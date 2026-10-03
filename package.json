@@ -22,6 +22,18 @@
     "stack:down": "docker compose down -v"
   },
   "dependencies": {
+    "@tiptap/core": "^3.31.3",
+    "@tiptap/extension-bold": "^3.31.3",
+    "@tiptap/extension-document": "^3.31.3",
+    "@tiptap/extension-heading": "^3.31.3",
+    "@tiptap/extension-history": "^3.31.3",
+    "@tiptap/extension-italic": "^3.31.3",
+    "@tiptap/extension-paragraph": "^3.31.3",
+    "@tiptap/extension-placeholder": "^3.31.3",
+    "@tiptap/extension-text": "^3.31.3",
+    "@tiptap/pm": "^3.31.3",
+    "@tiptap/react": "^3.31.3",
+    "dexie": "^4.4.6",
     "next": "15.5.25",
     "react": "19.3.0",
     "react-dom": "19.3.0"
@@ -37,6 +49,7 @@
     "@types/react-dom": "^19.3.0",
     "eslint": "^9.39.5",
     "eslint-config-next": "15.5.25",
+    "fake-indexeddb": "^6.2.5",
     "fast-check": "^4.10.2",
     "lefthook": "^2.1.16",
     "pg": "^8.23.1",
