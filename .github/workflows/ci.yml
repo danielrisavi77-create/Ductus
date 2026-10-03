@@ -83,5 +83,9 @@ jobs:
         run: docker run --rm -v "$PWD:/src" semgrep/semgrep:1.179.0 semgrep scan --config p/default --config p/typescript --error --metrics off /src
 
       # Ignored advisories, each with a reason and an expiry, are in osv-scanner.toml.
-      - name: OSV-Scanner (lockfile)
-        run: docker run --rm -v "$PWD:/src" ghcr.io/google/osv-scanner:v2.6.0 scan source --lockfile /src/pnpm-lock.yaml
+      - name: OSV-Scanner (lockfiles)
+        run: >-
+          docker run --rm -v "$PWD:/src" ghcr.io/google/osv-scanner:v2.6.0 scan source
+          --config /src/osv-scanner.toml
+          --lockfile /src/pnpm-lock.yaml
+          --lockfile /src/infra/fake-oidc/pnpm-lock.yaml

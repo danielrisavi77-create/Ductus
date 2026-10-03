@@ -29,6 +29,12 @@ services:
     command: ["/data"]
     ports:
       - "127.0.0.1:9100:9000"
+    # Anonymous listing must be refused (403); any HTTP answer means it is up.
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -o /dev/null http://localhost:9000/"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
 
   mail:
     image: axllent/mailpit:v1.31.4
@@ -43,3 +49,8 @@ services:
       ISSUER: http://localhost:8090
     ports:
       - "127.0.0.1:8090:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/.well-known/openid-configuration"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
