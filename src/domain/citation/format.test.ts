@@ -174,6 +174,14 @@ describe("ordering", () => {
     expect(result.map((s) => s.yearSuffix)).toEqual(["b", "a", undefined]);
     expect(first.yearSuffix).toBeUndefined();
   });
+
+  it("keeps existing suffixes and never reuses them", () => {
+    const tagged = { ...book([person("Lapavitsas", "Costas")], 2013, "Analiza"), yearSuffix: "a" };
+    const untaggedB = book([person("Lapavitsas", "Costas")], 2013, "Beta");
+    const untaggedC = book([person("Lapavitsas", "Costas")], 2013, "Cijena");
+    expect(assignYearSuffixes([tagged, untaggedB, untaggedC]).map((s) => s.yearSuffix)).toEqual(["a", "b", "c"]);
+    expect(assignYearSuffixes([tagged, untaggedC]).map((s) => s.yearSuffix)).toEqual(["a", "b"]);
+  });
 });
 
 describe("style config", () => {
@@ -187,6 +195,7 @@ describe("style config", () => {
       CitationStyleError,
     );
     expect(() => parseCitationStyle({ ...fpzgConfig, style: "numeric" })).toThrow(CitationStyleError);
+    expect(() => parseCitationStyle({ ...fpzgConfig, rangeDash: "" })).toThrow(CitationStyleError);
     expect(() => parseCitationStyle(null)).toThrow(CitationStyleError);
   });
 });

@@ -37,8 +37,8 @@ function record(value: unknown, path: string): Record<string, unknown> {
 
 function str(obj: Record<string, unknown>, key: string, path: string): string {
   const value = obj[key];
-  if (typeof value !== "string") {
-    throw new CitationStyleError(`${path}.${key} must be a string`);
+  if (typeof value !== "string" || value === "") {
+    throw new CitationStyleError(`${path}.${key} must be a non-empty string`);
   }
   return value;
 }

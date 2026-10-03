@@ -143,25 +143,27 @@ export function sortBibliography<T extends Source>(sources: readonly T[]): T[] {
 
 /**
  * Gives works with the same authors and year the suffixes a, b, ... ordered by
- * title. Sources that already carry a suffix keep it. Does not mutate the input.
+ * title. Suffixes already present are kept and never reused. Does not mutate the input.
  */
 export function assignYearSuffixes<T extends Source>(sources: readonly T[]): T[] {
   const groupKey = (s: Source) => `${s.authors.map(sortKey).join("|")}#${s.year}`;
   const groups = new Map<string, T[]>();
   for (const source of sources) {
-    if (source.yearSuffix !== undefined) continue;
     const key = groupKey(source);
     groups.set(key, [...(groups.get(key) ?? []), source]);
   }
   const suffixes = new Map<T, string>();
   for (const group of groups.values()) {
     if (group.length < 2) continue;
-    if (group.length > 26) {
+    const taken = new Set(group.flatMap((s) => (s.yearSuffix === undefined ? [] : [s.yearSuffix])));
+    const free = "abcdefghijklmnopqrstuvwxyz".split("").filter((letter) => !taken.has(letter));
+    const unsuffixed = group
+      .filter((s) => s.yearSuffix === undefined)
+      .sort((x, y) => collator.compare(x.title, y.title));
+    if (unsuffixed.length > free.length) {
       throw new CitationInputError("more than 26 works by the same authors in one year");
     }
-    [...group]
-      .sort((x, y) => collator.compare(x.title, y.title))
-      .forEach((source, index) => suffixes.set(source, String.fromCharCode(97 + index)));
+    unsuffixed.forEach((source, index) => suffixes.set(source, free[index]));
   }
   return sources.map((s) => (suffixes.has(s) ? { ...s, yearSuffix: suffixes.get(s) } : s));
 }
