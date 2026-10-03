@@ -82,4 +82,13 @@ describe("evidence ingest v2 boundary", () => {
       }),
     ).toBe(false);
   });
+
+  it("rejects descriptors with unknown fields", () => {
+    expect(
+      validateEvidenceIngestCommandV2({
+        ...validCommand(),
+        descriptor: { ...validCommand().descriptor, authorRole: "teacher" },
+      } as unknown as EvidenceIngestCommandV2),
+    ).toBe(false);
+  });
 });

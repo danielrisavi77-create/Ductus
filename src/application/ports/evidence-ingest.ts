@@ -59,6 +59,26 @@ export interface EvidenceIngestPort {
 }
 
 const SHA256_HEX = /^[0-9a-f]{64}$/;
+const DESCRIPTOR_KEYS: ReadonlySet<string> = new Set<
+  keyof EvidenceSegmentDescriptorV2
+>([
+  "evidencePackageId",
+  "documentId",
+  "sessionId",
+  "segmentId",
+  "evidenceSchema",
+  "canonicalization",
+  "hashAlgorithm",
+  "evidenceProfileId",
+  "sequenceFrom",
+  "sequenceTo",
+  "eventCount",
+  "observedStartedAt",
+  "observedEndedAt",
+  "segmentHash",
+  "predecessorSegmentHash",
+  "payloadBytes",
+]);
 const MAX_ID_LENGTH = 256;
 const MAX_CLIENT_REQUEST_ID_LENGTH = 256;
 
@@ -80,6 +100,10 @@ export function isEvidenceSegmentDescriptorV2(
   descriptor: unknown,
 ): descriptor is EvidenceSegmentDescriptorV2 {
   if (!isPlainObject(descriptor)) return false;
+  // Unknown fields fail closed so nothing unvalidated travels downstream.
+  if (!Object.keys(descriptor).every((key) => DESCRIPTOR_KEYS.has(key))) {
+    return false;
+  }
 
   if (
     !nonEmptyBounded(descriptor.evidencePackageId) ||
