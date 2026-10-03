@@ -22,7 +22,7 @@ Preporuka je **uvjetna**: potvrđuje je tek ono što spikeovi B0.1 i B0.2 izmjer
 | Transparency log, C2PA, QTSP paket | Ne u pilotu | §2 |
 | Red poslova | pg-boss u workeru, `migrate: false` | Potvrđeno: PG 13+, aktivno održavan |
 | Obavijesti | Polling, ali nastavnik dobiva obavijest o reviziji najviše po P-03 prozoru | §4.5 |
-| Trošak prve godine | **oko 520 do 700 EUR bez PDV-a, oko 575 do 750 EUR s PDV-om** | §7. Ne ulazi u D-66 (infrastruktura 300 do 500): odluka vlasnika |
+| Trošak prve godine | **oko 460 do 600 EUR bez PDV-a, oko 575 do 750 EUR s PDV-om** | §7. Ne ulazi u D-66 (infrastruktura 300 do 500): odluka vlasnika |
 
 Jedna točka kvara ostaje: jedan VM. Prihvatljivo za pilot samo uz dokazan povrat, rezervni put na **drugom računu** i zamjenski postupak predaje koji FPZG propisuje (D-69).
 
