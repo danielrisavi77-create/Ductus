@@ -53,7 +53,7 @@ const lines = [
   '| --- | --- | --- | --- | --- | --- | --- | --- | --- |',
 ];
 for (const r of results) {
-  lines.push(`| ${r.words} (${r.granularity}) | ${r.gen.steps} | ${r.replay.replayMs} ms | ${Math.max(r.replay.peakRssMb, r.checkpoint.peakRssMb)} MB | `
+  lines.push(`| ${r.words} (${r.granularity}) | ${r.gen.steps} | ${r.replay.replayMs} ms | ${Math.max(r.replay.peakRssMb, r.checkpoint.peakRssMb, r.bounded.peakRssMb)} MB | `
     + `${r.checkpoint.checkpoints} | ${r.checkpoint.lastCheckpointKb} KB (${r.checkpoint.lastCheckpointGzipKb} KB) | `
     + `${r.checkpoint.volumeRawMb} MB (${r.checkpoint.volumeGzipMb} MB) | ${r.bounded.medianMs} / ${r.bounded.maxMs} ms | `
     + `${r.gen.stepLogMb} MB (${r.gen.stepLogGzipMb} MB) |`);
