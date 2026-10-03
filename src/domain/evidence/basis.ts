@@ -47,7 +47,7 @@ function validRevision(value: number): boolean {
 export function createClaimRevision(input: ClaimRevision): ClaimRevision {
   if (!input.claimId || !validRevision(input.documentRevision) || !input.text) throw new Error("createClaimRevision: invalid input");
   if (input.text !== input.target.quote) throw new Error("createClaimRevision: text must equal anchor quote");
-  return { ...input };
+  return { ...input, target: { ...input.target } };
 }
 
 export function createEvidenceBasis(input: EvidenceBasis): EvidenceBasis {
@@ -58,7 +58,14 @@ export function createEvidenceBasis(input: EvidenceBasis): EvidenceBasis {
     throw new Error("createEvidenceBasis: excerpt must belong to source version");
   }
   if (Number.isNaN(Date.parse(input.reviewedAt))) throw new Error("createEvidenceBasis: invalid reviewedAt");
-  return { ...input, claim: createClaimRevision(input.claim) };
+  // Copy nested objects so later changes to the input cannot break the
+  // source-version check above.
+  return {
+    ...input,
+    source: { ...input.source },
+    excerpt: { ...input.excerpt },
+    claim: createClaimRevision(input.claim),
+  };
 }
 
 export function evaluateEvidenceBasis(

@@ -36,7 +36,8 @@ export type TransitionFailure =
   | "response-required"
   | "wrong-state"
   | "invalid-revision"
-  | "empty-explanation";
+  | "empty-explanation"
+  | "wrong-request";
 
 export type TransitionResult =
   | { ok: true; value: RevisionRequestState }
@@ -59,6 +60,7 @@ export function submitStudentResponse(
   if (state.request.status !== "OPEN" && state.request.status !== "NEEDS_CLARIFICATION") {
     return { ok: false, reason: "wrong-state" };
   }
+  if (response.requestId !== state.request.id) return { ok: false, reason: "wrong-request" };
   if (!Number.isSafeInteger(response.responseRevision) || response.responseRevision < state.request.requestedRevision) {
     return { ok: false, reason: "invalid-revision" };
   }
