@@ -10,6 +10,7 @@ M0 Temelj: plan proizvoda spojen (PR #1); postavljen rad u paralelnim sesijama (
 
 Agent nikad ne uzima ove stavke i nikad ne čeka na njih.
 
+- [ ] Codex pregled dok sesije rade u oblaku: preporuka jedna lokalna sesija "Ductus Codex" na `D:\Ductus` kojoj orkestrator šalje broj PR-a i razinu; alternativa OpenAI ključ kao tajna cloud okoline (trošak i tajna). Do odluke PR-ovi bez Codexa ne spajaju se.
 - [ ] Proba demoa u subotu 31. 10. 2026. i snimka prolaza (PLAN-DEMO D-3, D-4).
 - [ ] Potvrditi ili promijeniti prijedloge D-08, D-16, D-20, D-34, D-37, D-38 u `docs/DECISIONS.md`; odlučiti D-06 ili stroža D-39.
 - [ ] Potvrditi zadane pragove P-01 do P-04.
@@ -35,7 +36,9 @@ Agent nikad ne uzima ove stavke i nikad ne čeka na njih.
 
 Zadatke dodjeljuje orkestrator po `docs/ORKESTRATOR.md`. Do demoa vrijedi tablica u `docs/PLAN-DEMO.md` §4; ovdje je samo ono što je u radu ili sljedeće.
 
-**Adresa orkestratora:** "Ductus orkestrator" [local_98c824a6-a2aa-47cf-90d1-622973929825] (od 3. 10. 2026.; mijenja se pri rotaciji, `SESSIONS.md` §2a).
+**Adresa orkestratora:** "Ductus orkestrator" [session_01V3aEqiiQe33bd3PLecLLXf] (cloud sesija, od 3. 10. 2026., noć; mijenja se pri rotaciji, `SESSIONS.md` §2a). Poruke orkestratoru idu alatom `send_message` na taj ID.
+
+**Sesije rade u oblaku (od 3. 10. 2026., noć).** Orkestrator, Platforma (`session_01BXYXU76aCTprP1ckrJSSHW`), Frontend (`session_01SMw6v6eZpsHRZp5E1VtS5B`) i Backend (`session_01ES5D5titYTM6irHQvSvJCU`) su cloud sesije sa svježim klonom repoa; `D:\Ductus` vrijedi za lokalne sesije. Cloud sesije nemaju Codex CLI ni PowerShell, pa `scripts/codex-review.ps1` pokreće lokalna sesija na `D:\Ductus` (pitanje za Daniela u Owner queue).
 
 **Repo je na `D:\Ductus` (SSD, od 3. 10. 2026.).** P-8: C: je tvrdi disk; instalacija 879 s na C: prema 15 s na D:, typecheck i testovi 462 s prema 10 s. pnpm pohrana je `D:\pnpm-store` (globalno, mora biti na istom disku). Nove sesije i worktreeovi otvaraju se iz `D:\Ductus`; stara kopija `C:\Users\Daniel\Ductus` ostaje dok se stare sesije ne arhiviraju.
 
