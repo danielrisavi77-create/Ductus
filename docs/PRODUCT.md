@@ -258,7 +258,7 @@ Student dobiva potpuno okruženje za pisanje akademskog rada. Pravila oblika dol
 
 **Nikad (Ustav):** postotak AI-ja ili ljudskosti, ocjena rizika ili sumnje, tvrdnja o autorstvu, nadzor računala, kamere i zaslona, biometrija tipkanja, automatske sankcije, rangiranje studenata, treniranje modela na radovima, pisanje nalik ispitu pod nadzorom.
 
-**Kasnije:** sučelje na engleskom [ODLUČENO D-27], drugi fakulteti, Merlin (LTI), "Sign in with ChatGPT".
+**Kasnije:** drugi fakulteti, Merlin (LTI), "Sign in with ChatGPT".
 
 **Odlučeno, čeka izmjenu Ustava C-14 i C-19:** reprodukcija s ritmom u mentorskim radovima (D-56), val 3.
 
@@ -271,7 +271,8 @@ Student dobiva potpuno okruženje za pisanje akademskog rada. Pravila oblika dol
 - **Cijena:** pilot je besplatan; kupac nakon pilota je fakultet. [ODLUČENO D-13]
 - **Početak:** ljetni semestar akademske godine 2026./2027. [ODLUČENO D-26]
 - **Obveznost:** FPZG odlučuje je li korištenje obvezno ili dobrovoljno. Ako je dobrovoljno, studenti koji ne sudjeluju imaju ravnopravnu alternativu.
-- **Jezik:** hrvatski. [ODLUČENO D-27]
+- **Jezik:** sučelje na hrvatskom i engleskom od vala 1 [ODLUČENO D-70]; jezik rada bira se po zadatku (F-06).
+- **Podrška:** model iz D-69; rokovi u pilotu radnim danom u podne.
 - **Povlačenje studenta:** već predani radovi ostaju po pravilima fakulteta, sve ostalo se briše. [ODLUČENO D-12]
 - **Etape:** A tehnička proba sa sintetičkim radovima prije početka semestra; B nastava; C evaluacija.
 - Nijedan tehnički pokazatelj sam ne dovodi do ocjene ni posljedice.

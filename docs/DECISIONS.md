@@ -29,7 +29,7 @@ Napomena: ova numeracija vrijedi od verzije 0.2 i ne odgovara brojevima iz ranij
 | D-23 | Dopuštene AI pružatelje i modele određuje fakultet | Prijenos podataka izvan EU-a i pravila fakulteta |
 | D-25 | Pravila fakulteta, oblik rada, citiranje, bibliografija i naslovna stranica dolaze iz zajedničkog paketa s Lektom | Jedan izvor pravila za oba proizvoda |
 | D-26 | U pilot ulazi sve iz `PRODUCT.md`; pilot počinje u ljetnom semestru 2026./2027. | |
-| D-27 | Sučelje na hrvatskom u pilotu, engleski kasnije; tekstovi odvojeni od koda od prvog dana | |
+| D-27 | ~~Sučelje na hrvatskom u pilotu, engleski kasnije~~ **zamijenjeno s D-70**; tekstovi odvojeni od koda od prvog dana | |
 | D-28 | Zadatak može imati cikluse: nacrt, komentar, nova verzija, konačna predaja | |
 | D-32 | Student dobiva sve funkcije pisanja iz `PRODUCT.md` §10, uključujući citiranje i bibliografiju | Bez toga studenti pišu u Wordu i lijepe tekst |
 | D-33 | Mentorstvo završnih i viših radova je u prvoj verziji | |
@@ -65,8 +65,10 @@ Izvor: dokument "Ductus: konkurencija i poboljšanja proizvoda" i FPZG Smjernice
 | D-64 | Proširuje D-42. Katalog svrha u dvije razine. Razina 1, uključeno po defaultu (FPZG čl. 8): objašnjenje pojma, lektura (vraća označene izmjene), prijevod, traženje literature (uz provjeru izvora, D-48), formatiranje, transkripcija. Razina 2, samo ako nastavnik izričito uključi: brainstorming, restrukturiranje (vraća prijedlog redoslijeda, ne tekst), generiranje primjera, kodiranje podataka. Brainstorming po defaultu radi kao pomoćnik koji pita (sokratski način). Upute svake svrhe sastavlja poslužitelj (C-37) | FPZG čl. 4, 8 i 14; zamjena za svrhe "generiranje", "brainstorming" i "restrukturiranje" uključene po defaultu u prototipu | 2 |
 | D-65 | Funkcije iz brainstorminga prihvaćene su prema `docs/FEATURES.md` (32 prihvaćene, 2 za razgovor, 10 kasnije). Rupe u modelu podataka (komentor, povjerenstvo, pravno zadržavanje, jezik rada) ulaze u M2 | Odluke vlasnika u dokumentu brainstorminga | prema FEATURES.md |
 | D-66 | Budžet pilota je 1.000 EUR ukupno (infrastruktura, domena, e-pošta, pravna i sigurnosna provjera) | Odluka vlasnika | svi |
-| D-67 | FPZG ima kolegije na engleskom i Erasmus studente: jezik rada odvojen od jezika sučelja (F-06) ide u val 1. Otvoreno: treba li i sučelje na engleskom u pilotu (mijenja D-27) | Odluka vlasnika | 1 |
+| D-67 | FPZG ima kolegije na engleskom i Erasmus studente: jezik rada odvojen od jezika sučelja (F-06) ide u val 1. Sučelje na engleskom: D-70 | Odluka vlasnika | 1 |
 | D-68 | Ductus je dio obrane već u pilotu: povjerenstvo (N-09), priprema za razgovor (D-53) i priprema za obranu (A-04). Vrijedi za radove pisane u Ductusu od početka; obrane su vjerojatno nakon ljetnog semestra, pa je cilj spremnost prije prvog roka obrana | Odluka vlasnika | 3 |
+| D-69 | Podrška u pilotu: koordinator na FPZG-u rješava netehnička pitanja (produljenje roka, upute), vlasnik tehničke kvarove, AAI administrator FPZG-a probleme s AAI računom. Kanal je gumb "Prijavi problem" koji šalje stanje spremanja i verziju aplikacije bez sadržaja rada. Rokovi u pilotu radnim danom u podne. FPZG unaprijed propisuje zamjenski postupak ako Ductus ne radi u zadnja 24 sata prije roka. Raspodjela budžeta D-66: infrastruktura 300 do 500 EUR, domena i e-pošta 50 do 100, pravno 0 do 300 (nacrti uz službenika za zaštitu podataka FPZG-a, plaćeno samo mišljenje za D-55 i D-56), sigurnost 0 do 200 (automatski testovi i OWASP provjera), rezerva 100 do 200 | Odluka vlasnika | 1 |
+| D-70 | Sučelje na hrvatskom i engleskom već u valu 1 (zamjenjuje D-27) | Erasmus studenti i kolegiji na engleskom (D-67) | 1 |
 | D-52 | Nastavnik upisuje pravilo AI-ja iz izvedbenog plana na razinu kolegija (zabrana, djelomično dopušteno, poticanje; FPZG čl. 12); zadatak ga nasljeđuje i smije ga samo suziti | Pravilo se piše jednom i odgovara izvedbenom planu | 1 |
 
 ## Prijedlozi koji čekaju potvrdu
