@@ -1,6 +1,6 @@
 # Ductus: arhitektura pilota
 
-> **Napomena (3. 10. 2026.):** stack, prijava, hosting i okruženja u §1, §4, §5, §5a, §5b, §9 i §10 opisuju Supabase varijantu i bit će prepisani prema `docs/BACKEND.md` (zadatak B0.4) kad se potvrdi D-08. Do tada vrijedi `BACKEND.md`; ne vezati kod uz Supabase ni Netlify. §12 treba dopuniti R1 do R4 (evidencija).
+> **Napomena (3. 10. 2026.):** cijeli dokument još opisuje Supabase i Netlify varijantu (među ostalim §1, §2 `retention` preko `pg_cron`, §3 `ai_credential` u Supabase Vaultu i Storage, §4, §5, §5a, §5b, §8 ključevi, §9, §10, §11 dnevni korijen "nakon pilota"). Prepisuje se prema `docs/BACKEND.md` v0.2 (zadatak B0.4) kad se potvrdi D-08. Do tada vrijedi `BACKEND.md`; kod se ne veže uz Supabase ni Netlify. §12 treba zamijeniti točnim popisom prijenosa iz `BACKEND.md` §2.
 
 Verzija 0.2 · 3. 10. 2026. · Odgovorna osoba: Daniel Rišavi
 

@@ -14,7 +14,7 @@ Paralelno s fazama teče tvoj red (`STATE.md`, Owner queue): Srce, FPZG, pravni 
 
 ## Faze
 
-Backend (hosting, prijava, evidencija, korijen i žig, operacije) razrađen je u `docs/BACKEND.md` §8 kao okomiti rez kroz ove faze; neto +6 do +10 večeri uz spikeove B0.1 i B0.2 prije M2.
+Backend (hosting, prijava, evidencija, korijen i žig, operacije) razrađen je u `docs/BACKEND.md` §8 kao okomiti rez kroz ove faze; dodatak realno 18 do 25 večeri (zaseban red u valu 1) uz spikeove B0.1 i B0.2 prije M2.
 
 | Faza | Sadržaj | Izlazni kriterij | Procjena |
 | --- | --- | --- | --- |
@@ -125,5 +125,7 @@ Jedan crveni uvjet znači da val ne kreće.
 | Nastavni | Pragovi za korisnost i razumijevanje iz `PRODUCT.md` §12 definirani | Zapis u `DECISIONS.md` |
 | Operativni | Kontakt za podršku, postupak incidenta, imenovana osoba na FPZG-u koja smije zaustaviti pilot | `docs/OPERATIONS.md` (nastaje u M11) |
 | Operativni | Registracija u AAI@EduHr Registru resursa odobrena | Potvrda Srca |
+| Podatkovni | Popis podizvršitelja (hosting, baza, objekti, KMS, e-pošta, praćenje grešaka, OpenRouter, GitHub ako objavljuje korijene) s DPA-ima priložen ugovoru s FPZG-om (čl. 28(2) GDPR-a) | Dokument |
+| Tehnički | Proba povrata baze **i** bucketa uspješna; sintetički prolaz evidencije na stagingu koji koristi iste vrste resursa kao produkcija | Zapis probe |
 
 Pilot se zaustavlja ako se dogodi kritičan neovlašten pristup, gubitak rada ili lažan status (npr. "spremljeno" a nije).

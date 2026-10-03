@@ -1,250 +1,277 @@
 # Ductus: plan i program backenda
 
-Verzija 0.1 · 3. 10. 2026. · Odgovorna osoba: Daniel Rišavi · Status: PRIJEDLOG (čeka potvrdu D-08, D-71 do D-75)
+Verzija 0.2 · 3. 10. 2026. · Odgovorna osoba: Daniel Rišavi · Status: PRIJEDLOG (čeka potvrdu D-08, D-71 do D-75)
 
-Ovaj dokument zamjenjuje otvoreni D-08. Nastao je iz triju izvora: dokument "Pisač: Backend arhitektura i vizija vNext" (3. 10. 2026., dalje vNext), istraživanje opcija hostinga, potpisa i vremena te prijave i ovlasti (3. 10. 2026., sirovi izvještaji nisu u repou), i `ARCHITECTURE.md` v0.2. Brojke o cijenama su bez PDV-a, s datumom 3. 10. 2026., i označeno je što nije potvrđeno s izvora. Kad se ovaj dokument potvrdi, `ARCHITECTURE.md` se prepisuje prema njemu (zadatak B0.4).
+Ovaj dokument zamjenjuje otvoreni D-08. Izvori: dokument "Pisač: Backend arhitektura i vizija vNext" (dalje vNext), tri istraživanja (hosting, potpisi i vrijeme, prijava i ovlasti), `ARCHITECTURE.md` v0.2, te dva neovisna pregleda (arhitektonsko-sigurnosni i provjera činjenica na primarnim izvorima). **Verzija 0.1 imala je pogrešku koja je mijenjala preporuku: Scaleway Managed PostgreSQL nema PITR ni na jednom tipu čvora** (provjereno u službenom repozitoriju dokumentacije `scaleway/docs-content`, commit od 2. 10. 2026.). Ova verzija to ispravlja i ugrađuje ostale nalaze pregleda (šest kritičnih, 19 važnih). Cijene su s datumom 3. 10. 2026.; gdje nešto nije potvrđeno s primarnog izvora, piše NEPROVJERENO.
 
 ## 1. Sažetak odluke
 
-| Pitanje | Preporuka | Zašto |
+Preporuka je **uvjetna**: potvrđuje je tek ono što spikeovi B0.1 i B0.2 izmjere. Ako ne prođu, vraća se vlasniku, ne mijenja se tiho.
+
+| Pitanje | Preporuka | Zašto i što je provjereno |
 | --- | --- | --- |
-| Je li Supabase prava osnova? | **Ne za Ductus.** | Edge Functions imaju 2 s CPU i 256 MB, a rekonstrukcija rada od 80.000 riječi traži više. PITR je dodatak od 100 USD mjesečno (sam premašuje budžet). Vault ima jedan korijenski ključ projekta. Next.js ionako ne radi na Supabaseu, pa bi trebao drugi host. Gubi se i većina razloga za Supabase kad nema PostgRESTa ni klijentskog pristupa bazi. |
-| Aplikacija | Next.js (standalone, Docker) i zaseban worker proces na Hetzner VPS-u (Njemačka ili Finska) | CPU bez limita, 16 EUR mjesečno za 8 vCPU / 16 GB |
-| Baza | Upravljani PostgreSQL na Scalewayu (Francuska ili Nizozemska) | Backupi i PITR su posao dobavljača, ne tvoj. **PITR na najmanjem tipu (DB-DEV-S) nije potvrđen**, to je prvi spike |
-| Objekti | Scaleway Object Storage (S3, privatni bucket) | 0,016 EUR/GB, standardni S3, bez lock-ina |
-| E-pošta | Scaleway TEM | oko 1 do 2 EUR mjesečno za 5.000 poruka |
-| Prijava | Vlastiti OIDC klijent prema AAI@EduHr s našim sesijama u bazi (Better Auth s generic OAuth pluginom ili `openid-client`, odluka na M1 spikeu) | Jedan pružatelj, bez automatskog spajanja računa po e-pošti, nema ovisnosti o Supabase Authu |
-| Ovlasti | Postgres RLS + `SECURITY DEFINER` funkcija `can()` + pgTAP; bez OpenFGA | Pet vrsta odnosa, nijedna tranzitivna. Odgovara D-07 |
-| Potpisi | Ed25519 ključ aplikacije (šifriran, KEK iz okoline) iza sučelja `SigningKeyProvider`; KMS tek na okidač | KMS ne štiti od kompromitirane aplikacije (napadač i dalje zove Sign). Zaštitu daje vanjski žig (niže) |
-| Neovisno vrijeme | **Dnevni potpisani korijen + RFC 3161 žig (FINA) već u valu 1**, javno objavljen | Jedina jeftina mjera koja odgovara na "što ako operater prepiše povijest". Oko 40 EUR godišnje, pomiče D-10 iz "nakon pilota" |
-| Transparency log, C2PA, QTSP paket | Ne u pilotu | Vidi §2 |
-| Red poslova | pg-boss u worker procesu | Bez Redisa i dodatnih servisa |
-| Obavijesti | Polling lagane krajnje točke (30 do 60 s) | P-03 kaže najviše svakih 5 minuta, realtime servis nije potreban |
-| Procjena troška prve godine | oko 450 do 600 EUR | unutar D-66 (infrastruktura + domena + e-pošta); vidi §7 |
+| Supabase | **Ne kao osnova.** | Potvrđeno: Edge Functions 2 s CPU i 256 MB; PITR dodatak 100/200/400 USD mjesečno za 7/14/28 dana; Realtime 500 veza na Pro. Argument CPU-a još nije izmjeren za naše radove (B0.2): ako rekonstrukcija 15.000 riječi stane znatno ispod 2 s, taj argument otpada. Ostali razlozi stoje: Next.js ionako traži drugi host, cijena PITR-a, vezanost uz Auth/RLS/Vault |
+| Baza | **UpCloud Managed PostgreSQL (Developer, 2 GB, 14 EUR mjesečno), PITR 3 dana**, finska tvrtka | Zamjena za Scaleway PG koji PITR nema. PITR na Developer razini je s cjenika UpCloud, **stvarni povrat u točku treba izvesti u B0.1**. Rezerva: Neon Launch (Frankfurt, PITR do 7 dana, američka tvrtka) |
+| Aplikacija | Next.js (Docker) i zaseban worker na **UpCloud Cloud Native VM-u** u istom okruženju kao baza | Jedan dobavljač za računalo i bazu daje privatnu mrežu (baza bez javne adrese), nižu latenciju i izbjegava problem Hetznera: za CX tipove službena stranica kaže da je "number of available servers limited" i "currently unavailable", pa se CX43 možda ne može kupiti. Hetzner ostaje opcija za drugi račun (rezerva), ne za primarni put |
+| Objekti | Scaleway Object Storage (S3, privatni bucket), 0,016 EUR/GB | Potvrđena cijena. Uz dnevnu replikaciju u drugi račun (§4.7) |
+| E-pošta | Scaleway TEM, oko 14 EUR godišnje za 5.000 poruka | Potvrđeno |
+| Prijava | Vlastiti OIDC klijent prema AAI@EduHr, sesije u bazi; **Better Auth s `accountLinking.enabled: false`** ili `openid-client`, odluka na M1 | Potvrđeno: Better Auth ima OIDC discovery i PKCE, ali povezivanje računa po e-pošti je **zadano uključeno**, a polje `email` je obvezno i jedinstveno (rizik ako AAI ne vrati `mail`) |
+| Ovlasti | RLS + `current_actor()` (provjera tokena sesije u bazi) + `can()` + pgTAP; bez OpenFGA | §4.4. RLS je obrana u dubinu, ne granica protiv kompromitirane aplikacije |
+| Potpisi | **Dva odvojena Ed25519 ključa u AWS KMS** (ključ potvrda, ključ dnevnog korijena), potpisivanje izvan web procesa | Preokret u odnosu na v0.1. Adapter `aws-kms-ed25519-signer` već postoji u kodu, a ugovor porta traži KMS/HSM. KMS sprječava izvoz ključa (krađa iz snimki, backupa, CI-ja). Trošak oko 2,5 USD mjesečno po ključu (regionalna cijena NEPROVJERENA). U KMS idu samo hashevi, nikad osobni podaci ni tekst |
+| Neovisno vrijeme | Dnevni korijen + RFC 3161 žig već u valu 1, **uz poštenu tvrdnju (§4.2)**; početak s besplatnim nekvalificiranim TSA-om, FINA kad stigne ugovor | FINA: 0,11 EUR po žigu, certifikat za pristup 86,27 EUR (5 godina), endpoint `https://tsa.fina.hr/ts-rfc3161`, **pristupnicu podnosi poslovni subjekt** (znači obrt ili pravna osoba). Nije GO preduvjet |
+| Transparency log, C2PA, QTSP paket | Ne u pilotu | §2 |
+| Red poslova | pg-boss u workeru, `migrate: false` | Potvrđeno: PG 13+, aktivno održavan |
+| Obavijesti | Polling, ali nastavnik dobiva obavijest o reviziji najviše po P-03 prozoru | §4.5 |
+| Trošak prve godine | **oko 520 do 700 EUR bez PDV-a, oko 650 do 875 EUR s PDV-om** | §7. Ne ulazi u D-66 (infrastruktura 300 do 500): odluka vlasnika |
 
-Ostaje jedan rizik koji se ne smije preskočiti: **jedan VPS je jedna točka kvara**. To je prihvatljivo za pilot samo uz dokazanu probu povrata, hladni rezervni poslužitelj podignut iz koda (OpenTofu) i zamjenski postupak predaje koji FPZG propisuje (D-69).
+Jedna točka kvara ostaje: jedan VM. Prihvatljivo za pilot samo uz dokazan povrat, rezervni put na **drugom računu** i zamjenski postupak predaje koji FPZG propisuje (D-69).
 
-## 2. Što uzimamo iz vNext dokumenta, što odgađamo
+## 2. vNext: što uzimamo, što odgađamo
 
-vNext je dobar kao ciljna arhitektura i kao popis načela. Nije plan za pilot: pretpostavlja Azure, OpenFGA, Tesseru, PowerSync, .NET servis za dokumente, regionalne ćelije i C2PA. Jedan čovjek s budžetom od 1000 EUR to ne može održavati, a ništa od toga ne mijenja ono što pilot mora dokazati. Zato:
+vNext je dobra ciljna arhitektura i popis načela. Nije plan pilota: pretpostavlja Azure, OpenFGA, Tesseru, PowerSync, .NET servis za dokumente, regionalne ćelije i C2PA.
 
-### Prihvaćamo bez izmjene
+### Prihvaćamo
 
-- Svih 12 načela (§2 vNext): nema tihog last-write-winsa, identitet nije ovlast, dokaz nije presuda, lokalno nije kanonsko, audit nije dokaz, AI nije kritičan za dostupnost, server ne izmišlja povijest (praznine ostaju praznine), povrat stvara novu reviziju, privatnost kroz arhitekturu.
+- **Načela** (vNext §2, ima ih 12): nema tihog last-write-winsa; identitet nije ovlast; dokaz nije presuda; lokalno nije kanonsko; suradnja nije akademska povijest; audit nije dokaz; AI nije kritičan za dostupnost; server ne izmišlja povijest (praznine ostaju praznine); povrat stvara novu reviziju; završni artefakt mora biti provjerljiv bez žive baze; privatnost kroz arhitekturu; dokaz prije usvajanja nove tehnologije.
 - Protokol commita (CAS, server dodjeljuje broj revizije, idempotencija, `STALE_BASE`).
-- Evidence v2 (R1): JCS RFC 8785 + SHA-256, **točni bajtovi s mreže jednaki ponovno izračunatom JCS nizu**, kontinuirani raspon slijeda, lanac hasheva prije/poslije.
-- Redoslijed R4: nepromjenjivi zapis objekta, zatim atomarna rezervacija u bazi (`FOR UPDATE` na paketu, provjera konteksta, idempotencije i prethodnika, dodjela `receiptId` i `acceptedAt`, pomak glave lanca u istoj transakciji), zatim potpis, zatim priključivanje potpisa. Stanje `pending_signature` s ponovljivim potpisom iste prihvaćene stvari.
-- Idempotencija: pregled postojećeg prihvaćanja **prije** ponovnog uploada i prije provjere `acceptsEvidence`; isti ključ s drugim opisnikom je `IDEMPOTENCY_CONFLICT`.
-- Razdvajanje svrha ključeva: ključ potvrda i ključ dnevnog korijena su različiti (dva Ed25519 ključa), enkripcija tajni treći mehanizam.
-- Matrica kvarova (§32) i **Definition of Done za komponentu** (§38). Preuzimamo je u §6 ovog dokumenta kao obveznu kontrolnu listu.
-- Protokol evolucije shema: svaki trajni format ima verziju, nikad se ne reinterpretiraju stari bajtovi, `expand, migrate, contract`, jasan `upgrade_required` za predugo offline klijente.
-- Command gateway kao pravilo: nema "insert row" ni "upload object" kao proizvodnog API-ja. U Ductusu je to prirodno, jer klijent nikad ne govori izravno s bazom.
-- Break-glass za administratora (korak-gore provjera, razlog, uski opseg, istek, nepromjenjiv trag), u pojednostavljenom obliku: administratorski pristup sadržaju traži razlog i ide u `audit`.
-- Raw tekst nikad u operativne logove; sigurnosni događaji su zapisi domene, ne linije loga.
+- Evidence v2 (R1): JCS + SHA-256, točni bajtovi s mreže jednaki ponovno izračunatom JCS nizu, kontinuirani raspon slijeda, lanac hasheva.
+- Redoslijed R4 (objekt, atomarna rezervacija, potpis, priključivanje potpisa), `pending_signature`, idempotencija s pregledom prije ponovnog uploada. **Uz izmjene iz §4.1** (utrka čišćenja siročadi, odnos prema commitu dokumenta).
+- Razdvajanje svrha ključeva, matrica kvarova, Definition of Done (§6), expand/migrate/contract, `upgrade_required`.
+- Command gateway: nema "insert row" ni "upload object" kao proizvodnog API-ja.
+- Break-glass za administratora u pojednostavljenom obliku (razlog, uski opseg, istek, nepromjenjiv trag u `audit`).
 
-### Odgađamo, s okidačem (nadopuna `ARCHITECTURE.md` §11)
+### Odgađamo, s okidačem (dopuna `ARCHITECTURE.md` §11)
 
-| vNext | Okidač za usvajanje | Što radimo umjesto toga |
+| vNext | Okidač | Umjesto toga |
 | --- | --- | --- |
-| R5 Tessera, javni transparency log | Netko izvana stvarno ospori zapis, ili ustanova traži neovisnog svjedoka | Vlastito Merkle stablo (oko 100 redaka, `@noble/hashes`), testirano na vektorima iz `transparency-dev/merkle`; dnevni potpisani korijen u javnom repozitoriju. Tessera je Go biblioteka i prekompleksna; Rekor v2 nije za privatne zapise; mreža svjedoka je još u razvoju |
-| R6 eIDAS kvalificirani žig | Pravni postupak koji traži pravnu presumpciju | RFC 3161 žig FINA-e nad dnevnim korijenom (oko 0,11 EUR po žigu). Pravni učinak kvalificiranog žiga ne tvrdimo bez odvjetnika |
-| R7 C2PA | Kad SDK stvarno podrži DOCX; službena tablica `c2pa-rs` navodi PDF, ne DOCX | Odvojeni potpisani paket dokaza uz predaju; za PDF kasnije PAdES |
-| R8 OpenFGA | Odnosi postanu tranzitivni ili hijerarhijski, ili više servisa treba iste odluke | `can()` u SQL-u; `authz/*.fga` iz pisac-editora ostaje specifikacija za pgTAP |
-| Azure Key Vault, AWS KMS | Prvi plaćeni ugovor ili sigurnosni pregled koji to traži | `SigningKeyProvider` je već u R3/R4 s adapterima; prebacivanje je konfiguracija |
-| PowerSync | Stvarno offline stanje osim dokumenta | Dexie |
-| R9 LTI 1.3, Edu-API, ISVU | Srce prihvati Merlin alat, ili više od 3 kolegija | AAI@EduHr OIDC |
-| R11 .NET servis za dokumente | Izvezeni DOCX ne prolazi stvarni Word korpus | Postojeći DOCX izvoz iz pisac-editora i WordReplica kao orakul |
-| R12 regionalne ćelije | Prva ustanova izvan EU-a | Jedan EU okoliš |
-| Temporal | Dugotrajni višekoračni tokovi s ljudskim odobrenjem | pg-boss |
-| EvidenceProfile "High Assurance" i "Controlled" | Ispiti pod nadzorom | Profili Ductusa: standard (eseji, seminari) i pregled (mentorski radovi, D-56) |
+| R5 Tessera | Netko izvana ospori zapis ili ustanova traži svjedoka | Vlastito Merkle stablo (oko 100 redaka, `@noble/hashes`), testirano na vektorima iz `transparency-dev/merkle`. Tessera je sad "generally available" (v1.x), ali je Go biblioteka s drugačijom operativnom cijenom |
+| R6 eIDAS kvalificirani žig | Pravni postupak traži presumpciju | RFC 3161 žig; pravni učinak ne tvrdimo bez odvjetnika |
+| R7 C2PA | `c2pa-rs` podrži DOCX (službena tablica ga ne navodi) | Odvojeni potpisani paket dokaza; za PDF kasnije PAdES |
+| R8 OpenFGA | Odnosi postanu tranzitivni ili više servisa treba iste odluke | `can()` u SQL-u |
+| PowerSync, LTI 1.3, Edu-API, ISVU, .NET konverzija, regionalne ćelije, Temporal | Kao u `ARCHITECTURE.md` §11 | Dexie, AAI OIDC, postojeći DOCX izvoz, jedan EU okoliš, pg-boss |
+| Azure Key Vault | Samo ako AWS postane neprihvatljiv | Azure ne navodi Ed25519 u dokumentaciji; postojeći adapter je ES256 |
 
-### Ne usvajamo
+### Ispravak popisa prijenosa (`ARCHITECTURE.md` §12 i R1 do R4)
 
-- Azure Key Vault kao zadani potpisnik. Dokumentacija ne navodi Ed25519 za Azure, a Ductus potvrde su Ed25519 (D-10). Adapter ostaje u kodu kao opcija, ne kao zadani put.
-- `Principal` s `authenticationContext`, `affiliations` i brokerom federacije (SATOSA) prije druge ustanove. Zadržavamo tanko sučelje `Principal` (`id`, `issuer`, `externalSubject`, `homeOrg`) kako se prijava ne bi razlila kroz kod, ali bez brokera.
+Pregled koda u `pisac-editor` pokazao je da v0.1 netočno opisuje prijenos. Točan popis:
 
-### Nešto što dokument ne rješava, a mi moramo
+- **Prenosi se bez izmjene:** `src/domain/forensics`, `src/domain/*` (čist od Supabasea; komentari koji upućuju na Supabase migracije se brišu), `src/application/ports/*`, `src/application/evidence/*` (gateway oko 328 redaka + testovi), in-memory adapteri, `src/adapters/crypto/aws-kms-ed25519-signer*` i `development-ed25519-signer*`, ugovorni testovi.
+- **Prepisuje se:** sve SQL migracije (`evidence_r4_*` i F1). Razlozi: daju `grant ... to service_role/anon/authenticated`, a te uloge ne postoje izvan Supabasea; funkcije su u shemi `public` s prefiksom `pisac_`; vlasništvo se provjerava preko `pisac_workspaces.owner_id` kojeg model Ductusa nema; F1 RPC-i koriste `auth.uid()` i namijenjeni su izravnom pozivu iz preglednika. Također `src/lib/evidence/*` (uvozi `@supabase/supabase-js` i `lib/supabase/*`) i svi `supabase-*` adapteri.
+- **Novo:** `pg-evidence-*` adapteri (običan `pg`), `s3-evidence-payload-store`, `withActor`, nova shema `evidence` s ulogama (§3), novi izvršni referentni model ovlasti (§4.4), migracijski alat (§4.8).
+- Realna procjena prijenosa i prepisa B4: **5 do 8 večeri dodatno**, ne +2.
 
-- **Prijenos koda.** `ARCHITECTURE.md` §12 trenutno ne navodi R1 do R4. Treba ih dodati: `src/domain/forensics` (JCS, lanac, potvrde, već navedeno), `src/domain/evidence`, `src/adapters/crypto/*`, `src/lib/evidence/*`, sučelja repozitorija i spremišta objekata, SQL migracije `evidence_r4_*`. **Adapteri `supabase-evidence-*` ne prenose se**; zamjenjuju ih `pg-evidence-*` (običan `pg` klijent prema istim RPC funkcijama) i `s3-evidence-payload-store`. Ugovorni testovi koji sada rade nad Supabase adapterima postaju ugovorni testovi koji rade nad oba (in-memory i pg/S3).
-- **Sesija bez Supabasea.** RLS politike u pisac-editoru koriste `auth.uid()`. U Ductusu aplikacijska uloga u svakoj transakciji postavlja `set_config('app.user_id', ..., true)` i `app.institution_id`, a politike čitaju `current_setting`. Bez toga RLS ne postoji. To je prvi pgTAP test (anonimna uloga nema ništa, uloga bez postavljenog korisnika nema ništa).
-- **Granica tvrdnji.** vNext najviša poštena tvrdnja (§1) uzima se doslovno kao tekst za sučelje i DPIA. Ductus ne tvrdi da je student pritisnuo svaku tipku niti da nije koristio drugi uređaj (već u `PRODUCT.md`, D-53 i D-54).
+### Što dokument vNext ne rješava, a moramo
 
-## 3. Ciljna topologija pilota
+- **Granica tvrdnji.** Najviša poštena tvrdnja iz vNext §1 koristi se doslovno u sučelju i DPIA-i; Ductus ne tvrdi da je student pritisnuo svaku tipku niti da nije koristio drugi uređaj (D-53, D-54).
+- **Odnos commita dokumenta i prihvata evidencije.** U kodu su to dvije odvojene transakcije (`pisac_commit_document` i `pisac_evidence_reserve`). Bez odluke nastaje revizija bez odsječka (lažna praznina) ili odsječak bez revizije, a "spremljeno na poslužitelju" znači dvije stvari. Odluka (ADR u M3, prije koda): **jedan RPC koji u istoj transakciji radi CAS reviziju i `reserve`**; objekt u S3 zapisuje se prije, a ako RPC padne, ostaje siroče (§4.1). Ugovorni test za oba ishoda.
+
+## 3. Topologija pilota
 
 ```
 Preglednik (Next.js klijent, Tiptap, Dexie)
         |  HTTPS
-   Caddy (TLS, HSTS, rate limit)            Hetzner VPS (EU)
+   Caddy (TLS, HSTS)                         UpCloud VM (EU), privatna mreža
         |
-   Next.js app (standalone)  <---------->  Worker (Node): pg-boss, rekonstrukcija,
-        |                                   potpisi na čekanju, dnevni korijen,
-        |                                   retention, e-pošta
-        |   TLS, privatna mreža ili IP allowlist
-        +-----> Scaleway Managed PostgreSQL (PITR, tajne uloge)
-        +-----> Scaleway Object Storage (privatni bucket, versioning)
-        +-----> Scaleway TEM (SMTP/API)
-        +-----> OpenRouter (samo kad student pokrene AI, kroz proxy rutu)
-        +-----> FINA TSA (RFC 3161, jednom dnevno, iz workera)
-Javni repozitorij: dnevni potpisani korijen + .tsr žig (bez ikakvog sadržaja rada)
+   web: Next.js (bez ključeva)  <-------->   worker: pg-boss, potpisivanje preko KMS,
+        |                                     rekonstrukcija, dnevni korijen, retention, e-pošta
+        |   privatna mreža, bez javne adrese
+        +-----> UpCloud Managed PostgreSQL (PITR)
+        +-----> Scaleway Object Storage (privatni bucket, S3 API, javni endpoint s autentikacijom)
+        +-----> Scaleway TEM
+        +-----> AWS KMS (samo Sign nad digestom, dva ključa)
+        +-----> OpenRouter (samo kad student pokrene AI)
+        +-----> TSA (RFC 3161, jednom dnevno, iz workera)
+Javno: dnevni potpisani korijen + žig (bez sadržaja rada); drugi neovisni primatelji korijena (§4.2)
 ```
 
-Pravila granica:
+Pravila:
 
-1. Klijent govori samo s Next.js aplikacijom; baza i bucket nemaju javnu adresu.
-2. Tri uloge u bazi: `ductus_migrator` (samo CI na staging i ručno odobrenje na produkciju, nikad iz agenta), `ductus_app` (podliježe RLS-u, bez `BYPASSRLS`, bez prava na sheme evidencije osim kroz RPC), `ductus_evidence` (vlasnik funkcija sheme `evidence`; privatna shema bez ikakvih prava za aplikacijsku ulogu osim `EXECUTE` na RPC).
-3. Potpisni ključ postoji samo u worker procesu i ingest ruti, nikad u klijentskom paketu; učitava se iz šifrirane datoteke uz KEK iz okoline. Rotacija i opoziv kao u `ARCHITECTURE.md` §8.
-4. Tajne okoline: u CI-ju GitHub Environments sa zaštitom, na VPS-u `sops` + `age` datoteka. Ništa u repou (Gitleaks).
-5. Stranice sa sadržajem rada ne smiju završiti u predmemoriji ni u logovima: `Cache-Control: no-store`, bez analitike treće strane, Sentry ili GlitchTip s `sendDefaultPii=false` i `beforeSend` koji odbacuje tijela zahtjeva; CI test s "canary" nizom provjerava da se tekst rada ne pojavljuje u logovima.
-6. Server-side rendering sadržaja sad je dopušten (ograničenje iz Netlify varijante otpada, jer je kod na EU poslužitelju), ali samo iza autorizirane sesije.
+1. **Baza nema javnu adresu** (privatna mreža unutar UpCloud okoline). Object Storage ima javni S3 endpoint uz autentikaciju i uvijek je izvan privatne mreže; zato su ključevi bucketa uske ovlasti, a veza `verify-full`. KMS je također vanjski poziv.
+2. **Uloge u bazi** (svaka s pgTAP retkom): `ductus_migrator` (jedini s DDL-om; pokreće se **s VM-a pri deployu**, ne iz GitHub Actionsa, da se baza ne otvara IP rasponima runnera), `ductus_app` (podliježe RLS-u, bez `BYPASSRLS`, **bez `EXECUTE` na evidencijske funkcije**), `ductus_worker` (bez `BYPASSRLS`, samo uske `SECURITY DEFINER` funkcije za rekonstrukciju, ponovni potpis i korijen), `ductus_retention` (samo funkcija brisanja pokazivača na sadržaj), `ductus_evidence` (NOLOGIN, vlasnik funkcija sheme `evidence`).
+3. **Web proces ne drži nikakav materijal ključa.** Potpisuje worker preko KMS-a: ingest ruta zapisuje objekt i poziva RPC, a potpis se priključuje u workeru (stanje `pending_signature` već postoji kao normalan tok; klijent dobiva "spremljeno na poslužitelju" tek kad je potvrda potpisana, kao do sada).
+4. Tajne: GitHub Environments sa zaštitom za CI, na VM-u `sops` + `age`; **`age` ključ i pričuvne kopije tajni drži vlasnik izvan VM-a** (potrebno za RTO).
+5. Sadržaj radova nikad u logove, predmemoriju ni analitiku (§4.9).
+6. **Bez server-side renderiranja sadržaja** (kao u `ARCHITECTURE.md` §1). Ništa u pilotu ne traži SSR, a `no-store` u odgovoru ne isključuje Next.js Data/Full Route Cache. Sve rute sa sadržajem su API rute s `dynamic = 'force-dynamic'`, `revalidate = 0`, ESLint pravilom i E2E testom s dva korisnika.
+7. API rute s verzijom protokola (ne Server Actions) za sinkronizaciju, zbog starih klijenata nakon deploya; `upgrade_required` za predugo offline klijente.
 
 ## 4. Ključne dizajnerske odluke
 
-### 4.1 Evidencija i potpis
+### 4.1 Evidencija, potpis i bucket
 
-- Tok odsječka: validacija i točni bajtovi, zapis objekta (`v2/<paket>/<hash>.json`, bez upserta, duplikat se prihvaća tek nakon usporedbe bajtova), RPC `reserve` (jedna transakcija), potpis, RPC `attach_signature`. Sve je iza jedne Next.js rute `/api/ingest` s ograničenjem veličine tijela čitanjem toka.
-- Worker svakih nekoliko minuta ponovno potpisuje `pending_signature` zapise (isti `receiptId` i `acceptedAt`) i čisti objekte bez metapodataka starije od 24 sata. To zamjenjuje `pg_cron`, čija je dostupnost na upravljanom Postgresu NEPROVJERENA.
-- Potpis potvrde po odsječku (oko 100.000 mjesečno, jeftino na svakom hostu). Dnevni korijen potpisuje se zasebnim ključem.
+- Tok odsječka: validacija i točni bajtovi; zapis objekta (`v2/<paket>/<hash>.json`, bez upserta, duplikat se prihvaća tek nakon usporedbe bajtova); **jedan RPC** koji radi CAS reviziju i `reserve` (§2); potpis u workeru; `attach_signature`.
+- **RPC-i se prepisuju, ne prenose.** Postojeći `pisac_evidence_reserve`, `_lookup`, `_ensure_package` i `_authorize_append` primaju identitet kao **parametar** (`p_principal_id`) i jedina im je zaštita da ih smije izvršiti samo `service_role`. U Ductusu su `SECURITY DEFINER` s vlasnikom `ductus_evidence` i praznim `search_path`, **ne primaju identitet kao parametar nego ga izvode iz `current_actor()`** (§4.3), a `ductus_app` ih poziva samo kroz uske omotače. pgTAP test: `ductus_app` ne može dodati evidenciju s tuđim principalom.
+- **Evidencijske tablice su samo za dodavanje.** Okidači `BEFORE UPDATE OR DELETE` na `acceptances` dopuštaju samo prijelaz `pending_signature` u `signed` uz nepromijenjen `receipt_payload`, `descriptor` i hash, i zabranjuju `DELETE` osim brisanja pokazivača na sadržaj kroz funkciju retentiona. Glavu lanca (`packages.head_*`) mijenja samo `reserve`. `attach_signature` provjerava da `payloadDigestSha256` odgovara `receipt_payload` i da je `keyId` poznat i neopozvan (tablica `signing_key`).
+- **Siročad u bucketu:** automatsko brisanje objekata bez metapodataka **ne radimo u pilotu**. Offline klijent ponavlja odsječak danima kasnije, a `putImmutable` ne piše postojeći objekt, pa zadržava staro vrijeme; posao čišćenja bi mogao obrisati objekt na koji zakašnjeli `reserve` upravo pokazuje. Siročad se samo broji i prijavljuje; brisanje tek nakon 30 dana, uz ponovnu provjeru u bazi neposredno prije brisanja i savjetodavno zaključavanje po hashu. Nakon `reserve` radi se HEAD objekta prije potpisa. Test: konkurentno čišćenje i zakašnjeli `reserve`.
+- Autor odsječka dolazi iz sesije na poslužitelju, nikad iz polja klijenta. **Otvoreno pitanje:** kod izravnih izmjena nastavnika (D-34) revizija nastaje na studentovu klijentu, pa autora ("nastavnik") postavlja klijent. Rješenje se mora odrediti u M6 (npr. potpisani zahtjev nastavnikove sesije, koji klijent prilaže); do tada D-34 ostaje PRIJEDLOG.
 
-### 4.2 Dnevni korijen i vanjsko vrijeme (novo u valu 1)
+### 4.2 Dnevni korijen i vanjsko vrijeme (val 1, s poštenom tvrdnjom)
 
-1. Worker jednom dnevno gradi Merkle stablo nad svim potvrdama primljenim taj dan (listovi su hashevi kanonskih potvrda, bez sadržaja i bez osobnih podataka), potpisuje korijen ključem korijena i traži RFC 3161 žig od FINA-e (`tsa.fina.hr`).
-2. Rezultat (korijen, potpis, `.tsr`, broj listova, korijen prethodnog dana) objavljuje se u javni repozitorij `ductus-roots`. Vrijeme commita **nije** pouzdano vrijeme; pouzdano je samo `.tsr`.
-3. Što to dopušta tvrditi: potvrda je bila u korijenu dana D, a taj je korijen postojao najkasnije u trenutku žiga. Posljedica: operater ne može neprimijetno prepisati povijest unatrag prije žiga, ni s ukradenim potpisnim ključem.
-4. Što ne dopušta: ne štiti od "split viewa" bez neovisnih zrcala, ne dokazuje istinitost sadržaja ni autorstvo. Tekst u sučelju i DPIA mora to reći.
-5. Verifikator: mali CLI i web stranica koja radi u pregledniku (hash lanac, inclusion dokaz, potpis, `.tsr`, javni ključ), uz uputu za ručnu provjeru `openssl`-om. Taj dio već postoji kao D-49 i A-07; ovdje se samo pomiče najjednostavniji oblik u val 1.
-6. **Ovisnost koju vlasnik mora riješiti:** FINA ugovor, minimalna mjesečna naknada i cijena pristupnog certifikata NEPROVJERENI (cijena 0,11 EUR po žigu je s javnog cjenika od 1. 1. 2026.). Certilia QTSA je za ovaj obujam preskupa (najmanji paket oko 478 EUR godišnje). Do ugovora radi besplatni TSA kao privremena zamjena **samo u stagingu**; produkcija ne kreće bez ugovora ili odluke da se žig preskoči uz upisanu posljedicu.
+1. Worker jednom dnevno gradi Merkle stablo. **List = SHA-256 nad JCS `receipt_payload` (bez potpisa)**, pa ponovni potpis nakon rotacije ili kompromitacije ključa ne mijenja listove. **Dan se određuje po `accepted_at` iz sata baze, u UTC-u**; u stablo ulaze i `pending_signature` zapisi. Uz korijen se objavljuje broj listova, korijen prethodnog dana i **consistency dokaz** prema njemu.
+2. Korijen potpisuje drugi KMS ključ; traži se RFC 3161 žig. Dok nema ugovora s FINA-om: besplatni nekvalificirani TSA (uvjeti korištenja NEPROVJERENI), uz zapisano da pravnu osnovu ne daje. FINA: ugovor i pristupni certifikat preko poslovnog subjekta (obrt ili pravna osoba), 0,11 EUR po žigu, certifikat 86,27 EUR.
+3. Objava: javni repozitorij **i neovisni primatelji korijena** (dnevni e-mail koordinatoru FPZG-a; arhiviranje u Internet Archive ili Software Heritage). Javni repozitorij kontrolira isti operater (može force-pushati), pa sam po sebi nije svjedok.
+4. **Što to dokazuje:** kad je korijen dana D žigosan i objavljen, svaka kasnija promjena potvrda iz tog dana je otkriva svatko tko drži objavljeni korijen. Žig dokazuje da je hash postojao najkasnije u trenutku žiga, ne da je to jedini korijen tog dana ni da sadrži sve potvrde.
+5. **Što ne dokazuje:** ne štiti od dva različita korijena za isti dan bez neovisnog primatelja (split view); ne štiti od krivotvorenja potvrda u prozoru prije sidrenja (24 do 48 sati, dulje ako TSA ne radi) ni prije prvog uspješnog žiga; ne dokazuje istinitost sadržaja ni autorstvo. Taj tekst ide u sučelje i DPIA.
+6. Paket dokaza za predaju izdaje se kao "sidren" tek kad je pripadni korijen žigosan; do tada nosi oznaku "još nije sidren".
+7. Za radove s dugim rokom čuvanja uz `.tsr` spremaju se lanac certifikata TSA i stanje opoziva u trenutku žiga, uz plan ponovnog žigosanja prije isteka certifikata.
+8. Javni broj listova po danu otkriva dnevnu aktivnost pilota; procijeniti u DPIA-i ili zaokružiti.
+9. Verifikator: CLI i web stranica koja radi u pregledniku (lanac, inclusion i consistency dokaz, potpis, `.tsr`, javni ključ) uz ručnu provjeru `openssl`-om.
 
-### 4.3 Prijava i sesije
+### 4.3 Prijava, sesije i identitet u bazi
 
-- Next.js ruta pokreće OIDC Authorization Code s PKCE-om prema `login.aaiedu.hr`, discovery je na `/.well-known/openid-configuration` (POTVRĐENO). AAI@EduHr podržava OIDC uz SAML i CAS. Klijent se registrira u Registru resursa (`registar.aaiedu.hr`, redirect URI, scopeovi, logout URI), uz ručno odobrenje.
-- Scopeovi: `hrEduPersonUniqueID`, `hrEduPersonHomeOrg`, `hrEduPersonAffiliation`, ime i `mail` po potrebi. **OIB scope se ne traži** (nepotreban osobni podatak).
-- Sesije su retci u bazi (`session`: hash tokena, `user_id`, istek, zadnja uporaba, korak-gore za administratore), kolačić `HttpOnly; Secure; SameSite=Lax`, provjera `Origin` na svakom mijenjajućem zahtjevu, kratak apsolutni istek i klizni istek. Odjava poništava redak i briše lokalni journal (uz blokadu ako ima nesinkroniziranih promjena, kao sada).
-- Identitet se veže samo uz `hrEduPersonUniqueID` + izdavatelj. **Nikad automatsko spajanje po e-pošti** (rizik preuzimanja računa). Ovo je test u M1.
-- Lažni OIDC pružatelj za lokalni razvoj i CI: `node-oidc-provider` u procesu testa (ili `mock-oauth2-server` u Dockeru). CI test provjerava da produkcijska konfiguracija nema lažnog pružatelja.
-- Biblioteka: Better Auth (generic OAuth plugin, PKCE, sesije u bazi) je preporuka istraživanja. Auth.js je od rujna 2025. u održavanju Better Autha, Lucia je deprecirana. Ako M1 spike pokaže da biblioteka spaja račune po e-pošti ili ne dopušta traženo mapiranje, piše se ručni klijent nad `openid-client` (oko 300 redaka, sigurnosni pregled). Odluka je izlazni kriterij M1.
+- Next.js ruta pokreće OIDC Authorization Code s PKCE-om prema `login.aaiedu.hr` (OIDC potvrđen na službenoj Srce wiki stranici, discovery `/.well-known/openid-configuration`, registar resursa, Lab `fed-lab.aaiedu.hr`). Registraciju klijenta odobrava Srce ručno; tko smije podnijeti zahtjev nije potvrđeno (možda FPZG administrator).
+- **Obvezno (izlazni kriterij M1):** `state` i `nonce`; provjera `iss`, `aud`, `azp`, `exp`, `iat`, prikvačen algoritam, keširanje i rotacija JWKS-a, dopušten pomak sata. AAI vraća atribute s userinfo endpointa, pa `sub` iz userinfo odgovora mora biti jednak `sub` iz ID tokena (OIDC Core 5.3.2). Novi ID sesije pri prijavi (session fixation), kolačić `__Host-...; HttpOnly; Secure; SameSite=Lax`, zaštita `returnTo` od otvorenog preusmjeravanja, na mijenjajućim rutama obavezan `Origin` (bez zaglavlja odbij) i `Sec-Fetch-Site`.
+- **Odjava:** RP-initiated logout prema `end_session_endpoint` AAI-ja i back-channel logout koji zatvara sesije u bazi. Bez toga na zajedničkom računalu sljedeća osoba klikne "Prijava" i ulazi kao prethodni student.
+- Istek sesije tijekom pisanja nije odjava: journal se ne briše, ponovna prijava istog korisnika nastavlja. Dexie je po originu, pa "vezan uz korisnika" znači logičku oznaku; kad se prijavi drugi korisnik na istom pregledniku, journal prethodnog se prije toga briše ili blokira prijavu.
+- Identitet: `hrEduPersonUniqueID` + izdavatelj; **nikad automatsko spajanje po e-pošti**. Koji je identifikator trajan i ne dodjeljuje se ponovno potvrditi sa Srcem; spremiti i `sub` i `hrEduPersonUniqueID`. OIB se ne traži.
+- **RLS bez Supabasea.** `ductus_app` u svakoj transakciji postavlja `app.session_token` (slučajni token iz kolačića). `SECURITY DEFINER` funkcija `current_actor()` hashira token, traži redak u tablici `session` (na koju `ductus_app` nema `SELECT`), provjerava istek i vraća `user_id` i ustanovu. Politike čitaju `nullif(current_setting('app.session_token', true), '')`. Zašto ne sirovi `app.user_id`: `set_config` smije pozvati svaka uloga, pa bi SQL injekcija glumila bilo kojeg korisnika. Jedan modul `withActor(token, fn)` je jedini izvoz za pristup bazi, ESLint zabranjuje izravni `pool.query`, a test provjerava da se GUC ne zadržava na vezi nakon transakcije (nakon prvog `SET LOCAL` GUC vraća `''`, ne NULL; ni `SET` bez `LOCAL` ni `false` u `set_config` ne smiju se pojaviti u kodu ni u bibliotekama).
+- **RLS je obrana u dubinu**, ne granica protiv kompromitirane aplikacije; tako se piše u dokumentaciji i DPIA-i.
+- Lažni OIDC pružatelj samo lokalno i u CI-ju (`node-oidc-provider` u procesu ili `mock-oauth2-server`); CI test provjerava da ga produkcijska konfiguracija nema.
 
 ### 4.4 Ovlasti
 
-- Funkcija `can(actor, action, object)` kao jedino mjesto odluke; RLS politike i RPC pozivaju nju. Odnosi: vlasnik projekta, student kolegija, nastavnik kolegija, mentor (iz `mentorship`), administrator ustanove.
-- pgTAP matrica (`PROGRAM.md` GO uvjeti) ostaje uvjet za spajanje; diferencijalni test uspoređuje `can()` s izvršnim referentnim modelom iz R2 (`pisac-editor`, `src/domain/authorization`) nad istim slučajevima.
-- Opoziv je odmah: nema predmemorije odluka. Svaki dohvat sadržaja ponovno provjerava članstvo (već u `ARCHITECTURE.md` §7).
-- Evidencija (čitanje) i izvoz evidencije su zasebne sposobnosti. Administrator ustanove nije superadministrator sadržaja.
+- `can(actor, action, object)` je jedino mjesto odluke; RLS i RPC pozivaju nju.
+- **Ispravak v0.1:** odnosi **nisu** bez nasljeđivanja. Postoji kolegij, zadatak, projekt i dokument lanac, i R2 model ima tuple-to-userset. Argument protiv OpenFGA (D-07) vrijedi jer su odnosi plitki i broj vrsta mali, ne zato što nema nasljeđivanja.
+- **R2 referentni model nije model Ductusa.** R2 ima uloge `assistant`, `co_mentor`, `reviewer`, `auditor`, vremenski ograničen `break_glass`, a nastavnik kolegija u njemu **ne** vidi rad, dok D-06 daje nastavniku trenutno stanje. Zato se piše **novi izvršni referentni model Ductusa** (TypeScript, iz `PRODUCT.md` i `ARCHITECTURE.md` §7), a R2 i `authz/*.fga` služe samo kao izvor neprijateljskih slučajeva. Diferencijalni test uspoređuje `can()` s tim novim modelom.
+- Opoziv je odmah: nema predmemorije odluka. Čitanje evidencije i izvoz evidencije su zasebne sposobnosti; administrator ustanove nije superadministrator sadržaja.
 
 ### 4.5 Poslovi, obavijesti, AI
 
-- Worker koristi pg-boss (održava ga jedna osoba, što je rizik održavanja; zamjena je graphile-worker). Poslovi: ponovni potpis, retention (brisanje po klasi podataka), rekonstrukcija pri predaji, dnevni korijen i žig, e-pošta, podsjetnici.
-- Obavijesti nastavniku i studentu: tablica `notification` i endpoint "što je novo od X" uz polling 30 do 60 s; poruke nose samo ID. Ako se kasnije pokaže potreba, doda se SSE preko `LISTEN/NOTIFY` bez promjene podatkovnog modela.
-- AI proxy je obična Next.js ruta (ne edge) koja provjerava popis dopuštenih pružatelja po fakultetu i zadatku. Studentov OpenRouter ključ šifrira se aplikacijski: AES-256-GCM, KEK iz okoline, **AAD = `user_id` + namjena + verzija ključa**. Ne koristiti `pgsodium` (u najavi ukidanja) ni Supabase Vault.
-- E-pošta: Scaleway TEM, SPF/DKIM/DMARC na vlastitoj domeni. DPA dokumente treba provjeriti prije produkcije.
+- pg-boss u workeru, `migrate: false` (njegovu shemu vodi `ductus_migrator`). **Tijela poslova su samo ID-ovi** (test).
+- Obavijest nastavniku o novoj reviziji nastaje **najviše jednom po P-03 prozoru** (i po D-39 samo na kraju sesije ako se potvrdi), pa polling od 30 do 60 s ne pretvara pogled u uživo (D-06). Test.
+- AI proxy je obična Next.js ruta koja provodi popis dopuštenih pružatelja po fakultetu i zadatku, uz `provider.only`, isključene fallbackove i `data_collection: deny` u zahtjevu prema OpenRouteru, te ograničenje troška po studentu. Studentov ključ šifrira se aplikacijski: AES-256-GCM, KEK iz okoline, **AAD = `user_id` + namjena + verzija ključa**. Ne `pgsodium` (u najavi ukidanja).
+- Uvoz DOCX i PDF: parsira se **u pregledniku ili u izoliranom poslu** s ograničenjem veličine i vremena (zip bombe, XXE), nikad u web procesu.
 
 ### 4.6 Rekonstrukcija i predaja
 
-- Rekonstrukcija koristi isti kod kao klijent (ProseMirror u Nodeu) u workeru, od najbliže kontrolne točke. Ograničenje CPU-a nema, ali ima vremenska i memorijska granica posla (npr. 120 s, 1 GB) i kvote po korisniku.
-- M3 mjeri vrijeme na rad od 15.000 riječi, a ovdje ga proširujemo na **80.000 riječi** (doktorski) kao neizvediv scenarij na starom stacku koji sada postaje izvediv.
-- Nepodudarnost JCS usporedbe blokira predaju i bilježi incident (nepromijenjeno).
+- Isti kod kao klijent (ProseMirror u Nodeu) u workeru, u kontejneru s ograničenim CPU-om da ne guši ingest. B0.2 mjeri 15.000 riječi (pilot) i 80.000 (doktorski, izvan pilota, `PROGRAM.md`).
+- **Vrijeme predaje je `requested_at` iz sata baze u trenutku klika**, prije reda rekonstrukcija. Potvrda nosi to vrijeme. Nepodudarnost nakon roka ide u zamjenski postupak s očuvanim `requested_at`. Jedan izvor vremena za sve pravno relevantne trenutke: sat baze; prikaz u Europe/Zagreb. Load test (B9): 100 % predaja u 15 minuta prije roka.
+- Kontrolne točke s punim tekstom svakih 200 koraka za rad od 80.000 riječi znače stotine kilobajta po točki; B0.2 mjeri i volumen.
 
-### 4.7 Sigurnosna, sigurnosne kopije i povrat
+### 4.7 Kopije, povrat, čuvanje
 
-- PITR i dnevni backupi baze kod dobavljača; dodatno **vlastiti logički `pg_dump` šifriran `age` ključem** u zasebni bucket drugog dobavljača (Hetzner Storage Box ili Object Storage) jednom dnevno, kako gubitak jednog računa ne bi značio gubitak svega.
-- Bucket s evidencijom: versioning uključen; objekti se brišu samo workerom po retention pravilu (uloga `ductus_retention` s DeleteObject, aplikacijska uloga nema).
-- **Backup postoji tek kad je restore dokazan.** Mjesečna automatska proba: povrat najnovije kopije u privremenu bazu, `ductus verify` nad uzorkom radova, zapis rezultata. Prva proba je uvjet za GO.
-- Ciljevi pilota: RPO do 5 minuta (WAL), RTO do 4 sata (rezervni poslužitelj iz OpenTofu koda + povrat baze). Mjere se u probi, ne pretpostavljaju.
-- Hetzner automatski backup VPS-a (20 % cijene) uključen, ali nije izvor istine: stanje je u bazi i bucketu, VPS je potrošan.
+- **Baza:** PITR 3 dana na UpCloud Developer (RPO procjenjuje B0.1, ne pretpostavlja se 5 minuta), plus dnevni šifrirani logički `pg_dump` (`age`) u spremnik drugog dobavljača.
+- **Bucket:** `pg_dump` ne sadrži odsječke. Dnevna replikacija bucketa (`rclone sync` bez brisanja, šifrirano) u drugi račun (Hetzner Object Storage ili sl.). Bez toga gubitak ili blokada Scaleway računa znači da potvrde postoje, a sadržaj koji dokazuju ne postoji (uvjet zaustavljanja pilota).
+- **Backup postoji tek kad je restore dokazan:** mjesečna proba povrata baze **i** bucketa u privremeno okruženje, pa `ductus verify` nad uzorkom radova, zapis rezultata.
+- **Rezervni put na drugom računu** (Scaleway Instance ili Hetzner) u istom OpenTofu kodu; RTO se mjeri u probi i uključuje DNS, novu adresu, tajne i povrat ključeva (KMS ključevi ostaju na AWS-u). Cilj RTO 4 sata je cilj, ne tvrdnja.
+- **Brisanje po roku i kopije.** Versioning bucketa i backupi znače da `DeleteObject` ne briše: retention briše i verzije (`DeleteObjectVersion`) ili životni ciklus nesadašnjih verzija s kratkim rokom. Za svaku vrstu kopije (PITR, dump, replika, snimke) zapisan je rok čuvanja; brisanje po roku postaje potpuno tek kad istekne najdulji. Hashevi čvorova Merkle stabla ne brišu se (ne sadrže sadržaj).
+- Prozor održavanja upravljane baze zakazuje se izvan rokova predaje (D-69) i upisuje u `OPERATIONS.md`.
 
-## 5. Što istraživanje nije potvrdilo (mora se provjeriti, ne pretpostaviti)
+### 4.8 Migracije i sheme
 
-| Stavka | Kako se provjerava | Gdje |
+Postojeće migracije su u formatu Supabase CLI-ja; alat još nije odabran (kandidati: dbmate, node-pg-migrate, graphile-migrate). Odluka u B1 uz: zasebnu migraciju za uloge i grantove, pgTAP u CI-ju bez `supabase start`, provjeru zanošenja sheme (`pg_dump --schema-only` staging naspram produkcije), expand/migrate/contract.
+
+### 4.9 Opservabilnost i curenje sadržaja
+
+- Parametri baze: `log_statement=none` i da greška ne ispisuje naredbu s parametrima (provjeriti u B0.1 smije li se mijenjati; inače pozivati funkcije tako da tekst ne ide kroz parametre loga). Caddy access log bez query stringova; Next.js neuhvaćene greške bez tijela zahtjeva.
+- GlitchTip EU ili Sentry s `sendDefaultPii=false` i `beforeSend` koji odbacuje tijela. Canary test radi **u CI-ju i na stagingu nad logovima aplikacije, Caddyja i baze**.
+- Pet alarma u `OPERATIONS.md` (e-pošta i push): backlog `pending_signature`, neuspjeli dnevni korijen ili žig, neuspjeli backup ili replikacija bucketa, disk i istek TLS-a i broj veza na bazi, vanjski uptime monitor. SLO-ovi: "potvrda potpisana unutar N minuta", "korijen žigosan do 02:00".
+
+## 5. Što još nije potvrđeno (spike prije odluke)
+
+| Stavka | Provjera | Gdje |
 | --- | --- | --- |
-| PITR i retencija na Scaleway DB-DEV-S | Podignuti instancu, izvesti stvarni povrat u točku; ako nema, sljedeći tip je oko 105 EUR/mj (razbija budžet), pa alternativa postaje Postgres uz WAL-G na vlastitom VPS-u | B0.1 |
-| Latencija VPS (DE/FI) do Scaleway PG (Pariz/Amsterdam) | Mjerenje RTT i trajanje `reserve` RPC-a; ako je ingest sporiji od cilja, sve na Scalewayu (VM + PG + S3, oko 53 EUR/mj, privatna mreža) | B0.1 |
-| Rekonstrukcija 15.000 i 80.000 riječi | Benchmark na CX43 s ProseMirrorom u Nodeu | B0.2 |
-| AAI@EduHr Lab URL, tko odobrava, rokovi, uvjeti (treba li ustanova biti naručitelj), eduGAIN za izvanhrvatske SP-ove | Pisati na `aai@srce.hr`; za planiranje računati 2 do 6 tjedana (moja procjena, ne izvor) | Owner queue |
-| Mapiranje hrEdu claimova u Better Authu | M1 spike | B2 |
-| FINA minimalna naknada, certifikat za pristup TSA, uvjeti | Upit FINA-i | Owner queue |
-| `pg_cron` na Scaleway Managed PG | Nije potrebno; worker preuzima | n/a |
-| Cijene AWS/Azure za eu-central, besplatni TSA uvjeti, DPA dokumenti | Nije potrebno za preporuku; ako se vratimo na KMS, provjeriti tada | n/a |
-| Sentry EU regija na besplatnom planu | Ako nije, GlitchTip EU (15 USD za 100k događaja) ili samostalno | B9 |
+| PITR na UpCloud Developer (stvarni povrat u točku, uključen disk, regija, RPO) | Podići instancu, izvesti povrat | B0.1 |
+| Uloge na upravljanoj bazi: `CREATE ROLE NOLOGIN`, `ALTER FUNCTION OWNER`, `GRANT role TO role`, `max_connections`, promjena log parametara, ekstenzije | Pokrenuti skriptu uloga i pgTAP | B0.1 |
+| Latencija VM do baze i trajanje `reserve` | Mjerenje | B0.1 |
+| Jesu li UpCloud Cloud Native tipovi dostupni i po kojoj cijeni za računalo koje ne guši pri rekonstrukciji | Cjenik i narudžba | B0.1 |
+| Rekonstrukcija 15.000 i 80.000 riječi (vrijeme, memorija, volumen kontrolnih točaka) | Benchmark na stroju koji se stvarno kupuje | B0.2 |
+| AWS KMS Ed25519 u eu-central-1: cijena, latencija | Konzola | B0.1 |
+| Besplatni TSA: uvjeti, SLA | Pročitati uvjete | B5 |
+| Tko registrira klijent u AAI Registru resursa, rokovi, trajnost identifikatora | Pisati Srcu | Owner queue |
+| FINA: minimalna mjesečna naknada, uvjeti, tko je ugovorna strana | Upit | Owner queue |
+| Sentry EU na besplatnom planu | Pročitati | B9 |
 
-Istraživanje nije moglo čitati većinu stranica `aaiedu.hr` (robots.txt), pa je dio o prijavi velikim dijelom iz sažetaka i mora se potvrditi sa Srcem.
+Istraživanje nije moglo čitati većinu `aaiedu.hr` (robots.txt, proxy); OIDC i atributi potvrđeni su na službenoj Srce wiki stranici.
 
 ## 6. Obvezna kontrolna lista za svaku backend komponentu
 
-Preuzeto i skraćeno iz vNext §38; PR se ne spaja dok nije ispunjeno ili dok nije izričito zapisano zašto nije primjenjivo.
+PR se ne spaja dok nije ispunjeno ili dok nije zapisano zašto nije primjenjivo.
 
-1. Domenski ugovor (TypeScript tipovi + Zod shema; shema je verzionirana).
-2. Validacija pri izvođenju na granici (veličine, nepoznata polja odbijena).
-3. Model ovlasti: redak u pgTAP matrici i test koji dokazuje odbijanje.
-4. Matrica kvarova: što se događa kad padne baza, bucket, worker, TSA, potpisnik.
-5. Idempotencija i ponovni pokušaji (isti ulaz, isti rezultat).
-6. Odluka o privatnosti i čuvanju: klasa podataka i rok.
-7. Neprijateljski testovi (izmijenjeni bajtovi, ponovljeni ID s drugim sadržajem, tuđa sesija, istekla sesija, uklonjeni nastavnik).
-8. Plan migracije i povrata (expand, migrate, contract).
-9. Opservabilnost: metrika ili događaj bez sadržaja rada; canary test logova.
-10. Konfiguracijska brava: bez potpune konfiguracije značajka je zatvorena (fail closed).
+1. Domenski ugovor (tipovi + Zod shema, verzionirana).
+2. Validacija na granici (veličine, nepoznata polja odbijena).
+3. Redak u pgTAP matrici i test odbijanja.
+4. Matrica kvarova.
+5. Idempotencija i ponovni pokušaji.
+6. Klasa podataka i rok čuvanja, uključujući kopije.
+7. Neprijateljski testovi (izmijenjeni bajtovi, ponovljeni ID s drugim sadržajem, tuđa i istekla sesija, uklonjeni nastavnik, SQL pod `ductus_app` koji pokušava glumiti drugog).
+8. Plan migracije i povrata.
+9. Opservabilnost bez sadržaja; canary test.
+10. Konfiguracijska brava (zatvoreno bez potpune konfiguracije).
 11. CI zelen, uključujući pgTAP i property testove.
-12. Ako dira povjerenje (evidencija, potpis, predaja): **sintetički prolaz na živom stagingu s povratom prije aktivacije.** Pouka iz R4: uspješna migracija nije dokaz; tek prvi stvarni RPC poziv otkrio je grešku (`pg_catalog.coalesce`).
+12. Ako dira povjerenje: **sintetički prolaz na živom stagingu koji koristi iste vrste resursa kao produkcija (upravljana baza, KMS, S3), s povratom.** Pouka iz R4: prvi stvarni RPC poziv otkrio je grešku koju je migracija prešla.
 
-Dodatna matrica kvarova za naš okoliš:
+Dodatna matrica kvarova:
 
 | Kvar | Ispravno ponašanje |
 | --- | --- |
-| VPS pada | Klijent nastavlja lokalno, stanje "čeka poslužitelj"; rezervni poslužitelj iz koda; FPZG zamjenski postupak ako traje preko praga |
-| Worker pada | Ingest i dalje prima; potpisi ostaju `pending_signature`; backlog je metrika s alarmom |
-| Baza nedostupna | Ingest vraća 503, klijent ponavlja uz backoff; nijedna potvrda ne postoji bez zapisa u bazi |
-| Bucket nedostupan | Nema metapodataka ni potvrde; klijent ponavlja |
-| FINA TSA nedostupan | Dnevni korijen se potpisuje i objavljuje bez žiga i označava se "bez žiga"; posao ponavlja do žiga; žig se priključuje naknadno, ali se vrijeme žiga ne unazađuje |
-| Ključ potvrda kompromitiran | Postupak iz `ARCHITECTURE.md` §8; žig dnevnog korijena ograničava razdoblje sumnje |
-| Pogreška aplikacije pri deployu | Migracije samo naprijed uz expand/contract; deploy blue/green na istom VPS-u (dva kontejnera) ili brzi povrat slike |
+| VM pada | Klijent nastavlja lokalno ("čeka poslužitelj"); rezervni put na drugom računu; FPZG zamjenski postupak ako traje preko praga |
+| Worker pada | Ingest prima; potvrde ostaju `pending_signature`; backlog je alarm |
+| Baza nedostupna | Ingest 503, klijent ponavlja; potvrda ne postoji bez zapisa u bazi |
+| Bucket nedostupan | Nema metapodataka ni potvrde |
+| KMS nedostupan | `pending_signature`; ponovni potpis iste potvrde; dnevni korijen čeka |
+| TSA nedostupan | Korijen potpisan i objavljen "bez žiga"; posao ponavlja; vrijeme žiga se ne unazađuje; paket dokaza "još nije sidren" |
+| Ključ potvrda kompromitiran | Postupak iz `ARCHITECTURE.md` §8; listovi su bez potpisa pa ponovni potpis ne ruši dokaze |
+| Račun kod dobavljača blokiran | Povrat iz kopija na drugi račun (baza iz PITR/dumpa, bucket iz replike); proba ovo mjeri |
+| Greška pri deployu | Migracije samo naprijed (expand/contract); povrat slike |
 
-## 7. Trošak (bez PDV-a, procjena 3. 10. 2026.)
+## 7. Trošak (procjena 3. 10. 2026., EUR godišnje)
 
-| Stavka | EUR/god | Napomena |
+| Stavka | Bez PDV-a | Napomena |
 | --- | --- | --- |
-| Hetzner VPS CX43 (produkcija) | 192 | 15,99 EUR mjesečno |
-| Hetzner backup VPS-a | oko 38 | 20 % cijene, NEPROVJERENO za CX43 |
-| Staging (manji VPS ili Docker na istom) | 0 do 60 | Staging baza može biti Postgres u Dockeru na stagingu |
-| Scaleway Managed PG (DB-DEV-S, disk, backup) | oko 156 | oko 13 EUR mjesečno; PITR NEPROVJEREN |
-| Scaleway Object Storage | oko 5 do 10 | 0,016 EUR/GB |
-| Scaleway TEM | oko 15 | NEPROVJEREN DPA |
+| UpCloud Cloud Native VM (2 vCPU / 4 GB, 15 EUR mjesečno) | oko 180 | Veći tip (4 vCPU / 8 GB, 32 EUR mjesečno, oko 384) ako B0.2 traži; disk možda dodatno |
+| UpCloud Managed PG Developer 2 GB (14 EUR mjesečno) | oko 168 | PITR 3 dana; bez HA i SLA; disk NEPROVJEREN |
+| Scaleway Object Storage | 5 do 10 | |
+| Scaleway TEM | oko 14 | |
+| Replika bucketa (drugi račun) | 10 do 40 | |
+| AWS KMS (2 ključa) | oko 60 | oko 2,5 USD mjesečno po ključu, regija NEPROVJERENA |
 | Domena `.hr` | 15 do 30 | sekundarni izvor |
-| FINA žigovi (365) | oko 40 | plus nepoznata minimalna naknada |
-| Drugi bucket za šifrirane dumpove (Hetzner) | oko 10 do 60 | NEPROVJEREN |
-| Praćenje grešaka (GlitchTip EU / Sentry) | 0 do 20 | |
-| **Ukupno** | **oko 470 do 640** | D-66: infrastruktura 300 do 500 + domena i e-pošta 50 do 100 |
+| TSA žigovi | 0 do 40 | FINA 0,11 EUR po žigu |
+| FINA pristupni certifikat | oko 17 | 86,27 EUR na 5 godina; traži poslovni subjekt |
+| Praćenje grešaka i vanjski monitor | 0 do 20 | |
+| Staging (privremeni resursi tjednima prije aktivacije, naplata po satu NEPROVJERENA) | 30 do 100 | Staging mora koristiti upravljanu bazu, KMS i S3 (§6 točka 12) |
+| **Ukupno** | **oko 520 do 700** | |
+| **S PDV-om (oko +25 %)** | **oko 650 do 875** | PDV se naplaćuje fizičkoj osobi bez obrta u sustavu PDV-a; potvrditi sa računovođom |
 
-Na gornjoj granici troška prekoračuje se infrastrukturna stavka D-66; razlika dolazi iz rezerve (100 do 200 EUR), što treba potvrditi. Ako PITR na DEV-S ne postoji, varijanta "PG s WAL-G na vlastitom VPS-u" je jeftinija (oko 25 EUR mjesečno ukupno), ali rad na bazi i probe povrata postaju tvoj posao. Pri 5 puta većem broju korisnika procjena je 160 do 300 EUR mjesečno (veći tip baze, HA, odvojeni app serveri), izvan ovog budžeta; to je tada stvar financiranja, ne arhitekture.
+To je **iznad D-66** (infrastruktura 300 do 500 plus domena i e-pošta 50 do 100) i troši rezervu. Zato je odluka vlasnika:
+
+- **Varijanta A (preporuka ako B0.1 prođe):** gore opisano. Dodatni trošak pokriva rezerva (100 do 200) i stavka "sigurnost" (0 do 200) iz D-66 se smanjuje.
+- **Varijanta B:** Hetzner VM (ako se CX tip stvarno može naručiti; CPX32 dodaje oko 280 EUR godišnje) + PostgreSQL s WAL-G na vlastitom VM-u, bez upravljane baze. Jeftinija, ali PITR, nadogradnje i proba povrata postaju tvoj posao; baza ima javnu adresu ili tunel.
+- Rezanje po potrebi: FINA tek s ugovorom, staging samo u zadnjim tjednima, replika bucketa na jeftiniji spremnik, jedan KMS ključ za prvi mjesec.
+- Pri 5 puta većem broju korisnika procjena je 160 do 300 EUR mjesečno, izvan budžeta; to je tada pitanje financiranja.
 
 ## 8. Program backenda
 
-Backend nije posebna faza nego okomiti rez kroz M0 do M11. Dolje je što se u kojoj fazi radi i kako se razlikuje od `PROGRAM.md`. Procjene su u večerima (kao u `PROGRAM.md`), a **neto razlika prema trenutnom planu je oko +6 do +10 večeri** (prijava, worker, deploy i ops dodani, a Edge Functions, Realtime i Supabase CLI izbačeni; dnevni korijen i verifikator dodani u val 1).
+Backend nije posebna faza nego okomiti rez kroz M0 do M11. **Procjena dodatka prema `PROGRAM.md`: realno 18 do 25 večeri** (v0.1 je rekao +6 do +10 bez osnove; uklonjeni Supabase poslovi nikad nisu bili zasebno procijenjeni, pa se "neto" ne može izračunati). Preporučujem da se dodatak vodi kao zaseban red u valu 1.
 
 | Korak | Sadržaj | Izlazni kriterij | Faza | Večeri |
 | --- | --- | --- | --- | --- |
-| B0.1 Spike hostinga | Podići Scaleway PG i Hetzner VPS (privremeno), izmjeriti RTT i `reserve`, provesti stvarni PITR povrat na DEV-S | Zapis s brojkama; PITR radi ili je odabrana varijanta WAL-G | prije M2 | 1 do 2 |
-| B0.2 Spike rekonstrukcije | Benchmark ProseMirror rekonstrukcije za 15.000 i 80.000 riječi u workeru | Vrijeme i memorija zapisani; granice posla određene | prije M3 | 1 |
-| B0.3 Odluka D-08 | Vlasnik potvrđuje D-08, D-71 do D-75 prema rezultatima spikeova | Odluke u `DECISIONS.md` kao ODLUČENO | | 0 |
-| B0.4 Prepis ARCHITECTURE | §1, §4, §5, §5a, §5b, §9, §10, §12 prema ovom dokumentu | `ARCHITECTURE.md` bez Supabasea i Netlifyja, §12 s R1 do R4 | M0 | 1 |
-| B1 Okruženja | `docker compose` (Postgres, MinIO, Mailpit, lažni OIDC), OpenTofu za Hetzner i Scaleway, CI deploy na staging, `sops`/`age`, uloge u bazi, Caddy | `docker compose up` i `npm test` zeleno lokalno; staging se podiže iz koda | M0 | 3 do 4 |
-| B2 Identitet | OIDC klijent, sesije u bazi, `app.user_id` u transakciji, test bez spajanja po e-pošti, lažni pružatelj samo lokalno i u CI-ju | Prijava na AAI Labu radi; test dokazuje da lažni pružatelj ne postoji u produkciji | M1 | 2 do 3 |
-| B3 Ovlasti | `can()`, RLS, pgTAP matrica, diferencijalni test prema R2 modelu | Matrica zelena za sve uloge uključujući mentora | M2 | uključeno u M2 |
-| B4 Evidencija | Prijenos R1 do R4; `pg-evidence-*` i `s3-evidence-payload-store`; ingest ruta; worker za ponovni potpis; kontrolne točke; praznine | Svi ugovorni testovi zeleni nad in-memory i pg/S3; property testovi; sintetički prolaz na stagingu s povratom | M3 | uključeno u M3, +2 |
-| B5 Dnevni korijen i žig | Merkle stablo, potpis, FINA RFC 3161, objava u javni repozitorij, CLI verifikator | Neovisna provjera nad izvezenim paketom prolazi; promjena jednog odsječka ruši provjeru; dan bez TSA-a se ispravno oporavlja | M3 do M7 | 3 do 4 |
-| B6 Poslovi i obavijesti | pg-boss, retention, e-pošta (TEM), `notification` + polling | Posao ponovljen nakon pada workera ne duplicira učinak | M6, M7, M10 | uključeno, +1 |
-| B7 AI proxy | Ruta, popis pružatelja, envelope enkripcija ključa | Nedopušten pružatelj nedostupan; ključ nikad u odgovoru ni logu | M9 (val 2) | uključeno u M9 |
-| B8 Predaja | Rekonstrukcija u workeru, usporedba JCS, potvrda | Podudarna rekonstrukcija na svim scenarijima uključujući prazninu | M7 | uključeno u M7 |
-| B9 Operacije i GO | Backup i drugi bucket, mjesečna proba povrata, praćenje bez sadržaja, statusna stranica, `docs/OPERATIONS.md`, load test noći roka, OWASP provjera, DPA s dobavljačima | Svi crveni uvjeti iz GO tablice zeleni; zapisana proba povrata | M11 | uključeno u M11, +2 |
+| B0.1 Spike okruženja | UpCloud VM + Managed PG, skripta uloga, PITR povrat u točku, RTT, log parametri, KMS ključ | Zapis s brojkama; PITR radi ili se odabire varijanta B | prije M2 | 2 do 3 |
+| B0.2 Spike rekonstrukcije | ProseMirror u Nodeu za 15.000 i 80.000 riječi na stvarnom stroju | Vrijeme, memorija, volumen; granice posla određene | prije M3 | 1 do 2 |
+| B0.3 Odluka | Vlasnik potvrđuje D-08, D-71 do D-75 prema rezultatima | ODLUČENO u `DECISIONS.md` | | 0 |
+| B0.4 Prepis ARCHITECTURE | Cijeli dokument (uključujući §2, §3, §8, §11), §12 s točnim popisom prijenosa | Bez Supabasea i Netlifyja | M0 | 1 do 2 |
+| B1 Okruženja | `docker compose` (Postgres, MinIO, Mailpit, lažni OIDC), OpenTofu (dva računa), CI deploy, migracijski alat, `sops`/`age`, uloge, Caddy, deploy s VM-a | `docker compose up` i `npm test` zeleno; staging se podiže iz koda | M0 | 5 do 7 |
+| B2 Identitet | OIDC klijent s popisom iz §4.3, sesije, `current_actor()`, `withActor`, test GUC-a, odjava | Prijava na AAI Labu; svi testovi iz §4.3 zeleni; nema lažnog pružatelja u produkciji | M1 | 3 do 5 (uz sigurnosni pregled, neovisan o autoru) |
+| B3 Ovlasti | Novi referentni model, `can()`, RLS, pgTAP matrica, diferencijalni test | Matrica zelena | M2 | uključeno u M2, +1 |
+| B4 Evidencija | Točan popis prijenosa (§2), novi RPC-i, okidači, uloge, jedan RPC za commit i `reserve`, worker potpis preko KMS-a, kontrolne točke, praznine | Ugovorni testovi nad in-memory i pg/S3; property testovi; sintetički prolaz na stagingu s povratom | M3 | +5 do 8 |
+| B5 Dnevni korijen i žig | Merkle stablo, consistency dokaz, KMS potpis, TSA, objava i neovisni primatelji, CLI verifikator | Neovisna provjera prolazi; promjena odsječka ruši provjeru; dan bez TSA-a se oporavlja | M3 do M7 | 4 do 5 |
+| B6 Poslovi i obavijesti | pg-boss, retention (uklj. verzije), e-pošta, `notification` s prozorom P-03 | Ponovljen posao ne duplicira učinak; nastavnik ne dobiva obavijest češće od P-03 | M6, M7, M10 | +1 do 2 |
+| B7 AI proxy | Ruta, `provider.only`, ograničenje troška, envelope enkripcija | Nedopušten pružatelj nedostupan; ključ nikad u odgovoru ni logu | M9 (val 2) | uključeno u M9 |
+| B8 Predaja | `requested_at`, rekonstrukcija u workeru, usporedba JCS | Točna na svim scenarijima uključujući prazninu i pred-rokovni val | M7 | uključeno u M7 |
+| B9 Operacije i GO | Backup i replika bucketa, mjesečna proba povrata (baza i bucket), alarmi, statusna stranica, `OPERATIONS.md`, load test, OWASP, popis podizvršitelja s DPA-ima | Svi crveni GO uvjeti zeleni; zapisana proba povrata | M11 | +3 do 4 |
 
 Redoslijed i kontrolna točka 15. 12. 2026.:
 
-1. B0.1 i B0.2 dolaze **prije** bilo kakvog vezivanja za dobavljača; M0 do tada piše samo kod iza sučelja (pristupnici za bazu, objekte, e-poštu, potpis).
-2. Ako B0.1 ne potvrdi PITR, vlasnik bira: (a) WAL-G na VPS-u uz mjesečnu probu povrata, (b) Scaleway tip s PITR-om uz probijen budžet, (c) sve na jednom Scaleway računu radi privatne mreže. Preporuka: (a) uz obaveznu probu, jer je to jedina varijanta koja ostaje ispod 500 EUR.
-3. B5 se ne smije izbaciti u prvom rezu kontrolne točke. Ako treba rezati, prije njega ide verifikator s web stranicom (ostaje CLI), a nakon toga odgoda objave u javni repozitorij (korijen i žig ostaju). Predlažem da se to upiše u `PROGRAM.md` kao šesti rez.
-4. Prije prve stvarne aktivacije evidencije: cijela kontrolna lista iz §6, sintetički prolaz na živom stagingu i povrat.
+1. B0.1 i B0.2 dolaze prije vezivanja za dobavljača; do tada M0 piše samo kod iza sučelja (baza, objekti, e-pošta, potpis, vrijeme).
+2. B0.1 je **blokiran računima** kod UpCloud-a i AWS-a (Owner queue).
+3. B5 se ne reže u prvom rezu. Ako treba rezati: prvo web verifikator (ostaje CLI), zatim objava u javni repozitorij (korijen, potpis i žig ostaju). **FINA ugovor nije GO preduvjet**; produkcija može krenuti s besplatnim TSA-om uz upisanu posljedicu.
+4. Vanjske ovisnosti na kritičnom putu: Srce (2 do 6 tjedana je moja procjena, ne izvor; privatni subjekt možda mora preko FPZG administratora ili postati partner federacije), FINA, PR #49 i #50 (blokiraju M0), računi dobavljača.
+5. Kapacitet iz `PROGRAM.md` (10 jedinica tjedno) računa samo Ductus; M4 traži rad u Lekti, a vlasnik vodi i druge projekte. Zato kontrolna točka ostaje stvarna, ne formalna.
 
 ## 9. Što treba od vlasnika
 
-- Potvrditi ili promijeniti D-08, D-71 do D-75 (ili reći što od ovoga ne želiš).
-- Pisati Srcu (`aai@srce.hr`): registracija klijenta u Registru resursa, pristup Labu, potvrditi OIDC i atribute, uvjete za ustanovu, rokove.
-- Upit FINA-i o RFC 3161 pristupu: ugovor, certifikat, minimalna naknada, uvjeti korištenja.
-- Otvoriti račune Hetzner i Scaleway, uključiti dvofaktorsku prijavu, ne dijeliti root pristup agentu (agent dobiva ograničene API ključeve po okolišu).
-- Odlučiti gdje je lokalni stroj s Dockerom na kojem teče M0.
+- Potvrditi ili promijeniti D-08, D-71 do D-75 (vidi i odluku o troškovima u §7).
+- Računi: UpCloud, Scaleway (Object Storage, TEM), AWS (samo KMS, IAM korisnik s uskim ovlastima), 2FA svugdje, agent dobiva ograničene ključeve po okolišu.
+- Srce (`aai@srce.hr`): registracija klijenta, tko je ovlašten podnijeti, Lab, trajnost identifikatora, rokovi.
+- FINA: ugovor, certifikat, minimalna naknada; shvatiti da pristupnicu podnosi poslovni subjekt (veza s planiranim obrtom).
+- Računovođa: PDV za fizičku osobu bez obrta.
+- Lokalni stroj s Dockerom za M0.
