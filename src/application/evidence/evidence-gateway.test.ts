@@ -417,6 +417,18 @@ describe("EvidenceGateway", () => {
     expect(unavailable.payloadStore.size).toBe(0);
   });
 
+  it("checks authorization before verifying the payload", async () => {
+    const denied = setup();
+    denied.authorization.decision = { status: "deny" };
+    const cmd = await command();
+    const wrongHash = {
+      ...cmd,
+      descriptor: { ...cmd.descriptor, segmentHash: "0".repeat(64) },
+    };
+    // A payload that would fail verification still gets "unauthorized".
+    expect((await ingest(denied, wrongHash)).status).toBe("unauthorized");
+  });
+
   it("distinguishes context, size and closed-package failures before storage", async () => {
     const missing = setup();
     expect(

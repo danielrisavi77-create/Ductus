@@ -4,6 +4,7 @@ import type {
   EvidenceSegmentDescriptorV2,
 } from "@/application/ports/evidence-ingest";
 import type { EvidenceOutboxItem } from "@/application/ports/evidence-outbox";
+import type { SignedEvidenceReceipt } from "@/domain/forensics/evidence-receipt";
 import {
   digestEvidenceSegmentV2,
   type EvidenceSegmentV2,
@@ -19,28 +20,32 @@ export async function buildEvidenceIngestCommandV2(input: {
   clientRequestId: string;
   segment: EvidenceSegmentV2;
 }): Promise<EvidenceIngestCommandV2> {
-  const digest = await digestEvidenceSegmentV2(input.segment);
+  // Snapshot before await so payload and descriptor come from the same state.
+  const segment = structuredClone(input.segment);
+  const evidencePackageId = input.evidencePackageId;
+  const clientRequestId = input.clientRequestId;
+  const digest = await digestEvidenceSegmentV2(segment);
   const descriptor: EvidenceSegmentDescriptorV2 = {
-    evidencePackageId: input.evidencePackageId,
-    documentId: input.segment.documentId,
-    sessionId: input.segment.sessionId,
-    segmentId: input.segment.segmentId,
-    evidenceSchema: input.segment.evidenceSchema,
-    canonicalization: input.segment.canonicalization,
-    hashAlgorithm: input.segment.hashAlgorithm,
-    evidenceProfileId: input.segment.evidenceProfileId,
-    sequenceFrom: input.segment.sequenceFrom,
-    sequenceTo: input.segment.sequenceTo,
-    eventCount: input.segment.events.length,
-    observedStartedAt: input.segment.observedStartedAt,
-    observedEndedAt: input.segment.observedEndedAt,
+    evidencePackageId,
+    documentId: segment.documentId,
+    sessionId: segment.sessionId,
+    segmentId: segment.segmentId,
+    evidenceSchema: segment.evidenceSchema,
+    canonicalization: segment.canonicalization,
+    hashAlgorithm: segment.hashAlgorithm,
+    evidenceProfileId: segment.evidenceProfileId,
+    sequenceFrom: segment.sequenceFrom,
+    sequenceTo: segment.sequenceTo,
+    eventCount: segment.events.length,
+    observedStartedAt: segment.observedStartedAt,
+    observedEndedAt: segment.observedEndedAt,
     segmentHash: digest.sha256,
-    predecessorSegmentHash: input.segment.predecessorSegmentHash,
+    predecessorSegmentHash: segment.predecessorSegmentHash,
     payloadBytes: digest.byteLength,
   };
 
   return Object.freeze({
-    clientRequestId: input.clientRequestId,
+    clientRequestId,
     descriptor: Object.freeze(descriptor),
     canonicalPayload: digest.canonical,
   });
@@ -83,6 +88,28 @@ export function beginEvidenceOutboxAttempt(
   };
 }
 
+function receiptMatchesCommand(
+  receipt: SignedEvidenceReceipt,
+  item: EvidenceOutboxItem,
+): boolean {
+  const p = receipt.payload;
+  const d = item.command.descriptor;
+  return (
+    p.evidencePackageId === d.evidencePackageId &&
+    p.documentId === d.documentId &&
+    p.sessionId === d.sessionId &&
+    p.segmentId === d.segmentId &&
+    p.segmentHash === d.segmentHash &&
+    p.predecessorSegmentHash === d.predecessorSegmentHash &&
+    p.evidenceSchema === d.evidenceSchema &&
+    p.evidenceProfileId === d.evidenceProfileId &&
+    p.sequenceFrom === d.sequenceFrom &&
+    p.sequenceTo === d.sequenceTo &&
+    p.eventCount === d.eventCount &&
+    p.payloadBytes === d.payloadBytes
+  );
+}
+
 export function applyEvidenceOutboxOutcome(
   item: EvidenceOutboxItem,
   outcome: EvidenceIngestOutcome,
@@ -93,6 +120,10 @@ export function applyEvidenceOutboxOutcome(
   }
 
   if (outcome.status === "accepted" || outcome.status === "duplicate") {
+    // A receipt only settles the item it was issued for.
+    if (!receiptMatchesCommand(outcome.receipt, item)) {
+      return { ...item, status: "blocked", updatedAt, lastFailure: "invalid" };
+    }
     return {
       ...item,
       status: "accepted",

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import type { EvidenceOutboxItem } from "@/application/ports/evidence-outbox";
 import type { SignedEvidenceReceipt } from "@/domain/forensics/evidence-receipt";
 import {
   EVIDENCE_CANONICALIZATION_V2,
@@ -10,6 +11,7 @@ import {
 import {
   applyEvidenceOutboxOutcome,
   beginEvidenceOutboxAttempt,
+  buildEvidenceIngestCommandV2,
   createEvidenceOutboxItem,
 } from "./evidence-outbox";
 
@@ -47,6 +49,27 @@ function segment(): EvidenceSegmentV2 {
       transactionFormat: "prosemirror-step-json-v1",
     },
     evidenceProfileId: "standard-v1",
+  };
+}
+
+function receiptFor(item: EvidenceOutboxItem): SignedEvidenceReceipt {
+  const d = item.command.descriptor;
+  const base = receipt();
+  return {
+    ...base,
+    payload: {
+      ...base.payload,
+      evidencePackageId: d.evidencePackageId,
+      documentId: d.documentId,
+      sessionId: d.sessionId,
+      segmentId: d.segmentId,
+      segmentHash: d.segmentHash,
+      predecessorSegmentHash: d.predecessorSegmentHash,
+      sequenceFrom: d.sequenceFrom,
+      sequenceTo: d.sequenceTo,
+      eventCount: d.eventCount,
+      payloadBytes: d.payloadBytes,
+    },
   };
 }
 
@@ -162,11 +185,11 @@ describe("Evidence Outbox state machine", () => {
 
       const final = applyEvidenceOutboxOutcome(
         item,
-        { status, receipt: receipt() },
+        { status, receipt: receiptFor(item) },
         "2026-10-03T06:02:01.000Z",
       );
       expect(final.status).toBe("accepted");
-      expect(final.receipt).toEqual(receipt());
+      expect(final.receipt).toEqual(receiptFor(item));
       expect(() =>
         beginEvidenceOutboxAttempt(
           final,
@@ -207,5 +230,41 @@ describe("Evidence Outbox state machine", () => {
       expect(final.status).toBe("blocked");
       expect(final.lastFailure).toBe(outcome.status);
     }
+  });
+
+  it("does not settle an item with a receipt issued for another segment", async () => {
+    const item = beginEvidenceOutboxAttempt(
+      await createEvidenceOutboxItem({
+        id: "outbox-mismatch",
+        evidencePackageId: "evidence-1",
+        clientRequestId: "request-mismatch",
+        segment: segment(),
+        createdAt: "2026-10-03T06:01:00.000Z",
+      }),
+      "2026-10-03T06:02:00.000Z",
+    );
+    const other = receiptFor(item);
+    other.payload.segmentId = "segment-2";
+
+    const final = applyEvidenceOutboxOutcome(
+      item,
+      { status: "accepted", receipt: other },
+      "2026-10-03T06:02:01.000Z",
+    );
+    expect(final.status).toBe("blocked");
+    expect(final.receipt).toBeUndefined();
+  });
+
+  it("builds payload and descriptor from one snapshot of the segment", async () => {
+    const input = segment();
+    const pending = buildEvidenceIngestCommandV2({
+      evidencePackageId: "evidence-1",
+      clientRequestId: "request-snapshot",
+      segment: input,
+    });
+    input.segmentId = "changed-during-hash";
+    const command = await pending;
+    expect(command.descriptor.segmentId).toBe("segment-1");
+    expect(JSON.parse(command.canonicalPayload).segmentId).toBe("segment-1");
   });
 });

@@ -164,11 +164,6 @@ export class EvidenceGateway implements EvidenceIngestPort {
       return { status: "invalid" };
     }
 
-    const verified = await parseAndVerifyCanonicalPayload(request.command);
-    if (!verified.ok) {
-      return { status: verified.reason };
-    }
-
     const contextResult = await this.dependencies.contexts.resolve(
       request.command.descriptor.evidencePackageId,
     );
@@ -185,8 +180,8 @@ export class EvidenceGateway implements EvidenceIngestPort {
 
     const context = contextResult.context;
     if (
-      context.documentId !== verified.segment.documentId ||
-      context.evidenceProfileId !== verified.segment.evidenceProfileId
+      context.documentId !== request.command.descriptor.documentId ||
+      context.evidenceProfileId !== request.command.descriptor.evidenceProfileId
     ) {
       return { status: "invalid" };
     }
@@ -248,6 +243,14 @@ export class EvidenceGateway implements EvidenceIngestPort {
     }
     if (request.command.descriptor.payloadBytes > context.maxPayloadBytes) {
       return { status: "too_large" };
+    }
+
+    // Canonicalizing and hashing the payload is the expensive step, so it runs
+    // only after authorization and the size limit; descriptorMatchesSegment
+    // ties the descriptor fields used above to the verified segment.
+    const verified = await parseAndVerifyCanonicalPayload(request.command);
+    if (!verified.ok) {
+      return { status: verified.reason };
     }
 
     const stored = await this.dependencies.payloadStore.putImmutable({
