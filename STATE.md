@@ -23,7 +23,6 @@ Agent nikad ne uzima ove stavke i nikad ne čeka na njih.
 - [ ] 15. 12. 2026.: kontrolna točka roka (`PROGRAM.md`).
 - [ ] Odlučiti o vidljivosti repoa (preporuka: privatan).
 - [ ] Konačno ime proizvoda (D-18).
-- [ ] Potvrditi prijedlog iz D-77 (ispis razgovora iz vanjskog AI-ja uz izjavu).
 - [ ] Pitanja za sastanak s FPZG-om: FPZG-ov kalendar ljetnog semestra; je li Turnitin Clarity u Srceovoj licenci; tko je DPO; koja tri kolegija i koji nastavnici u valu 1; što referada traži pri predaji; zamjenski postupak kad student odbije Ductus ili Ductus ne radi (D-79); je li ispis razgovora po čl. 15 obavezan i kad je AI korišten samo za lekturu.
 - [ ] Model podrške u pilotu (tko, kojim kanalom, u koje vrijeme, zamjenski postupak predaje kad Ductus ne radi pred rok).
 - [ ] Sučelje na engleskom u pilotu ili Erasmus studenti izvan pilota (D-67).
