@@ -1,0 +1,30 @@
+name: Dependency review
+
+# Blocks a PR that adds a dependency with a known vulnerability or a licence
+# outside the allow list. OSV in ci.yml scans the whole lockfile; this job
+# looks only at what the PR changes and comments the diff on the PR.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-review-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: moderate
+          # The list covers every licence in the lockfile on 3. 10. 2026.
+          # LGPL-3.0-or-later is only sharp's libvips (Next.js image
+          # optimisation), loaded dynamically; anything new needs a decision.
+          allow-licenses: MIT, ISC, Apache-2.0, BSD-2-Clause, BSD-3-Clause, 0BSD, MPL-2.0, BlueOak-1.0.0, CC0-1.0, CC-BY-4.0, Python-2.0, LGPL-3.0-or-later

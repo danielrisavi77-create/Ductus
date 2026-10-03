@@ -71,5 +71,10 @@
       "Read(**/*.age)",
       "Read(**/secrets/**)"
     ]
+  },
+  "enabledPlugins": {
+    "typescript-lsp@claude-plugins-official": true,
+    "context7@claude-plugins-official": true,
+    "claude-security@claude-plugins-official": true
   }
 }
