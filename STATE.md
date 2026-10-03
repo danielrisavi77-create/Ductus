@@ -38,7 +38,8 @@ Zadatke dodjeljuje orkestrator po `docs/ORKESTRATOR.md`. Do demoa vrijedi tablic
 **Stanje orkestratora (3. 10. 2026., večer).** Nova sesija orkestratora preuzela; Daniel pitanja dobiva obaviješću (`ORKESTRATOR.md` §4a). Spojeno i #13 (P-3). Sesija Citiranje nastavlja kao Arhitektura (Danielova želja); Dizajn za arhiviranje.
 
 - [ ] Platforma: P-9 paketi za Frontend (Tiptap, Dexie, fake-indexeddb), pa P-8 istraga spore `pnpm install` na Windowsu. Zatim rotacija; P-4 ide svježoj sesiji.
-- [ ] Backend: PR2 forensics proces (bez rhythm, playback i mjera iz vremena), PR3 portovi i in-memory, zatim D-88 `ductus-evidence-*` kao zaseban PR. Lanac potvrđen. Zatim rotacija.
+- [ ] Backend: PR2 (#18) i PR3 (#20) spojeni; D-88 `ductus-evidence-*` kao zaseban PR, zatim rotacija.
+- [ ] Uvjet za B-8 (Codex na #20): `evidence-ingest` provjerava kanonski JCS segment i SHA-256 prema `descriptor.segmentHash` te odbija nepoznata polja u descriptoru.
 - [ ] Frontend: F-2 u pet PR-ova (document; collaboration i evidence; serverSync; sync u dva dijela). Editor, journal i drainRunner čekaju P-9; nakon toga F-4 ljuska (D-89).
 - [ ] Arhitektura: `ARCHITECTURE.md` §5 i §6 usklađeni s B0.2 (kontrolne točke oko 2.000 koraka, PRIJEDLOG do B0.3).
 - [ ] Sljedeće iz PLAN-DEMO: P-4 (dbmate, pgTAP u CI-ju), P-5 (E2E u CI-ju), P-6 (provjera zabranjenih riječi, Frontend ili Platforma), B-5 (uloge baze, sesije).
