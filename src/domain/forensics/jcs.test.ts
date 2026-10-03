@@ -90,4 +90,9 @@ describe("RFC 8785 JCS", () => {
       '{"large":1e+30,"n":0,"small":0.000001}',
     );
   });
+
+  it("rejects sparse arrays instead of hashing them as shorter arrays", () => {
+    expect(() => canonicalizeJcs({ steps: new Array(1) })).toThrow("sparse array");
+    expect(() => canonicalizeJcs([1, , 3])).toThrow("sparse array");
+  });
 });

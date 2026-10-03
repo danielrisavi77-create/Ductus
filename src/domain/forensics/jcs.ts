@@ -86,7 +86,15 @@ function serialize(value: unknown, active: WeakSet<object>): string {
   active.add(value);
   try {
     if (Array.isArray(value)) {
-      return "[" + value.map((item) => serialize(item, active)).join(",") + "]";
+      const items: string[] = [];
+      for (let index = 0; index < value.length; index++) {
+        // map() and every() skip holes, so a sparse array would hash as a shorter one.
+        if (!(index in value)) {
+          fail("sparse array");
+        }
+        items.push(serialize(value[index], active));
+      }
+      return "[" + items.join(",") + "]";
     }
 
     const prototype = Object.getPrototypeOf(value);
