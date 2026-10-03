@@ -1,6 +1,6 @@
 # Ductus: pravila rada orkestratora
 
-Verzija 0.1 · 3. 10. 2026. · Odgovorna osoba: Daniel Rišavi
+Verzija 0.2 · 3. 10. 2026. · Odgovorna osoba: Daniel Rišavi
 
 Upute za sesiju "Ductus orkestrator". Nova sesija orkestratora čita samo ovaj dokument, `STATE.md` i `docs/PLAN-DEMO.md` §3 i §4; ostalo po potrebi, po odjeljcima. Vrijedi uz `CLAUDE.md` i `docs/SESSIONS.md`.
 
@@ -41,7 +41,9 @@ Diff čitaju CI i Codex; orkestrator gleda samo metapodatke i popis datoteka, os
 
 ## 4. Što orkestrator odlučuje sam, a što pita
 
-**Odlučuje sam i bilježi u dnevnik:** redoslijed zadataka unutar plana, dodjela zadatka sesiji, prihvaćanje ili vraćanje PR-a po §2, raspodjela modula između uloga, sitni ispravci dokumenata koje je našla sesija, otvaranje i zatvaranje kratkotrajnih sesija.
+**Načelo (Daniel, 3. 10. 2026.):** orkestrator sve operativno radi sam i ne traži potvrdu u chatu. Daniela pita samo za odluke s popisa niže, i to obaviješću (§4a), a ne pitanjem u chatu.
+
+**Odlučuje sam i bilježi u dnevnik:** redoslijed zadataka unutar plana, dodjela zadatka sesiji, prihvaćanje ili vraćanje PR-a po §2, spajanje PR-ova (i vlastitih docs PR-ova kad je CI zelen), raspodjela modula između uloga, sitni ispravci dokumenata (i činjenični ispravci u `CLAUDE.md` koji ne mijenjaju pravila), arhiviranje gotovih sesija, otvaranje i zatvaranje kratkotrajnih sesija, upisi u `STATE.md` i na ploču.
 
 **Pita Daniela (i ne spaja dok ne odgovori):**
 
@@ -54,6 +56,13 @@ Diff čitaju CI i Codex; orkestrator gleda samo metapodatke i popis datoteka, os
 - promjene u `.claude/`, `CLAUDE.md` i postavkama repoa.
 
 Pitanja se skupljaju i šalju zajedno, s preporukom uz svako.
+
+### 4a. Kako se pita Daniel
+
+1. Pitanje se upisuje na ploču (Ductus pult, polje "Čeka tebe") s preporukom, a trajna stavka i u Owner queue u `STATE.md`.
+2. Orkestrator šalje push obavijest (alat `PushNotification`, do 200 znakova): što treba i preporuka, npr. "Ductus: treba odluka o D-08; preporuka UpCloud. Detalji na pultu." Više pitanja ide u jednu obavijest.
+3. Orkestrator ne čeka u chatu: nastavlja sve što ne ovisi o odgovoru. Što ovisi, stoji na ploči kao "čeka Daniela".
+4. Isto vrijedi kad Daniel mora nešto napraviti sam (npr. otvoriti novu sesiju pri rotaciji, §7, jer orkestrator ne može pokrenuti sesiju): obavijest s točnom radnjom.
 
 ## 5. Poruke među sesijama
 

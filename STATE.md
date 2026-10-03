@@ -35,11 +35,12 @@ Agent nikad ne uzima ove stavke i nikad ne čeka na njih.
 
 Zadatke dodjeljuje orkestrator po `docs/ORKESTRATOR.md`. Do demoa vrijedi tablica u `docs/PLAN-DEMO.md` §4; ovdje je samo ono što je u radu ili sljedeće.
 
-**Predaja orkestratora (3. 10. 2026., kraj dana).** Sesije: Platforma, Backend, Frontend (aktivne); Dizajn i Citiranje gotove, za arhiviranje. Spojeno: #2, #3, #5 do #10, #12. Kontekst Platforme i Backenda je preko praga za rotaciju; nakon trenutnih zadataka idu u svježe sesije.
+**Stanje orkestratora (3. 10. 2026., večer).** Nova sesija orkestratora preuzela; Daniel pitanja dobiva obaviješću (`ORKESTRATOR.md` §4a). Spojeno i #13 (P-3). Sesija Citiranje nastavlja kao Arhitektura (Danielova želja); Dizajn za arhiviranje.
 
-- [ ] Platforma: rebase PR #13 (lokalni stog) na `main`, pa P-9 paketi za Frontend (Tiptap, Dexie, fake-indexeddb), pa P-8 istraga spore `pnpm install` na Windowsu. Zatim rotacija.
-- [ ] Backend: PR2 forensics proces (bez rhythm, playback i mjera iz vremena), PR3 portovi i in-memory; zatim preimenovanje identifikatora sheme u `ductus-evidence-*` (D-88) kao zaseban PR prije B-8. Poruka s PR2 i PR3 možda nije stigla (nije potvrđena); provjeriti. Zatim rotacija.
-- [ ] Frontend: F2 `domain/document`, F3 `collaboration` i `evidence`, F4 editor schema (čeka P-9). Nakon F4 F-4 ljuska po odobrenom dizajnu (D-89).
+- [ ] Platforma: P-9 paketi za Frontend (Tiptap, Dexie, fake-indexeddb), pa P-8 istraga spore `pnpm install` na Windowsu. Zatim rotacija; P-4 ide svježoj sesiji.
+- [ ] Backend: PR2 forensics proces (bez rhythm, playback i mjera iz vremena), PR3 portovi i in-memory, zatim D-88 `ductus-evidence-*` kao zaseban PR. Lanac potvrđen. Zatim rotacija.
+- [ ] Frontend: F-2 u pet PR-ova (document; collaboration i evidence; serverSync; sync u dva dijela). Editor, journal i drainRunner čekaju P-9; nakon toga F-4 ljuska (D-89).
+- [ ] Arhitektura: `ARCHITECTURE.md` §5 i §6 usklađeni s B0.2 (kontrolne točke oko 2.000 koraka, PRIJEDLOG do B0.3).
 - [ ] Sljedeće iz PLAN-DEMO: P-4 (dbmate, pgTAP u CI-ju), P-5 (E2E u CI-ju), P-6 (provjera zabranjenih riječi, Frontend ili Platforma), B-5 (uloge baze, sesije).
 - [ ] Prije prvog poziva `diffText` nad cijelim radom (usporedba verzija, M5 do M7): granica ulaza ili diff po odlomcima, plus ispravci negacije i razmaka (Codex nalazi na PR #8).
 - [ ] Izvan demoa: B0.2 ostaje otvoren do mjerenja na stroju koji se kupuje (nakon B0.1); B0.1 blokiran računima; M1 blokiran pristupom Labu; M4 blokiran licencom Lekte.
@@ -51,4 +52,4 @@ Zadatke dodjeljuje orkestrator po `docs/ORKESTRATOR.md`. Do demoa vrijedi tablic
 - 3. 10. 2026.: faza S: uloge i protokol sesija, Codex pregled, mjerenje tokena, čišćenje worktreeova, nadzorna ploča (PR #2).
 - 3. 10. 2026.: odluke D-81 do D-89 (potvrđeni D-07, D-10, D-11, D-24; demo 2. 11.; dizajn v6 odobren; rezovi odobreni; `ductus-evidence-*`); plan demoa (`docs/PLAN-DEMO.md`); pravila orkestratora (`docs/ORKESTRATOR.md`).
 - 3. 10. 2026.: B0.4 prepis `docs/ARCHITECTURE.md` (PR #3); pravila za izgubljene poruke među sesijama (PR #5); B0.2 lokalna osnovica rekonstrukcije, `docs/spikes/B0.2.md` (PR #6): CPU i memorija nisu problem, volumen kontrolnih točaka svakih 200 koraka raste kvadratno (prijedlog oko 2.000 koraka ide uz B0.3).
-- 3. 10. 2026.: M0 krenuo: kostur (#7), CI sa skenerima (#10), F1 i18n i diff (#8), forensics jezgra (#9), FPZG citatni stil (#12).
+- 3. 10. 2026.: M0 krenuo: kostur (#7), CI sa skenerima (#10), F1 i18n i diff (#8), forensics jezgra (#9), FPZG citatni stil (#12), lokalni stog s lažnim OIDC-om i RustFS-om (#13).
