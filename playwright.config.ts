@@ -22,7 +22,9 @@ export default defineConfig({
   webServer: {
     command: webServerCommand,
     url: BASE_URL,
-    reuseExistingServer: !process.env.CI,
+    // A server already on the port may be `next dev` or an older build, so it
+    // is reused only on explicit request.
+    reuseExistingServer: process.env.E2E_REUSE_SERVER === "1",
     timeout: 240_000,
   },
 });
