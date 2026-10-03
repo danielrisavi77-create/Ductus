@@ -146,7 +146,7 @@ Pravila:
 
 - Isti kod kao klijent (ProseMirror u Nodeu) u workeru, u kontejneru s ograničenim CPU-om da ne guši ingest. B0.2 mjeri 15.000 riječi (pilot) i 80.000 (doktorski, izvan pilota, `PROGRAM.md`).
 - **Vrijeme predaje je `requested_at` iz sata baze u trenutku klika**, prije reda rekonstrukcija. Potvrda nosi to vrijeme. Nepodudarnost nakon roka ide u zamjenski postupak s očuvanim `requested_at`. Jedan izvor vremena za sve pravno relevantne trenutke: sat baze; prikaz u Europe/Zagreb. Load test (B9): 100 % predaja u 15 minuta prije roka.
-- Kontrolne točke s punim tekstom svakih 200 koraka za rad od 80.000 riječi znače stotine kilobajta po točki; B0.2 mjeri i volumen.
+- Kontrolne točke s punim tekstom: na kraju sesije, na praznini i oko svakih 2.000 koraka ili po veličini promjene [PRIJEDLOG, potvrđuje se uz B0.3]. Lokalna osnovica B0.2 pokazala je da uz razmak od 200 koraka volumen raste kvadratno (oko 1 GB točaka za rad od 80.000 riječi), a uz oko 2.000 koraka pada oko 10 puta uz predaju ispod 0,3 s (`docs/spikes/B0.2.md`).
 
 ### 4.7 Kopije, povrat, čuvanje
 
