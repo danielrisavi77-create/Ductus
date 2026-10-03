@@ -176,7 +176,7 @@ Postojeće migracije su u formatu Supabase CLI-ja; alat još nije odabran (kandi
 | Uloge na upravljanoj bazi: `CREATE ROLE NOLOGIN`, `ALTER FUNCTION OWNER`, `GRANT role TO role`, `max_connections`, promjena log parametara, ekstenzije | Pokrenuti skriptu uloga i pgTAP | B0.1 |
 | Latencija VM do baze i trajanje `reserve` | Mjerenje | B0.1 |
 | Jesu li UpCloud Cloud Native tipovi dostupni i po kojoj cijeni za računalo koje ne guši pri rekonstrukciji | Cjenik i narudžba | B0.1 |
-| Rekonstrukcija 15.000 i 80.000 riječi (vrijeme, memorija, volumen kontrolnih točaka) | Benchmark na stroju koji se stvarno kupuje | B0.2 |
+| Rekonstrukcija 15.000 i 80.000 riječi (vrijeme, memorija, volumen kontrolnih točaka) | Lokalna osnovica gotova 3. 10. 2026. (`docs/spikes/B0.2.md`): CPU i memorija nisu problem, volumen točaka svakih 200 koraka jest. Ostaje ponoviti na stroju koji se stvarno kupuje | B0.2 |
 | AWS KMS Ed25519 u eu-central-1: latencija potpisa | Mjerenje | B0.1 |
 | Uvjeti za partnera AAI@EduHr (može li obrt ili fizička osoba), rokovi, trajnost identifikatora | Pitati Srce, ali tek ako FPZG put ne uspije (§4.3) | Owner queue |
 | FINA: minimalna mjesečna naknada, uvjeti, tko je ugovorna strana | Upit | Owner queue |
