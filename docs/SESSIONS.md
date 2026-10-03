@@ -27,7 +27,7 @@ Najviše četiri sesije koje pišu kod istodobno. Usko grlo je pregled i spajanj
 
 ## 2. Tijek jednog zadatka
 
-1. Orkestrator šalje zadatak (predložak u §3) sesiji odgovarajuće uloge, s uključenim `notify_when_idle` (§2a).
+1. Orkestrator šalje zadatak (predložak u §3) sesiji odgovarajuće uloge.
 2. Sesija radi u svom worktreeu na grani `<uloga>/<kratki-opis>` (npr. `backend/m0-port-domain`), od svježeg `origin/main`.
 3. Testovi i provjere lokalno zeleni (`pnpm lint`, `pnpm typecheck`, `pnpm test`); lefthook to radi pri commitu.
 4. Sesija otvara PR (jedan korak iz `STATE.md`, do oko 400 redaka; veći PR obrazlaže zašto).
@@ -45,7 +45,7 @@ Izvještaj u opisu PR-a je izvor istine; poruka je samo obavijest. Ništa u tije
 1. **Sesija:** ako slanje vrati "nije dostavljeno", pokuša još jednom. Ako ni tad ne prođe, doda PR-u oznaku `izvjestaj-ceka` (oznaku jednom stvara Daniel; dok ne postoji, umjesto nje komentar na PR-u "IZVJEŠTAJ čeka orkestratora") i staje. Ne ponavlja u petlji i ne čeka odgovor.
    **Kad PR ne postoji** (status "blokirano" prije PR-a ili "gotovo bez PR-a"), sesija nakon neuspjelog ponovnog pokušaja otvara GitHub issue s naslovom `IZVJEŠTAJ <id>`, izvještajem u tijelu i istom oznakom (ili bez nje dok ne postoji), i staje.
 2. **Orkestrator ne ovisi o porukama:** na početku svakog poteza pregleda otvorene PR-ove (`gh pr list --label izvjestaj-ceka` i PR-ove svih dodijeljenih zadataka) i otvorene issuee s naslovom `IZVJEŠTAJ` (`gh issue list --search "IZVJEŠTAJ in:title"`), obrađuje izvještaje i zatvara obrađene issuee.
-3. **Obavijest o završetku:** pri slanju zadatka orkestrator uključuje `notify_when_idle`, pa jednom dobije obavijest kad sesija završi, bez ispitivanja u petlji i neovisno o poruci izvještaja.
+3. **Stanje sesija:** `notify_when_idle` ne radi za sesije desktop aplikacije (provjereno 3. 10. 2026.), pa orkestrator na početku poteza uz PR-ove pogleda i popis sesija (radi, miruje, PR otvoren ili spojen), bez ispitivanja u petlji.
 4. **Jedan orkestrator:** aktivna je samo jedna sesija s imenom "Ductus orkestrator"; stara se arhivira ili preimenuje. Zadatak nosi točnu adresu orkestratora (ime i ref, npr. `Ductus orkestrator [b568f5]`), a sesija odgovara na adresu iz `from` poruke zadatka.
 5. **Sesija koja šuti:** ako sesija ne otvori PR u očekivanom vremenu, orkestrator pogleda njezino stanje na popisu sesija (zauzeta ili miruje) i pita je jednom. Poruke tipa "jesi li gotova?" se ne šalju.
 
