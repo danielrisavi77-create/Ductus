@@ -92,7 +92,7 @@ Konzultacije (D-47), ključni rokovi (N-07), komentor i povjerenstvo u sučelju 
 
 ### Kontrolna točka 15. 12. 2026.
 
-Do tada moraju biti gotovi M0 do M3 (oko 17 do 23 nominalne večeri) i započet M4. Ako nisu, ovi rezovi stupaju na snagu redom, bez nove rasprave, dok val 1 ne stane:
+Do tada moraju biti gotovi M0 do M3 (oko 16 do 21 nominalnu večer) i započet M4. Ako nisu, ovi rezovi stupaju na snagu redom, bez nove rasprave, dok val 1 ne stane:
 
 1. Prijedlozi idu u val 2; u valu 1 samo komentari.
 2. Osnovna bilježnica izvora ide u val 2; DOI i ISBN ostaju.
