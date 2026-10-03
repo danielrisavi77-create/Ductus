@@ -23,9 +23,9 @@ Odgovorna osoba za proizvod i sve odluke u ovom dokumentu: Daniel Rišavi (Ustav
 
 **Kupac i korisnici [ODLUČENO D-02]:** kupac je fakultet. Korisnici su student, koji u Ductusu piše, te nastavnik i mentor, koji prate nastanak rada. Student mora imati vlastitu korist od alata: svoj "Word" koji zna pravila fakulteta, citiranje, bibliografiju, oblik rada i sigurno spremanje.
 
-**Problem.** U doba generativnog AI-ja gotov dokument ne govori ništa o tome kako je nastao, a detektori AI teksta daju postotke koji su nepouzdani i nepravedni. Fakultet treba pouzdan način da prati kako radovi nastaju i da razlikuje dopuštenu od nedopuštene uporabe AI-ja.
+**Problem.** U doba generativnog AI-ja gotov dokument ne govori ništa o tome kako je nastao, a detektori AI teksta daju postotke koji su nepouzdani i nepravedni. Fakultet treba pouzdan način da prati kako radovi nastaju i da sa studentom razgovara o dopuštenoj uporabi AI-ja.
 
-**Interno pozicioniranje** je "anti-AI" alat za fakultete. **Javno i prema fakultetu** proizvod se predstavlja kao transparentnost nastanka rada.
+**Pozicioniranje (jedno, interno i javno) [ODLUČENO D-02]:** "Ductus bilježi kako rad nastaje i olakšava razgovor o radu." Ductus se nikad ne predstavlja kao "anti-AI" alat ni kao alat koji otkriva AI: fakultetske smjernice GenUI tretiraju kao dio profesionalnog okruženja koji se dokumentira, a interna oznaka "anti-AI" stvara kod kupca očekivanje detekcije koje proizvod ne smije ispuniti.
 
 **Granica koja se nikad ne prelazi [ODLUČENO D-01]:** Ductus nikad ne tvrdi je li rad napisao student, niti je li AI korišten nedopušteno. Ductus daje dokaze o tome kako je rad nastao: kada je tekst nastao, što je zalijepljeno, što je uvezeno, što je došlo iz AI-ja unutar aplikacije, što je promijenio nastavnik i kako se rad mijenjao nakon komentara. Zaključak, razgovor sa studentom i svaku odluku donose nastavnik i fakultet. Razlog: student može prepisivati AI tekst s drugog uređaja i to u zapisu izgleda kao normalno pisanje, pa bi svaka tvrdnja o autorstvu mogla optužiti nevinog studenta (Ustav C-9, C-10).
 

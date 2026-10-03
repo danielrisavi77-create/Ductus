@@ -43,12 +43,11 @@ Oznake ID-a odgovaraju tom dokumentu. Procjena je u večerima rada (oko 3 sata) 
 
 Zbroj prihvaćenog: oko **55 do 70 večeri** uz grupne radove s izmjenom pisača. Uz 99 do 134 večeri iz `PROGRAM.md` to je više nego što stane u pilot; raspored po valovima i rezovi su sljedeći korak.
 
-## Iz vanjske revizije (3. 10. 2026., PRIJEDLOG D-80)
+## Iz vanjske revizije (3. 10. 2026., ODLUČENO D-80)
 
 | ID | Funkcija | Procjena | Val |
 | --- | --- | --- | --- |
 | R-01 | Zatvoren popis uporaba iz FPZG čl. 8 na prvom ekranu i u postavkama zadatka | 2 do 3 | demo |
-| R-02 | Izjava po čl. 15 koja ne proturječi zapisu | 1 do 2 | 1 |
 | R-03 | Brz put za nastavnika (tekst, četiri retka, stanje zapisa) | 2 | demo |
 | R-04 | Demo s dvije izmišljene povijesti | 1 | demo |
 | R-05 | Paket za Merlin (zip i CSV) | 1 | 1 |
