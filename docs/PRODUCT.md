@@ -91,10 +91,10 @@ Izvedeno iz Ustava; svako pravilo ima test ili provjeru u PR-u.
 1. Ductus nikad ne tvrdi tko je napisao rad, niti je li AI korišten nedopušteno. (C-9, C-10, D-01)
 2. Nema postotka AI-ja, postotka ljudskosti, ocjene rizika, sumnje ni integriteta. (C-6)
 3. Nepoznato nije krivnja. Praznina u zapisu prikazuje se kao praznina, nikad kao znak nečega. (C-8)
-4. Nema bilježenja tipki ni ritma tipkanja. Bilježe se promjene dokumenta, sažete u odsječke s grubim vremenom (§9). (C-14)
+4. Ne bilježi se koja je tipka pritisnuta ni koliko je držana. Bilježe se promjene dokumenta, sažete u odsječke s grubim vremenom (§9). Samo u mentorskim radovima uz to se bilježi vrijeme promjena u koracima od 100 ms, isključivo za reprodukciju; iz njega se nikad ne računa brzina, pauze ni bilo kakva mjera (D-56). (C-14, traži izmjenu)
 5. Student uvijek vidi točno ono što vidi nastavnik ili mentor, generirano istom funkcijom. (C-4)
 6. Student prije početka rada zna što nastavnik vidi i od kada: obavijest o praćenju je prvi ekran svakog zadatka. (C-3)
-7. Nastavnik vidi trenutno spremljeno stanje rada, osvježeno najviše svakih 5 minuta (P-03), ne tipkanje uživo. Povijest međustanja unutar sesije nije dostupna ni u jednom pregledu, sažetku ni usporedbi, a reprodukcija pisanja ne postoji. Student u obavijesti zna da nastavnik vidi trenutno stanje, pa i tekst koji će možda kasnije obrisati. (C-3, C-14, C-19)
+7. Nastavnik vidi trenutno spremljeno stanje rada, osvježeno najviše svakih 5 minuta (P-03), ne tipkanje uživo. Povijest međustanja unutar sesije nije dostupna ni u jednom pregledu, sažetku ni usporedbi, osim u reprodukciji mentorskih radova najavljenoj prije pisanja (D-56). Student u obavijesti zna da nastavnik vidi trenutno stanje, pa i tekst koji će možda kasnije obrisati. (C-3, C-14, C-19)
 8. Svaka promjena teksta pripisana je autoru: student, nastavnik ili mentor, prihvaćeni prijedlog, AI unutar Ductusa, uvoz, lijepljenje. (C-11)
 9. Integritet zapisa nije dokaz autorstva. Hash i potpis govore samo da zapis nije mijenjan od primitka. (C-13)
 10. Offline zapis ostaje označen kao offline i nakon sinkronizacije. (C-15)
@@ -158,7 +158,7 @@ Izvedeno iz Ustava; svako pravilo ima test ili provjeru u PR-u.
 | Osnovni | Spremljeno stanje rada, sažetak procesa, vremensku crtu | Zadana vrijednost |
 | Prošireni | Osnovni + usporedbu verzija na kraju sesija i poslanih verzija | Seminarski i završni radovi s više verzija |
 
-Reprodukcija pisanja ne postoji ni u jednom profilu: pokazala bi tekst napisan i obrisan unutar sesije (C-19) i ritam pisanja (C-14).
+**Reprodukcija (D-56):** samo u mentorskim radovima, najavljena u obavijesti prije pisanja. Pokazuje kako je rad rastao, uključujući obrisani tekst, brzinom kojom je pisan, s oznakama lijepljenja, uvoza, AI prijenosa, izmjena nastavnika, dorada i konzultacija. Može se pokrenuti za cijeli rad ili za jedan odlomak. Uz reprodukciju stoji stalni tekst: "Ritam pisanja ne govori ništa o autorstvu ni o trudu." Nema brzine tipkanja, statistike pauza ni isticanja "brzih" ili "sporih" dijelova. Student vidi istu reprodukciju i kad ju je mentor gledao.
 
 ### Administrator fakulteta
 
@@ -218,7 +218,8 @@ Jedna transakcija editora otprilike odgovara jednom pritisku tipke. Zato se tran
 
 | Bilježi se | Ne bilježi se |
 | --- | --- |
-| Promjene dokumenta sažete u odsječke, s autorom (student, nastavnik, mentor) | Pritisci tipki, vrijeme pojedinih promjena, ritam i brzina tipkanja |
+| Promjene dokumenta sažete u odsječke, s autorom (student, nastavnik, mentor) | Koja je tipka pritisnuta i koliko je držana; izvedene mjere (brzina, pauze, obrasci) |
+| Samo mentorski radovi: vrijeme promjena u koracima od 100 ms, zasebno i s kraćim rokom čuvanja (D-56) | Vrijeme promjena u ostalim radovima |
 | Poništavanje i ponavljanje | Druge aplikacije, kartice preglednika, međuspremnik izvan zalijepljenog sadržaja |
 | Lijepljenje: veličina i vrijeme | Kamera, mikrofon, zaslon |
 | Uvoz datoteke: naziv, vrsta, veličina, hash | IP adresa i podaci o uređaju u evidenciji (smiju postojati samo u sigurnosnim logovima, odvojeno) |
@@ -256,7 +257,7 @@ Student dobiva potpuno okruženje za pisanje akademskog rada. Pravila oblika dol
 
 **Kasnije:** sučelje na engleskom [ODLUČENO D-27], drugi fakulteti, Merlin (LTI), "Sign in with ChatGPT".
 
-**Samo uz novu odluku i Constitution Gate:** reprodukcija pisanja (D-05).
+**Odlučeno, čeka izmjenu Ustava C-14 i C-19:** reprodukcija s ritmom u mentorskim radovima (D-56), val 3.
 
 ---
 
@@ -301,6 +302,6 @@ Demo prolazi cijeli put na sintetičkom radu s unaprijed poznatim ishodom. Za va
 8. Sažetak procesa pokazuje lijepljenje, oba uvoza, AI prenošenje, izmjene nastavnika i sesije, bez ikakve ocjene; student i nastavnik vide isto.
 9. Rekonstruirani dokument je identičan predanoj verziji u kanonskom obliku; izvoz DOCX-a odgovara FPZG obliku.
 10. Kontrolirana praznina prikazuje se kao praznina.
-11. Tekst napisan i obrisan unutar iste sesije ne pojavljuje se ni u jednom pregledu povijesti, sažetku ni usporedbi.
+11. Tekst napisan i obrisan unutar iste sesije ne pojavljuje se ni u jednom pregledu povijesti, sažetku ni usporedbi; [val 3] u mentorskom radu pojavljuje se samo u reprodukciji, a ista reprodukcija rekonstruira predani rad bajt za bajt.
 12. Drugi student i nastavnik drugog kolegija ne mogu otvoriti ni rad ni evidenciju. Test gađa poslužitelj i bazu, ne samo sučelje.
 13. Nakon odjave na istom pregledniku nema studentovog lokalnog zapisa; odjava s nesinkroniziranim promjenama je blokirana uz poruku.

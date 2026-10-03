@@ -14,7 +14,7 @@ Napomena: ova numeracija vrijedi od verzije 0.2 i ne odgovara brojevima iz ranij
 | D-02 | Kupac je fakultet; korisnici su student, nastavnik i mentor; student ima vlastitu korist. Interno pozicioniranje "anti-AI", javno "transparentnost nastanka rada" | Fakultet plaća i propisuje; bez studentske koristi studenti pišu drugdje |
 | D-03 | Podržane su sve vrste pisanih radova: podnesak (300 do 1.500 riječi), esej, seminarski, završni, diplomski, specijalistički, doktorski. Ne pisanje nalik ispitu pod nadzorom | Cilj je jedno okruženje za sve radove; ispitni nadzor je visokorizičan po Aktu o UI |
 | D-04 | Fakultet odobrava i može propisati obvezno korištenje; u pilotu to odlučuje FPZG | |
-| D-05 | Nastavnik bira profil evidencije (Osnovni ili Prošireni); reprodukcija pisanja ne postoji | C-14, C-19 |
+| D-05 | Nastavnik bira profil evidencije (Osnovni ili Prošireni); ~~reprodukcija pisanja ne postoji~~ **reprodukcija: vidi D-56** | C-14, C-19 |
 | D-06 | Nastavnik i mentor vide spremljeno stanje rada od prvog dana, osvježeno svakih nekoliko minuta; ne vide tipkanje uživo | Praćenje nastanka rada; tipkanje uživo bi djelovalo kao nadzor |
 | D-09 | Studenti se prijavljuju isključivo AAI@EduHr računom | Kompatibilnost sa Srceovim sustavom; jedan pouzdan identitet |
 | D-12 | Povlačenje studenta: predani radovi ostaju po pravilima fakulteta, sve ostalo se briše | |
@@ -54,6 +54,7 @@ Izvor: dokument "Ductus: konkurencija i poboljšanja proizvoda" i FPZG Smjernice
 | D-51 | Nastavnik ili mentor može komentare objaviti zajedno umjesto svakog odmah | Mentor piše više komentara pa ih objavi kao cjelinu (Rumi) | 2 |
 | D-53 | Priprema za razgovor: Ductus deterministički izlistava mjesta u tekstu povezana s lijepljenjima, uvozima, AI prijenosima i izmjenama nakon prihvaćene dorade, uz studentove izjave i poveznicu na mjesto u radu. Nakon razgovora samo zapis "razgovor održan", bez polja za ocjenu. Student vidi isti popis | Razgovor o radu jedini se ne može krivotvoriti (FPZG čl. 10 i 11); Ductus ga čini kratkim i ciljanim, bez AI analize (pravilo 13) | 2 |
 | D-54 | Spike u M3: unos koji ne dolazi od stvarnog korisničkog događaja (programski umetnut tekst, npr. proširenja koja "tipkaju") bilježi se kao zaseban događaj "unos nije s tipkovnice ni lijepljenjem". Označava se, ne blokira (asistivni alati, D-50). Konačno ponašanje nakon testa na stvarnim alatima | Zatvara najjeftiniji put krivotvorenja | 1 (spike) |
+| D-56 | Reprodukcija pisanja s ritmom u mentorskim radovima (završni, diplomski, specijalistički, doktorski). Mentor i student vide istu reprodukciju, uključujući sadržaj obrisanog teksta. Najavljena u obavijesti prije pisanja, nikad unatrag (pravilo 14), nikad za kratke zadatke (D-37). Uvjeti: (1) bilježi se samo vrijeme promjene dokumenta u koracima od 100 ms; ne bilježi se koja je tipka pritisnuta ni koliko je držana; (2) iz vremena se nikad ne računa brzina, pauze, obrasci ni bilo kakva mjera; ritam postoji samo kao brzina reprodukcije; (3) vrijeme je u zasebnoj klasi podataka s kraćim rokom čuvanja, vezano uz odsječak hashom, pa se briše po roku bez rušenja lanca; (4) student vidi kad je mentor gledao reprodukciju i može dodati napomenu uz trenutak reprodukcije; (5) uz oznaku prilagodbe (D-50) reprodukcija prikazuje tu oznaku. **Traži izmjenu Ustava C-14 i C-19 (Constitution Gate) prije gradnje** | Mentorski alat za razumijevanje nastanka rada i pripremu razgovora; ne dokazuje autorstvo (D-01) | 3 |
 | D-52 | Nastavnik upisuje pravilo AI-ja iz izvedbenog plana na razinu kolegija (zabrana, djelomično dopušteno, poticanje; FPZG čl. 12); zadatak ga nasljeđuje i smije ga samo suziti | Pravilo se piše jednom i odgovara izvedbenom planu | 1 |
 
 ## Prijedlozi koji čekaju potvrdu
@@ -77,7 +78,7 @@ Izvor: dokument "Ductus: konkurencija i poboljšanja proizvoda" i FPZG Smjernice
 
 | Broj | Odluka | Prijedlog |
 | --- | --- | --- |
-| D-55 | Kontrolna točka uživo | Kratko pisanje u Ductusu na fakultetu (npr. 20 minuta: plan rada ili refleksija o vlastitom radu); nastavnik ljudski uspoređuje, Ductus ništa ne analizira. Do mišljenja ostaje isključeno (D-03). Pitanje za pravnika: primjenjuje se li Prilog III. točka 3(d) Akta o UI na sustav bez AI-ja i je li obrada razmjerna po GDPR-u |
+| D-55 | Kontrolna točka uživo | Kratko pisanje u Ductusu na fakultetu (npr. 20 minuta: plan rada ili refleksija o vlastitom radu); nastavnik ljudski uspoređuje, Ductus ništa ne analizira. Do mišljenja ostaje isključeno (D-03). Pitanje za pravnika: primjenjuje se li Prilog III. točka 3(d) Akta o UI na sustav bez AI-ja i je li obrada razmjerna po GDPR-u. Isto mišljenje pokriva bilježenje ritma iz D-56 (je li biometrijski podatak po čl. 4(14) GDPR-a i kako ga obraditi u DPIA-i) |
 
 ## Čeka FPZG
 

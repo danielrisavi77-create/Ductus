@@ -217,7 +217,7 @@ Migracije se nikad ne primjenjuju ručno na produkciju bez prolaska kroz staging
 
 | Element | Usvojiti kad |
 | --- | --- |
-| Reprodukcija pisanja | Nova odluka umjesto D-05 i Constitution Gate (C-14, C-19) |
+| Reprodukcija s ritmom (D-56) | Izmjena Ustava C-14 i C-19 i pravno mišljenje (D-55); val 3. Izvedba: uz odsječak mentorskog rada zaseban blob s pomacima vremena po transakciji (100 ms), adresiran hashom u odsječku; brisanje bloba po roku ne ruši lanac. Reprodukciju gradi isti kod koji rekonstruira predaju; projekcija nema funkciju koja iz pomaka računa mjere (test) |
 | Dnevni korijen potvrda s RFC 3161 žigom, javna objava | Nakon pilota, ili ranije ako fakultet traži neovisnu provjeru vremena |
 | Alat za neovisnu provjeru izvezene evidencije | Uz dnevni korijen |
 | OpenFGA ili drugi servis za ovlasti | Više ustanova s različitim pravilima, ili SQL pomoćne funkcije postanu neprovjerljive |
