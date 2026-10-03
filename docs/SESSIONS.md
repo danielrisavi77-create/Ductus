@@ -95,7 +95,16 @@ Skripta pokreće `codex exec review --base origin/main` (samo diff grane), Codex
 
 ## 7. Okruženje i održavanje
 
-- **Lokalne postavke** (`.claude/settings.local.json`, nije u gitu, kopira se u svaki worktree preko `.worktreeinclude`): isključeni claude.ai pluginovi, skillovi i konektori koji ne trebaju Ductusu; poruke između sesija primaju se bez dodatnog odobrenja.
+- **Lokalne postavke** (`.claude/settings.local.json`, nije u gitu, kopira se u svaki worktree preko `.worktreeinclude`): isključeni claude.ai pluginovi, skillovi i konektori koji ne trebaju Ductusu; poruke između sesija primaju se bez dodatnog odobrenja. Datoteku stvara Daniel (agent ne mijenja vlastite postavke):
+
+  ```json
+  {
+    "syncClaudeAiPlugins": false,
+    "syncClaudeAiSkills": false,
+    "disableClaudeAiConnectors": true,
+    "crossSessionInbound": "accept"
+  }
+  ```
 - **Worktreeovi**: aplikacija ih stvara u `.claude/worktrees/`. Arhiviranje sesije briše worktree; u postavkama aplikacije uključeno je automatsko arhiviranje nakon spajanja ili zatvaranja PR-a. Skripta `scripts/cleanup-worktrees.ps1` uklanja preostale worktreeove čija je grana spojena u `main`.
 - **Paketi**: pnpm (zajednička pohrana paketa, manje mjesta na disku po worktreeu). Node 24 (`.nvmrc`).
-- **Praćenje**: orkestrator vodi nadzornu ploču (artifact) s vremenskom crtom, stanjem sesija i potrošnjom tokena. Potrošnju po sesiji daje `powershell -File scripts/usage-report.ps1` (ccusage nad lokalnim zapisima; trošak je procjena po API cijenama, ne naplata pretplate).
+- **Praćenje**: orkestrator vodi nadzornu ploču "Ductus pult" (privatni artifact, https://claude.ai/artifact/UY9VUZPW4mePTZjhCPGLSd) s vremenskom crtom, stanjem sesija i potrošnjom tokena. Potrošnju po sesiji daje `powershell -File scripts/usage-report.ps1` (ccusage nad lokalnim zapisima; trošak je procjena po API cijenama, ne naplata pretplate).

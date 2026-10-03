@@ -4,14 +4,16 @@ Ažurira se nakon svakog spojenog PR-a. Najviše 80 redaka.
 
 ## Trenutna faza
 
-M0 Temelj: plan proizvoda u pregledu (PR #1). Prvi cilj: demo za fakultet (D-76, `PROGRAM.md`), početak studenog 2026.; sastanak s FPZG-om tek nakon njega. Zatim val 1 i val 2 oko 22. 2. 2027., kontrolna točka 15. 12. 2026.
+M0 Temelj: plan proizvoda spojen (PR #1); postavljen rad u paralelnim sesijama (`docs/SESSIONS.md`). Prvi cilj: demo za fakultet (D-76, `PROGRAM.md`), početak studenog 2026.; sastanak s FPZG-om tek nakon njega. Zatim val 1 i val 2 oko 22. 2. 2027., kontrolna točka 15. 12. 2026.
 
 ## Owner queue (samo Daniel)
 
 Agent nikad ne uzima ove stavke i nikad ne čeka na njih.
 
-- [ ] Pregledati i spojiti plan proizvoda (PR #1).
-- [ ] Spojiti `pisac-editor` PR #49 i #50 (izvor za prijenos jezgre).
+- [ ] Dodati `.claude/settings.local.json` (sadržaj u `docs/SESSIONS.md` §7) i u aplikaciji uključiti automatsko arhiviranje nakon spajanja PR-a.
+- [ ] Pokrenuti Docker Desktop (treba ga Platforma za M0).
+- [ ] Potvrditi D-07 (RLS i pgTAP, bez OpenFGA) prije M2.
+- [ ] Odobriti dizajnerski sustav i ekrane demoa (Design artifact) prije frontend ekrana.
 - [ ] Potvrditi ili promijeniti prijedloge D-07, D-08, D-10, D-11, D-16, D-20, D-24, D-34, D-36, D-37, D-38 u `docs/DECISIONS.md`; odlučiti D-06 ili stroža D-39.
 - [ ] Potvrditi zadane pragove P-01 do P-04.
 - [ ] FPZG (prodekan Višeslav Raos): koordinator pilota, kolegiji i mentori, akademski kalendar ljetnog semestra, AAI administrator, službenik za zaštitu podataka.
@@ -34,15 +36,21 @@ Agent nikad ne uzima ove stavke i nikad ne čeka na njih.
 
 ## Agent queue
 
-Uzima se prva stavka koju ništa iz Owner queuea ne blokira.
+Zadatke dodjeljuje orkestrator, jedan po sesiji (`docs/SESSIONS.md`). Uzima se prva stavka koju ništa ne blokira; uloga je u zagradi.
 
-- [ ] M0: prijenos jezgre iz `pisac-editor` s testovima (blokirano: PR #49 i #50).
-- [ ] B0.1 (blokirano: računi) i B0.2: spikeovi okruženja (PITR povrat na UpCloud, uloge, latencija, KMS) i rekonstrukcije 15.000 i 80.000 riječi (`docs/BACKEND.md` §8).
-- [ ] M0: CI, lefthook, `docker compose` okruženje u CI-ju (lokalni Claude Code, treba Docker).
+- [ ] M0.1 (Platforma): kostur projekta s pnpm-om (package.json, tsconfig, ESLint, Vitest, Playwright) prema `pisac-editor`, bez Supabasea i Netlifyja.
+- [ ] M0.2 (Backend): prijenos jezgre iz `pisac-editor` po popisu iz `docs/BACKEND.md` §2, u više PR-ova; isti broj prenesenih testova kao u izvoru (nakon M0.1).
+- [ ] M0.3 (Frontend): prijenos editora, journala i sinkronizacije u pregledniku s testovima (nakon M0.1).
+- [ ] M0.4 (Platforma): CI (lint, typecheck, unit, property, E2E, axe, Gitleaks, zizmor, Semgrep, OSV), lefthook, `docker compose` (Postgres, MinIO, Mailpit, lažni OIDC) (nakon M0.1; treba Docker).
+- [ ] B0.4 (kratkotrajna): prepis `docs/ARCHITECTURE.md` bez Supabasea i Netlifyja.
+- [ ] S8 (kratkotrajna, dizajn): dizajnerski sustav i ekrani demoa kao Design artifact za Danielovo odobrenje.
+- [ ] B0.2 (Backend): spike rekonstrukcije 15.000 i 80.000 riječi (nakon M0.2). B0.1 blokiran računima.
 - [ ] M1: AAI@EduHr spike (blokirano: pristup Labu).
-- [ ] M2: model fakulteta i pgTAP matrica pristupa (nakon M0).
+- [ ] M2: model fakulteta i pgTAP matrica pristupa (nakon M0 i D-07).
 - [ ] M4: paket pravila u Lekti po uzoru na `katedra-pack` (blokirano: odluka o licenci).
 
 ## Gotovo
 
-- 3. 10. 2026.: inicijalni commit repoa; plan proizvoda v0.1 i v0.2.
+- 3. 10. 2026.: inicijalni commit repoa; plan proizvoda v0.1 i v0.2 (PR #1).
+- 3. 10. 2026.: `pisac-editor` PR #49 i #50 spojeni.
+- 3. 10. 2026.: faza S: uloge i protokol sesija, Codex pregled, mjerenje tokena, čišćenje worktreeova, nadzorna ploča.
