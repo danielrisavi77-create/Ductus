@@ -32,26 +32,75 @@ Paralelno s fazama teče tvoj red (`STATE.md`, Owner queue): Srce, FPZG, pravni 
 
 **Zbroj prema tablici: 99 do 134 večeri** (69 do 93 prije dodataka D-40 do D-64). Procjene ovakvih projekata u pravilu se prekorače, pa je realan raspon **145 do 195 večeri**. Cijeli opseg ne stane u jedan semestar pripreme; zato vrijede valovi i kontrolna točka niže.
 
-## Valovi puštanja unutar pilota [PRIJEDLOG D-36]
+## Raspored po valovima [PRIJEDLOG D-36, verzija 2]
 
-U pilot ulazi sve (D-26). Da rok početka semestra ne ovisi o najvećim dijelovima, predlažem puštanje u tri vala tijekom semestra:
+U pilot ulazi sve prihvaćeno (D-26, D-65), ali ne odjednom. Faze M0 do M11 iz tablice gore dijele se po valovima; ovdje je što točno ide u koji val.
 
-| Val | Kada | Radovi | Faze |
-| --- | --- | --- | --- |
-| 1 | Početak ljetnog semestra | Podnesci i eseji | M0 do M4, osnovni dio M5 (naslovi, citiranje, bibliografija), M6, M7, M10, M11 |
-| 2 | Oko 4 tjedna kasnije | Seminarski radovi s ciklusima verzija | Ostatak M5 (fusnote, tablice, slike), M8, M9 |
-| 3 | Druga polovina semestra | Završni, diplomski, specijalistički i doktorski radovi s mentorom | Optimizacija dugih dokumenata, izvoz u punom obliku fakulteta |
+### Kapacitet
 
-Ako val 1 nije spreman do 22. 2. 2027., pilot se ne skraćuje nego pomiče cijeli raspored valova.
+Od 3. 10. 2026. do 22. 2. 2027. ima 20 tjedana, od toga oko 2 tjedna blagdana. Uz prekoračenje procjena od oko 40 %:
 
-## Iskrena procjena roka
+| Večeri tjedno za Ductus | Stvarnih večeri do 22. 2. | Nominalno (nakon prekoračenja) |
+| --- | --- | --- |
+| 3 | oko 54 | oko 38 |
+| 4 | oko 72 | oko 51 |
+| 5 | oko 90 | oko 64 |
+| 6 | oko 108 | oko 77 |
 
-- Cijeli opseg ne stane do 22. 2. 2027. uz posao na puno radno vrijeme i druge projekte. Realno je samo **val 1** (oko 55 do 74 nominalne večeri s dodacima D-43, D-44, D-50, D-52 i osnovnom izjavom D-40, uz prekoračenje više).
-- **Kontrolna točka 15. 12. 2026.**: ako M0 do M3 nisu gotovi i M4 nije započet, unaprijed dogovoreni rezovi stupaju na snagu bez nove rasprave:
-  1. izravne izmjene nastavnika (D-21) idu u val 2, u valu 1 samo komentari i prijedlozi;
-  2. uvoz PDF-a ide u val 3, u valu 1 samo DOCX;
-  3. doktorski radovi idu nakon pilota.
-- Rezovi se upisuju u `DECISIONS.md` kao nova odluka, ne brišu se postojeće.
+Val 1 ispod ima 56 do 74 nominalne večeri, dakle traži **5 do 6 večeri tjedno samo za Ductus**. Uz 4 večeri tjedno rezovi s kontrolne točke postaju plan, ne rezerva.
+
+### Val 1: početak ljetnog semestra (kod spreman oko 22. 2. 2027.)
+
+Radovi: podnesci i eseji. Bez AI pomoćnika (FPZG ga ionako ne smije tražiti, D-38). Mentori mogu pratiti završne radove osnovnim nastavničkim funkcijama.
+
+| Dio | Sadržaj | Procjena |
+| --- | --- | --- |
+| M0, M1 | Temelj i AAI@EduHr (M1 ovisi o pristupu Labu Srca; do tada lažni pružatelj) | 3 do 5 |
+| M2 | Model fakulteta s rupama: komentor, povjerenstvo, pravno zadržavanje, jezik rada, pravilo AI-ja kolegija, prilagodba | 5 do 6 |
+| M3 | Evidencija, oznaka lijepljenja (D-43), vrsta dokaza (D-44), spike programskog unosa (D-54), bilježenje ritma za mentorske radove ako je D-56 odobren | 8 do 10 |
+| M4 osnovno | Lekta paket: FPZG citatni stil, opseg, naslovna stranica | 4 do 6 |
+| M5 osnovno | Naslovi, citiranje, bibliografija, DOI i ISBN (S-08), opseg po poglavlju (D-60), pravopis po jeziku rada (S-07), navodnici, traži i zamijeni, osnovna bilježnica izvora (D-59) | 9 do 12 |
+| M6 osnovno | Pogled na rad u nastajanju, komentari, prijedlozi | 6 do 8 |
+| M7 osnovno | Obavijest S3, predaja, rekonstrukcija, sažetak procesa, izjava D-40 bez AI dijela, produljenje roka | 8 do 10 |
+| M10 osnovno | Klase podataka, brisanje po roku, pravno zadržavanje (F-02) | 2 do 3 |
+| M11 | GO uvjeti, sučelje na engleskom (D-70), pristupačnost (F-03), statusna stranica (F-10) | 5 do 6 |
+| Uz to | Obavijesti (N-01), podsjetnici (N-02), popis "tko treba pomoć" (N-12), uvodni vodič (S-11) | 6 do 8 |
+| **Ukupno** | | **56 do 74** |
+
+### Val 2: seminarski radovi (cilj sredina svibnja 2027.)
+
+| Dio | Sadržaj | Procjena |
+| --- | --- | --- |
+| M5 ostatak | Fusnote, tablice, slike, pozivi na prikaze | 5 do 7 |
+| M6 ostatak | Izravne izmjene (D-21), zahtjev za doradu (D-45), odgođeno objavljivanje (D-51), banka komentara (N-03), promjene od zadnjeg pregleda (N-05) | 8 do 11 |
+| M7 ostatak | Karta podrijetla (D-57), otvorena mjesta (D-61), pravila zadatka i kontrolni popis (D-62) | 5 do 7 |
+| M8 | Uvoz i izvoz DOCX-a | 4 do 5 |
+| M9 | AI pomoćnik: svrhe (D-42, D-64), razgovori uz izjavu (D-41), zaštita sadržaja (D-46), "Objasni mi komentar" (A-01), EU modeli (A-05) | 12 do 16 |
+| **Ukupno** | | **34 do 46** |
+
+Razvoj vala 2 teče tijekom semestra, uz podršku pilotu. Ako kasni, val 2 se pomiče prema kraju semestra; ne skraćuje se val 1.
+
+### Val 3: mentorski radovi i obrana (ljeto 2027., prije prvog roka obrana)
+
+Konzultacije (D-47), ključni rokovi (N-07), komentor i povjerenstvo u sučelju (N-08, N-09), priprema za razgovor (D-53), reprodukcija s povijesti odlomka (D-56), priprema za obranu (A-04), PDF izvori i provjera citata (S-09, A-03), uvoz PDF-a, poznato podrijetlo (D-58), provjera izvora (D-48), prenosiv zapis i paket za zaštitu (D-49, S-01), vremeplov (S-02), planer (S-06), zbirni pregled (N-11), verifikator (A-07), "moj rad u brojkama" (A-10), portfelj (S-10), izvješće za evaluaciju (F-01), mobilne bilješke (S-03). Procjena **50 do 65**, uglavnom u ljetnim mjesecima.
+
+### Ovisnosti koje se ne smiju propustiti
+
+- **Ritam za reprodukciju (D-56)** postoji samo ako se bilježi od prvog dana pisanja. Ako izmjena Ustava C-14 i C-19 i pravno mišljenje nisu gotovi prije početka pisanja završnih radova, ti radovi imat će reprodukciju samo po odsječcima, bez ritma.
+- **Grupni radovi (S-12)** odvijaju se tijekom semestra; u valu 3 (ljeto) gube smisao. Za pilot moraju u val 2, što ga produljuje za oko 4 večeri, ili ostaju za nakon pilota.
+- **M1** ovisi o pristupu AAI@EduHr Labu (Srce).
+
+### Kontrolna točka 15. 12. 2026.
+
+Do tada moraju biti gotovi M0 do M3 (oko 17 do 23 nominalne večeri) i započet M4. Ako nisu, ovi rezovi stupaju na snagu redom, bez nove rasprave, dok val 1 ne stane:
+
+1. Prijedlozi idu u val 2; u valu 1 samo komentari.
+2. Osnovna bilježnica izvora ide u val 2; DOI i ISBN ostaju.
+3. Obavijesti samo kao dnevni sažetak e-poštom.
+4. Sučelje na engleskom ide u val 2; Erasmus studenti pišu izvan Ductusa do vala 2.
+5. M4 samo citatni stil; provjera oblika u valu 2.
+
+Ranije dogovoreno vrijedi i dalje: izravne izmjene u valu 2, uvoz PDF-a u valu 3, doktorski radovi nakon pilota. Rezovi se upisuju u `DECISIONS.md` kao nova odluka.
 
 ## GO uvjeti za stvarne studente
 
