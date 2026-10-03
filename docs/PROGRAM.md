@@ -32,7 +32,7 @@ Paralelno s fazama teče tvoj red (`STATE.md`, Owner queue): Srce, FPZG, pravni 
 
 **Zbroj prema tablici: 99 do 134 večeri** (69 do 93 prije dodataka D-40 do D-64). Procjene ovakvih projekata u pravilu se prekorače, pa je realan raspon **145 do 195 večeri**. Cijeli opseg ne stane u jedan semestar pripreme; zato vrijede valovi i kontrolna točka niže.
 
-## Raspored po valovima [PRIJEDLOG D-36, verzija 2]
+## Raspored po valovima [ODLUČENO D-36, verzija 2]
 
 U pilot ulazi sve prihvaćeno (D-26, D-65), ali ne odjednom. Faze M0 do M11 iz tablice gore dijele se po valovima; ovdje je što točno ide u koji val.
 
@@ -46,8 +46,9 @@ Od 3. 10. 2026. do 22. 2. 2027. ima 20 tjedana, od toga oko 2 tjedna blagdana. U
 | 4 | oko 72 | oko 51 |
 | 5 | oko 90 | oko 64 |
 | 6 | oko 108 | oko 77 |
+| Puno radno vrijeme (oko 10 jedinica od 3 sata tjedno) | oko 180 | oko 130 |
 
-Val 1 ispod ima 56 do 74 nominalne večeri, dakle traži **5 do 6 večeri tjedno samo za Ductus**. Uz 4 večeri tjedno rezovi s kontrolne točke postaju plan, ne rezerva.
+Od 3. 10. 2026. vlasnik radi na Ductusu puno radno vrijeme. Uz oko 10 jedinica tjedno (dvije dnevno, pet dana; ostalo vrijeme za druge projekte i odmor) **val 1 i val 2 zajedno (oko 94 do 124 nominalne večeri) stanu do 22. 2. 2027.** Cilj je zato pustiti val 1 i val 2 na početku semestra, a val 3 tijekom semestra. Procjena od 10 jedinica tjedno je namjerno konzervativna: rad bez pauza ruši kvalitetu i rokove.
 
 ### Val 1: početak ljetnog semestra (kod spreman oko 22. 2. 2027.)
 
@@ -67,7 +68,7 @@ Radovi: podnesci i eseji. Bez AI pomoćnika (FPZG ga ionako ne smije tražiti, D
 | Uz to | Obavijesti (N-01), podsjetnici (N-02), popis "tko treba pomoć" (N-12), uvodni vodič (S-11) | 6 do 8 |
 | **Ukupno** | | **56 do 74** |
 
-### Val 2: seminarski radovi (cilj sredina svibnja 2027.)
+### Val 2: seminarski i grupni radovi (cilj: zajedno s valom 1 na početku semestra; najkasnije sredina svibnja 2027.)
 
 | Dio | Sadržaj | Procjena |
 | --- | --- | --- |
@@ -76,23 +77,23 @@ Radovi: podnesci i eseji. Bez AI pomoćnika (FPZG ga ionako ne smije tražiti, D
 | M7 ostatak | Karta podrijetla (D-57), otvorena mjesta (D-61), pravila zadatka i kontrolni popis (D-62) | 5 do 7 |
 | M8 | Uvoz i izvoz DOCX-a | 4 do 5 |
 | M9 | AI pomoćnik: svrhe (D-42, D-64), razgovori uz izjavu (D-41), zaštita sadržaja (D-46), "Objasni mi komentar" (A-01), EU modeli (A-05) | 12 do 16 |
-| **Ukupno** | | **34 do 46** |
+| S-12 | Grupni radovi: jedan pisač u trenutku, ostali komentiraju i predlažu, svaka promjena pripisana autoru | 4 |
+| **Ukupno** | | **38 do 50** |
 
 Razvoj vala 2 teče tijekom semestra, uz podršku pilotu. Ako kasni, val 2 se pomiče prema kraju semestra; ne skraćuje se val 1.
 
-### Val 3: mentorski radovi i obrana (ljeto 2027., prije prvog roka obrana)
+### Val 3: mentorski radovi i obrana (cilj svibanj 2027., najkasnije prije prvog roka obrana)
 
-Konzultacije (D-47), ključni rokovi (N-07), komentor i povjerenstvo u sučelju (N-08, N-09), priprema za razgovor (D-53), reprodukcija s povijesti odlomka (D-56), priprema za obranu (A-04), PDF izvori i provjera citata (S-09, A-03), uvoz PDF-a, poznato podrijetlo (D-58), provjera izvora (D-48), prenosiv zapis i paket za zaštitu (D-49, S-01), vremeplov (S-02), planer (S-06), zbirni pregled (N-11), verifikator (A-07), "moj rad u brojkama" (A-10), portfelj (S-10), izvješće za evaluaciju (F-01), mobilne bilješke (S-03). Procjena **50 do 65**, uglavnom u ljetnim mjesecima.
+Konzultacije (D-47), ključni rokovi (N-07), komentor i povjerenstvo u sučelju (N-08, N-09), priprema za razgovor (D-53), reprodukcija s povijesti odlomka (D-56), priprema za obranu (A-04), PDF izvori i provjera citata (S-09, A-03), uvoz PDF-a, poznato podrijetlo (D-58), provjera izvora (D-48), prenosiv zapis i paket za zaštitu (D-49, S-01), vremeplov (S-02), planer (S-06), zbirni pregled (N-11), verifikator (A-07), "moj rad u brojkama" (A-10), portfelj (S-10), izvješće za evaluaciju (F-01), mobilne bilješke (S-03). Procjena **50 do 65**.
 
 ### Ovisnosti koje se ne smiju propustiti
 
 - **Ritam za reprodukciju (D-56)** postoji samo ako se bilježi od prvog dana pisanja. Ako izmjena Ustava C-14 i C-19 i pravno mišljenje nisu gotovi prije početka pisanja završnih radova, ti radovi imat će reprodukciju samo po odsječcima, bez ritma.
-- **Grupni radovi (S-12)** odvijaju se tijekom semestra; u valu 3 (ljeto) gube smisao. Za pilot moraju u val 2, što ga produljuje za oko 4 večeri, ili ostaju za nakon pilota.
 - **M1** ovisi o pristupu AAI@EduHr Labu (Srce).
 
 ### Kontrolna točka 15. 12. 2026.
 
-Do tada moraju biti gotovi M0 do M3 (oko 16 do 21 nominalnu večer) i započet M4. Ako nisu, ovi rezovi stupaju na snagu redom, bez nove rasprave, dok val 1 ne stane:
+Uz puno radno vrijeme do tada mora biti gotov cijeli val 1 osim M11 (oko 50 do 66 nominalnih večeri). Ako nije, val 2 se vraća na cilj sredine svibnja. Ako ni M0 do M3 nisu gotovi, ovi rezovi stupaju na snagu redom, bez nove rasprave, dok val 1 ne stane:
 
 1. Prijedlozi idu u val 2; u valu 1 samo komentari.
 2. Osnovna bilježnica izvora ide u val 2; DOI i ISBN ostaju.

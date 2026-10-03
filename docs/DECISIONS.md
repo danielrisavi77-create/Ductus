@@ -86,7 +86,7 @@ Izvor: dokument "Ductus: konkurencija i poboljšanja proizvoda" i FPZG Smjernice
 | D-37 | Kratki zadaci | Za zadatke kraće od praga P-04 nastavnik vidi stanje tek nakon predaje, ne tijekom pisanja |
 | D-38 | Obvezni AI u pilotu | Zadatak u pilotu ne smije zahtijevati korištenje AI-a (student bi morao plaćati vanjski račun) |
 | D-39 | Stroža varijanta D-06 (za tvoju odluku) | Nastavnik vidi samo stanje na kraju svake sesije, ne osvježavanje svakih nekoliko minuta; manje osjećaja nadzora, manje uvida |
-| D-36 | Valovi puštanja unutar pilota | Val 1 podnesci i eseji na početku semestra; val 2 seminarski radovi oko 4 tjedna kasnije; val 3 završni i viši radovi u drugoj polovini semestra (`PROGRAM.md`) |
+| D-36 | Valovi puštanja unutar pilota | **Odlučeno 3. 10. 2026.: raspored verzija 2 u `PROGRAM.md`.** Vlasnik radi puno radno vrijeme; cilj je val 1 i val 2 (uključujući grupne radove, S-12) na početku semestra, val 3 tijekom semestra prije obrana |
 
 ## Čeka pravno mišljenje
 
