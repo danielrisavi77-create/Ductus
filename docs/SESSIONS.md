@@ -27,7 +27,7 @@ Najviše četiri sesije koje pišu kod istodobno. Usko grlo je pregled i spajanj
 
 ## 2. Tijek jednog zadatka
 
-1. Orkestrator šalje zadatak (predložak u §3) sesiji odgovarajuće uloge, s uključenim `notify_when_idle` (§2a).
+1. Orkestrator šalje zadatak (predložak u §3) sesiji odgovarajuće uloge.
 2. Sesija radi u svom worktreeu na grani `<uloga>/<kratki-opis>` (npr. `backend/m0-port-domain`), od svježeg `origin/main`.
 3. Testovi i provjere lokalno zeleni (`pnpm lint`, `pnpm typecheck`, `pnpm test`); lefthook to radi pri commitu.
 4. Sesija otvara PR (jedan korak iz `STATE.md`, do oko 400 redaka; veći PR obrazlaže zašto).
@@ -45,7 +45,7 @@ Izvještaj u opisu PR-a je izvor istine; poruka je samo obavijest. Ništa u tije
 1. **Sesija:** ako slanje vrati "nije dostavljeno", pokuša još jednom. Ako ni tad ne prođe, doda PR-u oznaku `izvjestaj-ceka` (oznaku jednom stvara Daniel; dok ne postoji, umjesto nje komentar na PR-u "IZVJEŠTAJ čeka orkestratora") i staje. Ne ponavlja u petlji i ne čeka odgovor.
    **Kad PR ne postoji** (status "blokirano" prije PR-a ili "gotovo bez PR-a"), sesija nakon neuspjelog ponovnog pokušaja otvara GitHub issue s naslovom `IZVJEŠTAJ <id>`, izvještajem u tijelu i istom oznakom (ili bez nje dok ne postoji), i staje.
 2. **Orkestrator ne ovisi o porukama:** na početku svakog poteza pregleda otvorene PR-ove (`gh pr list --label izvjestaj-ceka` i PR-ove svih dodijeljenih zadataka) i otvorene issuee s naslovom `IZVJEŠTAJ` (`gh issue list --search "IZVJEŠTAJ in:title"`), obrađuje izvještaje i zatvara obrađene issuee.
-3. **Obavijest o završetku:** pri slanju zadatka orkestrator uključuje `notify_when_idle`, pa jednom dobije obavijest kad sesija završi, bez ispitivanja u petlji i neovisno o poruci izvještaja.
+3. **Stanje sesija:** `notify_when_idle` ne radi za sesije desktop aplikacije (provjereno 3. 10. 2026.), pa orkestrator na početku poteza uz PR-ove pogleda i popis sesija (radi, miruje, PR otvoren ili spojen), bez ispitivanja u petlji.
 4. **Jedan orkestrator:** aktivna je samo jedna sesija s imenom "Ductus orkestrator"; stara se arhivira ili preimenuje. Zadatak nosi točnu adresu orkestratora (ime i ref, npr. `Ductus orkestrator [b568f5]`), a sesija odgovara na adresu iz `from` poruke zadatka.
 5. **Sesija koja šuti:** ako sesija ne otvori PR u očekivanom vremenu, orkestrator pogleda njezino stanje na popisu sesija (zauzeta ili miruje) i pita je jednom. Poruke tipa "jesi li gotova?" se ne šalju.
 
@@ -80,7 +80,8 @@ Izvještaj ide porukom orkestratoru na adresu iz zadatka (ili iz `from` poruke z
 
 ## 4. Štednja tokena
 
-- **Jedan zadatak, jedna sesija.** Nakon spajanja PR-a sesija se arhivira; novi zadatak dobiva svježu sesiju. Dugi razgovori skupi su na svakom potezu.
+- **Rotacija sesije.** Svaki potez ponovno šalje cijeli kontekst sesije, pa je duga sesija skupa i kad radi malo. Uloga (Platforma, Backend, Frontend) nastavlja u istoj sesiji dok joj kontekst ne prijeđe oko 150.000 tokena; tada zapiše predaju u izvještaj, orkestrator je arhivira i otvara se svježa sesija iste uloge. Kratkotrajna sesija se arhivira čim joj je PR spojen. Orkestrator rotira po `docs/ORKESTRATOR.md` §7.
+- **Lanci zadataka.** Kad je redoslijed jasan, sesija dobiva više zadataka odjednom (svaki svoj PR), pa treba manje poruka i manje ponovnog čitanja uputa.
 - **Čitaj samo ulaz iz zadatka.** `CLAUDE.md` traži `STATE.md`; ostale dokumente samo odjeljke navedene u zadatku.
 - **Pretraživanje preko pomoćnog agenta** (Explore) kad treba pregledati mnogo datoteka; u glavni razgovor vraća se zaključak, ne sadržaj.
 - **Testovi kroz naredbe s kratkim izlazom** (npr. `vitest run --reporter=dot`); puni izlaz samo za test koji pada.
@@ -97,7 +98,7 @@ Nakon otvaranja PR-a sesija pokreće:
 powershell -File scripts/codex-review.ps1
 ```
 
-Skripta pokreće `codex exec review --base origin/main` (samo diff grane), Codex sam čita upute iz `AGENTS.md`, a nalaz ide kao komentar na PR. Codex troši ChatGPT kvotu, ne Claude kvotu. Sesija ispravlja prihvaćene nalaze i u izvještaju navodi odbijene s razlogom. Kritičan nalaz koji sesija ne može riješiti znači status "blokirano".
+Codex radi i desetak minuta, pa se skripta pokreće u pozadini s vremenskim ograničenjem od najmanje 20 minuta; inače se prekine prije objave komentara. Skripta pokreće `codex exec review --base origin/main` (samo diff grane), Codex sam čita upute iz `AGENTS.md`, a nalaz ide kao komentar na PR. Codex troši ChatGPT kvotu, ne Claude kvotu. Sesija ispravlja prihvaćene nalaze i u izvještaju navodi odbijene s razlogom. Kritičan nalaz koji sesija ne može riješiti znači status "blokirano".
 
 ## 6. Dizajn
 
