@@ -37,11 +37,10 @@ Agent nikad ne uzima ove stavke i nikad ne čeka na njih.
 Zadatke dodjeljuje orkestrator, jedan po sesiji (`docs/SESSIONS.md`). Do demoa vrijedi tablica zadataka u `docs/PLAN-DEMO.md` §4; ovdje je samo ono što je u radu ili sljedeće.
 
 - [ ] P-1 (Platforma): M0.1 kostur projekta. U radu.
-- [ ] K-1 (Arhitektura): B0.4 prepis `docs/ARCHITECTURE.md`. U radu.
 - [ ] D-1 (Dizajn): S8 dizajnerski sustav i ekrani demoa po prototipu (D-85). U radu.
 - [ ] B-1 i F-1 (Backend, Frontend): planovi prijenosa jezgre. U radu.
 - [ ] Sljedeće nakon P-1: P-2, P-3 (Platforma), B-2 (Backend), F-2 (Frontend), K-2 (citatni stil).
-- [ ] Izvan demoa: B0.2 spike rekonstrukcije (nakon M0.2); B0.1 blokiran računima; M1 blokiran pristupom Labu; M4 blokiran licencom Lekte.
+- [ ] Izvan demoa: B0.2 ostaje otvoren do mjerenja na stroju koji se kupuje (nakon B0.1); B0.1 blokiran računima; M1 blokiran pristupom Labu; M4 blokiran licencom Lekte.
 
 ## Gotovo
 
@@ -49,3 +48,4 @@ Zadatke dodjeljuje orkestrator, jedan po sesiji (`docs/SESSIONS.md`). Do demoa v
 - 3. 10. 2026.: `pisac-editor` PR #49 i #50 spojeni.
 - 3. 10. 2026.: faza S: uloge i protokol sesija, Codex pregled, mjerenje tokena, čišćenje worktreeova, nadzorna ploča (PR #2).
 - 3. 10. 2026.: odluke D-81 do D-86; plan demoa (`docs/PLAN-DEMO.md`).
+- 3. 10. 2026.: B0.4 prepis `docs/ARCHITECTURE.md` (PR #3); pravila za izgubljene poruke među sesijama (PR #5); B0.2 lokalna osnovica rekonstrukcije, `docs/spikes/B0.2.md` (PR #6): CPU i memorija nisu problem, volumen kontrolnih točaka svakih 200 koraka raste kvadratno (prijedlog oko 2.000 koraka ide uz B0.3).

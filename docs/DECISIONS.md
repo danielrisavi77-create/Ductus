@@ -75,7 +75,7 @@ Izvor: dokument "Ductus: konkurencija i poboljšanja proizvoda" i FPZG Smjernice
 
 | Broj | Odluka | Razlog |
 | --- | --- | --- |
-| D-81 | Potvrđeni prijedlozi D-07 (ovlasti kroz članstvo, RLS i pgTAP, bez OpenFGA), D-10 (JCS odsječci, hash lanac, Ed25519 potvrde), D-11 (nepodudarna rekonstrukcija blokira predaju, praznina ne) i D-24 (odsječci do 30 s, vrijeme na minutu) | Demo (D-76) gradi model fakulteta i evidenciju; bez potvrde bi se gradilo na prijedlogu |
+| D-81 | Potvrđeni prijedlozi D-07 (ovlasti kroz članstvo, RLS i pgTAP, bez OpenFGA), D-10 (JCS odsječci, hash lanac, Ed25519 potvrde; dnevni korijen s RFC 3161 žigom ostaje u valu 2 po D-72, ne u valu 1 kako piše u D-10), D-11 (nepodudarna rekonstrukcija blokira predaju, praznina ne) i D-24 (odsječci do 30 s, vrijeme na minutu) | Demo (D-76) gradi model fakulteta i evidenciju; bez potvrde bi se gradilo na prijedlogu |
 | D-82 | Ciljni datum demoa za FPZG je ponedjeljak 2. 11. 2026.; plan zadataka je u `docs/PLAN-DEMO.md` | Konkretizira "početak studenog" iz D-76 |
 | D-83 | Za demo se FPZG citatni stil kopira iz Lekte kao konfiguracijska datoteka u Ductusu (samo taj stil, ne cijeli paket); zamjenjuje se Lekta paketom u M4 | Vlasnik Lekte dopušta tu kopiju prije odluke o licenci paketa; pravila ostaju konfiguracija (PRODUCT §5 pravilo 12) |
 | D-84 | Sučelje demoa samo na hrvatskom, svi tekstovi u ključevima od prvog dana; engleski (D-70) nakon demoa, u valu 1 | Manje posla prije demoa bez prepisivanja kasnije |

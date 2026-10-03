@@ -79,7 +79,7 @@ Preglednik (Next.js klijent, Tiptap, Dexie)
         +-----> Scaleway Object Storage (privatni bucket, S3 API, javni endpoint s autentikacijom)
         +-----> Scaleway TEM
         +-----> AWS KMS (samo Sign nad digestom, dva ključa)
-        +-----> OpenRouter (samo kad student pokrene AI)
+        +-----> OpenRouter (samo kad student pokrene AI; izvan pilota, D-77)
         +-----> TSA (RFC 3161, jednom dnevno, iz workera)
 Javno: dnevni potpisani korijen + žig (bez sadržaja rada); drugi neovisni primatelji korijena (§4.2)
 ```
@@ -114,7 +114,7 @@ Pravila:
 6. Paket dokaza za predaju izdaje se kao "sidren" tek kad je pripadni korijen žigosan; do tada nosi oznaku "još nije sidren".
 7. Za radove s dugim rokom čuvanja uz `.tsr` spremaju se lanac certifikata TSA i stanje opoziva u trenutku žiga, uz plan ponovnog žigosanja prije isteka certifikata.
 8. Javni broj listova po danu otkriva dnevnu aktivnost pilota; procijeniti u DPIA-i ili zaokružiti.
-9. Verifikator: CLI i web stranica koja radi u pregledniku (lanac, inclusion i consistency dokaz, potpis, `.tsr`, javni ključ) uz ručnu provjeru `openssl`-om.
+9. Verifikator: CLI i web stranica koja radi u pregledniku (web stranica se smije odgoditi prema rezu iz `PROGRAM.md`, CLI ostaje; lanac, inclusion i consistency dokaz, potpis, `.tsr`, javni ključ) uz ručnu provjeru `openssl`-om.
 
 ### 4.3 Prijava, sesije i identitet u bazi
 
@@ -139,7 +139,7 @@ Pravila:
 
 - pg-boss u workeru, `migrate: false` (njegovu shemu vodi `ductus_migrator`). **Tijela poslova su samo ID-ovi** (test).
 - Obavijest nastavniku o novoj reviziji nastaje **najviše jednom po P-03 prozoru** (i po D-39 samo na kraju sesije ako se potvrdi), pa polling od 30 do 60 s ne pretvara pogled u uživo (D-06). Test.
-- AI proxy je obična Next.js ruta koja provodi popis dopuštenih pružatelja po fakultetu i zadatku, uz `provider.only`, isključene fallbackove i `data_collection: deny` u zahtjevu prema OpenRouteru, te ograničenje troška po studentu. Studentov ključ šifrira se aplikacijski: AES-256-GCM, KEK iz okoline, **AAD = `user_id` + namjena + verzija ključa**. Ne `pgsodium` (u najavi ukidanja).
+- AI proxy (izvan pilota, D-77; vrijedi nakon pilota) je obična Next.js ruta koja provodi popis dopuštenih pružatelja po fakultetu i zadatku, uz `provider.only`, isključene fallbackove i `data_collection: deny` u zahtjevu prema OpenRouteru, te ograničenje troška po studentu. Studentov ključ šifrira se aplikacijski: AES-256-GCM, KEK iz okoline, **AAD = `user_id` + namjena + verzija ključa**. Ne `pgsodium` (u najavi ukidanja).
 - Uvoz DOCX i PDF: parsira se **u pregledniku ili u izoliranom poslu** s ograničenjem veličine i vremena (zip bombe, XXE), nikad u web procesu.
 
 ### 4.6 Rekonstrukcija i predaja
