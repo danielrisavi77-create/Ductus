@@ -31,8 +31,8 @@ const SAMPLES = [
 ];
 
 const filler = fc.string({ unit: fc.constantFrom(..."abcčćdđ ,.!?-()0123456789") });
-const separator = fc.constantFrom(" ", "\n", "\t", " ", " - ", ": ", "(", ")", ".");
-const invisible = fc.constantFrom("", "­", "​", "⁠");
+const separator = fc.constantFrom(" ", "\n", "\t", "\u00A0", " - ", ": ", "(", ")", ".");
+const invisible = fc.constantFrom("", "\u00AD", "\u200B", "\u2060");
 
 const variant = fc
   .tuple(fc.constantFrom(...SAMPLES), fc.infiniteStream(fc.boolean()), fc.infiniteStream(invisible))

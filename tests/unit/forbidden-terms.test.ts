@@ -77,9 +77,9 @@ describe("forbidden interface terms (PRODUCT.md 5)", () => {
 
   it("matches across case, diacritics, punctuation and invisible characters", () => {
     expect(foldText("AUTENTIČNOST")).toBe("autenticnost");
-    expect(foldText("Skri­ven")).toBe("skriven");
+    expect(foldText("Skri\u00ADven")).toBe("skriven");
     expect(foldText("Đak  –  rizik!")).toBe("dak rizik");
-    expect(entries("dokaz autorstva")).toEqual(["dokaz autorstva"]);
+    expect(entries("dokaz\u00A0autorstva")).toEqual(["dokaz autorstva"]);
   });
 
   it("gives every entry a replacement from the dictionary", () => {
