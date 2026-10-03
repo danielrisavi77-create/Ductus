@@ -24,6 +24,7 @@ Agent nikad ne uzima ove stavke i nikad ne čeka na njih.
 - [ ] 15. 12. 2026.: kontrolna točka roka (`PROGRAM.md`).
 - [ ] Odlučiti o vidljivosti repoa (preporuka: privatan).
 - [ ] Konačno ime proizvoda (D-18).
+- [ ] Istraživanje backenda i hostinga (D-08) prije M2; do tada M0 ne veže kod uz dobavljača.
 
 ## Agent queue
 

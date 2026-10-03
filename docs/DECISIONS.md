@@ -70,7 +70,7 @@ Izvor: dokument "Ductus: konkurencija i poboljšanja proizvoda" i FPZG Smjernice
 | Broj | Odluka | Prijedlog |
 | --- | --- | --- |
 | D-07 | Ovlasti | Članstvo i RLS u Postgresu, pgTAP matrica pristupa; bez OpenFGA servisa |
-| D-08 | Stack | Next.js, Tiptap, Dexie, Supabase, Netlify (sadržaj se ne obrađuje izvan EU-a) |
+| D-08 | Stack | **Otvoreno (3. 10. 2026.): backend i hosting biraju se nakon istraživanja**, prema zahtjevima iz dokumenta "Ductus: brainstorming funkcija i troškova" (EU, AAI OIDC, ovlasti po retku, isti TypeScript na poslužitelju, red poslova, kopije i povrat). Editor ostaje Tiptap i Dexie; Supabase i Netlify su samo jedna od opcija |
 | D-10 | Integritet zapisa | JCS odsječci adresirani hashom, hash lanac, Ed25519 potvrde s rotacijom ključeva; dnevni korijen s RFC 3161 žigom nakon pilota |
 | D-11 | Predaja i praznine | Nepodudarna rekonstrukcija blokira predaju; praznina ne blokira, ali je vidljiva |
 | D-16 | Prijava nastavnika, mentora i administratora | Također isključivo AAI@EduHr |
