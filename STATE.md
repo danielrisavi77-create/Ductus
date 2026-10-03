@@ -37,11 +37,12 @@ Zadatke dodjeljuje orkestrator po `docs/ORKESTRATOR.md`. Do demoa vrijedi tablic
 
 **Stanje orkestratora (3. 10. 2026., večer).** Nova sesija orkestratora preuzela; Daniel pitanja dobiva obaviješću (`ORKESTRATOR.md` §4a). Spojeno i #13 (P-3). Sesija Citiranje nastavlja kao Arhitektura (Danielova želja); Dizajn za arhiviranje.
 
-- [ ] Platforma: P-9 paketi za Frontend (Tiptap, Dexie, fake-indexeddb), pa P-8 istraga spore `pnpm install` na Windowsu. Zatim rotacija; P-4 ide svježoj sesiji.
-- [ ] Backend: PR2 (#18) i PR3 (#20) spojeni; D-88 `ductus-evidence-*` kao zaseban PR, zatim rotacija.
-- [ ] Uvjet za B-8 (Codex na #20): `evidence-ingest` provjerava kanonski JCS segment i SHA-256 prema `descriptor.segmentHash` te odbija nepoznata polja u descriptoru.
-- [ ] Frontend: F-2 u pet PR-ova (document; collaboration i evidence; serverSync; sync u dva dijela). Editor, journal i drainRunner čekaju P-9; nakon toga F-4 ljuska (D-89).
-- [ ] Arhitektura: `ARCHITECTURE.md` §5 i §6 usklađeni s B0.2 (kontrolne točke oko 2.000 koraka, PRIJEDLOG do B0.3).
+- [ ] Platforma: P-9 spojen (#15); P-8 istraga spore `pnpm install` na Windowsu. Zatim rotacija; P-4 ide svježoj sesiji.
+- [ ] Backend (svježa sesija; predaja u opisu PR #23): spojeni #9, #18, #20, #23 (D-88). Sljedeće: PR4 `application/evidence` (gateway, outbox; >400 redaka uz obrazloženje, `standard`), PR5 crypto adapteri (development i aws-kms signer, bez Azurea, `critical`), zatim B-5 kad P-4 bude spojen. Ne prenose se vremenski moduli (PRODUCT §5 pravilo 4, D-63), reference-model, Azure signer, nekorišteni portovi.
+- [ ] Uvjeti za B-8 (Codex na #20): `evidence-ingest` odbija nepoznata polja u descriptoru (gotov commit `259ebaa` na grani `backend/m0-2-ports-in-memory`, cherry-pick) i provjerava kanonski JCS segment i SHA-256 prema `descriptor.segmentHash` (izvor: `evidence-gateway.ts`, PR4), oboje s testom.
+- [ ] Uvjet za B-12 (Codex na #21): `forensics/replay.ts` za `delete`, `cut` i `replace` uspoređuje hash uklonjenog raspona s hashom u događaju i prekida replay pri nepodudaranju.
+- [ ] Frontend: spojeni #19 (document) i #21 (collaboration, evidence); #24 serverSync na pregledu; zatim sync u dva dijela, pa editor, process-ledger, journal i drainRunner (F-3), pa F-4 ljuska (D-89).
+- [ ] Okolina: `pnpm install` u novom worktreeu 15 do 20 min (P-8); lefthook `secrets` traži pokrenut Docker Desktop; worktree u dugoj putanji ruši vitest (MAX_PATH); `pnpm test` ne uključuje `tests/integration`.
 - [ ] Sljedeće iz PLAN-DEMO: P-4 (dbmate, pgTAP u CI-ju), P-5 (E2E u CI-ju), P-6 (provjera zabranjenih riječi, Frontend ili Platforma), B-5 (uloge baze, sesije).
 - [ ] Prije prvog poziva `diffText` nad cijelim radom (usporedba verzija, M5 do M7): granica ulaza ili diff po odlomcima, plus ispravci negacije i razmaka (Codex nalazi na PR #8).
 - [ ] Izvan demoa: B0.2 ostaje otvoren do mjerenja na stroju koji se kupuje (nakon B0.1); B0.1 blokiran računima; M1 blokiran pristupom Labu; M4 blokiran licencom Lekte.
@@ -53,4 +54,4 @@ Zadatke dodjeljuje orkestrator po `docs/ORKESTRATOR.md`. Do demoa vrijedi tablic
 - 3. 10. 2026.: faza S: uloge i protokol sesija, Codex pregled, mjerenje tokena, čišćenje worktreeova, nadzorna ploča (PR #2).
 - 3. 10. 2026.: odluke D-81 do D-89 (potvrđeni D-07, D-10, D-11, D-24; demo 2. 11.; dizajn v6 odobren; rezovi odobreni; `ductus-evidence-*`); plan demoa (`docs/PLAN-DEMO.md`); pravila orkestratora (`docs/ORKESTRATOR.md`).
 - 3. 10. 2026.: B0.4 prepis `docs/ARCHITECTURE.md` (PR #3); pravila za izgubljene poruke među sesijama (PR #5); B0.2 lokalna osnovica rekonstrukcije, `docs/spikes/B0.2.md` (PR #6): CPU i memorija nisu problem, volumen kontrolnih točaka svakih 200 koraka raste kvadratno (prijedlog oko 2.000 koraka ide uz B0.3).
-- 3. 10. 2026.: M0 krenuo: kostur (#7), CI sa skenerima (#10), F1 i18n i diff (#8), forensics jezgra (#9), FPZG citatni stil (#12), lokalni stog s lažnim OIDC-om i RustFS-om (#13).
+- 3. 10. 2026.: M0 krenuo: kostur (#7), CI sa skenerima (#10), F1 i18n i diff (#8), forensics jezgra (#9), FPZG citatni stil (#12), lokalni stog s lažnim OIDC-om i RustFS-om (#13), ARCHITECTURE v0.4 (#14), paketi za editor (#15), pravila orkestratora i Codex razine (#16, #22), Dependabot (#17), forensics replay (#18), domain/document (#19), portovi evidencije (#20), collaboration i evidence (#21), `ductus-evidence-*` (#23).
