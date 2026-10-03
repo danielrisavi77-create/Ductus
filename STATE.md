@@ -40,6 +40,7 @@ Zadatke dodjeljuje orkestrator, jedan po sesiji (`docs/SESSIONS.md`). Do demoa v
 - [ ] D-1 (Dizajn): S8 dizajnerski sustav i ekrani demoa po prototipu (D-85). U radu.
 - [ ] B-1 i F-1 (Backend, Frontend): planovi prijenosa jezgre. U radu.
 - [ ] Sljedeće nakon P-1: P-2, P-3 (Platforma), B-2 (Backend), F-2 (Frontend), K-2 (citatni stil).
+- [ ] Prije prvog poziva `diffText` nad cijelim radom (usporedba verzija, M5 do M7): granica ulaza ili diff po odlomcima, plus ispravci negacije i razmaka (Codex nalazi na PR #8).
 - [ ] Izvan demoa: B0.2 ostaje otvoren do mjerenja na stroju koji se kupuje (nakon B0.1); B0.1 blokiran računima; M1 blokiran pristupom Labu; M4 blokiran licencom Lekte.
 
 ## Gotovo

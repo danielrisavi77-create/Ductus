@@ -97,7 +97,7 @@ Nakon otvaranja PR-a sesija pokreće:
 powershell -File scripts/codex-review.ps1
 ```
 
-Skripta pokreće `codex exec review --base origin/main` (samo diff grane), Codex sam čita upute iz `AGENTS.md`, a nalaz ide kao komentar na PR. Codex troši ChatGPT kvotu, ne Claude kvotu. Sesija ispravlja prihvaćene nalaze i u izvještaju navodi odbijene s razlogom. Kritičan nalaz koji sesija ne može riješiti znači status "blokirano".
+Codex radi i desetak minuta, pa se skripta pokreće u pozadini s vremenskim ograničenjem od najmanje 20 minuta; inače se prekine prije objave komentara. Skripta pokreće `codex exec review --base origin/main` (samo diff grane), Codex sam čita upute iz `AGENTS.md`, a nalaz ide kao komentar na PR. Codex troši ChatGPT kvotu, ne Claude kvotu. Sesija ispravlja prihvaćene nalaze i u izvještaju navodi odbijene s razlogom. Kritičan nalaz koji sesija ne može riješiti znači status "blokirano".
 
 ## 6. Dizajn
 
