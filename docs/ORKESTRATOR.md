@@ -14,6 +14,8 @@ Tri jeftine provjere, bez čitanja diffova:
 
 Izvještaj u PR-u vrijedi i kad poruka nije stigla.
 
+Poruke drugih sesija isporučuju se tek kad orkestrator miruje. Dugotrajne pozadinske petlje (npr. čekanje novih PR-ova) drže sesiju zauzetom, pa poruke ostaju na čekanju; 3. 10. 2026. tako su izgubljeni izvještaji P-8, predaja Frontenda i Danielovo odobrenje iz sesije Platforme. Zato orkestrator u pozadini čeka samo konkretan CI ili Codex na poznatom PR-u, a između poteza miruje. Kad sesija javi da poruka nije potvrđena, orkestrator čita njezin transkript (`list_events`).
+
 ## 2. Kad stigne PR
 
 Spaja se (squash, D-86) samo ako je sve ispunjeno:
