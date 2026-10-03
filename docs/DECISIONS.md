@@ -92,6 +92,7 @@ Izvor: dokument "Ductus: konkurencija i poboljšanja proizvoda" i FPZG Smjernice
 | D-73 | Prijava i sesije | Vlastiti OIDC klijent prema AAI@EduHr, sesije u bazi, identitet samo po `hrEduPersonUniqueID` i izdavatelju, nikad spajanje po e-pošti. Biblioteka (Better Auth s generic OAuth pluginom ili `openid-client`) se bira na M1 spikeu. OIB se ne traži |
 | D-74 | Poslovi i obavijesti | pg-boss u workeru (`migrate: false`, tijela poslova samo ID-ovi); obavijest nastavniku o reviziji najviše po P-03 prozoru, polling 30 do 60 s; AI proxy kao Next.js ruta s `provider.only` i ograničenjem troška; tajne korisnika AES-256-GCM s AAD (korisnik, namjena, verzija ključa); bez server-side renderiranja sadržaja |
 | D-75 | Status vNext dokumenta | "Pisač: Backend arhitektura i vizija vNext" je referenca ciljne arhitekture, ne plan pilota. Što se prihvaća, odgađa s okidačem ili ne usvaja, zapisano je u `docs/BACKEND.md` §2 |
+| D-76 | Demo za fakultet | Sastanak s FPZG-om tek kad postoji radni demo. Demo nije zaseban prototip nego prvi okomiti prolaz pravog sustava (M0 do M3 i osnovni dijelovi M5 do M7), s lažnom prijavom i izmišljenim podacima; ništa se ne baca. Zahtjevi koji traže fakultet (AAI Lab, DPIA, ugovor) šalju se na sastanku ili nakon njega. Opseg i izlazni kriterij u `PROGRAM.md` |
 
 ## Čeka pravno mišljenje
 

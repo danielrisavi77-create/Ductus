@@ -4,7 +4,7 @@ Ažurira se nakon svakog spojenog PR-a. Najviše 80 redaka.
 
 ## Trenutna faza
 
-M0 Temelj: plan proizvoda u pregledu (PR #1). Cilj: val 1 i val 2 spremni oko 22. 2. 2027. (puno radno vrijeme), kontrolna točka 15. 12. 2026.
+M0 Temelj: plan proizvoda u pregledu (PR #1). Prvi cilj: demo za fakultet (D-76, `PROGRAM.md`), početak studenog 2026.; sastanak s FPZG-om tek nakon njega. Zatim val 1 i val 2 oko 22. 2. 2027., kontrolna točka 15. 12. 2026.
 
 ## Owner queue (samo Daniel)
 
@@ -26,7 +26,7 @@ Agent nikad ne uzima ove stavke i nikad ne čeka na njih.
 - [ ] Model podrške u pilotu (tko, kojim kanalom, u koje vrijeme, zamjenski postupak predaje kad Ductus ne radi pred rok).
 - [ ] Sučelje na engleskom u pilotu ili Erasmus studenti izvan pilota (D-67).
 - [ ] Potvrditi D-08 i D-71 do D-75 iz `docs/BACKEND.md` (istraživanje i neovisni pregled gotovi 3. 10. 2026.; preporuka UpCloud + Scaleway S3/TEM + AWS KMS, bez Supabasea; odluka o trošku iznad D-66, BACKEND §7); do tada M0 ne veže kod uz dobavljača.
-- [ ] FPZG (odgovorna osoba za AAI@EduHr): ovlastiti Daniela za AAI@EduHr Lab e-porukom na `aai@srce.hr` i kasnije registrirati Ductus kao uslugu FPZG-a u Registru resursa. Fizička osoba to ne može sama (pravila AAI@EduHr). Tekst zahtjeva: `docs/BACKEND.md` Dodatak B. Blokira M1.
+- [ ] FPZG (odgovorna osoba za AAI@EduHr): ovlastiti Daniela za AAI@EduHr Lab e-porukom na `aai@srce.hr` i kasnije registrirati Ductus kao uslugu FPZG-a u Registru resursa. Fizička osoba to ne može sama (pravila AAI@EduHr). Draft je u Gmailu; poslati na sastanku nakon demoa ili odmah poslije (D-76). Blokira M1, ali ne demo.
 - [ ] FINA: tek kad postoji obrt (ili FPZG kao ugovorna strana); do tada dva besplatna TSA-a (D-72).
 - [ ] Otvoriti račune UpCloud, Scaleway (Object Storage, TEM) i AWS (samo KMS, IAM s uskim ovlastima), 2FA, ograničeni ključevi po okolišu za agenta. Blokira B0.1.
 - [ ] Računovođa: PDV za fizičku osobu bez obrta; FINA zahtijeva poslovni subjekt.

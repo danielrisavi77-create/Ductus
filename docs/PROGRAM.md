@@ -34,6 +34,28 @@ Backend (hosting, prijava, evidencija, korijen i žig, operacije) razrađen je u
 
 **Zbroj prema tablici: 99 do 134 večeri** (69 do 93 prije dodataka D-40 do D-64). Procjene ovakvih projekata u pravilu se prekorače, pa je realan raspon **145 do 195 večeri**. Cijeli opseg ne stane u jedan semestar pripreme; zato vrijede valovi i kontrolna točka niže.
 
+## Demo za fakultet [PRIJEDLOG D-76]
+
+Sastanak s FPZG-om održava se kad je demo gotov. Demo je prvi dio pravog sustava, ne zaseban prototip.
+
+**Jedan prolaz od početka do kraja, na izmišljenom zadatku:**
+
+1. Nastavnik stvara kolegij i zadatak (s obaviješću studentu, S3).
+2. Student piše u pravom editoru (naslovi, citat, bibliografija u osnovnom obliku); stanja spremanja su stvarna, uključujući rad bez mreže i povratak.
+3. Nastavnik vidi spremljeno stanje rada i ostavlja komentar vezan uz odlomak.
+4. Student predaje; poslužitelj rekonstruira rad, usporedba se podudara, student dobiva potpisanu potvrdu.
+5. Student i nastavnik vide isti sažetak procesa; nema zabranjenih riječi ni postotaka.
+
+**Namjerno izvan demoa:** AAI prijava (lažni OIDC pružatelj s jasnom oznakom "demo prijava"), AI pomoćnik, Lekta paket osim jednog citatnog stila, uvoz i izvoz, dnevni korijen, mentorski radovi, reprodukcija.
+
+**Gdje radi:** na tvom računalu (Docker) za sastanak; javna staging adresa samo ako je B0.1 već odrađen, kako se kod ne bi vezao uz dobavljača prije D-08.
+
+**Izlazni kriterij:** prolaz 1 do 5 snimljen, E2E test tog prolaza zelen u CI-ju, nijedan stvarni osobni podatak.
+
+**Procjena:** oko 15 do 22 večeri (M0, B1 osnovno, dijelovi M2, M3, M5, M6, M7 iz vala 1). Uz puno radno vrijeme oko 3 do 4 tjedna od početka M0, dakle cilj **početak studenog 2026.**, ovisno o spajanju `pisac-editor` PR #49 i #50 i lokalnom stroju s Dockerom.
+
+Ovo nije dodatni posao: sve stavke su dio vala 1 i samo su poredane tako da prvi prikaz bude rano. Kontrolna točka 15. 12. 2026. ostaje.
+
 ## Raspored po valovima [ODLUČENO D-36, verzija 2]
 
 U pilot ulazi sve prihvaćeno (D-26, D-65), ali ne odjednom. Faze M0 do M11 iz tablice gore dijele se po valovima; ovdje je što točno ide u koji val.
