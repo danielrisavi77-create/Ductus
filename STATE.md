@@ -11,6 +11,7 @@ M0 Temelj: plan proizvoda spojen (PR #1); postavljen rad u paralelnim sesijama (
 Agent nikad ne uzima ove stavke i nikad ne čeka na njih.
 
 - [ ] Codex pregled dok sesije rade u oblaku: preporuka jedna lokalna sesija "Ductus Codex" na `D:\Ductus` kojoj orkestrator šalje broj PR-a i razinu; alternativa OpenAI ključ kao tajna cloud okoline (trošak i tajna). Do odluke PR-ovi bez Codexa ne spajaju se.
+- [ ] D-73 (dio): potvrditi "sesije u bazi + `app.current_actor()`" i nove NOLOGIN uloge `ductus_auth` (jedina s EXECUTE na `open_session`) i `ductus_identity` (vlasnik identity tablica) iz plana B-5 (issue #38). Preporuka: potvrditi; izbor biblioteke (Better Auth ili `openid-client`) ostaje za B-6. B-5 se gradi, ali ne spaja do potvrde.
 - [ ] Proba demoa u subotu 31. 10. 2026. i snimka prolaza (PLAN-DEMO D-3, D-4).
 - [ ] Potvrditi ili promijeniti prijedloge D-08, D-16, D-20, D-34, D-37, D-38 u `docs/DECISIONS.md`; odlučiti D-06 ili stroža D-39.
 - [ ] Potvrditi zadane pragove P-01 do P-04.
