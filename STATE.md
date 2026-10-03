@@ -16,6 +16,7 @@ Agent nikad ne uzima ove stavke i nikad ne čeka na njih.
 - [ ] Potvrditi zadane pragove P-01 do P-04.
 - [ ] Srce: registracija u AAI@EduHr Registru resursa i pristup AAI@EduHr Labu.
 - [ ] FPZG (prodekan Višeslav Raos): koordinator pilota, kolegiji i mentori, akademski kalendar ljetnog semestra, AAI administrator, službenik za zaštitu podataka.
+- [ ] FPZG: treba li "ispis razgovora" (čl. 9 Smjernica GenUI) i kad je AI korišten samo za lekturu ili prijevod.
 - [ ] FPZG: D-29 (pravna osnova), D-30 (rokovi čuvanja), D-31 (GO uvjeti), D-35 (dopušteni AI pružatelji), D-04 (obveznost u pilotu).
 - [ ] Lekta: odluka o licenci i pravu na redistribuciju pravila prije paketa za Ductus.
 - [ ] 15. 12. 2026.: kontrolna točka roka (`PROGRAM.md`).

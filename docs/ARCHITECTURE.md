@@ -56,7 +56,7 @@ Sve tablice imaju uključen RLS. Pristup ide kroz `SECURITY DEFINER` pomoćne fu
 | `institution` | id, naziv, AAI `homeOrg`, postavke (pragovi P-01 do P-03, rokovi čuvanja, dopušteni AI pružatelji i modeli, obveznost po vrsti rada) | Administrator te ustanove |
 | `app_user` | id, `aai_unique_id` (jedinstven), ustanova, ime za prikaz, posljednja prijava | Sam korisnik; nastavnik vidi ime studenata u svom kolegiju |
 | `institution_role` | korisnik, ustanova, uloga (`teacher`, `admin`), potvrdio, vrijeme | Administrator |
-| `course` | id, ustanova, naziv, akademska godina | Članovi kolegija |
+| `course` | id, ustanova, naziv, akademska godina, pravilo AI-ja iz izvedbenog plana (D-52) | Članovi kolegija |
 | `course_enrollment_code` | kolegij, hash koda, vrijedi do, aktivan | Nastavnik kolegija |
 | `course_member` | kolegij, korisnik, uloga u kolegiju (`teacher`, `student`), od, do | Članovi kolegija |
 | `mentorship` | mentor, student, vrsta rada, od, do, potvrdio | Mentor i student |
@@ -69,7 +69,7 @@ Sve tablice imaju uključen RLS. Pristup ide kroz `SECURITY DEFINER` pomoćne fu
 
 | Tablica | Ključni stupci | Tko čita |
 | --- | --- | --- |
-| `project` | id, zadatak ili mentorstvo, student, način izmjena nastavnika (prijedlozi ili izravno, D-21) | Student vlasnik; nastavnik zadatka ili mentor |
+| `project` | id, zadatak ili mentorstvo, student, način izmjena nastavnika (prijedlozi ili izravno, D-21), oznaka odobrene prilagodbe (D-50) | Student vlasnik; nastavnik zadatka ili mentor |
 | `document` | id, projekt, trenutna revizija | Student vlasnik |
 | `document_checkpoint` | dokument, broj revizije, puni kanonski sadržaj, hash | Student; poslužitelj za rekonstrukciju |
 | `document_revision` | dokument, broj revizije, bazna revizija, hash sadržaja, vrijeme poslužitelja, kraj sesije (da/ne). Sadržaj se ne sprema pri svakoj reviziji; nastaje iz najbliže kontrolne točke i odsječaka | Student; nastavnik ili mentor trenutno stanje (D-06) i revizije na kraju sesija prema profilu |
@@ -77,7 +77,12 @@ Sve tablice imaju uključen RLS. Pristup ide kroz `SECURITY DEFINER` pomoćne fu
 | `evidence_receipt` | odsječak, potpis, ID ključa | Kao odsječak |
 | `evidence_gap` | dokument, od revizije, do revizije, uzrok | Student; nastavnik kroz projekciju |
 | `import_event` | dokument, revizija, naziv i vrsta datoteke, veličina, hash | Student; nastavnik kroz projekciju |
-| `ai_transfer` | dokument, revizija, pružatelj, model, veličina prenesenog teksta, vrijeme | Student; nastavnik kroz projekciju |
+| `ai_transfer` | dokument, revizija, pružatelj, model, svrha (D-42), faza rada, veličina prenesenog teksta, vrijeme | Student; nastavnik kroz projekciju |
+| `ai_conversation` | projekt, pružatelj, model, svrha, poruke (zasebna klasa podataka), priložen izjavi (da/ne) | Student; nastavnik samo priložene, nakon slanja verzije ili predaje (D-41) |
+| `paste_label` | odsječak, oznaka (vlastite bilješke, citat, prijašnja verzija, vanjski AI, drugo), vrijeme. Samo dodavanje | Student; nastavnik kroz projekciju kao izjavljeno (D-43) |
+| `review_request` | komentar, stanje (otvoren, proveden prema studentu, prihvaćen, ponovno otvoren), revizija prihvaćanja, hash sidrenog raspona pri prihvaćanju | Kao komentar (D-45) |
+| `consultation` | mentorstvo ili projekt, datum, tema, dogovoreno, revizija rada, autor | Mentor i student (D-47) |
+| `source_check` | dokument, stavka bibliografije, DOI ili URL, rezultat (pronađeno, nije pronađeno, nedostupno), vrijeme | Student; nastavnik kroz projekciju (D-48) |
 | `comment` | dokument, sidro u tekstu, autor, tekst, stanje (otvoren, odgovoren, riješen), vrijeme | Student vlasnik; nastavnik ili mentor rada |
 | `suggestion` | dokument, bazna revizija, autor, koraci izmjene, stanje (otvoren, prihvaćen, odbijen), vrijeme | Kao komentar |
 | `signing_key` | ID ključa, javni ključ, vrijedi od, vrijedi do, opozvan | Javno |
@@ -88,7 +93,7 @@ Sve tablice imaju uključen RLS. Pristup ide kroz `SECURITY DEFINER` pomoćne fu
 | Tablica | Ključni stupci | Tko čita |
 | --- | --- | --- |
 | `submission` | id, zadatak, verzija zadatka, projekt, revizija, vrijeme poslužitelja, nakon roka (da/ne, uz produljenje), hash artefakta, rezultat rekonstrukcije, potvrda | Student vlasnik; nastavnik zadatka |
-| `assistance_declaration` | predaja, tekst izjave o AI-ju i drugoj pomoći, vrijeme | Kao predaja |
+| `assistance_declaration` | predaja ili poslana verzija, obrazac (koristio, nije koristio), stavke (alat, model, svrha, faza; opaženo ili izjavljeno), priloženi razgovori, refleksija, vrijeme (D-40) | Kao predaja |
 | `student_note` | predaja ili odsječak, tekst, vrijeme, zamjenjuje (prethodna napomena). Samo dodavanje | Kao predaja |
 | `access_log` | tko, što, kada, razlog | Administrator ustanove |
 | `data_class` | klasa, svrha, rok čuvanja, osnova | Administrator ustanove |
@@ -147,14 +152,15 @@ Ako odsječci između dviju primljenih revizija trajno izostanu, poslužitelj bi
 - **Komentari:** vezani uz raspon teksta preko sidra (preneseno iz `collaboration/anchor` u `pisac-editor`). Ako se tekst ispod sidra promijeni toliko da se sidro ne može pouzdano pronaći, komentar se prikazuje kao "sidro nije pouzdano", nikad na krivom mjestu.
 - **Prijedlozi:** spremaju se odvojeno od dokumenta (`suggestion`), pa ne stvaraju sukob s pisanjem studenta. Kad ga student prihvati, koraci prijedloga primjenjuju se kao nova revizija s autorom "nastavnik (prihvaćeni prijedlog)".
 - **Izravne izmjene (D-21, D-34):** dopuštene samo kad je na radu postavljen taj način i kad student nije u aktivnoj sesiji. Poslužitelj drži kratkotrajni zakup (lease) aktivnog pisača po dokumentu; ako ga drži student, izmjena nastavnika automatski postaje prijedlog. Izravna izmjena ide istim putem kao studentova (§5), s autorom "nastavnik".
+- **Zahtjev za doradu (D-45):** pri prihvaćanju se sprema hash sidrenog raspona; ako se raspon kasnije promijeni, projekcija prikazuje "promijenjeno nakon prihvaćanja". Deterministički, bez AI-ja.
 - **Pripisivanje:** autor je dio svakog odsječka evidencije i provjerava ga poslužitelj iz sesije, nikad iz polja koje šalje klijent.
 
 ## 5b. AI pomoćnik
 
 - Student se jednom poveže s OpenRouterom (OAuth s PKCE-om). Dobiveni ključ sprema se šifriran u Supabase Vault (`ai_credential`) i nikad ne dolazi u preglednik.
 - Zahtjevi idu preko Edge Functiona `ai` u EU-u, koja provjerava popis dopuštenih pružatelja i modela za fakultet i zadatak i tek tada prosljeđuje zahtjev. Popis se ne može provesti u pregledniku, zato proxy.
-- Funkcija ne sprema upite ni odgovore. Kad student prenese tekst iz AI-ja u rad, editor to bilježi kao događaj `ai_transfer` s pružateljem, modelom i veličinom.
-- Kad zadatak najavi vidljivost upita (D-22), upiti i odgovori spremaju se uz rad u zasebnoj klasi podataka s vlastitim rokom čuvanja.
+- Razgovori se spremaju u `ai_conversation` u zasebnoj klasi podataka s vlastitim rokom čuvanja; RLS ih nastavniku pokazuje tek kad su priloženi izjavi (D-41). Kad student prenese tekst u rad, editor bilježi `ai_transfer` s pružateljem, modelom, svrhom i veličinom.
+- Svrhe (D-42) su predlošci uputa na poslužitelju; student ne piše sistemske upute. Zaštita sadržaja (D-46) je deterministička usporedba brojki, navodnika i citatnih oznaka prije i poslije obrade, u pregledniku.
 - Zemlja obrade svakog pružatelja prikazuje se studentu prije prvog korištenja.
 
 ## 5c. Lekta paket i uvoz

@@ -127,22 +127,24 @@ Izvedeno iz Ustava; svako pravilo ima test ili provjeru u PR-u.
 2. **Ulaz u kolegij** kodom kolegija, ili dodjelom mentoru za završne i više radove.
 3. **Otvara zadatak (ekran S3).** Prvi ekran je obavijest: upute, rok, vrsta rada, pravila oblika (iz Lekte), dopušteni oblici pomoći i AI, što se bilježi, što se ne bilježi, da nastavnik vidi spremljeno stanje od prvog dana, koliko se dugo čuva i kako se dodaje napomena. Student potvrđuje da je pročitao. To nije privola i ne smije se tako prikazivati. Prije potvrde poslužitelj ne prima nikakvu evidenciju za taj rad. (C-3)
 4. **Piše** u editoru koji zna pravila fakulteta: struktura, oblik, citiranje, bibliografija, naslovna stranica, opseg. Stanje spremanja je uvijek vidljivo.
-5. **Koristi AI** ako zadatak dopušta: prijavi se svojim računom kod pružatelja kojeg fakultet dopušta (§8). Tekst koji iz AI-ja prenese u rad bilježi se kao "iz AI pomoćnika".
+5. **Koristi AI** ako zadatak dopušta: prijavi se svojim računom kod pružatelja kojeg fakultet dopušta (§8) i bira svrhu (lektura, prijevod, literatura...). Tekst koji iz AI-ja prenese u rad bilježi se kao "iz AI pomoćnika" sa svrhom.
+5a. **Lijepi tekst:** za veće lijepljenje može odabrati oznaku izvora (vlastite bilješke, citat, prijašnja verzija, vanjski AI, drugo); neobavezno (D-43). Ako ima odobrenu prilagodbu (npr. diktiranje), može je označiti na radu (D-50).
 6. **Uvozi postojeći tekst** (DOCX, PDF i drugi formati) ako zadatak to dopušta. Uvoz je označen događaj s nazivom, vrstom i veličinom datoteke. Ductus ne izmišlja povijest uvezenog teksta. Ponovni uvoz nakon uređivanja izvan Ductusa je novi uvoz, nikad prikazan kao pisanje u Ductusu. (C-45)
 7. **Vidi komentare i prijedloge** nastavnika ili mentora u stvarnom vremenu, jasno odvojene od svog teksta. Prijedlog prihvaća ili odbija; izravne izmjene nastavnika vidi označene. Način izmjena (prijedlozi ili izravno) student može u svakom trenutku vratiti na prijedloge.
 8. **Šalje verziju na pregled** kad zadatak ima cikluse: nacrt, komentar, nova verzija, konačna predaja. [ODLUČENO D-28]
 9. **Pregled prije konačne predaje (ekran S5).** Vidi isti prikaz kao nastavnik. Može dodati napomenu (npr. "prvi nacrt pisao sam rukom" ili "koristio sam diktiranje"). Napomene se samo dodaju; ispravak je nova napomena koja upućuje na staru. (C-16)
-10. **Konačna predaja.** Revizija se zamrzava. Student dobiva potvrdu s vremenom poslužitelja, izvoz rada u obliku koji traži fakultet i izjavu o uporabi pomoći.
+10. **Konačna predaja.** Ductus složi izjavu o GenUI po FPZG čl. 9 i 15 iz zapisa (D-40); student je pregleda, dopuni vanjskim alatima i potvrdi, uz eventualno pitanje za refleksiju. Revizija se zamrzava. Student dobiva potvrdu s vremenom poslužitelja, izvoz rada u obliku koji traži fakultet, izjavu i prenosiv zapis s QR provjerom (D-49).
 11. **Izvoz.** Student u svakom trenutku može izvesti svoj rad i svoju evidenciju.
 
 ### Nastavnik i mentor
 
 1. **Prijava** AAI@EduHr računom.
-2. **Kolegij:** naziv, akademska godina, kod za upis. Mentor dobiva studente dodjelom.
+2. **Kolegij:** naziv, akademska godina, kod za upis, pravilo AI-ja iz izvedbenog plana (D-52). Mentor dobiva studente dodjelom.
 3. **Novi zadatak:** naslov, upute, vrsta rada (§2), profil fakulteta iz Lekte, otvaranje i rok, dopušteni oblici pomoći, dopušteni AI (unutar popisa koji dopušta fakultet), dopušten uvoz, ciklusi verzija, profil evidencije. Kad prvi student potvrdi obavijest, verzija zadatka se zaključava: izmjene stvaraju novu verziju koju studenti ponovno potvrđuju, a profil se može samo suziti.
 4. **Pregled radova:** popis studenata sa stanjem rada (nije započeto, u tijeku, poslano na pregled, predano) i vremenom zadnje izmjene. Bez oznaka, boja upozorenja ili sortiranja po "sumnjivosti". Filtar "nakon roka" uzima u obzir odobrena produljenja.
 5. **Rad u nastajanju:** trenutno spremljeno stanje rada, osvježeno najviše svakih 5 minuta, od prvog dana. [ODLUČENO D-06] Za zadatke s kratkim vremenskim prozorom pogled na rad u nastajanju nije dostupan, nego samo predaja (D-37), jer bi inače bio blizu nadzora ispita.
-6. **Komentari** vezani uz odlomak, vidljivi studentu odmah.
+6. **Komentari** vezani uz odlomak, vidljivi studentu odmah ili objavljeni zajedno (D-51). Komentar može biti **zahtjev za doradu** sa stanjem (D-45).
+6a. **Konzultacije (mentor):** zapis konzultacije vezan uz verziju rada (D-47).
 7. **Izmjene teksta:** kao prijedlozi koje student prihvaća ili kao izravne izmjene. Način dogovaraju nastavnik i student, postavka se vidi na radu, a student je može u svakom trenutku vratiti na prijedloge. Izravna izmjena tehnički je prijedlog koji se automatski primjenjuje kod studenta (D-34). Svaka izmjena nastavnika pripisana je nastavniku. [ODLUČENO D-21]
 8. **Sažetak procesa** (§7) u svakom trenutku, uključujući prije predaje.
 9. **Usporedba verzija** u Proširenom profilu.
@@ -180,12 +182,17 @@ Ovo je srž onoga što fakultet kupuje. Svaka brojka ima jedinicu, nazivnik i me
 | Verzije | Verzije na kraju sesija, poslane na pregled i predane | Vremenska crta |
 | Lijepljenja | Svako lijepljenje veće od praga P-02 (zadano 200 znakova) kao zaseban događaj; manja se samo broje | Popis: vrijeme (zaokruženo na odsječak) i veličina, uz oznaku "izvor nije opažen". Bez zbroja i bez udjela u radu |
 | Uvozi | Uvoz datoteke, uključujući ponovni uvoz nakon uređivanja izvan Ductusa | Naziv, vrsta, veličina, vrijeme |
-| AI pomoćnik | Svako prenošenje teksta iz AI pomoćnika u rad | Popis: vrijeme, pružatelj i model, veličina i preneseni tekst; u radu se može označiti mjesto na koje je tekst prenesen. Upiti i odgovori AI-ja nisu vidljivi nastavniku, osim ako je to najavljeno u zadatku [ODLUČENO D-22] |
+| AI pomoćnik | Svako prenošenje teksta iz AI pomoćnika u rad | Popis: vrijeme, pružatelj i model, svrha (D-42), veličina i preneseni tekst; u radu se može označiti mjesto na koje je tekst prenesen. Razgovori su vidljivi nastavniku tek kao prilog izjavi pri slanju verzije ili predaji [ODLUČENO D-41] |
+| Zahtjevi za doradu | Zahtjevi nastavnika ili mentora i njihovo stanje | Popis sa stanjem; oznaka "promijenjeno nakon prihvaćanja" (D-45) |
+| Konzultacije | Zapisi mentora o konzultacijama | Datum, tema, dogovoreno, verzija rada (D-47) |
+| Prilagodba | Studentova oznaka odobrene prilagodbe | Samo oznaka, bez razloga (D-50) |
 | Izmjene nastavnika | Izravne izmjene i prihvaćeni prijedlozi nastavnika ili mentora | Popis s vremenom i veličinom |
 | Praznine u zapisu | Rasponi između dviju verzija koje je poslužitelj primio, za koje odsječci nisu stigli | Popis s objašnjenjem |
-| Izjava o pomoći | Studentova izjava o uporabi AI-ja i druge pomoći | Tekst izjave |
+| Izjava o GenUI | Izjava po FPZG čl. 9 i 15, složena iz zapisa i potvrđena od studenta, s priloženim razgovorima (D-40, D-41) | Tekst izjave i prilozi |
 | Napomene studenta | Studentovo objašnjenje uz evidenciju | Tekst |
 | Stanje zapisa | Je li zapis cjelovit i neizmijenjen od primitka | "Zapis je cjelovit" ili "Zapis ima praznine (vidi popis)" |
+
+**Vrsta dokaza [ODLUČENO D-44]:** svaka stavka nosi oznaku *opaženo* (nastalo u Ductusu), *uvezeno* (iz datoteke) ili *izjavljeno* (navod studenta, npr. oznaka lijepljenja ili vanjski AI razgovor).
 
 **Zabranjeno u sažetku:** brzina tipkanja, "neuobičajeni obrasci", usporedba s drugim studentima, rangiranje, bilo kakva ocjena ili boja koja sugerira procjenu studenta, te svaki prikaz koji dijeli tekst rada po podrijetlu uz zajednički nazivnik (to je postotak ljudskosti pod drugim imenom, C-6).
 
@@ -198,7 +205,9 @@ Ovo je srž onoga što fakultet kupuje. Svaka brojka ima jedinicu, nazivnik i me
 - **AI je uvijek dobrovoljan za studenta.** U pilotu zadatak ne smije zahtijevati AI. Obvezni AI kasnije je moguć samo uz ključ koji osigurava fakultet. (C-2)
 - **Tekst studenta šalje se pružatelju samo kad student sam pokrene AI.** Studenti u obavijesti vide da tekst tada odlazi izabranom pružatelju i u koju zemlju.
 - **Zaštita od podmetnutih uputa (C-37):** upute AI-ju sastavlja poslužitelj iz pravila zadatka; tekst rada i uvezenih datoteka šalje se kao omeđeni nepouzdani podaci, a skriveni tekst (npr. bijeli ili skriveni font u DOCX-u, nevidljivi sloj PDF-a) uklanja se pri uvozu.
-- **Bilježi se:** vrijeme, pružatelj, model i tekst prenesen u rad. Upiti i cijeli razgovori ostaju studentovi, osim ako zadatak to drukčije najavi. [ODLUČENO D-22]
+- **Svrhe umjesto praznog chata [ODLUČENO D-42]:** akcije su grupirane po FPZG čl. 8 (lektura, prijevod, traženje literature, formatiranje, objašnjenje pojma). Nastavnik uključuje svrhe po zadatku unutar pravila kolegija (D-52). Svrha i faza rada bilježe se same.
+- **Zaštita sadržaja [ODLUČENO D-46]:** prije primjene lekture ili prijevoda Ductus prikazuje promijenjene brojke, doslovne citate i oznake izvora; student potvrđuje.
+- **Bilježi se:** vrijeme, pružatelj, model, svrha i tekst prenesen u rad. Razgovori su studentovi tijekom pisanja; uz izjavu pri slanju verzije ili predaji automatski idu razgovori iz kojih je tekst prenesen, a student vidi što se prilaže i može dodati ostale te vanjske razgovore (izjavljeno). [ODLUČENO D-41, zamjenjuje D-22]
 - Ductus ne trenira modele na radovima i ne šalje radove nikamo bez studentove radnje. (C-38)
 
 ---
@@ -213,7 +222,8 @@ Jedna transakcija editora otprilike odgovara jednom pritisku tipke. Zato se tran
 | Poništavanje i ponavljanje | Druge aplikacije, kartice preglednika, međuspremnik izvan zalijepljenog sadržaja |
 | Lijepljenje: veličina i vrijeme | Kamera, mikrofon, zaslon |
 | Uvoz datoteke: naziv, vrsta, veličina, hash | IP adresa i podaci o uređaju u evidenciji (smiju postojati samo u sigurnosnim logovima, odvojeno) |
-| Prenošenje teksta iz AI pomoćnika: pružatelj, model, preneseni tekst i mjesto | Upiti i razgovori s AI-jem (osim ako je najavljeno u zadatku) |
+| Prenošenje teksta iz AI pomoćnika: pružatelj, model, svrha, preneseni tekst i mjesto | Razgovori s AI-jem dok ih student ne priloži izjavi (D-41) |
+| Oznaka lijepljenja koju student odabere (izjavljeno) | |
 | Komentari, prijedlozi i njihovo prihvaćanje ili odbijanje | Osobni prostor (ne postoji, D-19) |
 | Vrijeme odsječka na uređaju i vrijeme primitka na poslužitelju, odvojeno | |
 | Verzije, predaje, napomene, izjava o pomoći | |
@@ -228,12 +238,12 @@ Student dobiva potpuno okruženje za pisanje akademskog rada. Pravila oblika dol
 | --- | --- |
 | Struktura | Naslovi s numeracijom, sadržaj, naslovna stranica i izjava prema predlošku fakulteta (D-32) |
 | Tekst | Oblikovanje, popisi, citat kao blok, fusnote, tablice, slike s opisima, popis tablica i slika |
-| Citiranje | Citiranje u tekstu i bibliografija u stilu fakulteta, usklađivanje citata i bibliografije |
+| Citiranje | Citiranje u tekstu i bibliografija u stilu fakulteta, usklađivanje citata i bibliografije, provjera postojanja DOI-ja i URL-a (D-48) |
 | Pravila | Provjera oblika i opsega prema profilu fakulteta tijekom pisanja (iz Lekte) |
 | Opseg | Brojač riječi prema traženom rasponu vrste rada |
 | Izvoz | DOCX u obliku koji traži fakultet; PDF |
 | Uvoz | DOCX, PDF i drugi formati, kao označen događaj. PDF gubi oblik, a dijakritici ovise o kvaliteti PDF-a; student to vidi prije uvoza |
-| Suradnja | Komentari, prijedlozi izmjena, izravne izmjene nastavnika s pripisivanjem |
+| Suradnja | Komentari, zahtjevi za doradu sa stanjem, prijedlozi izmjena, izravne izmjene nastavnika s pripisivanjem, konzultacije |
 | AI | Pomoćnik prema §8 |
 
 ---
