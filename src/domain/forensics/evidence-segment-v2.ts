@@ -1,7 +1,7 @@
 import { sha256WebCrypto } from "./crypto";
 import { canonicalizeJcs, type JcsJsonValue } from "./jcs";
 
-export const EVIDENCE_SEGMENT_SCHEMA_V2 = "pisac-evidence-segment-v2" as const;
+export const EVIDENCE_SEGMENT_SCHEMA_V2 = "ductus-evidence-segment-v2" as const;
 export const EVIDENCE_CANONICALIZATION_V2 = "RFC8785-JCS" as const;
 export const EVIDENCE_HASH_ALGORITHM_V2 = "sha256" as const;
 
