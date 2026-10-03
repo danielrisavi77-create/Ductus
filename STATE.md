@@ -41,7 +41,15 @@ Zadatke dodjeljuje orkestrator po `docs/ORKESTRATOR.md`. Do demoa vrijedi tablic
 
 **Predaje za nove sesije (3. 10. 2026.):** Backend issue #34, Frontend #35, Platforma #36. Nova sesija čita svoj issue uz ovaj odjeljak i zatvara ga kad preuzme. Odgovori orkestratora na otvorena pitanja iz predaja: tekst stanja spremanja ("spremljeno na uređaju", "spremljeno na poslužitelju") mijenja se u F-8 uz ključeve hr i en; `en.ts` (D-70) radi Frontend kao zaseban PR odmah nakon F-4; `CI=true` u lefthooku radi Platforma (mali PR iz #36); `process-history` bez `durationMs` ne prenosi se do vala 3; o `verified-object-activity` (ovisi o `academic-graph`) odlučuje se kad Frontend prenese `lib/process-ledger`; vlasnik P-6 je Platforma, Frontend daje popis ključeva teksta.
 
-**Stanje orkestratora (3. 10. 2026., noć).** Platforma, Backend i Frontend su na pragu rotacije i čekaju nove sesije (otvara Daniel). Sesija Citiranje nastavlja kao Arhitektura.
+**Predaja orkestratora (3. 10. 2026., noć).** Orkestrator se rotira: Daniel otvara novu sesiju "Ductus orkestrator" iz `D:\Ductus` i arhivira staru (adresa gore). Otvorenih PR-ova nema. Platforma, Backend i Frontend dobivaju nove sesije iz `D:\Ductus` s predajama u issueima #34 do #36; stare sesije (worktreeovi na C:) za arhiviranje. Sesija Citiranje nastavlja kao Arhitektura.
+
+Prvi potezi nove sesije orkestratora:
+1. PR koji u `STATE.md` upisuje novu adresu orkestratora; ista adresa porukom svim aktivnim sesijama (`ORKESTRATOR.md` §7).
+2. Popis sesija: potvrditi da su Platforma 2, Frontend 2 i Backend 2 pokrenute i zatvorile svoje issuee; postaviti effort po zadatku (Platforma P-4 medium, Frontend medium, Backend B-5 high).
+3. Poruke stižu samo dok orkestrator miruje: bez dugotrajnih pozadinskih petlji (`ORKESTRATOR.md` §1); kad sesija javi da poruka nije potvrđena, čitati njezin transkript.
+4. Pult: https://claude.ai/artifact/UY9VUZPW4mePTZjhCPGLSd (podaci preko ArtifactData, kolekcije `board`, `sessions`, `days`); pitanja Danielu obaviješću (§4a).
+5. Kontrolna točka T1 u petak 9. 10. (`PLAN-DEMO.md` §3): kostur, CI i lokalni stog spojeni, dizajn odobren; uz to prijenos jezgre (T2) je za Backend gotov, za Frontend 5 od 11 koraka.
+6. Kad se stare sesije arhiviraju, stara kopija `C:\Users\Daniel\Ductus` može se ukloniti (Daniel ručno; memorija orkestratora vezana je uz putanju projekta).
 
 - [ ] Platforma (nova sesija): P-4 (dbmate, pgTAP u CI-ju); mali PR: lefthook `secrets` uz upozorenje preskače gitleaks kad Docker ne radi (CI ionako skenira) i naredbe u lefthooku s `CI=true` (inače `pnpm exec` visi na skrivenom upitu); zatim P-5, P-6.
 - [ ] Backend (nova sesija; predaja u opisu PR #23): spojeni #9, #18, #20, #23 (D-88), #29 (nepoznata polja u descriptoru), #30 (gateway, outbox, development signer; Codex Astra 3 važna ispravljena), #32 (aws-kms signer s popisom pouzdanih verzija ključa). Prijenos backend jezgre je gotov. Sljedeće: B-5 kad P-4 bude spojen (`critical`). Čeka Frontendov editor: `forensics/verified-*`, `evidence-v2-legacy-compat.test`. Ne prenose se vremenski moduli (PRODUCT §5 pravilo 4, D-63), reference-model, Azure signer, nekorišteni portovi.
