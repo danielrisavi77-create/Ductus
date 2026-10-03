@@ -1,6 +1,6 @@
 # Ductus: arhitektura pilota
 
-Verzija 0.3 · 3. 10. 2026. · Odgovorna osoba: Daniel Rišavi
+Verzija 0.4 · 3. 10. 2026. · Odgovorna osoba: Daniel Rišavi
 
 > **Povijesna napomena:** verzije 0.1 i 0.2 ovog dokumenta opisivale su varijantu na Supabaseu (baza, prijava, Storage, Edge Functions, Realtime, `pg_cron`, Vault) i Netlifyju (hosting sučelja). Ta varijanta je napuštena prijedlogom u `docs/BACKEND.md` v0.3 (D-08); razlozi su u BACKEND §1. Verzija 0.3 opisuje sustav preko sučelja (portova) koja ne ovise o dobavljaču, a konkretni dobavljači navedeni su samo u §9 i uvijek uvjetno.
 
@@ -184,7 +184,9 @@ Siročad u bucketu se u pilotu samo broji i prijavljuje; brisanje tek nakon 30 d
 
 Ako odsječci između dviju primljenih revizija trajno izostanu, poslužitelj bilježi prazninu za taj raspon. Praznina se nikad ne popunjava pretpostavkom.
 
-**Kontrolne točke:** svaki commit nosi puni kanonski dokument, ali poslužitelj ga trajno sprema samo kao kontrolnu točku: svakih 200 koraka, na kraju svake sesije i uvijek kad otkrije prazninu. Time su rekonstrukcija i usporedba ograničenog trajanja. Vrijeme, memoriju i volumen za radove od 15.000 i 80.000 riječi mjeri B0.2.
+**Kontrolne točke:** svaki commit nosi puni kanonski dokument, ali poslužitelj ga trajno sprema samo kao kontrolnu točku: na kraju svake sesije, uvijek kad otkrije prazninu, i unutar sesije po razmaku od **oko 2.000 koraka** ili po veličini promjene [PRIJEDLOG, potvrđuje se uz B0.3]. Time su rekonstrukcija i usporedba ograničenog trajanja.
+
+Lokalna osnovica B0.2 (`docs/spikes/B0.2.md`) pokazala je da CPU i memorija nisu ograničenje (predaja traje desetke milisekundi i za 80.000 riječi), nego volumen točaka: svaka nosi cijeli dokument, a broj im raste s brojem koraka, pa volumen raste kvadratno s duljinom rada. Uz ranijih "svakih 200 koraka" rad od 15.000 riječi ostavlja oko 32 MB točaka, a doktorski gotovo 1 GB; razmak od oko 2.000 koraka smanjuje volumen oko 10 puta, a rekonstrukcija pri predaji ostaje ispod 0,3 s. Prije M3 treba utvrditi granulaciju koraka u commitu (korak po tipki ili spojeni koraci), jer mijenja brojke oko 6 puta. Konačni razmak potvrđuje mjerenje na stroju koji se kupuje (B0.1, B0.2).
 
 ## 5a. Suradnja nastavnika i studenta
 
@@ -213,7 +215,7 @@ Ništa u sustavu ne poziva AI pružatelja, pa nijedan AI pružatelj nije podizvr
 
 1. Student potvrđuje predaju iz pregleda (S5). Predaja traži vezu s poslužiteljem: sve lokalne promjene moraju prvo biti potvrđene.
 2. **Vrijeme predaje je `requested_at` iz sata baze u trenutku klika**, prije reda rekonstrukcija. Kašnjenje se određuje isključivo tim vremenom, uz produljenje roka.
-3. Worker rekonstruira ciljanu reviziju od najbliže kontrolne točke i odsječaka, istim kodom kao klijent (ProseMirror u Nodeu), u kontejneru s ograničenim CPU-om da ne guši ingest. Ako u rasponu postoji praznina, rekonstrukcija kreće od kontrolne točke spremljene na kraju praznine, pa praznina ne sprječava točnu rekonstrukciju predane verzije; samo je vidljiva u evidenciji (D-11).
+3. Worker rekonstruira ciljanu reviziju od najbliže kontrolne točke i odsječaka, istim kodom kao klijent (ProseMirror u Nodeu), u kontejneru s ograničenim CPU-om da ne guši ingest (prema lokalnoj osnovici B0.2 dovoljni su 1 vCPU i 512 MB do 1 GB). Ako u rasponu postoji praznina, rekonstrukcija kreće od kontrolne točke spremljene na kraju praznine, pa praznina ne sprječava točnu rekonstrukciju predane verzije; samo je vidljiva u evidenciji (D-11).
 4. Rekonstruirani dokument uspoređuje se s ciljanom revizijom u kanonskom obliku (JCS). Nepodudarnost blokira predaju, bilježi incident i studentu nudi zamjenski postupak koji određuje fakultet (D-69, D-79), uz očuvani `requested_at`.
 5. Ako se podudaraju: zapis `submission` s verzijom zadatka, `requested_at`, oznakom kašnjenja, hashom artefakta i potpisanom potvrdom. Revizija je zamrznuta.
 
