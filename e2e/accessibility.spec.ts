@@ -2,7 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 // Every page added later gets a row here; WCAG 2.1 AA is the pilot target.
-const PAGES = ["/"];
+const PAGES = ["/", "/rad"];
 
 for (const path of PAGES) {
   test(`axe: no WCAG 2.1 AA violations on ${path}`, async ({ page }) => {
