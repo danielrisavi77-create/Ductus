@@ -107,7 +107,9 @@ export function validateDocument(doc: unknown): ValidationOutcome {
   const seenIds = new Set<string>();
   const nodes: DocumentNode[] = [];
 
-  doc.nodes.forEach((rawNode, index) => {
+  // Array.from turns holes into `undefined`, so a sparse array fails validation
+  // instead of being skipped by forEach.
+  Array.from(doc.nodes).forEach((rawNode, index) => {
     const node = validateNode(rawNode, `$.nodes[${index}]`, seenIds, errors);
     if (node) {
       nodes.push(node);
@@ -150,11 +152,12 @@ function validateNode(
   if (!isNodeId(raw.id)) {
     errors.push({ path: `${path}.id`, code: "NODE_ID_INVALID" });
     nodeOk = false;
-  } else if (seenIds.has(raw.id)) {
+  } else if (seenIds.has(raw.id.toLowerCase())) {
+    // UUIDs are case-insensitive: the same id in two cases is a duplicate.
     errors.push({ path: `${path}.id`, code: "NODE_ID_DUPLICATE" });
     nodeOk = false;
   } else {
-    seenIds.add(raw.id);
+    seenIds.add(raw.id.toLowerCase());
     id = raw.id;
   }
 
@@ -174,7 +177,7 @@ function validateNode(
   }
 
   const children: InlineNode[] = [];
-  raw.children.forEach((rawChild, index) => {
+  Array.from(raw.children).forEach((rawChild, index) => {
     const child = validateInline(rawChild, `${path}.children[${index}]`, errors);
     if (child) {
       const previous = children[children.length - 1];
@@ -234,7 +237,7 @@ function validateInline(
   }
 
   const marks: Mark[] = [];
-  raw.marks.forEach((rawMark, index) => {
+  Array.from(raw.marks).forEach((rawMark, index) => {
     if (!isMark(rawMark)) {
       errors.push({ path: `${path}.marks[${index}]`, code: "MARK_INVALID" });
       ok = false;
