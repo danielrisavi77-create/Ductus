@@ -1,5 +1,7 @@
 # Ductus: arhitektura pilota
 
+> **Napomena (3. 10. 2026.):** stack, prijava, hosting i okruženja u §1, §4, §5, §5a, §5b, §9 i §10 opisuju Supabase varijantu i bit će prepisani prema `docs/BACKEND.md` (zadatak B0.4) kad se potvrdi D-08. Do tada vrijedi `BACKEND.md`; ne vezati kod uz Supabase ni Netlify. §12 treba dopuniti R1 do R4 (evidencija).
+
 Verzija 0.2 · 3. 10. 2026. · Odgovorna osoba: Daniel Rišavi
 
 Cilj: najjednostavnija arhitektura koja pouzdano ispunjava `PRODUCT.md` za pilot na jednom fakultetu, koju jedna osoba uz AI agente može održavati, i koja se kasnije može proširiti bez prepisivanja. Ciljna arhitektura iz `pisac-editor` PR #45 ostaje referenca; elementi koje ovdje odgađamo imaju zapisan okidač (odjeljak 11).

@@ -76,8 +76,8 @@ Izvor: dokument "Ductus: konkurencija i poboljšanja proizvoda" i FPZG Smjernice
 | Broj | Odluka | Prijedlog |
 | --- | --- | --- |
 | D-07 | Ovlasti | Članstvo i RLS u Postgresu, pgTAP matrica pristupa; bez OpenFGA servisa |
-| D-08 | Stack | **Otvoreno (3. 10. 2026.): backend i hosting biraju se nakon istraživanja**, prema zahtjevima iz dokumenta "Ductus: brainstorming funkcija i troškova" (EU, AAI OIDC, ovlasti po retku, isti TypeScript na poslužitelju, red poslova, kopije i povrat). Editor ostaje Tiptap i Dexie; Supabase i Netlify su samo jedna od opcija |
-| D-10 | Integritet zapisa | JCS odsječci adresirani hashom, hash lanac, Ed25519 potvrde s rotacijom ključeva; dnevni korijen s RFC 3161 žigom nakon pilota |
+| D-08 | Stack | **PRIJEDLOG (3. 10. 2026., preporuka iz istraživanja, detalji u `docs/BACKEND.md`):** Next.js na Hetzner VPS-u (EU) uz zaseban worker, upravljani Postgres i S3 na Scalewayu, Scaleway TEM, vlastiti OIDC klijent. **Supabase se ne preporučuje** (Edge Functions 2 s CPU, PITR 100 USD mjesečno, Vault s jednim korijenskim ključem). Konačna odluka tek nakon spikeova B0.1 (PITR i latencija) i B0.2 (rekonstrukcija 80.000 riječi). Editor ostaje Tiptap i Dexie |
+| D-10 | Integritet zapisa | JCS odsječci adresirani hashom, hash lanac, Ed25519 potvrde s rotacijom ključeva; dnevni korijen s RFC 3161 žigom **već u valu 1** (vidi D-72) |
 | D-11 | Predaja i praznine | Nepodudarna rekonstrukcija blokira predaju; praznina ne blokira, ali je vidljiva |
 | D-16 | Prijava nastavnika, mentora i administratora | Također isključivo AAI@EduHr |
 | D-20 | Prijava u AI | OpenRouter (OAuth s PKCE-om), student plaća svoj račun; kasnije "Sign in with ChatGPT" ako Ductus postane partner. Pretplate na Claude ne mogu se koristiti u aplikacijama trećih strana |
@@ -87,6 +87,11 @@ Izvor: dokument "Ductus: konkurencija i poboljšanja proizvoda" i FPZG Smjernice
 | D-38 | Obvezni AI u pilotu | Zadatak u pilotu ne smije zahtijevati korištenje AI-a (student bi morao plaćati vanjski račun) |
 | D-39 | Stroža varijanta D-06 (za tvoju odluku) | Nastavnik vidi samo stanje na kraju svake sesije, ne osvježavanje svakih nekoliko minuta; manje osjećaja nadzora, manje uvida |
 | D-36 | Valovi puštanja unutar pilota | **Odlučeno 3. 10. 2026.: raspored verzija 2 u `PROGRAM.md`.** Vlasnik radi puno radno vrijeme; cilj je val 1 i val 2 (uključujući grupne radove, S-12) na početku semestra, val 3 tijekom semestra prije obrana |
+| D-71 | Potpisivanje potvrda | Ed25519 ključ aplikacije, šifriran (KEK iz okoline), iza sučelja `SigningKeyProvider`; zaseban ključ za dnevni korijen. KMS tek na okidač (prvi plaćeni ugovor ili sigurnosni pregled). Razlog: KMS ne štiti od kompromitirane aplikacije; zaštitu daje vanjski žig (D-72). Azure Key Vault nije zadani put jer ne podržava Ed25519 |
+| D-72 | Dnevni korijen i vanjsko vrijeme | Vlastito Merkle stablo (bez Tessere), dnevni potpisani korijen u javnom repozitoriju, RFC 3161 žig FINA-e, CLI i web verifikator. Zahtijeva FINA ugovor (minimalna naknada nepoznata). Ne tvrdi se pravni učinak kvalificiranog žiga bez odvjetnika. C2PA nije u pilotu (podrška za DOCX nepotvrđena) |
+| D-73 | Prijava i sesije | Vlastiti OIDC klijent prema AAI@EduHr, sesije u bazi, identitet samo po `hrEduPersonUniqueID` i izdavatelju, nikad spajanje po e-pošti. Biblioteka (Better Auth s generic OAuth pluginom ili `openid-client`) se bira na M1 spikeu. OIB se ne traži |
+| D-74 | Poslovi i obavijesti | pg-boss u worker procesu; obavijesti pollingom (30 do 60 s), bez realtime servisa; AI proxy kao obična Next.js ruta; tajne korisnika aplikacijskom AES-256-GCM enkripcijom (AAD: korisnik, namjena, verzija ključa) |
+| D-75 | Status vNext dokumenta | "Pisač: Backend arhitektura i vizija vNext" je referenca ciljne arhitekture, ne plan pilota. Što se prihvaća, odgađa s okidačem ili ne usvaja, zapisano je u `docs/BACKEND.md` §2 |
 
 ## Čeka pravno mišljenje
 

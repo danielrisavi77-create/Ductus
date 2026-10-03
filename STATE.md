@@ -26,14 +26,18 @@ Agent nikad ne uzima ove stavke i nikad ne čeka na njih.
 - [ ] Konačno ime proizvoda (D-18).
 - [ ] Model podrške u pilotu (tko, kojim kanalom, u koje vrijeme, zamjenski postupak predaje kad Ductus ne radi pred rok).
 - [ ] Sučelje na engleskom u pilotu ili Erasmus studenti izvan pilota (D-67).
-- [ ] Istraživanje backenda i hostinga (D-08) prije M2; do tada M0 ne veže kod uz dobavljača.
+- [ ] Potvrditi D-08 i D-71 do D-75 iz `docs/BACKEND.md` (istraživanje gotovo 3. 10. 2026.; preporuka Hetzner + Scaleway, bez Supabasea); do tada M0 ne veže kod uz dobavljača.
+- [ ] Srce (`aai@srce.hr`): OIDC registracija, Lab, atributi, uvjeti, rokovi (proširuje stavku iznad).
+- [ ] FINA: upit o RFC 3161 pristupu (ugovor, certifikat, minimalna naknada) za D-72.
+- [ ] Otvoriti račune Hetzner i Scaleway (2FA), ograničeni API ključevi po okolišu za agenta.
 
 ## Agent queue
 
 Uzima se prva stavka koju ništa iz Owner queuea ne blokira.
 
 - [ ] M0: prijenos jezgre iz `pisac-editor` s testovima (blokirano: PR #49 i #50).
-- [ ] M0: CI, lefthook, `supabase start` u CI-ju (lokalni Claude Code, treba Docker).
+- [ ] B0.1 i B0.2: spikeovi hostinga (PITR, latencija) i rekonstrukcije 15.000 i 80.000 riječi (`docs/BACKEND.md` §8).
+- [ ] M0: CI, lefthook, `docker compose` okruženje u CI-ju (lokalni Claude Code, treba Docker).
 - [ ] M1: AAI@EduHr spike (blokirano: pristup Labu).
 - [ ] M2: model fakulteta i pgTAP matrica pristupa (nakon M0).
 - [ ] M4: paket pravila u Lekti po uzoru na `katedra-pack` (blokirano: odluka o licenci).

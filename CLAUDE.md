@@ -1,6 +1,6 @@
 # Ductus: pravila za AI agente
 
-Prije svakog rada pročitaj `STATE.md`. Za proizvod čitaj `docs/PRODUCT.md`, za tehniku `docs/ARCHITECTURE.md`, za odluke `docs/DECISIONS.md`, za prihvaćene funkcije `docs/FEATURES.md`, za faze i GO uvjete `docs/PROGRAM.md`. U repou su to jedini izvori istine. Iznad njih stoje Product Vision v1.0 i Product Constitution v1.3 (Google Drive); u slučaju sukoba vrijedi Ustav, a sukob se prijavljuje u Owner queue.
+Prije svakog rada pročitaj `STATE.md`. Za proizvod čitaj `docs/PRODUCT.md`, za tehniku `docs/ARCHITECTURE.md` i `docs/BACKEND.md` (backend i hosting, ima prednost dok se ARCHITECTURE ne prepiše), za odluke `docs/DECISIONS.md`, za prihvaćene funkcije `docs/FEATURES.md`, za faze i GO uvjete `docs/PROGRAM.md`. U repou su to jedini izvori istine. Iznad njih stoje Product Vision v1.0 i Product Constitution v1.3 (Google Drive); u slučaju sukoba vrijedi Ustav, a sukob se prijavljuje u Owner queue.
 
 ## Tvrda pravila
 
