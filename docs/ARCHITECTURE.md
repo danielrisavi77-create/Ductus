@@ -244,7 +244,7 @@ Rokovi se unose i prikazuju u zoni Europe/Zagreb; promjena na zimsko računanje 
 
 [PRIJEDLOG D-72], val 2; potpisane potvrde i hash lanac su u valu 1. Pojedinosti i granice tvrdnje u BACKEND §4.2.
 
-- Worker jednom dnevno gradi Merkle stablo nad potvrdama dana (dan po UTC `accepted_at`; list je SHA-256 nad JCS `receipt_payload` bez potpisa), objavljuje broj listova, prethodni korijen i consistency dokaz.
+- Worker jednom dnevno gradi Merkle stablo nad potvrdama dana (dan po UTC `accepted_at`; list je SHA-256 nad JCS `receipt_payload` bez potpisa), objavljuje broj listova, prethodni korijen i consistency dokaz. Javni broj listova otkriva dnevnu aktivnost pilota: prije prve objave procjenjuje se u DPIA-i i po potrebi zaokružuje (BACKEND §4.2 t. 8).
 - Korijen potpisuje ključ dnevnog korijena; traže se žigovi od dva neovisna RFC 3161 TSA-a. Dan bez ijednog valjanog žiga je alarm; korijen se tada objavljuje "bez žiga" i posao ponavlja.
 - Objava u javni repozitorij i neovisnim primateljima (e-pošta koordinatoru FPZG-a, javna arhiva).
 - Paket dokaza za predaju izdaje se kao "sidren" tek kad je pripadni korijen žigosan; do tada nosi oznaku "još nije sidren".
