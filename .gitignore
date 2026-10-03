@@ -1,0 +1,14 @@
+.DS_Store
+Thumbs.db
+node_modules/
+.env
+.env.*
+!.env.example
+.netlify/
+playwright-report/
+test-results/
+.next/
+*.tsbuildinfo
+next-env.d.ts
+reports/
+supabase/.temp/

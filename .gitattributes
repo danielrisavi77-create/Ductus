@@ -1,0 +1,21 @@
+# Text files are stored and checked out with LF on every platform. Golden hash
+# vectors in tests and future fixture files must hash identically on Windows
+# checkouts and on Linux CI.
+* text=auto eol=lf
+
+# Windows-only scripts keep CRLF.
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Binary formats are never line-ending converted.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.docx binary
+*.woff binary
+*.woff2 binary
