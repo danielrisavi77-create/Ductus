@@ -12,3 +12,7 @@ test-results/
 next-env.d.ts
 reports/
 supabase/.temp/
+
+# Claude Code: local settings and session worktrees
+.claude/settings.local.json
+.claude/worktrees/
