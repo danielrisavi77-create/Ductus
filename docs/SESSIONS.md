@@ -1,6 +1,6 @@
 # Ductus: rad u paralelnim sesijama
 
-Verzija 0.1 · 3. 10. 2026. · Odgovorna osoba: Daniel Rišavi
+Verzija 0.2 · 3. 10. 2026. · Odgovorna osoba: Daniel Rišavi
 
 Kako više Claude Code sesija radi na Ductusu istodobno. Vrijedi uz `CLAUDE.md`; u sukobu vrijedi `CLAUDE.md`.
 
@@ -27,7 +27,7 @@ Najviše četiri sesije koje pišu kod istodobno. Usko grlo je pregled i spajanj
 
 ## 2. Tijek jednog zadatka
 
-1. Orkestrator šalje zadatak (predložak u §3) sesiji odgovarajuće uloge.
+1. Orkestrator šalje zadatak (predložak u §3) sesiji odgovarajuće uloge, s uključenim `notify_when_idle` (§2a).
 2. Sesija radi u svom worktreeu na grani `<uloga>/<kratki-opis>` (npr. `backend/m0-port-domain`), od svježeg `origin/main`.
 3. Testovi i provjere lokalno zeleni (`pnpm lint`, `pnpm typecheck`, `pnpm test`); lefthook to radi pri commitu.
 4. Sesija otvara PR (jedan korak iz `STATE.md`, do oko 400 redaka; veći PR obrazlaže zašto).
@@ -38,12 +38,24 @@ Najviše četiri sesije koje pišu kod istodobno. Usko grlo je pregled i spajanj
 
 Kad sesija zapne na odluci (PRIJEDLOG, nejasan zahtjev, tuđa mapa), ne nagađa: šalje izvještaj sa statusom "blokirano" i staje.
 
+### 2a. Kad poruka ne stigne
+
+Izvještaj u opisu PR-a je izvor istine; poruka je samo obavijest. Ništa u tijeku ne smije čekati na poruku.
+
+1. **Sesija:** ako slanje vrati "nije dostavljeno", pokuša još jednom. Ako ni tad ne prođe, doda PR-u oznaku `izvjestaj-ceka` (oznaku jednom stvara Daniel; dok ne postoji, umjesto nje komentar na PR-u "IZVJEŠTAJ čeka orkestratora") i staje. Ne ponavlja u petlji i ne čeka odgovor.
+   **Kad PR ne postoji** (status "blokirano" prije PR-a ili "gotovo bez PR-a"), sesija nakon neuspjelog ponovnog pokušaja otvara GitHub issue s naslovom `IZVJEŠTAJ <id>`, izvještajem u tijelu i istom oznakom (ili bez nje dok ne postoji), i staje.
+2. **Orkestrator ne ovisi o porukama:** na početku svakog poteza pregleda otvorene PR-ove (`gh pr list --label izvjestaj-ceka` i PR-ove svih dodijeljenih zadataka) i otvorene issuee s naslovom `IZVJEŠTAJ` (`gh issue list --search "IZVJEŠTAJ in:title"`), obrađuje izvještaje i zatvara obrađene issuee.
+3. **Obavijest o završetku:** pri slanju zadatka orkestrator uključuje `notify_when_idle`, pa jednom dobije obavijest kad sesija završi, bez ispitivanja u petlji i neovisno o poruci izvještaja.
+4. **Jedan orkestrator:** aktivna je samo jedna sesija s imenom "Ductus orkestrator"; stara se arhivira ili preimenuje. Zadatak nosi točnu adresu orkestratora (ime i ref, npr. `Ductus orkestrator [b568f5]`), a sesija odgovara na adresu iz `from` poruke zadatka.
+5. **Sesija koja šuti:** ako sesija ne otvori PR u očekivanom vremenu, orkestrator pogleda njezino stanje na popisu sesija (zauzeta ili miruje) i pita je jednom. Poruke tipa "jesi li gotova?" se ne šalju.
+
 ## 3. Predlošci
 
 ### Zadatak (orkestrator → sesija)
 
 ```
 ZADATAK <id> · uloga: <uloga> · korak iz STATE.md: <naziv>
+Orkestrator: <ime i ref, npr. Ductus orkestrator [b568f5]>
 Cilj: <jedna rečenica>
 Ulaz: <dokumenti i odjeljci koje treba pročitati, ništa više>
 Opseg: <što ulazi>; Izvan opsega: <što ne ulazi>
@@ -64,7 +76,7 @@ Otvoreno ili blokira: <stavke ili "ništa">
 Treba Daniel: <odluka ili "ništa">
 ```
 
-Izvještaj ide porukom orkestratoru (sesija ga nađe preko popisa sesija ili agenata, naziv sesije "Ductus orkestrator"). Isti sadržaj ide u opis PR-a, pa ništa ne ovisi samo o poruci.
+Izvještaj ide porukom orkestratoru na adresu iz zadatka (ili iz `from` poruke zadatka). Isti sadržaj ide u opis PR-a, pa ništa ne ovisi samo o poruci; ako poruka ne stigne, vrijedi §2a.
 
 ## 4. Štednja tokena
 

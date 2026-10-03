@@ -1,0 +1,169 @@
+{
+  "machine": {
+    "label": "local-ryzen5-1600",
+    "cpu": "AMD Ryzen 5 1600 Six-Core Processor",
+    "cpuCount": 12,
+    "memoryGb": 16,
+    "platform": "win32",
+    "node": "v24.14.0",
+    "date": "2026-10-03T13:23:33.639Z"
+  },
+  "results": [
+    {
+      "words": 15000,
+      "granularity": "char",
+      "gen": {
+        "words": 15000,
+        "steps": 103721,
+        "finalHash": "1158cf03984cdb525ed298f88d2d1d53e1fac99aa37442e12c2ee1b9097e993a",
+        "genMs": 1601.9,
+        "finalDocKb": 128,
+        "stepLogMb": 9.3,
+        "stepLogGzipMb": 0.7,
+        "peakRssMb": 279.5
+      },
+      "replay": {
+        "mode": "replay",
+        "steps": 103721,
+        "replayMs": 807.3,
+        "stepsPerSec": 128479,
+        "peakRssMb": 223.3
+      },
+      "checkpoint": {
+        "mode": "checkpoint",
+        "totalMs": 3444.4,
+        "checkpoints": 518,
+        "lastCheckpointKb": 128,
+        "lastCheckpointGzipKb": 39,
+        "avgCanonicalizeHashMs": 1.48,
+        "volumeRawMb": 32.5,
+        "volumeGzipMb": 10,
+        "peakRssMb": 255.1
+      },
+      "bounded": {
+        "mode": "bounded",
+        "tailSteps": 121,
+        "medianMs": 5.2,
+        "maxMs": 12,
+        "peakRssMb": 106.3
+      }
+    },
+    {
+      "words": 15000,
+      "granularity": "word",
+      "gen": {
+        "words": 15000,
+        "steps": 16907,
+        "finalHash": "cbf89a80f1214e76ec23199198edce8f0f786082d6524db199a4a15add92532b",
+        "genMs": 723.8,
+        "finalDocKb": 132,
+        "stepLogMb": 1.6,
+        "stepLogGzipMb": 0.2,
+        "peakRssMb": 112.9
+      },
+      "replay": {
+        "mode": "replay",
+        "steps": 16907,
+        "replayMs": 188.5,
+        "stepsPerSec": 89692,
+        "peakRssMb": 106.2
+      },
+      "checkpoint": {
+        "mode": "checkpoint",
+        "totalMs": 778,
+        "checkpoints": 84,
+        "lastCheckpointKb": 131,
+        "lastCheckpointGzipKb": 39,
+        "avgCanonicalizeHashMs": 1.84,
+        "volumeRawMb": 5.4,
+        "volumeGzipMb": 1.6,
+        "peakRssMb": 147.8
+      },
+      "bounded": {
+        "mode": "bounded",
+        "tailSteps": 107,
+        "medianMs": 6.5,
+        "maxMs": 14.3,
+        "peakRssMb": 100.3
+      }
+    },
+    {
+      "words": 80000,
+      "granularity": "char",
+      "gen": {
+        "words": 80000,
+        "steps": 551981,
+        "finalHash": "540f5ce83968cda955145086293a163c26a0046716800b7fb3268e314f60524b",
+        "genMs": 10260.8,
+        "finalDocKb": 688,
+        "stepLogMb": 50.3,
+        "stepLogGzipMb": 3.8,
+        "peakRssMb": 790.1
+      },
+      "replay": {
+        "mode": "replay",
+        "steps": 551981,
+        "replayMs": 6888.6,
+        "stepsPerSec": 80130,
+        "peakRssMb": 257
+      },
+      "checkpoint": {
+        "mode": "checkpoint",
+        "totalMs": 86651.5,
+        "checkpoints": 2759,
+        "lastCheckpointKb": 688,
+        "lastCheckpointGzipKb": 203,
+        "avgCanonicalizeHashMs": 7.77,
+        "volumeRawMb": 925.8,
+        "volumeGzipMb": 274.4,
+        "peakRssMb": 282.7
+      },
+      "bounded": {
+        "mode": "bounded",
+        "tailSteps": 181,
+        "medianMs": 23.7,
+        "maxMs": 33.1,
+        "peakRssMb": 231.3
+      }
+    },
+    {
+      "words": 80000,
+      "granularity": "word",
+      "gen": {
+        "words": 80000,
+        "steps": 89767,
+        "finalHash": "93eed6220e75ea209806d367e7e3067acb638439fc1168f1d81a7d939238f8f7",
+        "genMs": 3217.5,
+        "finalDocKb": 697,
+        "stepLogMb": 8.6,
+        "stepLogGzipMb": 0.9,
+        "peakRssMb": 388.3
+      },
+      "replay": {
+        "mode": "replay",
+        "steps": 89767,
+        "replayMs": 1206.9,
+        "stepsPerSec": 74378,
+        "peakRssMb": 248.3
+      },
+      "checkpoint": {
+        "mode": "checkpoint",
+        "totalMs": 15243.8,
+        "checkpoints": 448,
+        "lastCheckpointKb": 696,
+        "lastCheckpointGzipKb": 203,
+        "avgCanonicalizeHashMs": 8.66,
+        "volumeRawMb": 152.3,
+        "volumeGzipMb": 44.6,
+        "peakRssMb": 248.8
+      },
+      "bounded": {
+        "mode": "bounded",
+        "tailSteps": 167,
+        "medianMs": 39.3,
+        "maxMs": 61.4,
+        "peakRssMb": 240.6
+      }
+    }
+  ]
+}
