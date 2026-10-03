@@ -1,0 +1,46 @@
+{
+  "name": "ductus",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test:unit": "vitest run --project unit",
+    "test:property": "vitest run --project property",
+    "test": "pnpm test:unit && pnpm test:property",
+    "test:e2e": "playwright test",
+    "prepare": "lefthook install"
+  },
+  "dependencies": {
+    "next": "15.5.25",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@eslint/eslintrc": "^3.3.1",
+    "@fast-check/vitest": "^0.5.0",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^24.10.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "15.5.25",
+    "fast-check": "^4.10.2",
+    "lefthook": "^2.1.16",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.1"
+  },
+  "pnpm": {
+    "overrides": {
+      "next>postcss": "^8.5.28"
+    }
+  }
+}

@@ -1,0 +1,6 @@
+# Every entry needs a reason and an expiry; an expired entry fails CI again.
+
+[[IgnoredVulns]]
+id = "GHSA-vfj7-8cjw-p6xm"
+ignoreUntil = 2027-01-03
+reason = "braces has no fixed release. Dev-only, through eslint-config-next (fast-glob); not in the production bundle, and it only expands glob patterns from our own lint config, never user input. Re-check by ignoreUntil."
