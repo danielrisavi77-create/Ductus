@@ -33,7 +33,7 @@ Najviše četiri sesije koje pišu kod istodobno. Usko grlo je pregled i spajanj
 4. Sesija otvara PR (jedan korak iz `STATE.md`, do oko 400 redaka; veći PR obrazlaže zašto).
 5. Sesija pokreće Codex pregled (§5) i ispravlja nalaze koje prihvaća; odbijene nalaze obrazlaže u PR-u.
 6. Sesija šalje izvještaj orkestratoru (predložak u §3) i staje.
-7. Daniel pregledava i spaja. Agent nikad ne spaja PR.
+7. Spaja samo sesija "Ductus orkestrator" (izričita ovlast Daniela, 3. 10. 2026.), kad Codex nema otvorenih kritičnih nalaza i PR ne čeka Danielovu odluku. Radne sesije nikad ne spajaju PR, ne mijenjaju `.claude/` postavke i ne diraju postavke repoa na GitHubu.
 8. Orkestrator ažurira `STATE.md` i dnevnik, šalje sljedeći zadatak ili arhivira sesiju (arhiviranje briše worktree).
 
 Kad sesija zapne na odluci (PRIJEDLOG, nejasan zahtjev, tuđa mapa), ne nagađa: šalje izvještaj sa statusom "blokirano" i staje.
