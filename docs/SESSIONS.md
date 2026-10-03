@@ -95,8 +95,18 @@ Izvještaj ide porukom orkestratoru na adresu iz zadatka (ili iz `from` poruke z
 Nakon otvaranja PR-a sesija pokreće:
 
 ```
-powershell -File scripts/codex-review.ps1
+powershell -File scripts/codex-review.ps1 -Level <light|standard|critical>
 ```
+
+Razinu zadaje orkestrator u zadatku; kad je ne zada, sesija bira po tablici (Daniel, 3. 10. 2026.):
+
+| Razina | Codex model, effort | Zadaci |
+| --- | --- | --- |
+| `light` | GPT-6-Luna, medium | dokumenti, CI i konfiguracija, paketi, preimenovanja |
+| `standard` | GPT-6-Sol, high | doslovni prijenos s testovima, portovi i adapteri, ekrani i tokovi sučelja, migracije bez novih ovlasti |
+| `critical` | GPT-6-Astra, xhigh | evidencija, potpis i kriptografija, prijava i sesije, RLS i pgTAP matrica, predaja i rekonstrukcija, sve što dira `PRODUCT.md` §5 |
+
+Claude sesije su uvijek na Opusu; effort sesije orkestrator postavlja po istom zadatku: `light` → low, `standard` → medium, `critical` → high.
 
 Codex radi i desetak minuta, pa se skripta pokreće u pozadini s vremenskim ograničenjem od najmanje 20 minuta; inače se prekine prije objave komentara. Skripta pokreće `codex exec review --base origin/main` (samo diff grane), Codex sam čita upute iz `AGENTS.md`, a nalaz ide kao komentar na PR. Codex troši ChatGPT kvotu, ne Claude kvotu. Sesija ispravlja prihvaćene nalaze i u izvještaju navodi odbijene s razlogom. Kritičan nalaz koji sesija ne može riješiti znači status "blokirano".
 

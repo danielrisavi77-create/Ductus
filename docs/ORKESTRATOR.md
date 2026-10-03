@@ -34,7 +34,7 @@ Diff čitaju CI i Codex; orkestrator gleda samo metapodatke i popis datoteka, os
 
 ## 3. Nakon spajanja
 
-1. Sljedeći zadatak iz `PLAN-DEMO.md` §4 kojem su ovisnosti spojene; šalje se u obliku iz `SESSIONS.md` §3.
+1. Sljedeći zadatak iz `PLAN-DEMO.md` §4 kojem su ovisnosti spojene; šalje se u obliku iz `SESSIONS.md` §3, uz razinu Codex pregleda (`light`, `standard`, `critical`, `SESSIONS.md` §5). Prije slanja orkestrator postavlja effort sesije po istoj razini (model ostaje Opus).
 2. Kad je redoslijed jasan, sesija dobiva lanac zadataka (npr. "F2, F3 i F4 redom, svaki svoj PR od svježeg `origin/main`"), da treba manje poruka.
 3. Ploča (Ductus pult): jedan skupni upis po potezu.
 4. `STATE.md`: skupno, najviše jednom dnevno i na kontrolnoj točki, kroz PR orkestratora.
