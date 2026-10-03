@@ -9,12 +9,13 @@ export function applyForensicEvent(doc:ReplayDocument,event:ForensicEvent):Repla
  if(p.kind==="delete"||p.kind==="cut"){return{nodes:update(doc.nodes,p.nodeId,t=>{range(t,p.start,p.end);return t.slice(0,p.start)+t.slice(p.end)})};}
  if(p.kind==="replace"){return{nodes:update(doc.nodes,p.nodeId,t=>{range(t,p.start,p.end);return t.slice(0,p.start)+p.insertedText+t.slice(p.end)})};}
  if(p.kind==="paragraph-break"){return{nodes:update(doc.nodes,p.nodeId,t=>{point(t,p.offset);return t.slice(0,p.offset)+"\n"+t.slice(p.offset)})};}
- if(p.kind==="ai-accept")throw new Error("replay: ai-accept requires a resolved target transaction");
+ if(p.kind==="ai-accept"||p.kind==="undo"||p.kind==="redo")throw new Error(`replay: ${p.kind} requires a resolved target transaction`);// fail closed instead of returning text that does not match the record
  return{nodes:doc.nodes.map(n=>({...n}))};
 }
 export function replayUntil(initial:ReplayDocument,events:readonly ForensicEvent[],sequence:number):ReplayDocument{
  if(!Number.isSafeInteger(sequence)||sequence<0)throw new Error("replayUntil: invalid sequence");
  const selected=events.filter(e=>e.sequence<=sequence).sort((a,b)=>a.sequence-b.sequence);
  for(let i=0;i<selected.length;i++)if(selected[i].sequence!==i+1)throw new Error("replayUntil: non-contiguous sequence");
+ if(selected.length!==sequence)throw new Error("replayUntil: missing events up to sequence");
  return selected.reduce(applyForensicEvent,initial);
 }
