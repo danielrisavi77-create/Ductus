@@ -52,6 +52,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm stack:up
+      - run: pnpm db:migrate
+      - name: pgTAP (pg_prove)
+        run: pnpm test:db
       - run: pnpm test:integration
       - if: failure()
         run: docker compose logs

@@ -4,14 +4,17 @@
 name: ductus
 
 services:
+  # PostgreSQL 17.11 with pgTAP and pg_prove (infra/postgres) for `pnpm test:db`.
   postgres:
-    image: postgres:17.11-alpine
+    build: infra/postgres
     environment:
       POSTGRES_USER: ductus
       POSTGRES_PASSWORD: ductus-local-only
       POSTGRES_DB: ductus
     ports:
       - "127.0.0.1:54329:5432"
+    volumes:
+      - ./db/tests:/db/tests:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ductus -d ductus"]
       interval: 2s
