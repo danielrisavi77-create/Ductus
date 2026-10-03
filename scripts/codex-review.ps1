@@ -8,6 +8,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 git fetch origin main --quiet
+if ($LASTEXITCODE -ne 0) { throw "git fetch failed; refusing to review against a stale origin/main" }
 $out = Join-Path ([IO.Path]::GetTempPath()) ("codex-review-{0}.md" -f [guid]::NewGuid())
 
 codex exec review --base origin/main --ephemeral -o $out
@@ -20,5 +21,6 @@ Write-Output $body
 if (-not $NoComment) {
     if ($Pr -eq 0) { $Pr = [int](gh pr view --json number --jq .number) }
     gh pr comment $Pr --body-file $out
+    if ($LASTEXITCODE -ne 0) { throw "gh pr comment failed; review kept at $out" }
 }
 Remove-Item $out

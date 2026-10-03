@@ -20,6 +20,8 @@ if ($current.Path) { $worktrees += [pscustomobject]$current }
 
 foreach ($wt in $worktrees) {
     if (-not $wt.Branch -or $wt.Branch -eq 'main') { continue }
+    # A folder deleted by hand leaves a stale entry; the final prune removes it.
+    if (-not (Test-Path -LiteralPath $wt.Path)) { continue }
     if ((Resolve-Path $wt.Path).Path -eq (Resolve-Path $root).Path) { continue }
 
     $isMerged = $merged -contains $wt.Branch
