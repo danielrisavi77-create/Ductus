@@ -192,6 +192,8 @@ Ovo je srž onoga što fakultet kupuje. Svaka brojka ima jedinicu, nazivnik i me
 | Napomene studenta | Studentovo objašnjenje uz evidenciju | Tekst |
 | Stanje zapisa | Je li zapis cjelovit i neizmijenjen od primitka | "Zapis je cjelovit" ili "Zapis ima praznine (vidi popis)" |
 
+**Karta podrijetla [ODLUČENO D-57]:** isti događaji mogu se uključiti kao oznake u tekstu rada, na mjestu gdje su nastali; tekst napisan u Ductusu ostaje neoznačen, bez zbroja i udjela. Lijepljenje teksta kopiranog unutar Ductusa i podudaranje s odgovorom AI pomoćnika označavaju se poznatim podrijetlom (D-58).
+
 **Vrsta dokaza [ODLUČENO D-44]:** svaka stavka nosi oznaku *opaženo* (nastalo u Ductusu), *uvezeno* (iz datoteke) ili *izjavljeno* (navod studenta, npr. oznaka lijepljenja ili vanjski AI razgovor).
 
 **Zabranjeno u sažetku:** brzina tipkanja, "neuobičajeni obrasci", usporedba s drugim studentima, rangiranje, bilo kakva ocjena ili boja koja sugerira procjenu studenta, te svaki prikaz koji dijeli tekst rada po podrijetlu uz zajednički nazivnik (to je postotak ljudskosti pod drugim imenom, C-6).
@@ -237,8 +239,9 @@ Student dobiva potpuno okruženje za pisanje akademskog rada. Pravila oblika dol
 
 | Područje | Sadržaj |
 | --- | --- |
-| Struktura | Naslovi s numeracijom, sadržaj, naslovna stranica i izjava prema predlošku fakulteta (D-32) |
-| Tekst | Oblikovanje, popisi, citat kao blok, fusnote, tablice, slike s opisima, popis tablica i slika |
+| Struktura | Naslovi s numeracijom, sadržaj, naslovna stranica i izjava prema predlošku fakulteta (D-32); opseg po poglavlju s trakom napretka (D-60) |
+| Tekst | Oblikovanje, popisi, citat kao blok, fusnote, tablice, slike s opisima, popis tablica i slika; poziv na tablicu ili grafikon s automatskom numeracijom i upozorenjem "nije spomenut u tekstu"; automatski hrvatski navodnici; traži i zamijeni; način za fokus; prečaci |
+| Izvori | Bilježnica izvora s bilješkama, citiranje sa stranicom, kopiranje navoda s poznatim podrijetlom, uvoz iz Zotera (D-59) |
 | Citiranje | Citiranje u tekstu i bibliografija u stilu fakulteta, usklađivanje citata i bibliografije, provjera postojanja DOI-ja i URL-a (D-48) |
 | Pravila | Provjera oblika i opsega prema profilu fakulteta tijekom pisanja (iz Lekte) |
 | Opseg | Brojač riječi prema traženom rasponu vrste rada |

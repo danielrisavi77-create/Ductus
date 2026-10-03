@@ -82,6 +82,8 @@ Sve tablice imaju uključen RLS. Pristup ide kroz `SECURITY DEFINER` pomoćne fu
 | `paste_label` | odsječak, oznaka (vlastite bilješke, citat, prijašnja verzija, vanjski AI, drugo), vrijeme. Samo dodavanje | Student; nastavnik kroz projekciju kao izjavljeno (D-43) |
 | `review_request` | komentar, stanje (otvoren, proveden prema studentu, prihvaćen, ponovno otvoren), revizija prihvaćanja, hash sidrenog raspona pri prihvaćanju | Kao komentar (D-45) |
 | `consultation` | mentorstvo ili projekt, datum, tema, dogovoreno, revizija rada, autor | Mentor i student (D-47) |
+| `source_entry` | projekt, bibliografski zapis (CSL-JSON), bilješka, izvor uvoza (ručno, Zotero) | Student; nastavnik kroz projekciju citiranih jedinica (D-59) |
+| `clipboard_origin` | projekt, otisak kopiranog teksta, podrijetlo (AI odgovor, zapis izvora), vrijeme. Samo na uređaju i u odsječku lijepljenja | Student (D-58) |
 | `source_check` | dokument, stavka bibliografije, DOI ili URL, rezultat (pronađeno, nije pronađeno, nedostupno), vrijeme | Student; nastavnik kroz projekciju (D-48) |
 | `comment` | dokument, sidro u tekstu, autor, tekst, stanje (otvoren, odgovoren, riješen), vrijeme | Student vlasnik; nastavnik ili mentor rada |
 | `suggestion` | dokument, bazna revizija, autor, koraci izmjene, stanje (otvoren, prihvaćen, odbijen), vrijeme | Kao komentar |
