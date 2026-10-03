@@ -52,6 +52,8 @@ Izvor: dokument "Ductus: konkurencija i poboljšanja proizvoda" i FPZG Smjernice
 | D-49 | Student može izvesti prenosiv zapis: PDF sa sažetkom procesa, izjavom i QR kodom; potpis se provjerava u pregledniku bez računa | Dokaz koji student nosi izvan sustava (Signet) | 2 |
 | D-50 | Student može na radu označiti odobrenu prilagodbu (FPZG čl. 1), npr. diktiranje ili asistivni alat; nastavnik vidi oznaku, ne razlog | Legitiman način rada ne smije izgledati neobično | 1 |
 | D-51 | Nastavnik ili mentor može komentare objaviti zajedno umjesto svakog odmah | Mentor piše više komentara pa ih objavi kao cjelinu (Rumi) | 2 |
+| D-53 | Priprema za razgovor: Ductus deterministički izlistava mjesta u tekstu povezana s lijepljenjima, uvozima, AI prijenosima i izmjenama nakon prihvaćene dorade, uz studentove izjave i poveznicu na mjesto u radu. Nakon razgovora samo zapis "razgovor održan", bez polja za ocjenu. Student vidi isti popis | Razgovor o radu jedini se ne može krivotvoriti (FPZG čl. 10 i 11); Ductus ga čini kratkim i ciljanim, bez AI analize (pravilo 13) | 2 |
+| D-54 | Spike u M3: unos koji ne dolazi od stvarnog korisničkog događaja (programski umetnut tekst, npr. proširenja koja "tipkaju") bilježi se kao zaseban događaj "unos nije s tipkovnice ni lijepljenjem". Označava se, ne blokira (asistivni alati, D-50). Konačno ponašanje nakon testa na stvarnim alatima | Zatvara najjeftiniji put krivotvorenja | 1 (spike) |
 | D-52 | Nastavnik upisuje pravilo AI-ja iz izvedbenog plana na razinu kolegija (zabrana, djelomično dopušteno, poticanje; FPZG čl. 12); zadatak ga nasljeđuje i smije ga samo suziti | Pravilo se piše jednom i odgovara izvedbenom planu | 1 |
 
 ## Prijedlozi koji čekaju potvrdu
@@ -70,6 +72,12 @@ Izvor: dokument "Ductus: konkurencija i poboljšanja proizvoda" i FPZG Smjernice
 | D-38 | Obvezni AI u pilotu | Zadatak u pilotu ne smije zahtijevati korištenje AI-a (student bi morao plaćati vanjski račun) |
 | D-39 | Stroža varijanta D-06 (za tvoju odluku) | Nastavnik vidi samo stanje na kraju svake sesije, ne osvježavanje svakih nekoliko minuta; manje osjećaja nadzora, manje uvida |
 | D-36 | Valovi puštanja unutar pilota | Val 1 podnesci i eseji na početku semestra; val 2 seminarski radovi oko 4 tjedna kasnije; val 3 završni i viši radovi u drugoj polovini semestra (`PROGRAM.md`) |
+
+## Čeka pravno mišljenje
+
+| Broj | Odluka | Prijedlog |
+| --- | --- | --- |
+| D-55 | Kontrolna točka uživo | Kratko pisanje u Ductusu na fakultetu (npr. 20 minuta: plan rada ili refleksija o vlastitom radu); nastavnik ljudski uspoređuje, Ductus ništa ne analizira. Do mišljenja ostaje isključeno (D-03). Pitanje za pravnika: primjenjuje se li Prilog III. točka 3(d) Akta o UI na sustav bez AI-ja i je li obrada razmjerna po GDPR-u |
 
 ## Čeka FPZG
 
