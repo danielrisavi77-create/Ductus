@@ -81,6 +81,12 @@ function assertKmsKeyMetadata(
  * Receipt bytes are supplied as RAW input to ED25519_SHA_512 as required for
  * ECC_NIST_EDWARDS25519 KMS keys. keyVersion stores the concrete KMS KeyId/ARN
  * returned by Sign, so historical verification never follows a rotated alias.
+ *
+ * trustedKeyVersions lists the concrete KMS key ARNs this provider may sign
+ * with or verify against (current and historical, from the signing_key
+ * registry). keyVersion inside an envelope is untrusted input: without this
+ * allowlist a signature from any other key the transport can Verify with
+ * would pass.
  */
 export class AwsKmsEd25519SigningKeyProvider
   implements SigningKeyProvider
@@ -88,11 +94,20 @@ export class AwsKmsEd25519SigningKeyProvider
   constructor(
     private readonly transport: AwsKmsEd25519Transport,
     private readonly configuredKeyId: string,
+    trustedKeyVersions: readonly string[],
   ) {
     if (!configuredKeyId.trim()) {
       throw new Error("aws-kms: key id required");
     }
+    this.trustedKeyVersions = new Set(
+      trustedKeyVersions.filter((version) => version.trim()),
+    );
+    if (this.trustedKeyVersions.size === 0) {
+      throw new Error("aws-kms: trusted key versions required");
+    }
   }
+
+  private readonly trustedKeyVersions: ReadonlySet<string>;
 
   async sign(message: Uint8Array): Promise<SignatureEnvelope> {
     if (
@@ -116,6 +131,9 @@ export class AwsKmsEd25519SigningKeyProvider
     ) {
       throw new Error("aws-kms: invalid Sign response");
     }
+    if (!this.trustedKeyVersions.has(result.keyId)) {
+      throw new Error("aws-kms: signing key version not trusted");
+    }
 
     return {
       algorithm: "Ed25519",
@@ -134,7 +152,7 @@ export class AwsKmsEd25519SigningKeyProvider
       signature.algorithm !== "Ed25519" ||
       signature.signatureEncoding !== "raw" ||
       signature.keyId !== this.configuredKeyId ||
-      !signature.keyVersion.trim()
+      !this.trustedKeyVersions.has(signature.keyVersion)
     ) {
       return false;
     }
@@ -162,6 +180,9 @@ export class AwsKmsEd25519SigningKeyProvider
       keyId: this.configuredKeyId,
     });
     assertKmsKeyMetadata(result);
+    if (!this.trustedKeyVersions.has(result.keyId)) {
+      throw new Error("aws-kms: signing key version not trusted");
+    }
 
     return {
       algorithm: "Ed25519",

@@ -42,12 +42,16 @@ class FakeTransport implements AwsKmsEd25519Transport {
   }
 }
 
+const CONCRETE = "arn:aws:kms:eu-central-1:123:key/concrete-v1";
+const TRUSTED = [CONCRETE];
+
 describe("AwsKmsEd25519SigningKeyProvider", () => {
   it("uses RAW ED25519_SHA_512 and pins the concrete signing key version", async () => {
     const transport = new FakeTransport();
     const signer = new AwsKmsEd25519SigningKeyProvider(
       transport,
       "alias/ductus-evidence",
+      TRUSTED,
     );
     const message = new TextEncoder().encode("receipt");
 
@@ -81,6 +85,7 @@ describe("AwsKmsEd25519SigningKeyProvider", () => {
     const signer = new AwsKmsEd25519SigningKeyProvider(
       transport,
       "alias/ductus-evidence",
+      TRUSTED,
     );
 
     await expect(signer.publicVerificationKey()).resolves.toEqual({
@@ -104,6 +109,7 @@ describe("AwsKmsEd25519SigningKeyProvider", () => {
     const signer = new AwsKmsEd25519SigningKeyProvider(
       transport,
       "alias/ductus-evidence",
+      TRUSTED,
     );
 
     await expect(signer.publicVerificationKey()).rejects.toThrow(
@@ -115,6 +121,7 @@ describe("AwsKmsEd25519SigningKeyProvider", () => {
     const verifier = new AwsKmsEd25519SigningKeyProvider(
       validTransport,
       "alias/ductus-evidence",
+      TRUSTED,
     );
     expect(
       await verifier.verify(new Uint8Array([1]), {
@@ -131,9 +138,66 @@ describe("AwsKmsEd25519SigningKeyProvider", () => {
     const signer = new AwsKmsEd25519SigningKeyProvider(
       new FakeTransport(),
       "alias/ductus-evidence",
+      TRUSTED,
     );
     await expect(signer.sign(new Uint8Array(4097))).rejects.toThrow(
       "raw message size unsupported",
     );
+  });
+
+  it("rejects signatures whose key version is not a trusted version of the configured key", async () => {
+    const transport = new FakeTransport();
+    const signer = new AwsKmsEd25519SigningKeyProvider(
+      transport,
+      "alias/ductus-evidence",
+      TRUSTED,
+    );
+    // The transport would verify this, so only the allowlist can reject it.
+    expect(
+      await signer.verify(new Uint8Array([1]), {
+        algorithm: "Ed25519",
+        keyId: "alias/ductus-evidence",
+        keyVersion: "arn:aws:kms:eu-central-1:123:key/other-key",
+        signatureEncoding: "raw",
+        signatureBase64Url: "AQIDBA",
+      }),
+    ).toBe(false);
+    expect(transport.calls).toHaveLength(0);
+  });
+
+  it("keeps verifying a historical version after rotation and refuses to sign with an untrusted one", async () => {
+    const rotated = "arn:aws:kms:eu-central-1:123:key/rotated-v2";
+    const transport = new FakeTransport();
+    const signer = new AwsKmsEd25519SigningKeyProvider(
+      transport,
+      "alias/ductus-evidence",
+      [rotated, CONCRETE],
+    );
+    const message = new TextEncoder().encode("receipt");
+    const old = {
+      algorithm: "Ed25519" as const,
+      keyId: "alias/ductus-evidence",
+      keyVersion: CONCRETE,
+      signatureEncoding: "raw" as const,
+      signatureBase64Url: "AQIDBA",
+    };
+    expect(await signer.verify(message, old)).toBe(true);
+
+    const onlyRotated = new AwsKmsEd25519SigningKeyProvider(
+      new FakeTransport(),
+      "alias/ductus-evidence",
+      [rotated],
+    );
+    await expect(onlyRotated.sign(message)).rejects.toThrow(
+      "signing key version not trusted",
+    );
+    expect(
+      () =>
+        new AwsKmsEd25519SigningKeyProvider(
+          new FakeTransport(),
+          "alias/ductus-evidence",
+          [],
+        ),
+    ).toThrow("trusted key versions required");
   });
 });
