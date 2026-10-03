@@ -1,0 +1,40 @@
+import { fileURLToPath } from "node:url";
+
+import { defineConfig } from "vitest/config";
+
+export default defineConfig({
+  resolve: {
+    // Mirrors the `@/*` path mapping in tsconfig.json. The regex with a
+    // forward-slash replacement keeps `@/` imports working on Windows.
+    alias: [
+      {
+        find: /^@\//,
+        replacement: `${fileURLToPath(new URL("./src/", import.meta.url)).replaceAll("\\", "/")}/`,
+      },
+    ],
+  },
+  test: {
+    environment: "node",
+    // Two projects so that property tests run exactly once and can be scaled
+    // separately (FC_NUM_RUNS) without slowing the unit suite.
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: "unit",
+          include: ["src/**/*.test.ts", "tests/unit/**/*.test.ts"],
+          exclude: ["**/*.property.test.ts", "**/node_modules/**"],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "property",
+          include: ["src/**/*.property.test.ts", "tests/property/**/*.property.test.ts"],
+          setupFiles: ["tests/property/setup.ts"],
+          testTimeout: 60_000,
+        },
+      },
+    ],
+  },
+});
