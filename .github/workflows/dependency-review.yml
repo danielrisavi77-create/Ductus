@@ -2,7 +2,8 @@ name: Dependency review
 
 # Blocks a PR that adds a dependency with a known vulnerability or a licence
 # outside the allow list. OSV in ci.yml scans the whole lockfile; this job
-# looks only at what the PR changes and comments the diff on the PR.
+# looks only at what the PR changes. Results are in the job summary; no PR
+# comment, so the job keeps read-only permissions.
 on:
   pull_request:
 

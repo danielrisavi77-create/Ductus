@@ -30,7 +30,7 @@ Nijedan repozitorij nije dodan kao git submodul niti kopiran u repo.
 | Repozitorij | Što radi | Zašto sada |
 | --- | --- | --- |
 | Dependabot (`.github/dependabot.yml`) | Tjedni prijedlozi za GitHub akcije i npm, odgoda 7 dana (30 za glavne verzije), grupirane manje verzije | ARCHITECTURE §10 ga traži, a nije postojao; pinane SHA vrijednosti inače zastarijevaju |
-| `actions/dependency-review-action` v5.0.0 | Na svakom PR-u odbija novu ovisnost s poznatom ranjivošću (od `moderate`) ili licencom izvan popisa | Repo je javan pa je besplatno; OSV gleda cijeli lockfile, ovo gleda samo promjenu i komentira je na PR-u |
+| `actions/dependency-review-action` v5.0.0 | Na svakom PR-u odbija novu ovisnost s poznatom ranjivošću (od `moderate`) ili licencom izvan popisa | Repo je javan pa je besplatno; OSV gleda cijeli lockfile, ovo gleda samo promjenu; nalaz je u sažetku provjere, bez komentara na PR-u (dozvole samo za čitanje) |
 | Pluginovi `typescript-lsp`, `context7`, `claude-security` (`.claude/settings.json`) | Alati za sesije Claude Codea | Danielova odluka 3. 10. 2026.; vidi §6 |
 
 Zaseban workflow, a ne izmjena `ci.yml`, da se ne sudara s otvorenim PR-om #13 i zadacima P-4 i P-5.
