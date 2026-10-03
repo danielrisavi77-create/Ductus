@@ -4,17 +4,15 @@ Ažurira se nakon svakog spojenog PR-a. Najviše 80 redaka.
 
 ## Trenutna faza
 
-M0 Temelj: plan proizvoda spojen (PR #1); postavljen rad u paralelnim sesijama (`docs/SESSIONS.md`). Prvi cilj: demo za fakultet (D-76, `PROGRAM.md`), početak studenog 2026.; sastanak s FPZG-om tek nakon njega. Zatim val 1 i val 2 oko 22. 2. 2027., kontrolna točka 15. 12. 2026.
+M0 Temelj: plan proizvoda spojen (PR #1); postavljen rad u paralelnim sesijama (`docs/SESSIONS.md`). Prvi cilj: demo za fakultet u ponedjeljak 2. 11. 2026. (D-76, D-82; zadaci u `docs/PLAN-DEMO.md`); sastanak s FPZG-om tek nakon njega. Zatim val 1 i val 2 oko 22. 2. 2027., kontrolna točka 15. 12. 2026.
 
 ## Owner queue (samo Daniel)
 
 Agent nikad ne uzima ove stavke i nikad ne čeka na njih.
 
-- [ ] Dodati `.claude/settings.local.json` (sadržaj u `docs/SESSIONS.md` §7) i u aplikaciji uključiti automatsko arhiviranje nakon spajanja PR-a.
-- [ ] Pokrenuti Docker Desktop (treba ga Platforma za M0).
-- [ ] Potvrditi D-07 (RLS i pgTAP, bez OpenFGA) prije M2.
-- [ ] Odobriti dizajnerski sustav i ekrane demoa (Design artifact) prije frontend ekrana.
-- [ ] Potvrditi ili promijeniti prijedloge D-07, D-08, D-10, D-11, D-16, D-20, D-24, D-34, D-36, D-37, D-38 u `docs/DECISIONS.md`; odlučiti D-06 ili stroža D-39.
+- [ ] Odobriti dizajnerski sustav i ekrane demoa (PLAN-DEMO D-2) prije frontend ekrana.
+- [ ] Proba demoa u subotu 31. 10. 2026. i snimka prolaza (PLAN-DEMO D-3, D-4).
+- [ ] Potvrditi ili promijeniti prijedloge D-08, D-16, D-20, D-34, D-37, D-38 u `docs/DECISIONS.md`; odlučiti D-06 ili stroža D-39.
 - [ ] Potvrditi zadane pragove P-01 do P-04.
 - [ ] FPZG (prodekan Višeslav Raos): koordinator pilota, kolegiji i mentori, akademski kalendar ljetnog semestra, AAI administrator, službenik za zaštitu podataka.
 - [ ] Pravno mišljenje za D-55 (kontrolna točka uživo) i bilježenje ritma iz D-56.
@@ -23,7 +21,7 @@ Agent nikad ne uzima ove stavke i nikad ne čeka na njih.
 - [ ] FPZG: D-29 (pravna osnova), D-30 (rokovi čuvanja), D-31 (GO uvjeti), D-35 (dopušteni AI pružatelji), D-04 (obveznost u pilotu).
 - [ ] Lekta: odluka o licenci i pravu na redistribuciju pravila prije paketa za Ductus.
 - [ ] 15. 12. 2026.: kontrolna točka roka (`PROGRAM.md`).
-- [ ] Odlučiti o vidljivosti repoa (preporuka: privatan).
+- [ ] Vidljivost repoa: zasad javan (odluka 3. 10. 2026.); preporuka ostaje privatan prije stvarnih podataka.
 - [ ] Konačno ime proizvoda (D-18).
 - [ ] Pitanja za sastanak s FPZG-om: FPZG-ov kalendar ljetnog semestra; je li Turnitin Clarity u Srceovoj licenci; tko je DPO; koja tri kolegija i koji nastavnici u valu 1; što referada traži pri predaji; zamjenski postupak kad student odbije Ductus ili Ductus ne radi (D-79); je li ispis razgovora po čl. 15 obavezan i kad je AI korišten samo za lekturu.
 - [ ] Model podrške u pilotu (tko, kojim kanalom, u koje vrijeme, zamjenski postupak predaje kad Ductus ne radi pred rok).
@@ -36,21 +34,18 @@ Agent nikad ne uzima ove stavke i nikad ne čeka na njih.
 
 ## Agent queue
 
-Zadatke dodjeljuje orkestrator, jedan po sesiji (`docs/SESSIONS.md`). Uzima se prva stavka koju ništa ne blokira; uloga je u zagradi.
+Zadatke dodjeljuje orkestrator, jedan po sesiji (`docs/SESSIONS.md`). Do demoa vrijedi tablica zadataka u `docs/PLAN-DEMO.md` §4; ovdje je samo ono što je u radu ili sljedeće.
 
-- [ ] M0.1 (Platforma): kostur projekta s pnpm-om (package.json, tsconfig, ESLint, Vitest, Playwright) prema `pisac-editor`, bez Supabasea i Netlifyja.
-- [ ] M0.2 (Backend): prijenos jezgre iz `pisac-editor` po popisu iz `docs/BACKEND.md` §2, u više PR-ova; isti broj prenesenih testova kao u izvoru (nakon M0.1).
-- [ ] M0.3 (Frontend): prijenos editora, journala i sinkronizacije u pregledniku s testovima (nakon M0.1).
-- [ ] M0.4 (Platforma): CI (lint, typecheck, unit, property, E2E, axe, Gitleaks, zizmor, Semgrep, OSV), lefthook, `docker compose` (Postgres, MinIO, Mailpit, lažni OIDC) (nakon M0.1; treba Docker).
-- [ ] B0.4 (kratkotrajna): prepis `docs/ARCHITECTURE.md` bez Supabasea i Netlifyja.
-- [ ] S8 (kratkotrajna, dizajn): dizajnerski sustav i ekrani demoa kao Design artifact za Danielovo odobrenje.
-- [ ] B0.2 (Backend): spike rekonstrukcije 15.000 i 80.000 riječi (nakon M0.2). B0.1 blokiran računima.
-- [ ] M1: AAI@EduHr spike (blokirano: pristup Labu).
-- [ ] M2: model fakulteta i pgTAP matrica pristupa (nakon M0 i D-07).
-- [ ] M4: paket pravila u Lekti po uzoru na `katedra-pack` (blokirano: odluka o licenci).
+- [ ] P-1 (Platforma): M0.1 kostur projekta. U radu.
+- [ ] K-1 (Arhitektura): B0.4 prepis `docs/ARCHITECTURE.md`. U radu.
+- [ ] D-1 (Dizajn): S8 dizajnerski sustav i ekrani demoa po prototipu (D-85). U radu.
+- [ ] B-1 i F-1 (Backend, Frontend): planovi prijenosa jezgre. U radu.
+- [ ] Sljedeće nakon P-1: P-2, P-3 (Platforma), B-2 (Backend), F-2 (Frontend), K-2 (citatni stil).
+- [ ] Izvan demoa: B0.2 spike rekonstrukcije (nakon M0.2); B0.1 blokiran računima; M1 blokiran pristupom Labu; M4 blokiran licencom Lekte.
 
 ## Gotovo
 
 - 3. 10. 2026.: inicijalni commit repoa; plan proizvoda v0.1 i v0.2 (PR #1).
 - 3. 10. 2026.: `pisac-editor` PR #49 i #50 spojeni.
-- 3. 10. 2026.: faza S: uloge i protokol sesija, Codex pregled, mjerenje tokena, čišćenje worktreeova, nadzorna ploča.
+- 3. 10. 2026.: faza S: uloge i protokol sesija, Codex pregled, mjerenje tokena, čišćenje worktreeova, nadzorna ploča (PR #2).
+- 3. 10. 2026.: odluke D-81 do D-86; plan demoa (`docs/PLAN-DEMO.md`).

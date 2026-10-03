@@ -71,17 +71,28 @@ Izvor: dokument "Ductus: konkurencija i poboljšanja proizvoda" i FPZG Smjernice
 | D-70 | Sučelje na hrvatskom i engleskom već u valu 1 (zamjenjuje D-27) | Erasmus studenti i kolegiji na engleskom (D-67) | 1 |
 | D-52 | Nastavnik upisuje pravilo AI-ja iz izvedbenog plana na razinu kolegija (zabrana, djelomično dopušteno, poticanje; FPZG čl. 12); zadatak ga nasljeđuje i smije ga samo suziti | Pravilo se piše jednom i odgovara izvedbenom planu | 1 |
 
+## Odlučeno (3. 10. 2026.): demo i način rada
+
+| Broj | Odluka | Razlog |
+| --- | --- | --- |
+| D-81 | Potvrđeni prijedlozi D-07 (ovlasti kroz članstvo, RLS i pgTAP, bez OpenFGA), D-10 (JCS odsječci, hash lanac, Ed25519 potvrde), D-11 (nepodudarna rekonstrukcija blokira predaju, praznina ne) i D-24 (odsječci do 30 s, vrijeme na minutu) | Demo (D-76) gradi model fakulteta i evidenciju; bez potvrde bi se gradilo na prijedlogu |
+| D-82 | Ciljni datum demoa za FPZG je ponedjeljak 2. 11. 2026.; plan zadataka je u `docs/PLAN-DEMO.md` | Konkretizira "početak studenog" iz D-76 |
+| D-83 | Za demo se FPZG citatni stil kopira iz Lekte kao konfiguracijska datoteka u Ductusu (samo taj stil, ne cijeli paket); zamjenjuje se Lekta paketom u M4 | Vlasnik Lekte dopušta tu kopiju prije odluke o licenci paketa; pravila ostaju konfiguracija (PRODUCT §5 pravilo 12) |
+| D-84 | Sučelje demoa samo na hrvatskom, svi tekstovi u ključevima od prvog dana; engleski (D-70) nakon demoa, u valu 1 | Manje posla prije demoa bez prepisivanja kasnije |
+| D-85 | Editor i mentorsko, odnosno nastavničko sučelje preuzimaju izgled prototipa (prototipeditor.netlify.app); sadržaj i dalje slijedi PRODUCT §5 i odluke koje su zamijenile elemente prototipa (D-61 do D-64, D-80) | Odluka vlasnika |
+| D-86 | PR-ove spaja samo sesija "Ductus orkestrator", kad Codex nema otvorenih kritičnih nalaza i PR ne čeka vlasnikovu odluku; radne sesije nikad ne spajaju (`docs/SESSIONS.md`) | Izričita ovlast vlasnika |
+
 ## Prijedlozi koji čekaju potvrdu
 
 | Broj | Odluka | Prijedlog |
 | --- | --- | --- |
-| D-07 | Ovlasti | Članstvo i RLS u Postgresu, pgTAP matrica pristupa; bez OpenFGA servisa |
+| D-07 | Ovlasti | **Potvrđeno D-81.** Članstvo i RLS u Postgresu, pgTAP matrica pristupa; bez OpenFGA servisa |
 | D-08 | Stack | **PRIJEDLOG, uvjetan (3. 10. 2026., `docs/BACKEND.md` v0.3):** Next.js i worker na UpCloud VM-u, UpCloud Managed PostgreSQL (PITR), Scaleway Object Storage i TEM, AWS KMS za potpise, vlastiti OIDC klijent. Scaleway Managed PG otpada (nema PITR, provjereno u službenoj dokumentaciji). Supabase se ne preporučuje (Edge Functions 2 s CPU, PITR 100 USD mjesečno), ali je argument CPU-a neizmjeren: B0.2 ga potvrđuje ili ruši. Konačna odluka tek nakon B0.1 (PITR povrat, uloge, latencija) i B0.2. Alternativa B: Hetzner (dostupnost CX tipova upitna) + PostgreSQL s WAL-G. Trošak oko 575 do 750 EUR s PDV-om premašuje D-66, vidi BACKEND §7 |
-| D-10 | Integritet zapisa | JCS odsječci adresirani hashom, hash lanac, Ed25519 potvrde s rotacijom ključeva; dnevni korijen s RFC 3161 žigom **već u valu 1** (vidi D-72) |
-| D-11 | Predaja i praznine | Nepodudarna rekonstrukcija blokira predaju; praznina ne blokira, ali je vidljiva |
+| D-10 | Integritet zapisa | **Potvrđeno D-81.** JCS odsječci adresirani hashom, hash lanac, Ed25519 potvrde s rotacijom ključeva; dnevni korijen s RFC 3161 žigom **već u valu 1** (vidi D-72) |
+| D-11 | Predaja i praznine | **Potvrđeno D-81.** Nepodudarna rekonstrukcija blokira predaju; praznina ne blokira, ali je vidljiva |
 | D-16 | Prijava nastavnika, mentora i administratora | Također isključivo AAI@EduHr |
 | D-20 | Prijava u AI | OpenRouter (OAuth s PKCE-om), student plaća svoj račun; kasnije "Sign in with ChatGPT" ako Ductus postane partner. Pretplate na Claude ne mogu se koristiti u aplikacijama trećih strana |
-| D-24 | Granularnost evidencije | Odsječci od najviše 30 s, vrijeme zaokruženo na minutu |
+| D-24 | Granularnost evidencije | **Potvrđeno D-81.** Odsječci od najviše 30 s, vrijeme zaokruženo na minutu |
 | D-34 | Tehnička izvedba izravnih izmjena | Izravna izmjena je prijedlog koji studentov klijent automatski primjenjuje; dokument uvijek ima jednog pisača; student može vratiti način na prijedloge |
 | D-37 | Kratki zadaci | Za zadatke kraće od praga P-04 nastavnik vidi stanje tek nakon predaje, ne tijekom pisanja |
 | D-38 | Obvezni AI u pilotu | Zadatak u pilotu ne smije zahtijevati korištenje AI-a (student bi morao plaćati vanjski račun) |
