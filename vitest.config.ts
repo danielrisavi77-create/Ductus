@@ -23,7 +23,7 @@ export default defineConfig({
         test: {
           name: "unit",
           include: ["src/**/*.test.ts", "tests/unit/**/*.test.ts"],
-          exclude: ["**/*.property.test.ts", "**/node_modules/**"],
+          exclude: ["**/*.property.test.ts", "**/*.integration.test.ts", "**/node_modules/**"],
         },
       },
       {
@@ -33,6 +33,15 @@ export default defineConfig({
           include: ["src/**/*.property.test.ts", "tests/property/**/*.property.test.ts"],
           setupFiles: ["tests/property/setup.ts"],
           testTimeout: 60_000,
+        },
+      },
+      {
+        // Needs the local stack: pnpm stack:up (compose.yaml).
+        extends: true,
+        test: {
+          name: "integration",
+          include: ["tests/integration/**/*.integration.test.ts"],
+          testTimeout: 30_000,
         },
       },
     ],
