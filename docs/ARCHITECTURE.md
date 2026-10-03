@@ -1,6 +1,6 @@
 # Ductus: arhitektura pilota
 
-Verzija 0.1 · 3. 10. 2026. · Odgovorna osoba: Daniel Rišavi
+Verzija 0.2 · 3. 10. 2026. · Odgovorna osoba: Daniel Rišavi
 
 Cilj: najjednostavnija arhitektura koja pouzdano ispunjava `PRODUCT.md` za pilot na jednom fakultetu, koju jedna osoba uz AI agente može održavati, i koja se kasnije može proširiti bez prepisivanja. Ciljna arhitektura iz `pisac-editor` PR #45 ostaje referenca; elementi koje ovdje odgađamo imaju zapisan okidač (odjeljak 11).
 
@@ -13,10 +13,13 @@ Cilj: najjednostavnija arhitektura koja pouzdano ispunjava `PRODUCT.md` za pilot
 | Lokalna pohrana | Dexie (IndexedDB), journal s 8 stanja sinkronizacije | [PRIJEDLOG D-08], preneseno |
 | Baza i prijava | Supabase: Postgres, RLS, Auth s vlastitim OIDC pružateljem, privatni Storage, Edge Functions, `pg_cron` | [PRIJEDLOG D-08] |
 | Prijava | AAI@EduHr preko OpenID Connecta | [ODLUČENO D-09] |
-| Hosting | Netlify za statiku i sučelje; sadržaj radova se obrađuje u pregledniku ili u Supabase Edge Functions (eu-central-1), nikad u Netlify funkcijama izvan EU-a | [PRIJEDLOG D-08] |
+| Hosting | Netlify za statiku i sučelje; stranice sa sadržajem radova renderiraju se u pregledniku (bez SSR-a sadržaja), a obrada ide u pregledniku ili u Supabase Edge Functions (eu-central-1), nikad u Netlify funkcijama izvan EU-a | [PRIJEDLOG D-08] |
 | Testovi | Vitest (unit i property), Playwright (E2E i axe), pgTAP (RLS) | Preneseno i prošireno |
+| Stvarno vrijeme | Supabase Realtime za obavijesti o novom spremljenom stanju, komentarima i prijedlozima | [PRIJEDLOG D-08] |
+| Pravila fakulteta | Zajednički paket s Lektom (generirani podaci pravila, citatni stilovi, predlošci naslovne stranice) | [ODLUČENO D-25] |
+| AI | OpenRouter preko Edge Functiona u EU-u koja provodi popis dopuštenih pružatelja | [PRIJEDLOG D-20] |
 
-Bez dodatnih servisa u pilotu: nema OpenFGA servisa, transparency loga, KMS-a, Redisa, reda poruka ni zasebnog API servera.
+Jedini vanjski servis osim Supabasea i Netlifyja je OpenRouter, i to samo kad student sam pokrene AI. Nema OpenFGA servisa, transparency loga, KMS-a, Redisa, reda poruka ni zasebnog API servera.
 
 ## 2. Moduli
 
@@ -33,8 +36,12 @@ Modularni monolit. Svaki modul ima vlastite tablice, RPC funkcije i testove; dru
 | `evidence` | Odsječci, hash lanac, potpisi, praznine | Novo (JCS preneseno) |
 | `submission` | Zamrzavanje, rekonstrukcija, potvrda predaje | Novo |
 | `projection` | Sažetak procesa i usporedba verzija; jedna funkcija za studenta i nastavnika; računa se na poslužitelju | Novo |
-| `review` | Komentar nastavnika vezan uz predanu reviziju | Novo |
-| `export` | DOCX predane verzije, izvoz evidencije | DOCX preneseno |
+| `collaboration` | Komentari vezani uz odlomak, prijedlozi izmjena, izravne izmjene nastavnika i mentora, pravilo D-34, obavijesti u stvarnom vremenu | Novo |
+| `rules` | Učitavanje Lekta paketa, profil fakulteta po zadatku, provjera oblika nad dokumentom editora | Novo |
+| `citations` | Citiranje u tekstu i bibliografija prema stilu iz Lekta paketa | Novo (logika iz Lekte) |
+| `ai` | Prijava preko OpenRoutera, popis dopuštenih pružatelja, proxy i bilježenje prenošenja teksta | Novo |
+| `import` | Uvoz DOCX-a i PDF-a u dokument kao označen događaj | Novo |
+| `export` | DOCX i PDF u obliku fakulteta, izvoz evidencije | DOCX preneseno |
 | `retention` | Brisanje po klasi podataka (`pg_cron`) | Novo |
 | `audit` | Revizijski trag pristupa i administrativnih radnji | Novo |
 
@@ -46,14 +53,15 @@ Sve tablice imaju uključen RLS. Pristup ide kroz `SECURITY DEFINER` pomoćne fu
 
 | Tablica | Ključni stupci | Tko čita |
 | --- | --- | --- |
-| `institution` | id, naziv, AAI `homeOrg`, postavke (pragovi P-01 i P-02, rokovi čuvanja) | Administrator te ustanove |
+| `institution` | id, naziv, AAI `homeOrg`, postavke (pragovi P-01 do P-03, rokovi čuvanja, dopušteni AI pružatelji i modeli, obveznost po vrsti rada) | Administrator te ustanove |
 | `app_user` | id, `aai_unique_id` (jedinstven), ustanova, ime za prikaz, posljednja prijava | Sam korisnik; nastavnik vidi ime studenata u svom kolegiju |
 | `institution_role` | korisnik, ustanova, uloga (`teacher`, `admin`), potvrdio, vrijeme | Administrator |
 | `course` | id, ustanova, naziv, akademska godina | Članovi kolegija |
 | `course_enrollment_code` | kolegij, hash koda, vrijedi do, aktivan | Nastavnik kolegija |
 | `course_member` | kolegij, korisnik, uloga u kolegiju (`teacher`, `student`), od, do | Članovi kolegija |
+| `mentorship` | mentor, student, vrsta rada, od, do, potvrdio | Mentor i student |
 | `assignment` | id, kolegij, trenutna verzija | Članovi kolegija |
-| `assignment_version` | zadatak, broj verzije, naslov, upute, vrsta, otvaranje, rok, pravila pomoći, profil evidencije, uvoz dopušten, ponovna predaja dopuštena, vrijeme. **Nepromjenjiva**; profil nove verzije smije biti samo uži | Članovi kolegija |
+| `assignment_version` | zadatak, broj verzije, naslov, upute, vrsta rada, Lekta profil i verzija paketa, otvaranje, rok, pravila pomoći, dopušteni AI pružatelji, najava vidljivosti AI upita, profil evidencije, uvoz dopušten, ciklusi verzija, vrijeme. **Nepromjenjiva**; profil nove verzije smije biti samo uži | Članovi kolegija |
 | `notice_acknowledgment` | student, verzija zadatka, vrijeme | Student; nastavnik zadatka |
 | `deadline_extension` | zadatak, student, novi rok, razlog, odobrio | Student; nastavnik zadatka |
 
@@ -61,15 +69,19 @@ Sve tablice imaju uključen RLS. Pristup ide kroz `SECURITY DEFINER` pomoćne fu
 
 | Tablica | Ključni stupci | Tko čita |
 | --- | --- | --- |
-| `project` | id, zadatak, student | Student vlasnik |
+| `project` | id, zadatak ili mentorstvo, student, način izmjena nastavnika (prijedlozi ili izravno, D-21) | Student vlasnik; nastavnik zadatka ili mentor |
 | `document` | id, projekt, trenutna revizija | Student vlasnik |
 | `document_checkpoint` | dokument, broj revizije, puni kanonski sadržaj, hash | Student; poslužitelj za rekonstrukciju |
-| `document_revision` | dokument, broj revizije, bazna revizija, hash sadržaja, vrijeme poslužitelja, kraj sesije (da/ne). Sadržaj se ne sprema pri svakoj reviziji; nastaje iz najbliže kontrolne točke i odsječaka | Student; nastavnik samo predane revizije i revizije na kraju sesija, prema profilu |
-| `evidence_segment` | dokument, redni broj, raspon revizija, adresa sadržaja u Storageu (hash), prethodni hash, offline oznaka, vrijeme na uređaju (zaokruženo), vrijeme primitka, stanje potpisa | Student; nastavnik nikad izravno, samo kroz projekciju |
+| `document_revision` | dokument, broj revizije, bazna revizija, hash sadržaja, vrijeme poslužitelja, kraj sesije (da/ne). Sadržaj se ne sprema pri svakoj reviziji; nastaje iz najbliže kontrolne točke i odsječaka | Student; nastavnik ili mentor trenutno stanje (D-06) i revizije na kraju sesija prema profilu |
+| `evidence_segment` | dokument, redni broj, autor (student, nastavnik, mentor), raspon revizija, adresa sadržaja u Storageu (hash), prethodni hash, offline oznaka, vrijeme na uređaju (zaokruženo), vrijeme primitka, stanje potpisa | Student; nastavnik nikad izravno, samo kroz projekciju |
 | `evidence_receipt` | odsječak, potpis, ID ključa | Kao odsječak |
 | `evidence_gap` | dokument, od revizije, do revizije, uzrok | Student; nastavnik kroz projekciju |
-| `import_event` | dokument, revizija, naziv datoteke, veličina, hash | Student; nastavnik kroz projekciju |
+| `import_event` | dokument, revizija, naziv i vrsta datoteke, veličina, hash | Student; nastavnik kroz projekciju |
+| `ai_transfer` | dokument, revizija, pružatelj, model, veličina prenesenog teksta, vrijeme | Student; nastavnik kroz projekciju |
+| `comment` | dokument, sidro u tekstu, autor, tekst, stanje (otvoren, odgovoren, riješen), vrijeme | Student vlasnik; nastavnik ili mentor rada |
+| `suggestion` | dokument, bazna revizija, autor, koraci izmjene, stanje (otvoren, prihvaćen, odbijen), vrijeme | Kao komentar |
 | `signing_key` | ID ključa, javni ključ, vrijedi od, vrijedi do, opozvan | Javno |
+| `ai_credential` | korisnik, OpenRouter ključ šifriran u Supabase Vaultu, vrijeme | Nitko osim Edge Functiona `ai` |
 
 ### Predaja i pregled
 
@@ -78,7 +90,6 @@ Sve tablice imaju uključen RLS. Pristup ide kroz `SECURITY DEFINER` pomoćne fu
 | `submission` | id, zadatak, verzija zadatka, projekt, revizija, vrijeme poslužitelja, nakon roka (da/ne, uz produljenje), hash artefakta, rezultat rekonstrukcije, potvrda | Student vlasnik; nastavnik zadatka |
 | `assistance_declaration` | predaja, tekst izjave o AI-ju i drugoj pomoći, vrijeme | Kao predaja |
 | `student_note` | predaja ili odsječak, tekst, vrijeme, zamjenjuje (prethodna napomena). Samo dodavanje | Kao predaja |
-| `review_comment` | predaja, autor, tekst, vrijeme | Student vlasnik; nastavnik zadatka |
 | `access_log` | tko, što, kada, razlog | Administrator ustanove |
 | `data_class` | klasa, svrha, rok čuvanja, osnova | Administrator ustanove |
 
@@ -130,6 +141,30 @@ Ako odsječci između dviju primljenih revizija trajno izostanu, poslužitelj bi
 
 **Kontrolne točke:** kao u F1, svaki commit nosi puni kanonski dokument, ali poslužitelj ga trajno sprema samo kao kontrolnu točku: svakih 200 koraka, na kraju svake sesije i uvijek kad otkrije prazninu (pristigla revizija ne nastavlja se na posljednji primljeni odsječak). Time su rekonstrukcija i usporedba ograničenog trajanja. Opterećenje Edge Functiona (CPU vrijeme pri rekonstrukciji s ProseMirrorom u Denu) mjeri se u M3 na najvećem očekivanom radu (15.000 riječi).
 
+## 5a. Suradnja nastavnika i studenta
+
+- **Pogled na rad u nastajanju (D-06):** nastavnik ili mentor dobiva trenutno spremljeno stanje dokumenta kroz RPC koji provjerava odnos. Supabase Realtime šalje obavijest kad poslužitelj primi novu reviziju, najčešće svakih nekoliko minuta (P-03). Tipkanje se ne prenosi uživo.
+- **Komentari:** vezani uz raspon teksta preko sidra (preneseno iz `collaboration/anchor` u `pisac-editor`). Ako se tekst ispod sidra promijeni toliko da se sidro ne može pouzdano pronaći, komentar se prikazuje kao "sidro nije pouzdano", nikad na krivom mjestu.
+- **Prijedlozi:** spremaju se odvojeno od dokumenta (`suggestion`), pa ne stvaraju sukob s pisanjem studenta. Kad ga student prihvati, koraci prijedloga primjenjuju se kao nova revizija s autorom "nastavnik (prihvaćeni prijedlog)".
+- **Izravne izmjene (D-21, D-34):** dopuštene samo kad je na radu postavljen taj način i kad student nije u aktivnoj sesiji. Poslužitelj drži kratkotrajni zakup (lease) aktivnog pisača po dokumentu; ako ga drži student, izmjena nastavnika automatski postaje prijedlog. Izravna izmjena ide istim putem kao studentova (§5), s autorom "nastavnik".
+- **Pripisivanje:** autor je dio svakog odsječka evidencije i provjerava ga poslužitelj iz sesije, nikad iz polja koje šalje klijent.
+
+## 5b. AI pomoćnik
+
+- Student se jednom poveže s OpenRouterom (OAuth s PKCE-om). Dobiveni ključ sprema se šifriran u Supabase Vault (`ai_credential`) i nikad ne dolazi u preglednik.
+- Zahtjevi idu preko Edge Functiona `ai` u EU-u, koja provjerava popis dopuštenih pružatelja i modela za fakultet i zadatak i tek tada prosljeđuje zahtjev. Popis se ne može provesti u pregledniku, zato proxy.
+- Funkcija ne sprema upite ni odgovore. Kad student prenese tekst iz AI-ja u rad, editor to bilježi kao događaj `ai_transfer` s pružateljem, modelom i veličinom.
+- Kad zadatak najavi vidljivost upita (D-22), upiti i odgovori spremaju se uz rad u zasebnoj klasi podataka s vlastitim rokom čuvanja.
+- Zemlja obrade svakog pružatelja prikazuje se studentu prije prvog korištenja.
+
+## 5c. Lekta paket i uvoz
+
+- **Paket pravila (D-25):** Lekta generira verzionirani paket po uzoru na postojeći `katedra-pack` (`scripts/generate-katedra-pack.mts`): profili fakulteta s pravilima oblika, rasponima opsega, obveznim dijelovima, citatnim stilom i predloškom naslovne stranice, uz verziju i hash. Ductus ga uvozi kao ovisnost s fiksnom verzijom; zadatak pamti verziju paketa s kojom je stvoren.
+- **Provjera tijekom pisanja:** Lektina postojeća analiza radi nad DOCX datotekom. Za provjeru tijekom pisanja Ductus koristi pravila iz paketa nad dokumentom editora; potpuna Lektina provjera pokreće se nad izvezenim DOCX-om pri slanju verzije i predaji.
+- **Citiranje:** logika citatnih stilova i bibliografije izdvaja se iz Lekte u zajednički modul bez ovisnosti o Viteu i DOM-u (druga faza paketa).
+- **Licenca i podaci:** Lekta je trenutno `UNLICENSED`, a pravila potječu iz službenih dokumenata fakulteta. Prije objave paketa izvan vlastitih repozitorija treba odlučiti o licenci i pravu na redistribuciju pravila.
+- **Uvoz:** DOCX se pretvara u dokument editora uz očuvanje strukture gdje je moguće; PDF se uvozi kao tekst s osnovnom strukturom i jasnom porukom da je oblik izgubljen. Oba su jedan označen događaj `import_event`.
+
 ## 6. Predaja
 
 1. Student potvrđuje predaju iz pregleda (S5). Predaja traži vezu s poslužiteljem: sve lokalne promjene moraju prvo biti potvrđene.
@@ -142,8 +177,9 @@ Kašnjenje se određuje isključivo vremenom poslužitelja u trenutku predaje. R
 ## 7. Ovlasti
 
 - Uloga sama ne daje pristup (C-23). Svaka RLS politika i svaki RPC provjerava odnos: vlasnik projekta, nastavnik zadatka (aktivan član kolegija), administrator ustanove.
-- Nastavnik nikad ne čita odsječke ni revizije izravno. Dobiva samo rezultat funkcije `projection`, izračunat na poslužitelju za profil verzije zadatka uz koju je predaja vezana.
-- Ispis studenta iz kolegija (`course_member.do`) ne briše njegove predaje; nastavnik ih i dalje vidi do isteka roka čuvanja. Uklonjeni nastavnik gubi pristup odmah.
+- Nastavnik i mentor vide trenutno spremljeno stanje rada (D-06). Odsječke evidencije i stare revizije nikad ne čitaju izravno; dobivaju samo rezultat funkcije `projection`, izračunat na poslužitelju za profil verzije zadatka.
+- Mentor ima pristup samo radovima iz vlastitog `mentorship` zapisa.
+- Ispis studenta iz kolegija (`course_member.do`) ne briše njegove predaje; nastavnik ih i dalje vidi do isteka roka čuvanja. Uklonjeni nastavnik gubi pristup odmah: svaki dohvat sadržaja ponovno provjerava članstvo.
 - Kod za upis ima rok valjanosti, može se poništiti i ograničen je brojem pokušaja po korisniku.
 - pgTAP matrica pristupa (studenti A i B, nastavnik vlastitog i tuđeg kolegija, ispisani student, uklonjeni nastavnik, administrator vlastite i tuđe ustanove, anoniman) je uvjet za spajanje.
 
@@ -175,7 +211,7 @@ Migracije se nikad ne primjenjuju ručno na produkciju bez prolaska kroz staging
 
 | Element | Usvojiti kad |
 | --- | --- |
-| Reprodukcija pisanja | Zasebna odluka i Constitution Gate (C-14, C-19) |
+| Reprodukcija pisanja | Nova odluka umjesto D-05 i Constitution Gate (C-14, C-19) |
 | Dnevni korijen potvrda s RFC 3161 žigom, javna objava | Nakon pilota, ili ranije ako fakultet traži neovisnu provjeru vremena |
 | Alat za neovisnu provjeru izvezene evidencije | Uz dnevni korijen |
 | OpenFGA ili drugi servis za ovlasti | Više ustanova s različitim pravilima, ili SQL pomoćne funkcije postanu neprovjerljive |

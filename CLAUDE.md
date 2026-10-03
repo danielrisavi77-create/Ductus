@@ -5,7 +5,7 @@ Prije svakog rada pročitaj `STATE.md`. Za proizvod čitaj `docs/PRODUCT.md`, za
 ## Tvrda pravila
 
 - Prijava studenata isključivo AAI@EduHr (D-09). Nikad ne dodaji drugi način prijave, ni privremeno, osim lažnog OIDC pružatelja koji radi samo lokalno i u CI-ju.
-- Pravila iz `docs/PRODUCT.md` §4 nikad se ne krše. Riječi iz rječnika zabranjenih izraza ne smiju se pojaviti u sučelju.
+- Pravila iz `docs/PRODUCT.md` §5 nikad se ne krše. Riječi iz rječnika zabranjenih izraza ne smiju se pojaviti u sučelju.
 - Ništa se ne gradi na odluci sa statusom PRIJEDLOG ako bi promjena te odluke bila skupa. U tom slučaju stani i dodaj pitanje u Owner queue.
 - Jedan korak iz `STATE.md` po PR-u. Najviše oko 400 promijenjenih redaka koda; veći PR treba obrazloženje u opisu.
 - Testovi moraju biti zeleni prije svakog commita. Nikad ne briši, ne preskači i ne stavljaj u karantenu test bez jednakovrijedne zamjene.
