@@ -1,6 +1,6 @@
 # Ductus: plan i program backenda
 
-Verzija 0.2 · 3. 10. 2026. · Odgovorna osoba: Daniel Rišavi · Status: PRIJEDLOG (čeka potvrdu D-08, D-71 do D-75)
+Verzija 0.3 · 3. 10. 2026. · Odgovorna osoba: Daniel Rišavi · Status: PRIJEDLOG (čeka potvrdu D-08, D-71 do D-75)
 
 Ovaj dokument zamjenjuje otvoreni D-08. Izvori: dokument "Pisač: Backend arhitektura i vizija vNext" (dalje vNext), tri istraživanja (hosting, potpisi i vrijeme, prijava i ovlasti), `ARCHITECTURE.md` v0.2, te dva neovisna pregleda (arhitektonsko-sigurnosni i provjera činjenica na primarnim izvorima). **Verzija 0.1 imala je pogrešku koja je mijenjala preporuku: Scaleway Managed PostgreSQL nema PITR ni na jednom tipu čvora** (provjereno u službenom repozitoriju dokumentacije `scaleway/docs-content`, commit od 2. 10. 2026.). Ova verzija to ispravlja i ugrađuje ostale nalaze pregleda (šest kritičnih, 19 važnih). Cijene su s datumom 3. 10. 2026.; gdje nešto nije potvrđeno s primarnog izvora, piše NEPROVJERENO.
 
@@ -11,18 +11,18 @@ Preporuka je **uvjetna**: potvrđuje je tek ono što spikeovi B0.1 i B0.2 izmjer
 | Pitanje | Preporuka | Zašto i što je provjereno |
 | --- | --- | --- |
 | Supabase | **Ne kao osnova.** | Potvrđeno: Edge Functions 2 s CPU i 256 MB; PITR dodatak 100/200/400 USD mjesečno za 7/14/28 dana; Realtime 500 veza na Pro. Argument CPU-a još nije izmjeren za naše radove (B0.2): ako rekonstrukcija 15.000 riječi stane znatno ispod 2 s, taj argument otpada. Ostali razlozi stoje: Next.js ionako traži drugi host, cijena PITR-a, vezanost uz Auth/RLS/Vault |
-| Baza | **UpCloud Managed PostgreSQL (Developer, 2 GB, 14 EUR mjesečno), PITR 3 dana**, finska tvrtka | Zamjena za Scaleway PG koji PITR nema. PITR na Developer razini je s cjenika UpCloud, **stvarni povrat u točku treba izvesti u B0.1**. Rezerva: Neon Launch (Frankfurt, PITR do 7 dana, američka tvrtka) |
+| Baza | **UpCloud Managed PostgreSQL (Developer), PITR 3 dana**, finska tvrtka | Zamjena za Scaleway PG koji PITR nema. Potvrđeno u dokumentaciji UpCloud-a: dnevni puni backup, WAL se kopira "continuously at 5-minute intervals", retencija 3, 15 ili 31 dan, Developer plan 3 dana; privatna mreža podržana. **Postupak povrata u točku nije dokumentiran** (Terraform provider nema parametar za fork ni vrijeme povrata), pa ga B0.1 mora izvesti (Dodatak A). Rezerva: Neon Launch (Frankfurt, PITR do 7 dana, američka tvrtka) |
 | Aplikacija | Next.js (Docker) i zaseban worker na **UpCloud Cloud Native VM-u** u istom okruženju kao baza | Jedan dobavljač za računalo i bazu daje privatnu mrežu (baza bez javne adrese), nižu latenciju i izbjegava problem Hetznera: za CX tipove službena stranica kaže da je "number of available servers limited" i "currently unavailable", pa se CX43 možda ne može kupiti. Hetzner ostaje opcija za drugi račun (rezerva), ne za primarni put |
 | Objekti | Scaleway Object Storage (S3, privatni bucket), 0,016 EUR/GB | Potvrđena cijena. Uz dnevnu replikaciju u drugi račun (§4.7) |
 | E-pošta | Scaleway TEM, oko 14 EUR godišnje za 5.000 poruka | Potvrđeno |
 | Prijava | Vlastiti OIDC klijent prema AAI@EduHr, sesije u bazi; **Better Auth s `accountLinking.enabled: false`** ili `openid-client`, odluka na M1 | Potvrđeno: Better Auth ima OIDC discovery i PKCE, ali povezivanje računa po e-pošti je **zadano uključeno**, a polje `email` je obvezno i jedinstveno (rizik ako AAI ne vrati `mail`) |
 | Ovlasti | RLS + `current_actor()` (provjera tokena sesije u bazi) + `can()` + pgTAP; bez OpenFGA | §4.4. RLS je obrana u dubinu, ne granica protiv kompromitirane aplikacije |
-| Potpisi | **Dva odvojena Ed25519 ključa u AWS KMS** (ključ potvrda, ključ dnevnog korijena), potpisivanje izvan web procesa | Preokret u odnosu na v0.1. Adapter `aws-kms-ed25519-signer` već postoji u kodu, a ugovor porta traži KMS/HSM. KMS sprječava izvoz ključa (krađa iz snimki, backupa, CI-ja). Trošak oko 2,5 USD mjesečno po ključu (regionalna cijena NEPROVJERENA). U KMS idu samo hashevi, nikad osobni podaci ni tekst |
-| Neovisno vrijeme | Dnevni korijen + RFC 3161 žig već u valu 1, **uz poštenu tvrdnju (§4.2)**; početak s besplatnim nekvalificiranim TSA-om, FINA kad stigne ugovor | FINA: 0,11 EUR po žigu, certifikat za pristup 86,27 EUR (5 godina), endpoint `https://tsa.fina.hr/ts-rfc3161`, **pristupnicu podnosi poslovni subjekt** (znači obrt ili pravna osoba). Nije GO preduvjet |
+| Potpisi | **Dva odvojena Ed25519 ključa u AWS KMS** (ključ potvrda, ključ dnevnog korijena), potpisivanje izvan web procesa | Preokret u odnosu na v0.1. Adapter `aws-kms-ed25519-signer` već postoji u kodu, a ugovor porta traži KMS/HSM. KMS sprječava izvoz ključa. Potvrđeno sa službenog cjenika: 1 USD mjesečno po ključu, 0,15 USD na 10.000 potpisa asimetričnim ključem (izvan besplatne kvote), cjenik ne navodi razlike po regijama. Za 2 ključa i 100.000 potpisa: oko 3,5 USD mjesečno. U KMS idu samo hashevi |
+| Neovisno vrijeme | Dnevni korijen + RFC 3161 žig već u valu 1, **uz poštenu tvrdnju (§4.2)**; svaki dan **dva neovisna besplatna TSA-a** (DigiCert i Sectigo), FINA kad postoji poslovni subjekt | Besplatni TSA-ovi nemaju objavljene uvjete korištenja, SLA ni ograničenja (FreeTSA za komercijalnu uporabu traži kontakt), pa se tretiraju kao usluga bez jamstva: dva neovisna žiga dnevno, spremljen lanac certifikata. FINA: 0,11 EUR po žigu, certifikat 86,27 EUR (5 godina), **pristupnicu podnosi poslovni subjekt**. Nije GO preduvjet |
 | Transparency log, C2PA, QTSP paket | Ne u pilotu | §2 |
 | Red poslova | pg-boss u workeru, `migrate: false` | Potvrđeno: PG 13+, aktivno održavan |
 | Obavijesti | Polling, ali nastavnik dobiva obavijest o reviziji najviše po P-03 prozoru | §4.5 |
-| Trošak prve godine | **oko 520 do 700 EUR bez PDV-a, oko 650 do 875 EUR s PDV-om** | §7. Ne ulazi u D-66 (infrastruktura 300 do 500): odluka vlasnika |
+| Trošak prve godine | **oko 520 do 700 EUR bez PDV-a, oko 575 do 750 EUR s PDV-om** | §7. Ne ulazi u D-66 (infrastruktura 300 do 500): odluka vlasnika |
 
 Jedna točka kvara ostaje: jedan VM. Prihvatljivo za pilot samo uz dokazan povrat, rezervni put na **drugom računu** i zamjenski postupak predaje koji FPZG propisuje (D-69).
 
@@ -107,7 +107,7 @@ Pravila:
 ### 4.2 Dnevni korijen i vanjsko vrijeme (val 1, s poštenom tvrdnjom)
 
 1. Worker jednom dnevno gradi Merkle stablo. **List = SHA-256 nad JCS `receipt_payload` (bez potpisa)**, pa ponovni potpis nakon rotacije ili kompromitacije ključa ne mijenja listove. **Dan se određuje po `accepted_at` iz sata baze, u UTC-u**; u stablo ulaze i `pending_signature` zapisi. Uz korijen se objavljuje broj listova, korijen prethodnog dana i **consistency dokaz** prema njemu.
-2. Korijen potpisuje drugi KMS ključ; traži se RFC 3161 žig. Dok nema ugovora s FINA-om: besplatni nekvalificirani TSA (uvjeti korištenja NEPROVJERENI), uz zapisano da pravnu osnovu ne daje. FINA: ugovor i pristupni certifikat preko poslovnog subjekta (obrt ili pravna osoba), 0,11 EUR po žigu, certifikat 86,27 EUR.
+2. Korijen potpisuje drugi KMS ključ; traže se **dva RFC 3161 žiga od neovisnih besplatnih TSA-ova** (`http://timestamp.digicert.com` i `http://timestamp.sectigo.com`; HTTP je u redu jer je odgovor potpisan, ali se provjerava potpis i lanac). Nijedan nema objavljene uvjete, SLA ni ograničenja, pa vrijedi: jedan žig dnevno po TSA-u, bez ponavljanja češće od jednom u minutu, uspjeh dana znači barem jedan valjan žig, a dan s nijednim je alarm. Pravnu osnovu ne daju; tako piše i u DPIA-i. FINA (kvalificirani pružatelj u Hrvatskoj) dolazi kad postoji poslovni subjekt (obrt), ili ako FPZG pristane biti ugovorna strana: 0,11 EUR po žigu, certifikat 86,27 EUR na 5 godina, endpoint `https://tsa.fina.hr/ts-rfc3161`.
 3. Objava: javni repozitorij **i neovisni primatelji korijena** (dnevni e-mail koordinatoru FPZG-a; arhiviranje u Internet Archive ili Software Heritage). Javni repozitorij kontrolira isti operater (može force-pushati), pa sam po sebi nije svjedok.
 4. **Što to dokazuje:** kad je korijen dana D žigosan i objavljen, svaka kasnija promjena potvrda iz tog dana je otkriva svatko tko drži objavljeni korijen. Žig dokazuje da je hash postojao najkasnije u trenutku žiga, ne da je to jedini korijen tog dana ni da sadrži sve potvrde.
 5. **Što ne dokazuje:** ne štiti od dva različita korijena za isti dan bez neovisnog primatelja (split view); ne štiti od krivotvorenja potvrda u prozoru prije sidrenja (24 do 48 sati, dulje ako TSA ne radi) ni prije prvog uspješnog žiga; ne dokazuje istinitost sadržaja ni autorstvo. Taj tekst ide u sučelje i DPIA.
@@ -118,7 +118,8 @@ Pravila:
 
 ### 4.3 Prijava, sesije i identitet u bazi
 
-- Next.js ruta pokreće OIDC Authorization Code s PKCE-om prema `login.aaiedu.hr` (OIDC potvrđen na službenoj Srce wiki stranici, discovery `/.well-known/openid-configuration`, registar resursa, Lab `fed-lab.aaiedu.hr`). Registraciju klijenta odobrava Srce ručno; tko smije podnijeti zahtjev nije potvrđeno (možda FPZG administrator).
+- Next.js ruta pokreće OIDC Authorization Code s PKCE-om prema `login.aaiedu.hr` (OIDC potvrđen na službenoj Srce wiki stranici, discovery `/.well-known/openid-configuration`, registar resursa, Lab `fed-lab.aaiedu.hr`).
+- **Tko smije registrirati klijenta (potvrđeno na aaiedu.hr):** "Registrirani davatelj usluge u sustavu AAI@EduHr može biti partner sustava ili pak matična ustanova koja je ujedno i davatelj elektroničkih identiteta." Lab smiju koristiti "sve osobe koje ovlašteni predstavnik davatelja usluge (matične ustanove ili partnera AAI@EduHr) za to ovlasti" e-poštom na `aai@srce.hr`. **Daniel kao fizička osoba ne može sam registrirati Ductus ni dobiti Lab.** Put za pilot: FPZG (matična ustanova) registrira Ductus kao svoju uslugu u Registru resursa, a odgovorna osoba FPZG-a e-poštom ovlašćuje Daniela za Lab (do 5 testnih identiteta na `aai-test.hr`). Partnerstvo (vlastiti obrt ili tvrtka) je put za drugu ustanovu; uvjeti nisu provjereni (stranica blokira dohvat).
 - **Obvezno (izlazni kriterij M1):** `state` i `nonce`; provjera `iss`, `aud`, `azp`, `exp`, `iat`, prikvačen algoritam, keširanje i rotacija JWKS-a, dopušten pomak sata. AAI vraća atribute s userinfo endpointa, pa `sub` iz userinfo odgovora mora biti jednak `sub` iz ID tokena (OIDC Core 5.3.2). Novi ID sesije pri prijavi (session fixation), kolačić `__Host-...; HttpOnly; Secure; SameSite=Lax`, zaštita `returnTo` od otvorenog preusmjeravanja, na mijenjajućim rutama obavezan `Origin` (bez zaglavlja odbij) i `Sec-Fetch-Site`.
 - **Odjava:** RP-initiated logout prema `end_session_endpoint` AAI-ja i back-channel logout koji zatvara sesije u bazi. Bez toga na zajedničkom računalu sljedeća osoba klikne "Prijava" i ulazi kao prethodni student.
 - Istek sesije tijekom pisanja nije odjava: journal se ne briše, ponovna prijava istog korisnika nastavlja. Dexie je po originu, pa "vezan uz korisnika" znači logičku oznaku; kad se prijavi drugi korisnik na istom pregledniku, journal prethodnog se prije toga briše ili blokira prijavu.
@@ -170,18 +171,18 @@ Postojeće migracije su u formatu Supabase CLI-ja; alat još nije odabran (kandi
 
 | Stavka | Provjera | Gdje |
 | --- | --- | --- |
-| PITR na UpCloud Developer (stvarni povrat u točku, uključen disk, regija, RPO) | Podići instancu, izvesti povrat | B0.1 |
+| Povrat u točku na UpCloud Developer: postupak (Hub, API ili podrška), stvarni RPO, trajanje, stvara li novu instancu | Dodatak A, oko 30 minuta i nekoliko centi | B0.1 |
+| Cijene UpCloud VM-a: sažeci cjenika se razlikuju (Cloud Native 4 GB / 1 vCPU 12 EUR i 8 GB / 2 vCPU 24 EUR prema jednom, 2 vCPU / 4 GB 15 EUR prema drugom) i je li disk uključen | Pogledati cjenik u konzoli pri otvaranju računa | B0.1 |
 | Uloge na upravljanoj bazi: `CREATE ROLE NOLOGIN`, `ALTER FUNCTION OWNER`, `GRANT role TO role`, `max_connections`, promjena log parametara, ekstenzije | Pokrenuti skriptu uloga i pgTAP | B0.1 |
 | Latencija VM do baze i trajanje `reserve` | Mjerenje | B0.1 |
 | Jesu li UpCloud Cloud Native tipovi dostupni i po kojoj cijeni za računalo koje ne guši pri rekonstrukciji | Cjenik i narudžba | B0.1 |
 | Rekonstrukcija 15.000 i 80.000 riječi (vrijeme, memorija, volumen kontrolnih točaka) | Benchmark na stroju koji se stvarno kupuje | B0.2 |
-| AWS KMS Ed25519 u eu-central-1: cijena, latencija | Konzola | B0.1 |
-| Besplatni TSA: uvjeti, SLA | Pročitati uvjete | B5 |
-| Tko registrira klijent u AAI Registru resursa, rokovi, trajnost identifikatora | Pisati Srcu | Owner queue |
+| AWS KMS Ed25519 u eu-central-1: latencija potpisa | Mjerenje | B0.1 |
+| Uvjeti za partnera AAI@EduHr (može li obrt ili fizička osoba), rokovi, trajnost identifikatora | Pitati Srce, ali tek ako FPZG put ne uspije (§4.3) | Owner queue |
 | FINA: minimalna mjesečna naknada, uvjeti, tko je ugovorna strana | Upit | Owner queue |
 | Sentry EU na besplatnom planu | Pročitati | B9 |
 
-Istraživanje nije moglo čitati većinu `aaiedu.hr` (robots.txt, proxy); OIDC i atributi potvrđeni su na službenoj Srce wiki stranici.
+Riješeno 3. 10. 2026.: cijena KMS-a (službeni cjenik), uvjeti besplatnih TSA-ova (ne postoje objavljeni, zato dva neovisna žiga), tko registrira AAI klijenta (§4.3), PITR mehanizam na UpCloud-u (dokumentacija). Ostaje samo ono što traži račun: stvarni povrat i cijene u konzoli.
 
 ## 6. Obvezna kontrolna lista za svaku backend komponentu
 
@@ -223,14 +224,13 @@ Dodatna matrica kvarova:
 | Scaleway Object Storage | 5 do 10 | |
 | Scaleway TEM | oko 14 | |
 | Replika bucketa (drugi račun) | 10 do 40 | |
-| AWS KMS (2 ključa) | oko 60 | oko 2,5 USD mjesečno po ključu, regija NEPROVJERENA |
+| AWS KMS (2 ključa, 100.000 potpisa mjesečno) | oko 40 | 1 USD po ključu mjesečno + 0,15 USD na 10.000 potpisa, službeni cjenik |
 | Domena `.hr` | 15 do 30 | sekundarni izvor |
-| TSA žigovi | 0 do 40 | FINA 0,11 EUR po žigu |
-| FINA pristupni certifikat | oko 17 | 86,27 EUR na 5 godina; traži poslovni subjekt |
+| TSA žigovi | 0 | Dva besplatna TSA-a; FINA kasnije oko 40 EUR godišnje + certifikat 86,27 EUR na 5 godina |
 | Praćenje grešaka i vanjski monitor | 0 do 20 | |
 | Staging (privremeni resursi tjednima prije aktivacije, naplata po satu NEPROVJERENA) | 30 do 100 | Staging mora koristiti upravljanu bazu, KMS i S3 (§6 točka 12) |
-| **Ukupno** | **oko 520 do 700** | |
-| **S PDV-om (oko +25 %)** | **oko 650 do 875** | PDV se naplaćuje fizičkoj osobi bez obrta u sustavu PDV-a; potvrditi sa računovođom |
+| **Ukupno** | **oko 460 do 600** | |
+| **S PDV-om (oko +25 %)** | **oko 575 do 750** | PDV se naplaćuje fizičkoj osobi bez obrta u sustavu PDV-a; potvrditi sa računovođom |
 
 To je **iznad D-66** (infrastruktura 300 do 500 plus domena i e-pošta 50 do 100) i troši rezervu. Zato je odluka vlasnika:
 
@@ -271,7 +271,32 @@ Redoslijed i kontrolna točka 15. 12. 2026.:
 
 - Potvrditi ili promijeniti D-08, D-71 do D-75 (vidi i odluku o troškovima u §7).
 - Računi: UpCloud, Scaleway (Object Storage, TEM), AWS (samo KMS, IAM korisnik s uskim ovlastima), 2FA svugdje, agent dobiva ograničene ključeve po okolišu.
-- Srce (`aai@srce.hr`): registracija klijenta, tko je ovlašten podnijeti, Lab, trajnost identifikatora, rokovi.
-- FINA: ugovor, certifikat, minimalna naknada; shvatiti da pristupnicu podnosi poslovni subjekt (veza s planiranim obrtom).
+- **FPZG, ne Srce, je prvi korak za AAI:** zamoliti odgovornu osobu FPZG-a za AAI@EduHr da (1) e-poštom na `aai@srce.hr` ovlasti Daniela za AAI@EduHr Lab i (2) registrira Ductus kao uslugu FPZG-a u Registru resursa (OIDC klijent, redirect URI, scopeovi). Tekst zahtjeva je u Dodatku B.
+- FINA: tek kad postoji obrt (ili ako FPZG želi biti ugovorna strana); do tada dva besplatna TSA-a.
 - Računovođa: PDV za fizičku osobu bez obrta.
 - Lokalni stroj s Dockerom za M0.
+
+## Dodatak A: proba povrata u točku na UpCloud-u (B0.1)
+
+Cilj: dokazati da povrat u točku stvarno radi, izmjeriti RPO i trajanje. Traje oko 30 minuta, trošak je nekoliko centi (naplata po satu, instanca se briše nakon probe).
+
+1. U UpCloud Hubu stvoriti Managed PostgreSQL, plan Developer, zona `de-fra1` (ili `fi-hel1`), u privatnoj mreži s jednim malim VM-om.
+2. S VM-a pokrenuti pisanje markera svakih 10 sekundi, 20 minuta:
+   ```sql
+   create table pitr_probe (id bigserial primary key, written_at timestamptz not null default clock_timestamp());
+   ```
+   ```bash
+   for i in $(seq 1 120); do psql "$DATABASE_URL" -qc "insert into pitr_probe default values"; sleep 10; done
+   ```
+3. Zapisati točno vrijeme T (UTC) oko 12. minute; zatim obrisati sve: `delete from pitr_probe;` (simulirana greška).
+4. U Hubu (ili kroz podršku ako Hub to ne nudi) zatražiti povrat u točku T. Zapisati: gdje je opcija, stvara li novu instancu ili prepisuje postojeću, koliko traje.
+5. Na vraćenoj bazi: `select max(written_at) from pitr_probe;` RPO = T minus `max(written_at)`. Očekivano do 5 minuta prema dokumentaciji.
+6. Isto na istoj instanci: provjera uloga (`create role ductus_evidence nologin; grant ...; alter function ... owner to ...`), `show max_connections;`, smije li se mijenjati `log_statement` i `log_min_error_statement`.
+7. Rezultat u `docs/spikes/B0.1.md`: koraci, vremena, RPO, slike zaslona, odluka. Obrisati instance.
+
+Ako povrat u točku nije dostupan na Developer planu ili traje predugo: Neon Launch (PITR 7 dana) ili varijanta B, odluka vlasnika.
+
+## Dodatak B: zahtjev FPZG-u za AAI@EduHr
+
+> Poštovani, za pilot alata Ductus na FPZG-u (pisanje studentskih radova uz evidenciju procesa) prijava studenata i nastavnika ide isključivo preko AAI@EduHr. Prema pravilima AAI@EduHr uslugu može registrirati matična ustanova, a pristup AAI@EduHr Labu odobrava ovlašteni predstavnik ustanove. Molim (1) da ovlastite Daniela Rišavija za korištenje AAI@EduHr Laba e-porukom na aai@srce.hr i (2) da, kad Lab test prođe, registrirate Ductus kao uslugu FPZG-a u Registru resursa (OpenID Connect; tražimo samo atribute hrEduPersonUniqueID, hrEduPersonHomeOrg, hrEduPersonAffiliation i ime; OIB ne). Tehničke podatke (redirect URI, logout URI) dostavit ću. Hvala.
+

@@ -14,7 +14,6 @@ Agent nikad ne uzima ove stavke i nikad ne čeka na njih.
 - [ ] Spojiti `pisac-editor` PR #49 i #50 (izvor za prijenos jezgre).
 - [ ] Potvrditi ili promijeniti prijedloge D-07, D-08, D-10, D-11, D-16, D-20, D-24, D-34, D-36, D-37, D-38 u `docs/DECISIONS.md`; odlučiti D-06 ili stroža D-39.
 - [ ] Potvrditi zadane pragove P-01 do P-04.
-- [ ] Srce: registracija u AAI@EduHr Registru resursa i pristup AAI@EduHr Labu.
 - [ ] FPZG (prodekan Višeslav Raos): koordinator pilota, kolegiji i mentori, akademski kalendar ljetnog semestra, AAI administrator, službenik za zaštitu podataka.
 - [ ] Pravno mišljenje za D-55 (kontrolna točka uživo) i bilježenje ritma iz D-56.
 - [ ] Constitution Gate: izmjena Ustava C-14 i C-19 za reprodukciju s ritmom (D-56), u Driveu.
@@ -27,8 +26,8 @@ Agent nikad ne uzima ove stavke i nikad ne čeka na njih.
 - [ ] Model podrške u pilotu (tko, kojim kanalom, u koje vrijeme, zamjenski postupak predaje kad Ductus ne radi pred rok).
 - [ ] Sučelje na engleskom u pilotu ili Erasmus studenti izvan pilota (D-67).
 - [ ] Potvrditi D-08 i D-71 do D-75 iz `docs/BACKEND.md` (istraživanje i neovisni pregled gotovi 3. 10. 2026.; preporuka UpCloud + Scaleway S3/TEM + AWS KMS, bez Supabasea; odluka o trošku iznad D-66, BACKEND §7); do tada M0 ne veže kod uz dobavljača.
-- [ ] Srce (`aai@srce.hr`): OIDC registracija, Lab, atributi, uvjeti, rokovi (proširuje stavku iznad).
-- [ ] FINA: upit o RFC 3161 pristupu (ugovor, certifikat, minimalna naknada) za D-72.
+- [ ] FPZG (odgovorna osoba za AAI@EduHr): ovlastiti Daniela za AAI@EduHr Lab e-porukom na `aai@srce.hr` i kasnije registrirati Ductus kao uslugu FPZG-a u Registru resursa. Fizička osoba to ne može sama (pravila AAI@EduHr). Tekst zahtjeva: `docs/BACKEND.md` Dodatak B. Blokira M1.
+- [ ] FINA: tek kad postoji obrt (ili FPZG kao ugovorna strana); do tada dva besplatna TSA-a (D-72).
 - [ ] Otvoriti račune UpCloud, Scaleway (Object Storage, TEM) i AWS (samo KMS, IAM s uskim ovlastima), 2FA, ograničeni ključevi po okolišu za agenta. Blokira B0.1.
 - [ ] Računovođa: PDV za fizičku osobu bez obrta; FINA zahtijeva poslovni subjekt.
 
