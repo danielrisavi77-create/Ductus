@@ -14,11 +14,22 @@ export default defineConfig({
   testDir: "e2e",
   // Evidence must be reproducible: a flaky pass is not a pass.
   retries: 0,
-  reporter: "list",
+  // The HTML report carries screenshots, videos and traces; CI uploads it as
+  // the `playwright-report` artifact of the run (docs/SESSIONS.md 6).
+  reporter: [["list"], ["html", { open: "never" }]],
   use: {
     baseURL: BASE_URL,
+    locale: "hr-HR",
+    timezoneId: "Europe/Zagreb",
+    screenshot: "only-on-failure",
+    video: process.env.CI ? "on" : "retain-on-failure",
+    trace: "retain-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  // Wide and mobile layouts; every spec runs in both.
+  projects: [
+    { name: "desktop", use: { ...devices["Desktop Chrome"] } },
+    { name: "mobile", use: { ...devices["Pixel 7"] } },
+  ],
   webServer: {
     command: webServerCommand,
     url: BASE_URL,
