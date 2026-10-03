@@ -24,6 +24,8 @@ Agent nikad ne uzima ove stavke i nikad ne čeka na njih.
 - [ ] 15. 12. 2026.: kontrolna točka roka (`PROGRAM.md`).
 - [ ] Odlučiti o vidljivosti repoa (preporuka: privatan).
 - [ ] Konačno ime proizvoda (D-18).
+- [ ] Model podrške u pilotu (tko, kojim kanalom, u koje vrijeme, zamjenski postupak predaje kad Ductus ne radi pred rok).
+- [ ] Sučelje na engleskom u pilotu ili Erasmus studenti izvan pilota (D-67).
 - [ ] Raspored D-40 do D-65 i `FEATURES.md` po valovima, s rezovima za kontrolnu točku 15. 12. 2026.
 - [ ] Istraživanje backenda i hostinga (D-08) prije M2; do tada M0 ne veže kod uz dobavljača.
 
