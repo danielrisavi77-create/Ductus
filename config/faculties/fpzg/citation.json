@@ -1,0 +1,125 @@
+{
+  "faculty": "fpzg",
+  "style": "author-date",
+  "version": "2026-10-03.1",
+  "provenance": {
+    "decision": "D-83: kopija samo FPZG citatnog stila iz Lekte za demo; zamjenjuje se Lekta paketom u M4",
+    "lektaRepository": "danielrisavi77-create/Lekta",
+    "lektaCommit": "46757fc8",
+    "lektaFiles": [
+      ".claude/katedra-pkg/katedra-lite/references/fakulteti/fpzg.json",
+      ".claude/katedra-pkg/fpzg-diplomski/references/stranice-i-izvori.md",
+      ".claude/katedra-pkg/fpzg-diplomski/references/kucni-stil.md"
+    ],
+    "copiedAt": "2026-10-03",
+    "officialDocument": "Upute za pisanje akademskih radova na Fakultetu političkih znanosti (Zagreb, ožujak 2013.; izmijenjeno i dopunjeno studeni 2015.)",
+    "officialUrl": "https://www.fpzg.unizg.hr/images/50442907/Upute_za_pisanje_akademskih_radova_na_Fakultetu_politickih_znanosti.pdf",
+    "verifiedInLekta": "2026-08-08"
+  },
+  "inText": {
+    "open": "(",
+    "close": ")",
+    "authorYearSeparator": ", ",
+    "pageSeparator": ": ",
+    "twoAuthorsJoiner": " i ",
+    "maxNamedAuthors": 2,
+    "manyAuthorsSuffix": " i sur."
+  },
+  "bibliography": {
+    "authorJoiner": " i ",
+    "periodAfterYear": false,
+    "editorLabel": "ur.",
+    "inLabel": "U:",
+    "accessedLabel": "pristupljeno",
+    "hangingIndentCm": 1.25
+  },
+  "rangeDash": "–",
+  "rules": [
+    {
+      "id": "in-text",
+      "status": "explicit",
+      "rule": "Autor-godina s dvotočkom pred stranicom, bez „str.“; godina bez točke",
+      "examples": ["(Becker, 2007: 9)", "(Swanson i Mancini, 1996: 9)"],
+      "source": "Upute FPZG 2013./2015., Tekstnote (Lekta fpzg.json /citiranje/u_tekstu)"
+    },
+    {
+      "id": "in-text-without-page",
+      "status": "explicit",
+      "rule": "Stranica se izostavlja kad se upućuje na djelo u cjelini; broj stranice koji nije viđen u izvoru ne upisuje se",
+      "source": "Lekta stranice-i-izvori.md; kucni-stil.md"
+    },
+    {
+      "id": "in-text-three-or-more-authors",
+      "status": "derived",
+      "rule": "Tri ili više autora: prvo prezime i „i sur.“",
+      "source": "Nije u Uputama ni u Lekti; za potvrdu s FPZG-om"
+    },
+    {
+      "id": "book",
+      "status": "explicit",
+      "rule": "Prezime, Ime (Godina) Naslov. Mjesto: Nakladnik.",
+      "examples": ["Šiber, Ivan (2003) Politički marketing. Zagreb: Politička kultura."],
+      "source": "Upute FPZG 2013./2015., Popis literature (Lekta fpzg.json /citiranje/popis_primjer)"
+    },
+    {
+      "id": "article",
+      "status": "explicit",
+      "rule": "Prezime, Ime (godina) Naslov članka. Naziv časopisa volumen/broj: stranice.",
+      "source": "Lekta kucni-stil.md, Citiranje"
+    },
+    {
+      "id": "chapter",
+      "status": "derived",
+      "rule": "Prezime, Ime (godina) Naslov poglavlja. U: Ime Prezime (ur.) Naslov knjige. Mjesto: Nakladnik: stranice.",
+      "source": "Nije u Uputama ni u Lekti; izvedeno iz oblika knjige i članka; za potvrdu s FPZG-om"
+    },
+    {
+      "id": "web",
+      "status": "derived",
+      "rule": "Prezime, Ime ili institucija (godina) Naslov. URL (pristupljeno D. M. GGGG.)",
+      "source": "Obavezan datum pristupa je u Lekti kucni-stil.md (explicit); raspored elemenata je izveden; za potvrdu s FPZG-om"
+    },
+    {
+      "id": "full-name",
+      "status": "explicit",
+      "rule": "Puno ime autora u popisu, ne inicijal",
+      "source": "Lekta fpzg.json /citiranje/napomena"
+    },
+    {
+      "id": "multiple-authors-in-list",
+      "status": "derived",
+      "rule": "Svi autori u obliku „Prezime, Ime“; dva povezana s „i“, više njih zarezom i „i“ pred posljednjim",
+      "source": "Nije u Uputama ni u Lekti; za potvrdu s FPZG-om"
+    },
+    {
+      "id": "institutional-author",
+      "status": "explicit",
+      "rule": "AKRONIM (Puni naziv) (godina) u popisu; u tekstu akronim",
+      "source": "Lekta kucni-stil.md, Citiranje (oblik u tekstu je izveden)"
+    },
+    {
+      "id": "same-year",
+      "status": "explicit",
+      "rule": "Više radova istog autora iste godine: 2013a, 2013b",
+      "source": "Lekta kucni-stil.md i stranice-i-izvori.md"
+    },
+    {
+      "id": "order",
+      "status": "explicit",
+      "rule": "Abecedno po prezimenu, potom kronološki",
+      "source": "Lekta kucni-stil.md"
+    },
+    {
+      "id": "range-dash",
+      "status": "explicit",
+      "rule": "En crtica (–) za raspone stranica",
+      "source": "Lekta kucni-stil.md, Duga crtica se ne koristi"
+    },
+    {
+      "id": "hanging-indent",
+      "status": "derived",
+      "rule": "Viseća uvlaka nije propisana; preporuka 1,25 cm",
+      "source": "Lekta kucni-stil.md (preporuka, ne propis); fpzg.json uvlaka_u_popisu"
+    }
+  ]
+}
