@@ -23,7 +23,7 @@ Prema `PROGRAM.md`, na izmišljenom zadatku, lokalno u Dockeru, s lažnom prijav
 
 **Odlučeno:** D-07, D-10, D-11 i D-24 (potvrđeni u D-81), citatni stil kopiran iz Lekte (D-83), sučelje samo na hrvatskom s tekstovima u ključevima (D-84), izgled editora i nastavničkog sučelja po prototipu (D-85).
 
-**Gradi se uz PRIJEDLOG, iza sučelja, jer je promjena jeftina:** OIDC klijent `openid-client` (D-73 bira biblioteku na M1), red poslova pg-boss (D-74), potpis razvojnim Ed25519 ključem umjesto KMS-a (D-71), lokalni Postgres i MinIO umjesto dobavljača (D-08). Ništa od toga ne veže demo uz dobavljača.
+**Gradi se uz PRIJEDLOG, iza sučelja, jer je promjena jeftina:** OIDC klijent `openid-client` (D-73 bira biblioteku na M1), red poslova pg-boss (D-74), potpis razvojnim Ed25519 ključem umjesto KMS-a (D-71), lokalni Postgres i S3-kompatibilna pohrana umjesto dobavljača (D-08). Ništa od toga ne veže demo uz dobavljača.
 
 **Izvan demoa:** AAI prijava, AI pomoćnik, Lekta paket osim citatnog stila, uvoz i izvoz, dnevni korijen, mentorski radovi, reprodukcija, izravne izmjene nastavnika (D-34), engleski.
 
@@ -48,7 +48,7 @@ Oznaka uloge: P Platforma, B Backend, F Frontend, K kratkotrajna sesija, D Danie
 | --- | --- | --- | --- | --- |
 | P-1 | M0.1 kostur: pnpm, Node 24, Next.js i React kao u `pisac-editor`, TypeScript strict, ESLint, Vitest (unit, property), Playwright konfiguracija; bez Supabasea i Netlifyja | | `pnpm install`, `lint`, `typecheck`, `test` zeleni | T1 |
 | P-2 | M0.4a CI na GitHub Actions: lint, typecheck, unit, property, Gitleaks, zizmor, Semgrep, OSV; lefthook lokalno | P-1 | CI zelen na `main`; namjerno pokvaren test ruši CI | T1 |
-| P-3 | M0.4b `docker compose`: Postgres 17, MinIO, Mailpit, lažni OIDC pružatelj (`node-oidc-provider`) s jasnom oznakom "demo prijava"; jedna naredba za podizanje | P-1 | `pnpm stack:up` diže sve; zdravstvene provjere zelene; isto radi u CI-ju | T1 |
+| P-3 | M0.4b `docker compose`: Postgres 17, S3-kompatibilna pohrana (RustFS; MinIO više nema sliku), Mailpit, lažni OIDC pružatelj (`node-oidc-provider`) s jasnom oznakom "demo prijava"; jedna naredba za podizanje | P-1 | `pnpm stack:up` diže sve; zdravstvene provjere zelene; isto radi u CI-ju | T1 |
 | P-4 | Migracije (dbmate) i pgTAP u CI-ju (`pg_prove` nad Postgresom iz compose) | P-3 | Prazna migracija i jedan pgTAP test prolaze lokalno i u CI-ju | T2 |
 | P-5 | E2E u CI-ju: Playwright nad stogom iz compose, axe, snimke zaslona i video kao artefakti PR-a | P-2, P-3 | Primjer E2E testa zelen u CI-ju; snimke vidljive uz PR | T2 |
 | P-6 | Provjera zabranjenih riječi u CI-ju (rječnik iz `PRODUCT.md` §5) nad tekstovima sučelja | P-2 | Riječ iz rječnika u ključu teksta ruši CI | T2 |
@@ -65,7 +65,7 @@ Oznaka uloge: P Platforma, B Backend, F Frontend, K kratkotrajna sesija, D Danie
 | B-5 | Uloge baze (`ductus_migrator`, `ductus_app`, `ductus_worker`, `ductus_evidence`), sesije u bazi, `current_actor()`, `withActor` (BACKEND §3, §4.3) | P-4 | Tablica sesija s uključenim RLS-om i retkom u pgTAP matrici; pgTAP: `ductus_app` ne vidi tablicu sesija ni uz isključen `REVOKE`; test da GUC ne ostaje na vezi | T2 |
 | B-6 | Prijava preko lažnog OIDC-a: `openid-client`, PKCE, `state`, `nonce`, sesija u bazi, kolačić `__Host-`, odjava; test da produkcijska konfiguracija nema lažnog pružatelja | B-5, P-3 | Prijava i odjava rade; navedeni testovi zeleni | T2 |
 | B-7 | Model fakulteta za demo (dio M2): fakultet, kolegij, članstvo, upis kodom, zadatak i verzija zadatka, potvrda obavijesti; RLS i pgTAP matrica | B-5 | Matrica pristupa zelena za studenta, nastavnika i stranca (drugi kolegij) | T2 do T3 |
-| B-8 | Evidencija (dio M3): ruta `ingest`, odsječci (D-24), jedan RPC za CAS reviziju i `reserve`, hash lanac, spremanje u MinIO, idempotentno ponovno slanje | B-3, B-7 | Property testovi: izmjena, brisanje ili preslagivanje odsječka ruši provjeru; ponovno slanje ne duplicira; RPC izvodi identitet iz `current_actor()` i pgTAP dokazuje da `ductus_app` ne može dodati evidenciju s tuđim principalom; RLS i pgTAP retci za sve nove tablice evidencije; `ingest` odbija zahtjev s pogrešnim ili nedostajućim `Origin` i `Sec-Fetch-Site` (test) | T3 |
+| B-8 | Evidencija (dio M3): ruta `ingest`, odsječci (D-24), jedan RPC za CAS reviziju i `reserve`, hash lanac, spremanje u lokalnu S3 pohranu, idempotentno ponovno slanje | B-3, B-7 | Property testovi: izmjena, brisanje ili preslagivanje odsječka ruši provjeru; ponovno slanje ne duplicira; RPC izvodi identitet iz `current_actor()` i pgTAP dokazuje da `ductus_app` ne može dodati evidenciju s tuđim principalom; RLS i pgTAP retci za sve nove tablice evidencije; `ingest` odbija zahtjev s pogrešnim ili nedostajućim `Origin` i `Sec-Fetch-Site` (test) | T3 |
 | B-9 | Worker: pg-boss, potpis potvrda razvojnim ključem, `attach_signature`; stanje `pending_signature` | B-4, B-8 | Potvrda potpisana; pad workera ostavlja `pending_signature` i oporavlja se | T3 |
 | B-10 | Komentari uz odlomak: tablica, RPC, RLS, pgTAP | B-7 | Student vidi komentar na svom radu; stranac ne vidi ništa | T3 |
 | B-11 | Pogled nastavnika: spremljeno stanje rada s osvježavanjem po P-03 (polling, D-06); podaci za brz put (D-80): zadnja promjena, otvoreni zahtjevi, lijepljenja bez izvora, stanje izjave | B-8 | Nastavnik ne dobiva novo stanje češće od P-03; test | T3 do T4 |
@@ -103,7 +103,7 @@ Oznaka uloge: P Platforma, B Backend, F Frontend, K kratkotrajna sesija, D Danie
 
 ## 5. Rezovi ako se kasni
 
-Primjenjuju se redom, tek na kontrolnoj točki i uz Danielovu potvrdu (pravilo vrijedi dok ga Daniel ne promijeni):
+Redoslijed je odobren (D-87). Primjenjuju se redom, tek na kontrolnoj točki, kad orkestrator utvrdi kašnjenje; Daniel dobiva obavijest uz svaki primijenjeni rez:
 
 1. Dvije izmišljene povijesti (K-3, dio za D-80 točku 3) prikazuju se kao unaprijed pripremljen primjer umjesto u živom prolazu.
 2. Brz put za nastavnika (F-11) ide nakon demoa; nastavnik vidi rad i sažetak kroz F-9 i F-10.

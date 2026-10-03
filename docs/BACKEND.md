@@ -249,7 +249,7 @@ Backend nije posebna faza nego okomiti rez kroz M0 do M11. **Procjena dodatka pr
 | B0.2 Spike rekonstrukcije | ProseMirror u Nodeu za 15.000 i 80.000 riječi na stvarnom stroju | Vrijeme, memorija, volumen; granice posla određene | prije M3 | 1 do 2 |
 | B0.3 Odluka | Vlasnik potvrđuje D-08, D-71 do D-75 prema rezultatima | ODLUČENO u `DECISIONS.md` | | 0 |
 | B0.4 Prepis ARCHITECTURE | Cijeli dokument (uključujući §2, §3, §8, §11), §12 s točnim popisom prijenosa | Bez Supabasea i Netlifyja | M0 | 1 do 2 |
-| B1 Okruženja | `docker compose` (Postgres, MinIO, Mailpit, lažni OIDC), OpenTofu (dva računa), CI deploy, migracijski alat, `sops`/`age`, uloge, Caddy, deploy s VM-a | `docker compose up` i `npm test` zeleno; staging se podiže iz koda | M0 | 5 do 7 |
+| B1 Okruženja | `docker compose` (Postgres, S3-kompatibilna pohrana (RustFS), Mailpit, lažni OIDC), OpenTofu (dva računa), CI deploy, migracijski alat, `sops`/`age`, uloge, Caddy, deploy s VM-a | `docker compose up` i `npm test` zeleno; staging se podiže iz koda | M0 | 5 do 7 |
 | B2 Identitet | OIDC klijent s popisom iz §4.3, sesije, `current_actor()`, `withActor`, test GUC-a, odjava | Prijava na AAI Labu; svi testovi iz §4.3 zeleni; nema lažnog pružatelja u produkciji | M1 | 3 do 5 (uz sigurnosni pregled, neovisan o autoru) |
 | B3 Ovlasti | Novi referentni model, `can()`, RLS, pgTAP matrica, diferencijalni test | Matrica zelena | M2 | uključeno u M2, +1 |
 | B4 Evidencija | Točan popis prijenosa (§2), novi RPC-i, okidači, uloge, jedan RPC za commit i `reserve`, worker potpis preko KMS-a, kontrolne točke, praznine | Ugovorni testovi nad in-memory i pg/S3; property testovi; sintetički prolaz na stagingu s povratom | M3 | +5 do 8 |

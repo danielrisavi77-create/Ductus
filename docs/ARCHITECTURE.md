@@ -67,7 +67,7 @@ Sav pristup vanjskim uslugama ide kroz portove iz `src/application/ports`. Svaki
 | Port | Lokalno i CI | Produkcija (uvjetno, §9) |
 | --- | --- | --- |
 | Baza (`withActor`) | PostgreSQL u Dockeru s istim ulogama i migracijama | Upravljani PostgreSQL s PITR-om |
-| Pohrana objekata (`putImmutable`, `get`, `head`) | MinIO | S3-kompatibilan bucket |
+| Pohrana objekata (`putImmutable`, `get`, `head`) | RustFS (S3 API; MinIO više nema sliku) | S3-kompatibilan bucket |
 | Potpis (`sign(digest, keyId)`) | Razvojni Ed25519 potpisnik | KMS, samo nad digestom (D-71) |
 | Vremenski žig | Lažni TSA u testovima | Dva neovisna RFC 3161 TSA-a (D-72) |
 | E-pošta | Mailpit | Transakcijska usluga u EU-u |
@@ -254,7 +254,7 @@ Rokovi se unose i prikazuju u zoni Europe/Zagreb; promjena na zimsko računanje 
 
 | Okruženje | Računalo | Baza | Objekti, e-pošta, potpis | Prijava | Podaci |
 | --- | --- | --- | --- | --- | --- |
-| Lokalno i CI | `docker compose` | PostgreSQL u Dockeru, iste uloge i migracije | MinIO, Mailpit, razvojni potpisnik | Lažni OIDC pružatelj | Samo sintetički |
+| Lokalno i CI | `docker compose` | PostgreSQL u Dockeru, iste uloge i migracije | RustFS (S3), Mailpit, razvojni potpisnik | Lažni OIDC pružatelj | Samo sintetički |
 | Staging | Kao produkcija, privremeno | Upravljana baza iste vrste kao produkcija | Iste vrste usluga kao produkcija (bucket, KMS) | AAI@EduHr Lab | Samo sintetički |
 | Produkcija | VM u EU-u: Caddy, web, worker | Upravljani PostgreSQL s PITR-om, bez javne adrese | Privatni S3 bucket, transakcijska e-pošta u EU-u, KMS | AAI@EduHr | Stvarni, tek nakon GO uvjeta |
 

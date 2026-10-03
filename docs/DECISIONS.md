@@ -80,6 +80,9 @@ Izvor: dokument "Ductus: konkurencija i poboljšanja proizvoda" i FPZG Smjernice
 | D-83 | Za demo se FPZG citatni stil kopira iz Lekte kao konfiguracijska datoteka u Ductusu (samo taj stil, ne cijeli paket); zamjenjuje se Lekta paketom u M4 | Vlasnik Lekte dopušta tu kopiju prije odluke o licenci paketa; pravila ostaju konfiguracija (PRODUCT §5 pravilo 12) |
 | D-84 | Sučelje demoa samo na hrvatskom, svi tekstovi u ključevima od prvog dana; engleski (D-70) nakon demoa, u valu 1 | Manje posla prije demoa bez prepisivanja kasnije |
 | D-85 | Editor i mentorsko, odnosno nastavničko sučelje preuzimaju izgled prototipa (prototipeditor.netlify.app); sadržaj i dalje slijedi PRODUCT §5 i odluke koje su zamijenile elemente prototipa (D-61 do D-64, D-80) | Odluka vlasnika |
+| D-87 | Redoslijed rezova demoa iz `docs/PLAN-DEMO.md` §5 je odobren; orkestrator ih primjenjuje redom na kontrolnoj točki i obavještava vlasnika | Odluka vlasnika 3. 10. 2026. |
+| D-88 | Identifikatori sheme evidencije preimenuju se iz `pisac-evidence-*` u `ductus-evidence-*` prije prve pohranjene evidencije (prije B-8); nema kompatibilnosti sa zapisima iz `pisac-editor` | Identifikator ulazi u hash i potpis; preimenovanje je besplatno samo dok nema zapisa, a Ductus nema stare evidencije |
+| D-89 | Dizajn demoa v6 (Design artifact https://claude.ai/artifact/Gd1GMNq9f5QZaP2BTr34BU) je odobren, uključujući 8 obrazloženih odstupanja od prototipa; Frontend gradi ekrane po njemu | Odluka vlasnika 3. 10. 2026. |
 | D-86 | PR-ove spaja samo sesija "Ductus orkestrator", kad Codex nema otvorenih kritičnih nalaza i PR ne čeka vlasnikovu odluku; radne sesije nikad ne spajaju (`docs/SESSIONS.md`) | Izričita ovlast vlasnika |
 
 ## Prijedlozi koji čekaju potvrdu
