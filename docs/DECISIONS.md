@@ -84,6 +84,7 @@ Izvor: dokument "Ductus: konkurencija i poboljšanja proizvoda" i FPZG Smjernice
 | D-88 | Identifikatori sheme evidencije preimenuju se iz `pisac-evidence-*` u `ductus-evidence-*` prije prve pohranjene evidencije (prije B-8); nema kompatibilnosti sa zapisima iz `pisac-editor` | Identifikator ulazi u hash i potpis; preimenovanje je besplatno samo dok nema zapisa, a Ductus nema stare evidencije |
 | D-89 | Dizajn demoa v6 (Design artifact https://claude.ai/artifact/Gd1GMNq9f5QZaP2BTr34BU) je odobren, uključujući 8 obrazloženih odstupanja od prototipa; Frontend gradi ekrane po njemu | Odluka vlasnika 3. 10. 2026. |
 | D-86 | PR-ove spaja samo sesija "Ductus orkestrator", kad Codex nema otvorenih kritičnih nalaza i PR ne čeka vlasnikovu odluku; radne sesije nikad ne spajaju (`docs/SESSIONS.md`) | Izričita ovlast vlasnika |
+| D-90 | Potvrđeno 3. 10. 2026. (Daniel): (1) dio D-73: sesije u bazi i identitet u RLS-u kroz `app.current_actor()` (B-5); izbor biblioteke za OIDC ostaje za B-6; (2) NOLOGIN uloge `ductus_auth` (jedina s EXECUTE na `open_session`) i `ductus_identity` (vlasnik tablica i funkcija sheme `identity`) uz uloge iz BACKEND §3; (3) rječnik zabranjenih izraza iz PRODUCT §5 vrijedi i za engleske ekvivalente u tekstu sučelja (provjera P-6); (4) dok sesije uloga rade u oblaku, Codex pregled pokreće lokalna sesija "Ductus Codex" na `D:\Ductus` po nalogu orkestratora | B-5 i P-6 grade se na ovome; D-73 ostaje PRIJEDLOG samo u izboru biblioteke |
 
 ## Prijedlozi koji čekaju potvrdu
 
