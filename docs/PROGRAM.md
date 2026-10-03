@@ -27,7 +27,7 @@ Backend (hosting, prijava, evidencija, korijen i žig, operacije) razrađen je u
 | **M6 Suradnja** | Nastavnički pogled na spremljeno stanje (polling, D-74), komentari vezani uz odlomak, prijedlozi izmjena, izravne izmjene s pripisivanjem, pravilo D-34; val 2: zahtjev za doradu (D-45), odgođeno objavljivanje (D-51), konzultacije (D-47) | Komentar i prijedlog stižu studentu bez osvježavanja; svaka izmjena nastavnika pripisana u evidenciji; nema izgubljenih promjena kad oboje rade; izmjena prihvaćenog odlomka ponovno otvara pregled | 17 do 24 |
 | **M7 Predaja i sažetak** | Obavijest (S3), ciklusi verzija, pregled prije predaje, zamrzavanje, rekonstrukcija, potvrda, sažetak procesa, usporedba verzija, produljenje roka, izjava po FPZG čl. 9 i 15 (D-40); val 2: prenosiv zapis s QR provjerom (D-49) | Rekonstrukcija podudarna na svim scenarijima, uključujući prazninu; nepodudarnost blokira predaju; student i nastavnik vide isti sažetak; nema zabranjenih riječi; rok testiran preko promjene sata; izjava sadrži sve zabilježene stavke; karta podrijetla bez zbroja (D-57); otvorena mjesta (D-61) i pravila zadatka s kontrolnim popisom (D-62) bez oznaka prolaza | 15 do 20 |
 | **M8 Uvoz i izvoz** | Uvoz DOCX-a i PDF-a kao označen događaj; izvoz DOCX-a i PDF-a u obliku fakulteta | Uvoz označen u evidenciji; izvezeni DOCX prolazi Lektinu provjeru za FPZG profil | 6 do 8 |
-| **M9 AI pomoćnik** | Prijava preko OpenRoutera, popis dopuštenih pružatelja po fakultetu i zadatku, prenošenje teksta s bilježenjem pružatelja, modela i svrhe (D-42), razgovori uz izjavu (D-41), zaštita sadržaja pri lekturi (D-46), poznato podrijetlo i podudaranje s AI odgovorom (D-58) | Nedopušten pružatelj nije dostupan; svako prenošenje u evidenciji; nepriloženi razgovori nisu vidljivi nastavniku; promijenjena brojka ili citat prikazani prije primjene; prepisan AI odgovor označen; svrhe razine 2 nedostupne dok ih nastavnik ne uključi, pomoćnik koji pita (D-64) | 14 do 19 |
+| **M9 AI pomoćnik** (izvan pilota, D-77) | Prijava preko OpenRoutera, popis dopuštenih pružatelja po fakultetu i zadatku, prenošenje teksta s bilježenjem pružatelja, modela i svrhe (D-42), razgovori uz izjavu (D-41), zaštita sadržaja pri lekturi (D-46), poznato podrijetlo i podudaranje s AI odgovorom (D-58) | Nedopušten pružatelj nije dostupan; svako prenošenje u evidenciji; nepriloženi razgovori nisu vidljivi nastavniku; promijenjena brojka ili citat prikazani prije primjene; prepisan AI odgovor označen; svrhe razine 2 nedostupne dok ih nastavnik ne uključi, pomoćnik koji pita (D-64) | 14 do 19 |
 | **M10 Podaci** | Klase podataka, brisanje po roku, izvoz za studenta i za bivšeg studenta preko administratora | Brisanje po roku testirano; lanac ostaje provjerljiv nakon brisanja sadržaja | 3 |
 | **M11 GO uvjeti** | Produkcijski okoliš u EU-u (D-08), staging s AAI@EduHr Labom, proba povrata iz kopije, DPIA i ugovor o obradi, obavijest o privatnosti, pristupačnost, `docs/OPERATIONS.md` | Sve stavke iz tablice GO uvjeta zelene i zapisane | 3 + vanjski rokovi |
 | **M12 Pilot** | Faza A tehnička proba, faza B nastava, faza C evaluacija | Mjerila iz `PRODUCT.md` §12 izmjerena i zapisana | Ljetni semestar |
@@ -45,6 +45,9 @@ Sastanak s FPZG-om održava se kad je demo gotov. Demo je prvi dio pravog sustav
 3. Nastavnik vidi spremljeno stanje rada i ostavlja komentar vezan uz odlomak.
 4. Student predaje; poslužitelj rekonstruira rad, usporedba se podudara, student dobiva potpisanu potvrdu.
 5. Student i nastavnik vide isti sažetak procesa; nema zabranjenih riječi ni postotaka.
+6. Brz put za nastavnika (D-80): tekst rada, četiri retka i stanje zapisa, isto kao kod studenta.
+7. Prvi ekran zadatka citira dopuštene i zabranjene uporabe iz FPZG čl. 8 (D-80).
+8. Dvije izmišljene povijesti koje Ductus ne može razlikovati (samostalan uvezeni tekst i postupno pretipkan tuđi tekst), uz objašnjenje granica zapisa (D-80).
 
 **Namjerno izvan demoa:** AAI prijava (lažni OIDC pružatelj s jasnom oznakom "demo prijava"), AI pomoćnik, Lekta paket osim jednog citatnog stila, uvoz i izvoz, dnevni korijen, mentorski radovi, reprodukcija.
 
@@ -52,7 +55,7 @@ Sastanak s FPZG-om održava se kad je demo gotov. Demo je prvi dio pravog sustav
 
 **Izlazni kriterij:** prolaz 1 do 5 snimljen, E2E test tog prolaza zelen u CI-ju, nijedan stvarni osobni podatak.
 
-**Procjena:** oko 15 do 22 večeri (M0, B1 osnovno, dijelovi M2, M3, M5, M6, M7 iz vala 1). Uz puno radno vrijeme oko 3 do 4 tjedna od početka M0, dakle cilj **početak studenog 2026.**, ovisno o spajanju `pisac-editor` PR #49 i #50 i lokalnom stroju s Dockerom.
+**Procjena:** oko 18 do 26 večeri (M0, B1 osnovno, dijelovi M2, M3, M5, M6, M7 iz vala 1). Uz puno radno vrijeme oko 3 do 4 tjedna od početka M0, dakle cilj **početak studenog 2026.**, ovisno o spajanju `pisac-editor` PR #49 i #50 i lokalnom stroju s Dockerom.
 
 Ovo nije dodatni posao: sve stavke su dio vala 1 i samo su poredane tako da prvi prikaz bude rano. Kontrolna točka 15. 12. 2026. ostaje.
 
@@ -100,9 +103,11 @@ Radovi: podnesci i eseji. Bez AI pomoćnika (FPZG ga ionako ne smije tražiti, D
 | M6 ostatak | Izravne izmjene (D-21), zahtjev za doradu (D-45), odgođeno objavljivanje (D-51), banka komentara (N-03), promjene od zadnjeg pregleda (N-05) | 8 do 11 |
 | M7 ostatak | Karta podrijetla (D-57), otvorena mjesta (D-61), pravila zadatka i kontrolni popis (D-62) | 5 do 7 |
 | M8 | Uvoz i izvoz DOCX-a | 4 do 5 |
-| M9 | AI pomoćnik: svrhe (D-42, D-64), razgovori uz izjavu (D-41), zaštita sadržaja (D-46), "Objasni mi komentar" (A-01), EU modeli (A-05) | 12 do 16 |
-| S-12 | Grupni radovi: jedan pisač u trenutku, ostali komentiraju i predlažu, svaka promjena pripisana autoru | 4 |
-| **Ukupno** | | **38 do 50** |
+| Izjava o vanjskom AI-ju | Ispis razgovora iz vanjskog alata uz izjavu po čl. 15, kao izjavljeno (D-77) | 2 do 3 |
+| B5 | Dnevni korijen i žig, CLI verifikator (D-72) | 4 do 5 |
+| **Ukupno** | | **28 do 38** |
+
+Izvan pilota (3. 10. 2026.): ugrađeni AI pomoćnik M9 (D-77) i grupni radovi S-12 (D-78).
 
 Razvoj vala 2 teče tijekom semestra, uz podršku pilotu. Ako kasni, val 2 se pomiče prema kraju semestra; ne skraćuje se val 1.
 
