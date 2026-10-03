@@ -9,7 +9,7 @@ Upute za sesiju "Ductus orkestrator". Nova sesija orkestratora čita samo ovaj d
 Tri jeftine provjere, bez čitanja diffova:
 
 1. `gh pr list --state open --json number,title,headRefName,baseRefName,mergeable` i izvještaj u opisu svakog PR-a (`gh pr view <n> --json body,comments,statusCheckRollup`).
-2. `gh issue list --search "IZVJEŠTAJ in:title" --state open` (izvještaji bez PR-a, `SESSIONS.md` §2a).
+2. `gh issue list --search "IZVJEŠTAJ in:title" --state open` (izvještaji bez PR-a) i `gh pr list --label izvjestaj-ceka` te komentari "IZVJEŠTAJ čeka orkestratora" (`SESSIONS.md` §2a).
 3. Popis sesija (radi, miruje, PR) preko alata za sesije.
 
 Izvještaj u PR-u vrijedi i kad poruka nije stigla.
@@ -75,7 +75,7 @@ Svaki petak (`PLAN-DEMO.md` §3): usporedba spojenog s tablicom tjedna, kratak s
 
 ## 7. Štednja tokena orkestratora
 
-- **Rotacija sesije:** kad kontekst orkestratora prijeđe oko 200.000 tokena ili na kraju radnog dana, orkestrator zapiše predaju (stanje, otvoreni PR-ovi, poslani i neposlani zadaci, pitanja za Daniela) u `STATE.md` i na ploču, a Daniel otvori novu sesiju "Ductus orkestrator" i arhivira staru. Svaki potez duge sesije ponovno šalje cijeli kontekst.
+- **Rotacija sesije:** kad kontekst orkestratora prijeđe oko 200.000 tokena ili na kraju radnog dana, orkestrator zapiše predaju (stanje, otvoreni PR-ovi, poslani i neposlani zadaci, pitanja za Daniela) u `STATE.md` i na ploču, a Daniel otvori novu sesiju "Ductus orkestrator" i arhivira staru. Nova sesija prvim PR-om upisuje svoju adresu u `STATE.md` i šalje je svim aktivnim sesijama (`SESSIONS.md` §2a). Svaki potez duge sesije ponovno šalje cijeli kontekst.
 - Ne čita diffove ni cijele dokumente; samo metapodatke PR-a i potrebne odjeljke.
 - Istraživanja i pregled mnogo datoteka daje pomoćnom agentu ili kratkotrajnoj sesiji.
 - Ploča: dodaje događaje, ne prepisuje cijeli dnevnik.

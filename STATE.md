@@ -35,11 +35,13 @@ Agent nikad ne uzima ove stavke i nikad ne čeka na njih.
 
 Zadatke dodjeljuje orkestrator po `docs/ORKESTRATOR.md`. Do demoa vrijedi tablica u `docs/PLAN-DEMO.md` §4; ovdje je samo ono što je u radu ili sljedeće.
 
+**Adresa orkestratora:** "Ductus orkestrator" [local_98c824a6-a2aa-47cf-90d1-622973929825] (od 3. 10. 2026.; mijenja se pri rotaciji, `SESSIONS.md` §2a).
+
 **Stanje orkestratora (3. 10. 2026., večer).** Nova sesija orkestratora preuzela; Daniel pitanja dobiva obaviješću (`ORKESTRATOR.md` §4a). Spojeno i #13 (P-3). Sesija Citiranje nastavlja kao Arhitektura (Danielova želja); Dizajn za arhiviranje.
 
 - [ ] Platforma: P-9 spojen (#15); P-8 istraga spore `pnpm install` na Windowsu. Zatim rotacija; P-4 ide svježoj sesiji.
 - [ ] Backend (svježa sesija; predaja u opisu PR #23): spojeni #9, #18, #20, #23 (D-88). Sljedeće: PR4 `application/evidence` (gateway, outbox; >400 redaka uz obrazloženje, `standard`), PR5 crypto adapteri (development i aws-kms signer, bez Azurea, `critical`), zatim B-5 kad P-4 bude spojen. Ne prenose se vremenski moduli (PRODUCT §5 pravilo 4, D-63), reference-model, Azure signer, nekorišteni portovi.
-- [ ] Uvjeti za B-8 (Codex na #20): `evidence-ingest` odbija nepoznata polja u descriptoru (gotov commit `259ebaa` na grani `backend/m0-2-ports-in-memory`, cherry-pick) i provjerava kanonski JCS segment i SHA-256 prema `descriptor.segmentHash` (izvor: `evidence-gateway.ts`, PR4), oboje s testom.
+- [ ] Uvjeti za B-8 (Codex na #20): `evidence-ingest` odbija nepoznata polja u descriptoru (gotov commit `259ebaa` na grani `backend/m0-2-ports-in-memory`, cherry-pick) i provjerava kanonski JCS segment i SHA-256 prema `descriptor.segmentHash` (izvor: `evidence-gateway.ts`, PR4), oboje s testom. Uz to (Codex na #24, odgođeno): commit dokumenta i `reserve` odsječka u istom RPC-u mijenjaju `CommitRequest` i `CommitOutcome` u `domain/serverSync/contract.ts` u istom PR-u kao klijent (journal, drainRunner); klijentska granica veličine (`JSON.stringify`) usklađuje se s poslužiteljskom.
 - [ ] Uvjet za B-12 (Codex na #21): `forensics/replay.ts` za `delete`, `cut` i `replace` uspoređuje hash uklonjenog raspona s hashom u događaju i prekida replay pri nepodudaranju.
 - [ ] Frontend: spojeni #19 (document) i #21 (collaboration, evidence); #24 serverSync na pregledu; zatim sync u dva dijela, pa editor, process-ledger, journal i drainRunner (F-3), pa F-4 ljuska (D-89).
 - [ ] Okolina: `pnpm install` u novom worktreeu 15 do 20 min (P-8); lefthook `secrets` traži pokrenut Docker Desktop; worktree u dugoj putanji ruši vitest (MAX_PATH); `pnpm test` ne uključuje `tests/integration`.
