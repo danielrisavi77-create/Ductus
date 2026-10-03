@@ -10,7 +10,7 @@ import {
   EVIDENCE_SEGMENT_SCHEMA_V2,
 } from "@/domain/forensics/evidence-segment-v2";
 
-const payload = '{"evidenceSchema":"pisac-evidence-segment-v2"}';
+const payload = '{"evidenceSchema":"ductus-evidence-segment-v2"}';
 
 function validCommand(): EvidenceIngestCommandV2 {
   return {

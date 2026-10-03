@@ -3,7 +3,7 @@ import { sha256WebCrypto } from "./crypto";
 import { canonicalizeJcs } from "./jcs";
 import { EVIDENCE_SEGMENT_SCHEMA_V2, type EvidenceSegmentV2 } from "./evidence-segment-v2";
 
-export const EVIDENCE_RECEIPT_SCHEMA_V1 = "pisac-evidence-receipt-v1" as const;
+export const EVIDENCE_RECEIPT_SCHEMA_V1 = "ductus-evidence-receipt-v1" as const;
 
 export type EvidenceReceiptPayloadV1 = {
   receiptSchema: typeof EVIDENCE_RECEIPT_SCHEMA_V1;
