@@ -4,7 +4,7 @@
 
 ## Engineering metadata
 
-Agent: <claude|codex>:<slot>:<role>
+Agent: <claude|codex|chatgpt>:<slot>:<role>
 Risk: <low|standard|critical>
 Task: <ID ili kratki identifikator>
 
