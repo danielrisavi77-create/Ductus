@@ -63,6 +63,7 @@ async function main() {
   const result = evaluateGate({
     body: pr.body ?? "",
     headSha: pr.head.sha,
+    ownerLogin: owner,
     comments,
     reviews,
   });
