@@ -29,6 +29,23 @@ test("missing metadata fails closed", () => {
   );
 });
 
+test("missing task fails closed", () => {
+  assert.equal(
+    evaluateGate({ body: `Agent: ${author}\nRisk: standard\n`, headSha: head }).state,
+    "failure",
+  );
+});
+
+test("unknown agent role fails closed", () => {
+  assert.equal(
+    evaluateGate({
+      body: "Agent: claude:a:whatever\nRisk: low\nTask: X-1\n",
+      headSha: head,
+    }).state,
+    "failure",
+  );
+});
+
 test("standard waits for review", () => {
   assert.equal(
     evaluateGate({ body: prBody(), headSha: head }).state,
