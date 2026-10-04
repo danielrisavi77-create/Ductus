@@ -28,7 +28,7 @@ Poruke među Claude sesijama mogu ubrzati rad na istom računu, ali nikad nisu j
 Svaki aktivni agent ima četiri podatka:
 
 ```
-runtime: claude | codex
+runtime: claude | codex | chatgpt
 slot: a | b | ...
 role: orchestrator | platforma | backend | frontend | reviewer | qa | bug-hunter | product-ux | short
 task: <id>
@@ -114,7 +114,7 @@ Minimalni cross-account zadatak:
 
 ```
 ZADATAK <id>
-Runtime slot: <claude:a | codex:b | auto>
+Runtime slot: <claude:a | codex:b | chatgpt:c | auto>
 Uloga: <platforma | backend | frontend | reviewer | qa | bug-hunter | product-ux | short>
 Cilj: <jedna rečenica>
 Ulaz: <točni dokumenti/odjeljci>
