@@ -23,17 +23,17 @@ Pravila vlasništva:
 - `src/domain/` dijele Backend i Frontend (sinkronizacija i dokument). Vlasnik je Backend; Frontend smije mijenjati `src/domain/sync`, `src/domain/document`, `src/domain/diff` i `src/domain/serverSync` uz oznaku u opisu PR-a.
 - `STATE.md` mijenja samo orkestrator.
 
-Najviše četiri sesije koje pišu kod istodobno. Usko grlo je pregled i spajanje PR-ova, ne broj sesija.
+Normalno rade tri stalna writera (Backend, Frontend, Platforma). Četvrti je dopušten samo za potpuno neovisan zadatak. WIP limit, risk razine i kontrolne uloge definirani su u `docs/ENGINEERING_SYSTEM.md`.
 
 ## 2. Tijek jednog zadatka
 
 1. Orkestrator šalje zadatak (predložak u §3) sesiji odgovarajuće uloge.
 2. Sesija radi u svom worktreeu na grani `<uloga>/<kratki-opis>` (npr. `backend/m0-port-domain`), od svježeg `origin/main`.
 3. Testovi i provjere lokalno zeleni (`pnpm lint`, `pnpm typecheck`, `pnpm test`); lefthook to radi pri commitu.
-4. Sesija otvara PR (jedan korak iz `STATE.md`, do oko 400 redaka; veći PR obrazlaže zašto).
-5. PR dobiva neovisni pregled (§5). Zadano ga radi Codex. Ako je autor Codex worker, pregled mora napraviti druga aktivna agent-instanca; za kritične promjene koristi se drugi račun ili drugi provider kad je dostupan. Autor ispravlja nalaze koje prihvaća, a odbijene obrazlaže u PR-u.
+4. Sesija otvara PR (jedan korak iz `STATE.md`, do oko 400 redaka; veći PR obrazlaže zašto) i obvezno upisuje `Agent`, `Risk` i `Task` metadata iz `docs/ENGINEERING_SYSTEM.md`.
+5. PR dobiva neovisni pregled na aktualnom headu. Za `critical` PR obvezan je i zaseban QA/adversarial PASS. Autor i reviewer/QA moraju biti različite aktivne agent-instance; drugi provider se preferira za kritične trust granice. Autor ispravlja prihvaćene nalaze, a odbijene obrazlaže.
 6. Sesija zapisuje izvještaj u PR (predložak u §3) i staje. Direktna poruka orkestratoru je dodatna obavijest samo kad su obje sesije mogu međusobno komunicirati.
-7. Spaja samo sesija "Ductus orkestrator" (izričita ovlast Daniela, 3. 10. 2026.), kad Codex nema otvorenih kritičnih nalaza i PR ne čeka Danielovu odluku. Radne sesije nikad ne spajaju PR, ne mijenjaju `.claude/` postavke i ne diraju postavke repoa na GitHubu.
+7. Spaja samo aktivni Ductus orkestrator, kad su CI, Engineering review gate i svi risk-specifični gateovi zeleni te PR ne čeka Danielovu odluku. Radne sesije nikad ne spajaju PR, ne mijenjaju `.claude/` postavke i ne diraju postavke repoa na GitHubu.
 8. Orkestrator ažurira `STATE.md` i dnevnik, šalje sljedeći zadatak ili arhivira sesiju (arhiviranje briše worktree).
 
 Kad sesija zapne na odluci (PRIJEDLOG, nejasan zahtjev, tuđa mapa), ne nagađa: šalje izvještaj sa statusom "blokirano" i staje.
@@ -73,7 +73,8 @@ PR: <poveznica>
 Agent: <runtime>:<slot>:<uloga>
 Napravljeno: <3 do 5 stavki>
 Testovi: <naredba i rezultat>
-Codex: <broj nalaza, prihvaćeno, odbijeno uz razlog>
+Review: <reviewer, head, nalaz/PASS; odbijeni nalazi uz razlog>
+QA: <za critical: QA head + scope + PASS; inače n/a>
 Otvoreno ili blokira: <stavke ili "ništa">
 Treba Daniel: <odluka ili "ništa">
 ```
@@ -92,9 +93,9 @@ Izvještaj obvezno ide u opis PR-a ili, bez PR-a, u `IZVJEŠTAJ <id>` issue. Dir
 - **Predaja posla kroz `STATE.md` i opis PR-a**, ne kroz prepričavanje u razgovoru.
 - **Codex pregledava samo diff PR-a**, ne cijeli repo.
 
-## 5. Neovisni pregled (Codex)
+## 5. Neovisni pregled
 
-Nakon otvaranja PR-a sesija pokreće:
+Codex CLI je zadani automatizirani reviewer kad je dostupan, ali nije jedini dopušteni reviewer. Za lokalni Codex review može se pokrenuti:
 
 ```
 powershell -File scripts/codex-review.ps1 -Level <light|standard|critical>
