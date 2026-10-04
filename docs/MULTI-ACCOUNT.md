@@ -115,7 +115,7 @@ Minimalni cross-account zadatak:
 ```
 ZADATAK <id>
 Runtime slot: <claude:a | codex:b | auto>
-Uloga: <platforma | backend | frontend | short>
+Uloga: <platforma | backend | frontend | reviewer | qa | bug-hunter | product-ux | short>
 Cilj: <jedna rečenica>
 Ulaz: <točni dokumenti/odjeljci>
 Mape: <dopuštene putanje>
@@ -134,6 +134,8 @@ Svaki PR sadrži:
 ```
 IZVJEŠTAJ <id> · status: PR otvoren
 Agent: <runtime>:<slot>:<role>
+Risk: <low | standard | critical>
+Task: <id>
 Napravljeno: <3-5 stavki>
 Testovi: <naredbe i rezultat>
 Review: <status>
