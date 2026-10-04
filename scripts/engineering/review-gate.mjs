@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import process from "node:process";
 
+import { evaluateMetadata } from "./pr-metadata-core.mjs";
 import { evaluateGate } from "./review-gate-core.mjs";
 
 const context = "Engineering review gate";
@@ -17,11 +18,24 @@ async function api(path, options = {}) {
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`GitHub API ${response.status}: ${text}`);
+    const body = await response.text();
+    throw new Error(`GitHub API ${response.status}: ${body}`);
   }
   if (response.status === 204) return null;
   return response.json();
+}
+
+async function apiAll(path) {
+  const items = [];
+  for (let page = 1; page <= 100; page += 1) {
+    const separator = path.includes("?") ? "&" : "?";
+    const batch = await api(`${path}${separator}per_page=100&page=${page}`);
+    if (!Array.isArray(batch)) throw new Error(`Expected array from paginated endpoint: ${path}`);
+    items.push(...batch);
+    if (batch.length < 100) break;
+    if (page === 100) throw new Error(`Pagination limit reached for ${path}`);
+  }
+  return items;
 }
 
 function prNumberFromEvent(event) {
@@ -55,21 +69,33 @@ async function main() {
 
   const [owner, repo] = repository.split("/");
   const pr = await api(`/repos/${owner}/${repo}/pulls/${number}`);
-  const [comments, reviews] = await Promise.all([
-    api(`/repos/${owner}/${repo}/issues/${number}/comments?per_page=100`),
-    api(`/repos/${owner}/${repo}/pulls/${number}/reviews?per_page=100`),
+  const [comments, changedFiles] = await Promise.all([
+    apiAll(`/repos/${owner}/${repo}/issues/${number}/comments`),
+    apiAll(`/repos/${owner}/${repo}/pulls/${number}/files`),
   ]);
 
-  const result = evaluateGate({
+  const metadata = evaluateMetadata({
     body: pr.body ?? "",
-    headSha: pr.head.sha,
-    ownerLogin: owner,
-    comments,
-    reviews,
+    files: changedFiles.map((item) => item.filename),
   });
+
+  const result = metadata.ok
+    ? evaluateGate({
+        body: pr.body ?? "",
+        headSha: pr.head.sha,
+        ownerLogin: owner,
+        comments,
+      })
+    : {
+        state: "failure",
+        description: metadata.message,
+      };
 
   await setStatus(repository, pr.head.sha, result, pr.html_url);
   console.log(`${context}: ${result.state} — ${result.description}`);
+  if (metadata.ok) {
+    console.log(`Risk: declared=${metadata.risk}, minimum=${metadata.minimumRisk}`);
+  }
 }
 
 main().catch((error) => {
