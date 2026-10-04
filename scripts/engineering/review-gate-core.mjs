@@ -5,18 +5,34 @@ const SHA_RE = /^[0-9a-f]{40}$/i;
 const TRUSTED_ASSOCIATIONS = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 const VERDICTS = new Set(["PASS", "FAIL", "BLOCK"]);
 
+const APP_RUNTIME = new Map([
+  ["claude", "claude"],
+  ["chatgpt-codex-connector", "chatgpt"],
+]);
+
 export function field(body, name) {
   if (!body) return null;
   const prefix = `${name.toLowerCase()}:`;
-  let inFence = false;
+  let fence = null;
 
   for (const line of body.split(/\r?\n/)) {
     const trimmed = line.trim();
-    if (trimmed.startsWith("```")) {
-      inFence = !inFence;
+
+    if (fence) {
+      if (trimmed.startsWith(fence)) fence = null;
       continue;
     }
-    if (inFence || !trimmed.toLowerCase().startsWith(prefix)) continue;
+
+    if (trimmed.startsWith("```")) {
+      fence = "```";
+      continue;
+    }
+    if (trimmed.startsWith("~~~")) {
+      fence = "~~~";
+      continue;
+    }
+
+    if (!trimmed.toLowerCase().startsWith(prefix)) continue;
     return trimmed.slice(prefix.length).trim() || null;
   }
   return null;
@@ -40,10 +56,17 @@ function isAgent(value, role) {
   return value.endsWith(`:${role}`);
 }
 
-function principal(agent) {
+function declaredRuntime(agent) {
   if (!agent || !AGENT_RE.test(agent)) return null;
-  const [runtime, slot] = agent.split(":");
-  return `${runtime}:${slot}`;
+  return agent.split(":")[0];
+}
+
+function verifiedCommentIdentity(entry) {
+  const slug = entry?.appSlug ?? null;
+  if (!slug) return null;
+  const runtime = APP_RUNTIME.get(slug) ?? null;
+  if (!runtime) return null;
+  return { appSlug: slug, runtime };
 }
 
 function sameHead(value, headSha) {
@@ -57,6 +80,7 @@ function trustedComments(items) {
       body: item?.body ?? "",
       login: item?.user?.login ?? null,
       association: item?.author_association ?? null,
+      appSlug: item?.performed_via_github_app?.slug ?? null,
       createdAt: Date.parse(item?.created_at ?? "") || index,
       index,
     }))
@@ -64,10 +88,11 @@ function trustedComments(items) {
 }
 
 function findOwnerOverride(entries, headSha, ownerLogin) {
-  return entries.some(({ body, login, association }) =>
+  return entries.some(({ body, login, association, appSlug }) =>
     canonicalBlock(body, "Owner-Override") &&
     association === "OWNER" &&
     login === ownerLogin &&
+    appSlug === null &&
     field(body, "Owner-Override")?.toUpperCase() === "PASS" &&
     sameHead(field(body, "Override-Head"), headSha) &&
     Boolean(field(body, "Override-Reason")),
@@ -91,11 +116,13 @@ function latestVerdicts(entries, {
     const head = field(entry.body, headField);
     const verdict = field(entry.body, verdictField)?.toUpperCase() ?? null;
     const extra = extraField ? field(entry.body, extraField) : null;
-    const agentPrincipal = principal(agent);
+    const identity = verifiedCommentIdentity(entry);
+    const runtime = declaredRuntime(agent);
 
     if (
       !isAgent(agent, role) ||
-      !agentPrincipal ||
+      !identity ||
+      identity.runtime !== runtime ||
       !sameHead(head, headSha) ||
       !verdict ||
       !VERDICTS.has(verdict) ||
@@ -104,27 +131,34 @@ function latestVerdicts(entries, {
       continue;
     }
 
-    const previous = latest.get(agentPrincipal);
+    const key = identity.appSlug;
+    const previous = latest.get(key);
     const order = [entry.createdAt, entry.index];
     if (
       !previous ||
       order[0] > previous.order[0] ||
       (order[0] === previous.order[0] && order[1] > previous.order[1])
     ) {
-      latest.set(agentPrincipal, { agent, verdict, extra, order });
+      latest.set(key, { agent, verdict, extra, identity, order });
     }
   }
 
   return latest;
 }
 
-export function evaluateGate({ body, headSha, ownerLogin, comments = [] }) {
+export function evaluateGate({
+  body,
+  headSha,
+  ownerLogin,
+  comments = [],
+  authorAppSlug = null,
+}) {
   const authorAgent = field(body, "Agent");
-  const authorPrincipal = principal(authorAgent);
+  const authorRuntime = declaredRuntime(authorAgent);
   const risk = field(body, "Risk")?.toLowerCase() ?? null;
   const task = field(body, "Task");
 
-  if (!authorPrincipal) {
+  if (!authorRuntime) {
     return { state: "failure", description: "Missing or invalid Agent metadata." };
   }
   if (!risk || !RISK_VALUES.has(risk)) {
@@ -154,8 +188,8 @@ export function evaluateGate({ body, headSha, ownerLogin, comments = [] }) {
     headSha,
   });
 
-  for (const [reviewerPrincipal, review] of reviews) {
-    if (reviewerPrincipal === authorPrincipal) continue;
+  for (const [reviewApp, review] of reviews) {
+    if (authorAppSlug && reviewApp === authorAppSlug) continue;
     if (review.verdict === "FAIL" || review.verdict === "BLOCK") {
       return {
         state: "pending",
@@ -164,15 +198,15 @@ export function evaluateGate({ body, headSha, ownerLogin, comments = [] }) {
     }
   }
 
-  const passingReviewerPrincipals = new Set(
+  const passingReviewerApps = new Set(
     [...reviews.entries()]
-      .filter(([reviewerPrincipal, review]) =>
-        reviewerPrincipal !== authorPrincipal && review.verdict === "PASS")
-      .map(([reviewerPrincipal]) => reviewerPrincipal),
+      .filter(([reviewApp, review]) =>
+        (!authorAppSlug || reviewApp !== authorAppSlug) && review.verdict === "PASS")
+      .map(([reviewApp]) => reviewApp),
   );
 
-  if (passingReviewerPrincipals.size === 0) {
-    return { state: "pending", description: "Waiting for independent review on current head." };
+  if (passingReviewerApps.size === 0) {
+    return { state: "pending", description: "Waiting for independently authenticated review." };
   }
 
   if (risk === "critical") {
@@ -185,10 +219,10 @@ export function evaluateGate({ body, headSha, ownerLogin, comments = [] }) {
       extraField: "QA-Scope",
     });
 
-    for (const [qaPrincipal, result] of qa) {
+    for (const [qaApp, result] of qa) {
       if (
-        qaPrincipal === authorPrincipal ||
-        passingReviewerPrincipals.has(qaPrincipal)
+        (authorAppSlug && qaApp === authorAppSlug) ||
+        passingReviewerApps.has(qaApp)
       ) {
         continue;
       }
@@ -201,21 +235,21 @@ export function evaluateGate({ body, headSha, ownerLogin, comments = [] }) {
     }
 
     const qaPass = [...qa.entries()].some(
-      ([qaPrincipal, result]) =>
-        qaPrincipal !== authorPrincipal &&
-        !passingReviewerPrincipals.has(qaPrincipal) &&
+      ([qaApp, result]) =>
+        (!authorAppSlug || qaApp !== authorAppSlug) &&
+        !passingReviewerApps.has(qaApp) &&
         result.verdict === "PASS",
     );
 
     if (!qaPass) {
-      return { state: "pending", description: "Critical PR: waiting for independent QA PASS." };
+      return { state: "pending", description: "Critical PR: waiting for separately authenticated QA PASS." };
     }
   }
 
   return {
     state: "success",
     description: risk === "critical"
-      ? "Independent review and QA are valid for current head."
-      : "Independent review is valid for current head.",
+      ? "Independently authenticated review and QA are valid for current head."
+      : "Independently authenticated review is valid for current head.",
   };
 }
