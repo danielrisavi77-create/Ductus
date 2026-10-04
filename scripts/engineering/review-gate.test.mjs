@@ -118,6 +118,33 @@ test("formal GitHub reviews are not agent verdict inputs, including dismissed PA
   assert.equal(result.state, "pending");
 });
 
+test("author runtime slot cannot self-review under another role", () => {
+  const result = evaluate({
+    body: prBody("standard", "claude:a:backend"),
+    headSha: head,
+    comments: [review({
+      agent: "claude:a:reviewer",
+      appSlug: "claude",
+    })],
+  });
+  assert.equal(result.state, "pending");
+});
+
+test("author runtime slot cannot provide QA under another role", () => {
+  const result = evaluate({
+    body: prBody("critical", "chatgpt:a:backend"),
+    headSha: head,
+    comments: [
+      review({ agent: "claude:b:reviewer", appSlug: "claude" }),
+      qa({
+        agent: "chatgpt:a:qa",
+        appSlug: "chatgpt-codex-connector",
+      }),
+    ],
+  });
+  assert.equal(result.state, "pending");
+});
+
 test("review verdict must come from a matching authenticated GitHub App", () => {
   const result = evaluate({
     body: prBody(),
@@ -155,6 +182,47 @@ test("trusted collaborator review can satisfy the gate", () => {
     comments: [review({ login: "trusted-reviewer", association: "COLLABORATOR", appSlug: "claude" })],
   });
   assert.equal(result.state, "success");
+});
+
+test("four-character tilde fence remains fenced until equally long close", () => {
+  const body =
+    "Agent-Review: claude:b:reviewer\n~~~~text\n" +
+    "~~~\n" +
+    `Review-Head: ${head}\nReview-Verdict: PASS\n` +
+    "~~~~";
+  const result = evaluate({
+    body: prBody(),
+    headSha: head,
+    comments: [entry(body, { appSlug: "claude" })],
+  });
+  assert.equal(result.state, "pending");
+});
+
+test("four-character backtick fence remains fenced until equally long close", () => {
+  const body =
+    "Agent-Review: claude:b:reviewer\n````text\n" +
+    "```\n" +
+    `Review-Head: ${head}\nReview-Verdict: PASS\n` +
+    "````";
+  const result = evaluate({
+    body: prBody(),
+    headSha: head,
+    comments: [entry(body, { appSlug: "claude" })],
+  });
+  assert.equal(result.state, "pending");
+});
+
+test("indented Markdown code block metadata is ignored", () => {
+  const body =
+    "Agent-Review: claude:b:reviewer\n" +
+    `    Review-Head: ${head}\n` +
+    "    Review-Verdict: PASS";
+  const result = evaluate({
+    body: prBody(),
+    headSha: head,
+    comments: [entry(body, { appSlug: "claude" })],
+  });
+  assert.equal(result.state, "pending");
 });
 
 test("tilde fenced metadata does not satisfy the gate", () => {
@@ -209,6 +277,46 @@ test("review block must start the comment", () => {
       `Review complete.\nAgent-Review: claude:b:reviewer\nReview-Head: ${head}\nReview-Verdict: PASS\n`,
       { appSlug: "claude" },
     )],
+  });
+  assert.equal(result.state, "pending");
+});
+
+test("FAIL from one session is not erased by PASS from another session of same App", () => {
+  const result = evaluate({
+    body: prBody(),
+    headSha: head,
+    comments: [
+      review({
+        agent: "claude:c:reviewer",
+        verdict: "FAIL",
+        appSlug: "claude",
+      }),
+      review({
+        agent: "claude:b:reviewer",
+        verdict: "PASS",
+        appSlug: "claude",
+      }),
+    ],
+  });
+  assert.equal(result.state, "pending");
+});
+
+test("PASS from one session is not erased by FAIL from another session of same App", () => {
+  const result = evaluate({
+    body: prBody(),
+    headSha: head,
+    comments: [
+      review({
+        agent: "claude:b:reviewer",
+        verdict: "PASS",
+        appSlug: "claude",
+      }),
+      review({
+        agent: "claude:c:reviewer",
+        verdict: "FAIL",
+        appSlug: "claude",
+      }),
+    ],
   });
   assert.equal(result.state, "pending");
 });
