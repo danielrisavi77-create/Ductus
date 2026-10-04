@@ -15,34 +15,38 @@ const entry = (body, {
   login = ownerLogin,
   association = "OWNER",
   createdAt,
+  appSlug = null,
 } = {}) => ({
   body,
   user: { login },
   author_association: association,
+  performed_via_github_app: appSlug ? { slug: appSlug } : null,
   created_at: createdAt ?? new Date(1_700_000_000_000 + counter++ * 1000).toISOString(),
 });
 
 const review = ({
-  agent = "codex:b:reviewer",
+  agent = "claude:b:reviewer",
   sha = head,
   verdict = "PASS",
+  appSlug = "claude",
   ...meta
 } = {}) =>
   entry(
     `Agent-Review: ${agent}\nReview-Head: ${sha}\nReview-Verdict: ${verdict}\n`,
-    meta,
+    { appSlug, ...meta },
   );
 
 const qa = ({
-  agent = "claude:c:qa",
+  agent = "chatgpt:c:qa",
   sha = head,
   verdict = "PASS",
   scope = "offline + wrong actor",
+  appSlug = "chatgpt-codex-connector",
   ...meta
 } = {}) =>
   entry(
     `QA-Agent: ${agent}\nQA-Head: ${sha}\nQA-Verdict: ${verdict}\nQA-Scope: ${scope}\n`,
-    meta,
+    { appSlug, ...meta },
   );
 
 const evaluate = (input) =>
@@ -114,11 +118,14 @@ test("formal GitHub reviews are not agent verdict inputs, including dismissed PA
   assert.equal(result.state, "pending");
 });
 
-test("same runtime and slot cannot review own PR under another role", () => {
+test("review verdict must come from a matching authenticated GitHub App", () => {
   const result = evaluate({
     body: prBody(),
     headSha: head,
-    comments: [review({ agent: "claude:a:reviewer" })],
+    comments: [review({
+      agent: "claude:b:reviewer",
+      appSlug: "chatgpt-codex-connector",
+    })],
   });
   assert.equal(result.state, "pending");
 });
@@ -136,7 +143,7 @@ test("untrusted outsider cannot spoof a review PASS", () => {
   const result = evaluate({
     body: prBody(),
     headSha: head,
-    comments: [review({ login: "outsider", association: "NONE" })],
+    comments: [review({ login: "outsider", association: "NONE", appSlug: "claude" })],
   });
   assert.equal(result.state, "pending");
 });
@@ -145,9 +152,40 @@ test("trusted collaborator review can satisfy the gate", () => {
   const result = evaluate({
     body: prBody(),
     headSha: head,
-    comments: [review({ login: "trusted-reviewer", association: "COLLABORATOR" })],
+    comments: [review({ login: "trusted-reviewer", association: "COLLABORATOR", appSlug: "claude" })],
   });
   assert.equal(result.state, "success");
+});
+
+test("tilde fenced metadata does not satisfy the gate", () => {
+  const body =
+    "Agent-Review: claude:b:reviewer\n~~~text\n" +
+    `Review-Head: ${head}\nReview-Verdict: PASS\n` +
+    "~~~";
+  const result = evaluate({
+    body: prBody(),
+    headSha: head,
+    comments: [entry(body, { appSlug: "claude" })],
+  });
+  assert.equal(result.state, "pending");
+});
+
+test("one ChatGPT GitHub App cannot spoof reviewer and QA by changing declared runtime", () => {
+  const result = evaluate({
+    body: prBody("critical"),
+    headSha: head,
+    comments: [
+      review({
+        agent: "codex:x:reviewer",
+        appSlug: "chatgpt-codex-connector",
+      }),
+      qa({
+        agent: "chatgpt:y:qa",
+        appSlug: "chatgpt-codex-connector",
+      }),
+    ],
+  });
+  assert.equal(result.state, "pending");
 });
 
 test("review example inside a code fence does not satisfy the gate", () => {
@@ -226,25 +264,31 @@ test("critical also requires independent QA", () => {
   assert.equal(passing.state, "success");
 });
 
-test("same runtime and slot cannot be both reviewer and QA", () => {
+test("same authenticated GitHub App cannot satisfy both reviewer and QA", () => {
   const result = evaluate({
     body: prBody("critical"),
     headSha: head,
     comments: [
-      review({ agent: "codex:b:reviewer" }),
-      qa({ agent: "codex:b:qa" }),
+      review({
+        agent: "codex:b:reviewer",
+        appSlug: "chatgpt-codex-connector",
+      }),
+      qa({
+        agent: "chatgpt:c:qa",
+        appSlug: "chatgpt-codex-connector",
+      }),
     ],
   });
   assert.equal(result.state, "pending");
 });
 
-test("author principal cannot provide QA under another role", () => {
+test("Claude GitHub App cannot claim a ChatGPT QA runtime", () => {
   const result = evaluate({
     body: prBody("critical"),
     headSha: head,
     comments: [
       review(),
-      qa({ agent: "claude:a:qa" }),
+      qa({ agent: "chatgpt:c:qa", appSlug: "claude" }),
     ],
   });
   assert.equal(result.state, "pending");
@@ -281,6 +325,7 @@ test("owner override must be canonical, current-head and reasoned", () => {
     headSha: head,
     comments: [entry(
       `Owner-Override: PASS\nOverride-Head: ${head}\nOverride-Reason: emergency governance decision\n`,
+      { appSlug: null },
     )],
   });
   assert.equal(valid.state, "success");
