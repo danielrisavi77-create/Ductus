@@ -98,6 +98,22 @@ test("standard waits for review", () => {
   assert.equal(evaluate({ body: prBody(), headSha: head }).state, "pending");
 });
 
+test("formal GitHub reviews are not agent verdict inputs, including dismissed PASS", () => {
+  const result = evaluateGate({
+    ownerLogin,
+    body: prBody(),
+    headSha: head,
+    comments: [],
+    reviews: [{
+      body: `Agent-Review: codex:b:reviewer\nReview-Head: ${head}\nReview-Verdict: PASS\n`,
+      state: "DISMISSED",
+      author_association: "OWNER",
+      user: { login: ownerLogin },
+    }],
+  });
+  assert.equal(result.state, "pending");
+});
+
 test("same runtime and slot cannot review own PR under another role", () => {
   const result = evaluate({
     body: prBody(),
