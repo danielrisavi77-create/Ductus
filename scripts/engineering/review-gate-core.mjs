@@ -199,12 +199,7 @@ export function evaluateGate({
     });
 
     for (const [, result] of qa) {
-      if (
-        result.identity.principal === authorPrincipal ||
-        passingReviewerApps.has(result.identity.appSlug)
-      ) {
-        continue;
-      }
+      if (result.identity.principal === authorPrincipal) continue;
       if (result.verdict === "FAIL" || result.verdict === "BLOCK") {
         return {
           state: "pending",
