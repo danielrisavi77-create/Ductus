@@ -2,7 +2,7 @@
 
 Verzija 0.3 · 4. 10. 2026. · Odgovorna osoba: Daniel Rišavi
 
-Upute za aktivni Ductus orkestrator, neovisno o tome radi li u Claudeu ili Codexu. Nova instanca čita samo ovaj dokument, `STATE.md`, `docs/MULTI-ACCOUNT.md` i `docs/PLAN-DEMO.md` §3 i §4; ostalo po potrebi, po odjeljcima. Vrijedi uz `CLAUDE.md` i `docs/SESSIONS.md`.
+Upute za aktivni Ductus orkestrator, neovisno o tome radi li u Claudeu ili Codexu. Nova instanca čita samo ovaj dokument, `STATE.md`, `docs/ENGINEERING_SYSTEM.md`, `docs/MULTI-ACCOUNT.md` i `docs/PLAN-DEMO.md` §3 i §4; ostalo po potrebi, po odjeljcima. Vrijedi uz `CLAUDE.md` i `docs/SESSIONS.md`.
 
 ## 1. Na početku svakog poteza
 
@@ -23,7 +23,7 @@ Spaja se (squash, D-86) samo ako je sve ispunjeno:
 | Provjera | Kako |
 | --- | --- |
 | CI zelen | `statusCheckRollup` |
-| Codex bez otvorenih KRITIČNIH nalaza; VAŽNI ispravljeni ili obrazloženo odbijeni | komentar "Neovisni pregled (Codex)" i odgovor sesije |
+| Neovisni review vrijedi za aktualni head; `critical` uz to ima zaseban QA/adversarial PASS | `Engineering review gate` + komentari iz `ENGINEERING_SYSTEM.md` |
 | Baza je `main` i nema sukoba | `baseRefName`, `mergeable` |
 | Jedan zadatak; preko oko 400 redaka koda samo uz obrazloženje | opis PR-a |
 | Prijenos iz `pisac-editor`: tablica izvor, preneseno, nije preneseno s razlogom | opis PR-a |
@@ -36,7 +36,7 @@ Diff čitaju CI i Codex; orkestrator gleda samo metapodatke i popis datoteka, os
 
 ## 3. Nakon spajanja
 
-1. Sljedeći zadatak iz `PLAN-DEMO.md` §4 kojem su ovisnosti spojene zapisuje se u obliku iz `SESSIONS.md` §3, uz runtime slot i razinu pregleda (`light`, `standard`, `critical`, `SESSIONS.md` §5). Za Claude worker orkestrator postavlja effort po istoj razini; za Codex worker navodi model/effort samo kad je potreban nestandardni izbor.
+1. Sljedeći zadatak iz `PLAN-DEMO.md` §4 kojem su ovisnosti spojene zapisuje se u obliku iz `SESSIONS.md` §3, uz runtime slot, `Risk` razinu iz `ENGINEERING_SYSTEM.md` i review effort (`light`, `standard`, `critical`). Za Claude worker orkestrator postavlja effort po istoj razini; za Codex worker navodi model/effort samo kad je potreban nestandardni izbor.
 2. Kad je redoslijed jasan, sesija dobiva lanac zadataka (npr. "F2, F3 i F4 redom, svaki svoj PR od svježeg `origin/main`"), da treba manje poruka.
 3. Ploča (Ductus pult): jedan skupni upis po potezu.
 4. `STATE.md`: skupno, najviše jednom dnevno i na kontrolnoj točki, kroz PR orkestratora.
@@ -79,7 +79,7 @@ Svaki petak (`PLAN-DEMO.md` §3): usporedba spojenog s tablicom tjedna, kratak s
 
 ## 7. Štednja tokena orkestratora
 
-- **Rotacija orkestratora:** kad kontekst prijeđe oko 200.000 tokena ili na kraju radnog dana, orkestrator zapisuje predaju u `STATE.md` i na ploču. Nova instanca može biti na drugom računu ili provideru; mora moći nastaviti samo iz repoa, GitHuba i ploče. Session adresa u `STATE.md` ažurira se samo kao pomoćni podatak za runtime koji je koristi.
+- **Rotacija orkestratora:** rotira se nakon završenog logičkog sklopa ili kad ponovljeni kontekst postane skuplji od kratke repo/GitHub predaje; 200.000 tokena je gornja sigurnosna granica, ne cilj. Kad se rotira, orkestrator zapisuje predaju u `STATE.md` i na ploču. Nova instanca može biti na drugom računu ili provideru; mora moći nastaviti samo iz repoa, GitHuba i ploče. Session adresa u `STATE.md` ažurira se samo kao pomoćni podatak za runtime koji je koristi.
 - Ne čita diffove ni cijele dokumente; samo metapodatke PR-a i potrebne odjeljke.
 - Istraživanja i pregled mnogo datoteka daje pomoćnom agentu ili kratkotrajnoj sesiji.
 - Ploča: dodaje događaje, ne prepisuje cijeli dnevnik.
