@@ -1,10 +1,11 @@
 name: Engineering review gate
 
+# Review/QA/override events are trusted because these workflows are loaded from
+# the default branch. The workflow never checks out PR code and writes only a
+# commit status on the PR head.
 on:
-  pull_request_target:
-    types: [opened, synchronize, reopened, edited, ready_for_review]
   issue_comment:
-    types: [created, edited]
+    types: [created, edited, deleted]
   pull_request_review:
     types: [submitted, edited, dismissed]
 
@@ -25,9 +26,6 @@ jobs:
       github.event.issue.pull_request != null
     runs-on: ubuntu-latest
     steps:
-      # pull_request_target intentionally runs trusted code from the default
-      # branch. Never checkout PR code in this workflow because the token can
-      # write commit statuses.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
