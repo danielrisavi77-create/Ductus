@@ -5,17 +5,34 @@ import { evaluateGate, field } from "./review-gate-core.mjs";
 
 const head = "a".repeat(40);
 const author = "claude:a:backend";
+const ownerLogin = "danielrisavi77-create";
 
 const prBody = (risk = "standard") =>
   `Agent: ${author}\nRisk: ${risk}\nTask: B-1\n`;
 
-const review = (agent = "codex:b:reviewer", sha = head) => ({
-  body: `Agent-Review: ${agent}\nReview-Head: ${sha}\nReview-Verdict: PASS\n`,
+const entry = (body, {
+  login = ownerLogin,
+  association = "OWNER",
+} = {}) => ({
+  body,
+  user: { login },
+  author_association: association,
 });
 
-const qa = (agent = "claude:c:qa", sha = head) => ({
-  body: `QA-Agent: ${agent}\nQA-Head: ${sha}\nQA-Verdict: PASS\nQA-Scope: offline + wrong actor\n`,
-});
+const review = (agent = "codex:b:reviewer", sha = head, meta = {}) =>
+  entry(
+    `Agent-Review: ${agent}\nReview-Head: ${sha}\nReview-Verdict: PASS\n`,
+    meta,
+  );
+
+const qa = (agent = "claude:c:qa", sha = head, meta = {}) =>
+  entry(
+    `QA-Agent: ${agent}\nQA-Head: ${sha}\nQA-Verdict: PASS\nQA-Scope: offline + wrong actor\n`,
+    meta,
+  );
+
+const evaluate = (input) =>
+  evaluateGate({ ownerLogin, comments: [], reviews: [], ...input });
 
 test("field reads exact metadata lines", () => {
   assert.equal(field("Risk: critical\nTask: B-8", "Risk"), "critical");
@@ -23,22 +40,26 @@ test("field reads exact metadata lines", () => {
 });
 
 test("missing metadata fails closed", () => {
-  assert.equal(
-    evaluateGate({ body: "Risk: low", headSha: head }).state,
-    "failure",
-  );
+  assert.equal(evaluate({ body: "Risk: low", headSha: head }).state, "failure");
 });
 
 test("missing task fails closed", () => {
   assert.equal(
-    evaluateGate({ body: `Agent: ${author}\nRisk: standard\n`, headSha: head }).state,
+    evaluate({ body: `Agent: ${author}\nRisk: standard\n`, headSha: head }).state,
+    "failure",
+  );
+});
+
+test("missing owner identity fails closed", () => {
+  assert.equal(
+    evaluateGate({ body: prBody(), headSha: head }).state,
     "failure",
   );
 });
 
 test("unknown agent role fails closed", () => {
   assert.equal(
-    evaluateGate({
+    evaluate({
       body: "Agent: claude:a:whatever\nRisk: low\nTask: X-1\n",
       headSha: head,
     }).state,
@@ -47,14 +68,11 @@ test("unknown agent role fails closed", () => {
 });
 
 test("standard waits for review", () => {
-  assert.equal(
-    evaluateGate({ body: prBody(), headSha: head }).state,
-    "pending",
-  );
+  assert.equal(evaluate({ body: prBody(), headSha: head }).state, "pending");
 });
 
 test("author cannot review own PR", () => {
-  const result = evaluateGate({
+  const result = evaluate({
     body: prBody(),
     headSha: head,
     comments: [review("claude:a:backend")],
@@ -63,7 +81,7 @@ test("author cannot review own PR", () => {
 });
 
 test("review is bound to the current head", () => {
-  const result = evaluateGate({
+  const result = evaluate({
     body: prBody(),
     headSha: head,
     comments: [review("codex:b:reviewer", "b".repeat(40))],
@@ -71,8 +89,32 @@ test("review is bound to the current head", () => {
   assert.equal(result.state, "pending");
 });
 
-test("standard passes with independent review", () => {
-  const result = evaluateGate({
+test("untrusted outsider cannot spoof a review PASS", () => {
+  const result = evaluate({
+    body: prBody(),
+    headSha: head,
+    comments: [review("codex:b:reviewer", head, {
+      login: "outsider",
+      association: "NONE",
+    })],
+  });
+  assert.equal(result.state, "pending");
+});
+
+test("trusted collaborator review can satisfy the gate", () => {
+  const result = evaluate({
+    body: prBody(),
+    headSha: head,
+    comments: [review("codex:b:reviewer", head, {
+      login: "trusted-reviewer",
+      association: "COLLABORATOR",
+    })],
+  });
+  assert.equal(result.state, "success");
+});
+
+test("standard passes with independent owner-posted review", () => {
+  const result = evaluate({
     body: prBody(),
     headSha: head,
     comments: [review()],
@@ -81,14 +123,14 @@ test("standard passes with independent review", () => {
 });
 
 test("critical also requires independent QA", () => {
-  const waiting = evaluateGate({
+  const waiting = evaluate({
     body: prBody("critical"),
     headSha: head,
     comments: [review()],
   });
   assert.equal(waiting.state, "pending");
 
-  const passing = evaluateGate({
+  const passing = evaluate({
     body: prBody("critical"),
     headSha: head,
     comments: [review(), qa()],
@@ -98,26 +140,50 @@ test("critical also requires independent QA", () => {
 
 test("QA cannot be the reviewer", () => {
   const reviewer = "codex:b:reviewer";
-  const result = evaluateGate({
+  const result = evaluate({
     body: prBody("critical"),
     headSha: head,
     comments: [
       review(reviewer),
-      {
-        body: `QA-Agent: ${reviewer}\nQA-Head: ${head}\nQA-Verdict: PASS\nQA-Scope: test\n`,
-      },
+      entry(
+        `QA-Agent: ${reviewer}\nQA-Head: ${head}\nQA-Verdict: PASS\nQA-Scope: test\n`,
+      ),
+    ],
+  });
+  assert.equal(result.state, "pending");
+});
+
+test("outsider cannot spoof critical QA", () => {
+  const result = evaluate({
+    body: prBody("critical"),
+    headSha: head,
+    comments: [
+      review(),
+      qa("claude:c:qa", head, { login: "outsider", association: "NONE" }),
     ],
   });
   assert.equal(result.state, "pending");
 });
 
 test("owner override must target the current head and include a reason", () => {
-  const result = evaluateGate({
+  const result = evaluate({
     body: prBody("critical"),
     headSha: head,
-    comments: [{
-      body: `Owner-Override: PASS\nOverride-Head: ${head}\nOverride-Reason: local reviewer unavailable\n`,
-    }],
+    comments: [entry(
+      `Owner-Override: PASS\nOverride-Head: ${head}\nOverride-Reason: local reviewer unavailable\n`,
+    )],
   });
   assert.equal(result.state, "success");
+});
+
+test("collaborator cannot spoof owner override", () => {
+  const result = evaluate({
+    body: prBody("critical"),
+    headSha: head,
+    comments: [entry(
+      `Owner-Override: PASS\nOverride-Head: ${head}\nOverride-Reason: bypass\n`,
+      { login: "trusted-reviewer", association: "COLLABORATOR" },
+    )],
+  });
+  assert.equal(result.state, "pending");
 });
