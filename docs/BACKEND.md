@@ -159,7 +159,7 @@ Pravila:
 
 ### 4.8 Migracije i sheme
 
-Za M0/demo odabran je **dbmate** (`PLAN-DEMO.md` P-4); implementacija i pgTAP harness su u PR-u #39 dok se ne spoje. Produkcijski ugovor ostaje: zasebna migracija za uloge i grantove, pgTAP u CI-ju bez `supabase start`, provjera zanošenja sheme (`pg_dump --schema-only` staging naspram produkcije) te expand/migrate/contract. Ako PR #39 pokaže blocker, promjena alata traži eksplicitnu novu odluku umjesto povratka na neodređeni popis kandidata.
+Postojeće migracije su u formatu Supabase CLI-ja; alat još nije odabran (kandidati: dbmate, node-pg-migrate, graphile-migrate). Odluka u B1 uz: zasebnu migraciju za uloge i grantove, pgTAP u CI-ju bez `supabase start`, provjeru zanošenja sheme (`pg_dump --schema-only` staging naspram produkcije), expand/migrate/contract.
 
 ### 4.9 Opservabilnost i curenje sadržaja
 
