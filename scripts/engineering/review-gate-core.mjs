@@ -1,3 +1,5 @@
+import { canonicalBlock, field } from "./metadata-parser.mjs";
+
 const RISK_VALUES = new Set(["low", "standard", "critical"]);
 const AGENT_RE =
   /^(claude|codex|chatgpt):[A-Za-z0-9_-]+:(orchestrator|platforma|backend|frontend|reviewer|qa|bug-hunter|product-ux|short)$/;
@@ -10,68 +12,6 @@ const APP_RUNTIMES = new Map([
   ["chatgpt-codex-connector", new Set(["chatgpt", "codex"])],
 ]);
 
-function fenceInfo(line) {
-  const match = line.match(/^ {0,3}((?:`{3,})|(?:~{3,}))/);
-  if (!match) return null;
-  return { char: match[1][0], length: match[1].length };
-}
-
-function closesFence(line, fence) {
-  const re = fence.char === "`"
-    ? /^ {0,3}`{3,}\s*$/
-    : /^ {0,3}~{3,}\s*$/;
-  const match = line.match(re);
-  if (!match) return false;
-  const marker = line.trim();
-  const count = marker.match(fence.char === "`" ? /^`+/ : /^~+/)?.[0].length ?? 0;
-  return count >= fence.length;
-}
-
-function metadataLines(body) {
-  if (!body) return [];
-
-  const active = [];
-  let fence = null;
-
-  for (const rawLine of body.split(/\r?\n/)) {
-    if (fence) {
-      if (closesFence(rawLine, fence)) fence = null;
-      continue;
-    }
-
-    const opened = fenceInfo(rawLine);
-    if (opened) {
-      fence = opened;
-      continue;
-    }
-
-    // Four-space/tab indented blocks are Markdown code blocks.
-    if (/^(?: {4}|\t)/.test(rawLine)) continue;
-
-    active.push(rawLine.trim());
-  }
-
-  return active;
-}
-
-export function field(body, name) {
-  const prefix = `${name.toLowerCase()}:`;
-  for (const line of metadataLines(body)) {
-    if (!line.toLowerCase().startsWith(prefix)) continue;
-    return line.slice(prefix.length).trim() || null;
-  }
-  return null;
-}
-
-function firstActiveNonEmptyLine(body) {
-  return metadataLines(body).find(Boolean) ?? "";
-}
-
-function canonicalBlock(body, firstField) {
-  const first = firstActiveNonEmptyLine(body);
-  return first.toLowerCase().startsWith(`${firstField.toLowerCase()}:`);
-}
-
 function isAgent(value, role) {
   if (!value || !AGENT_RE.test(value)) return false;
   if (!role) return true;
@@ -83,10 +23,14 @@ function declaredRuntime(agent) {
   return agent.split(":")[0];
 }
 
+function principalRuntime(runtime) {
+  return runtime === "codex" || runtime === "chatgpt" ? "openai" : runtime;
+}
+
 function declaredPrincipal(agent) {
   if (!agent || !AGENT_RE.test(agent)) return null;
   const [runtime, slot] = agent.split(":");
-  return `${runtime}:${slot}`;
+  return `${principalRuntime(runtime)}:${slot}`;
 }
 
 function verifiedCommentIdentity(entry, declaredAgent) {
@@ -291,3 +235,5 @@ export function evaluateGate({
       : "Independently authenticated review is valid for current head.",
   };
 }
+
+export { field } from "./metadata-parser.mjs";
