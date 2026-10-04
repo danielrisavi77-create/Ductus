@@ -14,8 +14,9 @@ test("runtime code requires at least standard", () => {
   assert.equal(minimumRisk(["src/domain/document/index.ts"]).risk, "standard");
 });
 
-test("ordinary workflow changes require at least standard", () => {
-  assert.equal(minimumRisk([".github/workflows/ci.yml"]).risk, "standard");
+test("all workflow changes are critical because they can affect required statuses", () => {
+  assert.equal(minimumRisk([".github/workflows/ci.yml"]).risk, "critical");
+  assert.equal(minimumRisk([".github/workflows/dependency-review.yml"]).risk, "critical");
 });
 
 test("engineering gate and governance sources are critical", () => {
@@ -27,6 +28,20 @@ test("engineering gate and governance sources are critical", () => {
     "AGENTS.md",
     "docs/ENGINEERING_SYSTEM.md",
     "docs/PRODUCT.md",
+  ]) {
+    assert.equal(minimumRisk([filename]).risk, "critical", filename);
+  }
+});
+
+test("auth OIDC API and middleware boundaries are critical", () => {
+  for (const filename of [
+    "app/api/auth/callback/route.ts",
+    "app/api/evidence/ingest/route.ts",
+    "app/api/submissions/route.ts",
+    "src/server/auth/oidc.ts",
+    "src/adapters/oidc/client.ts",
+    "middleware.ts",
+    "src/middleware.ts",
   ]) {
     assert.equal(minimumRisk([filename]).risk, "critical", filename);
   }
