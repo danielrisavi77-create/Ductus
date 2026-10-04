@@ -1,6 +1,6 @@
 const RISK_RANK = { low: 0, standard: 1, critical: 2 };
 const AGENT_RE =
-  /^(claude|codex):[A-Za-z0-9_-]+:(orchestrator|platforma|backend|frontend|reviewer|qa|bug-hunter|product-ux|short)$/;
+  /^(claude|codex|chatgpt):[A-Za-z0-9_-]+:(orchestrator|platforma|backend|frontend|reviewer|qa|bug-hunter|product-ux|short)$/;
 
 export function field(body, name) {
   if (!body) return null;
