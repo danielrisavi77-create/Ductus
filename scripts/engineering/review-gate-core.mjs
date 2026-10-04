@@ -3,15 +3,15 @@ const AGENT_RE = /^(claude|codex|chatgpt):[A-Za-z0-9_-]+:(orchestrator|platforma
 const SHA_RE = /^[0-9a-f]{40}$/i;
 const TRUSTED_ASSOCIATIONS = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^\$\{\}()|[\]\\]/g, "\\$&");
-}
-
 export function field(body, name) {
   if (!body) return null;
-  const re = new RegExp(`^${escapeRegExp(name)}:\\s*(.+?)\\s*$`, "mi");
-  const match = body.match(re);
-  return match?.[1]?.trim() ?? null;
+  const prefix = `${name.toLowerCase()}:`;
+  for (const line of body.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed.toLowerCase().startsWith(prefix)) continue;
+    return trimmed.slice(prefix.length).trim() || null;
+  }
+  return null;
 }
 
 function isAgent(value, role) {
