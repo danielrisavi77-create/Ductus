@@ -95,7 +95,7 @@ Radovi: podnesci i eseji. Bez AI pomoćnika (FPZG ga ionako ne smije tražiti, D
 | Uz to | Obavijesti (N-01), podsjetnici (N-02), popis "tko treba pomoć" (N-12), uvodni vodič (S-11) | 6 do 8 |
 | **Ukupno** | | **56 do 74** |
 
-### Val 2: seminarski i grupni radovi (cilj: zajedno s valom 1 na početku semestra; najkasnije sredina svibnja 2027.)
+### Val 2: seminarski radovi i prošireni tokovi (cilj: zajedno s valom 1 na početku semestra; najkasnije sredina svibnja 2027.)
 
 | Dio | Sadržaj | Procjena |
 | --- | --- | --- |
