@@ -30,7 +30,7 @@ Svaki aktivni agent ima četiri podatka:
 ```
 runtime: claude | codex
 slot: a | b | ...
-role: orchestrator | platforma | backend | frontend | reviewer | short
+role: orchestrator | platforma | backend | frontend | reviewer | qa | bug-hunter | product-ux | short
 task: <id>
 ```
 
@@ -63,11 +63,17 @@ Repo sadrži adaptere za oba runtimea:
   ductus-worker/
   ductus-orchestrator/
   ductus-review/
+  ductus-qa/
+  ductus-bug-hunter/
+  ductus-product-ux/
 
 .agents/skills/
   ductus-worker/
   ductus-orchestrator/
   ductus-review/
+  ductus-qa/
+  ductus-bug-hunter/
+  ductus-product-ux/
 ```
 
 Skillovi su namjerno tanki. Ne dupliciraju proizvodna pravila; upućuju na kanonske dokumente u korijenu i `docs/`. Tako se jedna promjena pravila ne mora ručno kopirati u više skillova.
@@ -115,7 +121,8 @@ Ulaz: <točni dokumenti/odjeljci>
 Mape: <dopuštene putanje>
 Gotovo kad: <provjerljiv kriterij>
 Ovisi o: <PR/issue ili ništa>
-Review: <light | standard | critical>
+Risk: <low | standard | critical>
+Review effort: <light | standard | critical>
 ```
 
 Ako runtime nije zadan, orkestrator bira slobodan kompatibilan worker.
