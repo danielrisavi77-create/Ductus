@@ -1,13 +1,16 @@
 # Ductus: upute za AI coding agente
 
-Ovaj je dokument ulazna točka za Codex i druge agente koji automatski čitaju `AGENTS.md`. Ductus podržava tri eksplicitna načina rada: **worker**, **review** i **orchestrator**. Provider ili račun ne određuju ulogu.
+Ovaj je dokument ulazna točka za Codex i druge agente koji automatski čitaju `AGENTS.md`. Ductus podržava eksplicitne načine rada: **worker**, **review**, **qa**, **bug-hunter**, **product-ux** i **orchestrator**. Provider ili račun ne određuju ulogu.
 
-Prije rada pročitaj `CLAUDE.md`, `STATE.md` i `docs/MULTI-ACCOUNT.md`. Za detalje o paralelnom radu čitaj `docs/SESSIONS.md`; orkestrator dodatno čita `docs/ORKESTRATOR.md`.
+Prije rada pročitaj `CLAUDE.md`, `STATE.md`, `docs/ENGINEERING_SYSTEM.md` i `docs/MULTI-ACCOUNT.md`. Za detalje o paralelnom radu čitaj `docs/SESSIONS.md`; orkestrator dodatno čita `docs/ORKESTRATOR.md`.
 
 ## Odabir načina rada
 
 - **review**: `codex exec review`, zadatak koji izričito traži pregled/audit PR-a ili aktivirani skill `ductus-review`. Ne mijenjaj kod.
 - **worker**: zadatak `ZADATAK <id>`, eksplicitna implementacija/popravak ili aktivirani skill `ductus-worker`. Smiješ mijenjati samo dodijeljene mape.
+- **qa**: adversarialno testiranje; ne implementira feature pod testom i za critical PR koristi `ductus-qa` format.
+- **bug-hunter**: pokušava razbiti main/staging, otvara reproducibilne bugove i ne popravlja ih u istoj sesiji.
+- **product-ux**: istražuje tokove i prijedloge, otvara issue i ne implementira vlastiti prijedlog.
 - **orchestrator**: samo kad zadatak izričito kaže da si Ductus orkestrator ili aktivira `ductus-orchestrator`. Ne piši proizvodni kod.
 
 Ako način nije jasan, ne pretpostavljaj ovlast za pisanje. Pregled ili analiza bez eksplicitnog implementacijskog zadatka je read-only.
@@ -17,7 +20,7 @@ Ako način nije jasan, ne pretpostavljaj ovlast za pisanje. Pregled ili analiza 
 - Tvrda pravila su u `CLAUDE.md` i vrijede za svaki runtime.
 - GitHub i repo su zajednički control plane. Chat memorija, session-ID, privatni skill ili account-level postavka nikad nisu jedini izvor projektnog konteksta.
 - Svaki writer radi u zasebnom branchu/worktreeu od svježeg `origin/main`.
-- Vlasništvo mapa, tijek zadatka i izvještaj definirani su u `docs/SESSIONS.md` i `docs/MULTI-ACCOUNT.md`.
+- Vlasništvo mapa i tijek zadatka definirani su u `docs/SESSIONS.md`; risk, review, QA i WIP gateovi u `docs/ENGINEERING_SYSTEM.md`; cross-account predaja u `docs/MULTI-ACCOUNT.md`.
 - Ne mijenjaj granu drugog workera. Ne spajaj vlastiti PR.
 - Tajne, tokeni, auth datoteke i osobni podaci ne ulaze u repo, issue ni PR.
 
