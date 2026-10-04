@@ -5,10 +5,65 @@ const AGENT_RE =
 export function field(body, name) {
   if (!body) return null;
   const prefix = `${name.toLowerCase()}:`;
+  let inFence = false;
+
   for (const line of body.split(/\r?\n/)) {
     const trimmed = line.trim();
-    if (!trimmed.toLowerCase().startsWith(prefix)) continue;
+    if (trimmed.startsWith("```")) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence || !trimmed.toLowerCase().startsWith(prefix)) continue;
     return trimmed.slice(prefix.length).trim() || null;
+  }
+  return null;
+}
+
+function criticalReason(filename) {
+  if (
+    filename === "CLAUDE.md" ||
+    filename === "AGENTS.md" ||
+    filename === "docs/PRODUCT.md" ||
+    filename === "docs/ENGINEERING_SYSTEM.md" ||
+    filename === ".github/CODEOWNERS" ||
+    filename === ".github/workflows/engineering-gate.yml" ||
+    filename.startsWith("scripts/engineering/") ||
+    filename.startsWith("scripts/forbidden-terms/") ||
+    filename.startsWith("db/tests/")
+  ) {
+    return "governance/trust-critical path";
+  }
+
+  if (
+    /^db\/migrations\/.*(?:role|session|identity|evidence|submission|retention|auth|rls|policy|grant)/i.test(
+      filename,
+    )
+  ) {
+    return "security-sensitive migration";
+  }
+
+  if (
+    /^src\//.test(filename) &&
+    /(?:^|\/)(?:identity|authz|evidence|submission|retention|crypto|signing|forensics|session|jcs|signature|replay)(?:\/|[-_.])/.test(
+      filename,
+    )
+  ) {
+    return "trust-critical runtime path";
+  }
+
+  return null;
+}
+
+function standardReason(filename) {
+  if (
+    /^(src|app|db|infra|e2e)\//.test(filename) ||
+    /^\.github\/workflows\//.test(filename) ||
+    /^scripts\//.test(filename) ||
+    /^(package\.json|pnpm-lock\.yaml|compose\.yaml|eslint\.config\.mjs|next\.config\.ts|playwright\.config\.ts|vitest\.config\.ts|tsconfig\.json|lefthook\.yml)$/.test(
+      filename,
+    )
+  ) {
+    return "executable/runtime/config path";
   }
   return null;
 }
@@ -18,28 +73,17 @@ export function minimumRisk(files) {
   const reasons = [];
 
   for (const filename of files) {
-    const critical =
-      /^src\/.*\/(identity|authz|evidence|submission|retention|crypto|signing)(\/|$)/.test(filename) ||
-      /^db\/migrations\/.*(role|session|identity|evidence|submission|retention|auth)/i.test(filename) ||
-      /^scripts\/forbidden-terms\//.test(filename);
-
+    const critical = criticalReason(filename);
     if (critical) {
       rank = Math.max(rank, 2);
-      reasons.push(`${filename}: trust-critical path`);
+      reasons.push(`${filename}: ${critical}`);
       continue;
     }
 
-    const standard =
-      /^(src|app|db|infra|e2e)\//.test(filename) ||
-      /^\.github\/workflows\//.test(filename) ||
-      /^scripts\//.test(filename) ||
-      /^(package\.json|pnpm-lock\.yaml|compose\.yaml|eslint\.config\.mjs|next\.config\.ts|playwright\.config\.ts|vitest\.config\.ts|tsconfig\.json|lefthook\.yml)$/.test(
-        filename,
-      );
-
+    const standard = standardReason(filename);
     if (standard) {
       rank = Math.max(rank, 1);
-      reasons.push(`${filename}: executable/runtime/config path`);
+      reasons.push(`${filename}: ${standard}`);
     }
   }
 
