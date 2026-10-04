@@ -1,13 +1,13 @@
 name: Engineering review gate
 
-# Review/QA/override events are trusted because these workflows are loaded from
-# the default branch. The workflow never checks out PR code and writes only a
-# commit status on the PR head.
-on:
+# This workflow is intentionally privileged but metadata-only. It always loads
+# and executes code from the default branch, never fetches or executes PR code,
+# uses no repository secrets, and can write only commit statuses.
+on: # zizmor: ignore[dangerous-triggers] trusted default-branch metadata gate; PR code is never fetched or executed
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
   issue_comment:
     types: [created, edited, deleted]
-  pull_request_review:
-    types: [submitted, edited, dismissed]
 
 permissions:
   contents: read
@@ -24,6 +24,7 @@ jobs:
     if: >-
       github.event_name != 'issue_comment' ||
       github.event.issue.pull_request != null
+    name: Engineering review gate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -31,7 +32,7 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
-      - name: Evaluate independent review policy
+      - name: Evaluate metadata, independent review and QA policy
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/engineering/review-gate.mjs
