@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -28,7 +29,14 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
+      - name: Engineering PR metadata
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/engineering/pr-metadata-check.mjs
       - run: pnpm test:unit
+      - name: Engineering system unit tests
+        run: node --test scripts/engineering/*.test.mjs
       - run: pnpm test:property
       - run: pnpm build
       - name: Install Chromium

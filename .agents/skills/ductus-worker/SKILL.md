@@ -15,3 +15,14 @@ Operate in **worker** mode:
 - never depend on chat memory or private account skills as the only source of project context.
 
 Stop and report a blocker when a required owner decision, forbidden scope change, secret, or cross-role write is needed.
+
+
+Before opening or updating the PR, include the Engineering System metadata:
+
+```
+Agent: <runtime>:<slot>:<role>
+Risk: <low|standard|critical>
+Task: <task id>
+```
+
+Use the risk classification in `docs/ENGINEERING_SYSTEM.md`; do not downgrade trust-boundary changes to reduce review work.

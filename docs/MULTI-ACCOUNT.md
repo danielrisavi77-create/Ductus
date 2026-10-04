@@ -28,9 +28,9 @@ Poruke među Claude sesijama mogu ubrzati rad na istom računu, ali nikad nisu j
 Svaki aktivni agent ima četiri podatka:
 
 ```
-runtime: claude | codex
+runtime: claude | codex | chatgpt
 slot: a | b | ...
-role: orchestrator | platforma | backend | frontend | reviewer | short
+role: orchestrator | platforma | backend | frontend | reviewer | qa | bug-hunter | product-ux | short
 task: <id>
 ```
 
@@ -44,7 +44,7 @@ Primjer: `codex:b:backend:B-8`.
 
 Worker dobiva točno jedan zadatak ili eksplicitni lanac zadataka. Smije mijenjati samo mape dodijeljene ulozi. Radi od svježeg `origin/main`, testira, otvara PR, zapisuje izvještaj i staje.
 
-Claude i Codex mogu biti worker. Provider ne određuje vlasništvo mapa; uloga ga određuje.
+Claude, Codex i ChatGPT mogu biti worker. Provider ne određuje vlasništvo mapa; uloga ga određuje.
 
 ### Reviewer
 
@@ -56,18 +56,24 @@ Orkestrator ne piše proizvodni kod. Dodjeljuje zadatke, provjerava gateove, rje
 
 ## 5. Skills
 
-Repo sadrži adaptere za oba runtimea:
+Repo sadrži adaptere za podržane runtimee:
 
 ```
 .claude/skills/
   ductus-worker/
   ductus-orchestrator/
   ductus-review/
+  ductus-qa/
+  ductus-bug-hunter/
+  ductus-product-ux/
 
 .agents/skills/
   ductus-worker/
   ductus-orchestrator/
   ductus-review/
+  ductus-qa/
+  ductus-bug-hunter/
+  ductus-product-ux/
 ```
 
 Skillovi su namjerno tanki. Ne dupliciraju proizvodna pravila; upućuju na kanonske dokumente u korijenu i `docs/`. Tako se jedna promjena pravila ne mora ručno kopirati u više skillova.
@@ -108,14 +114,15 @@ Minimalni cross-account zadatak:
 
 ```
 ZADATAK <id>
-Runtime slot: <claude:a | codex:b | auto>
-Uloga: <platforma | backend | frontend | short>
+Runtime slot: <claude:a | codex:b | chatgpt:c | auto>
+Uloga: <platforma | backend | frontend | reviewer | qa | bug-hunter | product-ux | short>
 Cilj: <jedna rečenica>
 Ulaz: <točni dokumenti/odjeljci>
 Mape: <dopuštene putanje>
 Gotovo kad: <provjerljiv kriterij>
 Ovisi o: <PR/issue ili ništa>
-Review: <light | standard | critical>
+Risk: <low | standard | critical>
+Review effort: <light | standard | critical>
 ```
 
 Ako runtime nije zadan, orkestrator bira slobodan kompatibilan worker.
@@ -127,6 +134,8 @@ Svaki PR sadrži:
 ```
 IZVJEŠTAJ <id> · status: PR otvoren
 Agent: <runtime>:<slot>:<role>
+Risk: <low | standard | critical>
+Task: <id>
 Napravljeno: <3-5 stavki>
 Testovi: <naredbe i rezultat>
 Review: <status>
