@@ -1,23 +1,8 @@
+import { field } from "./metadata-parser.mjs";
+
 const RISK_RANK = { low: 0, standard: 1, critical: 2 };
 const AGENT_RE =
   /^(claude|codex|chatgpt):[A-Za-z0-9_-]+:(orchestrator|platforma|backend|frontend|reviewer|qa|bug-hunter|product-ux|short)$/;
-
-export function field(body, name) {
-  if (!body) return null;
-  const prefix = `${name.toLowerCase()}:`;
-  let inFence = false;
-
-  for (const line of body.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith("```")) {
-      inFence = !inFence;
-      continue;
-    }
-    if (inFence || !trimmed.toLowerCase().startsWith(prefix)) continue;
-    return trimmed.slice(prefix.length).trim() || null;
-  }
-  return null;
-}
 
 function criticalReason(filename) {
   if (
