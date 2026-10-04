@@ -10,14 +10,14 @@ Oznake ID-a odgovaraju tom dokumentu. Procjena je u večerima rada (oko 3 sata) 
 | --- | --- | --- | --- |
 | S-01 | Paket za zaštitu studenta (proširuje D-49) | 2 | 2 |
 | S-02 | Vremeplov verzija za studenta | 2 | 2 |
-| S-03 | Brze bilješke s mobitela u bilježnicu projekta | 3 | 3 prema `PROGRAM.md` |
+| S-03 | Brze bilješke s mobitela u bilježnicu projekta. **Vlasnik želi u pilotu** | 3 | 1 ili 2 |
 | S-06 | Planer rada iz roka i opsega po poglavlju | 2 | 2 |
 | S-07 | Pravopis prema jeziku rada, bez slanja teksta van | 1 | 1 |
 | S-08 | DOI i ISBN u bibliografski zapis | 1 do 2 | 1 |
 | S-09 | PDF izvori u bilježnici s isticanjem i citatom sa stranicom | 5 do 7 | 3 |
 | S-10 | Portfelj nakon studija | 1 | 3 |
 | S-11 | Uvodni vodič od dvije minute | 2 | 1 |
-| S-12 | Grupni radovi s pripisivanjem po autoru; jedan pisač u trenutku ili kasnije istodobno pisanje | 4 (izmjena pisača) ili 8 do 12 (istodobno) | **Izvan pilota (D-78)** |
+| S-12 | Grupni radovi s pripisivanjem po autoru. **Vlasnik želi u pilotu**; prijedlog za pilot: jedan pisač u trenutku, ostali komentiraju i predlažu (uklapa se u D-34), istodobno pisanje nakon pilota | 4 (izmjena pisača) ili 8 do 12 (istodobno) | 2 | **Izvan pilota (D-78).**
 | N-01 | Obavijesti e-poštom i u aplikaciji (odmah ili dnevni sažetak) | 2 do 3 | 1 |
 | N-02 | Podsjetnici o roku | 1 | 1 |
 | N-03 | Banka komentara | 1 | 2 |
