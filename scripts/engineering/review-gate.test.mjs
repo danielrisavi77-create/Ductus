@@ -7,36 +7,54 @@ const head = "a".repeat(40);
 const author = "claude:a:backend";
 const ownerLogin = "danielrisavi77-create";
 
-const prBody = (risk = "standard") =>
-  `Agent: ${author}\nRisk: ${risk}\nTask: B-1\n`;
+const prBody = (risk = "standard", agent = author) =>
+  `Agent: ${agent}\nRisk: ${risk}\nTask: B-1\n`;
 
+let counter = 0;
 const entry = (body, {
   login = ownerLogin,
   association = "OWNER",
+  createdAt,
 } = {}) => ({
   body,
   user: { login },
   author_association: association,
+  created_at: createdAt ?? new Date(1_700_000_000_000 + counter++ * 1000).toISOString(),
 });
 
-const review = (agent = "codex:b:reviewer", sha = head, meta = {}) =>
+const review = ({
+  agent = "codex:b:reviewer",
+  sha = head,
+  verdict = "PASS",
+  ...meta
+} = {}) =>
   entry(
-    `Agent-Review: ${agent}\nReview-Head: ${sha}\nReview-Verdict: PASS\n`,
+    `Agent-Review: ${agent}\nReview-Head: ${sha}\nReview-Verdict: ${verdict}\n`,
     meta,
   );
 
-const qa = (agent = "claude:c:qa", sha = head, meta = {}) =>
+const qa = ({
+  agent = "claude:c:qa",
+  sha = head,
+  verdict = "PASS",
+  scope = "offline + wrong actor",
+  ...meta
+} = {}) =>
   entry(
-    `QA-Agent: ${agent}\nQA-Head: ${sha}\nQA-Verdict: PASS\nQA-Scope: offline + wrong actor\n`,
+    `QA-Agent: ${agent}\nQA-Head: ${sha}\nQA-Verdict: ${verdict}\nQA-Scope: ${scope}\n`,
     meta,
   );
 
 const evaluate = (input) =>
-  evaluateGate({ ownerLogin, comments: [], reviews: [], ...input });
+  evaluateGate({ ownerLogin, comments: [], ...input });
 
-test("field reads exact metadata lines", () => {
+test("field reads metadata outside code fences only", () => {
   assert.equal(field("Risk: critical\nTask: B-8", "Risk"), "critical");
   assert.equal(field("Risky: low", "Risk"), null);
+  assert.equal(
+    field("```\nRisk: low\n```\nRisk: critical", "Risk"),
+    "critical",
+  );
 });
 
 test("missing metadata fails closed", () => {
@@ -69,7 +87,7 @@ test("unknown agent role fails closed", () => {
 
 test("ChatGPT is a valid runtime identity", () => {
   const result = evaluate({
-    body: "Agent: chatgpt:a:orchestrator\nRisk: low\nTask: SYS-1\n",
+    body: prBody("standard", "chatgpt:a:platforma"),
     headSha: head,
     comments: [review()],
   });
@@ -80,11 +98,11 @@ test("standard waits for review", () => {
   assert.equal(evaluate({ body: prBody(), headSha: head }).state, "pending");
 });
 
-test("author cannot review own PR", () => {
+test("same runtime and slot cannot review own PR under another role", () => {
   const result = evaluate({
     body: prBody(),
     headSha: head,
-    comments: [review("claude:a:backend")],
+    comments: [review({ agent: "claude:a:reviewer" })],
   });
   assert.equal(result.state, "pending");
 });
@@ -93,7 +111,7 @@ test("review is bound to the current head", () => {
   const result = evaluate({
     body: prBody(),
     headSha: head,
-    comments: [review("codex:b:reviewer", "b".repeat(40))],
+    comments: [review({ sha: "b".repeat(40) })],
   });
   assert.equal(result.state, "pending");
 });
@@ -102,10 +120,7 @@ test("untrusted outsider cannot spoof a review PASS", () => {
   const result = evaluate({
     body: prBody(),
     headSha: head,
-    comments: [review("codex:b:reviewer", head, {
-      login: "outsider",
-      association: "NONE",
-    })],
+    comments: [review({ login: "outsider", association: "NONE" })],
   });
   assert.equal(result.state, "pending");
 });
@@ -114,21 +129,69 @@ test("trusted collaborator review can satisfy the gate", () => {
   const result = evaluate({
     body: prBody(),
     headSha: head,
-    comments: [review("codex:b:reviewer", head, {
-      login: "trusted-reviewer",
-      association: "COLLABORATOR",
-    })],
+    comments: [review({ login: "trusted-reviewer", association: "COLLABORATOR" })],
   });
   assert.equal(result.state, "success");
 });
 
-test("standard passes with independent owner-posted review", () => {
+test("review example inside a code fence does not satisfy the gate", () => {
+  const body =
+    "Use this when done:\n```\n" +
+    `Agent-Review: codex:b:reviewer\nReview-Head: ${head}\nReview-Verdict: PASS\n` +
+    "```";
   const result = evaluate({
     body: prBody(),
     headSha: head,
-    comments: [review()],
+    comments: [entry(body)],
+  });
+  assert.equal(result.state, "pending");
+});
+
+test("review block must start the comment", () => {
+  const result = evaluate({
+    body: prBody(),
+    headSha: head,
+    comments: [entry(
+      `Review complete.\nAgent-Review: codex:b:reviewer\nReview-Head: ${head}\nReview-Verdict: PASS\n`,
+    )],
+  });
+  assert.equal(result.state, "pending");
+});
+
+test("latest verdict from one reviewer replaces its earlier PASS", () => {
+  const result = evaluate({
+    body: prBody(),
+    headSha: head,
+    comments: [
+      review({ verdict: "PASS" }),
+      review({ verdict: "FAIL" }),
+    ],
+  });
+  assert.equal(result.state, "pending");
+});
+
+test("later PASS can resolve an earlier FAIL from the same reviewer", () => {
+  const result = evaluate({
+    body: prBody(),
+    headSha: head,
+    comments: [
+      review({ verdict: "FAIL" }),
+      review({ verdict: "PASS" }),
+    ],
   });
   assert.equal(result.state, "success");
+});
+
+test("any current independent reviewer BLOCK holds the gate", () => {
+  const result = evaluate({
+    body: prBody(),
+    headSha: head,
+    comments: [
+      review({ agent: "codex:b:reviewer", verdict: "PASS" }),
+      review({ agent: "chatgpt:c:reviewer", verdict: "BLOCK" }),
+    ],
+  });
+  assert.equal(result.state, "pending");
 });
 
 test("critical also requires independent QA", () => {
@@ -147,16 +210,38 @@ test("critical also requires independent QA", () => {
   assert.equal(passing.state, "success");
 });
 
-test("QA cannot be the reviewer", () => {
-  const reviewer = "codex:b:reviewer";
+test("same runtime and slot cannot be both reviewer and QA", () => {
   const result = evaluate({
     body: prBody("critical"),
     headSha: head,
     comments: [
-      review(reviewer),
-      entry(
-        `QA-Agent: ${reviewer}\nQA-Head: ${head}\nQA-Verdict: PASS\nQA-Scope: test\n`,
-      ),
+      review({ agent: "codex:b:reviewer" }),
+      qa({ agent: "codex:b:qa" }),
+    ],
+  });
+  assert.equal(result.state, "pending");
+});
+
+test("author principal cannot provide QA under another role", () => {
+  const result = evaluate({
+    body: prBody("critical"),
+    headSha: head,
+    comments: [
+      review(),
+      qa({ agent: "claude:a:qa" }),
+    ],
+  });
+  assert.equal(result.state, "pending");
+});
+
+test("latest QA FAIL revokes an earlier QA PASS", () => {
+  const result = evaluate({
+    body: prBody("critical"),
+    headSha: head,
+    comments: [
+      review(),
+      qa({ verdict: "PASS" }),
+      qa({ verdict: "FAIL" }),
     ],
   });
   assert.equal(result.state, "pending");
@@ -168,21 +253,30 @@ test("outsider cannot spoof critical QA", () => {
     headSha: head,
     comments: [
       review(),
-      qa("claude:c:qa", head, { login: "outsider", association: "NONE" }),
+      qa({ login: "outsider", association: "NONE" }),
     ],
   });
   assert.equal(result.state, "pending");
 });
 
-test("owner override must target the current head and include a reason", () => {
-  const result = evaluate({
+test("owner override must be canonical, current-head and reasoned", () => {
+  const valid = evaluate({
     body: prBody("critical"),
     headSha: head,
     comments: [entry(
-      `Owner-Override: PASS\nOverride-Head: ${head}\nOverride-Reason: local reviewer unavailable\n`,
+      `Owner-Override: PASS\nOverride-Head: ${head}\nOverride-Reason: emergency governance decision\n`,
     )],
   });
-  assert.equal(result.state, "success");
+  assert.equal(valid.state, "success");
+
+  const prefixed = evaluate({
+    body: prBody("critical"),
+    headSha: head,
+    comments: [entry(
+      `Example only:\nOwner-Override: PASS\nOverride-Head: ${head}\nOverride-Reason: bypass\n`,
+    )],
+  });
+  assert.equal(prefixed.state, "pending");
 });
 
 test("collaborator cannot spoof owner override", () => {
