@@ -13,6 +13,10 @@ Kako više AI coding sesija radi na Ductusu istodobno, uključujući više Claud
 | **Backend** | Baza, uloge, RLS, pgTAP, RPC-i, evidencija, OIDC i sesije, worker, rekonstrukcija, potpisi | `src/domain/`, `src/application/`, `src/adapters/`, `src/server/`, `db/`, `app/api/`, `tests/` za te mape | Opus, high (evidencija, ovlasti, prijava); Sonnet za rutinu |
 | **Frontend** | Editor (Tiptap), journal i sinkronizacija u pregledniku (Dexie), ekrani, hr/en, pristupačnost, zabranjene riječi | `app/` (osim `app/api/`), `src/components/`, `src/editor/`, `src/client/`, `src/lib/i18n/`, `e2e/` | Sonnet, medium; Opus za sinkronizaciju |
 | **Kratkotrajna** | Jedan zadatak pa se arhivira: prepis dokumenta, spike, istraživanje | zadano u zadatku | prema zadatku |
+| **Product/UX** | Tokovi, copy, dizajn, human UX evaluacija, product issuei; ne implementira vlastiti prijedlog | read-only po defaultu | medium/high |
+| **QA** | Adversarial, offline, race, browser, chaos i regression testovi; smije dodavati testove/testne alate | `tests/`, `e2e/` i testni alati po zadatku | medium/high |
+| **Independent Reviewer** | Neovisni pregled PR-a; ne mijenja pregledanu granu | read-only | prema risku |
+| **Bug Hunter** | Pokušava razbiti main/staging i otvara reproducibilne issuee; ne popravlja nalaz | read-only | medium |
 
 Codex je zadano neovisni recenzent PR-a (§5), ali može biti worker kad zadatak izričito zada `worker` način. U tom slučaju vrijede ista vlasništva mapa i isti PR protokol kao za Claude worker; vlastiti PR ne smije sam proglasiti neovisno pregledanim.
 
