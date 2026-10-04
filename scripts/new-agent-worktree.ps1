@@ -1,4 +1,4 @@
-# Create an isolated Ductus worktree for a Claude or Codex worker.
+# Create an isolated Ductus worktree for a Claude, Codex, or ChatGPT worker.
 # Does not copy .env.local, credentials, tokens, or runtime auth state.
 # Usage:
 #   powershell -File scripts/new-agent-worktree.ps1 -Runtime codex -Slot b -Role backend -Task B-8
