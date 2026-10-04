@@ -61,7 +61,7 @@ Izvještaj u opisu PR-a je izvor istine; poruka je samo obavijest. Ništa u tije
 ```
 ZADATAK <id> · uloga: <uloga> · korak iz STATE.md: <naziv>
 Orkestrator: <ime; session ref je opcionalan>
-Runtime slot: <claude:a | codex:b | auto>
+Runtime slot: <claude:a | codex:b | chatgpt:c | auto>
 Cilj: <jedna rečenica>
 Ulaz: <dokumenti i odjeljci koje treba pročitati, ništa više>
 Opseg: <što ulazi>; Izvan opsega: <što ne ulazi>
