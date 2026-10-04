@@ -196,7 +196,7 @@ test("review example inside a code fence does not satisfy the gate", () => {
   const result = evaluate({
     body: prBody(),
     headSha: head,
-    comments: [entry(body)],
+    comments: [entry(body, { appSlug: "claude" })],
   });
   assert.equal(result.state, "pending");
 });
@@ -206,7 +206,8 @@ test("review block must start the comment", () => {
     body: prBody(),
     headSha: head,
     comments: [entry(
-      `Review complete.\nAgent-Review: codex:b:reviewer\nReview-Head: ${head}\nReview-Verdict: PASS\n`,
+      `Review complete.\nAgent-Review: claude:b:reviewer\nReview-Head: ${head}\nReview-Verdict: PASS\n`,
+      { appSlug: "claude" },
     )],
   });
   assert.equal(result.state, "pending");
@@ -241,8 +242,12 @@ test("any current independent reviewer BLOCK holds the gate", () => {
     body: prBody(),
     headSha: head,
     comments: [
-      review({ agent: "codex:b:reviewer", verdict: "PASS" }),
-      review({ agent: "chatgpt:c:reviewer", verdict: "BLOCK" }),
+      review({ agent: "claude:b:reviewer", verdict: "PASS", appSlug: "claude" }),
+      review({
+        agent: "chatgpt:c:reviewer",
+        verdict: "BLOCK",
+        appSlug: "chatgpt-codex-connector",
+      }),
     ],
   });
   assert.equal(result.state, "pending");
