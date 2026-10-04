@@ -25,7 +25,7 @@ Task: <ID ili kratki identifikator>
 
 ## Review
 
-Neovisni reviewer dodaje komentar:
+Neovisni reviewer dodaje **zaseban komentar čija je prva neprazna linija `Agent-Review:`**:
 
 ```
 Agent-Review: <runtime>:<slot>:reviewer
@@ -33,7 +33,7 @@ Review-Head: <sha>
 Review-Verdict: PASS
 ```
 
-Za `critical` PR QA dodaje:
+Za `critical` PR QA dodaje **zaseban komentar čija je prva neprazna linija `QA-Agent:`**:
 
 ```
 QA-Agent: <runtime>:<slot>:qa
