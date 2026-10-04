@@ -10,43 +10,65 @@ const APP_RUNTIMES = new Map([
   ["chatgpt-codex-connector", new Set(["chatgpt", "codex"])],
 ]);
 
-export function field(body, name) {
-  if (!body) return null;
-  const prefix = `${name.toLowerCase()}:`;
+function fenceInfo(line) {
+  const match = line.match(/^ {0,3}((?:`{3,})|(?:~{3,}))/);
+  if (!match) return null;
+  return { char: match[1][0], length: match[1].length };
+}
+
+function closesFence(line, fence) {
+  const re = fence.char === "`"
+    ? /^ {0,3}`{3,}\s*$/
+    : /^ {0,3}~{3,}\s*$/;
+  const match = line.match(re);
+  if (!match) return false;
+  const marker = line.trim();
+  const count = marker.match(fence.char === "`" ? /^`+/ : /^~+/)?.[0].length ?? 0;
+  return count >= fence.length;
+}
+
+function metadataLines(body) {
+  if (!body) return [];
+
+  const active = [];
   let fence = null;
 
-  for (const line of body.split(/\r?\n/)) {
-    const trimmed = line.trim();
-
+  for (const rawLine of body.split(/\r?\n/)) {
     if (fence) {
-      if (trimmed.startsWith(fence)) fence = null;
+      if (closesFence(rawLine, fence)) fence = null;
       continue;
     }
 
-    if (trimmed.startsWith("```")) {
-      fence = "```";
-      continue;
-    }
-    if (trimmed.startsWith("~~~")) {
-      fence = "~~~";
+    const opened = fenceInfo(rawLine);
+    if (opened) {
+      fence = opened;
       continue;
     }
 
-    if (!trimmed.toLowerCase().startsWith(prefix)) continue;
-    return trimmed.slice(prefix.length).trim() || null;
+    // Four-space/tab indented blocks are Markdown code blocks.
+    if (/^(?: {4}|\t)/.test(rawLine)) continue;
+
+    active.push(rawLine.trim());
+  }
+
+  return active;
+}
+
+export function field(body, name) {
+  const prefix = `${name.toLowerCase()}:`;
+  for (const line of metadataLines(body)) {
+    if (!line.toLowerCase().startsWith(prefix)) continue;
+    return line.slice(prefix.length).trim() || null;
   }
   return null;
 }
 
-function firstNonEmptyLine(body) {
-  return body
-    ?.split(/\r?\n/)
-    .map((line) => line.trim())
-    .find(Boolean) ?? "";
+function firstActiveNonEmptyLine(body) {
+  return metadataLines(body).find(Boolean) ?? "";
 }
 
 function canonicalBlock(body, firstField) {
-  const first = firstNonEmptyLine(body);
+  const first = firstActiveNonEmptyLine(body);
   return first.toLowerCase().startsWith(`${firstField.toLowerCase()}:`);
 }
 
@@ -61,13 +83,23 @@ function declaredRuntime(agent) {
   return agent.split(":")[0];
 }
 
+function declaredPrincipal(agent) {
+  if (!agent || !AGENT_RE.test(agent)) return null;
+  const [runtime, slot] = agent.split(":");
+  return `${runtime}:${slot}`;
+}
+
 function verifiedCommentIdentity(entry, declaredAgent) {
   const slug = entry?.appSlug ?? null;
   const runtime = declaredRuntime(declaredAgent);
   if (!slug || !runtime) return null;
   const allowedRuntimes = APP_RUNTIMES.get(slug);
   if (!allowedRuntimes?.has(runtime)) return null;
-  return { appSlug: slug, runtime };
+  return {
+    appSlug: slug,
+    runtime,
+    principal: declaredPrincipal(declaredAgent),
+  };
 }
 
 function sameHead(value, headSha) {
@@ -122,6 +154,7 @@ function latestVerdicts(entries, {
     if (
       !isAgent(agent, role) ||
       !identity ||
+      !identity.principal ||
       !sameHead(head, headSha) ||
       !verdict ||
       !VERDICTS.has(verdict) ||
@@ -130,7 +163,7 @@ function latestVerdicts(entries, {
       continue;
     }
 
-    const key = identity.appSlug;
+    const key = `${identity.appSlug}|${identity.principal}`;
     const previous = latest.get(key);
     const order = [entry.createdAt, entry.index];
     if (
@@ -153,10 +186,11 @@ export function evaluateGate({
 }) {
   const authorAgent = field(body, "Agent");
   const authorRuntime = declaredRuntime(authorAgent);
+  const authorPrincipal = declaredPrincipal(authorAgent);
   const risk = field(body, "Risk")?.toLowerCase() ?? null;
   const task = field(body, "Task");
 
-  if (!authorRuntime) {
+  if (!authorRuntime || !authorPrincipal) {
     return { state: "failure", description: "Missing or invalid Agent metadata." };
   }
   if (!risk || !RISK_VALUES.has(risk)) {
@@ -187,6 +221,7 @@ export function evaluateGate({
   });
 
   for (const [, review] of reviews) {
+    if (review.identity.principal === authorPrincipal) continue;
     if (review.verdict === "FAIL" || review.verdict === "BLOCK") {
       return {
         state: "pending",
@@ -195,15 +230,19 @@ export function evaluateGate({
     }
   }
 
-  const passingReviewerApps = new Set(
-    [...reviews.entries()]
-      .filter(([, review]) => review.verdict === "PASS")
-      .map(([reviewApp]) => reviewApp),
+  const passingReviews = [...reviews.values()].filter(
+    (review) =>
+      review.identity.principal !== authorPrincipal &&
+      review.verdict === "PASS",
   );
 
-  if (passingReviewerApps.size === 0) {
+  if (passingReviews.length === 0) {
     return { state: "pending", description: "Waiting for independently authenticated review." };
   }
+
+  const passingReviewerApps = new Set(
+    passingReviews.map((review) => review.identity.appSlug),
+  );
 
   if (risk === "critical") {
     const qa = latestVerdicts(trusted, {
@@ -215,8 +254,11 @@ export function evaluateGate({
       extraField: "QA-Scope",
     });
 
-    for (const [qaApp, result] of qa) {
-      if (passingReviewerApps.has(qaApp)) {
+    for (const [, result] of qa) {
+      if (
+        result.identity.principal === authorPrincipal ||
+        passingReviewerApps.has(result.identity.appSlug)
+      ) {
         continue;
       }
       if (result.verdict === "FAIL" || result.verdict === "BLOCK") {
@@ -227,14 +269,18 @@ export function evaluateGate({
       }
     }
 
-    const qaPass = [...qa.entries()].some(
-      ([qaApp, result]) =>
-        !passingReviewerApps.has(qaApp) &&
+    const qaPass = [...qa.values()].some(
+      (result) =>
+        result.identity.principal !== authorPrincipal &&
+        !passingReviewerApps.has(result.identity.appSlug) &&
         result.verdict === "PASS",
     );
 
     if (!qaPass) {
-      return { state: "pending", description: "Critical PR: waiting for separately authenticated QA PASS." };
+      return {
+        state: "pending",
+        description: "Critical PR: waiting for separately authenticated QA PASS.",
+      };
     }
   }
 
