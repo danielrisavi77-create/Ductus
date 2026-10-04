@@ -26,7 +26,7 @@ function criticalReason(filename) {
     filename === "docs/PRODUCT.md" ||
     filename === "docs/ENGINEERING_SYSTEM.md" ||
     filename === ".github/CODEOWNERS" ||
-    filename === ".github/workflows/engineering-gate.yml" ||
+    filename.startsWith(".github/workflows/") ||
     filename.startsWith("scripts/engineering/") ||
     filename.startsWith("scripts/forbidden-terms/") ||
     filename.startsWith("db/tests/")
