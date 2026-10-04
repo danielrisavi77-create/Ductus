@@ -4,7 +4,7 @@
 #   powershell -File scripts/new-agent-worktree.ps1 -Runtime codex -Slot b -Role backend -Task B-8
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('claude', 'codex')]
+    [ValidateSet('claude', 'codex', 'chatgpt')]
     [string]$Runtime,
 
     [Parameter(Mandatory = $true)]
