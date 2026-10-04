@@ -1,6 +1,7 @@
 const RISK_VALUES = new Set(["low", "standard", "critical"]);
 const AGENT_RE = /^(claude|codex):[A-Za-z0-9_-]+:(orchestrator|platforma|backend|frontend|reviewer|qa|bug-hunter|product-ux|short)$/;
 const SHA_RE = /^[0-9a-f]{40}$/i;
+const TRUSTED_ASSOCIATIONS = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^\$\{\}()|[\]\\]/g, "\\$&");
@@ -23,21 +24,30 @@ function sameHead(value, headSha) {
   return Boolean(value && SHA_RE.test(value) && value.toLowerCase() === headSha.toLowerCase());
 }
 
-function bodies(items) {
-  return (items ?? []).map((item) => item?.body ?? "").filter(Boolean);
+function trustedEntries(items) {
+  return (items ?? [])
+    .filter((item) => TRUSTED_ASSOCIATIONS.has(item?.author_association))
+    .map((item) => ({
+      body: item?.body ?? "",
+      login: item?.user?.login ?? null,
+      association: item?.author_association ?? null,
+    }))
+    .filter((entry) => entry.body);
 }
 
-function findOwnerOverride(allBodies, headSha) {
-  return allBodies.some((body) =>
+function findOwnerOverride(entries, headSha, ownerLogin) {
+  return entries.some(({ body, login, association }) =>
+    association === "OWNER" &&
+    login === ownerLogin &&
     field(body, "Owner-Override")?.toUpperCase() === "PASS" &&
     sameHead(field(body, "Override-Head"), headSha) &&
     Boolean(field(body, "Override-Reason")),
   );
 }
 
-function validReviews(allBodies, authorAgent, headSha) {
-  return allBodies
-    .map((body) => ({
+function validReviews(entries, authorAgent, headSha) {
+  return entries
+    .map(({ body }) => ({
       body,
       agent: field(body, "Agent-Review"),
       head: field(body, "Review-Head"),
@@ -52,9 +62,9 @@ function validReviews(allBodies, authorAgent, headSha) {
     );
 }
 
-function validQa(allBodies, authorAgent, reviewerAgents, headSha) {
-  return allBodies
-    .map((body) => ({
+function validQa(entries, authorAgent, reviewerAgents, headSha) {
+  return entries
+    .map(({ body }) => ({
       body,
       agent: field(body, "QA-Agent"),
       head: field(body, "QA-Head"),
@@ -72,7 +82,7 @@ function validQa(allBodies, authorAgent, reviewerAgents, headSha) {
     );
 }
 
-export function evaluateGate({ body, headSha, comments = [], reviews = [] }) {
+export function evaluateGate({ body, headSha, ownerLogin, comments = [], reviews = [] }) {
   const authorAgent = field(body, "Agent");
   const risk = field(body, "Risk")?.toLowerCase() ?? null;
   const task = field(body, "Task");
@@ -90,20 +100,24 @@ export function evaluateGate({ body, headSha, comments = [], reviews = [] }) {
     return { state: "failure", description: "Invalid PR head SHA." };
   }
 
-  const allBodies = [...bodies(comments), ...bodies(reviews)];
+  if (!ownerLogin) {
+    return { state: "failure", description: "Missing repository owner identity." };
+  }
 
-  if (findOwnerOverride(allBodies, headSha)) {
+  const trusted = [...trustedEntries(comments), ...trustedEntries(reviews)];
+
+  if (findOwnerOverride(trusted, headSha, ownerLogin)) {
     return { state: "success", description: `Owner override recorded for ${risk} risk.` };
   }
 
-  const reviewPasses = validReviews(allBodies, authorAgent, headSha);
+  const reviewPasses = validReviews(trusted, authorAgent, headSha);
   if (reviewPasses.length === 0) {
     return { state: "pending", description: "Waiting for independent review on current head." };
   }
 
   if (risk === "critical") {
     const reviewerAgents = new Set(reviewPasses.map((entry) => entry.agent));
-    const qaPasses = validQa(allBodies, authorAgent, reviewerAgents, headSha);
+    const qaPasses = validQa(trusted, authorAgent, reviewerAgents, headSha);
     if (qaPasses.length === 0) {
       return { state: "pending", description: "Critical PR: waiting for independent QA PASS." };
     }
