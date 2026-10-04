@@ -41,7 +41,7 @@ Novi feature rad je privremeno ograničen dok se postojeći stog ne osvježi na 
 
 - [ ] #39 P-4 dbmate + pgTAP — prvo osvježiti; baza za #46.
 - [ ] #41 Frontend sync B — osvježiti i review `standard`.
-- [ ] #42 lefthook Docker/CI — osvježiti i review `low`.
+- [ ] #42 lefthook Docker/CI — osvježiti i review `standard`.
 - [ ] #44 P-5 E2E stack — osvježiti; pri tome uključiti browser politiku iz `docs/TESTING.md`.
 - [ ] #45 P-6 zabranjeni izrazi — osvježiti; `critical` jer štiti PRODUCT §5.
 - [ ] #46 B-5a identity/RLS — nakon #39 retarget na `main`; `critical` + QA.
