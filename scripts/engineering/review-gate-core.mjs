@@ -5,9 +5,9 @@ const SHA_RE = /^[0-9a-f]{40}$/i;
 const TRUSTED_ASSOCIATIONS = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 const VERDICTS = new Set(["PASS", "FAIL", "BLOCK"]);
 
-const APP_RUNTIME = new Map([
-  ["claude", "claude"],
-  ["chatgpt-codex-connector", "chatgpt"],
+const APP_RUNTIMES = new Map([
+  ["claude", new Set(["claude"])],
+  ["chatgpt-codex-connector", new Set(["chatgpt", "codex"])],
 ]);
 
 export function field(body, name) {
@@ -61,11 +61,12 @@ function declaredRuntime(agent) {
   return agent.split(":")[0];
 }
 
-function verifiedCommentIdentity(entry) {
+function verifiedCommentIdentity(entry, declaredAgent) {
   const slug = entry?.appSlug ?? null;
-  if (!slug) return null;
-  const runtime = APP_RUNTIME.get(slug) ?? null;
-  if (!runtime) return null;
+  const runtime = declaredRuntime(declaredAgent);
+  if (!slug || !runtime) return null;
+  const allowedRuntimes = APP_RUNTIMES.get(slug);
+  if (!allowedRuntimes?.has(runtime)) return null;
   return { appSlug: slug, runtime };
 }
 
@@ -116,13 +117,11 @@ function latestVerdicts(entries, {
     const head = field(entry.body, headField);
     const verdict = field(entry.body, verdictField)?.toUpperCase() ?? null;
     const extra = extraField ? field(entry.body, extraField) : null;
-    const identity = verifiedCommentIdentity(entry);
-    const runtime = declaredRuntime(agent);
+    const identity = verifiedCommentIdentity(entry, agent);
 
     if (
       !isAgent(agent, role) ||
       !identity ||
-      identity.runtime !== runtime ||
       !sameHead(head, headSha) ||
       !verdict ||
       !VERDICTS.has(verdict) ||
@@ -151,7 +150,6 @@ export function evaluateGate({
   headSha,
   ownerLogin,
   comments = [],
-  authorAppSlug = null,
 }) {
   const authorAgent = field(body, "Agent");
   const authorRuntime = declaredRuntime(authorAgent);
@@ -188,8 +186,7 @@ export function evaluateGate({
     headSha,
   });
 
-  for (const [reviewApp, review] of reviews) {
-    if (authorAppSlug && reviewApp === authorAppSlug) continue;
+  for (const [, review] of reviews) {
     if (review.verdict === "FAIL" || review.verdict === "BLOCK") {
       return {
         state: "pending",
@@ -200,8 +197,7 @@ export function evaluateGate({
 
   const passingReviewerApps = new Set(
     [...reviews.entries()]
-      .filter(([reviewApp, review]) =>
-        (!authorAppSlug || reviewApp !== authorAppSlug) && review.verdict === "PASS")
+      .filter(([, review]) => review.verdict === "PASS")
       .map(([reviewApp]) => reviewApp),
   );
 
@@ -220,10 +216,7 @@ export function evaluateGate({
     });
 
     for (const [qaApp, result] of qa) {
-      if (
-        (authorAppSlug && qaApp === authorAppSlug) ||
-        passingReviewerApps.has(qaApp)
-      ) {
+      if (passingReviewerApps.has(qaApp)) {
         continue;
       }
       if (result.verdict === "FAIL" || result.verdict === "BLOCK") {
@@ -236,7 +229,6 @@ export function evaluateGate({
 
     const qaPass = [...qa.entries()].some(
       ([qaApp, result]) =>
-        (!authorAppSlug || qaApp !== authorAppSlug) &&
         !passingReviewerApps.has(qaApp) &&
         result.verdict === "PASS",
     );
