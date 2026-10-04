@@ -123,7 +123,7 @@ Review-Head: <40-znamenkasti SHA>
 Review-Verdict: PASS | FAIL | BLOCK
 ```
 
-Za isti `runtime:slot` vrijedi samo njegov najnoviji verdict na aktualnom headu. Aktualni `FAIL` ili `BLOCK` poništava raniji PASS. Autor i reviewer moraju imati različit `runtime:slot`.
+Verdict se ključa po `GitHub App + runtime:slot`. Za isti takav identitet vrijedi samo njegov najnoviji verdict na aktualnom headu. Aktualni `FAIL` ili `BLOCK` bilo kojeg valjanog neovisnog review identiteta drži gate blokiranim i ne može ga pregaziti PASS druge sesije istog Appa. Autor i reviewer moraju imati različit deklarirani `runtime:slot`.
 
 Za `critical` PR QA komentar je također zaseban kanonski komentar čija prva neprazna linija mora biti `QA-Agent:`:
 
@@ -136,7 +136,7 @@ QA-Scope: <što je adversarialno provjereno>
 
 Za `critical` PR reviewer i QA moraju biti strojno različiti po autentificiranom GitHub Appu koji je objavio komentar. Trenutno se prihvaća Claude App (`claude`) za `claude:*:reviewer|qa` i ChatGPT/Codex App (`chatgpt-codex-connector`) za `chatgpt:*|codex:*`. Jedan isti GitHub App ne može zadovoljiti i review i QA samo promjenom deklariranog runtimea.
 
-GitHub commit/PR API u ovom osobnom repou ne daje pouzdan App identitet autora svakog commita, pa **autor ≠ reviewer/QA nije strojno dokaziv ovim gateom**. To ostaje governance pravilo koje Orkestrator provodi kroz dodjelu zadatka i zasebne račune; gate ne smije tvrditi jaču garanciju nego što GitHub može dokazati. Ako se kasnije uvedu zasebni GitHub identiteti/Appovi za writere, ova provjera se može pooštriti.
+GitHub commit/PR API u ovom osobnom repou ne daje pouzdan App identitet autora svakog commita, pa **autor ≠ reviewer/QA nije kriptografski/stvarno autentificiran ovim gateom**. Ipak, gate kao defense-in-depth uspoređuje deklarirani author `runtime:slot` iz PR metadata s deklariranim reviewer/QA `runtime:slot` i odbija isti principal pod drugom ulogom. To ne zamjenjuje governance pravilo: Orkestrator i dalje mora dodijeliti odvojene instance/račune. Ako se kasnije uvedu zasebni GitHub identiteti/Appovi za writere, ova provjera se može pooštriti.
 
 Novi push poništava review i QA jer `*-Head` više nije jednak aktualnom PR headu. Formalni GitHub review state nije ulaz u ovaj agent gate; agent verdicti idu kroz kanonske PR komentare.
 
