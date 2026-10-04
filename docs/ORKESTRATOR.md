@@ -32,7 +32,7 @@ Spaja se (squash, D-86) samo ako je sve ispunjeno:
 
 Ako nešto ne prolazi, PR se vraća sesiji jednom porukom s točnim razlogom (npr. "rebase na origin/main"). Orkestrator ne mijenja grane drugih sesija.
 
-Diff čitaju CI i Codex; orkestrator gleda samo metapodatke i popis datoteka, osim kad Codex i sesija ne slažu.
+Diff čitaju CI i neovisni reviewer; orkestrator gleda metapodatke i popis datoteka, osim kad se reviewer i autor ne slažu ili risk zahtijeva njegovu odluku.
 
 ## 3. Nakon spajanja
 
@@ -40,6 +40,8 @@ Diff čitaju CI i Codex; orkestrator gleda samo metapodatke i popis datoteka, os
 2. Kad je redoslijed jasan, sesija dobiva lanac zadataka (npr. "F2, F3 i F4 redom, svaki svoj PR od svježeg `origin/main`"), da treba manje poruka.
 3. Ploča (Ductus pult): jedan skupni upis po potezu.
 4. `STATE.md`: skupno, najviše jednom dnevno i na kontrolnoj točki, kroz PR orkestratora.
+5. Provjeri post-merge smoke i osvježi zavisne PR-ove prije nove dodjele.
+6. Poštuj WIP limit iz `docs/ENGINEERING_SYSTEM.md`; novi writer ne otvaraj samo zato što je dostupan.
 
 ## 4. Što orkestrator odlučuje sam, a što pita
 
