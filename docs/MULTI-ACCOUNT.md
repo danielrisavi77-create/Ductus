@@ -28,7 +28,7 @@ Poruke među Claude sesijama mogu ubrzati rad na istom računu, ali nikad nisu j
 Svaki aktivni agent ima četiri podatka:
 
 ```
-runtime: claude | codex | chatgpt | chatgpt
+runtime: claude | codex | chatgpt
 slot: a | b | ...
 role: orchestrator | platforma | backend | frontend | reviewer | qa | bug-hunter | product-ux | short
 task: <id>
@@ -44,7 +44,7 @@ Primjer: `codex:b:backend:B-8`.
 
 Worker dobiva točno jedan zadatak ili eksplicitni lanac zadataka. Smije mijenjati samo mape dodijeljene ulozi. Radi od svježeg `origin/main`, testira, otvara PR, zapisuje izvještaj i staje.
 
-Claude i Codex mogu biti worker. Provider ne određuje vlasništvo mapa; uloga ga određuje.
+Claude, Codex i ChatGPT mogu biti worker. Provider ne određuje vlasništvo mapa; uloga ga određuje.
 
 ### Reviewer
 
@@ -56,7 +56,7 @@ Orkestrator ne piše proizvodni kod. Dodjeljuje zadatke, provjerava gateove, rje
 
 ## 5. Skills
 
-Repo sadrži adaptere za oba runtimea:
+Repo sadrži adaptere za podržane runtimee:
 
 ```
 .claude/skills/
