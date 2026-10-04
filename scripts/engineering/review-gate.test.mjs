@@ -130,6 +130,18 @@ test("author runtime slot cannot self-review under another role", () => {
   assert.equal(result.state, "pending");
 });
 
+test("Codex and ChatGPT same slot normalize to one OpenAI author principal", () => {
+  const result = evaluate({
+    body: prBody("standard", "codex:a:platforma"),
+    headSha: head,
+    comments: [review({
+      agent: "chatgpt:a:reviewer",
+      appSlug: "chatgpt-codex-connector",
+    })],
+  });
+  assert.equal(result.state, "pending");
+});
+
 test("author runtime slot cannot provide QA under another role", () => {
   const result = evaluate({
     body: prBody("critical", "chatgpt:a:backend"),
@@ -402,6 +414,31 @@ test("Claude GitHub App cannot claim a ChatGPT QA runtime", () => {
     comments: [
       review(),
       qa({ agent: "chatgpt:c:qa", appSlug: "claude" }),
+    ],
+  });
+  assert.equal(result.state, "pending");
+});
+
+test("QA FAIL from reviewer App still blocks even when another App QA passes", () => {
+  const result = evaluate({
+    body: prBody("critical"),
+    headSha: head,
+    comments: [
+      review({
+        agent: "claude:b:reviewer",
+        verdict: "PASS",
+        appSlug: "claude",
+      }),
+      qa({
+        agent: "claude:c:qa",
+        verdict: "FAIL",
+        appSlug: "claude",
+      }),
+      qa({
+        agent: "chatgpt:d:qa",
+        verdict: "PASS",
+        appSlug: "chatgpt-codex-connector",
+      }),
     ],
   });
   assert.equal(result.state, "pending");
