@@ -55,7 +55,7 @@ Primjeri:
 claude:a:backend
 claude:b:frontend
 codex:a:platforma
-codex:b:reviewer
+chatgpt:b:reviewer
 claude:c:qa
 ```
 
@@ -95,6 +95,15 @@ Gate:
 - sintetički staging prolaz kad BACKEND §6 točka 12 vrijedi.
 
 Za posebno osjetljiv auth/RLS/crypto PR Orkestrator može tražiti drugog reviewera iz drugog providera.
+
+### Automatski risk floor
+
+CI provjerava minimalnu razinu prema promijenjenim putanjama:
+- docs-only može biti `low`;
+- runtime kod, workflowi, infra i izvršne skripte najmanje `standard`;
+- identity/authz/evidence/submission/retention/crypto/signing, security migracije i forbidden-terms gate najmanje `critical`.
+
+Heuristika je samo donja granica. Orkestrator smije podići risk; agent ga ne smije spustiti ispod semantičke ozbiljnosti promjene.
 
 ## 6. PR metadata
 
@@ -137,7 +146,7 @@ Override-Head: <40-znamenkasti SHA>
 Override-Reason: <konkretan razlog>
 ```
 
-Engineering gate to može prihvatiti, ali override ostaje vidljiv u povijesti PR-a. Workflow ne može tehnički razlikovati je li isti GitHub račun komentar napisao čovjek ili agent; zato je override governance dokaz, a ne sigurnosna granica.
+Engineering gate prihvaća override samo iz komentara GitHub vlasnika repoa i za aktualni head, ali ne može razlikovati je li isti vlasnički račun komentar napisao čovjek ili agent; zato je override governance dokaz, a ne sigurnosna granica.
 
 ## 8. Tijek promjene
 
