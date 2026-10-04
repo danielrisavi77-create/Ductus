@@ -1,5 +1,5 @@
 const RISK_VALUES = new Set(["low", "standard", "critical"]);
-const AGENT_RE = /^(claude|codex):[A-Za-z0-9_-]+:[A-Za-z0-9_-]+$/;
+const AGENT_RE = /^(claude|codex):[A-Za-z0-9_-]+:(orchestrator|platforma|backend|frontend|reviewer|qa|bug-hunter|product-ux|short)$/;
 const SHA_RE = /^[0-9a-f]{40}$/i;
 
 function escapeRegExp(value) {
@@ -75,12 +75,16 @@ function validQa(allBodies, authorAgent, reviewerAgents, headSha) {
 export function evaluateGate({ body, headSha, comments = [], reviews = [] }) {
   const authorAgent = field(body, "Agent");
   const risk = field(body, "Risk")?.toLowerCase() ?? null;
+  const task = field(body, "Task");
 
   if (!isAgent(authorAgent)) {
     return { state: "failure", description: "Missing or invalid Agent metadata." };
   }
   if (!risk || !RISK_VALUES.has(risk)) {
     return { state: "failure", description: "Risk must be low, standard, or critical." };
+  }
+  if (!task) {
+    return { state: "failure", description: "Missing Task metadata." };
   }
   if (!SHA_RE.test(headSha)) {
     return { state: "failure", description: "Invalid PR head SHA." };
