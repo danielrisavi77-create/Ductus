@@ -43,12 +43,16 @@ function criticalReason(filename) {
   }
 
   if (
-    /^src\//.test(filename) &&
-    /(?:^|\/)(?:identity|authz|evidence|submission|retention|crypto|signing|forensics|session|jcs|signature|replay)(?:\/|[-_.])/.test(
+    /^(src|app)\//.test(filename) &&
+    /(?:^|\/)(?:identity|auth|authz|oidc|login|evidence|ingest|submission|submissions|retention|crypto|signing|forensics|session|jcs|signature|replay)(?:\/|[-_.])/.test(
       filename,
     )
   ) {
     return "trust-critical runtime path";
+  }
+
+  if (filename === "middleware.ts" || filename === "src/middleware.ts") {
+    return "trust-critical request boundary";
   }
 
   return null;
