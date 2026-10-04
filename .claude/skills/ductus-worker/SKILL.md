@@ -14,3 +14,14 @@ Operate in **worker** mode:
 - never treat account memory or private skills as a project source of truth.
 
 Stop and report a blocker for owner decisions, forbidden scope changes, secrets, or cross-role writes.
+
+
+Before opening or updating the PR, include the Engineering System metadata:
+
+```
+Agent: <runtime>:<slot>:<role>
+Risk: <low|standard|critical>
+Task: <task id>
+```
+
+Use the risk classification in `docs/ENGINEERING_SYSTEM.md`; do not downgrade trust-boundary changes to reduce review work.
