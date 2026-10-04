@@ -10,7 +10,7 @@ M0 Temelj: plan proizvoda spojen (PR #1); postavljen rad u paralelnim sesijama (
 
 Agent nikad ne uzima ove stavke i nikad ne čeka na njih.
 
-- [ ] Otvoriti lokalnu sesiju "Ductus Codex" na `D:\Ductus` (D-90); orkestrator joj šalje red PR-ova za Codex. Do tada se ništa ne spaja.
+- [ ] Nakon spajanja Engineering System v1 postaviti GitHub zaštitu `main` grane prema `docs/ENGINEERING_SYSTEM.md` §10 (PR, obvezni statusi, bez force pusha, squash only).
 - [ ] Proba demoa u subotu 31. 10. 2026. i snimka prolaza (PLAN-DEMO D-3, D-4).
 - [ ] Potvrditi ili promijeniti prijedloge D-08, D-16, D-20, D-34, D-37, D-38 u `docs/DECISIONS.md`; odlučiti D-06 ili stroža D-39.
 - [ ] Potvrditi zadane pragove P-01 do P-04.
@@ -38,7 +38,7 @@ Zadatke dodjeljuje orkestrator po `docs/ORKESTRATOR.md`. Do demoa vrijedi tablic
 
 **Adresa orkestratora:** "Ductus orkestrator" [session_01V3aEqiiQe33bd3PLecLLXf] (cloud sesija, od 3. 10. 2026., noć; mijenja se pri rotaciji, `SESSIONS.md` §2a). Poruke orkestratoru idu alatom `send_message` na taj ID.
 
-**Sesije rade u oblaku (od 3. 10. 2026., noć).** Orkestrator, Platforma (`session_01BXYXU76aCTprP1ckrJSSHW`), Frontend (`session_01SMw6v6eZpsHRZp5E1VtS5B`) i Backend (`session_01ES5D5titYTM6irHQvSvJCU`) su cloud sesije sa svježim klonom repoa; `D:\Ductus` vrijedi za lokalne sesije. Cloud sesije nemaju Codex CLI ni PowerShell, pa `scripts/codex-review.ps1` pokreće lokalna sesija na `D:\Ductus` (pitanje za Daniela u Owner queue).
+**Sesije rade kroz multi-account sustav.** Backend, Frontend i Platforma su stalni writeri; Orkestrator, Product/UX, QA, Independent Reviewer i Bug Hunter su kontrolne uloge iz `docs/ENGINEERING_SYSTEM.md`. Lokalni `scripts/codex-review.ps1` ostaje jedan mogući reviewer runtime, ali nije obvezan ako je neovisni review zabilježen na aktualnom headu prema Engineering gateu.
 
 **Repo je na `D:\Ductus` (SSD, od 3. 10. 2026.).** P-8: C: je tvrdi disk; instalacija 879 s na C: prema 15 s na D:, typecheck i testovi 462 s prema 10 s. pnpm pohrana je `D:\pnpm-store` (globalno, mora biti na istom disku). Nove sesije i worktreeovi otvaraju se iz `D:\Ductus`; stara kopija `C:\Users\Daniel\Ductus` ostaje dok se stare sesije ne arhiviraju.
 
@@ -48,7 +48,7 @@ Zadatke dodjeljuje orkestrator po `docs/ORKESTRATOR.md`. Do demoa vrijedi tablic
 
 Prvi potezi nove sesije orkestratora:
 1. PR koji u `STATE.md` upisuje novu adresu orkestratora; ista adresa porukom svim aktivnim sesijama (`ORKESTRATOR.md` §7).
-2. Popis sesija: potvrditi da su Platforma 2, Frontend 2 i Backend 2 pokrenute i zatvorile svoje issuee; postaviti effort po zadatku (Platforma P-4 medium, Frontend medium, Backend B-5 high).
+2. Potvrditi tri stalna writera (Platforma, Frontend, Backend), WIP limite iz Engineering System v1 i risk razinu svakog aktivnog PR-a.
 3. Poruke stižu samo dok orkestrator miruje: bez dugotrajnih pozadinskih petlji (`ORKESTRATOR.md` §1); kad sesija javi da poruka nije potvrđena, čitati njezin transkript.
 4. Pult: https://claude.ai/artifact/UY9VUZPW4mePTZjhCPGLSd (podaci preko ArtifactData, kolekcije `board`, `sessions`, `days`); pitanja Danielu obaviješću (§4a).
 5. Kontrolna točka T1 u petak 9. 10. (`PLAN-DEMO.md` §3): kostur, CI i lokalni stog spojeni, dizajn odobren; uz to prijenos jezgre (T2) je za Backend gotov, za Frontend 5 od 11 koraka.
