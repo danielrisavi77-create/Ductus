@@ -98,12 +98,12 @@ Za posebno osjetljiv auth/RLS/crypto PR Orkestrator može tražiti drugog review
 
 ### Automatski risk floor
 
-CI provjerava minimalnu razinu prema promijenjenim putanjama:
-- docs-only može biti `low`;
-- runtime kod, workflowi, infra i izvršne skripte najmanje `standard`;
-- identity/authz/evidence/submission/retention/crypto/signing, security migracije i forbidden-terms gate najmanje `critical`.
+CI i Engineering review gate ponovno računaju minimalnu razinu prema promijenjenim putanjama:
+- obični docs-only može biti `low`;
+- runtime kod, obični workflowi, infra i izvršne skripte najmanje `standard`;
+- identity/authz/evidence/submission/retention/crypto/signing/forensics/session/JCS/signature/replay, security migracije, pgTAP matrica, forbidden-terms gate, `PRODUCT.md`, `CLAUDE.md`, `AGENTS.md`, `ENGINEERING_SYSTEM.md`, CODEOWNERS i sam engineering gate najmanje `critical`.
 
-Heuristika je samo donja granica. Orkestrator smije podići risk; agent ga ne smije spustiti ispod semantičke ozbiljnosti promjene.
+Heuristika je samo donja granica. Orkestrator smije podići risk; agent ga ne smije spustiti ispod semantičke ozbiljnosti promjene. Edit PR bodyja na istom headu ponovno pokreće trusted gate, pa promjena `Risk`, `Agent` ili `Task` ne nasljeđuje stari zeleni status.
 
 ## 6. PR metadata
 
@@ -115,24 +115,26 @@ Risk: low | standard | critical
 Task: <ID ili kratki identifikator>
 ```
 
-Review komentar mora sadržavati:
+Review komentar je zaseban kanonski komentar. **Prva neprazna linija mora biti `Agent-Review:`**; primjer u code blocku ili tekst nakon preambule ne vrijedi kao verdict.
 
 ```
 Agent-Review: <runtime>:<slot>:reviewer
 Review-Head: <40-znamenkasti SHA>
-Review-Verdict: PASS
+Review-Verdict: PASS | FAIL | BLOCK
 ```
 
-Za `critical` PR QA komentar dodatno sadrži:
+Za isti `runtime:slot` vrijedi samo njegov najnoviji verdict na aktualnom headu. Aktualni `FAIL` ili `BLOCK` poništava raniji PASS. Autor i reviewer moraju imati različit `runtime:slot`.
+
+Za `critical` PR QA komentar je također zaseban kanonski komentar čija prva neprazna linija mora biti `QA-Agent:`:
 
 ```
 QA-Agent: <runtime>:<slot>:qa
 QA-Head: <40-znamenkasti SHA>
-QA-Verdict: PASS
+QA-Verdict: PASS | FAIL | BLOCK
 QA-Scope: <što je adversarialno provjereno>
 ```
 
-Novi push poništava review i QA jer `*-Head` više nije jednak aktualnom PR headu.
+Autor, passing reviewer i QA moraju biti tri različita `runtime:slot` identiteta za critical PR. Novi push poništava review i QA jer `*-Head` više nije jednak aktualnom PR headu. Formalni GitHub review state nije ulaz u ovaj agent gate; agent verdicti idu kroz kanonske PR komentare.
 
 ## 7. Owner Override
 
@@ -146,7 +148,7 @@ Override-Head: <40-znamenkasti SHA>
 Override-Reason: <konkretan razlog>
 ```
 
-Engineering gate prihvaća override samo iz komentara GitHub vlasnika repoa i za aktualni head, ali ne može razlikovati je li isti vlasnički račun komentar napisao čovjek ili agent; zato je override governance dokaz, a ne sigurnosna granica.
+Engineering gate prihvaća override samo iz zasebnog komentara GitHub vlasnika repoa čija je prva neprazna linija `Owner-Override:`, i samo za aktualni head. Ne može razlikovati je li isti vlasnički račun komentar napisao čovjek ili agent; zato je override governance dokaz, a ne sigurnosna granica.
 
 ## 8. Tijek promjene
 
@@ -201,7 +203,11 @@ Ciljno GitHub pravilo za `main`:
   - `Engineering review gate`
 - merge metoda: squash.
 
-Ako GitHub administracijski API nije dostupan agentu, ova konfiguracija je Owner queue stavka i ne smije se lažno označiti dovršenom.
+Trust/governance putanje iz `.github/CODEOWNERS` dodatno zahtijevaju Code Owner review.
+
+Engineering review status proizvodi privileged metadata-only workflow: `pull_request_target` služi za opened/synchronize/reopened/edited/ready_for_review, a `issue_comment` za agent verdict/override komentare. Workflow uvijek checkouta **default branch**, nikad PR head/merge ref, ne izvršava PR kod, nema repository secrets i jedina write ovlast mu je `statuses: write`.
+
+Za javni repo owner mora prije 2. 11. 2026. potvrditi Actions event policy koja dopušta ovaj namjerni `pull_request_target` ili prijeći na okruženje gdje ga default politika ne blokira (issue #53). Ako GitHub administracijski API nije dostupan agentu, ova konfiguracija je Owner queue stavka i ne smije se lažno označiti dovršenom.
 
 ## 11. Token i kontekst politika
 
