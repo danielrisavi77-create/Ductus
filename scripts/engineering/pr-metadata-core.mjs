@@ -4,9 +4,13 @@ const AGENT_RE =
 
 export function field(body, name) {
   if (!body) return null;
-  const escaped = name.replace(/[.*+?^\$\{\}()|[\]\\]/g, "\\$&");
-  const match = body.match(new RegExp(`^${escaped}:\\s*(.+?)\\s*$`, "mi"));
-  return match?.[1]?.trim() ?? null;
+  const prefix = `${name.toLowerCase()}:`;
+  for (const line of body.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed.toLowerCase().startsWith(prefix)) continue;
+    return trimmed.slice(prefix.length).trim() || null;
+  }
+  return null;
 }
 
 export function minimumRisk(files) {
