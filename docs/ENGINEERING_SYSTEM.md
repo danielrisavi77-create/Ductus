@@ -101,7 +101,7 @@ Za posebno osjetljiv auth/RLS/crypto PR Orkestrator može tražiti drugog review
 CI i Engineering review gate ponovno računaju minimalnu razinu prema promijenjenim putanjama:
 - obični docs-only može biti `low`;
 - runtime kod, obični workflowi, infra i izvršne skripte najmanje `standard`;
-- identity/authz/evidence/submission/retention/crypto/signing/forensics/session/JCS/signature/replay, security migracije, pgTAP matrica, forbidden-terms gate, `PRODUCT.md`, `CLAUDE.md`, `AGENTS.md`, `ENGINEERING_SYSTEM.md`, CODEOWNERS i sam engineering gate najmanje `critical`.
+- identity/auth/authz/OIDC/login/evidence/ingest/submission/retention/crypto/signing/forensics/session/JCS/signature/replay, request middleware, sve `app/api/**` trust granice koje sadrže te segmente, security migracije, pgTAP matrica, forbidden-terms gate, `PRODUCT.md`, `CLAUDE.md`, `AGENTS.md`, `ENGINEERING_SYSTEM.md`, CODEOWNERS i **svaki GitHub workflow** najmanje `critical`.
 
 Heuristika je samo donja granica. Orkestrator smije podići risk; agent ga ne smije spustiti ispod semantičke ozbiljnosti promjene. Edit PR bodyja na istom headu ponovno pokreće trusted gate, pa promjena `Risk`, `Agent` ili `Task` ne nasljeđuje stari zeleni status.
 
@@ -134,7 +134,11 @@ QA-Verdict: PASS | FAIL | BLOCK
 QA-Scope: <što je adversarialno provjereno>
 ```
 
-Autor, passing reviewer i QA moraju biti tri različita `runtime:slot` identiteta za critical PR. Novi push poništava review i QA jer `*-Head` više nije jednak aktualnom PR headu. Formalni GitHub review state nije ulaz u ovaj agent gate; agent verdicti idu kroz kanonske PR komentare.
+Za `critical` PR reviewer i QA moraju biti strojno različiti po autentificiranom GitHub Appu koji je objavio komentar. Trenutno se prihvaća Claude App (`claude`) za `claude:*:reviewer|qa` i ChatGPT/Codex App (`chatgpt-codex-connector`) za `chatgpt:*|codex:*`. Jedan isti GitHub App ne može zadovoljiti i review i QA samo promjenom deklariranog runtimea.
+
+GitHub commit/PR API u ovom osobnom repou ne daje pouzdan App identitet autora svakog commita, pa **autor ≠ reviewer/QA nije strojno dokaziv ovim gateom**. To ostaje governance pravilo koje Orkestrator provodi kroz dodjelu zadatka i zasebne račune; gate ne smije tvrditi jaču garanciju nego što GitHub može dokazati. Ako se kasnije uvedu zasebni GitHub identiteti/Appovi za writere, ova provjera se može pooštriti.
+
+Novi push poništava review i QA jer `*-Head` više nije jednak aktualnom PR headu. Formalni GitHub review state nije ulaz u ovaj agent gate; agent verdicti idu kroz kanonske PR komentare.
 
 ## 7. Owner Override
 
@@ -203,7 +207,7 @@ Ciljno GitHub pravilo za `main`:
   - `Engineering review gate`
 - merge metoda: squash.
 
-Trust/governance putanje iz `.github/CODEOWNERS` dodatno zahtijevaju Code Owner review.
+Trust/governance putanje su označene u `.github/CODEOWNERS`. Dok je Daniel jedini GitHub code owner i ujedno autor većine PR-ova, branch protection **ne smije** uključiti obvezni Code Owner approval jer GitHub ne dopušta odobravanje vlastitog PR-a. Kad postoji drugi stvarni GitHub code-owner identitet, #53 može uključiti taj zahtjev. Do tada zaštitu daju critical risk floor, neovisni App-authenticated review/QA i Owner Override samo kao eksplicitna iznimka.
 
 Engineering review status proizvodi privileged metadata-only workflow: `pull_request_target` služi za opened/synchronize/reopened/edited/ready_for_review, a `issue_comment` za agent verdict/override komentare. Workflow uvijek checkouta **default branch**, nikad PR head/merge ref, ne izvršava PR kod, nema repository secrets i jedina write ovlast mu je `statuses: write`.
 
