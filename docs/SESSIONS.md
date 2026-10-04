@@ -1,8 +1,8 @@
 # Ductus: rad u paralelnim sesijama
 
-Verzija 0.2 · 3. 10. 2026. · Odgovorna osoba: Daniel Rišavi
+Verzija 0.3 · 4. 10. 2026. · Odgovorna osoba: Daniel Rišavi
 
-Kako više Claude Code sesija radi na Ductusu istodobno. Vrijedi uz `CLAUDE.md`; u sukobu vrijedi `CLAUDE.md`.
+Kako više AI coding sesija radi na Ductusu istodobno, uključujući više Claude i Codex/ChatGPT računa. Vrijedi uz `CLAUDE.md` i `docs/MULTI-ACCOUNT.md`; u sukobu vrijedi `CLAUDE.md`.
 
 ## 1. Uloge
 
@@ -14,7 +14,7 @@ Kako više Claude Code sesija radi na Ductusu istodobno. Vrijedi uz `CLAUDE.md`;
 | **Frontend** | Editor (Tiptap), journal i sinkronizacija u pregledniku (Dexie), ekrani, hr/en, pristupačnost, zabranjene riječi | `app/` (osim `app/api/`), `src/components/`, `src/editor/`, `src/client/`, `src/lib/i18n/`, `e2e/` | Sonnet, medium; Opus za sinkronizaciju |
 | **Kratkotrajna** | Jedan zadatak pa se arhivira: prepis dokumenta, spike, istraživanje | zadano u zadatku | prema zadatku |
 
-Codex nije sesija nego neovisni recenzent PR-a (§5).
+Codex je zadano neovisni recenzent PR-a (§5), ali može biti worker kad zadatak izričito zada `worker` način. U tom slučaju vrijede ista vlasništva mapa i isti PR protokol kao za Claude worker; vlastiti PR ne smije sam proglasiti neovisno pregledanim.
 
 Pravila vlasništva:
 
@@ -31,8 +31,8 @@ Najviše četiri sesije koje pišu kod istodobno. Usko grlo je pregled i spajanj
 2. Sesija radi u svom worktreeu na grani `<uloga>/<kratki-opis>` (npr. `backend/m0-port-domain`), od svježeg `origin/main`.
 3. Testovi i provjere lokalno zeleni (`pnpm lint`, `pnpm typecheck`, `pnpm test`); lefthook to radi pri commitu.
 4. Sesija otvara PR (jedan korak iz `STATE.md`, do oko 400 redaka; veći PR obrazlaže zašto).
-5. Sesija pokreće Codex pregled (§5) i ispravlja nalaze koje prihvaća; odbijene nalaze obrazlaže u PR-u.
-6. Sesija šalje izvještaj orkestratoru (predložak u §3) i staje.
+5. PR dobiva neovisni pregled (§5). Zadano ga radi Codex. Ako je autor Codex worker, pregled mora napraviti druga aktivna agent-instanca; za kritične promjene koristi se drugi račun ili drugi provider kad je dostupan. Autor ispravlja nalaze koje prihvaća, a odbijene obrazlaže u PR-u.
+6. Sesija zapisuje izvještaj u PR (predložak u §3) i staje. Direktna poruka orkestratoru je dodatna obavijest samo kad su obje sesije mogu međusobno komunicirati.
 7. Spaja samo sesija "Ductus orkestrator" (izričita ovlast Daniela, 3. 10. 2026.), kad Codex nema otvorenih kritičnih nalaza i PR ne čeka Danielovu odluku. Radne sesije nikad ne spajaju PR, ne mijenjaju `.claude/` postavke i ne diraju postavke repoa na GitHubu.
 8. Orkestrator ažurira `STATE.md` i dnevnik, šalje sljedeći zadatak ili arhivira sesiju (arhiviranje briše worktree).
 
@@ -45,9 +45,9 @@ Izvještaj u opisu PR-a je izvor istine; poruka je samo obavijest. Ništa u tije
 1. **Sesija:** ako slanje vrati "nije dostavljeno", pokuša još jednom. Ako ni tad ne prođe, doda PR-u oznaku `izvjestaj-ceka` (oznaku jednom stvara Daniel; dok ne postoji, umjesto nje komentar na PR-u "IZVJEŠTAJ čeka orkestratora") i staje. Ne ponavlja u petlji i ne čeka odgovor.
    **Kad PR ne postoji** (status "blokirano" prije PR-a ili "gotovo bez PR-a"), sesija nakon neuspjelog ponovnog pokušaja otvara GitHub issue s naslovom `IZVJEŠTAJ <id>`, izvještajem u tijelu i istom oznakom (ili bez nje dok ne postoji), i staje.
 2. **Orkestrator ne ovisi o porukama:** na početku svakog poteza pregleda otvorene PR-ove (`gh pr list --label izvjestaj-ceka` i PR-ove svih dodijeljenih zadataka) i otvorene issuee s naslovom `IZVJEŠTAJ` (`gh issue list --search "IZVJEŠTAJ in:title"`), obrađuje izvještaje i zatvara obrađene issuee.
-3. **Stanje sesija:** `notify_when_idle` ne radi za sesije desktop aplikacije (provjereno 3. 10. 2026.), pa orkestrator na početku poteza uz PR-ove pogleda i popis sesija (radi, miruje, PR otvoren ili spojen), bez ispitivanja u petlji.
-4. **Jedan orkestrator:** aktivna je samo jedna sesija s imenom "Ductus orkestrator"; stara se arhivira ili preimenuje. Trenutna adresa orkestratora (ime i ID sesije) piše na vrhu odjeljka "Agent queue" u `STATE.md` i mijenja se pri svakoj rotaciji. Prije slanja izvještaja sesija pogleda popis sesija i šalje aktivnoj sesiji "Ductus orkestrator"; adresa iz `from` starog zadatka može pripadati arhiviranoj sesiji. Kad se adrese ne slažu, vrijedi popis sesija.
-5. **Sesija koja šuti:** ako sesija ne otvori PR u očekivanom vremenu, orkestrator pogleda njezino stanje na popisu sesija (zauzeta ili miruje) i pita je jednom. Poruke tipa "jesi li gotova?" se ne šalju.
+3. **Stanje sesija:** popis sesija vrijedi samo za runtime/račun koji ga može vidjeti. `notify_when_idle` ne radi za sesije desktop aplikacije (provjereno 3. 10. 2026.), pa orkestrator može pogledati lokalno vidljive sesije, ali stanje drugih računa zaključuje samo iz GitHub issuea/PR-ova i njihovih izvještaja.
+4. **Jedan orkestrator:** aktivan je samo jedan orkestrator. Session ime/ID u `STATE.md` može ostati pomoćna adresa za isti račun, ali nije cross-account identitet. Za drugi račun vrijedi GitHub zadatak/PR; ako session adresa nije dostupna, ništa ne smije stati zbog toga.
+5. **Sesija koja šuti:** ako sesija ne otvori PR u očekivanom vremenu, orkestrator prvo provjeri GitHub. Za sesiju na istom računu može dodatno pogledati runtime stanje i pitati je jednom. Sesiju drugog računa ne smatra završenom ili zaglavljenom samo zato što je nema na lokalnom popisu sesija.
 
 ## 3. Predlošci
 
@@ -55,7 +55,8 @@ Izvještaj u opisu PR-a je izvor istine; poruka je samo obavijest. Ništa u tije
 
 ```
 ZADATAK <id> · uloga: <uloga> · korak iz STATE.md: <naziv>
-Orkestrator: <ime i ref, npr. Ductus orkestrator [b568f5]>
+Orkestrator: <ime; session ref je opcionalan>
+Runtime slot: <claude:a | codex:b | auto>
 Cilj: <jedna rečenica>
 Ulaz: <dokumenti i odjeljci koje treba pročitati, ništa više>
 Opseg: <što ulazi>; Izvan opsega: <što ne ulazi>
@@ -69,6 +70,7 @@ Ovisi o: <PR ili ništa>
 ```
 IZVJEŠTAJ <id> · status: PR otvoren | blokirano | gotovo bez PR-a
 PR: <poveznica>
+Agent: <runtime>:<slot>:<uloga>
 Napravljeno: <3 do 5 stavki>
 Testovi: <naredba i rezultat>
 Codex: <broj nalaza, prihvaćeno, odbijeno uz razlog>
@@ -76,7 +78,7 @@ Otvoreno ili blokira: <stavke ili "ništa">
 Treba Daniel: <odluka ili "ništa">
 ```
 
-Izvještaj ide porukom orkestratoru na adresu iz zadatka (ili iz `from` poruke zadatka). Isti sadržaj ide u opis PR-a, pa ništa ne ovisi samo o poruci; ako poruka ne stigne, vrijedi §2a.
+Izvještaj obvezno ide u opis PR-a ili, bez PR-a, u `IZVJEŠTAJ <id>` issue. Direktna poruka orkestratoru je opcionalna optimizacija za sesije koje se međusobno vide; cross-account rad nikad ne ovisi o njoj.
 
 ## 4. Štednja tokena
 
@@ -106,9 +108,9 @@ Razinu zadaje orkestrator u zadatku; kad je ne zada, sesija bira po tablici (Dan
 | `standard` | GPT-6-Sol, high | doslovni prijenos s testovima, portovi i adapteri, ekrani i tokovi sučelja, migracije bez novih ovlasti |
 | `critical` | GPT-6-Astra, xhigh | evidencija, potpis i kriptografija, prijava i sesije, RLS i pgTAP matrica, predaja i rekonstrukcija, sve što dira `PRODUCT.md` §5 |
 
-Claude sesije su uvijek na Opusu; effort sesije orkestrator postavlja po istom zadatku: `light` → low, `standard` → medium, `critical` → high.
+Claude worker sesije trenutačno su na Opusu; effort orkestrator postavlja po zadatku: `light` → low, `standard` → medium, `critical` → high. Codex worker koristi model/effort koji orkestrator eksplicitno zada ili računov zadani coding model.
 
-Codex radi i desetak minuta, pa se skripta pokreće u pozadini s vremenskim ograničenjem od najmanje 20 minuta; inače se prekine prije objave komentara. Skripta pokreće `codex exec review --base origin/main` (samo diff grane), Codex sam čita upute iz `AGENTS.md`, a nalaz ide kao komentar na PR. Codex troši ChatGPT kvotu, ne Claude kvotu. Sesija ispravlja prihvaćene nalaze i u izvještaju navodi odbijene s razlogom. Kritičan nalaz koji sesija ne može riješiti znači status "blokirano".
+Codex radi i desetak minuta, pa se skripta pokreće u pozadini s vremenskim ograničenjem od najmanje 20 minuta; inače se prekine prije objave komentara. Skripta pokreće `codex exec review --base origin/main` (samo diff grane); `AGENTS.md` prepoznaje review način, a nalaz ide kao komentar na PR. Codex troši ChatGPT kvotu, ne Claude kvotu. Autor ispravlja prihvaćene nalaze i u izvještaju navodi odbijene s razlogom. Kritičan nalaz koji autor ne može riješiti znači status "blokirano".
 
 ## 6. Dizajn
 
@@ -128,6 +130,6 @@ Codex radi i desetak minuta, pa se skripta pokreće u pozadini s vremenskim ogra
     "crossSessionInbound": "accept"
   }
   ```
-- **Worktreeovi**: aplikacija ih stvara u `.claude/worktrees/`. Arhiviranje sesije briše worktree; u postavkama aplikacije uključeno je automatsko arhiviranje nakon spajanja ili zatvaranja PR-a. Skripta `scripts/cleanup-worktrees.ps1` uklanja preostale worktreeove čija je grana spojena u `main`.
+- **Worktreeovi**: Claude aplikacija može ih stvarati u `.claude/worktrees/`. Za ručni Claude/Codex worker postoji `scripts/new-agent-worktree.ps1`, koji ne kopira `.env.local` ni vjerodajnice. Dva writera nikad ne koriste isti working directory. `scripts/cleanup-worktrees.ps1` uklanja preostale worktreeove čija je grana spojena u `main`.
 - **Paketi**: pnpm (zajednička pohrana paketa, manje mjesta na disku po worktreeu). Node 24 (`.nvmrc`).
 - **Praćenje**: orkestrator vodi nadzornu ploču "Ductus pult" (privatni artifact, https://claude.ai/artifact/UY9VUZPW4mePTZjhCPGLSd) s vremenskom crtom, stanjem sesija i potrošnjom tokena. Potrošnju po sesiji daje `powershell -File scripts/usage-report.ps1` (ccusage nad lokalnim zapisima; trošak je procjena po API cijenama, ne naplata pretplate).
