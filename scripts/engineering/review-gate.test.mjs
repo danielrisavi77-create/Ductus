@@ -67,6 +67,15 @@ test("unknown agent role fails closed", () => {
   );
 });
 
+test("ChatGPT is a valid runtime identity", () => {
+  const result = evaluate({
+    body: "Agent: chatgpt:a:orchestrator\nRisk: low\nTask: SYS-1\n",
+    headSha: head,
+    comments: [review()],
+  });
+  assert.equal(result.state, "success");
+});
+
 test("standard waits for review", () => {
   assert.equal(evaluate({ body: prBody(), headSha: head }).state, "pending");
 });
