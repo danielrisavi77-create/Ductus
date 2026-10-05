@@ -127,3 +127,13 @@ test("unknown role fails", () => {
   });
   assert.equal(result.ok, false);
 });
+
+
+test("Grok is a valid agent metadata runtime", () => {
+  const result = evaluateMetadata({
+    body: body("standard", "grok:a:backend"),
+    files: ["src/domain/document/index.ts"],
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.agent, "grok:a:backend");
+});
