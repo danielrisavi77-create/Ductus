@@ -2,15 +2,19 @@ import { canonicalBlock, field } from "./metadata-parser.mjs";
 
 const RISK_VALUES = new Set(["low", "standard", "critical"]);
 const AGENT_RE =
-  /^(claude|codex|chatgpt):[A-Za-z0-9_-]+:(orchestrator|platforma|backend|frontend|reviewer|qa|bug-hunter|product-ux|short)$/;
+  /^(claude|codex|chatgpt|grok):[A-Za-z0-9_-]+:(orchestrator|platforma|backend|frontend|reviewer|qa|bug-hunter|product-ux|short)$/;
 const SHA_RE = /^[0-9a-f]{40}$/i;
 const TRUSTED_ASSOCIATIONS = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 const VERDICTS = new Set(["PASS", "FAIL", "BLOCK"]);
 
-const APP_RUNTIMES = new Map([
+export const APP_RUNTIMES = new Map([
   ["claude", new Set(["claude"])],
   ["chatgpt-codex-connector", new Set(["chatgpt", "codex"])],
+  ["grok-by-xai", new Set(["grok"])],
 ]);
+
+// Provider identities are trusted only after their actual GitHub App slug is
+// observed and explicitly registered above. Grok was verified as "grok-by-xai".
 
 function isAgent(value, role) {
   if (!value || !AGENT_RE.test(value)) return false;
@@ -33,7 +37,7 @@ function declaredPrincipal(agent) {
   return `${principalRuntime(runtime)}:${slot}`;
 }
 
-function verifiedCommentIdentity(entry, declaredAgent) {
+export function verifiedCommentIdentity(entry, declaredAgent) {
   const slug = entry?.appSlug ?? null;
   const runtime = declaredRuntime(declaredAgent);
   if (!slug || !runtime) return null;

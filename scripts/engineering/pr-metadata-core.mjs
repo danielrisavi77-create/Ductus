@@ -2,7 +2,7 @@ import { field } from "./metadata-parser.mjs";
 
 const RISK_RANK = { low: 0, standard: 1, critical: 2 };
 const AGENT_RE =
-  /^(claude|codex|chatgpt):[A-Za-z0-9_-]+:(orchestrator|platforma|backend|frontend|reviewer|qa|bug-hunter|product-ux|short)$/;
+  /^(claude|codex|chatgpt|grok):[A-Za-z0-9_-]+:(orchestrator|platforma|backend|frontend|reviewer|qa|bug-hunter|product-ux|short)$/;
 
 function criticalReason(filename) {
   if (
