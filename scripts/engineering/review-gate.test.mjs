@@ -503,16 +503,26 @@ test("collaborator cannot spoof owner override", () => {
 });
 
 
-test("Grok runtime is recognized but unregistered App cannot satisfy review", () => {
-  const result = evaluate({
-    body: prBody("standard", "grok:a:backend"),
+test("Grok reviewer is accepted only from verified Grok GitHub App", () => {
+  const valid = evaluate({
+    body: prBody("standard", "claude:a:backend"),
+    headSha: head,
+    comments: [review({
+      agent: "grok:b:reviewer",
+      appSlug: "grok-by-xai",
+    })],
+  });
+  assert.equal(valid.state, "success");
+
+  const guessed = evaluate({
+    body: prBody("standard", "claude:a:backend"),
     headSha: head,
     comments: [review({
       agent: "grok:b:reviewer",
       appSlug: "grok",
     })],
   });
-  assert.equal(result.state, "pending");
+  assert.equal(guessed.state, "pending");
 });
 
 test("Grok runtime cannot borrow Claude or OpenAI App identity", () => {
@@ -523,6 +533,57 @@ test("Grok runtime cannot borrow Claude or OpenAI App identity", () => {
       comments: [review({
         agent: "grok:b:reviewer",
         appSlug,
+      })],
+    });
+    assert.equal(result.state, "pending");
+  }
+});
+
+
+test("Grok QA can satisfy critical gate when reviewer is OpenAI", () => {
+  const result = evaluate({
+    body: prBody("critical", "claude:a:backend"),
+    headSha: head,
+    comments: [
+      review({
+        agent: "chatgpt:b:reviewer",
+        appSlug: "chatgpt-codex-connector",
+      }),
+      qa({
+        agent: "grok:c:qa",
+        appSlug: "grok-by-xai",
+      }),
+    ],
+  });
+  assert.equal(result.state, "success");
+});
+
+test("Grok reviewer and Grok QA cannot satisfy both sides of critical gate", () => {
+  const result = evaluate({
+    body: prBody("critical", "claude:a:backend"),
+    headSha: head,
+    comments: [
+      review({
+        agent: "grok:b:reviewer",
+        appSlug: "grok-by-xai",
+      }),
+      qa({
+        agent: "grok:c:qa",
+        appSlug: "grok-by-xai",
+      }),
+    ],
+  });
+  assert.equal(result.state, "pending");
+});
+
+test("Grok App cannot claim Claude or OpenAI runtime", () => {
+  for (const agent of ["claude:b:reviewer", "chatgpt:b:reviewer", "codex:b:reviewer"]) {
+    const result = evaluate({
+      body: prBody("standard", "grok:a:backend"),
+      headSha: head,
+      comments: [review({
+        agent,
+        appSlug: "grok-by-xai",
       })],
     });
     assert.equal(result.state, "pending");
