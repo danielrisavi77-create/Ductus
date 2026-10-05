@@ -65,6 +65,19 @@ Ductura se funkcionalno sastoji od osam glavnih enginea:
 
 Ovi enginei dijele isti identitet, authorization model i evidence substrate.
 
+## 1.1 Četiri odvojena modela stanja
+
+Ductura ima četiri različita state machinea koji se ne smiju spajati u jedan generički status:
+
+1. **Work state** — akademski napredak rada;
+2. **Sync state** — tehnička trajnost aktualne dokumentne revizije;
+3. **RevisionRequest state** — lifecycle pojedinačnog zahtjeva za doradu;
+4. **SubmissionAttempt state** — tehnička obrada jednog pokušaja konačne predaje.
+
+Primjer: Work može biti `IN_PROGRESS`, dokument istodobno `LOCAL_DURABLE`, jedan zahtjev za doradu `NEEDS_CLARIFICATION`, a prethodni SubmissionAttempt `RETRY_PENDING`. Nijedno od tih stanja ne implicira drugo.
+
+**UI pravilo:** korisniku se ne smije prikazivati zajednički status ako iza njega nije jednoznačno poznato kojem od četiri modela pripada.
+
 ---
 
 # 2. Domenski model
@@ -234,7 +247,21 @@ Svaka promjena konfiguracije stvara novu immutable verziju.
 - retention disclosure
 - hash
 
-Kad student potvrdi verziju, ona za njegov Work postaje frozen baseline. Kasnija nova verzija traži novu potvrdu ako utječe na studentova prava ili praćenje.
+Kad student potvrdi verziju, ona za njegov Work postaje frozen baseline. Potvrda stvara `WorkPolicyBaseline` i veže Work uz konkretne source-version ID-eve. Kasnija nova verzija Assignmenta ili parent policyja **ne može** promijeniti aktivni baseline postojećeg Worka samo zato što je kasnije stupila na snagu.
+
+### WorkPolicyBaseline
+
+- `work_policy_baseline_id`
+- `work_id`
+- `assignment_version_id`
+- `source_policy_version_ids[]`
+- `resolved_snapshot_hash`
+- `acknowledged_at`
+- `acknowledged_by`
+- `tracking_profile_hash`
+- `created_at`
+
+Dopuštena migracija postojećeg Worka na noviji policy zahtijeva zaseban command, audit i dokaz da promjena **ne proširuje** tracking/evidence obveze u odnosu na potvrđeni baseline. Ako promjena zahtijeva novu potvrdu, sama potvrda ne smije zaobići zabranu retroaktivnog proširenja praćenja.
 
 ---
 
@@ -303,19 +330,25 @@ Primjeri subjecta:
 
 ## 4.3 Resolution
 
-Za svaki Work postoji funkcija:
+Postoje dvije odvojene operacije:
 
-`resolveEffectivePolicy(work_id, at_time)`
+### A. `resolvePolicyForNewAssignmentVersion(scope, at_time)`
 
-Rezultat je deterministic policy snapshot.
+Koristi policy verzije važeće u `at_time` i gradi snapshot za **novu** AssignmentVersion / nove Workove.
+
+### B. `getEffectivePolicyForWork(work_id)`
+
+Za postojeći Work polazi isključivo od njegova potvrđenog `WorkPolicyBaseline`a i njegovih source-version ID-eva. Ne resolva ponovno parent policy prema trenutnom vremenu.
 
 Pravila:
 
-1. koristi verzije važeće u `at_time`;
-2. child ne smije proširiti parent prohibition;
-3. konflikt koji se ne može deterministički riješiti = configuration error;
-4. student prije rada vidi snapshot relevantan za njega;
-5. finalna predaja sprema immutable `SubmissionPolicySnapshot`.
+1. novi AssignmentVersion koristi policy verzije važeće u trenutku objave;
+2. postojeći Work koristi potvrđeni baseline;
+3. child ne smije proširiti parent prohibition;
+4. konflikt koji se ne može deterministički riješiti = configuration error;
+5. svaka dopuštena migracija postojećeg Worka mora biti narrowing-only za tracking/evidence obveze, eksplicitno autorizirana i auditirana;
+6. student prije rada vidi točno baseline koji potvrđuje;
+7. finalna predaja sprema immutable `SubmissionPolicySnapshot` izveden iz baselinea tog Worka, ne iz trenutačnog parent policyja.
 
 ## 4.4 SubmissionPolicySnapshot
 
@@ -393,6 +426,35 @@ Short assignment može ići:
 
 `NOT_STARTED → READY → IN_PROGRESS → FINAL_SUBMISSION_PENDING → FINAL_SUBMITTED`
 
+### 5.2.1 Normativna tablica prijelaza
+
+| Current | Command / event | Actor | Guard | Next |
+| --- | --- | --- | --- | --- |
+| NOT_STARTED | AcknowledgeAssignment | student | prikazana konkretna AssignmentVersion | READY |
+| READY | first accepted document event | student | baseline potvrđen | IN_PROGRESS |
+| IN_PROGRESS | SendVersionForReview | student | workflow dopušta review; ciljna verzija durable | SUBMITTED_FOR_REVIEW |
+| SUBMITTED_FOR_REVIEW | OpenReview | reviewer | valjan relation prema toj verziji | IN_REVIEW |
+| IN_REVIEW | RequestRevision | reviewer | konkretna version/range osnova | REVISION_REQUESTED |
+| IN_REVIEW | ApproveDraft | reviewer | workflow dopušta approval | APPROVED_FOR_FINAL |
+| REVISION_REQUESTED | ResumeRevision | student | zahtjev aktivan | REVISING |
+| REVISING | ResubmitForReview | student | nova frozen verzija | RESUBMITTED |
+| RESUBMITTED | OpenReview | reviewer | valjan relation | IN_REVIEW |
+| RESUBMITTED | RequestRevision | reviewer | nova pregledana verzija | REVISION_REQUESTED |
+| RESUBMITTED | ApproveDraft | reviewer | workflow dopušta approval | APPROVED_FOR_FINAL |
+| APPROVED_FOR_FINAL | RequestFinalSubmission | student | odobrena ciljna verzija nije promijenjena; declaration preduvjeti zadovoljeni | FINAL_SUBMISSION_PENDING |
+| IN_PROGRESS | RequestFinalSubmission | student | short/no-review workflow dopušta | FINAL_SUBMISSION_PENDING |
+| FINAL_SUBMISSION_PENDING | SubmissionCompleted | system | canonical Submission = SUBMITTED | FINAL_SUBMITTED |
+| FINAL_SUBMISSION_PENDING | SubmissionRetryableFailure | system | attempt ostaje isti | FINAL_SUBMISSION_PENDING |
+| FINAL_SUBMISSION_PENDING | SubmissionMismatch | system | mismatch/fallback zapis postoji | FINAL_SUBMISSION_PENDING |
+| FINAL_SUBMITTED | OpenDefense | authorized actor/system | workflow ima obranu | DEFENSE_PENDING |
+| DEFENSE_PENDING | CompleteDefense | authorized actor | uvjeti obrane završeni | COMPLETED |
+| FINAL_SUBMITTED | CompleteWork | system/authorized actor | nema obrane ili workflow završava predajom | COMPLETED |
+| COMPLETED | ArchiveWork | system | retention/hold provjera | ARCHIVED |
+
+Review/revision petlja može se ponavljati proizvoljan broj puta. `OpenReview` nikad nije akademsko odobrenje.
+
+Ako se sadržaj odobrene ciljne verzije naknadno promijeni, approval se ne prenosi na novu reviziju; Work se vraća u stanje koje workflow definira za novi pregled ili se traži novo odobrenje.
+
 ## 5.3 Zabranjeni prijelazi
 
 - FINAL_SUBMITTED → IN_PROGRESS bez formalne reopen akcije;
@@ -456,7 +518,9 @@ Revision i Version nisu isto.
 
 Svaki lokalni edit prvo ide u journal na uređaju.
 
-Stanja događaja:
+**Sync state nije Work state.** Postojeći kod već modelira korisnička sync stanja poput `EDITING`, `SAVING_LOCAL`, `LOCAL_DURABLE`, `SYNCING`, `SYNCED`, `CONFLICT`, `ERROR` i `RECOVERY_REQUIRED`. Ni jedno ne mijenja akademski status Worka samo po sebi.
+
+Interna stanja događaja/journala:
 
 - LOCAL_ONLY
 - RESERVED
@@ -728,19 +792,39 @@ REQUESTED
    ↓
 RECONSTRUCTING
    ├── mismatch → BLOCKED_MISMATCH
+   │                  └── fallback / corrected target → NEW ATTEMPT ili incident flow
    ├── system failure → RETRY_PENDING
-   └── exact → DECLARATION_CHECK
-                  ↓
-             RECEIPT_PENDING
-                  ↓
-               SUBMITTED
+   │                       └── retry ISTOG attempta → RECONSTRUCTING
+   └── exact | exact_with_gaps + hash match → DECLARATION_CHECK
+                                                  ↓
+                                             RECEIPT_PENDING
+                                                  ↓
+                                               SUBMITTED
 ```
 
-## 11.3 Rok
+### SubmissionAttempt invariants
 
-Pravno relevantan trenutak je `requested_at`, ne završetak workera.
+Retry istog attempta **ne mijenja**:
 
-Ako klik nastane prije roka, kasniji worker ne čini predaju zakašnjelom.
+- `submission_attempt_id`;
+- `requested_at`;
+- `target_document_revision`;
+- `target_document_hash`;
+- `policy_snapshot_id`.
+
+`exact_with_gaps` može nastaviti samo ako reconstruction engine potvrdi isti finalni hash i ako su gapovi prikazani prema product pravilima.
+
+`BLOCKED_MISMATCH` nije tehnički kvar. Ne smije automatski retryati isti target kao da je worker pao. Potreban je eksplicitni fallback/incident tok: korisniku se objašnjava da ciljna revizija nije dokazivo rekonstruirana, a eventualni novi pokušaj dobiva novi attempt ID i jasno zamrznut target.
+
+`RETRY_PENDING` je tehnički kvar. Worker može idempotentno ponovno obraditi isti attempt.
+
+## 11.3 Vrijeme zahtjeva
+
+`requested_at` nastaje pri **server-side prihvatu zahtjeva u bazi**, iz DB sata. Offline klik sam po sebi ne stvara `requested_at`.
+
+Za Ducturinu tehničku logiku rokova koristi se upravo taj zabilježeni trenutak prihvata. Hoće li ga ustanova pravno tretirati kao mjerodavan trenutak predaje potvrđuje se u institucionalnim pravilima i GO dokumentaciji; Functional Architecture ne daje samostalnu pravnu tvrdnju.
+
+Kasniji završetak workera ne mijenja izvorni `requested_at` istog attempta.
 
 ## 11.4 Submission
 
@@ -826,20 +910,53 @@ Svaki direct edit ostaje atribuibran nastavniku/mentoru.
 
 ## 13.4 RevisionRequest
 
+Functional Architecture **ne uvodi konkurentski lifecycle** postojećem domenskom modulu. Kanonska početna stanja iz `src/domain/collaboration/revision-request.ts` su:
+
+- `OPEN`
+- `STUDENT_RESPONDED`
+- `SHARED_FOR_REVIEW`
+- `ACCEPTED_FOR_REVISION`
+- `NEEDS_CLARIFICATION`
+- `REREVIEW_REQUIRED`
+
+Ciljni model dodaje samo stanja potrebna za zatvaranje lifecyclea, uz zaseban code task i testove:
+
+- `RESOLVED`
+- `WITHDRAWN`
+
+Minimalni podaci:
+
 - request_id
 - work_id
-- version_id
-- target ranges[]
-- description
+- document_id
+- requested_revision
+- reviewed_version_id?
+- target anchor/range
+- instruction
 - created_by
 - due_at?
-- status:
-  - open
-  - student_responded
-  - changed
-  - resolved
-  - withdrawn
+- response
+- accepted_revision?
 - resolved_in_version_id?
+- status
+
+### Normativni prijelazi
+
+| Current | Akcija | Next |
+| --- | --- | --- |
+| OPEN | student odgovori s revision >= requested_revision | STUDENT_RESPONDED |
+| NEEDS_CLARIFICATION | student dopuni odgovor | STUDENT_RESPONDED |
+| STUDENT_RESPONDED | student podijeli odgovor za pregled | SHARED_FOR_REVIEW |
+| SHARED_FOR_REVIEW | reviewer traži pojašnjenje | NEEDS_CLARIFICATION |
+| SHARED_FOR_REVIEW | reviewer prihvati odgovor za doradu | ACCEPTED_FOR_REVISION |
+| ACCEPTED_FOR_REVISION | relevantni prihvaćeni range/anchor naknadno se promijeni | REREVIEW_REQUIRED |
+| REREVIEW_REQUIRED | student podijeli novu verziju/odgovor | SHARED_FOR_REVIEW |
+| SHARED_FOR_REVIEW | reviewer potvrdi da je konkretna pregledana verzija zadovoljila zahtjev | RESOLVED |
+| OPEN / NEEDS_CLARIFICATION / STUDENT_RESPONDED / SHARED_FOR_REVIEW | ovlašteni reviewer povuče zahtjev | WITHDRAWN |
+
+`changed` nije status prihvata. Promjena teksta je evidence/document činjenica. `RESOLVED` je dopušten samo uz `resolved_in_version_id` koji je reviewer stvarno pregledao.
+
+Ako se nakon `RESOLVED` promijeni relevantni range, originalni resolution zapis ostaje auditiran, a sustav otvara novi review zahtjev ili novu generaciju zahtjeva prema workflowu; ne prepisuje povijesni resolution.
 
 ## 13.5 ConsultationRecord
 
@@ -1159,6 +1276,26 @@ Legal hold:
 - postavlja ovlaštena osoba;
 - svaki set/release ide u audit.
 
+### 20.2.1 Concurrency / destructive-delete fence
+
+Retention selection nije dovoljan dokaz da se objekt još smije brisati.
+
+Svaka destruktivna granica (DB delete, S3/object version delete, backup-expiry enqueue gdje je primjenjivo) mora neposredno prije nepovratne radnje ponovno provjeriti:
+
+- aktualni `legal_hold`;
+- `retention_generation` / expected generation;
+- identitet data classa i objekta.
+
+Normativni guard:
+
+`DELETE iff legal_hold == false AND retention_generation == expected_generation`
+
+`SetLegalHold` atomically povećava generation/fence vrijednost prije nego potvrdi uspjeh. Job koji je selektirao objekt prije toga, ali dođe na delete nakon promjene generationa, mora abortirati/no-op i ponovno evaluirati.
+
+Ponovljeni retention job mora biti idempotentan.
+
+Ako je nepovratno brisanje već završilo prije uspješnog linearization pointa `SetLegalHold`, sustav ne smije naknadno tvrditi da je hold zaštitio već izgubljeni sadržaj; incident se auditira i primjenjuju se backup/restore pravila ako su još dostupna.
+
 ---
 
 # 21. Integration Engine
@@ -1191,6 +1328,29 @@ Outbound:
 - deep link to Ductura review
 
 Preferira se standardizirani adapter; LTI nakon pilota gdje je opravdano.
+
+### 21.2.1 Inbound ordering, authority i idempotency
+
+Svaki inbound integration event nosi najmanje:
+
+- `connection_id`
+- `institution_id`
+- `source_object_id`
+- `source_version` ili drugi monotoni freshness token
+- `external_event_id`
+- `received_at`
+- `payload_hash`
+
+Pravila:
+
+1. isti `connection_id + external_event_id` i isti `payload_hash` = idempotentni no-op;
+2. isti event ID s drugim payload hashom = reject + audit;
+3. starija `source_version` od već primijenjene = stale reject ili reconciliation queue, nikad silent overwrite;
+4. integracijski roster može predložiti relation promjenu, ali ne smije zaobići Ductura authorization/institution governance;
+5. lokalni eksplicitni revoke ima definiran authority/fence i ne smije ga ponovno aktivirati stariji inbound roster;
+6. integracija sama ne može dodijeliti content access izvan relation modela;
+7. outbound/inbound callback ne može dovršiti canonical Submission niti mutirati sealed evidence; canonical submission i dalje zahtijeva reconstruction + declaration + receipt;
+8. duplicate submission/status callbackovi koriste stable submission/external ID i ne stvaraju novu predaju.
 
 ## 21.3 Zotero
 
@@ -1306,12 +1466,37 @@ Notification payload ne smije sadržavati osjetljiv radni tekst.
 14. Offline ostaje provenance činjenica i nakon synca.
 15. Export mora biti vezan uz hash sadržaja iz kojeg je nastao.
 16. UI stanje “predano” postoji tek nakon završene canonical submission transakcije.
-17. “Spremljeno na poslužitelju” postoji samo nakon potvrđenog server commita.
-18. REUSE backlog ne smije otvoriti drugi konkurentski implementation source of truth.
-19. Product-owner mockup semantics iz Product Speca ostaju zaseban presentation/governance sloj dok konflikti nisu formalno riješeni.
-20. Nijedan AI/analytics sloj ne smije mutirati evidence history.
+17. “Spremljeno na poslužitelju” / `SYNCED` za evidence-critical tok postoji tek kada aktualna revizija ima valjanu server potvrdu prema sync ugovoru; potvrda stare revizije ne smije označiti novu reviziju sinkroniziranom.
+18. Existing Work policy se čita iz potvrđenog WorkPolicyBaselinea; novi parent policy ne mijenja ga retroaktivno.
+19. Retry tehnički ne stvara novi SubmissionAttempt niti mijenja requested_at/target/hash/policy.
+20. Legal hold i retention delete imaju generation/fence provjeru na destruktivnoj granici.
+21. Inbound integration event mora imati freshness + idempotency identitet; stale event ne može vratiti opozvani odnos.
+22. REUSE backlog ne smije otvoriti drugi konkurentski implementation source of truth.
+23. Product-owner mockup semantics iz Product Speca ostaju zaseban presentation/governance sloj dok konflikti nisu formalno riješeni.
+24. Nijedan AI/analytics sloj ne smije mutirati evidence history.
 
 ---
+
+# 24A. Akcijska matrica za prvi vertical slice
+
+| Akcija | Actor | Preduvjet | Rezultat | Audit / odbijanje |
+| --- | --- | --- | --- | --- |
+| PublishAssignment | teacher s Course relationom | aktivno članstvo + valjana konfiguracija | nova AssignmentVersion | audit; unauthorized/config error |
+| AcknowledgeAssignment | student na Courseu | prikazana konkretna verzija | WorkPolicyBaseline + READY | audit; wrong version / no membership |
+| Start/Edit Work | student vlasnik | baseline potvrđen; Work editable | document revision + local journal | evidence; locked/unauthorized |
+| SendVersionForReview | student | workflow dopušta; durable snapshot | frozen Version + SUBMITTED_FOR_REVIEW | audit; target not durable |
+| OpenReview | assigned reviewer | relation valjan za verziju | IN_REVIEW | access audit; relation expired |
+| CreateRevisionRequest | reviewer | pregledana verzija + anchor | RevisionRequest OPEN | audit; invalid anchor/version |
+| Respond/Share | student | request u dopuštenom stanju | response + SHARED_FOR_REVIEW | audit; wrong-state |
+| Resolve / Clarify | reviewer | konkretna podijeljena verzija | RESOLVED ili NEEDS_CLARIFICATION | audit; stale version |
+| ApproveDraft | reviewer/mentor | workflow traži/dopušta approval | APPROVED_FOR_FINAL za konkretnu verziju | audit; changed target |
+| RequestFinalSubmission | student | declaration/policy/workflow guards | SubmissionAttempt + DB `requested_at` | audit; blocked reason |
+| CompleteSubmission | system worker | exact/exact_with_gaps + hash match + receipt | immutable Submission + FINAL_SUBMITTED | audit; mismatch/system retry |
+| RetryTechnicalFailure | system | isti attempt RETRY_PENDING | RECONSTRUCTING istog attempta | idempotent; target immutable |
+| ReopenSubmittedWork | posebno ovlašten actor | eksplicitno pravilo + razlog | nova radna grana/version lineage | stara Submission immutable |
+| ArchiveWork | system | retention + legal-hold fence | ARCHIVED / deletion actions | audit; hold/generation mismatch |
+
+Ova matrica je normativna za prvi povezani akademski tok. Ako UI ili implementacija nude akciju koja ovdje nema domensko značenje, prvo se mijenja Functional Architecture kroz review.
 
 # 25. Logical commands
 
@@ -1320,7 +1505,9 @@ Primjeri domain commandova:
 - CreateCourse
 - CreateAssignment
 - PublishAssignmentVersion
+- ResolvePolicyForNewAssignmentVersion
 - AcknowledgeAssignment
+- MigrateWorkPolicyBaselineNarrowingOnly
 - StartWork
 - CommitDocumentEvents
 - CreateVersion
@@ -1329,7 +1516,12 @@ Primjeri domain commandova:
 - CreateSuggestion
 - AcceptSuggestion
 - CreateRevisionRequest
+- ShareRevisionResponseForReview
+- AcceptRevisionResponseForRevision
+- RequestRevisionClarification
+- MarkRevisionRereviewRequired
 - ResolveRevisionRequest
+- WithdrawRevisionRequest
 - RecordConsultation
 - ExtendDeadline
 - RequestFinalSubmission
@@ -1344,6 +1536,8 @@ Primjeri domain commandova:
 - SealEvidencePackage
 - SetLegalHold
 - ReleaseLegalHold
+- ApplyIntegrationEvent
+- ReconcileStaleIntegrationEvent
 - ArchiveWork
 
 Svaki command ima authorization, validation, idempotency i audit semantics.
@@ -1362,7 +1556,8 @@ Svaki command ima authorization, validation, idempotency i audit semantics.
 - CompareVersions
 - GetOpenComments
 - GetRevisionRequests
-- GetEffectivePolicy
+- GetEffectivePolicyForWork
+- ResolvePolicyPreviewForNewAssignmentVersion
 - GetSubmissionReadiness
 - GetSubmissionReceipt
 - GetCourseDashboard
@@ -1481,7 +1676,7 @@ Ovaj dokument ne otvara paralelni roadmap. On definira funkcionalne ugovore koje
 Ductura je funkcionalno koherentna kada:
 
 1. svaki ekran iz Product Speca mapira na domenske entitete i command/query ugovore;
-2. svaki status koji korisnik vidi postoji u state machineu;
+2. svaki status koji korisnik vidi pripada točno jednom od četiri modela stanja (Work, Sync, RevisionRequest, SubmissionAttempt);
 3. svaki prijelaz ima actor, preduvjete i audit;
 4. policy je deterministic i versioned;
 5. svaki final submission ima reconstruction + policy + declaration + receipt;
@@ -1501,12 +1696,15 @@ Ductura je funkcionalno koherentna kada:
 
 Nakon odobrenja ovog dokumenta:
 
-1. napraviti executable TypeScript domain types za ključne entitete;
-2. napraviti state-machine testove za Work i Submission;
-3. napraviti policy-resolution pure function + property testove;
-4. definirati command/query interface ugovore;
-5. definirati provenance DAG interface;
-6. mapirati postojeće DB migracije na model iz ovog dokumenta;
-7. otvoriti samo stvarne delta issuee — ne duplicirati M0–M12 backlog;
-8. dodati Functional Architecture provjeru u Product/UX review checklist.
+1. uskladiti postojeći `revision-request.ts` s ovim lifecycleom i dodati izlaz iz `REREVIEW_REQUIRED` te `RESOLVED/WITHDRAWN` kroz zaseban code PR;
+2. napraviti executable TypeScript domain types za Work/Assignment/Submission/Policy baseline;
+3. napraviti state-machine testove za Work, Sync boundary, RevisionRequest i Submission;
+4. napraviti policy-resolution pure function + property testove za novu AssignmentVersion i postojeći Work baseline odvojeno;
+5. definirati command/query interface ugovore;
+6. definirati provenance DAG interface;
+7. definirati retention generation-fence i integration event envelope u backend ugovorima;
+8. mapirati postojeće DB migracije na model iz ovog dokumenta;
+9. otvoriti samo stvarne delta issuee — ne duplicirati M0–M12 backlog;
+10. nakon infrastrukturnih preduvjeta nastaviti postojeći B-7 → F-6/F-7 vertical slice iz PLAN-DEMO/STATE;
+11. dodati Functional Architecture provjeru u Product/UX review checklist.
 
