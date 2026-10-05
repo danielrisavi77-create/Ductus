@@ -10,11 +10,11 @@ const VERDICTS = new Set(["PASS", "FAIL", "BLOCK"]);
 export const APP_RUNTIMES = new Map([
   ["claude", new Set(["claude"])],
   ["chatgpt-codex-connector", new Set(["chatgpt", "codex"])],
+  ["grok-by-xai", new Set(["grok"])],
 ]);
 
-// Grok is a recognized runtime, but is intentionally not trusted until its
-// actual GitHub App slug is observed and explicitly registered here.
-export const UNREGISTERED_RUNTIMES = new Set(["grok"]);
+// Provider identities are trusted only after their actual GitHub App slug is
+// observed and explicitly registered above. Grok was verified as "grok-by-xai".
 
 function isAgent(value, role) {
   if (!value || !AGENT_RE.test(value)) return false;
