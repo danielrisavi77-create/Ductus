@@ -501,3 +501,30 @@ test("collaborator cannot spoof owner override", () => {
   });
   assert.equal(result.state, "pending");
 });
+
+
+test("Grok runtime is recognized but unregistered App cannot satisfy review", () => {
+  const result = evaluate({
+    body: prBody("standard", "grok:a:backend"),
+    headSha: head,
+    comments: [review({
+      agent: "grok:b:reviewer",
+      appSlug: "grok",
+    })],
+  });
+  assert.equal(result.state, "pending");
+});
+
+test("Grok runtime cannot borrow Claude or OpenAI App identity", () => {
+  for (const appSlug of ["claude", "chatgpt-codex-connector"]) {
+    const result = evaluate({
+      body: prBody("standard", "grok:a:backend"),
+      headSha: head,
+      comments: [review({
+        agent: "grok:b:reviewer",
+        appSlug,
+      })],
+    });
+    assert.equal(result.state, "pending");
+  }
+});
