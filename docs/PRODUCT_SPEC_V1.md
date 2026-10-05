@@ -307,7 +307,17 @@ Agentic Engineering System služi kao execution engine za ovaj tok. Ne određuje
 
 **Dizajn:** još nije izrađen kao zaseban ekran.
 
-**Milestone:** M5 / Val 2.
+**Milestone po podfunkcijama — zadržava postojeći PROGRAM/FEATURES raspored:**
+
+| Podfunkcija | Postojeći izvor | Milestone / val |
+| --- | --- | --- |
+| Osnovna bilježnica izvora | D-59 / M5 osnovno | Val 1 |
+| DOI i ISBN | S-08 / M5 osnovno | Val 1 |
+| Zotero/BibTeX/RIS/CSL-JSON uvoz | D-59 | Val 2 |
+| PDF izvori s isticanjem i citatom sa stranicom | S-09 | Val 3 |
+| Provjera doslovnog citata u PDF izvoru | A-03 | Val 3, uz S-09 |
+
+Ovaj Screen ID ne mijenja raspored iz `PROGRAM.md`; on samo okuplja funkcije koje će na kraju živjeti u istom korisničkom području.
 
 ---
 
@@ -715,7 +725,11 @@ Vidi §9.
 - status;
 - ovlašteni pregledavatelji.
 
+**Povjerenstvo / N-09:** pristup člana povjerenstva nije trajna uloga niti globalna ovlast. Veže se uz konkretan rad/slučaj, ima `valid_from` i `valid_until`, može se opozvati prije isteka, a nakon isteka više ne daje sadržajni ni evidence-package pristup. Model odnosa ulazi u M2 (D-65), a UI i obrambeni tok moraju biti spremni prije prvog roka obrana (D-68).
+
 ## C2 — Paket dokaza
+
+**Pristup:** student, mentor/nastavnik i posebno ovlašteni pregledavatelji prema odnosu i svrsi. Za povjerenstvo vrijedi N-09: vremenski ograničen pristup samo dodijeljenom radu/slučaju, s eksplicitnim početkom, istekom i opozivom. Svako otvaranje paketa ide u C3 Access Audit.
 
 **Sadržaj:**
 
@@ -871,6 +885,18 @@ Sve nekonfliktne dijelove mockupova frontend smije graditi odmah prema ovom spec
 
 # 19. GAP BACKLOG
 
+## 19.0 Pravilo deduplikacije
+
+E1–E6 nisu automatski novi paralelni implementacijski trackovi. Svaka stavka mora imati jednu od tri oznake:
+
+- **NEW** — stvarno nova funkcionalnost/model koji postojeći M0–M11 ne pokriva;
+- **UX GAP** — novi ekran/tok nad već planiranim backendom ili postojećom funkcijom;
+- **REUSE** — postojeći milestone/task ostaje jedini implementacijski izvor istine; epic služi samo za product/UX koordinaciju i traceability.
+
+Ako stavka ima REUSE ili UX GAP, ne otvara se drugi backend task s novim acceptance criteriajima; novi issue mora referencirati postojeći M/D/N/F/R zadatak.
+
+
+
 ## E1 — Public Website & Institutional Sales
 
 - E1-01 Homepage
@@ -894,15 +920,19 @@ Sve nekonfliktne dijelove mockupova frontend smije graditi odmah prema ovom spec
 
 ## E3 — Institution Operations
 
-- E3-01 Institution Overview
-- E3-02 Users & roles
-- E3-03 AAI health
-- E3-04 Courses
-- E3-05 Storage
-- E3-06 Retention
-- E3-07 Backup status
-- E3-08 Audit log
-- E3-09 Integration health
+| Stavka | Tip | Kanonska implementacijska veza |
+| --- | --- | --- |
+| E3-01 Institution Overview | UX GAP | agregira postojeće admin/ops podatke |
+| E3-02 Users & roles | REUSE | M2, D-07/D-81 |
+| E3-03 AAI health | UX GAP | M1 + M11 operativni status |
+| E3-04 Courses | REUSE | M2 model fakulteta |
+| E3-05 Storage | UX GAP | B9 / M11 ops |
+| E3-06 Retention | REUSE | M10, F-02 |
+| E3-07 Backup status | UX GAP | B9 / M11 restore i backup dokaz |
+| E3-08 Audit log | UX GAP | postojeći access/audit model |
+| E3-09 Integration health | UX GAP | AAI/Merlin/e-mail integracije prema postojećim planovima |
+
+E3 se ne smije koristiti za dupliciranje M2/M10/B9 implementacije.
 
 ## E4 — Evidence & Appeals
 
@@ -913,7 +943,7 @@ Sve nekonfliktne dijelove mockupova frontend smije graditi odmah prema ovom spec
 - E4-05 Signed manifest
 - E4-06 PDF export
 - E4-07 ZIP export
-- E4-08 Committee record
+- E4-08 Committee record — **REUSE/UX GAP:** N-09 + D-65 + D-68; mora koristiti vremenski ograničen pristup iz C1/C2
 
 ## E5 — Trust & Transparency UX
 
@@ -927,15 +957,19 @@ Sve nekonfliktne dijelove mockupova frontend smije graditi odmah prema ovom spec
 
 ## E6 — Collaboration Workflow
 
-- E6-01 Comment threads
-- E6-02 Suggestions
-- E6-03 Direct edits
-- E6-04 Revision requests
-- E6-05 Batch publish
-- E6-06 Draft/version lifecycle
-- E6-07 Consultation record
-- E6-08 Compare versions
-- E6-09 Deadline extension
+| Stavka | Tip | Kanonska implementacijska veza |
+| --- | --- | --- |
+| E6-01 Comment threads | REUSE + UX GAP | M6 |
+| E6-02 Suggestions | REUSE + UX GAP | M6 |
+| E6-03 Direct edits | REUSE + UX GAP | D-21, D-34, M6 val 2 |
+| E6-04 Revision requests | REUSE + UX GAP | D-45, M6 val 2 |
+| E6-05 Batch publish | REUSE + UX GAP | D-51, M6 val 2 |
+| E6-06 Draft/version lifecycle | REUSE + UX GAP | D-28, M7 |
+| E6-07 Consultation record | REUSE + UX GAP | D-47, mentorski val |
+| E6-08 Compare versions | REUSE + UX GAP | M7 |
+| E6-09 Deadline extension | REUSE + UX GAP | M7 / PRODUCT §6 |
+
+E6 je product/UX koordinacijski epic. Ne otvara drugi backend track za funkcije koje već imaju M6/M7/D-odluke.
 
 ---
 
@@ -1017,7 +1051,13 @@ Te funkcije ostaju u postojećim milestoneima M0–M11 i FEATURE/DECISION stavka
 
 # 22. Definition of Product-Complete Pilot V1
 
-Pilot V1 je spreman kad:
+Ovaj odjeljak definira **product-complete** stanje: funkcionalno je izgrađen tok koji želimo pilotirati. To **nije** dozvola za uključivanje stvarnih studenata.
+
+Stvarni pilot / svaki val smije krenuti tek kada su **svi GO uvjeti iz `PROGRAM.md` § “GO uvjeti za stvarne studente” zeleni**. Jedan crveni GO uvjet zaustavlja puštanje bez obzira na to što je product-complete lista ispod završena. To uključuje, među ostalim, DPIA i ugovor o obradi, AAI@EduHr registraciju, potvrđene rokove čuvanja, restore dokaz, pristupačnost, podršku/incident postupak i staging/proizvodne sigurnosne provjere.
+
+**P0–P3 u ovom dokumentu su redoslijed product razvoja, ne zamjena za M0–M12, valove ni release gateove iz `PROGRAM.md`.** D-68 i dalje određuje da podrška za obranu/povjerenstvo mora biti spremna prije prvog roka obrana.
+
+Product-complete Pilot V1 ostvaren je kad:
 
 1. student se može prijaviti i otvoriti stvarni zadatak;
 2. jasno razumije pravila i evidenciju;
@@ -1039,7 +1079,7 @@ Pilot V1 je spreman kad:
 
 Nakon mergea ovog Product Speca:
 
-1. otvoriti epike E1–E6;
+1. koristiti epike E1–E6 kao traceability/product epike; prije novih implementation taskova primijeniti §19.0 i za REUSE/UX GAP stavke povezati postojeće M/D/N/F/R taskove umjesto dupliciranja;
 2. mapirati postojeće M0–M11 taskove na Screen ID-eve iz ovog dokumenta;
 3. otvoriti zaseban OWNER/Governance issue za konflikte iz §18;
 4. dizajnirati nedostajuće ekrane redom:
