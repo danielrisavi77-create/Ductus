@@ -100,9 +100,12 @@ class Registry:
             db.execute('INSERT INTO events(time,run,kind) VALUES(?,?,?)',(time.time(),run,'recovered_after_confirmed_exit'))
     def status(self):
         with self.connect() as db:
-            columns='id,task,owner,role,provider,worktree,base_sha,status,heavy,heartbeat,controller_pid,child_pid'
-            active=[dict(r) for r in db.execute(f"SELECT {columns} FROM runs WHERE status IN ('reserved','running','orphaned') ORDER BY created")]
-            history=[dict(r) for r in db.execute(f"SELECT {columns} FROM runs WHERE status NOT IN ('reserved','running','orphaned') ORDER BY created DESC LIMIT 100")]
+            active=[dict(r) for r in db.execute(
+                "SELECT id,task,owner,role,provider,worktree,base_sha,status,heavy,heartbeat,controller_pid,child_pid "
+                "FROM runs WHERE status IN ('reserved','running','orphaned') ORDER BY created")]
+            history=[dict(r) for r in db.execute(
+                "SELECT id,task,owner,role,provider,worktree,base_sha,status,heavy,heartbeat,controller_pid,child_pid "
+                "FROM runs WHERE status NOT IN ('reserved','running','orphaned') ORDER BY created DESC LIMIT 100")]
             mode=db.execute("SELECT value FROM config WHERE key='mode'").fetchone()['value']
         return dict(mode=mode,active=active,history=history,
                     limits=dict(managed_runs=3,writers=1 if mode=='catch-up' else 2,heavy=1),
