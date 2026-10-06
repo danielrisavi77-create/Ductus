@@ -100,7 +100,9 @@ Izvještaj obvezno ide u opis PR-a ili, bez PR-a, u `IZVJEŠTAJ <id>` issue. Dir
 
 ## 5. Neovisni pregled
 
-Codex CLI je zadani automatizirani reviewer kad je dostupan, ali nije jedini dopušteni reviewer. Za lokalni Codex review može se pokrenuti:
+Zadani automatizirani reviewer za Claude-authored PR je **Codex GitHub Code Review** preko `chatgpt-codex-connector` Appa i Danielove ChatGPT/Codex pretplate. Repo mora imati uključen Code review + Automatic reviews u Codex postavkama. Taj native review zadovoljava reviewer gate samo po pravilima iz `docs/ENGINEERING_SYSTEM.md`.
+
+Codex CLI ostaje lokalni fallback/dijagnostika kad GitHub review nije dostupan. Za lokalni Codex review može se pokrenuti:
 
 ```
 powershell -File scripts/codex-review.ps1 -Level <light|standard|critical>
@@ -116,7 +118,7 @@ Razinu zadaje orkestrator u zadatku; kad je ne zada, sesija bira po tablici (Dan
 
 Claude worker sesije trenutačno su na Opusu; effort orkestrator postavlja po zadatku: `light` → low, `standard` → medium, `critical` → high. Codex worker koristi model/effort koji orkestrator eksplicitno zada ili računov zadani coding model.
 
-Codex radi i desetak minuta, pa se skripta pokreće u pozadini s vremenskim ograničenjem od najmanje 20 minuta; inače se prekine prije objave komentara. Skripta pokreće `codex exec review --base origin/main` (samo diff grane); `AGENTS.md` prepoznaje review način, a nalaz ide kao komentar na PR. Codex troši ChatGPT kvotu, ne Claude kvotu. Autor ispravlja prihvaćene nalaze i u izvještaju navodi odbijene s razlogom. Kritičan nalaz koji autor ne može riješiti znači status "blokirano".
+Codex radi i desetak minuta, pa se lokalna skripta pokreće u pozadini s vremenskim ograničenjem od najmanje 20 minuta; inače se prekine prije rezultata. Skripta pokreće `codex exec review --base origin/main` (samo diff grane) i troši ChatGPT kvotu, ne Claude kvotu. **Važno:** komentar objavljen običnim `gh` korisničkim tokenom nije `chatgpt-codex-connector` App-authenticated verdict, pa je lokalni CLI rezultat dijagnostički signal dok se verdict ne dobije kroz priznati App put. Autor ispravlja prihvaćene nalaze i u izvještaju navodi odbijene s razlogom. Kritičan nalaz koji autor ne može riješiti znači status "blokirano".
 
 ## 6. Dizajn
 
