@@ -117,6 +117,22 @@ Task: <ID ili kratki identifikator>
 
 Review komentar je zaseban kanonski komentar. **Prva neprazna linija mora biti `Agent-Review:`**; primjer u code blocku ili tekst nakon preambule ne vrijedi kao verdict.
 
+
+### Subscription-first Codex review
+
+Zadani put za PR koji je napisao Claude je **Codex GitHub Code Review** povezan s Danielovim ChatGPT računom, ne OpenAI API ključ. Kad je Code review + Automatic reviews uključen za repo u Codex postavkama, Codex automatski pregledava PR kad se otvori za review. Repo-specifična pravila su u `AGENTS.md` pod `## Code Review Rules`.
+
+Engineering gate prihvaća native Codex review kao OpenAI reviewer signal samo ako vrijedi sve:
+- GitHub identitet je stvarni `chatgpt-codex-connector` App/bot;
+- rezultat je vezan uz aktualni PR head;
+- Codex eksplicitno javlja da nije našao major issues i nema current-head inline nalaza;
+- autor PR-a nije `chatgpt`/`codex` runtime.
+
+Codex review s current-head nalazima drži gate `pending`. Novi push invalidira stari rezultat. Za `critical` PR native Codex review i dalje **nije dovoljan**: QA PASS mora doći iz drugog autentificiranog GitHub Appa (preferirano Grok; dopuštena je i odvojena Claude QA instanca prema pravilima uloge).
+
+`scripts/codex-review.ps1` ostaje lokalni read-only fallback za dijagnostiku i ručni review. Ako njegov rezultat objavi obični korisnički `gh` token, to samo po sebi nije App-authenticated verdict i ne zadovoljava Engineering gate.
+
+
 ```
 Agent-Review: <runtime>:<slot>:reviewer
 Review-Head: <40-znamenkasti SHA>
