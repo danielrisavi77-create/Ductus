@@ -141,6 +141,9 @@
       },
       "operations": [
         {
+          "type": "EDIT"
+        },
+        {
           "type": "LOCAL_SAVE_STARTED"
         },
         "crash",
@@ -279,6 +282,9 @@
         },
         "reconnect",
         {
+          "type": "SYNC_STARTED"
+        },
+        {
           "outcome": {
             "status": "committed",
             "revision": 8
@@ -407,6 +413,9 @@
       "prompt": "Procijeni ponovljeni server odgovor i naknadni EDIT dok odgovor prvog zapisa kasni. Prati koji tx i sadržaj ACK pokriva.",
       "failure_cut": "server committed tx-1; first response not delivered",
       "operations": [
+        {
+          "type": "SYNC_STARTED"
+        },
         {
           "outcome": {
             "status": "duplicate",
@@ -639,10 +648,19 @@
       },
       "operations": [
         {
+          "type": "SYNC_STARTED"
+        },
+        {
           "outcome": {
             "status": "stale_base",
             "currentRevision": 8
           }
+        },
+        {
+          "fixture_operation": "persist-current-state",
+          "target": "simulated_journal.meta.state",
+          "value_from": "current_reducer_state",
+          "scope": "synthetic in-memory fixture only; not an observed IndexedDB or storage adapter write"
         },
         "reload"
       ]
@@ -1011,5 +1029,12 @@
         "inspect proposed ACK clearing prefix"
       ]
     }
-  ]
+  ],
+  "operation_contract": {
+    "visible_state": "Početni reducer state svakog scenarija; svaki type objekt u operations je stvarni SyncEvent iz states.ts.",
+    "outcomes": "outcome i late_outcome objekti su supplied candidate DrainOutcome ulazi. Mapirati svaki kroz stvarni outcomeToEvents na candidate_revision i dobivene događaje redom primijeniti kroz syncReducer; ne izmišljati dodatne SyncEvente.",
+    "fixture_operations": "Tekstualni crash, reload i reconnect su sintetičke fixture operacije, ne SyncEventi. Crash odbacuje samo modelirano memorijsko stanje; reconnect sam ne mijenja reducer state. new_tx je novi memorijski kandidat s identitetom, ne opaženi local save, ACK ili novi pending red.",
+    "reload": "Za reload koristiti restoreSyncState nad simuliranom kopijom dostavljenog journal ulaza. Bez izričite fixture persistence operacije čitati nepromijenjeni posljednji durable journal.",
+    "persist_current_state": "Samo izričiti fixture_operation persist-current-state kopira trenutačni reducer state u simulated_journal.meta.state. To je sintetička in-memory priprema reloada, ne opaženi IndexedDB/adapter write; izvorni journal ulaz ostaje nepromijenjen."
+  }
 }
