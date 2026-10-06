@@ -589,3 +589,131 @@ test("Grok App cannot claim Claude or OpenAI runtime", () => {
     assert.equal(result.state, "pending");
   }
 });
+
+
+const nativeCodexPass = ({
+  sha = head,
+  association = "NONE",
+  appSlug = "chatgpt-codex-connector",
+  login = "chatgpt-codex-connector[bot]",
+} = {}) => ({
+  body: `Codex Review: Didn't find any major issues. Keep it up! Reviewed commit: \`${sha.slice(0, 10)}\``,
+  user: { login },
+  author_association: association,
+  performed_via_github_app: appSlug ? { slug: appSlug } : null,
+  created_at: new Date(1_800_000_000_000 + counter++ * 1000).toISOString(),
+});
+
+test("native Codex no-major-issues review satisfies standard gate for Claude author", () => {
+  const result = evaluate({
+    body: prBody("standard", "claude:a:backend"),
+    headSha: head,
+    comments: [nativeCodexPass()],
+  });
+  assert.equal(result.state, "success");
+});
+
+test("native Codex review is bound to the current head", () => {
+  const result = evaluate({
+    body: prBody("standard", "claude:a:backend"),
+    headSha: head,
+    comments: [nativeCodexPass({ sha: "b".repeat(40) })],
+  });
+  assert.equal(result.state, "pending");
+});
+
+test("plain user comment cannot spoof a native Codex PASS", () => {
+  const result = evaluate({
+    body: prBody("standard", "claude:a:backend"),
+    headSha: head,
+    comments: [nativeCodexPass({
+      login: ownerLogin,
+      association: "OWNER",
+      appSlug: null,
+    })],
+  });
+  assert.equal(result.state, "pending");
+});
+
+test("native Codex current-head findings keep the gate pending", () => {
+  const result = evaluate({
+    body: prBody("standard", "claude:a:backend"),
+    headSha: head,
+    comments: [{
+      body: `### 💡 Codex Review\nHere are some automated review suggestions. Reviewed commit: \`${head.slice(0, 10)}\``,
+      user: { login: "chatgpt-codex-connector[bot]" },
+      author_association: "NONE",
+      performed_via_github_app: { slug: "chatgpt-codex-connector" },
+      created_at: new Date(1_800_000_100_000).toISOString(),
+    }],
+  });
+  assert.equal(result.state, "pending");
+  assert.match(result.description, /Codex review has current-head findings/);
+});
+
+test("native Codex formal review can supply PASS when bound by commit_id", () => {
+  const result = evaluateGate({
+    ownerLogin,
+    body: prBody("standard", "claude:a:backend"),
+    headSha: head,
+    comments: [],
+    reviews: [{
+      body: "Codex Review: Didn't find any major issues. Keep it up!",
+      state: "COMMENTED",
+      commit_id: head,
+      author_association: "NONE",
+      user: { login: "chatgpt-codex-connector[bot]" },
+    }],
+  });
+  assert.equal(result.state, "success");
+});
+
+test("native Codex inline finding blocks a no-major summary on the same head", () => {
+  const result = evaluateGate({
+    ownerLogin,
+    body: prBody("standard", "claude:a:backend"),
+    headSha: head,
+    comments: [nativeCodexPass()],
+    reviewComments: [{
+      body: "P1: unsafe migration behavior",
+      commit_id: head,
+      author_association: "NONE",
+      user: { login: "chatgpt-codex-connector[bot]" },
+    }],
+  });
+  assert.equal(result.state, "pending");
+  assert.match(result.description, /Codex review has current-head findings/);
+});
+
+test("native Codex cannot self-review an OpenAI-authored PR", () => {
+  const result = evaluate({
+    body: prBody("standard", "chatgpt:a:platforma"),
+    headSha: head,
+    comments: [nativeCodexPass()],
+  });
+  assert.equal(result.state, "pending");
+});
+
+test("critical Claude PR can use native Codex review plus Grok QA", () => {
+  const result = evaluate({
+    body: prBody("critical", "claude:a:backend"),
+    headSha: head,
+    comments: [
+      nativeCodexPass(),
+      qa({ agent: "grok:c:qa", appSlug: "grok-by-xai" }),
+    ],
+  });
+  assert.equal(result.state, "success");
+});
+
+test("critical native Codex review still rejects QA from the same OpenAI App", () => {
+  const result = evaluate({
+    body: prBody("critical", "claude:a:backend"),
+    headSha: head,
+    comments: [
+      nativeCodexPass(),
+      qa({ agent: "chatgpt:c:qa", appSlug: "chatgpt-codex-connector" }),
+    ],
+  });
+  assert.equal(result.state, "pending");
+});
