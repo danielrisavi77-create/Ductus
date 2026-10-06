@@ -10,7 +10,7 @@ M0 Temelj. Prvi cilj ostaje radni demo za FPZG 2. 11. 2026. (`docs/PLAN-DEMO.md`
 
 Agent nikad ne uzima ove stavke i nikad ne čeka na njima ako drugi posao može naprijed.
 
-- [ ] Nakon mergea Engineering System v1 zaštititi `main`: PR obvezan; direct/force push i delete zabranjeni; unresolved conversations blokiraju; obvezni statusi CI, Local stack, Security scanners, Dependency review i Engineering review gate; squash only.
+- [ ] Završni owner prihvat opažene zaštite `main` ([#53](https://github.com/danielrisavi77-create/Ductus/issues/53)): PR obvezan; direct/force push i delete zabranjeni; unresolved conversations blokiraju; obvezni statusi CI, Local stack, Security scanners, Dependency review i Engineering review gate; squash only.
 - [ ] Proba demoa 31. 10. 2026. i snimka prolaza (PLAN-DEMO D-3, D-4).
 - [ ] Odlučiti D-06 ili strožu D-39 nakon UX testa iz `docs/UX-EVAL.md`.
 - [ ] Potvrditi ili promijeniti D-08, D-16, D-20, D-34, D-37, D-38 te pragove P-01 do P-04.
@@ -34,6 +34,12 @@ Kanonski dokument: `docs/ENGINEERING_SYSTEM.md`.
 - `critical`: neovisni review + zaseban QA PASS na aktualnom headu.
 - Novi push invalidira review/QA preko `Review-Head` / `QA-Head`.
 - Owner Override je eksplicitna iznimka s razlogom i head SHA-om.
+
+### Opaženi zapis #53 — 6. 10. 2026.
+
+- [Policy 6529](https://github.com/danielrisavi77-create/Ductus/settings/actions/rules/6529): API readback `2026-10-06T12:21:48.147+02:00` potvrđuje `allowed_events: [pull_request_target, issue_comment]`; aktivnost i opseg samo `.github/workflows/engineering-gate.yml` ostali su jednaki.
+- [Run 37327275967, attempt 2](https://github.com/danielrisavi77-create/Ductus/actions/runs/37327275967/attempts/2) završio je SUCCESS u `2026-10-06T10:25:11Z`: ponovljen je postojeći `issue_comment` smoke za zatvoreni, nespojeni PR #64; stvarni checkout aktualnog `main` bio je `b41d5633bfcee1550d83016dcce89adb9648af7a`.
+- Potvrda primitka/startupa novih `issue_comment` i `pull_request_target` događaja te završni owner prihvat ostaju otvoreni. Rerun ne zatvara cijeli #53 i nije review/QA PASS za #39 ili #86.
 
 ## Otvoreni razvojni stog
 
