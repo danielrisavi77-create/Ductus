@@ -59,6 +59,22 @@ Prijedlog: jedna rečenica.
 
 Na kraju napiši `Ukupno: N kritično, N važno, N manje.` Ako nema nalaza, samo `Bez nalaza.` Ne izmišljaj nalaze.
 
+## Code Review Rules
+
+Codex GitHub Code Review čita ovaj odjeljak automatski. Fokusiraj se samo na P0/P1 probleme; stil, imenovanje i mehaničke provjere ostaju CI-ju.
+
+### Trust granice
+- Za identity/auth/authz/RLS/session/evidence/submission/migrations provjeri fail-closed ponašanje: identitet dolazi iz `current_actor()`, nove tablice imaju RLS + pgTAP denial matricu, a klijent ne piše izravno u trust tablice.
+- `SECURITY DEFINER` mora imati prazan `search_path`; state-changing rute moraju provjeravati `Origin` i `Sec-Fetch-Site`.
+
+### Evidencija i sinkronizacija
+- Ne dopusti silent last-write-wins, preskakanje canonical JCS/hash/signature provjera ili pretvaranje praznine u uspješnu predaju.
+- Novi push/novi head poništava prethodni review; pregledaj samo aktualni PR head.
+
+### Proizvodne tvrdnje
+- Ne dopusti AI-detektor/autorsku presudu, postotak "AI napisao" ni drugo sučelje koje evidenciju pretvara u presudu o studentu.
+- Ako nema ozbiljnih nalaza, Codexov native rezultat "Didn't find any major issues" može zadovoljiti neovisni reviewer gate za PR čiji autor nije OpenAI runtime.
+
 ## Orkestrator
 
 U orchestrator načinu slijedi `docs/ORKESTRATOR.md`. GitHub stanje ima prednost pred session-listom pojedinog računa. Direktne cross-session poruke su optimizacija, ne protokol.
