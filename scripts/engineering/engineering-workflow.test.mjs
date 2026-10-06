@@ -9,7 +9,8 @@ test("privileged engineering workflow remains metadata-only", async () => {
 
   assert.match(workflow, /pull_request_target:/);
   assert.match(workflow, /issue_comment:/);
-  assert.doesNotMatch(workflow, /pull_request_review:/);
+  assert.match(workflow, /pull_request_review:/);
+  assert.match(workflow, /types:\s*\[submitted, edited, dismissed\]/);
 
   assert.match(
     workflow,
