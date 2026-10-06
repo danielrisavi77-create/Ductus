@@ -1,0 +1,109 @@
+"""Single-host SQLite reservations. Stale jobs retain their slots."""
+from contextlib import contextmanager
+import hashlib
+import json
+import os
+import secrets
+import sqlite3
+import time
+from pathlib import Path
+from .policy import ACTIVE, ROLES, Blocked, scopes_overlap, validate_task
+
+class Registry:
+    def __init__(self,path:Path,mode:str|None=None):
+        self.path=Path(path)
+        self.path.parent.mkdir(parents=True,exist_ok=True)
+        if mode not in (None,'catch-up','normal'): raise Blocked('blocked_mode')
+        with self.connect() as db:
+            db.executescript('''CREATE TABLE IF NOT EXISTS config(key TEXT PRIMARY KEY,value TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS runs(
+                id TEXT PRIMARY KEY,task TEXT NOT NULL,owner TEXT NOT NULL,role TEXT NOT NULL,
+                provider TEXT NOT NULL,worktree TEXT NOT NULL,scopes TEXT NOT NULL,base_sha TEXT NOT NULL,
+                status TEXT NOT NULL,heavy INTEGER NOT NULL,created REAL NOT NULL,heartbeat REAL NOT NULL,
+                controller_pid INTEGER NOT NULL,child_pid INTEGER,token_hash TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY,time REAL,run TEXT,kind TEXT);''')
+            db.execute('BEGIN IMMEDIATE')
+            old=db.execute("SELECT value FROM config WHERE key='mode'").fetchone()
+            oldmode=old['value'] if old else 'catch-up'
+            target=mode or oldmode
+            if target!=oldmode and db.execute("SELECT 1 FROM runs WHERE status IN ('reserved','running','orphaned') LIMIT 1").fetchone():
+                raise Blocked('blocked_mode: active reservations')
+            db.execute("INSERT OR REPLACE INTO config VALUES('mode',?)",(target,))
+    @contextmanager
+    def connect(self):
+        db=sqlite3.connect(self.path,timeout=15)
+        db.row_factory=sqlite3.Row
+        db.execute('PRAGMA busy_timeout=15000')
+        try:
+            with db:
+                yield db
+        finally:
+            db.close()
+    def acquire(self,task:dict,now:float|None=None,controller_pid:int|None=None):
+        t=validate_task(task); now=time.time() if now is None else now
+        token=secrets.token_hex(32); run=secrets.token_hex(12)
+        wt=os.path.normcase(str(Path(t['worktree']).resolve())).casefold()
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            rows=db.execute("SELECT * FROM runs WHERE status IN ('reserved','running','orphaned')").fetchall()
+            mode=db.execute("SELECT value FROM config WHERE key='mode'").fetchone()['value']
+            if len(rows)>=3: raise Blocked('blocked_capacity: three managed jobs')
+            for row in rows:
+                if row['task'].casefold()==t['id'].casefold(): raise Blocked('blocked_task_claim')
+                if row['worktree']==wt: raise Blocked('blocked_worktree_claim')
+                if row['owner']==t['owner']: raise Blocked('blocked_owner_claim')
+                if t['role']==row['role']=='orchestrator': raise Blocked('blocked_orchestrator_claim')
+                if t['heavy'] and row['heavy']: raise Blocked('blocked_heavy_capacity')
+                if ROLES[t['role']][1] and ROLES[row['role']][1] and scopes_overlap(t['scopes'],json.loads(row['scopes'])):
+                    raise Blocked('blocked_shared_scope')
+                if t['provider'] in ('grok','mistral') and row['provider']==t['provider']:
+                    raise Blocked('blocked_provider_capacity')
+            if ROLES[t['role']][1] and sum(ROLES[r['role']][1] for r in rows)>=(1 if mode=='catch-up' else 2):
+                raise Blocked('blocked_writer_capacity')
+            db.execute('INSERT INTO runs VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                (run,t['id'],t['owner'],t['role'],t['provider'],wt,json.dumps(t['scopes']),t['base_sha'],
+                 'reserved',int(t['heavy']),now,now,controller_pid or os.getpid(),None,hashlib.sha256(token.encode()).hexdigest()))
+            db.execute('INSERT INTO events(time,run,kind) VALUES(?,?,?)',(now,run,'reserved'))
+        return run,token
+    def _owned(self,db,run,token):
+        row=db.execute('SELECT * FROM runs WHERE id=?',(run,)).fetchone()
+        if not row or not secrets.compare_digest(row['token_hash'],hashlib.sha256(token.encode()).hexdigest()):
+            raise Blocked('blocked_ownership')
+        if row['status'] not in ACTIVE: raise Blocked('blocked_terminal_run')
+        return row
+    def heartbeat(self,run,token,child_pid=None):
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE'); self._owned(db,run,token)
+            db.execute("UPDATE runs SET status='running',heartbeat=?,child_pid=COALESCE(?,child_pid) WHERE id=?",(time.time(),child_pid,run))
+    def finish(self,run,token,status):
+        if status not in ('completed','failed','blocked_scope','blocked_runtime','cancelled'):
+            raise Blocked('blocked_status')
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE');self._owned(db,run,token)
+            db.execute('UPDATE runs SET status=?,heartbeat=? WHERE id=?',(status,time.time(),run))
+            db.execute('INSERT INTO events(time,run,kind) VALUES(?,?,?)',(time.time(),run,status))
+    def orphans(self,now=None,ttl=90):
+        now=time.time() if now is None else now
+        with self.connect() as db:
+            return db.execute("UPDATE runs SET status='orphaned' WHERE status IN ('reserved','running') AND heartbeat < ?",(now-ttl,)).rowcount
+    def recover(self,run,pid_alive):
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row=db.execute('SELECT * FROM runs WHERE id=?',(run,)).fetchone()
+            if not row or row['status']!='orphaned': raise Blocked('blocked_recovery: not orphaned')
+            if row['child_pid'] is not None:
+                raise Blocked('blocked_recovery: started process tree requires independent review')
+            # Unknown or reused PIDs fail closed. No killing arbitrary PIDs.
+            if any(pid_alive(pid) is not False for pid in (row['controller_pid'],row['child_pid']) if pid):
+                raise Blocked('blocked_recovery: process alive or liveness unknown')
+            db.execute("UPDATE runs SET status='cancelled',heartbeat=? WHERE id=?",(time.time(),run))
+            db.execute('INSERT INTO events(time,run,kind) VALUES(?,?,?)',(time.time(),run,'recovered_after_confirmed_exit'))
+    def status(self):
+        with self.connect() as db:
+            columns='id,task,owner,role,provider,worktree,base_sha,status,heavy,heartbeat,controller_pid,child_pid'
+            active=[dict(r) for r in db.execute(f"SELECT {columns} FROM runs WHERE status IN ('reserved','running','orphaned') ORDER BY created")]
+            history=[dict(r) for r in db.execute(f"SELECT {columns} FROM runs WHERE status NOT IN ('reserved','running','orphaned') ORDER BY created DESC LIMIT 100")]
+            mode=db.execute("SELECT value FROM config WHERE key='mode'").fetchone()['value']
+        return dict(mode=mode,active=active,history=history,
+                    limits=dict(managed_runs=3,writers=1 if mode=='catch-up' else 2,heavy=1),
+                    boundary='single-host managed jobs only; external chats/processes are not controlled')

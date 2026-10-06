@@ -1,0 +1,37 @@
+name: Managed CLI runtime tests
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/ai_runtime/**'
+      - 'scripts/ductus_ai.py'
+      - '.github/workflows/ai-runtime-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/ai_runtime/**'
+      - 'scripts/ductus_ai.py'
+      - '.github/workflows/ai-runtime-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  runtime:
+    name: Managed CLI runtime (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Require supported Python
+        run: python -c "import sys; assert sys.version_info >= (3,11), sys.version"
+      - name: Test real local processes and Git fixtures (no model or API calls)
+        run: python -B -W error::ResourceWarning -m unittest discover -s scripts/ai_runtime/tests -v
+      - name: Verify roster entry point
+        run: python -B scripts/ductus_ai.py roster
