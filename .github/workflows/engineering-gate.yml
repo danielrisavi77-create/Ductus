@@ -8,6 +8,8 @@ on: # zizmor: ignore[dangerous-triggers] trusted default-branch metadata gate; P
     types: [opened, synchronize, reopened, edited, ready_for_review]
   issue_comment:
     types: [created, edited, deleted]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
 
 permissions:
   contents: read
