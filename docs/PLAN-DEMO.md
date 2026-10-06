@@ -40,7 +40,7 @@ Na svakoj kontrolnoj točki orkestrator uspoređuje stanje s tablicom i, ako se 
 
 ## 4. Zadaci
 
-Oznaka uloge: P Platforma, B Backend, F Frontend, K kratkotrajna sesija, D Daniel. "Gotovo kad" je uvijek uz zelene testove, otvoren PR i Codex pregled bez otvorenih kritičnih nalaza, osim gdje piše drukčije. Za svaki backend zadatak uz to vrijede tvrda pravila iz `CLAUDE.md` i kontrolna lista iz `docs/BACKEND.md` §6: svaka nova tablica ima RLS i retke u pgTAP matrici s testom odbijanja; RPC-i izvode identitet iz `current_actor()`, nikad iz parametra; svaka ruta koja mijenja stanje odbija zahtjev bez ispravnog `Origin` i `Sec-Fetch-Site`.
+Oznaka uloge: P Platforma, B Backend, F Frontend, K kratkotrajna sesija, D Daniel. "Gotovo kad" je uvijek uz zelene testove, otvoren PR i zeleni Engineering review gate prema risk razini iz `docs/ENGINEERING_SYSTEM.md`, osim gdje piše drukčije. Za svaki backend zadatak uz to vrijede tvrda pravila iz `CLAUDE.md` i kontrolna lista iz `docs/BACKEND.md` §6: svaka nova tablica ima RLS i retke u pgTAP matrici s testom odbijanja; RPC-i izvode identitet iz `current_actor()`, nikad iz parametra; svaka ruta koja mijenja stanje odbija zahtjev bez ispravnog `Origin` i `Sec-Fetch-Site`.
 
 ### Platforma
 

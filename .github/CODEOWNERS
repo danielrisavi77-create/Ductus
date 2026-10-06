@@ -1,0 +1,9 @@
+# Ductus trust/governance boundaries.
+# Branch protection must require Code Owner review for these paths.
+/.github/CODEOWNERS @danielrisavi77-create
+/.github/workflows/** @danielrisavi77-create
+/scripts/engineering/** @danielrisavi77-create
+/CLAUDE.md @danielrisavi77-create
+/AGENTS.md @danielrisavi77-create
+/docs/ENGINEERING_SYSTEM.md @danielrisavi77-create
+/docs/PRODUCT.md @danielrisavi77-create
