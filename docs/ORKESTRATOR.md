@@ -32,6 +32,19 @@ Spaja se (squash, D-86) samo ako je sve ispunjeno:
 
 Ako nešto ne prolazi, PR se vraća sesiji jednom porukom s točnim razlogom (npr. "rebase na origin/main"). Orkestrator ne mijenja grane drugih sesija.
 
+### 2a. Subscription-first review routing
+
+Zadani put ne koristi API ključeve:
+
+1. Claude worker otvara PR kao draft i završava vlastite testove.
+2. Kad su branch, CI i izvještaj spremni, orkestrator označava PR **Ready for review**. Za repo mora biti jednokratno uključen Codex **Code review + Automatic reviews** u ChatGPT/Codex postavkama.
+3. Native Codex review iz `chatgpt-codex-connector` Appa automatski je neovisni reviewer za Claude-authored PR samo ako je vezan uz aktualni head i nema P0/P1 nalaza.
+4. Ako Codex nađe problem, PR se vraća autoru. Svaki push invalidira review; novi review mora pokriti novi head.
+5. Za `critical` PR nakon Codex PASS-a orkestrator dispatcha zaseban adversarial QA drugom provideru/Appu. Preferirani red je **Grok QA**; ako Grok nije dostupan, odvojena Claude QA instanca je dopuštena. QA nikad ne dolazi iz istog OpenAI Appa kao Codex reviewer.
+6. Tek kad Engineering review gate postane zelen, PR je kandidat za squash merge.
+
+Ako Codex Automatic reviews nije dostupan, `@codex review` kroz GitHub integraciju je prvi fallback. Lokalni `scripts/codex-review.ps1` je dijagnostički fallback i ne zadovoljava App-authenticated gate ako komentar objavi obični korisnički GitHub token.
+
 Diff čitaju CI i neovisni reviewer; orkestrator gleda metapodatke i popis datoteka, osim kad se reviewer i autor ne slažu ili risk zahtijeva njegovu odluku.
 
 ## 3. Nakon spajanja
