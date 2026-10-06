@@ -75,7 +75,11 @@ def doctor(state, worktree=None):
                 else:
                     try:
                         auth=json.loads(p.stdout)
-                        entry['native_subscription_login_verified']=auth.get('loggedIn') is True and auth.get('authMethod') in ('oauth','claudeAi')
+                        entry['native_subscription_login_verified']=(
+                            p.returncode == 0 and isinstance(auth, dict)
+                            and auth.get('loggedIn') is True
+                            and auth.get('apiProvider') == 'firstParty'
+                            and auth.get('authMethod') in ('claude.ai', 'oauth', 'claudeAi'))
                     except json.JSONDecodeError:entry['native_subscription_login_verified']=False
             else:entry['native_subscription_login_verified']=None
             file=state/'evidence'/f'{provider}.json'

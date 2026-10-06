@@ -17,6 +17,10 @@ python -B -W error::ResourceWarning -m unittest discover -s scripts/ai_runtime/t
 
 `doctor` ispituje instalaciju te podržane Codex/Claude auth-status naredbe; ne pokreće model, login, kupnju ni promjenu računa. Postojanje instalacije nije potvrda kvote ili financiranja. Ne vraća tokene ili e-mail adrese.
 
+## Dopuna dijagnostike prijave
+
+Claude Code 2.1.291 koristi `authMethod: "claude.ai"`. `doctor` prepoznaje taj oblik uz ranije podrzane `oauth`/`claudeAi` oznake, ali samo uz izlazni kod 0, JSON objekt, `loggedIn: true` i `apiProvider: "firstParty"`. Nepoznat, API ili neispravan odgovor ne dokazuje pretplatnu prijavu. Osobna polja odgovora ne objavljuju se. Potvrda prijave ne potvrduje kvotu, financiranje ili native kontrole i ne ukljucuje `dispatch_ready`.
+
 ## Implementirano
 
 Dvanaest uloga dostupno je kroz `roster`: O1 orkestrator, B1 backend, F1 frontend, P1 platforma, R1 reviewer, Q1 QA, H1 bug hunter, U1 product/UX te četiri specijalista S1/A1/L1/X1. To nisu dvanaest pokrenutih procesa.
