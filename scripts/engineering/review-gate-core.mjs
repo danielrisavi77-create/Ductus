@@ -224,7 +224,7 @@ export function evaluateGate({
     return { state: "success", description: `Owner override recorded for ${risk} risk.` };
   }
 
-  const reviews = latestVerdicts(trusted, {
+  const reviewVerdicts = latestVerdicts(trusted, {
     agentField: "Agent-Review",
     headField: "Review-Head",
     verdictField: "Review-Verdict",
@@ -232,7 +232,7 @@ export function evaluateGate({
     headSha,
   });
 
-  for (const [, review] of reviews) {
+  for (const [, review] of reviewVerdicts) {
     if (review.identity.principal === authorPrincipal) continue;
     if (review.verdict === "FAIL" || review.verdict === "BLOCK") {
       return {
@@ -242,7 +242,7 @@ export function evaluateGate({
     }
   }
 
-  const passingReviews = [...reviews.values()].filter(
+  const passingReviews = [...reviewVerdicts.values()].filter(
     (review) =>
       review.identity.principal !== authorPrincipal &&
       review.verdict === "PASS",
