@@ -24,6 +24,7 @@
  */
 
 import type { DocumentTransaction } from "../document";
+import { commitRequestFromTransaction } from "../serverSync/contract";
 import type {
   CommitOutcome,
   InvalidCommitOutcome,
@@ -87,12 +88,18 @@ function isLocalSeq(value: unknown): value is number {
  * which is what makes the supersession rule below sound.
  */
 function isSendable(row: PendingTransaction): boolean {
-  return (
-    row?.tx?.kind === "REPLACE_DOCUMENT" &&
-    isLocalSeq(row.localSeq) &&
-    typeof row.tx.clientTransactionId === "string" &&
-    row.tx.clientTransactionId !== ""
-  );
+  if (!isLocalSeq(row?.localSeq)) {
+    return false;
+  }
+  try {
+    // The existing wire builder owns the kind, ids, revision and byte limit
+    // rules. A rejected row must also bound every removable queue prefix.
+    return commitRequestFromTransaction(row.documentId, row.tx) !== null;
+  } catch {
+    // Plain damaged data can still fail JSON serialization (cycles, BigInt)
+    // or omit the transaction. Retain it as an unsendable recovery boundary.
+    return false;
+  }
 }
 
 /**

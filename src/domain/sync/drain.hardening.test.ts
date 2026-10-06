@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 
 import { emptyDocument, type DocumentTransaction } from "@/domain/document";
+import { commitRequestFromTransaction } from "@/domain/serverSync/contract";
 import { planDrain, type DrainPlan } from "./drain";
 import type { PendingTransaction } from "./journal-types";
 
@@ -134,4 +135,123 @@ describe("planDrain — data-preserving queue boundaries", () => {
     expect(rows).toEqual(before);
   });
 
+});
+
+/** This exact shape has 144 JSON bytes before its ASCII text payload. */
+function documentSized(bytes: number) {
+  const document = row(1).tx.document;
+  document.nodes[0].children = [{ type: "text", text: "a".repeat(bytes - 144), marks: [] }];
+  return document;
+}
+
+function damagedRow(change: Record<string, unknown>): PendingTransaction {
+  const valid = row(2);
+  return { ...valid, tx: { ...valid.tx, ...change } } as unknown as PendingTransaction;
+}
+
+describe("planDrain - actual commit wire rejection boundaries", () => {
+  // Reusing the real builder proves why these rows cannot be acknowledged;
+  // literal prefix outcomes catch the planner discarding them nevertheless.
+  const multibyteDocument = row(2).tx.document;
+  multibyteDocument.nodes[0].children = [
+    { type: "text", text: "\u010d".repeat(524_217), marks: [] },
+  ];
+  const rejected: { name: string; damaged: PendingTransaction }[] = [
+    { name: "idempotency key of length 129", damaged: damagedRow({ clientTransactionId: "x".repeat(129) }) },
+    { name: "negative base revision", damaged: damagedRow({ baseRevision: -1 }) },
+    { name: "fractional base revision", damaged: damagedRow({ baseRevision: 1.5 }) },
+    { name: "NaN base revision", damaged: damagedRow({ baseRevision: Number.NaN }) },
+    { name: "infinite base revision", damaged: damagedRow({ baseRevision: Number.POSITIVE_INFINITY }) },
+    { name: "negative infinite base revision", damaged: damagedRow({ baseRevision: Number.NEGATIVE_INFINITY }) },
+    { name: "unsafe base revision", damaged: damagedRow({ baseRevision: Number.MAX_SAFE_INTEGER + 1 }) },
+    { name: "string base revision", damaged: damagedRow({ baseRevision: "0" }) },
+    { name: "missing base revision", damaged: damagedRow({ baseRevision: undefined }) },
+    { name: "null base revision", damaged: damagedRow({ baseRevision: null }) },
+    { name: "non-string idempotency key", damaged: damagedRow({ clientTransactionId: 7 }) },
+    { name: "empty idempotency key", damaged: damagedRow({ clientTransactionId: "" }) },
+    { name: "missing idempotency key", damaged: damagedRow({ clientTransactionId: undefined }) },
+    { name: "empty document id", damaged: { ...row(2), documentId: "" } },
+    { name: "missing document id", damaged: { ...row(2), documentId: undefined } as unknown as PendingTransaction },
+    { name: "non-string document id", damaged: { ...row(2), documentId: 7 } as unknown as PendingTransaction },
+    { name: "unsupported transaction kind", damaged: unsupported(2) },
+    { name: "document one byte over 1 MiB", damaged: damagedRow({ document: documentSized(1_048_577) }) },
+    { name: "document over 1 MiB in UTF-8 bytes", damaged: damagedRow({ document: multibyteDocument }) },
+  ];
+
+  it.each(rejected)("preserves $name through supersession and ACK prefixes", ({ damaged }) => {
+    expect(commitRequestFromTransaction(damaged.documentId, damaged.tx)).toBeNull();
+    const later = row(3);
+    const rows = [row(1), damaged, later];
+    const before = structuredClone(rows);
+    const plan = planDrain(rows, null);
+    expect(plan.send?.localSeq).toBe(1);
+    expect(plan.supersededUpTo).toBeNull();
+    expect(plan.supersededUpTo !== null && damaged.localSeq <= plan.supersededUpTo).toBe(false);
+    expect(plan.send !== null && damaged.localSeq <= plan.send.localSeq).toBe(false);
+    const afterSupersession = rows.filter(
+      (entry) => plan.supersededUpTo === null || entry.localSeq > plan.supersededUpTo,
+    );
+    expect(afterSupersession).toContain(damaged);
+    expect(acknowledgePrefix(afterSupersession, plan)).toEqual([damaged, later]);
+    expect(rows).toEqual(before);
+  });
+
+  it.each([
+    { name: "overlong key", change: { clientTransactionId: "x".repeat(129) } },
+    { name: "negative base", change: { baseRevision: -1 } },
+  ])("keeps a nonempty removable prefix before an unsorted $name barrier", ({ change }) => {
+    const damaged = { ...damagedRow(change), localSeq: 3 };
+    const later = row(4);
+    const rows = [later, row(1), damaged, row(2)];
+    const plan = planDrain(rows, null);
+    expect(plan.send?.localSeq).toBe(2);
+    expect(plan.supersededUpTo).toBe(1);
+    const afterSupersession = rows.filter(
+      (entry) => plan.supersededUpTo === null || entry.localSeq > plan.supersededUpTo,
+    );
+    expect(afterSupersession).toContain(damaged);
+    expect(acknowledgePrefix(afterSupersession, plan)).toEqual([later, damaged]);
+  });
+
+  const cyclicDocument: Record<string, unknown> = { ...row(2).tx.document };
+  cyclicDocument.self = cyclicDocument;
+  it.each([
+    { name: "cyclic document", damaged: damagedRow({ document: cyclicDocument }) },
+    { name: "BigInt document field", damaged: damagedRow({ document: { ...row(2).tx.document, damaged: 1n } }) },
+    { name: "null transaction", damaged: { ...row(2), tx: null } as unknown as PendingTransaction },
+    { name: "missing transaction", damaged: { ...row(2), tx: undefined } as unknown as PendingTransaction },
+  ])("keeps total planning and both prefixes safe for $name", ({ damaged }) => {
+    expect(() => commitRequestFromTransaction(damaged.documentId, damaged.tx)).toThrow(TypeError);
+    const later = row(3);
+    const rows = [row(1), damaged, later];
+    const before = structuredClone(rows);
+    const plan = planDrain(rows, null);
+    expect(plan.send?.localSeq).toBe(1);
+    expect(plan.supersededUpTo).toBeNull();
+    expect(acknowledgePrefix(rows, plan)).toEqual([damaged, later]);
+    expect(rows).toEqual(before);
+  });
+
+  it.each([
+    { name: "128-character key and base zero", change: { clientTransactionId: "x".repeat(128), baseRevision: 0 } },
+    { name: "maximum safe base revision", change: { baseRevision: Number.MAX_SAFE_INTEGER } },
+    { name: "document exactly 1 MiB", change: { document: documentSized(1_048_576) } },
+  ])("continues sending a valid wire boundary: $name", ({ change }) => {
+    const newest = { ...damagedRow(change), localSeq: 3 };
+    expect(commitRequestFromTransaction(newest.documentId, newest.tx)).not.toBeNull();
+    if ("document" in change) {
+      expect(new TextEncoder().encode(JSON.stringify(newest.tx.document)).length).toBe(1_048_576);
+    }
+    const plan = planDrain([row(2), newest, row(1)], null);
+    expect(plan.send).toBe(newest);
+    expect(plan.supersededUpTo).toBe(2);
+  });
+
+  it("blocks every send when the earliest row exceeds the wire key limit", () => {
+    const damaged = { ...damagedRow({ clientTransactionId: "x".repeat(129) }), localSeq: 1 };
+    const rows = [row(3), damaged, row(2)];
+    const plan = planDrain(rows, null);
+    expect(plan).toEqual({ send: null, supersededUpTo: null });
+    expect(acknowledgePrefix(rows, plan)).toEqual(rows);
+  });
 });
