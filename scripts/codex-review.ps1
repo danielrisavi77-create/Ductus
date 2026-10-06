@@ -1,5 +1,8 @@
-# Independent Codex review of the current branch against origin/main.
+# Independent local Codex review of the current branch against origin/main.
 # Codex reads the review instructions from AGENTS.md automatically.
+# Subscription-first default is the authenticated Codex GitHub Code Review App.
+# A comment posted here through the user's gh token is diagnostic and does not
+# by itself satisfy the App-authenticated Engineering review gate.
 # Usage: powershell -File scripts/codex-review.ps1 -Level <light|standard|critical> [-Pr <number>] [-NoComment]
 # Levels (docs/SESSIONS.md 5): light = docs, config, packages; standard = ports
 # and features; critical = evidence, crypto, auth, RLS, submission.
