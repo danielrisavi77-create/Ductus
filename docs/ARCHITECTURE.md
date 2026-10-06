@@ -8,6 +8,34 @@ Cilj: najjednostavnija arhitektura koja pouzdano ispunjava `PRODUCT.md` za pilot
 
 **Odnos prema `BACKEND.md`:** BACKEND je detaljan plan backenda i ima prednost u pojedinostima (topologija, uloge, prijava, evidencija, kopije, trošak, program B0 do B9). Ovaj dokument daje cjelinu sustava i upućuje na BACKEND gdje je on mjerodavan. Sve što ovisi o D-08 i D-71 do D-75 vrijedi kao **PRIJEDLOG** dok vlasnik te odluke ne potvrdi (B0.3), a D-08 je uvjetan i rezultatima spikeova B0.1 i B0.2.
 
+## 0.1 Status implementacije i granice repozitorija
+
+Ovaj dokument opisuje **ciljnu arhitekturu**, ne potvrđuje da su svi navedeni moduli ili procesi implementirani. Implementirano stanje dokazuju kod, testovi i provjere na aktualnom `main`; naziv direktorija, plan zadatka ili otvoreni PR nisu dokaz završetka.
+
+Repozitorij ostaje jedan modularni monolit. Uvođenje granica prati stvarni kod i prvi cjeloviti tok, bez masovnog premještanja:
+
+```text
+app/                         # Next.js granica
+src/domain/                  # čista domenska pravila i modeli
+src/application/             # slučajevi uporabe i portovi
+src/adapters/                # implementacije portova
+src/lib/                     # male zajedničke tehničke funkcije
+src/editor/                  # editor kada se njegov tok implementira
+src/features/                # stvarni korisnički tokovi, postupno
+src/runtime/web/             # composition root kada se uvede runtime
+src/runtime/worker/           # odvojeni worker composition root kada je potreban
+db/migrations/               # nakon odluke o alatu u B1
+config/
+docs/
+e2e/
+infra/
+scripts/
+spikes/
+tests/
+```
+
+Smjer ovisnosti je prema unutra: `app` i features pozivaju application; application ovisi o domainu i portovima; adapters implementiraju portove; domain ne ovisi o Reactu, SQL-u, pohrani ni vendor SDK-ovima. Web i worker mogu dijeliti module, ali svaki ima svoj composition root. Ne stvarati servis po modulu. Direktorije `runtime`, `editor`, `features` i `db/migrations` uvoditi tek uz pripadajuću implementaciju i provjere.
+
 ## 1. Stack
 
 | Sloj | Izbor | Status |

@@ -1,7 +1,7 @@
 # Ductura: Product Spec v1
 
 Verzija 1.0 · 5. 10. 2026.  
-Status: kandidat za kanonski product/UI spec  
+Status: kandidat; nije prihvaćeni kanonski product/UI spec i sam ne odobrava implementaciju. `PRODUCT.md` §5, Constitution i potvrđene odluke imaju prednost; elementi u konfliktu ostaju blokirani do izričitog usklađenja. Naziv Ductura u ovom dokumentu radni je naziv, ne konačna odluka o brendu.
 Vlasnik proizvoda: Daniel Rišavi
 
 ## 0. Svrha dokumenta
@@ -870,6 +870,8 @@ Mogući sukobi s trenutačnim:
 ## 18.3 Pravilo za razvoj
 
 **Dizajn se ne mijenja da bi sakrio konflikt.**
+
+Evidencija vlasničke želje u §18.1 čuva povijest i ne predstavlja izuzeće od `PRODUCT.md` §5 ili Ustava. Dok nadležna odluka ne uskladi pravila, konfliktni elementi ne smiju se graditi niti prikazivati korisnicima.
 
 Umjesto toga:
 

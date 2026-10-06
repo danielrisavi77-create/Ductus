@@ -159,7 +159,7 @@ Pravila:
 
 ### 4.8 Migracije i sheme
 
-Postojeće migracije su u formatu Supabase CLI-ja; alat još nije odabran (kandidati: dbmate, node-pg-migrate, graphile-migrate). Odluka u B1 uz: zasebnu migraciju za uloge i grantove, pgTAP u CI-ju bez `supabase start`, provjeru zanošenja sheme (`pg_dump --schema-only` staging naspram produkcije), expand/migrate/contract.
+Postojeće migracije su u formatu Supabase CLI-ja; migracijski alat još nije odabran. `dbmate` je kandidat u otvorenom PR-u #39, ne prihvaćena odluka samo zato što je implementiran na grani ili prolazi CI. Odluku zabilježiti u B1 nakon reviewa i kriterija: zasebna migracija za uloge i grantove, pgTAP u CI-ju bez `supabase start`, provjera zanošenja sheme (`pg_dump --schema-only` staging naspram produkcije) te expand/migrate/contract. Ostali kandidati su `node-pg-migrate` i `graphile-migrate`.
 
 ### 4.9 Opservabilnost i curenje sadržaja
 
