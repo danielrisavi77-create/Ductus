@@ -7,6 +7,15 @@ const SHA_RE = /^[0-9a-f]{40}$/i;
 const TRUSTED_ASSOCIATIONS = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 const VERDICTS = new Set(["PASS", "FAIL", "BLOCK"]);
 
+const CODEX_APP_SLUG = "chatgpt-codex-connector";
+const CODEX_BOT_LOGINS = new Set([
+  "chatgpt-codex-connector",
+  "chatgpt-codex-connector[bot]",
+]);
+const CODEX_NO_MAJOR_ISSUES = /Codex Review:\s*Didn't find any major issues/i;
+const CODEX_REVIEW_MARKER = /(?:Codex Review|💡 Codex Review)/i;
+const CODEX_REVIEWED_COMMIT = /Reviewed commit:\s*`([0-9a-f]{7,40})`/i;
+
 export const APP_RUNTIMES = new Map([
   ["claude", new Set(["claude"])],
   ["chatgpt-codex-connector", new Set(["chatgpt", "codex"])],
@@ -52,6 +61,53 @@ export function verifiedCommentIdentity(entry, declaredAgent) {
 
 function sameHead(value, headSha) {
   return Boolean(value && SHA_RE.test(value) && value.toLowerCase() === headSha.toLowerCase());
+}
+
+function codexIdentity(entry) {
+  const login = entry?.user?.login ?? entry?.login ?? null;
+  const appSlug = entry?.performed_via_github_app?.slug ?? entry?.appSlug ?? null;
+  return appSlug === CODEX_APP_SLUG || CODEX_BOT_LOGINS.has(login);
+}
+
+function codexEntryMatchesHead(entry, headSha) {
+  const commitId = entry?.commit_id ?? entry?.commitId ?? null;
+  if (commitId && SHA_RE.test(commitId)) return sameHead(commitId, headSha);
+
+  const body = entry?.body ?? "";
+  const match = body.match(CODEX_REVIEWED_COMMIT);
+  if (!match) return false;
+  const reviewed = match[1].toLowerCase();
+  return headSha.toLowerCase().startsWith(reviewed);
+}
+
+function nativeCodexReviewSignal({
+  comments = [],
+  reviews = [],
+  reviewComments = [],
+  headSha,
+}) {
+  const currentComments = comments.filter(
+    (entry) => codexIdentity(entry) && codexEntryMatchesHead(entry, headSha),
+  );
+  const currentReviews = reviews.filter(
+    (entry) => codexIdentity(entry) && codexEntryMatchesHead(entry, headSha),
+  );
+  const currentInline = reviewComments.filter(
+    (entry) => codexIdentity(entry) && codexEntryMatchesHead(entry, headSha),
+  );
+
+  const hasFindings =
+    currentInline.length > 0 ||
+    [...currentComments, ...currentReviews].some(({ body = "" }) =>
+      CODEX_REVIEW_MARKER.test(body) && !CODEX_NO_MAJOR_ISSUES.test(body),
+    );
+
+  if (hasFindings) return "findings";
+
+  const hasPass = [...currentComments, ...currentReviews].some(({ body = "" }) =>
+    CODEX_NO_MAJOR_ISSUES.test(body),
+  );
+  return hasPass ? "pass" : null;
 }
 
 function trustedComments(items) {
@@ -131,6 +187,8 @@ export function evaluateGate({
   headSha,
   ownerLogin,
   comments = [],
+  reviews = [],
+  reviewComments = [],
 }) {
   const authorAgent = field(body, "Agent");
   const authorRuntime = declaredRuntime(authorAgent);
@@ -155,6 +213,12 @@ export function evaluateGate({
   }
 
   const trusted = trustedComments(comments);
+  const nativeCodex = nativeCodexReviewSignal({
+    comments,
+    reviews,
+    reviewComments,
+    headSha,
+  });
 
   if (findOwnerOverride(trusted, headSha, ownerLogin)) {
     return { state: "success", description: `Owner override recorded for ${risk} risk.` };
@@ -183,6 +247,29 @@ export function evaluateGate({
       review.identity.principal !== authorPrincipal &&
       review.verdict === "PASS",
   );
+
+  if (nativeCodex === "findings") {
+    return {
+      state: "pending",
+      description: "Codex review has current-head findings.",
+    };
+  }
+
+  if (
+    nativeCodex === "pass" &&
+    authorRuntime !== "codex" &&
+    authorRuntime !== "chatgpt"
+  ) {
+    passingReviews.push({
+      agent: "codex:github-code-review:reviewer",
+      verdict: "PASS",
+      identity: {
+        appSlug: CODEX_APP_SLUG,
+        runtime: "codex",
+        principal: "openai:github-code-review",
+      },
+    });
+  }
 
   if (passingReviews.length === 0) {
     return { state: "pending", description: "Waiting for independently authenticated review." };
