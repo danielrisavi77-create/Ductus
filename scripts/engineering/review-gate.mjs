@@ -69,8 +69,10 @@ async function main() {
 
   const [owner, repo] = repository.split("/");
   const pr = await api(`/repos/${owner}/${repo}/pulls/${number}`);
-  const [comments, changedFiles] = await Promise.all([
+  const [comments, reviews, reviewComments, changedFiles] = await Promise.all([
     apiAll(`/repos/${owner}/${repo}/issues/${number}/comments`),
+    apiAll(`/repos/${owner}/${repo}/pulls/${number}/reviews`),
+    apiAll(`/repos/${owner}/${repo}/pulls/${number}/comments`),
     apiAll(`/repos/${owner}/${repo}/pulls/${number}/files`),
   ]);
 
@@ -85,6 +87,8 @@ async function main() {
         headSha: pr.head.sha,
         ownerLogin: owner,
         comments,
+        reviews,
+        reviewComments,
       })
     : {
         state: "failure",
