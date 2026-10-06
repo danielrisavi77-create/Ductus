@@ -8,18 +8,19 @@ Ovaj dokument definira runtime sloj za rad više AI računa nad istim Ductus rep
 
 Ductus mora biti moguće otvoriti iz novog Claude ili ChatGPT/Codex računa bez ručnog prepisivanja projektnog konteksta. Sve što je potrebno za razumijevanje projekta i radni postupak mora biti u repozitoriju. Račun služi samo kao runtime i nositelj autentikacije.
 
-Repo je izvor istine; memorija računa, povijest chata i privatni skillovi nisu izvor istine.
+Repo je izvor istine za prihvaćene produktne/tehničke odluke, arhitekturu, implementacijske ugovore i razvojne upute. Linear je izvor istine za identifikator i razlog zadatka, prioritet, nositelja, rok i status. Memorija računa, povijest chata i privatni skillovi nisu izvori istine.
 
 ## 2. Control plane
 
-GitHub je zajednički control plane za sve račune i providere.
+GitHub je zajednički execution/evidence control plane za sve račune i providere. Ne zamjenjuje Linearov registar zadataka.
 
-- **Zadatak:** GitHub issue ili eksplicitna poruka vlasnika s identifikatorom zadatka.
-- **Izvršenje:** zaseban branch i zaseban worktree.
-- **Predaja:** PR opis s `IZVJEŠTAJ` blokom.
-- **Blokada bez PR-a:** GitHub issue `IZVJEŠTAJ <id>`.
-- **Pregled:** PR review ili komentar.
-- **Stanje projekta:** `STATE.md` i odgovarajući dokumenti u `docs/`.
+- **Zadatak, razlog, prioritet, nositelj, rok i status:** Linear Ductus issue/project.
+- **Opseg, prihvaćeni kriteriji i odluke:** kanonski dokumenti u repo-u (`STATE.md`, `docs/PROGRAM.md`, `docs/PLAN-DEMO.md` i povezani product/technical docs).
+- **Izvršenje:** zaseban branch i zaseban worktree na GitHubu.
+- **Predaja i tehnički dokaz:** GitHub PR opis s `IZVJEŠTAJ`, commits, checks, reviewi i CI.
+- **Blokada bez PR-a:** Linear issue ostaje kanonski zadatak; GitHub `IZVJEŠTAJ <id>` issue može nositi tehnički izvještaj uz poveznicu na Linear.
+- **Stanje plana:** Linear za živi status zadatka; repo dokumenti za prihvaćeni scope i kriterije; GitHub za izvedbu i dokaze.
+- **Ductus Space:** vremenski označen pregled tih izvora, ne paralelni roadmap ni registar statusa.
 
 Poruke među Claude sesijama mogu ubrzati rad na istom računu, ali nikad nisu jedini zapis zadatka, odluke, predaje ili blokade. Sesije na različitim računima ne moraju se međusobno vidjeti.
 
@@ -52,7 +53,7 @@ Reviewer ne mijenja granu koju pregledava. Traži kršenja tvrdih pravila, ispra
 
 ### Orkestrator
 
-Orkestrator ne piše proizvodni kod. Dodjeljuje zadatke, provjerava gateove, rješava ovisnosti, spaja dopuštene PR-ove i održava `STATE.md`. GitHub status ima prednost pred session-listom bilo kojeg pojedinog računa.
+Orkestrator ne piše proizvodni kod. Dodjeljuje zadatke, provjerava gateove, rješava ovisnosti, spaja dopuštene PR-ove i održava `STATE.md`. GitHub PR/commit/review/CI metapodaci imaju prednost pred tvrdnjom sesije o izvedbi; Linear ostaje mjerodavan za prioritet, nositelja i status Linear zadatka.
 
 ## 5. Skills
 
@@ -125,6 +126,8 @@ Risk: <low | standard | critical>
 Review effort: <light | standard | critical>
 ```
 
+Zadatak je u pravilu Linear issue ID. GitHub issue ili PR povezuje se kao tehnička rasprava i dokaz; ne kopira se u njega zaseban prioritetni status.
+
 Ako runtime nije zadan, orkestrator bira slobodan kompatibilan worker.
 
 ## 9. Predaja
@@ -143,6 +146,8 @@ Otvoreno ili blokira: <stavke ili ništa>
 Treba Daniel: <odluka ili ništa>
 ```
 
+`Task` upućuje na Linear issue. PR, review i CI opisuju izvedbu i provjeru, ne mijenjaju samostalno Linearov status zadatka.
+
 Session URL može biti dodatak, ali nije potreban za nastavak rada s drugog računa.
 
 ## 10. Pravila prelaska između računa
@@ -152,7 +157,7 @@ Novi račun ne dobiva "predaju u chatu". Dobiva samo:
 1. aktualni `main`;
 2. `CLAUDE.md` ili `AGENTS.md`;
 3. `STATE.md`;
-4. zadani issue/PR;
+4. Linear issue zadatka i povezani GitHub PR/issue;
 5. odjeljke dokumenata navedene u zadatku.
 
 Ako to nije dovoljno za nastavak rada, dokumentacija ili izvještaj su nepotpuni i treba popraviti njih, a ne oslanjati se na memoriju prethodnog računa.
