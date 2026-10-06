@@ -19,7 +19,17 @@ const databaseBoundaryPlugin = {
       create(context) {
         return {
           ImportExpression(node) {
-            const source = node.source;
+            let source = node.source;
+            // These TypeScript wrappers disappear at emit time. Only unwrap
+            // type-only syntax; do not evaluate any remaining runtime expression.
+            while (
+              source.type === "TSAsExpression" ||
+              source.type === "TSTypeAssertion" ||
+              source.type === "TSNonNullExpression" ||
+              source.type === "TSSatisfiesExpression"
+            ) {
+              source = source.expression;
+            }
             const specifier =
               source.type === "Literal"
                 ? source.value
@@ -29,7 +39,8 @@ const databaseBoundaryPlugin = {
 
             // Arbitrary computed specifiers cannot be resolved by this static
             // guard. Variables and interpolated templates are not inspected.
-            if (typeof specifier === "string" && /^pg(?:$|\/|-)/.test(specifier)) {
+            // Match the static rule's default case-insensitive Unicode semantics.
+            if (typeof specifier === "string" && /^pg(?:$|\/|-)/iu.test(specifier)) {
               context.report({ node: source, messageId: "restrictedPg" });
             }
           },
