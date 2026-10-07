@@ -174,6 +174,9 @@ describe("planDrain - actual commit wire rejection boundaries", () => {
     { name: "missing document id", damaged: { ...row(2), documentId: undefined } as unknown as PendingTransaction },
     { name: "non-string document id", damaged: { ...row(2), documentId: 7 } as unknown as PendingTransaction },
     { name: "unsupported transaction kind", damaged: unsupported(2) },
+    { name: "null document", damaged: damagedRow({ document: null }) },
+    { name: "missing document", damaged: damagedRow({ document: undefined }) },
+    { name: "malformed document", damaged: damagedRow({ document: {} }) },
     { name: "document one byte over 1 MiB", damaged: damagedRow({ document: documentSized(1_048_577) }) },
     { name: "document over 1 MiB in UTF-8 bytes", damaged: damagedRow({ document: multibyteDocument }) },
   ];
@@ -216,12 +219,24 @@ describe("planDrain - actual commit wire rejection boundaries", () => {
   const cyclicDocument: Record<string, unknown> = { ...row(2).tx.document };
   cyclicDocument.self = cyclicDocument;
   it.each([
-    { name: "cyclic document", damaged: damagedRow({ document: cyclicDocument }) },
-    { name: "BigInt document field", damaged: damagedRow({ document: { ...row(2).tx.document, damaged: 1n } }) },
-    { name: "null transaction", damaged: { ...row(2), tx: null } as unknown as PendingTransaction },
-    { name: "missing transaction", damaged: { ...row(2), tx: undefined } as unknown as PendingTransaction },
-  ])("keeps total planning and both prefixes safe for $name", ({ damaged }) => {
-    expect(() => commitRequestFromTransaction(damaged.documentId, damaged.tx)).toThrow(TypeError);
+    { name: "cyclic document", damaged: damagedRow({ document: cyclicDocument }), throws: false },
+    {
+      name: "BigInt document field",
+      damaged: damagedRow({ document: { ...row(2).tx.document, damaged: 1n } }),
+      throws: false,
+    },
+    { name: "null transaction", damaged: { ...row(2), tx: null } as unknown as PendingTransaction, throws: true },
+    {
+      name: "missing transaction",
+      damaged: { ...row(2), tx: undefined } as unknown as PendingTransaction,
+      throws: true,
+    },
+  ])("keeps total planning and both prefixes safe for $name", ({ damaged, throws }) => {
+    if (throws) {
+      expect(() => commitRequestFromTransaction(damaged.documentId, damaged.tx)).toThrow(TypeError);
+    } else {
+      expect(commitRequestFromTransaction(damaged.documentId, damaged.tx)).toBeNull();
+    }
     const later = row(3);
     const rows = [row(1), damaged, later];
     const before = structuredClone(rows);

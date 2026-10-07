@@ -19,7 +19,7 @@
  * a client that could name the actor could replay someone else's key.
  */
 
-import type { CanonicalDocument, DocumentTransaction } from "../document";
+import { validateDocument, type CanonicalDocument, type DocumentTransaction } from "../document";
 import { isPlainObject, ownProperty } from "../json";
 
 /** Every status `pisac_commit_document` can return, and nothing else. */
@@ -257,14 +257,15 @@ export function commitRequestFromTransaction(
   if (!isRevision(tx.baseRevision, 0)) {
     return null;
   }
-  if (exceedsDocumentSizeLimit(tx.document)) {
+  const validation = validateDocument(tx.document);
+  if (!validation.ok || exceedsDocumentSizeLimit(validation.doc)) {
     return null;
   }
 
   return {
     p_document_id: documentId,
     p_base_revision: tx.baseRevision,
-    p_document: tx.document,
+    p_document: validation.doc,
     p_client_transaction_id: tx.clientTransactionId,
   };
 }
