@@ -1,6 +1,6 @@
 # Ductus Engineering System v1
 
-Verzija 1.0 · 4. 10. 2026. · Odgovorna osoba: Daniel Rišavi
+Verzija 1.1 · 7. 10. 2026. · Odgovorna osoba: Daniel Rišavi
 
 Ovaj dokument definira kako AI tim razvija Ductus. Ne mijenja proizvodni Ustav, `PRODUCT.md` ni tehničku arhitekturu. Cilj je povećati brzinu bez gubitka neovisnog pregleda, testabilnosti i jasnog vlasništva.
 
@@ -135,6 +135,14 @@ QA-Scope: <što je adversarialno provjereno>
 ```
 
 Za `critical` PR reviewer i QA moraju biti strojno različiti po autentificiranom GitHub Appu koji je objavio komentar. To ograničenje vrijedi za **PASS**: isti App ne može dati oba potrebna PASS-a. Međutim, svaki valjani ne-autorski QA `FAIL` ili `BLOCK` drži gate blokiranim bez obzira na to je li isti App već dao reviewer PASS. Trenutno se prihvaća Claude App (`claude`) za `claude:*:reviewer|qa`, ChatGPT/Codex App (`chatgpt-codex-connector`) za `chatgpt:*|codex:*`, te Grok by xAI App (`grok-by-xai`) za `grok:*`. Runtime `grok:*` je podržan i za gate. Stvarni Grok komentar potvrđen je kao GitHub App `grok-by-xai` (Grok by xAI), pa se prihvaća samo mapping `grok-by-xai → grok`. Jedan isti GitHub App ne može zadovoljiti i review i QA samo promjenom deklariranog runtimea.
+
+### Fallback par modela kad drugi provider nije dostupan
+
+Ako pretplata ili kvota za treći provider (primjerice Grok) nije dostupna, critical gate može zadovoljiti kombinacija **Fable na Claudeu** i **Astra na ChatGPT/Codexu**, u bilo kojem redoslijedu između reviewer i QA. Svaki PASS i dalje mora biti objavljen preko vlastitog autentificiranog GitHub Appa: `claude` i `chatgpt-codex-connector`. Fallback se oslanja na ta dva odvojena providera, uz korištenje ovih odabranih modela.
+
+Radi auditabilnosti, fallback komentar bilježi model u ulozi koju je obavio, npr. `Review-Model: Fable` i `QA-Model: Astra` (ili obrnuto), uz točan runtime model ID ako ga runtime prikazuje. Bilježi se i `Provider-Fallback: <provider> — <razlog>`, primjerice `Grok — pretplata ili kvota nedostupna`. Ti su redci deklarirana governance evidencija, a ne kriptografska potvrda modela ili stanja pretplate. Automatizirani gate i dalje provjerava autentificirani App, principal, ulogu, aktualni head i verdict.
+
+Ako Claude ili ChatGPT/Codex pretplata potrebna za ovaj par nije dostupna, dvije sesije ili dva modela unutar preostalog istog Appa ne zadovoljavaju odvojeni critical PASS. Gate ostaje pending dok nije dostupan drugi prihvaćeni App ili Daniel ne zabilježi aktualni `Owner-Override` prema §7.
 
 GitHub commit/PR API u ovom osobnom repou ne daje pouzdan App identitet autora svakog commita, pa **autor ≠ reviewer/QA nije kriptografski/stvarno autentificiran ovim gateom**. Ipak, gate kao defense-in-depth uspoređuje deklarirani author `runtime:slot` iz PR metadata s deklariranim reviewer/QA `runtime:slot` i odbija isti principal pod drugom ulogom. To ne zamjenjuje governance pravilo: Orkestrator i dalje mora dodijeliti odvojene instance/račune. Ako se kasnije uvedu zasebni GitHub identiteti/Appovi za writere, ova provjera se može pooštriti.
 

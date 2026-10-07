@@ -1,6 +1,6 @@
 # Ductus: multi-account i multi-agent rad
 
-Verzija 0.1 · 4. 10. 2026. · Odgovorna osoba: Daniel Rišavi
+Verzija 0.2 · 7. 10. 2026. · Odgovorna osoba: Daniel Rišavi
 
 Ovaj dokument definira runtime sloj za rad više AI računa nad istim Ductus repozitorijem. Vrijedi uz `CLAUDE.md`, `AGENTS.md`, `STATE.md`, `docs/SESSIONS.md` i `docs/ORKESTRATOR.md`. Ne mijenja proizvodna, sigurnosna ni arhitekturna pravila.
 
@@ -49,6 +49,8 @@ Claude, Codex i ChatGPT mogu biti worker. Provider ne određuje vlasništvo mapa
 ### Reviewer
 
 Reviewer ne mijenja granu koju pregledava. Traži kršenja tvrdih pravila, ispravnost, sigurnost, pravila proizvoda, nedostatne testove i prekoračenje opsega. Autor PR-a i neovisni reviewer ne smiju biti ista aktivna agent-instanca. Za kritične promjene koristi se drugi račun ili drugi provider kad je dostupan.
+
+Ako pretplata ili kvota za treći provider (primjerice Grok) nije dostupna, odobreni fallback par je Fable na Claudeu i Astra na ChatGPT/Codexu; modeli mogu zamijeniti uloge reviewera i QA-a. PASS-ovi i dalje moraju doći preko dva različita autentificirana Appa (`claude` i `chatgpt-codex-connector`). Dvije sesije ili modela na istom Appu ne čine neovisni par. U fallback komentarima zabilježi model i razlog; te su oznake auditni trag, a gate ne potvrđuje sam odabrani model ni dostupnost pretplate. Ako pretplata za Claude ili ChatGPT/Codex nije dostupna, gate ostaje pending dok se ne pribavi drugi prihvaćeni App ili Daniel ne unese Owner Override.
 
 ### Orkestrator
 
