@@ -1,6 +1,16 @@
 # Ductus: pravila za AI agente
 
-Prije svakog rada pročitaj `STATE.md`. Razvojni governance, risk razine, review i QA gateovi su u `docs/ENGINEERING_SYSTEM.md`, a runtime-neutral pravila za više Claude/ChatGPT računa u `docs/MULTI-ACCOUNT.md`; repo i GitHub su izvori istine, a memorija računa, privatni skillovi i session-ID-ovi nisu. Projektni Claude skillovi su u `.claude/skills/` i moraju ostati tanki adapteri na kanonske dokumente. Za proizvod čitaj `docs/PRODUCT.md`, za tehniku `docs/ARCHITECTURE.md` i `docs/BACKEND.md` (backend i hosting; ima prednost u pojedinostima, ARCHITECTURE daje cjelinu), za odluke `docs/DECISIONS.md`, za prihvaćene funkcije `docs/FEATURES.md`, za faze i GO uvjete `docs/PROGRAM.md`. U repou su to jedini izvori istine. Iznad njih stoje Product Vision v1.0 i Product Constitution v1.3 (Google Drive); u slučaju sukoba vrijedi Ustav, a sukob se prijavljuje u Owner queue.
+Prije svakog rada pročitaj `STATE.md`. Razvojni governance, risk razine, review i QA gateovi su u `docs/ENGINEERING_SYSTEM.md`, a runtime-neutral pravila za više Claude/ChatGPT računa u `docs/MULTI-ACCOUNT.md`. Projektni Claude skillovi su u `.claude/skills/` i moraju ostati tanki adapteri na kanonske dokumente.
+
+## Mjerodavni izvori
+
+- **Linear Ductus projekt i issue:** identitet zadatka, razlog, prioritet, nositelj, rok i trenutačni status.
+- **Repo:** prihvaćene produktne i tehničke odluke, arhitektura, opseg, kriteriji i razvojne upute. Za proizvod čitaj `docs/PRODUCT.md`, za tehniku `docs/ARCHITECTURE.md` i `docs/BACKEND.md` (BACKEND ima prednost u pojedinostima), za odluke `docs/DECISIONS.md`, za funkcije `docs/FEATURES.md`, a za faze i GO uvjete `docs/PROGRAM.md` i `docs/PLAN-DEMO.md`.
+- **GitHub:** verzije koda i dokumenata, grane, PR-ovi, reviewi, CI i izvršni dokazi. To je zajednički cross-account control plane, ali nije samostalni registar prioriteta i statusa zadataka.
+- **Product Vision v1.0 i Product Constitution v1.3:** odobrene produktne i ustavne granice; u sukobu s repo dokumentom vrijedi Ustav, a pitanje ide u Owner queue.
+- **Ductus Space:** datirani pregled iz Lineara i GitHuba; ne prepisuje njihove statuse kao neovisan izvor.
+
+Ako se izvori ne slažu, sačuvaj nesklad kao otvoren, provjeri odgovarajući kanonski izvor i ne označavaj zadatak dovršenim na temelju PR-a, mergea ili zelenog CI-ja samog po sebi.
 
 ## Tvrda pravila
 

@@ -6,7 +6,7 @@ Upute za aktivni Ductus orkestrator, neovisno o tome radi li u Claudeu ili Codex
 
 ## 1. Na početku svakog poteza
 
-Tri jeftine provjere, bez čitanja diffova:
+Tri jeftine provjere, bez čitanja diffova. Za odabir i redoslijed zadataka koristi Linearov prioritet, nositelja i status; za grane, PR-ove, reviewe i CI koristi GitHub:
 
 1. `gh pr list --state open --json number,title,headRefName,baseRefName,mergeable` i izvještaj u opisu svakog PR-a (`gh pr view <n> --json body,comments,statusCheckRollup`).
 2. `gh issue list --search "IZVJEŠTAJ in:title" --state open` (izvještaji bez PR-a) i `gh pr list --label izvjestaj-ceka` te komentari "IZVJEŠTAJ čeka orkestratora" (`SESSIONS.md` §2a).
@@ -26,6 +26,7 @@ Spaja se (squash, D-86) samo ako je sve ispunjeno:
 | Neovisni review vrijedi za aktualni head; `critical` uz to ima zaseban QA/adversarial PASS | `Engineering review gate` + komentari iz `ENGINEERING_SYSTEM.md` |
 | Baza je `main` i nema sukoba | `baseRefName`, `mergeable` |
 | Jedan zadatak; preko oko 400 redaka koda samo uz obrazloženje | opis PR-a |
+| PR je vezan uz Linear issue koji nosi razlog, prioritet, nositelja i status | Linear + PR opis |
 | Prijenos iz `pisac-editor`: tablica izvor, preneseno, nije preneseno s razlogom | opis PR-a |
 | Sesija nije dirala tuđe mape, `.claude/`, `CLAUDE.md` ni postavke repoa | popis datoteka (`files`) |
 | PR ne čeka Danielovu odluku | izvještaj, polje "Treba Daniel" |
@@ -47,7 +48,7 @@ Diff čitaju CI i neovisni reviewer; orkestrator gleda metapodatke i popis datot
 
 **Načelo (Daniel, 3. 10. 2026.):** orkestrator sve operativno radi sam i ne traži potvrdu u chatu. Daniela pita samo za odluke s popisa niže, i to obaviješću (§4a), a ne pitanjem u chatu.
 
-**Odlučuje sam i bilježi u dnevnik:** redoslijed zadataka unutar plana, dodjela zadatka sesiji, prihvaćanje ili vraćanje PR-a po §2, spajanje PR-ova (i vlastitih docs PR-ova kad je CI zelen), raspodjela modula između uloga, sitni ispravci dokumenata (i činjenični ispravci u `CLAUDE.md` koji ne mijenjaju pravila), arhiviranje gotovih sesija, otvaranje i zatvaranje kratkotrajnih sesija, upisi u `STATE.md` i na ploču.
+**Odlučuje sam i bilježi u dnevnik:** redoslijed zadataka prema Linear prioritetu i stvarnim ovisnostima, dodjela zadatka sesiji, prihvaćanje ili vraćanje tuđeg PR-a po §2, spajanje tuđih PR-ova kad su svi gateovi zeleni, raspodjela modula između uloga, sitni ispravci dokumenata i arhiviranje gotovih sesija. Orkestrator ne spaja vlastiti PR, uključujući docs-only PR; takav PR prolazi isti neovisni review i gate kao ostali.
 
 **Pita Daniela (i ne spaja dok ne odgovori):**
 

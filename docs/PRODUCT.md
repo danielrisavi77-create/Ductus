@@ -76,7 +76,7 @@ Pravilo za sve uloge: uloga sama ne daje pristup sadržaju. Pristup nastaje iskl
 
 **[PRIJEDLOG D-16]** Isto pravilo vrijedi za nastavnike, mentore i administratore fakulteta.
 
-- Protokol: OpenID Connect, Authorization Code s PKCE-om, preko Supabase Autha (vlastiti OIDC pružatelj).
+- Protokol: OpenID Connect Authorization Code s PKCE-om prema AAI@EduHr. Prijava i sesije provode se vlastitim server-side OIDC tokom; Supabase Auth nije odabran. Biblioteka/adapter ostaju otvoreni do M1 spikea (D-73 i `BACKEND.md` §4.3). Lažni OIDC pružatelj služi samo lokalno i u CI-ju.
 - Identitet korisnika je `hrEduPersonUniqueID`, nikad e-mail.
 - Tražimo samo: `openid`, `hrEduPersonUniqueID`, `hrEduPersonAffiliation`, `hrEduPersonHomeOrg` i po potrebi `email`. OIB se ne traži.
 - `hrEduPersonAffiliation = djelatnik` znači samo da osoba može dobiti ulogu nastavnika ili mentora; ulogu potvrđuje administrator fakulteta.
