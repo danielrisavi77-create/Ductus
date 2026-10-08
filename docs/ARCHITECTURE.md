@@ -74,7 +74,7 @@ Modularni monolit u dva procesa (web i worker) nad istom bazom. Svaki modul ima 
 | `institution` | Ustanova, kolegij, članstvo, zadatak i verzije zadatka, potvrde obavijesti, produljenja roka | Novo |
 | `evidence` | Odsječci, hash lanac, potvrde, praznine, kontrolne točke | Domena, portovi i gateway preneseni; SQL i adapteri novi (§12) |
 | `signing` | Port potpisa; KMS adapter u produkciji, razvojni potpisnik lokalno i u CI-ju | Preneseno (§12) |
-| `anchoring` | Dnevni korijen, Merkle stablo, consistency dokaz, RFC 3161 žig, objava, CLI verifikator | Novo, val 2 (D-72) |
+| `anchoring` | Kumulativni log, dnevna kontrolna točka (C2SP tlog-checkpoint), consistency dokaz, RFC 3161 žig, objava, CLI verifikator | Novo, val 2 (D-72, D-93) |
 | `submission` | Zamrzavanje, rekonstrukcija u workeru, potvrda predaje | Novo |
 | `projection` | Sažetak procesa i usporedba verzija; jedna funkcija za studenta i nastavnika; računa se na poslužitelju | Novo |
 | `collaboration` | Komentari vezani uz odlomak, prijedlozi izmjena, izravne izmjene nastavnika i mentora (D-34), obavijesti | Novo |
@@ -142,7 +142,8 @@ Sve tablice imaju uključen RLS i retke u pgTAP matrici pristupa. Pristup ide kr
 | `evidence.receipt` | odsječak, `receipt_payload` (JCS), stanje (`pending_signature`, `signed`), potpis, ID ključa. Jedini dopušteni prijelaz je `pending_signature` u `signed` uz nepromijenjen payload | Kao odsječak |
 | `evidence.gap` | dokument, od revizije, do revizije, uzrok | Student; nastavnik kroz projekciju |
 | `evidence.signing_key` | ID ključa, namjena (potvrde, dnevni korijen), javni ključ, referenca na ključ u KMS-u, vrijedi od, vrijedi do, opozvan | Javno (bez reference) |
-| `evidence.daily_root` | dan (UTC), broj listova, korijen, prethodni korijen, consistency dokaz, potpis, žigovi (`.tsr` i lanac certifikata po TSA-u), objavljeno. Val 2 (D-72) | Javno |
+| `evidence.log_entry` | indeks u logu (bez praznina, dodjeljuje se pri prihvatu), potvrda, `leaf_digest` (= `D` iz D-92). Indeks se dodjeljuje od B4, log se gradi u valu 2 (D-93) | Nitko izravno; worker i verifikator |
+| `evidence.checkpoint` | veličina loga, korijen, tekst kontrolne točke (C2SP tlog-checkpoint), potpis, consistency dokaz prema prethodnoj točki, žigovi (`.tsr` i lanac certifikata po TSA-u), objavljeno. Val 2 (D-72, D-93) | Javno |
 | `import_event` | dokument, revizija, naziv i vrsta datoteke, veličina, hash | Student; nastavnik kroz projekciju |
 | `paste_label` | odsječak, oznaka (vlastite bilješke, citat, prijašnja verzija, vanjski AI, drugo), vrijeme. Samo dodavanje | Student; nastavnik kroz projekciju kao izjavljeno (D-43) |
 | `review_request` | komentar, stanje (otvoren, proveden prema studentu, prihvaćen, ponovno otvoren), revizija prihvaćanja, hash sidrenog raspona pri prihvaćanju | Kao komentar (D-45), val 2 |
@@ -274,7 +275,7 @@ Rokovi se unose i prikazuju u zoni Europe/Zagreb; promjena na zimsko računanje 
 
 [PRIJEDLOG D-72], val 2; potpisane potvrde i hash lanac su u valu 1. Pojedinosti i granice tvrdnje u BACKEND §4.2.
 
-- Worker jednom dnevno gradi Merkle stablo nad potvrdama dana (dan po UTC `accepted_at`; list je SHA-256 nad JCS `receipt_payload` bez potpisa), objavljuje broj listova, prethodni korijen i consistency dokaz. Javni broj listova otkriva dnevnu aktivnost pilota: prije prve objave procjenjuje se u DPIA-i i po potrebi zaokružuje (BACKEND §4.2 t. 8).
+- Jedan kumulativni append-only log (RFC 6962/9162) umjesto dnevnih stabala (D-93). List je `D` iz D-92, a indeks bez praznina dodjeljuje se pri prihvatu. Worker jednom dnevno objavljuje kontrolnu točku u formatu C2SP tlog-checkpoint i consistency dokaz prema prethodnoj točki. Točan ukupni broj potvrda je javan; za pilot se to prihvaća i zapisuje u DPIA (BACKEND §4.2 t. 8).
 - Korijen potpisuje ključ dnevnog korijena; traže se žigovi od dva neovisna RFC 3161 TSA-a. Dan bez ijednog valjanog žiga je alarm; korijen se tada objavljuje "bez žiga" i posao ponavlja.
 - Objava u javni repozitorij i neovisnim primateljima (e-pošta koordinatoru FPZG-a, javna arhiva).
 - Paket dokaza za predaju izdaje se kao "sidren" tek kad je pripadni korijen žigosan; do tada nosi oznaku "još nije sidren".

@@ -78,7 +78,7 @@ Preglednik (Next.js klijent, Tiptap, Dexie)
         +-----> UpCloud Managed PostgreSQL (PITR)
         +-----> Scaleway Object Storage (privatni bucket, S3 API, javni endpoint s autentikacijom)
         +-----> Scaleway TEM
-        +-----> AWS KMS (samo Sign nad digestom, dva ključa)
+        +-----> AWS KMS (samo Sign nad digestom s prefiksom, D-92; dva ključa)
         +-----> OpenRouter (samo kad student pokrene AI; izvan pilota, D-77)
         +-----> TSA (RFC 3161, jednom dnevno, iz workera)
 Javno: dnevni potpisani korijen + žig (bez sadržaja rada); drugi neovisni primatelji korijena (§4.2)
@@ -106,14 +106,14 @@ Pravila:
 
 ### 4.2 Dnevni korijen i vanjsko vrijeme (val 2, s poštenom tvrdnjom)
 
-1. Worker jednom dnevno gradi Merkle stablo. **List = SHA-256 nad JCS `receipt_payload` (bez potpisa)**, pa ponovni potpis nakon rotacije ili kompromitacije ključa ne mijenja listove. **Dan se određuje po `accepted_at` iz sata baze, u UTC-u**; u stablo ulaze i `pending_signature` zapisi. Uz korijen se objavljuje broj listova, korijen prethodnog dana i **consistency dokaz** prema njemu.
-2. Korijen potpisuje drugi KMS ključ; traže se **dva RFC 3161 žiga od neovisnih besplatnih TSA-ova** (`http://timestamp.digicert.com` i `http://timestamp.sectigo.com`; HTTP je u redu jer je odgovor potpisan, ali se provjerava potpis i lanac). Nijedan nema objavljene uvjete, SLA ni ograničenja, pa vrijedi: jedan žig dnevno po TSA-u, bez ponavljanja češće od jednom u minutu, uspjeh dana znači barem jedan valjan žig, a dan s nijednim je alarm. Pravnu osnovu ne daju; tako piše i u DPIA-i. FINA (kvalificirani pružatelj u Hrvatskoj) dolazi kad postoji poslovni subjekt (obrt), ili ako FPZG pristane biti ugovorna strana: 0,11 EUR po žigu, certifikat 86,27 EUR na 5 godina, endpoint `https://tsa.fina.hr/ts-rfc3161`.
+1. **Jedan kumulativni append-only log (D-93)**, ne zasebno stablo po danu. Hashiranje prema RFC 6962: list = `SHA-256(0x00 ‖ D)`, unutarnji čvor = `SHA-256(0x01 ‖ L ‖ R)`, gdje je `D = SHA-256(JCS(receiptPayloadV2))` isti digest koji se potpisuje (D-92). Ponovni potpis nakon rotacije ili kompromitacije ključa ne mijenja listove. Svaka potvrda dobiva indeks bez praznina pri prihvatu (`reserve`), pod jednim sekvencerom; u log ulaze i `pending_signature` zapisi, a zakašnjeli zapis jednostavno ulazi kad je prihvaćen. Worker jednom dnevno objavljuje kontrolnu točku u formatu C2SP tlog-checkpoint (ishodište, veličina, korijen) i **consistency dokaz** prema prethodnoj kontrolnoj točki; dan bez novih zapisa objavljuje istu točku s novim žigom. Prije koda: pisana specifikacija (poredak, objava, provjera) i neovisni review (Linear DAN-55).
+2. Kontrolnu točku potpisuje drugi KMS ključ (čisti Ed25519 nad tekstom točke); traže se **dva RFC 3161 žiga od neovisnih besplatnih TSA-ova** (`http://timestamp.digicert.com` i `http://timestamp.sectigo.com`; HTTP je u redu jer je odgovor potpisan, ali se provjerava potpis i lanac). Nijedan nema objavljene uvjete, SLA ni ograničenja, pa vrijedi: jedan žig dnevno po TSA-u, bez ponavljanja češće od jednom u minutu, uspjeh dana znači barem jedan valjan žig, a dan s nijednim je alarm. Pravnu osnovu ne daju; tako piše i u DPIA-i. FINA (kvalificirani pružatelj u Hrvatskoj) dolazi kad postoji poslovni subjekt (obrt), ili ako FPZG pristane biti ugovorna strana: 0,11 EUR po žigu, certifikat 86,27 EUR na 5 godina, endpoint `https://tsa.fina.hr/ts-rfc3161`.
 3. Objava: javni repozitorij **i neovisni primatelji korijena** (dnevni e-mail koordinatoru FPZG-a; arhiviranje u Internet Archive ili Software Heritage). Javni repozitorij kontrolira isti operater (može force-pushati), pa sam po sebi nije svjedok.
 4. **Što to dokazuje:** kad je korijen dana D žigosan i objavljen, svaka kasnija promjena potvrda iz tog dana je otkriva svatko tko drži objavljeni korijen. Žig dokazuje da je hash postojao najkasnije u trenutku žiga, ne da je to jedini korijen tog dana ni da sadrži sve potvrde.
 5. **Što ne dokazuje:** ne štiti od dva različita korijena za isti dan bez neovisnog primatelja (split view); ne štiti od krivotvorenja potvrda u prozoru prije sidrenja (24 do 48 sati, dulje ako TSA ne radi) ni prije prvog uspješnog žiga; ne dokazuje istinitost sadržaja ni autorstvo. Taj tekst ide u sučelje i DPIA.
 6. Paket dokaza za predaju izdaje se kao "sidren" tek kad je pripadni korijen žigosan; do tada nosi oznaku "još nije sidren".
 7. Za radove s dugim rokom čuvanja uz `.tsr` spremaju se lanac certifikata TSA i stanje opoziva u trenutku žiga, uz plan ponovnog žigosanja prije isteka certifikata.
-8. Javni broj listova po danu otkriva dnevnu aktivnost pilota; procijeniti u DPIA-i ili zaokružiti.
+8. Veličina loga u potpisanoj kontrolnoj točki mora biti točna i ne može se zaokružiti. Za pilot se prihvaća javna objava ukupnog broja potvrda i zapisuje u DPIA (D-93); popunjavajući nasumični listovi uvode se samo ako ustanova to zatraži.
 9. Verifikator: CLI i web stranica koja radi u pregledniku (web stranica se smije odgoditi prema rezu iz `PROGRAM.md`, CLI ostaje; lanac, inclusion i consistency dokaz, potpis, `.tsr`, javni ključ) uz ručnu provjeru `openssl`-om.
 
 ### 4.3 Prijava, sesije i identitet u bazi
@@ -159,7 +159,17 @@ Pravila:
 
 ### 4.8 Migracije i sheme
 
-Postojeće migracije su u formatu Supabase CLI-ja; migracijski alat još nije odabran. `dbmate` je kandidat u otvorenom PR-u #39, ne prihvaćena odluka samo zato što je implementiran na grani ili prolazi CI. Odluku zabilježiti u B1 nakon reviewa i kriterija: zasebna migracija za uloge i grantove, pgTAP u CI-ju bez `supabase start`, provjera zanošenja sheme (`pg_dump --schema-only` staging naspram produkcije) te expand/migrate/contract. Ostali kandidati su `node-pg-migrate` i `graphile-migrate`.
+**Odlučeno (D-91, 8. 10. 2026.): dbmate**, uz zaštitne mjere jer alat bilježi samo broj verzije i ne dokumentira zaključavanje:
+
+1. `db/migrations.sum` sa SHA-256 svake migracije; CI pada ako se postojeća migracija izmijeni ili obriše (samo dodavanje).
+2. Uvijek `--strict` (odbija migracije izvan redoslijeda).
+3. Deploy drži `pg_advisory_lock` na zasebnoj vezi dok dbmate radi.
+4. Reproducibilnost: CI na svježoj bazi radi `dbmate up` i `dbmate dump` i uspoređuje rezultat s commitanim `db/schema.sql`; `pg_dump` iste glavne verzije kao server.
+5. Zanošenje stvarnih okruženja: pgTAP matrica (vlasnici, ovlasti, RLS, politike, `SECURITY DEFINER` s praznim `search_path`) nad stagingom i produkcijom te normalizirani `pg_dump --schema-only` između njih.
+6. Uloge u zasebnoj idempotentnoj bootstrap skripti (djeluju na razini klastera; na upravljanoj bazi provjerava ih B0.1); ovlasti i vlasništvo funkcija u migracijama, s pgTAP provjerom; aplikacijske uloge nemaju pristup `schema_migrations`.
+7. Produkcija samo naprijed: deploy poziva isključivo `dbmate --strict up` kao `ductus_migrator` s VM-a; `rollback` postoji samo lokalno. pg-boss radi s `migrate: false`, a njegov SQL (iz `getConstructionPlans` ili `getMigrationPlans`) commitira se kao dbmate migracija; nadogradnja pg-bossa ide istim putem.
+
+Expand/migrate/contract i pgTAP u CI-ju bez `supabase start` vrijede i dalje.
 
 ### 4.9 Opservabilnost i curenje sadržaja
 
@@ -253,7 +263,7 @@ Backend nije posebna faza nego okomiti rez kroz M0 do M11. **Procjena dodatka pr
 | B2 Identitet | OIDC klijent s popisom iz §4.3, sesije, `current_actor()`, `withActor`, test GUC-a, odjava | Prijava na AAI Labu; svi testovi iz §4.3 zeleni; nema lažnog pružatelja u produkciji | M1 | 3 do 5 (uz sigurnosni pregled, neovisan o autoru) |
 | B3 Ovlasti | Novi referentni model, `can()`, RLS, pgTAP matrica, diferencijalni test | Matrica zelena | M2 | uključeno u M2, +1 |
 | B4 Evidencija | Točan popis prijenosa (§2), novi RPC-i, okidači, uloge, jedan RPC za commit i `reserve`, worker potpis preko KMS-a, kontrolne točke, praznine | Ugovorni testovi nad in-memory i pg/S3; property testovi; sintetički prolaz na stagingu s povratom | M3 | +5 do 8 |
-| B5 Dnevni korijen i žig | Merkle stablo, consistency dokaz, KMS potpis, TSA, objava i neovisni primatelji, CLI verifikator | Neovisna provjera prolazi; promjena odsječka ruši provjeru; dan bez TSA-a se oporavlja | M3 do M7 | 4 do 5 |
+| B5 Dnevni korijen i žig | Kumulativni log i dnevna kontrolna točka (D-93), consistency dokaz, KMS potpis, TSA, objava i neovisni primatelji, CLI verifikator | Neovisna provjera prolazi; promjena odsječka ruši provjeru; dan bez TSA-a se oporavlja | M3 do M7 | 4 do 5 |
 | B6 Poslovi i obavijesti | pg-boss, retention (uklj. verzije), e-pošta, `notification` s prozorom P-03 | Ponovljen posao ne duplicira učinak; nastavnik ne dobiva obavijest češće od P-03 | M6, M7, M10 | +1 do 2 |
 | B7 AI proxy | Izvan pilota (D-77) | | nakon pilota | 0 u pilotu |
 | B8 Predaja | `requested_at`, rekonstrukcija u workeru, usporedba JCS | Točna na svim scenarijima uključujući prazninu i pred-rokovni val | M7 | uključeno u M7 |
