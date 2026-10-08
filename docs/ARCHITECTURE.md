@@ -142,7 +142,7 @@ Sve tablice imaju uključen RLS i retke u pgTAP matrici pristupa. Pristup ide kr
 | `evidence.receipt` | odsječak, `receipt_payload` (JCS), stanje (`pending_signature`, `signed`), potpis, ID ključa. Jedini dopušteni prijelaz je `pending_signature` u `signed` uz nepromijenjen payload | Kao odsječak |
 | `evidence.gap` | dokument, od revizije, do revizije, uzrok | Student; nastavnik kroz projekciju |
 | `evidence.signing_key` | ID ključa, namjena (potvrde, dnevni korijen), javni ključ, referenca na ključ u KMS-u, vrijedi od, vrijedi do, opozvan | Javno (bez reference) |
-| `evidence.log_entry` | indeks u logu (bez praznina, dodjeljuje se pri prihvatu), potvrda, `leaf_digest` (= `D` iz D-92). Indeks se dodjeljuje od B4, log se gradi u valu 2 (D-93) | Nitko izravno; worker i verifikator |
+| `evidence.log_entry` | 0-based indeks u logu bez praznina, dodjeljuje se pri prihvatu; B4 ugovorni test pokriva konkurentne prihvate, rollback i idempotentni retry. Sadrži potvrdu i `leaf_digest` (= `D` iz D-92). Indeks se dodjeljuje od B4, log se gradi u valu 2 (D-93) | Nitko izravno; worker i verifikator |
 | `evidence.checkpoint` | veličina loga, korijen, tekst kontrolne točke (C2SP tlog-checkpoint), potpis, consistency dokaz prema prethodnoj točki, žigovi (`.tsr` i lanac certifikata po TSA-u), objavljeno. Val 2 (D-72, D-93) | Javno |
 | `import_event` | dokument, revizija, naziv i vrsta datoteke, veličina, hash | Student; nastavnik kroz projekciju |
 | `paste_label` | odsječak, oznaka (vlastite bilješke, citat, prijašnja verzija, vanjski AI, drugo), vrijeme. Samo dodavanje | Student; nastavnik kroz projekciju kao izjavljeno (D-43) |
@@ -269,17 +269,17 @@ Rokovi se unose i prikazuju u zoni Europe/Zagreb; promjena na zimsko računanje 
 - Lokalno i u CI-ju koristi se razvojni potpisnik iza istog porta; konfiguracijska brava sprječava razvojni potpisnik u produkciji.
 - Javni ključevi svih verzija su u `evidence.signing_key` s namjenom i razdobljem valjanosti, pa se stare potvrde mogu provjeriti i nakon rotacije (C-46).
 - Rotacija: jednom godišnje i pri svakoj sumnji na kompromitaciju.
-- Kompromitacija: ključ se označava opozvanim s vremenom; potvrde potpisane nakon tog vremena smatraju se nevaljanima i ponovno se potpisuju novim ključem. Listovi dnevnog korijena su potvrde bez potpisa, pa ponovni potpis ne mijenja već sidrene korijene. Događaj se bilježi i prijavljuje fakultetu.
+- Kompromitacija: ključ se označava opozvanim s vremenom; potvrde potpisane nakon tog vremena smatraju se nevaljanima i ponovno se potpisuju novim ključem. Listovi kumulativnog loga su potvrde bez potpisa, pa ponovni potpis ne mijenja korijene kontrolnih točaka u kojima su već sidreni. Događaj se bilježi i prijavljuje fakultetu.
 
 ## 8a. Dnevni korijen i vanjsko vrijeme
 
 D-72 (val 2), specificiran u D-93; potpisane potvrde i hash lanac su u valu 1. Pojedinosti i granice tvrdnje u BACKEND §4.2.
 
-- Jedan kumulativni append-only log (RFC 6962/9162) umjesto dnevnih stabala (D-93). Sadržaj lista je `D` iz D-92; hash lista prati RFC 6962 (`SHA-256(0x00 ‖ D)`), a indeks bez praznina dodjeljuje se pri prihvatu. Worker jednom dnevno objavljuje kontrolnu točku u formatu C2SP tlog-checkpoint i consistency dokaz prema prethodnoj točki. Točan ukupni broj potvrda je javan; za pilot se to prihvaća i zapisuje u DPIA (BACKEND §4.2 t. 8).
-- Korijen potpisuje ključ dnevnog korijena; traže se žigovi od dva neovisna RFC 3161 TSA-a. Dan bez ijednog valjanog žiga je alarm; korijen se tada objavljuje "bez žiga" i posao ponavlja.
-- Objava u javni repozitorij i neovisnim primateljima (e-pošta koordinatoru FPZG-a, javna arhiva).
-- Paket dokaza za predaju izdaje se kao "sidren" tek kad je pripadni korijen žigosan; do tada nosi oznaku "još nije sidren".
-- **Granica tvrdnje** ide doslovno u sučelje i DPIA-u: korijen otkriva kasniju promjenu potvrda svakome tko drži objavljeni korijen; ne štiti od krivotvorenja prije sidrenja ni od dva različita korijena za isti dan bez neovisnog primatelja; ne dokazuje istinitost sadržaja ni autorstvo.
+- Jedan kumulativni append-only log (RFC 6962/9162) umjesto dnevnih stabala (D-93). Sadržaj lista je `D` iz D-92; hash lista prati RFC 6962 (`SHA-256(0x00 ‖ D)`). Indeks je 0-based, bez praznina i dodjeljuje se pri prihvatu od B4; B4 ugovorni test pokriva konkurentne prihvate, rollback i idempotentni retry. Worker jednom dnevno objavljuje kontrolnu točku u formatu C2SP tlog-checkpoint i consistency dokaz prema prethodnoj točki. Točan ukupni broj potvrda je javan; za pilot se to prihvaća i zapisuje u DPIA (BACKEND §4.2 t. 8).
+- Kontrolnu točku potpisuje ključ dnevnog korijena; traže se žigovi od dva neovisna RFC 3161 TSA-a. Dan bez ijednog valjanog žiga je alarm; kontrolna točka se tada objavljuje "bez žiga" i posao ponavlja.
+- Kontrolna točka objavljuje se u javnom repozitoriju i šalje neovisnim primateljima (e-pošta koordinatoru FPZG-a, javna arhiva).
+- Paket dokaza za predaju izdaje se kao "sidren" tek kad se inclusion dokaz potvrdi prema prvoj uspješno potpisanoj, žigosanoj i objavljenoj kontrolnoj točki čiji je `tree_size` veći od 0-based indeksa potvrde; do tada nosi oznaku "još nije sidren".
+- **Granica tvrdnje** ide doslovno u sučelje i DPIA-u: inclusion dokaz prema sidrenoj kontrolnoj točki otkriva kasniju promjenu listova koji ulaze u njezin tree size; ne štiti od krivotvorenja prije prve sidrene kontrolne točke ni od split viewa (npr. dviju kontrolnih točaka istog ishodišta i veličine s različitim korijenima) bez neovisnog primatelja; ne dokazuje istinitost sadržaja ni autorstvo.
 
 ## 9. Okruženja
 
