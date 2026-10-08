@@ -1,15 +1,16 @@
 /**
  * Draining the pending queue to the server, as pure decisions (F1-4b).
  *
- * Three questions, three functions, no IO between them:
+ * Three decisions, isolated from IndexedDB, network calls, and clocks:
  *   1. `planDrain`            — what, if anything, is sent next?
  *   2. `nextAttemptDelayMs`   — how long to wait before trying again?
  *   3. `outcomeToEvents`      — what does the answer mean to the state machine?
  *
- * The state machine itself is untouched: this module never invents a state,
- * it only emits the four events `SYNCING` already understands (SYNC_STARTED,
- * SYNC_ACK, SYNC_STALE_BASE, SYNC_FAILED). Everything that talks to a clock,
- * to IndexedDB or to the network lives in `src/lib/sync/drainRunner.ts`.
+ * The state machine itself is untouched: this module never invents a state.
+ * It emits the four existing events (SYNC_STARTED, SYNC_ACK, SYNC_STALE_BASE,
+ * SYNC_FAILED); a pending receipt emits no event so SYNCING remains honest.
+ * Network, IndexedDB, clock, and trusted-key verification adapters are supplied
+ * outside this module.
  *
  * Constitution rules this file encodes:
  *   - No silent last-write-wins. `stale_base` maps to SYNC_STALE_BASE, which
@@ -17,10 +18,9 @@
  *     and never downgraded to an ordinary, retryable failure.
  *   - Local durable state is not canonical server state. Nothing here mints a
  *     revision; the only revisions that exist are the ones the server named.
- *   - A replayed commit is an ACK, not a second write. The server's
- *     `duplicate` (same idempotency key, same bytes) means the original
- *     commit landed and only its response was lost, so it is treated exactly
- *     like `committed`.
+ *   - `committed` and `duplicate` report the CAS result, not a user-visible
+ *     sync ACK. The queue remains owed until a signed receipt for that exact
+ *     document, transaction and revision is received and verified.
  */
 
 import type { DocumentTransaction } from "../document";
@@ -40,8 +40,46 @@ import type { SyncEvent } from "./states";
  */
 export type TransportError = { status: "transport_error" };
 
-/** Everything one drain attempt can come back with. */
-export type DrainOutcome = CommitOutcome | InvalidCommitOutcome | TransportError;
+/** Server-side state of the receipt for a committed revision. */
+export type CommitReceiptState =
+  | { status: "pending_signature" }
+  | { status: "signed"; signedReceipt: unknown };
+
+/** Fields a verifier must bind to the exact commit being acknowledged. */
+export type CommitReceiptExpectation = {
+  documentId: string;
+  clientTransactionId: string;
+  revision: number;
+};
+
+/**
+ * The adapter verifies receipt schema, canonical payload/digest, signature
+ * against the trusted public key, and all expected commit fields. It must fail
+ * closed if the key or receipt is unavailable or malformed.
+ */
+export type SignedCommitReceiptVerifier = (
+  signedReceipt: unknown,
+  expected: CommitReceiptExpectation,
+) => Promise<boolean>;
+
+export type CommitReceiptVerification = {
+  expected: CommitReceiptExpectation;
+  verify: SignedCommitReceiptVerifier;
+};
+
+type CommitSuccess = Extract<CommitOutcome, { status: "committed" | "duplicate" }>;
+type CommitFailure = Exclude<CommitOutcome, CommitSuccess>;
+
+/**
+ * A successful CAS is not a sync acknowledgement until a signed receipt is
+ * present and verified. Receipt state is therefore required on both success
+ * variants; bare committed/duplicate responses cannot pass this boundary.
+ */
+export type DrainOutcome =
+  | (CommitSuccess & { receipt: CommitReceiptState })
+  | CommitFailure
+  | InvalidCommitOutcome
+  | TransportError;
 
 /**
  * What to do with the queue right now.
@@ -257,10 +295,11 @@ const RETRYABLE: SyncEvent[] = [{ type: "SYNC_FAILED", retryable: true }];
  *
  * The mapping, and why each line is what it is:
  *
- *   committed  → SYNC_ACK       the CAS landed and named a revision.
- *   duplicate  → SYNC_ACK       the CAS landed earlier and the response was
- *                               lost; replaying it is how that is discovered,
- *                               and the revision it carries is the same one.
+ *   committed / duplicate + pending_signature → no event; remain SYNCING and
+ *                               retry until the signer publishes.
+ *   committed / duplicate + signed receipt → SYNC_ACK only after the injected
+ *                               verifier validates its signature and exact
+ *                               document, transaction id, and revision.
  *   stale_base → SYNC_STALE_BASE someone else moved the document. CONFLICT,
  *                               resolved explicitly in F1-5a — never retried,
  *                               because a retry here is an overwrite.
@@ -274,23 +313,72 @@ const RETRYABLE: SyncEvent[] = [{ type: "SYNC_FAILED", retryable: true }];
  *              → SYNC_FAILED(false)  nothing about the request improves by
  *                               being sent again: the session is gone, the
  *                               row is gone, or the payload is not sendable.
- *   transport_error → SYNC_FAILED(true)  the only retryable failure. Nothing
- *                               was learned about the server, so the queue is
- *                               still owed and backoff applies.
+ *   transport_error → SYNC_FAILED(true)  no server answer was learned;
+ *                               the queue remains owed and backoff applies.
+ *   pending_signature → no event and a retry; the CAS landed, but its receipt
+ *                               is not ready for acknowledgement.
  *
  * `SYNC_FAILED` lands in ERROR either way (retryable is carried for the retry
  * policy, not for the state): an unreachable server has not damaged anything
  * local, so it must never be dressed up as RECOVERY_REQUIRED.
  *
- * Returns an array because a single outcome may one day need two events; today
- * every arm returns exactly one. An unrecognised status is treated as fatal
- * rather than retryable: retrying something we cannot name is a loop.
+ * Returns an array because a single outcome may one day need two events.
+ * Pending signatures return an empty array to preserve SYNCING. An unrecognised
+ * status is treated as fatal rather than retryable: retrying something we
+ * cannot name is a loop.
  */
-export function outcomeToEvents(outcome: DrainOutcome): SyncEvent[] {
+const VERIFIED_COMMIT_REVISIONS = new WeakMap<object, number>();
+
+export async function outcomeToEvents(
+  outcome: DrainOutcome,
+  verification: CommitReceiptVerification,
+): Promise<SyncEvent[]> {
   switch (outcome?.status) {
     case "committed":
-    case "duplicate":
-      return ACK;
+    case "duplicate": {
+      const receipt = (outcome as { receipt?: unknown }).receipt;
+      if (
+        !receipt ||
+        typeof receipt !== "object" ||
+        Array.isArray(receipt) ||
+        !Object.prototype.hasOwnProperty.call(receipt, "status")
+      ) {
+        return FATAL;
+      }
+      const receiptState = (receipt as { status?: unknown }).status;
+      if (receiptState === "pending_signature") {
+        return [];
+      }
+      if (
+        receiptState !== "signed" ||
+        !Object.prototype.hasOwnProperty.call(receipt, "signedReceipt") ||
+        !verification ||
+        typeof verification.verify !== "function" ||
+        !verification.expected ||
+        typeof verification.expected.documentId !== "string" ||
+        verification.expected.documentId.trim() === "" ||
+        typeof verification.expected.clientTransactionId !== "string" ||
+        verification.expected.clientTransactionId.trim() === "" ||
+        !Number.isSafeInteger(outcome.revision) ||
+        outcome.revision < 1 ||
+        verification.expected.revision !== outcome.revision
+      ) {
+        return FATAL;
+      }
+      try {
+        const verified = await verification.verify(
+          (receipt as { signedReceipt: unknown }).signedReceipt,
+          verification.expected,
+        );
+        if (verified !== true) {
+          return FATAL;
+        }
+        VERIFIED_COMMIT_REVISIONS.set(outcome, outcome.revision);
+        return ACK;
+      } catch {
+        return FATAL;
+      }
+    }
     case "stale_base":
       return STALE;
     case "transport_error":
@@ -310,15 +398,21 @@ export function outcomeToEvents(outcome: DrainOutcome): SyncEvent[] {
 
 /** True when the queue should be handed to the server again after a wait. */
 export function isRetryable(outcome: DrainOutcome): boolean {
-  return outcome?.status === "transport_error";
+  if (outcome?.status === "transport_error") {
+    return true;
+  }
+  return (
+    (outcome?.status === "committed" || outcome?.status === "duplicate") &&
+    outcome.receipt?.status === "pending_signature"
+  );
 }
 
-/** True when the outcome means the commit is on the server, at `revision`. */
+/** Returns a revision only after outcomeToEvents has verified its signed receipt. */
 export function ackedRevision(outcome: DrainOutcome): number | null {
-  if (outcome?.status === "committed" || outcome?.status === "duplicate") {
-    return outcome.revision;
+  if (!outcome || typeof outcome !== "object") {
+    return null;
   }
-  return null;
+  return VERIFIED_COMMIT_REVISIONS.get(outcome) ?? null;
 }
 
 /**

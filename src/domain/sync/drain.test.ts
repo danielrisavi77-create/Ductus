@@ -16,7 +16,9 @@ import {
   outcomeToEvents,
   planDrain,
   serverSyncErrorToOutcome,
+  type CommitReceiptVerification,
   type DrainOutcome,
+  type SignedCommitReceiptVerifier,
 } from "./drain";
 import type { PendingTransaction, SyncMeta } from "./journal-types";
 import { syncReducer, type SyncState } from "./states";
@@ -52,6 +54,27 @@ function row(localSeq: number, baseRevision = 0): PendingTransaction {
 
 function meta(state: SyncState, localSeq = 0): SyncMeta {
   return { documentId: DOC, state, localSeq };
+}
+
+function signedCommitOutcome(
+  status: "committed" | "duplicate",
+  revision = 3,
+): DrainOutcome {
+  return {
+    status,
+    revision,
+    receipt: { status: "signed", signedReceipt: { testReceipt: true } },
+  };
+}
+
+function receiptVerification(
+  revision: number,
+  verify: SignedCommitReceiptVerifier = async () => true,
+): CommitReceiptVerification {
+  return {
+    expected: { documentId: DOC, clientTransactionId: "tx-1", revision },
+    verify,
+  };
 }
 
 describe("planDrain — what the next attempt sends", () => {
@@ -221,33 +244,95 @@ describe("nextAttemptDelayMs — backoff", () => {
 });
 
 describe("outcomeToEvents — what the server's answer means", () => {
-  it("committed is an ACK", () => {
-    expect(outcomeToEvents({ status: "committed", revision: 3 })).toEqual([
+  it("committed is an ACK only after verifying the signed receipt", async () => {
+    const verifier = receiptVerification(3, async (receipt, expected) => {
+      expect(receipt).toEqual({ testReceipt: true });
+      expect(expected).toEqual({
+        documentId: DOC,
+        clientTransactionId: "tx-1",
+        revision: 3,
+      });
+      return true;
+    });
+    expect(await outcomeToEvents(signedCommitOutcome("committed"), verifier)).toEqual([
       { type: "SYNC_ACK" },
     ]);
   });
 
-  it("duplicate is an ACK too — a replay after a lost response", () => {
-    expect(outcomeToEvents({ status: "duplicate", revision: 3 })).toEqual([
-      { type: "SYNC_ACK" },
-    ]);
+  it("duplicate is an ACK only after verifying the same commit receipt", async () => {
+    expect(
+      await outcomeToEvents(signedCommitOutcome("duplicate"), receiptVerification(3)),
+    ).toEqual([{ type: "SYNC_ACK" }]);
   });
 
-  it("stale_base is a conflict, never a retry", () => {
-    expect(outcomeToEvents({ status: "stale_base", currentRevision: 9 })).toEqual([
-      { type: "SYNC_STALE_BASE" },
-    ]);
-    expect(isRetryable({ status: "stale_base", currentRevision: 9 })).toBe(false);
+  it("pending_signature remains retryable and never verifies or ACKs", async () => {
+    let verifierCalled = false;
+    const outcome: DrainOutcome = {
+      status: "committed",
+      revision: 3,
+      receipt: { status: "pending_signature" },
+    };
+    expect(
+      await outcomeToEvents(
+        outcome,
+        receiptVerification(3, async () => {
+          verifierCalled = true;
+          return true;
+        }),
+      ),
+    ).toEqual([]);
+    expect(verifierCalled).toBe(false);
+    expect(isRetryable(outcome)).toBe(true);
   });
 
-  it("too_large fails for good", () => {
-    expect(outcomeToEvents({ status: "too_large" })).toEqual([
+  it("a missing receipt cannot ACK even when the CAS says committed", async () => {
+    const outcome = { status: "committed", revision: 3 } as unknown as DrainOutcome;
+    expect(await outcomeToEvents(outcome, receiptVerification(3))).toEqual([
       { type: "SYNC_FAILED", retryable: false },
     ]);
   });
 
-  it("txid_reused fails for good — it is a client bug", () => {
-    expect(outcomeToEvents({ status: "txid_reused" })).toEqual([
+  it("a bad signature cannot ACK", async () => {
+    expect(
+      await outcomeToEvents(
+        signedCommitOutcome("committed"),
+        receiptVerification(3, async () => false),
+      ),
+    ).toEqual([{ type: "SYNC_FAILED", retryable: false }]);
+  });
+
+  it("a verifier exception cannot ACK", async () => {
+    expect(
+      await outcomeToEvents(
+        signedCommitOutcome("committed"),
+        receiptVerification(3, async () => {
+          throw new Error("key service unavailable");
+        }),
+      ),
+    ).toEqual([{ type: "SYNC_FAILED", retryable: false }]);
+  });
+
+  it("a verifier cannot check a different revision", async () => {
+    expect(
+      await outcomeToEvents(signedCommitOutcome("committed", 4), receiptVerification(3)),
+    ).toEqual([{ type: "SYNC_FAILED", retryable: false }]);
+  });
+
+  it("stale_base is a conflict, never a retry", async () => {
+    expect(
+      await outcomeToEvents({ status: "stale_base", currentRevision: 9 }, receiptVerification(9)),
+    ).toEqual([{ type: "SYNC_STALE_BASE" }]);
+    expect(isRetryable({ status: "stale_base", currentRevision: 9 })).toBe(false);
+  });
+
+  it("too_large fails for good", async () => {
+    expect(await outcomeToEvents({ status: "too_large" }, receiptVerification(1))).toEqual([
+      { type: "SYNC_FAILED", retryable: false },
+    ]);
+  });
+
+  it("txid_reused fails for good — it is a client bug", async () => {
+    expect(await outcomeToEvents({ status: "txid_reused" }, receiptVerification(1))).toEqual([
       { type: "SYNC_FAILED", retryable: false },
     ]);
   });
@@ -258,75 +343,114 @@ describe("outcomeToEvents — what the server's answer means", () => {
     "invalid_document",
     "invalid_client_transaction_id",
     "invalid",
-  ] as const)("%s fails for good", (status) => {
-    expect(outcomeToEvents({ status } as DrainOutcome)).toEqual([
+  ] as const)("%s fails for good", async (status) => {
+    expect(await outcomeToEvents({ status } as DrainOutcome, receiptVerification(1))).toEqual([
       { type: "SYNC_FAILED", retryable: false },
     ]);
   });
 
-  it("a transport error is the one retryable failure", () => {
-    expect(outcomeToEvents({ status: "transport_error" })).toEqual([
-      { type: "SYNC_FAILED", retryable: true },
-    ]);
+  it("a transport error is retryable", async () => {
+    expect(
+      await outcomeToEvents({ status: "transport_error" }, receiptVerification(1)),
+    ).toEqual([{ type: "SYNC_FAILED", retryable: true }]);
     expect(isRetryable({ status: "transport_error" })).toBe(true);
   });
 
-  it("covers every status the commit contract declares", () => {
+  it("covers every status the commit contract declares", async () => {
     for (const status of COMMIT_STATUSES) {
       const outcome = (
         status === "committed" || status === "duplicate"
-          ? { status, revision: 1 }
+          ? {
+              status,
+              revision: 1,
+              receipt: { status: "signed", signedReceipt: { testReceipt: true } },
+            }
           : status === "stale_base"
             ? { status, currentRevision: 1 }
             : { status }
-      ) as CommitOutcome;
-      expect(outcomeToEvents(outcome)).toHaveLength(1);
+      ) as CommitOutcome | DrainOutcome;
+      expect(await outcomeToEvents(outcome as DrainOutcome, receiptVerification(1))).toHaveLength(1);
     }
   });
 
-  it("an unrecognised answer is fatal, not retryable — a loop is worse", () => {
-    expect(outcomeToEvents({ status: "who knows" } as unknown as DrainOutcome)).toEqual([
-      { type: "SYNC_FAILED", retryable: false },
-    ]);
+  it("an unrecognised answer is fatal, not retryable — a loop is worse", async () => {
+    expect(
+      await outcomeToEvents(
+        { status: "who knows" } as unknown as DrainOutcome,
+        receiptVerification(1),
+      ),
+    ).toEqual([{ type: "SYNC_FAILED", retryable: false }]);
     expect(isRetryable(undefined as unknown as DrainOutcome)).toBe(false);
   });
 
-  it("every emitted event is one the reducer already understands", () => {
+  it("every emitted event is one the reducer already understands", async () => {
     const outcomes: DrainOutcome[] = [
-      { status: "committed", revision: 1 },
-      { status: "duplicate", revision: 1 },
+      signedCommitOutcome("committed", 1),
+      signedCommitOutcome("duplicate", 1),
       { status: "stale_base", currentRevision: 1 },
       { status: "too_large" },
       { status: "transport_error" },
     ];
     for (const outcome of outcomes) {
-      for (const event of outcomeToEvents(outcome)) {
-        // SYNCING is where a drain attempt always is when the answer lands.
+      for (const event of await outcomeToEvents(outcome, receiptVerification(1))) {
         expect(syncReducer("SYNCING", event)).not.toBe("SYNCING");
       }
     }
   });
 
-  it("an ACK from SYNCING is SYNCED, and a stale base is CONFLICT", () => {
-    expect(syncReducer("SYNCING", outcomeToEvents({ status: "committed", revision: 2 })[0])).toBe(
-      "SYNCED",
+  it("SYNCED requires a verified receipt; a pending signature leaves the sync unresolved", async () => {
+    const signedEvents = await outcomeToEvents(
+      signedCommitOutcome("committed", 2),
+      receiptVerification(2),
     );
+    const pendingEvents = await outcomeToEvents(
+      { status: "committed", revision: 2, receipt: { status: "pending_signature" } },
+      receiptVerification(2),
+    );
+    expect(syncReducer("SYNCING", signedEvents[0])).toBe("SYNCED");
+    expect(pendingEvents).toEqual([]);
+    let pendingState: SyncState = "SYNCING";
+    for (const event of pendingEvents) {
+      pendingState = syncReducer(pendingState, event);
+    }
+    expect(pendingState).toBe("SYNCING");
     expect(
-      syncReducer("SYNCING", outcomeToEvents({ status: "stale_base", currentRevision: 2 })[0]),
+      syncReducer(
+        "SYNCING",
+        (await outcomeToEvents(
+          { status: "stale_base", currentRevision: 2 },
+          receiptVerification(2),
+        ))[0],
+      ),
     ).toBe("CONFLICT");
   });
 });
 
 describe("ackedRevision", () => {
-  it("reads the revision out of a commit", () => {
-    expect(ackedRevision({ status: "committed", revision: 12 })).toBe(12);
+  it("returns a commit revision only after outcomeToEvents verified its receipt", async () => {
+    const outcome = signedCommitOutcome("committed", 12);
+    expect(ackedRevision(outcome)).toBeNull();
+    await outcomeToEvents(outcome, receiptVerification(12));
+    expect(ackedRevision(outcome)).toBe(12);
   });
 
-  it("reads the same revision out of a replay", () => {
-    expect(ackedRevision({ status: "duplicate", revision: 12 })).toBe(12);
+  it("returns a replay revision only after outcomeToEvents verified its receipt", async () => {
+    const outcome = signedCommitOutcome("duplicate", 12);
+    await outcomeToEvents(outcome, receiptVerification(12));
+    expect(ackedRevision(outcome)).toBe(12);
   });
 
-  it("is null for anything that is not an ACK", () => {
+  it("keeps a pending signature from advancing the local base", () => {
+    expect(
+      ackedRevision({
+        status: "committed",
+        revision: 12,
+        receipt: { status: "pending_signature" },
+      }),
+    ).toBeNull();
+  });
+
+  it("is null for anything that is not a verified ACK", () => {
     expect(ackedRevision({ status: "stale_base", currentRevision: 12 })).toBeNull();
     expect(ackedRevision({ status: "transport_error" })).toBeNull();
     expect(ackedRevision({ status: "too_large" })).toBeNull();
