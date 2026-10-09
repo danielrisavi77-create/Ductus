@@ -1,0 +1,549 @@
+{
+  "synthetic": true,
+  "input_only": true,
+  "setup": "Use the selected repo revision and existing test harness dependencies only. Build native ingest commands with buildEvidenceIngestCommandV2 and actual repo digest helpers; do not substitute a generic event envelope. A/B/C repeated hashes below are schema-level synthetic document-hash tokens, not computed document digests or external anchors. No execution outcome is supplied.",
+  "scenarios": [
+    {
+      "scenario_id": "P01",
+      "selected_revision": "ac65c71d797e29417d3d0f07aa9bd7ad63f2ff06",
+      "source_status": "accepted-main",
+      "contract": "EvidenceSegmentV2 / EvidenceIngestRequestV2",
+      "entrypoints": [
+        "src/domain/forensics/evidence-segment-v2.ts:isEvidenceSegmentV2",
+        "src/application/evidence/evidence-outbox.ts:buildEvidenceIngestCommandV2",
+        "src/application/evidence/evidence-gateway.ts:EvidenceGateway.ingest"
+      ],
+      "identity": {
+        "principalId": "synthetic-student-a",
+        "evidencePackageId": "synthetic-package-a",
+        "clientRequestId": "synthetic-request-1"
+      },
+      "identity_scope": "InMemoryEvidenceAcceptanceRepository requestKey: principalId × evidencePackageId × clientRequestId; segment identities are separate; event sequence is within segment",
+      "prompt": "Procijeni dva uzastopna odsječka u izoliranom gateway harnessu. Odvoji validator, točne bajtove, receipt/potpis i stvarni replay/SQL/KMS opseg.",
+      "segments": [
+        {
+          "evidenceSchema": "ductus-evidence-segment-v2",
+          "canonicalization": "RFC8785-JCS",
+          "hashAlgorithm": "sha256",
+          "documentId": "synthetic-doc-a",
+          "sessionId": "synthetic-session-a",
+          "segmentId": "synthetic-segment-1",
+          "sequenceFrom": 1,
+          "sequenceTo": 1,
+          "observedStartedAt": "2026-10-06T20:00:00.000Z",
+          "observedEndedAt": "2026-10-06T20:00:01.000Z",
+          "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "finalDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "predecessorSegmentHash": null,
+          "events": [
+            {
+              "sequence": 1,
+              "occurredAt": "2026-10-06T20:00:00.500Z",
+              "elapsedMs": 500,
+              "source": "editor",
+              "steps": [
+                {
+                  "stepType": "replace",
+                  "from": 1,
+                  "to": 1,
+                  "slice": {
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "Sintetički A"
+                      }
+                    ]
+                  }
+                }
+              ],
+              "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          ],
+          "captureContext": {
+            "editorModel": "prosemirror",
+            "transactionFormat": "prosemirror-step-json-v1"
+          },
+          "evidenceProfileId": "standard-v1"
+        },
+        {
+          "evidenceSchema": "ductus-evidence-segment-v2",
+          "canonicalization": "RFC8785-JCS",
+          "hashAlgorithm": "sha256",
+          "documentId": "synthetic-doc-a",
+          "sessionId": "synthetic-session-a",
+          "segmentId": "synthetic-segment-2",
+          "sequenceFrom": 2,
+          "sequenceTo": 2,
+          "observedStartedAt": "2026-10-06T20:00:00.000Z",
+          "observedEndedAt": "2026-10-06T20:00:01.000Z",
+          "initialDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "finalDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "predecessorSegmentHash": null,
+          "events": [
+            {
+              "sequence": 2,
+              "occurredAt": "2026-10-06T20:00:00.500Z",
+              "elapsedMs": 500,
+              "source": "editor",
+              "steps": [
+                {
+                  "stepType": "replace",
+                  "from": 1,
+                  "to": 1,
+                  "slice": {
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "Sintetički A"
+                      }
+                    ]
+                  }
+                }
+              ],
+              "beforeDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "afterDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+            }
+          ],
+          "captureContext": {
+            "editorModel": "prosemirror",
+            "transactionFormat": "prosemirror-step-json-v1"
+          },
+          "evidenceProfileId": "standard-v1"
+        }
+      ],
+      "preparation": [
+        {
+          "after_build_segment": 0,
+          "set_before_build_segment": 1,
+          "field": "predecessorSegmentHash",
+          "value_from": "digestEvidenceSegmentV2(segments[0]).sha256"
+        }
+      ],
+      "request_ids": [
+        "synthetic-request-1",
+        "synthetic-request-2"
+      ]
+    },
+    {
+      "scenario_id": "P02",
+      "selected_revision": "ac65c71d797e29417d3d0f07aa9bd7ad63f2ff06",
+      "source_status": "accepted-main",
+      "contract": "EvidenceSegmentV2 / EvidenceIngestRequestV2",
+      "entrypoints": [
+        "src/domain/forensics/evidence-segment-v2.ts:isEvidenceSegmentV2",
+        "src/application/evidence/evidence-outbox.ts:buildEvidenceIngestCommandV2",
+        "src/application/evidence/evidence-gateway.ts:EvidenceGateway.ingest"
+      ],
+      "identity": {
+        "principalId": "synthetic-student-a",
+        "evidencePackageId": "synthetic-package-a",
+        "clientRequestId": "synthetic-request-1"
+      },
+      "identity_scope": "InMemoryEvidenceAcceptanceRepository requestKey: principalId × evidencePackageId × clientRequestId; segment identities are separate; event sequence is within segment",
+      "prompt": "U istom izoliranom harnessu dvaput pošalji isti izgrađeni command i zabilježi originalne ishode, receipt identitet i broj poslovnih zapisa.",
+      "segments": [
+        {
+          "evidenceSchema": "ductus-evidence-segment-v2",
+          "canonicalization": "RFC8785-JCS",
+          "hashAlgorithm": "sha256",
+          "documentId": "synthetic-doc-a",
+          "sessionId": "synthetic-session-a",
+          "segmentId": "synthetic-segment-1",
+          "sequenceFrom": 1,
+          "sequenceTo": 1,
+          "observedStartedAt": "2026-10-06T20:00:00.000Z",
+          "observedEndedAt": "2026-10-06T20:00:01.000Z",
+          "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "finalDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "predecessorSegmentHash": null,
+          "events": [
+            {
+              "sequence": 1,
+              "occurredAt": "2026-10-06T20:00:00.500Z",
+              "elapsedMs": 500,
+              "source": "editor",
+              "steps": [
+                {
+                  "stepType": "replace",
+                  "from": 1,
+                  "to": 1,
+                  "slice": {
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "Sintetički A"
+                      }
+                    ]
+                  }
+                }
+              ],
+              "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          ],
+          "captureContext": {
+            "editorModel": "prosemirror",
+            "transactionFormat": "prosemirror-step-json-v1"
+          },
+          "evidenceProfileId": "standard-v1"
+        }
+      ],
+      "operations": [
+        "build command once",
+        "ingest same command",
+        "ingest same command"
+      ]
+    },
+    {
+      "scenario_id": "P03",
+      "selected_revision": "ac65c71d797e29417d3d0f07aa9bd7ad63f2ff06",
+      "source_status": "accepted-main",
+      "contract": "EvidenceSegmentV2 / EvidenceIngestRequestV2",
+      "entrypoints": [
+        "src/domain/forensics/evidence-segment-v2.ts:isEvidenceSegmentV2",
+        "src/application/evidence/evidence-outbox.ts:buildEvidenceIngestCommandV2",
+        "src/application/evidence/evidence-gateway.ts:EvidenceGateway.ingest"
+      ],
+      "identity": {
+        "principalId": "synthetic-student-a",
+        "evidencePackageId": "synthetic-package-a",
+        "clientRequestId": "synthetic-request-1"
+      },
+      "identity_scope": "InMemoryEvidenceAcceptanceRepository requestKey: principalId × evidencePackageId × clientRequestId; segment identities are separate; event sequence is within segment",
+      "prompt": "Pod istim request identitetom najprije pošalji prvi, zatim ponovno izgrađeni promijenjeni odsječak. Procijeni primjenjivi ugovor ovoga sloja.",
+      "segments": [
+        {
+          "evidenceSchema": "ductus-evidence-segment-v2",
+          "canonicalization": "RFC8785-JCS",
+          "hashAlgorithm": "sha256",
+          "documentId": "synthetic-doc-a",
+          "sessionId": "synthetic-session-a",
+          "segmentId": "synthetic-segment-1",
+          "sequenceFrom": 1,
+          "sequenceTo": 1,
+          "observedStartedAt": "2026-10-06T20:00:00.000Z",
+          "observedEndedAt": "2026-10-06T20:00:01.000Z",
+          "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "finalDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "predecessorSegmentHash": null,
+          "events": [
+            {
+              "sequence": 1,
+              "occurredAt": "2026-10-06T20:00:00.500Z",
+              "elapsedMs": 500,
+              "source": "editor",
+              "steps": [
+                {
+                  "stepType": "replace",
+                  "from": 1,
+                  "to": 1,
+                  "slice": {
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "Sintetički A"
+                      }
+                    ]
+                  }
+                }
+              ],
+              "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          ],
+          "captureContext": {
+            "editorModel": "prosemirror",
+            "transactionFormat": "prosemirror-step-json-v1"
+          },
+          "evidenceProfileId": "standard-v1"
+        },
+        {
+          "evidenceSchema": "ductus-evidence-segment-v2",
+          "canonicalization": "RFC8785-JCS",
+          "hashAlgorithm": "sha256",
+          "documentId": "synthetic-doc-a",
+          "sessionId": "synthetic-session-a",
+          "segmentId": "synthetic-segment-1",
+          "sequenceFrom": 1,
+          "sequenceTo": 1,
+          "observedStartedAt": "2026-10-06T20:00:00.000Z",
+          "observedEndedAt": "2026-10-06T20:00:01.000Z",
+          "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "finalDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "predecessorSegmentHash": null,
+          "events": [
+            {
+              "sequence": 1,
+              "occurredAt": "2026-10-06T20:00:00.500Z",
+              "elapsedMs": 500,
+              "source": "editor",
+              "steps": [
+                {
+                  "stepType": "replace",
+                  "from": 1,
+                  "to": 1,
+                  "slice": {
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "Sintetički B"
+                      }
+                    ]
+                  }
+                }
+              ],
+              "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          ],
+          "captureContext": {
+            "editorModel": "prosemirror",
+            "transactionFormat": "prosemirror-step-json-v1"
+          },
+          "evidenceProfileId": "standard-v1"
+        }
+      ],
+      "operations": [
+        "build and ingest segments[0]",
+        "build and ingest segments[1] with same clientRequestId"
+      ]
+    },
+    {
+      "scenario_id": "P04",
+      "selected_revision": "ac65c71d797e29417d3d0f07aa9bd7ad63f2ff06",
+      "source_status": "accepted-main",
+      "contract": "EvidenceSegmentV2 / EvidenceIngestRequestV2",
+      "entrypoints": [
+        "src/domain/forensics/evidence-segment-v2.ts:isEvidenceSegmentV2",
+        "src/application/evidence/evidence-outbox.ts:buildEvidenceIngestCommandV2",
+        "src/application/evidence/evidence-gateway.ts:EvidenceGateway.ingest"
+      ],
+      "identity": {
+        "principalId": "synthetic-student-a",
+        "evidencePackageId": "synthetic-package-a",
+        "clientRequestId": "synthetic-request-1"
+      },
+      "identity_scope": "InMemoryEvidenceAcceptanceRepository requestKey: principalId × evidencePackageId × clientRequestId; segment identities are separate; event sequence is within segment",
+      "prompt": "Procijeni ove dostavljene varijante prema validatoru i poznatom očekivanom segment slijedu. Navedi granice zaključka o događajima izvan ulaza.",
+      "segments": [
+        {
+          "evidenceSchema": "ductus-evidence-segment-v2",
+          "canonicalization": "RFC8785-JCS",
+          "hashAlgorithm": "sha256",
+          "documentId": "synthetic-doc-a",
+          "sessionId": "synthetic-session-a",
+          "segmentId": "synthetic-segment-1",
+          "sequenceFrom": 1,
+          "sequenceTo": 2,
+          "observedStartedAt": "2026-10-06T20:00:00.000Z",
+          "observedEndedAt": "2026-10-06T20:00:01.000Z",
+          "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "finalDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "predecessorSegmentHash": null,
+          "events": [
+            {
+              "sequence": 2,
+              "occurredAt": "2026-10-06T20:00:00.500Z",
+              "elapsedMs": 500,
+              "source": "editor",
+              "steps": [
+                {
+                  "stepType": "replace",
+                  "from": 1,
+                  "to": 1,
+                  "slice": {
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "Sintetički A"
+                      }
+                    ]
+                  }
+                }
+              ],
+              "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          ],
+          "captureContext": {
+            "editorModel": "prosemirror",
+            "transactionFormat": "prosemirror-step-json-v1"
+          },
+          "evidenceProfileId": "standard-v1"
+        },
+        {
+          "evidenceSchema": "ductus-evidence-segment-v2",
+          "canonicalization": "RFC8785-JCS",
+          "hashAlgorithm": "sha256",
+          "documentId": "synthetic-doc-a",
+          "sessionId": "synthetic-session-a",
+          "segmentId": "synthetic-segment-1",
+          "sequenceFrom": 1,
+          "sequenceTo": 1,
+          "observedStartedAt": "2026-10-06T20:00:00.000Z",
+          "observedEndedAt": "2026-10-06T20:00:01.000Z",
+          "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "finalDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "predecessorSegmentHash": null,
+          "events": [
+            {
+              "sequence": 1,
+              "occurredAt": "2026-10-06T20:00:00.500Z",
+              "elapsedMs": 500,
+              "source": "editor",
+              "steps": [
+                {
+                  "stepType": "replace",
+                  "from": 1,
+                  "to": 1,
+                  "slice": {
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "Sintetički A"
+                      }
+                    ]
+                  }
+                }
+              ],
+              "beforeDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          ],
+          "captureContext": {
+            "editorModel": "prosemirror",
+            "transactionFormat": "prosemirror-step-json-v1"
+          },
+          "evidenceProfileId": "standard-v1"
+        }
+      ],
+      "known_expected_segment_sequences": [
+        1
+      ]
+    },
+    {
+      "scenario_id": "P05",
+      "selected_revision": "ac65c71d797e29417d3d0f07aa9bd7ad63f2ff06",
+      "source_status": "accepted-main",
+      "contract": "ForensicEvent v1 / ReplayDocument",
+      "entrypoints": [
+        "src/domain/forensics/ledger.ts:createForensicEvent",
+        "src/domain/forensics/replay.ts:replayUntil"
+      ],
+      "identity": {
+        "eventId": "synthetic-event-1",
+        "documentId": "synthetic-doc-a",
+        "actorId": "synthetic-student-a"
+      },
+      "identity_scope": "ForensicEvent v1 id; replayUntil selects contiguous sequence from 1 in the supplied list, not native EvidenceEventV2",
+      "prompt": "Rekonstruiraj do zadane sekvence i usporedi s dostavljenim checkpointom. Procijeni što kod stvarno provjerava bez tvrdnje o autorstvu.",
+      "initial": {
+        "nodes": [
+          {
+            "id": "synthetic-node-1",
+            "text": ""
+          }
+        ]
+      },
+      "events": [
+        {
+          "schemaVersion": 1,
+          "id": "synthetic-event-1",
+          "documentId": "synthetic-doc-a",
+          "sequence": 1,
+          "revision": 1,
+          "occurredAt": "2026-10-06T20:00:00.000Z",
+          "actorId": "synthetic-student-a",
+          "actorRole": "student",
+          "payload": {
+            "kind": "insert-text",
+            "nodeId": "synthetic-node-1",
+            "offset": 0,
+            "text": "A"
+          }
+        }
+      ],
+      "until_sequence": 1,
+      "checkpoint": {
+        "nodes": [
+          {
+            "id": "synthetic-node-1",
+            "text": "B"
+          }
+        ]
+      }
+    },
+    {
+      "scenario_id": "P06",
+      "selected_revision": "ac65c71d797e29417d3d0f07aa9bd7ad63f2ff06",
+      "source_status": "accepted-main",
+      "contract": "EvidenceSegmentV2 / EvidenceIngestRequestV2",
+      "entrypoints": [
+        "src/domain/forensics/evidence-segment-v2.ts:isEvidenceSegmentV2",
+        "src/application/evidence/evidence-outbox.ts:buildEvidenceIngestCommandV2",
+        "src/application/evidence/evidence-gateway.ts:EvidenceGateway.ingest"
+      ],
+      "identity": {
+        "principalId": "synthetic-student-a",
+        "evidencePackageId": "synthetic-package-a",
+        "clientRequestId": "synthetic-request-1"
+      },
+      "identity_scope": "InMemoryEvidenceAcceptanceRepository requestKey: principalId × evidencePackageId × clientRequestId; segment identities are separate; event sequence is within segment",
+      "prompt": "Procijeni canonicalPayload nakon promjene wire bajtova uz originalni descriptor. Ne mijenjaj pohranjeni izvorni command.",
+      "segments": [
+        {
+          "evidenceSchema": "ductus-evidence-segment-v2",
+          "canonicalization": "RFC8785-JCS",
+          "hashAlgorithm": "sha256",
+          "documentId": "synthetic-doc-a",
+          "sessionId": "synthetic-session-a",
+          "segmentId": "synthetic-segment-1",
+          "sequenceFrom": 1,
+          "sequenceTo": 1,
+          "observedStartedAt": "2026-10-06T20:00:00.000Z",
+          "observedEndedAt": "2026-10-06T20:00:01.000Z",
+          "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "finalDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "predecessorSegmentHash": null,
+          "events": [
+            {
+              "sequence": 1,
+              "occurredAt": "2026-10-06T20:00:00.500Z",
+              "elapsedMs": 500,
+              "source": "editor",
+              "steps": [
+                {
+                  "stepType": "replace",
+                  "from": 1,
+                  "to": 1,
+                  "slice": {
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "Sintetički A"
+                      }
+                    ]
+                  }
+                }
+              ],
+              "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          ],
+          "captureContext": {
+            "editorModel": "prosemirror",
+            "transactionFormat": "prosemirror-step-json-v1"
+          },
+          "evidenceProfileId": "standard-v1"
+        }
+      ],
+      "operations": [
+        "build command",
+        "copy command",
+        "append one space to copy.canonicalPayload leaving descriptor unchanged",
+        "inspect/ingest copy"
+      ]
+    }
+  ]
+}
