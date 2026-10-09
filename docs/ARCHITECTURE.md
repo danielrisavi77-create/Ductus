@@ -96,7 +96,7 @@ Sav pristup vanjskim uslugama ide kroz portove iz `src/application/ports`. Svaki
 | --- | --- | --- |
 | Baza (`withActor`) | PostgreSQL u Dockeru s istim ulogama i migracijama | Upravljani PostgreSQL s PITR-om |
 | Pohrana objekata (`putImmutable`, `get`, `head`) | RustFS (S3 API; MinIO više nema sliku) | S3-kompatibilan bucket |
-| Potpis (`sign(digest, keyId)`) | Razvojni Ed25519 potpisnik | KMS, samo nad digestom (D-71) |
+| Potpis (`sign(messageBytes, keyId)`) | Razvojni Ed25519 potpisnik | KMS `ED25519_SHA_512`, `RAW`: D-92 potvrda nad prefiksom + 32B digestom; D-93 C2SP kontrolna točka nad cijelim točnim UTF-8 signed-note tekstom (uključujući završni LF), bez dodatnog hashiranja |
 | Vremenski žig | Lažni TSA u testovima | Dva neovisna RFC 3161 TSA-a (D-72) |
 | E-pošta | Mailpit | Transakcijska usluga u EU-u |
 | Pružatelj identiteta | Lažni OIDC pružatelj (samo lokalno i u CI-ju, D-09) | AAI@EduHr |
@@ -265,7 +265,7 @@ Rokovi se unose i prikazuju u zoni Europe/Zagreb; promjena na zimsko računanje 
 
 [PRIJEDLOG D-71]; pojedinosti u BACKEND §1 i §4.1.
 
-- Dva odvojena Ed25519 ključa u KMS-u: **ključ potvrda** i **ključ dnevnog korijena**. Materijal ključa ne napušta KMS; u KMS idu samo digesti. Potpisuje samo worker; web proces nema pristup ni materijalu ni pravu potpisa.
+- Dva odvojena Ed25519 ključa u KMS-u: **ključ potvrda** i **ključ dnevnog korijena**. Materijal ključa ne napušta KMS; za D-92 u KMS ide prefiksirani digest (59 B), a za D-93 točan UTF-8 C2SP tekst kontrolne točke sa završnim LF (RAW, bez prethodnog hashiranja). Potpisuje samo worker; web proces nema pristup ni materijalu ni pravu potpisa.
 - Lokalno i u CI-ju koristi se razvojni potpisnik iza istog porta; konfiguracijska brava sprječava razvojni potpisnik u produkciji.
 - Javni ključevi svih verzija su u `evidence.signing_key` s namjenom i razdobljem valjanosti, pa se stare potvrde mogu provjeriti i nakon rotacije (C-46).
 - Rotacija: jednom godišnje i pri svakoj sumnji na kompromitaciju.
