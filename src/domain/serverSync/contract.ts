@@ -57,12 +57,18 @@ export type CommitStatus = (typeof COMMIT_STATUSES)[number];
  * A parsed answer from the RPC.
  *
  * `committed` and `duplicate` both carry the revision the payload occupies —
- * a replay of a lost response is indistinguishable from the original commit
- * on purpose, and the caller may treat both as an ACK for that revision.
+ * a replay of a lost response is indistinguishable from the original CAS.
+ * Neither result acknowledges a durable sync until a signed receipt has
+ * passed the trusted-key verifier. The wire parser preserves the receipt,
+ * but does NOT itself claim to validate its cryptographic signature.
  */
+export type CommitReceiptState =
+  | { status: "pending_signature" }
+  | { status: "signed"; signedReceipt: unknown };
+
 export type CommitOutcome =
-  | { status: "committed"; revision: number }
-  | { status: "duplicate"; revision: number }
+  | { status: "committed"; revision: number; receipt: CommitReceiptState }
+  | { status: "duplicate"; revision: number; receipt: CommitReceiptState }
   /** The same idempotency key was sent with different content: a client bug. */
   | { status: "txid_reused" }
   | { status: "stale_base"; currentRevision: number }
@@ -174,7 +180,28 @@ export function parseCommitOutcome(raw: unknown): CommitOutcome | InvalidCommitO
       if (!isRevision(revision, 1)) {
         return { status: "invalid" };
       }
-      return { status, revision };
+      const wireReceipt = ownProperty(raw, "receipt");
+      if (!isPlainObject(wireReceipt)) {
+        return { status: "invalid" };
+      }
+      const receiptStatus = ownProperty(wireReceipt, "status");
+      if (receiptStatus === "pending_signature") {
+        // A pending receipt cannot simultaneously claim to carry a signature.
+        if (Object.prototype.hasOwnProperty.call(wireReceipt, "signedReceipt")) {
+          return { status: "invalid" };
+        }
+        return { status, revision, receipt: { status: "pending_signature" } };
+      }
+      if (receiptStatus === "signed") {
+        const signedReceipt = ownProperty(wireReceipt, "signedReceipt");
+        // Only accept a structured JSON envelope. The cryptographic verifier
+        // must still validate its payload, signature, key and commit binding.
+        if (!isPlainObject(signedReceipt)) {
+          return { status: "invalid" };
+        }
+        return { status, revision, receipt: { status: "signed", signedReceipt } };
+      }
+      return { status: "invalid" };
     }
     case "stale_base": {
       const currentRevision = ownProperty(raw, "currentRevision");

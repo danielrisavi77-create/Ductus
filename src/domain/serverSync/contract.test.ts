@@ -55,17 +55,24 @@ function tx(overrides: Partial<DocumentTransaction> = {}): DocumentTransaction {
 }
 
 describe("parseCommitOutcome — statuses the RPC can return", () => {
-  it("parses a committed outcome with its revision", () => {
-    expect(parseCommitOutcome({ status: "committed", revision: 7 })).toEqual({
+  it("preserves a pending receipt without claiming an ACK", () => {
+    expect(parseCommitOutcome({
+      status: "committed", revision: 7, receipt: { status: "pending_signature" },
+    })).toEqual({
       status: "committed",
       revision: 7,
+      receipt: { status: "pending_signature" },
     });
   });
 
-  it("parses a duplicate outcome as an ACK for the revision the key already made", () => {
-    expect(parseCommitOutcome({ status: "duplicate", revision: 7 })).toEqual({
+  it("preserves an unverified signed receipt for the verifier", () => {
+    const signedReceipt = { schema: "test", signature: "synthetic" };
+    expect(parseCommitOutcome({
+      status: "duplicate", revision: 7, receipt: { status: "signed", signedReceipt },
+    })).toEqual({
       status: "duplicate",
       revision: 7,
+      receipt: { status: "signed", signedReceipt },
     });
   });
 
@@ -107,7 +114,7 @@ describe("parseCommitOutcome — statuses the RPC can return", () => {
     for (const status of COMMIT_STATUSES) {
       const raw =
         status === "committed" || status === "duplicate"
-          ? { status, revision: 1 }
+          ? { status, revision: 1, receipt: { status: "pending_signature" } }
           : status === "stale_base"
             ? { status, currentRevision: 1 }
             : { status };
@@ -196,8 +203,10 @@ describe("parseCommitOutcome — prototype pollution attempts", () => {
   });
 
   it("accepts a JSON.parse'd payload carrying a literal __proto__ key", () => {
-    const raw = JSON.parse('{"status":"committed","revision":2,"__proto__":{"x":1}}') as unknown;
-    expect(parseCommitOutcome(raw)).toEqual({ status: "committed", revision: 2 });
+    const raw = JSON.parse('{"status":"committed","revision":2,"receipt":{"status":"pending_signature"},"__proto__":{"x":1}}') as unknown;
+    expect(parseCommitOutcome(raw)).toEqual({
+      status: "committed", revision: 2, receipt: { status: "pending_signature" },
+    });
   });
 
   it("does not let a polluted Object.prototype invent a revision", () => {
