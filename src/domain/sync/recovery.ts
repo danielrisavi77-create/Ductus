@@ -227,6 +227,9 @@ function salvageOption(
   const pending = candidateFrom(input.pendingNewest, "pending");
   const snapshot = candidateFrom(input.snapshot, "snapshot");
   const best = newerOf(pending, snapshot);
+  // Ranking chooses the DOCUMENT, not the rollback floor. A losing yet
+  // valid local row can prove a more advanced server history.
+  const latestKnownLocalRevision = Math.max(pending?.revision ?? 0, snapshot?.revision ?? 0);
 
   if (best !== null) {
     // `at` is a tie-breaker, not part of the offer: the panel asks about a
@@ -238,7 +241,7 @@ function salvageOption(
       // A server rollback or unvalidated server response must not become a
       // silently accepted base. Recover locally until server state is verified.
       nextBaseRevision:
-        trustedServerRevision !== null && trustedServerRevision >= best.revision
+        trustedServerRevision !== null && trustedServerRevision >= latestKnownLocalRevision
           ? trustedServerRevision
           : null,
       nodes: best.nodes,

@@ -65,6 +65,35 @@ describe("salvage-local CAS rebase and provenance (DAN-25)", () => {
     expect(plan.salvage?.nextBaseRevision).toBeNull();
   });
 
+  it.each([null, "2026-10-09T09:00:00.000Z"])(
+    "prevents a hidden rollback when a higher-revision pending row loses timestamp ranking (%s)",
+    (pendingAt) => {
+      const plan = planRecovery(scenario({
+        pendingNewest: { document: LOCAL, revision: 7, at: pendingAt },
+        snapshot: { document: LOCAL, revision: 4, at: "2026-10-09T10:10:00.000Z" },
+        serverRevision: 5,
+      }));
+      // The snapshot wins on time, but the validated pending row proves the
+      // server has previously reached revision 7.
+      expect(plan.salvage).toMatchObject({
+        source: "snapshot",
+        revision: 4,
+        originalCandidateRevision: 4,
+        nextBaseRevision: null,
+      });
+      expect(plan.adopt?.revision).toBe(5);
+    },
+  );
+
+  it("does not use a corrupt high-revision local row as rollback evidence", () => {
+    const plan = planRecovery(scenario({
+      pendingNewest: { document: { invalid: true }, revision: 7, at: null },
+      snapshot: { document: LOCAL, revision: 4, at: "2026-10-09T10:10:00.000Z" },
+      serverRevision: 5,
+    }));
+    expect(plan.salvage).toMatchObject({ source: "snapshot", nextBaseRevision: 5 });
+  });
+
   it("recovery at equal revisions requires no invented increment", () => {
     const plan = planRecovery(scenario({ serverRevision: 1 }));
     expect(plan.salvage?.nextBaseRevision).toBe(1);
