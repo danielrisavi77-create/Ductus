@@ -35,19 +35,20 @@ Kanonski dokument: `docs/ENGINEERING_SYSTEM.md`.
 - Novi push invalidira review/QA preko `Review-Head` / `QA-Head`.
 - Owner Override je eksplicitna iznimka s razlogom i head SHA-om.
 
-## Otvoreni razvojni stog
+## Otvoreni razvojni stog — provjera 9. 10. 2026.
 
-Novi feature rad je privremeno ograničen dok se postojeći stog ne osvježi na aktualni `main`.
-
-- [ ] #39 P-4 dbmate + pgTAP — prvo osvježiti; baza za #46.
-- [ ] #41 Frontend sync B — osvježiti i review `standard`.
-- [ ] #42 lefthook Docker/CI — osvježiti i review `standard`.
-- [ ] #44 P-5 E2E stack — osvježiti; pri tome uključiti browser politiku iz `docs/TESTING.md`.
-- [ ] #45 P-6 zabranjeni izrazi — osvježiti; `critical` jer štiti PRODUCT §5.
-- [ ] #46 B-5a identity/RLS — nakon #39 retarget na `main`; `critical` + QA.
-- [ ] #47 pg import boundary — osvježiti nakon odluke o redoslijedu s #46.
-- [ ] #48 F-4 shell/design — osvježiti i provjeriti UX/accessibility.
-- [ ] #49 editor schema/interop — osvježiti nakon #41 gdje je potrebno.
+- [ ] #105 / DAN-23: docs D-91–93 (dbmate, receipt v2, kumulativni log), `critical`; CI zelen, neovisni current-head review i zaseban QA još nisu potvrđeni. Zamjenjuje neprihvaćeni #103; ne spajati oba.
+- [ ] #39 / DAN-23: P-4 dbmate + pgTAP je draft na staroj bazi; review/QA PASS vrijedi za `aac95bd5`, ali refresh nakon #105 mijenja head i traži nove dokaze prije mergea.
+- [ ] DAN-71: sedam D-91 zaštita (checksum, strict order, lock, schema drift, roles, prod-only forward, pg-boss pin) u zasebnom PR-u nakon #39; nije implementirano.
+- [ ] #46 / DAN-24: B-5a identity/session/RLS čeka #39 i novi critical review + drugi App QA; #32 OIDC demo i #33 B-7 nadalje ovise o tim temeljima.
+- [ ] #97 / DAN-25: sync hardening je otvoren; stari ACK P1 obrađen, ali novi P1 (`parseCommitOutcome` gubi receipt) i P2 (salvage-local stale base) ostaju neriješeni; current-head review/QA/gate i browser adapter nisu gotovi.
+- [ ] DAN-54: receipt v2 samo u lokalnom, neobjavljenom worktreeu; prije spajanja D-92 docs prihvat, stvarna read-only inventura durable v1 signed/pending, neovisni critical review + QA.
+- [ ] DAN-55: kumulativni log D-93 je specifikacijski kandidat #105, ne dovršen B5 runtime. Bez sintetičkih listova; checkpoint signer mora štititi od rollbacka/forka.
+- [ ] #42 / DAN-26 lefthook, #44 / DAN-27 E2E, #45 / DAN-28 forbidden terms, #48 / DAN-30 app shell: otvoreni kandidati; pregled, potrebna osvježenja i gateovi nisu dovršeni.
+- [ ] #89 / DAN-39: subscription-first review routing ima blokirajući security review; ne mergeati privilegirani `pull_request_review` workflow prije popravka.
+- [ ] DAN-49: F-3 journal/drainRunner/editor integracija čeka provjerenu #97 sync/receipt granicu; ne poistovjetiti sa spojenim editor-schema PR #49.
+- [ ] DAN-50: relativni `node_modules/pg` import zaobilazi ESLint boundary; odvojeni critical security fix i testovi ostaju otvoreni.
+- [ ] DAN-72 / GitHub #60: ažurirati izvedeni STATE; provjeriti preostale docs nesklade tek nakon prihvata #105, bez prijepisa tuđih kandidata.
 
 ## Ne smije se izgubiti
 
@@ -58,6 +59,8 @@ Novi feature rad je privremeno ograničen dok se postojeći stog ne osvježi na 
 - B0.2 ponoviti na stvarno kupljenom stroju; M1 čeka Lab; M4 čeka Lekta licencu.
 
 ## Gotovo
+- #99: koordinacija izvora istine Linear/GitHub/Space; #100: proširena pg import granica (ne pokriva DAN-50); #104: sigurnosni Next.js 15.5.27, post-merge main CI zelen (8. 10. 2026.).
+- #49: editor schema/interop je spojen; nije isto što i DAN-49 F-3 integration.
 
 - Plan proizvoda, odluke i demo-plan; arhitektura v0.4.
 - CI/skeneri, lokalni stog, prijenos prve jezgre, citatni stil, evidence/forensics osnova.
