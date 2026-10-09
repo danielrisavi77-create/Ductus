@@ -45,3 +45,11 @@ test("CI preserves full-history security tools and pins registry images by diges
   assert.match(ci, /run: pnpm stack:down/);
   assert.match(ci, /- run: pnpm test:unit/);
 });
+
+test("Gitleaks negative smoke proves scanner rejection, not just a nonzero startup error", () => {
+  assert.match(ci, /name: Gitleaks synthetic negative smoke/);
+  assert.match(ci, /ductus-synthetic-secret/);
+  assert.match(ci, /--report-format json --report-path \/reports\/leaks\.json/);
+  assert.match(ci, /finding\.get\("RuleID"\) == "ductus-synthetic-secret"/);
+  assert.match(ci, /Scanner failed before producing a report/);
+});
