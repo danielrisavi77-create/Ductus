@@ -207,7 +207,17 @@ describe("golden vectors: server side (gateway and reconstruction)", () => {
         .slice(0, 1)
         .map((former) => ({ name: former.name, accepted: false, bytes: fromHex(former.canonicalUtf8Hex) })),
     ];
-    expect(cases.length).toBeGreaterThan(20);
+    expect(cases.map((entry) => entry.name)).toEqual(
+      expect.arrayContaining([
+        "event-time-elapsed-ms",
+        "event-time-occurred-at",
+        "time-precision-start-seconds",
+        "time-precision-end-last-millisecond",
+        "time-form-other-zone",
+        "time-in-capture-context",
+        "former-odsjecak-zv-1",
+      ]),
+    );
 
     // `faithful` copies ids and times from the bytes into the descriptor, as an
     // honest client does; otherwise the descriptor keeps the valid ones of the

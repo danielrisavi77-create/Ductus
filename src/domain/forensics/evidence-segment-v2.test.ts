@@ -9,7 +9,6 @@ import {
   EVIDENCE_SEGMENT_SCHEMA_V2,
   isEvidenceMinuteV2,
   isEvidenceSegmentV2,
-  isTimeOrderedIdentifierV2,
   type EvidenceSegmentV2,
 } from "./evidence-segment-v2";
 
@@ -143,56 +142,6 @@ describe("EvidenceSegmentV2", () => {
     expect(isEvidenceSegmentV2(sameMinute)).toBe(true);
     const backwards = { ...fixture(), observedEndedAt: "2026-10-02T19:59:00.000Z" };
     expect(isEvidenceSegmentV2(backwards)).toBe(false);
-  });
-
-  // RFC 9562 appendix A.1, A.5 and A.6, and the example of the ULID specification.
-  it.each([
-    ["UUID version 1", "C232AB00-9414-11EC-B3C8-9F6BDECED846"],
-    ["UUID version 6", "1EC9414C-232A-6B00-B3C8-9F6BDECED846"],
-    ["UUID version 7", "017F22E2-79B0-7CC3-98C4-DC0C0C07398F"],
-    ["UUID version 7 in lower case", "017f22e2-79b0-7cc3-98c4-dc0c0c07398f"],
-    ["ULID", "01ARZ3NDEKTSV4RRFFQ69G5FAV"],
-    ["ULID in lower case", "01arz3ndektsv4rrffq69g5fav"],
-  ])("refuses an identifier that embeds its time of creation: %s", (_name, id) => {
-    expect(isTimeOrderedIdentifierV2(id)).toBe(true);
-    for (const field of ["documentId", "sessionId", "segmentId"] as const) {
-      expect(isEvidenceSegmentV2({ ...fixture(), [field]: id })).toBe(false);
-    }
-    const node = fixture();
-    node.events[0].touchedNodeIds = [id];
-    expect(isEvidenceSegmentV2(node)).toBe(false);
-  });
-
-  it("accepts identifiers without such a layout, a random UUID among them", () => {
-    // RFC 9562 appendix A.3 (version 4), and a name of 26 characters that is no ULID.
-    for (const id of ["919108f7-52d1-4320-9bac-f847db4148a8", "odsjecak-izmisljeni-zv-001"]) {
-      expect(isTimeOrderedIdentifierV2(id)).toBe(false);
-      const segment = { ...fixture(), documentId: id, sessionId: id, segmentId: id };
-      segment.events[0].touchedNodeIds = [id];
-      expect(isEvidenceSegmentV2(segment)).toBe(true);
-    }
-  });
-
-  it.each(["time", "ts", "at", "timestamp", "Timestamp", "TS", "occurredAt", "elapsedMs"])(
-    "refuses a step with the key %s, at any depth",
-    (key) => {
-      const places: ((step: Record<string, unknown>) => void)[] = [
-        (step) => (step[key] = 1791792062250),
-        (step) => (step.slice = { content: [{ type: "text", text: "A", attrs: { [key]: "x" } }] }),
-        (step) => (step.meta = [[{ [key]: null }]]),
-      ];
-      for (const place of places) {
-        const segment = fixture();
-        place(segment.events[0].steps[0]);
-        expect(isEvidenceSegmentV2(segment)).toBe(false);
-      }
-    },
-  );
-
-  it("does not take a step value or a longer key for a time key", () => {
-    const segment = fixture();
-    Object.assign(segment.events[0].steps[0], { format: "at", attrs: { state: "ts", path: ["time"] } });
-    expect(isEvidenceSegmentV2(segment)).toBe(true);
   });
 
   it("has no place for a time in captureContext or in the touched node ids", () => {

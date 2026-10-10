@@ -10,11 +10,7 @@ import {
 } from "./evidence-chain-v2";
 import { digestEvidenceReceiptPayload, isSignedEvidenceReceipt } from "./evidence-receipt";
 import { digestCanonicalDocumentV2 } from "./evidence-replay-v2";
-import {
-  digestEvidenceSegmentV2,
-  isEvidenceSegmentV2,
-  isTimeOrderedIdentifierV2,
-} from "./evidence-segment-v2";
+import { digestEvidenceSegmentV2, isEvidenceSegmentV2 } from "./evidence-segment-v2";
 import {
   applyPayloadEdit,
   fromHex,
@@ -174,7 +170,7 @@ describe("golden vectors: segment hash and chain", () => {
 });
 
 describe("golden vectors: time in a segment (D-24, D-56)", () => {
-  const { formerSegments, identifiers } = vectors.eventTime;
+  const { formerSegments } = vectors.eventTime;
 
   it("stores two whole minutes and no other time in each accepted segment", () => {
     for (const { segment, canonicalUtf8Hex } of chain.segments) {
@@ -216,14 +212,6 @@ describe("golden vectors: time in a segment (D-24, D-56)", () => {
       "8a95172066e145b5b890b9a73a3b4ccedbdceaf46ec8c373d2b35e94328f692e",
       "af2a408d76db01c7b95962f8f854a460b3491879f39b033ebed725587e948cb4",
     ]);
-  });
-
-  it.each(identifiers.timeOrdered)("names $name as an identifier that embeds time", ({ value }) => {
-    expect(isTimeOrderedIdentifierV2(value)).toBe(true);
-  });
-
-  it.each(identifiers.notTimeOrdered)("does not name $name as one", ({ value }) => {
-    expect(isTimeOrderedIdentifierV2(value)).toBe(false);
   });
 });
 

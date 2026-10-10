@@ -87,10 +87,6 @@ export type GoldenVectors = {
       canonicalUtf8Hex: string;
       reason: "invalid";
     }[];
-    identifiers: {
-      timeOrdered: { name: string; value: string }[];
-      notTimeOrdered: { name: string; value: string }[];
-    };
   };
   sizeLimit: {
     maxSegmentBytes: number;

@@ -70,18 +70,6 @@ export const MAX_EVIDENCE_PROFILE_ID_LENGTH = 120;
 
 const SHA256_HEX = /^[0-9a-f]{64}$/;
 const WHOLE_MINUTE_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00\.000Z$/;
-const UUID_WITH_TIME =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[167][0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const ULID = /^[0-7][0-9a-hjkmnp-tv-z]{25}$/i;
-/** Lower-case names a step key may not have, whatever its letter case. */
-const STEP_TIME_KEYS = new Set([
-  "time",
-  "ts",
-  "at",
-  "timestamp",
-  "occurredat",
-  "elapsedms",
-]);
 const MAX_ID_LENGTH = 256;
 const MAX_EVENTS = 5000;
 const SOURCES = new Set<string>(EVIDENCE_SOURCES_V2);
@@ -136,7 +124,7 @@ function isSha256(value: unknown): value is string {
 }
 
 /**
- * The only time a segment carries: a whole minute in UTC, written
+ * The form of the two times of a segment: a whole minute in UTC, written
  * `YYYY-MM-DDTHH:mm:00.000Z`. A time with seconds or milliseconds, in another
  * zone or in another spelling is refused, never rounded: the bytes are
  * addressed by their hash, so the server cannot change them.
@@ -147,59 +135,27 @@ export function isEvidenceMinuteV2(value: unknown): value is string {
   return Number.isFinite(time) && new Date(time).toISOString() === value;
 }
 
-/**
- * True for an identifier whose layout embeds the time it was made: a UUID of
- * version 1, 6 or 7 (RFC 9562) or a ULID, in either letter case. Such an
- * identifier per segment or per node would be a clock finer than a minute.
- * This names known layouts only; it cannot show that another identifier is
- * free of time.
- */
-export function isTimeOrderedIdentifierV2(value: string): boolean {
-  return UUID_WITH_TIME.test(value) || ULID.test(value);
-}
-
-function isIdentifier(value: unknown): value is string {
-  return nonEmptyBounded(value) && !isTimeOrderedIdentifierV2(value);
-}
-
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
 }
 
-/** A key named for a time, at any depth of a step. Call only on a value JCS accepted. */
-function hasTimeKey(step: EvidenceStepV2): boolean {
-  const pending: JcsJsonValue[] = [step];
-  for (let value = pending.pop(); value !== undefined; value = pending.pop()) {
-    if (value === null || typeof value !== "object") continue;
-    if (Array.isArray(value)) {
-      for (const item of value) pending.push(item);
-      continue;
-    }
-    for (const [key, item] of Object.entries(value)) {
-      if (STEP_TIME_KEYS.has(key.toLowerCase())) return true;
-      pending.push(item);
-    }
-  }
-  return false;
-}
-
 function isStep(value: unknown): value is EvidenceStepV2 {
   if (!isPlainObject(value)) return false;
   try {
     canonicalizeJcs(value);
+    return true;
   } catch {
     return false;
   }
-  return !hasTimeKey(value as EvidenceStepV2);
 }
 
 function isSortedUniqueStrings(value: unknown): value is string[] {
   if (!Array.isArray(value)) return false;
   let previous: string | null = null;
   for (const item of value) {
-    if (!isIdentifier(item)) return false;
+    if (!nonEmptyBounded(item)) return false;
     if (previous !== null && item <= previous) return false;
     previous = item;
   }
@@ -239,9 +195,9 @@ export function isEvidenceSegmentV2(value: unknown): value is EvidenceSegmentV2 
     value.evidenceSchema !== EVIDENCE_SEGMENT_SCHEMA_V2 ||
     value.canonicalization !== EVIDENCE_CANONICALIZATION_V2 ||
     value.hashAlgorithm !== EVIDENCE_HASH_ALGORITHM_V2 ||
-    !isIdentifier(value.documentId) ||
-    !isIdentifier(value.sessionId) ||
-    !isIdentifier(value.segmentId) ||
+    !nonEmptyBounded(value.documentId) ||
+    !nonEmptyBounded(value.sessionId) ||
+    !nonEmptyBounded(value.segmentId) ||
     !nonEmptyBounded(value.evidenceProfileId, MAX_EVIDENCE_PROFILE_ID_LENGTH) ||
     !Number.isSafeInteger(value.sequenceFrom) ||
     Number(value.sequenceFrom) < 1 ||

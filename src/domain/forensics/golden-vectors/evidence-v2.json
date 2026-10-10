@@ -10,7 +10,7 @@
     "documentHash": "Lowercase hex SHA-256 of the canonical bytes of the canonical document JSON.",
     "segmentHash": "Lowercase hex SHA-256 of the canonical bytes of an evidence segment v2. The server hashes the bytes it received and accepts them only when they are the canonical bytes of a valid segment.",
     "chain": "predecessorSegmentHash is the segmentHash of the segment accepted before it, null for the first. The head is the last segmentHash together with the number of segments.",
-    "segmentTime": "observedStartedAt and observedEndedAt are whole minutes in UTC, written YYYY-MM-DDTHH:mm:00.000Z. An event has no time; events are ordered by sequence. Nothing else in a segment carries time.",
+    "segmentTime": "observedStartedAt and observedEndedAt are whole minutes in UTC, written YYYY-MM-DDTHH:mm:00.000Z. An event has no time; events are ordered by sequence.",
     "receiptDigest": "Lowercase hex SHA-256 of the canonical bytes of the receipt payload v1 (payloadDigestSha256).",
     "receiptSignatureV1": "Ed25519 (RFC 8032, pure) over the canonical bytes of the receipt payload v1; raw 64-byte signature, base64url without padding. Decision D-92 replaces this for receipt v2."
   },
@@ -966,83 +966,6 @@
         "canonicalJcs": true
       },
       {
-        "name": "time-in-identifier-uuid-v7",
-        "class": "time-in-identifier",
-        "note": "segmentId is the UUID version 7 example of RFC 9562 appendix A.6: its first 48 bits are milliseconds.",
-        "base": 0,
-        "find": "\"segmentId\":\"odsjecak-zv-1\"",
-        "replace": "\"segmentId\":\"017f22e2-79b0-7cc3-98c4-dc0c0c07398f\"",
-        "reason": "invalid",
-        "recanonicalizesToBase": false,
-        "canonicalJcs": true
-      },
-      {
-        "name": "time-in-identifier-ulid",
-        "class": "time-in-identifier",
-        "note": "sessionId is the example of the ULID specification: its first 10 characters are milliseconds.",
-        "base": 0,
-        "find": "\"sessionId\":\"sesija-izmisljena-zv-1\"",
-        "replace": "\"sessionId\":\"01ARZ3NDEKTSV4RRFFQ69G5FAV\"",
-        "reason": "invalid",
-        "recanonicalizesToBase": false,
-        "canonicalJcs": true
-      },
-      {
-        "name": "time-in-identifier-uuid-v1",
-        "class": "time-in-identifier",
-        "note": "documentId is the UUID version 1 example of RFC 9562 appendix A.1, in upper case as printed there.",
-        "base": 0,
-        "find": "\"documentId\":\"dokument-izmisljeni-zv-1\"",
-        "replace": "\"documentId\":\"C232AB00-9414-11EC-B3C8-9F6BDECED846\"",
-        "reason": "invalid",
-        "recanonicalizesToBase": false,
-        "canonicalJcs": true
-      },
-      {
-        "name": "time-in-identifier-uuid-v6-node",
-        "class": "time-in-identifier",
-        "note": "A touched node id is the UUID version 6 example of RFC 9562 appendix A.5.",
-        "base": 0,
-        "find": "\u0161umi. \"}],\"touchedNodeIds\":[\"odlomak-1\"]",
-        "replace": "\u0161umi. \"}],\"touchedNodeIds\":[\"1ec9414c-232a-6b00-b3c8-9f6bdeced846\"]",
-        "reason": "invalid",
-        "recanonicalizesToBase": false,
-        "canonicalJcs": true
-      },
-      {
-        "name": "time-in-step-key-ts",
-        "class": "time-in-step",
-        "note": "A step with a ts key holding milliseconds since the epoch.",
-        "base": 0,
-        "find": "\u0161umi. \"}]",
-        "replace": "\u0161umi. \",\"ts\":1791792062250}]",
-        "reason": "invalid",
-        "recanonicalizesToBase": false,
-        "canonicalJcs": true
-      },
-      {
-        "name": "time-in-step-key-at-nested",
-        "class": "time-in-step",
-        "note": "The key at, one object below the step.",
-        "base": 0,
-        "find": "\u0161umi. \"}]",
-        "replace": "\u0161umi. \",\"zzMeta\":{\"at\":\"2026-10-12T08:01:02.250Z\"}}]",
-        "reason": "invalid",
-        "recanonicalizesToBase": false,
-        "canonicalJcs": true
-      },
-      {
-        "name": "time-in-step-key-other-case",
-        "class": "time-in-step",
-        "note": "The key Timestamp: the names are compared without case.",
-        "base": 0,
-        "find": "\"kind\":\"insert-text\",\"nodeId\":\"odlomak-1\",\"offset\":0,\"text\":\"Izmi",
-        "replace": "\"Timestamp\":1791792062250,\"kind\":\"insert-text\",\"nodeId\":\"odlomak-1\",\"offset\":0,\"text\":\"Izmi",
-        "reason": "invalid",
-        "recanonicalizesToBase": false,
-        "canonicalJcs": true
-      },
-      {
         "name": "time-in-capture-context",
         "class": "unknown-fields",
         "note": "captureContext has no place for a time.",
@@ -1067,7 +990,7 @@
     ]
   },
   "eventTime": {
-    "note": "Owner decision of 10 October 2026 (D-24, D-56): a segment carries no time per event and no time finer than a minute, and the server refuses a segment that does; it never rounds one. formerSegments are the two chain segments of the first revision of this file (DAN-127), byte for byte: canonical JCS that was valid then and must be refused now, because its events carry occurredAt and elapsedMs and its observed times carry seconds. formerSegmentHash is the hash that revision published for them. The edits with the classes event-time, time-precision, time-form, time-in-identifier, time-in-step and closed-shape under segmentPayloads.rejected each break one rule on the current first segment.",
+    "note": "Owner decision of 10 October 2026 (D-24, D-56): a segment carries no time per event and no time finer than a minute, and the server refuses a segment that does; it never rounds one. formerSegments are the two chain segments of the first revision of this file (DAN-127), byte for byte: canonical JCS that was valid then and must be refused now, because its events carry occurredAt and elapsedMs and its observed times carry seconds. formerSegmentHash is the hash that revision published for them. The edits with the classes event-time, time-precision, time-form and closed-shape under segmentPayloads.rejected, and time-in-capture-context, each break one rule on the current first segment.",
     "formerSegments": [
       {
         "name": "former-odsjecak-zv-1",
@@ -1083,32 +1006,7 @@
         "canonicalUtf8Hex": "7b2263616e6f6e6963616c697a6174696f6e223a22524643383738352d4a4353222c2263617074757265436f6e74657874223a7b22656469746f724d6f64656c223a22746573742d746578742d6e6f646573222c227472616e73616374696f6e466f726d6174223a226475637475732d746573742d696e736572742d746578742d7630227d2c22646f63756d656e744964223a22646f6b756d656e742d697a6d69736c6a656e692d7a762d31222c226576656e7473223a5b7b226166746572446f63756d656e7448617368223a2263393965356264396133646130626335376161656336623338303163376165316565616565656566373866323466373632333263613562336239666436653236222c226265666f7265446f63756d656e7448617368223a2239613236356338383161343661326665303738333738336630663339333736663933303438613530353337313064373938353266353332373238626663663838222c22656c61707365644d73223a3430302c226f636375727265644174223a22323032362d31302d31325430383a30323a30352e3030305a222c2273657175656e6365223a332c22736f75726365223a22636f6d706f736974696f6e222c227374657073223a5b7b226b696e64223a22696e736572742d74657874222c226e6f64654964223a226f646c6f6d616b2d32222c226f6666736574223a302c2274657874223a225a617672c5a16574616b20732072617a64766f6a656e696d207a6e616b6f6d2063cc8c2e227d5d7d5d2c2265766964656e636550726f66696c654964223a227374616e646172642d7631222c2265766964656e6365536368656d61223a226475637475732d65766964656e63652d7365676d656e742d7632222c2266696e616c446f63756d656e7448617368223a2263393965356264396133646130626335376161656336623338303163376165316565616565656566373866323466373632333263613562336239666436653236222c2268617368416c676f726974686d223a22736861323536222c22696e697469616c446f63756d656e7448617368223a2239613236356338383161343661326665303738333738336630663339333736663933303438613530353337313064373938353266353332373238626663663838222c226f62736572766564456e6465644174223a22323032362d31302d31325430383a30323a33302e3030305a222c226f62736572766564537461727465644174223a22323032362d31302d31325430383a30323a30302e3030305a222c227072656465636573736f725365676d656e7448617368223a2238613935313732303636653134356235623839306239613733613362346363656462646365616634366563386333373364326233356539343332386636393265222c227365676d656e744964223a226f64736a6563616b2d7a762d32222c2273657175656e636546726f6d223a332c2273657175656e6365546f223a332c2273657373696f6e4964223a22736573696a612d697a6d69736c6a656e612d7a762d32227d",
         "reason": "invalid"
       }
-    ],
-    "identifiers": {
-      "note": "documentId, sessionId, segmentId and every touched node id are refused when they have a layout that embeds the time of creation: a UUID of version 1, 6 or 7, or a ULID, in either letter case. This names known layouts only; it does not make any other identifier free of time, and it prescribes no layout.",
-      "timeOrdered": [
-        {"name": "uuid-v1", "source": "RFC 9562 appendix A.1", "value": "C232AB00-9414-11EC-B3C8-9F6BDECED846"},
-        {
-          "name": "uuid-v1-lowercase",
-          "source": "RFC 9562 appendix A.1",
-          "value": "c232ab00-9414-11ec-b3c8-9f6bdeced846"
-        },
-        {"name": "uuid-v6", "source": "RFC 9562 appendix A.5", "value": "1EC9414C-232A-6B00-B3C8-9F6BDECED846"},
-        {"name": "uuid-v7", "source": "RFC 9562 appendix A.6", "value": "017F22E2-79B0-7CC3-98C4-DC0C0C07398F"},
-        {
-          "name": "uuid-v7-lowercase",
-          "source": "RFC 9562 appendix A.6",
-          "value": "017f22e2-79b0-7cc3-98c4-dc0c0c07398f"
-        },
-        {"name": "ulid", "source": "README of github.com/ulid/spec", "value": "01ARZ3NDEKTSV4RRFFQ69G5FAV"},
-        {"name": "ulid-lowercase", "source": "README of github.com/ulid/spec", "value": "01arz3ndektsv4rrffq69g5fav"}
-      ],
-      "notTimeOrdered": [
-        {"name": "uuid-v4", "source": "RFC 9562 appendix A.3", "value": "919108f7-52d1-4320-9bac-f847db4148a8"},
-        {"name": "plain-name", "source": "invented", "value": "odsjecak-zv-1"},
-        {"name": "26-characters-with-a-hyphen", "source": "invented", "value": "odsjecak-izmisljeni-zv-001"}
-      ]
-    }
+    ]
   },
   "sizeLimit": {
     "maxSegmentBytes": 2097152,
