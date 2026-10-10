@@ -36,6 +36,19 @@ const SAMPLES = [
   "warning about the student",
   "student warning",
   "saved",
+  // Inflected and derived forms (QA of 232c9f4).
+  "autentičan",
+  "neautentičan",
+  "postoci AI",
+  "postotak umjetne inteligencije",
+  "vjerojatnošću",
+  "visokorizičan",
+  "anomalan",
+  "anomaly",
+  "prekopirano",
+  "dokaz o autorstvu",
+  "AI-generated",
+  "percentage of artificial intelligence",
 ];
 
 const filler = fc.string({ unit: fc.constantFrom(..."abcčćdđ ,.!?-()0123456789") });
