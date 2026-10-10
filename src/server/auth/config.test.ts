@@ -103,6 +103,10 @@ describe("loadAuthConfig", () => {
     // and malformed labels.
     "https://user@idp.aai.example.hr",
     "https://user:pw@idp.aai.example.hr",
+    "https://:pw@idp.aai.example.hr",
+    "https://idp.aai.example.hr/?",
+    "https://idp.aai.example.hr/#",
+    "https://idp.aai.example.hr?",
     "https://idp.aai.example.hr/?x=1",
     "https://idp.aai.example.hr/#x",
     "https://idp.aai.example.hr:8443/oidc",
@@ -133,6 +137,9 @@ describe("loadAuthConfig", () => {
       "https://u:p@ductus.example.hr/api/auth/callback",
       "https://ductus.example.hr/api/auth/callback?next=/x",
       "https://ductus.example.hr/api/auth/callback#x",
+      "https://:p@ductus.example.hr/api/auth/callback",
+      "https://ductus.example.hr/api/auth/callback?",
+      "https://ductus.example.hr/api/auth/callback#",
       "https://ductus.example.hr:8443/api/auth/callback",
       "https://ductus.corp/api/auth/callback",
     ]) {

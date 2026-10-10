@@ -84,9 +84,14 @@ function isPublicHost(hostname: string): boolean {
   return !RESERVED_SUFFIXES.some((s) => host.endsWith(s));
 }
 
-/** https on the default port, a public host, and nothing beside the path. */
-function isPlainHttpsUrl(value: URL): boolean {
+/**
+ * https on the default port, a public host, and nothing beside the path. The
+ * raw value is checked too: the parser drops an empty "?" or "#" from
+ * `search` and `hash` but keeps it in `href` (QA of #191).
+ */
+function isPlainHttpsUrl(value: URL, raw: string): boolean {
   return (
+    !/[?#]/.test(raw) &&
     value.protocol === "https:" &&
     isPublicHost(value.hostname) &&
     value.username === "" &&
@@ -119,7 +124,7 @@ export function loadAuthConfig(env: Env = process.env): AuthConfig {
       ["OIDC_ISSUER", issuer],
       ["OIDC_REDIRECT_URI", redirectUri],
     ] as const) {
-      if (!isPlainHttpsUrl(value)) {
+      if (!isPlainHttpsUrl(value, required(env, name))) {
         throw new AuthConfigError(`${name} must be an https URL of a public host in production`);
       }
     }
