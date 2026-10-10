@@ -627,6 +627,18 @@ function* sourceFiles(root: string): Generator<string> {
 const isModule = (file: string): boolean => /\.[cm]?ts$/.test(file) && !/\.d\.[cm]?ts$/.test(file);
 const isCode = (file: string): boolean => isModule(file) || file.endsWith(".tsx");
 
+/**
+ * Guard for the file types the scan does not read: `.js`, `.jsx`, `.mjs`,
+ * `.cjs` and `.mdx` under `app/` and `src/` (repository paths, sorted). The
+ * project is TypeScript, so there are none today. A file of this kind would
+ * hold interface text the scan never looks at and leave it green, so the
+ * repository test fails on every one. The fix is to write the file as `.ts` or
+ * `.tsx`, never to exempt it.
+ */
+export function findUnreadSourceFiles(root: string): string[] {
+  return [...sourceFiles(root)].filter((file) => /\.(?:[cm]?jsx?|mdx)$/.test(file)).sort();
+}
+
 /** How a file under `app/` or `src/` is read; `null` when the scan does not read it. */
 function scanKind(file: string): Kind | null {
   if (file.endsWith(".tsx")) return "component";

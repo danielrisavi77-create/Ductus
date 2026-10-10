@@ -6,8 +6,12 @@
  * catches "autentičnost", "AUTENTICNOST" and "autentičan". The two contextual
  * entries are matched on a form that also keeps where a phrase ends
  * (`foldPhrases`). A pattern covers
- * the gender, number and case of its entry and the forms derived from it; it
- * does not add synonyms the dictionary does not list.
+ * the gender, number and case of the word the entry lists, and the compounds
+ * and prefixed forms its comment names (`sumnj` and `rizik` anywhere in a word).
+ * It does not cover other forms of a listed participle (the active participle
+ * "kopirao" and "prepisao" or the noun "prepisivanje" are not "kopirano" and
+ * "prepisano"), another word order or synonyms: the dictionary is read
+ * narrowly, and widening it is the owner's decision (DAN-134).
  */
 export type Language = "hr" | "en";
 
@@ -34,11 +38,17 @@ export interface ForbiddenTerm {
   readonly contextual?: { readonly word: RegExp };
 }
 
-// Patterns are literals (no RegExp built from strings). Each one starts with
+// Patterns are literals (no RegExp built from strings). Most start with
 // (?<![\p{L}\p{N}]) and may end with (?![\p{L}\p{N}]): a letter or digit may
-// not touch the term, so "rizik" does not match inside another word. The one
-// exception is `sumnj`, which matches anywhere in a word so that derived forms
-// ("posumnjati", "osumnjičen") are caught; no unrelated word contains it.
+// not touch the term, so "vjerojatnost" does not match inside another word. The
+// exceptions are `sumnj`, which matches anywhere in a word so that derived forms
+// ("posumnjati", "osumnjičen") are caught (no unrelated word contains it), and
+// `rizik`, below.
+// `rizik` is the same kind of entry: the root is matched wherever it stands in a
+// word, so a compound with any prefix ("srednjerizičan", "bezrizično",
+// "visokorizičan", "nerizičan") is caught and the list of prefixes cannot go
+// stale. The one Croatian word that contains the letters is "križić" (folded
+// "krizic", a small cross), so a "k" in front of the root is the only exception.
 // The two contextual patterns only keep letters away from the word: a digit
 // that touches it (a footnote mark or a counter set next to the word by an
 // element, `Spremljeno<sup>1</sup>`) does not make it another word, and it
@@ -51,7 +61,7 @@ const GAP = "praznina u zapisu";
 
 export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
   { entry: "sumnjivo", instead: NOTHING, lang: "hr", pattern: /sumnj/u },
-  { entry: "rizik", instead: NOTHING, lang: "hr", pattern: /(?<![\p{L}\p{N}])(?:ne|visoko|nisko)?rizi[kc]/u },
+  { entry: "rizik", instead: NOTHING, lang: "hr", pattern: /(?<!k)rizi[kc]/u },
   // The English forms of this entry are the entry "anomaly" below.
   {
     entry: "anomalija, anomaly",

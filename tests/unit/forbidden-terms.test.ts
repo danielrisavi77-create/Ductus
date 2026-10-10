@@ -13,6 +13,7 @@ import {
   UI_TEXT_MODULES,
   extractUiText,
   findMisplacedUiText,
+  findUnreadSourceFiles,
   isUiTextModule,
   jsxTextValue,
   scanUiText,
@@ -1687,5 +1688,122 @@ describe("phrase boundary of the contextual entries", () => {
         ["src/lib/i18n/messages.hr.ts", 10, [HR]],
       ]);
     });
+  });
+});
+
+// QA of b091989: compounds of "rizik" with a prefix the pattern did not list.
+describe("the rizik entry in compounds", () => {
+  const rizik = (text: string) => entries(text).includes("rizik");
+
+  it.each([
+    "Srednjerizičan rad",
+    "srednjerizično",
+    "Bezrizično",
+    "bezrizičan rad",
+    "Umjerenorizičan",
+    "Iznimnorizični odlomci",
+    "Visokorizično",
+    "Niskorizični rad",
+    "Nerizičan",
+    "Nadprosječnorizičan",
+    "Rizik",
+    "rizici",
+    "rizicima",
+    "Ocjena rizika",
+    "SREDNJERIZIČAN",
+    "srednjerizicno",
+  ])("flags %j", (text) => {
+    expect(rizik(text)).toBe(true);
+  });
+
+  // Words that are not a risk grade. The only Croatian word with the letters
+  // "rizi" + k/c is "križić" (a small cross; also a surname), "krizic" once
+  // folded. The rest check that the root is not found in text around it.
+  it.each([
+    "Križić",
+    "križići",
+    "Križićima",
+    "Kliknite na križić za zatvaranje",
+    "Kriza",
+    "Križanje",
+    "Horizont",
+    "Arizona",
+    "Rizoma",
+    "Rizoto",
+    "Brisk",
+    "Asterisk",
+  ])("does not flag %j", (text) => {
+    expect(rizik(text)).toBe(false);
+  });
+
+  it("keeps the English entry bound to the start of a word (brisk, asterisk)", () => {
+    expect(entries("Asterisk")).toEqual([]);
+    expect(entries("Brisk walk")).toEqual([]);
+    expect(entries("High risk")).toContain("risk");
+  });
+
+  it("finds the compounds in a catalogue of a scanned repository, and not the small cross", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "ductus-terms-"));
+    try {
+      mkdirSync(path.join(root, "src", "lib", "i18n"), { recursive: true });
+      writeFileSync(
+        path.join(root, "src", "lib", "i18n", "messages.json"),
+        '{"a": "Niskorizičan", "b": "Srednjerizičan", "c": "Bezrizično", "d": "Zatvori križić"}\n',
+      );
+      expect(scanUiText(root).map((f) => [f.text, f.terms.map((t) => t.entry)])).toEqual([
+        ["Niskorizičan", ["rizik"]],
+        ["Srednjerizičan", ["rizik"]],
+        ["Bezrizično", ["rizik"]],
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+// QA of b091989: the scan reads `.ts` and `.tsx` only, so other source files must not exist.
+describe("source files the scan does not read", () => {
+  let root: string | undefined;
+  afterEach(() => {
+    if (root) rmSync(root, { recursive: true, force: true });
+    root = undefined;
+  });
+  const write = (relative: string, content: string): void => {
+    const file = path.join(root!, ...relative.split("/"));
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, content);
+  };
+
+  it("reports .js, .jsx, .mjs, .cjs and .mdx files under app/ and src/", () => {
+    root = mkdtempSync(path.join(tmpdir(), "ductus-terms-"));
+    write("app/x/page.jsx", "export default () => <p>Sumnjivo</p>;\n");
+    write("app/x/notes.mdx", "# Sumnjivo\n");
+    write("src/lib/old.js", 'export const x = "Sumnjivo";\n');
+    write("src/lib/old.mjs", 'export const x = "Sumnjivo";\n');
+    write("src/lib/old.cjs", 'module.exports = "Sumnjivo";\n');
+    expect(findUnreadSourceFiles(root)).toEqual([
+      "app/x/notes.mdx",
+      "app/x/page.jsx",
+      "src/lib/old.cjs",
+      "src/lib/old.js",
+      "src/lib/old.mjs",
+    ]);
+  });
+
+  it("does not report what the scan reads or skips on purpose", () => {
+    root = mkdtempSync(path.join(tmpdir(), "ductus-terms-"));
+    write("app/page.tsx", "export default () => <p>Spremljeno na uređaju</p>;\n");
+    write("src/lib/a.ts", "export const x = 1;\n");
+    write("src/lib/a.d.ts", "export declare const x: number;\n");
+    write("src/lib/a.test.ts", "export {};\n");
+    write("src/lib/i18n/messages.json", "{}\n");
+    write("src/node_modules/pkg/index.js", "module.exports = 1;\n");
+    write("src/.next/chunk.js", "x;\n");
+    write("scripts/tool.mjs", "export {};\n");
+    expect(findUnreadSourceFiles(root)).toEqual([]);
+  });
+
+  it("finds none in this repository (write a new one as .ts or .tsx, or make the scan read it)", () => {
+    expect(findUnreadSourceFiles(REPO_ROOT)).toEqual([]);
   });
 });
