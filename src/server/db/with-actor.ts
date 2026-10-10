@@ -31,12 +31,16 @@ export type WithActor = <T>(
 // cookie can neither raise an error that echoes it nor reach a log.
 const TOKEN_FORMAT = /^[A-Za-z0-9_-]{43}$/;
 
-// The configuration lock: the connection must be a plain login that is a
-// member of ductus_app. A superuser, a BYPASSRLS role or a session that
-// switched role (and could switch back) is refused. pg_stat_activity keeps
-// the role that authenticated, which SET SESSION AUTHORIZATION does not
+// The configuration lock: the connection must be a login that is neither
+// superuser nor BYPASSRLS, inherits ductus_app, and is the role it
+// authenticated as with no role switched for the session. pg_stat_activity
+// keeps the role that authenticated, which SET SESSION AUTHORIZATION does not
 // change: a superuser connection that took on an app login's name would
 // otherwise pass and could RESET back to superuser inside fn.
+// The lock does not look at other memberships: a login that is also a member
+// of another role keeps what that role grants, also through a role switched
+// inside fn and switched back before the exit check. Provisioning keeps app
+// logins in ductus_app alone (pgTAP 010 checks it locally).
 const APP_ROLE_SQL = `
 (SELECT NOT r.rolsuper AND NOT r.rolbypassrls
         AND pg_catalog.pg_has_role(r.oid, 'ductus_app', 'USAGE')
@@ -107,7 +111,9 @@ export function leadingKeyword(text: string): string {
 
 // Set while fn runs. A withActor inside fn would take a second connection
 // with its own transaction: it would commit apart from the outer one and can
-// wait forever for a connection that the outer call holds.
+// wait forever for a connection that the outer call holds. The store follows
+// the async context, so a callback on a promise created before fn (a .then on
+// it inside fn) runs outside the store and is not caught here.
 const insideActor = new AsyncLocalStorage<true>();
 
 export function createWithActor(pool: Pick<Pool, "connect">): WithActor {

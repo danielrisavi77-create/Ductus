@@ -193,6 +193,45 @@ describe("withActor over a ductus_app login", () => {
       expect(fn).not.toHaveBeenCalled();
     }
   });
+
+  // QA on #160 (V-1): a misprovisioned login. BYPASSRLS would read past RLS,
+  // and a login outside ductus_app is not the application's at all. Each is
+  // created for this test alone and dropped after it.
+  it.each([
+    ["a BYPASSRLS member of ductus_app", "LOGIN NOSUPERUSER BYPASSRLS IN ROLE ductus_app"],
+    ["a login that is not a member of ductus_app", "LOGIN NOSUPERUSER NOBYPASSRLS"],
+  ])("refuses %s before fn and closes the connection", async (_name, attributes) => {
+    const login = `it_with_actor_${randomBytes(4).toString("hex")}`;
+    const loginPassword = randomBytes(24).toString("hex");
+    const ddl = await admin.query<{ ddl: string }>(
+      `SELECT format('CREATE ROLE %I ${attributes} PASSWORD %L', $1::text, $2::text) AS ddl`,
+      [login, loginPassword],
+    );
+    await admin.query(ddl.rows[0].ddl);
+    // CONNECT is not granted to PUBLIC; ductus_app members get it from the role.
+    const grant = await admin.query<{ grant: string; revoke: string }>(
+      `SELECT format('GRANT CONNECT ON DATABASE %I TO %I', current_database(), $1::text) AS grant,
+              format('REVOKE CONNECT ON DATABASE %I FROM %I', current_database(), $1::text) AS revoke`,
+      [login],
+    );
+    await admin.query(grant.rows[0].grant);
+    const url = new URL(ADMIN_URL);
+    url.username = login;
+    url.password = loginPassword;
+    const pool = new pg.Pool({ connectionString: url.href, max: 1 });
+    try {
+      const { pid } = (await pool.query<{ pid: number }>("SELECT pg_catalog.pg_backend_pid() AS pid")).rows[0];
+      const fn = vi.fn(async () => "ran");
+      await expect(createWithActor(pool)(tokenA, fn)).rejects.toThrow("not a ductus_app login");
+      expect(fn).not.toHaveBeenCalled();
+      const after = (await pool.query<{ pid: number }>("SELECT pg_catalog.pg_backend_pid() AS pid")).rows[0];
+      expect(after.pid).not.toBe(pid);
+    } finally {
+      await pool.end();
+      await admin.query(grant.rows[0].revoke);
+      await admin.query(`DROP ROLE IF EXISTS ${login}`);
+    }
+  });
 });
 
 // DAN-129: what fn or the connection could carry past the transaction is
