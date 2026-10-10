@@ -8,17 +8,20 @@ import { findForbiddenTerms, type ForbiddenTerm } from "./terms";
 /**
  * Finds interface text in the source tree and checks it against the
  * dictionary (docs/PRODUCT.md 5). Only text a person can read is checked:
- * identifiers, comments, class names and import paths are not, so technical
- * code may use words like `hidden` freely.
+ * identifiers, comments, class names, import paths, SQL, log lines and DOM
+ * attribute values are not, so technical code may use words like `hidden`
+ * or `saved_at` freely.
  *
- * - Modules (`app/**` and `src/**` `.ts`, which covers the state labels in
- *   `src/domain/**` and the catalogues in `src/lib/i18n/**`) and JSON
- *   catalogues (`src/lib/i18n/**` `.json`): every string value; object keys,
- *   import paths and literal types are skipped. A `.ts` module cannot say
- *   which of its strings reach the screen, so all of them are checked.
+ * - Interface text modules (`UI_TEXT_MODULES`) and JSON catalogues
+ *   (`src/lib/i18n/**` `.json`): every string value; object keys, import
+ *   paths and literal types are skipped.
  * - Components (`app/**` and `src/**` `.tsx`): JSX text, strings rendered from
- *   JSX expressions, text attributes (alt, title, placeholder, label, aria-*)
- *   and the Next.js `metadata` export.
+ *   JSX expressions, the attributes a person reads or hears (`TEXT_ATTRIBUTES`)
+ *   and the Next.js `metadata` export. Other attributes (`aria-hidden`, `type`,
+ *   `role`, `className`, `data-*`, `id`, `name`, `href`, `style`) are not read.
+ * - Any other `.ts` module under `app/**`: the Next.js `metadata` export only.
+ * - Any other `.ts` module: not read. `findMisplacedUiText` reports Croatian
+ *   text that turns up there, so interface text cannot move out of scope.
  *
  * Test files (`*.test.*`, `*.spec.*`) and declaration files are not read.
  */
@@ -32,10 +35,38 @@ export interface Finding extends UiText {
   readonly terms: readonly ForbiddenTerm[];
 }
 
+/**
+ * The `.ts` modules that hold interface text, as globs over repository paths.
+ * Every string value in them is checked, so they should hold text and the
+ * code that picks it; SQL, log lines and DOM code belong elsewhere. A module
+ * that starts to hold interface text is named to match a pattern below or is
+ * added here. This is the only list: there are no exemptions per file or per
+ * finding.
+ */
+export const UI_TEXT_MODULES: readonly string[] = [
+  // Message catalogues.
+  "src/lib/i18n/**",
+  // Label and message modules wherever they live (today src/domain/sync/labels.ts).
+  "**/labels.ts",
+  "**/messages.ts",
+  "**/copy.ts",
+  // Messages for loading, sending and checkpoints, kept next to their codes.
+  "src/domain/serverSync/**",
+  // The editor placeholder.
+  "src/editor/schema.ts",
+];
+
 const SCANNED_DIRS = ["app", "src"];
-const CATALOGUE_DIR = path.join("src", "lib", "i18n");
+const CATALOGUE_DIR = "src/lib/i18n/";
 const SKIPPED_DIRS = new Set(["node_modules", ".next"]);
 const TEST_FILE = /\.(?:test|spec)\.[cm]?tsx?$/;
+const CROATIAN_LETTER = /[čćđšž]/iu;
+const STARTS_WITH_CAPITAL = /^[^\p{L}]*\p{Lu}/u;
+
+function looksLikeCroatianUiText(text: string): boolean {
+  const trimmed = text.trim();
+  return CROATIAN_LETTER.test(trimmed) && (/\s/u.test(trimmed) || STARTS_WITH_CAPITAL.test(trimmed));
+}
 
 const TEXT_ATTRIBUTES = new Set([
   "alt",
@@ -48,6 +79,22 @@ const TEXT_ATTRIBUTES = new Set([
   "aria-roledescription",
   "aria-valuetext",
 ]);
+
+// A double star crosses directories (followed by a slash it may match none);
+// a single star stays inside one name.
+function globPattern(glob: string): RegExp {
+  const body = glob
+    .replace(/[.+^${}()|[\]\\?]/g, "\\$&")
+    .replace(/\*\*\/|\*\*|\*/g, (wildcard) => (wildcard === "**/" ? "(?:.*/)?" : wildcard === "**" ? ".*" : "[^/]*"));
+  return new RegExp(`^${body}$`, "u");
+}
+
+const UI_TEXT_PATTERNS = UI_TEXT_MODULES.map(globPattern);
+
+/** Whether `file` (repository path with forward slashes) is on `UI_TEXT_MODULES`. */
+export function isUiTextModule(file: string): boolean {
+  return UI_TEXT_PATTERNS.some((pattern) => pattern.test(file));
+}
 
 type Collect = (node: ts.Node, text: string) => void;
 
@@ -92,6 +139,7 @@ function allStrings(node: ts.Node, collect: Collect): void {
   visit(node);
 }
 
+/** JSX text, rendered strings, text attributes and `metadata`; in a `.ts` file only `metadata` is left. */
 function componentText(source: ts.SourceFile, collect: Collect): void {
   const visit = (node: ts.Node): void => {
     if (ts.isJsxText(node)) {
@@ -116,7 +164,10 @@ function componentText(source: ts.SourceFile, collect: Collect): void {
   visit(source);
 }
 
-/** Interface text in one source file; `kind` decides which strings count. */
+/**
+ * Interface text in one source file. `catalogue` reads every string value,
+ * `component` only what a component renders (see the module comment).
+ */
 export function extractUiText(file: string, content: string, kind: "catalogue" | "component"): UiText[] {
   const found: UiText[] = [];
   if (file.endsWith(".json")) {
@@ -142,38 +193,70 @@ export function extractUiText(file: string, content: string, kind: "catalogue" |
   return found;
 }
 
-function* sourceFiles(root: string, dir: string): Generator<string> {
-  for (const entry of readdirSync(path.join(root, dir), { withFileTypes: true })) {
-    const relative = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      if (!SKIPPED_DIRS.has(entry.name)) yield* sourceFiles(root, relative);
-    } else if (!TEST_FILE.test(entry.name)) {
-      yield relative;
+/** Non-test files under `app/` and `src/`, as repository paths with forward slashes. */
+function* sourceFiles(root: string): Generator<string> {
+  const walk = function* (dir: string): Generator<string> {
+    for (const entry of readdirSync(path.join(root, dir), { withFileTypes: true })) {
+      const relative = `${dir}/${entry.name}`;
+      if (entry.isDirectory()) {
+        if (!SKIPPED_DIRS.has(entry.name)) yield* walk(relative);
+      } else if (!TEST_FILE.test(entry.name)) {
+        yield relative;
+      }
     }
-  }
+  };
+  for (const dir of SCANNED_DIRS) yield* walk(dir);
 }
 
-/** How a file under `app/` or `src/` is read; `null` when it holds no interface text. */
+const isModule = (file: string): boolean => /\.[cm]?ts$/.test(file) && !/\.d\.[cm]?ts$/.test(file);
+
+/** How a file under `app/` or `src/` is read; `null` when the scan does not read it. */
 function scanKind(file: string): "catalogue" | "component" | null {
   if (file.endsWith(".tsx")) return "component";
-  if (/\.[cm]?ts$/.test(file)) return /\.d\.[cm]?ts$/.test(file) ? null : "catalogue";
-  if (file.endsWith(".json")) return file.startsWith(CATALOGUE_DIR + path.sep) ? "catalogue" : null;
+  if (isModule(file)) {
+    if (isUiTextModule(file)) return "catalogue";
+    return file.startsWith("app/") ? "component" : null;
+  }
+  if (file.endsWith(".json")) return file.startsWith(CATALOGUE_DIR) ? "catalogue" : null;
   return null;
 }
 
 /** Every piece of interface text in the repository at `root` that uses a forbidden term. */
 export function scanUiText(root: string): Finding[] {
   const findings: Finding[] = [];
-  for (const dir of SCANNED_DIRS) {
-    for (const file of sourceFiles(root, dir)) {
-      const kind = scanKind(file);
-      if (kind === null) continue;
-      const content = readFileSync(path.join(root, file), "utf8");
-      for (const text of extractUiText(file.split(path.sep).join("/"), content, kind)) {
-        const terms = findForbiddenTerms(text.text);
-        if (terms.length > 0) findings.push({ ...text, terms });
-      }
+  for (const file of sourceFiles(root)) {
+    const kind = scanKind(file);
+    if (kind === null) continue;
+    const content = readFileSync(path.join(root, file), "utf8");
+    for (const text of extractUiText(file, content, kind)) {
+      const terms = findForbiddenTerms(text.text);
+      if (terms.length > 0) findings.push({ ...text, terms });
     }
   }
   return findings;
+}
+
+/**
+ * Guard for the narrow scope above: strings in a `.ts` module that is not on
+ * `UI_TEXT_MODULES` which have a Croatian letter (č, ć, đ, š, ž) and either
+ * white space or a capital first letter. Such a string looks like interface
+ * text that the scan would not read. The fix is to move it into a listed
+ * module or to extend the list, never to exempt the file.
+ *
+ * A single lower-case word ("može" in a word list) is data, not a label, and
+ * is not reported. Not caught either: text without a Croatian letter and
+ * English text in a module outside the list.
+ */
+export function findMisplacedUiText(root: string): UiText[] {
+  const misplaced: UiText[] = [];
+  for (const file of sourceFiles(root)) {
+    if (!isModule(file) || isUiTextModule(file)) continue;
+    const content = readFileSync(path.join(root, file), "utf8");
+    const kind = scanKind(file);
+    const read = new Set(kind === null ? [] : extractUiText(file, content, kind).map((t) => `${t.line}:${t.text}`));
+    for (const text of extractUiText(file, content, "catalogue")) {
+      if (looksLikeCroatianUiText(text.text) && !read.has(`${text.line}:${text.text}`)) misplaced.push(text);
+    }
+  }
+  return misplaced;
 }
