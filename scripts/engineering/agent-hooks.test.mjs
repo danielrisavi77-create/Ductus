@@ -226,11 +226,13 @@ test("every profile in PROFILE_ROLES gets the notice of its own role from the bu
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-roles-"));
   try {
     const transcript = path.join(dir, "t.jsonl");
-    fs.writeFileSync(transcript, assistant("a", { cache_read_input_tokens: ORCHESTRATOR_REMIND_AT }) + "\n");
     const expected = { orchestrator: /Reminder, not a stop/, worker: /IZVJEŠTAJ block of your own PR/, control: /your own comment on the PR or issue/ };
     assert.deepEqual([...new Set(Object.values(PROFILE_ROLES))].sort(), Object.keys(expected).sort());
     for (const [profile, role] of Object.entries(PROFILE_ROLES)) {
       assert.equal(sessionRole({ agent_type: profile }), role, profile);
+      // Each role is checked at the first point where it gets a notice: 300k for the orchestrator, 150k for the others.
+      const at = role === "orchestrator" ? 300_000 : 150_000;
+      fs.writeFileSync(transcript, assistant("a", { cache_read_input_tokens: at }) + "\n");
       const notice = runHook("budget", { transcript_path: transcript, agent_type: profile }).additionalContext;
       for (const [other, pattern] of Object.entries(expected)) {
         if (other === role) assert.match(notice, pattern, profile);
@@ -746,6 +748,60 @@ test("a repo below a directory named secrets/ keeps its hooks; its own deny-list
   } finally {
     fs.rmSync(base, { recursive: true, force: true });
   }
+});
+
+test("thresholds are literal: only the orchestrator moved, other roles stay at 150k and 250k", () => {
+  assert.equal(ROTATE_AT, 150_000);
+  assert.equal(HARD_AT, 250_000);
+  assert.equal(ORCHESTRATOR_REMIND_AT, 300_000);
+  assert.equal(ORCHESTRATOR_LIMIT, 400_000);
+  for (const role of ["worker", "control", "unknown"]) {
+    assert.equal(budgetNotice(149_999, role), null, role);
+    assert.match(budgetNotice(150_000, role), /past the 150k rotation point/, role);
+    assert.match(budgetNotice(249_999, role), /past the 150k rotation point/, role);
+    assert.match(budgetNotice(250_000, role), /past the 250k hard limit/, role);
+    assert.match(budgetNotice(500_000, role), /past the 250k hard limit/, role);
+  }
+});
+
+test("orchestrator edges: 299999 silent, 300000 reminder, 399999 no limit, 400000 limit", () => {
+  assert.equal(budgetNotice(299_999, "orchestrator"), null);
+  assert.match(budgetNotice(300_000, "orchestrator"), /Reminder, not a stop/);
+  assert.doesNotMatch(budgetNotice(300_000, "orchestrator"), /upper safety limit/);
+  assert.doesNotMatch(budgetNotice(399_999, "orchestrator"), /upper safety limit/);
+  assert.match(budgetNotice(400_000, "orchestrator"), /400k upper safety limit in §7/);
+});
+
+test("odd agent_type values are an unknown role, never the orchestrator", () => {
+  for (const agent_type of ["__proto__", "constructor", " ductus-orchestrator", "ductus-orchestrator ", "DUCTUS-ORCHESTRATOR", null, "", 7]) {
+    assert.equal(sessionRole({ agent_type }), "unknown", String(agent_type));
+  }
+  assert.equal(sessionRole({}), "unknown");
+  // Unknown role keeps the 150k notice, so a mis-detected orchestrator is never silent.
+  assert.match(budgetNotice(150_000, sessionRole({ agent_type: "__proto__" })), /role could not be detected/);
+});
+
+test("an invalid token count gives no notice and never prints NaNk", () => {
+  for (const tokens of [NaN, -1, -Infinity, Infinity, "300000", null, undefined]) {
+    for (const role of ["orchestrator", "worker", "control", "unknown"]) {
+      const notice = budgetNotice(tokens, role);
+      assert.equal(notice, null, `${String(tokens)} ${role}`);
+    }
+  }
+});
+
+test("the SESSIONS.md table and ORKESTRATOR.md match the threshold constants", () => {
+  const sessions = fs.readFileSync(path.join(repo, "docs/SESSIONS.md"), "utf8");
+  const row = sessions.split("\n").find((line) => line.startsWith("| Orkestrator | `ductus-orchestrator`"));
+  assert.ok(row);
+  assert.match(row, new RegExp(`od ${ORCHESTRATOR_REMIND_AT / 1000}k`));
+  assert.match(row, new RegExp(`Od ${ORCHESTRATOR_LIMIT / 1000}k`));
+  const hook = sessions.split("\n").find((line) => line.startsWith("| Hook `budget`"));
+  assert.match(hook, new RegExp(`Iznad ${ROTATE_AT / 1000}k tokena`));
+  assert.match(hook, new RegExp(`iznad ${HARD_AT / 1000}k uputa je stroža`));
+  assert.match(hook, new RegExp(`tek od ${ORCHESTRATOR_REMIND_AT / 1000}k, a od ${ORCHESTRATOR_LIMIT / 1000}k`));
+  const rules = fs.readFileSync(path.join(repo, "docs/ORKESTRATOR.md"), "utf8");
+  assert.match(rules, /prvi podsjetnik hooka dolazi na 300\.000/);
 });
 
 test("the orchestrator is told about the 400k safety limit of ORKESTRATOR.md §7 from 400k on", () => {

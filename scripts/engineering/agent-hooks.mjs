@@ -170,6 +170,8 @@ const HANDOFF_AT = {
 // new task. The orchestrator gets a reminder, and so does a session whose
 // role is unknown, because it may be the orchestrator.
 export function budgetNotice(tokens, role = "unknown") {
+  // A count that is not a finite number (NaN, a string) gives no notice instead of "NaNk".
+  if (typeof tokens !== "number" || !Number.isFinite(tokens)) return null;
   if (tokens < (role === "orchestrator" ? ORCHESTRATOR_REMIND_AT : ROTATE_AT)) return null;
   const size = `${Math.round(tokens / 1000)}k`;
   const hard = tokens >= HARD_AT;
