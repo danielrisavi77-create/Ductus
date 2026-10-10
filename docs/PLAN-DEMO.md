@@ -125,3 +125,16 @@ Detaljan plan faze nastaje tek kad je okidač ispunjen; do tada vrijedi tablica 
 | M5 do M7 ostatak | Demo spojen i Danielove primjedbe s probe; D-34 za izravne izmjene |
 | M10 Podaci | D-30 (rokovi čuvanja) od FPZG-a |
 | M11 GO uvjeti | D-08 potvrđen nakon B0.1 i B0.2; računi dobavljača |
+
+## 7. Kritični put i rezerva [PRIJEDLOG D-98]
+
+Ne vrijedi dok ga Daniel ne potvrdi. Do tada vrijede §3 do §5 kako su napisani.
+
+**Nalaz.** Lanac B-8 → B-9 → B-12 → F-10 → K-4 cijeli pada u T3 i T4, a proba D-3 je zadnji dan T4. Rezovi iz §5 skidaju točke 6 do 8 i snimku; nijedan ne skraćuje taj lanac. Kašnjenje bilo kojeg zadatka u lancu zato izravno pomiče demo.
+
+**Prijedlog:**
+
+1. **Tanki prolaz do kontrolne točke T2 (18. 10.).** `ingest` jednog odsječka, rekonstrukcija i JCS usporedba prolaze od početka do kraja nad in-memory adapterima i razvojnim potpisnikom, bez sučelja. B-8, B-9 i B-12 zatim zamjenjuju dijelove tog prolaza pravima, umjesto da se prvi put spoje u T4.
+2. **K-4 raste postupno.** E2E prolaz demoa nastaje u T2 kao test s prvim korakom (prijava) i dobiva korak uz svaki spojeni zadatak iz F-6 do F-10. U T4 ostaje samo zadnji korak i video.
+3. **Zamrzavanje opsega u srijedu 28. 10.** Nakon toga se spajaju samo popravci. Radna proba je u četvrtak 29. 10.; proba 31. 10. (D-3) ostaje kao završna.
+4. **Rez kritičnog puta, prije rezova iz §5.** Ako B-8 nije spojen do kontrolne točke T3 (25. 10.), potpis potvrde i rekonstrukcija za demo izvode se u istom procesu, iza istih sučelja, a pg-boss worker (B-9) i stanje `pending_signature` idu odmah nakon demoa. Ovo je odstupanje od D-71 i D-74 samo za demo s razvojnim ključem; ne vrijedi ni za jedno okruženje sa stvarnim podacima. Popis "ne režu se" iz §5 ostaje netaknut.
