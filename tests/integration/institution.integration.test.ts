@@ -274,7 +274,17 @@ describe("institution functions over withActor", () => {
       "SET SESSION AUTHORIZATION ductus_identity",
       "SET ROLE ductus_migrator",
     ]) {
-      await expect(single(people.stranger.token, (tx) => tx.query(statement))).rejects.toMatchObject({ code: "42501" });
+      // withActor refuses the statement before it reaches the database ...
+      await expect(single(people.stranger.token, (tx) => tx.query(statement))).rejects.toThrow(/not allowed/);
+      // ... and the database refuses it to the ductus_app login as well.
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await expect(client.query(statement)).rejects.toMatchObject({ code: "42501" });
+        await client.query("ROLLBACK");
+      } finally {
+        client.release();
+      }
     }
     // A raw user id in a setting is nobody's identity.
     const posed = await single(people.stranger.token, async (tx) => {
@@ -305,17 +315,29 @@ describe("institution functions over withActor", () => {
     const single = createWithActor(pool);
     // What an injected multi-statement string would do (QA finding 2 on #148):
     // end the transaction, then leave the teacher's token on the session.
-    await single(people.stranger.token, (tx) =>
-      tx.query(`COMMIT; SELECT set_config('app.session_token', '${people.teacher.token}', false)`),
-    );
-    // The token is on the pooled connection now, outside withActor.
-    expect((await pool.query("SELECT app.current_user_id() AS id")).rows[0].id).toBe(people.teacher.id);
+    // withActor refuses it, so the token is left on the connection directly.
+    await expect(
+      single(people.stranger.token, (tx) =>
+        tx.query(`COMMIT; SELECT set_config('app.session_token', '${people.teacher.token}', false)`),
+      ),
+    ).rejects.toThrow(/COMMIT statement is not allowed/);
+    // withActor resets the connection when it gives it back, so the token is
+    // left again before every call.
+    const leave = async () => {
+      await pool.query("SELECT set_config('app.session_token', $1, false)", [people.teacher.token]);
+      // The token is on the pooled connection now, outside withActor.
+      expect((await pool.query("SELECT app.current_user_id() AS id")).rows[0].id).toBe(people.teacher.id);
+    };
 
+    await leave();
     expect(await visibleCourses(single, null)).toEqual([]);
+    await leave();
     expect(await visibleCourses(single, people.stranger.token)).toEqual([]);
+    await leave();
     await expect(
       single(null, (tx) => tx.query("SELECT institution.revoke_enrollment_code($1)", [course])),
     ).rejects.toMatchObject({ code: "ZD401" });
+    await leave();
     await expect(
       single(people.stranger.token, (tx) => tx.query("SELECT institution.revoke_enrollment_code($1)", [course])),
     ).rejects.toMatchObject({ code: "ZD403" });

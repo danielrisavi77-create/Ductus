@@ -15,7 +15,6 @@ import { parseCommitOutcome } from "@/domain/serverSync/contract";
 import {
   ackedRevision,
   fastForwardBase,
-  newerRowsQueued,
   nextAwaitingReceipt,
   outcomeToEvents,
   planDrain,
@@ -126,7 +125,7 @@ async function drain(world: World, delivery: Delivery): Promise<World | "stale_b
       },
       verify: async () => true,
     },
-    newerRowsQueued(world.queue, sent),
+    { sent, pending: world.queue },
   );
   // SYNCED may only describe the newest row, and only once the server holds it.
   if (events.some((e) => e.type === "SYNC_ACK")) {
