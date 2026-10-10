@@ -22,7 +22,7 @@ Agent nikad ne uzima ove stavke i nikad ne čeka na njima ako drugi posao može 
 - [ ] Lekta: licenca/pravo redistribucije prije punog M4 paketa.
 - [ ] Dobavljači: UpCloud, Scaleway i AWS KMS računi + 2FA i uski ključevi; blokira B0.1.
 - [ ] Računovođa: PDV; FINA tek uz obrt ili FPZG kao ugovornu stranu.
-- [ ] Vidljivost repoa: prije stvarnih podataka ponovno odlučiti ostaje li javni.
+- [ ] Vidljivost repoa: prije stvarnih podataka ponovno odlučiti ostaje li javni. Uz to: session adresa orkestratora stoji u javnom `STATE.md`; prihvatiti ili premjestiti izvan repoa.
 - [ ] Konačno ime proizvoda.
 
 ## Engineering System v1

@@ -37,7 +37,7 @@ Normalno rade tri stalna writera (Backend, Frontend, Platforma). Četvrti je dop
 3. Testovi i provjere lokalno zeleni (`pnpm lint`, `pnpm typecheck`, `pnpm test`); lefthook to radi pri commitu.
 4. Sesija otvara PR (jedan korak iz `STATE.md`, do oko 400 redaka; veći PR obrazlaže zašto) i obvezno upisuje `Agent`, `Risk` i `Task` metadata iz `docs/ENGINEERING_SYSTEM.md`.
 5. PR dobiva neovisni pregled na aktualnom headu. Za `critical` PR obvezan je i zaseban QA/adversarial PASS. Za deklarirani author guard `codex` i `chatgpt` na istom slotu tretiraju se kao isti OpenAI principal (`openai:<slot>`), jer koriste isti GitHub App. Autor, reviewer i QA moraju biti različite aktivne agent-instance po governance pravilu; gate strojno provjerava da reviewer i QA dolaze iz različitih autentificiranih GitHub Appova. Autor ispravlja prihvaćene nalaze, a odbijene obrazlaže.
-6. Sesija zapisuje izvještaj u PR (predložak u §3) i staje. Direktna poruka orkestratoru je dodatna obavijest samo kad su obje sesije mogu međusobno komunicirati.
+6. Sesija zapisuje izvještaj u PR (predložak u §3) i staje. Claude sesija na istom računu uz to šalje orkestratoru jednu poruku po `docs/ORKESTRATOR.md` §5; rad s drugog računa ili providera o poruci ne ovisi.
 7. Spaja samo aktivni Ductus orkestrator, kad su CI, Engineering review gate i svi risk-specifični gateovi zeleni te PR ne čeka Danielovu odluku. Radne sesije nikad ne spajaju PR, ne mijenjaju `.claude/` postavke i ne diraju postavke repoa na GitHubu.
 8. Orkestrator ažurira `STATE.md` i dnevnik, šalje sljedeći zadatak ili arhivira sesiju (arhiviranje briše worktree).
 
@@ -84,7 +84,7 @@ Otvoreno ili blokira: <stavke ili "ništa">
 Treba Daniel: <odluka ili "ništa">
 ```
 
-Izvještaj obvezno ide u opis PR-a ili, bez PR-a, u `IZVJEŠTAJ <id>` issue. Direktna poruka orkestratoru je opcionalna optimizacija za sesije koje se međusobno vide; cross-account rad nikad ne ovisi o njoj.
+Izvještaj obvezno ide u opis PR-a ili, bez PR-a, u `IZVJEŠTAJ <id>` issue. Poruka orkestratoru šalje se po `docs/ORKESTRATOR.md` §5 kad su sesije na istom računu; ona je upućivanje na izvještaj, a cross-account rad nikad ne ovisi o njoj.
 
 ## 4. Štednja tokena
 
