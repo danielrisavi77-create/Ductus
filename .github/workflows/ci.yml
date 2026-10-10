@@ -68,8 +68,9 @@ jobs:
         run: pnpm test:db
       - run: pnpm test:integration
       - run: pnpm build
-      - name: Install Chromium
-        run: pnpm exec playwright install --with-deps chromium
+      # docs/TESTING.md 2: Chromium, Firefox and WebKit.
+      - name: Install browsers
+        run: pnpm exec playwright install --with-deps chromium firefox webkit
       - name: E2E tests
         env:
           E2E_NO_BUILD: "1"
