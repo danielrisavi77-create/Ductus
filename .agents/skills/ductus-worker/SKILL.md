@@ -27,10 +27,10 @@ Task: <task id>
 
 Use the risk classification in `docs/ENGINEERING_SYSTEM.md`; do not downgrade trust-boundary changes to reduce review work.
 
-Before handoff, run the checklist skill that matches the diff: `ductus-new-table`, `ductus-ui-copy`, `ductus-ci-change`, `ductus-sync-states`, `ductus-rules-change`, `ductus-synthetic-data`, `ductus-offline-recovery`. They add no rules; the cited documents govern.
+Before handoff, run the checklist skill that matches the diff: `ductus-new-table`, `ductus-ui-copy`, `ductus-ci-change`, `ductus-sync-states`, `ductus-rules-change`, `ductus-synthetic-data`, `ductus-local-storage-logout`, `ductus-offline-recovery`. They add no rules; the cited documents govern.
 
 When fixing review or QA findings on an open PR:
-- for each accepted finding, first add a test that fails on the current head, then the fix; never delete, skip or quarantine a test to get green (`CLAUDE.md`; `AGENTS.md` review item 4);
+- for an accepted finding that changes behavior, add or adjust a test that fails without the fix (`AGENTS.md` review item 4); never delete, skip or quarantine a test to get green (`CLAUDE.md`);
 - do not force a fix for a finding you disagree with: reject it with a reason in the `Review:` field (`docs/SESSIONS.md` §2 step 5 and §3);
 - refetch `main`, check real overlap and refresh the branch if `main` changed a file the PR touches; a stacked PR states its dependency (`docs/ENGINEERING_SYSTEM.md` §9);
 - stage with `git add <paths>` and rerun `pnpm lint`, `pnpm typecheck`, `pnpm test` (`CLAUDE.md`; `docs/SESSIONS.md` §2 step 3);
