@@ -22,9 +22,15 @@ SELECT is_empty(
        AND NOT (c.relrowsecurity AND c.relforcerowsecurity AND c.relowner = 'ductus_identity'::regrole) $$,
   'every institution table has ENABLE and FORCE ROW LEVEL SECURITY and belongs to ductus_identity'
 );
+-- The privilege lists below name the group roles. has_*_privilege counts what a
+-- role inherits, so a login that is a member of ductus_app (db/local/app-login.sql)
+-- would appear with ductus_app's rows; they are left out here with NOT rolcanlogin,
+-- and 010 checks every login (it may do nothing ductus_app may not, and holds no
+-- grant of its own).
 SELECT bag_eq(
   $$ SELECT r.rolname || ' ' || p.privilege || ' ' || c.relname
-     FROM (SELECT rolname::text FROM pg_roles WHERE rolname LIKE 'ductus\_%' AND rolname <> 'ductus_identity'
+     FROM (SELECT rolname::text FROM pg_roles
+           WHERE rolname LIKE 'ductus\_%' AND NOT rolcanlogin AND rolname <> 'ductus_identity'
            UNION ALL SELECT 'public') AS r
      CROSS JOIN pg_class c
      CROSS JOIN unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) AS p (privilege)
@@ -68,7 +74,7 @@ SELECT bag_eq(
 );
 SELECT bag_eq(
   $$ SELECT rolname::text FROM pg_roles
-     WHERE rolname LIKE 'ductus\_%' AND has_schema_privilege(rolname, 'institution', 'USAGE')
+     WHERE rolname LIKE 'ductus\_%' AND NOT rolcanlogin AND has_schema_privilege(rolname, 'institution', 'USAGE')
      UNION ALL SELECT 'public' WHERE has_schema_privilege('public', 'institution', 'USAGE') $$,
   ARRAY['ductus_app', 'ductus_identity', 'ductus_migrator'],
   'only ductus_app, the owner role and the migrator can use the institution schema'
@@ -93,7 +99,8 @@ SELECT bag_eq(
 );
 SELECT is_empty(
   $$ SELECT r.rolname || ' may execute ' || p.proname
-     FROM (SELECT rolname::text FROM pg_roles WHERE rolname LIKE 'ductus\_%' AND rolname NOT IN ('ductus_app', 'ductus_identity')
+     FROM (SELECT rolname::text FROM pg_roles
+           WHERE rolname LIKE 'ductus\_%' AND NOT rolcanlogin AND rolname NOT IN ('ductus_app', 'ductus_identity')
            UNION ALL SELECT 'public') AS r
      CROSS JOIN pg_proc p
      WHERE p.pronamespace = 'institution'::regnamespace AND has_function_privilege(r.rolname, p.oid, 'EXECUTE') $$,

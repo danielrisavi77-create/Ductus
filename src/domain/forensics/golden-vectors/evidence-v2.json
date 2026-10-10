@@ -1,0 +1,900 @@
+{
+  "vectorSchema": "ductus-golden-vectors-v1",
+  "about": [
+    "Golden vectors for canonicalization and hashing of Ductus evidence v2 (DAN-127). All data is invented.",
+    "The file is ASCII: every non-ASCII character is written as a \\u escape. Read it with a JSON parser from the file bytes, not through a bundler import, which may rewrite keys such as __proto__.",
+    "The expected values were derived outside the repository (RFC texts, hand-written canonical strings, an independent implementation). Never regenerate them from the code under test: a change that alters any value is a change of the evidence contract."
+  ],
+  "definitions": {
+    "canonicalBytes": "UTF-8 encoding of the RFC 8785 (JCS) serialization of a JSON value. No Unicode normalization. A lone surrogate or a non-finite number has no canonical form.",
+    "documentHash": "Lowercase hex SHA-256 of the canonical bytes of the canonical document JSON.",
+    "segmentHash": "Lowercase hex SHA-256 of the canonical bytes of an evidence segment v2. The server hashes the bytes it received and accepts them only when they are the canonical bytes of a valid segment.",
+    "chain": "predecessorSegmentHash is the segmentHash of the segment accepted before it, null for the first. The head is the last segmentHash together with the number of segments.",
+    "receiptDigest": "Lowercase hex SHA-256 of the canonical bytes of the receipt payload v1 (payloadDigestSha256).",
+    "receiptSignatureV1": "Ed25519 (RFC 8032, pure) over the canonical bytes of the receipt payload v1; raw 64-byte signature, base64url without padding. Decision D-92 replaces this for receipt v2."
+  },
+  "jcs": {
+    "accepted": [
+      {
+        "name": "rfc8785-primitives",
+        "class": "published",
+        "note": "RFC 8785 3.2.2 to 3.2.4; the expected bytes are the hex dump printed in 3.2.4.",
+        "input": {"numbers": [333333333.33333329, 1E30, 4.50, 2e-3, 0.000000000000000000000000001], "string": "\u20ac$\u000F\u000aA'\u0042\u0022\u005c\\\"\/", "literals": [null, true, false]},
+        "canonical": "{\"literals\":[null,true,false],\"numbers\":[333333333.3333333,1e+30,4.5,0.002,1e-27],\"string\":\"\u20ac$\\u000f\\nA'B\\\"\\\\\\\\\\\"/\"}",
+        "utf8Hex": "7b226c69746572616c73223a5b6e756c6c2c747275652c66616c73655d2c226e756d62657273223a5b3333333333333333332e333333333333332c31652b33302c342e352c302e3030322c31652d32375d2c22737472696e67223a22e282ac245c75303030665c6e4127425c225c5c5c5c5c222f227d",
+        "sha256": "2d5e01a318d0f0879ab568c4be289c8b1f64ef8921a53c6277d5e069978baacb"
+      },
+      {
+        "name": "rfc8785-sorting",
+        "class": "published",
+        "note": "RFC 8785 3.2.3; the RFC prints the expected order of the values.",
+        "input": {"\u20ac": "Euro Sign", "\r": "Carriage Return", "\ufb33": "Hebrew Letter Dalet With Dagesh", "1": "One", "\ud83d\ude00": "Emoji: Grinning Face", "\u0080": "Control", "\u00f6": "Latin Small Letter O With Diaeresis"},
+        "canonical": "{\"\\r\":\"Carriage Return\",\"1\":\"One\",\"\u0080\":\"Control\",\"\u00f6\":\"Latin Small Letter O With Diaeresis\",\"\u20ac\":\"Euro Sign\",\"\ud83d\ude00\":\"Emoji: Grinning Face\",\"\ufb33\":\"Hebrew Letter Dalet With Dagesh\"}",
+        "utf8Hex": "7b225c72223a2243617272696167652052657475726e222c2231223a224f6e65222c22c280223a22436f6e74726f6c222c22c3b6223a224c6174696e20536d616c6c204c6574746572204f205769746820446961657265736973222c22e282ac223a224575726f205369676e222c22f09f9880223a22456d6f6a693a204772696e6e696e672046616365222c22efacb3223a22486562726577204c65747465722044616c6574205769746820446167657368227d",
+        "sha256": "5e321556d22018a9656991a9e94f77ec175fa193e52a2429d312f8419ec8b08c"
+      },
+      {
+        "name": "key-order-utf16-not-code-point",
+        "class": "key-order",
+        "note": "U+1F600 is D83D DE00 in UTF-16 and sorts before U+FF5E; by code point it would sort after.",
+        "input": {"\uff5e": 2, "\ud83d\ude00": 1},
+        "canonical": "{\"\ud83d\ude00\":1,\"\uff5e\":2}",
+        "utf8Hex": "7b22f09f9880223a312c22efbd9e223a327d",
+        "sha256": "5848fd4854a6ce2c6f23359368eef2f1a8d667176e91a9b74a92b7086fa7b207"
+      },
+      {
+        "name": "key-order-prefix-and-empty-key",
+        "class": "key-order",
+        "note": "A shorter key precedes its extensions; the empty key is first.",
+        "input": {"ab": 1, "": 2, "aa": 3, "a": 4},
+        "canonical": "{\"\":2,\"a\":4,\"aa\":3,\"ab\":1}",
+        "utf8Hex": "7b22223a322c2261223a342c226161223a332c226162223a317d",
+        "sha256": "41f1e45da14d27a56c944d70a102079f83d66e8e5164b5338a5ee53dcab32d71"
+      },
+      {
+        "name": "key-order-integer-like-keys",
+        "class": "key-order",
+        "note": "Keys are strings: no numeric order, although JavaScript enumerates such keys numerically.",
+        "input": {"10": 1, "9": 2, "1": 3, "02": 4, "2": 5},
+        "canonical": "{\"02\":4,\"1\":3,\"10\":1,\"2\":5,\"9\":2}",
+        "utf8Hex": "7b223032223a342c2231223a332c223130223a312c2232223a352c2239223a327d",
+        "sha256": "089bf13fc67706f305e3ca059c2e42fad827996fa17e1c1062b50e7350f65a51"
+      },
+      {
+        "name": "key-order-case-and-punctuation",
+        "class": "key-order",
+        "note": "Plain code unit order: - A B _ a b.",
+        "input": {"b": 1, "B": 2, "_": 3, "a": 4, "A": 5, "-": 6},
+        "canonical": "{\"-\":6,\"A\":5,\"B\":2,\"_\":3,\"a\":4,\"b\":1}",
+        "utf8Hex": "7b222d223a362c2241223a352c2242223a322c225f223a332c2261223a342c2262223a317d",
+        "sha256": "27813f71013ee06898bbc4e7843a299f5772d895aa6b6c15ad83b078429b9d86"
+      },
+      {
+        "name": "key-order-prototype-names",
+        "class": "key-order",
+        "note": "__proto__ and friends are ordinary own keys.",
+        "input": {"constructor": 1, "__proto__": 2, "toString": 3, "hasOwnProperty": 4},
+        "canonical": "{\"__proto__\":2,\"constructor\":1,\"hasOwnProperty\":4,\"toString\":3}",
+        "utf8Hex": "7b225f5f70726f746f5f5f223a322c22636f6e7374727563746f72223a312c226861734f776e50726f7065727479223a342c22746f537472696e67223a337d",
+        "sha256": "3dd3e70e50671dff7787bdd457d68faf3694a99ee9db025c5085bc06f6e606c9"
+      },
+      {
+        "name": "key-order-escaped-keys",
+        "class": "key-order",
+        "note": "Keys are sorted in raw form and escaped afterwards.",
+        "input": {"\n": 1, "\"": 2, "\\": 3, "\u0000": 4},
+        "canonical": "{\"\\u0000\":4,\"\\n\":1,\"\\\"\":2,\"\\\\\":3}",
+        "utf8Hex": "7b225c7530303030223a342c225c6e223a312c225c22223a322c225c5c223a337d",
+        "sha256": "485d4f3acf677f4a71261f449e08cbbe4f105b17c697b61f4756716dcb5cbc2d"
+      },
+      {
+        "name": "key-order-croatian-letters",
+        "class": "key-order",
+        "note": "Locale independent: not the Croatian alphabetical order.",
+        "input": {"\u0161": 1, "s": 2, "z": 3, "\u017e": 4, "\u010d": 5, "c": 6, "\u0111": 7, "d": 8},
+        "canonical": "{\"c\":6,\"d\":8,\"s\":2,\"z\":3,\"\u010d\":5,\"\u0111\":7,\"\u0161\":1,\"\u017e\":4}",
+        "utf8Hex": "7b2263223a362c2264223a382c2273223a322c227a223a332c22c48d223a352c22c491223a372c22c5a1223a312c22c5be223a347d",
+        "sha256": "4ce257cb01794f557e9547c39f59134f729410df65344ee18cae5b583a60d8fe"
+      },
+      {
+        "name": "key-order-recursive-arrays-kept",
+        "class": "key-order",
+        "note": "Objects are sorted at every level; array order is kept.",
+        "input": {"b": [{"z": 1, "y": 2}, 3, 1, 2], "a": {"d": null, "c": true}},
+        "canonical": "{\"a\":{\"c\":true,\"d\":null},\"b\":[{\"y\":2,\"z\":1},3,1,2]}",
+        "utf8Hex": "7b2261223a7b2263223a747275652c2264223a6e756c6c7d2c2262223a5b7b2279223a322c227a223a317d2c332c312c325d7d",
+        "sha256": "766b0e2b0e3fb1de843d284f4660524d98eed4090fac21f8ce033b7eedd4f3ca"
+      },
+      {
+        "name": "unicode-nfc-and-nfd-stay-distinct",
+        "class": "unicode",
+        "note": "No normalization: U+010D and c + U+030C are different bytes, as values and as keys.",
+        "input": {"\u010d": "nfc", "c\u030c": "nfd", "values": ["\u010d", "c\u030c"]},
+        "canonical": "{\"c\u030c\":\"nfd\",\"values\":[\"\u010d\",\"c\u030c\"],\"\u010d\":\"nfc\"}",
+        "utf8Hex": "7b2263cc8c223a226e6664222c2276616c756573223a5b22c48d222c2263cc8c225d2c22c48d223a226e6663227d",
+        "sha256": "e8520577f6f577509d2c8d3cd327792f692a8eb72e94a0a85a34df89e062f4a6"
+      },
+      {
+        "name": "unicode-control-characters",
+        "class": "unicode",
+        "note": "U+0000 to U+001F use the short escapes or lowercase \\u00xx; U+007F, U+0080, U+2028 and U+2029 are not escaped.",
+        "input": "\u0000\u0001\u0002\u0003\u0004\u0005\u0006\u0007\u0008\u0009\u000A\u000B\u000C\u000D\u000E\u000F\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001A\u001B\u001C\u001D\u001E\u001F\u007F\u0080\u2028\u2029",
+        "canonical": "\"\\u0000\\u0001\\u0002\\u0003\\u0004\\u0005\\u0006\\u0007\\b\\t\\n\\u000b\\f\\r\\u000e\\u000f\\u0010\\u0011\\u0012\\u0013\\u0014\\u0015\\u0016\\u0017\\u0018\\u0019\\u001a\\u001b\\u001c\\u001d\\u001e\\u001f\u007f\u0080\u2028\u2029\"",
+        "utf8Hex": "225c75303030305c75303030315c75303030325c75303030335c75303030345c75303030355c75303030365c75303030375c625c745c6e5c75303030625c665c725c75303030655c75303030665c75303031305c75303031315c75303031325c75303031335c75303031345c75303031355c75303031365c75303031375c75303031385c75303031395c75303031615c75303031625c75303031635c75303031645c75303031655c75303031667fc280e280a8e280a922",
+        "sha256": "589cd2ec819c19f5d9a91e23d3e51e26e71b5bfb9333db29476fc253fe7a5ed3"
+      },
+      {
+        "name": "unicode-quote-backslash-solidus",
+        "class": "unicode",
+        "note": "Only the quote and the backslash are escaped.",
+        "input": "\"\\\/<>&'",
+        "canonical": "\"\\\"\\\\/<>&'\"",
+        "utf8Hex": "225c225c5c2f3c3e262722",
+        "sha256": "cb63ddc6fcc956ad841db4b79db6f25ec9aff4737e72f478bc1e32f2d8f0af6d"
+      },
+      {
+        "name": "unicode-astral-and-bmp-edges",
+        "class": "unicode",
+        "note": "Valid pairs and BMP edges pass unchanged: U+1F600, U+FFFF, U+FEFF, U+FFFD, U+E000, U+D7FF, U+10FFFF, ZWJ, RLO.",
+        "input": "\ud83d\ude00\uffff\ufeff\ufffd\ue000\ud7ff\udbff\udfff\u200d\u202e",
+        "canonical": "\"\ud83d\ude00\uffff\ufeff\ufffd\ue000\ud7ff\udbff\udfff\u200d\u202e\"",
+        "utf8Hex": "22f09f9880efbfbfefbbbfefbfbdee8080ed9fbff48fbfbfe2808de280ae22",
+        "sha256": "b1f647730526554feeb1d81fd230d950046d6fcb183258bd58f43053b99ce4ee"
+      },
+      {
+        "name": "unicode-croatian-text",
+        "class": "unicode",
+        "note": "Invented sentence with Croatian letters.",
+        "input": {"tekst": "Izmi\u0161ljeni odlomak: \u010d\u0107\u0111\u0161\u017e \u010c\u0106\u0110\u0160\u017d."},
+        "canonical": "{\"tekst\":\"Izmi\u0161ljeni odlomak: \u010d\u0107\u0111\u0161\u017e \u010c\u0106\u0110\u0160\u017d.\"}",
+        "utf8Hex": "7b2274656b7374223a22497a6d69c5a16c6a656e69206f646c6f6d616b3a20c48dc487c491c5a1c5be20c48cc486c490c5a0c5bd2e227d",
+        "sha256": "442710f6472baa3ad7903838176dd4030e71af871be7b24fa12c198fd4cabd5b"
+      },
+      {
+        "name": "numbers-same-value-different-spelling",
+        "class": "numbers",
+        "note": "The spelling of the input does not survive.",
+        "input": [1.0, 1e0, 10E-1, 100e-2, -0, -0.0, 0e5, 1E3, 1.50, 0.1e1],
+        "canonical": "[1,1,1,1,0,0,0,1000,1.5,1]",
+        "utf8Hex": "5b312c312c312c312c302c302c302c313030302c312e352c315d",
+        "sha256": "b92288edb45001bfd80f61e7c9693f7505e8d80ba63a3f7e0ff3755beefccd75"
+      },
+      {
+        "name": "numbers-exponent-thresholds",
+        "class": "numbers",
+        "note": "Exponent form starts at 1e21 and at 1e-7.",
+        "input": [1e20, 1e21, 123456789012345678901, 1e-6, 1e-7, 0.00001, 0.000001234, 1.5e-7],
+        "canonical": "[100000000000000000000,1e+21,123456789012345680000,0.000001,1e-7,0.00001,0.000001234,1.5e-7]",
+        "utf8Hex": "5b3130303030303030303030303030303030303030302c31652b32312c3132333435363738393031323334353638303030302c302e3030303030312c31652d372c302e30303030312c302e3030303030313233342c312e35652d375d",
+        "sha256": "7c98723126a383f5c613686ad5aadfa7d0b466cfd30daf569158034f4dfdbf50"
+      },
+      {
+        "name": "numbers-precision-edges",
+        "class": "numbers",
+        "note": "2^53 and its neighbours, classic binary fractions, the largest and smallest doubles.",
+        "input": [9007199254740991, 9007199254740992, 9007199254740993, -9007199254740993, 4294967296, 0.1, 0.2, 0.30000000000000004, 1.7976931348623157e308, 5e-324, 2.2250738585072014e-308],
+        "canonical": "[9007199254740991,9007199254740992,9007199254740992,-9007199254740992,4294967296,0.1,0.2,0.30000000000000004,1.7976931348623157e+308,5e-324,2.2250738585072014e-308]",
+        "utf8Hex": "5b393030373139393235343734303939312c393030373139393235343734303939322c393030373139393235343734303939322c2d393030373139393235343734303939322c343239343936373239362c302e312c302e322c302e33303030303030303030303030303030342c312e37393736393331333438363233313537652b3330382c35652d3332342c322e32323530373338353835303732303134652d3330385d",
+        "sha256": "897a5b0ddb387255e4acf1c733693ab2a23a88a1be473faa04054ac61a16d978"
+      },
+      {
+        "name": "empty-containers-and-strings",
+        "class": "empty",
+        "note": "Empty object, array, string and key, alone and nested.",
+        "input": {"a": {}, "b": [], "c": "", "d": null, "e": [[], {}, "", null, [{}]], "": ""},
+        "canonical": "{\"\":\"\",\"a\":{},\"b\":[],\"c\":\"\",\"d\":null,\"e\":[[],{},\"\",null,[{}]]}",
+        "utf8Hex": "7b22223a22222c2261223a7b7d2c2262223a5b5d2c2263223a22222c2264223a6e756c6c2c2265223a5b5b5d2c7b7d2c22222c6e756c6c2c5b7b7d5d5d7d",
+        "sha256": "2b02c5528bbcc62b00e39adad937379d6a1a54d7a6f571f04c41812c09d68a6a"
+      },
+      {
+        "name": "empty-top-level-null",
+        "class": "empty",
+        "note": "A scalar at the top level.",
+        "input": null,
+        "canonical": "null",
+        "utf8Hex": "6e756c6c",
+        "sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+      },
+      {
+        "name": "empty-top-level-string",
+        "class": "empty",
+        "note": "A scalar at the top level.",
+        "input": "",
+        "canonical": "\"\"",
+        "utf8Hex": "2222",
+        "sha256": "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126"
+      },
+      {
+        "name": "empty-top-level-false",
+        "class": "empty",
+        "note": "A scalar at the top level.",
+        "input": false,
+        "canonical": "false",
+        "utf8Hex": "66616c7365",
+        "sha256": "fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa"
+      },
+      {
+        "name": "empty-top-level-zero",
+        "class": "empty",
+        "note": "A scalar at the top level.",
+        "input": 0,
+        "canonical": "0",
+        "utf8Hex": "30",
+        "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+      },
+      {
+        "name": "empty-top-level-array",
+        "class": "empty",
+        "note": "An empty container at the top level.",
+        "input": [ ],
+        "canonical": "[]",
+        "utf8Hex": "5b5d",
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      {
+        "name": "empty-top-level-object",
+        "class": "empty",
+        "note": "An empty container at the top level.",
+        "input": { },
+        "canonical": "{}",
+        "utf8Hex": "7b7d",
+        "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+      },
+      {
+        "name": "nesting-64-arrays",
+        "class": "nesting",
+        "note": "64 nested arrays.",
+        "input": [[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]],
+        "canonical": "[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]",
+        "utf8Hex": "5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d",
+        "sha256": "b3ff3b51ce17ef2a2a68203329ff0e73738c07df874044149c283b28841a0035"
+      },
+      {
+        "name": "nesting-32-objects-and-arrays",
+        "class": "nesting",
+        "note": "32 levels of object and array, keys out of order at every level.",
+        "input": {"z": [{"z": [{"z": [{"z": [{"z": [{"z": [{"z": [{"z": [{"z": [{"z": [{"z": [{"z": [{"z": [{"z": [{"z": [{"z": [1], "a": 16}], "a": 15}], "a": 14}], "a": 13}], "a": 12}], "a": 11}], "a": 10}], "a": 9}], "a": 8}], "a": 7}], "a": 6}], "a": 5}], "a": 4}], "a": 3}], "a": 2}], "a": 1},
+        "canonical": "{\"a\":1,\"z\":[{\"a\":2,\"z\":[{\"a\":3,\"z\":[{\"a\":4,\"z\":[{\"a\":5,\"z\":[{\"a\":6,\"z\":[{\"a\":7,\"z\":[{\"a\":8,\"z\":[{\"a\":9,\"z\":[{\"a\":10,\"z\":[{\"a\":11,\"z\":[{\"a\":12,\"z\":[{\"a\":13,\"z\":[{\"a\":14,\"z\":[{\"a\":15,\"z\":[{\"a\":16,\"z\":[1]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}",
+        "utf8Hex": "7b2261223a312c227a223a5b7b2261223a322c227a223a5b7b2261223a332c227a223a5b7b2261223a342c227a223a5b7b2261223a352c227a223a5b7b2261223a362c227a223a5b7b2261223a372c227a223a5b7b2261223a382c227a223a5b7b2261223a392c227a223a5b7b2261223a31302c227a223a5b7b2261223a31312c227a223a5b7b2261223a31322c227a223a5b7b2261223a31332c227a223a5b7b2261223a31342c227a223a5b7b2261223a31352c227a223a5b7b2261223a31362c227a223a5b315d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d",
+        "sha256": "83030c09f17452d0ca6cbe866b12a8e7881237f1246d1fedd26506f3b5453422"
+      },
+      {
+        "name": "unknown-keys-are-kept",
+        "class": "unknown-fields",
+        "note": "The canonicalizer keeps every key; rejecting unknown fields is the job of the validators.",
+        "input": {"evidenceSchema": "ductus-evidence-segment-v2", "zzNepoznato": true, "_skriveno": null, "Extra": [1]},
+        "canonical": "{\"Extra\":[1],\"_skriveno\":null,\"evidenceSchema\":\"ductus-evidence-segment-v2\",\"zzNepoznato\":true}",
+        "utf8Hex": "7b224578747261223a5b315d2c225f736b726976656e6f223a6e756c6c2c2265766964656e6365536368656d61223a226475637475732d65766964656e63652d7365676d656e742d7632222c227a7a4e65706f7a6e61746f223a747275657d",
+        "sha256": "f752ab182f6cb187e1e0fac39f5047ac04656eeb272b744fc61b8828cb1770ad"
+      }
+    ],
+    "numbers": [
+      {"ieee754": "0000000000000000", "canonical": "0"},
+      {"ieee754": "8000000000000000", "canonical": "0"},
+      {"ieee754": "0000000000000001", "canonical": "5e-324"},
+      {"ieee754": "8000000000000001", "canonical": "-5e-324"},
+      {"ieee754": "7fefffffffffffff", "canonical": "1.7976931348623157e+308"},
+      {"ieee754": "ffefffffffffffff", "canonical": "-1.7976931348623157e+308"},
+      {"ieee754": "4340000000000000", "canonical": "9007199254740992"},
+      {"ieee754": "c340000000000000", "canonical": "-9007199254740992"},
+      {"ieee754": "4430000000000000", "canonical": "295147905179352830000"},
+      {"ieee754": "7fffffffffffffff", "rejects": "non-finite number"},
+      {"ieee754": "7ff0000000000000", "rejects": "non-finite number"},
+      {"ieee754": "44b52d02c7e14af5", "canonical": "9.999999999999997e+22"},
+      {"ieee754": "44b52d02c7e14af6", "canonical": "1e+23"},
+      {"ieee754": "44b52d02c7e14af7", "canonical": "1.0000000000000001e+23"},
+      {"ieee754": "444b1ae4d6e2ef4e", "canonical": "999999999999999700000"},
+      {"ieee754": "444b1ae4d6e2ef4f", "canonical": "999999999999999900000"},
+      {"ieee754": "444b1ae4d6e2ef50", "canonical": "1e+21"},
+      {"ieee754": "3eb0c6f7a0b5ed8c", "canonical": "9.999999999999997e-7"},
+      {"ieee754": "3eb0c6f7a0b5ed8d", "canonical": "0.000001"},
+      {"ieee754": "41b3de4355555553", "canonical": "333333333.3333332"},
+      {"ieee754": "41b3de4355555554", "canonical": "333333333.33333325"},
+      {"ieee754": "41b3de4355555555", "canonical": "333333333.3333333"},
+      {"ieee754": "41b3de4355555556", "canonical": "333333333.3333334"},
+      {"ieee754": "41b3de4355555557", "canonical": "333333333.33333343"},
+      {"ieee754": "becbf647612f3696", "canonical": "-0.0000033333333333333333"},
+      {"ieee754": "43143ff3c1cb0959", "canonical": "1424953923781206.2"}
+    ],
+    "rejected": [
+      {
+        "name": "surrogate-lone-high",
+        "class": "unicode",
+        "note": "A high surrogate with nothing after it.",
+        "input": "\ud800",
+        "rejects": "lone surrogate"
+      },
+      {
+        "name": "surrogate-lone-low",
+        "class": "unicode",
+        "note": "A low surrogate with nothing before it.",
+        "input": "\udc00",
+        "rejects": "lone surrogate"
+      },
+      {
+        "name": "surrogate-reversed-pair",
+        "class": "unicode",
+        "note": "Low then high.",
+        "input": "\ude00\ud83d",
+        "rejects": "lone surrogate"
+      },
+      {
+        "name": "surrogate-high-at-end-of-text",
+        "class": "unicode",
+        "note": "Text cut in the middle of a pair.",
+        "input": "Izmi\u0161ljeno \ud83d",
+        "rejects": "lone surrogate"
+      },
+      {
+        "name": "surrogate-high-before-bmp",
+        "class": "unicode",
+        "note": "A high surrogate followed by an ordinary character.",
+        "input": "\ud83dx",
+        "rejects": "lone surrogate"
+      },
+      {
+        "name": "surrogate-in-key",
+        "class": "unicode",
+        "note": "Keys are checked like values.",
+        "input": {"\udfff": 1},
+        "rejects": "lone surrogate"
+      },
+      {
+        "name": "surrogate-nested",
+        "class": "unicode",
+        "note": "Deep inside the value.",
+        "input": [[{"a": ["ok", "\ud800"]}]],
+        "rejects": "lone surrogate"
+      },
+      {
+        "name": "number-overflow",
+        "class": "numbers",
+        "note": "A JSON number beyond the double range parses to Infinity.",
+        "input": 1e999,
+        "rejects": "non-finite number"
+      },
+      {
+        "name": "number-negative-overflow-nested",
+        "class": "numbers",
+        "note": "The same, negative and nested.",
+        "input": {"a": [-1e999]},
+        "rejects": "non-finite number"
+      }
+    ]
+  },
+  "documents": [
+    {
+      "name": "editor-like-document",
+      "note": "An invented document in an editor-like JSON shape. The vector fixes the JCS form and the hash of this JSON value only; how the editor serializes its model is not defined here.",
+      "value": {"type": "doc", "content": [{"type": "heading", "attrs": {"level": 1, "id": "naslov-1"}, "content": [{"type": "text", "text": "Izmi\u0161ljeni naslov"}]}, {"type": "paragraph", "attrs": {"id": "odlomak-1"}, "content": [{"type": "text", "text": "Prva re\u010denica. "}, {"type": "text", "marks": [{"type": "bold"}], "text": "Istaknuto"}, {"type": "text", "marks": [{"type": "italic"}], "text": " i nagla\u0161eno."}]}, {"type": "paragraph", "attrs": {"id": "odlomak-2"}}]},
+      "utf8Hex": "7b22636f6e74656e74223a5b7b226174747273223a7b226964223a226e61736c6f762d31222c226c6576656c223a317d2c22636f6e74656e74223a5b7b2274657874223a22497a6d69c5a16c6a656e69206e61736c6f76222c2274797065223a2274657874227d5d2c2274797065223a2268656164696e67227d2c7b226174747273223a7b226964223a226f646c6f6d616b2d31227d2c22636f6e74656e74223a5b7b2274657874223a2250727661207265c48d656e6963612e20222c2274797065223a2274657874227d2c7b226d61726b73223a5b7b2274797065223a22626f6c64227d5d2c2274657874223a22497374616b6e75746f222c2274797065223a2274657874227d2c7b226d61726b73223a5b7b2274797065223a226974616c6963227d5d2c2274657874223a222069206e61676c61c5a1656e6f2e222c2274797065223a2274657874227d5d2c2274797065223a22706172616772617068227d2c7b226174747273223a7b226964223a226f646c6f6d616b2d32227d2c2274797065223a22706172616772617068227d5d2c2274797065223a22646f63227d",
+      "sha256": "0682232a88d60715e623e5c04e1706665d1ea95bb96cbdccee3297b10b2108b4"
+    },
+    {
+      "name": "editor-like-document-reordered",
+      "note": "The same value with other key order and 1.0 for 1: same bytes, same hash.",
+      "value": {"content": [{"content": [{"text": "Izmi\u0161ljeni naslov", "type": "text"}], "type": "heading", "attrs": {"id": "naslov-1", "level": 1.0}}, {"content": [{"text": "Prva re\u010denica. ", "type": "text"}, {"text": "Istaknuto", "type": "text", "marks": [{"type": "bold"}]}, {"text": " i nagla\u0161eno.", "marks": [{"type": "italic"}], "type": "text"}], "attrs": {"id": "odlomak-1"}, "type": "paragraph"}, {"attrs": {"id": "odlomak-2"}, "type": "paragraph"}], "type": "doc"},
+      "utf8Hex": "7b22636f6e74656e74223a5b7b226174747273223a7b226964223a226e61736c6f762d31222c226c6576656c223a317d2c22636f6e74656e74223a5b7b2274657874223a22497a6d69c5a16c6a656e69206e61736c6f76222c2274797065223a2274657874227d5d2c2274797065223a2268656164696e67227d2c7b226174747273223a7b226964223a226f646c6f6d616b2d31227d2c22636f6e74656e74223a5b7b2274657874223a2250727661207265c48d656e6963612e20222c2274797065223a2274657874227d2c7b226d61726b73223a5b7b2274797065223a22626f6c64227d5d2c2274657874223a22497374616b6e75746f222c2274797065223a2274657874227d2c7b226d61726b73223a5b7b2274797065223a226974616c6963227d5d2c2274657874223a222069206e61676c61c5a1656e6f2e222c2274797065223a2274657874227d5d2c2274797065223a22706172616772617068227d2c7b226174747273223a7b226964223a226f646c6f6d616b2d32227d2c2274797065223a22706172616772617068227d5d2c2274797065223a22646f63227d",
+      "sha256": "0682232a88d60715e623e5c04e1706665d1ea95bb96cbdccee3297b10b2108b4"
+    },
+    {
+      "name": "editor-like-document-nfd",
+      "note": "One letter decomposed (c + U+030C): another document, another hash.",
+      "value": {"type": "doc", "content": [{"type": "heading", "attrs": {"level": 1, "id": "naslov-1"}, "content": [{"type": "text", "text": "Izmi\u0161ljeni naslov"}]}, {"type": "paragraph", "attrs": {"id": "odlomak-1"}, "content": [{"type": "text", "text": "Prva rec\u030cenica. "}, {"type": "text", "marks": [{"type": "bold"}], "text": "Istaknuto"}, {"type": "text", "marks": [{"type": "italic"}], "text": " i nagla\u0161eno."}]}, {"type": "paragraph", "attrs": {"id": "odlomak-2"}}]},
+      "utf8Hex": "7b22636f6e74656e74223a5b7b226174747273223a7b226964223a226e61736c6f762d31222c226c6576656c223a317d2c22636f6e74656e74223a5b7b2274657874223a22497a6d69c5a16c6a656e69206e61736c6f76222c2274797065223a2274657874227d5d2c2274797065223a2268656164696e67227d2c7b226174747273223a7b226964223a226f646c6f6d616b2d31227d2c22636f6e74656e74223a5b7b2274657874223a225072766120726563cc8c656e6963612e20222c2274797065223a2274657874227d2c7b226d61726b73223a5b7b2274797065223a22626f6c64227d5d2c2274657874223a22497374616b6e75746f222c2274797065223a2274657874227d2c7b226d61726b73223a5b7b2274797065223a226974616c6963227d5d2c2274657874223a222069206e61676c61c5a1656e6f2e222c2274797065223a2274657874227d5d2c2274797065223a22706172616772617068227d2c7b226174747273223a7b226964223a226f646c6f6d616b2d32227d2c2274797065223a22706172616772617068227d5d2c2274797065223a22646f63227d",
+      "sha256": "55b29e4dfd9d68ec0358c8fa859fe20abfce7a8514e55862dacd0bcbe640bd7d"
+    }
+  ],
+  "chain": {
+    "note": "Two chained segments from the empty document to a signed receipt for each. Steps use an invented test format: insert-text at a UTF-16 offset of the text of one node. Receipts are signed with the Ed25519 test key published as TEST 1 in RFC 8032 section 7.1; only its public half is stored here. signingSeedSha256 is the SHA-256 of the 32 private bytes printed in the RFC, so that a test can show those bytes are in none of the vector files.",
+    "evidencePackageId": "paket-izmisljeni-zv-1",
+    "principalId": "student-izmisljeni-zv-1",
+    "documentStates": [
+      {
+        "afterSequence": 0,
+        "value": {"nodes": [{"id": "odlomak-1", "text": ""}, {"id": "odlomak-2", "text": ""}]},
+        "sha256": "46a9629e23fd207ac230d6c042b02d41cc86e67d684ffa2efa9a318fd19ddcc7"
+      },
+      {
+        "afterSequence": 1,
+        "value": {
+          "nodes": [
+            {"id": "odlomak-1", "text": "Izmi\u0161ljeni po\u010detak o \u010daju i \u0161umi. "},
+            {"id": "odlomak-2", "text": ""}
+          ]
+        },
+        "sha256": "02cacd5367d280c5ae0a79bc92610d75ba7ff02d02468924c4e7d71594188c29"
+      },
+      {
+        "afterSequence": 2,
+        "value": {
+          "nodes": [
+            {
+              "id": "odlomak-1",
+              "text": "\u0110: Izmi\u0161ljeni po\u010detak o \u010daju i \u0161umi. Zalijepljeni dio \ud83d\ude00. "
+            },
+            {"id": "odlomak-2", "text": ""}
+          ]
+        },
+        "sha256": "9a265c881a46a2fe0783783f0f39376f93048a5053710d79852f532728bfcf88"
+      },
+      {
+        "afterSequence": 3,
+        "value": {
+          "nodes": [
+            {
+              "id": "odlomak-1",
+              "text": "\u0110: Izmi\u0161ljeni po\u010detak o \u010daju i \u0161umi. Zalijepljeni dio \ud83d\ude00. "
+            },
+            {"id": "odlomak-2", "text": "Zavr\u0161etak s razdvojenim znakom c\u030c."}
+          ]
+        },
+        "sha256": "c99e5bd9a3da0bc57aaec6b3801c7ae1eeaeeeef78f24f76232ca5b3b9fd6e26"
+      }
+    ],
+    "expectedDocumentReordered": {
+      "nodes": [
+        {
+          "text": "\u0110: Izmi\u0161ljeni po\u010detak o \u010daju i \u0161umi. Zalijepljeni dio \ud83d\ude00. ",
+          "id": "odlomak-1"
+        },
+        {"text": "Zavr\u0161etak s razdvojenim znakom c\u030c.", "id": "odlomak-2"}
+      ]
+    },
+    "segments": [
+      {
+        "clientRequestId": "zahtjev-zv-1",
+        "segment": {
+          "evidenceSchema": "ductus-evidence-segment-v2",
+          "canonicalization": "RFC8785-JCS",
+          "hashAlgorithm": "sha256",
+          "documentId": "dokument-izmisljeni-zv-1",
+          "sessionId": "sesija-izmisljena-zv-1",
+          "segmentId": "odsjecak-zv-1",
+          "sequenceFrom": 1,
+          "sequenceTo": 2,
+          "observedStartedAt": "2026-10-12T08:01:00.000Z",
+          "observedEndedAt": "2026-10-12T08:01:30.000Z",
+          "initialDocumentHash": "46a9629e23fd207ac230d6c042b02d41cc86e67d684ffa2efa9a318fd19ddcc7",
+          "finalDocumentHash": "9a265c881a46a2fe0783783f0f39376f93048a5053710d79852f532728bfcf88",
+          "predecessorSegmentHash": null,
+          "events": [
+            {
+              "sequence": 1,
+              "occurredAt": "2026-10-12T08:01:01.000Z",
+              "elapsedMs": 0,
+              "source": "editor",
+              "steps": [
+                {
+                  "kind": "insert-text",
+                  "nodeId": "odlomak-1",
+                  "offset": 0,
+                  "text": "Izmi\u0161ljeni po\u010detak o \u010daju i \u0161umi. "
+                }
+              ],
+              "touchedNodeIds": ["odlomak-1"],
+              "beforeDocumentHash": "46a9629e23fd207ac230d6c042b02d41cc86e67d684ffa2efa9a318fd19ddcc7",
+              "afterDocumentHash": "02cacd5367d280c5ae0a79bc92610d75ba7ff02d02468924c4e7d71594188c29"
+            },
+            {
+              "sequence": 2,
+              "occurredAt": "2026-10-12T08:01:02.250Z",
+              "elapsedMs": 1250.5,
+              "source": "paste",
+              "steps": [
+                {
+                  "kind": "insert-text",
+                  "nodeId": "odlomak-1",
+                  "offset": 34,
+                  "text": "Zalijepljeni dio \ud83d\ude00. "
+                },
+                {"kind": "insert-text", "nodeId": "odlomak-1", "offset": 0, "text": "\u0110: "}
+              ],
+              "touchedNodeIds": ["odlomak-1"],
+              "beforeDocumentHash": "02cacd5367d280c5ae0a79bc92610d75ba7ff02d02468924c4e7d71594188c29",
+              "afterDocumentHash": "9a265c881a46a2fe0783783f0f39376f93048a5053710d79852f532728bfcf88"
+            }
+          ],
+          "captureContext": {"editorModel": "test-text-nodes", "transactionFormat": "ductus-test-insert-text-v0"},
+          "evidenceProfileId": "standard-v1"
+        },
+        "canonicalUtf8Hex": "7b2263616e6f6e6963616c697a6174696f6e223a22524643383738352d4a4353222c2263617074757265436f6e74657874223a7b22656469746f724d6f64656c223a22746573742d746578742d6e6f646573222c227472616e73616374696f6e466f726d6174223a226475637475732d746573742d696e736572742d746578742d7630227d2c22646f63756d656e744964223a22646f6b756d656e742d697a6d69736c6a656e692d7a762d31222c226576656e7473223a5b7b226166746572446f63756d656e7448617368223a2230326361636435333637643238306335616530613739626339323631306437356261376666303264303234363839323463346537643731353934313838633239222c226265666f7265446f63756d656e7448617368223a2234366139363239653233666432303761633233306436633034326230326434316363383665363764363834666661326566613961333138666431396464636337222c22656c61707365644d73223a302c226f636375727265644174223a22323032362d31302d31325430383a30313a30312e3030305a222c2273657175656e6365223a312c22736f75726365223a22656469746f72222c227374657073223a5b7b226b696e64223a22696e736572742d74657874222c226e6f64654964223a226f646c6f6d616b2d31222c226f6666736574223a302c2274657874223a22497a6d69c5a16c6a656e6920706fc48d6574616b206f20c48d616a75206920c5a1756d692e20227d5d2c22746f75636865644e6f6465496473223a5b226f646c6f6d616b2d31225d7d2c7b226166746572446f63756d656e7448617368223a2239613236356338383161343661326665303738333738336630663339333736663933303438613530353337313064373938353266353332373238626663663838222c226265666f7265446f63756d656e7448617368223a2230326361636435333637643238306335616530613739626339323631306437356261376666303264303234363839323463346537643731353934313838633239222c22656c61707365644d73223a313235302e352c226f636375727265644174223a22323032362d31302d31325430383a30313a30322e3235305a222c2273657175656e6365223a322c22736f75726365223a227061737465222c227374657073223a5b7b226b696e64223a22696e736572742d74657874222c226e6f64654964223a226f646c6f6d616b2d31222c226f6666736574223a33342c2274657874223a225a616c696a65706c6a656e692064696f20f09f98802e20227d2c7b226b696e64223a22696e736572742d74657874222c226e6f64654964223a226f646c6f6d616b2d31222c226f6666736574223a302c2274657874223a22c4903a20227d5d2c22746f75636865644e6f6465496473223a5b226f646c6f6d616b2d31225d7d5d2c2265766964656e636550726f66696c654964223a227374616e646172642d7631222c2265766964656e6365536368656d61223a226475637475732d65766964656e63652d7365676d656e742d7632222c2266696e616c446f63756d656e7448617368223a2239613236356338383161343661326665303738333738336630663339333736663933303438613530353337313064373938353266353332373238626663663838222c2268617368416c676f726974686d223a22736861323536222c22696e697469616c446f63756d656e7448617368223a2234366139363239653233666432303761633233306436633034326230326434316363383665363764363834666661326566613961333138666431396464636337222c226f62736572766564456e6465644174223a22323032362d31302d31325430383a30313a33302e3030305a222c226f62736572766564537461727465644174223a22323032362d31302d31325430383a30313a30302e3030305a222c227072656465636573736f725365676d656e7448617368223a6e756c6c2c227365676d656e744964223a226f64736a6563616b2d7a762d31222c2273657175656e636546726f6d223a312c2273657175656e6365546f223a322c2273657373696f6e4964223a22736573696a612d697a6d69736c6a656e612d7a762d31227d",
+        "byteLength": 1556,
+        "segmentHash": "8a95172066e145b5b890b9a73a3b4ccedbdceaf46ec8c373d2b35e94328f692e",
+        "descriptor": {
+          "evidencePackageId": "paket-izmisljeni-zv-1",
+          "documentId": "dokument-izmisljeni-zv-1",
+          "sessionId": "sesija-izmisljena-zv-1",
+          "segmentId": "odsjecak-zv-1",
+          "evidenceSchema": "ductus-evidence-segment-v2",
+          "canonicalization": "RFC8785-JCS",
+          "hashAlgorithm": "sha256",
+          "evidenceProfileId": "standard-v1",
+          "sequenceFrom": 1,
+          "sequenceTo": 2,
+          "eventCount": 2,
+          "observedStartedAt": "2026-10-12T08:01:00.000Z",
+          "observedEndedAt": "2026-10-12T08:01:30.000Z",
+          "segmentHash": "8a95172066e145b5b890b9a73a3b4ccedbdceaf46ec8c373d2b35e94328f692e",
+          "predecessorSegmentHash": null,
+          "payloadBytes": 1556
+        },
+        "receipt": {
+          "payload": {
+            "receiptSchema": "ductus-evidence-receipt-v1",
+            "receiptId": "potvrda-zv-1",
+            "evidencePackageId": "paket-izmisljeni-zv-1",
+            "documentId": "dokument-izmisljeni-zv-1",
+            "sessionId": "sesija-izmisljena-zv-1",
+            "segmentId": "odsjecak-zv-1",
+            "segmentHash": "8a95172066e145b5b890b9a73a3b4ccedbdceaf46ec8c373d2b35e94328f692e",
+            "predecessorSegmentHash": null,
+            "previousReceiptId": null,
+            "evidenceSchema": "ductus-evidence-segment-v2",
+            "evidenceProfileId": "standard-v1",
+            "sequenceFrom": 1,
+            "sequenceTo": 2,
+            "eventCount": 2,
+            "payloadBytes": 1556,
+            "acceptedAt": "2026-10-12T08:45:00.000Z"
+          },
+          "canonicalUtf8Hex": "7b2261636365707465644174223a22323032362d31302d31325430383a34353a30302e3030305a222c22646f63756d656e744964223a22646f6b756d656e742d697a6d69736c6a656e692d7a762d31222c226576656e74436f756e74223a322c2265766964656e63655061636b6167654964223a2270616b65742d697a6d69736c6a656e692d7a762d31222c2265766964656e636550726f66696c654964223a227374616e646172642d7631222c2265766964656e6365536368656d61223a226475637475732d65766964656e63652d7365676d656e742d7632222c227061796c6f61644279746573223a313535362c227072656465636573736f725365676d656e7448617368223a6e756c6c2c2270726576696f7573526563656970744964223a6e756c6c2c22726563656970744964223a22706f74767264612d7a762d31222c2272656365697074536368656d61223a226475637475732d65766964656e63652d726563656970742d7631222c227365676d656e7448617368223a2238613935313732303636653134356235623839306239613733613362346363656462646365616634366563386333373364326233356539343332386636393265222c227365676d656e744964223a226f64736a6563616b2d7a762d31222c2273657175656e636546726f6d223a312c2273657175656e6365546f223a322c2273657373696f6e4964223a22736573696a612d697a6d69736c6a656e612d7a762d31227d",
+          "payloadDigestSha256": "c71eb18db44caeffb61b258e7ad723a800f06a7f8424c31329751b102ba534a8",
+          "signature": {
+            "algorithm": "Ed25519",
+            "keyId": "ductus-golden-rfc8032-test-1",
+            "keyVersion": "1",
+            "signatureEncoding": "raw",
+            "signatureBase64Url": "Jv2QRgLIeA-UD7qZ_52EexTcpwfFoIMeiTSi4mU_Uo7hkHwKlXTuo411AEEDapxB96eS6AoKKrmv-zdyhv6jCw"
+          }
+        }
+      },
+      {
+        "clientRequestId": "zahtjev-zv-2",
+        "segment": {
+          "evidenceSchema": "ductus-evidence-segment-v2",
+          "canonicalization": "RFC8785-JCS",
+          "hashAlgorithm": "sha256",
+          "documentId": "dokument-izmisljeni-zv-1",
+          "sessionId": "sesija-izmisljena-zv-2",
+          "segmentId": "odsjecak-zv-2",
+          "sequenceFrom": 3,
+          "sequenceTo": 3,
+          "observedStartedAt": "2026-10-12T08:02:00.000Z",
+          "observedEndedAt": "2026-10-12T08:02:30.000Z",
+          "initialDocumentHash": "9a265c881a46a2fe0783783f0f39376f93048a5053710d79852f532728bfcf88",
+          "finalDocumentHash": "c99e5bd9a3da0bc57aaec6b3801c7ae1eeaeeeef78f24f76232ca5b3b9fd6e26",
+          "predecessorSegmentHash": "8a95172066e145b5b890b9a73a3b4ccedbdceaf46ec8c373d2b35e94328f692e",
+          "events": [
+            {
+              "sequence": 3,
+              "occurredAt": "2026-10-12T08:02:05.000Z",
+              "elapsedMs": 400,
+              "source": "composition",
+              "steps": [
+                {
+                  "kind": "insert-text",
+                  "nodeId": "odlomak-2",
+                  "offset": 0,
+                  "text": "Zavr\u0161etak s razdvojenim znakom c\u030c."
+                }
+              ],
+              "beforeDocumentHash": "9a265c881a46a2fe0783783f0f39376f93048a5053710d79852f532728bfcf88",
+              "afterDocumentHash": "c99e5bd9a3da0bc57aaec6b3801c7ae1eeaeeeef78f24f76232ca5b3b9fd6e26"
+            }
+          ],
+          "captureContext": {"editorModel": "test-text-nodes", "transactionFormat": "ductus-test-insert-text-v0"},
+          "evidenceProfileId": "standard-v1"
+        },
+        "canonicalUtf8Hex": "7b2263616e6f6e6963616c697a6174696f6e223a22524643383738352d4a4353222c2263617074757265436f6e74657874223a7b22656469746f724d6f64656c223a22746573742d746578742d6e6f646573222c227472616e73616374696f6e466f726d6174223a226475637475732d746573742d696e736572742d746578742d7630227d2c22646f63756d656e744964223a22646f6b756d656e742d697a6d69736c6a656e692d7a762d31222c226576656e7473223a5b7b226166746572446f63756d656e7448617368223a2263393965356264396133646130626335376161656336623338303163376165316565616565656566373866323466373632333263613562336239666436653236222c226265666f7265446f63756d656e7448617368223a2239613236356338383161343661326665303738333738336630663339333736663933303438613530353337313064373938353266353332373238626663663838222c22656c61707365644d73223a3430302c226f636375727265644174223a22323032362d31302d31325430383a30323a30352e3030305a222c2273657175656e6365223a332c22736f75726365223a22636f6d706f736974696f6e222c227374657073223a5b7b226b696e64223a22696e736572742d74657874222c226e6f64654964223a226f646c6f6d616b2d32222c226f6666736574223a302c2274657874223a225a617672c5a16574616b20732072617a64766f6a656e696d207a6e616b6f6d2063cc8c2e227d5d7d5d2c2265766964656e636550726f66696c654964223a227374616e646172642d7631222c2265766964656e6365536368656d61223a226475637475732d65766964656e63652d7365676d656e742d7632222c2266696e616c446f63756d656e7448617368223a2263393965356264396133646130626335376161656336623338303163376165316565616565656566373866323466373632333263613562336239666436653236222c2268617368416c676f726974686d223a22736861323536222c22696e697469616c446f63756d656e7448617368223a2239613236356338383161343661326665303738333738336630663339333736663933303438613530353337313064373938353266353332373238626663663838222c226f62736572766564456e6465644174223a22323032362d31302d31325430383a30323a33302e3030305a222c226f62736572766564537461727465644174223a22323032362d31302d31325430383a30323a30302e3030305a222c227072656465636573736f725365676d656e7448617368223a2238613935313732303636653134356235623839306239613733613362346363656462646365616634366563386333373364326233356539343332386636393265222c227365676d656e744964223a226f64736a6563616b2d7a762d32222c2273657175656e636546726f6d223a332c2273657175656e6365546f223a332c2273657373696f6e4964223a22736573696a612d697a6d69736c6a656e612d7a762d32227d",
+        "byteLength": 1127,
+        "segmentHash": "af2a408d76db01c7b95962f8f854a460b3491879f39b033ebed725587e948cb4",
+        "descriptor": {
+          "evidencePackageId": "paket-izmisljeni-zv-1",
+          "documentId": "dokument-izmisljeni-zv-1",
+          "sessionId": "sesija-izmisljena-zv-2",
+          "segmentId": "odsjecak-zv-2",
+          "evidenceSchema": "ductus-evidence-segment-v2",
+          "canonicalization": "RFC8785-JCS",
+          "hashAlgorithm": "sha256",
+          "evidenceProfileId": "standard-v1",
+          "sequenceFrom": 3,
+          "sequenceTo": 3,
+          "eventCount": 1,
+          "observedStartedAt": "2026-10-12T08:02:00.000Z",
+          "observedEndedAt": "2026-10-12T08:02:30.000Z",
+          "segmentHash": "af2a408d76db01c7b95962f8f854a460b3491879f39b033ebed725587e948cb4",
+          "predecessorSegmentHash": "8a95172066e145b5b890b9a73a3b4ccedbdceaf46ec8c373d2b35e94328f692e",
+          "payloadBytes": 1127
+        },
+        "receipt": {
+          "payload": {
+            "receiptSchema": "ductus-evidence-receipt-v1",
+            "receiptId": "potvrda-zv-2",
+            "evidencePackageId": "paket-izmisljeni-zv-1",
+            "documentId": "dokument-izmisljeni-zv-1",
+            "sessionId": "sesija-izmisljena-zv-2",
+            "segmentId": "odsjecak-zv-2",
+            "segmentHash": "af2a408d76db01c7b95962f8f854a460b3491879f39b033ebed725587e948cb4",
+            "predecessorSegmentHash": "8a95172066e145b5b890b9a73a3b4ccedbdceaf46ec8c373d2b35e94328f692e",
+            "previousReceiptId": "potvrda-zv-1",
+            "evidenceSchema": "ductus-evidence-segment-v2",
+            "evidenceProfileId": "standard-v1",
+            "sequenceFrom": 3,
+            "sequenceTo": 3,
+            "eventCount": 1,
+            "payloadBytes": 1127,
+            "acceptedAt": "2026-10-12T08:46:30.250Z"
+          },
+          "canonicalUtf8Hex": "7b2261636365707465644174223a22323032362d31302d31325430383a34363a33302e3235305a222c22646f63756d656e744964223a22646f6b756d656e742d697a6d69736c6a656e692d7a762d31222c226576656e74436f756e74223a312c2265766964656e63655061636b6167654964223a2270616b65742d697a6d69736c6a656e692d7a762d31222c2265766964656e636550726f66696c654964223a227374616e646172642d7631222c2265766964656e6365536368656d61223a226475637475732d65766964656e63652d7365676d656e742d7632222c227061796c6f61644279746573223a313132372c227072656465636573736f725365676d656e7448617368223a2238613935313732303636653134356235623839306239613733613362346363656462646365616634366563386333373364326233356539343332386636393265222c2270726576696f7573526563656970744964223a22706f74767264612d7a762d31222c22726563656970744964223a22706f74767264612d7a762d32222c2272656365697074536368656d61223a226475637475732d65766964656e63652d726563656970742d7631222c227365676d656e7448617368223a2261663261343038643736646230316337623935393632663866383534613436306233343931383739663339623033336562656437323535383765393438636234222c227365676d656e744964223a226f64736a6563616b2d7a762d32222c2273657175656e636546726f6d223a332c2273657175656e6365546f223a332c2273657373696f6e4964223a22736573696a612d697a6d69736c6a656e612d7a762d32227d",
+          "payloadDigestSha256": "b4305d3ead18021a73f1c754c27c9ebe7a474fd7339f4fb7fbf29befe57ac14d",
+          "signature": {
+            "algorithm": "Ed25519",
+            "keyId": "ductus-golden-rfc8032-test-1",
+            "keyVersion": "1",
+            "signatureEncoding": "raw",
+            "signatureBase64Url": "2srhynwYN9I0TzPpBSPE8RKvsvCyy51QXsnSqQxdhYMqPwmzLFdLBHpLDk4xxKG5OqX2YXy4rhZCh2JWumGFAw"
+          }
+        }
+      }
+    ],
+    "head": {"segmentHash": "af2a408d76db01c7b95962f8f854a460b3491879f39b033ebed725587e948cb4", "segmentCount": 2},
+    "verificationKey": {
+      "algorithm": "Ed25519",
+      "keyId": "ductus-golden-rfc8032-test-1",
+      "keyVersion": "1",
+      "encoding": "spki-der",
+      "spkiDerHex": "302a300506032b6570032100d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+      "signingSeedSha256": "644d50ab64864c20a12b3c4656d46b4a48f69ef7c47ecdc8415cd28316b22ef5"
+    }
+  },
+  "segmentPayloads": {
+    "note": "Byte edits of chain.segments[base].canonicalUtf8Hex that must not be accepted. find/replace are UTF-8 text, findHex/replaceHex are bytes; find occurs exactly once. recanonicalizesToBase: the edited bytes parse to the same segment, so only the bytes are wrong. canonicalJcs: the edited bytes are canonical JCS, so the segment validator is what rejects them.",
+    "rejected": [
+      {
+        "name": "space-after-colon",
+        "class": "non-canonical",
+        "note": "Insignificant whitespace.",
+        "base": 0,
+        "find": "\"sequenceFrom\":1,",
+        "replace": "\"sequenceFrom\": 1,",
+        "reason": "invalid",
+        "recanonicalizesToBase": true,
+        "canonicalJcs": false
+      },
+      {
+        "name": "trailing-line-feed",
+        "class": "non-canonical",
+        "note": "A line feed after the closing brace.",
+        "base": 0,
+        "find": "\"sessionId\":\"sesija-izmisljena-zv-1\"}",
+        "replace": "\"sessionId\":\"sesija-izmisljena-zv-1\"}\n",
+        "reason": "invalid",
+        "recanonicalizesToBase": true,
+        "canonicalJcs": false
+      },
+      {
+        "name": "leading-space",
+        "class": "non-canonical",
+        "note": "A space before the opening brace.",
+        "base": 0,
+        "find": "{\"canonicalization\"",
+        "replace": " {\"canonicalization\"",
+        "reason": "invalid",
+        "recanonicalizesToBase": true,
+        "canonicalJcs": false
+      },
+      {
+        "name": "reordered-keys",
+        "class": "non-canonical",
+        "note": "Two keys swapped.",
+        "base": 0,
+        "find": "\"sequenceFrom\":1,\"sequenceTo\":2,",
+        "replace": "\"sequenceTo\":2,\"sequenceFrom\":1,",
+        "reason": "invalid",
+        "recanonicalizesToBase": true,
+        "canonicalJcs": false
+      },
+      {
+        "name": "number-exponent-form",
+        "class": "non-canonical",
+        "note": "1 written as 1e0.",
+        "base": 0,
+        "find": "\"sequenceFrom\":1,",
+        "replace": "\"sequenceFrom\":1e0,",
+        "reason": "invalid",
+        "recanonicalizesToBase": true,
+        "canonicalJcs": false
+      },
+      {
+        "name": "number-fraction-form",
+        "class": "non-canonical",
+        "note": "2 written as 2.0.",
+        "base": 0,
+        "find": "\"sequenceTo\":2,",
+        "replace": "\"sequenceTo\":2.0,",
+        "reason": "invalid",
+        "recanonicalizesToBase": true,
+        "canonicalJcs": false
+      },
+      {
+        "name": "negative-zero",
+        "class": "non-canonical",
+        "note": "0 written as -0.",
+        "base": 0,
+        "find": "\"elapsedMs\":0,",
+        "replace": "\"elapsedMs\":-0,",
+        "reason": "invalid",
+        "recanonicalizesToBase": true,
+        "canonicalJcs": false
+      },
+      {
+        "name": "needless-escape",
+        "class": "non-canonical",
+        "note": "An ASCII letter written as an escape.",
+        "base": 0,
+        "find": "\"source\":\"editor\"",
+        "replace": "\"source\":\"\\u0065ditor\"",
+        "reason": "invalid",
+        "recanonicalizesToBase": true,
+        "canonicalJcs": false
+      },
+      {
+        "name": "escaped-non-ascii",
+        "class": "non-canonical",
+        "note": "What an ASCII-only serializer emits for a Croatian letter.",
+        "base": 0,
+        "find": "Izmi\u0161ljeni",
+        "replace": "Izmi\\u0161ljeni",
+        "reason": "invalid",
+        "recanonicalizesToBase": true,
+        "canonicalJcs": false
+      },
+      {
+        "name": "duplicate-key",
+        "class": "non-canonical",
+        "note": "A key repeated with the same value.",
+        "base": 0,
+        "find": "\"sequenceTo\":2,",
+        "replace": "\"sequenceTo\":2,\"sequenceTo\":2,",
+        "reason": "invalid",
+        "recanonicalizesToBase": true,
+        "canonicalJcs": false
+      },
+      {
+        "name": "byte-order-mark",
+        "class": "encoding",
+        "note": "A UTF-8 byte order mark before the JSON text.",
+        "base": 0,
+        "find": "{\"canonicalization\"",
+        "replace": "\ufeff{\"canonicalization\"",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": false
+      },
+      {
+        "name": "invalid-utf8-byte",
+        "class": "encoding",
+        "note": "0xFF inside a string.",
+        "base": 0,
+        "findHex": "497a6d69c5a16c6a656e69",
+        "replaceHex": "497a6d69ff6c6a656e69",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": false
+      },
+      {
+        "name": "overlong-utf8",
+        "class": "encoding",
+        "note": "The letter I as the overlong sequence C1 89.",
+        "base": 0,
+        "findHex": "497a6d69c5a16c6a656e69",
+        "replaceHex": "c1897a6d69c5a16c6a656e69",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": false
+      },
+      {
+        "name": "cesu8-surrogates",
+        "class": "encoding",
+        "note": "U+1F600 as two three-byte surrogates (CESU-8).",
+        "base": 0,
+        "findHex": "f09f9880",
+        "replaceHex": "eda0bdedb880",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": false
+      },
+      {
+        "name": "uppercase-hash",
+        "class": "validator",
+        "note": "Hashes are lowercase hex; the bytes are canonical JCS, the segment is not valid.",
+        "base": 0,
+        "find": "\"initialDocumentHash\":\"46a9629e23fd207ac230d6c042b02d41cc86e67d684ffa2efa9a318fd19ddcc7\"",
+        "replace": "\"initialDocumentHash\":\"46A9629E23FD207AC230D6C042B02D41CC86E67D684FFA2EFA9A318FD19DDCC7\"",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": true
+      },
+      {
+        "name": "unknown-field-segment",
+        "class": "unknown-fields",
+        "note": "An extra field on the segment, in canonical position.",
+        "base": 0,
+        "find": "\"sessionId\":\"sesija-izmisljena-zv-1\"}",
+        "replace": "\"sessionId\":\"sesija-izmisljena-zv-1\",\"zzNepoznato\":1}",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": true
+      },
+      {
+        "name": "unknown-field-proto",
+        "class": "unknown-fields",
+        "note": "An own key named __proto__ on the segment.",
+        "base": 0,
+        "find": "{\"canonicalization\"",
+        "replace": "{\"__proto__\":1,\"canonicalization\"",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": true
+      },
+      {
+        "name": "unknown-field-event",
+        "class": "unknown-fields",
+        "note": "An author smuggled into an event.",
+        "base": 0,
+        "find": ",\"beforeDocumentHash\":\"46a9629e23fd207ac230d6c042b02d41cc86e67d684ffa2efa9a318fd19ddcc7\"",
+        "replace": ",\"authorId\":\"student-izmisljeni-zv-9\",\"beforeDocumentHash\":\"46a9629e23fd207ac230d6c042b02d41cc86e67d684ffa2efa9a318fd19ddcc7\"",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": true
+      },
+      {
+        "name": "unknown-field-capture-context",
+        "class": "unknown-fields",
+        "note": "An extra field in captureContext.",
+        "base": 0,
+        "find": "\"transactionFormat\":\"ductus-test-insert-text-v0\"}",
+        "replace": "\"transactionFormat\":\"ductus-test-insert-text-v0\",\"userAgent\":\"izmisljeni-preglednik\"}",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": true
+      }
+    ]
+  },
+  "sizeLimit": {
+    "maxSegmentBytes": 2097152,
+    "note": "Set events[0].steps[0].text of segmentWithoutPadding to padding.unit repeated padding.count times. The unit is two UTF-8 bytes and one UTF-16 code unit, so the limit is seen to count bytes. The document hashes in the segment are those of the padded document. overLimit appends extraText to that text.",
+    "segmentWithoutPadding": {
+      "evidenceSchema": "ductus-evidence-segment-v2",
+      "canonicalization": "RFC8785-JCS",
+      "hashAlgorithm": "sha256",
+      "documentId": "dokument-izmisljeni-zv-1",
+      "sessionId": "sesija-izmisljena-zv-3",
+      "segmentId": "odsjecak-zv-granicni",
+      "sequenceFrom": 1,
+      "sequenceTo": 1,
+      "observedStartedAt": "2026-10-12T08:03:00.000Z",
+      "observedEndedAt": "2026-10-12T08:03:30.000Z",
+      "initialDocumentHash": "c2f2b7bbf11889d4d11989874f92367eb9653267a4d9bb6b06bd97c381e541d7",
+      "finalDocumentHash": "25a33d220dc62db722d7e1ea28e6d4be0de7589cc341baddff84f41fa28d8ba8",
+      "predecessorSegmentHash": null,
+      "events": [
+        {
+          "sequence": 1,
+          "occurredAt": "2026-10-12T08:03:01.000Z",
+          "elapsedMs": 0,
+          "source": "paste",
+          "steps": [{"kind": "insert-text", "nodeId": "odlomak-1", "offset": 0, "text": ""}],
+          "beforeDocumentHash": "c2f2b7bbf11889d4d11989874f92367eb9653267a4d9bb6b06bd97c381e541d7",
+          "afterDocumentHash": "25a33d220dc62db722d7e1ea28e6d4be0de7589cc341baddff84f41fa28d8ba8"
+        }
+      ],
+      "captureContext": {"editorModel": "test-text-nodes", "transactionFormat": "ductus-test-insert-text-v0"},
+      "evidenceProfileId": "standard-v1"
+    },
+    "padding": {"unit": "\u010d", "count": 1048062},
+    "atLimit": {"byteLength": 2097152, "sha256": "e1d41556f97ad04156a6ae548f1b96cf3aa7f2d1eae4ffdd38b24f401f4fdfad"},
+    "overLimit": {"extraText": "a", "byteLength": 2097153, "reason": "too_large"}
+  }
+}
