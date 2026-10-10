@@ -72,6 +72,56 @@ const DOCUMENTED_GAPS = {
     "git add \"$PWD\"",
     "git add --pathspec-from-file=all.txt",
     "git am -k3n x.patch",
+    "git am -3kn x.patch",
+    "GIT_CONFIG_PARAMETERS=\"'core.hookspath=/dev/null'\" git commit -m x",
+    "GIT_CONFIG_GLOBAL=x.cfg git commit -m x",
+    "GIT_CONFIG_SYSTEM=x.cfg git commit -m x",
+    "GIT_CONFIG=x.cfg git commit -m x",
+    "git config include.path x.cfg",
+    "npx git add -A",
+    "pnpm dlx git add -A",
+    // Commands read from a file: the hook sees the command line, not the script.
+    "bash x.sh",
+    "sh x.sh",
+    "source x.sh",
+    ". x.sh",
+    "./x.sh",
+    "./x.ps1",
+    "pwsh -File x.ps1",
+    "pnpm run x",
+    "pnpm x",
+    "npm run x",
+    "make x",
+    "node x.mjs",
+    "git config alias.ci 'commit -n'",
+    "git ci -m x",
+    // A git or lefthook hook that calls git itself runs from a routine commit.
+    "git commit -m x",
+    // Programs git runs on its own.
+    "git rebase -x 'git commit -n -m x' HEAD~1",
+    "git rebase --exec 'git add -A' HEAD~1",
+    "git submodule foreach 'git add -A'",
+    "git bisect run ./x.sh",
+    "git filter-branch --tree-filter ./x.sh HEAD",
+    "git difftool -x ./x.sh",
+    "GIT_EDITOR=./x.sh git commit",
+    "EDITOR=./x.sh git commit",
+    "GIT_SEQUENCE_EDITOR=./x.sh git rebase -i HEAD~1",
+    "git -c core.editor=./x.sh commit",
+    "git -c sequence.editor=./x.sh rebase -i HEAD~1",
+    "git -c core.pager=./x.sh log",
+    "GIT_PAGER=./x.sh git log",
+    "PAGER=./x.sh git log",
+    "git -c core.fsmonitor=./x.sh status",
+    "git -c gpg.program=./x.sh commit -S -m x",
+    "git -c diff.external=./x.sh diff",
+    "GIT_EXTERNAL_DIFF=./x.sh git diff",
+    "git -c credential.helper='!./x.sh' push",
+    "git config filter.x.clean ./x.sh",
+    "git config diff.x.textconv ./x.sh",
+    "git config core.sshCommand ./x.sh",
+    "GIT_TEMPLATE_DIR=x git init y",
+    "git clone --template=x y z",
   ],
   PowerShell: [
     "& git add -A",
@@ -84,7 +134,29 @@ const DOCUMENTED_GAPS = {
     "git push --force-with-lease=platforma/x origin platforma/x",
     "git -c core.hooksPath=NUL commit -m x",
     "git add ':!nothing'",
+    "$env:GIT_CONFIG_PARAMETERS=\"'core.hookspath=NUL'\"; git commit -m x",
+    "$env:GIT_EDITOR='./x.ps1'; git commit",
+    "git am -3kn x.patch",
+    "npx git add -A",
+    "./x.ps1",
+    "& ./x.ps1",
+    "pwsh -File x.ps1",
+    "bash x.sh",
+    "pnpm run x",
+    "node x.mjs",
+    "git config alias.ci 'commit -n'",
+    "git ci -m x",
+    "git rebase -x 'git commit -n -m x' HEAD~1",
+    "git submodule foreach 'git add -A'",
+    "git -c core.editor=./x.ps1 commit",
+    "git config core.sshCommand ./x.ps1",
   ],
+};
+
+// docs/SESSIONS.md 4a also names forms next to those gaps that built-in rules block.
+const DOCUMENTED_BUILT_IN_BLOCKS = {
+  Bash: ["GIT_SSH_COMMAND=./x.sh git push", "GIT_SSH=./x.sh git push", "git -c core.sshCommand=./x.sh push", "pnpm exec git add -A"],
+  PowerShell: ["source x.sh", ". x.sh", ". ./x.ps1", "GIT_SSH_COMMAND=./x.sh git push", "git -c core.sshCommand=./x.sh push", "pnpm exec git add -A"],
 };
 
 const DOCUMENTED_FALSE_BLOCKS = {
@@ -99,6 +171,12 @@ const DOCUMENTED_FALSE_BLOCKS = {
 test("gaps named in docs/SESSIONS.md 4a still pass the hook", () => {
   for (const [tool, commands] of Object.entries(DOCUMENTED_GAPS)) {
     for (const command of commands) assert.equal(decide(tool, command), "allowed", `${tool}: ${command}`);
+  }
+});
+
+test("blocked neighbours of the gaps named in docs/SESSIONS.md 4a stay blocked", () => {
+  for (const [tool, commands] of Object.entries(DOCUMENTED_BUILT_IN_BLOCKS)) {
+    for (const command of commands) assert.notEqual(decide(tool, command), "allowed", `${tool}: ${command}`);
   }
 });
 
