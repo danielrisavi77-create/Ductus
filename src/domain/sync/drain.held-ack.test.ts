@@ -165,11 +165,76 @@ describe("verified receipt for a held older row (QA finding 1)", () => {
   });
 
   it("withholds the ACK for anything but an explicit false", async () => {
-    for (const flag of [true, 1, "false", null, {}] as unknown as boolean[]) {
+    for (const flag of [true, 1, "false", null, undefined, {}] as unknown as boolean[]) {
       const outcome = signed("committed", 2);
       expect(await outcomeToEvents(outcome, verification("tx-1", 2), flag)).toEqual([]);
       expect(ackedRevision(outcome)).toBe(2);
     }
+  });
+
+  it("withholds the ACK when the caller leaves the argument out (review finding 1)", async () => {
+    // The parameter is required: a caller that forgets it does not compile.
+    const omitted = signed("committed", 2);
+    // @ts-expect-error newerRowsQueued has no default and must be passed
+    expect(await outcomeToEvents(omitted, verification("tx-1", 2))).toEqual([]);
+    expect(ackedRevision(omitted)).toBe(2);
+
+    // And a caller that slips past the compiler still gets no ACK.
+    const missing = signed("duplicate", 2);
+    expect(
+      await outcomeToEvents(missing, verification("tx-1", 2), undefined as unknown as boolean),
+    ).toEqual([]);
+    expect(ackedRevision(missing)).toBe(2);
+
+    // Control: the explicit false is what emits it.
+    expect(await outcomeToEvents(signed("committed", 2), verification("tx-1", 2), false)).toEqual([
+      { type: "SYNC_ACK" },
+    ]);
+  });
+
+  it("recognises the sent row by identity, not by object reference (review finding 2)", async () => {
+    // The runner re-reads the queue after the answer (IndexedDB hands back
+    // new objects) or passes a row moved through fastForwardBase.
+    const first = row(1, 1);
+    const plan = planDrain([first], meta("SYNCING"));
+    expect(plan.send).toBe(first);
+
+    const reread = structuredClone([first]);
+    expect(reread[0]).not.toBe(first);
+    expect(newerRowsQueued(reread, plan.send)).toBe(false);
+    expect(newerRowsQueued([first], structuredClone(first))).toBe(false);
+    const forwarded = { ...first, tx: fastForwardBase(first.tx, 4) };
+    expect(newerRowsQueued([first], forwarded)).toBe(false);
+    expect(newerRowsQueued([forwarded], first)).toBe(false);
+
+    // With nothing newer queued the receipt of the re-read row is SYNCED.
+    const state = reduce(
+      "SYNCING",
+      await outcomeToEvents(signed("committed", 2), verification("tx-1", 2), newerRowsQueued(reread, plan.send)),
+    );
+    expect(state).toBe("SYNCED");
+
+    // A copy does not hide a newer row behind it.
+    expect(newerRowsQueued([...reread, row(2, 1)], plan.send)).toBe(true);
+  });
+
+  it("matches the sent row on document, sequence and transaction id together", () => {
+    const sent = row(2, 1);
+    // Same sequence, different transaction: not provably older.
+    const otherTx = { ...row(2, 1), tx: { ...tx(2, 1), clientTransactionId: "tx-other" } };
+    expect(newerRowsQueued([otherTx], sent)).toBe(true);
+    // Same sequence and transaction, different document.
+    expect(newerRowsQueued([row(2, 1, OTHER_DOC)], sent)).toBe(true);
+    // Same transaction id under a later sequence.
+    const laterSeq = { ...row(3, 1), tx: { ...tx(3, 1), clientTransactionId: "tx-2" } };
+    expect(newerRowsQueued([laterSeq], sent)).toBe(true);
+    // Only one queued row can be the sent one; a second match is a duplicate.
+    expect(newerRowsQueued([structuredClone(sent), structuredClone(sent)], sent)).toBe(true);
+    // A sent row without a usable identity matches nothing.
+    const bare = { ...row(2, 1), tx: { ...tx(2, 1), clientTransactionId: "" } };
+    expect(newerRowsQueued([bare], bare)).toBe(true);
+    const nameless = { ...row(2, 1), documentId: "" };
+    expect(newerRowsQueued([structuredClone(nameless)], nameless)).toBe(true);
   });
 
   it("still fails closed on a bad receipt when newer rows are queued", async () => {
@@ -187,7 +252,7 @@ describe("verified receipt for a held older row (QA finding 1)", () => {
 describe("a verified outcome is bound to its transaction (QA finding 2)", () => {
   it("does not release another row's hold", async () => {
     const outcomeOfFirst = signed("duplicate", 2);
-    await outcomeToEvents(outcomeOfFirst, verification("tx-1", 2));
+    await outcomeToEvents(outcomeOfFirst, verification("tx-1", 2), false);
     expect(ackedRevision(outcomeOfFirst)).toBe(2);
 
     const second = row(2, 2);
@@ -198,7 +263,7 @@ describe("a verified outcome is bound to its transaction (QA finding 2)", () => 
 
   it("does not release a hold on the same key in another document", async () => {
     const outcome = signed("duplicate", 2);
-    await outcomeToEvents(outcome, verification("tx-1", 2, OTHER_DOC));
+    await outcomeToEvents(outcome, verification("tx-1", 2, OTHER_DOC), false);
     const first = row(1, 1);
     expect(nextAwaitingReceipt(first, outcome, null)).toEqual({
       documentId: DOC,
@@ -209,7 +274,7 @@ describe("a verified outcome is bound to its transaction (QA finding 2)", () => 
 
   it("releases the hold for the row it was verified for", async () => {
     const outcome = signed("duplicate", 2);
-    await outcomeToEvents(outcome, verification("tx-1", 2));
+    await outcomeToEvents(outcome, verification("tx-1", 2), false);
     expect(nextAwaitingReceipt(row(1, 1), outcome, null)).toBeNull();
   });
 });

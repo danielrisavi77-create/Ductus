@@ -98,7 +98,7 @@ describe("pending receipt → EDIT → drain", () => {
     const plan1 = planDrain([first], meta("SYNCING"));
     expect(plan1.send).toBe(first);
 
-    const events1 = await outcomeToEvents(PENDING, verification("tx-1", 2));
+    const events1 = await outcomeToEvents(PENDING, verification("tx-1", 2), false);
     expect(events1).toEqual([]);
     expect(ackedRevision(PENDING)).toBeNull();
     expect(isRetryable(PENDING)).toBe(true);
@@ -118,7 +118,7 @@ describe("pending receipt → EDIT → drain", () => {
     const replay = fakeServerAfterFirstCommit(plan2.send!, false);
     expect(replay.status).toBe("duplicate");
     let state: SyncState = "SYNCING";
-    for (const event of await outcomeToEvents(replay, verification("tx-1", 2))) {
+    for (const event of await outcomeToEvents(replay, verification("tx-1", 2), false)) {
       state = syncReducer(state, event);
     }
     expect(state).toBe("SYNCING");
@@ -239,10 +239,14 @@ describe("nextAwaitingReceipt", () => {
       revision: 2,
       receipt: { status: "signed", signedReceipt: { testReceipt: true } },
     };
-    const events = await outcomeToEvents(outcome, {
-      expected: { documentId: DOC, clientTransactionId: "tx-3", revision: 2 },
-      verify: async () => false,
-    });
+    const events = await outcomeToEvents(
+      outcome,
+      {
+        expected: { documentId: DOC, clientTransactionId: "tx-3", revision: 2 },
+        verify: async () => false,
+      },
+      false,
+    );
     expect(events).toEqual([{ type: "SYNC_FAILED", retryable: false }]);
     // The commit landed on the server even though it cannot be acknowledged.
     expect(nextAwaitingReceipt(sent, outcome, null)).toEqual(previous);

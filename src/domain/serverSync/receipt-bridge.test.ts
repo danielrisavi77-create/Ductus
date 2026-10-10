@@ -32,7 +32,7 @@ describe("canonical wire parser -> sync ACK boundary (DAN-25)", () => {
       const parsed = parseCommitOutcome(raw);
       expect(parsed).toEqual(raw);
       expect(ackedRevision(parsed)).toBeNull();
-      const events = await outcomeToEvents(parsed, verification(5));
+      const events = await outcomeToEvents(parsed, verification(5), false);
       expect(events).toEqual([{ type: "SYNC_ACK" }]);
       expect(ackedRevision(parsed)).toBe(5);
     },
@@ -45,7 +45,7 @@ describe("canonical wire parser -> sync ACK boundary (DAN-25)", () => {
         status, revision: 5, receipt: { status: "pending_signature" },
       });
       expect(parsed.status).toBe(status);
-      expect(await outcomeToEvents(parsed, verification(5))).toEqual([]);
+      expect(await outcomeToEvents(parsed, verification(5), false)).toEqual([]);
       expect(isRetryable(parsed)).toBe(true);
       expect(ackedRevision(parsed)).toBeNull();
     },
@@ -56,7 +56,7 @@ describe("canonical wire parser -> sync ACK boundary (DAN-25)", () => {
       status: "committed", revision: 5,
       receipt: { status: "signed", signedReceipt: SIGNED },
     });
-    expect(await outcomeToEvents(parsed, verification(5, false))).toEqual([
+    expect(await outcomeToEvents(parsed, verification(5, false), false)).toEqual([
       { type: "SYNC_FAILED", retryable: false },
     ]);
     expect(ackedRevision(parsed)).toBeNull();
@@ -67,7 +67,7 @@ describe("canonical wire parser -> sync ACK boundary (DAN-25)", () => {
       status: "duplicate", revision: 6,
       receipt: { status: "signed", signedReceipt: SIGNED },
     });
-    expect(await outcomeToEvents(parsed, verification(5))).toEqual([
+    expect(await outcomeToEvents(parsed, verification(5), false)).toEqual([
       { type: "SYNC_FAILED", retryable: false },
     ]);
     expect(ackedRevision(parsed)).toBeNull();
@@ -82,7 +82,7 @@ describe("canonical wire parser -> sync ACK boundary (DAN-25)", () => {
       ...verification(5),
       expected: { documentId: "other-document", clientTransactionId: TRANSACTION_ID, revision: 5 },
     };
-    expect(await outcomeToEvents(parsed, invalidBinding)).toEqual([
+    expect(await outcomeToEvents(parsed, invalidBinding, false)).toEqual([
       { type: "SYNC_FAILED", retryable: false },
     ]);
     expect(ackedRevision(parsed)).toBeNull();

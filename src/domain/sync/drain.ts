@@ -109,6 +109,11 @@ const NOTHING_TO_SEND: DrainPlan = { send: null, supersededUpTo: null };
  * boundary. A verified receipt for `sent` then vouches for older text than
  * the author is looking at; the result is handed to `outcomeToEvents`, which
  * withholds SYNC_ACK. Anything that cannot be ordered counts as newer.
+ *
+ * The sent row is recognised by document, sequence and transaction id, never
+ * by object reference: the runner re-reads the queue from the journal, which
+ * hands back new objects. Only ONE queued row can be the sent one; a second
+ * row with the same identity is a duplicate and is not provably older.
  */
 export function newerRowsQueued(
   pending: readonly PendingTransaction[],
@@ -120,8 +125,25 @@ export function newerRowsQueued(
   if (!Array.isArray(pending)) {
     return true;
   }
+  const sentDocumentId = sent.documentId;
+  const sentTransactionId = sent.tx?.clientTransactionId;
+  const identifiable =
+    typeof sentDocumentId === "string" &&
+    sentDocumentId.trim() !== "" &&
+    typeof sentTransactionId === "string" &&
+    sentTransactionId.trim() !== "" &&
+    typeof sent.localSeq === "number" &&
+    Number.isFinite(sent.localSeq);
+  let sentSeen = false;
   return pending.some((row) => {
-    if (row === sent) {
+    if (
+      identifiable &&
+      !sentSeen &&
+      row?.documentId === sentDocumentId &&
+      row.localSeq === sent.localSeq &&
+      row.tx?.clientTransactionId === sentTransactionId
+    ) {
+      sentSeen = true;
       return false;
     }
     const sequence = row?.localSeq;
@@ -444,11 +466,14 @@ const VERIFIED_COMMIT_REVISIONS = new WeakMap<object, CommitReceiptExpectation>(
  * looking at. The runner sees `ackedRevision(outcome) !== null` with no event
  * and plans the next send straight away; SYNC_ACK comes with the receipt of
  * the newest row.
+ *
+ * The argument is required on purpose: a default would acknowledge for every
+ * caller that forgot it. A missing or `undefined` value withholds the ACK.
  */
 export async function outcomeToEvents(
   outcome: DrainOutcome,
   verification: CommitReceiptVerification,
-  newerRowsQueued: boolean = false,
+  newerRowsQueued: boolean,
 ): Promise<SyncEvent[]> {
   switch (outcome?.status) {
     case "committed":
