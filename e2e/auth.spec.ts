@@ -4,7 +4,7 @@ import { expect, test } from "@playwright/test";
 // NODE_ENV=production, where the fake provider ("Demo prijava") is refused.
 // The login route answers with the neutral page and never sends the browser
 // to the fake provider. The full login through the fake provider is covered
-// by tests/unit/auth/flow.test.ts against an in-process provider.
+// by e2e/login/login.spec.ts against `next dev` (pnpm test:e2e:login).
 test("the production build refuses the fake provider with the neutral page", async ({ page }) => {
   const providerRequests: string[] = [];
   page.on("request", (request) => {

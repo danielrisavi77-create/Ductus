@@ -12,6 +12,9 @@ const webServerCommand =
 
 export default defineConfig({
   testDir: "e2e",
+  // The full login needs `next dev` and runs on its own config
+  // (playwright.login.config.ts, `pnpm test:e2e:login`).
+  testIgnore: "login/**",
   // Evidence must be reproducible: a flaky pass is not a pass.
   retries: 0,
   // The HTML report carries screenshots, videos and traces; CI uploads it as
