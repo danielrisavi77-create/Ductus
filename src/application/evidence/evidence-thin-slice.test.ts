@@ -92,7 +92,8 @@ const textReplayer: EvidenceStepReplayerV2<ReplayDocument> = {
           documentId: DOCUMENT,
           sequence: event.sequence,
           revision: 0,
-          occurredAt: event.occurredAt,
+          // An event of a segment has no time; the older replay domain asks for one.
+          occurredAt: "2026-10-12T08:00:00.000Z",
           actorId: STUDENT,
           actorRole: "student",
           payload,
@@ -123,8 +124,6 @@ async function buildSegment(
   for (const [index, text] of texts.entries()) {
     const event: EvidenceEventV2 = {
       sequence: sequenceFrom + index,
-      occurredAt: `2026-10-12T08:${minute}:0${index + 1}.000Z`,
-      elapsedMs: (index + 1) * 400,
       source: "editor",
       steps: [{ kind: "insert-text", nodeId: NODE, offset: document.nodes[0].text.length, text }],
       touchedNodeIds: [NODE],
@@ -145,7 +144,7 @@ async function buildSegment(
     sequenceFrom,
     sequenceTo: sequenceFrom + events.length - 1,
     observedStartedAt: `2026-10-12T08:${minute}:00.000Z`,
-    observedEndedAt: `2026-10-12T08:${minute}:30.000Z`,
+    observedEndedAt: `2026-10-12T08:${minute}:00.000Z`,
     initialDocumentHash,
     finalDocumentHash: hash,
     predecessorSegmentHash: predecessor,
