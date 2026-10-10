@@ -80,20 +80,23 @@ const TEXT_ATTRIBUTES = new Set([
   "aria-valuetext",
 ]);
 
-// A double star crosses directories (followed by a slash it may match none);
-// a single star stays inside one name.
-function globPattern(glob: string): RegExp {
-  const body = glob
-    .replace(/[.+^${}()|[\]\\?]/g, "\\$&")
-    .replace(/\*\*\/|\*\*|\*/g, (wildcard) => (wildcard === "**/" ? "(?:.*/)?" : wildcard === "**" ? ".*" : "[^/]*"));
-  return new RegExp(`^${body}$`, "u");
+// Path segments are compared literally. A double star segment stands for any
+// number of directories, including none; as the last segment it stands for
+// everything below. No other wildcard is supported, and no RegExp is built.
+function matchesSegments(pattern: readonly string[], file: readonly string[]): boolean {
+  if (pattern.length === 0) return file.length === 0;
+  const [head, ...rest] = pattern;
+  if (head !== "**") return file.length > 0 && file[0] === head && matchesSegments(rest, file.slice(1));
+  if (rest.length === 0) return file.length > 0;
+  return file.some((_, skipped) => matchesSegments(rest, file.slice(skipped)));
 }
 
-const UI_TEXT_PATTERNS = UI_TEXT_MODULES.map(globPattern);
+const UI_TEXT_PATTERNS = UI_TEXT_MODULES.map((glob) => glob.split("/"));
 
 /** Whether `file` (repository path with forward slashes) is on `UI_TEXT_MODULES`. */
 export function isUiTextModule(file: string): boolean {
-  return UI_TEXT_PATTERNS.some((pattern) => pattern.test(file));
+  const segments = file.split("/");
+  return UI_TEXT_PATTERNS.some((pattern) => matchesSegments(pattern, segments));
 }
 
 type Collect = (node: ts.Node, text: string) => void;
