@@ -124,7 +124,7 @@ Tri stalne uloge iz `ENGINEERING_SYSTEM.md` §2 (Backend, Frontend, Platforma) o
 
 **Gašenje.** Orkestrator zaustavlja ono što je sam pokrenuo: workera koji je predao PR, workera koji je izašao iz opsega i workera koji se vrti bez napretka. Sesiju koju nije pokrenuo ne može ugasiti; šalje joj jednu poruku da stane i dalje je ne računa u WIP. Worktree spojene grane uklanja `scripts/cleanup-worktrees.ps1`.
 
-**Dostupnost providera.** Na početku radnog dana i nakon svakog neuspjelog pokretanja orkestrator bilježi koje su kvote dostupne (Claude, ChatGPT/Codex, Grok); kvota se može vratiti bez najave, pa se nedostupan provider ponovno provjerava najmanje jednom dnevno. Dok je dostupan samo jedan App, `critical` PR ne može dobiti dva odvojena PASS-a: orkestrator ga dovodi do stanja "spreman za drugi PASS", stavlja u red i nastavlja `low` i `standard` posao.
+**Dostupnost providera.** Na početku radnog dana i nakon svakog neuspjelog pokretanja orkestrator bilježi koje su kvote dostupne (Claude, ChatGPT/Codex, Grok); kvota se može vratiti bez najave, pa se nedostupan provider ponovno provjerava najmanje jednom dnevno. Dok je dostupan samo jedan App, `critical` PR dobiva QA kroz kvotni fallback (`docs/ENGINEERING_SYSTEM.md` §6) ako iscrpljeni App ostavi komentar o kvoti na tom PR-u: orkestrator dodjeljuje QA novoj sesiji s vlastitim slotom koja nije autor ni reviewer. Bez tog dokaza PR dovodi do stanja "spreman za drugi PASS", stavlja ga u red i nastavlja `low` i `standard` posao.
 
 ## 9. Petlja poteza
 

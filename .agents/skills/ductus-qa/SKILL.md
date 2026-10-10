@@ -13,4 +13,4 @@ Operate in QA mode:
 - for a critical PR, emit the canonical `QA-Agent`, `QA-Head`, `QA-Verdict`, `QA-Scope` block only when all required scenarios pass.
 
 
-For a critical PR, publish the QA verdict as a separate canonical PR comment whose **first non-empty line is `QA-Agent:`**. Use `QA-Verdict: PASS | FAIL | BLOCK`, bind `QA-Head` to the exact tested head, and include a concrete `QA-Scope`. Never put explanatory prose before the metadata block.
+For a critical PR, publish the QA verdict as a separate canonical PR comment whose **first non-empty line is `QA-Agent:`**. Use `QA-Verdict: PASS | FAIL | BLOCK`, bind `QA-Head` to the exact tested head, and include a concrete `QA-Scope`. Never put explanatory prose before the metadata block. If you run under the same GitHub App as the passing reviewer because the other provider's quota is exhausted, add `Provider-Fallback: <exhausted App slug> — <reason>` to the block and follow the quota-fallback independence rules in `docs/ENGINEERING_SYSTEM.md` §6: a fresh session and slot that neither wrote nor reviewed the PR, building its own scenarios before reading the reviewer's findings.

@@ -16,6 +16,14 @@ export const APP_RUNTIMES = new Map([
 // Provider identities are trusted only after their actual GitHub App slug is
 // observed and explicitly registered above. Grok was verified as "grok-by-xai".
 
+// Quota exhaustion is accepted only from the provider's own App, with a
+// message observed on a real PR. Never guess a pattern for other providers.
+export const QUOTA_EXHAUSTED_PATTERNS = new Map([
+  ["chatgpt-codex-connector", /reached your Codex usage limits/i],
+]);
+
+export const QUOTA_FALLBACK_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 function isAgent(value, role) {
   if (!value || !AGENT_RE.test(value)) return false;
   if (!role) return true;
@@ -68,6 +76,28 @@ function trustedComments(items) {
     .filter((entry) => entry.body);
 }
 
+function quotaEvidence(items) {
+  return (items ?? [])
+    .map((item, index) => {
+      const slug = item?.performed_via_github_app?.slug ?? null;
+      const pattern = slug ? QUOTA_EXHAUSTED_PATTERNS.get(slug) : null;
+      if (
+        !pattern ||
+        item?.user?.type !== "Bot" ||
+        item?.user?.login !== `${slug}[bot]` ||
+        !pattern.test(item?.body ?? "")
+      ) {
+        return null;
+      }
+      return { appSlug: slug, createdAt: Date.parse(item?.created_at ?? "") || index };
+    })
+    .filter(Boolean);
+}
+
+function fallbackSlug(value) {
+  return value?.split(/\s+/)[0]?.toLowerCase() ?? null;
+}
+
 function findOwnerOverride(entries, headSha, ownerLogin) {
   return entries.some(({ body, login, association, appSlug }) =>
     canonicalBlock(body, "Owner-Override") &&
@@ -97,6 +127,7 @@ function latestVerdicts(entries, {
     const head = field(entry.body, headField);
     const verdict = field(entry.body, verdictField)?.toUpperCase() ?? null;
     const extra = extraField ? field(entry.body, extraField) : null;
+    const fallback = fallbackSlug(field(entry.body, "Provider-Fallback"));
     const identity = verifiedCommentIdentity(entry, agent);
 
     if (
@@ -119,7 +150,7 @@ function latestVerdicts(entries, {
       order[0] > previous.order[0] ||
       (order[0] === previous.order[0] && order[1] > previous.order[1])
     ) {
-      latest.set(key, { agent, verdict, extra, identity, order });
+      latest.set(key, { agent, verdict, extra, fallback, identity, order });
     }
   }
 
@@ -212,14 +243,45 @@ export function evaluateGate({
       }
     }
 
-    const qaPass = [...qa.values()].some(
+    const qaPasses = [...qa.values()].filter(
       (result) =>
         result.identity.principal !== authorPrincipal &&
-        !passingReviewerApps.has(result.identity.appSlug) &&
         result.verdict === "PASS",
     );
+    const separateAppPass = qaPasses.some(
+      (result) => !passingReviewerApps.has(result.identity.appSlug),
+    );
 
-    if (!qaPass) {
+    // Quota fallback: while another registered App proves on this PR that its
+    // quota is exhausted, QA may come from the reviewer's App, but only from a
+    // principal that is neither the author nor any passing reviewer.
+    const evidence = quotaEvidence(comments);
+    const passingReviewerPrincipals = new Set(
+      passingReviews.map((review) => review.identity.principal),
+    );
+    const fallbackPass = separateAppPass
+      ? null
+      : qaPasses.find(
+          (result) =>
+            result.fallback &&
+            result.fallback !== result.identity.appSlug &&
+            !passingReviewerPrincipals.has(result.identity.principal) &&
+            evidence.some(
+              (item) =>
+                item.appSlug === result.fallback &&
+                item.createdAt <= result.order[0] &&
+                result.order[0] - item.createdAt <= QUOTA_FALLBACK_WINDOW_MS,
+            ),
+        );
+
+    if (fallbackPass) {
+      return {
+        state: "success",
+        description: `Independent review and same-App QA valid for current head (quota fallback: ${fallbackPass.fallback}).`,
+      };
+    }
+
+    if (!separateAppPass) {
       return {
         state: "pending",
         description: "Critical PR: waiting for separately authenticated QA PASS.",
