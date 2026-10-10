@@ -109,7 +109,25 @@ Svaki petak (`PLAN-DEMO.md` §3): usporedba spojenog s tablicom tjedna, kratak s
 - Ne čita diffove ni cijele dokumente; samo metapodatke PR-a i potrebne odjeljke.
 - Istraživanja i pregled mnogo datoteka daje pomoćnom agentu ili kratkotrajnoj sesiji.
 - Ploča: dodaje događaje, ne prepisuje cijeli dnevnik.
-- **Model po poslu (Daniel, 10. 10. 2026.):** Opus za evidenciju, ovlasti, prijavu i sinkronizaciju; Sonnet za rutinu; Haiku za metapodatke i pretrage. Orkestrator model zadaje pri pokretanju workera.
+- **Model po poslu (Daniel, 10. 10. 2026.):** Opus za evidenciju, ovlasti, prijavu i sinkronizaciju; Sonnet za rutinu; Haiku za metapodatke i pretrage. Orkestrator model zadaje pri pokretanju workera. Pravilo vrijedi jednako za lokalne podagente i za jednokratne sesije u oblaku (§8); tablica ga čini provjerljivim (uloga × risk → model):
+
+  | Uloga | Zadatak | Model | Effort |
+  | --- | --- | --- | --- |
+  | Pisac | `low` i `standard` | Sonnet | po riziku |
+  | Pisac | `critical` | Opus | po riziku |
+  | Pisac | bilo koje razine u području evidencije, ovlasti, prijave ili sinkronizacije | Opus | po riziku |
+  | Review | `low` | Sonnet | po riziku |
+  | Review | `standard` | Sonnet, osim u području evidencije, ovlasti, prijave ili sinkronizacije (tada Opus) | po riziku |
+  | Review | `critical` | Opus | po riziku |
+  | QA | `critical` | Opus | po riziku |
+  | Sigurnosni pregled, Bug Hunter nad kritičnim područjima | sve razine | Opus | po riziku |
+  | Plan napada (§8) | `critical` zadatak | Opus | po riziku |
+  | Prijedlozi Product/UX, dokumenti | sve razine | Sonnet | po riziku |
+  | Pretrage i metapodaci | sve razine | Haiku | po riziku |
+
+  Effort slijedi risk zadatka (`ENGINEERING_SYSTEM.md` §5): `low` → low, `standard` → medium, `critical` → high. Kad se model iz tablice razlikuje od zadanog modela uloge u `docs/SESSIONS.md` §1, vrijedi tablica ("Prednost modela").
+
+  Model se zadaje **izričito pri svakom pokretanju**: parametar `model` alata Agent za lokalne podagente, polje `model` u konfiguraciji sesije u oblaku. Profili s `model: inherit` (među njima reviewer i QA) inače nasljeđuju model orkestratora, dakle Opus. Svaki zapis pokretanja na koordinacijskom issueu (§8) navodi model. Pravilo sumnje: ako nije jasno u koju razinu zadatak spada, ide viši model. Gate se time ne mijenja: komentari reviewa i QA-a i dalje navode stvarni model (`Review-Model`, `QA-Model`, `ENGINEERING_SYSTEM.md` §6). Ovo je governance pravilo, ne strojna granica: ništa ne provjerava da je zadani model stvarno korišten.
 - **Svjež podagent ili CLI posao po zadatku ili lancu.** Dobiva samo zadatak iz `SESSIONS.md` §3 i odjeljke navedene u polju Ulaz; nikad povijest razgovora orkestratora. Dugovječne sesije i dalje rotiraju po `SESSIONS.md` §4.
 - **Logovi samo za pad.** Stanje se čita po §1; CI logovi samo za provjeru koja je pala na PR-u koji se obrađuje.
 

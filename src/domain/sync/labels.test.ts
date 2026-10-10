@@ -41,6 +41,30 @@ describe("sync state labels", () => {
     expect(label).not.toContain("Sinkron");
   });
 
+  // docs/PRODUCT.md §5 "Rječnik sučelja", docs/PLAN-DEMO.md F-8 (#178 attack 2).
+  it("says 'Spremljeno na poslužitelju' for SYNCED, the form the dictionary prescribes", () => {
+    expect(SYNC_STATE_LABELS.SYNCED.label).toBe("Spremljeno na poslužitelju");
+    expect(chipContent("SYNCED").text).toBe("Spremljeno na poslužitelju");
+  });
+
+  it("names the server in SYNCED only, and the device in LOCAL_DURABLE only", () => {
+    const naming = (word: string) =>
+      SYNC_STATES.filter((state) =>
+        SYNC_STATE_LABELS[state].label.toLocaleLowerCase("hr").includes(word),
+      );
+    expect(naming("poslužitelj")).toEqual(["SYNCED"]);
+    expect(naming("uređaj")).toEqual(["LOCAL_DURABLE"]);
+  });
+
+  it("never says 'spremljeno' without saying where", () => {
+    for (const state of SYNC_STATES) {
+      const label = SYNC_STATE_LABELS[state].label.toLocaleLowerCase("hr");
+      if (/spremljen/.test(label)) {
+        expect(label, state).toMatch(/^spremljeno na (uređaju|poslužitelju)$/);
+      }
+    }
+  });
+
   it("keeps LOCAL_DURABLE and SYNCED distinct in both label and tone", () => {
     const local = SYNC_STATE_LABELS.LOCAL_DURABLE;
     const synced = SYNC_STATE_LABELS.SYNCED;
