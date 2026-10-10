@@ -75,6 +75,7 @@ Repo sadrži adaptere za podržane runtimee:
 .agents/skills/
   ductus-worker/
   ductus-handoff/
+  ductus-browser-cli/
   ductus-orchestrator/
   ductus-review/
   ductus-qa/

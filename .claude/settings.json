@@ -3,7 +3,8 @@
   "env": {
     "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "200000",
     "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet",
-    "CLAUDE_CODE_GLOB_NO_IGNORE": "false"
+    "CLAUDE_CODE_GLOB_NO_IGNORE": "false",
+    "CC_SAFETY_NET_WORKTREE": "1"
   },
   "permissions": {
     "allow": [

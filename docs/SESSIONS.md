@@ -100,7 +100,7 @@ Izvještaj obvezno ide u opis PR-a ili, bez PR-a, u `IZVJEŠTAJ <id>` issue. Dir
 
 ### 4a. Tehnička provedba (DAN-93)
 
-Pravila iz ovog odjeljka provodi `.claude/settings.json`; hookovi su u `scripts/engineering/agent-hooks.mjs` i pri svakoj grešci propuštaju rad (fail-open).
+Pravila iz ovog odjeljka provodi `.claude/settings.json`; vlastiti hookovi su u `scripts/engineering/agent-hooks.mjs` i pri svakoj grešci propuštaju rad (fail-open). Iznimka je `cc-safety-net`, koji pri grešci vlastite analize blokira naredbu.
 
 | Mehanizam | Što radi | Pravilo koje provodi |
 | --- | --- | --- |
@@ -112,8 +112,10 @@ Pravila iz ovog odjeljka provodi `.claude/settings.json`; hookovi su u `scripts/
 | `ductus-scout` (Haiku, samo Read/Grep/Glob) | Jeftino lociranje koda i odjeljaka; ugrađeni Explore radi na modelu glavne sesije. | Pretraživanje preko pomoćnog agenta |
 | `CLAUDE_CODE_GLOB_NO_IGNORE=false` | Glob preskače sve iz `.gitignore`: `node_modules`, `.next`, worktreeove, ali i `test-results/` i `playwright-report/`; njih se nalazi kroz `ls`. | — |
 | `enabledPlugins: false` za `knowledge-work-plugins` | Isključuje sales, marketing, finance, data, design, productivity i pdf-viewer u ovom projektu. | Bez nepotrebnih pluginova |
-| Hook `cc-safety-net` (PreToolUse: Bash, PowerShell) | Blokira `git add -A`/`.`, `git commit -a`, `--no-verify`, force push, `git reset --hard`, destruktivni `rm` i čitanje tajni, i kad su umotani u `bash -c`. Pravila: `.cc-safety-net/rules/ductus-rules/rulebook.json`. | `CLAUDE.md`: tvrda pravila |
+| Hook `cc-safety-net` (PreToolUse: Bash, PowerShell) | Projektna pravila (`.cc-safety-net/rules/ductus-rules/rulebook.json`): `git add -A`/`.`/`-u`, `git stage -A`, `git commit -a`, `--no-verify` na commitu i pushu, i kad su umotani u `bash -c`. Ugrađena pravila: force push, `git branch -D`, `git stash drop`, `git worktree remove --force`, `find -delete`, `rm -rf` izvan radnog direktorija i svaka naredba koja imenuje `.env*` datoteku osim `.env.example` (i `cp .env.example .env.local`; to radi Daniel). `git restore`, `git checkout -- <datoteka>`, `git clean` i `git reset --hard` bez reference dopušteni su samo u povezanom worktreeu (`CC_SAFETY_NET_WORKTREE=1`); `git reset --hard <ref>` je blokiran svugdje. Hook nema korisničko odobrenje: blokiranu naredbu izvršava Daniel ručno. | `CLAUDE.md`: tvrda pravila |
 | `skillOverrides`: `supabase-postgres-best-practices` = `name-only` | Opis skilla ne ulazi u popis; Backend i Security profili ga učitavaju po potrebi. | Bez nepotrebnog konteksta |
+
+Pravila hvataju uobičajene oblike, ne sve: `git add *` u PowerShellu, `git -c core.hooksPath=... commit` i `LEFTHOOK=0 git commit` prolaze, pa `deny` pravila, lefthook i CI ostaju obvezni. Lažno blokira `git -C . add <datoteka>` i commit poruku koja je točno `-a` ili `-am`; takvu poruku treba dati kroz `-F`. Slučajeve iz rulebooka izvršava `scripts/engineering/safety-rules.test.mjs` kroz stvarni hook, za Bash i PowerShell.
 
 Mjerenje: `pnpm tokens:report` ili `node scripts/engineering/token-report.mjs [--days N] [--budget N] [--json]` čita lokalne zapise sesija i ispisuje samo brojeve: ukupni ulaz, udio početnog konteksta, udio iznad budžeta i veličinu izlaza po alatu. `pnpm tokens:codeburn` daje drugi pogled (nekorišteni MCP poslužitelji, ponovljena čitanja), a `pnpm agents:lint` provjerava `CLAUDE.md`, `AGENTS.md`, skillove i hookove. Polazno stanje 1.–10. 10. 2026.: 198,7 M ulaznih tokena u 829 poziva; 42 % je kontekst iznad 150k po pozivu, 30 % početni kontekst od oko 72k ponovljen u svakom pozivu.
 
