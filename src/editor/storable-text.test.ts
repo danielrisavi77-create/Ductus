@@ -26,6 +26,9 @@ describe("storableText (#131)", () => {
     expect(storableText("\uDC00")).toBe("\uFFFD");
     expect(storableText("x\uD83D")).toBe("x\uFFFD");
     expect(storableText("\uDE00\uD83D")).toBe("\uFFFD\uFFFD");
+    // A valid pair next to a lone surrogate keeps the pair.
+    expect(storableText("😀\uD800")).toBe("😀\uFFFD");
+    expect(storableText("\uDC00😀")).toBe("\uFFFD😀");
   });
 
   it("drops NUL", () => {

@@ -10,9 +10,12 @@ import { AtomicDexieJournal } from "./atomic-dexie-journal";
 import {
   LOCAL_DEMO_DOCUMENT_ID, LOCAL_DEMO_SCOPE_HASH, LOCAL_DEMO_SCOPE_LABEL,
   LOCAL_DEMO_DEPLOYMENTS, LocalScopeConfigError, localScopeConfigFromEnv, resolveLocalScope,
+  type LocalScopeConfig,
 } from "./local-scope";
 
-const ENV_KEYS = ["DUCTUS_LOCAL_DEMO_JOURNAL", "DUCTUS_DEPLOYMENT"] as const;
+const ENV_KEYS = [
+  "DUCTUS_LOCAL_DEMO_JOURNAL", "DUCTUS_DEPLOYMENT", "NEXT_PUBLIC_DUCTUS_LOCAL_DEMO_JOURNAL",
+] as const;
 const saved = ENV_KEYS.map((key) => process.env[key]);
 
 afterEach(() => {
@@ -67,6 +70,17 @@ describe("local demo journal scope (#197 attack 12)", () => {
     expect(() => resolveLocalScope(localScopeConfigFromEnv())).toThrow(LocalScopeConfigError);
     process.env.DUCTUS_DEPLOYMENT = "ci";
     expect(resolveLocalScope(localScopeConfigFromEnv())).toBe(LOCAL_DEMO_SCOPE_HASH);
+  });
+
+  it("ignores a public twin of the flag and inherited configuration", () => {
+    delete process.env.DUCTUS_LOCAL_DEMO_JOURNAL;
+    process.env.NEXT_PUBLIC_DUCTUS_LOCAL_DEMO_JOURNAL = "1";
+    process.env.DUCTUS_DEPLOYMENT = "ci";
+    expect(localScopeConfigFromEnv().localDemoJournal).toBeUndefined();
+    expect(resolveLocalScope(localScopeConfigFromEnv())).toBeNull();
+    const inherited = Object.create({ localDemoJournal: "1", deployment: "local" }) as LocalScopeConfig;
+    expect(resolveLocalScope(inherited)).toBeNull();
+    expect(Object.isFrozen(LOCAL_DEMO_DEPLOYMENTS)).toBe(true);
   });
 
   it("is a valid journal scope with its own database, and the document id is accepted", async () => {

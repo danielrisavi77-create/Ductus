@@ -12,9 +12,7 @@
  * (written by `saveLocal`); transient states live in memory only.
  */
 
-import {
-  documentsEqual, emptyDocument, validateDocument, type CanonicalDocument,
-} from "../../domain/document";
+import { emptyDocument, validateDocument, type CanonicalDocument } from "../../domain/document";
 import { restoreSyncState } from "../../domain/sync/restore";
 import {
   syncReducer, type LocalSaveFailureReason, type SyncEvent, type SyncState,
@@ -143,7 +141,11 @@ export class LocalDocumentSaver {
         this.emit();
         return { kind: "recovery", document: stored?.ok ? stored.doc : null };
       }
+      // A ready read after an `unavailable` one is a deliberate retry: the
+      // sequence below is re-read, so saving may resume from it.
       this.loaded = true;
+      this.halted = false;
+      this.failure = null;
       this.seq = meta?.localSeq ?? 0;
       this.baseRevision = snapshot?.revision ?? 0;
       this.durable = stored?.ok ? stored.doc : null;
@@ -205,31 +207,30 @@ export class LocalDocumentSaver {
   private async save({ doc, gen }: Candidate): Promise<void> {
     const current = () => gen === this.gen && this.next === null;
     if (current()) this.dispatch({ type: "LOCAL_SAVE_STARTED" });
-    const document = storableDocument(doc);
-    if (this.durable && documentsEqual(document, this.durable)) {
-      if (current()) this.succeed();
-      return;
-    }
-    const tx = {
-      kind: "REPLACE_DOCUMENT" as const, clientTransactionId: this.newId(),
-      baseRevision: this.baseRevision, document, createdAt: this.now().toISOString(),
-    };
-    const size = JSON.stringify(tx).length;
-    if (this.rows + 1 > this.limits.maxPendingRows ||
-        this.chars + size > this.limits.maxPendingChars) {
-      this.fail("limit");
-      return;
-    }
+    // No shortcut for text equal to `durable`: another tab may have moved the
+    // journal since, and only `saveLocal`'s sequence check can tell (#206 F2).
     try {
+      const document = storableDocument(doc);
+      const tx = {
+        kind: "REPLACE_DOCUMENT" as const, clientTransactionId: this.newId(),
+        baseRevision: this.baseRevision, document, createdAt: this.now().toISOString(),
+      };
+      const size = JSON.stringify(tx).length;
+      if (this.rows + 1 > this.limits.maxPendingRows ||
+          this.chars + size > this.limits.maxPendingChars) {
+        this.fail("limit");
+        return;
+      }
       const result = await this.journal.saveLocal(this.documentId, tx, tx.createdAt, this.seq);
       this.seq = result.localSeq;
       this.durable = result.snapshot.document;
       this.rows += 1;
       this.chars += size;
-      if (current()) this.succeed();
     } catch (error) {
       this.fail(failureOf(error));
+      return;
     }
+    if (current()) this.succeed();
   }
 
   private succeed(): void {
@@ -240,12 +241,15 @@ export class LocalDocumentSaver {
   /**
    * A failure is shown even when the author typed on meanwhile (the state is
    * then EDITING, which has no failure transition): the attempt is replayed
-   * as started-then-failed so ERROR or RECOVERY_REQUIRED is never skipped.
+   * as edited-started-failed so ERROR or RECOVERY_REQUIRED is never skipped,
+   * also from LOCAL_DURABLE, which has no LOCAL_SAVE_STARTED (#206 Q2).
    */
   private fail(failure: SaverFailure): void {
     this.failure = failure;
     if (HALTING.has(failure)) this.halted = true;
-    if (this.state !== "SAVING_LOCAL") this.state = syncReducer(this.state, { type: "LOCAL_SAVE_STARTED" });
+    if (this.state !== "SAVING_LOCAL") {
+      this.state = syncReducer(syncReducer(this.state, { type: "EDIT" }), { type: "LOCAL_SAVE_STARTED" });
+    }
     this.dispatch({ type: "LOCAL_SAVE_FAILED", reason: reasonOf(failure) });
   }
 
