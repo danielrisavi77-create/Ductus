@@ -22,7 +22,8 @@
     "stack:down": "docker compose down -v",
     "db:new": "dbmate new",
     "db:provision": "docker compose exec -T postgres psql -U ductus -d ductus -v ON_ERROR_STOP=1 -q < db/local/migrator.sql",
-    "db:migrate": "pnpm db:provision && dbmate --url \"postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus?sslmode=disable&role=ductus_migrator\" --no-dump-schema --wait up",
+    "db:provision:app": "docker compose exec -T postgres psql -U ductus -d ductus -v ON_ERROR_STOP=1 -q < db/local/app-login.sql",
+    "db:migrate": "pnpm db:provision && dbmate --url \"postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus?sslmode=disable&role=ductus_migrator\" --no-dump-schema --wait up && pnpm db:provision:app",
     "db:rollback": "dbmate --url \"postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus?sslmode=disable&role=ductus_migrator\" --no-dump-schema rollback",
     "db:status": "dbmate --url \"postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus?sslmode=disable\" status",
     "orch:status": "node scripts/orchestrator/pr-status.mjs",
@@ -50,6 +51,7 @@
     "@tiptap/react": "^3.31.3",
     "dexie": "^4.4.6",
     "next": "15.5.27",
+    "pg": "^8.23.1",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
@@ -69,7 +71,6 @@
     "fake-indexeddb": "^6.2.5",
     "fast-check": "^4.10.2",
     "lefthook": "^2.1.16",
-    "pg": "^8.23.1",
     "typescript": "^5.9.3",
     "vitest": "^5.0.1"
   },

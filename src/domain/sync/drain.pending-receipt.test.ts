@@ -13,6 +13,7 @@ import { emptyDocument, type DocumentTransaction } from "@/domain/document";
 
 import {
   ackedRevision,
+  awaitingReceiptFor,
   fastForwardBase,
   isRetryable,
   newerRowsQueued,
@@ -164,6 +165,106 @@ describe("pending receipt → EDIT → drain", () => {
   });
 });
 
+describe("lost response → EDIT → drain", () => {
+  const LOST: DrainOutcome = { status: "transport_error" };
+
+  it("resends the in-flight row and fast-forwards the newer one after its receipt", async () => {
+    // Server is on revision 1; seq 1 (base 1) passes the CAS and creates
+    // revision 2, but the response never reaches the client.
+    const first = row(1, 1);
+    expect(planDrain([first], meta("SYNCING")).send).toBe(first);
+
+    expect(await outcomeToEvents(LOST, verification("tx-1", 2), false)).toEqual([
+      { type: "SYNC_FAILED", retryable: true },
+    ]);
+    expect(isRetryable(LOST)).toBe(true);
+    expect(ackedRevision(LOST)).toBeNull();
+    const awaiting = nextAwaitingReceipt(first, LOST, null);
+    expect(awaiting).toEqual({ documentId: DOC, localSeq: 1, clientTransactionId: "tx-1" });
+
+    // The author keeps typing: seq 2 is queued against the same base 1.
+    const second = row(2, 1);
+    const plan = planDrain([first, second], meta("SYNCING"), awaiting);
+
+    // The held row goes out again under the same key; seq 2 stays queued.
+    expect(plan.send).toBe(first);
+    expect(plan.send?.tx.clientTransactionId).toBe("tx-1");
+    expect(plan.supersededUpTo).toBeNull();
+    const replay = fakeServerAfterFirstCommit(plan.send!, true);
+    expect(replay.status).toBe("duplicate");
+    let state: SyncState = "SYNCING";
+    for (const event of await outcomeToEvents(
+      replay,
+      verification("tx-1", 2),
+      newerRowsQueued([first, second], plan.send),
+    )) {
+      state = syncReducer(state, event);
+    }
+    // Verified, but seq 2 is newer: no SYNC_ACK yet, and never a conflict.
+    expect(state).toBe("SYNCING");
+
+    const acked = ackedRevision(replay);
+    expect(acked).toBe(2);
+    const cleared = nextAwaitingReceipt(plan.send!, replay, awaiting);
+    expect(cleared).toBeNull();
+
+    // The runner clears the acknowledged prefix (seq ≤ 1); seq 2 goes next.
+    const next = planDrain([second], meta("LOCAL_DURABLE"), cleared);
+    expect(next.send).toBe(second);
+    const forwarded = fastForwardBase(next.send!.tx, acked);
+    expect(forwarded.baseRevision).toBe(2);
+    expect(forwarded.clientTransactionId).toBe("tx-2");
+    expect(
+      fakeServerAfterFirstCommit({ ...second, tx: forwarded }, false).status,
+    ).toBe("committed");
+  });
+
+  it("keeps holding the same row across repeated lost responses", () => {
+    const first = row(1, 1);
+    const queue = [first, row(2, 1), row(3, 1)];
+    let awaiting = nextAwaitingReceipt(first, LOST, null);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const plan = planDrain(queue, meta("SYNCING"), awaiting);
+      expect(plan.send).toBe(first);
+      awaiting = nextAwaitingReceipt(plan.send!, LOST, awaiting);
+      expect(awaiting).toEqual({ documentId: DOC, localSeq: 1, clientTransactionId: "tx-1" });
+    }
+  });
+
+  it("the marker written before the send is the one a lost response leaves", () => {
+    // Contract only: the DAN-49 runner persists this before sending, so a
+    // reload mid-flight resumes with the same hold a transport_error leaves.
+    const first = row(1, 1);
+    const beforeSend = awaitingReceiptFor(first);
+    expect(beforeSend).toEqual(nextAwaitingReceipt(first, LOST, null));
+    expect(nextAwaitingReceipt(first, LOST, beforeSend)).toEqual(beforeSend);
+    expect(planDrain([first, row(2, 1)], meta("LOCAL_DURABLE"), beforeSend).send).toBe(first);
+  });
+
+  it("a real stale_base on the held row is a conflict and ends the hold", async () => {
+    // Someone else moved the document: replaying the held row must not be
+    // softened into a retry. The server read tx-1 and refused it, so it did
+    // not land (a landed key replays as `duplicate`) and nothing is owed.
+    const first = row(1, 1);
+    const awaiting = nextAwaitingReceipt(first, LOST, null);
+    const stale: DrainOutcome = { status: "stale_base", currentRevision: 5 };
+    expect(await outcomeToEvents(stale, verification("tx-1", 2), false)).toEqual([
+      { type: "SYNC_STALE_BASE" },
+    ]);
+    expect(isRetryable(stale)).toBe(false);
+    expect(ackedRevision(stale)).toBeNull();
+    const after = nextAwaitingReceipt(first, stale, awaiting);
+    expect(after).toBeNull();
+    // CONFLICT holds everything until the author decides; a rebase then
+    // journals a new row on the server's base, and that row goes out.
+    expect(planDrain([first, row(2, 1)], meta("CONFLICT"), after).send).toBeNull();
+    const rebased = row(3, 5);
+    expect(planDrain([first, row(2, 1), rebased], meta("LOCAL_DURABLE"), after).send).toBe(
+      rebased,
+    );
+  });
+});
+
 describe("planDrain — holding for a receipt", () => {
   const awaiting: AwaitingReceipt = { documentId: DOC, localSeq: 2, clientTransactionId: "tx-2" };
 
@@ -257,19 +358,83 @@ describe("nextAwaitingReceipt", () => {
     expect(nextAwaitingReceipt(sent, bare, null)).toEqual(previous);
   });
 
-  it("keeps the previous marker when no server answer was learned", () => {
+  it("holds the sent row when no server answer was learned", () => {
+    // The response may be what was lost: the CAS can have landed unheard.
     expect(nextAwaitingReceipt(sent, { status: "transport_error" }, previous)).toEqual(previous);
-    expect(nextAwaitingReceipt(sent, { status: "transport_error" }, null)).toBeNull();
+    expect(nextAwaitingReceipt(sent, { status: "transport_error" }, null)).toEqual(previous);
   });
 
-  it("keeps the previous marker on answers that did not land this commit", () => {
+  it("does not start a hold on answers that say the commit did not land", () => {
+    for (const outcome of KEY_REFUSALS) {
+      expect(nextAwaitingReceipt(sent, outcome, null)).toBeNull();
+    }
+    expect(nextAwaitingReceipt(sent, { status: "unauthenticated" }, null)).toBeNull();
+  });
+
+  it("starts a hold on answers that do not prove the commit missed", () => {
+    // Unreadable, unknown or absent answers and `txid_reused` (the key IS on
+    // the server) can all hide a landed CAS, exactly like a lost response.
+    // `txid_reused` also marks the hold diverged (DAN-135).
+    expect(nextAwaitingReceipt(sent, { status: "txid_reused" }, null)).toEqual({
+      ...previous,
+      diverged: "txid_reused",
+    });
     for (const outcome of [
-      { status: "stale_base", currentRevision: 9 },
-      { status: "too_large" },
       { status: "invalid" },
+      { status: "something_new" },
       null,
+      undefined,
     ] as unknown as DrainOutcome[]) {
-      expect(nextAwaitingReceipt(sent, outcome, previous)).toEqual(previous);
+      expect(nextAwaitingReceipt(sent, outcome, null)).toEqual(previous);
+    }
+  });
+
+  const KEY_REFUSALS = [
+    { status: "stale_base", currentRevision: 9 },
+    { status: "too_large" },
+    { status: "not_found" },
+    { status: "invalid_document" },
+    { status: "invalid_client_transaction_id" },
+  ] as unknown as DrainOutcome[];
+  const SAYS_NOTHING_ABOUT_LANDING = [
+    { status: "unauthenticated" },
+    { status: "txid_reused" },
+    { status: "invalid" },
+    { status: "something_new" },
+    null,
+    undefined,
+  ] as unknown as DrainOutcome[];
+
+  it("ends the hold when the server refuses the held key itself", () => {
+    // A landed key replays as `duplicate`, so a refusal of the same key
+    // proves it never landed: keeping the hold would replay it forever.
+    for (const outcome of KEY_REFUSALS) {
+      expect(nextAwaitingReceipt(sent, outcome, previous)).toBeNull();
+    }
+  });
+
+  it("keeps the hold on answers that say nothing about whether the key landed", () => {
+    for (const outcome of SAYS_NOTHING_ABOUT_LANDING) {
+      const expected =
+        outcome?.status === "txid_reused" ? { ...previous, diverged: "txid_reused" } : previous;
+      expect(nextAwaitingReceipt(sent, outcome, previous)).toEqual(expected);
+    }
+  });
+
+  it("a refusal of another row never releases the held one", () => {
+    const others = [
+      row(4, 1),
+      { ...row(3, 1), tx: { ...tx(3, 1), clientTransactionId: "tx-other" } },
+      { ...row(3, 1), documentId: "22222222-2222-4222-8222-222222222222" },
+    ];
+    for (const other of others) {
+      for (const outcome of [...KEY_REFUSALS, ...SAYS_NOTHING_ABOUT_LANDING]) {
+        // txid_reused for another row keeps the hold too, marked diverged so
+        // it agrees with the SYNC_KEY_DIVERGED that answer emits (DAN-135).
+        const expected =
+          outcome?.status === "txid_reused" ? { ...previous, diverged: "txid_reused" } : previous;
+        expect(nextAwaitingReceipt(other, outcome, previous)).toEqual(expected);
+      }
     }
   });
 

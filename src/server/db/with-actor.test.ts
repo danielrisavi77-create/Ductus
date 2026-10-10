@@ -1,3 +1,5 @@
+import { EventEmitter } from "node:events";
+
 import type { Pool } from "pg";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -116,5 +118,45 @@ describe("withActor from the environment", () => {
     const fn = vi.fn(async () => "ran");
     await expect(withActor(TOKEN, fn)).rejects.toThrow("APP_DATABASE_URL is not set");
     expect(fn).not.toHaveBeenCalled();
+  });
+
+  it("bounds every wait of the application pool", async () => {
+    const { appPoolConfig } = await import("./index");
+    const config = appPoolConfig("postgres://app.invalid/ductus");
+    for (const limit of [
+      config.max,
+      config.connectionTimeoutMillis,
+      config.statement_timeout,
+      config.idle_in_transaction_session_timeout,
+      config.query_timeout,
+    ]) {
+      expect(limit).toBeGreaterThan(0);
+      expect(Number.isFinite(limit)).toBe(true);
+    }
+    // A server that answers must cancel a statement before the driver stops waiting for it.
+    expect(config.query_timeout).toBeGreaterThan(Number(config.statement_timeout));
+    // A nested call must fail on its own wait before the server ends the outer transaction.
+    expect(config.idle_in_transaction_session_timeout).toBeGreaterThan(config.connectionTimeoutMillis ?? 0);
+  });
+
+  it("listens for the failure of every connection and logs its code only", async () => {
+    const { handleConnectionErrors } = await import("./index");
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    const pool = new EventEmitter();
+    const client = new EventEmitter();
+    handleConnectionErrors(pool as unknown as Pool);
+    pool.emit("connect", client);
+
+    // An `error` event without a listener throws; neither of these may.
+    const failure = Object.assign(new Error(`statement with ${TOKEN}`), { code: "25P03", detail: TOKEN });
+    client.emit("error", failure);
+    client.emit("error", new Error(`dropped while sending ${TOKEN}`));
+    pool.emit("error", failure, client);
+
+    expect(logged.mock.calls).toEqual([
+      ["database connection failed", "25P03"],
+      ["database connection failed", "Error"],
+    ]);
+    logged.mockRestore();
   });
 });
