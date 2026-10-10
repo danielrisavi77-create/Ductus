@@ -21,10 +21,9 @@ export const hr = {
   shell: {
     skipToContent: "Preskoči na sadržaj",
     demoBadge: "Demo · izmišljeni podaci",
-    demoBadgeShort: "Demo",
   },
   home: {
-    lead: "Pišeš u Ductusu, a nastavnik vidi kako je rad nastao. Ništa se ne procjenjuje i ništa se ne skriva od tebe.",
+    lead: "Ductus ne procjenjuje autorstvo ni korištenje AI-ja. Prije početka vidiš što nastavnik vidi i od kada.",
     openWorkspace: "Otvori radni prostor",
   },
   workspace: {
@@ -32,6 +31,7 @@ export const hr = {
     viewModes: "Prikaz",
     modeWriting: "Pisanje",
     modeTeacherView: "Kako vidi nastavnik",
+    soon: "uskoro",
     structure: "Struktura",
     structureLabel: "Struktura rada",
     structureEmpty: "Naslovi će se pojaviti ovdje.",
@@ -43,6 +43,7 @@ export const hr = {
     sidePanel: "Upute, literatura i komentari",
     sidePanelEmpty: "Upute zadatka, literatura i komentari nastavnika prikazuju se ovdje.",
     documentUntitled: "Bez naslova",
+    documentLabel: "Tekst rada",
     documentPlaceholder: "Počni pisati…",
     status: "Stanje rada",
   },

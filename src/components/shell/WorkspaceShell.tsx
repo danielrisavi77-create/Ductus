@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 
+import ShellRail from "./ShellRail";
+
 export type WorkspaceMode = "writing" | "teacher-view";
 
 export type WorkspaceShellProps = {
@@ -11,8 +13,9 @@ export type WorkspaceShellProps = {
   /** Which of the two views is open; the other is a link. */
   mode?: WorkspaceMode;
   /**
-   * Where each view lives. A view without an address is shown as plain text,
-   * not as a link that leads nowhere: the teacher's view arrives with F-8.
+   * Where each view lives. A view without an address is a visibly disabled
+   * button marked "uskoro", never a link that leads nowhere: the teacher's
+   * view arrives with F-8.
    */
   writingHref?: string;
   teacherViewHref?: string;
@@ -32,8 +35,12 @@ export type WorkspaceShellProps = {
 
 /**
  * The writing workspace from design v6 (D-89): 46 px top bar, 236 px left
- * rail, sheet of at most 756 px, 322 px right rail, 34 px status bar. Below
- * 1100 px the rails stack under the sheet so the text keeps its width.
+ * rail, sheet of at most 756 px, 322 px right rail, 34 px status bar.
+ *
+ * The DOM order is the same at every width: sheet (`main`), instructions,
+ * structure. On a wide screen `grid-template-areas` puts the structure rail
+ * on the left, beside the sheet the skip link leads to; below 1100 px both
+ * rails are sections under the sheet that open with a button, in DOM order.
  */
 export default function WorkspaceShell({
   context,
@@ -65,19 +72,19 @@ export default function WorkspaceShell({
             {t.workspace.modeTeacherView}
           </ModeLink>
         </nav>
-        <span className="demo-badge demo-badge--small">{t.shell.demoBadgeShort}</span>
+        <span className="demo-badge">{t.shell.demoBadge}</span>
       </header>
       {banner}
       <div className="workspace__body">
-        <aside className="workspace__rail" aria-label={t.workspace.structureLabel}>
-          {rail}
-        </aside>
         <main id="sadrzaj" tabIndex={-1} className="workspace__main">
           {children}
         </main>
-        <aside className="workspace__panel" aria-label={t.workspace.sidePanel}>
+        <ShellRail className="workspace__panel" label={t.workspace.sidePanel}>
           {panel}
-        </aside>
+        </ShellRail>
+        <ShellRail className="workspace__rail" label={t.workspace.structureLabel}>
+          {rail}
+        </ShellRail>
       </div>
       <footer className="workspace__status" aria-label={t.workspace.status}>
         {status}
@@ -88,10 +95,18 @@ export default function WorkspaceShell({
 
 type ModeLinkProps = { href?: string; current: boolean; children: ReactNode };
 
-/** One entry of the view switch; without an address it is not a link. */
+/**
+ * One entry of the view switch. Without an address it is a button that stays
+ * in the Tab order and says it is unavailable (`aria-disabled`), so a keyboard
+ * or screen reader user learns the view exists and is not ready yet.
+ */
 function ModeLink({ href, current, children }: ModeLinkProps) {
   if (href === undefined) {
-    return <span className="modes__item">{children}</span>;
+    return (
+      <button type="button" className="modes__item" aria-disabled="true">
+        {children} <span className="soon">{t.workspace.soon}</span>
+      </button>
+    );
   }
   return (
     <Link className="modes__item" href={href} aria-current={current ? "page" : undefined}>
