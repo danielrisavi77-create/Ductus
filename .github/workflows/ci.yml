@@ -36,7 +36,7 @@ jobs:
         run: node scripts/engineering/pr-metadata-check.mjs
       - run: pnpm test:unit
       - name: Engineering system unit tests
-        run: node --test scripts/engineering/*.test.mjs
+        run: node --test scripts/engineering/*.test.mjs scripts/orchestrator/*.test.mjs
       - run: pnpm test:property
       - run: pnpm build
 
