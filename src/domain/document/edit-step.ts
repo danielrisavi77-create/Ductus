@@ -27,7 +27,6 @@ import { isPlainObject } from "../json";
 import {
   isHeadingLevel,
   isMark,
-  isNodeId,
   MARK_ORDER,
   type HeadingLevel,
   type Mark,
@@ -139,6 +138,17 @@ function reject(code: EditStepRejection, path: string): never {
 
 const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 const SHA256_HEX = /^[0-9a-f]{64}$/;
+/**
+ * A node id in a step is a random UUID (version 4) in lower case, and nothing
+ * else. Versions 1, 6 and 7 carry a timestamp finer than a minute, which a
+ * step may not hold (owner decision 6, D-24); upper case would be a second
+ * way to write the same id. Narrower than `isNodeId` on purpose.
+ */
+const STEP_NODE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+function isStepNodeId(value: unknown): value is NodeId {
+  return typeof value === "string" && STEP_NODE_ID.test(value);
+}
 /** Smaller than the canonical form of any node, mark or step. */
 const MIN_OBJECT_BYTES = 16;
 
@@ -264,7 +274,7 @@ function text(value: unknown, path: string, budget: Budget): EditStepText {
 }
 
 function nodeId(value: unknown, path: string): NodeId | null {
-  if (value === null || isNodeId(value)) {
+  if (value === null || isStepNodeId(value)) {
     return value;
   }
   return reject("invalid_node_id", path);
@@ -391,7 +401,7 @@ function attrStep(value: unknown, path: string): EditStepV1 {
   if (own.attr !== "nodeId") {
     reject("invalid_value", `${path}.attr`);
   }
-  if (!isNodeId(own.value)) {
+  if (!isStepNodeId(own.value)) {
     reject("invalid_node_id", `${path}.value`);
   }
   return { attr: "nodeId", pos, stepType: "attr", value: own.value };
