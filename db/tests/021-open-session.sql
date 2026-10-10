@@ -8,7 +8,7 @@ CREATE ROLE ductus_test_stranger NOLOGIN;
 GRANT USAGE ON SCHEMA public TO ductus_app, ductus_worker, ductus_retention, ductus_auth, ductus_test_stranger;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO ductus_app, ductus_worker, ductus_retention, ductus_auth, ductus_test_stranger;
 
-SELECT plan(51);
+SELECT plan(52);
 
 INSERT INTO identity.institution (id, slug, aai_home_org) VALUES
   ('00000000-0000-4000-8000-00000000000a', 'test-a', 'a.example'),
@@ -118,8 +118,18 @@ SELECT is(pg_temp.open('https://issuer.test', 'sub-mallory', 'ana@a.example', 'a
 SELECT is(pg_temp.open('https://issuer.test', 'sub-ana', 'mallory@a.example', 'a.example', pg_temp.h('m2')),
   'ZD403: forbidden', 'a known subject with another unique id is refused');
 SELECT is(pg_temp.open('https://issuer.test', 'sub-ana', 'ana@a.example', 'b.example', pg_temp.h('m3')),
-  'ZD403: forbidden', 'a known person arriving from another home organisation is refused');
+  'ZD503: institution not set up', 'a known person arriving from another home organisation is refused');
 RESET ROLE;
+-- A known person whose home organisation now belongs to another institution
+-- is refused rather than moved.
+UPDATE identity.institution SET aai_home_org = NULL WHERE slug = 'test-a';
+UPDATE identity.institution SET aai_home_org = 'a.example' WHERE slug = 'test-c';
+SET LOCAL ROLE ductus_auth;
+SELECT is(pg_temp.open('https://issuer.test', 'sub-ana', 'ana@a.example', 'a.example', pg_temp.h('m4')),
+  'ZD403: forbidden', 'a known person whose home organisation moved to another institution is refused');
+RESET ROLE;
+UPDATE identity.institution SET aai_home_org = NULL WHERE slug = 'test-c';
+UPDATE identity.institution SET aai_home_org = 'a.example' WHERE slug = 'test-a';
 SELECT is(pg_temp.counts(), '3 users, 4 sessions', 'refused identities create neither an account nor a session');
 
 -- 5. Home organisation: unknown, missing or of an institution without
@@ -170,7 +180,7 @@ SELECT is(pg_temp.open('https://issuer.test', 'sub-eve', 'eve@a.example', 'a.exa
   'ZD422: invalid input', 'a hash of 31 bytes is refused');
 SELECT is(pg_temp.open('https://issuer.test', 'sub-eve', 'eve@a.example', 'a.example', NULL),
   'ZD422: invalid input', 'a missing hash is refused');
-SELECT is(pg_temp.open('https://issuer.test', 'sub-eve', repeat('u', 255), 'a.example', pg_temp.h('i7')),
+SELECT is(pg_temp.open('https://issuer.test', 'sub-eve', repeat('u', 245) || '@a.example', 'a.example', pg_temp.h('i7')),
   'ok', 'hrEduPersonUniqueID of exactly 255 characters is accepted');
 RESET ROLE;
 SELECT is(pg_temp.counts(), '5 users, 7 sessions', 'refused input creates neither an account nor a session');
