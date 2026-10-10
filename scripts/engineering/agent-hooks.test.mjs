@@ -11,6 +11,7 @@ import {
   LARGE_DOC_BYTES,
   MODE_NAMES,
   ORCHESTRATOR_LIMIT,
+  ORCHESTRATOR_REMIND_AT,
   OUTLINE_LIMIT,
   PROFILE_ROLES,
   ROTATE_AT,
@@ -225,7 +226,7 @@ test("every profile in PROFILE_ROLES gets the notice of its own role from the bu
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-roles-"));
   try {
     const transcript = path.join(dir, "t.jsonl");
-    fs.writeFileSync(transcript, assistant("a", { cache_read_input_tokens: ROTATE_AT }) + "\n");
+    fs.writeFileSync(transcript, assistant("a", { cache_read_input_tokens: ORCHESTRATOR_REMIND_AT }) + "\n");
     const expected = { orchestrator: /Reminder, not a stop/, worker: /IZVJEŠTAJ block of your own PR/, control: /your own comment on the PR or issue/ };
     assert.deepEqual([...new Set(Object.values(PROFILE_ROLES))].sort(), Object.keys(expected).sort());
     for (const [profile, role] of Object.entries(PROFILE_ROLES)) {
@@ -248,7 +249,7 @@ test("every profile in PROFILE_ROLES gets the notice of its own role from the bu
 });
 
 test("the orchestrator is reminded to hand off and compact, never told to rotate or stop", () => {
-  for (const tokens of [ROTATE_AT, HARD_AT, HARD_AT * 2]) {
+  for (const tokens of [ORCHESTRATOR_REMIND_AT, ORCHESTRATOR_LIMIT, ORCHESTRATOR_LIMIT * 2]) {
     const notice = budgetNotice(tokens, "orchestrator");
     assert.match(notice, /docs\/ORKESTRATOR\.md §7/);
     assert.match(notice, /board/);
@@ -257,7 +258,9 @@ test("the orchestrator is reminded to hand off and compact, never told to rotate
     assert.doesNotMatch(notice, BAN);
     assert.doesNotMatch(notice, /ductus-handoff|should be rotated|fresh session/);
   }
-  assert.equal(budgetNotice(ROTATE_AT - 1, "orchestrator"), null);
+  assert.equal(budgetNotice(ORCHESTRATOR_REMIND_AT - 1, "orchestrator"), null);
+  // The orchestrator is not reminded at the 150k and 250k points that apply to other roles.
+  for (const tokens of [ROTATE_AT, HARD_AT]) assert.equal(budgetNotice(tokens, "orchestrator"), null);
 });
 
 test("an unrecognised role is never forbidden to work and gets the orchestrator exemption", () => {
@@ -289,7 +292,7 @@ test("budget entry point applies the role from the hook input", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-role-"));
   try {
     const transcript = path.join(dir, "t.jsonl");
-    fs.writeFileSync(transcript, assistant("a", { cache_read_input_tokens: HARD_AT }) + "\n");
+    fs.writeFileSync(transcript, assistant("a", { cache_read_input_tokens: ORCHESTRATOR_REMIND_AT }) + "\n");
     const notice = (extra) => run("budget", { transcript_path: transcript, ...extra }).additionalContext;
     assert.doesNotMatch(notice({ agent_type: "ductus-orchestrator" }), BAN);
     assert.match(notice({ agent_type: "ductus-orchestrator" }), /not rotated/);
@@ -745,20 +748,21 @@ test("a repo below a directory named secrets/ keeps its hooks; its own deny-list
   }
 });
 
-test("the orchestrator is told about the 200k safety limit of ORKESTRATOR.md §7 from 200k on", () => {
-  const limit = /200k upper safety limit in §7/;
-  assert.equal(ORCHESTRATOR_LIMIT, 200_000);
-  assert.match(fs.readFileSync(path.join(repo, "docs/ORKESTRATOR.md"), "utf8"), /200\.000 tokena je gornja sigurnosna granica/);
-  for (const tokens of [ROTATE_AT, ORCHESTRATOR_LIMIT - 1]) assert.doesNotMatch(budgetNotice(tokens, "orchestrator"), limit);
-  for (const tokens of [ORCHESTRATOR_LIMIT, 210_000, HARD_AT]) {
+test("the orchestrator is told about the 400k safety limit of ORKESTRATOR.md §7 from 400k on", () => {
+  const limit = /400k upper safety limit in §7/;
+  assert.equal(ORCHESTRATOR_LIMIT, 400_000);
+  assert.equal(ORCHESTRATOR_REMIND_AT, 300_000);
+  assert.match(fs.readFileSync(path.join(repo, "docs/ORKESTRATOR.md"), "utf8"), /400\.000 tokena je gornja sigurnosna granica/);
+  for (const tokens of [ORCHESTRATOR_REMIND_AT, ORCHESTRATOR_LIMIT - 1]) assert.doesNotMatch(budgetNotice(tokens, "orchestrator"), limit);
+  for (const tokens of [ORCHESTRATOR_LIMIT, 410_000, 500_000]) {
     assert.match(budgetNotice(tokens, "orchestrator"), limit);
     assert.doesNotMatch(budgetNotice(tokens, "orchestrator"), BAN);
   }
-  for (const role of ["worker", "control", "unknown"]) assert.doesNotMatch(budgetNotice(210_000, role), limit);
+  for (const role of ["worker", "control", "unknown"]) assert.doesNotMatch(budgetNotice(410_000, role), limit);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-limit-"));
   try {
     const transcript = path.join(dir, "t.jsonl");
-    fs.writeFileSync(transcript, assistant("a", { cache_read_input_tokens: 210_000 }) + "\n");
+    fs.writeFileSync(transcript, assistant("a", { cache_read_input_tokens: 410_000 }) + "\n");
     assert.match(run("budget", { transcript_path: transcript, agent_type: "ductus-orchestrator" }).additionalContext, limit);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
