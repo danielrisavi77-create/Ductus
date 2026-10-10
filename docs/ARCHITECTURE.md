@@ -115,6 +115,8 @@ Sve tablice imaju uključen RLS i retke u pgTAP matrici pristupa. Pristup ide kr
 | `app_user` | id, izdavatelj i `hrEduPersonUniqueID` (jedinstveni par), `sub`, ustanova, ime za prikaz, posljednja prijava | Sam korisnik; nastavnik vidi ime studenata u svom kolegiju |
 | `session` | hash tokena, korisnik, ustanova, nastala, istječe, zatvorena (odjava ili back-channel logout) | Nitko izravno; samo `current_actor()` |
 
+Sesiju otvara samo `identity.open_session`, koju izvršava jedino `ductus_auth` iz povratne rute prijave nakon provjere OIDC odgovora; prima izdavatelja, `sub`, `hrEduPersonUniqueID`, `hrEduPersonHomeOrg` i SHA-256 tokena, nikad sam token (B-6, D-90). Ustanovu bira po stupcu `identity.institution.aai_home_org`: jedinstven, mala slova (`^[a-z0-9.-]{1,255}$`), piše ga samo vlasnik `ductus_identity` (lokalni i CI seed, u produkciji provisioning), a `NULL` znači da ustanova ne prima prijave. Pristigli homeOrg se uspoređuje nakon uklanjanja rubnih razmaka i spuštanja ASCII slova; nepoznat, prazan ili znak sličan ASCII-ju daje odbijenu prijavu (`ZD503`) s neutralnom porukom koja ne otkriva postoji li ustanova.
+
 ### Ustanova i nastava
 
 | Tablica | Ključni stupci | Tko čita |
