@@ -119,6 +119,10 @@ export class LocalDocumentSaver {
   private unsaved = false;
   /** Why the last `load()` returned `recovery`; null after a `ready` one. */
   private recovery: RecoveryReason | null = null;
+  /** The journal sequence whose text the last recovery showed. */
+  private shown = 0;
+  /** Set while `resume()` reads: the journal must still be at this sequence. */
+  private resumeAt: number | null = null;
   private next: Candidate | null = null;
   private flight: Promise<void> | null = null;
   /** Set while any `load()` reads; no write starts until the last one resolves. */
@@ -203,17 +207,20 @@ export class LocalDocumentSaver {
         return this.recover("sticky", stored?.ok ? stored.doc : null);
       }
       const document = stored?.ok ? stored.doc : null;
-      if (this.loaded && (meta?.localSeq ?? 0) !== this.seq) {
-        return this.haltWith("stale", this.recover("stale", document));
+      const at = meta?.localSeq ?? 0;
+      const expected = this.resumeAt ?? (this.loaded ? this.seq : at);
+      if (at !== expected) {
+        return this.haltWith("stale", this.recover("stale", document, at));
       }
-      if (this.unsaved) {
+      if (this.unsaved && this.resumeAt === null) {
         const failure = this.failure ?? "unknown";
-        const result = this.recover("unsaved", document);
+        const result = this.recover("unsaved", document, at);
         return HALTING.has(failure) ? this.haltWith(failure, result) : result;
       }
       // A ready read after an `unavailable` one is a deliberate retry: the
       // sequence below is re-read, so saving may resume from it.
       this.loaded = true;
+      this.unsaved = false;
       this.recovery = null;
       this.halted = false;
       this.failure = null;
@@ -235,25 +242,33 @@ export class LocalDocumentSaver {
     }
   }
 
-  private recover(reason: RecoveryReason, document: CanonicalDocument | null): LoadResult {
+  private recover(reason: RecoveryReason, document: CanonicalDocument | null, at = 0): LoadResult {
     this.recovery = reason;
+    this.shown = at;
     return { kind: "recovery", reason, document };
   }
 
   /**
    * Leaves an `unsaved` or `stale` recovery with the text the author chose
-   * (usually the editor's): re-reads the journal's sequence and writes `doc`
-   * over the journal's text, which stays in its rows. The result is that of
-   * the re-read; the write's outcome is in the snapshot. A `corrupt` or
-   * `sticky` journal is never written over, so `resume()` throws there.
+   * (usually the editor's) and writes `doc` over the journal's text, which
+   * stays in its rows. Only over the text the recovery showed: if another
+   * writer moved the journal since, the result is a new `stale` recovery with
+   * its text and nothing is written; the write itself is a compare-and-set on
+   * that sequence. The result is that of the re-read; the write's outcome is
+   * in the snapshot. A `corrupt` or `sticky` journal is never written over,
+   * so `resume()` throws there.
    */
   async resume(doc: CanonicalDocument): Promise<LoadResult> {
     if (this.recovery !== "unsaved" && this.recovery !== "stale") {
       throw new Error("LocalDocumentSaver.resume() without an unsaved or stale recovery");
     }
-    this.unsaved = false;
-    this.loaded = false;
-    const result = await this.load();
+    this.resumeAt = this.shown;
+    let result: LoadResult;
+    try {
+      result = await this.load();
+    } finally {
+      this.resumeAt = null;
+    }
     if (result.kind !== "ready") return result;
     this.edit();
     await this.propose(doc);
@@ -321,6 +336,8 @@ export class LocalDocumentSaver {
         return;
       }
       const result = await this.journal.saveLocal(this.documentId, tx, tx.createdAt, this.seq);
+      // This saver's own write moves the journal past nothing the author lacks.
+      if (this.shown === this.seq) this.shown = result.localSeq;
       this.seq = result.localSeq;
       this.durable = result.snapshot.document;
       this.rows += 1;

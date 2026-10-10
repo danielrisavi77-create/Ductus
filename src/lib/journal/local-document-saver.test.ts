@@ -445,6 +445,98 @@ describe("LocalDocumentSaver: failures (#197 attacks 5, 6, 7, 4, 17, 13)", () =>
     expect(first.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
   });
 
+  it("4, 6: resume() never writes over text another writer saved after the recovery (#206 review)", async () => {
+    const at = scope();
+    const a = saver(journal(at));
+    const b = saver(journal(at));
+    await Promise.all([a.load(), b.load()]);
+    await type(b, "B1");
+    await type(a, "A1");
+    expect(await a.load()).toEqual({ kind: "recovery", reason: "stale", document: text("B1") });
+    await type(b, "B2 newer");
+    expect(b.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+    expect(await a.resume(text("A2"))).toEqual({ kind: "recovery", reason: "stale", document: text("B2 newer") });
+    expect(a.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+    expect((await journal(at).read(DOC)).snapshot?.document).toEqual(text("B2 newer"));
+    // Once the author has seen "B2 newer", resuming over it is a choice.
+    expect(await a.resume(text("A2"))).toEqual({ kind: "ready", document: text("B2 newer") });
+    expect(a.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+    const stored = await journal(at).read(DOC);
+    expect(stored.snapshot?.document).toEqual(text("A2"));
+    expect(stored.pending.some((row) => documentsEqual(row.tx.document, text("B2 newer")))).toBe(true);
+  });
+
+  it("6: resume() after an unsaved recovery never writes over another writer's later text", async () => {
+    const at = scope();
+    const real = journal(at);
+    let closed = false;
+    const a = saver(patched(real, {
+      saveLocal: async (...args: Parameters<AtomicDexieJournal["saveLocal"]>) => {
+        if (closed) throw Object.assign(new Error("closed"), { name: "DatabaseClosedError" });
+        return real.saveLocal(...args);
+      },
+    }));
+    await a.load();
+    await type(a, "staro");
+    closed = true;
+    await type(a, "iz editora");
+    closed = false;
+    expect(await a.load()).toEqual({ kind: "recovery", reason: "unsaved", document: text("staro") });
+    const b = saver(journal(at));
+    await b.load();
+    await type(b, "druga kartica");
+    expect(await a.resume(text("iz editora"))).toEqual({ kind: "recovery", reason: "stale", document: text("druga kartica") });
+    expect((await journal(at).read(DOC)).snapshot?.document).toEqual(text("druga kartica"));
+    expect(await a.resume(text("iz editora"))).toMatchObject({ kind: "ready" });
+    expect((await journal(at).read(DOC)).snapshot?.document).toEqual(text("iz editora"));
+  });
+
+  it("4, 6: a writer between resume()'s read and its write makes it stale, never overwritten", async () => {
+    const at = scope();
+    const real = journal(at);
+    let race: (() => Promise<void>) | null = null;
+    const a = saver(patched(real, {
+      saveLocal: async (...args: Parameters<AtomicDexieJournal["saveLocal"]>) => {
+        const before = race;
+        race = null;
+        if (before) await before();
+        return real.saveLocal(...args);
+      },
+    }));
+    const b = saver(journal(at));
+    await Promise.all([a.load(), b.load()]);
+    await type(b, "B1");
+    await type(a, "A1");
+    expect(await a.load()).toMatchObject({ kind: "recovery", reason: "stale" });
+    race = () => type(b, "B2 u utrci");
+    expect(await a.resume(text("A2"))).toEqual({ kind: "ready", document: text("B1") });
+    expect(a.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+    expect((await journal(at).read(DOC)).snapshot?.document).toEqual(text("B2 u utrci"));
+    expect(await a.load()).toEqual({ kind: "recovery", reason: "stale", document: text("B2 u utrci") });
+  });
+
+  it("6: resume() after a full store that this saver's own later write cleared is not stale", async () => {
+    const at = scope();
+    const real = journal(at);
+    let full = false;
+    const target = saver(patched(real, {
+      saveLocal: async (...args: Parameters<AtomicDexieJournal["saveLocal"]>) => {
+        if (full) throw Object.assign(new Error("full"), { name: "QuotaExceededError" });
+        return real.saveLocal(...args);
+      },
+    }));
+    await target.load();
+    await type(target, "prvi");
+    full = true;
+    await type(target, "drugi");
+    full = false;
+    expect(await target.load()).toMatchObject({ kind: "recovery", reason: "unsaved" });
+    await type(target, "drugi");
+    expect(await target.resume(text("odabrani"))).toEqual({ kind: "ready", document: text("drugi") });
+    expect(target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+    expect((await journal(at).read(DOC)).snapshot?.document).toEqual(text("odabrani"));
+  });
+
   it("resume() refuses without an unsaved or stale recovery and never writes then", async () => {
     const real = journal(scope());
     let writes = 0;
