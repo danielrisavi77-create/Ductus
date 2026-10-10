@@ -25,7 +25,9 @@ import { FORBIDDEN_TERMS, PHRASE_BREAK, findForbiddenTerms, findForbiddenTermsIn
  *   is also read as one text, put together from its pieces, so a phrase that
  *   markup splits (`Nestali <strong>podaci</strong>`) is still found. A phrase
  *   goes on through an inline element and a `<br />`; it ends at any other
- *   element, at a component and at a computed value (`PHRASE_BREAK`).
+ *   element, at a component and at a computed value (`PHRASE_BREAK`). That
+ *   text is read twice, as a sighted person sees it and as a screen reader
+ *   speaks it, and an entry found in either reading is reported (see `hiding`).
  * - Any other `.ts` module under `app/**`: the Next.js metadata only, that is
  *   the `metadata` export, what `generateMetadata` and `generateImageMetadata`
  *   return, and the `alt` export of `opengraph-image` and `twitter-image`.
@@ -197,6 +199,27 @@ export const INLINE_ELEMENTS: ReadonlySet<string> = new Set([
   "var",
 ]);
 
+/** Who a text reaches: a sighted person, or a person who hears it from a screen reader. */
+type Audience = "sighted" | "spoken";
+const AUDIENCES: readonly Audience[] = ["sighted", "spoken"];
+/** Whether an element is kept from one audience; `maybe` when the source does not say, or says it can change. */
+type Hiding = "no" | "yes" | "maybe";
+
+/**
+ * Class names that take content away from the eye and leave it to a screen
+ * reader. Like `HIDING_CLASSES`, this is a convention the stylesheet has to
+ * keep; these two lists are the only place such a name is recognised. A name
+ * counts with a variant in front too (`md:sr-only`).
+ */
+export const VISUALLY_HIDDEN_CLASSES: ReadonlySet<string> = new Set(["sr-only", "visually-hidden"]);
+/** Class names that take content away from everyone (`display: none`, `visibility: hidden`). */
+export const HIDING_CLASSES: ReadonlySet<string> = new Set(["hidden", "invisible"]);
+/** Inline style values that take content away from everyone. */
+const HIDING_STYLES: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  ["display", new Set(["none"])],
+  ["visibility", new Set(["hidden", "collapse"])],
+]);
+
 const METADATA_FUNCTIONS = new Set(["generateMetadata", "generateImageMetadata"]);
 const IMAGE_ROUTE_FILE = /(?:^|\/)(?:opengraph|twitter)-image\.[cm]?tsx?$/;
 const MANIFEST_FILE = /^app\/(?:.*\/)?manifest\.(?:json|webmanifest)$/;
@@ -235,6 +258,8 @@ const EMPTY: Reading = ["", ""];
 const UNKNOWN: Reading = [PHRASE_BREAK, PHRASE_BREAK];
 /** A `<br />`: the words on both sides are still read as one phrase. */
 const LINE_BREAK: Reading = [" ", " "];
+/** An inline element one audience does not get: nothing in the text, an element boundary between its neighbours. */
+const HIDDEN: Reading = ["", " "];
 /** Most readings kept for one text; see `inSequence` in `componentText`. */
 const MAX_READINGS = 64;
 
@@ -357,11 +382,79 @@ const isJsxNode = (node: ts.Node): node is JsxNode =>
 
 const RENDERS_NOTHING = new Set([ts.SyntaxKind.NullKeyword, ts.SyntaxKind.TrueKeyword, ts.SyntaxKind.FalseKeyword]);
 
+const neverSet = (node: ts.Expression): boolean =>
+  node.kind === ts.SyntaxKind.FalseKeyword || node.kind === ts.SyntaxKind.NullKeyword || (ts.isIdentifier(node) && node.text === "undefined");
+
+/** Every string written anywhere inside `node`. */
+function stringsWithin(node: ts.Node): string[] {
+  if (isPlainString(node)) return [node.text];
+  if (ts.isTemplateExpression(node)) return [node.head.text, ...node.templateSpans.flatMap((span) => [...stringsWithin(span.expression), span.literal.text])];
+  const found: string[] = [];
+  ts.forEachChild(node, (child) => void found.push(...stringsWithin(child)));
+  return found;
+}
+
+/**
+ * Whether the attributes of an element keep its content from `audience`.
+ *
+ * - `aria-hidden` keeps it from a screen reader: without a value or with
+ *   `true` always, with `false` never, with anything else maybe.
+ * - A class on `VISUALLY_HIDDEN_CLASSES` keeps it from the eye: always when it
+ *   is written as one string without variants, otherwise maybe.
+ * - The `hidden` attribute, a class on `HIDING_CLASSES` and an inline
+ *   `display` or `visibility` that hides, or is computed, keep it from both,
+ *   and only maybe: such content is there to be shown at some point.
+ * - Spread props can carry any of these: maybe, for both.
+ *
+ * Not covered, because the value is not in the element: a class or a `style`
+ * that comes from a variable or a CSS module, a rule in a stylesheet, and what
+ * a parent element or a component does to its children.
+ */
+function hiding(source: ts.SourceFile, element: ts.JsxOpeningElement, audience: Audience): Hiding {
+  let result: Hiding = "no";
+  const maybe = (): void => void (result = result === "yes" ? "yes" : "maybe");
+  for (const attribute of element.attributes.properties) {
+    if (ts.isJsxSpreadAttribute(attribute)) {
+      maybe();
+      continue;
+    }
+    const name = attribute.name.getText(source);
+    const written = attribute.initializer;
+    const value = written && ts.isJsxExpression(written) ? written.expression : written;
+    if (name === "aria-hidden" && audience === "spoken") {
+      const token = value && isPlainString(value) ? value.text.trim().toLowerCase() : undefined;
+      if (value === undefined || value.kind === ts.SyntaxKind.TrueKeyword || token === "true") result = "yes";
+      else if (!neverSet(value) && token !== "false") maybe();
+    } else if (name === "hidden") {
+      if (value === undefined || !neverSet(value)) maybe();
+    } else if ((name === "className" || name === "class") && value) {
+      const classes = stringsWithin(value).flatMap((text) => text.split(/\s+/).filter(Boolean));
+      const named = (list: ReadonlySet<string>): boolean => classes.some((token) => list.has(token.slice(token.lastIndexOf(":") + 1).replace(/^!/, "")));
+      if (named(HIDING_CLASSES)) maybe();
+      if (audience === "sighted" && named(VISUALLY_HIDDEN_CLASSES)) {
+        if (isPlainString(value) && !classes.some((token) => token.includes(":"))) result = "yes";
+        else maybe();
+      }
+    } else if (name === "style" && value && ts.isObjectLiteralExpression(value)) {
+      for (const property of value.properties) {
+        const hides = property.name && (ts.isIdentifier(property.name) || isPlainString(property.name)) ? HIDING_STYLES.get(property.name.text) : undefined;
+        if (!hides) continue;
+        const set = ts.isPropertyAssignment(property) ? property.initializer : undefined;
+        if (!set || !isPlainString(set) || hides.has(set.text.trim().toLowerCase())) maybe();
+      }
+    }
+  }
+  return result;
+}
+
 /** JSX text, rendered strings, attributes and Next.js metadata; in a `.ts` file only the metadata is left. */
 function componentText(source: ts.SourceFile, reader: Reader): void {
   const isImageRoute = IMAGE_ROUTE_FILE.test(source.fileName);
   /** Inline elements and fragments already read as part of the unit around them. */
   const absorbed = new Set<ts.Node>();
+  /** The audience the text is being read for, and how many elements around the current one each audience never gets. */
+  let audience: Audience = "sighted";
+  const withheld: Record<Audience, number> = { sighted: 0, spoken: 0 };
 
   // Readings of parts that follow one another. A part that would take the
   // count past MAX_READINGS is read as unknown text and its alternatives go to
@@ -441,15 +534,38 @@ function componentText(source: ts.SourceFile, reader: Reader): void {
       const tag = node.tagName.getText(source);
       return [tag === "wbr" ? EMPTY : tag === "br" ? LINE_BREAK : UNKNOWN];
     }
-    const content = contentReadings(node, alone);
     if (ts.isJsxFragment(node)) {
       absorbed.add(node);
-      return content;
+      return contentReadings(node, alone);
     }
-    const inline = INLINE_ELEMENTS.has(node.openingElement.tagName.getText(source));
-    if (inline) absorbed.add(node);
-    if (inline) return content.map(([joined, spaced]): Reading => [joined, ` ${spaced} `]);
-    return content.map(([joined, spaced]): Reading => [PHRASE_BREAK + joined + PHRASE_BREAK, PHRASE_BREAK + spaced + PHRASE_BREAK]);
+    if (!INLINE_ELEMENTS.has(node.openingElement.tagName.getText(source))) {
+      return contentReadings(node, alone).map(([joined, spaced]): Reading => [PHRASE_BREAK + joined + PHRASE_BREAK, PHRASE_BREAK + spaced + PHRASE_BREAK]);
+    }
+    // An inline element is part of the text only for the audience that gets
+    // it. Content that neither audience gets is hidden by a class at least
+    // once, which only the stylesheet makes true, so it is read by itself.
+    absorbed.add(node);
+    const other = audience === "sighted" ? "spoken" : "sighted";
+    const [here, there] = [hiding(source, node.openingElement, audience), hiding(source, node.openingElement, other)];
+    if (there === "yes") withheld[other] += 1;
+    const content = contentReadings(node, alone);
+    if (there === "yes") withheld[other] -= 1;
+    const shown = content.map(([joined, spaced]): Reading => [joined, ` ${spaced} `]);
+    if (here === "no") return shown;
+    if (here === "maybe") return distinct([...shown, HIDDEN]);
+    if (withheld[other] > 0 || there === "yes") alone.push(...content);
+    return [HIDDEN];
+  };
+
+  // A text in every reading it has: for each audience in turn, then the parts
+  // that are read by themselves.
+  const forEveryone = (read: (alone: Reading[]) => Reading[]): Reading[] => {
+    const alone: Reading[] = [];
+    const readings = AUDIENCES.flatMap((to) => {
+      audience = to;
+      return read(alone);
+    });
+    return distinct([...readings, ...alone]);
   };
 
   const textStart = (node: ts.JsxText): number => node.end - node.text.trimStart().length;
@@ -465,9 +581,8 @@ function componentText(source: ts.SourceFile, reader: Reader): void {
 
   const visit = (node: ts.Node): void => {
     if ((ts.isJsxElement(node) || ts.isJsxFragment(node)) && !absorbed.has(node)) {
-      const alone: Reading[] = [];
-      const readings = contentReadings(node, alone);
-      reader.unit(contentStart(node), node.children.pos, node.children.end, [...readings, ...alone]);
+      const readings = forEveryone((alone) => contentReadings(node, alone));
+      reader.unit(contentStart(node), node.children.pos, node.children.end, readings);
     } else if (ts.isJsxText(node)) {
       const value = jsxTextValue(node.text);
       if (value.trim() !== "") reader.part(node, value, textStart(node));
@@ -478,9 +593,8 @@ function componentText(source: ts.SourceFile, reader: Reader): void {
       else if (ts.isJsxExpression(node.initializer) && node.initializer.expression) {
         const expression = node.initializer.expression;
         renderedStrings(expression, reader.part);
-        const alone: Reading[] = [];
-        const readings = expressionReadings(expression, alone);
-        reader.unit(expression.getStart(source), expression.pos, expression.end, [...readings, ...alone]);
+        const readings = forEveryone((alone) => expressionReadings(expression, alone));
+        reader.unit(expression.getStart(source), expression.pos, expression.end, readings);
       }
     } else if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
       const name = node.name.text;
