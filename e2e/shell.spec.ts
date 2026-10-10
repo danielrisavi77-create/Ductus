@@ -78,7 +78,7 @@ test.describe("workspace shell", () => {
     expect(stops).toEqual(["Preskoči na sadržaj", "Ductus", "Pisanje", "Kako vidi nastavnik uskoro"]);
   });
 
-  test("teacher view and sheet are visibly disabled until F-8", async ({ page }) => {
+  test("teacher view is visibly disabled until F-8; the sheet is the local editor", async ({ page }) => {
     await page.goto("/rad");
     const teacher = page.getByRole("navigation", { name: "Prikaz" }).getByRole("button", {
       name: "Kako vidi nastavnik uskoro",
@@ -89,11 +89,13 @@ test.describe("workspace shell", () => {
     await expect(teacher).toBeDisabled();
     await teacher.click({ force: true });
     await expect(page).toHaveURL(/\/rad$/);
+    // E2E runs with the local demo journal on (playwright.config.ts), so the
+    // sheet is the editor; without the flag it stays the read-only placeholder.
     const sheetText = page.getByRole("textbox", { name: "Tekst rada" });
-    await expect(sheetText).toHaveAttribute("aria-disabled", "true");
-    await expect(sheetText).toHaveText("Pisanje ovdje još nije moguće. uskoro");
-    await expect(sheetText).not.toContainText("Počni");
-    await expect(sheetText.locator(".soon")).toBeVisible();
+    await expect(sheetText).toHaveAttribute("contenteditable", "true");
+    await expect(sheetText).toHaveAttribute("aria-readonly", "false");
+    await expect(sheetText).not.toHaveAttribute("aria-disabled", "true");
+    await expect(page.locator(".soon")).toHaveCount(1);
   });
 
   // One DOM order (sheet, instructions, structure) at every width; CSS places
@@ -157,10 +159,11 @@ test.describe("workspace shell", () => {
       await expect(page.getByText("Upute zadatka, literatura i komentari")).toBeHidden();
 
       // Keyboard: the panel toggle comes right after the top bar and the
-      // sheet has no stop, then the structure toggle; Enter opens.
+      // sheet's editor, then the structure toggle; Enter opens.
       if (tabVisitsLinks(browserName)) {
-        // Skip link, Ductus, Pisanje, Kako vidi nastavnik, then the panel.
-        for (let i = 0; i < 5; i += 1) await page.keyboard.press("Tab");
+        await expect(page.getByRole("textbox", { name: "Tekst rada" })).toHaveAttribute("contenteditable", "true");
+        // Skip link, Ductus, Pisanje, Kako vidi nastavnik, the editor, then the panel.
+        for (let i = 0; i < 6; i += 1) await page.keyboard.press("Tab");
         await expect(panelToggle).toBeFocused();
         await page.keyboard.press("Enter");
         await expect(panelToggle).toHaveAttribute("aria-expanded", "true");
