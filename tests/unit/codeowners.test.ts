@@ -37,7 +37,7 @@ describe("CODEOWNERS covers the D-97 paths", () => {
     }
   });
 
-  it("covers the governance paths named by DAN-138 and the plugin skill copies", () => {
+  it("covers the governance paths named by DAN-138 and the whole agent plugin", () => {
     for (const expected of [
       "/.claude/settings.json",
       "/.claude/skills/**",
@@ -46,7 +46,7 @@ describe("CODEOWNERS covers the D-97 paths", () => {
       "/scripts/orchestrator/**",
       "/lefthook.yml",
       "/docs/ORKESTRATOR.md",
-      "/plugins/ductura-engineering/skills/**",
+      "/plugins/ductura-engineering/**",
     ]) {
       expect(patterns.has(expected), expected).toBe(true);
     }
