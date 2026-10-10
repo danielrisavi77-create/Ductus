@@ -139,3 +139,4 @@ Pragovi su postavke fakulteta (C-7, C-55); uvijek se prikazuju uz brojku na koju
 | P-03 | Osvježavanje nastavničkog pogleda | Najviše svakih 5 minuta | Pogled na rad u nastajanju |
 | P-04 | Granica kratkog zadatka (D-37) | Rok kraći od 24 sata | Vidljivost tijekom pisanja |
 | P-05 | Lijepljenje za koje se nudi oznaka (D-43) | Isto kao P-02 | Pisanje |
+| P-06 | Najveća veličina jednog odsječka evidencije (D-24), ista vrijednost za klijent i poslužitelj | 2 MiB (2 097 152 bajta) kanonskih bajtova; potvrdio Daniel 10. 10. 2026. kao privremeni prag | Ingest evidencije (B-8) |
