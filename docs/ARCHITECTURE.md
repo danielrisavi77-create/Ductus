@@ -96,7 +96,7 @@ Sav pristup vanjskim uslugama ide kroz portove iz `src/application/ports`. Svaki
 | --- | --- | --- |
 | Baza (`withActor`) | PostgreSQL u Dockeru s istim ulogama i migracijama | Upravljani PostgreSQL s PITR-om |
 | Pohrana objekata (`putImmutable`, `get`, `head`) | RustFS (S3 API; MinIO više nema sliku) | S3-kompatibilan bucket |
-| Potpis (`sign(digest, keyId)`) | Razvojni Ed25519 potpisnik | KMS, samo nad digestom (D-71) |
+| Potpis (`sign(messageBytes, keyId)`) | Razvojni Ed25519 potpisnik | KMS `ED25519_SHA_512`, `RAW`: D-92 potvrda nad prefiksom + 32B digestom; D-93 C2SP kontrolna točka nad cijelim točnim UTF-8 signed-note tekstom (uključujući završni LF), bez dodatnog hashiranja |
 | Vremenski žig | Lažni TSA u testovima | Dva neovisna RFC 3161 TSA-a (D-72) |
 | E-pošta | Mailpit | Transakcijska usluga u EU-u |
 | Pružatelj identiteta | Lažni OIDC pružatelj (samo lokalno i u CI-ju, D-09) | AAI@EduHr |
@@ -206,7 +206,7 @@ Mjerodavno je BACKEND §4.3 [PRIJEDLOG D-73]; ovdje je tijek.
    1. provjerava sesiju (`current_actor()`), članstvo, verziju zadatka i je li zadatak otvoren; autora određuje iz sesije, nikad iz polja klijenta;
    2. provjerava da su primljeni bajtovi jednaki ponovno izračunatom JCS nizu, računa SHA-256 i zapisuje objekt u bucket na adresu tog hasha (bez prepisivanja; postojeći objekt prihvaća se tek nakon usporedbe bajtova);
    3. poziva **jedan RPC** koji u istoj transakciji radi CAS reviziju dokumenta i `reserve` odsječka: provjerava redoslijed i baznu reviziju, upisuje reviziju i metapodatke, nastavlja hash lanac i stvara potvrdu u stanju `pending_signature`. Ponovljeni ID transakcije vraća isti rezultat. Ako RPC padne, objekt ostaje siroče (BACKEND §2, ADR u M3).
-4. Worker preuzima posao (tijelo posla je samo ID), radi HEAD objekta, potpisuje digest potvrde ključem potvrda preko porta potpisa i priključuje potpis (`attach_signature` provjerava digest i da je ključ poznat i neopozvan).
+4. Worker preuzima posao (tijelo posla je samo ID), radi HEAD objekta, potpisuje D-92 prefiksirani 59B digest-poruku za v2 potvrde ključem potvrda preko porta potpisa (a v1 `pending_signature` ostaje na izvornom schema-specifičnom putu) i priključuje potpis (`attach_signature` provjerava digest i da je ključ poznat i neopozvan).
 5. Tek kad klijent dobije potpisanu potvrdu, stanje postaje "spremljeno na poslužitelju". Dok potpis čeka, klijent ostaje u stanju čekanja; ako worker ili KMS ne rade, potvrde ostaju `pending_signature` i backlog je alarm.
 
 Siročad u bucketu se u pilotu samo broji i prijavljuje; brisanje tek nakon 30 dana uz ponovnu provjeru u bazi i savjetodavno zaključavanje po hashu, jer zakašnjeli offline klijent može upravo upisivati `reserve` (BACKEND §4.1).
@@ -265,7 +265,7 @@ Rokovi se unose i prikazuju u zoni Europe/Zagreb; promjena na zimsko računanje 
 
 [PRIJEDLOG D-71]; pojedinosti u BACKEND §1 i §4.1.
 
-- Dva odvojena Ed25519 ključa u KMS-u: **ključ potvrda** i **ključ dnevnog korijena**. Materijal ključa ne napušta KMS; u KMS idu samo digesti. Potpisuje samo worker; web proces nema pristup ni materijalu ni pravu potpisa.
+- Dva odvojena Ed25519 ključa u KMS-u: **ključ potvrda** i **ključ dnevnog korijena**. Materijal ključa ne napušta KMS; za D-92 u KMS ide prefiksirani digest (59 B), a za D-93 točan UTF-8 C2SP tekst kontrolne točke sa završnim LF (RAW, bez prethodnog hashiranja). Potpisuje samo worker; web proces nema pristup ni materijalu ni pravu potpisa.
 - Lokalno i u CI-ju koristi se razvojni potpisnik iza istog porta; konfiguracijska brava sprječava razvojni potpisnik u produkciji.
 - Javni ključevi svih verzija su u `evidence.signing_key` s namjenom i razdobljem valjanosti, pa se stare potvrde mogu provjeriti i nakon rotacije (C-46).
 - Rotacija: jednom godišnje i pri svakoj sumnji na kompromitaciju.
