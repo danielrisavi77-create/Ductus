@@ -23,7 +23,7 @@ Prema `PROGRAM.md`, na izmišljenom zadatku, lokalno u Dockeru, s lažnom prijav
 
 **Odlučeno:** D-07, D-10, D-11 i D-24 (potvrđeni u D-81), citatni stil kopiran iz Lekte (D-83), sučelje samo na hrvatskom s tekstovima u ključevima (D-84), izgled editora i nastavničkog sučelja po prototipu (D-85).
 
-**Gradi se uz PRIJEDLOG, iza sučelja, jer je promjena jeftina:** OIDC klijent `openid-client` (D-73 bira biblioteku na M1), red poslova pg-boss (D-74, potvrđeno 10. 10. 2026.), potpis razvojnim Ed25519 ključem umjesto KMS-a (D-71, potvrđeno 10. 10. 2026.), lokalni Postgres i S3-kompatibilna pohrana umjesto dobavljača (D-08). Ništa od toga ne veže demo uz dobavljača.
+**Gradi se iza sučelja, jer je promjena jeftina (status uz svaku stavku):** OIDC klijent `openid-client` (D-73 bira biblioteku na M1), red poslova pg-boss (D-74, potvrđeno 10. 10. 2026.), potpis razvojnim Ed25519 ključem umjesto KMS-a (D-71, potvrđeno 10. 10. 2026.), lokalni Postgres i S3-kompatibilna pohrana umjesto dobavljača (D-08). Ništa od toga ne veže demo uz dobavljača.
 
 **Izvan demoa:** AAI prijava, AI pomoćnik, Lekta paket osim citatnog stila, uvoz i izvoz, dnevni korijen, mentorski radovi, reprodukcija, izravne izmjene nastavnika (D-34), engleski.
 
@@ -66,10 +66,10 @@ Oznaka uloge: P Platforma, B Backend, F Frontend, K kratkotrajna sesija, D Danie
 | B-6 | Prijava preko lažnog OIDC-a: `openid-client`, PKCE, `state`, `nonce`, sesija u bazi, kolačić `__Host-`, odjava; test da produkcijska konfiguracija nema lažnog pružatelja | B-5, P-3 | Prijava i odjava rade; navedeni testovi zeleni | T2 |
 | B-7 | Model fakulteta za demo (dio M2): fakultet, kolegij, članstvo, upis kodom, zadatak i verzija zadatka, potvrda obavijesti; RLS i pgTAP matrica | B-5 | Matrica pristupa zelena za studenta, nastavnika i stranca (drugi kolegij) | T2 do T3 |
 | B-8 | Evidencija (dio M3): ruta `ingest`, odsječci (D-24), jedan RPC za CAS reviziju i `reserve`, hash lanac, spremanje u lokalnu S3 pohranu, idempotentno ponovno slanje | B-3, B-7 | Property testovi: izmjena, brisanje ili preslagivanje odsječka ruši provjeru; ponovno slanje ne duplicira; RPC izvodi identitet iz `current_actor()` i pgTAP dokazuje da `ductus_app` ne može dodati evidenciju s tuđim principalom; RLS i pgTAP retci za sve nove tablice evidencije; `ingest` odbija zahtjev s pogrešnim ili nedostajućim `Origin` i `Sec-Fetch-Site` (test) | T3 |
-| B-9 | Worker: pg-boss, potpis potvrda razvojnim ključem, `attach_signature`; stanje `pending_signature` | B-4, B-8 | Potvrda potpisana po D-92 i prolazi ugovorni known-answer vektor iz BACKEND §4.1 (točni ulazni bajtovi, `D`, potpis testnim ključem), uključujući negativne slučajeve (potpis nad punim JCS-om, nad samim `D`, s drugim prefiksom ili nad izmijenjenim payloadom se odbija; v1 `pending_signature` ne potpisuje se v2 putem); pad workera ostavlja `pending_signature` i oporavlja se | T3 |
+| B-9 | **Izlazi iz demoa (D-98 dopuna, 10. 10. 2026.; ide nakon demoa).** Worker: pg-boss, potpis potvrda razvojnim ključem, `attach_signature`; stanje `pending_signature` | B-4, B-8 | Potvrda potpisana po D-92 i prolazi ugovorni known-answer vektor iz BACKEND §4.1 (točni ulazni bajtovi, `D`, potpis testnim ključem), uključujući negativne slučajeve (potpis nad punim JCS-om, nad samim `D`, s drugim prefiksom ili nad izmijenjenim payloadom se odbija; v1 `pending_signature` ne potpisuje se v2 putem); pad workera ostavlja `pending_signature` i oporavlja se | T3 |
 | B-10 | Komentari uz odlomak: tablica, RPC, RLS, pgTAP | B-7 | Student vidi komentar na svom radu; stranac ne vidi ništa | T3 |
 | B-11 | Pogled nastavnika: spremljeno stanje rada s osvježavanjem po P-03 (polling, D-06); podaci za brz put (D-80): zadnja promjena, otvoreni zahtjevi, lijepljenja bez izvora, stanje izjave | B-8 | Nastavnik ne dobiva novo stanje češće od P-03; test | T3 do T4 |
-| B-12 | Predaja (dio M7): `requested_at` iz sata baze, rekonstrukcija u workeru, JCS usporedba, nepodudarnost blokira predaju (D-11), praznina vidljiva, potpisana potvrda | B-9 | Rekonstrukcija podudarna na scenarijima uključujući prazninu; nepodudarnost blokira | T4 |
+| B-12 | Predaja (dio M7): `requested_at` iz sata baze, rekonstrukcija (za demo u web procesu, od prvog događaja, bez tablice kontrolnih točaka; D-98 dopuna), JCS usporedba, nepodudarnost blokira predaju (D-11), praznina vidljiva, potpisana potvrda | B-4, B-8 (B-9 nakon demoa; D-98 dopuna) | Rekonstrukcija podudarna na scenarijima uključujući prazninu; nepodudarnost blokira | T4 |
 | B-13 | Sažetak procesa: jedna funkcija za studenta i nastavnika (pravilo 5), sesije (P-01), lijepljenja (P-02), praznine, vrsta dokaza (D-44), stanje zapisa | B-8 | Test jednakosti studentskog i nastavničkog prikaza, uključujući API (D-80 točka 6) | T4 |
 | B-14 | Tanki prolaz kritičnog puta (D-98 t. 1, §7): `ingest` → rekonstrukcija → JCS usporedba, bez sučelja, baze i workera | B-3, B-4 | `ingest` jednog odsječka, rekonstrukcija i JCS usporedba prolaze od početka do kraja nad in-memory adapterima i razvojnim potpisnikom, kao automatski test u CI-ju | T2 (18. 10.) |
 
@@ -84,7 +84,7 @@ Oznaka uloge: P Platforma, B Backend, F Frontend, K kratkotrajna sesija, D Danie
 | F-5 | Ekran "demo prijava" i odjava; odjava s nesinkroniziranim promjenama blokirana uz poruku; journal prethodnog korisnika obrisan pri promjeni korisnika | B-6, F-4 | E2E: prijava, odjava, blokada | T2 do T3 |
 | F-6 | Nastavnik: stvaranje kolegija i zadatka s obaviješću S3 i popisom dopuštenih i zabranjenih uporaba iz FPZG čl. 8 | B-7, F-4 | E2E: nastavnik stvara zadatak | T3 |
 | F-7 | Student: upis kodom, prvi ekran zadatka (obavijest i čl. 8), potvrda; prije potvrde nema slanja evidencije | B-7, F-4 | E2E; test da prije potvrde ništa ne ide na poslužitelj | T3 |
-| F-8 | Editor u aplikaciji: naslovi, citat i bibliografija u FPZG stilu (osnovno), stanja spremanja "spremljeno na uređaju" i "spremljeno na poslužitelju", rad bez mreže i povratak s oznakom | F-3, B-8, K-2 | E2E: prekid mreže, nastavak, ništa izgubljeno, offline oznaka ostaje | T3 |
+| F-8 | Editor u aplikaciji: naslovi, citat i bibliografija u FPZG stilu (osnovno; u demou običan tekst, bez novog čvora u shemi, D-98 dopuna), stanja spremanja "spremljeno na uređaju" i "spremljeno na poslužitelju", rad bez mreže i povratak s oznakom | F-3, B-8, K-2 | E2E: prekid mreže, nastavak, ništa izgubljeno, offline oznaka ostaje | T3 |
 | F-9 | Nastavnički pogled na rad u nastajanju i komentar uz odlomak | B-10, B-11, F-4 | E2E: komentar stiže studentu | T3 do T4 |
 | F-10 | Predaja, potvrda i sažetak procesa (isti prikaz za oba) | B-12, B-13 | E2E: predaja, potvrda, isti sažetak | T4 |
 | F-11 | Brz put za nastavnika (D-80): tekst rada, četiri retka, stanje zapisa, sortiranje po prezimenu | B-11, F-9 | E2E; nema sortiranja po brojevima | T4 |
@@ -98,7 +98,7 @@ Oznaka uloge: P Platforma, B Backend, F Frontend, K kratkotrajna sesija, D Danie
 | D-2 | Daniel komentira dizajn; Dizajn sesija ispravlja; Daniel odobrava | D-1 | Daniel napiše "odobreno" | T1 |
 | K-2 | Citatni stil (D-83): FPZG stil kopiran iz Lekte (`katedra-lite/references/fakulteti/fpzg.json`, `fpzg-diplomski/references/stranice-i-izvori.md`) u konfiguracijsku datoteku Ductusa; čista funkcija za citat u tekstu i bibliografiju | P-1 | Testovi s primjerima iz Lekte zeleni | T2 |
 | K-3 | Izmišljeni podaci demoa: fakultet, kolegij, zadatak, nastavnik, dva studenta, i dvije povijesti koje Ductus ne može razlikovati (samostalan uvezeni tekst i postupno pretipkan tuđi tekst) s objašnjenjem granica zapisa (D-80 točka 3) | B-7, B-8 | Skripta puni bazu; nijedan stvarni osobni podatak | T3 |
-| K-4 | E2E prolaz demoa 1 do 5 kao jedan Playwright test s videom. Nastaje u T2 s prvim korakom i raste postupno (§7 t. 2); završni rok ostaje T4 | F-10, P-5, K-3 | Zelen u CI-ju; video priložen | T4 |
+| K-4 | E2E prolaz demoa 1 do 5 kao jedan Playwright test s videom. Nastaje u T2 s prvim korakom i raste postupno (§7 t. 2); završni rok ostaje T4. Do 1. 11. obvezan je samo na Chromiumu; Firefox i WebKit su informativni (D-98 dopuna) | F-10, P-5, K-3 | Zelen u CI-ju; video priložen | T4 |
 | D-3 | Proba demoa u subotu 31. 10.: Daniel prolazi demo sam, zapisuje primjedbe | K-4, P-7 | Primjedbe poslane orkestratoru | T4 |
 | D-4 | Snimka prolaza 1 do 5 za sastanak | D-3 | Snimka postoji | T4 |
 
@@ -129,16 +129,16 @@ Detaljan plan faze nastaje tek kad je okidač ispunjen; do tada vrijedi tablica 
 
 ## 7. Kritični put i rezerva [ODLUČENO D-98]
 
-Potvrđeno 10. 10. 2026. (Daniel). Dopunjuje §3 do §5; gdje se razlikuju (K-4 u §4 vodi se kao zadatak T4, B-12 ovisi o B-9), vrijedi ovaj odjeljak.
+Potvrđeno 10. 10. 2026. (Daniel). Dopunjuje §3 do §5; gdje se razlikuju (K-4 u §4 vodi se kao zadatak T4, B-12 ovisi o B-8, a ne o B-9), vrijedi ovaj odjeljak.
 
-**Nalaz.** Lanac B-8 → B-9 → B-12 → F-10 → K-4 cijeli pada u T3 i T4, a proba D-3 je zadnji dan T4. Rezovi iz §5 skidaju točke 6 do 8 i snimku; nijedan ne skraćuje taj lanac. Kašnjenje bilo kojeg zadatka u lancu zato izravno pomiče demo.
+**Nalaz.** Lanac B-8 → B-9 → B-12 → F-10 → K-4 (nakon dopune D-98 od 10. 10. 2026. za demo: B-8 → B-12 → F-10 → K-4, bez B-9) cijeli pada u T3 i T4, a proba D-3 je zadnji dan T4. Rezovi iz §5 skidaju točke 6 do 8 i snimku; nijedan ne skraćuje taj lanac. Kašnjenje bilo kojeg zadatka u lancu zato izravno pomiče demo.
 
 **Odluka:**
 
 1. **Tanki prolaz do kontrolne točke T2 (18. 10.).** `ingest` jednog odsječka, rekonstrukcija i JCS usporedba prolaze od početka do kraja nad in-memory adapterima i razvojnim potpisnikom, bez sučelja. Zadatak je B-14 u §4 (Backend; ovisi o B-3 i B-4). B-8, B-9 i B-12 zatim zamjenjuju dijelove tog prolaza pravima, umjesto da se prvi put spoje u T4.
 2. **K-4 raste postupno.** E2E prolaz demoa nastaje u T2 kao test s prvim korakom (prijava) i dobiva korak uz svaki spojeni zadatak iz F-6 do F-10. U T4 ostaje samo zadnji korak i video. Završni rok K-4 se ne mijenja: ostaje T4, kao u §4.
 3. **Zamrzavanje opsega u srijedu 28. 10.** Zamrzavanje znači zabranu novog opsega: nakon 28. 10. ne ulazi ništa što nije u tablici §4. Zadaci koje tablica §4 već raspoređuje u T4 (B-12, B-13, F-10, K-4 i P-7; prema tablici i F-11 te završeci B-11 i F-9) smiju se dovršiti i spojiti do kraja T4. Uz njih se spajaju samo popravci. Radna proba je u četvrtak 29. 10.; proba 31. 10. (D-3) ostaje kao završna.
-4. **Rez kritičnog puta, prije rezova iz §5.** Ako B-8 ili B-9 nisu spojeni do kontrolne točke T3 (25. 10.), potpis potvrde i rekonstrukcija za demo izvode se u istom procesu, iza istih sučelja, a pg-boss worker (B-9) i stanje `pending_signature` idu odmah nakon demoa. Taj proces je web proces (Next.js) lokalnog demo stoga, s razvojnim Ed25519 potpisnikom iz B-4. Popis "ne režu se" iz §5 ostaje netaknut.
+4. **Rez kritičnog puta, prije rezova iz §5.** Primjenjuje se odmah (vlasnik, 10. 10. 2026.; D-98 dopuna), ne tek uz kašnjenje; B-9 izlazi iz demoa. Potpis potvrde i rekonstrukcija za demo izvode se u istom procesu, iza istih sučelja, a pg-boss worker (B-9) i stanje `pending_signature` idu odmah nakon demoa. Taj proces je web proces (Next.js) lokalnog demo stoga, s razvojnim Ed25519 potpisnikom iz B-4. Popis "ne režu se" iz §5 ostaje netaknut.
 
    Odstupanja, samo za demo s razvojnim ključem:
 
