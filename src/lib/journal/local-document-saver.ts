@@ -43,14 +43,30 @@ export const DEFAULT_SAVER_LIMITS: SaverLimits = {
 };
 
 /**
+ * Why `load()` did not return `ready` (#206 review, contract for step 1b):
+ * - `corrupt`: the store is unreadable or incomplete; `document` is null.
+ * - `sticky`: the journal records CONFLICT or RECOVERY_REQUIRED; `document` is
+ *   its text.
+ * For both the journal is authoritative: show it, never write over it.
+ * - `unsaved`: a write of this saver failed and none succeeded since, so the
+ *   editor holds text the journal lacks; `document` is the journal's older
+ *   text.
+ * - `stale`: another writer moved the journal; `document` is its text.
+ * For both the editor's text is the author's newest: never replace it with
+ * `document`; offer both, and continue with `resume(chosen)`.
+ */
+export type RecoveryReason = "corrupt" | "sticky" | "unsaved" | "stale";
+
+/**
  * On a reload with edits not yet proposed, `ready` carries the journal's
  * document, not the editor's, and the state stays EDITING; the next
- * `propose()` saves the editor's text.
+ * `propose()` saves the editor's text. A new saver over the same journal
+ * also reads `ready` with the journal's text, so step 1b leaves a recovery
+ * through `resume()`, never by filling the editor from a new instance.
  */
 export type LoadResult =
   | { kind: "ready"; document: CanonicalDocument }
-  /** Sticky or unreadable store: show it, never overwrite it. */
-  | { kind: "recovery"; document: CanonicalDocument | null }
+  | { kind: "recovery"; reason: RecoveryReason; document: CanonicalDocument | null }
   | { kind: "unavailable" };
 
 export type SaverDeps = {
@@ -101,6 +117,8 @@ export class LocalDocumentSaver {
   private cleanGen = 0;
   /** A candidate failed and no later write succeeded: the journal lacks the editor's text. */
   private unsaved = false;
+  /** Why the last `load()` returned `recovery`; null after a `ready` one. */
+  private recovery: RecoveryReason | null = null;
   private next: Candidate | null = null;
   private flight: Promise<void> | null = null;
   /** Set while any `load()` reads; no write starts until the last one resolves. */
@@ -149,6 +167,9 @@ export class LocalDocumentSaver {
    * A reload never lifts a halt or a failure of this saver's own writes, and
    * never claims text another writer put in the journal: the editor then
    * holds text the journal lacks, so the result is `recovery` (#206 B1).
+   * A failure that does not halt (quota, limit, unknown) stays a retryable
+   * ERROR across the reload, so the next `propose()` tries again exactly as
+   * without it; only a halting one stays halted until `resume()`.
    */
   async load(): Promise<LoadResult> {
     if (this.readers++ === 0) {
@@ -172,25 +193,28 @@ export class LocalDocumentSaver {
       const { snapshot, meta, pending } = contents;
       const stored = snapshot ? validateDocument(snapshot.document) : null;
       if ((meta && !snapshot) || (snapshot && !meta) || (stored && !stored.ok)) {
-        return this.haltWith("corrupt", { kind: "recovery", document: null });
+        return this.haltWith("corrupt", this.recover("corrupt", null));
       }
       const restored = restoreSyncState(contents);
       if (restored === "CONFLICT" || restored === "RECOVERY_REQUIRED") {
         this.halted = true;
         this.state = restored;
         this.emit();
-        return { kind: "recovery", document: stored?.ok ? stored.doc : null };
+        return this.recover("sticky", stored?.ok ? stored.doc : null);
       }
       const document = stored?.ok ? stored.doc : null;
-      if (this.unsaved) {
-        return this.haltWith(this.failure ?? "unknown", { kind: "recovery", document });
-      }
       if (this.loaded && (meta?.localSeq ?? 0) !== this.seq) {
-        return this.haltWith("stale", { kind: "recovery", document });
+        return this.haltWith("stale", this.recover("stale", document));
+      }
+      if (this.unsaved) {
+        const failure = this.failure ?? "unknown";
+        const result = this.recover("unsaved", document);
+        return HALTING.has(failure) ? this.haltWith(failure, result) : result;
       }
       // A ready read after an `unavailable` one is a deliberate retry: the
       // sequence below is re-read, so saving may resume from it.
       this.loaded = true;
+      this.recovery = null;
       this.halted = false;
       this.failure = null;
       this.seq = meta?.localSeq ?? 0;
@@ -207,8 +231,33 @@ export class LocalDocumentSaver {
     } catch (error) {
       const failure = failureOf(error);
       return this.haltWith(failure, failure === "corrupt"
-        ? { kind: "recovery", document: null } : { kind: "unavailable" });
+        ? this.recover("corrupt", null) : { kind: "unavailable" });
     }
+  }
+
+  private recover(reason: RecoveryReason, document: CanonicalDocument | null): LoadResult {
+    this.recovery = reason;
+    return { kind: "recovery", reason, document };
+  }
+
+  /**
+   * Leaves an `unsaved` or `stale` recovery with the text the author chose
+   * (usually the editor's): re-reads the journal's sequence and writes `doc`
+   * over the journal's text, which stays in its rows. The result is that of
+   * the re-read; the write's outcome is in the snapshot. A `corrupt` or
+   * `sticky` journal is never written over, so `resume()` throws there.
+   */
+  async resume(doc: CanonicalDocument): Promise<LoadResult> {
+    if (this.recovery !== "unsaved" && this.recovery !== "stale") {
+      throw new Error("LocalDocumentSaver.resume() without an unsaved or stale recovery");
+    }
+    this.unsaved = false;
+    this.loaded = false;
+    const result = await this.load();
+    if (result.kind !== "ready") return result;
+    this.edit();
+    await this.propose(doc);
+    return result;
   }
 
   /**
