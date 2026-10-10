@@ -775,9 +775,10 @@ describe("interface text outside the scanned modules", () => {
 
   // KNOWN GAP of narrowing UI_TEXT_MODULES (DAN-117): outside the list only the
   // Croatian entries apply, so an English forbidden term in these three modules
-  // is not found by the scanner. The test "serverSync protocol strings" in
-  // tests/unit/server-sync-messages.test.ts closes it for these files; the
-  // scanner rule for properties such as `message` is DAN-133 (#190). When that
+  // is not found by the scanner, and the same holds for any new file in that
+  // directory. The tests "serverSync protocol strings" in
+  // tests/unit/server-sync-messages.test.ts close it for every non-test module
+  // there (an unlisted file fails); the scanner rule for properties such as `message` is DAN-133 (#190). When that
   // lands, this test is meant to fail and be replaced by a positive finding.
   it("documents that English forbidden terms in the other serverSync modules are not found by the scanner", () => {
     root = mkdtempSync(path.join(tmpdir(), "ductus-terms-"));

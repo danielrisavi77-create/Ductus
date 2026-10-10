@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -99,12 +100,43 @@ describe("serverSync protocol strings", () => {
     ],
   };
 
-  for (const [file, allowed] of Object.entries(PROTOCOL_STRINGS)) {
-    it(`${file} holds no string beyond the listed protocol strings and identifiers`, () => {
-      const relative = `src/domain/serverSync/${file}`;
-      const content = readFileSync(path.join(ROOT, relative), "utf8");
-      const found = new Set(extractUiText(relative, content, "catalogue").map((piece) => piece.text));
-      expect([...found].sort()).toEqual([...found].filter((text) => allowed.includes(text)).sort());
-    });
+  // Every non-test `.ts` file in the directory except messages.ts. A file that is
+  // not in `allowedByFile` is a problem in itself, so a new module cannot slip
+  // past the narrowed scanner list.
+  function problems(dir: string, allowedByFile: Record<string, readonly string[]>): string[] {
+    const found: string[] = [];
+    const files = readdirSync(dir).filter((name) => name.endsWith(".ts") && !/\.(?:test|spec)\.ts$/.test(name) && name !== "messages.ts");
+    for (const file of files.sort()) {
+      const allowed = allowedByFile[file];
+      if (!allowed) {
+        found.push(`${file}: not listed; add it to PROTOCOL_STRINGS or put user messages in messages.ts`);
+        continue;
+      }
+      const content = readFileSync(path.join(dir, file), "utf8");
+      for (const piece of extractUiText(`src/domain/serverSync/${file}`, content, "catalogue")) {
+        if (!allowed.includes(piece.text)) found.push(`${file}: ${JSON.stringify(piece.text)}`);
+      }
+    }
+    return found;
   }
+
+  it("every module in src/domain/serverSync holds only listed protocol strings and identifiers", () => {
+    expect(problems(path.join(ROOT, "src", "domain", "serverSync"), PROTOCOL_STRINGS)).toEqual([]);
+  });
+
+  it("fails on a new module that is not listed, and on a new string in a listed one", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "ductus-serversync-"));
+    try {
+      writeFileSync(path.join(dir, "errors.ts"), 'export const NOTE = "Hidden changes";\n');
+      writeFileSync(path.join(dir, "bootstrap.ts"), 'export const NOTE = "Risk score";\nexport const MODE = "edit";\n');
+      writeFileSync(path.join(dir, "errors.test.ts"), 'export const NOTE = "Saved";\n');
+      writeFileSync(path.join(dir, "messages.ts"), 'export const NOTE = "Anything";\n');
+      expect(problems(dir, { "bootstrap.ts": PROTOCOL_STRINGS["bootstrap.ts"] })).toEqual([
+        'bootstrap.ts: "Risk score"',
+        "errors.ts: not listed; add it to PROTOCOL_STRINGS or put user messages in messages.ts",
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
