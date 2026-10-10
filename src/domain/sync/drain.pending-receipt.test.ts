@@ -15,6 +15,7 @@ import {
   ackedRevision,
   fastForwardBase,
   isRetryable,
+  newerRowsQueued,
   nextAwaitingReceipt,
   outcomeToEvents,
   planDrain,
@@ -102,7 +103,7 @@ describe("pending receipt → EDIT → drain", () => {
     expect(ackedRevision(PENDING)).toBeNull();
     expect(isRetryable(PENDING)).toBe(true);
     const awaiting = nextAwaitingReceipt(first, PENDING, null);
-    expect(awaiting).toEqual({ localSeq: 1, clientTransactionId: "tx-1" });
+    expect(awaiting).toEqual({ documentId: DOC, localSeq: 1, clientTransactionId: "tx-1" });
 
     // The author keeps typing: seq 2 is queued against the same base 1.
     const second = row(2, 1);
@@ -131,8 +132,13 @@ describe("pending receipt → EDIT → drain", () => {
 
     const plan = planDrain([first, second], meta("SYNCING"), awaiting);
     const signedReplay = fakeServerAfterFirstCommit(plan.send!, true);
-    const events = await outcomeToEvents(signedReplay, verification("tx-1", 2));
-    expect(events).toEqual([{ type: "SYNC_ACK" }]);
+    const events = await outcomeToEvents(
+      signedReplay,
+      verification("tx-1", 2),
+      newerRowsQueued([first, second], plan.send),
+    );
+    // Verified, but seq 2 is still queued: no SYNC_ACK (see drain.held-ack.test.ts).
+    expect(events).toEqual([]);
 
     const acked = ackedRevision(signedReplay);
     expect(acked).toBe(2);
@@ -159,7 +165,7 @@ describe("pending receipt → EDIT → drain", () => {
 });
 
 describe("planDrain — holding for a receipt", () => {
-  const awaiting: AwaitingReceipt = { localSeq: 2, clientTransactionId: "tx-2" };
+  const awaiting: AwaitingReceipt = { documentId: DOC, localSeq: 2, clientTransactionId: "tx-2" };
 
   it("still supersedes rows older than the held row, never the newer ones", () => {
     const plan = planDrain([row(1, 1), row(2, 1), row(3, 1), row(4, 1)], null, awaiting);
@@ -176,7 +182,7 @@ describe("planDrain — holding for a receipt", () => {
 
   it("sends nothing when the row at that sequence carries a different idempotency key", () => {
     expect(
-      planDrain([row(2, 1), row(3, 1)], null, { localSeq: 2, clientTransactionId: "tx-other" }),
+      planDrain([row(2, 1), row(3, 1)], null, { documentId: DOC, localSeq: 2, clientTransactionId: "tx-other" }),
     ).toEqual({ send: null, supersededUpTo: null });
   });
 
@@ -190,10 +196,10 @@ describe("planDrain — holding for a receipt", () => {
     const queue = [row(1, 1), row(2, 1)];
     for (const bad of [
       {},
-      { localSeq: 1 },
-      { localSeq: 1.5, clientTransactionId: "tx-1" },
-      { localSeq: 0, clientTransactionId: "tx-1" },
-      { localSeq: 1, clientTransactionId: "" },
+      { documentId: DOC, localSeq: 1 },
+      { documentId: DOC, localSeq: 1.5, clientTransactionId: "tx-1" },
+      { documentId: DOC, localSeq: 0, clientTransactionId: "tx-1" },
+      { documentId: DOC, localSeq: 1, clientTransactionId: "" },
       "tx-1",
       1,
     ]) {
@@ -225,7 +231,7 @@ describe("planDrain — holding for a receipt", () => {
 
 describe("nextAwaitingReceipt", () => {
   const sent = row(3, 1);
-  const previous: AwaitingReceipt = { localSeq: 3, clientTransactionId: "tx-3" };
+  const previous: AwaitingReceipt = { documentId: DOC, localSeq: 3, clientTransactionId: "tx-3" };
 
   it("holds after a CAS success whose signed receipt failed verification", async () => {
     const outcome: DrainOutcome = {

@@ -104,6 +104,36 @@ export type DrainPlan = {
 const NOTHING_TO_SEND: DrainPlan = { send: null, supersededUpTo: null };
 
 /**
+ * True when the queue holds a row that is not provably OLDER than `sent` — a
+ * held replay with later edits behind it, or rows parked at an unsafe
+ * boundary. A verified receipt for `sent` then vouches for older text than
+ * the author is looking at; the result is handed to `outcomeToEvents`, which
+ * withholds SYNC_ACK. Anything that cannot be ordered counts as newer.
+ */
+export function newerRowsQueued(
+  pending: readonly PendingTransaction[],
+  sent: PendingTransaction | null,
+): boolean {
+  if (sent === null || sent === undefined) {
+    return false;
+  }
+  if (!Array.isArray(pending)) {
+    return true;
+  }
+  return pending.some((row) => {
+    if (row === sent) {
+      return false;
+    }
+    const sequence = row?.localSeq;
+    return !(
+      typeof sequence === "number" &&
+      Number.isFinite(sequence) &&
+      sequence < sent.localSeq
+    );
+  });
+}
+
+/**
  * The queue row whose compare-and-set the server has already accepted, but
  * whose signed receipt has not been verified yet (`nextAwaitingReceipt`).
  *
@@ -114,6 +144,7 @@ const NOTHING_TO_SEND: DrainPlan = { send: null, supersededUpTo: null };
  * module's.
  */
 export type AwaitingReceipt = {
+  documentId: string;
   localSeq: number;
   clientTransactionId: string;
 };
@@ -124,6 +155,8 @@ function isAwaitingReceipt(value: unknown): value is AwaitingReceipt {
   }
   const marker = value as Partial<AwaitingReceipt>;
   return (
+    typeof marker.documentId === "string" &&
+    marker.documentId.trim() !== "" &&
     isLocalSeq(marker.localSeq) &&
     typeof marker.clientTransactionId === "string" &&
     marker.clientTransactionId.trim() !== ""
@@ -231,6 +264,20 @@ export function planDrain(
     seen.add(sequence);
   }
 
+  // One queue, one document. Local sequences are per document, so a queue
+  // mixing two documents (or a meta row of another one) has no order in which
+  // a prefix could be proved safe to send, supersede or clear. Rows whose
+  // documentId is missing or empty are already unsendable boundaries above.
+  const documentIds = new Set<string>();
+  for (const candidate of [...pending.map((row) => row?.documentId), meta?.documentId]) {
+    if (typeof candidate === "string" && candidate.trim() !== "") {
+      documentIds.add(candidate);
+    }
+  }
+  if (documentIds.size > 1) {
+    return NOTHING_TO_SEND;
+  }
+
   const held = awaitingReceipt ?? null;
   if (held !== null && !isAwaitingReceipt(held)) {
     return NOTHING_TO_SEND;
@@ -244,6 +291,7 @@ export function planDrain(
     if (held !== null) {
       // Below the barrier sequences are unique, so at most one row matches.
       if (
+        row.documentId === held.documentId &&
         row.localSeq === held.localSeq &&
         row.tx.clientTransactionId === held.clientTransactionId
       ) {
@@ -385,11 +433,22 @@ const RETRYABLE: SyncEvent[] = [{ type: "SYNC_FAILED", retryable: true }];
  * status is treated as fatal rather than retryable: retrying something we
  * cannot name is a loop.
  */
-const VERIFIED_COMMIT_REVISIONS = new WeakMap<object, number>();
+const VERIFIED_COMMIT_REVISIONS = new WeakMap<object, CommitReceiptExpectation>();
 
+/**
+ * `newerRowsQueued` is `newerRowsQueued(pending, plan.send)` for the queue
+ * and plan that produced the send. When it is anything but `false`, a verified receipt still records
+ * its revision (so `ackedRevision` moves the base and `nextAwaitingReceipt`
+ * releases the hold) but emits NO event: the receipt covers older text than
+ * the newest queued row, and SYNCED may only ever describe what the author is
+ * looking at. The runner sees `ackedRevision(outcome) !== null` with no event
+ * and plans the next send straight away; SYNC_ACK comes with the receipt of
+ * the newest row.
+ */
 export async function outcomeToEvents(
   outcome: DrainOutcome,
   verification: CommitReceiptVerification,
+  newerRowsQueued: boolean = false,
 ): Promise<SyncEvent[]> {
   switch (outcome?.status) {
     case "committed":
@@ -431,8 +490,13 @@ export async function outcomeToEvents(
         if (verified !== true) {
           return FATAL;
         }
-        VERIFIED_COMMIT_REVISIONS.set(outcome, outcome.revision);
-        return ACK;
+        // Bound to the commit it was verified for, not just to this object.
+        VERIFIED_COMMIT_REVISIONS.set(outcome, {
+          documentId: verification.expected.documentId,
+          clientTransactionId: verification.expected.clientTransactionId,
+          revision: outcome.revision,
+        });
+        return newerRowsQueued === false ? ACK : [];
       } catch {
         return FATAL;
       }
@@ -470,7 +534,7 @@ export function ackedRevision(outcome: DrainOutcome): number | null {
   if (!outcome || typeof outcome !== "object") {
     return null;
   }
-  return VERIFIED_COMMIT_REVISIONS.get(outcome) ?? null;
+  return VERIFIED_COMMIT_REVISIONS.get(outcome)?.revision ?? null;
 }
 
 /**
@@ -497,10 +561,21 @@ export function nextAwaitingReceipt(
   if (outcome?.status !== "committed" && outcome?.status !== "duplicate") {
     return previous ?? null;
   }
-  if (ackedRevision(outcome) !== null) {
+  // The verification must be for THIS row: a verified outcome reused or
+  // cached for another row or document releases nothing.
+  const verified = VERIFIED_COMMIT_REVISIONS.get(outcome);
+  if (
+    verified !== undefined &&
+    verified.documentId === sent.documentId &&
+    verified.clientTransactionId === sent.tx.clientTransactionId
+  ) {
     return null;
   }
-  return { localSeq: sent.localSeq, clientTransactionId: sent.tx.clientTransactionId };
+  return {
+    documentId: sent.documentId,
+    localSeq: sent.localSeq,
+    clientTransactionId: sent.tx.clientTransactionId,
+  };
 }
 
 /**
