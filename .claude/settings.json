@@ -92,6 +92,17 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"$CLAUDE_PROJECT_DIR/scripts/cleanup-worktrees.ps1\"",
+            "async": true,
+            "timeout": 180
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
@@ -123,6 +134,30 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/pr-metadata-precheck.mjs\"",
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/pr-auto-merge.mjs\"",
+            "timeout": 30
+          }
+        ]
       }
     ]
   },
@@ -130,6 +165,7 @@
     "typescript-lsp@claude-plugins-official": true,
     "context7@claude-plugins-official": true,
     "claude-security@claude-plugins-official": true,
+    "linear@claude-plugins-official": true,
     "sales@knowledge-work-plugins": false,
     "marketing@knowledge-work-plugins": false,
     "finance@knowledge-work-plugins": false,
