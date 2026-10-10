@@ -357,6 +357,45 @@ const TAMPERING: [name: string, reason: string, index: number | null, tamper: Ta
       ),
   ],
   [
+    // Passes the shape check (any non-empty id does) and fails at the digest.
+    "a receipt whose id has no canonical form",
+    "receipt_mismatch",
+    1,
+    (env) =>
+      chainWith(env, (s) =>
+        s.map((entry, at) =>
+          at === 1 && entry.receipt
+            ? { ...entry, receipt: { ...entry.receipt, payload: { ...entry.receipt.payload, receiptId: "\ud800" } } }
+            : entry,
+        ),
+      ),
+  ],
+  [
+    // The signature covers the payload only, so it still verifies.
+    "a receipt with a field next to its signed payload",
+    "receipt_mismatch",
+    1,
+    (env) =>
+      chainWith(env, (s) =>
+        s.map((entry, at) =>
+          at === 1 && entry.receipt ? { ...entry, receipt: { ...entry.receipt, note: "izmišljeno" } } : entry,
+        ),
+      ),
+  ],
+  [
+    "a receipt whose signature carries an unknown field",
+    "receipt_mismatch",
+    2,
+    (env) =>
+      chainWith(env, (s) =>
+        s.map((entry, at) =>
+          at === 2 && entry.receipt
+            ? { ...entry, receipt: { ...entry.receipt, signature: { ...entry.receipt.signature, note: "izmišljeno" } } }
+            : entry,
+        ),
+      ),
+  ],
+  [
     "receipts signed by another key",
     "receipt_signature_invalid",
     0,

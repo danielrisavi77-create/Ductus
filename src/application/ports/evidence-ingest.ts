@@ -1,10 +1,12 @@
 import type { AuthorizationContext } from "./authorization";
-import { isPlainObject } from "@/domain/json";
+import { hasOnlyKeys, isPlainObject } from "@/domain/json";
+import { exceedsEvidenceSegmentLimit } from "@/domain/forensics/evidence-chain-v2";
 import type { SignedEvidenceReceipt } from "@/domain/forensics/evidence-receipt";
 import {
   EVIDENCE_CANONICALIZATION_V2,
   EVIDENCE_HASH_ALGORITHM_V2,
   EVIDENCE_SEGMENT_SCHEMA_V2,
+  MAX_EVIDENCE_PROFILE_ID_LENGTH,
 } from "@/domain/forensics/evidence-segment-v2";
 
 export type EvidenceSegmentDescriptorV2 = {
@@ -79,6 +81,11 @@ const DESCRIPTOR_KEYS: ReadonlySet<string> = new Set<
   "predecessorSegmentHash",
   "payloadBytes",
 ]);
+// The command is the whole wire envelope. A field next to these three, such as
+// a principal or an author, is refused: identity comes from the session.
+const COMMAND_KEYS: ReadonlySet<string> = new Set<
+  keyof EvidenceIngestCommandV2
+>(["clientRequestId", "descriptor", "canonicalPayload"]);
 const MAX_ID_LENGTH = 256;
 const MAX_CLIENT_REQUEST_ID_LENGTH = 256;
 
@@ -101,9 +108,7 @@ export function isEvidenceSegmentDescriptorV2(
 ): descriptor is EvidenceSegmentDescriptorV2 {
   if (!isPlainObject(descriptor)) return false;
   // Unknown fields fail closed so nothing unvalidated travels downstream.
-  if (!Object.keys(descriptor).every((key) => DESCRIPTOR_KEYS.has(key))) {
-    return false;
-  }
+  if (!hasOnlyKeys(descriptor, DESCRIPTOR_KEYS)) return false;
 
   if (
     !nonEmptyBounded(descriptor.evidencePackageId) ||
@@ -113,7 +118,10 @@ export function isEvidenceSegmentDescriptorV2(
     descriptor.evidenceSchema !== EVIDENCE_SEGMENT_SCHEMA_V2 ||
     descriptor.canonicalization !== EVIDENCE_CANONICALIZATION_V2 ||
     descriptor.hashAlgorithm !== EVIDENCE_HASH_ALGORITHM_V2 ||
-    !nonEmptyBounded(descriptor.evidenceProfileId) ||
+    !nonEmptyBounded(
+      descriptor.evidenceProfileId,
+      MAX_EVIDENCE_PROFILE_ID_LENGTH,
+    ) ||
     !Number.isSafeInteger(descriptor.sequenceFrom) ||
     Number(descriptor.sequenceFrom) < 1 ||
     !Number.isSafeInteger(descriptor.sequenceTo) ||
@@ -134,7 +142,8 @@ export function isEvidenceSegmentDescriptorV2(
         SHA256_HEX.test(descriptor.predecessorSegmentHash))
     ) ||
     !Number.isSafeInteger(descriptor.payloadBytes) ||
-    Number(descriptor.payloadBytes) < 1
+    Number(descriptor.payloadBytes) < 1 ||
+    exceedsEvidenceSegmentLimit(Number(descriptor.payloadBytes))
   ) {
     return false;
   }
@@ -142,14 +151,32 @@ export function isEvidenceSegmentDescriptorV2(
   return true;
 }
 
+/**
+ * Whether a payload is over the one segment limit (D-96), in UTF-8 bytes. A
+ * UTF-16 code unit is at least one byte, so a text that is already too long
+ * is never encoded.
+ */
+export function evidencePayloadExceedsLimit(canonicalPayload: string): boolean {
+  return (
+    exceedsEvidenceSegmentLimit(canonicalPayload.length) ||
+    exceedsEvidenceSegmentLimit(
+      new TextEncoder().encode(canonicalPayload).byteLength,
+    )
+  );
+}
+
 export function isEvidenceIngestCommandV2(
   command: unknown,
 ): command is EvidenceIngestCommandV2 {
-  if (!isPlainObject(command)) return false;
+  if (!isPlainObject(command) || !hasOnlyKeys(command, COMMAND_KEYS)) {
+    return false;
+  }
   const descriptor = command.descriptor;
   if (
     !nonEmptyBounded(command.clientRequestId, MAX_CLIENT_REQUEST_ID_LENGTH) ||
-    !nonEmptyBounded(command.canonicalPayload, 16 * 1024 * 1024) ||
+    typeof command.canonicalPayload !== "string" ||
+    command.canonicalPayload.length === 0 ||
+    evidencePayloadExceedsLimit(command.canonicalPayload) ||
     !isEvidenceSegmentDescriptorV2(descriptor)
   ) {
     return false;
