@@ -73,7 +73,7 @@ Zaseban workflow, a ne izmjena `ci.yml`, da se ne sudara s otvorenim PR-om #13 i
 | --- | --- | --- | --- |
 | `PeculiarVentures/PKI.js` | BSD-3 (GitHub ne prepoznaje) | M3 ostatak, dnevni korijen | RFC 3161 vremenski žigovi od dva besplatna TSA-a (D-72) |
 | `transparency-dev/merkle` | Apache-2.0 | Dnevni korijen | Go referenca i ispitni vektori za RFC 6962 consistency dokaze; implementacija je naša, u TypeScriptu |
-| `aws/aws-sdk-js-v3` (`client-kms`, `client-s3`) | Apache-2.0 | B0.1, M11 | KMS Ed25519 RAW: potvrde nad D-92 prefiksiranim digestom; C2SP D-93 nad izvornim signed-note tekstom; S3 adapter tek nakon D-08 |
+| `aws/aws-sdk-js-v3` (`client-kms`, `client-s3`) | Apache-2.0 | B0.1, M11 | KMS Ed25519 RAW: potvrde nad D-92 prefiksiranim digestom; C2SP D-93 nad izvornim tekstom bilješke (bez potpisnih redaka); S3 adapter tek nakon D-08 |
 | `getsentry/sentry-javascript` | MIT (GitHub ne prepoznaje) | M11 | SDK za GlitchTip EU, `sendDefaultPii: false`, `beforeSend` bez tijela |
 | `opentofu/opentofu`, `UpCloudLtd/terraform-provider-upcloud`, `scaleway/terraform-provider-scaleway` | MPL-2.0 | B0.1, M11 | `infra/` za okoliše; tek nakon računa dobavljača |
 | `caddyserver/caddy` | Apache-2.0 | M11 | TLS, HSTS, access log bez query stringova |
