@@ -28,9 +28,9 @@ REDACTIONS=(
     (r'(?i)(bearer\s+)[A-Za-z0-9._~+/=-]+',r'\1[REDACTED]',0),
     # key: value and KEY=value where the key name ends in a secret word
     # (oauth_token, refresh_token, MISTRAL_API_KEY, client_secret, password ...).
-    (r'''(?i)((?<![A-Za-z0-9])[A-Za-z0-9_.-]*'''+SECRET_KEY+r'''["'\s]*[:=]["'\s]*)[^\s,"'}]+''',r'\1[REDACTED]',0),
+    (r'''(?i)('''+SECRET_KEY+r'''["'\s]*[:=]["'\s]*)[^\s,"'}]+''',r'\1[REDACTED]',0),
     # user:password@ inside URLs.
-    (r'(?i)(\b[a-z][a-z0-9+.-]*://[^\s/:@]+:)[^\s/@]+@',r'\1[REDACTED]@',0),
+    (r'(?i)(://[^\s/:@]{1,256}:)[^\s/@]{1,1024}@',r'\1[REDACTED]@',0),
     # Provider token shapes that are recognisable without a key name.
     (r'\bgithub_pat_[A-Za-z0-9_]{20,}','[REDACTED]',0),
     (r'\bgh[pousr]_[A-Za-z0-9]{16,}','[REDACTED]',0),
@@ -39,8 +39,10 @@ REDACTIONS=(
     (r'\bxox[abeprs]-[A-Za-z0-9-]{10,}','[REDACTED]',0),
     (r'\b(?:AKIA|ASIA)[0-9A-Z]{16}\b','[REDACTED]',0),
     (r'\bAIza[0-9A-Za-z_-]{30,}','[REDACTED]',0),
-    (r'\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}','[REDACTED]',0),
+    (r'(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}','[REDACTED]',0),
 )
+# Every pattern above must stay linear on hostile output: a rule either starts
+# at a fixed literal or consumes its whole run, so a 1 MiB reply cannot stall the run.
 
 def redact(text):
     """Best-effort masking of common token shapes; not a guarantee against leaks."""

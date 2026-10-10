@@ -5,6 +5,7 @@ import os
 import shutil
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -91,6 +92,16 @@ class RedactionTests(unittest.TestCase):
                      'src/lib/token.ts:12 the token is compared with ===','Review-Verdict: PASS',
                      'see https://example.invalid/docs/tokens for details','commit '+'a'*40):
             with self.subTest(text=text):self.assertEqual(redact(text),text)
+    def test_hostile_megabyte_output_is_redacted_in_linear_time(self):
+        # A model can emit up to 1 MiB; a backtracking rule must not stall the run.
+        size=1024*1024
+        shapes={'word run':'a_','dashes':'-','dotted':'a.','base64':'QUJD','url run':'x://a-b.',
+                'jwt starts':'eyJ'+'a'*9+'-','jwt dots':'eyJ'+'a'*9+'.','key names':'token ',
+                'pem starts':'-----BEGIN PRIVATE KEY','schemes':'a://b:c','quotes':'token"\' '}
+        for name,unit in shapes.items():
+            text=unit*(size//len(unit))
+            started=time.perf_counter();redact(text);elapsed=time.perf_counter()-started
+            with self.subTest(shape=name):self.assertLess(elapsed,10)
     def test_tree_redaction_reaches_nested_strings_and_keeps_other_types(self):
         secret=SECRETS['github oauth']
         data={'a':[{'b':'oauth_token: '+secret}],'n':3,'f':False,'none':None}
