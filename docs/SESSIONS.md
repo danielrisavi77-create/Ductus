@@ -98,6 +98,25 @@ Izvještaj obvezno ide u opis PR-a ili, bez PR-a, u `IZVJEŠTAJ <id>` issue. Dir
 - **Predaja posla kroz `STATE.md` i opis PR-a**, ne kroz prepričavanje u razgovoru.
 - **Neovisni reviewer pregledava samo diff PR-a i relevantna kanonska pravila**, ne cijeli repo bez razloga.
 
+### 4a. Tehnička provedba (DAN-93)
+
+Pravila iz ovog odjeljka provodi `.claude/settings.json`; hookovi su u `scripts/engineering/agent-hooks.mjs` i pri svakoj grešci propuštaju rad (fail-open).
+
+| Mehanizam | Što radi | Pravilo koje provodi |
+| --- | --- | --- |
+| `CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000` | Sažimanje se pokreće prije 200k tokena i uz model s prozorom od 1M. | Gornja granica konteksta |
+| Hook `budget` (UserPromptSubmit) | Iznad 150k tokena dodaje agentu uputu da dovrši korak i preda posao skillom `ductus-handoff`; iznad 250k zabranjuje novi posao u sesiji. Ispod 150k ne dodaje ništa. | Rotacija sesije |
+| Hook `read` (PreToolUse: Read) | Odbija čitanje cijelog `.md` dokumenta većeg od 16 KB i vraća popis naslova s brojevima redaka; čitanje s `offset`/`limit` prolazi. Odbija `pnpm-lock.yaml`, `*.tsbuildinfo`, `.next/`, `playwright-report/`, `test-results/`. Vrijedi i u subagentima. | Čitaj samo ulaz iz zadatka |
+| Hook `start` (SessionStart) | Učitava `STATE.md` u kontekst pri pokretanju, `/clear` i nakon sažimanja, pa ga sesija ne čita zasebnim pozivom. | `CLAUDE.md`: prvo `STATE.md` |
+| `CLAUDE_CODE_SUBAGENT_MODEL=sonnet` | Subagent bez vlastitog modela radi na Sonnetu. Profili s `model: inherit` i dalje nasljeđuju model sesije. | Model po ulozi |
+| `ductus-scout` (Haiku, samo Read/Grep/Glob) | Jeftino lociranje koda i odjeljaka; ugrađeni Explore radi na modelu glavne sesije. | Pretraživanje preko pomoćnog agenta |
+| `CLAUDE_CODE_GLOB_NO_IGNORE=false` | Glob preskače `node_modules`, `.next` i worktreeove. | — |
+| `enabledPlugins: false` za `knowledge-work-plugins` | Isključuje sales, marketing, finance, data, design, productivity i pdf-viewer u ovom projektu. | Bez nepotrebnih pluginova |
+
+Mjerenje: `node scripts/engineering/token-report.mjs [--days N] [--budget N] [--json]` čita lokalne zapise sesija i ispisuje samo brojeve: ukupni ulaz, udio početnog konteksta, udio iznad budžeta i veličinu izlaza po alatu. Polazno stanje 1.–10. 10. 2026.: 198,7 M ulaznih tokena u 829 poziva; 42 % je kontekst iznad 150k po pozivu, 30 % početni kontekst od oko 72k ponovljen u svakom pozivu.
+
+Konektori claude.ai (Gmail, Drive, Netlify, Gamma, Desktop Commander i slični) u desktop aplikaciji uključuju se po sesiji i ne gase se ovom datotekom; Daniel ih isključuje u postavkama konektora. Za Ductus trebaju samo Linear i, po zadatku, Supabase.
+
 ## 5. Neovisni pregled
 
 Codex CLI je zadani automatizirani reviewer kad je dostupan, ali nije jedini dopušteni reviewer. Za lokalni Codex review može se pokrenuti:

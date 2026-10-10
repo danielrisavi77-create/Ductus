@@ -64,6 +64,7 @@ Repo sadrži adaptere za podržane runtimee:
 ```
 .claude/skills/
   ductus-worker/
+  ductus-handoff/
   ductus-orchestrator/
   ductus-review/
   ductus-qa/
@@ -72,6 +73,7 @@ Repo sadrži adaptere za podržane runtimee:
 
 .agents/skills/
   ductus-worker/
+  ductus-handoff/
   ductus-orchestrator/
   ductus-review/
   ductus-qa/
