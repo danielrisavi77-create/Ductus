@@ -75,7 +75,7 @@ test("clean worktree with HEAD on origin is removed; its branch stays", (t) => {
   assert.deepEqual(res.removed, ["agent-a1"]);
   assert.equal(existsSync(a.path), false);
   assert.equal(r.isRegistered(a.path), false);
-  assert.match(git(r.work, "branch", "--list", a.branch), new RegExp(a.branch));
+  assert.equal(git(r.work, "branch", "--list", "--format=%(refname:short)", a.branch), a.branch);
   assert.match(res.out, /summary: removed 1, failed 0, skipped 0/);
 });
 
