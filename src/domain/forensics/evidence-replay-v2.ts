@@ -1,4 +1,5 @@
 import { sha256WebCrypto } from "./crypto";
+import type { EvidenceChainDiscontinuityV2 } from "./evidence-chain-v2";
 import type { EvidenceEventV2, EvidenceSegmentV2 } from "./evidence-segment-v2";
 import { canonicalizeJcs, type JcsJsonValue } from "./jcs";
 
@@ -47,6 +48,49 @@ export async function digestCanonicalDocumentV2(
 ): Promise<{ canonical: string; sha256: string }> {
   const text = canonicalizeJcs(canonical);
   return { canonical: text, sha256: await sha256WebCrypto(text) };
+}
+
+/**
+ * Break between the starting document and the first segment of a record.
+ *
+ * The first segment has no predecessor, so the chain check has nothing to
+ * compare its first event number and its initial document hash with. Here it
+ * continues a virtual start: event 0 and the hash of `initialDocument`. It
+ * must therefore begin at event 1 and from that document; anything else is
+ * the same kind of break as between two segments, at `index: 0`.
+ * `discontinuity` is `null` when the record starts at the start.
+ */
+export async function findEvidenceStartBreakV2<TDocument>(
+  initialDocument: JcsJsonValue,
+  first: EvidenceSegmentV2,
+  replayer: EvidenceStepReplayerV2<TDocument>,
+): Promise<
+  | { ok: true; discontinuity: EvidenceChainDiscontinuityV2 | null }
+  | { ok: false; reason: "invalid_document" }
+> {
+  let startHash: string;
+  try {
+    const start = replayer.toCanonical(replayer.load(initialDocument));
+    startHash = (await digestCanonicalDocumentV2(start)).sha256;
+  } catch {
+    return { ok: false, reason: "invalid_document" };
+  }
+
+  const documentHashBreak = first.initialDocumentHash !== startHash;
+  if (first.sequenceFrom === 1 && !documentHashBreak) {
+    return { ok: true, discontinuity: null };
+  }
+  return {
+    ok: true,
+    discontinuity: {
+      index: 0,
+      previousSequenceTo: 0,
+      sequenceFrom: first.sequenceFrom,
+      sequence:
+        first.sequenceFrom === 1 ? "continuous" : first.sequenceFrom > 1 ? "gap" : "regression",
+      documentHashBreak,
+    },
+  };
 }
 
 /**

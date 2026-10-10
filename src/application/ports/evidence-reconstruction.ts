@@ -22,6 +22,11 @@ export type EvidenceChainReadResult =
        * package the store has never seen reads the same as an empty one:
        * `null` head and no segments. Reconstruction reports both as
        * `no_evidence`, never as a match.
+       *
+       * The head and the listing must come from one snapshot, the head from
+       * where `reserve` wrote it. Reconstruction checks the listing against
+       * this head and nothing else: a listing cut short together with a head
+       * moved back to its new last segment reads as a whole, shorter record.
        */
       head: EvidenceChainHeadV2 | null;
       /** Accepted segments in chain order, first accepted first. */

@@ -12,10 +12,14 @@ import type {
 } from "@/application/ports/evidence-reconstruction";
 import type { SigningKeyProvider } from "@/application/ports/signing-key-provider";
 import { sha256WebCrypto } from "@/domain/forensics/crypto";
-import { MAX_EVIDENCE_SEGMENT_BYTES } from "@/domain/forensics/evidence-chain-v2";
+import {
+  MAX_EVIDENCE_SEGMENT_BYTES,
+  type EvidenceChainHeadV2,
+} from "@/domain/forensics/evidence-chain-v2";
 import { digestEvidenceReceiptPayload } from "@/domain/forensics/evidence-receipt";
 import {
   digestCanonicalDocumentV2,
+  replayEvidenceSegmentsV2,
   type EvidenceStepReplayerV2,
 } from "@/domain/forensics/evidence-replay-v2";
 import {
@@ -45,6 +49,19 @@ const EMPTY: ReplayDocument = { nodes: [{ id: NODE, text: "" }] };
 const THREE = ["Prvi izmišljeni odlomak. ", "Drugi dio teksta. ", "Završna rečenica."];
 const utf8 = (text: string) => new TextEncoder().encode(text);
 const paragraph = (text: string): ReplayDocument => ({ nodes: [{ id: NODE, text }] });
+/** Text that was written before the first event the record holds. */
+const LOST = paragraph("Izgubljeni početak. ");
+/** What a record reconstructs to when its first segment does not continue the starting document. */
+const startBreak = (sequenceFrom: number, documentHashBreak: boolean) => ({
+  status: "discontinuity",
+  discontinuity: {
+    index: 0,
+    previousSequenceTo: 0,
+    sequenceFrom,
+    sequence: sequenceFrom === 1 ? "continuous" : "gap",
+    documentHashBreak,
+  },
+});
 
 /**
  * Stand-in for the editor's step code (ProseMirror in Node arrives with B-12):
@@ -184,28 +201,41 @@ async function ingestSegment(env: Env, segment: EvidenceSegmentV2, principalId =
  * Ingests one segment per text; returns each segment hash and the document after it.
  * From `breakAt` on, three event numbers are skipped: a break in the sequence. The
  * record up to there must reconstruct first, so the break is its only irregularity.
+ * `startAt` and `from` move the start of the record: its first event number and the
+ * document its first segment starts from.
  */
-async function ingestChain(env: Env, texts: readonly string[] = THREE, breakAt = texts.length) {
+async function ingestChain(
+  env: Env,
+  texts: readonly string[] = THREE,
+  breakAt = texts.length,
+  { startAt = 1, from = EMPTY }: RecordStart = {},
+) {
   const hashes: string[] = [];
   const documents: ReplayDocument[] = [];
   for (const [index, text] of texts.entries()) {
-    if (index === breakAt) expect((await reconstruct(env, documents[index - 1])).status).toBe("match");
-    const sequenceFrom = index < breakAt ? index + 1 : index + 4;
+    if (index === breakAt) {
+      const before = await reconstruct(env, documents[index - 1], { initial: from });
+      if (startAt === 1) expect(before.status).toBe("match");
+      else expect(before).toEqual(startBreak(startAt, false));
+    }
+    const sequenceFrom = startAt + index + (index < breakAt ? 0 : 3);
     const predecessor = hashes.at(-1) ?? null;
-    const built = await buildSegment(index + 1, documents.at(-1) ?? EMPTY, [text], predecessor, sequenceFrom);
+    const built = await buildSegment(index + 1, documents.at(-1) ?? from, [text], predecessor, sequenceFrom);
     const { command, outcome } = await ingestSegment(env, built.segment);
     expect(outcome.status).toBe("accepted");
     hashes.push(command.descriptor.segmentHash);
     documents.push(built.document);
   }
-  return { hashes, documents, target: documents.at(-1) ?? EMPTY };
+  return { hashes, documents, target: documents.at(-1) ?? from };
 }
+type RecordStart = { startAt?: number; from?: ReplayDocument };
 type Chain = Awaited<ReturnType<typeof ingestChain>>;
 
 type Overrides = {
   chain?: EvidenceChainReader;
   payloads?: EvidencePayloadReader;
   signer?: Pick<SigningKeyProvider, "verify">;
+  replayer?: EvidenceStepReplayerV2<ReplayDocument>;
   initial?: ReplayDocument;
   packageId?: string;
 };
@@ -288,6 +318,7 @@ const TAMPERING: [name: string, reason: string, index: number | null, tamper: Ta
       payloadWith(env, c.hashes[1], utf8(`${env.payloadStore.get(PACKAGE, c.hashes[1])?.canonicalPayload} `)),
   ],
   ["a payload deleted from storage", "missing_payload", 0, (env, c) => payloadWith(env, c.hashes[0], null)],
+  ["the first segment removed", "predecessor_mismatch", 0, (env) => chainWith(env, (s) => s.slice(1))],
   ["a segment removed from the middle", "predecessor_mismatch", 1, (env) => chainWith(env, (s) => [s[0], s[2]])],
   ["the last segment removed", "head_mismatch", null, (env) => chainWith(env, (s) => s.slice(0, 2))],
   ["reordered segments", "predecessor_mismatch", 1, (env) => chainWith(env, (s) => [s[0], s[2], s[1]])],
@@ -313,17 +344,26 @@ const TAMPERING: [name: string, reason: string, index: number | null, tamper: Ta
     },
   ],
   [
+    "a receipt that has no canonical form",
+    "receipt_mismatch",
+    1,
+    (env) =>
+      chainWith(env, (s) =>
+        s.map((entry, at) =>
+          at === 1 && entry.receipt
+            ? { ...entry, receipt: { ...entry.receipt, payload: { ...entry.receipt.payload, acceptedAt: "\ud800" } } }
+            : entry,
+        ),
+      ),
+  ],
+  [
     "receipts signed by another key",
     "receipt_signature_invalid",
     0,
     () => ({ signer: new DevelopmentEd25519SigningKeyProvider("b14-test-key", "v1") }),
   ],
-  [
-    "a starting document other than the one the record began from",
-    "document_hash_mismatch",
-    0,
-    () => ({ initial: paragraph("Ranije dopisan tekst. ") }),
-  ],
+  // "a starting document other than the one the record began from" is no longer a
+  // `mismatch`: it is a break at the start, with the other start cases further down.
 ];
 
 const broken = (reason: string, index: number | null) => ({ status: "mismatch", reason, index });
@@ -341,9 +381,13 @@ type Fault = {
   listing?: (segments: AcceptedEvidenceSegment[]) => AcceptedEvidenceSegment[];
   stored?: [segmentHash: string, bytes: Uint8Array | null];
   signer?: Overrides["signer"];
+  replayer?: Overrides["replayer"];
   initial?: ReplayDocument;
   target?: ReplayDocument;
   packageId?: string;
+  /** The port throws this instead of answering, for every call. */
+  chainError?: Error;
+  storageError?: Error;
 };
 type FaultRow = {
   name: string;
@@ -351,7 +395,23 @@ type FaultRow = {
   outcome: object;
   /** The record itself has a break in the event sequence. */
   sequenceBreak?: true;
+  /** The record itself does not start at event 1 on top of the empty document. */
+  record?: RecordStart;
+  /**
+   * A fault at the start: first event number and whether the document hash breaks. Two
+   * of them are one break at index 0 that carries both.
+   */
+  start?: [sequenceFrom: number, documentHashBreak: boolean];
   plant?: (env: Env, chain: Chain) => Fault | Promise<Fault>;
+};
+/** Applies the step of segment 1 as another text, so the replay misses the recorded hash. */
+const driftedReplayer: EvidenceStepReplayerV2<ReplayDocument> = {
+  ...textReplayer,
+  apply: (document, event) => {
+    const [step] = event.steps;
+    const changed = step.text === SIX[1] ? { ...event, steps: [{ ...step, text: "Drugo. " }] } : event;
+    return textReplayer.apply(document, changed);
+  },
 };
 const receiptOf =
   (segmentHash: string, receipt: AcceptedEvidenceSegment["receipt"]): Fault["listing"] =>
@@ -360,10 +420,20 @@ const receiptOf =
 /** Order of precedence: a fault decides the outcome against every fault below it. */
 const FAULTS: FaultRow[] = [
   {
+    name: "a chain port that rejects",
+    outcome: { status: "unavailable", stage: "chain", reason: "synthetic chain rejection" },
+    plant: () => ({ chainError: new Error("synthetic chain rejection") }),
+  },
+  {
     name: "an empty package",
     outcome: { status: "no_evidence" },
     // The target equals the starting document: the one case that used to read as a match.
     plant: () => ({ packageId: "paket-izmisljeni-prazan", target: EMPTY }),
+  },
+  {
+    name: "a storage port that rejects",
+    outcome: { status: "unavailable", stage: "storage", reason: "synthetic storage rejection" },
+    plant: () => ({ storageError: new Error("synthetic storage rejection") }),
   },
   {
     name: "a payload deleted from storage",
@@ -401,12 +471,31 @@ const FAULTS: FaultRow[] = [
     outcome: broken("receipt_signature_invalid", 2),
     plant: async (env, c) => ({ listing: receiptOf(c.hashes[2], await rewrittenReceipt(env, 2)) }),
   },
+  { name: "a gap at the start", outcome: startBreak(7, false), record: { startAt: 7 }, start: [7, false] },
   {
+    name: "a first segment that starts from another document",
+    outcome: startBreak(1, true),
+    record: { from: LOST },
+    start: [1, true],
+  },
+  {
+    // Was `document_hash_mismatch` / 0 until the start became a break like any other.
     name: "a wrong starting document",
-    outcome: broken("document_hash_mismatch", 0),
+    outcome: startBreak(1, true),
+    start: [1, true],
     plant: () => ({ initial: paragraph("Ranije dopisan tekst. ") }),
   },
+  {
+    name: "steps that do not produce the recorded hash",
+    outcome: broken("document_hash_mismatch", 1),
+    plant: () => ({ replayer: driftedReplayer }),
+  },
   { name: "a break in the sequence", outcome: BREAK, sequenceBreak: true },
+  {
+    name: "an invalid target",
+    outcome: broken("invalid_target", null),
+    plant: () => ({ target: paragraph("\ud800") }),
+  },
   {
     name: "a target that differs",
     outcome: broken("target_mismatch", null),
@@ -421,23 +510,45 @@ const FAULT_PAIRS = FAULTS.flatMap((stronger, at) =>
 async function attack(...rows: FaultRow[]) {
   const env = setup();
   const withBreak = rows.some((row) => row.sequenceBreak);
-  const chain = await ingestChain(env, SIX, withBreak ? 4 : SIX.length);
+  const start: RecordStart = Object.assign({}, ...rows.map((row) => row.record));
+  const movedStart = start.startAt !== undefined || start.from !== undefined;
+  if (movedStart) {
+    // A record with a moved start has no match of its own: the same texts from event 1 do.
+    const control = setup();
+    expect((await reconstruct(control, (await ingestChain(control, SIX)).target)).status).toBe("match");
+  }
+  const chain = await ingestChain(env, SIX, withBreak ? 4 : SIX.length, start);
   // With a break, `ingestChain` already saw `match` on the record before it.
   const untouched = await reconstruct(env, chain.target);
-  expect(untouched).toEqual(withBreak ? BREAK : expect.objectContaining({ status: "match" }));
+  expect(untouched).toEqual(
+    movedStart
+      ? startBreak(start.startAt ?? 1, start.from !== undefined)
+      : withBreak
+        ? BREAK
+        : expect.objectContaining({ status: "match" }),
+  );
 
   const faults = await Promise.all(rows.map((row) => row.plant?.(env, chain) ?? {}));
   const first = <K extends keyof Fault>(key: K) => faults.find((fault) => fault[key] !== undefined)?.[key];
+  const listed = chainWith(env, (segments) => faults.reduce((list, fault) => fault.listing?.(list) ?? list, segments));
+  const [chainError, storageError] = [first("chainError"), first("storageError")];
   return reconstruct(env, first("target") ?? chain.target, {
-    ...chainWith(env, (segments) => faults.reduce((list, fault) => fault.listing?.(list) ?? list, segments)),
+    chain: {
+      async readChain(id) {
+        if (chainError) throw chainError;
+        return (listed.chain ?? env.repository).readChain(id);
+      },
+    },
     payloads: {
       async readImmutable(input) {
+        if (storageError) throw storageError;
         const stored = faults.find((fault) => fault.stored?.[0] === input.segmentHash)?.stored;
         if (!stored) return env.payloadStore.readImmutable(input);
         return stored[1] ? { status: "found", bytes: stored[1] } : { status: "not_found" };
       },
     },
     signer: first("signer") ?? env.signer,
+    replayer: first("replayer") ?? textReplayer,
     initial: first("initial"),
     packageId: first("packageId"),
   });
@@ -597,7 +708,126 @@ describe("thin critical path: ingest, signed receipt, reconstruction, JCS compar
   it.each(FAULT_PAIRS)("attack table: %s decides over %s", async (_stronger, _weaker, stronger, weaker) => {
     const outcome = await attack(stronger, weaker);
     expect(outcome.status).not.toBe("match");
-    expect(outcome).toEqual(stronger.outcome);
+    const [from, to] = [stronger.start, weaker.start];
+    expect(outcome).toEqual(from && to ? startBreak(Math.max(from[0], to[0]), from[1] || to[1]) : stronger.outcome);
+  });
+
+  it.each<[string, number, ReplayDocument, ReplayDocument, boolean]>([
+    // name, first event, document the record starts from, document the caller starts from, hash break
+    ["A: events 1 to 6 lost, the text as it was", 7, EMPTY, EMPTY, false],
+    ["B: events 1 to 6 lost together with their text", 7, LOST, EMPTY, true],
+    ["a start after event 1, even on top of the document the caller starts from", 7, LOST, LOST, false],
+    ["a first event that starts from another document", 1, LOST, EMPTY, true],
+    ["a caller that starts from another document", 1, EMPTY, LOST, true],
+  ])("reports %s as a break at the start, never a match", async (_name, startAt, from, initial, hashBreak) => {
+    const ONE = ["Tekst nakon početka."];
+    // Untouched: the same one-segment record from event 1 on the empty document reconstructs.
+    const control = setup();
+    const sound = await ingestChain(control, ONE);
+    expect(await reconstruct(control, sound.target)).toMatchObject({ status: "match", head: { segmentCount: 1 } });
+
+    const env = setup();
+    const chain = await ingestChain(env, ONE, ONE.length, { startAt, from });
+    // The only irregularity is the start: from event 1 the record matches from its own document.
+    expect(await reconstruct(env, chain.target, { initial: from })).toEqual(
+      startAt === 1 ? expect.objectContaining({ status: "match" }) : startBreak(startAt, false),
+    );
+    for (const target of [chain.target, sound.target, from, EMPTY]) {
+      expect(await reconstruct(env, target, { initial })).toEqual(startBreak(startAt, hashBreak));
+    }
+    // A break at the start waits for the receipts like any other break.
+    expect(await reconstruct(env, chain.target, { initial, signer: { verify: async () => false } })).toEqual(
+      broken("receipt_signature_invalid", 0),
+    );
+    expect(await reconstruct(env, chain.target, { initial, signer: outage })).toMatchObject({ status: "unavailable" });
+  });
+
+  it("keeps the replay itself closed for a first segment that starts from another document", async () => {
+    // The use case reports this as a break at the start; the pure replay still refuses it.
+    const built = await buildSegment(1, EMPTY, ["Tekst."], null);
+    expect(await replayEvidenceSegmentsV2(textReplayer.toCanonical(EMPTY), [built.segment], textReplayer)).toMatchObject({
+      ok: true,
+    });
+    expect(await replayEvidenceSegmentsV2(textReplayer.toCanonical(LOST), [built.segment], textReplayer)).toEqual({
+      ok: false,
+      reason: "document_hash_mismatch",
+      segmentIndex: 0,
+      sequence: null,
+    });
+  });
+
+  it.each<[string, (head: EvidenceChainHeadV2, chain: Chain) => EvidenceChainHeadV2]>([
+    ["behind the last segment", (_head, c) => ({ segmentHash: c.hashes[1], segmentCount: 2 })],
+    ["ahead of the last segment", (head) => ({ ...head, segmentCount: 4 })],
+    ["at the last hash with an earlier count", (head) => ({ ...head, segmentCount: 2 })],
+    ["at an earlier hash with the full count", (head, c) => ({ ...head, segmentHash: c.hashes[1] })],
+    ["at a hash that was never accepted", (head) => ({ ...head, segmentHash: "0".repeat(64) })],
+  ])("blocks a head that points %s", async (_name, move) => {
+    const env = setup();
+    const chain = await ingestChain(env);
+    expect((await reconstruct(env, chain.target)).status).toBe("match");
+    const moved: Overrides = {
+      chain: {
+        async readChain(id) {
+          const read = await env.repository.readChain(id);
+          return read.status === "found" && read.head ? { ...read, head: move(read.head, chain) } : read;
+        },
+      },
+    };
+    for (const target of [chain.target, chain.documents[1]]) {
+      expect(await reconstruct(env, target, moved)).toEqual(broken("head_mismatch", null));
+    }
+  });
+
+  it.each<[string, unknown]>([
+    ["a number that is not finite", Number.NaN],
+    ["a lone surrogate", "\ud800"],
+    ["an undefined value", undefined],
+  ])("reports %s in the target or the starting document as a mismatch, without throwing", async (_name, text) => {
+    const env = setup();
+    const invalid = { nodes: [{ id: NODE, text }] } as unknown as ReplayDocument;
+    // The record is judged before the target: with nothing accepted there is nothing to compare.
+    expect(await reconstruct(env, invalid)).toEqual({ status: "no_evidence" });
+
+    const chain = await ingestChain(env);
+    expect((await reconstruct(env, chain.target)).status).toBe("match");
+    expect(await reconstruct(env, invalid)).toEqual(broken("invalid_target", null));
+    expect(await reconstruct(env, undefined as unknown as ReplayDocument)).toEqual(broken("invalid_target", null));
+    expect(await reconstruct(env, chain.target, { initial: invalid })).toEqual(broken("invalid_document", null));
+    // A fault of the record is not hidden by a target that cannot be compared.
+    expect(await reconstruct(env, invalid, { signer: { verify: async () => false } })).toEqual(
+      broken("receipt_signature_invalid", 0),
+    );
+  });
+
+  it("reports a port that throws or rejects as unavailable, never as an exception", async () => {
+    const env = setup();
+    const { target } = await ingestChain(env);
+    expect((await reconstruct(env, target)).status).toBe("match");
+
+    const rejects = () => Promise.reject(new Error("synthetic rejection"));
+    const throws = () => {
+      throw new Error("synthetic throw");
+    };
+    const unavailable = (stage: string, reason: string) => ({ status: "unavailable", stage, reason });
+    expect(await reconstruct(env, target, { chain: { readChain: rejects } })).toEqual(
+      unavailable("chain", "synthetic rejection"),
+    );
+    expect(await reconstruct(env, target, { chain: { readChain: throws } })).toEqual(
+      unavailable("chain", "synthetic throw"),
+    );
+    expect(await reconstruct(env, target, { payloads: { readImmutable: rejects } })).toEqual(
+      unavailable("storage", "synthetic rejection"),
+    );
+    expect(await reconstruct(env, target, { payloads: { readImmutable: throws } })).toEqual(
+      unavailable("storage", "synthetic throw"),
+    );
+    // A rejection that is not an `Error` still names where it came from.
+    const bare = () => Promise.reject("synthetic bare rejection");
+    expect(await reconstruct(env, target, { chain: { readChain: bare } })).toEqual(unavailable("chain", "chain failed"));
+    expect(await reconstruct(env, target, { payloads: { readImmutable: bare } })).toEqual(
+      unavailable("storage", "storage failed"),
+    );
   });
 
   it("never reports a match while a dependency is unavailable", async () => {
