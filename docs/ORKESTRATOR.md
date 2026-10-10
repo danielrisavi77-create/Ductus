@@ -38,7 +38,7 @@ Diff čitaju CI i neovisni reviewer; orkestrator gleda metapodatke i popis datot
 
 ## 3. Nakon spajanja
 
-1. Sljedeći zadatak iz `PLAN-DEMO.md` §4 kojem su ovisnosti spojene zapisuje se u obliku iz `SESSIONS.md` §3, uz runtime slot, `Risk` razinu iz `ENGINEERING_SYSTEM.md` i review effort (`light`, `standard`, `critical`). Za Claude worker orkestrator postavlja effort po istoj razini; za Codex worker navodi model/effort samo kad je potreban nestandardni izbor.
+1. Sljedeći zadatak iz `PLAN-DEMO.md` §4 kojem su ovisnosti spojene zapisuje se u obliku iz `SESSIONS.md` §3, uz runtime slot, `Risk` razinu iz `ENGINEERING_SYSTEM.md` i review effort (`light`, `standard`, `critical`). Za Claude worker orkestrator postavlja effort po istoj razini; za Codex worker navodi model/effort samo kad je potreban nestandardni izbor. Prije dodjele zadatka s `Risk: critical` orkestrator pribavlja plan napada, a zadatak koji gradi ili mijenja gate dijeli na manje PR-ove (§8, "Plan napada prije koda" i "Manji PR-ovi na gateovima").
 2. Kad je redoslijed jasan, sesija dobiva lanac zadataka (npr. "F2, F3 i F4 redom, svaki svoj PR od svježeg `origin/main`"), da treba manje poruka.
 3. Ploča (Ductus pult): jedan skupni upis po potezu.
 4. `STATE.md`: skupno, najviše jednom dnevno i na kontrolnoj točki, kroz PR orkestratora.
@@ -119,13 +119,15 @@ Orkestrator prati samo sesije koje rade na repou Ductus (Ductura). Ostale sesije
 
 **Radni direktorij.** Lokalni rad na Danielovu stolnom računalu ide s diska `D:` po rasporedu iz `MULTI-ACCOUNT.md` §6 (Daniel, 10. 10. 2026.): orkestrator se pokreće iz glavnog checkouta, a ručni worker dobiva worktree kroz `scripts/new-agent-worktree.ps1`; za runtime ili ulogu koju skripta ne podržava worktree se stvara ručno po istom obrascu. Podagent s `isolation: worktree` (`AGENT_SYSTEM_V2.md` §7) i sesija u oblaku koriste vlastiti worktree.
 
+**Privremene datoteke (Daniel, 10. 10. 2026.).** Dijeljena privremena mapa zajednička je svim sesijama na stroju, a 10. 10. 2026. sesije su u njoj tri puta prepisale jedna drugoj datoteke. Zato svaki podagent i svaka sesija drže privremene datoteke samo u vlastitoj podmapi dijeljene privremene mape, imenovanoj po zadatku (npr. `DAN-122`). Orkestrator podmapu navodi u zadatku (`SESSIONS.md` §3, polje "Privremene datoteke"). Zapis vlasnikove odluke: https://github.com/danielrisavi77-create/Ductus/pull/165#issuecomment-6100851850.
+
 **Kako se worker pokreće.** Redom kojim orkestrator bira:
 
 | Put | Tko ga pokreće i gasi | Za što |
 | --- | --- | --- |
 | Podagent orkestratora (`ductus-backend-data`, `ductus-frontend-editor`, `ductus-platform-sre` i kontrolne uloge) | orkestrator, u potpunosti | zadani put za writere; pregled samo kao advisory nalaz |
 | CLI posao drugog providera (Codex, Grok) | orkestrator, u potpunosti | writer kad ta kvota postoji; pregled samo kao advisory nalaz |
-| Sesija u oblaku ili desktop aplikaciji | review sesije i desktop sesije pokreće Daniel; QA sesije u oblaku pokreće orkestrator (vidi niže); orkestrator im šalje zadatak i prati ih preko GitHuba | kanonski review i QA; dugi poslovi |
+| Sesija u oblaku ili desktop aplikaciji | review sesije i desktop sesije pokreće Daniel; QA sesije i jednokratne pisce u oblaku pokreće orkestrator (vidi niže); orkestrator im šalje zadatak i prati ih preko GitHuba | kanonski review i QA; dugi poslovi; pisanje bez lokalnog stoga |
 
 **Sesija u oblaku koju pokreće orkestrator (Daniel, 10. 10. 2026.).** Orkestrator smije sam, bez pitanja, pokrenuti QA sesiju u oblaku kad mu zatreba, kao jednokratnu rutinu, alatom za rutine u oblaku koji mu je dostupan u njegovu runtimeu (naziv alata ovisi o okruženju). Sve QA sesije otvara orkestrator. Review sesije i desktop sesije pokreće samo Daniel; orkestrator ne pokreće review sesiju ni za jedan PR, bez obzira na risk. Uvjeti:
 
@@ -141,6 +143,25 @@ Orkestrator prati samo sesije koje rade na repou Ductus (Ductura). Ostale sesije
 - sesija radi jedan zadatak i staje: nakon objavljenog verdikta ne preuzima ništa novo; uputa joj zabranjuje push obavijesti i pokušaje slanja poruke (§5). Orkestrator završenu sesiju više ne budi; za novi head ili novi PR pokreće novu sesiju, jer buđenje stare ponovno šalje cijeli njezin kontekst. Sesija koja miruje ne troši tokene, pa je "gašenje" ovdje pravilo da se ne budi, a arhiviranje sesija u oblaku i desktop aplikaciji ostaje Danielu (orkestrator arhivira samo ono iz §4);
 - takva sesija je novi principal, za razliku od podagenta i CLI posla iz odlomka "Podagent nije novi principal": ima vlastiti kontejner, vlastiti checkout i vlastiti kontekst, a od orkestratora prima samo neutralnu uputu; podagent dijeli orkestratorovo okruženje i vjerodajnice. Ako uputa nije neutralna, sesija se za neovisnost računa kao podagent i njezin verdict ne vrijedi za orkestratorov PR;
 - pravila neovisnosti iz `ENGINEERING_SYSTEM.md` §6 vrijede nepromijenjena. Kad je PR orkestratorov vlastiti ili PR njegova podagenta, orkestrator time pokreće provjeru vlastitog rada: ova odluka to dopušta, ali se u zapisu izričito navodi, a Daniel takvu provjeru može u svakom trenutku ponoviti vlastitom sesijom.
+
+**Jednokratni pisac u oblaku (Daniel, 10. 10. 2026.).** Uz QA sesije orkestrator smije sam pokretati i jednokratne pisce u oblaku, istim alatom za rutine. Review sesije i dalje otvara samo Daniel. Uvjeti:
+
+- jedan zadatak po sesiji; nakon predaje ili blokade sesija staje i orkestrator je više ne budi (za novi zadatak ili popravak pokreće novu sesiju s novim slotom);
+- pisac u oblaku dobiva samo zadatke kojima ne treba lokalni stog (Postgres s pgTAP-om, S3, OIDC): dokumente, skillove, čistu domenu i skripte. Zadaci s bazom ostaju lokalnim podagentima;
+- prije commita pisac u oblaku pokrene `gitleaks version`, jer pre-commit hook traži skener tajni. Ako naredba ne uspije (skenera nema u toj okolini), ne commita: pripremljenu izmjenu ostavlja kao patch u tragu rada, a commit radi lokalna sesija. Hook se ne zaobilazi;
+- kad patch jednokratnog pisca commita druga sesija, pisac patcha i sesija koja ga commita obje su autori PR-a: obje se imenuju u opisu PR-a i nijedna ne daje review ni QA verdikt na tom PR-u;
+- jednokratni pisac ne može slati poruke (§5), pa je trag rada na PR-u (`SESSIONS.md` §2 t. 4) jedini signal da je napredovao ili stao. Stalne sesije u oblaku koje je otvorio Daniel javljaju se i porukom po §5;
+- svako pokretanje orkestrator bilježi na koordinacijskom issueu (trenutačno #87): PR ili zadatak, slot, model, ID rutine i polazni head.
+
+**Plan napada prije koda (Daniel, 10. 10. 2026.; mjesto objave: https://github.com/danielrisavi77-create/Ductus/pull/165#issuecomment-6100851850).** Za svaki zadatak s `Risk: critical` orkestrator prije dodjele pokreće sesiju koja napiše plan napada: QA sesiju u oblaku ili slobodnu review sesiju (review sesiji plan dodjeljuje redom za review, jer review sesije otvara Daniel). Pravila:
+
+- plan je popis napada, rubnih slučajeva i negativnih testova koje rješenje mora izdržati; svaka stavka ima scenarij na izmišljenim podacima, očekivani ishod i izvor u kanonskim dokumentima. Plan je popis zahtjeva na testove, ne rješenje. Kako se piše: skill `ductus-attack-plan`;
+- plan se objavljuje na GitHubu kao zaseban issue s naslovom "Plan napada: <zadatak>" (kao #153, #154, #155, #158 i #166); poveznica na taj issue upisuje se u polje "Plan napada" zadatka (`SESSIONS.md` §3). Ovo zamjenjuje raniji tekst iz DAN-122 o komentaru na Linear zadatku ili draft PR-u;
+- otvorena pitanja o proizvodu koja plan otkrije idu Danielu po §4a prije početka rada;
+- sesija koja je napisala plan ne daje review ni QA verdikt na PR-u tog zadatka (`ENGINEERING_SYSTEM.md` §6); orkestrator to poštuje pri dodjeli reviewa i QA-a;
+- autor svaku stavku pretvara u test ili u opisu PR-a obrazlaže zašto se ne odnosi na taj PR, daje tablicu "stavka plana → test" i prije pusha sam napada svoje rješenje (`SESSIONS.md` §3).
+
+**Manji PR-ovi na gateovima (Daniel, 10. 10. 2026.).** Zadatak koji gradi ili mijenja gate (skener, hook, evaluator) orkestrator prije dodjele dijeli na PR-ove koji se mogu zasebno pregledati, svaki s vlastitim planom napada.
 
 Jednokratnu rutinu orkestrator ne briše, nego je pušta da se sama ugasi nakon pokretanja; pogrešno zakazanu rutinu onemogućuje prije pokretanja. Trošak ostaje unutar postojećih pretplata; novi trošak ide Danielu po §4.
 
