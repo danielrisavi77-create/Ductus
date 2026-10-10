@@ -58,7 +58,11 @@ describe("content hidden from the eye or from a screen reader", () => {
     ["10 visibility hidden", ['<p>Spremljeno <span style={{ visibility: "hidden" }}>na uređaju</span></p>'], [HR]],
     ["10 display by a condition", ['<p>Spremljeno <span style={{ display: a ? "inline" : "none" }}>na uređaju</span></p>'], [HR]],
     ["10 computed display", ["<p>Spremljeno <span style={{ display: n }}>na uređaju</span></p>"], [HR]],
-    ["10 display inline", ['<p>Spremljeno <span style={{ display: "inline" }}>na uređaju</span></p>'], []],
+    ["10 spread in the style", ['<p>Spremljeno <span style={{ ...base, color: "red" }}>na uređaju</span></p>'], [HR]],
+    ["10 computed key in the style", ['<p>Saved <span style={{ [key]: "none" }}>on this device</span></p>'], [EN]],
+    ["10 display as a computed string key", ['<p>Spremljeno <span style={{ ["display"]: "none" }}>na uređaju</span></p>'], [HR]],
+    ["10 spread in the style after the whole phrase", ["<p>Spremljeno na uređaju <span style={{ ...base }}>14:05</span></p>"], []],
+    ["10 display inline",['<p>Spremljeno <span style={{ display: "inline" }}>na uređaju</span></p>'], []],
     ["10 style without display", ['<p>Spremljeno <span style={{ color: "red" }}>na uređaju</span></p>'], []],
     ["11 place rendered by &&", ["<p>Spremljeno {a && <span>na poslužitelju</span>}</p>"], [HR]],
     ["11 place rendered by a condition", ["<p>Spremljeno {a ? <span>na uređaju</span> : null}</p>"], [HR]],
@@ -98,7 +102,11 @@ describe("content hidden from the eye or from a screen reader", () => {
     // Not covered (remaining risk, see the comment on `hiding` in scan.ts): the
     // scan cannot tell what a value from elsewhere holds.
     ["not covered: style from a variable", ["<p>Spremljeno <span style={hiddenStyle}>na uređaju</span></p>"], []],
-    ["not covered: class from a variable", ["<p>Spremljeno <span className={styles.hidden}>na uređaju</span></p>"], []],
+    // Not covered either: an inline style that hides from the eye without `display` or `visibility`.
+    ["not covered: opacity 0", ["<p>Spremljeno <span style={{ opacity: 0 }}>na uređaju</span></p>"], []],
+    ["not covered: font size 0", ["<p>Spremljeno <span style={{ fontSize: 0 }}>na uređaju</span></p>"], []],
+    ["not covered: clipped off the screen", ['<p>Spremljeno <span style={{ position: "absolute", clip: "rect(0 0 0 0)" }}>na uređaju</span></p>'], []],
+    ["not covered: class from a variable",["<p>Spremljeno <span className={styles.hidden}>na uređaju</span></p>"], []],
   ];
 
   it.each(HIDDEN_CONTENT)("row %s", (_, lines, expected) => {

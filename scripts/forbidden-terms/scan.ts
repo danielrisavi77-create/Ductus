@@ -404,11 +404,17 @@ function stringsWithin(node: ts.Node): string[] {
  * - The `hidden` attribute, a class on `HIDING_CLASSES` and an inline
  *   `display` or `visibility` that hides, or is computed, keep it from both,
  *   and only maybe: such content is there to be shown at some point.
- * - Spread props can carry any of these: maybe, for both.
+ * - Spread props can carry any of these: maybe, for both. So can a spread or
+ *   a computed key inside a `style` literal.
  *
  * Not covered, because the value is not in the element: a class or a `style`
  * that comes from a variable or a CSS module, a rule in a stylesheet, and what
  * a parent element or a component does to its children.
+ *
+ * Not covered either: inline styles that hide from the eye without `display`
+ * or `visibility`, such as `opacity: 0`, `fontSize: 0`, a `clip` or
+ * `clipPath`, a position off the screen, a zero `width` or `height` with
+ * `overflow: "hidden"`, or text in the colour of the background.
  */
 function hiding(source: ts.SourceFile, element: ts.JsxOpeningElement, audience: Audience): Hiding {
   let result: Hiding = "no";
@@ -437,6 +443,8 @@ function hiding(source: ts.SourceFile, element: ts.JsxOpeningElement, audience: 
       }
     } else if (name === "style" && value && ts.isObjectLiteralExpression(value)) {
       for (const property of value.properties) {
+        // A spread or a computed key can set `display` without naming it.
+        if (ts.isSpreadAssignment(property) || (property.name && ts.isComputedPropertyName(property.name))) maybe();
         const hides = property.name && (ts.isIdentifier(property.name) || isPlainString(property.name)) ? HIDING_STYLES.get(property.name.text) : undefined;
         if (!hides) continue;
         const set = ts.isPropertyAssignment(property) ? property.initializer : undefined;
