@@ -46,6 +46,13 @@ export default defineConfig({
       APP_DATABASE_URL:
         process.env.APP_DATABASE_URL ??
         "postgres://ductus_app_local:ductus-app-local-only@127.0.0.1:54329/ductus",
+      // "Demo prijava" configured on purpose: the production build must refuse
+      // it (D-09, e2e/auth.spec.ts). Local-only values from .env.example.
+      DUCTUS_AUTH_PROVIDER: "fake-oidc",
+      OIDC_ISSUER: "http://localhost:8090",
+      OIDC_REDIRECT_URI: `${BASE_URL}/api/auth/callback`,
+      OIDC_CLIENT_ID: "ductus-local",
+      OIDC_CLIENT_SECRET: "ductus-local-only",
     },
     // A server already on the port may be `next dev` or an older build, so it
     // is reused only on explicit request.
