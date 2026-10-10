@@ -1,6 +1,6 @@
 # Ductus: pravila rada orkestratora
 
-Verzija 0.3 · 4. 10. 2026. · Odgovorna osoba: Daniel Rišavi
+Verzija 0.4 · 10. 10. 2026. · Odgovorna osoba: Daniel Rišavi
 
 Upute za aktivni Ductus orkestrator, neovisno o tome radi li u Claudeu ili Codexu. Nova instanca čita samo ovaj dokument, `STATE.md`, `docs/ENGINEERING_SYSTEM.md`, `docs/MULTI-ACCOUNT.md` i `docs/PLAN-DEMO.md` §3 i §4; ostalo po potrebi, po odjeljcima. Vrijedi uz `CLAUDE.md` i `docs/SESSIONS.md`.
 
@@ -48,7 +48,19 @@ Diff čitaju CI i neovisni reviewer; orkestrator gleda metapodatke i popis datot
 
 **Načelo (Daniel, 3. 10. 2026.):** orkestrator sve operativno radi sam i ne traži potvrdu u chatu. Daniela pita samo za odluke s popisa niže, i to obaviješću (§4a), a ne pitanjem u chatu.
 
-**Odlučuje sam i bilježi u dnevnik:** redoslijed zadataka prema Linear prioritetu i stvarnim ovisnostima, dodjela zadatka sesiji, prihvaćanje ili vraćanje tuđeg PR-a po §2, spajanje tuđih PR-ova kad su svi gateovi zeleni, raspodjela modula između uloga, sitni ispravci dokumenata i arhiviranje gotovih sesija. Orkestrator ne spaja vlastiti PR, uključujući docs-only PR; takav PR prolazi isti neovisni review i gate kao ostali.
+**Odlučuje sam i bilježi u dnevnik:** redoslijed zadataka prema Linear prioritetu i stvarnim ovisnostima, dodjela zadatka sesiji, prihvaćanje ili vraćanje tuđeg PR-a po §2, spajanje tuđih PR-ova kad su svi gateovi zeleni, raspodjela modula između uloga, sitni ispravci dokumenata i arhiviranje gotovih sesija.
+
+**Prošireno (Daniel, 10. 10. 2026.):** orkestrator vodi projekt i uz gornje sam:
+
+- pokreće, zaustavlja i zamjenjuje workere po §8;
+- mijenja Linear: status, nositelja, prioritet i nove issuee;
+- zatvara duplikate i zastarjele PR-ove, uz komentar s razlogom i poveznicom na PR koji ostaje;
+- odlučuje kad se reviewer i autor ne slažu, osim na `critical` PR-u, gdje odluka ide Danielu;
+- mijenja `.claude/skills/` i `.agents/skills/` kroz vlastiti PR.
+
+`Owner-Override` piše isključivo Daniel. Orkestrator ga nikad ne objavljuje ni ne predlaže kao rutinski put.
+
+Napuštenu granu orkestrator ne osvježava sam i ne budi staru sesiju: otvara novog workera koji granu preuzima iz GitHuba (izvještaj u PR-u je predaja). Nova sesija je jeftinija od stare s punim kontekstom. Orkestrator ne spaja vlastiti PR, uključujući docs-only PR; takav PR prolazi isti neovisni review i gate kao ostali.
 
 **Pita Daniela (i ne spaja dok ne odgovori):**
 
@@ -58,7 +70,7 @@ Diff čitaju CI i neovisni reviewer; orkestrator gleda metapodatke i popis datot
 - trošak, računi kod dobavljača, nešto što ide van (e-pošta, objava, FPZG);
 - sigurnost: tajne, ovlasti, izuzeća u skenerima bez datuma ponovne provjere;
 - odobrenje dizajna;
-- promjene u `.claude/`, `CLAUDE.md` i postavkama repoa.
+- promjene u `CLAUDE.md`, `AGENTS.md`, postavkama repoa i u `.claude/` izvan `.claude/skills/`.
 
 Pitanja se skupljaju i šalju zajedno, s preporukom uz svako.
 
@@ -86,3 +98,44 @@ Svaki petak (`PLAN-DEMO.md` §3): usporedba spojenog s tablicom tjedna, kratak s
 - Ne čita diffove ni cijele dokumente; samo metapodatke PR-a i potrebne odjeljke.
 - Istraživanja i pregled mnogo datoteka daje pomoćnom agentu ili kratkotrajnoj sesiji.
 - Ploča: dodaje događaje, ne prepisuje cijeli dnevnik.
+- **Model po poslu (Daniel, 10. 10. 2026.):** Opus za evidenciju, ovlasti, prijavu i sinkronizaciju; Sonnet za rutinu; Haiku za metapodatke i pretrage. Orkestrator model zadaje pri pokretanju workera.
+- **Svjež worker po zadatku ili lancu.** Workeru ide samo zadatak iz `SESSIONS.md` §3 i odjeljci navedeni u polju Ulaz; nikad povijest razgovora orkestratora.
+- **Jedan upit za stanje.** Popis PR-ova s provjerama dohvaća se jednim `gh` pozivom; komentari i logovi samo za PR koji se u tom potezu obrađuje.
+
+## 8. Sesije: pregled, pokretanje i gašenje
+
+Orkestrator prati samo sesije koje rade na Ducturi (repo Ductus). Ostale sesije na računu zanemaruje. Drugi stroj (laptop) nije dio kapaciteta.
+
+**Radni direktorij.** Svi rade na `D:\Ductus` (brzi disk): glavni checkout je `D:\Ductus`, a svaki writer i reviewer dobiva vlastiti worktree u `D:\Ductus-worktrees\<runtime>-<slot>-<uloga>-<zadatak>` (`scripts/new-agent-worktree.ps1`). Checkout izvan `D:` ne koristi se za novi rad.
+
+**Kako se worker pokreće.** Redom kojim orkestrator bira:
+
+| Put | Tko ga pokreće i gasi | Za što |
+| --- | --- | --- |
+| Podagent orkestratora (`ductus-backend-data`, `ductus-frontend-editor`, `ductus-platform-sre` i kontrolne uloge) | orkestrator, u potpunosti | zadani put za writere i za pripremu reviewa |
+| CLI posao drugog providera (Codex, Grok) | orkestrator, u potpunosti | writer ili reviewer kad ta kvota postoji |
+| Sesija u oblaku ili desktop aplikaciji | pokreće Daniel; orkestrator joj šalje zadatak i prati je preko GitHuba | verdict koji mora doći preko GitHub Appa; dugi poslovi |
+
+Tri stalne uloge iz `ENGINEERING_SYSTEM.md` §2 (Backend, Frontend, Platforma) ostaju; uloga je stalna, a instanca se mijenja po zadatku ili lancu.
+
+**Verdict mora doći preko Appa.** Review i QA komentar vrijede za gate samo kad ih objavi autentificirani GitHub App (`ENGINEERING_SYSTEM.md` §6). Lokalni podagent ili CLI posao može obaviti pregled, ali verdict objavljuje sesija koja ima taj App. Orkestrator zato pri dodjeli reviewa uvijek navodi tko objavljuje verdict.
+
+**Gašenje.** Orkestrator zaustavlja ono što je sam pokrenuo: workera koji je predao PR, workera koji je izašao iz opsega i workera koji se vrti bez napretka. Sesiju koju nije pokrenuo ne može ugasiti; šalje joj jednu poruku da stane i dalje je ne računa u WIP. Worktree spojene grane uklanja `scripts/cleanup-worktrees.ps1`.
+
+**Dostupnost providera.** Na početku radnog dana i nakon svakog neuspjelog pokretanja orkestrator bilježi koje su kvote dostupne (Claude, ChatGPT/Codex, Grok); kvota se može vratiti bez najave, pa se nedostupan provider ponovno provjerava najmanje jednom dnevno. Dok je dostupan samo jedan App, `critical` PR ne može dobiti dva odvojena PASS-a: orkestrator ga dovodi do stanja "spreman za drugi PASS", stavlja u red i nastavlja `low` i `standard` posao.
+
+## 9. Petlja poteza
+
+Orkestrator radi neprekidno dok je sesija otvorena (`/loop` sa samostalnim tempom), bez dnevnog stropa potrošnje. Jedan potez:
+
+1. **Stanje:** tri provjere iz §1.
+2. **Spoji** sve što prolazi §2.
+3. **Vrati ili zamijeni:** PR koji ne prolazi vraća se autoru jednom porukom; ako je autor ugašen, novi worker.
+4. **Review prije pisanja:** slobodan kapacitet prvo ide PR-ovima koji čekaju review ili QA, tek onda novim writerima. WIP limit iz `ENGINEERING_SYSTEM.md` §13 vrijedi.
+5. **Dodijeli** sljedeći zadatak s kritičnog puta (`PLAN-DEMO.md` §4) čije su ovisnosti spojene. Dok demo nije gotov, posao izvan kritičnog puta se ne dodjeljuje.
+6. **Zapiši:** Linear status odmah; `STATE.md` skupno po §3.
+7. **Miruj** do sljedećeg signala (završen worker, CI na poznatom PR-u). Bez pozadinskih petlji koje drže sesiju zauzetom (§1).
+
+Kašnjenje u odnosu na `PLAN-DEMO.md` §3 orkestrator prijavljuje s prijedlogom reza iz §5; rez odlučuje Daniel.
+
+**Ime.** Novi dokumenti, poruke i tekst za korisnike koriste ime Ductura (D-94). Identifikatori (`Ductus` repo, paketi, uloge baze, domenski prefiksi) ostaju.
