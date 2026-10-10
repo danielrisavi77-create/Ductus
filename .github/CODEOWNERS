@@ -1,5 +1,17 @@
 # Ductus trust/governance boundaries.
-# Branch protection must require Code Owner review for these paths.
+#
+# These entries record who owns the paths that protect the way of working and
+# make GitHub request the owner's review automatically. They are NOT a merge
+# gate: the "Require review from Code Owners" branch protection setting is
+# deliberately OFF (docs/ENGINEERING_SYSTEM.md section 10), because the owner is
+# the only code owner and GitHub does not let an author approve their own PR.
+# It may be switched on only after a second real code-owner identity exists
+# (issue #53). Until then the machine protection is the risk floor, independent
+# App-authenticated review/QA and, for D-97 paths, the owner's merge command.
+#
+# The last matching rule wins; keep every rule owned so no later, broader rule
+# can clear an earlier owner. tests/unit/codeowners.test.ts checks that every
+# D-97 path (D97_PATHS in scripts/orchestrator/orchestrator-core.mjs) is covered.
 /.github/CODEOWNERS @danielrisavi77-create
 /.github/workflows/** @danielrisavi77-create
 /scripts/engineering/** @danielrisavi77-create
@@ -7,3 +19,21 @@
 /AGENTS.md @danielrisavi77-create
 /docs/ENGINEERING_SYSTEM.md @danielrisavi77-create
 /docs/PRODUCT.md @danielrisavi77-create
+
+# Paths that decide who may write, review, merge or bypass a check (D-97).
+/.github/** @danielrisavi77-create
+/.claude/** @danielrisavi77-create
+/.claude/settings.json @danielrisavi77-create
+/.claude/skills/** @danielrisavi77-create
+/.claude/agents/** @danielrisavi77-create
+/.agents/** @danielrisavi77-create
+/scripts/hooks/** @danielrisavi77-create
+/scripts/orchestrator/** @danielrisavi77-create
+/lefthook.yml @danielrisavi77-create
+/docs/ORKESTRATOR.md @danielrisavi77-create
+/docs/SESSIONS.md @danielrisavi77-create
+/docs/MULTI-ACCOUNT.md @danielrisavi77-create
+/docs/AGENT_SYSTEM_V2.md @danielrisavi77-create
+
+# Copies of the .claude skills shipped as a plugin (DAN-138/2).
+/plugins/ductura-engineering/skills/** @danielrisavi77-create
