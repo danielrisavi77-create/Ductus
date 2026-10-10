@@ -23,7 +23,7 @@ Ako način nije jasan, ne pretpostavljaj ovlast za pisanje. Pregled ili analiza 
 - Chat memorija, session-ID, privatni skill ili account-level postavka nikad nisu jedini izvor projektnog konteksta.
 - Svaki writer radi u zasebnom branchu/worktreeu od svježeg `origin/main`.
 - Vlasništvo mapa i tijek zadatka definirani su u `docs/SESSIONS.md`; risk, review, QA i WIP gateovi u `docs/ENGINEERING_SYSTEM.md`; cross-account predaja u `docs/MULTI-ACCOUNT.md`.
-- Ne mijenjaj granu drugog workera. Ne spajaj vlastiti PR.
+- Ne mijenjaj granu drugog workera. Ne spajaj vlastiti PR. Jedina iznimka (D-95): sesija orkestratora smije spojiti PR svog podagenta ili CLI posla pod uvjetima iz `docs/ORKESTRATOR.md` §8; PR koji je sama napisala ne spaja.
 - Tajne, tokeni, auth datoteke i osobni podaci ne ulaze u repo, issue ni PR.
 
 ## Worker
