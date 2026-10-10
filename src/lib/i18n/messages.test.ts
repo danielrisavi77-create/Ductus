@@ -29,6 +29,7 @@ const FORBIDDEN = [
   "prepisan",
   "nestali podaci",
   "skriven",
+  "skriva",
 ];
 
 describe("messages.hr", () => {
