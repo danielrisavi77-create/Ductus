@@ -19,7 +19,12 @@
     "prepare": "lefthook install",
     "test:integration": "vitest run --project integration",
     "stack:up": "docker compose up -d --build --wait",
-    "stack:down": "docker compose down -v"
+    "stack:down": "docker compose down -v",
+    "db:new": "dbmate new",
+    "db:migrate": "dbmate --url \"postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus?sslmode=disable\" --no-dump-schema --wait up",
+    "db:rollback": "dbmate --url \"postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus?sslmode=disable\" --no-dump-schema rollback",
+    "db:status": "dbmate --url \"postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus?sslmode=disable\" status",
+    "test:db": "docker compose exec -T postgres pg_prove -U ductus -d ductus --recurse --ext .sql /db/tests"
   },
   "dependencies": {
     "@tiptap/core": "^3.31.3",
@@ -47,6 +52,7 @@
     "@types/pg": "^8.23.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "dbmate": "^2.36.0",
     "eslint": "^9.39.5",
     "eslint-config-next": "15.5.27",
     "fake-indexeddb": "^6.2.5",
