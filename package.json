@@ -31,7 +31,10 @@
     "orch:wait": "node scripts/orchestrator/wait-verdict.mjs",
     "orch:overlap": "node scripts/orchestrator/pr-overlap.mjs",
     "orch:clean": "node scripts/orchestrator/worktree-clean.mjs",
-    "test:db": "docker compose exec -T postgres pg_prove -U ductus -d ductus --recurse --ext .sql /db/tests"
+    "test:db": "docker compose exec -T postgres pg_prove -U ductus -d ductus --recurse --ext .sql /db/tests",
+    "agents:lint": "pnpm dlx --allow-build=agnix agnix@0.57.0 .",
+    "tokens:report": "node scripts/engineering/token-report.mjs",
+    "tokens:codeburn": "pnpm dlx codeburn@0.9.25 optimize"
   },
   "dependencies": {
     "@tiptap/core": "^3.31.3",
@@ -59,6 +62,7 @@
     "@types/pg": "^8.23.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "cc-safety-net": "2.6.1",
     "dbmate": "^2.36.0",
     "eslint": "^9.39.5",
     "eslint-config-next": "15.5.27",
