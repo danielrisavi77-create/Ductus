@@ -8,6 +8,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const ROTATE_AT = 150_000;
+// Upper safety limit for the permanent orchestrator session (docs/ORKESTRATOR.md §7).
+export const ORCHESTRATOR_LIMIT = 200_000;
 export const HARD_AT = 250_000;
 export const LARGE_DOC_BYTES = 16_000;
 export const OUTLINE_LIMIT = 80;
@@ -43,6 +45,18 @@ export const PROFILE_ROLES = {
 const toPosix = (file) => String(file ?? "").replace(/\\/g, "/");
 
 export const isProtected = (file) => PROTECTED.some((pattern) => pattern.test(toPosix(file)));
+
+// Where a path really is once every link in it is resolved: `file` is the real
+// path and `relative` its place under the real project root. Null when the
+// hook must not open it: it resolves outside the project (a link in the repo
+// can point anywhere on the machine) or under a Read deny rule. Throws when
+// the path does not exist, which the caller treats as "do nothing".
+export function realProjectPath(root, file, realpath = fs.realpathSync) {
+  const real = realpath(file);
+  const relative = path.relative(realpath(root), real);
+  const outside = !relative || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
+  return outside || isProtected(real) ? null : { file: real, relative: toPosix(relative) };
+}
 
 export function sessionRole(event) {
   const profile = event?.agent_type;
@@ -130,7 +144,8 @@ export function budgetNotice(tokens, role = "unknown") {
   const size = `${Math.round(tokens / 1000)}k`;
   const hard = tokens >= HARD_AT;
   if (role === "orchestrator") {
-    return `Context is ${size} tokens. Reminder, not a stop: ${ORCHESTRATOR_RULE}.${hard ? " This is past the 200k upper safety limit in §7, so compact before the next unit." : ""}`;
+    const limit = tokens >= ORCHESTRATOR_LIMIT ? ` This has reached the ${ORCHESTRATOR_LIMIT / 1000}k upper safety limit in §7, so compact before the next unit.` : "";
+    return `Context is ${size} tokens. Reminder, not a stop: ${ORCHESTRATOR_RULE}.${limit}`;
   }
   const where = hard
     ? `Context is ${size} tokens, past the ${HARD_AT / 1000}k hard limit. Every further call re-reads all of it. `
@@ -183,25 +198,40 @@ const modes = {
     const inProject = !relative.startsWith("..") && !path.isAbsolute(relative);
     if (!inProject || isProtected(relative)) return;
     const stat = fs.statSync(file, { throwIfNoEntry: false });
-    // A link inside the repo may point at a deny-listed file.
-    if (stat && isProtected(path.relative(fs.realpathSync(root), fs.realpathSync(file)))) return;
-    const reason = reviewRead({ ...input, file_path: relative || input.file_path }, stat, () => fs.readFileSync(file, "utf8"), inProject);
+    // A link inside the repo may point at a deny-listed file or out of the
+    // repo. Neither is opened here; the permission system decides the call.
+    const real = stat ? realProjectPath(root, file) : null;
+    if (stat && !real) return;
+    const reason = reviewRead({ ...input, file_path: relative || input.file_path }, stat, () => fs.readFileSync(real.file, "utf8"), inProject);
     if (reason) emit({ hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason });
   },
   // UserPromptSubmit
   budget(event) {
+    // The transcript lives outside the repo by design and only its size is
+    // reported, but a path that resolves under a Read deny rule is not opened.
+    const transcript = fs.realpathSync(event.transcript_path);
+    if (isProtected(event.transcript_path) || isProtected(transcript)) return;
     // A long turn can push the last call out of a small tail; widen once.
-    const tokens = lastContext(readTail(event.transcript_path, 400_000)) || lastContext(readTail(event.transcript_path, 4_000_000));
+    const tokens = lastContext(readTail(transcript, 400_000)) || lastContext(readTail(transcript, 4_000_000));
     const notice = budgetNotice(tokens, sessionRole(event));
     if (notice) emit({ hookEventName: "UserPromptSubmit", additionalContext: notice });
   },
   // SessionStart: saves the model call every session spends on reading STATE.md.
   start(event) {
-    const file = path.join(projectDir(event), "STATE.md");
-    const context = stateContext(file, fs.readFileSync(file, "utf8"));
+    const root = projectDir(event);
+    const file = path.join(root, "STATE.md");
+    // Only the project's own STATE.md is loaded. Git checks out links, so a
+    // branch can make STATE.md point at .env or any other file; a path that
+    // resolves anywhere but <root>/STATE.md is not read and nothing is added.
+    const real = realProjectPath(root, file);
+    if (real?.relative !== "STATE.md" || !fs.statSync(real.file).isFile()) return;
+    const context = stateContext(file, fs.readFileSync(real.file, "utf8"));
     if (context) emit({ hookEventName: "SessionStart", additionalContext: context });
   },
 };
+
+// Every mode opens a file; agent-hooks.test.mjs probes each name listed here.
+export const MODE_NAMES = Object.keys(modes);
 
 function main() {
   try {

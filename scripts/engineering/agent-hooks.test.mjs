@@ -9,6 +9,8 @@ import { fileURLToPath } from "node:url";
 import {
   HARD_AT,
   LARGE_DOC_BYTES,
+  MODE_NAMES,
+  ORCHESTRATOR_LIMIT,
   OUTLINE_LIMIT,
   PROFILE_ROLES,
   ROTATE_AT,
@@ -17,6 +19,7 @@ import {
   isProtected,
   lastContext,
   outline,
+  realProjectPath,
   reviewRead,
   sessionRole,
   stateContext,
@@ -38,6 +41,52 @@ function run(mode, event, projectDir) {
   const result = spawnSync(process.execPath, [script, mode], { input: JSON.stringify(event), encoding: "utf8", env });
   assert.equal(result.status, 0);
   return result.stdout ? JSON.parse(result.stdout).hookSpecificOutput : null;
+}
+
+// Everything a hook run printed, unparsed: "" means it neither decided nor quoted anything.
+function raw(mode, event, projectDir) {
+  const result = spawnSync(process.execPath, [script, mode], {
+    input: JSON.stringify(event),
+    encoding: "utf8",
+    env: { ...process.env, CLAUDE_PROJECT_DIR: projectDir },
+  });
+  assert.equal(result.status, 0);
+  return result.stdout + result.stderr;
+}
+
+const MARK = "FAKE-CONTENT-MARKER";
+const bigDoc = `## ${MARK}\n` + "x".repeat(LARGE_DOC_BYTES);
+const bigTranscript = assistant("a", { cache_read_input_tokens: HARD_AT }, { note: MARK }) + "\n";
+
+// A made-up project with deny-listed files, next to a directory outside it.
+function sandbox() {
+  const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "ductus-link-")));
+  const dir = path.join(base, "repo");
+  const outside = path.join(base, "outside");
+  for (const folder of [path.join(dir, "docs"), path.join(dir, "secrets"), path.join(outside, "notes")]) fs.mkdirSync(folder, { recursive: true });
+  fs.writeFileSync(path.join(dir, ".env"), `FAKE_TOKEN=${MARK}\n`);
+  fs.writeFileSync(path.join(dir, "docs", "open.md"), bigDoc);
+  fs.writeFileSync(path.join(dir, "docs", "small.md"), `# ${MARK}\n`);
+  fs.writeFileSync(path.join(dir, "secrets", "runbook.md"), bigDoc);
+  fs.writeFileSync(path.join(dir, "secrets", "STATE.md"), `# ${MARK}\n`);
+  fs.writeFileSync(path.join(dir, "secrets", "t.jsonl"), bigTranscript);
+  fs.writeFileSync(path.join(outside, "notes", "private.md"), bigDoc);
+  fs.writeFileSync(path.join(outside, "STATE.md"), `# ${MARK}\n`);
+  return { base, dir, outside };
+}
+
+// Directory links work everywhere (a junction on Windows). File links need a
+// privilege on Windows; only that one case may skip, and it says so.
+const dirLink = (target, at) => fs.symlinkSync(target, at, "junction");
+function fileLink(t, target, at) {
+  try {
+    fs.symlinkSync(target, at, "file");
+    return true;
+  } catch (error) {
+    if (process.platform !== "win32" || error.code !== "EPERM") throw error;
+    t.skip("Windows without the symlink privilege cannot create a file link; this case runs on Linux CI");
+    return false;
+  }
 }
 
 test("outline lists headings with line numbers and skips fenced code", () => {
@@ -245,7 +294,7 @@ test("every Read deny rule in settings.json is covered by the hook", () => {
   }
 });
 
-test("read entry point never puts content of a deny-listed file in its output", () => {
+test("read entry point never puts content of a deny-listed file in its output", async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-deny-"));
   try {
     const secret = "## TOP-SECRET-HEADING\n" + "x".repeat(LARGE_DOC_BYTES);
@@ -268,13 +317,145 @@ test("read entry point never puts content of a deny-listed file in its output", 
     for (const file of ["secrets/runbook.md", path.join(dir, "secrets", "runbook.md"), "docs/../secrets/runbook.md"]) {
       assert.equal(raw(file), "", file);
     }
-    let linked = true;
-    try {
-      fs.symlinkSync(path.join(dir, "secrets", "runbook.md"), path.join(dir, "docs", "link.md"));
-    } catch {
-      linked = false; // Windows without the symlink privilege.
+    dirLink(path.join(dir, "secrets"), path.join(dir, "docs", "linked"));
+    assert.equal(raw("docs/linked/runbook.md"), "");
+    await t.test("file link to a deny-listed file", (t) => {
+      if (fileLink(t, path.join(dir, "secrets", "runbook.md"), path.join(dir, "docs", "link.md"))) assert.equal(raw("docs/link.md"), "");
+    });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("real project path rejects targets outside the project or under a deny rule", () => {
+  const root = path.resolve("repo");
+  const at = (...parts) => path.join(root, ...parts);
+  const links = { [at("STATE.md")]: at(".env"), [at("docs", "out.md")]: path.resolve("elsewhere", "private.md"), [at("docs", "sec.md")]: at("secrets", "a.md") };
+  const realpath = (file) => links[file] ?? file;
+  assert.deepEqual(realProjectPath(root, at("docs", "BACKEND.md"), realpath), { file: at("docs", "BACKEND.md"), relative: "docs/BACKEND.md" });
+  for (const file of [at("STATE.md"), at("docs", "out.md"), at("docs", "sec.md"), root, path.resolve("STATE.md")]) {
+    assert.equal(realProjectPath(root, file, realpath), null, file);
+  }
+  // A project reached through a link is still the project.
+  const viaLink = (file) => file.replace(path.resolve("link"), root);
+  assert.equal(realProjectPath(path.resolve("link"), path.resolve("link", "STATE.md"), viaLink).relative, "STATE.md");
+  assert.equal(realProjectPath(root, at("..notes.md"), realpath).relative, "..notes.md");
+});
+
+test("start entry point loads only the project's own STATE.md, never a link target", async (t) => {
+  const { base, dir, outside } = sandbox();
+  try {
+    const state = path.join(dir, "STATE.md");
+    assert.equal(raw("start", { cwd: dir }, dir), "");
+    // Control: a regular STATE.md is loaded, also when the project is reached through a link.
+    fs.writeFileSync(state, "# Stanje rada\n");
+    assert.match(raw("start", { cwd: dir }, dir), /# Stanje rada/);
+    dirLink(dir, path.join(base, "via"));
+    assert.match(raw("start", { cwd: dir }, path.join(base, "via")), /# Stanje rada/);
+    fs.rmSync(state);
+    fs.mkdirSync(state);
+    assert.equal(raw("start", { cwd: dir }, dir), "");
+    fs.rmSync(state, { recursive: true });
+    const targets = [path.join(dir, ".env"), path.join(dir, "secrets", "STATE.md"), path.join(outside, "STATE.md"), path.join(dir, "docs", "small.md")];
+    for (const target of targets) {
+      await t.test(`STATE.md linked to ${path.relative(base, target)}`, (t) => {
+        if (!fileLink(t, target, state)) return;
+        assert.equal(raw("start", { cwd: dir }, dir), "");
+        fs.rmSync(state);
+      });
     }
-    if (linked) assert.equal(raw("docs/link.md"), "");
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("read entry point leaves a link out of the repo to the permission system", async (t) => {
+  const { base, dir, outside } = sandbox();
+  try {
+    // Control: the same content inside the repo is outlined.
+    assert.match(raw("read", { cwd: dir, tool_input: { file_path: "docs/open.md" } }, dir), new RegExp(MARK));
+    dirLink(path.join(outside, "notes"), path.join(dir, "docs", "ext"));
+    assert.equal(raw("read", { cwd: dir, tool_input: { file_path: "docs/ext/private.md" } }, dir), "");
+    await t.test("file link to a document outside the repo", (t) => {
+      if (!fileLink(t, path.join(outside, "notes", "private.md"), path.join(dir, "docs", "out.md"))) return;
+      assert.equal(raw("read", { cwd: dir, tool_input: { file_path: "docs/out.md" } }, dir), "");
+    });
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true });
+  }
+});
+
+// One probe list per hook mode; `link` is "dir", "file" or absent. Every probe
+// points the mode at a file that resolves under a deny rule or outside the repo.
+const readOf = (file) => (s) => ({ cwd: s.dir, tool_input: { file_path: file } });
+const startOf = (s) => ({ cwd: s.dir });
+const PROBES = {
+  read: [
+    { name: "deny-listed path", event: readOf("secrets/runbook.md") },
+    { name: "directory link to secrets/", link: "dir", target: (s) => path.join(s.dir, "secrets"), at: "docs/l", event: readOf("docs/l/runbook.md") },
+    { name: "directory link out of the repo", link: "dir", target: (s) => path.join(s.outside, "notes"), at: "docs/l", event: readOf("docs/l/private.md") },
+    { name: "file link to secrets/", link: "file", target: (s) => path.join(s.dir, "secrets", "runbook.md"), at: "docs/l.md", event: readOf("docs/l.md") },
+    { name: "file link out of the repo", link: "file", target: (s) => path.join(s.outside, "notes", "private.md"), at: "docs/l.md", event: readOf("docs/l.md") },
+  ],
+  start: [
+    { name: "project directory under secrets/", project: (s) => path.join(s.dir, "secrets"), event: startOf },
+    { name: "file link to .env", link: "file", target: (s) => path.join(s.dir, ".env"), at: "STATE.md", event: startOf },
+    { name: "file link to secrets/", link: "file", target: (s) => path.join(s.dir, "secrets", "STATE.md"), at: "STATE.md", event: startOf },
+    { name: "file link out of the repo", link: "file", target: (s) => path.join(s.outside, "STATE.md"), at: "STATE.md", event: startOf },
+  ],
+  budget: [
+    { name: "deny-listed path", event: (s) => ({ transcript_path: path.join(s.dir, "secrets", "t.jsonl") }) },
+    { name: "directory link to secrets/", link: "dir", target: (s) => path.join(s.dir, "secrets"), at: "docs/l", event: (s) => ({ transcript_path: path.join(s.dir, "docs", "l", "t.jsonl") }) },
+    { name: "file link to secrets/", link: "file", target: (s) => path.join(s.dir, "secrets", "t.jsonl"), at: "docs/t.jsonl", event: (s) => ({ transcript_path: path.join(s.dir, "docs", "t.jsonl") }) },
+  ],
+};
+
+test("no hook mode reads or quotes a file that resolves under a deny rule or outside the repo", async (t) => {
+  // A new mode has to add its probes here.
+  assert.deepEqual(Object.keys(PROBES).sort(), [...MODE_NAMES].sort());
+  for (const [mode, probes] of Object.entries(PROBES)) {
+    for (const probe of probes) {
+      await t.test(`${mode}: ${probe.name}`, (t) => {
+        const s = sandbox();
+        try {
+          const at = probe.at && path.join(s.dir, probe.at);
+          if (probe.link === "dir") dirLink(probe.target(s), at);
+          if (probe.link === "file" && !fileLink(t, probe.target(s), at)) return;
+          assert.equal(raw(mode, probe.event(s), probe.project ? probe.project(s) : s.dir), "");
+        } finally {
+          fs.rmSync(s.base, { recursive: true, force: true });
+        }
+      });
+    }
+  }
+  // The transcript is the one file read outside the repo, by design; only its size is reported.
+  const s = sandbox();
+  try {
+    const transcript = path.join(s.outside, "t.jsonl");
+    fs.writeFileSync(transcript, bigTranscript);
+    const output = raw("budget", { transcript_path: transcript }, s.dir);
+    assert.match(output, /Context is 250k tokens/);
+    assert.doesNotMatch(output, new RegExp(MARK));
+  } finally {
+    fs.rmSync(s.base, { recursive: true, force: true });
+  }
+});
+
+test("the orchestrator is told about the 200k safety limit of ORKESTRATOR.md §7 from 200k on", () => {
+  const limit = /200k upper safety limit in §7/;
+  assert.equal(ORCHESTRATOR_LIMIT, 200_000);
+  assert.match(fs.readFileSync(path.join(repo, "docs/ORKESTRATOR.md"), "utf8"), /200\.000 tokena je gornja sigurnosna granica/);
+  for (const tokens of [ROTATE_AT, ORCHESTRATOR_LIMIT - 1]) assert.doesNotMatch(budgetNotice(tokens, "orchestrator"), limit);
+  for (const tokens of [ORCHESTRATOR_LIMIT, 210_000, HARD_AT]) {
+    assert.match(budgetNotice(tokens, "orchestrator"), limit);
+    assert.doesNotMatch(budgetNotice(tokens, "orchestrator"), BAN);
+  }
+  for (const role of ["worker", "control", "unknown"]) assert.doesNotMatch(budgetNotice(210_000, role), limit);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-limit-"));
+  try {
+    const transcript = path.join(dir, "t.jsonl");
+    fs.writeFileSync(transcript, assistant("a", { cache_read_input_tokens: 210_000 }) + "\n");
+    assert.match(run("budget", { transcript_path: transcript, agent_type: "ductus-orchestrator" }).additionalContext, limit);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
