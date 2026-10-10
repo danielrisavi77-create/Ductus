@@ -481,6 +481,163 @@ test("QA M1: each part of the verdict key triggers a new probe", { timeout: 6000
     assert.equal(log(), "xppxxppxppxpp");
   }));
 
+// Fake package, probes counted: each part of the verdict key must start a new probe on its own.
+test("review: every part of the verdict key starts a new probe", { timeout: 180000 }, () => {
+  withTree({ bin: "allow" }, (tree) => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-keyhome-"));
+    const profile = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-keyprofile-"));
+    const other = path.join(tree.root, "other");
+    try {
+      let env = { ...process.env, HOME: home, USERPROFILE: profile };
+      for (const name of Object.keys(env)) if (name.startsWith("CC_SAFETY_NET_") || name.startsWith("SAFETY_NET_")) delete env[name];
+      const probes = () => (fs.readFileSync(tree.calls, "utf8").match(/p/g) ?? []).length;
+      const ls = (cwd) => run(tree, "Bash", "ls", cwd, env);
+      const step = (label, change, cwd) => {
+        assert.equal(ls(cwd).code, 0, `${label}: settle`);
+        const before = probes();
+        change();
+        assert.equal(ls(cwd).code, 0, label);
+        assert.equal(probes() - before, 2, `${label}: a changed input must start a new probe`);
+        assert.equal(ls(cwd).code, 0);
+        assert.equal(probes() - before, 2, `${label}: and then be remembered`);
+      };
+      const bin = path.join(tree.root, "node_modules", "cc-safety-net", "dist", "bin");
+      const project = path.join(tree.root, ".cc-safety-net");
+      const write = (file, content) => {
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, content);
+      };
+      step("loader", () => fs.appendFileSync(path.join(bin, "cc-safety-net.js"), "\n//changed"));
+      step("hook.js", () => write(path.join(bin, "hook.js"), "//changed"));
+      step("rulebook", () => write(path.join(project, "rules", "ductus-rules", "rulebook.json"), '{"changed":1}'));
+      step("project rule list", () => write(path.join(project, "rules", "rule.json"), "{}"));
+      step("project policy", () => write(path.join(project, "policy.json"), "{}"));
+      step("user config under HOME", () => write(path.join(home, ".cc-safety-net", "policy.json"), "{}"));
+      step("user config under USERPROFILE", () => write(path.join(profile, ".cc-safety-net", "policy.json"), "{}"));
+      const named = path.join(home, "named-config");
+      step("CC_SAFETY_NET_HOME set", () => {
+        env = { ...env, CC_SAFETY_NET_HOME: named };
+        fs.mkdirSync(named);
+      });
+      step("user config under CC_SAFETY_NET_HOME", () => write(path.join(named, "rules", "rule.json"), "{}"));
+      step("user config under a relative CC_SAFETY_NET_HOME is read relative to the project root", () => {
+        env = { ...env, CC_SAFETY_NET_HOME: "relative-config" };
+        write(path.join(tree.root, "relative-config", "policy.json"), "{}");
+      });
+      step("file inside it", () => write(path.join(tree.root, "relative-config", "policy.json"), '{"a":1}'));
+      step("same-size change of a file", () => write(path.join(tree.root, "relative-config", "policy.json"), '{"a":2}'));
+      step("CC_SAFETY_NET_ variable", () => (env = { ...env, CC_SAFETY_NET_STRICT: "1" }));
+      step("legacy SAFETY_NET_ variable", () => (env = { ...env, SAFETY_NET_WORKTREE: "1" }));
+      step("listed tool-directory variable", () => (env = { ...env, XDG_CONFIG_HOME: path.join(home, "xdg") }));
+      {
+        // Same rulebook content in another checkout directory: another state.
+        write(path.join(other, ".cc-safety-net", "rules", "ductus-rules", "rulebook.json"), "{}");
+        write(path.join(other, ".git"), "gitdir: elsewhere");
+        const before = probes();
+        assert.equal(ls(other).code, 0);
+        assert.equal(probes() - before, 2, "rulebook directory is part of the key");
+      }
+      // Links in the user configuration: what they point to counts.
+      const config = path.join(profile, ".cc-safety-net");
+      const target = path.join(home, "link-target.json");
+      const targetDir = path.join(home, "link-target-dir");
+      write(target, "{}");
+      write(path.join(targetDir, "inner.json"), "{}");
+      const link = (to, from, type) => {
+        try {
+          fs.symlinkSync(to, from, type);
+          return true;
+        } catch {
+          // Creating file links needs a privilege on Windows; CI (Linux) must have it.
+          assert.ok(!IN_CI, "symlinks must be available in CI");
+          return false;
+        }
+      };
+      const dirType = process.platform === "win32" ? "junction" : "dir";
+      if (link(targetDir, path.join(config, "linked-dir"), dirType)) {
+        step("file inside a linked directory", () => fs.writeFileSync(path.join(targetDir, "inner.json"), '{"changed":1}'));
+        if (link(config, path.join(targetDir, "loop"), dirType)) step("link loop does not hang or break the key", () => fs.writeFileSync(path.join(config, "x.json"), "{}"));
+      }
+      if (link(target, path.join(config, "linked-file.json"), "file")) {
+        step("target of a linked file", () => fs.writeFileSync(target, '{"changed":1}'));
+        step("link target removed", () => fs.rmSync(target));
+      }
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+      fs.rmSync(profile, { recursive: true, force: true });
+    }
+  });
+});
+
+test("review: the real package never lets a changed linked policy through behind a remembered verdict", { timeout: 180000 }, () => {
+  withTree({ real: true }, (tree) => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-linkhome-"));
+    try {
+      const userDir = path.join(home, ".cc-safety-net");
+      const target = path.join(home, "policy-target.json");
+      const targetDir = path.join(home, "rules-target");
+      fs.mkdirSync(userDir, { recursive: true });
+      fs.writeFileSync(target, "{}");
+      fs.mkdirSync(targetDir);
+      const env = { ...process.env, HOME: home, USERPROFILE: home, CC_SAFETY_NET_HOME: userDir };
+      const base = run(tree, "Bash", "ls", undefined, env);
+      assert.equal(base.code, 0, `baseline: ${base.stderr}`);
+      const policy = path.join(userDir, "policy.json");
+      const linkPolicy = () => {
+        try {
+          fs.symlinkSync(target, policy, "file");
+        } catch {
+          // Creating file links needs a privilege on Windows; CI (Linux) must have it.
+          assert.ok(!IN_CI, "symlinks must be available in CI");
+          fs.writeFileSync(policy, fs.readFileSync(target));
+        }
+      };
+      for (const [label, change] of [
+        ["policy link added", linkPolicy],
+        ["policy target garbage", () => fs.writeFileSync(target, "{ not json")],
+        ["policy target emptied", () => fs.writeFileSync(target, "")],
+        ["policy target changed", () => fs.writeFileSync(target, '{"changed":true}')],
+        ["policy target removed", () => fs.rmSync(target)],
+      ]) {
+        change();
+        for (const command of ["git add -A", "git push --force origin x", "git commit --no-verify -m x"]) {
+          const result = run(tree, "Bash", command, undefined, env);
+          assert.ok(safe(result), `${label}: ${command} -> ${result.code} ${result.stdout}`);
+        }
+      }
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  });
+});
+
+test("review: the instruction in the message is a command that passes", () => {
+  for (const dir of ["tree", "dir with spaces"]) {
+    withTree({ dir, bin: "allow" }, (tree) => {
+      const bare = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-hint-"));
+      try {
+        const result = run(tree, "Bash", "ls", bare);
+        assert.equal(result.code, 2);
+        const quoted = /Run exactly: (cd "[^"]+") \(/.exec(result.stderr)?.[1];
+        assert.ok(quoted, result.stderr);
+        assert.ok(isCdToRoot(quoted, tree.root));
+        assert.equal(run(tree, "Bash", quoted, bare).code, 0);
+      } finally {
+        fs.rmSync(bare, { recursive: true, force: true });
+      }
+    });
+  }
+  // A root with characters a shell reads specially gets no cd instruction at all.
+  withTree({ dir: "odd$dir", bin: "allow" }, (tree) => {
+    const bare = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-hint-"));
+    try {
+      assert.doesNotMatch(run(tree, "Bash", "ls", bare).stderr, /Run exactly/);
+    } finally {
+      fs.rmSync(bare, { recursive: true, force: true });
+    }
+  });
+});
+
 test("QA M1: answer() rejects non-JSON output, signals, bad statuses and errors on its own", () => {
   assert.ok(answer({ status: 0, stdout: "not json", stderr: "" }, 1).block);
   assert.ok(answer({ status: 0, signal: "SIGKILL", stdout: "", stderr: "" }, 1).block);

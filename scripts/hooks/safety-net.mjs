@@ -86,6 +86,7 @@ export function treeDigest(dir, skip = []) {
   }
   const hash = createHash("sha256");
   let count = 0;
+  const seen = new Set();
   const walk = (current, rel) => {
     let entries;
     try {
@@ -99,10 +100,10 @@ export function treeDigest(dir, skip = []) {
       if (skip.includes(name)) continue;
       if (++count > MAX_ENTRIES) throw new Error("too many entries");
       const full = path.join(current, entry.name);
-      if (entry.isDirectory()) {
-        hash.update(`d:${name}\n`);
-        walk(full, name);
-      } else if (entry.isSymbolicLink()) {
+      let kind = entry.isDirectory() ? "d" : entry.isFile() ? "f" : "o";
+      if (entry.isSymbolicLink()) {
+        // The package follows links in the user configuration, so what a link
+        // points to counts, not only where it points.
         let target = "?";
         try {
           target = fs.readlinkSync(full);
@@ -110,7 +111,23 @@ export function treeDigest(dir, skip = []) {
           // keep the placeholder
         }
         hash.update(`l:${name}:${target}\n`);
-      } else {
+        try {
+          const stat = fs.statSync(full);
+          kind = stat.isDirectory() ? "d" : stat.isFile() ? "f" : "o";
+          if (kind === "d") {
+            const real = fs.realpathSync(full);
+            if (seen.has(real)) continue;
+            seen.add(real);
+          }
+        } catch {
+          hash.update(`dangling:${name}\n`);
+          continue;
+        }
+      }
+      if (kind === "d") {
+        hash.update(`d:${name}\n`);
+        walk(full, name);
+      } else if (kind === "f") {
         hash.update(`f:${name}:`);
         try {
           hash.update(fs.readFileSync(full));
@@ -118,9 +135,16 @@ export function treeDigest(dir, skip = []) {
           hash.update("unreadable");
         }
         hash.update("\n");
+      } else {
+        hash.update(`other:${name}\n`);
       }
     }
   };
+  try {
+    seen.add(fs.realpathSync(dir));
+  } catch {
+    // no real path: the entry limit still bounds the walk
+  }
   walk(dir, "");
   return hash.digest("hex");
 }
@@ -158,41 +182,54 @@ export function findRulebookDir(cwd) {
   return (bounded ? chain : [cwd]).find((candidate) => fs.existsSync(path.join(candidate, ...RULEBOOK))) ?? null;
 }
 
-// Every place the package reads configuration from, for the key of a remembered
-// verdict: the whole project config directory, the whole user config directory
-// (the one named by CC_SAFETY_NET_HOME, and the one under each home the
-// package may resolve), minus logs and the Node compile cache, and every
-// CC_SAFETY_NET_* variable of the hook environment. Not covered: the compile
-// cache and the git configuration of the checkout.
+// Every input of the package 2.6.1 that can change what it denies, for the key
+// of a remembered verdict (read from its source, not guessed):
+//  - the two package files (hash), the rulebook directory;
+//  - the whole project config directory `.cc-safety-net/` of that directory
+//    (rulebooks, rule list, policy); the package refuses links there, the hash
+//    follows them anyway;
+//  - the whole user config directory, minus `logs` and `compile-cache`, with
+//    links followed: `CC_SAFETY_NET_HOME` resolved as the package does
+//    (win32 `/c/..` form, relative to its working directory, the root), else
+//    `HOME` or the OS home directory (the package takes HOME first); USERPROFILE
+//    is added as a harmless superset;
+//  - the environment: every `CC_SAFETY_NET_*` and legacy `SAFETY_NET_*` name,
+//    and the variables the package consults for home and tool directories.
+// Not covered: the Node compile cache of the package and the git configuration
+// of the checkout, which the package also reads.
 const USER_SKIP = ["logs", "compile-cache"];
-function userConfigDirs(env) {
+const ENV_NAMES = [
+  "AMP_SETTINGS_FILE", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CONFIG_DIR", "CODEX_HOME", "COPILOT_CLI", "COPILOT_HOME",
+  "CURSOR_DATA_DIR", "GEMINI_CLI_HOME", "GEMINI_CLI_SYSTEM_SETTINGS_PATH", "GROK_HOME", "HOME", "KIMI_CODE_HOME", "KIMI_SHARE_DIR",
+  "NODE_ENV", "OPENCODE_CONFIG", "OPENCODE_CONFIG_DIR", "OPENCODE_DB", "PARALLEL", "PI_CODING_AGENT_DIR", "ProgramData", "TMPDIR",
+  "XDG_CONFIG_HOME", "XDG_DATA_HOME", "USERPROFILE",
+];
+const packagePath = (value) => (process.platform === "win32" ? value.replace(/^\/([A-Za-z])(?:\/|$)/, "$1:/") : value);
+export function userConfigDirs(root, env) {
   const dirs = new Set();
-  if (env.CC_SAFETY_NET_HOME) dirs.add(path.resolve(env.CC_SAFETY_NET_HOME));
+  if (env.CC_SAFETY_NET_HOME) dirs.add(path.resolve(root, packagePath(env.CC_SAFETY_NET_HOME)));
   let homedir;
   try {
     homedir = os.homedir();
   } catch {
     homedir = undefined;
   }
-  for (const home of [env.HOME, env.USERPROFILE, homedir]) if (home) dirs.add(path.join(home, PROJECT_CONFIG));
+  for (const home of [env.HOME, env.USERPROFILE, homedir]) if (home) dirs.add(path.join(path.resolve(root, packagePath(home)), PROJECT_CONFIG));
   return [...dirs].sort();
 }
+const envNames = (env) => [...new Set([...ENV_NAMES, ...Object.keys(env).filter((name) => name.startsWith("CC_SAFETY_NET_") || name.startsWith("SAFETY_NET_"))])].sort();
 
 // Returns the key, or null when the state cannot be described reliably.
 function stateKey(root, rulebookDir, env) {
   try {
     const bin = path.join(root, "node_modules", "cc-safety-net", "dist", "bin");
     const parts = [
-      root,
       rulebookDir,
       fingerprint(path.join(bin, "cc-safety-net.js")),
       fingerprint(path.join(bin, "hook.js")),
       `project:${treeDigest(path.join(rulebookDir, PROJECT_CONFIG))}`,
-      ...userConfigDirs(env).map((dir) => `user:${dir}:${treeDigest(dir, USER_SKIP)}`),
-      ...Object.keys(env)
-        .filter((name) => name.startsWith("CC_SAFETY_NET_"))
-        .sort()
-        .map((name) => `env:${name}=${env[name]}`),
+      ...userConfigDirs(root, env).map((dir) => `user:${dir}:${treeDigest(dir, USER_SKIP)}`),
+      ...envNames(env).map((name) => `env:${name}=${env[name] ?? "<unset>"}`),
     ];
     return createHash("sha256").update(parts.join("|")).digest("hex");
   } catch {
@@ -342,7 +379,7 @@ export function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS_TIMEO
     if (isCdToRoot(command, root)) return { code: 0, stdout: first.stdout, stderr: first.stderr };
     return unusable(
       problem,
-      `Run exactly \`cd ${root}\` (nothing else in the command) to return to the project root, or leave the worktree with the worktree exit tool, or from the project root run: git -C <this directory> merge origin/main (or git -C <this directory> checkout origin/main -- .cc-safety-net)`,
+      `${isCdToRoot(`cd "${root}"`, root) ? `Run exactly: cd "${root}" (nothing else in the command) to return to the project root, or ` : ""}leave the worktree with the worktree exit tool, or from the project root run: git -C <this directory> merge origin/main (or git -C <this directory> checkout origin/main -- .cc-safety-net)`,
     );
   };
   if (!rulebookDir) {
