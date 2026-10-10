@@ -77,6 +77,21 @@ export type GoldenVectors = {
     verificationKey: GoldenVerificationKey;
   };
   segmentPayloads: { rejected: GoldenPayloadEdit[] };
+  /** Owner decision of 10 October 2026 (D-24, D-56): no time per event, none finer than a minute. */
+  eventTime: {
+    /** The chain segments of the first revision of the file, byte for byte. Valid then, refused now. */
+    formerSegments: {
+      name: string;
+      formerSegmentHash: string;
+      byteLength: number;
+      canonicalUtf8Hex: string;
+      reason: "invalid";
+    }[];
+    identifiers: {
+      timeOrdered: { name: string; value: string }[];
+      notTimeOrdered: { name: string; value: string }[];
+    };
+  };
   sizeLimit: {
     maxSegmentBytes: number;
     segmentWithoutPadding: EvidenceSegmentV2;

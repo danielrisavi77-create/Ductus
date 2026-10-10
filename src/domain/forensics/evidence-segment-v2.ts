@@ -18,10 +18,12 @@ export type EvidenceSourceV2 = (typeof EVIDENCE_SOURCES_V2)[number];
 
 export type EvidenceStepV2 = { [key: string]: JcsJsonValue };
 
+/**
+ * An event has no time of its own (D-24, D-56): events are ordered by
+ * `sequence` alone, and the segment carries two whole minutes.
+ */
 export type EvidenceEventV2 = {
   sequence: number;
-  occurredAt: string;
-  elapsedMs: number;
   source: EvidenceSourceV2;
   steps: EvidenceStepV2[];
   touchedNodeIds?: string[];
@@ -60,6 +62,19 @@ export type EvidenceSegmentDigestV2 = {
 };
 
 const SHA256_HEX = /^[0-9a-f]{64}$/;
+const WHOLE_MINUTE_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00\.000Z$/;
+const UUID_WITH_TIME =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[167][0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ULID = /^[0-7][0-9a-hjkmnp-tv-z]{25}$/i;
+/** Lower-case names a step key may not have, whatever its letter case. */
+const STEP_TIME_KEYS = new Set([
+  "time",
+  "ts",
+  "at",
+  "timestamp",
+  "occurredat",
+  "elapsedms",
+]);
 const MAX_ID_LENGTH = 256;
 const MAX_EVENTS = 5000;
 const SOURCES = new Set<string>(EVIDENCE_SOURCES_V2);
@@ -83,8 +98,6 @@ const SEGMENT_KEYS = new Set([
 ]);
 const EVENT_KEYS = new Set([
   "sequence",
-  "occurredAt",
-  "elapsedMs",
   "source",
   "steps",
   "touchedNodeIds",
@@ -112,10 +125,31 @@ function isSha256(value: unknown): value is string {
   return typeof value === "string" && SHA256_HEX.test(value);
 }
 
-function isCanonicalIsoInstant(value: unknown): value is string {
-  if (typeof value !== "string") return false;
+/**
+ * The only time a segment carries: a whole minute in UTC, written
+ * `YYYY-MM-DDTHH:mm:00.000Z`. A time with seconds or milliseconds, in another
+ * zone or in another spelling is refused, never rounded: the bytes are
+ * addressed by their hash, so the server cannot change them.
+ */
+export function isEvidenceMinuteV2(value: unknown): value is string {
+  if (typeof value !== "string" || !WHOLE_MINUTE_UTC.test(value)) return false;
   const time = Date.parse(value);
   return Number.isFinite(time) && new Date(time).toISOString() === value;
+}
+
+/**
+ * True for an identifier whose layout embeds the time it was made: a UUID of
+ * version 1, 6 or 7 (RFC 9562) or a ULID, in either letter case. Such an
+ * identifier per segment or per node would be a clock finer than a minute.
+ * This names known layouts only; it cannot show that another identifier is
+ * free of time.
+ */
+export function isTimeOrderedIdentifierV2(value: string): boolean {
+  return UUID_WITH_TIME.test(value) || ULID.test(value);
+}
+
+function isIdentifier(value: unknown): value is string {
+  return nonEmptyBounded(value) && !isTimeOrderedIdentifierV2(value);
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -124,21 +158,38 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
+/** A key named for a time, at any depth of a step. Call only on a value JCS accepted. */
+function hasTimeKey(step: EvidenceStepV2): boolean {
+  const pending: JcsJsonValue[] = [step];
+  for (let value = pending.pop(); value !== undefined; value = pending.pop()) {
+    if (value === null || typeof value !== "object") continue;
+    if (Array.isArray(value)) {
+      for (const item of value) pending.push(item);
+      continue;
+    }
+    for (const [key, item] of Object.entries(value)) {
+      if (STEP_TIME_KEYS.has(key.toLowerCase())) return true;
+      pending.push(item);
+    }
+  }
+  return false;
+}
+
 function isStep(value: unknown): value is EvidenceStepV2 {
   if (!isPlainObject(value)) return false;
   try {
     canonicalizeJcs(value);
-    return true;
   } catch {
     return false;
   }
+  return !hasTimeKey(value as EvidenceStepV2);
 }
 
 function isSortedUniqueStrings(value: unknown): value is string[] {
   if (!Array.isArray(value)) return false;
   let previous: string | null = null;
   for (const item of value) {
-    if (!nonEmptyBounded(item)) return false;
+    if (!isIdentifier(item)) return false;
     if (previous !== null && item <= previous) return false;
     previous = item;
   }
@@ -148,20 +199,10 @@ function isSortedUniqueStrings(value: unknown): value is string[] {
 function isEvent(
   value: unknown,
   expectedSequence: number,
-  start: number,
-  end: number,
-  previousElapsed: number,
 ): value is EvidenceEventV2 {
   if (!isPlainObject(value) || !hasOnlyKeys(value, EVENT_KEYS)) return false;
   if (
     value.sequence !== expectedSequence ||
-    !isCanonicalIsoInstant(value.occurredAt) ||
-    Date.parse(value.occurredAt) < start ||
-    Date.parse(value.occurredAt) > end ||
-    typeof value.elapsedMs !== "number" ||
-    !Number.isFinite(value.elapsedMs) ||
-    value.elapsedMs < 0 ||
-    value.elapsedMs < previousElapsed ||
     typeof value.source !== "string" ||
     !SOURCES.has(value.source) ||
     !Array.isArray(value.steps) ||
@@ -188,15 +229,15 @@ export function isEvidenceSegmentV2(value: unknown): value is EvidenceSegmentV2 
     value.evidenceSchema !== EVIDENCE_SEGMENT_SCHEMA_V2 ||
     value.canonicalization !== EVIDENCE_CANONICALIZATION_V2 ||
     value.hashAlgorithm !== EVIDENCE_HASH_ALGORITHM_V2 ||
-    !nonEmptyBounded(value.documentId) ||
-    !nonEmptyBounded(value.sessionId) ||
-    !nonEmptyBounded(value.segmentId) ||
+    !isIdentifier(value.documentId) ||
+    !isIdentifier(value.sessionId) ||
+    !isIdentifier(value.segmentId) ||
     !nonEmptyBounded(value.evidenceProfileId) ||
     !Number.isSafeInteger(value.sequenceFrom) ||
     Number(value.sequenceFrom) < 1 ||
     !Number.isSafeInteger(value.sequenceTo) ||
-    !isCanonicalIsoInstant(value.observedStartedAt) ||
-    !isCanonicalIsoInstant(value.observedEndedAt) ||
+    !isEvidenceMinuteV2(value.observedStartedAt) ||
+    !isEvidenceMinuteV2(value.observedEndedAt) ||
     Date.parse(value.observedEndedAt) < Date.parse(value.observedStartedAt) ||
     !isSha256(value.initialDocumentHash) ||
     !isSha256(value.finalDocumentHash) ||
@@ -219,20 +260,16 @@ export function isEvidenceSegmentV2(value: unknown): value is EvidenceSegmentV2 
   const sequenceTo = Number(value.sequenceTo);
   if (sequenceTo !== sequenceFrom + value.events.length - 1) return false;
 
-  const start = Date.parse(value.observedStartedAt);
-  const end = Date.parse(value.observedEndedAt);
-  let previousElapsed = 0;
   let previousAfter = value.initialDocumentHash;
 
   for (let index = 0; index < value.events.length; index++) {
     const event = value.events[index];
     if (
-      !isEvent(event, sequenceFrom + index, start, end, previousElapsed) ||
+      !isEvent(event, sequenceFrom + index) ||
       event.beforeDocumentHash !== previousAfter
     ) {
       return false;
     }
-    previousElapsed = event.elapsedMs;
     previousAfter = event.afterDocumentHash;
   }
 

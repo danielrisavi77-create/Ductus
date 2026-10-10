@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { describe, expect, it, vi } from "vitest";
 
 import { DevelopmentEd25519SigningKeyProvider } from "@/adapters/crypto/development-ed25519-signer";
@@ -5,6 +7,7 @@ import { InMemoryEvidenceAcceptanceRepository } from "@/adapters/evidence/in-mem
 import { InMemoryEvidenceContextPort } from "@/adapters/evidence/in-memory-evidence-context";
 import { InMemoryEvidencePayloadStore } from "@/adapters/evidence/in-memory-evidence-payload-store";
 import type { AuthorizationPort } from "@/application/ports/authorization";
+import type { EvidenceSegmentDescriptorV2 } from "@/application/ports/evidence-ingest";
 import type {
   EvidenceChainReader,
   EvidencePayloadReader,
@@ -13,6 +16,7 @@ import { MAX_EVIDENCE_SEGMENT_BYTES } from "@/domain/forensics/evidence-chain-v2
 import type { SignedEvidenceReceipt } from "@/domain/forensics/evidence-receipt";
 import type { EvidenceStepReplayerV2 } from "@/domain/forensics/evidence-replay-v2";
 import {
+  applyPayloadEdit,
   fromHex,
   goldenKeyVerifier,
   loadGoldenVectors,
@@ -185,6 +189,78 @@ describe("golden vectors: server side (gateway and reconstruction)", () => {
         { ...reconstruction, expectedDocument: finalDocument.value },
       ),
     ).toEqual(matched);
+  });
+
+  it("leaves no object, no record and no signature for a segment that carries time (D-24, D-56)", async () => {
+    const [base] = chain.segments;
+    // The first former segment only: like the base it is the first of its chain.
+    const cases = [
+      { name: "control", accepted: true, bytes: fromHex(base.canonicalUtf8Hex) },
+      ...vectors.segmentPayloads.rejected
+        .filter((edit) => edit.canonicalJcs)
+        .map((edit) => ({
+          name: edit.name,
+          accepted: false,
+          bytes: applyPayloadEdit(fromHex(chain.segments[edit.base].canonicalUtf8Hex), edit),
+        })),
+      ...vectors.eventTime.formerSegments
+        .slice(0, 1)
+        .map((former) => ({ name: former.name, accepted: false, bytes: fromHex(former.canonicalUtf8Hex) })),
+    ];
+    expect(cases.length).toBeGreaterThan(20);
+
+    // `faithful` copies ids and times from the bytes into the descriptor, as an
+    // honest client does; otherwise the descriptor keeps the valid ones of the
+    // base segment, so that only the check of the bytes can refuse.
+    for (const faithful of [true, false]) {
+      for (const { name, accepted, bytes } of cases) {
+        const canonicalPayload = new TextDecoder().decode(bytes);
+        const sent = JSON.parse(canonicalPayload) as Record<string, string>;
+        const descriptor = {
+          ...base.descriptor,
+          ...(faithful
+            ? {
+                documentId: sent.documentId,
+                sessionId: sent.sessionId,
+                segmentId: sent.segmentId,
+                observedStartedAt: sent.observedStartedAt,
+                observedEndedAt: sent.observedEndedAt,
+              }
+            : {}),
+          segmentHash: createHash("sha256").update(bytes).digest("hex"),
+          payloadBytes: bytes.byteLength,
+        } as EvidenceSegmentDescriptorV2;
+        const payloadStore = new InMemoryEvidencePayloadStore();
+        const repository = new InMemoryEvidenceAcceptanceRepository();
+        const signer = new DevelopmentEd25519SigningKeyProvider("zlatni-vektori-dev", "v1");
+        const sign = vi.spyOn(signer, "sign");
+        const gateway = new EvidenceGateway({
+          authorization: { check: async () => ({ status: "allow" }) },
+          contexts: new InMemoryEvidenceContextPort([
+            {
+              evidencePackageId: chain.evidencePackageId,
+              documentId: descriptor.documentId,
+              evidenceProfileId: descriptor.evidenceProfileId,
+              maxPayloadBytes: MAX_EVIDENCE_SEGMENT_BYTES,
+              acceptsEvidence: true,
+            },
+          ]),
+          payloadStore,
+          repository,
+          signer,
+        });
+
+        const outcome = await gateway.ingest({
+          principalId: chain.principalId,
+          command: { clientRequestId: "zahtjev-zv-odbijen", descriptor, canonicalPayload },
+        });
+        const label = `${name}, ${faithful ? "faithful" : "base"} descriptor`;
+        expect(outcome.status, label).toBe(accepted ? "accepted" : "invalid");
+        expect(payloadStore.size, label).toBe(accepted ? 1 : 0);
+        expect(repository.records(), label).toHaveLength(accepted ? 1 : 0);
+        expect(sign, label).toHaveBeenCalledTimes(accepted ? 1 : 0);
+      }
+    }
   });
 
   it("reconstructs the stored record under the stored signatures", async () => {
