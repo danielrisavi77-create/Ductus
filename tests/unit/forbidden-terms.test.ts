@@ -308,7 +308,7 @@ describe("repository scan", () => {
     write("src/domain/sync/labels.ts", 'export const LABELS = { done: "Copied text" };\n');
     write("src/domain/review/messages.ts", 'export const MESSAGES = { note: "Ocjena rizika" };\n');
     write("src/features/submit/copy.ts", 'export const COPY = { done: "Hidden edits" };\n');
-    write("src/domain/serverSync/contract.ts", 'export const MESSAGES = { failed: "Posumnjali smo u zapis." };\n');
+    write("src/domain/serverSync/messages.ts", 'export const MESSAGES = { failed: "Posumnjali smo u zapis." };\n');
     write("src/editor/schema.ts", 'export const placeholder = "Saved";\n');
     write("app/api/status/route.ts", 'export const metadata = { title: "Warning about the student" };\n');
     write("app/review/page.tsx", "export default () => (\n  <main>\n    <h1>Sumnjivo</h1>\n    <p>Risk score</p>\n  </main>\n);\n");
@@ -317,7 +317,7 @@ describe("repository scan", () => {
       ["app/review/page.tsx", 3, ["sumnjivo"]],
       ["app/review/page.tsx", 4, ["risk"]],
       ["src/domain/review/messages.ts", 1, ["rizik"]],
-      ["src/domain/serverSync/contract.ts", 1, ["sumnjivo"]],
+      ["src/domain/serverSync/messages.ts", 1, ["sumnjivo"]],
       ["src/domain/sync/labels.ts", 1, ["copied"]],
       ["src/editor/schema.ts", 1, ["saved (without saying where)"]],
       ["src/features/submit/copy.ts", 1, ["hidden"]],
@@ -701,7 +701,6 @@ describe("interface text outside the scanned modules", () => {
       "**/labels.ts",
       "**/messages.ts",
       "**/copy.ts",
-      "src/domain/serverSync/**",
       "src/editor/schema.ts",
       "app/**/manifest.ts",
     ]);
@@ -714,9 +713,7 @@ describe("interface text outside the scanned modules", () => {
       "labels.ts",
       "app/review/messages.ts",
       "src/features/submit/copy.ts",
-      "src/domain/serverSync/bootstrap.ts",
-      "src/domain/serverSync/checkpoints.ts",
-      "src/domain/serverSync/contract.ts",
+      "src/domain/serverSync/messages.ts",
       "src/editor/schema.ts",
     ]) {
       expect(isUiTextModule(file), file).toBe(true);
@@ -725,6 +722,9 @@ describe("interface text outside the scanned modules", () => {
       "src/domain/sync/states.ts",
       "src/domain/sync/sync-labels.ts",
       "src/domain/sync/labels.tsx",
+      "src/domain/serverSync/bootstrap.ts",
+      "src/domain/serverSync/checkpoints.ts",
+      "src/domain/serverSync/contract.ts",
       "src/domain/serverSyncX/contract.ts",
       "src/editor/interop.ts",
       "src/editor/schema.ts.bak",
@@ -764,7 +764,7 @@ describe("interface text outside the scanned modules", () => {
     write("src/lib/i18n/hr.ts", 'export const hr = { word: "riječ" };\n');
     write("src/domain/sync/labels.ts", 'export const LABELS = { ERROR: "Greška" };\n');
     write("src/domain/review/messages.ts", 'export const MESSAGES = { none: "Nema bilješki" };\n');
-    write("src/domain/serverSync/contract.ts", 'export const FAILED = "Rad nije pronađen na poslužitelju.";\n');
+    write("src/domain/serverSync/messages.ts", 'export const FAILED = "Rad nije pronađen na poslužitelju.";\n');
     write("src/editor/schema.ts", 'export const DEFAULT_PLACEHOLDER = "Počni pisati…";\n');
     write("app/layout.ts", 'export const metadata = { title: "Početna" };\n');
     write("app/page.tsx", "export default () => <p>Uređivanje</p>;\n");

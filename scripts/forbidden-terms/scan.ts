@@ -63,8 +63,8 @@ export const UI_TEXT_MODULES: readonly string[] = [
   "**/labels.ts",
   "**/messages.ts",
   "**/copy.ts",
-  // Messages for loading, sending and checkpoints, kept next to their codes.
-  "src/domain/serverSync/**",
+  // Messages for loading, sending and checkpoints live in
+  // src/domain/serverSync/messages.ts, matched by "**/messages.ts" above.
   // The editor placeholder.
   "src/editor/schema.ts",
   // The web app manifest: name, short name and description of the application.
