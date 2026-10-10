@@ -248,7 +248,7 @@ Posebna "token saver" sesija ne postoji. Orkestrator štedi kontekst.
 - Low risk: fast/low ili medium.
 - Standard: medium.
 - Critical: high/xhigh.
-- Sesija se rotira nakon logičkog sklopa ili kad ponovljeni kontekst postane skuplji od predaje novoj sesiji.
+- Sesija se rotira nakon logičkog sklopa ili kad ponovljeni kontekst postane skuplji od predaje novoj sesiji. Iznimka: sesija orkestratora se ne rotira, nego osvježava sažimanjem po `docs/ORKESTRATOR.md` §7.
 - Predaja mora stati u GitHub issue/PR i repo; chat povijest nije obvezan kontekst.
 - Puni logovi testova čitaju se samo za pad; zeleni testovi koriste sažetak.
 
