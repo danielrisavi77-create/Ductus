@@ -1,12 +1,12 @@
 // Table of all open PRs. Read-only. Usage: node pr-status.mjs [--json]
-import { gateStatus, ghJson, prComments } from "./gh.mjs";
+import { ghJson, prComments, readGate } from "./gh.mjs";
 import { formatVerdict, latestVerdict, parseAgentRisk } from "./orchestrator-core.mjs";
 
 const json = process.argv.includes("--json");
 
 async function row(pr) {
   const [gate, comments] = await Promise.all([
-    gateStatus(pr.headRefOid).catch(() => undefined),
+    readGate(pr.headRefOid).then((g) => (g?.error ? undefined : g)),
     prComments(pr.number).catch(() => undefined),
   ]);
   const { agent, risk } = parseAgentRisk(pr.body);
