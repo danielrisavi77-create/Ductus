@@ -21,6 +21,7 @@ import {
 } from "./contract";
 
 const DOC_ID = "9f1d8a52-5b6e-4a1a-9c0d-2f4b6e8a1c33";
+const VALID_PENDING_RECEIPT = { status: "pending_signature" } as const;
 
 function uuidSeq(): () => string {
   const ids = [
@@ -55,17 +56,24 @@ function tx(overrides: Partial<DocumentTransaction> = {}): DocumentTransaction {
 }
 
 describe("parseCommitOutcome — statuses the RPC can return", () => {
-  it("parses a committed outcome with its revision", () => {
-    expect(parseCommitOutcome({ status: "committed", revision: 7 })).toEqual({
+  it("preserves a pending receipt without claiming an ACK", () => {
+    expect(parseCommitOutcome({
+      status: "committed", revision: 7, receipt: { status: "pending_signature" },
+    })).toEqual({
       status: "committed",
       revision: 7,
+      receipt: { status: "pending_signature" },
     });
   });
 
-  it("parses a duplicate outcome as an ACK for the revision the key already made", () => {
-    expect(parseCommitOutcome({ status: "duplicate", revision: 7 })).toEqual({
+  it("preserves an unverified signed receipt for the verifier", () => {
+    const signedReceipt = { schema: "test", signature: "synthetic" };
+    expect(parseCommitOutcome({
+      status: "duplicate", revision: 7, receipt: { status: "signed", signedReceipt },
+    })).toEqual({
       status: "duplicate",
       revision: 7,
+      receipt: { status: "signed", signedReceipt },
     });
   });
 
@@ -107,7 +115,7 @@ describe("parseCommitOutcome — statuses the RPC can return", () => {
     for (const status of COMMIT_STATUSES) {
       const raw =
         status === "committed" || status === "duplicate"
-          ? { status, revision: 1 }
+          ? { status, revision: 1, receipt: { status: "pending_signature" } }
           : status === "stale_base"
             ? { status, currentRevision: 1 }
             : { status };
@@ -136,26 +144,41 @@ describe("parseCommitOutcome — malformed payloads", () => {
     expect(parseCommitOutcome({ status: 1, revision: 1 })).toEqual({ status: "invalid" });
   });
 
-  it("rejects a committed outcome without a revision", () => {
-    expect(parseCommitOutcome({ status: "committed" })).toEqual({ status: "invalid" });
+  it("rejects a committed outcome without a revision, even with a valid receipt", () => {
+    expect(parseCommitOutcome({
+      status: "committed", receipt: VALID_PENDING_RECEIPT,
+    })).toEqual({ status: "invalid" });
   });
 
+  it.each(["committed", "duplicate"] as const)(
+    "rejects %s without the now-mandatory receipt",
+    (status) => {
+      expect(parseCommitOutcome({ status, revision: 7 })).toEqual({ status: "invalid" });
+    },
+  );
+
   it("rejects revision 0 for a commit — a commit always advances past 0", () => {
-    expect(parseCommitOutcome({ status: "committed", revision: 0 })).toEqual({
+    expect(parseCommitOutcome({
+      status: "committed", revision: 0, receipt: VALID_PENDING_RECEIPT,
+    })).toEqual({
       status: "invalid",
     });
   });
 
   it("rejects a fractional, negative, infinite or unsafe revision instead of rounding it", () => {
     for (const revision of [1.5, -1, Infinity, NaN, Number.MAX_SAFE_INTEGER + 2]) {
-      expect(parseCommitOutcome({ status: "committed", revision })).toEqual({
+      expect(parseCommitOutcome({
+        status: "committed", revision, receipt: VALID_PENDING_RECEIPT,
+      })).toEqual({
         status: "invalid",
       });
     }
   });
 
   it("rejects a revision sent as a string, as a bigint-ish driver might", () => {
-    expect(parseCommitOutcome({ status: "committed", revision: "7" })).toEqual({
+    expect(parseCommitOutcome({
+      status: "committed", revision: "7", receipt: VALID_PENDING_RECEIPT,
+    })).toEqual({
       status: "invalid",
     });
   });
@@ -168,7 +191,9 @@ describe("parseCommitOutcome — malformed payloads", () => {
   });
 
   it("does not read a commit revision from the stale-base field, or the other way round", () => {
-    expect(parseCommitOutcome({ status: "committed", currentRevision: 4 })).toEqual({
+    expect(parseCommitOutcome({
+      status: "committed", currentRevision: 4, receipt: VALID_PENDING_RECEIPT,
+    })).toEqual({
       status: "invalid",
     });
     expect(parseCommitOutcome({ status: "stale_base", revision: 4 })).toEqual({
@@ -186,6 +211,7 @@ describe("parseCommitOutcome — prototype pollution attempts", () => {
   it("ignores a revision inherited from the prototype", () => {
     const raw = Object.create({ revision: 9 }) as Record<string, unknown>;
     raw.status = "committed";
+    raw.receipt = VALID_PENDING_RECEIPT;
     expect(parseCommitOutcome(raw)).toEqual({ status: "invalid" });
   });
 
@@ -196,15 +222,19 @@ describe("parseCommitOutcome — prototype pollution attempts", () => {
   });
 
   it("accepts a JSON.parse'd payload carrying a literal __proto__ key", () => {
-    const raw = JSON.parse('{"status":"committed","revision":2,"__proto__":{"x":1}}') as unknown;
-    expect(parseCommitOutcome(raw)).toEqual({ status: "committed", revision: 2 });
+    const raw = JSON.parse('{"status":"committed","revision":2,"receipt":{"status":"pending_signature"},"__proto__":{"x":1}}') as unknown;
+    expect(parseCommitOutcome(raw)).toEqual({
+      status: "committed", revision: 2, receipt: { status: "pending_signature" },
+    });
   });
 
   it("does not let a polluted Object.prototype invent a revision", () => {
     const proto = Object.prototype as unknown as Record<string, unknown>;
     proto.revision = 42;
     try {
-      expect(parseCommitOutcome({ status: "committed" })).toEqual({ status: "invalid" });
+      expect(parseCommitOutcome({
+        status: "committed", receipt: VALID_PENDING_RECEIPT,
+      })).toEqual({ status: "invalid" });
     } finally {
       delete proto.revision;
     }
