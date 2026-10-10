@@ -14,3 +14,5 @@ Probe existing behavior on main/staging for reproducible failures, especially ar
 Do not fix a bug you discover in the same role/run. Open or prepare a focused issue, include evidence, severity/risk, and likely ownership, then stop. Do not create speculative issues without reproduction.
 
 Canonical product/security rules remain in the repo documents; do not restate or redefine them here.
+
+To drive a real browser, use the `ductus-browser-cli` skill.

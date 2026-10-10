@@ -3,7 +3,8 @@
   "env": {
     "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "200000",
     "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet",
-    "CLAUDE_CODE_GLOB_NO_IGNORE": "false"
+    "CLAUDE_CODE_GLOB_NO_IGNORE": "false",
+    "CC_SAFETY_NET_WORKTREE": "1"
   },
   "permissions": {
     "allow": [
@@ -140,6 +141,21 @@
         "hooks": [
           {
             "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/node_modules/cc-safety-net/dist/bin/cc-safety-net.js",
+              "hook",
+              "--coding-cli"
+            ],
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
             "shell": "bash",
             "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/pr-metadata-precheck.mjs\"",
             "timeout": 20
@@ -160,6 +176,9 @@
         ]
       }
     ]
+  },
+  "skillOverrides": {
+    "supabase-postgres-best-practices": "name-only"
   },
   "enabledPlugins": {
     "typescript-lsp@claude-plugins-official": true,

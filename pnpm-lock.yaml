@@ -81,6 +81,9 @@ importers:
       '@types/react-dom':
         specifier: ^19.3.0
         version: 19.3.0(@types/react@19.3.0)
+      cc-safety-net:
+        specifier: 2.6.1
+        version: 2.6.1
       dbmate:
         specifier: ^2.36.0
         version: 2.36.0
@@ -1024,6 +1027,19 @@ packages:
 
   caniuse-lite@1.0.30001814:
     resolution: {integrity: sha512-/Uaf1lAzr59XcMpW0o96WoEfr+VXK2OX4U9AgFoiSHsVJ4HppnIFUjtYzsyDH2+tgANaQb2/oxYGwCPapN1FpA==}
+
+  cc-safety-net@2.6.1:
+    resolution: {integrity: sha512-HREoTjmrdHr99LkzdNPvyctfrAqC8qhY0F7vhcvHWkbISo+o2CoU+OtU1jLeUBzsCDCtPrwyw53t7t6U3g1k8Q==}
+    engines: {node: '>=18'}
+    hasBin: true
+    peerDependencies:
+      '@opencode-ai/plugin': ^1.18.29
+      '@opencode/plugin': ^2.0.6
+    peerDependenciesMeta:
+      '@opencode-ai/plugin':
+        optional: true
+      '@opencode/plugin':
+        optional: true
 
   chai@6.3.0:
     resolution: {integrity: sha512-XWAtwJ6OHO+tj0EKCs0Y2UamnyOxseZWltU4x2U2wh8g4AigdjwvtUjvLP2tqkA/avxHEtzxNaqGq/YGNwckKg==}
@@ -3192,6 +3208,8 @@ snapshots:
   callsites@3.1.0: {}
 
   caniuse-lite@1.0.30001814: {}
+
+  cc-safety-net@2.6.1: {}
 
   chai@6.3.0: {}
 
