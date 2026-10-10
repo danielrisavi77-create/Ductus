@@ -114,7 +114,18 @@ Orkestrator prati samo sesije koje rade na repou Ductus. Ostale sesije na račun
 | --- | --- | --- |
 | Podagent orkestratora (`ductus-backend-data`, `ductus-frontend-editor`, `ductus-platform-sre` i kontrolne uloge) | orkestrator, u potpunosti | zadani put za writere; pregled samo kao advisory nalaz |
 | CLI posao drugog providera (Codex, Grok) | orkestrator, u potpunosti | writer kad ta kvota postoji; pregled samo kao advisory nalaz |
-| Sesija u oblaku ili desktop aplikaciji | pokreće Daniel; orkestrator joj šalje zadatak i prati je preko GitHuba | kanonski review i QA; dugi poslovi |
+| Sesija u oblaku ili desktop aplikaciji | pokreće Daniel, a sesiju u oblaku i orkestrator (vidi niže); orkestrator joj šalje zadatak i prati je preko GitHuba | kanonski review i QA; dugi poslovi |
+
+**Sesija u oblaku koju pokreće orkestrator (Daniel, 10. 10. 2026.).** Orkestrator smije sam, bez pitanja, pokrenuti sesiju u oblaku za kanonski review ili QA kad mu zatreba, kao jednokratnu rutinu (`RemoteTrigger`, `run_once_at`). Desktop sesiju i dalje pokreće samo Daniel. Uvjeti:
+
+- jedna sesija po PR-u i ulozi, s vlastitim slotom (`claude:qa<PR>` ili `claude:review<PR>`), unutar WIP limita iz `ENGINEERING_SYSTEM.md` §13;
+- uputa je neutralna: identitet, PR, kanonski dokumenti koje treba pročitati i oblik verdikta. Ne sadrži orkestratorovu ocjenu PR-a, očekivani ishod ni sažetak reviewa; head i diff sesija čita sama iz GitHuba;
+- sesija dobiva samo repo i konektor za poruke orkestratoru (§5); ostali konektori računa joj se ne prilažu;
+- pokretanje se bilježi u koordinacijskom issueu: PR, slot, model i ID rutine;
+- sesija radi jedan zadatak i staje: nakon objavljenog verdikta šalje orkestratoru jednu poruku (§5) i ne preuzima ništa novo. Orkestrator završenu sesiju više ne budi; za novi head ili novi PR pokreće novu sesiju, jer buđenje stare ponovno šalje cijeli njezin kontekst. Sesija koja miruje ne troši tokene, pa je "gašenje" ovdje pravilo da se ne budi, a arhiviranje u aplikaciji ostaje Danielu;
+- pravila neovisnosti iz `ENGINEERING_SYSTEM.md` §6 vrijede nepromijenjena. Kad je PR orkestratorov vlastiti ili PR njegova podagenta, orkestrator time pokreće provjeru vlastitog rada: ova odluka to dopušta, ali se u zapisu izričito navodi, a Daniel takvu provjeru može u svakom trenutku ponoviti vlastitom sesijom.
+
+Jednokratna rutina se sama gasi nakon pokretanja; rutine se iz alata ne mogu brisati. Trošak ostaje unutar postojećih pretplata; novi trošak ide Danielu po §4.
 
 Tri stalne uloge iz `ENGINEERING_SYSTEM.md` §2 (Backend, Frontend, Platforma) ostaju; uloga je stalna, a instanca se mijenja po zadatku ili lancu.
 
