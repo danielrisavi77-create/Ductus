@@ -11,15 +11,57 @@ pre-commit:
         CI: "true"
       run: pnpm exec eslint {staged_files}
     secrets:
-      # stdin instead of `git --pre-commit`, so it also works in worktrees.
-      # Without a running Docker the check is skipped with a warning; the CI
-      # security job scans the full history on every push anyway.
+      # Scans the staged diff for secrets. stdin instead of `git --pre-commit`,
+      # so it also works in worktrees. Order:
+      #   1. Docker image with the pinned gitleaks version, if the daemon
+      #      answers within 10 s (a hung Docker Desktop on Windows can leave
+      #      `docker info` waiting for minutes). `timeout` does the waiting
+      #      where it exists (Linux, Git Bash): on Windows a plain `kill`
+      #      leaves docker.exe behind. The loop is for macOS, which has none;
+      #   2. a `gitleaks` binary from PATH (version is whatever is installed);
+      #   3. neither: loud warning, commit is NOT blocked.
+      # A finding or a scanner error blocks the commit in 1 and 2. Case 3 is a
+      # weaker local check, not a pass: the CI job "Security scanners" scans
+      # the whole history on push, but by then the secret is already in the
+      # pushed branch history and must be rotated.
+      # Keep the script free of double quotes: on Windows lefthook wraps it in
+      # double quotes for `sh -c` without escaping them, so a double-quoted
+      # string with a space in it cuts the script short and the hook fails.
       run: |
-        if ! docker info >/dev/null 2>&1; then
-          echo "lefthook secrets: Docker is not running, gitleaks skipped (CI still scans)." >&2
-          exit 0
+        docker_ready() {
+          command -v docker >/dev/null 2>&1 || return 1
+          if command -v timeout >/dev/null 2>&1; then
+            timeout 10 docker info >/dev/null 2>&1
+            return
+          fi
+          docker info >/dev/null 2>&1 &
+          probe=$!
+          waited=0
+          while kill -0 $probe 2>/dev/null; do
+            if [ $waited -ge 10 ]; then
+              kill $probe 2>/dev/null
+              return 1
+            fi
+            sleep 1
+            waited=$((waited + 1))
+          done
+          wait $probe
+        }
+        if docker_ready; then
+          git diff --cached | docker run -i --rm zricethezav/gitleaks:v8.30.1 stdin --redact --no-banner
+        elif command -v gitleaks >/dev/null 2>&1; then
+          echo 'lefthook secrets: Docker is not available, scanning with the gitleaks binary from PATH, version:' >&2
+          gitleaks version >&2
+          git diff --cached | gitleaks stdin --redact --no-banner
+        else
+          echo '==========================================================================' >&2
+          echo 'WARNING: SECRET SCAN SKIPPED. This commit was NOT checked for secrets.' >&2
+          echo 'Docker is not available and there is no gitleaks binary in PATH.' >&2
+          echo 'CI (Security scanners) scans on push, but a secret pushed to a branch' >&2
+          echo 'stays in its history and must be rotated. Check the staged diff yourself,' >&2
+          echo 'or start Docker / install gitleaks and run: pnpm exec lefthook run pre-commit' >&2
+          echo '==========================================================================' >&2
         fi
-        git diff --cached | docker run -i --rm zricethezav/gitleaks:v8.30.1 stdin --redact --no-banner
 
 pre-push:
   commands:
