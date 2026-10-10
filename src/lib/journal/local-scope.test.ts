@@ -12,7 +12,7 @@ import {
   LocalScopeConfigError, localScopeConfigFromEnv, resolveLocalScope,
 } from "./local-scope";
 
-const ENV_KEYS = ["NEXT_PUBLIC_DUCTUS_LOCAL_DEMO_JOURNAL", "NEXT_PUBLIC_DUCTUS_DEPLOYMENT"] as const;
+const ENV_KEYS = ["DUCTUS_LOCAL_DEMO_JOURNAL", "DUCTUS_DEPLOYMENT"] as const;
 const saved = ENV_KEYS.map((key) => process.env[key]);
 
 afterEach(() => {
@@ -50,12 +50,12 @@ describe("local demo journal scope (#197 attack 12)", () => {
       .toThrow(/prohibited in production/);
   });
 
-  it("reads the build-time variables", () => {
-    process.env.NEXT_PUBLIC_DUCTUS_LOCAL_DEMO_JOURNAL = "1";
-    process.env.NEXT_PUBLIC_DUCTUS_DEPLOYMENT = "production";
+  it("reads the runtime server variables", () => {
+    process.env.DUCTUS_LOCAL_DEMO_JOURNAL = "1";
+    process.env.DUCTUS_DEPLOYMENT = "production";
     expect(localScopeConfigFromEnv()).toEqual({ localDemoJournal: "1", deployment: "production" });
     expect(() => resolveLocalScope(localScopeConfigFromEnv())).toThrow(LocalScopeConfigError);
-    delete process.env.NEXT_PUBLIC_DUCTUS_DEPLOYMENT;
+    delete process.env.DUCTUS_DEPLOYMENT;
     expect(resolveLocalScope(localScopeConfigFromEnv())).toBe(LOCAL_DEMO_SCOPE_HASH);
   });
 

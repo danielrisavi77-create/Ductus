@@ -7,10 +7,12 @@
  * IndexedDB database, not an identity: nothing here signs anyone in, nothing
  * reaches a server, and the UI never presents it as an account (D-09).
  *
- * The scope exists only behind an explicit build flag, like the fake OIDC
- * provider (BACKEND §4.3). `next build` serves both E2E and the demo, so
- * NODE_ENV cannot tell production apart; a deployment marked `production`
- * refuses the flag instead of silently journalling under a shared scope.
+ * The scope exists only behind an explicit server flag, like the fake OIDC
+ * provider (BACKEND §4.3). It is read at request time on the server, never
+ * inlined into the client bundle, so one `next build` serves both E2E and the
+ * demo and the flag is set where the server starts. NODE_ENV cannot tell
+ * production apart; a deployment marked `production` refuses the flag instead
+ * of silently journalling under a shared scope.
  *
  * Its database name differs from every principal's, so when sign-in arrives
  * the demo journal is never picked up as a signed-in student's work: F-5
@@ -42,7 +44,7 @@ export class LocalScopeConfigError extends Error {
 }
 
 /**
- * The journal scope for this build, or null when local journalling is off.
+ * The journal scope for this server, or null when local journalling is off.
  * Null means the editor must stay read-only: there is nowhere honest to save.
  * A malformed or forbidden configuration throws rather than guessing.
  */
@@ -59,12 +61,13 @@ export function resolveLocalScope(config: LocalScopeConfig): string | null {
 }
 
 /**
- * Reads the build-time configuration. Next inlines `NEXT_PUBLIC_*` only when
- * the property is written out literally, hence no dynamic lookup.
+ * Reads the runtime configuration. Server only: without the `NEXT_PUBLIC_`
+ * prefix these are undefined in the browser, so the server resolves the scope
+ * per request and hands the result to the editor.
  */
 export function localScopeConfigFromEnv(): LocalScopeConfig {
   return {
-    localDemoJournal: process.env.NEXT_PUBLIC_DUCTUS_LOCAL_DEMO_JOURNAL,
-    deployment: process.env.NEXT_PUBLIC_DUCTUS_DEPLOYMENT,
+    localDemoJournal: process.env.DUCTUS_LOCAL_DEMO_JOURNAL,
+    deployment: process.env.DUCTUS_DEPLOYMENT,
   };
 }
