@@ -194,3 +194,84 @@ describe("withActor over a ductus_app login", () => {
     }
   });
 });
+
+// DAN-129: what fn or the connection could carry past the transaction is
+// refused, and a connection that may carry it is closed instead of pooled.
+describe("withActor refuses what could outlive its transaction", () => {
+  const AFTER = `SELECT pg_catalog.pg_backend_pid() AS pid, current_setting('app.session_token', true) AS token, app.current_user_id() AS user_id`;
+  type After = { pid: number; token: string | null; user_id: string | null };
+
+  it("refuses a superuser connection that took on an app login with SET SESSION AUTHORIZATION", async () => {
+    const assumed = new pg.Pool({ connectionString: ADMIN_URL, max: 1 });
+    pools.push(assumed);
+    await assumed.query(`SET SESSION AUTHORIZATION ${LOGIN}`);
+    const names = (await assumed.query("SELECT session_user::text AS login, current_user::text AS role")).rows[0];
+    expect(names).toEqual({ login: LOGIN, role: LOGIN });
+
+    const fn = vi.fn(async () => "ran");
+    await expect(createWithActor(assumed)(tokenA, fn)).rejects.toThrow("not a ductus_app login");
+    expect(fn).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    `COMMIT; SELECT set_config('app.session_token', '%s', false)`,
+    `commit; select set_config('app.session_token', '%s', false)`,
+    `/* SELECT */ end; SELECT set_config('app.session_token', '%s', false)`,
+    `SELECT 1; COMMIT; SELECT set_config('app.session_token', '%s', false)`,
+    `-- SELECT\nSET app.session_token = '%s'`,
+    `SAVEPOINT a; RELEASE a; SELECT set_config('app.session_token', '%s', false)`,
+    `DISCARD ALL; SELECT '%s'`,
+  ])("refuses %j and leaves no token on the pooled connection", async (template) => {
+    const pool = appPool(1);
+    const withActor = createWithActor(pool);
+    const { pid } = await who(withActor, tokenB);
+
+    await expect(withActor(tokenB, (tx) => tx.query(template.replace("%s", tokenA)))).rejects.toThrow();
+    const after = (await pool.query<After>(AFTER)).rows[0];
+    expect(after.user_id).toBeNull();
+    expect(after.token === null || after.token === "").toBe(true);
+    expect((await who(withActor, null)).user_id).toBeNull();
+    expect((await who(withActor, tokenB)).user_id).toBe(userB);
+    // A refused statement never reached the database; the connection stays.
+    if (!template.startsWith("SELECT 1;")) expect(after.pid).toBe(pid);
+  });
+
+  it.each([
+    ["replaces the token for the session", "SELECT set_config('app.session_token', $1, false)", () => [tokenA]],
+    ["switches role for the session", "SELECT set_config('role', 'ductus_app', false)", () => []],
+  ])("does not commit and closes the connection when fn %s", async (_name, statement, values) => {
+    const pool = appPool(1);
+    const withActor = createWithActor(pool);
+    const { pid } = await who(withActor, tokenB);
+
+    await expect(withActor(tokenB, (tx) => tx.query(statement, values()))).rejects.toThrow("changed inside fn");
+    const after = (await pool.query<After>(AFTER)).rows[0];
+    expect(after.pid).not.toBe(pid);
+    expect(after.user_id).toBeNull();
+    expect((await who(withActor, tokenB)).user_id).toBe(userB);
+  });
+
+  it("refuses a nested call instead of waiting for a second connection", async () => {
+    const withActor = createWithActor(appPool(1));
+    const inner = vi.fn(async () => "inner");
+    await expect(withActor(tokenA, async () => withActor(tokenB, inner))).rejects.toThrow("nested call");
+    expect(inner).not.toHaveBeenCalled();
+    expect((await who(withActor, tokenA)).user_id).toBe(userA);
+  });
+
+  it("propagates a connection dropped inside fn and serves the next call on a new connection", async () => {
+    const pool = appPool(1);
+    const withActor = createWithActor(pool);
+    let pid = 0;
+    await expect(
+      withActor(tokenA, async (tx) => {
+        pid = (await tx.query<Who>(WHO)).rows[0].pid;
+        await admin.query("SELECT pg_catalog.pg_terminate_backend($1)", [pid]);
+        return tx.query(WHO);
+      }),
+    ).rejects.toThrow();
+    const next = await who(withActor, tokenB);
+    expect(next.pid).not.toBe(pid);
+    expect(next.user_id).toBe(userB);
+  });
+});
