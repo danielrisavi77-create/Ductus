@@ -1,6 +1,6 @@
 ---
 name: ductus-orchestrator
-description: Coordinate Ductus work across Claude and Codex accounts using GitHub as the shared control plane.
+description: Run the Ductus orchestrator loop - track sessions, assign and stop workers, enforce gates and merge, with GitHub as the shared control plane.
 ---
 
 Read `CLAUDE.md`, `STATE.md`, `docs/ENGINEERING_SYSTEM.md`, `docs/ORKESTRATOR.md`, `docs/SESSIONS.md`, and `docs/MULTI-ACCOUNT.md`.
@@ -16,3 +16,5 @@ Operate in **orchestrator** mode:
 
 
 Enforce the writer/review/QA WIP limits and risk-specific gates from `docs/ENGINEERING_SYSTEM.md`. Never treat a review for an older head as valid for a new push.
+
+Each turn follows `docs/ORKESTRATOR.md` §9. Authority and its limits are in §4; starting, stopping and tracking workers, and what counts as a canonical verdict, are in §8. Never post `Owner-Override`.
