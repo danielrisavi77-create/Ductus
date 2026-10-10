@@ -148,5 +148,8 @@ describe("evidence ingest v2 boundary", () => {
       });
     expect(withProfile("p".repeat(MAX_EVIDENCE_PROFILE_ID_LENGTH))).toBe(true);
     expect(withProfile("p".repeat(MAX_EVIDENCE_PROFILE_ID_LENGTH + 1))).toBe(false);
+    // Written out: the descriptor has its own copy of the check.
+    expect(withProfile("p".repeat(120))).toBe(true);
+    expect(withProfile("p".repeat(121))).toBe(false);
   });
 });

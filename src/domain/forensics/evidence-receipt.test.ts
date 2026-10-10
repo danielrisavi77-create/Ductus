@@ -138,6 +138,21 @@ describe("evidence profile id limit", () => {
   const atLimit = "p".repeat(MAX_EVIDENCE_PROFILE_ID_LENGTH);
   const overLimit = "p".repeat(MAX_EVIDENCE_PROFILE_ID_LENGTH + 1);
 
+  // The bound decides which segments both sides accept, so it is part of the
+  // v2 format (docs/BACKEND.md section 4.1). The numbers are written out here
+  // on purpose: changing the constant alone must fail this test.
+  it("is 120 characters: 120 pass and 121 do not, in the segment and in the receipt", () => {
+    expect(MAX_EVIDENCE_PROFILE_ID_LENGTH).toBe(120);
+    expect(isEvidenceSegmentV2(segmentWithProfile("p".repeat(120)))).toBe(true);
+    expect(isEvidenceSegmentV2(segmentWithProfile("p".repeat(121)))).toBe(false);
+    expect(
+      isEvidenceReceiptPayloadV1({ ...payload(), evidenceProfileId: "p".repeat(120) }),
+    ).toBe(true);
+    expect(
+      isEvidenceReceiptPayloadV1({ ...payload(), evidenceProfileId: "p".repeat(121) }),
+    ).toBe(false);
+  });
+
   it("is the same for the segment and for the receipt issued for it", () => {
     expect(isEvidenceSegmentV2(segmentWithProfile(atLimit))).toBe(true);
     expect(isEvidenceReceiptPayloadV1({ ...payload(), evidenceProfileId: atLimit })).toBe(true);

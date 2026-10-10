@@ -978,6 +978,91 @@ describe("EvidenceGateway", () => {
       expect(s.authorization.requests).toHaveLength(0);
       expect(s.payloadStore.size).toBe(0);
     });
+
+    /** A package whose own limit is one byte under the default segment. */
+    async function understatedUnderLowerLimit() {
+      const cmd = await command();
+      const actual = cmd.descriptor.payloadBytes;
+      const s = setup();
+      s.contexts.set({
+        evidencePackageId: "evidence-1",
+        documentId: "doc-1",
+        evidenceProfileId: "standard-v1",
+        maxPayloadBytes: actual - 1,
+        acceptsEvidence: true,
+      });
+      const understated = {
+        ...cmd,
+        descriptor: { ...cmd.descriptor, payloadBytes: actual - 1 },
+      };
+      return { s, cmd, understated };
+    }
+
+    it("does not let a size declared under a lower package limit carry a larger segment", async () => {
+      const honest = await understatedUnderLowerLimit();
+      expect(await ingest(honest.s, honest.cmd)).toEqual({
+        status: "too_large",
+      });
+      expect(honest.s.payloadStore.size).toBe(0);
+
+      // Same bytes, same hash, one byte less declared: it would fit the limit.
+      const { s, understated } = await understatedUnderLowerLimit();
+      expect(await ingest(s, understated)).toEqual({ status: "invalid" });
+      expect(s.payloadStore.size).toBe(0);
+      expect(s.repository.records()).toHaveLength(0);
+      expect(s.signer.signCalls).toBe(0);
+    });
+
+    it("compares the received size with the declared one itself, even if the command check stops doing so", async () => {
+      // The command check compares the two sizes first, so the comparison in
+      // the gateway is the second line. Here the first one is taken away.
+      vi.resetModules();
+      vi.doMock("@/application/ports/evidence-ingest", async (importOriginal) => ({
+        ...((await importOriginal()) as Record<string, unknown>),
+        validateEvidenceIngestCommandV2: () => true,
+      }));
+      try {
+        const { EvidenceGateway: GatewayBehindLaxCheck } = await import(
+          "./evidence-gateway"
+        );
+        const behindLaxCheck = (s: ReturnType<typeof setup>) =>
+          new GatewayBehindLaxCheck({
+            authorization: s.authorization,
+            contexts: s.contexts,
+            payloadStore: s.payloadStore,
+            repository: s.repository,
+            signer: s.signer,
+          });
+
+        // The stand-in gateway is otherwise the real one.
+        const plain = setup();
+        expect(
+          (
+            await behindLaxCheck(plain).ingest({
+              principalId: "student-1",
+              command: await command(),
+            })
+          ).status,
+        ).toBe("accepted");
+
+        const { s, understated } = await understatedUnderLowerLimit();
+        expect(
+          await behindLaxCheck(s).ingest({
+            principalId: "student-1",
+            command: understated,
+          }),
+        ).toEqual({ status: "invalid" });
+        // It got past the command check and authorization: the refusal is
+        // the gateway's own, after it hashed the bytes it received.
+        expect(s.authorization.requests).toHaveLength(1);
+        expect(s.payloadStore.size).toBe(0);
+        expect(s.repository.records()).toHaveLength(0);
+        expect(s.signer.signCalls).toBe(0);
+      } finally {
+        vi.doUnmock("@/application/ports/evidence-ingest");
+        vi.resetModules();
+      }
+    });
   });
 
   describe("receipts with a field nobody validated", () => {
@@ -1034,6 +1119,31 @@ describe("EvidenceGateway", () => {
         s.repository.edit = edit;
         expect(await ingest(s, cmd)).toEqual(malformed);
       }
+    });
+
+    it("checks the stored receipt the same way when reserve, not lookup, finds the signed acceptance", async () => {
+      // Two requests in flight: the lookup of the second saw nothing yet, and
+      // its reserve finds the acceptance the first one has signed meanwhile.
+      const s = setup();
+      const cmd = await command();
+      const first = await ingest(s, cmd);
+      expect(first.status).toBe("accepted");
+      const lookup = vi.spyOn(s.repository, "lookup");
+      const reserve = vi.spyOn(s.repository, "reserve");
+
+      lookup.mockResolvedValueOnce({ status: "not_found" });
+      expect(await ingest(s, cmd)).toEqual({
+        status: "duplicate",
+        receipt: first.status === "accepted" ? first.receipt : null,
+      });
+      expect(reserve).toHaveBeenCalledTimes(1);
+
+      lookup.mockResolvedValueOnce({ status: "not_found" });
+      s.repository.edit = (record) =>
+        Object.assign(record.signedReceipt ?? {}, { note: "x" });
+      expect(await ingest(s, cmd)).toEqual(malformed);
+      expect(reserve).toHaveBeenCalledTimes(2);
+      expect(s.signer.signCalls).toBe(1);
     });
   });
 });

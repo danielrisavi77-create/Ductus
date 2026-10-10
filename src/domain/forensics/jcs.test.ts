@@ -100,6 +100,21 @@ describe("RFC 8785 JCS", () => {
       return value;
     };
 
+    // The limit decides what both sides may hash, so it is part of the v2
+    // format (docs/BACKEND.md section 4.1). The numbers are written out here
+    // on purpose: changing the constant alone must fail this test.
+    it("is 256 levels: a value 256 deep has a canonical form, one 257 deep has none", () => {
+      expect(MAX_JCS_DEPTH).toBe(256);
+      expect(canonicalizeJcs(nested(256))).toBe(
+        "[".repeat(256) + "1" + "]".repeat(256),
+      );
+      expect(() => canonicalizeJcs(nested(256, 1, true))).not.toThrow();
+      expect(() => canonicalizeJcs(nested(257))).toThrow("jcs: nesting too deep");
+      expect(() => canonicalizeJcs(nested(257, 1, true))).toThrow(
+        "jcs: nesting too deep",
+      );
+    });
+
     it("canonicalizes a value nested exactly to the limit", () => {
       expect(canonicalizeJcs(nested(MAX_JCS_DEPTH))).toBe(
         "[".repeat(MAX_JCS_DEPTH) + "1" + "]".repeat(MAX_JCS_DEPTH),
