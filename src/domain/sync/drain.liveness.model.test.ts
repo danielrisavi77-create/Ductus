@@ -6,7 +6,9 @@
  * author never conflicts with their own commit. This one adds what that model
  * cannot reach: another writer, refusals of the replayed key (`stale_base`,
  * a fatal `invalid_document`), answers that say nothing about landing
- * (`unauthenticated`, an unreadable payload) and the author resolving a
+ * (`unauthenticated`, a payload cut short and read by the real parser as
+ * `invalid`), `txid_reused` for a key the server already holds, and the
+ * author resolving a
  * CONFLICT by rebasing. Every state reachable in MAX_STEPS steps is visited.
  *
  * From each one the network comes back, nobody else writes, and the author
@@ -23,6 +25,7 @@
 import { describe, expect, it } from "vitest";
 
 import { emptyDocument } from "@/domain/document";
+import { parseCommitOutcome } from "@/domain/serverSync/contract";
 
 import {
   ackedRevision,
@@ -38,7 +41,7 @@ import type { PendingTransaction } from "./journal-types";
 import { syncReducer, type SyncEvent, type SyncState } from "./states";
 
 const DOC = "11111111-1111-4111-8111-111111111111";
-const MAX_STEPS = 9;
+const MAX_STEPS = 10;
 const SETTLE_LIMIT = 12;
 
 /** What happens to one drain attempt. */
@@ -49,6 +52,7 @@ const DELIVERIES = [
   "request_lost",
   "unauthenticated",
   "garbled",
+  "reused",
   "fatal",
 ] as const;
 type Delivery = (typeof DELIVERIES)[number];
@@ -70,6 +74,14 @@ type World = {
 };
 
 const DOCUMENT = emptyDocument(() => "aaaaaaaa-0000-4000-8000-000000000001");
+
+/** The answer loses its last field on the wire; the real parser must say `invalid`. */
+function garble(outcome: DrainOutcome): DrainOutcome {
+  const fields = Object.entries(outcome);
+  const parsed = parseCommitOutcome(Object.fromEntries(fields.slice(0, -1)));
+  expect(parsed).toEqual({ status: "invalid" });
+  return parsed as DrainOutcome;
+}
 
 function reduce(state: SyncState, events: readonly SyncEvent[]): SyncState {
   return events.reduce(syncReducer, state);
@@ -150,7 +162,10 @@ async function drain(world: World, delivery: Delivery): Promise<Drained> {
         ? ({ status: "pending_signature" } as const)
         : ({ status: "signed", signedReceipt: { testReceipt: true } } as const);
     const known = landed.get(key);
-    if (known !== undefined) {
+    if (known !== undefined && delivery === "reused") {
+      // The key is on the server, but the replay's bytes differ from it.
+      outcome = { status: "txid_reused" };
+    } else if (known !== undefined) {
       outcome = { status: "duplicate", revision: known, receipt };
     } else if (delivery === "fatal" || poisoned.has(key)) {
       poisoned = new Set(poisoned).add(key);
@@ -165,7 +180,7 @@ async function drain(world: World, delivery: Delivery): Promise<Drained> {
     if (delivery === "response_lost") {
       outcome = { status: "transport_error" };
     } else if (delivery === "garbled") {
-      outcome = { status: "invalid" } as unknown as DrainOutcome;
+      outcome = garble(outcome);
     }
   }
 

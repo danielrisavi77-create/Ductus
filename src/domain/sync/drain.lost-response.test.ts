@@ -9,6 +9,7 @@
 import { describe, expect, it } from "vitest";
 
 import { emptyDocument } from "@/domain/document";
+import { COMMIT_STATUSES, parseCommitOutcome } from "@/domain/serverSync/contract";
 
 import {
   ackedRevision,
@@ -175,6 +176,53 @@ describe("DAN-110 plan #158 — lost response", () => {
     const awaiting = nextAwaitingReceipt(r7, unreadable, null);
     expect(awaiting).toEqual(awaitingReceiptFor(r7));
     expect(planDrain([r7, r8], meta("ERROR"), awaiting).send).toBe(r7);
+  });
+
+  it("5b: every truncated payload the real parser reads as invalid holds r7 and never lets r8 out", async () => {
+    const truncated: unknown[] = [
+      { status: "committed", revision: 5 },
+      { status: "committed", receipt: { status: "signed", signedReceipt: {} } },
+      { status: "duplicate", revision: 5, receipt: {} },
+      { status: "duplicate", revision: 5, receipt: { status: "signed" } },
+      { status: "stale_base" },
+      { status: "commi" },
+      {},
+      '{"status":"committed","revision":5,"rec',
+      null,
+    ];
+    for (const raw of truncated) {
+      const parsed = parseCommitOutcome(raw);
+      expect(parsed).toEqual({ status: "invalid" });
+      const outcome = parsed as DrainOutcome;
+      expect(ackedRevision(outcome)).toBeNull();
+      expect(await outcomeToEvents(outcome, verification(r7, 5), true)).toEqual([
+        { type: "SYNC_FAILED", retryable: false },
+      ]);
+      // The CAS may have landed behind the cut: hold r7 exactly like a lost answer.
+      const awaiting = nextAwaitingReceipt(r7, outcome, null);
+      expect(awaiting).toEqual(nextAwaitingReceipt(r7, LOST, null));
+      expect(planDrain([r7, r8], meta("ERROR"), awaiting).send).toBe(r7);
+      // With a hold already in place it stays on r7.
+      expect(nextAwaitingReceipt(r7, outcome, awaiting)).toEqual(awaiting);
+    }
+  });
+
+  it("5c: a malformed sent row yields a marker that sends nothing instead of throwing", () => {
+    const malformed = [
+      undefined,
+      null,
+      {},
+      { documentId: D1, localSeq: 7 },
+      { documentId: D1, localSeq: 0, tx: r7.tx },
+      { ...r7, tx: { ...r7.tx, clientTransactionId: 7 } },
+    ] as unknown as PendingTransaction[];
+    for (const sent of malformed) {
+      const marker = awaitingReceiptFor(sent);
+      expect(nextAwaitingReceipt(sent, LOST, null)).toEqual(marker);
+      expect(nextAwaitingReceipt(sent, { status: "invalid" }, null)).toEqual(marker);
+      // A marker that names no row stalls visibly; r8 never goes out past it.
+      expect(planDrain([r7, r8], meta("ERROR"), marker).send).toBeNull();
+    }
   });
 
   it("3: repeated lost answers keep the same marker, key and bytes while backoff grows", () => {
@@ -379,7 +427,6 @@ describe("DAN-110 replay outcome table", () => {
       (
         [
           "too_large",
-          "txid_reused",
           "not_found",
           "invalid_document",
           "invalid_client_transaction_id",
@@ -397,7 +444,9 @@ describe("DAN-110 replay outcome table", () => {
       ]),
     ),
     ...Object.fromEntries(
-      (["unauthenticated", "invalid"] as const).map((status) => [
+      // txid_reused: the key IS on the server (other bytes), so r7 may have
+      // landed and r8 must not go out on base 4 past it.
+      (["unauthenticated", "txid_reused", "invalid", "something_new"] as const).map((status) => [
         status,
         {
           outcome: () => ({ status }) as unknown as DrainOutcome,
@@ -436,4 +485,60 @@ describe("DAN-110 replay outcome table", () => {
       expect(planDrain(remaining, meta(state), after).send).toBe(expected.nextSend);
     });
   }
+});
+
+describe("DAN-110 every status and parser output, without a hold", () => {
+  // Answers that prove the sent key did not land: no hold, the queue moves on.
+  const PROVES_MISSED = new Set([
+    "stale_base",
+    "too_large",
+    "not_found",
+    "invalid_document",
+    "invalid_client_transaction_id",
+  ]);
+  const outcomes: Array<[string, DrainOutcome]> = [
+    ...COMMIT_STATUSES.map((status): [string, DrainOutcome] => {
+      if (status === "committed" || status === "duplicate") {
+        return [`${status}, pending signature`, answer(status, 5, null)];
+      }
+      if (status === "stale_base") {
+        return [status, { status, currentRevision: 5 }];
+      }
+      return [status, { status } as DrainOutcome];
+    }),
+    ["committed, verified", answer("committed", 5, r7)],
+    ["duplicate, verified", answer("duplicate", 5, r7)],
+    ["duplicate, signed for another key", answer("duplicate", 5, r8)],
+    ["transport_error", LOST],
+    ["invalid (parser)", parseCommitOutcome({ status: "committed", revision: 5 }) as DrainOutcome],
+    ["unknown status", { status: "something_new" } as unknown as DrainOutcome],
+    ["null", null as unknown as DrainOutcome],
+    ["undefined", undefined as unknown as DrainOutcome],
+  ];
+
+  for (const [name, outcome] of outcomes) {
+    const proves = typeof outcome?.status === "string" && PROVES_MISSED.has(outcome.status);
+    const verified = name.endsWith(", verified");
+    // `unauthenticated` is refused before the RPC touches the key.
+    const released = proves || verified || name === "unauthenticated";
+    const expected = released ? "no hold" : "hold r7";
+    it(`${name} → ${expected}`, async () => {
+      if (outcome !== null && outcome !== undefined) {
+        await outcomeToEvents(outcome, verification(r7, 5), true);
+      }
+      const after = nextAwaitingReceipt(r7, outcome, null);
+      if (expected === "hold r7") {
+        expect(after).toEqual(awaitingReceiptFor(r7));
+        expect(planDrain([r7, r8], meta("ERROR"), after).send).toBe(r7);
+      } else {
+        expect(after).toBeNull();
+      }
+    });
+  }
+
+  it("covers every status the contract knows", () => {
+    for (const status of COMMIT_STATUSES) {
+      expect(outcomes.some(([, o]) => o?.status === status)).toBe(true);
+    }
+  });
 });

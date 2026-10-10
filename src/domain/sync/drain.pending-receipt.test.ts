@@ -365,26 +365,36 @@ describe("nextAwaitingReceipt", () => {
   });
 
   it("does not start a hold on answers that say the commit did not land", () => {
-    for (const outcome of [
-      { status: "stale_base", currentRevision: 9 },
-      { status: "too_large" },
-      { status: "invalid" },
-      null,
-    ] as unknown as DrainOutcome[]) {
+    for (const outcome of KEY_REFUSALS) {
       expect(nextAwaitingReceipt(sent, outcome, null)).toBeNull();
+    }
+    expect(nextAwaitingReceipt(sent, { status: "unauthenticated" }, null)).toBeNull();
+  });
+
+  it("starts a hold on answers that do not prove the commit missed", () => {
+    // Unreadable, unknown or absent answers and `txid_reused` (the key IS on
+    // the server) can all hide a landed CAS, exactly like a lost response.
+    for (const outcome of [
+      { status: "invalid" },
+      { status: "txid_reused" },
+      { status: "something_new" },
+      null,
+      undefined,
+    ] as unknown as DrainOutcome[]) {
+      expect(nextAwaitingReceipt(sent, outcome, null)).toEqual(previous);
     }
   });
 
   const KEY_REFUSALS = [
     { status: "stale_base", currentRevision: 9 },
     { status: "too_large" },
-    { status: "txid_reused" },
     { status: "not_found" },
     { status: "invalid_document" },
     { status: "invalid_client_transaction_id" },
   ] as unknown as DrainOutcome[];
   const SAYS_NOTHING_ABOUT_LANDING = [
     { status: "unauthenticated" },
+    { status: "txid_reused" },
     { status: "invalid" },
     { status: "something_new" },
     null,

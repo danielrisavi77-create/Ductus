@@ -10,6 +10,7 @@
 import { describe, expect, it } from "vitest";
 
 import { emptyDocument } from "@/domain/document";
+import { parseCommitOutcome } from "@/domain/serverSync/contract";
 
 import {
   ackedRevision,
@@ -27,7 +28,13 @@ const DOC = "11111111-1111-4111-8111-111111111111";
 const MAX_STEPS = 7;
 
 /** What the network does to one drain attempt. */
-const DELIVERIES = ["signed", "pending_signature", "response_lost", "request_lost"] as const;
+const DELIVERIES = [
+  "signed",
+  "pending_signature",
+  "response_lost",
+  "request_lost",
+  "garbled",
+] as const;
 type Delivery = (typeof DELIVERIES)[number];
 type Step = "edit" | Delivery;
 const STEPS: readonly Step[] = ["edit", ...DELIVERIES];
@@ -44,6 +51,18 @@ type World = {
 };
 
 const DOCUMENT = emptyDocument(() => "aaaaaaaa-0000-4000-8000-000000000001");
+
+/**
+ * The answer arrives cut short: its last field is lost on the wire. Whatever
+ * the server said, the real parser must read that as `invalid`, and the CAS
+ * may well have landed behind it.
+ */
+function garble(outcome: DrainOutcome): DrainOutcome {
+  const fields = Object.entries(outcome);
+  const parsed = parseCommitOutcome(Object.fromEntries(fields.slice(0, -1)));
+  expect(parsed).toEqual({ status: "invalid" });
+  return parsed as DrainOutcome;
+}
 
 function edit(world: World): World {
   const row: PendingTransaction = {
@@ -90,6 +109,8 @@ async function drain(world: World, delivery: Delivery): Promise<World | "stale_b
     }
     if (delivery === "response_lost") {
       outcome = { status: "transport_error" };
+    } else if (delivery === "garbled") {
+      outcome = garble(outcome);
     }
   }
 
@@ -164,7 +185,7 @@ describe("drain model — one author, lost answers", () => {
       [],
     );
 
-    expect(walked).toBeGreaterThan(5 ** MAX_STEPS);
+    expect(walked).toBeGreaterThan(STEPS.length ** MAX_STEPS);
     expect(stale).toEqual([]);
   }, 60_000);
 });
