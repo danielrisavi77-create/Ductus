@@ -337,7 +337,12 @@ describe("edit step format: steps ProseMirror really produces", () => {
     ["adding bold", (tr) => tr.addMark(1, 5, bold.create())],
     ["removing a mark", (tr) => tr.addMark(1, 9, italic.create()).removeMark(3, 6, italic.create())],
     ["giving a block an id", (tr) => tr.setNodeAttribute(26, "nodeId", A.replace(/1$/, "9"))],
-    ["pasting two blocks", (tr) => tr.replace(5, 5, new Slice(start.content, 1, 1))],
+    // Accepted by its shape only. The last block of the slice becomes the tail
+    // of the paragraph that the paste divides, a new block, yet it carries the
+    // id of the heading. The validator cannot see that without the document;
+    // the replayer must refuse it, and capture must write the tail with `null`
+    // and an `attr` step.
+    ["pasting two blocks (shape only)", (tr) => tr.replace(5, 5, new Slice(start.content, 1, 1))],
     ["deleting across blocks", (tr) => tr.delete(20, 30)],
     ["inserting an empty block", (tr) => tr.insert(26, paragraph.create({ nodeId: null }))],
     ["inserting a block with text", (tr) => tr.insert(26, heading.create({ level: 3, nodeId: null }, schema.text("x")))],
