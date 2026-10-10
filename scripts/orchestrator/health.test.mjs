@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { checkQueue, exitCode, parseWorktrees, queueItems } from "./health-core.mjs";
 import { health, readOnlyCall } from "./health.mjs";
@@ -299,27 +299,27 @@ test("U5/U6/U7: optional red, pending and PR-only checks are no stall; one red m
   assert.deepEqual((await check(w)).levels("main-ci"), ["NEPROVJERENO"]);
 });
 
-test("§3 end to end: fake gh and git on PATH record only read calls", { skip: process.platform === "win32" }, () => {
+test("§3 end to end: the real CLI records only read calls and writes no files", () => {
   const dir = mkdtempSync(join(tmpdir(), "orch-health-"));
   try {
-    const bin = join(dir, "bin");
-    mkdirSync(bin);
     const log = join(dir, "calls.log");
-    const fake = join(dir, "fake.cjs");
-    writeFileSync(fake, `const fs=require("fs");const [n,...a]=process.argv.slice(2);fs.appendFileSync(${JSON.stringify(log)},JSON.stringify([n,...a])+"\\n");
-if(n==="git"){process.stdout.write("worktree ${dir}\\0HEAD ${MAIN}\\0\\0");}else{process.stderr.write("gh: not logged in");process.exit(1);}`);
-    for (const name of ["gh", "git"]) {
-      writeFileSync(join(bin, name), `#!/bin/sh\nexec "${process.execPath}" "${fake}" ${name} "$@"\n`);
-      chmodSync(join(bin, name), 0o755);
-    }
+    const fake = join(dir, "fake-exec.mjs");
+    // Replaces execFile before health.mjs loads, so the CLI's own exec path is exercised on every platform.
+    writeFileSync(fake, `import cp from "node:child_process";import fs from "node:fs";import { syncBuiltinESMExports } from "node:module";import { promisify } from "node:util";
+const run=(cmd,args)=>{fs.appendFileSync(${JSON.stringify(log)},JSON.stringify([cmd,...args])+"\\n");
+if(cmd==="git")return {stdout:${JSON.stringify(`worktree ${dir}\0HEAD ${MAIN}\0\0`)},stderr:""};
+throw Object.assign(new Error("gh failed"),{stderr:"gh: not logged in"});};
+const fakeExecFile=(cmd,args,opts,cb)=>{try{const r=run(cmd,args);cb(null,r.stdout,r.stderr);}catch(e){cb(e);}};
+fakeExecFile[promisify.custom]=async(cmd,args)=>run(cmd,args);
+cp.execFile=fakeExecFile;syncBuiltinESMExports();`);
     const script = fileURLToPath(new URL("health.mjs", import.meta.url));
-    const r = spawnSync(process.execPath, [script], { cwd: dir, env: { PATH: bin }, encoding: "utf8" });
+    const r = spawnSync(process.execPath, ["--import", pathToFileURL(fake).href, script], { cwd: dir, encoding: "utf8" });
     assert.equal(r.status, 2, r.stdout + r.stderr);
     assert.match(r.stdout, /NEPROVJERENO/);
     const calls = readFileSync(log, "utf8").trim().split("\n").map((l) => JSON.parse(l));
     assert.ok(calls.length >= 2);
     for (const [cmd, ...args] of calls) assert.ok(readOnlyCall(cmd, args), `${cmd} ${args.join(" ")}`);
-    assert.deepEqual(readdirSync(dir).sort(), ["bin", "calls.log", "fake.cjs"]);
+    assert.deepEqual(readdirSync(dir).sort(), ["calls.log", "fake-exec.mjs"]);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

@@ -46,11 +46,11 @@ Otvoreno:
 
 - #160 DAN-129 `withActor` hardening (critical).
 - #173 DAN-137 `cc-safety-net` fail closed (critical, D-97).
-- #174 DAN-127 zlatni vektori JCS i hash (critical).
 - #175 B-7 2/2 zadaci i potvrda obavijesti (critical).
+- #185, #186 orchestrator CI i metrike; #189, #191, #194, #196, #198, #199, #192 (vidi `gh pr list`).
 - #180 DAN-138 test kopija skillova (draft); #94 DAN-41 drugi pružatelj reviewa (draft, nakon demoa).
 
-Spojeno 10. 10.: #45 P-6, #164 DAN-130, #151 DAN-120, #170 DAN-135, #169 DAN-138 (CODEOWNERS), #163 B-7 1/2, #162 DAN-131, #159 DAN-110, #150 B-14, #148 B-5b, #133 B-8a, #165, #147 i #105 (docs).
+Spojeno 10. 10.: #188 (docs), #174 DAN-127, #45 P-6, #164 DAN-130, #151 DAN-120, #170 DAN-135, #169 DAN-138 (CODEOWNERS), #163 B-7 1/2, #162 DAN-131, #159 DAN-110, #150 B-14, #148 B-5b, #133 B-8a, #165, #147 i #105 (docs).
 
 ## Ne smije se izgubiti
 
