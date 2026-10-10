@@ -43,8 +43,12 @@ const chainSpec = (minLength: number): fc.Arbitrary<ChainSpec> =>
 const documentHash = (n: number) => n.toString(16).padStart(64, "0");
 
 type ChainOptions = {
-  /** Segment index before which events and document revisions go missing. */
-  gapBefore?: number;
+  /** Segment index before which event sequence numbers are skipped. */
+  sequenceGapBefore?: number;
+  /** Segment index before which document revisions are skipped. */
+  documentGapBefore?: number;
+  /** Segment index whose events start again from sequence 1. */
+  sequenceRestartAt?: number;
   /** Segment index that names another document while linking correctly. */
   foreignDocumentAt?: number;
 };
@@ -56,10 +60,9 @@ async function buildChain(spec: ChainSpec, options: ChainOptions = {}): Promise<
   let revision = 0;
 
   for (const [index, events] of spec.entries()) {
-    if (index === options.gapBefore) {
-      sequence += 7;
-      revision += 7;
-    }
+    if (index === options.sequenceGapBefore) sequence += 7;
+    if (index === options.documentGapBefore) revision += 7;
+    if (index === options.sequenceRestartAt) sequence = 1;
     const segment: EvidenceSegmentV2 = {
       evidenceSchema: EVIDENCE_SEGMENT_SCHEMA_V2,
       canonicalization: EVIDENCE_CANONICALIZATION_V2,
@@ -117,27 +120,61 @@ describe("evidence segment chain v2", () => {
     });
   });
 
-  test.prop([chainSpec(2), fc.nat()])(
-    "a linked chain with missing events verifies but reports the discontinuity",
-    async (spec, pick) => {
-      const gapBefore = 1 + (pick % (spec.length - 1));
-      const { payloads, head } = await buildChain(spec, { gapBefore });
-      const previousSequenceTo = spec.slice(0, gapBefore).flat().length;
+  test.prop([chainSpec(2), fc.nat(), fc.constantFrom("sequence", "document", "both")])(
+    "a linked chain with a gap verifies but reports which continuity broke",
+    async (spec, pick, kind) => {
+      const at = 1 + (pick % (spec.length - 1));
+      const { payloads, head } = await buildChain(spec, {
+        sequenceGapBefore: kind === "document" ? undefined : at,
+        documentGapBefore: kind === "sequence" ? undefined : at,
+      });
+      const previousSequenceTo = spec.slice(0, at).flat().length;
       expect(await verifyEvidenceChainV2(payloads, head)).toEqual({
         ok: true,
         head,
         discontinuities: [
           {
-            index: gapBefore,
+            index: at,
             previousSequenceTo,
-            sequenceFrom: previousSequenceTo + 8,
-            sequenceBreak: true,
-            documentHashBreak: true,
+            sequenceFrom: previousSequenceTo + (kind === "document" ? 1 : 8),
+            sequence: kind === "document" ? "continuous" : "gap",
+            documentHashBreak: kind !== "sequence",
           },
         ],
       });
     },
   );
+
+  test.prop([chainSpec(2), fc.nat()])(
+    "a segment whose sequence goes back is reported as a regression, not as a gap",
+    async (spec, pick) => {
+      const at = 1 + (pick % (spec.length - 1));
+      const { payloads, head } = await buildChain(spec, { sequenceRestartAt: at });
+      expect(await verifyEvidenceChainV2(payloads, head)).toEqual({
+        ok: true,
+        head,
+        discontinuities: [
+          {
+            index: at,
+            previousSequenceTo: spec.slice(0, at).flat().length,
+            sequenceFrom: 1,
+            sequence: "regression",
+            documentHashBreak: false,
+          },
+        ],
+      });
+    },
+  );
+
+  test.prop([chainSpec(1)])("received bytes verify to the same head as their text", async (spec) => {
+    const { payloads, head } = await buildChain(spec);
+    const bytes = payloads.map((payload) => new TextEncoder().encode(payload));
+    expect(await verifyEvidenceChainV2(bytes, head)).toEqual({
+      ok: true,
+      head,
+      discontinuities: [],
+    });
+  });
 
   test.prop([chainSpec(2), fc.nat()])(
     "a correctly linked segment of another document breaks verification",
@@ -282,31 +319,48 @@ describe("evidence segment chain v2", () => {
 describe("evidence retry decision", () => {
   const hash = fc.stringMatching(/^[0-9a-f]{64}$/);
   const submissions = fc.array(
-    fc.record({ id: fc.constantFrom("req-1", "req-2", "req-3"), content: fc.constantFrom("a", "b", "c") }),
+    fc.record({
+      id: fc.constantFrom("req-1", "req-2", "req-3"),
+      content: fc.constantFrom("a", "b", "c"),
+      descriptor: fc.constantFrom("d1", "d2"),
+    }),
     { maxLength: 20 },
   );
 
-  test.prop([hash, hash])("same content is a duplicate, different content is a mismatch", (accepted, other) => {
-    expect(decideEvidenceRetry(null, accepted)).toBe("new");
-    expect(decideEvidenceRetry(accepted, accepted)).toBe("duplicate");
-    fc.pre(other !== accepted);
-    expect(decideEvidenceRetry(accepted, other)).toBe("content_mismatch");
-  });
+  test.prop([hash, hash, fc.boolean()])(
+    "follows the decided retry contract for every combination",
+    (accepted, other, descriptorMatches) => {
+      fc.pre(other !== accepted);
+      const decide = (acceptedSegmentHash: string | null, matches: boolean, received: string) =>
+        decideEvidenceRetry({
+          acceptedSegmentHash,
+          descriptorMatches: matches,
+          receivedPayloadSha256: received,
+        });
 
-  test.prop([submissions])(
-    "resending never adds or replaces an acceptance",
-    async (sequence) => {
-      const accepted = new Map<string, string>();
-      for (const { id, content } of sequence) {
-        const submitted = await sha256WebCrypto(content);
-        const before = accepted.get(id) ?? null;
-        const decision: EvidenceRetryDecision = decideEvidenceRetry(before, submitted);
-        if (decision === "new") accepted.set(id, submitted);
-
-        expect(decision === "new").toBe(before === null);
-        if (before !== null) expect(accepted.get(id)).toBe(before);
-      }
-      expect(accepted.size).toBe(new Set(sequence.map((s) => s.id)).size);
+      expect(decide(null, descriptorMatches, accepted)).toBe("new");
+      expect(decide(accepted, true, accepted)).toBe("duplicate");
+      expect(decide(accepted, true, other)).toBe("invalid");
+      expect(decide(accepted, false, accepted)).toBe("idempotency_conflict");
+      expect(decide(accepted, false, other)).toBe("idempotency_conflict");
     },
   );
+
+  test.prop([submissions])("resending never adds or replaces an acceptance", async (sequence) => {
+    const accepted = new Map<string, { hash: string; descriptor: string }>();
+    for (const { id, content, descriptor } of sequence) {
+      const received = await sha256WebCrypto(content);
+      const before = accepted.get(id) ?? null;
+      const decision: EvidenceRetryDecision = decideEvidenceRetry({
+        acceptedSegmentHash: before?.hash ?? null,
+        descriptorMatches: before?.descriptor === descriptor,
+        receivedPayloadSha256: received,
+      });
+      if (decision === "new") accepted.set(id, { hash: received, descriptor });
+
+      expect(decision === "new").toBe(before === null);
+      if (before !== null) expect(accepted.get(id)).toEqual(before);
+    }
+    expect(accepted.size).toBe(new Set(sequence.map((s) => s.id)).size);
+  });
 });
