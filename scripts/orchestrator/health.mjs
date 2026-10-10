@@ -60,7 +60,14 @@ export async function health({ exec = defaultExec, fsView = defaultFs, now = Dat
     if (!Array.isArray(p)) throw new Error(`unexpected response for ${path}`);
     return p;
   };
-  const list = async (path) => (await pages(path)).flat();
+  // Every page is an array of objects (comments, statuses); anything else is not a list.
+  const list = async (path) => {
+    const p = await pages(path);
+    if (!p.every((page) => Array.isArray(page) && page.every((x) => x && typeof x === "object" && !Array.isArray(x)))) {
+      throw new Error(`unexpected page for ${path}`);
+    }
+    return p.flat();
+  };
   const findings = [];
   const guard = async (check, fn) => {
     try {
@@ -85,6 +92,7 @@ export async function health({ exec = defaultExec, fsView = defaultFs, now = Dat
     const all = await json(["pr", "list", "--state", "all", "--limit", String(PR_LIMIT),
       "--json", "number,state,isDraft,headRefOid,headRefName"]);
     if (!Array.isArray(all) || all.length >= PR_LIMIT) throw new Error("PR list missing or possibly cut at the limit");
+    if (!all.length) throw new Error("PR list is empty");
     const read = await Promise.all(all.filter(watched).map((pr) =>
       list(`repos/{owner}/{repo}/issues/${pr.number}/comments?per_page=100`).then((c) => [pr.number, c], () => null)));
     comments = new Map(read.filter(Boolean));
@@ -94,7 +102,9 @@ export async function health({ exec = defaultExec, fsView = defaultFs, now = Dat
   if (prs) {
     await guard("fail-bez-pusha", async () => checkFailStalls({ prs, comments, now }));
     await guard("red-87", async () => {
-      const queue = queueItems(await list(`repos/{owner}/{repo}/issues/${QUEUE_ISSUE}/comments?per_page=100`));
+      const raw = await list(`repos/{owner}/{repo}/issues/${QUEUE_ISSUE}/comments?per_page=100`);
+      if (!raw.length) throw new Error(`issue ${QUEUE_ISSUE} returned no comments`);
+      const queue = queueItems(raw);
       return checkQueue({ queue, prs, comments, now });
     });
   } else {

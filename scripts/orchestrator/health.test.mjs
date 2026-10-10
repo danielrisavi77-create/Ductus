@@ -6,7 +6,9 @@ import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { checkQueue, exitCode, parseWorktrees, queueItems } from "./health-core.mjs";
+import {
+  canonicalVerdicts, checkMainCi, checkQueue, checkSafetyNet, exitCode, latestOnHead, parseWorktrees, queueItems,
+} from "./health-core.mjs";
 import { health, readOnlyCall } from "./health.mjs";
 
 const H1 = "1".repeat(40);
@@ -90,10 +92,15 @@ test("§3: only read calls pass the guard", () => {
   assert.ok(readOnlyCall("git", ["worktree", "list", "--porcelain", "-z"]));
 });
 
+const FORBIDDEN = /writeFile|appendFile|mkdir|rmSync|unlink|rename|spawn|worktree-clean|send_message|process\.binding|internalBinding|process\.dlopen/;
+
 test("§3: the sources contain no write, spawn or install paths", () => {
   for (const file of ["health.mjs", "health-core.mjs"]) {
     const src = readFileSync(new URL(file, import.meta.url), "utf8");
-    assert.doesNotMatch(src, /writeFile|appendFile|mkdir|rmSync|unlink|rename|spawn|worktree-clean|send_message/, file);
+    assert.doesNotMatch(src, FORBIDDEN, file);
+  }
+  for (const evil of ['process.binding("fs")', 'internalBinding("fs")', "process.dlopen(m, p)", "fs.writeFileSync(p, x)"]) {
+    assert.match(evil, FORBIDDEN, evil); // nalaz 11: native bindings bypass the fs import check
   }
 });
 
@@ -273,8 +280,7 @@ test("§4/U8/N3/N4: queue thresholds, stale head, foreign queue comments, malfor
   assert.deepEqual(r.of("red-87"), [
     "WARN #10: neispravna stavka (SHA nije pun)",
     "WARN #20: stavka je na starom headu 1111111, PR je sada na 2222222",
-    "WARN #99: neispravna stavka (PR ne postoji)",
-    "PASS 3 stavki, 0 s verdiktom dodijeljenog slota na svom headu, nijedna bez verdikta dulje od praga",
+    "NEPROVJERENO #99: stavka upućuje na PR kojeg nema na popisu",
     "WARN autor stavke se ne razlikuje od drugih sesija na vlasničkom računu (OWNER); stavka je podatak",
   ]);
 });
@@ -365,8 +371,10 @@ test("queue: POTEZ ORKESTRATORA with a RED ZA REVIEW section assigns (6101727275
     [189, S[189], ["claude:reviewC"]],
     [191, S[191], ["claude:reviewA"]],
     [192, S[192], ["claude:reviewA"]],
+    [194, null, []],
     [196, S[196], ["claude:reviewC"]],
   ]);
+  assert.equal(items.find((i) => i.number === 194).loose.why, "nije dodjela slotu s headom"); // "#194 → `claude:reviewB`" has no head
   const foreign = [comment(potez.body.replace("(claude:a:orchestrator)", "(neki tekst)"), { created_at: at(1) }),
     comment(potez.body, { author_association: "MEMBER", created_at: at(1) })];
   assert.deepEqual(queueItems(foreign), []);
@@ -383,9 +391,9 @@ test("queue: status lines with a short SHA never replace an assignment; the stal
       "- **#191** head `e7593d43`: review PASS `claude:reviewA` → pokrećem QA `claude:qa191`."], 110),
   ];
   const items = queueItems(comments);
-  assert.deepEqual(items.map((i) => [i.number, i.head]), [[185, S[185]], [189, S[189]], [191, S[191]], [192, S[192]], [196, S[196]], [199, S[199]]]);
+  assert.deepEqual(items.map((i) => [i.number, i.head]), [[185, S[185]], [189, S[189]], [191, S[191]], [192, S[192]], [194, null], [196, S[196]], [199, S[199]]]);
   assert.deepEqual(items.find((i) => i.number === 199).slots, ["claude:reviewB"]);
-  const prs = items.map((i) => ({ number: i.number, state: "OPEN", isDraft: false, headRefOid: i.head, headRefName: "x" }));
+  const prs = items.filter((i) => i.head).map((i) => ({ number: i.number, state: "OPEN", isDraft: false, headRefOid: i.head, headRefName: "x" }));
   const out = checkQueue({ queue: items, prs, comments: new Map(prs.map((p) => [p.number, []])), now: NOW });
   assert.deepEqual(out.filter((x) => x.level === "FAIL").map((x) => x.text.split(":")[0]),
     [185, 189, 191, 192, 196, 199].map((n) => `#${n} head ${S[n].slice(0, 7)}`));
@@ -416,4 +424,167 @@ test("queue: only a verdict of the assigned slot clears the item", () => {
   const run = (list) => checkQueue({ queue: items, prs, comments: new Map([[189, list]]), now: NOW }).map((x) => x.level);
   assert.deepEqual(run([v("claude:reviewB:reviewer"), v("claude:qa189:qa", "QA")])[0], "FAIL");
   assert.deepEqual(run([v("claude:reviewC:reviewer")])[0], "PASS");
+});
+
+// QA 6102784825. Shapes of real #87 comments 6102483730 and 6102660048 (prose shortened, SHAs invented).
+test("nalaz 1: a newer bare-slot assignment on the current head is evaluated, not masked by an older head", async () => {
+  const w = world();
+  w.comments.set(10, []);
+  w.comments.set(87, [
+    queue(`- **#10** (DAN-139, \`critical\`, \`claude:cloudP4:platforma\`) novi head \`${H2}\` nakon manjih nalaza 6102365163 → kratak ponovni review \`claude:reviewC\`, zatim QA.`, 120),
+    queue(`- **#10** (DAN-139, critical, claude:cloudP4:platforma) novi head ${H1} nakon review FAIL 6102517733 (Semgrep na health.test.mjs) → ponovni review claude:reviewC, zatim QA.`, 70),
+  ]);
+  assert.deepEqual(queueItems(w.comments.get(87)).map((i) => [i.number, i.head, i.slots]), [[10, H1, ["claude:reviewC"]]]);
+  const r = await check(w);
+  assert.deepEqual(r.of("red-87")[0], "FAIL #10 head 1111111: bez verdikta claude:reviewC 70 min od stavke u redu (prag 60)");
+  assert.equal(r.code, 1);
+});
+
+test("nalaz 1: a newer unparsed line naming the current head is NEPROVJERENO, never hidden behind an old head", async () => {
+  const w = world();
+  w.comments.set(87, [
+    queue(`- **#10** head \`${H2}\` → \`claude:rev\``, 200),
+    queue("- **#10** head `1111111`: review FAIL `claude:rev` (6101681338) → nalazi autoru `claude:a:platforma`.", 100, { id: 6101681339 }),
+  ]);
+  const r = await check(w);
+  assert.deepEqual(r.of("red-87").slice(0, 2), [
+    "NEPROVJERENO #10: noviji redak u redu nije prepoznat kao dodjela (komentar 6101681339): nije dodjela slotu s headom; spominje aktualni head 1111111, zastoj nije procijenjen",
+    "WARN #10: stavka je na starom headu 2222222, PR je sada na 1111111"]);
+  assert.equal(r.code, 2);
+});
+
+test("nalaz 1: real status-line shapes (QA PASS, merge, already queued) are WARN, not silence", async () => {
+  const lines = [
+    `- **#10** head \`${H1}\`: QA PASS \`claude:qa45-6\`, gate success → čeka Danielovu naredbu.`, // 6101498335
+    `Spojeno na Danielovu naredbu: **#10** head \`${H1}\` → \`${MAIN}\`.`, // 6101877673
+    "- **#10** → `claude:reviewB` (već u redu).", // 6101727275
+  ];
+  for (const line of lines) {
+    const w = world();
+    w.comments.set(87, [queue(`#10 head ${H1} → \`claude:rev\``, 90), queue(line, 40)]);
+    const r = await check(w);
+    assert.deepEqual(r.of("red-87").slice(0, 2), [
+      "WARN #10: noviji redak u redu nije prepoznat kao dodjela: nije dodjela slotu s headom",
+      "PASS 1 stavki, 1 s verdiktom dodijeljenog slota na svom headu, nijedna bez verdikta dulje od praga"], line);
+  }
+});
+
+test("nalaz 5: two PRs in a line, two full SHAs in a line and a slot without backticks are never dropped", async () => {
+  const w = world();
+  w.prs.push({ number: 20, state: "OPEN", isDraft: false, headRefOid: H2, headRefName: "y" });
+  w.comments.set(20, []);
+  w.comments.set(87, [queue(`#10 head ${H1} → \`claude:rev\``, 90), // 6101498335 shape follows
+    queue("- Bug Hunter (6101463676): **#10** (visoka, sync) → plan napada `claude:review2`, zatim popravak `claude:cloudF`; **#20** (niska) → Backend nakon #30.", 40)]);
+  let r = await check(w);
+  assert.deepEqual(r.of("red-87").filter((t) => t.startsWith("WARN #")), [
+    "WARN #10: noviji redak u redu nije prepoznat kao dodjela: više PR-ova u retku",
+    "WARN #20: noviji redak u redu nije prepoznat kao dodjela: više PR-ova u retku"]);
+  const two = queueItems([queue(`#10 head ${H2} → \`claude:rev\``, 200), queue(`**#10** head \`${H1}\` → \`claude:rev\` na \`${H2}\``, 70)]);
+  assert.deepEqual(two.map((i) => [i.head, i.loose?.why]), [[H2, "više punih SHA-ova u retku"]]);
+  const both = queueItems([queue(`**#10** head \`${H1}\` head \`${H2}\` → \`claude:rev\``, 70)]);
+  assert.deepEqual(both.map((i) => [i.head, i.loose?.why]), [[null, "više punih SHA-ova u retku"]]);
+  assert.deepEqual(queueItems([queue(`#10 head ${H1} → claude:rev, zatim QA`, 70)]).map((i) => i.slots), [["claude:rev"]]);
+  w.comments.set(87, [queue(`#10 head ${H1} → \`claude:rev\``, 90), queue(`**#10** head \`${H1}\` → \`claude:rev\` na \`${H2}\``, 70)]);
+  r = await check(w);
+  assert.ok(r.of("red-87").includes("WARN #10: noviji redak u redu nije prepoznat kao dodjela: više punih SHA-ova u retku"));
+});
+
+test("nalaz 2/U8: an empty, non-list or non-object #87 or PR comment page is NEPROVJERENO, never 0 items", async () => {
+  for (const pages of [[[]], [], [[comment("x")], {}], [[1, 2]], [[[comment("x")]]]]) {
+    const w = world();
+    w.pages = pages;
+    const r = await check(w);
+    assert.deepEqual(r.levels("red-87"), ["NEPROVJERENO"], JSON.stringify(pages));
+    assert.equal(r.code, 2);
+  }
+  const w = world();
+  w.comments.set(87, [queue("bez stavki", 30)]);
+  assert.deepEqual((await check(w)).of("red-87"), ["NEPROVJERENO nijedna stavka u redu #87; trajni red ne može biti prazan"]);
+  const v = world();
+  v.fail["issues/10/"] = JSON.stringify([["x"]]);
+  assert.deepEqual((await check(v)).levels("fail-bez-pusha"), ["NEPROVJERENO"]);
+});
+
+test("nalaz 3: main with no required check reported is NEPROVJERENO", async () => {
+  const w = world();
+  w.runs = [];
+  const r = await check(w);
+  assert.deepEqual(r.of("main-ci"), ["NEPROVJERENO main 3333333: nijedna obvezna provjera nije prijavljena"]);
+  assert.equal(r.code, 2);
+  assert.deepEqual(checkMainCi({ sha: MAIN, required: ["A"], checkRuns: [], statuses: [{ context: "B", state: "success" }] }).map((x) => x.level), ["NEPROVJERENO"]);
+});
+
+test("nalaz 4 and 6: empty, non-array and limit-sized PR lists are NEPROVJERENO; the limit is 1000", async () => {
+  const many = Array.from({ length: 1000 }, (_, i) => ({ number: i + 1, state: "CLOSED", isDraft: false, headRefOid: H1, headRefName: "x" }));
+  for (const out of ["[]", "{}", JSON.stringify(many)]) {
+    const w = world();
+    w.fail["pr list"] = out;
+    const r = await check(w);
+    for (const name of ["pr-list", "fail-bez-pusha", "red-87"]) assert.deepEqual(r.levels(name), ["NEPROVJERENO"], `${out.slice(0, 9)} ${name}`);
+  }
+  const r = await check(world());
+  const list = r.calls.find((c) => c[1] === "pr");
+  assert.equal(list[list.indexOf("--limit") + 1], "1000");
+});
+
+test("nalaz 6: a verdict under the wrong role field or with a short head is not canonical", async () => {
+  const body = (agent, head, kind = "Review") => `${kind === "QA" ? "QA-Agent" : "Agent-Review"}: ${agent}\n${kind}-Head: ${head}\n${kind}-Verdict: FAIL`;
+  assert.deepEqual(canonicalVerdicts([comment(body("claude:rev:qa", H1))]), []);
+  assert.deepEqual(canonicalVerdicts([comment(body("claude:qa1:reviewer", H1, "QA"))]), []);
+  assert.deepEqual(canonicalVerdicts([comment(body("claude:rev:reviewer", "1111111"))]), []);
+  assert.deepEqual(canonicalVerdicts([comment(body("claude:rev:reviewer", H1))]).map((v) => [v.kind, v.head]), [["review", H1]]);
+  const w = world();
+  w.comments.set(10, [comment(body("claude:rev:qa", H1), { created_at: at(300) })]);
+  const r = await check(w);
+  assert.deepEqual(r.levels("fail-bez-pusha"), ["PASS"]);
+  assert.ok(r.of("red-87").some((t) => t.startsWith("FAIL #10")), "a wrong-role verdict clears no queue item");
+});
+
+test("nalaz 6: only the newest verdict on the current head counts", async () => {
+  const run = async (list) => { const w = world(); w.comments.set(10, list); return (await check(w)).levels("fail-bez-pusha"); };
+  assert.deepEqual(await run([verdict(H1, "FAIL", 100), verdict(H2, "PASS", 50)]), ["FAIL"]); // PASS on another head
+  assert.deepEqual(await run([verdict(H1, "FAIL", 100), verdict(H1, "PASS", 50)]), ["PASS"]); // newer PASS
+  assert.deepEqual(await run([verdict(H1, "PASS", 100), verdict(H1, "FAIL", 50)]), ["FAIL"]);
+  const vs = canonicalVerdicts([verdict(H1, "FAIL", 100), verdict(H1, "PASS", 50), verdict(H2, "BLOCK", 10)]);
+  assert.deepEqual(latestOnHead(vs, H1).map((v) => v.verdict), ["PASS"]);
+  assert.deepEqual(latestOnHead(vs, H2.toUpperCase()).map((v) => v.verdict), ["BLOCK"]);
+});
+
+test("nalaz 6: a quoted queue line is not an item; unread PR comments make the queue NEPROVJERENO", async () => {
+  assert.deepEqual(queueItems([queue(`> - **#10** head \`${H1}\` → \`claude:rev\``, 90)]), []);
+  const w = world();
+  w.fail["issues/10/"] = new Error("HTTP 403");
+  assert.ok((await check(w)).of("red-87").includes("NEPROVJERENO #10: komentari nisu pročitani"));
+});
+
+test("nalaz 7: an unreadable created_at is NEPROVJERENO for a verdict and a queue item", async () => {
+  const w = world();
+  w.comments.set(10, [verdict(H1, "FAIL", 0, { created_at: "nije datum" })]);
+  w.comments.set(87, [queue(`#10 head ${H1} → \`claude:other\``, 0, { created_at: "nije datum" })]);
+  const r = await check(w);
+  assert.deepEqual(r.of("fail-bez-pusha"), ["NEPROVJERENO #10: vrijeme verdikta nije čitljivo"]);
+  assert.deepEqual(r.of("red-87")[0], "NEPROVJERENO #10: vrijeme stavke u redu nije čitljivo");
+  assert.equal(r.code, 2);
+});
+
+test("nalaz 8/9/10: control characters printed as ?, a range pin and a .. target are NEPROVJERENO", () => {
+  const worktrees = [{ path: "/r", prunable: false, locked: false }];
+  const fsView = { size: (p) => (p === "/r" ? 1 : null), read: () => JSON.stringify({ version: "2.6.1\u001b[2J" }) };
+  const out = checkSafetyNet({ worktrees, targets: ["node_modules/cc-safety-net/x\u0007.js"], pinned: "2.6.1", fsView });
+  assert.deepEqual(out.map((x) => `${x.level} ${x.text}`),
+    ["FAIL /r: node_modules/cc-safety-net/x?.js nedostaje ili je prazan; verzija 2.6.1?[2J, očekivano 2.6.1"]);
+  const pin = checkSafetyNet({ worktrees, targets: ["node_modules/cc-safety-net/b.js"], pinned: "2.6.1\u001b", fsView });
+  assert.deepEqual(pin.map((x) => `${x.level} ${x.text}`), ["NEPROVJERENO verzija u package.json nije točna (2.6.1?), usporedba nije moguća"]);
+  assert.deepEqual(checkSafetyNet({ worktrees, targets: ["node_modules/cc-safety-net/b.js"], pinned: "^2.6.1", fsView }).map((x) => x.level), ["NEPROVJERENO"]);
+  for (const t of ["../x/cc-safety-net/b.js", "node_modules/../../cc-safety-net/b.js", "/etc/cc-safety-net/b.js"]) {
+    assert.deepEqual(checkSafetyNet({ worktrees, targets: [t], pinned: "2.6.1", fsView }).map((x) => x.text), ["cilj hooka izlazi iz repoa (..), nije čitan"], t);
+  }
+});
+
+test("nalaz 9: a range pin in package.json is NEPROVJERENO end to end, not a false FAIL", async () => {
+  const w = world();
+  w.files.set("/r/package.json", JSON.stringify({ devDependencies: { "cc-safety-net": "^2.6.1" } }));
+  const r = await check(w);
+  assert.deepEqual(r.levels("cc-safety-net"), ["NEPROVJERENO"]);
+  assert.equal(r.code, 2);
 });

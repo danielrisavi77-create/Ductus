@@ -81,6 +81,10 @@ export function checkFailStalls({ prs, comments, now }) {
     looked += 1;
     const standing = latestOnHead(canonicalVerdicts(list), pr.headRefOid).filter((v) => v.verdict !== "PASS");
     if (!standing.length) continue;
+    if (standing.some((v) => Number.isNaN(v.at))) {
+      out.push(f("NEPROVJERENO", "fail-bez-pusha", `#${pr.number}: vrijeme verdikta nije čitljivo`));
+      continue;
+    }
     const oldest = standing.reduce((a, b) => (b.at < a.at ? b : a));
     const age = minutes(now, oldest.at);
     const who = standing.map((v) => `${v.kind} ${v.verdict} ${v.agent}`).join(", ");
@@ -95,27 +99,38 @@ const QUEUE_FIRST = ["RED ZA REVIEW", "POTEZ ORKESTRATORA"];
 const SECTION_RE = /^[*_#\s]*RED ZA REVIEW[*_:\s]*$/; // "**RED ZA REVIEW**" inside a POTEZ comment
 const HEADING_RE = /^(?:#{1,6}\s|\*\*[^*]+\*\*:?\s*$)/; // next section ends it
 // Only verdict roles may follow the slot (as in Agent-Review); an author identity such as
-// `claude:a:platforma` ("vraćeno nositelju") is not an assignment.
-const SLOT_RE = /`((?:claude|codex|chatgpt|grok):[A-Za-z0-9_-]+)(?::(?:reviewer|qa))?`/g;
+// `claude:a:platforma` ("vraćeno nositelju") is not an assignment. Backticks are optional
+// (6102660048 wrote the slot bare), so the slot must end at a non-name character.
+const SLOT_RE = /(?<![\w:-])`?((?:claude|codex|chatgpt|grok):[A-Za-z0-9_-]+)(?::(?:reviewer|qa))?`?(?![\w:-])/g;
+const FULL_SHA = /(?<![0-9a-f])[0-9a-f]{40}(?![0-9a-f])/i;
+const FULL_SHA_G = new RegExp(FULL_SHA.source, "gi");
 const principal = (slot) => slot.replace(/^(?:codex|chatgpt):/, "openai:"); // as review-gate-core
+const noParens = (s) => s.replace(/\([^()]*\)/g, "");
 
 /**
- * One assignment line: `#N … head <SHA> → … \`runtime:slot\``. Status lines
- * (no arrow to a slot, or no head before the arrow) are not assignments. The
- * first line of a "RED ZA REVIEW" comment may itself carry an assignment.
+ * One queue line. `item`: `#N … head <SHA> → … runtime:slot` with exactly one PR and
+ * one full SHA before the arrow and no new SHA after it. `loose`: a line with `#N` and
+ * an arrow that is not such an assignment (status line, two PRs, two SHAs, no slot).
+ * Loose lines are reported, never dropped silently (QA 6102784825, nalaz 1 i 5).
  */
-function assignment(line) {
+function classify(line) {
   if (line.startsWith(">")) return null;
   const arrow = line.search(/→|->/);
   if (arrow < 0) return null;
   const before = line.slice(0, arrow);
-  const pr = before.match(/#(\d+)\b/);
-  const head = before.match(/\bhead\b\W{0,3}([0-9A-Za-z]*)/i);
-  // Parenthesised slots are context ("plan #190; `claude:review2` isključen"), not assignees.
-  const tail = line.slice(arrow).replace(/\([^()]*\)/g, "");
+  const tail = noParens(line.slice(arrow)); // parenthesised slots are context, not assignees
+  const pr = (s) => [...new Set([...noParens(s).matchAll(/#(\d+)\b/g)].map((m) => Number(m[1])))];
+  if (!pr(before).length) return null;
+  const prs = pr(line); // "**#181** → …; **#182** → …" (6101498335): the second PR must not vanish
+  const mentions = [...line.matchAll(/(?<![0-9a-f])[0-9a-f]{7,40}(?![0-9a-f])/gi)].map((m) => m[0].toLowerCase());
+  const loose = (why) => ({ loose: true, numbers: prs, mentions, why });
+  const head = before.match(/\bhead[au]?\b\W{0,3}([0-9A-Za-z]*)/i);
   const slots = [...tail.matchAll(SLOT_RE)].map((m) => principal(m[1]));
-  if (!pr || !head || !slots.length) return null;
-  return { number: Number(pr[1]), head: SHA_RE.test(head[1]) ? head[1].toLowerCase() : null, slots };
+  if (prs.length > 1) return loose("više PR-ova u retku");
+  if (!head || !slots.length) return loose("nije dodjela slotu s headom");
+  const shas = new Set([...before.matchAll(FULL_SHA_G)].map((m) => m[0].toLowerCase()));
+  if (shas.size > 1 || FULL_SHA.test(tail)) return loose("više punih SHA-ova u retku");
+  return { number: prs[0], head: SHA_RE.test(head[1]) ? head[1].toLowerCase() : null, slots };
 }
 
 /**
@@ -123,9 +138,11 @@ function assignment(line) {
  * line starts with "RED ZA REVIEW" (every line) or "POTEZ ORKESTRATORA" (only its
  * "RED ZA REVIEW" section) and carries the orchestrator identity. Newest valid
  * assignment per PR wins; an item without a full SHA never replaces a valid one.
+ * A loose line newer than the PR's assignment is kept on the item (or alone) as `loose`.
  */
 export function queueItems(comments) {
   const items = new Map();
+  const loose = new Map();
   for (const [index, c] of (comments ?? []).entries()) {
     if (c?.author_association !== "OWNER") continue;
     const lines = metadataLines(c?.body ?? "");
@@ -139,27 +156,52 @@ export function queueItems(comments) {
         if (SECTION_RE.test(line)) inSection = true;
         else if (HEADING_RE.test(line)) inSection = false;
       }
-      const a = inSection ? assignment(line) : null;
+      const a = inSection ? classify(line) : null;
       if (!a) continue;
+      if (a.loose) {
+        for (const n of a.numbers) loose.set(n, { at, index, mentions: a.mentions, why: a.why, id: c?.id ?? null });
+        continue;
+      }
       const item = { ...a, at, index };
       const p = items.get(item.number);
       const newer = !p || at > p.at || (at === p.at && index >= p.index);
       if (item.head ? newer || !p.head : newer && !p?.head) items.set(item.number, item);
     }
   }
+  for (const [n, l] of loose) {
+    const p = items.get(n);
+    if (!p) items.set(n, { number: n, head: null, slots: [], at: l.at, index: l.index, loose: l, onlyLoose: true });
+    else if (l.at > p.at || (l.at === p.at && l.index > p.index)) p.loose = l;
+  }
   return [...items.values()].sort((a, b) => a.number - b.number);
 }
 
 /** (d) newest queue item per PR with no verdict of an assigned slot on that head for longer than QUEUE_STALL_MIN. */
 export function checkQueue({ queue, prs, comments, now }) {
+  if (!queue.length) return [f("NEPROVJERENO", "red-87", "nijedna stavka u redu #87; trajni red ne može biti prazan")];
   const out = [];
   const byNumber = new Map(prs.map((p) => [p.number, p]));
   let cleared = 0;
   for (const item of queue) {
     const pr = byNumber.get(item.number);
     if (pr && !watched(pr)) continue;
-    if (!item.head || !pr) {
-      out.push(f("WARN", "red-87", `#${item.number}: neispravna stavka (${!pr ? "PR ne postoji" : "SHA nije pun"})`));
+    if (item.onlyLoose && !pr) continue; // issue or plan reference, not a PR
+    if (item.loose && pr) {
+      const head = pr.headRefOid.toLowerCase();
+      const current = item.loose.mentions.some((m) => head.startsWith(m));
+      const masked = current && item.head !== head;
+      const where = item.loose.id ? ` (komentar ${item.loose.id})` : "";
+      out.push(f(masked ? "NEPROVJERENO" : "WARN", "red-87",
+        `#${pr.number}: noviji redak u redu nije prepoznat kao dodjela${where}: ${item.loose.why}` +
+        (masked ? `; spominje aktualni head ${short(head)}, zastoj nije procijenjen` : "")));
+      if (item.onlyLoose) continue;
+    }
+    if (!pr) {
+      out.push(f("NEPROVJERENO", "red-87", `#${item.number}: stavka upućuje na PR kojeg nema na popisu`));
+      continue;
+    }
+    if (!item.head) {
+      out.push(f("WARN", "red-87", `#${item.number}: neispravna stavka (SHA nije pun)`));
       continue;
     }
     if (pr.headRefOid.toLowerCase() !== item.head) {
@@ -173,6 +215,10 @@ export function checkQueue({ queue, prs, comments, now }) {
     }
     if (latestOnHead(canonicalVerdicts(list), item.head).some((v) => item.slots.includes(v.principal))) {
       cleared += 1;
+      continue;
+    }
+    if (Number.isNaN(item.at)) {
+      out.push(f("NEPROVJERENO", "red-87", `#${pr.number}: vrijeme stavke u redu nije čitljivo`));
       continue;
     }
     const age = minutes(now, item.at);
@@ -207,6 +253,9 @@ export function checkMainCi({ sha, required, checkRuns, statuses }) {
   }
   const names = (list) => list.map((n) => (SAFE_NAME.test(n) ? n : "<ime nije ispisano>")).join(", ");
   const out = [];
+  if (by.missing.length === required.length) {
+    return [f("NEPROVJERENO", "main-ci", `main ${short(sha)}: nijedna obvezna provjera nije prijavljena`)];
+  }
   if (by.red.length) out.push(f("FAIL", "main-ci", `main ${short(sha)} crven: ${names(by.red)}`));
   if (by.other.length) out.push(f("NEPROVJERENO", "main-ci", `main ${short(sha)} nepoznat ishod: ${names(by.other)}`));
   if (by.pending.length) out.push(f("WARN", "main-ci", `main ${short(sha)} još radi: ${names(by.pending)}`));
@@ -240,6 +289,7 @@ export function hookTargets(settings) {
   return [...found];
 }
 
+const EXACT_VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 const norm = (p) => p.replace(/\\/g, "/").replace(/\/+$/, "");
 /** Joins with "/", which Node accepts on Windows as well. */
 export const joinPath = (dir, rel) => `${norm(dir)}/${rel}`;
@@ -251,6 +301,12 @@ export const joinPath = (dir, rel) => `${norm(dir)}/${rel}`;
 export function checkSafetyNet({ worktrees, targets, pinned, fsView }) {
   if (!worktrees.length || !targets.length || !pinned) {
     return [f("NEPROVJERENO", "cc-safety-net", "nema popisa worktreeja, cilja hooka ili verzije u package.json")];
+  }
+  if (!EXACT_VERSION.test(pinned)) {
+    return [f("NEPROVJERENO", "cc-safety-net", `verzija u package.json nije točna (${printable(pinned)}), usporedba nije moguća`)];
+  }
+  if (targets.some((t) => t.split("/").includes("..") || t.startsWith("/"))) {
+    return [f("NEPROVJERENO", "cc-safety-net", "cilj hooka izlazi iz repoa (..), nije čitan")];
   }
   const root = norm(worktrees[0].path);
   const base = `${root}/.claude/worktrees/`.toLowerCase();
@@ -264,7 +320,7 @@ export function checkSafetyNet({ worktrees, targets, pinned, fsView }) {
     }
     const problems = [];
     for (const rel of targets) {
-      if (!(fsView.size(joinPath(w.path, rel)) > 0)) problems.push(`${rel} nedostaje ili je prazan`);
+      if (!(fsView.size(joinPath(w.path, rel)) > 0)) problems.push(`${printable(rel)} nedostaje ili je prazan`);
       const pkgDir = rel.slice(0, rel.indexOf("cc-safety-net") + "cc-safety-net".length);
       let version = null;
       try {
@@ -272,10 +328,10 @@ export function checkSafetyNet({ worktrees, targets, pinned, fsView }) {
       } catch {
         version = null;
       }
-      if (version !== pinned) problems.push(`verzija ${printable(version ?? "nepoznata")}, očekivano ${pinned}`);
+      if (version !== pinned) problems.push(`verzija ${printable(version ?? "nepoznata")}, očekivano ${printable(pinned)}`);
     }
     out.push(problems.length ? f("FAIL", "cc-safety-net", `${name}: ${[...new Set(problems)].join("; ")}`)
-      : f("PASS", "cc-safety-net", `${name}: hook ${pinned} prisutan`));
+      : f("PASS", "cc-safety-net", `${name}: hook ${printable(pinned)} prisutan`));
   }
   return out;
 }
