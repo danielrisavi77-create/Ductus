@@ -241,8 +241,15 @@ export function findForbiddenTerms(text: string, lang?: Language): ForbiddenTerm
  * (`Sum<span />njivo`) or that an element is set apart from its neighbours,
  * so no boundary keeps an entry from being found. A contextual entry is read
  * closed up only when its word is not whole otherwise.
+ *
+ * This is the stricter side on purpose. Two elements that do stand apart
+ * (two items of a list) are read closed up as well, because a class or a
+ * style the scan does not read can set any two elements in one line, so the
+ * end of one and the start of the next can make an entry nobody sees as one
+ * word. `closedUp: false` leaves this reading out; the scan uses it to tell
+ * such a finding apart and to say so where it reports it (`findingsIn`).
  */
-export function findForbiddenTermsInMarkup(joined: string, spaced: string): ForbiddenTerm[] {
+export function findForbiddenTermsInMarkup(joined: string, spaced: string, closedUp = true): ForbiddenTerm[] {
   const shown = foldText(joined);
   const apart = foldText(spaced);
   const closed = foldText(joined.replaceAll(PHRASE_BREAK, ""));
@@ -250,15 +257,15 @@ export function findForbiddenTermsInMarkup(joined: string, spaced: string): Forb
   const shownPhrases = foldPhrases(joined);
   const apartPhrases = foldPhrases(spaced);
   return FORBIDDEN_TERMS.filter((entry) => {
-    if (!entry.contextual) return entry.pattern.test(shown) || entry.pattern.test(apart) || entry.pattern.test(closed);
+    if (!entry.contextual) return entry.pattern.test(shown) || entry.pattern.test(apart) || (closedUp && entry.pattern.test(closed));
     if (entry.pattern.test(shownPhrases) && (entry.pattern.test(apartPhrases) || !entry.contextual.word.test(apartPhrases))) return true;
     // The word itself put together across something unknown: there is no whole word to judge without closing it.
-    return !entry.contextual.word.test(shownPhrases) && entry.pattern.test(closedPhrases);
+    return closedUp && !entry.contextual.word.test(shownPhrases) && entry.pattern.test(closedPhrases);
   });
 }
 
 /** White space that may stand between two letters of one text without being reported. */
-const PLAIN_SPACE = /[  ]/u;
+const PLAIN_SPACE = /[ \u00A0]/u;
 /** A run of symbols and spaces that touches a letter on both sides. */
 const INSIDE_A_WORD = /(?<=\p{L})[\p{So}\p{Zs}]+(?=\p{L})/gu;
 const NEVER_TEXT = /[\p{Co}\p{Cn}\p{Cs}]/gu;

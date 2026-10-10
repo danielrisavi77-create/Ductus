@@ -747,6 +747,16 @@ function stringsOutside(read: readonly Located[], file: string, content: string)
   return locate(file, content, "catalogue").texts.filter((text) => !read.some((seen) => seen.start <= text.start && text.end <= seen.end));
 }
 
+/** Stands in the text of a finding made only by the closed up reading; see `findForbiddenTermsInMarkup`. */
+export const CLOSED_UP_NOTE =
+  'found with the parts on both sides of "|" joined: an element boundary or an unknown part does not keep an entry apart, so reword one side or put the parts in one element';
+/** How to fix each kind of `findUnreadableText` report; the hint is part of its reason. */
+export const UNREADABLE_HINTS = {
+  characters:
+    "write interface text with Croatian or English letters and plain spaces; every string of a scanned file is checked, because interface text can stand in any of them, so for a string that is not interface text build the character with String.fromCodePoint, which names it in the source",
+  readings: "put the conditional or possibly hidden inline parts into elements of their own, so that no element has that many alternatives",
+} as const;
+
 /**
  * Findings in what was read from one file, in source order. A piece is
  * reported where it stands. A unit is reported for the entries that nothing
@@ -761,7 +771,7 @@ function findingsIn(file: string, read: Read): Finding[] {
   }
   const pieces = [...placed];
   const units = read.units.map((unit) => {
-    const hits = unit.readings.map(([joined, spaced]) => ({ text: joined, terms: findForbiddenTermsInMarkup(joined, spaced) }));
+    const hits = unit.readings.map(([joined, spaced]) => ({ text: joined, spaced, terms: findForbiddenTermsInMarkup(joined, spaced) }));
     return { ...unit, hits, terms: new Set(hits.flatMap((hit) => hit.terms)) };
   });
   for (const unit of units) {
@@ -772,7 +782,14 @@ function findingsIn(file: string, read: Read): Finding[] {
     ]);
     const terms = FORBIDDEN_TERMS.filter((term) => unit.terms.has(term) && !reported.has(term));
     const hit = unit.hits.find((candidate) => candidate.terms.some((term) => terms.includes(term)));
-    if (hit) placed.push({ ...unit, finding: { file, line: unit.line, text: hit.text, terms } });
+    if (!hit) continue;
+    // An entry that is there only once the text is closed up cannot be seen in
+    // the text as written, so the finding shows the parts and says what joined them.
+    const open = findForbiddenTermsInMarkup(hit.text, hit.spaced, false);
+    const asWritten = terms.some((term) => open.includes(term));
+    const parts = hit.text.split(PHRASE_BREAK).map((part) => part.trim()).filter((part) => part !== "");
+    const text = asWritten ? hit.text : `${parts.join(" | ")} (${CLOSED_UP_NOTE})`;
+    placed.push({ ...unit, finding: { file, line: unit.line, text, terms } });
   }
   return placed.sort((a, b) => a.at - b.at).map((entry) => entry.finding);
 }
@@ -853,7 +870,14 @@ export interface Unreadable {
  *
  * - every string of a scanned file, interface text or not, that holds a
  *   character on `unreadableCharacters`: a letter of another script, a code
- *   point that is no character, an inkless symbol or space inside a word;
+ *   point that is no character, an inkless symbol or space inside a word.
+ *   The scope is wide on purpose, for the reason `scanUiText` checks every
+ *   string against the Croatian entries: a string outside the text the scan
+ *   reads can still reach the interface through a variable, and a letter
+ *   that only looks Latin is not something a reviewer can see. A string that
+ *   is not interface text and needs such a character builds it with
+ *   `String.fromCodePoint`, so the source names the character; the guard is
+ *   not narrowed and no file is exempt;
  * - every text with more readings than the scan keeps (`MAX_READINGS`), where
  *   a part was read as unknown instead of in each of its forms.
  *
@@ -870,10 +894,10 @@ export function findUnreadableText(root: string): Unreadable[] {
     const others = kind === "catalogue" || !isCode(file) ? [] : stringsOutside(read.texts, file, content);
     for (const text of [...read.texts, ...others]) {
       const characters = unreadableCharacters(text.text);
-      if (characters.length > 0) unreadable.push({ file, line: text.line, reason: `characters outside interface text: ${characters.join(", ")}` });
+      if (characters.length > 0) unreadable.push({ file, line: text.line, reason: `characters outside interface text: ${characters.join(", ")} (${UNREADABLE_HINTS.characters})` });
     }
     for (const unit of read.units) {
-      if (unit.overflowed) unreadable.push({ file, line: unit.line, reason: `more than ${MAX_READINGS} readings of one text` });
+      if (unit.overflowed) unreadable.push({ file, line: unit.line, reason: `more than ${MAX_READINGS} readings of one text (${UNREADABLE_HINTS.readings})` });
     }
   }
   return unreadable;

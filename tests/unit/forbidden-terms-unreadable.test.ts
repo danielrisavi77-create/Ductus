@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { findUnreadableText, scanUiText } from "../../scripts/forbidden-terms/scan";
-import { findForbiddenTerms, unreadableCharacters } from "../../scripts/forbidden-terms/terms";
+import { CLOSED_UP_NOTE, UNREADABLE_HINTS, findUnreadableText, scanUiText } from "../../scripts/forbidden-terms/scan";
+import { PHRASE_BREAK, findForbiddenTerms, unreadableCharacters } from "../../scripts/forbidden-terms/terms";
 
 const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const HR = "spremljeno (bez pojašnjenja)";
@@ -63,6 +63,33 @@ describe("text closed up over unknown parts", () => {
   it.each(CLOSED_UP)("%s", (_, lines, expected) => {
     write("src/components/Case.tsx", component(lines));
     expect(scanUiText(root!).flatMap((finding) => finding.terms.map((term) => term.entry))).toEqual(expected);
+  });
+
+  // Review of 56a69b1: such an entry is not there to see in the text as
+  // written, so the finding shows the parts and says what joined them.
+  it.each([
+    ["two items of a list", "<ul><li>Pariz</li><li>ika</li></ul>", "rizik", "Pariz | ika"],
+    ["an empty element inside a word", "<p>Sum<span />njivo</p>", "sumnjivo", "Sum | njivo"],
+    ["a computed value inside a word", "<p>Prepi{n}sano danas</p>", "prepisano", "Prepi | sano danas"],
+    ["a contextual word over an empty element", "<p>Spre<span />mljeno</p>", HR, "Spre | mljeno"],
+  ])("says that the entry was found by joining the parts: %s", (_, line, entry, parts) => {
+    write("src/components/Case.tsx", component([line]));
+    const found = scanUiText(root!);
+    expect(found.map((finding) => finding.terms.map((term) => term.entry))).toEqual([[entry]]);
+    expect(found[0]!.text).toBe(`${parts} (${CLOSED_UP_NOTE})`);
+    expect(CLOSED_UP_NOTE).toMatch(/joined: an element boundary or an unknown part/);
+  });
+
+  it.each([
+    ["an entry in one piece", "<p>Sumnjivo</p>", "Sumnjivo"],
+    ["an entry split by an inline element", "<p>Sum<b>njivo</b></p>", "Sumnjivo"],
+    ["a phrase over a block boundary", "<div>Nestali<p>podaci</p></div>", `Nestali${PHRASE_BREAK}podaci${PHRASE_BREAK}`],
+    ["a bare contextual word", "<p>Spremljeno <Icon /> na uređaju</p>", `Spremljeno ${PHRASE_BREAK} na uređaju`],
+  ])("leaves the text of a finding that needs no joining as it was: %s", (_, line, text) => {
+    write("src/components/Case.tsx", component([line]));
+    const found = scanUiText(root!);
+    expect(found.at(-1)!.text).toBe(text);
+    for (const finding of found) expect(finding.text).not.toContain(CLOSED_UP_NOTE);
   });
 });
 
@@ -124,7 +151,7 @@ describe("text the scan cannot read", () => {
     write("src/lib/i18n/hr.json", `{\n  "a": "Predano",\n  "b": "Sumn${cp(0x458)}ivo"\n}\n`);
     write("src/components/Row.tsx", `export const Row = () => <p title={"Skr${cp(0x456)}veno"}>{"Stanje" + "${cp(0xe000)}"}</p>;\n`);
     const found = findUnreadableText(root!);
-    expect(found.map((entry) => [entry.file, entry.line, entry.reason.replace(/^.*: /, "")])).toEqual([
+    expect(found.map((entry) => [entry.file, entry.line, (entry.reason.match(/U\+[0-9A-F]+/g) ?? []).join(", ")])).toEqual([
       ["app/page.tsx", 3, "U+043E"],
       ["app/page.tsx", 4, "U+0131"],
       ["src/components/Row.tsx", 1, "U+0456"],
@@ -133,14 +160,28 @@ describe("text the scan cannot read", () => {
       ["src/domain/sync/state.ts", 1, "U+0430"],
       ["src/lib/i18n/hr.json", 3, "U+0458"],
     ]);
-    for (const entry of found) expect(entry.reason).toMatch(/^[a-z ]+: U\+[0-9A-F]{4,6}(?:, U\+[0-9A-F]{4,6})*$/);
+    // The reason names code points and says what to do, also for a string that is not interface text; it never quotes the text.
+    for (const entry of found) {
+      const [what, ...rest] = entry.reason.split(" (");
+      expect(what).toMatch(/^characters outside interface text: U\+[0-9A-F]{4,6}(?:, U\+[0-9A-F]{4,6})*$/);
+      expect(rest.join(" (")).toBe(`${UNREADABLE_HINTS.characters})`);
+    }
+    expect(UNREADABLE_HINTS.characters).toMatch(/Croatian or English letters/);
+    expect(UNREADABLE_HINTS.characters).toMatch(/not interface text.*String\.fromCodePoint/);
+  });
+
+  it("does not report a character that the source builds from its code point", () => {
+    write("src/domain/sync/state.ts", "export const SAMPLE = `kopir${String.fromCodePoint(0x430)}no`;\n");
+    expect(findUnreadableText(root!)).toEqual([]);
   });
 
   const alternatives = (count: number): string[] => Array.from({ length: count }, (_, index) => `  {${"abcdefg"[index]} ? "${index}" : "-"}`);
 
   it("reports a text with more readings than are kept, and not one within the limit", () => {
     write("src/components/Case.tsx", component(["<p>", ...alternatives(6), '  Sum{g ? "njivo" : "njiva"}', "</p>"]));
-    expect(findUnreadableText(root!)).toEqual([{ file: "src/components/Case.tsx", line: 3, reason: "more than 64 readings of one text" }]);
+    const reason = `more than 64 readings of one text (${UNREADABLE_HINTS.readings})`;
+    expect(UNREADABLE_HINTS.readings).toMatch(/inline parts into elements of their own/);
+    expect(findUnreadableText(root!)).toEqual([{ file: "src/components/Case.tsx", line: 3, reason }]);
     write("src/components/Case.tsx", component(["<p>", ...alternatives(5), '  Sum{g ? "njivo" : "njiva"}', "</p>"]));
     expect(findUnreadableText(root!)).toEqual([]);
     expect(scanUiText(root!).flatMap((finding) => finding.terms.map((term) => term.entry))).toEqual(["sumnjivo"]);
@@ -148,7 +189,7 @@ describe("text the scan cannot read", () => {
 
   it("reports the same for an attribute", () => {
     write("src/components/Case.tsx", component([`<Field hint={${Array.from({ length: 7 }, (_, index) => `(${"abcdefg"[index]} ? "x" : "y")`).join(" + ")}} />`]));
-    expect(findUnreadableText(root!).map((entry) => entry.reason)).toEqual(["more than 64 readings of one text"]);
+    expect(findUnreadableText(root!).map((entry) => entry.reason)).toEqual([`more than 64 readings of one text (${UNREADABLE_HINTS.readings})`]);
   });
 
   it("finds none in this repository (write the text in Croatian or English letters, or split the element)", () => {
