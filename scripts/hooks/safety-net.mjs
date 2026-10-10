@@ -62,23 +62,37 @@ const RULEBOOK = [".cc-safety-net", "rules", "ductus-rules", "rulebook.json"];
 // One built-in rule and one project rule; a working package denies both.
 export const PROBES = ["git push --force origin ductus-probe", "git add -A"];
 
+// SHA-256 of the file content (about 375 KB for hook.js, a couple of ms), so
+// restoring size and mtime does not keep an old verdict alive.
 const fingerprint = (file) => {
   try {
-    const stat = fs.statSync(file);
-    return `${stat.size}:${stat.mtimeMs}`;
+    return createHash("sha256").update(fs.readFileSync(file)).digest("hex");
   } catch {
     return "absent";
   }
 };
 
-// A package that exits 0 and prints nothing is also what an emptied or stubbed
-// hook.js does, so silence alone proves nothing. The control probe asks it
-// about commands it must deny. The verdict is remembered per package and
-// rulebook state (size and mtime), so the extra runs happen once, not per call.
-function probeMark(root) {
+// The package reads the project rules from the cwd of the event, not from the
+// project root, so the probe and its memory are bound to that same cwd.
+function eventCwd(input, root) {
+  try {
+    const cwd = JSON.parse(input).cwd;
+    if (typeof cwd === "string" && cwd !== "") return path.resolve(cwd);
+  } catch {
+    // No usable cwd in the event: the package then uses its own process cwd, the root.
+  }
+  return root;
+}
+
+// A package that exits 0 and prints nothing (or "{}") is also what an emptied
+// or stubbed hook.js does, so its answer alone proves nothing. The control
+// probe asks it about commands it must deny. The verdict is remembered per
+// package content, event cwd and the rulebook read from that cwd, so the extra
+// runs happen once per state, not per call.
+function probeMark(root, cwd) {
   const bin = path.join(root, "node_modules", "cc-safety-net", "dist", "bin");
   const key = createHash("sha256")
-    .update([root, fingerprint(path.join(bin, "cc-safety-net.js")), fingerprint(path.join(bin, "hook.js")), fingerprint(path.join(root, ...RULEBOOK))].join("|"))
+    .update([root, cwd, fingerprint(path.join(bin, "cc-safety-net.js")), fingerprint(path.join(bin, "hook.js")), fingerprint(path.join(cwd, ...RULEBOOK))].join("|"))
     .digest("hex");
   return path.join(os.tmpdir(), "ductus-safety-net-probe", key);
 }
@@ -95,13 +109,13 @@ function runPackage(root, input, timeout) {
   });
 }
 
-function probe(root, deadline) {
-  const mark = probeMark(root);
+function probe(root, cwd, deadline) {
+  const mark = probeMark(root, cwd);
   if (fs.existsSync(mark)) return null;
   for (const command of PROBES) {
     const left = deadline - Date.now();
     if (left <= 0) return "the control probe ran out of time";
-    const event = JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", cwd: root, tool_input: { command } });
+    const event = JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", cwd, tool_input: { command } });
     const run = runPackage(root, event, left);
     let decision;
     try {
@@ -110,7 +124,7 @@ function probe(root, deadline) {
       decision = undefined;
     }
     if (!(run.status === 0 && decision === "deny") && run.status !== 2) {
-      return `the control probe "${command}" was not denied (silent or stubbed package, or the project rulebook ${RULEBOOK.join("/")} is missing or invalid)`;
+      return `the control probe "${command}" was not denied (silent or stubbed package, or the project rulebook ${RULEBOOK.join("/")} is missing or invalid in ${cwd}, which is where the package reads it from)`;
     }
   }
   try {
@@ -154,9 +168,10 @@ export function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS_TIMEO
     } catch {
       return failed("returned output that is not JSON");
     }
-    return { code: 0, stdout, stderr };
   }
-  const probeProblem = probe(root, deadline);
+  // Any clean answer is checked once per state, not only a silent one: a stub
+  // that prints "{}" or an allow decision is as useless as one that prints nothing.
+  const probeProblem = probe(root, eventCwd(input, root), deadline);
   if (probeProblem) return unusable(probeProblem);
   return { code: 0, stdout, stderr };
 }

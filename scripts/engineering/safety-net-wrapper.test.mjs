@@ -19,13 +19,14 @@ const TOOLS = ["Bash", "PowerShell"];
 const IN_CI = process.env.CI === "true";
 
 const hookEntry = settings.hooks.PreToolUse.flatMap((group) => (group.matcher === "Bash|PowerShell" ? group.hooks : [])).find((hook) => /safety-net\.mjs/.test(hook.command ?? ""));
-const event = (tool, command) => JSON.stringify({ hook_event_name: "PreToolUse", tool_name: tool, tool_input: { command } });
+const event = (tool, command, cwd) => JSON.stringify({ hook_event_name: "PreToolUse", tool_name: tool, ...(cwd ? { cwd } : {}), tool_input: { command } });
 
 const FAKES = {
   // Denies the control-probe commands (logged as "p"), stays silent for the rest (logged as "x").
   allow:
     "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{const probe=/push --force|add -A/.test(d);require('fs').appendFileSync(__dirname+'/calls.log',probe?'p':'x');if(probe)process.stdout.write(JSON.stringify({hookSpecificOutput:{permissionDecision:'deny'}}));process.exit(0)});",
-  silent: "process.stdin.resume();process.stdin.on('end',()=>process.exit(0));",
+  stubjson: "process.stdin.resume();process.stdin.on('end',()=>{process.stdout.write('{}');process.exit(0)});",
+  silent:"process.stdin.resume();process.stdin.on('end',()=>process.exit(0));",
   big: "process.stdout.write('x'.repeat(5*1024*1024));",
   crash1: "process.exit(1);",
   crash3: "process.exit(3);",
@@ -71,7 +72,7 @@ function makeTree({ dir = "tree", bin = "allow", pkg = true, modules = true, ver
   return { root, calls: path.join(root, "node_modules", "cc-safety-net", "dist", "bin", "calls.log"), done: () => fs.rmSync(base, { recursive: true, force: true }) };
 }
 
-const run = (tree, tool, command) => decide({ root: tree.root, input: event(tool, command) });
+const run = (tree, tool, command, cwd) => decide({ root: tree.root, input: event(tool, command, cwd) });
 const withTree = (options, fn) => {
   const tree = makeTree(options);
   try {
@@ -291,6 +292,47 @@ test("B1 the probe verdict is remembered per package state, and a changed module
     blocked(run(tree, "Bash", "ls"), "hook.js replaced after a good verdict");
   });
 });
+
+test("review: a stub that prints JSON instead of nothing fails the probe too", () =>
+  withTree({ bin: "stubjson" }, (tree) => blocked(run(tree, "Bash", "git push --force origin x"), "stubjson")));
+
+test("review: the verdict follows the event cwd; a cwd without the project rulebook loses no rule silently", { timeout: 60000 }, () => {
+  withTree({ real: true }, (tree) => {
+    // A good verdict for the project root exists ...
+    assert.equal(run(tree, "Bash", "ls").code, 0);
+    assert.equal(run(tree, "Bash", "git add -A").code, 0);
+    // ... but a worktree or any other cwd without .cc-safety-net must not inherit it.
+    const bare = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-bare-"));
+    const withRules = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-rules-"));
+    try {
+      fs.cpSync(path.join(tree.root, ".cc-safety-net"), path.join(withRules, ".cc-safety-net"), { recursive: true });
+      for (const tool of TOOLS) {
+        const lost = run(tree, tool, "git add -A", bare);
+        blocked(lost, "cwd without rulebook");
+        assert.match(lost.stderr, /rulebook/);
+        assert.equal(run(tree, tool, "ls", bare).code, 2);
+        assert.equal(run(tree, tool, "pnpm install", bare).code, 0, "install stays possible");
+        const ok = run(tree, tool, "git add -A", withRules);
+        assert.equal(ok.code, 0);
+        assert.match(ok.stdout, /deny/);
+      }
+    } finally {
+      fs.rmSync(bare, { recursive: true, force: true });
+      fs.rmSync(withRules, { recursive: true, force: true });
+    }
+  });
+});
+
+test("review: a same-size stub with the old mtime does not keep an old verdict", { timeout: 60000 }, () =>
+  withTree({ real: true }, (tree) => {
+    const hook = path.join(tree.root, "node_modules", "cc-safety-net", "dist", "bin", "hook.js");
+    assert.equal(run(tree, "Bash", "ls").code, 0);
+    const { size, atime, mtime } = fs.statSync(hook);
+    fs.writeFileSync(hook, "process.exit(0);".padEnd(size, " "));
+    fs.utimesSync(hook, atime, mtime);
+    assert.equal(fs.statSync(hook).size, size);
+    blocked(run(tree, "Bash", "git push --force origin x"), "same-size stub");
+  }));
 
 test("M2 a package that floods stdout is stopped by the buffer limit", () =>
   withTree({ bin: "big" }, (tree) => {
