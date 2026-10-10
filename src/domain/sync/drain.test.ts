@@ -16,6 +16,7 @@ import {
   outcomeToEvents,
   planDrain,
   serverSyncErrorToOutcome,
+  type AnswerFlight,
   type CommitReceiptVerification,
   type DrainOutcome,
   type SignedCommitReceiptVerifier,
@@ -76,6 +77,10 @@ function receiptVerification(
     verify,
   };
 }
+
+/** The answer's flight: row 1 (tx-1) was sent and is still the only queued row. */
+const SENT = row(1);
+const ALONE: AnswerFlight = { sent: SENT, pending: [SENT] };
 
 describe("planDrain — what the next attempt sends", () => {
   it("sends nothing when the queue is empty", () => {
@@ -254,14 +259,14 @@ describe("outcomeToEvents — what the server's answer means", () => {
       });
       return true;
     });
-    expect(await outcomeToEvents(signedCommitOutcome("committed"), verifier, false)).toEqual([
+    expect(await outcomeToEvents(signedCommitOutcome("committed"), verifier, ALONE)).toEqual([
       { type: "SYNC_ACK" },
     ]);
   });
 
   it("duplicate is an ACK only after verifying the same commit receipt", async () => {
     expect(
-      await outcomeToEvents(signedCommitOutcome("duplicate"), receiptVerification(3), false),
+      await outcomeToEvents(signedCommitOutcome("duplicate"), receiptVerification(3), ALONE),
     ).toEqual([{ type: "SYNC_ACK" }]);
   });
 
@@ -279,7 +284,7 @@ describe("outcomeToEvents — what the server's answer means", () => {
           verifierCalled = true;
           return true;
         }),
-        false,
+        ALONE,
       ),
     ).toEqual([]);
     expect(verifierCalled).toBe(false);
@@ -288,7 +293,7 @@ describe("outcomeToEvents — what the server's answer means", () => {
 
   it("a missing receipt cannot ACK even when the CAS says committed", async () => {
     const outcome = { status: "committed", revision: 3 } as unknown as DrainOutcome;
-    expect(await outcomeToEvents(outcome, receiptVerification(3), false)).toEqual([
+    expect(await outcomeToEvents(outcome, receiptVerification(3), ALONE)).toEqual([
       { type: "SYNC_FAILED", retryable: false },
     ]);
   });
@@ -298,7 +303,7 @@ describe("outcomeToEvents — what the server's answer means", () => {
       await outcomeToEvents(
         signedCommitOutcome("committed"),
         receiptVerification(3, async () => false),
-        false,
+        ALONE,
       ),
     ).toEqual([{ type: "SYNC_FAILED", retryable: false }]);
   });
@@ -310,32 +315,32 @@ describe("outcomeToEvents — what the server's answer means", () => {
         receiptVerification(3, async () => {
           throw new Error("key service unavailable");
         }),
-        false,
+        ALONE,
       ),
     ).toEqual([{ type: "SYNC_FAILED", retryable: false }]);
   });
 
   it("a verifier cannot check a different revision", async () => {
     expect(
-      await outcomeToEvents(signedCommitOutcome("committed", 4), receiptVerification(3), false),
+      await outcomeToEvents(signedCommitOutcome("committed", 4), receiptVerification(3), ALONE),
     ).toEqual([{ type: "SYNC_FAILED", retryable: false }]);
   });
 
   it("stale_base is a conflict, never a retry", async () => {
     expect(
-      await outcomeToEvents({ status: "stale_base", currentRevision: 9 }, receiptVerification(9), false),
+      await outcomeToEvents({ status: "stale_base", currentRevision: 9 }, receiptVerification(9), ALONE),
     ).toEqual([{ type: "SYNC_STALE_BASE" }]);
     expect(isRetryable({ status: "stale_base", currentRevision: 9 })).toBe(false);
   });
 
   it("too_large fails for good", async () => {
-    expect(await outcomeToEvents({ status: "too_large" }, receiptVerification(1), false)).toEqual([
+    expect(await outcomeToEvents({ status: "too_large" }, receiptVerification(1), ALONE)).toEqual([
       { type: "SYNC_FAILED", retryable: false },
     ]);
   });
 
   it("txid_reused is never retried: it asks the author to recover (DAN-135)", async () => {
-    const events = await outcomeToEvents({ status: "txid_reused" }, receiptVerification(1), false);
+    const events = await outcomeToEvents({ status: "txid_reused" }, receiptVerification(1), ALONE);
     expect(events).toEqual([{ type: "SYNC_KEY_DIVERGED" }]);
     expect(isRetryable({ status: "txid_reused" })).toBe(false);
     expect(events.some((e) => e.type === "SYNC_STALE_BASE" || e.type === "SYNC_ACK")).toBe(false);
@@ -348,14 +353,14 @@ describe("outcomeToEvents — what the server's answer means", () => {
     "invalid_client_transaction_id",
     "invalid",
   ] as const)("%s fails for good", async (status) => {
-    expect(await outcomeToEvents({ status } as DrainOutcome, receiptVerification(1), false)).toEqual([
+    expect(await outcomeToEvents({ status } as DrainOutcome, receiptVerification(1), ALONE)).toEqual([
       { type: "SYNC_FAILED", retryable: false },
     ]);
   });
 
   it("a transport error is retryable", async () => {
     expect(
-      await outcomeToEvents({ status: "transport_error" }, receiptVerification(1), false),
+      await outcomeToEvents({ status: "transport_error" }, receiptVerification(1), ALONE),
     ).toEqual([{ type: "SYNC_FAILED", retryable: true }]);
     expect(isRetryable({ status: "transport_error" })).toBe(true);
   });
@@ -373,7 +378,7 @@ describe("outcomeToEvents — what the server's answer means", () => {
             ? { status, currentRevision: 1 }
             : { status }
       ) as CommitOutcome | DrainOutcome;
-      expect(await outcomeToEvents(outcome as DrainOutcome, receiptVerification(1), false)).toHaveLength(1);
+      expect(await outcomeToEvents(outcome as DrainOutcome, receiptVerification(1), ALONE)).toHaveLength(1);
     }
   });
 
@@ -382,7 +387,7 @@ describe("outcomeToEvents — what the server's answer means", () => {
       await outcomeToEvents(
         { status: "who knows" } as unknown as DrainOutcome,
         receiptVerification(1),
-        false,
+        ALONE,
       ),
     ).toEqual([{ type: "SYNC_FAILED", retryable: false }]);
     expect(isRetryable(undefined as unknown as DrainOutcome)).toBe(false);
@@ -397,7 +402,7 @@ describe("outcomeToEvents — what the server's answer means", () => {
       { status: "transport_error" },
     ];
     for (const outcome of outcomes) {
-      for (const event of await outcomeToEvents(outcome, receiptVerification(1), false)) {
+      for (const event of await outcomeToEvents(outcome, receiptVerification(1), ALONE)) {
         expect(syncReducer("SYNCING", event)).not.toBe("SYNCING");
       }
     }
@@ -407,12 +412,12 @@ describe("outcomeToEvents — what the server's answer means", () => {
     const signedEvents = await outcomeToEvents(
       signedCommitOutcome("committed", 2),
       receiptVerification(2),
-      false,
+      ALONE,
     );
     const pendingEvents = await outcomeToEvents(
       { status: "committed", revision: 2, receipt: { status: "pending_signature" } },
       receiptVerification(2),
-      false,
+      ALONE,
     );
     expect(syncReducer("SYNCING", signedEvents[0])).toBe("SYNCED");
     expect(pendingEvents).toEqual([]);
@@ -427,7 +432,7 @@ describe("outcomeToEvents — what the server's answer means", () => {
         (await outcomeToEvents(
           { status: "stale_base", currentRevision: 2 },
           receiptVerification(2),
-          false,
+          ALONE,
         ))[0],
       ),
     ).toBe("CONFLICT");
@@ -438,13 +443,13 @@ describe("ackedRevision", () => {
   it("returns a commit revision only after outcomeToEvents verified its receipt", async () => {
     const outcome = signedCommitOutcome("committed", 12);
     expect(ackedRevision(outcome)).toBeNull();
-    await outcomeToEvents(outcome, receiptVerification(12), false);
+    await outcomeToEvents(outcome, receiptVerification(12), ALONE);
     expect(ackedRevision(outcome)).toBe(12);
   });
 
   it("returns a replay revision only after outcomeToEvents verified its receipt", async () => {
     const outcome = signedCommitOutcome("duplicate", 12);
-    await outcomeToEvents(outcome, receiptVerification(12), false);
+    await outcomeToEvents(outcome, receiptVerification(12), ALONE);
     expect(ackedRevision(outcome)).toBe(12);
   });
 

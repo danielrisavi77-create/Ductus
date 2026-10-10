@@ -62,7 +62,7 @@ Zaseban workflow, a ne izmjena `ci.yml`, da se ne sudara s otvorenim PR-om #13 i
 | --- | --- | --- | --- |
 | `brianc/node-postgres` (`pg`) | MIT | B-5 | Veza prema bazi; `withActor` postavlja GUC sa `SET LOCAL` unutar transakcije. pg-boss koristi isti `pg`, pa jedan klijent umjesto dva |
 | `panva/openid-client` | MIT | B-6 | OIDC s PKCE, `state`, `nonce` [PRIJEDLOG D-73]; Better Auth (`better-auth/better-auth`) ostaje kandidat za M1 spike |
-| `timgit/pg-boss` | MIT | B-9, B-12 | Red poslova u workeru, `migrate: false` [PRIJEDLOG D-74] |
+| `timgit/pg-boss` | MIT | B-9, B-12 | Red poslova u workeru, `migrate: false` [ODLUČENO D-74] |
 | `colinhacks/zod` | MIT | B-6, B-8, B-12 | Provjera ulaza ruta i tijela `ingest`; greška bez ispisa sadržaja |
 | `paulmillr/noble-curves` | MIT | B-4 (ako treba) | Ed25519 samo ako `node:crypto` ne pokrije razvojni potpisnik; prvo probati `node:crypto` |
 | `pinojs/pino` | MIT | B-8, B-9 | Strukturirani logovi s `redact` za tijela i tekst rada (BACKEND §4.9); canary test |

@@ -255,6 +255,39 @@ describe("Evidence Outbox state machine", () => {
     expect(final.receipt).toBeUndefined();
   });
 
+  it("does not settle an item with a receipt that carries a field nobody validated", async () => {
+    const item = beginEvidenceOutboxAttempt(
+      await createEvidenceOutboxItem({
+        id: "outbox-unknown-field",
+        evidencePackageId: "evidence-1",
+        clientRequestId: "request-unknown-field",
+        segment: segment(),
+        createdAt: "2026-10-03T06:01:00.000Z",
+      }),
+      "2026-10-03T06:02:00.000Z",
+    );
+    const settle = (receipt: SignedEvidenceReceipt) =>
+      applyEvidenceOutboxOutcome(
+        item,
+        { status: "accepted", receipt },
+        "2026-10-03T06:02:01.000Z",
+      );
+    const valid = receiptFor(item);
+    expect(settle(valid).status).toBe("accepted");
+
+    for (const forged of [
+      { ...valid, note: "x" },
+      { ...valid, payload: { ...valid.payload, note: "x" } },
+      { ...valid, signature: { ...valid.signature, note: "x" } },
+      { ...valid, signature: { ...valid.signature, signatureBase64Url: "" } },
+    ]) {
+      const final = settle(forged);
+      expect(final.status).toBe("blocked");
+      expect(final.lastFailure).toBe("invalid");
+      expect(final.receipt).toBeUndefined();
+    }
+  });
+
   it("builds payload and descriptor from one snapshot of the segment", async () => {
     const input = segment();
     const pending = buildEvidenceIngestCommandV2({

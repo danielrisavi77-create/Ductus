@@ -6,7 +6,7 @@ Verzija 0.4 · 3. 10. 2026. · Odgovorna osoba: Daniel Rišavi
 
 Cilj: najjednostavnija arhitektura koja pouzdano ispunjava `PRODUCT.md` za pilot na jednom fakultetu, koju jedna osoba uz AI agente može održavati, i koja se kasnije može proširiti bez prepisivanja. Ciljna arhitektura vNext ostaje referenca (D-75); što se iz nje prihvaća i odgađa zapisano je u BACKEND §2, a odgođeni elementi imaju okidač u §11.
 
-**Odnos prema `BACKEND.md`:** BACKEND je detaljan plan backenda i ima prednost u pojedinostima (topologija, uloge, prijava, evidencija, kopije, trošak, program B0 do B9). Ovaj dokument daje cjelinu sustava i upućuje na BACKEND gdje je on mjerodavan. Sve što ovisi o D-08 i D-71 do D-75 vrijedi kao **PRIJEDLOG** dok vlasnik te odluke ne potvrdi (B0.3), a D-08 je uvjetan i rezultatima spikeova B0.1 i B0.2.
+**Odnos prema `BACKEND.md`:** BACKEND je detaljan plan backenda i ima prednost u pojedinostima (topologija, uloge, prijava, evidencija, kopije, trošak, program B0 do B9). Ovaj dokument daje cjelinu sustava i upućuje na BACKEND gdje je on mjerodavan. D-71 i D-74 vlasnik je potvrdio 10. 10. 2026. Sve što ovisi o D-08, D-72, D-73 i D-75 vrijedi kao **PRIJEDLOG** dok vlasnik te odluke ne potvrdi (B0.3), a D-08 je uvjetan i rezultatima spikeova B0.1 i B0.2.
 
 ## 0.1 Status implementacije i granice repozitorija
 
@@ -44,15 +44,15 @@ Smjer ovisnosti je prema unutra: `app` i features pozivaju application; applicat
 | Editor | Tiptap / ProseMirror | [PRIJEDLOG D-08], preneseno |
 | Lokalna pohrana | Dexie (IndexedDB), journal s 8 stanja sinkronizacije | [PRIJEDLOG D-08], preneseno |
 | API | Next.js API rute s verzijom protokola (ne Server Actions), u web procesu bez materijala ključeva | [PRIJEDLOG D-08], BACKEND §3 |
-| Pozadinski rad | Zaseban worker proces (Node): red poslova pg-boss, potpisivanje, rekonstrukcija, čuvanje, e-pošta, dnevni korijen | [PRIJEDLOG D-74] |
+| Pozadinski rad | Zaseban worker proces (Node): red poslova pg-boss, potpisivanje, rekonstrukcija, čuvanje, e-pošta, dnevni korijen | [ODLUČENO D-74] |
 | Baza | PostgreSQL s RLS-om, uloge po namjeni, upravljana usluga s povratom u točku (PITR) | [PRIJEDLOG D-08], dobavljač u §9 |
 | Pohrana objekata | S3-kompatibilan privatni bucket, objekti adresirani hashom | [PRIJEDLOG D-08] |
 | Prijava | AAI@EduHr preko OpenID Connecta | [ODLUČENO D-09] |
 | Izvedba prijave | Vlastiti OIDC klijent, sesije u bazi | [PRIJEDLOG D-73] |
-| Potpis | Dva odvojena Ed25519 ključa u KMS-u, potpisuje samo worker | [PRIJEDLOG D-71] |
+| Potpis | Dva odvojena Ed25519 ključa u KMS-u, potpisuje samo worker | [ODLUČENO D-71] |
 | Neovisno vrijeme | Dnevni korijen s RFC 3161 žigom, val 2 | [PRIJEDLOG D-72] |
 | E-pošta | Transakcijska usluga u EU-u preko SMTP-a ili API-ja | [PRIJEDLOG D-08] |
-| Obavijesti | Polling svakih 30 do 60 s, obavijest o reviziji najviše jednom po P-03 prozoru | [PRIJEDLOG D-74] |
+| Obavijesti | Polling svakih 30 do 60 s, obavijest o reviziji najviše jednom po P-03 prozoru | [ODLUČENO D-74] |
 | Testovi | Vitest (unit, property i ugovorni), Playwright (E2E i axe), pgTAP (RLS, uloge, matrica pristupa) | Preneseno i prošireno |
 | Pravila fakulteta | Zajednički paket s Lektom (generirani podaci pravila, citatni stilovi, predlošci naslovne stranice) | [ODLUČENO D-25] |
 | AI pomoćnik | Nije u pilotu; student koristi vlastiti alat izvan Ductusa i prilaže ispis razgovora uz izjavu | [ODLUČENO D-77] |
@@ -121,11 +121,13 @@ Sesiju otvara samo `identity.open_session`, koju izvršava jedino `ductus_auth` 
 
 | Tablica | Ključni stupci | Tko čita |
 | --- | --- | --- |
-| `institution` | id, naziv, AAI `homeOrg`, postavke (pragovi P-01 do P-03, rokovi čuvanja, obveznost po vrsti rada) | Administrator te ustanove |
+| `institution` | id, naziv, AAI `homeOrg`, postavke (pragovi P-01 do P-03, rokovi čuvanja, obveznost po vrsti rada). U izvedbi (B-7 1/2) podijeljeno: `identity.institution` (id, `slug`) i `institution_settings` | Administrator te ustanove |
+| `institution_settings` | ustanova (ključ), naziv za prikaz, ograničenje pogrešnih kodova za upis (zadano 5 u 15 min po korisniku; odluka vlasnika 10. 10. 2026.). Ustanova bez retka nikoga ne može upisati. Pragovi P-01 do P-03 i rokovi čuvanja još nisu u tablici | Administrator te ustanove |
 | `institution_role` | korisnik, ustanova, uloga (`teacher`, `admin`), potvrdio, vrijeme | Administrator |
 | `course` | id, ustanova, naziv, akademska godina, pravilo AI-ja iz izvedbenog plana (D-52) | Članovi kolegija |
 | `course_enrollment_code` | kolegij, hash koda, vrijedi do, aktivan | Nastavnik kolegija |
 | `course_member` | kolegij, korisnik, uloga u kolegiju (`teacher`, `student`), od, do | Nastavnik kolegija sve članove; student nastavnike kolegija i vlastito članstvo |
+| `enrollment_attempt` | korisnik, vrijeme pogrešnog koda. Pogreške jednog korisnika unutar prozora iz `institution_settings`; svaki pokušaj upisa najprije briše retke starije od prozora | Nitko izravno; piše samo `enroll_with_code` |
 | `mentorship` | mentor, student, vrsta rada, od, do, potvrdio | Mentor i student |
 | `assignment` | id, kolegij, trenutna verzija | Članovi kolegija |
 | `assignment_version` | zadatak, broj verzije, naslov, upute, vrsta rada, Lekta profil i verzija paketa, otvaranje, rok, pravila pomoći i dopuštene svrhe (D-80), profil evidencije, uvoz dopušten, ciklusi verzija, vrijeme. **Nepromjenjiva**; profil nove verzije smije biti samo uži | Članovi kolegija |
@@ -221,7 +223,7 @@ Lokalna osnovica B0.2 (`docs/spikes/B0.2.md`) pokazala je da CPU i memorija nisu
 
 ## 5a. Suradnja nastavnika i studenta
 
-- **Pogled na rad u nastajanju (D-06):** nastavnik ili mentor dobiva trenutno spremljeno stanje dokumenta kroz RPC koji provjerava odnos. Klijent provjerava novo stanje pollingom svakih 30 do 60 s; obavijest o novoj reviziji nastaje najviše jednom po P-03 prozoru (i samo na kraju sesije ako se potvrdi D-39). Tipkanje se ne prenosi uživo. [PRIJEDLOG D-74]
+- **Pogled na rad u nastajanju (D-06):** nastavnik ili mentor dobiva trenutno spremljeno stanje dokumenta kroz RPC koji provjerava odnos. Klijent provjerava novo stanje pollingom svakih 30 do 60 s; obavijest o novoj reviziji nastaje najviše jednom po P-03 prozoru (i po D-39 samo na kraju sesije; D-39 je potvrđena, a odnos s D-06 otvoren je u Owner queue, do odluke vrijedi D-06). Tipkanje se ne prenosi uživo. [ODLUČENO D-74]
 - **Komentari:** vezani uz raspon teksta preko sidra (preneseno iz `collaboration/anchor` u `pisac-editor`). Ako se tekst ispod sidra promijeni toliko da se sidro ne može pouzdano pronaći, komentar se prikazuje kao "sidro nije pouzdano", nikad na krivom mjestu.
 - **Prijedlozi:** spremaju se odvojeno od dokumenta (`suggestion`), pa ne stvaraju sukob s pisanjem studenta. Kad ga student prihvati, koraci prijedloga primjenjuju se kao nova revizija s autorom "nastavnik (prihvaćeni prijedlog)".
 - **Izravne izmjene (D-21, [PRIJEDLOG D-34]):** izravna izmjena je prijedlog koji studentov klijent automatski primjenjuje, pa dokument uvijek ima jednog pisača; student može vratiti način na prijedloge. **Otvoreno pitanje (BACKEND §4.1):** revizija tada nastaje na studentovu klijentu, a autor mora biti "nastavnik" bez povjerenja u polje klijenta (npr. potpisani zahtjev nastavnikove sesije koji klijent prilaže). Rješenje se određuje u M6; do tada D-34 ostaje PRIJEDLOG.
@@ -265,7 +267,7 @@ Rokovi se unose i prikazuju u zoni Europe/Zagreb; promjena na zimsko računanje 
 
 ## 8. Ključevi za potpis
 
-[PRIJEDLOG D-71]; pojedinosti u BACKEND §1 i §4.1.
+[ODLUČENO D-71]; pojedinosti u BACKEND §1 i §4.1.
 
 - Dva odvojena Ed25519 ključa u KMS-u: **ključ potvrda** i **ključ dnevnog korijena**. Materijal ključa ne napušta KMS; za D-92 u KMS ide prefiksirani digest (59 B), a za D-93 točan UTF-8 C2SP tekst kontrolne točke sa završnim LF (RAW, bez prethodnog hashiranja). Potpisuje samo worker; web proces nema pristup ni materijalu ni pravu potpisa.
 - Lokalno i u CI-ju koristi se razvojni potpisnik iza istog porta; konfiguracijska brava sprječava razvojni potpisnik u produkciji.

@@ -26,11 +26,11 @@ const tokenLogout = newToken();
 const admin = new pg.Pool({ connectionString: ADMIN_URL, max: 2 });
 const pools: pg.Pool[] = [admin];
 
-function appPool(max: number) {
+function appPool(max: number, options?: string) {
   const url = new URL(ADMIN_URL);
   url.username = LOGIN;
   url.password = password;
-  const pool = new pg.Pool({ connectionString: url.href, max });
+  const pool = new pg.Pool({ connectionString: url.href, max, options });
   pools.push(pool);
   return pool;
 }
@@ -192,5 +192,164 @@ describe("withActor over a ductus_app login", () => {
       await expect(createWithActor(pool)(tokenA, fn)).rejects.toThrow("not a ductus_app login");
       expect(fn).not.toHaveBeenCalled();
     }
+  });
+
+  // QA on #160 (V-1): a misprovisioned login. BYPASSRLS would read past RLS,
+  // and a login outside ductus_app is not the application's at all. Each is
+  // created for this test alone and dropped after it.
+  it.each([
+    ["a BYPASSRLS member of ductus_app", "LOGIN NOSUPERUSER BYPASSRLS IN ROLE ductus_app"],
+    ["a login that is not a member of ductus_app", "LOGIN NOSUPERUSER NOBYPASSRLS"],
+  ])("refuses %s before fn and closes the connection", async (_name, attributes) => {
+    const login = `it_with_actor_${randomBytes(4).toString("hex")}`;
+    const loginPassword = randomBytes(24).toString("hex");
+    const ddl = await admin.query<{ ddl: string }>(
+      `SELECT format('CREATE ROLE %I ${attributes} PASSWORD %L', $1::text, $2::text) AS ddl`,
+      [login, loginPassword],
+    );
+    await admin.query(ddl.rows[0].ddl);
+    // CONNECT is not granted to PUBLIC; ductus_app members get it from the role.
+    const grant = await admin.query<{ grant: string; revoke: string }>(
+      `SELECT format('GRANT CONNECT ON DATABASE %I TO %I', current_database(), $1::text) AS grant,
+              format('REVOKE CONNECT ON DATABASE %I FROM %I', current_database(), $1::text) AS revoke`,
+      [login],
+    );
+    await admin.query(grant.rows[0].grant);
+    const url = new URL(ADMIN_URL);
+    url.username = login;
+    url.password = loginPassword;
+    const pool = new pg.Pool({ connectionString: url.href, max: 1 });
+    try {
+      const { pid } = (await pool.query<{ pid: number }>("SELECT pg_catalog.pg_backend_pid() AS pid")).rows[0];
+      const fn = vi.fn(async () => "ran");
+      await expect(createWithActor(pool)(tokenA, fn)).rejects.toThrow("not a ductus_app login");
+      expect(fn).not.toHaveBeenCalled();
+      const after = (await pool.query<{ pid: number }>("SELECT pg_catalog.pg_backend_pid() AS pid")).rows[0];
+      expect(after.pid).not.toBe(pid);
+    } finally {
+      await pool.end();
+      await admin.query(grant.rows[0].revoke);
+      await admin.query(`DROP ROLE IF EXISTS ${login}`);
+    }
+  });
+});
+
+// DAN-129: what fn or the connection could carry past the transaction is
+// refused, and a connection that may carry it is closed instead of pooled.
+describe("withActor refuses what could outlive its transaction", () => {
+  const AFTER = `SELECT pg_catalog.pg_backend_pid() AS pid, current_setting('app.session_token', true) AS token, app.current_user_id() AS user_id`;
+  type After = { pid: number; token: string | null; user_id: string | null };
+
+  it("refuses a superuser connection that took on an app login with SET SESSION AUTHORIZATION", async () => {
+    const assumed = new pg.Pool({ connectionString: ADMIN_URL, max: 1 });
+    pools.push(assumed);
+    await assumed.query(`SET SESSION AUTHORIZATION ${LOGIN}`);
+    const names = (await assumed.query("SELECT session_user::text AS login, current_user::text AS role")).rows[0];
+    expect(names).toEqual({ login: LOGIN, role: LOGIN });
+
+    const fn = vi.fn(async () => "ran");
+    await expect(createWithActor(assumed)(tokenA, fn)).rejects.toThrow("not a ductus_app login");
+    expect(fn).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    `COMMIT; SELECT set_config('app.session_token', '%s', false)`,
+    `commit; select set_config('app.session_token', '%s', false)`,
+    `/* SELECT */ end; SELECT set_config('app.session_token', '%s', false)`,
+    `SELECT 1; COMMIT; SELECT set_config('app.session_token', '%s', false)`,
+    `-- SELECT\nSET app.session_token = '%s'`,
+    `SAVEPOINT a; RELEASE a; SELECT set_config('app.session_token', '%s', false)`,
+    `DISCARD ALL; SELECT '%s'`,
+  ])("refuses %j and leaves no token on the pooled connection", async (template) => {
+    const pool = appPool(1);
+    const withActor = createWithActor(pool);
+    const { pid } = await who(withActor, tokenB);
+
+    await expect(withActor(tokenB, (tx) => tx.query(template.replace("%s", tokenA)))).rejects.toThrow();
+    const after = (await pool.query<After>(AFTER)).rows[0];
+    expect(after.user_id).toBeNull();
+    expect(after.token === null || after.token === "").toBe(true);
+    expect((await who(withActor, null)).user_id).toBeNull();
+    expect((await who(withActor, tokenB)).user_id).toBe(userB);
+    // A refused statement never reached the database; the connection stays.
+    if (!template.startsWith("SELECT 1;")) expect(after.pid).toBe(pid);
+  });
+
+  it.each([
+    ["replaces the token for the session", "SELECT set_config('app.session_token', $1, false)", () => [tokenA]],
+    ["switches role for the session", "SELECT set_config('role', 'ductus_app', false)", () => []],
+  ])("does not commit and closes the connection when fn %s", async (_name, statement, values) => {
+    const pool = appPool(1);
+    const withActor = createWithActor(pool);
+    const { pid } = await who(withActor, tokenB);
+
+    await expect(withActor(tokenB, (tx) => tx.query(statement, values()))).rejects.toThrow("changed inside fn");
+    const after = (await pool.query<After>(AFTER)).rows[0];
+    expect(after.pid).not.toBe(pid);
+    expect(after.user_id).toBeNull();
+    expect((await who(withActor, tokenB)).user_id).toBe(userB);
+  });
+
+  // Review on #160: a SELECT in fn can set any parameter for the session. The
+  // login value of statement_timeout stands in for the limits of DAN-120.
+  const SETTINGS = `SELECT pg_catalog.pg_backend_pid() AS pid,
+    current_setting('statement_timeout') AS statement_timeout, current_setting('lock_timeout') AS lock_timeout,
+    current_setting('search_path') AS search_path, current_setting('application_name') AS application_name,
+    coalesce(current_setting('app.leftover', true), '') AS leftover,
+    (SELECT count(*)::int FROM pg_catalog.pg_locks WHERE locktype = 'advisory' AND pid = pg_catalog.pg_backend_pid()) AS advisory_locks`;
+  const LEAVE_BEHIND = `SELECT set_config('statement_timeout', '0', false), set_config('lock_timeout', '1', false),
+    set_config('search_path', 'public', false), set_config('application_name', 'it-leftover', false),
+    set_config('app.leftover', 'x', false), pg_catalog.pg_advisory_lock(4242)`;
+
+  it.each([
+    ["commits", async () => "saved"],
+    ["fails", async () => Promise.reject(new Error("fn failed"))],
+  ])("resets session settings and advisory locks that fn left when it %s", async (_name, end) => {
+    const pool = appPool(1, "-c statement_timeout=15000 -c application_name=it-login");
+    const withActor = createWithActor(pool);
+    const settings = () => withActor(null, async (tx) => (await tx.query(SETTINGS)).rows[0]);
+    const before = await settings();
+    expect(before).toMatchObject({ statement_timeout: "15s", application_name: "it-login", advisory_locks: 0 });
+
+    await withActor(tokenA, async (tx) => {
+      await tx.query(LEAVE_BEHIND);
+      expect((await tx.query(SETTINGS)).rows[0]).toMatchObject({ statement_timeout: "0", advisory_locks: 1 });
+      return end();
+    }).catch(() => undefined);
+    // The same connection, back at its login values.
+    expect(await settings()).toEqual(before);
+    expect((await pool.query(SETTINGS)).rows[0]).toEqual(before);
+    // The advisory lock went with it: another connection can take it.
+    const other = await admin.connect();
+    try {
+      expect((await other.query("SELECT pg_catalog.pg_try_advisory_lock(4242) AS got")).rows[0].got).toBe(true);
+      await other.query("SELECT pg_catalog.pg_advisory_unlock_all()");
+    } finally {
+      other.release();
+    }
+  });
+
+  it("refuses a nested call instead of waiting for a second connection", async () => {
+    const withActor = createWithActor(appPool(1));
+    const inner = vi.fn(async () => "inner");
+    await expect(withActor(tokenA, async () => withActor(tokenB, inner))).rejects.toThrow("nested call");
+    expect(inner).not.toHaveBeenCalled();
+    expect((await who(withActor, tokenA)).user_id).toBe(userA);
+  });
+
+  it("propagates a connection dropped inside fn and serves the next call on a new connection", async () => {
+    const pool = appPool(1);
+    const withActor = createWithActor(pool);
+    let pid = 0;
+    await expect(
+      withActor(tokenA, async (tx) => {
+        pid = (await tx.query<Who>(WHO)).rows[0].pid;
+        await admin.query("SELECT pg_catalog.pg_terminate_backend($1)", [pid]);
+        return tx.query(WHO);
+      }),
+    ).rejects.toThrow();
+    const next = await who(withActor, tokenB);
+    expect(next.pid).not.toBe(pid);
+    expect(next.user_id).toBe(userB);
   });
 });

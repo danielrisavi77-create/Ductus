@@ -26,7 +26,6 @@ import {
   fastForwardBase,
   isDiverged,
   mayAttempt,
-  newerRowsQueued,
   nextAwaitingReceipt,
   outcomeToEvents,
   planDrain,
@@ -228,7 +227,7 @@ async function drain(world: World, delivery: Delivery): Promise<World> {
       },
       verify: async () => true,
     },
-    newerRowsQueued(world.queue, sent),
+    { sent, pending: world.queue },
   );
   if (events.some((e) => e.type === "SYNC_ACK")) {
     expect(world.queue.at(-1)).toBe(sent);
@@ -265,7 +264,7 @@ async function lateDuplicate(world: World, pick: number): Promise<World> {
   const events = await outcomeToEvents(
     outcome,
     { expected: { documentId: DOC, clientTransactionId: key, revision }, verify: async () => true },
-    newerRowsQueued(world.queue, late),
+    { sent: late, pending: world.queue },
   );
   const awaiting = nextAwaitingReceipt(late, outcome, world.awaiting);
   if (isDiverged(world.awaiting) && world.awaiting!.localSeq !== late.localSeq) {
