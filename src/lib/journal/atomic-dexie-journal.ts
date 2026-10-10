@@ -19,7 +19,7 @@ import { SYNC_STATES } from "../../domain/sync/states";
 export type JournalErrorCode =
   | "invalid_input" | "incomplete_store" | "sticky_state"
   | "duplicate_transaction" | "sequence_exhausted" | "stale_local_sequence"
-  | "unsynced_work" | "logout_in_progress";
+  | "unsynced_work" | "logout_in_progress" | "logout_blocked";
 
 export class JournalError extends Error {
   constructor(readonly code: JournalErrorCode) {
@@ -42,9 +42,23 @@ class JournalDatabase extends Dexie {
   pending!: Table<PendingTransaction, [string, number]>;
   meta!: Table<SyncMeta, string>;
   control!: Table<JournalControl, string>;
+  /** Set once ANOTHER connection deletes this database (logout elsewhere). */
+  deletedElsewhere = false;
 
   constructor(name: string, options?: DexieOptions) {
     super(name, options);
+    // Dexie's default `versionchange` handler closes a stale connection but
+    // leaves auto-open on, so the next write in that tab would silently
+    // RE-CREATE the database another tab just deleted for logout: empty,
+    // without the fence. For a deletion this handler closes with auto-open
+    // disabled and returns false, which stops Dexie's default from running
+    // (the newest subscriber runs first). An upgrade keeps the default.
+    this.on("versionchange", (event) => {
+      if ((event.newVersion ?? 0) > 0) return undefined; // newVersion is null on delete
+      this.deletedElsewhere = true;
+      this.close();
+      return false;
+    });
     this.version(1).stores({
       snapshots: "documentId",
       pending: "[documentId+localSeq],documentId",
@@ -92,25 +106,68 @@ function canonicalTx(documentId: string, input: DocumentTransaction): DocumentTr
   }
 }
 
+export type JournalOptions = {
+  /** How long a blocked deletion may stay blocked before `logout_blocked`. */
+  logoutBlockedTimeoutMs?: number;
+};
+
 export class AtomicDexieJournal {
   private readonly db: JournalDatabase;
+  private readonly blockedTimeoutMs: number;
+  /** This instance's own logout: fence written, then database deleted. */
+  private logout: "none" | "fenced" | "destroyed" = "none";
+  private deletion: Promise<void> | null = null;
+  private deletionBlocked = false;
+  private onDeletionBlocked: (() => void) | null = null;
 
   /** Requires an opaque 64-character lower-case SHA-256 hex principal scope. */
-  constructor(scopeHash: string, options?: DexieOptions) {
+  constructor(scopeHash: string, options?: DexieOptions, journalOptions?: JournalOptions) {
     if (!/^[a-f0-9]{64}$/.test(scopeHash)) throw new JournalError("invalid_input");
     this.db = new JournalDatabase(`ductus-journal-v1-${scopeHash}`, options);
+    const timeout = journalOptions?.logoutBlockedTimeoutMs;
+    this.blockedTimeoutMs =
+      typeof timeout === "number" && Number.isFinite(timeout) && timeout >= 0 ? timeout : 3_000;
+    this.db.on("blocked", () => {
+      if (this.deletion) {
+        this.deletionBlocked = true;
+        this.onDeletionBlocked?.();
+      }
+    });
+  }
+
+  private loggedOut(): boolean {
+    return this.logout !== "none" || this.db.deletedElsewhere;
+  }
+
+  /**
+   * Runs a store operation. Once logout has started here or the database was
+   * deleted by another tab, this instance is finished: it fails closed and
+   * never re-creates the database.
+   */
+  private async whileUsable<T>(operation: () => Promise<T>): Promise<T> {
+    if (this.loggedOut()) throw new JournalError("logout_in_progress");
+    try {
+      return await operation();
+    } catch (error) {
+      // The connection can be closed under a running call by a deletion.
+      if (!(error instanceof JournalError) && this.loggedOut()) {
+        throw new JournalError("logout_in_progress");
+      }
+      throw error;
+    }
   }
 
   async read(documentId: string): Promise<JournalContents> {
     if (!validDocumentId(documentId)) throw new JournalError("invalid_input");
-    return this.db.transaction("r", this.db.snapshots, this.db.pending, this.db.meta, async () => {
-      const [snapshot, pending, meta] = await Promise.all([
-        this.db.snapshots.get(documentId),
-        this.db.pending.where("documentId").equals(documentId).sortBy("localSeq"),
-        this.db.meta.get(documentId),
-      ]);
-      return { snapshot: snapshot ?? null, pending, meta: meta ?? null };
-    });
+    return this.whileUsable(() =>
+      this.db.transaction("r", this.db.snapshots, this.db.pending, this.db.meta, async () => {
+        const [snapshot, pending, meta] = await Promise.all([
+          this.db.snapshots.get(documentId),
+          this.db.pending.where("documentId").equals(documentId).sortBy("localSeq"),
+          this.db.meta.get(documentId),
+        ]);
+        return { snapshot: snapshot ?? null, pending, meta: meta ?? null };
+      }));
   }
 
   /** No network, ACK, pending-row deletion, or silent conflict resolution. */
@@ -123,7 +180,7 @@ export class AtomicDexieJournal {
     const tx = canonicalTx(documentId, input);
     // IndexedDB serializes overlapping readwrite transactions over these
     // stores, including transactions from multiple tabs/instances.
-    return this.db.transaction(
+    return this.whileUsable(() => this.db.transaction(
       "rw", this.db.snapshots, this.db.pending, this.db.meta, this.db.control,
       async () => {
         const [logoutFence, prior, snapshotBefore, rows] = await Promise.all([
@@ -178,7 +235,7 @@ export class AtomicDexieJournal {
         await this.db.meta.put(meta);
         return { localSeq, snapshot, pending, meta };
       },
-    );
+    ));
   }
 
   close(): void {
@@ -192,9 +249,18 @@ export class AtomicDexieJournal {
    * a cross-tab session lock or a server-ACK implementation.
    */
   async destroyForLogout(): Promise<void> {
+    if (this.logout === "destroyed") return;
+    // Another tab owns that logout; re-opening here would re-create the store.
+    if (this.db.deletedElsewhere) throw new JournalError("logout_in_progress");
+    // A deletion that was reported blocked is still queued in the browser.
+    if (this.deletion) return this.settleDeletion(this.deletion);
+    // Dexie closes the connection before deleting, so a retry after a failed
+    // deletion starts from a closed connection and must open it again.
+    if (this.logout === "fenced" && !this.db.isOpen()) await this.db.open();
     // One readwrite transaction checks pending work and permanently fences
     // concurrent writers BEFORE async database deletion. If deletion fails,
-    // the fence remains and retrying this operation is safe.
+    // the fence remains and retrying this operation is safe, on this instance
+    // or a new one.
     await this.db.transaction(
       "rw", this.db.pending, this.db.snapshots, this.db.meta, this.db.control,
       async () => {
@@ -211,6 +277,40 @@ export class AtomicDexieJournal {
         await this.db.control.put({ key: "logout", state: "closing" });
       },
     );
-    await this.db.delete();
+    this.logout = "fenced";
+    this.deletionBlocked = false;
+    const deletion = Promise.resolve(this.db.delete()).then(
+      () => { this.logout = "destroyed"; this.deletion = null; },
+      (error: unknown) => { this.deletion = null; throw error; },
+    );
+    deletion.catch(() => {}); // Observed through settleDeletion below.
+    this.deletion = deletion;
+    return this.settleDeletion(deletion);
+  }
+
+  /**
+   * Waits for the deletion, but not forever: if another connection ignores
+   * `versionchange` (a suspended tab, another module) the browser reports the
+   * request as blocked and never settles it. After the grace period this
+   * rejects with `logout_blocked`. The fence stays, the request stays queued
+   * and completes when the blocker goes away; calling again re-attaches.
+   */
+  private async settleDeletion(deletion: Promise<void>): Promise<void> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const blocked = new Promise<never>((_, reject) => {
+      const arm = () => {
+        timer ??= setTimeout(
+          () => reject(new JournalError("logout_blocked")), this.blockedTimeoutMs,
+        );
+      };
+      this.onDeletionBlocked = arm;
+      if (this.deletionBlocked) arm();
+    });
+    try {
+      await Promise.race([deletion, blocked]);
+    } finally {
+      clearTimeout(timer);
+      this.onDeletionBlocked = null;
+    }
   }
 }
