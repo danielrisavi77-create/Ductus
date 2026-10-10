@@ -115,6 +115,8 @@ Sve tablice imaju uključen RLS i retke u pgTAP matrici pristupa. Pristup ide kr
 | `app_user` | id, izdavatelj i `hrEduPersonUniqueID` (jedinstveni par), `sub`, ustanova, ime za prikaz, posljednja prijava | Sam korisnik; nastavnik vidi ime studenata u svom kolegiju |
 | `session` | hash tokena, korisnik, ustanova, nastala, istječe, zatvorena (odjava ili back-channel logout) | Nitko izravno; samo `current_actor()` |
 
+Sesiju otvara samo `identity.open_session`, koju izvršava jedino `ductus_auth` iz povratne rute prijave nakon provjere OIDC odgovora; prima izdavatelja, `sub`, `hrEduPersonUniqueID`, `hrEduPersonHomeOrg` i SHA-256 tokena, nikad sam token (B-6, D-90). Ustanovu bira po stupcu `identity.institution.aai_home_org`: jedinstven DNS naziv malim slovima (oznake razdvojene točkom, bez prazne oznake i bez završne točke, najviše 253 znaka; `CHECK` u migraciji), piše ga samo vlasnik `ductus_identity` (lokalni i CI seed, u produkciji provisioning), a `NULL` znači da ustanova ne prima prijave. Pristigli homeOrg se uspoređuje nakon uklanjanja rubnih razmaka i spuštanja ASCII slova; nepoznat, prazan ili znak sličan ASCII-ju daje odbijenu prijavu (`ZD503`) s neutralnom porukom koja ne otkriva postoji li ustanova.
+
 ### Ustanova i nastava
 
 | Tablica | Ključni stupci | Tko čita |
@@ -124,7 +126,7 @@ Sve tablice imaju uključen RLS i retke u pgTAP matrici pristupa. Pristup ide kr
 | `institution_role` | korisnik, ustanova, uloga (`teacher`, `admin`), potvrdio, vrijeme | Administrator |
 | `course` | id, ustanova, naziv, akademska godina, pravilo AI-ja iz izvedbenog plana (D-52) | Članovi kolegija |
 | `course_enrollment_code` | kolegij, hash koda, vrijedi do, aktivan | Nastavnik kolegija |
-| `course_member` | kolegij, korisnik, uloga u kolegiju (`teacher`, `student`), od, do | Nastavnik kolegija sve članove; student nastavnike kolegija i vlastito članstvo |
+| `course_member` | kolegij, korisnik, uloga u kolegiju (`teacher`, `student`), od, do; za studenta kojeg je uklonio nastavnik: tko ga je uklonio i kada mu je povratak dopušten | Nastavnik kolegija sve članove; student nastavnike kolegija i vlastito članstvo |
 | `enrollment_attempt` | korisnik, vrijeme pogrešnog koda. Pogreške jednog korisnika unutar prozora iz `institution_settings`; svaki pokušaj upisa najprije briše retke starije od prozora | Nitko izravno; piše samo `enroll_with_code` |
 | `mentorship` | mentor, student, vrsta rada, od, do, potvrdio | Mentor i student |
 | `assignment` | id, kolegij, trenutna verzija | Članovi kolegija |
@@ -221,7 +223,7 @@ Lokalna osnovica B0.2 (`docs/spikes/B0.2.md`) pokazala je da CPU i memorija nisu
 
 ## 5a. Suradnja nastavnika i studenta
 
-- **Pogled na rad u nastajanju (D-06):** nastavnik ili mentor dobiva trenutno spremljeno stanje dokumenta kroz RPC koji provjerava odnos. Klijent provjerava novo stanje pollingom svakih 30 do 60 s; obavijest o novoj reviziji nastaje najviše jednom po P-03 prozoru (i samo na kraju sesije ako se potvrdi D-39). Tipkanje se ne prenosi uživo. [ODLUČENO D-74]
+- **Pogled na rad u nastajanju (D-06):** nastavnik ili mentor dobiva trenutno spremljeno stanje dokumenta kroz RPC koji provjerava odnos. Klijent provjerava novo stanje pollingom svakih 30 do 60 s; obavijest o novoj reviziji nastaje najviše jednom po P-03 prozoru (i po D-39 samo na kraju sesije; D-39 je potvrđena, a odnos s D-06 otvoren je u Owner queue, do odluke vrijedi D-06). Tipkanje se ne prenosi uživo. [ODLUČENO D-74]
 - **Komentari:** vezani uz raspon teksta preko sidra (preneseno iz `collaboration/anchor` u `pisac-editor`). Ako se tekst ispod sidra promijeni toliko da se sidro ne može pouzdano pronaći, komentar se prikazuje kao "sidro nije pouzdano", nikad na krivom mjestu.
 - **Prijedlozi:** spremaju se odvojeno od dokumenta (`suggestion`), pa ne stvaraju sukob s pisanjem studenta. Kad ga student prihvati, koraci prijedloga primjenjuju se kao nova revizija s autorom "nastavnik (prihvaćeni prijedlog)".
 - **Izravne izmjene (D-21, [PRIJEDLOG D-34]):** izravna izmjena je prijedlog koji studentov klijent automatski primjenjuje, pa dokument uvijek ima jednog pisača; student može vratiti način na prijedloge. **Otvoreno pitanje (BACKEND §4.1):** revizija tada nastaje na studentovu klijentu, a autor mora biti "nastavnik" bez povjerenja u polje klijenta (npr. potpisani zahtjev nastavnikove sesije koji klijent prilaže). Rješenje se određuje u M6; do tada D-34 ostaje PRIJEDLOG.

@@ -104,12 +104,30 @@ Svaki petak (`PLAN-DEMO.md` §3): usporedba spojenog s tablicom tjedna, kratak s
 
 ## 7. Štednja tokena orkestratora
 
-- **Trajna sesija orkestratora (Daniel, 10. 10. 2026.):** sesija orkestratora se ne arhivira i ne zamjenjuje novom radi štednje tokena, jer orkestrator treba neprekinut pregled onoga što se radi. Umjesto rotacije kontekst se osvježava sažimanjem: nakon završenog logičkog sklopa ili kad ponovljeni kontekst postane skuplji od sažetka; 200.000 tokena je gornja sigurnosna granica, ne cilj. Orkestrator zapisuje predaju na ploču i komentarom na koordinacijskom issueu (§8) na kraju svakog logičkog sklopa i prije svakog ručnog sažimanja, jer sažetak gubi pojedinosti; te zapise smije pisati odmah. `STATE.md` dobiva samo skupni sažetak po §3 t. 4, kroz PR. Sažima se ručno prije granice, tako da automatsko sažimanje runtimea, koje dolazi bez najave, nije redovni okidač: orkestrator sažima sam ako runtime to omogućuje, a inače po §4a traži od Daniela da pokrene sažimanje. Ako se automatsko sažimanje ipak dogodi, zadnja predaja s kraja sklopa ostaje polazište. Hook ili postavka koja svaku sesiju iznad praga upućuje na rotaciju ne vrijedi za orkestratora i mora ga izuzeti prije nego se uvede. Pravilo vrijedi samo za orkestratora; ostale sesije rotiraju po `SESSIONS.md` §4.
+- **Trajna sesija orkestratora (Daniel, 10. 10. 2026.):** sesija orkestratora se ne arhivira i ne zamjenjuje novom radi štednje tokena, jer orkestrator treba neprekinut pregled onoga što se radi. Umjesto rotacije kontekst se osvježava sažimanjem: nakon završenog logičkog sklopa ili kad ponovljeni kontekst postane skuplji od sažetka; 400.000 tokena je gornja sigurnosna granica, ne cilj (odluka vlasnika 10. 10. 2026.; prvi podsjetnik hooka dolazi na 300.000). Prag automatskog sažimanja (`CLAUDE_CODE_AUTO_COMPACT_WINDOW`) postavka je računala: orkestrator ga drži na `400000` u vlastitom `.claude/settings.local.json`, a zajednički `.claude/settings.json` ostaje na 200000. Izričito prihvaćeno ograničenje: `.worktreeinclude` kopira `settings.local.json` u svaki novi worktree, pa na računalu gdje orkestrator drži 400000 tu vrijednost nasljeđuje svaka sesija pokrenuta u istom checkoutu, a kroz kopiju i lokalni worktreeji radnika i kontrolnih sesija. Granice po ulozi (150k i 250k za radnike i kontrolne uloge) provodi hook podsjetnikom, ne automatsko sažimanje, a hook je savjetodavan. Orkestrator zapisuje predaju na ploču i komentarom na koordinacijskom issueu (§8) na kraju svakog logičkog sklopa i prije svakog ručnog sažimanja, jer sažetak gubi pojedinosti; te zapise smije pisati odmah. `STATE.md` dobiva samo skupni sažetak po §3 t. 4, kroz PR. Sažima se ručno prije granice, tako da automatsko sažimanje runtimea, koje dolazi bez najave, nije redovni okidač: orkestrator sažima sam ako runtime to omogućuje, a inače po §4a traži od Daniela da pokrene sažimanje. Ako se automatsko sažimanje ipak dogodi, zadnja predaja s kraja sklopa ostaje polazište. Hook ili postavka koja svaku sesiju iznad praga upućuje na rotaciju ne vrijedi za orkestratora i mora ga izuzeti prije nego se uvede. Pravilo vrijedi samo za orkestratora; ostale sesije rotiraju po `SESSIONS.md` §4.
 - **Trajna sesija nije izvor istine.** Sesija se može izgubiti i bez odluke (pad aplikacije, računalo, račun, kvota). Zato nova instanca, i na drugom računu ili provideru, i dalje mora moći nastaviti samo iz repoa, GitHuba i ploče; nova sesija orkestratora otvara se samo kad se postojeća ne može nastaviti. Session adresa u `STATE.md` ažurira se samo kao pomoćni podatak za runtime koji je koristi.
 - Ne čita diffove ni cijele dokumente; samo metapodatke PR-a i potrebne odjeljke.
 - Istraživanja i pregled mnogo datoteka daje pomoćnom agentu ili kratkotrajnoj sesiji.
 - Ploča: dodaje događaje, ne prepisuje cijeli dnevnik.
-- **Model po poslu (Daniel, 10. 10. 2026.):** Opus za evidenciju, ovlasti, prijavu i sinkronizaciju; Sonnet za rutinu; Haiku za metapodatke i pretrage. Orkestrator model zadaje pri pokretanju workera.
+- **Model po poslu (Daniel, 10. 10. 2026.):** Opus za evidenciju, ovlasti, prijavu i sinkronizaciju; Sonnet za rutinu; Haiku za metapodatke i pretrage. Orkestrator model zadaje pri pokretanju workera. Pravilo vrijedi jednako za lokalne podagente i za jednokratne sesije u oblaku (§8); tablica ga čini provjerljivim (uloga × risk → model):
+
+  | Uloga | Zadatak | Model | Effort |
+  | --- | --- | --- | --- |
+  | Pisac | `low` i `standard` | Sonnet | po riziku |
+  | Pisac | `critical` | Opus | po riziku |
+  | Pisac | bilo koje razine u području evidencije, ovlasti, prijave ili sinkronizacije | Opus | po riziku |
+  | Review | `low` | Sonnet | po riziku |
+  | Review | `standard` | Sonnet, osim u području evidencije, ovlasti, prijave ili sinkronizacije (tada Opus) | po riziku |
+  | Review | `critical` | Opus | po riziku |
+  | QA | `critical` | Opus | po riziku |
+  | Sigurnosni pregled, Bug Hunter nad kritičnim područjima | sve razine | Opus | po riziku |
+  | Plan napada (§8) | `critical` zadatak | Opus | po riziku |
+  | Prijedlozi Product/UX, dokumenti | sve razine | Sonnet | po riziku |
+  | Pretrage i metapodaci | sve razine | Haiku | po riziku |
+
+  Effort slijedi risk zadatka (`ENGINEERING_SYSTEM.md` §5): `low` → low, `standard` → medium, `critical` → high. Kad se model iz tablice razlikuje od zadanog modela uloge u `docs/SESSIONS.md` §1, vrijedi tablica ("Prednost modela").
+
+  Model se zadaje **izričito pri svakom pokretanju**: parametar `model` alata Agent za lokalne podagente, polje `model` u konfiguraciji sesije u oblaku. Profili s `model: inherit` (među njima reviewer i QA) inače nasljeđuju model orkestratora, dakle Opus. Svaki zapis pokretanja na koordinacijskom issueu (§8) navodi model. Pravilo sumnje: ako nije jasno u koju razinu zadatak spada, ide viši model. Gate se time ne mijenja: komentari reviewa i QA-a i dalje navode stvarni model (`Review-Model`, `QA-Model`, `ENGINEERING_SYSTEM.md` §6). Ovo je governance pravilo, ne strojna granica: ništa ne provjerava da je zadani model stvarno korišten.
 - **Svjež podagent ili CLI posao po zadatku ili lancu.** Dobiva samo zadatak iz `SESSIONS.md` §3 i odjeljke navedene u polju Ulaz; nikad povijest razgovora orkestratora. Dugovječne sesije i dalje rotiraju po `SESSIONS.md` §4.
 - **Logovi samo za pad.** Stanje se čita po §1; CI logovi samo za provjeru koja je pala na PR-u koji se obrađuje.
 

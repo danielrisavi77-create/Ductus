@@ -137,7 +137,7 @@ SET LOCAL ROLE ductus_retention;
 SELECT throws_ok('SELECT count(*) FROM identity.session', '42501', NULL, 'ductus_retention: SELECT on session is denied');
 RESET ROLE;
 SET LOCAL ROLE ductus_auth;
-SELECT throws_ok('SELECT count(*) FROM identity.session', '42501', NULL, 'ductus_auth: SELECT on session is denied (open_session comes with B-6)');
+SELECT throws_ok('SELECT count(*) FROM identity.session', '42501', NULL, 'ductus_auth: SELECT on session is denied (it only executes open_session)');
 RESET ROLE;
 SET LOCAL ROLE ductus_test_stranger;
 SELECT throws_ok('SELECT * FROM app.current_actor()', '42501', NULL, 'role without grants: current_actor() is denied');
