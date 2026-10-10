@@ -42,15 +42,44 @@ function isTransient(state: SyncState): boolean {
 }
 
 /**
+ * The two states whose labels say "spremljeno" are claims about a record, and
+ * a recorded state is only resumed while the journal still holds that record
+ * (#178 attacks 5 and 17):
+ *   - LOCAL_DURABLE ("Spremljeno na uređaju") needs the snapshot;
+ *   - SYNCED ("Spremljeno na poslužitelju") needs the snapshot and an empty
+ *     queue. A row still queued is text the server has not confirmed, and a
+ *     queue that cannot be read is not an empty one.
+ * Every other state claims nothing saved and passes.
+ */
+function hasItsRecord(state: SyncState, contents: JournalContents): boolean {
+  if (state !== "LOCAL_DURABLE" && state !== "SYNCED") {
+    return true;
+  }
+  if (!contents.snapshot) {
+    return false;
+  }
+  const pending: unknown = contents.pending;
+  return state === "LOCAL_DURABLE" || (Array.isArray(pending) && pending.length === 0);
+}
+
+/**
  * The state a session must resume in:
- *   - a recorded settled `meta.state` wins, so sticky states survive a reload;
+ *   - a recorded settled `meta.state` wins, so sticky states survive a reload,
+ *     unless it says "saved" about a record the journal does not hold
+ *     (`hasItsRecord`); such a state is read as if none had been recorded.
+ *     A recorded SYNCED with rows still queued therefore resumes in
+ *     LOCAL_DURABLE and the drain goes on;
  *   - a recorded in-flight state (SAVING_LOCAL, SYNCING) is not resumed and
  *     says nothing about what is on disk, so it is read as if no state had
  *     been recorded;
  *   - without a usable recorded state, a snapshot (a journal written by an
  *     older build, a partial store, or a tab closed mid-operation) is locally
  *     durable, since the bytes are there;
- *   - otherwise nothing has been saved and the session starts in EDITING.
+ *   - otherwise nothing is known to be saved and the session starts in
+ *     EDITING. That includes rows queued without a snapshot (a partial
+ *     store): no label may say "saved" about text the journal cannot show.
+ *     The rows are left queued; treating a partial store as a recovery case
+ *     belongs to the recovery flow, not to this function.
  *
  * Normalising to LOCAL_DURABLE claims only what the journal holds: after a
  * reload the editor shows the stored snapshot, not the candidate that was in
@@ -68,7 +97,7 @@ function isTransient(state: SyncState): boolean {
  */
 export function restoreSyncState(contents: JournalContents): SyncState {
   const recorded = contents.meta?.state;
-  if (isSyncState(recorded) && !isTransient(recorded)) {
+  if (isSyncState(recorded) && !isTransient(recorded) && hasItsRecord(recorded, contents)) {
     return recorded;
   }
   if (contents.snapshot) {

@@ -176,3 +176,81 @@ describe("restoreSyncState: what a reload must not clear (#178 attacks 8 and 21)
     expect(contents.meta?.state).toBe("SYNCING");
   });
 });
+
+/**
+ * #178 attacks 5 and 17, QA of #189: a "saved" label needs the record it
+ * speaks of. "Spremljeno na poslužitelju" needs a snapshot and an empty
+ * queue; "Spremljeno na uređaju" needs a snapshot. A reload proves neither.
+ */
+describe("restoreSyncState: no saved claim without its record (#178 attacks 5 and 17)", () => {
+  const ROWS = [row(1, "tx-a"), row(2, "tx-b")];
+  const stores = [
+    { name: "snapshot, empty queue", snapshot, pending: [] },
+    { name: "snapshot, rows queued", snapshot, pending: ROWS },
+    { name: "no snapshot, empty queue", snapshot: null, pending: [] },
+    { name: "no snapshot, rows queued", snapshot: null, pending: ROWS },
+  ] as const;
+  // Recorded state -> restored state, one column per store above.
+  const TABLE: Record<SyncState, readonly SyncState[]> = {
+    EDITING: ["EDITING", "EDITING", "EDITING", "EDITING"],
+    SAVING_LOCAL: ["LOCAL_DURABLE", "LOCAL_DURABLE", "EDITING", "EDITING"],
+    LOCAL_DURABLE: ["LOCAL_DURABLE", "LOCAL_DURABLE", "EDITING", "EDITING"],
+    SYNCING: ["LOCAL_DURABLE", "LOCAL_DURABLE", "EDITING", "EDITING"],
+    SYNCED: ["SYNCED", "LOCAL_DURABLE", "EDITING", "EDITING"],
+    CONFLICT: ["CONFLICT", "CONFLICT", "CONFLICT", "CONFLICT"],
+    ERROR: ["ERROR", "ERROR", "ERROR", "ERROR"],
+    RECOVERY_REQUIRED: [
+      "RECOVERY_REQUIRED", "RECOVERY_REQUIRED", "RECOVERY_REQUIRED", "RECOVERY_REQUIRED",
+    ],
+  };
+  const cases = SYNC_STATES.flatMap((state) =>
+    stores.map((store, column) => ({ state, store, expected: TABLE[state][column] })),
+  );
+
+  it.each(cases)("recorded $state with $store.name resumes in $expected", ({ state, store, expected }) => {
+    const contents = recorded(state, { snapshot: store.snapshot, pending: [...store.pending] });
+    expect(restoreSyncState(contents)).toBe(expected);
+  });
+
+  it("a recorded SYNCED with a row still owed is not shown as saved on the server", () => {
+    for (const pending of [[row(1, "tx-a")], ROWS]) {
+      const contents = recorded("SYNCED", { pending });
+      const restored = restoreSyncState(contents);
+      expect(restored).toBe("LOCAL_DURABLE");
+      expect(chipContent(restored).text).not.toBe(SYNC_STATE_LABELS.SYNCED.label);
+      // The queue goes on: a send may start, and the plan has a row to send.
+      expect(syncReducer(restored, { type: "SYNC_STARTED" })).toBe("SYNCING");
+      expect(planDrain(contents.pending, { ...contents.meta!, state: restored }).send).not.toBeNull();
+    }
+  });
+
+  it("says saved on the server only for a recorded SYNCED with a snapshot and an empty queue", () => {
+    for (const { state, store } of cases) {
+      const restored = restoreSyncState(
+        recorded(state, { snapshot: store.snapshot, pending: [...store.pending] }),
+      );
+      if (restored === "SYNCED") {
+        expect([state, store.name]).toEqual(["SYNCED", "snapshot, empty queue"]);
+      }
+      if (restored === "LOCAL_DURABLE") {
+        expect(store.snapshot).not.toBeNull();
+      }
+    }
+  });
+
+  it("does not take a queue it cannot read for an empty one", () => {
+    for (const pending of [null, undefined, "", 0, {}, { length: 0 }]) {
+      const contents = { ...recorded("SYNCED"), pending } as unknown as JournalContents;
+      expect(restoreSyncState(contents)).toBe("LOCAL_DURABLE");
+    }
+  });
+
+  it("leaves rows without a snapshot unclaimed and untouched, with or without meta", () => {
+    // A partial store: nothing on screen is known to be saved, so no label
+    // says so. The rows stay queued; this function never drops anything.
+    const contents: JournalContents = { snapshot: null, pending: [...ROWS], meta: null };
+    expect(restoreSyncState(contents)).toBe("EDITING");
+    expect(contents.pending).toHaveLength(2);
+    expect(chipContent("EDITING").text).not.toMatch(/spremljeno/i);
+  });
+});
