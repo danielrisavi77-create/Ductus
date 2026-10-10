@@ -28,7 +28,7 @@ export function safeReturnTo(value: unknown): string {
     return DEFAULT_RETURN_TO;
   }
   // Login routes would only loop back into the flow.
-  if (parsed.origin !== BASE || parsed.pathname.startsWith("/api/")) return DEFAULT_RETURN_TO;
+  if (parsed.origin !== BASE || parsed.pathname === "/api" || parsed.pathname.startsWith("/api/")) return DEFAULT_RETURN_TO;
   // The parser removes dot segments, so "/.//host" and "/%2e//host" come out
   // as "//host". What is returned is what must be safe, so check it again.
   const result = parsed.pathname + parsed.search + parsed.hash;

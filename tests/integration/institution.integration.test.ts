@@ -9,7 +9,7 @@ import { createWithActor, type WithActor } from "@/server/db/with-actor";
 // against the compose stack (pnpm stack:up, pnpm db:migrate). What pgTAP
 // cannot show is here: parallel requests, what one transaction leaves for the
 // next, and a login that tries to act as someone else (plan of attack on
-// issue #153, items 11, 12, 16, 18 and 29).
+// issue #153, items 11, 12, 16, 18 and 29; for assignments 26 and 27).
 // Every person, institution, course, token and password is random or invented.
 const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
 // The login exists only while this file runs: pgTAP (010) lists every
@@ -60,9 +60,35 @@ const attempts = (userId: string) =>
 const memberships = (userId: string) =>
   count("SELECT count(*) FROM institution.course_member WHERE user_id = $1", [userId]);
 
+type Refusal = { code?: string; message?: string };
+const refusal = (error: Refusal): Refusal => ({ code: error.code, message: error.message });
+
+// Everything of an assignment version after its title; all of it invented.
+const CONTENT =
+  "'Upute za izmišljeni zadatak.', 'essay', now(), now() + interval '30 days', 'partially_allowed', '{proofreading}'::text[], 'basic', false";
+const PUBLISH = `SELECT institution.publish_assignment_version($1, $2, 'Esej', ${CONTENT}) AS version`;
+const ACKNOWLEDGE = "SELECT institution.acknowledge_notice($1, $2)";
+
+// A transaction of one user that the test commits when it chooses.
+async function openTransaction(token: string) {
+  const client = new pg.Client({ connectionString: appUrl() });
+  await client.connect();
+  await client.query("BEGIN");
+  await client.query("SELECT set_config('app.session_token', $1, true)", [token]);
+  return client;
+}
+
+// False while the request is still waiting after 300 ms.
+const answeredSoon = (request: Promise<unknown>) =>
+  Promise.race([
+    request.then(() => true, () => true),
+    new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 300)),
+  ]);
+
 let withActor: WithActor;
 let course = "";
 let code = "";
+let assignment = "";
 
 beforeAll(async () => {
   await admin.query(`DROP ROLE IF EXISTS ${LOGIN}`);
@@ -124,6 +150,28 @@ beforeAll(async () => {
 afterAll(async () => {
   await Promise.all(pools.map((pool) => pool.end()));
   const institutions = [facultyA, facultyB];
+  // A version is immutable, for the operator too. Only this clean-up steps
+  // around the trigger, on its own connection and for its own rows.
+  const cleaner = new pg.Client({ connectionString: ADMIN_URL });
+  await cleaner.connect();
+  try {
+    await cleaner.query("BEGIN");
+    await cleaner.query("SET LOCAL session_replication_role = replica");
+    for (const table of ["notice_acknowledgment", "assignment_version"]) {
+      await cleaner.query(
+        `DELETE FROM institution.${table} WHERE assignment_id IN (
+           SELECT a.id FROM institution.assignment a JOIN institution.course c ON c.id = a.course_id WHERE c.institution_id = ANY ($1))`,
+        [institutions],
+      );
+    }
+    await cleaner.query(
+      "DELETE FROM institution.assignment WHERE course_id IN (SELECT id FROM institution.course WHERE institution_id = ANY ($1))",
+      [institutions],
+    );
+    await cleaner.query("COMMIT");
+  } finally {
+    await cleaner.end();
+  }
   await admin.query("DELETE FROM institution.enrollment_attempt WHERE user_id = ANY ($1)", [userIds]);
   await admin.query("DELETE FROM institution.course_member WHERE institution_id = ANY ($1)", [institutions]);
   await admin.query(
@@ -226,7 +274,17 @@ describe("institution functions over withActor", () => {
       "SET SESSION AUTHORIZATION ductus_identity",
       "SET ROLE ductus_migrator",
     ]) {
-      await expect(single(people.stranger.token, (tx) => tx.query(statement))).rejects.toMatchObject({ code: "42501" });
+      // withActor refuses the statement before it reaches the database ...
+      await expect(single(people.stranger.token, (tx) => tx.query(statement))).rejects.toThrow(/not allowed/);
+      // ... and the database refuses it to the ductus_app login as well.
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await expect(client.query(statement)).rejects.toMatchObject({ code: "42501" });
+        await client.query("ROLLBACK");
+      } finally {
+        client.release();
+      }
     }
     // A raw user id in a setting is nobody's identity.
     const posed = await single(people.stranger.token, async (tx) => {
@@ -257,17 +315,29 @@ describe("institution functions over withActor", () => {
     const single = createWithActor(pool);
     // What an injected multi-statement string would do (QA finding 2 on #148):
     // end the transaction, then leave the teacher's token on the session.
-    await single(people.stranger.token, (tx) =>
-      tx.query(`COMMIT; SELECT set_config('app.session_token', '${people.teacher.token}', false)`),
-    );
-    // The token is on the pooled connection now, outside withActor.
-    expect((await pool.query("SELECT app.current_user_id() AS id")).rows[0].id).toBe(people.teacher.id);
+    // withActor refuses it, so the token is left on the connection directly.
+    await expect(
+      single(people.stranger.token, (tx) =>
+        tx.query(`COMMIT; SELECT set_config('app.session_token', '${people.teacher.token}', false)`),
+      ),
+    ).rejects.toThrow(/COMMIT statement is not allowed/);
+    // withActor resets the connection when it gives it back, so the token is
+    // left again before every call.
+    const leave = async () => {
+      await pool.query("SELECT set_config('app.session_token', $1, false)", [people.teacher.token]);
+      // The token is on the pooled connection now, outside withActor.
+      expect((await pool.query("SELECT app.current_user_id() AS id")).rows[0].id).toBe(people.teacher.id);
+    };
 
+    await leave();
     expect(await visibleCourses(single, null)).toEqual([]);
+    await leave();
     expect(await visibleCourses(single, people.stranger.token)).toEqual([]);
+    await leave();
     await expect(
       single(null, (tx) => tx.query("SELECT institution.revoke_enrollment_code($1)", [course])),
     ).rejects.toMatchObject({ code: "ZD401" });
+    await leave();
     await expect(
       single(people.stranger.token, (tx) => tx.query("SELECT institution.revoke_enrollment_code($1)", [course])),
     ).rejects.toMatchObject({ code: "ZD403" });
@@ -324,5 +394,173 @@ describe("institution functions over withActor", () => {
     // A field the function does not know is no function at all.
     expect(await create("Kolegij", `, p_created_by => '${people.stranger.id}'`)).toMatchObject({ code: "42883" });
     expect(await count("SELECT count(*) FROM institution.course WHERE institution_id = $1", [facultyA])).toBe(1);
+  });
+});
+
+describe("assignments and removal over withActor", () => {
+  const publish = (expected: number) =>
+    withActor(people.teacher.token, async (tx) => {
+      const result = await tx.query<{ version: number }>(PUBLISH, [assignment, expected]);
+      return result.rows[0].version;
+    });
+  const acknowledgedCurrent = (token: string) =>
+    withActor(token, async (tx) => {
+      const result = await tx.query<{ yes: boolean }>("SELECT institution.has_acknowledged_current($1) AS yes", [assignment]);
+      return result.rows[0].yes;
+    });
+  const versions = async () =>
+    (
+      await admin.query<{ current_version: number; versions: number[] }>(
+        `SELECT a.current_version, array_agg(v.version_no ORDER BY v.version_no) AS versions
+         FROM institution.assignment a JOIN institution.assignment_version v ON v.assignment_id = a.id
+         WHERE a.id = $1 GROUP BY a.id`,
+        [assignment],
+      )
+    ).rows[0];
+
+  it("eight parallel publications from the same version leave one new version", async () => {
+    assignment = await withActor(people.teacher.token, async (tx) => {
+      const created = await tx.query<{ id: string }>(`SELECT institution.create_assignment($1, 'Esej', ${CONTENT}) AS id`, [course]);
+      return created.rows[0].id;
+    });
+    expect(await versions()).toEqual({ current_version: 1, versions: [1] });
+
+    const answers = await Promise.all(Array.from({ length: 8 }, () => publish(1).catch(refusal)));
+    expect(answers.filter((answer) => answer === 2)).toHaveLength(1);
+    expect(answers.filter((answer) => answer !== 2)).toEqual(
+      Array.from({ length: 7 }, () => ({ code: "ZD409", message: "conflict" })),
+    );
+    expect(await versions()).toEqual({ current_version: 2, versions: [1, 2] });
+  });
+
+  it("a notice is confirmed for the version that is current at commit, or not at all", async () => {
+    // The student confirms version 2 and has not committed: publishing waits.
+    const student = await openTransaction(people.student.token);
+    try {
+      await student.query(ACKNOWLEDGE, [assignment, 2]);
+      const published = publish(2);
+      expect(await answeredSoon(published)).toBe(false);
+      await student.query("COMMIT");
+      expect(await published).toBe(3);
+    } finally {
+      await student.end();
+    }
+    expect(await acknowledgedCurrent(people.student.token)).toBe(false);
+
+    // The teacher publishes version 4 and has not committed: the student, who
+    // still has version 3 on screen, waits and is then told of the conflict.
+    const teacher = await openTransaction(people.teacher.token);
+    try {
+      await teacher.query(PUBLISH, [assignment, 3]);
+      const late = withActor(people.student.token, (tx) => tx.query(ACKNOWLEDGE, [assignment, 3])).catch(refusal);
+      expect(await answeredSoon(late)).toBe(false);
+      await teacher.query("COMMIT");
+      expect(await late).toEqual({ code: "ZD409", message: "conflict" });
+    } finally {
+      await teacher.end();
+    }
+    expect(await versions()).toEqual({ current_version: 4, versions: [1, 2, 3, 4] });
+    const confirmed = () =>
+      admin.query("SELECT version_no FROM institution.notice_acknowledgment WHERE assignment_id = $1 AND student_id = $2 ORDER BY 1", [
+        assignment, people.student.id,
+      ]);
+    expect((await confirmed()).rows).toEqual([{ version_no: 2 }]);
+    expect(await acknowledgedCurrent(people.student.token)).toBe(false);
+
+    // Ten parallel confirmations of version 4 leave one row.
+    await Promise.all(Array.from({ length: 10 }, () => withActor(people.student.token, (tx) => tx.query(ACKNOWLEDGE, [assignment, 4]))));
+    expect((await confirmed()).rows).toEqual([{ version_no: 2 }, { version_no: 4 }]);
+    expect(await acknowledgedCurrent(people.student.token)).toBe(true);
+    // Nobody else has confirmed it, the teacher included.
+    expect(await acknowledgedCurrent(people.guesser.token)).toBe(false);
+    expect(await acknowledgedCurrent(people.teacher.token)).toBe(false);
+  });
+
+  it("a removal racing with enrolments leaves the student out until the teacher allows the return", async () => {
+    const open = () =>
+      count("SELECT count(*) FROM institution.course_member WHERE user_id = $1 AND member_to IS NULL", [people.guesser.id]);
+    const asTeacher = (fn: string) =>
+      withActor(people.teacher.token, async (tx) => {
+        const result = await tx.query<{ done: boolean }>(`SELECT institution.${fn}($1, $2) AS done`, [course, people.guesser.id]);
+        return result.rows[0].done;
+      });
+    expect(await open()).toBe(1);
+
+    const [removals, enrolments] = await Promise.all([
+      Promise.all(Array.from({ length: 4 }, () => asTeacher("remove_student"))),
+      Promise.all(Array.from({ length: 4 }, () => enroll(withActor, people.guesser.token, code))),
+    ]);
+    expect(removals.filter(Boolean)).toHaveLength(1);
+    // Each enrolment ran wholly before the removal or wholly after it.
+    for (const enrolment of enrolments) {
+      expect([{ outcome: "enrolled", enrolled_course_id: course }, { outcome: "refused", enrolled_course_id: null }]).toContainEqual(enrolment);
+    }
+    expect(await open()).toBe(0);
+    expect(await visibleCourses(withActor, people.guesser.token)).toEqual([]);
+    await expect(
+      withActor(people.guesser.token, (tx) => tx.query(ACKNOWLEDGE, [assignment, 4])),
+    ).rejects.toMatchObject({ code: "ZD403", message: "forbidden" });
+
+    // The answer to the removed student is the answer to a wrong code, and
+    // the code goes on working for someone else.
+    await admin.query("DELETE FROM institution.enrollment_attempt WHERE user_id = $1", [people.guesser.id]);
+    expect(await enroll(withActor, people.guesser.token, code)).toEqual(await enroll(withActor, people.guesser.token, "WRONG-CODE"));
+    expect(await attempts(people.guesser.id)).toBe(2);
+    expect(await enroll(withActor, people.stranger.token, code)).toEqual({ outcome: "enrolled", enrolled_course_id: course });
+
+    // Only a teacher of the course lets the student back.
+    for (const token of [people.guesser.token, people.student.token, people.admin.token, people.outsider.token]) {
+      await expect(
+        withActor(token, (tx) => tx.query("SELECT institution.allow_student_return($1, $2)", [course, people.guesser.id])),
+      ).rejects.toMatchObject({ code: "ZD403", message: "forbidden" });
+    }
+    expect((await enroll(withActor, people.guesser.token, code)).outcome).toBe("refused");
+    expect(await asTeacher("allow_student_return")).toBe(true);
+    expect(await enroll(withActor, people.guesser.token, code)).toEqual({ outcome: "enrolled", enrolled_course_id: course });
+    expect(await open()).toBe(1);
+    expect(await memberships(people.guesser.id)).toBe(2);
+  });
+
+  it("a teacher whose role the administrator revokes loses the assignments in the next transaction", async () => {
+    const seen = (token: string) =>
+      withActor(token, async (tx) => {
+        const result = await tx.query("SELECT version_no FROM institution.assignment_version WHERE assignment_id = $1", [assignment]);
+        return result.rowCount;
+      });
+    const asAdmin = (fn: string) =>
+      withActor(people.admin.token, (tx) => tx.query(`SELECT institution.${fn}($1)`, [people.teacher.id]));
+    expect(await seen(people.teacher.token)).toBe(4);
+    // A teacher cannot revoke the role, the own one either.
+    await expect(
+      withActor(people.teacher.token, (tx) => tx.query("SELECT institution.revoke_teacher_role($1)", [people.teacher.id])),
+    ).rejects.toMatchObject({ code: "ZD403", message: "forbidden" });
+
+    await asAdmin("revoke_teacher_role");
+    expect(await seen(people.teacher.token)).toBe(0);
+    expect(await publish(4).catch(refusal)).toEqual({ code: "ZD403", message: "forbidden" });
+    expect(await enroll(withActor, people.teacher.token, code)).toEqual({ outcome: "refused", enrolled_course_id: null });
+    // The students of the course keep the assignment.
+    expect(await seen(people.student.token)).toBe(4);
+    expect(await versions()).toEqual({ current_version: 4, versions: [1, 2, 3, 4] });
+
+    await asAdmin("confirm_teacher_role");
+    expect(await seen(people.teacher.token)).toBe(4);
+  });
+
+  it("refuses a hostile title of an assignment without repeating it", async () => {
+    const create = (title: string, extra = "") =>
+      withActor(people.teacher.token, (tx) =>
+        tx.query(`SELECT institution.create_assignment($1, $2, ${CONTENT}${extra})`, [course, title]),
+      ).catch(refusal);
+    const before = await count("SELECT count(*) FROM institution.assignment WHERE course_id = $1", [course]);
+
+    for (const title of ["a".repeat(100_000), "two\nlines", "   ", ""]) {
+      expect(await create(title)).toEqual({ code: "ZD422", message: "invalid input" });
+    }
+    // PostgreSQL text cannot hold a zero byte; the request fails as a whole.
+    expect(await create(`zero${String.fromCharCode(0)}byte`)).toMatchObject({ code: "22021" });
+    // No argument names the author of the assignment.
+    expect(await create("Esej", `, '${people.stranger.id}'`)).toMatchObject({ code: "42883" });
+    expect(await count("SELECT count(*) FROM institution.assignment WHERE course_id = $1", [course])).toBe(before);
   });
 });
