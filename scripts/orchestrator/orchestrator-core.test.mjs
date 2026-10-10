@@ -188,3 +188,59 @@ test("D-97 and draft are INFO only", () => {
   assert.ok(r.find((x) => x.id === "d97-manual"));
   assert.equal(r.find((x) => x.id === "draft").text, "draft");
 });
+
+// DAN-118. Shape of `gh pr view --json statusCheckRollup` for PR #145 on head 13a47cae.
+const run = (name, conclusion, startedAt, completedAt, workflowName = "CI") =>
+  ({ __typename: "CheckRun", name, conclusion, status: conclusion ? "COMPLETED" : "IN_PROGRESS", startedAt, completedAt, workflowName });
+const LINT = "Lint, typecheck, test and build";
+const RERUN = [
+  run(LINT, "FAILURE", "2026-10-10T14:34:37Z", "2026-10-10T14:34:57Z"),
+  run(LINT, "SUCCESS", "2026-10-10T14:37:20Z", "2026-10-10T14:38:15Z"),
+  run("Dependency review", "SUCCESS", "2026-10-10T14:31:31Z", "2026-10-10T14:31:38Z", "Dependency review"),
+  run("Dependency review", "SUCCESS", "2026-10-10T14:37:20Z", "2026-10-10T14:37:24Z", "Dependency review"),
+];
+
+test("CI: only the newest run of each check counts", () => {
+  assert.deepEqual(evaluateChecks(RERUN), { total: 2, bad: [] });
+  assert.deepEqual(evaluateChecks([...RERUN].reverse()), { total: 2, bad: [] });
+  const r = evaluateReady(ready({ rollup: RERUN }));
+  assert.equal(r.find((x) => x.id === "ci").text, "CI green (2 checks)");
+  assert.equal(allRequiredPass(r), true);
+});
+
+test("CI: a newer failing or unfinished run of a check is not hidden by an older green one", () => {
+  const green = run(LINT, "SUCCESS", "2026-10-10T14:34:37Z", "2026-10-10T14:34:57Z");
+  for (const [state, newer] of [
+    ["FAILURE", run(LINT, "FAILURE", "2026-10-10T14:37:20Z", "2026-10-10T14:38:15Z")],
+    ["IN_PROGRESS", run(LINT, "", "2026-10-10T14:37:20Z", null)],
+    ["CANCELLED", run(LINT, "CANCELLED", "2026-10-10T14:37:20Z", "2026-10-10T14:37:21Z")],
+  ]) {
+    for (const rollup of [[green, newer], [newer, green]]) {
+      assert.deepEqual(evaluateChecks(rollup), { total: 1, bad: [{ name: LINT, state }] });
+    }
+  }
+});
+
+test("CI: runs are never merged across workflows, and unknown order keeps the failure", () => {
+  const other = run(LINT, "FAILURE", "2026-10-10T14:00:00Z", "2026-10-10T14:01:00Z", "Other workflow");
+  assert.deepEqual(evaluateChecks([other, ...RERUN]).bad, [{ name: LINT, state: "FAILURE" }]);
+  const undated = [{ name: "t", conclusion: "FAILURE" }, { name: "t", conclusion: "SUCCESS" }];
+  for (const rollup of [undated, [...undated].reverse()]) {
+    assert.deepEqual(evaluateChecks(rollup), { total: 1, bad: [{ name: "t", state: "FAILURE" }] });
+  }
+  const statuses = [
+    { context: "legacy", state: "FAILURE", startedAt: "2026-10-10T14:00:00Z" },
+    { context: "legacy", state: "SUCCESS", startedAt: "2026-10-10T14:05:00Z" },
+  ];
+  assert.deepEqual(evaluateChecks(statuses), { total: 1, bad: [] });
+});
+
+test("readiness: an unreadable gate is reported as a read error, not as a missing status", () => {
+  const r = evaluateReady(ready({ gate: { error: "HTTP 502: Bad Gateway" } }));
+  const gate = r.find((x) => x.id === "gate");
+  assert.equal(gate.level, "FAIL");
+  assert.match(gate.text, /gate could not be read on aaaaaaaa \(read error, not a missing status; retry\): HTTP 502/);
+  assert.doesNotMatch(gate.text, /gate missing/);
+  assert.equal(allRequiredPass(r), false);
+  assert.match(evaluateReady(ready({ gate: null })).find((x) => x.id === "gate").text, /^gate missing on aaaaaaaa$/);
+});

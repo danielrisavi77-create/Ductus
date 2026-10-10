@@ -1,6 +1,6 @@
 // Merge-readiness checklist for one PR. Read-only: never merges or edits.
 // Usage: node pr-ready.mjs <number>   (exit 0 only if all required checks pass)
-import { gateStatus, ghJson, repoId, reviewThreads } from "./gh.mjs";
+import { ghJson, readGate, repoId, reviewThreads } from "./gh.mjs";
 import {
   allRequiredPass, evaluateReady, intersectFiles, parseAgentRisk, summarizeThreads,
 } from "./orchestrator-core.mjs";
@@ -38,7 +38,7 @@ try {
   const threadNodes = await attempt(() => reviewThreads(n));
   const checks = evaluateReady({
     head: pr.headRefOid,
-    gate: await attempt(() => gateStatus(pr.headRefOid)),
+    gate: await readGate(pr.headRefOid),
     rollup: pr.statusCheckRollup,
     base: pr.baseRefName,
     mergeable: pr.mergeable,
