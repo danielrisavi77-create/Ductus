@@ -85,6 +85,7 @@ Izvor: dokument "Ductus: konkurencija i poboljšanja proizvoda" i FPZG Smjernice
 | D-89 | Dizajn demoa v6 (Design artifact https://claude.ai/artifact/Gd1GMNq9f5QZaP2BTr34BU) je odobren, uključujući 8 obrazloženih odstupanja od prototipa; Frontend gradi ekrane po njemu | Odluka vlasnika 3. 10. 2026. |
 | D-86 | PR-ove spaja samo sesija "Ductus orkestrator", kad Codex nema otvorenih kritičnih nalaza i PR ne čeka vlasnikovu odluku; radne sesije nikad ne spajaju (`docs/SESSIONS.md`) | Izričita ovlast vlasnika |
 | D-90 | Potvrđeno 3. 10. 2026. (Daniel): (1) dio D-73: sesije u bazi i identitet u RLS-u kroz `app.current_actor()` (B-5); izbor biblioteke za OIDC ostaje za B-6; (2) NOLOGIN uloge `ductus_auth` (jedina s EXECUTE na `open_session`) i `ductus_identity` (vlasnik tablica i funkcija sheme `identity`) uz uloge iz BACKEND §3; (3) rječnik zabranjenih izraza iz PRODUCT §5 vrijedi i za engleske ekvivalente u tekstu sučelja (provjera P-6); (4) dok sesije uloga rade u oblaku, Codex pregled pokreće lokalna sesija "Ductus Codex" na `D:\Ductus` po nalogu orkestratora | B-5 i P-6 grade se na ovome; D-73 ostaje PRIJEDLOG samo u izboru biblioteke |
+| D-96 | Potvrđeno 10. 10. 2026. (Daniel): jedan odsječak evidencije (D-24) smije imati najviše 2 MiB (2 097 152 bajta) kanonskih bajtova. To je tehnička validacijska granica ingesta, ista konstanta za klijent i poslužitelj; nije postavka fakulteta, ne ulazi u pragove P-01 do P-05 i ne prikazuje se korisniku. Vrijednost je privremena i mijenja se samo novom odlukom, istodobno na obje strane | Bez granice klijent može složiti odsječak koji poslužitelj odbije, a poslužitelj prima neograničen zahtjev; B-8 se gradi na ovome |
 
 ## Prijedlozi koji čekaju potvrdu
 
@@ -139,4 +140,3 @@ Pragovi su postavke fakulteta (C-7, C-55); uvijek se prikazuju uz brojku na koju
 | P-03 | Osvježavanje nastavničkog pogleda | Najviše svakih 5 minuta | Pogled na rad u nastajanju |
 | P-04 | Granica kratkog zadatka (D-37) | Rok kraći od 24 sata | Vidljivost tijekom pisanja |
 | P-05 | Lijepljenje za koje se nudi oznaka (D-43) | Isto kao P-02 | Pisanje |
-| P-06 | Najveća veličina jednog odsječka evidencije (D-24), ista vrijednost za klijent i poslužitelj | 2 MiB (2 097 152 bajta) kanonskih bajtova; potvrdio Daniel 10. 10. 2026. kao privremeni prag | Ingest evidencije (B-8) |
