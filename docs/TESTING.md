@@ -32,6 +32,7 @@ Ductus ne testira samo radi li funkcija, nego može li se vjerovati zapisu, ovla
 - Prije pilota cijeli acceptance path mora proći na Chromiumu, Firefoxu i WebKitu.
 - Iznimka samo za demo (D-98 dopuna, 10. 10. 2026.): demo spec K-4 obvezan je do 1. 11. samo na Chromiumu; Firefox i WebKit prolaze informativno i ne blokiraju spajanje. Pravilo za pilot se ne mijenja.
 - Mobilni viewport je dodatak, ne zamjena za WebKit.
+- Iznimka po odluci vlasnika: puni tok prijave preko lažnog OIDC-a („Demo prijava”, `e2e/login/`, `pnpm test:e2e:login`) radi nad `next dev`, jer produkcijski build lažnog pružatelja odbija (D-09), i obvezan je samo na Chromiumu. Odbijanje u produkcijskom buildu (`e2e/auth.spec.ts`) i dalje prolazi sva tri enginea. Pokretanje: složaj iz `compose.yaml` (baza i lažni pružatelj na 8090), `pnpm db:migrate`, `pnpm db:seed` i `AUTH_DATABASE_URL` iz `.env.example`.
 
 ## 3. Obvezni adversarial scenariji prije pilota
 

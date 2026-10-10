@@ -48,6 +48,9 @@ export default defineConfig({
             APP_DATABASE_URL:
               process.env.APP_DATABASE_URL ??
               "postgres://ductus_app_local:ductus-app-local-only@127.0.0.1:54329/ductus",
+            // The login-callback login has no password in the repo
+            // (db/local/auth-login.sql); it is set only when one was provisioned.
+            ...(process.env.AUTH_DATABASE_URL ? { AUTH_DATABASE_URL: process.env.AUTH_DATABASE_URL } : {}),
           },
         },
       },

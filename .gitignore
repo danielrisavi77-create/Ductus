@@ -6,7 +6,9 @@ node_modules/
 !.env.example
 .netlify/
 playwright-report/
+playwright-report-login/
 test-results/
+test-results-login/
 .next/
 *.tsbuildinfo
 next-env.d.ts
