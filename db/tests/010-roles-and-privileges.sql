@@ -4,7 +4,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(27);
+SELECT plan(35);
 
 -- Group roles: none can log in or step around RLS.
 SELECT bag_eq(
@@ -22,7 +22,8 @@ SELECT is_empty(
 -- Logins come from the environment, never from a migration. The local stack
 -- provisions exactly one (db/local/app-login.sql): the login of the web
 -- process. It carries no attribute of its own; what it may do comes from its
--- single membership in ductus_app, listed further down.
+-- single membership in ductus_app, listed further down, and from nothing
+-- granted or set on the login itself, checked after the ductus_app rows.
 SELECT bag_eq(
   $$ SELECT rolname::text FROM pg_roles WHERE rolname LIKE 'ductus\_%' AND rolcanlogin $$,
   ARRAY['ductus_app_local'],
@@ -156,6 +157,116 @@ SELECT ok(
   NOT has_database_privilege('ductus_evidence', current_database(), 'CONNECT')
     AND NOT has_database_privilege('ductus_identity', current_database(), 'CONNECT'),
   'owner roles cannot connect'
+);
+
+-- A login adds nothing to its group. The rows above look at ductus_app, so a
+-- grant or a setting placed on the login itself would pass them. A login here
+-- is every ductus_* role that can log in and every login that is a member of
+-- a ductus_* role, so the rows below follow the membership list, not a name.
+CREATE TEMP VIEW ductus_login AS
+  SELECT r.oid, r.rolname::text AS login FROM pg_roles r
+  WHERE r.rolcanlogin
+    AND (r.rolname LIKE 'ductus\_%'
+         OR EXISTS (SELECT 1 FROM pg_auth_members m
+                    WHERE m.member = r.oid AND pg_get_userbyid(m.roleid) LIKE 'ductus\_%'));
+-- pg_shdepend records every object a role owns, every privilege granted to it
+-- on any object of any database, every default privilege and every policy
+-- that names it. A login must have none of these.
+CREATE TEMP VIEW login_dependency AS
+  SELECT l.login || ': ' || d.classid::regclass::text || ' (' || d.deptype::text || ')' AS found
+  FROM ductus_login l
+  JOIN pg_shdepend d ON d.refclassid = 'pg_authid'::regclass AND d.refobjid = l.oid;
+-- The same seen from the other side: nothing the login may do that ductus_app
+-- may not. PUBLIC grants reach both, so they do not show here.
+CREATE TEMP VIEW login_extra_privilege AS
+  SELECT l.login || ': ' || p.privilege || ' on ' || c.oid::regclass::text AS found
+  FROM ductus_login l
+  CROSS JOIN pg_class c
+  CROSS JOIN unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) AS p(privilege)
+  WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f')
+    AND has_table_privilege(l.oid, c.oid, p.privilege) AND NOT has_table_privilege('ductus_app', c.oid, p.privilege)
+  UNION ALL
+  SELECT l.login || ': column ' || p.privilege || ' on ' || c.oid::regclass::text
+  FROM ductus_login l
+  CROSS JOIN pg_class c
+  CROSS JOIN unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'REFERENCES']) AS p(privilege)
+  WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f')
+    AND has_any_column_privilege(l.oid, c.oid, p.privilege) AND NOT has_any_column_privilege('ductus_app', c.oid, p.privilege)
+  UNION ALL
+  SELECT l.login || ': ' || p.privilege || ' on sequence ' || c.oid::regclass::text
+  FROM ductus_login l
+  CROSS JOIN pg_class c
+  CROSS JOIN unnest(ARRAY['USAGE', 'SELECT', 'UPDATE']) AS p(privilege)
+  WHERE c.relkind = 'S'
+    AND has_sequence_privilege(l.oid, c.oid, p.privilege) AND NOT has_sequence_privilege('ductus_app', c.oid, p.privilege)
+  UNION ALL
+  SELECT l.login || ': EXECUTE on ' || f.oid::regprocedure::text
+  FROM ductus_login l
+  CROSS JOIN pg_proc f
+  WHERE has_function_privilege(l.oid, f.oid, 'EXECUTE') AND NOT has_function_privilege('ductus_app', f.oid, 'EXECUTE')
+  UNION ALL
+  SELECT l.login || ': ' || p.privilege || ' on schema ' || n.nspname
+  FROM ductus_login l
+  CROSS JOIN pg_namespace n
+  CROSS JOIN unnest(ARRAY['USAGE', 'CREATE']) AS p(privilege)
+  WHERE has_schema_privilege(l.oid, n.oid, p.privilege) AND NOT has_schema_privilege('ductus_app', n.oid, p.privilege)
+  UNION ALL
+  SELECT l.login || ': ' || p.privilege || ' on the database'
+  FROM ductus_login l
+  CROSS JOIN unnest(ARRAY['CREATE', 'TEMPORARY', 'CONNECT']) AS p(privilege)
+  WHERE has_database_privilege(l.oid, current_database(), p.privilege)
+    AND NOT has_database_privilege('ductus_app', current_database(), p.privilege);
+-- ALTER ROLE ... SET and ALTER DATABASE ... SET change what a new connection
+-- starts with: a search_path, a role, row_security. Neither a ductus_* role,
+-- nor a login, nor this database as a whole carries one.
+CREATE TEMP VIEW login_setting AS
+  SELECT CASE WHEN s.setrole = 0 THEN 'every role' ELSE pg_get_userbyid(s.setrole)::text END
+         || ': ' || array_to_string(s.setconfig, ', ') AS found
+  FROM pg_db_role_setting s
+  WHERE s.setdatabase IN (0, (SELECT oid FROM pg_database WHERE datname = current_database()))
+    AND (s.setrole = 0
+         OR pg_get_userbyid(s.setrole) LIKE 'ductus\_%'
+         OR s.setrole IN (SELECT oid FROM ductus_login));
+
+SELECT is_empty(
+  'SELECT found FROM login_dependency',
+  'no login owns an object, holds a grant of its own or is named by a policy or a default privilege'
+);
+SELECT is_empty(
+  'SELECT found FROM login_extra_privilege',
+  'no login may do anything that ductus_app may not'
+);
+SELECT is_empty(
+  'SELECT found FROM login_setting',
+  'no ductus_* role, login or database default carries a setting for new connections'
+);
+-- Negative controls: each of these went unnoticed while only ductus_app was
+-- checked. Each one is added, seen and taken back.
+GRANT SELECT ON identity.session TO ductus_app_local;
+SELECT isnt_empty(
+  'SELECT found FROM login_dependency',
+  'a table privilege granted to the login itself is noticed as a grant'
+);
+SELECT isnt_empty(
+  'SELECT found FROM login_extra_privilege',
+  'a table privilege granted to the login itself is noticed as a right beyond ductus_app'
+);
+REVOKE SELECT ON identity.session FROM ductus_app_local;
+GRANT CREATE ON DATABASE ductus TO ductus_app_local;
+SELECT isnt_empty(
+  'SELECT found FROM login_dependency',
+  'a database privilege granted to the login itself is noticed'
+);
+REVOKE CREATE ON DATABASE ductus FROM ductus_app_local;
+ALTER ROLE ductus_app_local SET search_path = test_elsewhere, public;
+SELECT isnt_empty(
+  'SELECT found FROM login_setting',
+  'a search_path set on the login is noticed'
+);
+ALTER ROLE ductus_app_local RESET search_path;
+SELECT is_empty(
+  'SELECT found FROM login_dependency UNION ALL SELECT found FROM login_extra_privilege UNION ALL SELECT found FROM login_setting',
+  'the login is clean again once the negative controls are taken back'
 );
 
 -- Every table outside the system and public schemas has forced RLS.

@@ -40,16 +40,55 @@ export const APP_STATEMENT_TIMEOUT_MS = 15_000;
  */
 export const APP_IDLE_IN_TRANSACTION_TIMEOUT_MS = 10_000;
 
+/**
+ * Longest wait for the answer to one statement, enforced by the driver. The
+ * two limits above are the server's, and a server that is frozen or behind a
+ * dead network enforces nothing: without this the request waits until the
+ * operating system gives the connection up. It is longer than the statement
+ * limit, so a server that still answers cancels the statement itself, with
+ * the clearer error and a connection that stays usable. When this limit does
+ * end a wait, the ROLLBACK that follows waits once more and the connection
+ * is dropped. A COMMIT that ends this way may still have been applied, as
+ * with any connection lost during COMMIT.
+ */
+export const APP_QUERY_TIMEOUT_MS = 20_000;
+
 /** The pool settings without the pool: tests apply them to a pool of their own. */
 export function appPoolConfig(connectionString: string): pg.PoolConfig {
   return {
     connectionString,
     max: APP_POOL_MAX,
     connectionTimeoutMillis: APP_CONNECTION_TIMEOUT_MS,
+    query_timeout: APP_QUERY_TIMEOUT_MS,
     // Startup parameters of the connection, not SET statements.
     statement_timeout: APP_STATEMENT_TIMEOUT_MS,
     idle_in_transaction_session_timeout: APP_IDLE_IN_TRANSACTION_TIMEOUT_MS,
   };
+}
+
+/**
+ * Keeps a connection that fails from taking the process down. The server may
+ * close a connection at any time: the idle-in-transaction limit above, an
+ * administrator, a restart. The driver reports that as an `error` event on
+ * the client, and an event without a listener is an uncaught exception. The
+ * pool listens only while a client is idle, so each client gets a listener
+ * for its whole life, borrowed or not.
+ *
+ * The listener only records. A borrowed client that failed rejects its next
+ * statement, so withActor fails and hands it back as broken, and the pool
+ * drops it. Only the error code is logged: never a message, a statement, a
+ * parameter or a token.
+ */
+export function handleConnectionErrors<P extends pg.Pool>(pool: P): P {
+  pool.on("connect", (client) => {
+    client.on("error", (error: Error & { code?: string }) => {
+      console.error("database connection failed", error.code ?? error.name);
+    });
+  });
+  // The pool repeats the failure of an idle client as its own `error` event,
+  // already logged above. Without a listener that event would throw.
+  pool.on("error", () => {});
+  return pool;
 }
 
 // APP_DATABASE_URL is the login of the web process: a member of ductus_app,
@@ -60,13 +99,7 @@ function connect(): WithActor {
   if (!connectionString) {
     throw new Error("APP_DATABASE_URL is not set; database access stays closed");
   }
-  const pool = new pg.Pool(appPoolConfig(connectionString));
-  // An idle connection that drops must not take the process down. Only the
-  // error code is logged: never a statement, a parameter or a token.
-  pool.on("error", (error: Error & { code?: string }) => {
-    console.error("database pool: idle connection failed", error.code ?? error.name);
-  });
-  return createWithActor(pool);
+  return createWithActor(handleConnectionErrors(new pg.Pool(appPoolConfig(connectionString))));
 }
 
 /**
