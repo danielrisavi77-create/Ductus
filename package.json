@@ -30,6 +30,7 @@
     "orch:ready": "node scripts/orchestrator/pr-ready.mjs",
     "orch:push": "node scripts/orchestrator/push-verify.mjs",
     "orch:wait": "node scripts/orchestrator/wait-verdict.mjs",
+    "orch:verdict": "node scripts/orchestrator/verdict.mjs",
     "orch:overlap": "node scripts/orchestrator/pr-overlap.mjs",
     "orch:clean": "node scripts/orchestrator/worktree-clean.mjs",
     "orch:metrics": "node scripts/orchestrator/pr-metrics.mjs",
