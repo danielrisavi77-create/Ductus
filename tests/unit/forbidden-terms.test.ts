@@ -902,6 +902,37 @@ describe("text as the browser shows it", () => {
       "saved (without saying where)",
     ]);
   });
+
+  // Finding of the review of 51fbabb: an element that splits the word itself must not hide it.
+  it("reports a contextual entry whose word an element split, unless the joined text says where", () => {
+    const inMarkup = (joined: string, spaced: string) => findForbiddenTermsInMarkup(joined, spaced).map((term) => term.entry);
+    expect(inMarkup("Spremljeno", "S premljeno")).toEqual(["spremljeno (bez pojašnjenja)"]);
+    expect(inMarkup("Spremljeno", "Sprem ljeno")).toEqual(["spremljeno (bez pojašnjenja)"]);
+    expect(inMarkup("Spremljena", "Spremlje na")).toEqual(["spremljeno (bez pojašnjenja)"]);
+    expect(inMarkup("Saved", "S aved")).toEqual(["saved (without saying where)"]);
+    expect(inMarkup("Saved locally", "Sa ved locally")).toEqual(["saved (without saying where)"]);
+    expect(inMarkup("Spremljeno na uređaju", "S premljeno na uređaju")).toEqual([]);
+    expect(inMarkup("Saved on this device", "S aved on this device")).toEqual([]);
+    // The whole word of one language does not clear the split word of the other.
+    expect(inMarkup("Saved Spremljeno na uređajuPredano", "S aved Spremljeno na uređaju Predano")).toEqual(["saved (without saying where)"]);
+  });
+
+  it("gives every contextual entry the word alone as a literal that covers every form the entry covers", () => {
+    const forms = ["spremljeno", "spremljena", "spremljen", "spremljenih", "saved"];
+    for (const term of FORBIDDEN_TERMS.filter((entry) => entry.contextual)) {
+      const word = term.contextual!.word;
+      expect(word.flags, term.entry).toBe("u");
+      const covered = forms.filter((form) => term.pattern.test(form));
+      expect(covered.length, term.entry).toBeGreaterThan(0);
+      for (const form of covered) {
+        expect(word.test(form), form).toBe(true);
+        expect(word.test(`${form} na uredaju`), form).toBe(true);
+        expect(word.test(`${form} on this device`), form).toBe(true);
+        expect(word.test(`ne${form}`), form).toBe(false);
+        expect(word.test(`${form}9`), form).toBe(false);
+      }
+    }
+  });
 });
 
 describe("markup in component text", () => {
@@ -1004,6 +1035,32 @@ describe("markup in component text", () => {
       ["src/components/Split.tsx", 5, ["verificirano autorstvo"]],
       ["src/components/Split.tsx", 6, ["sumnjivo"]],
       ["src/components/Split.tsx", 7, ["hidden"]],
+    ]);
+  });
+
+  // Finding of the review of 51fbabb, example by example.
+  it("reads a contextual word that an element splits as the word a person sees", () => {
+    root = mkdtempSync(path.join(tmpdir(), "ductus-terms-"));
+    write(
+      "src/components/SplitWord.tsx",
+      component([
+        "<p><b>S</b>premljeno</p>",
+        "<p>Sprem<span>ljeno</span></p>",
+        "<p><strong>S</strong>aved</p>",
+        "<p>Spre<b>mljeno</b></p>",
+        "<h2>Spremljen<em>o</em></h2>",
+        "<p>Spremljeno <b>na uređaju</b></p>",
+        '<p>Spremljeno{" "}na uređaju</p>',
+        "<div><span>Spremljeno na uređaju</span><span>Predano</span></div>",
+        "<p><b>S</b>premljeno na uređaju</p>",
+      ]),
+    );
+    expect(scanned()).toEqual([
+      ["src/components/SplitWord.tsx", 3, ["spremljeno (bez pojašnjenja)"]],
+      ["src/components/SplitWord.tsx", 4, ["spremljeno (bez pojašnjenja)"]],
+      ["src/components/SplitWord.tsx", 5, ["saved (without saying where)"]],
+      ["src/components/SplitWord.tsx", 6, ["spremljeno (bez pojašnjenja)"]],
+      ["src/components/SplitWord.tsx", 7, ["spremljeno (bez pojašnjenja)"]],
     ]);
   });
 
@@ -1133,6 +1190,18 @@ describe("markup in component text", () => {
     ["null branch", ['<p>Dokaz {a ? null : "autorstva"}</p>'], ["dokaz autorstva"]],
     ["table header cells", ["<tr><th>Stanje</th><th>Spremljeno na poslužitelju</th><th>Riječi</th></tr>"], []],
     ["description list", ["<dl><dt>Stanje</dt><dd>Spremljeno</dd></dl>"], ["spremljeno (bez pojašnjenja)"]],
+    // Finding of the review of 51fbabb: an element inside the word itself.
+    ["first letter of a bare word emphasised", ["<p><b>S</b>premljeno</p>"], ["spremljeno (bez pojašnjenja)"]],
+    ["bare word split by a span", ["<p>Sprem<span>ljeno</span></p>"], ["spremljeno (bez pojašnjenja)"]],
+    ["bare word split in the middle", ["<p>Spre<b>mljeno</b></p>"], ["spremljeno (bez pojašnjenja)"]],
+    ["bare word with its last letter emphasised", ["<h2>Spremljen<em>o</em></h2>"], ["spremljeno (bez pojašnjenja)"]],
+    ["first letter of a bare English word emphasised", ["<p><strong>S</strong>aved</p>"], ["saved (without saying where)"]],
+    ["bare word split twice", ["<p>S<b>prem</b>lj<i>eno</i></p>"], ["spremljeno (bez pojašnjenja)"]],
+    ["split word followed by another word", ["<p><b>S</b>premljeno lokalno</p>"], ["spremljeno (bez pojašnjenja)"]],
+    ["split word in a conditional", ['<p>{a ? <><b>S</b>aved</> : "Predano"}</p>'], ["saved (without saying where)"]],
+    ["allowed split word with its place", ["<p><b>S</b>premljeno na uređaju</p>"], []],
+    ["allowed split English word with its place", ["<p><strong>S</strong>aved on this device</p>"], []],
+    ["allowed split word with its place in an element", ["<p>Sprem<span>ljeno</span> <b>na poslužitelju</b></p>"], []],
   ];
 
   it.each(FORMATTING)("reads ordinary formatting: %s", (_, lines, expected) => {

@@ -24,9 +24,10 @@ export interface ForbiddenTerm {
   /**
    * Set when the pattern allows the word in front of certain words
    * ("spremljeno na uređaju"), so whether it matches depends on what follows.
+   * `word` is the same word whatever follows it, a literal like `pattern`.
    * See `findForbiddenTermsInMarkup`.
    */
-  readonly contextual?: true;
+  readonly contextual?: { readonly word: RegExp };
 }
 
 // Patterns are literals (no RegExp built from strings). Each one starts with
@@ -77,7 +78,7 @@ export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
     instead: "spremljeno na uređaju / spremljeno na poslužitelju / predano",
     lang: "hr",
     pattern: /(?<![\p{L}\p{N}])spremljen\p{L}*(?![\p{L}\p{N}])(?! na (?:uredaju|posluzitelju)(?![\p{L}\p{N}]))/u,
-    contextual: true,
+    contextual: { word: /(?<![\p{L}\p{N}])spremljen\p{L}*(?![\p{L}\p{N}])/u },
   },
   // The same entries in the English interface (D-90, point 3).
   { entry: "suspicious", instead: NOTHING, lang: "en", pattern: /(?<![\p{L}\p{N}])(?:suspic|suspect)/u },
@@ -122,7 +123,7 @@ export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
     lang: "en",
     pattern:
       /(?<![\p{L}\p{N}])saved(?![\p{L}\p{N}])(?! (?:on|to) (?:the |this |your )?(?:device|server)(?![\p{L}\p{N}]))/u,
-    contextual: true,
+    contextual: { word: /(?<![\p{L}\p{N}])saved(?![\p{L}\p{N}])/u },
   },
 ];
 
@@ -162,12 +163,21 @@ export function findForbiddenTerms(text: string, lang?: Language): ForbiddenTerm
  * `joined` has the pieces as the browser joins them, `spaced` has a space at
  * every element boundary. An entry found in either reading is reported, so
  * both a word split by an element and a phrase spread over elements are
- * caught. A contextual entry must be found in both: a boundary is not allowed
- * to hide the words that make "spremljeno na uređaju" acceptable.
+ * caught.
+ *
+ * A contextual entry is decided by the joined reading, which is what a person
+ * sees, and must be found there. The spaced reading can only clear it: when
+ * the word stands whole in the spaced reading and is acceptable there, the
+ * match came from two texts running together
+ * (`<span>Spremljeno na uređaju</span><span>Predano</span>`). When the spaced
+ * reading does not hold the whole word at all, an element split the word
+ * itself (`<b>S</b>premljeno`) and there is nothing to clear it with.
  */
 export function findForbiddenTermsInMarkup(joined: string, spaced: string): ForbiddenTerm[] {
-  const readings = [foldText(joined), foldText(spaced)];
-  return FORBIDDEN_TERMS.filter((entry) =>
-    entry.contextual ? readings.every((text) => entry.pattern.test(text)) : readings.some((text) => entry.pattern.test(text)),
-  );
+  const shown = foldText(joined);
+  const apart = foldText(spaced);
+  return FORBIDDEN_TERMS.filter((entry) => {
+    if (!entry.contextual) return entry.pattern.test(shown) || entry.pattern.test(apart);
+    return entry.pattern.test(shown) && (entry.pattern.test(apart) || !entry.contextual.word.test(apart));
+  });
 }
