@@ -5,7 +5,7 @@ import { openPrsWithPaths } from "./gh.mjs";
 import { overlapPairs, renderOverlap } from "./orchestrator-core.mjs";
 
 try {
-  const prs = await openPrsWithPaths("number,isDraft,baseRefName");
+  const prs = await openPrsWithPaths();
   const pairs = overlapPairs(prs);
   if (process.argv.includes("--json")) {
     console.log(JSON.stringify({
