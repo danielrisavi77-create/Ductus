@@ -109,7 +109,23 @@ Svaki petak (`PLAN-DEMO.md` §3): usporedba spojenog s tablicom tjedna, kratak s
 - Ne čita diffove ni cijele dokumente; samo metapodatke PR-a i potrebne odjeljke.
 - Istraživanja i pregled mnogo datoteka daje pomoćnom agentu ili kratkotrajnoj sesiji.
 - Ploča: dodaje događaje, ne prepisuje cijeli dnevnik.
-- **Model po poslu (Daniel, 10. 10. 2026.):** Opus za evidenciju, ovlasti, prijavu i sinkronizaciju; Sonnet za rutinu; Haiku za metapodatke i pretrage. Orkestrator model zadaje pri pokretanju workera.
+- **Model po poslu (Daniel, 10. 10. 2026.):** Opus za evidenciju, ovlasti, prijavu i sinkronizaciju; Sonnet za rutinu; Haiku za metapodatke i pretrage. Orkestrator model zadaje pri pokretanju workera. Pravilo vrijedi jednako za lokalne podagente i za jednokratne sesije u oblaku (§8); tablica ga čini provjerljivim (uloga × risk → model):
+
+  | Uloga | Zadatak | Model |
+  | --- | --- | --- |
+  | Pisac | `low` i `standard` | Sonnet |
+  | Pisac | `critical` | Opus |
+  | Pisac | bilo koje razine u području evidencije, ovlasti, prijave ili sinkronizacije | Opus |
+  | Review | `low` | Sonnet |
+  | Review | `standard` | Sonnet, osim u području evidencije, ovlasti, prijave ili sinkronizacije (tada Opus) |
+  | Review | `critical` | Opus |
+  | QA | `critical` | Opus |
+  | Sigurnosni pregled, Bug Hunter nad kritičnim područjima | sve razine | Opus |
+  | Plan napada (§8) | `critical` zadatak | Opus |
+  | Prijedlozi Product/UX, dokumenti | sve razine | Sonnet |
+  | Pretrage i metapodaci | sve razine | Haiku |
+
+  Model se zadaje **izričito pri svakom pokretanju**: parametar `model` alata Agent za lokalne podagente, polje `model` u konfiguraciji sesije u oblaku. Profili s `model: inherit` (među njima reviewer i QA) inače nasljeđuju model orkestratora, dakle Opus. Svaki zapis pokretanja na koordinacijskom issueu (§8) navodi model. Pravilo sumnje: ako nije jasno u koju razinu zadatak spada, ide viši model. Gate se time ne mijenja: komentari reviewa i QA-a i dalje navode stvarni model (`Review-Model`, `QA-Model`, `ENGINEERING_SYSTEM.md` §6). Ovo je governance pravilo, ne strojna granica: ništa ne provjerava da je zadani model stvarno korišten.
 - **Svjež podagent ili CLI posao po zadatku ili lancu.** Dobiva samo zadatak iz `SESSIONS.md` §3 i odjeljke navedene u polju Ulaz; nikad povijest razgovora orkestratora. Dugovječne sesije i dalje rotiraju po `SESSIONS.md` §4.
 - **Logovi samo za pad.** Stanje se čita po §1; CI logovi samo za provjeru koja je pala na PR-u koji se obrađuje.
 
