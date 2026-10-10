@@ -443,14 +443,16 @@ describe("restoreSyncState", () => {
     expect(restoreSyncState({ snapshot: null, pending: [], meta: null })).toBe("EDITING");
   });
 
+  // An in-flight state is not resumed (F-8, #178 attack 4): restore.test.ts.
   it.each(SYNC_STATES)("restores the recorded state %s across a reload", (state) => {
+    const inFlight = state === "SAVING_LOCAL" || state === "SYNCING";
     expect(
       restoreSyncState({
         snapshot,
         pending: [],
         meta: { documentId: "doc", state, localSeq: 3 },
       }),
-    ).toBe(state);
+    ).toBe(inFlight ? "LOCAL_DURABLE" : state);
   });
 
   it("does not let a reload clear a conflict", () => {

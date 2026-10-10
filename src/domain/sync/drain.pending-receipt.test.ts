@@ -16,7 +16,6 @@ import {
   awaitingReceiptFor,
   fastForwardBase,
   isRetryable,
-  newerRowsQueued,
   nextAwaitingReceipt,
   outcomeToEvents,
   planDrain,
@@ -99,7 +98,7 @@ describe("pending receipt → EDIT → drain", () => {
     const plan1 = planDrain([first], meta("SYNCING"));
     expect(plan1.send).toBe(first);
 
-    const events1 = await outcomeToEvents(PENDING, verification("tx-1", 2), false);
+    const events1 = await outcomeToEvents(PENDING, verification("tx-1", 2), { sent: first, pending: [first] });
     expect(events1).toEqual([]);
     expect(ackedRevision(PENDING)).toBeNull();
     expect(isRetryable(PENDING)).toBe(true);
@@ -119,7 +118,10 @@ describe("pending receipt → EDIT → drain", () => {
     const replay = fakeServerAfterFirstCommit(plan2.send!, false);
     expect(replay.status).toBe("duplicate");
     let state: SyncState = "SYNCING";
-    for (const event of await outcomeToEvents(replay, verification("tx-1", 2), false)) {
+    for (const event of await outcomeToEvents(replay, verification("tx-1", 2), {
+      sent: plan2.send!,
+      pending: [first, second],
+    })) {
       state = syncReducer(state, event);
     }
     expect(state).toBe("SYNCING");
@@ -136,7 +138,7 @@ describe("pending receipt → EDIT → drain", () => {
     const events = await outcomeToEvents(
       signedReplay,
       verification("tx-1", 2),
-      newerRowsQueued([first, second], plan.send),
+      { sent: plan.send!, pending: [first, second] },
     );
     // Verified, but seq 2 is still queued: no SYNC_ACK (see drain.held-ack.test.ts).
     expect(events).toEqual([]);
@@ -174,7 +176,7 @@ describe("lost response → EDIT → drain", () => {
     const first = row(1, 1);
     expect(planDrain([first], meta("SYNCING")).send).toBe(first);
 
-    expect(await outcomeToEvents(LOST, verification("tx-1", 2), false)).toEqual([
+    expect(await outcomeToEvents(LOST, verification("tx-1", 2), { sent: first, pending: [first] })).toEqual([
       { type: "SYNC_FAILED", retryable: true },
     ]);
     expect(isRetryable(LOST)).toBe(true);
@@ -196,7 +198,7 @@ describe("lost response → EDIT → drain", () => {
     for (const event of await outcomeToEvents(
       replay,
       verification("tx-1", 2),
-      newerRowsQueued([first, second], plan.send),
+      { sent: plan.send!, pending: [first, second] },
     )) {
       state = syncReducer(state, event);
     }
@@ -248,7 +250,7 @@ describe("lost response → EDIT → drain", () => {
     const first = row(1, 1);
     const awaiting = nextAwaitingReceipt(first, LOST, null);
     const stale: DrainOutcome = { status: "stale_base", currentRevision: 5 };
-    expect(await outcomeToEvents(stale, verification("tx-1", 2), false)).toEqual([
+    expect(await outcomeToEvents(stale, verification("tx-1", 2), { sent: first, pending: [first] })).toEqual([
       { type: "SYNC_STALE_BASE" },
     ]);
     expect(isRetryable(stale)).toBe(false);
@@ -346,7 +348,7 @@ describe("nextAwaitingReceipt", () => {
         expected: { documentId: DOC, clientTransactionId: "tx-3", revision: 2 },
         verify: async () => false,
       },
-      false,
+      { sent, pending: [sent] },
     );
     expect(events).toEqual([{ type: "SYNC_FAILED", retryable: false }]);
     // The commit landed on the server even though it cannot be acknowledged.
