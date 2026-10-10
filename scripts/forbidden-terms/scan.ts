@@ -4,7 +4,7 @@ import path from "node:path";
 import ts from "typescript";
 
 import { decodeEntities } from "./entities";
-import { FORBIDDEN_TERMS, PHRASE_BREAK, findForbiddenTerms, findForbiddenTermsInMarkup, type ForbiddenTerm } from "./terms";
+import { FORBIDDEN_TERMS, PHRASE_BREAK, findForbiddenTerms, findForbiddenTermsInMarkup, unreadableCharacters, type ForbiddenTerm } from "./terms";
 
 /**
  * Finds interface text in the source tree and checks it against the
@@ -29,6 +29,10 @@ import { FORBIDDEN_TERMS, PHRASE_BREAK, findForbiddenTerms, findForbiddenTermsIn
  *   text is read as written, as a sighted person sees it and as a screen
  *   reader speaks it, and an entry found in any reading is reported (see
  *   `hiding`). Hiding content can add a finding and never takes one away.
+ *   Where a phrase ends, a word does not: the text is also read closed up
+ *   over every such boundary (`findForbiddenTermsInMarkup`).
+ * - `findUnreadableText` reports what cannot be matched at all: characters
+ *   that are not Croatian or English text, and a text with too many readings.
  * - Any other `.ts` module under `app/**`: the Next.js metadata only, that is
  *   the `metadata` export, what `generateMetadata` and `generateImageMetadata`
  *   return, and the `alt` export of `opengraph-image` and `twitter-image`.
@@ -274,7 +278,7 @@ interface Reader {
   /** A piece of a unit: checked by itself, except for contextual entries, which the unit decides. */
   readonly part: Collect;
   /** The content of an element or the value of an attribute expression, in every form it can be rendered. */
-  readonly unit: (at: number, start: number, end: number, readings: readonly Reading[]) => void;
+  readonly unit: (at: number, start: number, end: number, readings: readonly Reading[], overflowed: boolean) => void;
 }
 
 /**
@@ -324,6 +328,8 @@ function renderedStrings(expression: ts.Expression, collect: Collect): void {
     ts.isNonNullExpression(expression)
   ) {
     renderedStrings(expression.expression, collect);
+  } else if (ts.isArrayLiteralExpression(expression)) {
+    for (const item of expression.elements) renderedStrings(item, collect);
   } else if (ts.isConditionalExpression(expression)) {
     renderedStrings(expression.whenTrue, collect);
     renderedStrings(expression.whenFalse, collect);
@@ -498,6 +504,8 @@ function componentText(source: ts.SourceFile, reader: Reader): void {
   const absorbed = new Set<ts.Node>();
   /** The audience the text is being read for; none while it is read as written, with nothing hidden. */
   let audience: Audience | undefined;
+  /** Set when the text being read has more readings than are kept; see `findUnreadableText`. */
+  let overflowed = false;
 
   // Readings of parts that follow one another. A part that would take the
   // count past MAX_READINGS is read as unknown text and its alternatives go to
@@ -509,6 +517,7 @@ function componentText(source: ts.SourceFile, reader: Reader): void {
       if (all.length * part.length > MAX_READINGS) {
         alone.push(...part);
         options = [UNKNOWN];
+        overflowed = true;
       }
       all = distinct(all.flatMap(([joined, spaced]) => options.map(([j, s]): Reading => [joined + j, spaced + s])));
     }
@@ -522,6 +531,11 @@ function componentText(source: ts.SourceFile, reader: Reader): void {
     if (isPlainString(expression)) return exactly(expression.text);
     if (RENDERS_NOTHING.has(expression.kind)) return [EMPTY];
     if (isJsxNode(expression)) return elementReadings(expression, alone);
+    if (ts.isArrayLiteralExpression(expression)) {
+      // React renders the items of an array one after another, with nothing between them.
+      const items = expression.elements.map((item) => (ts.isSpreadElement(item) || ts.isOmittedExpression(item) ? [UNKNOWN] : expressionReadings(item, alone)));
+      return inSequence(items, alone);
+    }
     if (ts.isTemplateExpression(expression)) {
       const parts = [exactly(expression.head.text)];
       for (const span of expression.templateSpans) {
@@ -598,6 +612,7 @@ function componentText(source: ts.SourceFile, reader: Reader): void {
   // away. Then for each audience, then the parts that are read by themselves.
   const forEveryone = (read: (alone: Reading[]) => Reading[]): Reading[] => {
     const alone: Reading[] = [];
+    overflowed = false;
     const readings = [undefined, ...AUDIENCES].flatMap((to) => {
       audience = to;
       return read(alone);
@@ -619,7 +634,7 @@ function componentText(source: ts.SourceFile, reader: Reader): void {
   const visit = (node: ts.Node): void => {
     if ((ts.isJsxElement(node) || ts.isJsxFragment(node)) && !absorbed.has(node)) {
       const readings = forEveryone((alone) => contentReadings(node, alone));
-      reader.unit(contentStart(node), node.children.pos, node.children.end, readings);
+      reader.unit(contentStart(node), node.children.pos, node.children.end, readings, overflowed);
     } else if (ts.isJsxText(node)) {
       const value = jsxTextValue(node.text);
       if (value.trim() !== "") reader.part(node, value, textStart(node));
@@ -631,7 +646,7 @@ function componentText(source: ts.SourceFile, reader: Reader): void {
         const expression = node.initializer.expression;
         renderedStrings(expression, reader.part);
         const readings = forEveryone((alone) => expressionReadings(expression, alone));
-        reader.unit(expression.getStart(source), expression.pos, expression.end, readings);
+        reader.unit(expression.getStart(source), expression.pos, expression.end, readings, overflowed);
       }
     } else if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
       const name = node.name.text;
@@ -670,6 +685,8 @@ interface Unit {
   readonly start: number;
   readonly end: number;
   readonly readings: readonly Reading[];
+  /** Set when the text has more readings than `MAX_READINGS`, so some part of it was read as unknown. */
+  readonly overflowed: boolean;
 }
 
 interface Read {
@@ -708,7 +725,7 @@ function locate(file: string, content: string, kind: Kind): Read {
     componentText(source, {
       text: collect(),
       part: collect(true),
-      unit: (at, start, end, readings) => units.push({ line: lineAt(at), at, start, end, readings }),
+      unit: (at, start, end, readings, overflowed) => units.push({ line: lineAt(at), at, start, end, readings, overflowed }),
     });
   }
   return { texts, units };
@@ -821,6 +838,45 @@ export function scanUiText(root: string): Finding[] {
     for (const text of stringsOutside(read.texts, file, content)) check(withoutSpan(text), findForbiddenTerms(text.check ?? text.text, "hr"));
   }
   return findings;
+}
+
+export interface Unreadable {
+  readonly file: string;
+  readonly line: number;
+  /** What the scan cannot read there; it names code points and never quotes the text. */
+  readonly reason: string;
+}
+
+/**
+ * Guard for text the dictionary cannot be matched on. Reported, and so failed
+ * by the repository test, are:
+ *
+ * - every string of a scanned file, interface text or not, that holds a
+ *   character on `unreadableCharacters`: a letter of another script, a code
+ *   point that is no character, an inkless symbol or space inside a word;
+ * - every text with more readings than the scan keeps (`MAX_READINGS`), where
+ *   a part was read as unknown instead of in each of its forms.
+ *
+ * The fix is to write the text with Croatian or English letters, or to split
+ * an element with that many alternatives; there are no exemptions.
+ */
+export function findUnreadableText(root: string): Unreadable[] {
+  const unreadable: Unreadable[] = [];
+  for (const file of sourceFiles(root)) {
+    const kind = scanKind(file);
+    if (kind === null && !isCode(file)) continue;
+    const content = readFileSync(path.join(root, file), "utf8");
+    const read = kind === null ? NOTHING_READ : locate(file, content, kind);
+    const others = kind === "catalogue" || !isCode(file) ? [] : stringsOutside(read.texts, file, content);
+    for (const text of [...read.texts, ...others]) {
+      const characters = unreadableCharacters(text.text);
+      if (characters.length > 0) unreadable.push({ file, line: text.line, reason: `characters outside interface text: ${characters.join(", ")}` });
+    }
+    for (const unit of read.units) {
+      if (unit.overflowed) unreadable.push({ file, line: unit.line, reason: `more than ${MAX_READINGS} readings of one text` });
+    }
+  }
+  return unreadable;
 }
 
 /**

@@ -234,14 +234,54 @@ export function findForbiddenTerms(text: string, lang?: Language): ForbiddenTerm
  * reading does not hold the whole word at all, an element split the word
  * itself (`<b>S</b>premljeno`) and there is nothing to clear it with. Both
  * readings of a contextual entry keep where a phrase ends (`foldPhrases`).
+ *
+ * A third reading closes the text up: every `PHRASE_BREAK` is taken out, so
+ * what stands on the two sides of an unknown part or of an element boundary
+ * is read as one word. The scan cannot know that such a part shows anything
+ * (`Sum<span />njivo`) or that an element is set apart from its neighbours,
+ * so no boundary keeps an entry from being found. A contextual entry is read
+ * closed up only when its word is not whole otherwise.
  */
 export function findForbiddenTermsInMarkup(joined: string, spaced: string): ForbiddenTerm[] {
   const shown = foldText(joined);
   const apart = foldText(spaced);
+  const closed = foldText(joined.replaceAll(PHRASE_BREAK, ""));
+  const closedPhrases = foldPhrases(joined.replaceAll(PHRASE_BREAK, ""));
   const shownPhrases = foldPhrases(joined);
   const apartPhrases = foldPhrases(spaced);
   return FORBIDDEN_TERMS.filter((entry) => {
-    if (!entry.contextual) return entry.pattern.test(shown) || entry.pattern.test(apart);
-    return entry.pattern.test(shownPhrases) && (entry.pattern.test(apartPhrases) || !entry.contextual.word.test(apartPhrases));
+    if (!entry.contextual) return entry.pattern.test(shown) || entry.pattern.test(apart) || entry.pattern.test(closed);
+    if (entry.pattern.test(shownPhrases) && (entry.pattern.test(apartPhrases) || !entry.contextual.word.test(apartPhrases))) return true;
+    // The word itself put together across something unknown: there is no whole word to judge without closing it.
+    return !entry.contextual.word.test(shownPhrases) && entry.pattern.test(closedPhrases);
   });
+}
+
+/** White space that may stand between two letters of one text without being reported. */
+const PLAIN_SPACE = /[  ]/u;
+/** A run of symbols and spaces that touches a letter on both sides. */
+const INSIDE_A_WORD = /(?<=\p{L})[\p{So}\p{Zs}]+(?=\p{L})/gu;
+const NEVER_TEXT = /[\p{Co}\p{Cn}\p{Cs}]/gu;
+
+/**
+ * Characters that interface text may not hold, each once, as `U+XXXX`. The
+ * dictionary is matched on letters, so a character that only looks
+ * like a letter, or like nothing at all, would take a word past it. Such a
+ * character is reported for what it is, whatever word it stands in:
+ *
+ * - a letter that does not fold to `a`-`z` (`foldLetters`): Cyrillic, Greek,
+ *   a dotless i, an IPA letter. Croatian letters and other Latin letters with
+ *   a diacritic fold, and so do the compatibility forms NFKC knows;
+ * - a private use, unassigned or surrogate code point, wherever it stands;
+ * - a symbol with no ink (a Braille blank, a musical null note) or a space
+ *   other than `PLAIN_SPACE` between two letters with no plain space next to it.
+ */
+export function unreadableCharacters(text: string): string[] {
+  const found: string[] = [...(text.match(NEVER_TEXT) ?? [])];
+  for (const char of text) if (/\p{L}/u.test(char) && !/^[a-z]*$/.test(foldLetters(char))) found.push(char);
+  // Without what the dictionary matching drops anyway, so that such a character next to the run does not hide it.
+  const bare = text.replace(INVISIBLE, "").replace(/\p{M}/gu, "");
+  for (const run of bare.match(INSIDE_A_WORD) ?? []) if (!PLAIN_SPACE.test(run)) found.push(...run);
+  const codes = found.map((char) => `U+${char.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")}`);
+  return [...new Set(codes)];
 }
