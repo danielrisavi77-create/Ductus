@@ -74,7 +74,15 @@ describe("golden vectors: document hash", () => {
     }
     const hashAfter = new Map(chain.documentStates.map((s) => [s.afterSequence, s.sha256]));
     const events = chain.segments.flatMap((vector) => vector.segment.events);
-    expect(events.map((event) => event.sequence)).toEqual([1, 2, 3]);
+    expect(events.map((event) => event.sequence)).toEqual([1, 2, 3, 4, 5]);
+    // Keyless input and a change with no attribution (D-54) are in the accepted chain.
+    expect(events.map((event) => event.source)).toEqual([
+      "editor",
+      "paste",
+      "composition",
+      "keyless-input",
+      "unattributed",
+    ]);
     for (const event of events) {
       expect(event.beforeDocumentHash).toBe(hashAfter.get(event.sequence - 1));
       expect(event.afterDocumentHash).toBe(hashAfter.get(event.sequence));

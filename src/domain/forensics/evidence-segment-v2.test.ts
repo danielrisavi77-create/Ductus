@@ -7,6 +7,7 @@ import {
   EVIDENCE_CANONICALIZATION_V2,
   EVIDENCE_HASH_ALGORITHM_V2,
   EVIDENCE_SEGMENT_SCHEMA_V2,
+  EVIDENCE_SOURCES_V2,
   isEvidenceMinuteV2,
   isEvidenceSegmentV2,
   type EvidenceSegmentV2,
@@ -164,6 +165,32 @@ describe("EvidenceSegmentV2", () => {
     expect(isEvidenceSegmentV2(source)).toBe(false);
   });
 
+  it("has a closed set of sources, with one for keyless input and one for a change with no attribution (D-54)", () => {
+    // Written out: a renamed, added or removed value is a change of the format.
+    expect(EVIDENCE_SOURCES_V2).toEqual([
+      "editor",
+      "paste",
+      "cut",
+      "drop",
+      "composition",
+      "system-replacement",
+      "keyless-input",
+      "unattributed",
+    ]);
+    const withSource = (source: string) => {
+      const segment = fixture();
+      segment.events[0].source = source as never;
+      return isEvidenceSegmentV2(segment);
+    };
+    for (const source of EVIDENCE_SOURCES_V2) expect(withSource(source)).toBe(true);
+    for (const source of ["", "Editor", "unattributed ", "keyless", "dictation", "unknown", "other"]) {
+      expect(withSource(source)).toBe(false);
+    }
+    // No default: an event without a source is not taken for typing.
+    const none = fixture();
+    delete (none.events[0] as { source?: string }).source;
+    expect(isEvidenceSegmentV2(none)).toBe(false);
+  });
 
   it("rejects unknown envelope fields so future semantics cannot be smuggled into v2", () => {
     const segment = fixture() as EvidenceSegmentV2 & { futureMeaning?: string };

@@ -37,7 +37,8 @@ const vectors = loadGoldenVectors();
 const { chain } = vectors;
 const utf8 = new TextEncoder();
 const goldenKey = goldenKeyVerifier(chain.verificationKey);
-const [emptyDocument, , , finalDocument] = chain.documentStates;
+const emptyDocument = chain.documentStates[0];
+const finalDocument = chain.documentStates[chain.documentStates.length - 1];
 
 type TextDocument = { nodes: { id: string; text: string }[] };
 

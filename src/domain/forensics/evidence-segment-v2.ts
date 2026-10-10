@@ -5,6 +5,19 @@ export const EVIDENCE_SEGMENT_SCHEMA_V2 = "ductus-evidence-segment-v2" as const;
 export const EVIDENCE_CANONICALIZATION_V2 = "RFC8785-JCS" as const;
 export const EVIDENCE_HASH_ALGORITHM_V2 = "sha256" as const;
 
+/**
+ * What a change of the document is attributed to. The set is closed: a value
+ * outside it is refused, and a new one needs a new format version.
+ *
+ * Attribution is positive or absent (D-54, owner decision of 10 October 2026).
+ * `editor` is written only for a change the capture layer positively
+ * attributed to typing in the editor, never for want of a better value.
+ * `keyless-input` is text entered without key events (dictation, an on-screen
+ * keyboard, an input method); its size is the size of its steps. Every change
+ * with no positive attribution is `unattributed`, and so is a paste or a drop
+ * whose event cannot be relied on. The server cannot observe attribution: it
+ * keeps the set closed, and the capture layer keeps the rule.
+ */
 export const EVIDENCE_SOURCES_V2 = [
   "editor",
   "paste",
@@ -12,6 +25,8 @@ export const EVIDENCE_SOURCES_V2 = [
   "drop",
   "composition",
   "system-replacement",
+  "keyless-input",
+  "unattributed",
 ] as const;
 
 export type EvidenceSourceV2 = (typeof EVIDENCE_SOURCES_V2)[number];
