@@ -6,6 +6,8 @@ Ažurira se skupno nakon spojenih PR-ova i kontrolnih točaka. Ovaj presjek čuv
 
 M0 Temelj. Prvi cilj ostaje radni demo za FPZG 2. 11. 2026. (`docs/PLAN-DEMO.md`). Ductus Engineering System v1 uvodi risk-based review, QA/Bug Hunter/Product uloge, GitHub za izvršenje i dokaze te Linear za zadatke, prioritete, nositelje i statuse.
 
+Session adresa orkestratora: `session_01BbeJRiYuBbWHCf4ZjHnHuH` (pomoćni podatak za `send_message`, `docs/ORKESTRATOR.md` §5; nije izvor istine).
+
 ## Owner queue (samo Daniel)
 
 Agent nikad ne uzima ove stavke i nikad ne čeka na njima ako drugi posao može naprijed.
