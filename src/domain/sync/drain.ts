@@ -24,6 +24,9 @@
  *   - A commit whose receipt is still owed holds the queue: only that same
  *     idempotency key is replayed, never a newer row on the un-advanced base
  *     (that would be answered `stale_base` — a conflict with ourselves).
+ *   - A send whose answer was lost holds the queue the same way. The CAS may
+ *     have landed without the client hearing of it, so the row stays held
+ *     until the server gives a verified answer for that idempotency key.
  */
 
 import type { DocumentTransaction } from "../document";
@@ -104,14 +107,20 @@ export type DrainPlan = {
 const NOTHING_TO_SEND: DrainPlan = { send: null, supersededUpTo: null };
 
 /**
- * The queue row whose compare-and-set the server has already accepted, but
- * whose signed receipt has not been verified yet (`nextAwaitingReceipt`).
+ * The queue row whose compare-and-set the server has accepted, or MAY have
+ * accepted, but whose signed receipt has not been verified yet
+ * (`nextAwaitingReceipt`). "May have" is a send whose answer never arrived:
+ * the commit can exist on the server without the client knowing.
  *
  * While this is set the local base has NOT been fast-forwarded (only a
  * verified receipt may do that), so every newer row still names the old base.
  * The caller keeps it for as long as the row is owed and hands it back to
- * `planDrain`; persisting it across a reload is the journal's job, not this
- * module's.
+ * `planDrain`.
+ *
+ * Persisting it is the journal's job, not this module's, and it has to happen
+ * BEFORE the request leaves (`awaitingReceiptFor`): a tab closed mid-flight
+ * learns no outcome at all, and a reload that finds no marker would send the
+ * newest row on the old base — the same self-inflicted CONFLICT.
  */
 export type AwaitingReceipt = {
   localSeq: number;
@@ -128,6 +137,14 @@ function isAwaitingReceipt(value: unknown): value is AwaitingReceipt {
     typeof marker.clientTransactionId === "string" &&
     marker.clientTransactionId.trim() !== ""
   );
+}
+
+/**
+ * The marker for `sent`: what the runner stores durably before sending it, and
+ * what a send with an unknown or unacknowledged outcome leaves behind.
+ */
+export function awaitingReceiptFor(sent: PendingTransaction): AwaitingReceipt {
+  return { localSeq: sent.localSeq, clientTransactionId: sent.tx.clientTransactionId };
 }
 
 /**
@@ -201,7 +218,9 @@ function isSendable(row: PendingTransaction): boolean {
  * row is still the one that commit replaced. Sending a newer row now would be
  * answered `stale_base` and put the author in CONFLICT with their own commit.
  * The plan therefore replays exactly the awaited row (same idempotency key,
- * which the server answers as `duplicate`) and leaves newer rows queued. If
+ * which the server answers as `duplicate`) and leaves newer rows queued. The
+ * same holds for a row whose answer was lost: if its CAS landed the replay is
+ * a `duplicate`, and if it never arrived the replay is the commit itself. If
  * the awaited row cannot be proved safe to replay — gone, a different key,
  * at or past an unsafe boundary, or the marker itself is malformed — nothing
  * is sent: a visible stall is recoverable, a self-inflicted CONFLICT is sticky.
@@ -371,6 +390,8 @@ const RETRYABLE: SyncEvent[] = [{ type: "SYNC_FAILED", retryable: true }];
  *                               row is gone, or the payload is not sendable.
  *   transport_error → SYNC_FAILED(true)  no server answer was learned;
  *                               the queue remains owed and backoff applies.
+ *                               The retry is the SAME row, as below: the
+ *                               commit may have landed unheard.
  *   pending_signature → no event and a retry; the CAS landed, but its receipt
  *                               is not ready for acknowledgement. The retry is
  *                               the SAME row (`nextAwaitingReceipt`, then
@@ -482,9 +503,17 @@ export function ackedRevision(outcome: DrainOutcome): number | null {
  *                               acknowledged. That includes a pending
  *                               signature, a missing or malformed receipt and
  *                               a receipt that failed verification.
- *   every other answer          → `previous`, unchanged: nothing new landed
- *                               (or nothing was learned), so whatever was owed
- *                               is still owed.
+ *   transport_error             → `previous`, or `sent` when nothing was
+ *                               held: the answer was lost, not necessarily the
+ *                               request, so the CAS may have landed. A newer
+ *                               row sent on the old base would then be
+ *                               `stale_base` against the author's own commit.
+ *                               Replaying `sent` is safe either way:
+ *                               `duplicate` if it landed, the commit itself if
+ *                               it did not.
+ *   every other answer          → `previous`, unchanged: the server said this
+ *                               commit did not land, so whatever was owed is
+ *                               still owed and nothing new is.
  *
  * "Verified" is `ackedRevision`, i.e. only an outcome that `outcomeToEvents`
  * itself vouched for can release the hold.
@@ -494,13 +523,16 @@ export function nextAwaitingReceipt(
   outcome: DrainOutcome,
   previous: AwaitingReceipt | null,
 ): AwaitingReceipt | null {
+  if (outcome?.status === "transport_error") {
+    return previous ?? awaitingReceiptFor(sent);
+  }
   if (outcome?.status !== "committed" && outcome?.status !== "duplicate") {
     return previous ?? null;
   }
   if (ackedRevision(outcome) !== null) {
     return null;
   }
-  return { localSeq: sent.localSeq, clientTransactionId: sent.tx.clientTransactionId };
+  return awaitingReceiptFor(sent);
 }
 
 /**
