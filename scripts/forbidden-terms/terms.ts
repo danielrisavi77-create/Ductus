@@ -1,8 +1,8 @@
 /**
  * Interface vocabulary that the product never uses (docs/PRODUCT.md 5,
- * "Rječnik sučelja"). Matching runs on folded text: NFC, Croatian lower case,
- * diacritics removed, punctuation and invisible characters turned into single
- * spaces. Patterns are written against that folded form, so `autentica?n`
+ * "Rječnik sučelja"). Matching runs on folded text: NFKC, Croatian lower case,
+ * diacritics removed, invisible characters dropped, punctuation and white
+ * space of any kind turned into single spaces. Patterns are written against that folded form, so `autentica?n`
  * catches "autentičnost", "AUTENTICNOST" and "autentičan". A pattern covers
  * the gender, number and case of its entry and the forms derived from it; it
  * does not add synonyms the dictionary does not list.
@@ -21,6 +21,12 @@ export interface ForbiddenTerm {
    */
   readonly lang: Language;
   readonly pattern: RegExp;
+  /**
+   * Set when the pattern allows the word in front of certain words
+   * ("spremljeno na uređaju"), so whether it matches depends on what follows.
+   * See `findForbiddenTermsInMarkup`.
+   */
+  readonly contextual?: true;
 }
 
 // Patterns are literals (no RegExp built from strings). Each one starts with
@@ -71,6 +77,7 @@ export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
     instead: "spremljeno na uređaju / spremljeno na poslužitelju / predano",
     lang: "hr",
     pattern: /(?<![\p{L}\p{N}])spremljen\p{L}*(?![\p{L}\p{N}])(?! na (?:uredaju|posluzitelju)(?![\p{L}\p{N}]))/u,
+    contextual: true,
   },
   // The same entries in the English interface (D-90, point 3).
   { entry: "suspicious", instead: NOTHING, lang: "en", pattern: /(?<![\p{L}\p{N}])(?:suspic|suspect)/u },
@@ -115,6 +122,7 @@ export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
     lang: "en",
     pattern:
       /(?<![\p{L}\p{N}])saved(?![\p{L}\p{N}])(?! (?:on|to) (?:the |this |your )?(?:device|server)(?![\p{L}\p{N}]))/u,
+    contextual: true,
   },
 ];
 
@@ -125,10 +133,14 @@ export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
  */
 const INVISIBLE = /[\p{Cf}\u115F\u1160\u3164\uFFA0]/gu;
 
-/** Folds text for matching; see the module comment. */
+/**
+ * Folds text for matching; see the module comment. NFKC also turns the
+ * compatibility forms of a letter (full width, mathematical, ligatures) into
+ * the letter itself.
+ */
 export function foldText(text: string): string {
   return text
-    .normalize("NFC")
+    .normalize("NFKC")
     .replace(INVISIBLE, "")
     .toLocaleLowerCase("hr")
     .replaceAll("đ", "d")
@@ -142,4 +154,20 @@ export function foldText(text: string): string {
 export function findForbiddenTerms(text: string, lang?: Language): ForbiddenTerm[] {
   const folded = foldText(text);
   return FORBIDDEN_TERMS.filter((entry) => (lang === undefined || entry.lang === lang) && entry.pattern.test(folded));
+}
+
+/**
+ * Dictionary entries in text that markup puts together from several pieces,
+ * such as `Nestali <strong>podaci</strong>`. The same text is given twice:
+ * `joined` has the pieces as the browser joins them, `spaced` has a space at
+ * every element boundary. An entry found in either reading is reported, so
+ * both a word split by an element and a phrase spread over elements are
+ * caught. A contextual entry must be found in both: a boundary is not allowed
+ * to hide the words that make "spremljeno na uređaju" acceptable.
+ */
+export function findForbiddenTermsInMarkup(joined: string, spaced: string): ForbiddenTerm[] {
+  const readings = [foldText(joined), foldText(spaced)];
+  return FORBIDDEN_TERMS.filter((entry) =>
+    entry.contextual ? readings.every((text) => entry.pattern.test(text)) : readings.some((text) => entry.pattern.test(text)),
+  );
 }

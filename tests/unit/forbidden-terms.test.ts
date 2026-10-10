@@ -3,17 +3,21 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import ts from "typescript";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { ENTITY_NAMES, decodeEntities } from "../../scripts/forbidden-terms/entities";
 import {
+  INLINE_ELEMENTS,
   TECHNICAL_ATTRIBUTES,
   UI_TEXT_MODULES,
   extractUiText,
   findMisplacedUiText,
   isUiTextModule,
+  jsxTextValue,
   scanUiText,
 } from "../../scripts/forbidden-terms/scan";
-import { FORBIDDEN_TERMS, findForbiddenTerms, foldText } from "../../scripts/forbidden-terms/terms";
+import { FORBIDDEN_TERMS, findForbiddenTerms, findForbiddenTermsInMarkup, foldText } from "../../scripts/forbidden-terms/terms";
 
 const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
@@ -784,5 +788,364 @@ describe("interface text outside the scanned modules", () => {
         "UI_TEXT_MODULES (scripts/forbidden-terms/scan.ts) ili proširi popis ako je cijeli modul tekst sučelja. " +
         "Izuzeci po datoteci nisu dopušteni.",
     ).toEqual([]);
+  });
+});
+
+// QA of 39fde31 (PR #45): entities, spaces of every kind and compatibility forms.
+describe("text as the browser shows it", () => {
+  it.each([
+    ["no-break space", " "],
+    ["narrow no-break space", " "],
+    ["thin space", " "],
+    ["en space", " "],
+    ["figure space", " "],
+    ["ideographic space", "　"],
+    ["line separator", " "],
+    ["tab", "\t"],
+  ])("takes a %s for a space", (_, space) => {
+    expect(entries(`Nestali${space}podaci`)).toEqual(["nestali podaci"]);
+    expect(entries(`Upozorenje o${space}studentu`)).toEqual(["upozorenje o studentu"]);
+    expect(entries(`Missing${space}data`)).toEqual(["missing data"]);
+    expect(entries(`Spremljeno${space}na${space}uređaju`)).toEqual([]);
+    expect(entries(`Saved${space}on${space}this${space}device`)).toEqual([]);
+  });
+
+  it.each([
+    ["Ｓｕｍｎｊｉｖｏ", "sumnjivo"],
+    ["ＲＩＺＩＫ", "rizik"],
+    ["𝐑𝐢𝐳𝐢𝐤", "rizik"],
+    ["Ｈｉｄｄｅｎ", "hidden"],
+    ["ﬁrst risk", "risk"],
+  ])("folds the compatibility form %j to its letters (NFKC)", (text, entry) => {
+    expect(entries(text)).toEqual([entry]);
+  });
+
+  it("keeps allowed wording allowed in compatibility forms", () => {
+    expect(foldText("Ｓｕｍｎｊｉｖｏ")).toBe("sumnjivo");
+    expect(entries("Ｓｐｒｅｍｌｊｅｎｏ ｎａ ｕｒｅđａｊｕ")).toEqual([]);
+    expect(entries("Ｐｒｅｄａｎｏ")).toEqual([]);
+  });
+
+  it("decodes named, decimal and hexadecimal entities", () => {
+    expect(decodeEntities("Nestali&nbsp;podaci")).toBe("Nestali podaci");
+    expect(decodeEntities("Sum&shy;njivo")).toBe("Sum­njivo");
+    expect(decodeEntities("&#83;umnjivo &#x53;umnjivo &#X53;")).toBe("Sumnjivo Sumnjivo &#X53;");
+    expect(decodeEntities("&scaron;&Scaron;&amp;&lt;&gt;&quot;&apos;&hellip;&ndash;")).toBe("šŠ&<>\"'…–");
+    expect(decodeEntities("&#x1F600;&#128512;")).toBe("😀😀");
+    expect(decodeEntities("&nope; &nbsp &; &#; &#x; &#1114112; R&D; a & b")).toBe("&nope; &nbsp &; &#; &#x; &#1114112; R&D; a & b");
+    expect(decodeEntities("&amp;nbsp;")).toBe("&nbsp;");
+  });
+
+  /** What the TypeScript JSX transform makes of JSX text: the string it passes as the child. */
+  const transformed = (jsxTexts: readonly string[]): string[] => {
+    const source = `export const all = [${jsxTexts.map((text) => `<a>${text}</a>`).join(", ")}];`;
+    const output = ts.transpileModule(source, { fileName: "all.tsx", compilerOptions: { jsx: ts.JsxEmit.React } }).outputText;
+    const rendered: string[] = [];
+    const visit = (node: ts.Node): void => {
+      const child = ts.isCallExpression(node) ? node.arguments[2] : undefined;
+      if (child && ts.isStringLiteral(child)) rendered.push(child.text);
+      ts.forEachChild(node, visit);
+    };
+    visit(ts.createSourceFile("all.js", output, ts.ScriptTarget.Latest, true));
+    return rendered;
+  };
+
+  it("knows the entities the TypeScript JSX transform knows, with the same characters", () => {
+    expect(ENTITY_NAMES).toHaveLength(253);
+    expect(new Set(ENTITY_NAMES).size).toBe(253);
+    const extra = ["&#83;", "&#x53;", "&#x1F600;", "&nope;", "&nbsp", "&Nbsp;"];
+    const written = [...ENTITY_NAMES.map((name) => `&${name};`), ...extra].map((entity) => `x${entity}x`);
+    expect(transformed(written)).toEqual(written.map(decodeEntities));
+  });
+
+  it.each([
+    ["Nestali podaci", "Nestali podaci"],
+    ["  Nestali  podaci  ", "  Nestali  podaci  "],
+    ["\n      Nestali\n      podaci\n    ", "Nestali podaci"],
+    ["\n      Nestali  \r\n\t podaci\n", "Nestali podaci"],
+    ["Nestali\n\n\n   podaci", "Nestali podaci"],
+    [" Sum\n   ", " Sum"],
+    ["\n   njivo ", "njivo "],
+    ["\n    ", ""],
+    [" ", " "],
+    ["Nestali&nbsp;\n  podaci", "Nestali  podaci"],
+    ["&#83;um&shy;njivo", "Sum­njivo"],
+  ])("reads JSX text %j as React renders it", (raw, value) => {
+    expect(jsxTextValue(raw)).toBe(value);
+  });
+
+  it("reads JSX text the way the TypeScript JSX transform emits it", () => {
+    const texts = [
+      "Nestali podaci",
+      "\n      Nestali\n      podaci\n    ",
+      "\n      Nestali  \n\t podaci\n",
+      "Nestali\n\n\n   podaci",
+      " Sum\n   ",
+      "\n   njivo ",
+      "  dva  razmaka  ",
+      "Nestali&nbsp;\n  podaci",
+      "Spremljeno&nbsp;na&nbsp;uređaju",
+    ];
+    expect(texts.map(jsxTextValue)).toEqual(transformed(texts));
+  });
+
+  it("reports an entry in either reading of markup, a contextual entry only in both", () => {
+    const inMarkup = (joined: string, spaced: string) => findForbiddenTermsInMarkup(joined, spaced).map((term) => term.entry);
+    expect(inMarkup("Sumnjivo", "Sum njivo")).toEqual(["sumnjivo"]);
+    expect(inMarkup("Nestalipodaci", "Nestali podaci")).toEqual(["nestali podaci"]);
+    expect(inMarkup("Spremljeno", "Spremljeno")).toEqual(["spremljeno (bez pojašnjenja)"]);
+    expect(inMarkup("Spremljeno na uređajuPredano", "Spremljeno na uređaju Predano")).toEqual([]);
+    expect(inMarkup("Saved on this deviceSubmitted", "Saved on this device Submitted")).toEqual([]);
+    expect(inMarkup("Spremljeno lokalno", "Spremljeno  lokalno")).toEqual(["spremljeno (bez pojašnjenja)"]);
+    expect(FORBIDDEN_TERMS.filter((term) => term.contextual).map((term) => term.entry)).toEqual([
+      "spremljeno (bez pojašnjenja)",
+      "saved (without saying where)",
+    ]);
+  });
+});
+
+describe("markup in component text", () => {
+  let root: string | undefined;
+  afterEach(() => {
+    if (root) rmSync(root, { recursive: true, force: true });
+    root = undefined;
+  });
+  const write = (relative: string, content: string): void => {
+    const file = path.join(root!, ...relative.split("/"));
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, content);
+  };
+  const scanned = () => scanUiText(root!).map((f) => [f.file, f.line, f.terms.map((t) => t.entry)]);
+  const component = (lines: readonly string[]): string =>
+    ["export const View = ({ a, b, n, items, where }: Props) => (", "  <section>", ...lines.map((line) => `    ${line}`), "  </section>", ");", ""].join(
+      "\n",
+    );
+
+  // Finding 1 of the QA of 39fde31, example by example.
+  it("decodes HTML entities in JSX text", () => {
+    root = mkdtempSync(path.join(tmpdir(), "ductus-terms-"));
+    write(
+      "src/components/Entities.tsx",
+      component([
+        "<p>Nestali&nbsp;podaci</p>",
+        "<p>Dokaz&nbsp;autorstva</p>",
+        "<p>Upozorenje o&nbsp;studentu</p>",
+        "<p>Missing&nbsp;data</p>",
+        "<p>Sum&shy;njivo</p>",
+        "<p>&#83;umnjivo</p>",
+        "<p>&#x53;umnjivo</p>",
+        "<p>Spremljeno&nbsp;na&nbsp;uređaju</p>",
+        "<p>Saved&nbsp;on&#32;this&#x20;device</p>",
+        "<p>Vi&scaron;e&hellip; R&amp;D &lt;2&gt; &copy; &nope; &amp;shy;</p>",
+        "<p>Skriven&#111;</p>",
+        "<p>Spremljeno&nbsp;lokalno</p>",
+      ]),
+    );
+    expect(scanned()).toEqual([
+      ["src/components/Entities.tsx", 3, ["nestali podaci"]],
+      ["src/components/Entities.tsx", 4, ["dokaz autorstva"]],
+      ["src/components/Entities.tsx", 5, ["upozorenje o studentu"]],
+      ["src/components/Entities.tsx", 6, ["missing data"]],
+      ["src/components/Entities.tsx", 7, ["sumnjivo"]],
+      ["src/components/Entities.tsx", 8, ["sumnjivo"]],
+      ["src/components/Entities.tsx", 9, ["sumnjivo"]],
+      ["src/components/Entities.tsx", 13, ["skriveno"]],
+      ["src/components/Entities.tsx", 14, ["spremljeno (bez pojašnjenja)"]],
+    ]);
+  });
+
+  it("decodes HTML entities in attribute strings, and reads a no-break space in a JS string as a space", () => {
+    root = mkdtempSync(path.join(tmpdir(), "ductus-terms-"));
+    write(
+      "src/components/Attributes.tsx",
+      component([
+        '<img alt="Nestali&nbsp;podaci" />',
+        '<input placeholder="Sum&shy;njivo" title="&#72;idden edits" />',
+        '<img alt="Spremljeno&nbsp;na&nbsp;uređaju" />',
+        '<a href="/pregled?a=1&amp;b=2" className="red&nbsp;saved" data-note="Hid&#100;en">Dalje</a>',
+        '<p>{"Nestali\\u00A0podaci"}</p>',
+        '<p>{"Upozorenje o\\u00A0studentu"}</p>',
+        '<p>{"Spremljeno\\u00A0na\\u00A0uređaju"}</p>',
+        '<p title={"Dokaz\\u202Fautorstva"}>{`Missing\\u00A0data`}</p>',
+        // In a JS string an entity is not decoded: the person sees the characters as written.
+        '<p>{"Spremljeno na&nbsp;uređaju"}</p>',
+      ]),
+    );
+    expect(scanned()).toEqual([
+      ["src/components/Attributes.tsx", 3, ["nestali podaci"]],
+      ["src/components/Attributes.tsx", 4, ["sumnjivo"]],
+      ["src/components/Attributes.tsx", 4, ["hidden"]],
+      ["src/components/Attributes.tsx", 7, ["nestali podaci"]],
+      ["src/components/Attributes.tsx", 8, ["upozorenje o studentu"]],
+      ["src/components/Attributes.tsx", 10, ["dokaz autorstva"]],
+      ["src/components/Attributes.tsx", 10, ["missing data"]],
+      ["src/components/Attributes.tsx", 11, ["spremljeno (bez pojašnjenja)"]],
+    ]);
+  });
+
+  // Finding 2 of the QA of 39fde31, example by example.
+  it("reads text split by elements or by a space expression as one text", () => {
+    root = mkdtempSync(path.join(tmpdir(), "ductus-terms-"));
+    write(
+      "src/components/Split.tsx",
+      component([
+        "<p>Nestali <strong>podaci</strong></p>",
+        "<p>Napisao <em>AI</em></p>",
+        '<p>Verificirano{" "}autorstvo</p>',
+        "<p>Sum<b>njivo</b></p>",
+        "<p>Hid<b>den</b></p>",
+        "<p>Spremljeno <b>na uređaju</b></p>",
+        '<p>Spremljeno{" "}na uređaju</p>',
+      ]),
+    );
+    expect(scanned()).toEqual([
+      ["src/components/Split.tsx", 3, ["nestali podaci"]],
+      ["src/components/Split.tsx", 4, ["napisao AI"]],
+      ["src/components/Split.tsx", 5, ["verificirano autorstvo"]],
+      ["src/components/Split.tsx", 6, ["sumnjivo"]],
+      ["src/components/Split.tsx", 7, ["hidden"]],
+    ]);
+  });
+
+  it("still reports a piece that is forbidden by itself, on its own line", () => {
+    root = mkdtempSync(path.join(tmpdir(), "ductus-terms-"));
+    write(
+      "src/components/Pieces.tsx",
+      component([
+        "<p>Sumnjivo <b>lijepljenje</b></p>",
+        "<p>Rad je <b>skriven</b></p>",
+        "<p>Spremljeno <b>lokalno</b></p>",
+        "<p><b>Spremljeno</b></p>",
+        "<p>",
+        "  Predano u roku.",
+        "  <em>",
+        "    Ocjena rizika",
+        "  </em>",
+        "  je u izradi, a",
+        "  dokaz",
+        "  <strong>autorstva</strong> nije.",
+        "</p>",
+        "<p>Sumnjivo <b>sumnjivo</b> sumnjivo</p>",
+        "<div>Kopirano <p>Kopirano</p></div>",
+      ]),
+    );
+    expect(scanned()).toEqual([
+      ["src/components/Pieces.tsx", 3, ["sumnjivo"]],
+      ["src/components/Pieces.tsx", 4, ["skriveno"]],
+      ["src/components/Pieces.tsx", 5, ["spremljeno (bez pojašnjenja)"]],
+      ["src/components/Pieces.tsx", 6, ["spremljeno (bez pojašnjenja)"]],
+      ["src/components/Pieces.tsx", 8, ["dokaz autorstva"]],
+      ["src/components/Pieces.tsx", 10, ["rizik"]],
+      ["src/components/Pieces.tsx", 16, ["sumnjivo"]],
+      ["src/components/Pieces.tsx", 16, ["sumnjivo"]],
+      ["src/components/Pieces.tsx", 16, ["sumnjivo"]],
+      ["src/components/Pieces.tsx", 17, ["kopirano"]],
+      ["src/components/Pieces.tsx", 17, ["kopirano"]],
+    ]);
+  });
+
+  it("lists the inline elements, none of them a block, a control or a component", () => {
+    expect(INLINE_ELEMENTS.size).toBeGreaterThan(20);
+    for (const name of INLINE_ELEMENTS) expect(name, name).toMatch(/^[a-z]+$/);
+    for (const name of ["p", "div", "li", "td", "th", "h1", "button", "label", "option", "br", "Badge", "section"]) {
+      expect(INLINE_ELEMENTS.has(name), name).toBe(false);
+    }
+  });
+
+  // Ordinary formatting, attacked before the third QA round: what it is, the JSX, the entries it must be reported for.
+  const FORMATTING: readonly [string, readonly string[], readonly string[]][] = [
+    ["text over several lines", ["<p>", "  Nestali", "  podaci", "</p>"], ["nestali podaci"]],
+    ["allowed text over several lines", ["<p>", "  Spremljeno", "  na uređaju", "</p>"], []],
+    ["line break before an inline element", ["<p>", '  Dokaz{" "}', "  <strong>autorstva</strong>", "</p>"], ["dokaz autorstva"]],
+    ["allowed line break before an inline element", ["<p>", '  Spremljeno{" "}', "  <b>na uređaju</b>", "</p>"], []],
+    ["first word emphasised", ["<p><strong>Spremljeno</strong> na poslužitelju</p>"], []],
+    ["first word emphasised, forbidden", ["<p><strong>Verificirano</strong> autorstvo</p>"], ["verificirano autorstvo"]],
+    ["nested inline elements", ["<p>Ovo je <span><em>napisao</em></span> <abbr>AI</abbr></p>"], ["napisao AI"]],
+    ["allowed nested inline elements", ["<p><span><b>Spremljeno</b></span> <i>na <u>uređaju</u></i></p>"], []],
+    ["a word split twice", ["<p>Rad je autenti<span>č</span><b>an</b></p>"], ["autentičnost"]],
+    ["capitals split by an element", ["<h2>SUM<b>NJIVO</b></h2>"], ["sumnjivo"]],
+    ["fragment", ["<>Nestali <i>podaci</i></>"], ["nestali podaci"]],
+    ["allowed fragment", ["<><b>Saved</b> on this device</>"], []],
+    ["fragment inside an element", ["<p><>Proof</> of <>authorship</></p>"], ["proof of authorship"]],
+    ["conditional tail", ['<p>Nestali {a ? "podaci" : "zapisi"}</p>'], ["nestali podaci"]],
+    ["allowed conditional tail", ['<p>Spremljeno {a ? "na poslužitelju" : "na uređaju"}</p>'], []],
+    ["conditional tail, one branch bare", ['<p>Spremljeno {a ? "na poslužitelju" : "lokalno"}</p>'], ["spremljeno (bez pojašnjenja)"]],
+    ["conditional head", ['<p>{a ? "Dokaz" : "Potvrda"} autorstva</p>'], ["dokaz autorstva"]],
+    ["two conditionals", ['<p>{a ? "Missing" : "No"} {b ? "data" : "words"}</p>'], ["missing data"]],
+    ["conditional elements", ["<div>{a ? <p>Nestali podaci</p> : <p>Predano</p>}</div>"], ["nestali podaci"]],
+    ["&& with an element", ["<p>Verificirano {a && <b>autorstvo</b>}</p>"], ["verificirano autorstvo"]],
+    ["&& that may leave the word bare", ["<p>Spremljeno {a && <b>na uređaju</b>}</p>"], ["spremljeno (bez pojašnjenja)"]],
+    ["allowed && with the whole phrase", ["<p>{a && <b>Spremljeno na uređaju</b>}</p>"], []],
+    ["&& with a forbidden element", ["<p>Stanje: {a && <span>skriveno</span>}</p>"], ["skriveno"]],
+    ["|| with a fallback", ['<p>Nestali {where || "podaci"}</p>'], ["nestali podaci"]],
+    ["list items", ["<ul>{items.map((item) => <li key={item}>Rizik: {item}</li>)}</ul>"], ["rizik"]],
+    [
+      "list items with markup",
+      ["<ul>", "  {items.map((item) => (", "    <li key={item}>", "      Nestali <b>podaci</b> {item}", "    </li>", "  ))}", "</ul>"],
+      ["nestali podaci"],
+    ],
+    ["allowed list items", ["<ul>{items.map((item) => (<li key={item}>Spremljeno na uređaju: {item}</li>))}</ul>"], []],
+    ["a bare list item beside its place", ["<ul><li>Spremljeno</li><li>na uređaju</li></ul>"], ["spremljeno (bez pojašnjenja)"]],
+    ["allowed labels side by side", ["<div><span>Spremljeno na uređaju</span><span>Predano</span></div>"], []],
+    ["allowed labels on separate lines", ["<div>", "  <span>Saved on this device</span>", "  <span>Submitted</span>", "</div>"], []],
+    ["allowed blocks in a row", ["<div><h2>Stanje</h2><p>Spremljeno na uređaju</p><p>Predano</p></div>"], []],
+    ["phrase spread over blocks", ["<div>Nestali<p>podaci</p></div>"], ["nestali podaci"]],
+    ["line break element", ["<td>Nestali<br />podaci</td>"], ["nestali podaci"]],
+    ["allowed line break element", ["<td>Spremljeno<br />na uređaju</td>"], []],
+    ["word break opportunity", ["<p>Sum<wbr />njivo</p>"], ["sumnjivo"]],
+    ["component children", ["<Trans>Nestali <Bold>podaci</Bold></Trans>"], ["nestali podaci"]],
+    ["a component is a text of its own", ["<Badge>Saved</Badge>"], ["saved (without saying where)"]],
+    ["element in a prop", ["<Row label={<>Dokaz <b>autorstva</b></>} />"], ["dokaz autorstva"]],
+    ["allowed element in a prop", ["<Row label={<><b>Spremljeno</b> na uređaju</>} />"], []],
+    ["template with a conditional", ['<p>{`Spremljeno ${a ? "na poslužitelju" : "na uređaju"}`}</p>'], []],
+    ["template with a forbidden branch", ['<p>{`Nestali ${a ? "podaci" : "zapisi"}`}</p>'], ["nestali podaci"]],
+    ["+ with a conditional in a prop", ['<Field hint={"Spremljeno " + (a ? "na uređaju" : "na poslužitelju")} />'], []],
+    ["+ with a bare branch in a prop", ['<Field hint={"Saved " + (a ? "on this device" : "locally")} />'], ["saved (without saying where)"]],
+    ["comment between the words", ["<p>Spremljeno {/* gdje */} na uređaju</p>"], []],
+    ["empty string between the halves", ['<p>Sum{""}njivo</p>'], ["sumnjivo"]],
+    ["entities and markup together", ["<p>Spremljeno&nbsp;<b>na&nbsp;poslužitelju</b>.</p>"], []],
+    ["entities and markup together, forbidden", ["<p>Upozorenje&nbsp;<i>o&nbsp;studentu</i></p>"], ["upozorenje o studentu"]],
+    ["entity split by an element", ["<p>&#83;um<b>nji&shy;vo</b></p>"], ["sumnjivo"]],
+    ["computed value after allowed text", ["<p>Spremljeno na uređaju u {n}</p>"], []],
+    ["computed value before a forbidden word", ["<p>{n} skrivenih</p>"], ["skriveno"]],
+    ["computed value after a bare word", ["<p>Spremljeno {where}</p>"], ["spremljeno (bez pojašnjenja)"]],
+    ["entities in technical attributes", ['<a href="/a?x=1&amp;saved=1" className="hidden&nbsp;risk" id="copied&#45;1">Dalje</a>'], []],
+    ["English emphasis", ["<p>Written <i>by</i> AI</p>"], ["written by AI"]],
+    ["English allowed emphasis", ["<p>Saved <strong>to your device</strong></p>"], []],
+    ["heading next to a paragraph", ["<div><h1>AI pomoćnik</h1><p>Postotak riješenih zadataka</p></div>"], []],
+    [
+      "more alternatives than are kept",
+      ["<p>", ...Array.from({ length: 8 }, (_, i) => `  {a${i} ? "da" : "ne"}`), '  {a ? "Nestali podaci" : "Predano"}', "</p>"],
+      ["nestali podaci"],
+    ],
+    [
+      "more alternatives than are kept, in elements of their own",
+      ["<div>", ...Array.from({ length: 8 }, (_, i) => `  <p>{a${i} ? "da" : "ne"}</p>`), '  <p>Spremljeno {a ? "na uređaju" : "na poslužitelju"}</p>', "</div>"],
+      [],
+    ],
+    ["element without children between the words", ["<p>Nestali <Icon /> podaci</p>"], ["nestali podaci"]],
+    ["line break before an inline element, no space expression", ["<p>", "  Nestali", "  <strong>podaci</strong>", "</p>"], ["nestali podaci"]],
+    ["link inside the allowed phrase", ['<p>Spremljeno na <a href="/uredaj">uređaju</a></p>'], []],
+    ["element inside the allowed word", ["<p>Spremljeno na ure<b>đaju</b></p>"], []],
+    ["conditional fragments", ["<p>Spremljeno {a ? <>na poslužitelju</> : <>na uređaju</>}</p>"], []],
+    ["conditional in a text attribute", ['<button title={a ? "Saved" : "Predano"}>Dalje</button>'], ["saved (without saying where)"]],
+    ["computed value between the words", ["<p>Nestali{where}podaci</p>"], ["nestali podaci"]],
+    ["null branch", ['<p>Dokaz {a ? null : "autorstva"}</p>'], ["dokaz autorstva"]],
+    ["table header cells", ["<tr><th>Stanje</th><th>Spremljeno na poslužitelju</th><th>Riječi</th></tr>"], []],
+    ["description list", ["<dl><dt>Stanje</dt><dd>Spremljeno</dd></dl>"], ["spremljeno (bez pojašnjenja)"]],
+  ];
+
+  it.each(FORMATTING)("reads ordinary formatting: %s", (_, lines, expected) => {
+    root = mkdtempSync(path.join(tmpdir(), "ductus-terms-"));
+    const source = ["export const Case = ({ a, b, n, items, where }: Props) => (", ...lines.map((line) => `  ${line}`), ");", ""];
+    write("src/components/Case.tsx", source.join("\n"));
+    const found = scanUiText(root);
+    // Each entry is reported, and reported once.
+    expect(found.flatMap((f) => f.terms.map((t) => t.entry))).toEqual(expected);
+    for (const finding of found) {
+      expect(finding.file).toBe("src/components/Case.tsx");
+      expect(finding.line).toBeGreaterThan(1);
+      expect(finding.line).toBeLessThanOrEqual(lines.length + 1);
+    }
   });
 });
