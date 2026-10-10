@@ -309,6 +309,7 @@ describe("repository scan", () => {
     write("src/domain/review/messages.ts", 'export const MESSAGES = { note: "Ocjena rizika" };\n');
     write("src/features/submit/copy.ts", 'export const COPY = { done: "Hidden edits" };\n');
     write("src/domain/serverSync/messages.ts", 'export const MESSAGES = { failed: "Posumnjali smo u zapis." };\n');
+    write("src/domain/serverSync/contract.ts", 'export const MESSAGES = { failed: "Posumnjali smo u zapis." };\n');
     write("src/editor/schema.ts", 'export const placeholder = "Saved";\n');
     write("app/api/status/route.ts", 'export const metadata = { title: "Warning about the student" };\n');
     write("app/review/page.tsx", "export default () => (\n  <main>\n    <h1>Sumnjivo</h1>\n    <p>Risk score</p>\n  </main>\n);\n");
@@ -317,6 +318,7 @@ describe("repository scan", () => {
       ["app/review/page.tsx", 3, ["sumnjivo"]],
       ["app/review/page.tsx", 4, ["risk"]],
       ["src/domain/review/messages.ts", 1, ["rizik"]],
+      ["src/domain/serverSync/contract.ts", 1, ["sumnjivo"]],
       ["src/domain/serverSync/messages.ts", 1, ["sumnjivo"]],
       ["src/domain/sync/labels.ts", 1, ["copied"]],
       ["src/editor/schema.ts", 1, ["saved (without saying where)"]],
@@ -757,6 +759,34 @@ describe("interface text outside the scanned modules", () => {
       'src/domain/sync/states.ts:2 "Preostalo   riječi"',
       'src/editor/interop.ts:1 "POČNI PISATI"',
     ]);
+  });
+
+  it("reports a Croatian user message put back into a serverSync module other than messages.ts", () => {
+    root = mkdtempSync(path.join(tmpdir(), "ductus-terms-"));
+    write("src/domain/serverSync/contract.ts", 'export const FAILED = "Rad nije pronađen na poslužitelju.";\n');
+    write("src/domain/serverSync/bootstrap.ts", 'export const LOAD = "Ne mogu učitati dokument. Osvježi stranicu.";\n');
+    write("src/domain/serverSync/checkpoints.ts", "export const note = (n: number) => `Kontrolna točka ${n}`;\n");
+    expect(misplaced(root).sort()).toEqual([
+      'src/domain/serverSync/bootstrap.ts:1 "Ne mogu učitati dokument. Osvježi stranicu."',
+      'src/domain/serverSync/checkpoints.ts:1 "Kontrolna točka"',
+      'src/domain/serverSync/contract.ts:1 "Rad nije pronađen na poslužitelju."',
+    ]);
+  });
+
+  // KNOWN GAP of narrowing UI_TEXT_MODULES (DAN-117): outside the list only the
+  // Croatian entries apply, so an English forbidden term in these three modules
+  // is not found by the scanner. The test "serverSync protocol strings" in
+  // tests/unit/server-sync-messages.test.ts closes it for these files; the
+  // scanner rule for properties such as `message` is DAN-133 (#190). When that
+  // lands, this test is meant to fail and be replaced by a positive finding.
+  it("documents that English forbidden terms in the other serverSync modules are not found by the scanner", () => {
+    root = mkdtempSync(path.join(tmpdir(), "ductus-terms-"));
+    write("src/domain/serverSync/bootstrap.ts", 'export const NOTE = "Hidden changes";\n');
+    write("src/domain/serverSync/checkpoints.ts", 'export const NOTE = "Risk score";\n');
+    write("src/domain/serverSync/contract.ts", 'export const NOTE = "Saved";\n');
+    expect(scanUiText(root).map((f) => [f.file, f.line, f.terms.map((t) => t.entry)])).toEqual([]);
+    write("src/domain/serverSync/messages.ts", 'export const NOTE = "Hidden changes";\n');
+    expect(scanUiText(root).map((f) => [f.file, f.line, f.terms.map((t) => t.entry)])).toEqual([["src/domain/serverSync/messages.ts", 1, ["hidden"]]]);
   });
 
   it("does not report text the scan reads, tests, declarations, keys, types or comments", () => {
