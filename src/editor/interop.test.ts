@@ -257,6 +257,37 @@ describe("node id strategy", () => {
     ]);
   });
 
+  it("treats the same id in another case as a duplicate and re-mints it, so the document keeps a canonical form", () => {
+    for (const variant of [ID_A.toUpperCase(), `${ID_A.slice(0, 4).toUpperCase()}${ID_A.slice(4)}`]) {
+      const result = tiptapToCanonical(
+        {
+          type: "doc",
+          content: [
+            { type: "paragraph", attrs: { [NODE_ID_ATTRIBUTE]: ID_A } },
+            { type: "paragraph", attrs: { [NODE_ID_ATTRIBUTE]: variant } },
+          ],
+        },
+        factory(ID_B),
+      );
+
+      expect(result.ok).toBe(true);
+      expect(result.ok && result.doc.nodes.map((node) => node.id)).toEqual([ID_A, ID_B]);
+    }
+  });
+
+  it("does not accept a minted id that is already in use in another case", () => {
+    const result = tiptapToCanonical(
+      {
+        type: "doc",
+        content: [{ type: "paragraph", attrs: { [NODE_ID_ATTRIBUTE]: ID_A } }, { type: "paragraph" }],
+      },
+      () => ID_A.toUpperCase() as NodeId,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.doc.nodes[1].id.toLowerCase()).not.toBe(ID_A);
+  });
+
   it("passes the block index to the id factory", () => {
     const seen: number[] = [];
     const ids = [ID_A, ID_B, ID_C];

@@ -157,6 +157,14 @@ type Projection = {
  * the only way to keep node identity unique without refusing the author's
  * paste. A malformed id is a different matter: it means someone tampered with
  * the attribute, so it is reported rather than repaired.
+ *
+ * Ids are compared the way `validateDocument` compares them, without regard
+ * to case, so an id repeated in another case is re-minted here and can never
+ * leave the author with a document that has no canonical form.
+ *
+ * This is the last line, not the place where ownership is decided: only the
+ * editor state knows which of two blocks was there first (`identity.ts`), and
+ * with that plugin in place a duplicate never reaches this function.
  */
 function resolveNodeId(
   attrs: Record<string, unknown>,
@@ -177,11 +185,11 @@ function resolveNodeId(
     return null;
   }
 
-  if (seen.has(raw)) {
+  if (seen.has(raw.toLowerCase())) {
     return mintUnseen(index, seen, idFor);
   }
 
-  seen.add(raw);
+  seen.add(raw.toLowerCase());
   return raw;
 }
 
@@ -189,10 +197,10 @@ function mintUnseen(index: number, seen: Set<string>, idFor: IdFactory): NodeId 
   let id = idFor(index);
   // An injected factory may collide with an id already in the document; keep
   // minting rather than emitting a document the domain would reject.
-  while (seen.has(id)) {
+  while (seen.has(id.toLowerCase())) {
     id = newNodeId();
   }
-  seen.add(id);
+  seen.add(id.toLowerCase());
   return id;
 }
 
