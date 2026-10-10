@@ -64,9 +64,11 @@ export const SYNC_STATE_LABELS: Record<SyncState, SyncStateLabel> = {
   SYNCING: { label: "Sinkroniziram", tone: "progress" },
   /*
    * The one state that has earned the all-clear. The words "na poslužitelju"
-   * are a claim, and the state is reached only with a signed receipt
+   * are a claim, and the reducer reaches the state only with a signed receipt
    * (docs/ARCHITECTURE.md §5 t. 5) or an explicit decision to take the
-   * server's document.
+   * server's document. A third way in is a reload: `restoreSyncState` resumes
+   * a recorded SYNCED, and only while the journal holds a snapshot and an
+   * empty queue.
    */
   SYNCED: { label: "Spremljeno na poslužitelju", tone: "ok" },
   /*
