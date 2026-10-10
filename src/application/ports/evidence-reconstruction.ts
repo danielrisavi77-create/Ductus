@@ -17,7 +17,12 @@ export type AcceptedEvidenceSegment = {
 export type EvidenceChainReadResult =
   | {
       status: "found";
-      /** Head recorded by `reserve`; `null` when nothing was accepted. */
+      /**
+       * Head recorded by `reserve`; `null` when nothing was accepted. A
+       * package the store has never seen reads the same as an empty one:
+       * `null` head and no segments. Reconstruction reports both as
+       * `no_evidence`, never as a match.
+       */
       head: EvidenceChainHeadV2 | null;
       /** Accepted segments in chain order, first accepted first. */
       segments: AcceptedEvidenceSegment[];

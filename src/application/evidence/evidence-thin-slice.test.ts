@@ -180,12 +180,19 @@ async function ingestSegment(env: Env, segment: EvidenceSegmentV2, principalId =
   return { command, outcome: await env.gateway.ingest({ principalId, command }) };
 }
 
-/** Ingests one segment per text; returns each segment hash and the document after it. */
-async function ingestChain(env: Env, texts: readonly string[] = THREE) {
+/**
+ * Ingests one segment per text; returns each segment hash and the document after it.
+ * From `breakAt` on, three event numbers are skipped: a break in the sequence. The
+ * record up to there must reconstruct first, so the break is its only irregularity.
+ */
+async function ingestChain(env: Env, texts: readonly string[] = THREE, breakAt = texts.length) {
   const hashes: string[] = [];
   const documents: ReplayDocument[] = [];
   for (const [index, text] of texts.entries()) {
-    const built = await buildSegment(index + 1, documents.at(-1) ?? EMPTY, [text], hashes.at(-1) ?? null);
+    if (index === breakAt) expect((await reconstruct(env, documents[index - 1])).status).toBe("match");
+    const sequenceFrom = index < breakAt ? index + 1 : index + 4;
+    const predecessor = hashes.at(-1) ?? null;
+    const built = await buildSegment(index + 1, documents.at(-1) ?? EMPTY, [text], predecessor, sequenceFrom);
     const { command, outcome } = await ingestSegment(env, built.segment);
     expect(outcome.status).toBe("accepted");
     hashes.push(command.descriptor.segmentHash);
@@ -200,14 +207,19 @@ type Overrides = {
   payloads?: EvidencePayloadReader;
   signer?: Pick<SigningKeyProvider, "verify">;
   initial?: ReplayDocument;
+  packageId?: string;
 };
 
 /** `expected` is passed as given, so its key order is the caller's, not the replayer's. */
-function reconstruct(env: Env, expected: ReplayDocument, { initial = EMPTY, ...ports }: Overrides = {}) {
+function reconstruct(
+  env: Env,
+  expected: ReplayDocument,
+  { initial = EMPTY, packageId = PACKAGE, ...ports }: Overrides = {},
+) {
   return reconstructAndCompareEvidence(
     { chain: env.repository, payloads: env.payloadStore, signer: env.signer, replayer: textReplayer, ...ports },
     {
-      evidencePackageId: PACKAGE,
+      evidencePackageId: packageId,
       initialDocument: textReplayer.toCanonical(initial),
       expectedDocument: expected as unknown as JcsJsonValue,
     },
@@ -247,8 +259,8 @@ async function forgedBytes({ hashes, documents }: Chain, at: number, text: strin
   return utf8(canonicalEvidenceSegmentV2(forged.segment));
 }
 
-async function rewrittenReceipt(env: Env) {
-  const original = env.repository.records()[0].signedReceipt;
+async function rewrittenReceipt(env: Env, at = 0) {
+  const original = env.repository.records()[at].signedReceipt;
   if (!original) throw new Error("fixture: receipt not signed");
   const payload = { ...original.payload, acceptedAt: "2026-10-11T08:45:00.000Z" };
   return { ...original, payload, payloadDigestSha256: (await digestEvidenceReceiptPayload(payload)).sha256 };
@@ -313,6 +325,123 @@ const TAMPERING: [name: string, reason: string, index: number | null, tamper: Ta
     () => ({ initial: paragraph("Ranije dopisan tekst. ") }),
   ],
 ];
+
+const broken = (reason: string, index: number | null) => ({ status: "mismatch", reason, index });
+const otherKey = () => new DevelopmentEd25519SigningKeyProvider("b14-test-key", "v1");
+const outage = { verify: () => Promise.reject(new Error("synthetic signer outage")) };
+const SIX = ["Jedan. ", "Dva. ", "Tri. ", "Četiri. ", "Pet. ", "Šest."];
+/** What `ingestChain(env, SIX, 4)` reconstructs to while nothing else is wrong. */
+const BREAK = {
+  status: "discontinuity",
+  discontinuity: { index: 4, previousSequenceTo: 4, sequenceFrom: 8, sequence: "gap", documentHashBreak: false },
+};
+
+/** One fault of the attack table. Faults address segments by hash, so any two can be planted together. */
+type Fault = {
+  listing?: (segments: AcceptedEvidenceSegment[]) => AcceptedEvidenceSegment[];
+  stored?: [segmentHash: string, bytes: Uint8Array | null];
+  signer?: Overrides["signer"];
+  initial?: ReplayDocument;
+  target?: ReplayDocument;
+  packageId?: string;
+};
+type FaultRow = {
+  name: string;
+  /** Outcome while this is the only fault, and while only faults below it are added. */
+  outcome: object;
+  /** The record itself has a break in the event sequence. */
+  sequenceBreak?: true;
+  plant?: (env: Env, chain: Chain) => Fault | Promise<Fault>;
+};
+const receiptOf =
+  (segmentHash: string, receipt: AcceptedEvidenceSegment["receipt"]): Fault["listing"] =>
+  (segments) => segments.map((entry) => (entry.segmentHash === segmentHash ? { ...entry, receipt } : entry));
+
+/** Order of precedence: a fault decides the outcome against every fault below it. */
+const FAULTS: FaultRow[] = [
+  {
+    name: "an empty package",
+    outcome: { status: "no_evidence" },
+    // The target equals the starting document: the one case that used to read as a match.
+    plant: () => ({ packageId: "paket-izmisljeni-prazan", target: EMPTY }),
+  },
+  {
+    name: "a payload deleted from storage",
+    outcome: broken("missing_payload", 0),
+    plant: (_env, c) => ({ stored: [c.hashes[0], null] }),
+  },
+  {
+    name: "a changed segment",
+    outcome: broken("predecessor_mismatch", 2),
+    plant: async (_env, c) => ({ stored: [c.hashes[1], await forgedBytes(c, 1, "Naknadno izmijenjen dio. ")] }),
+  },
+  {
+    name: "a removed segment",
+    outcome: broken("predecessor_mismatch", 3),
+    plant: (_env, c) => ({ listing: (s) => s.filter((entry) => entry.segmentHash !== c.hashes[3]) }),
+  },
+  {
+    name: "reordered segments",
+    outcome: broken("predecessor_mismatch", 4),
+    plant: (_env, c) => ({
+      listing: (s) => {
+        const [fifth, sixth] = [c.hashes[4], c.hashes[5]].map((hash) => s.find((e) => e.segmentHash === hash));
+        return s.map((entry) => (entry === fifth ? sixth : entry === sixth ? fifth : entry) ?? entry);
+      },
+    }),
+  },
+  {
+    name: "a missing receipt",
+    outcome: broken("receipt_missing", 0),
+    plant: (_env, c) => ({ listing: receiptOf(c.hashes[0], null) }),
+  },
+  { name: "another key", outcome: broken("receipt_signature_invalid", 0), plant: () => ({ signer: otherKey() }) },
+  {
+    name: "a wrong signature",
+    outcome: broken("receipt_signature_invalid", 2),
+    plant: async (env, c) => ({ listing: receiptOf(c.hashes[2], await rewrittenReceipt(env, 2)) }),
+  },
+  {
+    name: "a wrong starting document",
+    outcome: broken("document_hash_mismatch", 0),
+    plant: () => ({ initial: paragraph("Ranije dopisan tekst. ") }),
+  },
+  { name: "a break in the sequence", outcome: BREAK, sequenceBreak: true },
+  {
+    name: "a target that differs",
+    outcome: broken("target_mismatch", null),
+    plant: () => ({ target: paragraph(`${SIX.join("")}!`) }),
+  },
+];
+const FAULT_PAIRS = FAULTS.flatMap((stronger, at) =>
+  FAULTS.slice(at + 1).map((weaker) => [stronger.name, weaker.name, stronger, weaker] as const),
+);
+
+/** Ingests a six-segment record, confirms its untouched outcome, then plants every fault at once. */
+async function attack(...rows: FaultRow[]) {
+  const env = setup();
+  const withBreak = rows.some((row) => row.sequenceBreak);
+  const chain = await ingestChain(env, SIX, withBreak ? 4 : SIX.length);
+  // With a break, `ingestChain` already saw `match` on the record before it.
+  const untouched = await reconstruct(env, chain.target);
+  expect(untouched).toEqual(withBreak ? BREAK : expect.objectContaining({ status: "match" }));
+
+  const faults = await Promise.all(rows.map((row) => row.plant?.(env, chain) ?? {}));
+  const first = <K extends keyof Fault>(key: K) => faults.find((fault) => fault[key] !== undefined)?.[key];
+  return reconstruct(env, first("target") ?? chain.target, {
+    ...chainWith(env, (segments) => faults.reduce((list, fault) => fault.listing?.(list) ?? list, segments)),
+    payloads: {
+      async readImmutable(input) {
+        const stored = faults.find((fault) => fault.stored?.[0] === input.segmentHash)?.stored;
+        if (!stored) return env.payloadStore.readImmutable(input);
+        return stored[1] ? { status: "found", bytes: stored[1] } : { status: "not_found" };
+      },
+    },
+    signer: first("signer") ?? env.signer,
+    initial: first("initial"),
+    packageId: first("packageId"),
+  });
+}
 
 describe("thin critical path: ingest, signed receipt, reconstruction, JCS comparison (B-14)", () => {
   it("ingests one segment, signs its receipt, reconstructs the text and matches the target", async () => {
@@ -404,6 +533,71 @@ describe("thin critical path: ingest, signed receipt, reconstruction, JCS compar
       status: "discontinuity",
       discontinuity: { index: 1, previousSequenceTo: 1, sequenceFrom: 5, sequence: "gap", documentHashBreak: false },
     });
+  });
+
+  it.each<[string, object, (env: Env) => Overrides]>([
+    ["a signature that does not verify", broken("receipt_signature_invalid", 0), () => ({ signer: { verify: async () => false } })],
+    ["receipts signed by another key", broken("receipt_signature_invalid", 0), () => ({ signer: otherKey() })],
+    [
+      "no receipts at all",
+      broken("receipt_missing", 0),
+      (env) => chainWith(env, (s) => s.map((entry) => ({ ...entry, receipt: null }))),
+    ],
+    [
+      "an unsigned receipt after the break",
+      broken("receipt_missing", 5),
+      (env) => chainWith(env, (s) => s.map((entry, at) => (at === 5 ? { ...entry, receipt: null } : entry))),
+    ],
+    [
+      "a signer outage",
+      { status: "unavailable", stage: "verification", reason: "synthetic signer outage" },
+      () => ({ signer: outage }),
+    ],
+  ])("reports %s on a record with a sequence break, not the break", async (_name, outcome, tamper) => {
+    const env = setup();
+    // `ingestChain` confirms `match` on the record before the break is ingested.
+    const chain = await ingestChain(env, SIX, 4);
+    expect(await reconstruct(env, chain.target)).toEqual(BREAK);
+    expect(await reconstruct(env, chain.target, tamper(env))).toEqual(outcome);
+  });
+
+  it("never reports a match for a package with no accepted evidence", async () => {
+    const env = setup();
+    // A known package with nothing accepted: the empty target equals the starting document.
+    for (const target of [EMPTY, paragraph("Tekst bez zapisa.")]) {
+      expect(await reconstruct(env, target)).toEqual({ status: "no_evidence" });
+    }
+
+    const chain = await ingestChain(env);
+    expect((await reconstruct(env, chain.target)).status).toBe("match");
+    // A package the store has never seen, next to one whose record reconstructs.
+    for (const target of [EMPTY, chain.target]) {
+      expect(await reconstruct(env, target, { packageId: "paket-izmisljeni-nepostojeci" })).toEqual({
+        status: "no_evidence",
+      });
+    }
+    // A listing emptied behind a recorded head, or a head erased over a listing, is a broken record.
+    const headless: Overrides = {
+      chain: {
+        async readChain(id) {
+          const read = await env.repository.readChain(id);
+          return read.status === "found" ? { ...read, head: null } : read;
+        },
+      },
+    };
+    for (const [target, tampered] of [[EMPTY, chainWith(env, () => [])], [chain.target, headless]] as const) {
+      expect(await reconstruct(env, target, tampered)).toEqual(broken("head_mismatch", null));
+    }
+  });
+
+  it.each(FAULTS)("attack table: $name alone", async (row) => {
+    expect(await attack(row)).toEqual(row.outcome);
+  });
+
+  it.each(FAULT_PAIRS)("attack table: %s decides over %s", async (_stronger, _weaker, stronger, weaker) => {
+    const outcome = await attack(stronger, weaker);
+    expect(outcome.status).not.toBe("match");
+    expect(outcome).toEqual(stronger.outcome);
   });
 
   it("never reports a match while a dependency is unavailable", async () => {
