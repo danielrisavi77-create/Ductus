@@ -28,6 +28,14 @@ const SAMPLES = [
   "proof of authorship",
   "missing data",
   "hidden",
+  "posumnjati",
+  "osumnjičen",
+  "spremljeno",
+  "suspected",
+  "likelihood",
+  "warning about the student",
+  "student warning",
+  "saved",
 ];
 
 const filler = fc.string({ unit: fc.constantFrom(..."abcčćdđ ,.!?-()0123456789") });

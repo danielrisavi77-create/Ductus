@@ -50,6 +50,26 @@ describe("forbidden interface terms (PRODUCT.md 5)", () => {
     ["Copied text", "copied"],
     ["Missing data", "missing data"],
     ["Hidden edits", "hidden"],
+    // Derived forms: the stem may sit inside a word.
+    ["Posumnjati u rad", "sumnjivo"],
+    ["Osumnjičen", "sumnjivo"],
+    ["Nema razloga za posumnjati", "sumnjivo"],
+    ["Nerizičan rad", "rizik"],
+    ["Neautentično", "autentičnost"],
+    ["Inauthentic", "authenticity"],
+    // English equivalents (D-90, point 3).
+    ["Suspected paste", "suspicious"],
+    ["Likelihood of AI use", "probability"],
+    ["Warning about the student", "warning about the student"],
+    ["Warnings about students", "warning about the student"],
+    ["Alert regarding this student", "warning about the student"],
+    ["Student warning", "warning about the student"],
+    ["Student alerts", "warning about the student"],
+    ["Saved", "saved (without saying where)"],
+    ["All changes saved.", "saved (without saying where)"],
+    ["Saved locally", "saved (without saying where)"],
+    ["Saved on disk", "saved (without saying where)"],
+    ["Spremljeno lokalno", "spremljeno (bez pojašnjenja)"],
   ])("flags %j as %s", (text, entry) => {
     expect(entries(text)).toContain(entry);
   });
@@ -71,6 +91,23 @@ describe("forbidden interface terms (PRODUCT.md 5)", () => {
     "Prijava putem AAI@EduHr",
     "Dokazi o predaji",
     "Kristina je napisala uvod",
+    // Words that only resemble `sumnj` once diacritics are folded away.
+    "Razumniji prijedlog",
+    "Šumniji prostor",
+    "Sumarni pregled",
+    "U sumrak",
+    "Sumporna kiselina",
+    "Sum njihovih radova",
+    "Saved on this device",
+    "Saved on the server",
+    "Saved to your device",
+    "Unsaved changes",
+    "Save",
+    "Submitted",
+    "Warning about the deadline",
+    "Notice to students",
+    "Asterisk marks a required field",
+    "Briefly",
   ])("allows %j", (text) => {
     expect(entries(text)).toEqual([]);
   });
@@ -137,6 +174,55 @@ describe("repository scan", () => {
     expect(findings.map((f) => [f.file, f.line, f.terms.map((t) => t.entry)])).toEqual([
       ["src/lib/i18n/messages.json", 1, ["nestali podaci"]],
     ]);
+  });
+
+  const write = (relative: string, content: string): void => {
+    const file = path.join(root!, ...relative.split("/"));
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, content);
+  };
+  const scanned = () => scanUiText(root!).map((f) => [f.file, f.line, f.terms.map((t) => t.entry)]);
+
+  it("reads state labels in src/domain", () => {
+    root = mkdtempSync(path.join(tmpdir(), "ductus-terms-"));
+    mkdirSync(path.join(root, "app"));
+    write(
+      "src/domain/sync/labels.ts",
+      [
+        'import { hidden } from "./hidden";',
+        'type State = "hidden" | "risk";',
+        "export const LABELS: Record<string, { label: string }> = {",
+        '  LOCAL_DURABLE: { label: "Spremljeno lokalno" },',
+        '  SYNCED: { label: "Spremljeno na poslužitelju" },',
+        '  "status.hidden": { label: `Praznina u zapisu` },',
+        "};",
+        "",
+      ].join("\n"),
+    );
+    expect(scanned()).toEqual([["src/domain/sync/labels.ts", 4, ["spremljeno (bez pojašnjenja)"]]]);
+  });
+
+  it("reads every module under src and app, in Croatian and English", () => {
+    root = mkdtempSync(path.join(tmpdir(), "ductus-terms-"));
+    write("src/domain/serverSync/contract.ts", 'export const MESSAGES = { failed: "Posumnjali smo u zapis." };\n');
+    write("src/editor/schema.ts", 'export const placeholder = "Saved";\n');
+    write("app/api/status/route.ts", 'export const body = { message: "Warning about the student" };\n');
+    expect(scanned().sort()).toEqual([
+      ["app/api/status/route.ts", 1, ["warning about the student"]],
+      ["src/domain/serverSync/contract.ts", 1, ["sumnjivo"]],
+      ["src/editor/schema.ts", 1, ["saved (without saying where)"]],
+    ]);
+  });
+
+  it("does not read test files, declaration files or JSON outside the catalogues", () => {
+    root = mkdtempSync(path.join(tmpdir(), "ductus-terms-"));
+    mkdirSync(path.join(root, "app"));
+    write("src/domain/sync/labels.test.ts", 'export const x = "Sumnjivo";\n');
+    write("src/domain/sync/labels.spec.ts", 'export const x = "Sumnjivo";\n');
+    write("src/domain/sync/labels.d.ts", 'export declare const x: "Sumnjivo";\n');
+    write("src/domain/sync/fixture.json", '{"x": "Sumnjivo"}\n');
+    write("src/domain/sync/labels.ts", 'export const x = "Spremljeno na uređaju";\n');
+    expect(scanned()).toEqual([]);
   });
 
   it("finds no forbidden term in the interface text of this repository", () => {

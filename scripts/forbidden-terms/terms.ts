@@ -15,7 +15,9 @@ export interface ForbiddenTerm {
 
 // Patterns are literals (no RegExp built from strings). Each one starts with
 // (?<![\p{L}\p{N}]) and may end with (?![\p{L}\p{N}]): a letter or digit may
-// not touch the term, so "rizik" does not match inside another word.
+// not touch the term, so "rizik" does not match inside another word. The one
+// exception is `sumnj`, which matches anywhere in a word so that derived forms
+// ("posumnjati", "osumnjičen") are caught; no unrelated word contains it.
 const NOTHING = "(ništa; činjenice se prikazuju bez oznake)";
 const AI_ORIGIN = "iz AI pomoćnika (model, vrijeme)";
 const INTACT = "zapis je cjelovit i neizmijenjen od primitka";
@@ -23,8 +25,8 @@ const PASTED = "zalijepljeno (izvor nije opažen)";
 const GAP = "praznina u zapisu";
 
 export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
-  { entry: "sumnjivo", instead: NOTHING, pattern: /(?<![\p{L}\p{N}])(?:ne)?sumnj/u },
-  { entry: "rizik", instead: NOTHING, pattern: /(?<![\p{L}\p{N}])rizi[kc]/u },
+  { entry: "sumnjivo", instead: NOTHING, pattern: /sumnj/u },
+  { entry: "rizik", instead: NOTHING, pattern: /(?<![\p{L}\p{N}])(?:ne)?rizi[kc]/u },
   { entry: "anomalija, anomaly", instead: NOTHING, pattern: /(?<![\p{L}\p{N}])anomal/u },
   { entry: "upozorenje o studentu", instead: NOTHING, pattern: /(?<![\p{L}\p{N}])upozoren\p{L}* o student/u },
   {
@@ -33,7 +35,7 @@ export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
     pattern: /(?<![\p{L}\p{N}])(?:postot\p{L}* ai(?![\p{L}\p{N}])|ai postot)/u,
   },
   { entry: "vjerojatnost", instead: AI_ORIGIN, pattern: /(?<![\p{L}\p{N}])vjerojatnost/u },
-  { entry: "autentičnost", instead: AI_ORIGIN, pattern: /(?<![\p{L}\p{N}])autenticn/u },
+  { entry: "autentičnost", instead: AI_ORIGIN, pattern: /(?<![\p{L}\p{N}])(?:ne)?autenticn/u },
   {
     entry: "napisao AI",
     instead: AI_ORIGIN,
@@ -50,20 +52,26 @@ export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
     instead: "spremljeno na uređaju / spremljeno na poslužitelju / predano",
     pattern: /(?<![\p{L}\p{N}])spremljen\p{L}*(?![\p{L}\p{N}])(?! na (?:uredaju|posluzitelju)(?![\p{L}\p{N}]))/u,
   },
-  // The same entries in the English interface (D-67, D-70).
-  { entry: "suspicious", instead: NOTHING, pattern: /(?<![\p{L}\p{N}])suspic/u },
+  // The same entries in the English interface (D-90, point 3).
+  { entry: "suspicious", instead: NOTHING, pattern: /(?<![\p{L}\p{N}])(?:suspic|suspect)/u },
   { entry: "risk", instead: NOTHING, pattern: /(?<![\p{L}\p{N}])risk/u },
+  {
+    entry: "warning about the student",
+    instead: NOTHING,
+    pattern:
+      /(?<![\p{L}\p{N}])(?:(?:warning|alert)s? (?:about|on|regarding|concerning) (?:the |a |this |these |that |those )?student|student\p{L}* (?:warning|alert))/u,
+  },
   {
     entry: "AI percentage",
     instead: AI_ORIGIN,
     pattern: /(?<![\p{L}\p{N}])(?:ai percent|percent\p{L}* (?:of )?ai(?![\p{L}\p{N}]))/u,
   },
-  { entry: "probability", instead: AI_ORIGIN, pattern: /(?<![\p{L}\p{N}])probabilit/u },
-  // "authentic" and "authenticity", not "authentication".
+  { entry: "probability", instead: AI_ORIGIN, pattern: /(?<![\p{L}\p{N}])(?:probabilit|likelihood)/u },
+  // "authentic", "authenticity" and "inauthentic", not "authentication".
   {
     entry: "authenticity",
     instead: AI_ORIGIN,
-    pattern: /(?<![\p{L}\p{N}])authentic(?:ity|(?![\p{L}\p{N}]))/u,
+    pattern: /(?<![\p{L}\p{N}])(?:in)?authentic(?:ity|(?![\p{L}\p{N}]))/u,
   },
   {
     entry: "written by AI",
@@ -75,6 +83,12 @@ export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
   { entry: "copied", instead: PASTED, pattern: /(?<![\p{L}\p{N}])cop(?:ied|y pasted)/u },
   { entry: "missing data", instead: GAP, pattern: /(?<![\p{L}\p{N}])missing data/u },
   { entry: "hidden", instead: GAP, pattern: /(?<![\p{L}\p{N}])hidden/u },
+  {
+    entry: "saved (without saying where)",
+    instead: "saved on this device / saved on the server / submitted",
+    pattern:
+      /(?<![\p{L}\p{N}])saved(?![\p{L}\p{N}])(?! (?:on|to) (?:the |this |your )?(?:device|server)(?![\p{L}\p{N}]))/u,
+  },
 ];
 
 /**

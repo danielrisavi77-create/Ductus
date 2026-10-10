@@ -11,11 +11,16 @@ import { findForbiddenTerms, type ForbiddenTerm } from "./terms";
  * identifiers, comments, class names and import paths are not, so technical
  * code may use words like `hidden` freely.
  *
- * - Message catalogues (`src/lib/i18n/**`, `.ts` and `.json`): every string
- *   value; object keys are identifiers and are skipped.
+ * - Modules (`app/**` and `src/**` `.ts`, which covers the state labels in
+ *   `src/domain/**` and the catalogues in `src/lib/i18n/**`) and JSON
+ *   catalogues (`src/lib/i18n/**` `.json`): every string value; object keys,
+ *   import paths and literal types are skipped. A `.ts` module cannot say
+ *   which of its strings reach the screen, so all of them are checked.
  * - Components (`app/**` and `src/**` `.tsx`): JSX text, strings rendered from
  *   JSX expressions, text attributes (alt, title, placeholder, label, aria-*)
  *   and the Next.js `metadata` export.
+ *
+ * Test files (`*.test.*`, `*.spec.*`) and declaration files are not read.
  */
 export interface UiText {
   readonly file: string;
@@ -148,13 +153,20 @@ function* sourceFiles(root: string, dir: string): Generator<string> {
   }
 }
 
+/** How a file under `app/` or `src/` is read; `null` when it holds no interface text. */
+function scanKind(file: string): "catalogue" | "component" | null {
+  if (file.endsWith(".tsx")) return "component";
+  if (/\.[cm]?ts$/.test(file)) return /\.d\.[cm]?ts$/.test(file) ? null : "catalogue";
+  if (file.endsWith(".json")) return file.startsWith(CATALOGUE_DIR + path.sep) ? "catalogue" : null;
+  return null;
+}
+
 /** Every piece of interface text in the repository at `root` that uses a forbidden term. */
 export function scanUiText(root: string): Finding[] {
   const findings: Finding[] = [];
   for (const dir of SCANNED_DIRS) {
     for (const file of sourceFiles(root, dir)) {
-      const isCatalogue = file.startsWith(CATALOGUE_DIR + path.sep);
-      const kind = isCatalogue && /\.(?:ts|json)$/.test(file) ? "catalogue" : file.endsWith(".tsx") ? "component" : null;
+      const kind = scanKind(file);
       if (kind === null) continue;
       const content = readFileSync(path.join(root, file), "utf8");
       for (const text of extractUiText(file.split(path.sep).join("/"), content, kind)) {
