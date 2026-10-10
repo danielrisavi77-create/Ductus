@@ -1,0 +1,1040 @@
+{
+  "synthetic": true,
+  "input_only": true,
+  "setup": "Supplied journal rows are raw inputs. Candidate operations require the candidate revision in an isolated read/evaluation checkout; never replace main automatically. No real browser/storage result is supplied. Preserve absent fields and user data.",
+  "scenarios": [
+    {
+      "scenario_id": "O01",
+      "selected_revision": "ac65c71d797e29417d3d0f07aa9bd7ad63f2ff06",
+      "candidate_revision": "b11ed8392dde2f722866d116b5a5bf0ea1f5da6a",
+      "candidate_status": "DAN-25 not accepted-main",
+      "contracts": [
+        "CanonicalDocument",
+        "DocumentTransaction",
+        "JournalContents",
+        "SyncEvent",
+        "CommitOutcome"
+      ],
+      "entrypoints": [
+        "src/domain/document/validate.ts:validateDocument",
+        "src/domain/sync/states.ts:syncReducer",
+        "src/domain/sync/restore.ts:restoreSyncState",
+        "candidate src/domain/sync/drain.ts:planDrain/outcomeToEvents",
+        "candidate src/domain/sync/recovery.ts:planRecovery"
+      ],
+      "identity": {
+        "actor": "synthetic-student-a",
+        "documentId": "synthetic-doc-a",
+        "session": "synthetic-session-a"
+      },
+      "identity_scope": "pending key documentId × localSeq; commit identity documentId × session-derived actor × clientTransactionId; actor/session labels are harness metadata, not wire fields",
+      "acknowledged": {
+        "revision": 7,
+        "document": {
+          "schemaVersion": 1,
+          "nodes": [
+            {
+              "type": "paragraph",
+              "id": "00000000-0000-4000-8000-000000000001",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "Poslužiteljski A",
+                  "marks": []
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "current_document": {
+        "schemaVersion": 1,
+        "nodes": [
+          {
+            "type": "paragraph",
+            "id": "00000000-0000-4000-8000-000000000001",
+            "children": [
+              {
+                "type": "text",
+                "text": "Lokalni A",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "journal": {
+        "snapshot": {
+          "documentId": "synthetic-doc-a",
+          "revision": 7,
+          "document": {
+            "schemaVersion": 1,
+            "nodes": [
+              {
+                "type": "paragraph",
+                "id": "00000000-0000-4000-8000-000000000001",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Lokalni A",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "savedAt": "2026-10-06T20:00:00.000Z"
+        },
+        "pending": [
+          {
+            "documentId": "synthetic-doc-a",
+            "localSeq": 1,
+            "tx": {
+              "kind": "REPLACE_DOCUMENT",
+              "clientTransactionId": "synthetic-tx-1",
+              "baseRevision": 7,
+              "document": {
+                "schemaVersion": 1,
+                "nodes": [
+                  {
+                    "type": "paragraph",
+                    "id": "00000000-0000-4000-8000-000000000001",
+                    "children": [
+                      {
+                        "type": "text",
+                        "text": "Lokalni A",
+                        "marks": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "createdAt": "2026-10-06T20:00:00.000Z"
+            },
+            "queuedAt": "2026-10-06T20:00:00.000Z"
+          }
+        ],
+        "meta": {
+          "documentId": "synthetic-doc-a",
+          "state": "LOCAL_DURABLE",
+          "localSeq": 1
+        }
+      },
+      "visible_state": "LOCAL_DURABLE",
+      "prompt": "Procijeni crash tijekom local save i reload iz dostavljenog posljednjeg durable journala. Odvoji sadržaj koji je bio samo u memoriji od sadržaja dostupnog nakon reload-a.",
+      "failure_cut": "after LOCAL_SAVE_STARTED, before atomic local transaction commit",
+      "memory_document": {
+        "schemaVersion": 1,
+        "nodes": [
+          {
+            "type": "paragraph",
+            "id": "00000000-0000-4000-8000-000000000001",
+            "children": [
+              {
+                "type": "text",
+                "text": "Novo u memoriji",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "operations": [
+        {
+          "type": "EDIT"
+        },
+        {
+          "type": "LOCAL_SAVE_STARTED"
+        },
+        "crash",
+        "reload"
+      ],
+      "storage_observation": "No new atomic commit observed; supplied journal is the last readable artifact"
+    },
+    {
+      "scenario_id": "O02",
+      "selected_revision": "ac65c71d797e29417d3d0f07aa9bd7ad63f2ff06",
+      "candidate_revision": "b11ed8392dde2f722866d116b5a5bf0ea1f5da6a",
+      "candidate_status": "DAN-25 not accepted-main",
+      "contracts": [
+        "CanonicalDocument",
+        "DocumentTransaction",
+        "JournalContents",
+        "SyncEvent",
+        "CommitOutcome"
+      ],
+      "entrypoints": [
+        "src/domain/document/validate.ts:validateDocument",
+        "src/domain/sync/states.ts:syncReducer",
+        "src/domain/sync/restore.ts:restoreSyncState",
+        "candidate src/domain/sync/drain.ts:planDrain/outcomeToEvents",
+        "candidate src/domain/sync/recovery.ts:planRecovery"
+      ],
+      "identity": {
+        "actor": "synthetic-student-a",
+        "documentId": "synthetic-doc-a",
+        "session": "synthetic-session-a"
+      },
+      "identity_scope": "pending key documentId × localSeq; commit identity documentId × session-derived actor × clientTransactionId; actor/session labels are harness metadata, not wire fields",
+      "acknowledged": {
+        "revision": 7,
+        "document": {
+          "schemaVersion": 1,
+          "nodes": [
+            {
+              "type": "paragraph",
+              "id": "00000000-0000-4000-8000-000000000001",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "Poslužiteljski A",
+                  "marks": []
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "current_document": {
+        "schemaVersion": 1,
+        "nodes": [
+          {
+            "type": "paragraph",
+            "id": "00000000-0000-4000-8000-000000000001",
+            "children": [
+              {
+                "type": "text",
+                "text": "Lokalni A",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "journal": {
+        "snapshot": {
+          "documentId": "synthetic-doc-a",
+          "revision": 7,
+          "document": {
+            "schemaVersion": 1,
+            "nodes": [
+              {
+                "type": "paragraph",
+                "id": "00000000-0000-4000-8000-000000000001",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Lokalni A",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "savedAt": "2026-10-06T20:00:00.000Z"
+        },
+        "pending": [
+          {
+            "documentId": "synthetic-doc-a",
+            "localSeq": 1,
+            "tx": {
+              "kind": "REPLACE_DOCUMENT",
+              "clientTransactionId": "synthetic-tx-1",
+              "baseRevision": 7,
+              "document": {
+                "schemaVersion": 1,
+                "nodes": [
+                  {
+                    "type": "paragraph",
+                    "id": "00000000-0000-4000-8000-000000000001",
+                    "children": [
+                      {
+                        "type": "text",
+                        "text": "Lokalni A",
+                        "marks": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "createdAt": "2026-10-06T20:00:00.000Z"
+            },
+            "queuedAt": "2026-10-06T20:00:00.000Z"
+          }
+        ],
+        "meta": {
+          "documentId": "synthetic-doc-a",
+          "state": "LOCAL_DURABLE",
+          "localSeq": 1
+        }
+      },
+      "visible_state": "LOCAL_DURABLE",
+      "prompt": "Procijeni offline pa reconnect s dostavljenom pending transakcijom. Zapiši save stanje i sadržaj nakon svake operacije; odvoji transport opservaciju od server dokaza.",
+      "failure_cut": "response lost before any ACK observation",
+      "operations": [
+        {
+          "type": "SYNC_STARTED"
+        },
+        {
+          "outcome": {
+            "status": "transport_error"
+          }
+        },
+        "reconnect",
+        {
+          "type": "SYNC_STARTED"
+        },
+        {
+          "outcome": {
+            "status": "committed",
+            "revision": 8
+          }
+        }
+      ]
+    },
+    {
+      "scenario_id": "O03",
+      "selected_revision": "ac65c71d797e29417d3d0f07aa9bd7ad63f2ff06",
+      "candidate_revision": "b11ed8392dde2f722866d116b5a5bf0ea1f5da6a",
+      "candidate_status": "DAN-25 not accepted-main",
+      "contracts": [
+        "CanonicalDocument",
+        "DocumentTransaction",
+        "JournalContents",
+        "SyncEvent",
+        "CommitOutcome"
+      ],
+      "entrypoints": [
+        "src/domain/document/validate.ts:validateDocument",
+        "src/domain/sync/states.ts:syncReducer",
+        "src/domain/sync/restore.ts:restoreSyncState",
+        "candidate src/domain/sync/drain.ts:planDrain/outcomeToEvents",
+        "candidate src/domain/sync/recovery.ts:planRecovery"
+      ],
+      "identity": {
+        "actor": "synthetic-student-a",
+        "documentId": "synthetic-doc-a",
+        "session": "synthetic-session-a"
+      },
+      "identity_scope": "pending key documentId × localSeq; commit identity documentId × session-derived actor × clientTransactionId; actor/session labels are harness metadata, not wire fields",
+      "acknowledged": {
+        "revision": 7,
+        "document": {
+          "schemaVersion": 1,
+          "nodes": [
+            {
+              "type": "paragraph",
+              "id": "00000000-0000-4000-8000-000000000001",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "Poslužiteljski A",
+                  "marks": []
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "current_document": {
+        "schemaVersion": 1,
+        "nodes": [
+          {
+            "type": "paragraph",
+            "id": "00000000-0000-4000-8000-000000000001",
+            "children": [
+              {
+                "type": "text",
+                "text": "Lokalni A",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "journal": {
+        "snapshot": {
+          "documentId": "synthetic-doc-a",
+          "revision": 7,
+          "document": {
+            "schemaVersion": 1,
+            "nodes": [
+              {
+                "type": "paragraph",
+                "id": "00000000-0000-4000-8000-000000000001",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Lokalni A",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "savedAt": "2026-10-06T20:00:00.000Z"
+        },
+        "pending": [
+          {
+            "documentId": "synthetic-doc-a",
+            "localSeq": 1,
+            "tx": {
+              "kind": "REPLACE_DOCUMENT",
+              "clientTransactionId": "synthetic-tx-1",
+              "baseRevision": 7,
+              "document": {
+                "schemaVersion": 1,
+                "nodes": [
+                  {
+                    "type": "paragraph",
+                    "id": "00000000-0000-4000-8000-000000000001",
+                    "children": [
+                      {
+                        "type": "text",
+                        "text": "Lokalni A",
+                        "marks": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "createdAt": "2026-10-06T20:00:00.000Z"
+            },
+            "queuedAt": "2026-10-06T20:00:00.000Z"
+          }
+        ],
+        "meta": {
+          "documentId": "synthetic-doc-a",
+          "state": "LOCAL_DURABLE",
+          "localSeq": 1
+        }
+      },
+      "visible_state": "LOCAL_DURABLE",
+      "prompt": "Procijeni ponovljeni server odgovor i naknadni EDIT dok odgovor prvog zapisa kasni. Prati koji tx i sadržaj ACK pokriva.",
+      "failure_cut": "server committed tx-1; first response not delivered",
+      "operations": [
+        {
+          "type": "SYNC_STARTED"
+        },
+        {
+          "outcome": {
+            "status": "duplicate",
+            "revision": 8
+          }
+        },
+        {
+          "type": "EDIT"
+        },
+        {
+          "new_tx": {
+            "kind": "REPLACE_DOCUMENT",
+            "clientTransactionId": "synthetic-tx-2",
+            "baseRevision": 8,
+            "document": {
+              "schemaVersion": 1,
+              "nodes": [
+                {
+                  "type": "paragraph",
+                  "id": "00000000-0000-4000-8000-000000000001",
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "Novo nakon ACK-a",
+                      "marks": []
+                    }
+                  ]
+                }
+              ]
+            },
+            "createdAt": "2026-10-06T20:00:00.000Z"
+          }
+        },
+        {
+          "late_outcome": {
+            "status": "duplicate",
+            "revision": 8
+          }
+        }
+      ]
+    },
+    {
+      "scenario_id": "O04",
+      "selected_revision": "ac65c71d797e29417d3d0f07aa9bd7ad63f2ff06",
+      "candidate_revision": "b11ed8392dde2f722866d116b5a5bf0ea1f5da6a",
+      "candidate_status": "DAN-25 not accepted-main",
+      "contracts": [
+        "CanonicalDocument",
+        "DocumentTransaction",
+        "JournalContents",
+        "SyncEvent",
+        "CommitOutcome"
+      ],
+      "entrypoints": [
+        "src/domain/document/validate.ts:validateDocument",
+        "src/domain/sync/states.ts:syncReducer",
+        "src/domain/sync/restore.ts:restoreSyncState",
+        "candidate src/domain/sync/drain.ts:planDrain/outcomeToEvents",
+        "candidate src/domain/sync/recovery.ts:planRecovery"
+      ],
+      "identity": {
+        "actor": "synthetic-student-a",
+        "documentId": "synthetic-doc-a",
+        "session": "synthetic-session-a"
+      },
+      "identity_scope": "pending key documentId × localSeq; commit identity documentId × session-derived actor × clientTransactionId; actor/session labels are harness metadata, not wire fields",
+      "acknowledged": {
+        "revision": 7,
+        "document": {
+          "schemaVersion": 1,
+          "nodes": [
+            {
+              "type": "paragraph",
+              "id": "00000000-0000-4000-8000-000000000001",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "Poslužiteljski A",
+                  "marks": []
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "current_document": {
+        "schemaVersion": 1,
+        "nodes": [
+          {
+            "type": "paragraph",
+            "id": "00000000-0000-4000-8000-000000000001",
+            "children": [
+              {
+                "type": "text",
+                "text": "Lokalni A",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "journal": {
+        "snapshot": {
+          "documentId": "synthetic-doc-a",
+          "revision": 7,
+          "document": {
+            "schemaVersion": 1,
+            "nodes": [
+              {
+                "type": "paragraph",
+                "id": "00000000-0000-4000-8000-000000000001",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Lokalni A",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "savedAt": "2026-10-06T20:00:00.000Z"
+        },
+        "pending": [
+          {
+            "documentId": "synthetic-doc-a",
+            "localSeq": 1,
+            "tx": {
+              "kind": "REPLACE_DOCUMENT",
+              "clientTransactionId": "synthetic-tx-1",
+              "baseRevision": 7,
+              "document": {
+                "schemaVersion": 1,
+                "nodes": [
+                  {
+                    "type": "paragraph",
+                    "id": "00000000-0000-4000-8000-000000000001",
+                    "children": [
+                      {
+                        "type": "text",
+                        "text": "Lokalni A",
+                        "marks": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "createdAt": "2026-10-06T20:00:00.000Z"
+            },
+            "queuedAt": "2026-10-06T20:00:00.000Z"
+          }
+        ],
+        "meta": {
+          "documentId": "synthetic-doc-a",
+          "state": "LOCAL_DURABLE",
+          "localSeq": 1
+        }
+      },
+      "visible_state": "LOCAL_DURABLE",
+      "prompt": "Procijeni dva taba s istom bazom, novi server state i stale odgovor starijem tabu. Sačuvaj svaku lokalnu verziju i traži primjenjivi postupak.",
+      "failure_cut": "tab B has committed before tab A receives its response",
+      "tabs": {
+        "A": {
+          "tx": {
+            "kind": "REPLACE_DOCUMENT",
+            "clientTransactionId": "synthetic-tx-a",
+            "baseRevision": 7,
+            "document": {
+              "schemaVersion": 1,
+              "nodes": [
+                {
+                  "type": "paragraph",
+                  "id": "00000000-0000-4000-8000-000000000001",
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "Tab A",
+                      "marks": []
+                    }
+                  ]
+                }
+              ]
+            },
+            "createdAt": "2026-10-06T20:00:00.000Z"
+          }
+        },
+        "B": {
+          "tx": {
+            "kind": "REPLACE_DOCUMENT",
+            "clientTransactionId": "synthetic-tx-b",
+            "baseRevision": 7,
+            "document": {
+              "schemaVersion": 1,
+              "nodes": [
+                {
+                  "type": "paragraph",
+                  "id": "00000000-0000-4000-8000-000000000001",
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "Tab B",
+                      "marks": []
+                    }
+                  ]
+                }
+              ]
+            },
+            "createdAt": "2026-10-06T20:00:00.000Z"
+          }
+        }
+      },
+      "server_now": {
+        "revision": 8,
+        "document": {
+          "schemaVersion": 1,
+          "nodes": [
+            {
+              "type": "paragraph",
+              "id": "00000000-0000-4000-8000-000000000001",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "Tab B",
+                  "marks": []
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "operations": [
+        {
+          "type": "SYNC_STARTED"
+        },
+        {
+          "outcome": {
+            "status": "stale_base",
+            "currentRevision": 8
+          }
+        },
+        {
+          "fixture_operation": "persist-current-state",
+          "target": "simulated_journal.meta.state",
+          "value_from": "current_reducer_state",
+          "scope": "synthetic in-memory fixture only; not an observed IndexedDB or storage adapter write"
+        },
+        "reload"
+      ]
+    },
+    {
+      "scenario_id": "O05",
+      "selected_revision": "ac65c71d797e29417d3d0f07aa9bd7ad63f2ff06",
+      "candidate_revision": "b11ed8392dde2f722866d116b5a5bf0ea1f5da6a",
+      "candidate_status": "DAN-25 not accepted-main",
+      "contracts": [
+        "CanonicalDocument",
+        "DocumentTransaction",
+        "JournalContents",
+        "SyncEvent",
+        "CommitOutcome"
+      ],
+      "entrypoints": [
+        "src/domain/document/validate.ts:validateDocument",
+        "src/domain/sync/states.ts:syncReducer",
+        "src/domain/sync/restore.ts:restoreSyncState",
+        "candidate src/domain/sync/drain.ts:planDrain/outcomeToEvents",
+        "candidate src/domain/sync/recovery.ts:planRecovery"
+      ],
+      "identity": {
+        "actor": "synthetic-student-a",
+        "documentId": "synthetic-doc-a",
+        "session": "synthetic-session-a"
+      },
+      "identity_scope": "pending key documentId × localSeq; commit identity documentId × session-derived actor × clientTransactionId; actor/session labels are harness metadata, not wire fields",
+      "acknowledged": {
+        "revision": 7,
+        "document": {
+          "schemaVersion": 1,
+          "nodes": [
+            {
+              "type": "paragraph",
+              "id": "00000000-0000-4000-8000-000000000001",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "Poslužiteljski A",
+                  "marks": []
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "current_document": {
+        "schemaVersion": 1,
+        "nodes": [
+          {
+            "type": "paragraph",
+            "id": "00000000-0000-4000-8000-000000000001",
+            "children": [
+              {
+                "type": "text",
+                "text": "Lokalni A",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "journal": {
+        "snapshot": {
+          "documentId": "synthetic-doc-a",
+          "revision": 7,
+          "document": {
+            "schemaVersion": 1,
+            "nodes": [
+              {
+                "type": "paragraph",
+                "id": "00000000-0000-4000-8000-000000000001",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Lokalni A",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "savedAt": "2026-10-06T20:00:00.000Z"
+        },
+        "pending": [
+          {
+            "documentId": "synthetic-doc-a",
+            "localSeq": 1,
+            "tx": {
+              "kind": "REPLACE_DOCUMENT",
+              "clientTransactionId": "synthetic-tx-1",
+              "baseRevision": 7,
+              "document": {
+                "schemaVersion": 1,
+                "nodes": [
+                  {
+                    "type": "paragraph",
+                    "id": "00000000-0000-4000-8000-000000000001",
+                    "children": [
+                      {
+                        "type": "text",
+                        "text": "Lokalni A",
+                        "marks": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "createdAt": "2026-10-06T20:00:00.000Z"
+            },
+            "queuedAt": "2026-10-06T20:00:00.000Z"
+          }
+        ],
+        "meta": {
+          "documentId": "synthetic-doc-a",
+          "state": "LOCAL_DURABLE",
+          "localSeq": 1
+        }
+      },
+      "visible_state": "LOCAL_DURABLE",
+      "prompt": "Procijeni istek sesije i zatim pokušaj prijave drugog synthetic korisnika uz postojeći lokalni journal. Navedi potrebne dokaze i primjenjivi prihvaćeni tok.",
+      "failure_cut": "session expires with locally durable pending content",
+      "operations": [
+        "expire synthetic-session-a",
+        "same actor reauthentication requested",
+        "different actor synthetic-student-b login requested"
+      ],
+      "origin": "https://ductus.test",
+      "profile": "isolated-synthetic-fixture",
+      "storage_adapter_observation": null
+    },
+    {
+      "scenario_id": "O06",
+      "selected_revision": "ac65c71d797e29417d3d0f07aa9bd7ad63f2ff06",
+      "candidate_revision": "b11ed8392dde2f722866d116b5a5bf0ea1f5da6a",
+      "candidate_status": "DAN-25 not accepted-main",
+      "contracts": [
+        "CanonicalDocument",
+        "DocumentTransaction",
+        "JournalContents",
+        "SyncEvent",
+        "CommitOutcome"
+      ],
+      "entrypoints": [
+        "src/domain/document/validate.ts:validateDocument",
+        "src/domain/sync/states.ts:syncReducer",
+        "src/domain/sync/restore.ts:restoreSyncState",
+        "candidate src/domain/sync/drain.ts:planDrain/outcomeToEvents",
+        "candidate src/domain/sync/recovery.ts:planRecovery"
+      ],
+      "identity": {
+        "actor": "synthetic-student-a",
+        "documentId": "synthetic-doc-a",
+        "session": "synthetic-session-a"
+      },
+      "identity_scope": "pending key documentId × localSeq; commit identity documentId × session-derived actor × clientTransactionId; actor/session labels are harness metadata, not wire fields",
+      "acknowledged": {
+        "revision": 7,
+        "document": {
+          "schemaVersion": 1,
+          "nodes": [
+            {
+              "type": "paragraph",
+              "id": "00000000-0000-4000-8000-000000000001",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "Poslužiteljski A",
+                  "marks": []
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "current_document": {
+        "schemaVersion": 1,
+        "nodes": [
+          {
+            "type": "paragraph",
+            "id": "00000000-0000-4000-8000-000000000001",
+            "children": [
+              {
+                "type": "text",
+                "text": "Lokalni A",
+                "marks": []
+              }
+            ]
+          }
+        ]
+      },
+      "journal": {
+        "snapshot": {
+          "documentId": "synthetic-doc-a",
+          "revision": 7,
+          "document": {
+            "schemaVersion": 1,
+            "nodes": [
+              {
+                "type": "paragraph",
+                "id": "00000000-0000-4000-8000-000000000001",
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Lokalni A",
+                    "marks": []
+                  }
+                ]
+              }
+            ]
+          },
+          "savedAt": "2026-10-06T20:00:00.000Z"
+        },
+        "pending": [
+          {
+            "documentId": "synthetic-doc-a",
+            "localSeq": 1,
+            "tx": {
+              "kind": "REPLACE_DOCUMENT",
+              "clientTransactionId": "synthetic-tx-1",
+              "baseRevision": 7,
+              "document": {
+                "schemaVersion": 1,
+                "nodes": [
+                  {
+                    "type": "paragraph",
+                    "id": "00000000-0000-4000-8000-000000000001",
+                    "children": [
+                      {
+                        "type": "text",
+                        "text": "Lokalni A",
+                        "marks": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "createdAt": "2026-10-06T20:00:00.000Z"
+            },
+            "queuedAt": "2026-10-06T20:00:00.000Z"
+          }
+        ],
+        "meta": {
+          "documentId": "synthetic-doc-a",
+          "state": "LOCAL_DURABLE",
+          "localSeq": 1
+        }
+      },
+      "visible_state": "LOCAL_DURABLE",
+      "prompt": "Procijeni planDrain i removable ACK prefix za ovaj red. Sačuvaj input redove i obrazloži stvarni sendability opseg odabrane revizije.",
+      "failure_cut": "queue read before drain",
+      "pending_rows": [
+        {
+          "documentId": "synthetic-doc-a",
+          "localSeq": 1,
+          "tx": {
+            "kind": "REPLACE_DOCUMENT",
+            "clientTransactionId": "synthetic-tx-1",
+            "baseRevision": 7,
+            "document": {
+              "schemaVersion": 1,
+              "nodes": [
+                {
+                  "type": "paragraph",
+                  "id": "00000000-0000-4000-8000-000000000001",
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "Lokalni A",
+                      "marks": []
+                    }
+                  ]
+                }
+              ]
+            },
+            "createdAt": "2026-10-06T20:00:00.000Z"
+          },
+          "queuedAt": "2026-10-06T20:00:00.000Z"
+        },
+        {
+          "documentId": "synthetic-doc-a",
+          "localSeq": 2,
+          "tx": {
+            "kind": "FUTURE_DELTA",
+            "clientTransactionId": "synthetic-tx-2",
+            "baseRevision": 7,
+            "document": {
+              "schemaVersion": 1,
+              "nodes": [
+                {
+                  "type": "paragraph",
+                  "id": "00000000-0000-4000-8000-000000000001",
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "Nepoznati red",
+                      "marks": []
+                    }
+                  ]
+                }
+              ]
+            },
+            "createdAt": "2026-10-06T20:00:00.000Z"
+          },
+          "queuedAt": "2026-10-06T20:00:00.000Z"
+        },
+        {
+          "documentId": "synthetic-doc-a",
+          "localSeq": 3,
+          "tx": {
+            "kind": "REPLACE_DOCUMENT",
+            "clientTransactionId": "",
+            "baseRevision": -1,
+            "document": {
+              "schemaVersion": 1,
+              "nodes": [
+                {
+                  "type": "paragraph",
+                  "id": "00000000-0000-4000-8000-000000000001",
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "Oštećeni red",
+                      "marks": []
+                    }
+                  ]
+                }
+              ]
+            },
+            "createdAt": "2026-10-06T20:00:00.000Z"
+          },
+          "queuedAt": "2026-10-06T20:00:00.000Z"
+        },
+        {
+          "documentId": "synthetic-doc-a",
+          "localSeq": 4,
+          "tx": {
+            "kind": "REPLACE_DOCUMENT",
+            "clientTransactionId": "synthetic-tx-4",
+            "baseRevision": 7,
+            "document": {
+              "schemaVersion": 1,
+              "nodes": [
+                {
+                  "type": "paragraph",
+                  "id": "00000000-0000-4000-8000-000000000001",
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "Noviji A",
+                      "marks": []
+                    }
+                  ]
+                }
+              ]
+            },
+            "createdAt": "2026-10-06T20:00:00.000Z"
+          },
+          "queuedAt": "2026-10-06T20:00:00.000Z"
+        }
+      ],
+      "operations": [
+        "planDrain supplied pending_rows",
+        "inspect proposed ACK clearing prefix"
+      ]
+    }
+  ],
+  "operation_contract": {
+    "visible_state": "Početni reducer state svakog scenarija; svaki type objekt u operations je stvarni SyncEvent iz states.ts.",
+    "outcomes": "outcome i late_outcome objekti su supplied candidate DrainOutcome ulazi. Mapirati svaki kroz stvarni outcomeToEvents na candidate_revision i dobivene događaje redom primijeniti kroz syncReducer; ne izmišljati dodatne SyncEvente.",
+    "fixture_operations": "Tekstualni crash, reload i reconnect su sintetičke fixture operacije, ne SyncEventi. Crash odbacuje samo modelirano memorijsko stanje; reconnect sam ne mijenja reducer state. new_tx je novi memorijski kandidat s identitetom, ne opaženi local save, ACK ili novi pending red.",
+    "reload": "Za reload koristiti restoreSyncState nad simuliranom kopijom dostavljenog journal ulaza. Bez izričite fixture persistence operacije čitati nepromijenjeni posljednji durable journal.",
+    "persist_current_state": "Samo izričiti fixture_operation persist-current-state kopira trenutačni reducer state u simulated_journal.meta.state. To je sintetička in-memory priprema reloada, ne opaženi IndexedDB/adapter write; izvorni journal ulaz ostaje nepromijenjen."
+  }
+}
