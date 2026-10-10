@@ -124,7 +124,7 @@ Sve tablice imaju uključen RLS i retke u pgTAP matrici pristupa. Pristup ide kr
 | `institution_role` | korisnik, ustanova, uloga (`teacher`, `admin`), potvrdio, vrijeme | Administrator |
 | `course` | id, ustanova, naziv, akademska godina, pravilo AI-ja iz izvedbenog plana (D-52) | Članovi kolegija |
 | `course_enrollment_code` | kolegij, hash koda, vrijedi do, aktivan | Nastavnik kolegija |
-| `course_member` | kolegij, korisnik, uloga u kolegiju (`teacher`, `student`), od, do | Nastavnik kolegija sve članove; student nastavnike kolegija i vlastito članstvo |
+| `course_member` | kolegij, korisnik, uloga u kolegiju (`teacher`, `student`), od, do; za studenta kojeg je uklonio nastavnik: tko ga je uklonio i kada mu je povratak dopušten | Nastavnik kolegija sve članove; student nastavnike kolegija i vlastito članstvo |
 | `enrollment_attempt` | korisnik, vrijeme pogrešnog koda. Pogreške jednog korisnika unutar prozora iz `institution_settings`; svaki pokušaj upisa najprije briše retke starije od prozora | Nitko izravno; piše samo `enroll_with_code` |
 | `mentorship` | mentor, student, vrsta rada, od, do, potvrdio | Mentor i student |
 | `assignment` | id, kolegij, trenutna verzija | Članovi kolegija |
