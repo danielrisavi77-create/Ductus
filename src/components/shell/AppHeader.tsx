@@ -16,7 +16,7 @@ export default function AppHeader({ context, end }: AppHeaderProps) {
     <header className="app-header">
       <div className="app-header__inner">
         <div className="app-header__start">
-          <Link className="brand" href="/">
+          <Link className="brand brand--small" href="/">
             {t.app.name}
           </Link>
           {context ? <span className="app-header__context">{context}</span> : null}
