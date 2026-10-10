@@ -15,7 +15,7 @@ import type { SyncState } from "../../domain/sync/states";
 import { storableText } from "../../editor/storable-text";
 import { AtomicDexieJournal, JournalError } from "./atomic-dexie-journal";
 import {
-  failureOf, LocalDocumentSaver, type SaverDeps, type SaverSnapshot,
+  failureOf, LocalDocumentSaver, reasonOf, type SaverDeps, type SaverSnapshot,
 } from "./local-document-saver";
 
 const DOC = "local-demo-document";
@@ -341,6 +341,161 @@ describe("LocalDocumentSaver: failures (#197 attacks 5, 6, 7, 4, 17, 13)", () =>
     expect((await journal(at).read(DOC)).snapshot?.document).toEqual(text("drugo"));
   });
 
+  it("6: a reload after a failed write keeps the failure and never claims the journal's older text", async () => {
+    const at = scope();
+    const real = journal(at);
+    let failNext = false;
+    const target = saver(patched(real, {
+      saveLocal: async (...args: Parameters<AtomicDexieJournal["saveLocal"]>) => {
+        if (failNext) { failNext = false; throw new Error("transient"); }
+        return real.saveLocal(...args);
+      },
+    }));
+    await target.load();
+    await type(target, "prvo");
+    failNext = true;
+    target.edit();
+    const [, loaded] = await Promise.all([target.propose(text("drugo")), target.load()]);
+    expect(loaded).toEqual({ kind: "recovery", document: text("prvo") });
+    expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "unknown" });
+    await type(target, "treće");
+    expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "unknown" });
+    expect((await journal(at).read(DOC)).pending).toHaveLength(1);
+  });
+
+  it("4, 6: a reload in a stale tab keeps it stopped, whether the write was in flight or done", async () => {
+    const at = scope();
+    const first = saver(journal(at));
+    const second = saver(journal(at));
+    await Promise.all([first.load(), second.load()]);
+    await type(first, "A");
+    second.edit();
+    const [, during] = await Promise.all([second.propose(text("B")), second.load()]);
+    expect(during).toEqual({ kind: "recovery", document: text("A") });
+    expect(second.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+    const after = await second.load();
+    expect(after).toEqual({ kind: "recovery", document: text("A") });
+    expect(second.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+  });
+
+  it("4, 6: a reload never claims text another writer saved after this tab's last write", async () => {
+    const at = scope();
+    const first = saver(journal(at));
+    await first.load();
+    await type(first, "eins");
+    const second = saver(journal(at));
+    await second.load();
+    await type(second, "zwei");
+    expect(await first.load()).toEqual({ kind: "recovery", document: text("zwei") });
+    expect(first.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+  });
+
+  it("6: text typed before or during a reload is not claimed by it", async () => {
+    const real = journal(scope());
+    let reads = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let entered!: () => void;
+    const reading = new Promise<void>((resolve) => { entered = resolve; });
+    const target = saver(patched(real, {
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        if ((reads += 1) === 3) { entered(); await gate; }
+        return real.read(...args);
+      },
+    }));
+    await target.load();
+    await type(target, "prvo");
+    target.edit();
+    expect((await target.load()).kind).toBe("ready");
+    expect(target.snapshot().state).toBe("EDITING");
+    await type(target, "drugo");
+    const reload = target.load();
+    await reading;
+    target.edit();
+    release();
+    expect((await reload).kind).toBe("ready");
+    expect(target.snapshot().state).toBe("EDITING");
+  });
+
+  it("6: a candidate waiting on a reload is not claimed by it, even without a new edit", async () => {
+    const real = journal(scope());
+    let reads = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let entered!: () => void;
+    const reading = new Promise<void>((resolve) => { entered = resolve; });
+    const target = saver(patched(real, {
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        if ((reads += 1) === 2) { entered(); await gate; }
+        return real.read(...args);
+      },
+    }));
+    await target.load();
+    await type(target, "prvo");
+    const reload = target.load();
+    await reading;
+    const flight = target.propose(text("drugo"));
+    const states = record(target);
+    release();
+    await reload;
+    await flight;
+    expect(states.map((s) => s.state)).toEqual(["EDITING", "SAVING_LOCAL", "LOCAL_DURABLE"]);
+  });
+
+  it("6: overlapping reloads hold writes until the last read, so the only writer is not stale", async () => {
+    const at = scope();
+    const real = journal(at);
+    let reads = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const target = saver(patched(real, {
+      // The third read sees the journal, then is held: it returns what it saw.
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        const contents = await real.read(...args);
+        if ((reads += 1) === 3) await gate;
+        return contents;
+      },
+    }));
+    await target.load();
+    await type(target, "prvo");
+    const first = target.load();
+    const second = target.load();
+    await first;
+    target.edit();
+    const flight = target.propose(text("drugo"));
+    // Time for a write that does not wait to finish before the held read returns.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    release();
+    await Promise.all([second, flight]);
+    await type(target, "treće");
+    expect(target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+    expect((await journal(at).read(DOC)).pending).toHaveLength(3);
+  });
+
+  it("4: a halting failure drops the candidate queued behind it", async () => {
+    const real = journal(scope());
+    let writes = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const target = saver(patched(real, {
+      saveLocal: async () => {
+        writes += 1;
+        await gate;
+        throw new JournalError("stale_local_sequence");
+      },
+    }));
+    await target.load();
+    target.edit();
+    const flight = target.propose(text("a"));
+    target.edit();
+    void target.propose(text("b"));
+    release();
+    await flight;
+    await target.settled();
+    expect(writes).toBe(1);
+    expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+  });
+
   it("6: the store closing during a write halts saving", async () => {
     const real = journal(scope());
     let writes = 0;
@@ -387,6 +542,22 @@ describe("LocalDocumentSaver: failures (#197 attacks 5, 6, 7, 4, 17, 13)", () =>
     expect(again.snapshot().capacity).toBe("full");
     await type(again, "r7");
     expect(again.snapshot().failure).toBe("limit");
+  });
+
+  it("7: the character bound counts the rows this saver wrote", async () => {
+    const probe = scope();
+    const measure = saver(journal(probe));
+    await measure.load();
+    await type(measure, words(100));
+    const size = JSON.stringify((await journal(probe).read(DOC)).pending[0]!.tx).length;
+    const at = scope();
+    const target = saver(journal(at), { limits: { maxPendingRows: 100, maxPendingChars: Math.floor(size * 1.5) } });
+    await target.load();
+    await type(target, words(100));
+    expect(target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+    await type(target, words(100));
+    expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "limit" });
+    expect((await journal(at).read(DOC)).pending).toHaveLength(1);
   });
 
   it("7: the character bound stops a single oversized write", async () => {
@@ -522,6 +693,13 @@ describe("LocalDocumentSaver: failures (#197 attacks 5, 6, 7, 4, 17, 13)", () =>
     expect(failureOf(named("SecurityError"))).toBe("unavailable");
     expect(failureOf(new JournalError("duplicate_transaction"))).toBe("unknown");
     expect(failureOf(null)).toBe("unknown");
+  });
+
+  it("reports the queue bound as a full store and a stale journal as unknown to the reducer", () => {
+    expect(reasonOf("limit")).toBe("quota");
+    expect(reasonOf("stale")).toBe("unknown");
+    expect(reasonOf("quota")).toBe("quota");
+    expect(reasonOf("corrupt")).toBe("corrupt");
   });
 });
 

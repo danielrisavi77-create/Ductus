@@ -42,6 +42,11 @@ export const DEFAULT_SAVER_LIMITS: SaverLimits = {
   maxPendingRows: 5_000, maxPendingChars: 64 * 1024 * 1024,
 };
 
+/**
+ * On a reload with edits not yet proposed, `ready` carries the journal's
+ * document, not the editor's, and the state stays EDITING; the next
+ * `propose()` saves the editor's text.
+ */
 export type LoadResult =
   | { kind: "ready"; document: CanonicalDocument }
   /** Sticky or unreadable store: show it, never overwrite it. */
@@ -74,7 +79,7 @@ export function failureOf(error: unknown): SaverFailure {
   return "unknown";
 }
 
-function reasonOf(failure: SaverFailure): LocalSaveFailureReason {
+export function reasonOf(failure: SaverFailure): LocalSaveFailureReason {
   return failure === "limit" ? "quota" : failure === "stale" ? "unknown" : failure;
 }
 
@@ -92,10 +97,16 @@ export class LocalDocumentSaver {
   private chars = 0;
   /** Bumped by every `edit()`; a save may claim the text only at its own gen. */
   private gen = 0;
+  /** The gen whose text the journal holds, as far as this saver wrote it. */
+  private cleanGen = 0;
+  /** A candidate failed and no later write succeeded: the journal lacks the editor's text. */
+  private unsaved = false;
   private next: Candidate | null = null;
   private flight: Promise<void> | null = null;
-  /** Set while `load()` reads; no write starts until it resolves. */
+  /** Set while any `load()` reads; no write starts until the last one resolves. */
   private reading: Promise<void> | null = null;
+  private readers = 0;
+  private release: () => void = () => {};
   private readonly listeners = new Set<(snapshot: SaverSnapshot) => void>();
   private readonly now: () => Date;
   private readonly newId: () => string;
@@ -131,22 +142,31 @@ export class LocalDocumentSaver {
    * A write still in flight is awaited first, and none starts during the
    * read: otherwise the read could return the sequence before that write and
    * the next save would fail as stale in a tab that is the only writer.
+   * Overlapping loads share the block until the last one has read (#206 V1).
+   * A write that never settles (a blocked IndexedDB) holds the load with it;
+   * step 1b bounds that wait in the UI (#206 M-a).
+   *
+   * A reload never lifts a halt or a failure of this saver's own writes, and
+   * never claims text another writer put in the journal: the editor then
+   * holds text the journal lacks, so the result is `recovery` (#206 B1).
    */
   async load(): Promise<LoadResult> {
-    let release!: () => void;
-    this.reading = new Promise<void>((resolve) => { release = resolve; });
+    if (this.readers++ === 0) {
+      this.reading = new Promise<void>((resolve) => { this.release = resolve; });
+    }
     try {
       await this.settled();
       return await this.read();
     } finally {
-      this.reading = null;
-      release();
-      if (this.next && !this.halted) this.flight ??= this.drain();
+      if (--this.readers === 0) {
+        this.reading = null;
+        this.release();
+        if (this.next && !this.halted) this.flight ??= this.drain();
+      }
     }
   }
 
   private async read(): Promise<LoadResult> {
-    const gen = this.gen;
     try {
       const contents = await this.journal.read(this.documentId);
       const { snapshot, meta, pending } = contents;
@@ -161,6 +181,13 @@ export class LocalDocumentSaver {
         this.emit();
         return { kind: "recovery", document: stored?.ok ? stored.doc : null };
       }
+      const document = stored?.ok ? stored.doc : null;
+      if (this.unsaved) {
+        return this.haltWith(this.failure ?? "unknown", { kind: "recovery", document });
+      }
+      if (this.loaded && (meta?.localSeq ?? 0) !== this.seq) {
+        return this.haltWith("stale", { kind: "recovery", document });
+      }
       // A ready read after an `unavailable` one is a deliberate retry: the
       // sequence below is re-read, so saving may resume from it.
       this.loaded = true;
@@ -168,13 +195,13 @@ export class LocalDocumentSaver {
       this.failure = null;
       this.seq = meta?.localSeq ?? 0;
       this.baseRevision = snapshot?.revision ?? 0;
-      this.durable = stored?.ok ? stored.doc : null;
+      this.durable = document;
       this.rows = pending.length;
       this.chars = pending.reduce((sum, row) => sum + JSON.stringify(row.tx).length, 0);
       // Step 1 has no server: whatever meta says, the most this tab can
       // claim is that the bytes are on this device.
-      // Text typed during the read is not what the journal holds.
-      this.state = this.durable && gen === this.gen && !this.next ? "LOCAL_DURABLE" : "EDITING";
+      // Text typed before or during the read is not what the journal holds.
+      this.state = this.durable && this.gen === this.cleanGen && !this.next ? "LOCAL_DURABLE" : "EDITING";
       this.emit();
       return { kind: "ready", document: this.durable ?? emptyDocument() };
     } catch (error) {
@@ -249,6 +276,8 @@ export class LocalDocumentSaver {
       this.durable = result.snapshot.document;
       this.rows += 1;
       this.chars += size;
+      this.cleanGen = gen;
+      this.unsaved = false;
     } catch (error) {
       this.fail(failureOf(error));
       return;
@@ -269,6 +298,7 @@ export class LocalDocumentSaver {
    */
   private fail(failure: SaverFailure): void {
     this.failure = failure;
+    this.unsaved = true;
     if (HALTING.has(failure)) this.halted = true;
     if (this.state !== "SAVING_LOCAL") {
       this.state = syncReducer(syncReducer(this.state, { type: "EDIT" }), { type: "LOCAL_SAVE_STARTED" });
