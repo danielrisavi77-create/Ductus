@@ -32,13 +32,29 @@ export function demoTaskIds(planText) {
  * B-5). Merged PRs often carry a Linear id in Task and the plan id only in the title.
  */
 export function demoTasksOf(texts, demoIds) {
-  const found = new Set();
+  const found = new Map();
   for (const text of texts) {
-    for (const m of String(text ?? "").matchAll(/\b([A-Z]-\d+)[a-z]?\b/g)) {
-      if (demoIds.has(m[1])) found.add(m[1]);
+    for (const m of String(text ?? "").matchAll(/\b([A-Z]-\d+)([a-z])?\b(?:[,\s]+(\d+\/\d+)\b)?/g)) {
+      if (!demoIds.has(m[1])) continue;
+      const part = m[2] ?? m[3] ?? null;
+      found.set(`${m[1]}|${part ?? ""}`, { id: m[1], part });
     }
   }
-  return [...found].sort();
+  return [...found.values()].sort((a, b) => a.id.localeCompare(b.id) || String(a.part).localeCompare(String(b.part)));
+}
+
+/** Labels "B-7 (1/2)", "B-5 (a, b)"; a task without part marks prints its id only. Does not judge completeness. */
+export function demoWorkLabels(rows) {
+  const byId = new Map();
+  for (const { id, part } of rows.flatMap((r) => r.demoTasks)) {
+    const parts = byId.get(id) ?? new Set();
+    if (part) parts.add(part);
+    byId.set(id, parts);
+  }
+  return [...byId.keys()].sort().map((id) => {
+    const parts = [...byId.get(id)].sort();
+    return parts.length ? `${id} (${parts.join(", ")})` : id;
+  });
 }
 
 /**
@@ -101,7 +117,7 @@ export function summarize(rows) {
       qaRoundsPerPr: critical.length ? round(critical.reduce((s, r) => s + r.qaRounds, 0) / critical.length) : null,
       qaRoundsMax: critical.length ? Math.max(...critical.map((r) => r.qaRounds)) : null,
     },
-    demoTasksMerged: [...new Set(rows.flatMap((r) => r.demoTasks))].sort(),
+    demoTasksWithMergedWork: demoWorkLabels(rows),
     prsWithoutDemoId: rows.filter((r) => !r.demoTasks.length).length,
   };
 }
@@ -123,7 +139,7 @@ export function renderMetrics(rows, summary, since) {
   }
   lines.push(
     `all risks: n=${summary.all.prs} lead median ${f(summary.all.leadMedianH)} h, p90 ${f(summary.all.leadP90H)} h`,
-    `demo tasks merged: ${summary.demoTasksMerged.length} (${summary.demoTasksMerged.join(", ") || "-"}); PRs without a recognised plan id: ${summary.prsWithoutDemoId}`,
+    `demo tasks with merged work (parts as marked in PRs; completeness not judged): ${summary.demoTasksWithMergedWork.length} (${summary.demoTasksWithMergedWork.join(", ") || "-"}); PRs without a recognised plan id: ${summary.prsWithoutDemoId}`,
   );
   return lines;
 }

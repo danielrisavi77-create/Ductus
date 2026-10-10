@@ -42,11 +42,11 @@ test("demo task ids come from table rows only", () => {
 
 test("plan ids are found in Task or title, with letter suffix, not in Linear ids", () => {
   const ids = demoTaskIds(plan);
-  assert.deepEqual(demoTasksOf(["DAN-33", "feat: model (B-7, 1/2)"], ids), ["B-7"]);
-  assert.deepEqual(demoTasksOf(["B-5a", "feat: x"], ids), ["B-5"]);
-  assert.deepEqual(demoTasksOf(["B-8b", undefined], ids), ["B-8"]);
-  assert.deepEqual(demoTasksOf(["DAN-5", "feat: forbidden terms check in CI (P-6)"], ids), ["P-6"]);
-  assert.deepEqual(demoTasksOf(["B-7 1/2", "B-7 2/2 and P-6"], ids), ["B-7", "P-6"]);
+  assert.deepEqual(demoTasksOf(["DAN-33", "feat: model (B-7, 1/2)"], ids), [{ id: "B-7", part: "1/2" }]);
+  assert.deepEqual(demoTasksOf(["B-5a", "feat: x"], ids), [{ id: "B-5", part: "a" }]);
+  assert.deepEqual(demoTasksOf(["B-8b", undefined], ids), [{ id: "B-8", part: "b" }]);
+  assert.deepEqual(demoTasksOf(["DAN-5", "feat: forbidden terms check in CI (P-6)"], ids), [{ id: "P-6", part: null }]);
+  assert.deepEqual(demoTasksOf(["B-7 1/2", "B-7 2/2 and P-6"], ids), [{ id: "B-7", part: "1/2" }, { id: "B-7", part: "2/2" }, { id: "P-6", part: null }]);
   assert.deepEqual(demoTasksOf(["DAN-110", "fix: retry"], ids), []);
   assert.deepEqual(demoTasksOf(["B-99", "B-99a"], ids), []);
   assert.deepEqual(demoTasksOf([], ids), []);
@@ -62,9 +62,9 @@ test("prMetrics: a round is one distinct head per kind; gate rules decide its ou
     qa(SHA("b"), "PASS", "2026-10-02T11:10:00Z", "claude:qaY"), // two identities passing the same head
     { ...qa(SHA("c"), "FAIL", "2026-10-02T12:00:00Z"), author_association: "NONE" },
   ];
-  const m = prMetrics(merged({ title: "feat: model (B-7)" }), comments, demoTaskIds(plan));
+  const m = prMetrics(merged({ title: "feat: model (B-7, 1/2)" }), comments, demoTaskIds(plan));
   assert.deepEqual(m, {
-    number: 7, risk: "critical", task: "DAN-1", demoTasks: ["B-7"], leadHours: 36,
+    number: 7, risk: "critical", task: "DAN-1", demoTasks: [{ id: "B-7", part: "1/2" }], leadHours: 36,
     reviewPass: 1, reviewFail: 0, qaPass: 1, qaFail: 1, qaRounds: 2, heads: 2,
   });
 });
@@ -97,9 +97,9 @@ test("a PR without verdicts or a parsable date still yields a row", () => {
 test("summary: critical median/p90, QA rounds, demo tasks and PRs without a plan id", () => {
   const row = (number, risk, leadHours, qaRounds, demoTasks) => ({ number, risk, leadHours, qaRounds, demoTasks });
   const rows = [
-    row(1, "critical", 10, 1, ["B-7"]),
-    row(2, "critical", 30, 3, ["B-7"]),
-    row(3, "critical", 20, 2, ["P-6"]),
+    row(1, "critical", 10, 1, [{ id: "B-7", part: "1/2" }]),
+    row(2, "critical", 30, 3, [{ id: "B-5", part: "a" }, { id: "B-5", part: "b" }, { id: "B-8", part: "a" }]),
+    row(3, "critical", 20, 2, [{ id: "P-6", part: null }]),
     row(4, "critical", 40, 2, []),
     row(5, "standard", 2, 0, []),
   ];
@@ -107,7 +107,8 @@ test("summary: critical median/p90, QA rounds, demo tasks and PRs without a plan
   assert.equal(s.merged, 5);
   assert.deepEqual(s.critical, { prs: 4, leadMedianH: 25, leadP90H: 40, qaRoundsPerPr: 2, qaRoundsMax: 3 });
   assert.equal(s.all.leadMedianH, 20);
-  assert.deepEqual(s.demoTasksMerged, ["B-7", "P-6"]);
+  assert.deepEqual(s.demoTasksWithMergedWork, ["B-5 (a, b)", "B-7 (1/2)", "B-8 (a)", "P-6"]);
+  assert.equal("demoTasksMerged" in s, false);
   assert.equal(s.prsWithoutDemoId, 2);
   const empty = summarize([]);
   assert.equal(empty.critical.leadMedianH, null);
@@ -115,11 +116,13 @@ test("summary: critical median/p90, QA rounds, demo tasks and PRs without a plan
 });
 
 test("render puts the two T2 metrics first", () => {
-  const rows = [{ number: 1, risk: "critical", task: "B-7", leadHours: 4, qaRounds: 2, demoTasks: ["B-7"], reviewPass: 1, reviewFail: 0, qaPass: 1, qaFail: 1, heads: 2 }];
+  const rows = [{ number: 1, risk: "critical", task: "B-7", leadHours: 4, qaRounds: 2, demoTasks: [{ id: "B-7", part: null }], reviewPass: 1, reviewFail: 0, qaPass: 1, qaFail: 1, heads: 2 }];
   const lines = renderMetrics(rows, summarize(rows), "2026-10-01");
   assert.match(lines[1], /^1\. time from open to merge: median 4 h, p90 4 h/);
   assert.match(lines[2], /^2\. QA rounds per PR .*mean 2, max 2/);
   assert.match(lines.at(-1), /PRs without a recognised plan id: 0/);
+  assert.match(lines.at(-1), /demo tasks with merged work .*: 1 \(B-7\)/);
+  assert.doesNotMatch(lines.join("\n"), /tasks merged/);
   assert.ok(renderMetrics([], summarize([]), "2026-10-01").join("\n").includes("median ? h"));
 });
 
