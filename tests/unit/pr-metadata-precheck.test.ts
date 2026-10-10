@@ -13,7 +13,9 @@ const script = fileURLToPath(
 // minimum risk and the tests depend only on the body. Git hooks export
 // GIT_DIR and friends, which would point git back at this repository.
 const cwd = mkdtempSync(join(tmpdir(), "pr-precheck-"));
-const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")));
+const env = Object.fromEntries(
+  Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")),
+) as NodeJS.ProcessEnv;
 
 function run(command: string) {
   return spawnSync(process.execPath, [script], {
