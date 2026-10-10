@@ -34,7 +34,7 @@ export default function WorkspacePage() {
       <div className="sheet-area">
         <article className="sheet">
           <h1 className="manuscript manuscript__title">{t.workspace.documentUntitled}</h1>
-          {/* Not editable until F-8 mounts the editor; it says so instead of inviting typing. */}
+          {/* Not editable until F-8 mounts the editor: the text says so, matching aria-disabled. */}
           <div
             className="manuscript"
             role="textbox"
@@ -43,7 +43,7 @@ export default function WorkspacePage() {
             aria-label={t.workspace.documentLabel}
           >
             <p className="manuscript__placeholder">
-              {t.workspace.documentPlaceholder} <span className="soon">{t.workspace.soon}</span>
+              {t.workspace.documentNotEditable} <span className="soon">{t.workspace.soon}</span>
             </p>
           </div>
         </article>

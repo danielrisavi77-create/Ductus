@@ -44,7 +44,7 @@ export const hr = {
     sidePanelEmpty: "Upute zadatka, literatura i komentari nastavnika prikazuju se ovdje.",
     documentUntitled: "Bez naslova",
     documentLabel: "Tekst rada",
-    documentPlaceholder: "Počni pisati…",
+    documentNotEditable: "Pisanje ovdje još nije moguće.",
     status: "Stanje rada",
   },
 } as const;

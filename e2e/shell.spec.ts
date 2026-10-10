@@ -91,7 +91,8 @@ test.describe("workspace shell", () => {
     await expect(page).toHaveURL(/\/rad$/);
     const sheetText = page.getByRole("textbox", { name: "Tekst rada" });
     await expect(sheetText).toHaveAttribute("aria-disabled", "true");
-    await expect(sheetText).toContainText("Počni pisati… uskoro");
+    await expect(sheetText).toHaveText("Pisanje ovdje još nije moguće. uskoro");
+    await expect(sheetText).not.toContainText("Počni");
     await expect(sheetText.locator(".soon")).toBeVisible();
   });
 
