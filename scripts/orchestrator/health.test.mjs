@@ -6,7 +6,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { exitCode, parseWorktrees } from "./health-core.mjs";
+import { checkQueue, exitCode, parseWorktrees, queueItems } from "./health-core.mjs";
 import { health, readOnlyCall } from "./health.mjs";
 
 const H1 = "1".repeat(40);
@@ -34,7 +34,7 @@ function world() {
         [`${d}/node_modules/cc-safety-net/package.json`, '{"version":"2.6.1"}']]),
     ]),
     prs: [{ number: 10, state: "OPEN", isDraft: false, headRefOid: H1, headRefName: "feat/x", title: "x" }],
-    comments: new Map([[10, [verdict(H1, "PASS", 50)]], [87, [queue(`- **#10** head \`${H1}\` → reviewer`, 90)]]]),
+    comments: new Map([[10, [verdict(H1, "PASS", 50)]], [87, [queue(`- **#10** head \`${H1}\` → \`claude:rev\``, 90)]]]),
     pages: null,
     branch: { commit: { sha: MAIN }, protection: { required_status_checks: { contexts: [...REQUIRED] } } },
     runs: REQUIRED.slice(0, 2).map((name, id) => ({ id: 100 + id, name, status: "completed", conclusion: "success" })),
@@ -141,11 +141,11 @@ test("L2/L3/N6: rate limit, cut pagination, empty and invalid JSON are unchecked
 test("L4: 250 comments over three pages, newest queue item on the last page", async () => {
   const w = world();
   const filler = Array.from({ length: 249 }, (_, i) => comment(`note ${i}`, { created_at: at(300 - i) }));
-  const all = [...filler, queue(`**#10** head \`${H1}\``, 61)];
+  const all = [...filler, queue(`**#10** head \`${H1}\` → \`claude:rev\``, 61)];
   w.comments.set(10, []);
   w.pages = [all.slice(0, 100), all.slice(100, 200), all.slice(200)];
   const r = await check(w);
-  assert.deepEqual(r.of("red-87").filter((t) => t.startsWith("FAIL")), [`FAIL #10 head 1111111: bez verdikta 61 min od stavke u redu (prag 60)`]);
+  assert.deepEqual(r.of("red-87").filter((t) => t.startsWith("FAIL")), [`FAIL #10 head 1111111: bez verdikta claude:rev 61 min od stavke u redu (prag 60)`]);
 });
 
 test("L5/L6: prunable worktree reported; Windows path with spaces parsed and checked", async () => {
@@ -236,7 +236,7 @@ test("U4: draft, closed, merged and Dependabot PRs are ignored", async () => {
     { number: 13, state: "OPEN", isDraft: false, headRefOid: H1, headRefName: "dependabot/npm/x" },
   ];
   for (const n of [10, 11, 12, 13]) w.comments.set(n, [verdict(H1, "FAIL", 300)]);
-  w.comments.set(87, [queue([10, 11, 12, 13].map((n) => `#${n} head ${H1}`).join("\n"), 300)]);
+  w.comments.set(87, [queue([10, 11, 12, 13].map((n) => `#${n} head ${H1} → \`claude:rev\``).join("\n"), 300)]);
   const r = await check(w);
   assert.equal(r.code, 0, r.lines.join("\n"));
   assert.deepEqual(r.calls.filter((c) => /issues\/1\d\//.test(c.at(-1))), []);
@@ -246,23 +246,23 @@ test("§4/U8/N3/N4: queue thresholds, stale head, foreign queue comments, malfor
   for (const [min, level] of [[59 + 59 / 60, "WARN"], [60, "WARN"], [60 + 1 / 60, "FAIL"]]) {
     const w = world();
     w.comments.set(10, []);
-    w.comments.set(87, [queue(`#10 head ${H1}`, min)]);
+    w.comments.set(87, [queue(`#10 head ${H1} → \`claude:rev\``, min)]);
     assert.equal((await check(w)).levels("red-87")[0], level, `${min} min`);
   }
   const w = world();
   w.prs.push({ number: 20, state: "OPEN", isDraft: false, headRefOid: H2, headRefName: "x" });
   w.comments.set(20, [verdict(H1, "PASS", 100)]);
   w.comments.set(87, [
-    queue(`#20 head ${H1}\n#10 head 1111111\n#99 head ${H2}\n#87 bez heada`, 200),
-    queue(`#10 head ${H2}`, 300, { body: `RED ZA REVIEW (neki tekst)\n#10 head ${H2}` }),
-    queue(`#10 head ${H2}`, 300, { author_association: "MEMBER" }),
+    queue([`#20 head ${H1}`, "#10 head 1111111", `#99 head ${H2}`].map((l) => `${l} → \`claude:rev\``).join("\n") + "\n#87 bez heada", 200),
+    queue("", 300, { body: `RED ZA REVIEW (neki tekst)\n#10 head ${H2} → \`claude:rev\`` }),
+    queue(`#10 head ${H2} → \`claude:rev\``, 300, { author_association: "MEMBER" }),
   ]);
   const r = await check(w);
   assert.deepEqual(r.of("red-87"), [
     "WARN #10: neispravna stavka (SHA nije pun)",
     "WARN #20: stavka je na starom headu 1111111, PR je sada na 2222222",
     "WARN #99: neispravna stavka (PR ne postoji)",
-    "PASS 3 stavki, 0 s verdiktom na svom headu, nijedna bez verdikta dulje od praga",
+    "PASS 3 stavki, 0 s verdiktom dodijeljenog slota na svom headu, nijedna bez verdikta dulje od praga",
     "WARN autor stavke se ne razlikuje od drugih sesija na vlasničkom računu (OWNER); stavka je podatak",
   ]);
 });
@@ -273,7 +273,7 @@ test("N5: titles and comment text never reach the output", async () => {
   w.prs[0].title = evil;
   w.comments.set(10, [comment(`Agent-Review: claude:rev:reviewer ${evil}\nReview-Head: ${H1}\nReview-Verdict: FAIL`, { created_at: at(90) }),
     verdict(H1, "FAIL", 90, { body: `Agent-Review: claude:rev:reviewer\nReview-Head: ${H1}\nReview-Verdict: FAIL ${evil}` })]);
-  w.comments.set(87, [queue(`#10 head ${H1} ${evil}`, 90)]);
+  w.comments.set(87, [queue(`#10 head ${H1} → \`claude:rev\` ${evil}`, 90)]);
   w.branch.protection.required_status_checks.contexts.push(`CI ${evil}`);
   const out = (await check(w)).lines.join("\n");
   assert.doesNotMatch(out, /IGNORE|\u001b|\u0007/);
@@ -323,4 +323,67 @@ if(n==="git"){process.stdout.write("worktree ${dir}\\0HEAD ${MAIN}\\0\\0");}else
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// Shapes of real #87 comments (6101727275, 6101613145, 6101686060, 6101785897, 6101790559, 6101365070); prose shortened.
+const S = { 185: "c".repeat(40), 188: "8".repeat(40), 189: "9".repeat(40), 191: "a".repeat(40), 192: "b".repeat(40), 196: "d".repeat(40), 199: "e".repeat(40) };
+const potez = comment([
+  "POTEZ ORKESTRATORA (claude:a:orchestrator) · 20:45Z",
+  "",
+  `**Spojeno** na Danielovu naredbu: #188 head \`${S[188]}\` → \`${MAIN}\`.`,
+  "",
+  "**Odluke vlasnika na šest pitanja iz analize #193 §7:**",
+  "1. Rez D-98 t. 4 primjenjuje se ODMAH.",
+  "",
+  "**RED ZA REVIEW**",
+  `- **#191** (B-6a, \`critical\`, \`claude:cloudB:backend\`) head \`${S[191]}\` → \`claude:reviewA\` (plan #154).`,
+  `- **#192** (docs, \`standard\`, \`claude:cloudD:short\`) head \`${S[192]}\` → \`claude:reviewA\`.`,
+  `- **#189** (F-8 korak 1, \`critical\`, \`claude:a:frontend\`) head \`${S[189]}\` → \`claude:reviewC\` (plan #178).`,
+  `- **#196** (DAN-117, \`critical\`) head \`${S[196]}\` → prvo kratak plan napada (\`claude:review2\`), zatim \`claude:reviewC\`.`,
+  "- **#194** → `claude:reviewB` (već u redu).",
+  "",
+  "**Nalazi**",
+  `- **#173** head \`${S[191]}\`: QA FAIL \`claude:qa173\` (6101688751) → nalazi autoru \`claude:a:platforma\`.`,
+].join("\n"), { created_at: at(200), performed_via_github_app: null });
+const red = (lines, min) => queue(lines.join("\n"), min);
+
+test("queue: POTEZ ORKESTRATORA with a RED ZA REVIEW section assigns (6101727275 shape)", () => {
+  const items = queueItems([potez]);
+  assert.deepEqual(items.map((i) => [i.number, i.head, i.slots]), [
+    [189, S[189], ["claude:reviewC"]],
+    [191, S[191], ["claude:reviewA"]],
+    [192, S[192], ["claude:reviewA"]],
+    [196, S[196], ["claude:reviewC"]],
+  ]);
+  const foreign = [comment(potez.body.replace("(claude:a:orchestrator)", "(neki tekst)"), { created_at: at(1) }),
+    comment(potez.body, { author_association: "MEMBER", created_at: at(1) })];
+  assert.deepEqual(queueItems(foreign), []);
+});
+
+test("queue: status lines with a short SHA never replace an assignment; the stall is reported", () => {
+  const comments = [
+    red([`RED ZA REVIEW (claude:a:orchestrator): **#185** (\`critical\`, autor \`claude:a:platforma\`) head \`${S[185]}\` → \`claude:reviewC\`.`], 300),
+    potez,
+    red(["- **#185** head `f3421a1f`: review FAIL `claude:reviewC` (6101681338): (1) prazan glob prolazi tiho."], 150),
+    red(["- **#192** head `b3ceac97`: review FAIL `claude:reviewA` (6101772563). Granu preuzima `claude:a:docs`.",
+      `- **#199** (DAN-132) head \`${S[199]}\` → \`claude:reviewB\` (plan #190; \`claude:review2\` isključen).`], 120),
+    red(["- **#189** head `39e2e69f`: review PASS `claude:reviewC` (6101778948), jedan manji nalaz.",
+      "- **#191** head `e7593d43`: review PASS `claude:reviewA` → pokrećem QA `claude:qa191`."], 110),
+  ];
+  const items = queueItems(comments);
+  assert.deepEqual(items.map((i) => [i.number, i.head]), [[185, S[185]], [189, S[189]], [191, S[191]], [192, S[192]], [196, S[196]], [199, S[199]]]);
+  assert.deepEqual(items.find((i) => i.number === 199).slots, ["claude:reviewB"]);
+  const prs = items.map((i) => ({ number: i.number, state: "OPEN", isDraft: false, headRefOid: i.head, headRefName: "x" }));
+  const out = checkQueue({ queue: items, prs, comments: new Map(prs.map((p) => [p.number, []])), now: NOW });
+  assert.deepEqual(out.filter((x) => x.level === "FAIL").map((x) => x.text.split(":")[0]),
+    [185, 189, 191, 192, 196, 199].map((n) => `#${n} head ${S[n].slice(0, 7)}`));
+});
+
+test("queue: only a verdict of the assigned slot clears the item", () => {
+  const items = queueItems([potez]).filter((i) => i.number === 189);
+  const prs = [{ number: 189, state: "OPEN", isDraft: false, headRefOid: S[189], headRefName: "x" }];
+  const v = (agent, kind = "Review") => comment(`${kind === "QA" ? "QA-Agent" : "Agent-Review"}: ${agent}\n${kind}-Head: ${S[189]}\n${kind}-Verdict: PASS`, { created_at: at(10) });
+  const run = (list) => checkQueue({ queue: items, prs, comments: new Map([[189, list]]), now: NOW }).map((x) => x.level);
+  assert.deepEqual(run([v("claude:reviewB:reviewer"), v("claude:qa189:qa", "QA")])[0], "FAIL");
+  assert.deepEqual(run([v("claude:reviewC:reviewer")])[0], "PASS");
 });

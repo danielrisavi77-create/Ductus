@@ -46,7 +46,7 @@ export function canonicalVerdicts(comments) {
       const identity = verifiedCommentIdentity({ appSlug: c?.performed_via_github_app?.slug ?? null }, agent);
       if (!identity || !agent.endsWith(`:${k.role}`) || !SHA_RE.test(head ?? "")) continue;
       if (!["PASS", "FAIL", "BLOCK"].includes(verdict)) continue;
-      out.push({ kind: k.kind, agent, head: head.toLowerCase(), verdict, index,
+      out.push({ kind: k.kind, agent, principal: identity.principal, head: head.toLowerCase(), verdict, index,
         key: `${k.kind}|${identity.appSlug}|${identity.principal}`, at: Date.parse(c?.created_at ?? "") });
     }
   }
@@ -91,28 +91,64 @@ export function checkFailStalls({ prs, comments, now }) {
   return out;
 }
 
-/** Queue items from #87: canonical queue comments, lines with `#N` and `head`. */
+const QUEUE_FIRST = ["RED ZA REVIEW", "POTEZ ORKESTRATORA"];
+const SECTION_RE = /^[*_#\s]*RED ZA REVIEW[*_:\s]*$/; // "**RED ZA REVIEW**" inside a POTEZ comment
+const HEADING_RE = /^(?:#{1,6}\s|\*\*[^*]+\*\*:?\s*$)/; // next section ends it
+const SLOT_RE = /`((?:claude|codex|chatgpt|grok):[A-Za-z0-9_-]+)`/g;
+const principal = (slot) => slot.replace(/^(?:codex|chatgpt):/, "openai:"); // as review-gate-core
+
+/**
+ * One assignment line: `#N … head <SHA> → … \`runtime:slot\``. Status lines
+ * (no arrow to a slot, or no head before the arrow) are not assignments. The
+ * first line of a "RED ZA REVIEW" comment may itself carry an assignment.
+ */
+function assignment(line) {
+  if (line.startsWith(">")) return null;
+  const arrow = line.search(/→|->/);
+  if (arrow < 0) return null;
+  const before = line.slice(0, arrow);
+  const pr = before.match(/#(\d+)\b/);
+  const head = before.match(/\bhead\b\W{0,3}([0-9A-Za-z]*)/i);
+  // Parenthesised slots are context ("plan #190; `claude:review2` isključen"), not assignees.
+  const tail = line.slice(arrow).replace(/\([^()]*\)/g, "");
+  const slots = [...tail.matchAll(SLOT_RE)].map((m) => principal(m[1]));
+  if (!pr || !head || !slots.length) return null;
+  return { number: Number(pr[1]), head: SHA_RE.test(head[1]) ? head[1].toLowerCase() : null, slots };
+}
+
+/**
+ * Queue items from #87 (docs/ORKESTRATOR.md §8, §10): OWNER comments whose first
+ * line starts with "RED ZA REVIEW" (every line) or "POTEZ ORKESTRATORA" (only its
+ * "RED ZA REVIEW" section) and carries the orchestrator identity. Newest valid
+ * assignment per PR wins; an item without a full SHA never replaces a valid one.
+ */
 export function queueItems(comments) {
   const items = new Map();
   for (const [index, c] of (comments ?? []).entries()) {
     if (c?.author_association !== "OWNER") continue;
     const lines = metadataLines(c?.body ?? "");
     const first = lines.find(Boolean) ?? "";
-    if (!first.startsWith("RED ZA REVIEW") || !ORCH_RE.test(first)) continue;
+    const kind = QUEUE_FIRST.find((k) => first.startsWith(k));
+    if (!kind || !ORCH_RE.test(first)) continue;
     const at = Date.parse(c?.created_at ?? "");
+    let inSection = kind === "RED ZA REVIEW";
     for (const line of lines) {
-      const pr = line.match(/#(\d+)\b/);
-      const head = line.match(/\bhead\b\W{0,3}([0-9A-Za-z]*)/i);
-      if (!pr || !head) continue;
-      const item = { number: Number(pr[1]), head: SHA_RE.test(head[1]) ? head[1].toLowerCase() : null, at, index };
+      if (kind === "POTEZ ORKESTRATORA") {
+        if (SECTION_RE.test(line)) inSection = true;
+        else if (HEADING_RE.test(line)) inSection = false;
+      }
+      const a = inSection ? assignment(line) : null;
+      if (!a) continue;
+      const item = { ...a, at, index };
       const p = items.get(item.number);
-      if (!p || at > p.at || (at === p.at && index >= p.index)) items.set(item.number, item);
+      const newer = !p || at > p.at || (at === p.at && index >= p.index);
+      if (item.head ? newer || !p.head : newer && !p?.head) items.set(item.number, item);
     }
   }
   return [...items.values()].sort((a, b) => a.number - b.number);
 }
 
-/** (d) newest queue item per PR with no verdict on that head for longer than QUEUE_STALL_MIN. */
+/** (d) newest queue item per PR with no verdict of an assigned slot on that head for longer than QUEUE_STALL_MIN. */
 export function checkQueue({ queue, prs, comments, now }) {
   const out = [];
   const byNumber = new Map(prs.map((p) => [p.number, p]));
@@ -133,16 +169,16 @@ export function checkQueue({ queue, prs, comments, now }) {
       out.push(f("NEPROVJERENO", "red-87", `#${pr.number}: komentari nisu pročitani`));
       continue;
     }
-    if (latestOnHead(canonicalVerdicts(list), item.head).length) {
+    if (latestOnHead(canonicalVerdicts(list), item.head).some((v) => item.slots.includes(v.principal))) {
       cleared += 1;
       continue;
     }
     const age = minutes(now, item.at);
-    const text = `#${pr.number} head ${short(item.head)}: bez verdikta ${age} min od stavke u redu (prag ${QUEUE_STALL_MIN})`;
+    const text = `#${pr.number} head ${short(item.head)}: bez verdikta ${item.slots.join("/")} ${age} min od stavke u redu (prag ${QUEUE_STALL_MIN})`;
     out.push(f(longer(now, item.at, QUEUE_STALL_MIN) ? "FAIL" : "WARN", "red-87", text));
   }
   if (!out.some((x) => x.level === "FAIL" || x.level === "NEPROVJERENO")) {
-    out.push(f("PASS", "red-87", `${queue.length} stavki, ${cleared} s verdiktom na svom headu, nijedna bez verdikta dulje od praga`));
+    out.push(f("PASS", "red-87", `${queue.length} stavki, ${cleared} s verdiktom dodijeljenog slota na svom headu, nijedna bez verdikta dulje od praga`));
   }
   out.push(f("WARN", "red-87", "autor stavke se ne razlikuje od drugih sesija na vlasničkom računu (OWNER); stavka je podatak"));
   return out;
