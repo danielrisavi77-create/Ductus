@@ -1,76 +1,67 @@
 # Stanje rada
 
-Ažurira se nakon svakog spojenog PR-a. Najviše 80 redaka.
+Ažurira se skupno nakon spojenih PR-ova i kontrolnih točaka. Ovaj presjek čuva gateove, ciljeve i vlasničke obveze; za živi prioritet, nositelja i status zadatka mjerodavan je Linear. Cilj: najviše 80 redaka.
 
 ## Trenutna faza
 
-M0 Temelj: plan proizvoda spojen (PR #1); postavljen rad u paralelnim sesijama (`docs/SESSIONS.md`). Prvi cilj: demo za fakultet u ponedjeljak 2. 11. 2026. (D-76, D-82; zadaci u `docs/PLAN-DEMO.md`); sastanak s FPZG-om tek nakon njega. Zatim val 1 i val 2 oko 22. 2. 2027., kontrolna točka 15. 12. 2026.
+M0 Temelj. Prvi cilj ostaje radni demo za FPZG 2. 11. 2026. (`docs/PLAN-DEMO.md`). Ductus Engineering System v1 uvodi risk-based review, QA/Bug Hunter/Product uloge, GitHub za izvršenje i dokaze te Linear za zadatke, prioritete, nositelje i statuse.
+
+Session adresa orkestratora: `session_01BbeJRiYuBbWHCf4ZjHnHuH` (pomoćni podatak za `send_message`, `docs/ORKESTRATOR.md` §5; nije izvor istine).
 
 ## Owner queue (samo Daniel)
 
-Agent nikad ne uzima ove stavke i nikad ne čeka na njih.
+Agent nikad ne uzima ove stavke i nikad ne čeka na njima ako drugi posao može naprijed.
 
-- [ ] Codex pregled dok sesije rade u oblaku: preporuka jedna lokalna sesija "Ductus Codex" na `D:\Ductus` kojoj orkestrator šalje broj PR-a i razinu; alternativa OpenAI ključ kao tajna cloud okoline (trošak i tajna). Do odluke PR-ovi bez Codexa ne spajaju se.
-- [ ] D-73 (dio): potvrditi "sesije u bazi + `app.current_actor()`" i nove NOLOGIN uloge `ductus_auth` (jedina s EXECUTE na `open_session`) i `ductus_identity` (vlasnik identity tablica) iz plana B-5 (issue #38). Preporuka: potvrditi; izbor biblioteke (Better Auth ili `openid-client`) ostaje za B-6. B-5 se gradi, ali ne spaja do potvrde.
-- [ ] Proba demoa u subotu 31. 10. 2026. i snimka prolaza (PLAN-DEMO D-3, D-4).
-- [ ] Potvrditi ili promijeniti prijedloge D-08, D-16, D-20, D-34, D-37, D-38 u `docs/DECISIONS.md`; odlučiti D-06 ili stroža D-39.
-- [ ] Potvrditi zadane pragove P-01 do P-04.
-- [ ] FPZG (prodekan Višeslav Raos): koordinator pilota, kolegiji i mentori, akademski kalendar ljetnog semestra, AAI administrator, službenik za zaštitu podataka.
-- [ ] Pravno mišljenje za D-55 (kontrolna točka uživo) i bilježenje ritma iz D-56.
-- [ ] Constitution Gate: izmjena Ustava C-14 i C-19 za reprodukciju s ritmom (D-56), u Driveu.
-- [ ] FPZG: treba li "ispis razgovora" (čl. 9 Smjernica GenUI) i kad je AI korišten samo za lekturu ili prijevod.
-- [ ] FPZG: D-29 (pravna osnova), D-30 (rokovi čuvanja), D-31 (GO uvjeti), D-35 (dopušteni AI pružatelji), D-04 (obveznost u pilotu).
-- [ ] Lekta: odluka o licenci i pravu na redistribuciju pravila prije paketa za Ductus.
-- [ ] 15. 12. 2026.: kontrolna točka roka (`PROGRAM.md`).
-- [ ] Vidljivost repoa: zasad javan (odluka 3. 10. 2026.); preporuka ostaje privatan prije stvarnih podataka.
-- [ ] Konačno ime proizvoda (D-18).
-- [ ] Pitanja za sastanak s FPZG-om: FPZG-ov kalendar ljetnog semestra; je li Turnitin Clarity u Srceovoj licenci; tko je DPO; koja tri kolegija i koji nastavnici u valu 1; što referada traži pri predaji; zamjenski postupak kad student odbije Ductus ili Ductus ne radi (D-79); je li ispis razgovora po čl. 15 obavezan i kad je AI korišten samo za lekturu; potvrda izvedenih oblika citatnog stila označenih "derived" u `config/faculties/fpzg/citation.json` (poglavlje, mrežni izvor, "i sur." za 3+ autora, više autora u popisu, akronim institucije).
-- [ ] Model podrške u pilotu (tko, kojim kanalom, u koje vrijeme, zamjenski postupak predaje kad Ductus ne radi pred rok).
-- [ ] Sučelje na engleskom u pilotu ili Erasmus studenti izvan pilota (D-67).
-- [ ] Potvrditi D-08 i D-71 do D-75 iz `docs/BACKEND.md` (istraživanje i neovisni pregled gotovi 3. 10. 2026.; preporuka UpCloud + Scaleway S3/TEM + AWS KMS, bez Supabasea; odluka o trošku iznad D-66, BACKEND §7); do tada M0 ne veže kod uz dobavljača.
-- [ ] FPZG (odgovorna osoba za AAI@EduHr): ovlastiti Daniela za AAI@EduHr Lab e-porukom na `aai@srce.hr` i kasnije registrirati Ductus kao uslugu FPZG-a u Registru resursa. Fizička osoba to ne može sama (pravila AAI@EduHr). Draft je u Gmailu; poslati na sastanku nakon demoa ili odmah poslije (D-76). Blokira M1, ali ne demo.
-- [ ] FINA: tek kad postoji obrt (ili FPZG kao ugovorna strana); do tada dva besplatna TSA-a (D-72).
-- [ ] Otvoriti račune UpCloud, Scaleway (Object Storage, TEM) i AWS (samo KMS, IAM s uskim ovlastima), 2FA, ograničeni ključevi po okolišu za agenta. Blokira B0.1.
-- [ ] Računovođa: PDV za fizičku osobu bez obrta; FINA zahtijeva poslovni subjekt.
+- [x] 10. 10. 2026.: `main` zaštićen (PR obvezan; obvezni statusi CI, Local stack, Security scanners, Dependency review, Engineering review gate; neriješeni razgovori blokiraju; force push i delete zabranjeni; squash only; auto-merge i brisanje grane nakon spajanja uključeni). Administrator smije zaobići zaštitu; obvezni Code Owner review nije uključen (ENGINEERING_SYSTEM §10).
+- [ ] Proba demoa 31. 10. 2026. i snimka prolaza (PLAN-DEMO D-3, D-4).
+- [ ] Odlučiti D-06 ili strožu D-39 nakon UX testa iz `docs/UX-EVAL.md`.
+- [ ] Potvrditi ili promijeniti D-08, D-16, D-20, D-34, D-37, D-38 te pragove P-01 do P-04.
+- [ ] D-56: pravno mišljenje + Constitution Gate C-14/C-19 prije ikakvog bilježenja ritma; nije na kritičnom putu demoa.
+- [ ] FPZG: koordinator pilota, kolegiji/mentori, akademski kalendar, AAI administrator, DPO, D-04, D-29, D-30, D-31, D-35, zamjenski postupak i zahtjev za ispis razgovora.
+- [ ] FPZG AAI: ovlast za AAI@EduHr Lab i kasnije registracija Ductusa kao usluge. Blokira M1, ne demo.
+- [ ] Lekta: licenca/pravo redistribucije prije punog M4 paketa.
+- [ ] Dobavljači: UpCloud, Scaleway i AWS KMS računi + 2FA i uski ključevi; blokira B0.1.
+- [ ] Računovođa: PDV; FINA tek uz obrt ili FPZG kao ugovornu stranu.
+- [ ] Vidljivost repoa: prije stvarnih podataka ponovno odlučiti ostaje li javni. Uz to: session adresa orkestratora stoji u javnom `STATE.md`; prihvatiti ili premjestiti izvan repoa.
+- [ ] Konačno ime proizvoda.
 
-## Agent queue
+## Engineering System v1
 
-Zadatke dodjeljuje orkestrator po `docs/ORKESTRATOR.md`. Do demoa vrijedi tablica u `docs/PLAN-DEMO.md` §4; ovdje je samo ono što je u radu ili sljedeće.
+Kanonski dokument: `docs/ENGINEERING_SYSTEM.md`.
 
-**Adresa orkestratora:** "Ductus orkestrator" [session_01V3aEqiiQe33bd3PLecLLXf] (cloud sesija, od 3. 10. 2026., noć; mijenja se pri rotaciji, `SESSIONS.md` §2a). Poruke orkestratoru idu alatom `send_message` na taj ID.
+- Normalno 3 writera: Backend, Frontend, Platforma; četvrti samo za potpuno neovisan posao.
+- Kontrolne uloge: Orkestrator, Product/UX, QA, Independent Reviewer, Bug Hunter.
+- Autor ne reviewa vlastiti PR; Bug Hunter/Product ne implementiraju vlastite nalaze.
+- `low` i `standard`: neovisni review na aktualnom headu.
+- `critical`: neovisni review + zaseban QA PASS na aktualnom headu.
+- Novi push invalidira review/QA preko `Review-Head` / `QA-Head`.
+- Owner Override je eksplicitna iznimka s razlogom i head SHA-om.
 
-**Sesije rade u oblaku (od 3. 10. 2026., noć).** Orkestrator, Platforma (`session_01BXYXU76aCTprP1ckrJSSHW`), Frontend (`session_01SMw6v6eZpsHRZp5E1VtS5B`) i Backend (`session_01ES5D5titYTM6irHQvSvJCU`) su cloud sesije sa svježim klonom repoa; `D:\Ductus` vrijedi za lokalne sesije. Cloud sesije nemaju Codex CLI ni PowerShell, pa `scripts/codex-review.ps1` pokreće lokalna sesija na `D:\Ductus` (pitanje za Daniela u Owner queue).
+## Otvoreni razvojni stog
 
-**Repo je na `D:\Ductus` (SSD, od 3. 10. 2026.).** P-8: C: je tvrdi disk; instalacija 879 s na C: prema 15 s na D:, typecheck i testovi 462 s prema 10 s. pnpm pohrana je `D:\pnpm-store` (globalno, mora biti na istom disku). Nove sesije i worktreeovi otvaraju se iz `D:\Ductus`; stara kopija `C:\Users\Daniel\Ductus` ostaje dok se stare sesije ne arhiviraju.
+Novi feature rad je privremeno ograničen dok se postojeći stog ne osvježi na aktualni `main`.
 
-**Predaje za nove sesije (3. 10. 2026.):** Backend issue #34, Frontend #35, Platforma #36. Nova sesija čita svoj issue uz ovaj odjeljak i zatvara ga kad preuzme. Odgovori orkestratora na otvorena pitanja iz predaja: tekst stanja spremanja ("spremljeno na uređaju", "spremljeno na poslužitelju") mijenja se u F-8 uz ključeve hr i en; `en.ts` (D-70) radi Frontend kao zaseban PR odmah nakon F-4; `CI=true` u lefthooku radi Platforma (mali PR iz #36); `process-history` bez `durationMs` ne prenosi se do vala 3; o `verified-object-activity` (ovisi o `academic-graph`) odlučuje se kad Frontend prenese `lib/process-ledger`; vlasnik P-6 je Platforma, Frontend daje popis ključeva teksta.
+- [ ] #39 P-4 dbmate + pgTAP — prvo osvježiti; baza za #46.
+- [ ] #41 Frontend sync B — osvježiti i review `standard`.
+- [ ] #42 lefthook Docker/CI — osvježiti i review `standard`.
+- [ ] #44 P-5 E2E stack — osvježiti; pri tome uključiti browser politiku iz `docs/TESTING.md`.
+- [ ] #45 P-6 zabranjeni izrazi — osvježiti; `critical` jer štiti PRODUCT §5.
+- [ ] #46 B-5a identity/RLS — nakon #39 retarget na `main`; `critical` + QA.
+- [ ] #47 pg import boundary — osvježiti nakon odluke o redoslijedu s #46.
+- [ ] #48 F-4 shell/design — osvježiti i provjeriti UX/accessibility.
+- [ ] #49 editor schema/interop — osvježiti nakon #41 gdje je potrebno.
 
-**Predaja orkestratora (3. 10. 2026., noć).** Orkestrator se rotira: Daniel otvara novu sesiju "Ductus orkestrator" iz `D:\Ductus` i arhivira staru (adresa gore). Otvorenih PR-ova nema. Platforma, Backend i Frontend dobivaju nove sesije iz `D:\Ductus` s predajama u issueima #34 do #36; stare sesije (worktreeovi na C:) za arhiviranje. Sesija Citiranje nastavlja kao Arhitektura.
+## Ne smije se izgubiti
 
-Prvi potezi nove sesije orkestratora:
-1. PR koji u `STATE.md` upisuje novu adresu orkestratora; ista adresa porukom svim aktivnim sesijama (`ORKESTRATOR.md` §7).
-2. Popis sesija: potvrditi da su Platforma 2, Frontend 2 i Backend 2 pokrenute i zatvorile svoje issuee; postaviti effort po zadatku (Platforma P-4 medium, Frontend medium, Backend B-5 high).
-3. Poruke stižu samo dok orkestrator miruje: bez dugotrajnih pozadinskih petlji (`ORKESTRATOR.md` §1); kad sesija javi da poruka nije potvrđena, čitati njezin transkript.
-4. Pult: https://claude.ai/artifact/UY9VUZPW4mePTZjhCPGLSd (podaci preko ArtifactData, kolekcije `board`, `sessions`, `days`); pitanja Danielu obaviješću (§4a).
-5. Kontrolna točka T1 u petak 9. 10. (`PLAN-DEMO.md` §3): kostur, CI i lokalni stog spojeni, dizajn odobren; uz to prijenos jezgre (T2) je za Backend gotov, za Frontend 5 od 11 koraka.
-6. Kad se stare sesije arhiviraju, stara kopija `C:\Users\Daniel\Ductus` može se ukloniti (Daniel ručno; memorija orkestratora vezana je uz putanju projekta).
-
-- [ ] Platforma (nova sesija): P-4 (dbmate, pgTAP u CI-ju); mali PR: lefthook `secrets` uz upozorenje preskače gitleaks kad Docker ne radi (CI ionako skenira) i naredbe u lefthooku s `CI=true` (inače `pnpm exec` visi na skrivenom upitu); zatim P-5, P-6.
-- [ ] Backend (nova sesija; predaja u opisu PR #23): spojeni #9, #18, #20, #23 (D-88), #29 (nepoznata polja u descriptoru), #30 (gateway, outbox, development signer; Codex Astra 3 važna ispravljena), #32 (aws-kms signer s popisom pouzdanih verzija ključa). Prijenos backend jezgre je gotov. Sljedeće: B-5 kad P-4 bude spojen (`critical`). Čeka Frontendov editor: `forensics/verified-*`, `evidence-v2-legacy-compat.test`. Ne prenose se vremenski moduli (PRODUCT §5 pravilo 4, D-63), reference-model, Azure signer, nekorišteni portovi.
-- [ ] Uvjeti za B-8 (Codex na #20): `evidence-ingest` odbija nepoznata polja u descriptoru (spojeno, #29) i provjerava kanonski JCS segment i SHA-256 prema `descriptor.segmentHash` (spojeno u gatewayu, #30, s testom); ruta `ingest` mora koristiti taj gateway. Uz to (Codex na #24, odgođeno): commit dokumenta i `reserve` odsječka u istom RPC-u mijenjaju `CommitRequest` i `CommitOutcome` u `domain/serverSync/contract.ts` u istom PR-u kao klijent (journal, drainRunner); klijentska granica veličine (`JSON.stringify`) usklađuje se s poslužiteljskom.
-- [ ] Uvjeti za F-3 i F-8 (Codex na #26, odgođeno, ne smije se izgubiti): `SYNCED` tek uz potpisanu potvrdu (novo stanje uz B-8 i F-8); ishod spremanja ili CAS-a koji je u tijeku (`SYNC_STALE_BASE`, `LOCAL_SAVE_FAILED`) obrađuje se i nakon novog `EDIT`; `restoreSyncState` ne vraća prekinutu operaciju kao aktivnu; `rebase` i `salvage-local` prema redoslijedu iz journala. Svaki uz test redoslijeda u PR-u s journalom i drainRunnerom.
-- [ ] Uvjet za B-12 (Codex na #21): `forensics/replay.ts` za `delete`, `cut` i `replace` uspoređuje hash uklonjenog raspona s hashom u događaju i prekida replay pri nepodudaranju.
-- [ ] Frontend (nova sesija; izvor `pisac-editor@6cd0b75`, plan F1 do F12 u opisu #8): spojeni #19, #21, #24, #26 (sync A). Redom, svaki PR od svježeg `origin/main`, Codex `standard`: (1) sync B: conflict, recovery, drain, `index.ts` (102 testa); (2) editor schema i interop (52); (3) process-capture, `Editor.tsx`, `SyncStatusChip` (25); (4) `lib/process-ledger` (14), nakon njega Backend prenosi `forensics/verified-*`; (5) `lib/journal` db, lock, recovery (26), `journal.ts` (98), `lib/sync/drainRunner` (40), uz uvjete za F-3 niže; (6) F-4 ljuska po dizajnu v6 (D-89). Ispravke Codex nalaza u prenesenom kodu staviti u `*.hardening.test.ts`, prenesene testove ne mijenjati; u svaki PR tablica izvor, preneseno, nije preneseno.
-- [ ] Okolina: lefthook `secrets` traži pokrenut Docker Desktop (do popravka Platforme); git i pnpm naredbe s `CI=true`; worktree u dugoj putanji ruši vitest (MAX_PATH); `pnpm test` ne uključuje `tests/integration`.
-- [ ] Sljedeće iz PLAN-DEMO: P-4 (dbmate, pgTAP u CI-ju), P-5 (E2E u CI-ju), P-6 (provjera zabranjenih riječi, Frontend ili Platforma), B-5 (uloge baze, sesije).
-- [ ] Prije prvog poziva `diffText` nad cijelim radom (usporedba verzija, M5 do M7): granica ulaza ili diff po odlomcima, plus ispravci negacije i razmaka (Codex nalazi na PR #8).
-- [ ] Izvan demoa: B0.2 ostaje otvoren do mjerenja na stroju koji se kupuje (nakon B0.1); B0.1 blokiran računima; M1 blokiran pristupom Labu; M4 blokiran licencom Lekte.
+- B-8: canonical JCS + SHA-256, unknown fields reject, commit+reserve atomically, client/server size limit.
+- F-3/F-8: SYNCED tek uz potpisanu potvrdu; stale/local-save ishodi nakon novog EDIT-a; recovery/rebase/salvage redoslijed testirati.
+- B-12: replay za delete/cut/replace provjerava hash uklonjenog raspona.
+- Prije velikog `diffText`: input granica ili diff po odlomcima + postojeći hardening nalazi.
+- B0.2 ponoviti na stvarno kupljenom stroju; M1 čeka Lab; M4 čeka Lekta licencu.
 
 ## Gotovo
 
-- 3. 10. 2026.: inicijalni commit repoa; plan proizvoda v0.1 i v0.2 (PR #1).
-- 3. 10. 2026.: `pisac-editor` PR #49 i #50 spojeni.
-- 3. 10. 2026.: faza S: uloge i protokol sesija, Codex pregled, mjerenje tokena, čišćenje worktreeova, nadzorna ploča (PR #2).
-- 3. 10. 2026.: odluke D-81 do D-89 (potvrđeni D-07, D-10, D-11, D-24; demo 2. 11.; dizajn v6 odobren; rezovi odobreni; `ductus-evidence-*`); plan demoa (`docs/PLAN-DEMO.md`); pravila orkestratora (`docs/ORKESTRATOR.md`).
-- 3. 10. 2026.: B0.4 prepis `docs/ARCHITECTURE.md` (PR #3); pravila za izgubljene poruke među sesijama (PR #5); B0.2 lokalna osnovica rekonstrukcije, `docs/spikes/B0.2.md` (PR #6): CPU i memorija nisu problem, volumen kontrolnih točaka svakih 200 koraka raste kvadratno (prijedlog oko 2.000 koraka ide uz B0.3).
-- 3. 10. 2026.: M0 krenuo: kostur (#7), CI sa skenerima (#10), F1 i18n i diff (#8), forensics jezgra (#9), FPZG citatni stil (#12), lokalni stog s lažnim OIDC-om i RustFS-om (#13), ARCHITECTURE v0.4 (#14), paketi za editor (#15), pravila orkestratora i Codex razine (#16, #22), Dependabot (#17), forensics replay (#18), domain/document (#19), portovi evidencije (#20), collaboration i evidence (#21), `ductus-evidence-*` (#23).
+- Plan proizvoda, odluke i demo-plan; arhitektura v0.4.
+- CI/skeneri, lokalni stog, prijenos prve jezgre, citatni stil, evidence/forensics osnova.
+- PR #51: multi-account/provider-neutral agent runtime i repo-local skills.
+- 10. 10. 2026.: globalni alati naredbenog retka i pluginovi za sesije (`docs/REPOZITORIJI.md` §8); PR #17 (Dependabot, provjera ovisnosti) spojen 3. 10.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ductus identity isolation"
+  short_description: "Provjeri matricu identiteta, ovlasti i RLS granice"
+  default_prompt: "Use $ductus-identity-isolation to trace these synthetic actor, resource and action cases."
