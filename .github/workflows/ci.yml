@@ -39,13 +39,9 @@ jobs:
         run: node --test scripts/engineering/*.test.mjs
       - run: pnpm test:property
       - run: pnpm build
-      - name: Install Chromium
-        run: pnpm exec playwright install --with-deps chromium
-      - name: E2E tests
-        env:
-          E2E_NO_BUILD: "1"
-        run: pnpm test:e2e
 
+  # E2E runs here, against the compose stack, so routes that need the
+  # database, storage or the fake OIDC provider are covered as they land.
   stack:
     name: Local stack (compose.yaml)
     runs-on: ubuntu-latest
@@ -71,6 +67,22 @@ jobs:
       - name: pgTAP (pg_prove)
         run: pnpm test:db
       - run: pnpm test:integration
+      - run: pnpm build
+      # docs/TESTING.md 2: Chromium, Firefox and WebKit.
+      - name: Install browsers
+        run: pnpm exec playwright install --with-deps chromium firefox webkit
+      - name: E2E tests
+        env:
+          E2E_NO_BUILD: "1"
+        run: pnpm test:e2e
+      # Screenshots (desktop and mobile), videos and failure traces for the PR.
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
       - if: failure()
         run: docker compose logs
       - if: always()
