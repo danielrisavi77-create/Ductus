@@ -1,10 +1,17 @@
 import { fileURLToPath } from "node:url";
 
 import { ESLint } from "eslint";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const eslint = new ESLint({ cwd: REPO_ROOT });
+
+// The first lintText call loads the ESLint config and the TypeScript parser,
+// which takes several seconds on a busy machine. Pay that once here, with its
+// own budget, so it is not charged to the first case's 5 s test timeout.
+beforeAll(async () => {
+  await eslint.lintText("export {};\n", { filePath: "src/domain/example.ts" });
+}, 60_000);
 
 async function restrictedImports(filePath: string, code: string) {
   const [result] = await eslint.lintText(code, { filePath });
