@@ -132,16 +132,44 @@ export function summarizeThreads(nodes) {
 
 const OK_CHECK = new Set(["SUCCESS", "SKIPPED", "NEUTRAL"]);
 
+const checkState = (c) => String(c.conclusion || c.state || c.status || "UNKNOWN").toUpperCase();
+const checkTime = (c) => Date.parse(c.startedAt ?? "") || Date.parse(c.completedAt ?? "") || 0;
+
+/**
+ * One entry per check (workflow + name): the most recently started run. A
+ * re-run leaves the older run of the same check in statusCheckRollup. When the
+ * order cannot be told (equal or missing times), the non-green entry is kept.
+ */
+export function latestChecks(rollup) {
+  const latest = new Map();
+  for (const c of rollup ?? []) {
+    const key = `${c.workflowName ?? ""}\n${c.name ?? c.context}`;
+    const prev = latest.get(key);
+    const dt = prev ? checkTime(c) - checkTime(prev) : 1;
+    if (dt > 0 || (dt === 0 && OK_CHECK.has(checkState(prev)))) latest.set(key, c);
+  }
+  return [...latest.values()];
+}
+
 /** statusCheckRollup entries -> CI result, excluding the review gate itself. */
 export function evaluateChecks(rollup) {
-  const items = (rollup ?? []).filter((c) => (c.name ?? c.context) !== GATE_CONTEXT);
+  const items = latestChecks(rollup).filter((c) => (c.name ?? c.context) !== GATE_CONTEXT);
   const bad = items
-    .map((c) => ({
-      name: c.name ?? c.context,
-      state: String(c.conclusion || c.state || c.status || "UNKNOWN").toUpperCase(),
-    }))
+    .map((c) => ({ name: c.name ?? c.context, state: checkState(c) }))
     .filter((c) => !OK_CHECK.has(c.state));
   return { total: items.length, bad };
+}
+
+/**
+ * Newest status of the gate context in a commit statuses list (any order).
+ * null means the commit really has no gate status.
+ */
+export function pickGate(statuses) {
+  const at = (s) => Date.parse(s.created_at ?? "") || 0;
+  const newer = (a, b) => at(a) > at(b) || (at(a) === at(b) && (a.id ?? 0) > (b.id ?? 0));
+  return (statuses ?? [])
+    .filter((s) => s?.context === GATE_CONTEXT)
+    .reduce((best, s) => (!best || newer(s, best) ? s : best), null);
 }
 
 /** Returns [{level: PASS|FAIL|INFO, id, text}]. */
@@ -149,7 +177,9 @@ export function evaluateReady(d) {
   const out = [];
   const add = (level, id, text) => out.push({ level, id, text });
   const gate = d.gate;
-  add(gate?.state === "success" ? "PASS" : "FAIL", "gate",
+  // {error}: the read failed, which is not evidence that the commit has no status.
+  if (gate?.error) add("FAIL", "gate", `gate could not be read on ${d.head.slice(0, 8)} (read error, not a missing status; retry): ${gate.error}`);
+  else add(gate?.state === "success" ? "PASS" : "FAIL", "gate",
     `gate ${gate?.state ?? "missing"} on ${d.head.slice(0, 8)}${gate?.description ? `: ${gate.description}` : ""}`);
   const ck = evaluateChecks(d.rollup);
   if (ck.total === 0) add("FAIL", "ci", "no CI checks reported");
@@ -203,6 +233,46 @@ export function parsePushArgs(args, { currentBranch = null, defaultBranch = "mai
   if (!dst || !validBranch(dst)) throw new Error("cannot determine destination branch (detached HEAD?)");
   if (dst === "main" || dst === defaultBranch) throw new Error(`push to ${dst} refused`);
   return { remote, src, dst };
+}
+
+/**
+ * Full push-verify command line: `[remote] [refspec] [--to <branch>]`.
+ * Without an explicit destination (`--to` or `src:dst`) a HEAD push goes to the
+ * upstream branch of the current branch, never to a branch guessed from the
+ * local branch name. opts adds `upstream`: {remote, branch} | null.
+ */
+export function resolvePushTarget(argv, opts = {}) {
+  const rest = [...argv];
+  let to = null;
+  const i = rest.indexOf("--to");
+  if (i !== -1) {
+    if (i + 1 >= rest.length) throw new Error("--to needs a branch name");
+    [, to] = rest.splice(i, 2);
+  }
+  if (rest.length > 2) throw new Error("usage: push-verify [remote] [refspec] [--to <branch>]");
+  const [remote = "origin", spec = "HEAD"] = rest;
+  if (to !== null) {
+    if (spec.includes(":")) throw new Error("give the destination once: --to or src:dst");
+    return parsePushArgs([remote, `${spec}:${to}`], opts);
+  }
+  if (spec !== "HEAD") return parsePushArgs([remote, spec], opts);
+  const up = opts.upstream;
+  const here = opts.currentBranch ?? "detached HEAD";
+  if (!up?.branch) throw new Error(`no upstream set for ${here}; pass --to <branch>`);
+  if (up.remote !== remote) throw new Error(`upstream of ${here} is on remote ${up.remote}, not ${remote}; pass --to <branch>`);
+  if (up.branch === "main" || up.branch === (opts.defaultBranch ?? "main")) {
+    throw new Error(`upstream of ${here} is ${up.branch}; pass --to <branch>`);
+  }
+  return parsePushArgs([remote, `HEAD:${up.branch}`], opts);
+}
+
+/** SHA of exactly `refs/heads/<branch>` in `git ls-remote` output, else null. */
+export function parseLsRemote(out, branch) {
+  for (const line of String(out ?? "").split("\n")) {
+    const [sha, ref] = line.trim().split(/\s+/);
+    if (ref === `refs/heads/${branch}` && SHA_RE.test(sha)) return sha;
+  }
+  return null;
 }
 
 export function pushVerdict(pushOk, localSha, remoteSha) {

@@ -71,6 +71,7 @@ Oznaka uloge: P Platforma, B Backend, F Frontend, K kratkotrajna sesija, D Danie
 | B-11 | Pogled nastavnika: spremljeno stanje rada s osvježavanjem po P-03 (polling, D-06); podaci za brz put (D-80): zadnja promjena, otvoreni zahtjevi, lijepljenja bez izvora, stanje izjave | B-8 | Nastavnik ne dobiva novo stanje češće od P-03; test | T3 do T4 |
 | B-12 | Predaja (dio M7): `requested_at` iz sata baze, rekonstrukcija u workeru, JCS usporedba, nepodudarnost blokira predaju (D-11), praznina vidljiva, potpisana potvrda | B-9 | Rekonstrukcija podudarna na scenarijima uključujući prazninu; nepodudarnost blokira | T4 |
 | B-13 | Sažetak procesa: jedna funkcija za studenta i nastavnika (pravilo 5), sesije (P-01), lijepljenja (P-02), praznine, vrsta dokaza (D-44), stanje zapisa | B-8 | Test jednakosti studentskog i nastavničkog prikaza, uključujući API (D-80 točka 6) | T4 |
+| B-14 | Tanki prolaz kritičnog puta (D-98 t. 1, §7): `ingest` → rekonstrukcija → JCS usporedba, bez sučelja, baze i workera | B-3, B-4 | `ingest` jednog odsječka, rekonstrukcija i JCS usporedba prolaze od početka do kraja nad in-memory adapterima i razvojnim potpisnikom, kao automatski test u CI-ju | T2 (18. 10.) |
 
 ### Frontend
 
@@ -97,7 +98,7 @@ Oznaka uloge: P Platforma, B Backend, F Frontend, K kratkotrajna sesija, D Danie
 | D-2 | Daniel komentira dizajn; Dizajn sesija ispravlja; Daniel odobrava | D-1 | Daniel napiše "odobreno" | T1 |
 | K-2 | Citatni stil (D-83): FPZG stil kopiran iz Lekte (`katedra-lite/references/fakulteti/fpzg.json`, `fpzg-diplomski/references/stranice-i-izvori.md`) u konfiguracijsku datoteku Ductusa; čista funkcija za citat u tekstu i bibliografiju | P-1 | Testovi s primjerima iz Lekte zeleni | T2 |
 | K-3 | Izmišljeni podaci demoa: fakultet, kolegij, zadatak, nastavnik, dva studenta, i dvije povijesti koje Ductus ne može razlikovati (samostalan uvezeni tekst i postupno pretipkan tuđi tekst) s objašnjenjem granica zapisa (D-80 točka 3) | B-7, B-8 | Skripta puni bazu; nijedan stvarni osobni podatak | T3 |
-| K-4 | E2E prolaz demoa 1 do 5 kao jedan Playwright test s videom | F-10, P-5, K-3 | Zelen u CI-ju; video priložen | T4 |
+| K-4 | E2E prolaz demoa 1 do 5 kao jedan Playwright test s videom. Nastaje u T2 s prvim korakom i raste postupno (§7 t. 2); završni rok ostaje T4 | F-10, P-5, K-3 | Zelen u CI-ju; video priložen | T4 |
 | D-3 | Proba demoa u subotu 31. 10.: Daniel prolazi demo sam, zapisuje primjedbe | K-4, P-7 | Primjedbe poslane orkestratoru | T4 |
 | D-4 | Snimka prolaza 1 do 5 za sastanak | D-3 | Snimka postoji | T4 |
 
@@ -126,15 +127,23 @@ Detaljan plan faze nastaje tek kad je okidač ispunjen; do tada vrijedi tablica 
 | M10 Podaci | D-30 (rokovi čuvanja) od FPZG-a |
 | M11 GO uvjeti | D-08 potvrđen nakon B0.1 i B0.2; računi dobavljača |
 
-## 7. Kritični put i rezerva [PRIJEDLOG D-98]
+## 7. Kritični put i rezerva [ODLUČENO D-98]
 
-Ne vrijedi dok ga Daniel ne potvrdi. Do tada vrijede §3 do §5 kako su napisani.
+Potvrđeno 10. 10. 2026. (Daniel). Dopunjuje §3 do §5; gdje se razlikuju (K-4 u §4 vodi se kao zadatak T4, B-12 ovisi o B-9), vrijedi ovaj odjeljak.
 
 **Nalaz.** Lanac B-8 → B-9 → B-12 → F-10 → K-4 cijeli pada u T3 i T4, a proba D-3 je zadnji dan T4. Rezovi iz §5 skidaju točke 6 do 8 i snimku; nijedan ne skraćuje taj lanac. Kašnjenje bilo kojeg zadatka u lancu zato izravno pomiče demo.
 
-**Prijedlog:**
+**Odluka:**
 
-1. **Tanki prolaz do kontrolne točke T2 (18. 10.).** `ingest` jednog odsječka, rekonstrukcija i JCS usporedba prolaze od početka do kraja nad in-memory adapterima i razvojnim potpisnikom, bez sučelja. B-8, B-9 i B-12 zatim zamjenjuju dijelove tog prolaza pravima, umjesto da se prvi put spoje u T4.
-2. **K-4 raste postupno.** E2E prolaz demoa nastaje u T2 kao test s prvim korakom (prijava) i dobiva korak uz svaki spojeni zadatak iz F-6 do F-10. U T4 ostaje samo zadnji korak i video.
-3. **Zamrzavanje opsega u srijedu 28. 10.** Nakon toga se spajaju samo popravci. Radna proba je u četvrtak 29. 10.; proba 31. 10. (D-3) ostaje kao završna.
-4. **Rez kritičnog puta, prije rezova iz §5.** Ako B-8 nije spojen do kontrolne točke T3 (25. 10.), potpis potvrde i rekonstrukcija za demo izvode se u istom procesu, iza istih sučelja, a pg-boss worker (B-9) i stanje `pending_signature` idu odmah nakon demoa. Ovo je odstupanje od D-71 i D-74 samo za demo s razvojnim ključem; ne vrijedi ni za jedno okruženje sa stvarnim podacima. Popis "ne režu se" iz §5 ostaje netaknut.
+1. **Tanki prolaz do kontrolne točke T2 (18. 10.).** `ingest` jednog odsječka, rekonstrukcija i JCS usporedba prolaze od početka do kraja nad in-memory adapterima i razvojnim potpisnikom, bez sučelja. Zadatak je B-14 u §4 (Backend; ovisi o B-3 i B-4). B-8, B-9 i B-12 zatim zamjenjuju dijelove tog prolaza pravima, umjesto da se prvi put spoje u T4.
+2. **K-4 raste postupno.** E2E prolaz demoa nastaje u T2 kao test s prvim korakom (prijava) i dobiva korak uz svaki spojeni zadatak iz F-6 do F-10. U T4 ostaje samo zadnji korak i video. Završni rok K-4 se ne mijenja: ostaje T4, kao u §4.
+3. **Zamrzavanje opsega u srijedu 28. 10.** Zamrzavanje znači zabranu novog opsega: nakon 28. 10. ne ulazi ništa što nije u tablici §4. Zadaci koje tablica §4 već raspoređuje u T4 (B-12, B-13, F-10, K-4 i P-7; prema tablici i F-11 te završeci B-11 i F-9) smiju se dovršiti i spojiti do kraja T4. Uz njih se spajaju samo popravci. Radna proba je u četvrtak 29. 10.; proba 31. 10. (D-3) ostaje kao završna.
+4. **Rez kritičnog puta, prije rezova iz §5.** Ako B-8 ili B-9 nisu spojeni do kontrolne točke T3 (25. 10.), potpis potvrde i rekonstrukcija za demo izvode se u istom procesu, iza istih sučelja, a pg-boss worker (B-9) i stanje `pending_signature` idu odmah nakon demoa. Taj proces je web proces (Next.js) lokalnog demo stoga, s razvojnim Ed25519 potpisnikom iz B-4. Popis "ne režu se" iz §5 ostaje netaknut.
+
+   Odstupanja, samo za demo s razvojnim ključem:
+
+   - **Potpis:** D-71, `docs/BACKEND.md` §3 pravilo 3 i `docs/ARCHITECTURE.md` §8 i §10 traže da web proces ne drži materijal ključa i da potpisuje samo worker. U demou web proces drži razvojni ključ i potpisuje.
+   - **Red poslova:** D-74 i BACKEND §4.5 stavljaju pg-boss u worker, a BACKEND §3 pravilo 3 vodi `pending_signature` kao normalan tok. U demou nema ni reda poslova ni tog stanja.
+   - **Rekonstrukcija:** B-12 (§4), BACKEND §4.6 i ARCHITECTURE §6 t. 3 traže rekonstrukciju u workeru. U demou se izvodi u web procesu.
+
+   Odstupanje ne vrijedi ni za jedno okruženje sa stvarnim podacima. BACKEND i ARCHITECTURE se zbog njega ne mijenjaju i ostaju mjerodavni za sve osim ovog demoa; brava koja sprječava razvojni potpisnik u produkciji (ARCHITECTURE §8 i §9) ostaje. PR koji provodi t. 4 otvara se kao `Risk: critical` (`docs/ENGINEERING_SYSTEM.md` §5: potpisi, rekonstrukcija, predaja).

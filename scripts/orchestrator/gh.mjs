@@ -2,7 +2,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-import { GATE_CONTEXT } from "./orchestrator-core.mjs";
+import { pickGate } from "./orchestrator-core.mjs";
 
 const run = promisify(execFile);
 
@@ -26,9 +26,26 @@ export async function ghList(path) {
 
 export const prComments = (n) => ghList(`repos/{owner}/{repo}/issues/${n}/comments?per_page=100`);
 
-export async function gateStatus(sha) {
-  const st = await ghJson(["api", `repos/{owner}/{repo}/commits/${sha}/status`]);
-  return (st.statuses ?? []).find((s) => s.context === GATE_CONTEXT) ?? null;
+/**
+ * Newest gate status on the commit, from the full statuses list (every status
+ * ever posted, not the combined roll-up). null = no gate status; throws when
+ * the read fails. `list` is injectable for tests.
+ */
+export async function gateStatus(sha, list = ghList) {
+  return pickGate(await list(`repos/{owner}/{repo}/commits/${sha}/statuses?per_page=100`));
+}
+
+/** gateStatus with retries; a failed read yields {error}, never "no status". */
+export async function readGate(sha, { read = gateStatus, tries = 2 } = {}) {
+  let error = "unknown";
+  for (let i = 0; i < tries; i += 1) {
+    try {
+      return await read(sha);
+    } catch (e) {
+      error = String(e?.stderr || e?.message || e).trim().split("\n")[0];
+    }
+  }
+  return { error };
 }
 
 let cachedRepo;

@@ -75,18 +75,18 @@ Od 3. 10. 2026. do 22. 2. 2027. ima 20 tjedana, od toga oko 2 tjedna blagdana. U
 | 6 | oko 108 | oko 77 |
 | Puno radno vrijeme (oko 10 jedinica od 3 sata tjedno) | oko 180 | oko 130 |
 
-Od 3. 10. 2026. vlasnik radi na Ductusu puno radno vrijeme. Uz oko 10 jedinica tjedno (dvije dnevno, pet dana; ostalo vrijeme za druge projekte i odmor) **val 1 i val 2 zajedno (oko 94 do 124 nominalne večeri) stanu do 22. 2. 2027.** Cilj je zato pustiti val 1 i val 2 na početku semestra, a val 3 tijekom semestra. Procjena od 10 jedinica tjedno je namjerno konzervativna: rad bez pauza ruši kvalitetu i rokove.
+Od 3. 10. 2026. vlasnik radi na Ductusu puno radno vrijeme. Uz oko 10 jedinica tjedno (dvije dnevno, pet dana; ostalo vrijeme za druge projekte i odmor) do 22. 2. 2027. ima oko 130 nominalnih večeri, a **val 1 i val 2 zajedno traže 102 do 137 nominalnih večeri** (zbroj tablica niže, D-99). Donja granica stane uz oko 28 večeri rezerve; gornja prelazi kapacitet za oko 7. Cilj ostaje pustiti val 1 i val 2 na početku semestra, a val 3 tijekom semestra (D-36). Stane li opseg, provjerava se na kontrolnim točkama (D-100); ako val 2 kasni, pomiče se najkasnije do sredine svibnja; val 1 se zbog vala 2 ne skraćuje, nego samo rezovima iz kontrolne točke (D-100). Procjena od 10 jedinica tjedno je namjerno konzervativna: rad bez pauza ruši kvalitetu i rokove.
 
-#### Provjera zbroja [PRIJEDLOG D-99]
+#### Provjera zbroja [ODLUČENO D-99]
 
-Ne vrijedi dok je Daniel ne potvrdi; do tada vrijedi odlomak iznad.
+Potvrđeno 10. 10. 2026. (Daniel). Odlomak iznad, tablica vala 1 i kontrolna točka 15. 12. 2026. usklađeni su s ovim računom.
 
-- Tablice valova niže daju 56 do 74 (val 1) i 28 do 38 (val 2), zajedno **84 do 112**, a ne 94 do 124.
-- Backend dodatak od 18 do 25 večeri (`docs/BACKEND.md` §8) naveden je kao zaseban red u valu 1, ali ga tablica vala 1 nema. S njim je val 1 **74 do 99**, a val 1 i val 2 zajedno **102 do 137**, naspram oko 130 nominalnih večeri do 22. 2. 2027.
-- Do kontrolne točke 15. 12. 2026. ima oko 75 nominalnih večeri; val 1 bez M11 s backend dodatkom traži oko 69 do 93.
-- M0 je procijenjen na 2 do 3 večeri, a 10. 10. 2026. `STATE.md` ga i dalje vodi kao trenutnu fazu. Prijedlog: na svakoj kontrolnoj točki zapisati stvarno utrošene jedinice po fazi i iz toga izvesti faktor prekoračenja, umjesto pretpostavljenih 40 %.
-
-Ako se potvrdi: tablica vala 1 dobiva redak za backend dodatak, a brojke u odlomku iznad i u kontrolnoj točki se usklađuju.
+- Val 1 prema tablici niže: 56 do 74 bez backend dodatka; s dodatkom od 18 do 25 večeri (`docs/BACKEND.md` §8) **74 do 99**.
+- Val 2 prema tablici niže: **28 do 38**.
+- Val 1 i val 2 zajedno: **102 do 137**, naspram oko 130 nominalnih večeri do 22. 2. 2027. Raniji tekst navodio je 94 do 124, a tablice bez backend dodatka davale su 84 do 112.
+- Do kontrolne točke 15. 12. 2026. ima oko 75 nominalnih večeri; val 1 bez M11 (5 do 6) traži **69 do 93**.
+- Faktor prekoračenja: M0 je procijenjen na 2 do 3 večeri, a 10. 10. 2026. `STATE.md` ga i dalje vodi kao trenutnu fazu. Na svakoj kontrolnoj točki zapisuju se stvarno utrošene jedinice po fazi i iz njih se izvodi faktor prekoračenja, umjesto pretpostavljenih 40 % s kojima računa tablica kapaciteta gore.
+- **Otvoreno pitanje: sastav backend dodatka (riješiti prije provjere 16. 11. 2026.).** Dodatak od 18 do 25 večeri nije razložen po koracima ni po fazama. Retci s procjenom u `docs/BACKEND.md` §8 zajedno daju 26 do 39 večeri. Među njima je B5 (4 do 5), koji ima i vlastiti redak u valu 2, i B9 (3 do 4), koji pripada M11. Ako dodatak sadrži B5, zbroj 102 do 137 broji ga dvaput; ako sadrži B9, "val 1 bez M11" (69 do 93) sadrži dio M11. Brojke 74 do 99, 102 do 137 i 69 do 93 prihvaćene su u D-99 i ovdje se ne mijenjaju, ali ovise o ovom pitanju.
 
 ### Val 1: početak ljetnog semestra (kod spreman oko 22. 2. 2027.)
 
@@ -104,7 +104,8 @@ Radovi: podnesci i eseji. Bez AI pomoćnika (FPZG ga ionako ne smije tražiti, D
 | M10 osnovno | Klase podataka, brisanje po roku, pravno zadržavanje (F-02) | 2 do 3 |
 | M11 | GO uvjeti, sučelje na engleskom (D-70), pristupačnost (F-03), statusna stranica (F-10) | 5 do 6 |
 | Uz to | Obavijesti (N-01), podsjetnici (N-02), popis "tko treba pomoć" (N-12), uvodni vodič (S-11) | 6 do 8 |
-| **Ukupno** | | **56 do 74** |
+| Backend dodatak | Okomiti rez kroz faze vala 1 prema `docs/BACKEND.md` §8 (D-99) | 18 do 25 |
+| **Ukupno** | | **74 do 99** |
 
 ### Val 2: proširenje seminarskih radova (cilj: početak semestra; najkasnije sredina svibnja 2027.)
 
@@ -133,7 +134,9 @@ Konzultacije (D-47), ključni rokovi (N-07), komentor i povjerenstvo u sučelju 
 
 ### Kontrolna točka 15. 12. 2026.
 
-Uz puno radno vrijeme do tada mora biti gotov cijeli val 1 osim M11 (oko 50 do 66 nominalnih večeri). Ako nije, val 2 se vraća na cilj sredine svibnja. Ako ni M0 do M3 nisu gotovi, ovi rezovi stupaju na snagu redom, bez nove rasprave, dok val 1 ne stane:
+Uz puno radno vrijeme do tada mora biti gotov cijeli val 1 osim M11 (69 do 93 nominalne večeri s backend dodatkom, naspram oko 75 raspoloživih do tog datuma; D-99). Ako nije, val 2 se vraća na cilj sredine svibnja.
+
+**Okidač rezova [ODLUČENO D-100].** Na kontrolnoj točki zbroji se preostala nominalna procjena vala 1 i usporedi s preostalim nominalnim večerima do 22. 2. 2027. (stvarne večeri podijeljene faktorom prekoračenja). Ako opseg ne stane, ovi rezovi stupaju na snagu redom, bez nove rasprave, dok val 1 ne stane, bez obzira na to koje su faze gotove. Ista provjera radi se i dva tjedna nakon demoa, 16. 11. 2026. Procjena uštede po rezu (nominalni raspon koji svaki rez uklanja) dodaje se uz popis niže do provjere 16. 11. 2026.; do tada se okidač računa ponovnim zbrajanjem preostalog opsega vala 1 nakon svakog primijenjenog reza. Ovo zamjenjuje raniji uvjet po kojem su rezovi stupali na snagu samo ako ni M0 do M3 nisu gotovi; taj uvjet nije pokrivao slučaj kad su M0 do M3 gotovi, a M5 do M7 nisu.
 
 1. Prijedlozi idu u val 2; u valu 1 samo komentari.
 2. Osnovna bilježnica izvora ide u val 2; DOI i ISBN ostaju.
@@ -144,15 +147,7 @@ Uz puno radno vrijeme do tada mora biti gotov cijeli val 1 osim M11 (oko 50 do 6
 
 Ranije dogovoreno vrijedi i dalje: izravne izmjene u valu 2, uvoz PDF-a u valu 3, doktorski radovi nakon pilota. Rezovi se upisuju u `DECISIONS.md` kao nova odluka.
 
-#### Okidač po preostalom opsegu [PRIJEDLOG D-100]
-
-Ne vrijedi dok ga Daniel ne potvrdi; do tada vrijedi pravilo iznad.
-
-Pravilo iznad pokriva dva slučaja: cijeli val 1 osim M11 je gotov, ili ni M0 do M3 nisu gotovi. Slučaj između (M0 do M3 gotovi, M5 do M7 nisu) nema pravilo osim pomaka vala 2.
-
-Prijedlog: na kontrolnoj točki zbroji se preostala nominalna procjena vala 1 i usporedi s preostalim nominalnim večerima do 22. 2. 2027. (stvarne večeri podijeljene faktorom prekoračenja). Ako opseg ne stane, rezovi 1 do 6 primjenjuju se redom dok ne stane, bez obzira na to koje su faze gotove. Ista provjera radi se i dva tjedna nakon demoa, 16. 11. 2026.
-
-Varijanta za odluku vlasnika: rezovi 1 do 4 primjenjuju se odmah, a vraćaju se u val 1 ako provjera 15. 12. pokaže da ima mjesta.
+Nije izabrano (10. 10. 2026.): varijanta po kojoj bi se rezovi 1 do 4 primijenili odmah i vratili u val 1 ako provjera 15. 12. pokaže da ima mjesta. Rezovi se primjenjuju samo po okidaču gore.
 
 ## GO uvjeti za stvarne studente
 

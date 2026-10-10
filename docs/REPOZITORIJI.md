@@ -202,3 +202,28 @@ Mjerodavan ostaje CI: lokalni alat ubrzava provjeru, ali ne zamjenjuje pinane ve
 | `codex`, `agents-observe` | korisnička (otprije) | Neovisni pregled i nadzor sesija |
 
 Pregledani i ne uključuju se: `pr-review-toolkit`, `code-review`, `feature-dev` (dupliciraju agente i skillove `ductus-*` te Codex), `security-guidance` i `hookify` (hookovi na svakom potezu u više paralelnih sesija), `commit-commands` (zaobilazi pravilo `git add <putanje>`), `frontend-design` (izgled je određen odobrenim dizajnom, D-85 i D-89), `session-report` (pokrivaju `scripts/usage-report.ps1` i `agents-observe`), `playwright` i `github` MCP (pokrivaju `@playwright/test` i `gh`), `serena` (pokriva `typescript-lsp`). `terraform` MCP razmotriti tek uz `infra/`.
+
+## 9. Alati za štednju tokena — pregled 10. 10. 2026. (DAN-93)
+
+Podaci su s GitHub API-ja i iz README-a na dan pregleda. Ništa nije instalirano ni pokrenuto; ponašanje na Windowsu je prema dokumentaciji, ne prema testu. Tvrdnje o uštedi su tvrdnje samih projekata, osim gdje piše drukčije. Nijedan alat nije dodan ovim zadatkom.
+
+Mjerenje iz `docs/SESSIONS.md` §4a određuje redoslijed: najviše troše veličina konteksta i početni kontekst, a izlaz naredbi je sporedan. Zato su alati koji komprimiraju izlaz naredbi ispod mjerenja i vlastitih hookova.
+
+| Repozitorij | Licenca | Što radi | Odluka |
+| --- | --- | --- | --- |
+| [ccusage/ccusage](https://github.com/ccusage/ccusage) | MIT | Potrošnja po sesiji i danu iz lokalnih zapisa. | Već u uporabi (`scripts/usage-report.ps1`). |
+| [getagentseal/codeburn](https://github.com/getagentseal/codeburn) | MIT | Potrošnja za Claude Code i Codex; `optimize` nalazi nekorištene MCP poslužitelje i ponovljena čitanja. | Probati samo izvještaj; `--apply` i `guard install` mijenjaju konfiguraciju. |
+| [agent-sh/agnix](https://github.com/agent-sh/agnix) | MIT/Apache-2.0 | Linter za `CLAUDE.md`, `AGENTS.md`, `SKILL.md`, hookove i MCP konfiguraciju; ima GitHub Action. | Kandidat za CI; zaseban Platformin zadatak. |
+| [rtk-ai/rtk](https://github.com/rtk-ai/rtk) | Apache-2.0 | PreToolUse hook koji Bash naredbe zamjenjuje inačicama sa sažetim izlazom (git, tsc, vitest, playwright, eslint, gh). | Proba uz mjerenje. Sve naredbe prolaze kroz nepotpisanu binarnu datoteku; pokrivenost PowerShell alata nije potvrđena; čuva lokalnu povijest naredbi. |
+| [kenryu42/cc-safety-net](https://github.com/kenryu42/cc-safety-net) | MIT | PreToolUse čuvar koji parsira naredbe (vidi kroz `bash -c`) i blokira destruktivni git/rm i čitanje tajni. | Kandidat: pokriva rupu u `deny` pravilima, koja ne vide `sh -c`. |
+| [karanb192/claude-code-hooks](https://github.com/karanb192/claude-code-hooks) | MIT | Zbirka Node hookova; `protect-tests` blokira brisanje i preskakanje testova. | Preuzeti ideju `protect-tests` vlastitim kodom; mali repo, bez izjave o Windowsu. |
+| [supabase/agent-skills](https://github.com/supabase/agent-skills) | MIT | Skillovi za RLS, migracije i Postgres. | Samo za Backend i Security profile, kad počne B-5a. |
+| [microsoft/playwright-cli](https://github.com/microsoft/playwright-cli) | Apache-2.0 | CLI i skill umjesto Playwright MCP-a. | Kandidat za QA i Bug Hunter. |
+| [sirmalloc/ccstatusline](https://github.com/sirmalloc/ccstatusline) | MIT | Statusna linija s postotkom konteksta i istekom cachea. | Nije potrebno: postoji vlastita statusna linija i hook `budget`. |
+| [oraios/serena](https://github.com/oraios/serena) | GPL-3.0-or-later | MCP za simbolički pristup kodu preko LSP-a. | Ne sada: preklapa se s `typescript-lsp` i dodaje MCP alate u svaki kontekst. |
+| [DeusData/codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp) | MIT | Graf koda u SQLiteu, 17 MCP alata. | Ne: nepotpisana binarna datoteka, instalater piše u konfiguraciju svih agenata. |
+| [mksglu/context-mode](https://github.com/mksglu/context-mode) | Elastic 2.0 | Veliki izlazi alata idu u sandbox i indeks. | Ne: otvoreni Windows/PowerShell kvarovi, licenca nije otvorena. |
+| [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman) | Apache-2.0 | Skill za kratak izlaz i proxy za sažimanje ulaza. | Ne: izlaz je 1,5 M od 198,7 M tokena; proxy stoji ispred prijave. |
+| [headroomlabs-ai/headroom](https://github.com/headroomlabs-ai/headroom) | Apache-2.0 | Proxy koji sažima povijest prije poziva. | Ne: sav promet ide kroz njega, telemetrija uključena po zadanom. |
+
+Odbijeno kao dodatni trošak ili dupliciranje postojećeg governancea: `github/spec-kit`, `bmad-code-org/BMAD-METHOD`, `ruvnet/ruflo`, `obra/superpowers` (SessionStart dodaje oko 3 KB u svaku sesiju), `Fission-AI/OpenSpec`, `buildermethods/agent-os`, `wshobson/agents` (preuzeta samo ideja modela po agentu).
