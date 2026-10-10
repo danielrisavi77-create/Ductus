@@ -1,19 +1,150 @@
 # Installed by `pnpm install` (prepare script). CI runs the same checks; the
 # hooks only make failures show up before the push. Hooks live in the shared
 # .git/hooks of all worktrees and call the lefthook of the current worktree.
+# CI=true keeps pnpm from waiting on a prompt nobody sees inside a hook.
 pre-commit:
   parallel: true
   commands:
     lint:
       glob: "*.{ts,tsx,mjs}"
+      env:
+        CI: "true"
       run: pnpm exec eslint {staged_files}
     secrets:
-      # stdin instead of `git --pre-commit`, so it also works in worktrees.
-      run: git diff --cached | docker run -i --rm zricethezav/gitleaks:v8.30.1 stdin --redact --no-banner
+      # Scans the staged diff for secrets. stdin instead of `git --pre-commit`,
+      # so it also works in worktrees. Order:
+      #   1. Docker, if the daemon answers within 10 s (a hung Docker Desktop
+      #      on Windows can leave `docker info` waiting for minutes) and the
+      #      gitleaks image is present or can be pulled. `timeout` does the
+      #      waiting where it exists (Linux, Git Bash): on Windows a plain
+      #      `kill` leaves docker.exe behind. The loop is for macOS, which has
+      #      none. The image is the one CI uses (.github/workflows/ci.yml):
+      #      same registry, same version, pinned by digest; change both
+      #      together. The container gets the staged diff on stdin, so it runs
+      #      with --network none. That flag covers the container only: the
+      #      image is pulled beforehand, once, and that pull is not time-bound;
+      #   2. a `gitleaks` binary from PATH (version is whatever is installed),
+      #      also when Docker answers but the image cannot be pulled;
+      #   3. neither: the hook FAILS and the commit is blocked (strict mode,
+      #      the default). It says what to start or install.
+      # A finding or a scanner error blocks the commit in 1 and 2.
+      #
+      # Skipping the scan in case 3 takes an explicit opt-in by a human, bound
+      # to the staged content:
+      #   DUCTUS_ALLOW_SECRET_SCAN_SKIP=$(git write-tree) git commit ...
+      # The value must equal the output of `git write-tree` for the index
+      # being committed (the failure message prints it). Staging anything else
+      # changes that id, so an exported variable does not carry over to any
+      # other commit, nor to an agent session started from the same terminal.
+      # Any other value (1, true, empty, the id of an earlier index) keeps the
+      # hook strict, and so does a failing `git write-tree` (for example an
+      # unresolved merge). `git commit -a` and `git commit <paths>` commit a
+      # different index than the one `git write-tree` sees beforehand: stage
+      # with `git add` first, or take the id from the failure message. With
+      # Docker or gitleaks available the variable does nothing: the scan runs
+      # and a finding still blocks. Rules:
+      #   - agents must never set it; an agent without a scanner stops and
+      #     reports instead;
+      #   - it is not a substitute for --no-verify and does not make
+      #     --no-verify acceptable;
+      #   - it must never be written into .claude/settings.json, .env, a shell
+      #     profile or CI. It is typed on the command line of one commit.
+      # A skipped scan is a weaker local check, not a pass: the CI job
+      # "Security scanners" scans the whole history only once a pull request
+      # is open (and on main), and by then the secret is already in the pushed
+      # branch history and must be rotated. A pushed branch without a pull
+      # request is not scanned by CI.
+      # Keep the script free of double quotes: on Windows lefthook wraps it in
+      # double quotes for `sh -c` without escaping them, so a double-quoted
+      # string with a space in it cuts the script short and the hook fails.
+      run: |
+        image=ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+        docker_ready() {
+          command -v docker >/dev/null 2>&1 || return 1
+          if command -v timeout >/dev/null 2>&1; then
+            timeout 10 docker info >/dev/null 2>&1
+            return
+          fi
+          docker info >/dev/null 2>&1 &
+          probe=$!
+          waited=0
+          while kill -0 $probe 2>/dev/null; do
+            if [ $waited -ge 10 ]; then
+              kill $probe 2>/dev/null
+              return 1
+            fi
+            sleep 1
+            waited=$((waited + 1))
+          done
+          wait $probe
+        }
+        image_ready() {
+          docker image inspect $image >/dev/null 2>&1 && return 0
+          echo 'lefthook secrets: pulling the gitleaks image (needed once) ...' >&2
+          docker pull -q $image >/dev/null && return 0
+          echo 'lefthook secrets: the gitleaks image could not be pulled.' >&2
+          return 1
+        }
+        if docker_ready && image_ready; then
+          git diff --cached | docker run -i --rm --network none $image stdin --redact --no-banner
+        elif command -v gitleaks >/dev/null 2>&1; then
+          echo 'lefthook secrets: Docker or the gitleaks image is not available, scanning with the gitleaks binary from PATH, version:' >&2
+          gitleaks version >&2
+          git diff --cached | gitleaks stdin --redact --no-banner
+        else
+          tree=$(git write-tree 2>/dev/null) || tree=
+          skip=no
+          case $tree in
+            '') ;;
+            *)
+              case ${DUCTUS_ALLOW_SECRET_SCAN_SKIP:-} in
+                $tree) skip=yes ;;
+              esac
+              ;;
+          esac
+          if [ $skip = yes ]; then
+            echo '==========================================================================' >&2
+            echo 'WARNING: SECRET SCAN SKIPPED. This commit was NOT checked for secrets.' >&2
+            echo 'Docker (or the gitleaks image) is not available and there is no gitleaks' >&2
+            echo 'binary in PATH. Skipped only because DUCTUS_ALLOW_SECRET_SCAN_SKIP equals' >&2
+            echo 'the id of the staged content:' $tree >&2
+            echo 'CI (Security scanners) scans only once a pull request is open, and a secret' >&2
+            echo 'pushed to a branch stays in its history and must be rotated either way.' >&2
+            echo 'Check the staged diff yourself,' >&2
+            echo 'or start Docker / install gitleaks and run: pnpm exec lefthook run pre-commit' >&2
+            echo '==========================================================================' >&2
+          else
+            echo 'lefthook secrets: FAILED, the staged diff was NOT scanned for secrets.' >&2
+            echo 'Docker is not available (not installed, the daemon did not answer within' >&2
+            echo '10 s, or the gitleaks image could not be pulled) and there is no gitleaks' >&2
+            echo 'binary in PATH.' >&2
+            echo 'Do one of these and commit again:' >&2
+            echo '  - start Docker (Docker Desktop) and wait until docker info answers, or' >&2
+            echo '  - install gitleaks 8.30.1 and put it in PATH: https://github.com/gitleaks/gitleaks/releases' >&2
+            echo 'Do not use --no-verify. A human (never an agent) may skip the scan for' >&2
+            echo 'exactly this staged content; see the comment in lefthook.yml.' >&2
+            case $tree in
+              '')
+                echo 'That is not possible now: git write-tree failed (unresolved merge?).' >&2
+                ;;
+              *)
+                echo 'After git add, without -a and without paths on the commit line:' >&2
+                echo '  DUCTUS_ALLOW_SECRET_SCAN_SKIP='$tree 'git commit ...' >&2
+                echo 'The value is the output of git write-tree for this index. It stops' >&2
+                echo 'working as soon as the staged content changes; the value 1 never works.' >&2
+                ;;
+            esac
+            exit 1
+          fi
+        fi
 
 pre-push:
   commands:
     typecheck:
+      env:
+        CI: "true"
       run: pnpm typecheck
     test:
+      env:
+        CI: "true"
       run: pnpm test
