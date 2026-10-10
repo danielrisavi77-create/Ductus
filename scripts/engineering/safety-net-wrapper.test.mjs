@@ -369,6 +369,7 @@ test("review: in a subdirectory the root rulebook still applies; no checkout abo
           const result = run(tree, tool, "ls", cwd);
           assert.equal(result.code, 2, `no inherited rulebook for ${cwd}`);
           assert.match(result.stderr, /no project rulebook/);
+          assert.match(result.stderr, /git -C <this directory> merge origin\/main/);
           assert.doesNotMatch(result.stderr, /pnpm install --frozen-lockfile/);
         }
       }

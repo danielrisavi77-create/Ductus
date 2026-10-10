@@ -211,7 +211,7 @@ export function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS_TIMEO
   if (!rulebookDir) {
     return unusable(
       `no project rulebook (${RULEBOOK.join("/")}) found from ${cwd} up to the checkout root, so the project rules (git add -A, --no-verify, commit -a) would be off`,
-      "Change to the project root or restore .cc-safety-net/ from git, then retry",
+      "Leave this directory with the worktree exit tool, or from the project root run: git -C <this directory> merge origin/main (or git -C <this directory> checkout origin/main -- .cc-safety-net)",
     );
   }
   // Any clean answer is checked once per state, not only a silent one: a stub
