@@ -97,6 +97,16 @@ test("§3: the sources contain no write, spawn or install paths", () => {
   }
 });
 
+test("§3: the CLI imports only execFile and read-only fs functions", () => {
+  const src = readFileSync(new URL("health.mjs", import.meta.url), "utf8");
+  const imports = (mod) => [...src.matchAll(new RegExp(`import\\s*\\{([^}]*)\\}\\s*from\\s*"${mod}"`, "g"))].flatMap((m) => m[1].split(",").map((x) => x.trim()).filter(Boolean));
+  assert.deepEqual(imports("node:child_process"), ["execFile"]);
+  assert.deepEqual(imports("node:fs").sort(), ["readFileSync", "realpathSync", "statSync"]);
+  assert.doesNotMatch(src, /import\s+\*\s+as|import\s+\w+\s+from\s+"node:(?:child_process|fs)|require\(|import\(|node:fs\/promises/);
+  const core = readFileSync(new URL("health-core.mjs", import.meta.url), "utf8");
+  assert.doesNotMatch(core, /node:(?:child_process|fs)|require\(|import\(/, "health-core.mjs");
+});
+
 test("healthy repo: exit 0, manual items printed and named in the summary", async () => {
   const r = await check(world());
   assert.equal(r.code, 0, r.lines.join("\n"));
@@ -382,6 +392,19 @@ test("queue: status lines with a short SHA never replace an assignment; the stal
 test("queue: a slot written with its role suffix is still an assignment", () => {
   const items = queueItems([red([`RED ZA REVIEW (claude:a:orchestrator): **#185** head \`${S[185]}\` → \`claude:reviewC:reviewer\`.`], 100)]);
   assert.deepEqual(items.map((i) => [i.number, i.head, i.slots]), [[185, S[185], ["claude:reviewC"]]]);
+});
+
+test("queue: an author identity after the arrow is not an assignment", () => {
+  const items = queueItems([
+    red([`RED ZA REVIEW (claude:a:orchestrator): **#185** head \`${S[185]}\` → \`claude:reviewC\`.`], 100),
+    red([`RED ZA REVIEW (claude:a:orchestrator)`, `- **#185** head \`${S[185]}\` FAIL → vraćeno nositelju \`claude:a:platforma\``], 50),
+  ]);
+  assert.deepEqual(items.map((i) => [i.number, i.head, i.slots]), [[185, S[185], ["claude:reviewC"]]]);
+});
+
+test("queue: a QA role suffix is accepted and dropped", () => {
+  const items = queueItems([red([`RED ZA REVIEW (claude:a:orchestrator): **#185** head \`${S[185]}\` → \`claude:qa185:qa\`.`], 100)]);
+  assert.deepEqual(items.map((i) => i.slots), [["claude:qa185"]]);
 });
 
 test("queue: only a verdict of the assigned slot clears the item", () => {
