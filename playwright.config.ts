@@ -14,11 +14,29 @@ export default defineConfig({
   testDir: "e2e",
   // Evidence must be reproducible: a flaky pass is not a pass.
   retries: 0,
-  reporter: "list",
+  // The HTML report carries screenshots, videos and traces; CI uploads it as
+  // the `playwright-report` artifact of the run (docs/SESSIONS.md 6).
+  reporter: [["list"], ["html", { open: "never" }]],
   use: {
     baseURL: BASE_URL,
+    locale: "hr-HR",
+    timezoneId: "Europe/Zagreb",
+    screenshot: "only-on-failure",
+    video: process.env.CI ? "on" : "retain-on-failure",
+    trace: "retain-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  // Browser policy (docs/TESTING.md 2). Chromium is required on every PR;
+  // Firefox and WebKit are required for editor, sync, offline, clipboard, auth
+  // and submission changes. CI runs all three engines on every PR, which
+  // covers each of those classes without a path filter that could miss one.
+  // `mobile` is a Chromium viewport: an addition, never a stand-in for WebKit.
+  // Every spec runs in every project; locally, `--project desktop` runs one.
+  projects: [
+    { name: "desktop", use: { ...devices["Desktop Chrome"] } },
+    { name: "mobile", use: { ...devices["Pixel 7"] } },
+    { name: "firefox", use: { ...devices["Desktop Firefox"] } },
+    { name: "webkit", use: { ...devices["Desktop Safari"] } },
+  ],
   webServer: {
     command: webServerCommand,
     url: BASE_URL,
