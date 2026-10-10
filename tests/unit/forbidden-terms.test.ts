@@ -17,7 +17,14 @@ import {
   jsxTextValue,
   scanUiText,
 } from "../../scripts/forbidden-terms/scan";
-import { FORBIDDEN_TERMS, findForbiddenTerms, findForbiddenTermsInMarkup, foldText } from "../../scripts/forbidden-terms/terms";
+import {
+  FORBIDDEN_TERMS,
+  PHRASE_BREAK,
+  findForbiddenTerms,
+  findForbiddenTermsInMarkup,
+  foldPhrases,
+  foldText,
+} from "../../scripts/forbidden-terms/terms";
 
 const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
@@ -1216,5 +1223,469 @@ describe("markup in component text", () => {
       expect(finding.line).toBeGreaterThan(1);
       expect(finding.line).toBeLessThanOrEqual(lines.length + 1);
     }
+  });
+});
+
+// QA of fdbd6de (PR #45): the words that make "spremljeno" or "saved" acceptable must follow in the same phrase.
+describe("phrase boundary of the contextual entries", () => {
+  const HR = "spremljeno (bez pojašnjenja)";
+  const EN = "saved (without saying where)";
+  const cp = (...codes: number[]): string => String.fromCodePoint(...codes);
+
+  // The eight strings of the finding, as written there.
+  it.each([
+    ["Spremljeno. Na uređaju nema drugih promjena.", HR],
+    ["Spremljeno, na poslužitelju još nije.", HR],
+    ["Spremljeno! Na poslužitelju je i dalje stara verzija.", HR],
+    ["Spremljeno? Na uređaju da, na poslužitelju ne.", HR],
+    ["Spremljeno\nNa uređaju", HR],
+    ["Saved. On the server: 2 changes waiting.", EN],
+    ["Saved — on the server nothing yet.", EN],
+    ["Saved? On this device, yes.", EN],
+  ])("flags %j, where the next sentence or clause starts with the place", (text, entry) => {
+    expect(entries(text)).toEqual([entry]);
+  });
+
+  /** The plan of attack from the PR description: what stands between the word and the place, and whether it ends the phrase. */
+  const PHRASE_BOUNDARY: readonly [row: string, between: string, ends: boolean][] = [
+    ["1 one space", " ", false],
+    ["2 two spaces", "  ", false],
+    ["2 many spaces", "       ", false],
+    ["3 no-break space", cp(0xa0), false],
+    ["3 narrow no-break space", cp(0x202f), false],
+    ["3 thin space", cp(0x2009), false],
+    ["3 en space", cp(0x2002), false],
+    ["3 figure space", cp(0x2007), false],
+    ["3 ideographic space", cp(0x3000), false],
+    ["3 a space and a no-break space", ` ${cp(0xa0)}`, false],
+    ["4 tab", "\t", false],
+    ["4 tab between spaces", " \t ", false],
+    ["5 line separator U+2028", cp(0x2028), false],
+    ["6 line feed", "\n", true],
+    ["6 carriage return and line feed", "\r\n", true],
+    ["6 carriage return", "\r", true],
+    ["6 line feed between spaces", " \n ", true],
+    ["6 two line feeds", "\n\n", true],
+    ["6 paragraph separator U+2029", cp(0x2029), true],
+    ["6 next line U+0085", cp(0x85), true],
+    ["6 vertical tab", "\v", true],
+    ["6 form feed", "\f", true],
+    ["8 full stop", ". ", true],
+    ["8 full stop, no space", ".", true],
+    ["9 exclamation mark", "! ", true],
+    ["10 question mark", "? ", true],
+    ["11 ellipsis", `${cp(0x2026)} `, true],
+    ["11 three full stops", "... ", true],
+    ["12 semicolon", "; ", true],
+    ["13 colon", ": ", true],
+    ["14 comma", ", ", true],
+    ["14 comma, no space", ",", true],
+    ["15 en dash between spaces", ` ${cp(0x2013)} `, true],
+    ["15 em dash between spaces", ` ${cp(0x2014)} `, true],
+    ["15 hyphen between spaces", " - ", true],
+    ["15 minus sign between spaces", ` ${cp(0x2212)} `, true],
+    ["16 hyphen, no spaces", "-", true],
+    ["16 en dash, no spaces", cp(0x2013), true],
+    ["16 em dash, no spaces", cp(0x2014), true],
+    ["16 non-breaking hyphen", cp(0x2011), true],
+    ["17 opening parenthesis", " (", true],
+    ["17 closing parenthesis", ") ", true],
+    ["17 square bracket", " [", true],
+    ["17 curly bracket", " {", true],
+    ["18 straight double quote", ' "', true],
+    ["18 straight single quote", " '", true],
+    ["18 low double quote", ` ${cp(0x201e)}`, true],
+    ["18 left double quote", ` ${cp(0x201c)}`, true],
+    ["18 right double quote", `${cp(0x201d)} `, true],
+    ["18 left single quote", ` ${cp(0x2018)}`, true],
+    ["18 right single quote", `${cp(0x2019)} `, true],
+    ["18 left guillemet", ` ${cp(0xab)}`, true],
+    ["18 right guillemet", ` ${cp(0xbb)}`, true],
+    ["18 single guillemets", ` ${cp(0x203a)}${cp(0x2039)} `, true],
+    ["19 check mark", ` ${cp(0x2713)} `, true],
+    ["19 check mark emoji", ` ${cp(0x2705)} `, true],
+    ["19 emoji with a variation selector", ` ${cp(0x2714, 0xfe0f)} `, true],
+    ["19 bullet", ` ${cp(0x2022)} `, true],
+    ["19 middle dot", ` ${cp(0xb7)} `, true],
+    ["19 slash", " / ", true],
+    ["19 slash, no spaces", "/", true],
+    ["19 vertical bar", " | ", true],
+    ["19 arrow", ` ${cp(0x2192)} `, true],
+    ["19 plus", " + ", true],
+    ["19 equals", " = ", true],
+    ["19 asterisk", " * ", true],
+    ["19 ampersand", " & ", true],
+    ["19 underscore", "_", true],
+    ["20 number", " 2 ", true],
+    ["20 number in brackets", " (2) ", true],
+    ["21 conjunction", " i ", true],
+    ["21 English conjunction", " and ", true],
+    ["21 another word", " samo ", true],
+    ["22 negation after a comma", ", ali ne ", true],
+    ["22 negation", " ne ", true],
+    ["22 English negation", " not ", true],
+    ["34 HTML5 entity name that JSX leaves as written", "&period; ", true],
+    ["34 HTML5 entity name for a comma", "&comma; ", true],
+    ["35 soft hyphen before the space", `${cp(0xad)} `, false],
+    ["35 zero width space after the space", ` ${cp(0x200b)}`, false],
+  ];
+
+  const PLACES_HR = ["na uređaju", "na poslužitelju", "Na uređaju", "NA POSLUŽITELJU"];
+  const PLACES_EN = ["on this device", "on the server", "to your device", "on device", "On the server", "to the server"];
+
+  it.each(PHRASE_BOUNDARY)("row %s between the word and the place", (_, between, ends) => {
+    for (const word of ["Spremljeno", "spremljena", "SPREMLJENO", "Promjene su spremljene"]) {
+      for (const place of PLACES_HR) {
+        expect(entries(`${word}${between}${place}`), `${word}|${place}`).toEqual(ends ? [HR] : []);
+        expect(entries(`Stanje: ${word}${between}${place}. Predano.`), `${word}|${place}`).toEqual(ends ? [HR] : []);
+      }
+    }
+    for (const word of ["Saved", "saved", "SAVED", "All changes saved"]) {
+      for (const place of PLACES_EN) {
+        expect(entries(`${word}${between}${place}`), `${word}|${place}`).toEqual(ends ? [EN] : []);
+        expect(entries(`Status: ${word}${between}${place}. Submitted.`), `${word}|${place}`).toEqual(ends ? [EN] : []);
+      }
+    }
+  });
+
+  // Row 36: an invisible character in place of the space leaves the words run together.
+  it("flags the Croatian word run together with the place by an invisible character", () => {
+    expect(entries(`Spremljeno${cp(0x200b)}na uređaju`)).toEqual([HR]);
+    expect(entries(`Spremljeno${cp(0xad)}na poslužitelju`)).toEqual([HR]);
+    expect(entries("Spremljenona uređaju")).toEqual([HR]);
+  });
+
+  // Row 37: the place itself must be one phrase.
+  it.each([
+    ["Spremljeno na, uređaju", HR],
+    ["Spremljeno na. Uređaju", HR],
+    ["Spremljeno na\nposlužitelju", HR],
+    ["Spremljeno na (uređaju)", HR],
+    ["Spremljeno na - poslužitelju", HR],
+    ["Spremljeno na svakom uređaju", HR],
+    ["Spremljeno na uređajima", HR],
+    ["Saved on. The server", EN],
+    ["Saved on the, server", EN],
+    ["Saved on this\ndevice", EN],
+    ["Saved on the (server)", EN],
+    ["Saved on - device", EN],
+    ["Saved on the new server", EN],
+    ["Saved on devices", EN],
+  ])("flags %j, where the place is not one phrase", (text, entry) => {
+    expect(entries(text)).toEqual([entry]);
+  });
+
+  // Rows 23, 38 and 40: the whole phrase, whatever stands before or after it.
+  it.each([
+    "Spremljeno na uređaju",
+    "Spremljeno na uređaju.",
+    "Spremljeno na poslužitelju, predano.",
+    "Spremljeno na uređaju!",
+    "Spremljeno na uređaju?",
+    "Spremljeno na uređaju; predano.",
+    "Spremljeno na uređaju: 14:05",
+    "Spremljeno na uređaju – 14:05",
+    "Spremljeno na uređaju\nPredano",
+    "Spremljeno na uređaju (prije 2 minute)",
+    "(spremljeno na uređaju)",
+    "„Spremljeno na poslužitelju”",
+    "Stanje: spremljeno na uređaju.",
+    "Stanje – spremljeno na poslužitelju",
+    "✓ Spremljeno na uređaju",
+    "Nije spremljeno na uređaju",
+    "Nije spremljeno na poslužitelju.",
+    "Još nije spremljeno na poslužitelju, ali je spremljeno na uređaju.",
+    "Spremljeno na uređaju. Spremljeno na poslužitelju. Predano.",
+    "Spremljeno na uređaju i na poslužitelju",
+    "Predano",
+    "Predano.",
+    "Predano. Spremljeno na poslužitelju.",
+    "Saved on device",
+    "Saved on device.",
+    "Saved on this device.",
+    "Saved on the server, submitted.",
+    "Saved to your device (2 minutes ago)",
+    "Status: saved on the server.",
+    "Not saved on this device",
+    "Saved on this device. Saved on the server. Submitted.",
+    "Submitted.",
+  ])("allows %j", (text) => {
+    expect(entries(text)).toEqual([]);
+  });
+
+  // Rows 24 and 39, and a bare word next to a whole phrase.
+  it.each([
+    ["Na uređaju: spremljeno", HR],
+    ["Na uređaju spremljeno", HR],
+    ["Na poslužitelju je spremljeno.", HR],
+    ["Spremljeno. Predano.", HR],
+    ["Spremljeno, predano", HR],
+    ["Spremljeno i predano", HR],
+    ["Predano. Spremljeno.", HR],
+    ["Spremljeno na uređaju. Spremljeno.", HR],
+    ["Spremljeno. Spremljeno na uređaju.", HR],
+    ["Spremljeno na uređaju, spremljeno i ovdje", HR],
+    ["Nije spremljeno. Na uređaju nema mjesta.", HR],
+    ["On this device: saved", EN],
+    ["On the server, saved.", EN],
+    ["Saved. Submitted.", EN],
+    ["Saved, submitted", EN],
+    ["Saved on this device. Saved.", EN],
+    ["Saved. Saved on this device.", EN],
+  ])("flags %j", (text, entry) => {
+    expect(entries(text)).toEqual([entry]);
+  });
+
+  // Found in the author's own attack: a digit that touches the word hid it.
+  it.each([
+    ["Spremljeno1", HR],
+    ["Spremljeno¹", HR],
+    ["3Spremljeno", HR],
+    ["Spremljeno2 na uređaju", HR],
+    ["Spremljena3. Na poslužitelju", HR],
+    ["Saved2", EN],
+    ["2saved", EN],
+    ["Saved1 on this device", EN],
+  ])("flags %j, where a digit touches the word", (text, entry) => {
+    expect(entries(text)).toEqual([entry]);
+  });
+
+  it("keeps where a phrase ends in the folded text of a contextual entry, and only there", () => {
+    expect(PHRASE_BREAK).not.toMatch(/[ \p{L}\p{N}]/u);
+    expect(foldPhrases("Spremljeno. Na uređaju")).toBe(`spremljeno${PHRASE_BREAK}na uredaju`);
+    expect(foldPhrases(`  Spremljeno \t na${cp(0xa0)}uređaju.  `)).toBe("spremljeno na uredaju");
+    expect(foldPhrases("Saved — on the server (2)")).toBe(`saved${PHRASE_BREAK}on the server${PHRASE_BREAK}2`);
+    expect(foldPhrases("a , . ! b")).toBe(`a${PHRASE_BREAK}b`);
+    expect(foldPhrases(" – ")).toBe("");
+    // Text without punctuation folds the same either way.
+    for (const text of ["Spremljeno na uređaju", "ČĆŽŠĐ  čćžšđ", "Ｓａｖｅｄ on device", `Skri${cp(0xad)}ven`]) {
+      expect(foldPhrases(text)).toBe(foldText(text));
+    }
+    // Every other entry is still matched across punctuation, as before.
+    expect(entries("Nestali. Podaci")).toEqual(["nestali podaci"]);
+    expect(entries("Dokaz, autorstva")).toEqual(["dokaz autorstva"]);
+    expect(entries("Verified\nauthorship")).toEqual(["verified authorship"]);
+    expect(entries("Missing - data")).toEqual(["missing data"]);
+  });
+
+  it("keeps the phrase boundary in both readings of markup", () => {
+    const inMarkup = (joined: string, spaced: string) => findForbiddenTermsInMarkup(joined, spaced).map((term) => term.entry);
+    expect(inMarkup("Spremljeno. Na uređaju", "Spremljeno.  Na uređaju")).toEqual([HR]);
+    expect(inMarkup("Spremljeno, na poslužitelju", "Spremljeno , na poslužitelju")).toEqual([HR]);
+    expect(inMarkup(`Spremljeno${PHRASE_BREAK}na uređaju`, `Spremljeno${PHRASE_BREAK}na uređaju`)).toEqual([HR]);
+    expect(inMarkup("Saved — on the server", "Saved  —  on the server")).toEqual([EN]);
+    expect(inMarkup("Spremljeno na uređaju", "Spremljeno  na uređaju")).toEqual([]);
+    expect(inMarkup("Spremljeno na uređaju.", "Spremljeno  na uređaju .")).toEqual([]);
+    expect(inMarkup(`Spremljeno na uređaju${PHRASE_BREAK}Predano`, `Spremljeno na uređaju${PHRASE_BREAK}Predano`)).toEqual([]);
+    // A split word is not cleared by a spaced reading whose own phrase is broken.
+    expect(inMarkup("Spremljeno. Na uređaju", "S premljeno. Na uređaju")).toEqual([HR]);
+  });
+
+  describe("in the files the scan reads", () => {
+    let root: string | undefined;
+    afterEach(() => {
+      if (root) rmSync(root, { recursive: true, force: true });
+      root = undefined;
+    });
+    const write = (relative: string, content: string): void => {
+      const file = path.join(root!, ...relative.split("/"));
+      mkdirSync(path.dirname(file), { recursive: true });
+      writeFileSync(file, content);
+    };
+    const scanned = () => scanUiText(root!).map((f) => [f.file, f.line, f.terms.map((t) => t.entry)]);
+
+    // The lines of the finding, in the files it names.
+    it("flags the lines of the finding in a page and in the catalogue", () => {
+      root = mkdtempSync(path.join(tmpdir(), "ductus-terms-"));
+      write(
+        "app/y/page.tsx",
+        [
+          "export default () => (",
+          "  <main>",
+          "    <p>Spremljeno. Na uređaju nema drugih promjena.</p>",
+          '    <button aria-label="Saved. On this device nothing else changed.">Dalje</button>',
+          "    <p><strong>Spremljeno.</strong> Na poslužitelju čeka jedna promjena.</p>",
+          "  </main>",
+          ");",
+          "",
+        ].join("\n"),
+      );
+      write("src/lib/i18n/messages.hr.ts", 'export const hr = { status: "Spremljeno. Na uređaju nema drugih promjena." };\n');
+      expect(scanned()).toEqual([
+        ["app/y/page.tsx", 3, [HR]],
+        ["app/y/page.tsx", 4, [EN]],
+        ["app/y/page.tsx", 5, [HR]],
+        ["src/lib/i18n/messages.hr.ts", 1, [HR]],
+      ]);
+    });
+
+    /** Rows of the plan that need markup: what it is, the JSX, the entries it must be reported for. */
+    const PHRASE_MARKUP: readonly [string, readonly string[], readonly string[]][] = [
+      ["7 sentence end at a source line break", ["<p>", "  Spremljeno.", "  Na uređaju nema promjena.", "</p>"], [HR]],
+      ["8 full stop in JSX text", ["<p>Spremljeno. Na uređaju nema drugih promjena.</p>"], [HR]],
+      ["8 full stop in a string expression", ['<p>{"Spremljeno. Na uređaju"}</p>'], [HR]],
+      ["8 full stop as an expression of its own", ['<p>Spremljeno{". "}Na uređaju</p>'], [HR]],
+      ["8 full stop in one branch", ['<p>Spremljeno{a ? "." : ""} na uređaju</p>'], [HR]],
+      ["14 comma that && may render", ['<p>Spremljeno{a && ","} na uređaju</p>'], [HR]],
+      ["15 dash as an expression", ['<p>Saved{" — "}on the server</p>'], [EN]],
+      ["6 line feed in a string expression", ['<p>{"Spremljeno\\nNa uređaju"}</p>'], [HR]],
+      ["6 line feed in a template", ["<p>{`Saved\\non this device`}</p>"], [EN]],
+      ["6 line feed as an expression", ['<p>Spremljeno{"\\n"}na uređaju</p>'], [HR]],
+      ["17 place in brackets around an element", ["<p>Spremljeno (<b>na uređaju</b>)</p>"], [HR]],
+      ["18 word in quotation marks", ["<p>„Spremljeno” <i>na uređaju</i></p>"], [HR]],
+      ["19 symbol in an element", ["<p>Spremljeno <span>✓</span> na uređaju</p>"], [HR]],
+      ["25 sentence end before a line break element", ["<td>Spremljeno.<br />Na uređaju</td>"], [HR]],
+      ["26 inline element, place inside", ["<p>Saved <em>on the server</em></p>"], []],
+      ["26 inline element around both", ["<p><span>Spremljeno</span> <span>na poslužitelju</span></p>"], []],
+      ["27 sentence end inside the emphasis", ["<p><strong>Spremljeno.</strong> Na poslužitelju čeka jedna promjena.</p>"], [HR]],
+      ["27 sentence end after the emphasis", ["<p><strong>Saved</strong>. On this device nothing changed.</p>"], [EN]],
+      ["27 comma in an element of its own", ["<p>Spremljeno<b>,</b> na uređaju</p>"], [HR]],
+      ["27 dash at the start of the emphasis", ["<p>Spremljeno <b>– na uređaju</b></p>"], [HR]],
+      ["27 colon at the end of a nested element", ["<p><span><b>Spremljeno:</b></span> <i>na uređaju</i></p>"], [HR]],
+      ["28 place in a block of its own", ["<div>Spremljeno<div>na uređaju</div></div>"], [HR]],
+      ["28 place in a paragraph of its own", ["<div>Saved <p>on this device</p></div>"], [EN]],
+      ["28 place in a component", ["<p>Spremljeno <Where>na uređaju</Where></p>"], [HR]],
+      ["28 place in a button", ["<label>Spremljeno <button>na poslužitelju</button></label>"], [HR]],
+      ["28 word in a block before the place", ["<div><h2>Spremljeno</h2>na uređaju</div>"], [HR]],
+      ["29 icon between the word and the place", ["<p>Spremljeno <Icon /> na uređaju</p>"], [HR]],
+      ["29 image between the word and the place", ['<p>Saved <img src="/tick.svg" alt="" /> on this device</p>'], [EN]],
+      ["29 horizontal rule between the word and the place", ["<div>Spremljeno<hr />na uređaju</div>"], [HR]],
+      ["30 computed value between the word and the place", ["<p>Spremljeno {n} na uređaju</p>"], [HR]],
+      ["30 computed value in a template", ["<p>{`Spremljeno ${n} na uređaju`}</p>"], [HR]],
+      ["30 computed value in a + chain", ['<p>{"Saved " + n + " on this device"}</p>'], [EN]],
+      ["30 computed value in a prop", ['<Field hint={"Spremljeno " + n + " na uređaju"} />'], [HR]],
+      ["30 call between the word and the place", ["<p>Spremljeno {format(n)} na poslužitelju</p>"], [HR]],
+      ["31 empty string between the word and the place", ['<p>Spremljeno {""}na uređaju</p>'], []],
+      ["32 entity for a space", ["<p>Saved&#32;on&nbsp;the&#x20;server</p>"], []],
+      ["33 decimal entity for a full stop", ["<p>Spremljeno&#46; Na uređaju</p>"], [HR]],
+      ["33 hexadecimal entity for a full stop", ["<p>Spremljeno&#x2E; Na uređaju</p>"], [HR]],
+      ["33 decimal entity for a comma", ["<p>Spremljeno&#44; na uređaju</p>"], [HR]],
+      ["33 entity for an em dash", ["<p>Saved &mdash; on the server</p>"], [EN]],
+      ["33 entity for an en dash", ["<p>Spremljeno &ndash; na uređaju</p>"], [HR]],
+      ["33 entity for an ellipsis", ["<p>Spremljeno&hellip; na uređaju</p>"], [HR]],
+      ["33 entity for a line feed", ["<p>Spremljeno&#10;na uređaju</p>"], [HR]],
+      ["33 entity for a quotation mark", ["<p>Spremljeno &bdquo;na uređaju&rdquo;</p>"], [HR]],
+      ["33 entity for a middle dot", ["<p>Saved &middot; on this device</p>"], [EN]],
+      ["34 HTML5 name for a full stop", ["<p>Spremljeno&period; Na uređaju</p>"], [HR]],
+      ["34 HTML5 name for a comma", ["<p>Spremljeno&comma; na uređaju</p>"], [HR]],
+      ["35 soft hyphen entity before the space", ["<p>Spremljeno&shy; na uređaju</p>"], []],
+      ["38 sentence end after the place", ["<p>Spremljeno na uređaju.</p>"], []],
+      ["38 another status after the place", ["<p>Spremljeno na poslužitelju, predano.</p>"], []],
+      ["38 phrase in brackets", ["<p>(Spremljeno na uređaju)</p>"], []],
+      ["38 sentence end after an emphasised place", ["<p>Spremljeno <b>na uređaju</b>. Predano.</p>"], []],
+      ["38 English phrase without an article", ["<p>Saved on device</p>"], []],
+      ["23 negation before the word", ["<p>Nije spremljeno na uređaju.</p>"], []],
+      ["24 place before the word", ["<p>Na uređaju: spremljeno</p>"], [HR]],
+      ["24 place before the word, in elements", ["<p><b>Na uređaju</b> <i>spremljeno</i></p>"], [HR]],
+      ["39 another status after a bare word", ["<p>Spremljeno. Predano.</p>"], [HR]],
+      ["43 attribute string", ['<button aria-label="Saved. On this device nothing else changed.">Dalje</button>'], [EN]],
+      ["43 attribute string with a comma", ['<img alt="Spremljeno, na poslužitelju još nije." />'], [HR]],
+      ["43 attribute string with a dash entity", ['<input placeholder="Saved &mdash; on the server" />'], [EN]],
+      ["43 attribute expression", ['<p title={"Spremljeno! Na poslužitelju je i dalje stara verzija."}>Stanje</p>'], [HR]],
+      ["43 attribute with a conditional", ['<Field hint={a ? "Spremljeno? Na uređaju da." : "Predano"} />'], [HR]],
+      ["43 attribute with an element", ["<Row label={<><b>Spremljeno.</b> Na uređaju</>} />"], [HR]],
+      ["43 allowed attribute string", ['<button aria-label="Spremljeno na uređaju, 14:05">Dalje</button>'], []],
+      ["43 allowed attribute expression", ['<p title={"Saved on the server."}>Stanje</p>'], []],
+      // Found in the author's own attack; none of these is a row of the plan.
+      ["attack: footnote mark on a bare word", ["<p>Spremljeno<sup>1</sup></p>"], [HR]],
+      ["attack: counter in an element after a bare word", ['<p>Spremljeno<span className="badge">3</span></p>'], [HR]],
+      ["attack: counter in an element before a bare word", ["<p><span>3</span>Saved</p>"], [EN]],
+      ["attack: footnote mark between the word and the place", ["<p>Spremljeno<sup>1</sup> na uređaju</p>"], [HR]],
+      ["attack: footnote mark after the place", ["<p>Spremljeno na uređaju<sup>1</sup></p>"], []],
+      ["attack: counter next to the whole phrase", ["<div><span>Spremljeno na uređaju</span><span>3</span></div>"], []],
+      ["attack: full stop for screen readers only", ['<p>Spremljeno<span className="sr-only">.</span> na uređaju</p>'], [HR]],
+      ["attack: full stop in a fragment", ["<p>Spremljeno<>.</> Na uređaju</p>"], [HR]],
+      ["attack: full stop in an empty element's neighbour", ["<p>Spremljeno <b></b>. Na uređaju</p>"], [HR]],
+      ["attack: space or full stop by a condition", ['<p>Spremljeno{a ? " " : ". "}na uređaju</p>'], [HR]],
+      ["attack: place or a clause by a condition", ['<p>Spremljeno{a ? " na uređaju" : ", na poslužitelju"}</p>'], [HR]],
+      ["attack: place in both branches, then a full stop", ['<p>Spremljeno{a ? " na uređaju" : " na poslužitelju"}.</p>'], []],
+      ["attack: line break element or a full stop", ['<p>Spremljeno{a ? <br /> : ". "}na uređaju</p>'], [HR]],
+      ["attack: component children with a sentence end", ["<Trans>Spremljeno. <b>Na uređaju</b></Trans>"], [HR]],
+      ["attack: template in an attribute with a computed tail", ["<p aria-label={`Spremljeno. ${n}`}>Stanje</p>"], [HR]],
+      ["attack: full stop by a condition inside a template", ['<p title={`Spremljeno${a ? "." : ""} na uređaju`}>Stanje</p>'], [HR]],
+      ["attack: attribute string over two lines", ['<p title="Spremljeno', '  na uređaju">Stanje</p>'], [HR]],
+      ["attack: zero width space entity in place of the space", ["<p>Spremljeno&#x200B;na uređaju</p>"], [HR]],
+      ["attack: carriage return entity", ["<p>Spremljeno&#13;na uređaju</p>"], [HR]],
+      ["attack: tab entity", ["<p>Spremljeno&#9;na uređaju</p>"], []],
+      ["attack: labels run together, sentence end between", ["<div><span>Spremljeno.</span><span>Na uređaju</span></div>"], [HR]],
+      ["attack: place split over two elements", ["<p>Spremljeno <b>na</b> <i>uređaju</i></p>"], []],
+      ["attack: comma between the elements of the place", ["<p>Spremljeno <b>na</b>, <i>uređaju</i></p>"], [HR]],
+      ["attack: place in brackets inside a link", ['<p>Spremljeno <a href="/x">(na uređaju)</a></p>'], [HR]],
+      ["attack: place only in a title", ['<p>Spremljeno <abbr title="na uređaju">ovdje</abbr></p>'], [HR]],
+      ["attack: form control between the word and the place", ["<label>Spremljeno <input /> na uređaju</label>"], [HR]],
+      ["attack: computed value or the place", ['<p>Spremljeno{n ?? " na uređaju"}</p>'], [HR]],
+      ["attack: array of sentences joined in code", ['<p>{["Spremljeno.", "Na uređaju"].join(" ")}</p>'], [HR]],
+      [
+        "attack: more alternatives than are kept between the word and the place",
+        ["<p>", "  Spremljeno", ...Array.from({ length: 8 }, (_, i) => `  {a${i} ? " " : "\\t"}`), "  na uređaju", "</p>"],
+        [HR],
+      ],
+    ];
+
+    it.each(PHRASE_MARKUP)("row %s", (_, lines, expected) => {
+      root = mkdtempSync(path.join(tmpdir(), "ductus-terms-"));
+      const source = ["export const Case = ({ a, n }: Props) => (", ...lines.map((line) => `  ${line}`), ");", ""];
+      write("src/components/Case.tsx", source.join("\n"));
+      const found = scanUiText(root);
+      // Each entry is reported, and reported once.
+      expect(found.flatMap((f) => f.terms.map((t) => t.entry))).toEqual(expected);
+      for (const finding of found) {
+        expect(finding.line).toBeGreaterThan(1);
+        expect(finding.line).toBeLessThanOrEqual(lines.length + 1);
+      }
+    });
+
+    it("keeps the phrase boundary in catalogues, manifests, metadata and every other module", () => {
+      root = mkdtempSync(path.join(tmpdir(), "ductus-terms-"));
+      write(
+        "src/lib/i18n/messages.hr.ts",
+        [
+          "export const messages = (n: number) => ({",
+          '  status: "Spremljeno. Na uređaju nema drugih promjena.",',
+          '  local: "Spremljeno na uređaju.",',
+          '  count: "Spremljeno {count} na uređaju",',
+          "  computed: `Spremljeno ${n} na uređaju`,",
+          '  lines: "Spremljeno\\nna uređaju",',
+          '  server: "Spremljeno na poslužitelju, predano.",',
+          "  after: `Spremljeno na uređaju u ${n}`,",
+          '  dash: "Spremljeno – na poslužitelju",',
+          "  bare: `Spremljeno ${n}`,",
+          "});",
+          "",
+        ].join("\n"),
+      );
+      write(
+        "src/lib/i18n/en.json",
+        ["{", '  "a": "Saved? On this device, yes.",', '  "b": "Saved on this device.",', '  "c": "Saved — on the server nothing yet."', "}", ""].join("\n"),
+      );
+      write("src/domain/sync/labels.ts", 'export const A = "Saved. On the server: 2 changes waiting.";\nexport const B = "Saved on the server: 2";\n');
+      write("app/manifest.webmanifest", '{\n  "name": "Spremljeno, na uređaju"\n}\n');
+      write(
+        "app/rad/page.tsx",
+        ['export const metadata = { title: "Spremljeno! Na uređaju", description: "Spremljeno na uređaju!" };', "export default () => <p>Predano</p>;", ""].join(
+          "\n",
+        ),
+      );
+      // A module outside the list is checked against the Croatian entries only.
+      write(
+        "src/domain/sync/state.ts",
+        ['export const A = "spremljeno, na posluzitelju";', 'export const B = "spremljeno na posluzitelju";', 'export const C = "saved. on the server";', ""].join("\n"),
+      );
+      const key = (row: readonly unknown[]): string => `${String(row[0])}:${String(row[1]).padStart(3, "0")}`;
+      expect(scanned().sort((x, y) => key(x).localeCompare(key(y)))).toEqual([
+        ["app/manifest.webmanifest", 2, [HR]],
+        ["app/rad/page.tsx", 1, [HR]],
+        ["src/domain/sync/labels.ts", 1, [EN]],
+        ["src/domain/sync/state.ts", 1, [HR]],
+        ["src/lib/i18n/en.json", 2, [EN]],
+        ["src/lib/i18n/en.json", 4, [EN]],
+        ["src/lib/i18n/messages.hr.ts", 2, [HR]],
+        ["src/lib/i18n/messages.hr.ts", 4, [HR]],
+        ["src/lib/i18n/messages.hr.ts", 5, [HR]],
+        ["src/lib/i18n/messages.hr.ts", 6, [HR]],
+        ["src/lib/i18n/messages.hr.ts", 9, [HR]],
+        ["src/lib/i18n/messages.hr.ts", 10, [HR]],
+      ]);
+    });
   });
 });

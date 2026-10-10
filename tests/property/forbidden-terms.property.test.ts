@@ -127,3 +127,44 @@ test.prop([fc.array(fc.constantFrom("Nestali", "podaci", " ", "  ", "\t", "\n", 
     expect(words(value)).toEqual(words(decodeEntities(pieces.join(""))));
   },
 );
+
+// QA of fdbd6de: the place must follow "spremljeno" or "saved" in the same phrase.
+const HORIZONTAL = [" ", "\t", String.fromCodePoint(0xa0), String.fromCodePoint(0x202f), String.fromCodePoint(0x2009)];
+const ENDS_PHRASE = [".", ",", "!", "?", ";", ":", "-", "–", "—", "…", "(", ")", "[", '"', "'", "„", "”", "«", "/", "|", "•", "✓", "&", "\n", "\r"];
+const PHRASES: readonly (readonly [word: string, place: string])[] = [
+  ["Spremljeno", "na uređaju"],
+  ["Spremljena", "na poslužitelju"],
+  ["Saved", "on this device"],
+  ["Saved", "to the server"],
+  ["Saved", "on device"],
+];
+const gap = fc.array(fc.constantFrom(...HORIZONTAL, ...ENDS_PHRASE), { minLength: 1, maxLength: 6 }).map((chars) => chars.join(""));
+const onlySpace = fc.array(fc.constantFrom(...HORIZONTAL), { minLength: 1, maxLength: 6 }).map((chars) => chars.join(""));
+
+test.prop([fc.constantFrom(...PHRASES), gap])("the place counts only when nothing but white space of one line stands before it", ([word, place], between) => {
+  const ends = [...between].some((char) => ENDS_PHRASE.includes(char));
+  expect(entriesOf(`${word}${between}${place}`).length).toBe(ends ? 1 : 0);
+});
+
+test.prop([fc.constantFrom(...PHRASES), onlySpace, fc.constantFrom(...ENDS_PHRASE), fc.constantFrom("", " ")])(
+  "a phrase that ends inside the place leaves the word bare",
+  ([word, place], space, mark, after) => {
+    const [first = "", ...rest] = place.split(" ");
+    expect(entriesOf(`${word}${space}${first}${mark}${after}${rest.join(" ")}`).length).toBe(1);
+  },
+);
+
+test.prop([fc.constantFrom(...PHRASES), onlySpace, gap, fc.constantFrom("Predano", "Submitted", "14:05", "")])(
+  "the whole phrase is allowed whatever ends it",
+  ([word, place], space, close, after) => {
+    expect(entriesOf(`${word}${space}${place.replaceAll(" ", space)}${close}${after}`)).toEqual([]);
+  },
+);
+
+test.prop([fc.constantFrom(...PHRASES), gap, fc.boolean()])("an element boundary never joins what punctuation keeps apart", ([word, place], between, inside) => {
+  const ends = [...between].some((char) => ENDS_PHRASE.includes(char));
+  // The two readings of `<b>word between</b>place` and of `word<b>between place</b>`.
+  const joined = `${word}${between}${place}`;
+  const spaced = inside ? ` ${word}${between} ${place}` : `${word} ${between}${place} `;
+  expect(findForbiddenTermsInMarkup(joined, spaced).length).toBe(ends ? 1 : 0);
+});

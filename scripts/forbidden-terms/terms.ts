@@ -3,7 +3,9 @@
  * "Rječnik sučelja"). Matching runs on folded text: NFKC, Croatian lower case,
  * diacritics removed, invisible characters dropped, punctuation and white
  * space of any kind turned into single spaces. Patterns are written against that folded form, so `autentica?n`
- * catches "autentičnost", "AUTENTICNOST" and "autentičan". A pattern covers
+ * catches "autentičnost", "AUTENTICNOST" and "autentičan". The two contextual
+ * entries are matched on a form that also keeps where a phrase ends
+ * (`foldPhrases`). A pattern covers
  * the gender, number and case of its entry and the forms derived from it; it
  * does not add synonyms the dictionary does not list.
  */
@@ -24,6 +26,8 @@ export interface ForbiddenTerm {
   /**
    * Set when the pattern allows the word in front of certain words
    * ("spremljeno na uređaju"), so whether it matches depends on what follows.
+   * Such a pattern is matched on `foldPhrases`, where only white space of one
+   * line keeps the following words in the phrase of the word.
    * `word` is the same word whatever follows it, a literal like `pattern`.
    * See `findForbiddenTermsInMarkup`.
    */
@@ -35,6 +39,10 @@ export interface ForbiddenTerm {
 // not touch the term, so "rizik" does not match inside another word. The one
 // exception is `sumnj`, which matches anywhere in a word so that derived forms
 // ("posumnjati", "osumnjičen") are caught; no unrelated word contains it.
+// The two contextual patterns only keep letters away from the word: a digit
+// that touches it (a footnote mark or a counter set next to the word by an
+// element, `Spremljeno<sup>1</sup>`) does not make it another word, and it
+// does not say where the work was saved.
 const NOTHING = "(ništa; činjenice se prikazuju bez oznake)";
 const AI_ORIGIN = "iz AI pomoćnika (model, vrijeme)";
 const INTACT = "zapis je cjelovit i neizmijenjen od primitka";
@@ -77,7 +85,7 @@ export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
     entry: "spremljeno (bez pojašnjenja)",
     instead: "spremljeno na uređaju / spremljeno na poslužitelju / predano",
     lang: "hr",
-    pattern: /(?<![\p{L}\p{N}])spremljen\p{L}*(?![\p{L}\p{N}])(?! na (?:uredaju|posluzitelju)(?![\p{L}\p{N}]))/u,
+    pattern: /(?<!\p{L})spremljen\p{L}*(?!\p{L})(?! na (?:uredaju|posluzitelju)(?![\p{L}\p{N}]))/u,
     contextual: { word: /(?<![\p{L}\p{N}])spremljen\p{L}*(?![\p{L}\p{N}])/u },
   },
   // The same entries in the English interface (D-90, point 3).
@@ -122,7 +130,7 @@ export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
     instead: "saved on this device / saved on the server / submitted",
     lang: "en",
     pattern:
-      /(?<![\p{L}\p{N}])saved(?![\p{L}\p{N}])(?! (?:on|to) (?:the |this |your )?(?:device|server)(?![\p{L}\p{N}]))/u,
+      /(?<!\p{L})saved(?!\p{L})(?! (?:on|to) (?:the |this |your )?(?:device|server)(?![\p{L}\p{N}]))/u,
     contextual: { word: /(?<![\p{L}\p{N}])saved(?![\p{L}\p{N}])/u },
   },
 ];
@@ -140,21 +148,61 @@ const INVISIBLE = /[\p{Cf}\u115F\u1160\u3164\uFFA0]/gu;
  * the letter itself.
  */
 export function foldText(text: string): string {
+  return foldLetters(text)
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+/** The letters and digits of `text` as the patterns expect them; everything between them is left as written. */
+function foldLetters(text: string): string {
   return text
     .normalize("NFKC")
     .replace(INVISIBLE, "")
     .toLocaleLowerCase("hr")
     .replaceAll("đ", "d")
     .normalize("NFD")
-    .replace(/\p{M}/gu, "")
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\p{M}/gu, "");
+}
+
+/**
+ * Stands in folded text wherever a phrase ends. It is not a space, so the
+ * spaces written in a pattern do not match it, and it is not a letter or a
+ * digit, so a word still ends at it. Markup readers put it into the text they
+ * hand over wherever the phrase cannot go on (see `scan.ts`).
+ */
+export const PHRASE_BREAK = "\n";
+
+/**
+ * White space that keeps two words in one phrase on one line: spaces of every
+ * width and the tab. U+2028 (line separator) is on this side only because the
+ * tests of the earlier QA round hold it as a space.
+ */
+const SPACES_ONLY = /^[\p{Zs}\t\p{Zl}]+$/u;
+
+/**
+ * Folds text like `foldText`, but keeps where a phrase ends. Between two words
+ * of one phrase there is white space of one line and nothing else. Any other
+ * run of characters that are not letters or digits becomes `PHRASE_BREAK`:
+ * sentence punctuation, a comma, a dash or hyphen, a bracket, a quotation
+ * mark, a symbol, an emoji or a line break, with or without spaces around it.
+ *
+ * Contextual entries are matched on this form, so the words that make
+ * "spremljeno" acceptable must follow it in the same phrase: "Spremljeno na
+ * uređaju." is acceptable, "Spremljeno. Na uređaju nema promjena." is not.
+ */
+export function foldPhrases(text: string): string {
+  return foldLetters(text)
+    .replace(/[^\p{L}\p{N}]+/gu, (run) => (SPACES_ONLY.test(run) ? " " : PHRASE_BREAK))
     .trim();
 }
 
 /** Dictionary entries that occur in `text`, in dictionary order; with `lang`, only the entries of that language. */
 export function findForbiddenTerms(text: string, lang?: Language): ForbiddenTerm[] {
   const folded = foldText(text);
-  return FORBIDDEN_TERMS.filter((entry) => (lang === undefined || entry.lang === lang) && entry.pattern.test(folded));
+  const phrases = foldPhrases(text);
+  return FORBIDDEN_TERMS.filter(
+    (entry) => (lang === undefined || entry.lang === lang) && entry.pattern.test(entry.contextual ? phrases : folded),
+  );
 }
 
 /**
@@ -171,13 +219,16 @@ export function findForbiddenTerms(text: string, lang?: Language): ForbiddenTerm
  * match came from two texts running together
  * (`<span>Spremljeno na uređaju</span><span>Predano</span>`). When the spaced
  * reading does not hold the whole word at all, an element split the word
- * itself (`<b>S</b>premljeno`) and there is nothing to clear it with.
+ * itself (`<b>S</b>premljeno`) and there is nothing to clear it with. Both
+ * readings of a contextual entry keep where a phrase ends (`foldPhrases`).
  */
 export function findForbiddenTermsInMarkup(joined: string, spaced: string): ForbiddenTerm[] {
   const shown = foldText(joined);
   const apart = foldText(spaced);
+  const shownPhrases = foldPhrases(joined);
+  const apartPhrases = foldPhrases(spaced);
   return FORBIDDEN_TERMS.filter((entry) => {
     if (!entry.contextual) return entry.pattern.test(shown) || entry.pattern.test(apart);
-    return entry.pattern.test(shown) && (entry.pattern.test(apart) || !entry.contextual.word.test(apart));
+    return entry.pattern.test(shownPhrases) && (entry.pattern.test(apartPhrases) || !entry.contextual.word.test(apartPhrases));
   });
 }

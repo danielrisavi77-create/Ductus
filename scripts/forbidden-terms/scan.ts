@@ -4,7 +4,7 @@ import path from "node:path";
 import ts from "typescript";
 
 import { decodeEntities } from "./entities";
-import { FORBIDDEN_TERMS, findForbiddenTerms, findForbiddenTermsInMarkup, type ForbiddenTerm } from "./terms";
+import { FORBIDDEN_TERMS, PHRASE_BREAK, findForbiddenTerms, findForbiddenTermsInMarkup, type ForbiddenTerm } from "./terms";
 
 /**
  * Finds interface text in the source tree and checks it against the
@@ -23,7 +23,9 @@ import { FORBIDDEN_TERMS, findForbiddenTerms, findForbiddenTermsInMarkup, type F
  *   and attribute strings are read as React renders them: HTML entities are
  *   decoded and line breaks follow the JSX rules. The content of every element
  *   is also read as one text, put together from its pieces, so a phrase that
- *   markup splits (`Nestali <strong>podaci</strong>`) is still found.
+ *   markup splits (`Nestali <strong>podaci</strong>`) is still found. A phrase
+ *   goes on through an inline element and a `<br />`; it ends at any other
+ *   element, at a component and at a computed value (`PHRASE_BREAK`).
  * - Any other `.ts` module under `app/**`: the Next.js metadata only, that is
  *   the `metadata` export, what `generateMetadata` and `generateImageMetadata`
  *   return, and the `alt` export of `opengraph-image` and `twitter-image`.
@@ -164,7 +166,7 @@ function isTechnicalAttribute(name: string): boolean {
  * content). Their content is read as part of the parent's text and joined to
  * it without a space, as the browser does: `Sum<b>njivo</b>` is one word. Any
  * other element, and every component, is a text of its own: it is read by
- * itself and stands in the parent's text between spaces.
+ * itself and stands in the parent's text between phrase breaks.
  */
 export const INLINE_ELEMENTS: ReadonlySet<string> = new Set([
   "a",
@@ -218,14 +220,21 @@ export function isUiTextModule(file: string): boolean {
   return UI_TEXT_PATTERNS.some((pattern) => matchesSegments(pattern, segments));
 }
 
-/** Takes a piece of text read from `node`; `at` is where the text starts when that is not where the node starts. */
-type Collect = (node: ts.Node, text: string, at?: number) => void;
+/**
+ * Takes a piece of text read from `node`; `at` is where the text starts when
+ * that is not where the node starts. `check` is the text to check when it is
+ * not the text to show: the same text with a phrase break at computed parts.
+ */
+type Collect = (node: ts.Node, text: string, at?: number, check?: string) => void;
 
 /** One text in the two readings `findForbiddenTermsInMarkup` takes: pieces joined as rendered, and with a space at every element boundary. */
 type Reading = readonly [joined: string, spaced: string];
 
 const EMPTY: Reading = ["", ""];
-const UNKNOWN: Reading = [" ", " "];
+/** Something that is shown but cannot be read: no phrase goes on through it. */
+const UNKNOWN: Reading = [PHRASE_BREAK, PHRASE_BREAK];
+/** A `<br />`: the words on both sides are still read as one phrase. */
+const LINE_BREAK: Reading = [" ", " "];
 /** Most readings kept for one text; see `inSequence` in `componentText`. */
 const MAX_READINGS = 64;
 
@@ -320,7 +329,8 @@ function allStrings(node: ts.Node, collect: Collect): void {
       return;
     }
     if (ts.isTemplateExpression(current)) {
-      collect(current, [current.head.text, ...current.templateSpans.map((s) => s.literal.text)].join(" "));
+      const pieces = [current.head.text, ...current.templateSpans.map((s) => s.literal.text)];
+      collect(current, pieces.join(" "), undefined, pieces.join(PHRASE_BREAK));
     }
     ts.forEachChild(current, visit);
   };
@@ -371,7 +381,7 @@ function componentText(source: ts.SourceFile, reader: Reader): void {
 
   // Every text an expression can render. Both branches of `?:`, `||` and `??`
   // are alternatives, `&&` can also render nothing, `+` and templates put
-  // their parts in a row, and anything computed is unknown text: a space.
+  // their parts in a row, and anything computed is unknown text.
   const expressionReadings = (expression: ts.Expression, alone: Reading[]): Reading[] => {
     if (isPlainString(expression)) return exactly(expression.text);
     if (RENDERS_NOTHING.has(expression.kind)) return [EMPTY];
@@ -423,10 +433,14 @@ function componentText(source: ts.SourceFile, reader: Reader): void {
     );
 
   // An element as it stands in the text around it. An element without
-  // children shows something unknown (an icon, a line break); `wbr` shows
-  // nothing. A fragment is its content. See `INLINE_ELEMENTS` for the rest.
+  // children shows something unknown (an icon), except `br`, a line break,
+  // and `wbr`, which shows nothing. A fragment is its content. Any element
+  // that is not inline ends the phrase on both sides; see `INLINE_ELEMENTS`.
   const elementReadings = (node: JsxNode, alone: Reading[]): Reading[] => {
-    if (ts.isJsxSelfClosingElement(node)) return [node.tagName.getText(source) === "wbr" ? EMPTY : UNKNOWN];
+    if (ts.isJsxSelfClosingElement(node)) {
+      const tag = node.tagName.getText(source);
+      return [tag === "wbr" ? EMPTY : tag === "br" ? LINE_BREAK : UNKNOWN];
+    }
     const content = contentReadings(node, alone);
     if (ts.isJsxFragment(node)) {
       absorbed.add(node);
@@ -434,7 +448,8 @@ function componentText(source: ts.SourceFile, reader: Reader): void {
     }
     const inline = INLINE_ELEMENTS.has(node.openingElement.tagName.getText(source));
     if (inline) absorbed.add(node);
-    return content.map(([joined, spaced]): Reading => [inline ? joined : ` ${joined} `, ` ${spaced} `]);
+    if (inline) return content.map(([joined, spaced]): Reading => [joined, ` ${spaced} `]);
+    return content.map(([joined, spaced]): Reading => [PHRASE_BREAK + joined + PHRASE_BREAK, PHRASE_BREAK + spaced + PHRASE_BREAK]);
   };
 
   const textStart = (node: ts.JsxText): number => node.end - node.text.trimStart().length;
@@ -493,6 +508,8 @@ interface Located extends UiText {
   readonly end: number;
   /** Set for a piece of a unit; see `Reader`. */
   readonly part?: true;
+  /** The text to check when it is not `text`; see `Collect`. */
+  readonly check?: string;
 }
 
 /** Text put together from pieces: where it starts, the span that holds its pieces and its readings. */
@@ -531,9 +548,9 @@ function locate(file: string, content: string, kind: Kind): Read {
   const lineAt = (position: number): number => source.getLineAndCharacterOfPosition(position).line + 1;
   const collect =
     (part?: true): Collect =>
-    (node, text, at) => {
+    (node, text, at, check) => {
       const start = at ?? node.getStart(source);
-      texts.push({ file, line: lineAt(start), text, start, end: node.getEnd(), ...(part && { part }) });
+      texts.push({ file, line: lineAt(start), text, start, end: node.getEnd(), ...(part && { part }), ...(check !== undefined && { check }) });
     };
   if (kind === "catalogue") allStrings(source, collect());
   else {
@@ -558,10 +575,8 @@ export function extractUiText(file: string, content: string, kind: Kind): UiText
 }
 
 /** The strings of a code file that lie outside everything in `read`. */
-function stringsOutside(read: readonly Located[], file: string, content: string): UiText[] {
-  return locate(file, content, "catalogue")
-    .texts.filter((text) => !read.some((seen) => seen.start <= text.start && text.end <= seen.end))
-    .map(withoutSpan);
+function stringsOutside(read: readonly Located[], file: string, content: string): Located[] {
+  return locate(file, content, "catalogue").texts.filter((text) => !read.some((seen) => seen.start <= text.start && text.end <= seen.end));
 }
 
 /**
@@ -573,7 +588,7 @@ function stringsOutside(read: readonly Located[], file: string, content: string)
 function findingsIn(file: string, read: Read): Finding[] {
   const placed: { at: number; start: number; end: number; finding: Finding }[] = [];
   for (const text of read.texts) {
-    const terms = findForbiddenTerms(text.text).filter((term) => !(text.part && term.contextual));
+    const terms = findForbiddenTerms(text.check ?? text.text).filter((term) => !(text.part && term.contextual));
     if (terms.length > 0) placed.push({ at: text.start, start: text.start, end: text.end, finding: { ...withoutSpan(text), terms } });
   }
   const pieces = [...placed];
@@ -640,7 +655,7 @@ export function scanUiText(root: string): Finding[] {
     const read = kind === null ? NOTHING_READ : locate(file, content, kind);
     findings.push(...findingsIn(file, read));
     if (kind === "catalogue" || !isCode(file)) continue;
-    for (const text of stringsOutside(read.texts, file, content)) check(text, findForbiddenTerms(text.text, "hr"));
+    for (const text of stringsOutside(read.texts, file, content)) check(withoutSpan(text), findForbiddenTerms(text.check ?? text.text, "hr"));
   }
   return findings;
 }
@@ -665,7 +680,7 @@ export function findMisplacedUiText(root: string): UiText[] {
     const kind = scanKind(file);
     const read = kind === null ? NOTHING_READ : locate(file, content, kind);
     for (const text of stringsOutside(read.texts, file, content)) {
-      if (looksLikeCroatianUiText(text.text)) misplaced.push(text);
+      if (looksLikeCroatianUiText(text.text)) misplaced.push(withoutSpan(text));
     }
   }
   return misplaced;
