@@ -802,6 +802,8 @@ test("the SESSIONS.md table and ORKESTRATOR.md match the threshold constants", (
   assert.match(hook, new RegExp(`tek od ${ORCHESTRATOR_REMIND_AT / 1000}k, a od ${ORCHESTRATOR_LIMIT / 1000}k`));
   const rules = fs.readFileSync(path.join(repo, "docs/ORKESTRATOR.md"), "utf8");
   assert.match(rules, /prvi podsjetnik hooka dolazi na 300\.000/);
+  assert.match(rules, /svaka sesija pokrenuta u istom checkoutu/);
+  assert.match(sessions, /svaka sesija pokrenuta u istom checkoutu/);
 });
 
 test("the orchestrator is told about the 400k safety limit of ORKESTRATOR.md §7 from 400k on", () => {
