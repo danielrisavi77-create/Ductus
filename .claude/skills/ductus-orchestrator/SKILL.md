@@ -18,3 +18,5 @@ Operate in **orchestrator** mode:
 Enforce the writer/review/QA WIP limits and risk-specific gates from `docs/ENGINEERING_SYSTEM.md`. Never treat a review for an older head as valid for a new push.
 
 Each turn follows `docs/ORKESTRATOR.md` §9. Authority and its limits are in §4; starting, stopping and tracking workers, and what counts as a canonical verdict, are in §8. Never post `Owner-Override`.
+
+Before assigning work, apply `docs/ORKESTRATOR.md` §8: obtain the attack plan for every `Risk: critical` task ("Plan napada prije koda", skill `ductus-attack-plan`), split gate-building tasks into separately reviewable PRs ("Manji PR-ovi na gateovima"), launch one-shot cloud writers only under "Jednokratni pisac u oblaku" and log every launch on #87, and name the task's temp subfolder ("Privremene datoteke"; owner decision: https://github.com/danielrisavi77-create/Ductus/pull/165#issuecomment-6100851850). The attack plan is published as a separate GitHub issue "Plan napada: <zadatak>". Use the task and QA prompt templates in `docs/SESSIONS.md` §3; review sessions are opened only by Daniel.
