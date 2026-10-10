@@ -1,0 +1,261 @@
+/**
+ * Local-only saving of one document into the journal (F-3 step 1a, #197).
+ *
+ * The editor calls `edit()` on every change and `propose(doc)` with the
+ * debounced canonical candidate. Saves run one at a time per document and the
+ * newest candidate wins, so this tab never races its own `expectedLocalSeq`
+ * and the snapshot never falls back to older text. State changes go through
+ * `syncReducer`, and LOCAL_DURABLE ("Spremljeno na uređaju") is reached only
+ * after `saveLocal` resolved for exactly the text the editor holds.
+ *
+ * No network, no ACK, no logout: journal meta only ever records LOCAL_DURABLE
+ * (written by `saveLocal`); transient states live in memory only.
+ */
+
+import {
+  documentsEqual, emptyDocument, validateDocument, type CanonicalDocument,
+} from "../../domain/document";
+import { restoreSyncState } from "../../domain/sync/restore";
+import {
+  syncReducer, type LocalSaveFailureReason, type SyncEvent, type SyncState,
+} from "../../domain/sync/states";
+import { storableDocument } from "../../editor/storable-text";
+import type { AtomicDexieJournal } from "./atomic-dexie-journal";
+
+/**
+ * Why saving stopped. `limit` is this module's own bound on the queue (no
+ * compaction before step 2); `stale` means another writer moved the journal.
+ */
+export type SaverFailure = LocalSaveFailureReason | "limit" | "stale";
+
+export type QueueCapacity = "ok" | "near" | "full";
+
+export type SaverSnapshot = {
+  readonly state: SyncState;
+  /** Sticky until a save succeeds, so the next keystroke cannot hide it. */
+  readonly failure: SaverFailure | null;
+  readonly capacity: QueueCapacity;
+};
+
+export type SaverLimits = { readonly maxPendingRows: number; readonly maxPendingChars: number };
+
+/** Rows and JSON characters; `near` from 80 %. Measured in the PR. */
+export const DEFAULT_SAVER_LIMITS: SaverLimits = {
+  maxPendingRows: 5_000, maxPendingChars: 64 * 1024 * 1024,
+};
+
+export type LoadResult =
+  | { kind: "ready"; document: CanonicalDocument }
+  /** Sticky or unreadable store: show it, never overwrite it. */
+  | { kind: "recovery"; document: CanonicalDocument | null }
+  | { kind: "unavailable" };
+
+export type SaverDeps = {
+  readonly now?: () => Date;
+  readonly newTransactionId?: () => string;
+  readonly limits?: SaverLimits;
+};
+
+/** Failures after which writing again could overwrite or hide work. */
+const HALTING: ReadonlySet<SaverFailure> = new Set(["corrupt", "stale", "unavailable"]);
+
+export function failureOf(error: unknown): SaverFailure {
+  const code = (error as { code?: unknown } | null)?.code;
+  switch (code) {
+    case "incomplete_store": case "sticky_state": return "corrupt";
+    case "stale_local_sequence": return "stale";
+    case "logout_in_progress": case "logout_blocked": return "unavailable";
+  }
+  const names = [error, (error as { inner?: unknown } | null)?.inner]
+    .map((e) => (e as { name?: unknown } | null)?.name);
+  if (names.includes("QuotaExceededError")) return "quota";
+  if (names.some((n) => typeof n === "string" &&
+    /^(MissingAPI|OpenFailed|DatabaseClosed|InvalidState|Security)Error$/.test(n))) {
+    return "unavailable";
+  }
+  return "unknown";
+}
+
+function reasonOf(failure: SaverFailure): LocalSaveFailureReason {
+  return failure === "limit" ? "quota" : failure === "stale" ? "unknown" : failure;
+}
+
+type Candidate = { doc: CanonicalDocument; gen: number };
+
+export class LocalDocumentSaver {
+  private state: SyncState = "EDITING";
+  private failure: SaverFailure | null = null;
+  private loaded = false;
+  private halted = false;
+  private seq = 0;
+  private baseRevision = 0;
+  private durable: CanonicalDocument | null = null;
+  private rows = 0;
+  private chars = 0;
+  /** Bumped by every `edit()`; a save may claim the text only at its own gen. */
+  private gen = 0;
+  private next: Candidate | null = null;
+  private flight: Promise<void> | null = null;
+  private readonly listeners = new Set<(snapshot: SaverSnapshot) => void>();
+  private readonly now: () => Date;
+  private readonly newId: () => string;
+  private readonly limits: SaverLimits;
+
+  constructor(
+    private readonly journal: AtomicDexieJournal,
+    private readonly documentId: string,
+    deps: SaverDeps = {},
+  ) {
+    this.now = deps.now ?? (() => new Date());
+    this.newId = deps.newTransactionId ?? (() => crypto.randomUUID());
+    this.limits = deps.limits ?? DEFAULT_SAVER_LIMITS;
+  }
+
+  snapshot(): SaverSnapshot {
+    const { maxPendingRows: rows, maxPendingChars: chars } = this.limits;
+    const capacity: QueueCapacity = this.rows >= rows || this.chars >= chars ? "full"
+      : this.rows >= rows * 0.8 || this.chars >= chars * 0.8 ? "near" : "ok";
+    return { state: this.state, failure: this.failure, capacity };
+  }
+
+  subscribe(listener: (snapshot: SaverSnapshot) => void): () => void {
+    this.listeners.add(listener);
+    return () => { this.listeners.delete(listener); };
+  }
+
+  /**
+   * Reads the journal once. A store that cannot be trusted yields `recovery`
+   * and leaves the saver halted: an empty editor must never be journalled
+   * over text that merely failed to load (#197 attack 17).
+   */
+  async load(): Promise<LoadResult> {
+    try {
+      const contents = await this.journal.read(this.documentId);
+      const { snapshot, meta, pending } = contents;
+      const stored = snapshot ? validateDocument(snapshot.document) : null;
+      if ((meta && !snapshot) || (snapshot && !meta) || (stored && !stored.ok)) {
+        return this.haltWith("corrupt", { kind: "recovery", document: null });
+      }
+      const restored = restoreSyncState(contents);
+      if (restored === "CONFLICT" || restored === "RECOVERY_REQUIRED") {
+        this.halted = true;
+        this.state = restored;
+        this.emit();
+        return { kind: "recovery", document: stored?.ok ? stored.doc : null };
+      }
+      this.loaded = true;
+      this.seq = meta?.localSeq ?? 0;
+      this.baseRevision = snapshot?.revision ?? 0;
+      this.durable = stored?.ok ? stored.doc : null;
+      this.rows = pending.length;
+      this.chars = pending.reduce((sum, row) => sum + JSON.stringify(row.tx).length, 0);
+      // Step 1 has no server: whatever meta says, the most this tab can
+      // claim is that the bytes are on this device.
+      this.state = this.durable ? "LOCAL_DURABLE" : "EDITING";
+      this.emit();
+      return { kind: "ready", document: this.durable ?? emptyDocument() };
+    } catch (error) {
+      const failure = failureOf(error);
+      return this.haltWith(failure, failure === "corrupt"
+        ? { kind: "recovery", document: null } : { kind: "unavailable" });
+    }
+  }
+
+  /** The editor changed: nothing it now shows is claimed as saved. */
+  edit(): void {
+    this.gen += 1;
+    this.dispatch({ type: "EDIT" });
+  }
+
+  /** The debounced candidate for the current text; the newest one wins. */
+  propose(doc: CanonicalDocument): Promise<void> {
+    if (!this.loaded || this.halted) return Promise.resolve();
+    this.next = { doc, gen: this.gen };
+    this.flight ??= this.drain();
+    return this.flight;
+  }
+
+  /** Resolves once nothing is queued or in flight (`pagehide`, tests). */
+  async settled(): Promise<void> {
+    while (this.flight) await this.flight;
+  }
+
+  private async drain(): Promise<void> {
+    try {
+      while (this.next && !this.halted) {
+        const candidate = this.next;
+        this.next = null;
+        await this.save(candidate);
+      }
+    } finally {
+      this.flight = null;
+    }
+  }
+
+  private async save({ doc, gen }: Candidate): Promise<void> {
+    const current = () => gen === this.gen && this.next === null;
+    if (current()) this.dispatch({ type: "LOCAL_SAVE_STARTED" });
+    const document = storableDocument(doc);
+    if (this.durable && documentsEqual(document, this.durable)) {
+      if (current()) this.succeed();
+      return;
+    }
+    const tx = {
+      kind: "REPLACE_DOCUMENT" as const, clientTransactionId: this.newId(),
+      baseRevision: this.baseRevision, document, createdAt: this.now().toISOString(),
+    };
+    const size = JSON.stringify(tx).length;
+    if (this.rows + 1 > this.limits.maxPendingRows ||
+        this.chars + size > this.limits.maxPendingChars) {
+      this.fail("limit");
+      return;
+    }
+    try {
+      const result = await this.journal.saveLocal(this.documentId, tx, tx.createdAt, this.seq);
+      this.seq = result.localSeq;
+      this.durable = result.snapshot.document;
+      this.rows += 1;
+      this.chars += size;
+      if (current()) this.succeed();
+    } catch (error) {
+      this.fail(failureOf(error));
+    }
+  }
+
+  private succeed(): void {
+    this.failure = null;
+    this.dispatch({ type: "LOCAL_SAVE_OK" });
+  }
+
+  /**
+   * A failure is shown even when the author typed on meanwhile (the state is
+   * then EDITING, which has no failure transition): the attempt is replayed
+   * as started-then-failed so ERROR or RECOVERY_REQUIRED is never skipped.
+   */
+  private fail(failure: SaverFailure): void {
+    this.failure = failure;
+    if (HALTING.has(failure)) this.halted = true;
+    if (this.state !== "SAVING_LOCAL") this.state = syncReducer(this.state, { type: "LOCAL_SAVE_STARTED" });
+    this.dispatch({ type: "LOCAL_SAVE_FAILED", reason: reasonOf(failure) });
+  }
+
+  private haltWith<T>(failure: SaverFailure, result: T): T {
+    this.halted = true;
+    this.failure = failure;
+    this.state = failure === "corrupt" ? "RECOVERY_REQUIRED" : "ERROR";
+    this.emit();
+    return result;
+  }
+
+  private dispatch(event: SyncEvent): void {
+    const next = syncReducer(this.state, event);
+    if (next === this.state && event.type !== "LOCAL_SAVE_FAILED") return;
+    this.state = next;
+    this.emit();
+  }
+
+  private emit(): void {
+    const snapshot = this.snapshot();
+    for (const listener of this.listeners) listener(snapshot);
+  }
+}

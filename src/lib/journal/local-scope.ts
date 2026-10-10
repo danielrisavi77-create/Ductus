@@ -1,0 +1,70 @@
+/**
+ * Scope of the local journal before sign-in exists (F-3 step 1, plan #197).
+ *
+ * `AtomicDexieJournal` is keyed by a SHA-256 digest of the authenticated
+ * principal. Until F-5 brings AAI@EduHr sign-in, the demo has no principal, so
+ * the journal runs under ONE fixed local scope. This is the name of a local
+ * IndexedDB database, not an identity: nothing here signs anyone in, nothing
+ * reaches a server, and the UI never presents it as an account (D-09).
+ *
+ * The scope exists only behind an explicit build flag, like the fake OIDC
+ * provider (BACKEND §4.3). `next build` serves both E2E and the demo, so
+ * NODE_ENV cannot tell production apart; a deployment marked `production`
+ * refuses the flag instead of silently journalling under a shared scope.
+ *
+ * Its database name differs from every principal's, so when sign-in arrives
+ * the demo journal is never picked up as a signed-in student's work: F-5
+ * constructs the journal with the principal's own digest (step 5, DAN-92).
+ */
+
+/** Plain-text label the scope digest is derived from; versioned on purpose. */
+export const LOCAL_DEMO_SCOPE_LABEL = "ductus-local-demo-journal-v1";
+
+/** SHA-256 hex of `LOCAL_DEMO_SCOPE_LABEL`; a test recomputes it. */
+export const LOCAL_DEMO_SCOPE_HASH =
+  "7b240ae113072b46d91df37b08b29482f6761431bd88caed744fc82151689d1d";
+
+/** The one document `/rad` edits while there is no document list. */
+export const LOCAL_DEMO_DOCUMENT_ID = "local-demo-document";
+
+export type LocalScopeConfig = {
+  /** `"1"` enables the demo scope; unset or empty leaves it off. */
+  readonly localDemoJournal?: string;
+  /** Deployment marker; `"production"` refuses the demo scope. */
+  readonly deployment?: string;
+};
+
+export class LocalScopeConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "LocalScopeConfigError";
+  }
+}
+
+/**
+ * The journal scope for this build, or null when local journalling is off.
+ * Null means the editor must stay read-only: there is nowhere honest to save.
+ * A malformed or forbidden configuration throws rather than guessing.
+ */
+export function resolveLocalScope(config: LocalScopeConfig): string | null {
+  const flag = config.localDemoJournal ?? "";
+  if (flag === "") return null;
+  if (flag !== "1") {
+    throw new LocalScopeConfigError("local demo journal flag must be \"1\" or unset");
+  }
+  if (config.deployment === "production") {
+    throw new LocalScopeConfigError("local demo journal is prohibited in production");
+  }
+  return LOCAL_DEMO_SCOPE_HASH;
+}
+
+/**
+ * Reads the build-time configuration. Next inlines `NEXT_PUBLIC_*` only when
+ * the property is written out literally, hence no dynamic lookup.
+ */
+export function localScopeConfigFromEnv(): LocalScopeConfig {
+  return {
+    localDemoJournal: process.env.NEXT_PUBLIC_DUCTUS_LOCAL_DEMO_JOURNAL,
+    deployment: process.env.NEXT_PUBLIC_DUCTUS_DEPLOYMENT,
+  };
+}
