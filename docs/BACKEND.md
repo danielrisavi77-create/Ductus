@@ -1,6 +1,6 @@
 # Ductus: plan i program backenda
 
-Verzija 0.3 · 3. 10. 2026. · Odgovorna osoba: Daniel Rišavi · Status: PRIJEDLOG (čeka potvrdu D-08, D-71 do D-75)
+Verzija 0.3 · 3. 10. 2026. · Odgovorna osoba: Daniel Rišavi · Status: PRIJEDLOG (čeka potvrdu D-08, D-72, D-73 i D-75; D-71 i D-74 potvrđene 10. 10. 2026.)
 
 Ovaj dokument zamjenjuje otvoreni D-08. Izvori: dokument "Pisač: Backend arhitektura i vizija vNext" (dalje vNext), tri istraživanja (hosting, potpisi i vrijeme, prijava i ovlasti), `ARCHITECTURE.md` v0.2, te dva neovisna pregleda (arhitektonsko-sigurnosni i provjera činjenica na primarnim izvorima). **Verzija 0.1 imala je pogrešku koja je mijenjala preporuku: Scaleway Managed PostgreSQL nema PITR ni na jednom tipu čvora** (provjereno u službenom repozitoriju dokumentacije `scaleway/docs-content`, commit od 2. 10. 2026.). Ova verzija to ispravlja i ugrađuje ostale nalaze pregleda (šest kritičnih, 19 važnih). Cijene su s datumom 3. 10. 2026.; gdje nešto nije potvrđeno s primarnog izvora, piše NEPROVJERENO.
 
@@ -100,6 +100,7 @@ Pravila:
 
 - Tok odsječka: validacija i točni bajtovi; zapis objekta (`v2/<paket>/<hash>.json`, bez upserta, duplikat se prihvaća tek nakon usporedbe bajtova); **jedan RPC** koji radi CAS reviziju i `reserve` (§2); potpis u workeru; `attach_signature`.
 - **Potpis potvrde (D-92):** `D = SHA-256(JCS(receiptPayloadV2))`; `receiptSchema` je `ductus-evidence-receipt-v2`. Worker šalje Ed25519 KMS-u (`ED25519_SHA_512`, `RAW`) točne bajtove `UTF-8("ductus-evidence-receipt-v2") ‖ 0x0A ‖ D`, pri čemu je `D` sirovih 32 bajta; verifikator rekonstruira iste bajtove i provjerava potpis.
+- **Hash dokumenta (evidencija v2).** Kanonski dokument je JSON vrijednost. Njegovi kanonski bajtovi su UTF-8 zapis RFC 8785 (JCS) oblika te vrijednosti: ključevi poredani po UTF-16 kodnim jedinicama, brojevi u ECMAScript zapisu, bez Unicode normalizacije, bez bjelina. Hash dokumenta je SHA-256 tih bajtova, zapisan kao 64 mala heksadekadska znaka. Vrijednost s usamljenim surogatom ili brojem koji nije konačan nema kanonski oblik i nema hash. Izvedba: `canonicalizeJcs` (`src/domain/forensics/jcs.ts`) i `digestCanonicalDocumentV2` (`src/domain/forensics/evidence-replay-v2.ts`).
 - **Ponovno slanje (odluka uz DAN-46, 10. 10. 2026.).** Pod istim principalom, paketom i `clientRequestId`: isti descriptor i bajt-identičan JCS (isti SHA-256 primljenih bajtova) je `duplicate` i vraća izvornu potvrdu ili nastavlja oporavak `pending_signature`, bez nove pohrane, rezervacije i potpisa; isti descriptor uz drukčije bajtove je `invalid`, izvorni prihvat ostaje netaknut, a promijenjeni bajtovi se ne pohranjuju i ne potpisuju; drukčiji descriptor je `idempotency_conflict`. Autorizacija ide prije lookupa, a zabrane novog ingesta (zatvoren paket, smanjen limit) ne smiju doći ispred legitimnog oporavka. Hash se računa nad primljenim bajtovima, strogo dekodiranima kao UTF-8 (nevaljan niz ili BOM je `invalid`), nikad nad `segmentHash` koji klijent deklarira. Čista odluka je `decideEvidenceRetry` u `src/domain/forensics/evidence-chain-v2.ts`; gateway je preuzima u B-8b.
 - **RPC-i se prepisuju, ne prenose.** Postojeći `pisac_evidence_reserve`, `_lookup`, `_ensure_package` i `_authorize_append` primaju identitet kao **parametar** (`p_principal_id`) i jedina im je zaštita da ih smije izvršiti samo `service_role`. U Ductusu su `SECURITY DEFINER` s vlasnikom `ductus_evidence` i praznim `search_path`, **ne primaju identitet kao parametar nego ga izvode iz `current_actor()`** (§4.3), a `ductus_app` ih poziva samo kroz uske omotače. pgTAP test: `ductus_app` ne može dodati evidenciju s tuđim principalom.
 - **Evidencijske tablice su samo za dodavanje.** Okidači `BEFORE UPDATE OR DELETE` na `acceptances` dopuštaju samo prijelaz `pending_signature` u `signed` uz nepromijenjen `receipt_payload`, `descriptor` i hash, i zabranjuju `DELETE` osim brisanja pokazivača na sadržaj kroz funkciju retentiona. Glavu lanca (`packages.head_*`) mijenja samo `reserve`. `attach_signature` provjerava da `payloadDigestSha256` odgovara `receipt_payload` i da je `keyId` poznat i neopozvan (tablica `signing_key`).
@@ -279,7 +280,7 @@ Backend nije posebna faza nego okomiti rez kroz M0 do M11. **Procjena dodatka pr
 | --- | --- | --- | --- | --- |
 | B0.1 Spike okruženja | UpCloud VM + Managed PG, skripta uloga, PITR povrat u točku, RTT, log parametri, KMS ključ | Zapis s brojkama; PITR radi ili se odabire varijanta B | prije M2 | 2 do 3 |
 | B0.2 Spike rekonstrukcije | ProseMirror u Nodeu za 15.000 i 80.000 riječi na stvarnom stroju | Vrijeme, memorija, volumen; granice posla određene | prije M3 | 1 do 2 |
-| B0.3 Odluka | Vlasnik potvrđuje D-08, D-71 do D-75 prema rezultatima | ODLUČENO u `DECISIONS.md` | | 0 |
+| B0.3 Odluka | Vlasnik potvrđuje D-08, D-72, D-73 i D-75 prema rezultatima (D-71 i D-74 potvrđene 10. 10. 2026.) | ODLUČENO u `DECISIONS.md` | | 0 |
 | B0.4 Prepis ARCHITECTURE | Cijeli dokument (uključujući §2, §3, §8, §11), §12 s točnim popisom prijenosa | Bez Supabasea i Netlifyja | M0 | 1 do 2 |
 | B1 Okruženja | `docker compose` (Postgres, S3-kompatibilna pohrana (RustFS), Mailpit, lažni OIDC), OpenTofu (dva računa), CI deploy, migracijski alat, `sops`/`age`, uloge, Caddy, deploy s VM-a | `docker compose up` i `npm test` zeleno; staging se podiže iz koda | M0 | 5 do 7 |
 | B2 Identitet | OIDC klijent s popisom iz §4.3, sesije, `current_actor()`, `withActor`, test GUC-a, odjava | Prijava na AAI Labu; svi testovi iz §4.3 zeleni; nema lažnog pružatelja u produkciji | M1 | 3 do 5 (uz sigurnosni pregled, neovisan o autoru) |
@@ -301,7 +302,7 @@ Redoslijed i kontrolna točka 15. 12. 2026.:
 
 ## 9. Što treba od vlasnika
 
-- Potvrditi ili promijeniti D-08, D-71 do D-75 (vidi i odluku o troškovima u §7).
+- Potvrditi ili promijeniti D-08, D-72, D-73 i D-75 (D-71 i D-74 potvrđene 10. 10. 2026.; vidi i odluku o troškovima u §7).
 - Računi: UpCloud, Scaleway (Object Storage, TEM), AWS (samo KMS, IAM korisnik s uskim ovlastima), 2FA svugdje, agent dobiva ograničene ključeve po okolišu.
 - **FPZG, ne Srce, je prvi korak za AAI:** zamoliti odgovornu osobu FPZG-a za AAI@EduHr da (1) e-poštom na `aai@srce.hr` ovlasti Daniela za AAI@EduHr Lab i (2) registrira Ductus kao uslugu FPZG-a u Registru resursa (OIDC klijent, redirect URI, scopeovi). Tekst zahtjeva je u Dodatku B.
 - FINA: tek kad postoji obrt (ili ako FPZG želi biti ugovorna strana); do tada dva besplatna TSA-a.
