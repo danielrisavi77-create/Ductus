@@ -673,15 +673,19 @@ export function fastForwardBase(
  * Maps a `ServerSyncError` code from the commit server action onto a drain
  * outcome, so the runner sees one vocabulary.
  *
- * `slanje` and `citanje` are the two codes that mean "the round trip did not
- * complete" — Postgres unreachable, the RPC erroring out — and they are the
- * only retryable ones. The rest describe the payload or the row, and repeating
- * them changes nothing.
+ * `slanje` and `citanje` mean "the round trip did not complete" — Postgres
+ * unreachable, the RPC erroring out. `odgovor-neispravan` means the answer
+ * came back truncated or unreadable, so the CAS may well have landed: like a
+ * lost answer, it must hold the sent row and replay the same key (DAN-110),
+ * never drop the hold and let a newer row out on the old base. These three
+ * are the only retryable ones. The rest describe the payload or the row, and
+ * repeating them changes nothing.
  */
 export function serverSyncErrorToOutcome(code: ServerSyncErrorCode): DrainOutcome {
   switch (code) {
     case "slanje":
     case "citanje":
+    case "odgovor-neispravan":
       return { status: "transport_error" };
     case "prevelik":
       return { status: "too_large" };
@@ -689,8 +693,6 @@ export function serverSyncErrorToOutcome(code: ServerSyncErrorCode): DrainOutcom
       return { status: "not_found" };
     case "zapis-neispravan":
       return { status: "invalid_document" };
-    case "odgovor-neispravan":
-      return { status: "invalid" };
     default:
       return { status: "invalid" };
   }

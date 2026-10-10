@@ -12,6 +12,7 @@ import { emptyDocument } from "@/domain/document";
 
 import {
   ackedRevision,
+  awaitingReceiptFor,
   fastForwardBase,
   isRetryable,
   newerRowsQueued,
@@ -19,6 +20,7 @@ import {
   nextAwaitingReceipt,
   outcomeToEvents,
   planDrain,
+  serverSyncErrorToOutcome,
   type CommitReceiptVerification,
   type DrainOutcome,
 } from "./drain";
@@ -152,6 +154,27 @@ describe("DAN-110 plan #158 — lost response", () => {
       expect(chipContent(s).text).not.toBe(SYNC_STATE_LABELS.SYNCED.label);
     }
     expect(chipContent("ERROR").text).not.toMatch(/spremljeno/i);
+  });
+
+  it("2: the ported marker carries its document, so planDrain sends r7 instead of nothing", () => {
+    const marker = awaitingReceiptFor(r7);
+    expect(marker).toEqual({ documentId: D1, localSeq: 7, clientTransactionId: "T7" });
+    expect(nextAwaitingReceipt(r7, LOST, null)).toEqual(marker);
+    expect(planDrain([r7, r8], meta("ERROR"), marker).send).toBe(r7);
+    const withoutDocument = { localSeq: 7, clientTransactionId: "T7" };
+    expect(planDrain([r7, r8], meta("ERROR"), withoutDocument as never).send).toBeNull();
+  });
+
+  it("5: a truncated or unreadable answer holds r7 like a lost one and never lets r8 out", async () => {
+    const unreadable = serverSyncErrorToOutcome("odgovor-neispravan");
+    expect(unreadable).toEqual(LOST);
+    expect(isRetryable(unreadable)).toBe(true);
+    expect(await outcomeToEvents(unreadable, verification(r7, 5), true)).toEqual([
+      { type: "SYNC_FAILED", retryable: true },
+    ]);
+    const awaiting = nextAwaitingReceipt(r7, unreadable, null);
+    expect(awaiting).toEqual(awaitingReceiptFor(r7));
+    expect(planDrain([r7, r8], meta("ERROR"), awaiting).send).toBe(r7);
   });
 
   it("3: repeated lost answers keep the same marker, key and bytes while backoff grows", () => {
