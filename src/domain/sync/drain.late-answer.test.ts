@@ -208,6 +208,27 @@ describe("a late answer of an earlier attempt (#181)", () => {
     expect(nextAwaitingReceipt(r7, crossed, heldD1)).toEqual(heldD1);
   });
 
+  it("8 (QA of #194): a receipt verified for r7 never acknowledges r8's flight of the same document", async () => {
+    // Same document, so only the transaction id tells the two rows apart. The
+    // verifier is satisfied (it was asked about r7); the flight sent r8.
+    for (const pending of [[r8], [r7, r8]]) {
+      for (const status of ["committed", "duplicate"] as const) {
+        const crossed = signed(status, 5);
+        const events = await outcomeToEvents(crossed, ver(r7, 5), flight(r8, pending));
+        expect(events).toEqual([{ type: "SYNC_FAILED", retryable: false }]);
+        expect(reduce("SYNCING", events)).toBe("ERROR");
+        // Nothing was vouched for: no base move, and no hold is released.
+        expect(ackedRevision(crossed)).toBeNull();
+        const held = nextAwaitingReceipt(r8, { status: "transport_error" }, null);
+        expect(nextAwaitingReceipt(r8, crossed, held)).toEqual(held);
+      }
+    }
+    // Control: the same answer with r8's own verification is the normal path.
+    expect(await outcomeToEvents(signed("committed", 5), ver(r8, 5), flight(r8, [r8]))).toEqual([
+      { type: "SYNC_ACK" },
+    ]);
+  });
+
   it("9: SYNCED is unreachable while rows wait, so SYNCED has nothing owed to swallow", async () => {
     const rows = [row(1, 1), row(2, 1), row(3, 1)];
     for (let s = 0; s < rows.length; s += 1) {
