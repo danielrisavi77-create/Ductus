@@ -123,7 +123,7 @@ Sve tablice imaju uključen RLS i retke u pgTAP matrici pristupa. Pristup ide kr
 | `institution_role` | korisnik, ustanova, uloga (`teacher`, `admin`), potvrdio, vrijeme | Administrator |
 | `course` | id, ustanova, naziv, akademska godina, pravilo AI-ja iz izvedbenog plana (D-52) | Članovi kolegija |
 | `course_enrollment_code` | kolegij, hash koda, vrijedi do, aktivan | Nastavnik kolegija |
-| `course_member` | kolegij, korisnik, uloga u kolegiju (`teacher`, `student`), od, do | Članovi kolegija |
+| `course_member` | kolegij, korisnik, uloga u kolegiju (`teacher`, `student`), od, do | Nastavnik kolegija sve članove; student nastavnike kolegija i vlastito članstvo |
 | `mentorship` | mentor, student, vrsta rada, od, do, potvrdio | Mentor i student |
 | `assignment` | id, kolegij, trenutna verzija | Članovi kolegija |
 | `assignment_version` | zadatak, broj verzije, naslov, upute, vrsta rada, Lekta profil i verzija paketa, otvaranje, rok, pravila pomoći i dopuštene svrhe (D-80), profil evidencije, uvoz dopušten, ciklusi verzija, vrijeme. **Nepromjenjiva**; profil nove verzije smije biti samo uži | Članovi kolegija |
