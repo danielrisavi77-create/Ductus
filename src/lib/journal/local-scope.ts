@@ -38,7 +38,7 @@ export type LocalScopeConfig = {
 };
 
 /** The only deployments the demo scope runs in; matched exactly. */
-export const LOCAL_DEMO_DEPLOYMENTS: readonly string[] = ["local", "ci", "demo"];
+export const LOCAL_DEMO_DEPLOYMENTS: readonly string[] = Object.freeze(["local", "ci", "demo"]);
 
 export class LocalScopeConfigError extends Error {
   constructor(message: string) {
@@ -47,20 +47,27 @@ export class LocalScopeConfigError extends Error {
   }
 }
 
+/** An own string property only: an inherited value never switches the scope on. */
+function own(source: object, key: string): string | undefined {
+  if (!Object.hasOwn(source, key)) return undefined;
+  const value: unknown = (source as Record<string, unknown>)[key];
+  return typeof value === "string" ? value : undefined;
+}
+
 /**
  * The journal scope for this server, or null when local journalling is off.
  * Null means the editor must stay read-only: there is nowhere honest to save.
  * A malformed or forbidden configuration throws rather than guessing.
  */
 export function resolveLocalScope(config: LocalScopeConfig): string | null {
-  const flag = config.localDemoJournal ?? "";
+  const flag = own(config, "localDemoJournal") ?? "";
   if (flag === "") return null;
   if (flag !== "1") {
     throw new LocalScopeConfigError("local demo journal flag must be \"1\" or unset");
   }
   // Allow-list, not deny-list: "Production", "prod " or a forgotten marker
   // must fail closed rather than look like a non-production deployment.
-  if (!LOCAL_DEMO_DEPLOYMENTS.includes(config.deployment ?? "")) {
+  if (!LOCAL_DEMO_DEPLOYMENTS.includes(own(config, "deployment") ?? "")) {
     throw new LocalScopeConfigError(
       "local demo journal needs a deployment of exactly local, ci or demo",
     );
@@ -75,7 +82,7 @@ export function resolveLocalScope(config: LocalScopeConfig): string | null {
  */
 export function localScopeConfigFromEnv(): LocalScopeConfig {
   return {
-    localDemoJournal: process.env.DUCTUS_LOCAL_DEMO_JOURNAL,
-    deployment: process.env.DUCTUS_DEPLOYMENT,
+    localDemoJournal: own(process.env, "DUCTUS_LOCAL_DEMO_JOURNAL"),
+    deployment: own(process.env, "DUCTUS_DEPLOYMENT"),
   };
 }

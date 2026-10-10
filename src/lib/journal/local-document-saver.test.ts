@@ -176,14 +176,34 @@ describe("LocalDocumentSaver: ordering (#197 attacks 2, 3, 9)", () => {
     expect(claimed).toEqual(["novije"]);
   });
 
-  it("an unchanged candidate is confirmed without a new row", async () => {
+  it("9: text typed while a newer candidate waited is never claimed by that candidate", async () => {
+    const real = journal(scope());
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const target = saver(patched(real, {
+      saveLocal: async (...args: Parameters<AtomicDexieJournal["saveLocal"]>) => {
+        await gate;
+        return real.saveLocal(...args);
+      },
+    }));
+    await target.load();
+    target.edit();
+    void target.propose(text("a"));
+    void target.propose(text("b"));
+    target.edit();
+    release();
+    await target.settled();
+    expect(target.snapshot()).toMatchObject({ state: "EDITING", failure: null });
+  });
+
+  it("an unchanged candidate is still written, so only the journal confirms it", async () => {
     const at = scope();
     const target = saver(journal(at));
     await target.load();
     await type(target, "isto");
     await type(target, "isto");
     expect(target.snapshot().state).toBe("LOCAL_DURABLE");
-    expect((await journal(at).read(DOC)).pending).toHaveLength(1);
+    expect((await journal(at).read(DOC)).pending).toHaveLength(2);
   });
 });
 
@@ -239,6 +259,48 @@ describe("LocalDocumentSaver: failures (#197 attacks 5, 6, 7, 4, 17, 13)", () =>
     expect(writes).toBe(0);
   });
 
+  it("6: a ready load after an unavailable one resumes saving", async () => {
+    const at = scope();
+    const real = journal(at);
+    let reads = 0;
+    const target = saver(patched(real, {
+      read: (...args: Parameters<AtomicDexieJournal["read"]>) => (reads += 1) === 1
+        ? Promise.reject(Object.assign(new Error("no idb"), { name: "MissingAPIError" }))
+        : real.read(...args),
+    }));
+    expect(await target.load()).toEqual({ kind: "unavailable" });
+    expect((await target.load()).kind).toBe("ready");
+    expect(target.snapshot()).toEqual({ state: "EDITING", failure: null, capacity: "ok" });
+    await type(target, "nakon ponovnog čitanja");
+    expect(target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+    expect((await journal(at).read(DOC)).pending).toHaveLength(1);
+  });
+
+  it("6: the store closing during a write halts saving", async () => {
+    const real = journal(scope());
+    let writes = 0;
+    const target = saver(patched(real, {
+      saveLocal: async () => {
+        writes += 1;
+        throw Object.assign(new Error("closed"), { name: "DatabaseClosedError" });
+      },
+    }));
+    await target.load();
+    await type(target, "x");
+    expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "unavailable" });
+    await type(target, "y");
+    expect(writes).toBe(1);
+  });
+
+  it("an error while building the row is ERROR, not a save stuck in progress", async () => {
+    const target = saver(journal(scope()), {
+      newTransactionId: () => { throw new Error("no randomness"); },
+    });
+    await target.load();
+    await type(target, "x");
+    expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "unknown" });
+  });
+
   it("7: the queue stops fail-closed at its bound and says so before it gets there", async () => {
     const at = scope();
     const target = saver(journal(at), { limits: { maxPendingRows: 5, maxPendingChars: 1e9 } });
@@ -287,6 +349,32 @@ describe("LocalDocumentSaver: failures (#197 attacks 5, 6, 7, 4, 17, 13)", () =>
     const stored = await journal(at).read(DOC);
     expect(documentsEqual(stored.snapshot!.document, text("prva kartica"))).toBe(true);
     expect(stored.pending).toHaveLength(1);
+  });
+
+  it("4: the same text as before is not trusted from memory after another tab saved", async () => {
+    const at = scope();
+    const first = saver(journal(at));
+    await first.load();
+    await type(first, "prva kartica");
+    const second = saver(journal(at));
+    await second.load();
+    await type(second, "druga kartica");
+    await type(first, "prva kartica");
+    expect(first.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+    const stored = await journal(at).read(DOC);
+    expect(documentsEqual(stored.snapshot!.document, text("druga kartica"))).toBe(true);
+  });
+
+  it("4: a stale write proposed straight from LOCAL_DURABLE still shows ERROR", async () => {
+    const at = scope();
+    const first = saver(journal(at));
+    await first.load();
+    await type(first, "prva kartica");
+    const second = saver(journal(at));
+    await second.load();
+    await type(second, "druga kartica");
+    await first.propose(text("prva kartica 2"));
+    expect(first.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
   });
 
   it("17: an unreadable journal is recovery, and an empty editor is never written over it", async () => {
