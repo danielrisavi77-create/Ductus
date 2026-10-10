@@ -26,7 +26,9 @@ test.prop([source, fc.option(fc.integer({ min: 1, max: 2000 }), { nil: undefined
     expect(citation.startsWith("(")).toBe(true);
     expect(citation.endsWith(")")).toBe(true);
     expect(citation).toContain(`, ${year}`);
-    expect(citation.includes(": ")).toBe(page !== undefined);
+    // Check the tail exactly: author names may themselves contain ": ".
+    const pagePart = page === undefined ? "" : `${style.inText.pageSeparator}${page}`;
+    expect(citation.endsWith(`${year}${pagePart}${style.inText.close}`)).toBe(true);
   },
 );
 
