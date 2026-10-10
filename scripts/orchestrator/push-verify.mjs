@@ -8,10 +8,23 @@ import { parsePushArgs, pushVerdict } from "./orchestrator-core.mjs";
 const run = promisify(execFile);
 const git = async (...args) => (await run("git", args, { windowsHide: true })).stdout.trim();
 
+const argv = process.argv.slice(2);
+const tryGit = async (...a) => {
+  try {
+    return await git(...a);
+  } catch {
+    return null;
+  }
+};
+const currentBranch = await tryGit("symbolic-ref", "--short", "HEAD");
+const head = await tryGit("symbolic-ref", "--short", `refs/remotes/${argv[0] ?? "origin"}/HEAD`);
+const defaultBranch = head ? head.split("/").slice(1).join("/") : "main";
+
 let remote;
-let refspec;
+let src;
+let dst;
 try {
-  ({ remote, refspec } = parsePushArgs(process.argv.slice(2)));
+  ({ remote, src, dst } = parsePushArgs(argv, { currentBranch, defaultBranch }));
 } catch (e) {
   console.error(`push-verify: ${e.message}`);
   process.exit(2);
@@ -19,7 +32,7 @@ try {
 
 let pushOk = true;
 try {
-  await git("push", remote, refspec);
+  await git("push", remote, `${src}:refs/heads/${dst}`);
 } catch (e) {
   pushOk = false;
   console.error(`git push failed: ${e.stderr?.trim() || e.message}`);
@@ -28,13 +41,9 @@ try {
 let local = null;
 let remoteSha = null;
 try {
-  const branch = refspec === "HEAD"
-    ? await git("symbolic-ref", "--short", "HEAD")
-    : refspec.split(":").pop().replace(/^refs\/heads\//, "");
-  const src = refspec.includes(":") ? refspec.split(":")[0] : refspec;
   await git("fetch", remote);
-  local = await git("rev-parse", src || "HEAD");
-  remoteSha = await git("rev-parse", `${remote}/${branch}`);
+  local = await git("rev-parse", src);
+  remoteSha = await git("rev-parse", `${remote}/${dst}`);
 } catch (e) {
   console.error(`verification failed: ${e.stderr?.trim() || e.message}`);
 }

@@ -70,12 +70,52 @@ test("file intersection and D-97 detection", () => {
   assert.deepEqual(d97ManualMatches(["docs/DECISIONS.md", "a"]), ["docs/DECISIONS.md"]);
 });
 
-test("push args reject force in every spelling", () => {
-  assert.deepEqual(parsePushArgs([]), { remote: "origin", refspec: "HEAD" });
-  assert.deepEqual(parsePushArgs(["origin", "HEAD:refs/heads/x"]), { remote: "origin", refspec: "HEAD:refs/heads/x" });
-  for (const bad of [["--force"], ["-f"], ["--force-with-lease"], ["origin", "+HEAD"], ["origin", "a:+b"], ["origin", "a", "b"], ["--delete"], ["bad remote"]]) {
-    assert.throws(() => parsePushArgs(bad), undefined, bad.join(" "));
+const PO = { currentBranch: "feat/x", defaultBranch: "main" };
+
+test("push args: allow-list of branch forms", () => {
+  assert.deepEqual(parsePushArgs([], PO), { remote: "origin", src: "HEAD", dst: "feat/x" });
+  assert.deepEqual(parsePushArgs(["origin", "HEAD"], PO), { remote: "origin", src: "HEAD", dst: "feat/x" });
+  assert.deepEqual(parsePushArgs(["origin", "feat/y"], PO), { remote: "origin", src: "feat/y", dst: "feat/y" });
+  assert.deepEqual(parsePushArgs(["origin", "HEAD:refs/heads/feat/z"], PO), { remote: "origin", src: "HEAD", dst: "feat/z" });
+  assert.deepEqual(parsePushArgs(["origin", "loc:rem"], PO), { remote: "origin", src: "loc", dst: "rem" });
+});
+
+test("push args: every other form is rejected", () => {
+  const bad = [
+    ["--force"], ["-f"], ["--force-with-lease"], ["--delete"], ["--mirror"], ["--all"], ["--tags"], ["--prune"],
+    ["origin", "--delete"], ["origin", "--all"], ["origin", "+HEAD"], ["origin", "+a:b"], ["origin", "a:+b"],
+    ["origin", ":victim"], ["origin", ":refs/heads/victim"], ["origin", "a:"], ["origin", ":"],
+    ["origin", "a*"], ["origin", "a:b*"], ["origin", "*:b"], ["origin", "a?"], ["origin", "a[0]"],
+    ["origin", "refs/tags/v1"], ["origin", "HEAD:refs/tags/v1"], ["origin", "a:refs/for/x"],
+    ["origin", "a:b:c"], ["origin", "a..b"], ["origin", "a b"], ["origin", "-x"], ["origin", "a:-x"],
+    ["origin", "a/"], ["origin", "a.lock"], ["origin", "a", "b"], ["-x"], ["bad remote"], ["--x", "HEAD"],
+  ];
+  for (const b of bad) assert.throws(() => parsePushArgs(b, PO), undefined, b.join(" "));
+});
+
+test("push args: main and the repo default branch are always refused", () => {
+  const o = { currentBranch: "feat/x", defaultBranch: "trunk" };
+  for (const r of ["main", "HEAD:main", "HEAD:refs/heads/main", "a:refs/heads/main", "trunk", "HEAD:trunk"]) {
+    assert.throws(() => parsePushArgs(["origin", r], o), undefined, r);
   }
+  assert.throws(() => parsePushArgs(["origin", "HEAD"], { currentBranch: "main", defaultBranch: "main" }));
+  assert.throws(() => parsePushArgs([], { currentBranch: null, defaultBranch: "main" }));
+});
+
+test("verdict summary is per identity: any FAIL/BLOCK on current head wins", () => {
+  const rv = (id, head, verdict, at) => ({
+    ...c(`Agent-Review: claude:${id}:reviewer\nReview-Head: ${head}\nReview-Verdict: ${verdict}`, { created_at: at }),
+    performed_via_github_app: { slug: "claude" },
+  });
+  const comments = [rv("reviewB", H1, "FAIL", "2026-10-10T10:00:00Z"), rv("review1", H1, "PASS", "2026-10-10T11:00:00Z")];
+  assert.equal(latestVerdict(comments, "review", H1).verdict, "FAIL");
+  const fixed = [...comments, rv("reviewB", H1, "PASS", "2026-10-10T12:00:00Z")];
+  assert.equal(latestVerdict(fixed, "review", H1).verdict, "PASS");
+  assert.equal(latestVerdict([...fixed, rv("r3", H1, "BLOCK", "2026-10-10T13:00:00Z")], "review", H1).verdict, "BLOCK");
+  const mixed = latestVerdict([rv("r3", H2, "FAIL", "2026-10-10T13:00:00Z"), rv("r1", H1, "PASS", "2026-10-10T10:00:00Z")], "review", H1);
+  assert.equal(mixed.verdict, "PASS");
+  assert.equal(mixed.current, true);
+  assert.equal(latestVerdict([rv("r3", H2, "FAIL", "2026-10-10T13:00:00Z")], "review", H1).current, false);
 });
 
 test("push verdict requires success and equal SHAs", () => {

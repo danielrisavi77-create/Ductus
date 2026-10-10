@@ -58,6 +58,7 @@ export function parseVerdicts(comments, kind) {
       head: field(c.body, k.head),
       verdict: field(c.body, k.verdict)?.toUpperCase() ?? null,
       author: c.user?.login ?? null,
+      appSlug: c.performed_via_github_app?.slug ?? null,
       createdAt: Date.parse(c.created_at ?? "") || index,
       index,
     }))
@@ -69,14 +70,33 @@ export function countCanonical(comments) {
 }
 
 /** Latest verdict of a kind; `current` = bound to headSha. null if none. */
+const GATE_VERDICTS = new Set(["PASS", "FAIL", "BLOCK"]);
+
+// Identity as the gate keys it (ENGINEERING_SYSTEM §6): App slug + runtime:slot,
+// with codex and chatgpt normalised to openai.
+function identityKey(entry) {
+  const [runtime = "", slot = ""] = (entry.agent ?? "").split(":");
+  const rt = runtime === "codex" || runtime === "chatgpt" ? "openai" : runtime;
+  return `${entry.appSlug ?? ""}|${rt}:${slot}`;
+}
+
+/**
+ * Verdict of a kind per gate rules: per identity only the newest verdict on the
+ * current head counts; any FAIL/BLOCK wins, else PASS, else null when none are
+ * current. Without current verdicts, falls back to the newest one marked stale.
+ */
 export function latestVerdict(comments, kind, headSha) {
-  const last = parseVerdicts(comments, kind).at(-1);
-  if (!last) return null;
-  const current = Boolean(
-    last.head && SHA_RE.test(last.head) && headSha &&
-      last.head.toLowerCase() === headSha.toLowerCase(),
+  const isCurrent = (e) => Boolean(
+    e.head && SHA_RE.test(e.head) && headSha && e.head.toLowerCase() === headSha.toLowerCase(),
   );
-  return { verdict: last.verdict ?? "?", head: last.head, agent: last.agent, current };
+  const all = parseVerdicts(comments, kind).filter((e) => GATE_VERDICTS.has(e.verdict));
+  const latest = new Map();
+  for (const e of all.filter(isCurrent)) latest.set(identityKey(e), e);
+  const cur = [...latest.values()];
+  const pick = cur.find((e) => e.verdict !== "PASS") ?? cur[0];
+  if (pick) return { verdict: pick.verdict, head: pick.head, agent: pick.agent, current: true };
+  const last = all.at(-1);
+  return last ? { verdict: last.verdict, head: last.head, agent: last.agent, current: false } : null;
 }
 
 export function formatVerdict(v) {
@@ -158,17 +178,31 @@ export function allRequiredPass(checks) {
   return checks.every((c) => c.level !== "FAIL");
 }
 
-/** Validates push args; rejects force in every spelling. Returns {remote, refspec} or throws. */
-export function parsePushArgs(args) {
-  for (const a of args) {
-    if (a.startsWith("-")) throw new Error(`option not allowed: ${a} (no force, no options)`);
-  }
+const BRANCH_RE = /^[A-Za-z0-9_][A-Za-z0-9._/-]*$/;
+const validBranch = (b) =>
+  BRANCH_RE.test(b) && !b.startsWith("refs/") && !b.includes("..") && !b.includes("//") && !b.includes("/.") &&
+  !b.endsWith("/") && !b.endsWith(".") && !b.endsWith(".lock");
+
+/**
+ * Allow-list for push-verify. Accepts only `<branch>`, `HEAD`, or
+ * `<src>:<dst>` / `<src>:refs/heads/<dst>` with both sides non-empty branch
+ * names. Never main or the repo default branch. Returns {remote, src, dst}.
+ * opts: {currentBranch, defaultBranch}.
+ */
+export function parsePushArgs(args, { currentBranch = null, defaultBranch = "main" } = {}) {
   if (args.length > 2) throw new Error("usage: push-verify [remote] [refspec]");
-  const [remote = "origin", refspec = "HEAD"] = args;
-  if (!/^[A-Za-z0-9._-]+$/.test(remote)) throw new Error(`bad remote: ${remote}`);
-  if (refspec.startsWith("+") || refspec.includes(":+")) throw new Error(`forced refspec not allowed: ${refspec}`);
-  if (/\s/.test(refspec)) throw new Error(`bad refspec: ${refspec}`);
-  return { remote, refspec };
+  const [remote = "origin", spec = "HEAD"] = args;
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(remote)) throw new Error(`bad remote: ${remote}`);
+  const parts = spec.split(":");
+  if (parts.length > 2) throw new Error(`refspec not allowed: ${spec}`);
+  const src = parts[0];
+  let dst = parts.length === 2 ? parts[1].replace(/^refs\/heads\//, "") : null;
+  if (src !== "HEAD" && !validBranch(src)) throw new Error(`source not allowed: ${spec}`);
+  if (parts.length === 2 && !validBranch(dst)) throw new Error(`destination not allowed: ${spec}`);
+  dst ??= src === "HEAD" ? currentBranch : src;
+  if (!dst || !validBranch(dst)) throw new Error("cannot determine destination branch (detached HEAD?)");
+  if (dst === "main" || dst === defaultBranch) throw new Error(`push to ${dst} refused`);
+  return { remote, src, dst };
 }
 
 export function pushVerdict(pushOk, localSha, remoteSha) {
