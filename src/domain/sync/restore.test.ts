@@ -80,13 +80,15 @@ describe("restoreSyncState: a reload carries no operation in flight (#178 attack
     }
   });
 
-  it("resumes a tab closed mid-send in LOCAL_DURABLE, with the row still owed", () => {
+  // One queued row only. With several rows and no persisted hold, planDrain
+  // sends the newest one, not the one that was in flight (#183 attack 12).
+  it("resumes a tab closed mid-send in LOCAL_DURABLE, with its single queued row still owed", () => {
     const contents = recorded("SYNCING", { pending: [row(1, "tx-a")] });
     const restored = restoreSyncState(contents);
     expect(restored).toBe("LOCAL_DURABLE");
     // Not stuck: the drain may start again from the restored state...
     expect(syncReducer(restored, { type: "SYNC_STARTED" })).toBe("SYNCING");
-    // ...and the plan over the same journal still sends the owed row.
+    // ...and the plan over the same one-row journal sends that row.
     const plan = planDrain(contents.pending, contents.meta);
     expect(plan.send?.tx.clientTransactionId).toBe("tx-a");
   });

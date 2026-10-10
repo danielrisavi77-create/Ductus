@@ -54,10 +54,14 @@ function isTransient(state: SyncState): boolean {
  *
  * Normalising to LOCAL_DURABLE claims only what the journal holds: after a
  * reload the editor shows the stored snapshot, not the candidate that was in
- * memory. It is also the state a drain starts from (`SYNC_STARTED`), so a row
- * that was mid-send is sent again under its own idempotency key and the
- * server's answer, not this function, decides what happens next. It never
- * yields SYNCED: a request that was in flight proves nothing about a receipt.
+ * memory. It is also the state a drain starts from (`SYNC_STARTED`), so the
+ * queue is not left waiting. Which row goes out is `planDrain`'s rule, not
+ * this function's: with one queued row that is the row that was in flight,
+ * replayed under its own idempotency key; with several, and no hold that
+ * survives a reload, it is the NEWEST row, not necessarily the one that was
+ * in flight. That is a known open gap (DAN-110 hold is not persisted; #183
+ * attack 12), not something this function closes. It never yields SYNCED: a
+ * request that was in flight proves nothing about a receipt.
  *
  * A `meta.state` that is not one of the eight states is ignored rather than
  * trusted: stored data is data, not a promise about what the machine allows.
