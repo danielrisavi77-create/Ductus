@@ -138,6 +138,44 @@ describe("edit step format: hostile input", () => {
     // Refused on its length alone; scanning it took about a second.
     expect(performance.now() - started).toBeLessThan(300);
   });
+
+  it("stops inside an oversized step instead of reading it to its end", () => {
+    // 100 000 text nodes of 40 letters pass the limit long before the last
+    // one, which is invalid and would be the answer if it were ever read.
+    const content: unknown[] = Array.from({ length: 100_000 }, (_, i) => ({
+      type: "text", text: "a".repeat(40), ...(i % 2 ? { marks: [{ type: "bold" }] } : {}),
+    }));
+    content[content.length - 1] = { type: "text", text: "" };
+    const result = parseEditStep({ ...typing(), slice: { content } });
+    if (result.ok) throw new Error("accepted");
+    expect(result.code).toBe("too_large");
+    const stoppedAt = Number(/^\$\.slice\.content\[(\d+)\]$/.exec(result.path)?.[1]);
+    expect(stoppedAt).toBeGreaterThan(0);
+    expect(stoppedAt).toBeLessThan(50_000);
+  });
+});
+
+/**
+ * Owner decision 3 (QA of #213, second round, B1): a block that a step creates
+ * has no id, and gets one from an `attr` step of the same event. Otherwise the
+ * same event could be written in two ways.
+ */
+describe("edit step format: a new block and its id", () => {
+  const insert = (nodeId: string | null) => ({
+    stepType: "replace", from: 12, to: 12,
+    slice: { content: [{ type: "paragraph", attrs: { nodeId }, content: [{ type: "text", text: "Q" }] }] },
+  });
+
+  it("refuses a new block that arrives with its id", () => {
+    expect(parseEditStep(insert(A))).toEqual({
+      ok: false, code: "new_block_has_id", path: "$.slice.content[0].attrs.nodeId",
+    });
+  });
+
+  it("accepts the block without an id, followed by the step that names it", () => {
+    const steps = [insert(null), { stepType: "attr", pos: 12, attr: "nodeId", value: A }];
+    expect(parseEditSteps(EDIT_STEP_FORMAT_V1, steps)).toEqual({ ok: true, steps });
+  });
 });
 
 /**
@@ -164,6 +202,8 @@ describe("edit step format: the D-96 size limit, to the byte", () => {
   it.each([
     ["ASCII text", (n: number) => "a".repeat(n), 1],
     ["two-byte letters", (n: number) => "š".repeat(n / 2), 2],
+    // Three bytes each: the euro sign, a line separator, a zero-width space.
+    ["three-byte characters", (n: number) => "€ ​".repeat(Math.floor(n / 9)) + "a".repeat(n % 9), 3],
     ["four-byte characters", (n: number) => "😀".repeat((n - 2) / 4) + "ab", 4],
     ["characters JSON escapes", (n: number) => '"'.repeat(n / 2), 2],
     // U+001F is written \u001f, six bytes; the rest is filled with ASCII.
@@ -299,6 +339,8 @@ describe("edit step format: steps ProseMirror really produces", () => {
     ["giving a block an id", (tr) => tr.setNodeAttribute(26, "nodeId", A.replace(/1$/, "9"))],
     ["pasting two blocks", (tr) => tr.replace(5, 5, new Slice(start.content, 1, 1))],
     ["deleting across blocks", (tr) => tr.delete(20, 30)],
+    ["inserting an empty block", (tr) => tr.insert(26, paragraph.create({ nodeId: null }))],
+    ["inserting a block with text", (tr) => tr.insert(26, heading.create({ level: 3, nodeId: null }, schema.text("x")))],
   ];
 
   it.each(edits)("accepts %s", (_name, edit) => {
@@ -321,5 +363,26 @@ describe("edit step format: steps ProseMirror really produces", () => {
       doc = applied.doc as PmNode;
     }
     expect(doc.toJSON()).toEqual(tr.doc.toJSON());
+  });
+
+  // What ProseMirror writes when the editor has not cleared the id of a new
+  // block. Capture (a later step) has to record these with `null` and an
+  // `attr` step; until it does, the format refuses them rather than guess.
+  const refused: [string, (tr: Transform) => void, EditStepRejection][] = [
+    ["a split that copies the id onto the new block", (tr) => tr.split(5), "invalid_node_id"],
+    [
+      "an inserted block that still carries an id",
+      (tr) => tr.insert(26, paragraph.create({ nodeId: A.replace(/1$/, "9") }, schema.text("x"))),
+      "new_block_has_id",
+    ],
+  ];
+
+  it.each(refused)("refuses %s", (_name, edit, code) => {
+    const tr = new Transform(start);
+    edit(tr);
+    expect(tr.steps).toHaveLength(1);
+    expect(parseEditStep(JSON.parse(JSON.stringify(tr.steps[0].toJSON())))).toMatchObject({
+      ok: false, code,
+    });
   });
 });

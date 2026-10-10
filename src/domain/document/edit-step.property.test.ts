@@ -49,36 +49,62 @@ const textRun = fc
     ),
   );
 const content = fc.option(textRun, { nil: undefined });
-const block = fc.oneof(
-  fc.record({ nodeId: maybeNodeId, content }).map((b) => ({
-    type: "paragraph", attrs: { nodeId: b.nodeId }, ...(b.content ? { content: b.content } : {}),
+type Block = { type: string; attrs: { level?: number; nodeId: string | null }; content?: unknown[] };
+type TestSlice = { content: unknown[]; openStart?: 1; openEnd?: 1 };
+/** A block as a slice creates it: without an id (owner decision 3). */
+const block: fc.Arbitrary<Block> = fc.oneof(
+  fc.record({ content }).map((b) => ({
+    type: "paragraph", attrs: { nodeId: null }, ...(b.content ? { content: b.content } : {}),
   })),
-  fc.record({ nodeId: maybeNodeId, content, level: fc.constantFrom(1, 2, 3) }).map((b) => ({
-    type: "heading", attrs: { level: b.level, nodeId: b.nodeId },
+  fc.record({ content, level: fc.constantFrom(1, 2, 3) }).map((b) => ({
+    type: "heading", attrs: { level: b.level, nodeId: null },
     ...(b.content ? { content: b.content } : {}),
   })),
 );
 const open = fc.constantFrom({}, { openStart: 1 }, { openEnd: 1 }, { openStart: 1, openEnd: 1 });
-const slice = fc.oneof(
-  textRun.map((list) => ({ content: list })),
-  fc
-    .record({ list: fc.array(block, { minLength: 1, maxLength: 4 }), open })
-    // One empty block open on both sides inserts nothing and is not a form.
-    .filter((s) => !(s.list.length === 1 && !("content" in s.list[0]) && "openStart" in s.open && "openEnd" in s.open))
-    .map((s) => ({ content: s.list, ...s.open })),
-);
+const withId = (b: Block, id: string | null): Block => ({ ...b, attrs: { ...b.attrs, nodeId: id } });
+const blockSlice: fc.Arbitrary<TestSlice> = fc
+  .record({ list: fc.array(block, { minLength: 1, maxLength: 4 }), open, ids: fc.tuple(maybeNodeId, maybeNodeId) })
+  // One block open on both sides is written as text, and is not a form.
+  .filter((s) => !(s.list.length === 1 && "openStart" in s.open && "openEnd" in s.open))
+  .filter((s) => s.ids[0] === null || s.ids[0] !== s.ids[1])
+  // Only a block on an open side continues an existing one and may carry its id.
+  .map((s) => {
+    const list = [...s.list];
+    if ("openStart" in s.open) list[0] = withId(list[0], s.ids[0]);
+    if ("openEnd" in s.open) list[list.length - 1] = withId(list[list.length - 1], s.ids[1]);
+    return { content: list, ...s.open };
+  });
+const slice: fc.Arbitrary<TestSlice> = fc.oneof(textRun.map((list) => ({ content: list })), blockSlice);
+const hasText = (s: TestSlice) =>
+  s.content.some((item) => (item as Block).type === "text" || "content" in (item as Block));
+const isSplit = (s: TestSlice) => "openStart" in s && "openEnd" in s && !hasText(s);
+/** One empty block open at its end: over one position it would only retype a block. */
+const isBlockOpening = (s: TestSlice | undefined) =>
+  s !== undefined && s.content.length === 1 && !hasText(s) && "openEnd" in s && !("openStart" in s);
 const range = fc.tuple(position, fc.integer({ min: 1, max: 5_000 }));
+const boundary = fc.tuple(position, fc.constantFrom(1, 2));
 
 const validStep: fc.Arbitrary<Record<string, unknown>> = fc.oneof(
-  fc.record({ from: position, slice }).map((s) => ({ stepType: "replace", from: s.from, to: s.from, slice: s.slice })),
-  fc.record({ range, sha256, slice: fc.option(slice, { nil: undefined }) }).map((s) => ({
-    stepType: "replace", from: s.range[0], to: s.range[0] + s.range[1], removedSha256: s.sha256,
-    ...(s.slice ? { slice: s.slice } : {}),
+  // `structure` on an insertion stands exactly on a split.
+  fc.record({ from: position, slice }).map((s) => ({
+    stepType: "replace", from: s.from, to: s.from, slice: s.slice,
+    ...(isSplit(s.slice) ? { structure: true } : {}),
   })),
-  fc.record({ range, slice: fc.option(slice, { nil: undefined }) }).map((s) => ({
-    stepType: "replace", from: s.range[0], to: s.range[0] + s.range[1], structure: true,
-    ...(s.slice ? { slice: s.slice } : {}),
-  })),
+  fc
+    .record({ range, sha256, slice: fc.option(slice, { nil: undefined }) })
+    .filter((s) => !(s.range[1] === 1 && isBlockOpening(s.slice)))
+    .map((s) => ({
+      stepType: "replace", from: s.range[0], to: s.range[0] + s.range[1], removedSha256: s.sha256,
+      ...(s.slice ? { slice: s.slice } : {}),
+    })),
+  fc
+    .record({ range: boundary, slice: fc.option(slice, { nil: undefined }) })
+    .filter((s) => !(s.range[1] === 1 && isBlockOpening(s.slice)))
+    .map((s) => ({
+      stepType: "replace", from: s.range[0], to: s.range[0] + s.range[1], structure: true,
+      ...(s.slice ? { slice: s.slice } : {}),
+    })),
   fc.record({ range, nodeId: maybeNodeId, level: fc.constantFrom(0, 1, 2, 3) }).map((s) => ({
     stepType: "replaceAround", from: s.range[0], to: s.range[0] + s.range[1] + 1,
     gapFrom: s.range[0] + 1, gapTo: s.range[0] + s.range[1], insert: 1, structure: true,
@@ -143,6 +169,27 @@ describe("edit step format: valid steps", () => {
     const written = Step.fromJSON(schema, pmJson).toJSON() as Record<string, unknown>;
     expect(removedSha256 === undefined ? written : { ...written, removedSha256 }).toEqual(input);
   });
+
+  // Owner decision 3, QA of #213 (second round, B1).
+  test.prop([blockSlice, fc.nat(), nodeId, position])(
+    "is refused when a block that the slice creates brings an id",
+    (made, pick, id, from) => {
+      const last = made.content.length - 1;
+      const created = made.content
+        .map((_, i) => i)
+        .filter((i) => !((i === 0 && "openStart" in made) || (i === last && "openEnd" in made)));
+      fc.pre(created.length > 0);
+      const at = created[pick % created.length];
+      const content = made.content.map((item, i) => (i === at ? withId(item as Block, id) : item));
+      const step = {
+        stepType: "replace", from, to: from + 3, removedSha256: "0".repeat(64),
+        slice: { ...made, content },
+      };
+      expect(parseEditStep(step)).toEqual({
+        ok: false, code: "new_block_has_id", path: `$.slice.content[${at}].attrs.nodeId`,
+      });
+    },
+  );
 
   test.prop([fc.array(validStep, { minLength: 1, maxLength: 6 })])(
     "reads a list as the same steps in the same order",

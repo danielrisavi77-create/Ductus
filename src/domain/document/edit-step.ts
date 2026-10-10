@@ -15,11 +15,16 @@
  *   - an accepted step is written the way ProseMirror would write it back:
  *     optional parts are absent rather than empty, `false` or `0`, text
  *     nodes that ProseMirror would join are already joined, and a slice is
- *     never empty. This is one form per step, not one step per effect: two
- *     different accepted steps can still leave the same document (the id on
- *     the first block of a slice open at its start is not used, a mark step
- *     over structure changes nothing). Only the replayer, which holds the
- *     document, can refuse those;
+ *     never empty;
+ *   - where two forms of the same change can be told apart without the
+ *     document, one of them is refused: a block made by a slice carries no id
+ *     (owner decision 3: the id comes from an `attr` step), `structure` on an
+ *     insertion stands only on a split, one block open on both sides is written
+ *     as text, and a change of a block's type is written as `replaceAround`.
+ *     This does not make every change have one form. The rest needs the
+ *     document and is the replayer's job (listed in the description of #213):
+ *     the block on an open side of a slice, the range of a mark step, a range
+ *     that removes and re-inserts the same block boundary;
  *   - positions are non-negative safe integers; whether they lie inside a
  *     document is the replayer's check, because only it holds the document;
  *   - text is well-formed Unicode without NUL and is never normalised: the
@@ -62,7 +67,11 @@ export const MAX_EDIT_STEP_BYTES = 2_097_152;
 
 export type EditStepMark = { type: Mark };
 export type EditStepText = { marks?: EditStepMark[]; text: string; type: "text" };
-/** `nodeId` is `null` only on a block the editor has not yet given an id. */
+/**
+ * `nodeId` is `null` on every block a `replace` creates. It is an id only on
+ * a block that continues an existing one: on an open side of a slice, and in
+ * `replaceAround`.
+ */
 export type EditStepBlock =
   | { attrs: { nodeId: NodeId | null }; content?: EditStepText[]; type: "paragraph" }
   | {
@@ -115,6 +124,7 @@ export const EDIT_STEP_REJECTIONS = [
   "invalid_mark",
   "invalid_text",
   "invalid_node_id",
+  "new_block_has_id",
   "invalid_removed_hash",
   "not_canonical",
   "too_large",
@@ -352,6 +362,29 @@ function block(value: unknown, path: string, budget: Budget): EditStepBlock {
   return content ? { ...node, content, type: "heading" } : { ...node, type: "heading" };
 }
 
+/**
+ * Owner decision 3: a block made by a slice arrives without an id and gets one
+ * from an `attr` step. Only a block on an open side of the slice may carry an
+ * id, because it is not new: it continues a block of the document. Which block
+ * that is, and that the id matches it, only the replayer can tell.
+ */
+function newBlocksHaveNoId(parsed: EditStepSlice, path: string): void {
+  const last = parsed.content.length - 1;
+  parsed.content.forEach((item, i) => {
+    const continues = (i === 0 && "openStart" in parsed) || (i === last && "openEnd" in parsed);
+    if (item.type !== "text" && item.attrs.nodeId !== null && !continues) {
+      reject("new_block_has_id", `${path}.content[${i}].attrs.nodeId`);
+    }
+  });
+  const [first, end] = [parsed.content[0], parsed.content[last]];
+  if (
+    last > 0 && first.type !== "text" && end.type !== "text" &&
+    first.attrs.nodeId !== null && first.attrs.nodeId === end.attrs.nodeId
+  ) {
+    reject("invalid_node_id", `${path}.content[${last}].attrs.nodeId`);
+  }
+}
+
 /** Blocks or text, never a mix; an open side only on a slice of blocks. */
 function slice(value: unknown, path: string, budget: Budget): EditStepSlice {
   const own = fields(value, path, ["content"], ["openStart", "openEnd"]);
@@ -372,13 +405,33 @@ function slice(value: unknown, path: string, budget: Budget): EditStepSlice {
       open += 1;
     }
   }
-  // One empty block open on both sides inserts nothing: ProseMirror writes
-  // such a step back without a slice, so it is not a form of its own.
-  if (open === 2 && content.length === 1 && !("content" in content[0])) {
+  // One block open on both sides brings only its text (or nothing): the same
+  // step is written with a slice of text, or without a slice.
+  if (open === 2 && content.length === 1) {
     reject("not_canonical", path);
   }
   return parsed;
 }
+
+/** A slice of one empty block that is open only at its end. */
+function isBlockOpening(parsed: EditStepSlice): boolean {
+  const only = parsed.content[0];
+  return (
+    parsed.content.length === 1 && only.type !== "text" && !("content" in only) &&
+    "openEnd" in parsed && !("openStart" in parsed)
+  );
+}
+
+/** Blocks without text, open on both sides: the slice only divides a block. */
+function isSplit(parsed: EditStepSlice): boolean {
+  return (
+    "openStart" in parsed && "openEnd" in parsed &&
+    parsed.content.every((item) => item.type !== "text" && !("content" in item))
+  );
+}
+
+/** A join removes the end of one block and the start of the next: two positions. */
+const MAX_STRUCTURE_RANGE = 2;
 
 function replaceStep(value: unknown, path: string, budget: Budget): EditStepV1 {
   const own = fields(value, path, ["stepType", "from", "to"], ["slice", "structure", "removedSha256"]);
@@ -397,10 +450,28 @@ function replaceStep(value: unknown, path: string, budget: Budget): EditStepV1 {
   if (removes && (typeof own.removedSha256 !== "string" || !SHA256_HEX.test(own.removedSha256))) {
     reject("invalid_removed_hash", `${path}.removedSha256`);
   }
+  if ("structure" in own && to - from > MAX_STRUCTURE_RANGE) {
+    reject("invalid_position", `${path}.to`);
+  }
+  const parsed = "slice" in own ? slice(own.slice, `${path}.slice`, budget) : null;
+  if (parsed) {
+    newBlocksHaveNoId(parsed, `${path}.slice`);
+    // Replacing only the opening of a block changes its type or attributes
+    // and keeps its content: that step is written as `replaceAround`.
+    if (to === from + 1 && isBlockOpening(parsed)) {
+      reject("not_canonical", `${path}.slice`);
+    }
+    // With nothing removed the flag changes nothing, so it would be a second
+    // form of the same insertion. It is kept exactly where ProseMirror's own
+    // split writes it, and refused everywhere else.
+    if (to === from && "structure" in own !== isSplit(parsed)) {
+      reject("not_canonical", `${path}.structure`);
+    }
+  }
   return {
     from,
     ...(removes ? { removedSha256: own.removedSha256 as string } : {}),
-    ...("slice" in own ? { slice: slice(own.slice, `${path}.slice`, budget) } : {}),
+    ...(parsed ? { slice: parsed } : {}),
     stepType: "replace",
     ...("structure" in own ? { structure: true as const } : {}),
     to,
