@@ -69,7 +69,7 @@ Oznaka uloge: P Platforma, B Backend, F Frontend, K kratkotrajna sesija, D Danie
 | B-9 | **Izlazi iz demoa (D-98 dopuna, 10. 10. 2026.; ide nakon demoa).** Worker: pg-boss, potpis potvrda razvojnim ključem, `attach_signature`; stanje `pending_signature` | B-4, B-8 | Potvrda potpisana po D-92 i prolazi ugovorni known-answer vektor iz BACKEND §4.1 (točni ulazni bajtovi, `D`, potpis testnim ključem), uključujući negativne slučajeve (potpis nad punim JCS-om, nad samim `D`, s drugim prefiksom ili nad izmijenjenim payloadom se odbija; v1 `pending_signature` ne potpisuje se v2 putem); pad workera ostavlja `pending_signature` i oporavlja se | T3 |
 | B-10 | Komentari uz odlomak: tablica, RPC, RLS, pgTAP | B-7 | Student vidi komentar na svom radu; stranac ne vidi ništa | T3 |
 | B-11 | Pogled nastavnika: spremljeno stanje rada s osvježavanjem po P-03 (polling, D-06); podaci za brz put (D-80): zadnja promjena, otvoreni zahtjevi, lijepljenja bez izvora, stanje izjave | B-8 | Nastavnik ne dobiva novo stanje češće od P-03; test | T3 do T4 |
-| B-12 | Predaja (dio M7): `requested_at` iz sata baze, rekonstrukcija (za demo u web procesu, od prvog događaja, bez tablice kontrolnih točaka; D-98 dopuna), JCS usporedba, nepodudarnost blokira predaju (D-11), praznina vidljiva, potpisana potvrda | B-9 | Rekonstrukcija podudarna na scenarijima uključujući prazninu; nepodudarnost blokira | T4 |
+| B-12 | Predaja (dio M7): `requested_at` iz sata baze, rekonstrukcija (za demo u web procesu, od prvog događaja, bez tablice kontrolnih točaka; D-98 dopuna), JCS usporedba, nepodudarnost blokira predaju (D-11), praznina vidljiva, potpisana potvrda | B-4, B-8 (B-9 nakon demoa; D-98 dopuna) | Rekonstrukcija podudarna na scenarijima uključujući prazninu; nepodudarnost blokira | T4 |
 | B-13 | Sažetak procesa: jedna funkcija za studenta i nastavnika (pravilo 5), sesije (P-01), lijepljenja (P-02), praznine, vrsta dokaza (D-44), stanje zapisa | B-8 | Test jednakosti studentskog i nastavničkog prikaza, uključujući API (D-80 točka 6) | T4 |
 | B-14 | Tanki prolaz kritičnog puta (D-98 t. 1, §7): `ingest` → rekonstrukcija → JCS usporedba, bez sučelja, baze i workera | B-3, B-4 | `ingest` jednog odsječka, rekonstrukcija i JCS usporedba prolaze od početka do kraja nad in-memory adapterima i razvojnim potpisnikom, kao automatski test u CI-ju | T2 (18. 10.) |
 
@@ -129,9 +129,9 @@ Detaljan plan faze nastaje tek kad je okidač ispunjen; do tada vrijedi tablica 
 
 ## 7. Kritični put i rezerva [ODLUČENO D-98]
 
-Potvrđeno 10. 10. 2026. (Daniel). Dopunjuje §3 do §5; gdje se razlikuju (K-4 u §4 vodi se kao zadatak T4, B-12 ovisi o B-9), vrijedi ovaj odjeljak.
+Potvrđeno 10. 10. 2026. (Daniel). Dopunjuje §3 do §5; gdje se razlikuju (K-4 u §4 vodi se kao zadatak T4, B-12 ovisi o B-8, a ne o B-9), vrijedi ovaj odjeljak.
 
-**Nalaz.** Lanac B-8 → B-9 → B-12 → F-10 → K-4 cijeli pada u T3 i T4, a proba D-3 je zadnji dan T4. Rezovi iz §5 skidaju točke 6 do 8 i snimku; nijedan ne skraćuje taj lanac. Kašnjenje bilo kojeg zadatka u lancu zato izravno pomiče demo.
+**Nalaz.** Lanac B-8 → B-9 → B-12 → F-10 → K-4 (nakon dopune D-98 od 10. 10. 2026. za demo: B-8 → B-12 → F-10 → K-4, bez B-9) cijeli pada u T3 i T4, a proba D-3 je zadnji dan T4. Rezovi iz §5 skidaju točke 6 do 8 i snimku; nijedan ne skraćuje taj lanac. Kašnjenje bilo kojeg zadatka u lancu zato izravno pomiče demo.
 
 **Odluka:**
 
