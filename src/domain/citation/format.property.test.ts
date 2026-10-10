@@ -25,8 +25,8 @@ test.prop([source, fc.option(fc.integer({ min: 1, max: 2000 }), { nil: undefined
     const citation = formatInText(book, style, page === undefined ? undefined : String(page));
     expect(citation.startsWith("(")).toBe(true);
     expect(citation.endsWith(")")).toBe(true);
-    expect(citation).toContain(`, ${year}`);
-    expect(citation.includes(": ")).toBe(page !== undefined);
+    // Assert on the suffix: generated names may themselves contain ", " or ": ".
+    expect(citation.endsWith(page === undefined ? `, ${year})` : `, ${year}: ${page})`)).toBe(true);
   },
 );
 
