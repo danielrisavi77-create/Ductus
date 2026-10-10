@@ -23,7 +23,9 @@
     "db:new": "dbmate new",
     "db:provision": "docker compose exec -T postgres psql -U ductus -d ductus -v ON_ERROR_STOP=1 -q < db/local/migrator.sql",
     "db:provision:app": "docker compose exec -T postgres psql -U ductus -d ductus -v ON_ERROR_STOP=1 -q < db/local/app-login.sql",
-    "db:migrate": "pnpm db:provision && dbmate --url \"postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus?sslmode=disable&role=ductus_migrator\" --no-dump-schema --wait up && pnpm db:provision:app",
+    "db:provision:auth": "docker compose exec -T postgres psql -U ductus -d ductus -v ON_ERROR_STOP=1 -q -v auth_password=\"$DUCTUS_AUTH_LOCAL_PASSWORD\" < db/local/auth-login.sql",
+    "db:seed": "docker compose exec -T postgres psql -U ductus -d ductus -v ON_ERROR_STOP=1 -q < db/local/seed.sql",
+    "db:migrate": "pnpm db:provision && dbmate --url \"postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus?sslmode=disable&role=ductus_migrator\" --no-dump-schema --wait up && pnpm db:provision:app && pnpm db:provision:auth",
     "db:rollback": "dbmate --url \"postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus?sslmode=disable&role=ductus_migrator\" --no-dump-schema rollback",
     "db:status": "dbmate --url \"postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus?sslmode=disable\" status",
     "orch:status": "node scripts/orchestrator/pr-status.mjs",
@@ -52,6 +54,7 @@
     "@tiptap/react": "^3.31.3",
     "dexie": "^4.4.6",
     "next": "15.5.27",
+    "openid-client": "6.8.8",
     "pg": "^8.23.1",
     "react": "19.3.0",
     "react-dom": "19.3.0"
