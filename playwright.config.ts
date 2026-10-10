@@ -46,6 +46,10 @@ export default defineConfig({
       APP_DATABASE_URL:
         process.env.APP_DATABASE_URL ??
         "postgres://ductus_app_local:ductus-app-local-only@127.0.0.1:54329/ductus",
+      // The local demo journal (F-3 step 1b): read by /rad at request time,
+      // so the same build runs with it here and without it elsewhere.
+      DUCTUS_LOCAL_DEMO_JOURNAL: "1",
+      DUCTUS_DEPLOYMENT: "ci",
     },
     // A server already on the port may be `next dev` or an older build, so it
     // is reused only on explicit request.
