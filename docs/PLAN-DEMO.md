@@ -23,7 +23,7 @@ Prema `PROGRAM.md`, na izmišljenom zadatku, lokalno u Dockeru, s lažnom prijav
 
 **Odlučeno:** D-07, D-10, D-11 i D-24 (potvrđeni u D-81), citatni stil kopiran iz Lekte (D-83), sučelje samo na hrvatskom s tekstovima u ključevima (D-84), izgled editora i nastavničkog sučelja po prototipu (D-85).
 
-**Gradi se uz PRIJEDLOG, iza sučelja, jer je promjena jeftina:** OIDC klijent `openid-client` (D-73 bira biblioteku na M1), red poslova pg-boss (D-74), potpis razvojnim Ed25519 ključem umjesto KMS-a (D-71), lokalni Postgres i S3-kompatibilna pohrana umjesto dobavljača (D-08). Ništa od toga ne veže demo uz dobavljača.
+**Gradi se uz PRIJEDLOG, iza sučelja, jer je promjena jeftina:** OIDC klijent `openid-client` (D-73 bira biblioteku na M1), red poslova pg-boss (D-74, potvrđeno 10. 10. 2026.), potpis razvojnim Ed25519 ključem umjesto KMS-a (D-71, potvrđeno 10. 10. 2026.), lokalni Postgres i S3-kompatibilna pohrana umjesto dobavljača (D-08). Ništa od toga ne veže demo uz dobavljača.
 
 **Izvan demoa:** AAI prijava, AI pomoćnik, Lekta paket osim citatnog stila, uvoz i izvoz, dnevni korijen, mentorski radovi, reprodukcija, izravne izmjene nastavnika (D-34), engleski.
 
