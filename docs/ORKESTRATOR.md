@@ -60,7 +60,7 @@ Diff čitaju CI i neovisni reviewer; orkestrator gleda metapodatke i popis datot
 
 `Owner-Override` piše isključivo Daniel. Orkestrator ga nikad ne objavljuje ni ne predlaže kao rutinski put.
 
-Napuštenu granu orkestrator ne osvježava sam i ne budi staru sesiju: otvara novog workera koji granu preuzima iz GitHuba (izvještaj u PR-u je predaja). Nova sesija je jeftinija od stare s punim kontekstom. Orkestrator ne spaja vlastiti PR, uključujući docs-only PR; takav PR prolazi isti neovisni review i gate kao ostali.
+Napuštenu granu orkestrator ne osvježava sam i ne budi staru sesiju: otvara novog workera koji granu preuzima iz GitHuba (izvještaj u PR-u je predaja). Nova sesija je jeftinija od stare s punim kontekstom. Orkestrator ne spaja vlastiti PR, uključujući docs-only PR; takav PR prolazi isti neovisni review i gate kao ostali. Jedina iznimka je PR njegova podagenta, pod uvjetima iz §8.
 
 **Pita Daniela (i ne spaja dok ne odgovori):**
 
@@ -118,7 +118,7 @@ Orkestrator prati samo sesije koje rade na repou Ductus. Ostale sesije na račun
 
 Tri stalne uloge iz `ENGINEERING_SYSTEM.md` §2 (Backend, Frontend, Platforma) ostaju; uloga je stalna, a instanca se mijenja po zadatku ili lancu.
 
-**Podagent nije novi principal.** Podagent i CLI posao koje pokrene orkestrator nasljeđuju njegovo okruženje i vjerodajnice (`AGENT_SYSTEM_V2.md` §6). Zato PR takvog writera nosi `Agent: <runtime>:<slot orkestratora>:<uloga>` i za pravila o neovisnosti vrijedi kao orkestratorov vlastiti: pregledava ga drugi principal, a orkestrator u njemu ne presuđuje sporove. Sesija orkestratora sama i dalje ne piše proizvodni kod; piše ga podagent u svojoj ulozi i svom worktreeu. Smije li orkestrator takav PR spojiti kad su gateovi zeleni, odlučuje Daniel; dok ne odluči, vrijedi pravilo iz §4 da orkestrator ne spaja vlastiti PR.
+**Podagent nije novi principal.** Podagent i CLI posao koje pokrene orkestrator nasljeđuju njegovo okruženje i vjerodajnice (`AGENT_SYSTEM_V2.md` §6). Zato PR takvog writera nosi `Agent: <runtime>:<slot orkestratora>:<uloga>` i za pravila o neovisnosti vrijedi kao orkestratorov vlastiti: pregledava ga drugi principal, a orkestrator u njemu ne presuđuje sporove. Sesija orkestratora sama i dalje ne piše proizvodni kod; piše ga podagent u svojoj ulozi i svom worktreeu. Iznimka od zabrane spajanja vlastitog PR-a (Daniel, 10. 10. 2026.): orkestrator smije spojiti PR svog podagenta ili CLI posla kad su svi gateovi iz §2 zeleni i kanonski PASS je preko Appa dala sesija drugog principala. PR koji je orkestrator napisao sam i dalje ne spaja.
 
 **Kanonski verdict.** Review i QA komentar vrijede za gate samo kad ih objavi autentificirani GitHub App (`ENGINEERING_SYSTEM.md` §6). Sesija koja objavljuje verdict sama pregledava aktualni head i mora biti drugi principal od autora. Nalaz podagenta ili CLI posla autorove sesije je advisory ulaz: autoru služi za popravak prije reviewa, a ne zamjenjuje verdict niti ga druga sesija smije samo prepisati. Orkestrator pri dodjeli reviewa navodi koja sesija pregledava i objavljuje.
 
