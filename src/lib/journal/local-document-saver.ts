@@ -94,6 +94,8 @@ export class LocalDocumentSaver {
   private gen = 0;
   private next: Candidate | null = null;
   private flight: Promise<void> | null = null;
+  /** Set while `load()` reads; no write starts until it resolves. */
+  private reading: Promise<void> | null = null;
   private readonly listeners = new Set<(snapshot: SaverSnapshot) => void>();
   private readonly now: () => Date;
   private readonly newId: () => string;
@@ -125,8 +127,26 @@ export class LocalDocumentSaver {
    * Reads the journal once. A store that cannot be trusted yields `recovery`
    * and leaves the saver halted: an empty editor must never be journalled
    * over text that merely failed to load (#197 attack 17).
+   *
+   * A write still in flight is awaited first, and none starts during the
+   * read: otherwise the read could return the sequence before that write and
+   * the next save would fail as stale in a tab that is the only writer.
    */
   async load(): Promise<LoadResult> {
+    let release!: () => void;
+    this.reading = new Promise<void>((resolve) => { release = resolve; });
+    try {
+      await this.settled();
+      return await this.read();
+    } finally {
+      this.reading = null;
+      release();
+      if (this.next && !this.halted) this.flight ??= this.drain();
+    }
+  }
+
+  private async read(): Promise<LoadResult> {
+    const gen = this.gen;
     try {
       const contents = await this.journal.read(this.documentId);
       const { snapshot, meta, pending } = contents;
@@ -153,7 +173,8 @@ export class LocalDocumentSaver {
       this.chars = pending.reduce((sum, row) => sum + JSON.stringify(row.tx).length, 0);
       // Step 1 has no server: whatever meta says, the most this tab can
       // claim is that the bytes are on this device.
-      this.state = this.durable ? "LOCAL_DURABLE" : "EDITING";
+      // Text typed during the read is not what the journal holds.
+      this.state = this.durable && gen === this.gen && !this.next ? "LOCAL_DURABLE" : "EDITING";
       this.emit();
       return { kind: "ready", document: this.durable ?? emptyDocument() };
     } catch (error) {
@@ -183,6 +204,8 @@ export class LocalDocumentSaver {
     if (this.halted) return Promise.resolve();
     if (!this.loaded) throw new Error("LocalDocumentSaver.propose() before a ready load()");
     this.next = { doc, gen: this.gen };
+    // During a reload the candidate waits; `load()` starts it once read.
+    if (this.reading) return this.reading.then(() => this.settled());
     this.flight ??= this.drain();
     return this.flight;
   }

@@ -276,6 +276,71 @@ describe("LocalDocumentSaver: failures (#197 attacks 5, 6, 7, 4, 17, 13)", () =>
     expect((await journal(at).read(DOC)).pending).toHaveLength(1);
   });
 
+  it("6: a reload while a write is in flight waits for it, so the next save is not stale", async () => {
+    const at = scope();
+    const real = journal(at);
+    let gate = Promise.resolve();
+    let open = () => {};
+    let written = Promise.resolve();
+    const target = saver(patched(real, {
+      // Held until a read has seen the journal (or briefly, if none comes).
+      saveLocal: (...args: Parameters<AtomicDexieJournal["saveLocal"]>) => {
+        const result = gate.then(() => real.saveLocal(...args));
+        written = result.then(() => undefined, () => undefined);
+        return result;
+      },
+      // Resolves only after that write, with what it saw before it.
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        const contents = await real.read(...args);
+        open();
+        await written;
+        return contents;
+      },
+    }));
+    await target.load();
+    await type(target, "prvo");
+    gate = new Promise<void>((resolve) => { open = resolve; setTimeout(resolve, 50); });
+    target.edit();
+    const flight = target.propose(text("drugo"));
+    await Promise.all([flight, target.load()]);
+    await type(target, "treće");
+    expect(target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+    expect((await journal(at).read(DOC)).pending).toHaveLength(3);
+  });
+
+  it("6: text proposed during a reload is written after the read, and not claimed by the load", async () => {
+    const at = scope();
+    const real = journal(at);
+    let reads = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const order: string[] = [];
+    const target = saver(patched(real, {
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        if ((reads += 1) === 2) await gate;
+        order.push("read");
+        return real.read(...args);
+      },
+      saveLocal: (...args: Parameters<AtomicDexieJournal["saveLocal"]>) => {
+        order.push("write");
+        return real.saveLocal(...args);
+      },
+    }));
+    await target.load();
+    await type(target, "prvo");
+    const reload = target.load();
+    target.edit();
+    const flight = target.propose(text("drugo"));
+    await Promise.resolve();
+    expect(order).toEqual(["read", "write"]);
+    release();
+    await reload;
+    await flight;
+    expect(order).toEqual(["read", "write", "read", "write"]);
+    expect(target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+    expect((await journal(at).read(DOC)).snapshot?.document).toEqual(text("drugo"));
+  });
+
   it("6: the store closing during a write halts saving", async () => {
     const real = journal(scope());
     let writes = 0;
