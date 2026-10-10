@@ -34,12 +34,13 @@ test("a PR without files overlaps with nothing", () => {
 test("more than 100 files: every page is requested and used", async () => {
   const calls = [];
   const page = (from, n) => Array.from({ length: n }, (_, i) => f(`src/f${from + i}.ts`));
+  const pages = [page(0, 100), page(100, 100), page(200, 37)];
   const exec = async (cmd, args) => {
     calls.push([cmd, ...args]);
-    return JSON.stringify([page(0, 100), page(100, 100), page(200, 37)]);
+    return JSON.stringify(pages[calls.length - 1]);
   };
   const paths = await prPaths(7, (path) => ghList(path, exec));
-  assert.deepEqual(calls, [["gh", "api", "--paginate", "--slurp", "repos/{owner}/{repo}/pulls/7/files?per_page=100"]]);
+  assert.deepEqual(calls, [1, 2, 3].map((n) => ["gh", "api", `repos/{owner}/{repo}/pulls/7/files?per_page=100&page=${n}`]));
   assert.equal(paths.length, 237);
   // a file that is only on the third page still produces the overlap
   assert.deepEqual(overlapPairs([pr(7, paths), pr(8, ["src/f236.ts"])]).map((p) => p.files), [["src/f236.ts"]]);
@@ -76,17 +77,17 @@ test("different files in db/migrations or db/tests still collide", () => {
 
 test("a failed files read is unknown, never 'no overlap'", async () => {
   const listed = [];
-  const prs = await openPrsWithPaths("number,isDraft", {
-    json: async (args) => {
-      listed.push(args);
-      return [{ number: 3, isDraft: true }, { number: 1, isDraft: false }, { number: 2, isDraft: false }];
+  const prs = await openPrsWithPaths({
+    list: async (path) => {
+      listed.push(path);
+      return [{ number: 3, draft: true }, { number: 1, draft: false }, { number: 2, draft: false }];
     },
     paths: async (n) => {
       if (n === 2) throw new Error("HTTP 502");
       return ["a.ts"];
     },
   });
-  assert.deepEqual(listed, [["pr", "list", "--state", "open", "--limit", "200", "--json", "number,isDraft"]]);
+  assert.deepEqual(listed, ["repos/{owner}/{repo}/pulls?state=open&per_page=100"]);
   assert.deepEqual(prs.map((p) => [p.number, p.paths]), [[1, ["a.ts"]], [2, null], [3, ["a.ts"]]]);
   const pairs = overlapPairs(prs);
   assert.deepEqual(pairs.map((p) => [p.a, p.b]), [[1, 3]]);
