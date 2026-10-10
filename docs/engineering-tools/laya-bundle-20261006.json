@@ -1,0 +1,189 @@
+{
+  "schema_version": "ductus.laya_bundle_evidence.v1",
+  "task": "DAN-45",
+  "evidence_task": "C-01",
+  "purpose": "Informativni per-file dokaz sadržaja; nije loader konfiguracija ni migracija registra.",
+  "repository": "convaiinnovations/laya",
+  "revision": "55cf4c4ebb4ebe31b2550e8bdf3bd21b99753851",
+  "subfolder": "multilingual",
+  "local_checkpoint_root": "D:\\laya\\hf\\hub\\models--convaiinnovations--laya\\snapshots\\55cf4c4ebb4ebe31b2550e8bdf3bd21b99753851\\multilingual",
+  "local_hash_window_utc": {
+    "from": "2026-10-06T20:59:33.825755+00:00",
+    "to": "2026-10-06T20:59:35.518907+00:00"
+  },
+  "evidence_updated_at": "2026-10-06T21:06:43.586630+00:00",
+  "hash_algorithm": "SHA-256 sirovih bajtova svake zasebne datoteke, 1 MiB streaming; bez zajedničkog digesta mape ili JSON normalizacije.",
+  "git_blob_algorithm": "SHA-1(\"blob \" + broj_bajtova + NUL + raw_bytes); zaseban Git identitet, nije raw-file SHA-256.",
+  "provenance": {
+    "evidence_artifact": "C01-bundle-integrity.json",
+    "metadata_url": "https://huggingface.co/api/models/convaiinnovations/laya/tree/55cf4c4ebb4ebe31b2550e8bdf3bd21b99753851/multilingual?recursive=true&expand=false",
+    "metadata_observed_at_utc": "2026-10-06T21:01:02+00:00",
+    "config_comparison_window_utc": {
+      "from": "2026-10-06T21:06:42.014665+00:00",
+      "to": "2026-10-06T21:06:43.586630+00:00"
+    },
+    "method": "Raniji lokalni byte hashovi uspoređeni sa službenim pinanim HF tree API LFS metapodacima za dvije velike datoteke i sirovim HTTP tijelima za tri mala configa; bez ponavljanja mjerenja u DAN-45."
+  },
+  "file_count": 5,
+  "total_size_bytes": 678201636,
+  "files": [
+    {
+      "path": "model.safetensors",
+      "size_bytes": 643835514,
+      "sha256": "9d628fd971b700382ac6f65920a86f149777b2e748e0c955fb3b19695aa8f204",
+      "is_symlink": false,
+      "stable_stat_during_read": true,
+      "source_url": "https://huggingface.co/convaiinnovations/laya/resolve/55cf4c4ebb4ebe31b2550e8bdf3bd21b99753851/multilingual/model.safetensors",
+      "upstream_git_blob_sha1": "b99c8bea239c53f6f6bce734557dc6c403fa6b3e",
+      "verification": {
+        "method": "Pinani HF tree API: LFS SHA-256 i veličina prema lokalnim sirovim bajtovima.",
+        "evidence_time_utc": "2026-10-06T21:01:02+00:00",
+        "lfs_sha256": "9d628fd971b700382ac6f65920a86f149777b2e748e0c955fb3b19695aa8f204",
+        "lfs_size_bytes": 643835514,
+        "sha256_matches": true,
+        "size_matches": true,
+        "status": "MATCH"
+      }
+    },
+    {
+      "path": "rl_agent_config.json",
+      "size_bytes": 472,
+      "sha256": "25061739243b617ad88d1219ba6f8a9c86c5881ca28df024fa2d9b3b2fcc30c6",
+      "is_symlink": false,
+      "stable_stat_during_read": true,
+      "source_url": "https://huggingface.co/convaiinnovations/laya/resolve/55cf4c4ebb4ebe31b2550e8bdf3bd21b99753851/multilingual/rl_agent_config.json",
+      "upstream_git_blob_sha1": "00e35f88bb731bb9126a914666ab1cdac8a204c8",
+      "verification": {
+        "method": "SHA-256 nepromijenjenih HTTP bajtova prije parsiranja; Accept-Encoding identity, limit 65536 B; zasebna usporedba Git blob SHA-1.",
+        "requested_url": "https://huggingface.co/convaiinnovations/laya/resolve/55cf4c4ebb4ebe31b2550e8bdf3bd21b99753851/multilingual/rl_agent_config.json",
+        "evidence_time_utc": "2026-10-06T21:06:43.007858+00:00",
+        "raw_upstream_sha256": "25061739243b617ad88d1219ba6f8a9c86c5881ca28df024fa2d9b3b2fcc30c6",
+        "raw_upstream_size_bytes": 472,
+        "git_blob_sha1": "00e35f88bb731bb9126a914666ab1cdac8a204c8",
+        "etag": "\"00e35f88bb731bb9126a914666ab1cdac8a204c8\"",
+        "repo_commit_header": "55cf4c4ebb4ebe31b2550e8bdf3bd21b99753851",
+        "http_status": 200,
+        "sha256_matches": true,
+        "size_matches": true,
+        "git_blob_matches": true,
+        "repo_commit_matches": true,
+        "status": "MATCH"
+      }
+    },
+    {
+      "path": "encoder/config.json",
+      "size_bytes": 1938,
+      "sha256": "83f6916d13ef0f556ac461f28308dc2bffa7ebeadee8ec9e2db5812020ea5bb4",
+      "is_symlink": false,
+      "stable_stat_during_read": true,
+      "source_url": "https://huggingface.co/convaiinnovations/laya/resolve/55cf4c4ebb4ebe31b2550e8bdf3bd21b99753851/multilingual/encoder/config.json",
+      "upstream_git_blob_sha1": "0de0e2d30638873790cf962def52e2acf4db3eef",
+      "verification": {
+        "method": "SHA-256 nepromijenjenih HTTP bajtova prije parsiranja; Accept-Encoding identity, limit 65536 B; zasebna usporedba Git blob SHA-1.",
+        "requested_url": "https://huggingface.co/convaiinnovations/laya/resolve/55cf4c4ebb4ebe31b2550e8bdf3bd21b99753851/multilingual/encoder/config.json",
+        "evidence_time_utc": "2026-10-06T21:06:43.316075+00:00",
+        "raw_upstream_sha256": "83f6916d13ef0f556ac461f28308dc2bffa7ebeadee8ec9e2db5812020ea5bb4",
+        "raw_upstream_size_bytes": 1938,
+        "git_blob_sha1": "0de0e2d30638873790cf962def52e2acf4db3eef",
+        "etag": "\"0de0e2d30638873790cf962def52e2acf4db3eef\"",
+        "repo_commit_header": "55cf4c4ebb4ebe31b2550e8bdf3bd21b99753851",
+        "http_status": 200,
+        "sha256_matches": true,
+        "size_matches": true,
+        "git_blob_matches": true,
+        "repo_commit_matches": true,
+        "status": "MATCH"
+      }
+    },
+    {
+      "path": "tokenizer/tokenizer.json",
+      "size_bytes": 34363188,
+      "sha256": "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f",
+      "is_symlink": false,
+      "stable_stat_during_read": true,
+      "source_url": "https://huggingface.co/convaiinnovations/laya/resolve/55cf4c4ebb4ebe31b2550e8bdf3bd21b99753851/multilingual/tokenizer/tokenizer.json",
+      "upstream_git_blob_sha1": "56d765858ed38eaabd35cd90759cbb1f89b0baa4",
+      "verification": {
+        "method": "Pinani HF tree API: LFS SHA-256 i veličina prema lokalnim sirovim bajtovima.",
+        "evidence_time_utc": "2026-10-06T21:01:02+00:00",
+        "lfs_sha256": "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f",
+        "lfs_size_bytes": 34363188,
+        "sha256_matches": true,
+        "size_matches": true,
+        "status": "MATCH"
+      }
+    },
+    {
+      "path": "tokenizer/tokenizer_config.json",
+      "size_bytes": 524,
+      "sha256": "6c6b2d8e3c84ce0e671c129cd6b374b235d6f9863042a5836358d00a89bbb5a1",
+      "is_symlink": false,
+      "stable_stat_during_read": true,
+      "source_url": "https://huggingface.co/convaiinnovations/laya/resolve/55cf4c4ebb4ebe31b2550e8bdf3bd21b99753851/multilingual/tokenizer/tokenizer_config.json",
+      "upstream_git_blob_sha1": "c255ac0c8cb34a37d066cd0dafe313fd769d27ae",
+      "verification": {
+        "method": "SHA-256 nepromijenjenih HTTP bajtova prije parsiranja; Accept-Encoding identity, limit 65536 B; zasebna usporedba Git blob SHA-1.",
+        "requested_url": "https://huggingface.co/convaiinnovations/laya/resolve/55cf4c4ebb4ebe31b2550e8bdf3bd21b99753851/multilingual/tokenizer/tokenizer_config.json",
+        "evidence_time_utc": "2026-10-06T21:06:43.586630+00:00",
+        "raw_upstream_sha256": "6c6b2d8e3c84ce0e671c129cd6b374b235d6f9863042a5836358d00a89bbb5a1",
+        "raw_upstream_size_bytes": 524,
+        "git_blob_sha1": "c255ac0c8cb34a37d066cd0dafe313fd769d27ae",
+        "etag": "\"c255ac0c8cb34a37d066cd0dafe313fd769d27ae\"",
+        "repo_commit_header": "55cf4c4ebb4ebe31b2550e8bdf3bd21b99753851",
+        "http_status": 200,
+        "sha256_matches": true,
+        "size_matches": true,
+        "git_blob_matches": true,
+        "repo_commit_matches": true,
+        "status": "MATCH"
+      }
+    }
+  ],
+  "legacy_registry": {
+    "path": "D:\\laya\\registry-lokalni.json",
+    "source": "Ranije potvrđeno opažanje u C-01; nije ponovno čitan ni promijenjen u DAN-45.",
+    "digests": [
+      {
+        "sha256": "1793ac850c9b50a324737e7b62f68993415bce62e806a1533e72d7dd03578d4b",
+        "original_field": "weightsSha256"
+      },
+      {
+        "sha256": "6852bbf6ae96eb7f9a550306f31a6fe617efc89231d18d5235517e4ab6450840",
+        "original_field": "tokenizerSha256"
+      }
+    ],
+    "expected_model_size_bytes": 643835514,
+    "weights_raw_file_match": false,
+    "weights_size_match": true,
+    "tokenizer_matching_paths": [],
+    "tokenizer_target": "UNRESOLVED",
+    "aggregate_algorithm_attempted": false,
+    "conclusion": "Stari digesti ne odgovaraju provjerenim per-file identitetima; ne dokazuju oštećenje bundlea. Semantika starog tokenizer cilja ostaje nepoznata."
+  },
+  "verification_history": [
+    {
+      "completed_at": "2026-10-06T21:01:02+00:00",
+      "status": "Dvije LFS datoteke podudarne; tri configa tada samo veličinom, sadržaj NOT_VERIFIED."
+    },
+    {
+      "completed_at": "2026-10-06T21:06:43.586630+00:00",
+      "status": "Dopuna: sva tri raw configa podudarna po SHA-256, veličini, Git blob OID/ETag i X-Repo-Commit; svih pet sadržajno potvrđeno."
+    }
+  ],
+  "runtime_status": {
+    "loader_manifest_wired": false,
+    "legacy_registry_modified": false,
+    "offline_load": "NOT_RUN",
+    "tokenizer_and_final_prompt_options_preflight": "NOT_RUN",
+    "quality_and_calibration": "NOT_RUN",
+    "ram": "NOT_MEASURED",
+    "latency": "NOT_MEASURED",
+    "controller_integration": "OUT_OF_SCOPE"
+  },
+  "limits": [
+    "Byte integritet nije dokaz funkcionalne integracije, offline ponašanja ili zadovoljenja 3 GiB/P95 kriterija.",
+    "Nije potvrđen potpis izdavača ni podrijetlo trening podataka.",
+    "Vrijeme hashiranja nije vrijeme učitavanja ili inferencije.",
+    "Za usklađenje starih digesta potrebna je izričita pregledana migracija."
+  ]
+}

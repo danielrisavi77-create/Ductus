@@ -1,0 +1,25 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "ductura-engineering",
+  "version": "0.1.0",
+  "description": "Projektni postupci za Ductus evidenciju, oporavak lokalnog sadržaja i izolaciju identiteta.",
+  "author": {
+    "name": "Ductus project"
+  },
+  "repository": "https://github.com/danielrisavi77-create/Ductus",
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Ductura Engineering",
+        "shortDescription": "Dokazi, oporavak i identitet",
+        "longDescription": "Tri uska projektna postupka s provjerljivim izvorima i jasno odvojenim slojevima dokaza.",
+        "developerName": "Ductus project",
+        "category": "Productivity",
+        "capabilities": [
+          "Interactive"
+        ],
+        "defaultPrompt": "Provjeri zadani Ductus scenarij uz točnu reviziju, izvore i granice zaključka."
+      }
+    }
+  }
+}
