@@ -9,7 +9,9 @@ import { fileURLToPath } from "node:url";
 
 export const ROTATE_AT = 150_000;
 // Upper safety limit for the permanent orchestrator session (docs/ORKESTRATOR.md §7).
-export const ORCHESTRATOR_LIMIT = 200_000;
+// Owner decision 10 Oct 2026: 400k. The first reminder comes earlier, at 300k.
+export const ORCHESTRATOR_REMIND_AT = 300_000;
+export const ORCHESTRATOR_LIMIT = 400_000;
 export const HARD_AT = 250_000;
 export const LARGE_DOC_BYTES = 16_000;
 export const OUTLINE_LIMIT = 80;
@@ -168,7 +170,9 @@ const HANDOFF_AT = {
 // new task. The orchestrator gets a reminder, and so does a session whose
 // role is unknown, because it may be the orchestrator.
 export function budgetNotice(tokens, role = "unknown") {
-  if (tokens < ROTATE_AT) return null;
+  // A count that is not a finite number (NaN, a string) gives no notice instead of "NaNk".
+  if (typeof tokens !== "number" || !Number.isFinite(tokens)) return null;
+  if (tokens < (role === "orchestrator" ? ORCHESTRATOR_REMIND_AT : ROTATE_AT)) return null;
   const size = `${Math.round(tokens / 1000)}k`;
   const hard = tokens >= HARD_AT;
   if (role === "orchestrator") {

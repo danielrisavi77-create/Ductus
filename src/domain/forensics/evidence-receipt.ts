@@ -1,7 +1,12 @@
 import { isSignatureEnvelope, type SignatureEnvelope } from "./signature";
 import { sha256WebCrypto } from "./crypto";
 import { canonicalizeJcs } from "./jcs";
-import { EVIDENCE_SEGMENT_SCHEMA_V2, type EvidenceSegmentV2 } from "./evidence-segment-v2";
+import {
+  EVIDENCE_SEGMENT_SCHEMA_V2,
+  MAX_EVIDENCE_PROFILE_ID_LENGTH,
+  type EvidenceSegmentV2,
+} from "./evidence-segment-v2";
+import { hasOnlyKeys, isPlainObject } from "../json";
 
 export const EVIDENCE_RECEIPT_SCHEMA_V1 = "ductus-evidence-receipt-v1" as const;
 
@@ -54,6 +59,31 @@ export async function digestEvidenceReceiptPayload(
 
 
 const SHA256_HEX = /^[0-9a-f]{64}$/;
+// The payload is what gets signed and the envelope is what the client keeps as
+// proof: a field outside these sets was checked by nobody, so it is refused.
+const RECEIPT_PAYLOAD_KEYS: ReadonlySet<string> = new Set<
+  keyof EvidenceReceiptPayloadV1
+>([
+  "receiptSchema",
+  "receiptId",
+  "evidencePackageId",
+  "documentId",
+  "sessionId",
+  "segmentId",
+  "segmentHash",
+  "predecessorSegmentHash",
+  "previousReceiptId",
+  "evidenceSchema",
+  "evidenceProfileId",
+  "sequenceFrom",
+  "sequenceTo",
+  "eventCount",
+  "payloadBytes",
+  "acceptedAt",
+]);
+const SIGNED_RECEIPT_KEYS: ReadonlySet<string> = new Set<
+  keyof SignedEvidenceReceipt
+>(["payload", "payloadDigestSha256", "signature"]);
 
 function nonEmpty(value: unknown, max = 256): value is string {
   return (
@@ -72,10 +102,10 @@ function canonicalInstant(value: unknown): value is string {
 export function isEvidenceReceiptPayloadV1(
   value: unknown,
 ): value is EvidenceReceiptPayloadV1 {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (!isPlainObject(value) || !hasOnlyKeys(value, RECEIPT_PAYLOAD_KEYS)) {
     return false;
   }
-  const v = value as Record<string, unknown>;
+  const v = value;
   return (
     v.receiptSchema === EVIDENCE_RECEIPT_SCHEMA_V1 &&
     nonEmpty(v.receiptId) &&
@@ -90,7 +120,7 @@ export function isEvidenceReceiptPayloadV1(
         SHA256_HEX.test(v.predecessorSegmentHash))) &&
     (v.previousReceiptId === null || nonEmpty(v.previousReceiptId)) &&
     v.evidenceSchema === EVIDENCE_SEGMENT_SCHEMA_V2 &&
-    nonEmpty(v.evidenceProfileId, 120) &&
+    nonEmpty(v.evidenceProfileId, MAX_EVIDENCE_PROFILE_ID_LENGTH) &&
     Number.isSafeInteger(v.sequenceFrom) &&
     Number(v.sequenceFrom) >= 1 &&
     Number.isSafeInteger(v.sequenceTo) &&
@@ -108,10 +138,10 @@ export function isEvidenceReceiptPayloadV1(
 export function isSignedEvidenceReceipt(
   value: unknown,
 ): value is SignedEvidenceReceipt {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (!isPlainObject(value) || !hasOnlyKeys(value, SIGNED_RECEIPT_KEYS)) {
     return false;
   }
-  const v = value as Record<string, unknown>;
+  const v = value;
   return (
     isEvidenceReceiptPayloadV1(v.payload) &&
     typeof v.payloadDigestSha256 === "string" &&
