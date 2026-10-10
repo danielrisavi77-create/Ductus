@@ -32,7 +32,8 @@ const heredoc = (agent: string) =>
     ')"',
   ].join("\n");
 
-describe("pr-metadata-precheck hook", () => {
+// Each case starts a Node process; the default 5 s is tight on a loaded machine.
+describe("pr-metadata-precheck hook", { timeout: 30_000 }, () => {
   it("ignores commands that do not create or edit a PR", () => {
     expect(run("git status").status).toBe(0);
     expect(run("gh pr view 12").status).toBe(0);
