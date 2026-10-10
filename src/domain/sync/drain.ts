@@ -283,6 +283,10 @@ function isSendable(row: PendingTransaction): boolean {
  * the awaited row cannot be proved safe to replay — gone, a different key,
  * at or past an unsafe boundary, or the marker itself is malformed — nothing
  * is sent: a visible stall is recoverable, a self-inflicted CONFLICT is sticky.
+ * The hold itself always ends: a verified answer for the held row releases
+ * it, and so does any answer in which the server refused the held key
+ * (`nextAwaitingReceipt`). Only a lost, unreadable or unauthenticated answer
+ * keeps it, because only those leave open whether the key landed.
  */
 export function planDrain(
   pending: readonly PendingTransaction[],
@@ -587,6 +591,16 @@ export function ackedRevision(outcome: DrainOutcome): number | null {
   return VERIFIED_COMMIT_REVISIONS.get(outcome)?.revision ?? null;
 }
 
+/** Answers in which the server read the key and refused it: it did not land. */
+const KEY_REFUSED: ReadonlySet<string> = new Set([
+  "stale_base",
+  "too_large",
+  "txid_reused",
+  "not_found",
+  "invalid_document",
+  "invalid_client_transaction_id",
+]);
+
 /**
  * What the queue is waiting on after `sent` was answered with `outcome`.
  *
@@ -604,8 +618,23 @@ export function ackedRevision(outcome: DrainOutcome): number | null {
  *                               Replaying `sent` is safe either way:
  *                               `duplicate` if it landed, the commit itself if
  *                               it did not.
- *   every other answer          → `previous`, unchanged: the server said this
- *                               commit did not land, so whatever was owed is
+ *   stale_base / too_large / txid_reused / not_found / invalid_document /
+ *   invalid_client_transaction_id
+ *                               → null when `sent` is the held row, else
+ *                               `previous`: the server read this key and
+ *                               refused it, and a key that had landed would
+ *                               have been answered `duplicate`. Nothing is
+ *                               owed for it any more, so the hold ends here;
+ *                               keeping it would replay the refused row after
+ *                               every rebase (a CONFLICT loop) or, once the
+ *                               row is gone, stall the queue for good. The
+ *                               refusal itself still surfaces as CONFLICT or
+ *                               ERROR (`outcomeToEvents`), and no ACK follows.
+ *   unauthenticated / invalid / anything else
+ *                               → `previous`, unchanged: the answer says
+ *                               nothing about whether this key landed (the
+ *                               session is gone, or the payload was not a
+ *                               readable outcome), so whatever was owed is
  *                               still owed and nothing new is.
  *
  * "Verified" is `ackedRevision`, i.e. only an outcome that `outcomeToEvents`
@@ -620,7 +649,14 @@ export function nextAwaitingReceipt(
     return previous ?? awaitingReceiptFor(sent);
   }
   if (outcome?.status !== "committed" && outcome?.status !== "duplicate") {
-    return previous ?? null;
+    if (previous == null) {
+      return null;
+    }
+    const heldWasSent =
+      previous.documentId === sent?.documentId &&
+      previous.localSeq === sent?.localSeq &&
+      previous.clientTransactionId === sent?.tx?.clientTransactionId;
+    return heldWasSent && KEY_REFUSED.has(outcome?.status as string) ? null : previous;
   }
   // The verification must be for THIS row: a verified outcome reused or
   // cached for another row or document releases nothing.

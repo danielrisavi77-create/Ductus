@@ -247,14 +247,52 @@ describe("DAN-110 plan #158 — lost response", () => {
     expect(planDrain([r7, r8], meta("ERROR"), awaiting).send).toBe(r7);
   });
 
-  it("11: someone else's revision on the replay is still a conflict, never a rewrite", async () => {
+  it("11: someone else's revision on the replay is a conflict, and after the rebase the new row goes out", async () => {
+    // Before this fix the test asserted the hold survived stale_base. That was
+    // wrong: the server refused T7 itself, so T7 never landed (a landed key
+    // replays as `duplicate`), and a surviving hold replays T7 after every
+    // rebase (CONFLICT loop) or, once r7 is gone, stalls the queue for good.
     const awaiting = nextAwaitingReceipt(r7, LOST, null);
     const stale: DrainOutcome = { status: "stale_base", currentRevision: 5 };
     const events = await outcomeToEvents(stale, verification(r7, 5), true);
     expect(events).toEqual([{ type: "SYNC_STALE_BASE" }]);
     expect(syncReducer("SYNCING", events[0]!)).toBe("CONFLICT");
     expect(ackedRevision(stale)).toBeNull();
-    expect(nextAwaitingReceipt(r7, stale, awaiting)).toEqual(awaiting);
+    const after = nextAwaitingReceipt(r7, stale, awaiting);
+    expect(after).toBeNull();
+
+    // Still a conflict, never a rewrite: nothing leaves until Ana decides.
+    expect(planDrain([r7, r8], meta("CONFLICT"), after).send).toBeNull();
+    expect(syncReducer("CONFLICT", { type: "CONFLICT_RESOLVED", via: "rebase" })).toBe(
+      "SAVING_LOCAL",
+    );
+
+    // The rebase journals r9 on the server's revision 5; r9 goes out, not r7,
+    // whether the old rows are still queued or already cleared.
+    const r9 = row(D1, 9, 5);
+    expect(planDrain([r7, r8, r9], meta("LOCAL_DURABLE"), after)).toEqual({
+      send: r9,
+      supersededUpTo: 8,
+    });
+    expect(planDrain([r9], meta("LOCAL_DURABLE"), after).send).toBe(r9);
+    expect(r9.tx.baseRevision).toBe(5);
+
+    // Discarding instead leaves an empty queue and no marker to stall on.
+    expect(syncReducer("CONFLICT", { type: "CONFLICT_RESOLVED", via: "discard" })).toBe("SYNCED");
+    expect(planDrain([], meta("SYNCED"), after).send).toBeNull();
+  });
+
+  it("11b: a fatal refusal of the replayed key ends the hold, shows ERROR and lets a new version out", async () => {
+    const awaiting = nextAwaitingReceipt(r7, LOST, null);
+    const refused: DrainOutcome = { status: "invalid_document" };
+    expect(await outcomeToEvents(refused, verification(r7, 5), true)).toEqual([
+      { type: "SYNC_FAILED", retryable: false },
+    ]);
+    expect(syncReducer("SYNCING", { type: "SYNC_FAILED", retryable: false })).toBe("ERROR");
+    const after = nextAwaitingReceipt(r7, refused, awaiting);
+    expect(after).toBeNull();
+    // r8 is on base 4 and T7 never landed, so base 4 is still the server's.
+    expect(planDrain([r7, r8], meta("ERROR"), after).send).toBe(r8);
   });
 
   it("12: nothing older than r7 is superseded past it, and a missing r7 is a visible stall", () => {
@@ -272,4 +310,130 @@ describe("DAN-110 plan #158 — lost response", () => {
     await outcomeToEvents(d2Ack, verification(r3, 2), false);
     expect(nextAwaitingReceipt(r7, d2Ack, heldD1)).toEqual(heldD1);
   });
+});
+
+/**
+ * Replay outcome → marker → next state, for a replay of the held row r7.
+ * Every row of the table in the PR description is one case here.
+ */
+describe("DAN-110 replay outcome table", () => {
+  type Row = {
+    outcome: () => DrainOutcome;
+    revision: number;
+    marker: "released" | "held";
+    events: SyncEvent[];
+    state: SyncState;
+    nextSend: PendingTransaction | null;
+  };
+  const ACK_NOTHING: SyncEvent[] = [];
+  const TABLE: Record<string, Row> = {
+    "committed, verified": {
+      outcome: () => answer("committed", 5, r7),
+      revision: 5,
+      marker: "released",
+      events: ACK_NOTHING,
+      state: "SYNCING",
+      nextSend: r8,
+    },
+    "duplicate, verified": {
+      outcome: () => answer("duplicate", 5, r7),
+      revision: 5,
+      marker: "released",
+      events: ACK_NOTHING,
+      state: "SYNCING",
+      nextSend: r8,
+    },
+    "committed, pending signature": {
+      outcome: () => answer("committed", 5, null),
+      revision: 5,
+      marker: "held",
+      events: ACK_NOTHING,
+      state: "SYNCING",
+      nextSend: r7,
+    },
+    "duplicate, signature for another key": {
+      outcome: () => answer("duplicate", 5, r8),
+      revision: 5,
+      marker: "held",
+      events: [{ type: "SYNC_FAILED", retryable: false }],
+      state: "ERROR",
+      nextSend: r7,
+    },
+    transport_error: {
+      outcome: () => LOST,
+      revision: 5,
+      marker: "held",
+      events: [{ type: "SYNC_FAILED", retryable: true }],
+      state: "ERROR",
+      nextSend: r7,
+    },
+    stale_base: {
+      outcome: () => ({ status: "stale_base", currentRevision: 5 }),
+      revision: 5,
+      marker: "released",
+      events: [{ type: "SYNC_STALE_BASE" }],
+      state: "CONFLICT",
+      nextSend: null,
+    },
+    ...Object.fromEntries(
+      (
+        [
+          "too_large",
+          "txid_reused",
+          "not_found",
+          "invalid_document",
+          "invalid_client_transaction_id",
+        ] as const
+      ).map((status) => [
+        status,
+        {
+          outcome: () => ({ status }) as DrainOutcome,
+          revision: 5,
+          marker: "released",
+          events: [{ type: "SYNC_FAILED", retryable: false }],
+          state: "ERROR",
+          nextSend: r8,
+        } satisfies Row,
+      ]),
+    ),
+    ...Object.fromEntries(
+      (["unauthenticated", "invalid"] as const).map((status) => [
+        status,
+        {
+          outcome: () => ({ status }) as unknown as DrainOutcome,
+          revision: 5,
+          marker: "held",
+          events: [{ type: "SYNC_FAILED", retryable: false }],
+          state: "ERROR",
+          nextSend: r7,
+        } satisfies Row,
+      ]),
+    ),
+  };
+
+  for (const [name, expected] of Object.entries(TABLE)) {
+    it(`${name} → marker ${expected.marker} → ${expected.state}`, async () => {
+      const awaiting = nextAwaitingReceipt(r7, LOST, null);
+      const queue = [r7, r8];
+      expect(planDrain(queue, meta("ERROR"), awaiting).send).toBe(r7);
+      const outcome = expected.outcome();
+      const events = await outcomeToEvents(
+        outcome,
+        verification(r7, expected.revision),
+        newerRowsQueued(queue, r7),
+      );
+      expect(events).toEqual(expected.events);
+      expect(events.some((e) => e.type === "SYNC_ACK")).toBe(false);
+      let state: SyncState = "SYNCING";
+      for (const event of events) {
+        state = syncReducer(state, event);
+      }
+      expect(state).toBe(expected.state);
+      const after = nextAwaitingReceipt(r7, outcome, awaiting);
+      expect(after).toEqual(expected.marker === "released" ? null : awaiting);
+      // A released marker after a landed key drops r7 from the queue first.
+      const remaining = ackedRevision(outcome) === null ? queue : queue.filter((r) => r !== r7);
+      expect(planDrain(remaining, meta(state), after).send).toBe(expected.nextSend);
+    });
+  }
 });

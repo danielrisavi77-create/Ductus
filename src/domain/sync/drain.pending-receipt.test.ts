@@ -241,9 +241,10 @@ describe("lost response → EDIT → drain", () => {
     expect(planDrain([first, row(2, 1)], meta("LOCAL_DURABLE"), beforeSend).send).toBe(first);
   });
 
-  it("a real stale_base on the held row is still a conflict", async () => {
+  it("a real stale_base on the held row is a conflict and ends the hold", async () => {
     // Someone else moved the document: replaying the held row must not be
-    // softened into a retry.
+    // softened into a retry. The server read tx-1 and refused it, so it did
+    // not land (a landed key replays as `duplicate`) and nothing is owed.
     const first = row(1, 1);
     const awaiting = nextAwaitingReceipt(first, LOST, null);
     const stale: DrainOutcome = { status: "stale_base", currentRevision: 5 };
@@ -251,7 +252,16 @@ describe("lost response → EDIT → drain", () => {
       { type: "SYNC_STALE_BASE" },
     ]);
     expect(isRetryable(stale)).toBe(false);
-    expect(nextAwaitingReceipt(first, stale, awaiting)).toEqual(awaiting);
+    expect(ackedRevision(stale)).toBeNull();
+    const after = nextAwaitingReceipt(first, stale, awaiting);
+    expect(after).toBeNull();
+    // CONFLICT holds everything until the author decides; a rebase then
+    // journals a new row on the server's base, and that row goes out.
+    expect(planDrain([first, row(2, 1)], meta("CONFLICT"), after).send).toBeNull();
+    const rebased = row(3, 5);
+    expect(planDrain([first, row(2, 1), rebased], meta("LOCAL_DURABLE"), after).send).toBe(
+      rebased,
+    );
   });
 });
 
@@ -365,14 +375,46 @@ describe("nextAwaitingReceipt", () => {
     }
   });
 
-  it("keeps the previous marker on answers that did not land this commit", () => {
-    for (const outcome of [
-      { status: "stale_base", currentRevision: 9 },
-      { status: "too_large" },
-      { status: "invalid" },
-      null,
-    ] as unknown as DrainOutcome[]) {
+  const KEY_REFUSALS = [
+    { status: "stale_base", currentRevision: 9 },
+    { status: "too_large" },
+    { status: "txid_reused" },
+    { status: "not_found" },
+    { status: "invalid_document" },
+    { status: "invalid_client_transaction_id" },
+  ] as unknown as DrainOutcome[];
+  const SAYS_NOTHING_ABOUT_LANDING = [
+    { status: "unauthenticated" },
+    { status: "invalid" },
+    { status: "something_new" },
+    null,
+    undefined,
+  ] as unknown as DrainOutcome[];
+
+  it("ends the hold when the server refuses the held key itself", () => {
+    // A landed key replays as `duplicate`, so a refusal of the same key
+    // proves it never landed: keeping the hold would replay it forever.
+    for (const outcome of KEY_REFUSALS) {
+      expect(nextAwaitingReceipt(sent, outcome, previous)).toBeNull();
+    }
+  });
+
+  it("keeps the hold on answers that say nothing about whether the key landed", () => {
+    for (const outcome of SAYS_NOTHING_ABOUT_LANDING) {
       expect(nextAwaitingReceipt(sent, outcome, previous)).toEqual(previous);
+    }
+  });
+
+  it("a refusal of another row never releases the held one", () => {
+    const others = [
+      row(4, 1),
+      { ...row(3, 1), tx: { ...tx(3, 1), clientTransactionId: "tx-other" } },
+      { ...row(3, 1), documentId: "22222222-2222-4222-8222-222222222222" },
+    ];
+    for (const other of others) {
+      for (const outcome of [...KEY_REFUSALS, ...SAYS_NOTHING_ABOUT_LANDING]) {
+        expect(nextAwaitingReceipt(other, outcome, previous)).toEqual(previous);
+      }
     }
   });
 
