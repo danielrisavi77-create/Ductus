@@ -18,6 +18,10 @@ Kako više AI coding sesija radi na Ductusu istodobno, uključujući više Claud
 | **Independent Reviewer** | Neovisni pregled PR-a; ne mijenja pregledanu granu | read-only | prema risku |
 | **Bug Hunter** | Pokušava razbiti main/staging i otvara reproducibilne issuee; ne popravlja nalaz | read-only | medium |
 
+**Prednost modela.** Stupac "Model i napor" je zadani model uloge. Za `critical` posao i za područja evidencije, ovlasti, prijave, sinkronizacije i sigurnosti vrijedi tablica uloga × risk → model iz `docs/ORKESTRATOR.md` §7 (Opus), čak i kad je zadani model uloge Sonnet (npr. Platforma ili Frontend na `critical` zadatku). U svim ostalim slučajevima vrijedi zadani model uloge. Vidi i "Model po ulozi" u §4.
+
+Profili `ductus-bug-hunter` i `ductus-platform-sre` u `.claude/agents/` imaju fiksan Sonnet. Orkestrator pri svakom pokretanju izričito zadaje model i effort; to ima prednost pred modelom iz profila, a zadani model bilježi se u zapisu pokretanja na #87. Profili se ovim pravilom ne mijenjaju.
+
 Neovisni reviewer može biti Claude, Codex, ChatGPT ili Grok s drugog `runtime:slot` identiteta od autora. Grok je dopušten kao autentificirani review/QA provider preko verificiranog GitHub App sluga `grok-by-xai`. Codex CLI je samo jedan mogući način pregleda (§5), ne jedini gate. Provider ne određuje ovlast; uloga i agent identitet je određuju.
 
 Pravila vlasništva:
@@ -122,7 +126,7 @@ Razmak dolazi odmah iza imena pružatelja, bez zareza ili drugog znaka: gate či
 - **Pretraživanje preko pomoćnog agenta** (Explore) kad treba pregledati mnogo datoteka; u glavni razgovor vraća se zaključak, ne sadržaj.
 - **Testovi kroz naredbe s kratkim izlazom** (npr. `vitest run --reporter=dot`); puni izlaz samo za test koji pada.
 - **Bez nepotrebnih pluginova i konektora** u ovom projektu (`.claude/settings.local.json`, §7).
-- **Model po ulozi** iz tablice u §1, a po riziku iz tablice "Model po poslu" u `docs/ORKESTRATOR.md` §7 (vrijedi i za jednokratne sesije u oblaku). Opus samo gdje je pogreška skupa.
+- **Model po ulozi** iz tablice u §1, a po riziku iz tablice "Model po poslu" u `docs/ORKESTRATOR.md` §7 (vrijedi i za jednokratne sesije u oblaku). Opus samo gdje je pogreška skupa. Prednost: vidi "Prednost modela" u §1.
 - **Predaja posla kroz `STATE.md` i opis PR-a**, ne kroz prepričavanje u razgovoru.
 - **Neovisni reviewer pregledava samo diff PR-a i relevantna kanonska pravila**, ne cijeli repo bez razloga.
 
@@ -196,7 +200,7 @@ Razinu zadaje orkestrator u zadatku; kad je ne zada, sesija bira po tablici (Dan
 | `standard` | GPT-6-Sol, high | doslovni prijenos s testovima, portovi i adapteri, ekrani i tokovi sučelja, migracije bez novih ovlasti |
 | `critical` | GPT-6-Astra, xhigh | evidencija, potpis i kriptografija, prijava i sesije, RLS i pgTAP matrica, predaja i rekonstrukcija, sve što dira `PRODUCT.md` §5 |
 
-Claude worker sesije trenutačno su na Opusu, osim gdje `docs/ORKESTRATOR.md` §7 ("Model po poslu") traži drugi model; effort orkestrator postavlja po zadatku: `light` → low, `standard` → medium, `critical` → high. Codex worker koristi model/effort koji orkestrator eksplicitno zada ili računov zadani coding model.
+Claude worker sesije trenutačno su na Opusu, osim gdje `docs/ORKESTRATOR.md` §7 ("Model po poslu") traži drugi model; effort orkestrator postavlja po zadatku: `low` → low, `standard` → medium, `critical` → high. Codex worker koristi model/effort koji orkestrator eksplicitno zada ili računov zadani coding model.
 
 Codex radi i desetak minuta, pa se skripta pokreće u pozadini s vremenskim ograničenjem od najmanje 20 minuta; inače se prekine prije objave komentara. Skripta pokreće `codex exec review --base origin/main` (samo diff grane); `AGENTS.md` prepoznaje review način, a nalaz ide kao komentar na PR. Codex troši ChatGPT kvotu, ne Claude kvotu. Autor ispravlja prihvaćene nalaze i u izvještaju navodi odbijene s razlogom. Kritičan nalaz koji autor ne može riješiti znači status "blokirano".
 
