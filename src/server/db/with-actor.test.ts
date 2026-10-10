@@ -43,7 +43,7 @@ describe("withActor", () => {
     const value = await db.withActor(TOKEN, async (tx) => (await tx.query("SELECT 1", [7])).rows);
 
     expect(value).toEqual([{ answer: 1 }]);
-    expect(db.statements()).toEqual(["BEGIN", "SELECT", "SELECT", "SELECT", "COMMIT"]);
+    expect(db.statements()).toEqual(["BEGIN", "SELECT", "SELECT", "SELECT", "COMMIT", "DISCARD"]);
     expect(db.sent[1].text).toContain("set_config('app.session_token', $1, true)");
     expect(db.sent[1].text).toContain("set_config('app.with_actor_tx', $2, true)");
     expect(db.sent[1].values?.[0]).toEqual(TOKEN);
@@ -79,7 +79,7 @@ describe("withActor", () => {
     const db = fakePool();
     const failure = new Error("fn failed");
     await expect(db.withActor(TOKEN, async () => Promise.reject(failure))).rejects.toBe(failure);
-    expect(db.statements()).toEqual(["BEGIN", "SELECT", "ROLLBACK"]);
+    expect(db.statements()).toEqual(["BEGIN", "SELECT", "ROLLBACK", "DISCARD"]);
     expect(db.released).toEqual([undefined]);
   });
 
@@ -142,7 +142,7 @@ describe("withActor", () => {
     const db = fakePool();
     const statement = text;
     await expect(db.withActor(TOKEN, (tx) => tx.query(statement))).rejects.toThrow("not allowed in a withActor transaction");
-    expect(db.statements()).toEqual(["BEGIN", "SELECT", "ROLLBACK"]);
+    expect(db.statements()).toEqual(["BEGIN", "SELECT", "ROLLBACK", "DISCARD"]);
   });
 
   it.each([
@@ -166,7 +166,7 @@ describe("withActor", () => {
     const inner = vi.fn(async () => "inner");
     await expect(db.withActor(TOKEN, async () => db.withActor(TOKEN, inner))).rejects.toThrow("nested call");
     expect(inner).not.toHaveBeenCalled();
-    expect(db.statements()).toEqual(["BEGIN", "SELECT", "ROLLBACK"]);
+    expect(db.statements()).toEqual(["BEGIN", "SELECT", "ROLLBACK", "DISCARD"]);
     // Calls side by side are not nested.
     await expect(Promise.all([db.withActor(TOKEN, async () => 1), db.withActor(null, async () => 2)])).resolves.toEqual([1, 2]);
   });
@@ -175,7 +175,7 @@ describe("withActor", () => {
     const aborted = Object.assign(new Error("current transaction is aborted"), { code: "25P02" });
     const db = fakePool({ "SELECT pg_catalog.current_setting": aborted });
     await expect(db.withActor(TOKEN, async () => "saved")).rejects.toThrow("rolled back");
-    expect(db.statements()).toEqual(["BEGIN", "SELECT", "SELECT", "ROLLBACK"]);
+    expect(db.statements()).toEqual(["BEGIN", "SELECT", "SELECT", "ROLLBACK", "DISCARD"]);
   });
 
   it("closes a connection that dropped inside fn and stops listening to it", async () => {
@@ -187,6 +187,25 @@ describe("withActor", () => {
     });
     expect(db.released).toEqual([dropped]);
     expect(db.client.listeners.size).toBe(0);
+  });
+
+  it("closes a connection it cannot reset and keeps the committed result", async () => {
+    const resetFailure = new Error("connection lost");
+    const db = fakePool({ DISCARD: resetFailure });
+    await expect(db.withActor(TOKEN, async () => "saved")).resolves.toBe("saved");
+    expect(db.statements()).toEqual(["BEGIN", "SELECT", "SELECT", "COMMIT", "DISCARD"]);
+    expect(db.released).toEqual([resetFailure]);
+
+    const failure = new Error("fn failed");
+    const failed = fakePool({ DISCARD: resetFailure });
+    await expect(failed.withActor(TOKEN, async () => Promise.reject(failure))).rejects.toBe(failure);
+    expect(failed.released).toEqual([resetFailure]);
+  });
+
+  it("does not reset a connection that is closed anyway", async () => {
+    const db = fakePool({ "SELECT pg_catalog.set_config": { rows: [{ token_set: true, app_role: false }] } });
+    await expect(db.withActor(TOKEN, async () => "ran")).rejects.toThrow("not a ductus_app login");
+    expect(db.statements()).not.toContain("DISCARD");
   });
 
   it("fails when COMMIT answers ROLLBACK (aborted transaction)", async () => {

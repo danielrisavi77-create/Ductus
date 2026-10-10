@@ -186,6 +186,19 @@ export function createWithActor(pool: Pick<Pool, "connect">): WithActor {
       }
       throw error;
     } finally {
+      // fn's own SELECT can set a parameter for the whole session
+      // (set_config with is_local false, also inside an SQL function) or take a
+      // session-level advisory lock; COMMIT keeps both and ROLLBACK keeps the
+      // lock. No check before COMMIT sees every such change, so every
+      // connection is reset before it goes back to the pool: DISCARD ALL
+      // restores each parameter to its login value and drops locks, plans,
+      // temporary objects and sequence state. A connection it cannot reset is
+      // closed. The outcome of the transaction stands either way.
+      if (!connectionError) {
+        await client.query("DISCARD ALL").catch((error: unknown) => {
+          connectionError = error instanceof Error ? error : new Error("withActor: DISCARD ALL failed");
+        });
+      }
       client.removeListener("error", onConnectionError);
       client.release(connectionError);
     }

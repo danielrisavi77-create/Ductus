@@ -26,11 +26,11 @@ const tokenLogout = newToken();
 const admin = new pg.Pool({ connectionString: ADMIN_URL, max: 2 });
 const pools: pg.Pool[] = [admin];
 
-function appPool(max: number) {
+function appPool(max: number, options?: string) {
   const url = new URL(ADMIN_URL);
   url.username = LOGIN;
   url.password = password;
-  const pool = new pg.Pool({ connectionString: url.href, max });
+  const pool = new pg.Pool({ connectionString: url.href, max, options });
   pools.push(pool);
   return pool;
 }
@@ -249,6 +249,45 @@ describe("withActor refuses what could outlive its transaction", () => {
     expect(after.pid).not.toBe(pid);
     expect(after.user_id).toBeNull();
     expect((await who(withActor, tokenB)).user_id).toBe(userB);
+  });
+
+  // Review on #160: a SELECT in fn can set any parameter for the session. The
+  // login value of statement_timeout stands in for the limits of DAN-120.
+  const SETTINGS = `SELECT pg_catalog.pg_backend_pid() AS pid,
+    current_setting('statement_timeout') AS statement_timeout, current_setting('lock_timeout') AS lock_timeout,
+    current_setting('search_path') AS search_path, current_setting('application_name') AS application_name,
+    coalesce(current_setting('app.leftover', true), '') AS leftover,
+    (SELECT count(*)::int FROM pg_catalog.pg_locks WHERE locktype = 'advisory' AND pid = pg_catalog.pg_backend_pid()) AS advisory_locks`;
+  const LEAVE_BEHIND = `SELECT set_config('statement_timeout', '0', false), set_config('lock_timeout', '1', false),
+    set_config('search_path', 'public', false), set_config('application_name', 'it-leftover', false),
+    set_config('app.leftover', 'x', false), pg_catalog.pg_advisory_lock(4242)`;
+
+  it.each([
+    ["commits", async () => "saved"],
+    ["fails", async () => Promise.reject(new Error("fn failed"))],
+  ])("resets session settings and advisory locks that fn left when it %s", async (_name, end) => {
+    const pool = appPool(1, "-c statement_timeout=15000 -c application_name=it-login");
+    const withActor = createWithActor(pool);
+    const settings = () => withActor(null, async (tx) => (await tx.query(SETTINGS)).rows[0]);
+    const before = await settings();
+    expect(before).toMatchObject({ statement_timeout: "15s", application_name: "it-login", advisory_locks: 0 });
+
+    await withActor(tokenA, async (tx) => {
+      await tx.query(LEAVE_BEHIND);
+      expect((await tx.query(SETTINGS)).rows[0]).toMatchObject({ statement_timeout: "0", advisory_locks: 1 });
+      return end();
+    }).catch(() => undefined);
+    // The same connection, back at its login values.
+    expect(await settings()).toEqual(before);
+    expect((await pool.query(SETTINGS)).rows[0]).toEqual(before);
+    // The advisory lock went with it: another connection can take it.
+    const other = await admin.connect();
+    try {
+      expect((await other.query("SELECT pg_catalog.pg_try_advisory_lock(4242) AS got")).rows[0].got).toBe(true);
+      await other.query("SELECT pg_catalog.pg_advisory_unlock_all()");
+    } finally {
+      other.release();
+    }
   });
 
   it("refuses a nested call instead of waiting for a second connection", async () => {
