@@ -30,6 +30,7 @@ const EVENTS: readonly SyncEvent[] = [
   { type: "SYNC_STALE_BASE" },
   { type: "SYNC_FAILED", retryable: true },
   { type: "SYNC_FAILED", retryable: false },
+  { type: "SYNC_KEY_DIVERGED" },
   ...CONFLICT_RESOLUTIONS.map((via): SyncEvent => ({ type: "CONFLICT_RESOLVED", via })),
   ...RECOVERY_CHOICES.map((via): SyncEvent => ({ type: "RECOVERED", via })),
 ];
@@ -259,6 +260,82 @@ describe("sync failures", () => {
   it("allows a retry out of ERROR in both directions", () => {
     expect(syncReducer("ERROR", { type: "LOCAL_SAVE_STARTED" })).toBe("SAVING_LOCAL");
     expect(syncReducer("ERROR", { type: "SYNC_STARTED" })).toBe("SYNCING");
+  });
+});
+
+describe("diverged idempotency key (DAN-135)", () => {
+  const DIVERGED: SyncEvent = { type: "SYNC_KEY_DIVERGED" };
+
+  it.each(["SYNCING", "LOCAL_DURABLE", "ERROR"] as const)(
+    "escalates %s to RECOVERY_REQUIRED, never ERROR or CONFLICT",
+    (state) => {
+      expect(syncReducer(state, DIVERGED)).toBe("RECOVERY_REQUIRED");
+    },
+  );
+
+  it("is legal from exactly those three states", () => {
+    const from = SYNC_STATES.filter((state) => SYNC_TRANSITIONS[state].SYNC_KEY_DIVERGED);
+    expect(from.sort()).toEqual(["ERROR", "LOCAL_DURABLE", "SYNCING"]);
+    for (const state of ["EDITING", "SAVING_LOCAL", "SYNCED", "CONFLICT"] as const) {
+      expect(syncReducer(state, DIVERGED)).toBe(state);
+    }
+  });
+
+  it("is the only event besides a corrupt store that enters RECOVERY_REQUIRED", () => {
+    const entries: string[] = [];
+    for (const state of SYNC_STATES) {
+      if (state === "RECOVERY_REQUIRED") continue;
+      for (const event of EVENTS) {
+        if (syncReducer(state, event) === "RECOVERY_REQUIRED") {
+          entries.push(label(event));
+        }
+      }
+    }
+    expect([...new Set(entries)].sort()).toEqual([
+      "LOCAL_SAVE_FAILED(corrupt)",
+      "SYNC_KEY_DIVERGED",
+    ]);
+  });
+
+  it("keeps SYNCED reachable only by a signed ACK or an explicit decision", () => {
+    const into: string[] = [];
+    for (const state of SYNC_STATES) {
+      if (state === "SYNCED") continue;
+      for (const event of EVENTS) {
+        if (syncReducer(state, event) === "SYNCED") {
+          into.push(`${state}:${label(event)}`);
+        }
+      }
+    }
+    expect(into.sort()).toEqual([
+      "CONFLICT:CONFLICT_RESOLVED(discard)",
+      "RECOVERY_REQUIRED:RECOVERED(adopt-server)",
+      "SYNCING:SYNC_ACK",
+    ]);
+    for (const event of EVENTS) {
+      expect(syncReducer("SYNCED", event)).not.toBe("SYNCING");
+    }
+  });
+
+  it("does not let typing erase the cause, nor a reload clear it", () => {
+    const after = [DIVERGED, { type: "EDIT" }, { type: "SYNC_STARTED" }] as const;
+    expect(after.reduce<SyncState>(syncReducer, "SYNCING")).toBe("RECOVERY_REQUIRED");
+    expect(
+      restoreSyncState({
+        snapshot: null,
+        pending: [],
+        meta: { documentId: "d", state: "RECOVERY_REQUIRED", localSeq: 9 },
+      }),
+    ).toBe("RECOVERY_REQUIRED");
+  });
+
+  it("leaves only through RECOVERED, salvage via the journal first", () => {
+    expect(syncReducer("RECOVERY_REQUIRED", { type: "RECOVERED", via: "salvage-local" })).toBe(
+      "SAVING_LOCAL",
+    );
+    expect(syncReducer("RECOVERY_REQUIRED", { type: "RECOVERED", via: "adopt-server" })).toBe(
+      "SYNCED",
+    );
   });
 });
 

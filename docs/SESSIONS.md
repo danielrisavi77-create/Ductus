@@ -35,7 +35,7 @@ Normalno rade tri stalna writera (Backend, Frontend, Platforma). Četvrti je dop
 1. Orkestrator šalje zadatak (predložak u §3) sesiji odgovarajuće uloge.
 2. Sesija radi u svom worktreeu na grani `<uloga>/<kratki-opis>` (npr. `backend/m0-port-domain`), od svježeg `origin/main`.
 3. Testovi i provjere lokalno zeleni (`pnpm lint`, `pnpm typecheck`, `pnpm test`); lefthook to radi pri commitu.
-4. Sesija otvara PR (jedan korak iz `STATE.md`, do oko 400 redaka; veći PR obrazlaže zašto) i obvezno upisuje `Agent`, `Risk` i `Task` metadata iz `docs/ENGINEERING_SYSTEM.md`.
+4. Sesija otvara PR (jedan korak iz `STATE.md`, do oko 400 redaka; veći PR obrazlaže zašto) i obvezno upisuje `Agent`, `Risk` i `Task` metadata iz `docs/ENGINEERING_SYSTEM.md`. Nakon svakog pusha, prije čekanja na CI, autor (podagent ili sesija) ostavlja na PR-u kratak komentar "Trag rada" (predložak u §3); završni izvještaj iz koraka 6 i dalje je obvezan (Daniel, 10. 10. 2026.).
 5. PR dobiva neovisni pregled na aktualnom headu. Za `critical` PR obvezan je i zaseban QA/adversarial PASS. Za deklarirani author guard `codex` i `chatgpt` na istom slotu tretiraju se kao isti OpenAI principal (`openai:<slot>`), jer koriste isti GitHub App. Autor, reviewer i QA moraju biti različite aktivne agent-instance po governance pravilu; gate strojno provjerava da reviewer i QA dolaze iz različitih autentificiranih GitHub Appova. Autor ispravlja prihvaćene nalaze, a odbijene obrazlaže.
 6. Sesija zapisuje izvještaj u PR (predložak u §3) i staje. Claude sesija na istom računu uz to šalje orkestratoru jednu poruku po `docs/ORKESTRATOR.md` §5; rad s drugog računa ili providera o poruci ne ovisi.
 7. Spaja samo aktivni Ductus orkestrator, kad su CI, Engineering review gate i svi risk-specifični gateovi zeleni te PR ne čeka Danielovu odluku. Radne sesije nikad ne spajaju PR, ne mijenjaju `.claude/` postavke i ne diraju postavke repoa na GitHubu.
@@ -68,6 +68,8 @@ Opseg: <što ulazi>; Izvan opsega: <što ne ulazi>
 Mape: <smije dirati>
 Gotovo kad: <provjerljiv kriterij, npr. naredba i očekivani ishod>
 Lokalne provjere prije pusha: <npr. actionlint i zizmor kad PR dira workflowe, osv-scanner kad dira lockfile; inače "standardne">
+Plan napada: <poveznica na GitHub issue "Plan napada: <zadatak>"; obvezno za Risk: critical i za zadatak koji gradi ili mijenja gate (ORKESTRATOR.md §8), inače n/a>
+Privremene datoteke: <vlastita podmapa dijeljene privremene mape, ime po zadatku, npr. DAN-122; zapis odluke: https://github.com/danielrisavi77-create/Ductus/pull/165#issuecomment-6100851850>
 Ovisi o: <PR ili ništa>
 ```
 
@@ -81,11 +83,36 @@ Napravljeno: <3 do 5 stavki>
 Testovi: <naredba i rezultat>
 Review: <reviewer, head, nalaz/PASS; odbijeni nalazi uz razlog>
 QA: <za critical: QA head + scope + PASS; inače n/a>
+Plan napada: <tablica "stavka plana → test" u opisu PR-a, s razlogom za svaku neprimjenjivu stavku; inače n/a>
 Otvoreno ili blokira: <stavke ili "ništa">
 Treba Daniel: <odluka ili "ništa">
 ```
 
 Izvještaj obvezno ide u opis PR-a ili, bez PR-a, u `IZVJEŠTAJ <id>` issue. Poruka orkestratoru šalje se po `docs/ORKESTRATOR.md` §5 kad su sesije na istom računu; ona je upućivanje na izvještaj, a cross-account rad nikad ne ovisi o njoj.
+
+Za zadatak s planom napada autor svaku stavku plana pretvara u test ili u opisu PR-a obrazlaže zašto nije primjenjiva, daje tablicu "stavka plana → test" i prije pusha napada vlastito rješenje (`docs/ORKESTRATOR.md` §8, "Plan napada prije koda").
+
+### Trag rada (autor → PR, nakon svakog pusha)
+
+```
+Trag rada (<runtime>:<slot>)
+Head: <puni SHA>
+Promijenjeno: <što je ovaj push promijenio>
+Čeka: <CI, review, QA ili ništa>
+Otvoreno: <pitanja ili "ništa">
+```
+
+Komentar ide na PR nakon svakog pusha, prije čekanja na CI. Jednokratni pisac u oblaku ne može slati poruke, pa mu je trag rada jedini signal; trajne sesije u oblaku koje otvara Daniel uz to javljaju porukom po `docs/ORKESTRATOR.md` §5. Trag rada ne zamjenjuje izvještaj.
+
+### QA upit (orkestrator → QA sesija)
+
+Sadržaj upute je neutralan (`docs/ORKESTRATOR.md` §8). Kad uputa navodi kvotni fallback iz `docs/ENGINEERING_SYSTEM.md` §6, redak deklaracije navodi točno u ovom obliku:
+
+```
+Provider-Fallback: chatgpt-codex-connector — kvota iscrpljena
+```
+
+Razmak dolazi odmah iza imena pružatelja, bez zareza ili drugog znaka: gate čita prvu riječ doslovno, a 10. 10. 2026. odbio je PASS zbog zareza iza imena. Izvor oblika je `scripts/engineering/review-gate-core.mjs` (`fallbackSlug`), pa uz promjenu parsera vrijedi kod, a ne ova rečenica.
 
 ## 4. Štednja tokena
 
@@ -101,18 +128,38 @@ Izvještaj obvezno ide u opis PR-a ili, bez PR-a, u `IZVJEŠTAJ <id>` issue. Por
 
 ### 4a. Tehnička provedba (DAN-93)
 
-Pravila iz ovog odjeljka provodi `.claude/settings.json`; hookovi su u `scripts/engineering/agent-hooks.mjs` i pri svakoj grešci propuštaju rad (fail-open).
+Pravila iz ovog odjeljka provodi `.claude/settings.json`; vlastiti hookovi su u `scripts/engineering/agent-hooks.mjs` i pri svakoj grešci propuštaju rad (fail-open). Iznimka je `cc-safety-net`, koji pri grešci vlastite analize blokira naredbu.
 
 | Mehanizam | Što radi | Pravilo koje provodi |
 | --- | --- | --- |
 | `CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000` | Sažimanje se pokreće prije 200k tokena i uz model s prozorom od 1M. | Gornja granica konteksta |
 | Hook `budget` (UserPromptSubmit) | Iznad 150k tokena dodaje agentu uputu prema ulozi sesije (tablica ispod); iznad 250k uputa je stroža (doseže se samo u sesiji u kojoj granica od 200k ne vrijedi, primjerice pokrenutoj prije ove postavke). Novi zadatak zabranjuje samo prepoznatom workeru i kontrolnoj ulozi, nikad orkestratoru ni sesiji nepoznate uloge. Orkestratoru od 200k dodaje da je dosegnuta gornja sigurnosna granica iz `ORKESTRATOR.md` §7. Ispod 150k i odmah nakon sažimanja ne dodaje ništa. Zapis sesije čija je stvarna putanja pod `Read` deny pravilima ne otvara; čita ga kroz provjereni deskriptor (opis ispod tablice). | Rotacija sesije; iznimka za orkestratora (`ORKESTRATOR.md` §7) |
-| Hook `read` (PreToolUse: Read) | Odbija čitanje cijelog `.md` dokumenta većeg od 16 KB i vraća popis naslova s brojevima redaka; čitanje s `offset`/`limit` prolazi. Odbija `pnpm-lock.yaml`, `*.tsbuildinfo` i `.next/`. Vrijedi samo za datoteke unutar repoa, i u subagentima. Putanje pod `Read` deny pravilima (`secrets/`, `.env*`, `*.age`) hook ne otvara i ne odlučuje o njima: odluka ostaje sustavu dozvola, pa im ni naslovi ne dospijevaju u kontekst. Mjerodavna je stvarna putanja nakon razrješenja poveznica, gledana od korijena projekta: poveznicu u repou koja vodi na takvu datoteku ili izvan repoa hook također ne otvara, a repo smješten ispod mape imena `secrets/` radi normalno. Sadržaj čita kroz provjereni deskriptor (opis ispod tablice). Ne pokriva čitanje kroz `cat` ili `sed` u ljusci. | Čitaj samo ulaz iz zadatka |
+| Hook `read` (PreToolUse: Read) | Odbija čitanje cijelog `.md` dokumenta većeg od 16 KB i vraća popis naslova s brojevima redaka; čitanje s `offset`/`limit` prolazi. Odbija `pnpm-lock.yaml`, `*.tsbuildinfo` i `.next/`. Vrijedi samo za datoteke unutar repoa, i u subagentima; pripadnost repou određuje se i prema stvarnim putanjama, pa vrijedi i kad je korijen projekta ili datoteka zadana kroz poveznicu. Putanje pod `Read` deny pravilima (`secrets/`, `.env*`, `*.age`) hook ne otvara i ne odlučuje o njima: odluka ostaje sustavu dozvola, pa im ni naslovi ne dospijevaju u kontekst. Mjerodavna je stvarna putanja nakon razrješenja poveznica, gledana od korijena projekta: poveznicu u repou koja vodi na takvu datoteku ili izvan repoa hook također ne otvara, a repo smješten ispod mape imena `secrets/` radi normalno. Sadržaj čita kroz provjereni deskriptor (opis ispod tablice). Ne pokriva čitanje kroz `cat` ili `sed` u ljusci. | Čitaj samo ulaz iz zadatka |
 | Hook `start` (SessionStart) | Učitava `STATE.md` iz korijena projekta u kontekst pri pokretanju, `/clear` i nakon sažimanja, uz putanju iz koje je pročitan, pa ga sesija ne čita zasebnim pozivom. Ako `STATE.md` prijeđe 9000 znakova, hook ne dodaje ništa i sesija ga čita sama. Isto vrijedi ako `STATE.md` nije obična datoteka u korijenu projekta, primjerice ako je simbolička poveznica na bilo koju drugu datoteku: hook je tada ne čita. Čita kroz provjereni deskriptor (opis ispod tablice). | `CLAUDE.md`: prvo `STATE.md` |
 | `CLAUDE_CODE_SUBAGENT_MODEL=sonnet` | Subagent bez vlastitog modela radi na Sonnetu. Profili s `model: inherit` i dalje nasljeđuju model sesije (Claude Code 2.1.251 ili noviji; starije inačice daju prednost varijabli). | Model po ulozi |
 | `ductus-scout` (Haiku, samo Read/Grep/Glob) | Jeftino lociranje koda i odjeljaka; ugrađeni Explore radi na modelu glavne sesije. | Pretraživanje preko pomoćnog agenta |
 | `CLAUDE_CODE_GLOB_NO_IGNORE=false` | Glob preskače sve iz `.gitignore`: `node_modules`, `.next`, worktreeove, ali i `test-results/` i `playwright-report/`; njih se nalazi kroz `ls`. | — |
 | `enabledPlugins: false` za `knowledge-work-plugins` | Isključuje sales, marketing, finance, data, design, productivity i pdf-viewer u ovom projektu. | Bez nepotrebnih pluginova |
+| Hook `cc-safety-net` (PreToolUse: Bash, PowerShell) | Projektna pravila (`.cc-safety-net/rules/ductus-rules/rulebook.json`): skupno dodavanje (`git add`/`git stage` uz `-A`, `--all`, `-u`, `--update`, `--no-ignore-removal` ili putanju cijelog stabla: `.`, `./`, `..`, `:/`, `:(top)`, `*`, `**`), `git commit -a`/`--all` i `git commit` s putanjom cijelog stabla, preskakanje hookova (`--no-verify` na `commit`, `push`, `merge`, `pull`, `am` i `rebase`; `-n` na `commit` i `am`) te `git push --force-with-lease` i `--force-if-includes` bez vrijednosti. Vrijede i za kratke zastavice u skupu (`-nm`, `-anm`, `-Av`), za skraćenice dugih opcija (`--al`, `--upd`, `--no-verif`, `--force-w`) i kad je naredba umotana u `bash -c`. Ugrađena pravila: `git push --force`/`-f`/`+grana`, `git push --delete`/`-d`/`:grana`, `git push --mirror`, `git branch -D`, `git stash drop`, `git worktree remove --force`, `find -delete`, `rm -rf` izvan radnog direktorija i svaka naredba koja imenuje `.env*` datoteku osim `.env.example` (i `cp .env.example .env.local`; to radi Daniel). `git restore`, `git checkout -- <datoteka>`, `git clean` i `git reset --hard` bez reference dopušteni su samo u povezanom worktreeu (`CC_SAFETY_NET_WORKTREE=1`); `git reset --hard <ref>` je blokiran svugdje. Hook nema korisničko odobrenje: blokiranu naredbu izvršava Daniel ručno. | `CLAUDE.md`: tvrda pravila |
+| `skillOverrides`: `supabase-postgres-best-practices` = `name-only` | Opis skilla ne ulazi u popis; Backend i Security profili ga učitavaju po potrebi. | Bez nepotrebnog konteksta |
+
+Pravila uspoređuju cijele argumente i ne izvršavaju ljusku, pa hvataju navedene oblike, ne sve. `deny` pravila, lefthook, zaštita grane `main` i CI zato ostaju obvezni. Poznate rupe (prolaze kroz hook):
+
+- **Force push s vrijednošću:** `git push --force-with-lease=<grana>` i `--force-with-lease=<grana>:<sha>`. Oblik bez vrijednosti je blokiran. Prolazi i `git push --prune`, koji briše udaljene grane bez lokalnog para.
+- **Hookovi isključeni mimo zastavice:** `git -c core.hooksPath=... commit`, `git --config-env=core.hooksPath=... commit`, varijable `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_0` i `GIT_CONFIG_PARAMETERS` (u Bashu i kao `$env:`), druga datoteka konfiguracije (`GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`, `GIT_CONFIG`, `git config include.path ...`), `git config core.hooksPath ...`, `LEFTHOOK=0 git commit`, `$env:LEFTHOOK='0'`, `LEFTHOOK_EXCLUDE=...`, `lefthook uninstall` i brisanje datoteka u `.git/hooks`.
+- **PowerShell:** naredba iza operatora poziva (`& git add -A`, `& git commit -n -m x`), u zagradama (`(git add -A)`), u pridruživanju (`$x = git commit -n -m x`) i kroz `Start-Process git -ArgumentList ...`. Ugrađena pravila oblik s `&` hvataju (`& git push --force` je blokiran), projektna ne.
+- **Argument ili naredba koji nastaju tek u ljusci:** varijabla (`$a='-A'; git add $a`, `g=git; $g commit -n`), supstitucija (`git commit $(echo -n)`, `git add ${X:--A}`), `alias` ljuske, git alias (`git -c alias.ci='commit -n' ci`), nepoznat omotač (`winpty git add -A`, `npx git add -A`, `pnpm dlx git add -A`; `pnpm exec` je blokiran) i drugi interpreter (`node -e`, `python -c`).
+- **Ostale putanje koje pokrivaju cijelo stablo:** `git add ':!x'`, `':^x'`, `':(top,glob)**'`, `src/..`, apsolutna putanja korijena, `"$PWD"`, `$(git rev-parse --show-toplevel)`, `$(git ls-files -m)`, uzorci poput `*.*` i `--pathspec-from-file`.
+- **Naredba iz datoteke:** hook vidi samo tekst naredbe, ne sadržaj skripte koju agent prethodno napiše alatom Write: `bash x.sh`, `sh x.sh`, `./x.sh`, `./x.ps1`, `& ./x.ps1`, `pwsh -File x.ps1`, `pnpm run <skripta>`, `pnpm <skripta>`, `npm run <skripta>`, `make`, `node x.mjs` koja zove git. U Bashu prolaze i `source x.sh` i `. x.sh`; za alat PowerShell ih ugrađeno pravilo (`analysis.dynamic-shell-source`) blokira. Isto vrijedi za git alias iz datoteke konfiguracije (`git config alias.ci 'commit -n'`, zatim `git ci -m x`) i za git ili lefthook hook koji sam zove git: pokreće ga običan `git commit -m x`.
+- **Program koji pokreće sam git:** naredba kao argument (`git rebase -x '...'`/`--exec`, `git submodule foreach '...'`, `git bisect run`, `git filter-branch --tree-filter`, `git difftool -x`) i program iz varijable ili konfiguracije: `GIT_EDITOR`, `EDITOR`, `GIT_SEQUENCE_EDITOR`, `core.editor`, `sequence.editor`, `core.pager`/`GIT_PAGER`/`PAGER`, `core.fsmonitor`, `gpg.program`, `diff.external`/`GIT_EXTERNAL_DIFF`, `credential.helper`, `filter.<x>.clean`, `diff.<x>.textconv`, `git config core.sshCommand ...` te hookovi iz predloška (`GIT_TEMPLATE_DIR`, `git clone --template`). `GIT_SSH_COMMAND=`, `GIT_SSH=` i `git -c core.sshCommand=` ugrađeno pravilo blokira.
+- **Naredbe niže razine:** `git commit-tree`, `git update-index`, `git apply --cached`, `git send-pack`.
+- **Kratka zastavica iza znamenke u skupu:** `git am -k3n` i `git am -3kn`; `git am -n` i `git am -3n` su blokirani.
+
+`git add *` hook blokira i u Bashu i u PowerShellu (provjereno na Windowsu i Linuxu), jer vidi zvjezdicu prije nego što je ljuska proširi.
+
+Lažne blokade: globalna opcija s točkom (`git -C . add <datoteka>`, `git -C . commit`), vrijednost prilijepljena uz kratku zastavicu kad sadrži slovo `a` ili `n` (`git commit -mnote`, `-mwait`, `-uno`) i commit poruka koja je točno `-a`, `-am`, `-n` ili `.`. Poruku treba dati odvojeno (`-m "..."`) ili kroz `-F`. `git push -n` (`--dry-run`) nije blokiran.
+
+Slučajeve iz rulebooka, navedene rupe i lažne blokade izvršava `scripts/engineering/safety-rules.test.mjs` kroz stvarni hook, za Bash i PowerShell; ako se neka rupa zatvori ili lažna blokada nestane, test pada dok se ovaj popis ne uskladi.
 
 Provjereni deskriptor. Nijedan hook ne čita datoteku po imenu nakon provjere putanje, jer bi se ime tada razriješilo drugi put i zamjena datoteke ili mape poveznicom u međuvremenu odvela bi čitanje drugamo. Hook datoteku otvara jednom (uz `O_NOFOLLOW` gdje postoji), a zatim na otvorenom deskriptoru provjerava da je obična datoteka, da se provjerena putanja i dalje razrješava u samu sebe i da je datoteka na toj putanji upravo ona otvorena (isti uređaj i inode). Na Linuxu dodatno uspoređuje putanju koju jezgra vodi za deskriptor (`/proc/self/fd`), što vrijedi bez obzira na to kako se imena mijenjaju tijekom provjere. Čita samo iz tog deskriptora; ako se išta razlikuje, ne vraća ništa i odlučuje sustav dozvola.
 
@@ -129,7 +176,7 @@ Hook `budget` po ulozi. Ulogu određuje profil agenta s kojim je sesija pokrenut
 
 Ograničenja: sesija pokrenuta bez profila (samo skillom ili običnim razgovorom), starija inačica Claude Codea bez polja `agent_type` i svaki drugi runtime nemaju prepoznatljivu ulogu. Tada je poruka namjerno blaga, jer bi zabrana pogodila i orkestratora; worker bez profila zato dobiva savjet, a ne nalog. Orkestrator vlastiti podsjetnik dobiva samo kad je sesija pokrenuta s profilom `ductus-orchestrator`; bez profila dobiva blagu poruku za nepoznatu ulogu. Hook ne provjerava identitet: profil je postavka sesije, a ne dokaz ovlasti, i o gateu ništa ne odlučuje. Novi profil mora dobiti ulogu u `PROFILE_ROLES`; test pada dok je nema.
 
-Mjerenje: `node scripts/engineering/token-report.mjs [--days N] [--budget N] [--json]` čita lokalne zapise sesija i ispisuje samo brojeve: ukupni ulaz, udio početnog konteksta, udio iznad budžeta i veličinu izlaza po alatu. Polazno stanje 1.–10. 10. 2026.: 198,7 M ulaznih tokena u 829 poziva; 42 % je kontekst iznad 150k po pozivu, 30 % početni kontekst od oko 72k ponovljen u svakom pozivu.
+Mjerenje: `pnpm tokens:report` ili `node scripts/engineering/token-report.mjs [--days N] [--budget N] [--json]` čita lokalne zapise sesija i ispisuje samo brojeve: ukupni ulaz, udio početnog konteksta, udio iznad budžeta i veličinu izlaza po alatu. `pnpm tokens:codeburn` daje drugi pogled (nekorišteni MCP poslužitelji, ponovljena čitanja), a `pnpm agents:lint` provjerava `CLAUDE.md`, `AGENTS.md`, skillove i hookove. Polazno stanje 1.–10. 10. 2026.: 198,7 M ulaznih tokena u 829 poziva; 42 % je kontekst iznad 150k po pozivu, 30 % početni kontekst od oko 72k ponovljen u svakom pozivu.
 
 Konektori claude.ai (Gmail, Drive, Netlify, Gamma, Desktop Commander i slični) u desktop aplikaciji uključuju se po sesiji i ne gase se ovom datotekom; Daniel ih isključuje u postavkama konektora. Za Ductus trebaju samo Linear i, po zadatku, Supabase.
 

@@ -7,7 +7,7 @@ Use when the context-budget notice appears, when a logical unit of work is done,
 
 1. Finish or cleanly stop the step in progress. Commit work that passes the checks; never leave uncommitted changes as the only copy.
 2. Write the handoff where the next session of your role will look, not in chat:
-   - Worker (Backend, Frontend, Platform, short-lived) → the `IZVJEŠTAJ` block in the body of your own PR; with no PR yet, a comment on your Linear issue (or a GitHub `IZVJEŠTAJ <id>` issue).
+   - Worker (Backend, Frontend, Platform, short-lived) → the `IZVJEŠTAJ` block in the body of your own PR; with no PR yet, a comment on your Linear issue (or a GitHub `IZVJEŠTAJ <id>` issue). The `Trag rada` comment after each push (`docs/SESSIONS.md` §3) does not replace it; for a one-shot cloud writer, which cannot send messages, it is the only signal.
    - Reviewer, QA, Bug Hunter and other control roles → your own comment on the PR or issue you are checking; never edit the PR body or the `IZVJEŠTAJ` block of another author, and never post a verdict as a handoff.
    - Orchestrator → not rotated: the board and a comment on the coordination issue (`docs/ORKESTRATOR.md` §7 and §8); `STATE.md` only through its own PR.
 3. The handoff contains only what cannot be read from the diff:

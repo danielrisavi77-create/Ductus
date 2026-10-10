@@ -42,6 +42,13 @@ export default defineConfig({
           name: "integration",
           include: ["tests/integration/**/*.integration.test.ts"],
           testTimeout: 30_000,
+          // The application login of the local stack (.env.example); the
+          // application itself has no default for it.
+          env: {
+            APP_DATABASE_URL:
+              process.env.APP_DATABASE_URL ??
+              "postgres://ductus_app_local:ductus-app-local-only@127.0.0.1:54329/ductus",
+          },
         },
       },
     ],

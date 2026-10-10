@@ -74,7 +74,7 @@ Modularni monolit u dva procesa (web i worker) nad istom bazom. Svaki modul ima 
 | `institution` | Ustanova, kolegij, članstvo, zadatak i verzije zadatka, potvrde obavijesti, produljenja roka | Novo |
 | `evidence` | Odsječci, hash lanac, potvrde, praznine, kontrolne točke | Domena, portovi i gateway preneseni; SQL i adapteri novi (§12) |
 | `signing` | Port potpisa; KMS adapter u produkciji, razvojni potpisnik lokalno i u CI-ju | Preneseno (§12) |
-| `anchoring` | Dnevni korijen, Merkle stablo, consistency dokaz, RFC 3161 žig, objava, CLI verifikator | Novo, val 2 (D-72) |
+| `anchoring` | Kumulativni log, dnevna kontrolna točka (C2SP tlog-checkpoint), consistency dokaz, RFC 3161 žig, objava, CLI verifikator | Novo, val 2 (D-72, D-93) |
 | `submission` | Zamrzavanje, rekonstrukcija u workeru, potvrda predaje | Novo |
 | `projection` | Sažetak procesa i usporedba verzija; jedna funkcija za studenta i nastavnika; računa se na poslužitelju | Novo |
 | `collaboration` | Komentari vezani uz odlomak, prijedlozi izmjena, izravne izmjene nastavnika i mentora (D-34), obavijesti | Novo |
@@ -96,7 +96,7 @@ Sav pristup vanjskim uslugama ide kroz portove iz `src/application/ports`. Svaki
 | --- | --- | --- |
 | Baza (`withActor`) | PostgreSQL u Dockeru s istim ulogama i migracijama | Upravljani PostgreSQL s PITR-om |
 | Pohrana objekata (`putImmutable`, `get`, `head`) | RustFS (S3 API; MinIO više nema sliku) | S3-kompatibilan bucket |
-| Potpis (`sign(digest, keyId)`) | Razvojni Ed25519 potpisnik | KMS, samo nad digestom (D-71) |
+| Potpis (`sign(messageBytes, keyId)`) | Razvojni Ed25519 potpisnik | KMS `ED25519_SHA_512`, `RAW`: D-92 potvrda nad prefiksom + 32B digestom; D-93 C2SP kontrolna točka nad cijelim točnim UTF-8 tekstom bilješke (bez potpisnih redaka; uključujući završni LF), bez dodatnog hashiranja |
 | Vremenski žig | Lažni TSA u testovima | Dva neovisna RFC 3161 TSA-a (D-72) |
 | E-pošta | Mailpit | Transakcijska usluga u EU-u |
 | Pružatelj identiteta | Lažni OIDC pružatelj (samo lokalno i u CI-ju, D-09) | AAI@EduHr |
@@ -123,7 +123,7 @@ Sve tablice imaju uključen RLS i retke u pgTAP matrici pristupa. Pristup ide kr
 | `institution_role` | korisnik, ustanova, uloga (`teacher`, `admin`), potvrdio, vrijeme | Administrator |
 | `course` | id, ustanova, naziv, akademska godina, pravilo AI-ja iz izvedbenog plana (D-52) | Članovi kolegija |
 | `course_enrollment_code` | kolegij, hash koda, vrijedi do, aktivan | Nastavnik kolegija |
-| `course_member` | kolegij, korisnik, uloga u kolegiju (`teacher`, `student`), od, do | Članovi kolegija |
+| `course_member` | kolegij, korisnik, uloga u kolegiju (`teacher`, `student`), od, do | Nastavnik kolegija sve članove; student nastavnike kolegija i vlastito članstvo |
 | `mentorship` | mentor, student, vrsta rada, od, do, potvrdio | Mentor i student |
 | `assignment` | id, kolegij, trenutna verzija | Članovi kolegija |
 | `assignment_version` | zadatak, broj verzije, naslov, upute, vrsta rada, Lekta profil i verzija paketa, otvaranje, rok, pravila pomoći i dopuštene svrhe (D-80), profil evidencije, uvoz dopušten, ciklusi verzija, vrijeme. **Nepromjenjiva**; profil nove verzije smije biti samo uži | Članovi kolegija |
@@ -142,7 +142,8 @@ Sve tablice imaju uključen RLS i retke u pgTAP matrici pristupa. Pristup ide kr
 | `evidence.receipt` | odsječak, `receipt_payload` (JCS), stanje (`pending_signature`, `signed`), potpis, ID ključa. Jedini dopušteni prijelaz je `pending_signature` u `signed` uz nepromijenjen payload | Kao odsječak |
 | `evidence.gap` | dokument, od revizije, do revizije, uzrok | Student; nastavnik kroz projekciju |
 | `evidence.signing_key` | ID ključa, namjena (potvrde, dnevni korijen), javni ključ, referenca na ključ u KMS-u, vrijedi od, vrijedi do, opozvan | Javno (bez reference) |
-| `evidence.daily_root` | dan (UTC), broj listova, korijen, prethodni korijen, consistency dokaz, potpis, žigovi (`.tsr` i lanac certifikata po TSA-u), objavljeno. Val 2 (D-72) | Javno |
+| `evidence.log_entry` | Neizmjenjiva mapa potvrde i uzastopnog 0-based indeksa; `leaf_digest` se računa prema `receiptSchema` (`SHA-256(JCS(receiptPayloadV1))` ili v2 ekvivalent iz D-92), a RFC 6962 list je `SHA-256(0x00 ‖ leaf_digest)`. Pre-log zapisi validiraju se i deterministički mapiraju po kanonskom UTC `acceptedAt` uzlazno, zatim bajtovnim leksikografskim redoslijedom UTF-8 za `receiptId`; payload i potpis ostaju nepromijenjeni. B4 test pokriva konkurentne prihvate, rollback i idempotentni retry. Log se gradi u valu 2 (D-93) | Nitko izravno; worker i verifikator |
+| `evidence.checkpoint` | veličina loga, korijen, tekst kontrolne točke (C2SP tlog-checkpoint), potpis, consistency dokazi prema prethodnim točkama, žigovi (`.tsr` i lanac certifikata po TSA-u), objavljeno; signer prije potpisa provjerava potpunu append-only povijest izvan domene povrata baze i zatvara put kod regresije, forka ili nedostupne povijesti. Val 2 (D-72, D-93) | Javno |
 | `import_event` | dokument, revizija, naziv i vrsta datoteke, veličina, hash | Student; nastavnik kroz projekciju |
 | `paste_label` | odsječak, oznaka (vlastite bilješke, citat, prijašnja verzija, vanjski AI, drugo), vrijeme. Samo dodavanje | Student; nastavnik kroz projekciju kao izjavljeno (D-43) |
 | `review_request` | komentar, stanje (otvoren, proveden prema studentu, prihvaćen, ponovno otvoren), revizija prihvaćanja, hash sidrenog raspona pri prihvaćanju | Kao komentar (D-45), val 2 |
@@ -205,7 +206,7 @@ Mjerodavno je BACKEND §4.3 [PRIJEDLOG D-73]; ovdje je tijek.
    1. provjerava sesiju (`current_actor()`), članstvo, verziju zadatka i je li zadatak otvoren; autora određuje iz sesije, nikad iz polja klijenta;
    2. provjerava da su primljeni bajtovi jednaki ponovno izračunatom JCS nizu, računa SHA-256 i zapisuje objekt u bucket na adresu tog hasha (bez prepisivanja; postojeći objekt prihvaća se tek nakon usporedbe bajtova);
    3. poziva **jedan RPC** koji u istoj transakciji radi CAS reviziju dokumenta i `reserve` odsječka: provjerava redoslijed i baznu reviziju, upisuje reviziju i metapodatke, nastavlja hash lanac i stvara potvrdu u stanju `pending_signature`. Ponovljeni ID transakcije vraća isti rezultat. Ako RPC padne, objekt ostaje siroče (BACKEND §2, ADR u M3).
-4. Worker preuzima posao (tijelo posla je samo ID), radi HEAD objekta, potpisuje digest potvrde ključem potvrda preko porta potpisa i priključuje potpis (`attach_signature` provjerava digest i da je ključ poznat i neopozvan).
+4. Worker preuzima posao (tijelo posla je samo ID), radi HEAD objekta, potpisuje D-92 prefiksirani 59B digest-poruku za v2 potvrde ključem potvrda preko porta potpisa (a v1 `pending_signature` ostaje na izvornom schema-specifičnom putu) i priključuje potpis (`attach_signature` provjerava digest i da je ključ poznat i neopozvan).
 5. Tek kad klijent dobije potpisanu potvrdu, stanje postaje "spremljeno na poslužitelju". Dok potpis čeka, klijent ostaje u stanju čekanja; ako worker ili KMS ne rade, potvrde ostaju `pending_signature` i backlog je alarm.
 
 Siročad u bucketu se u pilotu samo broji i prijavljuje; brisanje tek nakon 30 dana uz ponovnu provjeru u bazi i savjetodavno zaključavanje po hashu, jer zakašnjeli offline klijent može upravo upisivati `reserve` (BACKEND §4.1).
@@ -264,21 +265,21 @@ Rokovi se unose i prikazuju u zoni Europe/Zagreb; promjena na zimsko računanje 
 
 [PRIJEDLOG D-71]; pojedinosti u BACKEND §1 i §4.1.
 
-- Dva odvojena Ed25519 ključa u KMS-u: **ključ potvrda** i **ključ dnevnog korijena**. Materijal ključa ne napušta KMS; u KMS idu samo digesti. Potpisuje samo worker; web proces nema pristup ni materijalu ni pravu potpisa.
+- Dva odvojena Ed25519 ključa u KMS-u: **ključ potvrda** i **ključ dnevnog korijena**. Materijal ključa ne napušta KMS; za D-92 u KMS ide prefiksirani digest (59 B), a za D-93 točan UTF-8 C2SP tekst kontrolne točke sa završnim LF (RAW, bez prethodnog hashiranja). Potpisuje samo worker; web proces nema pristup ni materijalu ni pravu potpisa.
 - Lokalno i u CI-ju koristi se razvojni potpisnik iza istog porta; konfiguracijska brava sprječava razvojni potpisnik u produkciji.
 - Javni ključevi svih verzija su u `evidence.signing_key` s namjenom i razdobljem valjanosti, pa se stare potvrde mogu provjeriti i nakon rotacije (C-46).
 - Rotacija: jednom godišnje i pri svakoj sumnji na kompromitaciju.
-- Kompromitacija: ključ se označava opozvanim s vremenom; potvrde potpisane nakon tog vremena smatraju se nevaljanima i ponovno se potpisuju novim ključem. Listovi dnevnog korijena su potvrde bez potpisa, pa ponovni potpis ne mijenja već sidrene korijene. Događaj se bilježi i prijavljuje fakultetu.
+- Kompromitacija: ključ se označava opozvanim s vremenom; potvrde potpisane nakon tog vremena smatraju se nevaljanima i ponovno se potpisuju novim ključem. Listovi kumulativnog loga su potvrde bez potpisa, pa ponovni potpis ne mijenja korijene kontrolnih točaka u kojima su već sidreni. Događaj se bilježi i prijavljuje fakultetu.
 
 ## 8a. Dnevni korijen i vanjsko vrijeme
 
-[PRIJEDLOG D-72], val 2; potpisane potvrde i hash lanac su u valu 1. Pojedinosti i granice tvrdnje u BACKEND §4.2.
+[PRIJEDLOG D-72; dio o stablu odlučen u D-93], val 2; potpisane potvrde i hash lanac su u valu 1. Pojedinosti i granice tvrdnje u BACKEND §4.2.
 
-- Worker jednom dnevno gradi Merkle stablo nad potvrdama dana (dan po UTC `accepted_at`; list je SHA-256 nad JCS `receipt_payload` bez potpisa), objavljuje broj listova, prethodni korijen i consistency dokaz. Javni broj listova otkriva dnevnu aktivnost pilota: prije prve objave procjenjuje se u DPIA-i i po potrebi zaokružuje (BACKEND §4.2 t. 8).
-- Korijen potpisuje ključ dnevnog korijena; traže se žigovi od dva neovisna RFC 3161 TSA-a. Dan bez ijednog valjanog žiga je alarm; korijen se tada objavljuje "bez žiga" i posao ponavlja.
-- Objava u javni repozitorij i neovisnim primateljima (e-pošta koordinatoru FPZG-a, javna arhiva).
-- Paket dokaza za predaju izdaje se kao "sidren" tek kad je pripadni korijen žigosan; do tada nosi oznaku "još nije sidren".
-- **Granica tvrdnje** ide doslovno u sučelje i DPIA-u: korijen otkriva kasniju promjenu potvrda svakome tko drži objavljeni korijen; ne štiti od krivotvorenja prije sidrenja ni od dva različita korijena za isti dan bez neovisnog primatelja; ne dokazuje istinitost sadržaja ni autorstvo.
+- Jedan kumulativni append-only log (RFC 6962/9162) umjesto dnevnih stabala (D-93). Digest lista bira se po `receiptSchema`: v1 koristi `SHA-256(JCS(receiptPayloadV1))`, a v2 koristi D iz D-92; list je `SHA-256(0x00 ‖ D_schema)`. Verifikator prema `receiptSchema` bira odgovarajući payload, digest i provjeravatelj potpisa, uz očuvanje izvornog payloada i potpisa. Cutover gate aktivira se prije inventara neovisno o broju zapisa. `reserve` i promjena gatea koriste istu transakcijsku serijalizacijsku bravu: prihvat koji je dobije prvi mora završiti prije snapshot-a, a nakon zatvaranja gatea `reserve` vraća ponovljivu privremenu grešku i ne potvrđuje zapis. Gate ostaje zatvoren tijekom inventara, validacije i mapiranja cijelog pre-log skupa u nepromjenjivu `evidence.log_entry` tablicu determinističkim redom kanonskog UTC `acceptedAt` uzlazno, zatim bajtovnim leksikografskim redoslijedom UTF-8 za `receiptId`, uzastopnim 0-based indeksima. Neispravan ili nepotpun inventar ili neuspjela objava blokira cutover i ostavlja gate zatvorenim. Prva potpisana, žigosana cutover kontrolna točka mora sadržavati sve mapirane potvrde, biti neovisno trajno pohranjena izvan baze i imati `tree_size` jednak njihovu broju; tek tada se gate otvara. Prazan inventar započinje s `tree_size = 0` i praznim RFC 6962 korijenom. B5 test pokreće `reserve` konkurentno s cutoverom praznog inventara i dokazuje da nema prihvata između snapshot-a i pohrane prve točke te da prvi prihvat nakon otvaranja dobiva indeks 0. Nakon cutover-a novi zapisi dobivaju sljedeći gapless indeks pri prihvatu; B4 test pokriva konkurentne prihvate, rollback i idempotentni retry. Worker jednom dnevno objavljuje kontrolnu točku C2SP tlog-checkpoint i consistency dokaz prema prethodnim točkama. Točan broj stvarnih potvrda je javan; pilot prihvaća tu objavu i bilježi je u DPIA (BACKEND §4.2 t. 8); popunjavajući listovi samo ako ustanova to zatraži i uz domenski model iz zasebnog PR-a (D-93); dok ga nema, `tree_size` odgovara samo stvarnim potvrdama.
+- Prije potpisa KMS-om signer čita potpunu append-only povijest ishodišta iz neovisne pohrane izvan domene povrata baze i uspoređuje kandidata sa svim ranijim potpisanim kontrolnim točkama. Manji `tree_size`, jednaka veličina s drugim korijenom, nevaljan consistency dokaz ili nedostupna vanjska povijest blokiraju potpis; jednaki postojeći checkpoint vraća se idempotentno, a veći mora biti konzistentan prema svima. B5 test povrata baze potvrđuje da se regresivna ili razgranata kontrolna točka ne potpisuje, ne žigoše i ne objavljuje te da se indeksi ne resetiraju. Valjana kontrolna točka nakon te provjere potpisuje se ključem dnevnog korijena i šalje na žig dvama neovisnim RFC 3161 TSA-ovima. Dan bez ijednog valjanog žiga je alarm; konzistentna kontrolna točka tada se može objaviti "bez žiga", a posao ponavlja.
+- Kontrolna točka objavljuje se u javnom repozitoriju i šalje neovisnim primateljima (e-pošta koordinatoru FPZG-a, javna arhiva).
+- Paket dokaza za predaju izdaje se kao "sidren" tek kad se inclusion dokaz potvrdi prema prvoj uspješno potpisanoj, žigosanoj i objavljenoj kontrolnoj točki čiji je `tree_size` veći od 0-based indeksa potvrde; do tada nosi oznaku "još nije sidren".
+- **Granica tvrdnje** ide doslovno u sučelje i DPIA-u: inclusion dokaz prema sidrenoj kontrolnoj točki otkriva kasniju promjenu listova koji ulaze u njezin tree size; ne štiti od krivotvorenja prije prve sidrene kontrolne točke ni od split viewa (npr. dviju kontrolnih točaka istog ishodišta i veličine s različitim korijenima) bez neovisnog primatelja; ne dokazuje istinitost sadržaja ni autorstvo.
 
 ## 9. Okruženja
 
