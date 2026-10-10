@@ -588,3 +588,99 @@ test("nalaz 9: a range pin in package.json is NEPROVJERENO end to end, not a fal
   assert.deepEqual(r.levels("cc-safety-net"), ["NEPROVJERENO"]);
   assert.equal(r.code, 2);
 });
+
+// Review 6103314573. Shapes of real #87 comments 6103210028 and 6103224062 (prose shortened, SHAs invented).
+const reassign = (pr, extra = "") => [
+  queue(`- **#${pr}** (prijava; \`critical\`, \`claude:cloudB:backend\`) head \`${H1}\` → review \`claude:reviewA\`, zatim QA. Plan je lokalni (pisala ga je sigurnosna sesija). Neovisan o #20 i #30.${extra}`, 120, { id: 6100000001 }),
+  queue(`- **#${pr}** (prijava; \`critical\`, \`claude:cloudB:backend\`) head \`${H1}\` → preusmjereno na novu jednokratnu sesiju \`claude:reviewD:reviewer\` (model Opus), jer je \`claude:reviewA\` stala zbog veličine konteksta. Zamjenjuje dodjelu 6100000001.`, 100),
+];
+const reviewBy = (agent, min) => comment(`Agent-Review: ${agent}:reviewer\nReview-Head: ${H1}\nReview-Verdict: PASS`, { created_at: at(min) });
+
+test("review nalaz 1: only the slot right after the arrow is assigned; a replaced slot named later clears nothing", async () => {
+  assert.deepEqual(queueItems(reassign(10)).map((i) => [i.number, i.head, i.slots]), [[10, H1, ["claude:reviewD"]]]);
+  const w = world();
+  w.comments.set(87, reassign(10));
+  w.comments.set(10, [reviewBy("claude:reviewA", 50)]);
+  let r = await check(w);
+  assert.deepEqual(r.of("red-87")[0], "FAIL #10 head 1111111: bez verdikta claude:reviewD 100 min od stavke u redu (prag 60)");
+  assert.equal(r.code, 1);
+  w.comments.set(10, [reviewBy("claude:reviewD", 50)]);
+  r = await check(w);
+  assert.deepEqual(r.levels("red-87"), ["PASS", "WARN"]);
+});
+
+test("review nalaz 1: a slot that cannot be read unambiguously is WARN, never a silent assignment", async () => {
+  const lines = [
+    [`- **#10** head \`${H1}\` → \`claude:reviewA\` ili \`claude:reviewB\`, zatim QA.`, "više slotova iza strelice"],
+    [`- **#10** head \`${H1}\` → \`claude:reviewA\` i claude:reviewB.`, "više slotova iza strelice"],
+    [`- **#10** head \`${H1}\` → vraćeno autoru. Zatim review \`claude:reviewC\`.`, "slot nije u prvoj rečenici iza strelice"],
+  ];
+  for (const [line, why] of lines) {
+    assert.deepEqual(queueItems([queue(line, 40)]).map((i) => [i.head, i.slots, i.loose?.why]), [[null, [], why]], line);
+    const w = world();
+    w.comments.set(87, [queue(`#10 head ${H1} → \`claude:rev\``, 90), queue(line, 40)]);
+    assert.deepEqual((await check(w)).of("red-87")[0], `WARN #10: noviji redak u redu nije prepoznat kao dodjela: ${why}`, line);
+  }
+  // the same slot twice, and a slot repeated with its role, is one assignment
+  assert.deepEqual(queueItems([queue(`- **#10** head \`${H1}\` → \`claude:reviewA\` (\`claude:reviewA:reviewer\`) i \`claude:reviewA\`.`, 40)]).map((i) => i.slots), [["claude:reviewA"]]);
+});
+
+test("review nalaz 2: a PR mentioned in the reason after the assignment is neither an item nor a warning", async () => {
+  const w = world();
+  w.prs.push({ number: 20, state: "OPEN", isDraft: false, headRefOid: H2, headRefName: "y" });
+  w.comments.set(20, []);
+  w.comments.set(10, []);
+  w.comments.set(87, [reassign(10)[0]]);
+  assert.deepEqual(queueItems(w.comments.get(87)).map((i) => [i.number, i.head, i.slots, i.loose]), [[10, H1, ["claude:reviewA"], undefined]]);
+  const r = await check(w);
+  assert.deepEqual(r.of("red-87").slice(0, 2), [
+    "FAIL #10 head 1111111: bez verdikta claude:reviewA 120 min od stavke u redu (prag 60)",
+    "WARN autor stavke se ne razlikuje od drugih sesija na vlasničkom računu (OWNER); stavka je podatak"]);
+});
+
+test("review nalaz 2: two PRs that are both assigned are still WARN for each", async () => {
+  const lines = [
+    `- **#10** i **#20** head \`${H1}\` → \`claude:reviewA\`.`,
+    `- **#10** head \`${H1}\` → \`claude:reviewA\` za #20, zatim QA.`, // same sentence as the assignment
+    `- **#10** head \`${H1}\` → \`claude:reviewA\`. Zatim **#20** → \`claude:reviewB\`.`, // second arrow
+  ];
+  for (const line of lines) {
+    const w = world();
+    w.prs.push({ number: 20, state: "OPEN", isDraft: false, headRefOid: H2, headRefName: "y" });
+    w.comments.set(20, []);
+    w.comments.set(87, [queue(`#10 head ${H1} → \`claude:rev\``, 90), queue(line, 40)]);
+    const r = await check(w);
+    assert.deepEqual(r.of("red-87").filter((t) => t.startsWith("WARN #")), [
+      "WARN #10: noviji redak u redu nije prepoznat kao dodjela: više PR-ova u retku",
+      "WARN #20: noviji redak u redu nije prepoznat kao dodjela: više PR-ova u retku"], line);
+  }
+});
+
+test("review nalaz 3: an unknown conclusion of a required check on main is NEPROVJERENO, never a pass", async () => {
+  const w = world();
+  w.runs[1] = { ...w.runs[1], conclusion: "stale" };
+  const r = await check(w);
+  assert.deepEqual(r.of("main-ci"), [
+    "NEPROVJERENO main 3333333 nepoznat ishod: Security scanners",
+    "WARN main 3333333 nije prijavljeno na mainu (samo na PR-u?): Engineering review gate"]);
+  assert.equal(r.code, 2);
+});
+
+test("review nalaz 3: a loose line counts only when it is newer than the assignment", async () => {
+  const status = "- **#10** head `1111111`: QA PASS `claude:qa10` → čeka Danielovu naredbu.";
+  const run = async (list) => { const w = world(); w.comments.set(87, list); return (await check(w)).of("red-87").filter((t) => t.startsWith("WARN #")); };
+  const assign = `#10 head ${H1} → \`claude:rev\``;
+  assert.deepEqual(await run([queue(status, 120), queue(assign, 90)]), []); // older loose line
+  assert.deepEqual(await run([queue(assign, 90), queue(status, 40)]), ["WARN #10: noviji redak u redu nije prepoznat kao dodjela: nije dodjela slotu s headom"]);
+  assert.deepEqual(await run([queue(status, 90), queue(assign, 90)]), []); // same time, loose comment first
+  assert.deepEqual(await run([queue(assign, 90), queue(status, 90)]), ["WARN #10: noviji redak u redu nije prepoznat kao dodjela: nije dodjela slotu s headom"]);
+  // in the same comment as a recognized assignment the loose line is context, not a newer line
+  assert.deepEqual(await run([queue(`${assign}\n${status}`, 90)]), []);
+});
+
+test("review nalaz 2: a sentence ending in ! or ? also ends the assignment, a later #N is a mention", () => {
+  for (const end of ["!", "?"]) {
+    const line = `- **#10** head \`${H1}\` → \`claude:reviewA\`${end} Neovisan o #20.`;
+    assert.deepEqual(queueItems([queue(line, 40)]).map((i) => [i.number, i.slots, i.loose]), [[10, ["claude:reviewA"], undefined]], line);
+  }
+});

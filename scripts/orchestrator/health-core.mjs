@@ -107,11 +107,16 @@ const FULL_SHA_G = new RegExp(FULL_SHA.source, "gi");
 const principal = (slot) => slot.replace(/^(?:codex|chatgpt):/, "openai:"); // as review-gate-core
 const noParens = (s) => s.replace(/\([^()]*\)/g, "");
 
+const SENTENCE_END = /[.!?](?=\s|$)/;
+const CLAUSE_END = /[,;]|[.!?](?=\s|$)/;
+
 /**
  * One queue line. `item`: `#N … head <SHA> → … runtime:slot` with exactly one PR and
  * one full SHA before the arrow and no new SHA after it. `loose`: a line with `#N` and
  * an arrow that is not such an assignment (status line, two PRs, two SHAs, no slot).
  * Loose lines are reported, never dropped silently (QA 6102784825, nalaz 1 i 5).
+ * Only the first slot after the arrow is assigned; a later slot is the reason (6103224062).
+ * A `#N` after the last arrow in a later sentence is a mention, not a PR of the line (6103210028).
  */
 function classify(line) {
   if (line.startsWith(">")) return null;
@@ -121,16 +126,26 @@ function classify(line) {
   const tail = noParens(line.slice(arrow)); // parenthesised slots are context, not assignees
   const pr = (s) => [...new Set([...noParens(s).matchAll(/#(\d+)\b/g)].map((m) => Number(m[1])))];
   if (!pr(before).length) return null;
-  const prs = pr(line); // "**#181** → …; **#182** → …" (6101498335): the second PR must not vanish
+  // "**#181** → …; **#182** → …" (6101498335): a PR before a later arrow must not vanish.
+  const segments = tail.split(/→|->/).slice(1);
+  const last = segments.pop() ?? "";
+  const end = last.search(SENTENCE_END);
+  const prs = [...new Set([...pr(before), ...segments.flatMap(pr), ...pr(end < 0 ? last : last.slice(0, end))])];
   const mentions = [...line.matchAll(/(?<![0-9a-f])[0-9a-f]{7,40}(?![0-9a-f])/gi)].map((m) => m[0].toLowerCase());
   const loose = (why) => ({ loose: true, numbers: prs, mentions, why });
   const head = before.match(/\bhead[au]?\b\W{0,3}([0-9A-Za-z]*)/i);
-  const slots = [...tail.matchAll(SLOT_RE)].map((m) => principal(m[1]));
+  const found = [...tail.matchAll(SLOT_RE)];
   if (prs.length > 1) return loose("više PR-ova u retku");
-  if (!head || !slots.length) return loose("nije dodjela slotu s headom");
+  if (!head || !found.length) return loose("nije dodjela slotu s headom");
   const shas = new Set([...before.matchAll(FULL_SHA_G)].map((m) => m[0].toLowerCase()));
   if (shas.size > 1 || FULL_SHA.test(tail)) return loose("više punih SHA-ova u retku");
-  return { number: prs[0], head: SHA_RE.test(head[1]) ? head[1].toLowerCase() : null, slots };
+  const [first] = found;
+  if (SENTENCE_END.test(tail.slice(0, first.index))) return loose("slot nije u prvoj rečenici iza strelice");
+  const rest = tail.slice(first.index + first[0].length);
+  const clause = rest.search(CLAUSE_END) < 0 ? rest : rest.slice(0, rest.search(CLAUSE_END));
+  const slot = principal(first[1]);
+  if ([...clause.matchAll(SLOT_RE)].some((m) => principal(m[1]) !== slot)) return loose("više slotova iza strelice");
+  return { number: prs[0], head: SHA_RE.test(head[1]) ? head[1].toLowerCase() : null, slots: [slot] };
 }
 
 /**
