@@ -21,8 +21,10 @@ import {
   outline,
   realProjectPath,
   reviewRead,
+  runHook,
   sessionRole,
   stateContext,
+  withCheckedFile,
 } from "./agent-hooks.mjs";
 import { summarizeTranscript } from "./token-report.mjs";
 
@@ -398,7 +400,7 @@ const PROBES = {
     { name: "file link out of the repo", link: "file", target: (s) => path.join(s.outside, "notes", "private.md"), at: "docs/l.md", event: readOf("docs/l.md") },
   ],
   start: [
-    { name: "project directory under secrets/", project: (s) => path.join(s.dir, "secrets"), event: startOf },
+    { name: "STATE.md is a directory link to secrets/", link: "dir", target: (s) => path.join(s.dir, "secrets"), at: "STATE.md", event: startOf },
     { name: "file link to .env", link: "file", target: (s) => path.join(s.dir, ".env"), at: "STATE.md", event: startOf },
     { name: "file link to secrets/", link: "file", target: (s) => path.join(s.dir, "secrets", "STATE.md"), at: "STATE.md", event: startOf },
     { name: "file link out of the repo", link: "file", target: (s) => path.join(s.outside, "STATE.md"), at: "STATE.md", event: startOf },
@@ -438,6 +440,231 @@ test("no hook mode reads or quotes a file that resolves under a deny rule or out
     assert.doesNotMatch(output, new RegExp(MARK));
   } finally {
     fs.rmSync(s.base, { recursive: true, force: true });
+  }
+});
+
+// QA on ab2221d: the path was checked, then opened again by name. The tests
+// below change the file system between the two through an injected `io`.
+const OK = "OK-FAKE";
+const LEAK = "SECRET-FAKE";
+
+// base/repo is the project; repo/secrets is deny-listed and base/vault is outside it.
+function raceSandbox() {
+  const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "ductus-race-")));
+  const dir = path.join(base, "repo");
+  for (const folder of [path.join(dir, "ok"), path.join(dir, "secrets"), path.join(base, "vault")]) fs.mkdirSync(folder, { recursive: true });
+  fs.writeFileSync(path.join(dir, "STATE.md"), `# ${OK}\n`);
+  fs.writeFileSync(path.join(dir, ".env"), `FAKE_TOKEN=${LEAK}\n`);
+  fs.writeFileSync(path.join(dir, "ok", "big.md"), `## ${OK}\n` + "x".repeat(LARGE_DOC_BYTES));
+  fs.writeFileSync(path.join(dir, "ok", "t.jsonl"), assistant("a", { cache_read_input_tokens: ROTATE_AT }) + "\n");
+  fs.writeFileSync(path.join(dir, "secrets", "big.md"), `## ${LEAK}\n` + "x".repeat(LARGE_DOC_BYTES));
+  fs.writeFileSync(path.join(dir, "secrets", "t.jsonl"), assistant("a", { cache_read_input_tokens: HARD_AT }) + "\n");
+  fs.writeFileSync(path.join(base, "vault", "STATE.md"), `# ${LEAK}\n`);
+  return { base, dir };
+}
+
+// Replaces the directory `at` with a link to `target`, and puts it back.
+function swapper(at, target) {
+  const kept = `${at}.real`;
+  return {
+    in: () => (fs.renameSync(at, kept), dirLink(target, at)),
+    out: () => (fs.rmSync(at), fs.renameSync(kept, at)),
+  };
+}
+
+// The real file system, except that `before[name]` runs once, just ahead of
+// the first by-name call of that function. readFileSync is hooked like
+// openSync so that a hook reading by name is caught as well. `io.ran` lists
+// the actions that ran and `io.failed` those that threw, so a test can tell a
+// swap that happened from one that did not.
+function racing(before) {
+  const io = { ...fs, ran: [], failed: [] };
+  for (const [name, action] of Object.entries(before)) {
+    io[name] = (target, ...rest) => {
+      if (!io.ran.includes(name) && (typeof target === "string" || name === "fstatSync")) {
+        io.ran.push(name);
+        try {
+          action();
+        } catch (error) {
+          io.failed.push(`${name}: ${error.message}`);
+        }
+      }
+      return fs[name](target, ...rest);
+    };
+  }
+  return io;
+}
+
+// A hook run as main() would see it: a throw is no output (fail open).
+function quiet(mode, event, io, env) {
+  try {
+    return runHook(mode, event, io, env);
+  } catch {
+    return undefined;
+  }
+}
+
+// The swaps a timing asked for all happened, in the hook's by-descriptor path.
+function assertSwapped(io, hooks) {
+  assert.deepEqual(io.failed, []);
+  assert.deepEqual(io.ran, Object.keys(hooks).filter((name) => name !== "readFileSync"));
+}
+
+// When the swap happens, relative to the hook's own steps.
+const TIMINGS = {
+  "link swapped in before the open": (swap) => ({ openSync: swap.in, readFileSync: swap.in }),
+  "link swapped in before the open and out again after it": (swap) => ({ openSync: swap.in, readFileSync: swap.in, fstatSync: swap.out }),
+};
+
+// What each mode is pointed at, which directory is replaced by a link to
+// which, and what a correct run and a fooled run would print.
+const RACES = {
+  read: { at: "repo/ok", target: "repo/secrets", event: (s) => ({ cwd: s.dir, tool_input: { file_path: "ok/big.md" } }), control: new RegExp(OK), leak: new RegExp(LEAK) },
+  budget: { at: "repo/ok", target: "repo/secrets", event: (s) => ({ transcript_path: path.join(s.dir, "ok", "t.jsonl") }), control: /150k tokens/, leak: /250k tokens/ },
+  start: { at: "repo", target: "vault", event: (s) => ({ cwd: s.dir }), control: new RegExp(OK), leak: new RegExp(LEAK) },
+};
+
+test("no hook mode follows a link swapped in between its path check and its read", async (t) => {
+  // A new mode has to add its race here.
+  assert.deepEqual(Object.keys(RACES).sort(), [...MODE_NAMES].sort());
+  for (const [mode, race] of Object.entries(RACES)) {
+    for (const [timing, hooks] of Object.entries(TIMINGS)) {
+      await t.test(`${mode}: ${timing}`, () => {
+        const s = raceSandbox();
+        try {
+          const env = { CLAUDE_PROJECT_DIR: s.dir };
+          // Control: undisturbed, the hook reads the checked file.
+          assert.match(JSON.stringify(runHook(mode, race.event(s), fs, env)), race.control);
+          const plan = hooks(swapper(path.join(s.base, race.at), path.join(s.base, race.target)));
+          const io = racing(plan);
+          const output = quiet(mode, race.event(s), io, env);
+          assertSwapped(io, plan);
+          assert.doesNotMatch(JSON.stringify(output ?? ""), race.leak);
+          assert.equal(output, undefined);
+        } finally {
+          fs.rmSync(s.base, { recursive: true, force: true });
+        }
+      });
+    }
+    // Every name check is fooled here: the link is in place for the open and
+    // for the stat by name, and gone while the name is resolved. Only the
+    // kernel's record of the descriptor's path tells, so this runs on Linux.
+    await t.test(`${mode}: link in place for the open and the stat, gone for the realpath`, (t) => {
+      if (process.platform !== "linux") return t.skip("needs /proc/self/fd; other platforms have only the name checks (docs/SESSIONS.md §4a)");
+      const s = raceSandbox();
+      try {
+        const swap = swapper(path.join(s.base, race.at), path.join(s.base, race.target));
+        let checking = false;
+        const io = racing({ openSync: () => (swap.in(), (checking = true)), lstatSync: swap.in });
+        io.realpathSync = (...args) => {
+          if (checking) {
+            swap.out();
+            checking = false;
+          }
+          return fs.realpathSync(...args);
+        };
+        assert.equal(runHook(mode, race.event(s), io, { CLAUDE_PROJECT_DIR: s.dir }), undefined);
+        assert.deepEqual([io.failed, io.ran, checking], [[], ["openSync", "lstatSync"], false]);
+      } finally {
+        fs.rmSync(s.base, { recursive: true, force: true });
+      }
+    });
+  }
+});
+
+test("start does not follow STATE.md replaced by a file link to .env after the check", async (t) => {
+  for (const [timing, hooks] of Object.entries(TIMINGS)) {
+    await t.test(timing, (t) => {
+      const s = raceSandbox();
+      try {
+        const state = path.join(s.dir, "STATE.md");
+        if (!fileLink(t, path.join(s.dir, ".env"), path.join(s.dir, "probe"))) return;
+        const swap = {
+          in: () => (fs.renameSync(state, `${state}.real`), fs.symlinkSync(path.join(s.dir, ".env"), state, "file")),
+          out: () => (fs.rmSync(state), fs.renameSync(`${state}.real`, state)),
+        };
+        const io = racing(hooks(swap));
+        assert.equal(quiet("start", { cwd: s.dir }, io, { CLAUDE_PROJECT_DIR: s.dir }), undefined);
+        // Where O_NOFOLLOW exists the open itself refuses the link, so nothing after it runs.
+        assert.deepEqual(io.failed, []);
+        assert.equal(io.ran[0], "openSync");
+      } finally {
+        fs.rmSync(s.base, { recursive: true, force: true });
+      }
+    });
+  }
+});
+
+test("a checked file is read only when the open descriptor is the file at the checked path", () => {
+  const s = raceSandbox();
+  try {
+    const file = path.join(s.dir, "STATE.md");
+    const read = (io) => withCheckedFile(file, (fd, size) => `${size}:${fs.readFileSync(fd, "utf8")}`, io);
+    assert.equal(read(fs), `${OK.length + 3}:# ${OK}\n`);
+    assert.equal(withCheckedFile(path.join(s.dir, "ok", "big.md"), () => "read"), "read");
+    // Not a regular file. Linux opens a directory and fstat rejects it; Windows refuses the open.
+    assert.notEqual(
+      (() => {
+        try {
+          return withCheckedFile(s.dir, () => "read");
+        } catch {
+          return undefined;
+        }
+      })(),
+      "read",
+    );
+    // A file system that reports no inode cannot prove identity.
+    const noInode = (name) => (...args) => Object.assign(fs[name](...args), { ino: 0n });
+    assert.equal(read({ ...fs, fstatSync: noInode("fstatSync"), lstatSync: noInode("lstatSync") }), undefined);
+    // Another file now sits at the checked name.
+    const other = fs.statSync(path.join(s.dir, ".env"), { bigint: true });
+    assert.equal(read({ ...fs, lstatSync: () => other }), undefined);
+    // The name now resolves elsewhere.
+    assert.equal(read({ ...fs, realpathSync: () => path.join(s.dir, ".env") }), undefined);
+    // On Linux the descriptor's own path decides, whatever the names say.
+    const linux = (fdPath) => ({ ...fs, platform: "linux", readlinkSync: () => fdPath });
+    assert.equal(read(linux(path.join(s.dir, "secrets", "big.md"))), undefined);
+    assert.equal(read(linux(`${file} (deleted)`)), undefined);
+    assert.equal(read(linux(file)), `${OK.length + 3}:# ${OK}\n`);
+    // Every descriptor is closed, also when the file is refused.
+    let open = 0;
+    const counting = { ...linux("elsewhere"), openSync: (...args) => ((open += 1), fs.openSync(...args)), closeSync: (fd) => ((open -= 1), fs.closeSync(fd)) };
+    assert.equal(read(counting), undefined);
+    assert.equal(open, 0);
+  } finally {
+    fs.rmSync(s.base, { recursive: true, force: true });
+  }
+});
+
+test("a repo below a directory named secrets/ keeps its hooks; its own deny-listed files stay unread", () => {
+  const root = path.resolve("secrets", "Ductus");
+  const same = (file) => file;
+  assert.deepEqual(realProjectPath(root, path.join(root, "docs", "BACKEND.md"), same), { file: path.join(root, "docs", "BACKEND.md"), relative: "docs/BACKEND.md" });
+  for (const file of [path.join(root, "secrets", "a.md"), path.join(root, ".env"), path.join(root, "infra", "key.age"), path.resolve("secrets", "other", "a.md")]) {
+    assert.equal(realProjectPath(root, file, same), null, file);
+  }
+  const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "ductus-under-")));
+  try {
+    const dir = path.join(base, "secrets", "Ductus");
+    for (const folder of ["docs", "secrets"]) fs.mkdirSync(path.join(dir, folder), { recursive: true });
+    fs.writeFileSync(path.join(dir, "STATE.md"), `# ${OK}\n`);
+    fs.writeFileSync(path.join(dir, "docs", "big.md"), `## ${OK}\n` + "x".repeat(LARGE_DOC_BYTES));
+    fs.writeFileSync(path.join(dir, "secrets", "big.md"), `## ${LEAK}\n` + "x".repeat(LARGE_DOC_BYTES));
+    fs.writeFileSync(path.join(dir, ".env"), `## ${LEAK}\n` + "x".repeat(LARGE_DOC_BYTES));
+    fs.writeFileSync(path.join(base, "secrets", "sibling.md"), `## ${LEAK}\n` + "x".repeat(LARGE_DOC_BYTES));
+    const readEvent = (file) => ({ cwd: dir, tool_input: { file_path: file } });
+    assert.match(run("start", { cwd: dir }, dir).additionalContext, new RegExp(`# ${OK}`));
+    assert.match(run("start", { cwd: dir }).additionalContext, new RegExp(`# ${OK}`));
+    const denied = run("read", readEvent("docs/big.md"), dir);
+    assert.equal(denied.permissionDecision, "deny");
+    assert.match(denied.permissionDecisionReason, new RegExp(`1: ## ${OK}`));
+    for (const file of ["secrets/big.md", ".env", "../sibling.md", path.join(base, "secrets", "sibling.md")]) {
+      assert.equal(raw("read", readEvent(file), dir), "", file);
+    }
+    dirLink(path.join(dir, "secrets"), path.join(dir, "docs", "l"));
+    assert.equal(raw("read", readEvent("docs/l/big.md"), dir), "");
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true });
   }
 });
 

@@ -49,13 +49,41 @@ export const isProtected = (file) => PROTECTED.some((pattern) => pattern.test(to
 // Where a path really is once every link in it is resolved: `file` is the real
 // path and `relative` its place under the real project root. Null when the
 // hook must not open it: it resolves outside the project (a link in the repo
-// can point anywhere on the machine) or under a Read deny rule. Throws when
+// can point anywhere on the machine) or under a Read deny rule. The deny rules
+// are matched against the place under the root, as the permission rules are,
+// so a repo cloned below a directory named secrets/ still works. Throws when
 // the path does not exist, which the caller treats as "do nothing".
 export function realProjectPath(root, file, realpath = fs.realpathSync) {
   const real = realpath(file);
   const relative = path.relative(realpath(root), real);
   const outside = !relative || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
-  return outside || isProtected(real) ? null : { file: real, relative: toPosix(relative) };
+  return outside || isProtected(relative) ? null : { file: real, relative: toPosix(relative) };
+}
+
+const READ_FLAGS = fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0);
+
+// Opens `real` (a path realProjectPath or realpath already approved) once and
+// hands `read` the descriptor and size, so the content read is the content that
+// was checked. Opening by name again would resolve every part of the path a
+// second time, and a link swapped in after the check would lead elsewhere.
+// After the open the descriptor must be a regular file, the name must still
+// resolve to itself, and the file now at that name must be the open one (same
+// device and inode; a file system that reports no inode cannot be verified).
+// On Linux the kernel's own record of the descriptor's path must match too,
+// which holds however the names are swapped during the checks; elsewhere only
+// the name checks exist. Returns undefined when anything differs.
+export function withCheckedFile(real, read, io = fs) {
+  const fd = io.openSync(real, READ_FLAGS);
+  try {
+    const opened = io.fstatSync(fd, { bigint: true });
+    if (!opened.isFile() || io.realpathSync(real) !== real) return undefined;
+    const named = io.lstatSync(real, { bigint: true });
+    if (!named.isFile() || opened.ino === 0n || opened.ino !== named.ino || opened.dev !== named.dev) return undefined;
+    if ((io.platform ?? process.platform) === "linux" && io.readlinkSync(`/proc/self/fd/${fd}`) !== real) return undefined;
+    return read(fd, Number(opened.size));
+  } finally {
+    io.closeSync(fd);
+  }
 }
 
 export function sessionRole(event) {
@@ -172,71 +200,74 @@ export function stateContext(file, text) {
   );
 }
 
-function readTail(file, bytes) {
-  const { size } = fs.statSync(file);
+function readTail(io, fd, size, bytes) {
   const length = Math.min(size, bytes);
   const buffer = Buffer.alloc(length);
-  const handle = fs.openSync(file, "r");
-  try {
-    fs.readSync(handle, buffer, 0, length, size - length);
-  } finally {
-    fs.closeSync(handle);
-  }
+  io.readSync(fd, buffer, 0, length, size - length);
   return buffer.toString("utf8");
 }
 
-const emit = (hookSpecificOutput) => process.stdout.write(JSON.stringify({ hookSpecificOutput }));
-const projectDir = (event) => process.env.CLAUDE_PROJECT_DIR ?? event.cwd ?? ".";
+const projectDir = (event, env) => env.CLAUDE_PROJECT_DIR ?? event.cwd ?? ".";
 
+// Each mode returns its hookSpecificOutput, or nothing. Files are read only
+// through withCheckedFile, never by name.
 const modes = {
   // PreToolUse(Read)
-  read(event) {
+  read(event, io, env) {
     const input = event.tool_input ?? {};
     const file = path.resolve(event.cwd ?? ".", String(input.file_path ?? ""));
-    const root = path.resolve(projectDir(event));
+    const root = path.resolve(projectDir(event, env));
     const relative = path.relative(root, file);
     const inProject = !relative.startsWith("..") && !path.isAbsolute(relative);
-    if (!inProject || isProtected(relative)) return;
-    const stat = fs.statSync(file, { throwIfNoEntry: false });
+    if (!inProject || isProtected(relative)) return undefined;
+    const named = { ...input, file_path: relative || input.file_path };
+    const deny = (reason) => (reason ? { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason } : undefined);
+    if (!io.statSync(file, { throwIfNoEntry: false })) return deny(reviewRead(named, undefined, () => "", inProject));
     // A link inside the repo may point at a deny-listed file or out of the
     // repo. Neither is opened here; the permission system decides the call.
-    const real = stat ? realProjectPath(root, file) : null;
-    if (stat && !real) return;
-    const reason = reviewRead({ ...input, file_path: relative || input.file_path }, stat, () => fs.readFileSync(real.file, "utf8"), inProject);
-    if (reason) emit({ hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason });
+    const real = realProjectPath(root, file, io.realpathSync);
+    if (!real) return undefined;
+    return withCheckedFile(real.file, (fd, size) => deny(reviewRead(named, { size }, () => io.readFileSync(fd, "utf8"), inProject)), io);
   },
   // UserPromptSubmit
-  budget(event) {
+  budget(event, io) {
     // The transcript lives outside the repo by design and only its size is
     // reported, but a path that resolves under a Read deny rule is not opened.
-    const transcript = fs.realpathSync(event.transcript_path);
-    if (isProtected(event.transcript_path) || isProtected(transcript)) return;
+    const transcript = io.realpathSync(event.transcript_path);
+    if (isProtected(event.transcript_path) || isProtected(transcript)) return undefined;
     // A long turn can push the last call out of a small tail; widen once.
-    const tokens = lastContext(readTail(transcript, 400_000)) || lastContext(readTail(transcript, 4_000_000));
-    const notice = budgetNotice(tokens, sessionRole(event));
-    if (notice) emit({ hookEventName: "UserPromptSubmit", additionalContext: notice });
+    const tokens = withCheckedFile(transcript, (fd, size) => lastContext(readTail(io, fd, size, 400_000)) || lastContext(readTail(io, fd, size, 4_000_000)), io);
+    const notice = budgetNotice(tokens ?? 0, sessionRole(event));
+    return notice ? { hookEventName: "UserPromptSubmit", additionalContext: notice } : undefined;
   },
   // SessionStart: saves the model call every session spends on reading STATE.md.
-  start(event) {
-    const root = projectDir(event);
+  start(event, io, env) {
+    const root = projectDir(event, env);
     const file = path.join(root, "STATE.md");
     // Only the project's own STATE.md is loaded. Git checks out links, so a
     // branch can make STATE.md point at .env or any other file; a path that
     // resolves anywhere but <root>/STATE.md is not read and nothing is added.
-    const real = realProjectPath(root, file);
-    if (real?.relative !== "STATE.md" || !fs.statSync(real.file).isFile()) return;
-    const context = stateContext(file, fs.readFileSync(real.file, "utf8"));
-    if (context) emit({ hookEventName: "SessionStart", additionalContext: context });
+    const real = realProjectPath(root, file, io.realpathSync);
+    if (real?.relative !== "STATE.md") return undefined;
+    const text = withCheckedFile(real.file, (fd) => io.readFileSync(fd, "utf8"), io);
+    const context = typeof text === "string" ? stateContext(file, text) : null;
+    return context ? { hookEventName: "SessionStart", additionalContext: context } : undefined;
   },
 };
 
 // Every mode opens a file; agent-hooks.test.mjs probes each name listed here.
 export const MODE_NAMES = Object.keys(modes);
 
+// One hook run without the process around it. `io` is the file system the
+// hook sees; tests pass one that changes between the check and the read.
+export function runHook(name, event, io = fs, env = process.env) {
+  return Object.hasOwn(modes, name) ? modes[name](event, io, env) : undefined;
+}
+
 function main() {
   try {
-    const mode = modes[process.argv[2]];
-    if (mode) mode(JSON.parse(fs.readFileSync(0, "utf8")));
+    const hookSpecificOutput = runHook(process.argv[2], JSON.parse(fs.readFileSync(0, "utf8")));
+    if (hookSpecificOutput) process.stdout.write(JSON.stringify({ hookSpecificOutput }));
   } catch {
     // Fail open.
   }
