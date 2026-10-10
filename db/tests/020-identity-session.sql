@@ -3,12 +3,12 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
 -- Inside this transaction only: the roles under test may call pgTAP (the
--- default privileges from the roles migration withhold EXECUTE from PUBLIC).
+-- roles migration takes USAGE on public away from PUBLIC).
 CREATE ROLE ductus_test_stranger NOLOGIN;
 GRANT USAGE ON SCHEMA public TO ductus_app, ductus_worker, ductus_retention, ductus_auth, ductus_test_stranger;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO ductus_app, ductus_worker, ductus_retention, ductus_auth, ductus_test_stranger;
 
-SELECT plan(30);
+SELECT plan(39);
 
 INSERT INTO identity.institution (id, slug) VALUES
   ('00000000-0000-4000-8000-00000000000a', 'test-a'),
@@ -54,6 +54,21 @@ SELECT throws_ok(
 );
 SELECT throws_ok('SELECT count(*) FROM identity.user_account', '42501', NULL, 'ductus_app: SELECT on user_account is denied');
 SELECT throws_ok('SELECT count(*) FROM identity.institution', '42501', NULL, 'ductus_app: SELECT on institution is denied');
+-- Rewriting an identifier would turn one account into another person's.
+-- The updates read no column, so they need the UPDATE privilege alone.
+SELECT throws_ok(
+  $$ INSERT INTO identity.user_account (institution_id, oidc_issuer, oidc_subject, hr_edu_person_unique_id)
+     VALUES ('00000000-0000-4000-8000-00000000000a', 'https://issuer.test', 'sub-x', 'x@test-a.example') $$,
+  '42501', NULL, 'ductus_app: INSERT on user_account is denied'
+);
+SELECT throws_ok($$ UPDATE identity.user_account SET created_at = now() $$, '42501', NULL, 'ductus_app: UPDATE on user_account is denied');
+SELECT throws_ok($$ DELETE FROM identity.user_account $$, '42501', NULL, 'ductus_app: DELETE on user_account is denied');
+SELECT throws_ok(
+  $$ INSERT INTO identity.institution (slug) VALUES ('test-c') $$,
+  '42501', NULL, 'ductus_app: INSERT on institution is denied'
+);
+SELECT throws_ok($$ UPDATE identity.institution SET created_at = now() $$, '42501', NULL, 'ductus_app: UPDATE on institution is denied');
+SELECT throws_ok($$ DELETE FROM identity.institution $$, '42501', NULL, 'ductus_app: DELETE on institution is denied');
 
 -- 2. Even with SELECT granted by mistake, RLS returns no rows.
 RESET ROLE;
@@ -127,6 +142,32 @@ RESET ROLE;
 SET LOCAL ROLE ductus_test_stranger;
 SELECT throws_ok('SELECT * FROM app.current_actor()', '42501', NULL, 'role without grants: current_actor() is denied');
 RESET ROLE;
+-- The migrator owns the schema, so this denial comes from the table itself.
+SET LOCAL ROLE ductus_migrator;
+SELECT throws_ok('SELECT count(*) FROM identity.session', '42501', NULL, 'ductus_migrator: SELECT on session is denied (DDL, not data)');
+RESET ROLE;
+
+-- 6. The whole matrix from the catalogue. Several denials above come from a
+-- missing USAGE on the schema, so they would survive a table grant; here no
+-- role except the owner may hold any privilege on any identity table, and a
+-- policy for another role is a failure even before a grant makes it usable.
+SELECT is_empty(
+  $$ SELECT r.rolname || ': ' || p.privilege || ' on ' || c.relname
+     FROM (SELECT rolname::text FROM pg_roles WHERE rolname LIKE 'ductus\_%' AND rolname <> 'ductus_identity'
+           UNION ALL SELECT 'public') AS r
+     CROSS JOIN pg_class c
+     CROSS JOIN unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) AS p (privilege)
+     WHERE c.relnamespace = 'identity'::regnamespace AND c.relkind IN ('r', 'p', 'v', 'm')
+       AND (has_table_privilege(r.rolname, c.oid, p.privilege)
+            OR (p.privilege IN ('SELECT', 'INSERT', 'UPDATE', 'REFERENCES')
+                AND has_any_column_privilege(r.rolname, c.oid, p.privilege))) $$,
+  'no role but ductus_identity, nor PUBLIC, holds a table or column privilege on any identity table'
+);
+SELECT is_empty(
+  $$ SELECT tablename || '.' || policyname FROM pg_policies
+     WHERE schemaname = 'identity' AND roles <> ARRAY['ductus_identity']::name[] $$,
+  'every policy on an identity table is for ductus_identity alone'
+);
 
 SELECT * FROM finish();
 ROLLBACK;

@@ -4,19 +4,54 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(14);
+SELECT plan(20);
 
 -- Group roles: none can log in or step around RLS.
 SELECT bag_eq(
   $$ SELECT rolname::text FROM pg_roles WHERE rolname LIKE 'ductus\_%' AND NOT rolcanlogin $$,
-  ARRAY['ductus_app', 'ductus_worker', 'ductus_retention', 'ductus_evidence', 'ductus_identity', 'ductus_auth'],
-  'the six group roles exist'
+  ARRAY['ductus_migrator', 'ductus_app', 'ductus_worker', 'ductus_retention', 'ductus_evidence', 'ductus_identity', 'ductus_auth'],
+  'the six group roles and the migrator exist, none with a login'
 );
 SELECT is_empty(
   $$ SELECT rolname FROM pg_roles
      WHERE rolname IN ('ductus_app', 'ductus_worker', 'ductus_retention', 'ductus_evidence', 'ductus_identity', 'ductus_auth')
        AND (rolcanlogin OR rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb OR rolreplication) $$,
   'group roles are NOLOGIN, not superuser, without BYPASSRLS, CREATEROLE, CREATEDB or REPLICATION'
+);
+
+-- The migrator is the only role with DDL, yet it is neither a superuser nor
+-- above RLS. Owning the database, the ledger and every application schema
+-- also proves that the migrations ran as this role and not as a superuser.
+SELECT ok(
+  (SELECT rolcreaterole AND NOT (rolsuper OR rolbypassrls OR rolreplication OR rolcreatedb)
+   FROM pg_roles WHERE rolname = 'ductus_migrator'),
+  'ductus_migrator has CREATEROLE but no SUPERUSER, BYPASSRLS, REPLICATION or CREATEDB'
+);
+SELECT is(
+  (SELECT pg_get_userbyid(datdba)::text FROM pg_database WHERE datname = current_database()),
+  'ductus_migrator',
+  'ductus_migrator owns the database'
+);
+SELECT is_empty(
+  $$ SELECT nspname::text FROM pg_namespace
+     WHERE nspname NOT LIKE 'pg\_%' AND nspname NOT IN ('information_schema', 'public')
+       AND nspowner <> 'ductus_migrator'::regrole
+     UNION ALL
+     SELECT 'public.schema_migrations' FROM pg_class
+     WHERE oid = 'public.schema_migrations'::regclass AND relowner <> 'ductus_migrator'::regrole $$,
+  'every application schema and the dbmate ledger belong to ductus_migrator'
+);
+SELECT is_empty(
+  $$ SELECT pg_get_userbyid(roleid)::text FROM pg_auth_members
+     WHERE member = 'ductus_migrator'::regrole AND inherit_option $$,
+  'ductus_migrator inherits the privileges of no other role'
+);
+SELECT is_empty(
+  $$ SELECT r.rolname || ' on ' || n.nspname FROM pg_roles r CROSS JOIN pg_namespace n
+     WHERE r.rolname LIKE 'ductus\_%' AND r.rolname <> 'ductus_migrator'
+       AND n.nspname NOT LIKE 'pg\_%' AND n.nspname <> 'information_schema'
+       AND has_schema_privilege(r.rolname, n.oid, 'CREATE') $$,
+  'no role but ductus_migrator has CREATE on a schema'
 );
 
 -- ductus_app owns nothing and can create nothing.
@@ -92,6 +127,11 @@ SELECT is_empty(
   $$ SELECT name FROM app_function
      WHERE prosecdef AND proowner NOT IN ('ductus_identity'::regrole, 'ductus_evidence'::regrole) $$,
   'SECURITY DEFINER functions belong to a NOLOGIN owner role'
+);
+SELECT is_empty(
+  $$ SELECT name FROM app_function
+     WHERE proowner NOT IN ('ductus_migrator'::regrole, 'ductus_identity'::regrole, 'ductus_evidence'::regrole) $$,
+  'application functions belong to the migrator or an owner role'
 );
 SELECT is_empty(
   $$ SELECT name FROM app_function

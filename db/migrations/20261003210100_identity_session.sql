@@ -44,10 +44,6 @@ CREATE TABLE identity.session (
 );
 CREATE INDEX session_user_id_idx ON identity.session (user_id);
 
-ALTER TABLE identity.institution OWNER TO ductus_identity;
-ALTER TABLE identity.user_account OWNER TO ductus_identity;
-ALTER TABLE identity.session OWNER TO ductus_identity;
-
 -- RLS is forced, so even the owner needs a policy. Only ductus_identity has
 -- one; it is NOLOGIN and acts solely through the functions below. Every
 -- other role sees no rows even if a grant is added by mistake.
@@ -109,9 +105,6 @@ BEGIN
 END
 $$;
 
-ALTER FUNCTION app.current_actor() OWNER TO ductus_identity;
-ALTER FUNCTION identity.close_current_session() OWNER TO ductus_identity;
-
 GRANT USAGE ON SCHEMA identity TO ductus_identity, ductus_app;
 GRANT USAGE ON SCHEMA app TO ductus_identity, ductus_app;
 GRANT EXECUTE ON FUNCTION
@@ -120,6 +113,17 @@ GRANT EXECUTE ON FUNCTION
   app.current_institution_id(),
   identity.close_current_session()
 TO ductus_app;
+
+-- Ownership moves last: once a table belongs to ductus_identity the migrator
+-- can no longer alter it without SET ROLE. PostgreSQL asks that the new
+-- owner have CREATE on the schema, so it holds it for the handover only.
+GRANT CREATE ON SCHEMA identity, app TO ductus_identity;
+ALTER TABLE identity.institution OWNER TO ductus_identity;
+ALTER TABLE identity.user_account OWNER TO ductus_identity;
+ALTER TABLE identity.session OWNER TO ductus_identity;
+ALTER FUNCTION app.current_actor() OWNER TO ductus_identity;
+ALTER FUNCTION identity.close_current_session() OWNER TO ductus_identity;
+REVOKE CREATE ON SCHEMA identity, app FROM ductus_identity;
 
 -- migrate:down
 DROP SCHEMA app CASCADE;

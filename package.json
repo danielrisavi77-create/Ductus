@@ -21,8 +21,9 @@
     "stack:up": "docker compose up -d --build --wait",
     "stack:down": "docker compose down -v",
     "db:new": "dbmate new",
-    "db:migrate": "dbmate --url \"postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus?sslmode=disable\" --no-dump-schema --wait up",
-    "db:rollback": "dbmate --url \"postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus?sslmode=disable\" --no-dump-schema rollback",
+    "db:provision": "docker compose exec -T postgres psql -U ductus -d ductus -v ON_ERROR_STOP=1 -q < db/local/migrator.sql",
+    "db:migrate": "pnpm db:provision && dbmate --url \"postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus?sslmode=disable&role=ductus_migrator\" --no-dump-schema --wait up",
+    "db:rollback": "dbmate --url \"postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus?sslmode=disable&role=ductus_migrator\" --no-dump-schema rollback",
     "db:status": "dbmate --url \"postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus?sslmode=disable\" status",
     "test:db": "docker compose exec -T postgres pg_prove -U ductus -d ductus --recurse --ext .sql /db/tests"
   },
