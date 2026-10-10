@@ -17,6 +17,10 @@ const ATTACKS = [
   "/\u0000",
   "/\ud800",
   "/api/auth/login",
+  // QA of #191: the bare prefix too.
+  "/api",
+  "/api?x=1",
+  "/api#x",
   "",
   `/${"a".repeat(512)}`,
   // Dot segments that the URL parser removes after the input check (review

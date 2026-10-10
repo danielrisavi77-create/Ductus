@@ -8,7 +8,7 @@ CREATE ROLE ductus_test_stranger NOLOGIN;
 GRANT USAGE ON SCHEMA public TO ductus_app, ductus_worker, ductus_retention, ductus_auth, ductus_test_stranger;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO ductus_app, ductus_worker, ductus_retention, ductus_auth, ductus_test_stranger;
 
-SELECT plan(47);
+SELECT plan(51);
 
 INSERT INTO identity.institution (id, slug, aai_home_org) VALUES
   ('00000000-0000-4000-8000-00000000000a', 'test-a', 'a.example'),
@@ -194,6 +194,29 @@ SELECT throws_ok($$ UPDATE identity.institution SET aai_home_org = 'x.example' $
 RESET ROLE;
 SELECT throws_ok($$ INSERT INTO identity.institution (slug, aai_home_org) VALUES ('test-e', 'E.example') $$, '23514', NULL,
   'aai_home_org in upper case cannot be stored');
+-- QA of #191: open_session picks the institution by this value, so two
+-- institutions must never share it.
+SELECT throws_ok($$ INSERT INTO identity.institution (slug, aai_home_org) VALUES ('test-dup', 'a.example') $$, '23505', NULL,
+  'two institutions cannot share an aai_home_org');
+SELECT col_is_unique('identity', 'institution', ARRAY['aai_home_org'], 'aai_home_org is unique');
+CREATE FUNCTION pg_temp.home_org_stored(p_value text) RETURNS boolean
+LANGUAGE plpgsql AS $$
+BEGIN
+  INSERT INTO identity.institution (slug, aai_home_org) VALUES ('test-check', p_value);
+  RAISE EXCEPTION 'stored' USING ERRCODE = 'P0001';
+EXCEPTION
+  WHEN check_violation THEN RETURN false;
+  WHEN raise_exception THEN RETURN true;
+END
+$$;
+SELECT is(
+  (SELECT array_agg(v ORDER BY v) FROM unnest(ARRAY['a.example.', '.', '-', '..', 'a..b', '-a.example', 'a-.example', 'example',
+                                                    repeat('a', 251) || '.hr']) AS t (v)
+    WHERE pg_temp.home_org_stored(v)),
+  NULL,
+  'aai_home_org refuses trailing dots, empty labels, edge hyphens, single labels and names over 253 characters'
+);
+SELECT ok(pg_temp.home_org_stored('demo-fakultet.ductus.test'), 'aai_home_org stores a valid DNS name');
 SELECT is_empty(
   $$ SELECT r.rolname FROM (SELECT rolname::text FROM pg_roles
                             WHERE rolname LIKE 'ductus\_%' AND rolname <> 'ductus_identity'
