@@ -95,7 +95,7 @@ Radovi: podnesci i eseji. Bez AI pomoćnika (FPZG ga ionako ne smije tražiti, D
 | Uz to | Obavijesti (N-01), podsjetnici (N-02), popis "tko treba pomoć" (N-12), uvodni vodič (S-11) | 6 do 8 |
 | **Ukupno** | | **56 do 74** |
 
-### Val 2: seminarski i grupni radovi (cilj: zajedno s valom 1 na početku semestra; najkasnije sredina svibnja 2027.)
+### Val 2: proširenje seminarskih radova (cilj: početak semestra; najkasnije sredina svibnja 2027.)
 
 | Dio | Sadržaj | Procjena |
 | --- | --- | --- |
@@ -113,7 +113,7 @@ Razvoj vala 2 teče tijekom semestra, uz podršku pilotu. Ako kasni, val 2 se po
 
 ### Val 3: mentorski radovi i obrana (cilj svibanj 2027., najkasnije prije prvog roka obrana)
 
-Konzultacije (D-47), ključni rokovi (N-07), komentor i povjerenstvo u sučelju (N-08, N-09), priprema za razgovor (D-53), reprodukcija s povijesti odlomka (D-56), priprema za obranu (A-04), PDF izvori i provjera citata (S-09, A-03), uvoz PDF-a, poznato podrijetlo (D-58), provjera izvora (D-48), prenosiv zapis i paket za zaštitu (D-49, S-01), vremeplov (S-02), planer (S-06), zbirni pregled (N-11), verifikator (A-07), "moj rad u brojkama" (A-10), portfelj (S-10), izvješće za evaluaciju (F-01), mobilne bilješke (S-03). Procjena **50 do 65**.
+Konzultacije (D-47), ključni rokovi (N-07), komentor i povjerenstvo u sučelju (N-08, N-09), priprema za razgovor (D-53), reprodukcija s povijesti odlomka (D-56), priprema za obranu (A-04), PDF izvori i provjera citata (S-09, A-03), uvoz PDF-a, poznato podrijetlo (D-58), provjera izvora (D-48), prenosiv zapis i paket za zaštitu (D-49, S-01), vremeplov (S-02), planer (S-06), zbirni pregled (N-11), verifikator (A-07), "moj rad u brojkama" (A-10), portfelj (S-10), izvješće za evaluaciju (F-01), mobilne bilješke (S-03, val 3 unutar kasnijeg pilot-vala; ne ulaze u valove 1–2). Procjena **50 do 65**.
 
 ### Ovisnosti koje se ne smiju propustiti
 
