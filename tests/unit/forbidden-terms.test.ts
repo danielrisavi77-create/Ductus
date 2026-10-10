@@ -1716,9 +1716,10 @@ describe("the rizik entry in compounds", () => {
     expect(rizik(text)).toBe(true);
   });
 
-  // Words that are not a risk grade. The only Croatian word with the letters
-  // "rizi" + k/c is "križić" (a small cross; also a surname), "krizic" once
-  // folded. The rest check that the root is not found in text around it.
+  // Words that are not a risk grade. The one common word with the letters
+  // "rizi" + k/c is "križić" (a small cross), "krizic" once folded; the pattern
+  // makes that one exception. The rest check that the root is not found in
+  // text around it.
   it.each([
     "Križić",
     "križići",
@@ -1734,6 +1735,13 @@ describe("the rizik entry in compounds", () => {
     "Asterisk",
   ])("does not flag %j", (text) => {
     expect(rizik(text)).toBe(false);
+  });
+
+  // Known false positives, recorded so the behaviour is deliberate: invented
+  // surnames that end in "-rizić" after a letter other than "k" match the root.
+  // The pattern is not changed; such a name does not belong in interface text.
+  it.each(["Brizić", "Parizić", "Grizić"])("flags the invented surname %j (known false positive)", (text) => {
+    expect(rizik(text)).toBe(true);
   });
 
   it("keeps the English entry bound to the start of a word (brisk, asterisk)", () => {

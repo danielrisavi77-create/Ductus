@@ -47,8 +47,11 @@ export interface ForbiddenTerm {
 // `rizik` is the same kind of entry: the root is matched wherever it stands in a
 // word, so a compound with any prefix ("srednjerizičan", "bezrizično",
 // "visokorizičan", "nerizičan") is caught and the list of prefixes cannot go
-// stale. The one Croatian word that contains the letters is "križić" (folded
+// stale. The one common word that contains the letters is "križić" (folded
 // "krizic", a small cross), so a "k" in front of the root is the only exception.
+// Surnames and other words that end in "-rizić" or "-rizik" after another letter
+// (an invented "Brizić", "Parizić", "Grizić") are matched too and are false
+// positives; they do not belong in interface text and are handled one by one.
 // The two contextual patterns only keep letters away from the word: a digit
 // that touches it (a footnote mark or a counter set next to the word by an
 // element, `Spremljeno<sup>1</sup>`) does not make it another word, and it
