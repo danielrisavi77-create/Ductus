@@ -1,4 +1,4 @@
-"""DAN-41: negative policy and actual SQLite concurrency tests."""
+"""DAN-41: negative policy and actual SQLite concurrency tests (read-only scope)."""
 import concurrent.futures
 import sqlite3
 import tempfile
@@ -7,15 +7,15 @@ import unittest
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from ai_runtime.policy import Blocked, validate_task, validate_funding, scopes_overlap
+from ai_runtime.policy import Blocked, CHANNELS, ROLES, validate_task, validate_funding
 from ai_runtime.registry import Registry
 
 SHA = 'a' * 40
 
 def task(**overrides):
-    data = dict(id='DAN-99', owner='codex:a:platforma', role='platforma', provider='codex',
-                base_sha=SHA, worktree='/isolated/a', scopes=['scripts/'],
-                goal='Synthetic test', acceptance='Tests pass', risk='critical', heavy=False)
+    data = dict(id='DAN-99', owner='codex:a:reviewer', role='reviewer', provider='codex',
+                base_sha=SHA, worktree='/isolated/a', scopes=[],
+                goal='Synthetic test', acceptance='Advisory report', risk='critical', heavy=False)
     data.update(overrides)
     return data
 
@@ -33,19 +33,30 @@ class PolicyTests(unittest.TestCase):
     def test_unknown_fields_and_bad_values(self):
         for overrides in [dict(role='god'),dict(role=[]),dict(provider={}), dict(provider='openrouter'), dict(base_sha='main'),
                           dict(id='../escape'),dict(scopes=['../secret']),dict(scopes=['.git/']),
-                          dict(scopes=['/etc']),dict(scopes=['src/../.env']),dict(scopes=[]),
+                          dict(scopes=['/etc']),dict(scopes=['src/../.env']),dict(scopes=None),
+                          dict(scopes={}),dict(scopes='src/'),
                           dict(heavy='false'),dict(timeout=0),dict(extra='surprise')]:
             with self.subTest(overrides=overrides),self.assertRaises(Blocked):
                 validate_task(task(**overrides))
-    def test_orchestrator_cannot_write_code(self):
+    def test_writer_and_orchestrator_roles_do_not_exist(self):
+        for role in ('orchestrator','backend','frontend','platforma'):
+            self.assertNotIn(role,ROLES)
+            for scopes in ([],['src/']):
+                with self.subTest(role=role,scopes=scopes),self.assertRaises(Blocked):
+                    validate_task(task(role=role,scopes=scopes))
+    def test_every_role_is_read_only_and_any_write_path_is_refused(self):
+        for role in ROLES:
+            self.assertEqual(validate_task(task(role=role))['scopes'],[])
+            for scopes in (['src/'],['docs/AI_RUNTIME.md'],['']):
+                with self.subTest(role=role,scopes=scopes),self.assertRaises(Blocked) as caught:
+                    validate_task(task(role=role,scopes=scopes))
+                self.assertIn('blocked_scope',str(caught.exception))
+    def test_claude_is_refused_with_named_reason(self):
+        self.assertNotIn('claude',CHANNELS)
+        with self.assertRaises(Blocked) as caught:validate_task(task(provider='claude'))
+        self.assertIn('blocked_provider',str(caught.exception))
         with self.assertRaises(Blocked):
-            validate_task(task(role='orchestrator'))
-    def test_read_only_roles_have_no_scopes(self):
-        self.assertEqual(validate_task(task(role='reviewer',scopes=[]))['role'],'reviewer')
-    def test_scope_overlap_handles_ancestor_and_boundary(self):
-        self.assertTrue(scopes_overlap(['src/'],['src/domain/']))
-        self.assertFalse(scopes_overlap(['src/lib/'],['src/library/']))
-        self.assertTrue(scopes_overlap(['src/A.ts'],['SRC/a.ts']))
+            validate_funding('claude',evidence(provider='claude',channel='claude_subscription'),100,'b'*64)
     def test_funding_happy_path(self):
         validate_funding('codex',evidence(),100,'b'*64)
     def test_funding_fails_closed(self):
@@ -56,6 +67,11 @@ class PolicyTests(unittest.TestCase):
                        dict(extra_spend_disabled='true')]:
             with self.subTest(change=change), self.assertRaises(Blocked):
                 validate_funding('codex',evidence(**change),100,'b'*64)
+    def test_funding_evidence_expires_after_24_hours(self):
+        validate_funding('codex',evidence(observed_at=0,expires_at=86400),86399,'b'*64)
+        for change,now in [(dict(observed_at=0,expires_at=86401),100),(dict(observed_at=0,expires_at=86400),86400)]:
+            with self.subTest(change=change,now=now),self.assertRaises(Blocked):
+                validate_funding('codex',evidence(**change),now,'b'*64)
     def test_missing_funding_not_assumed(self):
         with self.assertRaises(Blocked): validate_funding('codex',None,100,'b'*64)
     def test_paid_mistral_and_web_meta_never_dispatch(self):
@@ -71,40 +87,42 @@ class RegistryTests(unittest.TestCase):
     def tearDown(self): self.temp.cleanup()
     def take(self,n,role='reviewer',**kwargs):
         return self.reg.acquire(task(id=f'DAN-{n}',owner=f'codex:{n}:{role}',role=role,
-                           worktree=f'/isolated/{n}',scopes=[] if role not in ('backend','frontend','platforma') else [f'src/{n}/'], **kwargs),now=100,controller_pid=10001)
+                           worktree=f'/isolated/{n}',**kwargs),now=100,controller_pid=10001)
     def test_connection_is_closed_after_transaction(self):
         with self.reg.connect() as db:
             db.execute('SELECT 1')
         with self.assertRaises(sqlite3.ProgrammingError): db.execute('SELECT 1')
-    def test_old_active_claim_visible_after_many_completed_jobs(self):
+    def test_old_active_claim_visible_when_history_is_truncated(self):
+        # Same property as the former 109-job test, without ~220 durable commits:
+        # the history window is a parameter, and the oldest claim must outlive it.
         self.take(1)
-        for n in range(2,110):
+        for n in range(2,7):
             run,token=self.take(n)
             self.reg.finish(run,token,'completed')
-        self.assertEqual(len(self.reg.status()['active']),1)
+        status=self.reg.status(history_limit=3)
+        self.assertEqual([r['task'] for r in status['active']],['DAN-1'])
+        self.assertEqual(len(status['history']),3)
+        self.assertEqual(len(self.reg.status()['history']),5)
     def test_same_task_cannot_run_twice(self):
         self.take(1)
         with self.assertRaises(Blocked): self.take(1)
     def test_same_worktree_cannot_run_twice(self):
         self.take(1)
         with self.assertRaises(Blocked):
-            self.reg.acquire(task(id='DAN-2',role='reviewer',scopes=[],worktree='/isolated/1'),now=100)
-    def test_maximum_three_managed_runs(self):
+            self.reg.acquire(task(id='DAN-2',owner='codex:2:reviewer',worktree='/isolated/1'),now=100)
+    def test_maximum_three_read_only_runs(self):
         for n in range(3): self.take(n)
         with self.assertRaises(Blocked): self.take(4)
-    def test_one_writer_in_catchup(self):
-        self.take(1,'backend')
-        with self.assertRaises(Blocked): self.take(2,'frontend')
-    def test_two_writers_in_normal_mode(self):
-        self.reg=Registry(self.path,mode='normal')
-        self.take(1,'backend');self.take(2,'frontend')
-        with self.assertRaises(Blocked): self.take(3,'platforma')
-    def test_one_orchestrator(self):
-        self.take(1,'orchestrator')
-        with self.assertRaises(Blocked): self.take(2,'orchestrator')
+    def test_task_with_write_paths_never_reaches_the_registry(self):
+        with self.assertRaises(Blocked): self.take(1,scopes=['src/'])
+        self.assertEqual(self.reg.status()['active'],[])
     def test_only_one_heavy_job(self):
         self.take(1,heavy=True)
         with self.assertRaises(Blocked): self.take(2,heavy=True)
+    def test_one_slot_per_grok_and_mistral(self):
+        for n,provider in ((1,'grok'),(3,'mistral')):
+            self.take(n,provider=provider)
+            with self.subTest(provider=provider),self.assertRaises(Blocked): self.take(n+1,provider=provider)
     def test_wrong_token_cannot_release(self):
         run,token=self.take(1)
         with self.assertRaises(Blocked): self.reg.finish(run,'wrong','completed')
@@ -134,18 +152,14 @@ class RegistryTests(unittest.TestCase):
             except Blocked: return False
         with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
             self.assertEqual(sum(pool.map(race,range(8))),1)
-    def test_overlapping_scopes_block_even_different_worktrees(self):
-        self.reg=Registry(self.path,mode='normal')
-        self.reg.acquire(task(worktree='/a',scopes=['src/']),now=100)
-        with self.assertRaises(Blocked):
-            self.reg.acquire(task(id='DAN-2',owner='codex:b:backend',role='backend',worktree='/b',scopes=['src/domain/']),now=100)
     def test_started_orphan_requires_process_tree_review(self):
         run,token=self.take(1)
         self.reg.heartbeat(run,token,child_pid=12345)
         self.reg.orphans(now=time.time()+200,ttl=90)
         with self.assertRaises(Blocked):self.reg.recover(run,lambda pid:False)
-    def test_registry_mode_cannot_silently_change(self):
-        self.take(1,'backend')
-        with self.assertRaises(Blocked): Registry(self.path,mode='normal')
+    def test_status_has_no_writer_or_mode_concept(self):
+        status=self.reg.status()
+        self.assertEqual(status['limits'],{'read_only_runs':3,'heavy':1})
+        self.assertNotIn('mode',status)
 
 if __name__=='__main__':unittest.main()

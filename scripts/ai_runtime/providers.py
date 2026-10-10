@@ -1,11 +1,10 @@
-"""Native CLI adapters; no API keys, arbitrary shell strings, or paid fallbacks."""
+"""Read-only native CLI adapters; no API keys, shell strings, write modes or paid fallbacks."""
 import hashlib
-import json
 import os
 import re
 import shutil
 from pathlib import Path
-from .policy import Blocked, CHANNELS, ROLES, validate_task
+from .policy import Blocked, CHANNELS, validate_task
 
 ENV_NAMES={'PATH','HOME','USERPROFILE','APPDATA','LOCALAPPDATA','TEMP','TMP','TMPDIR',
            'SYSTEMROOT','WINDIR','COMSPEC','PATHEXT','HOMEDRIVE','HOMEPATH','LANG','LC_ALL',
@@ -27,8 +26,7 @@ def resolve_command(provider):
     if provider not in CHANNELS: raise Blocked('blocked_channel: native CLI not approved')
     if os.name=='nt':
         app=Path(os.environ.get('APPDATA',''))
-        if provider=='claude': candidates=[app/'npm/node_modules/@anthropic-ai/claude-code/bin/claude.exe']
-        elif provider=='mistral': candidates=[Path.home()/'.local/bin/vibe.exe']
+        if provider=='mistral': candidates=[Path.home()/'.local/bin/vibe.exe']
         elif provider=='grok':
             script=app/'npm/node_modules/@xai-official/grok/bin/grok';node=shutil.which('node.exe')
             if script.is_file() and node:return [node,str(script)]
@@ -54,33 +52,33 @@ def fingerprint(command):
 def config_fingerprint(provider, worktree):
     """Hash configuration, never read or publish credential contents."""
     home=Path.home();root=Path(worktree).resolve()
-    directory={'codex':'.codex','claude':'.claude','grok':'.grok','mistral':'.vibe'}[provider]
-    names={'codex':['config.toml'],'claude':['settings.json','settings.local.json'],
-           'grok':['config.toml'],'mistral':['config.toml']}[provider]
-    paths=[home/directory/n for n in names]
-    for parent in [root,*root.parents]: paths += [parent/directory/n for n in names]
+    if provider not in CHANNELS:raise Blocked('blocked_channel: native CLI not approved')
+    directory={'codex':'.codex','grok':'.grok','mistral':'.vibe'}[provider]
+    paths=[home/directory/'config.toml']
+    for parent in [root,*root.parents]: paths.append(parent/directory/'config.toml')
     h=hashlib.sha256()
     for file in sorted(set(paths),key=str):
         if file.is_file():
             h.update(str(file).encode());h.update(file.read_bytes())
     return h.hexdigest()
 
+def neutralize_verdicts(text):
+    """Model output is advisory: no gate marker may start a line after a copy-paste.
+
+    Position-independent on purpose, because adapters emit JSON with escaped newlines.
+    """
+    return re.sub(r'(?i)(Agent-Review|QA-Agent|Owner-Override)(\s*:)',
+                  r'[advisory, not canonical] \1\2',text)
+
 def build_command(task, executable, prompt):
-    t=validate_task(task);provider=t['provider'];writer=ROLES[t['role']][1]
-    if provider not in CHANNELS:raise Blocked('blocked_channel')
+    """Every adapter is read-only; there is no write mode to select."""
+    provider=validate_task(task)['provider']
     if provider=='codex':
-        return executable+['exec','--ephemeral','--json','--sandbox',
-            'workspace-write' if writer else 'read-only','--disable','multi_agent',
-            '-c','forced_login_method="chatgpt"','-c','model_provider="openai"',
-            '-c','approval_policy="never"','-c','web_search="disabled"',
-            '-c','sandbox_workspace_write.network_access=false','-']
-    if provider=='claude':
-        return executable+['--restricted','--strict-mcp-config','--mcp-config','{"mcpServers":{}}',
-            '--setting-sources','', '--tools','Read,Glob,Grep,Edit,Write' if writer else 'Read,Glob,Grep',
-            '--disallowedTools','Agent,Task,Bash','--permission-mode','acceptEdits' if writer else 'plan',
-            '--print','--output-format','json',prompt]
+        return executable+['exec','--ephemeral','--json','--sandbox','read-only',
+            '--disable','multi_agent','-c','forced_login_method="chatgpt"',
+            '-c','model_provider="openai"','-c','approval_policy="never"',
+            '-c','web_search="disabled"','-']
     if provider=='grok':
-        if writer:raise Blocked('blocked_provider_role: Grok starts in advisory mode')
         return executable+['--no-subagents','--disable-web-search','--tools','Read,Grep,Glob',
             '--deny','Bash(*)','--deny','MCPTool(*)','--permission-mode','plan',
             '--max-turns','6','--output-format','json','--single',prompt]
@@ -88,10 +86,11 @@ def build_command(task, executable, prompt):
                        '--max-tokens','16000','--output','json','--prompt',prompt]
 
 def prompt_for(task):
-    return ('ZADATAK '+task['id']+'\nAgent: '+task['owner']+'\n'
+    return ('ZADATAK '+task['id']+'\nAgent: '+task['owner']+'\nRole: '+task['role']+'\n'
             'Read AGENTS.md, CLAUDE.md and STATE.md. Follow the assigned role and canonical governance.\n'
+            'This run is READ-ONLY: do not create, modify, delete, stage or commit any file.\n'
             'No subagents, no additional model calls, no credential/billing changes, no production resources.\n'
-            'Never commit, push, merge or publish a review/QA verdict. Return an advisory handoff.\n'
+            'Never push, merge, comment on GitHub or write a review, QA or owner-override verdict block.\n'
+            'Your answer is a local advisory report for a human; it is not a review or QA verdict.\n'
             'Goal: '+task['goal']+'\nAcceptance: '+task['acceptance']+'\n'
-            'Allowed write paths: '+json.dumps(task['scopes'])+'\n'
-            'No write scopes means read-only. Stop if authentication, quota or permissions are unavailable.\n')
+            'Stop if authentication, quota or permissions are unavailable.\n')

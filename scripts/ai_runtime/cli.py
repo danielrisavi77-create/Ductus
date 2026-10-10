@@ -1,6 +1,9 @@
-"""Ductus managed CLI controller. Funding must be observed, never inferred."""
+"""Ductus read-only second-provider runner. Funding must be observed, never inferred.
+
+The controller starts one bounded, read-only CLI run of a non-Claude provider and
+stores a local advisory report. It never writes to the repository or to GitHub.
+"""
 import argparse
-import hashlib
 import json
 import os
 import re
@@ -10,11 +13,15 @@ import subprocess
 import time
 from pathlib import Path
 from .policy import Blocked, CHANNELS, ROLES, validate_task, validate_funding
-from .registry import Registry
-from .workspace import canonical_repo, inspect_workspace, audit_scope, prepare_worktree
-from .providers import (build_command, clean_environment, config_fingerprint,
-                        fingerprint, prompt_for, redact, resolve_command)
+from .registry import MAX_RUNS, Registry
+from .workspace import canonical_repo, inspect_workspace, audit_unchanged, snapshot
+from .providers import (build_command, clean_environment, config_fingerprint, fingerprint,
+                        neutralize_verdicts, prompt_for, redact, resolve_command)
 from .process import bounded_process
+
+REGISTRY='review-registry.sqlite3'
+NOT_CANONICAL=('This is a local advisory record of a read-only run. It is not an '
+               'App-authenticated review or QA verdict and satisfies no gate.')
 
 def runtime_home():
     base=Path(os.environ.get('LOCALAPPDATA') or (Path.home()/'.local/share'))
@@ -44,7 +51,6 @@ def write_json(path,data):
 
 def check_ready(task, repo, state):
     t=validate_task(task);provider=t['provider']
-    if provider not in CHANNELS:raise Blocked('blocked_channel: no approved native entitlement')
     evidence_file=state/'evidence'/f'{provider}.json'
     if not evidence_file.exists():raise Blocked('blocked_funding: no verified account evidence')
     evidence=read_json(evidence_file);executable=resolve_command(provider)
@@ -60,27 +66,16 @@ def check_ready(task, repo, state):
 
 def doctor(state, worktree=None):
     result={}
-    for provider in ('codex','claude','grok','mistral','meta','deepseek'):
+    for provider in CHANNELS:
         entry={'model_calls':0,'dispatch_ready':False}
         try:
             command=resolve_command(provider)
             entry.update(installed=True,command=command,executable_sha256=fingerprint(command))
             if worktree is not None:entry['config_sha256']=config_fingerprint(provider,worktree)
-            if provider in ('codex','claude'):
-                args=['login','status'] if provider=='codex' else ['auth','status']
-                p=subprocess.run(command+args,capture_output=True,encoding='utf-8',errors='replace',
-                                 timeout=20,env=clean_environment())
-                if provider=='codex':
-                    entry['native_subscription_login_verified']=p.returncode==0 and 'Logged in using ChatGPT' in (p.stdout+p.stderr)
-                else:
-                    try:
-                        auth=json.loads(p.stdout)
-                        entry['native_subscription_login_verified']=(
-                            p.returncode == 0 and isinstance(auth, dict)
-                            and auth.get('loggedIn') is True
-                            and auth.get('apiProvider') == 'firstParty'
-                            and auth.get('authMethod') in ('claude.ai', 'oauth', 'claudeAi'))
-                    except json.JSONDecodeError:entry['native_subscription_login_verified']=False
+            if provider=='codex':
+                p=subprocess.run(command+['login','status'],capture_output=True,encoding='utf-8',
+                                 errors='replace',timeout=20,env=clean_environment())
+                entry['native_subscription_login_verified']=p.returncode==0 and 'Logged in using ChatGPT' in (p.stdout+p.stderr)
             else:entry['native_subscription_login_verified']=None
             file=state/'evidence'/f'{provider}.json'
             entry['evidence_file_exists']=file.exists()
@@ -93,7 +88,7 @@ def doctor(state, worktree=None):
 
 def execute(task, repo, state):
     t=validate_task(task);root,command,_=check_ready(t,repo,state)
-    registry=Registry(state/'registry.sqlite3')
+    registry=Registry(state/REGISTRY)
     run,token=registry.acquire(t)
     folder=state/'runs'/run;folder.mkdir(parents=True)
     write_json(folder/'task.json',t)
@@ -102,16 +97,16 @@ def execute(task, repo, state):
     try:
         # Re-check immediately after the atomic reservation, before starting inference.
         root,command,_=check_ready(t,repo,state)
-        prompt=prompt_for(t)
+        prompt=prompt_for(t);before=snapshot(root)
         started=True
         child=bounded_process(command,str(root),os.environ,timeout=t.get('timeout',600),
                               stdin_text=prompt if t['provider']=='codex' else None,
                               heartbeat=lambda pid:registry.heartbeat(run,token,pid))
-        output=child.pop('output')
+        output=neutralize_verdicts(child.pop('output'))
         (folder/'output.txt').write_text(output,encoding='utf-8')
-        violations=audit_scope(t)
-        status='blocked_scope' if violations else ('completed' if child['exit_code']==0 and not child['stop_reason'] and child['exited'] else 'failed')
-        result.update(child,status=status,scope_violations=violations)
+        changed=audit_unchanged(t,before)
+        status='blocked_write' if changed else ('completed' if child['exit_code']==0 and not child['stop_reason'] and child['exited'] else 'failed')
+        result.update(child,status=status,changed_paths=changed)
         if child['exited']:registry.finish(run,token,status)
         else:result['status']='orphaned'
     except Exception as exc:
@@ -122,29 +117,28 @@ def execute(task, repo, state):
             result['note']='Capacity retained until process-tree exit is independently established.'
     write_json(folder/'result.json',result)
     (folder/'HANDOFF.md').write_text(
-        '# IZVJEŠTAJ '+t['id']+'\n\nAgent: '+t['owner']+'\nRisk: '+t['risk']+
-        '\nBase-SHA: '+t['base_sha']+'\nStatus: '+result['status']+
-        '\n\nThis is a local execution record, not an App-authenticated review/QA verdict.\n',encoding='utf-8')
+        '# Lokalni izvještaj '+t['id']+'\n\nRun-Owner: '+t['owner']+'\nRole: '+t['role']+
+        '\nProvider: '+t['provider']+'\nReviewed-SHA: '+t['base_sha']+'\nStatus: '+result['status']+
+        '\nCanonical-Review: false\n\n'+NOT_CANONICAL+'\n',encoding='utf-8')
     result['artifacts']=str(folder)
     return result
 
 def main(argv=None):
-    parser=argparse.ArgumentParser(description='Ductus SUB+Free managed execution (no paid fallback)')
+    parser=argparse.ArgumentParser(description='Ductus read-only second-provider runner (no paid fallback, no writes)')
     parser.add_argument('--repo',default=os.getcwd())
     sub=parser.add_subparsers(dest='action',required=True)
     for name in ('roster','status','doctor'):sub.add_parser(name)
     for name in ('check','run'):
         p=sub.add_parser(name);p.add_argument('task_file')
-    p=sub.add_parser('mode');p.add_argument('value',choices=('catch-up','normal'))
-    p=sub.add_parser('prepare');p.add_argument('task_file')
     p=sub.add_parser('handoff');p.add_argument('run_id')
     args=parser.parse_args(argv);state=runtime_home()
     try:
         if args.action=='roster':
-            data={'roles':[{'role':r,'id':v[0],'writer':v[1]} for r,v in ROLES.items()],
-                  'active_orchestrators_max':1,'managed_runs_max':3,'auto_start':False}
-        elif args.action in ('status','mode'):
-            registry=Registry(state/'registry.sqlite3',args.value if args.action=='mode' else None)
+            data={'roles':[{'role':r,'id':v,'writer':False} for r,v in ROLES.items()],
+                  'providers':sorted(CHANNELS),'read_only_runs_max':MAX_RUNS,'auto_start':False,
+                  'canonical_review':False}
+        elif args.action=='status':
+            registry=Registry(state/REGISTRY)
             registry.orphans();data=registry.status()
         elif args.action=='doctor':data=doctor(state,args.repo)
         elif args.action=='handoff':
@@ -152,20 +146,13 @@ def main(argv=None):
             data=read_json(state/'runs'/args.run_id/'result.json')
         else:
             task=validate_task(read_json(args.task_file))
-            if args.action=='prepare':
-                # Explicit prepare action creates a new worktree; it does not start a model.
-                prepared=prepare_worktree(args.repo,task['id'],task['role'])
-                task.update(worktree=prepared['worktree'],base_sha=prepared['base_sha'])
-                target=state/'tasks'/f'{task["id"]}.json'
-                write_json(target,task);data={'task_file':str(target),**prepared,'model_calls':0}
-            elif args.action=='check':
+            if args.action=='check':
                 root,command,_=check_ready(task,args.repo,state)
-                data={'status':'ready_for_managed_run','worktree':str(root),'provider':task['provider'],
+                data={'status':'ready_for_read_only_run','worktree':str(root),'provider':task['provider'],
                       'model_calls':0,'billing_boundary':'account observation, not a provider-side spend cap'}
             else:data=execute(task,args.repo,state)
         print(json.dumps(data,ensure_ascii=False,indent=2))
-        return 0 if data.get('status') not in ('failed','orphaned','blocked_scope','blocked_runtime') else 2
+        return 0 if data.get('status') not in ('failed','orphaned','blocked_write','blocked_runtime') else 2
     except (Blocked,OSError,sqlite3.Error) as exc:
         print(json.dumps({'status':'blocked','reason':redact(str(exc))[:1000]},ensure_ascii=False))
         return 2
-

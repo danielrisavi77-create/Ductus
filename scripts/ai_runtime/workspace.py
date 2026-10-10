@@ -1,9 +1,8 @@
-"""Git identity and non-destructive worktree validation."""
+"""Git identity, non-destructive worktree validation and the no-change audit."""
 import os
-import re
 import subprocess
 from pathlib import Path
-from .policy import Blocked, scope_path, validate_task
+from .policy import Blocked, validate_task
 
 ORIGINS={'https://github.com/danielrisavi77-create/Ductus.git',
          'https://github.com/danielrisavi77-create/Ductus',
@@ -37,8 +36,9 @@ def inspect_workspace(task, repo):
     gd=Path(git(root,'rev-parse','--absolute-git-dir').strip()).resolve()
     if gd==repo/'.git' or git(root,'rev-parse','--show-superproject-working-tree').strip():
         raise Blocked('blocked_worktree: primary checkout or submodule')
-    branch=git(root,'branch','--show-current').strip()
-    if not branch or branch in ('main','master'): raise Blocked('blocked_worktree: non-main branch required')
+    # A detached HEAD at the reviewed commit is the expected shape of a review worktree.
+    if git(root,'branch','--show-current').strip() in ('main','master'):
+        raise Blocked('blocked_worktree: main branch is never a review worktree')
     if git(root,'rev-parse','HEAD').strip()!=t['base_sha']: raise Blocked('blocked_sha: unexpected HEAD')
     if git(root,'status','--porcelain=v1','--untracked-files=all').strip():
         raise Blocked('blocked_worktree: existing changes must be preserved')
@@ -47,33 +47,26 @@ def inspect_workspace(task, repo):
     for record in git(root,'ls-files','--stage','-z').split('\0'):
         if record.startswith(('120000 ','160000 ')):
             raise Blocked('blocked_worktree: symlink or submodule needs separate review')
-    for scope in t['scopes']:
-        if not (root/scope).resolve().is_relative_to(root): raise Blocked('blocked_scope: symlink escape')
     return root
 
-def audit_scope(task):
-    t=validate_task(task);root=Path(t['worktree'])
-    paths=set(git(root,'diff','--name-only','--no-renames','-z',t['base_sha'],'--').split('\0'))
-    paths.update(git(root,'ls-files','--others','--exclude-standard','-z').split('\0'))
-    allowed=[scope_path(p) for p in t['scopes']];violations=[]
-    for path in sorted(paths-{''}):
+def snapshot(root):
+    """HEAD, branch and size/mtime of every untracked file, ignored ones included."""
+    root=Path(root);files={}
+    for path in git(root,'ls-files','--others','-z').split('\0'):
+        if not path:continue
         try:
-            p=scope_path(path)
-            ok=any(p==a or p.startswith(a+'/') for a in allowed)
-            if not (root/path).resolve().is_relative_to(root.resolve()): ok=False
-        except Blocked: ok=False
-        if not ok:violations.append(path)
-    return violations
+            stat=(root/path).lstat();files[path]=(stat.st_size,stat.st_mtime_ns)
+        except OSError:files[path]=None
+    return {'head':git(root,'rev-parse','HEAD').strip(),
+            'branch':git(root,'branch','--show-current').strip(),'files':files}
 
-def prepare_worktree(repo, task_id, role):
-    repo=canonical_repo(repo)
-    if git(repo,'remote','get-url','origin').strip() not in ORIGINS: raise Blocked('blocked_repository')
-    slug=re.sub('[^a-z0-9-]','-',task_id.lower()).strip('-')
-    if not slug or len(slug)>80: raise Blocked('blocked_task: bad worktree identifier')
-    branch=f'{role}/{slug}';target=repo.parent/'Ductus-worktrees'/f'managed-{slug}'
-    if target.exists() or git(repo,'branch','--list',branch).strip(): raise Blocked('blocked_worktree: already exists')
-    git(repo,'fetch','origin','main','--quiet',timeout=90)
-    sha=git(repo,'rev-parse','origin/main').strip()
-    target.parent.mkdir(exist_ok=True)
-    git(repo,'worktree','add','-b',branch,str(target),sha)
-    return dict(worktree=str(target),base_sha=sha,branch=branch)
+def audit_unchanged(task, before):
+    """Every difference from the pre-run state is a violation; nothing is reverted."""
+    t=validate_task(task);root=Path(t['worktree'])
+    changed=set(git(root,'diff','--name-only','--no-renames','-z',t['base_sha'],'--').split('\0'))
+    after=snapshot(root);missing=object()
+    changed.update(path for path in before['files'].keys()|after['files'].keys()
+                   if before['files'].get(path,missing)!=after['files'].get(path,missing))
+    violations=sorted(changed-{''})
+    if (after['head'],after['branch'])!=(before['head'],before['branch']):violations.insert(0,'HEAD')
+    return violations
