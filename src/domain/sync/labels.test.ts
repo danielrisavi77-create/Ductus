@@ -35,9 +35,9 @@ describe("sync state labels", () => {
     }
   });
 
-  it("says 'lokalno' for LOCAL_DURABLE, so it cannot read as server sync", () => {
+  it("says 'na uređaju' for LOCAL_DURABLE, so it cannot read as server sync", () => {
     const { label } = SYNC_STATE_LABELS.LOCAL_DURABLE;
-    expect(label).toContain("lokalno");
+    expect(label).toContain("na uređaju");
     expect(label).not.toContain("Sinkron");
   });
 

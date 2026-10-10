@@ -6,11 +6,13 @@ Ažurira se skupno nakon spojenih PR-ova i kontrolnih točaka. Ovaj presjek čuv
 
 M0 Temelj. Prvi cilj ostaje radni demo za FPZG 2. 11. 2026. (`docs/PLAN-DEMO.md`). Ductus Engineering System v1 uvodi risk-based review, QA/Bug Hunter/Product uloge, GitHub za izvršenje i dokaze te Linear za zadatke, prioritete, nositelje i statuse.
 
+Session adresa orkestratora: `session_01BbeJRiYuBbWHCf4ZjHnHuH` (pomoćni podatak za `send_message`, `docs/ORKESTRATOR.md` §5; nije izvor istine).
+
 ## Owner queue (samo Daniel)
 
 Agent nikad ne uzima ove stavke i nikad ne čeka na njima ako drugi posao može naprijed.
 
-- [ ] Nakon mergea Engineering System v1 zaštititi `main`: PR obvezan; direct/force push i delete zabranjeni; unresolved conversations blokiraju; obvezni statusi CI, Local stack, Security scanners, Dependency review i Engineering review gate; squash only.
+- [x] 10. 10. 2026.: `main` zaštićen (PR obvezan; obvezni statusi CI, Local stack, Security scanners, Dependency review, Engineering review gate; neriješeni razgovori blokiraju; force push i delete zabranjeni; squash only; auto-merge i brisanje grane nakon spajanja uključeni). Administrator smije zaobići zaštitu; obvezni Code Owner review nije uključen (ENGINEERING_SYSTEM §10).
 - [ ] Proba demoa 31. 10. 2026. i snimka prolaza (PLAN-DEMO D-3, D-4).
 - [ ] Odlučiti D-06 ili strožu D-39 nakon UX testa iz `docs/UX-EVAL.md`.
 - [ ] Potvrditi ili promijeniti D-08, D-16, D-20, D-34, D-37, D-38 te pragove P-01 do P-04.
@@ -20,7 +22,7 @@ Agent nikad ne uzima ove stavke i nikad ne čeka na njima ako drugi posao može 
 - [ ] Lekta: licenca/pravo redistribucije prije punog M4 paketa.
 - [ ] Dobavljači: UpCloud, Scaleway i AWS KMS računi + 2FA i uski ključevi; blokira B0.1.
 - [ ] Računovođa: PDV; FINA tek uz obrt ili FPZG kao ugovornu stranu.
-- [ ] Vidljivost repoa: prije stvarnih podataka ponovno odlučiti ostaje li javni.
+- [ ] Vidljivost repoa: prije stvarnih podataka ponovno odlučiti ostaje li javni. Uz to: session adresa orkestratora stoji u javnom `STATE.md`; prihvatiti ili premjestiti izvan repoa.
 - [ ] Konačno ime proizvoda.
 
 ## Engineering System v1
@@ -62,3 +64,4 @@ Novi feature rad je privremeno ograničen dok se postojeći stog ne osvježi na 
 - Plan proizvoda, odluke i demo-plan; arhitektura v0.4.
 - CI/skeneri, lokalni stog, prijenos prve jezgre, citatni stil, evidence/forensics osnova.
 - PR #51: multi-account/provider-neutral agent runtime i repo-local skills.
+- 10. 10. 2026.: globalni alati naredbenog retka i pluginovi za sesije (`docs/REPOZITORIJI.md` §8); PR #17 (Dependabot, provjera ovisnosti) spojen 3. 10.

@@ -19,7 +19,17 @@
     "prepare": "lefthook install",
     "test:integration": "vitest run --project integration",
     "stack:up": "docker compose up -d --build --wait",
-    "stack:down": "docker compose down -v"
+    "stack:down": "docker compose down -v",
+    "db:new": "dbmate new",
+    "db:provision": "docker compose exec -T postgres psql -U ductus -d ductus -v ON_ERROR_STOP=1 -q < db/local/migrator.sql",
+    "db:migrate": "pnpm db:provision && dbmate --url \"postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus?sslmode=disable&role=ductus_migrator\" --no-dump-schema --wait up",
+    "db:rollback": "dbmate --url \"postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus?sslmode=disable&role=ductus_migrator\" --no-dump-schema rollback",
+    "db:status": "dbmate --url \"postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus?sslmode=disable\" status",
+    "orch:status": "node scripts/orchestrator/pr-status.mjs",
+    "orch:ready": "node scripts/orchestrator/pr-ready.mjs",
+    "orch:push": "node scripts/orchestrator/push-verify.mjs",
+    "orch:wait": "node scripts/orchestrator/wait-verdict.mjs",
+    "test:db": "docker compose exec -T postgres pg_prove -U ductus -d ductus --recurse --ext .sql /db/tests"
   },
   "dependencies": {
     "@tiptap/core": "^3.31.3",
@@ -47,6 +57,7 @@
     "@types/pg": "^8.23.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "dbmate": "^2.36.0",
     "eslint": "^9.39.5",
     "eslint-config-next": "15.5.27",
     "fake-indexeddb": "^6.2.5",
