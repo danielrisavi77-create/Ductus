@@ -9,11 +9,16 @@ let deps: AuthDeps | undefined;
 /**
  * The route dependencies, built on the first request rather than at import,
  * so `next build` needs no login configuration. An invalid configuration
- * (the fake provider in production among them) throws here, on every login.
+ * (the fake provider in a production build among them) throws here, on every
+ * login.
  */
 export function authDeps(): AuthDeps {
   if (deps) return deps;
-  const config = loadAuthConfig();
+  // D-09 is a property of the build. Next replaces the literal
+  // `process.env.NODE_ENV` when it compiles: `next build` writes "production",
+  // `next dev` "development". So no NODE_ENV given to `next start` can select
+  // the fake provider; only `next dev` and the unit tests can.
+  const config = loadAuthConfig({ ...process.env, NODE_ENV: process.env.NODE_ENV });
   deps = {
     config,
     oidc: createOidcClient(config),
