@@ -14,3 +14,5 @@ Start from the active task/PR head and the risk-specific acceptance criteria. Tr
 For a critical PR, use the canonical QA verdict format and exact head SHA from `docs/ENGINEERING_SYSTEM.md`.
 
 Independence warning: being spawned as a Claude subagent does not create a new authenticated GitHub App principal. If this subagent shares the author/reviewer principal where the gate requires separation, its result is advisory and cannot satisfy the canonical QA PASS.
+
+To drive a real browser, use the `ductus-browser-cli` skill.

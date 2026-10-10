@@ -1,0 +1,52 @@
+{
+  "rulebook_version": 1,
+  "name": "ductus-rules",
+  "version": "1.0.0",
+  "description": "Ductus hard rules from CLAUDE.md that must hold through shell wrappers.",
+  "author": "Ductus",
+  "allowed_commands": ["git"],
+  "rules": [
+    {
+      "name": "block-git-add-all",
+      "command": "git",
+      "subcommand": "add",
+      "block_args": ["-A", "--all", "."],
+      "reason": "CLAUDE.md: stage with 'git add <paths>', never a blanket add.",
+      "intent": "use_alternative"
+    },
+    {
+      "name": "block-git-commit-all",
+      "command": "git",
+      "subcommand": "commit",
+      "block_args": ["-a", "-am", "--all"],
+      "reason": "CLAUDE.md: stage explicit paths with 'git add <paths>' before committing.",
+      "intent": "use_alternative"
+    },
+    {
+      "name": "block-git-commit-no-verify",
+      "command": "git",
+      "subcommand": "commit",
+      "block_args": ["--no-verify", "-n"],
+      "reason": "Hooks run lint and the secrets scan; fix the failure instead of skipping them.",
+      "intent": "stop_and_explain"
+    },
+    {
+      "name": "block-git-push-no-verify",
+      "command": "git",
+      "subcommand": "push",
+      "block_args": ["--no-verify"],
+      "reason": "CLAUDE.md: tests must be green before a push; do not skip the pre-push checks.",
+      "intent": "stop_and_explain"
+    }
+  ],
+  "tests": [
+    { "command": "git add -A", "expect": "blocked", "rule": "block-git-add-all" },
+    { "command": "git add .", "expect": "blocked", "rule": "block-git-add-all" },
+    { "command": "git add docs/SESSIONS.md", "expect": "allowed" },
+    { "command": "git commit -am wip", "expect": "blocked", "rule": "block-git-commit-all" },
+    { "command": "git commit --no-verify -m wip", "expect": "blocked", "rule": "block-git-commit-no-verify" },
+    { "command": "git commit -m wip", "expect": "allowed" },
+    { "command": "git push --no-verify", "expect": "blocked", "rule": "block-git-push-no-verify" },
+    { "command": "git push -u origin platforma/x", "expect": "allowed" }
+  ]
+}
