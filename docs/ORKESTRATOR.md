@@ -1,6 +1,6 @@
 # Ductus: pravila rada orkestratora
 
-Verzija 0.4 · 10. 10. 2026. · Odgovorna osoba: Daniel Rišavi
+Verzija 0.5 · 10. 10. 2026. · Odgovorna osoba: Daniel Rišavi
 
 Upute za aktivni Ductus orkestrator, neovisno o tome radi li u Claudeu ili Codexu. Nova instanca čita samo ovaj dokument, `STATE.md`, `docs/ENGINEERING_SYSTEM.md`, `docs/MULTI-ACCOUNT.md` i `docs/PLAN-DEMO.md` §3 i §4; ostalo po potrebi, po odjeljcima. Vrijedi uz `CLAUDE.md` i `docs/SESSIONS.md`.
 
@@ -28,7 +28,8 @@ Spaja se (squash, D-86) samo ako je sve ispunjeno:
 | Jedan zadatak; preko oko 400 redaka koda samo uz obrazloženje | opis PR-a |
 | PR je vezan uz Linear issue koji nosi razlog, prioritet, nositelja i status | Linear + PR opis |
 | Prijenos iz `pisac-editor`: tablica izvor, preneseno, nije preneseno s razlogom | opis PR-a |
-| Sesija nije dirala tuđe mape, `.claude/`, `CLAUDE.md` ni postavke repoa (iznimka: orkestratorov PR nad `.claude/skills/` i `.agents/skills/`, §4) | popis datoteka (`files`) |
+| Sesija nije dirala tuđe mape, `.claude/`, `CLAUDE.md` ni postavke repoa (iznimka: orkestratorov PR nad vlastitim adapterom `ductus-orchestrator`, §4) | popis datoteka (`files`) |
+| PR nije orkestratorov vlastiti ni PR njegova podagenta ili CLI posla (§4, §8) | polje `Agent` u opisu PR-a |
 | PR ne čeka Danielovu odluku | izvještaj, polje "Treba Daniel" |
 
 Ako nešto ne prolazi, PR se vraća sesiji jednom porukom s točnim razlogom (npr. "rebase na origin/main"). Orkestrator ne mijenja grane drugih sesija.
@@ -56,11 +57,11 @@ Diff čitaju CI i neovisni reviewer; orkestrator gleda metapodatke i popis datot
 - mijenja Linear: status, nositelja, prioritet i nove issuee;
 - zatvara duplikate i zastarjele PR-ove, uz komentar s razlogom i poveznicom na PR koji ostaje;
 - presuđuje u sporu reviewera i autora na tuđem PR-u; ne na vlastitom ni na PR-u vlastitog podagenta (§8), a na `critical` PR-u odluka ide Danielu. Presuda ne zamjenjuje verdict: aktualni `FAIL` ili `BLOCK` drži gate po `ENGINEERING_SYSTEM.md` §6 dok ga taj reviewer ne zamijeni novim verdictom ili Daniel ne objavi Owner Override;
-- mijenja `.claude/skills/` i `.agents/skills/` kroz vlastiti PR.
+- mijenja vlastiti adapter `ductus-orchestrator` u `.claude/skills/` i `.agents/skills/` kroz vlastiti PR; ostale skillove i agent profile ne.
 
 `Owner-Override` piše isključivo Daniel. Orkestrator ga nikad ne objavljuje ni ne predlaže kao rutinski put.
 
-Napuštenu granu orkestrator ne osvježava sam i ne budi staru sesiju: otvara novog workera koji granu preuzima iz GitHuba (izvještaj u PR-u je predaja). Nova sesija je jeftinija od stare s punim kontekstom. Orkestrator ne spaja vlastiti PR, uključujući docs-only PR; takav PR prolazi isti neovisni review i gate kao ostali. Jedina iznimka je PR njegova podagenta, pod uvjetima iz §8.
+Napuštenu granu orkestrator ne osvježava sam i ne budi staru sesiju: otvara novog workera koji granu preuzima iz GitHuba (izvještaj u PR-u je predaja). Nova sesija je jeftinija od stare s punim kontekstom. Orkestrator ne spaja vlastiti PR, uključujući docs-only PR; takav PR prolazi isti neovisni review i gate kao ostali. Isto vrijedi za PR njegova podagenta ili CLI posla (§8). Kad hook iz `SESSIONS.md` §7 na njegovu `low` PR-u uključi auto-merge, spaja GitHub tek nakon zelenog gatea; orkestrator ga ne spaja ručno.
 
 **Pita Daniela (i ne spaja dok ne odgovori):**
 
@@ -70,7 +71,7 @@ Napuštenu granu orkestrator ne osvježava sam i ne budi staru sesiju: otvara no
 - trošak, računi kod dobavljača, nešto što ide van (e-pošta, objava, FPZG);
 - sigurnost: tajne, ovlasti, izuzeća u skenerima bez datuma ponovne provjere;
 - odobrenje dizajna;
-- promjene u `CLAUDE.md`, `AGENTS.md`, postavkama repoa i u `.claude/` izvan `.claude/skills/`.
+- promjene u `CLAUDE.md`, `AGENTS.md`, postavkama repoa te u `.claude/` i `.agents/` izvan vlastitog adaptera `ductus-orchestrator`.
 
 Pitanja se skupljaju i šalju zajedno, s preporukom uz svako.
 
@@ -116,9 +117,9 @@ Orkestrator prati samo sesije koje rade na repou Ductus. Ostale sesije na račun
 | CLI posao drugog providera (Codex, Grok) | orkestrator, u potpunosti | writer kad ta kvota postoji; pregled samo kao advisory nalaz |
 | Sesija u oblaku ili desktop aplikaciji | pokreće Daniel; orkestrator joj šalje zadatak i prati je preko GitHuba | kanonski review i QA; dugi poslovi |
 
-Tri stalne uloge iz `ENGINEERING_SYSTEM.md` §2 (Backend, Frontend, Platforma) ostaju; uloga je stalna, a instanca se mijenja po zadatku ili lancu.
+Tri stalna writera iz `ENGINEERING_SYSTEM.md` §1 (Backend, Frontend, Platforma) ostaju; uloga je stalna, a instanca se mijenja po zadatku ili lancu.
 
-**Podagent nije novi principal.** Podagent i CLI posao koje pokrene orkestrator nasljeđuju njegovo okruženje i vjerodajnice (`AGENT_SYSTEM_V2.md` §6). Zato PR takvog writera nosi `Agent: <runtime>:<slot orkestratora>:<uloga>` i za pravila o neovisnosti vrijedi kao orkestratorov vlastiti: pregledava ga drugi principal, a orkestrator u njemu ne presuđuje sporove. Sesija orkestratora sama i dalje ne piše proizvodni kod; piše ga podagent u svojoj ulozi i svom worktreeu. Iznimka od zabrane spajanja vlastitog PR-a (Daniel, 10. 10. 2026.): orkestrator smije spojiti PR svog podagenta ili CLI posla kad su svi gateovi iz §2 zeleni i kanonski PASS je preko Appa dala sesija drugog principala. PR koji je orkestrator napisao sam i dalje ne spaja.
+**Podagent nije novi principal.** Podagent i CLI posao koje pokrene orkestrator nasljeđuju njegovo okruženje i vjerodajnice (`AGENT_SYSTEM_V2.md` §6). Zato PR takvog writera nosi runtime i slot orkestratora (npr. `Agent: claude:a:backend`), i kad ga je izveo CLI drugog providera; izvršni runtime upisuje se u izvještaj. Za pravila o neovisnosti vrijedi kao orkestratorov vlastiti: pregledava ga drugi principal, a orkestrator u njemu ne presuđuje sporove. Sesija orkestratora sama i dalje ne piše proizvodni kod; piše ga podagent u svojoj ulozi i svom worktreeu. Orkestrator takav PR ne spaja (`AGENTS.md`: "Ne spajaj vlastiti PR"); spaja ga Daniel. Daniel je 10. 10. 2026. načelno odobrio iznimku, ali ona vrijedi tek kad bude zapisana kao odluka u `DECISIONS.md` i usklađena u `AGENTS.md` i `ENGINEERING_SYSTEM.md` zasebnim `critical` PR-om.
 
 **Kanonski verdict.** Review i QA komentar vrijede za gate samo kad ih objavi autentificirani GitHub App (`ENGINEERING_SYSTEM.md` §6). Sesija koja objavljuje verdict sama pregledava aktualni head i mora biti drugi principal od autora. Nalaz podagenta ili CLI posla autorove sesije je advisory ulaz: autoru služi za popravak prije reviewa, a ne zamjenjuje verdict niti ga druga sesija smije samo prepisati. Orkestrator pri dodjeli reviewa navodi koja sesija pregledava i objavljuje.
 
@@ -131,7 +132,7 @@ Tri stalne uloge iz `ENGINEERING_SYSTEM.md` §2 (Backend, Frontend, Platforma) o
 Orkestrator radi neprekidno dok je sesija otvorena (`/loop` sa samostalnim tempom). Daniel 10. 10. 2026. nije postavio dnevni strop potrošnje postojećih pretplata; novi trošak i dalje ide Danielu po §4. Jedan potez:
 
 1. **Stanje:** tri provjere iz §1.
-2. **Spoji** sve što prolazi §2.
+2. **Spoji** sve što prolazi §2, uključujući redak o vlastitom PR-u.
 3. **Vrati ili zamijeni:** PR koji ne prolazi vraća se autoru jednom porukom; ako je autor ugašen, novi worker.
 4. **Review prije pisanja:** slobodan kapacitet prvo ide PR-ovima koji čekaju review ili QA, tek onda novim writerima. WIP limit iz `ENGINEERING_SYSTEM.md` §13 vrijedi.
 5. **Dodijeli** sljedeći zadatak s kritičnog puta (`PLAN-DEMO.md` §4) čije su ovisnosti spojene. Dok demo nije gotov, posao izvan kritičnog puta se ne dodjeljuje.
