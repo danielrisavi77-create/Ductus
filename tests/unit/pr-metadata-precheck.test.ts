@@ -10,13 +10,16 @@ const script = fileURLToPath(
   new URL("../../scripts/hooks/pr-metadata-precheck.mjs", import.meta.url),
 );
 // A directory outside any git repository, so no changed files raise the
-// minimum risk and the tests depend only on the body.
+// minimum risk and the tests depend only on the body. Git hooks export
+// GIT_DIR and friends, which would point git back at this repository.
 const cwd = mkdtempSync(join(tmpdir(), "pr-precheck-"));
+const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")));
 
 function run(command: string) {
   return spawnSync(process.execPath, [script], {
     input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd }),
     encoding: "utf8",
+    env,
   });
 }
 
