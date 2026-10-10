@@ -42,6 +42,9 @@ INSERT INTO ref VALUES
   ('k1', '00000000-0000-4000-8000-0000000000c1'),
   ('k2', '00000000-0000-4000-8000-0000000000c2'),
   ('k3', '00000000-0000-4000-8000-0000000000c3'),
+  ('z1', '00000000-0000-4000-8000-0000000000a1'),
+  ('z2', '00000000-0000-4000-8000-0000000000a2'),
+  ('z3', '00000000-0000-4000-8000-0000000000a3'),
   ('nobody', '00000000-0000-4000-8000-00000000dead');
 GRANT SELECT ON person, ref TO PUBLIC;
 
@@ -102,6 +105,30 @@ FROM (VALUES
   ('k2', 'KOD-K2-ISTEKAO', interval '-1 second', true, 'marko'),
   ('k3', 'KOD-K3-TEST', interval '30 days', true, 'petra')
 ) AS c (course, code, valid_for, active, teacher);
+
+-- One assignment per course (part 2). Z1 of K1 is at its second, narrower
+-- version: Ana and Dora acknowledged the first, only Ana the second. Z2 of K2
+-- has no acknowledgment, Z3 of K3 has Tomo's.
+INSERT INTO institution.assignment (id, course_id, current_version, created_by)
+SELECT pg_temp.id(a.name), pg_temp.id(a.course), a.current_version, pg_temp.id(a.teacher)
+FROM (VALUES ('z1', 'k1', 2, 'vesna'), ('z2', 'k2', 1, 'marko'), ('z3', 'k3', 1, 'petra')
+) AS a (name, course, current_version, teacher);
+INSERT INTO institution.assignment_version (
+  assignment_id, version_no, title, instructions, work_type, opens_at, due_at, ai_policy, ai_purposes,
+  evidence_profile, import_allowed, created_by
+)
+SELECT pg_temp.id(v.name), v.version_no, upper(v.name), 'Upute za izmišljeni zadatak.', 'essay', now(),
+       now() + interval '30 days', v.ai_policy, v.ai_purposes::text[], v.evidence_profile, v.import_allowed,
+       pg_temp.id(v.teacher)
+FROM (VALUES
+  ('z1', 1, 'partially_allowed', '{formatting,proofreading}', 'extended', true, 'vesna'),
+  ('z1', 2, 'partially_allowed', '{proofreading}', 'extended', true, 'vesna'),
+  ('z2', 1, 'prohibited', '{}', 'basic', false, 'marko'),
+  ('z3', 1, 'encouraged', '{translation}', 'basic', true, 'petra')
+) AS v (name, version_no, ai_policy, ai_purposes, evidence_profile, import_allowed, teacher);
+INSERT INTO institution.notice_acknowledgment (assignment_id, version_no, student_id)
+SELECT pg_temp.id(n.name), n.version_no, pg_temp.id(n.student)
+FROM (VALUES ('z1', 1, 'ana'), ('z1', 1, 'dora'), ('z1', 2, 'ana'), ('z3', 1, 'tomo')) AS n (name, version_no, student);
 
 -- Runs one statement as p_role with p_actor's session token and returns its
 -- single value as text, or "SQLSTATE: message" when it fails. The assertions
