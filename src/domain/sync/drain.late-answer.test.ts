@@ -235,6 +235,23 @@ describe("a late answer of an earlier attempt (#181)", () => {
     expect(await outcomeToEvents(answer, ver(r7, 5), false)).toEqual([]);
     expect(ackedRevision(answer)).toBe(5);
   });
+
+  it("10 (review of #194): a queue holding another document's row or an unidentifiable row is unreadable, never settled", async () => {
+    const r3OnD2 = row(3, 1, D2);
+    const nameless = { ...row(3, 4), tx: { ...row(3, 4).tx, clientTransactionId: "" } };
+    for (const pending of [[r3OnD2], [nameless], [r8, r3OnD2]]) {
+      const stale: DrainOutcome = { status: "stale_base", currentRevision: 6 };
+      const events = await outcomeToEvents(stale, ver(r8, 6), flight(r8, pending));
+      expect(reduce("SYNCING", events)).toBe("CONFLICT");
+      const reused: DrainOutcome = { status: "txid_reused" };
+      expect(reduce("SYNCING", await outcomeToEvents(reused, ver(r8, 6), flight(r8, pending)))).toBe(
+        "RECOVERY_REQUIRED",
+      );
+      const answer = signed("committed", 5);
+      // Unreadable: never SYNC_ACK, whatever the receipt says.
+      expect(await outcomeToEvents(answer, ver(r8, 5), flight(r8, pending))).toEqual([]);
+    }
+  });
 });
 
 describe("restart mid-flight (#183 t. 11 to 13)", () => {

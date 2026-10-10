@@ -563,18 +563,33 @@ export type AnswerFlight = {
 };
 
 /**
+ * A flight can be read only when `sent` and every row of `pending` are
+ * identifiable rows of the same document. A queue holding another document's
+ * row, or a row that cannot be told apart, is not that document's queue, so
+ * the absence of `sent` from it proves nothing.
+ */
+function isReadable(flight: AnswerFlight): boolean {
+  const sent = flight?.sent;
+  const pending = flight?.pending;
+  return (
+    isIdentifiable(sent) &&
+    Array.isArray(pending) &&
+    pending.every((row) => isIdentifiable(row) && row.documentId === sent.documentId)
+  );
+}
+
+/**
  * The flight is readable and its queue no longer holds `sent`: whatever the
  * answer says is about a row that is already settled (acknowledged, refused
  * and rebased, or salvaged). A flight that cannot be read is NOT treated as
- * settled, so a refusal is never swallowed because the caller passed garbage.
+ * settled, so a refusal is never swallowed because the caller passed garbage
+ * or another document's queue (#183 attack 10).
  */
 function isSettled(flight: AnswerFlight): boolean {
-  const sent = flight?.sent;
-  const pending = flight?.pending;
-  if (!isIdentifiable(sent) || !Array.isArray(pending)) {
+  if (!isReadable(flight)) {
     return false;
   }
-  return !pending.some((row) => isSameIdentity(identityOf(row), identityOf(sent)));
+  return !flight.pending.some((row) => isSameIdentity(identityOf(row), identityOf(flight.sent)));
 }
 
 /**
@@ -584,10 +599,10 @@ function isSettled(flight: AnswerFlight): boolean {
  * that can refuse it for someone else's answer.
  */
 function earnsAck(flight: AnswerFlight, expected: CommitReceiptExpectation): boolean | null {
-  const sent = flight?.sent;
-  if (!isIdentifiable(sent) || !Array.isArray(flight.pending)) {
+  if (!isReadable(flight)) {
     return false;
   }
+  const sent = flight.sent;
   if (
     expected.documentId !== sent.documentId ||
     expected.clientTransactionId !== sent.tx.clientTransactionId
