@@ -67,6 +67,7 @@ Ulaz: <dokumenti i odjeljci koje treba pročitati, ništa više>
 Opseg: <što ulazi>; Izvan opsega: <što ne ulazi>
 Mape: <smije dirati>
 Gotovo kad: <provjerljiv kriterij, npr. naredba i očekivani ishod>
+Lokalne provjere prije pusha: <npr. actionlint i zizmor kad PR dira workflowe, osv-scanner kad dira lockfile; inače "standardne">
 Ovisi o: <PR ili ništa>
 ```
 
