@@ -4,7 +4,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(20);
+SELECT plan(21);
 
 -- Group roles: none can log in or step around RLS.
 SELECT bag_eq(
@@ -45,6 +45,29 @@ SELECT is_empty(
   $$ SELECT pg_get_userbyid(roleid)::text FROM pg_auth_members
      WHERE member = 'ductus_migrator'::regrole AND inherit_option $$,
   'ductus_migrator inherits the privileges of no other role'
+);
+-- Privilege checks see only inherited rights, so a membership with SET alone
+-- would let a role become an owner role unnoticed. Every membership that
+-- involves a ductus_* role is therefore listed: the migrator administers the
+-- roles it created and may SET ROLE to the two owner roles, nothing more.
+SELECT bag_eq(
+  $$ SELECT pg_get_userbyid(member) || ' in ' || pg_get_userbyid(roleid) || ':'
+            || CASE WHEN admin_option THEN ' admin' ELSE '' END
+            || CASE WHEN inherit_option THEN ' inherit' ELSE '' END
+            || CASE WHEN set_option THEN ' set' ELSE '' END
+     FROM pg_auth_members
+     WHERE pg_get_userbyid(roleid) LIKE 'ductus\_%' OR pg_get_userbyid(member) LIKE 'ductus\_%' $$,
+  ARRAY[
+    'ductus_migrator in ductus_app: admin',
+    'ductus_migrator in ductus_worker: admin',
+    'ductus_migrator in ductus_retention: admin',
+    'ductus_migrator in ductus_auth: admin',
+    'ductus_migrator in ductus_evidence: admin',
+    'ductus_migrator in ductus_identity: admin',
+    'ductus_migrator in ductus_evidence: set',
+    'ductus_migrator in ductus_identity: set'
+  ],
+  'no ductus_* role is a member of another, except the migrator as creator and with SET on the two owner roles'
 );
 SELECT is_empty(
   $$ SELECT r.rolname || ' on ' || n.nspname FROM pg_roles r CROSS JOIN pg_namespace n
