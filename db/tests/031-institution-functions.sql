@@ -8,7 +8,7 @@ BEGIN;
 \ir fixtures/institution.inc
 SET LOCAL lc_messages TO 'C';
 
-SELECT plan(273);
+SELECT plan(278);
 
 CREATE FUNCTION pg_temp.attempts(p_name text) RETURNS bigint
 LANGUAGE sql AS $$ SELECT count(*) FROM institution.enrollment_attempt WHERE user_id = pg_temp.id(p_name) $$;
@@ -513,6 +513,27 @@ SELECT is(
   concat_ws(' ', pg_temp.memberships('ana', 'k1'), pg_temp.memberships('vesna', 'k1'),
             (SELECT count(*) FROM institution.course_member WHERE removed_by IS NOT NULL OR return_allowed_at IS NOT NULL)),
   'student teacher 0', 'none of these calls removed anybody or allowed anything'
+);
+
+-- The table itself holds the shape of a removal, whoever writes the row (QA
+-- finding V1 on #175): only an ended membership of a student names who
+-- removed it, and a return is allowed only where somebody was removed.
+SELECT throws_ok(
+  format('UPDATE institution.course_member SET %s WHERE course_id = pg_temp.id(''k1'') AND user_id = pg_temp.id(%L)', v.change, v.person),
+  '23514', 'new row for relation "course_member" violates check constraint "course_member_removal_check"',
+  'written directly, the table refuses ' || v.what
+)
+FROM (VALUES
+  (1, 'ana', $$removed_by = pg_temp.id('vesna')$$, 'a removal on a membership that is still open'),
+  (2, 'vesna', $$member_to = now(), removed_by = pg_temp.id('vesna')$$, 'a removal on the membership of a teacher'),
+  (3, 'ana', 'return_allowed_at = now()', 'a permission to return on an open membership nobody removed'),
+  (4, 'ana', 'member_to = now(), return_allowed_at = now()', 'a permission to return on an ended membership nobody removed')
+) AS v (n, person, change, what)
+ORDER BY v.n;
+SELECT is(
+  concat_ws(' ', pg_temp.memberships('ana', 'k1'), pg_temp.memberships('vesna', 'k1'),
+            (SELECT count(*) FROM institution.course_member WHERE removed_by IS NOT NULL OR return_allowed_at IS NOT NULL)),
+  'student teacher 0', 'and the refused writes left every membership as it was'
 );
 
 SELECT is(pg_temp.ask('vesna', 'SELECT institution.remove_student({k1}, {ana})::text'), 'true', 'Vesna removes Ana from K1');
