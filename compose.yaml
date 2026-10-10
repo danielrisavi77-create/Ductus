@@ -4,14 +4,20 @@
 name: ductus
 
 services:
+  # PostgreSQL 17.11 with pgTAP and pg_prove (infra/postgres) for `pnpm test:db`.
   postgres:
-    image: postgres:17.11-alpine
+    build:
+      context: infra/postgres
+      args:
+        POSTGRES_BASE_IMAGE: ${DUCTUS_POSTGRES_IMAGE:-postgres:17.11-trixie}
     environment:
       POSTGRES_USER: ductus
       POSTGRES_PASSWORD: ductus-local-only
       POSTGRES_DB: ductus
     ports:
       - "127.0.0.1:54329:5432"
+    volumes:
+      - ./db/tests:/db/tests:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ductus -d ductus"]
       interval: 2s
@@ -22,7 +28,7 @@ services:
   # container images; the app reaches storage only through its S3 interface,
   # so swapping this service is a configuration change.
   objects:
-    image: rustfs/rustfs:1.0.0
+    image: ${DUCTUS_OBJECTS_IMAGE:-rustfs/rustfs:1.0.0}
     environment:
       RUSTFS_ACCESS_KEY: ductus-local
       RUSTFS_SECRET_KEY: ductus-local-only
@@ -37,14 +43,17 @@ services:
       retries: 30
 
   mail:
-    image: axllent/mailpit:v1.31.4
+    image: ${DUCTUS_MAIL_IMAGE:-axllent/mailpit:v1.31.4}
     ports:
       - "127.0.0.1:8025:8025"
       - "127.0.0.1:1025:1025"
 
   # "Demo prijava": fake OIDC provider (D-09 allows it only locally and in CI).
   oidc:
-    build: infra/fake-oidc
+    build:
+      context: infra/fake-oidc
+      args:
+        OIDC_BASE_IMAGE: ${DUCTUS_OIDC_BASE_IMAGE:-node:24.21.0-alpine}
     environment:
       ISSUER: http://localhost:8090
     ports:

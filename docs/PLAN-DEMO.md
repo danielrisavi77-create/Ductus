@@ -40,7 +40,7 @@ Na svakoj kontrolnoj točki orkestrator uspoređuje stanje s tablicom i, ako se 
 
 ## 4. Zadaci
 
-Oznaka uloge: P Platforma, B Backend, F Frontend, K kratkotrajna sesija, D Daniel. "Gotovo kad" je uvijek uz zelene testove, otvoren PR i Codex pregled bez otvorenih kritičnih nalaza, osim gdje piše drukčije. Za svaki backend zadatak uz to vrijede tvrda pravila iz `CLAUDE.md` i kontrolna lista iz `docs/BACKEND.md` §6: svaka nova tablica ima RLS i retke u pgTAP matrici s testom odbijanja; RPC-i izvode identitet iz `current_actor()`, nikad iz parametra; svaka ruta koja mijenja stanje odbija zahtjev bez ispravnog `Origin` i `Sec-Fetch-Site`.
+Oznaka uloge: P Platforma, B Backend, F Frontend, K kratkotrajna sesija, D Daniel. "Gotovo kad" je uvijek uz zelene testove, otvoren PR i zeleni Engineering review gate prema risk razini iz `docs/ENGINEERING_SYSTEM.md`, osim gdje piše drukčije. Za svaki backend zadatak uz to vrijede tvrda pravila iz `CLAUDE.md` i kontrolna lista iz `docs/BACKEND.md` §6: svaka nova tablica ima RLS i retke u pgTAP matrici s testom odbijanja; RPC-i izvode identitet iz `current_actor()`, nikad iz parametra; svaka ruta koja mijenja stanje odbija zahtjev bez ispravnog `Origin` i `Sec-Fetch-Site`.
 
 ### Platforma
 
@@ -49,7 +49,7 @@ Oznaka uloge: P Platforma, B Backend, F Frontend, K kratkotrajna sesija, D Danie
 | P-1 | M0.1 kostur: pnpm, Node 24, Next.js i React kao u `pisac-editor`, TypeScript strict, ESLint, Vitest (unit, property), Playwright konfiguracija; bez Supabasea i Netlifyja | | `pnpm install`, `lint`, `typecheck`, `test` zeleni | T1 |
 | P-2 | M0.4a CI na GitHub Actions: lint, typecheck, unit, property, Gitleaks, zizmor, Semgrep, OSV; lefthook lokalno | P-1 | CI zelen na `main`; namjerno pokvaren test ruši CI | T1 |
 | P-3 | M0.4b `docker compose`: Postgres 17, S3-kompatibilna pohrana (RustFS; MinIO više nema sliku), Mailpit, lažni OIDC pružatelj (`node-oidc-provider`) s jasnom oznakom "demo prijava"; jedna naredba za podizanje | P-1 | `pnpm stack:up` diže sve; zdravstvene provjere zelene; isto radi u CI-ju | T1 |
-| P-4 | Migracije (dbmate) i pgTAP u CI-ju (`pg_prove` nad Postgresom iz compose) | P-3 | Prazna migracija i jedan pgTAP test prolaze lokalno i u CI-ju | T2 |
+| P-4 | Odabrati migracijski alat (dbmate je kandidat u PR #39) i dodati pgTAP u CI (`pg_prove` nad Postgresom iz compose) | P-3 | Odluka o alatu zabilježena u B1; prazna migracija i jedan pgTAP test prolaze lokalno i u CI-ju | T2 |
 | P-5 | E2E u CI-ju: Playwright nad stogom iz compose, axe, snimke zaslona i video kao artefakti PR-a | P-2, P-3 | Primjer E2E testa zelen u CI-ju; snimke vidljive uz PR | T2 |
 | P-6 | Provjera zabranjenih riječi u CI-ju (rječnik iz `PRODUCT.md` §5) nad tekstovima sučelja | P-2 | Riječ iz rječnika u ključu teksta ruši CI | T2 |
 | P-7 | Demo naredbe: `pnpm demo:up` (stog, migracije, izmišljeni podaci) i kratke upute za Daniela | P-3, K-3 | Daniel s čistog stanja podiže demo jednom naredbom | T4 |
@@ -125,3 +125,16 @@ Detaljan plan faze nastaje tek kad je okidač ispunjen; do tada vrijedi tablica 
 | M5 do M7 ostatak | Demo spojen i Danielove primjedbe s probe; D-34 za izravne izmjene |
 | M10 Podaci | D-30 (rokovi čuvanja) od FPZG-a |
 | M11 GO uvjeti | D-08 potvrđen nakon B0.1 i B0.2; računi dobavljača |
+
+## 7. Kritični put i rezerva [PRIJEDLOG D-98]
+
+Ne vrijedi dok ga Daniel ne potvrdi. Do tada vrijede §3 do §5 kako su napisani.
+
+**Nalaz.** Lanac B-8 → B-9 → B-12 → F-10 → K-4 cijeli pada u T3 i T4, a proba D-3 je zadnji dan T4. Rezovi iz §5 skidaju točke 6 do 8 i snimku; nijedan ne skraćuje taj lanac. Kašnjenje bilo kojeg zadatka u lancu zato izravno pomiče demo.
+
+**Prijedlog:**
+
+1. **Tanki prolaz do kontrolne točke T2 (18. 10.).** `ingest` jednog odsječka, rekonstrukcija i JCS usporedba prolaze od početka do kraja nad in-memory adapterima i razvojnim potpisnikom, bez sučelja. B-8, B-9 i B-12 zatim zamjenjuju dijelove tog prolaza pravima, umjesto da se prvi put spoje u T4.
+2. **K-4 raste postupno.** E2E prolaz demoa nastaje u T2 kao test s prvim korakom (prijava) i dobiva korak uz svaki spojeni zadatak iz F-6 do F-10. U T4 ostaje samo zadnji korak i video.
+3. **Zamrzavanje opsega u srijedu 28. 10.** Nakon toga se spajaju samo popravci. Radna proba je u četvrtak 29. 10.; proba 31. 10. (D-3) ostaje kao završna.
+4. **Rez kritičnog puta, prije rezova iz §5.** Ako B-8 nije spojen do kontrolne točke T3 (25. 10.), potpis potvrde i rekonstrukcija za demo izvode se u istom procesu, iza istih sučelja, a pg-boss worker (B-9) i stanje `pending_signature` idu odmah nakon demoa. Ovo je odstupanje od D-71 i D-74 samo za demo s razvojnim ključem; ne vrijedi ni za jedno okruženje sa stvarnim podacima. Popis "ne režu se" iz §5 ostaje netaknut.

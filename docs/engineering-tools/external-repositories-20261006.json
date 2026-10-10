@@ -1,0 +1,1074 @@
+{
+  "schema_version": "ductus.external_repositories.v1",
+  "task": "DAN-45",
+  "title": "Datirani inventar opaženih vanjskih izvora",
+  "evidence_tasks": [
+    "R-01"
+  ],
+  "observed_window_utc": {
+    "from": "2026-10-06T20:41:52.363378+00:00",
+    "to": "2026-10-06T20:42:13.065602+00:00"
+  },
+  "clone_root": "D:\\lekta-alati",
+  "scope": "Samo 16 prethodno opaženih lokalnih Git klonova / 14 upstream identiteta; bez nove pretrage ili osvježavanja.",
+  "documentation_base_commit": "ac65c71d797e29417d3d0f07aa9bd7ad63f2ff06",
+  "ductus_checked_commit": "0025d1fc60798afcf7c3100f891d07438829b036",
+  "hash_formats": {
+    "local_head": "Git commit: 40 lowercase hex",
+    "evidence_sha256": "SHA-256 izvornih bajtova dokumenta: 64 lowercase hex",
+    "git_blob": "Git blob SHA-1: 40 lowercase hex, odvojen od raw-file SHA-256; null ako nije zabilježen"
+  },
+  "counts": {
+    "upstreams": 14,
+    "local_clones": 16,
+    "clean_observed_clones": 16,
+    "integrations_selected_by_evidence_task": 0
+  },
+  "integration_evidence": {
+    "evidence_artifact": "R-01-ductus-integration-check.json",
+    "checked_commit": "0025d1fc60798afcf7c3100f891d07438829b036",
+    "named_reference_search": "NO_MATCHES",
+    "gitmodules_present": false,
+    "dependency_declarations": "Nijedan od ovih 14 pomoćnih izvora nije demonstriran kao imenovana ovisnost u provjerenom mainu.",
+    "limit": "Ne isključuje anonimne kopirane fragmente, sve aliase, druge grane ili kasnije commitove; nije iscrpna pretraga svih GitHub izvora."
+  },
+  "provenance": {
+    "register": "R-01-register.json",
+    "validation": "R-01-validation.json",
+    "source_documents": "R-01-source-evidence.json",
+    "supplementary_documents": "R-01-supplementary-evidence.json",
+    "method": "Pinned git show; full-file SHA-256; bounded line-numbered excerpts",
+    "note": "Oznake privatnih audit artefakata služe podrijetlu, nisu javne repo putanje. Javno ponovljivi izvori su pinani URL-ovi uz svaki zapis."
+  },
+  "limits": [
+    "Nema fetch/pull ili provjere najnovijeg upstream HEAD-a.",
+    "Licencni zapis je dokaz sadržaja točnog commita, ne pravno odobrenje ni audit svih datoteka/transitivnih ovisnosti.",
+    "Negativna pretraga naziva/dependencyja ne dokazuje da nema anonimno kopiranih fragmenata ili integracija na drugim granama.",
+    "Nisu izvršeni alati niti pročitani stvarni studentski dokumenti; odabrani fixturei ne postoje.",
+    "DAN-42/Laya zasebna grana nije dio provjerenog maina niti opsega ovih 14 upstreama.",
+    "M8 DOCX kandidati nisu automatske ovisnosti demoa.",
+    "Licenca je opažanje točnog commita, bez pravnog odobrenja."
+  ],
+  "entries": [
+    {
+      "canonical_upstream_url": "https://github.com/citation-style-language/locales",
+      "source_kind": "git_clone_reference",
+      "license_assertion": "CC-BY-SA-3.0 (README i prava unutar HR XML-a)",
+      "license_scope": "Locale podaci; README traži spomen CSL projekta, poveznicu i očuvanje prevoditeljske metapodatkovne oznake.",
+      "license_legal_clearance": false,
+      "intended_use": "Lokalizacija citata i bibliografije.",
+      "integration_status": "not_demonstrated_in_checked_main",
+      "related_task": {
+        "registry": "R-01",
+        "integration": null
+      },
+      "owner": null,
+      "selected_files": [],
+      "candidate_files": [
+        "locales-hr-HR.xml"
+      ],
+      "dependency_or_fixture_version": null,
+      "destination": null,
+      "validation_result": {
+        "inventory": "PASS",
+        "runtime": "NOT_RUN",
+        "integration": "NOT_SELECTED"
+      },
+      "decision": "Čeka provjeru",
+      "acquisition_route": "Podatkovna datoteka/fixture; cijeli clone nije runtime ovisnost.",
+      "integration_gate": "Pridružiti konkretan citation task; odabrati locales-hr-HR.xml i checksum; sačuvati attribution; HR očekivani citat/bibliografija mora proći i ne promijeniti kanonski tekst/evidenciju.",
+      "open_checks": [
+        "Integracijski task nije dodijeljen.",
+        "Provjera kompatibilnosti odabranog CSL procesora nije provedena."
+      ],
+      "planned_module": "Citati i bibliografija",
+      "planned_phase": "Postojeći citation modul; tek uz konkretan task",
+      "phase_source": "DAN-45 dodjela; nije dodijeljeni integracijski task",
+      "local_paths": [
+        {
+          "origin_url": "https://github.com/citation-style-language/locales.git",
+          "local_head": "a89adece41013402236e2c9020972d7e931fbab8",
+          "dirty": false,
+          "observed_at": "2026-10-06T20:41:52.363378+00:00",
+          "relative_path": "izvori/citation-style-language__locales"
+        },
+        {
+          "origin_url": "https://github.com/citation-style-language/locales",
+          "local_head": "a89adece41013402236e2c9020972d7e931fbab8",
+          "dirty": false,
+          "observed_at": "2026-10-06T20:41:52.669224+00:00",
+          "relative_path": "repos/locales"
+        }
+      ],
+      "license_evidence": [
+        {
+          "head": "a89adece41013402236e2c9020972d7e931fbab8",
+          "path": "README.md",
+          "sha256": "f8e1b34d3e1b66f101b45bc45e5fca0397aa923fe4abeab6f98139c8f731c320",
+          "git_blob": "3dba681bd510d36184f317dc2431aeeb2b7cfb1f",
+          "url": "https://github.com/citation-style-language/locales/blob/a89adece41013402236e2c9020972d7e931fbab8/README.md",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "izvori/citation-style-language__locales",
+          "size_bytes": 1777
+        },
+        {
+          "head": "a89adece41013402236e2c9020972d7e931fbab8",
+          "path": "README.md",
+          "sha256": "f8e1b34d3e1b66f101b45bc45e5fca0397aa923fe4abeab6f98139c8f731c320",
+          "git_blob": "3dba681bd510d36184f317dc2431aeeb2b7cfb1f",
+          "url": "https://github.com/citation-style-language/locales/blob/a89adece41013402236e2c9020972d7e931fbab8/README.md",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "repos/locales",
+          "size_bytes": 1777
+        },
+        {
+          "head": "a89adece41013402236e2c9020972d7e931fbab8",
+          "path": "locales-hr-HR.xml",
+          "sha256": "7cc37b61e0c2e6ff3c15e0733dc6891bc91db88799393451d808c38a01b72237",
+          "git_blob": null,
+          "url": "https://github.com/citation-style-language/locales/blob/a89adece41013402236e2c9020972d7e931fbab8/locales-hr-HR.xml",
+          "evidence_file": "R-01-supplementary-evidence.json",
+          "relative_clone_path": "repos/locales"
+        }
+      ]
+    },
+    {
+      "canonical_upstream_url": "https://github.com/citation-style-language/styles",
+      "source_kind": "git_clone_reference",
+      "license_assertion": "CC-BY-SA-3.0 (README obje revizije)",
+      "license_scope": "Stilovi; zadržati autore i doprinose u metapodacima te CSL attribution.",
+      "license_legal_clearance": false,
+      "intended_use": "Formatiranje citata prema izričito odabranom akademskom stilu.",
+      "integration_status": "not_demonstrated_in_checked_main",
+      "related_task": {
+        "registry": "R-01",
+        "integration": null
+      },
+      "owner": null,
+      "selected_files": [],
+      "candidate_files": [],
+      "dependency_or_fixture_version": null,
+      "destination": null,
+      "validation_result": {
+        "inventory": "PASS",
+        "runtime": "NOT_RUN",
+        "integration": "NOT_SELECTED"
+      },
+      "decision": "Čeka provjeru",
+      "acquisition_route": "Verzionirane CSL datoteke; processor je zasebna ovisnost, ova dva repoa nisu processor.",
+      "integration_gate": "Potvrditi prihvaćeni vodič, konkretan .csl i eventualni parent; izabrati jednu od dvije lokalne revizije; očuvati prava i metapodatke; golden test pokriva autore, godinu, stranice i bibliografiju.",
+      "open_checks": [
+        "Kanonizacija jedne kopije po zadatku još nije odlučena.",
+        "Različiti HEAD-ovi nisu uspoređeni po svakom stilu; obje kopije ostaju."
+      ],
+      "planned_module": "Citati i bibliografija",
+      "planned_phase": "Postojeći citation modul; tek uz potvrđen stil",
+      "phase_source": "DAN-45 dodjela; nije dodijeljeni integracijski task",
+      "local_paths": [
+        {
+          "origin_url": "https://github.com/citation-style-language/styles.git",
+          "local_head": "2e9355847feffe53d0e9f82cd8ee119c4a0ff2db",
+          "dirty": false,
+          "observed_at": "2026-10-06T20:42:04.097000+00:00",
+          "relative_path": "izvori/citation-style-language__styles"
+        },
+        {
+          "origin_url": "https://github.com/citation-style-language/styles",
+          "local_head": "3c6698d791a83016d699f50cbbea857f6ee3d2f8",
+          "dirty": false,
+          "observed_at": "2026-10-06T20:42:04.572430+00:00",
+          "relative_path": "repos/styles"
+        }
+      ],
+      "license_evidence": [
+        {
+          "head": "2e9355847feffe53d0e9f82cd8ee119c4a0ff2db",
+          "path": "README.md",
+          "sha256": "eeda35e6ab1c71ef74ba98e8d63f3f5c07e1b1c458b92d54cdd7515afcb1b04e",
+          "git_blob": "d8eacace4110a4abb693fb4ca9c653654595a8cf",
+          "url": "https://github.com/citation-style-language/styles/blob/2e9355847feffe53d0e9f82cd8ee119c4a0ff2db/README.md",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "izvori/citation-style-language__styles",
+          "size_bytes": 6573
+        },
+        {
+          "head": "3c6698d791a83016d699f50cbbea857f6ee3d2f8",
+          "path": "README.md",
+          "sha256": "eeda35e6ab1c71ef74ba98e8d63f3f5c07e1b1c458b92d54cdd7515afcb1b04e",
+          "git_blob": "d8eacace4110a4abb693fb4ca9c653654595a8cf",
+          "url": "https://github.com/citation-style-language/styles/blob/3c6698d791a83016d699f50cbbea857f6ee3d2f8/README.md",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "repos/styles",
+          "size_bytes": 6573
+        }
+      ]
+    },
+    {
+      "canonical_upstream_url": "https://github.com/mnater/Hyphenopoly",
+      "source_kind": "git_clone_reference",
+      "license_assertion": "MIT za kod; jezični patterni imaju vlastite uvjete",
+      "license_scope": "Root LICENSE ne zamjenjuje licencu uzorka ugrađenu u WASM; HR pattern nije zasebno provjeren.",
+      "license_legal_clearance": false,
+      "intended_use": "Polyfill za prijelom riječi u HTML-u i Node modul.",
+      "integration_status": "not_demonstrated_in_checked_main",
+      "related_task": {
+        "registry": "R-01",
+        "integration": null
+      },
+      "owner": null,
+      "selected_files": [],
+      "candidate_files": [],
+      "dependency_or_fixture_version": null,
+      "destination": null,
+      "validation_result": {
+        "inventory": "PASS",
+        "runtime": "NOT_RUN",
+        "integration": "NOT_SELECTED"
+      },
+      "decision": "Odgođeno",
+      "acquisition_route": "Paket hyphenopoly, tek u PR-u koji ga koristi; klon je referentni izvor.",
+      "integration_gate": "Potvrditi HR pattern i prava; test uskog prikaza, kopiranja i undo toka; soft hyphen ne smije promijeniti kanonski tekst, offsete ili hash evidencije; izmjeriti bundle.",
+      "open_checks": [
+        "HR pattern licence i zasebni sadržaji nisu odabrani/provjereni."
+      ],
+      "planned_module": "Prikaz teksta",
+      "planned_phase": "Odgođeno; prihvaćeni zahtjev i mjerenje prije izbora",
+      "phase_source": "DAN-45 dodjela; nije dodijeljeni integracijski task",
+      "local_paths": [
+        {
+          "origin_url": "https://github.com/mnater/Hyphenopoly.git",
+          "local_head": "798afbabebaf41def5c60d47e8819a42075d2b60",
+          "dirty": false,
+          "observed_at": "2026-10-06T20:42:08.026753+00:00",
+          "relative_path": "izvori/mnater__Hyphenopoly"
+        }
+      ],
+      "license_evidence": [
+        {
+          "head": "798afbabebaf41def5c60d47e8819a42075d2b60",
+          "path": "README.md",
+          "sha256": "7bae9e2401363635ade48103253a323ec50046558c4845f0b5d984b8e92b3fc0",
+          "git_blob": "63c965a79682eb7c07e32f1ef8c4fe075a248a03",
+          "url": "https://github.com/mnater/Hyphenopoly/blob/798afbabebaf41def5c60d47e8819a42075d2b60/README.md",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "izvori/mnater__Hyphenopoly",
+          "size_bytes": 12711
+        },
+        {
+          "head": "798afbabebaf41def5c60d47e8819a42075d2b60",
+          "path": "LICENSE",
+          "sha256": "2f7119724bcc8536483379e4e7558120263a5ce0172e7966cc388c67198767b0",
+          "git_blob": "01b86a760ed4c59228535fa61c03a2c9ff8225c5",
+          "url": "https://github.com/mnater/Hyphenopoly/blob/798afbabebaf41def5c60d47e8819a42075d2b60/LICENSE",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "izvori/mnater__Hyphenopoly",
+          "size_bytes": 1080
+        },
+        {
+          "head": "798afbabebaf41def5c60d47e8819a42075d2b60",
+          "path": "package.json",
+          "sha256": "ee9a5c83037b59c3e20c557b1ae26c8101b31371e3fa91e8d6d22b79bb626954",
+          "git_blob": "704fba95babc72be383a78f34a5b1ffdbc301217",
+          "url": "https://github.com/mnater/Hyphenopoly/blob/798afbabebaf41def5c60d47e8819a42075d2b60/package.json",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "izvori/mnater__Hyphenopoly",
+          "size_bytes": 2901
+        }
+      ]
+    },
+    {
+      "canonical_upstream_url": "https://github.com/xarsh/ooxml-validator",
+      "source_kind": "git_clone_reference",
+      "license_assertion": "MIT; THIRD-PARTY-NOTICES.md navodi Open XML SDK pod MIT",
+      "license_scope": "Kod i navedeni SDK; konkretni prebuilt binary i sve transitive komponente nisu posebno auditirani.",
+      "license_legal_clearance": false,
+      "intended_use": "Validacija OOXML strukture DOCX/XLSX/PPTX.",
+      "integration_status": "not_demonstrated_in_checked_main",
+      "related_task": {
+        "registry": "R-01",
+        "integration": null
+      },
+      "owner": null,
+      "selected_files": [],
+      "candidate_files": [],
+      "dependency_or_fixture_version": null,
+      "destination": null,
+      "validation_result": {
+        "inventory": "PASS",
+        "runtime": "NOT_RUN",
+        "integration": "NOT_SELECTED"
+      },
+      "decision": "Čeka provjeru",
+      "acquisition_route": "Dev paket @xarsh/ooxml-validator (lokalni package.json 0.4.0), bez dodatnog clonea; registrska dostupnost nije provjerena.",
+      "integration_gate": "Pozitivan sintetički DOCX i namjerno strukturno nevaljan DOCX; pin verzije/platformnog binaryja i notice; razumjeti exit code/JSON; ograničiti veličinu i vrijeme; test povezati s konkretnim export taskom.",
+      "open_checks": [
+        "Nije izvršen validator niti provjeren instalacijski put za Windows/CI."
+      ],
+      "planned_module": "Validacija DOCX izvoza",
+      "planned_phase": "M8, nakon demoa",
+      "phase_source": "DAN-45 dodjela; nije dodijeljeni integracijski task",
+      "local_paths": [
+        {
+          "origin_url": "https://github.com/xarsh/ooxml-validator.git",
+          "local_head": "11e3e8c5430d054c8d9102e3e5f5e15c6697c7b2",
+          "dirty": false,
+          "observed_at": "2026-10-06T20:42:08.224354+00:00",
+          "relative_path": "izvori/xarsh__ooxml-validator"
+        }
+      ],
+      "license_evidence": [
+        {
+          "head": "11e3e8c5430d054c8d9102e3e5f5e15c6697c7b2",
+          "path": "README.md",
+          "sha256": "2dca971dd25339fff18517268914ee61e776292a9dbddc6572a03d773f4bb47c",
+          "git_blob": "3f8c208955c24105d97c8e9c15a7d2dd581e6ad3",
+          "url": "https://github.com/xarsh/ooxml-validator/blob/11e3e8c5430d054c8d9102e3e5f5e15c6697c7b2/README.md",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "izvori/xarsh__ooxml-validator",
+          "size_bytes": 4468
+        },
+        {
+          "head": "11e3e8c5430d054c8d9102e3e5f5e15c6697c7b2",
+          "path": "LICENSE",
+          "sha256": "ab06c0080d0db819154a8a0ed9b8efcecbb09cabcc348d8487114f75eca42635",
+          "git_blob": "a248402327a351fba1c49fd018098711913a61d3",
+          "url": "https://github.com/xarsh/ooxml-validator/blob/11e3e8c5430d054c8d9102e3e5f5e15c6697c7b2/LICENSE",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "izvori/xarsh__ooxml-validator",
+          "size_bytes": 1068
+        },
+        {
+          "head": "11e3e8c5430d054c8d9102e3e5f5e15c6697c7b2",
+          "path": "package.json",
+          "sha256": "bd4ccde936d1d455056c7a09100ad46683aaf88124af68e355c85e3b1af12b3a",
+          "git_blob": "720c787a2a2fbadcb42813f84f6f02c8a7336498",
+          "url": "https://github.com/xarsh/ooxml-validator/blob/11e3e8c5430d054c8d9102e3e5f5e15c6697c7b2/package.json",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "izvori/xarsh__ooxml-validator",
+          "size_bytes": 1244
+        },
+        {
+          "head": "11e3e8c5430d054c8d9102e3e5f5e15c6697c7b2",
+          "path": "THIRD-PARTY-NOTICES.md",
+          "sha256": "a3738ce003def4d8b5ddf7bdbc544c735fe7281dd30e8db168a1e2d345a25dde",
+          "git_blob": null,
+          "url": "https://github.com/xarsh/ooxml-validator/blob/11e3e8c5430d054c8d9102e3e5f5e15c6697c7b2/THIRD-PARTY-NOTICES.md",
+          "evidence_file": "R-01-supplementary-evidence.json",
+          "relative_clone_path": "izvori/xarsh__ooxml-validator"
+        }
+      ]
+    },
+    {
+      "canonical_upstream_url": "https://github.com/inukshuk/anystyle",
+      "source_kind": "git_clone_reference",
+      "license_assertion": "BSD-2-Clause (LICENSE i gemspec)",
+      "license_scope": "Kod; README izričito navodi da finder trening izvori nisu potpuno dostupni zbog copyright ograničenja. Modeli/dataseti traže zaseban zapis.",
+      "license_legal_clearance": false,
+      "intended_use": "Strojno parsiranje bibliografskih referenci.",
+      "integration_status": "not_demonstrated_in_checked_main",
+      "related_task": {
+        "registry": "R-01",
+        "integration": null
+      },
+      "owner": null,
+      "selected_files": [],
+      "candidate_files": [],
+      "dependency_or_fixture_version": null,
+      "destination": null,
+      "validation_result": {
+        "inventory": "PASS",
+        "runtime": "NOT_RUN",
+        "integration": "NOT_SELECTED"
+      },
+      "decision": "Odgođeno",
+      "acquisition_route": "Ruby gem anystyle / zasebni anystyle-cli prema dokumentaciji; instalacija i dostupnost nisu provjerene.",
+      "integration_gate": "Task za bibliografski uvoz; odvojena prava modela/podataka; HR/EN ručno označeni primjeri; nepouzdan zapis ostaje za pregled, bez automatske promjene citiranog izvora.",
+      "open_checks": [
+        "Nema provjere prava konkretnog modela/dataseta ni HR kvalitete."
+      ],
+      "planned_module": "Uvoz bibliografije",
+      "planned_phase": "Kasnije, uz prihvaćeni task",
+      "phase_source": "DAN-45 dodjela; nije dodijeljeni integracijski task",
+      "local_paths": [
+        {
+          "origin_url": "https://github.com/inukshuk/anystyle",
+          "local_head": "c6f5fb2fa6e8ce9456ad1e1e88d6bba5f3d7731d",
+          "dirty": false,
+          "observed_at": "2026-10-06T20:42:08.429586+00:00",
+          "relative_path": "repos/anystyle"
+        }
+      ],
+      "license_evidence": [
+        {
+          "head": "c6f5fb2fa6e8ce9456ad1e1e88d6bba5f3d7731d",
+          "path": "README.md",
+          "sha256": "1e12fceef2adc3797889a1a930f0a19b1efe773ed9acd274707245334ae6b3e8",
+          "git_blob": "c1abb210a7d328a2b70f47acfb31462ab80e2392",
+          "url": "https://github.com/inukshuk/anystyle/blob/c6f5fb2fa6e8ce9456ad1e1e88d6bba5f3d7731d/README.md",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "repos/anystyle",
+          "size_bytes": 8334
+        },
+        {
+          "head": "c6f5fb2fa6e8ce9456ad1e1e88d6bba5f3d7731d",
+          "path": "LICENSE",
+          "sha256": "28d57c231f317b039eb838d4c8734221078b557f63607def6b283a403a660ad6",
+          "git_blob": "5e06c274662be9cc490e93330d9f33fd59066ab1",
+          "url": "https://github.com/inukshuk/anystyle/blob/c6f5fb2fa6e8ce9456ad1e1e88d6bba5f3d7731d/LICENSE",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "repos/anystyle",
+          "size_bytes": 1516
+        },
+        {
+          "head": "c6f5fb2fa6e8ce9456ad1e1e88d6bba5f3d7731d",
+          "path": "anystyle.gemspec",
+          "sha256": "39433633c89aa5d243ad4d1a5d75a81e9ce3ae7546dc311c78b913b7e536850c",
+          "git_blob": "761df793ebca8861e0bb122aa81cf3ad8d37ace4",
+          "url": "https://github.com/inukshuk/anystyle/blob/c6f5fb2fa6e8ce9456ad1e1e88d6bba5f3d7731d/anystyle.gemspec",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "repos/anystyle",
+          "size_bytes": 1388
+        }
+      ]
+    },
+    {
+      "canonical_upstream_url": "https://github.com/ThirstyHead/docx-a11y",
+      "source_kind": "git_clone_reference",
+      "license_assertion": "MIT (LICENSE i pyproject)",
+      "license_scope": "Kod; konkretni dokumenti/fixturei nisu odabrani ni pojedinačno provjereni.",
+      "license_legal_clearance": false,
+      "intended_use": "Deterministički audit i remediation DOCX pristupačnosti.",
+      "integration_status": "not_demonstrated_in_checked_main",
+      "related_task": {
+        "registry": "R-01",
+        "integration": null
+      },
+      "owner": null,
+      "selected_files": [],
+      "candidate_files": [],
+      "dependency_or_fixture_version": null,
+      "destination": null,
+      "validation_result": {
+        "inventory": "PASS",
+        "runtime": "NOT_RUN",
+        "integration": "NOT_SELECTED"
+      },
+      "decision": "Čeka provjeru",
+      "acquisition_route": "Python projekt docx-a11y (lokalno 0.5.0), zasebno razvojno okruženje ako odabrano; PyPI/release nije provjeren.",
+      "integration_gate": "Točan kriterij (npr. jezik, heading redoslijed, tablična zaglavlja) i mali vlastiti ili licencno provjeren fixture; očekivani finding i čisti negativni kontrolni slučaj; audit ne mijenja ulaz; ishod nije certifikat pune WCAG sukladnosti.",
+      "open_checks": [
+        "README tvrdnje o WCAG nisu neovisno validirane.",
+        "Remediation ostaje izvan scopea."
+      ],
+      "planned_module": "Pristupačnost DOCX izvoza",
+      "planned_phase": "M8, nakon demoa",
+      "phase_source": "DAN-45 dodjela; nije dodijeljeni integracijski task",
+      "local_paths": [
+        {
+          "origin_url": "https://github.com/ThirstyHead/docx-a11y",
+          "local_head": "456f76613efb469aa0131caca557e975e7763cf2",
+          "dirty": false,
+          "observed_at": "2026-10-06T20:42:08.956751+00:00",
+          "relative_path": "repos/docx-a11y"
+        }
+      ],
+      "license_evidence": [
+        {
+          "head": "456f76613efb469aa0131caca557e975e7763cf2",
+          "path": "README.md",
+          "sha256": "ed4bd802869380a7920de3f9215f9e490a597e4d4ccf75773554399608a5da5a",
+          "git_blob": "c9ca1faa4c2df8b9aaeb54a78bf4bc5cb68ee91d",
+          "url": "https://github.com/ThirstyHead/docx-a11y/blob/456f76613efb469aa0131caca557e975e7763cf2/README.md",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "repos/docx-a11y",
+          "size_bytes": 13713
+        },
+        {
+          "head": "456f76613efb469aa0131caca557e975e7763cf2",
+          "path": "LICENSE",
+          "sha256": "24faa056bba7319ae599168c420d2589598775d7c365edd7d5a668d15ce53fe8",
+          "git_blob": "85df381ee4fbbe8f5ab5fe36666845c314a3f93c",
+          "url": "https://github.com/ThirstyHead/docx-a11y/blob/456f76613efb469aa0131caca557e975e7763cf2/LICENSE",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "repos/docx-a11y",
+          "size_bytes": 1078
+        },
+        {
+          "head": "456f76613efb469aa0131caca557e975e7763cf2",
+          "path": "pyproject.toml",
+          "sha256": "3b1f47c768588ca279c96942ef50dda940edbf1de727c48dd8af023b3298034e",
+          "git_blob": "d0ce63385bd9461dd4528d528ba2fb4fdef5faaa",
+          "url": "https://github.com/ThirstyHead/docx-a11y/blob/456f76613efb469aa0131caca557e975e7763cf2/pyproject.toml",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "repos/docx-a11y",
+          "size_bytes": 2066
+        }
+      ]
+    },
+    {
+      "canonical_upstream_url": "https://github.com/BaymaxStudio/docx-content-guard",
+      "source_kind": "git_clone_reference",
+      "license_assertion": "MIT (LICENSE i pyproject)",
+      "license_scope": "Kod; prava konkretnog demonstracijskog sadržaja nisu provjerena.",
+      "license_legal_clearance": false,
+      "intended_use": "Lokalna usporedba sadržaja dviju DOCX verzija, s filtriranjem formatnih razlika.",
+      "integration_status": "not_demonstrated_in_checked_main",
+      "related_task": {
+        "registry": "R-01",
+        "integration": null
+      },
+      "owner": null,
+      "selected_files": [],
+      "candidate_files": [],
+      "dependency_or_fixture_version": null,
+      "destination": null,
+      "validation_result": {
+        "inventory": "PASS",
+        "runtime": "NOT_RUN",
+        "integration": "NOT_SELECTED"
+      },
+      "decision": "Čeka provjeru",
+      "acquisition_route": "Python projekt; package.json/pnpm integracija nije primjerena. Ne tvrdi se dostupnost objavljenog paketa.",
+      "integration_gate": "Povezati svaku prenesenu provjeru s Ductus invariantom; format-only par ne daje tekstualnu promjenu, zamjena jedne riječi mora je dati; sintetički ulazi, bez mutacije; autoritet ostaje postojeći canonical/evidence model.",
+      "open_checks": [
+        "Nisu pregledani svi slučajevi normalizacije i mogućeg skrivanja promjene."
+      ],
+      "planned_module": "Usporedba DOCX roundtripa",
+      "planned_phase": "M8, nakon demoa",
+      "phase_source": "DAN-45 dodjela; nije dodijeljeni integracijski task",
+      "local_paths": [
+        {
+          "origin_url": "https://github.com/BaymaxStudio/docx-content-guard",
+          "local_head": "b6bda242c66510419d241d47bc72e887944eac0c",
+          "dirty": false,
+          "observed_at": "2026-10-06T20:42:09.266401+00:00",
+          "relative_path": "repos/docx-content-guard"
+        }
+      ],
+      "license_evidence": [
+        {
+          "head": "b6bda242c66510419d241d47bc72e887944eac0c",
+          "path": "README.md",
+          "sha256": "564461e13dc5c877f7ba5f4f8c422de8093538e990ad7f45d27b24b4e9bc541e",
+          "git_blob": "afe59f8dc652ce90a4f66de2deb522e1d30ac8d2",
+          "url": "https://github.com/BaymaxStudio/docx-content-guard/blob/b6bda242c66510419d241d47bc72e887944eac0c/README.md",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "repos/docx-content-guard",
+          "size_bytes": 2806
+        },
+        {
+          "head": "b6bda242c66510419d241d47bc72e887944eac0c",
+          "path": "LICENSE",
+          "sha256": "76e040dccb57c1f1ce4965a62005b1198ecb0b3517a518fd6544f0e0ac6a4cec",
+          "git_blob": "bf7c9e6d2de65b974149d68baaba7b9068cc9fc5",
+          "url": "https://github.com/BaymaxStudio/docx-content-guard/blob/b6bda242c66510419d241d47bc72e887944eac0c/LICENSE",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "repos/docx-content-guard",
+          "size_bytes": 1069
+        },
+        {
+          "head": "b6bda242c66510419d241d47bc72e887944eac0c",
+          "path": "pyproject.toml",
+          "sha256": "1ce8dafdcb5a429002545cb2de64aa126ed01803450b91737d5182252fc3e5f9",
+          "git_blob": "20f8560d302d0249eb57127ded561c4f2459722b",
+          "url": "https://github.com/BaymaxStudio/docx-content-guard/blob/b6bda242c66510419d241d47bc72e887944eac0c/pyproject.toml",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "repos/docx-content-guard",
+          "size_bytes": 559
+        }
+      ]
+    },
+    {
+      "canonical_upstream_url": "https://github.com/JSv4/Docxodus",
+      "source_kind": "git_clone_reference",
+      "license_assertion": "MIT jezgra; zasebni uvjeti za demo/font materijale",
+      "license_scope": "NOTICE razdvaja MIT npm/NuGet jezgru od demo Doom integracije (GPL) i Freedooma (BSD-3-Clause); demo font ima Bitstream/DejaVu uvjete. Ne širiti MIT na cijelo stablo.",
+      "license_legal_clearance": false,
+      "intended_use": "OOXML render/edit/diff/projection kroz .NET/WASM i više klijenata.",
+      "integration_status": "not_demonstrated_in_checked_main",
+      "related_task": {
+        "registry": "R-01",
+        "integration": null
+      },
+      "owner": null,
+      "selected_files": [],
+      "candidate_files": [],
+      "dependency_or_fixture_version": null,
+      "destination": null,
+      "validation_result": {
+        "inventory": "PASS",
+        "runtime": "NOT_RUN",
+        "integration": "NOT_SELECTED"
+      },
+      "decision": "Odgođeno",
+      "acquisition_route": "Odabrati jednu površinu (NuGet ili npm/WASM itd.) i zaključati je; ne uvoziti cijeli repo ni demo assets.",
+      "integration_gate": "Dokaz prednosti nad postojećim putem; ograničen strukturirani roundtrip s očekivanim gubicima; test accept/reject usporedbe na razini stvarno potrebnih struktura; test troška i resursa; odabrani artefakt i prava njegovih dijelova.",
+      "open_checks": [
+        "README 'lossless' nije Ductus dokaz.",
+        "Nisu auditirani svi paketni/build/testni sadržaji."
+      ],
+      "planned_module": "Uvoz/izvoz OOXML",
+      "planned_phase": "M8, nakon demoa",
+      "phase_source": "DAN-45 dodjela; nije dodijeljeni integracijski task",
+      "local_paths": [
+        {
+          "origin_url": "https://github.com/JSv4/Docxodus",
+          "local_head": "959b4741f0f636e74886e5667469fcd73832015b",
+          "dirty": false,
+          "observed_at": "2026-10-06T20:42:09.627994+00:00",
+          "relative_path": "repos/Docxodus"
+        }
+      ],
+      "license_evidence": [
+        {
+          "head": "959b4741f0f636e74886e5667469fcd73832015b",
+          "path": "README.md",
+          "sha256": "e1fab1f70da6ba5628f2b6a45dfb195c0303b59ba068a7ef01bf15b7caa87e59",
+          "git_blob": "d359af67db9060c812c60f47f8076fed45b3aa22",
+          "url": "https://github.com/JSv4/Docxodus/blob/959b4741f0f636e74886e5667469fcd73832015b/README.md",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "repos/Docxodus",
+          "size_bytes": 15608
+        },
+        {
+          "head": "959b4741f0f636e74886e5667469fcd73832015b",
+          "path": "LICENSE",
+          "sha256": "a1998f7eb856a98fa66fac2c64f0cf6be9aed7c999916d5d426272507a11dcae",
+          "git_blob": "b035e29ec796dffddd7993f71c06e9fffbe11651",
+          "url": "https://github.com/JSv4/Docxodus/blob/959b4741f0f636e74886e5667469fcd73832015b/LICENSE",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "repos/Docxodus",
+          "size_bytes": 1127
+        },
+        {
+          "head": "959b4741f0f636e74886e5667469fcd73832015b",
+          "path": "docs/demo/vendor/NOTICE.md",
+          "sha256": "49ccab784b3fe1e18a513a5d12c29d013c47b787e36b9ae1d5f73ac666592147",
+          "git_blob": null,
+          "url": "https://github.com/JSv4/Docxodus/blob/959b4741f0f636e74886e5667469fcd73832015b/docs/demo/vendor/NOTICE.md",
+          "evidence_file": "R-01-supplementary-evidence.json",
+          "relative_clone_path": "repos/Docxodus"
+        },
+        {
+          "head": "959b4741f0f636e74886e5667469fcd73832015b",
+          "path": "docs/demo/fonts/LICENSE.txt",
+          "sha256": "da240c2811b8b190a4258c50ae2a5daa50f23cdd6858c7993bb691c44dae8302",
+          "git_blob": null,
+          "url": "https://github.com/JSv4/Docxodus/blob/959b4741f0f636e74886e5667469fcd73832015b/docs/demo/fonts/LICENSE.txt",
+          "evidence_file": "R-01-supplementary-evidence.json",
+          "relative_clone_path": "repos/Docxodus"
+        }
+      ]
+    },
+    {
+      "canonical_upstream_url": "https://github.com/openpreserve/format-corpus",
+      "source_kind": "git_clone_reference",
+      "license_assertion": "README: CC0 osim gdje je drukčije navedeno",
+      "license_scope": "Korpus po datoteci; iznimke nisu inventarizirane jer nijedna datoteka nije odabrana.",
+      "license_legal_clearance": false,
+      "intended_use": "Mali primjeri raznih formata i rubni dokumenti.",
+      "integration_status": "not_demonstrated_in_checked_main",
+      "related_task": {
+        "registry": "R-01",
+        "integration": null
+      },
+      "owner": null,
+      "selected_files": [],
+      "candidate_files": [],
+      "dependency_or_fixture_version": null,
+      "destination": null,
+      "validation_result": {
+        "inventory": "PASS",
+        "runtime": "NOT_RUN",
+        "integration": "NOT_SELECTED"
+      },
+      "decision": "Čeka provjeru",
+      "acquisition_route": "Kopirati samo odabrani mali fixture s manifestom i checksumom; paket nije potreban.",
+      "integration_gate": "Za svaku datoteku zabilježiti izvornu putanju/commit, prava/iznimku, veličinu i checksum, očekivani ishod te test; odbiti nejasna prava ili nepotrebno velike datoteke.",
+      "open_checks": [
+        "Nisu pregledani pojedinačni dokumenti niti potvrđena prava bilo kojeg kandidata."
+      ],
+      "planned_module": "Regresijski korpus uvoza/izvoza",
+      "planned_phase": "M8, nakon demoa",
+      "phase_source": "DAN-45 dodjela; nije dodijeljeni integracijski task",
+      "local_paths": [
+        {
+          "origin_url": "https://github.com/openpreserve/format-corpus",
+          "local_head": "366f068cec399d0cdfd61fa473de3ab6dc858098",
+          "dirty": false,
+          "observed_at": "2026-10-06T20:42:10.619649+00:00",
+          "relative_path": "repos/format-corpus"
+        }
+      ],
+      "license_evidence": [
+        {
+          "head": "366f068cec399d0cdfd61fa473de3ab6dc858098",
+          "path": "README.md",
+          "sha256": "f964954263e78e3757394130d428ba6aa1fcfc9aee59d0580c39381d5cf4b9fb",
+          "git_blob": "ba613ff8909e42ef184ef9201332313b63c63eb4",
+          "url": "https://github.com/openpreserve/format-corpus/blob/366f068cec399d0cdfd61fa473de3ab6dc858098/README.md",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "repos/format-corpus",
+          "size_bytes": 1265
+        }
+      ]
+    },
+    {
+      "canonical_upstream_url": "https://github.com/krunose/hunspell-hr",
+      "source_kind": "git_clone_reference",
+      "license_assertion": "README_hr_HR.txt: 'LGPL/SISSL license, 2003'",
+      "license_scope": "Rječnički podaci; nije utvrđena precizna LGPL verzija/izbor licence ni opseg novijih doprinosa. Root nema zaseban LICENSE/COPYING kandidat.",
+      "license_legal_clearance": false,
+      "intended_use": "Hrvatski pravopisni rječnik hr_HR.dic/hr_HR.aff; nije Hunspell engine.",
+      "integration_status": "not_demonstrated_in_checked_main",
+      "related_task": {
+        "registry": "R-01",
+        "integration": null
+      },
+      "owner": null,
+      "selected_files": [],
+      "candidate_files": [],
+      "dependency_or_fixture_version": null,
+      "destination": null,
+      "validation_result": {
+        "inventory": "PASS",
+        "runtime": "NOT_RUN",
+        "integration": "NOT_SELECTED"
+      },
+      "decision": "Odgođeno",
+      "acquisition_route": "Verzionirani podaci plus zasebno odabrani engine; clone sam ne daje funkciju.",
+      "integration_gate": "Razjasniti prava odabranog .dic/.aff, odabrati engine i mjeriti HR lažne uzbune; sve izmjene tek izričitom korisničkom radnjom, bez tihog mijenjanja rada/evidencije.",
+      "open_checks": [
+        "Licencna verzija i opseg novijih doprinosa ostaju otvoreni."
+      ],
+      "planned_module": "Savjetodavni hrvatski pravopis",
+      "planned_phase": "Odgođeno; zasebna odluka o opsegu",
+      "phase_source": "DAN-45 dodjela; nije dodijeljeni integracijski task",
+      "local_paths": [
+        {
+          "origin_url": "https://github.com/krunose/hunspell-hr",
+          "local_head": "5a81badfdfe687ae08964865f661059b0d7453bf",
+          "dirty": false,
+          "observed_at": "2026-10-06T20:42:11.288852+00:00",
+          "relative_path": "repos/hunspell-hr"
+        }
+      ],
+      "license_evidence": [
+        {
+          "head": "5a81badfdfe687ae08964865f661059b0d7453bf",
+          "path": "README.md",
+          "sha256": "f928e025df23a7688042e3620716df28d5cea326286b74c61bd94f55d90ff134",
+          "git_blob": "945cdd95b9343e1b236757a04c53fed9774696ef",
+          "url": "https://github.com/krunose/hunspell-hr/blob/5a81badfdfe687ae08964865f661059b0d7453bf/README.md",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "repos/hunspell-hr",
+          "size_bytes": 5887
+        },
+        {
+          "head": "5a81badfdfe687ae08964865f661059b0d7453bf",
+          "path": "README_hr_HR.txt",
+          "sha256": "ab01eb2f990566a09f8f393f030f5e8ab5c8045571da173fb0f05985db8abafe",
+          "git_blob": "4ee6c38ba72a488148920789e72e830eac22f710",
+          "url": "https://github.com/krunose/hunspell-hr/blob/5a81badfdfe687ae08964865f661059b0d7453bf/README_hr_HR.txt",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "repos/hunspell-hr",
+          "size_bytes": 152
+        }
+      ]
+    },
+    {
+      "canonical_upstream_url": "https://github.com/mwilliamson/mammoth.js",
+      "source_kind": "git_clone_reference",
+      "license_assertion": "BSD-2-Clause (LICENSE i package.json)",
+      "license_scope": "Kod; prava odabranih fixturea zasebno.",
+      "license_legal_clearance": false,
+      "intended_use": "Semantička konverzija DOCX u HTML, uz namjerno zanemarivanje dijela vizualnog formatiranja.",
+      "integration_status": "not_demonstrated_in_checked_main",
+      "related_task": {
+        "registry": "R-01",
+        "integration": null
+      },
+      "owner": null,
+      "selected_files": [],
+      "candidate_files": [],
+      "dependency_or_fixture_version": null,
+      "destination": null,
+      "validation_result": {
+        "inventory": "PASS",
+        "runtime": "NOT_RUN",
+        "integration": "NOT_SELECTED"
+      },
+      "decision": "Odgođeno",
+      "acquisition_route": "npm paket mammoth (lokalni package.json 1.13.0) ako odabran; ne dodatni source clone.",
+      "integration_gate": "Test podržanih struktura i izričit gubitak nepodržanih; sanitizacija HTML-a i negativni javascript:/vanjski file reference slučajevi; vanjski pristup mora biti onemogućen; dokument se ne proglašava očuvanim samo zato što je HTML proizveden.",
+      "open_checks": [
+        "Sigurnosna svojstva lokalnog wrappera nisu implementirana ni ispitana.",
+        "README izričito kaže da Mammoth ne sanitizira izvor."
+      ],
+      "planned_module": "DOCX uvoz",
+      "planned_phase": "M8, nakon demoa",
+      "phase_source": "DAN-45 dodjela; nije dodijeljeni integracijski task",
+      "local_paths": [
+        {
+          "origin_url": "https://github.com/mwilliamson/mammoth.js",
+          "local_head": "791a189230977143cde64dbf9f1d24dce96ac8a1",
+          "dirty": false,
+          "observed_at": "2026-10-06T20:42:11.949636+00:00",
+          "relative_path": "repos/mammoth.js"
+        }
+      ],
+      "license_evidence": [
+        {
+          "head": "791a189230977143cde64dbf9f1d24dce96ac8a1",
+          "path": "README.md",
+          "sha256": "f251fea64a8e8d84129c1b0d9e404d535b962471f3df5a10cf188fa67cf66bac",
+          "git_blob": "1c8d927267bcbfebaedf04ad9963875a08047a0f",
+          "url": "https://github.com/mwilliamson/mammoth.js/blob/791a189230977143cde64dbf9f1d24dce96ac8a1/README.md",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "repos/mammoth.js",
+          "size_bytes": 29981
+        },
+        {
+          "head": "791a189230977143cde64dbf9f1d24dce96ac8a1",
+          "path": "LICENSE",
+          "sha256": "6663bbd049205d38a496ccacb412a151980b444627d38de218b3b809aef330f1",
+          "git_blob": "7e706611733707863fcca3f68ea81af0aa43fd29",
+          "url": "https://github.com/mwilliamson/mammoth.js/blob/791a189230977143cde64dbf9f1d24dce96ac8a1/LICENSE",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "repos/mammoth.js",
+          "size_bytes": 1307
+        },
+        {
+          "head": "791a189230977143cde64dbf9f1d24dce96ac8a1",
+          "path": "package.json",
+          "sha256": "6f0646cf64afff35003fef06d3d45bc159f2cef8474e2093ee9d786658dbe73a",
+          "git_blob": "54a97cffb667c6410d46ac2b40275340df233725",
+          "url": "https://github.com/mwilliamson/mammoth.js/blob/791a189230977143cde64dbf9f1d24dce96ac8a1/package.json",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "repos/mammoth.js",
+          "size_bytes": 1425
+        }
+      ]
+    },
+    {
+      "canonical_upstream_url": "https://github.com/agilesix/nofo-design-prep-checker",
+      "source_kind": "git_clone_reference",
+      "license_assertion": "Apache-2.0 u LICENSE; README istodobno navodi interni HHS alat",
+      "license_scope": "Nerazriješena razlika između root licence i napomene o distribuciji/alatu; ne izvodi se pravni zaključak. HHS dokumenti/brand/domena nisu Ductus sadržaj.",
+      "license_legal_clearance": false,
+      "intended_use": "Provjere pripreme NOFO dokumenata za dizajn.",
+      "integration_status": "not_demonstrated_in_checked_main",
+      "related_task": {
+        "registry": "R-01",
+        "integration": null
+      },
+      "owner": null,
+      "selected_files": [],
+      "candidate_files": [],
+      "dependency_or_fixture_version": null,
+      "destination": null,
+      "validation_result": {
+        "inventory": "PASS",
+        "runtime": "NOT_RUN",
+        "integration": "NOT_SELECTED"
+      },
+      "decision": "Odgođeno",
+      "acquisition_route": "Nema instalacije; privatni Vite app prema package.json, nije objavljena knjižnica.",
+      "integration_gate": "Razjasniti napomenu o distribuciji i točan sadržaj; pokazati podudarnost s prihvaćenim Ductus zahtjevom; vlastiti sintetički fixture i attribution za eventualno odabrani kod.",
+      "open_checks": [
+        "README/LICENCE opseg distribucije nije razjašnjen; ništa nije odabrano za kopiranje."
+      ],
+      "planned_module": "Referenca za pripremu dokumenata",
+      "planned_phase": "Odgođeno; opseg prava nerazriješen",
+      "phase_source": "DAN-45 dodjela; nije dodijeljeni integracijski task",
+      "local_paths": [
+        {
+          "origin_url": "https://github.com/agilesix/nofo-design-prep-checker",
+          "local_head": "b83375df402b25dc7dce810fb0b56ff1a667cef9",
+          "dirty": false,
+          "observed_at": "2026-10-06T20:42:12.200694+00:00",
+          "relative_path": "repos/nofo-design-prep-checker"
+        }
+      ],
+      "license_evidence": [
+        {
+          "head": "b83375df402b25dc7dce810fb0b56ff1a667cef9",
+          "path": "README.md",
+          "sha256": "5eefbbe023ff84a66cf9a74e925d58ba527428b8771c8d48ba77553a24d5a77d",
+          "git_blob": "d5c04b54ffa19cca7d73912924684fe75f049a1c",
+          "url": "https://github.com/agilesix/nofo-design-prep-checker/blob/b83375df402b25dc7dce810fb0b56ff1a667cef9/README.md",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "repos/nofo-design-prep-checker",
+          "size_bytes": 8822
+        },
+        {
+          "head": "b83375df402b25dc7dce810fb0b56ff1a667cef9",
+          "path": "LICENSE",
+          "sha256": "2ac22ee8433fc7f7882c1c092eb4efd36872eff21d54ca4ff9d8538831bff4d4",
+          "git_blob": "61dfad1f1420dd7092ddb82e25a4ecafe1123de9",
+          "url": "https://github.com/agilesix/nofo-design-prep-checker/blob/b83375df402b25dc7dce810fb0b56ff1a667cef9/LICENSE",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "repos/nofo-design-prep-checker",
+          "size_bytes": 11431
+        },
+        {
+          "head": "b83375df402b25dc7dce810fb0b56ff1a667cef9",
+          "path": "package.json",
+          "sha256": "d7183fe4c528c994504d7ecd2498d2d07c7f320a92280f2714b7f58139f7fb79",
+          "git_blob": "48d92df01e37821a7e9fee862ca4c9971d14bda8",
+          "url": "https://github.com/agilesix/nofo-design-prep-checker/blob/b83375df402b25dc7dce810fb0b56ff1a667cef9/package.json",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "repos/nofo-design-prep-checker",
+          "size_bytes": 1277
+        }
+      ]
+    },
+    {
+      "canonical_upstream_url": "https://github.com/srivtx/officelens",
+      "source_kind": "git_clone_reference",
+      "license_assertion": "MIT (LICENSE i package.json)",
+      "license_scope": "Kod; odabrani fixturei i binary distribucija još nisu provjereni.",
+      "license_legal_clearance": false,
+      "intended_use": "Offline DOCX/PPTX pristupačnost, deterministički JSON/SARIF i CI exit kodovi.",
+      "integration_status": "not_demonstrated_in_checked_main",
+      "related_task": {
+        "registry": "R-01",
+        "integration": null
+      },
+      "owner": null,
+      "selected_files": [],
+      "candidate_files": [],
+      "dependency_or_fixture_version": null,
+      "destination": null,
+      "validation_result": {
+        "inventory": "PASS",
+        "runtime": "NOT_RUN",
+        "integration": "NOT_SELECTED"
+      },
+      "decision": "Čeka provjeru",
+      "acquisition_route": "README navodi da nije objavljen na npm; dokumentira Bun/GitHub i binary. Potreban commit pin, provjera Node24/Bun/Windows kompatibilnosti; ne koristiti #main kao pin.",
+      "integration_gate": "Dokazati stvarni izvršni put na našoj platformi bez automatskog shell instaliranja; pozitivan/negativan sintetički DOCX; parsirati JSON/exit code; usporediti pokriće s docx-a11y i izabrati najmanji dovoljan alat.",
+      "open_checks": [
+        "Nije pokrenut; Node/Bun/release kompatibilnost nije potvrđena.",
+        "Tvrdnje README-a nisu certifikat pristupačnosti."
+      ],
+      "planned_module": "Audit DOCX/PPTX pristupačnosti",
+      "planned_phase": "M8, nakon demoa",
+      "phase_source": "DAN-45 dodjela; nije dodijeljeni integracijski task",
+      "local_paths": [
+        {
+          "origin_url": "https://github.com/srivtx/officelens",
+          "local_head": "b35b226a678c4cb13642cb9ccf5e831a467e6804",
+          "dirty": false,
+          "observed_at": "2026-10-06T20:42:12.887888+00:00",
+          "relative_path": "repos/officelens"
+        }
+      ],
+      "license_evidence": [
+        {
+          "head": "b35b226a678c4cb13642cb9ccf5e831a467e6804",
+          "path": "README.md",
+          "sha256": "1f7225da72bdfec679d70eb86aa8ff895da89e12e77b0f45bc2c1a281c972a9c",
+          "git_blob": "26c88de9247c1857518be021235bef2abfa62916",
+          "url": "https://github.com/srivtx/officelens/blob/b35b226a678c4cb13642cb9ccf5e831a467e6804/README.md",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "repos/officelens",
+          "size_bytes": 8785
+        },
+        {
+          "head": "b35b226a678c4cb13642cb9ccf5e831a467e6804",
+          "path": "LICENSE",
+          "sha256": "d251af515a94f84bd46b5f845ac0ec94d2fcd1c652cec39bbbe6e31169f89e4e",
+          "git_blob": "031cdbd3b671e204560a1bf3c9c62c537b154bd9",
+          "url": "https://github.com/srivtx/officelens/blob/b35b226a678c4cb13642cb9ccf5e831a467e6804/LICENSE",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "repos/officelens",
+          "size_bytes": 1080
+        },
+        {
+          "head": "b35b226a678c4cb13642cb9ccf5e831a467e6804",
+          "path": "package.json",
+          "sha256": "fa76595b125f36e4b1e682210a811bb1a675049c8ab18429fbe76332e3ffb292",
+          "git_blob": "3bf5eb082b60f595592d4324102bfe9cb7fd98b2",
+          "url": "https://github.com/srivtx/officelens/blob/b35b226a678c4cb13642cb9ccf5e831a467e6804/package.json",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "repos/officelens",
+          "size_bytes": 1593
+        }
+      ]
+    },
+    {
+      "canonical_upstream_url": "https://github.com/clarinsi/reldi-tokeniser",
+      "source_kind": "git_clone_reference",
+      "license_assertion": "Apache-2.0 (LICENSE; setup.py navodi apache-2.0)",
+      "license_scope": "Kod; jezični resursi i primjeri nisu zasebno odabrani/provjereni.",
+      "license_legal_clearance": false,
+      "intended_use": "Tokenizacija slovenskog, hrvatskog, srpskog, makedonskog i bugarskog teksta.",
+      "integration_status": "not_demonstrated_in_checked_main",
+      "related_task": {
+        "registry": "R-01",
+        "integration": null
+      },
+      "owner": null,
+      "selected_files": [],
+      "candidate_files": [],
+      "dependency_or_fixture_version": null,
+      "destination": null,
+      "validation_result": {
+        "inventory": "PASS",
+        "runtime": "NOT_RUN",
+        "integration": "NOT_SELECTED"
+      },
+      "decision": "Odgođeno",
+      "acquisition_route": "Python projekt reldi-tokeniser (setup verzija 1.0.3); objava/dostupnost paketa nije ovdje potvrđena.",
+      "integration_gate": "Jasan zadatak za segmentaciju, ljudski očekivani HR primjeri i offseti; pravila za standardni/nestandardni tekst; ne zamjenjivati tokenizer Laya checkpointa niti transformirati canonical evidence.",
+      "open_checks": [
+        "Nema potrebe dokazane u aktualnom demou; kompatibilnost runtimea nije ispitana."
+      ],
+      "planned_module": "HR segmentacija teksta",
+      "planned_phase": "Kasnije, samo uz dokazan zahtjev",
+      "phase_source": "DAN-45 dodjela; nije dodijeljeni integracijski task",
+      "local_paths": [
+        {
+          "origin_url": "https://github.com/clarinsi/reldi-tokeniser",
+          "local_head": "9a90b6ca1e9429ba40722ac0e43253c399085306",
+          "dirty": false,
+          "observed_at": "2026-10-06T20:42:13.065602+00:00",
+          "relative_path": "repos/reldi-tokeniser"
+        }
+      ],
+      "license_evidence": [
+        {
+          "head": "9a90b6ca1e9429ba40722ac0e43253c399085306",
+          "path": "README.md",
+          "sha256": "cad9a514ee5d62c02c8aefbf1b844c8b577a8ebb33a5bf593289f290faeac4a7",
+          "git_blob": "3ccd5e7387fcc4affbeca071749df06d20b0b8fa",
+          "url": "https://github.com/clarinsi/reldi-tokeniser/blob/9a90b6ca1e9429ba40722ac0e43253c399085306/README.md",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "repos/reldi-tokeniser",
+          "size_bytes": 3609
+        },
+        {
+          "head": "9a90b6ca1e9429ba40722ac0e43253c399085306",
+          "path": "LICENSE",
+          "sha256": "b40930bbcf80744c86c46a12bc9da056641d722716c378f5659b9e555ef833e1",
+          "git_blob": "8dada3edaf50dbc082c9a125058f25def75e625a",
+          "url": "https://github.com/clarinsi/reldi-tokeniser/blob/9a90b6ca1e9429ba40722ac0e43253c399085306/LICENSE",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "repos/reldi-tokeniser",
+          "size_bytes": 11357
+        },
+        {
+          "head": "9a90b6ca1e9429ba40722ac0e43253c399085306",
+          "path": "setup.py",
+          "sha256": "834907dbb6b5cacdfb38d940ef13ded1444f31a513dc9ad770cbf21a3520adfe",
+          "git_blob": "243ce89f4a8889e21646ec22af741b696f78ca54",
+          "url": "https://github.com/clarinsi/reldi-tokeniser/blob/9a90b6ca1e9429ba40722ac0e43253c399085306/setup.py",
+          "evidence_file": "R-01-source-evidence.json",
+          "relative_clone_path": "repos/reldi-tokeniser",
+          "size_bytes": 714
+        }
+      ]
+    }
+  ]
+}

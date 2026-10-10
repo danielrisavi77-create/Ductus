@@ -11,7 +11,8 @@
  *     map is a `Record` over `SyncState` so a ninth state cannot compile
  *     without its own wording.
  *   - Local durable state is not canonical server state. LOCAL_DURABLE says
- *     "Spremljeno lokalno" — the word "lokalno" is the whole point — and it
+ *     "Spremljeno na uređaju" — the words "na uređaju" are the whole point
+ *     (the form docs/PRODUCT.md §5 prescribes instead of a bare "spremljeno") — and it
  *     does NOT share the reassuring tone that only SYNCED earns. Painting
  *     "durable on this machine" the same colour as "the server has it" would
  *     re-introduce the generic "saved" through the palette after the label
@@ -57,7 +58,7 @@ export const SYNC_STATE_LABELS: Record<SyncState, SyncStateLabel> = {
    * purpose: the work is safe from a reload, not from losing the machine, and
    * only a server ACK may look like an all-clear.
    */
-  LOCAL_DURABLE: { label: "Spremljeno lokalno", tone: "neutral" },
+  LOCAL_DURABLE: { label: "Spremljeno na uređaju", tone: "neutral" },
   SYNCING: { label: "Sinkroniziram", tone: "progress" },
   /* The one state that has earned the all-clear: the server holds it. */
   SYNCED: { label: "Sinkronizirano", tone: "ok" },

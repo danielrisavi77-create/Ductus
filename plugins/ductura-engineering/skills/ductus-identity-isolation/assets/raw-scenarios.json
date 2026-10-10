@@ -1,0 +1,245 @@
+{
+  "synthetic": true,
+  "input_only": true,
+  "setup": {
+    "institutions": [
+      "synthetic-institution-a",
+      "synthetic-institution-b"
+    ],
+    "principals": [
+      "synthetic-student-a",
+      "synthetic-student-b"
+    ],
+    "documents": [
+      {
+        "id": "synthetic-doc-a",
+        "owner": "synthetic-student-a",
+        "sharing": []
+      },
+      {
+        "id": "synthetic-doc-b",
+        "owner": "synthetic-student-b",
+        "sharing": []
+      }
+    ],
+    "sql_fixture_locator": "#46 db/tests/020-identity-session.sql synthetic A/B UUIDs and repeat(A/B,43) token fixture; actual DB setup only under independent isolated Postgres authorization",
+    "production_credentials": null,
+    "execution_results": null
+  },
+  "scenarios": [
+    {
+      "scenario_id": "I01",
+      "selected_revision": "ac65c71d797e29417d3d0f07aa9bd7ad63f2ff06",
+      "candidate_revision": "6700605bf035b626984ee7b173b0dcbc53bc0fe7",
+      "candidate_status": "#46 open draft, not accepted-main; #39 prerequisite",
+      "contracts": [
+        "src/application/ports/authorization.ts:AuthorizationCheck",
+        "docs/BACKEND.md §4.3/4.4",
+        "candidate app.current_actor()"
+      ],
+      "entrypoints": [
+        "AuthorizationPort.check (port, implementation must be located)",
+        "candidate db/migrations/20261003210100_identity_session.sql:app.current_actor()",
+        "candidate db/tests/020-identity-session.sql"
+      ],
+      "identity_scope": "app principal from authenticated synthetic session; SQL actor from app.session_token; authorization resource id is document-scoped",
+      "check": {
+        "principalId": "synthetic-student-a",
+        "resource": {
+          "type": "document",
+          "id": "synthetic-doc-a"
+        },
+        "action": "write_document",
+        "consistency": "higher-consistency"
+      },
+      "prompt": "Izvedi očekivanje iz prihvaćenih pravila i provjeri vlastiti document pristup. Navedi stvarni implementirani entrypoint i praznine između app porta i SQL-a.",
+      "session_actor": "synthetic-student-a"
+    },
+    {
+      "scenario_id": "I02",
+      "selected_revision": "ac65c71d797e29417d3d0f07aa9bd7ad63f2ff06",
+      "candidate_revision": "6700605bf035b626984ee7b173b0dcbc53bc0fe7",
+      "candidate_status": "#46 open draft, not accepted-main; #39 prerequisite",
+      "contracts": [
+        "src/application/ports/authorization.ts:AuthorizationCheck",
+        "docs/BACKEND.md §4.3/4.4",
+        "candidate app.current_actor()"
+      ],
+      "entrypoints": [
+        "AuthorizationPort.check (port, implementation must be located)",
+        "candidate db/migrations/20261003210100_identity_session.sql:app.current_actor()",
+        "candidate db/tests/020-identity-session.sql"
+      ],
+      "identity_scope": "app principal from authenticated synthetic session; SQL actor from app.session_token; authorization resource id is document-scoped",
+      "check": {
+        "principalId": "synthetic-student-a",
+        "resource": {
+          "type": "document",
+          "id": "synthetic-doc-b"
+        },
+        "action": "read_private_draft",
+        "consistency": "higher-consistency"
+      },
+      "prompt": "Procijeni pristup A privatnom dokumentu B bez dijeljenja. Razdvoji stvarni odgovor i nedostajući can/RLS sloj.",
+      "session_actor": "synthetic-student-a"
+    },
+    {
+      "scenario_id": "I03",
+      "selected_revision": "ac65c71d797e29417d3d0f07aa9bd7ad63f2ff06",
+      "candidate_revision": "6700605bf035b626984ee7b173b0dcbc53bc0fe7",
+      "candidate_status": "#46 open draft, not accepted-main; #39 prerequisite",
+      "contracts": [
+        "src/application/ports/authorization.ts:AuthorizationCheck",
+        "docs/BACKEND.md §4.3/4.4",
+        "candidate app.current_actor()"
+      ],
+      "entrypoints": [
+        "AuthorizationPort.check (port, implementation must be located)",
+        "candidate db/migrations/20261003210100_identity_session.sql:app.current_actor()",
+        "candidate db/tests/020-identity-session.sql"
+      ],
+      "identity_scope": "app principal from authenticated synthetic session; SQL actor from app.session_token; authorization resource id is document-scoped",
+      "check": {
+        "principalId": "synthetic-student-b",
+        "resource": {
+          "type": "document",
+          "id": "synthetic-doc-b"
+        },
+        "action": "write_document",
+        "consistency": "higher-consistency"
+      },
+      "prompt": "Procijeni klijentski pokušaj imenovanja B uz sesiju A i prazan session token uz app.user_id. Utvrdi actual wire/SQL ugovor bez umetanja actor polja u CommitRequest.",
+      "session_actor": "synthetic-student-a",
+      "caller_supplied_metadata": {
+        "actor": "synthetic-student-b"
+      },
+      "sql_observation_input": {
+        "app.session_token": "",
+        "app.user_id": "00000000-0000-4000-8000-0000000000b1"
+      }
+    },
+    {
+      "scenario_id": "I04",
+      "selected_revision": "ac65c71d797e29417d3d0f07aa9bd7ad63f2ff06",
+      "candidate_revision": "6700605bf035b626984ee7b173b0dcbc53bc0fe7",
+      "candidate_status": "#46 open draft, not accepted-main; #39 prerequisite",
+      "contracts": [
+        "src/application/ports/authorization.ts:AuthorizationCheck",
+        "docs/BACKEND.md §4.3/4.4",
+        "candidate app.current_actor()"
+      ],
+      "entrypoints": [
+        "AuthorizationPort.check (port, implementation must be located)",
+        "candidate db/migrations/20261003210100_identity_session.sql:app.current_actor()",
+        "candidate db/tests/020-identity-session.sql"
+      ],
+      "identity_scope": "app principal from authenticated synthetic session; SQL actor from app.session_token; authorization resource id is document-scoped",
+      "check": {
+        "principalId": "synthetic-student-a",
+        "resource": {
+          "type": "document",
+          "id": "synthetic-doc-b"
+        },
+        "action": "read_private_draft",
+        "consistency": "higher-consistency"
+      },
+      "prompt": "Procijeni read nakon opoziva granta uz stari claim. Odvoji current_actor provjeru zatvorene sesije od document can() opoziva.",
+      "grant_history": [
+        {
+          "action": "grant",
+          "at": "2026-10-06T19:00:00.000Z"
+        },
+        {
+          "action": "revoke",
+          "at": "2026-10-06T19:30:00.000Z"
+        }
+      ],
+      "claim_observed_at": "2026-10-06T19:10:00.000Z",
+      "request_at": "2026-10-06T20:00:00.000Z",
+      "session_actor": "synthetic-student-a"
+    },
+    {
+      "scenario_id": "I05",
+      "selected_revision": "ac65c71d797e29417d3d0f07aa9bd7ad63f2ff06",
+      "candidate_revision": "6700605bf035b626984ee7b173b0dcbc53bc0fe7",
+      "candidate_status": "#46 open draft, not accepted-main; #39 prerequisite",
+      "contracts": [
+        "src/application/ports/authorization.ts:AuthorizationCheck",
+        "docs/BACKEND.md §4.3/4.4",
+        "candidate app.current_actor()"
+      ],
+      "entrypoints": [
+        "AuthorizationPort.check (port, implementation must be located)",
+        "candidate db/migrations/20261003210100_identity_session.sql:app.current_actor()",
+        "candidate db/tests/020-identity-session.sql"
+      ],
+      "identity_scope": "app principal from authenticated synthetic session; SQL actor from app.session_token; authorization resource id is document-scoped",
+      "check": {
+        "principalId": "",
+        "resource": {
+          "type": "document",
+          "id": "synthetic-doc-a"
+        },
+        "action": "write_document",
+        "consistency": "higher-consistency"
+      },
+      "prompt": "Procijeni protected radnju bez sesije i pokaži koja granica može dati dokaz odbijanja. Ne pretvaraj fake OIDC u stvarnu AAI provjeru.",
+      "session_actor": null,
+      "session_token": null
+    },
+    {
+      "scenario_id": "I06",
+      "selected_revision": "ac65c71d797e29417d3d0f07aa9bd7ad63f2ff06",
+      "candidate_revision": "6700605bf035b626984ee7b173b0dcbc53bc0fe7",
+      "candidate_status": "#46 open draft, not accepted-main; #39 prerequisite",
+      "contracts": [
+        "src/application/ports/authorization.ts:AuthorizationCheck",
+        "docs/BACKEND.md §4.3/4.4",
+        "candidate app.current_actor()"
+      ],
+      "entrypoints": [
+        "AuthorizationPort.check (port, implementation must be located)",
+        "candidate db/migrations/20261003210100_identity_session.sql:app.current_actor()",
+        "candidate db/tests/020-identity-session.sql"
+      ],
+      "identity_scope": "app principal from authenticated synthetic session; SQL actor from app.session_token; authorization resource id is document-scoped",
+      "check": {
+        "principalId": "",
+        "resource": {
+          "type": "document",
+          "id": "synthetic-doc-a"
+        },
+        "action": "read_private_draft",
+        "consistency": "higher-consistency"
+      },
+      "prompt": "Procijeni reuse iste pool veze nakon commit i rollback transakcije A pa anonimne transakcije. Zapiši potrebne stvarne SQL opservacije i granice postojeće candidate probe.",
+      "session_actor": null,
+      "pool_sequence": [
+        {
+          "transaction": 1,
+          "session_label": "synthetic-A",
+          "operation": "SET LOCAL app.session_token using isolated A fixture",
+          "finish": "COMMIT"
+        },
+        {
+          "transaction": 2,
+          "session_label": null,
+          "operation": "read current_setting(...,true), nullif and current_actor on same connection",
+          "finish": "ROLLBACK"
+        },
+        {
+          "transaction": 3,
+          "session_label": "synthetic-A",
+          "operation": "transaction-local token",
+          "finish": "ROLLBACK"
+        },
+        {
+          "transaction": 4,
+          "session_label": null,
+          "operation": "repeat current_actor on same connection",
+          "finish": "COMMIT"
+        }
+      ]
+    }
+  ]
+}
