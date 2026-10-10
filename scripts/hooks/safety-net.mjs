@@ -72,8 +72,6 @@ const fingerprint = (file) => {
   }
 };
 
-// The package reads the project rules from the cwd of the event, not from the
-// project root, so the probe and its memory are bound to that same cwd.
 function eventCwd(input, root) {
   try {
     const cwd = JSON.parse(input).cwd;
@@ -84,15 +82,38 @@ function eventCwd(input, root) {
   return root;
 }
 
+// The package reads project rules only from the exact cwd it is given, never
+// from a parent. The rules therefore come from the nearest directory, from the
+// event cwd up to the checkout root (the directory holding `.git`, which a
+// worktree also has), that contains the rulebook. The search never leaves the
+// checkout: a cwd outside any checkout looks only at itself, and a worktree
+// without a rulebook does not inherit the rulebook of the checkout above it.
+export function findRulebookDir(cwd) {
+  const chain = [];
+  let dir = cwd;
+  let bounded = false;
+  for (;;) {
+    chain.push(dir);
+    if (fs.existsSync(path.join(dir, ".git"))) {
+      bounded = true;
+      break;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return (bounded ? chain : [cwd]).find((candidate) => fs.existsSync(path.join(candidate, ...RULEBOOK))) ?? null;
+}
+
 // A package that exits 0 and prints nothing (or "{}") is also what an emptied
 // or stubbed hook.js does, so its answer alone proves nothing. The control
-// probe asks it about commands it must deny. The verdict is remembered per
-// package content, event cwd and the rulebook read from that cwd, so the extra
-// runs happen once per state, not per call.
-function probeMark(root, cwd) {
+// probe asks it about commands it must deny, run in the directory whose
+// rulebook applies. The verdict is remembered per package content and that
+// directory with its rulebook, so the extra runs happen once per state.
+function probeMark(root, rulebookDir) {
   const bin = path.join(root, "node_modules", "cc-safety-net", "dist", "bin");
   const key = createHash("sha256")
-    .update([root, cwd, fingerprint(path.join(bin, "cc-safety-net.js")), fingerprint(path.join(bin, "hook.js")), fingerprint(path.join(cwd, ...RULEBOOK))].join("|"))
+    .update([root, rulebookDir, fingerprint(path.join(bin, "cc-safety-net.js")), fingerprint(path.join(bin, "hook.js")), fingerprint(path.join(rulebookDir, ...RULEBOOK))].join("|"))
     .digest("hex");
   return path.join(os.tmpdir(), "ductus-safety-net-probe", key);
 }
@@ -102,20 +123,20 @@ function runPackage(root, input, timeout) {
   return spawnSync(process.execPath, [bin, "hook", "--coding-cli"], {
     input,
     encoding: "utf8",
-    timeout,
+    timeout: Math.max(1, timeout),
     killSignal: "SIGKILL",
     cwd: root,
     maxBuffer: 4 * 1024 * 1024,
   });
 }
 
-function probe(root, cwd, deadline) {
-  const mark = probeMark(root, cwd);
+function probe(root, rulebookDir, deadline) {
+  const mark = probeMark(root, rulebookDir);
   if (fs.existsSync(mark)) return null;
   for (const command of PROBES) {
     const left = deadline - Date.now();
     if (left <= 0) return "the control probe ran out of time";
-    const event = JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", cwd, tool_input: { command } });
+    const event = JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", cwd: rulebookDir, tool_input: { command } });
     const run = runPackage(root, event, left);
     let decision;
     try {
@@ -124,7 +145,7 @@ function probe(root, cwd, deadline) {
       decision = undefined;
     }
     if (!(run.status === 0 && decision === "deny") && run.status !== 2) {
-      return `the control probe "${command}" was not denied (silent or stubbed package, or the project rulebook ${RULEBOOK.join("/")} is missing or invalid in ${cwd}, which is where the package reads it from)`;
+      return `the control probe "${command}" was not denied (silent or stubbed package, or the project rulebook ${RULEBOOK.join("/")} in ${rulebookDir} is invalid)`;
     }
   }
   try {
@@ -136,7 +157,7 @@ function probe(root, cwd, deadline) {
   return null;
 }
 
-const blockedFor = (problem) => ({ code: 2, stdout: "", stderr: `Safety hook blocked this command: ${problem}. ${RECOVERY}\n` });
+const blockedFor = (problem, hint = RECOVERY) => ({ code: 2, stdout: "", stderr: `Safety hook blocked this command: ${problem}. ${hint}\n` });
 
 function commandOf(input) {
   try {
@@ -146,21 +167,14 @@ function commandOf(input) {
   }
 }
 
-// Pure decision: { code, stdout, stderr }. `input` is the raw hook stdin.
-export function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS_TIMEOUT_MS }) {
-  const deadline = Date.now() + timeoutMs;
-  // The exact install command is the way out of an unusable package.
-  const unusable = (problem) => (isInstallCommand(commandOf(input)) ? { code: 0, stdout: "", stderr: "" } : blockedFor(problem));
-  const problem = packageProblem(root);
-  if (problem) return unusable(problem);
-
-  const run = runPackage(root, input, timeoutMs);
+// Reads one package run: { block } when it must end the decision, else { stdout, stderr }.
+function answer(run, timeoutMs) {
   const stdout = run.stdout ?? "";
   const stderr = run.stderr ?? "";
-  const failed = (why) => ({ code: 2, stdout: "", stderr: `Safety hook blocked this command: cc-safety-net ${why}. ${RECOVERY}\n${stderr}` });
+  const failed = (why) => ({ block: { code: 2, stdout: "", stderr: `Safety hook blocked this command: cc-safety-net ${why}. ${RECOVERY}\n${stderr}` } });
   if (run.error) return failed(run.error.code === "ETIMEDOUT" ? `did not answer within ${timeoutMs} ms` : `could not run (${run.error.message})`);
   if (run.signal) return failed(`was killed by ${run.signal}`);
-  if (run.status === 2) return { code: 2, stdout, stderr };
+  if (run.status === 2) return { block: { code: 2, stdout, stderr } };
   if (run.status !== 0) return failed(`exited with status ${run.status}`);
   if (stdout.trim()) {
     try {
@@ -169,11 +183,57 @@ export function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS_TIMEO
       return failed("returned output that is not JSON");
     }
   }
+  return { stdout, stderr };
+}
+
+const denies = (stdout) => {
+  try {
+    return JSON.parse(stdout).hookSpecificOutput?.permissionDecision === "deny";
+  } catch {
+    return false;
+  }
+};
+
+// Pure decision: { code, stdout, stderr }. `input` is the raw hook stdin.
+export function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS_TIMEOUT_MS }) {
+  const deadline = Date.now() + timeoutMs;
+  // The exact install command is the way out of an unusable package.
+  const unusable = (problem, hint) => (isInstallCommand(commandOf(input)) ? { code: 0, stdout: "", stderr: "" } : blockedFor(problem, hint));
+  const problem = packageProblem(root);
+  if (problem) return unusable(problem);
+
+  // Run 1: the event as sent (built-in rules, relative paths keep their meaning).
+  const first = answer(runPackage(root, input, timeoutMs), timeoutMs);
+  if (first.block) return first.block;
+
+  const cwd = eventCwd(input, root);
+  const rulebookDir = findRulebookDir(cwd);
+  if (!rulebookDir) {
+    return unusable(
+      `no project rulebook (${RULEBOOK.join("/")}) found from ${cwd} up to the checkout root, so the project rules (git add -A, --no-verify, commit -a) would be off`,
+      "Change to the project root or restore .cc-safety-net/ from git, then retry",
+    );
+  }
   // Any clean answer is checked once per state, not only a silent one: a stub
   // that prints "{}" or an allow decision is as useless as one that prints nothing.
-  const probeProblem = probe(root, eventCwd(input, root), deadline);
+  const probeProblem = probe(root, rulebookDir, deadline);
   if (probeProblem) return unusable(probeProblem);
-  return { code: 0, stdout, stderr };
+
+  // Run 2: in a subdirectory the project rules live in a parent the package does not search.
+  if (rulebookDir !== cwd && !denies(first.stdout)) {
+    let moved;
+    try {
+      moved = JSON.stringify({ ...JSON.parse(input), cwd: rulebookDir });
+    } catch {
+      moved = null;
+    }
+    if (moved) {
+      const second = answer(runPackage(root, moved, deadline - Date.now()), timeoutMs);
+      if (second.block) return second.block;
+      if (second.stdout.trim()) return { code: 0, stdout: second.stdout, stderr: second.stderr };
+    }
+  }
+  return { code: 0, stdout: first.stdout, stderr: first.stderr };
 }
 
 // Process entry point: reads stdin; an error never becomes a pass.

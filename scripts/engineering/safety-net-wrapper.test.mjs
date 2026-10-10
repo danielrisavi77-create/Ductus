@@ -61,6 +61,10 @@ function makeTree({ dir = "tree", bin = "allow", pkg = true, modules = true, ver
         if (rulebook) fs.cpSync(path.join(repo, ".cc-safety-net"), path.join(root, ".cc-safety-net"), { recursive: true });
       } else {
         fs.mkdirSync(binDir, { recursive: true });
+        if (rulebook) {
+          fs.mkdirSync(path.join(root, ".cc-safety-net", "rules", "ductus-rules"), { recursive: true });
+          fs.writeFileSync(path.join(root, ".cc-safety-net", "rules", "ductus-rules", "rulebook.json"), "{}"); // read only by the real package
+        }
         fs.writeFileSync(path.join(root, "node_modules", "cc-safety-net", "package.json"), JSON.stringify({ version }));
         if (bin === "empty") fs.writeFileSync(path.join(binDir, "cc-safety-net.js"), "");
         else if (bin !== "missing") fs.writeFileSync(path.join(binDir, "cc-safety-net.js"), FAKES[bin]);
@@ -274,8 +278,8 @@ for (const tool of TOOLS) {
   test(`M1 a missing project rulebook is caught by the probe (${tool})`, { timeout: 60000 }, () =>
     withTree({ real: true, rulebook: false }, (tree) => {
       const result = run(tree, tool, "ls");
-      blocked(result, "rulebook");
-      assert.match(result.stderr, /rulebook/);
+      assert.equal(result.code, 2);
+      assert.match(result.stderr, /no project rulebook/);
       assert.equal(run(tree, tool, "pnpm install").code, 0);
     }));
 }
@@ -308,7 +312,7 @@ test("review: the verdict follows the event cwd; a cwd without the project ruleb
       fs.cpSync(path.join(tree.root, ".cc-safety-net"), path.join(withRules, ".cc-safety-net"), { recursive: true });
       for (const tool of TOOLS) {
         const lost = run(tree, tool, "git add -A", bare);
-        blocked(lost, "cwd without rulebook");
+        assert.equal(lost.code, 2, "cwd without rulebook");
         assert.match(lost.stderr, /rulebook/);
         assert.equal(run(tree, tool, "ls", bare).code, 2);
         assert.equal(run(tree, tool, "pnpm install", bare).code, 0, "install stays possible");
@@ -326,13 +330,53 @@ test("review: the verdict follows the event cwd; a cwd without the project ruleb
 test("review: a same-size stub with the old mtime does not keep an old verdict", { timeout: 60000 }, () =>
   withTree({ real: true }, (tree) => {
     const hook = path.join(tree.root, "node_modules", "cc-safety-net", "dist", "bin", "hook.js");
+    // Whole seconds, so that restoring the time is exact on every file system.
+    fs.utimesSync(hook, 1_700_000_000, 1_700_000_000);
     assert.equal(run(tree, "Bash", "ls").code, 0);
-    const { size, atime, mtime } = fs.statSync(hook);
+    const { size, mtimeMs } = fs.statSync(hook);
     fs.writeFileSync(hook, "process.exit(0);".padEnd(size, " "));
-    fs.utimesSync(hook, atime, mtime);
+    fs.utimesSync(hook, 1_700_000_000, 1_700_000_000);
     assert.equal(fs.statSync(hook).size, size);
+    assert.equal(fs.statSync(hook).mtimeMs, mtimeMs, "size and mtime identical to the verdict's");
     blocked(run(tree, "Bash", "git push --force origin x"), "same-size stub");
   }));
+
+test("review: in a subdirectory the root rulebook still applies; no checkout above is inherited", { timeout: 90000 }, () => {
+  withTree({ real: true }, (tree) => {
+    fs.writeFileSync(path.join(tree.root, ".git"), "gitdir: elsewhere");
+    const src = path.join(tree.root, "src", "deep");
+    fs.mkdirSync(src, { recursive: true });
+    // A worktree inside the checkout, with its own .git and no rulebook.
+    const worktree = path.join(tree.root, ".claude", "worktrees", "w");
+    fs.mkdirSync(path.join(worktree, "sub"), { recursive: true });
+    fs.writeFileSync(path.join(worktree, ".git"), "gitdir: elsewhere");
+    // Not a checkout at all: a rulebook above must not be inherited.
+    const outer = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-outer-"));
+    try {
+      fs.cpSync(path.join(tree.root, ".cc-safety-net"), path.join(outer, ".cc-safety-net"), { recursive: true });
+      fs.mkdirSync(path.join(outer, "child"));
+      for (const tool of TOOLS) {
+        // ls and cd .. work from a subdirectory, and the project rule still denies.
+        for (const cwd of [src, path.join(tree.root, "src")]) {
+          assert.equal(run(tree, tool, "ls", cwd).code, 0, `ls in ${cwd}`);
+          assert.equal(run(tree, tool, "cd ..", cwd).code, 0, `cd .. in ${cwd}`);
+          const denied = run(tree, tool, "git add -A", cwd);
+          assert.equal(denied.code, 0);
+          assert.match(denied.stdout, /deny/, `git add -A in ${cwd}`);
+          assert.match(run(tree, tool, "git push --force origin x", cwd).stdout, /deny/);
+        }
+        for (const cwd of [worktree, path.join(worktree, "sub"), path.join(outer, "child")]) {
+          const result = run(tree, tool, "ls", cwd);
+          assert.equal(result.code, 2, `no inherited rulebook for ${cwd}`);
+          assert.match(result.stderr, /no project rulebook/);
+          assert.doesNotMatch(result.stderr, /pnpm install --frozen-lockfile/);
+        }
+      }
+    } finally {
+      fs.rmSync(outer, { recursive: true, force: true });
+    }
+  });
+});
 
 test("M2 a package that floods stdout is stopped by the buffer limit", () =>
   withTree({ bin: "big" }, (tree) => {
