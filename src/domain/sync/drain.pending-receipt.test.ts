@@ -374,9 +374,13 @@ describe("nextAwaitingReceipt", () => {
   it("starts a hold on answers that do not prove the commit missed", () => {
     // Unreadable, unknown or absent answers and `txid_reused` (the key IS on
     // the server) can all hide a landed CAS, exactly like a lost response.
+    // `txid_reused` also marks the hold diverged (DAN-135).
+    expect(nextAwaitingReceipt(sent, { status: "txid_reused" }, null)).toEqual({
+      ...previous,
+      diverged: "txid_reused",
+    });
     for (const outcome of [
       { status: "invalid" },
-      { status: "txid_reused" },
       { status: "something_new" },
       null,
       undefined,
@@ -411,7 +415,9 @@ describe("nextAwaitingReceipt", () => {
 
   it("keeps the hold on answers that say nothing about whether the key landed", () => {
     for (const outcome of SAYS_NOTHING_ABOUT_LANDING) {
-      expect(nextAwaitingReceipt(sent, outcome, previous)).toEqual(previous);
+      const expected =
+        outcome?.status === "txid_reused" ? { ...previous, diverged: "txid_reused" } : previous;
+      expect(nextAwaitingReceipt(sent, outcome, previous)).toEqual(expected);
     }
   });
 

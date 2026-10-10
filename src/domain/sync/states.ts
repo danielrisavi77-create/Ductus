@@ -14,7 +14,9 @@
  *   - No silent last-write-wins: a stale base puts the document in CONFLICT,
  *     which can only be left by an explicit `CONFLICT_RESOLVED` decision.
  *   - Unrecoverable local storage failure is not an ordinary error: it lands
- *     in RECOVERY_REQUIRED, which can only be left by `RECOVERED`.
+ *     in RECOVERY_REQUIRED, which can only be left by `RECOVERED`. So does a
+ *     held key the server holds with other bytes (`SYNC_KEY_DIVERGED`): two
+ *     versions of the text exist and only the author may pick one.
  */
 
 /** The eight user-visible states. No ninth state, no implicit "saved". */
@@ -87,6 +89,18 @@ export type SyncEvent =
    * local and must not be dressed up as RECOVERY_REQUIRED.
    */
   | { type: "SYNC_FAILED"; retryable: boolean }
+  /**
+   * The server holds the held row's idempotency key with OTHER document bytes
+   * (`txid_reused`, DAN-135). The answer is deterministic, so retrying cannot
+   * change it, and the commit under that key may have moved the base. Two
+   * versions now exist (the server's under that key, and the local rows), and
+   * only the author may choose between them: RECOVERY_REQUIRED, never ERROR
+   * (an endless retry) and never CONFLICT (it is not another writer).
+   *
+   * Payload-free on purpose: the cause is recorded on the hold marker
+   * (`AwaitingReceipt.diverged`), never the document text.
+   */
+  | { type: "SYNC_KEY_DIVERGED" }
   /** The author explicitly chose to rebase or to discard the local change. */
   | { type: "CONFLICT_RESOLVED"; via: ConflictResolution }
   /**
@@ -113,6 +127,7 @@ export const SYNC_EVENT_TYPES = [
   "SYNC_ACK",
   "SYNC_STALE_BASE",
   "SYNC_FAILED",
+  "SYNC_KEY_DIVERGED",
   "CONFLICT_RESOLVED",
   "RECOVERED",
 ] as const satisfies readonly SyncEventType[];
@@ -155,6 +170,14 @@ export type SyncTransitionRow = Readonly<Partial<Record<SyncEventType, SyncTrans
  *     data blocked) is not damaged, and RECOVERY_REQUIRED there would be a
  *     trap — the recovery flow itself needs a working store to leave it.
  *     'quota' and 'unknown' are likewise ordinary, retryable failures.
+ *   - `SYNC_KEY_DIVERGED` is the only other way into RECOVERY_REQUIRED, and
+ *     only from SYNCING (the answer arrives in flight), LOCAL_DURABLE and
+ *     ERROR (a drain is about to start and the plan finds a diverged marker,
+ *     e.g. after a reload). Not from EDITING or SAVING_LOCAL: no drain starts
+ *     there, so the runner reports it once the save lands in LOCAL_DURABLE,
+ *     and typing never erases the cause. Never from SYNCED (nothing is held
+ *     there) and never into SYNCED: only a signed receipt or an explicit
+ *     `RECOVERED: adopt-server` reaches SYNCED.
  */
 export const SYNC_TRANSITIONS: Readonly<Record<SyncState, SyncTransitionRow>> = {
   EDITING: {
@@ -176,12 +199,14 @@ export const SYNC_TRANSITIONS: Readonly<Record<SyncState, SyncTransitionRow>> = 
   LOCAL_DURABLE: {
     EDIT: { to: "EDITING" },
     SYNC_STARTED: { to: "SYNCING" },
+    SYNC_KEY_DIVERGED: { to: "RECOVERY_REQUIRED" },
   },
   SYNCING: {
     EDIT: { to: "EDITING" },
     SYNC_ACK: { to: "SYNCED" },
     SYNC_STALE_BASE: { to: "CONFLICT" },
     SYNC_FAILED: { cases: { true: "ERROR", false: "ERROR" } },
+    SYNC_KEY_DIVERGED: { to: "RECOVERY_REQUIRED" },
   },
   SYNCED: {
     EDIT: { to: "EDITING" },
@@ -211,6 +236,7 @@ export const SYNC_TRANSITIONS: Readonly<Record<SyncState, SyncTransitionRow>> = 
     EDIT: { to: "EDITING" },
     LOCAL_SAVE_STARTED: { to: "SAVING_LOCAL" },
     SYNC_STARTED: { to: "SYNCING" },
+    SYNC_KEY_DIVERGED: { to: "RECOVERY_REQUIRED" },
   },
   RECOVERY_REQUIRED: {
     /*
@@ -230,6 +256,13 @@ export const SYNC_TRANSITIONS: Readonly<Record<SyncState, SyncTransitionRow>> = 
      * in one transaction, BEFORE either transition is dispatched. Without
      * that, the SYNCED claim above would not be honest and a crash between
      * the two would leave a document that quietly stopped recovering.
+     *
+     * Entered through `SYNC_KEY_DIVERGED`, the same journal transaction also
+     * clears the diverged hold marker. Salvage appends the newest local text
+     * as a NEW row with a NEW key on the server's validated revision, and the
+     * held row and every row after it stay queued below it, superseded, until
+     * that row's receipt is verified. Adoption drops them only after the
+     * author has explicitly confirmed it.
      */
     RECOVERED: { cases: { "salvage-local": "SAVING_LOCAL", "adopt-server": "SYNCED" } },
   },
