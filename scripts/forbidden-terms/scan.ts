@@ -26,8 +26,9 @@ import { FORBIDDEN_TERMS, PHRASE_BREAK, findForbiddenTerms, findForbiddenTermsIn
  *   markup splits (`Nestali <strong>podaci</strong>`) is still found. A phrase
  *   goes on through an inline element and a `<br />`; it ends at any other
  *   element, at a component and at a computed value (`PHRASE_BREAK`). That
- *   text is read twice, as a sighted person sees it and as a screen reader
- *   speaks it, and an entry found in either reading is reported (see `hiding`).
+ *   text is read as written, as a sighted person sees it and as a screen
+ *   reader speaks it, and an entry found in any reading is reported (see
+ *   `hiding`). Hiding content can add a finding and never takes one away.
  * - Any other `.ts` module under `app/**`: the Next.js metadata only, that is
  *   the `metadata` export, what `generateMetadata` and `generateImageMetadata`
  *   return, and the `alt` export of `opengraph-image` and `twitter-image`.
@@ -213,11 +214,12 @@ type Hiding = "no" | "yes" | "maybe";
  */
 export const VISUALLY_HIDDEN_CLASSES: ReadonlySet<string> = new Set(["sr-only", "visually-hidden"]);
 /** Class names that take content away from everyone (`display: none`, `visibility: hidden`). */
-export const HIDING_CLASSES: ReadonlySet<string> = new Set(["hidden", "invisible"]);
+export const HIDING_CLASSES: ReadonlySet<string> = new Set(["hidden", "invisible", "collapse"]);
 /** Inline style values that take content away from everyone. */
 const HIDING_STYLES: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ["display", new Set(["none"])],
   ["visibility", new Set(["hidden", "collapse"])],
+  ["contentVisibility", new Set(["hidden"])],
 ]);
 
 const METADATA_FUNCTIONS = new Set(["generateMetadata", "generateImageMetadata"]);
@@ -385,12 +387,17 @@ const RENDERS_NOTHING = new Set([ts.SyntaxKind.NullKeyword, ts.SyntaxKind.TrueKe
 const neverSet = (node: ts.Expression): boolean =>
   node.kind === ts.SyntaxKind.FalseKeyword || node.kind === ts.SyntaxKind.NullKeyword || (ts.isIdentifier(node) && node.text === "undefined");
 
-/** Every string written anywhere inside `node`. */
-function stringsWithin(node: ts.Node): string[] {
+const LOGICAL_OPERATORS = new Set([ts.SyntaxKind.AmpersandAmpersandToken, ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken]);
+
+/** Every string written anywhere inside `node`; with `keys`, also the names of object literal properties (`cn({ hidden: a })`). */
+function stringsWithin(node: ts.Node, keys = false): string[] {
   if (isPlainString(node)) return [node.text];
-  if (ts.isTemplateExpression(node)) return [node.head.text, ...node.templateSpans.flatMap((span) => [...stringsWithin(span.expression), span.literal.text])];
+  if (keys && ts.isIdentifier(node) && ts.isObjectLiteralElementLike(node.parent) && node.parent.name === node) return [node.text];
+  if (ts.isTemplateExpression(node)) {
+    return [node.head.text, ...node.templateSpans.flatMap((span) => [...stringsWithin(span.expression, keys), span.literal.text])];
+  }
   const found: string[] = [];
-  ts.forEachChild(node, (child) => void found.push(...stringsWithin(child)));
+  ts.forEachChild(node, (child) => void found.push(...stringsWithin(child, keys)));
   return found;
 }
 
@@ -400,19 +407,21 @@ function stringsWithin(node: ts.Node): string[] {
  * - `aria-hidden` keeps it from a screen reader: without a value or with
  *   `true` always, with `false` never, with anything else maybe.
  * - A class on `VISUALLY_HIDDEN_CLASSES` keeps it from the eye: always when it
- *   is written as one string without variants, otherwise maybe.
- * - The `hidden` attribute, a class on `HIDING_CLASSES` and an inline
- *   `display` or `visibility` that hides, or is computed, keep it from both,
- *   and only maybe: such content is there to be shown at some point.
- * - Spread props can carry any of these: maybe, for both. So can a spread or
- *   a computed key inside a `style` literal.
+ *   is written as one string without variants, otherwise maybe. Class names
+ *   are looked for in every string of the value and in the keys of object
+ *   literals in it (`cn("sr-only", { hidden: a })`).
+ * - The `hidden` attribute, a class on `HIDING_CLASSES` and an inline style
+ *   on `HIDING_STYLES` that hides, or is computed, keep it from both, and only
+ *   maybe: such content is there to be shown at some point (`styleMayHide`).
+ * - Spread props can carry any of these: maybe, for both.
  *
  * Not covered, because the value is not in the element: a class or a `style`
- * that comes from a variable or a CSS module, a rule in a stylesheet, and what
- * a parent element or a component does to its children.
+ * that comes from a variable or a CSS module, a class name put together with
+ * a computed piece (`"sr-" + suffix`), a rule in a stylesheet, and what a
+ * parent element or a component does to its children.
  *
- * Not covered either: inline styles that hide from the eye without `display`
- * or `visibility`, such as `opacity: 0`, `fontSize: 0`, a `clip` or
+ * Not covered either: inline styles that hide from the eye without a property
+ * on `HIDING_STYLES`, such as `opacity: 0`, `fontSize: 0`, a `clip` or
  * `clipPath`, a position off the screen, a zero `width` or `height` with
  * `overflow: "hidden"`, or text in the colour of the background.
  */
@@ -424,35 +433,62 @@ function hiding(source: ts.SourceFile, element: ts.JsxOpeningElement, audience: 
       maybe();
       continue;
     }
-    const name = attribute.name.getText(source);
+    // HTML attribute names are not case sensitive: `aria-Hidden` reaches the page as `aria-hidden`.
+    const name = attribute.name.getText(source).toLowerCase();
     const written = attribute.initializer;
     const value = written && ts.isJsxExpression(written) ? written.expression : written;
     if (name === "aria-hidden" && audience === "spoken") {
-      const token = value && isPlainString(value) ? value.text.trim().toLowerCase() : undefined;
+      // Only the two values as ARIA writes them are certain; `"TRUE"` or `" true "` is maybe.
+      const token = value && isPlainString(value) ? value.text : undefined;
       if (value === undefined || value.kind === ts.SyntaxKind.TrueKeyword || token === "true") result = "yes";
       else if (!neverSet(value) && token !== "false") maybe();
     } else if (name === "hidden") {
       if (value === undefined || !neverSet(value)) maybe();
-    } else if ((name === "className" || name === "class") && value) {
-      const classes = stringsWithin(value).flatMap((text) => text.split(/\s+/).filter(Boolean));
-      const named = (list: ReadonlySet<string>): boolean => classes.some((token) => list.has(token.slice(token.lastIndexOf(":") + 1).replace(/^!/, "")));
+    } else if ((name === "classname" || name === "class") && value) {
+      // Each string by itself, and all of them in a row for a name put together from pieces (`"sr-" + "only"`).
+      const strings = stringsWithin(value, true);
+      const classes = [...strings, strings.join("")].flatMap((text) => text.split(/\s+/).filter(Boolean));
+      // A variant stands in front of the name (`md:hidden`), the important mark on either side (`!hidden`, `hidden!`).
+      const named = (list: ReadonlySet<string>): boolean => classes.some((token) => list.has(token.slice(token.lastIndexOf(":") + 1).replace(/^!|!$/g, "")));
       if (named(HIDING_CLASSES)) maybe();
       if (audience === "sighted" && named(VISUALLY_HIDDEN_CLASSES)) {
         if (isPlainString(value) && !classes.some((token) => token.includes(":"))) result = "yes";
         else maybe();
       }
-    } else if (name === "style" && value && ts.isObjectLiteralExpression(value)) {
-      for (const property of value.properties) {
-        // A spread or a computed key can set `display` without naming it.
-        if (ts.isSpreadAssignment(property) || (property.name && ts.isComputedPropertyName(property.name))) maybe();
-        const hides = property.name && (ts.isIdentifier(property.name) || isPlainString(property.name)) ? HIDING_STYLES.get(property.name.text) : undefined;
-        if (!hides) continue;
-        const set = ts.isPropertyAssignment(property) ? property.initializer : undefined;
-        if (!set || !isPlainString(set) || hides.has(set.text.trim().toLowerCase())) maybe();
-      }
+    } else if (name === "style" && value && styleMayHide(value)) {
+      maybe();
     }
   }
   return result;
+}
+
+/**
+ * Whether a `style` value may set a property on `HIDING_STYLES` to a value
+ * that hides. An object literal is read property by property; a spread, a
+ * computed key and a computed value may hide. Brackets and type assertions
+ * are looked through, and every branch of `?:`, `&&`, `||` and `??` is read.
+ * Any other expression may hide when it names such a property anywhere
+ * (`Object.assign({}, { display: "none" })`).
+ */
+function styleMayHide(value: ts.Expression): boolean {
+  if (ts.isParenthesizedExpression(value) || ts.isAsExpression(value) || ts.isSatisfiesExpression(value) || ts.isNonNullExpression(value)) {
+    return styleMayHide(value.expression);
+  }
+  if (ts.isConditionalExpression(value)) return styleMayHide(value.whenTrue) || styleMayHide(value.whenFalse);
+  if (ts.isBinaryExpression(value) && LOGICAL_OPERATORS.has(value.operatorToken.kind)) return styleMayHide(value.left) || styleMayHide(value.right);
+  if (!ts.isObjectLiteralExpression(value)) {
+    const names = (node: ts.Node): boolean =>
+      ((ts.isIdentifier(node) || isPlainString(node)) && HIDING_STYLES.has(node.text)) || (ts.forEachChild(node, names) ?? false);
+    return names(value);
+  }
+  return value.properties.some((property) => {
+    if (ts.isSpreadAssignment(property) || (property.name && ts.isComputedPropertyName(property.name))) return true;
+    const hides = property.name && (ts.isIdentifier(property.name) || isPlainString(property.name)) ? HIDING_STYLES.get(property.name.text) : undefined;
+    if (!hides) return false;
+    const set = ts.isPropertyAssignment(property) ? property.initializer : undefined;
+    // CSS keywords are not case sensitive, and white space around a value does not count.
+    return !set || !isPlainString(set) || hides.has(set.text.trim().toLowerCase());
+  });
 }
 
 /** JSX text, rendered strings, attributes and Next.js metadata; in a `.ts` file only the metadata is left. */
@@ -460,9 +496,8 @@ function componentText(source: ts.SourceFile, reader: Reader): void {
   const isImageRoute = IMAGE_ROUTE_FILE.test(source.fileName);
   /** Inline elements and fragments already read as part of the unit around them. */
   const absorbed = new Set<ts.Node>();
-  /** The audience the text is being read for, and how many elements around the current one each audience never gets. */
-  let audience: Audience = "sighted";
-  const withheld: Record<Audience, number> = { sighted: 0, spoken: 0 };
+  /** The audience the text is being read for; none while it is read as written, with nothing hidden. */
+  let audience: Audience | undefined;
 
   // Readings of parts that follow one another. A part that would take the
   // count past MAX_READINGS is read as unknown text and its alternatives go to
@@ -549,27 +584,21 @@ function componentText(source: ts.SourceFile, reader: Reader): void {
     if (!INLINE_ELEMENTS.has(node.openingElement.tagName.getText(source))) {
       return contentReadings(node, alone).map(([joined, spaced]): Reading => [PHRASE_BREAK + joined + PHRASE_BREAK, PHRASE_BREAK + spaced + PHRASE_BREAK]);
     }
-    // An inline element is part of the text only for the audience that gets
-    // it. Content that neither audience gets is hidden by a class at least
-    // once, which only the stylesheet makes true, so it is read by itself.
+    // An inline element is part of the text only for the audience that gets it.
     absorbed.add(node);
-    const other = audience === "sighted" ? "spoken" : "sighted";
-    const [here, there] = [hiding(source, node.openingElement, audience), hiding(source, node.openingElement, other)];
-    if (there === "yes") withheld[other] += 1;
-    const content = contentReadings(node, alone);
-    if (there === "yes") withheld[other] -= 1;
-    const shown = content.map(([joined, spaced]): Reading => [joined, ` ${spaced} `]);
-    if (here === "no") return shown;
-    if (here === "maybe") return distinct([...shown, HIDDEN]);
-    if (withheld[other] > 0 || there === "yes") alone.push(...content);
-    return [HIDDEN];
+    const hidden = audience ? hiding(source, node.openingElement, audience) : "no";
+    const shown = contentReadings(node, alone).map(([joined, spaced]): Reading => [joined, ` ${spaced} `]);
+    if (hidden === "no") return shown;
+    return hidden === "maybe" ? distinct([...shown, HIDDEN]) : [HIDDEN];
   };
 
-  // A text in every reading it has: for each audience in turn, then the parts
-  // that are read by themselves.
+  // A text in every reading it has. First as written, with nothing hidden:
+  // what hides content is only a claim in the source (a class is hidden by a
+  // stylesheet the scan does not read), so no attribute can take a finding
+  // away. Then for each audience, then the parts that are read by themselves.
   const forEveryone = (read: (alone: Reading[]) => Reading[]): Reading[] => {
     const alone: Reading[] = [];
-    const readings = AUDIENCES.flatMap((to) => {
+    const readings = [undefined, ...AUDIENCES].flatMap((to) => {
       audience = to;
       return read(alone);
     });
