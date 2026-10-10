@@ -148,21 +148,20 @@ describe("pr-auto-merge hook", { timeout: 30_000 }, () => {
     expect(decide("gh pr view 7", url)).toBe("");
   });
 
-  it("leaves a PR alone when its files put the floor above the declared low", () => {
-    for (const file of [
-      ".github/workflows/ci.yml",
-      "scripts/engineering/review-gate.mjs",
-      "scripts/orchestrator/pr-ready.mjs",
-      ".claude/skills/x/SKILL.md",
-      ".agents/skills/x/SKILL.md",
-      "docs/SESSIONS.md",
-      "docs/DECISIONS.md",
-      "tests/unit/codeowners.test.ts",
-      "STATE.md",
-      "src/domain/document/index.ts",
-    ]) {
-      expect(decide(create("low"), url, branchChanging("docs/notes.md", file)), file).toBe("");
-    }
+  // One case per file: each builds a repository, and a shared time budget is tight on a loaded machine.
+  it.each([
+    ".github/workflows/ci.yml",
+    "scripts/engineering/review-gate.mjs",
+    "scripts/orchestrator/pr-ready.mjs",
+    ".claude/skills/x/SKILL.md",
+    ".agents/skills/x/SKILL.md",
+    "docs/SESSIONS.md",
+    "docs/DECISIONS.md",
+    "tests/unit/codeowners.test.ts",
+    "STATE.md",
+    "src/domain/document/index.ts",
+  ])("leaves a PR alone when %s puts the floor above the declared low", (file) => {
+    expect(decide(create("low"), url, branchChanging("docs/notes.md", file))).toBe("");
   });
 
   it("counts a file moved out of a protected directory under its old name", () => {
