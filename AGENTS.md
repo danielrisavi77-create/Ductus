@@ -18,7 +18,9 @@ Ako način nije jasan, ne pretpostavljaj ovlast za pisanje. Pregled ili analiza 
 ## Zajednička pravila
 
 - Tvrda pravila su u `CLAUDE.md` i vrijede za svaki runtime.
-- GitHub i repo su zajednički control plane. Chat memorija, session-ID, privatni skill ili account-level postavka nikad nisu jedini izvor projektnog konteksta.
+- Izvori imaju odvojenu mjerodavnost: Linear je mjerodavan za zadatak, razlog, prioritet, nositelja i status; repo za prihvaćene produktne i tehničke odluke, arhitekturu, opseg i kriterije; GitHub PR-ovi, commitovi, reviewi i provjere za izvedbu i dokaze. GitHub je zajednički cross-account control plane za izvršenje, ne jedini registar prioriteta i statusa. Ductus Space je datirani pregled izveden iz Lineara i GitHuba.
+- Ako se izvori ne slažu, ne biraj status prešutno. Zabilježi nesklad uz Linear zadatak, provjeri kanonski dokument ili GitHub dokaz i tek zatim ažuriraj Space.
+- Chat memorija, session-ID, privatni skill ili account-level postavka nikad nisu jedini izvor projektnog konteksta.
 - Svaki writer radi u zasebnom branchu/worktreeu od svježeg `origin/main`.
 - Vlasništvo mapa i tijek zadatka definirani su u `docs/SESSIONS.md`; risk, review, QA i WIP gateovi u `docs/ENGINEERING_SYSTEM.md`; cross-account predaja u `docs/MULTI-ACCOUNT.md`.
 - Ne mijenjaj granu drugog workera. Ne spajaj vlastiti PR.

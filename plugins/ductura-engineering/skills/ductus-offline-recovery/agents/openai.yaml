@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ductus offline recovery"
+  short_description: "Provjeri oporavak sadržaja i stanje spremanja"
+  default_prompt: "Use $ductus-offline-recovery to assess this synthetic save, retry and reload scenario."

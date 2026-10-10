@@ -589,3 +589,134 @@ test("Grok App cannot claim Claude or OpenAI runtime", () => {
     assert.equal(result.state, "pending");
   }
 });
+
+const codexQuota = ({
+  body = "You have reached your Codex usage limits for code reviews.",
+  login = "chatgpt-codex-connector[bot]",
+  type = "Bot",
+  appSlug = "chatgpt-codex-connector",
+  createdAt,
+} = {}) => ({
+  body,
+  user: { login, type },
+  author_association: "NONE",
+  performed_via_github_app: appSlug ? { slug: appSlug } : null,
+  created_at: createdAt ?? new Date(1_700_000_000_000 + counter++ * 1000).toISOString(),
+});
+
+const claudeFallbackQa = (meta = {}) =>
+  entry(
+    `QA-Agent: claude:c:qa\nQA-Head: ${head}\nQA-Verdict: PASS\nQA-Scope: offline + wrong actor\nProvider-Fallback: chatgpt-codex-connector — kvota iscrpljena\n`,
+    { appSlug: "claude", ...meta },
+  );
+
+test("quota fallback lets an independent same-App QA satisfy critical gate", () => {
+  const result = evaluate({
+    body: prBody("critical", "chatgpt:a:backend"),
+    headSha: head,
+    comments: [codexQuota(), review(), claudeFallbackQa()],
+  });
+  assert.equal(result.state, "success");
+  assert.match(result.description, /quota fallback: chatgpt-codex-connector/);
+});
+
+test("quota fallback requires authenticated quota evidence from the named App", () => {
+  for (const evidence of [
+    [],
+    [codexQuota({ appSlug: null })],
+    [codexQuota({ login: ownerLogin, type: "User" })],
+    [codexQuota({ body: "Didn't find any major issues." })],
+    [{ ...codexQuota(), performed_via_github_app: { slug: "claude" } }],
+  ]) {
+    const result = evaluate({
+      body: prBody("critical", "chatgpt:a:backend"),
+      headSha: head,
+      comments: [...evidence, review(), claudeFallbackQa()],
+    });
+    assert.equal(result.state, "pending");
+  }
+});
+
+test("quota fallback requires the QA comment to declare the exhausted App", () => {
+  const result = evaluate({
+    body: prBody("critical", "chatgpt:a:backend"),
+    headSha: head,
+    comments: [codexQuota(), review(), qa({ agent: "claude:c:qa", appSlug: "claude" })],
+  });
+  assert.equal(result.state, "pending");
+});
+
+test("quota fallback evidence must precede QA and be at most 24 hours old", () => {
+  const base = 1_800_000_000_000;
+  const late = evaluate({
+    body: prBody("critical", "chatgpt:a:backend"),
+    headSha: head,
+    comments: [
+      review(),
+      claudeFallbackQa({ createdAt: new Date(base).toISOString() }),
+      codexQuota({ createdAt: new Date(base + 1000).toISOString() }),
+    ],
+  });
+  assert.equal(late.state, "pending");
+
+  const stale = evaluate({
+    body: prBody("critical", "chatgpt:a:backend"),
+    headSha: head,
+    comments: [
+      codexQuota({ createdAt: new Date(base).toISOString() }),
+      review(),
+      claudeFallbackQa({ createdAt: new Date(base + 25 * 3600 * 1000).toISOString() }),
+    ],
+  });
+  assert.equal(stale.state, "pending");
+});
+
+test("quota fallback QA cannot be the passing reviewer or the author principal", () => {
+  const asReviewer = evaluate({
+    body: prBody("critical", "chatgpt:a:backend"),
+    headSha: head,
+    comments: [
+      codexQuota(),
+      review({ agent: "claude:c:reviewer" }),
+      claudeFallbackQa(),
+    ],
+  });
+  assert.equal(asReviewer.state, "pending");
+
+  const asAuthor = evaluate({
+    body: prBody("critical", "claude:c:backend"),
+    headSha: head,
+    comments: [codexQuota(), review(), claudeFallbackQa()],
+  });
+  assert.equal(asAuthor.state, "pending");
+});
+
+test("quota fallback does not override a current QA FAIL", () => {
+  const result = evaluate({
+    body: prBody("critical", "chatgpt:a:backend"),
+    headSha: head,
+    comments: [
+      codexQuota(),
+      review(),
+      claudeFallbackQa(),
+      qa({ agent: "claude:d:qa", appSlug: "claude", verdict: "FAIL" }),
+    ],
+  });
+  assert.equal(result.state, "pending");
+});
+
+test("a declared fallback naming the QA's own App is ignored", () => {
+  const result = evaluate({
+    body: prBody("critical", "chatgpt:a:backend"),
+    headSha: head,
+    comments: [
+      codexQuota(),
+      review(),
+      entry(
+        `QA-Agent: claude:c:qa\nQA-Head: ${head}\nQA-Verdict: PASS\nQA-Scope: x\nProvider-Fallback: claude\n`,
+        { appSlug: "claude" },
+      ),
+    ],
+  });
+  assert.equal(result.state, "pending");
+});
