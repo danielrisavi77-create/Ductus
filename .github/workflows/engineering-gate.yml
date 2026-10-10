@@ -5,7 +5,7 @@ name: Engineering review gate
 # uses no repository secrets, and can write only commit statuses.
 on: # zizmor: ignore[dangerous-triggers] trusted default-branch metadata gate; PR code is never fetched or executed
   pull_request_target:
-    types: [opened, synchronize, reopened, edited, ready_for_review]
+    types: [opened, synchronize, reopened, edited, ready_for_review, auto_merge_enabled, auto_merge_disabled]
   issue_comment:
     types: [created, edited, deleted]
 

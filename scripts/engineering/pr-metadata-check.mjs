@@ -1,6 +1,7 @@
 import fs from "node:fs";
 
 import { evaluateMetadata } from "./pr-metadata-core.mjs";
+import { changedPaths } from "./protected-paths.mjs";
 
 const event = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, "utf8"));
 const pr = event.pull_request;
@@ -17,7 +18,7 @@ if (!token || !repository) throw new Error("Missing GitHub runtime environment."
 const [owner, repo] = repository.split("/");
 const files = [];
 
-for (let page = 1; page <= 10; page += 1) {
+for (let page = 1; page <= 30; page += 1) {
   const response = await fetch(
     `https://api.github.com/repos/${owner}/${repo}/pulls/${pr.number}/files?per_page=100&page=${page}`,
     {
@@ -31,13 +32,17 @@ for (let page = 1; page <= 10; page += 1) {
   );
   if (!response.ok) throw new Error(`GitHub API ${response.status}: ${await response.text()}`);
   const batch = await response.json();
-  files.push(...batch.map((item) => item.filename));
+  files.push(...batch);
   if (batch.length < 100) break;
 }
 
-const result = evaluateMetadata({ body: pr.body ?? "", files });
+// GitHub lists at most 3000 files; an unread tail would hide paths from the floor.
+if (!(pr.changed_files <= files.length)) throw new Error("Changed file list is incomplete.");
+
+const result = evaluateMetadata({ body: pr.body ?? "", files: changedPaths(files) });
 if (!result.ok) {
   console.error(`Engineering metadata FAILED: ${result.message}`);
+  for (const reason of result.reasons ?? []) console.error(`  ${JSON.stringify(reason)}`);
   process.exit(1);
 }
 
