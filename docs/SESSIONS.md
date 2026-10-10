@@ -105,13 +105,24 @@ Pravila iz ovog odjeljka provodi `.claude/settings.json`; hookovi su u `scripts/
 | Mehanizam | Što radi | Pravilo koje provodi |
 | --- | --- | --- |
 | `CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000` | Sažimanje se pokreće prije 200k tokena i uz model s prozorom od 1M. | Gornja granica konteksta |
-| Hook `budget` (UserPromptSubmit) | Iznad 150k tokena dodaje agentu uputu da dovrši korak i preda posao skillom `ductus-handoff`; iznad 250k zabranjuje novi posao u sesiji (doseže se samo u sesiji u kojoj granica od 200k ne vrijedi, primjerice pokrenutoj prije ove postavke). Ispod 150k i odmah nakon sažimanja ne dodaje ništa. | Rotacija sesije |
-| Hook `read` (PreToolUse: Read) | Odbija čitanje cijelog `.md` dokumenta većeg od 16 KB i vraća popis naslova s brojevima redaka; čitanje s `offset`/`limit` prolazi. Odbija `pnpm-lock.yaml`, `*.tsbuildinfo` i `.next/`. Vrijedi samo za datoteke unutar repoa, i u subagentima. Ne pokriva čitanje kroz `cat` ili `sed` u ljusci. | Čitaj samo ulaz iz zadatka |
+| Hook `budget` (UserPromptSubmit) | Iznad 150k tokena dodaje agentu uputu prema ulozi sesije (tablica ispod); iznad 250k uputa je stroža (doseže se samo u sesiji u kojoj granica od 200k ne vrijedi, primjerice pokrenutoj prije ove postavke). Novi zadatak zabranjuje samo prepoznatom workeru i kontrolnoj ulozi, nikad orkestratoru ni sesiji nepoznate uloge. Ispod 150k i odmah nakon sažimanja ne dodaje ništa. | Rotacija sesije; iznimka za orkestratora (`ORKESTRATOR.md` §7) |
+| Hook `read` (PreToolUse: Read) | Odbija čitanje cijelog `.md` dokumenta većeg od 16 KB i vraća popis naslova s brojevima redaka; čitanje s `offset`/`limit` prolazi. Odbija `pnpm-lock.yaml`, `*.tsbuildinfo` i `.next/`. Vrijedi samo za datoteke unutar repoa, i u subagentima. Putanje pod `Read` deny pravilima (`secrets/`, `.env*`, `*.age`) hook ne otvara i ne odlučuje o njima: odluka ostaje sustavu dozvola, pa im ni naslovi ne dospijevaju u kontekst. Ne pokriva čitanje kroz `cat` ili `sed` u ljusci. | Čitaj samo ulaz iz zadatka |
 | Hook `start` (SessionStart) | Učitava `STATE.md` iz korijena projekta u kontekst pri pokretanju, `/clear` i nakon sažimanja, uz putanju iz koje je pročitan, pa ga sesija ne čita zasebnim pozivom. Ako `STATE.md` prijeđe 9000 znakova, hook ne dodaje ništa i sesija ga čita sama. | `CLAUDE.md`: prvo `STATE.md` |
 | `CLAUDE_CODE_SUBAGENT_MODEL=sonnet` | Subagent bez vlastitog modela radi na Sonnetu. Profili s `model: inherit` i dalje nasljeđuju model sesije (Claude Code 2.1.251 ili noviji; starije inačice daju prednost varijabli). | Model po ulozi |
 | `ductus-scout` (Haiku, samo Read/Grep/Glob) | Jeftino lociranje koda i odjeljaka; ugrađeni Explore radi na modelu glavne sesije. | Pretraživanje preko pomoćnog agenta |
 | `CLAUDE_CODE_GLOB_NO_IGNORE=false` | Glob preskače sve iz `.gitignore`: `node_modules`, `.next`, worktreeove, ali i `test-results/` i `playwright-report/`; njih se nalazi kroz `ls`. | — |
 | `enabledPlugins: false` za `knowledge-work-plugins` | Isključuje sales, marketing, finance, data, design, productivity i pdf-viewer u ovom projektu. | Bez nepotrebnih pluginova |
+
+Hook `budget` po ulozi. Ulogu određuje profil agenta s kojim je sesija pokrenuta (`.claude/agents/`); Claude Code ga hooku predaje u polju `agent_type` (provjereno na inačici 2.1.296).
+
+| Uloga sesije | Profil | Što hook kaže iznad 150k | Gdje je predaja (`ductus-handoff`) |
+| --- | --- | --- | --- |
+| Orkestrator | `ductus-orchestrator` | Samo podsjetnik: sesija je trajna i ne rotira se, smije uzeti novi posao; na kraju sklopa predaja pa sažimanje. | Ploča i komentar na koordinacijskom issueu (`ORKESTRATOR.md` §7 i §8) |
+| Worker | `ductus-backend-data`, `ductus-frontend-editor`, `ductus-platform-sre` | Dovrši korak, predaj, zatraži rotaciju; bez novog zadatka. | IZVJEŠTAJ u tijelu vlastitog PR-a ili vlastiti issue |
+| Kontrolna uloga (Reviewer, QA, Bug Hunter, Product/UX, auditi) | ostali profili osim `ductus-scout` | Isto kao worker. | Vlastiti komentar na PR-u ili issueu koji provjerava; nikad tuđe tijelo PR-a |
+| Nepoznata | sesija bez profila ili s profilom izvan popisa | Ništa ne zabranjuje. Navodi iznimku za orkestratora, a ostalim ulogama savjetuje predaju i rotaciju. | Prema ulozi, po skillu |
+
+Ograničenja: sesija pokrenuta bez profila (samo skillom ili običnim razgovorom), starija inačica Claude Codea bez polja `agent_type` i svaki drugi runtime nemaju prepoznatljivu ulogu. Tada je poruka namjerno blaga, jer bi zabrana pogodila i orkestratora; worker bez profila zato dobiva savjet, a ne nalog. Orkestrator vlastiti podsjetnik dobiva samo kad je sesija pokrenuta s profilom `ductus-orchestrator`; bez profila dobiva blagu poruku za nepoznatu ulogu. Hook ne provjerava identitet: profil je postavka sesije, a ne dokaz ovlasti, i o gateu ništa ne odlučuje. Novi profil mora dobiti ulogu u `PROFILE_ROLES`; test pada dok je nema.
 
 Mjerenje: `node scripts/engineering/token-report.mjs [--days N] [--budget N] [--json]` čita lokalne zapise sesija i ispisuje samo brojeve: ukupni ulaz, udio početnog konteksta, udio iznad budžeta i veličinu izlaza po alatu. Polazno stanje 1.–10. 10. 2026.: 198,7 M ulaznih tokena u 829 poziva; 42 % je kontekst iznad 150k po pozivu, 30 % početni kontekst od oko 72k ponovljen u svakom pozivu.
 

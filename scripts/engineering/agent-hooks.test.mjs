@@ -10,17 +10,22 @@ import {
   HARD_AT,
   LARGE_DOC_BYTES,
   OUTLINE_LIMIT,
+  PROFILE_ROLES,
   ROTATE_AT,
   STATE_LIMIT,
   budgetNotice,
+  isProtected,
   lastContext,
   outline,
   reviewRead,
+  sessionRole,
   stateContext,
 } from "./agent-hooks.mjs";
 import { summarizeTranscript } from "./token-report.mjs";
 
 const script = fileURLToPath(new URL("./agent-hooks.mjs", import.meta.url));
+const repo = fileURLToPath(new URL("../../", import.meta.url));
+const BAN = /Do not (start|take)/;
 const big = { size: LARGE_DOC_BYTES + 1 };
 const doc = "# Title\n\n## 1. One\ntext\n```\n## not a heading\n```\n## 2. Two\n";
 
@@ -140,6 +145,147 @@ test("hook entry point denies, stays silent and fails open", () => {
     fs.rmSync(dir, { recursive: true, force: true });
     fs.rmSync(other, { recursive: true, force: true });
   }
+});
+
+test("session role comes from the agent profile and is unknown otherwise", () => {
+  assert.equal(sessionRole({ agent_type: "ductus-orchestrator" }), "orchestrator");
+  assert.equal(sessionRole({ agent_type: "ductus-platform-sre" }), "worker");
+  for (const profile of ["ductus-independent-reviewer", "ductus-adversarial-qa", "ductus-bug-hunter"]) {
+    assert.equal(sessionRole({ agent_type: profile }), "control");
+  }
+  for (const event of [{}, undefined, { agent_type: "Explore" }, { agent_type: "constructor" }, { agent_type: 7 }, { agent_type: "" }]) {
+    assert.equal(sessionRole(event), "unknown");
+  }
+});
+
+test("every agent profile in the repo has a role, except the read-only scout", () => {
+  const profiles = fs
+    .readdirSync(path.join(repo, ".claude/agents"), { recursive: true })
+    .filter((file) => String(file).endsWith(".md"))
+    .map((file) => path.basename(String(file), ".md"));
+  assert.ok(profiles.length > 5);
+  for (const profile of profiles) {
+    if (profile !== "ductus-scout") assert.ok(Object.hasOwn(PROFILE_ROLES, profile), `${profile} has no role`);
+  }
+  for (const profile of Object.keys(PROFILE_ROLES)) assert.ok(profiles.includes(profile), `${profile} is not a profile`);
+});
+
+test("the orchestrator is reminded to hand off and compact, never told to rotate or stop", () => {
+  for (const tokens of [ROTATE_AT, HARD_AT, HARD_AT * 2]) {
+    const notice = budgetNotice(tokens, "orchestrator");
+    assert.match(notice, /docs\/ORKESTRATOR\.md §7/);
+    assert.match(notice, /board/);
+    assert.match(notice, /coordination issue/);
+    assert.match(notice, /compact/);
+    assert.doesNotMatch(notice, BAN);
+    assert.doesNotMatch(notice, /ductus-handoff|should be rotated|fresh session/);
+  }
+  assert.equal(budgetNotice(ROTATE_AT - 1, "orchestrator"), null);
+});
+
+test("an unrecognised role is never forbidden to work and gets the orchestrator exemption", () => {
+  for (const tokens of [ROTATE_AT, HARD_AT]) {
+    for (const notice of [budgetNotice(tokens), budgetNotice(tokens, "unknown"), budgetNotice(tokens, "nonsense")]) {
+      assert.doesNotMatch(notice, BAN);
+      assert.match(notice, /role could not be detected/);
+      assert.match(notice, /If you are the orchestrator[^.]*docs\/ORKESTRATOR\.md §7/);
+      assert.match(notice, /Any other role[^.]*ductus-handoff/);
+    }
+  }
+});
+
+test("workers hand off in their own PR, control roles in their own comment", () => {
+  for (const tokens of [ROTATE_AT, HARD_AT]) {
+    const worker = budgetNotice(tokens, "worker");
+    assert.match(worker, BAN);
+    assert.match(worker, /ductus-handoff/);
+    assert.match(worker, /your own PR/);
+    const control = budgetNotice(tokens, "control");
+    assert.match(control, BAN);
+    assert.match(control, /your own comment/);
+    assert.match(control, /never edit another author's PR body/);
+    assert.doesNotMatch(control, /IZVJEŠTAJ block/);
+  }
+});
+
+test("budget entry point applies the role from the hook input", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-role-"));
+  try {
+    const transcript = path.join(dir, "t.jsonl");
+    fs.writeFileSync(transcript, assistant("a", { cache_read_input_tokens: HARD_AT }) + "\n");
+    const notice = (extra) => run("budget", { transcript_path: transcript, ...extra }).additionalContext;
+    assert.doesNotMatch(notice({ agent_type: "ductus-orchestrator" }), BAN);
+    assert.match(notice({ agent_type: "ductus-orchestrator" }), /not rotated/);
+    assert.match(notice({ agent_type: "ductus-backend-data" }), BAN);
+    assert.match(notice({ agent_type: "ductus-independent-reviewer" }), /your own comment/);
+    assert.doesNotMatch(notice({}), BAN);
+    assert.doesNotMatch(notice({ agent_type: { nested: true } }), BAN);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("paths under the Read deny rules are left to the permission system unread", () => {
+  const fail = () => assert.fail("must not read the file");
+  const denied = ["secrets/runbook.md", "infra/Secrets/RUNBOOK.MD", ".env", "app/.env.local", ".env.ci.local", ".env.production", "infra/key.md.age", "secrets/pnpm-lock.yaml"];
+  for (const file of denied) {
+    assert.equal(isProtected(file), true, file);
+    assert.equal(reviewRead({ file_path: file }, big, fail), null, file);
+  }
+  for (const file of ["docs/secrets.md", "docs/environment.md", "src/age.md", "docs/BACKEND.md"]) assert.equal(isProtected(file), false, file);
+});
+
+test("every Read deny rule in settings.json is covered by the hook", () => {
+  const settings = JSON.parse(fs.readFileSync(path.join(repo, ".claude/settings.json"), "utf8"));
+  const rules = settings.permissions.deny.filter((rule) => rule.startsWith("Read("));
+  assert.ok(rules.length >= 7);
+  for (const rule of rules) {
+    const sample = rule.slice(5, -1).replace(/^\*\*\//, "a/").replace(/\*\*/g, "x.md").replace(/\*/g, "x");
+    assert.equal(isProtected(sample), true, `${rule} -> ${sample}`);
+  }
+});
+
+test("read entry point never puts content of a deny-listed file in its output", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-deny-"));
+  try {
+    const secret = "## TOP-SECRET-HEADING\n" + "x".repeat(LARGE_DOC_BYTES);
+    fs.mkdirSync(path.join(dir, "secrets"));
+    fs.mkdirSync(path.join(dir, "docs"));
+    fs.writeFileSync(path.join(dir, "secrets", "runbook.md"), secret);
+    fs.writeFileSync(path.join(dir, ".env.local"), secret);
+    fs.writeFileSync(path.join(dir, "docs", "open.md"), secret);
+    const raw = (file) => {
+      const result = spawnSync(process.execPath, [script, "read"], {
+        input: JSON.stringify({ cwd: dir, tool_input: { file_path: file } }),
+        encoding: "utf8",
+        env: { ...process.env, CLAUDE_PROJECT_DIR: dir },
+      });
+      assert.equal(result.status, 0);
+      return result.stdout + result.stderr;
+    };
+    // Control: the same content outside the deny rules is outlined.
+    assert.match(raw("docs/open.md"), /TOP-SECRET-HEADING/);
+    for (const file of ["secrets/runbook.md", path.join(dir, "secrets", "runbook.md"), "docs/../secrets/runbook.md"]) {
+      assert.equal(raw(file), "", file);
+    }
+    let linked = true;
+    try {
+      fs.symlinkSync(path.join(dir, "secrets", "runbook.md"), path.join(dir, "docs", "link.md"));
+    } catch {
+      linked = false; // Windows without the symlink privilege.
+    }
+    if (linked) assert.equal(raw("docs/link.md"), "");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("handoff skill names a destination per role and both copies match", () => {
+  const claude = fs.readFileSync(path.join(repo, ".claude/skills/ductus-handoff/SKILL.md"), "utf8");
+  assert.equal(fs.readFileSync(path.join(repo, ".agents/skills/ductus-handoff/SKILL.md"), "utf8"), claude);
+  assert.match(claude, /Orchestrator[^\n]*not rotated/);
+  assert.match(claude, /Reviewer, QA, Bug Hunter[^\n]*own comment[^\n]*never[^\n]*PR body/);
+  assert.match(claude, /Worker[^\n]*own PR/);
 });
 
 test("token report de-duplicates streamed calls and measures over-budget context", () => {

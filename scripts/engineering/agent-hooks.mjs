@@ -16,7 +16,38 @@ export const STATE_LIMIT = 9_000;
 
 const GENERATED = [/(^|\/)pnpm-lock\.yaml$/, /\.tsbuildinfo$/, /(^|\/)\.next\//];
 
+// Mirrors the Read deny rules in .claude/settings.json, slightly wider and
+// case-insensitive. PreToolUse runs before the permission rules, so the hook
+// must not open these files itself; a test keeps the two lists in step.
+const PROTECTED = [/(^|\/)secrets\//i, /(^|\/)\.env[^/]*$/i, /\.age$/i];
+
+// Session role by agent profile (.claude/agents/**). The profile is the only
+// role signal the runtime attests: Claude Code puts it in the hook input as
+// `agent_type` for a session started with that profile. A session without a
+// profile has no detectable role and is treated as "unknown".
+export const PROFILE_ROLES = {
+  "ductus-orchestrator": "orchestrator",
+  "ductus-backend-data": "worker",
+  "ductus-frontend-editor": "worker",
+  "ductus-platform-sre": "worker",
+  "ductus-independent-reviewer": "control",
+  "ductus-security-reviewer": "control",
+  "ductus-adversarial-qa": "control",
+  "ductus-bug-hunter": "control",
+  "ductus-accessibility": "control",
+  "ductus-product-ux": "control",
+  "ductus-architecture-performance": "control",
+  "ductus-privacy-legal-pilot": "control",
+};
+
 const toPosix = (file) => String(file ?? "").replace(/\\/g, "/");
+
+export const isProtected = (file) => PROTECTED.some((pattern) => pattern.test(toPosix(file)));
+
+export function sessionRole(event) {
+  const profile = event?.agent_type;
+  return typeof profile === "string" && Object.hasOwn(PROFILE_ROLES, profile) ? PROFILE_ROLES[profile] : "unknown";
+}
 
 // Markdown headings with their 1-based line numbers, skipping fenced code.
 export function outline(text) {
@@ -41,9 +72,10 @@ function describeOutline(text) {
 // Decide whether a Read call may proceed. Returns null to allow, or the
 // reason shown to the agent when the call is denied. `inProject` limits the
 // document rule to this repo: files elsewhere on the machine are not ours.
+// Deny-listed paths are never read here; the permission system decides them.
 export function reviewRead(input, stat, readText, inProject = true) {
   const file = toPosix(input?.file_path);
-  if (!file || !inProject) return null;
+  if (!file || !inProject || isProtected(file)) return null;
   if (GENERATED.some((pattern) => pattern.test(file))) {
     return `${path.posix.basename(file)} is generated output. Use Grep for the entry you need instead of reading it.`;
   }
@@ -78,19 +110,42 @@ export function lastContext(tail) {
   return 0;
 }
 
-export function budgetNotice(tokens) {
+const ORCHESTRATOR_RULE =
+  "the orchestrator session is permanent and not rotated (docs/ORKESTRATOR.md §7), and it keeps taking work; " +
+  "at the end of the current logical unit write the handoff to the board and as a comment on the coordination issue, " +
+  "then compact the context (yourself if the runtime allows it, otherwise ask Daniel)";
+
+// Where each rotating role writes its handoff (ductus-handoff skill, step 2).
+const HANDOFF_AT = {
+  worker: "the IZVJEŠTAJ block of your own PR, or your own issue when there is no PR",
+  control: "your own comment on the PR or issue you are checking; never edit another author's PR body",
+};
+
+// The notice added to a prompt once the context passes the rotation point.
+// Only a recognised worker or control role is told to rotate and to take no
+// new task. The orchestrator gets a reminder, and so does a session whose
+// role is unknown, because it may be the orchestrator.
+export function budgetNotice(tokens, role = "unknown") {
   if (tokens < ROTATE_AT) return null;
   const size = `${Math.round(tokens / 1000)}k`;
-  if (tokens >= HARD_AT) {
+  const hard = tokens >= HARD_AT;
+  if (role === "orchestrator") {
+    return `Context is ${size} tokens. Reminder, not a stop: ${ORCHESTRATOR_RULE}.${hard ? " This is past the 200k upper safety limit in §7, so compact before the next unit." : ""}`;
+  }
+  const where = hard
+    ? `Context is ${size} tokens, past the ${HARD_AT / 1000}k hard limit. Every further call re-reads all of it. `
+    : `Context is ${size} tokens, past the ${ROTATE_AT / 1000}k rotation point in docs/SESSIONS.md §4. `;
+  const target = HANDOFF_AT[role];
+  if (!target) {
     return (
-      `Context is ${size} tokens, past the ${HARD_AT / 1000}k hard limit. Every further call re-reads all of it. ` +
-      "Do not start new work in this session: finish only the step in progress, write the handoff with the ductus-handoff skill, and tell the user to continue in a fresh session."
+      `${where}This session's role could not be detected, so nothing is forbidden here. ` +
+      `If you are the orchestrator, ${ORCHESTRATOR_RULE}. ` +
+      "Any other role: finish the current step, write the handoff with the ductus-handoff skill at the place it names for your role, and tell the user this session should be rotated."
     );
   }
-  return (
-    `Context is ${size} tokens, past the ${ROTATE_AT / 1000}k rotation point in docs/SESSIONS.md §4. ` +
-    "Finish the current step, then write the handoff with the ductus-handoff skill and tell the user this session should be rotated. Do not take on a new task here."
-  );
+  const handoff = `write the handoff with the ductus-handoff skill (${target})`;
+  if (hard) return `${where}Do not start new work in this session: finish only the step in progress, ${handoff}, and tell the user to continue in a fresh session.`;
+  return `${where}Finish the current step, then ${handoff} and tell the user this session should be rotated. Do not take on a new task here.`;
 }
 
 // STATE.md as session-start context, or null when it would be truncated.
@@ -123,9 +178,13 @@ const modes = {
   read(event) {
     const input = event.tool_input ?? {};
     const file = path.resolve(event.cwd ?? ".", String(input.file_path ?? ""));
-    const relative = path.relative(path.resolve(projectDir(event)), file);
+    const root = path.resolve(projectDir(event));
+    const relative = path.relative(root, file);
     const inProject = !relative.startsWith("..") && !path.isAbsolute(relative);
+    if (!inProject || isProtected(relative)) return;
     const stat = fs.statSync(file, { throwIfNoEntry: false });
+    // A link inside the repo may point at a deny-listed file.
+    if (stat && isProtected(path.relative(fs.realpathSync(root), fs.realpathSync(file)))) return;
     const reason = reviewRead({ ...input, file_path: relative || input.file_path }, stat, () => fs.readFileSync(file, "utf8"), inProject);
     if (reason) emit({ hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason });
   },
@@ -133,7 +192,7 @@ const modes = {
   budget(event) {
     // A long turn can push the last call out of a small tail; widen once.
     const tokens = lastContext(readTail(event.transcript_path, 400_000)) || lastContext(readTail(event.transcript_path, 4_000_000));
-    const notice = budgetNotice(tokens);
+    const notice = budgetNotice(tokens, sessionRole(event));
     if (notice) emit({ hookEventName: "UserPromptSubmit", additionalContext: notice });
   },
   // SessionStart: saves the model call every session spends on reading STATE.md.
