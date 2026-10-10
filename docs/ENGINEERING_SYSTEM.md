@@ -69,6 +69,8 @@ Svaki PR mora imati jednu razinu.
 
 Dokumentacija, copy bez promjene značenja, preimenovanja, jednostavna konfiguracija, mali dependency update bez runtime promjene.
 
+Iznimka: PR koji dira putanje ili zapise iz D-97 (`docs/DECISIONS.md`), tj. pravila o tome tko smije pisati, pregledavati, spajati ili zaobići provjeru, nije `low` ni kad je samo dokumentacija; otvara se kao `standard` ili viši i spaja tek na Danielovu naredbu.
+
 Gate:
 - CI;
 - Dependency review kad je primjenjivo;

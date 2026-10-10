@@ -39,7 +39,7 @@ Normalno rade tri stalna writera (Backend, Frontend, Platforma). Četvrti je dop
 5. PR dobiva neovisni pregled na aktualnom headu. Za `critical` PR obvezan je i zaseban QA/adversarial PASS. Za deklarirani author guard `codex` i `chatgpt` na istom slotu tretiraju se kao isti OpenAI principal (`openai:<slot>`), jer koriste isti GitHub App. Autor, reviewer i QA moraju biti različite aktivne agent-instance po governance pravilu; gate strojno provjerava da reviewer i QA dolaze iz različitih autentificiranih GitHub Appova. Autor ispravlja prihvaćene nalaze, a odbijene obrazlaže.
 6. Sesija zapisuje izvještaj u PR (predložak u §3) i staje. Claude sesija na istom računu uz to šalje orkestratoru jednu poruku po `docs/ORKESTRATOR.md` §5; rad s drugog računa ili providera o poruci ne ovisi.
 7. Spaja samo aktivni Ductus orkestrator, kad su CI, Engineering review gate i svi risk-specifični gateovi zeleni te PR ne čeka Danielovu odluku. Radne sesije nikad ne spajaju PR, ne mijenjaju `.claude/` postavke i ne diraju postavke repoa na GitHubu.
-8. Orkestrator ažurira `STATE.md` i dnevnik, šalje sljedeći zadatak ili arhivira sesiju (arhiviranje briše worktree).
+8. Orkestrator ažurira `STATE.md` i dnevnik, šalje sljedeći zadatak ili arhivira sesiju koju sam može arhivirati (podagent ili CLI posao; arhiviranje briše worktree). Sesije u oblaku i desktop aplikaciji arhivira Daniel (`docs/ORKESTRATOR.md` §4 i §8).
 
 Kad sesija zapne na odluci (PRIJEDLOG, nejasan zahtjev, tuđa mapa), ne nagađa: šalje izvještaj sa statusom "blokirano" i staje.
 
@@ -88,7 +88,7 @@ Izvještaj obvezno ide u opis PR-a ili, bez PR-a, u `IZVJEŠTAJ <id>` issue. Por
 
 ## 4. Štednja tokena
 
-- **Rotacija sesije.** Svaki potez ponovno šalje cijeli kontekst sesije, pa je duga sesija skupa i kad radi malo. Uloga (Platforma, Backend, Frontend) nastavlja u istoj sesiji dok joj kontekst ne prijeđe oko 150.000 tokena; tada zapiše predaju u izvještaj, orkestrator je arhivira i otvara se svježa sesija iste uloge. Kratkotrajna sesija se arhivira čim joj je PR spojen. Iznimka je orkestrator: njegova sesija se ne zamjenjuje, nego osvježava sažimanjem po `docs/ORKESTRATOR.md` §7.
+- **Rotacija sesije.** Svaki potez ponovno šalje cijeli kontekst sesije, pa je duga sesija skupa i kad radi malo. Uloga (Platforma, Backend, Frontend) nastavlja u istoj sesiji dok joj kontekst ne prijeđe oko 150.000 tokena; tada zapiše predaju u izvještaj, orkestrator je arhivira (sesiju u oblaku ili desktop aplikaciji arhivira Daniel) i otvara se svježa sesija iste uloge. Kratkotrajna sesija se arhivira čim joj je PR spojen. Iznimka je orkestrator: njegova sesija se ne zamjenjuje, nego osvježava sažimanjem po `docs/ORKESTRATOR.md` §7.
 - **Lanci zadataka.** Kad je redoslijed jasan, sesija dobiva više zadataka odjednom (svaki svoj PR), pa treba manje poruka i manje ponovnog čitanja uputa.
 - **Čitaj samo ulaz iz zadatka.** `CLAUDE.md` traži `STATE.md`; ostale dokumente samo odjeljke navedene u zadatku.
 - **Pretraživanje preko pomoćnog agenta** (Explore) kad treba pregledati mnogo datoteka; u glavni razgovor vraća se zaključak, ne sadržaj.
