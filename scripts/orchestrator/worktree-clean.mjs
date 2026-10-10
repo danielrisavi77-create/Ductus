@@ -1,6 +1,9 @@
 // Removes finished subagent worktrees under <main checkout>/.claude/worktrees/agent-*.
-// Default is a dry run; only --apply removes. Never --force, never deletes a branch,
-// never touches a worktree outside that directory.
+// Default is a dry run; only --apply removes. Never --force, never deletes a branch;
+// worktrees are only ever removed under that directory.
+// The closing `git worktree prune` acts on the whole repository, not only on agent-*: it drops the
+// registration of every unlocked worktree whose directory is missing (e.g. on an unplugged disk).
+// A dry run lists these first as "would prune".
 // Usage: node worktree-clean.mjs [--dry-run | --apply] [--keep <name>]...
 // Exit: 0 ok, 1 fetch or removal failure, 2 usage or path-guard error.
 import { spawnSync } from "node:child_process";
