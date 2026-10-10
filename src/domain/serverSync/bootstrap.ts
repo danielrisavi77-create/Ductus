@@ -59,6 +59,3 @@ export function resolveInitialDocument(
 
   return { mode: "error" };
 }
-
-/** Shown when neither source could supply a document. */
-export const LOAD_FAILURE_MESSAGE = "Ne mogu učitati dokument. Osvježi stranicu.";

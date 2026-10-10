@@ -35,6 +35,7 @@
     "orch:wait": "node scripts/orchestrator/wait-verdict.mjs",
     "orch:overlap": "node scripts/orchestrator/pr-overlap.mjs",
     "orch:clean": "node scripts/orchestrator/worktree-clean.mjs",
+    "orch:metrics": "node scripts/orchestrator/pr-metrics.mjs",
     "test:db": "docker compose exec -T postgres pg_prove -U ductus -d ductus --recurse --ext .sql /db/tests",
     "agents:lint": "pnpm dlx --allow-build=agnix agnix@0.57.0 .",
     "tokens:report": "node scripts/engineering/token-report.mjs",

@@ -1,20 +1,21 @@
--- Access matrix of the institution module (B-7 part 1; docs/ARCHITECTURE.md 3
--- and 7; plan of attack on issue #153, items 1 to 8, 10, 13 and 19).
--- Synthetic fixtures only (fixtures/institution.inc).
+-- Access matrix of the institution module (B-7 parts 1 and 2;
+-- docs/ARCHITECTURE.md 3 and 7; plan of attack on issue #153, items 1 to 8,
+-- 10, 13 and 19). Synthetic fixtures only (fixtures/institution.inc).
 BEGIN;
 \ir fixtures/institution.inc
 -- Denials are told apart by their message below, so the language is fixed.
 SET LOCAL lc_messages TO 'C';
 
-SELECT plan(431);
+SELECT plan(643);
 
 -- 1. The catalogue. A table, policy, grant or function that is added later
 -- changes one of these lists, so it cannot arrive without a row here.
 SELECT bag_eq(
   $$ SELECT c.relname::text FROM pg_class c
      WHERE c.relnamespace = 'institution'::regnamespace AND c.relkind IN ('r', 'p', 'v', 'm', 'f') $$,
-  ARRAY['institution_settings', 'institution_role', 'course', 'course_enrollment_code', 'course_member', 'enrollment_attempt'],
-  'the institution schema holds exactly the six tables of this matrix'
+  ARRAY['institution_settings', 'institution_role', 'course', 'course_enrollment_code', 'course_member', 'enrollment_attempt',
+        'assignment', 'assignment_version', 'notice_acknowledgment'],
+  'the institution schema holds exactly the nine tables of this matrix'
 );
 SELECT is_empty(
   $$ SELECT c.relname FROM pg_class c
@@ -43,7 +44,10 @@ SELECT bag_eq(
     'ductus_app SELECT institution_role',
     'ductus_app SELECT course',
     'ductus_app SELECT course_enrollment_code',
-    'ductus_app SELECT course_member'
+    'ductus_app SELECT course_member',
+    'ductus_app SELECT assignment',
+    'ductus_app SELECT assignment_version',
+    'ductus_app SELECT notice_acknowledgment'
   ],
   'besides the owner only ductus_app holds a privilege on an institution table, and only SELECT'
 );
@@ -68,9 +72,23 @@ SELECT bag_eq(
     'course_enrollment_code: course_enrollment_code_read SELECT to ductus_app',
     'course_member: course_member_owner ALL to ductus_identity',
     'course_member: course_member_read SELECT to ductus_app',
-    'enrollment_attempt: enrollment_attempt_owner ALL to ductus_identity'
+    'enrollment_attempt: enrollment_attempt_owner ALL to ductus_identity',
+    'assignment: assignment_owner ALL to ductus_identity',
+    'assignment: assignment_read SELECT to ductus_app',
+    'assignment_version: assignment_version_owner ALL to ductus_identity',
+    'assignment_version: assignment_version_read SELECT to ductus_app',
+    'notice_acknowledgment: notice_acknowledgment_owner ALL to ductus_identity',
+    'notice_acknowledgment: notice_acknowledgment_read SELECT to ductus_app'
   ],
   'policies: the owner on every table, ductus_app for SELECT alone, nobody on enrollment_attempt'
+);
+-- A version is immutable by its triggers; losing one must change this list.
+SELECT bag_eq(
+  $$ SELECT c.relname || ': ' || t.tgname || ' ' || t.tgtype::text || ' ' || t.tgenabled::text
+     FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
+     WHERE c.relnamespace = 'institution'::regnamespace AND NOT t.tgisinternal $$,
+  ARRAY['assignment_version: assignment_version_immutable 27 O', 'assignment_version: assignment_version_no_truncate 34 O'],
+  'triggers: before every UPDATE and DELETE of a row and before TRUNCATE of assignment_version, both enabled'
 );
 SELECT bag_eq(
   $$ SELECT rolname::text FROM pg_roles
@@ -93,7 +111,18 @@ SELECT bag_eq(
     'create_course(p_name text, p_academic_year text, p_ai_policy text) definer app',
     'create_enrollment_code(p_course_id uuid, p_valid_until timestamp with time zone) definer app',
     'revoke_enrollment_code(p_course_id uuid) definer app',
-    'enroll_with_code(p_code text, OUT outcome text, OUT enrolled_course_id uuid) definer app'
+    'enroll_with_code(p_code text, OUT outcome text, OUT enrolled_course_id uuid) definer app',
+    'remove_student(p_course_id uuid, p_student_id uuid) definer app',
+    'allow_student_return(p_course_id uuid, p_student_id uuid) definer app',
+    'revoke_teacher_role(p_teacher_id uuid) definer app',
+    'ai_policy_rank(p_ai_policy text)',
+    'is_assignment_content(p_title text, p_instructions text, p_work_type text, p_opens_at timestamp with time zone, p_due_at timestamp with time zone, p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_import_allowed boolean)',
+    'refuse_change()',
+    'actor_assignment_role(p_assignment_id uuid) definer app',
+    'create_assignment(p_course_id uuid, p_title text, p_instructions text, p_work_type text, p_opens_at timestamp with time zone, p_due_at timestamp with time zone, p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_import_allowed boolean) definer app',
+    'publish_assignment_version(p_assignment_id uuid, p_expected_version integer, p_title text, p_instructions text, p_work_type text, p_opens_at timestamp with time zone, p_due_at timestamp with time zone, p_ai_policy text, p_ai_purposes text[], p_evidence_profile text, p_import_allowed boolean) definer app',
+    'acknowledge_notice(p_assignment_id uuid, p_version_no integer) definer app',
+    'has_acknowledged_current(p_assignment_id uuid) definer app'
   ],
   'functions: exact signatures, which are SECURITY DEFINER and which ductus_app may call'
 );
@@ -146,7 +175,8 @@ SELECT r.role, t.tbl, o.op, r.n AS role_n, t.n AS tbl_n, o.n AS op_n
 FROM unnest(ARRAY['ductus_app', 'ductus_worker', 'ductus_retention', 'ductus_auth', 'ductus_evidence',
                   'ductus_migrator', 'ductus_test_stranger']) WITH ORDINALITY AS r (role, n)
 CROSS JOIN unnest(ARRAY['institution_settings', 'institution_role', 'course', 'course_enrollment_code',
-                        'course_member', 'enrollment_attempt']) WITH ORDINALITY AS t (tbl, n)
+                        'course_member', 'enrollment_attempt', 'assignment', 'assignment_version',
+                        'notice_acknowledgment']) WITH ORDINALITY AS t (tbl, n)
 CROSS JOIN unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE']) WITH ORDINALITY AS o (op, n);
 
 SELECT is(
@@ -171,7 +201,8 @@ SELECT is(
 );
 
 -- 3. Who sees what through ductus_app. One line per actor: every row the
--- session can read in the five readable tables.
+-- session can read in the eight readable tables. A version reads as
+-- assignment.number, an acknowledgment as assignment.number.student.
 CREATE FUNCTION pg_temp.sees(p_actor text) RETURNS text
 LANGUAGE sql AS $f$
   SELECT pg_temp.ask(p_actor, $q$
@@ -187,36 +218,58 @@ LANGUAGE sql AS $f$
       'roles: ' || coalesce((
         SELECT string_agg(p.name || '.' || r.role, ' ' ORDER BY p.name)
         FROM institution.institution_role r JOIN person p ON p.id = r.user_id), '-'),
-      'settings: ' || coalesce((SELECT string_agg(s.display_name, ' ') FROM institution.institution_settings s), '-'))
+      'settings: ' || coalesce((SELECT string_agg(s.display_name, ' ') FROM institution.institution_settings s), '-'),
+      'assignments: ' || coalesce((
+        SELECT string_agg(z.name, ' ' ORDER BY z.name)
+        FROM institution.assignment a JOIN ref z ON z.val = a.id::text), '-'),
+      'versions: ' || coalesce((
+        SELECT string_agg(z.name || '.' || v.version_no, ' ' ORDER BY z.name, v.version_no)
+        FROM institution.assignment_version v JOIN ref z ON z.val = v.assignment_id::text), '-'),
+      'acks: ' || coalesce((
+        SELECT string_agg(z.name || '.' || n.version_no || '.' || p.name, ' ' ORDER BY z.name, n.version_no, p.name)
+        FROM institution.notice_acknowledgment n
+        JOIN ref z ON z.val = n.assignment_id::text
+        JOIN person p ON p.id = n.student_id), '-'))
   $q$)
 $f$;
+-- What a session with no part in any course reads of part 2.
+CREATE FUNCTION pg_temp.none() RETURNS text
+LANGUAGE sql AS $$ SELECT ' | assignments: - | versions: - | acks: -' $$;
 
 SELECT is(pg_temp.sees(v.actor), v.expected, v.actor || ': ' || v.note)
 FROM (VALUES
-  (1, 'vesna', 'courses: K1 | members: k1.ana k1.dora k1.vesna | codes: 2 | roles: - | settings: -',
-   'teacher of K1 sees K1, all its members and its codes'),
-  (2, 'marko', 'courses: K2 | members: k2.marko | codes: 1 | roles: - | settings: -',
-   'teacher of another course sees nothing of K1'),
-  (3, 'ana', 'courses: K1 | members: k1.ana k1.vesna | codes: 0 | roles: - | settings: -',
-   'student sees the course, the teacher and the own membership, not Dora and no code'),
-  (4, 'dora', 'courses: K1 | members: k1.dora k1.vesna | codes: 0 | roles: - | settings: -',
-   'the other student likewise does not see Ana'),
-  (5, 'boris', 'courses: - | members: - | codes: 0 | roles: - | settings: -',
+  (1, 'vesna', 'courses: K1 | members: k1.ana k1.dora k1.vesna | codes: 2 | roles: - | settings: -'
+               ' | assignments: z1 | versions: z1.1 z1.2 | acks: z1.1.ana z1.1.dora z1.2.ana',
+   'teacher of K1 sees K1, all its members, its codes, its assignment with both versions and every acknowledgment'),
+  (2, 'marko', 'courses: K2 | members: k2.marko | codes: 1 | roles: - | settings: -'
+               ' | assignments: z2 | versions: z2.1 | acks: -',
+   'teacher of another course sees nothing of K1, its assignment included'),
+  (3, 'ana', 'courses: K1 | members: k1.ana k1.vesna | codes: 0 | roles: - | settings: -'
+             ' | assignments: z1 | versions: z1.1 z1.2 | acks: z1.1.ana z1.2.ana',
+   'student sees the course, the teacher, the own membership, the assignment and the own acknowledgments, not Dora and no code'),
+  (4, 'dora', 'courses: K1 | members: k1.dora k1.vesna | codes: 0 | roles: - | settings: -'
+              ' | assignments: z1 | versions: z1.1 z1.2 | acks: z1.1.dora',
+   'the other student likewise sees nothing of Ana, her acknowledgments included'),
+  (5, 'boris', 'courses: - | members: - | codes: 0 | roles: - | settings: -' || pg_temp.none(),
    'student of the same institution outside K1 sees nothing'),
-  (6, 'nina', 'courses: - | members: - | codes: 0 | roles: - | settings: -',
+  (6, 'nina', 'courses: - | members: - | codes: 0 | roles: - | settings: -' || pg_temp.none(),
    'unconfirmed teacher role opens nothing, not even the own role row'),
-  (7, 'iva', 'courses: - | members: - | codes: 0 | roles: iva.admin marko.teacher nina.teacher vesna.teacher | settings: Fakultet A (test)',
-   'administrator sees roles and settings of the own institution, no course and no member'),
-  (8, 'lea', 'courses: - | members: - | codes: 0 | roles: lea.admin petra.teacher | settings: Fakultet B (test)',
+  (7, 'iva', 'courses: - | members: - | codes: 0 | roles: iva.admin marko.teacher nina.teacher vesna.teacher | settings: Fakultet A (test)'
+             || pg_temp.none(),
+   'administrator sees roles and settings of the own institution, no course, member, assignment or acknowledgment'),
+  (8, 'lea', 'courses: - | members: - | codes: 0 | roles: lea.admin petra.teacher | settings: Fakultet B (test)'
+             || pg_temp.none(),
    'administrator of another institution sees nothing of fak-a'),
-  (9, 'petra', 'courses: K3 | members: k3.petra k3.tomo | codes: 1 | roles: - | settings: -',
-   'teacher at another institution sees only K3'),
-  (10, 'tomo', 'courses: K3 | members: k3.petra k3.tomo | codes: 0 | roles: - | settings: -',
-   'student at another institution sees only K3'),
-  (11, 'anon', 'courses: - | members: - | codes: 0 | roles: - | settings: -', 'no session sees nothing'),
-  (12, 'expired', 'courses: - | members: - | codes: 0 | roles: - | settings: -', 'expired session of Ana sees nothing'),
-  (13, 'closed', 'courses: - | members: - | codes: 0 | roles: - | settings: -', 'closed session of Ana sees nothing'),
-  (14, 'unknown', 'courses: - | members: - | codes: 0 | roles: - | settings: -', 'token of no session sees nothing')
+  (9, 'petra', 'courses: K3 | members: k3.petra k3.tomo | codes: 1 | roles: - | settings: -'
+               ' | assignments: z3 | versions: z3.1 | acks: z3.1.tomo',
+   'teacher at another institution sees only K3 and what belongs to it'),
+  (10, 'tomo', 'courses: K3 | members: k3.petra k3.tomo | codes: 0 | roles: - | settings: -'
+               ' | assignments: z3 | versions: z3.1 | acks: z3.1.tomo',
+   'student at another institution sees only K3 and what belongs to it'),
+  (11, 'anon', 'courses: - | members: - | codes: 0 | roles: - | settings: -' || pg_temp.none(), 'no session sees nothing'),
+  (12, 'expired', 'courses: - | members: - | codes: 0 | roles: - | settings: -' || pg_temp.none(), 'expired session of Ana sees nothing'),
+  (13, 'closed', 'courses: - | members: - | codes: 0 | roles: - | settings: -' || pg_temp.none(), 'closed session of Ana sees nothing'),
+  (14, 'unknown', 'courses: - | members: - | codes: 0 | roles: - | settings: -' || pg_temp.none(), 'token of no session sees nothing')
 ) AS v (n, actor, expected, note)
 ORDER BY v.n;
 
@@ -243,6 +296,26 @@ FROM (VALUES
   (7, 'anon', 'null false false'), (8, 'expired', 'null false false'), (9, 'closed', 'null false false')
 ) AS v (n, actor, expected)
 ORDER BY v.n;
+-- The same for an assignment, its versions and its acknowledgments.
+SELECT is(
+  pg_temp.ask(v.actor, format($$ SELECT concat_ws(' ',
+    (SELECT count(*) FROM institution.assignment WHERE id = %1$s),
+    (SELECT count(*) FROM institution.assignment_version WHERE assignment_id = %1$s),
+    (SELECT count(*) FROM institution.notice_acknowledgment WHERE assignment_id = %1$s),
+    coalesce(institution.actor_assignment_role(%1$s), 'null'),
+    institution.has_acknowledged_current(%1$s)::text) $$, v.assignment)),
+  v.expected, format('%s: %s by id (assignment, versions, acknowledgments, part in it, current version acknowledged)', v.actor, v.assignment)
+)
+FROM (VALUES
+  (1, 'vesna', '{z1}', '1 2 3 teacher false'), (2, 'ana', '{z1}', '1 2 2 student true'),
+  (3, 'dora', '{z1}', '1 2 1 student false'), (4, 'boris', '{z1}', '0 0 0 null false'),
+  (5, 'boris', '{nobody}', '0 0 0 null false'), (6, 'marko', '{z1}', '0 0 0 null false'),
+  (7, 'iva', '{z1}', '0 0 0 null false'), (8, 'lea', '{z1}', '0 0 0 null false'),
+  (9, 'tomo', '{z1}', '0 0 0 null false'), (10, 'ana', '{z2}', '0 0 0 null false'),
+  (11, 'anon', '{z1}', '0 0 0 null false'), (12, 'expired', '{z1}', '0 0 0 null false'),
+  (13, 'closed', '{z1}', '0 0 0 null false')
+) AS v (n, actor, assignment, expected)
+ORDER BY v.n;
 SELECT is(
   pg_temp.ask('vesna', 'SELECT encode(code_hash, ''hex'') FROM institution.course_enrollment_code LIMIT 1'),
   '42501: permission denied for table course_enrollment_code',
@@ -268,34 +341,55 @@ SELECT is(
   pg_temp.ask('vesna', $$ DELETE FROM institution.course_member WHERE user_id = {ana} $$),
   '42501: permission denied for table course_member', 'Vesna cannot delete a membership row; history stays'
 );
+SELECT is(
+  pg_temp.ask(v.actor, v.statement), '42501: permission denied for table ' || v.tbl,
+  v.actor || ' cannot ' || v.what
+)
+FROM (VALUES
+  (1, 'dora', 'notice_acknowledgment', 'acknowledge by writing the row herself',
+   $$ INSERT INTO institution.notice_acknowledgment (assignment_id, version_no, student_id) VALUES ({z1}, 2, {dora}) $$),
+  (2, 'ana', 'notice_acknowledgment', 'take her acknowledgment back',
+   $$ DELETE FROM institution.notice_acknowledgment WHERE student_id = {ana} $$),
+  (3, 'vesna', 'notice_acknowledgment', 'acknowledge in the name of a student',
+   $$ INSERT INTO institution.notice_acknowledgment (assignment_id, version_no, student_id) VALUES ({z1}, 2, {dora}) $$),
+  (4, 'vesna', 'assignment_version', 'rewrite a version of her own assignment',
+   $$ UPDATE institution.assignment_version SET title = 'Drugi naslov' WHERE assignment_id = {z1} $$),
+  (5, 'vesna', 'assignment', 'move the pointer of her assignment back to the first version',
+   $$ UPDATE institution.assignment SET current_version = 1 WHERE id = {z1} $$),
+  (6, 'marko', 'assignment', 'put an assignment into a course of another teacher',
+   $$ INSERT INTO institution.assignment (course_id, created_by) VALUES ({k1}, {marko}) $$)
+) AS v (n, actor, tbl, what, statement)
+ORDER BY v.n;
 
 -- 5. Removal works at once: no cached decision (plan 19).
 UPDATE institution.course_member SET member_to = now() WHERE user_id = pg_temp.id('ana');
 SELECT is(
-  pg_temp.sees('ana'), 'courses: - | members: k1.ana(ended) | codes: 0 | roles: - | settings: -',
-  'unenrolled student: K1 and its teacher are gone at once; only the own ended membership remains'
+  pg_temp.sees('ana'), 'courses: - | members: k1.ana(ended) | codes: 0 | roles: - | settings: -' || pg_temp.none(),
+  'unenrolled student: K1, its teacher, its assignment and her acknowledgments are gone at once; only the own ended membership remains'
 );
 SELECT is(
-  pg_temp.sees('vesna'), 'courses: K1 | members: k1.ana(ended) k1.dora k1.vesna | codes: 2 | roles: - | settings: -',
-  'the teacher still sees the ended membership'
+  pg_temp.sees('vesna'), 'courses: K1 | members: k1.ana(ended) k1.dora k1.vesna | codes: 2 | roles: - | settings: -'
+                         ' | assignments: z1 | versions: z1.1 z1.2 | acks: z1.1.ana z1.1.dora z1.2.ana',
+  'the teacher still sees the ended membership and what that student acknowledged'
 );
 UPDATE institution.course_member SET member_to = now() WHERE user_id = pg_temp.id('vesna');
 SELECT is(
-  pg_temp.sees('vesna'), 'courses: - | members: k1.vesna(ended) | codes: 0 | roles: - | settings: -',
-  'removed teacher: course, members and codes are gone at once'
+  pg_temp.sees('vesna'), 'courses: - | members: k1.vesna(ended) | codes: 0 | roles: - | settings: -' || pg_temp.none(),
+  'removed teacher: course, members, codes, assignment, versions and acknowledgments are gone at once'
 );
 SELECT is(
-  pg_temp.sees('dora'), 'courses: K1 | members: k1.dora | codes: 0 | roles: - | settings: -',
-  'a student no longer sees the removed teacher'
+  pg_temp.sees('dora'), 'courses: K1 | members: k1.dora | codes: 0 | roles: - | settings: -'
+                        ' | assignments: z1 | versions: z1.1 z1.2 | acks: z1.1.dora',
+  'a student no longer sees the removed teacher, and keeps the assignment'
 );
 UPDATE institution.institution_role SET revoked_at = now() WHERE user_id = pg_temp.id('marko');
 SELECT is(
-  pg_temp.sees('marko'), 'courses: - | members: k2.marko | codes: 0 | roles: - | settings: -',
-  'teacher whose role the institution revoked: an open membership alone opens nothing'
+  pg_temp.sees('marko'), 'courses: - | members: k2.marko | codes: 0 | roles: - | settings: -' || pg_temp.none(),
+  'teacher whose role the institution revoked: an open membership alone opens nothing, the assignment of K2 included'
 );
 UPDATE institution.institution_role SET revoked_at = now() WHERE user_id = pg_temp.id('iva');
 SELECT is(
-  pg_temp.sees('iva'), 'courses: - | members: - | codes: 0 | roles: - | settings: -',
+  pg_temp.sees('iva'), 'courses: - | members: - | codes: 0 | roles: - | settings: -' || pg_temp.none(),
   'administrator whose role was revoked sees nothing'
 );
 
@@ -330,8 +424,11 @@ SELECT is(
                          (SELECT count(*) FROM institution.institution_role),
                          (SELECT count(*) FROM institution.course),
                          (SELECT count(*) FROM institution.course_enrollment_code),
-                         (SELECT count(*) FROM institution.course_member))),
-  '2 6 3 4 6',
+                         (SELECT count(*) FROM institution.course_member),
+                         (SELECT count(*) FROM institution.assignment),
+                         (SELECT count(*) FROM institution.assignment_version),
+                         (SELECT count(*) FROM institution.notice_acknowledgment))),
+  '2 6 3 4 6 3 4 4',
   'after every probe the fixture rows are all still there'
 );
 

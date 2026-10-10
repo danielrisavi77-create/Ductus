@@ -59,6 +59,13 @@ export type EvidenceSegmentDigestV2 = {
   sha256: string;
 };
 
+/**
+ * Longest evidence profile id, in UTF-16 code units. One limit for the
+ * segment, its descriptor and the receipt: with separate limits a segment
+ * could be valid while no valid receipt can be issued for it.
+ */
+export const MAX_EVIDENCE_PROFILE_ID_LENGTH = 120;
+
 const SHA256_HEX = /^[0-9a-f]{64}$/;
 const MAX_ID_LENGTH = 256;
 const MAX_EVENTS = 5000;
@@ -100,11 +107,14 @@ function hasOnlyKeys(
   return Object.keys(value).every((key) => allowed.has(key));
 }
 
-function nonEmptyBounded(value: unknown): value is string {
+function nonEmptyBounded(
+  value: unknown,
+  max = MAX_ID_LENGTH,
+): value is string {
   return (
     typeof value === "string" &&
     value.trim().length > 0 &&
-    value.length <= MAX_ID_LENGTH
+    value.length <= max
   );
 }
 
@@ -191,7 +201,7 @@ export function isEvidenceSegmentV2(value: unknown): value is EvidenceSegmentV2 
     !nonEmptyBounded(value.documentId) ||
     !nonEmptyBounded(value.sessionId) ||
     !nonEmptyBounded(value.segmentId) ||
-    !nonEmptyBounded(value.evidenceProfileId) ||
+    !nonEmptyBounded(value.evidenceProfileId, MAX_EVIDENCE_PROFILE_ID_LENGTH) ||
     !Number.isSafeInteger(value.sequenceFrom) ||
     Number(value.sequenceFrom) < 1 ||
     !Number.isSafeInteger(value.sequenceTo) ||

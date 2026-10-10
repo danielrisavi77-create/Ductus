@@ -6,7 +6,7 @@ Ažurira se skupno nakon spojenih PR-ova i kontrolnih točaka. Ovaj presjek čuv
 
 M0 Temelj. Prvi cilj ostaje radni demo za FPZG 2. 11. 2026. (`docs/PLAN-DEMO.md`). Ductus Engineering System v1 uvodi risk-based review, QA/Bug Hunter/Product uloge, GitHub za izvršenje i dokaze te Linear za zadatke, prioritete, nositelje i statuse.
 
-Session adresa orkestratora: `session_01BbeJRiYuBbWHCf4ZjHnHuH` (pomoćni podatak za `send_message`, `docs/ORKESTRATOR.md` §5; nije izvor istine).
+Session adresa orkestratora: `session_012PKnBC3YXckp6L2abHe7VX` (pomoćni podatak za `send_message`, `docs/ORKESTRATOR.md` §5; nije izvor istine).
 
 ## Owner queue (samo Daniel)
 
@@ -14,8 +14,9 @@ Agent nikad ne uzima ove stavke i nikad ne čeka na njima ako drugi posao može 
 
 - [x] 10. 10. 2026.: `main` zaštićen (PR obvezan; obvezni statusi CI, Local stack, Security scanners, Dependency review, Engineering review gate; neriješeni razgovori blokiraju; force push i delete zabranjeni; squash only; auto-merge i brisanje grane nakon spajanja uključeni). Administrator smije zaobići zaštitu; obvezni Code Owner review nije uključen (ENGINEERING_SYSTEM §10).
 - [ ] Proba demoa 31. 10. 2026. i snimka prolaza (PLAN-DEMO D-3, D-4).
-- [ ] Odlučiti D-06 ili strožu D-39 nakon UX testa iz `docs/UX-EVAL.md`.
-- [ ] Potvrditi ili promijeniti D-08, D-16, D-20, D-34, D-37, D-38 te pragove P-01 do P-04.
+- [x] 10. 10. 2026.: vlasnik je potvrdio D-37, D-39, D-71 i D-74 (trag: komentar na issueu #87, `issuecomment-6101424008`; zapisano u `docs/DECISIONS.md`).
+- [ ] Razjasniti odnos D-06 i potvrđene D-39: zamjenjuje li D-39 odluku D-06 (potvrda to ne kaže; D-06 ostaje na snazi). UX test u `docs/UX-EVAL.md` §4.
+- [ ] Potvrditi ili promijeniti D-08, D-16, D-20, D-34, D-38 te pragove P-01 do P-04.
 - [ ] D-56: pravno mišljenje + Constitution Gate C-14/C-19 prije ikakvog bilježenja ritma; nije na kritičnom putu demoa.
 - [ ] FPZG: koordinator pilota, kolegiji/mentori, akademski kalendar, AAI administrator, DPO, D-04, D-29, D-30, D-31, D-35, zamjenski postupak i zahtjev za ispis razgovora.
 - [ ] FPZG AAI: ovlast za AAI@EduHr Lab i kasnije registracija Ductusa kao usluge. Blokira M1, ne demo.
@@ -39,17 +40,17 @@ Kanonski dokument: `docs/ENGINEERING_SYSTEM.md`.
 
 ## Otvoreni razvojni stog
 
-Novi feature rad je privremeno ograničen dok se postojeći stog ne osvježi na aktualni `main`.
+Stanje 10. 10. 2026. navečer prema `gh pr list` (nositelj statusa je Linear; review i QA stanje je na PR-u).
 
-- [ ] #39 P-4 dbmate + pgTAP — prvo osvježiti; baza za #46.
-- [ ] #41 Frontend sync B — osvježiti i review `standard`.
-- [ ] #42 lefthook Docker/CI — osvježiti i review `standard`.
-- [ ] #44 P-5 E2E stack — osvježiti; pri tome uključiti browser politiku iz `docs/TESTING.md`.
-- [ ] #45 P-6 zabranjeni izrazi — osvježiti; `critical` jer štiti PRODUCT §5.
-- [ ] #46 B-5a identity/RLS — nakon #39 retarget na `main`; `critical` + QA.
-- [ ] #47 pg import boundary — osvježiti nakon odluke o redoslijedu s #46.
-- [ ] #48 F-4 shell/design — osvježiti i provjeriti UX/accessibility.
-- [ ] #49 editor schema/interop — osvježiti nakon #41 gdje je potrebno.
+Otvoreno:
+
+- #160 DAN-129 `withActor` hardening (critical).
+- #173 DAN-137 `cc-safety-net` fail closed (critical, D-97).
+- #175 B-7 2/2 zadaci i potvrda obavijesti (critical).
+- #185, #186 orchestrator CI i metrike; #189, #191, #194, #196, #198, #199, #192 (vidi `gh pr list`).
+- #180 DAN-138 test kopija skillova (draft); #94 DAN-41 drugi pružatelj reviewa (draft, nakon demoa).
+
+Spojeno 10. 10.: #188 (docs), #174 DAN-127, #45 P-6, #164 DAN-130, #151 DAN-120, #170 DAN-135, #169 DAN-138 (CODEOWNERS), #163 B-7 1/2, #162 DAN-131, #159 DAN-110, #150 B-14, #148 B-5b, #133 B-8a, #165, #147 i #105 (docs).
 
 ## Ne smije se izgubiti
 

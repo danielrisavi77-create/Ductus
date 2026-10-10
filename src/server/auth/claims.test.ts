@@ -41,6 +41,19 @@ describe("identityFromClaims", () => {
     expect(result.ok && result.identity.uniqueId).toBe(ANA.hrEduPersonUniqueID);
   });
 
+  // QA of #191 (mutant cl5): when both carry an attribute, userinfo wins.
+  it("prefers the userinfo attributes over the ID token ones", () => {
+    const result = identityFromClaims(ANA, {
+      sub: ANA.sub,
+      hrEduPersonUniqueID: "ana.userinfo@demo-drugi.test",
+      hrEduPersonHomeOrg: "demo-drugi.test",
+    });
+    expect(result).toStrictEqual({
+      ok: true,
+      identity: { subject: ANA.sub, uniqueId: "ana.userinfo@demo-drugi.test", homeOrg: "demo-drugi.test" },
+    });
+  });
+
   it.each([
     ["empty", ""],
     ["256 characters", "a".repeat(256)],

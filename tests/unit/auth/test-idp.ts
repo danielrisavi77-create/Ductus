@@ -6,7 +6,9 @@ import { createHash, createHmac, generateKeyPairSync, randomBytes, sign, type Ke
  * Every account and value is invented. Tests change `next` to make the
  * provider misbehave in one way at a time.
  */
-export const ISSUER = "https://idp.test";
+// The fake provider accepts only a loopback issuer (config.ts); nothing
+// listens here, every request goes to `fetch` below.
+export const ISSUER = "https://127.0.0.1:9443";
 export const CLIENT_ID = "ductus-test";
 export const CLIENT_SECRET = "test-only-client-secret";
 

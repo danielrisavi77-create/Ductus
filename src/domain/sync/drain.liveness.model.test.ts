@@ -22,6 +22,12 @@
  *
  * Server contract assumed from `@/domain/serverSync/contract`: a landed key
  * replayed with the same bytes is answered `duplicate`, never refused.
+ *
+ * `late_answer` (#181, plan #183): the answer of the last attempt (the real
+ * one when the response was lost) arrives again, late, judged against the
+ * queue it finds then. SYNCED then still needs an empty queue and a receipt
+ * for the newest row, an owed refusal is never dropped, and the base never
+ * goes back.
  */
 import { describe, expect, it } from "vitest";
 
@@ -31,7 +37,6 @@ import { parseCommitOutcome } from "@/domain/serverSync/contract";
 import {
   ackedRevision,
   fastForwardBase,
-  newerRowsQueued,
   nextAwaitingReceipt,
   outcomeToEvents,
   planDrain,
@@ -57,8 +62,8 @@ const DELIVERIES = [
   "fatal",
 ] as const;
 type Delivery = (typeof DELIVERIES)[number];
-type Step = "edit" | "other_writer" | "rebase" | Delivery;
-const STEPS: readonly Step[] = ["edit", "other_writer", "rebase", ...DELIVERIES];
+type Step = "edit" | "other_writer" | "rebase" | "late_answer" | Delivery;
+const STEPS: readonly Step[] = ["edit", "other_writer", "rebase", "late_answer", ...DELIVERIES];
 
 type World = {
   /** Server: current revision, the revision each key created, keys it refuses for good. */
@@ -72,6 +77,8 @@ type World = {
   nextSeq: number;
   awaiting: AwaitingReceipt | null;
   state: SyncState;
+  /** The last attempt's answer as the server gave it, which may still arrive late. */
+  stray: { sent: PendingTransaction; outcome: DrainOutcome } | null;
 };
 
 const DOCUMENT = emptyDocument(() => "aaaaaaaa-0000-4000-8000-000000000001");
@@ -172,6 +179,7 @@ async function drain(world: World, delivery: Delivery): Promise<Drained> {
   let { revision, landed, poisoned } = world;
 
   let outcome: DrainOutcome;
+  let stray: World["stray"] = null;
   if (delivery === "request_lost") {
     outcome = { status: "transport_error" };
   } else if (delivery === "unauthenticated") {
@@ -197,6 +205,7 @@ async function drain(world: World, delivery: Delivery): Promise<Drained> {
     } else {
       outcome = { status: "stale_base", currentRevision: revision };
     }
+    stray = { sent, outcome };
     if (delivery === "response_lost") {
       outcome = { status: "transport_error" };
     } else if (delivery === "garbled") {
@@ -204,24 +213,7 @@ async function drain(world: World, delivery: Delivery): Promise<Drained> {
     }
   }
 
-  const events = await outcomeToEvents(
-    outcome,
-    {
-      expected: {
-        documentId: sent.documentId,
-        clientTransactionId: key,
-        revision: "revision" in outcome ? outcome.revision : 0,
-      },
-      verify: async () => true,
-    },
-    newerRowsQueued(world.queue, sent),
-  );
-  // SYNCED may only describe the newest row, and only once the server holds it.
-  if (events.some((e) => e.type === "SYNC_ACK")) {
-    expect(world.queue.at(-1)).toBe(sent);
-    expect(landed.get(key)).toBe(ackedRevision(outcome));
-  }
-  const acked = ackedRevision(outcome);
+  const { events, acked } = await answer(world, sent, outcome, landed);
   return {
     world: {
       ...world,
@@ -232,10 +224,76 @@ async function drain(world: World, delivery: Delivery): Promise<Drained> {
       base: acked ?? world.base,
       queue: acked === null ? world.queue : world.queue.filter((r) => r.localSeq > sent.localSeq),
       state: reduce(reduce(world.state, [{ type: "SYNC_STARTED" }]), events),
+      stray: stray ?? { sent, outcome },
     },
     refused: outcome.status === "stale_base" || outcome.status === "invalid_document" ? key : null,
     fatal: outcome.status === "invalid_document",
   };
+}
+
+/** The runner hands an answer the queue it finds; the invariants of #183 hold for each. */
+async function answer(
+  world: World,
+  sent: PendingTransaction,
+  outcome: DrainOutcome,
+  landed: World["landed"],
+): Promise<{ events: SyncEvent[]; acked: number | null }> {
+  const key = sent.tx.clientTransactionId;
+  const events = await outcomeToEvents(
+    outcome,
+    {
+      expected: {
+        documentId: sent.documentId,
+        clientTransactionId: key,
+        revision: "revision" in outcome ? outcome.revision : 0,
+      },
+      verify: async () => true,
+    },
+    { sent, pending: world.queue },
+  );
+  // SYNCED may only describe the newest row, and only once the server holds it.
+  if (events.some((e) => e.type === "SYNC_ACK")) {
+    expect(world.queue.at(-1)).toBe(sent);
+    expect(landed.get(key)).toBe(ackedRevision(outcome));
+  }
+  // A refusal of a row that is still owed always reaches the state.
+  const owed = world.queue.includes(sent);
+  if (owed && (outcome.status === "stale_base" || outcome.status === "txid_reused")) {
+    expect(events).not.toEqual([]);
+  }
+  const acked = ackedRevision(outcome);
+  // The base never goes back.
+  if (acked !== null) {
+    expect(acked).toBeGreaterThanOrEqual(world.base);
+  }
+  return { events, acked };
+}
+
+/** The last attempt's answer arrives (again), late, while the runner is in a flight. */
+async function lateAnswer(world: World): Promise<World> {
+  if (world.stray === null) {
+    return world;
+  }
+  const { sent, outcome } = world.stray;
+  const { events, acked } = await answer(world, sent, outcome, world.landed);
+  if (events.length === 0 && acked === null && nextAwaitingReceipt(sent, outcome, world.awaiting) === world.awaiting) {
+    return { ...world, stray: null };
+  }
+  return {
+    ...world,
+    awaiting: nextAwaitingReceipt(sent, outcome, world.awaiting),
+    base: acked ?? world.base,
+    queue: acked === null ? world.queue : world.queue.filter((r) => r.localSeq > sent.localSeq),
+    state: reduce(reduce(world.state, [{ type: "SYNC_STARTED" }]), events),
+    stray: null,
+  };
+}
+
+/** SYNCED never stands next to an owed row. */
+function expectSyncedHonest(world: World): void {
+  if (world.state === "SYNCED") {
+    expect(world.queue).toEqual([]);
+  }
 }
 
 /** A marker that names no queued row can never be released by an answer. */
@@ -262,6 +320,7 @@ function fingerprint(world: World): string {
     world.nextSeq,
     world.awaiting,
     world.state,
+    world.stray && [world.stray.sent.localSeq, world.stray.outcome],
   ]);
 }
 
@@ -325,6 +384,7 @@ describe("drain model — liveness of the receipt hold", () => {
           nextSeq: 1,
           awaiting: null,
           state: "SYNCED",
+          stray: null,
         },
         path: [],
       },
@@ -340,6 +400,7 @@ describe("drain model — liveness of the receipt hold", () => {
         }
         seen.add(id);
         expectNoOrphanMarker(world);
+        expectSyncedHonest(world);
         const reason = await settle(world);
         if (reason !== null && failures.length < 5) {
           failures.push({ path, reason });
@@ -358,6 +419,8 @@ describe("drain model — liveness of the receipt hold", () => {
             after = otherWriter(world);
           } else if (step === "rebase") {
             after = rebase(world);
+          } else if (step === "late_answer") {
+            after = await lateAnswer(world);
           } else {
             after = (await drain(world, step)).world;
           }

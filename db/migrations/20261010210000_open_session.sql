@@ -18,8 +18,13 @@ SET LOCAL ROLE ductus_identity;
 -- An institution without a home organisation takes no logins; clearing the
 -- value is how an institution stops taking them. Only the owner writes it
 -- (local and CI seeds; provisioning in production).
+-- A DNS name in lower case: dot-separated labels, no empty label, no
+-- trailing dot, so "x.example" and "x.example." cannot be two institutions.
 ALTER TABLE identity.institution
-  ADD COLUMN aai_home_org text UNIQUE CHECK (aai_home_org ~ '^[a-z0-9.-]{1,255}$');
+  ADD COLUMN aai_home_org text UNIQUE CHECK (
+    char_length(aai_home_org) <= 253
+    AND aai_home_org ~ '^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$'
+  );
 
 -- Sessions last 12 hours from login. Expiry is not logout (BACKEND 4.3): the
 -- browser keeps unsynced work until the same user signs in again.

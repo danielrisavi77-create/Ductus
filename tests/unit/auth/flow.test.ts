@@ -248,11 +248,18 @@ describe("login", () => {
     const response = await callback(url, cookie);
     expect(response.headers.get("location")).toBe(`${APP}/rad?x=1`);
 
-    for (const evil of ["https://zlo.test/", "//zlo.test", "/.//zlo.test"]) {
+    for (const evil of ["https://zlo.test/", "//zlo.test", "/.//zlo.test", "/API/auth/login", "/%61pi/auth/login"]) {
       const attempt = await begin(`/api/auth/login?returnTo=${encodeURIComponent(evil)}`);
       const done = await callback(idp.approve(attempt.authorize, `${APP}/api/auth/callback`), attempt.cookie);
       expect(done.headers.get("location")).toBe(`${APP}/`);
     }
+  });
+
+  it("#17 keeps the percent-encoding of the stored path in Location", async () => {
+    const stored = "/rad/%C5%A1kola?q=a%20b%26c#x%20y";
+    const { authorize, cookie } = await begin(`/api/auth/login?returnTo=${encodeURIComponent(stored)}`);
+    const response = await callback(idp.approve(authorize, `${APP}/api/auth/callback`), cookie);
+    expect(response.headers.get("location")).toBe(`${APP}${stored}`);
   });
 
   it("uses the configured redirect URI, never the Host of the callback request", async () => {
