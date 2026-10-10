@@ -89,6 +89,8 @@ const shellTest = (name, fn) =>
 test("settings.json routes Bash and PowerShell through the wrapper, not the bare package", () => {
   assert.ok(hookEntry, "PreToolUse Bash|PowerShell hook for safety-net.mjs");
   assert.equal(hookEntry.shell, "bash");
+  // Claude Code >= 2.1.295: a hook that cannot start, times out or exits other than 0/2 blocks.
+  assert.equal(hookEntry.onFailure, "block");
   assert.ok(hookEntry.timeout >= 8, "hook timeout leaves room for the wrapper analysis limit");
   const all = JSON.stringify(settings.hooks);
   assert.ok(!/node_modules\/cc-safety-net/.test(all), "no hook calls node_modules directly");
