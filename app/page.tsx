@@ -7,7 +7,7 @@ export default function HomePage() {
   return (
     <>
       <AppHeader />
-      <main id="sadrzaj" className="page">
+      <main id="sadrzaj" tabIndex={-1} className="page">
         <h1>{t.app.name}</h1>
         <p>{t.app.tagline}</p>
         <p>{t.home.lead}</p>

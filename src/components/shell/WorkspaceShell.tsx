@@ -10,6 +10,10 @@ export type WorkspaceShellProps = {
   context?: ReactNode;
   /** Which of the two views is open; the other is a link. */
   mode?: WorkspaceMode;
+  /**
+   * Where each view lives. A view without an address is shown as plain text,
+   * not as a link that leads nowhere: the teacher's view arrives with F-8.
+   */
   writingHref?: string;
   teacherViewHref?: string;
   /** Extra controls in the top bar, before the view switch. */
@@ -34,8 +38,8 @@ export type WorkspaceShellProps = {
 export default function WorkspaceShell({
   context,
   mode = "writing",
-  writingHref = "#",
-  teacherViewHref = "#",
+  writingHref,
+  teacherViewHref,
   barExtra,
   banner,
   rail,
@@ -54,12 +58,12 @@ export default function WorkspaceShell({
         </div>
         {barExtra}
         <nav className="modes" aria-label={t.workspace.viewModes}>
-          <a href={writingHref} aria-current={mode === "writing" ? "page" : undefined}>
+          <ModeLink href={writingHref} current={mode === "writing"}>
             {t.workspace.modeWriting}
-          </a>
-          <a href={teacherViewHref} aria-current={mode === "teacher-view" ? "page" : undefined}>
+          </ModeLink>
+          <ModeLink href={teacherViewHref} current={mode === "teacher-view"}>
             {t.workspace.modeTeacherView}
-          </a>
+          </ModeLink>
         </nav>
         <span className="demo-badge demo-badge--small">{t.shell.demoBadgeShort}</span>
       </header>
@@ -68,7 +72,7 @@ export default function WorkspaceShell({
         <aside className="workspace__rail" aria-label={t.workspace.structureLabel}>
           {rail}
         </aside>
-        <main id="sadrzaj" className="workspace__main">
+        <main id="sadrzaj" tabIndex={-1} className="workspace__main">
           {children}
         </main>
         <aside className="workspace__panel" aria-label={t.workspace.sidePanel}>
@@ -79,6 +83,20 @@ export default function WorkspaceShell({
         {status}
       </footer>
     </div>
+  );
+}
+
+type ModeLinkProps = { href?: string; current: boolean; children: ReactNode };
+
+/** One entry of the view switch; without an address it is not a link. */
+function ModeLink({ href, current, children }: ModeLinkProps) {
+  if (href === undefined) {
+    return <span className="modes__item">{children}</span>;
+  }
+  return (
+    <Link className="modes__item" href={href} aria-current={current ? "page" : undefined}>
+      {children}
+    </Link>
   );
 }
 

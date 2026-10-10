@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { MULTI_TAB_BLOCKED_MESSAGE, SYNC_STATE_LABELS } from "@/domain/sync/labels";
+
 import { messagesHr } from "./messages.hr";
 
 function leaves(node: unknown, path = ""): [string, string][] {
@@ -44,6 +46,19 @@ describe("messages.hr", () => {
       for (const word of FORBIDDEN) {
         expect(lower.includes(word), `${path}: "${text}" contains "${word}"`).toBe(false);
       }
+    }
+  });
+
+  // The save-state wording has one home, next to the state machine. A second
+  // copy here could drift from it ("Spremljeno na uređaju", PRODUCT §5).
+  it("does not repeat the save-state wording kept in the sync domain", () => {
+    const syncTexts = new Set(
+      [...Object.values(SYNC_STATE_LABELS).map((entry) => entry.label), MULTI_TAB_BLOCKED_MESSAGE].map(
+        (text) => text.toLocaleLowerCase("hr"),
+      ),
+    );
+    for (const [path, text] of all) {
+      expect(syncTexts.has(text.toLocaleLowerCase("hr").trim()), path).toBe(false);
     }
   });
 

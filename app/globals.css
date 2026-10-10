@@ -112,6 +112,14 @@ button {
   top: 8px;
 }
 
+/*
+ * The skip link moves focus to <main>. An outline there would frame the whole
+ * page, so it is dropped on <main> only; every control keeps its own.
+ */
+main:focus {
+  outline: none;
+}
+
 .lbl {
   font-size: 10px;
   font-weight: 600;
@@ -269,7 +277,7 @@ button {
   background: var(--rule-2);
 }
 
-.modes a {
+.modes__item {
   display: inline-flex;
   align-items: center;
   min-height: 32px;
@@ -281,7 +289,7 @@ button {
   text-decoration: none;
 }
 
-.modes a[aria-current="page"] {
+.modes__item[aria-current="page"] {
   background: var(--sheet);
   color: var(--ink);
   box-shadow: 0 1px 2px #0000000f;

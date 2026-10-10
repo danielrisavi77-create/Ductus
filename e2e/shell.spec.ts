@@ -33,6 +33,48 @@ test.describe("workspace shell", () => {
     expect(overflow).toBeLessThanOrEqual(0);
   });
 
+  // Whether Tab visits links is a browser setting in WebKit: off by default on
+  // macOS and in the Windows port, on in the Linux port that CI runs.
+  const tabVisitsLinks = (browserName: string) => browserName !== "webkit" || process.platform === "linux";
+
+  for (const path of ["/", "/rad"]) {
+    test(`keyboard: the skip link is the first stop on ${path} and leads to the content`, async ({
+      page,
+      browserName,
+    }) => {
+      await page.goto(path);
+      const skip = page.getByRole("link", { name: "Preskoči na sadržaj" });
+      if (tabVisitsLinks(browserName)) {
+        await page.keyboard.press("Tab");
+      } else {
+        await skip.focus();
+      }
+      await expect(skip).toBeFocused();
+      await expect(skip).toBeInViewport();
+      await page.keyboard.press("Enter");
+      await expect(page.locator("main#sadrzaj")).toBeFocused();
+    });
+  }
+
+  test("keyboard: every stop in the workspace is a real link with a visible focus mark", async ({
+    page,
+    browserName,
+  }) => {
+    test.skip(!tabVisitsLinks(browserName), "Tab does not visit links in this WebKit port by default");
+    await page.goto("/rad");
+    const stops: string[] = [];
+    for (let i = 0; i < 3; i += 1) {
+      await page.keyboard.press("Tab");
+      const focused = page.locator(":focus");
+      stops.push((await focused.textContent()) ?? "");
+      expect(await focused.getAttribute("href")).not.toBe("#");
+      const outline = await focused.evaluate((element) => getComputedStyle(element).outlineStyle);
+      expect(outline).not.toBe("none");
+    }
+    // The teacher view has no address yet (F-8), so it is not a stop.
+    expect(stops).toEqual(["Preskoči na sadržaj", "Ductus", "Pisanje"]);
+  });
+
   test("home links to the workspace", async ({ page }) => {
     await page.goto("/");
     await page.getByRole("link", { name: "Otvori radni prostor" }).click();
