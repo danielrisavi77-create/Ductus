@@ -94,7 +94,8 @@ Svaki petak (`PLAN-DEMO.md` §3): usporedba spojenog s tablicom tjedna, kratak s
 
 ## 7. Štednja tokena orkestratora
 
-- **Rotacija orkestratora:** rotira se nakon završenog logičkog sklopa ili kad ponovljeni kontekst postane skuplji od kratke repo/GitHub predaje; 200.000 tokena je gornja sigurnosna granica, ne cilj. Kad se rotira, orkestrator zapisuje predaju u `STATE.md` i na ploču. Nova instanca može biti na drugom računu ili provideru; mora moći nastaviti samo iz repoa, GitHuba i ploče. Session adresa u `STATE.md` ažurira se samo kao pomoćni podatak za runtime koji je koristi.
+- **Trajna sesija orkestratora (Daniel, 10. 10. 2026.):** sesija orkestratora se ne arhivira i ne zamjenjuje novom radi štednje tokena, jer orkestrator treba neprekinut pregled onoga što se radi. Umjesto rotacije kontekst se osvježava sažimanjem: nakon završenog logičkog sklopa ili kad ponovljeni kontekst postane skuplji od sažetka; 200.000 tokena je gornja sigurnosna granica, ne cilj. Prije svakog sažimanja orkestrator zapisuje predaju u `STATE.md` i na ploču, jer sažetak gubi pojedinosti. Pravilo vrijedi samo za orkestratora; ostale sesije rotiraju po `SESSIONS.md` §4.
+- **Trajna sesija nije izvor istine.** Sesija se može izgubiti i bez odluke (pad aplikacije, računalo, račun, kvota). Zato nova instanca, i na drugom računu ili provideru, i dalje mora moći nastaviti samo iz repoa, GitHuba i ploče; nova sesija orkestratora otvara se samo kad se postojeća ne može nastaviti. Session adresa u `STATE.md` ažurira se samo kao pomoćni podatak za runtime koji je koristi.
 - Ne čita diffove ni cijele dokumente; samo metapodatke PR-a i potrebne odjeljke.
 - Istraživanja i pregled mnogo datoteka daje pomoćnom agentu ili kratkotrajnoj sesiji.
 - Ploča: dodaje događaje, ne prepisuje cijeli dnevnik.
