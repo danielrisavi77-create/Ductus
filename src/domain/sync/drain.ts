@@ -21,6 +21,9 @@
  *   - `committed` and `duplicate` report the CAS result, not a user-visible
  *     sync ACK. The queue remains owed until a signed receipt for that exact
  *     document, transaction and revision is received and verified.
+ *   - A commit whose receipt is still owed holds the queue: only that same
+ *     idempotency key is replayed, never a newer row on the un-advanced base
+ *     (that would be answered `stale_base` — a conflict with ourselves).
  */
 
 import type { DocumentTransaction } from "../document";
@@ -101,6 +104,33 @@ export type DrainPlan = {
 const NOTHING_TO_SEND: DrainPlan = { send: null, supersededUpTo: null };
 
 /**
+ * The queue row whose compare-and-set the server has already accepted, but
+ * whose signed receipt has not been verified yet (`nextAwaitingReceipt`).
+ *
+ * While this is set the local base has NOT been fast-forwarded (only a
+ * verified receipt may do that), so every newer row still names the old base.
+ * The caller keeps it for as long as the row is owed and hands it back to
+ * `planDrain`; persisting it across a reload is the journal's job, not this
+ * module's.
+ */
+export type AwaitingReceipt = {
+  localSeq: number;
+  clientTransactionId: string;
+};
+
+function isAwaitingReceipt(value: unknown): value is AwaitingReceipt {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const marker = value as Partial<AwaitingReceipt>;
+  return (
+    isLocalSeq(marker.localSeq) &&
+    typeof marker.clientTransactionId === "string" &&
+    marker.clientTransactionId.trim() !== ""
+  );
+}
+
+/**
  * States in which the queue must not be drained at all.
  *
  * CONFLICT and RECOVERY_REQUIRED are the two sticky states, and each may only
@@ -165,10 +195,21 @@ function isSendable(row: PendingTransaction): boolean {
  *
  * The input is not assumed to be sorted, and `meta` may be `null` (a journal
  * written before meta existed, or a partial store).
+ *
+ * Holding for a receipt: when `awaitingReceipt` names a row, that row's CAS
+ * already landed but its receipt is unverified, so the base of every newer
+ * row is still the one that commit replaced. Sending a newer row now would be
+ * answered `stale_base` and put the author in CONFLICT with their own commit.
+ * The plan therefore replays exactly the awaited row (same idempotency key,
+ * which the server answers as `duplicate`) and leaves newer rows queued. If
+ * the awaited row cannot be proved safe to replay — gone, a different key,
+ * at or past an unsafe boundary, or the marker itself is malformed — nothing
+ * is sent: a visible stall is recoverable, a self-inflicted CONFLICT is sticky.
  */
 export function planDrain(
   pending: readonly PendingTransaction[],
   meta: SyncMeta | null,
+  awaitingReceipt: AwaitingReceipt | null = null,
 ): DrainPlan {
   if (!Array.isArray(pending) || pending.length === 0) {
     return NOTHING_TO_SEND;
@@ -190,9 +231,24 @@ export function planDrain(
     seen.add(sequence);
   }
 
+  const held = awaitingReceipt ?? null;
+  if (held !== null && !isAwaitingReceipt(held)) {
+    return NOTHING_TO_SEND;
+  }
+
   let newest: PendingTransaction | null = null;
   for (const row of pending) {
     if (!isSendable(row) || row.localSeq >= barrier) {
+      continue;
+    }
+    if (held !== null) {
+      // Below the barrier sequences are unique, so at most one row matches.
+      if (
+        row.localSeq === held.localSeq &&
+        row.tx.clientTransactionId === held.clientTransactionId
+      ) {
+        newest = row;
+      }
       continue;
     }
     if (newest === null || row.localSeq > newest.localSeq) {
@@ -316,7 +372,9 @@ const RETRYABLE: SyncEvent[] = [{ type: "SYNC_FAILED", retryable: true }];
  *   transport_error → SYNC_FAILED(true)  no server answer was learned;
  *                               the queue remains owed and backoff applies.
  *   pending_signature → no event and a retry; the CAS landed, but its receipt
- *                               is not ready for acknowledgement.
+ *                               is not ready for acknowledgement. The retry is
+ *                               the SAME row (`nextAwaitingReceipt`, then
+ *                               `planDrain`), never a newer one.
  *
  * `SYNC_FAILED` lands in ERROR either way (retryable is carried for the retry
  * policy, not for the state): an unreachable server has not damaged anything
@@ -413,6 +471,36 @@ export function ackedRevision(outcome: DrainOutcome): number | null {
     return null;
   }
   return VERIFIED_COMMIT_REVISIONS.get(outcome) ?? null;
+}
+
+/**
+ * What the queue is waiting on after `sent` was answered with `outcome`.
+ *
+ *   committed / duplicate, receipt verified → null: the base may move on.
+ *   committed / duplicate, anything else    → `sent`: the CAS landed, so newer
+ *                               rows are stale until this exact commit is
+ *                               acknowledged. That includes a pending
+ *                               signature, a missing or malformed receipt and
+ *                               a receipt that failed verification.
+ *   every other answer          → `previous`, unchanged: nothing new landed
+ *                               (or nothing was learned), so whatever was owed
+ *                               is still owed.
+ *
+ * "Verified" is `ackedRevision`, i.e. only an outcome that `outcomeToEvents`
+ * itself vouched for can release the hold.
+ */
+export function nextAwaitingReceipt(
+  sent: PendingTransaction,
+  outcome: DrainOutcome,
+  previous: AwaitingReceipt | null,
+): AwaitingReceipt | null {
+  if (outcome?.status !== "committed" && outcome?.status !== "duplicate") {
+    return previous ?? null;
+  }
+  if (ackedRevision(outcome) !== null) {
+    return null;
+  }
+  return { localSeq: sent.localSeq, clientTransactionId: sent.tx.clientTransactionId };
 }
 
 /**
