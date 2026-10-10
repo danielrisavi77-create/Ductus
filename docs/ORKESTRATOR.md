@@ -6,11 +6,12 @@ Upute za aktivni Ductus orkestrator, neovisno o tome radi li u Claudeu ili Codex
 
 ## 1. Na početku svakog poteza
 
-Tri jeftine provjere, bez čitanja diffova. Za odabir i redoslijed zadataka koristi Linearov prioritet, nositelja i status; za grane, PR-ove, reviewe i CI koristi GitHub:
+Četiri jeftine provjere, bez čitanja diffova. Za odabir i redoslijed zadataka koristi Linearov prioritet, nositelja i status; za grane, PR-ove, reviewe i CI koristi GitHub:
 
 1. `gh pr list --state open --json number,title,headRefName,baseRefName,mergeable,statusCheckRollup` za sve otvorene PR-ove u jednom pozivu; izvještaj i komentari (`gh pr view <n> --json body,comments`) samo za PR-ove koji se u tom potezu obrađuju.
 2. `gh issue list --search "IZVJEŠTAJ in:title" --state open` (izvještaji bez PR-a) i `gh pr list --label izvjestaj-ceka` te komentari "IZVJEŠTAJ čeka orkestratora" (`SESSIONS.md` §2a).
 3. GitHub zadaci/PR-ovi po dodijeljenim workerima. Popis sesija koristi se samo kao dodatni signal za sesije koje aktualni račun može vidjeti; nikad za zaključivanje stanja drugog računa.
+4. Verdikti na PR-ovima koje je orkestrator dao na review ili QA: zadnji `Agent-Review` i `QA-Agent` komentar na aktualnom headu, a ne samo status gatea. Sesija u oblaku ne može poslati poruku orkestratoru, pa je njezin komentar na PR-u jedini trag da je gotova ili da čeka novi red.
 
 Izvještaj u PR-u ili `IZVJEŠTAJ <id>` issueu vrijedi i kad poruka nije stigla ili računi uopće ne mogu međusobno slati session poruke.
 
@@ -79,7 +80,7 @@ Pitanja se skupljaju i šalju zajedno, s preporukom uz svako.
 1. Pitanje se upisuje na ploču (Ductus pult, polje "Čeka tebe") s preporukom, a trajna stavka i u Owner queue u `STATE.md`.
 2. Orkestrator šalje push obavijest (alat `PushNotification`, do 200 znakova): što treba i preporuka, npr. "Ductus: treba odluka o D-08; preporuka UpCloud. Detalji na pultu." Više pitanja ide u jednu obavijest.
 3. Orkestrator ne čeka u chatu: nastavlja sve što ne ovisi o odgovoru. Što ovisi, stoji na ploči kao "čeka Daniela".
-4. Isto vrijedi kad Daniel mora nešto napraviti sam (npr. otvoriti novu sesiju pri rotaciji, §7, jer orkestrator ne može pokrenuti desktop ni cloud sesiju, §8): obavijest s točnom radnjom.
+4. Isto vrijedi kad Daniel mora nešto napraviti sam (npr. otvoriti novu sesiju workera pri rotaciji ili novu sesiju orkestratora kad se postojeća ne može nastaviti, §7, jer orkestrator ne može pokrenuti desktop ni cloud sesiju, §8): obavijest s točnom radnjom.
 
 ## 5. Poruke i cross-account koordinacija
 
@@ -94,7 +95,7 @@ Svaki petak (`PLAN-DEMO.md` §3): usporedba spojenog s tablicom tjedna, kratak s
 
 ## 7. Štednja tokena orkestratora
 
-- **Trajna sesija orkestratora (Daniel, 10. 10. 2026.):** sesija orkestratora se ne arhivira i ne zamjenjuje novom radi štednje tokena, jer orkestrator treba neprekinut pregled onoga što se radi. Umjesto rotacije kontekst se osvježava sažimanjem: nakon završenog logičkog sklopa ili kad ponovljeni kontekst postane skuplji od sažetka; 200.000 tokena je gornja sigurnosna granica, ne cilj. Prije svakog sažimanja orkestrator zapisuje predaju u `STATE.md` i na ploču, jer sažetak gubi pojedinosti. Pravilo vrijedi samo za orkestratora; ostale sesije rotiraju po `SESSIONS.md` §4.
+- **Trajna sesija orkestratora (Daniel, 10. 10. 2026.):** sesija orkestratora se ne arhivira i ne zamjenjuje novom radi štednje tokena, jer orkestrator treba neprekinut pregled onoga što se radi. Umjesto rotacije kontekst se osvježava sažimanjem: nakon završenog logičkog sklopa ili kad ponovljeni kontekst postane skuplji od sažetka; 200.000 tokena je gornja sigurnosna granica, ne cilj. Orkestrator zapisuje predaju u `STATE.md` i na ploču na kraju svakog logičkog sklopa i prije svakog ručnog sažimanja, jer sažetak gubi pojedinosti. Sažima ručno prije granice, tako da automatsko sažimanje runtimea, koje dolazi bez najave, nije redovni okidač; ako se ipak dogodi, zadnja predaja s kraja sklopa ostaje polazište. Pravilo vrijedi samo za orkestratora; ostale sesije rotiraju po `SESSIONS.md` §4.
 - **Trajna sesija nije izvor istine.** Sesija se može izgubiti i bez odluke (pad aplikacije, računalo, račun, kvota). Zato nova instanca, i na drugom računu ili provideru, i dalje mora moći nastaviti samo iz repoa, GitHuba i ploče; nova sesija orkestratora otvara se samo kad se postojeća ne može nastaviti. Session adresa u `STATE.md` ažurira se samo kao pomoćni podatak za runtime koji je koristi.
 - Ne čita diffove ni cijele dokumente; samo metapodatke PR-a i potrebne odjeljke.
 - Istraživanja i pregled mnogo datoteka daje pomoćnom agentu ili kratkotrajnoj sesiji.
@@ -122,6 +123,8 @@ Tri stalne uloge iz `ENGINEERING_SYSTEM.md` §2 (Backend, Frontend, Platforma) o
 **Podagent nije novi principal.** Podagent i CLI posao koje pokrene orkestrator nasljeđuju njegovo okruženje i vjerodajnice (`AGENT_SYSTEM_V2.md` §6). Zato PR takvog writera nosi `Agent: <runtime>:<slot orkestratora>:<uloga>` i za pravila o neovisnosti vrijedi kao orkestratorov vlastiti: pregledava ga drugi principal, a orkestrator u njemu ne presuđuje sporove. Sesija orkestratora sama i dalje ne piše proizvodni kod; piše ga podagent u svojoj ulozi i svom worktreeu. Iznimka od zabrane spajanja vlastitog PR-a (Daniel, 10. 10. 2026.): orkestrator smije spojiti PR svog podagenta ili CLI posla kad su svi gateovi iz §2 zeleni i kanonski PASS je preko Appa dala sesija drugog principala. PR koji je orkestrator napisao sam i dalje ne spaja.
 
 **Kanonski verdict.** Review i QA komentar vrijede za gate samo kad ih objavi autentificirani GitHub App (`ENGINEERING_SYSTEM.md` §6). Sesija koja objavljuje verdict sama pregledava aktualni head i mora biti drugi principal od autora. Nalaz podagenta ili CLI posla autorove sesije je advisory ulaz: autoru služi za popravak prije reviewa, a ne zamjenjuje verdict niti ga druga sesija smije samo prepisati. Orkestrator pri dodjeli reviewa navodi koja sesija pregledava i objavljuje.
+
+**Red za reviewera i QA.** Red se objavljuje kao komentar na koordinacijskom issueu (trenutačno #87), po sesiji i redom, da preživi gubitak poruke i promjenu računa. Komentar sam ne budi sesiju koja miruje: uz svaku objavu orkestrator sesiji šalje i jednu poruku koja upućuje na taj komentar. Dostava poruke sesiji u oblaku se ne potvrđuje; ako verdict ne stigne, orkestrator po §4a traži od Daniela da sesiji zalijepi uputu.
 
 **Gašenje.** Orkestrator zaustavlja ono što je sam pokrenuo: workera koji je predao PR, workera koji je izašao iz opsega i workera koji se vrti bez napretka. Sesiju koju nije pokrenuo ne može ugasiti; šalje joj jednu poruku da stane i dalje je ne računa u WIP. Worktree spojene grane uklanja `scripts/cleanup-worktrees.ps1`.
 
