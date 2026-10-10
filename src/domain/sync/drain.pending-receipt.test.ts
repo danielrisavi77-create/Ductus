@@ -429,7 +429,11 @@ describe("nextAwaitingReceipt", () => {
     ];
     for (const other of others) {
       for (const outcome of [...KEY_REFUSALS, ...SAYS_NOTHING_ABOUT_LANDING]) {
-        expect(nextAwaitingReceipt(other, outcome, previous)).toEqual(previous);
+        // txid_reused for another row keeps the hold too, marked diverged so
+        // it agrees with the SYNC_KEY_DIVERGED that answer emits (DAN-135).
+        const expected =
+          outcome?.status === "txid_reused" ? { ...previous, diverged: "txid_reused" } : previous;
+        expect(nextAwaitingReceipt(other, outcome, previous)).toEqual(expected);
       }
     }
   });

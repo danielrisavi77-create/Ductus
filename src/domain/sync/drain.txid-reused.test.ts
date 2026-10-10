@@ -271,6 +271,44 @@ describe("held txid_reused — the marker (DAN-135)", () => {
     expect(nextAwaitingReceipt(R7, forT7, marker)).toBeNull();
   });
 
+  it("10, 11: a late refusal for D1/T7 itself never releases it", async () => {
+    const { marker, state } = await diverge();
+    const refusals = ["stale_base", "too_large", "not_found", "invalid_document"] as const;
+    for (const status of refusals) {
+      const late = { status } as DrainOutcome;
+      const kept = nextAwaitingReceipt(R7, late, marker);
+      expect(kept, status).toBe(marker);
+      expect(isDiverged(kept), status).toBe(true);
+      expect(planDrain(QUEUE, meta(state), kept).send, status).toBeNull();
+      expect(reduce(state, await outcomeToEvents(late, verification("T7", 0), true)), status).toBe(
+        "RECOVERY_REQUIRED",
+      );
+    }
+    // Its own verified receipt still releases it afterwards.
+    const forT7 = signedDuplicate(5);
+    await outcomeToEvents(forT7, verification("T7", 5), true);
+    expect(nextAwaitingReceipt(R7, forT7, marker)).toBeNull();
+  });
+
+  it("a late txid_reused for r8 while r7 is held marks the hold, so the state survives a restart", async () => {
+    const lateForR8 = await outcomeToEvents(REUSED, verification("T8", 0), true);
+    expect(lateForR8).toEqual([{ type: "SYNC_KEY_DIVERGED" }]);
+    const state = reduce(reduce("LOCAL_DURABLE", [{ type: "SYNC_STARTED" }]), lateForR8);
+    expect(state).toBe("RECOVERY_REQUIRED");
+
+    const marker = nextAwaitingReceipt(R8, REUSED, HELD_R7);
+    expect(marker).toEqual({ ...HELD_R7, diverged: "txid_reused" });
+    expect(planDrain(QUEUE, meta(state), marker).send).toBeNull();
+
+    // After a restart the marker alone brings the state back.
+    const reloaded = JSON.parse(JSON.stringify(marker)) as AwaitingReceipt;
+    expect(isDiverged(reloaded)).toBe(true);
+    expect(planDrain(QUEUE, meta("LOCAL_DURABLE"), reloaded).send).toBeNull();
+
+    // An already diverged hold is kept as it is.
+    expect(nextAwaitingReceipt(R8, REUSED, marker)).toBe(marker);
+  });
+
   it("12: the cause is recorded, the content is not", async () => {
     const { marker } = await diverge();
     expect(Object.keys(marker!).sort()).toEqual([

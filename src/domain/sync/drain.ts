@@ -179,8 +179,9 @@ export type AwaitingReceipt = {
   localSeq: number;
   clientTransactionId: string;
   /**
-   * Set once the server has answered this exact row `txid_reused` (DAN-135):
-   * the key is on the server with other document bytes. The answer is
+   * Set once the server has answered `txid_reused` (DAN-135) for this row,
+   * or for another row while this one was held: a key is on the server with
+   * other document bytes. The answer is
    * deterministic, so the row is never sent again (`planDrain`), and newer
    * rows stay behind it because that commit may have moved the base. Only an
    * explicit recovery decision clears it, in the same journal transaction that
@@ -664,7 +665,9 @@ const KEY_REFUSED: ReadonlySet<string> = new Set([
  *   stale_base / too_large / not_found / invalid_document /
  *   invalid_client_transaction_id
  *                               → null when `sent` is the held row, else
- *                               `previous`: the server read this key and
+ *                               `previous`; a diverged hold is always kept
+ *                               (`previous`), since a late refusal is no
+ *                               recovery decision. The server read this key and
  *                               refused it, and a key that had landed would
  *                               have been answered `duplicate`. Nothing is
  *                               owed for it any more, so the hold ends here;
@@ -678,7 +681,9 @@ const KEY_REFUSED: ReadonlySet<string> = new Set([
  *                               landed nothing, and whatever was owed before
  *                               is still owed.
  *   txid_reused                 → `sent`, marked diverged, unless another
- *                               row is held (then `previous`). The key is on
+ *                               row is held (then `previous`, marked
+ *                               diverged, so the hold agrees with the
+ *                               SYNC_KEY_DIVERGED this answer emits). The key is on
  *                               the server with other bytes, so the commit
  *                               under it may have moved the base: newer rows
  *                               stay behind it, and the row itself is never
@@ -729,11 +734,19 @@ export function nextAwaitingReceipt(
   }
   if (status === "txid_reused") {
     if (previous != null && !isSameRow(previous, sent)) {
-      return previous;
+      // `outcomeToEvents` answers SYNC_KEY_DIVERGED whichever row this was,
+      // so the hold must say so too: RECOVERY_REQUIRED with a sendable hold
+      // behind it could not be rebuilt after a restart.
+      return isDiverged(previous) ? previous : { ...previous, diverged: "txid_reused" };
     }
     return { ...awaitingReceiptFor(sent), diverged: "txid_reused" };
   }
   if (typeof status === "string" && KEY_REFUSED.has(status)) {
+    // A late refusal never releases a diverged hold (plan #166 t. 10, 11):
+    // only the author's recovery decision or its own verified receipt does.
+    if (isDiverged(previous)) {
+      return previous;
+    }
     if (previous == null) {
       return null;
     }

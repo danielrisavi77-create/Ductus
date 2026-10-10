@@ -10,7 +10,9 @@
  *   - the newest text is queued, on the server under its own key, or was
  *     dropped by that explicit adoption;
  *   - rows that wait while the plan sends nothing are always visible as
- *     RECOVERY_REQUIRED or CONFLICT, never a silent stall.
+ *     RECOVERY_REQUIRED or CONFLICT, never a silent stall;
+ *   - RECOVERY_REQUIRED always has a diverged hold behind it, so a restart
+ *     can rebuild it.
  * Then the network comes back and the author acts only on what is visible: every
  * run must end in SYNCED within a bounded number of rounds.
  */
@@ -298,6 +300,10 @@ function expectInvariants(world: World, how: string): void {
   }
   if (isDiverged(world.awaiting)) {
     expect(world.schedules.has(DOC), `${how}: hot retry on a diverged hold`).toBe(false);
+  }
+  if (world.state === "RECOVERY_REQUIRED") {
+    // A restart rebuilds RECOVERY_REQUIRED only from the marker.
+    expect(isDiverged(world.awaiting), `${how}: RECOVERY_REQUIRED without a diverged hold`).toBe(true);
   }
 }
 
