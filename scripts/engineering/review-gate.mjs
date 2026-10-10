@@ -1,8 +1,7 @@
 import { readFile } from "node:fs/promises";
 import process from "node:process";
 
-import { evaluateMetadata } from "./pr-metadata-core.mjs";
-import { evaluateGate } from "./review-gate-core.mjs";
+import { evaluatePullRequest } from "./review-gate-core.mjs";
 
 const context = "Engineering review gate";
 
@@ -74,26 +73,16 @@ async function main() {
     apiAll(`/repos/${owner}/${repo}/pulls/${number}/files`),
   ]);
 
-  const metadata = evaluateMetadata({
-    body: pr.body ?? "",
-    files: changedFiles.map((item) => item.filename),
+  const { metadata, result } = evaluatePullRequest({
+    pr,
+    files: changedFiles,
+    comments,
+    ownerLogin: owner,
   });
-
-  const result = metadata.ok
-    ? evaluateGate({
-        body: pr.body ?? "",
-        headSha: pr.head.sha,
-        ownerLogin: owner,
-        comments,
-      })
-    : {
-        state: "failure",
-        description: metadata.message,
-      };
 
   await setStatus(repository, pr.head.sha, result, pr.html_url);
   console.log(`${context}: ${result.state} — ${result.description}`);
-  if (metadata.ok) {
+  if (metadata?.ok) {
     console.log(`Risk: declared=${metadata.risk}, minimum=${metadata.minimumRisk}`);
   }
 }

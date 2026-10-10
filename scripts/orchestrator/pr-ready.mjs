@@ -1,6 +1,6 @@
 // Merge-readiness checklist for one PR. Read-only: never merges or edits.
 // Usage: node pr-ready.mjs <number>   (exit 0 only if all required checks pass)
-import { ghJson, readGate, repoId, reviewThreads } from "./gh.mjs";
+import { ghJson, prPaths, readGate, repoId, reviewThreads } from "./gh.mjs";
 import {
   allRequiredPass, evaluateReady, intersectFiles, parseAgentRisk, summarizeThreads,
 } from "./orchestrator-core.mjs";
@@ -22,13 +22,14 @@ const attempt = async (fn) => {
 try {
   const pr = await ghJson([
     "pr", "view", String(n),
-    "--json", "headRefOid,baseRefName,mergeable,isDraft,autoMergeRequest,statusCheckRollup,files,body,state",
+    "--json", "headRefOid,baseRefName,mergeable,isDraft,autoMergeRequest,statusCheckRollup,body,state",
   ]);
   if (pr.state !== "OPEN") {
     console.error(`PR #${n} is ${pr.state}`);
     process.exit(2);
   }
-  const files = (pr.files ?? []).map((f) => f.path);
+  // REST list: a rename counts under both names, and a cut list is an error.
+  const files = await attempt(() => prPaths(n));
   const { owner, repo } = await repoId();
   const compare = await attempt(() =>
     ghJson(["api", `repos/${owner}/${repo}/compare/${pr.headRefOid}...main`]));
@@ -42,7 +43,7 @@ try {
     rollup: pr.statusCheckRollup,
     base: pr.baseRefName,
     mergeable: pr.mergeable,
-    overlap: mainFiles ? intersectFiles(mainFiles, files) : null,
+    overlap: mainFiles && files ? intersectFiles(mainFiles, files) : null,
     threads: threadNodes ? summarizeThreads(threadNodes) : null,
     autoMerge: Boolean(pr.autoMergeRequest),
     files,

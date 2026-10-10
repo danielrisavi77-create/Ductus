@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
@@ -94,9 +94,34 @@ describe("pr-metadata-precheck hook", { timeout: 30_000 }, () => {
 
 const autoMerge = fileURLToPath(new URL("../../scripts/hooks/pr-auto-merge.mjs", import.meta.url));
 
-function decide(command: string, stdout: string) {
+// A repository whose branch changes exactly `files` against origin/main.
+function branchChanging(...files: string[]) {
+  const dir = mkdtempSync(join(tmpdir(), "pr-automerge-"));
+  const git = (...args: string[]) => {
+    const identity = ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false"];
+    const done = spawnSync("git", [...identity, ...args], { cwd: dir, env, encoding: "utf8" });
+    if (done.status !== 0) throw new Error(`git ${args[0]}: ${done.stderr}`);
+  };
+  const commit = (paths: string[], message: string) => {
+    for (const path of paths) {
+      mkdirSync(dirname(join(dir, path)), { recursive: true });
+      writeFileSync(join(dir, path), `${message}\n`);
+      git("add", "--", path);
+    }
+    git("commit", "-q", "-m", message);
+  };
+  git("init", "-q");
+  commit(["README.md", "scripts/hooks/old.mjs"], "base");
+  git("update-ref", "refs/remotes/origin/main", "HEAD");
+  commit(files, "change");
+  return dir;
+}
+
+const docsOnly = branchChanging("docs/notes.md");
+
+function decide(command: string, stdout: string, dir = docsOnly) {
   const result = spawnSync(process.execPath, [autoMerge, "--dry-run"], {
-    input: JSON.stringify({ tool_input: { command }, tool_response: { stdout }, cwd }),
+    input: JSON.stringify({ tool_input: { command }, tool_response: { stdout }, cwd: dir }),
     encoding: "utf8",
     env,
   });
@@ -121,5 +146,39 @@ describe("pr-auto-merge hook", { timeout: 30_000 }, () => {
     expect(decide(create("low"), "pull request create failed")).toBe("");
     expect(decide('gh pr edit 7 --body "Risk: low"', url)).toBe("");
     expect(decide("gh pr view 7", url)).toBe("");
+  });
+
+  // One case per file: each builds a repository, and a shared time budget is tight on a loaded machine.
+  it.each([
+    ".github/workflows/ci.yml",
+    "scripts/engineering/review-gate.mjs",
+    "scripts/orchestrator/pr-ready.mjs",
+    ".claude/skills/x/SKILL.md",
+    ".agents/skills/x/SKILL.md",
+    "docs/SESSIONS.md",
+    "docs/DECISIONS.md",
+    "tests/unit/codeowners.test.ts",
+    "STATE.md",
+    "src/domain/document/index.ts",
+  ])("leaves a PR alone when %s puts the floor above the declared low", (file) => {
+    expect(decide(create("low"), url, branchChanging("docs/notes.md", file))).toBe("");
+  });
+
+  it("counts a file moved out of a protected directory under its old name", () => {
+    const dir = branchChanging("docs/notes.md");
+    const git = (...args: string[]) => spawnSync("git", args, { cwd: dir, env, encoding: "utf8" }).status;
+    expect(git("mv", "scripts/hooks/old.mjs", "docs/old.md")).toBe(0);
+    expect(git("-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "move")).toBe(0);
+    expect(decide(create("low"), url, dir)).toBe("");
+  });
+
+  it("leaves a PR alone when the changed files cannot be read", () => {
+    expect(decide(create("low"), url, cwd)).toBe("");
+  });
+
+  it("leaves a PR alone when its metadata is not valid", () => {
+    expect(decide('gh pr create --title "x" --body "Risk: low\nTask: DAN-1"', url)).toBe("");
+    expect(decide('gh pr create --title "x" --body "Agent: claude:a:nobody\nRisk: low\nTask: DAN-1"', url)).toBe("");
+    expect(decide('gh pr create --title "x" --body-file missing.md', url)).toBe("");
   });
 });

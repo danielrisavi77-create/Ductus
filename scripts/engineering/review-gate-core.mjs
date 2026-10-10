@@ -1,4 +1,6 @@
 import { canonicalBlock, field } from "./metadata-parser.mjs";
+import { evaluateMetadata } from "./pr-metadata-core.mjs";
+import { changedPaths, ownerCommandPaths } from "./protected-paths.mjs";
 
 const RISK_VALUES = new Set(["low", "standard", "critical"]);
 const AGENT_RE =
@@ -300,6 +302,34 @@ export function evaluateGate({
     description: risk === "critical"
       ? "Independently authenticated review and QA are valid for current head."
       : "Independently authenticated review is valid for current head.",
+  };
+}
+
+/**
+ * Whole decision for one PR from REST data: `pr` (GET pulls/{n}), `files` (its
+ * files list) and the issue comments. Every description is a fixed text.
+ */
+export function evaluatePullRequest({ pr, files, comments, ownerLogin }) {
+  const listed = files ?? [];
+  // The floor is only as good as the list: a cut or unread list fails closed.
+  if (!(pr.changed_files <= listed.length)) {
+    return { result: { state: "failure", description: "Changed file list is incomplete; the risk floor cannot be computed." } };
+  }
+  const paths = changedPaths(listed);
+  const metadata = evaluateMetadata({ body: pr.body ?? "", files: paths });
+  if (!metadata.ok) return { metadata, result: { state: "failure", description: metadata.message } };
+  if (pr.auto_merge && ownerCommandPaths(paths).length > 0) {
+    return {
+      metadata,
+      result: {
+        state: "pending",
+        description: "Auto-merge is enabled on a PR that needs the owner's merge command (D-97); disable auto-merge.",
+      },
+    };
+  }
+  return {
+    metadata,
+    result: evaluateGate({ body: pr.body ?? "", headSha: pr.head.sha, ownerLogin, comments }),
   };
 }
 
