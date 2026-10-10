@@ -221,6 +221,32 @@ test("every agent profile in the repo has a role, except the read-only scout", (
   for (const profile of Object.keys(PROFILE_ROLES)) assert.ok(profiles.includes(profile), `${profile} is not a profile`);
 });
 
+test("every profile in PROFILE_ROLES gets the notice of its own role from the budget hook", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-roles-"));
+  try {
+    const transcript = path.join(dir, "t.jsonl");
+    fs.writeFileSync(transcript, assistant("a", { cache_read_input_tokens: ROTATE_AT }) + "\n");
+    const expected = { orchestrator: /Reminder, not a stop/, worker: /IZVJEŠTAJ block of your own PR/, control: /your own comment on the PR or issue/ };
+    assert.deepEqual([...new Set(Object.values(PROFILE_ROLES))].sort(), Object.keys(expected).sort());
+    for (const [profile, role] of Object.entries(PROFILE_ROLES)) {
+      assert.equal(sessionRole({ agent_type: profile }), role, profile);
+      const notice = runHook("budget", { transcript_path: transcript, agent_type: profile }).additionalContext;
+      for (const [other, pattern] of Object.entries(expected)) {
+        if (other === role) assert.match(notice, pattern, profile);
+        else assert.doesNotMatch(notice, pattern, profile);
+      }
+      if (role === "orchestrator") assert.doesNotMatch(notice, BAN, profile);
+      else assert.match(notice, BAN, profile);
+    }
+    // A name near a profile is not that profile.
+    for (const profile of ["ductus-scout", "Ductus-Orchestrator", "ductus-orchestrator ", "orchestrator"]) {
+      assert.equal(sessionRole({ agent_type: profile }), "unknown", profile);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("the orchestrator is reminded to hand off and compact, never told to rotate or stop", () => {
   for (const tokens of [ROTATE_AT, HARD_AT, HARD_AT * 2]) {
     const notice = budgetNotice(tokens, "orchestrator");
@@ -382,6 +408,35 @@ test("read entry point leaves a link out of the repo to the permission system", 
       if (!fileLink(t, path.join(outside, "notes", "private.md"), path.join(dir, "docs", "out.md"))) return;
       assert.equal(raw("read", { cwd: dir, tool_input: { file_path: "docs/out.md" } }, dir), "");
     });
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true });
+  }
+});
+
+// QA on 2523825 (#117): with the project root given as a link and Read naming
+// the real path, the names alone put the file outside the project and the
+// document rule silently did not apply.
+test("read entry point knows its own files when the root or the file is named through a link", () => {
+  const { base, dir, outside } = sandbox();
+  try {
+    const via = path.join(base, "via");
+    dirLink(dir, via);
+    fs.writeFileSync(path.join(dir, "pnpm-lock.yaml"), `# ${MARK}\n`);
+    const read = (root, file) => raw("read", { cwd: dir, tool_input: { file_path: file } }, root);
+    for (const [root, other] of [[via, dir], [dir, via]]) {
+      assert.match(read(root, path.join(other, "docs", "open.md")), new RegExp(`"deny".*${MARK}`), `${root} <- ${other}`);
+      assert.match(read(root, path.join(other, "pnpm-lock.yaml")), /generated output/);
+      assert.equal(read(root, path.join(other, "docs", "small.md")), "");
+      assert.equal(read(root, path.join(other, "docs", "missing.md")), "");
+      // Deny-listed and foreign files stay unread however they are named.
+      for (const file of [path.join(other, "secrets", "runbook.md"), path.join(other, ".env"), path.join(outside, "notes", "private.md")]) {
+        assert.equal(read(root, file), "", `${root} <- ${file}`);
+      }
+    }
+    dirLink(path.join(dir, "secrets"), path.join(dir, "docs", "l"));
+    dirLink(path.join(outside, "notes"), path.join(dir, "docs", "ext"));
+    assert.equal(read(via, path.join(dir, "docs", "l", "runbook.md")), "");
+    assert.equal(read(via, path.join(dir, "docs", "ext", "private.md")), "");
   } finally {
     fs.rmSync(base, { recursive: true, force: true });
   }
@@ -565,6 +620,28 @@ test("no hook mode follows a link swapped in between its path check and its read
         };
         assert.equal(runHook(mode, race.event(s), io, { CLAUDE_PROJECT_DIR: s.dir }), undefined);
         assert.deepEqual([io.failed, io.ran, checking], [[], ["openSync", "lstatSync"], false]);
+      } finally {
+        fs.rmSync(s.base, { recursive: true, force: true });
+      }
+    });
+  }
+});
+
+test("read does not follow a swapped-in link when the project root is given as a link", async (t) => {
+  for (const [timing, hooks] of Object.entries(TIMINGS)) {
+    await t.test(timing, () => {
+      const s = raceSandbox();
+      try {
+        const env = { CLAUDE_PROJECT_DIR: path.join(s.base, "via") };
+        dirLink(s.dir, env.CLAUDE_PROJECT_DIR);
+        const event = { cwd: s.dir, tool_input: { file_path: path.join(s.dir, "ok", "big.md") } };
+        assert.match(JSON.stringify(runHook("read", event, fs, env)), new RegExp(OK));
+        const plan = hooks(swapper(path.join(s.dir, "ok"), path.join(s.dir, "secrets")));
+        const io = racing(plan);
+        const output = quiet("read", event, io, env);
+        assertSwapped(io, plan);
+        assert.doesNotMatch(JSON.stringify(output ?? ""), new RegExp(LEAK));
+        assert.equal(output, undefined);
       } finally {
         fs.rmSync(s.base, { recursive: true, force: true });
       }
