@@ -40,6 +40,7 @@ Claude Code projektni subagenti nalaze se u `.claude/agents/`:
 ├── engineering/
 │   ├── ductus-backend-data.md
 │   ├── ductus-frontend-editor.md
+│   ├── ductus-scout.md
 │   └── ductus-platform-sre.md
 ├── quality/
 │   ├── ductus-independent-reviewer.md
@@ -72,8 +73,9 @@ Datoteke su namjerno kratke. Claude Code ih može pronaći rekurzivno u podmapam
 | Accessibility | ne | keyboard, semantics, focus, AT i WCAG audit |
 | Privacy / Legal / Pilot | ne | privacy, retention, institucionalni i pilot gateovi |
 | Architecture / Performance | ne | granice sustava, pouzdanost, skaliranje i performance audit |
+| Scout | ne; samo Read/Grep/Glob | jeftino lociranje koda i odjeljaka dokumenata (Haiku), bez prosudbe |
 
-Ovo nije signal da svih 12 uloga treba raditi istodobno. WIP limit iz `docs/ENGINEERING_SYSTEM.md` ostaje nadređen: normalno tri stalna writera, kontrolne i auditorske uloge po potrebi.
+Ovo nije signal da svih 13 uloga treba raditi istodobno. WIP limit iz `docs/ENGINEERING_SYSTEM.md` ostaje nadređen: normalno tri stalna writera, kontrolne i auditorske uloge po potrebi.
 
 ## 5. Agent nije isto što i skill
 
@@ -134,7 +136,8 @@ Orkestrator ili glavna sesija bira najmanji potreban profil:
 - tok/copy/product vrijednost → Product + UX;
 - pristupačnost → Accessibility;
 - privacy/pilot/institucionalni preduvjet → Privacy / Legal / Pilot;
-- cross-cutting arhitektura/performance → Architecture / Performance.
+- cross-cutting arhitektura/performance → Architecture / Performance;
+- lociranje koda ili odjeljka kad treba više od tri pretrage → Scout.
 
 Ne stvarati novu agent datoteku samo zato što postoji novi task. Nova uloga je opravdana tek kad ima trajan, jasno odvojen mandat koji se ponavlja.
 

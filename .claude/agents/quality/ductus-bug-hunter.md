@@ -1,7 +1,7 @@
 ---
 name: ductus-bug-hunter
 description: Attempts to break Ductus main or staging and turns reproducible failures into focused bug reports without fixing them in the same run.
-model: inherit
+model: sonnet
 effort: medium
 skills:
   - ductus-bug-hunter

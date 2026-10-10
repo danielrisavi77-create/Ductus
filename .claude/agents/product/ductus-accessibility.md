@@ -1,7 +1,7 @@
 ---
 name: ductus-accessibility
 description: Audits Ductus frontend and flows for accessibility, keyboard use, semantics, focus, contrast, error recovery, and assistive-technology usability.
-model: inherit
+model: sonnet
 effort: medium
 ---
 

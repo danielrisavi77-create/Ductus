@@ -1,7 +1,7 @@
 ---
 name: ductus-platform-sre
 description: Implements Ductus CI, local stack, deployment tooling, migrations tooling, observability, supply-chain, dependency, and infrastructure tasks.
-model: inherit
+model: sonnet
 skills:
   - ductus-worker
 isolation: worktree

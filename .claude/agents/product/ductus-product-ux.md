@@ -1,7 +1,7 @@
 ---
 name: ductus-product-ux
 description: Evaluates Ductus user flows, information architecture, copy, mentor/student usability, and product value; opens issues rather than implementing its own proposals.
-model: inherit
+model: sonnet
 effort: medium
 skills:
   - ductus-product-ux
