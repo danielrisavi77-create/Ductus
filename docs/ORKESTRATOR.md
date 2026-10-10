@@ -80,7 +80,7 @@ Pitanja se skupljaju i šalju zajedno, s preporukom uz svako.
 1. Pitanje se upisuje na ploču (Ductus pult, polje "Čeka tebe") s preporukom, a trajna stavka i u Owner queue u `STATE.md`.
 2. Orkestrator šalje push obavijest (alat `PushNotification`, do 200 znakova): što treba i preporuka, npr. "Ductus: treba odluka o D-08; preporuka UpCloud. Detalji na pultu." Više pitanja ide u jednu obavijest.
 3. Orkestrator ne čeka u chatu: nastavlja sve što ne ovisi o odgovoru. Što ovisi, stoji na ploči kao "čeka Daniela".
-4. Isto vrijedi kad Daniel mora nešto napraviti sam (npr. otvoriti novu sesiju workera pri rotaciji ili novu sesiju orkestratora kad se postojeća ne može nastaviti, §7, jer orkestrator ne može pokrenuti desktop sesiju ni review sesiju za vlastiti PR, §8): obavijest s točnom radnjom.
+4. Isto vrijedi kad Daniel mora nešto napraviti sam (npr. otvoriti novu sesiju workera pri rotaciji ili novu sesiju orkestratora kad se postojeća ne može nastaviti, §7, jer orkestrator ne pokreće desktop ni review sesije, §8): obavijest s točnom radnjom.
 
 ## 5. Poruke i cross-account koordinacija
 
@@ -126,12 +126,12 @@ Orkestrator prati samo sesije koje rade na repou Ductus. Ostale sesije na račun
 | CLI posao drugog providera (Codex, Grok) | orkestrator, u potpunosti | writer kad ta kvota postoji; pregled samo kao advisory nalaz |
 | Sesija u oblaku ili desktop aplikaciji | review sesije i desktop sesije pokreće Daniel; QA sesije u oblaku pokreće orkestrator (vidi niže); orkestrator im šalje zadatak i prati ih preko GitHuba | kanonski review i QA; dugi poslovi |
 
-**Sesija u oblaku koju pokreće orkestrator (Daniel, 10. 10. 2026.).** Orkestrator smije sam, bez pitanja, pokrenuti sesiju u oblaku kad mu zatreba, kao jednokratnu rutinu (alat za rutine u oblaku, u Claude Codeu `RemoteTrigger` s `run_once_at`). Sve QA sesije otvara orkestrator. Desktop sesiju i dalje pokreće samo Daniel. Uvjeti:
+**Sesija u oblaku koju pokreće orkestrator (Daniel, 10. 10. 2026.).** Orkestrator smije sam, bez pitanja, pokrenuti QA sesiju u oblaku kad mu zatreba, kao jednokratnu rutinu (alat za rutine u oblaku, u Claude Codeu `RemoteTrigger` s `run_once_at`). Sve QA sesije otvara orkestrator. Review sesije i desktop sesije pokreće samo Daniel; orkestrator ne pokreće review sesiju ni za jedan PR, bez obzira na risk. Uvjeti:
 
 - na `critical` PR-u koji je orkestratorov vlastiti ili PR njegova podagenta barem jedan od dva PASS-a mora doći iz sesije koju je otvorio Daniel. Zato orkestrator za takve PR-ove pokreće samo QA, a review daje sesija koju je otvorio Daniel; PASS dviju sesija koje je obje pokrenuo orkestrator ne zadovoljava uvjet za spajanje takvog PR-a;
 
-- jedna sesija po PR-u, ulozi i headu, s vlastitim slotom (`claude:qa<PR>` ili `claude:review<PR>`), unutar WIP limita iz `ENGINEERING_SYSTEM.md` §13;
-- verdict na headu je konačan za tu ulogu: nakon objavljenog verdikta orkestrator na istom headu ne pokreće novu sesiju iste uloge. `FAIL` ili `BLOCK` stoji dok autor ne pusha popravak ili Daniel ne objavi Owner Override. Sesija za novi head dobiva novi slot (`claude:qa<PR>-2`, `claude:qa<PR>-3`), da njezin verdict ne zamijeni raniji istog identiteta;
+- jedna QA sesija po PR-u i headu, s vlastitim slotom (`claude:qa<PR>`), unutar WIP limita iz `ENGINEERING_SYSTEM.md` §13;
+- QA verdict na headu je konačan: nakon objavljenog verdikta orkestrator na istom headu ne pokreće novu QA sesiju. `FAIL` ili `BLOCK` stoji dok autor ne pusha popravak ili Daniel ne objavi Owner Override. Sesija za novi head dobiva novi slot (`claude:qa<PR>-2`, `claude:qa<PR>-3`), da njezin verdict ne zamijeni raniji istog identiteta;
 - uputa je neutralna: identitet, PR, kanonski dokumenti koje treba pročitati, oblik verdikta i postupak kvotnog fallbacka iz `ENGINEERING_SYSTEM.md` §6 (provjera komentara iscrpljenog Appa, inače `@codex review` i čekanje). Ne sadrži orkestratorovu ocjenu PR-a, očekivani ishod ni sažetak reviewa; head i diff sesija čita sama iz GitHuba;
 - sesija dobiva samo repo i konektor za poruke orkestratoru (§5); ostali konektori računa joj se ne prilažu;
 - pokretanje se bilježi u koordinacijskom issueu: PR, slot, model, ID rutine, head u trenutku pokretanja i točan tekst upute. Rutina se nakon pokretanja ne mijenja; prije pokretanja smije se samo suziti (npr. ukloniti konektore) ili onemogućiti;
