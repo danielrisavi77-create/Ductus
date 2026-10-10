@@ -379,6 +379,11 @@ test("queue: status lines with a short SHA never replace an assignment; the stal
     [185, 189, 191, 192, 196, 199].map((n) => `#${n} head ${S[n].slice(0, 7)}`));
 });
 
+test("queue: a slot written with its role suffix is still an assignment", () => {
+  const items = queueItems([red([`RED ZA REVIEW (claude:a:orchestrator): **#185** head \`${S[185]}\` → \`claude:reviewC:reviewer\`.`], 100)]);
+  assert.deepEqual(items.map((i) => [i.number, i.head, i.slots]), [[185, S[185], ["claude:reviewC"]]]);
+});
+
 test("queue: only a verdict of the assigned slot clears the item", () => {
   const items = queueItems([potez]).filter((i) => i.number === 189);
   const prs = [{ number: 189, state: "OPEN", isDraft: false, headRefOid: S[189], headRefName: "x" }];

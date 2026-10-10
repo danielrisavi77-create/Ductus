@@ -94,7 +94,7 @@ export function checkFailStalls({ prs, comments, now }) {
 const QUEUE_FIRST = ["RED ZA REVIEW", "POTEZ ORKESTRATORA"];
 const SECTION_RE = /^[*_#\s]*RED ZA REVIEW[*_:\s]*$/; // "**RED ZA REVIEW**" inside a POTEZ comment
 const HEADING_RE = /^(?:#{1,6}\s|\*\*[^*]+\*\*:?\s*$)/; // next section ends it
-const SLOT_RE = /`((?:claude|codex|chatgpt|grok):[A-Za-z0-9_-]+)`/g;
+const SLOT_RE = /`((?:claude|codex|chatgpt|grok):[A-Za-z0-9_-]+)(?::[a-z-]+)?`/g; // role suffix as in Agent-Review is dropped
 const principal = (slot) => slot.replace(/^(?:codex|chatgpt):/, "openai:"); // as review-gate-core
 
 /**
