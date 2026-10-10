@@ -14,7 +14,7 @@ describe("safeReturnTo", () => {
     "zlo.test",
     "/\tzlo.test",
     "/\n/zlo.test",
-    "/‎/zlo.test",
+    "/\u200e/zlo.test",
     "/\u0000",
     "/\ud800",
     "/api/auth/login",
