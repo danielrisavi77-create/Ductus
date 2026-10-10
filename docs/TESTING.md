@@ -30,6 +30,7 @@ Ductus ne testira samo radi li funkcija, nego može li se vjerovati zapisu, ovla
 - Firefox: editor, sync, journal, clipboard, auth i submission PR-ovi.
 - WebKit: editor, IndexedDB/Dexie, offline, Web Locks, clipboard, auth i submission PR-ovi.
 - Prije pilota cijeli acceptance path mora proći na Chromiumu, Firefoxu i WebKitu.
+- Iznimka samo za demo (D-98 dopuna, 10. 10. 2026.): demo spec K-4 obvezan je do 1. 11. samo na Chromiumu; Firefox i WebKit prolaze informativno i ne blokiraju spajanje. Pravilo za pilot se ne mijenja.
 - Mobilni viewport je dodatak, ne zamjena za WebKit.
 
 ## 3. Obvezni adversarial scenariji prije pilota
