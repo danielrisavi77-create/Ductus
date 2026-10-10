@@ -10,7 +10,7 @@ M0 Temelj. Prvi cilj ostaje radni demo za FPZG 2. 11. 2026. (`docs/PLAN-DEMO.md`
 
 Agent nikad ne uzima ove stavke i nikad ne čeka na njima ako drugi posao može naprijed.
 
-- [ ] Nakon mergea Engineering System v1 zaštititi `main`: PR obvezan; direct/force push i delete zabranjeni; unresolved conversations blokiraju; obvezni statusi CI, Local stack, Security scanners, Dependency review i Engineering review gate; squash only.
+- [x] 10. 10. 2026.: `main` zaštićen (PR obvezan; obvezni statusi CI, Local stack, Security scanners, Dependency review, Engineering review gate; neriješeni razgovori blokiraju; force push i delete zabranjeni; squash only; auto-merge i brisanje grane nakon spajanja uključeni). Administrator smije zaobići zaštitu; obvezni Code Owner review nije uključen (ENGINEERING_SYSTEM §10).
 - [ ] Proba demoa 31. 10. 2026. i snimka prolaza (PLAN-DEMO D-3, D-4).
 - [ ] Odlučiti D-06 ili strožu D-39 nakon UX testa iz `docs/UX-EVAL.md`.
 - [ ] Potvrditi ili promijeniti D-08, D-16, D-20, D-34, D-37, D-38 te pragove P-01 do P-04.

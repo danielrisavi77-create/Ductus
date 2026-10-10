@@ -91,3 +91,35 @@ describe("pr-metadata-precheck hook", { timeout: 30_000 }, () => {
     expect(run('gh pr edit 5 --title "new title"').status).toBe(0);
   });
 });
+
+const autoMerge = fileURLToPath(new URL("../../scripts/hooks/pr-auto-merge.mjs", import.meta.url));
+
+function decide(command: string, stdout: string) {
+  const result = spawnSync(process.execPath, [autoMerge, "--dry-run"], {
+    input: JSON.stringify({ tool_input: { command }, tool_response: { stdout }, cwd }),
+    encoding: "utf8",
+    env,
+  });
+  return result.stdout.trim();
+}
+
+describe("pr-auto-merge hook", { timeout: 30_000 }, () => {
+  const url = "https://github.com/example/repo/pull/7";
+  const create = (risk: string) =>
+    `gh pr create --title "x" --body "Agent: claude:a:platforma\nRisk: ${risk}\nTask: DAN-1"`;
+
+  it("selects a newly created low-risk PR", () => {
+    expect(decide(create("low"), `${url}\n`)).toBe(url);
+  });
+
+  it("leaves standard and critical PRs alone", () => {
+    expect(decide(create("standard"), url)).toBe("");
+    expect(decide(create("critical"), url)).toBe("");
+  });
+
+  it("does nothing when no PR was created", () => {
+    expect(decide(create("low"), "pull request create failed")).toBe("");
+    expect(decide('gh pr edit 7 --body "Risk: low"', url)).toBe("");
+    expect(decide("gh pr view 7", url)).toBe("");
+  });
+});

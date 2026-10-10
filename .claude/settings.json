@@ -104,6 +104,19 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/pr-auto-merge.mjs\"",
+            "timeout": 30
+          }
+        ]
+      }
     ]
   }
 }
