@@ -162,7 +162,9 @@ export function LocalDocumentProvider({
     let release: (() => void) | null = null;
     const abort = new AbortController();
     const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
-    if (!locks) {
+    // Checked here, not left to Dexie: browsers report a missing IndexedDB
+    // under different error names, and the author must see the same notice.
+    if (!locks || typeof indexedDB === "undefined" || !indexedDB) {
       setPhase("unavailable");
       return;
     }

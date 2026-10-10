@@ -166,7 +166,13 @@ test.describe("local editor (#197)", () => {
       data.setData("text/html", html);
       data.setData("text/plain", "Izmišljeni naslov");
       const target = document.querySelector('[role="textbox"]')!;
-      target.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+      const event = new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true });
+      target.dispatchEvent(event);
+      // Firefox hands an untrusted paste event no clipboard data; the same
+      // ProseMirror paste pipeline (transformPasted included) then runs directly.
+      if (!event.clipboardData?.getData("text/html")) {
+        (target as unknown as { editor: { view: { pasteHTML(html: string): boolean } } }).editor.view.pasteHTML(html);
+      }
     });
     await expect(chipOf(page)).toHaveText(SAVED);
     expect(await page.evaluate(() => (window as unknown as { __pasted?: boolean }).__pasted)).toBeUndefined();
