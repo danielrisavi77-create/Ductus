@@ -161,15 +161,25 @@ export class LocalDocumentSaver {
     }
   }
 
-  /** The editor changed: nothing it now shows is claimed as saved. */
+  /**
+   * The editor changed: nothing it now shows is claimed as saved. A halted
+   * saver keeps ERROR or RECOVERY_REQUIRED: typing on must never turn the
+   * chip back to "Uređivanje" while nothing is being saved (#197 attack 4).
+   */
   edit(): void {
     this.gen += 1;
+    if (this.halted) return;
     this.dispatch({ type: "EDIT" });
   }
 
-  /** The debounced candidate for the current text; the newest one wins. */
+  /**
+   * The debounced candidate for the current text; the newest one wins. A
+   * halted saver drops it (its state already says so); proposing before a
+   * `ready` load is a caller bug and throws instead of dropping text silently.
+   */
   propose(doc: CanonicalDocument): Promise<void> {
-    if (!this.loaded || this.halted) return Promise.resolve();
+    if (this.halted) return Promise.resolve();
+    if (!this.loaded) throw new Error("LocalDocumentSaver.propose() before a ready load()");
     this.next = { doc, gen: this.gen };
     this.flight ??= this.drain();
     return this.flight;

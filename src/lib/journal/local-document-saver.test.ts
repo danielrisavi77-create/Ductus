@@ -235,6 +235,7 @@ describe("LocalDocumentSaver: failures (#197 attacks 5, 6, 7, 4, 17, 13)", () =>
     expect(await target.load()).toEqual({ kind: "unavailable" });
     expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "unavailable" });
     await type(target, "x");
+    expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "unavailable" });
     expect(writes).toBe(0);
   });
 
@@ -278,7 +279,11 @@ describe("LocalDocumentSaver: failures (#197 attacks 5, 6, 7, 4, 17, 13)", () =>
     await type(first, "prva kartica");
     await type(second, "druga kartica");
     expect(second.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+    // Typing on must not turn the chip back to "Uređivanje" while nothing saves.
     await type(second, "druga kartica opet");
+    expect(second.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+    second.edit();
+    expect(second.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
     const stored = await journal(at).read(DOC);
     expect(documentsEqual(stored.snapshot!.document, text("prva kartica"))).toBe(true);
     expect(stored.pending).toHaveLength(1);
@@ -303,6 +308,7 @@ describe("LocalDocumentSaver: failures (#197 attacks 5, 6, 7, 4, 17, 13)", () =>
       expect(await target.load()).toEqual({ kind: "recovery", document: null });
       expect(target.snapshot()).toMatchObject({ state: "RECOVERY_REQUIRED", failure: "corrupt" });
       await type(target, "");
+      expect(target.snapshot()).toMatchObject({ state: "RECOVERY_REQUIRED", failure: "corrupt" });
     }
     expect(writes).toBe(0);
   });
@@ -324,6 +330,7 @@ describe("LocalDocumentSaver: failures (#197 attacks 5, 6, 7, 4, 17, 13)", () =>
       expect(loaded.kind === "recovery" && documentsEqual(loaded.document!, text("sačuvaj"))).toBe(true);
       expect(target.snapshot().state).toBe(state);
       await type(target, "");
+      expect(target.snapshot().state).toBe(state);
       expect(writes).toBe(0);
     }
   });
@@ -335,8 +342,20 @@ describe("LocalDocumentSaver: failures (#197 attacks 5, 6, 7, 4, 17, 13)", () =>
     await journal(at).destroyForLogout();
     await type(target, "nakon odjave");
     expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "unavailable" });
+    await type(target, "i dalje nakon odjave");
+    expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "unavailable" });
+    expect((await journal(at).read(DOC)).snapshot).toBeNull();
     const source = readFileSync(new URL("./local-document-saver.ts", import.meta.url), "utf8");
     expect(source).not.toMatch(/destroyForLogout|hasPendingLogout|\bfetch\(/);
+  });
+
+  it("refuses a candidate proposed before a ready load instead of dropping it", async () => {
+    const target = saver(journal(scope()));
+    expect(() => target.propose(text("prerano"))).toThrow(/before a ready load/);
+    expect(target.snapshot().state).toBe("EDITING");
+    await target.load();
+    await type(target, "nakon učitavanja");
+    expect(target.snapshot().state).toBe("LOCAL_DURABLE");
   });
 
   it("maps journal and browser errors to visible reasons", () => {

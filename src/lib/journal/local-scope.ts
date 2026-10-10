@@ -11,8 +11,9 @@
  * provider (BACKEND §4.3). It is read at request time on the server, never
  * inlined into the client bundle, so one `next build` serves both E2E and the
  * demo and the flag is set where the server starts. NODE_ENV cannot tell
- * production apart; a deployment marked `production` refuses the flag instead
- * of silently journalling under a shared scope.
+ * production apart, so the flag also needs an explicit, allow-listed
+ * deployment (`local`, `ci` or `demo`); an unset or any other deployment
+ * refuses it instead of silently journalling under a shared scope.
  *
  * Its database name differs from every principal's, so when sign-in arrives
  * the demo journal is never picked up as a signed-in student's work: F-5
@@ -32,9 +33,12 @@ export const LOCAL_DEMO_DOCUMENT_ID = "local-demo-document";
 export type LocalScopeConfig = {
   /** `"1"` enables the demo scope; unset or empty leaves it off. */
   readonly localDemoJournal?: string;
-  /** Deployment marker; `"production"` refuses the demo scope. */
+  /** Deployment marker; only `LOCAL_DEMO_DEPLOYMENTS` allow the demo scope. */
   readonly deployment?: string;
 };
+
+/** The only deployments the demo scope runs in; matched exactly. */
+export const LOCAL_DEMO_DEPLOYMENTS: readonly string[] = ["local", "ci", "demo"];
 
 export class LocalScopeConfigError extends Error {
   constructor(message: string) {
@@ -54,8 +58,12 @@ export function resolveLocalScope(config: LocalScopeConfig): string | null {
   if (flag !== "1") {
     throw new LocalScopeConfigError("local demo journal flag must be \"1\" or unset");
   }
-  if (config.deployment === "production") {
-    throw new LocalScopeConfigError("local demo journal is prohibited in production");
+  // Allow-list, not deny-list: "Production", "prod " or a forgotten marker
+  // must fail closed rather than look like a non-production deployment.
+  if (!LOCAL_DEMO_DEPLOYMENTS.includes(config.deployment ?? "")) {
+    throw new LocalScopeConfigError(
+      "local demo journal needs a deployment of exactly local, ci or demo",
+    );
   }
   return LOCAL_DEMO_SCOPE_HASH;
 }
