@@ -1,9 +1,11 @@
 -- migrate:up
--- open_session also requires that the realm of hrEduPersonUniqueID, the part
--- after its last "@", equals hrEduPersonHomeOrg after the same normalisation.
--- A refusal is the same ZD503 as an unknown home organisation and leaves no
--- row. The check runs on every login, so it also holds for accounts created
--- before it. Comparison is equality alone; no pattern is built from input.
+-- open_session also requires that hrEduPersonUniqueID is local@realm, with
+-- exactly one "@" and a local part free of spaces, separators, controls and
+-- invisible format characters, and that the realm equals hrEduPersonHomeOrg
+-- after the same normalisation. A refusal is the same ZD503 as an unknown
+-- home organisation, runs the same institution lookup and leaves no row. The
+-- check runs on every login, so it also holds for accounts created before it.
+-- Comparison is equality alone; no pattern is built from input.
 GRANT CREATE ON SCHEMA identity TO ductus_identity;
 SET LOCAL ROLE ductus_identity;
 
@@ -29,6 +31,7 @@ DECLARE
   v_at integer := pg_catalog.strpos(pg_catalog.reverse(p_unique_id), '@');
   v_local text;
   v_realm text;
+  v_shape_ok boolean;
 BEGIN
   IF p_issuer IS NULL OR pg_catalog.length(p_issuer) NOT BETWEEN 1 AND 255
      OR p_subject IS NULL OR pg_catalog.length(p_subject) NOT BETWEEN 1 AND 255
@@ -37,19 +40,26 @@ BEGIN
     RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
   END IF;
 
-  -- A unique id is local@realm: both parts present, and the local part does
-  -- not end in "@", so "x@@realm" is no shortcut to a realm.
+  -- A unique id is local@realm with exactly one "@". The local part is not
+  -- empty and holds no "@", no space or separator (Zs, Zl, Zp), no control
+  -- (Cc) and no invisible format character (Cf), the classes claims.ts also
+  -- refuses; text cannot hold a surrogate (Cs). Any other character passes.
   IF v_at > 0 THEN
     v_local := pg_catalog."left"(p_unique_id, -v_at);
     v_realm := pg_catalog.lower(pg_catalog.btrim(pg_catalog."right"(p_unique_id, v_at - 1), E' \t\r\n') COLLATE "C");
   END IF;
+  v_shape_ok := v_home_org ~ '^[a-z0-9.-]{1,255}$'
+    AND v_local ~ ('^[^@\u0001-\u0020\u007F-\u00A0\u00AD\u0600-\u0605\u061C\u06DD\u070F\u0890\u0891\u08E2'
+                   '\u1680\u180E\u2000-\u200F\u2028-\u202F\u205F-\u2064\u2066-\u206F\u3000\uFEFF\uFFF9-\uFFFB'
+                   '\U000110BD\U000110CD\U00013430-\U0001343F\U0001BCA0-\U0001BCA3\U0001D173-\U0001D17A'
+                   '\U000E0001\U000E0020-\U000E007F]+$' COLLATE "C")
+    AND v_realm = v_home_org COLLATE "C";
 
-  IF v_home_org ~ '^[a-z0-9.-]{1,255}$'
-     AND v_local <> '' AND pg_catalog."right"(v_local, 1) <> '@'
-     AND v_realm = v_home_org COLLATE "C" THEN
-    SELECT i.id INTO v_institution FROM identity.institution i WHERE i.aai_home_org = v_home_org;
-  END IF;
-  IF v_institution IS NULL THEN
+  -- The lookup runs on every path, so a refused shape or realm and an
+  -- unknown institution run the same query before the same ZD503. That is
+  -- the boundary: equal outcome and equal queries, not equal duration.
+  SELECT i.id INTO v_institution FROM identity.institution i WHERE i.aai_home_org = v_home_org;
+  IF v_institution IS NULL OR v_shape_ok IS NOT TRUE THEN
     RAISE EXCEPTION 'institution not set up' USING ERRCODE = 'ZD503';
   END IF;
 

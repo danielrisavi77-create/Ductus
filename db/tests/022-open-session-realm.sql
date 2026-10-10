@@ -7,7 +7,7 @@ SET LOCAL lc_messages TO 'C';
 GRANT USAGE ON SCHEMA public TO ductus_auth;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO ductus_auth;
 
-SELECT plan(31);
+SELECT plan(36);
 
 INSERT INTO identity.institution (id, slug, aai_home_org) VALUES
   ('00000000-0000-4000-8000-0000000002a1', 'test-realm', 'realm.test'),
@@ -61,7 +61,8 @@ $$;
 -- 1. Accepted: the realm equals the home organisation.
 SET LOCAL ROLE ductus_auth;
 SELECT is(pg_temp.open('ana@realm.test', 'realm.test', 'a1'), 'ok', 'realm equal to the home organisation is accepted');
-SELECT is(pg_temp.open('a@b.test@c.test', 'c.test', 'a2'), 'ok', 'the realm is the part after the last @');
+SELECT is(pg_temp.open('ana.mari' || chr(263) || '-x_1+t%@realm.test', 'realm.test', 'a2'), 'ok',
+  'a local part with dots, hyphens, signs and non-ASCII letters is accepted');
 SELECT is(pg_temp.open('x@b.test@c.test', 'b.test', 'a3'), 'ZD503: institution not set up',
   'a part before the last @ is not the realm');
 -- Case and edge spaces as far as the home organisation normalisation allows.
@@ -78,6 +79,33 @@ SELECT is(pg_temp.not_refused(ARRAY['ana.realm.test', 'realm.test', 'x@', '@real
                                     '@@realm.test', 'x@@@realm.test'],
                               'realm.test', 's'),
   '{}'::text[], 'no @, empty local part, empty realm and @ before the realm are refused');
+SELECT is(pg_temp.not_refused(ARRAY['a@b.test@realm.test', 'x@ @realm.test', 'x@' || chr(160) || '@realm.test',
+                                    'x@' || chr(9) || '@realm.test', 'x@' || chr(8203) || '@realm.test'],
+                              'realm.test', 'q'),
+  '{}'::text[], 'a second @ is refused, also with a space, no-break space, tab or zero-width space before the realm');
+SELECT is(pg_temp.not_refused(ARRAY[' @realm.test', '  @realm.test', chr(160) || '@realm.test', chr(9) || '@realm.test',
+                                    ' ana@realm.test', 'ana @realm.test', 'a na@realm.test', 'a' || chr(160) || 'na@realm.test',
+                                    'a' || chr(5760) || 'na@realm.test', 'a' || chr(8194) || 'na@realm.test',
+                                    'a' || chr(8239) || 'na@realm.test', 'a' || chr(8287) || 'na@realm.test',
+                                    'a' || chr(12288) || 'na@realm.test', 'a' || chr(8232) || 'na@realm.test',
+                                    'a' || chr(8233) || 'na@realm.test'],
+                              'realm.test', 'z'),
+  '{}'::text[], 'a local part that is or holds a space or a line or paragraph separator is refused');
+SELECT is(pg_temp.not_refused(ARRAY['a' || chr(1) || 'na@realm.test', 'a' || chr(9) || 'na@realm.test',
+                                    'a' || chr(10) || 'na@realm.test', 'a' || chr(13) || 'na@realm.test',
+                                    'a' || chr(27) || 'na@realm.test', 'ana' || chr(127) || '@realm.test',
+                                    'a' || chr(133) || 'na@realm.test', 'a' || chr(159) || 'na@realm.test'],
+                              'realm.test', 'k'),
+  '{}'::text[], 'a local part with a control character is refused');
+SELECT is(pg_temp.not_refused(ARRAY['a' || chr(173) || 'na@realm.test', 'a' || chr(1564) || 'na@realm.test',
+                                    'a' || chr(6158) || 'na@realm.test', 'a' || chr(8203) || 'na@realm.test',
+                                    'a' || chr(8205) || 'na@realm.test', 'a' || chr(8206) || 'na@realm.test',
+                                    'a' || chr(8238) || 'na@realm.test', 'a' || chr(8288) || 'na@realm.test',
+                                    'a' || chr(8294) || 'na@realm.test', 'a' || chr(65279) || 'na@realm.test',
+                                    'a' || chr(65529) || 'na@realm.test', 'a' || chr(917505) || 'na@realm.test',
+                                    'a' || chr(917631) || 'na@realm.test'],
+                              'realm.test', 'f'),
+  '{}'::text[], 'a local part with an invisible format character is refused');
 
 -- 3. Equality only.
 SELECT is(pg_temp.open('ana@other.test', 'realm.test', 'm1'), 'ZD503: institution not set up',
@@ -148,6 +176,25 @@ SELECT is(
 
 -- 8. Refusals leave no row.
 SELECT is(pg_temp.counts(), '7 users, 7 sessions', 'refused logins create neither an account nor a session');
+
+-- 8a. A refused shape or realm runs the same institution lookup as an
+-- unknown institution. Counts of this transaction are read live.
+CREATE FUNCTION pg_temp.lookups(p_unique_id text, p_home_org text, p_hash text) RETURNS bigint
+LANGUAGE plpgsql AS $$
+DECLARE v_before bigint; v_after bigint;
+BEGIN
+  SELECT coalesce(seq_scan, 0) + coalesce(idx_scan, 0) INTO v_before
+  FROM pg_catalog.pg_stat_xact_user_tables WHERE relid = 'identity.institution'::regclass;
+  PERFORM pg_temp.open(p_unique_id, p_home_org, p_hash);
+  SELECT coalesce(seq_scan, 0) + coalesce(idx_scan, 0) INTO v_after
+  FROM pg_catalog.pg_stat_xact_user_tables WHERE relid = 'identity.institution'::regclass;
+  RETURN v_after - v_before;
+END
+$$;
+SELECT is(ARRAY[pg_temp.lookups('ana@realm.test', 'realm.test', 'y1'), pg_temp.lookups('x@ @realm.test', 'realm.test', 'y2'),
+                pg_temp.lookups('ana@other.test', 'realm.test', 'y3'), pg_temp.lookups('ana.realm.test', 'realm.test', 'y4'),
+                pg_temp.lookups('ana@realm.test', 'Realm!test', 'y5')],
+  ARRAY[1, 1, 1, 1, 1]::bigint[], 'an unknown institution, a refused shape and a refused realm each run the lookup once');
 
 -- 9. An account created before this check is held to it on its next login.
 INSERT INTO identity.user_account (institution_id, oidc_issuer, oidc_subject, hr_edu_person_unique_id)
