@@ -18,7 +18,8 @@ import { SYNC_STATES } from "../../domain/sync/states";
 
 export type JournalErrorCode =
   | "invalid_input" | "incomplete_store" | "sticky_state"
-  | "duplicate_transaction" | "sequence_exhausted" | "stale_local_sequence" | "unsynced_work";
+  | "duplicate_transaction" | "sequence_exhausted" | "stale_local_sequence"
+  | "unsynced_work" | "logout_in_progress";
 
 export class JournalError extends Error {
   constructor(readonly code: JournalErrorCode) {
@@ -34,10 +35,13 @@ export type LocalSaveResult = {
   meta: SyncMeta;
 };
 
+type JournalControl = { key: "logout"; state: "closing" };
+
 class JournalDatabase extends Dexie {
   snapshots!: Table<JournalSnapshot, string>;
   pending!: Table<PendingTransaction, [string, number]>;
   meta!: Table<SyncMeta, string>;
+  control!: Table<JournalControl, string>;
 
   constructor(name: string, options?: DexieOptions) {
     super(name, options);
@@ -46,6 +50,9 @@ class JournalDatabase extends Dexie {
       pending: "[documentId+localSeq],documentId",
       meta: "documentId",
     });
+    // Non-destructive upgrade: version 1 documents and their owed transactions
+    // survive. A logout fence is durable until deletion completes.
+    this.version(2).stores({ control: "key" });
   }
 }
 
@@ -117,13 +124,18 @@ export class AtomicDexieJournal {
     // IndexedDB serializes overlapping readwrite transactions over these
     // stores, including transactions from multiple tabs/instances.
     return this.db.transaction(
-      "rw", this.db.snapshots, this.db.pending, this.db.meta,
+      "rw", this.db.snapshots, this.db.pending, this.db.meta, this.db.control,
       async () => {
-        const [prior, snapshotBefore, rows] = await Promise.all([
+        const [logoutFence, prior, snapshotBefore, rows] = await Promise.all([
+          this.db.control.get("logout"),
           this.db.meta.get(documentId),
           this.db.snapshots.get(documentId),
           this.db.pending.where("documentId").equals(documentId).toArray(),
         ]);
+        // The logout precondition is serialized with every local write over
+        // this same object store. A stale tab cannot save between the
+        // pre-delete check and deletion of the previous principal's journal.
+        if (logoutFence) throw new JournalError("logout_in_progress");
         if ((!prior && (snapshotBefore || rows.length > 0)) ||
             (prior && (!snapshotBefore ||
               !validSeq(prior.localSeq) ||
@@ -180,19 +192,25 @@ export class AtomicDexieJournal {
    * a cross-tab session lock or a server-ACK implementation.
    */
   async destroyForLogout(): Promise<void> {
-    const [pending, snapshots, metas] = await this.db.transaction(
-      "r", this.db.pending, this.db.snapshots, this.db.meta,
-      async () => Promise.all([
-        this.db.pending.count(), this.db.snapshots.toArray(), this.db.meta.toArray(),
-      ]),
+    // One readwrite transaction checks pending work and permanently fences
+    // concurrent writers BEFORE async database deletion. If deletion fails,
+    // the fence remains and retrying this operation is safe.
+    await this.db.transaction(
+      "rw", this.db.pending, this.db.snapshots, this.db.meta, this.db.control,
+      async () => {
+        const [pending, snapshots, metas] = await Promise.all([
+          this.db.pending.count(), this.db.snapshots.toArray(), this.db.meta.toArray(),
+        ]);
+        const states = new Map(metas.map((meta) => [meta.documentId, meta.state]));
+        const snapshotIds = new Set(snapshots.map((snapshot) => snapshot.documentId));
+        if (pending !== 0 ||
+            snapshots.some((snapshot) => states.get(snapshot.documentId) !== "SYNCED") ||
+            metas.some((meta) => meta.state !== "SYNCED" || !snapshotIds.has(meta.documentId))) {
+          throw new JournalError("unsynced_work");
+        }
+        await this.db.control.put({ key: "logout", state: "closing" });
+      },
     );
-    const states = new Map(metas.map((meta) => [meta.documentId, meta.state]));
-    const snapshotIds = new Set(snapshots.map((snapshot) => snapshot.documentId));
-    if (pending !== 0 ||
-        snapshots.some((snapshot) => states.get(snapshot.documentId) !== "SYNCED") ||
-        metas.some((meta) => meta.state !== "SYNCED" || !snapshotIds.has(meta.documentId))) {
-      throw new JournalError("unsynced_work");
-    }
     await this.db.delete();
   }
 }
