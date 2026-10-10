@@ -60,7 +60,7 @@ Diff čitaju CI i neovisni reviewer; orkestrator gleda metapodatke i popis datot
 
 `Owner-Override` piše isključivo Daniel. Orkestrator ga nikad ne objavljuje ni ne predlaže kao rutinski put.
 
-Napuštenu granu orkestrator ne osvježava sam i ne budi staru sesiju: otvara novog workera koji granu preuzima iz GitHuba (izvještaj u PR-u je predaja). Nova sesija je jeftinija od stare s punim kontekstom. Vlastiti PR orkestratora, uključujući docs-only PR, prolazi isti neovisni review i gate kao ostali. Kad su sve provjere iz §2 ispunjene i kanonski PASS je dala sesija drugog principala, orkestrator ga spaja sam, kao i PR svog podagenta (D-95, D-97). Iznimka: PR koji mijenja ovlasti orkestratora ili pravila gatea (putanje i zapisi nabrojeni u D-97) spaja tek na Danielovu izričitu naredbu za taj PR; do tada ga vodi kao "čeka Daniela" po §4a.
+Napuštenu granu orkestrator ne osvježava sam i ne budi staru sesiju: otvara novog workera koji granu preuzima iz GitHuba (izvještaj u PR-u je predaja). Nova sesija je jeftinija od stare s punim kontekstom. Vlastiti PR orkestratora, uključujući docs-only PR, prolazi isti neovisni review i gate kao ostali. Kad su sve provjere iz §2 ispunjene i kanonski PASS je dala sesija drugog principala, orkestrator ga spaja sam, kao i PR svog podagenta (D-95, D-97). Iznimka: PR koji mijenja ovlasti orkestratora ili pravila gatea (putanje i zapisi nabrojeni u D-97) spaja tek na Danielovu izričitu naredbu za taj PR i taj head; do tada ga vodi kao "čeka Daniela" po §4a. Prije spajanja naredbu bilježi komentarom na PR-u: doslovni citat, datum i puni SHA heada; novi push je poništava. Na takvom PR-u odmah isključuje auto-merge (`gh pr merge --disable-auto`) i ne označava ga nižom razinom od `standard`, da ga hook iz `SESSIONS.md` §7 ne spoji bez naredbe.
 
 **Pita Daniela (i ne spaja dok ne odgovori):**
 
@@ -104,7 +104,7 @@ Svaki petak (`PLAN-DEMO.md` §3): usporedba spojenog s tablicom tjedna, kratak s
 
 ## 8. Sesije: pregled, pokretanje i gašenje
 
-Orkestrator prati samo sesije koje rade na repou Ductus (Ductura). Ostale sesije na računu zanemaruje i ne šalje im poruke (Daniel, 10. 10. 2026.). Sesija se računa kao Ductus sesija samo ako ju je orkestrator sam pokrenuo, ako ju je Daniel imenovao kao Ductus sesiju ili ako se identificirala izvještajem na Ductus PR-u ili issueu; samo ime sesije nije dovoljno. Kad nije sigurno, orkestrator ne šalje poruku nego pita Daniela. Drugi stroj (laptop) nije dio kapaciteta.
+Orkestrator prati samo sesije koje rade na repou Ductus (Ductura). Ostale sesije na računu zanemaruje i ne šalje im poruke (Daniel, 10. 10. 2026.). Sesija se računa kao Ductus sesija samo ako ju je orkestrator sam pokrenuo, ako ju je Daniel imenovao kao Ductus sesiju ili ako se identificirala izvještajem na Ductus PR-u ili issueu; za rutinu u oblaku mjerodavan je repo u njezinoj konfiguraciji (`session_context.sources`). Samo ime sesije nije dovoljno. Kad nije sigurno, orkestrator ne šalje poruku nego pita Daniela. Drugi stroj (laptop) nije dio kapaciteta.
 
 **Radni direktorij.** Lokalni rad na Danielovu stolnom računalu ide s diska `D:` po rasporedu iz `MULTI-ACCOUNT.md` §6 (Daniel, 10. 10. 2026.): orkestrator se pokreće iz glavnog checkouta, a ručni worker dobiva worktree kroz `scripts/new-agent-worktree.ps1`; za runtime ili ulogu koju skripta ne podržava worktree se stvara ručno po istom obrascu. Podagent s `isolation: worktree` (`AGENT_SYSTEM_V2.md` §7) i sesija u oblaku koriste vlastiti worktree.
 
