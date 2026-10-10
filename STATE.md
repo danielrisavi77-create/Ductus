@@ -62,3 +62,4 @@ Novi feature rad je privremeno ograničen dok se postojeći stog ne osvježi na 
 - Plan proizvoda, odluke i demo-plan; arhitektura v0.4.
 - CI/skeneri, lokalni stog, prijenos prve jezgre, citatni stil, evidence/forensics osnova.
 - PR #51: multi-account/provider-neutral agent runtime i repo-local skills.
+- 10. 10. 2026.: globalni alati naredbenog retka i pluginovi za sesije (`docs/REPOZITORIJI.md` §8); PR #17 (Dependabot, provjera ovisnosti) spojen 3. 10.
