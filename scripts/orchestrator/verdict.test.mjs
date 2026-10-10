@@ -12,9 +12,9 @@ const base = ["7", "--agent", "claude:reviewC:reviewer", "--head", HEAD, "--verd
 test("parseVerdictArgs reads a reviewer and a QA verdict", () => {
   const r = parseVerdictArgs(base);
   assert.equal(r.error, undefined);
-  assert.deepEqual([r.pr, r.role, r.verdict, r.post], [7, "reviewer", "PASS", false]);
-  const q = parseVerdictArgs(["9", "--agent", "codex:x:qa", "--head", HEAD, "--verdict", "FAIL", "--qa-scope", "races", "--post"]);
-  assert.deepEqual([q.role, q.qaScope, q.post], ["qa", "races", true]);
+  assert.deepEqual([r.pr, r.role, r.verdict], [7, "reviewer", "PASS"]);
+  const q = parseVerdictArgs(["9", "--agent", "codex:x:qa", "--head", HEAD, "--verdict", "FAIL", "--qa-scope", "races"]);
+  assert.deepEqual([q.role, q.qaScope], ["qa", "races"]);
 });
 
 test("parseVerdictArgs refuses what the gate would not count", () => {
@@ -32,7 +32,8 @@ test("parseVerdictArgs refuses what the gate would not count", () => {
     ["7", "--agent", "claude:q:qa", "--head", HEAD, "--verdict", "PASS", "--qa-scope", "a\nb"],
     [...base, "--fallback", "chatgpt-codex-connector — kvota"],
     [...base, "--model"],
-    [...base, "--report", "--post"],
+    [...base, "--report", "--model"],
+    [...base, "--post"],
     [...base, "--force"],
   ];
   for (const args of bad) assert.ok(parseVerdictArgs(args).error, args.join(" "));
