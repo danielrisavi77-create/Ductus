@@ -12,8 +12,14 @@
  *   - every object has a closed set of keys, so an unknown field, a
  *     `__proto__` or `constructor` key and any time field (owner decision 6:
  *     steps carry no time) have nowhere to sit;
- *   - a step has exactly one serialised form: optional parts are absent
- *     rather than empty, `false` or `0`;
+ *   - an accepted step is written the way ProseMirror would write it back:
+ *     optional parts are absent rather than empty, `false` or `0`, text
+ *     nodes that ProseMirror would join are already joined, and a slice is
+ *     never empty. This is one form per step, not one step per effect: two
+ *     different accepted steps can still leave the same document (the id on
+ *     the first block of a slice open at its start is not used, a mark step
+ *     over structure changes nothing). Only the replayer, which holds the
+ *     document, can refuse those;
  *   - positions are non-negative safe integers; whether they lie inside a
  *     document is the replayer's check, because only it holds the document;
  *   - text is well-formed Unicode without NUL and is never normalised: the
@@ -47,9 +53,10 @@ export const EDIT_STEP_TYPES = [
 export type EditStepType = (typeof EDIT_STEP_TYPES)[number];
 
 /**
- * Upper bound of one step, and of all steps of one event, in bytes: the limit of a whole evidence segment
- * (D-96, 2 MiB). A step is counted by a lower bound of its canonical size, so
- * a step refused here could not have fitted into a segment either.
+ * The limit of a whole evidence segment (D-96, 2 MiB), applied to the UTF-8
+ * bytes of the canonical (RFC 8785) form: of one step in `parseEditStep`, and
+ * of the JSON array of all steps of one event in `parseEditSteps`. Exactly
+ * this many bytes are accepted, one more is `too_large`.
  */
 export const MAX_EDIT_STEP_BYTES = 2_097_152;
 
@@ -109,6 +116,7 @@ export const EDIT_STEP_REJECTIONS = [
   "invalid_text",
   "invalid_node_id",
   "invalid_removed_hash",
+  "not_canonical",
   "too_large",
   "unreadable",
 ] as const;
@@ -155,13 +163,34 @@ const MIN_OBJECT_BYTES = 16;
 /** No array that fits the byte limit is longer; checked before it is copied. */
 const MAX_ITEMS = MAX_EDIT_STEP_BYTES / MIN_OBJECT_BYTES;
 
-type Budget = { bytes: number };
+/**
+ * `floor` is a lower bound of the canonical size, kept while reading so that
+ * oversized input is refused before it is copied or serialised. `exact` is
+ * the real canonical size of what has been accepted so far; it decides.
+ */
+type Budget = { floor: number; exact: number };
 
 function spend(budget: Budget, bytes: number, path: string): void {
-  budget.bytes += bytes;
-  if (budget.bytes > MAX_EDIT_STEP_BYTES) {
+  budget.floor += bytes;
+  if (budget.floor > MAX_EDIT_STEP_BYTES) {
     reject("too_large", path);
   }
+}
+
+/** UTF-8 length of a well-formed string. */
+function utf8Length(value: string): number {
+  let bytes = value.length;
+  for (let i = 0; i < value.length; i += 1) {
+    const unit = value.charCodeAt(i);
+    if (unit >= 0xd800 && unit <= 0xdbff) {
+      // A pair: two units, four bytes.
+      bytes += 2;
+      i += 1;
+    } else if (unit >= 0x80) {
+      bytes += unit < 0x800 ? 1 : 2;
+    }
+  }
+  return bytes;
 }
 
 /**
@@ -222,6 +251,10 @@ function textBytes(value: unknown, path: string): number {
   if (typeof value !== "string" || value.length === 0) {
     reject("invalid_text", path);
   }
+  // Every UTF-16 unit is at least one byte: refuse before scanning.
+  if (value.length > MAX_EDIT_STEP_BYTES) {
+    reject("too_large", path);
+  }
   let bytes = 0;
   for (let i = 0; i < value.length; i += 1) {
     const unit = value.charCodeAt(i);
@@ -273,6 +306,20 @@ function text(value: unknown, path: string, budget: Budget): EditStepText {
   return "marks" in own ? { marks: marks(own.marks, `${path}.marks`), ...parsed } : parsed;
 }
 
+/**
+ * A run of text nodes. Neighbours with the same marks are refused: ProseMirror
+ * joins them when it reads the step, so they would be a second form of it.
+ */
+function texts(raw: readonly unknown[], path: string, budget: Budget): EditStepText[] {
+  const parsed = raw.map((item, i) => text(item, `${path}[${i}]`, budget));
+  for (let i = 1; i < parsed.length; i += 1) {
+    if (JSON.stringify(parsed[i - 1].marks) === JSON.stringify(parsed[i].marks)) {
+      reject("not_canonical", `${path}[${i}]`);
+    }
+  }
+  return parsed;
+}
+
 function nodeId(value: unknown, path: string): NodeId | null {
   if (value === null || isStepNodeId(value)) {
     return value;
@@ -288,9 +335,7 @@ function block(value: unknown, path: string, budget: Budget): EditStepBlock {
   spend(budget, MIN_OBJECT_BYTES, path);
   const content =
     "content" in own
-      ? items(own.content, `${path}.content`, "invalid_node").map((child, i) =>
-          text(child, `${path}.content[${i}]`, budget),
-        )
+      ? texts(items(own.content, `${path}.content`, "invalid_node"), `${path}.content`, budget)
       : null;
   if (own.type === "paragraph") {
     const attrs = fields(own.attrs, `${path}.attrs`, ["nodeId"]);
@@ -314,16 +359,23 @@ function slice(value: unknown, path: string, budget: Budget): EditStepSlice {
   const first = raw[0];
   const inline = isPlainObject(first) && Object.hasOwn(first, "type") && first.type === "text";
   const content = inline
-    ? raw.map((item, i) => text(item, `${path}.content[${i}]`, budget))
+    ? texts(raw, `${path}.content`, budget)
     : raw.map((item, i) => block(item, `${path}.content[${i}]`, budget));
   const parsed: EditStepSlice = { content };
+  let open = 0;
   for (const side of ["openEnd", "openStart"] as const) {
     if (side in own) {
       if (own[side] !== 1 || inline) {
         reject("invalid_slice", `${path}.${side}`);
       }
       parsed[side] = 1;
+      open += 1;
     }
+  }
+  // One empty block open on both sides inserts nothing: ProseMirror writes
+  // such a step back without a slice, so it is not a form of its own.
+  if (open === 2 && content.length === 1 && !("content" in content[0])) {
+    reject("not_canonical", path);
   }
   return parsed;
 }
@@ -407,7 +459,21 @@ function attrStep(value: unknown, path: string): EditStepV1 {
   return { attr: "nodeId", pos, stepType: "attr", value: own.value };
 }
 
+/**
+ * Reads one step and charges its real canonical size. The result has sorted
+ * keys, so `JSON.stringify` of it is the canonical form; it is serialised
+ * once, which keeps the whole check linear in the size of the input.
+ */
 function step(value: unknown, path: string, budget: Budget): EditStepV1 {
+  const parsed = stepShape(value, path, budget);
+  budget.exact += utf8Length(JSON.stringify(parsed));
+  if (budget.exact > MAX_EDIT_STEP_BYTES) {
+    reject("too_large", path);
+  }
+  return parsed;
+}
+
+function stepShape(value: unknown, path: string, budget: Budget): EditStepV1 {
   if (!isPlainObject(value)) {
     reject("not_object", path);
   }
@@ -443,7 +509,7 @@ function guarded<T>(parse: () => T): T | { ok: false; code: EditStepRejection; p
 
 /** Reads one untrusted step of `EDIT_STEP_FORMAT_V1`. Never throws. */
 export function parseEditStep(value: unknown): EditStepResult {
-  return guarded(() => ({ ok: true, step: step(value, "$", { bytes: 0 }) }));
+  return guarded(() => ({ ok: true, step: step(value, "$", { floor: 0, exact: 0 }) }));
 }
 
 /**
@@ -458,9 +524,16 @@ export function parseEditSteps(transactionFormat: unknown, steps: unknown): Edit
     if (!Array.isArray(steps)) {
       return reject("steps_not_array", "$");
     }
-    // One budget for the event: all of its steps travel in one segment.
-    const budget: Budget = { bytes: 0 };
+    // One budget for the event: all of its steps travel in one segment. The
+    // array costs its two brackets and one comma between neighbours.
+    const budget: Budget = { floor: 0, exact: 2 };
     const list = items(steps, "$", "steps_empty");
-    return { ok: true, steps: list.map((item, i) => step(item, `$[${i}]`, budget)) };
+    return {
+      ok: true,
+      steps: list.map((item, i) => {
+        budget.exact += i === 0 ? 0 : 1;
+        return step(item, `$[${i}]`, budget);
+      }),
+    };
   });
 }

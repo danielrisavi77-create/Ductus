@@ -129,18 +129,89 @@ describe("edit step format: hostile input", () => {
     }
   });
 
-  it("bounds a step by the segment limit, before copying a huge array", () => {
-    const text = (size: number) => ({ type: "text", text: "š".repeat(size / 2) });
-    const big = { ...typing(), slice: { content: [text(MAX_EDIT_STEP_BYTES)] } };
-    expect(parseEditStep(big)).toMatchObject({ ok: false, code: "too_large" });
-    const fits = { ...typing(), slice: { content: [text(MAX_EDIT_STEP_BYTES / 2)] } };
-    expect(parseEditStep(fits).ok).toBe(true);
+  it("refuses oversized input before copying or scanning it", () => {
     const endless = { ...typing(), slice: { content: new Array(2 ** 31) } };
     expect(parseEditStep(endless)).toMatchObject({ ok: false, code: "too_large" });
-    // The limit is shared by all steps of one event.
-    expect(parseEditSteps(EDIT_STEP_FORMAT_V1, [fits, fits, fits])).toMatchObject({
-      ok: false, code: "too_large", path: "$[1].slice.content[0]",
+    const long = { ...typing(), slice: { content: [{ type: "text", text: "a".repeat(50_000_000) }] } };
+    const started = performance.now();
+    expect(parseEditStep(long)).toMatchObject({ ok: false, code: "too_large" });
+    // Refused on its length alone; scanning it took about a second.
+    expect(performance.now() - started).toBeLessThan(300);
+  });
+});
+
+/**
+ * D-96 (#203 attack 8, QA of #213 B1): the limit is 2 097 152 bytes of the
+ * canonical form, exactly. The sizes below were counted outside the module
+ * (Python `json`): a typing step without its text is 86 bytes, a deletion
+ * with one-digit positions 121, an attribute step with a one-digit position 90.
+ */
+describe("edit step format: the D-96 size limit, to the byte", () => {
+  const MAX = 2_097_152;
+  const TYPING_OVERHEAD = 86;
+  const DELETION = 121;
+  const bytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).length;
+  const typed = (text: string) => ({ ...typing(), slice: { content: [{ type: "text", text }] } });
+  /** A deletion whose `to` has `extra` more digits than one. */
+  const deletion = (extra = 0) => ({
+    stepType: "replace", from: 1, to: extra === 0 ? 2 : 10 ** extra, removedSha256: HASH,
+  });
+
+  it("is the limit D-96 names", () => {
+    expect(MAX_EDIT_STEP_BYTES).toBe(MAX);
+  });
+
+  it.each([
+    ["ASCII text", (n: number) => "a".repeat(n), 1],
+    ["two-byte letters", (n: number) => "š".repeat(n / 2), 2],
+    ["four-byte characters", (n: number) => "😀".repeat((n - 2) / 4) + "ab", 4],
+    ["characters JSON escapes", (n: number) => '"'.repeat(n / 2), 2],
+    // U+001F is written \u001f, six bytes; the rest is filled with ASCII.
+    ["control characters", (n: number) => "\u001f".repeat(Math.floor(n / 6)) + "a".repeat(n % 6), 6],
+  ])("one large step of %s: exactly the limit is accepted, one byte more is not", (_name, fill) => {
+    const text = fill(MAX - TYPING_OVERHEAD);
+    const atLimit = parseEditStep(typed(text));
+    if (!atLimit.ok) throw new Error(`${atLimit.code} at ${atLimit.path}`);
+    expect(bytes(atLimit.step)).toBe(MAX);
+    expect(parseEditStep(typed(`${text}a`))).toEqual({ ok: false, code: "too_large", path: "$" });
+    // A list of one step costs its two brackets as well.
+    expect(parseEditSteps(EDIT_STEP_FORMAT_V1, [typed(text)])).toMatchObject({ code: "too_large" });
+    expect(parseEditSteps(EDIT_STEP_FORMAT_V1, [typed(text.slice(2))]).ok).toBe(true);
+  });
+
+  it("many small steps: exactly the limit is accepted, one byte more is not", () => {
+    // n steps cost n * 121, n - 1 commas and two brackets: 122 n + 1.
+    const count = Math.floor((MAX - 1) / (DELETION + 1));
+    const spare = MAX - (count * (DELETION + 1) + 1);
+    expect([count, spare]).toEqual([17189, 93]);
+    // 93 spare bytes: six steps with fifteen more digits, one with three.
+    const steps = Array.from({ length: count }, (_, i) => deletion(i < 6 ? 15 : i === 6 ? 3 : 0));
+    const atLimit = parseEditSteps(EDIT_STEP_FORMAT_V1, steps);
+    if (!atLimit.ok) throw new Error(`${atLimit.code} at ${atLimit.path}`);
+    expect(bytes(atLimit.steps)).toBe(MAX);
+
+    const oneDigitMore = steps.map((step, i) => (i === count - 1 ? deletion(1) : step));
+    expect(parseEditSteps(EDIT_STEP_FORMAT_V1, oneDigitMore)).toEqual({
+      ok: false, code: "too_large", path: `$[${count - 1}]`,
     });
+    expect(parseEditSteps(EDIT_STEP_FORMAT_V1, [...steps, deletion()])).toMatchObject({
+      ok: false, code: "too_large", path: `$[${count}]`,
+    });
+  });
+
+  it("refuses the oversized events QA measured as accepted", () => {
+    const attr = { stepType: "attr", pos: 1, attr: "nodeId", value: A };
+    for (const [step, count] of [[attr, 131_072], [attr, 40_000], [deletion(), 20_000]] as const) {
+      const steps = Array.from({ length: count }, () => step);
+      expect(bytes(steps)).toBeGreaterThan(MAX);
+      expect(parseEditSteps(EDIT_STEP_FORMAT_V1, steps)).toMatchObject({
+        ok: false, code: "too_large",
+      });
+    }
+    // 23 301 attribute steps of 90 bytes are 2 120 392 bytes; 23 045 are 2 097 096.
+    const fits = Array.from({ length: 23_045 }, () => attr);
+    expect(bytes(fits)).toBe(2_097_096);
+    expect(parseEditSteps(EDIT_STEP_FORMAT_V1, fits).ok).toBe(true);
   });
 });
 

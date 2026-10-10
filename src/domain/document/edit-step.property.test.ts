@@ -1,7 +1,12 @@
 import { fc, test } from "@fast-check/vitest";
+import { getSchema } from "@tiptap/core";
+import { Step } from "@tiptap/pm/transform";
 import { describe, expect } from "vitest";
 
+import { createEditorExtensions } from "@/editor/schema";
 import { canonicalizeJcs, type JcsJsonValue } from "@/domain/forensics/jcs";
+
+const schema = getSchema(createEditorExtensions());
 
 import {
   EDIT_STEP_FORMAT_V1,
@@ -35,7 +40,15 @@ const textNode = fc
   .map(({ text: value, marks: list }) =>
     list ? { type: "text", text: value, marks: list } : { type: "text", text: value },
   );
-const content = fc.option(fc.array(textNode, { minLength: 1, maxLength: 4 }), { nil: undefined });
+/** A run of text as ProseMirror keeps it: neighbours never share their marks. */
+const textRun = fc
+  .array(textNode, { minLength: 1, maxLength: 4 })
+  .map((list) =>
+    list.filter(
+      (node, i) => i === 0 || JSON.stringify(node.marks) !== JSON.stringify(list[i - 1].marks),
+    ),
+  );
+const content = fc.option(textRun, { nil: undefined });
 const block = fc.oneof(
   fc.record({ nodeId: maybeNodeId, content }).map((b) => ({
     type: "paragraph", attrs: { nodeId: b.nodeId }, ...(b.content ? { content: b.content } : {}),
@@ -47,10 +60,12 @@ const block = fc.oneof(
 );
 const open = fc.constantFrom({}, { openStart: 1 }, { openEnd: 1 }, { openStart: 1, openEnd: 1 });
 const slice = fc.oneof(
-  fc.array(textNode, { minLength: 1, maxLength: 4 }).map((list) => ({ content: list })),
-  fc.record({ list: fc.array(block, { minLength: 1, maxLength: 4 }), open }).map((s) => ({
-    content: s.list, ...s.open,
-  })),
+  textRun.map((list) => ({ content: list })),
+  fc
+    .record({ list: fc.array(block, { minLength: 1, maxLength: 4 }), open })
+    // One empty block open on both sides inserts nothing and is not a form.
+    .filter((s) => !(s.list.length === 1 && !("content" in s.list[0]) && "openStart" in s.open && "openEnd" in s.open))
+    .map((s) => ({ content: s.list, ...s.open })),
 );
 const range = fc.tuple(position, fc.integer({ min: 1, max: 5_000 }));
 
@@ -118,6 +133,15 @@ describe("edit step format: valid steps", () => {
       const repeated = parseEditStep(again);
       expect(repeated.ok && JSON.stringify(repeated.step)).toBe(bytes);
     }
+  });
+
+  // QA of #213, V1: what the reader accepts is what ProseMirror writes back.
+  test.prop([validStep])("is written back unchanged by ProseMirror itself", (input) => {
+    const result = parseEditStep(input);
+    if (!result.ok) throw new Error(`${result.code} at ${result.path}`);
+    const { removedSha256, ...pmJson } = result.step as Record<string, unknown>;
+    const written = Step.fromJSON(schema, pmJson).toJSON() as Record<string, unknown>;
+    expect(removedSha256 === undefined ? written : { ...written, removedSha256 }).toEqual(input);
   });
 
   test.prop([fc.array(validStep, { minLength: 1, maxLength: 6 })])(
