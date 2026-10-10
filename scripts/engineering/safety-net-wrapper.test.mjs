@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { decide, isInstallCommand, runCli } from "../hooks/safety-net.mjs";
+import { answer, decide, isCdToRoot, isInstallCommand, runCli } from "../hooks/safety-net.mjs";
 
 // DAN-137: the cc-safety-net PreToolUse hook must fail closed. Trees are built
 // in temporary directories; the real node_modules is never touched.
@@ -76,7 +76,7 @@ function makeTree({ dir = "tree", bin = "allow", pkg = true, modules = true, ver
   return { root, calls: path.join(root, "node_modules", "cc-safety-net", "dist", "bin", "calls.log"), done: () => fs.rmSync(base, { recursive: true, force: true }) };
 }
 
-const run = (tree, tool, command, cwd) => decide({ root: tree.root, input: event(tool, command, cwd) });
+const run = (tree, tool, command, cwd, env) => decide({ root: tree.root, input: event(tool, command, cwd), ...(env ? { env } : {}) });
 const withTree = (options, fn) => {
   const tree = makeTree(options);
   try {
@@ -377,6 +377,119 @@ test("review: in a subdirectory the root rulebook still applies; no checkout abo
       fs.rmSync(outer, { recursive: true, force: true });
     }
   });
+});
+
+// A command of the rulebook is either blocked or denied by the package, never let through.
+const safe = (result) => result.code === 2 || (result.code === 0 && /"permissionDecision":\s*"deny"/.test(result.stdout));
+
+test("QA B1: no configuration input of the package can be changed, removed or corrupted behind a remembered verdict", { timeout: 280000 }, () => {
+  withTree({ real: true }, (tree) => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-home-"));
+    try {
+      const userDir = path.join(home, ".cc-safety-net");
+      fs.mkdirSync(path.join(userDir, "rules", "extra"), { recursive: true });
+      // Never the real home: the package is pointed at this one.
+      const env = { ...process.env, HOME: home, USERPROFILE: home, CC_SAFETY_NET_HOME: userDir };
+      const project = path.join(tree.root, ".cc-safety-net");
+      const files = [
+        path.join(project, "policy.json"),
+        path.join(project, "rules", "rule.json"),
+        path.join(project, "rules", "ductus-rules", "rulebook.json"),
+        path.join(userDir, "policy.json"),
+        path.join(userDir, "rules", "rule.json"),
+        path.join(userDir, "rules", "extra", "rulebook.json"),
+      ];
+      const mutations = [
+        ["garbage", (file) => fs.writeFileSync(file, "{ not json")],
+        ["empty object", (file) => fs.writeFileSync(file, "{}")],
+        ["emptied", (file) => fs.writeFileSync(file, "")],
+        ["deleted", (file) => fs.rmSync(file, { force: true })],
+      ];
+      assert.equal(run(tree, "Bash", "ls", undefined, env).code, 0, "baseline");
+      for (const file of files) {
+        const original = fs.existsSync(file) ? fs.readFileSync(file) : null;
+        for (const [label, mutate] of mutations) {
+          mutate(file);
+          for (const command of ["git add -A", "git push --force origin x", "git commit --no-verify -m x"]) {
+            const result = run(tree, "Bash", command, undefined, env);
+            assert.ok(safe(result), `${path.relative(tree.root, file)} ${label}: ${command} -> ${result.code} ${result.stdout}`);
+          }
+          if (original === null) fs.rmSync(file, { force: true });
+          else fs.writeFileSync(file, original);
+        }
+        assert.equal(run(tree, "Bash", "ls", undefined, env).code, 0, `restored ${file}`);
+      }
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  });
+});
+
+test("QA V1: the only way out of a directory without rules is the exact cd to the project root", () => {
+  for (const dir of ["tree", "dir with spaces"]) {
+    withTree({ dir, bin: "allow" }, (tree) => {
+      const bare = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-bare-"));
+      const nested = path.join(tree.root, "nested");
+      fs.mkdirSync(path.join(nested, ".cc-safety-net"), { recursive: true });
+      try {
+        const R = tree.root;
+        const allowed = [`cd "${R}"`, `cd '${R}'`, ` cd "${R}" `, ...(/\s/.test(R) ? [] : [`cd ${R}`])];
+        const refused = [
+          `cd "${R}" && git add -A`, `cd "${R}"; ls`, `cd "${R}" | cat`, `cd "${R}" $(id)`, `cd "${R}"/..`, `cd "${R}/src"`, `cd "${R}"\nls`, `cd "${R}"\r\ngit push -f`,
+          "cd -", "cd", `cd "${R}" x`, `cd "${R}" > f`, `cd "${R}" #x`, `cd "${R}"x`, `cd ""`, `cd "${R}`, `CD "${R}"`, `cd  "${R}"  extra`, "ls", `cd "${R}" `.repeat(2),
+          `Set-Location "${R}"`, `cd "${R}" -and (git add -A)`, `cd "${R}"\`n git push -f`,
+        ];
+        for (const tool of TOOLS) {
+          for (const cwd of [bare, nested]) {
+            for (const command of allowed) assert.equal(run(tree, tool, command, cwd).code, 0, `${tool} ${JSON.stringify(command)} in ${cwd}`);
+            for (const command of refused) assert.equal(run(tree, tool, command, cwd).code, 2, `${tool} ${JSON.stringify(command)} in ${cwd}`);
+          }
+          // After the cd the session is at the root, where everything works again.
+          assert.equal(run(tree, tool, "ls", R).code, 0);
+        }
+      } finally {
+        fs.rmSync(bare, { recursive: true, force: true });
+      }
+    });
+  }
+  // A root a shell would read specially gets no exit at all.
+  for (const root of ["/tmp/a$b", "/tmp/a`b", "/tmp/a;b", "/tmp/a'b", '/tmp/a"b', "/tmp/a&b", "/tmp/a\nb"]) {
+    assert.equal(isCdToRoot(`cd "${root}"`, root), false, root);
+  }
+});
+
+test("QA M1: each part of the verdict key triggers a new probe", { timeout: 60000 }, () =>
+  withTree({ bin: "allow" }, (tree) => {
+    const rulebook = path.join(tree.root, ".cc-safety-net", "rules", "ductus-rules", "rulebook.json");
+    const log = () => fs.readFileSync(tree.calls, "utf8");
+    run(tree, "Bash", "ls");
+    run(tree, "Bash", "ls");
+    assert.equal(log(), "xppx", "one probe for two calls");
+    fs.writeFileSync(rulebook, '{"changed":1}');
+    run(tree, "Bash", "ls");
+    assert.equal(log(), "xppxxpp", "changed rulebook probes again");
+    // The same rulebook content in another checkout directory is another state.
+    const other = path.join(tree.root, "other");
+    fs.mkdirSync(path.join(other, ".cc-safety-net", "rules", "ductus-rules"), { recursive: true });
+    fs.copyFileSync(rulebook, path.join(other, ".cc-safety-net", "rules", "ductus-rules", "rulebook.json"));
+    fs.writeFileSync(path.join(other, ".git"), "gitdir: elsewhere");
+    run(tree, "Bash", "ls", other);
+    assert.equal(log(), "xppxxppxpp", "another directory probes again");
+    // Another file of the project config directory is part of the state too.
+    fs.writeFileSync(path.join(tree.root, ".cc-safety-net", "policy.json"), "{}");
+    run(tree, "Bash", "ls");
+    assert.equal(log(), "xppxxppxppxpp");
+  }));
+
+test("QA M1: answer() rejects non-JSON output, signals, bad statuses and errors on its own", () => {
+  assert.ok(answer({ status: 0, stdout: "not json", stderr: "" }, 1).block);
+  assert.ok(answer({ status: 0, signal: "SIGKILL", stdout: "", stderr: "" }, 1).block);
+  assert.ok(answer({ status: null, signal: "SIGTERM", stdout: "", stderr: "" }, 1).block);
+  assert.ok(answer({ status: 1, stdout: "", stderr: "" }, 1).block);
+  assert.ok(answer({ error: Object.assign(new Error("x"), { code: "ETIMEDOUT" }), stdout: "", stderr: "" }, 1).block);
+  assert.equal(answer({ status: 2, stdout: "", stderr: "no" }, 1).block.code, 2);
+  assert.equal(answer({ status: 0, stdout: "{}", stderr: "" }, 1).block, undefined);
+  assert.equal(answer({ status: 0, stdout: "", stderr: "" }, 1).block, undefined);
 });
 
 test("M2 a package that floods stdout is stopped by the buffer limit", () =>
