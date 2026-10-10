@@ -190,3 +190,17 @@ Orkestrator radi neprekidno dok je sesija otvorena (`/loop` sa samostalnim tempo
 7. **Miruj** do sljedećeg signala (završen worker, CI na poznatom PR-u). Bez pozadinskih petlji koje drže sesiju zauzetom (§1).
 
 Kašnjenje u odnosu na `PLAN-DEMO.md` §3 orkestrator prijavljuje s prijedlogom reza iz §5; rez odlučuje Daniel.
+
+## 10. Provjera zastoja (`pnpm orch:health`)
+
+Korak 0 otkucaja petlje (§9). Skripta `scripts/orchestrator/health.mjs` samo čita (`gh api` GET, `gh pr list`, `git worktree list`), ništa ne piše na GitHub ni u repo i nema predmemoriju; svaki ispis su podaci pročitani u tom pokretu. Pragovi su konstante u `scripts/orchestrator/health-core.mjs` i ovdje se samo citiraju:
+
+- otkucaj (`HEARTBEAT_MIN`): 30 min;
+- review ili QA FAIL/BLOCK na aktualnom headu bez novog pusha dulje od jednog otkucaja (30 min) je FAIL; starost se mjeri od `created_at` verdikt komentara, nikad od datuma commita;
+- stavka "RED ZA REVIEW" na #87 bez kanonskog verdikta na svom headu dulje od dva otkucaja (60 min) je FAIL; stavka na starom headu, neispravan SHA ili nepostojeći PR su WARN;
+- crvena obvezna provjera na zadnjem commitu `main` je jedan FAIL; provjera koja još radi ili se na `main` ne prijavljuje (samo na PR-u) je WARN;
+- `cc-safety-net` u glavnom checkoutu i svakom worktreeju pod `.claude/worktrees`: cilj hooka čita se iz `.claude/settings.json`, verzija iz `package.json`; prazan ili nepostojeći bin ili druga verzija je FAIL.
+
+Verdikt se broji samo kanonski, po pravilima gatea (§8, `ENGINEERING_SYSTEM.md` §6). Ispis ne prenosi tekst komentara ni naslova, samo brojeve, SHA i identitete.
+
+Izlazni kod: `0` = sve provjereno i ništa ne stoji; `1` = barem jedan FAIL (i kad je nešto drugo neprovjereno); `2` = nema FAIL-a, ali barem jedna provjera nije izvedena (NEPROVJERENO). Stavke RUČNO skripta ne vidi i ne utječu na kod: lokalni subagent bez javljanja dulje od 45 min, QA u oblaku bez verdikta 20 min nakon pokretanja, stanje sesija u oblaku i Codex kvota. Njih orkestrator i dalje provjerava ručno, kao i PASS bez QA na `critical` PR-u, READY PR koji čeka vlasnika, preklapanje za `pr-ready` i granu bez traga rada.
