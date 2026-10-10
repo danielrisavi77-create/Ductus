@@ -217,9 +217,18 @@ const modes = {
     const input = event.tool_input ?? {};
     const file = path.resolve(event.cwd ?? ".", String(input.file_path ?? ""));
     const root = path.resolve(projectDir(event, env));
-    const relative = path.relative(root, file);
-    const inProject = !relative.startsWith("..") && !path.isAbsolute(relative);
-    if (!inProject || isProtected(relative)) return undefined;
+    let relative = path.relative(root, file);
+    let inProject = !relative.startsWith("..") && !path.isAbsolute(relative);
+    if (!inProject) {
+      // The names alone can miss our own file: the project root may be given
+      // as a link while Read names the real path, or the other way round.
+      // Resolving opens nothing; a missing file throws and nothing is decided.
+      const resolved = realProjectPath(root, file, io.realpathSync);
+      if (!resolved) return undefined;
+      relative = resolved.relative;
+      inProject = true;
+    }
+    if (isProtected(relative)) return undefined;
     const named = { ...input, file_path: relative || input.file_path };
     const deny = (reason) => (reason ? { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason } : undefined);
     if (!io.statSync(file, { throwIfNoEntry: false })) return deny(reviewRead(named, undefined, () => "", inProject));

@@ -1,5 +1,9 @@
 import { canonicalizeJcs } from "@/domain/forensics/jcs";
 import type {
+  EvidencePayloadReadResult,
+  EvidencePayloadReader,
+} from "@/application/ports/evidence-reconstruction";
+import type {
   EvidencePayloadPutResult,
   EvidencePayloadStore,
 } from "@/application/ports/evidence-trust";
@@ -9,7 +13,9 @@ type StoredPayload = {
   canonicalPayload: string;
 };
 
-export class InMemoryEvidencePayloadStore implements EvidencePayloadStore {
+export class InMemoryEvidencePayloadStore
+  implements EvidencePayloadStore, EvidencePayloadReader
+{
   private readonly payloads = new Map<string, StoredPayload>();
   unavailableReason: string | null = null;
 
@@ -40,6 +46,24 @@ export class InMemoryEvidencePayloadStore implements EvidencePayloadStore {
       canonicalPayload: input.canonicalPayload,
     });
     return { status: "stored", storageRef };
+  }
+
+  async readImmutable(input: {
+    evidencePackageId: string;
+    segmentHash: string;
+  }): Promise<EvidencePayloadReadResult> {
+    if (this.unavailableReason) {
+      return { status: "unavailable", reason: this.unavailableReason };
+    }
+    const stored = this.payloads.get(
+      canonicalizeJcs([input.evidencePackageId, input.segmentHash]),
+    );
+    return stored
+      ? {
+          status: "found",
+          bytes: new TextEncoder().encode(stored.canonicalPayload),
+        }
+      : { status: "not_found" };
   }
 
   get(

@@ -494,9 +494,12 @@ describe("fastForwardBase — only ever onto our own ACK", () => {
 });
 
 describe("serverSyncErrorToOutcome", () => {
-  it("maps the two round-trip failures to a retryable transport error", () => {
+  it("maps the round-trip failures and an unreadable answer to a retryable transport error", () => {
     expect(serverSyncErrorToOutcome("slanje")).toEqual({ status: "transport_error" });
     expect(serverSyncErrorToOutcome("citanje")).toEqual({ status: "transport_error" });
+    expect(serverSyncErrorToOutcome("odgovor-neispravan")).toEqual({
+      status: "transport_error",
+    });
   });
 
   it("maps the payload and row failures to their non-retryable outcomes", () => {
@@ -505,10 +508,9 @@ describe("serverSyncErrorToOutcome", () => {
     expect(serverSyncErrorToOutcome("zapis-neispravan")).toEqual({
       status: "invalid_document",
     });
-    expect(serverSyncErrorToOutcome("odgovor-neispravan")).toEqual({ status: "invalid" });
   });
 
-  it("only 'slanje' and 'citanje' are ever retried", () => {
+  it("only 'slanje', 'citanje' and 'odgovor-neispravan' are ever retried", () => {
     const codes = [
       "slanje",
       "citanje",
@@ -518,6 +520,6 @@ describe("serverSyncErrorToOutcome", () => {
       "odgovor-neispravan",
     ] as const;
     const retryable = codes.filter((code) => isRetryable(serverSyncErrorToOutcome(code)));
-    expect(retryable).toEqual(["slanje", "citanje"]);
+    expect(retryable).toEqual(["slanje", "citanje", "odgovor-neispravan"]);
   });
 });

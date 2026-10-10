@@ -121,7 +121,7 @@ main:focus {
 }
 
 .lbl {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -139,26 +139,45 @@ main:focus {
   text-decoration: none;
 }
 
+/*
+ * The same brand on every screen (review #156, 6). Padding widens the target
+ * to at least 32 px (review #156, 7); the negative margin keeps the letters
+ * on the grid line.
+ */
 .brand--small {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 6px;
+  margin-left: -6px;
   font-family: var(--ff-ui);
   font-size: 14px;
   font-weight: 600;
 }
 
 .demo-badge {
-  font-size: 13px;
-  padding: 2px 8px;
+  font-size: 12px;
+  padding: 1px 7px;
   border: 1px dashed var(--ink-3);
   border-radius: 4px;
   color: var(--ink-3);
   white-space: nowrap;
 }
 
-.demo-badge--small {
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  padding: 1px 6px;
+/* Marks a control that F-8 will switch on; never looks like a working one. */
+.soon {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--rule-2);
+  color: var(--ink-2);
+  font-family: var(--ff-ui);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  vertical-align: 1px;
+  text-align: left;
 }
 
 /* Plain screens */
@@ -192,8 +211,9 @@ main:focus {
   font-size: 16px;
 }
 
+/* On the header's grid: same width and side padding, so both start on one line. */
 .page {
-  max-width: 880px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 48px 24px 64px;
   display: flex;
@@ -214,6 +234,10 @@ main:focus {
 
 .page p {
   margin: 0;
+}
+
+.page > * {
+  max-width: 640px;
 }
 
 .btn {
@@ -262,7 +286,7 @@ main:focus {
 }
 
 .brand-line__context {
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ink-3);
@@ -282,11 +306,17 @@ main:focus {
   align-items: center;
   min-height: 32px;
   padding: 0 12px;
+  border: 0;
   border-radius: 5px;
+  background: transparent;
   font-size: 12.5px;
   font-weight: 500;
   color: var(--ink-3);
   text-decoration: none;
+}
+
+.modes__item[aria-disabled="true"] {
+  cursor: not-allowed;
 }
 
 .modes__item[aria-current="page"] {
@@ -299,7 +329,20 @@ main:focus {
   flex: 1;
   display: grid;
   grid-template-columns: 236px minmax(0, 1fr) 322px;
+  grid-template-areas: "rail main panel";
   min-height: 0;
+}
+
+.workspace__main {
+  grid-area: main;
+}
+
+.workspace__rail {
+  grid-area: rail;
+}
+
+.workspace__panel {
+  grid-area: panel;
 }
 
 .workspace__rail,
@@ -331,25 +374,68 @@ main:focus {
   padding: 6px 14px;
   background: var(--chrome);
   border-top: 1px solid var(--rule);
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--ink-2);
   font-variant-numeric: tabular-nums;
+}
+
+/* The rail toggles exist only where the rails are sections under the sheet. */
+.rail-toggle {
+  display: none;
 }
 
 @media (max-width: 1100px) {
   .workspace__body {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "main"
+      "panel"
+      "rail";
     align-content: start;
-  }
-
-  .workspace__main {
-    order: -1;
   }
 
   .workspace__rail,
   .workspace__panel {
+    padding: 0;
     border: 0;
     border-top: 1px solid var(--rule);
+  }
+
+  .rail-toggle {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 44px;
+    padding: 0 16px;
+    border: 0;
+    background: transparent;
+    font-size: 13.5px;
+    font-weight: 600;
+    text-align: left;
+  }
+
+  .rail-toggle::after {
+    content: "";
+    flex: none;
+    width: 7px;
+    height: 7px;
+    margin-left: auto;
+    border-right: 1.5px solid var(--ink-2);
+    border-bottom: 1.5px solid var(--ink-2);
+    transform: translateY(-2px) rotate(45deg);
+  }
+
+  .rail-toggle[aria-expanded="true"]::after {
+    transform: translateY(2px) rotate(-135deg);
+  }
+
+  .rail-body {
+    padding: 4px 12px 20px;
+  }
+
+  .rail-body[data-open="false"] {
+    display: none;
   }
 }
 
@@ -363,7 +449,7 @@ main:focus {
   gap: 8px;
   margin: 0 0 7px;
   padding: 0 4px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -381,7 +467,7 @@ main:focus {
 .rail-empty {
   margin: 0;
   padding: 2px 7px;
-  font-size: 11.5px;
+  font-size: 12.5px;
   color: var(--ink-3);
 }
 
@@ -399,6 +485,13 @@ main:focus {
   box-shadow: var(--lift);
 }
 
+/* The lift is invisible on the dark ground; a 1 px rule keeps the sheet's edge (review #156, c). */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .sheet {
+    box-shadow: 0 0 0 1px var(--rule), var(--lift);
+  }
+}
+
 @media (max-width: 640px) {
   .sheet-area {
     padding: 12px 8px 40px;
@@ -406,6 +499,19 @@ main:focus {
 
   .sheet {
     padding: 32px 20px;
+  }
+
+  /* Phone: no interface text under 13 px (review #156, 5). */
+  .lbl,
+  .demo-badge,
+  .soon,
+  .brand-line__context,
+  .modes__item,
+  .workspace__status,
+  .rail-section__title,
+  .rail-empty,
+  .editor-toolbar .btn {
+    font-size: 13px;
   }
 }
 

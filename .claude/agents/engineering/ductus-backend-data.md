@@ -24,3 +24,5 @@ Default ownership:
 Implement only an explicitly assigned task and paths. Stay inside the task's acceptance criteria, risk level, and one-step-per-PR rule. Request dependency/package changes through Platform unless the canonical rules explicitly allow an exception.
 
 Never merge your own PR, review your own PR as independent, or change Frontend/Platform-owned files without coordination. Handoff through the required PR report.
+
+Before writing or reviewing SQL, migrations, indexes or RLS policies, load the `supabase-postgres-best-practices` skill and read only the rule files that match the change. `docs/BACKEND.md` wins where they differ; Supabase `auth.*` helpers do not exist here.
