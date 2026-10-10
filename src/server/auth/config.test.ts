@@ -56,6 +56,25 @@ describe("loadAuthConfig", () => {
     "https://idp.example",
     "https://fake.local",
     "http://idp.aai.example.hr",
+    // Review of #191: trailing dots, the rest of 127/8, unspecified and
+    // mapped addresses, other IPv4 spellings, private ranges, single labels.
+    "https://localhost.",
+    "https://localhost.:8090",
+    "https://oidc.test.",
+    "https://idp.example..",
+    "https://127.0.0.2",
+    "https://0.0.0.0",
+    "https://2130706433",
+    "https://0x7f.1",
+    "https://[::ffff:127.0.0.1]",
+    "https://[::]",
+    "https://[2001:db8::1]",
+    "https://10.0.0.5",
+    "https://172.16.0.1",
+    "https://192.168.1.10",
+    "https://169.254.169.254",
+    "https://8.8.8.8",
+    "https://intranet",
   ])("refuses the issuer %s in production", (issuer) => {
     expect(refusal({ ...PRODUCTION, OIDC_ISSUER: issuer }).message).toMatch(/OIDC_ISSUER must be an https URL/);
   });
@@ -64,7 +83,17 @@ describe("loadAuthConfig", () => {
     expect(refusal({ ...PRODUCTION, OIDC_REDIRECT_URI: "http://localhost:3000/cb" }).message).toMatch(
       /OIDC_REDIRECT_URI/,
     );
+    for (const redirect of ["https://localhost./cb", "https://127.0.0.2/cb", "https://[::ffff:7f00:1]/cb", "https://10.0.0.5/cb"]) {
+      expect(refusal({ ...PRODUCTION, OIDC_REDIRECT_URI: redirect }).message).toMatch(/OIDC_REDIRECT_URI/);
+    }
     expect(loadAuthConfig(PRODUCTION).allowInsecureRequests).toBe(false);
+  });
+
+  it("accepts a public DNS host in production, also with a trailing dot", () => {
+    expect(loadAuthConfig({ ...PRODUCTION, OIDC_ISSUER: "https://idp.aai.example.hr./" }).issuer.hostname).toBe(
+      "idp.aai.example.hr.",
+    );
+    expect(loadAuthConfig({ ...PRODUCTION, OIDC_ISSUER: "https://login.aai.example.hr:8443/oidc" }).provider).toBe("aai-eduhr");
   });
 
   it("allows http only for the fake provider on a loopback host", () => {

@@ -50,9 +50,21 @@ function url(env: Env, name: string): URL {
   }
 }
 
-function isLocalHost(hostname: string): boolean {
-  const host = hostname.toLowerCase();
-  return LOOPBACK_HOSTS.has(host) || RESERVED_SUFFIXES.some((s) => host.endsWith(s) || host === s.slice(1));
+// The URL parser already turns every IPv4 spelling (decimal, hex, short
+// forms) into dotted decimal and keeps IPv6 in brackets.
+const IPV4_LITERAL = /^\d{1,3}(?:\.\d{1,3}){3}$/;
+
+/**
+ * A production issuer or redirect URI names a public DNS host: the AAI@EduHr
+ * issuer and Ductus itself always do. So every IP literal is refused, not
+ * only loopback (127/8, 0.0.0.0, ::1, ::ffff:…) but private ranges too, and
+ * so are single-label names and reserved suffixes. A trailing dot is the
+ * same host and is ignored.
+ */
+function isPublicHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/\.+$/, "");
+  if (host === "" || host.startsWith("[") || IPV4_LITERAL.test(host) || !host.includes(".")) return false;
+  return !RESERVED_SUFFIXES.some((s) => host.endsWith(s));
 }
 
 export function loadAuthConfig(env: Env = process.env): AuthConfig {
@@ -75,7 +87,7 @@ export function loadAuthConfig(env: Env = process.env): AuthConfig {
       ["OIDC_ISSUER", issuer],
       ["OIDC_REDIRECT_URI", redirectUri],
     ] as const) {
-      if (value.protocol !== "https:" || isLocalHost(value.hostname)) {
+      if (value.protocol !== "https:" || !isPublicHost(value.hostname)) {
         throw new AuthConfigError(`${name} must be an https URL of a public host in production`);
       }
     }
