@@ -14,8 +14,9 @@
  *     and nothing here picks for the author. Both options destroy one of two
  *     versions of their work, so both are explicit.
  *   - Local durable state is not canonical server state. `adopt` carries the
- *     revision the SERVER named; `salvage` carries the base revision the local
- *     candidate was written against. No number is invented here.
+ *     SERVER revision; `salvage` retains its original local revision for
+ *     provenance separately from the validated server CAS base. If server
+ *     state is unavailable or regressive, the next CAS base is null.
  *   - Evidence is not judgment. The counts below exist so the author can tell
  *     the two versions apart before choosing; they never decide anything.
  *
@@ -53,10 +54,18 @@ export type RecoveryUnavailableReason =
 export type RecoveryCandidate = {
   document: CanonicalDocument;
   /**
-   * For a salvage: the base revision the local candidate was written against.
-   * For an adoption: the revision the server named. Never minted here.
+   * For salvage: the ORIGINAL local base revision (not a CAS target).
+   * For adoption: the validated server revision. Never minted here.
    */
   revision: number;
+  /** Salvage's original local base revision, retained as provenance. Null for adoption. */
+  originalCandidateRevision: number | null;
+  /**
+   * Revision for a future CAS after the author's explicit recovery decision.
+   * Only populated from a validated server document AND its safe revision.
+   * Null means: preserve local text, but do not send any CAS until revalidated.
+   */
+  nextBaseRevision: number | null;
   nodes: number;
   words: number;
   /** Which journal row this came from. `null` for the server's document. */
@@ -168,7 +177,7 @@ function readableTimestamp(value: unknown): string | null {
 function candidateFrom(
   input: LocalCandidateInput,
   source: RecoverySource,
-): (RecoveryCandidate & { at: string | null }) | null {
+): (Omit<RecoveryCandidate, "originalCandidateRevision" | "nextBaseRevision"> & { at: string | null }) | null {
   if (input === null || input === undefined) {
     return null;
   }
@@ -211,10 +220,16 @@ function newerOf<T extends { at: string | null }>(pending: T | null, snapshot: T
   return pending;
 }
 
-function salvageOption(input: PlanRecoveryInput): RecoveryOption {
+function salvageOption(
+  input: PlanRecoveryInput,
+  trustedServerRevision: number | null,
+): RecoveryOption {
   const pending = candidateFrom(input.pendingNewest, "pending");
   const snapshot = candidateFrom(input.snapshot, "snapshot");
   const best = newerOf(pending, snapshot);
+  // Ranking chooses the DOCUMENT, not the rollback floor. A losing yet
+  // valid local row can prove a more advanced server history.
+  const latestKnownLocalRevision = Math.max(pending?.revision ?? 0, snapshot?.revision ?? 0);
 
   if (best !== null) {
     // `at` is a tie-breaker, not part of the offer: the panel asks about a
@@ -222,6 +237,13 @@ function salvageOption(input: PlanRecoveryInput): RecoveryOption {
     const candidate: RecoveryCandidate = {
       document: best.document,
       revision: best.revision,
+      originalCandidateRevision: best.revision,
+      // A server rollback or unvalidated server response must not become a
+      // silently accepted base. Recover locally until server state is verified.
+      nextBaseRevision:
+        trustedServerRevision !== null && trustedServerRevision >= latestKnownLocalRevision
+          ? trustedServerRevision
+          : null,
       nodes: best.nodes,
       words: best.words,
       source: best.source,
@@ -249,6 +271,8 @@ function adoptOption(input: PlanRecoveryInput): RecoveryOption {
         candidate: {
           document: validated.doc,
           revision: input.serverRevision,
+          originalCandidateRevision: null,
+          nextBaseRevision: input.serverRevision,
           nodes: nodeCount(validated.doc),
           words: wordCount(validated.doc),
           source: null,
@@ -269,9 +293,9 @@ function adoptOption(input: PlanRecoveryInput): RecoveryOption {
  * Plans the way out of RECOVERY_REQUIRED.
  *
  * Why 'salvage-local' is recommended whenever it is available: it is the only
- * one of the two that destroys nothing. The salvaged text is re-queued against
- * the server's revision and still has to pass the compare-and-set, so a server
- * that has moved on raises an honest conflict instead of an overwrite —
+ * one of the two that destroys nothing. After an explicit recovery choice,
+ * re-queue only against the validated nextBaseRevision; if it is null, wait
+ * for a verified server read. CAS still catches a concurrent server change —
  * whereas adopting the server's document drops local work that, by definition,
  * the server has never seen. When the local store has nothing left to offer,
  * the server's document is the only thing there is, and it is recommended
@@ -282,8 +306,10 @@ function adoptOption(input: PlanRecoveryInput): RecoveryOption {
  * because a button that silently disappears tells the author nothing.
  */
 export function planRecovery(input: PlanRecoveryInput): RecoveryPlan {
-  const salvage = salvageOption(input);
+  // Never trust a revision alone: first validate the associated server
+  // document. A later CAS still catches a concurrent server update.
   const adopt = adoptOption(input);
+  const salvage = salvageOption(input, adopt.candidate?.revision ?? null);
 
   const recommended: RecoveryChoice | null = salvage.available
     ? "salvage-local"
