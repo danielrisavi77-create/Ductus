@@ -19,7 +19,7 @@ import { fileURLToPath } from "node:url";
 // Must stay below the 10 s `timeout` of the hook in .claude/settings.json: an
 // expiry left to the harness is fail-open. One budget covers the analysis and,
 // on the first run for a package state, the control probes.
-export const ANALYSIS_TIMEOUT_MS = 7000;
+export const ANALYSIS_TIMEOUT_MS = 8000;
 export const RECOVERY = "Run `pnpm install --frozen-lockfile` in a terminal (or ask for exactly that command), then retry.";
 
 // The only commands allowed while the package is unusable: the whole command,
