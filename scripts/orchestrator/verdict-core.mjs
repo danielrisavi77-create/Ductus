@@ -1,6 +1,7 @@
 // Compose and check a canonical review or QA verdict comment (ENGINEERING_SYSTEM §6).
 // Pure functions; verdict.mjs does the reads and prints the body; it never posts.
-import { canonicalBlock, field } from "../engineering/metadata-parser.mjs";
+import { canonicalBlock, field, metadataLines } from "../engineering/metadata-parser.mjs";
+import { APP_RUNTIMES, QUOTA_EXHAUSTED_PATTERNS } from "../engineering/review-gate-core.mjs";
 
 const SHA_RE = /^[0-9a-f]{40}$/;
 const AGENT_RE = /^(claude|codex|chatgpt|grok):[A-Za-z0-9_-]+:(reviewer|qa)$/;
@@ -41,32 +42,121 @@ export function parseVerdictArgs(args) {
   for (const k of ["model", "fallback"]) {
     if (o[k] !== undefined && !oneLine(o[k])) return { error: `--${k} must be one line` };
   }
-  if (o.fallback !== undefined && o.role !== "qa") return { error: "--fallback is for QA verdicts only" };
+  const fb = fallbackProblem(o);
+  if (fb) return { error: fb };
   return o;
 }
 
+// leading blank lines and trailing space go; a first-line indent stays, so code stays code
+const reportText = (report) => String(report ?? "").replace(/^(?:[ \t]*\r?\n)+/, "").trimEnd();
+
+const LABEL_RE = /^\[(KRITIČNO|VAŽNO|MANJE)\]/;
+const TOTALS_RE = /^Ukupno:\s*(\d+)\s*kritičn\w*,\s*(\d+)\s*važn\w*,\s*(\d+)\s*manj\w*\.?$/i;
+const NONE_RE = /^Bez nalaza\.?$/i;
+
 /**
- * Report checks. A reviewer report ends with the totals line the review skill
- * prescribes; a PASS with a KRITIČNO or VAŽNO finding is refused, as is a
- * report line that would start a second metadata block.
+ * Every field a gate, the orchestrator or a D-97 record reads from a comment.
+ * A report may carry none of them where the gate parser would see it.
  */
-export function checkReport(report, { role, verdict }) {
-  const text = String(report ?? "").trim();
-  if (!text) return null;
-  if (/^(agent-review|review-head|review-verdict|qa-agent|qa-head|qa-verdict|qa-scope|owner-override|override-head):/im.test(text)) {
-    return "report must not contain verdict or override metadata lines";
+export const GOVERNANCE_FIELDS = [
+  "Agent", "Risk", "Task",
+  "Agent-Review", "Review-Head", "Review-Verdict", "Review-Model",
+  "QA-Agent", "QA-Head", "QA-Verdict", "QA-Scope", "QA-Model",
+  "Provider-Fallback", "Owner-Override", "Override-Head", "Override-Reason",
+  "Owner-Command", "Command-Head",
+];
+// any other line in these families is refused too, so a field added later is covered
+const FIELD_FAMILY_RE = /^(agent|review|qa|provider|owner|override|command)-[a-z-]*:/i;
+
+/**
+ * Report checks, decided by the gate parser: the report may not carry a line
+ * the gate would read as a field. Findings are `[KRITIČNO|VAŽNO|MANJE]` lines
+ * (review skill); when there are findings or a totals line, exactly one totals
+ * line closes the report and matches the labels. A PASS with a KRITIČNO or
+ * VAŽNO finding is refused for reviewer and QA alike (QA skill: PASS only
+ * when every required scenario passes).
+ */
+export function checkReport(report, opts) {
+  const { role } = opts;
+  const text = reportText(report);
+  if (!text) return role === "reviewer" ? "a reviewer verdict needs a report ending with the totals line" : null;
+  for (const name of GOVERNANCE_FIELDS) {
+    if (field(text, name) !== null) return `report contains a ${name}: line the gate would read; remove or indent it as code`;
   }
-  if (role === "reviewer") {
-    const totals = text.match(/^Ukupno:\s*(\d+)\s*kritičn\w*,\s*(\d+)\s*važn\w*,\s*(\d+)\s*manj\w*\.?\s*$/im);
-    if (!totals && !/^Bez nalaza\.?\s*$/im.test(text)) {
-      return "report must end with 'Ukupno: N kritično, N važno, N manje.' or 'Bez nalaza.'";
+  const active = metadataLines(text);
+  if (active.some((l) => FIELD_FAMILY_RE.test(l))) return "report contains a governance-style field line; remove or indent it as code";
+  return findingsProblem(text, active, opts);
+}
+
+function findingsProblem(text, active, { role, verdict }) {
+  const labels = { KRITIČNO: 0, VAŽNO: 0, MANJE: 0 };
+  for (const l of active) {
+    const m = l.match(LABEL_RE);
+    if (m) labels[m[1]] += 1;
+  }
+  const lines = text.split(/\r?\n/).map((l) => l.trim());
+  const closing = lines.filter((l) => TOTALS_RE.test(l) || NONE_RE.test(l));
+  const found = labels.KRITIČNO + labels.VAŽNO + labels.MANJE;
+  if (closing.length === 0) {
+    if (role === "reviewer" || found > 0) return "report must end with 'Ukupno: N kritično, N važno, N manje.' or 'Bez nalaza.'";
+  } else {
+    if (closing.length > 1) return "report has more than one totals line";
+    if (closing[0] !== lines.at(-1)) return "the totals line must be the last line of the report";
+    const t = closing[0].match(TOTALS_RE);
+    if (!t && found > 0) return "'Bez nalaza.' with labelled findings above it";
+    if (t && (Number(t[1]) !== labels.KRITIČNO || Number(t[2]) !== labels.VAŽNO || Number(t[3]) !== labels.MANJE)) {
+      return `totals line does not match the labels (${labels.KRITIČNO} kritično, ${labels.VAŽNO} važno, ${labels.MANJE} manje)`;
     }
-    if (verdict === "PASS" && totals && (Number(totals[1]) > 0 || Number(totals[2]) > 0)) {
-      return "PASS with open KRITIČNO or VAŽNO findings; resolve them or use FAIL";
-    }
+  }
+  if (verdict === "PASS" && labels.KRITIČNO + labels.VAŽNO > 0) {
+    return "PASS with open KRITIČNO or VAŽNO findings; resolve them or use FAIL";
   }
   return null;
 }
+
+const principal = (agent) => {
+  const [runtime, slot] = agent.split(":");
+  return `${runtime === "codex" || runtime === "chatgpt" ? "openai" : runtime}:${slot}`;
+};
+const PR_AGENT_RE = /^(claude|codex|chatgpt|grok):[A-Za-z0-9_-]+:[a-z-]+$/;
+
+/** §6: author and reviewer/QA must be different principals (codex and chatgpt are one). */
+export function authorProblem(prBody, agent) {
+  const author = field(prBody ?? "", "Agent");
+  if (!author || !PR_AGENT_RE.test(author)) return "PR body has no valid Agent: line; the gate will fail it anyway";
+  if (principal(author) === principal(agent)) return `${agent} is the PR author's principal (${author}); the author never gives a verdict on its own PR`;
+  return null;
+}
+
+const appFor = (runtime) => [...APP_RUNTIMES].find(([, rs]) => rs.has(runtime))?.[0] ?? null;
+
+/**
+ * §6 fallback line `<provider> — <razlog>`. Quota fallback (a registered
+ * exhausted App) is QA only and never names the App that posts the verdict;
+ * the model-pair fallback (either role) records the model with --model.
+ */
+export function fallbackProblem({ fallback, agent, role, model }) {
+  if (fallback === undefined) return null;
+  const m = fallback.match(/^(\S+) — (\S.*)$/);
+  if (!m) return "--fallback must read '<provider> — <razlog>' (ENGINEERING_SYSTEM §6)";
+  const slug = m[1].toLowerCase();
+  if (slug === appFor(agent.split(":")[0])) return `--fallback names ${slug}, the App that posts this verdict (§6 kvotni fallback t. 2)`;
+  if (QUOTA_EXHAUSTED_PATTERNS.has(slug)) {
+    return role === "qa" ? null : "quota fallback is for QA verdicts only (§6 kvotni fallback)";
+  }
+  return model ? null : "a model-pair fallback records the model: add --model (§6 fallback par modela)";
+}
+
+const REPO = "danielrisavi77-create/Ductus";
+/** The only calls verdict.mjs may make: three GET reads of this repository. */
+export function readOnlyCall(cmd, args) {
+  if (cmd !== "gh" || args.length !== 2 || args[0] !== "api") return false;
+  const p = args[1];
+  return p === "repos/{owner}/{repo}" ||
+    new RegExp(`^repos/${REPO}/pulls/[1-9]\\d*$`).test(p) ||
+    new RegExp(`^repos/${REPO}/git/ref/heads/[A-Za-z0-9._/%-]+$`).test(p);
+}
+export const EXPECTED_REPO = REPO;
 
 /** One comment: the canonical block first, then the report, then the footer. */
 export function composeVerdict({ role, agent, head, verdict, qaScope, model, fallback, report }) {
@@ -76,7 +166,7 @@ export function composeVerdict({ role, agent, head, verdict, qaScope, model, fal
   if (model) lines.push(`${role === "qa" ? "QA" : "Review"}-Model: ${model}`);
   if (fallback) lines.push(`Provider-Fallback: ${fallback}`);
   const parts = [lines.join("\n")];
-  const text = String(report ?? "").trim();
+  const text = reportText(report);
   if (text) parts.push(text);
   if (agent.startsWith("claude:")) parts.push(FOOTER);
   return `${parts.join("\n\n")}\n`;
