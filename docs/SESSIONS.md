@@ -35,7 +35,7 @@ Normalno rade tri stalna writera (Backend, Frontend, Platforma). Četvrti je dop
 1. Orkestrator šalje zadatak (predložak u §3) sesiji odgovarajuće uloge.
 2. Sesija radi u svom worktreeu na grani `<uloga>/<kratki-opis>` (npr. `backend/m0-port-domain`), od svježeg `origin/main`.
 3. Testovi i provjere lokalno zeleni (`pnpm lint`, `pnpm typecheck`, `pnpm test`); lefthook to radi pri commitu.
-4. Sesija otvara PR (jedan korak iz `STATE.md`, do oko 400 redaka; veći PR obrazlaže zašto) i obvezno upisuje `Agent`, `Risk` i `Task` metadata iz `docs/ENGINEERING_SYSTEM.md`.
+4. Sesija otvara PR (jedan korak iz `STATE.md`, do oko 400 redaka; veći PR obrazlaže zašto) i obvezno upisuje `Agent`, `Risk` i `Task` metadata iz `docs/ENGINEERING_SYSTEM.md`. Nakon svakog pusha, prije čekanja na CI, autor (podagent ili sesija) ostavlja na PR-u kratak komentar "Trag rada" (predložak u §3); završni izvještaj iz koraka 6 i dalje je obvezan (Daniel, 10. 10. 2026.).
 5. PR dobiva neovisni pregled na aktualnom headu. Za `critical` PR obvezan je i zaseban QA/adversarial PASS. Za deklarirani author guard `codex` i `chatgpt` na istom slotu tretiraju se kao isti OpenAI principal (`openai:<slot>`), jer koriste isti GitHub App. Autor, reviewer i QA moraju biti različite aktivne agent-instance po governance pravilu; gate strojno provjerava da reviewer i QA dolaze iz različitih autentificiranih GitHub Appova. Autor ispravlja prihvaćene nalaze, a odbijene obrazlaže.
 6. Sesija zapisuje izvještaj u PR (predložak u §3) i staje. Claude sesija na istom računu uz to šalje orkestratoru jednu poruku po `docs/ORKESTRATOR.md` §5; rad s drugog računa ili providera o poruci ne ovisi.
 7. Spaja samo aktivni Ductus orkestrator, kad su CI, Engineering review gate i svi risk-specifični gateovi zeleni te PR ne čeka Danielovu odluku. Radne sesije nikad ne spajaju PR, ne mijenjaju `.claude/` postavke i ne diraju postavke repoa na GitHubu.
@@ -68,6 +68,8 @@ Opseg: <što ulazi>; Izvan opsega: <što ne ulazi>
 Mape: <smije dirati>
 Gotovo kad: <provjerljiv kriterij, npr. naredba i očekivani ishod>
 Lokalne provjere prije pusha: <npr. actionlint i zizmor kad PR dira workflowe, osv-scanner kad dira lockfile; inače "standardne">
+Plan napada: <poveznica na komentar "Plan napada: <zadatak>"; obvezno za Risk: critical i za zadatak koji gradi ili mijenja gate (ORKESTRATOR.md §8), inače n/a>
+Privremene datoteke: <vlastita podmapa dijeljene privremene mape, ime po zadatku, npr. DAN-122>
 Ovisi o: <PR ili ništa>
 ```
 
@@ -81,11 +83,36 @@ Napravljeno: <3 do 5 stavki>
 Testovi: <naredba i rezultat>
 Review: <reviewer, head, nalaz/PASS; odbijeni nalazi uz razlog>
 QA: <za critical: QA head + scope + PASS; inače n/a>
+Plan napada: <tablica "stavka plana → test" u opisu PR-a, s razlogom za svaku neprimjenjivu stavku; inače n/a>
 Otvoreno ili blokira: <stavke ili "ništa">
 Treba Daniel: <odluka ili "ništa">
 ```
 
 Izvještaj obvezno ide u opis PR-a ili, bez PR-a, u `IZVJEŠTAJ <id>` issue. Poruka orkestratoru šalje se po `docs/ORKESTRATOR.md` §5 kad su sesije na istom računu; ona je upućivanje na izvještaj, a cross-account rad nikad ne ovisi o njoj.
+
+Za zadatak s planom napada autor svaku stavku plana pretvara u test ili u opisu PR-a obrazlaže zašto nije primjenjiva, daje tablicu "stavka plana → test" i prije pusha napada vlastito rješenje (`docs/ORKESTRATOR.md` §8, "Plan napada prije koda").
+
+### Trag rada (autor → PR, nakon svakog pusha)
+
+```
+Trag rada (<runtime>:<slot>)
+Head: <puni SHA>
+Promijenjeno: <što je ovaj push promijenio>
+Čeka: <CI, review, QA ili ništa>
+Otvoreno: <pitanja ili "ništa">
+```
+
+Komentar ide na PR nakon svakog pusha, prije čekanja na CI. Jednokratni pisac u oblaku ne može slati poruke, pa mu je trag rada jedini signal; trajne sesije u oblaku koje otvara Daniel uz to javljaju porukom po `docs/ORKESTRATOR.md` §5. Trag rada ne zamjenjuje izvještaj.
+
+### QA upit (orkestrator → QA sesija)
+
+Sadržaj upute je neutralan (`docs/ORKESTRATOR.md` §8). Kad uputa navodi kvotni fallback iz `docs/ENGINEERING_SYSTEM.md` §6, redak deklaracije navodi točno u ovom obliku:
+
+```
+Provider-Fallback: chatgpt-codex-connector — kvota iscrpljena
+```
+
+Razmak dolazi odmah iza imena pružatelja, bez zareza ili drugog znaka: gate čita prvu riječ doslovno, a 10. 10. 2026. odbio je valjan PASS zbog zareza iza imena (Daniel, 10. 10. 2026.).
 
 ## 4. Štednja tokena
 
