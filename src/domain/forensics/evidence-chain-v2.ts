@@ -169,6 +169,29 @@ export type EvidenceChainVerificationV2 =
   | { ok: false; reason: EvidenceChainFailureV2; index: number | null };
 
 /**
+ * A head is `null` or a hash with an integer count. Anything else is a caller
+ * bug (a mistyped column, say) and throws: read leniently, a head with both
+ * fields `undefined` would equal the computed head of an empty package and
+ * pass, and the bug would show only once segments arrive. A well-typed head
+ * with the wrong count, zero or negative included, is not a bug of that kind:
+ * it never equals a computed head and is answered as `head_mismatch`.
+ */
+function assertChainHead(
+  head: unknown,
+): asserts head is EvidenceChainHeadV2 | null {
+  if (head === null) return;
+  const candidate =
+    typeof head === "object" ? (head as Partial<EvidenceChainHeadV2>) : {};
+  if (
+    typeof candidate.segmentHash !== "string" ||
+    !SHA256_HEX.test(candidate.segmentHash) ||
+    !Number.isSafeInteger(candidate.segmentCount)
+  ) {
+    throw new Error("evidence-v2: expectedHead is not a chain head");
+  }
+}
+
+/**
  * Verifies stored segments in chain order against the recorded head.
  *
  * Every segment must be canonical, name the hash of the segment before it
@@ -191,6 +214,7 @@ export async function verifyEvidenceChainV2(
   payloads: readonly unknown[],
   expectedHead: EvidenceChainHeadV2 | null,
 ): Promise<EvidenceChainVerificationV2> {
+  assertChainHead(expectedHead);
   let previousHash: string | null = null;
   let previous: EvidenceSegmentV2 | null = null;
   const discontinuities: EvidenceChainDiscontinuityV2[] = [];

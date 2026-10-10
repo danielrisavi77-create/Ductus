@@ -14,6 +14,7 @@ import {
   EVIDENCE_HASH_ALGORITHM_V2,
   EVIDENCE_SEGMENT_SCHEMA_V2,
 } from "./evidence-segment-v2";
+import { MAX_JCS_DEPTH } from "./jcs";
 
 const A = "a".repeat(64);
 const B = "b".repeat(64);
@@ -172,5 +173,54 @@ describe("evidence payload and chain edge cases", () => {
     expect(
       await verifyEvidenceChainV2([], { segmentHash: "a".repeat(64), segmentCount: 1 }),
     ).toEqual({ ok: false, reason: "head_mismatch", index: null });
+  });
+
+  it("answers head_mismatch for a well-typed head with a count no package can have", async () => {
+    const hash = "a".repeat(64);
+    for (const segmentCount of [0, -1]) {
+      expect(
+        await verifyEvidenceChainV2([], { segmentHash: hash, segmentCount }),
+      ).toEqual({ ok: false, reason: "head_mismatch", index: null });
+    }
+  });
+
+  it("throws on a head that is not a hash with an integer count, instead of reading it as empty", async () => {
+    const hash = "a".repeat(64);
+    for (const head of [
+      {},
+      { segmentHash: undefined, segmentCount: undefined },
+      { segmentHash: hash },
+      { segmentCount: 1 },
+      { segmentHash: hash.toUpperCase(), segmentCount: 1 },
+      { segmentHash: hash, segmentCount: Number.NaN },
+      { segmentHash: hash, segmentCount: 1.5 },
+      { segmentHash: hash, segmentCount: "1" },
+      undefined,
+      "head",
+    ]) {
+      await expect(
+        verifyEvidenceChainV2([], head as never),
+      ).rejects.toThrow("expectedHead is not a chain head");
+    }
+  });
+
+  it("answers invalid, never a stack overflow, for a step nested past the JCS limit", async () => {
+    // The step value sits five levels down: segment, events, event, steps, step.
+    const deepest = MAX_JCS_DEPTH - 5;
+    const withNesting = (depth: number) =>
+      canonicalFixture("x").replace(
+        '"text":"x"',
+        `"text":${"[".repeat(depth)}${"]".repeat(depth)}`,
+      );
+
+    expect(await verifyCanonicalEvidencePayloadV2(withNesting(deepest))).toMatchObject({
+      ok: true,
+    });
+    for (const depth of [deepest + 1, 5_000, 100_000]) {
+      expect(await verifyCanonicalEvidencePayloadV2(withNesting(depth))).toEqual({
+        ok: false,
+        reason: "invalid",
+      });
+    }
   });
 });
