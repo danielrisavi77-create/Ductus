@@ -39,3 +39,73 @@ test("destructive commands and secret reads are blocked", () => {
     assert.notEqual(decide("Bash", command), "allowed", command);
   }
 });
+
+test("force push is blocked in every spelling the tool can match", () => {
+  for (const tool of ["Bash", "PowerShell"]) {
+    for (const command of ["git push --force origin x", "git push -f origin x", "git push origin +x", "git push --force-with-lease origin x", "git push --force-if-includes origin x", "git push --force-w origin x", "git push --forc origin x"]) {
+      assert.notEqual(decide(tool, command), "allowed", `${tool}: ${command}`);
+    }
+  }
+});
+
+// The two lists below pin what docs/SESSIONS.md 4a says about the limits of the
+// rulebook. A change in either direction means the document must change too.
+const DOCUMENTED_GAPS = {
+  Bash: [
+    "git push --force-with-lease=platforma/x origin platforma/x",
+    "git push --prune origin",
+    "git -c core.hooksPath=/dev/null commit -m x",
+    "git --config-env=core.hooksPath=HP commit -m x",
+    "LEFTHOOK=0 git commit -m x",
+    "git -c alias.ci='commit -n' ci -m x",
+    "g=git; $g commit -n -m x",
+    "alias g=git; g add -A",
+    "git commit $(echo -n) -m x",
+    "git add ${X:--A}",
+    "winpty git add -A",
+    "node -e \"require('child_process').execSync('git commit -n -m x')\"",
+    "git commit-tree HEAD^{tree} -m x",
+    "git update-index --again",
+    "git add ':!nothing'",
+    "git add ':(top,glob)**'",
+    "git add src/..",
+    "git add \"$PWD\"",
+    "git add --pathspec-from-file=all.txt",
+    "git am -k3n x.patch",
+  ],
+  PowerShell: [
+    "& git add -A",
+    "& git commit -n -m x",
+    "(git add -A)",
+    "$x = git commit -n -m x",
+    "Start-Process git -ArgumentList 'commit','-n','-m','x'",
+    "$a='-A'; git add $a",
+    "$env:LEFTHOOK='0'; git commit -m x",
+    "git push --force-with-lease=platforma/x origin platforma/x",
+    "git -c core.hooksPath=NUL commit -m x",
+    "git add ':!nothing'",
+  ],
+};
+
+const DOCUMENTED_FALSE_BLOCKS = {
+  "git commit -mnote": "block-git-commit-no-verify",
+  "git commit -uno -m x": "block-git-commit-no-verify",
+  "git commit -m \"-n\"": "block-git-commit-no-verify",
+  "git commit -mwait": "block-git-commit-all",
+  "git -C . add src/x.ts": "block-git-add-all",
+  "git -C . commit -m x": "block-git-commit-all",
+};
+
+test("gaps named in docs/SESSIONS.md 4a still pass the hook", () => {
+  for (const [tool, commands] of Object.entries(DOCUMENTED_GAPS)) {
+    for (const command of commands) assert.equal(decide(tool, command), "allowed", `${tool}: ${command}`);
+  }
+});
+
+test("false blocks named in docs/SESSIONS.md 4a are still blocked", () => {
+  for (const tool of ["Bash", "PowerShell"]) {
+    for (const [command, rule] of Object.entries(DOCUMENTED_FALSE_BLOCKS)) {
+      assert.equal(decide(tool, command), `custom.ductus-rules/${rule}`, `${tool}: ${command}`);
+    }
+  }
+});

@@ -1,8 +1,8 @@
 {
   "rulebook_version": 1,
   "name": "ductus-rules",
-  "version": "1.1.0",
-  "description": "Ductus git rules from CLAUDE.md, enforced for the common spellings including shell wrappers. Not exhaustive: see docs/SESSIONS.md 4a.",
+  "version": "1.2.0",
+  "description": "Ductus git rules from CLAUDE.md. Arguments are matched as whole tokens (short flags also inside a cluster), so the rules list every spelling they block. Not exhaustive: see docs/SESSIONS.md 4a.",
   "author": "Ductus",
   "allowed_commands": [
     "git"
@@ -14,14 +14,37 @@
       "subcommand": "add",
       "block_args": [
         "-A",
+        "--a",
+        "--al",
         "--all",
+        "-u",
+        "--u",
+        "--up",
+        "--upd",
+        "--upda",
+        "--updat",
+        "--update",
+        "--no-ignore-r",
+        "--no-ignore-re",
+        "--no-ignore-rem",
+        "--no-ignore-remo",
+        "--no-ignore-remov",
+        "--no-ignore-remova",
+        "--no-ignore-removal",
         ".",
         "./",
         ".\\",
+        "./.",
+        "..",
+        "../",
+        "..\\",
         ":/",
+        ":(top)",
         "*",
-        "-u",
-        "--update"
+        "**",
+        "./*",
+        ".\\*",
+        ":/*"
       ],
       "reason": "CLAUDE.md: stage with 'git add <paths>', never a blanket add.",
       "intent": "use_alternative"
@@ -32,14 +55,37 @@
       "subcommand": "stage",
       "block_args": [
         "-A",
+        "--a",
+        "--al",
         "--all",
+        "-u",
+        "--u",
+        "--up",
+        "--upd",
+        "--upda",
+        "--updat",
+        "--update",
+        "--no-ignore-r",
+        "--no-ignore-re",
+        "--no-ignore-rem",
+        "--no-ignore-remo",
+        "--no-ignore-remov",
+        "--no-ignore-remova",
+        "--no-ignore-removal",
         ".",
         "./",
         ".\\",
+        "./.",
+        "..",
+        "../",
+        "..\\",
         ":/",
+        ":(top)",
         "*",
-        "-u",
-        "--update"
+        "**",
+        "./*",
+        ".\\*",
+        ":/*"
       ],
       "reason": "CLAUDE.md: stage with 'git add <paths>', never a blanket add.",
       "intent": "use_alternative"
@@ -51,7 +97,21 @@
       "block_args": [
         "-a",
         "-am",
-        "--all"
+        "--all",
+        ".",
+        "./",
+        ".\\",
+        "./.",
+        "..",
+        "../",
+        "..\\",
+        ":/",
+        ":(top)",
+        "*",
+        "**",
+        "./*",
+        ".\\*",
+        ":/*"
       ],
       "reason": "CLAUDE.md: stage explicit paths with 'git add <paths>' before committing.",
       "intent": "use_alternative"
@@ -61,6 +121,12 @@
       "command": "git",
       "subcommand": "commit",
       "block_args": [
+        "-n",
+        "--no-v",
+        "--no-ve",
+        "--no-ver",
+        "--no-veri",
+        "--no-verif",
         "--no-verify"
       ],
       "reason": "Hooks run lint and the secrets scan; fix the failure instead of skipping them.",
@@ -71,9 +137,106 @@
       "command": "git",
       "subcommand": "push",
       "block_args": [
+        "--no-v",
+        "--no-ve",
+        "--no-ver",
+        "--no-veri",
+        "--no-verif",
         "--no-verify"
       ],
       "reason": "CLAUDE.md: tests must be green before a push; do not skip the pre-push checks.",
+      "intent": "stop_and_explain"
+    },
+    {
+      "name": "block-git-push-force-with-lease",
+      "command": "git",
+      "subcommand": "push",
+      "block_args": [
+        "--force-w",
+        "--force-wi",
+        "--force-wit",
+        "--force-with",
+        "--force-with-",
+        "--force-with-l",
+        "--force-with-le",
+        "--force-with-lea",
+        "--force-with-leas",
+        "--force-with-lease",
+        "--force-i",
+        "--force-if",
+        "--force-if-",
+        "--force-if-i",
+        "--force-if-in",
+        "--force-if-inc",
+        "--force-if-incl",
+        "--force-if-inclu",
+        "--force-if-includ",
+        "--force-if-include",
+        "--force-if-includes"
+      ],
+      "reason": "Ductus branches are refreshed with a merge commit; no force push in any form.",
+      "intent": "stop_and_explain"
+    },
+    {
+      "name": "block-git-merge-no-verify",
+      "command": "git",
+      "subcommand": "merge",
+      "block_args": [
+        "--no-v",
+        "--no-ve",
+        "--no-ver",
+        "--no-veri",
+        "--no-verif",
+        "--no-verify"
+      ],
+      "reason": "Do not skip the merge hooks; fix the failure instead.",
+      "intent": "stop_and_explain"
+    },
+    {
+      "name": "block-git-pull-no-verify",
+      "command": "git",
+      "subcommand": "pull",
+      "block_args": [
+        "--no-v",
+        "--no-ve",
+        "--no-ver",
+        "--no-veri",
+        "--no-verif",
+        "--no-verify"
+      ],
+      "reason": "Do not skip the merge hooks; fix the failure instead.",
+      "intent": "stop_and_explain"
+    },
+    {
+      "name": "block-git-am-no-verify",
+      "command": "git",
+      "subcommand": "am",
+      "block_args": [
+        "-n",
+        "-3n",
+        "--no-v",
+        "--no-ve",
+        "--no-ver",
+        "--no-veri",
+        "--no-verif",
+        "--no-verify"
+      ],
+      "reason": "Do not skip the commit hooks; fix the failure instead.",
+      "intent": "stop_and_explain"
+    },
+    {
+      "name": "block-git-rebase-no-verify",
+      "command": "git",
+      "subcommand": "rebase",
+      "block_args": [
+        "--no-v",
+        "--no-ve",
+        "--no-ver",
+        "--no-veri",
+        "--no-verif",
+        "--no-verify"
+      ],
+      "reason": "Do not skip the pre-rebase hook; fix the failure instead.",
       "intent": "stop_and_explain"
     }
   ],
@@ -141,7 +304,7 @@
       "expect": "allowed"
     },
     {
-      "command": "git commit -mnote",
+      "command": "git commit -mfix",
       "expect": "allowed"
     },
     {
@@ -155,6 +318,576 @@
     },
     {
       "command": "git push -u origin platforma/x",
+      "expect": "allowed"
+    },
+    {
+      "command": "git add --all",
+      "expect": "blocked",
+      "rule": "block-git-add-all"
+    },
+    {
+      "command": "git add --al",
+      "expect": "blocked",
+      "rule": "block-git-add-all"
+    },
+    {
+      "command": "git add --a",
+      "expect": "blocked",
+      "rule": "block-git-add-all"
+    },
+    {
+      "command": "git add --update",
+      "expect": "blocked",
+      "rule": "block-git-add-all"
+    },
+    {
+      "command": "git add --upd",
+      "expect": "blocked",
+      "rule": "block-git-add-all"
+    },
+    {
+      "command": "git add --up",
+      "expect": "blocked",
+      "rule": "block-git-add-all"
+    },
+    {
+      "command": "git add --no-ignore-removal",
+      "expect": "blocked",
+      "rule": "block-git-add-all"
+    },
+    {
+      "command": "git add --no-ignore-r",
+      "expect": "blocked",
+      "rule": "block-git-add-all"
+    },
+    {
+      "command": "git add ':(top)'",
+      "expect": "blocked",
+      "rule": "block-git-add-all"
+    },
+    {
+      "command": "git add \":(top)\"",
+      "expect": "blocked",
+      "rule": "block-git-add-all"
+    },
+    {
+      "command": "git add :/",
+      "expect": "blocked",
+      "rule": "block-git-add-all"
+    },
+    {
+      "command": "git add '*'",
+      "expect": "blocked",
+      "rule": "block-git-add-all"
+    },
+    {
+      "command": "git add **",
+      "expect": "blocked",
+      "rule": "block-git-add-all"
+    },
+    {
+      "command": "git add ./*",
+      "expect": "blocked",
+      "rule": "block-git-add-all"
+    },
+    {
+      "command": "git add :/*",
+      "expect": "blocked",
+      "rule": "block-git-add-all"
+    },
+    {
+      "command": "git add ./.",
+      "expect": "blocked",
+      "rule": "block-git-add-all"
+    },
+    {
+      "command": "git add ..",
+      "expect": "blocked",
+      "rule": "block-git-add-all"
+    },
+    {
+      "command": "git add -Av",
+      "expect": "blocked",
+      "rule": "block-git-add-all"
+    },
+    {
+      "command": "git add -vu",
+      "expect": "blocked",
+      "rule": "block-git-add-all"
+    },
+    {
+      "command": "git add -- .",
+      "expect": "blocked",
+      "rule": "block-git-add-all"
+    },
+    {
+      "command": "git stage --all",
+      "expect": "blocked",
+      "rule": "block-git-stage-all"
+    },
+    {
+      "command": "git stage --al",
+      "expect": "blocked",
+      "rule": "block-git-stage-all"
+    },
+    {
+      "command": "git stage --a",
+      "expect": "blocked",
+      "rule": "block-git-stage-all"
+    },
+    {
+      "command": "git stage --update",
+      "expect": "blocked",
+      "rule": "block-git-stage-all"
+    },
+    {
+      "command": "git stage --upd",
+      "expect": "blocked",
+      "rule": "block-git-stage-all"
+    },
+    {
+      "command": "git stage --up",
+      "expect": "blocked",
+      "rule": "block-git-stage-all"
+    },
+    {
+      "command": "git stage --no-ignore-removal",
+      "expect": "blocked",
+      "rule": "block-git-stage-all"
+    },
+    {
+      "command": "git stage --no-ignore-r",
+      "expect": "blocked",
+      "rule": "block-git-stage-all"
+    },
+    {
+      "command": "git stage ':(top)'",
+      "expect": "blocked",
+      "rule": "block-git-stage-all"
+    },
+    {
+      "command": "git stage \":(top)\"",
+      "expect": "blocked",
+      "rule": "block-git-stage-all"
+    },
+    {
+      "command": "git stage :/",
+      "expect": "blocked",
+      "rule": "block-git-stage-all"
+    },
+    {
+      "command": "git stage '*'",
+      "expect": "blocked",
+      "rule": "block-git-stage-all"
+    },
+    {
+      "command": "git stage **",
+      "expect": "blocked",
+      "rule": "block-git-stage-all"
+    },
+    {
+      "command": "git stage ./*",
+      "expect": "blocked",
+      "rule": "block-git-stage-all"
+    },
+    {
+      "command": "git stage :/*",
+      "expect": "blocked",
+      "rule": "block-git-stage-all"
+    },
+    {
+      "command": "git stage ./.",
+      "expect": "blocked",
+      "rule": "block-git-stage-all"
+    },
+    {
+      "command": "git stage ..",
+      "expect": "blocked",
+      "rule": "block-git-stage-all"
+    },
+    {
+      "command": "git stage -Av",
+      "expect": "blocked",
+      "rule": "block-git-stage-all"
+    },
+    {
+      "command": "git stage -vu",
+      "expect": "blocked",
+      "rule": "block-git-stage-all"
+    },
+    {
+      "command": "git stage -- .",
+      "expect": "blocked",
+      "rule": "block-git-stage-all"
+    },
+    {
+      "command": "git add -f .",
+      "expect": "blocked",
+      "rule": "block-git-add-all"
+    },
+    {
+      "command": "git -c core.quotePath=false add -A",
+      "expect": "blocked",
+      "rule": "block-git-add-all"
+    },
+    {
+      "command": "git -C src add --al",
+      "expect": "blocked",
+      "rule": "block-git-add-all"
+    },
+    {
+      "command": "git status; git add --al",
+      "expect": "blocked",
+      "rule": "block-git-add-all"
+    },
+    {
+      "command": "git status && git add ':(top)'",
+      "expect": "blocked",
+      "rule": "block-git-add-all"
+    },
+    {
+      "command": "git add src/x.ts",
+      "expect": "allowed"
+    },
+    {
+      "command": "git add -- src/x.ts docs/y.md",
+      "expect": "allowed"
+    },
+    {
+      "command": "git add -p src/x.ts",
+      "expect": "allowed"
+    },
+    {
+      "command": "git add --intent-to-add src/x.ts",
+      "expect": "allowed"
+    },
+    {
+      "command": "git stage src/x.ts",
+      "expect": "allowed"
+    },
+    {
+      "command": "git commit -n -m x",
+      "expect": "blocked",
+      "rule": "block-git-commit-no-verify"
+    },
+    {
+      "command": "git commit -nm x",
+      "expect": "blocked",
+      "rule": "block-git-commit-no-verify"
+    },
+    {
+      "command": "git commit -m x -n",
+      "expect": "blocked",
+      "rule": "block-git-commit-no-verify"
+    },
+    {
+      "command": "git commit -qnm x",
+      "expect": "blocked",
+      "rule": "block-git-commit-no-verify"
+    },
+    {
+      "command": "git commit --amend -n",
+      "expect": "blocked",
+      "rule": "block-git-commit-no-verify"
+    },
+    {
+      "command": "git commit --no-verif -m x",
+      "expect": "blocked",
+      "rule": "block-git-commit-no-verify"
+    },
+    {
+      "command": "git commit --no-veri -m x",
+      "expect": "blocked",
+      "rule": "block-git-commit-no-verify"
+    },
+    {
+      "command": "git commit --no-ver -m x",
+      "expect": "blocked",
+      "rule": "block-git-commit-no-verify"
+    },
+    {
+      "command": "git commit --no-v -m x",
+      "expect": "blocked",
+      "rule": "block-git-commit-no-verify"
+    },
+    {
+      "command": "git -c user.name=x commit -n -m x",
+      "expect": "blocked",
+      "rule": "block-git-commit-no-verify"
+    },
+    {
+      "command": "git -C src commit -nm x",
+      "expect": "blocked",
+      "rule": "block-git-commit-no-verify"
+    },
+    {
+      "command": "git add src/x.ts && git commit -n -m x",
+      "expect": "blocked",
+      "rule": "block-git-commit-no-verify"
+    },
+    {
+      "command": "git add src/x.ts; git commit -nm x",
+      "expect": "blocked",
+      "rule": "block-git-commit-no-verify"
+    },
+    {
+      "command": "bash -c \"git commit -n -m x\"",
+      "expect": "blocked",
+      "rule": "block-git-commit-no-verify"
+    },
+    {
+      "command": "git commit -m 'fix: x' --no-verify",
+      "expect": "blocked",
+      "rule": "block-git-commit-no-verify"
+    },
+    {
+      "command": "git commit -anm x",
+      "expect": "blocked",
+      "rule": "block-git-commit-all"
+    },
+    {
+      "command": "git commit -nam x",
+      "expect": "blocked",
+      "rule": "block-git-commit-all"
+    },
+    {
+      "command": "git commit --all -m x",
+      "expect": "blocked",
+      "rule": "block-git-commit-all"
+    },
+    {
+      "command": "git commit . -m x",
+      "expect": "blocked",
+      "rule": "block-git-commit-all"
+    },
+    {
+      "command": "git commit -m x -- .",
+      "expect": "blocked",
+      "rule": "block-git-commit-all"
+    },
+    {
+      "command": "git commit -m x :/",
+      "expect": "blocked",
+      "rule": "block-git-commit-all"
+    },
+    {
+      "command": "git commit -i . -m x",
+      "expect": "blocked",
+      "rule": "block-git-commit-all"
+    },
+    {
+      "command": "git commit -o ./ -m x",
+      "expect": "blocked",
+      "rule": "block-git-commit-all"
+    },
+    {
+      "command": "git commit -m x ':(top)'",
+      "expect": "blocked",
+      "rule": "block-git-commit-all"
+    },
+    {
+      "command": "git commit --amend",
+      "expect": "allowed"
+    },
+    {
+      "command": "git commit --amend --no-edit",
+      "expect": "allowed"
+    },
+    {
+      "command": "git commit -m x src/x.ts",
+      "expect": "allowed"
+    },
+    {
+      "command": "git commit -F msg.txt",
+      "expect": "allowed"
+    },
+    {
+      "command": "git commit --fixup HEAD",
+      "expect": "allowed"
+    },
+    {
+      "command": "git commit -m \"fix: no-verify is never used\"",
+      "expect": "allowed"
+    },
+    {
+      "command": "git commit -m \"docs: -n is blocked\"",
+      "expect": "allowed"
+    },
+    {
+      "command": "git commit -S -m x",
+      "expect": "allowed"
+    },
+    {
+      "command": "git commit -v",
+      "expect": "allowed"
+    },
+    {
+      "command": "git commit --allow-empty -m x",
+      "expect": "allowed"
+    },
+    {
+      "command": "git push --no-verif",
+      "expect": "blocked",
+      "rule": "block-git-push-no-verify"
+    },
+    {
+      "command": "git push --no-v origin x",
+      "expect": "blocked",
+      "rule": "block-git-push-no-verify"
+    },
+    {
+      "command": "git push origin x --no-verify",
+      "expect": "blocked",
+      "rule": "block-git-push-no-verify"
+    },
+    {
+      "command": "git -C src push --no-verify",
+      "expect": "blocked",
+      "rule": "block-git-push-no-verify"
+    },
+    {
+      "command": "git push --force-with-lease",
+      "expect": "blocked",
+      "rule": "block-git-push-force-with-lease"
+    },
+    {
+      "command": "git push --force-with-lease origin platforma/x",
+      "expect": "blocked",
+      "rule": "block-git-push-force-with-lease"
+    },
+    {
+      "command": "git push origin platforma/x --force-with-lease",
+      "expect": "blocked",
+      "rule": "block-git-push-force-with-lease"
+    },
+    {
+      "command": "git push --force-if-includes",
+      "expect": "blocked",
+      "rule": "block-git-push-force-with-lease"
+    },
+    {
+      "command": "git push --force-with-lease --force-if-includes origin x",
+      "expect": "blocked",
+      "rule": "block-git-push-force-with-lease"
+    },
+    {
+      "command": "git push --force-w origin x",
+      "expect": "blocked",
+      "rule": "block-git-push-force-with-lease"
+    },
+    {
+      "command": "git push --force-with origin x",
+      "expect": "blocked",
+      "rule": "block-git-push-force-with-lease"
+    },
+    {
+      "command": "git push --force-i origin x",
+      "expect": "blocked",
+      "rule": "block-git-push-force-with-lease"
+    },
+    {
+      "command": "git -C src push --force-with-lease",
+      "expect": "blocked",
+      "rule": "block-git-push-force-with-lease"
+    },
+    {
+      "command": "git fetch origin && git push --force-with-lease",
+      "expect": "blocked",
+      "rule": "block-git-push-force-with-lease"
+    },
+    {
+      "command": "git push",
+      "expect": "allowed"
+    },
+    {
+      "command": "git push origin platforma/x",
+      "expect": "allowed"
+    },
+    {
+      "command": "git push origin local:platforma/x",
+      "expect": "allowed"
+    },
+    {
+      "command": "git push -n origin platforma/x",
+      "expect": "allowed"
+    },
+    {
+      "command": "git push --dry-run origin platforma/x",
+      "expect": "allowed"
+    },
+    {
+      "command": "git push -nu origin platforma/x",
+      "expect": "allowed"
+    },
+    {
+      "command": "git push --follow-tags origin platforma/x",
+      "expect": "allowed"
+    },
+    {
+      "command": "git merge --no-verify origin/main",
+      "expect": "blocked",
+      "rule": "block-git-merge-no-verify"
+    },
+    {
+      "command": "git merge origin/main --no-verif",
+      "expect": "blocked",
+      "rule": "block-git-merge-no-verify"
+    },
+    {
+      "command": "git pull --no-verify",
+      "expect": "blocked",
+      "rule": "block-git-pull-no-verify"
+    },
+    {
+      "command": "git am --no-verify x.patch",
+      "expect": "blocked",
+      "rule": "block-git-am-no-verify"
+    },
+    {
+      "command": "git am -n x.patch",
+      "expect": "blocked",
+      "rule": "block-git-am-no-verify"
+    },
+    {
+      "command": "git am -3n x.patch",
+      "expect": "blocked",
+      "rule": "block-git-am-no-verify"
+    },
+    {
+      "command": "git rebase --no-verify origin/main",
+      "expect": "blocked",
+      "rule": "block-git-rebase-no-verify"
+    },
+    {
+      "command": "git merge origin/main",
+      "expect": "allowed"
+    },
+    {
+      "command": "git merge -n origin/main",
+      "expect": "allowed"
+    },
+    {
+      "command": "git merge --no-ff --no-edit origin/main",
+      "expect": "allowed"
+    },
+    {
+      "command": "git merge --no-verify-signatures origin/main",
+      "expect": "allowed"
+    },
+    {
+      "command": "git pull -n",
+      "expect": "allowed"
+    },
+    {
+      "command": "git pull --ff-only",
+      "expect": "allowed"
+    },
+    {
+      "command": "git am -3 x.patch",
+      "expect": "allowed"
+    },
+    {
+      "command": "git rebase -n origin/main",
       "expect": "allowed"
     }
   ]
