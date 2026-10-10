@@ -1,6 +1,8 @@
 // Table of all open PRs. Read-only. Usage: node pr-status.mjs [--json]
-import { ghJson, prComments, readGate } from "./gh.mjs";
-import { formatVerdict, latestVerdict, parseAgentRisk } from "./orchestrator-core.mjs";
+import { openPrsWithPaths, prComments, readGate } from "./gh.mjs";
+import {
+  formatOverlaps, formatVerdict, latestVerdict, overlapPairs, overlapsOf, parseAgentRisk,
+} from "./orchestrator-core.mjs";
 
 const json = process.argv.includes("--json");
 
@@ -26,17 +28,15 @@ async function row(pr) {
 }
 
 try {
-  const prs = await ghJson([
-    "pr", "list", "--state", "open", "--limit", "200",
-    "--json", "number,headRefOid,baseRefName,isDraft,body",
-  ]);
-  const rows = await Promise.all(prs.sort((a, b) => a.number - b.number).map(row));
+  const prs = await openPrsWithPaths("number,headRefOid,baseRefName,isDraft,body");
+  const pairs = overlapPairs(prs);
+  const rows = (await Promise.all(prs.map(row))).map((r) => ({ ...r, overlaps: overlapsOf(r.number, prs, pairs) }));
   if (json) {
     console.log(JSON.stringify(rows, null, 2));
   } else {
     for (const r of rows) {
       console.log(
-        `#${r.number} ${r.head} ${r.base}${r.draft ? " DRAFT" : ""} | ${r.agent ?? "-"} | ${r.risk ?? "-"} | gate ${r.gate} | review ${r.review} | qa ${r.qa}`,
+        `#${r.number} ${r.head} ${r.base}${r.draft ? " DRAFT" : ""} | ${r.agent ?? "-"} | ${r.risk ?? "-"} | gate ${r.gate} | review ${r.review} | qa ${r.qa} | preklapa: ${formatOverlaps(r.overlaps)}`,
       );
     }
     if (!rows.length) console.log("no open PRs");

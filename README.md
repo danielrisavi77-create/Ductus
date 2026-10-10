@@ -20,4 +20,4 @@ pnpm test:integration
 
 `pnpm stack:up` diže `compose.yaml`: Postgres 17, S3 kompatibilnu pohranu (RustFS), Mailpit i lažni OIDC pružatelj ("demo prijava", izmišljeni računi). Sve služi samo lokalno i u CI-ju (D-09). Vrijednosti su u `.env.example`.
 
-Migracije su u `db/migrations` (dbmate; nova s `pnpm db:new <ime>`). `pnpm db:migrate` radi samo prema lokalnoj bazi iz `compose.yaml`; na produkciju se migracije nikad ne primjenjuju odavde (BACKEND §3). pgTAP testovi su u `db/tests` i pokreće ih `pnpm test:db` (`pg_prove` u kontejneru baze).
+Migracije su u `db/migrations` (dbmate; nova s `pnpm db:new <ime>`). `pnpm db:migrate` radi samo prema lokalnoj bazi iz `compose.yaml`; na produkciju se migracije nikad ne primjenjuju odavde (BACKEND §3). Nakon migracija ista naredba stvara lokalnu prijavu aplikacije `ductus_app_local` (članica `ductus_app`, `db/local/app-login.sql`), na koju pokazuje `APP_DATABASE_URL`; `DATABASE_URL` je superuser stoga i služi samo migracijama i testovima. pgTAP testovi su u `db/tests` i pokreće ih `pnpm test:db` (`pg_prove` u kontejneru baze).

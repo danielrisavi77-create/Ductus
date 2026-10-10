@@ -334,10 +334,11 @@ describe("outcomeToEvents — what the server's answer means", () => {
     ]);
   });
 
-  it("txid_reused fails for good — it is a client bug", async () => {
-    expect(await outcomeToEvents({ status: "txid_reused" }, receiptVerification(1), false)).toEqual([
-      { type: "SYNC_FAILED", retryable: false },
-    ]);
+  it("txid_reused is never retried: it asks the author to recover (DAN-135)", async () => {
+    const events = await outcomeToEvents({ status: "txid_reused" }, receiptVerification(1), false);
+    expect(events).toEqual([{ type: "SYNC_KEY_DIVERGED" }]);
+    expect(isRetryable({ status: "txid_reused" })).toBe(false);
+    expect(events.some((e) => e.type === "SYNC_STALE_BASE" || e.type === "SYNC_ACK")).toBe(false);
   });
 
   it.each([

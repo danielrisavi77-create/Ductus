@@ -12,7 +12,8 @@
  * CONFLICT by rebasing. Every state reachable in MAX_STEPS steps is visited.
  *
  * From each one the network comes back, nobody else writes, and the author
- * acts only on what the chip shows (rebase a CONFLICT, type a new version
+ * acts only on what the chip shows (rebase a CONFLICT, salvage the local text
+ * out of RECOVERY_REQUIRED after `txid_reused` (DAN-135), type a new version
  * after a fatal refusal). The queue must then empty, with the newest version
  * on the server and SYNCED earned by its own signed receipt, without the same
  * key being refused twice (a loop) and without a plan that sends nothing
@@ -134,6 +135,25 @@ function rebase(world: World): World {
     ...world,
     base: world.revision,
     state: syncReducer("CONFLICT", { type: "CONFLICT_RESOLVED", via: "rebase" }),
+  };
+  return edit(resolved, world.revision);
+}
+
+/**
+ * The author salvages local text out of RECOVERY_REQUIRED (DAN-135): one
+ * journal transaction clears the diverged marker and queues the newest text
+ * as a NEW row with a NEW key on the server's revision. The held row and the
+ * rows after it stay queued below it, superseded, until its receipt.
+ */
+function salvage(world: World): World {
+  if (world.state !== "RECOVERY_REQUIRED") {
+    return world;
+  }
+  const resolved = {
+    ...world,
+    awaiting: null,
+    base: world.revision,
+    state: syncReducer("RECOVERY_REQUIRED", { type: "RECOVERED", via: "salvage-local" }),
   };
   return edit(resolved, world.revision);
 }
@@ -263,6 +283,10 @@ async function settle(start: World): Promise<string | null> {
     }
     if (world.state === "CONFLICT") {
       world = rebase(world);
+      continue;
+    }
+    if (world.state === "RECOVERY_REQUIRED") {
+      world = salvage(world);
       continue;
     }
     const drained = await drain(world, "signed");

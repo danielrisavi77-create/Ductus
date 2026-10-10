@@ -368,7 +368,7 @@ describe("DAN-110 replay outcome table", () => {
   type Row = {
     outcome: () => DrainOutcome;
     revision: number;
-    marker: "released" | "held";
+    marker: "released" | "held" | "diverged";
     events: SyncEvent[];
     state: SyncState;
     nextSend: PendingTransaction | null;
@@ -443,10 +443,20 @@ describe("DAN-110 replay outcome table", () => {
         } satisfies Row,
       ]),
     ),
+    // txid_reused: the key IS on the server (other bytes), so r7 may have
+    // landed and r8 must not go out on base 4 past it. The answer is
+    // deterministic, so r7 is not replayed either (DAN-135): the marker turns
+    // diverged and the author decides in RECOVERY_REQUIRED.
+    txid_reused: {
+      outcome: () => ({ status: "txid_reused" }),
+      revision: 5,
+      marker: "diverged",
+      events: [{ type: "SYNC_KEY_DIVERGED" }],
+      state: "RECOVERY_REQUIRED",
+      nextSend: null,
+    },
     ...Object.fromEntries(
-      // txid_reused: the key IS on the server (other bytes), so r7 may have
-      // landed and r8 must not go out on base 4 past it.
-      (["unauthenticated", "txid_reused", "invalid", "something_new"] as const).map((status) => [
+      (["unauthenticated", "invalid", "something_new"] as const).map((status) => [
         status,
         {
           outcome: () => ({ status }) as unknown as DrainOutcome,
@@ -479,7 +489,13 @@ describe("DAN-110 replay outcome table", () => {
       }
       expect(state).toBe(expected.state);
       const after = nextAwaitingReceipt(r7, outcome, awaiting);
-      expect(after).toEqual(expected.marker === "released" ? null : awaiting);
+      expect(after).toEqual(
+        expected.marker === "released"
+          ? null
+          : expected.marker === "diverged"
+            ? { ...awaiting, diverged: "txid_reused" }
+            : awaiting,
+      );
       // A released marker after a landed key drops r7 from the queue first.
       const remaining = ackedRevision(outcome) === null ? queue : queue.filter((r) => r !== r7);
       expect(planDrain(remaining, meta(state), after).send).toBe(expected.nextSend);
@@ -521,7 +537,7 @@ describe("DAN-110 every status and parser output, without a hold", () => {
     const verified = name.endsWith(", verified");
     // `unauthenticated` is refused before the RPC touches the key.
     const released = proves || verified || name === "unauthenticated";
-    const expected = released ? "no hold" : "hold r7";
+    const expected = released ? "no hold" : name === "txid_reused" ? "diverged r7" : "hold r7";
     it(`${name} → ${expected}`, async () => {
       if (outcome !== null && outcome !== undefined) {
         await outcomeToEvents(outcome, verification(r7, 5), true);
@@ -530,6 +546,10 @@ describe("DAN-110 every status and parser output, without a hold", () => {
       if (expected === "hold r7") {
         expect(after).toEqual(awaitingReceiptFor(r7));
         expect(planDrain([r7, r8], meta("ERROR"), after).send).toBe(r7);
+      } else if (expected === "diverged r7") {
+        // Held, so r8 stays behind it; diverged, so r7 is not replayed either.
+        expect(after).toEqual({ ...awaitingReceiptFor(r7), diverged: "txid_reused" });
+        expect(planDrain([r7, r8], meta("ERROR"), after).send).toBeNull();
       } else {
         expect(after).toBeNull();
       }
