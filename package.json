@@ -24,6 +24,10 @@
     "db:migrate": "dbmate --url \"postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus?sslmode=disable\" --no-dump-schema --wait up",
     "db:rollback": "dbmate --url \"postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus?sslmode=disable\" --no-dump-schema rollback",
     "db:status": "dbmate --url \"postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus?sslmode=disable\" status",
+    "orch:status": "node scripts/orchestrator/pr-status.mjs",
+    "orch:ready": "node scripts/orchestrator/pr-ready.mjs",
+    "orch:push": "node scripts/orchestrator/push-verify.mjs",
+    "orch:wait": "node scripts/orchestrator/wait-verdict.mjs",
     "test:db": "docker compose exec -T postgres pg_prove -U ductus -d ductus --recurse --ext .sql /db/tests"
   },
   "dependencies": {
