@@ -68,8 +68,8 @@ Opseg: <što ulazi>; Izvan opsega: <što ne ulazi>
 Mape: <smije dirati>
 Gotovo kad: <provjerljiv kriterij, npr. naredba i očekivani ishod>
 Lokalne provjere prije pusha: <npr. actionlint i zizmor kad PR dira workflowe, osv-scanner kad dira lockfile; inače "standardne">
-Plan napada: <poveznica na komentar "Plan napada: <zadatak>"; obvezno za Risk: critical i za zadatak koji gradi ili mijenja gate (ORKESTRATOR.md §8), inače n/a>
-Privremene datoteke: <vlastita podmapa dijeljene privremene mape, ime po zadatku, npr. DAN-122>
+Plan napada: <poveznica na GitHub issue "Plan napada: <zadatak>"; obvezno za Risk: critical i za zadatak koji gradi ili mijenja gate (ORKESTRATOR.md §8), inače n/a>
+Privremene datoteke: <vlastita podmapa dijeljene privremene mape, ime po zadatku, npr. DAN-122; zapis odluke: https://github.com/danielrisavi77-create/Ductus/pull/165#issuecomment-6100851850>
 Ovisi o: <PR ili ništa>
 ```
 
@@ -112,7 +112,7 @@ Sadržaj upute je neutralan (`docs/ORKESTRATOR.md` §8). Kad uputa navodi kvotni
 Provider-Fallback: chatgpt-codex-connector — kvota iscrpljena
 ```
 
-Razmak dolazi odmah iza imena pružatelja, bez zareza ili drugog znaka: gate čita prvu riječ doslovno, a 10. 10. 2026. odbio je valjan PASS zbog zareza iza imena (Daniel, 10. 10. 2026.).
+Razmak dolazi odmah iza imena pružatelja, bez zareza ili drugog znaka: gate čita prvu riječ doslovno, a 10. 10. 2026. odbio je PASS zbog zareza iza imena. Izvor oblika je `scripts/engineering/review-gate-core.mjs` (`fallbackSlug`), pa uz promjenu parsera vrijedi kod, a ne ova rečenica.
 
 ## 4. Štednja tokena
 

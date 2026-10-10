@@ -40,4 +40,4 @@ When fixing review or QA findings on an open PR:
 Work trail, attack plan and temp files (`docs/SESSIONS.md` §2 step 4 and §3; `docs/ORKESTRATOR.md` §8):
 - after every push, before waiting on CI, leave a short `Trag rada` PR comment in the `docs/SESSIONS.md` §3 form (full head, what changed, what waits, open questions); the final `IZVJEŠTAJ` stays mandatory;
 - when the task links an attack plan, turn every item into a test or explain in the PR description why it does not apply, give the table "stavka plana → test", and attack your own solution before pushing;
-- keep temp files only in your own task-named subfolder of the shared temp dir.
+- keep temp files only in your own task-named subfolder of the shared temp dir (owner decision: https://github.com/danielrisavi77-create/Ductus/pull/165#issuecomment-6100851850).
