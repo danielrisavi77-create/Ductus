@@ -99,9 +99,11 @@ test("§3: the sources contain no write, spawn or install paths", () => {
 
 test("§3: the CLI imports only execFile and read-only fs functions", () => {
   const src = readFileSync(new URL("health.mjs", import.meta.url), "utf8");
-  const imports = (mod) => [...src.matchAll(new RegExp(`import\\s*\\{([^}]*)\\}\\s*from\\s*"${mod}"`, "g"))].flatMap((m) => m[1].split(",").map((x) => x.trim()).filter(Boolean));
-  assert.deepEqual(imports("node:child_process"), ["execFile"]);
-  assert.deepEqual(imports("node:fs").sort(), ["readFileSync", "realpathSync", "statSync"]);
+  const names = (matches) => [...matches].flatMap((m) => m[1].split(",").map((x) => x.trim()).filter(Boolean));
+  const childProcessImports = names(src.matchAll(/import\s*\{([^}]*)\}\s*from\s*"node:child_process"/g));
+  const fsImports = names(src.matchAll(/import\s*\{([^}]*)\}\s*from\s*"node:fs"/g));
+  assert.deepEqual(childProcessImports, ["execFile"]);
+  assert.deepEqual(fsImports.sort(), ["readFileSync", "realpathSync", "statSync"]);
   assert.doesNotMatch(src, /import\s+\*\s+as|import\s+\w+\s+from\s+"node:(?:child_process|fs)|require\(|import\(|node:fs\/promises/);
   const core = readFileSync(new URL("health-core.mjs", import.meta.url), "utf8");
   assert.doesNotMatch(core, /node:(?:child_process|fs)|require\(|import\(/, "health-core.mjs");
