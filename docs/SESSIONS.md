@@ -18,6 +18,10 @@ Kako više AI coding sesija radi na Ductusu istodobno, uključujući više Claud
 | **Independent Reviewer** | Neovisni pregled PR-a; ne mijenja pregledanu granu | read-only | prema risku |
 | **Bug Hunter** | Pokušava razbiti main/staging i otvara reproducibilne issuee; ne popravlja nalaz | read-only | medium |
 
+**Prednost modela.** Stupac "Model i napor" je zadani model uloge. Za `critical` posao i za područja evidencije, ovlasti, prijave, sinkronizacije i sigurnosti vrijedi tablica uloga × risk → model iz `docs/ORKESTRATOR.md` §7 (Opus), čak i kad je zadani model uloge Sonnet (npr. Platforma ili Frontend na `critical` zadatku). U svim ostalim slučajevima vrijedi zadani model uloge. Vidi i "Model po ulozi" u §4.
+
+Profili `ductus-bug-hunter` i `ductus-platform-sre` u `.claude/agents/` imaju fiksan Sonnet. Orkestrator pri svakom pokretanju izričito zadaje model i effort; to ima prednost pred modelom iz profila, a zadani model bilježi se u zapisu pokretanja na #87. Profili se ovim pravilom ne mijenjaju.
+
 Neovisni reviewer može biti Claude, Codex, ChatGPT ili Grok s drugog `runtime:slot` identiteta od autora. Grok je dopušten kao autentificirani review/QA provider preko verificiranog GitHub App sluga `grok-by-xai`. Codex CLI je samo jedan mogući način pregleda (§5), ne jedini gate. Provider ne određuje ovlast; uloga i agent identitet je određuju.
 
 Pravila vlasništva:
@@ -122,7 +126,7 @@ Razmak dolazi odmah iza imena pružatelja, bez zareza ili drugog znaka: gate či
 - **Pretraživanje preko pomoćnog agenta** (Explore) kad treba pregledati mnogo datoteka; u glavni razgovor vraća se zaključak, ne sadržaj.
 - **Testovi kroz naredbe s kratkim izlazom** (npr. `vitest run --reporter=dot`); puni izlaz samo za test koji pada.
 - **Bez nepotrebnih pluginova i konektora** u ovom projektu (`.claude/settings.local.json`, §7).
-- **Model po ulozi** iz tablice u §1. Opus samo gdje je pogreška skupa.
+- **Model po ulozi** iz tablice u §1, a po riziku iz tablice "Model po poslu" u `docs/ORKESTRATOR.md` §7 (vrijedi i za jednokratne sesije u oblaku). Opus samo gdje je pogreška skupa. Prednost: vidi "Prednost modela" u §1.
 - **Predaja posla kroz `STATE.md` i opis PR-a**, ne kroz prepričavanje u razgovoru.
 - **Neovisni reviewer pregledava samo diff PR-a i relevantna kanonska pravila**, ne cijeli repo bez razloga.
 
@@ -136,7 +140,7 @@ Pravila iz ovog odjeljka provodi `.claude/settings.json`; vlastiti hookovi su u 
 | Hook `budget` (UserPromptSubmit) | Iznad 150k tokena dodaje agentu uputu prema ulozi sesije (tablica ispod); iznad 250k uputa je stroža (doseže se samo u sesiji u kojoj granica od 200k ne vrijedi, primjerice pokrenutoj prije ove postavke). Novi zadatak zabranjuje samo prepoznatom workeru i kontrolnoj ulozi, nikad orkestratoru ni sesiji nepoznate uloge. Orkestratoru od 200k dodaje da je dosegnuta gornja sigurnosna granica iz `ORKESTRATOR.md` §7. Ispod 150k i odmah nakon sažimanja ne dodaje ništa. Zapis sesije čija je stvarna putanja pod `Read` deny pravilima ne otvara; čita ga kroz provjereni deskriptor (opis ispod tablice). | Rotacija sesije; iznimka za orkestratora (`ORKESTRATOR.md` §7) |
 | Hook `read` (PreToolUse: Read) | Odbija čitanje cijelog `.md` dokumenta većeg od 16 KB i vraća popis naslova s brojevima redaka; čitanje s `offset`/`limit` prolazi. Odbija `pnpm-lock.yaml`, `*.tsbuildinfo` i `.next/`. Vrijedi samo za datoteke unutar repoa, i u subagentima; pripadnost repou određuje se i prema stvarnim putanjama, pa vrijedi i kad je korijen projekta ili datoteka zadana kroz poveznicu. Putanje pod `Read` deny pravilima (`secrets/`, `.env*`, `*.age`) hook ne otvara i ne odlučuje o njima: odluka ostaje sustavu dozvola, pa im ni naslovi ne dospijevaju u kontekst. Mjerodavna je stvarna putanja nakon razrješenja poveznica, gledana od korijena projekta: poveznicu u repou koja vodi na takvu datoteku ili izvan repoa hook također ne otvara, a repo smješten ispod mape imena `secrets/` radi normalno. Sadržaj čita kroz provjereni deskriptor (opis ispod tablice). Ne pokriva čitanje kroz `cat` ili `sed` u ljusci. | Čitaj samo ulaz iz zadatka |
 | Hook `start` (SessionStart) | Učitava `STATE.md` iz korijena projekta u kontekst pri pokretanju, `/clear` i nakon sažimanja, uz putanju iz koje je pročitan, pa ga sesija ne čita zasebnim pozivom. Ako `STATE.md` prijeđe 9000 znakova, hook ne dodaje ništa i sesija ga čita sama. Isto vrijedi ako `STATE.md` nije obična datoteka u korijenu projekta, primjerice ako je simbolička poveznica na bilo koju drugu datoteku: hook je tada ne čita. Čita kroz provjereni deskriptor (opis ispod tablice). | `CLAUDE.md`: prvo `STATE.md` |
-| `CLAUDE_CODE_SUBAGENT_MODEL=sonnet` | Subagent bez vlastitog modela radi na Sonnetu. Profili s `model: inherit` i dalje nasljeđuju model sesije (Claude Code 2.1.251 ili noviji; starije inačice daju prednost varijabli). | Model po ulozi |
+| `CLAUDE_CODE_SUBAGENT_MODEL=sonnet` | Subagent bez vlastitog modela radi na Sonnetu. Profili s `model: inherit` i dalje nasljeđuju model sesije (Claude Code 2.1.251 ili noviji; starije inačice daju prednost varijabli), pa orkestrator model zadaje izričito pri pokretanju (`docs/ORKESTRATOR.md` §7). | Model po ulozi |
 | `ductus-scout` (Haiku, samo Read/Grep/Glob) | Jeftino lociranje koda i odjeljaka; ugrađeni Explore radi na modelu glavne sesije. | Pretraživanje preko pomoćnog agenta |
 | `CLAUDE_CODE_GLOB_NO_IGNORE=false` | Glob preskače sve iz `.gitignore`: `node_modules`, `.next`, worktreeove, ali i `test-results/` i `playwright-report/`; njih se nalazi kroz `ls`. | — |
 | `enabledPlugins: false` za `knowledge-work-plugins` | Isključuje sales, marketing, finance, data, design, productivity i pdf-viewer u ovom projektu. | Bez nepotrebnih pluginova |
@@ -196,7 +200,7 @@ Razinu zadaje orkestrator u zadatku; kad je ne zada, sesija bira po tablici (Dan
 | `standard` | GPT-6-Sol, high | doslovni prijenos s testovima, portovi i adapteri, ekrani i tokovi sučelja, migracije bez novih ovlasti |
 | `critical` | GPT-6-Astra, xhigh | evidencija, potpis i kriptografija, prijava i sesije, RLS i pgTAP matrica, predaja i rekonstrukcija, sve što dira `PRODUCT.md` §5 |
 
-Claude worker sesije trenutačno su na Opusu; effort orkestrator postavlja po zadatku: `light` → low, `standard` → medium, `critical` → high. Codex worker koristi model/effort koji orkestrator eksplicitno zada ili računov zadani coding model.
+Claude worker sesije trenutačno su na Opusu, osim gdje `docs/ORKESTRATOR.md` §7 ("Model po poslu") traži drugi model; effort orkestrator postavlja po zadatku: `low` → low, `standard` → medium, `critical` → high. Codex worker koristi model/effort koji orkestrator eksplicitno zada ili računov zadani coding model.
 
 Codex radi i desetak minuta, pa se skripta pokreće u pozadini s vremenskim ograničenjem od najmanje 20 minuta; inače se prekine prije objave komentara. Skripta pokreće `codex exec review --base origin/main` (samo diff grane); `AGENTS.md` prepoznaje review način, a nalaz ide kao komentar na PR. Codex troši ChatGPT kvotu, ne Claude kvotu. Autor ispravlja prihvaćene nalaze i u izvještaju navodi odbijene s razlogom. Kritičan nalaz koji autor ne može riješiti znači status "blokirano".
 

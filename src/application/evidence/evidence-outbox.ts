@@ -4,7 +4,10 @@ import type {
   EvidenceSegmentDescriptorV2,
 } from "@/application/ports/evidence-ingest";
 import type { EvidenceOutboxItem } from "@/application/ports/evidence-outbox";
-import type { SignedEvidenceReceipt } from "@/domain/forensics/evidence-receipt";
+import {
+  isSignedEvidenceReceipt,
+  type SignedEvidenceReceipt,
+} from "@/domain/forensics/evidence-receipt";
 import {
   digestEvidenceSegmentV2,
   type EvidenceSegmentV2,
@@ -120,8 +123,13 @@ export function applyEvidenceOutboxOutcome(
   }
 
   if (outcome.status === "accepted" || outcome.status === "duplicate") {
-    // A receipt only settles the item it was issued for.
-    if (!receiptMatchesCommand(outcome.receipt, item)) {
+    // A receipt only settles the item it was issued for, and only if it is a
+    // well-formed signed receipt: an extra field next to the signature is
+    // covered by nothing.
+    if (
+      !isSignedEvidenceReceipt(outcome.receipt) ||
+      !receiptMatchesCommand(outcome.receipt, item)
+    ) {
       return { ...item, status: "blocked", updatedAt, lastFailure: "invalid" };
     }
     return {
