@@ -158,3 +158,47 @@ Ukupno: **678201636 bajtova**. SHA-256 se odnosi na svaku zasebnu datoteku, bez 
 Povijesni `D:\laya\registry-lokalni.json` ostaje nepromijenjen: `weightsSha256` **`1793ac850c9b50a324737e7b62f68993415bce62e806a1533e72d7dd03578d4b`** ne odgovara `model.safetensors`, iako njegova očekivana veličina 643835514 B odgovara. `tokenizerSha256` **`6852bbf6ae96eb7f9a550306f31a6fe617efc89231d18d5235517e4ab6450840`** ne odgovara nijednoj od pet datoteka; cilj/algoritam starog tokenizer zapisa ostaje nepoznat. To je neslaganje registry očekivanja s potvrđenim per-file sadržajem, ne dokaz oštećenja modela. Nije pretpostavljen niti isproban aggregate algoritam; usklađenje treba izričitu pregledanu migraciju.
 
 Novi dokumentacijski manifest **nije povezan s loaderom** i ne aktivira model. Offline učitavanje, tokenizer i final prompt/options preflight, inferencija, kvaliteta/kalibracija, RAM i latencija nisu testirani. Vrijeme hashiranja nije benchmark učitavanja ili inferencije. Te provjere i controller integracija zahtijevaju zaseban dodijeljeni zadatak; ovaj dokaz ne potvrđuje 3 GiB ni P95 kriterij.
+
+## 8. Datirana dopuna — 10. 10. 2026.: globalni alati i pluginovi
+
+Stanje na Danielovoj radnoj stanici, na njegov zahtjev. Odjeljci 1 do 7 ostaju povijesni presjeci i nisu ponovno provjereni.
+
+### 8.1. Što "globalno" znači po vrsti
+
+| Vrsta | Gdje živi | Kako je dobiva svaka sesija |
+| --- | --- | --- |
+| Knjižnica koju kod uvozi (Tiptap, Dexie, `pg`...) | `package.json` + lockfile na `main` | Worktree od svježeg `main` i `pnpm install`; pnpm ih drži u jednoj zajedničkoj pohrani na disku. Knjižnica se ne može instalirati "globalno" tako da je kod vidi bez `package.json` |
+| Alat naredbenog retka | Korisnički `PATH` radne stanice | Svaka nova sesija (stare treba ponovno otvoriti) |
+| Plugin za Claude Code | Korisnička razina (`~/.claude/settings.json`) i `.claude/settings.json` projekta | Korisnička razina vrijedi za sve projekte na stroju; projektna vrijedi i na drugom stroju ili računu |
+| Lokalni klonovi iz §7 | `D:\lekta-alati\repos` i `D:\lekta-alati\izvori` | `permissions.additionalDirectories` u `.claude/settings.local.json`, koji se kopira u svaki novi worktree (`.worktreeinclude`). Samo čitanje kao referenca; pravila uporabe iz §7 vrijede i dalje |
+
+### 8.2. Knjižnice iz §4: stanje na `main`
+
+U `package.json`: Tiptap, Dexie, `fake-indexeddb`, `pg`. Još nisu, ulaze sa svojim PR-om: dbmate i pgTAP (#39), `openid-client` i `node-oidc-provider` (prijava), pg-boss, zod, pino, knip. Pravilo iz §1 ostaje.
+
+### 8.3. Alati naredbenog retka instalirani globalno
+
+| Alat | Izvor | Instalacija | Čemu služi lokalno |
+| --- | --- | --- | --- |
+| `dbmate` 2.36.0 | `amacneil/dbmate` | `npm install -g dbmate` | Migracije (#39) bez Dockera |
+| `zizmor` 1.30.1 | `zizmorcore/zizmor` | `uv tool install zizmor` | Provjera workflowa prije pusha; ista verzija kao u CI-ju |
+| `osv-scanner` | `google/osv-scanner` | winget `Google.OSVScanner` | Provjera lockfilea prije PR-a koji dira ovisnosti |
+| `actionlint` | `rhysd/actionlint` | winget `rhysd.actionlint` | Sintaksa i izrazi u GitHub workflowima |
+| `gitleaks` | `gitleaks/gitleaks` | winget (otprije) | Tajne; hook i dalje koristi Docker sliku s pinanom verzijom |
+| `age`, `sops` | `FiloSottile/age`, `getsops/sops` | winget `FiloSottile.age`, `SecretsOPerationS.SOPS` | Tajne na VM-u i šifrirani dump (M11) |
+| `tofu` | `opentofu/opentofu` | winget `OpenTofu.Tofu` | `infra/` (B0.1, M11) |
+| `typescript-language-server` | `typescript-language-server/typescript-language-server` | `npm install -g` (otprije) | Plugin `typescript-lsp` |
+
+Mjerodavan ostaje CI: lokalni alat ubrzava provjeru, ali ne zamjenjuje pinane verzije u `ci.yml`. Semgrep i `pg_prove` nemaju pouzdanu Windows instalaciju i ostaju u Dockeru.
+
+### 8.4. Pluginovi
+
+| Plugin | Razina | Zašto |
+| --- | --- | --- |
+| `typescript-lsp` | korisnička + projektna | Definicije i reference bez pretraživanja tekstom |
+| `claude-security` | korisnička + projektna | Dubinsko skeniranje na zahtjev prije demoa i GO uvjeta |
+| `context7` | projektna (plugin) + korisnička (MCP poslužitelj otprije) | Dokumentacija za točnu verziju knjižnice. Na ovom stroju se zato pojavljuje dvaput; bezopasno, a projektna razina ostaje radi drugih strojeva |
+| `linear` (novo) | korisnička + projektna | Linear je mjerodavan za zadatak, prioritet, nositelja i status (`MULTI-ACCOUNT.md`), a claude.ai konektori su u projektu isključeni. Traži jednokratnu prijavu u Linear |
+| `codex`, `agents-observe` | korisnička (otprije) | Neovisni pregled i nadzor sesija |
+
+Pregledani i ne uključuju se: `pr-review-toolkit`, `code-review`, `feature-dev` (dupliciraju agente i skillove `ductus-*` te Codex), `security-guidance` i `hookify` (hookovi na svakom potezu u više paralelnih sesija), `commit-commands` (zaobilazi pravilo `git add <putanje>`), `frontend-design` (izgled je određen odobrenim dizajnom, D-85 i D-89), `session-report` (pokrivaju `scripts/usage-report.ps1` i `agents-observe`), `playwright` i `github` MCP (pokrivaju `@playwright/test` i `gh`), `serena` (pokriva `typescript-lsp`). `terraform` MCP razmotriti tek uz `infra/`.

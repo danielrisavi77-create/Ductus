@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ductus provenance invariants"
+  short_description: "Provjeri lance, potvrde i granice dokaza"
+  default_prompt: "Use $ductus-provenance-invariants to check this evidence chain at the supplied full revision."

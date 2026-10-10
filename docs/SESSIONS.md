@@ -8,7 +8,7 @@ Kako više AI coding sesija radi na Ductusu istodobno, uključujući više Claud
 
 | Uloga | Posao | Vlasnik mapa | Model i napor |
 | --- | --- | --- | --- |
-| **Orkestrator** | Plan, `STATE.md`, dodjela zadataka, dnevnik, Owner queue, praćenje tokena. Ne piše kod. | `STATE.md`, `docs/` (osim ARCHITECTURE kad ga drži druga sesija) | Opus, high |
+| **Orkestrator** | Plan, `STATE.md`, dodjela zadataka, dnevnik, Owner queue, praćenje tokena. Ne piše kod. | `STATE.md`, `docs/` (osim ARCHITECTURE kad ga drži druga sesija), `.claude/skills/` i `.agents/skills/` (`ORKESTRATOR.md` §4) | Opus, high |
 | **Platforma** | Kostur projekta, CI, `docker compose`, lefthook, skeneri, migracijski alat, kasnije OpenTofu i operacije | korijenske konfiguracije (`package.json`, `tsconfig*`, `eslint*`, `vitest*`, `playwright*`), `.github/`, `compose.yaml`, `lefthook.yml`, `scripts/`, `infra/` | Sonnet, medium |
 | **Backend** | Baza, uloge, RLS, pgTAP, RPC-i, evidencija, OIDC i sesije, worker, rekonstrukcija, potpisi | `src/domain/`, `src/application/`, `src/adapters/`, `src/server/`, `db/`, `app/api/`, `tests/` za te mape | Opus, high (evidencija, ovlasti, prijava); Sonnet za rutinu |
 | **Frontend** | Editor (Tiptap), journal i sinkronizacija u pregledniku (Dexie), ekrani, hr/en, pristupačnost, zabranjene riječi | `app/` (osim `app/api/`), `src/components/`, `src/editor/`, `src/client/`, `src/lib/i18n/`, `e2e/` | Sonnet, medium; Opus za sinkronizaciju |
@@ -137,5 +137,9 @@ Codex radi i desetak minuta, pa se skripta pokreće u pozadini s vremenskim ogra
   }
   ```
 - **Worktreeovi**: Claude aplikacija može ih stvarati u `.claude/worktrees/`. Za ručni Claude/Codex worker postoji `scripts/new-agent-worktree.ps1`, koji ne kopira `.env.local` ni vjerodajnice. Dva writera nikad ne koriste isti working directory. `scripts/cleanup-worktrees.ps1` uklanja preostale worktreeove čija je grana spojena u `main`.
+- **Automatika u Claude Code sesijama** (`hooks` u `.claude/settings.json`; vrijedi za svaku Claude sesiju u projektu, ne za Codex):
+  - na početku sesije u pozadini se pokreće `scripts/cleanup-worktrees.ps1`: uklanja worktreeove i lokalne grane čiji je PR spojen ili zatvoren; worktree s nespremljenim izmjenama se preskače;
+  - prije `gh pr create` i `gh pr edit` `scripts/hooks/pr-metadata-precheck.mjs` provjerava `Agent`, `Risk` i `Task` u opisu PR-a istim pravilima kao CI (`scripts/engineering/pr-metadata-core.mjs`) i blokira naredbu ako ne prolaze.
+  - nakon `gh pr create` `scripts/hooks/pr-auto-merge.mjs` za PR s `Risk: low` uključuje GitHub auto-merge (squash). GitHub spaja tek kad su zelene sve obvezne provjere na `main`, uključujući `Engineering review gate`, pa neovisni review ili Owner Override i dalje trebaju. PR-ove `standard` i `critical` spaja orkestrator.
 - **Paketi**: pnpm (zajednička pohrana paketa, manje mjesta na disku po worktreeu). Node 24 (`.nvmrc`).
 - **Praćenje**: orkestrator vodi nadzornu ploču "Ductus pult" (privatni artifact, https://claude.ai/artifact/UY9VUZPW4mePTZjhCPGLSd) s vremenskom crtom, stanjem sesija i potrošnjom tokena. Potrošnju po sesiji daje `powershell -File scripts/usage-report.ps1` (ccusage nad lokalnim zapisima; trošak je procjena po API cijenama, ne naplata pretplate).

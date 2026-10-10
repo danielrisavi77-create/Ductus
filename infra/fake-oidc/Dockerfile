@@ -1,5 +1,6 @@
 # Fake OIDC provider for local development and CI only (D-09). Never deployed.
-FROM node:24.21.0-alpine
+ARG OIDC_BASE_IMAGE=node:24.21.0-alpine
+FROM ${OIDC_BASE_IMAGE}
 WORKDIR /app
 RUN corepack enable
 COPY package.json pnpm-lock.yaml ./
