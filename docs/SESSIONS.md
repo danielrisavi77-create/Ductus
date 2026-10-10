@@ -105,12 +105,12 @@ Pravila iz ovog odjeljka provodi `.claude/settings.json`; hookovi su u `scripts/
 | Mehanizam | Što radi | Pravilo koje provodi |
 | --- | --- | --- |
 | `CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000` | Sažimanje se pokreće prije 200k tokena i uz model s prozorom od 1M. | Gornja granica konteksta |
-| Hook `budget` (UserPromptSubmit) | Iznad 150k tokena dodaje agentu uputu da dovrši korak i preda posao skillom `ductus-handoff`; iznad 250k zabranjuje novi posao u sesiji. Ispod 150k ne dodaje ništa. | Rotacija sesije |
-| Hook `read` (PreToolUse: Read) | Odbija čitanje cijelog `.md` dokumenta većeg od 16 KB i vraća popis naslova s brojevima redaka; čitanje s `offset`/`limit` prolazi. Odbija `pnpm-lock.yaml`, `*.tsbuildinfo`, `.next/`, `playwright-report/`, `test-results/`. Vrijedi i u subagentima. | Čitaj samo ulaz iz zadatka |
-| Hook `start` (SessionStart) | Učitava `STATE.md` u kontekst pri pokretanju, `/clear` i nakon sažimanja, pa ga sesija ne čita zasebnim pozivom. | `CLAUDE.md`: prvo `STATE.md` |
-| `CLAUDE_CODE_SUBAGENT_MODEL=sonnet` | Subagent bez vlastitog modela radi na Sonnetu. Profili s `model: inherit` i dalje nasljeđuju model sesije. | Model po ulozi |
+| Hook `budget` (UserPromptSubmit) | Iznad 150k tokena dodaje agentu uputu da dovrši korak i preda posao skillom `ductus-handoff`; iznad 250k zabranjuje novi posao u sesiji (doseže se samo u sesiji u kojoj granica od 200k ne vrijedi, primjerice pokrenutoj prije ove postavke). Ispod 150k i odmah nakon sažimanja ne dodaje ništa. | Rotacija sesije |
+| Hook `read` (PreToolUse: Read) | Odbija čitanje cijelog `.md` dokumenta većeg od 16 KB i vraća popis naslova s brojevima redaka; čitanje s `offset`/`limit` prolazi. Odbija `pnpm-lock.yaml`, `*.tsbuildinfo` i `.next/`. Vrijedi samo za datoteke unutar repoa, i u subagentima. Ne pokriva čitanje kroz `cat` ili `sed` u ljusci. | Čitaj samo ulaz iz zadatka |
+| Hook `start` (SessionStart) | Učitava `STATE.md` iz korijena projekta u kontekst pri pokretanju, `/clear` i nakon sažimanja, uz putanju iz koje je pročitan, pa ga sesija ne čita zasebnim pozivom. Ako `STATE.md` prijeđe 9000 znakova, hook ne dodaje ništa i sesija ga čita sama. | `CLAUDE.md`: prvo `STATE.md` |
+| `CLAUDE_CODE_SUBAGENT_MODEL=sonnet` | Subagent bez vlastitog modela radi na Sonnetu. Profili s `model: inherit` i dalje nasljeđuju model sesije (Claude Code 2.1.251 ili noviji; starije inačice daju prednost varijabli). | Model po ulozi |
 | `ductus-scout` (Haiku, samo Read/Grep/Glob) | Jeftino lociranje koda i odjeljaka; ugrađeni Explore radi na modelu glavne sesije. | Pretraživanje preko pomoćnog agenta |
-| `CLAUDE_CODE_GLOB_NO_IGNORE=false` | Glob preskače `node_modules`, `.next` i worktreeove. | — |
+| `CLAUDE_CODE_GLOB_NO_IGNORE=false` | Glob preskače sve iz `.gitignore`: `node_modules`, `.next`, worktreeove, ali i `test-results/` i `playwright-report/`; njih se nalazi kroz `ls`. | — |
 | `enabledPlugins: false` za `knowledge-work-plugins` | Isključuje sales, marketing, finance, data, design, productivity i pdf-viewer u ovom projektu. | Bez nepotrebnih pluginova |
 | Hook `cc-safety-net` (PreToolUse: Bash, PowerShell) | Blokira `git add -A`/`.`, `git commit -a`, `--no-verify`, force push, `git reset --hard`, destruktivni `rm` i čitanje tajni, i kad su umotani u `bash -c`. Pravila: `.cc-safety-net/rules/ductus-rules/rulebook.json`. | `CLAUDE.md`: tvrda pravila |
 | `skillOverrides`: `supabase-postgres-best-practices` = `name-only` | Opis skilla ne ulazi u popis; Backend i Security profili ga učitavaju po potrebi. | Bez nepotrebnog konteksta |
