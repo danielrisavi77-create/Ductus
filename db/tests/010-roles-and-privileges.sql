@@ -4,7 +4,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(21);
+SELECT plan(27);
 
 -- Group roles: none can log in or step around RLS.
 SELECT bag_eq(
@@ -17,6 +17,22 @@ SELECT is_empty(
      WHERE rolname IN ('ductus_app', 'ductus_worker', 'ductus_retention', 'ductus_evidence', 'ductus_identity', 'ductus_auth')
        AND (rolcanlogin OR rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb OR rolreplication) $$,
   'group roles are NOLOGIN, not superuser, without BYPASSRLS, CREATEROLE, CREATEDB or REPLICATION'
+);
+
+-- Logins come from the environment, never from a migration. The local stack
+-- provisions exactly one (db/local/app-login.sql): the login of the web
+-- process. It carries no attribute of its own; what it may do comes from its
+-- single membership in ductus_app, listed further down.
+SELECT bag_eq(
+  $$ SELECT rolname::text FROM pg_roles WHERE rolname LIKE 'ductus\_%' AND rolcanlogin $$,
+  ARRAY['ductus_app_local'],
+  'the local application login is the only ductus_* role with a login'
+);
+SELECT is(
+  (SELECT rolinherit AND NOT (rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb OR rolreplication)
+   FROM pg_roles WHERE rolname = 'ductus_app_local'),
+  true,
+  'ductus_app_local has no SUPERUSER, BYPASSRLS, CREATEROLE, CREATEDB or REPLICATION'
 );
 
 -- The migrator is the only role with DDL, yet it is neither a superuser nor
@@ -48,16 +64,19 @@ SELECT is_empty(
 );
 -- Privilege checks see only inherited rights, so a membership with SET alone
 -- would let a role become an owner role unnoticed. Every membership that
--- involves a ductus_* role is therefore listed: the migrator administers the
--- roles it created and may SET ROLE to the two owner roles, nothing more.
-SELECT bag_eq(
-  $$ SELECT pg_get_userbyid(member) || ' in ' || pg_get_userbyid(roleid) || ':'
-            || CASE WHEN admin_option THEN ' admin' ELSE '' END
-            || CASE WHEN inherit_option THEN ' inherit' ELSE '' END
-            || CASE WHEN set_option THEN ' set' ELSE '' END
-     FROM pg_auth_members
-     WHERE pg_get_userbyid(roleid) LIKE 'ductus\_%' OR pg_get_userbyid(member) LIKE 'ductus\_%' $$,
-  ARRAY[
+-- involves a ductus_* role, as group or as member, is therefore listed with
+-- its options: the migrator administers the roles it created and may SET ROLE
+-- to the two owner roles; the local login inherits ductus_app and nothing
+-- else. Any other row fails the comparison.
+CREATE TEMP VIEW ductus_membership AS
+  SELECT pg_get_userbyid(member) || ' in ' || pg_get_userbyid(roleid) || ':'
+         || CASE WHEN admin_option THEN ' admin' ELSE '' END
+         || CASE WHEN inherit_option THEN ' inherit' ELSE '' END
+         || CASE WHEN set_option THEN ' set' ELSE '' END AS membership
+  FROM pg_auth_members
+  WHERE pg_get_userbyid(roleid) LIKE 'ductus\_%' OR pg_get_userbyid(member) LIKE 'ductus\_%';
+CREATE TEMP VIEW allowed_membership AS
+  SELECT unnest(ARRAY[
     'ductus_migrator in ductus_app: admin',
     'ductus_migrator in ductus_worker: admin',
     'ductus_migrator in ductus_retention: admin',
@@ -65,9 +84,43 @@ SELECT bag_eq(
     'ductus_migrator in ductus_evidence: admin',
     'ductus_migrator in ductus_identity: admin',
     'ductus_migrator in ductus_evidence: set',
-    'ductus_migrator in ductus_identity: set'
-  ],
-  'no ductus_* role is a member of another, except the migrator as creator and with SET on the two owner roles'
+    'ductus_migrator in ductus_identity: set',
+    'ductus_app_local in ductus_app: inherit'
+  ]) AS membership;
+
+SELECT bag_eq(
+  'SELECT membership FROM ductus_membership',
+  'SELECT membership FROM allowed_membership',
+  'the only memberships: the migrator as creator and with SET on the two owner roles, the local login in ductus_app'
+);
+-- Negative controls: the comparison above must notice a membership that is
+-- not on the list. Each one is added, seen and taken back.
+GRANT ductus_auth TO ductus_app_local;
+SELECT bag_ne(
+  'SELECT membership FROM ductus_membership',
+  'SELECT membership FROM allowed_membership',
+  'a second membership of the local login is noticed'
+);
+REVOKE ductus_auth FROM ductus_app_local;
+GRANT ductus_app TO ductus_app_local WITH SET TRUE;
+SELECT bag_ne(
+  'SELECT membership FROM ductus_membership',
+  'SELECT membership FROM allowed_membership',
+  'SET on ductus_app for the local login is noticed'
+);
+GRANT ductus_app TO ductus_app_local WITH SET FALSE;
+CREATE ROLE test_second_login LOGIN;
+GRANT ductus_app TO test_second_login;
+SELECT bag_ne(
+  'SELECT membership FROM ductus_membership',
+  'SELECT membership FROM allowed_membership',
+  'another member of ductus_app is noticed, whatever its name'
+);
+DROP ROLE test_second_login;
+SELECT bag_eq(
+  'SELECT membership FROM ductus_membership',
+  'SELECT membership FROM allowed_membership',
+  'the memberships equal the allowed list again once the negative controls are taken back'
 );
 SELECT is_empty(
   $$ SELECT r.rolname || ' on ' || n.nspname FROM pg_roles r CROSS JOIN pg_namespace n

@@ -117,4 +117,15 @@ describe("withActor from the environment", () => {
     await expect(withActor(TOKEN, fn)).rejects.toThrow("APP_DATABASE_URL is not set");
     expect(fn).not.toHaveBeenCalled();
   });
+
+  it("bounds every wait of the application pool", async () => {
+    const { appPoolConfig } = await import("./index");
+    const config = appPoolConfig("postgres://app.invalid/ductus");
+    for (const limit of [config.max, config.connectionTimeoutMillis, config.statement_timeout, config.idle_in_transaction_session_timeout]) {
+      expect(limit).toBeGreaterThan(0);
+      expect(Number.isFinite(limit)).toBe(true);
+    }
+    // A nested call must fail on its own wait before the server ends the outer transaction.
+    expect(config.idle_in_transaction_session_timeout).toBeGreaterThan(config.connectionTimeoutMillis ?? 0);
+  });
 });
