@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { decide, isInstallCommand } from "../hooks/safety-net.mjs";
+import { decide, isInstallCommand, runCli } from "../hooks/safety-net.mjs";
 
 // DAN-137: the cc-safety-net PreToolUse hook must fail closed. Trees are built
 // in temporary directories; the real node_modules is never touched.
@@ -22,7 +22,11 @@ const hookEntry = settings.hooks.PreToolUse.flatMap((group) => (group.matcher ==
 const event = (tool, command) => JSON.stringify({ hook_event_name: "PreToolUse", tool_name: tool, tool_input: { command } });
 
 const FAKES = {
-  allow: "process.stdin.resume();process.stdin.on('end',()=>{require('fs').appendFileSync(__dirname+'/calls.log','x');process.exit(0)});",
+  // Denies the control-probe commands (logged as "p"), stays silent for the rest (logged as "x").
+  allow:
+    "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{const probe=/push --force|add -A/.test(d);require('fs').appendFileSync(__dirname+'/calls.log',probe?'p':'x');if(probe)process.stdout.write(JSON.stringify({hookSpecificOutput:{permissionDecision:'deny'}}));process.exit(0)});",
+  silent: "process.stdin.resume();process.stdin.on('end',()=>process.exit(0));",
+  big: "process.stdout.write('x'.repeat(5*1024*1024));",
   crash1: "process.exit(1);",
   crash3: "process.exit(3);",
   throws: "throw new Error('boom');",
@@ -34,7 +38,12 @@ const FAKES = {
 
 // bin: a FAKES key, "empty" or "missing"; pkg: false = no package directory;
 // modules: false = no node_modules at all.
-function makeTree({ dir = "tree", bin = "allow", pkg = true, modules = true, version = pinned, wrapper = true } = {}) {
+// hook: content of dist/bin/hook.js ("ok", "missing", "empty", "spaces", "exit0");
+// real: copy the installed package and the project rulebook instead of a fake
+// (rulebook: false leaves the project rules out).
+const HOOKS = { ok: "//ok", empty: "", spaces: "  \n\t\n", exit0: "process.exit(0);" };
+const realPackage = path.join(repo, "node_modules", "cc-safety-net");
+function makeTree({ dir = "tree", bin = "allow", pkg = true, modules = true, version = pinned, wrapper = true, hook = "ok", real = false, rulebook = true } = {}) {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-sn-"));
   const root = path.join(base, dir);
   fs.mkdirSync(path.join(root, "scripts", "hooks"), { recursive: true });
@@ -45,10 +54,18 @@ function makeTree({ dir = "tree", bin = "allow", pkg = true, modules = true, ver
     fs.mkdirSync(path.join(root, "node_modules"), { recursive: true });
     if (pkg) {
       const binDir = path.join(root, "node_modules", "cc-safety-net", "dist", "bin");
-      fs.mkdirSync(binDir, { recursive: true });
-      fs.writeFileSync(path.join(root, "node_modules", "cc-safety-net", "package.json"), JSON.stringify({ version }));
-      if (bin === "empty") fs.writeFileSync(path.join(binDir, "cc-safety-net.js"), "");
-      else if (bin !== "missing") fs.writeFileSync(path.join(binDir, "cc-safety-net.js"), FAKES[bin]);
+      if (real) {
+        assert.ok(fs.existsSync(realPackage), "cc-safety-net is not installed: run `pnpm install --frozen-lockfile`");
+        fs.cpSync(fs.realpathSync(realPackage), path.join(root, "node_modules", "cc-safety-net"), { recursive: true, dereference: true });
+        if (rulebook) fs.cpSync(path.join(repo, ".cc-safety-net"), path.join(root, ".cc-safety-net"), { recursive: true });
+      } else {
+        fs.mkdirSync(binDir, { recursive: true });
+        fs.writeFileSync(path.join(root, "node_modules", "cc-safety-net", "package.json"), JSON.stringify({ version }));
+        if (bin === "empty") fs.writeFileSync(path.join(binDir, "cc-safety-net.js"), "");
+        else if (bin !== "missing") fs.writeFileSync(path.join(binDir, "cc-safety-net.js"), FAKES[bin]);
+      }
+      if (hook === "missing") fs.rmSync(path.join(binDir, "hook.js"), { force: true });
+      else if (!real || hook !== "ok") fs.writeFileSync(path.join(binDir, "hook.js"), HOOKS[hook]);
     }
   }
   return { root, calls: path.join(root, "node_modules", "cc-safety-net", "dist", "bin", "calls.log"), done: () => fs.rmSync(base, { recursive: true, force: true }) };
@@ -134,7 +151,7 @@ for (const tool of TOOLS) {
       assert.match(result.stderr, /nope/);
     }));
 
-  test(`A5 a hanging analysis is killed by the wrapper and blocks (${tool})`, () =>
+  test(`A5 a hanging analysis is killed by the wrapper and blocks (${tool})`, { timeout: 20000 }, () =>
     withTree({ bin: "hang" }, (tree) => {
       const started = Date.now();
       const result = decide({ root: tree.root, input: event(tool, "git status"), timeoutMs: 400 });
@@ -222,6 +239,88 @@ for (const tool of TOOLS) {
     assert.match(result.stdout, /"permissionDecision":\s*"deny"/);
   });
 }
+
+for (const tool of TOOLS) {
+  test(`B1 a hollowed-out analysis module blocks, install allowed (${tool})`, { timeout: 60000 }, () => {
+    for (const hook of ["missing", "empty", "spaces", "exit0"]) {
+      withTree({ real: true, hook }, (tree) => {
+        for (const command of ["git push --force origin x", "git add -A", "ls"]) blocked(run(tree, tool, command), `${hook}: ${command}`);
+        assert.equal(run(tree, tool, "pnpm install --frozen-lockfile").code, 0, hook);
+        assert.equal(run(tree, tool, "pnpm install && git push -f").code, 2, hook);
+      });
+    }
+  });
+
+  test(`B1 a silent package fails the control probe (${tool})`, () =>
+    withTree({ bin: "silent" }, (tree) => {
+      const result = run(tree, tool, "git status");
+      blocked(result, "silent");
+      assert.match(result.stderr, /control probe/);
+    }));
+
+  test(`B1/M1 intact real package: project and built-in rules deny, routine passes (${tool})`, { timeout: 60000 }, () =>
+    withTree({ real: true }, (tree) => {
+      for (const command of ["git add -A", "git push --force origin x"]) {
+        const result = run(tree, tool, command);
+        assert.equal(result.code, 0, command);
+        assert.match(result.stdout, /"permissionDecision":\s*"deny"/, command);
+      }
+      const ok = run(tree, tool, "ls");
+      assert.equal(ok.code, 0);
+      assert.equal(ok.stdout.trim(), "");
+    }));
+
+  test(`M1 a missing project rulebook is caught by the probe (${tool})`, { timeout: 60000 }, () =>
+    withTree({ real: true, rulebook: false }, (tree) => {
+      const result = run(tree, tool, "ls");
+      blocked(result, "rulebook");
+      assert.match(result.stderr, /rulebook/);
+      assert.equal(run(tree, tool, "pnpm install").code, 0);
+    }));
+}
+
+test("B1 the probe verdict is remembered per package state, and a changed module is probed again", { timeout: 60000 }, () => {
+  withTree({ bin: "allow" }, (tree) => {
+    for (let i = 0; i < 3; i++) assert.equal(run(tree, "Bash", "ls").code, 0);
+    assert.equal(fs.readFileSync(tree.calls, "utf8"), "xppxx", "the call, two probes once, then one run per call");
+  });
+  withTree({ real: true }, (tree) => {
+    assert.equal(run(tree, "Bash", "ls").code, 0);
+    assert.equal(run(tree, "Bash", "ls").code, 0);
+    fs.writeFileSync(path.join(tree.root, "node_modules", "cc-safety-net", "dist", "bin", "hook.js"), "process.exit(0);");
+    blocked(run(tree, "Bash", "ls"), "hook.js replaced after a good verdict");
+  });
+});
+
+test("M2 a package that floods stdout is stopped by the buffer limit", () =>
+  withTree({ bin: "big" }, (tree) => {
+    const result = run(tree, "Bash", "git status");
+    blocked(result, "big");
+    assert.match(result.stderr, /ENOBUFS|could not run/);
+  }));
+
+test("M2 unreadable or mismatching version information blocks", () => {
+  withTree({}, (tree) => {
+    fs.writeFileSync(path.join(tree.root, "node_modules", "cc-safety-net", "package.json"), "{ not json");
+    const result = run(tree, "Bash", "git status");
+    blocked(result, "bad package.json");
+    assert.match(result.stderr, /could not be verified/);
+  });
+  withTree({}, (tree) => {
+    fs.writeFileSync(path.join(tree.root, "package.json"), "{}");
+    const result = run(tree, "Bash", "git status");
+    blocked(result, "no pin");
+    assert.match(result.stderr, /differs/);
+  });
+});
+
+test("M2 the entry point turns any internal error into a block", () => {
+  const thrown = runCli({ read: () => "", decideFn: () => { throw new Error("boom"); } });
+  assert.equal(thrown.code, 2);
+  assert.match(thrown.stderr, /wrapper error \(boom\)/);
+  const unreadable = runCli({ read: () => { throw new Error("no stdin"); }, decideFn: ({ input }) => ({ code: input === "" ? 2 : 0, stdout: "", stderr: "" }) });
+  assert.equal(unreadable.code, 2);
+});
 
 test("isInstallCommand accepts only the two literal spellings", () => {
   assert.ok(isInstallCommand("pnpm install"));
