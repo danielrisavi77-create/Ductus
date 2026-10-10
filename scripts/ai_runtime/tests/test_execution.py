@@ -15,12 +15,19 @@ from ai_runtime.process import bounded_process
 from test_runtime import task
 
 ORIGIN='https://github.com/danielrisavi77-create/Ductus.git'
+LOGIN='MISTRAL_API_KEY=synthetic-login-fixture\n'
+# Synthetic stand-ins for credentials that other tools keep in a user directory.
+PLANTED=('.config/gh/hosts.yml','AppData/Roaming/GitHub CLI/hosts.yml','.git-credentials',
+         '.codex/auth.json','.grok/auth.json','.vibe/vibehistory','AppData/Local/planted.txt')
+MARK='planted-synthetic-credential'
 
-class WorkspaceTests(unittest.TestCase):
+class GitFixture(unittest.TestCase):
     """One synthetic repository per class; every test gets its own fresh worktree.
 
     Building the repository once keeps the Git process count low: on a loaded
     Windows system disk each Git command that creates files costs seconds.
+    Runs use the only enabled adapter and a synthetic "real" user directory, so
+    no test reads the directory of the person running the suite.
     """
     @classmethod
     def setUpClass(cls):
@@ -41,12 +48,26 @@ class WorkspaceTests(unittest.TestCase):
         return target
     def setUp(self):
         self.wt=self.worktree()
-        self.t=task(worktree=str(self.wt),base_sha=self.sha)
-    def run_child(self,code):
+        self.t=task(worktree=str(self.wt),base_sha=self.sha,provider='mistral')
+    def user_directory(self,login=True):
+        home=self.root/f'user-{next(self.counter)}'
+        for relative in PLANTED:
+            (home/relative).parent.mkdir(parents=True,exist_ok=True)
+            (home/relative).write_text(MARK,encoding='utf-8')
+        (home/'.vibe'/'config.toml').write_text('# synthetic configuration\n',encoding='utf-8')
+        if login:(home/'.vibe'/'.env').write_bytes(LOGIN.encode())
+        return home
+    def run_child(self,code,home=None,state=None):
         from ai_runtime.cli import execute
-        state=self.root/f'runtime-{next(self.counter)}'
-        with patch('ai_runtime.cli.check_ready',return_value=(self.wt,[sys.executable,'-c',code],{})):
+        state=state or self.root/f'runtime-{next(self.counter)}'
+        home=home or self.user_directory()
+        inherited={'HOME':str(home),'USERPROFILE':str(home),'APPDATA':str(home/'AppData'/'Roaming'),
+                   'LOCALAPPDATA':str(home/'AppData'/'Local'),'XDG_CONFIG_HOME':str(home/'.config')}
+        with patch.dict(os.environ,inherited), \
+                patch('ai_runtime.cli.check_ready',return_value=(self.wt,[sys.executable,'-c',code],{})):
             return execute(self.t,self.repo,state),state
+
+class WorkspaceTests(GitFixture):
     def test_detached_review_worktree_and_common_root(self):
         self.assertEqual(canonical_repo(self.wt),self.repo.resolve())
         self.assertEqual(inspect_workspace(self.t,self.repo),self.wt.resolve())
@@ -73,7 +94,7 @@ class WorkspaceTests(unittest.TestCase):
                'src/demo.txt':'from pathlib import Path;Path("src/demo.txt").write_text("tampered")'}
         for path,code in codes.items():
             with self.subTest(path=path):
-                self.wt=self.worktree();self.t=task(worktree=str(self.wt),base_sha=self.sha)
+                self.wt=self.worktree();self.t=task(worktree=str(self.wt),base_sha=self.sha,provider='mistral')
                 result,_=self.run_child(code)
                 self.assertEqual(result['status'],'blocked_write')
                 self.assertEqual(result['changed_paths'],[path])

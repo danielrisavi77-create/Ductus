@@ -6,10 +6,12 @@ import threading
 import time
 from .providers import clean_environment, redact
 
-def bounded_process(command, cwd, env, timeout=600, max_bytes=1024*1024, stdin_text=None, heartbeat=None):
+def bounded_process(command, cwd, env, timeout=600, max_bytes=1024*1024, stdin_text=None, heartbeat=None, env_overrides=None):
+    """env_overrides are controller-chosen paths, applied after the inherited environment is cleaned."""
     result=bytearray();over=threading.Event()
+    child_env=clean_environment(env);child_env.update(env_overrides or {})
     flags={'creationflags':subprocess.CREATE_NEW_PROCESS_GROUP} if os.name=='nt' else {'start_new_session':True}
-    p=subprocess.Popen(command,cwd=cwd,env=clean_environment(env),stdin=subprocess.PIPE,
+    p=subprocess.Popen(command,cwd=cwd,env=child_env,stdin=subprocess.PIPE,
                        stdout=subprocess.PIPE,stderr=subprocess.STDOUT,**flags)
     def reader():
         while True:
