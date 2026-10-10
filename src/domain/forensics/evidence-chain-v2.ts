@@ -88,8 +88,27 @@ export type EvidenceChainFailureV2 =
   | "document_mismatch"
   | "head_mismatch";
 
+/**
+ * A segment that links to the one before it by hash but does not continue it:
+ * its first event does not follow the previous last event, or its initial
+ * document hash is not the previous final one. Either means events are missing
+ * between the two segments.
+ */
+export type EvidenceChainDiscontinuityV2 = {
+  /** Index of the later segment of the pair. */
+  index: number;
+  previousSequenceTo: number;
+  sequenceFrom: number;
+  sequenceBreak: boolean;
+  documentHashBreak: boolean;
+};
+
 export type EvidenceChainVerificationV2 =
-  | { ok: true; head: EvidenceChainHeadV2 | null }
+  | {
+      ok: true;
+      head: EvidenceChainHeadV2 | null;
+      discontinuities: EvidenceChainDiscontinuityV2[];
+    }
   | { ok: false; reason: EvidenceChainFailureV2; index: number | null };
 
 /**
@@ -101,15 +120,18 @@ export type EvidenceChainVerificationV2 =
  * segment breaks one of those. `expectedHead` is `null` only for a package
  * with no accepted segments.
  *
- * Event sequence numbers are checked inside each segment only: a gap between
- * segments is legitimate and is recorded by the server, never assumed away.
+ * A gap between linked segments does not fail verification, because a client
+ * recovering from lost segments legitimately continues from the server head.
+ * It is never passed over in silence either: every such pair is returned in
+ * `discontinuities`, for comparison with the gaps the server recorded.
  */
 export async function verifyEvidenceChainV2(
   canonicalPayloads: readonly unknown[],
   expectedHead: EvidenceChainHeadV2 | null,
 ): Promise<EvidenceChainVerificationV2> {
   let previousHash: string | null = null;
-  let documentId: string | null = null;
+  let previous: EvidenceSegmentV2 | null = null;
+  const discontinuities: EvidenceChainDiscontinuityV2[] = [];
 
   for (let index = 0; index < canonicalPayloads.length; index++) {
     const verified = await verifyCanonicalEvidencePayloadV2(
@@ -125,10 +147,25 @@ export async function verifyEvidenceChainV2(
     if (verified.segment.predecessorSegmentHash !== previousHash) {
       return { ok: false, reason: "predecessor_mismatch", index };
     }
-    if (documentId !== null && verified.segment.documentId !== documentId) {
-      return { ok: false, reason: "document_mismatch", index };
+    const segment = verified.segment;
+    if (previous !== null) {
+      if (segment.documentId !== previous.documentId) {
+        return { ok: false, reason: "document_mismatch", index };
+      }
+      const sequenceBreak = segment.sequenceFrom !== previous.sequenceTo + 1;
+      const documentHashBreak =
+        segment.initialDocumentHash !== previous.finalDocumentHash;
+      if (sequenceBreak || documentHashBreak) {
+        discontinuities.push({
+          index,
+          previousSequenceTo: previous.sequenceTo,
+          sequenceFrom: segment.sequenceFrom,
+          sequenceBreak,
+          documentHashBreak,
+        });
+      }
     }
-    documentId = verified.segment.documentId;
+    previous = segment;
     previousHash = verified.sha256;
   }
 
@@ -143,19 +180,22 @@ export async function verifyEvidenceChainV2(
   ) {
     return { ok: false, reason: "head_mismatch", index: null };
   }
-  return { ok: true, head };
+  return { ok: true, head, discontinuities };
 }
 
-export type EvidenceRetryDecision = "new" | "duplicate" | "idempotency_conflict";
+export type EvidenceRetryDecision = "new" | "duplicate" | "content_mismatch";
 
 /**
- * Decides what a submission under one idempotency key means.
+ * Compares a submission with what was already accepted under the same
+ * idempotency key.
  *
  * `acceptedSegmentHash` is the content hash already accepted under that key
- * (`null` if none); `submittedSegmentHash` is the hash of the bytes now being
- * submitted. Same key and same content is a duplicate and must not create a
- * second acceptance; same key with different content is refused and the
- * original acceptance stays as it is.
+ * (`null` if none); `submittedSegmentHash` is the content hash of the new
+ * submission. Same content is a duplicate and must not create a second
+ * acceptance. Different content is reported as `content_mismatch`, a neutral
+ * fact: it is never a new acceptance and never replaces the original one, but
+ * which outcome the caller returns for it is decided in the application layer
+ * (DAN-46), not here.
  */
 export function decideEvidenceRetry(
   acceptedSegmentHash: string | null,
@@ -164,5 +204,5 @@ export function decideEvidenceRetry(
   if (acceptedSegmentHash === null) return "new";
   return acceptedSegmentHash === submittedSegmentHash
     ? "duplicate"
-    : "idempotency_conflict";
+    : "content_mismatch";
 }

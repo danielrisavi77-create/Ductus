@@ -42,18 +42,29 @@ const chainSpec = (minLength: number): fc.Arbitrary<ChainSpec> =>
 
 const documentHash = (n: number) => n.toString(16).padStart(64, "0");
 
-async function buildChain(spec: ChainSpec): Promise<BuiltChain> {
+type ChainOptions = {
+  /** Segment index before which events and document revisions go missing. */
+  gapBefore?: number;
+  /** Segment index that names another document while linking correctly. */
+  foreignDocumentAt?: number;
+};
+
+async function buildChain(spec: ChainSpec, options: ChainOptions = {}): Promise<BuiltChain> {
   const payloads: string[] = [];
   let predecessor: string | null = null;
   let sequence = 1;
   let revision = 0;
 
   for (const [index, events] of spec.entries()) {
+    if (index === options.gapBefore) {
+      sequence += 7;
+      revision += 7;
+    }
     const segment: EvidenceSegmentV2 = {
       evidenceSchema: EVIDENCE_SEGMENT_SCHEMA_V2,
       canonicalization: EVIDENCE_CANONICALIZATION_V2,
       hashAlgorithm: EVIDENCE_HASH_ALGORITHM_V2,
-      documentId: "doc-fixture",
+      documentId: index === options.foreignDocumentAt ? "doc-other" : "doc-fixture",
       sessionId: "session-fixture",
       segmentId: `segment-${index + 1}`,
       sequenceFrom: sequence,
@@ -99,8 +110,61 @@ function rewrite(payload: string, edit: (segment: EvidenceSegmentV2) => void): s
 describe("evidence segment chain v2", () => {
   test.prop([chainSpec(1)])("an untouched chain verifies to its head", async (spec) => {
     const { payloads, head } = await buildChain(spec);
-    expect(await verifyEvidenceChainV2(payloads, head)).toEqual({ ok: true, head });
+    expect(await verifyEvidenceChainV2(payloads, head)).toEqual({
+      ok: true,
+      head,
+      discontinuities: [],
+    });
   });
+
+  test.prop([chainSpec(2), fc.nat()])(
+    "a linked chain with missing events verifies but reports the discontinuity",
+    async (spec, pick) => {
+      const gapBefore = 1 + (pick % (spec.length - 1));
+      const { payloads, head } = await buildChain(spec, { gapBefore });
+      const previousSequenceTo = spec.slice(0, gapBefore).flat().length;
+      expect(await verifyEvidenceChainV2(payloads, head)).toEqual({
+        ok: true,
+        head,
+        discontinuities: [
+          {
+            index: gapBefore,
+            previousSequenceTo,
+            sequenceFrom: previousSequenceTo + 8,
+            sequenceBreak: true,
+            documentHashBreak: true,
+          },
+        ],
+      });
+    },
+  );
+
+  test.prop([chainSpec(2), fc.nat()])(
+    "a correctly linked segment of another document breaks verification",
+    async (spec, pick) => {
+      const foreignDocumentAt = 1 + (pick % (spec.length - 1));
+      const { payloads, head } = await buildChain(spec, { foreignDocumentAt });
+      expect(await verifyEvidenceChainV2(payloads, head)).toEqual({
+        ok: false,
+        reason: "document_mismatch",
+        index: foreignDocumentAt,
+      });
+    },
+  );
+
+  test.prop([chainSpec(1), fc.integer({ min: -3, max: 3 })])(
+    "the right head hash with the wrong segment count breaks verification",
+    async (spec, offset) => {
+      fc.pre(offset !== 0);
+      const { payloads, head } = await buildChain(spec);
+      const wrongCount = { ...head, segmentCount: head.segmentCount + offset };
+      expect(await verifyEvidenceChainV2(payloads, wrongCount)).toEqual({
+        ok: false,
+        reason: "head_mismatch",
+        index: null,
+      });
+    },
+  );
 
   test.prop([chainSpec(1), fc.nat(), fc.string({ minLength: 1, maxLength: 4 })])(
     "changing one segment breaks verification, even when it stays well-formed",
@@ -222,11 +286,11 @@ describe("evidence retry decision", () => {
     { maxLength: 20 },
   );
 
-  test.prop([hash, hash])("same content is a duplicate, different content is refused", (accepted, other) => {
+  test.prop([hash, hash])("same content is a duplicate, different content is a mismatch", (accepted, other) => {
     expect(decideEvidenceRetry(null, accepted)).toBe("new");
     expect(decideEvidenceRetry(accepted, accepted)).toBe("duplicate");
     fc.pre(other !== accepted);
-    expect(decideEvidenceRetry(accepted, other)).toBe("idempotency_conflict");
+    expect(decideEvidenceRetry(accepted, other)).toBe("content_mismatch");
   });
 
   test.prop([submissions])(

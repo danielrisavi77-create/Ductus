@@ -48,7 +48,11 @@ describe("evidence payload and chain edge cases", () => {
   });
 
   it("verifies an empty package only against an empty head", async () => {
-    expect(await verifyEvidenceChainV2([], null)).toEqual({ ok: true, head: null });
+    expect(await verifyEvidenceChainV2([], null)).toEqual({
+      ok: true,
+      head: null,
+      discontinuities: [],
+    });
     expect(
       await verifyEvidenceChainV2([], { segmentHash: "a".repeat(64), segmentCount: 1 }),
     ).toEqual({ ok: false, reason: "head_mismatch", index: null });
