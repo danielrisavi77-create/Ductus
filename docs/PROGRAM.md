@@ -75,7 +75,7 @@ Od 3. 10. 2026. do 22. 2. 2027. ima 20 tjedana, od toga oko 2 tjedna blagdana. U
 | 6 | oko 108 | oko 77 |
 | Puno radno vrijeme (oko 10 jedinica od 3 sata tjedno) | oko 180 | oko 130 |
 
-Od 3. 10. 2026. vlasnik radi na Ductusu puno radno vrijeme. Uz oko 10 jedinica tjedno (dvije dnevno, pet dana; ostalo vrijeme za druge projekte i odmor) do 22. 2. 2027. ima oko 130 nominalnih večeri, a **val 1 i val 2 zajedno traže 102 do 137 nominalnih večeri** (zbroj tablica niže, D-99). Donja granica stane uz oko 28 večeri rezerve; gornja prelazi kapacitet za oko 7. Cilj ostaje pustiti val 1 i val 2 na početku semestra, a val 3 tijekom semestra (D-36). Stane li opseg, provjerava se na kontrolnim točkama (D-100); ako val 2 kasni, pomiče se najkasnije do sredine svibnja, a val 1 se ne skraćuje. Procjena od 10 jedinica tjedno je namjerno konzervativna: rad bez pauza ruši kvalitetu i rokove.
+Od 3. 10. 2026. vlasnik radi na Ductusu puno radno vrijeme. Uz oko 10 jedinica tjedno (dvije dnevno, pet dana; ostalo vrijeme za druge projekte i odmor) do 22. 2. 2027. ima oko 130 nominalnih večeri, a **val 1 i val 2 zajedno traže 102 do 137 nominalnih večeri** (zbroj tablica niže, D-99). Donja granica stane uz oko 28 večeri rezerve; gornja prelazi kapacitet za oko 7. Cilj ostaje pustiti val 1 i val 2 na početku semestra, a val 3 tijekom semestra (D-36). Stane li opseg, provjerava se na kontrolnim točkama (D-100); ako val 2 kasni, pomiče se najkasnije do sredine svibnja; val 1 se zbog vala 2 ne skraćuje, nego samo rezovima iz kontrolne točke (D-100). Procjena od 10 jedinica tjedno je namjerno konzervativna: rad bez pauza ruši kvalitetu i rokove.
 
 #### Provjera zbroja [ODLUČENO D-99]
 
@@ -86,6 +86,7 @@ Potvrđeno 10. 10. 2026. (Daniel). Odlomak iznad, tablica vala 1 i kontrolna to�
 - Val 1 i val 2 zajedno: **102 do 137**, naspram oko 130 nominalnih večeri do 22. 2. 2027. Raniji tekst navodio je 94 do 124, a tablice bez backend dodatka davale su 84 do 112.
 - Do kontrolne točke 15. 12. 2026. ima oko 75 nominalnih večeri; val 1 bez M11 (5 do 6) traži **69 do 93**.
 - Faktor prekoračenja: M0 je procijenjen na 2 do 3 večeri, a 10. 10. 2026. `STATE.md` ga i dalje vodi kao trenutnu fazu. Na svakoj kontrolnoj točki zapisuju se stvarno utrošene jedinice po fazi i iz njih se izvodi faktor prekoračenja, umjesto pretpostavljenih 40 % s kojima računa tablica kapaciteta gore.
+- **Otvoreno pitanje: sastav backend dodatka (riješiti prije provjere 16. 11. 2026.).** Dodatak od 18 do 25 večeri nije razložen po koracima ni po fazama. Retci s procjenom u `docs/BACKEND.md` §8 zajedno daju 26 do 39 večeri. Među njima je B5 (4 do 5), koji ima i vlastiti redak u valu 2, i B9 (3 do 4), koji pripada M11. Ako dodatak sadrži B5, zbroj 102 do 137 broji ga dvaput; ako sadrži B9, "val 1 bez M11" (69 do 93) sadrži dio M11. Brojke 74 do 99, 102 do 137 i 69 do 93 prihvaćene su u D-99 i ovdje se ne mijenjaju, ali ovise o ovom pitanju.
 
 ### Val 1: početak ljetnog semestra (kod spreman oko 22. 2. 2027.)
 
@@ -135,7 +136,7 @@ Konzultacije (D-47), ključni rokovi (N-07), komentor i povjerenstvo u sučelju 
 
 Uz puno radno vrijeme do tada mora biti gotov cijeli val 1 osim M11 (69 do 93 nominalne večeri s backend dodatkom, naspram oko 75 raspoloživih do tog datuma; D-99). Ako nije, val 2 se vraća na cilj sredine svibnja.
 
-**Okidač rezova [ODLUČENO D-100].** Na kontrolnoj točki zbroji se preostala nominalna procjena vala 1 i usporedi s preostalim nominalnim večerima do 22. 2. 2027. (stvarne večeri podijeljene faktorom prekoračenja). Ako opseg ne stane, ovi rezovi stupaju na snagu redom, bez nove rasprave, dok val 1 ne stane, bez obzira na to koje su faze gotove. Ista provjera radi se i dva tjedna nakon demoa, 16. 11. 2026. Ovo zamjenjuje raniji uvjet po kojem su rezovi stupali na snagu samo ako ni M0 do M3 nisu gotovi; taj uvjet nije pokrivao slučaj kad su M0 do M3 gotovi, a M5 do M7 nisu.
+**Okidač rezova [ODLUČENO D-100].** Na kontrolnoj točki zbroji se preostala nominalna procjena vala 1 i usporedi s preostalim nominalnim večerima do 22. 2. 2027. (stvarne večeri podijeljene faktorom prekoračenja). Ako opseg ne stane, ovi rezovi stupaju na snagu redom, bez nove rasprave, dok val 1 ne stane, bez obzira na to koje su faze gotove. Ista provjera radi se i dva tjedna nakon demoa, 16. 11. 2026. Procjena uštede po rezu (nominalni raspon koji svaki rez uklanja) dodaje se uz popis niže do provjere 16. 11. 2026.; do tada se okidač računa ponovnim zbrajanjem preostalog opsega vala 1 nakon svakog primijenjenog reza. Ovo zamjenjuje raniji uvjet po kojem su rezovi stupali na snagu samo ako ni M0 do M3 nisu gotovi; taj uvjet nije pokrivao slučaj kad su M0 do M3 gotovi, a M5 do M7 nisu.
 
 1. Prijedlozi idu u val 2; u valu 1 samo komentari.
 2. Osnovna bilježnica izvora ide u val 2; DOI i ISBN ostaju.
