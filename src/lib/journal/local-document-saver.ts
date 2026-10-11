@@ -237,7 +237,9 @@ export class LocalDocumentSaver {
       // and never a half-applied read (#206 qa206c MANJE 2).
       let chars = 0;
       for (const row of pending) {
-        const json: unknown = JSON.stringify(row?.tx);
+        // A BigInt or a cycle throws; that row is as unsendable (#206 Codex r4240729191).
+        let json: unknown;
+        try { json = JSON.stringify(row?.tx); } catch { json = undefined; }
         if (typeof json !== "string") return this.haltWith("corrupt", this.recover("corrupt", null));
         chars += json.length;
       }

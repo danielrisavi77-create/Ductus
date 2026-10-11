@@ -1586,6 +1586,9 @@ describe("LocalDocumentSaver: a journal whose rows disagree (#206 qa206e V-1)", 
     // #206 Codex r4240617145: the next write would inherit a base every save refuses.
     ["a snapshot with a negative revision", (db) => db.table("snapshots").update(DOC, { revision: -1 })],
     ["a snapshot with a fractional revision", (db) => db.table("snapshots").update(DOC, { revision: 0.5 })],
+    // #206 Codex r4240729191: IndexedDB stores a BigInt that JSON cannot serialise.
+    ["a pending row that cannot be serialised", (db) =>
+      db.table("pending").update([DOC, 1], { "tx.createdAt": 1n })],
   ];
   for (const [name, damage] of cases) {
     it(`17: ${name} is corrupt, never older or empty text shown as saved, and nothing is written`, async () => {
