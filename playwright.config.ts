@@ -11,10 +11,28 @@ const webServerCommand =
   process.env.E2E_NO_BUILD === "1" ? "pnpm start" : "pnpm build && pnpm start";
 
 /**
- * `next start` on a port with the login configured as "Demo prijava", and
- * NODE_ENV set at start when given.
+ * How a server is started with respect to the local demo journal (F-3 step 1b):
+ * on, off as deployed by default, or switched on in a deployment that must
+ * refuse it (#197 attack 12).
  */
-function server(port: number, command: string, nodeEnv?: "test" | "development") {
+type LocalJournal = "on" | "off" | "refused";
+
+const LOCAL_JOURNAL_ENV: Record<LocalJournal, Record<string, string>> = {
+  on: { DUCTUS_LOCAL_DEMO_JOURNAL: "1", DUCTUS_DEPLOYMENT: "ci" },
+  off: {},
+  refused: { DUCTUS_LOCAL_DEMO_JOURNAL: "1", DUCTUS_DEPLOYMENT: "production" },
+};
+
+/**
+ * `next start` on a port with the login configured as "Demo prijava", the
+ * local demo journal as given, and NODE_ENV set at start when given.
+ */
+function server(
+  port: number,
+  command: string,
+  journal: LocalJournal,
+  nodeEnv?: "test" | "development",
+) {
   const baseUrl = `http://localhost:${port}`;
   return {
     command: `${command} -p ${port}`,
@@ -32,6 +50,9 @@ function server(port: number, command: string, nodeEnv?: "test" | "development")
       OIDC_REDIRECT_URI: `${baseUrl}/api/auth/callback`,
       OIDC_CLIENT_ID: "ductus-local",
       OIDC_CLIENT_SECRET: "ductus-local-only",
+      // The local demo journal is read by /rad at request time, so the same
+      // build runs with it, without it and with it refused.
+      ...LOCAL_JOURNAL_ENV[journal],
       ...(nodeEnv ? { NODE_ENV: nodeEnv } : {}),
     },
     // A server already on the port may be `next dev` or an older build, so it
@@ -71,13 +92,18 @@ export default defineConfig({
     { name: "firefox", use: { ...devices["Desktop Firefox"] } },
     { name: "webkit", use: { ...devices["Desktop Safari"] } },
   ],
-  // The first server is the build as deployed. The other two run the same
-  // build with NODE_ENV=test and development given at start: D-09 must hold
-  // for every NODE_ENV, because the build fixes it (e2e/auth.spec.ts). Servers
-  // start in order, so the build runs once.
+  // The first three servers run the build with the local demo journal on; the
+  // second and third give NODE_ENV=test and development at start: D-09 must
+  // hold for every NODE_ENV, because the build fixes it (e2e/auth.spec.ts).
+  // The fourth is the build as deployed, without the journal, and the fifth
+  // switches the journal on in a deployment that must refuse it: /rad keeps
+  // the read-only sheet on both (e2e/shell.spec.ts). Servers start in order,
+  // so the build runs once.
   webServer: [
-    server(PORT, webServerCommand),
-    server(PORT + 1, "pnpm start", "test"),
-    server(PORT + 2, "pnpm start", "development"),
+    server(PORT, webServerCommand, "on"),
+    server(PORT + 1, "pnpm start", "on", "test"),
+    server(PORT + 2, "pnpm start", "on", "development"),
+    server(PORT + 3, "pnpm start", "off"),
+    server(PORT + 4, "pnpm start", "refused"),
   ],
 });

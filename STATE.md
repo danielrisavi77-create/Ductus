@@ -39,7 +39,7 @@ Kanonski dokument: `docs/ENGINEERING_SYSTEM.md`.
 - Autor ne reviewa vlastiti PR; Bug Hunter/Product ne implementiraju vlastite nalaze.
 - `low` i `standard`: neovisni review na aktualnom headu.
 - `critical`: neovisni review + zaseban QA PASS na aktualnom headu.
-- Novi push invalidira review/QA preko `Review-Head` / `QA-Head`.
+- Novi push invalidira review/QA preko `Review-Head` / `QA-Head`, osim čistog spajanja `main` bez promjene diffa (D-101).
 - Owner Override je eksplicitna iznimka s razlogom i head SHA-om.
 
 ## Otvoreni razvojni stog
