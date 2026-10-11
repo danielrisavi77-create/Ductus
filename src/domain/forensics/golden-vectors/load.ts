@@ -36,6 +36,8 @@ export type GoldenSegmentVector = {
 /** One edit of the canonical bytes of `chain.segments[base]`. */
 export type GoldenPayloadEdit = {
   name: string;
+  /** Why the edit is refused, for example non-canonical bytes or an unknown field. */
+  class: string;
   base: number;
   find?: string;
   replace?: string;
@@ -44,6 +46,11 @@ export type GoldenPayloadEdit = {
   reason: "invalid";
   /** The edited text parses to the same value as the base segment. */
   recanonicalizesToBase: boolean;
+  /**
+   * JCS writes the parsed edit as the base with `find` replaced by this: the
+   * edited bytes differ from their own canonical form exactly there.
+   */
+  canonicalReplace?: string;
   /** The edited bytes are canonical JCS; only the validator rejects them. */
   canonicalJcs: boolean;
 };

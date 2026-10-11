@@ -828,7 +828,7 @@
     }
   },
   "segmentPayloads": {
-    "note": "Byte edits of chain.segments[base].canonicalUtf8Hex that must not be accepted. find/replace are UTF-8 text, findHex/replaceHex are bytes; find occurs exactly once. recanonicalizesToBase: the edited bytes parse to the same segment, so only the bytes are wrong. canonicalJcs: the edited bytes are canonical JCS, so the segment validator is what rejects them.",
+    "note": "Byte edits of chain.segments[base].canonicalUtf8Hex that must not be accepted. find/replace are UTF-8 text, findHex/replaceHex are bytes; find occurs exactly once. recanonicalizesToBase: the edited bytes parse to the same segment, so only the bytes are wrong. canonicalReplace: JCS writes the parsed edit as the base with find replaced by canonicalReplace, so the edited bytes differ from their own canonical form exactly there. canonicalJcs: the edited bytes are canonical JCS, so the segment validator is what rejects them.",
     "rejected": [
       {
         "name": "space-after-colon",
@@ -899,10 +899,11 @@
       {
         "name": "negative-zero",
         "class": "non-canonical",
-        "note": "A position written as -0. JCS never writes -0, and no step starts at 0.",
+        "note": "A position written as -0. JCS writes the parsed value as 0, so the bytes are not canonical: the only difference from the canonical form is the spelling -0.",
         "base": 0,
         "find": "\"from\":1,\"slice\":{\"content\":[{\"text\":\"Izmi",
         "replace": "\"from\":-0,\"slice\":{\"content\":[{\"text\":\"Izmi",
+        "canonicalReplace": "\"from\":0,\"slice\":{\"content\":[{\"text\":\"Izmi",
         "reason": "invalid",
         "recanonicalizesToBase": false,
         "canonicalJcs": false

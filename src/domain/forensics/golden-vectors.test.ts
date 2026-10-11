@@ -146,6 +146,20 @@ describe("golden vectors: segment hash and chain", () => {
     if (edit.recanonicalizesToBase) {
       expect(toHex(jcsUtf8Bytes(JSON.parse(text ?? "")))).toBe(base.canonicalUtf8Hex);
     }
+    if (edit.canonicalReplace !== undefined) {
+      // The edit is not canonical at exactly the spot it changes, so the
+      // vector holds the byte check to that spelling, whatever later
+      // validators also refuse.
+      const canonical = applyPayloadEdit(fromHex(base.canonicalUtf8Hex), {
+        ...edit,
+        replace: edit.canonicalReplace,
+      });
+      expect(canonicalizeJcs(JSON.parse(text ?? ""))).toBe(strictText(canonical));
+    }
+    if (edit.class === "non-canonical") {
+      expect(edit.recanonicalizesToBase || edit.canonicalReplace !== undefined).toBe(true);
+      expect(canonicalizeJcs(JSON.parse(text ?? ""))).not.toBe(text);
+    }
     if (edit.canonicalJcs) {
       expect(canonicalizeJcs(JSON.parse(text ?? ""))).toBe(text);
       expect(isEvidenceSegmentV2(JSON.parse(text ?? ""))).toBe(false);
