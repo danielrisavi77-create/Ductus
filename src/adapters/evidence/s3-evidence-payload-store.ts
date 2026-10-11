@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import {
   evidenceObjectKey,
   evidenceStorageRef,
@@ -19,8 +21,29 @@ import {
 /** Upper bound for one `putImmutable` call, every request and read included. */
 export const MAX_S3_REQUEST_TIMEOUT_MS = 60_000;
 
+/**
+ * Operator confirmation that this storage passed the contract test (#155):
+ * it refuses a second conditional write and echoes the SHA-256 checksum.
+ * Neither can be told apart within one request, so a store without it is
+ * never used.
+ */
+export type S3StorageCapability = {
+  provider: string;
+  /** The configured endpoint, as confirmed. */
+  endpoint: string;
+  conditionalWrite: "verified";
+  checksumEcho: "verified";
+  /** Date of the contract test run, YYYY-MM-DD. */
+  verifiedOn: string;
+  /** Label of the contract test that confirmed both. */
+  contractTest: string;
+};
+
 export type S3EvidencePayloadStoreConfig = {
-  /** Path-style endpoint, e.g. `https://s3.example.eu`; http only for loopback. */
+  /**
+   * Path-style endpoint, e.g. `https://s3.example.eu`; http only for loopback
+   * with `allowPlainHttpOnLoopback`.
+   */
   endpoint: string;
   region: string;
   bucket: string;
@@ -37,6 +60,12 @@ export type S3EvidencePayloadStoreConfig = {
    * value stops startup.
    */
   requestTimeoutMs: number;
+  /**
+   * Set only by local and CI configuration; refused when NODE_ENV is
+   * production, so a production endpoint is always https.
+   */
+  allowPlainHttpOnLoopback?: boolean;
+  capability: S3StorageCapability;
   fetch?: typeof fetch;
   now?: () => Date;
   /** Receives ids and hashes only, never the payload (BACKEND 4.9). */
@@ -44,9 +73,15 @@ export type S3EvidencePayloadStoreConfig = {
 };
 
 const BUCKET = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
-/** Names S3 providers refuse although they match BUCKET. */
-const BUCKET_REFUSED = /^\d{1,3}(\.\d{1,3}){3}$|\.\./;
+/**
+ * Names S3 providers refuse although they match BUCKET: IP addresses,
+ * adjacent dots or dot-hyphen pairs, and AWS reserved prefixes and suffixes.
+ */
+const BUCKET_REFUSED =
+  /^\d{1,3}(\.\d{1,3}){3}$|\.\.|\.-|-\.|^(xn--|sthree-|amzn-s3-demo-)|(-s3alias|--ol-s3|\.mrap|--x-s3|--table-s3)$/;
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
+const CAPABILITY_LABEL = /^[A-Za-z0-9][A-Za-z0-9._:/#@-]{0,127}$/;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 /** Enough for the `<Code>` of an S3 error document; the rest is never read. */
 const MAX_ERROR_BODY_BYTES = 4_096;
 /**
@@ -60,8 +95,18 @@ const ERROR_REASONS: Readonly<Record<string, string>> = {
   InvalidAccessKeyId: "storage_signature_rejected",
 };
 
+const timedOut = (): EvidencePayloadPutResult => ({
+  status: "unavailable",
+  reason: "storage_timeout",
+});
+
+const unverified = (): EvidencePayloadPutResult => ({
+  status: "unavailable",
+  reason: "storage_write_unverified",
+});
+
 type Fetched =
-  | { ok: true; status: number; body: Uint8Array | null }
+  | { ok: true; status: number; body: Uint8Array | null; checksum: string | null }
   | { ok: false; reason: string };
 
 /**
@@ -69,7 +114,10 @@ type Fetched =
  *
  * One conditional PUT per object (`If-None-Match: *`) with a SHA-256 checksum:
  * no multipart upload, no overwrite, no delete. When the key already exists
- * the object is read back and compared byte for byte, never by ETag. Every
+ * the object is read back and compared byte for byte, never by ETag. A 200 is
+ * `stored` only with both proofs (#155): the echoed checksum equals the one
+ * sent, and reading the object back gives the same bytes. The read-back runs
+ * after every write and has no switch. Every
  * doubtful answer is `unavailable`; retrying is the client's job, so the store
  * itself never retries and never follows a redirect. Requests go only to the
  * configured endpoint; the signer builds every URL from validated parts.
@@ -95,16 +143,21 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
 
   constructor(config: S3EvidencePayloadStoreConfig) {
     const endpoint = parseEndpoint(config.endpoint);
+    const plainHttp =
+      config.allowPlainHttpOnLoopback === true &&
+      process.env.NODE_ENV !== "production";
     if (
       endpoint === null ||
       !(
         endpoint.protocol === "https:" ||
-        (endpoint.protocol === "http:" && LOOPBACK.has(endpoint.hostname))
+        (endpoint.protocol === "http:" &&
+          plainHttp &&
+          LOOPBACK.has(endpoint.hostname))
       ) ||
       endpoint.href !== `${endpoint.origin}/`
     ) {
       throw new TypeError(
-        "S3 endpoint must be https (http only on loopback) without a path",
+        "S3 endpoint must be https (http only on loopback when allowed) without a path",
       );
     }
     if (
@@ -129,6 +182,12 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
         `S3 request timeout must be a whole number of milliseconds from 1 to ${MAX_S3_REQUEST_TIMEOUT_MS}`,
       );
     }
+    const now = config.now ?? (() => new Date());
+    if (!isConfirmed(config.capability, endpoint, now())) {
+      throw new TypeError(
+        "S3 storage capability must be confirmed by a contract test for this endpoint",
+      );
+    }
     this.endpoint = endpoint;
     this.region = config.region;
     this.bucket = config.bucket;
@@ -139,7 +198,7 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
       secretAccessKey: config.credentials.secretAccessKey,
     });
     this.fetch = config.fetch ?? globalThis.fetch;
-    this.now = config.now ?? (() => new Date());
+    this.now = now;
     this.warn =
       config.warn ?? ((message, fields) => console.warn(message, fields));
   }
@@ -166,11 +225,21 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     const path = [this.bucket, ...key];
     const storageRef = evidenceStorageRef(this.storageDomain, key);
     // One deadline for the whole call, so a slow PUT leaves the read-back
-    // only what is left of it.
+    // only what is left of it. The race ends the call even when a fetch
+    // ignores the signal, and an answer after the deadline never counts.
     const abort = new AbortController();
-    const timer = setTimeout(() => abort.abort(), this.requestTimeoutMs);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const expired = new Promise<EvidencePayloadPutResult>((resolve) => {
+      timer = setTimeout(() => {
+        abort.abort();
+        resolve(timedOut());
+      }, this.requestTimeoutMs);
+    });
     try {
-      return await this.write(input, path, bytes, storageRef, abort.signal);
+      return await Promise.race([
+        this.write(input, path, bytes, storageRef, abort.signal),
+        expired,
+      ]);
     } finally {
       clearTimeout(timer);
     }
@@ -190,7 +259,7 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     // The signer adds and signs If-None-Match: * and the SHA-256 checksum.
     const put = await this.send("PUT", path, bytes, signal);
     if (!put.ok) return this.unavailable(put.reason);
-    if (put.status === 200) return { status: "stored", storageRef };
+    if (put.status === 200) return this.verify(input, path, bytes, put, storageRef, signal);
     // 412: the key exists. 409: a concurrent conditional write to the same
     // key; it may exist by now. Either way only its bytes decide.
     if (put.status !== 412 && put.status !== 409) {
@@ -212,7 +281,7 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     ) {
       return { status: "existing", storageRef };
     }
-    this.warn("evidence payload conflict", {
+    this.log("evidence payload conflict", {
       institutionId: input.institutionId,
       evidencePackageId: input.evidencePackageId,
       segmentHash: input.segmentHash,
@@ -220,12 +289,57 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     return { status: "conflict" };
   }
 
+  /**
+   * The write proof: the echo must equal the checksum sent, and the object
+   * read back must hold the same bytes. Anything less is not `stored`; other
+   * bytes under the key are a conflict.
+   */
+  private async verify(
+    input: {
+      institutionId: string;
+      evidencePackageId: string;
+      segmentHash: string;
+    },
+    path: string[],
+    bytes: Uint8Array<ArrayBuffer>,
+    put: { checksum: string | null },
+    storageRef: string,
+    signal: AbortSignal,
+  ): Promise<EvidencePayloadPutResult> {
+    const ids = {
+      institutionId: input.institutionId,
+      evidencePackageId: input.evidencePackageId,
+      segmentHash: input.segmentHash,
+    };
+    const sent = createHash("sha256").update(bytes).digest("base64");
+    if (put.checksum === sent) {
+      const get = await this.send("GET", path, null, signal);
+      if (get.ok && get.status === 200 && get.body !== null) {
+        if (sameBytes(get.body, bytes)) return { status: "stored", storageRef };
+        this.log("evidence payload conflict", ids);
+        return { status: "conflict" };
+      }
+    }
+    // An orphan candidate: the object may or may not be there.
+    this.log("evidence payload write unverified", ids);
+    return unverified();
+  }
+
   /** Configuration faults are also logged, by fixed reason only. */
   private unavailable(reason: string): EvidencePayloadPutResult {
     if (reason === "storage_clock_skew" || reason === "storage_signature_rejected") {
-      this.warn("evidence storage refused the request signature", { reason });
+      this.log("evidence storage refused the request signature", { reason });
     }
     return { status: "unavailable", reason };
+  }
+
+  /** A failing logger neither fails the call nor carries anything out of it. */
+  private log(message: string, fields: Record<string, string>): void {
+    try {
+      this.warn(message, fields);
+    } catch {
+      // Dropped on purpose: its error may hold whatever the logger had.
+    }
   }
 
   private async send(
@@ -255,17 +369,22 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
       if (response.status === 400 || response.status === 403) {
         const reason = await errorReason(response, signal);
         if (reason) return { ok: false, reason };
-        return { ok: true, status: response.status, body: null };
+        return { ok: true, status: response.status, body: null, checksum: null };
       }
       if (method === "PUT" || response.status !== 200) {
         // Not awaited: a cancel that never settles must not outlast the deadline.
         void response.body?.cancel().catch(() => undefined);
-        return { ok: true, status: response.status, body: null };
+        return {
+          ok: true,
+          status: response.status,
+          body: null,
+          checksum: response.headers.get("x-amz-checksum-sha256"),
+        };
       }
       const read = await readLimited(response, MAX_EVIDENCE_SEGMENT_BYTES, signal);
       return read === null
         ? { ok: false, reason: "storage_object_too_large" }
-        : { ok: true, status: 200, body: read };
+        : { ok: true, status: 200, body: read, checksum: null };
     } catch {
       return {
         ok: false,
@@ -285,6 +404,32 @@ function parseEndpoint(value: string): URL | null {
   } catch {
     return null;
   }
+}
+
+/** Both capabilities confirmed for exactly this endpoint, on a real past date. */
+function isConfirmed(value: unknown, endpoint: URL, now: Date): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const c = value as Partial<Record<keyof S3StorageCapability, unknown>>;
+  if (
+    c.conditionalWrite !== "verified" ||
+    c.checksumEcho !== "verified" ||
+    typeof c.provider !== "string" ||
+    !CAPABILITY_LABEL.test(c.provider) ||
+    typeof c.contractTest !== "string" ||
+    !CAPABILITY_LABEL.test(c.contractTest) ||
+    typeof c.endpoint !== "string" ||
+    parseEndpoint(c.endpoint)?.href !== endpoint.href ||
+    typeof c.verifiedOn !== "string" ||
+    !ISO_DATE.test(c.verifiedOn)
+  ) {
+    return false;
+  }
+  const day = new Date(`${c.verifiedOn}T00:00:00Z`);
+  return (
+    !Number.isNaN(day.getTime()) &&
+    day.toISOString().startsWith(c.verifiedOn) &&
+    day.getTime() <= now.getTime()
+  );
 }
 
 /** The fixed reason for a known S3 error code, or null; the body never leaves. */

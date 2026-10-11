@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { inspect } from "node:util";
 
 import { describe, expect, it, vi } from "vitest";
@@ -24,7 +26,8 @@ type Call = { method: string; origin: string; path: string; headers: Headers };
 
 /**
  * In-process S3 stand-in: conditional create is atomic, the signed payload
- * hash and the SHA-256 checksum are checked against the bytes received.
+ * hash and the SHA-256 checksum are checked against the bytes received, and
+ * a stored write echoes the checksum as S3 does.
  * `hook` may answer a call itself before the store sees it.
  */
 function fakeS3(
@@ -65,24 +68,39 @@ function fakeS3(
       }
       if (objects.has(call.path)) return new Response(null, { status: 412 });
       objects.set(call.path, body.slice());
-      return new Response(null, { status: 200 });
+      return new Response(null, {
+        status: 200,
+        headers: { "x-amz-checksum-sha256": checksum },
+      });
     },
   );
   return { objects, calls, fetch };
 }
+
+const capabilityOf = (endpoint: string) => ({
+  provider: "fake-s3",
+  endpoint,
+  conditionalWrite: "verified" as const,
+  checksumEcho: "verified" as const,
+  verifiedOn: "2026-10-11",
+  contractTest: "unit/fake-s3",
+});
 
 function storeWith(
   fetch: typeof globalThis.fetch,
   overrides: Partial<S3EvidencePayloadStoreConfig> = {},
 ) {
   const warn = vi.fn();
+  const endpoint = overrides.endpoint ?? "http://127.0.0.1:9100";
   const store = new S3EvidencePayloadStore({
-    endpoint: "http://127.0.0.1:9100",
+    endpoint,
     region: "eu-central-1",
     bucket: "ductus-evidence",
     storageDomain: "fak-a-eu-1",
     credentials: { accessKeyId: "fake-id", secretAccessKey: "fake-secret" },
     requestTimeoutMs: 1_000,
+    allowPlainHttpOnLoopback: true,
+    capability: capabilityOf(endpoint),
     fetch,
     warn,
     ...overrides,
@@ -136,7 +154,7 @@ describe("S3EvidencePayloadStore", () => {
       status: "existing",
       storageRef: ref,
     });
-    expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "PUT", "GET"]);
+    expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET", "PUT", "GET"]);
     expect(s3.calls[0].path).toBe(keyOf(PACKAGE, hash));
     expect(s3.objects.size).toBe(1);
   });
@@ -170,7 +188,7 @@ describe("S3EvidencePayloadStore", () => {
       status: "stored",
       storageRef: `fak-a-eu-1:v2/${OTHER_INSTITUTION}/${PACKAGE}/${hash}.json`,
     });
-    expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "PUT"]);
+    expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET", "PUT", "GET"]);
     expect([...s3.objects.keys()].sort()).toEqual(
       [keyOf(PACKAGE, hash), keyOf(PACKAGE, hash, OTHER_INSTITUTION)].sort(),
     );
@@ -281,7 +299,7 @@ describe("S3EvidencePayloadStore", () => {
   });
 
   it("does not wait on a response body whose cancel never settles", async () => {
-    const stuck = (status: number, bytes = 0) =>
+    const stuck = (status: number, bytes = 0, headers: HeadersInit = {}) =>
       new Response(
         new ReadableStream<Uint8Array>({
           start: (controller) => {
@@ -289,9 +307,19 @@ describe("S3EvidencePayloadStore", () => {
           },
           cancel: () => new Promise<void>(() => {}),
         }),
-        { status },
+        { status, headers },
       );
-    const stored = fakeS3(() => Promise.resolve(stuck(200)));
+    const stored: ReturnType<typeof fakeS3> = fakeS3((call) => {
+      if (call.method !== "PUT") return null;
+      stored.objects.set(call.path, new TextEncoder().encode(payload("a")));
+      return Promise.resolve(
+        stuck(200, 0, {
+          "x-amz-checksum-sha256": createHash("sha256")
+            .update(payload("a"))
+            .digest("base64"),
+        }),
+      );
+    });
     await expect(
       put(storeWith(stored.fetch, { requestTimeoutMs: 50 }).store, "a"),
     ).resolves.toEqual({ status: "stored", storageRef: expect.any(String) });
@@ -458,7 +486,21 @@ describe("S3EvidencePayloadStore", () => {
     ).toThrow(TypeError);
   });
 
-  it.each(["192.168.5.4", "10.0.0.1", "ductus..evidence"])(
+  it.each([
+    "192.168.5.4",
+    "10.0.0.1",
+    "ductus..evidence",
+    "xn--ductus",
+    "sthree-ductus",
+    "amzn-s3-demo-ductus",
+    "ductus-s3alias",
+    "ductus--ol-s3",
+    "ductus.mrap",
+    "ductus--x-s3",
+    "ductus--table-s3",
+    "ductus.-evidence",
+    "ductus-.evidence",
+  ])(
     "refuses to start with a bucket name storage cannot hold: %s",
     (bucket) => {
       expect(() => storeWith(fakeS3().fetch, { bucket })).toThrow(
@@ -494,15 +536,15 @@ describe("S3EvidencePayloadStore", () => {
     await put(store, "a");
     await put(store, "a");
 
-    const [first, second, get] = s3.calls;
-    for (const call of [first, second]) {
+    expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET", "PUT", "GET"]);
+    for (const call of s3.calls) {
       expect(signedHeadersOf(call)).toBe(
-        "content-type;host;if-none-match;x-amz-checksum-sha256;x-amz-content-sha256;x-amz-date",
+        call.method === "PUT"
+          ? "content-type;host;if-none-match;x-amz-checksum-sha256;x-amz-content-sha256;x-amz-date"
+          : "host;x-amz-content-sha256;x-amz-date",
       );
+      expect(call.headers.has("if-none-match")).toBe(call.method === "PUT");
     }
-    expect(get.method).toBe("GET");
-    expect(signedHeadersOf(get)).toBe("host;x-amz-content-sha256;x-amz-date");
-    expect(get.headers.has("if-none-match")).toBe(false);
   });
 
   it("answers a clock skew with a reason that names it, never conflict (S9)", async () => {
@@ -692,7 +734,7 @@ describe("S3EvidencePayloadStore", () => {
     await put(store, "a");
     await put(store, "a");
 
-    expect(s3.calls).toHaveLength(3);
+    expect(s3.calls).toHaveLength(4);
     expect(new Set(s3.calls.map((c) => c.origin))).toEqual(
       new Set(["https://s3.example.eu:8443"]),
     );
@@ -716,6 +758,10 @@ describe("S3EvidencePayloadStore", () => {
     ["a key id with a slash", { credentials: { accessKeyId: "a/b", secretAccessKey: "s" } }],
     ["an empty key id", { credentials: { accessKeyId: "", secretAccessKey: "s" } }],
     ["an empty secret", { credentials: { accessKeyId: "a", secretAccessKey: "" } }],
+    ["a blank secret", { credentials: { accessKeyId: "a", secretAccessKey: " " } }],
+    ["a newline secret", { credentials: { accessKeyId: "a", secretAccessKey: "\n" } }],
+    ["a secret with a line break", { credentials: { accessKeyId: "a", secretAccessKey: "a\nb" } }],
+    ["a secret with a trailing newline", { credentials: { accessKeyId: "a", secretAccessKey: "ab\n" } }],
   ])("refuses to start with %s (S10)", (_, overrides) => {
     expect(() => storeWith(fakeS3().fetch, overrides)).toThrow(TypeError);
   });
@@ -742,5 +788,262 @@ describe("S3EvidencePayloadStore", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+  it("allows plain http on loopback only when the configuration asks for it", () => {
+    expect(() =>
+      storeWith(fakeS3().fetch, { allowPlainHttpOnLoopback: false }),
+    ).toThrow(TypeError);
+    expect(() =>
+      storeWith(fakeS3().fetch, { allowPlainHttpOnLoopback: undefined }),
+    ).toThrow(TypeError);
+    expect(() =>
+      storeWith(fakeS3().fetch, {
+        endpoint: "https://s3.example.eu",
+        allowPlainHttpOnLoopback: false,
+      }),
+    ).not.toThrow();
+    vi.stubEnv("NODE_ENV", "production");
+    try {
+      expect(() => storeWith(fakeS3().fetch)).toThrow(TypeError);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("answers storage_timeout when fetch ignores the abort signal", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const s3 = fakeS3(() => new Promise<Response>(() => undefined));
+      const { store } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+      let result: unknown;
+      void put(store, "a").then((r) => (result = r));
+
+      await vi.advanceTimersByTimeAsync(20);
+      expect(result).toEqual({ status: "unavailable", reason: "storage_timeout" });
+      expect(s3.fetch.mock.calls[0][1]?.signal?.aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("never answers stored for a write that succeeds after the deadline", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const s3 = fakeS3(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(() => resolve(new Response(null, { status: 200 })), 80),
+          ),
+      );
+      const { store } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+      let result: unknown;
+      void put(store, "a").then((r) => (result = r));
+
+      await vi.advanceTimersByTimeAsync(100);
+      expect(result).toEqual({ status: "unavailable", reason: "storage_timeout" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each(["conflict", "signature"])(
+    "keeps a throwing logger from failing or leaking out of the call (%s)",
+    async (kind) => {
+      const canary = ["kanarinac", "logger", Date.now().toString(36)].join("-");
+      const s3 = fakeS3((call) =>
+        kind === "signature"
+          ? s3Error(403, "SignatureDoesNotMatch")
+          : call.method === "PUT"
+            ? Promise.resolve(new Response(null, { status: 412 }))
+            : Promise.resolve(new Response(payload("b"))),
+      );
+      const { store } = storeWith(s3.fetch, {
+        warn: () => {
+          throw new Error(canary, { cause: new Error(canary) });
+        },
+      });
+
+      const result = await put(store, "a");
+      expect(result).toEqual(
+        kind === "signature"
+          ? { status: "unavailable", reason: "storage_signature_rejected" }
+          : { status: "conflict" },
+      );
+      expect(inspect(result, { depth: Infinity })).not.toContain(canary);
+    },
+  );
+});
+
+describe("write proof (#155, S1 to S6)", () => {
+  const unverified = { status: "unavailable", reason: "storage_write_unverified" };
+  const checksumOf = (text: string) =>
+    createHash("sha256").update(payload(text)).digest("base64");
+  /** Stores the bytes as the fake would, then answers 200 with `headers`. */
+  const writtenWith = (
+    s3: ReturnType<typeof fakeS3>,
+    call: Call,
+    headers: Record<string, string>,
+    text = "a",
+  ) => {
+    s3.objects.set(call.path, new TextEncoder().encode(payload(text)));
+    return Promise.resolve(new Response(null, { status: 200, headers }));
+  };
+
+  it("S1: an empty 200 from a server that stored nothing is not stored", async () => {
+    const methods: string[] = [];
+    const server = createServer((request, response) => {
+      methods.push(request.method ?? "");
+      request.resume();
+      request.on("end", () => response.writeHead(200).end());
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const { port } = server.address() as AddressInfo;
+      const { store } = storeWith(globalThis.fetch, {
+        endpoint: `http://127.0.0.1:${port}`,
+      });
+      await expect(put(store, "a")).resolves.toEqual(unverified);
+      expect(methods).toEqual(["PUT"]);
+    } finally {
+      server.closeAllConnections();
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+
+  it.each([
+    ["no checksum echo", {}],
+    ["the checksum of other bytes", { "x-amz-checksum-sha256": checksumOf("b") }],
+    ["a malformed checksum", { "x-amz-checksum-sha256": "nije-zbroj" }],
+  ])("S2: a 200 with %s is not stored", async (_, headers) => {
+    const s3: ReturnType<typeof fakeS3> = fakeS3((call) =>
+      call.method === "PUT" ? writtenWith(s3, call, headers) : null,
+    );
+    const { store, warn } = storeWith(s3.fetch);
+
+    await expect(put(store, "a")).resolves.toEqual(unverified);
+    await expect(put(store, "a")).resolves.not.toMatchObject({ status: "stored" });
+    // The orphan candidate signal: ids and the hash only.
+    expect(warn).toHaveBeenCalledWith("evidence payload write unverified", {
+      institutionId: INSTITUTION,
+      evidencePackageId: PACKAGE,
+      segmentHash: hashOf(payload("a")),
+    });
+  });
+
+  it.each([
+    ["not found", () => Promise.resolve(new Response(null, { status: 404 }))],
+    ["a server error", () => Promise.resolve(new Response(null, { status: 500 }))],
+    ["a failed request", () => Promise.reject(new TypeError("fetch failed"))],
+  ])("S3: an echoed write whose read-back is %s is not stored", async (_, get) => {
+    const s3 = fakeS3((call) =>
+      call.method === "PUT"
+        ? Promise.resolve(
+            new Response(null, {
+              status: 200,
+              headers: { "x-amz-checksum-sha256": checksumOf("a") },
+            }),
+          )
+        : get(),
+    );
+    const { store, warn } = storeWith(s3.fetch);
+
+    await expect(put(store, "a")).resolves.toEqual(unverified);
+    expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
+    expect(warn).toHaveBeenCalledWith(
+      "evidence payload write unverified",
+      expect.objectContaining({ segmentHash: hashOf(payload("a")) }),
+    );
+  });
+
+  it("S4: an echoed write that reads back other bytes is a conflict", async () => {
+    const s3: ReturnType<typeof fakeS3> = fakeS3((call) =>
+      call.method === "PUT"
+        ? writtenWith(s3, call, { "x-amz-checksum-sha256": checksumOf("a") }, "b")
+        : null,
+    );
+    const { store, warn } = storeWith(s3.fetch);
+
+    await expect(put(store, "a")).resolves.toEqual({ status: "conflict" });
+    expect(warn).toHaveBeenCalledWith("evidence payload conflict", {
+      institutionId: INSTITUTION,
+      evidencePackageId: PACKAGE,
+      segmentHash: hashOf(payload("a")),
+    });
+  });
+
+  const confirmed = capabilityOf("http://127.0.0.1:9100");
+  it.each<[string, unknown]>([
+    ["missing", undefined],
+    ["an unconfirmed conditional write", { ...confirmed, conditionalWrite: "assumed" }],
+    ["no checksum echo confirmation", { ...confirmed, checksumEcho: undefined }],
+    ["another endpoint", { ...confirmed, endpoint: "http://localhost:9100" }],
+    ["an impossible month", { ...confirmed, verifiedOn: "2026-13-01" }],
+    ["a day that rolls over", { ...confirmed, verifiedOn: "2026-02-30" }],
+    ["a future date", { ...confirmed, verifiedOn: "9999-01-01" }],
+    ["no provider", { ...confirmed, provider: "" }],
+    ["no contract test", { ...confirmed, contractTest: "" }],
+  ])(
+    "S5: storage that ignores the condition never runs without its capability confirmation (%s)",
+    async (_, capability) => {
+      // Overwrites whatever is there and answers as a correct store would:
+      // no answer within one request tells it apart, so only the lock does.
+      const objects = new Map<string, Uint8Array>();
+      objects.set("x", new TextEncoder().encode(payload("prvi")));
+      const overwriting = vi.fn(async (url: URL | string | Request, init?: RequestInit) => {
+        const body = init?.body as Uint8Array;
+        objects.set(new URL(String(url)).pathname, body.slice());
+        return new Response(null, {
+          status: 200,
+          headers: {
+            "x-amz-checksum-sha256": createHash("sha256").update(body).digest("base64"),
+          },
+        });
+      });
+
+      expect(() =>
+        storeWith(overwriting, {
+          capability: capability as S3EvidencePayloadStoreConfig["capability"],
+        }),
+      ).toThrow(TypeError);
+      expect(overwriting).not.toHaveBeenCalled();
+      expect(objects.size).toBe(1);
+    },
+  );
+
+  it("S5: the confirmation error names no configured value", () => {
+    const secretish = "kanarinac-konfiguracija";
+    let message = "";
+    try {
+      storeWith(fakeS3().fetch, {
+        capability: { ...confirmed, provider: `${secretish} `, contractTest: secretish },
+      });
+    } catch (error) {
+      message = String(error);
+    }
+    expect(message).not.toBe("");
+    expect(message).not.toContain(secretish);
+  });
+
+  it("S6: a read-back that never answers ends as storage_timeout", async () => {
+    const s3: ReturnType<typeof fakeS3> = fakeS3((call, signal) =>
+      call.method === "PUT"
+        ? writtenWith(s3, call, { "x-amz-checksum-sha256": checksumOf("a") })
+        : hang(signal),
+    );
+    const { store } = storeWith(s3.fetch, { requestTimeoutMs: 30 });
+
+    await expect(put(store, "a")).resolves.toEqual({
+      status: "unavailable",
+      reason: "storage_timeout",
+    });
+    expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
+  });
+
+  it("verifies every write: a stored answer always follows a read-back", async () => {
+    const s3 = fakeS3();
+    const { store } = storeWith(s3.fetch);
+
+    await expect(put(store, "a")).resolves.toMatchObject({ status: "stored" });
+    expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
   });
 });

@@ -67,7 +67,12 @@ const accessKeyId = fc.string({
   minLength: 1,
   maxLength: 40,
 });
-const secretAccessKey = fc.string({ minLength: 1, maxLength: 60 });
+// Every secret the configuration lock accepts: visible ASCII, no space.
+const secretAccessKey = fc.string({
+  unit: fc.integer({ min: 0x21, max: 0x7e }).map((code) => String.fromCharCode(code)),
+  minLength: 1,
+  maxLength: 60,
+});
 const now = fc.date({ min: new Date("1970-01-01T00:00:00Z"), max: new Date("9999-12-31T23:59:59Z"), noInvalidDate: true });
 
 test.prop([

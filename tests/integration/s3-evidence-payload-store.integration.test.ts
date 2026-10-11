@@ -53,7 +53,12 @@ async function raw(
     headers: signed.headers,
     redirect: "error",
   });
-  return { status: response.status, text: await response.text() };
+  return {
+    status: response.status,
+    text: await response.text(),
+    sentChecksum: signed.headers["x-amz-checksum-sha256"],
+    echo: response.headers.get("x-amz-checksum-sha256"),
+  };
 }
 
 const keyOf = (input: {
@@ -68,6 +73,16 @@ const keyOf = (input: {
   `${input.segmentHash}.json`,
 ];
 
+// This contract test is what the confirmation below names.
+const capability = {
+  provider: "rustfs-local",
+  endpoint: S3_ENDPOINT,
+  conditionalWrite: "verified",
+  checksumEcho: "verified",
+  verifiedOn: "2026-10-11",
+  contractTest: "local-stack/s3-evidence-payload-store.integration",
+} as const;
+
 const store = new S3EvidencePayloadStore({
   endpoint: S3_ENDPOINT,
   region,
@@ -75,6 +90,8 @@ const store = new S3EvidencePayloadStore({
   storageDomain,
   credentials,
   requestTimeoutMs: 10_000,
+  allowPlainHttpOnLoopback: true,
+  capability,
 });
 
 function segment(text: string) {
@@ -108,6 +125,19 @@ beforeAll(async () => {
 }, 30_000);
 
 describe("S3EvidencePayloadStore against the local object store", () => {
+  it("echoes the checksum of a stored write, the proof the adapter needs (#155)", async () => {
+    const input = segment("echo");
+    const response = await raw(
+      keyOf(input),
+      new TextEncoder().encode(input.canonicalPayload),
+    );
+    expect(response.status).toBe(200);
+    expect(response.echo).toBe(response.sentChecksum);
+    await expect(store.putImmutable(input)).resolves.toMatchObject({
+      status: "existing",
+    });
+  });
+
   it("stores once, then answers existing for the same bytes", async () => {
     const input = segment("a");
     await expect(store.putImmutable(input)).resolves.toMatchObject({
@@ -207,6 +237,8 @@ describe("S3EvidencePayloadStore against the local object store", () => {
       storageDomain,
       credentials,
       requestTimeoutMs: 10_000,
+      allowPlainHttpOnLoopback: true,
+      capability,
       now: () => new Date(Date.now() + 3_600_000),
       warn: () => undefined,
     });
@@ -227,6 +259,8 @@ describe("S3EvidencePayloadStore against the local object store", () => {
       storageDomain,
       credentials: { ...credentials, secretAccessKey: "not-the-local-secret" },
       requestTimeoutMs: 10_000,
+      allowPlainHttpOnLoopback: true,
+      capability,
       warn: () => undefined,
     });
     await expect(wrong.putImmutable(segment("g"))).resolves.toEqual({

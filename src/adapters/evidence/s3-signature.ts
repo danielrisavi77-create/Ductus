@@ -34,6 +34,9 @@ const HEADER_VALUE = /^[\x20-\x7e]{0,1024}$/;
 const PATH_SEGMENT = /^[A-Za-z0-9._-]{1,255}$/;
 const REGION = /^[a-z0-9-]{1,32}$/;
 const ACCESS_KEY_ID = /^[A-Za-z0-9_-]{1,128}$/;
+// Visible ASCII only: a blank value or a line break kept from a file or an
+// environment variable stops startup instead of failing every signature.
+const SECRET_ACCESS_KEY = /^[\x21-\x7e]{1,128}$/;
 const AMZ_DATE = /^\d{8}T\d{6}Z$/;
 
 /**
@@ -56,7 +59,7 @@ export function assertS3SigningConfig(
     typeof accessKeyId !== "string" ||
     !ACCESS_KEY_ID.test(accessKeyId) ||
     typeof secretAccessKey !== "string" ||
-    secretAccessKey.length === 0
+    !SECRET_ACCESS_KEY.test(secretAccessKey)
   ) {
     throw new TypeError("S3 credentials are not valid");
   }

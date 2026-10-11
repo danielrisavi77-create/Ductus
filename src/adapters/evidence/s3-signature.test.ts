@@ -227,11 +227,14 @@ describe("signS3Request: input it refuses (plan S1 to S10)", () => {
     },
   );
 
-  it("refuses an empty secret (S10)", () => {
-    expect(() =>
-      assertS3SigningConfig("us-east-1", { ...credentials, secretAccessKey: "" }),
-    ).toThrow(TypeError);
-  });
+  it.each(["", " ", "\n", "a\nb", "ab\n", "a\tb", "a".repeat(129)])(
+    "refuses the secret %j (S10)",
+    (secretAccessKey) => {
+      expect(() =>
+        assertS3SigningConfig("us-east-1", { ...credentials, secretAccessKey }),
+      ).toThrow(TypeError);
+    },
+  );
 });
 
 describe("signS3Request: what it signs", () => {
