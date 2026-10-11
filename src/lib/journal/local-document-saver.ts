@@ -267,19 +267,16 @@ export class LocalDocumentSaver {
       this.durable = document;
       this.rows = pending.length;
       this.chars = chars;
-      if (basis) {
-        // The chosen text is not written yet, so nothing is claimed saved
-        // (#206 A1), and a candidate left from before the choice is dropped:
-        // the chosen text supersedes it (#206 MANJE 3). One proposed while
-        // this read ran is newer than the choice and stays (#206 r6 finding 2).
-        if (this.next && this.next.gen < basis.gen) this.next = null;
-        this.state = "EDITING";
-      } else {
-        // Step 1 has no server: whatever meta says, the most this tab can
-        // claim is that the bytes are on this device.
-        // Text typed before or during the read is not what the journal holds.
-        this.state = this.durable && this.gen === this.cleanGen && !this.next ? "LOCAL_DURABLE" : "EDITING";
-      }
+      // A candidate left from before a `resume()` choice is dropped: the
+      // chosen text supersedes it (#206 MANJE 3). One proposed while this read
+      // ran is newer than the choice and stays (#206 r6 finding 2).
+      if (basis && this.next && this.next.gen < basis.gen) this.next = null;
+      // Step 1 has no server: whatever meta says, the most this tab can claim
+      // is that the bytes are on this device, and only for the text it shows.
+      // Text typed before or during the read is not what the journal holds;
+      // nor is a chosen text not written yet, as `resume()` bumped `gen`
+      // (#206 A1). Written already at that gen, it is (#206 qa206d M-1).
+      this.state = this.durable && this.gen === this.cleanGen && !this.next ? "LOCAL_DURABLE" : "EDITING";
       this.emit();
       return { kind: "ready", document: this.durable ?? emptyDocument() };
     } catch (error) {
@@ -323,7 +320,10 @@ export class LocalDocumentSaver {
     this.resuming += 1;
     try {
       const result = await this.loadFor(basis);
-      if (result.kind === "ready" && !this.halted) {
+      // Queued even if an overlapping load halted this saver after the ready
+      // read: the chosen text then waits like any candidate proposed while
+      // halted, and the next ready reload writes it (#206 qa206d V-1).
+      if (result.kind === "ready") {
         if (this.queuedGen < gen) await this.queue({ doc, gen });
         else await this.settled();
       }
@@ -372,7 +372,11 @@ export class LocalDocumentSaver {
     return this.flight ?? Promise.resolve();
   }
 
-  /** Resolves once nothing is queued or in flight (`pagehide`, tests). */
+  /**
+   * Resolves once nothing is in flight (`pagehide`, tests). A halted saver
+   * keeps its candidate queued past this, and its state meanwhile never says
+   * LOCAL_DURABLE.
+   */
   async settled(): Promise<void> {
     while (this.flight) await this.flight;
   }
@@ -459,8 +463,19 @@ export class LocalDocumentSaver {
     this.emit();
   }
 
+  /**
+   * A listener that throws never interrupts saving: the error is thrown again
+   * outside this call, so it is still reported, while the candidate already
+   * taken from `next` is written (#206 Codex r4240240768).
+   */
   private emit(): void {
     const snapshot = this.snapshot();
-    for (const listener of this.listeners) listener(snapshot);
+    for (const listener of this.listeners) {
+      try {
+        listener(snapshot);
+      } catch (error) {
+        queueMicrotask(() => { throw error; });
+      }
+    }
   }
 }

@@ -5,7 +5,7 @@
  * 5/6/9 are E2E in step 1b. All text here is synthetic.
  */
 import { readFileSync } from "node:fs";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import Dexie from "dexie";
 import { indexedDB, IDBKeyRange } from "fake-indexeddb";
 import {
@@ -1389,6 +1389,138 @@ describe("LocalDocumentSaver: resume() contract (#206 r6)", () => {
   });
 });
 
+describe("LocalDocumentSaver: a halt racing a ready read (#206 qa206d)", () => {
+  const closed = () => Object.assign(new Error("closed"), { name: "DatabaseClosedError" });
+  const quota = () => Object.assign(new Error("full"), { name: "QuotaExceededError" });
+  /** Lets every pending promise callback and macrotask run. */
+  const drained = async () => {
+    for (let i = 0; i < 100; i += 1) await new Promise((resolve) => setImmediate(resolve));
+  };
+  function plain(doc: CanonicalDocument | null | undefined): string {
+    const node = doc?.nodes[0];
+    return node && "children" in node ? node.children.map((c) => ("text" in c ? c.text : "")).join("") : "";
+  }
+
+  // `delay` microtasks after resume()'s ready read, the read of an
+  // overlapping load() fails and halts the saver: before (0, 1) or after the
+  // chosen text was queued, the choice must reach the journal.
+  for (const delay of [0, 1, 2, 3, 5, 10, 20]) {
+    it(`V-1 (D1, delay ${delay}): resume()'s choice survives an overlapping load() failing after its ready read`, async () => {
+      const at = scope();
+      const real = journal(at);
+      let split = false;
+      let calls = 0;
+      let failLoad = () => {};
+      const a = saver(patched(real, {
+        read: (id: string) => {
+          if (!split) return real.read(id);
+          calls += 1;
+          if (calls === 1) return new Promise((_, reject) => { failLoad = () => reject(closed()); });
+          return real.read(id).then((contents) => {
+            let later = Promise.resolve();
+            for (let i = 0; i < delay; i += 1) later = later.then(() => undefined);
+            void later.then(() => failLoad());
+            return contents;
+          });
+        },
+      }));
+      await a.load();
+      await type(a, "prvi");
+      const b = saver(journal(at));
+      await b.load();
+      await type(b, "tuđi");
+      await type(a, "moj noviji");
+      expect(await a.load()).toMatchObject({ kind: "recovery", reason: "stale" });
+      split = true;
+      const overlapping = a.load();
+      const resumed = a.resume(text("moj noviji"));
+      expect(await overlapping).toEqual({ kind: "unavailable" });
+      expect((await resumed).kind).toBe("ready");
+      split = false;
+      await a.settled();
+      expect(a.snapshot()).toMatchObject({ state: "ERROR", failure: "unavailable" });
+      expect((await a.load()).kind).toBe("ready");
+      await a.settled();
+      await drained();
+      expect(plain((await journal(at).read(DOC)).snapshot?.document)).toBe("moj noviji");
+      expect(a.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+      const fresh = await saver(journal(at)).load();
+      expect(fresh.kind === "ready" && plain(fresh.document)).toBe("moj noviji");
+    });
+  }
+
+  it("load(): text held while halted survives a second load() failing after a ready one", async () => {
+    const at = scope();
+    const real = journal(at);
+    let reads = 0;
+    let failFirst = () => {};
+    const target = saver(patched(real, {
+      read: (id: string) => {
+        reads += 1;
+        if (reads === 2) return Promise.reject(closed());
+        if (reads === 3) return new Promise((_, reject) => { failFirst = () => reject(closed()); });
+        if (reads === 4) return real.read(id).then((contents) => { void Promise.resolve().then(() => failFirst()); return contents; });
+        return real.read(id);
+      },
+    }));
+    expect((await target.load()).kind).toBe("ready");
+    await type(target, "prije");
+    expect(await target.load()).toEqual({ kind: "unavailable" });
+    await type(target, "za vrijeme greške");
+    const first = target.load();
+    const second = target.load();
+    expect((await second).kind).toBe("ready");
+    expect(await first).toEqual({ kind: "unavailable" });
+    await target.settled();
+    expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "unavailable" });
+    expect(plain((await journal(at).read(DOC)).snapshot?.document)).toBe("prije");
+    expect((await target.load()).kind).toBe("ready");
+    await target.settled();
+    expect(plain((await journal(at).read(DOC)).snapshot?.document)).toBe("za vrijeme greške");
+    expect(target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+  });
+
+  it("M-1 (D2): resume() whose text a same-gen proposal already wrote shows it saved", async () => {
+    const at = scope();
+    const real = journal(at);
+    let mode: "ok" | "quota" | "gate" = "ok";
+    let open = () => {};
+    const a = saver(patched(real, {
+      saveLocal: async (...args: Parameters<AtomicDexieJournal["saveLocal"]>) => {
+        if (mode === "quota") throw quota();
+        if (mode === "gate") {
+          mode = "ok";
+          await new Promise<void>((resolve) => { open = resolve; });
+        }
+        return real.saveLocal(...args);
+      },
+    }));
+    await a.load();
+    await type(a, "prvi");
+    mode = "quota";
+    await type(a, "drugi");
+    expect(a.snapshot().failure).toBe("quota");
+    expect(await a.load()).toMatchObject({ kind: "recovery", reason: "unsaved" });
+    mode = "gate";
+    a.edit();
+    const written = a.propose(text("drugi"));
+    await drained();
+    const states = record(a);
+    const resumed = a.resume(text("drugi"));
+    // The editor's debounce fires after the click, at the choice's gen.
+    const proposed = a.propose(text("drugi"));
+    open();
+    expect((await resumed).kind).toBe("ready");
+    await written;
+    await proposed;
+    await a.settled();
+    await drained();
+    expect(plain((await journal(at).read(DOC)).snapshot?.document)).toBe("drugi");
+    expect(states.at(-1)?.state).toBe("LOCAL_DURABLE");
+    expect(a.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+  });
+});
+
 describe("LocalDocumentSaver: stored text (#197 attack 10)", () => {
   it("10: a lone surrogate and NUL are stored in a form the server accepts", async () => {
     const at = scope();
@@ -1398,6 +1530,32 @@ describe("LocalDocumentSaver: stored text (#197 attack 10)", () => {
     const stored = (await journal(at).read(DOC)).snapshot!.document.nodes[0]!.children[0]!.text;
     expect(stored).toBe(storableText("a\uD800b\u0000c"));
     expect(stored).not.toMatch(/\u0000/);
+  });
+});
+
+describe("LocalDocumentSaver: listeners (#206 Codex r4240240768)", () => {
+  it("a listener that throws neither stops the save nor hides its error", async () => {
+    const at = scope();
+    const target = saver(journal(at));
+    await target.load();
+    const states = record(target);
+    const failure = new Error("izmišljeni kvar pretplatnika");
+    target.subscribe((s) => { if (s.state === "SAVING_LOCAL") throw failure; });
+    // Dexie also queues microtasks: they run as before, and only what one
+    // throws is caught here instead of failing the run.
+    const rethrown: unknown[] = [];
+    const queue = globalThis.queueMicrotask.bind(globalThis);
+    const spy = vi.spyOn(globalThis, "queueMicrotask").mockImplementation((callback) => {
+      queue(() => { try { callback(); } catch (error) { rethrown.push(error); } });
+    });
+    try {
+      await type(target, "spremljeno unatoč kvaru");
+    } finally {
+      spy.mockRestore();
+    }
+    expect(rethrown).toEqual([failure]);
+    expect(states.map((s) => s.state)).toEqual(["SAVING_LOCAL", "LOCAL_DURABLE"]);
+    expect((await journal(at).read(DOC)).snapshot!.document).toEqual(text("spremljeno unatoč kvaru"));
   });
 });
 
