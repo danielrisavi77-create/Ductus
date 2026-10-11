@@ -692,6 +692,10 @@ test("review 6103532187: a later sentence with its own head or full SHA counts i
     `- **#10** head \`${H1}\` → \`claude:reviewC\`. Uz to ${H2} za #20.`, // own full SHA, no head word
     `- **#10** head \`${H1}\` → \`claude:reviewC\`. Rok je do 10. 10. pa #20 head 2222222.`, // date, short SHA
     `- **#10** head \`${H1}\` → \`claude:reviewC\`. Neovisan o #30! Zatim #20 head 2222222 isto? Bez #40.`, // only its own sentence counts
+    `- **#10** head \`${H1}\` → \`claude:reviewC\`. Isto #20 na headu 2222222.`, // review 6103706823: case endings
+    `- **#10** head \`${H1}\` → \`claude:reviewC\`. Isto #20 bez heada 2222222.`,
+    `- **#10** head \`${H1}\` → \`claude:reviewC\`. Isto #20 na Headu 2222222.`, // any letter case
+    `- **#10** head \`${H1}\` → \`claude:reviewC\`. Isto #20, HEAD 2222222.`,
   ];
   for (const line of lines) {
     const w = world();
@@ -711,6 +715,9 @@ test("review 6103532187: a later sentence without its own head or full SHA stays
     `- **#10** head \`${H1}\` → \`claude:reviewC\`. Rok je do 10. 10. pa #20 nakon toga.`,
     `- **#10** head \`${H1}\` → \`claude:reviewC\`. Vidi #20 (commit 2222222).`,
     `- **#10** head \`${H1}\` → \`claude:reviewC\`. Vidi #20 i commit 2222222.`, // a short SHA alone is not a head
+    `- **#10** head \`${H1}\` → \`claude:reviewC\`. Vidi #20, ahead 2222222.`, // review 6103706823: "head" only inside a word
+    `- **#10** head \`${H1}\` → \`claude:reviewC\`. Vidi #20, header 2222222.`,
+    `- **#10** head \`${H1}\` → \`claude:reviewC\`. Vidi #20, overheadu 2222222.`,
   ];
   for (const line of lines) {
     assert.deepEqual(queueItems([queue(line, 40)]).map((i) => [i.number, i.head, i.slots, i.loose]), [[10, H1, ["claude:reviewC"], undefined]], line);
@@ -720,4 +727,95 @@ test("review 6103532187: a later sentence without its own head or full SHA stays
     w.comments.set(87, [queue(line, 40)]);
     assert.deepEqual((await check(w)).of("red-87").filter((t) => / #20/.test(t)), [], line);
   }
+});
+
+// Mutation pass over classify and its patterns (review 6103706823): one line per case a surviving mutation got wrong.
+const AB = "ab".repeat(20);
+const CD = "cd".repeat(20);
+const D64 = "e".repeat(64); // a SHA-256 digest is not a commit SHA
+test("classify: head, SHA, slot, sentence and clause boundaries, one line each", () => {
+  const A = (head, slots) => [10, head, slots, null];
+  const L = (why) => [10, null, [], why];
+  const lines = [
+    // the head before the arrow
+    [`#10 head z${H1} → \`claude:rev\``, A(null, ["claude:rev"])], // longer than a SHA
+    [`#10 head ${H1}z → \`claude:rev\``, A(null, ["claude:rev"])],
+    [`#10 head ${"g".repeat(40)} → \`claude:rev\``, A(null, ["claude:rev"])], // not hex
+    [`#10 head ${AB.toUpperCase()} → \`claude:rev\``, A(AB, ["claude:rev"])], // any case, stored lower
+    [`#10 Head ${H1} → \`claude:rev\``, A(H1, ["claude:rev"])],
+    [`#10 na headu ${H1} → \`claude:rev\``, A(H1, ["claude:rev"])],
+    [`#10 bez heada ${H1} → \`claude:rev\``, A(H1, ["claude:rev"])],
+    [`#10 head: \`${H1}\` → \`claude:rev\``, A(H1, ["claude:rev"])], // three separators
+    [`#10 head — \`${H1}\` → \`claude:rev\``, A(null, ["claude:rev"])], // four separators: not read, WARN
+    [`#10 head → \`claude:rev\``, A(null, ["claude:rev"])],
+    [`#10 head→ \`claude:rev\``, A(null, ["claude:rev"])],
+    [`#10 ahead ${H1} → \`claude:rev\``, L("nije dodjela slotu s headom")],
+    [`#10 header ${H1} → \`claude:rev\``, L("nije dodjela slotu s headom")],
+    [`#10 → \`claude:rev\` na headu 1111111`, L("nije dodjela slotu s headom")], // a head after the arrow is not the item head
+    [`#10 head ${H1} -> \`claude:rev\``, A(H1, ["claude:rev"])],
+    // PR numbers
+    [`- **#10** (nakon #20) head \`${H1}\` → \`claude:rev\``, A(H1, ["claude:rev"])],
+    [`- **#10** head \`${H1}\` → \`claude:rev\` za #10.`, A(H1, ["claude:rev"])],
+    [`- **#10** head \`${H1}\` → \`claude:rev\`, boja #20a0ff.`, A(H1, ["claude:rev"])],
+    // full SHAs
+    [`- **#10** head \`${H1}\` → \`claude:rev\` (umjesto \`${H2}\`).`, A(H1, ["claude:rev"])],
+    [`- **#10** head \`${AB}\` (\`${AB.toUpperCase()}\`) → \`claude:rev\``, A(AB, ["claude:rev"])],
+    [`- **#10** head \`${H1}\` ili \`${CD.toUpperCase()}\` → \`claude:rev\``, L("više punih SHA-ova u retku")],
+    [`- **#10** head \`${H1}\` → \`claude:rev\` na ${CD.toUpperCase()}`, L("više punih SHA-ova u retku")],
+    [`- **#10** head \`${H1}\` artefakt ${D64} → \`claude:rev\`, sha256 ${D64}.`, A(H1, ["claude:rev"])],
+    // slots
+    [`#10 head ${H1} → \`my-claude:reviewC\``, L("nije dodjela slotu s headom")],
+    [`#10 head ${H1} → \`myclaude:reviewC\``, L("nije dodjela slotu s headom")],
+    [`#10 head ${H1} → \`x:claude:reviewC\``, L("nije dodjela slotu s headom")],
+    [`#10 head ${H1} FAIL → vraćeno nositelju \`claude:cloudP4:platforma\``, L("nije dodjela slotu s headom")],
+    [`#10 head ${H1} FAIL → vraćeno nositelju \`claude:cloud-p4:platforma\``, L("nije dodjela slotu s headom")],
+    [`#10 head ${H1} → \`claude:review-c\``, A(H1, ["claude:review-c"])],
+    [`#10 head ${H1} → \`claude:review_c\``, A(H1, ["claude:review_c"])],
+    [`#10 head ${H1} → \`codex:rev\``, A(H1, ["openai:rev"])], // principal as in review-gate-core
+    [`#10 head ${H1} → \`chatgpt:rev\``, A(H1, ["openai:rev"])],
+    [`#10 head ${H1} → \`grok:rev\``, A(H1, ["grok:rev"])],
+    [`#10 head ${H1} → \`codex:rev\` i \`codex:rev:reviewer\``, A(H1, ["openai:rev"])],
+    [`#10 head ${H1} → \`codex:rev\` i \`chatgpt:rev\``, A(H1, ["openai:rev"])],
+    [`#10 head ${H1} → \`claude:reviewA\` (x) i (\`claude:reviewB\`)`, A(H1, ["claude:reviewA"])], // every group
+    [`#10 head ${H1} → \`claude:reviewA\` (vidi \`claude:reviewB\` (stari)`, L("više slotova iza strelice")], // unclosed group stays
+    [`#10 head ${H1} → ponovni review, \`claude:reviewA\` ili \`claude:reviewB\`.`, L("više slotova iza strelice")],
+    [`#10 head ${H1} → \`claude:reviewA\` i claude:b`, L("više slotova iza strelice")],
+    // sentence and clause ends
+    [`#10 head ${H1} → prema docs/ORKESTRATOR.md \`claude:reviewC\`.`, A(H1, ["claude:reviewC"])], // a dot inside a word
+    [`#10 head ${H1} → vraćeno autoru.\`claude:reviewC\``, L("slot nije u prvoj rečenici iza strelice")],
+    [`#10 head ${H1} → vraćeno autoru. Zatim review \`claude:reviewC\`.`, L("slot nije u prvoj rečenici iza strelice")],
+    [`#10 head ${H1} → review \`claude:reviewC\`; QA \`claude:qa10\`.`, A(H1, ["claude:reviewC"])],
+    [`#10 head ${H1} → \`claude:reviewA\`. Zatim QA \`claude:qa10\`.`, A(H1, ["claude:reviewA"])],
+    [`#10 head ${H1} → \`claude:reviewA\`! Zatim QA \`claude:qa10\`.`, A(H1, ["claude:reviewA"])],
+    [`#10 head ${H1} → \`claude:reviewA\`? Zatim QA \`claude:qa10\`.`, A(H1, ["claude:reviewA"])],
+    [`#10 head ${H1} → \`claude:reviewA\` uz ORKESTRATOR.md i \`claude:reviewB\`.`, L("više slotova iza strelice")],
+    // a later sentence: only head, heada, headu (any case) or a full SHA make its PR count
+    [`#10 head ${H1} → \`claude:reviewC\`. Vidi #20, heade i headau 2222222.`, A(H1, ["claude:reviewC"])],
+  ];
+  for (const [line, want] of lines) {
+    assert.deepEqual(queueItems([queue(line, 40)]).map((i) => [i.number, i.head, i.slots, i.loose?.why ?? null]), [want], line);
+  }
+  // a line without an arrow is no item at all
+  assert.deepEqual(queueItems([queue(`- **#10** head \`${H1}\`: čeka QA.`, 40)]), []);
+});
+
+test("classify: two PRs across an ASCII arrow or after an arrow ending a sentence are WARN for each", () => {
+  for (const line of [
+    `- **#10** head \`${H1}\` → \`claude:reviewA\`. Zatim **#20** -> \`claude:reviewB\`.`,
+    `- **#10** head \`${H1}\` →. Isto #20 head 2222222.`,
+  ]) assert.deepEqual(queueItems([queue(line, 40)]).map((i) => [i.number, i.loose?.why]), [[10, "više PR-ova u retku"], [20, "više PR-ova u retku"]], line);
+});
+
+test("classify: a loose line names the current head only by a whole short or full SHA, in any case, anywhere in the line", async () => {
+  const run = async (line, head = H1) => {
+    const w = world();
+    w.prs[0].headRefOid = head;
+    w.comments.set(87, [queue(`#10 head ${H2} → \`claude:rev\``, 200), queue(line, 100)]);
+    return (await check(w)).levels("red-87")[0];
+  };
+  assert.equal(await run(`- **#10** head \`${H1}\`: QA PASS → čeka naredbu.`), "NEPROVJERENO"); // full SHA
+  assert.equal(await run("- **#10** → ponovni review na 1111111."), "NEPROVJERENO"); // after the arrow
+  assert.equal(await run("- **#10**: review FAIL na ABABABA → nalazi autoru.", AB), "NEPROVJERENO");
+  assert.equal(await run(`- **#10**: review FAIL na 0${H1} → nalazi autoru.`), "WARN"); // 41 hex: no SHA
+  assert.equal(await run(`- **#10**: review FAIL na ${H1}0 → nalazi autoru.`), "WARN");
 });
