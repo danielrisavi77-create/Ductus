@@ -17,6 +17,9 @@
  *   pasted ones (attack 11). The stored document enters only through
  *   `replaceWithStoredDocument`, so a reload gives back the same ids and a
  *   stored document with a repeated id is refused, never repaired.
+ * - Text the journal would store differently (NUL, a lone surrogate) is made
+ *   storable in the editor itself (`StorableInput`), so the chip never says
+ *   saved while the editor shows other text than the journal holds.
  */
 
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
@@ -27,6 +30,8 @@ import { chipContent } from "@/domain/sync/labels";
 import { countWords, NODE_ID_ATTRIBUTE, tiptapToCanonical } from "@/editor/interop";
 import { replaceWithStoredDocument } from "@/editor/identity";
 import { createEditorExtensions } from "@/editor/schema";
+import { StorableInput } from "@/editor/storable-input";
+import { storableDocument } from "@/editor/storable-text";
 import { wordsHr } from "@/lib/i18n/hr";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
@@ -95,7 +100,10 @@ export function LocalDocumentProvider({
     if (!dirtyRef.current || !editor || editor.isDestroyed || !saver || !readyRef.current) return;
     dirtyRef.current = false;
     const candidate = tiptapToCanonical(editor.getJSON());
-    if (!candidate.ok || !sameIds(editor, candidate.doc)) {
+    // `StorableInput` keeps unstorable text out of the editor; should any
+    // remain, the journal would hold other text than shown, so it is refused.
+    if (!candidate.ok || !sameIds(editor, candidate.doc) ||
+        storableDocument(candidate.doc) !== candidate.doc) {
       setInvalid(true);
       return;
     }
@@ -105,7 +113,7 @@ export function LocalDocumentProvider({
   });
 
   const editor = useEditor({
-    extensions: createEditorExtensions(t.editor.placeholder),
+    extensions: [...createEditorExtensions(t.editor.placeholder), StorableInput],
     editable: false,
     immediatelyRender: false,
     editorProps: {

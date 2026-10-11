@@ -61,6 +61,33 @@ function storedIds(page: Page, repeat: "same" | "upper" | null): Promise<string[
   }, repeat);
 }
 
+/** The text of every block, as the editor holds it and as the journal stores it. */
+async function shownAndStored(page: Page): Promise<{ shown: string[]; stored: string[] }> {
+  return page.evaluate(async () => {
+    const target = document.querySelector('[role="textbox"]') as unknown as {
+      editor: { state: { doc: { forEach(f: (node: { textContent: string }) => void): void } } };
+    };
+    const shown: string[] = [];
+    target.editor.state.doc.forEach((node) => shown.push(node.textContent));
+    const request = <T>(r: IDBRequest<T>) => new Promise<T>((resolve, reject) => {
+      r.onsuccess = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+    });
+    for (const { name } of await indexedDB.databases()) {
+      const db = await request(indexedDB.open(name!));
+      if (!db.objectStoreNames.contains("snapshots")) {
+        db.close();
+        continue;
+      }
+      const store = db.transaction("snapshots", "readonly").objectStore("snapshots");
+      const [row] = await request(store.getAll()) as { document: { nodes: { children: { text: string }[] }[] } }[];
+      db.close();
+      return { shown, stored: row!.document.nodes.map((node) => node.children.map((c) => c.text).join("")) };
+    }
+    throw new Error("no journal database");
+  });
+}
+
 async function axe(page: Page): Promise<void> {
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
@@ -231,6 +258,33 @@ test.describe("local editor (#197)", () => {
     const reloaded = await editorOf(page).locator(":scope > [data-node-id]")
       .evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-node-id")));
     expect(reloaded).toEqual(ids);
+  });
+
+  test("10: pasted NUL and a lone surrogate never leave the chip saying saved over other text", async ({ page }) => {
+    await openEditor(page);
+    await editorOf(page).click();
+    // A fresh document is not saved yet, so the chip below can only be the paste's.
+    await expect(chipOf(page)).not.toHaveText(SAVED);
+    await page.evaluate(() => {
+      const text = "a\u0000b\uD800c";
+      const data = new DataTransfer();
+      data.setData("text/plain", text);
+      const target = document.querySelector('[role="textbox"]')!;
+      const event = new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true });
+      target.dispatchEvent(event);
+      // Firefox hands an untrusted paste event no clipboard data (see test 11).
+      if (!event.clipboardData?.getData("text/plain")) {
+        (target as unknown as { editor: { view: { pasteText(text: string): boolean } } }).editor.view.pasteText(text);
+      }
+    });
+    await expect(chipOf(page)).toHaveText(SAVED);
+    const saved = await shownAndStored(page);
+    expect(saved.shown).toEqual(["ab\uFFFDc"]);
+    expect(saved.stored).toEqual(saved.shown);
+
+    await page.reload();
+    await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+    expect((await shownAndStored(page)).shown).toEqual(saved.shown);
   });
 
   test("14: axe finds nothing on the ready editor with saved text", async ({ page }) => {
