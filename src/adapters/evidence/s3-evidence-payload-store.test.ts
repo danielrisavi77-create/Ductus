@@ -1333,6 +1333,70 @@ describe("one monotonic deadline (QA qa233d)", () => {
     expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
   });
 
+  /**
+   * A monotonic clock that passes the deadline right after the PUT answer is
+   * checked: reads 0 (deadline) and 1 (check after the PUT) are on time,
+   * every later read is past it. No timer fires within the test.
+   */
+  const passDeadlineAfterPutCheck = () => {
+    const start = performance.now();
+    let reads = 0;
+    return vi
+      .spyOn(performance, "now")
+      .mockImplementation(() => (reads++ < 2 ? start : start + 1_000_000));
+  };
+
+  it.each<[string, boolean, object]>([
+    ["an echoed write", false, unverified],
+    ["a write the key already holds", true, timeout],
+  ])("%s starts no read-back once the deadline has passed", async (_, keyHeld, expected) => {
+    const s3 = fakeS3();
+    if (keyHeld) {
+      s3.objects.set(keyOf(PACKAGE, hashOf(payload("a"))), new TextEncoder().encode(payload("a")));
+    }
+    const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 60_000 });
+    const clock = passDeadlineAfterPutCheck();
+    try {
+      await expect(put(store, "a")).resolves.toEqual(expected);
+    } finally {
+      clock.mockRestore();
+    }
+    expect(s3.calls.map((c) => c.method)).toEqual(["PUT"]);
+    expect(warn.mock.calls).toEqual(
+      expected === unverified ? [["evidence payload write unverified", idsOfA]] : [],
+    );
+  });
+
+  it("a comparison read of other bytes past the deadline is a timeout, not a conflict", async () => {
+    const s3: ReturnType<typeof fakeS3> = fakeS3((call) =>
+      call.method === "GET" ? (block(60), null) : null,
+    );
+    s3.objects.set(keyOf(PACKAGE, hashOf(payload("a"))), new TextEncoder().encode(payload("b")));
+    const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+
+    await expect(put(store, "a")).resolves.toEqual(timeout);
+    expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("logs no conflict for other bytes that arrive after the deadline answered", async () => {
+    const other = new TextEncoder().encode(payload("b"));
+    const s3: ReturnType<typeof fakeS3> = fakeS3((call) =>
+      call.method === "GET"
+        ? new Promise((resolve) =>
+            setTimeout(() => resolve(new Response(other.slice(), { status: 200 })), 40),
+          )
+        : null,
+    );
+    s3.objects.set(keyOf(PACKAGE, hashOf(payload("a"))), other);
+    const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+
+    await expect(put(store, "a")).resolves.toEqual(timeout);
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it("answers stored only within the deadline, even when no timer is late", async () => {
     const text = "a".repeat(2_097_000);
     const s3 = fakeS3();

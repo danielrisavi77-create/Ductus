@@ -308,7 +308,11 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
       return { status: "unavailable", reason: `storage_put_status_${put.status}` };
     }
 
+    if (late(phase)) return this.expire(input, phase);
     const get = await this.send("GET", path, null, signal);
+    // Past the deadline no answer speaks for the content, comparing
+    // included: neither existing nor conflict, and no late conflict log.
+    if (late(phase)) return this.expire(input, phase);
     if (!get.ok) return this.unavailable(get.reason);
     if (get.status !== 200 || get.body === null) {
       // Not found right after "exists" is not a write we can vouch for.
@@ -321,10 +325,7 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
       sha256Hex(get.body) === input.segmentHash &&
       sameBytes(get.body, bytes)
     ) {
-      // Never existing past the deadline, however late the timer fires.
-      return late(phase)
-        ? this.expire(input, phase)
-        : { status: "existing", storageRef };
+      return { status: "existing", storageRef };
     }
     this.log("evidence payload conflict", idsOf(input));
     return { status: "conflict" };
@@ -352,6 +353,7 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     const sent = createHash("sha256").update(bytes).digest("base64");
     if (put.checksum === sent) {
       phase.echoConfirmed = true;
+      if (late(phase)) return this.expire(input, phase);
       const get = await this.send("GET", path, null, signal);
       const same =
         get.ok && get.status === 200 && get.body !== null
