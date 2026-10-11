@@ -1,7 +1,7 @@
 # ADR: jedan ugovor za spremanje dokumenta i zapis pisanja
 
 - **Status:** PRIHVAĆENO 11. 10. 2026. odlukom vlasnika. Trag: komentar `issuecomment-6105502093` na issueu 87, koji je objavio orkestrator s odlukama danim u njegovoj sesiji. Odluke su prepisane u §8. Stavke iz §9 i dalje nisu provjerene.
-- **Dopune nakon prihvaćanja (review PR-a 246):** u §5.3 dodane su provjera konteksta odsječka (t. 3), prethodna provjera ključa ponavljanja prije zapisa objekta (t. 5) i ponovna provjera identiteta i ovlasti unutar transakcije (t. 7 i 8). Potpis u demou (t. 14 i odlomak iza popisa) i potvrda kodova uzroka praznine (§5.5) slijede dvije naknadne odluke vlasnika iz komentara `issuecomment-6105792585` na issueu 87, prepisane u §8 kao odluke 6 i 7. Odluke 1 do 5 i značenje polja potvrde iz §5.1 nisu mijenjani.
+- **Dopune nakon prihvaćanja (review PR-a 246):** u §5.3 dodane su provjera konteksta odsječka (t. 3), prethodna provjera ključa ponavljanja prije zapisa objekta (t. 5) i ponovna provjera identiteta i ovlasti unutar transakcije (t. 7 i 8). Potpis u demou (t. 14 i odlomak iza popisa) i potvrda kodova uzroka praznine (§5.5) slijede dvije naknadne odluke vlasnika iz komentara `issuecomment-6105792585` na issueu 87, prepisane u §8 kao odluke 6 i 7. Drugi krug reviewa dodao je: brave na recima ovlasti (t. 7), odbijanje prijave praznine uz odsječak koji uredno nastavlja i gornju granicu preskoka rednih brojeva (t. 12), te ponavljanje istog zahtjeva nakon ponovne prijave istog korisnika (§5.4). Odluke 1 do 7 i značenje polja potvrde iz §5.1 nisu mijenjani.
 - **Datum:** 11. 10. 2026.
 - **Zadatak:** stavka 0.3 plana u issueu 239. Samo dokument; ne mijenja kod ni druge dokumente.
 - **Stanje koda:** `main` na `1912cac`. Brojevi redaka vrijede za taj commit.
@@ -115,12 +115,14 @@ Prije transakcije:
 
 U jednoj transakciji, uz zaključan redak dokumenta:
 
-7. identitet se ponovno izvodi iz `current_actor()` unutar RPC-a, nikad iz parametra, i ponovno se provjerava članstvo. Provjera prije transakcije nije dovoljna, jer se sesija, članstvo ili zadatak mogu promijeniti između nje i zaključavanja retka;
+7. identitet se ponovno izvodi iz `current_actor()` unutar RPC-a, nikad iz parametra, i ponovno se provjerava članstvo. Provjera prije transakcije nije dovoljna, jer se sesija, članstvo ili zadatak mogu promijeniti između nje i zaključavanja retka. Ni brava na retku dokumenta sama nije dovoljna: reci na kojima počiva ovlast (članstvo, a za novi prihvat i tekući redak zadatka iz točke 8) moraju se pročitati tako da ih druga transakcija ne može promijeniti do potvrde ove, bravom na tim recima ili drugom serijalizacijom, i to se drži do potvrde transakcije, u demou uključujući potpis. Mehanizam i jedan stalan redoslijed brava određuje plan napada koraka koji uvodi RPC. Brava na zajedničkom retku zadatka, koju bi pri svakom spremanju uzimali svi studenti istog zadatka, moguća je točka zagušenja i mora se izmjeriti (§9);
 8. ključ ponavljanja, ponovno i mjerodavno, zbog utrke dvaju istih zahtjeva (isti sadržaj vraća prijašnji ishod, drugi sadržaj `txid_reused`). U demou ključ postoji samo ako je i potpis uspio, pa je prijašnji ishod uvijek potpisana potvrda. Samo za novi prihvat zatim: verzija zadatka i je li zadatak otvoren, te granice paketa;
 9. bazna revizija jednaka je tekućoj;
 10. prethodnik odsječka jednak je glavi lanca;
 11. redni broj prvog događaja veći je od zadnjeg prihvaćenog (vraćanje unatrag odbija se uvijek);
-12. nastavak: redni broj je točno sljedeći i `initialDocumentHash` jednak je otisku spremljenog dokumenta, ili zahtjev nosi prijavu praznine;
+12. nastavak, jedno od dvoga:
+    - redni broj je točno sljedeći i `initialDocumentHash` jednak je otisku spremljenog dokumenta, a zahtjev ne nosi prijavu praznine;
+    - zahtjev nosi prijavu praznine i odsječak stvarno ne nastavlja: redni broj nije točno sljedeći, ili `initialDocumentHash` nije otisak spremljenog dokumenta, ili oboje. Prijava praznine uz odsječak koji uredno nastavlja odbija se kao `invalid`, jer bi nastao redak praznine bez prekida u potpisanim odsječcima, što §5.5 vodi kao grešku koja blokira predaju. Preskok rednih brojeva uz prazninu ima gornju granicu: jedna konstanta koju uvoze klijent i poslužitelj, a zahtjev iznad nje je `invalid`. Bez granice bi jedan prihvaćen odsječak s najvećim dopuštenim rednim brojem zauvijek onemogućio sljedeći. Vrijednost određuje plan napada koraka s poljem `gap`;
 13. upis: revizija, dokument i njegov otisak, odsječak, nova glava, potvrda, i redak praznine ako je prijavljena;
 14. potpis, u demou unutar iste transakcije: potvrda se potpisuje i potpis se priključuje prije nego što se transakcija potvrdi. Ako potpis ne uspije, cijela se transakcija poništava: nema ni revizije, ni odsječka, ni potvrde, ni retka praznine.
 
@@ -130,7 +132,7 @@ Točke 4 i 12 su stavka 0.5 plana (§7).
 
 - U demou odgovori `committed` i `duplicate` uvijek nose potpisanu potvrdu; `pending_signature` nije odgovor u demou.
 - Ponovljeni zahtjev nalazi ili cijeli potpisan prihvat (pa je `duplicate` s istom potvrdom) ili ništa (pa se cijelo spremanje ponavlja). Put "potpiši postojeći nepotpisani prihvat", koji gateway danas ima (`evidence-gateway.ts` r. 277 do 279), u demou se ne koristi.
-- Transakcija i brava na retku dokumenta drže se dok traje potpis. U demou potpisuje web proces razvojnim ključem, u istom procesu. Kako točno potpis ulazi u transakciju (redoslijed poziva između web procesa i RPC-a) određuje plan napada koraka koji uvodi RPC.
+- Transakcija i njezine brave drže se dok traje potpis. U demou potpisuje web proces razvojnim ključem, u istom procesu. Redoslijed je odredila dopuna plana napada (issue 155, komentar 6105834933): RPC prihvata izvodi točke 7 do 13 i vraća sadržaj potvrde bez potvrde transakcije; web proces potpisuje te bajtove i sam provjerava potpis; drugi RPC priključuje potpis; tek tada se transakcija potvrđuje i odgovor nosi potpisanu potvrdu.
 
 Izvan demoa i dalje vrijede `BACKEND.md` §3 pravilo 3 i `ARCHITECTURE.md` §5 t. 3 do 5: potpisuje worker, a potvrda do tada stoji u stanju `pending_signature`. Vrijedi li stroža varijanta i izvan demoa, otvoreno je pitanje (§8).
 
@@ -144,10 +146,11 @@ Potvrda v2 time tvrdi tri stvari: da su ti bajtovi odsječka primljeni i pohranj
 | `stale_base`, `chain_conflict` | Poslužitelj je dalje ili drugdje; odgovor nosi reviziju, otisak glave, zadnji redni broj i otisak dokumenta | Usklađivanje (niže). |
 | `not_continuous` | Odsječak se veže na glavu, ali ne nastavlja slijed ili dokument, a praznina nije prijavljena | Kao gore. Poslužitelj nikad sam ne pretvara takav zahtjev u prazninu. |
 | `txid_reused` | Isti ključ, drugi sadržaj | Postojeći oporavak (`RECOVERY_REQUIRED`). |
-| `document_mismatch`, `invalid`, `too_large` | Zahtjev nije ispravan i neće biti ni pri ponavljanju | Ne ponavlja. Tekst ostaje "spremljen na uređaju"; put dalje je §5.5. |
-| `unauthenticated`, `unauthorized`, `not_found`, `not_accepting` | Sesija, članstvo ili zadatak ne dopuštaju novi prihvat (točke 1, 7 i 8) | Ne ponavlja isti zahtjev. Tekst ostaje "spremljen na uređaju"; nova prijava ili stanje zadatka određuju što dalje. |
+| `document_mismatch`, `invalid`, `too_large` | Zahtjev nije ispravan i neće biti ni pri ponavljanju. `invalid` je i prijava praznine uz odsječak koji uredno nastavlja te preskok rednih brojeva iznad granice (točka 12) | Ne ponavlja. Tekst ostaje "spremljen na uređaju"; put dalje je §5.5. |
+| `unauthenticated` | Sesija je istekla ili je nema; ništa nije spremljeno | Ne ponavlja sam od sebe, ali čuva zamrznuti commit i cijeli red. Nakon ponovne prijave istog korisnika ponavlja potpuno isti zahtjev s istim `clientTransactionId` i nastavlja red (`BACKEND.md` §4.3: istek sesije nije odjava; `drain.ts` za ovaj ishod zadržava čekanje na potvrdu). Prijava drugog korisnika ide po pravilu iz `BACKEND.md` §4.3, ne ovim putem. |
+| `unauthorized`, `not_found`, `not_accepting` | Članstvo ili zadatak ne dopuštaju novi prihvat (točke 1, 7 i 8) | Ne ponavlja isti zahtjev. Tekst ostaje "spremljen na uređaju"; stanje članstva ili zadatka određuje što dalje. |
 | nedostupno, izgubljen odgovor | Ne zna se | Ponavlja isti zahtjev. |
-| potpis nije uspio (demo) | Ništa nije spremljeno: transakcija je poništena | Ponavlja isti zahtjev s istim ključem. Kako se ishod zove na žici, određuje plan napada koraka koji uvodi RPC. |
+| potpis nije uspio (demo) | Ništa nije spremljeno: transakcija je poništena | Ponavlja isti zahtjev s istim ključem. Na žici to nije novi status: dopuna plana napada (issue 155, komentar 6105834933) preporučuje postojeću ponovljivu klasu, `unavailable` sa `stage: "signing"`, jer klijent nepoznat status vodi kao konačan. |
 
 Usklađivanje, uvijek istim redom:
 
@@ -165,7 +168,7 @@ Usklađivanje, uvijek istim redom:
 - Događaji iz samog odsječka prekida ostaju u lancu i u pohrani, ali se ne provjeravaju reprodukcijom, jer poslužitelj nema stanje od kojeg polaze. Praznina zato obuhvaća i taj odsječak (najviše 30 sekundi pisanja).
 - Prekidi koji se vide iz potpisanih odsječaka moraju se jedan prema jedan poklapati s recima praznina. Prekid bez retka i redak bez prekida su greška koja blokira predaju.
 - Rad bez mreže i povratak **nije** prekid: red se čuva i šalje redom.
-- **Uzrok praznine je tehnički kod iz zatvorenog popisa, a ne tekst za prikaz.** Popis još nije potvrđen, i to je ovisnost koja blokira jedan korak: kodove potvrđuje plan napada za korak B-8 s poljem `gap`, a vlasnik ih vidi prije koda; do tada čeka samo taj korak, a ostali koraci B-8 idu dalje (odluka 7 u §8). Kod ulazi u redak baze, u otisak sadržaja za ključ ponavljanja i u mjerenja. Prijedlog, izveden iz slučajeva u §5.4: `local_record_lost` (klijent ne može nastaviti lanac jer mu nedostaje dio vlastitog reda ili je odsječak konačno odbijen) i `conflict_kept_local` (autor je u sukobu dvaju uređaja zadržao svoju verziju; odluka 3 u §8). Tekst koji uz prazninu vide student i nastavnik određuje Product/UX i smije se mijenjati bez promjene spremljenih kodova.
+- **Uzrok praznine je tehnički kod iz zatvorenog popisa, a ne tekst za prikaz.** Popis još nije potvrđen, i to je ovisnost koja blokira jedan korak: kodove potvrđuje plan napada za korak B-8 s poljem `gap`, a vlasnik ih vidi prije koda; do tada čeka samo taj korak, a ostali koraci B-8 idu dalje (odluka 7 u §8). Kod ulazi u redak baze, u otisak sadržaja za ključ ponavljanja i u mjerenja. Prijedlog, izveden iz slučajeva u §5.4: `local_record_lost` (klijent ne može nastaviti lanac jer mu nedostaje dio vlastitog reda ili je odsječak konačno odbijen) i `conflict_kept_local` (autor je u sukobu dvaju uređaja zadržao svoju verziju; odluka 3 u §8). Dopuna plana napada (issue 155, komentar 6105834933) predlaže i treći kod, `segment_rejected`, za konačno odbijen odsječak, da se greška u hvatanju zapisa u mjerenjima razlikuje od gubitka lokalnog zapisa; izbor između dva i tri koda plan postavlja vlasniku, kako traži odluka 7. Tekst koji uz prazninu vide student i nastavnik određuje Product/UX i smije se mijenjati bez promjene spremljenih kodova.
 
 Razmotreno i odbačeno za sada: prekid zapisati kao jedan događaj u lancu koji stanje poslužitelja zamjenjuje stanjem uređaja. Lanac bi ostao neprekinut i rekonstrukcija ne bi trebala sačuvani dokument. Ali to mijenja odobreni tekst `ARCHITECTURE.md` §5 i §6, ovisi o formatu koraka (stavka 0.4) i o reprodukciji koje na `main` još nema, i lako se prikaže kao jedan velik unos bez izvora umjesto kao praznina.
 
@@ -229,6 +232,7 @@ I dalje otvoreno, izvan ovih odluka:
 - **Trošak na klijentu.** Svaki događaj nosi otisak dokumenta prije i poslije. Ako se računa nad cijelim dokumentom pri svakom događaju, to je 11 do 14 ms po događaju za 80.000 riječi na poslužiteljskom vCPU-u; u pregledniku nije izmjereno. Hvatanje zapisa na `main` još ne postoji.
 - **Volumen zapisa u bazi** zbog prepisivanja tekućeg dokumenta pri svakom commitu, trajanje upisa objekta i potpisa preko servisa ključeva.
 - **Dohvat potpisane potvrde u produkciji.** Ako se potvrda koja čeka potpis dohvaća ponavljanjem cijelog zahtjeva, svaki upit nosi cijeli dokument. Vjerojatno treba malo čitanje po ID-u transakcije; u demou je potvrda potpisana u istoj transakciji pa se to ne vidi.
+- **Brave na recima ovlasti.** Koliko košta brava na retku zadatka koju pri svakom spremanju uzimaju svi studenti istog zadatka (§5.3 t. 7), i koliko dugo se drži uz potpis unutar transakcije, nije izmjereno.
 - **Granica lokalnog reda.** U `src/lib/journal/atomic-dexie-journal.ts` nisam našao granicu veličine reda.
 - **Tko prazni red kad su otvorena dva taba.** Nisam našao zaključavanje pražnjenja između tabova.
 - **Otvoreni PR-ovi 206, 232, 233 i 240** pročitani su po opisu i popisu datoteka, ne redak po redak. PR 213 spojen je tijekom rada; pročitano je zaglavlje formata koraka.
@@ -250,7 +254,7 @@ U docs PR-u odluka:
 
 Ostali zadaci:
 
-- Dopuna plana napada B-8 (issue 155, točke 17 do 21): potpis unutar iste transakcije u demou i poništenje cijelog spremanja kad potpis ne uspije (odluka 6, §5.3 t. 14), te potvrda popisa kodova uzroka praznine za korak s poljem `gap`, koji vlasnik vidi prije koda (odluka 7, §5.5).
+- Plan napada B-8 (issue 155). Dopuna 6105834933 već pokriva potpis unutar iste transakcije u demou, naziv ishoda kad potpis ne uspije, siročad nakon poništenja i prijedlog kodova uzroka praznine s pitanjem za vlasnika (odluke 6 i 7). Planu još treba dodati: mehanizam i redoslijed brava na recima ovlasti (§5.3 t. 7) i vrijednost gornje granice preskoka rednih brojeva uz prazninu (§5.3 t. 12).
 - Dopuna plana potvrde v2 (issue 202, napad 5: koji ID transakcije potvrda nosi).
 - Preimenovanje ugovora u `src/domain/serverSync/contract.ts`.
 - Uklanjanje zasebnog reda zapisa iz `src/application/evidence/evidence-outbox.ts` u korist jednog reda.
