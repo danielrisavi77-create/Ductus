@@ -243,7 +243,10 @@ export function isEvidenceSegmentV2(value: unknown): value is EvidenceSegmentV2 
 
   const sequenceFrom = Number(value.sequenceFrom);
   const sequenceTo = Number(value.sequenceTo);
-  if (sequenceTo !== sequenceFrom + value.events.length - 1) return false;
+  // Counted as to - from, which is exact for safe integers: from + count - 1
+  // can round in a double and pass a segment with more events than its range.
+  // With it every from + index below is at most sequenceTo, so exact too.
+  if (sequenceTo - sequenceFrom !== value.events.length - 1) return false;
 
   let previousAfter = value.initialDocumentHash;
 
