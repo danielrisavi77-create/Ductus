@@ -95,6 +95,9 @@ const ERROR_REASONS: Readonly<Record<string, string>> = {
   InvalidAccessKeyId: "storage_signature_rejected",
 };
 
+const isSignatureFault = (reason: string) =>
+  reason === "storage_clock_skew" || reason === "storage_signature_rejected";
+
 const timedOut = (): EvidencePayloadPutResult => ({
   status: "unavailable",
   reason: "storage_timeout",
@@ -319,24 +322,33 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
         this.log("evidence payload conflict", ids);
         return { status: "conflict" };
       }
+      // An orphan candidate: the object may or may not be there.
+      this.log("evidence payload write unverified", ids);
+      // A refused signature keeps its fixed reason, as on the PUT.
+      return !get.ok && isSignatureFault(get.reason)
+        ? this.unavailable(get.reason)
+        : unverified();
     }
-    // An orphan candidate: the object may or may not be there.
     this.log("evidence payload write unverified", ids);
     return unverified();
   }
 
   /** Configuration faults are also logged, by fixed reason only. */
   private unavailable(reason: string): EvidencePayloadPutResult {
-    if (reason === "storage_clock_skew" || reason === "storage_signature_rejected") {
+    if (isSignatureFault(reason)) {
       this.log("evidence storage refused the request signature", { reason });
     }
     return { status: "unavailable", reason };
   }
 
-  /** A failing logger neither fails the call nor carries anything out of it. */
+  /**
+   * A failing logger neither fails the call nor carries anything out of it;
+   * a logger that answers with a promise has its rejection dropped the same way.
+   */
   private log(message: string, fields: Record<string, string>): void {
     try {
-      this.warn(message, fields);
+      const result: unknown = this.warn(message, fields);
+      void Promise.resolve(result).catch(() => undefined);
     } catch {
       // Dropped on purpose: its error may hold whatever the logger had.
     }

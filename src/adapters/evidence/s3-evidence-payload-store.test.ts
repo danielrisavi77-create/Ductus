@@ -872,6 +872,51 @@ describe("S3EvidencePayloadStore", () => {
       expect(inspect(result, { depth: Infinity })).not.toContain(canary);
     },
   );
+
+  it.each(["conflict", "signature", "unverified"])(
+    "keeps a rejecting async logger from an unhandled rejection (%s)",
+    async (kind) => {
+      const canary = ["kanarinac", "async", Date.now().toString(36)].join("-");
+      const unhandled: unknown[] = [];
+      const listener = (reason: unknown) => unhandled.push(reason);
+      process.on("unhandledRejection", listener);
+      try {
+        const s3 = fakeS3((call) => {
+          if (kind === "signature") return s3Error(403, "SignatureDoesNotMatch");
+          if (kind === "unverified") {
+            return Promise.resolve(new Response(null, { status: 200 }));
+          }
+          return call.method === "PUT"
+            ? Promise.resolve(new Response(null, { status: 412 }))
+            : Promise.resolve(new Response(payload("b")));
+        });
+        // Not vi.fn: a mock observes the promises it returns, which would
+        // handle the rejection in place of the adapter.
+        let warned = 0;
+        const warn = () => {
+          warned += 1;
+          return Promise.reject(new Error(canary));
+        };
+        const { store } = storeWith(s3.fetch, { warn });
+
+        const result = await put(store, "a");
+        expect(result).toEqual(
+          {
+            conflict: { status: "conflict" },
+            signature: { status: "unavailable", reason: "storage_signature_rejected" },
+            unverified: { status: "unavailable", reason: "storage_write_unverified" },
+          }[kind],
+        );
+        expect(warned).toBeGreaterThan(0);
+        // Unhandled rejections are reported after the microtask queue drains.
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        expect(unhandled).toEqual([]);
+        expect(inspect(result, { depth: Infinity })).not.toContain(canary);
+      } finally {
+        process.off("unhandledRejection", listener);
+      }
+    },
+  );
 });
 
 describe("write proof (#155, S1 to S6)", () => {
@@ -954,6 +999,39 @@ describe("write proof (#155, S1 to S6)", () => {
       expect.objectContaining({ segmentHash: hashOf(payload("a")) }),
     );
   });
+
+  it.each([
+    ["RequestTimeTooSkewed", "storage_clock_skew"],
+    ["SignatureDoesNotMatch", "storage_signature_rejected"],
+    ["InvalidAccessKeyId", "storage_signature_rejected"],
+  ])(
+    "S3: an echoed write whose read-back is refused with %s keeps that reason",
+    async (code, reason) => {
+      const s3 = fakeS3((call) =>
+        call.method === "PUT"
+          ? Promise.resolve(
+              new Response(null, {
+                status: 200,
+                headers: { "x-amz-checksum-sha256": checksumOf("a") },
+              }),
+            )
+          : s3Error(403, code),
+      );
+      const { store, warn } = storeWith(s3.fetch);
+
+      await expect(put(store, "a")).resolves.toEqual({ status: "unavailable", reason });
+      expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
+      expect(warn).toHaveBeenCalledWith(
+        "evidence storage refused the request signature",
+        { reason },
+      );
+      // Still an orphan candidate: the write may be there.
+      expect(warn).toHaveBeenCalledWith(
+        "evidence payload write unverified",
+        expect.objectContaining({ segmentHash: hashOf(payload("a")) }),
+      );
+    },
+  );
 
   it("S4: an echoed write that reads back other bytes is a conflict", async () => {
     const s3: ReturnType<typeof fakeS3> = fakeS3((call) =>
