@@ -16,7 +16,9 @@ import { FORBIDDEN_TERMS, MAX_WINDOW_PARTS, PHRASE_BREAK, closedUpPastQuotes, fi
  * - Interface text modules (`UI_TEXT_MODULES`), JSON catalogues
  *   (`src/lib/i18n/**` `.json`) and static web app manifests under `app/**`:
  *   every string value; object keys, import paths and literal types are
- *   skipped.
+ *   skipped. A `+` chain or a template in a text module is also read as one
+ *   text put together from parts, as it is in JSX. A `.json` file that a
+ *   scanned code file imports from anywhere else is read the same way.
  * - Components (`app/**` and `src/**` `.tsx`): JSX text, strings rendered from
  *   JSX expressions, the string value of every JSX attribute that is not on
  *   `TECHNICAL_ATTRIBUTES`, and the Next.js metadata described below. JSX text
@@ -43,7 +45,8 @@ import { FORBIDDEN_TERMS, MAX_WINDOW_PARTS, PHRASE_BREAK, closedUpPastQuotes, fi
  *   code. `findMisplacedUiText` reports other Croatian text in a `.ts` module
  *   outside the list, so interface text cannot move out of scope.
  *
- * Test files (`*.test.*`, `*.spec.*`) and declaration files are not read.
+ * Test files (`*.test.*`, `*.spec.*`) and declaration files are not read, so a
+ * scanned file may not import a test module (`findUnreadableText`).
  */
 export interface UiText {
   readonly file: string;
@@ -350,12 +353,28 @@ function renderedStrings(expression: ts.Expression, collect: Collect): void {
   }
 }
 
-/** Every string value below `node`, except object keys and module specifiers. */
-function allStrings(node: ts.Node, collect: Collect): void {
+/** Whether `node` is the name of a module handed to `import()` or `require()`. */
+function isLoadedModule(node: ts.Node): boolean {
+  const call = node.parent;
+  if (!ts.isCallExpression(call) || call.arguments[0] !== node) return false;
+  return call.expression.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(call.expression) && call.expression.text === "require");
+}
+
+/**
+ * Every string value below `node`, except object keys and module specifiers.
+ * `imported` takes the name of every module that is imported, handed on,
+ * loaded with `import()` or required.
+ */
+function allStrings(node: ts.Node, collect: Collect, imported?: (name: ts.StringLiteralLike) => void): void {
   const visit = (current: ts.Node): void => {
-    if (ts.isImportDeclaration(current) || ts.isExportDeclaration(current) || ts.isImportTypeNode(current)) return;
+    if (ts.isImportDeclaration(current) || ts.isExportDeclaration(current)) {
+      if (current.moduleSpecifier && isPlainString(current.moduleSpecifier)) imported?.(current.moduleSpecifier);
+      return;
+    }
+    if (ts.isImportTypeNode(current)) return;
     if (ts.isStringLiteral(current) || ts.isNoSubstitutionTemplateLiteral(current)) {
       const parent = current.parent;
+      if (ts.isExternalModuleReference(parent) || isLoadedModule(current)) imported?.(current);
       const isKey = (ts.isPropertyAssignment(parent) || ts.isPropertySignature(parent)) && parent.name === current;
       const isTypeOnly = ts.isLiteralTypeNode(parent);
       if (!isKey && !isTypeOnly) collect(current, current.text);
@@ -497,8 +516,24 @@ function styleMayHide(value: ts.Expression): boolean {
   });
 }
 
-/** JSX text, rendered strings, attributes and Next.js metadata; in a `.ts` file only the metadata is left. */
-function componentText(source: ts.SourceFile, reader: Reader): void {
+/** A `+` chain or a template with placeholders: text put together from parts. */
+const isComposition = (node: ts.Node): boolean => ts.isTemplateExpression(node) || (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken);
+
+/** What holds `node`, looking out through brackets, type assertions and the placeholder of a template. */
+function holder(node: ts.Node): ts.Node {
+  const outer = node.parent;
+  return ts.isParenthesizedExpression(outer) || ts.isAsExpression(outer) || ts.isSatisfiesExpression(outer) || ts.isNonNullExpression(outer) || ts.isTemplateSpan(outer) ? holder(outer) : outer;
+}
+
+/**
+ * JSX text, rendered strings, attributes and Next.js metadata; in a `.ts` file
+ * only the metadata is left. With `composed`, every `+` chain and template of
+ * the file is a text put together from parts as well, wherever it stands: that
+ * is how a text module writes one (`"Sum" + "njivo"`), and it is read the way
+ * the same expression is read in JSX, closed up over the parts that are
+ * computed.
+ */
+function componentText(source: ts.SourceFile, reader: Reader, composed = false): void {
   const isImageRoute = IMAGE_ROUTE_FILE.test(source.fileName);
   /** Inline elements and fragments already read as part of the unit around them. */
   const absorbed = new Set<ts.Node>();
@@ -632,6 +667,10 @@ function componentText(source: ts.SourceFile, reader: Reader): void {
   };
 
   const visit = (node: ts.Node): void => {
+    if (composed && isComposition(node) && !isComposition(holder(node))) {
+      const readings = forEveryone((alone) => expressionReadings(node as ts.Expression, alone));
+      reader.unit(node.getStart(source), node.pos, node.end, readings, overflowed);
+    }
     if ((ts.isJsxElement(node) || ts.isJsxFragment(node)) && !absorbed.has(node)) {
       const readings = forEveryone((alone) => contentReadings(node, alone));
       reader.unit(contentStart(node), node.children.pos, node.children.end, readings, overflowed);
@@ -667,6 +706,8 @@ function componentText(source: ts.SourceFile, reader: Reader): void {
 }
 
 type Kind = "catalogue" | "component";
+/** How locate reads a file: by a kind, or only for its strings and imports. */
+type How = Kind | "strings";
 
 /** A piece of text with the span of source it was read from (both zero in JSON). */
 interface Located extends UiText {
@@ -689,20 +730,34 @@ interface Unit {
   readonly overflowed: boolean;
 }
 
+/** A module that a code file names in an `import`, an `export … from`, an `import()` or a `require()`. */
+interface Import {
+  readonly name: string;
+  readonly line: number;
+}
+
 interface Read {
   readonly texts: Located[];
   readonly units: Unit[];
+  readonly imports: Import[];
 }
 
-const NOTHING_READ: Read = { texts: [], units: [] };
+const NOTHING_READ: Read = { texts: [], units: [], imports: [] };
 
 /**
  * The syntax errors of a parsed file, asked for through a program that holds
- * only that file: no library, no imports resolved, nothing read from disk and
- * nothing parsed a second time.
+ * only that file: no library, nothing read from disk and nothing parsed a
+ * second time. No import is resolved either: the host answers every module
+ * name with nothing and says of every other file that it is not there.
  */
-function syntaxErrors(source: ts.SourceFile): readonly ts.DiagnosticWithLocation[] {
-  const host: ts.CompilerHost = {
+export function syntaxErrors(source: ts.SourceFile, host: ts.CompilerHost = isolatedHost(source)): readonly ts.DiagnosticWithLocation[] {
+  const options: ts.CompilerOptions = { noLib: true, noResolve: true, types: [], jsx: ts.JsxEmit.Preserve };
+  return ts.createProgram({ rootNames: [source.fileName], options, host }).getSyntacticDiagnostics(source);
+}
+
+/** The host of `syntaxErrors`: it knows one file and finds no other. */
+export function isolatedHost(source: ts.SourceFile): ts.CompilerHost {
+  return {
     getSourceFile: () => source,
     getDefaultLibFileName: () => "lib.d.ts",
     writeFile: () => undefined,
@@ -710,17 +765,17 @@ function syntaxErrors(source: ts.SourceFile): readonly ts.DiagnosticWithLocation
     getCanonicalFileName: (name) => name,
     useCaseSensitiveFileNames: () => true,
     getNewLine: () => "\n",
-    fileExists: () => true,
+    fileExists: () => false,
     readFile: () => undefined,
+    resolveModuleNameLiterals: (names) => names.map(() => ({ resolvedModule: undefined })),
+    resolveTypeReferenceDirectiveReferences: (names) => names.map(() => ({ resolvedTypeReferenceDirective: undefined })),
   };
-  const options: ts.CompilerOptions = { noLib: true, noResolve: true, types: [], jsx: ts.JsxEmit.Preserve };
-  return ts.createProgram({ rootNames: [source.fileName], options, host }).getSyntacticDiagnostics(source);
 }
 
-function locate(file: string, content: string, kind: Kind): Read {
+function locate(file: string, content: string, kind: How): Read {
   const texts: Located[] = [];
   const units: Unit[] = [];
-  if (file.endsWith(".json") || file.endsWith(".webmanifest")) {
+  if (file.toLowerCase().endsWith(".json") || file.endsWith(".webmanifest")) {
     const lines = content.split("\n");
     const walk = (value: unknown): void => {
       if (typeof value === "string") {
@@ -730,7 +785,7 @@ function locate(file: string, content: string, kind: Kind): Read {
       else if (value !== null && typeof value === "object") Object.values(value).forEach(walk);
     };
     walk(JSON.parse(content));
-    return { texts, units };
+    return { texts, units, imports: [] };
   }
   const scriptKind = file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
   const source = ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true, scriptKind);
@@ -746,15 +801,13 @@ function locate(file: string, content: string, kind: Kind): Read {
       const start = at ?? node.getStart(source);
       texts.push({ file, line: lineAt(start), text, start, end: node.getEnd(), ...(part && { part }), ...(check !== undefined && { check }) });
     };
-  if (kind === "catalogue") allStrings(source, collect());
-  else {
-    componentText(source, {
-      text: collect(),
-      part: collect(true),
-      unit: (at, start, end, readings, overflowed) => units.push({ line: lineAt(at), at, start, end, readings, overflowed }),
-    });
-  }
-  return { texts, units };
+  const unit: Reader["unit"] = (at, start, end, readings, overflowed) => units.push({ line: lineAt(at), at, start, end, readings, overflowed });
+  const imports: Import[] = [];
+  if (kind === "component") componentText(source, { text: collect(), part: collect(true), unit });
+  else allStrings(source, collect(), (name) => imports.push({ name: name.text, line: lineAt(name.getStart(source)) }));
+  // A text module also puts text together with `+` and templates; those are read as in JSX.
+  if (kind === "catalogue") componentText(source, { text: () => undefined, part: () => undefined, unit }, true);
+  return { texts, units, imports };
 }
 
 const withoutSpan = ({ file, line, text }: UiText): UiText => ({ file, line, text });
@@ -770,7 +823,7 @@ export function extractUiText(file: string, content: string, kind: Kind): UiText
 
 /** The strings of a code file that lie outside everything in `read`. */
 function stringsOutside(read: readonly Located[], file: string, content: string): Located[] {
-  return locate(file, content, "catalogue").texts.filter((text) => !read.some((seen) => seen.start <= text.start && text.end <= seen.end));
+  return locate(file, content, "strings").texts.filter((text) => !read.some((seen) => seen.start <= text.start && text.end <= seen.end));
 }
 
 /** Stands in the text of a finding made only by the closed up reading; see `findForbiddenTermsInMarkup`. */
@@ -784,6 +837,8 @@ export const UNREADABLE_HINTS = {
     'the text is read with its parts and elements joined, and between two letters only a plain space sets words apart: an element boundary, a line break and ASCII punctuation do not. Put {" "} between the two parts or elements, or write the character out of the text. Croatian and English quotation marks next to an element boundary are not reported',
   readings: "put the conditional or possibly hidden inline parts into elements of their own, so that no element has that many alternatives",
   parts: "a word cut over that many parts would not be found, so write the text in fewer parts",
+  testModule: "test files are not read, so what such a module shows would pass unchecked; give the module a name that is not a test's, or do not import it from code that runs",
+  dataFile: "the strings of an imported .json file are read like a catalogue, and this one is not where the import says; import it by a path from the importing file or from @/",
 } as const;
 
 /**
@@ -890,16 +945,58 @@ export function scanUiText(root: string): Finding[] {
   const check = (text: UiText, terms: ForbiddenTerm[]): void => {
     if (terms.length > 0) findings.push({ ...text, terms });
   };
+  for (const { file, read, others } of scannedFiles(root)) {
+    findings.push(...findingsIn(file, read));
+    for (const text of others) check(withoutSpan(text), findForbiddenTerms(text.check ?? text.text, "hr"));
+  }
+  return findings;
+}
+
+/** The name of a test file as an import writes it, with its extension or without. */
+const TEST_MODULE = /\.(?:test|spec)(?:\.[cm]?[jt]sx?)?$/;
+
+/**
+ * The `.json` file that an import in `file` names, as a repository path, when
+ * it is one the scan does not read as a catalogue already: code that imports
+ * it can show its strings, so it is read like a catalogue. `null` when the
+ * scan cannot tell which file is meant or the file is not there, `undefined`
+ * when the import is of something else. A name is followed from the folder of
+ * the file and from `@/`, which the project sets to `src/`.
+ */
+function importedData(root: string, file: string, name: string): string | null | undefined {
+  if (!name.toLowerCase().endsWith(".json")) return undefined;
+  const target = name.startsWith("@/") ? path.posix.normalize(`src/${name.slice(2)}`) : name.startsWith(".") ? path.posix.join(path.posix.dirname(file), name) : "..";
+  if (target.startsWith("..") || !existsSync(path.join(root, target))) return null;
+  return scanKind(target) === "catalogue" ? undefined : target;
+}
+
+/** A scanned file as read: by its kind, with the other strings of a code file and the modules it imports. */
+interface Scanned {
+  readonly file: string;
+  readonly read: Read;
+  readonly others: Located[];
+  readonly imports: readonly Import[];
+}
+
+/**
+ * Every file the scan reads, in the order of `sourceFiles`, and after them
+ * the `.json` files that those import from anywhere else (`importedData`).
+ */
+function* scannedFiles(root: string): Generator<Scanned> {
+  const data = new Set<string>();
   for (const file of sourceFiles(root)) {
     const kind = scanKind(file);
     if (kind === null && !isCode(file)) continue;
     const content = readSource(root, file);
     const read = kind === null ? NOTHING_READ : locate(file, content, kind);
-    findings.push(...findingsIn(file, read));
-    if (kind === "catalogue" || !isCode(file)) continue;
-    for (const text of stringsOutside(read.texts, file, content)) check(withoutSpan(text), findForbiddenTerms(text.check ?? text.text, "hr"));
+    // Every string of a code file, and what it imports, whatever its kind reads.
+    const all = kind === "catalogue" || !isCode(file) ? read : locate(file, content, "strings");
+    const others = all === read ? [] : all.texts.filter((text) => !read.texts.some((seen) => seen.start <= text.start && text.end <= seen.end));
+    for (const { name } of all.imports) data.add(importedData(root, file, name) ?? "");
+    yield { file, read, others, imports: all.imports };
   }
-  return findings;
+  data.delete("");
+  for (const file of [...data].sort()) yield { file, read: locate(file, readSource(root, file), "catalogue"), others: [], imports: [] };
 }
 
 export interface Unreadable {
@@ -929,19 +1026,22 @@ export interface Unreadable {
  * - every text with more readings than the scan keeps (`MAX_READINGS`), where
  *   a part was read as unknown instead of in each of its forms;
  * - every text with a longer run of parts without letters than the dictionary
- *   reads across (`windowsCutShort`).
+ *   reads across (`windowsCutShort`);
+ * - every import of a test module (`TEST_MODULE`) from a scanned file: test
+ *   files are not read, and a page that imports one shows what is in it;
+ * - every import of a `.json` file the scan cannot find and so cannot read
+ *   like a catalogue (`importedData`).
  *
  * The fix is to write the text with Croatian or English letters, or to split
  * an element with that many alternatives; there are no exemptions.
  */
 export function findUnreadableText(root: string): Unreadable[] {
   const unreadable: Unreadable[] = [];
-  for (const file of sourceFiles(root)) {
-    const kind = scanKind(file);
-    if (kind === null && !isCode(file)) continue;
-    const content = readSource(root, file);
-    const read = kind === null ? NOTHING_READ : locate(file, content, kind);
-    const others = kind === "catalogue" || !isCode(file) ? [] : stringsOutside(read.texts, file, content);
+  for (const { file, read, others, imports } of scannedFiles(root)) {
+    for (const { name, line } of imports) {
+      if (TEST_MODULE.test(name)) unreadable.push({ file, line, reason: `import of the test module "${name}" (${UNREADABLE_HINTS.testModule})` });
+      if (importedData(root, file, name) === null) unreadable.push({ file, line, reason: `import of "${name}", a data file the scan cannot find (${UNREADABLE_HINTS.dataFile})` });
+    }
     const strings = [...read.texts, ...others].map((text) => ({ ...text, characters: unreadableCharacters(text.text) }));
     for (const text of strings) {
       if (text.characters.length > 0) unreadable.push({ file, line: text.line, reason: `characters outside interface text: ${text.characters.join(", ")} (${UNREADABLE_HINTS.characters})` });

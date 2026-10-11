@@ -8,7 +8,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import ts from "typescript";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { CLOSED_UP_NOTE, UNREADABLE_HINTS, findMisplacedUiText, findUnreadableText, scanUiText } from "../../scripts/forbidden-terms/scan";
+import { CLOSED_UP_NOTE, UNREADABLE_HINTS, findMisplacedUiText, findUnreadableText, isolatedHost, scanUiText, syntaxErrors } from "../../scripts/forbidden-terms/scan";
 import { MAX_WINDOW_PARTS, PHRASE_BREAK, closedUpPastQuotes, findForbiddenTerms, findForbiddenTermsInMarkup, unreadableCharacters, windowsCutShort } from "../../scripts/forbidden-terms/terms";
 
 const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url));
@@ -754,6 +754,237 @@ describe("a file the scan cannot read", () => {
       rmSync(work, { recursive: true, force: true });
     }
   }, 60_000);
+});
+
+// QA of e11efe6: three ways for text to reach a page from a place the scan
+// did not read. What cannot be read fails a check.
+describe("text that reaches a page from outside the files the scan reads", () => {
+  const entries = (): string[] => scanUiText(root!).flatMap((finding) => finding.terms.map((term) => term.entry));
+  const reasons = (): [string, number, string][] => findUnreadableText(root!).map((entry) => [entry.file, entry.line, entry.reason]);
+
+  it("reports a page that imports a component named like a test, which is not read", () => {
+    write("src/qa/Case.spec.tsx", "export default function Case() { return <p>Sumnjivo</p>; }\n");
+    write("app/qa-spec/page.tsx", 'import Case from "../../src/qa/Case.spec";\nexport default function Page() { return <Case />; }\n');
+    expect(entries()).toEqual([]);
+    expect(reasons()).toEqual([["app/qa-spec/page.tsx", 1, `import of the test module "../../src/qa/Case.spec" (${UNREADABLE_HINTS.testModule})`]]);
+    expect(UNREADABLE_HINTS.testModule).toMatch(/test files are not read/);
+  });
+
+  /** How the import is written, on the second line of the file. */
+  const TEST_IMPORTS: readonly [string, string, string][] = [
+    ["a test module by its whole name", "src/components/Page.tsx", 'import { Case } from "./Case.test.tsx";'],
+    ["a test module under the alias", "src/components/Page.tsx", 'import { Case } from "@/components/Case.test";'],
+    ["a spec module with another extension", "src/components/Page.tsx", 'import { Case } from "./Case.spec.mjs";'],
+    ["a test module for its side effects", "app/layout.tsx", 'import "./setup.test";'],
+    ["a test module for a type", "src/domain/sync/state.ts", 'import type { Fixture } from "./state.test";'],
+    ["a test module handed on", "src/domain/sync/index.ts", 'export * from "./state.spec";'],
+    ["a test module handed on by name", "src/domain/sync/labels.ts", 'export { LABEL } from "./labels.test";'],
+    ["a test module loaded later", "src/components/Page.tsx", 'export const Case = lazy(() => import("./Case.spec"));'],
+    ["a test module required", "src/domain/sync/state.ts", 'export const fixture = require("./state.test");'],
+    ["a test module in the old form", "src/domain/sync/state.ts", 'import fixture = require("./state.spec");'],
+  ];
+
+  it.each(TEST_IMPORTS)("reports the import of %s", (_, file, line) => {
+    write(file, `export const A = 1;\n${line}\n`);
+    const name = /"([^"]+)"/.exec(line)![1]!;
+    expect(reasons()).toEqual([[file, 2, `import of the test module "${name}" (${UNREADABLE_HINTS.testModule})`]]);
+  });
+
+  it("does not report the import of a module that only has test or spec in its name", () => {
+    write("src/components/Page.tsx", 'import { a } from "./latest";\nimport { b } from "./spec";\nimport { c } from "./test/Case";\nimport { d } from "./Case.testing";\nimport { e } from "inspect";\nimport f from "./contest.css";\nexport const all = [a, b, c, d, e, f, "./Case.test"];\n');
+    expect(reasons()).toEqual([]);
+  });
+
+  it("does not read the test file itself, and an import inside one is nobody's", () => {
+    write("src/qa/Case.spec.tsx", 'import other from "./Other.test";\nimport copy from "./nowhere.json";\nexport default function Case() { return <p>Sumnjivo</p>; }\n');
+    expect(entries()).toEqual([]);
+    expect(reasons()).toEqual([]);
+  });
+
+  it("reads a .json file that a page imports from outside the catalogues like a catalogue", () => {
+    write("src/qa/data/copy.json", '{"title":"Sumnjivo"}');
+    write("app/qa-json/page.tsx", 'import copy from "../../src/qa/data/copy.json";\nexport default function Page() { return <p>{copy.title}</p>; }\n');
+    expect(scanUiText(root!).map((finding) => [finding.file, finding.line, finding.text, finding.terms.map((term) => term.entry)])).toEqual([["src/qa/data/copy.json", 1, "Sumnjivo", ["sumnjivo"]]]);
+    expect(reasons()).toEqual([]);
+    // Not imported, it is not interface text, as before.
+    write("app/qa-json/page.tsx", "export default function Page() { return <p>Rok</p>; }\n");
+    expect(entries()).toEqual([]);
+  });
+
+  /** Where the importing file and the data are, and how the import names the data. */
+  const DATA: readonly [string, string, string, string][] = [
+    ["next to the importing file", "src/components/Page.tsx", "src/components/copy.json", "./copy.json"],
+    ["outside app and src", "src/domain/citation/index.ts", "config/faculties/x/citation.json", "../../../config/faculties/x/citation.json"],
+    ["under the alias", "app/rad/page.tsx", "src/data/copy.json", "@/data/copy.json"],
+    ["with the extension in capitals", "src/components/Page.tsx", "src/components/copy.JSON", "./copy.JSON"],
+    ["from a text module", "src/domain/sync/labels.ts", "src/domain/sync/words.json", "./words.json"],
+  ];
+
+  it.each(DATA)("reads imported data %s", (_, file, data, name) => {
+    write(data, '{\n  "a": { "label": "Rok" },\n  "b": ["Risk", { "c": "Spremljeno" }]\n}\n');
+    write(file, `import words from "${name}";\nexport const all = words;\n`);
+    expect(scanUiText(root!).map((finding) => [finding.file, finding.line, finding.terms.map((term) => term.entry)])).toEqual([
+      [data, 3, ["risk"]],
+      [data, 3, [HR]],
+    ]);
+    expect(reasons()).toEqual([]);
+  });
+
+  it.each([
+    ["an import", 'import words from "./words.json";'],
+    ["an import handed on", 'export { default } from "./words.json";'],
+    ["an import loaded later", 'export const words = import("./words.json");'],
+    ["a require", 'export const words = require("./words.json");'],
+  ])("reads the data of %s", (_, line) => {
+    write("src/components/words.json", `["Sum${cp(0x456)}njivo", "Kopirano"]`);
+    write("src/components/Page.tsx", `${line}\n`);
+    expect(entries()).toEqual(["kopirano"]);
+    // The guard reads its strings too.
+    expect(reasons().map(([file, , reason]) => [file, reason.split(" (")[0]])).toEqual([["src/components/words.json", "characters outside interface text: U+0456"]]);
+  });
+
+  it("reads imported data once, whoever imports it, and a catalogue as it always was", () => {
+    write("src/components/words.json", '["Kopirano"]');
+    write("src/lib/i18n/hr.json", '{ "title": "Skriveno" }');
+    write("src/components/A.tsx", 'import words from "./words.json";\nimport hr from "../lib/i18n/hr.json";\nexport const a = [words, hr];\n');
+    write("src/components/B.tsx", 'import words from "@/components/words.json";\nimport hr from "@/lib/i18n/hr.json";\nexport const b = [words, hr];\n');
+    expect(scanUiText(root!).map((finding) => [finding.file, finding.terms.map((term) => term.entry)])).toEqual([
+      ["src/lib/i18n/hr.json", ["skriveno"]],
+      ["src/components/words.json", ["kopirano"]],
+    ]);
+    expect(reasons()).toEqual([]);
+  });
+
+  /** What it is, how the import names the data. */
+  const LOST: readonly [string, string][] = [
+    ["data that is not there", "./missing.json"],
+    ["data under an alias the scan does not know", "~/data/copy.json"],
+    ["data of a package", "some-package/copy.json"],
+    ["data outside the repository", "../../../outside.json"],
+    ["data under the alias that is not there", "@/data/missing.json"],
+  ];
+
+  it.each(LOST)("reports the import of %s", (_, name) => {
+    write("src/data/copy.json", '{"title":"Sumnjivo"}');
+    write("src/components/Page.tsx", `export const A = 1;\n\nimport copy from "${name}";\nexport const all = copy;\n`);
+    expect(reasons()).toEqual([["src/components/Page.tsx", 3, `import of "${name}", a data file the scan cannot find (${UNREADABLE_HINTS.dataFile})`]]);
+    expect(UNREADABLE_HINTS.dataFile).toMatch(/read like a catalogue/);
+    expect(entries()).toEqual([]);
+  });
+
+  it("stops on imported data that is not JSON or not UTF-8, like a catalogue", () => {
+    write("src/components/Page.tsx", 'import words from "./words.json";\nexport const all = words;\n');
+    write("src/components/words.json", '{ "title": "Rok" ');
+    expect(() => scanUiText(root!)).toThrow(SyntaxError);
+    expect(() => findUnreadableText(root!)).toThrow(SyntaxError);
+    writeFileSync(path.join(root!, "src", "components", "words.json"), Buffer.from([0x7b, 0xff, 0x7d]));
+    expect(() => scanUiText(root!)).toThrow("src/components/words.json: the file is not valid UTF-8, so the scan cannot read it");
+  });
+
+  // A text module puts text together too. Its `+` chains and templates are
+  // read as the same expression is read in JSX.
+  it("finds an entry that a text module puts together from literal parts", () => {
+    write("src/qa/labels.ts", 'export const concatenated = "Sum" + "njivo";\nexport const templated = `Sum${"nji"}vo`;\n');
+    write("app/qa-concat/page.tsx", 'import { concatenated, templated } from "../../src/qa/labels";\nexport default function Page() {\n  return <div><p>{concatenated}</p><p>{templated}</p></div>;\n}\n');
+    expect(scanUiText(root!).map((finding) => [finding.file, finding.line, finding.text, finding.terms.map((term) => term.entry)])).toEqual([
+      ["src/qa/labels.ts", 1, "Sumnjivo", ["sumnjivo"]],
+      ["src/qa/labels.ts", 2, "Sumnjivo", ["sumnjivo"]],
+    ]);
+    expect(reasons()).toEqual([]);
+  });
+
+  /** What it is, the line of a text module, the entries found. */
+  const COMPOSED: readonly [string, string, readonly string[]][] = [
+    ["three literals", 'export const A = "Su" + "mnj" + "ivo";', ["sumnjivo"]],
+    ["literals in brackets", 'export const A = ("Kopi" + ("ra" + "no")) as string;', ["kopirano"]],
+    ["a literal and a template without placeholders", 'export const A = "Hid" + `den`;', ["hidden"]],
+    ["a template inside a template", "export const A = `Vje${`ro${\"jat\"}no`}st`;", ["vjerojatnost"]],
+    ["a chain inside a template", 'export const A = `Pre${"pi" + "sa"}no`;', ["prepisano"]],
+    ["a phrase over two literals", 'export const A = "Nestali " + "podaci";', ["nestali podaci"]],
+    ["a property of an object", 'export const A = { label: "Ri" + "zik" };', ["rizik"]],
+    ["an item of an array", 'export const A = ["Rok", "Sus" + "picious"];', ["suspicious"]],
+    ["what a function returns", 'export const a = (): string => "Skri" + "veno";', ["skriveno"]],
+    ["an argument of a call", 'export const A = label("Ano" + "malija");', ["anomalija, anomaly"]],
+    ["one branch of a condition", 'export const A = (n: number) => (n > 1 ? "Sum" + "njivo" : "Rok");', ["sumnjivo"]],
+    ["a condition between the halves", 'export const A = (n: boolean) => "Sum" + (n ? "njivo" : "a");', ["sumnjivo"]],
+    ["a computed part between the halves", 'export const A = (n: number) => "Sum" + n + "njivo";', ["sumnjivo"]],
+    ["a computed part between the halves of a template", "export const A = (n: number) => `Kopi${n}rano`;", ["kopirano"]],
+    ["an assignment", 'let a = "Rok";\na += "x";\na = "Sum" + "njivo";', ["sumnjivo"]],
+    // Nothing to report.
+    ["a message with a number in it", "export const A = (n: number) => `Naziv smije imati najviše ${n} znakova.`;", []],
+    ["plain words put together", 'export const A = "Rok " + "predaje";', []],
+    ["numbers added up", "export const A = (a: number, b: number) => a + b + 1;", []],
+    ["a contextual word and its place", 'export const A = "Spremljeno na uređaju" + ".";', []],
+  ];
+
+  it.each(COMPOSED)("in a text module: %s", (_, line, expected) => {
+    write("src/domain/sync/labels.ts", `${line}\n`);
+    expect(entries()).toEqual(expected);
+    expect(reasons()).toEqual([]);
+  });
+
+  it("reports an entry that is whole in one literal once, where it stands, and not again for the expression", () => {
+    write("src/domain/sync/messages.ts", 'export const A = (n: number) =>\n  "Rok " +\n  "Sumnjivo " + n;\n');
+    expect(scanUiText(root!).map((finding) => [finding.line, finding.text])).toEqual([[3, "Sumnjivo "]]);
+  });
+
+  it("says that an entry of a text module was found by joining the parts around a computed one", () => {
+    write("src/domain/sync/labels.ts", 'export const A = (n: number) => "Sum" + n + "njivo";\n');
+    expect(scanUiText(root!).map((finding) => finding.text)).toEqual([`Sum | njivo (${CLOSED_UP_NOTE})`]);
+  });
+
+  it("reports a character that is harmless alone between two parts of a text module, and too many readings", () => {
+    write("src/domain/sync/labels.ts", `export const A = "Sum" + ${JSON.stringify(cp(0x2009))} + "njivo";\n`);
+    expect(reasons().map(([, line, reason]) => [line, reason.split(" (")[0]])).toEqual([[1, "characters outside interface text, where its parts meet: U+2009"]]);
+    // Once for the whole expression, not again for the chains and templates inside it.
+    write("src/domain/sync/labels.ts", `export const A = "Sum" + ${JSON.stringify(cp(0x2009))} + "njivo" + "x";\nexport const B = \`a\${"Ri" + ${JSON.stringify(cp(0x2009))} + "zik"}b\`;\n`);
+    expect(reasons().map(([, line, reason]) => [line, reason.split(" (")[0]])).toEqual([
+      [1, "characters outside interface text, where its parts meet: U+2009"],
+      [2, "characters outside interface text, where its parts meet: U+2009"],
+    ]);
+    write("src/domain/sync/labels.ts", `export const A = (a: boolean) => ${Array.from({ length: 7 }, () => '(a ? "x" : "y")').join(" + ")};\n`);
+    expect(reasons().map(([, , reason]) => reason)).toEqual([`more than 64 readings of one text (${UNREADABLE_HINTS.readings})`]);
+  });
+
+  it("puts text together like that only in a text module", () => {
+    // Outside one, a string is checked against the Croatian entries by itself, as before.
+    write("src/domain/sync/state.ts", 'export const A = "Hid" + "den";\nexport const B = "Sum" + "njivo";\n');
+    write("src/components/Case.tsx", 'const label = "Kopi" + "rano";\nexport const Case = () => <p>{label}</p>;\n');
+    expect(entries()).toEqual([]);
+  });
+
+  // QA of e11efe6: the program that is asked for syntax errors holds the one
+  // file, and its host is asked for no other: no module name is looked up.
+  it("asks the compiler for the syntax errors of one file without looking up what it imports", () => {
+    const WRITTEN = '/// <reference types="node" />\n/// <reference path="./other.d.ts" />\nimport { missing } from "./nowhere";\nimport data from "node:fs";\nimport type { T } from "@/none";\nexport * from "./also-nowhere";\nconst n: number = "tri";\nexport const C = (t: T) => <p>{missing}{undeclared}{data}{n}{t}</p>;\n';
+    for (const [name, kind] of [["src/components/Case.tsx", ts.ScriptKind.TSX], ["src/domain/sync/state.ts", ts.ScriptKind.TS]] as const) {
+      const written = kind === ts.ScriptKind.TSX ? WRITTEN : WRITTEN.replace(/<p>.*<\/p>/, "[missing, data, n, t]");
+      const source = ts.createSourceFile(name, written, ts.ScriptTarget.Latest, true, kind);
+      const host = isolatedHost(source);
+      // Every way a host is asked about a file other than the one it holds, and what it was asked to look up.
+      const asked: string[] = [];
+      const looked: string[] = [];
+      const files = { ...host };
+      expect([files.fileExists("/src/components/nowhere.ts"), files.readFile("/src/components/nowhere.ts")]).toEqual([false, undefined]);
+      host.fileExists = (file) => (asked.push(`fileExists ${file}`), files.fileExists(file));
+      host.readFile = (file) => (asked.push(`readFile ${file}`), files.readFile(file));
+      host.getSourceFile = (file, ...rest) => (file === name ? undefined : asked.push(`getSourceFile ${file}`), files.getSourceFile(file, ...rest));
+      host.directoryExists = (file) => (asked.push(`directoryExists ${file}`), false);
+      host.getDirectories = (file) => (asked.push(`getDirectories ${file}`), []);
+      host.resolveModuleNameLiterals = (names, ...rest) => {
+        looked.push(...names.map((literal) => literal.text));
+        const resolved = files.resolveModuleNameLiterals!(names, ...rest);
+        expect(resolved.map((entry) => entry.resolvedModule)).toEqual(names.map(() => undefined));
+        return resolved;
+      };
+      expect(syntaxErrors(source, host)).toEqual([]);
+      expect(asked).toEqual([]);
+      expect(looked.sort()).toEqual(["./also-nowhere", "./nowhere", "@/none", "node:fs"]);
+      // The same host still gives the errors of the file it holds.
+      const broken = ts.createSourceFile(name, `${written}export const D = {;\n`, ts.ScriptTarget.Latest, true, kind);
+      expect(syntaxErrors(broken).length).toBeGreaterThan(0);
+    }
+  });
 });
 
 // QA of 2b6b414: whether a contextual word is read closed up was decided for
