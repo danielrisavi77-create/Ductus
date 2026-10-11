@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { CLOSED_UP_NOTE, UNREADABLE_HINTS, findUnreadableText, scanUiText } from "../../scripts/forbidden-terms/scan";
-import { PHRASE_BREAK, closedUpPastQuotes, findForbiddenTerms, findForbiddenTermsInMarkup, unreadableCharacters } from "../../scripts/forbidden-terms/terms";
+import { MAX_WINDOW_PARTS, PHRASE_BREAK, closedUpPastQuotes, findForbiddenTerms, findForbiddenTermsInMarkup, unreadableCharacters, windowsCutShort } from "../../scripts/forbidden-terms/terms";
 
 const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const HR = "spremljeno (bez pojašnjenja)";
@@ -167,6 +167,85 @@ describe("an entry cut by boundaries, whatever stands next to it", () => {
   it("adds nothing when the text is not read closed up", () => {
     const joined = ["Opis", "hid", "den", "Kraj"].join(B);
     expect(findForbiddenTermsInMarkup(joined, joined, false)).toEqual([]);
+  });
+
+  // Review of 8325bb0: parts without letters have no length, so a run of them
+  // has to end a window by its count, and the text is then reported instead.
+  const entriesIn = (parts: readonly string[]): string[] => findForbiddenTermsInMarkup(parts.join(B), parts.join(B)).map((term) => term.entry);
+  const run = (count: number, part: string): string[] => Array.from({ length: count }, () => part);
+  const NOTHING = cp(0x200b);
+  const DOT = cp(0xb7);
+
+  it("reads an entry over a window of 64 parts, and says that a text has a longer run of parts without letters", () => {
+    expect(MAX_WINDOW_PARTS).toBe(64);
+    // "hid", 62 parts of nothing and "den" are 64 parts.
+    expect(entriesIn(["Opis", "hid", ...run(62, NOTHING), "den", "Kraj"])).toEqual(["hidden"]);
+    expect(entriesIn(["Opis", "hid", ...run(63, NOTHING), "den", "Kraj"])).toEqual([]);
+    expect(windowsCutShort(["Opis", "hid", ...run(63, NOTHING), "den", "Kraj"].join(B))).toBe(true);
+    // The longest window that is read whole: 64 parts, the first and the last one with letters.
+    expect(windowsCutShort(["hid", ...run(62, DOT), "den"].join(B))).toBe(false);
+    expect(windowsCutShort(["hid", ...run(63, DOT), "den"].join(B))).toBe(true);
+    expect(windowsCutShort(["hid", ...run(62, DOT), "den"].join(B + B))).toBe(false);
+    expect(windowsCutShort(["hid", ...run(63, DOT), "den"].join(B + B))).toBe(true);
+    expect(windowsCutShort(run(65, DOT).join(B))).toBe(true);
+    expect(windowsCutShort(run(64, DOT).join(B))).toBe(false);
+    // Wherever the run stands in the text.
+    const LONG = "Rok predaje zadatka je sutra u podne, a ne prekosutra";
+    // The part before the run is the first of a window as well, so one part fewer is enough there.
+    expect(windowsCutShort([LONG, "a", LONG, "hid", ...run(62, DOT), "den"].join(B))).toBe(true);
+    expect(windowsCutShort([LONG, "a", LONG, "hid", ...run(61, DOT), "den"].join(B))).toBe(false);
+    // Only a window that its letters would not have ended: 48 of them inside it do not end it, 49 do.
+    expect(windowsCutShort(["a", "b".repeat(48), ...run(62, DOT), "c"].join(B))).toBe(true);
+    expect(windowsCutShort(["a", "b".repeat(49), ...run(62, DOT), "c"].join(B))).toBe(false);
+    expect(windowsCutShort(["a", ...run(62, DOT), "b".repeat(48), "c"].join(B))).toBe(true);
+    expect(windowsCutShort(["a", ...run(62, DOT), "b".repeat(49), "c"].join(B))).toBe(false);
+  });
+
+  it("never passes an entry cut over a run of parts without letters: it is found or the text is reported", { timeout: 60_000 }, () => {
+    for (const part of [NOTHING, cp(0x201e)]) {
+      for (const count of [0, 1, 2, 30, 31, 32, 60, 61, 62, 63, 64, 65, 66, 100, 140]) {
+        for (const parts of [["Opis", "hid", ...run(count, part), "den", "Kraj"], ["Opis", ...run(count, part), "hid", ...run(count, part), "den"], ["Rok", "Kopi", ...run(count, part), "ra", ...run(count, part), "no", "Kraj"]]) {
+          expect(entriesIn(parts).length > 0 || windowsCutShort(parts.join(B)), `${count} parts of U+${part.codePointAt(0)!.toString(16)}`).toBe(true);
+        }
+      }
+    }
+  });
+
+  it.each([
+    ["words", (index: number) => ["Opis", "Rok", "predaje", "Kraj"][index % 4]!],
+    ["single letters", (index: number) => "abcdefghij"[index % 10]!],
+    ["a mark after every word", (index: number) => (index % 2 === 0 ? "Rok" : DOT)],
+    ["twelve marks after every word", (index: number) => (index % 13 === 0 ? "Rok predaje zadatka" : DOT)],
+  ])("does not say so for a text of %s, however long", (_, part) => {
+    for (const count of [3, 64, 65, 66, 500]) expect(windowsCutShort(Array.from({ length: count }, (__, index) => part(index)).join(B))).toBe(false);
+  });
+
+  it.each([
+    ["marks", () => DOT],
+    ["pictures", () => cp(0x1f600)],
+    ["spaces", () => " "],
+    ["different marks", (index: number) => `${DOT}${cp(0x2014)}${cp(0x2026)}!?:;,.`[index % 9]! + DOT.repeat(index % 7)],
+  ])("reads a text with thousands of parts of %s in a time that grows with their number", { timeout: 60_000 }, (_, part) => {
+    // Before the bound, 3000 such parts took two minutes and 1000 of them five seconds.
+    const joined = ["hid", ...Array.from({ length: 5000 }, (__, index) => part(index)), "den"].join(B);
+    const from = performance.now();
+    expect(findForbiddenTermsInMarkup(joined, joined)).toEqual([]);
+    expect(windowsCutShort(joined)).toBe(true);
+    expect(performance.now() - from).toBeLessThan(15_000);
+  });
+
+  it("reports a text with a longer run of parts without letters than a window takes, and not a shorter one", () => {
+    // A full stop: the guard has nothing else to say about it.
+    const items = (count: number): string => `<ul><li>hid</li>${"<li>.</li>".repeat(count)}<li>den</li></ul>`;
+    write("src/components/Case.tsx", component([items(63)]));
+    expect(findUnreadableText(root!)).toEqual([{ file: "src/components/Case.tsx", line: 2, reason: `more than 64 parts of one text next to each other with hardly a letter between them (${UNREADABLE_HINTS.parts})` }]);
+    expect(UNREADABLE_HINTS.parts).toMatch(/would not be found.*fewer parts/);
+    write("src/components/Case.tsx", component([items(62)]));
+    expect(findUnreadableText(root!)).toEqual([]);
+    // The same for unknown parts in one element, and only for the text that has them:
+    // the paragraph and the element around it, which starts with the same text; not the second paragraph.
+    write("src/components/Case.tsx", component(["<div>", `  <p>hid${"{n}.".repeat(63)}{n}den</p>`, "  <p>Rok predaje</p>", "</div>"]));
+    expect(findUnreadableText(root!).map((entry) => [entry.line, entry.reason.slice(0, 18)])).toEqual([[3, "more than 64 parts"], [3, "more than 64 parts"]]);
   });
 });
 

@@ -4,7 +4,7 @@ import path from "node:path";
 import ts from "typescript";
 
 import { decodeEntities } from "./entities";
-import { FORBIDDEN_TERMS, PHRASE_BREAK, closedUpPastQuotes, findForbiddenTerms, findForbiddenTermsInMarkup, unreadableCharacters, type ForbiddenTerm } from "./terms";
+import { FORBIDDEN_TERMS, MAX_WINDOW_PARTS, PHRASE_BREAK, closedUpPastQuotes, findForbiddenTerms, findForbiddenTermsInMarkup, unreadableCharacters, windowsCutShort, type ForbiddenTerm } from "./terms";
 
 /**
  * Finds interface text in the source tree and checks it against the
@@ -757,6 +757,7 @@ export const UNREADABLE_HINTS = {
   meeting:
     'the text is read with its parts and elements joined, and between two letters only a plain space sets words apart: an element boundary, a line break and ASCII punctuation do not. Put {" "} between the two parts or elements, or write the character out of the text. Croatian and English quotation marks next to an element boundary are not reported',
   readings: "put the conditional or possibly hidden inline parts into elements of their own, so that no element has that many alternatives",
+  parts: "a word cut over that many parts would not be found, so write the text in fewer parts",
 } as const;
 
 /**
@@ -884,7 +885,9 @@ export interface Unreadable {
  *   `String.fromCodePoint`, so the source names the character; the guard is
  *   not narrowed and no file is exempt;
  * - every text with more readings than the scan keeps (`MAX_READINGS`), where
- *   a part was read as unknown instead of in each of its forms.
+ *   a part was read as unknown instead of in each of its forms;
+ * - every text with a longer run of parts without letters than the dictionary
+ *   reads across (`windowsCutShort`).
  *
  * The fix is to write the text with Croatian or English letters, or to split
  * an element with that many alternatives; there are no exemptions.
@@ -903,6 +906,7 @@ export function findUnreadableText(root: string): Unreadable[] {
     }
     for (const unit of read.units) {
       if (unit.overflowed) unreadable.push({ file, line: unit.line, reason: `more than ${MAX_READINGS} readings of one text (${UNREADABLE_HINTS.readings})` });
+      if (unit.readings.some(([text]) => windowsCutShort(text))) unreadable.push({ file, line: unit.line, reason: `more than ${MAX_WINDOW_PARTS} parts of one text next to each other with hardly a letter between them (${UNREADABLE_HINTS.parts})` });
       // A character that is harmless by itself can stand between two parts
       // with letters, so the text is read as the parts make it, closed up as
       // the dictionary reads it. What a string of the unit already reported

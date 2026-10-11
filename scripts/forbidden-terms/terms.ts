@@ -276,12 +276,20 @@ export function findForbiddenTermsInMarkup(joined: string, spaced: string, close
  * may hold. An entry that starts in the first part of a window and ends in
  * its last one has all of them inside it, and the longest text a pattern is
  * written for has 34 characters ("umjetne inteligencije ga je napisao"); the
- * rest is room for longer endings. A wider window adds nothing that should
- * be found: a pattern keeps letters away from its ends and never asks for
- * one there, so what a window finds, the narrowest window around the entry
- * finds as well.
+ * rest is room for longer endings. A pattern keeps letters away from its ends
+ * and never asks for one there, so what a window finds, the narrowest window
+ * around the entry finds as well. A pattern that lets a word run on has no
+ * longest text, so this is a bound and not a proof: text cut by boundaries
+ * that is longer than the bound is not read in a window.
  */
 const WINDOW = 48;
+/**
+ * The most parts in a window. Parts without a letter or a digit (a dot, a
+ * picture, white space) have no length, so `WINDOW` alone would let a run of
+ * them widen a window without end, and the time with it. A text that this
+ * bound cuts a window in is reported by the guard (`windowsCutShort`).
+ */
+export const MAX_WINDOW_PARTS = 64;
 /** Parts kept on each side of a window, apart from it: the other words of a phrase, at most four. */
 const CONTEXT = 4;
 const NO_TERMS: ReadonlySet<ForbiddenTerm> = new Set();
@@ -295,16 +303,18 @@ const foundInPiece = new Map<string, readonly ForbiddenTerm[]>();
  * that an entry can reach across (`WINDOW`) is also read closed up by
  * itself, with a few parts around it kept apart. Parts are measured as the
  * dictionary reads them, so a part of invisible characters has no length.
- * The number of readings grows with the number of parts, not with its square.
+ * A window has at most `MAX_WINDOW_PARTS` parts, so the number of readings
+ * grows with the number of parts, not with its square.
  */
 function inWindows(joined: string): ReadonlySet<ForbiddenTerm> {
   const parts = joined.split(PHRASE_BREAK).filter((part) => part !== "");
   if (parts.length < 3) return NO_TERMS;
+  const lengths = parts.map((part) => foldText(part).length);
   const quoted = [...joined].some((char) => QUOTATION_MARKS.has(char.codePointAt(0)!));
   const found = new Set<ForbiddenTerm>();
   for (let start = 0; start < parts.length - 1; start += 1) {
     const before = parts.slice(Math.max(0, start - CONTEXT), start);
-    for (let end = start + 2, within = 0; end <= parts.length && within <= WINDOW; within += foldText(parts[end - 1]!).length, end += 1) {
+    for (let end = start + 2, widest = widestWindow(lengths, start).end; end <= widest; end += 1) {
       const inside = parts.slice(start, end);
       const after = parts.slice(end, end + CONTEXT);
       for (const closed of new Set([inside.join(""), quoted ? closedUpPastQuotes(inside.join(PHRASE_BREAK)) : inside.join("")])) {
@@ -325,6 +335,29 @@ function inWindows(joined: string): ReadonlySet<ForbiddenTerm> {
     }
   }
   return found;
+}
+
+/**
+ * The end of the widest window that starts at `start`, by the lengths of the
+ * parts strictly inside it, and whether `MAX_WINDOW_PARTS` stopped it while
+ * `WINDOW` would have let it grow.
+ */
+function widestWindow(lengths: readonly number[], start: number): { end: number; cut: boolean } {
+  let end = start + 1;
+  for (let within = 0; end < lengths.length && within <= WINDOW; end += 1, within += lengths[end - 1]!) {
+    if (end + 1 - start > MAX_WINDOW_PARTS) return { end, cut: true };
+  }
+  return { end, cut: false };
+}
+
+/**
+ * Whether `joined` has a run of parts that `inWindows` did not read as far as
+ * an entry can reach, because the run has more parts than a window takes. An
+ * entry cut over such a run would not be found, so the guard reports the text.
+ */
+export function windowsCutShort(joined: string): boolean {
+  const lengths = joined.split(PHRASE_BREAK).filter((part) => part !== "").map((part) => foldText(part).length);
+  return lengths.length >= 3 && lengths.some((_, start) => widestWindow(lengths, start).cut);
 }
 
 /** The quotation marks of Croatian and English outside ASCII. */

@@ -6,7 +6,7 @@ import { fc, test } from "@fast-check/vitest";
 import { expect } from "vitest";
 
 import { findUnreadableText, scanUiText } from "../../scripts/forbidden-terms/scan";
-import { closedUpPastQuotes, findForbiddenTerms, findForbiddenTermsInMarkup, unreadableCharacters, PHRASE_BREAK } from "../../scripts/forbidden-terms/terms";
+import { closedUpPastQuotes, findForbiddenTerms, findForbiddenTermsInMarkup, unreadableCharacters, windowsCutShort, PHRASE_BREAK } from "../../scripts/forbidden-terms/terms";
 
 // A dictionary entry with one of its letters swapped for a letter that looks
 // the same, or with a character without ink put into it, never passes: either
@@ -157,5 +157,24 @@ test.prop([sample, fc.array(fc.nat(), { minLength: 1, maxLength: 20 }), neighbou
     const expected = findForbiddenTerms(text).map((term) => term.entry);
     const found = findForbiddenTermsInMarkup(joined, joined).map((term) => term.entry);
     for (const entry of expected) expect(found).toContain(entry);
+  },
+);
+
+// Review of 8325bb0: a window takes a bounded number of parts, so an entry cut
+// over a long run of parts that the dictionary reads as nothing is either
+// found or the text is reported as one with too long a run.
+const EMPTY_PARTS = [0x200b, 0xad, 0x201e, 0x201d, 0xab];
+const emptyRun = fc.tuple(fc.constantFrom(...EMPTY_PARTS), fc.constantFrom(0, 1, 5, 40, 61, 62, 63, 64, 65, 90)).map(([code, count]) => Array.from({ length: count }, () => String.fromCodePoint(code)));
+
+test.prop([sample, fc.array(fc.tuple(fc.nat(), emptyRun), { minLength: 1, maxLength: 3 }), neighbours, neighbours])(
+  "an entry cut over runs of parts that are read as nothing is found or the text is reported",
+  (text, cuts, before, after) => {
+    const letters = [...text];
+    const places = letters.flatMap((_, index) => (index > 0 && letters[index - 1] !== " " && letters[index] !== " " ? [index] : []));
+    const runs = new Map(cuts.map(([cut, run]) => [places[cut % places.length]!, run]));
+    const cut = letters.map((letter, index) => (runs.has(index) ? [PHRASE_BREAK, ...runs.get(index)!.map((part) => part + PHRASE_BREAK), letter].join("") : letter)).join("");
+    const joined = [...before, cut, ...after].join(PHRASE_BREAK);
+    const found = findForbiddenTermsInMarkup(joined, joined).map((term) => term.entry);
+    if (!windowsCutShort(joined)) for (const entry of findForbiddenTerms(text).map((term) => term.entry)) expect(found).toContain(entry);
   },
 );
