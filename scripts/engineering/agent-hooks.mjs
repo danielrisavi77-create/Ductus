@@ -17,6 +17,8 @@ export const LARGE_DOC_BYTES = 16_000;
 export const OUTLINE_LIMIT = 80;
 // Hook additionalContext is capped at 10,000 characters by Claude Code.
 export const STATE_LIMIT = 9_000;
+// Node major the repo runs on (.nvmrc, package.json "engines"); a test keeps them in step.
+export const NODE_MAJOR = 24;
 
 const GENERATED = [/(^|\/)pnpm-lock\.yaml$/, /\.tsbuildinfo$/, /(^|\/)\.next\//];
 
@@ -204,6 +206,34 @@ export function stateContext(file, text) {
   );
 }
 
+// One line on what is wrong with the checkout's toolchain, or null when it is
+// ready. `lock` is the checked-out pnpm-lock.yaml and `installed` the copy pnpm
+// keeps of the lockfile it last installed (node_modules/.pnpm/lock.yaml);
+// undefined means the file is missing or could not be read safely.
+export function envNotice({ node, lock, installed }) {
+  const problems = [];
+  if (!(Number(String(node).split(".")[0]) >= NODE_MAJOR)) {
+    problems.push(`Node ${node} is older than ${NODE_MAJOR} (.nvmrc); CI runs ${NODE_MAJOR}, so a local pass here is not proof, say so in your report`);
+  }
+  const install = "run pnpm install --frozen-lockfile before tests or commits";
+  if (installed === undefined) problems.push(`node_modules is missing; ${install}`);
+  else if (lock !== installed) problems.push(`node_modules does not match pnpm-lock.yaml; ${install}`);
+  return problems.length ? `Environment check: ${problems.join(". ")}.` : null;
+}
+
+// A project file's text, read as STATE.md is: only when the path resolves to
+// that same place under the project root, never through a link elsewhere.
+function projectText(root, relative, io) {
+  try {
+    const real = realProjectPath(root, path.join(root, relative), io.realpathSync);
+    if (real?.relative !== relative) return undefined;
+    const text = withCheckedFile(real.file, (fd) => io.readFileSync(fd, "utf8"), io);
+    return typeof text === "string" ? text : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function readTail(io, fd, size, bytes) {
   const length = Math.min(size, bytes);
   const buffer = Buffer.alloc(length);
@@ -253,17 +283,20 @@ const modes = {
     const notice = budgetNotice(tokens ?? 0, sessionRole(event));
     return notice ? { hookEventName: "UserPromptSubmit", additionalContext: notice } : undefined;
   },
-  // SessionStart: saves the model call every session spends on reading STATE.md.
+  // SessionStart: saves the model call every session spends on reading STATE.md
+  // and the calls it spends finding out that its toolchain is not ready.
   start(event, io, env) {
     const root = projectDir(event, env);
-    const file = path.join(root, "STATE.md");
-    // Only the project's own STATE.md is loaded. Git checks out links, so a
-    // branch can make STATE.md point at .env or any other file; a path that
-    // resolves anywhere but <root>/STATE.md is not read and nothing is added.
-    const real = realProjectPath(root, file, io.realpathSync);
-    if (real?.relative !== "STATE.md") return undefined;
-    const text = withCheckedFile(real.file, (fd) => io.readFileSync(fd, "utf8"), io);
-    const context = typeof text === "string" ? stateContext(file, text) : null;
+    // Only the project's own files are read. Git checks out links, so a branch
+    // can make STATE.md point at .env or any other file; a path that resolves
+    // anywhere but the same place under <root> is not read.
+    const text = projectText(root, "STATE.md", io);
+    const state = text === undefined ? null : stateContext(path.join(root, "STATE.md"), text);
+    // A directory without a lockfile is not a checkout to install, so it gets no notice.
+    const lock = projectText(root, "pnpm-lock.yaml", io);
+    const installed = lock === undefined ? undefined : projectText(root, "node_modules/.pnpm/lock.yaml", io);
+    const notice = lock === undefined ? null : envNotice({ node: process.versions.node, lock, installed });
+    const context = [notice, state].filter(Boolean).join("\n\n");
     return context ? { hookEventName: "SessionStart", additionalContext: context } : undefined;
   },
 };
