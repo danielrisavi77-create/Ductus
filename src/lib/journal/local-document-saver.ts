@@ -230,8 +230,11 @@ export class LocalDocumentSaver {
       // it would report a false `stale`, or a `ready` that lifts a newer
       // `stale` and shows older text, so read again (#206 r6 model). Once
       // only: a fresh read still behind means the journal itself went back.
-      if (retry && (meta?.localSeq ?? 0) < this.seen) return await this.read(basis, false);
-      this.seen = Math.max(this.seen, meta?.localSeq ?? 0);
+      // Anything but a number (a stored BigInt makes `Math.max` throw) is left
+      // to `consistent()`, which reports it as corrupt (#206 Codex r4240729191).
+      const recorded = typeof meta?.localSeq === "number" ? meta.localSeq : 0;
+      if (retry && recorded < this.seen) return await this.read(basis, false);
+      this.seen = Math.max(this.seen, recorded);
       const stored = snapshot ? validateDocument(snapshot.document) : null;
       // Measured before any field changes, so a malformed row is `corrupt`
       // and never a half-applied read (#206 qa206c MANJE 2).

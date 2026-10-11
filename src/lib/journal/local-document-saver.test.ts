@@ -1589,6 +1589,16 @@ describe("LocalDocumentSaver: a journal whose rows disagree (#206 qa206e V-1)", 
     // #206 Codex r4240729191: IndexedDB stores a BigInt that JSON cannot serialise.
     ["a pending row that cannot be serialised", (db) =>
       db.table("pending").update([DOC, 1], { "tx.createdAt": 1n })],
+    ["a pending row with a cycle", async (db) => {
+      const row = await db.table("pending").get([DOC, 1]);
+      row.tx.self = row.tx;
+      await db.table("pending").put(row);
+    }],
+    ["a recorded sequence stored as a BigInt", (db) => db.table("meta").update(DOC, { localSeq: 1n })],
+    ["a snapshot document holding a BigInt", (db) =>
+      db.table("snapshots").update(DOC, { "document.schemaVersion": 1n })],
+    ["a snapshot document stored as a Map", (db) =>
+      db.table("snapshots").update(DOC, { document: new Map([["nodes", []]]) })],
   ];
   for (const [name, damage] of cases) {
     it(`17: ${name} is corrupt, never older or empty text shown as saved, and nothing is written`, async () => {
