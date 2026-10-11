@@ -139,3 +139,30 @@ test("an exempt PR reports a review carried from an earlier head", () => {
   assert.match(result.description, /Carried from bbbbbbb/);
   assert.ok(result.description.length <= 140, result.description);
 });
+
+test("a spec file outside e2e/ is a test", () => {
+  assert.equal(qaExemption(["src/domain/sync/queue.spec.ts"]), "tests");
+});
+
+test("through the gate, a rename from code or gate code into a test or document still waits for QA", () => {
+  for (const [filename, previous_filename] of [
+    ["tests/unit/a.test.ts", "src/domain/a.ts"],
+    ["docs/A.md", "scripts/engineering/review-gate-core.mjs"],
+  ]) {
+    const files = [{ filename, previous_filename, status: "renamed" }];
+    const pr = { body: body(), head: { sha: head }, changed_files: 1, auto_merge: null };
+    const { result } = evaluatePullRequest({ pr, files, comments: [review(head)], ownerLogin });
+    assert.equal(result.state, "pending", filename);
+    assert.match(result.description, /waiting for separately authenticated QA PASS/, filename);
+  }
+});
+
+test("the exemption note is only for critical PRs", () => {
+  for (const risk of ["low", "standard"]) {
+    const pr = { body: body(risk), head: { sha: head }, changed_files: 1, auto_merge: null };
+    const files = [{ filename: "docs/A.md", status: "modified" }];
+    const { result } = evaluatePullRequest({ pr, files, comments: [review(head)], ownerLogin });
+    assert.equal(result.state, "success", risk);
+    assert.doesNotMatch(result.description, /QA not required/, risk);
+  }
+});
