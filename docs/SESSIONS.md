@@ -209,7 +209,7 @@ Codex radi i desetak minuta, pa se skripta pokreće u pozadini s vremenskim ogra
 
 1. Prije koda: dizajnerski sustav i ključni ekrani demoa kao Design artifact; Daniel ih komentira i odobrava. Frontend gradi samo po odobrenom.
 2. Svaki frontend PR prilaže snimke zaslona iz Playwrighta (širok i mobilni prikaz, hr i en).
-3. Na zahtjev: lokalno pokretanje i pregled u pregledniku unutar aplikacije. Javni preview tek nakon D-08.
+3. Na zahtjev: lokalno pokretanje i pregled u pregledniku unutar aplikacije. Javni preview tek nakon potvrde dijela D-08 o dobavljačima i trošku (B0.1).
 
 ## 7. Okruženje i održavanje
 
