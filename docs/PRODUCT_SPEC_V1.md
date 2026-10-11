@@ -545,7 +545,9 @@ Može biti dio Course Dashboarda ili zaseban prikaz.
 - event log;
 - navigation tabs.
 
-**OWNER ODLUKA 5. 10. 2026.:** novi mockup ostaje točno u smjeru u kojem je dizajniran, uključujući:
+**OWNER ODLUKA 11. 10. 2026. (D-105; issue #87, komentar 6105201573):** nastavnički prikaz ostaje samo opisni, bez postotaka i bez zaključka o autorstvu. `docs/PRODUCT.md` §5 pravilo 2 i D-01 se ne mijenjaju. Postotni elementi i oznake navedeni u sljedećem popisu (odluka od 5. 10. 2026.) ne ulaze u nastavnički prikaz.
+
+**OWNER ODLUKA 5. 10. 2026.** (u dijelu koji se odnosi na nastavnički prikaz nadjačana odlukom od 11. 10. 2026.): novi mockup ostaje točno u smjeru u kojem je dizajniran, uključujući:
 
 - `6.1% nepoznato podrijetlo`;
 - postotne udjele provenance kategorija;
@@ -554,7 +556,7 @@ Može biti dio Course Dashboarda ili zaseban prikaz.
 - vizualno isticanje segmenata;
 - statusni sažetak u donjoj traci.
 
-Ovaj Product Spec ne uklanja niti zamjenjuje te elemente.
+Ovaj Product Spec ne uklanja niti zamjenjuje te elemente izvan nastavničkog prikaza.
 
 ## 12.2 T6 — Detaljna provenijencija
 
@@ -743,6 +745,8 @@ Vidi §9.
 
 **OWNER ODLUKA 5. 10. 2026.:** vizualni koncept `Nema indikacija neautentičnog autorstva` iz novog mockupa se zadržava u ovom Product Specu. Ne uklanja se niti zamjenjuje drugim copyjem ovim PR-om.
 
+**Ažurirano 11. 10. 2026. (D-105):** taj copy je zaključak o autorstvu i ne ulazi u nastavnički prikaz.
+
 **Governance napomena:** implementacija zahtijeva eksplicitno usklađivanje s postojećim pravilima koja ograničavaju tvrdnje o autorstvu. Dizajn je product-owner zahtjev; konflikt se evidentira u §18.
 
 ## C3 — Access Audit
@@ -845,7 +849,7 @@ Ovaj odjeljak postoji zato što se nova product-owner vizija u nekoliko točaka 
 
 ## 18.1 Zadržani elementi
 
-Vlasnik je 5. 10. 2026. izričito odlučio zadržati:
+Vlasnik je 5. 10. 2026. izričito odlučio zadržati (za nastavnički prikaz nadjačano odlukom od 11. 10. 2026., D-105: samo opisni prikaz, bez postotaka i bez zaključka o autorstvu):
 
 1. postotak `nepoznato podrijetlo`;
 2. postotne provenance kategorije;
