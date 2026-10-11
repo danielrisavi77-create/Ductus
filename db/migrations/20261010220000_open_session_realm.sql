@@ -42,8 +42,9 @@ BEGIN
 
   -- A unique id is local@realm with exactly one "@". The local part is not
   -- empty and holds no "@", no space or separator (Zs, Zl, Zp), no control
-  -- (Cc) and no invisible format character (Cf), the classes claims.ts also
-  -- refuses; text cannot hold a surrogate (Cs). Any other character passes.
+  -- (Cc) and no invisible format character (Cf); text cannot hold a surrogate
+  -- (Cs). This is stricter than claims.ts, which lets Zs spaces through. Any
+  -- other character passes.
   IF v_at > 0 THEN
     v_local := pg_catalog."left"(p_unique_id, -v_at);
     v_realm := pg_catalog.lower(pg_catalog.btrim(pg_catalog."right"(p_unique_id, v_at - 1), E' \t\r\n') COLLATE "C");

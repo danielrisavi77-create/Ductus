@@ -103,7 +103,15 @@ SELECT is(pg_temp.not_refused(ARRAY['a' || chr(173) || 'na@realm.test', 'a' || c
                                     'a' || chr(8238) || 'na@realm.test', 'a' || chr(8288) || 'na@realm.test',
                                     'a' || chr(8294) || 'na@realm.test', 'a' || chr(65279) || 'na@realm.test',
                                     'a' || chr(65529) || 'na@realm.test', 'a' || chr(917505) || 'na@realm.test',
-                                    'a' || chr(917631) || 'na@realm.test'],
+                                    'a' || chr(917631) || 'na@realm.test', 'a' || chr(65531) || 'na@realm.test',
+                                    'a' || chr(1536) || 'na@realm.test', 'a' || chr(1541) || 'na@realm.test',
+                                    'a' || chr(1757) || 'na@realm.test', 'a' || chr(1807) || 'na@realm.test',
+                                    'a' || chr(2192) || 'na@realm.test', 'a' || chr(2193) || 'na@realm.test',
+                                    'a' || chr(2274) || 'na@realm.test', 'a' || chr(69821) || 'na@realm.test',
+                                    'a' || chr(69837) || 'na@realm.test', 'a' || chr(78896) || 'na@realm.test',
+                                    'a' || chr(78911) || 'na@realm.test', 'a' || chr(113824) || 'na@realm.test',
+                                    'a' || chr(113827) || 'na@realm.test', 'a' || chr(119155) || 'na@realm.test',
+                                    'a' || chr(119162) || 'na@realm.test'],
                               'realm.test', 'f'),
   '{}'::text[], 'a local part with an invisible format character is refused');
 
