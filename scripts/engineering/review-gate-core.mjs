@@ -26,6 +26,12 @@ export const QUOTA_EXHAUSTED_PATTERNS = new Map([
 
 export const QUOTA_FALLBACK_WINDOW_MS = 24 * 60 * 60 * 1000;
 
+// D-101: a verdict on an earlier head carries to the current head only when
+// every later commit merges the base in and the PR's own diff is unchanged.
+export const MAX_CARRIED_HEADS = 5;
+export const MAX_MERGE_STEPS = 10;
+const COMPARE_FILE_CAP = 300;
+
 function isAgent(value, role) {
   if (!value || !AGENT_RE.test(value)) return false;
   if (!role) return true;
@@ -119,6 +125,7 @@ function latestVerdicts(entries, {
   role,
   headSha,
   extraField,
+  carriedHeads,
 }) {
   const latest = new Map();
 
@@ -136,7 +143,7 @@ function latestVerdicts(entries, {
       !isAgent(agent, role) ||
       !identity ||
       !identity.principal ||
-      !sameHead(head, headSha) ||
+      !(sameHead(head, headSha) || carriedHeads.has(head?.toLowerCase())) ||
       !verdict ||
       !VERDICTS.has(verdict) ||
       (extraField && !extra)
@@ -171,6 +178,7 @@ export function evaluateGate({
   headSha,
   ownerLogin,
   comments = [],
+  carriedHeads = new Set(),
 }) {
   const authorAgent = field(body, "Agent");
   const authorRuntime = declaredRuntime(authorAgent);
@@ -206,6 +214,7 @@ export function evaluateGate({
     verdictField: "Review-Verdict",
     role: "reviewer",
     headSha,
+    carriedHeads,
   });
 
   const qa = latestVerdicts(trusted, {
@@ -215,6 +224,7 @@ export function evaluateGate({
     role: "qa",
     headSha,
     extraField: "QA-Scope",
+    carriedHeads,
   });
 
   // A current FAIL or BLOCK holds the gate whatever the PR body declares. The
@@ -306,10 +316,71 @@ export function evaluateGate({
 }
 
 /**
+ * Earlier heads named by trusted canonical review or QA blocks, newest first,
+ * that the runner may test for a carry-over. The Owner Override never carries.
+ */
+export function carriedHeadCandidates(comments, headSha) {
+  const heads = [];
+  for (const entry of trustedComments(comments).sort(
+    (a, b) => b.createdAt - a.createdAt || b.index - a.index,
+  )) {
+    for (const [block, headField] of [["Agent-Review", "Review-Head"], ["QA-Agent", "QA-Head"]]) {
+      if (!canonicalBlock(entry.body, block)) continue;
+      const head = field(entry.body, headField)?.toLowerCase();
+      if (head && SHA_RE.test(head) && head !== headSha.toLowerCase() && !heads.includes(head)) {
+        heads.push(head);
+      }
+    }
+    if (heads.length >= MAX_CARRIED_HEADS) break;
+  }
+  return heads.slice(0, MAX_CARRIED_HEADS);
+}
+
+/**
+ * `path` is the first-parent walk from the current head, newest first, as
+ * GET commits/{sha} objects. It must reach `earlier` through merge commits
+ * only; the merged-in side is judged by `sameChange`.
+ */
+export function onlyBaseMerges(path, earlier) {
+  const target = earlier?.toLowerCase();
+  const steps = path ?? [];
+  const end = steps.findIndex((commit) => commit?.sha?.toLowerCase() === target);
+  return (
+    end > 0 &&
+    end <= MAX_MERGE_STEPS &&
+    steps.slice(0, end).every((commit) => (commit?.parents?.length ?? 0) >= 2)
+  );
+}
+
+function changeKey(file) {
+  return JSON.stringify([
+    file?.filename ?? null,
+    file?.previous_filename ?? null,
+    file?.status ?? null,
+    file?.patch ?? null,
+    typeof file?.patch === "string" ? null : file?.sha ?? null,
+  ]);
+}
+
+/**
+ * `current` and `earlier` are GET compare/{base}...{head} for the current and
+ * the earlier head: the PR's own diff must be identical, file by file.
+ */
+export function sameChange(current, earlier) {
+  const a = current?.files ?? [];
+  const b = earlier?.files ?? [];
+  if (a.length === 0 || a.length !== b.length || a.length >= COMPARE_FILE_CAP) return false;
+  const keys = (files) => files.map(changeKey).sort();
+  const left = keys(a);
+  const right = keys(b);
+  return left.every((key, index) => key === right[index]);
+}
+
+/**
  * Whole decision for one PR from REST data: `pr` (GET pulls/{n}), `files` (its
  * files list) and the issue comments. Every description is a fixed text.
  */
-export function evaluatePullRequest({ pr, files, comments, ownerLogin }) {
+export function evaluatePullRequest({ pr, files, comments, ownerLogin, carriedHeads }) {
   const listed = files ?? [];
   // The floor is only as good as the list: a cut or unread list fails closed.
   if (!(pr.changed_files <= listed.length)) {
@@ -329,7 +400,7 @@ export function evaluatePullRequest({ pr, files, comments, ownerLogin }) {
   }
   return {
     metadata,
-    result: evaluateGate({ body: pr.body ?? "", headSha: pr.head.sha, ownerLogin, comments }),
+    result: evaluateGate({ body: pr.body ?? "", headSha: pr.head.sha, ownerLogin, comments, carriedHeads }),
   };
 }
 

@@ -159,7 +159,7 @@ Dok je kvota drugog providera dokazano iskorištena, `critical` QA PASS smije do
 
 Uz strojne uvjete vrijedi governance pravilo neovisnosti: QA sesija je nova sesija s vlastitim slotom, nije pisala ni reviewala taj PR, nije podagent reviewer sesije i ne polazi od reviewerova izvještaja. Scenarije gradi i izvodi sama, a reviewerove nalaze smije pročitati tek nakon vlastitog verdikta. Ako je moguće, koristi drugi model od reviewera i bilježi ga kao `QA-Model`.
 
-Fallback ne mijenja ništa drugo: QA `FAIL` ili `BLOCK` bilo koje valjane ne-autorske sesije i dalje blokira, novi push poništava i review i QA, a status gatea navodi da je korišten kvotni fallback. Kad se kvota vrati, novi `critical` PR-ovi opet traže QA s drugog Appa; već spojeni PR-ovi se ne otvaraju ponovno.
+Fallback ne mijenja ništa drugo: QA `FAIL` ili `BLOCK` bilo koje valjane ne-autorske sesije i dalje blokira, novi push poništava i review i QA (osim prijenosa iz D-101), a status gatea navodi da je korišten kvotni fallback. Kad se kvota vrati, novi `critical` PR-ovi opet traže QA s drugog Appa; već spojeni PR-ovi se ne otvaraju ponovno.
 
 Bez strojnog dokaza kvote dvije sesije ili dva modela unutar istog Appa ne zadovoljavaju odvojeni critical PASS. Gate tada ostaje pending dok nije dostupan drugi prihvaćeni App, dok ne nastane dokaz kvote ili dok Daniel ne zabilježi aktualni `Owner-Override` prema §7.
 
@@ -171,7 +171,7 @@ Novi AI provider ne dobiva trust samo zato što se deklarira u komentaru. Prvi k
 
 PR metadata i review/QA komentari koriste **jedan zajednički parser** (`scripts/engineering/metadata-parser.mjs`) kako CI i review gate ne bi različito tumačili fenced ili uvučene Markdown primjere.
 
-Novi push poništava review i QA jer `*-Head` više nije jednak aktualnom PR headu. Formalni GitHub review state nije ulaz u ovaj agent gate; agent verdicti idu kroz kanonske PR komentare.
+Novi push poništava review i QA jer `*-Head` više nije jednak aktualnom PR headu. Iznimka (D-101): verdikt na ranijem headu vrijedi i dalje kad su svi kasniji commiti samo spajanja osnovne grane (merge commiti) i diff PR-a prema osnovnoj grani identičan je onome na tom headu; gate to provjerava preko GitHub API-ja (hod po prvom roditelju i compare) i na svaku grešku ne prenosi ništa. Owner Override se nikad ne prenosi. Formalni GitHub review state nije ulaz u ovaj agent gate; agent verdicti idu kroz kanonske PR komentare.
 
 ## 7. Owner Override
 
@@ -219,7 +219,7 @@ Product/UX i Bug Hunter nikad ne preskaču issue fazu i ne prelaze ravno u imple
 - Draft smije zaostajati dok se radi.
 - Prije ready-for-review autor ponovno dohvaća `main` i provjerava stvarni overlap.
 - Ako je `main` promijenio datoteku koju PR dira, autor osvježava branch prije reviewa.
-- Svaki push nakon reviewa automatski invalidira review preko `Review-Head`.
+- Svaki push nakon reviewa automatski invalidira review preko `Review-Head`, osim čistog spajanja osnovne grane bez promjene diffa PR-a (D-101).
 - Orkestrator ne tretira staro zeleno stanje kao dokaz za novi head.
 - Stackani PR-ovi su dopušteni samo kada je ovisnost eksplicitna u opisu; nakon spajanja baze child PR se vraća na `main`.
 
