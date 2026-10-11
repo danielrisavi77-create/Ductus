@@ -44,6 +44,8 @@ export type S3EvidencePayloadStoreConfig = {
 };
 
 const BUCKET = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
+/** Names S3 providers refuse although they match BUCKET. */
+const BUCKET_REFUSED = /^\d{1,3}(\.\d{1,3}){3}$|\.\./;
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
 /** Enough for the `<Code>` of an S3 error document; the rest is never read. */
 const MAX_ERROR_BODY_BYTES = 4_096;
@@ -92,8 +94,9 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
   ) => void;
 
   constructor(config: S3EvidencePayloadStoreConfig) {
-    const endpoint = new URL(config.endpoint);
+    const endpoint = parseEndpoint(config.endpoint);
     if (
+      endpoint === null ||
       !(
         endpoint.protocol === "https:" ||
         (endpoint.protocol === "http:" && LOOPBACK.has(endpoint.hostname))
@@ -104,7 +107,11 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
         "S3 endpoint must be https (http only on loopback) without a path",
       );
     }
-    if (typeof config.bucket !== "string" || !BUCKET.test(config.bucket)) {
+    if (
+      typeof config.bucket !== "string" ||
+      !BUCKET.test(config.bucket) ||
+      BUCKET_REFUSED.test(config.bucket)
+    ) {
       throw new TypeError("S3 bucket is not valid");
     }
     if (!isStorageDomainLabel(config.storageDomain)) {
@@ -251,7 +258,8 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
         return { ok: true, status: response.status, body: null };
       }
       if (method === "PUT" || response.status !== 200) {
-        await response.body?.cancel().catch(() => undefined);
+        // Not awaited: a cancel that never settles must not outlast the deadline.
+        void response.body?.cancel().catch(() => undefined);
         return { ok: true, status: response.status, body: null };
       }
       const read = await readLimited(response, MAX_EVIDENCE_SEGMENT_BYTES, signal);
@@ -264,6 +272,18 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
         reason: signal.aborted ? "storage_timeout" : "storage_request_failed",
       };
     }
+  }
+}
+
+/**
+ * Node's URL error keeps the whole input, credentials included; this answer
+ * keeps nothing of it.
+ */
+function parseEndpoint(value: string): URL | null {
+  try {
+    return new URL(value);
+  } catch {
+    return null;
   }
 }
 
@@ -308,7 +328,7 @@ async function readLimited(
       if (done) break;
       total += value.byteLength;
       if (total > limit) {
-        await reader.cancel().catch(() => undefined);
+        void reader.cancel().catch(() => undefined);
         return null;
       }
       chunks.push(value);

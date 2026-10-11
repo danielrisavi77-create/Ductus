@@ -280,6 +280,37 @@ describe("S3EvidencePayloadStore", () => {
     });
   });
 
+  it("does not wait on a response body whose cancel never settles", async () => {
+    const stuck = (status: number, bytes = 0) =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start: (controller) => {
+            if (bytes > 0) controller.enqueue(new Uint8Array(bytes));
+          },
+          cancel: () => new Promise<void>(() => {}),
+        }),
+        { status },
+      );
+    const stored = fakeS3(() => Promise.resolve(stuck(200)));
+    await expect(
+      put(storeWith(stored.fetch, { requestTimeoutMs: 50 }).store, "a"),
+    ).resolves.toEqual({ status: "stored", storageRef: expect.any(String) });
+
+    const tooLarge = fakeS3((call) =>
+      Promise.resolve(
+        call.method === "PUT"
+          ? new Response(null, { status: 412 })
+          : stuck(200, MAX_EVIDENCE_SEGMENT_BYTES + 1),
+      ),
+    );
+    await expect(
+      put(storeWith(tooLarge.fetch, { requestTimeoutMs: 50 }).store, "a"),
+    ).resolves.toEqual({
+      status: "unavailable",
+      reason: "storage_object_too_large",
+    });
+  });
+
   it("lets the client retry after a timeout, written or not", async () => {
     let mode: "write-then-hang" | "hang" | "normal" = "write-then-hang";
     const s3 = fakeS3((call, signal) => {
@@ -427,6 +458,15 @@ describe("S3EvidencePayloadStore", () => {
     ).toThrow(TypeError);
   });
 
+  it.each(["192.168.5.4", "10.0.0.1", "ductus..evidence"])(
+    "refuses to start with a bucket name storage cannot hold: %s",
+    (bucket) => {
+      expect(() => storeWith(fakeS3().fetch, { bucket })).toThrow(
+        "S3 bucket is not valid",
+      );
+    },
+  );
+
   it("refuses to start on plain http beyond loopback or with an endpoint path", () => {
     for (const endpoint of [
       "http://s3.example.eu",
@@ -544,6 +584,8 @@ describe("S3EvidencePayloadStore", () => {
       { region: "EU" },
       { credentials: { accessKeyId: "id/x", secretAccessKey: secret } },
       { endpoint: `https://id:${secret}@s3.example.eu` },
+      // Unparseable: Node's URL error would carry the whole input.
+      { endpoint: `https://id:${secret}@[` },
       { bucket: secret.toUpperCase() },
     ]) {
       try {
@@ -551,7 +593,13 @@ describe("S3EvidencePayloadStore", () => {
         seen.push("constructed");
       } catch (error) {
         const e = error as Error;
-        seen.push({ name: e.name, message: e.message, stack: e.stack, cause: String(e.cause) });
+        const own = Object.fromEntries(
+          Object.getOwnPropertyNames(e).map((key) => [
+            key,
+            String((e as unknown as Record<string, unknown>)[key]),
+          ]),
+        );
+        seen.push({ name: e.name, message: e.message, stack: e.stack, cause: String(e.cause), own });
       }
     }
 
