@@ -882,6 +882,27 @@ test("the symlink and /proc cases of agent-hooks.test.mjs run only on Linux CI (
   assert.equal(process.platform, "linux", "those cases skip on other platforms; CI must not run there");
 });
 
+test("A13b the PR metadata precheck blocks when the changed files cannot be read, and allows an empty list", () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-pre2-"));
+  try {
+    const body = path.join(base, "body.md");
+    fs.writeFileSync(body, "Agent: claude:a:platforma\nRisk: low\nTask: DAN-1\n");
+    const go = () => spawnSync(process.execPath, [precheck], { input: JSON.stringify({ tool_input: { command: `gh pr create --title t --body-file ${body}` }, cwd: base }), encoding: "utf8" });
+    // Not a repository (or no origin/main): the risk floor cannot be computed.
+    const unreadable = go();
+    assert.equal(unreadable.status, 2, unreadable.stderr);
+    assert.match(unreadable.stderr, /could not read the changed files/);
+    // A readable origin/main with nothing changed is an empty list, not an error.
+    const git = (...a) => spawnSync("git", a, { cwd: base, encoding: "utf8" });
+    git("init", "-q");
+    git("-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "--allow-empty", "-m", "x");
+    git("update-ref", "refs/remotes/origin/main", "HEAD");
+    const ok = go();
+    assert.equal(ok.status, 0, ok.stderr);
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true });
+  }
+});
 test("A13 the PR metadata precheck blocks when it throws on a PR command, and ignores other commands", () => {
   // The preload makes the metadata parser throw, as an internal error would.
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-pre-"));
@@ -890,6 +911,11 @@ test("A13 the PR metadata precheck blocks when it throws on a PR command, and ig
     fs.writeFileSync(preload, "const o = String.prototype.startsWith; String.prototype.startsWith = function (...a) { if (a[0] === 'agent:') throw new Error('injected'); return o.apply(this, a); };");
     const go = (command, args = []) => spawnSync(process.execPath, [...args, precheck], { input: JSON.stringify({ tool_input: { command }, cwd: base }), encoding: "utf8" });
     const broken = ["--import", pathToFileURL(preload).href];
+    // The directory needs a readable origin/main, or the changed files cannot be listed.
+    const git = (...a) => spawnSync("git", a, { cwd: base, encoding: "utf8" });
+    git("init", "-q");
+    git("-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "--allow-empty", "-m", "x");
+    git("update-ref", "refs/remotes/origin/main", "HEAD");
     const prCommand = 'gh pr create --title t --body "Agent: x"';
     const thrown = go(prCommand, broken);
     assert.equal(thrown.status, 2, thrown.stderr);

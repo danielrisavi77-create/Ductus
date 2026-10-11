@@ -3,23 +3,8 @@
 // CI applies (pr-metadata-core). Exit 2 blocks the tool call and shows the
 // reason to the agent. For a PR command an internal error blocks too (DAN-137);
 // every other command passes untouched.
-import { execFileSync } from "node:child_process";
-
 import { evaluateMetadata } from "../engineering/pr-metadata-core.mjs";
-import { extractBody, prAction, readInput } from "./pr-command.mjs";
-
-function changedFiles(cwd) {
-  try {
-    const out = execFileSync("git", ["diff", "--name-only", "origin/main...HEAD"], {
-      cwd,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    });
-    return out.split(/\r?\n/).filter(Boolean);
-  } catch {
-    return [];
-  }
-}
+import { changedFiles, extractBody, prAction, readInput } from "./pr-command.mjs";
 
 const input = readInput();
 const command = input.tool_input?.command ?? "";
@@ -35,7 +20,14 @@ try {
     process.exit(0);
   }
 
-  const result = evaluateMetadata({ body: body ?? "", files: changedFiles(cwd) });
+  // A changed-file list that cannot be read hides the risk floor: block (DAN-137).
+  const files = changedFiles(cwd);
+  if (files === null) {
+    console.error("PR metadata check could not read the changed files (git diff origin/main...HEAD failed); blocking so the risk floor cannot be skipped. Fetch origin/main and retry.");
+    process.exit(2);
+  }
+
+  const result = evaluateMetadata({ body: body ?? "", files });
   if (result.ok) process.exit(0);
 
   console.error(
