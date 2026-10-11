@@ -14,6 +14,7 @@ import { MAX_EVIDENCE_SEGMENT_BYTES } from "@/domain/forensics/evidence-chain-v2
 import {
   assertS3SigningConfig,
   type S3Credentials,
+  S3SecretCredentials,
   sha256Hex,
   signS3Request,
 } from "./s3-signature";
@@ -53,7 +54,11 @@ export type S3EvidencePayloadStoreConfig = {
    * part of the object key and never enters a signature.
    */
   storageDomain: string;
-  credentials: S3Credentials;
+  /**
+   * Sealed, so a configuration that is logged or serialized shows no key;
+   * plain keys are refused.
+   */
+  credentials: S3SecretCredentials;
   /**
    * Deadline for one `putImmutable` call as a whole (the PUT, a read-back and
    * reading the answers). No default on purpose (BACKEND 6 t. 10): a missing
@@ -106,6 +111,19 @@ const timedOut = (): EvidencePayloadPutResult => ({
 const unverified = (): EvidencePayloadPutResult => ({
   status: "unavailable",
   reason: "storage_write_unverified",
+});
+
+/** Set once the PUT echo matches, before the read-back starts. */
+type WritePhase = { echoConfirmed: boolean };
+
+const idsOf = (input: {
+  institutionId: string;
+  evidencePackageId: string;
+  segmentHash: string;
+}): Record<string, string> => ({
+  institutionId: input.institutionId,
+  evidencePackageId: input.evidencePackageId,
+  segmentHash: input.segmentHash,
 });
 
 type Fetched =
@@ -173,7 +191,8 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     if (!isStorageDomainLabel(config.storageDomain)) {
       throw new TypeError("storage domain label is not valid");
     }
-    assertS3SigningConfig(config.region, config.credentials);
+    const credentials = S3SecretCredentials.reveal(config.credentials);
+    assertS3SigningConfig(config.region, credentials);
     const timeout: unknown = config.requestTimeoutMs;
     if (
       typeof timeout !== "number" ||
@@ -196,10 +215,7 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     this.bucket = config.bucket;
     this.storageDomain = config.storageDomain;
     this.requestTimeoutMs = timeout;
-    this.#credentials = Object.freeze({
-      accessKeyId: config.credentials.accessKeyId,
-      secretAccessKey: config.credentials.secretAccessKey,
-    });
+    this.#credentials = Object.freeze(credentials);
     this.fetch = config.fetch ?? globalThis.fetch;
     this.now = now;
     this.warn =
@@ -230,17 +246,25 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     // One deadline for the whole call, so a slow PUT leaves the read-back
     // only what is left of it. The race ends the call even when a fetch
     // ignores the signal, and an answer after the deadline never counts.
+    // Once the PUT echo is confirmed the object may exist, so a deadline
+    // during the read-back is an unverified write, logged here once.
     const abort = new AbortController();
+    const phase: WritePhase = { echoConfirmed: false };
     let timer: ReturnType<typeof setTimeout> | undefined;
     const expired = new Promise<EvidencePayloadPutResult>((resolve) => {
       timer = setTimeout(() => {
+        if (phase.echoConfirmed) {
+          this.log("evidence payload write unverified", idsOf(input));
+          resolve(unverified());
+        } else {
+          resolve(timedOut());
+        }
         abort.abort();
-        resolve(timedOut());
       }, this.requestTimeoutMs);
     });
     try {
       return await Promise.race([
-        this.write(input, path, bytes, storageRef, abort.signal),
+        this.write(input, path, bytes, storageRef, phase, abort.signal),
         expired,
       ]);
     } finally {
@@ -257,12 +281,15 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     path: string[],
     bytes: Uint8Array<ArrayBuffer>,
     storageRef: string,
+    phase: WritePhase,
     signal: AbortSignal,
   ): Promise<EvidencePayloadPutResult> {
     // The signer adds and signs If-None-Match: * and the SHA-256 checksum.
     const put = await this.send("PUT", path, bytes, signal);
     if (!put.ok) return this.unavailable(put.reason);
-    if (put.status === 200) return this.verify(input, path, bytes, put, storageRef, signal);
+    if (put.status === 200) {
+      return this.verify(input, path, bytes, put, storageRef, phase, signal);
+    }
     // 412: the key exists. 409: a concurrent conditional write to the same
     // key; it may exist by now. Either way only its bytes decide.
     if (put.status !== 412 && put.status !== 409) {
@@ -284,11 +311,7 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     ) {
       return { status: "existing", storageRef };
     }
-    this.log("evidence payload conflict", {
-      institutionId: input.institutionId,
-      evidencePackageId: input.evidencePackageId,
-      segmentHash: input.segmentHash,
-    });
+    this.log("evidence payload conflict", idsOf(input));
     return { status: "conflict" };
   }
 
@@ -307,16 +330,16 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     bytes: Uint8Array<ArrayBuffer>,
     put: { checksum: string | null },
     storageRef: string,
+    phase: WritePhase,
     signal: AbortSignal,
   ): Promise<EvidencePayloadPutResult> {
-    const ids = {
-      institutionId: input.institutionId,
-      evidencePackageId: input.evidencePackageId,
-      segmentHash: input.segmentHash,
-    };
+    const ids = idsOf(input);
     const sent = createHash("sha256").update(bytes).digest("base64");
     if (put.checksum === sent) {
+      phase.echoConfirmed = true;
       const get = await this.send("GET", path, null, signal);
+      // Past the deadline, which already answered and logged this write.
+      if (signal.aborted) return unverified();
       if (get.ok && get.status === 200 && get.body !== null) {
         if (sameBytes(get.body, bytes)) return { status: "stored", storageRef };
         this.log("evidence payload conflict", ids);
@@ -361,6 +384,8 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     body: Uint8Array<ArrayBuffer> | null,
     signal: AbortSignal,
   ): Promise<Fetched> {
+    // No request starts after the deadline, even from a late answer.
+    if (signal.aborted) return { ok: false, reason: "storage_timeout" };
     try {
       const signed = signS3Request({
         method,

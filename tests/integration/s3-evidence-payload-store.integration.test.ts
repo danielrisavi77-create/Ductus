@@ -4,6 +4,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { S3EvidencePayloadStore } from "@/adapters/evidence/s3-evidence-payload-store";
 import {
+  S3SecretCredentials,
   sha256Hex,
   signS3Request,
   type SignedS3Request,
@@ -17,6 +18,7 @@ const credentials = {
   accessKeyId: process.env.S3_ACCESS_KEY_ID ?? "ductus-local",
   secretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? "ductus-local-only",
 };
+const sealed = new S3SecretCredentials(credentials);
 const region = "us-east-1";
 const bucket = "ductus-evidence-contract";
 const storageDomain = "local-contract";
@@ -88,7 +90,7 @@ const store = new S3EvidencePayloadStore({
   region,
   bucket,
   storageDomain,
-  credentials,
+  credentials: sealed,
   requestTimeoutMs: 10_000,
   allowPlainHttpOnLoopback: true,
   capability,
@@ -235,7 +237,7 @@ describe("S3EvidencePayloadStore against the local object store", () => {
       region,
       bucket,
       storageDomain,
-      credentials,
+      credentials: sealed,
       requestTimeoutMs: 10_000,
       allowPlainHttpOnLoopback: true,
       capability,
@@ -257,7 +259,10 @@ describe("S3EvidencePayloadStore against the local object store", () => {
       region,
       bucket,
       storageDomain,
-      credentials: { ...credentials, secretAccessKey: "not-the-local-secret" },
+      credentials: new S3SecretCredentials({
+        ...credentials,
+        secretAccessKey: "not-the-local-secret",
+      }),
       requestTimeoutMs: 10_000,
       allowPlainHttpOnLoopback: true,
       capability,

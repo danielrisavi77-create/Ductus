@@ -1,4 +1,5 @@
 import { createHash, createHmac } from "node:crypto";
+import { inspect } from "node:util";
 
 export type S3Credentials = {
   accessKeyId: string;
@@ -51,6 +52,12 @@ export function assertS3SigningConfig(
   if (typeof region !== "string" || !REGION.test(region)) {
     throw new TypeError("S3 region is not valid");
   }
+  assertS3Credentials(credentials);
+}
+
+function assertS3Credentials(
+  credentials: unknown,
+): asserts credentials is S3Credentials {
   const { accessKeyId, secretAccessKey } = (credentials ?? {}) as Record<
     string,
     unknown
@@ -62,6 +69,48 @@ export function assertS3SigningConfig(
     !SECRET_ACCESS_KEY.test(secretAccessKey)
   ) {
     throw new TypeError("S3 credentials are not valid");
+  }
+}
+
+const REDACTED = "[S3 credentials redacted]";
+
+/**
+ * S3 keys sealed for configuration. The values live only in native private
+ * fields, so enumeration, spreading, `JSON.stringify`, `String` and
+ * `util.inspect` (hidden properties and getters included) of the keys or of a
+ * configuration that holds them show a redaction mark. The keys are copied
+ * and validated when sealed; the error never names a value.
+ */
+export class S3SecretCredentials {
+  readonly #accessKeyId: string;
+  readonly #secretAccessKey: string;
+
+  constructor(credentials: S3Credentials) {
+    assertS3Credentials(credentials);
+    this.#accessKeyId = credentials.accessKeyId;
+    this.#secretAccessKey = credentials.secretAccessKey;
+    Object.freeze(this);
+  }
+
+  /** The plain keys, for the adapter that signs; refuses anything unsealed. */
+  static reveal(sealed: unknown): S3Credentials {
+    if (!(typeof sealed === "object" && sealed !== null && #accessKeyId in sealed)) {
+      throw new TypeError("S3 credentials must be sealed");
+    }
+    const keys = sealed as S3SecretCredentials;
+    return { accessKeyId: keys.#accessKeyId, secretAccessKey: keys.#secretAccessKey };
+  }
+
+  toJSON(): string {
+    return REDACTED;
+  }
+
+  toString(): string {
+    return REDACTED;
+  }
+
+  [inspect.custom](): string {
+    return REDACTED;
   }
 }
 
