@@ -1502,6 +1502,43 @@ describe("one monotonic deadline (QA qa233d)", () => {
     expect(s3.calls).toEqual([]);
     expect(warn).not.toHaveBeenCalled();
   });
+
+  it.each<[string, number, boolean, object, string[]]>([
+    ["the PUT", 1, false, timeout, []],
+    ["the read-back of an echoed write", 2, false, unverified, ["PUT"]],
+    ["the comparison read at a held key", 2, true, timeout, ["PUT"]],
+  ])(
+    "a deadline that passes while signing %s sends no request",
+    async (_, spendOn, keyHeld, expected, sent) => {
+      // The signing time is read once per request while it is signed; that
+      // read spends the whole deadline on this clock.
+      let now = performance.now();
+      let signing = 0;
+      const s3 = fakeS3();
+      if (keyHeld) {
+        s3.objects.set(keyOf(PACKAGE, hashOf(payload("a"))), new TextEncoder().encode(payload("a")));
+      }
+      const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 60_000 });
+      const signingTime = vi
+        .spyOn(store as unknown as { now: () => Date }, "now")
+        .mockImplementation(() => {
+          if (++signing === spendOn) now += 1_000_000;
+          return new Date();
+        });
+      const clock = vi.spyOn(performance, "now").mockImplementation(() => now);
+      try {
+        await expect(put(store, "a")).resolves.toEqual(expected);
+      } finally {
+        clock.mockRestore();
+        signingTime.mockRestore();
+      }
+      expect(signing).toBe(spendOn);
+      expect(s3.calls.map((c) => c.method)).toEqual(sent);
+      expect(warn.mock.calls).toEqual(
+        expected === unverified ? [["evidence payload write unverified", idsOfA]] : [],
+      );
+    },
+  );
 });
 
 describe("byte-identical read-back (Codex 4240926024)", () => {

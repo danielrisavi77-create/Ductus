@@ -16,6 +16,7 @@ import {
   type S3Credentials,
   S3SecretCredentials,
   sha256Hex,
+  type SignedS3Request,
   signS3Request,
 } from "./s3-signature";
 
@@ -262,8 +263,12 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     // the call even when a fetch ignores the signal.
     const abort = new AbortController();
     const phase: WritePhase = { deadline, echoConfirmed: false, expired: false };
-    // Spent on the input already: no PUT starts. Rounded up, so the timer
-    // never answers before the deadline the checks hold to.
+    // The signer adds and signs If-None-Match: * and the SHA-256 checksum.
+    // Signed before the check below, which is then the last step before the
+    // PUT is sent: signing hashes the whole body and no timer fires meanwhile.
+    const signedPut = this.sign("PUT", path, bytes);
+    // Spent on the input or on signing already: no PUT starts. Rounded up,
+    // so the timer never answers before the deadline the checks hold to.
     const left = Math.ceil(deadline - performance.now());
     if (left <= 0) return this.expire(input, phase);
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -275,7 +280,7 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     });
     try {
       return await Promise.race([
-        this.write(input, path, bytes, storageRef, phase, abort.signal),
+        this.write(input, path, bytes, signedPut, storageRef, phase, abort.signal),
         expired,
       ]);
     } finally {
@@ -291,12 +296,12 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     },
     path: string[],
     bytes: Uint8Array<ArrayBuffer>,
+    signedPut: SignedS3Request | null,
     storageRef: string,
     phase: WritePhase,
     signal: AbortSignal,
   ): Promise<EvidencePayloadPutResult> {
-    // The signer adds and signs If-None-Match: * and the SHA-256 checksum.
-    const put = await this.send("PUT", path, bytes, signal);
+    const put = await this.send("PUT", signedPut, bytes, signal);
     // A late answer, a matching echo included, confirms nothing and starts
     // no further request: the deadline answers storage_timeout.
     if (late(phase)) return this.expire(input, phase);
@@ -310,8 +315,10 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
       return { status: "unavailable", reason: `storage_put_status_${put.status}` };
     }
 
+    // Signed first, so the check is the last step before the GET is sent.
+    const signedGet = this.sign("GET", path, null);
     if (late(phase)) return this.expire(input, phase);
-    const get = await this.send("GET", path, null, signal);
+    const get = await this.send("GET", signedGet, null, signal);
     if (late(phase)) return this.expire(input, phase);
     if (!get.ok) return this.unavailable(get.reason);
     if (get.status !== 200 || get.body === null) {
@@ -353,8 +360,10 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     const sent = createHash("sha256").update(bytes).digest("base64");
     if (put.checksum === sent) {
       phase.echoConfirmed = true;
+      // Signed first, so the check is the last step before the GET is sent.
+      const signedGet = this.sign("GET", path, null);
       if (late(phase)) return this.expire(input, phase);
-      const get = await this.send("GET", path, null, signal);
+      const get = await this.send("GET", signedGet, null, signal);
       const same =
         get.ok && get.status === 200 && get.body !== null
           ? sameBytes(get.body, bytes)
@@ -416,16 +425,18 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     }
   }
 
-  private async send(
+  /**
+   * Signs one request, or answers null when it cannot be signed. Synchronous
+   * and kept apart from `send`, so a caller checks the deadline after the
+   * signing and right before the request leaves.
+   */
+  private sign(
     method: "GET" | "PUT",
     path: string[],
     body: Uint8Array<ArrayBuffer> | null,
-    signal: AbortSignal,
-  ): Promise<Fetched> {
-    // No request starts after the deadline, even from a late answer.
-    if (signal.aborted) return { ok: false, reason: "storage_timeout" };
+  ): SignedS3Request | null {
     try {
-      const signed = signS3Request({
+      return signS3Request({
         method,
         endpoint: this.endpoint,
         path,
@@ -435,6 +446,21 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
         credentials: this.#credentials,
         now: this.now(),
       });
+    } catch {
+      return null;
+    }
+  }
+
+  private async send(
+    method: "GET" | "PUT",
+    signed: SignedS3Request | null,
+    body: Uint8Array<ArrayBuffer> | null,
+    signal: AbortSignal,
+  ): Promise<Fetched> {
+    // No request starts after the deadline, even from a late answer.
+    if (signal.aborted) return { ok: false, reason: "storage_timeout" };
+    if (signed === null) return { ok: false, reason: "storage_request_failed" };
+    try {
       const response = await this.fetch(signed.url, {
         method,
         // Asks for the stored bytes as they are. Unsigned on purpose: an
