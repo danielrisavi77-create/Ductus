@@ -5,7 +5,8 @@
 **Samo pravnik ili ustanova odlučuje:** tko je voditelj i kako se naziva; pravna osnova; rokovi; kontakt službenika za zaštitu podataka; je li korištenje obvezno i što je alternativa; jesu li navedeni podizvršitelji konačni; sadrži li obavijest sve što traže čl. 13. i 14. GDPR-a.
 
 **Napomene za uredništvo (nisu dio teksta za studente):**
-- Tekst poštuje rječnik sučelja iz PRODUCT §5 i njegove engleske ekvivalente (D-90). Prije objave ga treba provući kroz `scripts/forbidden-terms/`; do tada nije provjeren tim alatom.
+- Tekst poštuje rječnik sučelja iz PRODUCT §5 i njegove engleske ekvivalente (D-90). Alat `scripts/forbidden-terms/` nad tekstom obavijesti (od naslova "Obavijest o privatnosti") 11. 10. 2026. nije dao pogodaka; provjeru treba ponoviti pri svakoj izmjeni.
+- Izgrađeni su samo prijava, sesije, upis u kolegij i potvrda obavijesti. Ostalo u odjeljku 3 (rad, događaji u radu, predaje, komentari, tko je otvorio rad), reprodukcija, izvoz i brisanje opisani su kao ciljno stanje i ne smiju se objaviti kao postojeći dok nisu izgrađeni.
 - Obavijest o privatnosti ne zamjenjuje obavijest o praćenju koja je prvi ekran svakog zadatka (PRODUCT §5 pr. 6); ona je ugrađena u nju (PROGRAM, GO uvjeti). Potvrda koju student daje nije privola i ne smije se tako prikazivati (PRODUCT §6, student 3).
 - Dok potvrda ne veže otisak teksta ove obavijesti, ne može se tvrditi da je student potvrdio upravo ovaj tekst `[IZVEDBA]`.
 - Odlomci označeni `[VARIJANTA]` ovise o neriješenom odnosu D-06 i D-39.
@@ -26,7 +27,7 @@ Ductus bilježi kako rad nastaje i olakšava razgovor o radu. Zaključak o vaše
 
 ### 3. Koje podatke obrađujemo
 
-- **Prijava.** Prijavljujete se isključivo AAI@EduHr računom. Od AAI-ja dobivamo i trajno spremamo oznaku vašeg računa (`hrEduPersonUniqueID`), oznaku izdavatelja prijave i identifikator korisnika kod izdavatelja (`sub`); matična ustanova služi za odabir ustanove i ne sprema se uz vaš račun. Izvedeno je upravo to. `[Dodatni atributi iz popisa u 04 tek kad budu potvrđeni.]` OIB ne tražimo.
+- **Prijava.** Prijavljujete se isključivo AAI@EduHr računom. Od AAI-ja dobivamo i trajno spremamo oznaku vašeg računa (`hrEduPersonUniqueID`), oznaku izdavatelja prijave i identifikator korisnika kod izdavatelja (`sub`); matična ustanova iz AAI-ja služi za određivanje vaše ustanove: uz račun spremamo ustanovu, a ne izvorni atribut prijave. `[Dodatni atributi iz popisa u 04 tek kad budu potvrđeni.]` OIB ne tražimo.
 - **Rad.** Tekst koji pišete i promjene teksta, sažete u odsječke do 30 sekundi s vremenom zaokruženim na minutu. Bilježi se i je li promjena vaša, nastavnikova ili mentorova.
 - **Događaji u radu.** Veliko lijepljenje (veličina i vrijeme), uvoz datoteke (naziv, vrsta, veličina), oznaka koju sami odaberete uz lijepljeni tekst, vaše napomene, izjava o pomoći alata i razgovori koje sami priložite.
 - **Nastava.** Upis u kolegij, potvrda ove obavijesti i vrijeme potvrde, predaje, komentari i prijedlozi nastavnika, produljenja roka.
@@ -41,7 +42,8 @@ Koju ste tipku pritisnuli i koliko dugo ste je držali. Brzinu tipkanja i stanke
 
 - Vi uvijek vidite točno ono što vidi nastavnik ili mentor.
 - `[VARIJANTA A (D-06): Nastavnik ili mentor vidi trenutno stanje spremljeno na poslužitelju, osvježeno najviše svakih 5 minuta, od prvog dana.]` `[VARIJANTA B (D-39): Nastavnik ili mentor vidi stanje na kraju svake sesije pisanja.]` Ne vidi tipkanje uživo. Može vidjeti i tekst koji ste kasnije obrisali, ako je bio u stanju koje je poslužitelj primio.
-- `[VARIJANTA, samo uz D-56: U mentorskom radu mentor može pokrenuti reprodukciju kako je rad rastao, za cijeli rad ili jedan odlomak, uključujući tekst koji ste obrisali i prethodne verzije odlomka, uz oznake lijepljenja, uvoza, izmjena i konzultacija. Vidite istu reprodukciju i vidite kad ju je mentor gledao; uz trenutak reprodukcije možete dodati napomenu. Ritam se ne mjeri: nema brzine tipkanja ni statistike stanki. Od kojeg je trenutka reprodukcija dostupna mentoru: odluka, u izvorima nije određeno.]` tko je kada pristupio kojem radu, ali ne vidi sadržaj rada.
+- `[VARIJANTA, samo uz D-56: U mentorskom radu mentor može pokrenuti reprodukciju kako je rad rastao, za cijeli rad ili jedan odlomak, uključujući tekst koji ste obrisali i prethodne verzije odlomka, uz oznake lijepljenja, uvoza, izmjena i konzultacija. Vidite istu reprodukciju i vidite kad ju je mentor gledao; uz trenutak reprodukcije možete dodati napomenu. Ritam se ne mjeri: nema brzine tipkanja ni statistike stanki. Od kojeg je trenutka reprodukcija dostupna mentoru: odluka, u izvorima nije određeno.]`
+- Administrator ustanove vidi tko je kada pristupio kojem radu, ali ne vidi sadržaj rada.
 - Održavatelj Ductusa ne čita sadržaj radova, osim zabilježenog pristupa podrške uz pristanak ustanove i u skladu s ugovorom o obradi `[planirano, PRODUCT §3: ugovor, zapis pristupa i ovlast operatera ne postoje; ODLUKA]`.
 
 ### 6. Zašto smijemo obrađivati podatke

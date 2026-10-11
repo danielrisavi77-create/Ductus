@@ -30,7 +30,7 @@ Protokol: OIDC Authorization Code s PKCE-om prema AAI@EduHr (D-09, `docs/PRODUCT
 | --- | --- | --- | --- | --- |
 | `openid`, `sub` | Traži se | Čita se i sprema (`identity.user_account.oidc_subject`) | Provjera ID tokena i userinfo odgovora | Uz `hrEduPersonUniqueID` do potvrde Srca koji je trajan |
 | `hrEduPersonUniqueID` | Traži se; identitet korisnika, nikad e-pošta | Čita se i sprema | Ključ računa uz izdavatelja | Oblik `lokalni@realm` provjerava se pri svakoj prijavi |
-| `hrEduPersonHomeOrg` | Traži se | Čita se; bira ustanovu; **ne sprema se** uz korisnika | Odabir ustanove, upis samo za istu ustanovu | Nepoznata ustanova daje odbijenu prijavu |
+| `hrEduPersonHomeOrg` | Traži se | Čita se; bira ustanovu. Sirova vrijednost **ne sprema se**, ali se ustanova trajno veže uz račun (`user_account.institution_id`) | Odabir ustanove, upis samo za istu ustanovu | Nepoznata ustanova daje odbijenu prijavu |
 | `hrEduPersonAffiliation` | Traži se; `djelatnik` znači samo da osoba može dobiti ulogu | **Ne čita se** | Predviđeno za potvrdu uloge nastavnika | Uloge potvrđuje administrator; je li atribut potreban `[ODLUKA]` |
 | `email` | "Po potrebi" | Ne čita se, ne sprema | Moguće obavijesti | Prijava radi i bez njega; potreba nije utvrđena `[ODLUKA]` |
 | `profile` (opseg) | Nije na popisu | **Zatražen:** `scope: "openid profile"` (`src/server/auth/oidc.ts`) | Nije naveden | Razlika od PRODUCT §4; što AAI pod tim opsegom pušta, nije provjereno; kod ne sprema ništa osim gornjeg `[IZVEDBA]` |

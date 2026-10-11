@@ -11,7 +11,7 @@ Stanje koda: `main` na `bfa2e73`. Na `main` postoje samo tablice identiteta i na
 | Podatak | Izvor | Gdje | Tko čita | Rok čuvanja |
 | --- | --- | --- | --- | --- |
 | Izdavatelj, `sub`, `hrEduPersonUniqueID`, ustanova korisnika | AAI@EduHr, pri prvoj prijavi | `identity.user_account`; izgrađeno (`20261003210100_identity_session.sql`, `20261010210000_open_session.sql`) | Nijedna aplikacijska uloga izravno; samo funkcije `current_actor()` i prijava | Otvoreno. Kraj AAI računa: izvoz na zahtjev preko administratora (ARCHITECTURE §4); brisanje računa nije definirano `[IZVEDBA]` |
-| `hrEduPersonHomeOrg` | AAI@EduHr, pri svakoj prijavi | Samo za odabir ustanove; ne sprema se uz korisnika; izgrađeno | Ne čita se poslije | Ne čuva se |
+| `hrEduPersonHomeOrg` | AAI@EduHr, pri svakoj prijavi | Služi za određivanje ustanove. Sirova vrijednost atributa se ne sprema, ali se iz nje određena ustanova trajno veže uz račun (`user_account.institution_id`, obavezno); izgrađeno | Ne čita se poslije | Sirova vrijednost se ne čuva; pripadnost ustanovi traje koliko i račun |
 | Sesija: hash tokena, korisnik, ustanova, nastanak, istek (12 h), zatvaranje i razlog | Poslužitelj | `identity.session`; izgrađeno | Samo `current_actor()` | Prijedlog: do isteka ili odjave, "zatim kratko radi revizije"; posao za brisanje nije izgrađen `[IZVEDBA]` |
 | Ime za prikaz, posljednja prijava, e-pošta | Predviđeno u ARCHITECTURE §3 (`app_user`) | **Nije izgrađeno**; shema nema ni ime ni e-poštu | Nastavnik bi vidio ime studenata u kolegiju (planirano) | Otvoreno; odakle dolazi ime nije odlučeno `[ODLUKA]` |
 
