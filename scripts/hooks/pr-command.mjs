@@ -1,5 +1,6 @@
 // Shared parsing of `gh pr create` / `gh pr edit` commands for the Claude
 // Code hooks in this directory.
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -34,4 +35,19 @@ export function extractBody(command, cwd) {
   // Drop the opening quote, or the whole `"$(cat <<'EOF'` line of a heredoc.
   body = /^["']?\$\(/.test(body) ? body.slice(body.indexOf("\n") + 1) : body.replace(/^["']/, "");
   return body;
+}
+
+// Files the branch changes against origin/main, or null when that cannot be
+// read. A rename is listed under both names.
+export function changedFiles(cwd) {
+  try {
+    const out = execFileSync("git", ["diff", "--name-only", "--no-renames", "-z", "origin/main...HEAD"], {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    return out.split("\0").filter(Boolean);
+  } catch {
+    return null;
+  }
 }
