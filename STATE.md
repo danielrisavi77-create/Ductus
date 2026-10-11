@@ -16,8 +16,10 @@ Agent nikad ne uzima ove stavke i nikad ne čeka na njima ako drugi posao može 
 - [ ] Proba demoa 31. 10. 2026. i snimka prolaza (PLAN-DEMO D-3, D-4).
 - [x] 10. 10. 2026.: vlasnik je potvrdio D-37, D-39, D-71 i D-74 (trag: komentar na issueu #87, `issuecomment-6101424008`; zapisano u `docs/DECISIONS.md`).
 - [ ] Razjasniti odnos D-06 i potvrđene D-39: zamjenjuje li D-39 odluku D-06 (potvrda to ne kaže; D-06 ostaje na snazi). UX test u `docs/UX-EVAL.md` §4.
-- [x] 11. 10. 2026.: vlasnik je odlučio (trag: komentari na issueu #87, `issuecomment-6105246182`, `6105084144`, `6105021669`, `6105034219`, `6105201573`; zapisano u `docs/DECISIONS.md`): D-08 razdvojen (dio o aplikaciji ODLUČEN, dobavljači i trošak PRIJEDLOG do B0.1, rok 16. 11. 2026.), D-34 potvrđen uz dopunu o autoru, domena evidencije (D-102), ključ ustanove (D-103), model računa za drugog izdavatelja uz nepromijenjen D-09 (D-104), nastavnički prikaz samo opisni i bez rezova demoa (D-105), jezik tek uz engleski (D-70). Potvrđeno i tumačenje točke 3 (komentar `6105263690`): migracije na kritičnom putu demoa (#240 i sljedeći korak B-8) se ne zaustavljaju, B0.1 kreće čim postoje računi dobavljača, rizik prepisa migracija do tada ostaje zapisan.
+- [x] 11. 10. 2026.: vlasnik je odlučio (trag: komentari na issueu #87, `issuecomment-6105246182`, `6105084144`, `6105021669`, `6105034219`, `6105201573`; zapisano u `docs/DECISIONS.md`): D-08 razdvojen (dio o aplikaciji ODLUČEN, dobavljači i trošak PRIJEDLOG do B0.1, rok 16. 11. 2026.), D-34 potvrđen uz dopunu o autoru, domena evidencije (D-102), ključ ustanove (D-103), model računa za drugog izdavatelja uz nepromijenjen D-09 (D-104), nastavnički prikaz samo opisni i bez novih rezova demoa (D-105), jezik tek uz engleski (D-70). Potvrđeno i tumačenje točke 3 (komentar `6105263690`): migracije na kritičnom putu demoa (#240 i sljedeći korak B-8) se ne zaustavljaju, B0.1 kreće čim postoje računi dobavljača, rizik prepisa migracija do tada ostaje zapisan.
 - [ ] Potvrditi ili promijeniti D-16, D-20, D-38 te pragove P-01 do P-04 (D-08, dio o dobavljačima: B0.1).
+- [ ] Odnos D-08 (dio o dobavljačima, B0.1) prema B0.2: D-08 niže i `docs/PLAN-DEMO.md` traže i B0.2, nova odluka 11. 10. spominje samo B0.1. Odluka nije donesena.
+- [ ] Odnos D-105 ("zasad se ništa ne reže") prema već primijenjenom rezu iz D-98 dopune (a): D-105 ga ne poništava; vraćanje reza bila bi nova odluka.
 - [ ] Izvršitelj obrade i ugovorna strana prema ustanovi (kontroler/procesor): vlasnik rješava s ustanovom; blokira pilot, ne demo.
 - [ ] D-56: pravno mišljenje + Constitution Gate C-14/C-19 prije ikakvog bilježenja ritma; nije na kritičnom putu demoa.
 - [ ] FPZG: koordinator pilota, kolegiji/mentori, akademski kalendar, AAI administrator, DPO, D-04, D-29, D-30, D-31, D-35, zamjenski postupak i zahtjev za ispis razgovora.
@@ -46,12 +48,13 @@ Stanje 11. 10. 2026. prema `gh pr list` (nositelj statusa je Linear; review i QA
 
 Otvoreno:
 
-- #240 DAN-83 ključ ustanove na zadacima i potvrdama obavijesti (draft); #232 i #233 B-8i ključ objekta s ustanovom i S3 adapter (#233 draft); #234 docs REPOZITORIJI (draft).
-- #206, #213, #214 F-3 spremanje dokumenta, format koraka izmjene i Tiptap editor (#214 draft).
+- #240 DAN-83 ključ ustanove na zadacima i potvrdama obavijesti; #232 i #233 B-8i ključ objekta s ustanovom i S3 adapter (#233 draft); #245 B-8i B2 domene pohrane po ustanovi (draft); #234 docs REPOZITORIJI (draft).
+- #206 i #214 F-3 spremanje dokumenta i Tiptap editor (#214 draft).
 - #219, #220, #221, #230 orchestrator skripte, Owner-Override, verdikti (D-101; #221 i #230 draft); #223 čitanje teksta sučelja; #228 hook u cloud sesijama (draft).
+- #243 ovaj docs PR; #244 nacrti dokumenata o privatnosti.
 - #180 DAN-138 test kopija skillova (draft); #94 DAN-41 drugi pružatelj reviewa (draft, nakon demoa).
 
-Spojeno 10. i 11. 10.: #160, #173, #175, #185, #186, #189, #191, #194, #196, #198, #199, #205, #207 do #210, #212, #215 do #218, #224, #226, #227, #229, #237, #238 i ranije #188, #174, #45, #164, #151, #170, #169, #163, #162, #159, #150, #148, #133, #165, #147, #105.
+Spojeno 10. i 11. 10.: #160, #173, #175, #185, #186, #189, #191, #194, #196, #198, #199, #205, #207 do #210, #212, #213, #215 do #218, #224, #226, #227, #229, #237, #238 i ranije #188, #174, #45, #164, #151, #170, #169, #163, #162, #159, #150, #148, #133, #165, #147, #105.
 
 ## Ne smije se izgubiti
 
