@@ -1301,18 +1301,23 @@ describe("what a check hands over shows no character that a log cannot show", ()
     }
   });
 
-  it("writes by its escape every character that the guard reports wherever it stands, and no other", () => {
+  // Every code point is asked, one plane per case: the whole range in one case
+  // took longer than the 5 s limit on a slower machine.
+  it.each(Array.from({ length: 17 }, (_, plane) => plane))("writes by its escape every character of plane %i that the guard reports wherever it stands, and no other", (plane) => {
     const wrong: string[] = [];
-    let escaped = 0;
-    for (let value = 0; value <= 0x10ffff; value += 1) {
+    for (let value = plane * 0x10000; value <= plane * 0x10000 + 0xffff; value += 1) {
       const char = cp(value);
       const hidden = HIDDEN.test(char);
-      if (hidden) escaped += 1;
       if (shownText(char) !== (hidden ? escape(value) : char)) wrong.push(value.toString(16));
       // The guard reports the same ones; the many code points of private use and without a character are asked at their ends below.
       if (!/[\p{Co}\p{Cn}]/u.test(char) && (unreadableCharacters(`Rok ${char} predaje`).length > 0) !== hidden && !/[\p{L}\p{N}]/u.test(char)) wrong.push(`guard ${value.toString(16)}`);
     }
     expect(wrong).toEqual([]);
+  });
+
+  it("writes by its escape most code points, and what a reader can see as it is", () => {
+    let escaped = 0;
+    for (let value = 0; value <= 0x10ffff; value += 1) if (HIDDEN.test(cp(value))) escaped += 1;
     expect(escaped).toBeGreaterThan(900_000);
     for (const value of [0x378, 0xe000, 0xf8ff, 0xffff, 0xf0000, 0x10ffff]) expect(unreadableCharacters(cp(value))).toHaveLength(1);
     // What a reader can see, white space and the four that are left to the dictionary stay as they are.
