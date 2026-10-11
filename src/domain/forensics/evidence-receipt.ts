@@ -85,16 +85,34 @@ const SIGNED_RECEIPT_KEYS: ReadonlySet<string> = new Set<
   keyof SignedEvidenceReceipt
 >(["payload", "payloadDigestSha256", "signature"]);
 
+// Every text is measured before it is read: a validator never trims, parses
+// or matches a value of unbounded size.
 function nonEmpty(value: unknown, max = 256): value is string {
   return (
     typeof value === "string" &&
-    value.trim().length > 0 &&
-    value.length <= max
+    value.length <= max &&
+    value.trim().length > 0
   );
 }
 
+function isSha256Hex(value: unknown): value is string {
+  return (
+    typeof value === "string" && value.length === 64 && SHA256_HEX.test(value)
+  );
+}
+
+/** A non-blank id of at most 256 UTF-16 code units, as a receipt carries it. */
+export function isReceiptId(value: unknown): value is string {
+  return nonEmpty(value);
+}
+
+// The longest text `toISOString` writes is 27 characters (a year of six digits).
+const MAX_INSTANT_LENGTH = 27;
+
 export function canonicalInstant(value: unknown): value is string {
-  if (typeof value !== "string") return false;
+  if (typeof value !== "string" || value.length > MAX_INSTANT_LENGTH) {
+    return false;
+  }
   const time = Date.parse(value);
   return Number.isFinite(time) && new Date(time).toISOString() === value;
 }
@@ -119,11 +137,9 @@ function hasValidAcceptanceFields(v: Record<string, unknown>): boolean {
     nonEmpty(v.documentId) &&
     nonEmpty(v.sessionId) &&
     nonEmpty(v.segmentId) &&
-    typeof v.segmentHash === "string" &&
-    SHA256_HEX.test(v.segmentHash) &&
+    isSha256Hex(v.segmentHash) &&
     (v.predecessorSegmentHash === null ||
-      (typeof v.predecessorSegmentHash === "string" &&
-        SHA256_HEX.test(v.predecessorSegmentHash))) &&
+      isSha256Hex(v.predecessorSegmentHash)) &&
     (v.previousReceiptId === null || nonEmpty(v.previousReceiptId)) &&
     v.evidenceSchema === EVIDENCE_SEGMENT_SCHEMA_V2 &&
     nonEmpty(v.evidenceProfileId, MAX_EVIDENCE_PROFILE_ID_LENGTH) &&
@@ -133,8 +149,10 @@ function hasValidAcceptanceFields(v: Record<string, unknown>): boolean {
     Number(v.sequenceTo) >= Number(v.sequenceFrom) &&
     Number.isSafeInteger(v.eventCount) &&
     Number(v.eventCount) >= 1 &&
-    Number(v.sequenceTo) ===
-      Number(v.sequenceFrom) + Number(v.eventCount) - 1 &&
+    // Counted as to - from, which is exact for these numbers: from + count - 1
+    // can round in a double and pass a count the range does not hold.
+    Number(v.sequenceTo) - Number(v.sequenceFrom) ===
+      Number(v.eventCount) - 1 &&
     Number.isSafeInteger(v.payloadBytes) &&
     Number(v.payloadBytes) >= 1 &&
     canonicalInstant(v.acceptedAt)
@@ -150,8 +168,7 @@ export function isSignedEvidenceReceipt(
   const v = value;
   return (
     isEvidenceReceiptPayloadV1(v.payload) &&
-    typeof v.payloadDigestSha256 === "string" &&
-    SHA256_HEX.test(v.payloadDigestSha256) &&
+    isSha256Hex(v.payloadDigestSha256) &&
     isSignatureEnvelope(v.signature)
   );
 }
@@ -210,7 +227,11 @@ const RECEIPT_V2_SIGNING_PREFIX = new TextEncoder().encode(
 
 /** A canonical lowercase UUID of version 4, and nothing else. */
 export function isEvidenceDomainId(value: unknown): value is string {
-  return typeof value === "string" && CANONICAL_UUID_V4.test(value);
+  return (
+    typeof value === "string" &&
+    value.length === 36 &&
+    CANONICAL_UUID_V4.test(value)
+  );
 }
 
 /** A transaction id a receipt may carry: bounded, with no control character. */
@@ -286,8 +307,7 @@ export function isSignedEvidenceReceiptV2(
   }
   return (
     isEvidenceReceiptPayloadV2(value.payload) &&
-    typeof value.payloadDigestSha256 === "string" &&
-    SHA256_HEX.test(value.payloadDigestSha256) &&
+    isSha256Hex(value.payloadDigestSha256) &&
     isSignatureEnvelope(value.signature) &&
     // D-92: pure Ed25519, and no other algorithm.
     value.signature.algorithm === "Ed25519"

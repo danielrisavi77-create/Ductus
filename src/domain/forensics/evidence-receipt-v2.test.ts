@@ -149,7 +149,15 @@ describe("receipt v2: refused payloads", () => {
     const names = (klass: string) =>
       receiptV2.rejectedPayloads.filter((edit) => edit.class === klass).map((edit) => edit.name);
     expect(new Set(receiptV2.rejectedPayloads.map((edit) => edit.class))).toEqual(
-      new Set(["former-shape", "schema", "revision", "client-transaction-id", "evidence-domain-id", "unknown-fields"]),
+      new Set([
+        "former-shape",
+        "schema",
+        "revision",
+        "client-transaction-id",
+        "evidence-domain-id",
+        "unknown-fields",
+        "acceptance-fields",
+      ]),
     );
     expect(names("former-shape")).toHaveLength(4);
     expect(names("revision")).toEqual(
@@ -180,6 +188,46 @@ describe("receipt v2: refused payloads", () => {
     );
     // Each vector changes the contract payload, which itself is accepted.
     expect(isSignedEvidenceReceiptV2(signedWith(contract.payload))).toBe(true);
+  });
+
+  it("holds a refusal for every field a receipt v2 shares with a receipt v1", () => {
+    const shared = Object.keys(contract.payload).filter(
+      (field) => !["receiptSchema", "revision", "clientTransactionId", "evidenceDomainId"].includes(field),
+    );
+    expect(shared).toHaveLength(15);
+    const edits = receiptV2.rejectedPayloads.filter((edit) => edit.class === "acceptance-fields");
+    for (const field of shared) {
+      // The field left out, and the field with a value it may not have.
+      expect(edits.some((edit) => edit.remove?.length === 1 && edit.remove[0] === field)).toBe(true);
+      expect(edits.some((edit) => Object.keys(edit.set ?? {}).includes(field))).toBe(true);
+    }
+    const names = edits.map((edit) => edit.name);
+    expect(names).toEqual(
+      expect.arrayContaining([
+        "payload-bytes-zero",
+        "event-count-rounding-at-largest-number",
+        "event-count-rounding-at-largest-count",
+        "sequence-to-above-safe-integer",
+        "accepted-at-without-milliseconds",
+      ]),
+    );
+  });
+
+  it("counts the events of a range exactly, up to the largest safe integer", () => {
+    const LARGEST = Number.MAX_SAFE_INTEGER;
+    const range = (sequenceFrom: number, sequenceTo: number, eventCount: number) =>
+      isEvidenceReceiptPayloadV2({ ...contract.payload, sequenceFrom, sequenceTo, eventCount });
+    expect(range(1, LARGEST, LARGEST)).toBe(true);
+    expect(range(LARGEST, LARGEST, 1)).toBe(true);
+    expect(range(LARGEST - 1, LARGEST, 2)).toBe(true);
+    expect(range(2, LARGEST, LARGEST - 1)).toBe(true);
+    // In a double, from + count - 1 rounds each of these back to the end of the range.
+    expect(LARGEST + 2 - 1).toBe(LARGEST);
+    expect(2 + LARGEST - 1).toBe(LARGEST);
+    expect(range(LARGEST, LARGEST, 2)).toBe(false);
+    expect(range(2, LARGEST, LARGEST)).toBe(false);
+    expect(range(LARGEST - 1, LARGEST, 3)).toBe(false);
+    expect(range(1, LARGEST, LARGEST - 1)).toBe(false);
   });
 
   it("refuses the contract vector as it was before DAN-54", async () => {

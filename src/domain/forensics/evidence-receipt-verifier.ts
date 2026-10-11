@@ -1,8 +1,14 @@
 import {
+  ed25519KeyFromSpki,
+  isCanonicalEd25519Signature,
+  isSoundEd25519Point,
+} from "./ed25519-encoding";
+import {
   canonicalInstant,
   digestEvidenceReceiptPayloadV2,
   isEvidenceDomainId,
   isReceiptClientTransactionId,
+  isReceiptId,
   isReceiptRevision,
   isSignedEvidenceReceiptV2,
   type EvidenceReceiptPayloadV2,
@@ -74,8 +80,7 @@ function isExpectation(value: unknown): value is EvidenceReceiptExpectationV2 {
   return (
     isPlainObject(value) &&
     hasOnlyKeys(value, EXPECTATION_KEYS) &&
-    typeof value.documentId === "string" &&
-    value.documentId.trim() !== "" &&
+    isReceiptId(value.documentId) &&
     isReceiptClientTransactionId(value.clientTransactionId) &&
     isReceiptRevision(value.revision) &&
     isEvidenceDomainId(value.evidenceDomainId)
@@ -132,6 +137,10 @@ function decodeBase64Url(
  * - The key is found by the `keyId` of the signature and must belong to the
  *   domain named in the signed payload, with the purpose `receipt`. A key of
  *   another domain or a checkpoint key of the same domain is refused.
+ * - The key and the signature are judged by their bytes before the runtime
+ *   is asked (`ed25519-encoding.ts`): a point of small order, a second
+ *   spelling of a number or `S` at or above the group order is refused, in
+ *   every runtime alike.
  * - What counts for a key is the moment of signing, and that moment is not in
  *   the signed payload. The server holds a key to it when it attaches the
  *   signature; here only `acceptedAt` is known (plan answer 6105652638 on
@@ -196,7 +205,9 @@ export async function verifySignedEvidenceReceiptV2(
       signature.signatureBase64Url,
       ED25519_SIGNATURE_BYTES,
     );
-    if (signatureBytes === null) {
+    // A small-order or second spelling of R, or S at or above the group
+    // order, is refused here: runtimes do not agree on such a signature.
+    if (signatureBytes === null || !isCanonicalEd25519Signature(signatureBytes)) {
       return refuse("receipt_malformed");
     }
 
@@ -204,7 +215,11 @@ export async function verifySignedEvidenceReceiptV2(
     const named = trustedKeys.filter(
       (key: unknown) => isPlainObject(key) && key.keyId === signature.keyId,
     );
-    const key: unknown = named.length === 1 ? structuredClone(named[0]) : null;
+    // Checked before it is copied too, so a key of any size costs no copy.
+    const key: unknown =
+      named.length === 1 && isEvidenceDomainKey(named[0])
+        ? structuredClone(named[0])
+        : null;
     if (!isEvidenceDomainKey(key) || key.keyVersion !== signature.keyVersion) {
       return refuse("key_unknown");
     }
@@ -227,10 +242,13 @@ export async function verifySignedEvidenceReceiptV2(
       return refuse("key_not_valid");
     }
 
-    // An Ed25519 public key in SPKI DER is 44 bytes (RFC 8410).
+    // An Ed25519 public key in SPKI DER is 44 bytes (RFC 8410). A point of
+    // small order as the key verifies a signature made with no private key
+    // in some runtimes, so the key is judged here and not by the runtime.
     const keyBytes = decodeBase64Url(key.keyBase64Url, 44);
+    const point = keyBytes === null ? null : ed25519KeyFromSpki(keyBytes);
     const publicKey =
-      keyBytes === null
+      keyBytes === null || point === null || !isSoundEd25519Point(point)
         ? null
         : await globalThis.crypto.subtle
             .importKey("spki", keyBytes, { name: "Ed25519" }, false, ["verify"])

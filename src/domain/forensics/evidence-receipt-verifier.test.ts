@@ -547,3 +547,277 @@ describe("verifier of receipt v2: rotation and revocation (supplement D8 to D10;
     );
   });
 });
+
+describe("verifier of receipt v2: keys and signatures no honest signer makes (QA 6106245321)", () => {
+  // The eight points of small order of edwards25519, as [L]Q for random points
+  // Q, worked out by arithmetic outside this repository and not taken from a list.
+  const SMALL_ORDER: [string, string][] = [
+    ["the identity", "01" + "00".repeat(31)],
+    ["the point of order 2", "ec" + "ff".repeat(30) + "7f"],
+    ["a point of order 4", "00".repeat(32)],
+    ["the other point of order 4", "00".repeat(31) + "80"],
+    ["a point of order 8", "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05"],
+    ["a second point of order 8", "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85"],
+    ["a third point of order 8", "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a"],
+    ["a fourth point of order 8", "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa"],
+  ];
+  // A second spelling of a number: y at or above p = 2^255 - 19, or the sign of x set where x is 0.
+  const NOT_CANONICAL: [string, string][] = [
+    ["the identity with the sign of x set", "01" + "00".repeat(30) + "80"],
+    ["the point of order 2 with the sign of x set", "ec" + "ff".repeat(31)],
+    ["y = p, a second spelling of 0", "ed" + "ff".repeat(30) + "7f"],
+    ["y = p + 1, a second spelling of 1", "ee" + "ff".repeat(30) + "7f"],
+    ["y = p + 2", "ef" + "ff".repeat(30) + "7f"],
+    ["y = 2^255 - 1", "ff".repeat(31) + "7f"],
+    ["32 bytes of 0xff", "ff".repeat(32)],
+  ];
+  const UNSOUND = [...SMALL_ORDER, ...NOT_CANONICAL];
+  const GROUP_ORDER = 2n ** 252n + 27742317777372353535851937790883648493n;
+  const BASE_POINT = "58" + "66".repeat(31);
+
+  const spki = (keyHex: string, oid = "2b6570") =>
+    Buffer.from(`302a300506${`03${oid}`}032100${keyHex}`, "hex").toString("base64url");
+  const signatureText = (rHex: string, s: bigint) =>
+    Buffer.concat([
+      Buffer.from(rHex, "hex"),
+      Buffer.from(s.toString(16).padStart(64, "0"), "hex").reverse(),
+    ]).toString("base64url");
+  const partsOf = (signed: SignedEvidenceReceiptV2) => {
+    const bytes = Buffer.from(signed.signature.signatureBase64Url, "base64url");
+    return {
+      r: bytes.subarray(0, 32).toString("hex"),
+      s: BigInt(`0x${Buffer.from(bytes.subarray(32)).reverse().toString("hex")}`),
+    };
+  };
+  const withSignature = (signed: SignedEvidenceReceiptV2, signatureBase64Url: string) => ({
+    ...signed,
+    signature: { ...signed.signature, signatureBase64Url },
+  });
+
+  /** A runtime that imports and verifies anything, as some do for a weak key. */
+  async function underLenientRuntime(act: () => Promise<unknown>) {
+    const importKey = vi.spyOn(globalThis.crypto.subtle, "importKey").mockResolvedValue({} as CryptoKey);
+    const verify = vi.spyOn(globalThis.crypto.subtle, "verify").mockResolvedValue(true);
+    try {
+      const result = await act();
+      return { result, imports: importKey.mock.calls.length, verifications: verify.mock.calls.length };
+    } finally {
+      importKey.mockRestore();
+      verify.mockRestore();
+    }
+  }
+
+  it("is checked against a runtime that accepts a sound key and signature", async () => {
+    const key = testKey("kljuc-izmisljeni-1");
+    const signed = key.sign(contract.payload);
+    expect(await underLenientRuntime(() => verifySignedEvidenceReceiptV2(signed, EXPECTED, [key.trusted]))).toEqual({
+      result: { ok: true, payload: contract.payload },
+      imports: 1,
+      verifications: 1,
+    });
+  });
+
+  it.each(UNSOUND)("refuses a trusted key that is %s, whatever the runtime would say", async (_name, keyHex) => {
+    const key = testKey("kljuc-izmisljeni-1");
+    const weak = { ...key.trusted, keyBase64Url: spki(keyHex) };
+    expect(
+      await underLenientRuntime(() => verifySignedEvidenceReceiptV2(key.sign(contract.payload), EXPECTED, [weak])),
+    ).toEqual({ result: refused("key_unknown"), imports: 0, verifications: 0 });
+  });
+
+  it.each(UNSOUND)("refuses a signature whose R is %s, whatever the runtime would say", async (_name, rHex) => {
+    const key = testKey("kljuc-izmisljeni-1");
+    const signed = key.sign(contract.payload);
+    const forged = withSignature(signed, signatureText(rHex, partsOf(signed).s));
+    expect(await underLenientRuntime(() => verifySignedEvidenceReceiptV2(forged, EXPECTED, [key.trusted]))).toEqual({
+      result: refused("receipt_malformed"),
+      imports: 0,
+      verifications: 0,
+    });
+  });
+
+  it("refuses a receipt forged with no private key under the identity key (QA reproduction)", async () => {
+    // With the identity as the key, [S]B = R holds for whoever picks S: R = [S]B
+    // needs no secret. A runtime that does not refuse the key verifies any message.
+    const payload = {
+      ...contract.payload,
+      documentId: "doc-krivotvoren",
+      clientTransactionId: "tx-krivotvoren",
+      revision: 234,
+      segmentHash: "f".repeat(64),
+    };
+    const identity = { ...GOLDEN, keyId: "kljuc-slab", keyBase64Url: spki(SMALL_ORDER[0][1]) };
+    const forgedWith = (signatureBase64Url: string): SignedEvidenceReceiptV2 => ({
+      payload,
+      payloadDigestSha256: createHash("sha256").update(canonicalizeJcs(payload), "utf8").digest("hex"),
+      signature: {
+        algorithm: "Ed25519",
+        keyId: "kljuc-slab",
+        keyVersion: GOLDEN.keyVersion,
+        signatureEncoding: "raw",
+        signatureBase64Url,
+      },
+    });
+    // The signature of the reproduction (R the identity, S = 0), and R = B with S = 1.
+    const reproduced = forgedWith(signatureText(SMALL_ORDER[0][1], 0n));
+    const sound = forgedWith(signatureText(BASE_POINT, 1n));
+    for (const lenient of [false, true]) {
+      const run = lenient ? underLenientRuntime : async (act: () => Promise<unknown>) => ({ result: await act() });
+      expect(
+        (await run(() => verifySignedEvidenceReceiptV2(reproduced, expectationOf(payload), [identity]))).result,
+      ).toEqual(refused("receipt_malformed"));
+      expect(
+        (await run(() => verifySignedEvidenceReceiptV2(sound, expectationOf(payload), [identity]))).result,
+      ).toEqual(refused("key_unknown"));
+    }
+  });
+
+  it("refuses a signature whose S is not below the group order", async () => {
+    const key = testKey("kljuc-izmisljeni-1");
+    const signed = key.sign(contract.payload);
+    const { r, s } = partsOf(signed);
+    expect(s < GROUP_ORDER).toBe(true);
+    // S + L verifies wherever S does, unless the verifier asks for S < L.
+    for (const other of [s + GROUP_ORDER, GROUP_ORDER, GROUP_ORDER + 1n, 2n ** 256n - 1n]) {
+      const malleated = withSignature(signed, signatureText(r, other));
+      expect(
+        await underLenientRuntime(() => verifySignedEvidenceReceiptV2(malleated, EXPECTED, [key.trusted])),
+      ).toEqual({ result: refused("receipt_malformed"), imports: 0, verifications: 0 });
+    }
+    // The largest S there is reaches the runtime, which finds the signature wrong.
+    const largest = withSignature(signed, signatureText(r, GROUP_ORDER - 1n));
+    expect(await verifySignedEvidenceReceiptV2(largest, EXPECTED, [key.trusted])).toEqual(
+      refused("signature_invalid"),
+    );
+  });
+
+  it("leaves a canonical point of no small order to the runtime", async () => {
+    const key = testKey("kljuc-izmisljeni-1");
+    const signed = key.sign(contract.payload);
+    // y = p - 2 and y = 2: next to the refused values, and neither of small order.
+    for (const pointHex of ["eb" + "ff".repeat(30) + "7f", "02" + "00".repeat(31), BASE_POINT]) {
+      expect(
+        await underLenientRuntime(() =>
+          verifySignedEvidenceReceiptV2(signed, EXPECTED, [{ ...key.trusted, keyBase64Url: spki(pointHex) }]),
+        ),
+      ).toMatchObject({ imports: 1, verifications: 1 });
+      const otherR = withSignature(signed, signatureText(pointHex, partsOf(signed).s));
+      expect(
+        await underLenientRuntime(() => verifySignedEvidenceReceiptV2(otherR, EXPECTED, [key.trusted])),
+      ).toMatchObject({ imports: 1, verifications: 1 });
+    }
+  });
+
+  it("refuses 44 bytes that are not an Ed25519 key in SPKI, without asking the runtime", async () => {
+    const key = testKey("kljuc-izmisljeni-1");
+    const signed = key.sign(contract.payload);
+    const rawKey = Buffer.from(key.trusted.keyBase64Url, "base64url").subarray(12).toString("hex");
+    expect(spki(rawKey)).toBe(key.trusted.keyBase64Url);
+    // The same 32 bytes under the identifier of X25519, and of Ed448.
+    for (const oid of ["2b656e", "2b6571"]) {
+      const other = { ...key.trusted, keyBase64Url: spki(rawKey, oid) };
+      expect(await underLenientRuntime(() => verifySignedEvidenceReceiptV2(signed, EXPECTED, [other]))).toEqual({
+        result: refused("key_unknown"),
+        imports: 0,
+        verifications: 0,
+      });
+    }
+  });
+});
+
+describe("verifier of receipt v2: oversized input (QA 6106245321)", () => {
+  const LONG = 1 << 20;
+  const FILLERS = [" ".repeat(LONG), "a".repeat(LONG)];
+  // What a text may be at most when it is read: an instant, an id, a signature.
+  const MOST = { parsed: 27, trimmed: 2048, matched: 4096 };
+
+  /** Runs `act` and reports the costly work it did, and on texts of what size. */
+  async function watched(act: () => Promise<unknown>) {
+    const clone = vi.spyOn(globalThis, "structuredClone");
+    const digest = vi.spyOn(globalThis.crypto.subtle, "digest");
+    const importKey = vi.spyOn(globalThis.crypto.subtle, "importKey");
+    const decode = vi.spyOn(globalThis, "atob");
+    const parse = vi.spyOn(Date, "parse");
+    const trim = vi.spyOn(String.prototype, "trim");
+    const match = vi.spyOn(RegExp.prototype, "test");
+    const longest = (texts: unknown[]) => texts.reduce<number>((most, text) => Math.max(most, String(text).length), 0);
+    try {
+      const result = await act();
+      return {
+        result,
+        clones: clone.mock.calls.length,
+        hashes: digest.mock.calls.length,
+        imports: importKey.mock.calls.length,
+        decoded: longest(decode.mock.calls.map(([text]) => text)),
+        parsed: longest(parse.mock.calls.map(([text]) => text)),
+        trimmed: longest(trim.mock.contexts),
+        matched: longest(match.mock.calls.map(([text]) => text)),
+      };
+    } finally {
+      for (const spy of [clone, digest, importKey, decode, parse, trim, match]) spy.mockRestore();
+    }
+  }
+
+  it("does the costly work for a receipt of the right size, so the watch sees it", async () => {
+    const seen = await watched(() => verifySignedEvidenceReceiptV2(signedOf(contract), EXPECTED, [GOLDEN]));
+    expect(seen).toMatchObject({ result: { ok: true }, clones: 2, hashes: 1, imports: 1, decoded: 86, parsed: 24 });
+    expect(seen.trimmed).toBeGreaterThan(0);
+    expect(seen.matched).toBe(86);
+  });
+
+  it("refuses a receipt with an oversized text before it copies, hashes or reads that text", async () => {
+    const honest = signedOf(contract);
+    const oversized: unknown[] = [];
+    for (const filler of FILLERS) {
+      for (const field of Object.keys(honest.payload)) {
+        oversized.push({ ...honest, payload: { ...honest.payload, [field]: filler } });
+      }
+      for (const field of Object.keys(honest.signature)) {
+        oversized.push({ ...honest, signature: { ...honest.signature, [field]: filler } });
+      }
+      oversized.push({ ...honest, payloadDigestSha256: filler });
+    }
+    expect(oversized).toHaveLength(2 * (19 + 5 + 1));
+    for (const receipt of oversized) {
+      const seen = await watched(() => verifySignedEvidenceReceiptV2(receipt, EXPECTED, [GOLDEN]));
+      expect(seen).toMatchObject({ result: refused("receipt_malformed"), clones: 0, hashes: 0, imports: 0, decoded: 0 });
+      expect(seen.parsed).toBeLessThanOrEqual(MOST.parsed);
+      expect(seen.trimmed).toBeLessThanOrEqual(MOST.trimmed);
+      expect(seen.matched).toBeLessThanOrEqual(MOST.matched);
+    }
+  });
+
+  it("refuses a trusted key with an oversized text before it copies or reads that text", async () => {
+    const fields = Object.keys(GOLDEN).filter((field) => field !== "keyId");
+    expect(fields).toHaveLength(9);
+    for (const filler of FILLERS) {
+      for (const field of fields) {
+        const seen = await watched(() =>
+          verifySignedEvidenceReceiptV2(signedOf(contract), EXPECTED, [{ ...GOLDEN, [field]: filler }]),
+        );
+        // One copy and one hash: of the receipt. The key is never copied.
+        expect(seen).toMatchObject({ result: refused("key_unknown"), clones: 1, hashes: 1, imports: 0, decoded: 86 });
+        expect(seen.parsed).toBeLessThanOrEqual(MOST.parsed);
+        expect(seen.trimmed).toBeLessThanOrEqual(MOST.trimmed);
+        expect(seen.matched).toBeLessThanOrEqual(MOST.matched);
+      }
+    }
+  });
+
+  it("refuses an oversized expectation before it reads that text", async () => {
+    for (const filler of FILLERS) {
+      for (const field of ["documentId", "clientTransactionId", "evidenceDomainId"]) {
+        const seen = await watched(() =>
+          verifySignedEvidenceReceiptV2(signedOf(contract), { ...EXPECTED, [field]: filler }, [GOLDEN]),
+        );
+        expect(seen).toMatchObject({ result: refused("expectation_invalid"), clones: 0, hashes: 0 });
+        expect(seen.trimmed).toBeLessThanOrEqual(MOST.trimmed);
+        expect(seen.matched).toBeLessThanOrEqual(MOST.matched);
+      }
+    }
+    const longId = { ...EXPECTED, documentId: "d".repeat(257) };
+    expect(await verifySignedEvidenceReceiptV2(signedOf(contract), longId, [GOLDEN])).toEqual(
+      refused("expectation_invalid"),
+    );
+  });
+});
