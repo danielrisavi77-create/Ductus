@@ -1,6 +1,7 @@
 # ADR: jedan ugovor za spremanje dokumenta i zapis pisanja
 
 - **Status:** PRIHVAĆENO 11. 10. 2026. odlukom vlasnika. Trag: komentar `issuecomment-6105502093` na issueu 87, koji je objavio orkestrator s odlukama danim u njegovoj sesiji. Odluke su prepisane u §8. Stavke iz §9 i dalje nisu provjerene.
+- **Dopune nakon prihvaćanja (review PR-a 246):** u §5.3 dodane su provjera konteksta odsječka (t. 3), prethodna provjera ključa ponavljanja prije zapisa objekta (t. 5), ponovna provjera identiteta i ovlasti unutar transakcije (t. 7 i 8) i odlomak o potpisu u demou; u §5.5 uzrok praznine je naveden kao ovisnost koja blokira. Odluke iz §8 i značenje polja potvrde iz §5.1 nisu mijenjani.
 - **Datum:** 11. 10. 2026.
 - **Zadatak:** stavka 0.3 plana u issueu 239. Samo dokument; ne mijenja kod ni druge dokumente.
 - **Stanje koda:** `main` na `1912cac`. Brojevi redaka vrijede za taj commit.
@@ -78,7 +79,7 @@ Brojke o veličini dolaze iz `docs/spikes/B0.2.md` (shema `prosemirror-schema-ba
 
 ## 5. Preporuka
 
-Preporuka je prihvaćena (§8, odluke 1 do 5). Tekst ovog odjeljka ostaje kako je predložen.
+Preporuka je prihvaćena (§8, odluke 1 do 5). Tekst ovog odjeljka je onaj iz prijedloga, uz dopune nakon reviewa navedene u zaglavlju.
 
 **Opcija A sada, uz tri uvjeta koja ostavljaju opciju B otvorenom, i prekid kao prijavljena praznina.** To je najmanja promjena koja ostaje unutar odobrene arhitekture: `ARCHITECTURE.md` §5 već opisuje upravo taj oblik, plan B-8 ga već predviđa, a demo radi s kratkim tekstovima i kratkim prekidima mreže.
 
@@ -103,23 +104,28 @@ Granice: odsječak do 2 MiB (D-96), dokument do 1 MiB, i jedna zajednička konst
 
 ### 5.3 Što poslužitelj provjerava, redom
 
-Prije transakcije, bez stanja:
+Prije transakcije:
 
 1. sesija, ovlast, veličine;
 2. odsječak je bajt po bajt JCS oblik valjanog odsječka; dokument je valjan;
-3. otisak JCS oblika dokumenta jednak je `finalDocumentHash` odsječka;
-4. objekt se zapisuje u spremište.
+3. kontekst odsječka: `documentId` u odsječku jednak je dokumentu iz zahtjeva, a `evidenceProfileId` profilu paketa koji poslužitelj sam izvodi iz tog dokumenta. Odsječak koji imenuje drugi dokument ili profil odbija se kao `invalid`, kao što gateway radi i danas (`evidence-gateway.ts` r. 227 do 233);
+4. otisak JCS oblika dokumenta jednak je `finalDocumentHash` odsječka;
+5. prethodna provjera ključa ponavljanja, čitanjem: poznat ključ s istim sadržajem vraća prijašnji ishod, a s drugim sadržajem `txid_reused`, u oba slučaja bez novog objekta, prihvata i potpisa (`BACKEND.md` §4.1, "Ponovno slanje"). Ovlast ide prije ove provjere; zabrane novog prihvata (točka 8) idu poslije nje, da ne stanu ispred oporavka već prihvaćenog zahtjeva;
+6. objekt se zapisuje u spremište, samo za ključ koji prethodna provjera ne poznaje.
 
 U jednoj transakciji, uz zaključan redak dokumenta:
 
-5. ključ ponavljanja (isti sadržaj vraća prijašnji ishod, drugi sadržaj `txid_reused`);
-6. bazna revizija jednaka je tekućoj;
-7. prethodnik odsječka jednak je glavi lanca;
-8. redni broj prvog događaja veći je od zadnjeg prihvaćenog (vraćanje unatrag odbija se uvijek);
-9. nastavak: redni broj je točno sljedeći i `initialDocumentHash` jednak je otisku spremljenog dokumenta, ili zahtjev nosi prijavu praznine;
-10. upis: revizija, dokument i njegov otisak, odsječak, nova glava, potvrda u stanju `pending_signature`, i redak praznine ako je prijavljena.
+7. identitet se ponovno izvodi iz `current_actor()` unutar RPC-a, nikad iz parametra, i ponovno se provjerava članstvo. Provjera prije transakcije nije dovoljna, jer se sesija, članstvo ili zadatak mogu promijeniti između nje i zaključavanja retka;
+8. ključ ponavljanja, ponovno i mjerodavno, zbog utrke dvaju istih zahtjeva (isti sadržaj vraća prijašnji ishod, drugi sadržaj `txid_reused`). Samo za novi prihvat zatim: verzija zadatka i je li zadatak otvoren, te granice paketa;
+9. bazna revizija jednaka je tekućoj;
+10. prethodnik odsječka jednak je glavi lanca;
+11. redni broj prvog događaja veći je od zadnjeg prihvaćenog (vraćanje unatrag odbija se uvijek);
+12. nastavak: redni broj je točno sljedeći i `initialDocumentHash` jednak je otisku spremljenog dokumenta, ili zahtjev nosi prijavu praznine;
+13. upis: revizija, dokument i njegov otisak, odsječak, nova glava, potvrda bez potpisa (u produkciji stanje `pending_signature`), i redak praznine ako je prijavljena.
 
-Tek zatim potpis. Točke 3 i 9 su stavka 0.5 plana (§7).
+Tek zatim potpis. Točke 4 i 12 su stavka 0.5 plana (§7).
+
+**Potpis u demou (dopuna D-98).** U demou nema workera ni reda poslova, a klijent nikad ne dobiva odgovor `pending_signature`: web proces potpisuje razvojnim ključem u istom zahtjevu, odmah nakon transakcije, i vraća potpisanu potvrdu. Ako proces stane između transakcije i potpisa, u bazi ostaje prihvat bez potpisa. Oporavak ne traži worker: klijent ionako ponavlja isti zahtjev dok ne provjeri potpisanu potvrdu (`drain.ts`), a poslužitelj za poznati ključ s nepotpisanim prihvatom potpisuje postojeći zapis umjesto novog prihvata, kao što gateway već radi (`evidence-gateway.ts` r. 277 do 279). Nepotpisani prihvat je u demou kratko međustanje oporavka, a ne tok koji netko čeka. Ako se dopuna D-98 čita strože, tako da nepotpisan prihvat ne smije ni nastati, potpis mora ući u istu transakciju; to ovaj zapis ne odlučuje i mora se riješiti u planu napada koraka koji uvodi RPC.
 
 Potvrda v2 time tvrdi tri stvari: da su ti bajtovi odsječka primljeni i pohranjeni; da nastavljaju lanac iza navedenog prethodnika; i da je dokument s otiskom `finalDocumentHash` spremljen kao revizija `revision`. To značenje treba zapisati uz vektor potvrde (stavka 0.1), jer se polja ne mijenjaju, a mijenja se ono što potpis jamči.
 
@@ -132,6 +138,7 @@ Potvrda v2 time tvrdi tri stvari: da su ti bajtovi odsječka primljeni i pohranj
 | `not_continuous` | Odsječak se veže na glavu, ali ne nastavlja slijed ili dokument, a praznina nije prijavljena | Kao gore. Poslužitelj nikad sam ne pretvara takav zahtjev u prazninu. |
 | `txid_reused` | Isti ključ, drugi sadržaj | Postojeći oporavak (`RECOVERY_REQUIRED`). |
 | `document_mismatch`, `invalid`, `too_large` | Zahtjev nije ispravan i neće biti ni pri ponavljanju | Ne ponavlja. Tekst ostaje "spremljen na uređaju"; put dalje je §5.5. |
+| `unauthenticated`, `unauthorized`, `not_found`, `not_accepting` | Sesija, članstvo ili zadatak ne dopuštaju novi prihvat (točke 1, 7 i 8) | Ne ponavlja isti zahtjev. Tekst ostaje "spremljen na uređaju"; nova prijava ili stanje zadatka određuju što dalje. |
 | nedostupno, izgubljen odgovor | Ne zna se | Ponavlja isti zahtjev. |
 
 Usklađivanje, uvijek istim redom:
@@ -150,6 +157,7 @@ Usklađivanje, uvijek istim redom:
 - Događaji iz samog odsječka prekida ostaju u lancu i u pohrani, ali se ne provjeravaju reprodukcijom, jer poslužitelj nema stanje od kojeg polaze. Praznina zato obuhvaća i taj odsječak (najviše 30 sekundi pisanja).
 - Prekidi koji se vide iz potpisanih odsječaka moraju se jedan prema jedan poklapati s recima praznina. Prekid bez retka i redak bez prekida su greška koja blokira predaju.
 - Rad bez mreže i povratak **nije** prekid: red se čuva i šalje redom.
+- **Uzrok praznine je tehnički kod iz zatvorenog popisa, a ne tekst za prikaz.** Popis još nije potvrđen, i to je ovisnost koja blokira: korak B-8 koji uvodi polje `gap` (tablica praznina i RPC) ne spaja se dok popis nije potvrđen u planu napada tog koraka, jer kod ulazi u redak baze, u otisak sadržaja za ključ ponavljanja i u mjerenja. Prijedlog, izveden iz slučajeva u §5.4: `local_record_lost` (klijent ne može nastaviti lanac jer mu nedostaje dio vlastitog reda ili je odsječak konačno odbijen) i `conflict_kept_local` (autor je u sukobu dvaju uređaja zadržao svoju verziju; odluka 3 u §8). Tekst koji uz prazninu vide student i nastavnik određuje Product/UX i smije se mijenjati bez promjene spremljenih kodova.
 
 Razmotreno i odbačeno za sada: prekid zapisati kao jedan događaj u lancu koji stanje poslužitelja zamjenjuje stanjem uređaja. Lanac bi ostao neprekinut i rekonstrukcija ne bi trebala sačuvani dokument. Ali to mijenja odobreni tekst `ARCHITECTURE.md` §5 i §6, ovisi o formatu koraka (stavka 0.4) i o reprodukciji koje na `main` još nema, i lako se prikaže kao jedan velik unos bez izvora umjesto kao praznina.
 
@@ -159,7 +167,7 @@ Broj ishoda po vrsti (osobito `stale_base`, `chain_conflict`, `not_continuous`, 
 
 ### 5.7 Što ulazi prije demoa, a što poslije
 
-- **Prije demoa:** zahtjev i provjere iz §5.2 i §5.3, ishodi iz §5.4, redak praznine s dokumentom na poslužitelju (B-12 traži scenarij s prazninom), red na klijentu koji šalje redom.
+- **Prije demoa:** zahtjev i provjere iz §5.2 i §5.3, ishodi iz §5.4, redak praznine s dokumentom na poslužitelju (B-12 traži scenarij s prazninom; preduvjet je potvrđen popis uzroka, §5.5), red na klijentu koji šalje redom.
 - **Poslije demoa, prije prvog stvarnog studenta:** put u sučelju za sukob dvaju uređaja s izborom "zadržavam svoju verziju", mjerenja iz §9, odluka o opciji B.
 
 ## 6. Najjači argument protiv
@@ -172,7 +180,7 @@ Drugi argument, protiv A u korist B: bez mreže A sprema cijeli dokument svakih 
 
 ## 7. Dvije susjedne stavke
 
-**(a) Usporedba otiska pri prijemu (stavka 0.5).** U jednom ugovoru to su točke 3 i 9 iz §5.3: dokument je u istom zahtjevu, a otisak spremljenog dokumenta u istoj transakciji. S dva odvojena ugovora ista bi provjera tražila čitanje preko granice dviju transakcija, s utrkom između njih. Trošak je jedna kanonizacija i otisak po commitu (do 14 ms za 80.000 riječi) i jedan stupac s otiskom tekućeg dokumenta. Plan napada prije koda ostaje obvezan.
+**(a) Usporedba otiska pri prijemu (stavka 0.5).** U jednom ugovoru to su točke 4 i 12 iz §5.3: dokument je u istom zahtjevu, a otisak spremljenog dokumenta u istoj transakciji. S dva odvojena ugovora ista bi provjera tražila čitanje preko granice dviju transakcija, s utrkom između njih. Trošak je jedna kanonizacija i otisak po commitu (do 14 ms za 80.000 riječi) i jedan stupac s otiskom tekućeg dokumenta. Plan napada prije koda ostaje obvezan.
 
 **(b) Trajni razvojni ključ (stavka 0.2).** Čim pohrana postane trajna, potvrda izdana prije ponovnog pokretanja procesa više se ne može provjeriti, a predaja to čita kao neispravan zapis. Što odluka treba sadržavati: javni ključ upisan u registar ključeva domene evidencije; verzija ključa izvedena iz samog ključa, ne stalni tekst; potvrda se provjerava ključem koji registar navodi za njezinu oznaku i verziju, nikad "trenutnim ključem potpisnika"; privatni razvojni ključ izvan repoa; produkcijska konfiguracija i dalje odbija razvojnog potpisnika. Veza s ovom odlukom: ugovor vraća potvrde koje klijent provjerava, pa klijent mora dobiti isti popis javnih ključeva.
 
@@ -193,7 +201,12 @@ Vlasniku je postavljeno pet pitanja. Odluke su prepisane doslovno iz komentara `
 
 Isti komentar navodi i posljedice: pisac DAN-54 smije zaključiti zlatne vektore prema točki 5, a planovi 241 i 242 više ne čekaju ovu odluku.
 
-I dalje otvoreno, i nije pitanje za vlasnika nego za Product/UX: zatvoreni popis uzroka praznine i tekst koji uz prazninu vide student i nastavnik (`PRODUCT.md` §9). Tok "promjena uređaja" i dalje nema nositelja (stavka 1.6 plana).
+I dalje otvoreno, izvan ovih pet odluka:
+
+- **Zatvoreni popis tehničkih kodova uzroka praznine** nije potvrđen. Blokira korak B-8 koji uvodi polje `gap`; prijedlog i mjesto potvrde su u §5.5.
+- **Tekst koji uz prazninu vide student i nastavnik** (`PRODUCT.md` §9) određuje Product/UX. Ne blokira B-8, jer se ne sprema.
+- **Potpis u demou:** čita li se dopuna D-98 tako da nepotpisan prihvat smije kratko postojati radi oporavka (§5.3).
+- Tok "promjena uređaja" i dalje nema nositelja (stavka 1.6 plana).
 
 ## 9. Što nisam mogao provjeriti
 
@@ -210,4 +223,19 @@ I dalje otvoreno, i nije pitanje za vlasnika nego za Product/UX: zatvoreni popis
 
 ## 10. Što slijedi nakon odluke
 
-Zasebnim zadacima, ne ovim PR-om: upis u `docs/DECISIONS.md`; napomena uz kriterij B-12 u `docs/PLAN-DEMO.md` i uz dopunu D-98 da se "uključujući prazninu" tumači prema odluci 4; usklađivanje `BACKEND.md` §2 i `ARCHITECTURE.md` §5 (t. 2 o ID-u transakcije, odlomak o praznini); dopuna plana napada (issue 155, točke 17 do 21) i plana potvrde v2 (issue 202, napad 5: koji ID transakcije potvrda nosi); preimenovanje ugovora u `src/domain/serverSync/contract.ts`; uklanjanje zasebnog reda zapisa iz `src/application/evidence/evidence-outbox.ts` u korist jednog reda.
+Zasebnim zadacima, ne ovim PR-om. Isti popis stoji u opisu PR-a 246.
+
+U docs PR-u odluka:
+
+- `docs/DECISIONS.md`: nova odluka s brojem, s pet točaka iz komentara 6105502093.
+- `docs/PLAN-DEMO.md`, kriterij B-12 "uključujući prazninu", i dopuna D-98 "bez tablice kontrolnih točaka": napomena da se tumače prema odluci 4. D-98 ostaje.
+- `docs/ARCHITECTURE.md` §5: t. 2 (odsječak nosi ID transakcije klijenta), odlomak o praznini i odlomak "Kontrolne točke" ("uvijek kad otkrije prazninu"), koji treba reći da se uz redak praznine čuva dokument od kojeg rekonstrukcija nastavlja.
+- `docs/ARCHITECTURE.md` §6 t. 3 ("rekonstrukcija kreće od kontrolne točke spremljene na kraju praznine"): isto.
+- `docs/BACKEND.md` §2 ("ADR u M3, prije koda"): uputa na ovaj zapis.
+
+Ostali zadaci:
+
+- Dopuna plana napada B-8 (issue 155, točke 17 do 21), uključujući potvrdu popisa uzroka praznine (§5.5) i čitanje dopune D-98 za potpis u demou (§5.3).
+- Dopuna plana potvrde v2 (issue 202, napad 5: koji ID transakcije potvrda nosi).
+- Preimenovanje ugovora u `src/domain/serverSync/contract.ts`.
+- Uklanjanje zasebnog reda zapisa iz `src/application/evidence/evidence-outbox.ts` u korist jednog reda.
