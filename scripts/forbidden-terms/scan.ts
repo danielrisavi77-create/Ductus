@@ -353,28 +353,36 @@ function renderedStrings(expression: ts.Expression, collect: Collect): void {
   }
 }
 
+/** Whether `node` is a call of `import()` or `require()`. */
+function isLoad(node: ts.Node): node is ts.CallExpression {
+  return ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(node.expression) && node.expression.text === "require"));
+}
+
 /** Whether `node` is the name of a module handed to `import()` or `require()`. */
 function isLoadedModule(node: ts.Node): boolean {
-  const call = node.parent;
-  if (!ts.isCallExpression(call) || call.arguments[0] !== node) return false;
-  return call.expression.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(call.expression) && call.expression.text === "require");
+  return isLoad(node.parent) && node.parent.arguments[0] === node;
 }
 
 /**
- * Every string value below `node`, except object keys and module specifiers.
- * `imported` takes the name of every module that is imported, handed on,
- * loaded with `import()` or required.
+ * Every string value below `node`, except object keys and the module
+ * specifiers of `import` and `export` declarations. The name handed to
+ * `import()` or `require()` is still read as a string, as it always was: a
+ * function of that name may be the code's own. `imported` takes the name of every module that is imported, handed on,
+ * loaded with `import()` or required, and where it is named. A module loaded
+ * by a name that is not one string (a `+` chain, a template with a place, a
+ * variable) comes without a name: the scan cannot tell what is loaded.
  */
-function allStrings(node: ts.Node, collect: Collect, imported?: (name: ts.StringLiteralLike) => void): void {
+function allStrings(node: ts.Node, collect: Collect, imported?: (at: ts.Node, name: string | null) => void): void {
   const visit = (current: ts.Node): void => {
     if (ts.isImportDeclaration(current) || ts.isExportDeclaration(current)) {
-      if (current.moduleSpecifier && isPlainString(current.moduleSpecifier)) imported?.(current.moduleSpecifier);
+      if (current.moduleSpecifier && isPlainString(current.moduleSpecifier)) imported?.(current.moduleSpecifier, current.moduleSpecifier.text);
       return;
     }
     if (ts.isImportTypeNode(current)) return;
+    if (isLoad(current) && current.arguments[0] && !isPlainString(current.arguments[0])) imported?.(current.arguments[0], null);
     if (ts.isStringLiteral(current) || ts.isNoSubstitutionTemplateLiteral(current)) {
       const parent = current.parent;
-      if (ts.isExternalModuleReference(parent) || isLoadedModule(current)) imported?.(current);
+      if (ts.isExternalModuleReference(parent) || isLoadedModule(current)) imported?.(current, current.text);
       const isKey = (ts.isPropertyAssignment(parent) || ts.isPropertySignature(parent)) && parent.name === current;
       const isTypeOnly = ts.isLiteralTypeNode(parent);
       if (!isKey && !isTypeOnly) collect(current, current.text);
@@ -732,7 +740,8 @@ interface Unit {
 
 /** A module that a code file names in an `import`, an `export … from`, an `import()` or a `require()`. */
 interface Import {
-  readonly name: string;
+  /** `null` when an `import()` or a `require()` is handed a name that is not one string. */
+  readonly name: string | null;
   readonly line: number;
 }
 
@@ -804,7 +813,7 @@ function locate(file: string, content: string, kind: How): Read {
   const unit: Reader["unit"] = (at, start, end, readings, overflowed) => units.push({ line: lineAt(at), at, start, end, readings, overflowed });
   const imports: Import[] = [];
   if (kind === "component") componentText(source, { text: collect(), part: collect(true), unit });
-  else allStrings(source, collect(), (name) => imports.push({ name: name.text, line: lineAt(name.getStart(source)) }));
+  else allStrings(source, collect(), (at, name) => imports.push({ name, line: lineAt(at.getStart(source)) }));
   // A text module also puts text together with `+` and templates; those are read as in JSX.
   if (kind === "catalogue") componentText(source, { text: () => undefined, part: () => undefined, unit }, true);
   return { texts, units, imports };
@@ -839,6 +848,7 @@ export const UNREADABLE_HINTS = {
   parts: "a word cut over that many parts would not be found, so write the text in fewer parts",
   testModule: "test files are not read, so what such a module shows would pass unchecked; give the module a name that is not a test's, or do not import it from code that runs",
   dataFile: "the strings of an imported .json file are read like a catalogue, and this one is not where the import says; import it by a path from the importing file or from @/",
+  computedModule: "the scan follows a module by the name the source writes, so what a name put together when the code runs loads would pass unchecked; write the name as one string",
 } as const;
 
 /**
@@ -1027,7 +1037,7 @@ function* scannedFiles(root: string): Generator<Scanned> {
     // Every string of a code file, and what it imports, whatever its kind reads.
     const all = kind === "catalogue" || !isCode(file) ? read : locate(file, content, "strings");
     const others = all === read ? [] : all.texts.filter((text) => !read.texts.some((seen) => seen.start <= text.start && text.end <= seen.end));
-    for (const { name } of all.imports) data.add(importedData(root, file, name) ?? "");
+    for (const { name } of all.imports) data.add((name === null ? null : importedData(root, file, name)) ?? "");
     yield { file, read, others, imports: all.imports };
   }
   data.delete("");
@@ -1065,7 +1075,9 @@ export interface Unreadable {
  * - every import of a test module (`TEST_MODULE`) from a scanned file: test
  *   files are not read, and a page that imports one shows what is in it;
  * - every import of a `.json` file the scan cannot find and so cannot read
- *   like a catalogue (`importedData`).
+ *   like a catalogue (`importedData`);
+ * - every `import()` and `require()` of a module whose name is not one
+ *   string: the scan cannot tell which file is loaded, so it cannot read it.
  *
  * The fix is to write the text with Croatian or English letters, or to split
  * an element with that many alternatives; there are no exemptions.
@@ -1081,6 +1093,10 @@ function unreadableIn(root: string): Unreadable[] {
   const unreadable: Unreadable[] = [];
   for (const { file, read, others, imports } of scannedFiles(root)) {
     for (const { name, line } of imports) {
+      if (name === null) {
+        unreadable.push({ file, line, reason: `import() or require() of a module whose name is not one string (${UNREADABLE_HINTS.computedModule})` });
+        continue;
+      }
       if (TEST_MODULE.test(name)) unreadable.push({ file, line, reason: `import of the test module "${name}" (${UNREADABLE_HINTS.testModule})` });
       if (importedData(root, file, name) === null) unreadable.push({ file, line, reason: `import of "${name}", a data file the scan cannot find (${UNREADABLE_HINTS.dataFile})` });
     }

@@ -1048,6 +1048,89 @@ describe("an entry cut into three parts after a long text in the same part", () 
   });
 });
 
+// Review of c1bd97f by the second provider: the parts it gives for the window
+// spell a word with a letter too many, which is no entry. With the letters of
+// the entry, the same parts are found.
+describe("the parts of the review of the window", () => {
+  const B = PHRASE_BREAK;
+  const entries = (parts: readonly string[]): string[] => findForbiddenTermsInMarkup(parts.join(B), parts.join(B)).map((term) => term.entry);
+
+  it("spell no entry as they are written, and are found when they spell one", () => {
+    const long = "x".repeat(49);
+    expect(["Sav", "v", "ed"].join("")).toBe("Savved");
+    expect(findForbiddenTerms("Savved")).toEqual([]);
+    expect(entries([`${long} Sav`, "v", "ed", "Later"])).toEqual([]);
+    expect(entries([`${long} Sa`, "v", "ed", "Later"])).toEqual(["saved (without saying where)"]);
+    expect(entries([`${long} Sav`, "ed", "Later"])).toEqual(["saved (without saying where)"]);
+    expect(entries([`${long} S`, "av", "ed", "Later"])).toEqual(["saved (without saying where)"]);
+  });
+});
+
+// Review of c1bd97f by the second provider: a module loaded by a name that
+// the code puts together is one the scan cannot follow, so a .json file
+// loaded that way was not read and nothing said so. It is reported.
+describe("a module loaded by a name that is not one string", () => {
+  const reason = `import() or require() of a module whose name is not one string (${UNREADABLE_HINTS.computedModule})`;
+
+  it("reports a .json file that a page requires by a name put together, which is not read", () => {
+    write("src/copy.json", '{ "title": "Sumnjivo" }\n');
+    write("src/C.tsx", 'const copy = require("./copy" + ".json");\nexport const C = () => <p>{copy.title}</p>;\n');
+    expect(scanUiText(root!)).toEqual([]);
+    expect(findUnreadableText(root!)).toEqual([{ file: "src/C.tsx", line: 1, reason }]);
+    expect(UNREADABLE_HINTS.computedModule).toMatch(/write the name as one string/);
+    // Written as one string, the file is read like a catalogue.
+    write("src/C.tsx", 'const copy = require("./copy.json");\nexport const C = () => <p>{copy.title}</p>;\n');
+    expect(findUnreadableText(root!)).toEqual([]);
+    expect(scanUiText(root!).map((finding) => [finding.file, finding.terms.map((term) => term.entry).join(", ")])).toEqual([["src/copy.json", "sumnjivo"]]);
+  });
+
+  /** How the module is loaded, the file, its content; the load is on line 2. */
+  const COMPUTED: readonly [string, string, string][] = [
+    ["require of a + chain", "src/components/Case.tsx", 'const name = "copy";\nconst copy = require("./" + name + ".json");\nexport const Case = () => <p>{copy.title}</p>;\n'],
+    ["require of two strings", "src/components/Case.tsx", "\nconst copy = require(\"./copy\" + \".json\");\nexport const Case = () => <p>{copy.title}</p>;\n"],
+    ["require of a variable", "src/components/Case.tsx", 'const name = "./copy.json";\nconst copy = require(name);\nexport const Case = () => <p>{copy.title}</p>;\n'],
+    ["require of a template with a place", "src/components/Case.tsx", 'const name = "copy";\nconst copy = require(`./${name}.json`);\nexport const Case = () => <p>{copy.title}</p>;\n'],
+    ["require of a condition", "src/components/Case.tsx", "declare const hr: boolean;\nconst copy = require(hr ? \"./hr.json\" : \"./en.json\");\nexport const Case = () => <p>{copy.title}</p>;\n"],
+    ["require of a call", "src/components/Case.tsx", "\nconst copy = require([\"./copy\", \"json\"].join(\".\"));\nexport const Case = () => <p>{copy.title}</p>;\n"],
+    ["import() of a + chain", "src/components/Case.tsx", "export const load = async () =>\n  (await import(\"./copy\" + \".json\")).default;\n"],
+    ["import() of a variable", "src/components/Case.tsx", "export const load = async (name: string) =>\n  (await import(name)).default;\n"],
+    ["import() of a template with a place", "src/components/Case.tsx", "export const load = async (name: string) =>\n  (await import(`./${name}.json`)).default;\n"],
+    ["import() of a string in brackets with a cast", "src/components/Case.tsx", "export const load = async () =>\n  (await import((\"./copy.json\" as string))).default;\n"],
+    ["a text module", "src/domain/sync/labels.ts", 'const name = "copy";\nexport const copy = require("./" + name + ".json");\n'],
+    ["a module outside the text modules", "src/domain/sync/state.ts", 'const name = "copy";\nexport const copy = require("./" + name + ".json");\n'],
+    ["a page", "app/page.tsx", "const name = \"copy\";\nconst copy = require(`./${name}.json`);\nexport default () => <p>{copy.title}</p>;\n"],
+  ];
+
+  it.each(COMPUTED)("reports a %s", (_, file, content) => {
+    write(file, content);
+    expect(findUnreadableText(root!)).toEqual([{ file, line: 2, reason }]);
+  });
+
+  it.each([
+    ["require of one string", 'const copy = require("./copy");\nexport const Case = () => <p>{copy.title}</p>;\n'],
+    ["require of a template without a place", "const copy = require(`./copy`);\nexport const Case = () => <p>{copy.title}</p>;\n"],
+    ["import() of one string", 'export const load = async () => (await import("./copy")).default;\n'],
+    ["require without a name", "declare const require: () => { title: string };\nconst copy = require();\nexport const Case = () => <p>{copy.title}</p>;\n"],
+    ["a method named require", "declare const loader: { require(name: string): { title: string } };\ndeclare const name: string;\nconst copy = loader.require(name);\nexport const Case = () => <p>{copy.title}</p>;\n"],
+    ["a function of another name", "declare const load: (name: string) => { title: string };\ndeclare const name: string;\nconst copy = load(name);\nexport const Case = () => <p>{copy.title}</p>;\n"],
+    ["import.meta", "export const here = import.meta.url;\n"],
+    ["a type import", 'export type Copy = typeof import("./copy");\n'],
+  ])("does not report %s", (_, content) => {
+    write("src/components/Case.tsx", content);
+    expect(findUnreadableText(root!)).toEqual([]);
+  });
+
+  it("reports each such load once, and still reads the others", () => {
+    write("src/copy.json", '{ "title": "Sumnjivo" }\n');
+    write("src/components/Case.tsx", 'declare const a: string;\nconst one = require(a);\nconst two = require("../copy.json");\nconst three = import(a + ".json");\nexport const Case = () => <p>{two.title}</p>;\n');
+    expect(findUnreadableText(root!)).toEqual([
+      { file: "src/components/Case.tsx", line: 2, reason },
+      { file: "src/components/Case.tsx", line: 4, reason },
+    ]);
+    expect(scanUiText(root!).map((finding) => finding.file)).toEqual(["src/copy.json"]);
+  });
+});
+
 // A string is shown in a finding as the source writes it, but for the code
 // point of the mark: no log can show it, so it is shown by its escape.
 describe("the text of a finding for a string that writes the code point of the mark", () => {
