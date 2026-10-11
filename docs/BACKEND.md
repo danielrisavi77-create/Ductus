@@ -225,7 +225,7 @@ Expand/migrate/contract i pgTAP u CI-ju bez `supabase start` vrijede i dalje.
 | FINA: minimalna mjesečna naknada, uvjeti, tko je ugovorna strana | Upit | Owner queue |
 | Sentry EU na besplatnom planu | Pročitati | B9 |
 
-B0.1 je pomaknut naprijed (odluka vlasnika 11. 10. 2026., D-08), rok 16. 11. 2026.; preduvjet su računi dobavljača (Owner queue u `STATE.md`). **Otvoreno, nije potvrđeno:** tumačenje orkestratora da se migracije na kritičnom putu demoa (#240 i sljedeći korak B-8) ne zaustavljaju jer demo radi lokalno, da se B0.1 izvodi čim računi postoje i da rizik prepisa migracija do tada ostaje otvoren i zapisan, vlasnik još nije potvrdio.
+B0.1 je pomaknut naprijed (odluka vlasnika 11. 10. 2026., D-08), rok 16. 11. 2026.; preduvjet su računi dobavljača (Owner queue u `STATE.md`). **Odluka vlasnika 11. 10. 2026. (tumačenje točke 3, potvrđeno; issue #87, komentar 6105263690):** migracije na kritičnom putu demoa (#240 i sljedeći korak B-8) se ne zaustavljaju; B0.1 kreće čim postoje računi dobavljača; rizik prepisa migracija do tada ostaje zapisan.
 
 Riješeno 3. 10. 2026.: cijena KMS-a (službeni cjenik), uvjeti besplatnih TSA-ova (ne postoje objavljeni, zato dva neovisna žiga), tko registrira AAI klijenta (§4.3), PITR mehanizam na UpCloud-u (dokumentacija). Ostaje samo ono što traži račun: stvarni povrat i cijene u konzoli.
 
