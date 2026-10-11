@@ -2258,3 +2258,175 @@ describe("LocalDocumentSaver: settled() during a reload (#206 Codex r4240541632)
     expect(target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
   });
 });
+
+describe("LocalDocumentSaver: an older read never applies over a newer one (#206 qa206k)", () => {
+  const closed = () => Object.assign(new Error("closed"), { name: "DatabaseClosedError" });
+  type Contents = Awaited<ReturnType<AtomicDexieJournal["read"]>>;
+  /**
+   * A saver whose next read after `hold()` reads the journal at once and
+   * finishes only when the returned function is called: with those contents,
+   * or by throwing when `fail` is set.
+   */
+  function holding(real: AtomicDexieJournal) {
+    let armed: { fail: boolean } | null = null;
+    let finish = (): void => {};
+    let failNext = false;
+    let calls = 0;
+    const target = saver(patched(real, {
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        calls += 1;
+        if (failNext) { failNext = false; throw closed(); }
+        if (!armed) return real.read(...args);
+        const plan = armed;
+        armed = null;
+        const contents = await real.read(...args);
+        return new Promise<Contents>((resolve, reject) => {
+          finish = () => (plan.fail ? reject(closed()) : resolve(contents));
+        });
+      },
+    }));
+    return {
+      target,
+      calls: () => calls,
+      failNext: () => { failNext = true; },
+      /** Starts a load whose read is held; resolves once the read has read. */
+      async hold(fail: boolean): Promise<{ load: Promise<LoadResult>; finish: () => void }> {
+        armed = { fail };
+        const load = target.load();
+        while (armed) await new Promise((resolve) => setImmediate(resolve));
+        await new Promise((resolve) => setImmediate(resolve));
+        return { load, finish: () => finish() };
+      },
+    };
+  }
+  async function ready(at: string): Promise<{ real: AtomicDexieJournal; writer: LocalDocumentSaver }> {
+    const real = journal(at);
+    const writer = saver(journal(at));
+    await writer.load();
+    await type(writer, "staro");
+    return { real, writer };
+  }
+  const unavailable = { state: "ERROR", failure: "unavailable" };
+  /** The whole stored journal, to show a halt left it as it was. */
+  const stored = (at: string) => journal(at).read(DOC);
+  async function rows(at: string): Promise<CanonicalDocument[]> {
+    return (await stored(at)).pending.map((row) => row.tx.document);
+  }
+
+  it("(b) a held read that throws after a newer ready halts, keeps the journal and the next load() lifts it", async () => {
+    const at = scope();
+    const { real } = await ready(at);
+    const h = holding(real);
+    expect((await h.target.load()).kind).toBe("ready");
+    const before = await stored(at);
+    const older = await h.hold(true);
+    expect((await h.target.load()).kind).toBe("ready");
+    older.finish();
+    expect(await older.load).toEqual({ kind: "unavailable" });
+    await h.target.settled();
+    expect(h.target.snapshot()).toMatchObject(unavailable);
+    expect(await stored(at)).toEqual(before);
+    const next = await h.target.load();
+    expect(next.kind === "ready" && documentsEqual(next.document, text("staro"))).toBe(true);
+    expect(h.target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+  });
+
+  it("(b) a held read that throws after a newer stale halts, and the newer recovery comes back and resumes", async () => {
+    const at = scope();
+    const { real, writer } = await ready(at);
+    const h = holding(real);
+    expect((await h.target.load()).kind).toBe("ready");
+    const older = await h.hold(true);
+    await type(writer, "novo");
+    const before = await stored(at);
+    const stale = { kind: "recovery", reason: "stale", document: text("novo") };
+    expect(await h.target.load()).toEqual(stale);
+    older.finish();
+    expect(await older.load).toEqual({ kind: "unavailable" });
+    await h.target.settled();
+    expect(h.target.snapshot()).toMatchObject(unavailable);
+    expect(await stored(at)).toEqual(before);
+    expect(await h.target.load()).toEqual(stale);
+    expect((await h.target.resume(text("izbor"))).kind).toBe("ready");
+    await h.target.settled();
+    expect((await rows(at)).at(-1)).toEqual(text("izbor"));
+    expect(h.target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+  });
+
+  it("(b) a held read that throws after a newer corrupt halts, and the next load() finds the damage again", async () => {
+    const at = scope();
+    const { real } = await ready(at);
+    const h = holding(real);
+    expect((await h.target.load()).kind).toBe("ready");
+    const older = await h.hold(true);
+    const db = (real as unknown as { db: Dexie }).db;
+    await db.table("meta").update(DOC, { localSeq: 999 });
+    const corrupt = { kind: "recovery", reason: "corrupt", document: null };
+    expect(await h.target.load()).toEqual(corrupt);
+    older.finish();
+    expect(await older.load).toEqual({ kind: "unavailable" });
+    await h.target.settled();
+    expect(h.target.snapshot()).toMatchObject(unavailable);
+    expect(await h.target.load()).toEqual(corrupt);
+    expect(h.target.snapshot()).toMatchObject({ state: "RECOVERY_REQUIRED", failure: "corrupt" });
+  });
+
+  it("(b) control: a read that throws with no newer outcome halts the saver", async () => {
+    const at = scope();
+    const { real } = await ready(at);
+    const h = holding(real);
+    expect((await h.target.load()).kind).toBe("ready");
+    h.failNext();
+    expect(await h.target.load()).toEqual({ kind: "unavailable" });
+    expect(h.target.snapshot()).toMatchObject(unavailable);
+    expect((await h.target.load()).kind).toBe("ready");
+  });
+
+  it("(a) a held ready read never lifts a newer corrupt", async () => {
+    const at = scope();
+    const { real } = await ready(at);
+    const h = holding(real);
+    expect((await h.target.load()).kind).toBe("ready");
+    const older = await h.hold(false);
+    const db = (real as unknown as { db: Dexie }).db;
+    await db.table("meta").update(DOC, { localSeq: 999 });
+    const corrupt = { kind: "recovery", reason: "corrupt", document: null };
+    expect(await h.target.load()).toEqual(corrupt);
+    older.finish();
+    expect(await older.load).toEqual(corrupt);
+    await h.target.settled();
+    expect(h.target.snapshot()).toMatchObject({ state: "RECOVERY_REQUIRED", failure: "corrupt" });
+  });
+
+  it("(a) a held ready read never lifts a newer failure with text the journal no longer holds", async () => {
+    const at = scope();
+    const { real, writer } = await ready(at);
+    const h = holding(real);
+    expect((await h.target.load()).kind).toBe("ready");
+    const older = await h.hold(false);
+    h.failNext();
+    expect(await h.target.load()).toEqual({ kind: "unavailable" });
+    await type(writer, "novo");
+    older.finish();
+    expect(await older.load).toEqual({ kind: "recovery", reason: "stale", document: text("novo") });
+    await h.target.settled();
+    expect(h.target.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+  });
+
+  it("a journal damaged for good is read at most twice per load(), never in a loop", async () => {
+    const at = scope();
+    const { real } = await ready(at);
+    const h = holding(real);
+    expect((await h.target.load()).kind).toBe("ready");
+    const db = (real as unknown as { db: Dexie }).db;
+    await db.table("meta").update(DOC, { localSeq: 999 });
+    for (let i = 0; i < 3; i += 1) {
+      const before = h.calls();
+      expect(await h.target.load()).toEqual({ kind: "recovery", reason: "corrupt", document: null });
+      expect(h.calls() - before).toBe(2);
+    }
+    const fresh = holding(real);
+    expect(await fresh.target.load()).toEqual({ kind: "recovery", reason: "corrupt", document: null });
+    expect(fresh.calls()).toBe(1);
+  });
+});

@@ -119,10 +119,14 @@ export class LocalDocumentSaver {
   private halted = false;
   private seq = 0;
   /**
-   * The newest journal sequence any read of this saver saw. Own writes need
-   * not move it: none starts while a read runs (`reading`).
+   * The newest journal sequence any read of this saver accepted. Own writes
+   * need not move it: none starts while a read runs (`reading`).
    */
   private seen = 0;
+  /** Reads started so far; each read takes the next number before it reads. */
+  private reads = 0;
+  /** The number of the latest-started read whose outcome was applied. */
+  private applied = 0;
   private baseRevision = 0;
   private durable: CanonicalDocument | null = null;
   private rows = 0;
@@ -222,6 +226,16 @@ export class LocalDocumentSaver {
   }
 
   private async read(basis: Basis | null, floor = -1): Promise<LoadResult> {
+    // (a) An outcome from the contents (ready, stale, unsaved, corrupt,
+    // sticky) never applies over one already applied from a read started
+    // later (#206 qa206k). Numbered when it starts, not when it ends:
+    // IndexedDB runs transactions over the same stores in the order they were
+    // created, so a read started later sees a journal at least as new as one
+    // started earlier, however the two finish; numbered at the end, a held
+    // older read would outrank the newer one. An overtaken read reads again
+    // and takes the newest number, so only a read started after it can
+    // overtake it again.
+    const started = ++this.reads;
     try {
       const contents = await this.journal.read(this.documentId);
       const { snapshot, meta, pending } = contents;
@@ -251,7 +265,10 @@ export class LocalDocumentSaver {
       // retry above the journal and let an overtaken result through, and an
       // overtaken refusal would halt over a newer read (#206 qa206k VAŽNO).
       const recorded = valid ? meta?.localSeq ?? 0 : 0;
-      if (recorded < this.seen && recorded >= floor) return await this.read(basis, this.seen);
+      if (started < this.applied || (recorded < this.seen && recorded >= floor)) {
+        return await this.read(basis, this.seen);
+      }
+      this.applied = started;
       if (!valid) return this.haltWith("corrupt", this.recover("corrupt", null));
       this.seen = Math.max(this.seen, recorded);
       const restored = restoreSyncState(contents);
@@ -297,6 +314,11 @@ export class LocalDocumentSaver {
       this.emit();
       return { kind: "ready", document: this.durable ?? emptyDocument() };
     } catch (error) {
+      // (b) A read that throws halts the saver whatever its order, on purpose
+      // (#206 qa206d): ERROR stops saving and claims nothing, and a later
+      // load() or resume() lifts it. It still counts as applied, so an older
+      // read that ends after it reads again rather than lift the halt.
+      this.applied = Math.max(this.applied, started);
       const failure = failureOf(error);
       return this.haltWith(failure, failure === "corrupt"
         ? this.recover("corrupt", null) : { kind: "unavailable" });
