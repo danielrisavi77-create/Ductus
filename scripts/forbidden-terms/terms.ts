@@ -441,6 +441,24 @@ const SYMBOL_AT_A_LETTER = /(?<=\p{L})[\p{Sm}\p{Sc}\p{Sk}]|[\p{Sm}\p{Sc}\p{Sk}](
  * feed, carriage return) are text: code that reads white space names them.
  */
 const NEVER_TEXT = /[\p{Co}\p{Cn}\p{Cs}]|(?![\t\n\v\f\r])\p{Cc}/gu;
+/**
+ * The line separator and the paragraph separator (U+2028, U+2029). The
+ * dictionary reads them as a space, and a page may show nothing for them.
+ */
+const SEPARATOR = /[\p{Zl}\p{Zp}]/gu;
+/**
+ * Format characters, but for the four that are left to the dictionary
+ * (the soft hyphen and the three of zero width). The dictionary
+ * drops every one of them before it matches, which is right for a character
+ * that shows nothing and changes nothing. It is wrong for one that changes
+ * the order in which the letters are shown (the marks, embeddings, overrides
+ * and isolates of text direction: U+061C, U+200E, U+200F, U+202A to U+202E,
+ * U+2066 to U+2069) and for one that is drawn (the number signs of other
+ * scripts). The rest (invisible operators, annotation and shaping controls,
+ * tags, a byte order mark) has no place in Croatian or English text, so the
+ * whole category is reported and no list of it is kept that could go stale.
+ */
+const FORMAT = /(?![\u00AD\u200B\u200C\u200D])\p{Cf}/gu;
 /** A character typed on a keyboard; what it looks like is for the reader of the source to judge. */
 const isAscii = (char: string): boolean => char.codePointAt(0)! < 0x80;
 
@@ -457,6 +475,12 @@ const isAscii = (char: string): boolean => char.codePointAt(0)! < 0x80;
  *   the digits of other scripts, some of which are drawn like a Latin letter;
  * - a private use, unassigned or surrogate code point and a control character
  *   that is not white space, wherever it stands;
+ * - a line or paragraph separator (`SEPARATOR`) and a format character
+ *   (`FORMAT`), wherever it stands. Four format characters are left to the
+ *   dictionary, which reads a word past them: the soft hyphen, the zero
+ *   width space, the zero width non-joiner and the zero width joiner (U+00AD,
+ *   U+200B, U+200C, U+200D). They show nothing inside a word and change
+ *   nothing around it;
  * - between two letters with no `PLAIN_SPACE` between them: every symbol,
  *   every space and every punctuation mark that is not ASCII, except the
  *   marks on `MARKS_INSIDE_A_WORD`. That is a symbol with no ink (a Braille
@@ -472,7 +496,7 @@ const isAscii = (char: string): boolean => char.codePointAt(0)! < 0x80;
  * ASCII symbols and digits are not reported whatever they resemble.
  */
 export function unreadableCharacters(text: string): string[] {
-  const found: string[] = [...(text.match(NEVER_TEXT) ?? [])];
+  const found: string[] = [...(text.match(NEVER_TEXT) ?? []), ...(text.match(SEPARATOR) ?? []), ...(text.match(FORMAT) ?? [])];
   for (const char of text) {
     const folded = foldLetters(char);
     if (/\p{L}/u.test(char) ? !/^[a-z]*$/.test(folded) : /\p{N}/u.test(char) && /[^a-z0-9]/.test(folded.replace(/[^\p{L}\p{N}]/gu, ""))) found.push(char);

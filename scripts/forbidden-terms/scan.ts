@@ -841,6 +841,11 @@ export const UNREADABLE_HINTS = {
   dataFile: "the strings of an imported .json file are read like a catalogue, and this one is not where the import says; import it by a path from the importing file or from @/",
 } as const;
 
+/** How the mark of a boundary is shown when a source writes that code point in a string: by its escape. */
+const MARK_WRITTEN = `\\u${PHRASE_BREAK.codePointAt(0)!.toString(16).toUpperCase()}`;
+/** A string as a finding shows it. The code point of the mark is never shown as it is: no log can show it. */
+const asShown = <T extends { readonly text: string }>(piece: T): T => (piece.text.includes(PHRASE_BREAK) ? { ...piece, text: piece.text.replaceAll(PHRASE_BREAK, MARK_WRITTEN) } : piece);
+
 /**
  * Findings in what was read from one file, in source order. A piece is
  * reported where it stands. A unit is reported for the entries that nothing
@@ -851,7 +856,7 @@ function findingsIn(file: string, read: Read): Finding[] {
   const placed: { at: number; start: number; end: number; finding: Finding }[] = [];
   for (const text of read.texts) {
     const terms = findForbiddenTerms(text.check ?? text.text).filter((term) => !(text.part && term.contextual));
-    if (terms.length > 0) placed.push({ at: text.start, start: text.start, end: text.end, finding: { ...withoutSpan(text), terms } });
+    if (terms.length > 0) placed.push({ at: text.start, start: text.start, end: text.end, finding: { ...asShown(withoutSpan(text)), terms } });
   }
   const pieces = [...placed];
   const units = read.units.map((unit) => {
@@ -947,7 +952,7 @@ function scanKind(file: string): Kind | null {
 export function scanUiText(root: string): Finding[] {
   const findings: Finding[] = [];
   const check = (text: UiText, terms: ForbiddenTerm[]): void => {
-    if (terms.length > 0) findings.push({ ...text, terms });
+    if (terms.length > 0) findings.push({ ...asShown(text), terms });
   };
   for (const { file, read, others } of scannedFiles(root)) {
     findings.push(...findingsIn(file, read));

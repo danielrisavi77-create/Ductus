@@ -345,7 +345,7 @@ describe("characters interface text may not hold", () => {
     ["degree sign and marks at the edge of a word", "20 °C, Ductus™, ©Autor, ®Znak", []],
     ["mathematical and currency symbols set apart or next to digits", "Natrag ← → Dalje, 3×4, 3 × 4, 5 €, 5€, ±2, a ≤ b", []],
     ["control characters that are white space", "a\tb\nc\vd\fe\rf", []],
-    ["line separator, which is shown as a space", `Rok${cp(0x2028)}predaje`, []],
+    ["line separator, which a page may show as nothing", `Rok${cp(0x2028)}predaje`, ["U+2028"]],
     // What the dictionary matching already takes out of a word (invisible format characters, marks, fillers).
     ["soft hyphen, zero width space and joiner", `Pre${cp(0xad)}da${cp(0x200b)}n${cp(0x200d)}o`, []],
     ["combining mark and variation selector", `Pre${cp(0x34f)}da${cp(0xfe0f)}no`, []],
@@ -915,6 +915,164 @@ describe("the text of a finding does not show the mark of a boundary", () => {
     // A phrase with a bar between its words is found as the text it is, with or without a boundary.
     expect(placed("<p>Nestali | podaci</p>")).toEqual(placed("<p>Nestali podaci</p>"));
     expect(shown("<p>Nestali | podaci</p>")).toEqual(["Nestali | podaci"]);
+  });
+});
+
+// Review of e11efe6 by the second provider: a line or paragraph separator
+// between two letters was read as a space, though a page may show nothing
+// for it, and a control of text direction was dropped, though it changes the
+// order in which the letters are shown. Both are reported wherever they
+// stand, and so is every other format character but four.
+describe("separators and format characters", () => {
+  const code = (value: number): string => `U+${value.toString(16).toUpperCase().padStart(4, "0")}`;
+  const escape = (value: number): string => `\\u${value.toString(16).toUpperCase().padStart(4, "0")}`;
+  const reported = (): string[][] => findUnreadableText(root!).map((entry) => [entry.file, ...(entry.reason.match(/U\+[0-9A-F]+/g) ?? [])]);
+
+  /** What it is, the code point. Every one of them is in the Basic Multilingual Plane, so it has an escape. */
+  const NAMED: readonly [string, number][] = [
+    ["line separator (Zl)", 0x2028],
+    ["paragraph separator (Zp)", 0x2029],
+    ["Arabic letter mark", 0x61c],
+    ["left-to-right mark", 0x200e],
+    ["right-to-left mark", 0x200f],
+    ["left-to-right embedding", 0x202a],
+    ["right-to-left embedding", 0x202b],
+    ["pop directional formatting", 0x202c],
+    ["left-to-right override", 0x202d],
+    ["right-to-left override", 0x202e],
+    ["left-to-right isolate", 0x2066],
+    ["right-to-left isolate", 0x2067],
+    ["first strong isolate", 0x2068],
+    ["pop directional isolate", 0x2069],
+    ["word joiner", 0x2060],
+    ["invisible times", 0x2062],
+    ["a deprecated format character", 0x206a],
+    ["byte order mark", 0xfeff],
+    ["interlinear annotation anchor", 0xfff9],
+    ["Arabic number sign, which is drawn", 0x600],
+    ["Mongolian vowel separator", 0x180e],
+  ];
+  /** Where the text stands, the file, its content with `|` where the character goes, whether the escape is JSON's or the source's. */
+  const PLACES: readonly [string, string, string][] = [
+    ["a string in JSX", "src/components/Case.tsx", 'export const Case = () => <p>{"Sum|njivo"}</p>;\n'],
+    ["an attribute", "src/components/Case.tsx", 'export const Case = () => <img alt="Sum|njivo" />;\n'],
+    ["a template in JSX", "src/components/Case.tsx", "export const Case = () => <p>{`Sum|njivo`}</p>;\n"],
+    ["a string of a text module", "src/domain/sync/labels.ts", 'export const A = "Sum|njivo";\n'],
+    ["a string outside the text modules", "src/domain/sync/state.ts", 'export const A = "Sum|njivo";\n'],
+    ["a catalogue", "src/lib/i18n/hr.json", '{ "title": "Sum|njivo" }\n'],
+  ];
+
+  it.each(NAMED.flatMap(([what, value]) => PLACES.map(([where, file, content]) => [what, where, value, file, content] as const)))("reports a %s between the letters of an entry in %s", (_, __, value, file, content) => {
+    // Written as itself.
+    write(file, content.replace("|", cp(value)));
+    expect(reported()).toEqual([[file, code(value)]]);
+    // Written by its escape; an attribute without braces has none.
+    if (!content.includes('alt="')) {
+      write(file, content.replace("|", escape(value)));
+      expect(reported()).toEqual([[file, code(value)]]);
+    }
+  });
+
+  it.each(PLACES)("reports the controls that show the letters of an entry in another order, in %s", (_, file, content) => {
+    for (const [open, close] of [[0x202e, 0x202c], [0x2067, 0x2069], [0x202b, 0x202c]] as const) {
+      write(file, content.replace("Sum|njivo", `${cp(open)}ovijnmuS${cp(close)}`));
+      expect(reported()).toEqual([[file, code(open), code(close)]]);
+    }
+  });
+
+  it.each(NAMED)("reports a %s wherever it stands", (_, value) => {
+    const char = cp(value);
+    for (const text of [`Sum${char}njivo`, `${char}Rok`, `Rok${char}`, `Rok ${char} predaje`, `2${char}3`, char]) expect(unreadableCharacters(text), JSON.stringify(text)).toEqual([code(value)]);
+    expect(unreadableCharacters(`Rok${char}${char}predaje`)).toEqual([code(value)]);
+  });
+
+  // Every code point, so that the category is not left to a list: the four
+  // that the dictionary reads a word past are written out here a second time.
+  it("reports every separator of lines and every format character, but for four", () => {
+    const written = [0xad, 0x200b, 0x200c, 0x200d];
+    const passed: number[] = [];
+    let seen = 0;
+    for (let value = 0x80; value <= 0x10ffff; value += 1) {
+      const char = cp(value);
+      if (!/[\p{Cf}\p{Zl}\p{Zp}]/u.test(char)) continue;
+      seen += 1;
+      const found = [`Sum${char}njivo`, `${char}Rok`, `Rok ${char} predaje`].map((text) => unreadableCharacters(text));
+      if (found.every((codes) => codes.length === 0)) passed.push(value);
+      else expect(found, code(value)).toEqual([[code(value)], [code(value)], [code(value)]]);
+    }
+    expect(seen).toBeGreaterThan(160);
+    expect(passed).toEqual(written);
+    // The four show nothing inside a word, and the dictionary reads the word past them.
+    for (const value of written) {
+      expect(findForbiddenTerms(`Sum${cp(value)}njivo`).map((term) => term.entry)).toEqual(["sumnjivo"]);
+      expect(unreadableCharacters(`Sum${cp(value)}njivo`)).toEqual([]);
+    }
+  });
+
+  it("reports such a character as a part of its own between two parts with letters", () => {
+    for (const value of [0x2028, 0x2029, 0x202e, 0x200f, 0x2060]) {
+      write("src/components/Case.tsx", `export const Case = () => <p>Sum{${JSON.stringify(cp(value))}}njivo</p>;\n`);
+      expect(reported()).toEqual([["src/components/Case.tsx", code(value)]]);
+    }
+  });
+});
+
+// Review of 2b6b414 by the second provider: the parts strictly inside a
+// window are measured, so what stands in the first part of it, however long,
+// does not end the window early.
+describe("an entry cut into three parts after a long text in the same part", () => {
+  const B = PHRASE_BREAK;
+  const CUT: readonly [string, string, string, string][] = [
+    ["saved (without saying where)", "Sa", "v", "ed"],
+    ["hidden", "hi", "dd", "en"],
+    ["sumnjivo", "Sum", "nji", "vo"],
+    ["nestali podaci", "ne", "stali po", "daci"],
+    [HR, "Spre", "mlje", "no"],
+  ];
+  // 49 and 60 are the lengths of the review; 48 is the bound of a window, and the rest is around it and far past it.
+  const LENGTHS = [0, 1, 47, 48, 49, 50, 60, 63, 64, 65, 96, 128, 300, 1000];
+
+  it.each(CUT.flatMap(([entry, a, b, c]) => LENGTHS.map((length) => [entry, length, a, b, c] as const)))("finds %s after %i characters", (entry, length, a, b, c) => {
+    const [long, words, other] = ["x".repeat(length), "rok ".repeat(length), "y".repeat(length)];
+    for (const parts of [
+      [`${long} ${a}`, b, c, "Later"],
+      [`${words}${a}`, b, c, "Later"],
+      [long, a, b, c, "Later"],
+      [a, b, `${c} ${long}`, "Later"],
+      ["Opis", `${long} ${a}`, b, `${c} ${other}`, "Later"],
+    ]) {
+      const joined = parts.join(B);
+      expect(findForbiddenTermsInMarkup(joined, joined).map((term) => term.entry), JSON.stringify(parts.map((part) => part.length))).toEqual([entry]);
+      expect(windowsCutShort(joined)).toBe(false);
+    }
+  });
+});
+
+// A string is shown in a finding as the source writes it, but for the code
+// point of the mark: no log can show it, so it is shown by its escape.
+describe("the text of a finding for a string that writes the code point of the mark", () => {
+  const B = PHRASE_BREAK;
+  it.each([
+    ["a string in JSX", "src/components/Case.tsx", 'export const Case = () => <p>{"Sumnjivo|danas"}</p>;\n'],
+    ["an attribute", "src/components/Case.tsx", 'export const Case = () => <img alt={"Sumnjivo|danas"} />;\n'],
+    ["a string of a text module", "src/domain/sync/labels.ts", 'export const A = "Sumnjivo|danas";\n'],
+    ["a string outside the text modules", "src/domain/sync/state.ts", 'export const A = "Sumnjivo|danas";\n'],
+    ["a catalogue", "src/lib/i18n/hr.json", '{ "title": "Sumnjivo|danas" }\n'],
+  ])("shows the escape in %s", (_, file, content) => {
+    for (const written of [B, "\\uFFFF"]) {
+      write(file, content.replace("|", written));
+      const found = scanUiText(root!);
+      expect(found.map((finding) => [finding.file, finding.terms.map((term) => term.entry).join(", ")])).toContainEqual([file, "sumnjivo"]);
+      for (const finding of found) expect(finding.text).not.toContain(B);
+      expect(found.map((finding) => finding.text)).toContain("Sumnjivo\\uFFFFdanas");
+      // The guard reports the code point as before.
+      expect(findUnreadableText(root!).map((entry) => entry.reason.match(/U\+[0-9A-F]+/g))).toContainEqual(["U+FFFF"]);
+    }
+  });
+
+  it("leaves every other string as it is written", () => {
+    write("src/domain/sync/labels.ts", 'export const A = " Sumnjivo \\\\uFFFF danas ";\n');
+    expect(scanUiText(root!).map((finding) => finding.text)).toEqual([" Sumnjivo \\uFFFF danas "]);
   });
 });
 
