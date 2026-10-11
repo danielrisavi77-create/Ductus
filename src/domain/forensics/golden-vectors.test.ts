@@ -302,6 +302,8 @@ describe("golden vectors: the signing key", () => {
     const files = [
       ...readdirSync(directory).map((name) => new URL(name, directory)),
       new URL("./golden-vectors.test.ts", import.meta.url),
+      new URL("./evidence-receipt-v2.test.ts", import.meta.url),
+      new URL("./evidence-receipt-verifier.test.ts", import.meta.url),
       new URL("../../application/evidence/evidence-golden-vectors.test.ts", import.meta.url),
     ];
     expect(files.length).toBeGreaterThanOrEqual(4);

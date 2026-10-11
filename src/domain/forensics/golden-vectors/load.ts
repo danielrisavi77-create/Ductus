@@ -2,7 +2,10 @@ import { createPublicKey, verify } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 import type { EvidenceChainHeadV2 } from "../evidence-chain-v2";
-import type { SignedEvidenceReceipt } from "../evidence-receipt";
+import type {
+  EvidenceReceiptPayloadV2,
+  SignedEvidenceReceipt,
+} from "../evidence-receipt";
 import type { EvidenceSegmentV2 } from "../evidence-segment-v2";
 import type { JcsJsonValue } from "../jcs";
 import type { SignatureEnvelope } from "../signature";
@@ -59,6 +62,20 @@ export type GoldenVerificationKey = {
   signingSeedSha256: string;
 };
 
+/** A receipt v2 with every value the D-92 signature is built from. */
+export type GoldenReceiptV2Vector = {
+  name: string;
+  payload: EvidenceReceiptPayloadV2;
+  canonical: string;
+  canonicalUtf8Hex: string;
+  byteLength: number;
+  payloadDigestSha256: string;
+  /** `UTF-8("ductus-evidence-receipt-v2") || 0x0a || D`, 59 bytes. */
+  signingInputHex: string;
+  signatureHex: string;
+  signature: SignatureEnvelope;
+};
+
 export type GoldenVectors = {
   vectorSchema: "ductus-golden-vectors-v1";
   jcs: {
@@ -94,6 +111,24 @@ export type GoldenVectors = {
     padding: { unit: string; count: number };
     atLimit: { byteLength: number; sha256: string };
     overLimit: { extraText: string; byteLength: number; reason: "too_large" };
+  };
+  /** Receipt v2 (D-92, DAN-54): `accepted[0]` is the contract vector of docs/BACKEND.md section 4.1. */
+  receiptV2: {
+    signingPrefix: string;
+    evidenceDomainId: string;
+    otherEvidenceDomainId: string;
+    accepted: GoldenReceiptV2Vector[];
+    /** The contract vector before DAN-54, without the three fields. Refused now. */
+    former: Omit<GoldenReceiptV2Vector, "name" | "payload" | "byteLength">;
+    /** Changes of `accepted[0].payload` that no validator may accept. */
+    rejectedPayloads: {
+      name: string;
+      class: string;
+      set?: Record<string, JcsJsonValue>;
+      remove?: string[];
+    }[];
+    /** Valid signatures of the same key over `messageHex`, which is not the signing input. */
+    rejectedSignatures: { name: string; messageHex: string; signatureBase64Url: string }[];
   };
 };
 
