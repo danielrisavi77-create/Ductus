@@ -215,7 +215,9 @@ export function envNotice({ node, lock, installed }) {
   if (!(Number(String(node).split(".")[0]) >= NODE_MAJOR)) {
     problems.push(`Node ${node} is older than ${NODE_MAJOR} (.nvmrc); CI runs ${NODE_MAJOR}, so a local pass here is not proof, say so in your report`);
   }
-  const install = "run pnpm install --frozen-lockfile before tests or commits";
+  // An install runs the checked-out root lifecycle scripts, so the notice never
+  // tells a session to install a head it did not write (F-059).
+  const install = "run pnpm install --frozen-lockfile before tests or commits, but only on main or a branch you write, never on a head you review or test (docs/SESSIONS.md 4a)";
   if (installed === undefined) problems.push(`node_modules is missing; ${install}`);
   else if (lock !== installed) problems.push(`node_modules does not match pnpm-lock.yaml; ${install}`);
   return problems.length ? `Environment check: ${problems.join(". ")}.` : null;

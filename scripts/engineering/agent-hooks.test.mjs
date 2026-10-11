@@ -386,6 +386,7 @@ test("environment notice names an old Node and a missing or stale install, and i
   }
   assert.match(envNotice({ ...ready, installed: undefined }), /node_modules is missing; run pnpm install --frozen-lockfile/);
   assert.match(envNotice({ ...ready, installed: "lock: 0\n" }), /node_modules does not match pnpm-lock\.yaml; run pnpm install --frozen-lockfile/);
+  assert.match(envNotice({ ...ready, installed: "lock: 0\n" }), /only on main or a branch you write, never on a head you review or test/);
   const both = envNotice({ node: "22.0.0", lock: "a", installed: undefined });
   assert.equal(both.split("\n").length, 1);
   assert.match(both, /^Environment check: Node 22\.0\.0 .*\. node_modules is missing; .*\.$/);
