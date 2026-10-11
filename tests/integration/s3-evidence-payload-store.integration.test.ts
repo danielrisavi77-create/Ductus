@@ -1,9 +1,13 @@
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { S3EvidencePayloadStore } from "@/adapters/evidence/s3-evidence-payload-store";
-import { sha256Hex, signS3Request } from "@/adapters/evidence/s3-signature";
+import {
+  sha256Hex,
+  signS3Request,
+  type SignedS3Request,
+} from "@/adapters/evidence/s3-signature";
 
 // Contract test of the conditional write (B-8i, plan E1) against the local
 // S3-compatible store of compose.yaml. It proves the adapter for this store
@@ -16,26 +20,44 @@ const credentials = {
 const region = "us-east-1";
 const bucket = "ductus-evidence-contract";
 
+/**
+ * A signed PUT sent as is, or changed after signing by `tamper`, which may
+ * edit the headers and returns the bytes to send.
+ */
 async function raw(
-  path: string,
+  path: string[],
   body: Uint8Array<ArrayBuffer>,
-  headers: Record<string, string> = {},
+  options: {
+    now?: Date;
+    tamper?: (signed: SignedS3Request) => Uint8Array<ArrayBuffer>;
+  } = {},
 ) {
-  const url = new URL(path, S3_ENDPOINT);
-  return fetch(url, {
+  const signed = signS3Request({
     method: "PUT",
+    endpoint: new URL(S3_ENDPOINT),
+    path,
+    headers: {},
     body,
-    headers: signS3Request({
-      method: "PUT",
-      url,
-      headers,
-      payloadSha256Hex: sha256Hex(body),
-      region,
-      credentials,
-      now: new Date(),
-    }),
+    region,
+    credentials,
+    now: options.now ?? new Date(),
   });
+  const sent = options.tamper ? options.tamper(signed) : body;
+  const response = await fetch(signed.url, {
+    method: "PUT",
+    body: sent,
+    headers: signed.headers,
+    redirect: "error",
+  });
+  return { status: response.status, text: await response.text() };
 }
+
+const keyOf = (input: { evidencePackageId: string; segmentHash: string }) => [
+  bucket,
+  "v2",
+  input.evidencePackageId,
+  `${input.segmentHash}.json`,
+];
 
 const store = new S3EvidencePayloadStore({
   endpoint: S3_ENDPOINT,
@@ -57,11 +79,22 @@ function segment(text: string) {
   };
 }
 
+// Test setup, not the adapter: storage can report healthy (any HTTP answer)
+// before it accepts writes, so creating the bucket is retried for a bounded
+// time. The adapter itself never retries.
 beforeAll(async () => {
-  const created = await raw(`/${bucket}`, new Uint8Array());
-  // 409: the bucket is already there from an earlier run.
-  expect([200, 409]).toContain(created.status);
-});
+  let status = 0;
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    status = await raw([bucket], new Uint8Array()).then(
+      (r) => r.status,
+      () => 0,
+    );
+    // 409: the bucket is already there from an earlier run.
+    if (status === 200 || status === 409) return;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  expect([200, 409]).toContain(status);
+}, 30_000);
 
 describe("S3EvidencePayloadStore against the local object store", () => {
   it("stores once, then answers existing for the same bytes", async () => {
@@ -77,10 +110,9 @@ describe("S3EvidencePayloadStore against the local object store", () => {
   it("never overwrites: a second conditional write with other bytes is refused", async () => {
     const input = segment("a");
     await store.putImmutable(input);
-    const key = `/${bucket}/v2/${input.evidencePackageId}/${input.segmentHash}.json`;
     const other = new TextEncoder().encode('{"text":"b"}');
 
-    const response = await raw(key, other, { "if-none-match": "*" });
+    const response = await raw(keyOf(input), other);
     expect(response.status).toBe(412);
     await expect(store.putImmutable(input)).resolves.toMatchObject({
       status: "existing",
@@ -97,19 +129,81 @@ describe("S3EvidencePayloadStore against the local object store", () => {
     expect(statuses.filter((s) => s === "existing")).toHaveLength(3);
   });
 
-  it("refuses bytes that do not match the sent checksum", async () => {
+  it("refuses a body with one byte changed after signing (S7)", async () => {
     const input = segment("d");
-    const key = `/${bucket}/v2/${input.evidencePackageId}/${input.segmentHash}.json`;
     const bytes = new TextEncoder().encode(input.canonicalPayload);
-    const wrong = createHash("sha256").update("other").digest("base64");
 
-    const response = await raw(key, bytes, {
-      "if-none-match": "*",
-      "x-amz-checksum-sha256": wrong,
+    const response = await raw(keyOf(input), bytes, {
+      tamper: () => {
+        const changed = bytes.slice();
+        changed[3] ^= 1;
+        return changed;
+      },
     });
-    expect(response.status).toBe(400);
+    expect([400, 403]).toContain(response.status);
     await expect(store.putImmutable(input)).resolves.toMatchObject({
       status: "stored",
+    });
+  });
+
+  it.each(["if-none-match", "x-amz-checksum-sha256"])(
+    "refuses a write whose signed %s was removed (S6)",
+    async (header) => {
+      const input = segment("e");
+      const bytes = new TextEncoder().encode(input.canonicalPayload);
+
+      const response = await raw(keyOf(input), bytes, {
+        tamper: (signed) => {
+          delete signed.headers[header];
+          return bytes;
+        },
+      });
+      expect(response.status).toBe(403);
+      expect(response.text).toContain("SignatureDoesNotMatch");
+      await expect(store.putImmutable(input)).resolves.toMatchObject({
+        status: "stored",
+      });
+    },
+  );
+
+  it("refuses a request signed an hour off and the adapter names the skew (S9)", async () => {
+    const input = segment("f");
+    const bytes = new TextEncoder().encode(input.canonicalPayload);
+    const response = await raw(keyOf(input), bytes, {
+      now: new Date(Date.now() - 3_600_000),
+    });
+    expect(response.status).toBe(403);
+
+    const skewed = new S3EvidencePayloadStore({
+      endpoint: S3_ENDPOINT,
+      region,
+      bucket,
+      credentials,
+      requestTimeoutMs: 10_000,
+      now: () => new Date(Date.now() + 3_600_000),
+      warn: () => undefined,
+    });
+    await expect(skewed.putImmutable(input)).resolves.toEqual({
+      status: "unavailable",
+      reason: "storage_clock_skew",
+    });
+    await expect(store.putImmutable(input)).resolves.toMatchObject({
+      status: "stored",
+    });
+  });
+
+  it("answers a wrong secret as a configuration fault (S11)", async () => {
+    const wrong = new S3EvidencePayloadStore({
+      endpoint: S3_ENDPOINT,
+      region,
+      bucket,
+      credentials: { ...credentials, secretAccessKey: "not-the-local-secret" },
+      requestTimeoutMs: 10_000,
+      warn: () => undefined,
+    });
+    await expect(wrong.putImmutable(segment("g"))).resolves.toEqual({
+      status: "unavailable",
+      reason: "storage_signature_rejected",
     });
   });
 });

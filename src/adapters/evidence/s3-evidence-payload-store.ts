@@ -1,5 +1,3 @@
-import { createHash } from "node:crypto";
-
 import {
   isEvidencePackageId,
   isSha256Hex,
@@ -10,9 +8,14 @@ import type {
 } from "@/application/ports/evidence-trust";
 import { MAX_EVIDENCE_SEGMENT_BYTES } from "@/domain/forensics/evidence-chain-v2";
 
-import { type S3Credentials, sha256Hex, signS3Request } from "./s3-signature";
+import {
+  assertS3SigningConfig,
+  type S3Credentials,
+  sha256Hex,
+  signS3Request,
+} from "./s3-signature";
 
-/** Upper bound for one storage request, the read of a response included. */
+/** Upper bound for one `putImmutable` call, every request and read included. */
 export const MAX_S3_REQUEST_TIMEOUT_MS = 60_000;
 
 export type S3EvidencePayloadStoreConfig = {
@@ -21,7 +24,11 @@ export type S3EvidencePayloadStoreConfig = {
   region: string;
   bucket: string;
   credentials: S3Credentials;
-  /** No default on purpose (BACKEND 6 t. 10): a missing value stops startup. */
+  /**
+   * Deadline for one `putImmutable` call as a whole (the PUT, a read-back and
+   * reading the answers). No default on purpose (BACKEND 6 t. 10): a missing
+   * value stops startup.
+   */
   requestTimeoutMs: number;
   fetch?: typeof fetch;
   now?: () => Date;
@@ -30,9 +37,19 @@ export type S3EvidencePayloadStoreConfig = {
 };
 
 const BUCKET = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
-const REGION = /^[a-z0-9-]{1,32}$/;
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
-const EMPTY_SHA256 = sha256Hex(new Uint8Array());
+/** Enough for the `<Code>` of an S3 error document; the rest is never read. */
+const MAX_ERROR_BODY_BYTES = 4_096;
+/**
+ * S3 error codes that name a cause the operator has to fix. Only these fixed
+ * reasons leave the adapter; the error document itself is never passed on.
+ */
+const ERROR_REASONS: Readonly<Record<string, string>> = {
+  RequestTimeTooSkewed: "storage_clock_skew",
+  SignatureDoesNotMatch: "storage_signature_rejected",
+  AuthorizationHeaderMalformed: "storage_signature_rejected",
+  InvalidAccessKeyId: "storage_signature_rejected",
+};
 
 type Fetched =
   | { ok: true; status: number; body: Uint8Array | null }
@@ -45,7 +62,8 @@ type Fetched =
  * no multipart upload, no overwrite, no delete. When the key already exists
  * the object is read back and compared byte for byte, never by ETag. Every
  * doubtful answer is `unavailable`; retrying is the client's job, so the store
- * itself never retries.
+ * itself never retries and never follows a redirect. Requests go only to the
+ * configured endpoint; the signer builds every URL from validated parts.
  */
 export class S3EvidencePayloadStore implements EvidencePayloadStore {
   private readonly endpoint: URL;
@@ -63,24 +81,16 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
         endpoint.protocol === "https:" ||
         (endpoint.protocol === "http:" && LOOPBACK.has(endpoint.hostname))
       ) ||
-      endpoint.pathname !== "/" ||
-      endpoint.search !== "" ||
-      endpoint.username !== "" ||
-      endpoint.password !== ""
+      endpoint.href !== `${endpoint.origin}/`
     ) {
       throw new TypeError(
         "S3 endpoint must be https (http only on loopback) without a path",
       );
     }
-    if (!BUCKET.test(config.bucket) || !REGION.test(config.region)) {
-      throw new TypeError("S3 bucket or region is not valid");
+    if (typeof config.bucket !== "string" || !BUCKET.test(config.bucket)) {
+      throw new TypeError("S3 bucket is not valid");
     }
-    if (
-      !config.credentials.accessKeyId ||
-      !config.credentials.secretAccessKey
-    ) {
-      throw new TypeError("S3 credentials are required");
-    }
+    assertS3SigningConfig(config.region, config.credentials);
     const timeout: unknown = config.requestTimeoutMs;
     if (
       typeof timeout !== "number" ||
@@ -112,36 +122,50 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
       return { status: "invalid" };
     }
     const bytes = new TextEncoder().encode(input.canonicalPayload);
-    const digest = createHash("sha256").update(bytes).digest();
     if (
       bytes.byteLength > MAX_EVIDENCE_SEGMENT_BYTES ||
-      digest.toString("hex") !== input.segmentHash
+      sha256Hex(bytes) !== input.segmentHash
     ) {
       return { status: "invalid" };
     }
 
-    const key = `v2/${input.evidencePackageId}/${input.segmentHash}.json`;
-    const url = new URL(`${this.config.bucket}/${key}`, this.endpoint);
-    const storageRef = `s3://${this.config.bucket}/${key}`;
+    const path = [
+      this.config.bucket,
+      "v2",
+      input.evidencePackageId,
+      `${input.segmentHash}.json`,
+    ];
+    const storageRef = `s3://${path.join("/")}`;
+    // One deadline for the whole call, so a slow PUT leaves the read-back
+    // only what is left of it.
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), this.config.requestTimeoutMs);
+    try {
+      return await this.write(input, path, bytes, storageRef, abort.signal);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
 
-    const put = await this.send("PUT", url, bytes, input.segmentHash, {
-      "content-type": "application/json",
-      "if-none-match": "*",
-      "x-amz-checksum-sha256": digest.toString("base64"),
-    });
-    if (!put.ok) return { status: "unavailable", reason: put.reason };
+  private async write(
+    input: { evidencePackageId: string; segmentHash: string },
+    path: string[],
+    bytes: Uint8Array<ArrayBuffer>,
+    storageRef: string,
+    signal: AbortSignal,
+  ): Promise<EvidencePayloadPutResult> {
+    // The signer adds and signs If-None-Match: * and the SHA-256 checksum.
+    const put = await this.send("PUT", path, bytes, signal);
+    if (!put.ok) return this.unavailable(put.reason);
     if (put.status === 200) return { status: "stored", storageRef };
     // 412: the key exists. 409: a concurrent conditional write to the same
     // key; it may exist by now. Either way only its bytes decide.
     if (put.status !== 412 && put.status !== 409) {
-      return {
-        status: "unavailable",
-        reason: `storage_put_status_${put.status}`,
-      };
+      return { status: "unavailable", reason: `storage_put_status_${put.status}` };
     }
 
-    const get = await this.send("GET", url, null, EMPTY_SHA256, {});
-    if (!get.ok) return { status: "unavailable", reason: get.reason };
+    const get = await this.send("GET", path, null, signal);
+    if (!get.ok) return this.unavailable(get.reason);
     if (get.status !== 200 || get.body === null) {
       // Not found right after "exists" is not a write we can vouch for.
       return {
@@ -162,55 +186,73 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     return { status: "conflict" };
   }
 
+  /** Configuration faults are also logged, by fixed reason only. */
+  private unavailable(reason: string): EvidencePayloadPutResult {
+    if (reason === "storage_clock_skew" || reason === "storage_signature_rejected") {
+      this.warn("evidence storage refused the request signature", { reason });
+    }
+    return { status: "unavailable", reason };
+  }
+
   private async send(
     method: "GET" | "PUT",
-    url: URL,
+    path: string[],
     body: Uint8Array<ArrayBuffer> | null,
-    payloadSha256Hex: string,
-    headers: Record<string, string>,
+    signal: AbortSignal,
   ): Promise<Fetched> {
-    const signed = signS3Request({
-      method,
-      url,
-      headers,
-      payloadSha256Hex,
-      region: this.config.region,
-      credentials: this.config.credentials,
-      now: this.now(),
-    });
-    const abort = new AbortController();
-    const timer = setTimeout(() => abort.abort(), this.config.requestTimeoutMs);
     try {
-      const response = await this.fetch(url, {
+      const signed = signS3Request({
         method,
-        headers: signed,
+        endpoint: this.endpoint,
+        path,
+        headers: method === "PUT" ? { "content-type": "application/json" } : {},
+        body: body ?? new Uint8Array(),
+        region: this.config.region,
+        credentials: this.config.credentials,
+        now: this.now(),
+      });
+      const response = await this.fetch(signed.url, {
+        method,
+        headers: signed.headers,
         body,
         redirect: "error",
-        signal: abort.signal,
+        signal,
       });
+      if (response.status === 400 || response.status === 403) {
+        const reason = await errorReason(response, signal);
+        if (reason) return { ok: false, reason };
+        return { ok: true, status: response.status, body: null };
+      }
       if (method === "PUT" || response.status !== 200) {
         await response.body?.cancel().catch(() => undefined);
         return { ok: true, status: response.status, body: null };
       }
-      const read = await readLimited(
-        response,
-        MAX_EVIDENCE_SEGMENT_BYTES,
-        abort.signal,
-      );
+      const read = await readLimited(response, MAX_EVIDENCE_SEGMENT_BYTES, signal);
       return read === null
         ? { ok: false, reason: "storage_object_too_large" }
         : { ok: true, status: 200, body: read };
     } catch {
       return {
         ok: false,
-        reason: abort.signal.aborted
-          ? "storage_timeout"
-          : "storage_request_failed",
+        reason: signal.aborted ? "storage_timeout" : "storage_request_failed",
       };
-    } finally {
-      clearTimeout(timer);
     }
   }
+}
+
+/** The fixed reason for a known S3 error code, or null; the body never leaves. */
+async function errorReason(
+  response: Response,
+  signal: AbortSignal,
+): Promise<string | null> {
+  const body = await readLimited(response, MAX_ERROR_BODY_BYTES, signal);
+  if (body === null) return null;
+  const code = /<Code>([A-Za-z]{1,64})<\/Code>/.exec(
+    new TextDecoder().decode(body),
+  )?.[1];
+  return code !== undefined && Object.hasOwn(ERROR_REASONS, code)
+    ? ERROR_REASONS[code]
+    : null;
 }
 
 /**

@@ -17,7 +17,7 @@ const hashOf = (value: Uint8Array | string) =>
 const keyOf = (pkg: string, hash: string) =>
   `/ductus-evidence/v2/${pkg}/${hash}.json`;
 
-type Call = { method: string; path: string; headers: Headers };
+type Call = { method: string; origin: string; path: string; headers: Headers };
 
 /**
  * In-process S3 stand-in: conditional create is atomic, the signed payload
@@ -33,6 +33,7 @@ function fakeS3(
     async (url: URL | string | Request, init?: RequestInit) => {
       const call = {
         method: init?.method ?? "GET",
+        origin: new URL(String(url)).origin,
         path: new URL(String(url)).pathname,
         headers: new Headers(init?.headers),
       };
@@ -91,6 +92,17 @@ const put = (store: S3EvidencePayloadStore, text: string, pkg = PACKAGE) =>
     segmentHash: hashOf(payload(text)),
     canonicalPayload: payload(text),
   });
+
+const s3Error = (status: number, code: string, message = "") =>
+  Promise.resolve(
+    new Response(
+      `<?xml version="1.0" encoding="UTF-8"?><Error><Code>${code}</Code><Message>${message}</Message></Error>`,
+      { status },
+    ),
+  );
+
+const signedHeadersOf = (call: Call) =>
+  /SignedHeaders=([^,]+),/.exec(call.headers.get("authorization") ?? "")?.[1];
 
 /** Never answers; rejects only when the request is aborted. */
 const hang = (signal: AbortSignal) =>
@@ -375,5 +387,200 @@ describe("S3EvidencePayloadStore", () => {
     );
     expect(source).not.toMatch(/uploadId|uploads|"DELETE"|"POST"|list-type/);
     expect(source.match(/"(GET|PUT)"/g)).not.toBeNull();
+  });
+  it("signs If-None-Match and the checksum on every PUT and neither on GET (S6)", async () => {
+    const s3 = fakeS3();
+    const { store } = storeWith(s3.fetch);
+    await put(store, "a");
+    await put(store, "a");
+
+    const [first, second, get] = s3.calls;
+    for (const call of [first, second]) {
+      expect(signedHeadersOf(call)).toBe(
+        "content-type;host;if-none-match;x-amz-checksum-sha256;x-amz-content-sha256;x-amz-date",
+      );
+    }
+    expect(get.method).toBe("GET");
+    expect(signedHeadersOf(get)).toBe("host;x-amz-content-sha256;x-amz-date");
+    expect(get.headers.has("if-none-match")).toBe(false);
+  });
+
+  it("answers a clock skew with a reason that names it, never conflict (S9)", async () => {
+    const s3 = fakeS3(() => s3Error(403, "RequestTimeTooSkewed"));
+    const { store, warn } = storeWith(s3.fetch, {
+      now: () => new Date(Date.now() - 3_600_000),
+    });
+
+    await expect(put(store, "a")).resolves.toEqual({
+      status: "unavailable",
+      reason: "storage_clock_skew",
+    });
+    expect(s3.calls).toHaveLength(1);
+    expect(warn).toHaveBeenCalledWith("evidence storage refused the request signature", {
+      reason: "storage_clock_skew",
+    });
+  });
+
+  it.each(["AuthorizationHeaderMalformed", "SignatureDoesNotMatch", "InvalidAccessKeyId"])(
+    "answers %s as a configuration fault, never conflict (S11)",
+    async (code) => {
+      for (const failing of ["PUT", "GET"]) {
+        const s3 = fakeS3((call) =>
+          call.method === failing
+            ? s3Error(code === "AuthorizationHeaderMalformed" ? 400 : 403, code)
+            : Promise.resolve(new Response(null, { status: 412 })),
+        );
+        const { store, warn } = storeWith(s3.fetch);
+        await expect(put(store, "a")).resolves.toEqual({
+          status: "unavailable",
+          reason: "storage_signature_rejected",
+        });
+        expect(warn).toHaveBeenCalledWith(
+          "evidence storage refused the request signature",
+          { reason: "storage_signature_rejected" },
+        );
+      }
+    },
+  );
+
+  it("never passes on an error document it does not know", async () => {
+    const s3 = fakeS3(() =>
+      s3Error(403, "AccessDenied", "echo fake-secret <Code>RequestTimeTooSkewed</Code>"),
+    );
+    const { store, warn } = storeWith(s3.fetch);
+
+    await expect(put(store, "a")).resolves.toEqual({
+      status: "unavailable",
+      reason: "storage_put_status_403",
+    });
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("puts the secret and the signing key in no result, log or error (S12)", async () => {
+    // A synthetic canary, built at run time so the secret scanner does not
+    // mistake the literal for a real key.
+    const secret = ["kanarinac", "S12", Date.now().toString(36)].join("-");
+    const credentials = { accessKeyId: "fake-id", secretAccessKey: secret };
+    const answers: Array<(call: Call, signal: AbortSignal) => Promise<Response> | null> = [
+      () => null,
+      () => s3Error(403, "SignatureDoesNotMatch", secret),
+      () => s3Error(403, "RequestTimeTooSkewed", secret),
+      () => s3Error(403, "AccessDenied", secret),
+      () => Promise.reject(new TypeError(`fetch failed ${secret}`)),
+      () => Promise.resolve(new Response(null, { status: 301, headers: { location: `https://zlo.test/${secret}` } })),
+      (call) =>
+        call.method === "PUT"
+          ? Promise.resolve(new Response(null, { status: 412 }))
+          : Promise.resolve(new Response(secret, { status: 200 })),
+      (_, signal) => hang(signal),
+    ];
+    const seen: unknown[] = [];
+    for (const answer of answers) {
+      const s3 = fakeS3(answer);
+      const { store, warn } = storeWith(s3.fetch, { credentials, requestTimeoutMs: 20 });
+      seen.push(await put(store, "a"), warn.mock.calls);
+    }
+    for (const bad of [
+      { region: "EU" },
+      { credentials: { accessKeyId: "id/x", secretAccessKey: secret } },
+      { endpoint: `https://id:${secret}@s3.example.eu` },
+      { bucket: secret.toUpperCase() },
+    ]) {
+      try {
+        storeWith(fakeS3().fetch, { credentials, ...bad });
+        seen.push("constructed");
+      } catch (error) {
+        const e = error as Error;
+        seen.push({ name: e.name, message: e.message, stack: e.stack, cause: String(e.cause) });
+      }
+    }
+
+    const text = JSON.stringify(seen);
+    expect(seen).not.toContain("constructed");
+    expect(text).not.toContain(secret);
+    expect(text.toLowerCase()).not.toContain(secret.toLowerCase());
+  });
+
+  it("does not follow a redirect and makes no second request (S13)", async () => {
+    for (const status of [301, 302, 307, 308]) {
+      const s3 = fakeS3(() =>
+        Promise.resolve(
+          new Response(null, { status, headers: { location: "https://zlo.test/x" } }),
+        ),
+      );
+      const { store } = storeWith(s3.fetch);
+      await expect(put(store, "a")).resolves.toEqual({
+        status: "unavailable",
+        reason: `storage_put_status_${status}`,
+      });
+      expect(s3.calls).toHaveLength(1);
+      expect(s3.fetch.mock.calls[0][1]?.redirect).toBe("error");
+    }
+    // What fetch itself does with redirect: "error".
+    const s3 = fakeS3(() => Promise.reject(new TypeError("unexpected redirect")));
+    const { store } = storeWith(s3.fetch);
+    await expect(put(store, "a")).resolves.toEqual({
+      status: "unavailable",
+      reason: "storage_request_failed",
+    });
+    expect(s3.calls).toHaveLength(1);
+  });
+
+  it("sends every request to the configured origin only (S14)", async () => {
+    const s3 = fakeS3();
+    const { store } = storeWith(s3.fetch, { endpoint: "https://s3.example.eu:8443" });
+    await put(store, "a");
+    await put(store, "a");
+
+    expect(s3.calls).toHaveLength(3);
+    expect(new Set(s3.calls.map((c) => c.origin))).toEqual(
+      new Set(["https://s3.example.eu:8443"]),
+    );
+    expect(s3.calls.every((c) => c.path.startsWith("/ductus-evidence/v2/"))).toBe(true);
+  });
+
+  it.each([
+    "http://s3.example.eu",
+    "http://10.0.0.1:9000",
+    "https://s3.example.eu/?x=1",
+    "https://s3.example.eu/#x",
+    "https://user@s3.example.eu",
+  ])("refuses to start with endpoint %s (S14)", (endpoint) => {
+    expect(() => storeWith(fakeS3().fetch, { endpoint })).toThrow(TypeError);
+  });
+
+  it.each<[string, Partial<S3EvidencePayloadStoreConfig>]>([
+    ["an upper-case region", { region: "EU-CENTRAL-1" }],
+    ["an empty region", { region: "" }],
+    ["a region with a slash", { region: "eu/central" }],
+    ["a key id with a slash", { credentials: { accessKeyId: "a/b", secretAccessKey: "s" } }],
+    ["an empty key id", { credentials: { accessKeyId: "", secretAccessKey: "s" } }],
+    ["an empty secret", { credentials: { accessKeyId: "a", secretAccessKey: "" } }],
+  ])("refuses to start with %s (S10)", (_, overrides) => {
+    expect(() => storeWith(fakeS3().fetch, overrides)).toThrow(TypeError);
+  });
+
+  it("bounds the whole call, read-back included, by one deadline", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const s3 = fakeS3((call, signal) =>
+        call.method === "PUT"
+          ? new Promise((resolve) =>
+              setTimeout(() => resolve(new Response(null, { status: 412 })), 60),
+            )
+          : hang(signal),
+      );
+      const { store } = storeWith(s3.fetch, { requestTimeoutMs: 100 });
+      let result: unknown;
+      void put(store, "a").then((r) => (result = r));
+
+      await vi.advanceTimersByTimeAsync(99);
+      expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
+      expect(result).toBeUndefined();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(result).toEqual({ status: "unavailable", reason: "storage_timeout" });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
