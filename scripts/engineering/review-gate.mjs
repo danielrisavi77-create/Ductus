@@ -3,9 +3,9 @@ import process from "node:process";
 
 import {
   MAX_MERGE_STEPS,
+  carriedByCompare,
   carriedHeadCandidates,
   evaluatePullRequest,
-  sameChange,
 } from "./review-gate-core.mjs";
 
 const context = "Engineering review gate";
@@ -65,7 +65,6 @@ async function firstParentPath(owner, repo, head) {
 // D-101: earlier heads whose verdicts still hold because only base merges
 // followed and the PR diff is unchanged. Any API error carries nothing.
 async function carriedHeads(owner, repo, pr, comments) {
-  const carried = new Set();
   const compare = (range) => api(`/repos/${owner}/${repo}/compare/${range}?per_page=100`);
   let candidates;
   let current;
@@ -74,27 +73,14 @@ async function carriedHeads(owner, repo, pr, comments) {
     const { heads, reason } = carriedHeadCandidates(comments, pr.head.sha, path);
     if (reason) console.log(`Carry-over refused: ${reason}.`);
     candidates = heads;
-    if (candidates.length === 0) return carried;
+    if (candidates.length === 0) return new Set();
     current = await compare(`${pr.base.sha}...${pr.head.sha}`);
   } catch (error) {
     console.log(`Carry-over check failed closed: ${error.message}`);
-    return carried;
+    return new Set();
   }
-  for (const sha of candidates) {
-    const range = `${pr.base.sha}...${sha}`;
-    try {
-      const same = sameChange(current, await compare(range));
-      console.log(
-        `Carry-over ${same ? "accepted" : "rejected"}: head ${sha}, base ${pr.base.sha}, ` +
-          `compared ${pr.base.sha}...${pr.head.sha} with ${range}.`,
-      );
-      if (same) carried.add(sha);
-    } catch (error) {
-      // A head that is gone or unreadable simply does not carry.
-      console.log(`Carry-over check for ${sha} failed closed: ${error.message}`);
-    }
-  }
-  return carried;
+  console.log(`Carry-over compares ${pr.base.sha}...<head> with ${pr.base.sha}...${pr.head.sha}.`);
+  return carriedByCompare(candidates, current, (sha) => compare(`${pr.base.sha}...${sha}`), console.log);
 }
 
 async function setStatus(repository, sha, result, targetUrl) {

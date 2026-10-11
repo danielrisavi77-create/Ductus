@@ -405,6 +405,27 @@ export function sameChange(current, earlier) {
 }
 
 /**
+ * Heads among `candidates` whose PR diff equals `current`. `compareHead(sha)`
+ * returns GET compare/{base}...{sha}. All or nothing: if any compare fails,
+ * no head carries, so a carryable FAIL is never dropped while a PASS carries.
+ */
+export async function carriedByCompare(candidates, current, compareHead, log = () => {}) {
+  const carried = new Set();
+  for (const sha of candidates) {
+    let same;
+    try {
+      same = sameChange(current, await compareHead(sha));
+    } catch (error) {
+      log(`Carry-over check for ${sha} failed closed, nothing carries: ${error.message}`);
+      return new Set();
+    }
+    log(`Carry-over ${same ? "accepted" : "rejected"}: head ${sha}.`);
+    if (same) carried.add(sha);
+  }
+  return carried;
+}
+
+/**
  * Whole decision for one PR from REST data: `pr` (GET pulls/{n}), `files` (its
  * files list) and the issue comments. Every description is a fixed text.
  */

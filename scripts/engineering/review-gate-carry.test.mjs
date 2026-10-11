@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   MAX_CARRIED_HEADS,
   MAX_MERGE_STEPS,
+  carriedByCompare,
   carriedHeadCandidates,
   evaluateGate,
   evaluatePullRequest,
@@ -151,6 +152,22 @@ test("a merge that changes the base side of the PR's hunk does not carry", () =>
   const before = { files: [file("a.mjs", "@@ -1 +1 @@\n-a\n+b")] };
   const after = { files: [file("a.mjs", "@@ -1 +1 @@\n-c\n+b")] };
   assert.equal(sameChange(after, before), false);
+});
+
+test("an error on any compare carries nothing, so an older FAIL is never dropped", async () => {
+  const current = { files: [file("a.mjs")] };
+  const pass = "c".repeat(40);
+  const ok = async () => current;
+  assert.deepEqual([...(await carriedByCompare([pass, earlier], current, ok))], [pass, earlier]);
+  for (const failing of [pass, earlier]) {
+    const flaky = async (sha) => {
+      if (sha === failing) throw new Error("502");
+      return current;
+    };
+    assert.equal((await carriedByCompare([pass, earlier], current, flaky)).size, 0);
+  }
+  const differs = async (sha) => (sha === pass ? current : { files: [file("a.mjs", "@@ -1 +1 @@\n-a\n+c")] });
+  assert.deepEqual([...(await carriedByCompare([pass, earlier], current, differs))], [pass]);
 });
 
 test("a success that counts a carried verdict names the earlier head", () => {
