@@ -1,6 +1,6 @@
 # Ductus: pravila za AI agente
 
-Prije svakog rada pročitaj `STATE.md`. Razvojni governance, risk razine, review i QA gateovi su u `docs/ENGINEERING_SYSTEM.md`, a runtime-neutral pravila za više Claude/ChatGPT računa u `docs/MULTI-ACCOUNT.md`. Projektni Claude skillovi su u `.claude/skills/` i moraju ostati tanki adapteri na kanonske dokumente.
+Prije svakog rada pročitaj `STATE.md`. Razvojni governance, risk razine, review i QA gateovi su u `docs/ENGINEERING_SYSTEM.md`, a runtime-neutral pravila za više Claude/ChatGPT računa u `docs/MULTI-ACCOUNT.md`. Projektni Claude skillovi su u `.claude/skills/` i moraju ostati tanki adapteri na kanonske dokumente. Sesija s dodijeljenom ulogom (pisac Backend, Frontend ili Platforma, reviewer, QA) na početku čita svoju karticu u `.claude/uloge/`; pravila po putanjama u `.claude/rules/` učitavaju se sama. Oboje su podsjetnici koji upućuju na ove dokumente, ne nova pravila.
 
 ## Mjerodavni izvori
 

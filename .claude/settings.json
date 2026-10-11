@@ -99,7 +99,7 @@
           {
             "type": "command",
             "shell": "bash",
-            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"$CLAUDE_PROJECT_DIR/scripts/cleanup-worktrees.ps1\"",
+            "command": "command -v powershell >/dev/null 2>&1 || exit 0; powershell -NoProfile -ExecutionPolicy Bypass -File \"$CLAUDE_PROJECT_DIR/scripts/cleanup-worktrees.ps1\"",
             "async": true,
             "timeout": 180
           }

@@ -15,7 +15,7 @@ Upute za aktivni Ductus orkestrator, neovisno o tome radi li u Claudeu ili Codex
 
 Izvještaj u PR-u ili `IZVJEŠTAJ <id>` issueu vrijedi i kad poruka nije stigla ili računi uopće ne mogu međusobno slati session poruke.
 
-Za Claude sesije na istom računu poruke drugih sesija isporučuju se tek kad orkestrator miruje. Dugotrajne pozadinske petlje (npr. čekanje novih PR-ova) drže sesiju zauzetom, pa poruke ostaju na čekanju; 3. 10. 2026. tako su izgubljeni izvještaji P-8, predaja Frontenda i Danielovo odobrenje iz sesije Platforme. Zato orkestrator u pozadini čeka samo konkretan CI ili Codex na poznatom PR-u, a između poteza miruje. Kad sesija javi da poruka nije potvrđena, orkestrator čita njezin transkript (`list_events`).
+Za Claude sesije na istom računu poruke drugih sesija isporučuju se tek kad orkestrator miruje. Dugotrajne pozadinske petlje (npr. čekanje novih PR-ova) drže sesiju zauzetom, pa poruke ostaju na čekanju; 3. 10. 2026. tako su izgubljeni izvještaji P-8, predaja Frontenda i Danielovo odobrenje iz sesije Platforme. Zato orkestrator u pozadini čeka samo konkretan CI ili Codex na poznatom PR-u, a između poteza miruje. Kad sesija javi da poruka nije potvrđena, orkestrator čita njezin transkript (`list_events`). Transkript čita usko: `kinds: ["assistant", "result"]` i `limit` do 20, a stariju stranicu (`before_id`) tek kad odgovor nije na prvoj; neograničeno čitanje troši desetke tisuća tokena po pozivu.
 
 ## 2. Kad stigne PR
 
