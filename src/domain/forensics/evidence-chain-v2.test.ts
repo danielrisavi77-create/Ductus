@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { EDIT_STEP_FORMAT_V1 } from "@/domain/document/edit-step";
+
 import { sha256WebCrypto } from "./crypto";
 import {
   decideEvidenceRetry,
@@ -39,14 +41,14 @@ function canonicalFixture(text: string): string {
       {
         sequence: 1,
         source: "editor",
-        steps: [{ stepType: "replace", from: 1, to: 1, text }],
+        steps: [{ stepType: "replace", from: 1, to: 1, slice: { content: [{ type: "text", text }] } }],
         beforeDocumentHash: A,
         afterDocumentHash: B,
       },
     ],
     captureContext: {
       editorModel: "prosemirror",
-      transactionFormat: "prosemirror-step-json-v1",
+      transactionFormat: EDIT_STEP_FORMAT_V1,
     },
     evidenceProfileId: "standard-v1",
   });
@@ -203,8 +205,9 @@ describe("evidence payload and chain edge cases", () => {
   });
 
   it("answers invalid, never a stack overflow, for a step nested past the JCS limit", async () => {
-    // The step value sits five levels down: segment, events, event, steps, step.
-    const deepest = MAX_JCS_DEPTH - 5;
+    // The text value sits eight levels down: segment, events, event, steps,
+    // step, slice, content, text node.
+    const deepest = MAX_JCS_DEPTH - 8;
     const withNesting = (depth: number) =>
       canonicalFixture("x").replace(
         '"text":"x"',
