@@ -106,7 +106,8 @@ SELECT is(
 -- version nor a pointer to a missing version can be written.
 SET CONSTRAINTS ALL IMMEDIATE;
 SELECT throws_ok(
-  format('INSERT INTO institution.assignment (course_id, created_by) VALUES (%L, %L)', pg_temp.id('k1'), pg_temp.id('vesna')),
+  format('INSERT INTO institution.assignment (course_id, institution_id, created_by) VALUES (%L, %L, %L)',
+         pg_temp.id('k1'), pg_temp.id('fak_a'), pg_temp.id('vesna')),
   '23503', NULL, 'an assignment without its first version cannot be stored, by the owner either'
 );
 SELECT throws_ok(

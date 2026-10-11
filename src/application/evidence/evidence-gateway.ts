@@ -10,6 +10,7 @@ import {
   type EvidenceIngestPort,
   type EvidenceIngestRequestV2,
 } from "@/application/ports/evidence-ingest";
+import { isInstitutionId } from "@/application/ports/evidence-object-key";
 import type {
   EvidenceAcceptanceRecord,
   EvidenceAcceptanceRepository,
@@ -232,6 +233,15 @@ export class EvidenceGateway implements EvidenceIngestPort {
     ) {
       return { status: "invalid" };
     }
+    // The institution comes only from the server's own package row; a
+    // malformed one is a server fault, not the caller's.
+    if (!isInstitutionId(context.institutionId)) {
+      return {
+        status: "unavailable",
+        stage: "context",
+        reason: "evidence context is malformed",
+      };
+    }
 
     const lookup = await this.dependencies.repository.lookup({
       principalId: request.principalId,
@@ -301,8 +311,10 @@ export class EvidenceGateway implements EvidenceIngestPort {
       return { status: "invalid" };
     }
 
+    // The key is built from the ids the server resolved, not from the request.
     const stored = await this.dependencies.payloadStore.putImmutable({
-      evidencePackageId,
+      institutionId: context.institutionId,
+      evidencePackageId: context.evidencePackageId,
       segmentHash: verified.sha256,
       canonicalPayload,
     });
@@ -313,7 +325,7 @@ export class EvidenceGateway implements EvidenceIngestPort {
         reason: stored.reason,
       };
     }
-    if (stored.status === "conflict") {
+    if (stored.status === "conflict" || stored.status === "invalid") {
       return { status: "invalid" };
     }
 
