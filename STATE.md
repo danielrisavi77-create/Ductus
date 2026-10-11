@@ -44,17 +44,18 @@ Kanonski dokument: `docs/ENGINEERING_SYSTEM.md`.
 
 ## Otvoreni razvojni stog
 
-Stanje 11. 10. 2026. prema `gh pr list` (nositelj statusa je Linear; review i QA stanje je na PR-u).
+Provjereni presjek 11. 10. 2026. oko 17:25 CEST: između 8. i 11. 10. spojena su 102 PR-a (GitHub UTC: 3, 3, 64, 32); na presjeku je bilo 10 otvorenih razvojnih PR-ova. Nakon presjeka otvoren je informativni [PR #259](https://github.com/danielrisavi77-create/Ductus/pull/259) s detaljnom evidencijom i punim popisom spojenih PR-ova. **To nije potvrda dovršenosti FPZG demoa niti status živih zadataka.**
 
-Otvoreno:
+Otvoreno na razvojnom presjeku (za aktualni review, QA i CI uvijek provjeriti pojedini PR):
 
-- #240 DAN-83 ključ ustanove na zadacima i potvrdama obavijesti; #233 B-8i S3 adapter pohrane; #245 B-8i B2 domene pohrane po ustanovi (draft); #247 DAN-54 potvrda v2; #248 DAN-183a fixtureovi na format koraka v1 (draft); #234 docs REPOZITORIJI (draft).
-- #206 i #214 F-3 spremanje dokumenta i Tiptap editor (#214 draft).
-- #219, #220, #221, #230 orchestrator skripte, Owner-Override, verdikti (D-101; #221 i #230 draft); #223 čitanje teksta sučelja; #228 hook u cloud sesijama (draft).
-- #243 ovaj docs PR.
-- #180 DAN-138 test kopija skillova (draft); #94 DAN-41 drugi pružatelj reviewa (draft, nakon demoa).
+- **F-3:** #214 lokalni Tiptap editor na `/rad` (otvoren, nije u `main`). #206 atomsko lokalno spremanje te #250/#251/#256 zaštite i testovi već su spojeni; za editor ostaju 1b-2b (poruke/izvoz), 1b-3 (status spremanja) i stvarni browser QA.
+- **B-8 / dokazna evidencija:** #245 integracija S3 domena po ustanovi (draft), #257 testni zlatni vektori na formatu koraka v1 (draft); #232/#233/#247/#253/#254 spojeni su kao zasebni temelji, ne kao dovršen integrirani ingest i potpis.
+- **Orkestracija:** #219 REST cloud skripte, #220 ispis Owner-Override, #221 ispis review/QA verdikta (draft), #258 upozorenja na razvojno okruženje (draft).
+- **Ostalo:** #234 usklađenje S3 dokumentacije (draft), #180 test sinkronosti skillova (draft), #94 drugi review provider (draft, nakon demoa).
 
-Spojeno 10. i 11. 10.: #160, #173, #175, #185, #186, #189, #191, #194, #196, #198, #199, #205, #207 do #210, #212, #213, #215 do #218, #224, #226, #227, #229, #232, #237, #238, #244, #246 i ranije #188, #174, #45, #164, #151, #170, #169, #163, #162, #159, #150, #148, #133, #165, #147, #105.
+Spojeno kao ključni napredak 8.–11. 10.: #39 migracije/pgTAP, #44 E2E infrastruktura, #45 provjera teksta UI-ja, #46/#148/#151 uloge/sesije, #191/#212/#215/#224 demo prijava, #163/#175/#240 model ustanove i zadatka, #112/#206 journal/saver, #97/#159/#170/#189/#194/#216 oporavak sinkronizacije, #133/#174/#207/#213/#218 evidencijski ugovori, #232/#233/#247/#253/#254 pohrana i potvrde, #150 tanki dokazni prolaz, #238 prvi korak demo E2E, #230 D-101 kontrola verdikta, #243 i #244 odluke i nacrti privatnosti.
+
+**Sljedeći GO dokaz za demo:** cjelovit tok nastavnik stvara zadatak → student se upisuje i piše uz lokalno/poslužiteljsko spremanje → nastavnik komentira → student predaje uz server-side rekonstrukciju → jednak sažetak i potvrda. Potreban je zelen E2E u CI-ju, ponovljiv lokalni demo i snimka prolaza 31. 10.; cilj prikaza ostaje 2. 11. 2026. Prioritet je povezivanje, ne širenje opsega.
 
 ## Ne smije se izgubiti
 
