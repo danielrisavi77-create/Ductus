@@ -62,10 +62,12 @@ SELECT ok(has_function_privilege('ductus_auth', 'identity.open_session(text, tex
   'ductus_auth may execute open_session');
 SELECT is_empty(
   $$ SELECT r.rolname FROM (SELECT rolname::text FROM pg_roles
-                            WHERE rolname LIKE 'ductus\_%' AND rolname NOT IN ('ductus_auth', 'ductus_identity')
+                            WHERE rolname LIKE 'ductus\_%'
+                              -- ductus_auth_local inherits ductus_auth and nothing else (010).
+                              AND rolname NOT IN ('ductus_auth', 'ductus_identity', 'ductus_auth_local')
                             UNION ALL SELECT 'public') AS r (rolname)
      WHERE has_function_privilege(r.rolname, 'identity.open_session(text, text, text, text, bytea)', 'EXECUTE') $$,
-  'no role but ductus_auth and the owner, nor PUBLIC, may execute open_session'
+  'no role but ductus_auth, its local login and the owner, nor PUBLIC, may execute open_session'
 );
 SET LOCAL ROLE ductus_app;
 SELECT throws_ok(

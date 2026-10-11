@@ -3,7 +3,8 @@
  * AAI@EduHr alone. The fake OIDC provider ("demo prijava") exists only
  * locally and in CI: only NODE_ENV=development or test may select it, every
  * other value (unset or misspelt included) counts as production, and loading
- * such a configuration throws at startup.
+ * such a configuration throws at startup. The routes pass the NODE_ENV the
+ * build fixed, not the one the server starts with (deps.ts).
  *
  * Errors name the variable, never its value, so a secret cannot reach a log.
  */
