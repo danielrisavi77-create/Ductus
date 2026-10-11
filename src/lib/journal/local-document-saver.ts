@@ -507,7 +507,9 @@ function consistent(
   if (!meta) return pending.length === 0;
   if (meta.documentId !== documentId || !Number.isSafeInteger(meta.localSeq) ||
       meta.localSeq < 0 || !(SYNC_STATES as readonly string[]).includes(meta.state) ||
-      snapshot?.documentId !== documentId) return false;
+      snapshot?.documentId !== documentId ||
+      // The next write takes its base from here (#206 Codex r4240617145).
+      !Number.isSafeInteger(snapshot.revision) || snapshot.revision < 0) return false;
   let previous = 0;
   for (const row of pending) {
     const tx = row?.tx;
