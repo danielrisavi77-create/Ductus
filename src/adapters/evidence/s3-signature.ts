@@ -1,4 +1,5 @@
 import { createHash, createHmac } from "node:crypto";
+import { inspect } from "node:util";
 
 export type S3Credentials = {
   accessKeyId: string;
@@ -34,6 +35,9 @@ const HEADER_VALUE = /^[\x20-\x7e]{0,1024}$/;
 const PATH_SEGMENT = /^[A-Za-z0-9._-]{1,255}$/;
 const REGION = /^[a-z0-9-]{1,32}$/;
 const ACCESS_KEY_ID = /^[A-Za-z0-9_-]{1,128}$/;
+// Visible ASCII only: a blank value or a line break kept from a file or an
+// environment variable stops startup instead of failing every signature.
+const SECRET_ACCESS_KEY = /^[\x21-\x7e]{1,128}$/;
 const AMZ_DATE = /^\d{8}T\d{6}Z$/;
 
 /**
@@ -45,20 +49,96 @@ export function assertS3SigningConfig(
   region: unknown,
   credentials: unknown,
 ): asserts credentials is S3Credentials {
+  assertRegion(region);
+  readS3Credentials(credentials);
+}
+
+function assertRegion(region: unknown): asserts region is string {
   if (typeof region !== "string" || !REGION.test(region)) {
     throw new TypeError("S3 region is not valid");
   }
-  const { accessKeyId, secretAccessKey } = (credentials ?? {}) as Record<
-    string,
-    unknown
-  >;
+}
+
+/**
+ * The one error for keys that are missing, invalid or cannot be read. Built
+ * here, never from a caught error: a getter or Proxy that throws may put the
+ * secret in its message, so nothing of it (message, stack or cause) is kept.
+ */
+function invalidCredentials(): TypeError {
+  const error = new TypeError("S3 credentials are not valid");
+  Object.defineProperty(error, "stack", {
+    value: "TypeError: S3 credentials are not valid",
+    configurable: true,
+    writable: true,
+  });
+  return error;
+}
+
+/**
+ * Reads each key once and returns that same validated value, so a getter
+ * cannot pass one value and have another used.
+ */
+function readS3Credentials(credentials: unknown): S3Credentials {
+  let accessKeyId: unknown;
+  let secretAccessKey: unknown;
+  try {
+    const source = (credentials ?? {}) as Record<string, unknown>;
+    accessKeyId = source.accessKeyId;
+    secretAccessKey = source.secretAccessKey;
+  } catch {
+    throw invalidCredentials();
+  }
   if (
     typeof accessKeyId !== "string" ||
     !ACCESS_KEY_ID.test(accessKeyId) ||
     typeof secretAccessKey !== "string" ||
-    secretAccessKey.length === 0
+    !SECRET_ACCESS_KEY.test(secretAccessKey)
   ) {
-    throw new TypeError("S3 credentials are not valid");
+    throw invalidCredentials();
+  }
+  return { accessKeyId, secretAccessKey };
+}
+
+const REDACTED = "[S3 credentials redacted]";
+
+/**
+ * S3 keys sealed for configuration. The values live only in native private
+ * fields, so enumeration, spreading, `JSON.stringify`, `String` and
+ * `util.inspect` (hidden properties and getters included) of the keys or of a
+ * configuration that holds them show a redaction mark. Each key is read once
+ * when sealed, and that same value is validated and stored, so a getter
+ * cannot pass one value and seal another; the error never names a value.
+ */
+export class S3SecretCredentials {
+  readonly #accessKeyId: string;
+  readonly #secretAccessKey: string;
+
+  constructor(credentials: S3Credentials) {
+    const keys = readS3Credentials(credentials);
+    this.#accessKeyId = keys.accessKeyId;
+    this.#secretAccessKey = keys.secretAccessKey;
+    Object.freeze(this);
+  }
+
+  /** The plain keys, for the adapter that signs; refuses anything unsealed. */
+  static reveal(sealed: unknown): S3Credentials {
+    if (!(typeof sealed === "object" && sealed !== null && #accessKeyId in sealed)) {
+      throw new TypeError("S3 credentials must be sealed");
+    }
+    const keys = sealed as S3SecretCredentials;
+    return { accessKeyId: keys.#accessKeyId, secretAccessKey: keys.#secretAccessKey };
+  }
+
+  toJSON(): string {
+    return REDACTED;
+  }
+
+  toString(): string {
+    return REDACTED;
+  }
+
+  [inspect.custom](): string {
+    return REDACTED;
   }
 }
 
@@ -173,7 +253,8 @@ export function signS3Request(input: {
   if (!AMZ_DATE.test(amzDate)) {
     throw new TypeError("S3 signing time is out of range");
   }
-  assertS3SigningConfig(input.region, input.credentials);
+  assertRegion(input.region);
+  const credentials = readS3Credentials(input.credentials);
 
   const headers: Record<string, string> = {};
   for (const [name, value] of Object.entries(input.headers)) {
@@ -204,7 +285,7 @@ export function signS3Request(input: {
     payloadSha256Hex: digest.toString("hex"),
     region: input.region,
     service: "s3",
-    credentials: input.credentials,
+    credentials,
     amzDate,
   });
   const sent: Record<string, string> = {};
