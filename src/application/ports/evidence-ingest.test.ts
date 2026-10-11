@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   evidencePayloadExceedsLimit,
+  isEvidencePackageId,
   isEvidenceSegmentDescriptorV2,
   validateEvidenceIngestCommandV2,
   type EvidenceIngestCommandV2,
@@ -172,5 +173,22 @@ describe("evidence ingest v2 boundary", () => {
     // Written out: the descriptor has its own copy of the check.
     expect(withProfile("p".repeat(120))).toBe(true);
     expect(withProfile("p".repeat(121))).toBe(false);
+  });
+
+  it("takes only package ids that are safe as one object key segment", () => {
+    const withPackage = (evidencePackageId: string) =>
+      validateEvidenceIngestCommandV2({
+        ...validCommand(),
+        descriptor: { ...validCommand().descriptor, evidencePackageId },
+      });
+    // The gateway and the payload store share this one check.
+    for (const id of ["a", "0", "evidence-1", "a_b-c", "a".repeat(128)]) {
+      expect(isEvidencePackageId(id)).toBe(true);
+      expect(withPackage(id)).toBe(true);
+    }
+    for (const id of ["", "Evidence-1", "-a", "a/b", "..", "a.b", "a\n", "ａ", "a".repeat(129)]) {
+      expect(isEvidencePackageId(id)).toBe(false);
+      expect(withPackage(id)).toBe(false);
+    }
   });
 });

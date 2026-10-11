@@ -62,6 +62,20 @@ export interface EvidenceIngestPort {
 }
 
 const SHA256_HEX = /^[0-9a-f]{64}$/;
+// Becomes part of an object key (`v2/<package>/<hash>.json`, BACKEND 4.1):
+// ASCII only, no dots, slashes, escapes or whitespace, and lowercase only, so
+// two ids never differ by case alone. Another form is refused, not normalized.
+const EVIDENCE_PACKAGE_ID = /^[a-z0-9][a-z0-9_-]{0,127}$/;
+
+export function isEvidencePackageId(value: unknown): value is string {
+  return typeof value === "string" && EVIDENCE_PACKAGE_ID.test(value);
+}
+
+/** Exactly 64 lowercase hex digits; uppercase is refused, not normalized. */
+export function isSha256Hex(value: unknown): value is string {
+  return typeof value === "string" && SHA256_HEX.test(value);
+}
+
 const DESCRIPTOR_KEYS: ReadonlySet<string> = new Set<
   keyof EvidenceSegmentDescriptorV2
 >([
@@ -106,7 +120,7 @@ export function isEvidenceSegmentDescriptorV2(
   if (!hasOnlyKeys(descriptor, DESCRIPTOR_KEYS)) return false;
 
   if (
-    !nonEmptyBounded(descriptor.evidencePackageId) ||
+    !isEvidencePackageId(descriptor.evidencePackageId) ||
     !nonEmptyBounded(descriptor.documentId) ||
     !nonEmptyBounded(descriptor.sessionId) ||
     !nonEmptyBounded(descriptor.segmentId) ||
