@@ -154,8 +154,7 @@ function reject(code: EditStepRejection, path: string): never {
   throw new Rejected(code, path);
 }
 
-const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);
-const SHA256_HEX = /^[0-9a-f]{64}$/;
+const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);const SHA256_HEX = /^[0-9a-f]{64}$/;
 /**
  * A node id in a step is a random UUID (version 4) in lower case, and nothing
  * else. Versions 1, 6 and 7 carry a timestamp finer than a minute, which a
@@ -217,6 +216,11 @@ function fields(
   if (!isPlainObject(value)) {
     reject("not_object", path);
   }
+  // The engine lists all keys of an object before the first can be looked at
+  // (`for…in` does the same), so an object with millions of keys costs time
+  // in proportion to them, unlike a long array or text. The size limit cannot
+  // stop that here: the route that parses the request must bound the body
+  // before `JSON.parse`, which is the slower of the two anyway.
   const own: Record<string, unknown> = Object.create(null);
   for (const key of Reflect.ownKeys(value)) {
     if (typeof key !== "string" || FORBIDDEN_KEYS.has(key)) {
@@ -562,7 +566,13 @@ function stepShape(value: unknown, path: string, budget: Budget): EditStepV1 {
       return attrStep(value, path);
     default:
       // Checked for forbidden keys first, so the answer names the worse fault.
-      fields(value, path, [], Reflect.ownKeys(value).filter((key) => typeof key === "string"));
+      // One pass over the keys: looking each one up in a list of them all
+      // would cost the square of their number.
+      for (const key of Reflect.ownKeys(value)) {
+        if (typeof key !== "string" || FORBIDDEN_KEYS.has(key)) {
+          reject("forbidden_key", path);
+        }
+      }
       return reject("unknown_step_type", `${path}.stepType`);
   }
 }

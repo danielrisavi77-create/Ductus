@@ -139,19 +139,43 @@ describe("edit step format: hostile input", () => {
     expect(performance.now() - started).toBeLessThan(300);
   });
 
-  it("stops inside an oversized step instead of reading it to its end", () => {
-    // 100 000 text nodes of 40 letters pass the limit long before the last
-    // one, which is invalid and would be the answer if it were ever read.
+  // 100 000 text nodes of 40 characters pass the limit long before the last
+  // one, which is invalid and would be the answer if it were ever read. The
+  // place where reading stops shows how many bytes each character was counted as.
+  it.each([
+    ["one-byte letters", "a", 37_000, 38_000],
+    ["three-byte characters", "€", 15_000, 16_000],
+  ])("stops inside an oversized step of %s instead of reading it to its end", (_name, unit, min, max) => {
     const content: unknown[] = Array.from({ length: 100_000 }, (_, i) => ({
-      type: "text", text: "a".repeat(40), ...(i % 2 ? { marks: [{ type: "bold" }] } : {}),
+      type: "text", text: unit.repeat(40), ...(i % 2 ? { marks: [{ type: "bold" }] } : {}),
     }));
     content[content.length - 1] = { type: "text", text: "" };
     const result = parseEditStep({ ...typing(), slice: { content } });
     if (result.ok) throw new Error("accepted");
     expect(result.code).toBe("too_large");
     const stoppedAt = Number(/^\$\.slice\.content\[(\d+)\]$/.exec(result.path)?.[1]);
-    expect(stoppedAt).toBeGreaterThan(0);
-    expect(stoppedAt).toBeLessThan(50_000);
+    expect(stoppedAt).toBeGreaterThan(min);
+    expect(stoppedAt).toBeLessThan(max);
+  });
+
+  // QA of #213 (third round, M2). The engine lists every key of an object
+  // before the first can be read, so this is refused correctly but not early.
+  // What bounds the cost is the size of the request body, checked by the route
+  // before `JSON.parse`: within the D-96 limit an object has few enough keys.
+  it("refuses an object with as many keys as fit the size limit", () => {
+    // `"k…":1,` is at least six bytes a key: 2 MiB hold fewer than 350 000.
+    const crowded: Record<string, unknown> = { ...typing() };
+    for (let i = 0; i < 350_000; i += 1) crowded[`k${i}`] = 1;
+    expect(JSON.stringify(crowded).length).toBeGreaterThan(MAX_EDIT_STEP_BYTES);
+    const unknownKind = { ...crowded, stepType: "undo" };
+    const started = performance.now();
+    expect(parseEditStep(crowded)).toEqual({ ok: false, code: "unknown_field", path: "$.k0" });
+    expect(parseEditStep(unknownKind)).toEqual({
+      ok: false, code: "unknown_step_type", path: "$.stepType",
+    });
+    // Linear in the keys: well under a second. Looking every key up in a list
+    // of all of them, as the unknown kind once did, took over a minute and a half.
+    expect(performance.now() - started).toBeLessThan(5_000);
   });
 });
 
@@ -205,6 +229,8 @@ describe("edit step format: the D-96 size limit, to the byte", () => {
     // Three bytes each: the euro sign, a line separator, a zero-width space.
     ["three-byte characters", (n: number) => "€ ​".repeat(Math.floor(n / 9)) + "a".repeat(n % 9), 3],
     ["four-byte characters", (n: number) => "😀".repeat((n - 2) / 4) + "ab", 4],
+    // The last plane: its high surrogate is U+DBFF, the end of the range.
+    ["four-byte characters of plane 16", (n: number) => "\u{10FFFD}".repeat((n - 2) / 4) + "ab", 4],
     ["characters JSON escapes", (n: number) => '"'.repeat(n / 2), 2],
     // U+001F is written \u001f, six bytes; the rest is filled with ASCII.
     ["control characters", (n: number) => "\u001f".repeat(Math.floor(n / 6)) + "a".repeat(n % 6), 6],
@@ -368,6 +394,27 @@ describe("edit step format: steps ProseMirror really produces", () => {
       doc = applied.doc as PmNode;
     }
     expect(doc.toJSON()).toEqual(tr.doc.toJSON());
+  });
+
+  // QA of #213 (third round, M3). A slice open at its end whose last block is
+  // of another type changes the type of the block it continues and inserts
+  // text in one step. Not intended: a change of type is `replaceAround` only.
+  // The validator cannot tell without the document what the block was, so the
+  // step passes by its shape; the replayer must refuse it (obligation 3: the
+  // block on an open side equals the block it continues, type and level too).
+  it("accepts by shape a replace that would change the type of the block it continues", () => {
+    const step = {
+      stepType: "replace", from: 0, to: 1, structure: true,
+      slice: {
+        content: [{ type: "heading", attrs: { level: 1, nodeId: A }, content: [{ type: "text", text: "Z" }] }],
+        openEnd: 1,
+      },
+    };
+    const result = parseEditStep(step);
+    if (!result.ok) throw new Error(`${result.code} at ${result.path}`);
+    const applied = Step.fromJSON(schema, result.step).apply(start);
+    expect(applied.doc?.firstChild?.type.name).toBe("heading");
+    expect(applied.doc?.firstChild?.textContent).toBe("ZPrvi izmišljeni odlomak.");
   });
 
   // What ProseMirror writes when the editor has not cleared the id of a new
