@@ -1600,3 +1600,316 @@ describe("byte-identical read-back (Codex 4240926024)", () => {
     },
   );
 });
+
+describe("no request and no content outcome past the deadline (QA qa233e)", () => {
+  const timeout = { status: "unavailable", reason: "storage_timeout" };
+  const unverified = { status: "unavailable", reason: "storage_write_unverified" };
+  const idsOfA = {
+    institutionId: INSTITUTION,
+    evidencePackageId: PACKAGE,
+    segmentHash: hashOf(payload("a")),
+  };
+  /** A monotonic clock the test moves; timers stay real and far away. */
+  const controlledClock = (start = 100) => {
+    const clock = { now: start };
+    const spy = vi.spyOn(performance, "now").mockImplementation(() => clock.now);
+    return { clock, restore: () => spy.mockRestore() };
+  };
+  /** S3 that answers the PUT with `status` (or stores it) and reads back other bytes. */
+  const otherBytesAfter = (status: number) =>
+    fakeS3((call) => {
+      if (call.method === "PUT" && status !== 200) {
+        return Promise.resolve(new Response(null, { status }));
+      }
+      if (call.method === "GET") {
+        return Promise.resolve(new Response(new TextEncoder().encode(payload("b"))));
+      }
+      return null;
+    });
+
+  it.each<[number, string, () => unknown]>([
+    [200, "blocks past the deadline", () => undefined],
+    [412, "blocks past the deadline", () => undefined],
+    [409, "blocks past the deadline", () => undefined],
+    [200, "throws", () => {
+      throw new Error("logger down");
+    }],
+    [412, "hangs", () => new Promise(() => undefined)],
+    [409, "rejects", () => Promise.reject(new Error("logger down"))],
+  ])(
+    "a conflict after PUT %i is decided before a logger that %s runs, logged once",
+    async (status, _, behave) => {
+      const s3 = otherBytesAfter(status);
+      const { clock, restore } = controlledClock();
+      let decided = false;
+      const seenDecided: boolean[] = [];
+      const warn = vi.fn(() => {
+        seenDecided.push(decided);
+        clock.now += 1_000_000;
+        return behave();
+      });
+      const store = new S3EvidencePayloadStore({
+        ...configWith(s3.fetch, { requestTimeoutMs: 60_000 }),
+        warn,
+      });
+      const result = put(store, "a");
+      try {
+        const settled = await Promise.race([
+          result.then((r) => {
+            decided = true;
+            return r;
+          }),
+          new Promise((resolve) => setTimeout(() => resolve("hung"), 1_000)),
+        ]);
+        expect(settled).toEqual({ status: "conflict" });
+      } finally {
+        restore();
+      }
+      expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
+      // Written exactly once, and only after the outcome was fixed.
+      expect(warn.mock.calls).toEqual([["evidence payload conflict", idsOfA]]);
+      expect(seenDecided).toEqual([false]);
+      expect(clock.now).toBe(100 + 1_000_000);
+    },
+  );
+
+  it.each<[string, number, boolean, object, string[]]>([
+    ["the PUT", 1, false, timeout, []],
+    ["the read-back of an echoed write", 2, false, unverified, ["PUT"]],
+    ["the comparison read at a held key", 2, true, timeout, ["PUT"]],
+  ])(
+    "a stall between the last check and sending %s sends nothing",
+    async (_, stallOn, keyHeld, expected, sent) => {
+      const s3 = fakeS3();
+      if (keyHeld) {
+        s3.objects.set(keyOf(PACKAGE, hashOf(payload("a"))), new TextEncoder().encode(payload("a")));
+      }
+      const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 60_000 });
+      const inner = store as unknown as { send: (...args: unknown[]) => Promise<unknown> };
+      const send = inner.send.bind(store);
+      const { clock, restore } = controlledClock();
+      let sends = 0;
+      const stall = vi.spyOn(inner, "send").mockImplementation((...args) => {
+        if (++sends === stallOn) clock.now += 1_000_000;
+        return send(...args);
+      });
+      try {
+        await expect(put(store, "a")).resolves.toEqual(expected);
+      } finally {
+        stall.mockRestore();
+        restore();
+      }
+      expect(sends).toBe(stallOn);
+      expect(s3.calls.map((c) => c.method)).toEqual(sent);
+      expect(warn.mock.calls).toEqual(
+        expected === unverified ? [["evidence payload write unverified", idsOfA]] : [],
+      );
+    },
+  );
+
+  it.each<[string, boolean, (start: number) => number, object]>([
+    ["no reading", false, () => Number.NaN, unverified],
+    ["no reading", true, () => Number.NaN, timeout],
+    ["a reading that runs back", false, (start) => start - 50, unverified],
+    ["a reading that runs back", true, (start) => start - 50, timeout],
+  ])(
+    "a monotonic clock with %s after the read-back (key held: %s) proves no time left",
+    async (_, keyHeld, after, expected) => {
+      const { clock, restore } = controlledClock(100);
+      const s3 = fakeS3((call) => {
+        if (call.method === "GET") clock.now = after(100);
+        return null;
+      });
+      if (keyHeld) {
+        s3.objects.set(keyOf(PACKAGE, hashOf(payload("a"))), new TextEncoder().encode(payload("a")));
+      }
+      const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+      try {
+        await expect(put(store, "a")).resolves.toEqual(expected);
+      } finally {
+        restore();
+      }
+      expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
+      expect(warn.mock.calls).toEqual(
+        expected === unverified ? [["evidence payload write unverified", idsOfA]] : [],
+      );
+    },
+  );
+
+  const anomalies: [string, number][] = [
+    ["NaN", Number.NaN],
+    ["Infinity", Number.POSITIVE_INFINITY],
+    ["a reading that runs back", 50],
+  ];
+  // Readings, echoed write: start, send PUT, after PUT, send GET, after the
+  // comparison. Held key: the same, then after the GET and after comparing.
+  const echoedReadings: [number, object, string[]][] = [
+    [1, timeout, []],
+    [2, timeout, []],
+    [3, timeout, ["PUT"]],
+    [4, unverified, ["PUT"]],
+    [5, unverified, ["PUT", "GET"]],
+  ];
+  const heldReadings: [number, object, string[]][] = [
+    [1, timeout, []],
+    [2, timeout, []],
+    [3, timeout, ["PUT"]],
+    [4, timeout, ["PUT"]],
+    [5, timeout, ["PUT", "GET"]],
+    [6, timeout, ["PUT", "GET"]],
+  ];
+  it.each(
+    anomalies.flatMap(([name, value]) =>
+      [
+        ...echoedReadings.map(
+          ([n, expected, sent]) => [name, n, false, value, expected, sent] as const,
+        ),
+        ...heldReadings.map(
+          ([n, expected, sent]) => [name, n, true, value, expected, sent] as const,
+        ),
+        // The first reading has nothing earlier to run back from.
+      ].filter(([, n]) => value !== 50 || n > 1),
+    ),
+  )(
+    "a monotonic clock reading %s at reading %i (key held: %s) fails closed",
+    async (_, n, keyHeld, value, expected, sent) => {
+      const s3 = fakeS3();
+      if (keyHeld) {
+        s3.objects.set(keyOf(PACKAGE, hashOf(payload("a"))), new TextEncoder().encode(payload("a")));
+      }
+      const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 60_000 });
+      let readings = 0;
+      // Every other reading is 100, so a single bad one must stick.
+      const clock = vi
+        .spyOn(performance, "now")
+        .mockImplementation(() => (++readings === n ? value : 100));
+      try {
+        await expect(put(store, "a")).resolves.toEqual(expected);
+      } finally {
+        clock.mockRestore();
+      }
+      expect(readings).toBeGreaterThanOrEqual(n);
+      expect(s3.calls.map((c) => c.method)).toEqual(sent);
+      expect(warn.mock.calls).toEqual(
+        expected === unverified ? [["evidence payload write unverified", idsOfA]] : [],
+      );
+    },
+  );
+
+  it.each<[string, number, boolean, object, string[]]>([
+    ["the PUT", 1, false, { status: "unavailable", reason: "storage_request_failed" }, []],
+    ["an echoed write's read-back", 2, false, unverified, ["PUT"]],
+    [
+      "the comparison read at a held key",
+      2,
+      true,
+      { status: "unavailable", reason: "storage_request_failed" },
+      ["PUT"],
+    ],
+  ])("a signature that cannot be made for %s sends nothing more", async (_, failOn, keyHeld, expected, sent) => {
+    const s3 = fakeS3();
+    if (keyHeld) {
+      s3.objects.set(keyOf(PACKAGE, hashOf(payload("a"))), new TextEncoder().encode(payload("a")));
+    }
+    const { store, warn } = storeWith(s3.fetch);
+    const inner = store as unknown as { sign: (...args: unknown[]) => unknown };
+    const sign = inner.sign.bind(store);
+    let signs = 0;
+    const failing = vi
+      .spyOn(inner, "sign")
+      .mockImplementation((...args) => (++signs === failOn ? null : sign(...args)));
+    try {
+      await expect(put(store, "a")).resolves.toEqual(expected);
+    } finally {
+      failing.mockRestore();
+    }
+    expect(signs).toBe(failOn);
+    expect(s3.calls.map((c) => c.method)).toEqual(sent);
+    expect(warn.mock.calls).toEqual(
+      expected === unverified ? [["evidence payload write unverified", idsOfA]] : [],
+    );
+  });
+
+  it("an answer after the timer fired starts no request, even on a clock that stands still", async () => {
+    let answered = false;
+    const s3 = fakeS3((call) => {
+      if (call.method !== "PUT") return null;
+      const body = new TextEncoder().encode(payload("a"));
+      const echo = createHash("sha256").update(body).digest("base64");
+      // Ignores the abort and answers a matching echo after the timer.
+      return new Promise((resolve) =>
+        setTimeout(() => {
+          answered = true;
+          resolve(new Response(null, { status: 200, headers: { "x-amz-checksum-sha256": echo } }));
+        }, 60),
+      );
+    });
+    const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+    const { restore } = controlledClock();
+    try {
+      await expect(put(store, "a")).resolves.toEqual(timeout);
+      await vi.waitFor(() => expect(answered).toBe(true));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    } finally {
+      restore();
+    }
+    expect(s3.calls.map((c) => c.method)).toEqual(["PUT"]);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY])(
+    "a monotonic clock reading %s at the start sends nothing",
+    async (start) => {
+      const s3 = fakeS3();
+      const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 60_000 });
+      const { restore } = controlledClock(start);
+      try {
+        await expect(put(store, "a")).resolves.toEqual(timeout);
+      } finally {
+        restore();
+      }
+      expect(s3.calls).toEqual([]);
+      expect(warn).not.toHaveBeenCalled();
+    },
+  );
+
+  it("a deadline that passes while comparing an echoed write's read-back is unverified", async () => {
+    const { clock, restore } = controlledClock();
+    let armed = false;
+    const s3 = fakeS3((call) => {
+      if (call.method === "GET") armed = true;
+      return null;
+    });
+    const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 60_000 });
+    const every = Uint8Array.prototype.every;
+    const comparing = vi
+      .spyOn(Uint8Array.prototype, "every")
+      .mockImplementation(function (this: Uint8Array, ...args) {
+        if (armed) clock.now += 1_000_000;
+        return every.apply(this, args);
+      });
+    try {
+      await expect(put(store, "a")).resolves.toEqual(unverified);
+    } finally {
+      comparing.mockRestore();
+      restore();
+    }
+    expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
+    expect(warn.mock.calls).toEqual([["evidence payload write unverified", idsOfA]]);
+  });
+
+  it.each<[string, (bytes: Uint8Array) => Uint8Array]>([
+    ["one byte short", (bytes) => bytes.slice(0, -1)],
+    ["one byte long", (bytes) => Uint8Array.from([...bytes, bytes[0]])],
+  ])("an echoed write read back %s is a conflict, never stored", async (_, change) => {
+    const s3 = fakeS3((call) =>
+      call.method === "GET"
+        ? Promise.resolve(new Response(change(new TextEncoder().encode(payload("a"))).slice()))
+        : null,
+    );
+    const { store, warn } = storeWith(s3.fetch);
+    await expect(put(store, "a")).resolves.toEqual({ status: "conflict" });
+    expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
+    expect(warn.mock.calls).toEqual([["evidence payload conflict", idsOfA]]);
+  });
+});

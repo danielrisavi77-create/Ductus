@@ -117,9 +117,17 @@ const unverified = (): EvidencePayloadPutResult => ({
 /**
  * State of one `putImmutable` call. `deadline` is on the monotonic clock
  * (`performance.now`), so a late timer or a changed wall clock moves nothing.
+ *
+ * The deadline rule: a deadline check is the last expression before every
+ * fetch and before every return that claims anything about the content
+ * (stored, existing, conflict). Time the runtime spends between that
+ * expression and the system call itself, or the return reaching the caller,
+ * cannot be bounded inside the process and is not part of the guarantee.
  */
 type WritePhase = {
   deadline: number;
+  /** The last monotonic reading; a later one may not be earlier. */
+  read: number;
   /** Set once the PUT echo matches within the deadline, before the read-back. */
   echoConfirmed: boolean;
   /** Set once the deadline has answered the call, by the timer or a check. */
@@ -238,8 +246,47 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     segmentHash: string;
     canonicalPayload: string;
   }): Promise<EvidencePayloadPutResult> {
-    // The deadline covers the whole call, checking the input included.
-    const deadline = performance.now() + this.requestTimeoutMs;
+    // One deadline for the whole call, so checking the input and a slow PUT
+    // leave the read-back only what is left of it. The deadline itself is a
+    // monotonic instant, checked by `send` right before every request and
+    // after every answer and outcome, so a timer that fires late (a busy
+    // event loop) cannot let a late answer count. The timer only stops the
+    // waiting: its race ends the call even when a fetch ignores the signal.
+    // Started after the deadline is read, it never answers before it.
+    const phase: WritePhase = {
+      deadline: Number.NEGATIVE_INFINITY,
+      read: Number.NEGATIVE_INFINITY,
+      echoConfirmed: false,
+      expired: false,
+    };
+    // A start that cannot be read leaves the deadline at -Infinity: late.
+    const start = readClock(phase);
+    if (start !== null) phase.deadline = start + this.requestTimeoutMs;
+    const abort = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const expired = new Promise<EvidencePayloadPutResult>((resolve) => {
+      timer = setTimeout(() => {
+        resolve(this.expire(input, phase));
+        abort.abort();
+      }, this.requestTimeoutMs);
+    });
+    try {
+      return await Promise.race([this.attempt(input, phase, abort.signal), expired]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private async attempt(
+    input: {
+      institutionId: string;
+      evidencePackageId: string;
+      segmentHash: string;
+      canonicalPayload: string;
+    },
+    phase: WritePhase,
+    signal: AbortSignal,
+  ): Promise<EvidencePayloadPutResult> {
     // Defense in depth: the gateway checks the same; nothing invalid is sent.
     const key = evidenceObjectKey(input);
     if (key === null) {
@@ -255,37 +302,9 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
 
     const path = [this.bucket, ...key];
     const storageRef = evidenceStorageRef(this.storageDomain, key);
-    // One deadline for the whole call, so checking the input and a slow PUT
-    // leave the read-back only what is left of it. The deadline itself is a
-    // monotonic instant, checked after every answer and before every request
-    // and outcome, so a timer that fires late (a busy event loop) cannot let
-    // a late answer count. The timer only stops the waiting: its race ends
-    // the call even when a fetch ignores the signal.
-    const abort = new AbortController();
-    const phase: WritePhase = { deadline, echoConfirmed: false, expired: false };
     // The signer adds and signs If-None-Match: * and the SHA-256 checksum.
-    // Signed before the check below, which is then the last step before the
-    // PUT is sent: signing hashes the whole body and no timer fires meanwhile.
     const signedPut = this.sign("PUT", path, bytes);
-    // Spent on the input or on signing already: no PUT starts. Rounded up,
-    // so the timer never answers before the deadline the checks hold to.
-    const left = Math.ceil(deadline - performance.now());
-    if (left <= 0) return this.expire(input, phase);
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const expired = new Promise<EvidencePayloadPutResult>((resolve) => {
-      timer = setTimeout(() => {
-        resolve(this.expire(input, phase));
-        abort.abort();
-      }, left);
-    });
-    try {
-      return await Promise.race([
-        this.write(input, path, bytes, signedPut, storageRef, phase, abort.signal),
-        expired,
-      ]);
-    } finally {
-      clearTimeout(timer);
-    }
+    return this.write(input, path, bytes, signedPut, storageRef, phase, signal);
   }
 
   private async write(
@@ -301,7 +320,7 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     phase: WritePhase,
     signal: AbortSignal,
   ): Promise<EvidencePayloadPutResult> {
-    const put = await this.send("PUT", signedPut, bytes, signal);
+    const put = await this.send("PUT", signedPut, bytes, phase, signal);
     // A late answer, a matching echo included, confirms nothing and starts
     // no further request: the deadline answers storage_timeout.
     if (late(phase)) return this.expire(input, phase);
@@ -315,10 +334,8 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
       return { status: "unavailable", reason: `storage_put_status_${put.status}` };
     }
 
-    // Signed first, so the check is the last step before the GET is sent.
     const signedGet = this.sign("GET", path, null);
-    if (late(phase)) return this.expire(input, phase);
-    const get = await this.send("GET", signedGet, null, signal);
+    const get = await this.send("GET", signedGet, null, phase, signal);
     if (late(phase)) return this.expire(input, phase);
     if (!get.ok) return this.unavailable(get.reason);
     if (get.status !== 200 || get.body === null) {
@@ -328,8 +345,10 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
         reason: `storage_get_status_${get.status}`,
       };
     }
-    const same =
-      sha256Hex(get.body) === input.segmentHash && sameBytes(get.body, bytes);
+    // The input's hash was checked against the bytes sent, so the hash of
+    // the bytes at the key decides; a byte comparison could add nothing short
+    // of a SHA-256 collision.
+    const same = sha256Hex(get.body) === input.segmentHash;
     // Checked after comparing, right before the outcome: past the deadline
     // neither existing nor conflict, and no late conflict log.
     if (late(phase)) return this.expire(input, phase);
@@ -360,10 +379,8 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     const sent = createHash("sha256").update(bytes).digest("base64");
     if (put.checksum === sent) {
       phase.echoConfirmed = true;
-      // Signed first, so the check is the last step before the GET is sent.
       const signedGet = this.sign("GET", path, null);
-      if (late(phase)) return this.expire(input, phase);
-      const get = await this.send("GET", signedGet, null, signal);
+      const get = await this.send("GET", signedGet, null, phase, signal);
       const same =
         get.ok && get.status === 200 && get.body !== null
           ? sameBytes(get.body, bytes)
@@ -413,22 +430,27 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
   }
 
   /**
-   * A failing logger neither fails the call nor carries anything out of it;
-   * a logger that answers with a promise has its rejection dropped the same way.
+   * Off the path to the outcome: the line is written after the outcome is
+   * decided, so a logger that blocks, throws or hangs can neither delay nor
+   * change it. A failing logger neither fails the call nor carries anything
+   * out of it; a logger that answers with a promise has its rejection
+   * dropped the same way.
    */
   private log(message: string, fields: Record<string, string>): void {
-    try {
-      const result: unknown = this.warn(message, fields);
-      void Promise.resolve(result).catch(() => undefined);
-    } catch {
-      // Dropped on purpose: its error may hold whatever the logger had.
-    }
+    queueMicrotask(() => {
+      try {
+        const result: unknown = this.warn(message, fields);
+        void Promise.resolve(result).catch(() => undefined);
+      } catch {
+        // Dropped on purpose: its error may hold whatever the logger had.
+      }
+    });
   }
 
   /**
    * Signs one request, or answers null when it cannot be signed. Synchronous
-   * and kept apart from `send`, so a caller checks the deadline after the
-   * signing and right before the request leaves.
+   * and kept apart from `send`, which checks the deadline after the signing,
+   * right before the request leaves.
    */
   private sign(
     method: "GET" | "PUT",
@@ -455,10 +477,14 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     method: "GET" | "PUT",
     signed: SignedS3Request | null,
     body: Uint8Array<ArrayBuffer> | null,
+    phase: WritePhase,
     signal: AbortSignal,
   ): Promise<Fetched> {
-    // No request starts after the deadline, even from a late answer.
-    if (signal.aborted) return { ok: false, reason: "storage_timeout" };
+    // No request starts after the deadline, even from a late answer: the
+    // last step before every fetch, with nothing awaited in between.
+    // The timer marks the phase expired before it aborts, so this also
+    // covers an aborted signal.
+    if (late(phase)) return { ok: false, reason: "storage_timeout" };
     if (signed === null) return { ok: false, reason: "storage_request_failed" };
     try {
       const response = await this.fetch(signed.url, {
@@ -509,9 +535,27 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
   }
 }
 
-/** Whether the call's deadline has passed, by the monotonic clock. */
+/**
+ * Whether the call's deadline has passed, by the monotonic clock. A clock
+ * that cannot be read or runs backwards proves no time left. Every caller
+ * ends the call on a late answer, so no later reading can undo it.
+ */
 function late(phase: WritePhase): boolean {
-  return phase.expired || performance.now() >= phase.deadline;
+  if (phase.expired) return true;
+  const now = readClock(phase);
+  return now === null || now >= phase.deadline;
+}
+
+/**
+ * The one place that reads the monotonic clock. A reading that is not
+ * finite or is earlier than the last one is refused (null), and the call
+ * is late: fail closed, the outcome follows the echo phase.
+ */
+function readClock(phase: WritePhase): number | null {
+  const now = performance.now();
+  if (!Number.isFinite(now) || now < phase.read) return null;
+  phase.read = now;
+  return now;
 }
 
 /**
