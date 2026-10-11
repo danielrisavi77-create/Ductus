@@ -7,7 +7,7 @@ SET LOCAL lc_messages TO 'C';
 GRANT USAGE ON SCHEMA public TO ductus_auth;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO ductus_auth;
 
-SELECT plan(36);
+SELECT plan(37);
 
 INSERT INTO identity.institution (id, slug, aai_home_org) VALUES
   ('00000000-0000-4000-8000-0000000002a1', 'test-realm', 'realm.test'),
@@ -29,6 +29,18 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   GET STACKED DIAGNOSTICS v_detail = PG_EXCEPTION_DETAIL, v_hint = PG_EXCEPTION_HINT;
   RETURN SQLSTATE || ': ' || SQLERRM || v_detail || v_hint;
+END
+$$;
+-- The error context of a refusal: where in open_session it was raised.
+CREATE FUNCTION pg_temp.context_of(p_unique_id text, p_home_org text, p_hash text)
+RETURNS text LANGUAGE plpgsql AS $$
+DECLARE v_context text;
+BEGIN
+  PERFORM identity.open_session('https://issuer.test', 'sub-' || p_hash, p_unique_id, p_home_org, pg_temp.h(p_hash));
+  RETURN 'ok';
+EXCEPTION WHEN OTHERS THEN
+  GET STACKED DIAGNOSTICS v_context = PG_EXCEPTION_CONTEXT;
+  RETURN v_context;
 END
 $$;
 CREATE FUNCTION pg_temp.open(p_unique_id text, p_home_org text, p_hash text)
@@ -123,6 +135,16 @@ SELECT is(pg_temp.open('ana@realm.test', 'other.test', 'm2'), 'ZD503: institutio
 SELECT is(pg_temp.open('ana@unknown.test', 'unknown.test', 'm3'),
   pg_temp.open('ana@other.test', 'realm.test', 'm4'),
   'a mismatch and an unknown institution give the same answer');
+SELECT is(
+  (SELECT array_agg(DISTINCT c) FROM (VALUES
+     (pg_temp.context_of('ana@unknown.test', 'unknown.test', 'x1')),
+     (pg_temp.context_of('ana@other.test', 'realm.test', 'x2')),
+     (pg_temp.context_of('ana@realm.test', 'other.test', 'x3')),
+     (pg_temp.context_of('ana', 'realm.test', 'x4')),
+     (pg_temp.context_of(' ana@realm.test', 'realm.test', 'x5'))) AS r (c)
+   WHERE c LIKE 'PL/pgSQL function identity.open_session(%) line % at RAISE%'),
+  ARRAY[pg_temp.context_of('ana@unknown.test', 'unknown.test', 'x6')],
+  'an unknown institution, a mismatch and a refused shape are raised by the same statement');
 SELECT is(pg_temp.not_refused(ARRAY['eve@realm.test.', 'eve@sub.realm.test', 'eve@xrealm.test', 'eve@realm.test.drugo.test',
                                     'eve@realm.drugo.test', 'eve@realm.tes', 'eve@ealm.test', 'eve@realm.test@'],
                               'realm.test', 'e'),
