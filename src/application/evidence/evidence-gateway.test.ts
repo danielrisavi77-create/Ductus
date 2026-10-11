@@ -917,6 +917,19 @@ describe("EvidenceGateway", () => {
     expect(s.signer.signCalls).toBe(0);
   });
 
+  it("answers invalid and reserves and signs nothing when the store refuses the object as invalid", async () => {
+    const s = setup();
+    vi.spyOn(s.payloadStore, "putImmutable").mockResolvedValue({
+      status: "invalid",
+    });
+    const reserve = vi.spyOn(s.repository, "reserve");
+
+    expect(await ingest(s)).toEqual({ status: "invalid" });
+    expect(reserve).not.toHaveBeenCalled();
+    expect(s.repository.records()).toHaveLength(0);
+    expect(s.signer.signCalls).toBe(0);
+  });
+
   describe("retry under one idempotency key (DAN-46)", () => {
     type Command = Awaited<ReturnType<typeof command>>;
     /** Canonical bytes of another valid segment, of the same length. */
