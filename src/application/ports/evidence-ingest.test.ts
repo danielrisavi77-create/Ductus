@@ -8,6 +8,7 @@ import {
   type EvidenceIngestCommandV2,
 } from "./evidence-ingest";
 import { MAX_EVIDENCE_SEGMENT_BYTES } from "@/domain/forensics/evidence-chain-v2";
+import { loadGoldenVectors } from "@/domain/forensics/golden-vectors/load";
 import {
   EVIDENCE_CANONICALIZATION_V2,
   EVIDENCE_HASH_ALGORITHM_V2,
@@ -86,6 +87,29 @@ describe("evidence ingest v2 boundary", () => {
         },
       }),
     ).toBe(false);
+  });
+
+  it("counts the events of a range exactly, up to the largest safe integer", () => {
+    const { accepted, rejected } = loadGoldenVectors().sequenceRanges;
+    const withRange = (range: { sequenceFrom: number; sequenceTo: number; eventCount: number }) =>
+      isEvidenceSegmentDescriptorV2({
+        ...validCommand().descriptor,
+        sequenceFrom: range.sequenceFrom,
+        sequenceTo: range.sequenceTo,
+        eventCount: range.eventCount,
+      });
+    expect(accepted.length).toBeGreaterThanOrEqual(6);
+    for (const range of accepted) expect(withRange(range), range.name).toBe(true);
+    for (const range of rejected) expect(withRange(range), range.name).toBe(false);
+
+    // In a double, from + count - 1 rounds each of these back to the end of
+    // the range, so a check written that way takes them.
+    const rounding = rejected.filter((range) => range.name.startsWith("rounding"));
+    expect(rounding).toHaveLength(3);
+    for (const { sequenceFrom, sequenceTo, eventCount } of rounding) {
+      expect(sequenceFrom + eventCount - 1).toBe(sequenceTo);
+      expect(sequenceTo - sequenceFrom).not.toBe(eventCount - 1);
+    }
   });
 
   it("accepts only whole UTC minutes as observed times (D-24)", () => {

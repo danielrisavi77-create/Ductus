@@ -11,6 +11,7 @@ import {
   isEvidenceReceiptPayloadV1,
   isEvidenceReceiptPayloadV2,
   isReceiptClientTransactionId,
+  isReceiptPrincipalId,
   isReceiptRevision,
   isSignedEvidenceReceipt,
   isSignedEvidenceReceiptV2,
@@ -25,7 +26,7 @@ import { canonicalizeJcs } from "./jcs";
  * and signatures come from the golden-vector file, where they were derived
  * outside this repository. All data is invented.
  */
-const { receiptV2, chain } = loadGoldenVectors();
+const { receiptV2, chain, sequenceRanges } = loadGoldenVectors();
 const [contract, edges] = receiptV2.accepted;
 const goldenKey = goldenKeyVerifier(chain.verificationKey);
 const utf8 = new TextEncoder();
@@ -75,7 +76,7 @@ describe("receipt v2: known-answer vectors (D-92)", () => {
     expect(await goldenKey.verify(utf8.encode(digest.sha256), vector.signature)).toBe(false);
   });
 
-  it("puts the three fields where RFC 8785 puts them", () => {
+  it("puts the four fields where RFC 8785 puts them", () => {
     expect(receiptV2.signingPrefix).toBe(EVIDENCE_RECEIPT_SCHEMA_V2);
     expect(Object.keys(JSON.parse(contract.canonical))).toEqual([
       "acceptedAt",
@@ -89,6 +90,7 @@ describe("receipt v2: known-answer vectors (D-92)", () => {
       "payloadBytes",
       "predecessorSegmentHash",
       "previousReceiptId",
+      "principalId",
       "receiptId",
       "receiptSchema",
       "revision",
@@ -98,6 +100,9 @@ describe("receipt v2: known-answer vectors (D-92)", () => {
       "sequenceTo",
       "sessionId",
     ]);
+    expect(contract.canonical).toContain(
+      `"previousReceiptId":null,"principalId":"${receiptV2.principalId}","receiptId":"receipt-1",`,
+    );
     expect(contract.canonical).toContain(
       '{"acceptedAt":"2026-10-03T06:05:00.000Z","clientTransactionId":"tx-š-1","documentId":"doc-1",',
     );
@@ -155,11 +160,35 @@ describe("receipt v2: refused payloads", () => {
         "revision",
         "client-transaction-id",
         "evidence-domain-id",
+        "principal-id",
         "unknown-fields",
         "acceptance-fields",
+        "accepted-at-minute",
       ]),
     );
     expect(names("former-shape")).toHaveLength(4);
+    // The author left out, a readable name in its place, and the other forms.
+    expect(names("principal-id")).toEqual(
+      expect.arrayContaining([
+        "principal-id-missing",
+        "principal-id-a-name",
+        "principal-id-an-address",
+        "principal-id-uppercase",
+        "principal-id-version-1",
+        "principal-id-version-7",
+        "principal-id-null",
+      ]),
+    );
+    expect(names("accepted-at-minute")).toEqual(
+      expect.arrayContaining([
+        "accepted-at-with-seconds",
+        "accepted-at-with-milliseconds",
+        "accepted-at-last-millisecond",
+        "accepted-at-year-of-six-digits",
+      ]),
+    );
+    // No field under which a client could name the author stays unknown and accepted.
+    expect(names("unknown-fields")).toContain("unknown-author-id");
     expect(names("revision")).toEqual(
       expect.arrayContaining([
         "revision-zero",
@@ -192,7 +221,8 @@ describe("receipt v2: refused payloads", () => {
 
   it("holds a refusal for every field a receipt v2 shares with a receipt v1", () => {
     const shared = Object.keys(contract.payload).filter(
-      (field) => !["receiptSchema", "revision", "clientTransactionId", "evidenceDomainId"].includes(field),
+      (field) =>
+        !["receiptSchema", "revision", "clientTransactionId", "evidenceDomainId", "principalId"].includes(field),
     );
     expect(shared).toHaveLength(15);
     const edits = receiptV2.rejectedPayloads.filter((edit) => edit.class === "acceptance-fields");
@@ -228,6 +258,46 @@ describe("receipt v2: refused payloads", () => {
     expect(range(2, LARGEST, LARGEST)).toBe(false);
     expect(range(LARGEST - 1, LARGEST, 3)).toBe(false);
     expect(range(1, LARGEST, LARGEST - 1)).toBe(false);
+  });
+
+  it("holds the range vectors the descriptor and the segment are held to, in both receipts", () => {
+    const v1 = chain.segments[0].receipt.payload;
+    const { accepted, rejected } = sequenceRanges;
+    expect(rejected.filter((range) => range.name.startsWith("rounding"))).toHaveLength(3);
+    for (const [ranges, taken] of [[accepted, true], [rejected, false]] as const) {
+      for (const { name, sequenceFrom, sequenceTo, eventCount } of ranges) {
+        const range = { sequenceFrom, sequenceTo, eventCount };
+        expect(isEvidenceReceiptPayloadV2({ ...contract.payload, ...range }), name).toBe(taken);
+        expect(isEvidenceReceiptPayloadV1({ ...v1, ...range }), name).toBe(taken);
+      }
+    }
+  });
+
+  it("takes acceptedAt only as a whole UTC minute, where a receipt v1 takes any instant", () => {
+    // Issue 87, comment 6107934097, point 2: the minute and nothing finer.
+    const v1 = chain.segments[0].receipt.payload;
+    for (const vector of receiptV2.accepted) {
+      expect(vector.payload.acceptedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00\.000Z$/);
+    }
+    for (const acceptedAt of ["2026-10-03T06:05:00.000Z", "2026-12-31T23:59:00.000Z", "0001-01-01T00:00:00.000Z"]) {
+      expect(isEvidenceReceiptPayloadV2({ ...contract.payload, acceptedAt }), acceptedAt).toBe(true);
+    }
+    const finer = receiptV2.rejectedPayloads.filter((edit) => edit.class === "accepted-at-minute");
+    expect(finer.length).toBeGreaterThanOrEqual(6);
+    let takenByV1 = 0;
+    for (const edit of finer) {
+      const acceptedAt = edit.set?.acceptedAt;
+      expect(isEvidenceReceiptPayloadV2({ ...contract.payload, acceptedAt }), edit.name).toBe(false);
+      // The same text is an instant a receipt v1 may carry: only the minute rule refuses it.
+      if (isEvidenceReceiptPayloadV1({ ...v1, acceptedAt })) takenByV1 += 1;
+      else expect(edit.name).toBe("accepted-at-without-seconds");
+    }
+    expect(takenByV1).toBe(finer.length - 1);
+    // A golden receipt v1 keeps its full instant.
+    const later = chain.segments[1].receipt.payload;
+    expect(later.acceptedAt).toBe("2026-10-12T08:46:30.250Z");
+    expect(isEvidenceReceiptPayloadV1(later)).toBe(true);
+    expect(isEvidenceReceiptPayloadV2({ ...contract.payload, acceptedAt: later.acceptedAt })).toBe(false);
   });
 
   it("refuses the contract vector as it was before DAN-54", async () => {
@@ -267,7 +337,32 @@ describe("receipt v2: refused payloads", () => {
   });
 });
 
-describe("receipt v2: limits of the three fields", () => {
+describe("receipt v2: limits of the four fields", () => {
+  it("takes only a canonical lowercase UUID of version 4 as the author, and signs it", async () => {
+    const { principalId, otherPrincipalId } = receiptV2;
+    for (const id of [principalId, otherPrincipalId]) {
+      expect(isReceiptPrincipalId(id)).toBe(true);
+      expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    }
+    expect(otherPrincipalId).not.toBe(principalId);
+    expect(receiptV2.accepted.map((vector) => vector.payload.principalId)).toEqual([principalId, principalId]);
+    for (const version of "012356789abcdef") {
+      const other = `${principalId.slice(0, 14)}${version}${principalId.slice(15)}`;
+      expect(isReceiptPrincipalId(other), `version ${version}`).toBe(false);
+    }
+    for (const value of ["student-izmisljeni-zv-1", principalId.toUpperCase(), ` ${principalId}`, "", null, 7]) {
+      expect(isReceiptPrincipalId(value)).toBe(false);
+    }
+
+    // The author is under the signature: the same receipt for another author
+    // is a valid payload with another digest, which the signature does not fit.
+    const other = { ...contract.payload, principalId: otherPrincipalId };
+    expect(isEvidenceReceiptPayloadV2(other)).toBe(true);
+    const digest = await digestEvidenceReceiptPayloadV2(other);
+    expect(digest.sha256).not.toBe(contract.payloadDigestSha256);
+    expect(await goldenKey.verify(digest.signingInput, contract.signature)).toBe(false);
+  });
+
   it("takes revisions from 1 to the largest safe integer", () => {
     expect([1, 7, 9007199254740991].map(isReceiptRevision)).toEqual([true, true, true]);
     expect([0, -1, 1.5, 9007199254740992, Number.NaN, Number.POSITIVE_INFINITY, "7", null].map(isReceiptRevision)).toEqual(

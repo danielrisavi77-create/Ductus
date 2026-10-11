@@ -3,6 +3,7 @@ import { sha256WebCrypto } from "./crypto";
 import { canonicalizeJcs } from "./jcs";
 import {
   EVIDENCE_SEGMENT_SCHEMA_V2,
+  isEvidenceMinuteV2,
   MAX_EVIDENCE_PROFILE_ID_LENGTH,
   type EvidenceSegmentV2,
 } from "./evidence-segment-v2";
@@ -194,6 +195,16 @@ export const EVIDENCE_RECEIPT_V2_SIGNING_INPUT_BYTES = 59;
  * revision has exactly one receipt, or that the sequence numbers of a segment
  * follow the revision. `evidenceDomainId` names the evidence domain (one
  * institution in one region) and says nothing else about it.
+ *
+ * `principalId` is the author the server took from the session of the request
+ * that sent the segment, never a value the client wrote: a canonical lowercase
+ * UUID of version 4, as the server mints its user ids.
+ *
+ * `acceptedAt` is the start of the UTC minute in which the server accepted
+ * the segment, written `YYYY-MM-DDTHH:mm:00.000Z` (the form of D-24). The
+ * server drops seconds and milliseconds before it signs; a reader refuses
+ * every other form and never rounds one. Receipt v1 keeps the full instant.
+ * (Issue 87, comment 6107934097, point 2.)
  */
 export type EvidenceReceiptPayloadV2 = Omit<
   EvidenceReceiptPayloadV1,
@@ -203,6 +214,7 @@ export type EvidenceReceiptPayloadV2 = Omit<
   revision: number;
   clientTransactionId: string;
   evidenceDomainId: string;
+  principalId: string;
 };
 
 export type SignedEvidenceReceiptV2 = {
@@ -213,8 +225,12 @@ export type SignedEvidenceReceiptV2 = {
 
 const RECEIPT_PAYLOAD_V2_KEYS: ReadonlySet<string> = new Set<string>([
   ...RECEIPT_PAYLOAD_KEYS,
-  ...(["revision", "clientTransactionId", "evidenceDomainId"] satisfies
-    (keyof EvidenceReceiptPayloadV2)[]),
+  ...([
+    "revision",
+    "clientTransactionId",
+    "evidenceDomainId",
+    "principalId",
+  ] satisfies (keyof EvidenceReceiptPayloadV2)[]),
 ]);
 // Version 4 only: a random identifier, with no time and nothing derived in it.
 const CANONICAL_UUID_V4 =
@@ -232,6 +248,11 @@ export function isEvidenceDomainId(value: unknown): value is string {
     value.length === 36 &&
     CANONICAL_UUID_V4.test(value)
   );
+}
+
+/** The author of a receipt: the same one form as an evidence domain id. */
+export function isReceiptPrincipalId(value: unknown): value is string {
+  return isEvidenceDomainId(value);
 }
 
 /** A transaction id a receipt may carry: bounded, with no control character. */
@@ -256,9 +277,12 @@ export function isEvidenceReceiptPayloadV2(
   return (
     value.receiptSchema === EVIDENCE_RECEIPT_SCHEMA_V2 &&
     hasValidAcceptanceFields(value) &&
+    // After the shared rules, which bound the length of the text.
+    isEvidenceMinuteV2(value.acceptedAt) &&
     isReceiptRevision(value.revision) &&
     isReceiptClientTransactionId(value.clientTransactionId) &&
-    isEvidenceDomainId(value.evidenceDomainId)
+    isEvidenceDomainId(value.evidenceDomainId) &&
+    isReceiptPrincipalId(value.principalId)
   );
 }
 

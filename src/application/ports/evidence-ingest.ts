@@ -137,8 +137,10 @@ export function isEvidenceSegmentDescriptorV2(
     Number(descriptor.sequenceTo) < Number(descriptor.sequenceFrom) ||
     !Number.isSafeInteger(descriptor.eventCount) ||
     Number(descriptor.eventCount) < 1 ||
-    Number(descriptor.sequenceTo) !==
-      Number(descriptor.sequenceFrom) + Number(descriptor.eventCount) - 1 ||
+    // Counted as to - from, which is exact for safe integers: from + count - 1
+    // can round in a double and pass a count the range does not hold.
+    Number(descriptor.sequenceTo) - Number(descriptor.sequenceFrom) !==
+      Number(descriptor.eventCount) - 1 ||
     // Whole minutes only (D-24): the descriptor repeats the times of the segment.
     !isEvidenceMinuteV2(descriptor.observedStartedAt) ||
     !isEvidenceMinuteV2(descriptor.observedEndedAt) ||

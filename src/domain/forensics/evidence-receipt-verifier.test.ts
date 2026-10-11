@@ -17,7 +17,7 @@ import { canonicalizeJcs } from "./jcs";
  * Where an attack needs a validly signed receipt the file does not hold, the
  * test signs with a key made for that test. All data is invented.
  */
-const { receiptV2, chain } = loadGoldenVectors();
+const { receiptV2, chain, ed25519Points } = loadGoldenVectors();
 const [contract, edges] = receiptV2.accepted;
 const DOMAIN_A = receiptV2.evidenceDomainId;
 const DOMAIN_B = receiptV2.otherEvidenceDomainId;
@@ -128,6 +128,33 @@ describe("verifier of receipt v2: what it accepts", () => {
       ok: true,
       payload: contract.payload,
     });
+  });
+
+  it("hands back the author the server signed, and no other author under that signature", async () => {
+    const { principalId, otherPrincipalId } = receiptV2;
+    const verified = await verifySignedEvidenceReceiptV2(signedOf(contract), EXPECTED, [GOLDEN]);
+    expect(verified).toMatchObject({ ok: true, payload: { principalId } });
+
+    // Another author in the same receipt: the digest no longer fits, and with
+    // the digest worked out again the signature does not.
+    const payload = { ...contract.payload, principalId: otherPrincipalId };
+    expect(await verifySignedEvidenceReceiptV2({ ...signedOf(contract), payload }, EXPECTED, [GOLDEN])).toEqual(
+      refused("digest_mismatch"),
+    );
+    const key = testKey("kljuc-izmisljeni-1");
+    const redigested = { ...key.sign(payload), signature: contract.signature };
+    expect(await verifySignedEvidenceReceiptV2(redigested, EXPECTED, [GOLDEN])).toEqual(refused("signature_invalid"));
+
+    // The author is not part of the expectation: a receipt the server signed
+    // for another author verifies, and the caller reads who it names.
+    expect(await verifySignedEvidenceReceiptV2(key.sign(payload), EXPECTED, [key.trusted])).toEqual({
+      ok: true,
+      payload,
+    });
+    const withAuthor = { ...EXPECTED, principalId } as unknown as EvidenceReceiptExpectationV2;
+    expect(await verifySignedEvidenceReceiptV2(signedOf(contract), withAuthor, [GOLDEN])).toEqual(
+      refused("expectation_invalid"),
+    );
   });
 });
 
@@ -275,12 +302,17 @@ describe("verifier of receipt v2: what was signed (plan attacks 2, 3, 4, 6 and 1
 
   it("refuses a signature that is not exactly 64 bytes in one spelling", async () => {
     const original = contract.signature.signatureBase64Url;
-    const lastOtherBits = original.slice(0, -1) + (original.endsWith("Q") ? "R" : "Q");
+    // The last of the 86 characters carries two bits of the signature and four
+    // unused ones: with the lowest of those set it is another spelling of the
+    // same 64 bytes for a lenient decoder.
+    const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    const lastOtherBits = original.slice(0, -1) + ALPHABET[ALPHABET.indexOf(original.slice(-1)) ^ 1];
+    expect(Buffer.from(lastOtherBits, "base64url").equals(Buffer.from(original, "base64url"))).toBe(true);
     for (const signatureBase64Url of [
       original.slice(0, -2),
       `${original}AA`,
-      // The same 64 bytes for a lenient decoder: other unused bits, another alphabet.
-      Buffer.from(lastOtherBits, "base64url").equals(Buffer.from(original, "base64url")) ? lastOtherBits : "A",
+      lastOtherBits,
+      // The same 64 bytes in the other alphabet.
       original.replaceAll("-", "+").replaceAll("_", "/"),
     ]) {
       expect(signatureBase64Url).not.toBe(original);
@@ -413,6 +445,34 @@ describe("verifier of receipt v2: evidence domain and key scope (supplement D1, 
     ).toEqual(refused("key_scope"));
   });
 
+  it.each(receiptV2.rejectedKeys)(
+    "refuses the contract receipt, whose signature is valid, under a trusted $name",
+    async (edit) => {
+      // The honest entry verifies the receipt; only the change of the entry refuses it.
+      expect([GOLDEN.evidenceDomainId, GOLDEN.purpose]).toEqual([contract.payload.evidenceDomainId, "receipt"]);
+      expect((await verifySignedEvidenceReceiptV2(signedOf(contract), EXPECTED, [GOLDEN])).ok).toBe(true);
+      const entry: Record<string, unknown> = { ...GOLDEN };
+      for (const field of edit.remove ?? []) delete entry[field];
+      Object.assign(entry, edit.set ?? {});
+      const keys = [entry as unknown as EvidenceDomainKey];
+      expect(await verifySignedEvidenceReceiptV2(signedOf(contract), EXPECTED, keys)).toEqual(refused(edit.reason));
+      // Nor when the caller expects the domain the changed entry names.
+      const domainOfEntry = typeof entry.evidenceDomainId === "string" ? entry.evidenceDomainId : DOMAIN_B;
+      expect(
+        (await verifySignedEvidenceReceiptV2(signedOf(contract), { ...EXPECTED, evidenceDomainId: domainOfEntry }, keys))
+          .ok,
+      ).toBe(false);
+    },
+  );
+
+  it("holds a refused key of another domain, of another purpose and of no domain", () => {
+    const reasonOf = (name: string) => receiptV2.rejectedKeys.find((edit) => edit.name === name)?.reason;
+    expect(reasonOf("key-of-other-domain")).toBe("key_scope");
+    expect(reasonOf("key-for-checkpoints")).toBe("key_scope");
+    expect(reasonOf("key-without-domain")).toBe("key_unknown");
+    expect(reasonOf("key-without-purpose")).toBe("key_unknown");
+  });
+
   it("refuses a key id the list does not hold exactly once (D12, V6)", async () => {
     const key = testKey("kljuc-izmisljeni-1");
     const signed = key.sign(contract.payload);
@@ -463,11 +523,45 @@ describe("verifier of receipt v2: evidence domain and key scope (supplement D1, 
 });
 
 describe("verifier of receipt v2: rotation and revocation (supplement D8 to D10; plan answer 6105652638; owner decision 6105677746)", () => {
-  // The contract receipt was accepted at 06:05:00.000; T is one millisecond later.
-  const T = "2026-10-03T06:05:00.001Z";
-  const AFTER = "2026-10-03T06:06:00.000Z";
+  // The contract receipt names the minute 06:05: the segment was accepted
+  // somewhere from 06:05:00.000 up to 06:06:00.000, which is T. AFTER is the
+  // minute that starts at T. INSIDE is a moment within the minute of the receipt.
+  const T = "2026-10-03T06:06:00.000Z";
+  const AFTER = T;
+  const INSIDE = "2026-10-03T06:05:00.001Z";
   const acceptedAt = (time: string) => ({ ...contract.payload, acceptedAt: time, receiptId: "receipt-kasnija" });
   const accepted = (payload: EvidenceReceiptPayloadV2) => ({ ok: true, payload });
+
+  it("judges a retired key at the boundary of the minute acceptedAt names", async () => {
+    expect(contract.payload.acceptedAt).toBe("2026-10-03T06:05:00.000Z");
+    const retiredAt = async (validTo: string) => {
+      const key = testKey("kljuc-a-2025", { validTo });
+      return verifySignedEvidenceReceiptV2(key.sign(contract.payload), EXPECTED, [key.trusted]);
+    };
+    // The whole minute is before validTo: from its end on, the key vouches for it.
+    for (const validTo of ["2026-10-03T06:06:00.000Z", "2026-10-03T06:06:00.001Z", "2026-10-03T06:07:00.000Z"]) {
+      expect(await retiredAt(validTo), validTo).toEqual(accepted(contract.payload));
+    }
+    // validTo at the start of the minute, before it, or anywhere inside it:
+    // nothing in the receipt says the segment was accepted before validTo.
+    for (const validTo of [
+      "2026-10-03T06:05:00.000Z",
+      "2026-10-03T06:04:59.999Z",
+      "2026-10-03T06:05:00.001Z",
+      "2026-10-03T06:05:30.000Z",
+      "2026-10-03T06:05:59.999Z",
+    ]) {
+      expect(await retiredAt(validTo), validTo).toEqual(refused("key_not_valid"));
+    }
+    // With validTo on a whole minute the rule is acceptedAt < validTo.
+    const onTheMinute = testKey("kljuc-a-2025", { validTo: T });
+    const before = onTheMinute.sign(acceptedAt("2026-10-03T06:05:00.000Z"));
+    const at = onTheMinute.sign(acceptedAt(T));
+    expect(await verifySignedEvidenceReceiptV2(before, EXPECTED, [onTheMinute.trusted])).toEqual(
+      accepted(before.payload),
+    );
+    expect(await verifySignedEvidenceReceiptV2(at, EXPECTED, [onTheMinute.trusted])).toEqual(refused("key_not_valid"));
+  });
 
   it("V1: accepts a receipt reserved under the old key and signed by the new one after the rotation (D9)", async () => {
     const k1 = testKey("kljuc-a-2025", { validTo: T });
@@ -496,7 +590,7 @@ describe("verifier of receipt v2: rotation and revocation (supplement D8 to D10;
     expect(await verifySignedEvidenceReceiptV2(retired.sign(contract.payload), EXPECTED, keys)).toEqual(
       accepted(contract.payload),
     );
-    for (const time of [T, AFTER, "2027-01-01T00:00:00.000Z"]) {
+    for (const time of [AFTER, "2026-10-03T06:07:00.000Z", "2027-01-01T00:00:00.000Z"]) {
       expect(await verifySignedEvidenceReceiptV2(retired.sign(acceptedAt(time)), EXPECTED, keys)).toEqual(
         refused("key_not_valid"),
       );
@@ -508,11 +602,14 @@ describe("verifier of receipt v2: rotation and revocation (supplement D8 to D10;
   });
 
   it("V3: refuses a revoked key for a receipt accepted from the revocation on (D10)", async () => {
-    const revoked = testKey("kljuc-a-opozvan", { revokedAt: T });
-    for (const time of [T, AFTER, "2027-01-01T00:00:00.000Z"]) {
-      expect(await verifySignedEvidenceReceiptV2(revoked.sign(acceptedAt(time)), EXPECTED, [revoked.trusted])).toEqual(
-        refused("key_revoked"),
-      );
+    // Revoked on a whole minute, and inside the minute the contract receipt names.
+    for (const revokedAt of [T, INSIDE]) {
+      const revoked = testKey("kljuc-a-opozvan", { revokedAt });
+      for (const time of [AFTER, "2026-10-03T06:07:00.000Z", "2027-01-01T00:00:00.000Z"]) {
+        expect(
+          await verifySignedEvidenceReceiptV2(revoked.sign(acceptedAt(time)), EXPECTED, [revoked.trusted]),
+        ).toEqual(refused("key_revoked"));
+      }
     }
   });
 
@@ -529,7 +626,7 @@ describe("verifier of receipt v2: rotation and revocation (supplement D8 to D10;
     expect(await verifySignedEvidenceReceiptV2(backDated, EXPECTED, [revoked.trusted])).toEqual(refused("key_revoked"));
 
     // Retired first and revoked afterwards: the revocation still decides.
-    const both = testKey("kljuc-a-oboje", { validTo: T, revokedAt: AFTER });
+    const both = testKey("kljuc-a-oboje", { validTo: T, revokedAt: "2026-10-03T06:07:00.000Z" });
     expect(await verifySignedEvidenceReceiptV2(both.sign(contract.payload), EXPECTED, [both.trusted])).toEqual(
       refused("key_revoked"),
     );
@@ -691,21 +788,63 @@ describe("verifier of receipt v2: keys and signatures no honest signer makes (QA
     );
   });
 
-  it("leaves a canonical point of no small order to the runtime", async () => {
+  it.each(ed25519Points.accepted)("leaves $name, a point of the prime-order subgroup, to the runtime", async (point) => {
+    // Before the subgroup was checked this test also sent y = p - 2 and y = 2
+    // to the runtime; both are on no point of the curve and are refused below.
     const key = testKey("kljuc-izmisljeni-1");
     const signed = key.sign(contract.payload);
-    // y = p - 2 and y = 2: next to the refused values, and neither of small order.
-    for (const pointHex of ["eb" + "ff".repeat(30) + "7f", "02" + "00".repeat(31), BASE_POINT]) {
-      expect(
-        await underLenientRuntime(() =>
-          verifySignedEvidenceReceiptV2(signed, EXPECTED, [{ ...key.trusted, keyBase64Url: spki(pointHex) }]),
-        ),
-      ).toMatchObject({ imports: 1, verifications: 1 });
-      const otherR = withSignature(signed, signatureText(pointHex, partsOf(signed).s));
-      expect(
-        await underLenientRuntime(() => verifySignedEvidenceReceiptV2(otherR, EXPECTED, [key.trusted])),
-      ).toMatchObject({ imports: 1, verifications: 1 });
-    }
+    expect(
+      await underLenientRuntime(() =>
+        verifySignedEvidenceReceiptV2(signed, EXPECTED, [{ ...key.trusted, keyBase64Url: spki(point.pointHex) }]),
+      ),
+    ).toMatchObject({ result: { ok: true }, imports: 1, verifications: 1 });
+    const otherR = withSignature(signed, signatureText(point.pointHex, partsOf(signed).s));
+    expect(
+      await underLenientRuntime(() => verifySignedEvidenceReceiptV2(otherR, EXPECTED, [key.trusted])),
+    ).toMatchObject({ result: { ok: true }, imports: 1, verifications: 1 });
+    // The runtime itself finds such a signature wrong: the point is sound, the signature is not.
+    expect(await verifySignedEvidenceReceiptV2(otherR, EXPECTED, [key.trusted])).toEqual(refused("signature_invalid"));
+  });
+
+  it.each(ed25519Points.rejected)(
+    "refuses $name ($class) as a trusted key and as R, whatever the runtime would say",
+    async (point) => {
+      const key = testKey("kljuc-izmisljeni-1");
+      const signed = key.sign(contract.payload);
+      const weak = { ...key.trusted, keyBase64Url: spki(point.pointHex) };
+      expect(await underLenientRuntime(() => verifySignedEvidenceReceiptV2(signed, EXPECTED, [weak]))).toEqual({
+        result: refused("key_unknown"),
+        imports: 0,
+        verifications: 0,
+      });
+      const otherR = withSignature(signed, signatureText(point.pointHex, partsOf(signed).s));
+      expect(await underLenientRuntime(() => verifySignedEvidenceReceiptV2(otherR, EXPECTED, [key.trusted]))).toEqual({
+        result: refused("receipt_malformed"),
+        imports: 0,
+        verifications: 0,
+      });
+    },
+  );
+
+  it("refuses a signature that fits the equation of RFC 8032 under a mixed-order key", async () => {
+    // The key is the golden key plus a point of order 8, and the nonce was
+    // picked so that the challenge is a multiple of 8: [S]B = R + [h]A holds.
+    // A runtime that checks that equation verifies it, one that multiplies by
+    // the cofactor verifies every signature of that scalar; neither is asked.
+    const { pointHex, signatureBase64Url, signatureHex } = ed25519Points.mixedOrderSignature;
+    expect(Buffer.from(signatureBase64Url, "base64url").toString("hex")).toBe(signatureHex);
+    const mixed = { ...GOLDEN, keyBase64Url: spki(pointHex) };
+    const receipt = withSignature(signedOf(contract), signatureBase64Url);
+    // R and S of that signature are sound: only the key is not.
+    expect(await verifySignedEvidenceReceiptV2(receipt, EXPECTED, [GOLDEN])).toEqual(refused("signature_invalid"));
+    expect(await verifySignedEvidenceReceiptV2(receipt, EXPECTED, [mixed])).toEqual(refused("key_unknown"));
+    expect(await underLenientRuntime(() => verifySignedEvidenceReceiptV2(receipt, EXPECTED, [mixed]))).toEqual({
+      result: refused("key_unknown"),
+      imports: 0,
+      verifications: 0,
+    });
+    // Nor does the honest signature of the golden key pass under the mixed-order key.
+    expect(await verifySignedEvidenceReceiptV2(signedOf(contract), EXPECTED, [mixed])).toEqual(refused("key_unknown"));
   });
 
   it("refuses 44 bytes that are not an Ed25519 key in SPKI, without asking the runtime", async () => {
@@ -777,7 +916,7 @@ describe("verifier of receipt v2: oversized input (QA 6106245321)", () => {
       }
       oversized.push({ ...honest, payloadDigestSha256: filler });
     }
-    expect(oversized).toHaveLength(2 * (19 + 5 + 1));
+    expect(oversized).toHaveLength(2 * (20 + 5 + 1));
     for (const receipt of oversized) {
       const seen = await watched(() => verifySignedEvidenceReceiptV2(receipt, EXPECTED, [GOLDEN]));
       expect(seen).toMatchObject({ result: refused("receipt_malformed"), clones: 0, hashes: 0, imports: 0, decoded: 0 });

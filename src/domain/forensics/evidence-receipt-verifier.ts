@@ -71,6 +71,8 @@ const EXPECTATION_KEYS: ReadonlySet<string> = new Set<
   keyof EvidenceReceiptExpectationV2
 >(["documentId", "clientTransactionId", "revision", "evidenceDomainId"]);
 const ED25519_SIGNATURE_BYTES = 64;
+/** The span one `acceptedAt` of a receipt v2 stands for. */
+const ACCEPTED_AT_MINUTE_MS = 60_000;
 
 function refuse(reason: EvidenceReceiptRefusal): EvidenceReceiptVerification {
   return { ok: false, reason };
@@ -137,16 +139,28 @@ function decodeBase64Url(
  * - The key is found by the `keyId` of the signature and must belong to the
  *   domain named in the signed payload, with the purpose `receipt`. A key of
  *   another domain or a checkpoint key of the same domain is refused.
+ * - `expected` and `trustedKeys` are the caller's own knowledge. They have to
+ *   come from a source other than the response that carries the receipt; this
+ *   function cannot tell where they came from.
  * - The key and the signature are judged by their bytes before the runtime
- *   is asked (`ed25519-encoding.ts`): a point of small order, a second
- *   spelling of a number or `S` at or above the group order is refused, in
- *   every runtime alike.
+ *   is asked (`ed25519-encoding.ts`): the key and `R` have to be points of
+ *   the prime-order subgroup in their one spelling, and `S` below the group
+ *   order. A point of small or mixed order, a second spelling of a number or
+ *   a larger `S` is refused, in every runtime alike.
  * - What counts for a key is the moment of signing, and that moment is not in
  *   the signed payload. The server holds a key to it when it attaches the
  *   signature; here only `acceptedAt` is known (plan answer 6105652638 on
  *   issue 202).
- * - A retired key, one past `validTo` and never revoked, still vouches for a
- *   receipt with `acceptedAt` before `validTo`, and for none from there on.
+ * - `acceptedAt` is a whole minute, so the segment was accepted anywhere from
+ *   its start up to its end. A retired key, one past `validTo` and never
+ *   revoked, still vouches for a receipt whose whole minute is before
+ *   `validTo`: `acceptedAt + 1 min <= validTo`. For a `validTo` on a whole
+ *   minute that is `acceptedAt < validTo`; for one inside a minute the
+ *   receipts of that minute are refused, since nothing in them says on which
+ *   side of `validTo` they were accepted.
+ * - The author is not bound here either: `payload.principalId` is the author
+ *   the server took from the session, and a caller that knows whose receipt
+ *   it expects compares it.
  * - A revoked key vouches for nothing, whatever `acceptedAt` says: that field
  *   is signed by the key itself, so its holder writes any earlier time. Owner
  *   decision of 11 October 2026, option A (issue 87, comment 6105677746): all
@@ -205,8 +219,9 @@ export async function verifySignedEvidenceReceiptV2(
       signature.signatureBase64Url,
       ED25519_SIGNATURE_BYTES,
     );
-    // A small-order or second spelling of R, or S at or above the group
-    // order, is refused here: runtimes do not agree on such a signature.
+    // An R outside the prime-order subgroup or in a second spelling, or S at
+    // or above the group order, is refused here: runtimes do not agree on
+    // such a signature.
     if (signatureBytes === null || !isCanonicalEd25519Signature(signatureBytes)) {
       return refuse("receipt_malformed");
     }
@@ -235,16 +250,20 @@ export async function verifySignedEvidenceReceiptV2(
     if (key.revokedAt !== null) {
       return refuse("key_revoked");
     }
+    // `acceptedAt` names a whole minute, and the segment was accepted
+    // somewhere in it: the key has to have been valid to the end of it.
     if (
       key.validTo !== null &&
-      Date.parse(payload.acceptedAt) >= Date.parse(key.validTo)
+      Date.parse(payload.acceptedAt) + ACCEPTED_AT_MINUTE_MS >
+        Date.parse(key.validTo)
     ) {
       return refuse("key_not_valid");
     }
 
     // An Ed25519 public key in SPKI DER is 44 bytes (RFC 8410). A point of
     // small order as the key verifies a signature made with no private key
-    // in some runtimes, so the key is judged here and not by the runtime.
+    // in some runtimes, and one of mixed order verifies in some runtimes and
+    // not in others, so the key is judged here and not by the runtime.
     const keyBytes = decodeBase64Url(key.keyBase64Url, 44);
     const point = keyBytes === null ? null : ed25519KeyFromSpki(keyBytes);
     const publicKey =

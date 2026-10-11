@@ -117,8 +117,11 @@ export type GoldenVectors = {
     signingPrefix: string;
     evidenceDomainId: string;
     otherEvidenceDomainId: string;
+    /** The author of both accepted receipts, and another one. Invented. */
+    principalId: string;
+    otherPrincipalId: string;
     accepted: GoldenReceiptV2Vector[];
-    /** The contract vector before DAN-54, without the three fields. Refused now. */
+    /** The contract vector before DAN-54, without the four fields. Refused now. */
     former: Omit<GoldenReceiptV2Vector, "name" | "payload" | "byteLength">;
     /** Changes of `accepted[0].payload` that no validator may accept. */
     rejectedPayloads: {
@@ -129,7 +132,40 @@ export type GoldenVectors = {
     }[];
     /** Valid signatures of the same key over `messageHex`, which is not the signing input. */
     rejectedSignatures: { name: string; messageHex: string; signatureBase64Url: string }[];
+    /** Changes of the trusted key entry under which `accepted[0]` is refused with `reason`. */
+    rejectedKeys: {
+      name: string;
+      set?: Record<string, JcsJsonValue>;
+      remove?: string[];
+      reason: "key_scope" | "key_unknown";
+    }[];
   };
+  /** Encodings of points a verifier takes or refuses as a key and as the R of a signature. */
+  ed25519Points: {
+    accepted: { name: string; pointHex: string }[];
+    rejected: {
+      name: string;
+      class: "small-order" | "mixed-order" | "not-on-curve" | "non-canonical";
+      pointHex: string;
+    }[];
+    /**
+     * Satisfies the RFC 8032 equation over `receiptV2.accepted[0].signingInputHex`
+     * under the public point `pointHex`, which is of mixed order.
+     */
+    mixedOrderSignature: { pointHex: string; signatureHex: string; signatureBase64Url: string };
+  };
+  /** Ranges of sequence numbers with a count of events, for the descriptor, the segment and the receipts. */
+  sequenceRanges: {
+    accepted: GoldenSequenceRange[];
+    rejected: GoldenSequenceRange[];
+  };
+};
+
+export type GoldenSequenceRange = {
+  name: string;
+  sequenceFrom: number;
+  sequenceTo: number;
+  eventCount: number;
 };
 
 /**
