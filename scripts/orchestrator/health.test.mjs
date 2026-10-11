@@ -9,7 +9,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   canonicalVerdicts, checkMainCi, checkQueue, checkSafetyNet, exitCode, hookTargets, latestOnHead, parseWorktrees, queueItems,
 } from "./health-core.mjs";
-import { health, readOnlyCall } from "./health.mjs";
+import { defaultFs, health, readOnlyCall } from "./health.mjs";
 
 const H1 = "1".repeat(40);
 const H2 = "2".repeat(40);
@@ -69,7 +69,7 @@ function fakeExec(w, calls) {
 
 async function check(w, now = NOW) {
   const calls = [];
-  const fsView = { size: (p) => (w.files.has(p) ? w.files.get(p).length : null), read: (p) => w.files.get(p) ?? null };
+  const fsView = { size: (p) => (w.files.has(p) ? w.files.get(p).length : null), read: (p) => w.files.get(p) ?? null, syntax: (p) => (w.syntax ? w.syntax(p) : !String(w.files.get(p)).startsWith("BROKEN")) };
   const r = await health({ exec: fakeExec(w, calls), fsView, now });
   for (const c of calls) assert.ok(readOnlyCall(c[0], c.slice(1)), `non-read call: ${c.join(" ")}`);
   const of = (name) => r.findings.filter((x) => x.check === name).map((x) => `${x.level} ${x.text}`);
@@ -258,6 +258,53 @@ test("L10c: with the wrapper hook the check passes, and fails on a missing wrapp
   r = await check(w);
   assert.deepEqual(r.levels("cc-safety-net"), ["NEPROVJERENO"]);
   assert.equal(r.code, 2);
+});
+test("L10d: a wrapper that exists but does not parse is a FAIL, an unrunnable syntax check is unchecked", async () => {
+  const wrapped = () => {
+    const w = world();
+    w.files.set("/r/.claude/settings.json", hookSettings(WRAPPER_COMMAND));
+    for (const d of ["/r", "/r/.claude/worktrees/agent-x"]) {
+      w.files.set(`${d}/scripts/hooks/safety-net.mjs`, "// wrapper\n");
+      w.files.set(`${d}/node_modules/cc-safety-net/dist/bin/hook.js`, "// analysis\n");
+    }
+    return w;
+  };
+  let w = wrapped();
+  w.files.set("/r/.claude/worktrees/agent-x/scripts/hooks/safety-net.mjs", "BROKEN {{{\n");
+  let r = await check(w);
+  assert.deepEqual(r.levels("cc-safety-net"), ["PASS", "FAIL"]);
+  assert.match(r.of("cc-safety-net")[1], /agent-x: scripts\/hooks\/safety-net\.mjs ima sintaktičku grešku \(node --check\)/);
+  assert.equal(r.code, 1);
+  w = wrapped();
+  w.syntax = () => null;
+  r = await check(w);
+  assert.deepEqual(r.levels("cc-safety-net"), ["NEPROVJERENO", "NEPROVJERENO"]);
+  assert.equal(r.code, 2);
+  // A direct package call has no script of ours to parse.
+  w = world();
+  w.syntax = () => { throw new Error("must not be called"); };
+  r = await check(w);
+  assert.deepEqual(r.levels("cc-safety-net"), ["PASS", "PASS"]);
+});
+
+test("L10e: the real syntax check tells a good script from a broken one, in a path with spaces", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ductus health "));
+  try {
+    const good = join(dir, "good wrapper.mjs");
+    const bad = join(dir, "bad wrapper.mjs");
+    writeFileSync(good, 'import fs from "node:fs";\nexport const x = fs.existsSync;\n');
+    writeFileSync(bad, "export const x = ;\n(\n");
+    assert.equal(await defaultFs.syntax(good), true);
+    assert.equal(await defaultFs.syntax(bad), false);
+    // --check parses only: a script with a side effect is not run.
+    const marker = join(dir, "ran.txt");
+    const effect = join(dir, "effect.mjs");
+    writeFileSync(effect, `import { writeFileSync } from "node:fs";\nwriteFileSync(${JSON.stringify(marker)}, "x");\n`);
+    assert.equal(await defaultFs.syntax(effect), true);
+    assert.throws(() => readFileSync(marker), /ENOENT/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 test("§4: FAIL stall boundary at one heartbeat, clock ±10 min", async () => {
   const cases = [[29 + 59 / 60, "WARN"], [30, "WARN"], [30 + 1 / 60, "FAIL"], [-10, "WARN"]];

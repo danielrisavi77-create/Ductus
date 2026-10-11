@@ -37,11 +37,20 @@ async function defaultExec(cmd, args) {
   return stdout;
 }
 
-const defaultFs = {
+// `syntax`: true = parses, false = syntax error, null = node --check could not be run.
+export const defaultFs = {
   size: (p) => { try { return statSync(p).size; } catch { return null; } },
   read: (p) => { try { return readFileSync(p, "utf8"); } catch { return null; } },
+  syntax: async (p) => {
+    try {
+      // --check only parses; NODE_OPTIONS is cleared so no preload runs in the guard.
+      await run(process.execPath, ["--check", p], { timeout: 15000, windowsHide: true, env: { ...process.env, NODE_OPTIONS: "" } });
+      return true;
+    } catch (e) {
+      return typeof e?.code === "number" && !e.killed ? false : null;
+    }
+  },
 };
-
 const reason = (e) => String(e?.stderr || e?.message || e).trim().split("\n")[0].slice(0, 160);
 
 /** All checks; `exec`, `fsView` and `now` (ms) are injectable for tests. Returns {findings, code, lines}. */
@@ -83,7 +92,17 @@ export async function health({ exec = defaultExec, fsView = defaultFs, now = Dat
     if (!root) throw new Error("git worktree list is empty");
     const settings = JSON.parse(fsView.read(joinPath(root, ".claude/settings.json")) ?? "null");
     const pinned = JSON.parse(fsView.read(joinPath(root, "package.json")) ?? "null")?.devDependencies?.["cc-safety-net"];
-    return checkSafetyNet({ worktrees, targets: hookTargets(settings), pinned, fsView });
+    const targets = hookTargets(settings);
+    // The syntax check runs a child process, so it is awaited here and the core reads the results.
+    const parsed = new Map();
+    if (typeof fsView.syntax === "function") {
+      await Promise.all(worktrees.flatMap((w) => targets.filter((t) => t.endsWith(".mjs")).map(async (rel) => {
+        const file = joinPath(w.path, rel);
+        parsed.set(file, (await fsView.size(file)) > 0 ? await fsView.syntax(file) : null);
+      })));
+    }
+    const view = typeof fsView.syntax === "function" ? { ...fsView, syntax: (file) => parsed.get(file) ?? null } : fsView;
+    return checkSafetyNet({ worktrees, targets, pinned, fsView: view });
   });
 
   let prs = null;

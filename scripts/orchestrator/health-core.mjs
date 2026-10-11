@@ -348,8 +348,15 @@ export function checkSafetyNet({ worktrees, targets, pinned, fsView }) {
       continue;
     }
     const problems = [];
+    const unchecked = [];
     for (const rel of targets) {
       if (!(fsView.size(joinPath(w.path, rel)) > 0)) problems.push(`${printable(rel)} nedostaje ili je prazan`);
+      if (rel.endsWith(".mjs") && fsView.size(joinPath(w.path, rel)) > 0 && typeof fsView.syntax === "function") {
+        // A wrapper that exists but does not parse would fail every hook call: a failed check, not an unchecked one.
+        const parses = fsView.syntax(joinPath(w.path, rel));
+        if (parses === false) problems.push(`${printable(rel)} ima sintaktičku grešku (node --check)`);
+        else if (parses !== true) unchecked.push(`${printable(rel)}: node --check nije izveden`);
+      }
       if (!rel.includes("cc-safety-net")) continue; // the wrapper script itself is not a package
       const pkgDir = rel.slice(0, rel.indexOf("cc-safety-net") + "cc-safety-net".length);
       let version = null;
@@ -361,6 +368,7 @@ export function checkSafetyNet({ worktrees, targets, pinned, fsView }) {
       if (version !== pinned) problems.push(`verzija ${printable(version ?? "nepoznata")}, očekivano ${printable(pinned)}`);
     }
     out.push(problems.length ? f("FAIL", "cc-safety-net", `${name}: ${[...new Set(problems)].join("; ")}`)
+      : unchecked.length ? f("NEPROVJERENO", "cc-safety-net", `${name}: ${[...new Set(unchecked)].join("; ")}`)
       : f("PASS", "cc-safety-net", `${name}: hook ${printable(pinned)} prisutan`));
   }
   return out;
