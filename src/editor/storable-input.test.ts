@@ -96,4 +96,51 @@ describe("StorableInput", () => {
     expect(editor.state.doc.textContent).toBe("x�ab");
     expectStorable(editor);
   });
+
+  // #251 review 6109174031: the step's own range stops at the edge of the half
+  // it leaves behind. Positions over "ab😀": the pair sits at 3..5.
+
+  it("a delete at the edge of a run that leaves half a pair is fixed", () => {
+    const end = editorWith(["ab😀"]);
+    end.view.dispatch(end.state.tr.delete(4, 5));
+    expect(end.state.doc.textContent).toBe("ab\uFFFD");
+    expectStorable(end);
+
+    const start = editorWith(["😀ab"]);
+    start.view.dispatch(start.state.tr.delete(1, 2));
+    expect(start.state.doc.textContent).toBe("\uFFFDab");
+    expectStorable(start);
+  });
+
+  it("a split between the halves of a pair fixes both new blocks", () => {
+    const editor = editorWith(["ab😀"]);
+    editor.view.dispatch(editor.state.tr.split(4));
+    expect(editor.state.doc.childCount).toBe(2);
+    expect(editor.state.doc.child(0).textContent).toBe("ab\uFFFD");
+    expect(editor.state.doc.child(1).textContent).toBe("\uFFFD");
+    expectStorable(editor);
+  });
+
+  it("adding or removing a mark over half a pair is fixed, though mark steps map no positions", () => {
+    const added = editorWith(["ab😀"]);
+    const bold = added.state.schema.marks.bold!.create();
+    added.view.dispatch(added.state.tr.addMark(4, 5, bold));
+    expect(added.state.doc.textContent).toBe("ab\uFFFD\uFFFD");
+    expectStorable(added);
+
+    const removed = editorWith(["ab😀"]);
+    removed.view.dispatch(removed.state.tr.addMark(1, 5, bold));
+    expect(removed.state.doc.textContent).toBe("ab😀");
+    removed.view.dispatch(removed.state.tr.removeMark(3, 4, bold));
+    expect(removed.state.doc.textContent).toBe("ab\uFFFD\uFFFD");
+    expectStorable(removed);
+  });
+
+  it("text in other blocks is left alone when a block is widened", () => {
+    const editor = editorWith(["ab😀", "Drugi"]);
+    const before = editor.state.doc.child(1);
+    editor.view.dispatch(editor.state.tr.delete(4, 5));
+    expect(editor.state.doc.child(1)).toBe(before);
+    expectStorable(editor);
+  });
 });

@@ -27,7 +27,7 @@ import { expect } from "vitest";
 import Dexie from "dexie";
 import { indexedDB, IDBKeyRange } from "fake-indexeddb";
 import { documentsEqual, newNodeId, paragraphNode, textNode, type CanonicalDocument } from "../../domain/document";
-import { AtomicDexieJournal } from "./atomic-dexie-journal";
+import { AtomicDexieJournal, JournalError } from "./atomic-dexie-journal";
 import { LocalDocumentSaver, type LoadResult } from "./local-document-saver";
 
 const DOC = "model-document";
@@ -109,6 +109,8 @@ type Tab = {
   /** Sequences this tab based its text on: stale needs a commit past them (3). */
   base: Set<number>;
   failure: string | null;
+  /** Transaction ids stay unique across this tab's reloads. */
+  tx: number;
 };
 
 async function run(tabCount: number, ops: readonly Op[]): Promise<void> {
@@ -125,7 +127,6 @@ async function run(tabCount: number, ops: readonly Op[]): Promise<void> {
   };
 
   const newSaver = (tab: Tab): LocalDocumentSaver => {
-    let tx = 0;
     const wrapped = Object.assign(Object.create(tab.journal) as AtomicDexieJournal, {
       read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
         const call = caller.getStore();
@@ -154,7 +155,13 @@ async function run(tabCount: number, ops: readonly Op[]): Promise<void> {
           if (mode === "unknown") throw new Error("something else");
           if (mode === "closed") throw Object.assign(new Error("closed"), { name: "DatabaseClosedError" });
           if (mode === "gate") await new Promise<void>((resolve) => { tab.gated.push(resolve); });
-          const result = await tab.journal.saveLocal(...args);
+          const result = await tab.journal.saveLocal(...args).catch((error: unknown) => {
+            // An id reused across reloads would end every later write here (#206 Codex r4240617152).
+            if (error instanceof JournalError && error.code === "duplicate_transaction") {
+              violations.push(`ids: tab ${tab.id} reused ${args[1].clientTransactionId}`);
+            }
+            throw error;
+          });
           // 2: the replaced text was shown to this tab. Sequences grow by one
           // per write, so this holds even if the saver passed no expectation.
           if (!tab.known.has(result.localSeq - 1)) {
@@ -172,7 +179,7 @@ async function run(tabCount: number, ops: readonly Op[]): Promise<void> {
     });
     const saver = new LocalDocumentSaver(wrapped, DOC, {
       now: () => new Date("2026-10-10T20:00:00.000Z"),
-      newTransactionId: () => `t${tab.id}-${(tx += 1)}`,
+      newTransactionId: () => `t${tab.id}-${(tab.tx += 1)}`,
     });
     saver.subscribe((snapshot) => {
       if (tab.saver !== saver) return;
@@ -262,7 +269,7 @@ async function run(tabCount: number, ops: readonly Op[]): Promise<void> {
     for (let id = 0; id < tabCount; id += 1) {
       const tab = {
         id, journal: new AtomicDexieJournal(at, idb), mode: "ok", readFails: false, readSlow: false,
-        readLate: false, gated: [], writing: 0, loadedText: "", loadedAt: 0, lastReadAt: 0, edits: 0,
+        readLate: false, gated: [], writing: 0, tx: 0, loadedText: "", loadedAt: 0, lastReadAt: 0, edits: 0,
       } as unknown as Tab;
       tabs.push(tab);
       fresh(tab);

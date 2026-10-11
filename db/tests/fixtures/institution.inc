@@ -109,10 +109,12 @@ FROM (VALUES
 -- One assignment per course (part 2). Z1 of K1 is at its second, narrower
 -- version: Ana and Dora acknowledged the first, only Ana the second. Z2 of K2
 -- has no acknowledgment, Z3 of K3 has Tomo's.
-INSERT INTO institution.assignment (id, course_id, current_version, created_by)
-SELECT pg_temp.id(a.name), pg_temp.id(a.course), a.current_version, pg_temp.id(a.teacher)
+-- The institution comes from the course, as in create_assignment.
+INSERT INTO institution.assignment (id, course_id, institution_id, current_version, created_by)
+SELECT pg_temp.id(a.name), c.id, c.institution_id, a.current_version, pg_temp.id(a.teacher)
 FROM (VALUES ('z1', 'k1', 2, 'vesna'), ('z2', 'k2', 1, 'marko'), ('z3', 'k3', 1, 'petra')
-) AS a (name, course, current_version, teacher);
+) AS a (name, course, current_version, teacher)
+JOIN institution.course c ON c.id = pg_temp.id(a.course);
 INSERT INTO institution.assignment_version (
   assignment_id, version_no, title, instructions, work_type, opens_at, due_at, ai_policy, ai_purposes,
   evidence_profile, import_allowed, created_by
@@ -126,9 +128,10 @@ FROM (VALUES
   ('z2', 1, 'prohibited', '{}', 'basic', false, 'marko'),
   ('z3', 1, 'encouraged', '{translation}', 'basic', true, 'petra')
 ) AS v (name, version_no, ai_policy, ai_purposes, evidence_profile, import_allowed, teacher);
-INSERT INTO institution.notice_acknowledgment (assignment_id, version_no, student_id)
-SELECT pg_temp.id(n.name), n.version_no, pg_temp.id(n.student)
-FROM (VALUES ('z1', 1, 'ana'), ('z1', 1, 'dora'), ('z1', 2, 'ana'), ('z3', 1, 'tomo')) AS n (name, version_no, student);
+INSERT INTO institution.notice_acknowledgment (assignment_id, version_no, student_id, institution_id)
+SELECT a.id, n.version_no, pg_temp.id(n.student), a.institution_id
+FROM (VALUES ('z1', 1, 'ana'), ('z1', 1, 'dora'), ('z1', 2, 'ana'), ('z3', 1, 'tomo')) AS n (name, version_no, student)
+JOIN institution.assignment a ON a.id = pg_temp.id(n.name);
 
 -- Runs one statement as p_role with p_actor's session token and returns its
 -- single value as text, or "SQLSTATE: message" when it fails. The assertions

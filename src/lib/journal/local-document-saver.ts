@@ -12,10 +12,14 @@
  * (written by `saveLocal`); transient states live in memory only.
  */
 
-import { emptyDocument, validateDocument, type CanonicalDocument } from "../../domain/document";
+import {
+  documentsEqual, emptyDocument, validateDocument, type CanonicalDocument,
+} from "../../domain/document";
+import { commitRequestFromTransaction } from "../../domain/serverSync/contract";
+import type { JournalContents } from "../../domain/sync/journal-types";
 import { restoreSyncState } from "../../domain/sync/restore";
 import {
-  syncReducer, type LocalSaveFailureReason, type SyncEvent, type SyncState,
+  LOCAL_SAVE_FAILURE_REASONS, SYNC_STATES, syncReducer, type LocalSaveFailureReason, type SyncEvent, type SyncState,
 } from "../../domain/sync/states";
 import { storableDocument } from "../../editor/storable-text";
 import type { AtomicDexieJournal } from "./atomic-dexie-journal";
@@ -115,10 +119,14 @@ export class LocalDocumentSaver {
   private halted = false;
   private seq = 0;
   /**
-   * The newest journal sequence any read of this saver saw. Own writes need
-   * not move it: none starts while a read runs (`reading`).
+   * The newest journal sequence any read of this saver accepted. Own writes
+   * need not move it: none starts while a read runs (`reading`).
    */
   private seen = 0;
+  /** Reads started so far; each read takes the next number before it reads. */
+  private reads = 0;
+  /** The number of the latest-started read whose outcome was applied. */
+  private applied = 0;
   private baseRevision = 0;
   private durable: CanonicalDocument | null = null;
   private rows = 0;
@@ -140,6 +148,9 @@ export class LocalDocumentSaver {
   /** The bases of the `resume()` calls still running; own writes advance them. */
   private readonly bases = new Set<Basis>();
   private resuming = 0;
+  /** Ends when every running `resume()` returns; `settled()` waits on it. */
+  private resumed: Promise<void> = Promise.resolve();
+  private finish: () => void = () => {};
   /** The newest gen ever queued, so `resume()` never queues behind a newer text. */
   private queuedGen = 0;
   private next: Candidate | null = null;
@@ -203,40 +214,63 @@ export class LocalDocumentSaver {
       this.reading = new Promise<void>((resolve) => { this.release = resolve; });
     }
     try {
-      await this.settled();
+      await this.flightSettled();
       return await this.read(basis);
     } finally {
       if (--this.readers === 0) {
         this.reading = null;
         this.release();
-        if (this.next && !this.halted) this.flight ??= this.drain();
+        if (this.next && !this.halted && !this.flight) this.drain();
       }
     }
   }
 
-  private async read(basis: Basis | null, retry = true): Promise<LoadResult> {
+  private async read(basis: Basis | null, floor = -1): Promise<LoadResult> {
+    // (a) An outcome from the contents (ready, stale, unsaved, corrupt,
+    // sticky) never applies over one already applied from a read started
+    // later (#206 qa206k). Numbered when it starts, not when it ends:
+    // IndexedDB runs transactions over the same stores in the order they were
+    // created, so a read started later sees a journal at least as new as one
+    // started earlier, however the two finish; numbered at the end, a held
+    // older read would outrank the newer one. An overtaken read reads again
+    // and takes the newest number, so only a read started after it can
+    // overtake it again.
+    const started = ++this.reads;
     try {
       const contents = await this.journal.read(this.documentId);
       const { snapshot, meta, pending } = contents;
-      // The journal only grows, so a read behind what this saver already saw
-      // was overtaken by a newer read of its own while it was held:
-      // it would report a false `stale`, or a `ready` that lifts a newer
-      // `stale` and shows older text, so read again (#206 r6 model). Once
-      // only: a fresh read still behind means the journal itself went back.
-      if (retry && (meta?.localSeq ?? 0) < this.seen) return await this.read(basis, false);
-      this.seen = Math.max(this.seen, meta?.localSeq ?? 0);
       const stored = snapshot ? validateDocument(snapshot.document) : null;
-      // Measured before any field changes, so a malformed row is `corrupt`
+      // Checked before anything is applied, so a malformed row is `corrupt`
       // and never a half-applied read (#206 qa206c MANJE 2).
       let chars = 0;
+      let malformed = false;
       for (const row of pending) {
-        const json: unknown = JSON.stringify(row?.tx);
-        if (typeof json !== "string") return this.haltWith("corrupt", this.recover("corrupt", null));
+        // A BigInt or a cycle throws; that row is as unsendable (#206 Codex r4240729191).
+        let json: unknown;
+        try { json = JSON.stringify(row?.tx); } catch { json = undefined; }
+        if (typeof json !== "string") { malformed = true; break; }
         chars += json.length;
       }
-      if ((meta && !snapshot) || (snapshot && !meta) || (stored && !stored.ok)) {
-        return this.haltWith("corrupt", this.recover("corrupt", null));
+      const valid = !malformed && !((meta && !snapshot) || (snapshot && !meta) || (stored && !stored.ok)) &&
+        consistent(this.documentId, contents, stored?.ok ? stored.doc : null);
+      // The journal only grows, so a read behind what this saver already
+      // accepted was overtaken by a newer read of its own while it was held:
+      // it would report a false `stale`, or a `ready` that lifts a newer
+      // `stale` and shows older text, so read again (#206 r6 model). Again
+      // while a newer read overtakes the retry too (#206 Codex r4240797922);
+      // a retry behind what it was asked to reach means the journal itself
+      // went back. Each retry needs `seen` to grow, so the loop ends. Only an
+      // accepted read moves `seen`, and a refused one counts as sequence 0:
+      // a sequence its own rows contradict would lift the floor of a later
+      // retry above the journal and let an overtaken result through, and an
+      // overtaken refusal would halt over a newer read (#206 qa206k VAŽNO).
+      const recorded = valid ? meta?.localSeq ?? 0 : 0;
+      if (started < this.applied || (recorded < this.seen && recorded >= floor)) {
+        return await this.read(basis, this.seen);
       }
+      this.applied = started;
+      if (!valid) return this.haltWith("corrupt", this.recover("corrupt", null));
+      this.seen = Math.max(this.seen, recorded);
       const restored = restoreSyncState(contents);
       if (restored === "CONFLICT" || restored === "RECOVERY_REQUIRED") {
         this.halted = true;
@@ -267,22 +301,24 @@ export class LocalDocumentSaver {
       this.durable = document;
       this.rows = pending.length;
       this.chars = chars;
-      if (basis) {
-        // The chosen text is not written yet, so nothing is claimed saved
-        // (#206 A1), and a candidate left from before the choice is dropped:
-        // the chosen text supersedes it (#206 MANJE 3). One proposed while
-        // this read ran is newer than the choice and stays (#206 r6 finding 2).
-        if (this.next && this.next.gen < basis.gen) this.next = null;
-        this.state = "EDITING";
-      } else {
-        // Step 1 has no server: whatever meta says, the most this tab can
-        // claim is that the bytes are on this device.
-        // Text typed before or during the read is not what the journal holds.
-        this.state = this.durable && this.gen === this.cleanGen && !this.next ? "LOCAL_DURABLE" : "EDITING";
-      }
+      // A candidate left from before a `resume()` choice is dropped: the
+      // chosen text supersedes it (#206 MANJE 3). One proposed while this read
+      // ran is newer than the choice and stays (#206 r6 finding 2).
+      if (basis && this.next && this.next.gen < basis.gen) this.next = null;
+      // Step 1 has no server: whatever meta says, the most this tab can claim
+      // is that the bytes are on this device, and only for the text it shows.
+      // Text typed before or during the read is not what the journal holds;
+      // nor is a chosen text not written yet, as `resume()` bumped `gen`
+      // (#206 A1). Written already at that gen, it is (#206 qa206d M-1).
+      this.state = this.durable && this.gen === this.cleanGen && !this.next ? "LOCAL_DURABLE" : "EDITING";
       this.emit();
       return { kind: "ready", document: this.durable ?? emptyDocument() };
     } catch (error) {
+      // (b) A read that throws halts the saver whatever its order, on purpose
+      // (#206 qa206d): ERROR stops saving and claims nothing, and a later
+      // load() or resume() lifts it. It still counts as applied, so an older
+      // read that ends after it reads again rather than lift the halt.
+      this.applied = Math.max(this.applied, started);
       const failure = failureOf(error);
       return this.haltWith(failure, failure === "corrupt"
         ? this.recover("corrupt", null) : { kind: "unavailable" });
@@ -320,17 +356,22 @@ export class LocalDocumentSaver {
     const gen = (this.gen += 1);
     const basis: Basis = { at: this.shown, gen };
     this.bases.add(basis);
-    this.resuming += 1;
+    if (this.resuming++ === 0) {
+      this.resumed = new Promise<void>((resolve) => { this.finish = resolve; });
+    }
     try {
       const result = await this.loadFor(basis);
-      if (result.kind === "ready" && !this.halted) {
+      // Queued even if an overlapping load halted this saver after the ready
+      // read: the chosen text then waits like any candidate proposed while
+      // halted, and the next ready reload writes it (#206 qa206d V-1).
+      if (result.kind === "ready") {
         if (this.queuedGen < gen) await this.queue({ doc, gen });
-        else await this.settled();
+        else await this.flightSettled();
       }
       return result;
     } finally {
       this.bases.delete(basis);
-      this.resuming -= 1;
+      if (--this.resuming === 0) this.finish();
     }
   }
 
@@ -366,18 +407,41 @@ export class LocalDocumentSaver {
     this.next = candidate;
     this.queuedGen = Math.max(this.queuedGen, candidate.gen);
     // During a reload the candidate waits; `load()` starts it once read.
-    if (this.reading) return this.reading.then(() => this.settled());
+    if (this.reading) return this.reading.then(() => this.flightSettled());
     // A halted saver holds it; `drain()` would end at once and never clear `flight`.
-    if (!this.halted) this.flight ??= this.drain();
+    if (!this.halted && !this.flight) this.drain();
     return this.flight ?? Promise.resolve();
   }
 
-  /** Resolves once nothing is queued or in flight (`pagehide`, tests). */
+  /**
+   * Resolves once no reload or `resume()` runs and nothing is in flight
+   * (`pagehide`, tests): a candidate waiting on a reload, and the text a
+   * `resume()` chose, are written first (#206 Codex r4240541632, qa206g). A halted saver keeps its candidate queued past this, and
+   * its state meanwhile never says LOCAL_DURABLE.
+   */
   async settled(): Promise<void> {
+    while (this.reading || this.flight || this.resuming) {
+      await (this.reading ?? this.flight ?? this.resumed);
+    }
+  }
+
+  /** Writes only: a load awaiting `settled()` would wait for its own read. */
+  private async flightSettled(): Promise<void> {
     while (this.flight) await this.flight;
   }
 
-  private async drain(): Promise<void> {
+  /**
+   * `flight` is set before anything runs: `save()` notifies listeners
+   * synchronously, and one calling `settled()` or `propose()` from there
+   * must see this write in flight, not start a second one (#206 qa206i VAŽNO).
+   */
+  private drain(): void {
+    let settle!: (written: Promise<void>) => void;
+    this.flight = new Promise<void>((resolve) => { settle = resolve; });
+    settle(this.writeQueued());
+  }
+
+  private async writeQueued(): Promise<void> {
     try {
       while (this.next && !this.halted) {
         const candidate = this.next;
@@ -459,8 +523,58 @@ export class LocalDocumentSaver {
     this.emit();
   }
 
+  /**
+   * A listener that throws never interrupts saving: the error is thrown again
+   * outside this call, so it is still reported, while the candidate already
+   * taken from `next` is written (#206 Codex r4240240768).
+   */
   private emit(): void {
     const snapshot = this.snapshot();
-    for (const listener of this.listeners) listener(snapshot);
+    for (const listener of this.listeners) {
+      try {
+        listener(snapshot);
+      } catch (error) {
+        queueMicrotask(() => { throw error; });
+      }
+    }
   }
+}
+
+/**
+ * Whether the journal's rows agree with each other, so that what `read()`
+ * shows is the newest text this device holds (#206 qa206e V-1). `saveLocal`
+ * writes snapshot, pending row and meta in one transaction, so a row of an
+ * unknown kind, a sequence out of order, or a snapshot that is not the newest
+ * pending text can only come from damage, and loading it would show older or
+ * empty text as saved. Pending rows are never cleared in step 1; once an ACK
+ * clears a prefix (F-8), the newest row still left is still the snapshot.
+ */
+function consistent(
+  documentId: string, { snapshot, pending, meta }: JournalContents,
+  stored: CanonicalDocument | null,
+): boolean {
+  if (!meta) return pending.length === 0;
+  if (meta.documentId !== documentId || !Number.isSafeInteger(meta.localSeq) ||
+      meta.localSeq < 0 || !(SYNC_STATES as readonly string[]).includes(meta.state) ||
+      (meta.lastError !== undefined &&
+        !(LOCAL_SAVE_FAILURE_REASONS as readonly unknown[]).includes(meta.lastError)) ||
+      snapshot?.documentId !== documentId ||
+      // The next write takes its base from here (#206 Codex r4240617145).
+      !Number.isSafeInteger(snapshot.revision) || snapshot.revision < 0) return false;
+  let previous = 0;
+  for (const row of pending) {
+    const tx = row?.tx;
+    // A row the commit request refuses would block the drain for ever (#206 Codex r4240541630),
+    // as would text JCS or jsonb refuses, which `save()` never writes (#206 Codex r4240797929).
+    const request = tx ? commitRequestFromTransaction(documentId, tx) : null;
+    if (!row || row.documentId !== documentId || !Number.isSafeInteger(row.localSeq) ||
+        row.localSeq <= previous || row.localSeq > meta.localSeq || !request ||
+        storableDocument(request.p_document) !== request.p_document) return false;
+    previous = row.localSeq;
+  }
+  const last = pending.at(-1);
+  if (!last) return true;
+  const newest = validateDocument(last.tx.document);
+  return last.localSeq === meta.localSeq && newest.ok && stored !== null &&
+    documentsEqual(newest.doc, stored);
 }

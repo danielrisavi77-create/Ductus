@@ -5,17 +5,18 @@
  * 5/6/9 are E2E in step 1b. All text here is synthetic.
  */
 import { readFileSync } from "node:fs";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import Dexie from "dexie";
 import { indexedDB, IDBKeyRange } from "fake-indexeddb";
 import {
   documentsEqual, emptyDocument, newNodeId, paragraphNode, textNode, type CanonicalDocument,
 } from "../../domain/document";
+import { documentByteLength, MAX_DOCUMENT_BYTES } from "../../domain/serverSync/contract";
 import type { SyncState } from "../../domain/sync/states";
 import { storableText } from "../../editor/storable-text";
 import { AtomicDexieJournal, JournalError } from "./atomic-dexie-journal";
 import {
-  failureOf, LocalDocumentSaver, reasonOf, type SaverDeps, type SaverSnapshot,
+  failureOf, LocalDocumentSaver, reasonOf, type LoadResult, type SaverDeps, type SaverSnapshot,
 } from "./local-document-saver";
 
 const DOC = "local-demo-document";
@@ -106,6 +107,23 @@ describe("LocalDocumentSaver: normal path and reload (controls)", () => {
     const target = saver(fake);
     expect((await target.load()).kind).toBe("ready");
     expect(target.snapshot().state).toBe("LOCAL_DURABLE");
+  });
+
+  it("the next write carries the revision the loaded snapshot holds (#206 qa206j MANJE)", async () => {
+    for (const revision of [0, 23, 2 ** 40, Number.MAX_SAFE_INTEGER]) {
+      const real = journal(scope());
+      const createdAt = "2026-10-10T20:00:00.000Z";
+      await real.saveLocal(DOC, {
+        kind: "REPLACE_DOCUMENT", clientTransactionId: `rev-${revision}`, baseRevision: revision,
+        document: text("učitano"), createdAt,
+      }, createdAt, 0);
+      const target = saver(real);
+      expect((await target.load()).kind).toBe("ready");
+      await type(target, "novo");
+      const { snapshot, pending } = await real.read(DOC);
+      expect(pending.at(-1)!.tx).toMatchObject({ baseRevision: revision, document: text("novo") });
+      expect(snapshot!.revision).toBe(revision);
+    }
   });
 
   it("two documents in one scope both save", async () => {
@@ -1360,6 +1378,264 @@ describe("LocalDocumentSaver: resume() contract (#206 r6)", () => {
     expect((await rows(at)).at(-1)).toEqual(text("A"));
   });
 
+  it("r6: a held read overtaken twice reads again until it is current (#206 Codex r4240797922)", async () => {
+    const at = scope();
+    const real = journal(at);
+    let armed = false;
+    let open = () => {};
+    let entered = () => {};
+    const a = saver(patched(real, {
+      // Held after it has read: its contents are older than what comes next.
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        const contents = await real.read(...args);
+        if (armed) {
+          armed = false;
+          const gate = new Promise<void>((resolve) => { open = resolve; });
+          entered();
+          await gate;
+        }
+        return contents;
+      },
+    }));
+    const hold = () => {
+      armed = true;
+      return new Promise<void>((resolve) => { entered = resolve; });
+    };
+    const b = saver(journal(at));
+    await Promise.all([a.load(), b.load()]);
+    let held = hold();
+    const old = a.load();
+    await held;
+    await type(b, "B1");
+    expect(await a.load()).toEqual({ kind: "recovery", reason: "stale", document: text("B1") });
+    // The held read is behind and reads again; that read is held in turn
+    // while another writer and a third load move past it.
+    held = hold();
+    open();
+    await held;
+    await type(b, "B2");
+    expect(await a.load()).toEqual({ kind: "recovery", reason: "stale", document: text("B2") });
+    open();
+    expect(await old).toEqual({ kind: "recovery", reason: "stale", document: text("B2") });
+    expect(a.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+    expect(await a.resume(text("A"))).toEqual({ kind: "ready", document: text("B2") });
+    await a.settled();
+    expect((await rows(at)).at(-1)).toEqual(text("A"));
+  });
+
+  // #206 Codex r4240797922: a retry needs `seen` to have grown past what it
+  // read, and only a read that returned grows it, so retries are bounded.
+  it("r6: a journal that went back is read once more, not for ever", async () => {
+    const at = scope();
+    const real = journal(at);
+    let calls = 0;
+    let back: Awaited<ReturnType<AtomicDexieJournal["read"]>> | null = null;
+    const a = saver(patched(real, {
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        calls += 1;
+        return back ?? await real.read(...args);
+      },
+    }));
+    const b = saver(journal(at));
+    await b.load();
+    await type(b, "B1");
+    const older = await real.read(DOC);
+    await type(b, "B2");
+    await a.load();
+    back = older;
+    calls = 0;
+    expect((await a.load()).kind).toBe("recovery");
+    expect(calls).toBe(2);
+  });
+
+  it("r6: held reads overtaken while the journal keeps growing all end on the newest text", async () => {
+    const at = scope();
+    const real = journal(at);
+    let calls = 0;
+    let holding = true;
+    const gates: Array<() => void> = [];
+    const a = saver(patched(real, {
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        calls += 1;
+        const contents = await real.read(...args);
+        if (holding) await new Promise<void>((resolve) => { gates.push(resolve); });
+        return contents;
+      },
+    }));
+    const b = saver(journal(at));
+    await b.load();
+    holding = false;
+    await a.load();
+    holding = true;
+    calls = 0;
+    const loads: Promise<LoadResult>[] = [];
+    for (const value of ["B1", "B2", "B3"]) {
+      loads.push(a.load());
+      while (gates.length < loads.length) await new Promise((resolve) => setImmediate(resolve));
+      await type(b, value);
+    }
+    holding = false;
+    const results: LoadResult[] = [];
+    for (const index of [2, 1, 0]) {
+      gates[index]!();
+      results.push(await loads[index]!);
+    }
+    const stale = (value: string) => ({ kind: "recovery", reason: "stale", document: text(value) });
+    expect(results).toEqual([stale("B2"), stale("B3"), stale("B3")]);
+    expect(calls).toBe(5);
+  });
+
+  const badSeqs: [string, unknown][] = [
+    ["NaN", Number.NaN], ["Infinity", Number.POSITIVE_INFINITY], ["-1", -1], ["1.5", 1.5],
+    ["MAX_SAFE_INTEGER + 1", Number.MAX_SAFE_INTEGER + 1], ["the string \"1\"", "1"],
+  ];
+  for (const [name, bad] of badSeqs) it(`r6: a ${name} sequence read as corrupt never stops a later held read from reading again (#206 qa206j VAŽNO)`, async () => {
+    const at = scope();
+    const real = journal(at);
+    let armed = false;
+    let open = () => {};
+    let entered = () => {};
+    const held = new Promise<void>((resolve) => { entered = resolve; });
+    const target = saver(patched(real, {
+      // Held after it has read: its contents are older than what comes next.
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        const contents = await real.read(...args);
+        if (armed) {
+          armed = false;
+          const gate = new Promise<void>((resolve) => { open = resolve; });
+          entered();
+          await gate;
+        }
+        return contents;
+      },
+    }));
+    const writer = saver(journal(at));
+    await writer.load();
+    await type(writer, "staro");
+    expect((await target.load()).kind).toBe("ready");
+    const db = (real as unknown as { db: Dexie }).db;
+    await db.table("meta").update(DOC, { localSeq: bad });
+    expect(await target.load()).toEqual({ kind: "recovery", reason: "corrupt", document: null });
+    await db.table("meta").update(DOC, { localSeq: 1 });
+    armed = true;
+    const older = target.load();
+    await held;
+    await type(writer, "novo");
+    const stale = { kind: "recovery", reason: "stale", document: text("novo") };
+    expect(await target.load()).toEqual(stale);
+    open();
+    expect(await older).toEqual(stale);
+    await target.settled();
+    expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+  });
+
+  // #206 qa206k VAŽNO: valid sequences the rows contradict, and the values a
+  // weaker sequence guard would let through.
+  const refusedSeqs: [string, unknown][] = [
+    ["3", 3], ["999", 999], ["MAX_SAFE_INTEGER", Number.MAX_SAFE_INTEGER], ["Infinity", Number.POSITIVE_INFINITY],
+    ["1.5", 1.5], ["MAX_SAFE_INTEGER + 1", Number.MAX_SAFE_INTEGER + 1],
+  ];
+  for (const [name, bad] of refusedSeqs) it(`r6: a ${name} sequence refused as corrupt never lets a held retry undo a newer recovery (#206 qa206k VAŽNO)`, async () => {
+    const at = scope();
+    const real = journal(at);
+    let armed = 0;
+    let open = () => {};
+    let entered = () => {};
+    const held = new Promise<void>((resolve) => { entered = resolve; });
+    const target = saver(patched(real, {
+      // The second read that still sees the old text is held after reading.
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        const contents = await real.read(...args);
+        if (armed > 0 && contents.meta?.localSeq === 1 && ++armed === 3) {
+          const gate = new Promise<void>((resolve) => { open = resolve; });
+          entered();
+          await gate;
+        }
+        return contents;
+      },
+    }));
+    const writer = saver(journal(at));
+    await writer.load();
+    await type(writer, "staro");
+    expect((await target.load()).kind).toBe("ready");
+    const db = (real as unknown as { db: Dexie }).db;
+    await db.table("meta").update(DOC, { localSeq: bad });
+    expect(await target.load()).toEqual({ kind: "recovery", reason: "corrupt", document: null });
+    await db.table("meta").update(DOC, { localSeq: 1 });
+    armed = 1;
+    const older = target.load();
+    await Promise.race([held, older]);
+    await type(writer, "novo");
+    const stale = { kind: "recovery", reason: "stale", document: text("novo") };
+    expect(await target.load()).toEqual(stale);
+    open();
+    await older;
+    await target.settled();
+    expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+  });
+
+  for (const [name, bad] of refusedSeqs) it(`r6: a held read that saw a ${name} sequence reads again rather than halt over a newer recovery (#206 qa206k VAŽNO)`, async () => {
+    const at = scope();
+    const real = journal(at);
+    let armed = false;
+    let open = () => {};
+    let entered = () => {};
+    const held = new Promise<void>((resolve) => { entered = resolve; });
+    const target = saver(patched(real, {
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        const contents = await real.read(...args);
+        if (armed) {
+          armed = false;
+          const gate = new Promise<void>((resolve) => { open = resolve; });
+          entered();
+          await gate;
+        }
+        return contents;
+      },
+    }));
+    const writer = saver(journal(at));
+    await writer.load();
+    await type(writer, "staro");
+    expect((await target.load()).kind).toBe("ready");
+    const db = (real as unknown as { db: Dexie }).db;
+    await db.table("meta").update(DOC, { localSeq: bad });
+    armed = true;
+    const older = target.load();
+    await held;
+    await db.table("meta").update(DOC, { localSeq: 1 });
+    await type(writer, "novo");
+    const stale = { kind: "recovery", reason: "stale", document: text("novo") };
+    expect(await target.load()).toEqual(stale);
+    open();
+    expect(await older).toEqual(stale);
+    await target.settled();
+    expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+  });
+
+  it("r6: settled() called between two resumes waits for both, not for the first one's end (#206 qa206j MANJE)", async () => {
+    const at = scope();
+    const { a, b } = await staleTab(at);
+    await type(b, "B2");
+    let fired = false;
+    let done = false;
+    let second: Promise<LoadResult> | undefined;
+    // After the first resume's read is stale, before that resume has ended.
+    a.subscribe((s) => {
+      if (fired || s.state !== "ERROR") return;
+      fired = true;
+      queueMicrotask(() => queueMicrotask(() => {
+        void a.settled().then(() => { done = true; });
+        second = a.resume(text("drugi odabir"));
+      }));
+    });
+    expect(await a.resume(text("prvi odabir"))).toEqual({ kind: "recovery", reason: "stale", document: text("B2") });
+    expect(second).toBeDefined();
+    expect((await second!).kind).toBe("ready");
+    for (let i = 0; i < 5; i += 1) await new Promise((resolve) => setImmediate(resolve));
+    expect(done).toBe(true);
+    expect((await rows(at)).at(-1)).toEqual(text("drugi odabir"));
+  });
+
   it("r6: text proposed while a failed read halted the saver is written by the next ready reload", async () => {
     const at = scope();
     const real = journal(at);
@@ -1389,7 +1665,325 @@ describe("LocalDocumentSaver: resume() contract (#206 r6)", () => {
   });
 });
 
+describe("LocalDocumentSaver: a halt racing a ready read (#206 qa206d)", () => {
+  const closed = () => Object.assign(new Error("closed"), { name: "DatabaseClosedError" });
+  const quota = () => Object.assign(new Error("full"), { name: "QuotaExceededError" });
+  /** Lets every pending promise callback and macrotask run. */
+  const drained = async () => {
+    for (let i = 0; i < 100; i += 1) await new Promise((resolve) => setImmediate(resolve));
+  };
+  function plain(doc: CanonicalDocument | null | undefined): string {
+    const node = doc?.nodes[0];
+    return node && "children" in node ? node.children.map((c) => ("text" in c ? c.text : "")).join("") : "";
+  }
+
+  // `delay` microtasks after resume()'s ready read, the read of an
+  // overlapping load() fails and halts the saver: before (0, 1) or after the
+  // chosen text was queued, the choice must reach the journal.
+  for (const delay of [0, 1, 2, 3, 5, 10, 20]) {
+    it(`V-1 (D1, delay ${delay}): resume()'s choice survives an overlapping load() failing after its ready read`, async () => {
+      const at = scope();
+      const real = journal(at);
+      let split = false;
+      let calls = 0;
+      let failLoad = () => {};
+      const a = saver(patched(real, {
+        read: (id: string) => {
+          if (!split) return real.read(id);
+          calls += 1;
+          if (calls === 1) return new Promise((_, reject) => { failLoad = () => reject(closed()); });
+          return real.read(id).then((contents) => {
+            let later = Promise.resolve();
+            for (let i = 0; i < delay; i += 1) later = later.then(() => undefined);
+            void later.then(() => failLoad());
+            return contents;
+          });
+        },
+      }));
+      await a.load();
+      await type(a, "prvi");
+      const b = saver(journal(at));
+      await b.load();
+      await type(b, "tuđi");
+      await type(a, "moj noviji");
+      expect(await a.load()).toMatchObject({ kind: "recovery", reason: "stale" });
+      split = true;
+      const overlapping = a.load();
+      const resumed = a.resume(text("moj noviji"));
+      expect(await overlapping).toEqual({ kind: "unavailable" });
+      expect((await resumed).kind).toBe("ready");
+      split = false;
+      await a.settled();
+      expect(a.snapshot()).toMatchObject({ state: "ERROR", failure: "unavailable" });
+      expect((await a.load()).kind).toBe("ready");
+      await a.settled();
+      await drained();
+      expect(plain((await journal(at).read(DOC)).snapshot?.document)).toBe("moj noviji");
+      expect(a.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+      const fresh = await saver(journal(at)).load();
+      expect(fresh.kind === "ready" && plain(fresh.document)).toBe("moj noviji");
+    });
+  }
+
+  it("load(): text held while halted survives a second load() failing after a ready one", async () => {
+    const at = scope();
+    const real = journal(at);
+    let reads = 0;
+    let failFirst = () => {};
+    const target = saver(patched(real, {
+      read: (id: string) => {
+        reads += 1;
+        if (reads === 2) return Promise.reject(closed());
+        if (reads === 3) return new Promise((_, reject) => { failFirst = () => reject(closed()); });
+        if (reads === 4) return real.read(id).then((contents) => { void Promise.resolve().then(() => failFirst()); return contents; });
+        return real.read(id);
+      },
+    }));
+    expect((await target.load()).kind).toBe("ready");
+    await type(target, "prije");
+    expect(await target.load()).toEqual({ kind: "unavailable" });
+    await type(target, "za vrijeme greške");
+    const first = target.load();
+    const second = target.load();
+    expect((await second).kind).toBe("ready");
+    expect(await first).toEqual({ kind: "unavailable" });
+    await target.settled();
+    expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "unavailable" });
+    expect(plain((await journal(at).read(DOC)).snapshot?.document)).toBe("prije");
+    expect((await target.load()).kind).toBe("ready");
+    await target.settled();
+    expect(plain((await journal(at).read(DOC)).snapshot?.document)).toBe("za vrijeme greške");
+    expect(target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+  });
+
+  it("M-1 (D2): resume() whose text a same-gen proposal already wrote shows it saved", async () => {
+    const at = scope();
+    const real = journal(at);
+    let mode: "ok" | "quota" | "gate" = "ok";
+    let open = () => {};
+    const a = saver(patched(real, {
+      saveLocal: async (...args: Parameters<AtomicDexieJournal["saveLocal"]>) => {
+        if (mode === "quota") throw quota();
+        if (mode === "gate") {
+          mode = "ok";
+          await new Promise<void>((resolve) => { open = resolve; });
+        }
+        return real.saveLocal(...args);
+      },
+    }));
+    await a.load();
+    await type(a, "prvi");
+    mode = "quota";
+    await type(a, "drugi");
+    expect(a.snapshot().failure).toBe("quota");
+    expect(await a.load()).toMatchObject({ kind: "recovery", reason: "unsaved" });
+    mode = "gate";
+    a.edit();
+    const written = a.propose(text("drugi"));
+    await drained();
+    const states = record(a);
+    const resumed = a.resume(text("drugi"));
+    // The editor's debounce fires after the click, at the choice's gen.
+    const proposed = a.propose(text("drugi"));
+    open();
+    expect((await resumed).kind).toBe("ready");
+    await written;
+    await proposed;
+    await a.settled();
+    await drained();
+    expect(plain((await journal(at).read(DOC)).snapshot?.document)).toBe("drugi");
+    expect(states.at(-1)?.state).toBe("LOCAL_DURABLE");
+    expect(a.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+  });
+});
+
+describe("LocalDocumentSaver: a journal whose rows disagree (#206 qa206e V-1)", () => {
+  type Damage = (db: Dexie) => Promise<unknown>;
+  /** Two saves, then one damage straight on the tables, as storage damage would. */
+  async function damaged(damage: Damage): Promise<{ real: AtomicDexieJournal; db: Dexie }> {
+    const real = journal(scope());
+    const first = saver(real);
+    await first.load();
+    await type(first, "starije");
+    await type(first, "najnovije");
+    const db = (real as unknown as { db: Dexie }).db;
+    await damage(db);
+    return { real, db };
+  }
+  const cases: [string, Damage][] = [
+    ["(a) a snapshot older than the newest pending row", (db) =>
+      db.table("snapshots").update(DOC, { document: text("starije") })],
+    ["(b) pending rows without snapshot and meta", async (db) => {
+      await db.table("snapshots").delete(DOC);
+      await db.table("meta").delete(DOC);
+    }],
+    ["(c) a pending row of an unknown kind", (db) =>
+      db.table("pending").update([DOC, 2], { "tx.kind": "UNKNOWN_SYNTHETIC" })],
+    ["an unknown meta state", (db) => db.table("meta").update(DOC, { state: "UNKNOWN_SYNTHETIC" })],
+    ["a negative local sequence", (db) => db.table("meta").update(DOC, { localSeq: -1 })],
+    ["a pending row past the recorded sequence", (db) => db.table("meta").update(DOC, { localSeq: 1 })],
+    // #206 reviewB: each case below is caught by one condition alone.
+    ["a fractional local sequence with no pending rows", async (db) => {
+      await db.table("pending").where("documentId").equals(DOC).delete();
+      await db.table("meta").update(DOC, { localSeq: 2.5 });
+    }],
+    ["a negative local sequence with no pending rows", async (db) => {
+      await db.table("pending").where("documentId").equals(DOC).delete();
+      await db.table("meta").update(DOC, { localSeq: -1 });
+    }],
+    ["a pending row with a fractional sequence", async (db) => {
+      const row = await db.table("pending").get([DOC, 1]);
+      await db.table("pending").delete([DOC, 1]);
+      await db.table("pending").put({ ...row, localSeq: 1.5 });
+    }],
+    ["a pending row at sequence zero", async (db) => {
+      const row = await db.table("pending").get([DOC, 1]);
+      await db.table("pending").delete([DOC, 1]);
+      await db.table("pending").put({ ...row, localSeq: 0 });
+    }],
+    ["a pending row whose transaction id is not text", (db) =>
+      db.table("pending").update([DOC, 1], { "tx.clientTransactionId": 42 })],
+    ["an invalid document in a pending row before the newest", (db) =>
+      db.table("pending").update([DOC, 1], { "tx.document": { synthetic: true } })],
+    ["a recorded sequence past the newest pending row", (db) =>
+      db.table("meta").update(DOC, { localSeq: 3 })],
+    // #206 Codex r4240541630: rows the commit request refuses would block the drain for ever.
+    ["a pending row whose transaction is null", (db) =>
+      db.table("pending").update([DOC, 1], { tx: null })],
+    ["a pending row with an empty transaction id", (db) =>
+      db.table("pending").update([DOC, 1], { "tx.clientTransactionId": "" })],
+    ["a pending row with a transaction id over 128 characters", (db) =>
+      db.table("pending").update([DOC, 1], { "tx.clientTransactionId": "t".repeat(129) })],
+    ["a pending row with an invalid base revision", (db) =>
+      db.table("pending").update([DOC, 1], { "tx.baseRevision": -1 })],
+    ["a pending row whose document exceeds the size limit", (db) =>
+      db.table("pending").update([DOC, 1], { "tx.document": text("x".repeat(MAX_DOCUMENT_BYTES)) })],
+    // #206 Codex r4240617145: the next write would inherit a base every save refuses.
+    ["a snapshot with a negative revision", (db) => db.table("snapshots").update(DOC, { revision: -1 })],
+    ["a snapshot with a fractional revision", (db) => db.table("snapshots").update(DOC, { revision: 0.5 })],
+    // #206 Codex r4240729191: IndexedDB stores a BigInt that JSON cannot serialise.
+    ["a pending row that cannot be serialised", (db) =>
+      db.table("pending").update([DOC, 1], { "tx.createdAt": 1n })],
+    ["a pending row with a cycle", async (db) => {
+      const row = await db.table("pending").get([DOC, 1]);
+      row.tx.self = row.tx;
+      await db.table("pending").put(row);
+    }],
+    ["a recorded sequence stored as a BigInt", (db) => db.table("meta").update(DOC, { localSeq: 1n })],
+    ["a snapshot document holding a BigInt", (db) =>
+      db.table("snapshots").update(DOC, { "document.schemaVersion": 1n })],
+    ["a snapshot document stored as a Map", (db) =>
+      db.table("snapshots").update(DOC, { document: new Map([["nodes", []]]) })],
+    // #206 Codex r4240797929: text JCS or jsonb refuses would sit as LOCAL_DURABLE for ever.
+    ["a newest row and snapshot holding a lone surrogate", async (db) => {
+      await db.table("pending").update([DOC, 2], { "tx.document": text("a\uD800b") });
+      await db.table("snapshots").update(DOC, { document: text("a\uD800b") });
+    }],
+    ["a newest row and snapshot holding NUL", async (db) => {
+      await db.table("pending").update([DOC, 2], { "tx.document": text("a\u0000b") });
+      await db.table("snapshots").update(DOC, { document: text("a\u0000b") });
+    }],
+    ["an older pending row holding NUL", (db) =>
+      db.table("pending").update([DOC, 1], { "tx.document": text("a\u0000b") })],
+    // #206 qa206i MANJE: a failure reason restore cannot name.
+    ...([
+      ["a BigInt", 1n], ["a Date", new Date(0)], ["a Map", new Map()], ["NaN", Number.NaN],
+      ["an unknown reason", "UNKNOWN_SYNTHETIC"], ["a long string", "q".repeat(10_000)],
+    ] as [string, unknown][]).map(([what, value]): [string, Damage] =>
+      [`a meta failure reason stored as ${what}`, (db) => db.table("meta").update(DOC, { lastError: value })]),
+    ["a meta failure reason with a cycle", async (db) => {
+      const cycle: Record<string, unknown> = {};
+      cycle.self = cycle;
+      await db.table("meta").update(DOC, { lastError: cycle });
+    }],
+  ];
+  it("17: a snapshot without meta or pending rows is corrupt, never shown as saved (#206 qa206k MANJE)", async () => {
+    const { real } = await damaged(async (db) => {
+      await db.table("pending").clear();
+      await db.table("meta").delete(DOC);
+    });
+    const before = await real.read(DOC);
+    expect(before.snapshot).not.toBeNull();
+    expect(before.meta).toBeNull();
+    expect(before.pending).toEqual([]);
+    const fresh = saver(real);
+    expect(await fresh.load()).toEqual({ kind: "recovery", reason: "corrupt", document: null });
+    expect(fresh.snapshot()).toMatchObject({ state: "RECOVERY_REQUIRED", failure: "corrupt" });
+    await type(fresh, "zamjena");
+    expect(await real.read(DOC)).toEqual(before);
+  });
+
+  for (const [name, damage] of cases) {
+    it(`17: ${name} is corrupt, never older or empty text shown as saved, and nothing is written`, async () => {
+      const { real } = await damaged(damage);
+      const before = await real.read(DOC);
+      const fresh = saver(real);
+      expect(await fresh.load()).toEqual({ kind: "recovery", reason: "corrupt", document: null });
+      expect(fresh.snapshot()).toMatchObject({ state: "RECOVERY_REQUIRED", failure: "corrupt" });
+      await type(fresh, "zamjena");
+      expect(fresh.snapshot()).toMatchObject({ state: "RECOVERY_REQUIRED", failure: "corrupt" });
+      expect(await real.read(DOC)).toEqual(before);
+    });
+  }
+
+  // #206 Codex r4240797929: the storable check refuses only what the server refuses.
+  function atLimit(): CanonicalDocument {
+    return text("x".repeat(MAX_DOCUMENT_BYTES - documentByteLength(text("x")) + 1));
+  }
+  const valid: [string, CanonicalDocument][] = [
+    ["an emoji and other valid surrogate pairs", text("ok \u{1F600} \u{1D49C} \u{1F469}\u200D\u{1F4BB}")],
+    ["combining marks", text("e\u0301 c\u030C a\u0328")],
+    ["an empty document", text("")],
+    ["a document exactly at the size limit", atLimit()],
+  ];
+  for (const [name, doc] of valid) {
+    it(`17: a newest row and snapshot holding ${name} still load as saved`, async () => {
+      if (name.includes("size limit")) expect(documentByteLength(doc)).toBe(MAX_DOCUMENT_BYTES);
+      const { real } = await damaged(async (db) => {
+        await db.table("pending").update([DOC, 2], { "tx.document": doc });
+        await db.table("snapshots").update(DOC, { document: doc });
+      });
+      const fresh = saver(real);
+      const loaded = await fresh.load();
+      expect(loaded.kind === "ready" && documentsEqual(loaded.document, doc)).toBe(true);
+      expect(fresh.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+    });
+  }
+
+  it("17: a meta failure reason restore names still loads with the journal's text (#206 qa206i MANJE)", async () => {
+    const { real } = await damaged((db) => db.table("meta").update(DOC, { lastError: "quota" }));
+    const loaded = await saver(real).load();
+    expect(loaded.kind === "ready" && documentsEqual(loaded.document, text("najnovije"))).toBe(true);
+  });
+
+  // "Newest pending row is the snapshot" holds only while rows remain: once an
+  // ACK clears them (F-8), snapshot and meta alone are a whole journal.
+  it("17: snapshot and meta with no pending rows, or with only the newest left, still load", async () => {
+    for (const keep of [0, 1]) {
+      const { real } = await damaged((db) =>
+        db.table("pending").where("[documentId+localSeq]").between([DOC, 1], [DOC, 2 - keep], true, true).delete());
+      expect((await real.read(DOC)).pending).toHaveLength(keep);
+      const fresh = saver(real);
+      const loaded = await fresh.load();
+      expect(loaded.kind === "ready" && documentsEqual(loaded.document, text("najnovije"))).toBe(true);
+      expect(fresh.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+    }
+  });
+});
+
 describe("LocalDocumentSaver: stored text (#197 attack 10)", () => {
+  it("10: text saved with a lone surrogate or NUL reloads as saved, never as corrupt (#206 Codex r4240797929)", async () => {
+    const at = scope();
+    const target = saver(journal(at));
+    await target.load();
+    for (const value of ["a\uD800b", "\uDC00\uD800", "a\u0000b", "\u0000", "x\uD83D\u0000\uDE00y"]) {
+      await type(target, value);
+    }
+    expect((await journal(at).read(DOC)).pending).toHaveLength(5);
+    const fresh = saver(journal(at));
+    expect((await fresh.load()).kind).toBe("ready");
+    expect(fresh.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+  });
   it("10: a lone surrogate and NUL are stored in a form the server accepts", async () => {
     const at = scope();
     const target = saver(journal(at));
@@ -1398,6 +1992,32 @@ describe("LocalDocumentSaver: stored text (#197 attack 10)", () => {
     const stored = (await journal(at).read(DOC)).snapshot!.document.nodes[0]!.children[0]!.text;
     expect(stored).toBe(storableText("a\uD800b\u0000c"));
     expect(stored).not.toMatch(/\u0000/);
+  });
+});
+
+describe("LocalDocumentSaver: listeners (#206 Codex r4240240768)", () => {
+  it("a listener that throws neither stops the save nor hides its error", async () => {
+    const at = scope();
+    const target = saver(journal(at));
+    await target.load();
+    const states = record(target);
+    const failure = new Error("izmišljeni kvar pretplatnika");
+    target.subscribe((s) => { if (s.state === "SAVING_LOCAL") throw failure; });
+    // Dexie also queues microtasks: they run as before, and only what one
+    // throws is caught here instead of failing the run.
+    const rethrown: unknown[] = [];
+    const queue = globalThis.queueMicrotask.bind(globalThis);
+    const spy = vi.spyOn(globalThis, "queueMicrotask").mockImplementation((callback) => {
+      queue(() => { try { callback(); } catch (error) { rethrown.push(error); } });
+    });
+    try {
+      await type(target, "spremljeno unatoč kvaru");
+    } finally {
+      spy.mockRestore();
+    }
+    expect(rethrown).toEqual([failure]);
+    expect(states.map((s) => s.state)).toEqual(["SAVING_LOCAL", "LOCAL_DURABLE"]);
+    expect((await journal(at).read(DOC)).snapshot!.document).toEqual(text("spremljeno unatoč kvaru"));
   });
 });
 
@@ -1425,5 +2045,507 @@ describe("LocalDocumentSaver: measurement (#197 attack 8)", () => {
     const loaded = await saver(journal(at)).load();
     expect(loaded.kind === "ready" && documentsEqual(loaded.document, text(""))).toBe(true);
     expect(emptyDocument().nodes[0]!.children).toEqual([]);
+  });
+});
+
+describe("LocalDocumentSaver: settled() during a reload (#206 Codex r4240541632)", () => {
+  /** The real journal whose second `read()` waits for `release()`, then reads or throws. */
+  function slowSecondRead(real: AtomicDexieJournal, fails = false) {
+    let reads = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const fake = patched(real, {
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        if ((reads += 1) === 2) {
+          await gate;
+          if (fails) throw Object.assign(new Error("izmišljeni kvar"), { name: "OpenFailedError" });
+        }
+        return real.read(...args);
+      },
+    });
+    return { fake, release: () => release() };
+  }
+  const turns = async (count: number) => {
+    for (let i = 0; i < count; i += 1) await new Promise((resolve) => setImmediate(resolve));
+  };
+
+  it("pagehide: settled() waits for text proposed during a reload until it is in the journal", async () => {
+    const at = scope();
+    const slow = slowSecondRead(journal(at));
+    const target = saver(slow.fake);
+    await target.load();
+    await type(target, "prvo");
+    const reload = target.load();
+    target.edit();
+    void target.propose(text("drugo"));
+    let done = false;
+    const settled = target.settled().then(() => { done = true; });
+    await turns(5);
+    expect(done).toBe(false);
+    slow.release();
+    await settled;
+    expect((await journal(at).read(DOC)).snapshot?.document).toEqual(text("drugo"));
+    await reload;
+  });
+
+  it("settled() during a reload that waits for a write in flight resolves with both", async () => {
+    const at = scope();
+    const real = journal(at);
+    let open = () => {};
+    let gate = Promise.resolve();
+    const target = saver(patched(real, {
+      saveLocal: (...args: Parameters<AtomicDexieJournal["saveLocal"]>) =>
+        gate.then(() => real.saveLocal(...args)),
+    }));
+    await target.load();
+    gate = new Promise<void>((resolve) => { open = resolve; });
+    target.edit();
+    const flight = target.propose(text("prvo"));
+    const reload = target.load();
+    const settled = target.settled();
+    await turns(5);
+    open();
+    await Promise.all([flight, reload, settled]);
+    expect((await reload).kind).toBe("ready");
+    expect(target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+  });
+
+  it("settled() ends when the reload fails, with the candidate kept unwritten", async () => {
+    const at = scope();
+    const slow = slowSecondRead(journal(at), true);
+    const target = saver(slow.fake);
+    await target.load();
+    await type(target, "prvo");
+    const reload = target.load();
+    target.edit();
+    void target.propose(text("drugo"));
+    const settled = target.settled();
+    slow.release();
+    await settled;
+    expect(await reload).toEqual({ kind: "unavailable" });
+    expect(target.snapshot().state).not.toBe("LOCAL_DURABLE");
+    expect((await journal(at).read(DOC)).snapshot?.document).toEqual(text("prvo"));
+  });
+
+  // #206 qa206g: `reading` ends before `resume()` queues the chosen text.
+  it("settled() during resume() waits until the chosen text is in the journal", async () => {
+    const at = scope();
+    const real = journal(at);
+    let full = false;
+    let readGate: Promise<void> | null = null;
+    let writeGate: Promise<void> | null = null;
+    let openRead = () => {};
+    let openWrite = () => {};
+    let writeStarted = false;
+    const target = saver(patched(real, {
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        if (readGate) await readGate;
+        return real.read(...args);
+      },
+      saveLocal: async (...args: Parameters<AtomicDexieJournal["saveLocal"]>) => {
+        if (full) throw Object.assign(new Error("full"), { name: "QuotaExceededError" });
+        if (writeGate) { writeStarted = true; await writeGate; }
+        return real.saveLocal(...args);
+      },
+    }));
+    await target.load();
+    await type(target, "staro");
+    full = true;
+    await type(target, "odabrano");
+    expect((await target.load()).kind).toBe("recovery");
+    full = false;
+    readGate = new Promise<void>((resolve) => { openRead = resolve; });
+    writeGate = new Promise<void>((resolve) => { openWrite = resolve; });
+    const resumed = target.resume(text("odabrano"));
+    let done = false;
+    const settled = target.settled().then(() => { done = true; });
+    openRead();
+    await turns(10);
+    expect(writeStarted).toBe(true);
+    expect(done).toBe(false);
+    openWrite();
+    await settled;
+    expect((await journal(at).read(DOC)).snapshot?.document).toEqual(text("odabrano"));
+    expect((await resumed).kind).toBe("ready");
+  });
+
+  // #206 qa206i VAŽNO: a listener runs inside `save()`, before its write.
+  function heldWrite(real: AtomicDexieJournal) {
+    let open = () => {};
+    let gate: Promise<void> | null = null;
+    const started: string[] = [];
+    const fake = patched(real, {
+      saveLocal: async (...args: Parameters<AtomicDexieJournal["saveLocal"]>) => {
+        const tx = args[1] as { document: CanonicalDocument };
+        started.push(JSON.stringify(tx.document));
+        if (gate) await gate;
+        return real.saveLocal(...args);
+      },
+    });
+    return {
+      fake, started,
+      hold: () => { gate = new Promise<void>((resolve) => { open = resolve; }); },
+      open: () => { gate = null; open(); },
+    };
+  }
+
+  it("settled() waits for a write proposed on its own until it is in the journal (#206 qa206i MANJE)", async () => {
+    const at = scope();
+    const held = heldWrite(journal(at));
+    const target = saver(held.fake);
+    await target.load();
+    held.hold();
+    target.edit();
+    void target.propose(text("samo"));
+    let done = false;
+    const settled = target.settled().then(() => { done = true; });
+    await turns(5);
+    expect(held.started).toHaveLength(1);
+    expect(done).toBe(false);
+    held.open();
+    await settled;
+    expect((await journal(at).read(DOC)).snapshot?.document).toEqual(text("samo"));
+  });
+
+  it("A: settled() called by a SAVING_LOCAL listener waits for that write", async () => {
+    const at = scope();
+    const held = heldWrite(journal(at));
+    const target = saver(held.fake);
+    await target.load();
+    await type(target, "staro");
+    held.hold();
+    let done = false;
+    let inner: Promise<void> | null = null;
+    target.subscribe((s) => {
+      if (s.state === "SAVING_LOCAL" && !inner) inner = target.settled().then(() => { done = true; });
+    });
+    target.edit();
+    void target.propose(text("novo"));
+    await turns(5);
+    expect(inner).not.toBeNull();
+    expect(done).toBe(false);
+    held.open();
+    await inner;
+    expect((await journal(at).read(DOC)).snapshot?.document).toEqual(text("novo"));
+  });
+
+  it("B: text a SAVING_LOCAL listener proposes is written after, never beside, the write in flight", async () => {
+    const at = scope();
+    const held = heldWrite(journal(at));
+    const target = saver(held.fake);
+    await target.load();
+    held.hold();
+    let proposed = false;
+    target.subscribe((s) => {
+      if (s.state !== "SAVING_LOCAL" || proposed) return;
+      proposed = true;
+      target.edit();
+      void target.propose(text("novije"));
+    });
+    target.edit();
+    void target.propose(text("starije"));
+    let done = false;
+    const settled = target.settled().then(() => { done = true; });
+    await turns(5);
+    expect(held.started).toEqual([JSON.stringify(text("starije"))]);
+    expect(done).toBe(false);
+    held.open();
+    await settled;
+    expect(held.started).toEqual([JSON.stringify(text("starije")), JSON.stringify(text("novije"))]);
+    const after = await journal(at).read(DOC);
+    expect(after.snapshot?.document).toEqual(text("novije"));
+    expect(after.pending.map((row) => row.localSeq)).toEqual([1, 2]);
+    expect(target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+  });
+});
+
+describe("LocalDocumentSaver: an older read never applies over a newer one (#206 qa206k)", () => {
+  const closed = () => Object.assign(new Error("closed"), { name: "DatabaseClosedError" });
+  type Contents = Awaited<ReturnType<AtomicDexieJournal["read"]>>;
+  /**
+   * A saver whose next read after `hold()` reads the journal at once and
+   * finishes only when the returned function is called: with those contents,
+   * or by throwing when `fail` is set.
+   */
+  function holding(real: AtomicDexieJournal) {
+    type Plan = { fail: boolean; finish: () => void };
+    let armed: Plan | null = null;
+    let failNext = false;
+    let calls = 0;
+    const target = saver(patched(real, {
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        calls += 1;
+        if (failNext) { failNext = false; throw closed(); }
+        if (!armed) return real.read(...args);
+        const plan = armed;
+        armed = null;
+        const contents = await real.read(...args);
+        return new Promise<Contents>((resolve, reject) => {
+          plan.finish = () => (plan.fail ? reject(closed()) : resolve(contents));
+        });
+      },
+    }));
+    return {
+      target,
+      calls: () => calls,
+      failNext: () => { failNext = true; },
+      /**
+       * Starts a load, or the read `start` begins, whose read is held;
+       * resolves once the read has read.
+       */
+      async hold(
+        fail: boolean, start: () => Promise<LoadResult> = () => target.load(),
+      ): Promise<{ load: Promise<LoadResult>; finish: () => void }> {
+        // Each hold() finishes its own read, however many are held at once.
+        const plan: Plan = { fail, finish: () => {} };
+        armed = plan;
+        const load = start();
+        while (armed) await new Promise((resolve) => setImmediate(resolve));
+        await new Promise((resolve) => setImmediate(resolve));
+        return { load, finish: () => plan.finish() };
+      },
+    };
+  }
+  async function ready(at: string): Promise<{ real: AtomicDexieJournal; writer: LocalDocumentSaver }> {
+    const real = journal(at);
+    const writer = saver(journal(at));
+    await writer.load();
+    await type(writer, "staro");
+    return { real, writer };
+  }
+  const unavailable = { state: "ERROR", failure: "unavailable" };
+  /** The whole stored journal, to show a halt left it as it was. */
+  const stored = (at: string) => journal(at).read(DOC);
+  async function rows(at: string): Promise<CanonicalDocument[]> {
+    return (await stored(at)).pending.map((row) => row.tx.document);
+  }
+
+  it("(b) a held read that throws after a newer ready halts, keeps the journal and the next load() lifts it", async () => {
+    const at = scope();
+    const { real } = await ready(at);
+    const h = holding(real);
+    expect((await h.target.load()).kind).toBe("ready");
+    const before = await stored(at);
+    const older = await h.hold(true);
+    expect((await h.target.load()).kind).toBe("ready");
+    older.finish();
+    expect(await older.load).toEqual({ kind: "unavailable" });
+    await h.target.settled();
+    expect(h.target.snapshot()).toMatchObject(unavailable);
+    expect(await stored(at)).toEqual(before);
+    const next = await h.target.load();
+    expect(next.kind === "ready" && documentsEqual(next.document, text("staro"))).toBe(true);
+    expect(h.target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+  });
+
+  it("(b) a held read that throws after a newer stale halts, and the newer recovery comes back and resumes", async () => {
+    const at = scope();
+    const { real, writer } = await ready(at);
+    const h = holding(real);
+    expect((await h.target.load()).kind).toBe("ready");
+    const older = await h.hold(true);
+    await type(writer, "novo");
+    const before = await stored(at);
+    const stale = { kind: "recovery", reason: "stale", document: text("novo") };
+    expect(await h.target.load()).toEqual(stale);
+    older.finish();
+    expect(await older.load).toEqual({ kind: "unavailable" });
+    await h.target.settled();
+    expect(h.target.snapshot()).toMatchObject(unavailable);
+    expect(await stored(at)).toEqual(before);
+    expect(await h.target.load()).toEqual(stale);
+    expect((await h.target.resume(text("izbor"))).kind).toBe("ready");
+    await h.target.settled();
+    expect((await rows(at)).at(-1)).toEqual(text("izbor"));
+    expect(h.target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+  });
+
+  it("(b) a held read that throws after a newer corrupt halts, and the next load() finds the damage again", async () => {
+    const at = scope();
+    const { real } = await ready(at);
+    const h = holding(real);
+    expect((await h.target.load()).kind).toBe("ready");
+    const older = await h.hold(true);
+    const db = (real as unknown as { db: Dexie }).db;
+    await db.table("meta").update(DOC, { localSeq: 999 });
+    const corrupt = { kind: "recovery", reason: "corrupt", document: null };
+    expect(await h.target.load()).toEqual(corrupt);
+    older.finish();
+    expect(await older.load).toEqual({ kind: "unavailable" });
+    await h.target.settled();
+    expect(h.target.snapshot()).toMatchObject(unavailable);
+    expect(await h.target.load()).toEqual(corrupt);
+    expect(h.target.snapshot()).toMatchObject({ state: "RECOVERY_REQUIRED", failure: "corrupt" });
+  });
+
+  it("(b) control: a read that throws with no newer outcome halts the saver", async () => {
+    const at = scope();
+    const { real } = await ready(at);
+    const h = holding(real);
+    expect((await h.target.load()).kind).toBe("ready");
+    h.failNext();
+    expect(await h.target.load()).toEqual({ kind: "unavailable" });
+    expect(h.target.snapshot()).toMatchObject(unavailable);
+    expect((await h.target.load()).kind).toBe("ready");
+  });
+
+  it("(a) a held ready read never lifts a newer corrupt", async () => {
+    const at = scope();
+    const { real } = await ready(at);
+    const h = holding(real);
+    expect((await h.target.load()).kind).toBe("ready");
+    const older = await h.hold(false);
+    const db = (real as unknown as { db: Dexie }).db;
+    await db.table("meta").update(DOC, { localSeq: 999 });
+    const corrupt = { kind: "recovery", reason: "corrupt", document: null };
+    expect(await h.target.load()).toEqual(corrupt);
+    older.finish();
+    expect(await older.load).toEqual(corrupt);
+    await h.target.settled();
+    expect(h.target.snapshot()).toMatchObject({ state: "RECOVERY_REQUIRED", failure: "corrupt" });
+  });
+
+  it("(a) a held ready read never lifts a newer failure with text the journal no longer holds", async () => {
+    const at = scope();
+    const { real, writer } = await ready(at);
+    const h = holding(real);
+    expect((await h.target.load()).kind).toBe("ready");
+    const older = await h.hold(false);
+    h.failNext();
+    expect(await h.target.load()).toEqual({ kind: "unavailable" });
+    await type(writer, "novo");
+    older.finish();
+    expect(await older.load).toEqual({ kind: "recovery", reason: "stale", document: text("novo") });
+    await h.target.settled();
+    expect(h.target.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+  });
+
+  it("a journal damaged for good is read at most twice per load(), never in a loop", async () => {
+    const at = scope();
+    const { real } = await ready(at);
+    const h = holding(real);
+    expect((await h.target.load()).kind).toBe("ready");
+    const db = (real as unknown as { db: Dexie }).db;
+    await db.table("meta").update(DOC, { localSeq: 999 });
+    for (let i = 0; i < 3; i += 1) {
+      const before = h.calls();
+      expect(await h.target.load()).toEqual({ kind: "recovery", reason: "corrupt", document: null });
+      expect(h.calls() - before).toBe(2);
+    }
+    const fresh = holding(real);
+    expect(await fresh.target.load()).toEqual({ kind: "recovery", reason: "corrupt", document: null });
+    expect(fresh.calls()).toBe(1);
+  });
+  // The tests below pin down guards a mutant could drop while every other
+  // test still passed (#206 qa206l MANJE 1 to 4, review 6108190306).
+  const tables = ["snapshots", "pending", "meta"] as const;
+  const dbOf = (real: AtomicDexieJournal) => (real as unknown as { db: Dexie }).db;
+  /** Every stored row, to put the journal back to this point later. */
+  async function capture(real: AtomicDexieJournal): Promise<unknown[][]> {
+    return Promise.all(tables.map((name) => dbOf(real).table(name).toArray()));
+  }
+  /** Puts the journal back to `rows` in one transaction: it went back. */
+  async function rollBack(real: AtomicDexieJournal, rows: unknown[][]): Promise<void> {
+    const db = dbOf(real);
+    await db.transaction("rw", [...tables], async () => {
+      for (const [i, name] of tables.entries()) {
+        await db.table(name).clear();
+        await db.table(name).bulkPut(rows[i]);
+      }
+    });
+  }
+
+  it("a stale recovery after the journal went back resumes with the sequence it read (#206 qa206l MANJE 1)", async () => {
+    const at = scope();
+    const { real, writer } = await ready(at);
+    const older = await capture(real);
+    await type(writer, "drugo");
+    const h = holding(real);
+    expect((await h.target.load()).kind).toBe("ready");
+    await rollBack(real, older);
+    expect(await h.target.load()).toEqual({ kind: "recovery", reason: "stale", document: text("staro") });
+    // The next write must expect the sequence the journal holds now, not the
+    // highest one this saver ever saw.
+    expect((await h.target.resume(text("izbor"))).kind).toBe("ready");
+    await h.target.settled();
+    expect((await rows(at)).at(-1)).toEqual(text("izbor"));
+    expect(h.target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+  });
+
+  it("a journal that went back is read twice by every later load(), not once (#206 qa206l MANJE 4)", async () => {
+    const at = scope();
+    const { real, writer } = await ready(at);
+    const older = await capture(real);
+    await type(writer, "drugo");
+    const h = holding(real);
+    expect((await h.target.load()).kind).toBe("ready");
+    await rollBack(real, older);
+    // The highest sequence seen is kept, so each load() finds the journal
+    // behind it and checks once more before it shows the older text.
+    const reads: number[] = [];
+    for (let i = 0; i < 3; i += 1) {
+      const before = h.calls();
+      expect(await h.target.load()).toEqual({ kind: "recovery", reason: "stale", document: text("staro") });
+      reads.push(h.calls() - before);
+    }
+    expect(reads).toEqual([2, 2, 2]);
+  });
+
+  it("a damaged meta put back is read once per load(): a refused read never raises the floor", async () => {
+    const at = scope();
+    const { real } = await ready(at);
+    const h = holding(real);
+    expect((await h.target.load()).kind).toBe("ready");
+    await dbOf(real).table("meta").update(DOC, { localSeq: 999 });
+    expect(await h.target.load()).toEqual({ kind: "recovery", reason: "corrupt", document: null });
+    await dbOf(real).table("meta").update(DOC, { localSeq: 1 });
+    for (let i = 0; i < 3; i += 1) {
+      const before = h.calls();
+      const loaded = await h.target.load();
+      expect(loaded.kind === "ready" && documentsEqual(loaded.document, text("staro"))).toBe(true);
+      expect(h.calls() - before).toBe(1);
+    }
+  });
+
+  it("resume() overtaken by a later stale load() still writes the chosen text (#206 qa206l MANJE 2)", async () => {
+    const at = scope();
+    const { real, writer } = await ready(at);
+    const h = holding(real);
+    expect((await h.target.load()).kind).toBe("ready");
+    await type(writer, "novo");
+    await type(h.target, "moje");
+    const stale = { kind: "recovery", reason: "stale", document: text("novo") };
+    expect(await h.target.load()).toEqual(stale);
+    const resumed = await h.hold(false, () => h.target.resume(text("izbor")));
+    // Started later, this load() is applied first; the overtaken resume()
+    // reads again with the text the author chose from, so it is not stale.
+    expect(await h.target.load()).toEqual(stale);
+    resumed.finish();
+    expect(await resumed.load).toEqual({ kind: "ready", document: text("novo") });
+    await h.target.settled();
+    expect((await rows(at)).at(-1)).toEqual(text("izbor"));
+    expect(h.target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+  });
+
+  it("(b) an older read that throws never lets a middle read apply over a newer corrupt (#206 qa206l MANJE 3)", async () => {
+    const at = scope();
+    const { real, writer } = await ready(at);
+    const h = holding(real);
+    expect((await h.target.load()).kind).toBe("ready");
+    const first = await h.hold(true);
+    const middle = await h.hold(false);
+    await type(writer, "novo");
+    await dbOf(real).table("meta").update(DOC, { localSeq: 999 });
+    const corrupt = { kind: "recovery", reason: "corrupt", document: null };
+    expect(await h.target.load()).toEqual(corrupt);
+    first.finish();
+    expect(await first.load).toEqual({ kind: "unavailable" });
+    // The throw keeps the newest applied read, so the middle read, which read
+    // "staro", is behind it and reads the damage again.
+    middle.finish();
+    expect(await middle.load).toEqual(corrupt);
+    await h.target.settled();
+    expect(h.target.snapshot()).toMatchObject({ state: "RECOVERY_REQUIRED", failure: "corrupt" });
+    expect((await rows(at)).at(-1)).toEqual(text("novo"));
   });
 });
