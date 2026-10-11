@@ -239,7 +239,10 @@ export function findForbiddenTerms(text: string, lang?: Language): ForbiddenTerm
  * what stands on the two sides of an unknown part or of an element boundary
  * is read as one word. The scan cannot know that such a part shows anything
  * (`Sum<span />njivo`) or that an element is set apart from its neighbours,
- * so no boundary keeps an entry from being found. A contextual entry is read
+ * so a boundary does not keep an entry from being found. The parts next to
+ * each other are read closed up by themselves as well (`inWindows`), so that
+ * what stands before or after an entry does not touch it. What this covers
+ * is one run of boundaries inside an entry. A contextual entry is read
  * closed up only when its word is not whole otherwise.
  *
  * This is the stricter side on purpose. Two elements that do stand apart
@@ -259,12 +262,69 @@ export function findForbiddenTermsInMarkup(joined: string, spaced: string, close
   const tightPhrases = foldPhrases(closedUpPastQuotes(joined));
   const shownPhrases = foldPhrases(joined);
   const apartPhrases = foldPhrases(spaced);
+  const windows = closedUp ? inWindows(joined) : NO_TERMS;
   return FORBIDDEN_TERMS.filter((entry) => {
-    if (!entry.contextual) return entry.pattern.test(shown) || entry.pattern.test(apart) || (closedUp && (entry.pattern.test(closed) || entry.pattern.test(tight)));
+    if (!entry.contextual) return entry.pattern.test(shown) || entry.pattern.test(apart) || (closedUp && (entry.pattern.test(closed) || entry.pattern.test(tight) || windows.has(entry)));
     if (entry.pattern.test(shownPhrases) && (entry.pattern.test(apartPhrases) || !entry.contextual.word.test(apartPhrases))) return true;
     // The word itself put together across something unknown: there is no whole word to judge without closing it.
-    return closedUp && !entry.contextual.word.test(shownPhrases) && (entry.pattern.test(closedPhrases) || entry.pattern.test(tightPhrases));
+    return closedUp && !entry.contextual.word.test(shownPhrases) && (entry.pattern.test(closedPhrases) || entry.pattern.test(tightPhrases) || windows.has(entry));
   });
+}
+
+/**
+ * The most letters, digits and spaces that the parts strictly inside a window
+ * may hold. An entry that starts in the first part of a window and ends in
+ * its last one has all of them inside it, and the longest text a pattern is
+ * written for has 34 characters ("umjetne inteligencije ga je napisao"); the
+ * rest is room for longer endings. A wider window adds nothing that should
+ * be found: a pattern keeps letters away from its ends and never asks for
+ * one there, so what a window finds, the narrowest window around the entry
+ * finds as well.
+ */
+const WINDOW = 48;
+/** Parts kept on each side of a window, apart from it: the other words of a phrase, at most four. */
+const CONTEXT = 4;
+const NO_TERMS: ReadonlySet<ForbiddenTerm> = new Set();
+/** What was found in a piece of text; the same pieces come back for every element around them. */
+const foundInPiece = new Map<string, readonly ForbiddenTerm[]>();
+
+/**
+ * Entries in `joined` read in windows. With every `PHRASE_BREAK` taken out at
+ * once, the part before an entry touches it, and most patterns do not match
+ * a word that a letter touches. So every run of parts next to each other
+ * that an entry can reach across (`WINDOW`) is also read closed up by
+ * itself, with a few parts around it kept apart. Parts are measured as the
+ * dictionary reads them, so a part of invisible characters has no length.
+ * The number of readings grows with the number of parts, not with its square.
+ */
+function inWindows(joined: string): ReadonlySet<ForbiddenTerm> {
+  const parts = joined.split(PHRASE_BREAK).filter((part) => part !== "");
+  if (parts.length < 3) return NO_TERMS;
+  const quoted = [...joined].some((char) => QUOTATION_MARKS.has(char.codePointAt(0)!));
+  const found = new Set<ForbiddenTerm>();
+  for (let start = 0; start < parts.length - 1; start += 1) {
+    const before = parts.slice(Math.max(0, start - CONTEXT), start);
+    for (let end = start + 2, within = 0; end <= parts.length && within <= WINDOW; within += foldText(parts[end - 1]!).length, end += 1) {
+      const inside = parts.slice(start, end);
+      const after = parts.slice(end, end + CONTEXT);
+      for (const closed of new Set([inside.join(""), quoted ? closedUpPastQuotes(inside.join(PHRASE_BREAK)) : inside.join("")])) {
+        const piece = [...before, closed, ...after].join(PHRASE_BREAK);
+        let terms = foundInPiece.get(piece);
+        if (!terms) {
+          const [words, phrases] = [foldText(piece), foldPhrases(piece)];
+          terms = FORBIDDEN_TERMS.filter((entry) => entry.pattern.test(entry.contextual ? phrases : words));
+          if (foundInPiece.size >= 200_000) foundInPiece.clear();
+          foundInPiece.set(piece, terms);
+        }
+        for (const term of terms) {
+          // A contextual word that is whole without the last part is judged there: that part, closed up after the place, would hide the place.
+          const narrower = foldPhrases(closedUpPastQuotes(inside.slice(0, -1).join(PHRASE_BREAK)));
+          if (!term.contextual?.word.test(narrower)) found.add(term);
+        }
+      }
+    }
+  }
+  return found;
 }
 
 /** The quotation marks of Croatian and English outside ASCII. */

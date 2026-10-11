@@ -139,3 +139,23 @@ test.prop([sample, fc.nat(), quotes, quotes, fc.integer({ min: 1, max: 3 })])("a
   // And nothing is reported by the guard in its place, so the dictionary is what holds here.
   expect(unreadableCharacters(closedUpPastQuotes(joined))).toEqual([]);
 });
+
+// An entry cut by boundaries is found whatever stands in the parts next to
+// it: words that would touch it once every boundary is taken out, the letter
+// one entry may not follow, quotation marks at the cuts.
+const NEIGHBOURS = ["Opis", "Rok", "Zadatak", "Kraj", "i", "na", "2", "Rok predaje.", "\u201ERok\u201D"];
+const neighbours = fc.array(fc.constantFrom(...NEIGHBOURS), { maxLength: 4 });
+
+test.prop([sample, fc.array(fc.nat(), { minLength: 1, maxLength: 20 }), neighbours, neighbours, fc.boolean()])(
+  "an entry cut by boundaries is found whatever stands next to it",
+  (text, cuts, before, after, upper) => {
+    const letters = [...(upper ? text.toLocaleUpperCase("hr") : text)];
+    const places = letters.flatMap((_, index) => (index > 0 && letters[index - 1] !== " " && letters[index] !== " " ? [index] : []));
+    const at = new Set(cuts.map((cut) => places[cut % places.length]!));
+    const cut = letters.map((letter, index) => (at.has(index) ? PHRASE_BREAK + letter : letter)).join("");
+    const joined = [...before, cut, ...after].join(PHRASE_BREAK);
+    const expected = findForbiddenTerms(text).map((term) => term.entry);
+    const found = findForbiddenTermsInMarkup(joined, joined).map((term) => term.entry);
+    for (const entry of expected) expect(found).toContain(entry);
+  },
+);

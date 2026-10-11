@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { CLOSED_UP_NOTE, UNREADABLE_HINTS, findUnreadableText, scanUiText } from "../../scripts/forbidden-terms/scan";
-import { PHRASE_BREAK, closedUpPastQuotes, findForbiddenTerms, unreadableCharacters } from "../../scripts/forbidden-terms/terms";
+import { PHRASE_BREAK, closedUpPastQuotes, findForbiddenTerms, findForbiddenTermsInMarkup, unreadableCharacters } from "../../scripts/forbidden-terms/terms";
 
 const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const HR = "spremljeno (bez pojašnjenja)";
@@ -90,6 +90,83 @@ describe("text closed up over unknown parts", () => {
     const found = scanUiText(root!);
     expect(found.at(-1)!.text).toBe(text);
     for (const finding of found) expect(finding.text).not.toContain(CLOSED_UP_NOTE);
+  });
+});
+
+// With every boundary taken out at once, what stands before an entry touches
+// it, and most entries are not found in a word that a letter touches. So the
+// parts next to each other are also read closed up by themselves.
+describe("an entry cut by boundaries, whatever stands next to it", () => {
+  const B = PHRASE_BREAK;
+  const EN = "saved (without saying where)";
+  /** What it is, the parts of the text, the entries found. */
+  const NEIGHBOURS: readonly [string, readonly string[], readonly string[]][] = [
+    ["two parts, a part before", ["Opis", "hid", "den"], ["hidden"]],
+    ["two parts, a part after", ["hid", "den", "Opis"], ["hidden"]],
+    ["two parts, parts on both sides", ["Opis", "hid", "den", "Kraj"], ["hidden"]],
+    ["two parts, several parts on both sides", ["Rok", "Opis", "Kopi", "rano", "Kraj", "Dalje"], ["kopirano"]],
+    ["three parts, a part before", ["Opis", "Sus", "pic", "ious"], ["suspicious"]],
+    ["three parts, parts on both sides", ["Opis", "Skri", "ve", "no", "Kraj"], ["skriveno"]],
+    ["five parts, parts on both sides", ["Opis", "Vje", "ro", "jat", "no", "st", "Kraj"], ["vjerojatnost"]],
+    ["a part for every letter, parts on both sides", ["Opis", ..."hidden", "Kraj"], ["hidden"]],
+    ["a part for every letter of the longest word, parts on both sides", ["Opis", ..."vjerojatnost", "Kraj"], ["vjerojatnost"]],
+    ["a part for every letter of a phrase", ["Opis", ..."proof of authorship", "Kraj"], ["proof of authorship"]],
+    ["the part before ends in the one letter the entry does not follow", ["Zadatak", "ri", "zik"], ["rizik"]],
+    ["an entry that must end where it ends, a part after", ["ano", "malan", "Opis"], ["anomalija, anomaly"]],
+    ["an entry that must end where it ends, parts on both sides", ["Opis", "written by A", "I", "Kraj"], ["written by AI"]],
+    ["a phrase with its first word whole in the part before", ["Opis", "nestali", "po", "daci", "Kraj"], ["nestali podaci"]],
+    ["a phrase with its last word whole in the part after", ["Opis", "ne", "stali", "podaci", "Kraj"], ["nestali podaci"]],
+    ["a phrase of four words, the last one cut", ["Opis", "warning", "about", "the", "stu", "dent", "Kraj"], ["warning about the student"]],
+    ["a phrase with a cut in two of its words", ["Opis", "ne", "stali po", "daci", "Kraj"], ["nestali podaci"]],
+    ["a phrase with a cut in two of its words and a quotation mark for its space", ["Opis", "ne", `stali${cp(0x201e)}`, "po", "daci", "Kraj"], ["nestali podaci"]],
+    ["parts of invisible characters inside the entry", ["Opis", "hid", String.fromCodePoint(0x200b).repeat(80), String.fromCodePoint(0xad).repeat(80), "den", "Kraj"], ["hidden"]],
+    ["quotation marks at the cuts", ["Opis", `hid${cp(0x201d)}`, `${cp(0x201e)}den`, "Kraj"], ["hidden"]],
+    ["a contextual word, a part before", ["Opis", "Spre", "mljeno"], [HR]],
+    ["a contextual word, parts on both sides", ["Opis", "sa", "ved", "Kraj"], [EN]],
+    ["a contextual word cut, its place in the part after", ["Opis", "Spre", "mljeno", " na uređaju"], [HR]],
+    // Nothing to report.
+    ["plain words", ["Opis", "Rok", "predaje", "Kraj"], []],
+    ["plain words that hold the letters of an entry between them", ["Opis", "hid", "e", "den", "Kraj"], []],
+    ["an entry with a long part inside it", ["Opis", "hid", "Rok predaje zadatka je sutra u podne, a ne prekosutra navečer", "den"], []],
+    ["a contextual word cut, with its place in the same part", ["Opis", "Spre", "mljeno na uređaju", "Kraj"], []],
+    ["a contextual phrase whole", ["Opis", "Spremljeno na uređaju", "Kraj"], []],
+    ["a contextual word cut twice, with its place in the same part", ["Opis", "Spre", "mlje", "no na uređaju", "Kraj", "Dalje"], []],
+    ["a contextual word cut at quotation marks, with its place in the same part", ["Opis", `Spre${cp(0x201d)}`, `${cp(0x201e)}mljeno na uređaju`, "Kraj"], []],
+    ["a contextual word cut, with its place in the same part and quotation marks around",["Opis", `${cp(0x201e)}Spre`, `mljeno na uređaju${cp(0x201d)}`, "Kraj"], []],
+    ["a word that only ends like an entry", ["Opis", "aste", "risk"], ["risk"]],
+  ];
+
+  it.each(NEIGHBOURS)("%s", (_, parts, expected) => {
+    const joined = parts.join(B);
+    expect(findForbiddenTermsInMarkup(joined, joined).map((term) => term.entry)).toEqual(expected);
+    // Empty parts between them change nothing.
+    const padded = parts.join(B + B);
+    expect(findForbiddenTermsInMarkup(padded, padded).map((term) => term.entry)).toEqual(expected);
+  });
+
+  it.each([
+    ["items of a list", "<ul><li>Opis</li><li>hid</li><li>den</li><li>Kraj</li></ul>", "hidden", "Opis | hid | den | Kraj"],
+    ["cells of a row", "<tr><td>Opis</td><td>Kopi</td><td>rano</td></tr>", "kopirano", "Opis | Kopi | rano"],
+    ["unknown parts", "<p>Opis{n}Skri{n}veno{n}Kraj</p>", "skriveno", "Opis | Skri | veno | Kraj"],
+    ["five cells of a row", "<tr><td>Opis</td><td>Sus</td><td>pic</td><td>ious</td><td>Kraj</td></tr>", "suspicious", "Opis | Sus | pic | ious | Kraj"],
+    ["a contextual word in items of a list", "<ul><li>Opis</li><li>Spre</li><li>mljeno</li></ul>", HR, "Opis | Spre | mljeno"],
+  ])("is found in %s, and the finding says that the parts were joined", (_, line, entry, parts) => {
+    write("src/components/Case.tsx", component([line]));
+    const found = scanUiText(root!);
+    expect(found.map((finding) => finding.terms.map((term) => term.entry))).toContainEqual([entry]);
+    expect(found.map((finding) => finding.text)).toContain(`${parts} (${CLOSED_UP_NOTE})`);
+  });
+
+  it("reads the same parts again by what stands around them", () => {
+    const entries = (parts: readonly string[]): string[] => findForbiddenTermsInMarkup(parts.join(B), parts.join(B)).map((term) => term.entry);
+    expect(entries(["Opis", "x", "po", "daci", "Kraj"])).toEqual([]);
+    expect(entries(["Opis", "nestali", "po", "daci", "Kraj"])).toEqual(["nestali podaci"]);
+    expect(entries(["Opis", "x", "po", "daci", "Kraj"])).toEqual([]);
+  });
+
+  it("adds nothing when the text is not read closed up", () => {
+    const joined = ["Opis", "hid", "den", "Kraj"].join(B);
+    expect(findForbiddenTermsInMarkup(joined, joined, false)).toEqual([]);
   });
 });
 
