@@ -93,7 +93,7 @@ test("§3: only read calls pass the guard", () => {
     ["gh", "pr", "review", "1"], ["gh", "pr", "ready", "1"], ["gh", "pr", "close", "1"], ["gh", "issue", "comment", "87"],
     ["gh", "issue", "edit", "87"], ["gh", "run", "rerun", "1"], ["gh", "run", "cancel", "1"], ["gh", "workflow", "run", "ci"],
     ["gh", "pr", "list", "--web"], ["gh", "pr", "list", "--state", "all", "--json", "number"],
-    ["gh", "api", "--paginate", "--slurp", "repos/{owner}/{repo}/issues/87/comments"], ["gh", "api", "x", "y"], ["gh", "api"],
+    ["gh", "api", "--paginate", "--slurp", "repos/{owner}/{repo}/issues/87/comments"], ["gh", "api", "x", "y"], ["gh", "api"], ["gh", "api", ""],
     ["git", "fetch", "origin"], ["git", "worktree", "prune"], ["git", "worktree", "remove", "x"],
     ["git", "push"], ["git", "branch", "-d", "x"], ["pnpm", "install"], ["node", "scripts/orchestrator/worktree-clean.mjs"],
   ];
