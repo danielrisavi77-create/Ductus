@@ -871,8 +871,12 @@ function findingsIn(file: string, read: Read): Finding[] {
     // the text as written, so the finding shows the parts and says what joined them.
     const open = findForbiddenTermsInMarkup(hit.text, hit.spaced, false);
     const asWritten = terms.some((term) => open.includes(term));
+    // The mark of a boundary is no character and is never shown: the parts are
+    // shown trimmed, with " | " between them, and a boundary at an end of the
+    // text shows nothing. A text without a boundary is shown as it is.
     const parts = hit.text.split(PHRASE_BREAK).map((part) => part.trim()).filter((part) => part !== "");
-    const text = asWritten ? hit.text : `${parts.join(" | ")} (${CLOSED_UP_NOTE})`;
+    const shown = hit.text.includes(PHRASE_BREAK) ? parts.join(" | ") : hit.text;
+    const text = asWritten ? shown : `${parts.join(" | ")} (${CLOSED_UP_NOTE})`;
     placed.push({ ...unit, finding: { file, line: unit.line, text, terms } });
   }
   return placed.sort((a, b) => a.at - b.at).map((entry) => entry.finding);

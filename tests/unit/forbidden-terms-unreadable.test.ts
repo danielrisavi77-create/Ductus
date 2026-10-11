@@ -86,8 +86,8 @@ describe("text closed up over unknown parts", () => {
   it.each([
     ["an entry in one piece", "<p>Sumnjivo</p>", "Sumnjivo"],
     ["an entry split by an inline element", "<p>Sum<b>njivo</b></p>", "Sumnjivo"],
-    ["a phrase over a block boundary", "<div>Nestali<p>podaci</p></div>", `Nestali${PHRASE_BREAK}podaci${PHRASE_BREAK}`],
-    ["a bare contextual word", "<p>Spremljeno <Icon /> na uređaju</p>", `Spremljeno ${PHRASE_BREAK} na uređaju`],
+    ["a phrase over a block boundary", "<div>Nestali<p>podaci</p></div>", "Nestali | podaci"],
+    ["a bare contextual word", "<p>Spremljeno <Icon /> na uređaju</p>", "Spremljeno | na uređaju"],
   ])("leaves the text of a finding that needs no joining as it was: %s", (_, line, text) => {
     write("src/components/Case.tsx", component([line]));
     const found = scanUiText(root!);
@@ -854,6 +854,67 @@ describe("a line break written in the text is not a boundary to close up", () =>
       expect(findUnreadableText(root!).map((entry) => entry.reason.match(/U\+[0-9A-F]+/g)), content).toContainEqual(["U+FFFF"]);
       if (content.includes("Sum")) expect(entries(), content).toContain("sumnjivo");
     }
+  });
+});
+
+// Review of 4898e6f: the mark of a boundary is no character, so a finding
+// that showed its text with the mark in it could not be read in a log. A
+// finding shows the parts trimmed, with " | " between them, and nothing for
+// a boundary at an end of the text.
+describe("the text of a finding does not show the mark of a boundary", () => {
+  const B = PHRASE_BREAK;
+  const shown = (line: string): string[] => {
+    write("src/components/Case.tsx", component([line]));
+    return scanUiText(root!).map((finding) => finding.text);
+  };
+  const placed = (line: string): string[] => {
+    write("src/components/Case.tsx", component([line]));
+    return scanUiText(root!).map((finding) => `${finding.file}:${finding.line} ${finding.terms.map((term) => term.entry).join(", ")}`);
+  };
+
+  /** What it is, the JSX, the text of every finding. */
+  const TEXTS: readonly [string, string, readonly string[]][] = [
+    ["a phrase over a block boundary", "<div>Nestali<p>podaci</p></div>", ["Nestali | podaci"]],
+    ["a phrase over two block boundaries", "<div><p>Nestali</p><p>podaci</p></div>", ["Nestali | podaci"]],
+    ["a bare contextual word before an unknown part", "<p>Spremljeno <Icon /> na uređaju</p>", ["Spremljeno | na uređaju"]],
+    ["a bare contextual word before a computed value", "<p>Saved {n} on this device</p>", ["Saved | on this device"]],
+    ["a bare contextual word between two unknown parts", "<p>{n} Spremljeno {n}</p>", ["Spremljeno"]],
+    ["a bare contextual word in a template", "<p>{`Spremljeno ${n} na uređaju`}</p>", ["Spremljeno | na uređaju"]],
+    ["a word closed up over an unknown part", "<p>Sum{n}njivo</p>", [`Sum | njivo (${CLOSED_UP_NOTE})`]],
+    ["a word closed up over items of a list", "<ul><li>Opis</li><li>hid</li><li>den</li></ul>", [`Opis | hid | den (${CLOSED_UP_NOTE})`]],
+    ["a text without a boundary", "<p>Nestali <b>podaci</b> </p>", ["Nestali podaci "]],
+  ];
+
+  it.each(TEXTS)("%s", (_, line, texts) => {
+    expect(shown(line)).toEqual(texts);
+  });
+
+  it("shows no finding of either kind with the mark in it", () => {
+    const texts = TEXTS.flatMap(([, line]) => shown(line));
+    expect(texts.filter((text) => text.includes(CLOSED_UP_NOTE)).length).toBeGreaterThan(0);
+    expect(texts.filter((text) => !text.includes(CLOSED_UP_NOTE) && text.includes(" | ")).length).toBeGreaterThan(0);
+    for (const text of texts) expect(text).not.toContain(B);
+    for (const text of texts) expect(text).not.toMatch(/\p{Cn}/u);
+  });
+
+  // " | " is only how a boundary is shown: a bar that a text writes is read as the text it is.
+  it.each([
+    ["<p>Spremljeno <Icon /> na uređaju</p>", "<p>Spremljeno | <Icon /> | na uređaju</p>"],
+    ["<div>Nestali<p>podaci</p></div>", "<div>Nestali |<p>| podaci</p></div>"],
+    ["<p>Sum{n}njivo</p>", "<p>Sum{n}njivo | Rok</p>"],
+  ])("reports the same entries in the same place when the text writes a bar next to a boundary: %s", (plain, barred) => {
+    const found = placed(plain);
+    expect(found).toHaveLength(1);
+    expect(placed(barred)).toEqual(found);
+  });
+
+  it("does not take a bar that a text writes for a boundary", () => {
+    // Written apart with a bar, two halves of a word are two words, and nothing is closed up over the bar.
+    expect(shown("<p>Sum | njivo</p>")).toEqual([]);
+    expect(shown("<p>Spre | mljeno</p>")).toEqual([]);
+    // A phrase with a bar between its words is found as the text it is, with or without a boundary.
+    expect(placed("<p>Nestali | podaci</p>")).toEqual(placed("<p>Nestali podaci</p>"));
+    expect(shown("<p>Nestali | podaci</p>")).toEqual(["Nestali | podaci"]);
   });
 });
 
