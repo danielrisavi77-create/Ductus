@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { CLOSED_UP_NOTE, UNREADABLE_HINTS, findUnreadableText, scanUiText } from "../../scripts/forbidden-terms/scan";
-import { PHRASE_BREAK, findForbiddenTerms, unreadableCharacters } from "../../scripts/forbidden-terms/terms";
+import { PHRASE_BREAK, closedUpPastQuotes, findForbiddenTerms, unreadableCharacters } from "../../scripts/forbidden-terms/terms";
 
 const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const HR = "spremljeno (bez pojašnjenja)";
@@ -284,7 +284,7 @@ describe("text the scan cannot read", () => {
       expect(scanUiText(root!)).toEqual([]);
       const found = findUnreadableText(root!);
       expect(found.map((entry) => [entry.file, entry.line])).toEqual([["src/components/Case.tsx", 2]]);
-      expect(found[0]!.reason).toBe(`${between}: U+${code.toString(16).toUpperCase()} (${UNREADABLE_HINTS.characters})`);
+      expect(found[0]!.reason).toBe(`${between}: U+${code.toString(16).toUpperCase()} (${UNREADABLE_HINTS.meeting})`);
     },
   );
 
@@ -299,7 +299,7 @@ describe("text the scan cannot read", () => {
     ["a symbol in place of the last letter, with an unknown part before it", `<p>Sumnjiv{n}{${part(0x2218)}}</p>`, "U+2218"],
   ])("reports %s", (_, line, code) => {
     write("src/components/Case.tsx", component([line]));
-    expect(findUnreadableText(root!).map((entry) => entry.reason)).toEqual([`${between}: ${code} (${UNREADABLE_HINTS.characters})`]);
+    expect(findUnreadableText(root!).map((entry) => entry.reason)).toEqual([`${between}: ${code} (${UNREADABLE_HINTS.meeting})`]);
   });
 
   it.each([
@@ -315,6 +315,78 @@ describe("text the scan cannot read", () => {
   ])("does not report %s", (_, line) => {
     write("src/components/Case.tsx", component([line]));
     expect(findUnreadableText(root!)).toEqual([]);
+  });
+
+  // Review of 92793ef: a paragraph or a list item that begins or ends with a
+  // quotation mark is ordinary text. The guard leaves out Croatian and English
+  // quotation marks next to an element boundary, and may do so only because
+  // the dictionary reads the text without them: an entry cut there is found.
+  const QUOTES: readonly [string, number, number][] = [
+    ["Croatian quotation marks", 0x201e, 0x201d],
+    ["English quotation marks", 0x201c, 0x201d],
+    ["angle quotation marks", 0xbb, 0xab],
+    ["single quotation marks", 0x2018, 0x2019],
+    ["low single quotation mark", 0x201a, 0x2018],
+  ];
+  const BLOCKS: readonly [string, (first: string, second: string, third: string) => string][] = [
+    ["paragraphs", (first, second, third) => `<div><p>${first}</p><p>${second}</p><p>${third}</p></div>`],
+    ["items of a list", (first, second, third) => `<ul><li>${first}</li><li>${second}</li><li>${third}</li></ul>`],
+    ["a heading and paragraphs", (first, second, third) => `<section><h2>${first}</h2><p>${second}</p><p>${third}</p></section>`],
+  ];
+  const QUOTED = BLOCKS.flatMap(([blocks, build]) => QUOTES.map(([marks, open, close]) => [blocks, marks, build, cp(open), cp(close)] as const));
+
+  it.each(QUOTED)("does not report %s that begin or end with %s", (_, __, build, open, close) => {
+    for (const [first, second, third] of [
+      ["Pritisni gumb.", `${open}Predaj${close}`, "Zatim pričekaj"],
+      ["Pritisni gumb", `${open}Predaj${close}.`, "Zatim pričekaj"],
+      [`Što znači ${open}predano${close}?`, "Rad je predan", `(${open}Rok${close})`],
+      [`Gumb ${open}Predaj${close}`, `${open}Natrag${close}, ${open}Dalje${close}`, "Kraj"],
+    ] as const) {
+      write("src/components/Case.tsx", component([build(first, second, third)]));
+      expect(findUnreadableText(root!)).toEqual([]);
+      expect(scanUiText(root!)).toEqual([]);
+    }
+  });
+
+  it.each(QUOTED)("finds an entry cut between %s with %s at the cut", (_, __, build, open, close) => {
+    for (const [first, second] of [
+      ["Sum", `${open}njivo`],
+      [`Sum${close}`, "njivo"],
+      [`Sum${close}`, `${open}njivo`],
+      [`Sum${close}${close}`, `${open}${open}njivo`],
+      [`Ri${open}`, `${close}zik`],
+    ] as const) {
+      write("src/components/Case.tsx", component([build(first, second, "Kraj")]));
+      const found = scanUiText(root!);
+      expect(found.flatMap((finding) => finding.terms.map((term) => term.entry))).toHaveLength(1);
+      expect(found[0]!.text).toContain(CLOSED_UP_NOTE);
+    }
+    write("src/components/Case.tsx", component([build("Spre", `${open}mljeno${close}`, "Kraj")]));
+    expect(scanUiText(root!).flatMap((finding) => finding.terms.map((term) => term.entry))).toEqual([HR]);
+  });
+
+  it.each([
+    ["a quotation mark between two letters of one string", `<p>{"Gumb${cp(0x201e)}Predaj"}</p>`, "U+201E"],
+    ["a quotation mark at an inline boundary, where no phrase ends", `<p><b>Gumb</b>${cp(0x201e)}Predaj${cp(0x201d)}</p>`, "U+201E"],
+    ["a bracket outside ASCII at the start of a block", `<div><p>Pritisni gumb.</p><p>${cp(0xff08)}Predaj${cp(0xff09)}</p></div>`, "U+FF08"],
+    ["a quotation mark of another language at the start of a block", `<div><p>Pritisni gumb.</p><p>${cp(0x300c)}Predaj${cp(0x300d)}</p></div>`, "U+300C"],
+    ["a mark drawn like a letter next to a quotation mark at a boundary", `<div><p>Sumnj${cp(0x201d)}</p><p>${cp(0x5c0)}vo</p></div>`, "U+05C0"],
+    ["an odd space next to a quotation mark at a boundary", `<div><p>Sum${cp(0x201d)}</p><p>{${part(0x2009)}}njivo</p></div>`, "U+2009"],
+  ])("still reports %s", (_, line, code) => {
+    write("src/components/Case.tsx", component([line]));
+    expect(findUnreadableText(root!).map((entry) => entry.reason.match(/U\+[0-9A-F]+/g))).toContainEqual([code]);
+  });
+
+  it("closes a text up past quotation marks only where a phrase ends between two words", () => {
+    const B = PHRASE_BREAK;
+    const [open, close] = [cp(0x201e), cp(0x201d)];
+    expect(closedUpPastQuotes(`gumb.${B}${open}Predaj${close}${B}Zatim`)).toBe("gumb.PredajZatim");
+    expect(closedUpPastQuotes(`znači ${open}predano${close}?${B}${B}Rad`)).toBe(`znači ${open}predano?Rad`);
+    expect(closedUpPastQuotes(`Sum${close}${B} ${B}${open}njivo`)).toBe("Sum njivo");
+    expect(closedUpPastQuotes(`Gumb${open}Predaj${close} je`)).toBe(`Gumb${open}Predaj${close} je`);
+    expect(closedUpPastQuotes(`Sum${B}${cp(0xff08)}${cp(0x2009)}njivo`)).toBe(`Sum${cp(0xff08)}${cp(0x2009)}njivo`);
+    expect(UNREADABLE_HINTS.meeting).toMatch(/only a plain space sets words apart: an element boundary, a line break and ASCII punctuation do not/);
+    expect(UNREADABLE_HINTS.meeting).toMatch(/Put \{" "\} between the two parts or elements/);
   });
 
   it("reports a character once: in the string that holds it, and not again for the text around it", () => {

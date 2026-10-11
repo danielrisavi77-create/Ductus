@@ -6,7 +6,7 @@ import { fc, test } from "@fast-check/vitest";
 import { expect } from "vitest";
 
 import { findUnreadableText, scanUiText } from "../../scripts/forbidden-terms/scan";
-import { findForbiddenTerms, findForbiddenTermsInMarkup, unreadableCharacters, PHRASE_BREAK } from "../../scripts/forbidden-terms/terms";
+import { closedUpPastQuotes, findForbiddenTerms, findForbiddenTermsInMarkup, unreadableCharacters, PHRASE_BREAK } from "../../scripts/forbidden-terms/terms";
 
 // A dictionary entry with one of its letters swapped for a letter that looks
 // the same, or with a character without ink put into it, never passes: either
@@ -121,3 +121,21 @@ test.prop([sample, fc.nat(), fc.array(fc.constantFrom(...ODD_PARTS), { minLength
     }
   },
 );
+
+// Review of 92793ef: the guard leaves out quotation marks next to an element
+// boundary, so the dictionary has to find an entry cut there, whatever
+// quotation marks stand on the two sides of the cut.
+const QUOTES = [0xab, 0xbb, 0x2018, 0x201a, 0x201c, 0x201d, 0x201e, 0x2019];
+const quotes = fc.array(fc.constantFrom(...QUOTES), { maxLength: 3 }).map((codes) => String.fromCodePoint(...codes));
+
+test.prop([sample, fc.nat(), quotes, quotes, fc.integer({ min: 1, max: 3 })])("an entry cut where a phrase ends is found with quotation marks at the cut", (text, at, before, after, breaks) => {
+  const letters = [...text];
+  const places = letters.flatMap((_, index) => (index > 0 && letters[index - 1] !== " " && letters[index] !== " " ? [index] : []));
+  const index = places[at % places.length]!;
+  const joined = letters.slice(0, index).join("") + before + PHRASE_BREAK.repeat(breaks) + after + letters.slice(index).join("");
+  const expected = findForbiddenTerms(text).map((term) => term.entry);
+  const found = findForbiddenTermsInMarkup(joined, joined).map((term) => term.entry);
+  for (const entry of expected) expect(found).toContain(entry);
+  // And nothing is reported by the guard in its place, so the dictionary is what holds here.
+  expect(unreadableCharacters(closedUpPastQuotes(joined))).toEqual([]);
+});

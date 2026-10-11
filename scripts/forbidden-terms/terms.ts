@@ -254,14 +254,34 @@ export function findForbiddenTermsInMarkup(joined: string, spaced: string, close
   const apart = foldText(spaced);
   const closed = foldText(joined.replaceAll(PHRASE_BREAK, ""));
   const closedPhrases = foldPhrases(joined.replaceAll(PHRASE_BREAK, ""));
+  // Closed up past the quotation marks at a boundary too: see `closedUpPastQuotes`.
+  const tight = foldText(closedUpPastQuotes(joined));
+  const tightPhrases = foldPhrases(closedUpPastQuotes(joined));
   const shownPhrases = foldPhrases(joined);
   const apartPhrases = foldPhrases(spaced);
   return FORBIDDEN_TERMS.filter((entry) => {
-    if (!entry.contextual) return entry.pattern.test(shown) || entry.pattern.test(apart) || (closedUp && entry.pattern.test(closed));
+    if (!entry.contextual) return entry.pattern.test(shown) || entry.pattern.test(apart) || (closedUp && (entry.pattern.test(closed) || entry.pattern.test(tight)));
     if (entry.pattern.test(shownPhrases) && (entry.pattern.test(apartPhrases) || !entry.contextual.word.test(apartPhrases))) return true;
     // The word itself put together across something unknown: there is no whole word to judge without closing it.
-    return closedUp && !entry.contextual.word.test(shownPhrases) && entry.pattern.test(closedPhrases);
+    return closedUp && !entry.contextual.word.test(shownPhrases) && (entry.pattern.test(closedPhrases) || entry.pattern.test(tightPhrases));
   });
+}
+
+/** The quotation marks of Croatian and English outside ASCII. */
+const QUOTATION_MARKS: ReadonlySet<number> = new Set([0xab, 0xbb, 0x2018, 0x2019, 0x201a, 0x201c, 0x201d, 0x201e]);
+/** What stands between two words around a `PHRASE_BREAK`, the break included. */
+const AROUND_A_BREAK = /[^\p{L}\p{N}]*\n[^\p{L}\p{N}]*/gu;
+
+/**
+ * `joined` closed up, and without the quotation marks that stand between two
+ * words where a `PHRASE_BREAK` stands between them. A paragraph that ends
+ * with a quotation mark, or begins with one, is ordinary text, so
+ * `findUnreadableText` does not report such a mark there. It may leave it out
+ * only because the dictionary reads the text without it as well: an entry cut
+ * at a boundary with a quotation mark at the cut is found here.
+ */
+export function closedUpPastQuotes(joined: string): string {
+  return joined.replace(AROUND_A_BREAK, (run) => [...run].filter((char) => char !== PHRASE_BREAK && !QUOTATION_MARKS.has(char.codePointAt(0)!)).join(""));
 }
 
 /**
@@ -282,8 +302,10 @@ const SYMBOL_SPACE_OR_MARK = /[\p{S}\p{Zs}\p{P}]/u;
  * (U+2019) and the ellipsis (U+2026). None of them is drawn like a letter.
  * Every other mark outside ASCII is reported there, because some are (an
  * upright bar, a dot at the height of a letter) and nobody can tell them
- * apart in a review. Quotation marks and brackets stand at the edge of a
- * word, next to a space or to ASCII punctuation, where nothing is asked.
+ * apart in a review. That holds for quotation marks and brackets too, and
+ * ASCII punctuation next to them does not change it: only a plain space sets
+ * two words apart. `findUnreadableText` leaves out the quotation marks next
+ * to an element boundary (`closedUpPastQuotes`).
  */
 const MARKS_INSIDE_A_WORD: ReadonlySet<number> = new Set([0x2010, 0x2011, 0x2013, 0x2014, 0x2019, 0x2026]);
 /** A mathematical, currency or modifier symbol that touches a letter. */

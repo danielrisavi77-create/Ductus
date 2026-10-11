@@ -4,7 +4,7 @@ import path from "node:path";
 import ts from "typescript";
 
 import { decodeEntities } from "./entities";
-import { FORBIDDEN_TERMS, PHRASE_BREAK, findForbiddenTerms, findForbiddenTermsInMarkup, unreadableCharacters, type ForbiddenTerm } from "./terms";
+import { FORBIDDEN_TERMS, PHRASE_BREAK, closedUpPastQuotes, findForbiddenTerms, findForbiddenTermsInMarkup, unreadableCharacters, type ForbiddenTerm } from "./terms";
 
 /**
  * Finds interface text in the source tree and checks it against the
@@ -754,6 +754,8 @@ export const CLOSED_UP_NOTE =
 export const UNREADABLE_HINTS = {
   characters:
     "write interface text with Croatian or English letters and plain spaces; every string of a scanned file is checked, because interface text can stand in any of them, so for a string that is not interface text build the character with String.fromCodePoint, which names it in the source",
+  meeting:
+    'the text is read with its parts and elements joined, and between two letters only a plain space sets words apart: an element boundary, a line break and ASCII punctuation do not. Put {" "} between the two parts or elements, or write the character out of the text. Croatian and English quotation marks next to an element boundary are not reported',
   readings: "put the conditional or possibly hidden inline parts into elements of their own, so that no element has that many alternatives",
 } as const;
 
@@ -904,11 +906,14 @@ export function findUnreadableText(root: string): Unreadable[] {
       // A character that is harmless by itself can stand between two parts
       // with letters, so the text is read as the parts make it, closed up as
       // the dictionary reads it. What a string of the unit already reported
-      // is not reported a second time.
+      // is not reported a second time. A Croatian or English quotation mark
+      // next to a boundary is ordinary text (a paragraph that begins with
+      // one) and is not reported, since the dictionary reads the text without
+      // it as well (`closedUpPastQuotes`); any other mark there is reported.
       const reported = new Set(strings.filter((text) => unit.start <= text.start && text.end <= unit.end).flatMap((text) => text.characters));
-      const joined = unit.readings.flatMap(([text]) => unreadableCharacters(text.replaceAll(PHRASE_BREAK, "")));
+      const joined = unit.readings.flatMap(([text]) => unreadableCharacters(closedUpPastQuotes(text)));
       const characters = [...new Set(joined)].filter((code) => !reported.has(code));
-      if (characters.length > 0) unreadable.push({ file, line: unit.line, reason: `characters outside interface text, where its parts meet: ${characters.join(", ")} (${UNREADABLE_HINTS.characters})` });
+      if (characters.length > 0) unreadable.push({ file, line: unit.line, reason: `characters outside interface text, where its parts meet: ${characters.join(", ")} (${UNREADABLE_HINTS.meeting})` });
     }
   }
   return unreadable;
