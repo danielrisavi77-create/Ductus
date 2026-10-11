@@ -15,6 +15,7 @@
 import {
   documentsEqual, emptyDocument, validateDocument, type CanonicalDocument,
 } from "../../domain/document";
+import { commitRequestFromTransaction } from "../../domain/serverSync/contract";
 import type { JournalContents } from "../../domain/sync/journal-types";
 import { restoreSyncState } from "../../domain/sync/restore";
 import {
@@ -206,7 +207,7 @@ export class LocalDocumentSaver {
       this.reading = new Promise<void>((resolve) => { this.release = resolve; });
     }
     try {
-      await this.settled();
+      await this.flightSettled();
       return await this.read(basis);
     } finally {
       if (--this.readers === 0) {
@@ -329,7 +330,7 @@ export class LocalDocumentSaver {
       // halted, and the next ready reload writes it (#206 qa206d V-1).
       if (result.kind === "ready") {
         if (this.queuedGen < gen) await this.queue({ doc, gen });
-        else await this.settled();
+        else await this.flightSettled();
       }
       return result;
     } finally {
@@ -370,18 +371,24 @@ export class LocalDocumentSaver {
     this.next = candidate;
     this.queuedGen = Math.max(this.queuedGen, candidate.gen);
     // During a reload the candidate waits; `load()` starts it once read.
-    if (this.reading) return this.reading.then(() => this.settled());
+    if (this.reading) return this.reading.then(() => this.flightSettled());
     // A halted saver holds it; `drain()` would end at once and never clear `flight`.
     if (!this.halted) this.flight ??= this.drain();
     return this.flight ?? Promise.resolve();
   }
 
   /**
-   * Resolves once nothing is in flight (`pagehide`, tests). A halted saver
-   * keeps its candidate queued past this, and its state meanwhile never says
-   * LOCAL_DURABLE.
+   * Resolves once no reload runs and nothing is in flight (`pagehide`,
+   * tests): a candidate waiting on a reload is written first (#206 Codex
+   * r4240541632). A halted saver keeps its candidate queued past this, and
+   * its state meanwhile never says LOCAL_DURABLE.
    */
   async settled(): Promise<void> {
+    while (this.reading || this.flight) await (this.reading ?? this.flight);
+  }
+
+  /** Writes only: a load awaiting `settled()` would wait for its own read. */
+  private async flightSettled(): Promise<void> {
     while (this.flight) await this.flight;
   }
 
@@ -506,8 +513,8 @@ function consistent(
     const tx = row?.tx;
     if (!row || row.documentId !== documentId || !Number.isSafeInteger(row.localSeq) ||
         row.localSeq <= previous || row.localSeq > meta.localSeq ||
-        tx?.kind !== "REPLACE_DOCUMENT" || typeof tx.clientTransactionId !== "string" ||
-        !validateDocument(tx.document).ok) return false;
+        // A row the commit request refuses would block the drain for ever (#206 Codex r4240541630).
+        !tx || !commitRequestFromTransaction(documentId, tx)) return false;
     previous = row.localSeq;
   }
   const last = pending.at(-1);

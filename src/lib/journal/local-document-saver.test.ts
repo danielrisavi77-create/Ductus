@@ -11,6 +11,7 @@ import { indexedDB, IDBKeyRange } from "fake-indexeddb";
 import {
   documentsEqual, emptyDocument, newNodeId, paragraphNode, textNode, type CanonicalDocument,
 } from "../../domain/document";
+import { MAX_DOCUMENT_BYTES } from "../../domain/serverSync/contract";
 import type { SyncState } from "../../domain/sync/states";
 import { storableText } from "../../editor/storable-text";
 import { AtomicDexieJournal, JournalError } from "./atomic-dexie-journal";
@@ -1571,6 +1572,17 @@ describe("LocalDocumentSaver: a journal whose rows disagree (#206 qa206e V-1)", 
       db.table("pending").update([DOC, 1], { "tx.document": { synthetic: true } })],
     ["a recorded sequence past the newest pending row", (db) =>
       db.table("meta").update(DOC, { localSeq: 3 })],
+    // #206 Codex r4240541630: rows the commit request refuses would block the drain for ever.
+    ["a pending row whose transaction is null", (db) =>
+      db.table("pending").update([DOC, 1], { tx: null })],
+    ["a pending row with an empty transaction id", (db) =>
+      db.table("pending").update([DOC, 1], { "tx.clientTransactionId": "" })],
+    ["a pending row with a transaction id over 128 characters", (db) =>
+      db.table("pending").update([DOC, 1], { "tx.clientTransactionId": "t".repeat(129) })],
+    ["a pending row with an invalid base revision", (db) =>
+      db.table("pending").update([DOC, 1], { "tx.baseRevision": -1 })],
+    ["a pending row whose document exceeds the size limit", (db) =>
+      db.table("pending").update([DOC, 1], { "tx.document": text("x".repeat(MAX_DOCUMENT_BYTES)) })],
   ];
   for (const [name, damage] of cases) {
     it(`17: ${name} is corrupt, never older or empty text shown as saved, and nothing is written`, async () => {
@@ -1662,5 +1674,85 @@ describe("LocalDocumentSaver: measurement (#197 attack 8)", () => {
     const loaded = await saver(journal(at)).load();
     expect(loaded.kind === "ready" && documentsEqual(loaded.document, text(""))).toBe(true);
     expect(emptyDocument().nodes[0]!.children).toEqual([]);
+  });
+});
+
+describe("LocalDocumentSaver: settled() during a reload (#206 Codex r4240541632)", () => {
+  /** The real journal whose second `read()` waits for `release()`, then reads or throws. */
+  function slowSecondRead(real: AtomicDexieJournal, fails = false) {
+    let reads = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const fake = patched(real, {
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        if ((reads += 1) === 2) {
+          await gate;
+          if (fails) throw Object.assign(new Error("izmišljeni kvar"), { name: "OpenFailedError" });
+        }
+        return real.read(...args);
+      },
+    });
+    return { fake, release: () => release() };
+  }
+  const turns = async (count: number) => {
+    for (let i = 0; i < count; i += 1) await new Promise((resolve) => setImmediate(resolve));
+  };
+
+  it("pagehide: settled() waits for text proposed during a reload until it is in the journal", async () => {
+    const at = scope();
+    const slow = slowSecondRead(journal(at));
+    const target = saver(slow.fake);
+    await target.load();
+    await type(target, "prvo");
+    const reload = target.load();
+    target.edit();
+    void target.propose(text("drugo"));
+    let done = false;
+    const settled = target.settled().then(() => { done = true; });
+    await turns(5);
+    expect(done).toBe(false);
+    slow.release();
+    await settled;
+    expect((await journal(at).read(DOC)).snapshot?.document).toEqual(text("drugo"));
+    await reload;
+  });
+
+  it("settled() during a reload that waits for a write in flight resolves with both", async () => {
+    const at = scope();
+    const real = journal(at);
+    let open = () => {};
+    let gate = Promise.resolve();
+    const target = saver(patched(real, {
+      saveLocal: (...args: Parameters<AtomicDexieJournal["saveLocal"]>) =>
+        gate.then(() => real.saveLocal(...args)),
+    }));
+    await target.load();
+    gate = new Promise<void>((resolve) => { open = resolve; });
+    target.edit();
+    const flight = target.propose(text("prvo"));
+    const reload = target.load();
+    const settled = target.settled();
+    await turns(5);
+    open();
+    await Promise.all([flight, reload, settled]);
+    expect((await reload).kind).toBe("ready");
+    expect(target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+  });
+
+  it("settled() ends when the reload fails, with the candidate kept unwritten", async () => {
+    const at = scope();
+    const slow = slowSecondRead(journal(at), true);
+    const target = saver(slow.fake);
+    await target.load();
+    await type(target, "prvo");
+    const reload = target.load();
+    target.edit();
+    void target.propose(text("drugo"));
+    const settled = target.settled();
+    slow.release();
+    await settled;
+    expect(await reload).toEqual({ kind: "unavailable" });
+    expect(target.snapshot().state).not.toBe("LOCAL_DURABLE");
+    expect((await journal(at).read(DOC)).snapshot?.document).toEqual(text("prvo"));
   });
 });
