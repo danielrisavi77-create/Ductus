@@ -114,6 +114,11 @@ export class LocalDocumentSaver {
   private loaded = false;
   private halted = false;
   private seq = 0;
+  /**
+   * The newest journal sequence any read of this saver saw. Own writes need
+   * not move it: none starts while a read runs (`reading`).
+   */
+  private seen = 0;
   private baseRevision = 0;
   private durable: CanonicalDocument | null = null;
   private rows = 0;
@@ -209,10 +214,17 @@ export class LocalDocumentSaver {
     }
   }
 
-  private async read(basis: Basis | null): Promise<LoadResult> {
+  private async read(basis: Basis | null, retry = true): Promise<LoadResult> {
     try {
       const contents = await this.journal.read(this.documentId);
       const { snapshot, meta, pending } = contents;
+      // The journal only grows, so a read behind what this saver already saw
+      // was overtaken by a newer read of its own while it was held:
+      // it would report a false `stale`, or a `ready` that lifts a newer
+      // `stale` and shows older text, so read again (#206 r6 model). Once
+      // only: a fresh read still behind means the journal itself went back.
+      if (retry && (meta?.localSeq ?? 0) < this.seen) return await this.read(basis, false);
+      this.seen = Math.max(this.seen, meta?.localSeq ?? 0);
       const stored = snapshot ? validateDocument(snapshot.document) : null;
       // Measured before any field changes, so a malformed row is `corrupt`
       // and never a half-applied read (#206 qa206c MANJE 2).

@@ -1280,6 +1280,86 @@ describe("LocalDocumentSaver: resume() contract (#206 r6)", () => {
     }
   });
 
+  it("r6: a read held past this tab's own newer read is read again, not a false stale", async () => {
+    const at = scope();
+    const real = journal(at);
+    let armed = false;
+    let open = () => {};
+    let entered = () => {};
+    let readDone = () => {};
+    const held = new Promise<void>((resolve) => { entered = resolve; });
+    const a = saver(patched(real, {
+      // Held after it has read: its contents are older than what comes next.
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        const contents = await real.read(...args);
+        if (armed) {
+          armed = false;
+          const gate = new Promise<void>((resolve) => { open = resolve; });
+          entered();
+          await gate;
+        } else {
+          readDone();
+        }
+        return contents;
+      },
+    }));
+    const nextRead = () => new Promise<void>((resolve) => { readDone = resolve; })
+      .then(() => new Promise((resolve) => setImmediate(resolve)));
+    const b = saver(journal(at));
+    await Promise.all([a.load(), b.load()]);
+    armed = true;
+    const old = a.load();
+    await held;
+    await type(b, "B1");
+    expect(await a.load()).toEqual({ kind: "recovery", reason: "stale", document: text("B1") });
+    // The resume reads the shown sequence and is ready before the held read
+    // returns, so the held read is behind this saver's own sequence.
+    const read = nextRead();
+    const resumed = a.resume(text("A"));
+    await read;
+    open();
+    expect((await old).kind).toBe("ready");
+    expect((await resumed).kind).toBe("ready");
+    await a.settled();
+    expect((await rows(at)).at(-1)).toEqual(text("A"));
+    expect(a.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+  });
+
+  it("r6: a read held from before a stale read never lifts the halt or shows older text", async () => {
+    const at = scope();
+    const real = journal(at);
+    let armed = false;
+    let open = () => {};
+    let entered = () => {};
+    const held = new Promise<void>((resolve) => { entered = resolve; });
+    const a = saver(patched(real, {
+      // Held after it has read: its contents are older than what comes next.
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        const contents = await real.read(...args);
+        if (armed) {
+          armed = false;
+          const gate = new Promise<void>((resolve) => { open = resolve; });
+          entered();
+          await gate;
+        }
+        return contents;
+      },
+    }));
+    const b = saver(journal(at));
+    await Promise.all([a.load(), b.load()]);
+    armed = true;
+    const old = a.load();
+    await held;
+    await type(b, "B1");
+    expect(await a.load()).toEqual({ kind: "recovery", reason: "stale", document: text("B1") });
+    open();
+    expect(await old).toEqual({ kind: "recovery", reason: "stale", document: text("B1") });
+    expect(a.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+    expect(await a.resume(text("A"))).toEqual({ kind: "ready", document: text("B1") });
+    await a.settled();
+    expect((await rows(at)).at(-1)).toEqual(text("A"));
+  });
+
   it("r6: text proposed while a failed read halted the saver is written by the next ready reload", async () => {
     const at = scope();
     const real = journal(at);

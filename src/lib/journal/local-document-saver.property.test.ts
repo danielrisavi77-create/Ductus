@@ -377,7 +377,16 @@ async function run(tabCount: number, ops: readonly Op[]): Promise<void> {
 // Races need many interleavings: four times the global run count.
 const numRuns = 4 * Number(process.env.FC_NUM_RUNS ?? 100);
 
-test.prop([fc.integer({ min: 1, max: 3 }), fc.array(step, { minLength: 5, maxLength: 40 })], { numRuns })(
+/** Model r6: as H2, a held read in tab 1 returns after its newer `stale` read; always run first. */
+const H3: Op[] = [
+  { kind: "slowRead", tab: 1, wait: 0 }, { kind: "load", tab: 1, wait: 0 },
+  { kind: "edit", tab: 0, wait: 0 }, { kind: "propose", tab: 0, wait: 0 },
+  { kind: "resume", tab: 0, wait: 0 }, { kind: "load", tab: 1, wait: 9 },
+  { kind: "propose", tab: 0, wait: 5 }, { kind: "resume", tab: 1, wait: 0 },
+  { kind: "tick", tab: 0, wait: 0 }, { kind: "edit", tab: 0, wait: 0 },
+  { kind: "load", tab: 0, wait: 0 },
+];
+test.prop([fc.integer({ min: 1, max: 3 }), fc.array(step, { minLength: 5, maxLength: 40 })], { numRuns, examples: [[2, H3]] })(
   "1-3 tabs: durable only for written text, no write over unseen text, no false stale, nothing stuck",
   (tabCount, ops) => run(tabCount, ops),
 );
@@ -407,7 +416,30 @@ const N1: Op[] = [
   { kind: "load", tab: 0 }, { kind: "tick", tab: 0 },
   { kind: "release", tab: 0 }, { kind: "tick", tab: 0 },
 ];
-test.prop([fc.array(step, { minLength: 5, maxLength: 40 })], { numRuns, examples: [[N1]] })(
+/**
+ * Model r6: a read held after it read returns behind this tab's own newer
+ * read and must be read again, not reported as `stale`; always run first.
+ */
+const H1: Op[] = [
+  { kind: "load", tab: 0, wait: 0 }, { kind: "propose", tab: 1, wait: 0 },
+  { kind: "slowRead", tab: 0, wait: 7 }, { kind: "load", tab: 0, wait: 6 },
+  { kind: "edit", tab: 0, wait: 2 }, { kind: "resume", tab: 0, wait: 0 },
+  { kind: "load", tab: 0, wait: 0 }, { kind: "mode", tab: 0, mode: "ok", wait: 0 },
+  { kind: "mode", tab: 0, mode: "ok", wait: 0 }, { kind: "load", tab: 0, wait: 4 },
+];
+/**
+ * Model r6: a read held from before a `stale` one returns `ready` for the
+ * older sequence; it must not lift the halt or show older text.
+ */
+const H2: Op[] = [
+  { kind: "propose", tab: 0, wait: 0 }, { kind: "load", tab: 1, wait: 0 },
+  { kind: "slowRead", tab: 0, wait: 0 }, { kind: "resume", tab: 1, wait: 0 },
+  { kind: "load", tab: 0, wait: 0 }, { kind: "edit", tab: 0, wait: 4 },
+  { kind: "load", tab: 0, wait: 0 }, { kind: "mode", tab: 0, mode: "ok", wait: 0 },
+  { kind: "propose", tab: 1, wait: 0 }, { kind: "tick", tab: 0, wait: 0 },
+  { kind: "resume", tab: 0, wait: 5 },
+];
+test.prop([fc.array(step, { minLength: 5, maxLength: 40 })], { numRuns, examples: [[N1], [H1], [H2]] })(
   "2 tabs: resume() writes only over the recovery shown when it was called",
   (ops) => run(2, ops),
 );
