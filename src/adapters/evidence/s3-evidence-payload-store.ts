@@ -237,6 +237,8 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     segmentHash: string;
     canonicalPayload: string;
   }): Promise<EvidencePayloadPutResult> {
+    // The deadline covers the whole call, checking the input included.
+    const deadline = performance.now() + this.requestTimeoutMs;
     // Defense in depth: the gateway checks the same; nothing invalid is sent.
     const key = evidenceObjectKey(input);
     if (key === null) {
@@ -252,24 +254,24 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
 
     const path = [this.bucket, ...key];
     const storageRef = evidenceStorageRef(this.storageDomain, key);
-    // One deadline for the whole call, so a slow PUT leaves the read-back
-    // only what is left of it. The deadline itself is a monotonic instant,
-    // checked after every answer and before every request and outcome, so
-    // a timer that fires late (a busy event loop) cannot let a late answer
-    // count. The timer only stops the waiting: its race ends the call even
-    // when a fetch ignores the signal.
+    // One deadline for the whole call, so checking the input and a slow PUT
+    // leave the read-back only what is left of it. The deadline itself is a
+    // monotonic instant, checked after every answer and before every request
+    // and outcome, so a timer that fires late (a busy event loop) cannot let
+    // a late answer count. The timer only stops the waiting: its race ends
+    // the call even when a fetch ignores the signal.
     const abort = new AbortController();
-    const phase: WritePhase = {
-      deadline: performance.now() + this.requestTimeoutMs,
-      echoConfirmed: false,
-      expired: false,
-    };
+    const phase: WritePhase = { deadline, echoConfirmed: false, expired: false };
+    // Spent on the input already: no PUT starts. Rounded up, so the timer
+    // never answers before the deadline the checks hold to.
+    const left = Math.ceil(deadline - performance.now());
+    if (left <= 0) return this.expire(input, phase);
     let timer: ReturnType<typeof setTimeout> | undefined;
     const expired = new Promise<EvidencePayloadPutResult>((resolve) => {
       timer = setTimeout(() => {
         resolve(this.expire(input, phase));
         abort.abort();
-      }, this.requestTimeoutMs);
+      }, left);
     });
     try {
       return await Promise.race([
@@ -437,7 +439,13 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
       });
       const response = await this.fetch(signed.url, {
         method,
-        headers: signed.headers,
+        // Asks for the stored bytes as they are. Unsigned on purpose: an
+        // intermediary may rewrite it, and the check below, not the request,
+        // is what keeps a decoded body from being compared.
+        headers:
+          method === "GET"
+            ? { ...signed.headers, "accept-encoding": "identity" }
+            : signed.headers,
         body,
         redirect: "error",
         signal,
@@ -456,6 +464,13 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
           body: null,
           checksum: response.headers.get("x-amz-checksum-sha256"),
         };
+      }
+      // fetch decodes gzip, deflate and br on its own, so an encoded object
+      // would be compared as other bytes than it holds: never compared.
+      const encoding = response.headers.get("content-encoding");
+      if (encoding !== null && encoding.toLowerCase() !== "identity") {
+        void response.body?.cancel().catch(() => undefined);
+        return { ok: false, reason: "storage_get_encoded" };
       }
       const read = await readLimited(response, MAX_EVIDENCE_SEGMENT_BYTES, signal);
       return read === null

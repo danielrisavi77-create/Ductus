@@ -1338,12 +1338,14 @@ describe("one monotonic deadline (QA qa233d)", () => {
    * checked: reads 0 (deadline) and 1 (check after the PUT) are on time,
    * every later read is past it. No timer fires within the test.
    */
+  // Readings: the call's start, the check before the PUT and the check
+  // after its answer are on time; every later one is past the deadline.
   const passDeadlineAfterPutCheck = () => {
     const start = performance.now();
     let reads = 0;
     return vi
       .spyOn(performance, "now")
-      .mockImplementation(() => (reads++ < 2 ? start : start + 1_000_000));
+      .mockImplementation(() => (reads++ < 3 ? start : start + 1_000_000));
   };
 
   it.each<[string, boolean, object]>([
@@ -1410,4 +1412,96 @@ describe("one monotonic deadline (QA qa233d)", () => {
     expect(elapsed).toBeGreaterThan(1);
     expect(result).toMatchObject({ status: "unavailable" });
   });
+
+  it("counts the deadline from the call, so checking the input cannot start a late PUT", async () => {
+    const s3 = fakeS3();
+    const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 60_000 });
+    const input = {
+      institutionId: INSTITUTION,
+      evidencePackageId: PACKAGE,
+      segmentHash: hashOf(payload("a")),
+      canonicalPayload: payload("a"),
+    };
+    // Encoding the input spends the whole deadline on this clock.
+    let now = performance.now();
+    let encoded = 0;
+    const clock = vi.spyOn(performance, "now").mockImplementation(() => now);
+    const realEncode = TextEncoder.prototype.encode;
+    const encode = vi
+      .spyOn(TextEncoder.prototype, "encode")
+      .mockImplementation(function (this: TextEncoder, text?: string) {
+        now += 1_000_000;
+        encoded += 1;
+        return realEncode.call(this, text);
+      });
+    try {
+      await expect(store.putImmutable(input)).resolves.toEqual(timeout);
+    } finally {
+      encode.mockRestore();
+      clock.mockRestore();
+    }
+    expect(encoded).toBeGreaterThan(0);
+    expect(s3.calls).toEqual([]);
+    expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+describe("byte-identical read-back (Codex 4240926024)", () => {
+  const unverified = { status: "unavailable", reason: "storage_write_unverified" };
+  const encoded = { status: "unavailable", reason: "storage_get_encoded" };
+  const idsOfA = {
+    institutionId: INSTITUTION,
+    evidencePackageId: PACKAGE,
+    segmentHash: hashOf(payload("a")),
+  };
+  /** A GET answered with `bytes` as a decoding fetch hands them over. */
+  const withEncoding = (encoding: string) => (call: Call) =>
+    call.method === "GET"
+      ? Promise.resolve(
+          new Response(new TextEncoder().encode(payload("a")), {
+            status: 200,
+            headers: { "content-encoding": encoding },
+          }),
+        )
+      : null;
+
+  it("asks for the stored bytes as they are, without signing that request", async () => {
+    const s3 = fakeS3();
+    const { store } = storeWith(s3.fetch);
+    await expect(put(store, "a")).resolves.toMatchObject({ status: "stored" });
+    const get = s3.calls[1];
+    expect(get.method).toBe("GET");
+    expect(get.headers.get("accept-encoding")).toBe("identity");
+    expect(signedHeadersOf(get)?.split(";")).not.toContain("accept-encoding");
+    expect(s3.calls[0].headers.has("accept-encoding")).toBe(false);
+  });
+
+  it.each(["gzip", "br", "deflate", "GZIP", "identity, gzip", ""])(
+    "never answers existing for a key read back with Content-Encoding %j",
+    async (encoding) => {
+      const s3 = fakeS3(withEncoding(encoding));
+      s3.objects.set(keyOf(PACKAGE, hashOf(payload("a"))), new Uint8Array([1]));
+      const { store, warn } = storeWith(s3.fetch);
+      await expect(put(store, "a")).resolves.toEqual(encoded);
+      expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
+      expect(warn).not.toHaveBeenCalled();
+    },
+  );
+
+  it("never answers stored for an echoed write read back encoded", async () => {
+    const s3 = fakeS3(withEncoding("gzip"));
+    const { store, warn } = storeWith(s3.fetch);
+    await expect(put(store, "a")).resolves.toEqual(unverified);
+    expect(warn.mock.calls).toEqual([["evidence payload write unverified", idsOfA]]);
+  });
+
+  it.each(["identity", " Identity "])(
+    "compares a read back with Content-Encoding %j as stored bytes",
+    async (encoding) => {
+      const s3 = fakeS3(withEncoding(encoding));
+      s3.objects.set(keyOf(PACKAGE, hashOf(payload("a"))), new Uint8Array([1]));
+      const { store } = storeWith(s3.fetch);
+      await expect(put(store, "a")).resolves.toMatchObject({ status: "existing" });
+    },
+  );
 });
