@@ -25,7 +25,9 @@ try {
     console.error(`PR #${n} is ${pr.state}`);
     process.exit(2);
   }
-  const [files, rollup] = await Promise.all([prPaths(n), checkRollup(pr.headRefOid)]);
+  // REST list: a rename counts under both names, and a cut list is an error.
+  const files = await attempt(() => prPaths(n));
+  const rollup = await checkRollup(pr.headRefOid);
   const { owner, repo } = await repoId();
   const compare = await attempt(() =>
     ghJson(["api", `repos/${owner}/${repo}/compare/${pr.headRefOid}...main`]));
@@ -39,7 +41,7 @@ try {
     rollup,
     base: pr.baseRefName,
     mergeable: pr.mergeable,
-    overlap: mainFiles ? intersectFiles(mainFiles, files) : null,
+    overlap: mainFiles && files ? intersectFiles(mainFiles, files) : null,
     threads: threadNodes ? summarizeThreads(threadNodes) : null,
     autoMerge: Boolean(pr.autoMergeRequest),
     files,
