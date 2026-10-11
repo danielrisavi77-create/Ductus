@@ -19,6 +19,10 @@ const credentials = {
 };
 const region = "us-east-1";
 const bucket = "ductus-evidence-contract";
+const storageDomain = "local-contract";
+// Invented institutions; a fresh package per test keeps reruns apart.
+const INSTITUTION = "00000000-0000-4000-8000-00000000000a";
+const OTHER_INSTITUTION = "00000000-0000-4000-8000-00000000000b";
 
 /**
  * A signed PUT sent as is, or changed after signing by `tamper`, which may
@@ -52,9 +56,14 @@ async function raw(
   return { status: response.status, text: await response.text() };
 }
 
-const keyOf = (input: { evidencePackageId: string; segmentHash: string }) => [
+const keyOf = (input: {
+  institutionId: string;
+  evidencePackageId: string;
+  segmentHash: string;
+}) => [
   bucket,
   "v2",
+  input.institutionId,
   input.evidencePackageId,
   `${input.segmentHash}.json`,
 ];
@@ -63,6 +72,7 @@ const store = new S3EvidencePayloadStore({
   endpoint: S3_ENDPOINT,
   region,
   bucket,
+  storageDomain,
   credentials,
   requestTimeoutMs: 10_000,
 });
@@ -73,6 +83,7 @@ function segment(text: string) {
     nonce: randomBytes(8).toString("hex"),
   });
   return {
+    institutionId: INSTITUTION,
     evidencePackageId: `paket-${randomBytes(6).toString("hex")}`,
     segmentHash: sha256Hex(canonicalPayload),
     canonicalPayload,
@@ -102,7 +113,22 @@ describe("S3EvidencePayloadStore against the local object store", () => {
     await expect(store.putImmutable(input)).resolves.toMatchObject({
       status: "stored",
     });
+    await expect(store.putImmutable(input)).resolves.toEqual({
+      status: "existing",
+      storageRef: `${storageDomain}:${keyOf(input).slice(1).join("/")}`,
+    });
+  });
+
+  it("keeps the same package and hash of two institutions apart (P5)", async () => {
+    const input = segment("p5");
+    const other = { ...input, institutionId: OTHER_INSTITUTION };
     await expect(store.putImmutable(input)).resolves.toMatchObject({
+      status: "stored",
+    });
+    await expect(store.putImmutable(other)).resolves.toMatchObject({
+      status: "stored",
+    });
+    await expect(store.putImmutable(other)).resolves.toMatchObject({
       status: "existing",
     });
   });
@@ -178,6 +204,7 @@ describe("S3EvidencePayloadStore against the local object store", () => {
       endpoint: S3_ENDPOINT,
       region,
       bucket,
+      storageDomain,
       credentials,
       requestTimeoutMs: 10_000,
       now: () => new Date(Date.now() + 3_600_000),
@@ -197,6 +224,7 @@ describe("S3EvidencePayloadStore against the local object store", () => {
       endpoint: S3_ENDPOINT,
       region,
       bucket,
+      storageDomain,
       credentials: { ...credentials, secretAccessKey: "not-the-local-secret" },
       requestTimeoutMs: 10_000,
       warn: () => undefined,

@@ -10,12 +10,14 @@ import {
   type S3EvidencePayloadStoreConfig,
 } from "./s3-evidence-payload-store";
 
+const INSTITUTION = "00000000-0000-4000-8000-00000000000a";
+const OTHER_INSTITUTION = "00000000-0000-4000-8000-00000000000b";
 const PACKAGE = "paket-izmisljeni-1";
 const payload = (text: string) => JSON.stringify({ text });
 const hashOf = (value: Uint8Array | string) =>
   createHash("sha256").update(value).digest("hex");
-const keyOf = (pkg: string, hash: string) =>
-  `/ductus-evidence/v2/${pkg}/${hash}.json`;
+const keyOf = (pkg: string, hash: string, institution = INSTITUTION) =>
+  `/ductus-evidence/v2/${institution}/${pkg}/${hash}.json`;
 
 type Call = { method: string; origin: string; path: string; headers: Headers };
 
@@ -77,6 +79,7 @@ function storeWith(
     endpoint: "http://127.0.0.1:9100",
     region: "eu-central-1",
     bucket: "ductus-evidence",
+    storageDomain: "fak-a-eu-1",
     credentials: { accessKeyId: "fake-id", secretAccessKey: "fake-secret" },
     requestTimeoutMs: 1_000,
     fetch,
@@ -86,8 +89,14 @@ function storeWith(
   return { store, warn };
 }
 
-const put = (store: S3EvidencePayloadStore, text: string, pkg = PACKAGE) =>
+const put = (
+  store: S3EvidencePayloadStore,
+  text: string,
+  pkg = PACKAGE,
+  institutionId = INSTITUTION,
+) =>
   store.putImmutable({
+    institutionId,
     evidencePackageId: pkg,
     segmentHash: hashOf(payload(text)),
     canonicalPayload: payload(text),
@@ -111,11 +120,12 @@ const hang = (signal: AbortSignal) =>
   );
 
 describe("S3EvidencePayloadStore", () => {
-  it("stores once under v2/<package>/<hash>.json, then answers existing", async () => {
+  it("stores once under v2/<institution>/<package>/<hash>.json, then answers existing", async () => {
     const s3 = fakeS3();
     const { store } = storeWith(s3.fetch);
     const hash = hashOf(payload("a"));
-    const ref = `s3://ductus-evidence/v2/${PACKAGE}/${hash}.json`;
+    // The label and the key only: no endpoint, bucket or URL.
+    const ref = `fak-a-eu-1:v2/${INSTITUTION}/${PACKAGE}/${hash}.json`;
 
     await expect(put(store, "a")).resolves.toEqual({
       status: "stored",
@@ -140,10 +150,57 @@ describe("S3EvidencePayloadStore", () => {
     await expect(put(store, "a")).resolves.toEqual({ status: "conflict" });
     expect(s3.objects.get(keyOf(PACKAGE, hash))).toEqual(tampered);
     expect(warn).toHaveBeenCalledWith("evidence payload conflict", {
+      institutionId: INSTITUTION,
       evidencePackageId: PACKAGE,
       segmentHash: hash,
     });
   });
+
+  it("keeps the same package and hash of two institutions apart in one bucket (P5)", async () => {
+    const s3 = fakeS3();
+    const { store } = storeWith(s3.fetch);
+    const hash = hashOf(payload("a"));
+
+    await expect(put(store, "a")).resolves.toMatchObject({ status: "stored" });
+    // A bucket shared by mistake still never answers existing across them.
+    await expect(
+      put(store, "a", PACKAGE, OTHER_INSTITUTION),
+    ).resolves.toEqual({
+      status: "stored",
+      storageRef: `fak-a-eu-1:v2/${OTHER_INSTITUTION}/${PACKAGE}/${hash}.json`,
+    });
+    expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "PUT"]);
+    expect([...s3.objects.keys()].sort()).toEqual(
+      [keyOf(PACKAGE, hash), keyOf(PACKAGE, hash, OTHER_INSTITUTION)].sort(),
+    );
+  });
+
+  it.each([
+    "",
+    "00000000-0000-4000-8000-00000000000A",
+    "{00000000-0000-4000-8000-00000000000a}",
+    "00000000000040008000-00000000000a",
+    "00000000-0000-4000-8000-00000000000a\n",
+    "../00000000-0000-4000-8000-00000000000a",
+    "fak-a",
+  ])("refuses institution id %j before any request", async (institutionId) => {
+    const s3 = fakeS3();
+    const { store } = storeWith(s3.fetch);
+
+    await expect(put(store, "a", PACKAGE, institutionId)).resolves.toEqual({
+      status: "invalid",
+    });
+    expect(s3.calls).toHaveLength(0);
+  });
+
+  it.each(["", "Fak-a", "-fak", "fak_a", "fak.a", "fak/a", "s3://x", "a".repeat(64)])(
+    "refuses to start with storage domain label %j",
+    (storageDomain) => {
+      expect(() => storeWith(fakeS3().fetch, { storageDomain })).toThrow(
+        TypeError,
+      );
+    },
+  );
 
   it("decides concurrent writes of the same key by the condition", async () => {
     const s3 = fakeS3();
@@ -334,6 +391,7 @@ describe("S3EvidencePayloadStore", () => {
     ]) {
       await expect(
         store.putImmutable({
+          institutionId: INSTITUTION,
           evidencePackageId: PACKAGE,
           segmentHash,
           canonicalPayload: text,
@@ -343,6 +401,7 @@ describe("S3EvidencePayloadStore", () => {
     const big = "x".repeat(MAX_EVIDENCE_SEGMENT_BYTES + 1);
     await expect(
       store.putImmutable({
+        institutionId: INSTITUTION,
         evidencePackageId: PACKAGE,
         segmentHash: hashOf(big),
         canonicalPayload: big,

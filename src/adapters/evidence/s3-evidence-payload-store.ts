@@ -1,7 +1,8 @@
 import {
-  isEvidencePackageId,
-  isSha256Hex,
-} from "@/application/ports/evidence-ingest";
+  evidenceObjectKey,
+  evidenceStorageRef,
+  isStorageDomainLabel,
+} from "@/application/ports/evidence-object-key";
 import type {
   EvidencePayloadPutResult,
   EvidencePayloadStore,
@@ -23,6 +24,12 @@ export type S3EvidencePayloadStoreConfig = {
   endpoint: string;
   region: string;
   bucket: string;
+  /**
+   * Operator label of this storage domain, kept in `storageRef` in place of
+   * the endpoint and bucket (e.g. `fpzg-eu-1`). Operational only: it is not
+   * part of the object key and never enters a signature.
+   */
+  storageDomain: string;
   credentials: S3Credentials;
   /**
    * Deadline for one `putImmutable` call as a whole (the PUT, a read-back and
@@ -90,6 +97,9 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     if (typeof config.bucket !== "string" || !BUCKET.test(config.bucket)) {
       throw new TypeError("S3 bucket is not valid");
     }
+    if (!isStorageDomainLabel(config.storageDomain)) {
+      throw new TypeError("storage domain label is not valid");
+    }
     assertS3SigningConfig(config.region, config.credentials);
     const timeout: unknown = config.requestTimeoutMs;
     if (
@@ -110,15 +120,14 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
   }
 
   async putImmutable(input: {
+    institutionId: string;
     evidencePackageId: string;
     segmentHash: string;
     canonicalPayload: string;
   }): Promise<EvidencePayloadPutResult> {
     // Defense in depth: the gateway checks the same; nothing invalid is sent.
-    if (
-      !isEvidencePackageId(input.evidencePackageId) ||
-      !isSha256Hex(input.segmentHash)
-    ) {
+    const key = evidenceObjectKey(input);
+    if (key === null) {
       return { status: "invalid" };
     }
     const bytes = new TextEncoder().encode(input.canonicalPayload);
@@ -129,13 +138,8 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
       return { status: "invalid" };
     }
 
-    const path = [
-      this.config.bucket,
-      "v2",
-      input.evidencePackageId,
-      `${input.segmentHash}.json`,
-    ];
-    const storageRef = `s3://${path.join("/")}`;
+    const path = [this.config.bucket, ...key];
+    const storageRef = evidenceStorageRef(this.config.storageDomain, key);
     // One deadline for the whole call, so a slow PUT leaves the read-back
     // only what is left of it.
     const abort = new AbortController();
@@ -148,7 +152,11 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
   }
 
   private async write(
-    input: { evidencePackageId: string; segmentHash: string },
+    input: {
+      institutionId: string;
+      evidencePackageId: string;
+      segmentHash: string;
+    },
     path: string[],
     bytes: Uint8Array<ArrayBuffer>,
     storageRef: string,
@@ -180,6 +188,7 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
       return { status: "existing", storageRef };
     }
     this.warn("evidence payload conflict", {
+      institutionId: input.institutionId,
       evidencePackageId: input.evidencePackageId,
       segmentHash: input.segmentHash,
     });
