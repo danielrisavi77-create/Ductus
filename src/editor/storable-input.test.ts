@@ -1,5 +1,6 @@
 import { Editor } from "@tiptap/core";
 import { Fragment, Slice } from "@tiptap/pm/model";
+import { TextSelection } from "@tiptap/pm/state";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { CanonicalDocument, NodeId } from "../domain/document";
@@ -34,6 +35,10 @@ function editorWith(texts: string[]): Editor {
   editor.view.updateState(editor.state.reconfigure({ plugins: editor.extensionManager.plugins }));
   editors.push(editor);
   return editor;
+}
+
+function caretAt(editor: Editor, pos: number): void {
+  editor.view.dispatch(editor.state.tr.setSelection(TextSelection.create(editor.state.doc, pos)));
 }
 
 function shown(editor: Editor): CanonicalDocument {
@@ -141,6 +146,60 @@ describe("StorableInput", () => {
     const before = editor.state.doc.child(1);
     editor.view.dispatch(editor.state.tr.delete(4, 5));
     expect(editor.state.doc.child(1)).toBe(before);
+    expectStorable(editor);
+  });
+
+  // Only the code units the journal would change are repaired; the rest of
+  // the run, the caret and the blocks around it keep their positions.
+
+  it("a repair inside a long run keeps the caret right after the typed text", () => {
+    const editor = editorWith(["prije poslije"]);
+    // "prije " ends at 7; typing at the caret moves it past the typed text.
+    caretAt(editor, 7);
+    editor.view.dispatch(editor.state.tr.insertText("x\uD800"));
+    expect(editor.state.doc.textContent).toBe("prije x\uFFFDposlije");
+    expect(editor.state.selection.from).toBe(9);
+    expect(editor.state.selection.empty).toBe(true);
+    expectStorable(editor);
+  });
+
+  it("a NUL dropped mid-run leaves the caret where the typed text ended", () => {
+    const editor = editorWith(["prije poslije"]);
+    caretAt(editor, 7);
+    editor.view.dispatch(editor.state.tr.insertText("a\u0000b"));
+    expect(editor.state.doc.textContent).toBe("prije abposlije");
+    expect(editor.state.selection.from).toBe(9);
+    expectStorable(editor);
+  });
+
+  it("each repair is a step over the offending code units only, never the whole run", () => {
+    const editor = editorWith(["prije poslije"]);
+    const { state, transactions } = editor.state.applyTransaction(
+      editor.state.tr.insertText("\u0000\u0000x\uDC00", 7),
+    );
+    expect(state.doc.textContent).toBe("prije x\uFFFDposlije");
+    const repair = transactions.slice(1).flatMap((tr) => tr.steps.map((step) => step.toJSON() as { from: number; to: number }));
+    // From the end: the lone surrogate at 10..11, then the NUL run at 7..9.
+    expect(repair.map(({ from, to }) => [from, to])).toEqual([[10, 11], [7, 9]]);
+  });
+
+  it("at a block boundary a split pair is repaired in place in both blocks and the caret stays where it was", () => {
+    const editor = editorWith(["ab😀cd", "Drugi"]);
+    const second = editor.state.doc.child(1);
+    // Positions over "ab😀cd": the pair sits at 3..5, the caret between c and d
+    // at 6; split between the halves of the pair.
+    caretAt(editor, 6);
+    editor.view.dispatch(editor.state.tr.split(4));
+    expect(editor.state.doc.childCount).toBe(3);
+    expect(editor.state.doc.child(0).textContent).toBe("ab\uFFFD");
+    expect(editor.state.doc.child(1).textContent).toBe("\uFFFDcd");
+    expect(editor.state.doc.child(2)).toBe(second);
+    // The caret is still between c and d, now in the new block.
+    const $caret = editor.state.selection.$from;
+    expect($caret.parent).toBe(editor.state.doc.child(1));
+    expect($caret.parentOffset).toBe(2);
+    expect(shown(editor).nodes.map((node) => node.id)).toContain(ID_A);
+    expect(shown(editor).nodes.map((node) => node.id)).toContain(ID_B);
     expectStorable(editor);
   });
 });

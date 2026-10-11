@@ -248,6 +248,23 @@ test.describe("local editor (#197)", () => {
     expect((await shownAndStored(page)).shown).toEqual(saved.shown);
   });
 
+  test("10: typing after a repaired paste mid-text lands right after the paste", async ({ page }) => {
+    await openEditor(page);
+    await typeInto(page, "prijeposlije");
+    await expect(editorOf(page)).toHaveText("prijeposlije");
+    await page.evaluate(() => {
+      const target = document.querySelector('[role="textbox"]')!;
+      const { editor } = target as unknown as {
+        editor: { commands: { setTextSelection(pos: number): boolean }; view: { pasteText(text: string): boolean } };
+      };
+      // Position 6 is after "prije": the paragraph opens at 0, its text at 1.
+      editor.commands.setTextSelection(6);
+      editor.view.pasteText(" a\u0000\uD800 ");
+    });
+    await page.keyboard.type("X");
+    await expect(editorOf(page)).toHaveText("prije a\uFFFD Xposlije");
+  });
+
   test("14: axe finds nothing on the ready editor with saved text", async ({ page }) => {
     await openEditor(page);
     await typeInto(page, "Pristupačan izmišljeni tekst");
