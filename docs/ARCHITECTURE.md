@@ -40,7 +40,7 @@ Smjer ovisnosti je prema unutra: `app` i features pozivaju application; applicat
 
 | Sloj | Izbor | Status |
 | --- | --- | --- |
-| Sučelje | Next.js (App Router), React, TypeScript; sadržaj radova se ne renderira na poslužitelju | [ODLUČENO D-08, dio o aplikaciji: Next.js; ostali detalji retka PRIJEDLOG], preneseno iz `pisac-editor` |
+| Sučelje | Next.js (App Router), React, TypeScript; sadržaj radova se ne renderira na poslužitelju | [ODLUČENO D-08, dio o aplikaciji: Next.js; ODLUČENO D-74: bez server-side renderiranja sadržaja; ostali detalji retka (App Router, React, TypeScript) PRIJEDLOG], preneseno iz `pisac-editor` |
 | Editor | Tiptap / ProseMirror | [PRIJEDLOG D-08], preneseno |
 | Lokalna pohrana | Dexie (IndexedDB), journal s 8 stanja sinkronizacije | [PRIJEDLOG D-08], preneseno |
 | API | Next.js API rute s verzijom protokola (ne Server Actions), u web procesu bez materijala ključeva | [ODLUČENO D-08, dio o aplikaciji: Next.js i worker; API rute s verzijom protokola i bez Server Actions PRIJEDLOG; web proces bez materijala ključeva: D-71], BACKEND §3 |
