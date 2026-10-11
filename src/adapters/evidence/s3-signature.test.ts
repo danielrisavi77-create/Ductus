@@ -269,6 +269,18 @@ describe("signS3Request: what it signs", () => {
     expect(url.href).toBe("http://127.0.0.1:9100/ductus-evidence/v2/pkg/a.json");
   });
 
+  it("sends each header value in the trimmed form it signed", () => {
+    const { headers } = sign({
+      headers: { "content-type": "  application/json  ", "x-amz-meta-a": " a   b " },
+    });
+    expect(headers["content-type"]).toBe("application/json");
+    expect(headers["x-amz-meta-a"]).toBe("a b");
+    expect(headers.authorization).toBe(
+      sign({ headers: { "content-type": "application/json", "x-amz-meta-a": "a b" } })
+        .headers.authorization,
+    );
+  });
+
   it("never puts the secret or the derived signing key in an error or a result (S12)", () => {
     // A synthetic canary, built at run time so the secret scanners do not
     // mistake a literal for a real key. "/" and "+" keep base64 characters in.
