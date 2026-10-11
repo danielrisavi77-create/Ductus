@@ -17,7 +17,7 @@ export const QUEUE_ISSUE = 87; // coordination issue (docs/ORKESTRATOR.md §8)
 
 /**
  * True only for the calls this script needs: `gh api <path>` (a GET with no
- * flags, never GraphQL) and `git worktree list`. Lists are read page by page
+ * flags and a non-empty path, never GraphQL) and `git worktree list`. Lists are read page by page
  * (gh.mjs ghList), so neither `--paginate` nor `gh pr list` is needed; both
  * fail in cloud sessions (Link headers to repositories/{id}, GraphQL 403).
  */
@@ -25,7 +25,7 @@ export function readOnlyCall(cmd, args) {
   const a = args.map(String);
   if (cmd === "git") return a.join(" ") === "worktree list --porcelain -z";
   if (cmd !== "gh") return false;
-  return a.length === 2 && a[0] === "api" && !a[1].startsWith("-") && !a[1].startsWith("graphql");
+  return a.length === 2 && a[0] === "api" && a[1] !== "" && !a[1].startsWith("-") && !a[1].startsWith("graphql");
 }
 
 const run = promisify(execFile);
