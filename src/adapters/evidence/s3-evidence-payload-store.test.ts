@@ -1005,8 +1005,8 @@ describe("write proof (#155, S1 to S6)", () => {
     ["SignatureDoesNotMatch", "storage_signature_rejected"],
     ["InvalidAccessKeyId", "storage_signature_rejected"],
   ])(
-    "S3: an echoed write whose read-back is refused with %s keeps that reason",
-    async (code, reason) => {
+    "S3: an echoed write whose read-back is refused with %s is unverified and logs the cause",
+    async (code, cause) => {
       const s3 = fakeS3((call) =>
         call.method === "PUT"
           ? Promise.resolve(
@@ -1019,17 +1019,20 @@ describe("write proof (#155, S1 to S6)", () => {
       );
       const { store, warn } = storeWith(s3.fetch);
 
-      await expect(put(store, "a")).resolves.toEqual({ status: "unavailable", reason });
+      // The caller sees the plan's outcome (6106170317); the cause stays in
+      // the server log only.
+      await expect(put(store, "a")).resolves.toEqual({
+        status: "unavailable",
+        reason: "storage_write_unverified",
+      });
       expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
-      expect(warn).toHaveBeenCalledWith(
-        "evidence storage refused the request signature",
-        { reason },
-      );
-      // Still an orphan candidate: the write may be there.
-      expect(warn).toHaveBeenCalledWith(
-        "evidence payload write unverified",
-        expect.objectContaining({ segmentHash: hashOf(payload("a")) }),
-      );
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith("evidence payload write unverified", {
+        institutionId: INSTITUTION,
+        evidencePackageId: PACKAGE,
+        segmentHash: hashOf(payload("a")),
+        cause,
+      });
     },
   );
 

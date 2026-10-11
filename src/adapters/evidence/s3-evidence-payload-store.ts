@@ -322,12 +322,13 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
         this.log("evidence payload conflict", ids);
         return { status: "conflict" };
       }
-      // An orphan candidate: the object may or may not be there.
-      this.log("evidence payload write unverified", ids);
-      // A refused signature keeps its fixed reason, as on the PUT.
-      return !get.ok && isSignatureFault(get.reason)
-        ? this.unavailable(get.reason)
-        : unverified();
+      // An orphan candidate: the object may or may not be there. A refused
+      // signature is logged as the cause; the caller sees the plan's outcome.
+      this.log(
+        "evidence payload write unverified",
+        !get.ok && isSignatureFault(get.reason) ? { ...ids, cause: get.reason } : ids,
+      );
+      return unverified();
     }
     this.log("evidence payload write unverified", ids);
     return unverified();
