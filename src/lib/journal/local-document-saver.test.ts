@@ -11,12 +11,12 @@ import { indexedDB, IDBKeyRange } from "fake-indexeddb";
 import {
   documentsEqual, emptyDocument, newNodeId, paragraphNode, textNode, type CanonicalDocument,
 } from "../../domain/document";
-import { MAX_DOCUMENT_BYTES } from "../../domain/serverSync/contract";
+import { documentByteLength, MAX_DOCUMENT_BYTES } from "../../domain/serverSync/contract";
 import type { SyncState } from "../../domain/sync/states";
 import { storableText } from "../../editor/storable-text";
 import { AtomicDexieJournal, JournalError } from "./atomic-dexie-journal";
 import {
-  failureOf, LocalDocumentSaver, reasonOf, type SaverDeps, type SaverSnapshot,
+  failureOf, LocalDocumentSaver, reasonOf, type LoadResult, type SaverDeps, type SaverSnapshot,
 } from "./local-document-saver";
 
 const DOC = "local-demo-document";
@@ -1406,6 +1406,68 @@ describe("LocalDocumentSaver: resume() contract (#206 r6)", () => {
     expect((await rows(at)).at(-1)).toEqual(text("A"));
   });
 
+  // #206 Codex r4240797922: a retry needs `seen` to have grown past what it
+  // read, and only a read that returned grows it, so retries are bounded.
+  it("r6: a journal that went back is read once more, not for ever", async () => {
+    const at = scope();
+    const real = journal(at);
+    let calls = 0;
+    let back: Awaited<ReturnType<AtomicDexieJournal["read"]>> | null = null;
+    const a = saver(patched(real, {
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        calls += 1;
+        return back ?? await real.read(...args);
+      },
+    }));
+    const b = saver(journal(at));
+    await b.load();
+    await type(b, "B1");
+    const older = await real.read(DOC);
+    await type(b, "B2");
+    await a.load();
+    back = older;
+    calls = 0;
+    expect((await a.load()).kind).toBe("recovery");
+    expect(calls).toBe(2);
+  });
+
+  it("r6: held reads overtaken while the journal keeps growing all end on the newest text", async () => {
+    const at = scope();
+    const real = journal(at);
+    let calls = 0;
+    let holding = true;
+    const gates: Array<() => void> = [];
+    const a = saver(patched(real, {
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        calls += 1;
+        const contents = await real.read(...args);
+        if (holding) await new Promise<void>((resolve) => { gates.push(resolve); });
+        return contents;
+      },
+    }));
+    const b = saver(journal(at));
+    await b.load();
+    holding = false;
+    await a.load();
+    holding = true;
+    calls = 0;
+    const loads: Promise<LoadResult>[] = [];
+    for (const value of ["B1", "B2", "B3"]) {
+      loads.push(a.load());
+      while (gates.length < loads.length) await new Promise((resolve) => setImmediate(resolve));
+      await type(b, value);
+    }
+    holding = false;
+    const results: LoadResult[] = [];
+    for (const index of [2, 1, 0]) {
+      gates[index]!();
+      results.push(await loads[index]!);
+    }
+    const stale = (value: string) => ({ kind: "recovery", reason: "stale", document: text(value) });
+    expect(results).toEqual([stale("B2"), stale("B3"), stale("B3")]);
+    expect(calls).toBe(5);
+  });
+
   it("r6: text proposed while a failed read halted the saver is written by the next ready reload", async () => {
     const at = scope();
     const real = journal(at);
@@ -1669,6 +1731,30 @@ describe("LocalDocumentSaver: a journal whose rows disagree (#206 qa206e V-1)", 
     });
   }
 
+  // #206 Codex r4240797929: the storable check refuses only what the server refuses.
+  function atLimit(): CanonicalDocument {
+    return text("x".repeat(MAX_DOCUMENT_BYTES - documentByteLength(text("x")) + 1));
+  }
+  const valid: [string, CanonicalDocument][] = [
+    ["an emoji and other valid surrogate pairs", text("ok \u{1F600} \u{1D49C} \u{1F469}\u200D\u{1F4BB}")],
+    ["combining marks", text("e\u0301 c\u030C a\u0328")],
+    ["an empty document", text("")],
+    ["a document exactly at the size limit", atLimit()],
+  ];
+  for (const [name, doc] of valid) {
+    it(`17: a newest row and snapshot holding ${name} still load as saved`, async () => {
+      if (name.includes("size limit")) expect(documentByteLength(doc)).toBe(MAX_DOCUMENT_BYTES);
+      const { real } = await damaged(async (db) => {
+        await db.table("pending").update([DOC, 2], { "tx.document": doc });
+        await db.table("snapshots").update(DOC, { document: doc });
+      });
+      const fresh = saver(real);
+      const loaded = await fresh.load();
+      expect(loaded.kind === "ready" && documentsEqual(loaded.document, doc)).toBe(true);
+      expect(fresh.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+    });
+  }
+
   // "Newest pending row is the snapshot" holds only while rows remain: once an
   // ACK clears them (F-8), snapshot and meta alone are a whole journal.
   it("17: snapshot and meta with no pending rows, or with only the newest left, still load", async () => {
@@ -1685,6 +1771,18 @@ describe("LocalDocumentSaver: a journal whose rows disagree (#206 qa206e V-1)", 
 });
 
 describe("LocalDocumentSaver: stored text (#197 attack 10)", () => {
+  it("10: text saved with a lone surrogate or NUL reloads as saved, never as corrupt (#206 Codex r4240797929)", async () => {
+    const at = scope();
+    const target = saver(journal(at));
+    await target.load();
+    for (const value of ["a\uD800b", "\uDC00\uD800", "a\u0000b", "\u0000", "x\uD83D\u0000\uDE00y"]) {
+      await type(target, value);
+    }
+    expect((await journal(at).read(DOC)).pending).toHaveLength(5);
+    const fresh = saver(journal(at));
+    expect((await fresh.load()).kind).toBe("ready");
+    expect(fresh.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+  });
   it("10: a lone surrogate and NUL are stored in a form the server accepts", async () => {
     const at = scope();
     const target = saver(journal(at));
