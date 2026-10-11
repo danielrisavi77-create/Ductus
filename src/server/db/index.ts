@@ -1,10 +1,13 @@
 import pg from "pg";
 
+import { createOpenSession, type OpenSession } from "./open-session";
 import { createWithActor, type WithActor } from "./with-actor";
 
+export type { OpenSessionInput, OpenSessionResult } from "./open-session";
 export type { ActorTransaction, WithActor } from "./with-actor";
 
 let appWithActor: WithActor | undefined;
+let authOpenSession: OpenSession | undefined;
 
 // Limits of the web process pool. Every wait has an end, so a stuck request
 // fails instead of holding a connection or a caller for good.
@@ -109,4 +112,23 @@ function connect(): WithActor {
 export const withActor: WithActor = async (token, fn) => {
   appWithActor ??= connect();
   return appWithActor(token, fn);
+};
+
+// AUTH_DATABASE_URL is the login of the login callback: a member of
+// ductus_auth and nothing else (docs/BACKEND.md 4.3; ductus_auth_local in
+// the local stack). Logins are rare and each is one statement, so the pool is
+// small. Without the variable no session can be opened.
+function connectAuth(): OpenSession {
+  const connectionString = process.env.AUTH_DATABASE_URL;
+  if (!connectionString) {
+    throw new Error("AUTH_DATABASE_URL is not set; login stays closed");
+  }
+  const pool = new pg.Pool({ ...appPoolConfig(connectionString), max: 2 });
+  return createOpenSession(handleConnectionErrors(pool));
+}
+
+/** Opens a session for a verified login; only the login callback calls it. */
+export const openSession: OpenSession = async (input) => {
+  authOpenSession ??= connectAuth();
+  return authOpenSession(input);
 };
