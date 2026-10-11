@@ -9,9 +9,9 @@ import { describe, expect, it } from "vitest";
 const script = fileURLToPath(
   new URL("../../scripts/hooks/pr-metadata-precheck.mjs", import.meta.url),
 );
-// A directory outside any git repository, so no changed files raise the
-// minimum risk and the tests depend only on the body. Git hooks export
-// GIT_DIR and friends, which would point git back at this repository.
+// A directory outside any git repository, where the changed files cannot be
+// read. Git hooks export GIT_DIR and friends, which would point git back at
+// this repository.
 const cwd = mkdtempSync(join(tmpdir(), "pr-precheck-"));
 const env = Object.fromEntries(
   Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")),
@@ -19,7 +19,9 @@ const env = Object.fromEntries(
 
 function run(command: string) {
   return spawnSync(process.execPath, [script], {
-    input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd }),
+    // A docs-only branch: the changed files are readable and raise no floor.
+    // Outside a repository the hook blocks instead (DAN-137).
+    input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd: docsOnly }),
     encoding: "utf8",
     env,
   });
@@ -85,6 +87,16 @@ describe("pr-metadata-precheck hook", { timeout: 30_000 }, () => {
     writeFileSync(file, "Risk: low\nTask: DAN-3\n");
     expect(run(`gh pr edit 5 --body-file "${file}"`).status).toBe(2);
     expect(run('gh pr create --title "x" --body-file missing.md').status).toBe(0);
+  });
+
+  it("blocks when the changed files cannot be read, with a clear message", () => {
+    const result = spawnSync(process.execPath, [script], {
+      input: JSON.stringify({ tool_name: "Bash", tool_input: { command: heredoc("claude:desktop:platforma") }, cwd }),
+      encoding: "utf8",
+      env,
+    });
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("could not read the changed files");
   });
 
   it("lets gh pr edit through when the body is untouched", () => {
