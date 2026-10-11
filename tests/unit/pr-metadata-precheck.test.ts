@@ -9,21 +9,25 @@ import { describe, expect, it } from "vitest";
 const script = fileURLToPath(
   new URL("../../scripts/hooks/pr-metadata-precheck.mjs", import.meta.url),
 );
-// A directory outside any git repository, so no changed files raise the
-// minimum risk and the tests depend only on the body. Git hooks export
-// GIT_DIR and friends, which would point git back at this repository.
+// A directory outside any git repository, where the changed files cannot be
+// read. Git hooks export GIT_DIR and friends, which would point git back at
+// this repository.
 const cwd = mkdtempSync(join(tmpdir(), "pr-precheck-"));
 const env = Object.fromEntries(
   Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")),
 ) as NodeJS.ProcessEnv;
 
-function run(command: string) {
+function runIn(command: string, dir: string, childEnv = env) {
   return spawnSync(process.execPath, [script], {
-    input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd }),
+    input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd: dir }),
     encoding: "utf8",
-    env,
+    env: childEnv,
   });
 }
+
+// A docs-only branch: the changed files are readable and raise no floor.
+// Outside a repository the hook blocks instead (DAN-137).
+const run = (command: string) => runIn(command, docsOnly);
 
 const heredoc = (agent: string) =>
   [
@@ -87,6 +91,16 @@ describe("pr-metadata-precheck hook", { timeout: 30_000 }, () => {
     expect(run('gh pr create --title "x" --body-file missing.md').status).toBe(0);
   });
 
+  it("blocks when the changed files cannot be read, with a clear message", () => {
+    const result = spawnSync(process.execPath, [script], {
+      input: JSON.stringify({ tool_name: "Bash", tool_input: { command: heredoc("claude:desktop:platforma") }, cwd }),
+      encoding: "utf8",
+      env,
+    });
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("could not read the changed files");
+  });
+
   it("lets gh pr edit through when the body is untouched", () => {
     expect(run('gh pr edit 5 --title "new title"').status).toBe(0);
   });
@@ -119,11 +133,11 @@ function branchChanging(...files: string[]) {
 
 const docsOnly = branchChanging("docs/notes.md");
 
-function decide(command: string, stdout: string, dir = docsOnly) {
+function decide(command: string, stdout: string, dir = docsOnly, childEnv = env) {
   const result = spawnSync(process.execPath, [autoMerge, "--dry-run"], {
     input: JSON.stringify({ tool_input: { command }, tool_response: { stdout }, cwd: dir }),
     encoding: "utf8",
-    env,
+    env: childEnv,
   });
   return result.stdout.trim();
 }
@@ -170,6 +184,39 @@ describe("pr-auto-merge hook", { timeout: 30_000 }, () => {
     expect(git("mv", "scripts/hooks/old.mjs", "docs/old.md")).toBe(0);
     expect(git("-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "move")).toBe(0);
     expect(decide(create("low"), url, dir)).toBe("");
+  });
+
+  // The list of changed files must not depend on the directory the session runs in or on
+  // git settings that narrow a diff to it (a class of silent truncation, DAN-137).
+  describe("from a subdirectory with a setting that narrows the diff to it", () => {
+    const protectedChange = () => {
+      const dir = branchChanging("docs/notes.md", ".github/workflows/ci.yml");
+      return { dir, sub: join(dir, "docs") };
+    };
+    const low = () => `gh pr create --title "x" --body "Agent: claude:a:platforma\nRisk: low\nTask: DAN-1"`;
+    const git = (dir: string, ...args: string[]) => spawnSync("git", args, { cwd: dir, env, encoding: "utf8" });
+
+    it("keeps the full list when the repository sets diff.relative", () => {
+      const { dir, sub } = protectedChange();
+      expect(git(dir, "config", "diff.relative", "true").status).toBe(0);
+      expect(runIn(low(), sub).status).toBe(2);
+      expect(decide(low(), url, sub)).toBe("");
+    });
+
+    it("keeps the full list when the user config sets it", () => {
+      const { sub } = protectedChange();
+      const globalConfig = join(mkdtempSync(join(tmpdir(), "pr-gitconfig-")), "config");
+      writeFileSync(globalConfig, "[diff]\n\trelative = true\n");
+      const childEnv = { ...env, GIT_CONFIG_GLOBAL: globalConfig } as NodeJS.ProcessEnv;
+      expect(runIn(low(), sub, childEnv).status).toBe(2);
+      expect(decide(low(), url, sub, childEnv)).toBe("");
+    });
+
+    it("still selects a docs-only branch from a subdirectory", () => {
+      const dir = branchChanging("docs/notes.md");
+      expect(git(dir, "config", "diff.relative", "true").status).toBe(0);
+      expect(decide(low(), url, join(dir, "docs"))).toBe(url);
+    });
   });
 
   it("leaves a PR alone when the changed files cannot be read", () => {
