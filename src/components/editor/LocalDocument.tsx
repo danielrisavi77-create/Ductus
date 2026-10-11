@@ -5,7 +5,7 @@
  *
  * One provider owns the editor, the Web Lock and the `LocalDocumentSaver`;
  * the sheet (`LocalEditor`) and the word count (`LocalWordCount`) only render
- * what it holds. Nothing here touches the network. The save chip is step 1b-3.
+ * what it holds. Nothing here touches the network.
  *
  * - One writer per document: the tab holding the Web Lock journals; any other
  *   tab shows the blocked notice, stays read-only and reads the journal again
@@ -27,6 +27,8 @@ import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 
 import type { CanonicalDocument } from "@/domain/document";
+import { chipContent, type ChipContent } from "@/domain/sync/labels";
+import type { SyncState } from "@/domain/sync/states";
 import { countWords, NODE_ID_ATTRIBUTE, tiptapToCanonical } from "@/editor/interop";
 import { replaceWithStoredDocument } from "@/editor/identity";
 import { createEditorExtensions } from "@/editor/schema";
@@ -275,7 +277,7 @@ export function LocalEditor() {
   const canExport = editor !== null && (alert !== null) && !editor.isEmpty;
   return (
     <>
-      {/* Live regions exist before their text does, so it is announced; the chip is not live. */}
+      {/* Live regions exist before their text does, so it is announced. */}
       <div className="editor-notice" role="alert">
         {alert ? <p>{alert}</p> : null}
       </div>
@@ -293,7 +295,53 @@ export function LocalEditor() {
   );
 }
 
-/** Word count for the status bar; the save chip joins it in step 1b-3. */
+type Chip = ChipContent & { state: SyncState | "blocked" };
+
+/**
+ * What the save chip says, or null while the journal is still being read.
+ * Order matters: a blocked tab journals nothing, a refused document and any
+ * failure outrank whatever the saver last reported, so the chip never says
+ * "Spremljeno na uređaju" while a notice says saving has stopped (#197
+ * attacks 5 and 9). Only the saver's own state, reached after `saveLocal`
+ * resolved, can say it.
+ */
+function chipOf(value: LocalDocumentValue): Chip | null {
+  if (value.phase === "blocked") return { ...chipContent("EDITING", true), state: "blocked" };
+  const failure = failureOf(value);
+  const state: SyncState | null = value.phase === "recovery" || failure === "corrupt"
+    ? "RECOVERY_REQUIRED"
+    : failure ? "ERROR"
+    : value.phase === "ready" && value.snapshot ? value.snapshot.state
+    : null;
+  return state ? { ...chipContent(state), state } : null;
+}
+
+/**
+ * The save state in the status bar (#197 step 1 and line 53). The chip itself
+ * is not live: it changes when typing starts and again when it pauses, which
+ * a screen reader would read out over the typing. The polite region beside it
+ * says only that the text is now on the device (attack 14); a failure is
+ * announced by the alert above the sheet, a blocked tab by its status notice.
+ */
+export function LocalSaveChip() {
+  const chip = chipOf(useLocalDocument());
+  return (
+    <>
+      {chip ? (
+        // `data-state` is for tests only; the label carries the meaning.
+        <span className="sync-chip" data-tone={chip.tone} data-state={chip.state}>
+          <span className="sync-chip__dot" aria-hidden="true" />
+          {chip.text}
+        </span>
+      ) : null}
+      <span className="visually-hidden" role="status">
+        {chip?.state === "LOCAL_DURABLE" ? chip.text : null}
+      </span>
+    </>
+  );
+}
+
+/** Word count for the status bar. */
 export function LocalWordCount() {
   return <span>{wordsHr(useLocalDocument().words)}</span>;
 }
