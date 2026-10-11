@@ -14,6 +14,10 @@
  * a long document still costs nothing beyond the edited block. Node ids are
  * left to the identity plugin: replacing text inside a block keeps the block
  * and its id.
+ *
+ * Only the offending code units are replaced, never the whole run: the caret
+ * and every position outside them map through unchanged, so typing goes on
+ * where it was.
  */
 
 import { Extension } from "@tiptap/core";
@@ -24,6 +28,11 @@ import { AddMarkStep, RemoveMarkStep } from "@tiptap/pm/transform";
 import { storableText } from "./storable-text";
 
 const storableInputKey = new PluginKey("storableInput");
+
+// A run of code units `storableText` would change. With the `u` flag a valid
+// pair is one code point outside the class, so it never joins a run, and the
+// run's own repair equals the repair of the whole text at that place.
+const UNSTORABLE_RUN = /[\uD800-\uDFFF\u0000]+/gu;
 
 /**
  * Ranges of `doc` (the state after `transactions`) that they changed, each
@@ -58,21 +67,24 @@ export function createStorableInputPlugin(): Plugin {
     key: storableInputKey,
     appendTransaction(transactions, _oldState, newState) {
       if (!transactions.some((tr) => tr.docChanged)) return null;
-      const fixes = new Map<number, PmNode>();
+      const fixes = new Map<number, { to: number; text: string; node: PmNode }>();
       for (const [from, to] of changedRanges(transactions, newState.doc)) {
         newState.doc.nodesBetween(from, to, (node, pos) => {
-          if (node.isText && storableText(node.text!) !== node.text) fixes.set(pos, node);
-          return !node.isText;
+          if (!node.isText) return true;
+          for (const run of node.text!.matchAll(UNSTORABLE_RUN)) {
+            const start = pos + run.index;
+            fixes.set(start, { to: start + run[0].length, text: storableText(run[0]), node });
+          }
+          return false;
         });
       }
       if (fixes.size === 0) return null;
       const tr = newState.tr;
       // From the end, so earlier positions stay valid.
-      for (const pos of [...fixes.keys()].sort((a, b) => b - a)) {
-        const node = fixes.get(pos)!;
-        const text = storableText(node.text!);
-        if (text === "") tr.delete(pos, pos + node.nodeSize);
-        else tr.replaceWith(pos, pos + node.nodeSize, newState.schema.text(text, node.marks));
+      for (const from of [...fixes.keys()].sort((a, b) => b - a)) {
+        const { to, text, node } = fixes.get(from)!;
+        if (text === "") tr.delete(from, to);
+        else tr.replaceWith(from, to, newState.schema.text(text, node.marks));
       }
       return tr;
     },
