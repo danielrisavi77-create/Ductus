@@ -2,11 +2,11 @@
 
 Verzija 0.4 · 3. 10. 2026. · Odgovorna osoba: Daniel Rišavi
 
-> **Povijesna napomena:** verzije 0.1 i 0.2 ovog dokumenta opisivale su varijantu na Supabaseu (baza, prijava, Storage, Edge Functions, Realtime, `pg_cron`, Vault) i Netlifyju (hosting sučelja). Ta varijanta je napuštena prijedlogom u `docs/BACKEND.md` v0.3 (D-08); razlozi su u BACKEND §1. Verzija 0.3 opisuje sustav preko sučelja (portova) koja ne ovise o dobavljaču, a konkretni dobavljači navedeni su samo u §9 i uvijek uvjetno.
+> **Povijesna napomena:** verzije 0.1 i 0.2 ovog dokumenta opisivale su varijantu na Supabaseu (baza, prijava, Storage, Edge Functions, Realtime, `pg_cron`, Vault) i Netlifyju (hosting sučelja). Ta varijanta je napuštena prijedlogom u `docs/BACKEND.md` v0.3 (D-08; dio o aplikaciji odlučen 11. 10. 2026.); razlozi su u BACKEND §1. Verzija 0.3 opisuje sustav preko sučelja (portova) koja ne ovise o dobavljaču, a konkretni dobavljači navedeni su samo u §9 i uvijek uvjetno.
 
 Cilj: najjednostavnija arhitektura koja pouzdano ispunjava `PRODUCT.md` za pilot na jednom fakultetu, koju jedna osoba uz AI agente može održavati, i koja se kasnije može proširiti bez prepisivanja. Ciljna arhitektura vNext ostaje referenca (D-75); što se iz nje prihvaća i odgađa zapisano je u BACKEND §2, a odgođeni elementi imaju okidač u §11.
 
-**Odnos prema `BACKEND.md`:** BACKEND je detaljan plan backenda i ima prednost u pojedinostima (topologija, uloge, prijava, evidencija, kopije, trošak, program B0 do B9). Ovaj dokument daje cjelinu sustava i upućuje na BACKEND gdje je on mjerodavan. D-71 i D-74 vlasnik je potvrdio 10. 10. 2026. Sve što ovisi o D-08, D-72, D-73 i D-75 vrijedi kao **PRIJEDLOG** dok vlasnik te odluke ne potvrdi (B0.3), a D-08 je uvjetan i rezultatima spikeova B0.1 i B0.2.
+**Odnos prema `BACKEND.md`:** BACKEND je detaljan plan backenda i ima prednost u pojedinostima (topologija, uloge, prijava, evidencija, kopije, trošak, program B0 do B9). Ovaj dokument daje cjelinu sustava i upućuje na BACKEND gdje je on mjerodavan. D-71 i D-74 vlasnik je potvrdio 10. 10. 2026. D-08 je 11. 10. 2026. razdvojen (komentar 6105246182 na issueu #87): dio o aplikaciji (Next.js i worker, PostgreSQL s RLS-om i ulogama, pohrana kompatibilna sa S3, vlastiti OIDC klijent, sve u EU-u) je **ODLUČEN**, a dio o dobavljačima i trošku ostaje **PRIJEDLOG** do provjere B0.1 (rok 16. 11. 2026.). Odnos D-08 prema B0.2 nije odlučen. Sve što ovisi o dijelu D-08 o dobavljačima i trošku, o D-72, D-73 i D-75 vrijedi kao **PRIJEDLOG** dok vlasnik te odluke ne potvrdi (B0.3); retci §1 koje odluka od 11. 10. 2026. ne navodi (Editor, Lokalna pohrana, E-pošta) ostaju označeni kao prijedlog.
 
 ## 0.1 Status implementacije i granice repozitorija
 
