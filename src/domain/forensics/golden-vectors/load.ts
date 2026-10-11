@@ -36,6 +36,8 @@ export type GoldenSegmentVector = {
 /** One edit of the canonical bytes of `chain.segments[base]`. */
 export type GoldenPayloadEdit = {
   name: string;
+  /** Why the edit is refused, for example non-canonical bytes or an unknown field. */
+  class: string;
   base: number;
   find?: string;
   replace?: string;
@@ -44,6 +46,12 @@ export type GoldenPayloadEdit = {
   reason: "invalid";
   /** The edited text parses to the same value as the base segment. */
   recanonicalizesToBase: boolean;
+  /**
+   * JCS writes the parsed edit as the base with `find` replaced by this: the
+   * edited bytes differ from their own canonical form exactly there, and
+   * the verifier accepts that canonical twin. Only with text `find`.
+   */
+  canonicalReplace?: string;
   /** The edited bytes are canonical JCS; only the validator rejects them. */
   canonicalJcs: boolean;
 };
@@ -97,6 +105,17 @@ export type GoldenVectors = {
   /** Owner decision of 10 October 2026 (D-24, D-56): no time per event, none finer than a minute. */
   eventTime: {
     /** The chain segments of the first revision of the file, byte for byte. Valid then, refused now. */
+    formerSegments: {
+      name: string;
+      formerSegmentHash: string;
+      byteLength: number;
+      canonicalUtf8Hex: string;
+      reason: "invalid";
+    }[];
+  };
+  /** DAN-183 (Z10): only steps of the closed format ductus-edit-steps-v1. */
+  stepFormat: {
+    /** The chain segments of this file before DAN-183, byte for byte, with the test insert format. */
     formerSegments: {
       name: string;
       formerSegmentHash: string;
