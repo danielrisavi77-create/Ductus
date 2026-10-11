@@ -13,19 +13,19 @@
  *   once the lock is free (#197 attack 4).
  * - Every change calls `edit()` at once; the canonical candidate is built and
  *   proposed after a debounce and on `pagehide` or a hidden page (attack 1).
- * - Ids minted for new blocks are written back into the editor, so a block
- *   keeps its identity from one candidate to the next.
- * - Pasted blocks lose their `nodeId`: ids are minted here, never taken from
- *   the clipboard (attack 11).
+ * - Block ids belong to the identity plugin (#226): it mints them and strips
+ *   pasted ones (attack 11). The stored document enters only through
+ *   `replaceWithStoredDocument`, so a reload gives back the same ids and a
+ *   stored document with a repeated id is refused, never repaired.
  */
 
-import { Fragment, Slice, type Node as PmNode } from "@tiptap/pm/model";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 
 import type { CanonicalDocument } from "@/domain/document";
 import { chipContent } from "@/domain/sync/labels";
-import { canonicalToTiptap, countWords, NODE_ID_ATTRIBUTE, tiptapToCanonical } from "@/editor/interop";
+import { countWords, NODE_ID_ATTRIBUTE, tiptapToCanonical } from "@/editor/interop";
+import { replaceWithStoredDocument } from "@/editor/identity";
 import { createEditorExtensions } from "@/editor/schema";
 import { wordsHr } from "@/lib/i18n/hr";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
@@ -36,8 +36,6 @@ import {
 
 /** Quiet time after the last change before a candidate is proposed. */
 const DEBOUNCE_MS = 400;
-/** Marks the transaction that writes minted ids back; it is not an edit. */
-const ID_WRITE_BACK = "ductusNodeIdWriteBack";
 const EXPORT_FILE_NAME = "ductus-rad.txt";
 
 type Phase = "loading" | "blocked" | "ready" | "recovery" | "unavailable";
@@ -59,31 +57,20 @@ function useLocalDocument(): LocalDocumentValue {
   return value;
 }
 
-function withoutNodeIds(fragment: Fragment): Fragment {
-  const nodes: PmNode[] = [];
-  fragment.forEach((node) => {
-    if (node.isText) {
-      nodes.push(node);
-      return;
-    }
-    const attrs = NODE_ID_ATTRIBUTE in node.attrs ? { ...node.attrs, [NODE_ID_ATTRIBUTE]: null } : node.attrs;
-    nodes.push(node.type.create(attrs, withoutNodeIds(node.content), node.marks));
+/**
+ * Whether the candidate holds exactly the ids the editor holds. The identity
+ * plugin (#226) gives every block its id, so interop never mints one; if it
+ * did, the journal would hold ids the editor lacks and a reload would not
+ * give the same blocks back, so such a candidate is refused, not written back.
+ */
+function sameIds(editor: Editor, doc: CanonicalDocument): boolean {
+  const { doc: shownDoc } = editor.state;
+  if (shownDoc.childCount !== doc.nodes.length) return false;
+  let same = true;
+  shownDoc.forEach((node, _offset, index) => {
+    if (node.attrs[NODE_ID_ATTRIBUTE] !== doc.nodes[index]!.id) same = false;
   });
-  return Fragment.fromArray(nodes);
-}
-
-/** Gives every top-level block the id the candidate carries for it. */
-function writeBackIds(editor: Editor, doc: CanonicalDocument): void {
-  const { state } = editor;
-  if (state.doc.childCount !== doc.nodes.length) return;
-  const tr = state.tr;
-  state.doc.forEach((node, offset, index) => {
-    const id = doc.nodes[index]!.id;
-    if (node.attrs[NODE_ID_ATTRIBUTE] !== id) {
-      tr.setNodeMarkup(offset, undefined, { ...node.attrs, [NODE_ID_ATTRIBUTE]: id });
-    }
-  });
-  if (tr.docChanged) editor.view.dispatch(tr.setMeta("addToHistory", false).setMeta(ID_WRITE_BACK, true));
+  return same;
 }
 
 export function LocalDocumentProvider({
@@ -108,12 +95,11 @@ export function LocalDocumentProvider({
     if (!dirtyRef.current || !editor || editor.isDestroyed || !saver || !readyRef.current) return;
     dirtyRef.current = false;
     const candidate = tiptapToCanonical(editor.getJSON());
-    if (!candidate.ok) {
+    if (!candidate.ok || !sameIds(editor, candidate.doc)) {
       setInvalid(true);
       return;
     }
     setInvalid(false);
-    writeBackIds(editor, candidate.doc);
     setWords(countWords(candidate.doc));
     void saver.propose(candidate.doc);
   });
@@ -130,10 +116,9 @@ export function LocalDocumentProvider({
         "aria-readonly": readyRef.current ? "false" : "true",
         class: "manuscript",
       }),
-      transformPasted: (slice) => new Slice(withoutNodeIds(slice.content), slice.openStart, slice.openEnd),
     },
-    onUpdate: ({ transaction }) => {
-      if (transaction.getMeta(ID_WRITE_BACK) || !readyRef.current) return;
+    onUpdate: () => {
+      if (!readyRef.current) return;
       saverRef.current?.edit();
       dirtyRef.current = true;
       if (timerRef.current !== null) clearTimeout(timerRef.current);
@@ -182,7 +167,13 @@ export function LocalDocumentProvider({
         saverRef.current = saver;
         setSnapshot(saver.snapshot());
         if (result.kind !== "unavailable" && result.document) {
-          editor.commands.setContent(canonicalToTiptap(result.document), { emitUpdate: false });
+          // The only way stored ids enter the editor (#226): validated, never
+          // re-minted. A refused document is a journal this tab cannot trust,
+          // so it stays untouched and the editor stays read-only.
+          if (!replaceWithStoredDocument(editor.view, result.document).ok) {
+            setPhase("recovery");
+            return;
+          }
           setWords(countWords(result.document));
         }
         if (result.kind !== "ready") {

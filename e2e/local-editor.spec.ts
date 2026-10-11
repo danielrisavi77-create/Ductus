@@ -27,6 +27,40 @@ async function typeInto(page: Page, text: string): Promise<void> {
   await page.keyboard.type(text);
 }
 
+const blockIds = (page: Page) => editorOf(page).locator(":scope > [data-node-id]")
+  .evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-node-id")));
+
+/**
+ * Rewrites the stored snapshot of the only journalled document: the second
+ * block takes the first block's id, in the given letter case. Returns the
+ * stored ids afterwards; `null` leaves the snapshot as it is (read only).
+ */
+function storedIds(page: Page, repeat: "same" | "upper" | null): Promise<string[]> {
+  return page.evaluate(async (repeat) => {
+    const request = <T>(r: IDBRequest<T>) => new Promise<T>((resolve, reject) => {
+      r.onsuccess = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+    });
+    for (const { name } of await indexedDB.databases()) {
+      const db = await request(indexedDB.open(name!));
+      if (!db.objectStoreNames.contains("snapshots")) {
+        db.close();
+        continue;
+      }
+      const store = db.transaction("snapshots", "readwrite").objectStore("snapshots");
+      const [row] = await request(store.getAll()) as { document: { nodes: { id: string }[] } }[];
+      const nodes = row!.document.nodes;
+      if (repeat) {
+        nodes[1]!.id = repeat === "upper" ? nodes[0]!.id.toUpperCase() : nodes[0]!.id;
+        await request(store.put(row));
+      }
+      db.close();
+      return nodes.map((node) => node.id);
+    }
+    throw new Error("no journal database");
+  }, repeat);
+}
+
 async function axe(page: Page): Promise<void> {
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
@@ -205,4 +239,62 @@ test.describe("local editor (#197)", () => {
     await expect(chipOf(page)).toHaveText(SAVED);
     await axe(page);
   });
+
+  test("stored ids: a reload gives every block its stored id back, and a new block keeps the rest", async ({ page }) => {
+    await openEditor(page);
+    await typeInto(page, "Prvi izmišljeni odlomak");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("Drugi odlomak, čćžšđ");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("Treći odlomak");
+    await expect(chipOf(page)).toHaveText(SAVED);
+    const ids = await blockIds(page);
+    expect(ids).toHaveLength(3);
+    expect(await storedIds(page, null)).toEqual(ids);
+
+    for (let round = 0; round < 2; round++) {
+      await page.reload();
+      await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+      await expect(chipOf(page)).toHaveText(SAVED);
+      expect(await blockIds(page)).toEqual(ids);
+    }
+
+    await editorOf(page).locator(":scope > p").last().click();
+    await page.keyboard.press("End");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("Četvrti odlomak");
+    await expect(chipOf(page)).toHaveText(SAVED);
+    const grown = await blockIds(page);
+    expect(grown.slice(0, 3)).toEqual(ids);
+    expect(grown).toHaveLength(4);
+    await page.reload();
+    await expect(chipOf(page)).toHaveText(SAVED);
+    expect(await blockIds(page)).toEqual(grown);
+    expect(await storedIds(page, null)).toEqual(grown);
+  });
+
+  for (const repeat of ["same", "upper"] as const) {
+    test(`stored ids: a stored document repeating an id (${repeat} case) is refused, never repaired`, async ({ page }) => {
+      await openEditor(page);
+      await typeInto(page, "Prvi izmišljeni odlomak");
+      await page.keyboard.press("Enter");
+      await page.keyboard.type("Drugi izmišljeni odlomak");
+      await expect(chipOf(page)).toHaveText(SAVED);
+      const tampered = await storedIds(page, repeat);
+      expect(tampered[1]!.toLowerCase()).toBe(tampered[0]!.toLowerCase());
+
+      await page.reload();
+      await expect(noticeOf(page)).toContainText("Lokalni zapis nije moguće pouzdano pročitati.");
+      await expect(editorOf(page)).toHaveAttribute("contenteditable", "false");
+      await expect(editorOf(page)).toHaveAttribute("aria-readonly", "true");
+      await expect(chipOf(page)).not.toHaveText(SAVED);
+      // No block shows the repeated id under a new one: nothing was loaded.
+      expect(await blockIds(page)).not.toContain(tampered[1]);
+      await editorOf(page).click({ force: true });
+      await page.keyboard.type("Ne smije ući");
+      await expect(editorOf(page)).not.toContainText("Ne smije ući");
+      // The journal keeps exactly what it held: refused, not repaired.
+      expect(await storedIds(page, null)).toEqual(tampered);
+    });
+  }
 });
