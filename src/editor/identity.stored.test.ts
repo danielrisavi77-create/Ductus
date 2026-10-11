@@ -1,7 +1,7 @@
 import { Editor } from "@tiptap/core";
 import { Slice } from "@tiptap/pm/model";
 import { Step, Transform } from "@tiptap/pm/transform";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { paragraphNode, textNode, DOCUMENT_SCHEMA_VERSION, type CanonicalDocument, type NodeId } from "../domain/document";
 
@@ -395,6 +395,52 @@ describe("blocks that never had an id", () => {
     expect(repeatedNodeIds(state(ID_A, ID_B, ID_C, null, null))).toEqual([]);
     expect(repeatedNodeIds(state(ID_A, ID_B, ID_A.toUpperCase(), ID_B, ID_B, ID_C))).toEqual([ID_A, ID_B]);
     expect(repeatedNodeIds(state("not-a-uuid", "not-a-uuid"))).toEqual(["not-a-uuid"]);
+  });
+
+  describe("when the editor is created", () => {
+    const paragraph = (id: string) => ({ type: "paragraph", attrs: { [NODE_ID_ATTRIBUTE]: id } });
+
+    /** Creates the editor and runs what Tiptap runs once it is mounted. */
+    function create(found: string[], onRepeatedInitialId?: (ids: readonly string[]) => void): Editor {
+      const extensions = createEditorExtensions().map((extension) =>
+        extension.name === "nodeIdentity" && onRepeatedInitialId
+          ? NodeIdentity.configure({ onRepeatedInitialId })
+          : extension,
+      );
+      const editor = new Editor({ element: null, extensions, content: { type: "doc", content: found.map(paragraph) } });
+      editor.emit("create", { editor });
+      return editor;
+    }
+
+    it("the option is told the repeated ids, once, and replaces the console warning", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      const calls: (readonly string[])[] = [];
+      create([ID_A, ID_B, ID_A.toUpperCase(), ID_B, ID_C], (repeated) => calls.push(repeated));
+
+      // The repair that follows needs a mounted editor; the browser suite covers it.
+      expect(calls).toEqual([[ID_A, ID_B]]);
+      expect(warn).not.toHaveBeenCalled();
+      warn.mockRestore();
+    });
+
+    it("the option is not called when no id is repeated", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      const calls: (readonly string[])[] = [];
+      create([ID_A, ID_B, ID_C], (repeated) => calls.push(repeated));
+
+      expect(calls).toEqual([]);
+      expect(warn).not.toHaveBeenCalled();
+      warn.mockRestore();
+    });
+
+    it("without the option a repeated id is a console warning that names the way to load a stored document", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      create([ID_A, ID_A]);
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toContain("replaceWithStoredDocument");
+      warn.mockRestore();
+    });
   });
 
   it("does not touch an id that is present, malformed or not", () => {
