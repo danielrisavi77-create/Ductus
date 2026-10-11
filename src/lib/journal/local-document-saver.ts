@@ -19,7 +19,7 @@ import { commitRequestFromTransaction } from "../../domain/serverSync/contract";
 import type { JournalContents } from "../../domain/sync/journal-types";
 import { restoreSyncState } from "../../domain/sync/restore";
 import {
-  SYNC_STATES, syncReducer, type LocalSaveFailureReason, type SyncEvent, type SyncState,
+  LOCAL_SAVE_FAILURE_REASONS, SYNC_STATES, syncReducer, type LocalSaveFailureReason, type SyncEvent, type SyncState,
 } from "../../domain/sync/states";
 import { storableDocument } from "../../editor/storable-text";
 import type { AtomicDexieJournal } from "./atomic-dexie-journal";
@@ -216,7 +216,7 @@ export class LocalDocumentSaver {
       if (--this.readers === 0) {
         this.reading = null;
         this.release();
-        if (this.next && !this.halted) this.flight ??= this.drain();
+        if (this.next && !this.halted && !this.flight) this.drain();
       }
     }
   }
@@ -385,7 +385,7 @@ export class LocalDocumentSaver {
     // During a reload the candidate waits; `load()` starts it once read.
     if (this.reading) return this.reading.then(() => this.flightSettled());
     // A halted saver holds it; `drain()` would end at once and never clear `flight`.
-    if (!this.halted) this.flight ??= this.drain();
+    if (!this.halted && !this.flight) this.drain();
     return this.flight ?? Promise.resolve();
   }
 
@@ -406,7 +406,18 @@ export class LocalDocumentSaver {
     while (this.flight) await this.flight;
   }
 
-  private async drain(): Promise<void> {
+  /**
+   * `flight` is set before anything runs: `save()` notifies listeners
+   * synchronously, and one calling `settled()` or `propose()` from there
+   * must see this write in flight, not start a second one (#206 qa206i VAŽNO).
+   */
+  private drain(): void {
+    let settle!: (written: Promise<void>) => void;
+    this.flight = new Promise<void>((resolve) => { settle = resolve; });
+    settle(this.writeQueued());
+  }
+
+  private async writeQueued(): Promise<void> {
     try {
       while (this.next && !this.halted) {
         const candidate = this.next;
@@ -521,6 +532,8 @@ function consistent(
   if (!meta) return pending.length === 0;
   if (meta.documentId !== documentId || !Number.isSafeInteger(meta.localSeq) ||
       meta.localSeq < 0 || !(SYNC_STATES as readonly string[]).includes(meta.state) ||
+      (meta.lastError !== undefined &&
+        !(LOCAL_SAVE_FAILURE_REASONS as readonly unknown[]).includes(meta.lastError)) ||
       snapshot?.documentId !== documentId ||
       // The next write takes its base from here (#206 Codex r4240617145).
       !Number.isSafeInteger(snapshot.revision) || snapshot.revision < 0) return false;

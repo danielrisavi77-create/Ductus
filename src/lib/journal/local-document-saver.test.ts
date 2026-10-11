@@ -1717,6 +1717,17 @@ describe("LocalDocumentSaver: a journal whose rows disagree (#206 qa206e V-1)", 
     }],
     ["an older pending row holding NUL", (db) =>
       db.table("pending").update([DOC, 1], { "tx.document": text("a\u0000b") })],
+    // #206 qa206i MANJE: a failure reason restore cannot name.
+    ...([
+      ["a BigInt", 1n], ["a Date", new Date(0)], ["a Map", new Map()], ["NaN", Number.NaN],
+      ["an unknown reason", "UNKNOWN_SYNTHETIC"], ["a long string", "q".repeat(10_000)],
+    ] as [string, unknown][]).map(([what, value]): [string, Damage] =>
+      [`a meta failure reason stored as ${what}`, (db) => db.table("meta").update(DOC, { lastError: value })]),
+    ["a meta failure reason with a cycle", async (db) => {
+      const cycle: Record<string, unknown> = {};
+      cycle.self = cycle;
+      await db.table("meta").update(DOC, { lastError: cycle });
+    }],
   ];
   for (const [name, damage] of cases) {
     it(`17: ${name} is corrupt, never older or empty text shown as saved, and nothing is written`, async () => {
@@ -1754,6 +1765,12 @@ describe("LocalDocumentSaver: a journal whose rows disagree (#206 qa206e V-1)", 
       expect(fresh.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
     });
   }
+
+  it("17: a meta failure reason restore names still loads with the journal's text (#206 qa206i MANJE)", async () => {
+    const { real } = await damaged((db) => db.table("meta").update(DOC, { lastError: "quota" }));
+    const loaded = await saver(real).load();
+    expect(loaded.kind === "ready" && documentsEqual(loaded.document, text("najnovije"))).toBe(true);
+  });
 
   // "Newest pending row is the snapshot" holds only while rows remain: once an
   // ACK clears them (F-8), snapshot and meta alone are a whole journal.
@@ -1966,5 +1983,94 @@ describe("LocalDocumentSaver: settled() during a reload (#206 Codex r4240541632)
     await settled;
     expect((await journal(at).read(DOC)).snapshot?.document).toEqual(text("odabrano"));
     expect((await resumed).kind).toBe("ready");
+  });
+
+  // #206 qa206i VAŽNO: a listener runs inside `save()`, before its write.
+  function heldWrite(real: AtomicDexieJournal) {
+    let open = () => {};
+    let gate: Promise<void> | null = null;
+    const started: string[] = [];
+    const fake = patched(real, {
+      saveLocal: async (...args: Parameters<AtomicDexieJournal["saveLocal"]>) => {
+        const tx = args[1] as { document: CanonicalDocument };
+        started.push(JSON.stringify(tx.document));
+        if (gate) await gate;
+        return real.saveLocal(...args);
+      },
+    });
+    return {
+      fake, started,
+      hold: () => { gate = new Promise<void>((resolve) => { open = resolve; }); },
+      open: () => { gate = null; open(); },
+    };
+  }
+
+  it("settled() waits for a write proposed on its own until it is in the journal (#206 qa206i MANJE)", async () => {
+    const at = scope();
+    const held = heldWrite(journal(at));
+    const target = saver(held.fake);
+    await target.load();
+    held.hold();
+    target.edit();
+    void target.propose(text("samo"));
+    let done = false;
+    const settled = target.settled().then(() => { done = true; });
+    await turns(5);
+    expect(held.started).toHaveLength(1);
+    expect(done).toBe(false);
+    held.open();
+    await settled;
+    expect((await journal(at).read(DOC)).snapshot?.document).toEqual(text("samo"));
+  });
+
+  it("A: settled() called by a SAVING_LOCAL listener waits for that write", async () => {
+    const at = scope();
+    const held = heldWrite(journal(at));
+    const target = saver(held.fake);
+    await target.load();
+    await type(target, "staro");
+    held.hold();
+    let done = false;
+    let inner: Promise<void> | null = null;
+    target.subscribe((s) => {
+      if (s.state === "SAVING_LOCAL" && !inner) inner = target.settled().then(() => { done = true; });
+    });
+    target.edit();
+    void target.propose(text("novo"));
+    await turns(5);
+    expect(inner).not.toBeNull();
+    expect(done).toBe(false);
+    held.open();
+    await inner;
+    expect((await journal(at).read(DOC)).snapshot?.document).toEqual(text("novo"));
+  });
+
+  it("B: text a SAVING_LOCAL listener proposes is written after, never beside, the write in flight", async () => {
+    const at = scope();
+    const held = heldWrite(journal(at));
+    const target = saver(held.fake);
+    await target.load();
+    held.hold();
+    let proposed = false;
+    target.subscribe((s) => {
+      if (s.state !== "SAVING_LOCAL" || proposed) return;
+      proposed = true;
+      target.edit();
+      void target.propose(text("novije"));
+    });
+    target.edit();
+    void target.propose(text("starije"));
+    let done = false;
+    const settled = target.settled().then(() => { done = true; });
+    await turns(5);
+    expect(held.started).toEqual([JSON.stringify(text("starije"))]);
+    expect(done).toBe(false);
+    held.open();
+    await settled;
+    expect(held.started).toEqual([JSON.stringify(text("starije")), JSON.stringify(text("novije"))]);
+    const after = await journal(at).read(DOC);
+    expect(after.snapshot?.document).toEqual(text("novije"));
+    expect(after.pending.map((row) => row.localSeq)).toEqual([1, 2]);
+    expect(target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
   });
 });
