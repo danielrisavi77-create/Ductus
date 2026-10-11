@@ -14,6 +14,7 @@ import {
   isEvidenceSegmentV2,
   type EvidenceSegmentV2,
 } from "./evidence-segment-v2";
+import { loadGoldenVectors } from "./golden-vectors/load";
 
 const A = "a".repeat(64);
 const B = "b".repeat(64);
@@ -99,6 +100,57 @@ describe("EvidenceSegmentV2", () => {
     const wrongFinal = fixture();
     wrongFinal.finalDocumentHash = "c".repeat(64);
     expect(isEvidenceSegmentV2(wrongFinal)).toBe(false);
+  });
+
+  it("counts its events against its range exactly, up to the largest safe integer", () => {
+    const { accepted, rejected } = loadGoldenVectors().sequenceRanges;
+    const hash = (index: number) => index.toString(16).padStart(64, "0");
+    /** A segment with `eventCount` events numbered from `sequenceFrom`, as a client would number them. */
+    const withRange = (sequenceFrom: number, sequenceTo: number, eventCount: number): EvidenceSegmentV2 => ({
+      ...fixture(),
+      sequenceFrom,
+      sequenceTo,
+      initialDocumentHash: hash(0),
+      finalDocumentHash: hash(eventCount),
+      events: Array.from({ length: eventCount }, (_, index) => ({
+        ...fixture().events[0],
+        sequence: sequenceFrom + index,
+        beforeDocumentHash: hash(index),
+        afterDocumentHash: hash(index + 1),
+      })),
+    });
+    const small = (range: { eventCount: number }) => range.eventCount <= 8;
+    expect(accepted.filter(small).map((range) => range.name)).toEqual(
+      expect.arrayContaining(["largest-number-alone", "last-two-numbers"]),
+    );
+    for (const range of accepted.filter(small)) {
+      expect(isEvidenceSegmentV2(withRange(range.sequenceFrom, range.sequenceTo, range.eventCount)), range.name).toBe(
+        true,
+      );
+    }
+    const refusedNames = rejected.filter(small).map((range) => range.name);
+    expect(refusedNames).toEqual(
+      expect.arrayContaining([
+        "rounding-two-events-at-largest-number",
+        "rounding-three-events-in-last-two-numbers",
+        "end-above-safe-integer",
+        "empty-range",
+      ]),
+    );
+    for (const range of rejected.filter(small)) {
+      const segment = withRange(range.sequenceFrom, range.sequenceTo, range.eventCount);
+      expect(isEvidenceSegmentV2(segment), range.name).toBe(false);
+      // Nor with every event numbered by the end of the range instead.
+      for (const event of segment.events) event.sequence = range.sequenceTo;
+      expect(isEvidenceSegmentV2(segment), range.name).toBe(false);
+    }
+
+    // The two that a check written as from + length - 1 takes: the sum rounds
+    // to the end of the range, and the last event carries 2^53.
+    const two = withRange(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER, 2);
+    expect(two.sequenceFrom + two.events.length - 1).toBe(two.sequenceTo);
+    expect(two.events.map((event) => event.sequence)).toEqual([9007199254740991, 9007199254740992]);
+    expect(isEvidenceSegmentV2(two)).toBe(false);
   });
 
   it("orders events by sequence alone and refuses any time on an event", () => {
