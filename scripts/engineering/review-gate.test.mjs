@@ -196,6 +196,34 @@ test("trusted collaborator review can satisfy the gate", () => {
   assert.equal(result.state, "success");
 });
 
+// Shape of a recorded App bot comment (issue comment 6111258117 on #267); GitHub
+// reported it as NONE, but the gate must not lean on that alone.
+const botComment = (body, association) => ({
+  body,
+  user: { login: "chatgpt-codex-connector[bot]", type: "Bot" },
+  author_association: association,
+  performed_via_github_app: { slug: "chatgpt-codex-connector" },
+  created_at: "2026-10-11T16:39:31Z",
+});
+
+test("an App bot comment is never a review or QA verdict, whatever its association", () => {
+  for (const association of ["NONE", "OWNER", "MEMBER", "COLLABORATOR"]) {
+    const reviewOnly = evaluate({
+      body: prBody(),
+      headSha: head,
+      comments: [botComment(review({ agent: "codex:b:reviewer" }).body, association)],
+    });
+    assert.equal(reviewOnly.state, "pending");
+
+    const withBotQa = evaluate({
+      body: prBody("critical"),
+      headSha: head,
+      comments: [review(), botComment(qa().body, association)],
+    });
+    assert.equal(withBotQa.state, "pending");
+  }
+});
+
 test("four-character tilde fence remains fenced until equally long close", () => {
   const body =
     "Agent-Review: claude:b:reviewer\n~~~~text\n" +
