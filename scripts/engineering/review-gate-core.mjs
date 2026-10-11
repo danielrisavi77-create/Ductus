@@ -1,6 +1,6 @@
 import { canonicalBlock, field } from "./metadata-parser.mjs";
 import { evaluateMetadata } from "./pr-metadata-core.mjs";
-import { changedPaths, ownerCommandPaths } from "./protected-paths.mjs";
+import { changedPaths, ownerCommandPaths, qaExemption } from "./protected-paths.mjs";
 
 const RISK_VALUES = new Set(["low", "standard", "critical"]);
 const AGENT_RE =
@@ -209,6 +209,7 @@ export function evaluateGate({
   comments = [],
   carriedHeads = new Set(),
   trustedLogins = TRUSTED_VERDICT_LOGINS,
+  qaExempt = null,
 }) {
   const authorAgent = field(body, "Agent");
   const authorRuntime = declaredRuntime(authorAgent);
@@ -295,6 +296,16 @@ export function evaluateGate({
       result.identity.principal !== authorPrincipal &&
       result.verdict === "PASS",
   );
+
+  // ENGINEERING_SYSTEM §5: a critical PR changing only tests or only
+  // documents needs no QA PASS. `qaExempt` comes from the changed file list,
+  // never from the body; a current QA FAIL or BLOCK above still holds.
+  if (risk === "critical" && qaExempt) {
+    return {
+      state: "success",
+      description: `Independently authenticated review is valid for current head (critical, ${qaExempt} only: QA not required).${carriedNote(passingReviews, headSha)}`,
+    };
+  }
 
   if (risk === "critical") {
     const separateAppPass = qaPasses.some(
@@ -466,7 +477,14 @@ export function evaluatePullRequest({ pr, files, comments, ownerLogin, carriedHe
   }
   return {
     metadata,
-    result: evaluateGate({ body: pr.body ?? "", headSha: pr.head.sha, ownerLogin, comments, carriedHeads }),
+    result: evaluateGate({
+      body: pr.body ?? "",
+      headSha: pr.head.sha,
+      ownerLogin,
+      comments,
+      carriedHeads,
+      qaExempt: qaExemption(paths),
+    }),
   };
 }
 
