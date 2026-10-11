@@ -49,6 +49,9 @@ export const hr = {
     documentNotEditable: "Pisanje ovdje još nije moguće.",
     status: "Stanje rada",
   },
+  editor: {
+    placeholder: "Počni pisati…",
+  },
   auth: {
     failedTitle: "Prijava nije dovršena",
     failedBody: "Prijavu nije bilo moguće dovršiti. Pokušaj ponovno; ako se ponovi, javi se koordinatoru na svojoj ustanovi.",
