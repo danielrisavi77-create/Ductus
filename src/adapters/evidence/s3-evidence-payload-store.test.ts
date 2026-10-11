@@ -1399,6 +1399,64 @@ describe("one monotonic deadline (QA qa233d)", () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  it.each([404, 500])(
+    "a comparison read that fails with %i past the deadline is a timeout",
+    async (status) => {
+      const s3: ReturnType<typeof fakeS3> = fakeS3((call) =>
+        call.method === "GET" ? (block(60), Promise.resolve(new Response(null, { status }))) : null,
+      );
+      s3.objects.set(keyOf(PACKAGE, hashOf(payload("a"))), new TextEncoder().encode(payload("a")));
+      const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+
+      await expect(put(store, "a")).resolves.toEqual(timeout);
+      expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
+      expect(warn).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each<[string, string]>([
+    ["existing", "a"],
+    ["conflict", "b"],
+  ])(
+    "a deadline that passes while comparing the bytes at the key is a timeout, not %s",
+    async (_, held) => {
+      // Hashing the read-back is the first non-empty hash after the GET; it
+      // spends the whole deadline on this clock.
+      let now = performance.now();
+      let afterGet = false;
+      let spent = 0;
+      const s3 = fakeS3((call) => {
+        if (call.method === "GET") afterGet = true;
+        return null;
+      });
+      s3.objects.set(keyOf(PACKAGE, hashOf(payload("a"))), new TextEncoder().encode(payload(held)));
+      const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 60_000 });
+      const hash = Object.getPrototypeOf(createHash("sha256")) as {
+        update: (data: Uint8Array) => unknown;
+      };
+      const realUpdate = hash.update;
+      const update = vi
+        .spyOn(hash, "update")
+        .mockImplementation(function (this: unknown, data: Uint8Array) {
+          if (afterGet && data.byteLength > 0) {
+            now += 1_000_000;
+            spent += 1;
+          }
+          return realUpdate.call(this, data);
+        });
+      const clock = vi.spyOn(performance, "now").mockImplementation(() => now);
+      try {
+        await expect(put(store, "a")).resolves.toEqual(timeout);
+      } finally {
+        clock.mockRestore();
+        update.mockRestore();
+      }
+      expect(spent).toBe(1);
+      expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
+      expect(warn).not.toHaveBeenCalled();
+    },
+  );
+
   it("answers stored only within the deadline, even when no timer is late", async () => {
     const text = "a".repeat(2_097_000);
     const s3 = fakeS3();

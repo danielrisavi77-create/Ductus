@@ -312,8 +312,6 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
 
     if (late(phase)) return this.expire(input, phase);
     const get = await this.send("GET", path, null, signal);
-    // Past the deadline no answer speaks for the content, comparing
-    // included: neither existing nor conflict, and no late conflict log.
     if (late(phase)) return this.expire(input, phase);
     if (!get.ok) return this.unavailable(get.reason);
     if (get.status !== 200 || get.body === null) {
@@ -323,12 +321,12 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
         reason: `storage_get_status_${get.status}`,
       };
     }
-    if (
-      sha256Hex(get.body) === input.segmentHash &&
-      sameBytes(get.body, bytes)
-    ) {
-      return { status: "existing", storageRef };
-    }
+    const same =
+      sha256Hex(get.body) === input.segmentHash && sameBytes(get.body, bytes);
+    // Checked after comparing, right before the outcome: past the deadline
+    // neither existing nor conflict, and no late conflict log.
+    if (late(phase)) return this.expire(input, phase);
+    if (same) return { status: "existing", storageRef };
     this.log("evidence payload conflict", idsOf(input));
     return { status: "conflict" };
   }
