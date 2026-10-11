@@ -750,6 +750,20 @@ describe("a file the scan cannot read", () => {
       expect(plain.stderr).toContain("src/domain/sync/state.ts:1: the file does not parse, so the scan cannot read it");
       write("src/domain/sync/state.ts", "export const STATE = {};\n");
       expect(run()).toMatchObject({ status: 0, stderr: "" });
+      // QA of e11efe6: what reaches a page from a file that is not read is a finding of the guard, so the code is 3.
+      write("src/components/Case.spec.tsx", "export default function Case() { return <p>Sumnjivo</p>; }\n");
+      write("app/rad/page.tsx", 'import Case from "../../src/components/Case.spec";\nexport default function Page() { return <Case />; }\n');
+      expect(run()).toMatchObject({ status: 3, stderr: "" });
+      write("app/rad/page.tsx", 'import copy from "./missing.json";\nexport default function Page() { return <p>{copy.title}</p>; }\n');
+      expect(run()).toMatchObject({ status: 3, stderr: "" });
+      write("app/rad/copy.json", '{ "title": "Sumnjivo" }');
+      write("app/rad/page.tsx", 'import copy from "./copy.json";\nexport default function Page() { return <p>{copy.title}</p>; }\n');
+      expect(run()).toMatchObject({ status: 3, stderr: "" });
+      write("src/domain/sync/labels.ts", 'export const LABEL = "Sum" + "njivo";\n');
+      write("app/rad/copy.json", '{ "title": "Rok" }');
+      expect(run()).toMatchObject({ status: 3, stderr: "" });
+      write("src/domain/sync/labels.ts", 'export const LABEL = "Rok " + "predaje";\n');
+      expect(run()).toMatchObject({ status: 0, stderr: "" });
     } finally {
       rmSync(work, { recursive: true, force: true });
     }
