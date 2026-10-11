@@ -684,3 +684,40 @@ test("review nalaz 2: a sentence ending in ! or ? also ends the assignment, a la
     assert.deepEqual(queueItems([queue(line, 40)]).map((i) => [i.number, i.slots, i.loose]), [[10, ["claude:reviewA"], undefined]], line);
   }
 });
+
+// Review 6103532187: a `#N` in a later sentence with its own head or full SHA may be an assignment, never silence.
+test("review 6103532187: a later sentence with its own head or full SHA counts its PR and is WARN for each", async () => {
+  const lines = [
+    `- **#10** head \`${H1}\` → \`claude:reviewC\`. #20 head \`${H2}\` isto.`, // own head and full SHA
+    `- **#10** head \`${H1}\` → \`claude:reviewC\`. Uz to ${H2} za #20.`, // own full SHA, no head word
+    `- **#10** head \`${H1}\` → \`claude:reviewC\`. Rok je do 10. 10. pa #20 head 2222222.`, // date, short SHA
+    `- **#10** head \`${H1}\` → \`claude:reviewC\`. Neovisan o #30! Zatim #20 head 2222222 isto? Bez #40.`, // only its own sentence counts
+  ];
+  for (const line of lines) {
+    const w = world();
+    w.prs.push({ number: 20, state: "OPEN", isDraft: false, headRefOid: H2, headRefName: "y" });
+    w.comments.set(20, []);
+    w.comments.set(87, [queue(`#10 head ${H1} → \`claude:rev\``, 90), queue(`#20 head ${H2} → \`claude:rev\``, 90), queue(line, 40)]);
+    assert.deepEqual((await check(w)).of("red-87").filter((t) => /^(WARN|NEPROVJERENO) #/.test(t)), [
+      "WARN #10: noviji redak u redu nije prepoznat kao dodjela: više PR-ova u retku",
+      "WARN #20: noviji redak u redu nije prepoznat kao dodjela: više PR-ova u retku"], line);
+    assert.deepEqual(queueItems([queue(line, 40)]).map((i) => [i.number, i.slots]), [[10, []], [20, []]], line);
+  }
+});
+
+test("review 6103532187: a later sentence without its own head or full SHA stays a mention", async () => {
+  const lines = [
+    `- **#10** head \`${H1}\` → \`claude:reviewC\`. Neovisan o #20 i #30.`,
+    `- **#10** head \`${H1}\` → \`claude:reviewC\`. Rok je do 10. 10. pa #20 nakon toga.`,
+    `- **#10** head \`${H1}\` → \`claude:reviewC\`. Vidi #20 (commit 2222222).`,
+    `- **#10** head \`${H1}\` → \`claude:reviewC\`. Vidi #20 i commit 2222222.`, // a short SHA alone is not a head
+  ];
+  for (const line of lines) {
+    assert.deepEqual(queueItems([queue(line, 40)]).map((i) => [i.number, i.head, i.slots, i.loose]), [[10, H1, ["claude:reviewC"], undefined]], line);
+    const w = world();
+    w.prs.push({ number: 20, state: "OPEN", isDraft: false, headRefOid: H2, headRefName: "y" });
+    w.comments.set(20, []);
+    w.comments.set(87, [queue(line, 40)]);
+    assert.deepEqual((await check(w)).of("red-87").filter((t) => / #20/.test(t)), [], line);
+  }
+});

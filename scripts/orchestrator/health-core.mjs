@@ -109,6 +109,8 @@ const noParens = (s) => s.replace(/\([^()]*\)/g, "");
 
 const SENTENCE_END = /[.!?](?=\s|$)/;
 const CLAUSE_END = /[,;]|[.!?](?=\s|$)/;
+// A later sentence with its own head or full SHA may be an assignment, not a mention (review 6103532187).
+const OWN_HEAD = (s) => /\bhead[au]?\b/i.test(s) || FULL_SHA.test(s);
 
 /**
  * One queue line. `item`: `#N … head <SHA> → … runtime:slot` with exactly one PR and
@@ -116,7 +118,8 @@ const CLAUSE_END = /[,;]|[.!?](?=\s|$)/;
  * an arrow that is not such an assignment (status line, two PRs, two SHAs, no slot).
  * Loose lines are reported, never dropped silently (QA 6102784825, nalaz 1 i 5).
  * Only the first slot after the arrow is assigned; a later slot is the reason (6103224062).
- * A `#N` after the last arrow in a later sentence is a mention, not a PR of the line (6103210028).
+ * A `#N` after the last arrow in a later sentence is a mention, not a PR of the line (6103210028),
+ * unless that sentence carries its own head or full SHA: then it is a PR of the line and WARN.
  */
 function classify(line) {
   if (line.startsWith(">")) return null;
@@ -130,7 +133,8 @@ function classify(line) {
   const segments = tail.split(/→|->/).slice(1);
   const last = segments.pop() ?? "";
   const end = last.search(SENTENCE_END);
-  const prs = [...new Set([...pr(before), ...segments.flatMap(pr), ...pr(end < 0 ? last : last.slice(0, end))])];
+  const later = end < 0 ? [] : last.slice(end + 1).split(new RegExp(SENTENCE_END.source)).filter(OWN_HEAD);
+  const prs = [...new Set([...pr(before), ...segments.flatMap(pr), ...pr(end < 0 ? last : last.slice(0, end)), ...later.flatMap(pr)])];
   const mentions = [...line.matchAll(/(?<![0-9a-f])[0-9a-f]{7,40}(?![0-9a-f])/gi)].map((m) => m[0].toLowerCase());
   const loose = (why) => ({ loose: true, numbers: prs, mentions, why });
   const head = before.match(/\bhead[au]?\b\W{0,3}([0-9A-Za-z]*)/i);
