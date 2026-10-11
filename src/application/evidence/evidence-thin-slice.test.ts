@@ -37,6 +37,9 @@ import { EvidenceGateway } from "./evidence-gateway";
 import { buildEvidenceIngestCommandV2 } from "./evidence-outbox";
 import { reconstructAndCompareEvidence } from "./evidence-reconstruction";
 
+// A synthetic institution; no real one is used in tests.
+const INSTITUTION_ID = "00000000-0000-4000-8000-00000000000a";
+
 // B-14 (D-98 t. 1): ingest -> signed receipt -> reconstruction -> JCS comparison
 // over the in-memory adapters and the development signer. All data is invented.
 const PACKAGE = "paket-izmisljeni-1";
@@ -168,6 +171,7 @@ function setup() {
   };
   const contexts = new InMemoryEvidenceContextPort([
     {
+      institutionId: INSTITUTION_ID,
       evidencePackageId: PACKAGE,
       documentId: DOCUMENT,
       evidenceProfileId: "standard-v1",

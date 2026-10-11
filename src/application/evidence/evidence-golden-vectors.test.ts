@@ -27,6 +27,9 @@ import { EvidenceGateway } from "./evidence-gateway";
 import { buildEvidenceIngestCommandV2 } from "./evidence-outbox";
 import { reconstructAndCompareEvidence } from "./evidence-reconstruction";
 
+// A synthetic institution; no real one is used in tests.
+const INSTITUTION_ID = "00000000-0000-4000-8000-00000000000a";
+
 /**
  * Golden vectors (DAN-127) through the application layer. The client side
  * (outbox) and the server side (gateway, reconstruction) read the same file
@@ -140,6 +143,7 @@ describe("golden vectors: server side (gateway and reconstruction)", () => {
     };
     const contexts = new InMemoryEvidenceContextPort([
       {
+        institutionId: INSTITUTION_ID,
         evidencePackageId: chain.evidencePackageId,
         documentId: chain.segments[0].segment.documentId,
         evidenceProfileId: chain.segments[0].segment.evidenceProfileId,
@@ -249,6 +253,7 @@ describe("golden vectors: server side (gateway and reconstruction)", () => {
           authorization: { check: async () => ({ status: "allow" }) },
           contexts: new InMemoryEvidenceContextPort([
             {
+              institutionId: INSTITUTION_ID,
               evidencePackageId: chain.evidencePackageId,
               documentId: descriptor.documentId,
               evidenceProfileId: descriptor.evidenceProfileId,
