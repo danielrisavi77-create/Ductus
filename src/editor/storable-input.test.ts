@@ -1,6 +1,7 @@
 import { Editor } from "@tiptap/core";
 import { Fragment, Slice } from "@tiptap/pm/model";
-import { TextSelection } from "@tiptap/pm/state";
+import { TextSelection, type Transaction } from "@tiptap/pm/state";
+import { ReplaceStep } from "@tiptap/pm/transform";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { CanonicalDocument, NodeId } from "../domain/document";
@@ -200,6 +201,78 @@ describe("StorableInput", () => {
     expect($caret.parentOffset).toBe(2);
     expect(shown(editor).nodes.map((node) => node.id)).toContain(ID_A);
     expect(shown(editor).nodes.map((node) => node.id)).toContain(ID_B);
+    expectStorable(editor);
+  });
+
+  // F-067: many offending runs are repaired in one step, so the cost does not
+  // grow as runs times document size.
+
+  function repairSteps(editor: Editor, tr: Transaction): ReplaceStep[] {
+    const { state, transactions } = editor.state.applyTransaction(tr);
+    editor.view.updateState(state);
+    // Block ids the identity plugin gives new blocks are its own step, not a repair.
+    return transactions.slice(1).flatMap((t) => t.steps.filter((step) => step instanceof ReplaceStep));
+  }
+
+  it("up to eight runs are still repaired one step each", () => {
+    const editor = editorWith(["prije poslije"]);
+    expect(repairSteps(editor, editor.state.tr.insertText("a\uD800".repeat(8), 7))).toHaveLength(8);
+    expect(editor.state.doc.textContent).toBe(`prije ${"a\uFFFD".repeat(8)}poslije`);
+    expectStorable(editor);
+  });
+
+  it("more runs are one step from the first to the last run, and the caret ends after the paste", () => {
+    const editor = editorWith(["prije poslije"]);
+    caretAt(editor, 7);
+    const steps = repairSteps(editor, editor.state.tr.insertText("a\uD800\u0000".repeat(9)));
+    // The first run starts at 8, the last ends at 7 + 27.
+    expect(steps.map(({ from, to }) => [from, to])).toEqual([[8, 34]]);
+    expect(editor.state.doc.textContent).toBe(`prije ${"a\uFFFD".repeat(9)}poslije`);
+    expect(editor.state.selection.from).toBe(7 + 18);
+    expectStorable(editor);
+  });
+
+  it("the single step keeps marks and the text between runs", () => {
+    const editor = editorWith(["Prvi", "Drugi"]);
+    const { schema } = editor.state;
+    const bold = schema.marks.bold!.create();
+    const nodes = Array.from({ length: 10 }, (_, i) =>
+      schema.text(`b${i}\uDC00`, i % 2 === 0 ? [bold] : []));
+    const steps = repairSteps(editor, editor.state.tr.replace(7, 7, new Slice(Fragment.from(nodes), 0, 0)));
+    expect(steps).toHaveLength(1);
+    const block = editor.state.doc.child(1);
+    expect(block.textContent).toBe(`${Array.from({ length: 10 }, (_, i) => `b${i}\uFFFD`).join("")}Drugi`);
+    expect(block.child(0).marks.map((m) => m.type.name)).toEqual(["bold"]);
+    expect(block.child(1).marks).toEqual([]);
+    expect(editor.state.doc.child(0).textContent).toBe("Prvi");
+    expect(shown(editor).nodes.map((node) => node.id)).toEqual([ID_A, ID_B]);
+    expectStorable(editor);
+  });
+
+  it("a paste of 100,000 code units with 50,000 runs over two blocks is one repair step", () => {
+    const editor = editorWith(["prije poslije", "Drugi"]);
+    const pasted = "a\uD800".repeat(25_000);
+    const tr = editor.state.tr.insertText(pasted, 7).insertText(pasted, 7 + pasted.length + 10);
+    expect(repairSteps(editor, tr)).toHaveLength(1);
+    expect(editor.state.doc.child(0).textContent).toBe(`prije ${"a\uFFFD".repeat(25_000)}poslije`);
+    expect(editor.state.doc.child(1).textContent).toBe(`D${"a\uFFFD".repeat(25_000)}rugi`);
+    expect(shown(editor).nodes.map((node) => node.id)).toEqual([ID_A, ID_B]);
+    expectStorable(editor);
+  });
+
+  it("a paste of many blocks with one run each is one repair step that keeps every block", () => {
+    const editor = editorWith(["prije poslije", "Drugi"]);
+    const { schema } = editor.state;
+    const blocks = Array.from({ length: 2_000 }, (_, i) => schema.nodes.paragraph!.create(null, schema.text(`r${i}\u0000`)));
+    const steps = repairSteps(editor, editor.state.tr.replace(7, 7, new Slice(Fragment.from(blocks), 1, 1)));
+    expect(steps).toHaveLength(1);
+    const texts: string[] = [];
+    editor.state.doc.forEach((node) => texts.push(node.textContent));
+    expect(texts).toEqual(["prije r0", ...Array.from({ length: 1_998 }, (_, i) => `r${i + 1}`), "r1999poslije", "Drugi"]);
+    const ids = shown(editor).nodes.map((node) => node.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toContain(ID_A);
+    expect(ids).toContain(ID_B);
     expectStorable(editor);
   });
 });

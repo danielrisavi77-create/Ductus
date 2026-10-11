@@ -18,10 +18,17 @@
  * Only the offending code units are replaced, never the whole run: the caret
  * and every position outside them map through unchanged, so typing goes on
  * where it was.
+ *
+ * More than `MAX_REPAIR_STEPS` offending runs, as a paste can bring, are
+ * repaired with one step from the first run to the last (F-067): each step
+ * rebuilds the blocks above it and the transaction keeps every intermediate
+ * document, so one step per run grows as runs times document size. Blocks,
+ * their ids, marks and text between the runs are kept; a caret inside that
+ * range moves to its end.
  */
 
 import { Extension } from "@tiptap/core";
-import type { Node as PmNode } from "@tiptap/pm/model";
+import { Fragment, type Node as PmNode, type Schema, Slice } from "@tiptap/pm/model";
 import { Plugin, PluginKey, type Transaction } from "@tiptap/pm/state";
 import { AddMarkStep, RemoveMarkStep } from "@tiptap/pm/transform";
 
@@ -33,6 +40,36 @@ const storableInputKey = new PluginKey("storableInput");
 // pair is one code point outside the class, so it never joins a run, and the
 // run's own repair equals the repair of the whole text at that place.
 const UNSTORABLE_RUN = /[\uD800-\uDFFF\u0000]+/gu;
+
+// Up to this many runs are repaired one step each; above it they get a single
+// step (F-067).
+const MAX_REPAIR_STEPS = 8;
+
+type Run = { from: number; to: number; text: string; node: PmNode };
+
+/** The runs of one text block `storableText` would change, in order. */
+function runsOf(block: PmNode, start: number): Run[] {
+  const runs: Run[] = [];
+  block.forEach((node, offset) => {
+    if (!node.isText) return;
+    for (const run of node.text!.matchAll(UNSTORABLE_RUN)) {
+      const from = start + offset + run.index;
+      runs.push({ from, to: from + run[0].length, text: storableText(run[0]), node });
+    }
+  });
+  return runs;
+}
+
+/** `content` with every text node, at any depth, made storable and emptied ones dropped. */
+function storableContent(content: Fragment, schema: Schema): Fragment {
+  const nodes: PmNode[] = [];
+  content.forEach((node) => {
+    if (!node.isText) return void nodes.push(node.isLeaf ? node : node.copy(storableContent(node.content, schema)));
+    const text = storableText(node.text!);
+    if (text !== "") nodes.push(schema.text(text, node.marks));
+  });
+  return Fragment.fromArray(nodes);
+}
 
 /**
  * Ranges of `doc` (the state after `transactions`) that they changed, each
@@ -67,22 +104,26 @@ export function createStorableInputPlugin(): Plugin {
     key: storableInputKey,
     appendTransaction(transactions, _oldState, newState) {
       if (!transactions.some((tr) => tr.docChanged)) return null;
-      const fixes = new Map<number, { to: number; text: string; node: PmNode }>();
+      const blocks = new Map<number, Run[]>();
       for (const [from, to] of changedRanges(transactions, newState.doc)) {
         newState.doc.nodesBetween(from, to, (node, pos) => {
-          if (!node.isText) return true;
-          for (const run of node.text!.matchAll(UNSTORABLE_RUN)) {
-            const start = pos + run.index;
-            fixes.set(start, { to: start + run[0].length, text: storableText(run[0]), node });
-          }
+          if (!node.isTextblock) return true;
+          if (!blocks.has(pos)) blocks.set(pos, runsOf(node, pos + 1));
           return false;
         });
       }
-      if (fixes.size === 0) return null;
+      const runs = [...blocks.values()].flat().sort((a, b) => a.from - b.from);
+      if (runs.length === 0) return null;
       const tr = newState.tr;
+      if (runs.length > MAX_REPAIR_STEPS) {
+        const from = runs[0]!.from;
+        const to = runs[runs.length - 1]!.to;
+        const slice = newState.doc.slice(from, to);
+        tr.replace(from, to, new Slice(storableContent(slice.content, newState.schema), slice.openStart, slice.openEnd));
+        return tr;
+      }
       // From the end, so earlier positions stay valid.
-      for (const from of [...fixes.keys()].sort((a, b) => b - a)) {
-        const { to, text, node } = fixes.get(from)!;
+      for (const { from, to, text, node } of runs.reverse()) {
         if (text === "") tr.delete(from, to);
         else tr.replaceWith(from, to, newState.schema.text(text, node.marks));
       }
