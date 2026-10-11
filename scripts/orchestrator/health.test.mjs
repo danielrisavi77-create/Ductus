@@ -7,7 +7,7 @@ import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
-  canonicalVerdicts, checkMainCi, checkQueue, checkSafetyNet, exitCode, latestOnHead, parseWorktrees, queueItems,
+  canonicalVerdicts, checkMainCi, checkQueue, checkSafetyNet, exitCode, hookTargets, latestOnHead, parseWorktrees, queueItems,
 } from "./health-core.mjs";
 import { health, readOnlyCall } from "./health.mjs";
 
@@ -214,6 +214,51 @@ test("L10: hook target comes from settings.json; empty bin and wrong version are
   assert.deepEqual(r.levels("cc-safety-net"), ["NEPROVJERENO"]);
 });
 
+// The command of the fail-closed wrapper hook, verbatim from .claude/settings.json of DAN-137 (#173).
+const WRAPPER_COMMAND = "command -v node \u003e/dev/null 2\u003e\u00261 \u0026\u0026 [ -f \"$CLAUDE_PROJECT_DIR/scripts/hooks/safety-net.mjs\" ] || { echo \u0027Safety hook cannot run: node or scripts/hooks/safety-net.mjs is missing. Run pnpm install --frozen-lockfile in a terminal.\u0027 \u003e\u00262; exit 2; }; node \"$CLAUDE_PROJECT_DIR/scripts/hooks/safety-net.mjs\"; rc=$?; [ \"$rc\" -eq 0 ] \u0026\u0026 exit 0; [ \"$rc\" -eq 2 ] \u0026\u0026 exit 2; echo \"Safety hook failed unexpectedly (status $rc). Run pnpm install --frozen-lockfile in a terminal.\" \u003e\u00262; exit 2";
+const hookSettings = (command) => JSON.stringify({ hooks: { PreToolUse: [{ matcher: "Bash|PowerShell", hooks: [{ type: "command", shell: "bash", command, onFailure: "block", timeout: 10 }] }] } });
+
+test("L10b: hookTargets knows the direct call and the wrapper command, any other shape finds nothing", () => {
+  const direct = { hooks: { PreToolUse: [{ hooks: [{ command: "node", args: [`\${CLAUDE_PROJECT_DIR}/${BIN}`, "hook"] }] }] } };
+  assert.deepEqual(hookTargets(direct), [BIN]);
+  assert.deepEqual(hookTargets(JSON.parse(hookSettings(WRAPPER_COMMAND))), [
+    "scripts/hooks/safety-net.mjs", BIN, "node_modules/cc-safety-net/dist/bin/hook.js"]);
+  for (const other of ['bash -c "node $CLAUDE_PROJECT_DIR/scripts/hooks/safety-net.mjs.bak"', "node scripts/hooks/safety-net.mjs", "true"]) {
+    assert.deepEqual(hookTargets(JSON.parse(hookSettings(other))), [], other);
+  }
+});
+
+test("L10c: with the wrapper hook the check passes, and fails on a missing wrapper, hook.js or wrong version", async () => {
+  const wrapped = () => {
+    const w = world();
+    w.files.set("/r/.claude/settings.json", hookSettings(WRAPPER_COMMAND));
+    for (const d of ["/r", "/r/.claude/worktrees/agent-x"]) {
+      w.files.set(`${d}/scripts/hooks/safety-net.mjs`, "// wrapper\n");
+      w.files.set(`${d}/node_modules/cc-safety-net/dist/bin/hook.js`, "// analysis\n");
+    }
+    return w;
+  };
+  let w = wrapped();
+  let r = await check(w);
+  assert.deepEqual(r.levels("cc-safety-net"), ["PASS", "PASS"]);
+  w.files.set("/r/.claude/worktrees/agent-x/scripts/hooks/safety-net.mjs", "");
+  r = await check(w);
+  assert.match(r.of("cc-safety-net")[1], /^FAIL .*agent-x: scripts\/hooks\/safety-net\.mjs nedostaje ili je prazan/);
+  w = wrapped();
+  w.files.delete("/r/node_modules/cc-safety-net/dist/bin/hook.js");
+  r = await check(w);
+  assert.match(r.of("cc-safety-net")[0], /^FAIL \/r: node_modules\/cc-safety-net\/dist\/bin\/hook\.js nedostaje/);
+  w = wrapped();
+  w.files.set("/r/node_modules/cc-safety-net/package.json", '{"version":"2.5.0"}');
+  r = await check(w);
+  assert.match(r.of("cc-safety-net")[0], /^FAIL \/r: verzija 2\.5\.0, očekivano 2\.6\.1/);
+  // An unknown shape is unchecked, never a false PASS.
+  w = wrapped();
+  w.files.set("/r/.claude/settings.json", hookSettings("node tools/other-hook.mjs"));
+  r = await check(w);
+  assert.deepEqual(r.levels("cc-safety-net"), ["NEPROVJERENO"]);
+  assert.equal(r.code, 2);
+});
 test("§4: FAIL stall boundary at one heartbeat, clock ±10 min", async () => {
   const cases = [[29 + 59 / 60, "WARN"], [30, "WARN"], [30 + 1 / 60, "FAIL"], [-10, "WARN"]];
   for (const [min, level] of cases) {

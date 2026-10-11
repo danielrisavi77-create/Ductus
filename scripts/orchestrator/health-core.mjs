@@ -295,13 +295,23 @@ export function parseWorktrees(out) {
   }).filter((w) => w.path);
 }
 
-/** Relative files the cc-safety-net hook runs, read from .claude/settings.json (not hard-coded). */
+// The fail-closed wrapper (DAN-137) calls the package itself, so a hook that runs it
+// depends on the wrapper and on both package files it needs.
+const WRAPPER = "scripts/hooks/safety-net.mjs";
+const WRAPPER_DEPENDS = [WRAPPER, "node_modules/cc-safety-net/dist/bin/cc-safety-net.js", "node_modules/cc-safety-net/dist/bin/hook.js"];
+
+/**
+ * Relative files the cc-safety-net hook runs, read from .claude/settings.json (not hard-coded).
+ * Two shapes are known: a direct call of the package binary, and the bash command of the
+ * wrapper. Any other shape finds nothing, so the check stays NEPROVJERENO, never a false PASS.
+ */
 export function hookTargets(settings) {
   const found = new Set();
   const walk = (v) => {
     if (typeof v === "string") {
       const m = v.match(/^\$\{?CLAUDE_PROJECT_DIR\}?[/\\](.*cc-safety-net[^\s"]*)/);
       if (m) found.add(m[1].replace(/\\/g, "/"));
+      else if (/\$\{?CLAUDE_PROJECT_DIR\}?[/\\]scripts[/\\]hooks[/\\]safety-net\.mjs(?![\w.-])/.test(v)) WRAPPER_DEPENDS.forEach((t) => found.add(t));
     } else if (v && typeof v === "object") Object.values(v).forEach(walk);
   };
   walk(settings?.hooks);
@@ -340,6 +350,7 @@ export function checkSafetyNet({ worktrees, targets, pinned, fsView }) {
     const problems = [];
     for (const rel of targets) {
       if (!(fsView.size(joinPath(w.path, rel)) > 0)) problems.push(`${printable(rel)} nedostaje ili je prazan`);
+      if (!rel.includes("cc-safety-net")) continue; // the wrapper script itself is not a package
       const pkgDir = rel.slice(0, rel.indexOf("cc-safety-net") + "cc-safety-net".length);
       let version = null;
       try {
