@@ -21,6 +21,9 @@
  *     (owner decision 3: the id comes from an `attr` step), `structure` on an
  *     insertion stands only on a split, one block open on both sides is written
  *     as text, and a change of a block's type is written as `replaceAround`.
+ *     The same goes for a step that no document can make right (see
+ *     `replaceShape`): a range the slice cannot fit, `structure` over text or
+ *     a whole block, and a slice that puts back the boundary its range removes.
  *     This does not make every change have one form. The rest needs the
  *     document and is the replayer's job (listed in the description of #213):
  *     the block on an open side of a slice, the range of a mark step, a range
@@ -418,12 +421,86 @@ function slice(value: unknown, path: string, budget: Budget): EditStepSlice {
   return parsed;
 }
 
-/** A slice of one block that is open only at its end, with or without text. */
-function isBlockOpening(parsed: EditStepSlice): boolean {
-  return (
-    parsed.content.length === 1 && parsed.content[0].type !== "text" &&
-    "openEnd" in parsed && !("openStart" in parsed)
-  );
+/**
+ * What a slice says about the two ends of the range it replaces. A position of
+ * the F1 document lies between two blocks or inside one, and ProseMirror fits a
+ * slice only where each end lies as deep as that side of the slice is open.
+ */
+type SliceKind = "none" | "text" | "closed" | "both" | "end" | "start";
+
+function sliceKind(parsed: EditStepSlice | null): SliceKind {
+  if (!parsed) {
+    return "none";
+  }
+  if (parsed.content[0].type === "text") {
+    return "text";
+  }
+  if ("openStart" in parsed) {
+    return "openEnd" in parsed ? "both" : "start";
+  }
+  return "openEnd" in parsed ? "end" : "closed";
+}
+
+/**
+ * Refuses what no document can make right, told from the step alone. In the
+ * words of the replayer's obligations (description of #213):
+ *   - a range that cannot exist: text or a slice open at its start put at
+ *     position 0, which lies before the first block; a slice open only at its
+ *     end put at one position; one position replaced by whole blocks;
+ *   - the wrong record of what is removed: `structure` where the range must
+ *     hold text or a whole block, a hash where it can hold only the start of
+ *     a block;
+ *   - a second record of the same change: a range that ends on the end of a
+ *     block and a slice that puts an end of a block back.
+ */
+function replaceShape(
+  from: number, to: number, structure: boolean, parsed: EditStepSlice | null, path: string,
+): void {
+  const kind = sliceKind(parsed);
+  const width = to - from;
+  // Open only at its start: at one position it fits nowhere, and over a range
+  // the range ends between two blocks, so the end of a block is removed and
+  // the slice, closed at its end, puts one back.
+  if (kind === "start") {
+    reject("not_canonical", `${path}.slice`);
+  }
+  if ((kind === "text" || kind === "both") && from === 0) {
+    reject("invalid_position", `${path}.from`);
+  }
+  if (
+    (kind === "end" && width === 0) || (kind === "closed" && width === 1) ||
+    (kind === "none" && width === 1 && from === 0)
+  ) {
+    reject("invalid_position", `${path}.to`);
+  }
+  // One position at the start of a slice open only at its end is the start of
+  // a block. Elsewhere only a join is made of boundaries alone: two positions
+  // inside blocks, so never from position 0 and never under whole blocks.
+  const startOfBlock = kind === "end" && width === 1;
+  const maybeJoin = kind !== "end" && kind !== "closed" && width === 2 && from > 0;
+  if (structure && width > 0 && !startOfBlock && !maybeJoin) {
+    reject("not_canonical", `${path}.structure`);
+  }
+  if (!structure && startOfBlock) {
+    reject("not_canonical", `${path}.removedSha256`);
+  }
+  if (!parsed) {
+    return;
+  }
+  // Whole blocks after a block are written as a split of that block, and
+  // whole blocks over whole blocks leave the last end of a block in place.
+  if (kind === "closed" && to > 0) {
+    reject("not_canonical", `${path}.slice`);
+  }
+  // The start of a block is removed and the last block of the slice writes it
+  // again. With one block the slice begins with that same start; with more,
+  // a last block without text ends with it. A different start would be a
+  // change of the block's type or attributes, which is `replaceAround`.
+  const single = parsed.content.length === 1;
+  const lastIsEmpty = !("content" in parsed.content[parsed.content.length - 1]);
+  if (kind === "end" && ((width === 1 && (single || lastIsEmpty)) || (width === 2 && single))) {
+    reject("not_canonical", `${path}.slice`);
+  }
 }
 
 /** Blocks without text, open on both sides: the slice only divides a block. */
@@ -460,15 +537,6 @@ function replaceStep(value: unknown, path: string, budget: Budget): EditStepV1 {
   const parsed = "slice" in own ? slice(own.slice, `${path}.slice`, budget) : null;
   if (parsed) {
     newBlocksHaveNoId(parsed, `${path}.slice`);
-    // One position replaced by one block open at its end: the position is
-    // the opening of a block and the slice writes that opening again. If the
-    // new opening differs, the step changes the block's type or attributes,
-    // which is written as `replaceAround`. If it is the same, the opening was
-    // removed only to be put back, and text the slice brings is written as an
-    // insertion of text. Either way this is not a form of its own.
-    if (to === from + 1 && isBlockOpening(parsed)) {
-      reject("not_canonical", `${path}.slice`);
-    }
     // With nothing removed the flag changes nothing, so it would be a second
     // form of the same insertion. It is kept exactly where ProseMirror's own
     // split writes it, and refused everywhere else.
@@ -476,6 +544,7 @@ function replaceStep(value: unknown, path: string, budget: Budget): EditStepV1 {
       reject("not_canonical", `${path}.structure`);
     }
   }
+  replaceShape(from, to, "structure" in own, parsed, path);
   return {
     from,
     ...(removes ? { removedSha256: own.removedSha256 as string } : {}),
@@ -522,6 +591,10 @@ function markStep(value: unknown, path: string, stepType: "addMark" | "removeMar
   const to = position(own.to, `${path}.to`);
   if (to <= from) {
     reject("invalid_position", `${path}.to`);
+  }
+  // A mark range begins on a character, and position 0 is the start of a block.
+  if (from === 0) {
+    reject("invalid_position", `${path}.from`);
   }
   return { from, mark: mark(own.mark, `${path}.mark`), stepType, to };
 }

@@ -75,37 +75,56 @@ const blockSlice: fc.Arbitrary<TestSlice> = fc
     if ("openEnd" in s.open) list[list.length - 1] = withId(list[list.length - 1], s.ids[1]);
     return { content: list, ...s.open };
   });
-const slice: fc.Arbitrary<TestSlice> = fc.oneof(textRun.map((list) => ({ content: list })), blockSlice);
 const hasText = (s: TestSlice) =>
   s.content.some((item) => (item as Block).type === "text" || "content" in (item as Block));
 const isSplit = (s: TestSlice) => "openStart" in s && "openEnd" in s && !hasText(s);
-/** One block open at its end: over one position it only rewrites the opening of a block. */
-const isBlockOpening = (s: TestSlice | undefined) =>
-  s !== undefined && s.content.length === 1 && (s.content[0] as Block).type !== "text" &&
-  "openEnd" in s && !("openStart" in s);
-const range = fc.tuple(position, fc.integer({ min: 1, max: 5_000 }));
-const boundary = fc.tuple(position, fc.constantFrom(1, 2));
+const openOn = (s: TestSlice, start: boolean, end: boolean) =>
+  "openStart" in s === start && "openEnd" in s === end;
+/** Text, or blocks open on both sides: both ends of the range lie inside a block. */
+const insideSlice: fc.Arbitrary<TestSlice> = fc.oneof(
+  textRun.map((list) => ({ content: list })),
+  blockSlice.filter((s) => openOn(s, true, true)),
+);
+/** Blocks open only at the end: the range starts before a block and ends inside one. */
+const endSlice = blockSlice.filter((s) => openOn(s, false, true));
+const startSlice = blockSlice.filter((s) => openOn(s, true, false));
+const closedSlice = blockSlice.filter((s) => openOn(s, false, false));
+/** A position inside a block: never 0, which lies before the first block. */
+const inside = fc.integer({ min: 1, max: 1_000_000 });
+const width = fc.integer({ min: 1, max: 5_000 });
+const range = fc.tuple(position, width);
+const replace = (from: number, to: number, rest: Record<string, unknown>, s?: TestSlice) => ({
+  stepType: "replace", from, to, ...rest, ...(s ? { slice: s } : {}),
+});
+
+/** Every shape of `replace` the format keeps (the table in the description of #213). */
+const validReplace: fc.Arbitrary<Record<string, unknown>> = fc.oneof(
+  // An insertion inside a block; `structure` stands exactly on a split.
+  fc.record({ from: inside, slice: insideSlice }).map((s) =>
+    replace(s.from, s.from, isSplit(s.slice) ? { structure: true } : {}, s.slice)),
+  // New blocks before the first block.
+  closedSlice.map((s) => replace(0, 0, {}, s)),
+  // Text or blocks removed, from inside a block to inside a block.
+  fc.record({ from: inside, width, sha256, slice: fc.option(insideSlice, { nil: undefined }) })
+    .map((s) => replace(s.from, s.from + s.width, { removedSha256: s.sha256 }, s.slice)),
+  // Whole blocks removed from the start of the document.
+  fc.record({ width: fc.integer({ min: 2, max: 5_000 }), sha256 })
+    .map((s) => replace(0, s.width, { removedSha256: s.sha256 })),
+  // A join, with or without something put in its place.
+  fc.record({ from: inside, slice: fc.option(insideSlice, { nil: undefined }) })
+    .map((s) => replace(s.from, s.from + 2, { structure: true }, s.slice)),
+  // New blocks before a block, and text at its start.
+  fc.record({ from: position, slice: endSlice })
+    .filter((s) => s.slice.content.length > 1 && "content" in (s.slice.content.at(-1) as Block))
+    .map((s) => replace(s.from, s.from + 1, { structure: true }, s.slice)),
+  // The same over the first letters of that block, or over blocks before it.
+  fc.record({ from: position, width: fc.integer({ min: 2, max: 5_000 }), sha256, slice: endSlice })
+    .filter((s) => s.width > 2 || s.slice.content.length > 1)
+    .map((s) => replace(s.from, s.from + s.width, { removedSha256: s.sha256 }, s.slice)),
+);
 
 const validStep: fc.Arbitrary<Record<string, unknown>> = fc.oneof(
-  // `structure` on an insertion stands exactly on a split.
-  fc.record({ from: position, slice }).map((s) => ({
-    stepType: "replace", from: s.from, to: s.from, slice: s.slice,
-    ...(isSplit(s.slice) ? { structure: true } : {}),
-  })),
-  fc
-    .record({ range, sha256, slice: fc.option(slice, { nil: undefined }) })
-    .filter((s) => !(s.range[1] === 1 && isBlockOpening(s.slice)))
-    .map((s) => ({
-      stepType: "replace", from: s.range[0], to: s.range[0] + s.range[1], removedSha256: s.sha256,
-      ...(s.slice ? { slice: s.slice } : {}),
-    })),
-  fc
-    .record({ range: boundary, slice: fc.option(slice, { nil: undefined }) })
-    .filter((s) => !(s.range[1] === 1 && isBlockOpening(s.slice)))
-    .map((s) => ({
-      stepType: "replace", from: s.range[0], to: s.range[0] + s.range[1], structure: true,
-      ...(s.slice ? { slice: s.slice } : {}),
-    })),
+  { arbitrary: validReplace, weight: 3 },
   fc.record({ range, nodeId: maybeNodeId, level: fc.constantFrom(0, 1, 2, 3) }).map((s) => ({
     stepType: "replaceAround", from: s.range[0], to: s.range[0] + s.range[1] + 1,
     gapFrom: s.range[0] + 1, gapTo: s.range[0] + s.range[1], insert: 1, structure: true,
@@ -117,8 +136,8 @@ const validStep: fc.Arbitrary<Record<string, unknown>> = fc.oneof(
       ],
     },
   })),
-  fc.record({ range, type: fc.constantFrom("addMark", "removeMark"), mark: fc.constantFrom("bold", "italic") })
-    .map((s) => ({ stepType: s.type, from: s.range[0], to: s.range[0] + s.range[1], mark: { type: s.mark } })),
+  fc.record({ from: inside, width, type: fc.constantFrom("addMark", "removeMark"), mark: fc.constantFrom("bold", "italic") })
+    .map((s) => ({ stepType: s.type, from: s.from, to: s.from + s.width, mark: { type: s.mark } })),
   fc.record({ pos: position, value: nodeId }).map((s) => ({ stepType: "attr", attr: "nodeId", ...s })),
 );
 
@@ -188,6 +207,40 @@ describe("edit step format: valid steps", () => {
       };
       expect(parseEditStep(step)).toEqual({
         ok: false, code: "new_block_has_id", path: `$.slice.content[${at}].attrs.nodeId`,
+      });
+    },
+  );
+
+  // QA of #213 (fourth round): no document makes these right, so the step
+  // alone is enough to refuse them.
+  test.prop([startSlice, position, fc.nat({ max: 5_000 }), fc.boolean()])(
+    "is refused when its slice is open only at its start",
+    (made, from, size, structure) => {
+      const flag = size === 0 ? {} : structure ? { structure: true } : { removedSha256: "0".repeat(64) };
+      fc.pre(!(structure && size > 2));
+      expect(parseEditStep(replace(from, from + size, flag, made))).toEqual({
+        ok: false, code: "not_canonical", path: "$.slice",
+      });
+    },
+  );
+
+  test.prop([closedSlice, position, fc.nat({ max: 5_000 })])(
+    "is refused when whole blocks go anywhere but before the first block",
+    (made, from, size) => {
+      fc.pre(from + size > 0);
+      const flag = size === 0 ? {} : { removedSha256: "0".repeat(64) };
+      const result = parseEditStep(replace(from, from + size, flag, made));
+      expect(result).toMatchObject({ ok: false });
+      expect(["not_canonical", "invalid_position"]).toContain(result.ok ? "" : result.code);
+    },
+  );
+
+  test.prop([insideSlice, fc.nat({ max: 5_000 })])(
+    "is refused when text or a slice open at its start is put at position 0",
+    (made, size) => {
+      const flag = size === 0 ? (isSplit(made) ? { structure: true } : {}) : { removedSha256: "0".repeat(64) };
+      expect(parseEditStep(replace(0, size, flag, made))).toEqual({
+        ok: false, code: "invalid_position", path: "$.from",
       });
     },
   );

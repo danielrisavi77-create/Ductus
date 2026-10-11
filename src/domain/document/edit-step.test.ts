@@ -139,12 +139,31 @@ describe("edit step format: hostile input", () => {
     expect(performance.now() - started).toBeLessThan(300);
   });
 
+  // QA of #213 (fourth round, M4). The path tells the two refusals apart: on
+  // its length alone the text itself is named, and after a scan the node is.
+  it("refuses one text longer than the limit without scanning it", () => {
+    const text = (length: number) => ({
+      ...typing(), slice: { content: [{ type: "text", text: "a".repeat(length) }] },
+    });
+    expect(parseEditStep(text(MAX_EDIT_STEP_BYTES + 1))).toEqual({
+      ok: false, code: "too_large", path: "$.slice.content[0].text",
+    });
+    expect(parseEditStep(text(MAX_EDIT_STEP_BYTES))).toEqual({
+      ok: false, code: "too_large", path: "$.slice.content[0]",
+    });
+  });
+
   // 100 000 text nodes of 40 characters pass the limit long before the last
   // one, which is invalid and would be the answer if it were ever read. The
   // place where reading stops shows how many bytes each character was counted as.
   it.each([
     ["one-byte letters", "a", 37_000, 38_000],
     ["three-byte characters", "€", 15_000, 16_000],
+    // The two sides of the boundary between two and three bytes, and a pair
+    // of surrogates, which is four bytes in two units (fourth round, M14-M16).
+    ["the last two-byte character", "߿", 21_500, 22_000],
+    ["the first three-byte character", "ࠀ", 15_000, 16_000],
+    ["four-byte characters", "😀", 11_500, 12_500],
   ])("stops inside an oversized step of %s instead of reading it to its end", (_name, unit, min, max) => {
     const content: unknown[] = Array.from({ length: 100_000 }, (_, i) => ({
       type: "text", text: unit.repeat(40), ...(i % 2 ? { marks: [{ type: "bold" }] } : {}),
@@ -186,7 +205,7 @@ describe("edit step format: hostile input", () => {
  */
 describe("edit step format: a new block and its id", () => {
   const insert = (nodeId: string | null) => ({
-    stepType: "replace", from: 12, to: 12,
+    stepType: "replace", from: 0, to: 0,
     slice: { content: [{ type: "paragraph", attrs: { nodeId }, content: [{ type: "text", text: "Q" }] }] },
   });
 
@@ -197,7 +216,7 @@ describe("edit step format: a new block and its id", () => {
   });
 
   it("accepts the block without an id, followed by the step that names it", () => {
-    const steps = [insert(null), { stepType: "attr", pos: 12, attr: "nodeId", value: A }];
+    const steps = [insert(null), { stepType: "attr", pos: 0, attr: "nodeId", value: A }];
     expect(parseEditSteps(EDIT_STEP_FORMAT_V1, steps)).toEqual({ ok: true, steps });
   });
 });
@@ -226,6 +245,9 @@ describe("edit step format: the D-96 size limit, to the byte", () => {
   it.each([
     ["ASCII text", (n: number) => "a".repeat(n), 1],
     ["two-byte letters", (n: number) => "š".repeat(n / 2), 2],
+    // U+07FF is the last character of two bytes and U+0800 the first of three.
+    ["the last two-byte character", (n: number) => "߿".repeat(n / 2), 2],
+    ["the first three-byte character", (n: number) => "ࠀ".repeat(Math.floor(n / 3)) + "a".repeat(n % 3), 3],
     // Three bytes each: the euro sign, a line separator, a zero-width space.
     ["three-byte characters", (n: number) => "€ ​".repeat(Math.floor(n / 9)) + "a".repeat(n % 9), 3],
     ["four-byte characters", (n: number) => "😀".repeat((n - 2) / 4) + "ab", 4],
@@ -370,8 +392,9 @@ describe("edit step format: steps ProseMirror really produces", () => {
     // and an `attr` step.
     ["pasting two blocks (shape only)", (tr) => tr.replace(5, 5, new Slice(start.content, 1, 1))],
     ["deleting across blocks", (tr) => tr.delete(20, 30)],
-    ["inserting an empty block", (tr) => tr.insert(26, paragraph.create({ nodeId: null }))],
-    ["inserting a block with text", (tr) => tr.insert(26, heading.create({ level: 3, nodeId: null }, schema.text("x")))],
+    ["deleting the empty first block", (tr) => tr.insert(0, paragraph.create({ nodeId: null })).delete(0, 2)],
+    ["inserting an empty block before the first", (tr) => tr.insert(0, paragraph.create({ nodeId: null }))],
+    ["inserting a block with text before the first", (tr) => tr.insert(0, heading.create({ level: 3, nodeId: null }, schema.text("x")))],
   ];
 
   it.each(edits)("accepts %s", (_name, edit) => {
@@ -481,13 +504,31 @@ describe("edit step format: steps ProseMirror really produces", () => {
       (tr) => tr.insert(26, paragraph.create({ nodeId: A.replace(/1$/, "9") }, schema.text("x"))),
       "new_block_has_id",
     ],
+    // Whole blocks after a block are one change with two records: these, and
+    // a split of the block before them. The format keeps the split (fourth
+    // round of QA), so capture has to write these as one.
+    ["an empty block inserted after a block", (tr) => tr.insert(26, paragraph.create({ nodeId: null })), "not_canonical"],
+    [
+      "a block with text inserted after a block",
+      (tr) => tr.insert(26, heading.create({ level: 3, nodeId: null }, schema.text("x"))),
+      "not_canonical",
+    ],
+    // The same with the end of a block: ProseMirror writes this for a paste
+    // that ends on a whole block, and for undoing and redoing one.
+    [
+      "a slice open only at its start",
+      (tr) => tr.replace(5, 26, new Slice(start.slice(0, 26).content, 1, 0)),
+      "not_canonical",
+    ],
   ];
 
   it.each(refused)("refuses %s", (_name, edit, code) => {
     const tr = new Transform(start);
     edit(tr);
     expect(tr.steps).toHaveLength(1);
-    expect(parseEditStep(JSON.parse(JSON.stringify(tr.steps[0].toJSON())))).toMatchObject({
+    const json = tr.steps[0].toJSON() as Record<string, unknown>;
+    if ((json.to as number) > (json.from as number)) json.removedSha256 = HASH;
+    expect(parseEditStep(JSON.parse(JSON.stringify(json)))).toMatchObject({
       ok: false, code,
     });
   });
