@@ -7,7 +7,7 @@ BEGIN;
 \ir fixtures/institution.inc
 SET LOCAL lc_messages TO 'C';
 
-SELECT plan(34);
+SELECT plan(38);
 
 -- Every schema of the application; pgTAP lives in public.
 CREATE TEMP VIEW app_class AS
@@ -175,6 +175,37 @@ FROM (VALUES
    $$ SELECT institution.create_assignment({k1}, 'Naslov', 'Upute.', 'essay', '2026-11-02 08:00+01',
       '2026-12-01 23:59+01', 'prohibited', '{}', 'basic', false) $$)
 ) AS v (n, actor, what, call)
+ORDER BY v.n;
+
+-- 8. The policies check the institution on the row itself, not only through
+-- the course or the assignment. With the foreign keys that keep a row in the
+-- institution of its parent dropped (inside this transaction only), a row
+-- keyed to fak-b under a parent of fak-a stays hidden from the fak-a people
+-- the parent alone would show it to. Last, as it takes those keys away. The
+-- deferred checks of earlier rows run first, as ALTER TABLE needs; Z8 never
+-- gets the version its pointer names, which only the rollback spares.
+SET CONSTRAINTS ALL IMMEDIATE;
+SET CONSTRAINTS ALL DEFERRED;
+ALTER TABLE institution.assignment DROP CONSTRAINT assignment_course_institution_fkey;
+ALTER TABLE institution.notice_acknowledgment
+  DROP CONSTRAINT notice_acknowledgment_assignment_institution_fkey,
+  DROP CONSTRAINT notice_acknowledgment_student_institution_fkey;
+INSERT INTO ref VALUES ('z8', '00000000-0000-4000-8000-0000000000a8');
+INSERT INTO institution.assignment (id, course_id, institution_id, created_by)
+VALUES (pg_temp.id('z8'), pg_temp.id('k1'), pg_temp.id('fak_b'), pg_temp.id('petra'));
+INSERT INTO institution.notice_acknowledgment (assignment_id, version_no, student_id, institution_id)
+VALUES (pg_temp.id('z9'), 1, pg_temp.id('dora'), pg_temp.id('fak_b'));
+SELECT is(pg_temp.ask(v.actor, v.query), '0', format('%s (%s) does not see %s', v.actor, v.who, v.what))
+FROM (VALUES
+  (1, 'vesna', 'teacher of K1', 'an assignment of K1 keyed to fak-b',
+   'SELECT count(*) FROM institution.assignment WHERE id = {z8}'),
+  (2, 'ana', 'student of K1', 'an assignment of K1 keyed to fak-b',
+   'SELECT count(*) FROM institution.assignment WHERE id = {z8}'),
+  (3, 'vesna', 'teacher of Z9', 'an acknowledgment of Z9 keyed to fak-b',
+   'SELECT count(*) FROM institution.notice_acknowledgment WHERE assignment_id = {z9} AND student_id = {dora}'),
+  (4, 'dora', 'its student', 'her own acknowledgment of Z9 keyed to fak-b',
+   'SELECT count(*) FROM institution.notice_acknowledgment WHERE assignment_id = {z9} AND student_id = {dora}')
+) AS v (n, actor, who, what, query)
 ORDER BY v.n;
 
 SELECT * FROM finish();
