@@ -184,6 +184,30 @@ test("every repo path and skill named in cards and rules exists", () => {
   }
 });
 
+// Cards and rules point at canonical documents (D-106), never at issue
+// comments: a comment cannot be amended through review, so a card citing one
+// keeps a rule alive that the canonical text may already have changed.
+test("cards and rules cite canonical documents, not issue comments", () => {
+  const files = [
+    ...mdFiles(cardsDir).map((n) => path.join(cardsDir, n)),
+    ...rules.map((r) => path.join(rulesDir, r.name)),
+  ];
+  for (const file of files) {
+    const rel = path.relative(root, file);
+    const text = read(file);
+    assert.doesNotMatch(
+      text,
+      /issuecomment-/,
+      `${rel}: cites an issue comment URL`,
+    );
+    assert.doesNotMatch(
+      text,
+      /#\d+ komentar\w* `?\d{6,}/,
+      `${rel}: cites an issue comment; point at the canonical section instead`,
+    );
+  }
+});
+
 test("the UI rule covers every live scanner text module", () => {
   const rule = parseRule(read(path.join(rulesDir, "sucelje.md")));
   assert.ok(rule);

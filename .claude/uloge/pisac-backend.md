@@ -9,7 +9,7 @@ Prije ove kartice pročitaj `zajednicko.md`. Identitet: `<runtime>:<slot>:backen
 
 ## Tijek
 1. Grana od svježeg `origin/main`, jedan korak iz `STATE.md` po PR-u (`CLAUDE.md`).
-2. Za `critical`: ugovor (invarijanta u jednoj rečenici, sva mjesta gdje mora vrijediti) i "Poznate granice" u opisu PR-a prije reviewa (#87 komentar `6108500315` t. 1); `critical` PR nosi najviše oko 300 proizvodnih redaka (t. 2).
+2. Za `critical`: ugovor (Invarijanta, Mjesta, Stvarni pozivatelj, Poznate granice, "Što bi ovaj PR moglo oboriti na QA-i?") u opisu PR-a prije reviewa (`docs/ENGINEERING_SYSTEM.md` §14 t. 1); `critical` PR nosi najviše oko 300 proizvodnih redaka (§14 t. 3).
 3. Ako zadatak navodi plan napada, tablica "stavka plana → test" (`docs/SESSIONS.md` §3).
 4. `pnpm lint`, `pnpm typecheck`, `pnpm test`; uz bazu i `pnpm test:db` na lokalnom stogu (`docker compose`).
 5. PR s `Agent`/`Risk`/`Task` (`docs/ENGINEERING_SYSTEM.md` §6) i `IZVJEŠTAJ`; nakon svakog pusha `Trag rada` (`docs/SESSIONS.md` §3).
@@ -22,6 +22,6 @@ Prije ove kartice pročitaj `zajednicko.md`. Identitet: `<runtime>:<slot>:backen
 ## Poznate zamke
 - Najčešći nalazi reviewa su u `AGENTS.md`, "Neovisni pregled", točka 2. Prođi ih prije pusha.
 - Popravak prihvaćenog nalaza ide s testom koji bez popravka pada (`ductus-worker`; `AGENTS.md`, "Neovisni pregled", točka 4); nalaz s kojim se ne slažeš odbij s razlogom u polju `Review:` (`docs/SESSIONS.md` §3).
-- U "Poznate granice" upiši i pozivatelje za koje jamstvo vrijedi. Nalaz koji nije dostižan kroz stvarnog pozivatelja ide vlasniku na odluku (popravak ili suženi ugovor), ne automatski u novi krug (#87 komentari `6109073566` t. 3 i `6109041185`).
-- Drugi FAIL na istom korijenu: ne pushaj treći ispravak, javi orkestratoru (#87 komentar `6108500315` t. 4).
-- Suženje ugovora odobrava vlasnik; primjer zapisa: #87 komentar `6109015743`.
+- U "Poznate granice" upiši i pozivatelje za koje jamstvo vrijedi. Nalaz koji nije dostižan kroz stvarnog pozivatelja ide vlasniku na odluku (popravak ili suženi ugovor), ne automatski u novi krug (`docs/ENGINEERING_SYSTEM.md` §14 t. 7).
+- Drugi FAIL na istom korijenu: ne pushaj treći ispravak, javi orkestratoru (`docs/ENGINEERING_SYSTEM.md` §14 t. 6).
+- Suženje ugovora odobrava vlasnik; bez traga njegova odobrenja "Poznata granica" ne umanjuje nalaz (`docs/ENGINEERING_SYSTEM.md` §14 t. 2).
