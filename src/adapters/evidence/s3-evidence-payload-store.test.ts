@@ -1581,6 +1581,24 @@ describe("one monotonic deadline (QA qa233d)", () => {
     expect(s3.calls).toEqual([]);
     expect(warn).not.toHaveBeenCalled();
   });
+
+  it("a clock that throws at the start rejects the call before any request", async () => {
+    const s3 = fakeS3();
+    const { store, warn } = storeWith(s3.fetch);
+    const broken = new Error("clock unavailable");
+    const clock = vi.spyOn(performance, "now").mockImplementation(() => {
+      throw broken;
+    });
+    try {
+      await expect(put(store, "a")).rejects.toBe(broken);
+    } finally {
+      clock.mockRestore();
+    }
+    await logged();
+    expect(s3.calls).toEqual([]);
+    expect([...s3.objects.keys()]).toEqual([]);
+    expect(warn).not.toHaveBeenCalled();
+  });
 });
 
 describe("byte-identical read-back (Codex 4240926024)", () => {
