@@ -1,5 +1,8 @@
 // Pure logic for the orchestrator helper scripts. No gh/git calls here.
 import { canonicalBlock, field } from "../engineering/metadata-parser.mjs";
+import {
+  changedPaths, D97_MANUAL_PATHS, D97_PATHS, matchesPath, normalizePath,
+} from "../engineering/protected-paths.mjs";
 
 export const GATE_CONTEXT = "Engineering review gate";
 const SHA_RE = /^[0-9a-f]{40}$/i;
@@ -10,50 +13,23 @@ const KINDS = {
   qa: { agent: "QA-Agent", head: "QA-Head", verdict: "QA-Verdict" },
 };
 
-// Paths from docs/DECISIONS.md D-97 (2): a PR touching them merges only on
-// Daniel's explicit command. Entries ending with "/" are directories.
-export const D97_PATHS = [
-  "CLAUDE.md",
-  "AGENTS.md",
-  "docs/ENGINEERING_SYSTEM.md",
-  "docs/ORKESTRATOR.md",
-  "docs/SESSIONS.md",
-  "docs/MULTI-ACCOUNT.md",
-  "docs/AGENT_SYSTEM_V2.md",
-  "lefthook.yml",
-  ".github/",
-  "scripts/engineering/",
-  "scripts/hooks/",
-  ".claude/",
-  ".agents/",
-];
-// D-97 also covers DECISIONS entries about who may merge/review; not decidable by path alone.
-export const D97_MANUAL_PATHS = ["docs/DECISIONS.md"];
+// The D-97 lists live with the gate (scripts/engineering/protected-paths.mjs)
+// so the risk floor and this report read the same paths.
+export { changedPaths, D97_MANUAL_PATHS, D97_PATHS };
 
-const norm = (p) => String(p).replaceAll("\\", "/").replace(/^\.\//, "");
+const norm = normalizePath;
 
 export function d97Matches(files) {
-  return (files ?? []).map(norm).filter((f) =>
-    D97_PATHS.some((p) => (p.endsWith("/") ? f.startsWith(p) : f === p)),
-  );
+  return (files ?? []).map(norm).filter((f) => matchesPath(f, D97_PATHS));
 }
 
 export function d97ManualMatches(files) {
-  return (files ?? []).map(norm).filter((f) => D97_MANUAL_PATHS.includes(f));
+  return (files ?? []).map(norm).filter((f) => matchesPath(f, D97_MANUAL_PATHS));
 }
 
 export function intersectFiles(mainFiles, prFiles) {
   const main = new Set((mainFiles ?? []).map(norm));
   return [...new Set((prFiles ?? []).map(norm))].filter((f) => main.has(f)).sort();
-}
-
-/** Paths of a REST pull-request files list; a rename counts under both names. */
-export function changedPaths(files) {
-  const out = new Set();
-  for (const f of files ?? []) {
-    for (const p of [f?.filename, f?.previous_filename]) if (p) out.add(norm(p));
-  }
-  return [...out].sort();
 }
 
 // Directories where different files of two PRs still collide (ordering, shared plan).
@@ -257,6 +233,8 @@ export function evaluateReady(d) {
   else if (d.threads.count) add("FAIL", "threads", `${d.threads.count} unresolved threads (${d.threads.authors.join(", ")})`);
   else add("PASS", "threads", "no unresolved threads");
   add(d.autoMerge ? "FAIL" : "PASS", "automerge", d.autoMerge ? "auto-merge enabled" : "auto-merge off");
+  // An unread file list is not "no D-97 paths".
+  if (!Array.isArray(d.files)) add("FAIL", "files", "changed files could not be read; D-97 paths unknown");
   const d97 = d97Matches(d.files);
   add("INFO", "d97", d97.length ? `touches D-97 paths, ask for Daniel's command: ${d97.join(", ")}` : "no D-97 paths");
   const manual = d97ManualMatches(d.files);

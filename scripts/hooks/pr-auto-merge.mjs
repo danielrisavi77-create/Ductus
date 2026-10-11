@@ -2,12 +2,15 @@
 // `Risk: low`, turns on GitHub auto-merge (squash). GitHub then merges only
 // when every required check on `main` is green, including the Engineering
 // review gate, so a review or an Owner Override is still needed. Standard
-// and critical PRs are left to the orchestrator.
+// and critical PRs are left to the orchestrator, and so is every PR whose
+// changed files put the floor above low, need the owner's merge command
+// (D-97) or cannot be read: the declared risk alone never enables auto-merge.
 // `--dry-run` prints the decision instead of calling gh (used by the tests).
 import { execFileSync } from "node:child_process";
 
-import { field } from "../engineering/metadata-parser.mjs";
-import { extractBody, prAction, readInput } from "./pr-command.mjs";
+import { evaluateMetadata } from "../engineering/pr-metadata-core.mjs";
+import { ownerCommandPaths } from "../engineering/protected-paths.mjs";
+import { changedFiles, extractBody, prAction, readInput } from "./pr-command.mjs";
 
 const PR_URL = /https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+/;
 
@@ -21,9 +24,13 @@ const command = input.tool_input?.command ?? "";
 if (prAction(command) !== "create") process.exit(0);
 
 const url = output(input.tool_response).match(PR_URL)?.[0];
-const body = extractBody(command, input.cwd ?? process.cwd());
-const risk = field(body ?? "", "Risk")?.toLowerCase();
-if (!url || risk !== "low") process.exit(0);
+const cwd = input.cwd ?? process.cwd();
+const body = extractBody(command, cwd);
+const files = changedFiles(cwd);
+if (!url || body === null || files === null) process.exit(0);
+const metadata = evaluateMetadata({ body, files });
+if (!metadata.ok || metadata.risk !== "low" || metadata.minimumRisk !== "low") process.exit(0);
+if (ownerCommandPaths(files).length > 0) process.exit(0);
 
 if (process.argv.includes("--dry-run")) {
   console.log(url);

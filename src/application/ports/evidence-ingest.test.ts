@@ -87,6 +87,27 @@ describe("evidence ingest v2 boundary", () => {
     ).toBe(false);
   });
 
+  it("accepts only whole UTC minutes as observed times (D-24)", () => {
+    const withTimes = (times: Partial<EvidenceIngestCommandV2["descriptor"]>) =>
+      validateEvidenceIngestCommandV2({
+        ...validCommand(),
+        descriptor: { ...validCommand().descriptor, ...times },
+      });
+
+    // One minute at both ends is a segment within that minute.
+    expect(withTimes({ observedEndedAt: "2026-10-03T06:00:00.000Z" })).toBe(true);
+    for (const time of [
+      "2026-10-03T06:00:30.000Z",
+      "2026-10-03T06:00:00.001Z",
+      "2026-10-03T06:00:59.999Z",
+      "2026-10-03T08:00:00.000+02:00",
+      "2026-10-03T06:00:00Z",
+    ]) {
+      expect(withTimes({ observedStartedAt: time })).toBe(false);
+      expect(withTimes({ observedEndedAt: time })).toBe(false);
+    }
+  });
+
   it("rejects descriptors with unknown fields", () => {
     expect(
       validateEvidenceIngestCommandV2({
