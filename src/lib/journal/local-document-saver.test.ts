@@ -1546,6 +1546,31 @@ describe("LocalDocumentSaver: a journal whose rows disagree (#206 qa206e V-1)", 
     ["an unknown meta state", (db) => db.table("meta").update(DOC, { state: "UNKNOWN_SYNTHETIC" })],
     ["a negative local sequence", (db) => db.table("meta").update(DOC, { localSeq: -1 })],
     ["a pending row past the recorded sequence", (db) => db.table("meta").update(DOC, { localSeq: 1 })],
+    // #206 reviewB: each case below is caught by one condition alone.
+    ["a fractional local sequence with no pending rows", async (db) => {
+      await db.table("pending").where("documentId").equals(DOC).delete();
+      await db.table("meta").update(DOC, { localSeq: 2.5 });
+    }],
+    ["a negative local sequence with no pending rows", async (db) => {
+      await db.table("pending").where("documentId").equals(DOC).delete();
+      await db.table("meta").update(DOC, { localSeq: -1 });
+    }],
+    ["a pending row with a fractional sequence", async (db) => {
+      const row = await db.table("pending").get([DOC, 1]);
+      await db.table("pending").delete([DOC, 1]);
+      await db.table("pending").put({ ...row, localSeq: 1.5 });
+    }],
+    ["a pending row at sequence zero", async (db) => {
+      const row = await db.table("pending").get([DOC, 1]);
+      await db.table("pending").delete([DOC, 1]);
+      await db.table("pending").put({ ...row, localSeq: 0 });
+    }],
+    ["a pending row whose transaction id is not text", (db) =>
+      db.table("pending").update([DOC, 1], { "tx.clientTransactionId": 42 })],
+    ["an invalid document in a pending row before the newest", (db) =>
+      db.table("pending").update([DOC, 1], { "tx.document": { synthetic: true } })],
+    ["a recorded sequence past the newest pending row", (db) =>
+      db.table("meta").update(DOC, { localSeq: 3 })],
   ];
   for (const [name, damage] of cases) {
     it(`17: ${name} is corrupt, never older or empty text shown as saved, and nothing is written`, async () => {
