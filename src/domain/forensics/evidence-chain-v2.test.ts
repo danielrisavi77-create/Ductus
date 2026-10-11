@@ -31,15 +31,13 @@ function canonicalFixture(text: string): string {
     sequenceFrom: 1,
     sequenceTo: 1,
     observedStartedAt: "2026-10-02T20:00:00.000Z",
-    observedEndedAt: "2026-10-02T20:00:30.000Z",
+    observedEndedAt: "2026-10-02T20:01:00.000Z",
     initialDocumentHash: A,
     finalDocumentHash: B,
     predecessorSegmentHash: null,
     events: [
       {
         sequence: 1,
-        occurredAt: "2026-10-02T20:00:10.000Z",
-        elapsedMs: 0,
         source: "editor",
         steps: [{ stepType: "replace", from: 1, to: 1, text }],
         beforeDocumentHash: A,
