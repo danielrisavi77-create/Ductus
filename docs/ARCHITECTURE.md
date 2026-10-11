@@ -51,7 +51,7 @@ Smjer ovisnosti je prema unutra: `app` i features pozivaju application; applicat
 | Izvedba prijave | Vlastiti OIDC klijent, sesije u bazi | [vlastiti OIDC klijent ODLUČEN 11. 10. 2026. (D-08, dio o aplikaciji); sesije u bazi i identitet u RLS-u potvrđeni u D-90; PRIJEDLOG samo izbor biblioteke (D-73)] |
 | Potpis | Dva odvojena Ed25519 ključa u KMS-u, potpisuje samo worker | [ODLUČENO D-71] |
 | Neovisno vrijeme | Dnevni korijen s RFC 3161 žigom, val 2 | [PRIJEDLOG D-72] |
-| E-pošta | Transakcijska usluga u EU-u preko SMTP-a ili API-ja | [PRIJEDLOG D-08] |
+| E-pošta | Transakcijska usluga u EU-u preko SMTP-a ili API-ja | [ODLUČENO D-08, dio o aplikaciji: u EU-u; usluga i dobavljač PRIJEDLOG do B0.1] |
 | Obavijesti | Polling svakih 30 do 60 s, obavijest o reviziji najviše jednom po P-03 prozoru | [ODLUČENO D-74] |
 | Testovi | Vitest (unit, property i ugovorni), Playwright (E2E i axe), pgTAP (RLS, uloge, matrica pristupa) | Preneseno i prošireno |
 | Pravila fakulteta | Zajednički paket s Lektom (generirani podaci pravila, citatni stilovi, predlošci naslovne stranice) | [ODLUČENO D-25] |

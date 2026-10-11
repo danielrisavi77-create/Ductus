@@ -48,13 +48,13 @@ Stanje 11. 10. 2026. prema `gh pr list` (nositelj statusa je Linear; review i QA
 
 Otvoreno:
 
-- #240 DAN-83 ključ ustanove na zadacima i potvrdama obavijesti; #232 i #233 B-8i ključ objekta s ustanovom i S3 adapter (#233 draft); #245 B-8i B2 domene pohrane po ustanovi (draft); #234 docs REPOZITORIJI (draft).
+- #240 DAN-83 ključ ustanove na zadacima i potvrdama obavijesti; #233 B-8i S3 adapter pohrane; #245 B-8i B2 domene pohrane po ustanovi (draft); #247 DAN-54 potvrda v2; #248 DAN-183a fixtureovi na format koraka v1 (draft); #234 docs REPOZITORIJI (draft).
 - #206 i #214 F-3 spremanje dokumenta i Tiptap editor (#214 draft).
 - #219, #220, #221, #230 orchestrator skripte, Owner-Override, verdikti (D-101; #221 i #230 draft); #223 čitanje teksta sučelja; #228 hook u cloud sesijama (draft).
-- #243 ovaj docs PR; #244 nacrti dokumenata o privatnosti.
+- #243 ovaj docs PR.
 - #180 DAN-138 test kopija skillova (draft); #94 DAN-41 drugi pružatelj reviewa (draft, nakon demoa).
 
-Spojeno 10. i 11. 10.: #160, #173, #175, #185, #186, #189, #191, #194, #196, #198, #199, #205, #207 do #210, #212, #213, #215 do #218, #224, #226, #227, #229, #237, #238 i ranije #188, #174, #45, #164, #151, #170, #169, #163, #162, #159, #150, #148, #133, #165, #147, #105.
+Spojeno 10. i 11. 10.: #160, #173, #175, #185, #186, #189, #191, #194, #196, #198, #199, #205, #207 do #210, #212, #213, #215 do #218, #224, #226, #227, #229, #232, #237, #238, #244, #246 i ranije #188, #174, #45, #164, #151, #170, #169, #163, #162, #159, #150, #148, #133, #165, #147, #105.
 
 ## Ne smije se izgubiti
 
