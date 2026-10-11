@@ -301,8 +301,9 @@ export class EvidenceGateway implements EvidenceIngestPort {
       return { status: "invalid" };
     }
 
+    // The key is built from the id the server resolved, not from the request.
     const stored = await this.dependencies.payloadStore.putImmutable({
-      evidencePackageId,
+      evidencePackageId: context.evidencePackageId,
       segmentHash: verified.sha256,
       canonicalPayload,
     });
@@ -313,7 +314,7 @@ export class EvidenceGateway implements EvidenceIngestPort {
         reason: stored.reason,
       };
     }
-    if (stored.status === "conflict") {
+    if (stored.status === "conflict" || stored.status === "invalid") {
       return { status: "invalid" };
     }
 

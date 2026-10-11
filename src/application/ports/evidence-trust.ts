@@ -25,12 +25,15 @@ export type EvidencePayloadPutResult =
   | { status: "stored"; storageRef: string }
   | { status: "existing"; storageRef: string }
   | { status: "conflict" }
+  | { status: "invalid" }
   | { status: "unavailable"; reason: string };
 
 export interface EvidencePayloadStore {
   /**
    * Stores exact canonical bytes immutably. Repeating the same package/hash
    * with identical bytes is idempotent; different bytes at that key conflict.
+   * A store that checks the key or the bytes itself answers `invalid` for a
+   * package id, hash or payload the gateway should already have refused.
    */
   putImmutable(input: {
     evidencePackageId: string;
