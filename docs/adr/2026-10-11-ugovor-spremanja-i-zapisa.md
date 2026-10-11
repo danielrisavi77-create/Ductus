@@ -1,10 +1,10 @@
 # ADR: jedan ugovor za spremanje dokumenta i zapis pisanja
 
-- **Status:** PRIJEDLOG. Čeka odluku vlasnika. Do odluke se na ovome ništa ne gradi.
+- **Status:** PRIHVAĆENO 11. 10. 2026. odlukom vlasnika. Trag: komentar `issuecomment-6105502093` na issueu 87, koji je objavio orkestrator s odlukama danim u njegovoj sesiji. Odluke su prepisane u §8. Stavke iz §9 i dalje nisu provjerene.
 - **Datum:** 11. 10. 2026.
 - **Zadatak:** stavka 0.3 plana u issueu 239. Samo dokument; ne mijenja kod ni druge dokumente.
 - **Stanje koda:** `main` na `1912cac`. Brojevi redaka vrijede za taj commit.
-- **Mjesto:** u `docs/` do sada nije bilo zapisa ove vrste (postoje samo `docs/spikes/` i `docs/engineering/`), pa je ovo prvi u `docs/adr/`. Broj odluke u `docs/DECISIONS.md` dodjeljuje se tek nakon odluke vlasnika, zasebnim PR-om.
+- **Mjesto:** u `docs/` do sada nije bilo zapisa ove vrste (postoje samo `docs/spikes/` i `docs/engineering/`), pa je ovo prvi u `docs/adr/`. Broj odluke u `docs/DECISIONS.md` dodjeljuje se zasebnim PR-om (§10).
 
 ## 1. Što se odlučuje
 
@@ -28,7 +28,7 @@ Svaka tvrdnja iz nalaza provjerena je čitanjem koda, ne ciljanim pokretanjem (v
 
 Uz to, tijekom provjere nađeno:
 
-- **Tri navoda koja ne mogu vrijediti zajedno.** `docs/PLAN-DEMO.md` B-12 traži "rekonstrukcija podudarna na scenarijima uključujući prazninu". Dopuna D-98 kaže da demo rekonstruira od prvog događaja, bez tablice kontrolnih točaka. Kod kaže da se nakon prekida nastavlja od kontrolne točke (`evidence-reconstruction.ts` r. 60). Bez dokumenta s kraja praznine rekonstrukcija ne može prijeći prazninu.
+- **Tri navoda koja ne mogu vrijediti zajedno.** `docs/PLAN-DEMO.md` B-12 traži "rekonstrukcija podudarna na scenarijima uključujući prazninu". Dopuna D-98 kaže da demo rekonstruira od prvog događaja, bez tablice kontrolnih točaka. Kod kaže da se nakon prekida nastavlja od kontrolne točke (`evidence-reconstruction.ts` r. 60). Bez dokumenta s kraja praznine rekonstrukcija ne može prijeći prazninu. Razriješeno odlukom 4 (§8).
 - **Potvrda ne nosi ono što klijent provjerava.** Klijent drži stanje dok ne provjeri potvrdu prema (`documentId`, `clientTransactionId`, `revision`) (`src/domain/sync/drain.ts`), a potvrda v1 nema ni reviziju ni ID transakcije. To je stavka 0.1 (issue 202).
 - **`ARCHITECTURE.md` §5 t. 2** kaže da odsječak nosi ID transakcije klijenta. Format odsječka v2 nema to polje (ima `segmentId`).
 - **Pravilo pražnjenja reda vrijedi samo dok je svaki redak cijeli dokument.** `drain.ts` r. 300 do 314 šalje samo najnoviji redak, a starije preskače, i sam upozorava da to prestaje vrijediti čim redak postane dio niza.
@@ -77,6 +77,8 @@ Brojke o veličini dolaze iz `docs/spikes/B0.2.md` (shema `prosemirror-schema-ba
 | Kasnije | B se može uključiti bez promjene potpisanih formata ako se sada poštuju tri uvjeta iz §5.1. | Dijeljenje reda i više potvrda po reviziji ostaju trajna složenost na najosjetljivijem putu. | Prelazak na jedan ugovor nakon prvih stvarnih zapisa znači dvije vrste potvrda i dva značenja revizije u istoj povijesti. |
 
 ## 5. Preporuka
+
+Preporuka je prihvaćena (§8, odluke 1 do 5). Tekst ovog odjeljka ostaje kako je predložen.
 
 **Opcija A sada, uz tri uvjeta koja ostavljaju opciju B otvorenom, i prekid kao prijavljena praznina.** To je najmanja promjena koja ostaje unutar odobrene arhitekture: `ARCHITECTURE.md` §5 već opisuje upravo taj oblik, plan B-8 ga već predviđa, a demo radi s kratkim tekstovima i kratkim prekidima mreže.
 
@@ -164,7 +166,7 @@ Broj ishoda po vrsti (osobito `stale_base`, `chain_conflict`, `not_continuous`, 
 
 **Jedan ugovor veže trajnost teksta uz ispravnost zapisa.** Danas je spremanje dokumenta jednostavan, zaseban put. Nakon ove odluke tekst dolazi na poslužitelj samo ako klijent uz njega proizvede valjan odsječak: kanonski bajtovi, točni otisci, točan prethodnik. Greška bilo gdje u hvatanju zapisa, u kodu koji će se pisati u tri tjedna prije demoa, znači da studentov tekst ostaje samo na uređaju. Prijavljeni prekid nije izlaz iz svake takve greške, jer i on traži jedan valjan odsječak.
 
-Zašto preporuka ipak stoji: razdvojeni put je upravo ono što `BACKEND.md` §2 odbacuje ("revizija bez odsječka je lažna praznina"), a pravilo 11 iz `PRODUCT.md` §5 traži da se predati može samo ono što se može rekonstruirati. Rizik se smanjuje, ne uklanja: tekst je trajno na uređaju i stanje to pošteno pokazuje, odbijanja se broje (§5.6), a put spašavanja teksta s uređaja već postoji (`src/domain/sync/recovery.ts`). Vlasnik treba znati da taj rizik prihvaća.
+Zašto preporuka ipak stoji: razdvojeni put je upravo ono što `BACKEND.md` §2 odbacuje ("revizija bez odsječka je lažna praznina"), a pravilo 11 iz `PRODUCT.md` §5 traži da se predati može samo ono što se može rekonstruirati. Rizik se smanjuje, ne uklanja: tekst je trajno na uređaju i stanje to pošteno pokazuje, odbijanja se broje (§5.6), a put spašavanja teksta s uređaja već postoji (`src/domain/sync/recovery.ts`). Vlasnik je taj rizik prihvatio odlukom 1 (§8).
 
 Drugi argument, protiv A u korist B: bez mreže A sprema cijeli dokument svakih 30 sekundi i ne smije ništa preskočiti. Za demo je to zanemarivo (oko 3 MB na sat). Za diplomski ili doktorski rad nije (16 do 83 MB na sat), a "rad bez mreže" se ne smije rezati. Zato su uvjeti iz §5.1 dio preporuke, a ne dodatak.
 
@@ -174,15 +176,24 @@ Drugi argument, protiv A u korist B: bez mreže A sprema cijeli dokument svakih 
 
 **(b) Trajni razvojni ključ (stavka 0.2).** Čim pohrana postane trajna, potvrda izdana prije ponovnog pokretanja procesa više se ne može provjeriti, a predaja to čita kao neispravan zapis. Što odluka treba sadržavati: javni ključ upisan u registar ključeva domene evidencije; verzija ključa izvedena iz samog ključa, ne stalni tekst; potvrda se provjerava ključem koji registar navodi za njezinu oznaku i verziju, nikad "trenutnim ključem potpisnika"; privatni razvojni ključ izvan repoa; produkcijska konfiguracija i dalje odbija razvojnog potpisnika. Veza s ovom odlukom: ugovor vraća potvrde koje klijent provjerava, pa klijent mora dobiti isti popis javnih ključeva.
 
-## 8. Što ostaje vlasniku
+## 8. Odluke vlasnika
 
-1. **Prihvaća li se preporuka** (opcija A sada, uvjeti iz §5.1, opcija B kao kasnija odluka), uz rizik iz §6.
-2. **Tko smije prijaviti prazninu.** Smije li klijent sam, nakon konačnog odbijanja, prijaviti prekid i spremiti tekst, ili to traži potvrdu autora? Prvo čuva tekst bez pitanja; drugo znači da tekst čeka na uređaju dok autor ne odgovori.
-3. **Sukob dvaju uređaja.** Kad autor odabere "zadržavam svoju verziju", neposlani odsječci tog uređaja ne mogu se nadovezati na lanac. Preporuka: odbacuju se i prikazuje se praznina. Druga mogućnost je čuvati ih izvan lanca, što je nova vrsta zapisa i nova odluka. Tok "promjena uređaja" nema nositelja (stavka 1.6 plana).
-4. **Demo i D-98.** Je li dokument sačuvan uz redak praznine u skladu s dopunom D-98 "bez tablice kontrolnih točaka"? Ako nije, kriterij B-12 "uključujući prazninu" ne može se ispuniti u demou. I: prikazuje li demo sukob dvaju uređaja?
-5. **Potvrda v2 (stavka 0.1) je u radu.** Značenje iz §5.1 t. 1 i §5.3 treba potvrditi prije nego što se vektor zaključa.
+Vlasniku je postavljeno pet pitanja. Odluke su prepisane doslovno iz komentara `issuecomment-6105502093` na issueu 87 (11. 10. 2026.), bez dopuna.
 
-Za Product/UX, ne za vlasnika: zatvoreni popis uzroka praznine i tekst koji uz prazninu vide student i nastavnik (`PRODUCT.md` §9).
+1. **Pitanje:** prihvaća li se preporuka (opcija A sada, uvjeti iz §5.1, opcija B kao kasnija odluka), uz rizik iz §6.
+   **Odluka:** "Prijedlog se prihvaća: jedno slanje nosi jedan odsječak zapisa i cijeli dokument, u jednoj transakciji, s jednim ključem ponavljanja (`clientTransactionId`). Prihvaćen je i rizik da trajnost teksta na poslužitelju ovisi o ispravnosti hvatanja zapisa."
+2. **Pitanje:** smije li klijent sam, nakon konačnog odbijanja, prijaviti prekid i spremiti tekst, ili to traži potvrdu autora.
+   **Odluka:** "Klijent smije sam prijaviti prazninu u zapisu; student je uvijek vidi."
+3. **Pitanje:** što s neposlanim odsječcima uređaja čija verzija ostaje nakon sukoba dvaju uređaja; oni se ne mogu nadovezati na lanac.
+   **Odluka:** "Kod sukoba dvaju uređaja neposlani odsječci uređaja čija verzija ostaje odbacuju se i prikazuje se praznina."
+4. **Pitanje:** je li dokument sačuvan uz redak praznine u skladu s dopunom D-98 "bez tablice kontrolnih točaka", i prikazuje li demo sukob dvaju uređaja.
+   **Odluka:** "Demo ne prikazuje sukob dvaju uređaja; uz redak praznine čuva se dokument od kojeg rekonstrukcija nastavlja, bez tablice kontrolnih točaka (D-98 ostaje). Kriterij B-12 „uključujući prazninu” tumači se tako."
+5. **Pitanje:** značenje polja potvrde v2 iz §5.1 t. 1 i §5.3, prije nego što se vektor zaključa (stavka 0.1).
+   **Odluka:** "Značenje polja `revision` i `clientTransactionId` u potvrdi v2 potvrđuje se kako piše u PR-u 246, uključujući uvjete koji ostavljaju mogućim kasnije slanje više odsječaka bez promjene potpisanog formata."
+
+Isti komentar navodi i posljedice: pisac DAN-54 smije zaključiti zlatne vektore prema točki 5, a planovi 241 i 242 više ne čekaju ovu odluku.
+
+I dalje otvoreno, i nije pitanje za vlasnika nego za Product/UX: zatvoreni popis uzroka praznine i tekst koji uz prazninu vide student i nastavnik (`PRODUCT.md` §9). Tok "promjena uređaja" i dalje nema nositelja (stavka 1.6 plana).
 
 ## 9. Što nisam mogao provjeriti
 
@@ -195,8 +206,8 @@ Za Product/UX, ne za vlasnika: zatvoreni popis uzroka praznine i tekst koji uz p
 - **Tko prazni red kad su otvorena dva taba.** Nisam našao zaključavanje pražnjenja između tabova.
 - **Otvoreni PR-ovi 206, 232, 233 i 240** pročitani su po opisu i popisu datoteka, ne redak po redak. PR 213 spojen je tijekom rada; pročitano je zaglavlje formata koraka.
 - **Izvorni `pisac-editor`** nije dostupan; što su njegovi RPC-i radili znam samo iz komentara u kodu.
-- **Linear** nije čitan; s issuea 87 pročitana su samo četiri navedena komentara. PR 243 upisuje odluke od 11. 10. u dokumente; ovdje se pozivam na komentare, ne na brojeve odluka iz tog PR-a.
+- **Linear** nije čitan; s issuea 87 pročitana su samo četiri navedena komentara i komentar s odlukama iz §8. PR 243 upisuje odluke od 11. 10. u dokumente; ovdje se pozivam na komentare, ne na brojeve odluka iz tog PR-a.
 
-## 10. Ako se odluka prihvati
+## 10. Što slijedi nakon odluke
 
-Zasebnim zadacima, ne ovim PR-om: upis u `docs/DECISIONS.md`; usklađivanje `BACKEND.md` §2 i `ARCHITECTURE.md` §5 (t. 2 o ID-u transakcije, odlomak o praznini); dopuna plana napada (issue 155, točke 17 do 21) i plana potvrde v2 (issue 202, napad 5: koji ID transakcije potvrda nosi); preimenovanje ugovora u `src/domain/serverSync/contract.ts`; uklanjanje zasebnog reda zapisa iz `src/application/evidence/evidence-outbox.ts` u korist jednog reda.
+Zasebnim zadacima, ne ovim PR-om: upis u `docs/DECISIONS.md`; napomena uz kriterij B-12 u `docs/PLAN-DEMO.md` i uz dopunu D-98 da se "uključujući prazninu" tumači prema odluci 4; usklađivanje `BACKEND.md` §2 i `ARCHITECTURE.md` §5 (t. 2 o ID-u transakcije, odlomak o praznini); dopuna plana napada (issue 155, točke 17 do 21) i plana potvrde v2 (issue 202, napad 5: koji ID transakcije potvrda nosi); preimenovanje ugovora u `src/domain/serverSync/contract.ts`; uklanjanje zasebnog reda zapisa iz `src/application/evidence/evidence-outbox.ts` u korist jednog reda.
