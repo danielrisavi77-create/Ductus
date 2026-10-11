@@ -182,8 +182,15 @@ function foldLetters(text: string): string {
  * spaces written in a pattern do not match it, and it is not a letter or a
  * digit, so a word still ends at it. Markup readers put it into the text they
  * hand over wherever the phrase cannot go on (see `scan.ts`).
+ *
+ * It is U+FFFF, a code point that is no character, and not a line feed: the
+ * text is also read with every mark taken out (`findForbiddenTermsInMarkup`),
+ * and a line break that is written in a string is white space between two
+ * words, not a boundary to close up. A source that writes U+FFFF itself is
+ * reported for it (`unreadableCharacters`), so the mark cannot be mistaken
+ * for text that passes.
  */
-export const PHRASE_BREAK = "\n";
+export const PHRASE_BREAK = "\uFFFF";
 
 /**
  * White space that keeps two words in one phrase on one line: spaces of every
@@ -206,7 +213,7 @@ const SPACES_ONLY = /^[\p{Zs}\t\p{Zl}]+$/u;
 export function foldPhrases(text: string): string {
   return foldLetters(text)
     .replace(/[^\p{L}\p{N}]+/gu, (run) => (SPACES_ONLY.test(run) ? " " : PHRASE_BREAK))
-    .trim();
+    .replace(/^[ \uFFFF]+|[ \uFFFF]+$/g, "");
 }
 
 /** Dictionary entries that occur in `text`, in dictionary order; with `lang`, only the entries of that language. */
@@ -388,7 +395,7 @@ export function windowsCutShort(joined: string): boolean {
 /** The quotation marks of Croatian and English outside ASCII. */
 const QUOTATION_MARKS: ReadonlySet<number> = new Set([0xab, 0xbb, 0x2018, 0x2019, 0x201a, 0x201c, 0x201d, 0x201e]);
 /** What stands between two words around a `PHRASE_BREAK`, the break included. */
-const AROUND_A_BREAK = /[^\p{L}\p{N}]*\n[^\p{L}\p{N}]*/gu;
+const AROUND_A_BREAK = /[^\p{L}\p{N}]*\uFFFF[^\p{L}\p{N}]*/gu;
 
 /**
  * `joined` closed up, and without the quotation marks that stand between two

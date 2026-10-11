@@ -770,6 +770,93 @@ describe("a file the scan cannot read", () => {
   }, 60_000);
 });
 
+// Review of 2f797cc: the mark that stands where a phrase ends was a line
+// feed, so closing a text up also took out the line breaks that are written
+// in it, and two words on two lines were read as one. The mark is now a code
+// point that is no character; a line break that is written stays where it is.
+describe("a line break written in the text is not a boundary to close up", () => {
+  const B = PHRASE_BREAK;
+  const entries = (): string[] => scanUiText(root!).flatMap((finding) => finding.terms.map((term) => term.entry));
+  const [LF, CRLF, TAB] = ["\n", "\r\n", "\t"];
+
+  /** What it is, the content of the file with `|` where the white space goes. */
+  const WRITTEN: readonly [string, string, string][] = [
+    ["a string in JSX", "src/components/Case.tsx", 'export const Case = () => <p>{"Sum|njivo"}</p>;\n'],
+    ["a template in JSX", "src/components/Case.tsx", "export const Case = () => <p>{`Sum|njivo`}</p>;\n"],
+    ["a template with a placeholder in JSX", "src/components/Case.tsx", "export const Case = ({ n }: Props) => <p>{`${n} Kopi|rano`}</p>;\n"],
+    ["a chain in JSX", "src/components/Case.tsx", 'export const Case = () => <p>{"Hid|" + "den"}</p>;\n'],
+    ["an attribute", "src/components/Case.tsx", 'export const Case = () => <img alt={"Sus|picious"} />;\n'],
+    ["a string of a text module", "src/domain/sync/labels.ts", 'export const A = "Sum|njivo";\n'],
+    ["a chain of a text module", "src/domain/sync/labels.ts", 'export const A = "Skri|" + "veno";\n'],
+    ["a template of a text module", "src/domain/sync/labels.ts", "export const A = (n: number) => `${n} Prepi|sano`;\n"],
+    ["a string outside the text modules", "src/domain/sync/state.ts", 'export const A = "Sum|njivo";\n'],
+    ["a catalogue", "src/lib/i18n/hr.json", '{ "title": "Sum|njivo" }\n'],
+  ];
+  /** How the white space is written: by its escape, or as itself where the source can hold it. */
+  const SPACES: readonly [string, string, string | null][] = [
+    ["a line feed", "\\n", LF],
+    ["a carriage return and a line feed", "\\r\\n", CRLF],
+    ["a tab", "\\t", TAB],
+  ];
+
+  it.each(WRITTEN.flatMap(([what, file, content]) => SPACES.map(([space, escape, raw]) => [what, space, file, content, escape, raw] as const)))("%s with %s between two halves of an entry", (_, __, file, content, escape, raw) => {
+    write(file, content.replace("|", escape));
+    expect(entries()).toEqual([]);
+    expect(findUnreadableText(root!)).toEqual([]);
+    // Only a template can hold the white space as itself.
+    if (content.includes("`") && raw !== null) {
+      write(file, content.replace("|", raw));
+      expect(entries()).toEqual([]);
+      expect(findUnreadableText(root!)).toEqual([]);
+    }
+  });
+
+  it.each([LF, CRLF, TAB, `${LF}${LF}`, ` ${LF} `])("reads two words with white space written between them as two words: %j", (space) => {
+    for (const [first, second] of [["Sum", "njivo"], ["Hid", "den"], ["Nestali po", "daci"], ["Spre", "mljeno"], ["sa", "ved"]] as const) {
+      const text = `${first}${space}${second}`;
+      expect(findForbiddenTermsInMarkup(text, text)).toEqual([]);
+      expect(findForbiddenTermsInMarkup(`Opis${B}${text}${B}Kraj`, `Opis${B}${text}${B}Kraj`)).toEqual([]);
+      expect(findForbiddenTermsInMarkup(`${text}${B}Kraj`, `${text}${B}Kraj`, false)).toEqual([]);
+    }
+  });
+
+  it("still closes up over the mark, and next to white space that is written", () => {
+    const found = (text: string): string[] => findForbiddenTermsInMarkup(text, text).map((term) => term.entry);
+    expect(found(`Sum${B}njivo`)).toEqual(["sumnjivo"]);
+    expect(found(`Rok${LF}Sum${B}njivo${LF}Kraj`)).toEqual(["sumnjivo"]);
+    expect(found(`Opis${B}Rok${LF}hid${B}den${CRLF}Kraj${B}Dalje`)).toEqual(["hidden"]);
+    // A written line break ends the phrase of a contextual word, as it always did.
+    expect(found(`Spremljeno${LF}na uređaju`)).toEqual([HR]);
+    expect(found("Spremljeno na uređaju")).toEqual([]);
+  });
+
+  it("does not take a run of lines for a run of parts, or the quotation marks at a line break for those at a boundary", () => {
+    const lines = Array.from({ length: 80 }, () => cp(0xb7)).join(LF);
+    expect(windowsCutShort(`hid${LF}${lines}${LF}den`)).toBe(false);
+    expect(windowsCutShort(`hid${B}${lines.replaceAll(LF, B)}${B}den`)).toBe(true);
+    const quoted = `Sum${cp(0x201d)}${LF}${cp(0x201e)}njivo`;
+    expect(closedUpPastQuotes(quoted)).toBe(quoted);
+    expect(closedUpPastQuotes(quoted.replace(LF, B))).toBe("Sumnjivo");
+  });
+
+  it("uses a mark that is no character, and reports that code point when a source writes it", () => {
+    expect(B).toBe(cp(0xffff));
+    expect(/^\p{Cn}$/u.test(B)).toBe(true);
+    expect(unreadableCharacters(`Rok${B}predaje`)).toEqual(["U+FFFF"]);
+    // Written in a source, it cuts a word as a boundary does: the entry is found and the code point is reported.
+    for (const [file, content] of [
+      ["src/components/Case.tsx", 'export const Case = () => <p>{"Sum\\uFFFFnjivo"}</p>;\n'],
+      ["src/components/Case.tsx", `export const Case = () => <p>Sum${B}njivo</p>;\n`],
+      ["src/domain/sync/labels.ts", 'export const A = "Sum" + "\\uFFFF" + "njivo";\n'],
+      ["src/domain/sync/state.ts", `export const A = "Rok${B}predaje";\n`],
+    ] as const) {
+      write(file, content);
+      expect(findUnreadableText(root!).map((entry) => entry.reason.match(/U\+[0-9A-F]+/g)), content).toContainEqual(["U+FFFF"]);
+      if (content.includes("Sum")) expect(entries(), content).toContain("sumnjivo");
+    }
+  });
+});
+
 // QA of e11efe6: three ways for text to reach a page from a place the scan
 // did not read. What cannot be read fails a check.
 describe("text that reaches a page from outside the files the scan reads", () => {
