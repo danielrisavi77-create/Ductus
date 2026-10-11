@@ -29,11 +29,8 @@ const GOLDEN: EvidenceDomainKey = {
   keyVersion: chain.verificationKey.keyVersion,
   encoding: "spki-der",
   keyBase64Url: Buffer.from(fromHex(chain.verificationKey.spkiDerHex)).toString("base64url"),
-  evidenceDomainId: DOMAIN_A,
-  purpose: "receipt",
-  validFrom: "2026-01-01T00:00:00.000Z",
-  validTo: null,
-  revokedAt: null,
+  // The domain, the purpose and the validity the vector file states for this entry.
+  ...receiptV2.keyEntry,
 };
 
 const signedOf = (vector: GoldenReceiptV2Vector): SignedEvidenceReceiptV2 => ({
@@ -392,12 +389,15 @@ describe("verifier of receipt v2: what was signed (plan attacks 2, 3, 4, 6 and 1
         // The expected receipt on the first reading, another one afterwards.
         return reads === 1 ? contract.payload : other;
       },
-      payloadDigestSha256: contract.payloadDigestSha256,
-      signature: contract.signature,
+      // Digest and signature of the other receipt: on every later reading the
+      // value is a good receipt of another commit, and that is what is judged.
+      payloadDigestSha256: edges.payloadDigestSha256,
+      signature: edges.signature,
     };
     const result = await verifySignedEvidenceReceiptV2(shifting, EXPECTED, [GOLDEN]);
     expect(reads).toBeGreaterThan(1);
     expect(result).toEqual(refused("commit_mismatch"));
+    expect((await verifySignedEvidenceReceiptV2(signedOf(edges), expectationOf(other), [GOLDEN])).ok).toBe(true);
 
     // The copy is held to the same rules: a field that shows up on the second
     // reading was checked by nobody.
@@ -450,6 +450,7 @@ describe("verifier of receipt v2: evidence domain and key scope (supplement D1, 
     async (edit) => {
       // The honest entry verifies the receipt; only the change of the entry refuses it.
       expect([GOLDEN.evidenceDomainId, GOLDEN.purpose]).toEqual([contract.payload.evidenceDomainId, "receipt"]);
+      expect([GOLDEN.validFrom, GOLDEN.validTo, GOLDEN.revokedAt]).toEqual(["2026-01-01T00:00:00.000Z", null, null]);
       expect((await verifySignedEvidenceReceiptV2(signedOf(contract), EXPECTED, [GOLDEN])).ok).toBe(true);
       const entry: Record<string, unknown> = { ...GOLDEN };
       for (const field of edit.remove ?? []) delete entry[field];
@@ -471,6 +472,52 @@ describe("verifier of receipt v2: evidence domain and key scope (supplement D1, 
     expect(reasonOf("key-for-checkpoints")).toBe("key_scope");
     expect(reasonOf("key-without-domain")).toBe("key_unknown");
     expect(reasonOf("key-without-purpose")).toBe("key_unknown");
+  });
+
+  it.each(receiptV2.acceptedKeys)("accepts the contract receipt under a trusted $name", async (edit) => {
+    const entry = { ...GOLDEN, ...edit.set } as unknown as EvidenceDomainKey;
+    expect(entry).not.toEqual(GOLDEN);
+    expect(await verifySignedEvidenceReceiptV2(signedOf(contract), EXPECTED, [entry])).toEqual({
+      ok: true,
+      payload: contract.payload,
+    });
+  });
+
+  it("holds both sides of acceptedAt < validTo, and no key whose validity ends inside a minute", () => {
+    // Owner decision of 11 October 2026 (issue 87, comment 6108490197).
+    const refusedKey = (name: string) => receiptV2.rejectedKeys.find((edit) => edit.name === name);
+    const acceptedKey = (name: string) => receiptV2.acceptedKeys.find((edit) => edit.name === name);
+    const { acceptedAt } = contract.payload;
+    const minuteLater = new Date(Date.parse(acceptedAt) + 60_000).toISOString();
+
+    // acceptedAt = validTo is refused; acceptedAt = validTo - 1 min is accepted.
+    expect(refusedKey("key-retired-at-accepted-at")).toMatchObject({
+      set: { validTo: acceptedAt },
+      reason: "key_not_valid",
+    });
+    expect(acceptedKey("key-retired-one-minute-after-accepted-at")?.set).toEqual({ validTo: minuteLater });
+
+    // A rotation inside the minute of the receipt (the receipt would name
+    // 06:05 for a segment accepted at 06:05:10 under a key that ends at
+    // 06:05:30): refused as a key, so no receipt is judged by it.
+    expect(refusedKey("key-valid-to-inside-the-minute-of-the-receipt")).toMatchObject({
+      set: { validTo: "2026-10-03T06:05:30.000Z" },
+      reason: "key_unknown",
+    });
+    // An end of validity off the minute is no key on either side of the
+    // receipt, and so is a start of validity off the minute.
+    const offTheMinute = receiptV2.rejectedKeys.filter((edit) => /^key-valid-(to|from)-(with|last)/.test(edit.name));
+    expect(offTheMinute.map((edit) => edit.reason)).toEqual(Array(offTheMinute.length).fill("key_unknown"));
+    expect(offTheMinute.filter((edit) => edit.set?.validTo !== undefined).length).toBeGreaterThanOrEqual(4);
+    expect(offTheMinute.filter((edit) => edit.set?.validFrom !== undefined).length).toBeGreaterThanOrEqual(2);
+    // A key whose validity ends before it starts, or as it starts, is no key.
+    for (const name of ["key-valid-to-before-valid-from", "key-valid-to-at-valid-from"]) {
+      const set = refusedKey(name)?.set as { validFrom: string; validTo: string };
+      expect(refusedKey(name)?.reason).toBe("key_unknown");
+      expect(Date.parse(set.validTo)).toBeLessThanOrEqual(Date.parse(set.validFrom));
+      // Without the rule the receipt would pass: it is before that validTo.
+      expect(Date.parse(acceptedAt)).toBeLessThan(Date.parse(set.validTo));
+    }
   });
 
   it("refuses a key id the list does not hold exactly once (D12, V6)", async () => {
@@ -532,28 +579,52 @@ describe("verifier of receipt v2: rotation and revocation (supplement D8 to D10;
   const acceptedAt = (time: string) => ({ ...contract.payload, acceptedAt: time, receiptId: "receipt-kasnija" });
   const accepted = (payload: EvidenceReceiptPayloadV2) => ({ ok: true, payload });
 
-  it("judges a retired key at the boundary of the minute acceptedAt names", async () => {
+  it("judges a retired key by acceptedAt < validTo, and knows no key that ends or starts inside a minute", async () => {
+    // Owner decision of 11 October 2026 (issue 87, comment 6108490197): the
+    // literal rule, and the end of validity of a key always on a whole minute.
     expect(contract.payload.acceptedAt).toBe("2026-10-03T06:05:00.000Z");
-    const retiredAt = async (validTo: string) => {
-      const key = testKey("kljuc-a-2025", { validTo });
+    const under = async (scope: Partial<EvidenceDomainKey>) => {
+      const key = testKey("kljuc-a-2025", scope);
       return verifySignedEvidenceReceiptV2(key.sign(contract.payload), EXPECTED, [key.trusted]);
     };
-    // The whole minute is before validTo: from its end on, the key vouches for it.
-    for (const validTo of ["2026-10-03T06:06:00.000Z", "2026-10-03T06:06:00.001Z", "2026-10-03T06:07:00.000Z"]) {
-      expect(await retiredAt(validTo), validTo).toEqual(accepted(contract.payload));
+    // acceptedAt < validTo: from the minute after the receipt on.
+    for (const validTo of ["2026-10-03T06:06:00.000Z", "2026-10-03T06:07:00.000Z", "2027-01-01T00:00:00.000Z"]) {
+      expect(await under({ validTo }), validTo).toEqual(accepted(contract.payload));
     }
-    // validTo at the start of the minute, before it, or anywhere inside it:
-    // nothing in the receipt says the segment was accepted before validTo.
+    // acceptedAt = validTo and anything earlier: the end of validity is exclusive.
+    for (const validTo of ["2026-10-03T06:05:00.000Z", "2026-10-03T06:04:00.000Z", "2026-01-02T00:00:00.000Z"]) {
+      expect(await under({ validTo }), validTo).toEqual(refused("key_not_valid"));
+    }
+    // A key that ends inside a minute is no key, on either side of the
+    // receipt: the time is never rounded, down or up. 06:05:30 is the honest
+    // rotation inside the minute of the receipt (accepted at 06:05:10, signed
+    // at 06:05:20); 06:06:30 and 06:06:00.001 would pass the comparison.
     for (const validTo of [
-      "2026-10-03T06:05:00.000Z",
+      "2026-10-03T06:05:30.000Z",
       "2026-10-03T06:04:59.999Z",
       "2026-10-03T06:05:00.001Z",
-      "2026-10-03T06:05:30.000Z",
       "2026-10-03T06:05:59.999Z",
+      "2026-10-03T06:06:00.001Z",
+      "2026-10-03T06:06:30.000Z",
+      "2026-10-03T06:06:59.999Z",
     ]) {
-      expect(await retiredAt(validTo), validTo).toEqual(refused("key_not_valid"));
+      expect(await under({ validTo }), validTo).toEqual(refused("key_unknown"));
     }
-    // With validTo on a whole minute the rule is acceptedAt < validTo.
+    // The start of validity is held to the same form: the end of one key is
+    // the start of the next. It is still never compared with acceptedAt.
+    for (const validFrom of ["2026-01-01T00:00:30.000Z", "2026-01-01T00:00:00.001Z", "2025-12-31T23:59:59.999Z"]) {
+      expect(await under({ validFrom }), validFrom).toEqual(refused("key_unknown"));
+    }
+    expect(await under({ validFrom: "2027-01-01T00:00:00.000Z" })).toEqual(accepted(contract.payload));
+    // A validity that ends before it starts, or as it starts, is no validity.
+    expect(await under({ validFrom: T, validTo: "2026-10-03T06:07:00.000Z" })).toEqual(accepted(contract.payload));
+    for (const validTo of [T, "2026-10-03T06:05:00.000Z", "2026-01-01T00:00:00.000Z"]) {
+      expect(await under({ validFrom: T, validTo }), validTo).toEqual(refused("key_unknown"));
+    }
+    // A revocation is an event and may fall inside a minute; it refuses everything.
+    expect(await under({ revokedAt: INSIDE })).toEqual(refused("key_revoked"));
+
+    // The same boundary seen from the receipt, under one key.
     const onTheMinute = testKey("kljuc-a-2025", { validTo: T });
     const before = onTheMinute.sign(acceptedAt("2026-10-03T06:05:00.000Z"));
     const at = onTheMinute.sign(acceptedAt(T));
@@ -642,6 +713,236 @@ describe("verifier of receipt v2: rotation and revocation (supplement D8 to D10;
     expect(await verifySignedEvidenceReceiptV2(signedAgain, EXPECTED, [revoked.trusted, k2.trusted])).toEqual(
       accepted(contract.payload),
     );
+  });
+});
+
+describe("verifier of receipt v2: what a reason says (review 6108474330)", () => {
+  const honest = signedOf(contract);
+  const otherCommit = { ...EXPECTED, revision: 8 };
+  const otherDomain = { ...EXPECTED, evidenceDomainId: DOMAIN_B };
+
+  it("names another commit or domain only for a receipt whose signature it has verified", async () => {
+    // Verified under a receipt key of its own domain: the server did sign it,
+    // for another commit or for another domain than the caller expects.
+    expect(await verifySignedEvidenceReceiptV2(honest, otherCommit, [GOLDEN])).toEqual(refused("commit_mismatch"));
+    expect(await verifySignedEvidenceReceiptV2(honest, otherDomain, [GOLDEN])).toEqual(refused("domain_mismatch"));
+    expect(
+      await verifySignedEvidenceReceiptV2(honest, { ...otherCommit, evidenceDomainId: DOMAIN_B }, [GOLDEN]),
+    ).toEqual(refused("domain_mismatch"));
+
+    // Not verified: the reason is what kept it from being verified, and says
+    // nothing about a commit or a domain anyone signed.
+    const overOtherBytes = {
+      ...honest,
+      signature: { ...contract.signature, signatureBase64Url: receiptV2.rejectedSignatures[0].signatureBase64Url },
+    };
+    const smallOrderR = {
+      ...honest,
+      signature: { ...contract.signature, signatureBase64Url: Buffer.alloc(64).toString("base64url") },
+    };
+    const unverified: [string, unknown, EvidenceDomainKey[], string][] = [
+      ["no key on the list", honest, [], "key_unknown"],
+      ["a signature over other bytes", overOtherBytes, [GOLDEN], "signature_invalid"],
+      ["the digest of another payload", { ...honest, payloadDigestSha256: edges.payloadDigestSha256 }, [GOLDEN], "digest_mismatch"],
+      ["a signature no signer makes", smallOrderR, [GOLDEN], "receipt_malformed"],
+      ["a checkpoint key", honest, [{ ...GOLDEN, purpose: "checkpoint" }], "key_scope"],
+      ["a revoked key", honest, [{ ...GOLDEN, revokedAt: "2026-10-03T06:06:00.000Z" }], "key_revoked"],
+      ["a retired key", honest, [{ ...GOLDEN, validTo: contract.payload.acceptedAt }], "key_not_valid"],
+    ];
+    for (const [name, receipt, keys, reason] of unverified) {
+      for (const expected of [EXPECTED, otherCommit, otherDomain]) {
+        expect(await verifySignedEvidenceReceiptV2(receipt, expected, keys), name).toEqual(refused(reason));
+      }
+    }
+  });
+
+  it("gives a receipt nobody signed no reason that reads as a signed commit", async () => {
+    // A payload for a commit the caller does not expect, under the signature
+    // of the contract receipt: the digest is right, the signature is not.
+    const key = testKey("kljuc-izmisljeni-1");
+    const payload = { ...contract.payload, revision: 8 };
+    const unsigned = { ...key.sign(payload), signature: contract.signature };
+    expect(await verifySignedEvidenceReceiptV2(unsigned, EXPECTED, [GOLDEN])).toEqual(refused("signature_invalid"));
+    expect(await verifySignedEvidenceReceiptV2(unsigned, expectationOf(payload), [GOLDEN])).toEqual(
+      refused("signature_invalid"),
+    );
+  });
+});
+
+describe("verifier of receipt v2: a runtime that cannot verify", () => {
+  // Not a refusal: the check was not made, and the receipt may be a good one.
+  const UNAVAILABLE = { ok: false, reason: "verification_unavailable" };
+  const honest = () => verifySignedEvidenceReceiptV2(signedOf(contract), EXPECTED, [GOLDEN]);
+  const notSupported = () => new DOMException("Unrecognized algorithm name", "NotSupportedError");
+
+  async function withGlobal(name: string, value: unknown, act: () => Promise<unknown>) {
+    vi.stubGlobal(name, value);
+    try {
+      return await act();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  }
+
+  async function withSubtle<Result>(
+    method: "digest" | "importKey" | "verify",
+    stub: (...args: unknown[]) => unknown,
+    act: () => Promise<Result>,
+  ) {
+    const spy = vi.spyOn(globalThis.crypto.subtle, method).mockImplementation(stub as never);
+    try {
+      return { result: await act(), calls: spy.mock.calls.length };
+    } finally {
+      spy.mockRestore();
+    }
+  }
+
+  it("verifies the honest receipt in this runtime, so the stubs below are what changes the answer", async () => {
+    expect(await honest()).toEqual({ ok: true, payload: contract.payload });
+  });
+
+  // The hashing and the key import of this runtime, for a runtime that has only part of Web Crypto.
+  const real = globalThis.crypto.subtle;
+  const digest: SubtleCrypto["digest"] = (...args) => real.digest(...args);
+  const importKey = (...args: Parameters<SubtleCrypto["importKey"]>) => real.importKey(...args);
+
+  it.each([
+    ["no crypto at all", undefined],
+    ["a crypto with no subtle", {}],
+    ["a subtle that is null", { subtle: null }],
+    ["a subtle with no method", { subtle: {} }],
+    ["a subtle that can only hash", { subtle: { digest } }],
+    ["a subtle that hashes and imports but cannot verify", { subtle: { digest, importKey } }],
+  ])("says the check was not made under %s", async (_name, crypto) => {
+    expect(await withGlobal("crypto", crypto, honest)).toEqual(UNAVAILABLE);
+  });
+
+  it("verifies under a crypto put together from the three calls it uses", async () => {
+    const verify: SubtleCrypto["verify"] = (...args) => real.verify(...args);
+    expect(await withGlobal("crypto", { subtle: { digest, importKey, verify } }, honest)).toEqual({
+      ok: true,
+      payload: contract.payload,
+    });
+  });
+
+  it.each(["structuredClone", "atob", "btoa"])("says the check was not made where there is no %s", async (name) => {
+    expect(await withGlobal(name, undefined, honest)).toEqual(UNAVAILABLE);
+  });
+
+  it("says the check was not made when the runtime cannot hash", async () => {
+    for (const stub of [
+      async () => Promise.reject(notSupported()),
+      () => {
+        throw new TypeError("digest is not available");
+      },
+      // A digest that is not 32 bytes is no SHA-256.
+      async () => new ArrayBuffer(20),
+      async () => undefined,
+    ]) {
+      expect(await withSubtle("digest", stub, honest)).toEqual({ result: UNAVAILABLE, calls: 1 });
+    }
+  });
+
+  it("says the check was not made when the runtime does not import a key that is sound", async () => {
+    // A runtime without Ed25519 rejects with NotSupportedError. The bytes of
+    // the key were judged before the runtime was asked, so whatever it throws
+    // for them is the runtime, never the key.
+    for (const stub of [
+      async () => Promise.reject(notSupported()),
+      async () => Promise.reject(new DOMException("Invalid keyData", "DataError")),
+      async () => Promise.reject(new Error("anything")),
+      () => {
+        throw new TypeError("importKey is not available");
+      },
+    ]) {
+      expect(await withSubtle("importKey", stub, honest)).toEqual({ result: UNAVAILABLE, calls: 1 });
+    }
+  });
+
+  it("still refuses a key that is no key in a runtime that imports nothing", async () => {
+    const reject = async () => Promise.reject(notSupported());
+    const smallOrder = { ...GOLDEN, keyBase64Url: Buffer.from(`302a300506032b6570032100${"00".repeat(32)}`, "hex").toString("base64url") };
+    const notSpki = { ...GOLDEN, keyBase64Url: Buffer.alloc(44, 1).toString("base64url") };
+    for (const key of [smallOrder, notSpki, { ...GOLDEN, keyBase64Url: "AQID" }]) {
+      expect(
+        await withSubtle("importKey", reject, () => verifySignedEvidenceReceiptV2(signedOf(contract), EXPECTED, [key])),
+      ).toEqual({ result: refused("key_unknown"), calls: 0 });
+    }
+    // And every refusal that is decided before the key is imported keeps its reason.
+    const before: [unknown, EvidenceDomainKey[], string][] = [
+      [signedOf(contract), [], "key_unknown"],
+      [signedOf(contract), [{ ...GOLDEN, purpose: "checkpoint" }], "key_scope"],
+      [signedOf(contract), [{ ...GOLDEN, revokedAt: "2026-10-03T06:06:00.000Z" }], "key_revoked"],
+      [signedOf(contract), [{ ...GOLDEN, validTo: contract.payload.acceptedAt }], "key_not_valid"],
+      [{ ...signedOf(contract), payloadDigestSha256: edges.payloadDigestSha256 }, [GOLDEN], "digest_mismatch"],
+      [{ ...signedOf(contract), payload: { ...contract.payload, revision: 0 } }, [GOLDEN], "receipt_malformed"],
+    ];
+    for (const [receipt, keys, reason] of before) {
+      expect(
+        await withSubtle("importKey", reject, () => verifySignedEvidenceReceiptV2(receipt, EXPECTED, keys)),
+      ).toEqual({ result: refused(reason), calls: 0 });
+    }
+  });
+
+  it("says the check was not made when the runtime cannot verify", async () => {
+    for (const stub of [
+      async () => Promise.reject(notSupported()),
+      async () => Promise.reject(new DOMException("The operation failed", "OperationError")),
+      () => {
+        throw new TypeError("verify is not available");
+      },
+    ]) {
+      expect(await withSubtle("verify", stub, honest)).toEqual({ result: UNAVAILABLE, calls: 1 });
+    }
+  });
+
+  it("takes only the answer true of the runtime as a valid signature", async () => {
+    // The honest receipt, and a runtime that answers with something truthy.
+    for (const answer of [1, "true", {}, [true], false, 0, null, undefined]) {
+      expect(await withSubtle("verify", async () => answer, honest)).toEqual({
+        result: refused("signature_invalid"),
+        calls: 1,
+      });
+    }
+    expect(await withSubtle("verify", async () => true, honest)).toEqual({
+      result: { ok: true, payload: contract.payload },
+      calls: 1,
+    });
+  });
+
+  it("keeps a fault of the receipt a refusal, in a runtime that can verify", async () => {
+    const throwing = {
+      ...signedOf(contract),
+      get payload(): unknown {
+        throw new Error("no payload");
+      },
+    };
+    expect(await verifySignedEvidenceReceiptV2(throwing, EXPECTED, [GOLDEN])).toEqual(refused("receipt_malformed"));
+    // A value that is gone when it is copied: the copy fails for the value, not for the runtime.
+    let reads = 0;
+    const vanishing = {
+      ...signedOf(contract),
+      get payload(): unknown {
+        reads += 1;
+        if (reads > 1) throw new Error("no payload any more");
+        return contract.payload;
+      },
+    };
+    expect(await verifySignedEvidenceReceiptV2(vanishing, EXPECTED, [GOLDEN])).toEqual(refused("receipt_malformed"));
+    expect(reads).toBe(2);
+  });
+
+  it("never reads the unavailable check as a receipt", async () => {
+    const forged = { ...signedOf(contract), signature: { ...contract.signature, signatureBase64Url: receiptV2.rejectedSignatures[0].signatureBase64Url } };
+    for (const receipt of [signedOf(contract), forged]) {
+      for (const method of ["digest", "importKey", "verify"] as const) {
+        const { result } = await withSubtle(method, async () => Promise.reject(notSupported()), () =>
+          verifySignedEvidenceReceiptV2(receipt, EXPECTED, [GOLDEN]),
+        );
+        expect(result).toEqual(UNAVAILABLE);
+        expect(result.ok).toBe(false);
+      }
+    }
   });
 });
 

@@ -112,6 +112,29 @@ describe("evidence ingest v2 boundary", () => {
     }
   });
 
+  it("refuses a range of no event and one that ends before it starts, also where the count agrees with it", () => {
+    const { rejected } = loadGoldenVectors().sequenceRanges;
+    const refuses = (name: string) => {
+      const { sequenceFrom, sequenceTo, eventCount } = rejected.find((range) => range.name === name)!;
+      const range = { sequenceFrom, sequenceTo, eventCount };
+      expect(isEvidenceSegmentDescriptorV2({ ...validCommand().descriptor, ...range }), name).toBe(false);
+      return range;
+    };
+    expect(isEvidenceSegmentDescriptorV2(validCommand().descriptor)).toBe(true);
+    // to - from = count - 1 holds for these three, so it is not that equation
+    // which refuses them: a range holds an event and does not end before it starts.
+    for (const name of ["empty-range", "empty-range-above-one", "negative-count"]) {
+      const { sequenceFrom, sequenceTo, eventCount } = refuses(name);
+      expect(sequenceTo - sequenceFrom, name).toBe(eventCount - 1);
+      expect(eventCount, name).toBeLessThan(1);
+      expect(sequenceTo, name).toBeLessThan(sequenceFrom);
+    }
+    expect(refuses("empty-range-above-one")).toEqual({ sequenceFrom: 5, sequenceTo: 4, eventCount: 0 });
+    // Each of the two rules where the other one is kept.
+    expect(refuses("no-event-in-one-number")).toEqual({ sequenceFrom: 1, sequenceTo: 1, eventCount: 0 });
+    expect(refuses("end-before-start")).toEqual({ sequenceFrom: 2, sequenceTo: 1, eventCount: 1 });
+  });
+
   it("accepts only whole UTC minutes as observed times (D-24)", () => {
     const withTimes = (times: Partial<EvidenceIngestCommandV2["descriptor"]>) =>
       validateEvidenceIngestCommandV2({

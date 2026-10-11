@@ -198,7 +198,9 @@ export const EVIDENCE_RECEIPT_V2_SIGNING_INPUT_BYTES = 59;
  *
  * `principalId` is the author the server took from the session of the request
  * that sent the segment, never a value the client wrote: a canonical lowercase
- * UUID of version 4, as the server mints its user ids.
+ * UUID of version 4, as the server mints its user ids. The role of the author
+ * and a mark of offline work are left out of a receipt v2 on purpose (owner
+ * decision of 11 October 2026, issue 87 comment 6108404647, point 2).
  *
  * `acceptedAt` is the start of the UTC minute in which the server accepted
  * the segment, written `YYYY-MM-DDTHH:mm:00.000Z` (the form of D-24). The
@@ -287,10 +289,17 @@ export function isEvidenceReceiptPayloadV2(
 }
 
 /**
+ * Thrown where the runtime cannot hash: no Web Crypto, or a SHA-256 that
+ * fails or is not 32 bytes. It says nothing about the payload.
+ */
+export class EvidenceHashUnavailableError extends Error {}
+
+/**
  * The digest `D = SHA-256(JCS(payload))` and the only bytes a receipt v2 may
  * be signed over: `UTF-8("ductus-evidence-receipt-v2") || 0x0A || D`, with `D`
  * as its 32 raw bytes (D-92). Throws for anything that is not a valid v2
- * payload, so the v2 signing input can never be made for a v1 record.
+ * payload, so the v2 signing input can never be made for a v1 record, and
+ * `EvidenceHashUnavailableError` where the runtime cannot hash.
  */
 export async function digestEvidenceReceiptPayloadV2(
   payload: EvidenceReceiptPayloadV2,
@@ -303,14 +312,19 @@ export async function digestEvidenceReceiptPayloadV2(
   if (!isEvidenceReceiptPayloadV2(payload)) {
     throw new Error("evidence receipt v2: not a v2 payload");
   }
-  if (!globalThis.crypto?.subtle) {
-    throw new Error("evidence receipt v2: Web Crypto unavailable");
-  }
   const canonical = canonicalizeJcs(payload);
   const bytes = new TextEncoder().encode(canonical);
-  const digest = new Uint8Array(
-    await globalThis.crypto.subtle.digest("SHA-256", bytes),
-  );
+  // The payload is valid and has its canonical bytes: what fails from here on
+  // is the runtime, also where it has no Web Crypto at all.
+  const digest = await Promise.resolve()
+    .then(() => globalThis.crypto.subtle.digest("SHA-256", bytes))
+    .then((hash) => new Uint8Array(hash))
+    .catch(() => null);
+  if (digest?.byteLength !== 32) {
+    throw new EvidenceHashUnavailableError(
+      "evidence receipt v2: SHA-256 unavailable",
+    );
+  }
   const signingInput = new Uint8Array(EVIDENCE_RECEIPT_V2_SIGNING_INPUT_BYTES);
   signingInput.set(RECEIPT_V2_SIGNING_PREFIX);
   signingInput.set(digest, RECEIPT_V2_SIGNING_PREFIX.byteLength);

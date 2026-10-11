@@ -6,6 +6,7 @@ import {
 import {
   canonicalInstant,
   digestEvidenceReceiptPayloadV2,
+  EvidenceHashUnavailableError,
   isEvidenceDomainId,
   isReceiptClientTransactionId,
   isReceiptId,
@@ -13,13 +14,16 @@ import {
   isSignedEvidenceReceiptV2,
   type EvidenceReceiptPayloadV2,
 } from "./evidence-receipt";
+import { isEvidenceMinuteV2 } from "./evidence-segment-v2";
 import { isPublicVerificationKey, type PublicVerificationKey } from "./signature";
 import { hasOnlyKeys, isPlainObject } from "../json";
 
 /**
  * Verifier of a signed receipt v2 (D-92, DAN-54), for the client and for
  * anyone holding the public keys. Pure: no clock, no storage, no network.
- * It never throws; whatever it cannot vouch for is a refusal.
+ * It never throws. Whatever it cannot vouch for is not accepted: either a
+ * refusal, or `verification_unavailable` where the runtime could not do the
+ * check at all.
  */
 
 /** What a key of an evidence domain may sign. A receipt key signs nothing else. */
@@ -33,13 +37,21 @@ export type EvidenceDomainKey = PublicVerificationKey & {
   evidenceDomainId: string;
   purpose: EvidenceKeyPurpose;
   /**
-   * Start of validity. It bounds the moment of signing, which only the server
-   * knows; the verifier never compares it with `acceptedAt`.
+   * Start of validity, a whole UTC minute in the form of `acceptedAt`. It
+   * bounds the moment of signing, which only the server knows; the verifier
+   * never compares it with `acceptedAt`.
    */
   validFrom: string;
-  /** End of validity, exclusive; null while the key is the active one. */
+  /**
+   * End of validity, exclusive; null while the key is the active one. Always
+   * a whole UTC minute in the form of `acceptedAt`, and after `validFrom`
+   * (owner decision of 11 October 2026, issue 87 comment 6108490197).
+   */
   validTo: string | null;
-  /** When the key was revoked; null if it never was. A revoked key verifies nothing. */
+  /**
+   * When the key was revoked, to the millisecond; null if it never was. A
+   * revoked key verifies nothing, so this time is compared with nothing.
+   */
   revokedAt: string | null;
 };
 
@@ -63,19 +75,51 @@ export type EvidenceReceiptRefusal =
   | "key_not_valid"
   | "signature_invalid";
 
+/**
+ * Not a refusal. The runtime could not carry out the check: no Web Crypto, no
+ * Ed25519 or SHA-256 in it, or a call of it that failed. It says nothing about
+ * the receipt, which may be a good one; the caller treats it as not verified
+ * and may verify it again elsewhere.
+ */
+export const EVIDENCE_VERIFICATION_UNAVAILABLE =
+  "verification_unavailable" as const;
+
 export type EvidenceReceiptVerification =
   | { ok: true; payload: EvidenceReceiptPayloadV2 }
-  | { ok: false; reason: EvidenceReceiptRefusal };
+  | { ok: false; reason: EvidenceReceiptRefusal }
+  | { ok: false; reason: typeof EVIDENCE_VERIFICATION_UNAVAILABLE };
 
 const EXPECTATION_KEYS: ReadonlySet<string> = new Set<
   keyof EvidenceReceiptExpectationV2
 >(["documentId", "clientTransactionId", "revision", "evidenceDomainId"]);
 const ED25519_SIGNATURE_BYTES = 64;
-/** The span one `acceptedAt` of a receipt v2 stands for. */
-const ACCEPTED_AT_MINUTE_MS = 60_000;
 
 function refuse(reason: EvidenceReceiptRefusal): EvidenceReceiptVerification {
   return { ok: false, reason };
+}
+
+/** Thrown where a call of the runtime fails for a value already judged sound. */
+class RuntimeUnavailable extends Error {}
+
+/**
+ * What the check uses of the runtime outside Web Crypto. Asked first: a
+ * missing one would otherwise read as a fault of the receipt. Web Crypto is
+ * not asked about here; each call of it is caught where it is made.
+ */
+function hasCopyAndBase64(): boolean {
+  return (
+    typeof globalThis.structuredClone === "function" &&
+    typeof globalThis.atob === "function" &&
+    typeof globalThis.btoa === "function"
+  );
+}
+
+/**
+ * A whole UTC minute in the one form `acceptedAt` has. Measured as an instant
+ * first, so a text of any size is never matched.
+ */
+function isWholeMinute(value: unknown): value is string {
+  return canonicalInstant(value) && isEvidenceMinuteV2(value);
 }
 
 function isExpectation(value: unknown): value is EvidenceReceiptExpectationV2 {
@@ -101,8 +145,12 @@ function isEvidenceDomainKey(value: unknown): value is EvidenceDomainKey {
     isPublicVerificationKey(publicKey) &&
     isEvidenceDomainId(evidenceDomainId) &&
     (purpose === "receipt" || purpose === "checkpoint") &&
-    canonicalInstant(validFrom) &&
-    (validTo === null || canonicalInstant(validTo)) &&
+    // The end of one key is the start of the next, so both are held to the
+    // whole minute: a key that ends or starts inside a minute is no key, and
+    // neither is one whose validity ends before it starts or as it starts.
+    isWholeMinute(validFrom) &&
+    (validTo === null ||
+      (isWholeMinute(validTo) && Date.parse(validFrom) < Date.parse(validTo))) &&
     (revokedAt === null || canonicalInstant(revokedAt))
   );
 }
@@ -146,21 +194,35 @@ function decodeBase64Url(
  *   is asked (`ed25519-encoding.ts`): the key and `R` have to be points of
  *   the prime-order subgroup in their one spelling, and `S` below the group
  *   order. A point of small or mixed order, a second spelling of a number or
- *   a larger `S` is refused, in every runtime alike.
+ *   a larger `S` is refused here, so no runtime is asked about one.
+ * - The runtime still does the hashing and the Ed25519 check, and not every
+ *   runtime can. Where Web Crypto is missing, has no SHA-256 or Ed25519, or a
+ *   call of it fails, the answer is `verification_unavailable`: the check was
+ *   not made, which is no word on the receipt. The key bytes are judged before
+ *   the runtime imports them, so a failed import is the runtime and never the
+ *   key. Only the answer `true` of the runtime is a valid signature.
+ * - What a reason says. `domain_mismatch` and `commit_mismatch` are given only
+ *   for a receipt whose signature was verified under a valid receipt key of
+ *   the domain it names: a trusted key did sign it, for another domain or
+ *   commit than the caller expects. Every other reason says only that there
+ *   is no receipt here. Nothing in such a value is authenticated, least of
+ *   all the commit or the key it names.
  * - What counts for a key is the moment of signing, and that moment is not in
  *   the signed payload. The server holds a key to it when it attaches the
  *   signature; here only `acceptedAt` is known (plan answer 6105652638 on
  *   issue 202).
- * - `acceptedAt` is a whole minute, so the segment was accepted anywhere from
- *   its start up to its end. A retired key, one past `validTo` and never
- *   revoked, still vouches for a receipt whose whole minute is before
- *   `validTo`: `acceptedAt + 1 min <= validTo`. For a `validTo` on a whole
- *   minute that is `acceptedAt < validTo`; for one inside a minute the
- *   receipts of that minute are refused, since nothing in them says on which
- *   side of `validTo` they were accepted.
- * - The author is not bound here either: `payload.principalId` is the author
- *   the server took from the session, and a caller that knows whose receipt
- *   it expects compares it.
+ * - A retired key, one past `validTo` and never revoked, still vouches for a
+ *   receipt with `acceptedAt < validTo`, and for no other (owner decision of
+ *   11 October 2026, issue 87 comment 6108490197). `acceptedAt` is the start
+ *   of a minute and `validTo` is always a whole minute, so every segment
+ *   accepted before `validTo` passes and none accepted from it on does. An
+ *   entry whose `validTo` or `validFrom` is not a whole minute, or whose
+ *   validity does not end after it starts, is no key (`key_unknown`): the
+ *   time is never rounded, and no receipt is judged by such an entry.
+ * - Two things the caller compares itself, because they are not part of
+ *   `expected`: `payload.principalId`, the author the server took from the
+ *   session, and `payload.segmentHash` (below). `ok: true` says nothing about
+ *   either.
  * - A revoked key vouches for nothing, whatever `acceptedAt` says: that field
  *   is signed by the key itself, so its holder writes any earlier time. Owner
  *   decision of 11 October 2026, option A (issue 87, comment 6105677746): all
@@ -186,6 +248,9 @@ export async function verifySignedEvidenceReceiptV2(
   trustedKeys: readonly EvidenceDomainKey[],
 ): Promise<EvidenceReceiptVerification> {
   try {
+    if (!hasCopyAndBase64()) {
+      return { ok: false, reason: EVIDENCE_VERIFICATION_UNAVAILABLE };
+    }
     if (!isExpectation(expected) || !Array.isArray(trustedKeys)) {
       return refuse("expectation_invalid");
     }
@@ -199,17 +264,6 @@ export async function verifySignedEvidenceReceiptV2(
       return refuse("receipt_malformed");
     }
     const { payload, signature } = receipt;
-
-    if (payload.evidenceDomainId !== expected.evidenceDomainId) {
-      return refuse("domain_mismatch");
-    }
-    if (
-      payload.documentId !== expected.documentId ||
-      payload.clientTransactionId !== expected.clientTransactionId ||
-      payload.revision !== expected.revision
-    ) {
-      return refuse("commit_mismatch");
-    }
 
     const digest = await digestEvidenceReceiptPayloadV2(payload);
     if (receipt.payloadDigestSha256 !== digest.sha256) {
@@ -250,12 +304,10 @@ export async function verifySignedEvidenceReceiptV2(
     if (key.revokedAt !== null) {
       return refuse("key_revoked");
     }
-    // `acceptedAt` names a whole minute, and the segment was accepted
-    // somewhere in it: the key has to have been valid to the end of it.
+    // Both are whole minutes: `acceptedAt < validTo`, and nothing rounded.
     if (
       key.validTo !== null &&
-      Date.parse(payload.acceptedAt) + ACCEPTED_AT_MINUTE_MS >
-        Date.parse(key.validTo)
+      Date.parse(payload.acceptedAt) >= Date.parse(key.validTo)
     ) {
       return refuse("key_not_valid");
     }
@@ -266,23 +318,52 @@ export async function verifySignedEvidenceReceiptV2(
     // not in others, so the key is judged here and not by the runtime.
     const keyBytes = decodeBase64Url(key.keyBase64Url, 44);
     const point = keyBytes === null ? null : ed25519KeyFromSpki(keyBytes);
-    const publicKey =
-      keyBytes === null || point === null || !isSoundEd25519Point(point)
-        ? null
-        : await globalThis.crypto.subtle
-            .importKey("spki", keyBytes, { name: "Ed25519" }, false, ["verify"])
-            .catch(() => null);
-    if (publicKey === null) {
+    if (keyBytes === null || point === null || !isSoundEd25519Point(point)) {
       return refuse("key_unknown");
     }
-    const valid = await globalThis.crypto.subtle.verify(
-      { name: "Ed25519" },
-      publicKey,
-      signatureBytes,
-      digest.signingInput,
-    );
-    return valid === true ? { ok: true, payload } : refuse("signature_invalid");
-  } catch {
-    return refuse("receipt_malformed");
+    // The key is sound, so from here on a call that fails is the runtime,
+    // also where it has no Web Crypto or no Ed25519 in it.
+    const valid: unknown = await Promise.resolve()
+      .then(() =>
+        globalThis.crypto.subtle.importKey(
+          "spki",
+          keyBytes,
+          { name: "Ed25519" },
+          false,
+          ["verify"],
+        ),
+      )
+      .then((publicKey) =>
+        globalThis.crypto.subtle.verify(
+          { name: "Ed25519" },
+          publicKey,
+          signatureBytes,
+          digest.signingInput,
+        ),
+      )
+      .catch(() => {
+        throw new RuntimeUnavailable();
+      });
+    if (valid !== true) {
+      return refuse("signature_invalid");
+    }
+
+    // Only now, for a receipt a trusted key of its own domain did sign.
+    if (payload.evidenceDomainId !== expected.evidenceDomainId) {
+      return refuse("domain_mismatch");
+    }
+    if (
+      payload.documentId !== expected.documentId ||
+      payload.clientTransactionId !== expected.clientTransactionId ||
+      payload.revision !== expected.revision
+    ) {
+      return refuse("commit_mismatch");
+    }
+    return { ok: true, payload };
+  } catch (error) {
+    return error instanceof RuntimeUnavailable ||
+      error instanceof EvidenceHashUnavailableError
+      ? { ok: false, reason: EVIDENCE_VERIFICATION_UNAVAILABLE }
+      : refuse("receipt_malformed");
   }
 }

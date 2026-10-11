@@ -137,8 +137,18 @@ export type GoldenVectors = {
       name: string;
       set?: Record<string, JcsJsonValue>;
       remove?: string[];
-      reason: "key_scope" | "key_unknown";
+      reason: "key_scope" | "key_unknown" | "key_not_valid";
     }[];
+    /** What the unchanged entry of the trusted key list holds next to the key itself. */
+    keyEntry: {
+      evidenceDomainId: string;
+      purpose: "receipt";
+      validFrom: string;
+      validTo: null;
+      revokedAt: null;
+    };
+    /** Changes of that entry under which `accepted[0]` still verifies. */
+    acceptedKeys: { name: string; set: Record<string, JcsJsonValue> }[];
   };
   /** Encodings of points a verifier takes or refuses as a key and as the R of a signature. */
   ed25519Points: {

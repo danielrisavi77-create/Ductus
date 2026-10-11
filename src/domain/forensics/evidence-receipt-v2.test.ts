@@ -273,6 +273,31 @@ describe("receipt v2: refused payloads", () => {
     }
   });
 
+  it("refuses a range of no event and one that ends before it starts, also where the count agrees with it", () => {
+    const v1 = chain.segments[0].receipt.payload;
+    const refuses = (name: string) => {
+      const { sequenceFrom, sequenceTo, eventCount } = sequenceRanges.rejected.find((range) => range.name === name)!;
+      const range = { sequenceFrom, sequenceTo, eventCount };
+      expect(isEvidenceReceiptPayloadV2({ ...contract.payload, ...range }), name).toBe(false);
+      expect(isEvidenceReceiptPayloadV1({ ...v1, ...range }), name).toBe(false);
+      return range;
+    };
+    // to - from = count - 1 holds for these three, so it is not that equation
+    // which refuses them: a range holds an event and does not end before it starts.
+    for (const name of ["empty-range", "empty-range-above-one", "negative-count"]) {
+      const { sequenceFrom, sequenceTo, eventCount } = refuses(name);
+      expect(sequenceTo - sequenceFrom, name).toBe(eventCount - 1);
+      expect(eventCount, name).toBeLessThan(1);
+      expect(sequenceTo, name).toBeLessThan(sequenceFrom);
+    }
+    // Both ends valid numbers on their own, so no rule about one end refuses it either.
+    expect(refuses("empty-range-above-one")).toEqual({ sequenceFrom: 5, sequenceTo: 4, eventCount: 0 });
+    // Each of the two rules where the other one is kept: no event in a range
+    // that does not end before it starts, and one event in a range that does.
+    expect(refuses("no-event-in-one-number")).toEqual({ sequenceFrom: 1, sequenceTo: 1, eventCount: 0 });
+    expect(refuses("end-before-start")).toEqual({ sequenceFrom: 2, sequenceTo: 1, eventCount: 1 });
+  });
+
   it("takes acceptedAt only as a whole UTC minute, where a receipt v1 takes any instant", () => {
     // Issue 87, comment 6107934097, point 2: the minute and nothing finer.
     const v1 = chain.segments[0].receipt.payload;
