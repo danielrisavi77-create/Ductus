@@ -8,33 +8,49 @@
  * update, so "Spremljeno na uređaju" always describes exactly what is shown
  * and a reload gives the same text back.
  *
- * Only the ranges a change touched are read, so typing in a long document
- * costs nothing beyond the edited block. Node ids are left to the identity
- * plugin: replacing text inside a block keeps the block and its id.
+ * Only the text blocks a change touched are read, whole: a delete or split
+ * at the edge of a run, or a mark added over half a pair, leaves the other
+ * half just outside the step's own range (#251 review 6109174031). Typing in
+ * a long document still costs nothing beyond the edited block. Node ids are
+ * left to the identity plugin: replacing text inside a block keeps the block
+ * and its id.
  */
 
 import { Extension } from "@tiptap/core";
 import type { Node as PmNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey, type Transaction } from "@tiptap/pm/state";
+import { AddMarkStep, RemoveMarkStep } from "@tiptap/pm/transform";
 
 import { storableText } from "./storable-text";
 
 const storableInputKey = new PluginKey("storableInput");
 
-/** Ranges of `doc` (the state after `transactions`) that they changed. */
+/**
+ * Ranges of `doc` (the state after `transactions`) that they changed, each
+ * widened to the whole text blocks at its ends. Mark steps map no positions,
+ * so their own from/to is taken.
+ */
 function changedRanges(transactions: readonly Transaction[], doc: PmNode): [number, number][] {
   let ranges: [number, number][] = [];
   for (const tr of transactions) {
     ranges = ranges.map(([from, to]) => [tr.mapping.map(from, -1), tr.mapping.map(to, 1)]);
-    tr.mapping.maps.forEach((map, index) => {
+    tr.steps.forEach((step, index) => {
       const after = tr.mapping.slice(index + 1);
-      map.forEach((_oldFrom, _oldTo, from, to) => {
-        ranges.push([after.map(from, -1), after.map(to, 1)]);
-      });
+      const add = (from: number, to: number) => ranges.push([after.map(from, -1), after.map(to, 1)]);
+      tr.mapping.maps[index]!.forEach((_oldFrom, _oldTo, from, to) => add(from, to));
+      if (step instanceof AddMarkStep || step instanceof RemoveMarkStep) add(step.from, step.to);
     });
   }
   const size = doc.content.size;
-  return ranges.map(([from, to]) => [Math.max(0, Math.min(from, size)), Math.max(0, Math.min(to, size))]);
+  const clamp = (pos: number) => Math.max(0, Math.min(pos, size));
+  return ranges.map(([from, to]) => {
+    const $from = doc.resolve(clamp(from));
+    const $to = doc.resolve(clamp(Math.max(from, to)));
+    return [
+      $from.parent.isTextblock ? $from.start() : $from.pos,
+      $to.parent.isTextblock ? $to.end() : $to.pos,
+    ];
+  });
 }
 
 export function createStorableInputPlugin(): Plugin {
