@@ -1361,6 +1361,51 @@ describe("LocalDocumentSaver: resume() contract (#206 r6)", () => {
     expect((await rows(at)).at(-1)).toEqual(text("A"));
   });
 
+  it("r6: a held read overtaken twice reads again until it is current (#206 Codex r4240797922)", async () => {
+    const at = scope();
+    const real = journal(at);
+    let armed = false;
+    let open = () => {};
+    let entered = () => {};
+    const a = saver(patched(real, {
+      // Held after it has read: its contents are older than what comes next.
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        const contents = await real.read(...args);
+        if (armed) {
+          armed = false;
+          const gate = new Promise<void>((resolve) => { open = resolve; });
+          entered();
+          await gate;
+        }
+        return contents;
+      },
+    }));
+    const hold = () => {
+      armed = true;
+      return new Promise<void>((resolve) => { entered = resolve; });
+    };
+    const b = saver(journal(at));
+    await Promise.all([a.load(), b.load()]);
+    let held = hold();
+    const old = a.load();
+    await held;
+    await type(b, "B1");
+    expect(await a.load()).toEqual({ kind: "recovery", reason: "stale", document: text("B1") });
+    // The held read is behind and reads again; that read is held in turn
+    // while another writer and a third load move past it.
+    held = hold();
+    open();
+    await held;
+    await type(b, "B2");
+    expect(await a.load()).toEqual({ kind: "recovery", reason: "stale", document: text("B2") });
+    open();
+    expect(await old).toEqual({ kind: "recovery", reason: "stale", document: text("B2") });
+    expect(a.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+    expect(await a.resume(text("A"))).toEqual({ kind: "ready", document: text("B2") });
+    await a.settled();
+    expect((await rows(at)).at(-1)).toEqual(text("A"));
+  });
+
   it("r6: text proposed while a failed read halted the saver is written by the next ready reload", async () => {
     const at = scope();
     const real = journal(at);
@@ -1599,6 +1644,17 @@ describe("LocalDocumentSaver: a journal whose rows disagree (#206 qa206e V-1)", 
       db.table("snapshots").update(DOC, { "document.schemaVersion": 1n })],
     ["a snapshot document stored as a Map", (db) =>
       db.table("snapshots").update(DOC, { document: new Map([["nodes", []]]) })],
+    // #206 Codex r4240797929: text JCS or jsonb refuses would sit as LOCAL_DURABLE for ever.
+    ["a newest row and snapshot holding a lone surrogate", async (db) => {
+      await db.table("pending").update([DOC, 2], { "tx.document": text("a\uD800b") });
+      await db.table("snapshots").update(DOC, { document: text("a\uD800b") });
+    }],
+    ["a newest row and snapshot holding NUL", async (db) => {
+      await db.table("pending").update([DOC, 2], { "tx.document": text("a\u0000b") });
+      await db.table("snapshots").update(DOC, { document: text("a\u0000b") });
+    }],
+    ["an older pending row holding NUL", (db) =>
+      db.table("pending").update([DOC, 1], { "tx.document": text("a\u0000b") })],
   ];
   for (const [name, damage] of cases) {
     it(`17: ${name} is corrupt, never older or empty text shown as saved, and nothing is written`, async () => {

@@ -221,19 +221,21 @@ export class LocalDocumentSaver {
     }
   }
 
-  private async read(basis: Basis | null, retry = true): Promise<LoadResult> {
+  private async read(basis: Basis | null, floor = -1): Promise<LoadResult> {
     try {
       const contents = await this.journal.read(this.documentId);
       const { snapshot, meta, pending } = contents;
       // The journal only grows, so a read behind what this saver already saw
       // was overtaken by a newer read of its own while it was held:
       // it would report a false `stale`, or a `ready` that lifts a newer
-      // `stale` and shows older text, so read again (#206 r6 model). Once
-      // only: a fresh read still behind means the journal itself went back.
+      // `stale` and shows older text, so read again (#206 r6 model). Again
+      // while a newer read overtakes the retry too (#206 Codex r4240797922);
+      // a retry behind what it was asked to reach means the journal itself
+      // went back. Each retry needs `seen` to grow, so the loop ends.
       // Anything but a number (a stored BigInt makes `Math.max` throw) is left
       // to `consistent()`, which reports it as corrupt (#206 Codex r4240729191).
       const recorded = typeof meta?.localSeq === "number" ? meta.localSeq : 0;
-      if (retry && recorded < this.seen) return await this.read(basis, false);
+      if (recorded < this.seen && recorded >= floor) return await this.read(basis, this.seen);
       this.seen = Math.max(this.seen, recorded);
       const stored = snapshot ? validateDocument(snapshot.document) : null;
       // Measured before any field changes, so a malformed row is `corrupt`
@@ -525,10 +527,12 @@ function consistent(
   let previous = 0;
   for (const row of pending) {
     const tx = row?.tx;
+    // A row the commit request refuses would block the drain for ever (#206 Codex r4240541630),
+    // as would text JCS or jsonb refuses, which `save()` never writes (#206 Codex r4240797929).
+    const request = tx ? commitRequestFromTransaction(documentId, tx) : null;
     if (!row || row.documentId !== documentId || !Number.isSafeInteger(row.localSeq) ||
-        row.localSeq <= previous || row.localSeq > meta.localSeq ||
-        // A row the commit request refuses would block the drain for ever (#206 Codex r4240541630).
-        !tx || !commitRequestFromTransaction(documentId, tx)) return false;
+        row.localSeq <= previous || row.localSeq > meta.localSeq || !request ||
+        storableDocument(request.p_document) !== request.p_document) return false;
     previous = row.localSeq;
   }
   const last = pending.at(-1);
