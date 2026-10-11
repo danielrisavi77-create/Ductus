@@ -89,14 +89,31 @@ test.describe("workspace shell", () => {
     await expect(teacher).toBeDisabled();
     await teacher.click({ force: true });
     await expect(page).toHaveURL(/\/rad$/);
-    // E2E runs with the local demo journal on (playwright.config.ts), so the
-    // sheet is the editor; without the flag it stays the read-only placeholder.
+    // This server runs with the local demo journal on (playwright.config.ts),
+    // so the sheet is the editor; the read-only cases are covered below.
     const sheetText = page.getByRole("textbox", { name: "Tekst rada" });
     await expect(sheetText).toHaveAttribute("contenteditable", "true");
     await expect(sheetText).toHaveAttribute("aria-readonly", "false");
     await expect(sheetText).not.toHaveAttribute("aria-disabled", "true");
     await expect(page.locator(".soon")).toHaveCount(1);
   });
+
+  // Without the flag (as deployed) and with the flag refused outside
+  // local|ci|demo, /rad keeps the read-only sheet and mounts no editor.
+  for (const { name, origin } of [
+    { name: "as deployed, without the local demo journal", origin: "http://localhost:3003" },
+    { name: "with the local demo journal refused", origin: "http://localhost:3004" },
+  ]) {
+    test(`/rad ${name}: the sheet stays the read-only placeholder`, async ({ page }) => {
+      await page.goto(`${origin}/rad`);
+      const sheetText = page.getByRole("textbox", { name: "Tekst rada" });
+      await expect(sheetText).toHaveAttribute("aria-disabled", "true");
+      await expect(sheetText).toHaveText("Pisanje ovdje još nije moguće. uskoro");
+      await expect(sheetText).not.toContainText("Počni");
+      await expect(sheetText.locator(".soon")).toBeVisible();
+      await expect(page.locator("[contenteditable]")).toHaveCount(0);
+    });
+  }
 
   // One DOM order (sheet, instructions, structure) at every width; CSS places
   // the rails with grid areas, never with `order`.
