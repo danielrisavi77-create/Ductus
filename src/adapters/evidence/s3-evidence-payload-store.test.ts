@@ -119,18 +119,28 @@ function storeWith(fetch: typeof globalThis.fetch, overrides: Overrides = {}) {
   return { store, warn };
 }
 
-const put = (
+/** Taken before any test fakes the timers, so waiting for it never stalls. */
+const realSetImmediate = setImmediate;
+
+/** Lets the macrotask the store writes its log line in run. */
+const logged = () => new Promise<void>((resolve) => realSetImmediate(resolve));
+
+/** Answers the outcome once the line it logs, if any, is written. */
+const put = async (
   store: S3EvidencePayloadStore,
   text: string,
   pkg = PACKAGE,
   institutionId = INSTITUTION,
-) =>
-  store.putImmutable({
+) => {
+  const outcome = await store.putImmutable({
     institutionId,
     evidencePackageId: pkg,
     segmentHash: hashOf(payload(text)),
     canonicalPayload: payload(text),
   });
+  await logged();
+  return outcome;
+};
 
 const s3Error = (status: number, code: string, message = "") =>
   Promise.resolve(
@@ -870,6 +880,7 @@ describe("S3EvidencePayloadStore", () => {
       expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
       expect(result).toBeUndefined();
       await vi.advanceTimersByTimeAsync(1);
+      await logged();
       expect(result).toEqual({ status: "unavailable", reason: "storage_timeout" });
     } finally {
       vi.useRealTimers();
@@ -905,6 +916,7 @@ describe("S3EvidencePayloadStore", () => {
       void put(store, "a").then((r) => (result = r));
 
       await vi.advanceTimersByTimeAsync(20);
+      await logged();
       expect(result).toEqual({ status: "unavailable", reason: "storage_timeout" });
       expect(s3.fetch.mock.calls[0][1]?.signal?.aborted).toBe(true);
     } finally {
@@ -1911,5 +1923,117 @@ describe("no request and no content outcome past the deadline (QA qa233e)", () =
     await expect(put(store, "a")).resolves.toEqual({ status: "conflict" });
     expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
     expect(warn.mock.calls).toEqual([["evidence payload conflict", idsOfA]]);
+  });
+});
+
+describe("the log line waits until the caller resumes (QA qa233e, macrotask)", () => {
+  const unverified = { status: "unavailable", reason: "storage_write_unverified" };
+  const idsOfA = {
+    institutionId: INSTITUTION,
+    evidencePackageId: PACKAGE,
+    segmentHash: hashOf(payload("a")),
+  };
+  const inputOf = (text: string) => ({
+    institutionId: INSTITUTION,
+    evidencePackageId: PACKAGE,
+    segmentHash: hashOf(payload(text)),
+    canonicalPayload: payload(text),
+  });
+  /** S3 that answers the PUT with `status` (or stores it) and reads back other bytes. */
+  const otherBytesAfter = (status: number) => () =>
+    fakeS3((call) => {
+      if (call.method === "PUT" && status !== 200) {
+        return Promise.resolve(new Response(null, { status }));
+      }
+      if (call.method === "GET") {
+        return Promise.resolve(new Response(new TextEncoder().encode(payload("b"))));
+      }
+      return null;
+    });
+  /** S3 that stores the write, echoes it and fails the read-back. */
+  const readBackFails = () =>
+    fakeS3((call) =>
+      call.method === "GET" ? Promise.resolve(new Response(null, { status: 503 })) : null,
+    );
+
+  it.each<[string, () => ReturnType<typeof fakeS3>, object, string]>([
+    ["a conflict after PUT 200", otherBytesAfter(200), { status: "conflict" }, "evidence payload conflict"],
+    ["a conflict after PUT 412", otherBytesAfter(412), { status: "conflict" }, "evidence payload conflict"],
+    ["a conflict after PUT 409", otherBytesAfter(409), { status: "conflict" }, "evidence payload conflict"],
+    ["an unverified write", readBackFails, unverified, "evidence payload write unverified"],
+  ])(
+    "%s: the caller resumes after await putImmutable before the logger runs",
+    async (_, s3Of, expected, line) => {
+      const s3 = s3Of();
+      const order: string[] = [];
+      const store = new S3EvidencePayloadStore({
+        ...configWith(s3.fetch),
+        warn: (message) => void order.push(`log: ${message}`),
+      });
+
+      const outcome = await store.putImmutable(inputOf("a"));
+      order.push("caller");
+
+      expect(outcome).toEqual(expected);
+      await logged();
+      expect(order).toEqual(["caller", `log: ${line}`]);
+    },
+  );
+
+  it("a logger that blocks for 60 ms leaves a 20 ms deadline to the caller, then logs once", async () => {
+    // Warm the path up on another store so the measured call is the store's own.
+    const warm = new S3EvidencePayloadStore({ ...configWith(otherBytesAfter(412)().fetch), warn: vi.fn() });
+    await warm.putImmutable(inputOf("a"));
+    await logged();
+
+    const s3 = otherBytesAfter(412)();
+    const warn = vi.fn(() => {
+      const until = Date.now() + 60;
+      while (Date.now() < until) {
+        // Blocks the thread, as a synchronous sink on a stalled disk would.
+      }
+    });
+    const store = new S3EvidencePayloadStore({
+      ...configWith(s3.fetch, { requestTimeoutMs: 20 }),
+      warn,
+    });
+
+    const started = performance.now();
+    const outcome = await store.putImmutable(inputOf("a"));
+    const took = performance.now() - started;
+
+    expect(outcome).toEqual({ status: "conflict" });
+    expect(took).toBeLessThan(20);
+    expect(warn).not.toHaveBeenCalled();
+    await logged();
+    expect(warn.mock.calls).toEqual([["evidence payload conflict", idsOfA]]);
+  });
+
+  it.each<[string, () => unknown]>([
+    ["throws", () => {
+      throw new Error("logger down");
+    }],
+    ["hangs", () => new Promise(() => undefined)],
+    ["rejects", () => Promise.reject(new Error("logger down"))],
+  ])("a logger that %s leaves the outcome as it is and raises nothing", async (_, behave) => {
+    const escaped: unknown[] = [];
+    const keep = (error: unknown) => void escaped.push(error);
+    process.on("uncaughtException", keep);
+    process.on("unhandledRejection", keep);
+    try {
+      const s3 = otherBytesAfter(412)();
+      const warn = vi.fn(behave);
+      const store = new S3EvidencePayloadStore({ ...configWith(s3.fetch), warn });
+
+      await expect(store.putImmutable(inputOf("a"))).resolves.toEqual({ status: "conflict" });
+      await logged();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(warn.mock.calls).toEqual([["evidence payload conflict", idsOfA]]);
+      expect(escaped).toEqual([]);
+    } finally {
+      process.off("uncaughtException", keep);
+      process.off("unhandledRejection", keep);
+    }
   });
 });

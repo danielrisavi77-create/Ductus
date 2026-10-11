@@ -430,14 +430,18 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
   }
 
   /**
-   * Off the path to the outcome: the line is written after the outcome is
-   * decided, so a logger that blocks, throws or hangs can neither delay nor
-   * change it. A failing logger neither fails the call nor carries anything
-   * out of it; a logger that answers with a promise has its rejection
-   * dropped the same way.
+   * Off the path to the outcome: the line is written in a later macrotask
+   * (setImmediate; this adapter runs on Node only, it hashes with
+   * node:crypto), so the caller awaiting the outcome resumes first and a
+   * logger that blocks, throws, hangs or rejects can neither delay nor change
+   * it. A microtask would not do: it runs before the caller resumes. Not
+   * unref'd: an immediate runs in the same turn of the event loop, so it
+   * keeps the process no longer than that, and an unref'd one could be
+   * dropped at exit and lose the line. A failing logger neither fails the
+   * call nor carries anything out of it.
    */
   private log(message: string, fields: Record<string, string>): void {
-    queueMicrotask(() => {
+    setImmediate(() => {
       try {
         const result: unknown = this.warn(message, fields);
         void Promise.resolve(result).catch(() => undefined);
