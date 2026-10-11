@@ -1485,7 +1485,11 @@ describe("LocalDocumentSaver: resume() contract (#206 r6)", () => {
     expect(calls).toBe(5);
   });
 
-  it("r6: a NaN sequence read as corrupt never stops a later held read from reading again (#206 qa206j VAŽNO)", async () => {
+  const badSeqs: [string, unknown][] = [
+    ["NaN", Number.NaN], ["Infinity", Number.POSITIVE_INFINITY], ["-1", -1], ["1.5", 1.5],
+    ["MAX_SAFE_INTEGER + 1", Number.MAX_SAFE_INTEGER + 1], ["the string \"1\"", "1"],
+  ];
+  for (const [name, bad] of badSeqs) it(`r6: a ${name} sequence read as corrupt never stops a later held read from reading again (#206 qa206j VAŽNO)`, async () => {
     const at = scope();
     const real = journal(at);
     let armed = false;
@@ -1510,7 +1514,7 @@ describe("LocalDocumentSaver: resume() contract (#206 r6)", () => {
     await type(writer, "staro");
     expect((await target.load()).kind).toBe("ready");
     const db = (real as unknown as { db: Dexie }).db;
-    await db.table("meta").update(DOC, { localSeq: Number.NaN });
+    await db.table("meta").update(DOC, { localSeq: bad });
     expect(await target.load()).toEqual({ kind: "recovery", reason: "corrupt", document: null });
     await db.table("meta").update(DOC, { localSeq: 1 });
     armed = true;
