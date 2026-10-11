@@ -124,7 +124,6 @@ function segment(input: {
   predecessor?: string | null;
   profile?: string;
   start?: string;
-  eventAt?: string;
   end?: string;
 } = {}): EvidenceSegmentV2 {
   const sequence = input.sequence ?? 1;
@@ -142,16 +141,13 @@ function segment(input: {
     observedStartedAt:
       input.start ?? "2026-10-03T06:00:00.000Z",
     observedEndedAt:
-      input.end ?? "2026-10-03T06:00:01.000Z",
+      input.end ?? "2026-10-03T06:01:00.000Z",
     initialDocumentHash: before,
     finalDocumentHash: after,
     predecessorSegmentHash: input.predecessor ?? null,
     events: [
       {
         sequence,
-        occurredAt:
-          input.eventAt ?? "2026-10-03T06:00:00.500Z",
-        elapsedMs: sequence * 500,
         source: "editor",
         steps: [{ stepType: "replace", from: 1, to: 1 }],
         touchedNodeIds: ["p1"],
@@ -314,8 +310,7 @@ describe("EvidenceGateway", () => {
       after: C,
       predecessor: firstCommand.descriptor.segmentHash,
       start: "2026-10-03T06:01:00.000Z",
-      eventAt: "2026-10-03T06:01:00.500Z",
-      end: "2026-10-03T06:01:01.000Z",
+      end: "2026-10-03T06:01:00.000Z",
     });
     const conflicting = await command(second, "request-1");
     expect((await ingest(s, conflicting)).status).toBe(
@@ -337,8 +332,7 @@ describe("EvidenceGateway", () => {
         after: C,
         predecessor: null,
         start: "2026-10-03T06:01:00.000Z",
-        eventAt: "2026-10-03T06:01:00.500Z",
-        end: "2026-10-03T06:01:01.000Z",
+        end: "2026-10-03T06:01:00.000Z",
       }),
       "request-2",
     );
@@ -365,8 +359,7 @@ describe("EvidenceGateway", () => {
         after: C,
         predecessor: firstCommand.descriptor.segmentHash,
         start: "2026-10-03T06:01:00.000Z",
-        eventAt: "2026-10-03T06:01:00.500Z",
-        end: "2026-10-03T06:01:01.000Z",
+        end: "2026-10-03T06:01:00.000Z",
       }),
       "request-2",
     );
@@ -381,6 +374,41 @@ describe("EvidenceGateway", () => {
       firstCommand.descriptor.segmentHash,
     );
     expect(s.repository.records()).toHaveLength(2);
+  });
+
+  it("accepts several segments of one minute and orders them by sequence and chain alone", async () => {
+    const s = setup();
+    const minute = "2026-10-03T06:00:00.000Z";
+    const hashes = [A, B, C, "d".repeat(64)];
+    const receipts = [];
+    let predecessor: string | null = null;
+    for (const index of [0, 1, 2]) {
+      const cmd = await command(
+        segment({
+          segmentId: `segment-${index + 1}`,
+          sequence: index + 1,
+          before: hashes[index],
+          after: hashes[index + 1],
+          predecessor,
+          start: minute,
+          end: minute,
+        }),
+        `request-${index + 1}`,
+      );
+      const outcome = await ingest(s, cmd);
+      if (outcome.status !== "accepted") throw new Error(`segment ${index}: ${outcome.status}`);
+      expect(outcome.receipt.payload.predecessorSegmentHash).toBe(predecessor);
+      receipts.push(outcome.receipt.payload);
+      predecessor = cmd.descriptor.segmentHash;
+    }
+    expect(receipts.map((r) => [r.sequenceFrom, r.previousReceiptId])).toEqual([
+      [1, null],
+      [2, "receipt-1"],
+      [3, "receipt-2"],
+    ]);
+    // Nothing of the segment's time is in the receipt, so equal times cannot blur the order.
+    expect(JSON.stringify(receipts)).not.toContain(minute);
+    expect(s.repository.records()).toHaveLength(3);
   });
 
   it("rejects non-canonical wire bytes even when their own hash and byte count are supplied", async () => {
