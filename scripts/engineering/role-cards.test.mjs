@@ -48,25 +48,41 @@ function parseRule(text) {
   return { paths, body: m[2] };
 }
 
-/** Glob to RegExp for `**`, `*` and `?`; braces and classes are rejected by the caller. */
-function globToRegExp(glob) {
-  let re = "";
-  for (let i = 0; i < glob.length; i++) {
-    const c = glob[i];
-    if (c === "*" && glob[i + 1] === "*") {
-      if (glob[i + 2] === "/") {
-        re += "(?:.*/)?";
-        i += 2;
-      } else {
-        re += ".*";
-        i += 1;
-      }
-    } else if (c === "*") re += "[^/]*";
-    else if (c === "?") re += "[^/]";
-    else re += c.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+/** Matches one path segment against a pattern with `*` and `?`. */
+function segmentMatches(pattern, segment) {
+  if (!pattern) return !segment;
+  if (pattern[0] === "*") {
+    return (
+      segmentMatches(pattern.slice(1), segment) ||
+      (segment.length > 0 && segmentMatches(pattern, segment.slice(1)))
+    );
   }
-  return new RegExp(`^${re}$`);
+  if (!segment) return false;
+  return (
+    (pattern[0] === "?" || pattern[0] === segment[0]) &&
+    segmentMatches(pattern.slice(1), segment.slice(1))
+  );
 }
+
+/** Matches path segments; a `**` segment spans zero or more segments. */
+function partsMatch(pattern, parts) {
+  if (!pattern.length) return !parts.length;
+  if (pattern[0] === "**") {
+    return (
+      partsMatch(pattern.slice(1), parts) ||
+      (parts.length > 0 && partsMatch(pattern, parts.slice(1)))
+    );
+  }
+  return (
+    parts.length > 0 &&
+    segmentMatches(pattern[0], parts[0]) &&
+    partsMatch(pattern.slice(1), parts.slice(1))
+  );
+}
+
+/** Glob match for `**`, `*` and `?` without building a RegExp; braces and classes are rejected by the caller. */
+const globMatches = (glob, file) =>
+  partsMatch(glob.split("/"), file.split("/"));
 
 const rules = mdFiles(rulesDir).map((name) => ({
   name,
@@ -96,9 +112,8 @@ test("every path rule has parseable frontmatter with live globs", () => {
         /^\.?\//,
         `${name}: ${glob} must be relative to the repo root`,
       );
-      const re = globToRegExp(glob);
       assert.ok(
-        tracked.some((f) => re.test(f)),
+        tracked.some((f) => globMatches(glob, f)),
         `${name}: ${glob} matches no tracked file`,
       );
     }
@@ -164,11 +179,13 @@ test("every repo path and skill named in cards and rules exists", () => {
 });
 
 test("the glob matcher handles the forms the rules use", () => {
-  assert.ok(globToRegExp("db/**").test("db/migrations/0001.sql"));
-  assert.ok(globToRegExp("app/**/*.tsx").test("app/page.tsx"));
-  assert.ok(globToRegExp("app/**/*.tsx").test("app/rad/page.tsx"));
-  assert.ok(!globToRegExp("app/**/*.tsx").test("app/api/auth/login/route.ts"));
-  assert.ok(globToRegExp("**/*.test.ts").test("src/domain/json.test.ts"));
-  assert.ok(!globToRegExp("CLAUDE.md").test("docs/CLAUDE.md"));
-  assert.ok(!globToRegExp("lefthook.yml").test("lefthookxyml"));
+  assert.ok(globMatches("db/**", "db/migrations/0001.sql"));
+  assert.ok(globMatches("app/**/*.tsx", "app/page.tsx"));
+  assert.ok(globMatches("app/**/*.tsx", "app/rad/page.tsx"));
+  assert.ok(!globMatches("app/**/*.tsx", "app/api/auth/login/route.ts"));
+  assert.ok(globMatches("**/*.test.ts", "src/domain/json.test.ts"));
+  assert.ok(!globMatches("CLAUDE.md", "docs/CLAUDE.md"));
+  assert.ok(!globMatches("lefthook.yml", "lefthookxyml"));
+  assert.ok(globMatches(".github/**", ".github/workflows/ci.yml"));
+  assert.ok(!globMatches("src/editor/**", "src/editorial/x.ts"));
 });
