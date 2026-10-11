@@ -882,40 +882,70 @@ test("the symlink and /proc cases of agent-hooks.test.mjs run only on Linux CI (
   assert.equal(process.platform, "linux", "those cases skip on other platforms; CI must not run there");
 });
 
+// Git hooks export GIT_DIR and friends; a child git or the precheck would then act on the
+// repository running the tests instead of the temporary one.
+const gitFreeEnv = (env = process.env) => Object.fromEntries(Object.entries(env).filter(([key]) => !key.toUpperCase().startsWith("GIT_")));
+const gitIn = (dir, ...args) => spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false", ...args], { cwd: dir, encoding: "utf8", env: gitFreeEnv() });
+const withOriginMain = (dir) => {
+  gitIn(dir, "init", "-q");
+  gitIn(dir, "commit", "-q", "--allow-empty", "-m", "x");
+  gitIn(dir, "update-ref", "refs/remotes/origin/main", "HEAD");
+};
+
+test("A13c the temporary repositories and the precheck ignore an inherited GIT_DIR", () => {
+  const decoy = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-decoy-"));
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-pre3-"));
+  const saved = process.env.GIT_DIR;
+  try {
+    withOriginMain(decoy);
+    const refBefore = gitIn(decoy, "rev-parse", "refs/remotes/origin/main").stdout;
+    process.env.GIT_DIR = path.join(decoy, ".git");
+    // A plain directory: with the inherited GIT_DIR the decoy would make the file list readable.
+    const body = path.join(base, "body.md");
+    fs.writeFileSync(body, "Agent: claude:a:platforma\nRisk: low\nTask: DAN-1\n");
+    const go = () => spawnSync(process.execPath, [precheck], { input: JSON.stringify({ tool_input: { command: `gh pr create --title t --body-file "${body}"` }, cwd: base }), encoding: "utf8", env: gitFreeEnv() });
+    assert.equal(go().status, 2, "no repository in the directory: blocked, whatever GIT_DIR says");
+    withOriginMain(base);
+    assert.equal(go().status, 0);
+    assert.equal(gitIn(decoy, "rev-parse", "refs/remotes/origin/main").stdout, refBefore, "the decoy repository is untouched");
+    assert.equal(gitIn(decoy, "log", "--oneline").stdout.trim().split("\n").length, 1, "no extra commit landed in the decoy");
+  } finally {
+    if (saved === undefined) delete process.env.GIT_DIR;
+    else process.env.GIT_DIR = saved;
+    fs.rmSync(base, { recursive: true, force: true });
+    fs.rmSync(decoy, { recursive: true, force: true });
+  }
+});
+
 test("A13b the PR metadata precheck blocks when the changed files cannot be read, and allows an empty list", () => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-pre2-"));
   try {
     const body = path.join(base, "body.md");
     fs.writeFileSync(body, "Agent: claude:a:platforma\nRisk: low\nTask: DAN-1\n");
-    const go = () => spawnSync(process.execPath, [precheck], { input: JSON.stringify({ tool_input: { command: `gh pr create --title t --body-file ${body}` }, cwd: base }), encoding: "utf8" });
+    const go = () => spawnSync(process.execPath, [precheck], { input: JSON.stringify({ tool_input: { command: `gh pr create --title t --body-file "${body}"` }, cwd: base }), encoding: "utf8", env: gitFreeEnv() });
     // Not a repository (or no origin/main): the risk floor cannot be computed.
     const unreadable = go();
     assert.equal(unreadable.status, 2, unreadable.stderr);
     assert.match(unreadable.stderr, /could not read the changed files/);
     // A readable origin/main with nothing changed is an empty list, not an error.
-    const git = (...a) => spawnSync("git", a, { cwd: base, encoding: "utf8" });
-    git("init", "-q");
-    git("-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "--allow-empty", "-m", "x");
-    git("update-ref", "refs/remotes/origin/main", "HEAD");
+    withOriginMain(base);
     const ok = go();
     assert.equal(ok.status, 0, ok.stderr);
   } finally {
     fs.rmSync(base, { recursive: true, force: true });
   }
 });
-test("A13 the PR metadata precheck blocks when it throws on a PR command, and ignores other commands", () => {
+
+test("A13the PR metadata precheck blocks when it throws on a PR command, and ignores other commands", () => {
   // The preload makes the metadata parser throw, as an internal error would.
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-pre-"));
   try {
     const preload = path.join(base, "preload.mjs");
     fs.writeFileSync(preload, "const o = String.prototype.startsWith; String.prototype.startsWith = function (...a) { if (a[0] === 'agent:') throw new Error('injected'); return o.apply(this, a); };");
-    const go = (command, args = []) => spawnSync(process.execPath, [...args, precheck], { input: JSON.stringify({ tool_input: { command }, cwd: base }), encoding: "utf8" });
+    const go = (command, args = []) => spawnSync(process.execPath, [...args, precheck], { input: JSON.stringify({ tool_input: { command }, cwd: base }), encoding: "utf8", env: gitFreeEnv() });
     const broken = ["--import", pathToFileURL(preload).href];
     // The directory needs a readable origin/main, or the changed files cannot be listed.
-    const git = (...a) => spawnSync("git", a, { cwd: base, encoding: "utf8" });
-    git("init", "-q");
-    git("-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "--allow-empty", "-m", "x");
-    git("update-ref", "refs/remotes/origin/main", "HEAD");
+    withOriginMain(base);
     const prCommand = 'gh pr create --title t --body "Agent: x"';
     const thrown = go(prCommand, broken);
     assert.equal(thrown.status, 2, thrown.stderr);
