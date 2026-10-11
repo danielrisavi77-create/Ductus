@@ -6,6 +6,7 @@ import {
   EVIDENCE_CANONICALIZATION_V2,
   EVIDENCE_HASH_ALGORITHM_V2,
   EVIDENCE_SEGMENT_SCHEMA_V2,
+  isEvidenceMinuteV2,
   MAX_EVIDENCE_PROFILE_ID_LENGTH,
 } from "@/domain/forensics/evidence-segment-v2";
 
@@ -97,12 +98,6 @@ function nonEmptyBounded(value: unknown, max = MAX_ID_LENGTH): value is string {
   );
 }
 
-function canonicalInstant(value: unknown): value is string {
-  if (typeof value !== "string") return false;
-  const time = Date.parse(value);
-  return Number.isFinite(time) && new Date(time).toISOString() === value;
-}
-
 export function isEvidenceSegmentDescriptorV2(
   descriptor: unknown,
 ): descriptor is EvidenceSegmentDescriptorV2 {
@@ -130,8 +125,9 @@ export function isEvidenceSegmentDescriptorV2(
     Number(descriptor.eventCount) < 1 ||
     Number(descriptor.sequenceTo) !==
       Number(descriptor.sequenceFrom) + Number(descriptor.eventCount) - 1 ||
-    !canonicalInstant(descriptor.observedStartedAt) ||
-    !canonicalInstant(descriptor.observedEndedAt) ||
+    // Whole minutes only (D-24): the descriptor repeats the times of the segment.
+    !isEvidenceMinuteV2(descriptor.observedStartedAt) ||
+    !isEvidenceMinuteV2(descriptor.observedEndedAt) ||
     Date.parse(descriptor.observedEndedAt) <
       Date.parse(descriptor.observedStartedAt) ||
     typeof descriptor.segmentHash !== "string" ||

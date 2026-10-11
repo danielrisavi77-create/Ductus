@@ -72,7 +72,8 @@ test("RLS, role and grant migrations plus pgTAP matrix are critical", () => {
   ]) {
     assert.equal(minimumRisk([filename]).risk, "critical", filename);
   }
-  assert.equal(minimumRisk(["db/migrations/20261004_baseline.sql"]).risk, "standard");
+  // Every migration is critical: a baseline creates the tables the policies protect.
+  assert.equal(minimumRisk(["db/migrations/20261004_baseline.sql"]).risk, "critical");
 });
 
 test("forbidden terms gate is critical because it enforces PRODUCT rules", () => {

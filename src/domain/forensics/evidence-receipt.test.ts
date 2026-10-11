@@ -64,15 +64,13 @@ function segmentWithProfile(evidenceProfileId: string) {
     sequenceFrom: 1,
     sequenceTo: 1,
     observedStartedAt: "2026-10-03T06:00:00.000Z",
-    observedEndedAt: "2026-10-03T06:00:01.000Z",
+    observedEndedAt: "2026-10-03T06:01:00.000Z",
     initialDocumentHash: A,
     finalDocumentHash: B,
     predecessorSegmentHash: null,
     events: [
       {
         sequence: 1,
-        occurredAt: "2026-10-03T06:00:00.000Z",
-        elapsedMs: 0,
         source: "editor",
         steps: [{ stepType: "replace", from: 1, to: 1 }],
         beforeDocumentHash: A,
