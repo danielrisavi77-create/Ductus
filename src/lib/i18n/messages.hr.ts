@@ -47,6 +47,13 @@ export const hr = {
     documentNotEditable: "Pisanje ovdje još nije moguće.",
     status: "Stanje rada",
   },
+  auth: {
+    failedTitle: "Prijava nije dovršena",
+    failedBody: "Prijavu nije bilo moguće dovršiti. Pokušaj ponovno; ako se ponovi, javi se koordinatoru na svojoj ustanovi.",
+    unavailableBody: "Prijava preko AAI@EduHr trenutačno ne odgovara. Pokušaj ponovno za nekoliko minuta.",
+    retry: "Pokušaj ponovno",
+    home: "Na početnu",
+  },
 } as const;
 
 type Widen<T> = { readonly [K in keyof T]: T[K] extends string ? string : Widen<T[K]> };
