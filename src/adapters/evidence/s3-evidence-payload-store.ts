@@ -88,8 +88,24 @@ const BUCKET_REFUSED =
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
 const CAPABILITY_LABEL = /^[A-Za-z0-9][A-Za-z0-9._:/#@-]{0,127}$/;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+/**
+ * The object an operator writes into each bucket when it is provisioned:
+ * `{"institutionId":"<uuid>","region":"<region>"}`. Read only, never written
+ * by the application (BACKEND 4.1, P3).
+ */
+export const STORAGE_IDENTITY_KEY = "ductus-storage-identity.json";
+const MAX_IDENTITY_BYTES = 1_024;
 /** Enough for the `<Code>` of an S3 error document; the rest is never read. */
 const MAX_ERROR_BODY_BYTES = 4_096;
+
+/**
+ * How a GET is read: the most bytes taken from a 200, and whether a 404 is
+ * read for its S3 error code. Only `NoSuchKey` says the object is missing; a
+ * 404 from a missing bucket or from a server that is not S3 says nothing.
+ */
+type GetRead = { limit: number; notFoundCode: boolean };
+const SEGMENT_READ: GetRead = { limit: MAX_EVIDENCE_SEGMENT_BYTES, notFoundCode: false };
+const IDENTITY_READ: GetRead = { limit: MAX_IDENTITY_BYTES, notFoundCode: true };
 /**
  * S3 error codes that name a cause the operator has to fix. Only these fixed
  * reasons leave the adapter; the error document itself is never passed on.
@@ -134,6 +150,12 @@ type WritePhase = {
   expired: boolean;
 };
 
+/** What a bucket's identity label proves; the reason is for the operator only. */
+export type StorageIdentityResult =
+  | { status: "verified" }
+  | { status: "mismatch" }
+  | { status: "unavailable"; reason: string };
+
 const idsOf = (input: {
   institutionId: string;
   evidencePackageId: string;
@@ -145,7 +167,13 @@ const idsOf = (input: {
 });
 
 type Fetched =
-  | { ok: true; status: number; body: Uint8Array | null; checksum: string | null }
+  | {
+      ok: true;
+      status: number;
+      body: Uint8Array | null;
+      checksum: string | null;
+      noSuchKey?: true;
+    }
   | { ok: false; reason: string };
 
 /**
@@ -439,8 +467,81 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     return unverified();
   }
 
+  /**
+   * Reads the bucket's identity label and compares it with what this domain
+   * is configured for. Only GET; a missing, malformed or different label is
+   * `mismatch`, a failed or late read `unavailable`. The same deadline rule
+   * as a write: signed first, then checked right before the request, after
+   * the answer and before the outcome; the timer's race ends the call even
+   * when a fetch ignores the signal.
+   */
+  async verifyIdentity(expected: {
+    institutionId: string;
+  }): Promise<StorageIdentityResult> {
+    const phase: WritePhase = {
+      deadline: Number.NEGATIVE_INFINITY,
+      read: Number.NEGATIVE_INFINITY,
+      echoConfirmed: false,
+      expired: false,
+    };
+    const start = readClock(phase);
+    if (start !== null) phase.deadline = start + this.requestTimeoutMs;
+    // Read once, after the deadline starts, as `putImmutable` reads its input.
+    const institutionId = expected.institutionId;
+    const abort = new AbortController();
+    // Synchronous up to its fetch; the timer gets only what is left from there.
+    const run = this.readIdentity({ institutionId }, phase, abort.signal);
+    const left = phase.deadline - phase.read;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const expired = new Promise<StorageIdentityResult>((resolve) => {
+      timer = setTimeout(
+        () => {
+          phase.expired = true;
+          resolve({ status: "unavailable", reason: "storage_timeout" });
+          abort.abort();
+        },
+        Number.isFinite(left) ? Math.max(0, Math.ceil(left)) : 0,
+      );
+    });
+    try {
+      return await Promise.race([run, expired]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private async readIdentity(
+    expected: { institutionId: string },
+    phase: WritePhase,
+    signal: AbortSignal,
+  ): Promise<StorageIdentityResult> {
+    const signed = this.sign("GET", [this.bucket, STORAGE_IDENTITY_KEY], null);
+    const got = await this.send("GET", signed, null, phase, signal, IDENTITY_READ);
+    const matches =
+      got.ok && got.status === 200 && got.body !== null
+        ? identityMatches(got.body, {
+            institutionId: expected.institutionId,
+            region: this.region,
+          })
+        : null;
+    // Before every outcome, `unavailable` included: past the deadline only a
+    // timeout, and no late signature log.
+    if (late(phase)) return { status: "unavailable", reason: "storage_timeout" };
+    if (!got.ok) {
+      // More bytes than any label: the object there is not a label.
+      return got.reason === "storage_object_too_large"
+        ? { status: "mismatch" }
+        : this.unavailable(got.reason);
+    }
+    if (got.status === 404 && got.noSuchKey) return { status: "mismatch" };
+    if (matches === null) {
+      return { status: "unavailable", reason: `storage_get_status_${got.status}` };
+    }
+    return matches ? { status: "verified" } : { status: "mismatch" };
+  }
+
   /** Configuration faults are also logged, by fixed reason only. */
-  private unavailable(reason: string): EvidencePayloadPutResult {
+  private unavailable(reason: string): { status: "unavailable"; reason: string } {
     if (isSignatureFault(reason)) {
       this.log("evidence storage refused the request signature", { reason });
     }
@@ -501,6 +602,7 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     body: Uint8Array<ArrayBuffer> | null,
     phase: WritePhase,
     signal: AbortSignal,
+    read: GetRead = SEGMENT_READ,
   ): Promise<Fetched> {
     // No request starts after the deadline, even from a late answer: the
     // last step before every fetch, with nothing awaited in between.
@@ -527,6 +629,12 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
         if (reason) return { ok: false, reason };
         return { ok: true, status: response.status, body: null, checksum: null };
       }
+      if (method === "GET" && response.status === 404 && read.notFoundCode) {
+        const code = await errorCode(response, signal);
+        return code === "NoSuchKey"
+          ? { ok: true, status: 404, body: null, checksum: null, noSuchKey: true }
+          : { ok: true, status: 404, body: null, checksum: null };
+      }
       if (method === "PUT" || response.status !== 200) {
         // Not awaited: a cancel that never settles must not outlast the deadline.
         void response.body?.cancel().catch(() => undefined);
@@ -544,10 +652,10 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
         void response.body?.cancel().catch(() => undefined);
         return { ok: false, reason: "storage_get_encoded" };
       }
-      const read = await readLimited(response, MAX_EVIDENCE_SEGMENT_BYTES, signal);
-      return read === null
+      const bytes = await readLimited(response, read.limit, signal);
+      return bytes === null
         ? { ok: false, reason: "storage_object_too_large" }
-        : { ok: true, status: 200, body: read, checksum: null };
+        : { ok: true, status: 200, body: bytes, checksum: null };
     } catch {
       return {
         ok: false,
@@ -618,19 +726,54 @@ function isConfirmed(value: unknown, endpoint: URL, now: Date): boolean {
   );
 }
 
+/** Exactly the two expected fields with the expected values, nothing else. */
+function identityMatches(
+  body: Uint8Array,
+  expected: { institutionId: string; region: string },
+): boolean {
+  if (body.byteLength > MAX_IDENTITY_BYTES) return false;
+  let label: unknown;
+  try {
+    label = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(body));
+  } catch {
+    return false;
+  }
+  if (typeof label !== "object" || label === null || Array.isArray(label)) {
+    return false;
+  }
+  const keys = Object.keys(label).sort();
+  const fields = label as Record<string, unknown>;
+  return (
+    keys.length === 2 &&
+    keys[0] === "institutionId" &&
+    keys[1] === "region" &&
+    fields.institutionId === expected.institutionId &&
+    fields.region === expected.region
+  );
+}
+
 /** The fixed reason for a known S3 error code, or null; the body never leaves. */
 async function errorReason(
   response: Response,
   signal: AbortSignal,
 ): Promise<string | null> {
-  const body = await readLimited(response, MAX_ERROR_BODY_BYTES, signal);
-  if (body === null) return null;
-  const code = /<Code>([A-Za-z]{1,64})<\/Code>/.exec(
-    new TextDecoder().decode(body),
-  )?.[1];
-  return code !== undefined && Object.hasOwn(ERROR_REASONS, code)
+  const code = await errorCode(response, signal);
+  return code !== null && Object.hasOwn(ERROR_REASONS, code)
     ? ERROR_REASONS[code]
     : null;
+}
+
+/** The `<Code>` of a bounded S3 error document, or null. */
+async function errorCode(
+  response: Response,
+  signal: AbortSignal,
+): Promise<string | null> {
+  const body = await readLimited(response, MAX_ERROR_BODY_BYTES, signal);
+  if (body === null) return null;
+  return (
+    /<Code>([A-Za-z]{1,64})<\/Code>/.exec(new TextDecoder().decode(body))?.[1] ??
+    null
+  );
 }
 
 /**
