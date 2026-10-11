@@ -4,3 +4,4 @@ export * from "./validate";
 export * from "./normalize";
 export * from "./transaction";
 export * from "./equality";
+export * from "./edit-step";
