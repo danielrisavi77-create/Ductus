@@ -6,7 +6,12 @@ const RISK_VALUES = new Set(["low", "standard", "critical"]);
 const AGENT_RE =
   /^(claude|codex|chatgpt|grok):[A-Za-z0-9_-]+:(orchestrator|platforma|backend|frontend|reviewer|qa|bug-hunter|product-ux|short)$/;
 const SHA_RE = /^[0-9a-f]{40}$/i;
-const TRUSTED_ASSOCIATIONS = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
+const LISTED_ASSOCIATIONS = new Set(["MEMBER", "COLLABORATOR"]);
+
+// Write access alone does not make an account a verdict author: the owner
+// always is, a member or collaborator only when its login is listed here.
+// Adding a login is a D-97 change; never list a bot or triage account.
+export const TRUSTED_VERDICT_LOGINS = Object.freeze([]);
 const VERDICTS = new Set(["PASS", "FAIL", "BLOCK"]);
 
 export const APP_RUNTIMES = new Map([
@@ -70,11 +75,22 @@ function sameHead(value, headSha) {
   return Boolean(value && SHA_RE.test(value) && value.toLowerCase() === headSha.toLowerCase());
 }
 
-// A verdict is a person's comment posted through an App; a bot account's own
-// comment never counts, whatever association GitHub reports for it.
-function trustedComments(items) {
+/**
+ * True when a comment's author may record a verdict or override: never a bot
+ * account, whatever association GitHub reports; the owner; or a listed login.
+ * Shared with the orchestrator scripts so they count what the gate counts.
+ */
+export function trustedAuthor(item, logins = TRUSTED_VERDICT_LOGINS) {
+  if (item?.user?.type === "Bot") return false;
+  if (item?.author_association === "OWNER") return true;
+  const login = item?.user?.login;
+  return LISTED_ASSOCIATIONS.has(item?.author_association) && typeof login === "string" && logins.includes(login);
+}
+
+// A verdict is a person's comment posted through an App.
+function trustedComments(items, logins) {
   return (items ?? [])
-    .filter((item) => TRUSTED_ASSOCIATIONS.has(item?.author_association) && item?.user?.type !== "Bot")
+    .filter((item) => trustedAuthor(item, logins))
     .map((item, index) => ({
       body: item?.body ?? "",
       login: item?.user?.login ?? null,
@@ -181,6 +197,7 @@ export function evaluateGate({
   ownerLogin,
   comments = [],
   carriedHeads = new Set(),
+  trustedLogins = TRUSTED_VERDICT_LOGINS,
 }) {
   const authorAgent = field(body, "Agent");
   const authorRuntime = declaredRuntime(authorAgent);
@@ -204,7 +221,7 @@ export function evaluateGate({
     return { state: "failure", description: "Missing repository owner identity." };
   }
 
-  const trusted = trustedComments(comments);
+  const trusted = trustedComments(comments, trustedLogins);
 
   if (findOwnerOverride(trusted, headSha, ownerLogin)) {
     return { state: "success", description: `Owner override recorded for ${risk} risk.` };

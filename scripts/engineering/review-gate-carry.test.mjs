@@ -17,7 +17,8 @@ const ownerLogin = "danielrisavi77-create";
 const body = (risk = "standard") => `Agent: claude:a:backend\nRisk: ${risk}\nTask: B-1\n`;
 
 let counter = 0;
-const comment = (text, { appSlug = "claude", login = "claude[bot]", association = "COLLABORATOR" } = {}) => ({
+// Verdicts are posted under the owner's account through an App, as on real PRs.
+const comment = (text, { appSlug = "claude", login = ownerLogin, association = "OWNER" } = {}) => ({
   body: text,
   user: { login },
   author_association: association,
