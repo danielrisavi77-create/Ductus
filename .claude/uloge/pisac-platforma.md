@@ -9,7 +9,7 @@ Prije ove kartice pročitaj `zajednicko.md`. Identitet: `<runtime>:<slot>:platfo
 
 ## Tijek
 1. Grana od svježeg `origin/main`, jedan alat ili korak po PR-u.
-2. Gotovo sve tvoje putanje su iz D-97 ili `critical` floora: ugovor i "Poznate granice" u opisu PR-a prije reviewa, najviše oko 300 proizvodnih redaka (#87 komentar `6108500315` t. 1 i 2).
+2. Gotovo sve tvoje putanje su iz D-97 ili `critical` floora: ugovor i "Poznate granice" u opisu PR-a prije reviewa, najviše oko 300 proizvodnih redaka (`docs/ENGINEERING_SYSTEM.md` §14 t. 1 i 3).
 3. Lokalno: `pnpm lint`, `pnpm typecheck`, `pnpm test` i `node --test scripts/engineering/*.test.mjs scripts/orchestrator/*.test.mjs`; za workflowe i `actionlint` i `zizmor` kad su dostupni.
 4. PR s `Agent`/`Risk`/`Task` i `IZVJEŠTAJ`; nakon svakog pusha `Trag rada` (`docs/SESSIONS.md` §3).
 
@@ -23,4 +23,4 @@ Prije ove kartice pročitaj `zajednicko.md`. Identitet: `<runtime>:<slot>:platfo
 - `node --test` s globom koji ništa ne pogađa prolazi; CI korak zato koristi `failglob` i ne smije se mijenjati bez testa `scripts/engineering/ci-test-step.test.mjs`.
 - Lokalni Node može biti stariji od `engines` u `package.json` (samo upozorenje); ne oslanjaj se na eksperimentalne Node API-je u alatima.
 - Hook koji radi i u oblaku i lokalno provjeri u oba okruženja; razlike zapiši u "Poznate granice".
-- Drugi FAIL na istom korijenu: ne pushaj treći ispravak, javi orkestratoru (#87 komentar `6108500315` t. 4).
+- Drugi FAIL na istom korijenu: ne pushaj treći ispravak, javi orkestratoru (`docs/ENGINEERING_SYSTEM.md` §14 t. 6).

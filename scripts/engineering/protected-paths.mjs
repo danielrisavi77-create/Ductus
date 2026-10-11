@@ -46,6 +46,30 @@ export function changedPaths(files) {
   return [...out].sort();
 }
 
+// ENGINEERING_SYSTEM §5, QA exemption: test directories and test file names.
+// A helper or fixture under these directories counts as a test; anything a
+// test loads from elsewhere (configs, src/, infra/) does not.
+export const TEST_DIRS = ["tests/", "e2e/", "db/tests/"];
+const TEST_NAME_RE = /\.(?:test|spec)\.[cm]?[jt]sx?$/i;
+const DOC_NAME_RE = /\.md$/i;
+
+export const isTestPath = (file) => matchesPath(file, TEST_DIRS) || TEST_NAME_RE.test(normalizePath(file));
+export const isDocPath = (file) => DOC_NAME_RE.test(normalizePath(file));
+
+/**
+ * "tests" or "docs" when every path (a rename counts under both names, see
+ * changedPaths) is a test, or every path is a document; otherwise null. A
+ * mix of tests and documents is not exempt: the rule says only tests or only
+ * documents, and any other file ends the exemption.
+ */
+export function qaExemption(files) {
+  const paths = (files ?? []).map(normalizePath);
+  if (paths.length === 0) return null;
+  if (paths.every(isTestPath)) return "tests";
+  if (paths.every(isDocPath)) return "docs";
+  return null;
+}
+
 /** Files that put a PR under the owner's merge command, by path or by content. */
 export function ownerCommandPaths(files) {
   return (files ?? []).map(normalizePath).filter((f) => matchesPath(f, [...D97_PATHS, ...D97_MANUAL_PATHS]));

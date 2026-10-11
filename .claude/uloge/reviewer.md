@@ -5,7 +5,7 @@ Prije ove kartice pročitaj `zajednicko.md`. Identitet: `<runtime>:<slot>:review
 ## Pročitaj na početku
 - Skill `ductus-review` i odjeljak "Neovisni pregled" u `AGENTS.md`: redoslijed provjera i oblik nalaza.
 - Samo diff PR-a i odjeljke koji ga se tiču: `CLAUDE.md`, `docs/PRODUCT.md` §5, `docs/BACKEND.md` §3, §4 i §6 kad je primjenjivo, zapis odluke u `docs/DECISIONS.md` (`docs/SESSIONS.md` §4).
-- Opis PR-a: `Risk`, ugovor i "Poznate granice". Za `critical` PR bez ugovora javi orkestratoru; ne reviewaj nagađanjem (#87 komentar `6108500315` t. 1).
+- Opis PR-a: `Risk`, ugovor i "Poznate granice". Za `critical` PR bez ugovora javi orkestratoru; ne reviewaj nagađanjem (`docs/ENGINEERING_SYSTEM.md` §14 t. 1).
 - Kontrolni skill koji odgovara diffu (popis u `.claude/skills/ductus-worker/SKILL.md`) kao popis što provjeriti.
 
 ## Tijek
@@ -20,8 +20,8 @@ Prije ove kartice pročitaj `zajednicko.md`. Identitet: `<runtime>:<slot>:review
 - Ne reviewaj PR koji si napisao (`docs/ENGINEERING_SYSTEM.md` §3).
 
 ## Poznate zamke
-- Za svaki nalaz napiši je li dostižan kroz stvarnog pozivatelja i okolinu; o nedostižnom odlučuje vlasnik (#87 komentar `6109041185` t. 1).
-- Nalaz izvan ugovora i "Poznatih granica" je manji, ne razlog za FAIL (#87 komentar `6109015743` t. 4).
-- Uz svaki manji nalaz napiši "blokira" ili "ne blokira"; manji nalaz samo u testovima ili dokumentaciji uz PASS i "ne blokira" smije ravno u QA (#87 komentar `6104646540`).
+- Svaki nalaz ima redak "Dohvatljivo kroz" (pozivatelj i ulaz, ili "nije pokazano"); o nedokazanom odlučuje vlasnik (`docs/ENGINEERING_SYSTEM.md` §14 t. 5 i 7).
+- Nalaz izvan ugovora i "Poznatih granica" je manji samo ako granica ima trag vlasnikova odobrenja; nalaz koji dira tvrdo pravilo iz `CLAUDE.md`, `docs/PRODUCT.md` §5 ili granicu povjerenja nikad (`docs/ENGINEERING_SYSTEM.md` §14 t. 2).
+- Uz svaki manji nalaz napiši "blokira" ili "ne blokira"; manji nalaz samo u testovima ili dokumentaciji uz PASS i "ne blokira" ne traži novi push (`docs/ENGINEERING_SYSTEM.md` §14 t. 5).
 - Za `critical` PR review PASS i QA PASS moraju doći iz različitih GitHub Appova, osim uz kvotni fallback (`docs/ENGINEERING_SYSTEM.md` §6).
 - Ne prijavljuj stil ni ono što hvata linter (`AGENTS.md`).

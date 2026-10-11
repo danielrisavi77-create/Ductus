@@ -1552,6 +1552,54 @@ describe("one monotonic deadline (QA qa233d)", () => {
       );
     },
   );
+
+  it("a stored write leaves no timer that later logs it as unverified", async () => {
+    const s3 = fakeS3();
+    const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+
+    await expect(put(store, "a")).resolves.toMatchObject({ status: "stored" });
+    // Past the deadline: a timer still armed would now log the write.
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    await logged();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("a reading exactly at the deadline is past it: no request is sent", async () => {
+    const s3 = fakeS3();
+    const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 60_000 });
+    const start = performance.now();
+    let reads = 0;
+    // The call's start, then every later reading at start + requestTimeoutMs.
+    const clock = vi
+      .spyOn(performance, "now")
+      .mockImplementation(() => (reads++ === 0 ? start : start + 60_000));
+    try {
+      await expect(put(store, "a")).resolves.toEqual(timeout);
+    } finally {
+      clock.mockRestore();
+    }
+    expect(reads).toBeGreaterThan(1);
+    expect(s3.calls).toEqual([]);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("a clock that throws at the start rejects the call before any request", async () => {
+    const s3 = fakeS3();
+    const { store, warn } = storeWith(s3.fetch);
+    const broken = new Error("clock unavailable");
+    const clock = vi.spyOn(performance, "now").mockImplementation(() => {
+      throw broken;
+    });
+    try {
+      await expect(put(store, "a")).rejects.toBe(broken);
+    } finally {
+      clock.mockRestore();
+    }
+    await logged();
+    expect(s3.calls).toEqual([]);
+    expect([...s3.objects.keys()]).toEqual([]);
+    expect(warn).not.toHaveBeenCalled();
+  });
 });
 
 describe("byte-identical read-back (Codex 4240926024)", () => {

@@ -45,6 +45,12 @@ function world() {
   };
 }
 
+/** A test PR in gh field names -> the REST pull object the script reads. */
+const rest = (p) => ({
+  number: p.number, title: p.title, state: p.state === "MERGED" ? "closed" : p.state.toLowerCase(),
+  merged_at: p.state === "MERGED" ? at(1000) : null, draft: p.isDraft, head: { sha: p.headRefOid, ref: p.headRefName },
+});
+
 function fakeExec(w, calls) {
   return async (cmd, args) => {
     calls.push([cmd, ...args]);
@@ -56,14 +62,17 @@ function fakeExec(w, calls) {
       }
     }
     if (cmd === "git") return w.worktrees;
-    if (args[0] === "pr") return JSON.stringify(w.prs);
     const path = args.at(-1);
     if (path.endsWith("branches/main")) return JSON.stringify(w.branch);
-    if (path.includes("/check-runs")) return JSON.stringify([{ total_count: w.runs.length, check_runs: w.runs }]);
-    if (path.includes("/statuses")) return JSON.stringify([w.statuses]);
+    // Lists are read with page=N, 100 per page (gh.mjs ghList).
+    const page = Number(path.match(/[?&]page=(\d+)/)?.[1]);
+    const slice = (items) => items.slice((page - 1) * 100, page * 100);
+    if (path.includes("/pulls?")) return JSON.stringify(slice(w.prs.map(rest)));
+    if (path.includes("/check-runs")) return JSON.stringify({ total_count: w.runs.length, check_runs: slice(w.runs) });
+    if (path.includes("/statuses")) return JSON.stringify(slice(w.statuses));
     const n = Number(path.match(/issues\/(\d+)\/comments/)?.[1]);
-    if (n === 87 && w.pages) return JSON.stringify(w.pages);
-    return JSON.stringify([w.comments.get(n) ?? []]);
+    if (n === 87 && w.pages) return JSON.stringify(w.pages[page - 1] ?? []);
+    return JSON.stringify(slice(w.comments.get(n) ?? []));
   };
 }
 
@@ -83,12 +92,13 @@ test("§3: only read calls pass the guard", () => {
     ["gh", "api", "graphql"], ["gh", "pr", "merge", "1"], ["gh", "pr", "comment", "1"], ["gh", "pr", "edit", "1"],
     ["gh", "pr", "review", "1"], ["gh", "pr", "ready", "1"], ["gh", "pr", "close", "1"], ["gh", "issue", "comment", "87"],
     ["gh", "issue", "edit", "87"], ["gh", "run", "rerun", "1"], ["gh", "run", "cancel", "1"], ["gh", "workflow", "run", "ci"],
-    ["gh", "pr", "list", "--web"], ["git", "fetch", "origin"], ["git", "worktree", "prune"], ["git", "worktree", "remove", "x"],
+    ["gh", "pr", "list", "--web"], ["gh", "pr", "list", "--state", "all", "--json", "number"],
+    ["gh", "api", "--paginate", "--slurp", "repos/{owner}/{repo}/issues/87/comments"], ["gh", "api", "x", "y"], ["gh", "api"],
+    ["git", "fetch", "origin"], ["git", "worktree", "prune"], ["git", "worktree", "remove", "x"],
     ["git", "push"], ["git", "branch", "-d", "x"], ["pnpm", "install"], ["node", "scripts/orchestrator/worktree-clean.mjs"],
   ];
   for (const [cmd, ...args] of refused) assert.equal(readOnlyCall(cmd, args), false, `${cmd} ${args.join(" ")}`);
-  assert.ok(readOnlyCall("gh", ["api", "--paginate", "--slurp", "repos/{owner}/{repo}/issues/87/comments"]));
-  assert.ok(readOnlyCall("gh", ["pr", "list", "--state", "all", "--limit", "1000", "--json", "number"]));
+  assert.ok(readOnlyCall("gh", ["api", "repos/{owner}/{repo}/issues/87/comments?per_page=100&page=2"]));
   assert.ok(readOnlyCall("git", ["worktree", "list", "--porcelain", "-z"]));
 });
 
@@ -327,6 +337,8 @@ test("U1/N1/N2: old-head FAIL, App-less, quoted, fenced and non-first-line verdi
     verdict(H2, "FAIL", 300),
     verdict(H1, "FAIL", 300, { performed_via_github_app: null }),
     verdict(H1, "FAIL", 300, { author_association: "NONE" }),
+    verdict(H1, "FAIL", 300, { author_association: "COLLABORATOR", user: { login: "helper", type: "User" } }),
+    verdict(H1, "FAIL", 300, { user: { login: "app[bot]", type: "Bot" } }),
     comment(`> Agent-Review: claude:rev:reviewer\n> Review-Head: ${H1}\n> Review-Verdict: FAIL`, { created_at: at(300) }),
     comment(`\`\`\`\nAgent-Review: claude:rev:reviewer\nReview-Head: ${H1}\nReview-Verdict: FAIL\n\`\`\``, { created_at: at(300) }),
     comment(`Hi\nAgent-Review: claude:rev:reviewer\nReview-Head: ${H1}\nReview-Verdict: FAIL`, { created_at: at(300) }),
@@ -582,7 +594,8 @@ test("nalaz 5: two PRs in a line, two full SHAs in a line and a slot without bac
 });
 
 test("nalaz 2/U8: an empty, non-list or non-object #87 or PR comment page is NEPROVJERENO, never 0 items", async () => {
-  for (const pages of [[[]], [], [[comment("x")], {}], [[1, 2]], [[[comment("x")]]]]) {
+  const full = Array.from({ length: 100 }, (_, i) => comment(`x ${i}`));
+  for (const pages of [[[]], [], [full, {}], [[1, 2]], [[[comment("x")]]]]) {
     const w = world();
     w.pages = pages;
     const r = await check(w);
@@ -593,7 +606,7 @@ test("nalaz 2/U8: an empty, non-list or non-object #87 or PR comment page is NEP
   w.comments.set(87, [queue("bez stavki", 30)]);
   assert.deepEqual((await check(w)).of("red-87"), ["NEPROVJERENO nijedna stavka u redu #87; trajni red ne može biti prazan"]);
   const v = world();
-  v.fail["issues/10/"] = JSON.stringify([["x"]]);
+  v.fail["issues/10/"] = JSON.stringify(["x"]);
   assert.deepEqual((await check(v)).levels("fail-bez-pusha"), ["NEPROVJERENO"]);
 });
 
@@ -606,17 +619,20 @@ test("nalaz 3: main with no required check reported is NEPROVJERENO", async () =
   assert.deepEqual(checkMainCi({ sha: MAIN, required: ["A"], checkRuns: [], statuses: [{ context: "B", state: "success" }] }).map((x) => x.level), ["NEPROVJERENO"]);
 });
 
-test("nalaz 4 and 6: empty, non-array and limit-sized PR lists are NEPROVJERENO; the limit is 1000", async () => {
-  const many = Array.from({ length: 1000 }, (_, i) => ({ number: i + 1, state: "CLOSED", isDraft: false, headRefOid: H1, headRefName: "x" }));
-  for (const out of ["[]", "{}", JSON.stringify(many)]) {
+test("nalaz 4 and 6: empty, non-list and endless PR lists are NEPROVJERENO; every page is read", async () => {
+  const pr = (number) => ({ number, state: "CLOSED", isDraft: false, headRefOid: H1, headRefName: "x" });
+  for (const out of ["[]", "{}", JSON.stringify([1]), JSON.stringify(Array.from({ length: 100 }, (_, i) => rest(pr(i + 1))))]) {
     const w = world();
-    w.fail["pr list"] = out;
+    w.fail["/pulls?"] = out; // the last: every page full, so the list never ends within the page cap
     const r = await check(w);
     for (const name of ["pr-list", "fail-bez-pusha", "red-87"]) assert.deepEqual(r.levels(name), ["NEPROVJERENO"], `${out.slice(0, 9)} ${name}`);
   }
-  const r = await check(world());
-  const list = r.calls.find((c) => c[1] === "pr");
-  assert.equal(list[list.indexOf("--limit") + 1], "1000");
+  const w = world();
+  w.prs = [...Array.from({ length: 249 }, (_, i) => pr(i + 100)), ...w.prs];
+  const r = await check(w);
+  assert.deepEqual(r.levels("fail-bez-pusha"), ["PASS"], "#10 sits on the third page");
+  assert.deepEqual(r.calls.filter((c) => c[2].includes("/pulls?")).map((c) => c[2]),
+    [1, 2, 3].map((n) => `repos/{owner}/{repo}/pulls?state=all&per_page=100&page=${n}`));
 });
 
 test("nalaz 6: a verdict under the wrong role field or with a short head is not canonical", async () => {
