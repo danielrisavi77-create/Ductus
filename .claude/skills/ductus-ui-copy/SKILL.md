@@ -7,7 +7,7 @@ Popis provjera prije predaje PR-a koji dodaje ili mijenja tekst sučelja. Ne uvo
 
 Pročitati `CLAUDE.md` (Tvrda pravila, Jezik), `docs/PRODUCT.md` §5 s "Rječnikom sučelja", D-84 i D-90 t. 3 u `docs/DECISIONS.md`, `docs/PLAN-DEMO.md` §4 (F-8, P-6) i `docs/ARCHITECTURE.md` §5 t. 1 i t. 5.
 
-1. Tekst sučelja je na hrvatskom i u ključevima; kod i identifikatori su na engleskom (`CLAUDE.md` "Jezik"; D-84).
+1. Tekst sučelja je na hrvatskom i u ključevima; kod i identifikatori su na engleskom (`CLAUDE.md` "Jezik"; D-84). Uređivanje izravnog korištenja hrvatskog teksta izvan kataloga odgođeno je do uvođenja engleskog (D-70, dopuna 11. 10. 2026.) i do tada nije poseban zadatak; hrvatski tekst i rječnik zabranjenih izraza ostaju obvezni.
 2. Nijedan izraz iz lijevog stupca Rječnika, ni njegov engleski ekvivalent, ne pojavljuje se u tekstu sučelja (PRODUCT §5; D-90 t. 3). Nema postotaka, ocjena ni tvrdnji o autorstvu (PRODUCT §5 pravila 1, 2 i 9).
 3. Stanja spremanja koriste doslovno propisane oblike iz zadnjeg retka Rječnika i iz F-8. Druga formulacija istog stanja ne prolazi (nalaz: "Spremljeno lokalno" za stanje koje se zove "spremljeno na uređaju").
 4. "Spremljeno na poslužitelju" prikazuje se samo uz potpisanu potvrdu (ARCHITECTURE §5 t. 5); vidi `ductus-sync-states`. Offline oznaka ostaje i nakon sinkronizacije (PRODUCT §5 pravilo 10).
