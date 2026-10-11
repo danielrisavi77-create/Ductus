@@ -88,6 +88,13 @@ const BUCKET_REFUSED =
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
 const CAPABILITY_LABEL = /^[A-Za-z0-9][A-Za-z0-9._:/#@-]{0,127}$/;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+/**
+ * The object an operator writes into each bucket when it is provisioned:
+ * `{"institutionId":"<uuid>","region":"<region>"}`. Read only, never written
+ * by the application (BACKEND 4.1, P3).
+ */
+export const STORAGE_IDENTITY_KEY = "ductus-storage-identity.json";
+const MAX_IDENTITY_BYTES = 1_024;
 /** Enough for the `<Code>` of an S3 error document; the rest is never read. */
 const MAX_ERROR_BODY_BYTES = 4_096;
 /**
@@ -133,6 +140,12 @@ type WritePhase = {
   /** Set once the deadline has answered the call, by the timer or a check. */
   expired: boolean;
 };
+
+/** What a bucket's identity label proves; the reason is for the operator only. */
+export type StorageIdentityResult =
+  | { status: "verified" }
+  | { status: "mismatch" }
+  | { status: "unavailable"; reason: string };
 
 const idsOf = (input: {
   institutionId: string;
@@ -439,8 +452,74 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     return unverified();
   }
 
+  /**
+   * Reads the bucket's identity label and compares it with what this domain
+   * is configured for. Only GET; a missing, malformed or different label is
+   * `mismatch`, a failed or late read `unavailable`. The same deadline rule
+   * as a write: signed first, then checked right before the request, after
+   * the answer and before the outcome; the timer's race ends the call even
+   * when a fetch ignores the signal.
+   */
+  async verifyIdentity(expected: {
+    institutionId: string;
+  }): Promise<StorageIdentityResult> {
+    const phase: WritePhase = {
+      deadline: Number.NEGATIVE_INFINITY,
+      read: Number.NEGATIVE_INFINITY,
+      echoConfirmed: false,
+      expired: false,
+    };
+    const start = readClock(phase);
+    if (start !== null) phase.deadline = start + this.requestTimeoutMs;
+    // Read once, after the deadline starts, as `putImmutable` reads its input.
+    const institutionId = expected.institutionId;
+    const abort = new AbortController();
+    // Synchronous up to its fetch; the timer gets only what is left from there.
+    const run = this.readIdentity({ institutionId }, phase, abort.signal);
+    const left = phase.deadline - phase.read;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const expired = new Promise<StorageIdentityResult>((resolve) => {
+      timer = setTimeout(
+        () => {
+          phase.expired = true;
+          resolve({ status: "unavailable", reason: "storage_timeout" });
+          abort.abort();
+        },
+        Number.isFinite(left) ? Math.max(0, Math.ceil(left)) : 0,
+      );
+    });
+    try {
+      return await Promise.race([run, expired]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private async readIdentity(
+    expected: { institutionId: string },
+    phase: WritePhase,
+    signal: AbortSignal,
+  ): Promise<StorageIdentityResult> {
+    const signed = this.sign("GET", [this.bucket, STORAGE_IDENTITY_KEY], null);
+    const got = await this.send("GET", signed, null, phase, signal);
+    if (!got.ok) return this.unavailable(got.reason);
+    const matches =
+      got.status === 200 && got.body !== null
+        ? identityMatches(got.body, {
+            institutionId: expected.institutionId,
+            region: this.region,
+          })
+        : null;
+    if (late(phase)) return { status: "unavailable", reason: "storage_timeout" };
+    if (got.status === 404) return { status: "mismatch" };
+    if (matches === null) {
+      return { status: "unavailable", reason: `storage_get_status_${got.status}` };
+    }
+    return matches ? { status: "verified" } : { status: "mismatch" };
+  }
+
   /** Configuration faults are also logged, by fixed reason only. */
-  private unavailable(reason: string): EvidencePayloadPutResult {
+  private unavailable(reason: string): { status: "unavailable"; reason: string } {
     if (isSignatureFault(reason)) {
       this.log("evidence storage refused the request signature", { reason });
     }
@@ -615,6 +694,32 @@ function isConfirmed(value: unknown, endpoint: URL, now: Date): boolean {
     !Number.isNaN(day.getTime()) &&
     day.toISOString().startsWith(c.verifiedOn) &&
     day.getTime() <= now.getTime()
+  );
+}
+
+/** Exactly the two expected fields with the expected values, nothing else. */
+function identityMatches(
+  body: Uint8Array,
+  expected: { institutionId: string; region: string },
+): boolean {
+  if (body.byteLength > MAX_IDENTITY_BYTES) return false;
+  let label: unknown;
+  try {
+    label = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(body));
+  } catch {
+    return false;
+  }
+  if (typeof label !== "object" || label === null || Array.isArray(label)) {
+    return false;
+  }
+  const keys = Object.keys(label).sort();
+  const fields = label as Record<string, unknown>;
+  return (
+    keys.length === 2 &&
+    keys[0] === "institutionId" &&
+    keys[1] === "region" &&
+    fields.institutionId === expected.institutionId &&
+    fields.region === expected.region
   );
 }
 

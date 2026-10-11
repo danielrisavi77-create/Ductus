@@ -10,6 +10,7 @@ import { MAX_EVIDENCE_SEGMENT_BYTES } from "@/domain/forensics/evidence-chain-v2
 
 import {
   S3EvidencePayloadStore,
+  STORAGE_IDENTITY_KEY,
   type S3EvidencePayloadStoreConfig,
 } from "./s3-evidence-payload-store";
 import { type S3Credentials, S3SecretCredentials } from "./s3-signature";
@@ -2184,6 +2185,172 @@ describe("the input is read once (QA qa233f)", () => {
       await vi.advanceTimersByTimeAsync(1);
       await logged();
       expect(result).toEqual({ status: "unavailable", reason: "storage_timeout" });
+      expect(s3.fetch.mock.calls[0][1]?.signal?.aborted).toBe(true);
+    } finally {
+      spy.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("S3EvidencePayloadStore.verifyIdentity (P3)", () => {
+  const LABEL_PATH = `/ductus-evidence/${STORAGE_IDENTITY_KEY}`;
+  const label = (value: unknown) =>
+    new TextEncoder().encode(
+      typeof value === "string" ? value : JSON.stringify(value),
+    );
+  const withLabel = (bytes: Uint8Array | null) => {
+    const s3 = fakeS3();
+    if (bytes !== null) s3.objects.set(LABEL_PATH, bytes);
+    return s3;
+  };
+  const verify = (s3: ReturnType<typeof fakeS3>) =>
+    storeWith(s3.fetch).store.verifyIdentity({ institutionId: INSTITUTION });
+
+  it("verifies a label of this institution and region with one GET and no write", async () => {
+    const s3 = withLabel(label({ institutionId: INSTITUTION, region: "eu-central-1" }));
+
+    await expect(verify(s3)).resolves.toEqual({ status: "verified" });
+    expect(s3.calls.map((c) => [c.method, c.path])).toEqual([["GET", LABEL_PATH]]);
+  });
+
+  it.each<[string, Uint8Array | null]>([
+    ["a missing label", null],
+    ["another institution", label({ institutionId: OTHER_INSTITUTION, region: "eu-central-1" })],
+    ["another region", label({ institutionId: INSTITUTION, region: "eu-west-1" })],
+    ["an upper-case institution", label({ institutionId: INSTITUTION.toUpperCase(), region: "eu-central-1" })],
+    ["an extra field", label({ institutionId: INSTITUTION, region: "eu-central-1", bucket: "x" })],
+    ["a missing region", label({ institutionId: INSTITUTION })],
+    ["a list", label([INSTITUTION, "eu-central-1"])],
+    ["text that is not JSON", label("fak-a")],
+    ["invalid UTF-8", new Uint8Array([0x7b, 0xff, 0x7d])],
+    // Valid JSON with the right values, only padded past the limit.
+    [
+      "a label over 1 KiB",
+      label(JSON.stringify({ institutionId: INSTITUTION, region: "eu-central-1" }) + " ".repeat(1_024)),
+    ],
+  ])("answers mismatch for %s", async (_, bytes) => {
+    await expect(verify(withLabel(bytes))).resolves.toEqual({ status: "mismatch" });
+  });
+
+  it.each<[string, () => Promise<Response>, string]>([
+    ["a server error", () => Promise.resolve(new Response(null, { status: 503 })), "storage_get_status_503"],
+    ["access denied", () => s3Error(403, "AccessDenied"), "storage_get_status_403"],
+    ["a wrong region", () => s3Error(400, "AuthorizationHeaderMalformed"), "storage_signature_rejected"],
+    ["a network failure", () => Promise.reject(new TypeError("fetch failed")), "storage_request_failed"],
+  ])("answers unavailable, never mismatch, on %s (P7)", async (_, answer, reason) => {
+    const s3 = fakeS3(() => answer());
+
+    await expect(verify(s3)).resolves.toEqual({ status: "unavailable", reason });
+  });
+
+  it("bounds the read by the configured timeout", async () => {
+    const s3 = fakeS3((_, signal) => hang(signal));
+    const { store } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+
+    await expect(
+      store.verifyIdentity({ institutionId: INSTITUTION }),
+    ).resolves.toEqual({ status: "unavailable", reason: "storage_timeout" });
+  });
+
+  const timeout = { status: "unavailable", reason: "storage_timeout" };
+
+  it("answers a timeout when the fetch ignores the abort signal", async () => {
+    const s3 = fakeS3(() => new Promise<Response>(() => undefined));
+    const { store } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+
+    await expect(store.verifyIdentity({ institutionId: INSTITUTION })).resolves.toEqual(timeout);
+    expect(s3.calls.map((c) => c.method)).toEqual(["GET"]);
+  });
+
+  it("a deadline that passes while signing the read sends no request", async () => {
+    let now = performance.now();
+    const s3 = withLabel(label({ institutionId: INSTITUTION, region: "eu-central-1" }));
+    const { store } = storeWith(s3.fetch, { requestTimeoutMs: 60_000 });
+    const signingTime = vi
+      .spyOn(store as unknown as { now: () => Date }, "now")
+      .mockImplementation(() => {
+        now += 1_000_000;
+        return new Date();
+      });
+    const clock = vi.spyOn(performance, "now").mockImplementation(() => now);
+    try {
+      await expect(store.verifyIdentity({ institutionId: INSTITUTION })).resolves.toEqual(timeout);
+    } finally {
+      clock.mockRestore();
+      signingTime.mockRestore();
+    }
+    expect(s3.calls).toEqual([]);
+  });
+
+  it("a matching label that arrives after the deadline is a timeout, not verified", async () => {
+    let now = performance.now();
+    const bytes = label({ institutionId: INSTITUTION, region: "eu-central-1" });
+    const s3 = fakeS3(() => {
+      now += 1_000_000;
+      return Promise.resolve(new Response(bytes.slice(), { status: 200 }));
+    });
+    const { store } = storeWith(s3.fetch, { requestTimeoutMs: 60_000 });
+    const clock = vi.spyOn(performance, "now").mockImplementation(() => now);
+    try {
+      await expect(store.verifyIdentity({ institutionId: INSTITUTION })).resolves.toEqual(timeout);
+    } finally {
+      clock.mockRestore();
+    }
+    expect(s3.calls.map((c) => c.method)).toEqual(["GET"]);
+  });
+
+  it("a missing label that arrives after the deadline is a timeout, not mismatch", async () => {
+    let now = performance.now();
+    const s3 = fakeS3(() => {
+      now += 1_000_000;
+      return Promise.resolve(new Response(null, { status: 404 }));
+    });
+    const { store } = storeWith(s3.fetch, { requestTimeoutMs: 60_000 });
+    const clock = vi.spyOn(performance, "now").mockImplementation(() => now);
+    try {
+      await expect(store.verifyIdentity({ institutionId: INSTITUTION })).resolves.toEqual(timeout);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it("reads the institution once and compares under that reading", async () => {
+    const s3 = withLabel(label({ institutionId: INSTITUTION, region: "eu-central-1" }));
+    let reads = 0;
+    const expected = {
+      get institutionId() {
+        reads += 1;
+        return reads === 1 ? INSTITUTION : OTHER_INSTITUTION;
+      },
+    };
+
+    await expect(storeWith(s3.fetch).store.verifyIdentity(expected)).resolves.toEqual({
+      status: "verified",
+    });
+    expect(reads).toBe(1);
+  });
+
+  it("gives the timer only what a slow getter left of the deadline", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const clock = { now: 100 };
+    const spy = vi.spyOn(performance, "now").mockImplementation(() => clock.now);
+    try {
+      const s3 = fakeS3(() => new Promise<Response>(() => undefined));
+      const { store } = storeWith(s3.fetch, { requestTimeoutMs: 100 });
+      const expected = {
+        get institutionId() {
+          clock.now += 70;
+          return INSTITUTION;
+        },
+      };
+      let result: unknown;
+      void store.verifyIdentity(expected).then((r) => (result = r));
+
+      await vi.advanceTimersByTimeAsync(29);
+      expect(result).toBeUndefined();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(result).toEqual(timeout);
       expect(s3.fetch.mock.calls[0][1]?.signal?.aborted).toBe(true);
     } finally {
       spy.mockRestore();
