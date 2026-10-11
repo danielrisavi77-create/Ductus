@@ -69,6 +69,7 @@ export function toPr(p) {
     state,
     isDraft: Boolean(p.draft),
     headRefOid: p.head?.sha,
+    headRefName: p.head?.ref,
     baseRefName: p.base?.ref,
     createdAt: p.created_at,
     mergedAt: p.merged_at ?? null,
