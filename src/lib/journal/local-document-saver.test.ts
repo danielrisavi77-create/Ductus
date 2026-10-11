@@ -1758,4 +1758,46 @@ describe("LocalDocumentSaver: settled() during a reload (#206 Codex r4240541632)
     expect(target.snapshot().state).not.toBe("LOCAL_DURABLE");
     expect((await journal(at).read(DOC)).snapshot?.document).toEqual(text("prvo"));
   });
+
+  // #206 qa206g: `reading` ends before `resume()` queues the chosen text.
+  it("settled() during resume() waits until the chosen text is in the journal", async () => {
+    const at = scope();
+    const real = journal(at);
+    let full = false;
+    let readGate: Promise<void> | null = null;
+    let writeGate: Promise<void> | null = null;
+    let openRead = () => {};
+    let openWrite = () => {};
+    let writeStarted = false;
+    const target = saver(patched(real, {
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        if (readGate) await readGate;
+        return real.read(...args);
+      },
+      saveLocal: async (...args: Parameters<AtomicDexieJournal["saveLocal"]>) => {
+        if (full) throw Object.assign(new Error("full"), { name: "QuotaExceededError" });
+        if (writeGate) { writeStarted = true; await writeGate; }
+        return real.saveLocal(...args);
+      },
+    }));
+    await target.load();
+    await type(target, "staro");
+    full = true;
+    await type(target, "odabrano");
+    expect((await target.load()).kind).toBe("recovery");
+    full = false;
+    readGate = new Promise<void>((resolve) => { openRead = resolve; });
+    writeGate = new Promise<void>((resolve) => { openWrite = resolve; });
+    const resumed = target.resume(text("odabrano"));
+    let done = false;
+    const settled = target.settled().then(() => { done = true; });
+    openRead();
+    await turns(10);
+    expect(writeStarted).toBe(true);
+    expect(done).toBe(false);
+    openWrite();
+    await settled;
+    expect((await journal(at).read(DOC)).snapshot?.document).toEqual(text("odabrano"));
+    expect((await resumed).kind).toBe("ready");
+  });
 });

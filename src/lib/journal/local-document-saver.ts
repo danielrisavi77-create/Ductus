@@ -144,6 +144,9 @@ export class LocalDocumentSaver {
   /** The bases of the `resume()` calls still running; own writes advance them. */
   private readonly bases = new Set<Basis>();
   private resuming = 0;
+  /** Ends when every running `resume()` returns; `settled()` waits on it. */
+  private resumed: Promise<void> = Promise.resolve();
+  private finish: () => void = () => {};
   /** The newest gen ever queued, so `resume()` never queues behind a newer text. */
   private queuedGen = 0;
   private next: Candidate | null = null;
@@ -322,7 +325,9 @@ export class LocalDocumentSaver {
     const gen = (this.gen += 1);
     const basis: Basis = { at: this.shown, gen };
     this.bases.add(basis);
-    this.resuming += 1;
+    if (this.resuming++ === 0) {
+      this.resumed = new Promise<void>((resolve) => { this.finish = resolve; });
+    }
     try {
       const result = await this.loadFor(basis);
       // Queued even if an overlapping load halted this saver after the ready
@@ -335,7 +340,7 @@ export class LocalDocumentSaver {
       return result;
     } finally {
       this.bases.delete(basis);
-      this.resuming -= 1;
+      if (--this.resuming === 0) this.finish();
     }
   }
 
@@ -378,13 +383,15 @@ export class LocalDocumentSaver {
   }
 
   /**
-   * Resolves once no reload runs and nothing is in flight (`pagehide`,
-   * tests): a candidate waiting on a reload is written first (#206 Codex
-   * r4240541632). A halted saver keeps its candidate queued past this, and
+   * Resolves once no reload or `resume()` runs and nothing is in flight
+   * (`pagehide`, tests): a candidate waiting on a reload, and the text a
+   * `resume()` chose, are written first (#206 Codex r4240541632, qa206g). A halted saver keeps its candidate queued past this, and
    * its state meanwhile never says LOCAL_DURABLE.
    */
   async settled(): Promise<void> {
-    while (this.reading || this.flight) await (this.reading ?? this.flight);
+    while (this.reading || this.flight || this.resuming) {
+      await (this.reading ?? this.flight ?? this.resumed);
+    }
   }
 
   /** Writes only: a load awaiting `settled()` would wait for its own read. */
