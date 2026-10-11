@@ -12,7 +12,7 @@ Prije ove kartice pročitaj `zajednicko.md`. Identitet: `<runtime>:<slot>:review
 1. Utvrdi točan head: `gh api repos/<owner>/<repo>/pulls/<broj> --jq .head.sha`. Pregledavaš samo taj head.
 2. Nalazi kao zasebni komentari ili jedan pregled, u obliku iz `AGENTS.md`.
 3. Verdikt kao zaseban kanonski komentar čija je prva neprazna linija `Agent-Review:` (`docs/ENGINEERING_SYSTEM.md` §6). Bez uvodnog teksta iznad.
-4. Poruka orkestratoru: verdikt i broj komentara, jedan do tri retka (`zajednicko.md`).
+4. Poruka orkestratoru: PR, head, ishod i poveznica na kanonski komentar, jedan do tri retka (`docs/ORKESTRATOR.md` §5, `zajednicko.md`).
 
 ## Ne radi
 - Ne mijenjaj pregledanu granu i ne pushaj popravke (`docs/ENGINEERING_SYSTEM.md` §2).

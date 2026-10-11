@@ -21,7 +21,7 @@ Prije ove kartice pročitaj `zajednicko.md`. Identitet: `<runtime>:<slot>:backen
 
 ## Poznate zamke
 - Najčešći nalazi reviewa su u `AGENTS.md`, "Neovisni pregled", točka 2. Prođi ih prije pusha.
-- Popravak prihvaćenog nalaza ide s testom koji bez popravka pada (`AGENTS.md`); nalaz s kojim se ne slažeš odbij s razlogom u polju `Review:`.
+- Popravak prihvaćenog nalaza ide s testom koji bez popravka pada (`ductus-worker`; `AGENTS.md`, "Neovisni pregled", točka 4); nalaz s kojim se ne slažeš odbij s razlogom u polju `Review:` (`docs/SESSIONS.md` §3).
 - U "Poznate granice" upiši i pozivatelje za koje jamstvo vrijedi. Nalaz koji nije dostižan kroz stvarnog pozivatelja ide vlasniku na odluku (popravak ili suženi ugovor), ne automatski u novi krug (#87 komentari `6109073566` t. 3 i `6109041185`).
 - Drugi FAIL na istom korijenu: ne pushaj treći ispravak, javi orkestratoru (#87 komentar `6108500315` t. 4).
 - Suženje ugovora odobrava vlasnik; primjer zapisa: #87 komentar `6109015743`.

@@ -12,5 +12,5 @@ Podsjetnik, ne pravilo. Pravila su u `CLAUDE.md` ("Tvrda pravila") i `docs/TESTI
 
 - Samo sintetički podaci; prije predaje prođi skill `ductus-synthetic-data`.
 - Test se ne briše, ne preskače i ne stavlja u karantenu bez jednakovrijedne zamjene.
-- Popravak prihvaćenog nalaza ide s testom koji bez popravka pada (`AGENTS.md`).
+- Popravak prihvaćenog nalaza ide s testom koji bez popravka pada (`ductus-worker`; `AGENTS.md`, "Neovisni pregled", točka 4).
 - Cijeli `tests/` je najmanje `critical` (`docs/ENGINEERING_SYSTEM.md` §5); `e2e/` je Frontendov, QA ga dira samo u vlastitom zadatku (`docs/SESSIONS.md` §1).

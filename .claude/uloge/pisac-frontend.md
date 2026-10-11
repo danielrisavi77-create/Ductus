@@ -21,6 +21,6 @@ Prije ove kartice pročitaj `zajednicko.md`. Identitet: `<runtime>:<slot>:fronte
 ## Poznate zamke
 - Stanja spremanja i sinkronizacije imaju točno značenje; pogrešna oznaka je kršenje pravila, ne stil (`ductus-sync-states`, `STATE.md` "Ne smije se izgubiti").
 - QA i Frontend nikad ne pišu u isti branch; `e2e/` QA dira samo u vlastitom zadatku (`docs/SESSIONS.md` §1).
-- Popravak prihvaćenog nalaza ide s testom koji bez popravka pada (`AGENTS.md`).
+- Popravak prihvaćenog nalaza ide s testom koji bez popravka pada (`ductus-worker`; `AGENTS.md`, "Neovisni pregled", točka 4).
 - U "Poznate granice" upiši i pozivatelje za koje jamstvo vrijedi. Nalaz koji nije dostižan kroz stvarnog pozivatelja ide vlasniku na odluku (popravak ili suženi ugovor), ne automatski u novi krug (#87 komentari `6109073566` t. 3 i `6109041185`).
 - Drugi FAIL na istom korijenu: ne pushaj treći ispravak, javi orkestratoru (#87 komentar `6108500315` t. 4).
