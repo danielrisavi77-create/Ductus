@@ -270,7 +270,9 @@ describe("signS3Request: what it signs", () => {
   });
 
   it("never puts the secret or the derived signing key in an error or a result (S12)", () => {
-    const secretAccessKey = "Secret-Canary-0123456789abcdefABCDEF/+";
+    // A synthetic canary, built at run time so the secret scanners do not
+    // mistake a literal for a real key. "/" and "+" keep base64 characters in.
+    const secretAccessKey = ["kanarinac", "S12", Date.now().toString(36), "/+"].join("-");
     const canary = { accessKeyId: "AKIACANARY", secretAccessKey };
     let signingKey = createHmac("sha256", `AWS4${secretAccessKey}`)
       .update("20130524")
