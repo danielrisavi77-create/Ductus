@@ -243,7 +243,9 @@ export function findForbiddenTerms(text: string, lang?: Language): ForbiddenTerm
  * each other are read closed up by themselves as well (`inWindows`), so that
  * what stands before or after an entry does not touch it. What this covers
  * is one run of boundaries inside an entry. A contextual entry is read
- * closed up only when its word is not whole otherwise.
+ * closed up only where its word is not whole otherwise: a place where the
+ * word stands whole is judged as written, and every other place is read
+ * closed up without it (`withoutWholeWords`).
  *
  * This is the stricter side on purpose. Two elements that do stand apart
  * (two items of a list) are read closed up as well, because a class or a
@@ -266,8 +268,31 @@ export function findForbiddenTermsInMarkup(joined: string, spaced: string, close
   return FORBIDDEN_TERMS.filter((entry) => {
     if (!entry.contextual) return entry.pattern.test(shown) || entry.pattern.test(apart) || (closedUp && (entry.pattern.test(closed) || entry.pattern.test(tight) || windows.has(entry)));
     if (entry.pattern.test(shownPhrases) && (entry.pattern.test(apartPhrases) || !entry.contextual.word.test(apartPhrases))) return true;
+    if (!closedUp) return false;
     // The word itself put together across something unknown: there is no whole word to judge without closing it.
-    return closedUp && !entry.contextual.word.test(shownPhrases) && (entry.pattern.test(closedPhrases) || entry.pattern.test(tightPhrases) || windows.has(entry));
+    if (!entry.contextual.word.test(shownPhrases)) return entry.pattern.test(closedPhrases) || entry.pattern.test(tightPhrases) || windows.has(entry);
+    // The word stands whole somewhere, and that place was judged above. It says nothing about another place where the word is cut.
+    const cut = withoutWholeWords(joined, entry.contextual.word);
+    return entry.pattern.test(foldPhrases(cut.replaceAll(PHRASE_BREAK, ""))) || entry.pattern.test(foldPhrases(closedUpPastQuotes(cut))) || inWindows(cut).has(entry);
+  });
+}
+
+/** Letters and digits written in a row, with what `foldLetters` drops between them. */
+const WRITTEN_WORD = /[\p{L}\p{N}\p{M}\p{Cf}ᅟᅠㅤﾠ]+/gu;
+/** Stands where a whole word was taken out: it ends the phrase and no boundary is closed up over it. */
+const TAKEN_OUT = ".";
+
+/**
+ * `joined` without the places where `word` is written whole. Closed up, a
+ * whole word that says where it was saved would run into the next part and
+ * read as one that does not, so the whole words are judged as written and
+ * only what is left is read closed up: the places where a boundary cuts the
+ * word. One acceptable place does not clear another.
+ */
+function withoutWholeWords(joined: string, word: RegExp): string {
+  return joined.replace(WRITTEN_WORD, (written) => {
+    const folded = foldLetters(written);
+    return word.exec(folded)?.[0] === folded ? TAKEN_OUT : written;
   });
 }
 

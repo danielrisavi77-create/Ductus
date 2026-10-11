@@ -714,6 +714,13 @@ function locate(file: string, content: string, kind: Kind): Read {
   const scriptKind = file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
   const source = ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true, scriptKind);
   const lineAt = (position: number): number => source.getLineAndCharacterOfPosition(position).line + 1;
+  // What the parser made of a file it could not parse is a guess, and text it
+  // guessed wrong is text that was never checked. The parser keeps its errors
+  // on the file it returns; a file without that list is not trusted either.
+  const errors = (source as { parseDiagnostics?: readonly ts.DiagnosticWithLocation[] }).parseDiagnostics;
+  if (!Array.isArray(errors)) throw new Error(`${file}: the parser did not say whether the file parses, so the scan cannot read it`);
+  const [first] = errors as readonly ts.DiagnosticWithLocation[];
+  if (first) throw new Error(`${file}:${lineAt(first.start)}: the file does not parse, so the scan cannot read it (TS${first.code}, ${errors.length} in all)`);
   const collect =
     (part?: true): Collect =>
     (node, text, at, check) => {
@@ -812,6 +819,22 @@ function* sourceFiles(root: string): Generator<string> {
   for (const dir of SCANNED_DIRS) if (existsSync(path.join(root, dir))) yield* walk(dir);
 }
 
+const UTF8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+
+/**
+ * The text of a scanned file. Bytes that are not UTF-8 are an error: read
+ * leniently they become U+FFFD, which matches no entry, so the file would
+ * pass with text nobody checked.
+ */
+function readSource(root: string, file: string): string {
+  const bytes = readFileSync(path.join(root, file));
+  try {
+    return UTF8.decode(bytes);
+  } catch (cause) {
+    throw new Error(`${file}: the file is not valid UTF-8, so the scan cannot read it`, { cause });
+  }
+}
+
 const isModule = (file: string): boolean => /\.[cm]?ts$/.test(file) && !/\.d\.[cm]?ts$/.test(file);
 const isCode = (file: string): boolean => isModule(file) || file.endsWith(".tsx");
 
@@ -851,7 +874,7 @@ export function scanUiText(root: string): Finding[] {
   for (const file of sourceFiles(root)) {
     const kind = scanKind(file);
     if (kind === null && !isCode(file)) continue;
-    const content = readFileSync(path.join(root, file), "utf8");
+    const content = readSource(root, file);
     const read = kind === null ? NOTHING_READ : locate(file, content, kind);
     findings.push(...findingsIn(file, read));
     if (kind === "catalogue" || !isCode(file)) continue;
@@ -897,7 +920,7 @@ export function findUnreadableText(root: string): Unreadable[] {
   for (const file of sourceFiles(root)) {
     const kind = scanKind(file);
     if (kind === null && !isCode(file)) continue;
-    const content = readFileSync(path.join(root, file), "utf8");
+    const content = readSource(root, file);
     const read = kind === null ? NOTHING_READ : locate(file, content, kind);
     const others = kind === "catalogue" || !isCode(file) ? [] : stringsOutside(read.texts, file, content);
     const strings = [...read.texts, ...others].map((text) => ({ ...text, characters: unreadableCharacters(text.text) }));
@@ -939,7 +962,7 @@ export function findMisplacedUiText(root: string): UiText[] {
   const misplaced: UiText[] = [];
   for (const file of sourceFiles(root)) {
     if (!isModule(file) || isUiTextModule(file)) continue;
-    const content = readFileSync(path.join(root, file), "utf8");
+    const content = readSource(root, file);
     const kind = scanKind(file);
     const read = kind === null ? NOTHING_READ : locate(file, content, kind);
     for (const text of stringsOutside(read.texts, file, content)) {

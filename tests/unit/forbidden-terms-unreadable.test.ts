@@ -1,11 +1,14 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
+import ts from "typescript";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { CLOSED_UP_NOTE, UNREADABLE_HINTS, findUnreadableText, scanUiText } from "../../scripts/forbidden-terms/scan";
+import { CLOSED_UP_NOTE, UNREADABLE_HINTS, findMisplacedUiText, findUnreadableText, scanUiText } from "../../scripts/forbidden-terms/scan";
 import { MAX_WINDOW_PARTS, PHRASE_BREAK, closedUpPastQuotes, findForbiddenTerms, findForbiddenTermsInMarkup, unreadableCharacters, windowsCutShort } from "../../scripts/forbidden-terms/terms";
 
 const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url));
@@ -612,5 +615,198 @@ describe("text the scan cannot read", () => {
 
   it("finds none in this repository (write the text in Croatian or English letters, or split the element)", () => {
     expect(findUnreadableText(REPO_ROOT)).toEqual([]);
+  });
+});
+
+// QA of 2b6b414: a file that does not parse, or is not UTF-8, was read as
+// far as the parser or the decoder could guess and passed with no finding.
+// Each of the three checks now stops on it, and the process that runs them
+// ends with an exit code that is not 0.
+describe("a file the scan cannot read", () => {
+  const CHECKS = { scanUiText, findUnreadableText, findMisplacedUiText } as const;
+  const names = Object.keys(CHECKS) as (keyof typeof CHECKS)[];
+  const writeBytes = (relative: string, bytes: readonly number[]): void => {
+    write(relative, "");
+    writeFileSync(path.join(root!, ...relative.split("/")), Buffer.from(bytes));
+  };
+  /** The checks that read a file: the guard for misplaced text reads only the modules outside the text modules. */
+  const readBy = (file: string): (keyof typeof CHECKS)[] => names.filter((name) => name !== "findMisplacedUiText" || (file.endsWith(".ts") && !file.endsWith("labels.ts")));
+  /** What it is, the file, its content, the error. */
+  const BROKEN: readonly [string, string, string, RegExp][] = [
+    ["a component with an element that is not closed", "src/components/Case.tsx", "export const C = <p>Predano", /^src\/components\/Case\.tsx:1: the file does not parse, so the scan cannot read it \(TS\d+, 2 in all\)$/],
+    ["a component with an error on a later line", "src/components/Case.tsx", "export const C = () => (\n  <p>Rok</p>\n  <p>Predano</p>\n);\n", /^src\/components\/Case\.tsx:[2-4]: the file does not parse/],
+    ["a text module with a string that is not closed", "src/domain/sync/labels.ts", 'export const LABEL = "Predano;\n', /^src\/domain\/sync\/labels\.ts:1: the file does not parse/],
+    ["a module outside the text modules", "src/domain/sync/state.ts", "export const STATE = {;\n", /^src\/domain\/sync\/state\.ts:1: the file does not parse/],
+    ["a module under app", "app/api/status/route.ts", "export function GET( {\n", /^app\/api\/status\/route\.ts:[12]: the file does not parse/],
+  ];
+
+  it.each(BROKEN)("stops on %s", (_, file, content, message) => {
+    write(file, content);
+    for (const name of readBy(file)) expect(() => CHECKS[name](root!), name).toThrow(message);
+    // The message names the file and the line, and never quotes the text.
+    expect(() => scanUiText(root!)).not.toThrow(/Predano|Rok/);
+  });
+
+  /** What it is, the file, its bytes. */
+  const NOT_UTF8: readonly [string, string, readonly number[]][] = [
+    ["a component of bytes that are no text", "src/components/Case.tsx", [0xff, 0xfe, 0xff]],
+    ["a component with one byte that is not UTF-8 inside a word", "src/components/Case.tsx", [...Buffer.from("export const C = () => <p>Sum"), 0xff, ...Buffer.from("njivo</p>;\n")]],
+    ["a component with a sequence that is cut short", "src/components/Case.tsx", [...Buffer.from("export const C = () => <p>Rok"), 0xc5, ...Buffer.from("</p>;\n")]],
+    ["a component with a surrogate written as three bytes", "src/components/Case.tsx", [...Buffer.from('export const C = "'), 0xed, 0xa0, 0x80, ...Buffer.from('";\n')]],
+    ["a text module", "src/domain/sync/labels.ts", [...Buffer.from('export const LABEL = "Rok'), 0x80, ...Buffer.from('";\n')]],
+    ["a module outside the text modules", "src/domain/sync/state.ts", [...Buffer.from('export const STATE = "a'), 0xfe, ...Buffer.from('";\n')]],
+    ["a catalogue", "src/lib/i18n/hr.json", [...Buffer.from('{ "title": "Rok'), 0xff, ...Buffer.from('" }\n')]],
+  ];
+
+  it.each(NOT_UTF8)("stops on %s that is not UTF-8", (_, file, bytes) => {
+    writeBytes(file, bytes);
+    const message = `${file}: the file is not valid UTF-8, so the scan cannot read it`;
+    for (const name of readBy(file)) expect(() => CHECKS[name](root!), name).toThrow(message);
+  });
+
+  it("stops on a catalogue that is not JSON, as before", () => {
+    write("src/lib/i18n/hr.json", '{ "title": "Rok" ');
+    expect(() => scanUiText(root!)).toThrow(SyntaxError);
+    expect(() => findUnreadableText(root!)).toThrow(SyntaxError);
+    // A byte order mark is kept in what is read, as it was, so a catalogue that starts with one is not JSON.
+    write("src/lib/i18n/hr.json", `${cp(0xfeff)}{ "title": "Rok" }\n`);
+    expect(() => scanUiText(root!)).toThrow(SyntaxError);
+  });
+
+  it("reads files that parse and are UTF-8 as before, with or without a byte order mark", () => {
+    write("src/components/Case.tsx", `${cp(0xfeff)}${component(["<p>Sumnjivo. Čćđšž</p>"])}`);
+    write("src/domain/sync/labels.ts", 'export const LABEL = "Rok predaje – „sutra”";\n');
+    write("src/domain/sync/state.ts", "export const STATE = { open: true } as const;\n");
+    write("src/lib/i18n/hr.json", '{ "title": "Rok" }\n');
+    expect(scanUiText(root!).flatMap((finding) => finding.terms.map((term) => term.entry))).toEqual(["sumnjivo"]);
+    expect(findUnreadableText(root!)).toEqual([]);
+    expect(findMisplacedUiText(root!)).toEqual([]);
+  });
+
+  it("does not stop on a file it does not read", () => {
+    writeBytes("src/components/Case.test.tsx", [0xff, 0xfe, 0xff]);
+    write("src/components/Other.spec.tsx", "export const C = <p>Predano");
+    writeBytes("src/assets/picture.png", [0x89, 0x50, 0x4e, 0x47, 0xff]);
+    for (const name of names) expect(CHECKS[name](root!), name).toEqual([]);
+  });
+
+  // The checks run inside a test run, and a check that throws is what fails
+  // it. This runs them the same way in a process of their own and reads the
+  // exit code: 0 for a clean tree, 3 for a finding, and 1, with the file
+  // named, when a file cannot be read.
+  it("ends the process that runs the checks with an exit code that is not 0", () => {
+    const work = mkdtempSync(path.join(tmpdir(), "ductus-terms-run-"));
+    try {
+      const typescript = createRequire(import.meta.url).resolve("typescript");
+      for (const name of ["scan", "terms", "entities"]) {
+        const written = readFileSync(path.join(REPO_ROOT, "scripts", "forbidden-terms", `${name}.ts`), "utf8");
+        const { outputText } = ts.transpileModule(written, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } });
+        writeFileSync(path.join(work, `${name}.mjs`), outputText.replace(/from "\.\/(terms|entities)"/g, 'from "./$1.mjs"').replace('from "typescript"', `from ${JSON.stringify(pathToFileURL(typescript).href)}`));
+      }
+      writeFileSync(
+        path.join(work, "run.mjs"),
+        'import { findMisplacedUiText, findUnreadableText, scanUiText } from "./scan.mjs";\nconst root = process.argv[2];\nconst found = [...scanUiText(root), ...findUnreadableText(root), ...findMisplacedUiText(root)];\nprocess.exit(found.length > 0 ? 3 : 0);\n',
+      );
+      const run = (): { status: number | null; stderr: string } => spawnSync(process.execPath, [path.join(work, "run.mjs"), root!], { encoding: "utf8" });
+
+      write("src/components/Case.tsx", component(["<p>Rok predaje</p>"]));
+      expect(run()).toMatchObject({ status: 0, stderr: "" });
+      write("src/components/Case.tsx", component(["<p>Sumnjivo</p>"]));
+      expect(run().status).toBe(3);
+      write("src/components/Case.tsx", "export const C = <p>Predano");
+      const broken = run();
+      expect(broken.status).toBe(1);
+      expect(broken.stderr).toContain("src/components/Case.tsx:1: the file does not parse, so the scan cannot read it");
+      writeBytes("src/components/Case.tsx", [0xff, 0xfe, 0xff]);
+      const bytes = run();
+      expect(bytes.status).toBe(1);
+      expect(bytes.stderr).toContain("src/components/Case.tsx: the file is not valid UTF-8, so the scan cannot read it");
+      write("src/components/Case.tsx", component(["<p>Rok predaje</p>"]));
+      writeBytes("src/domain/sync/state.ts", [...Buffer.from('export const STATE = "a'), 0xfe, ...Buffer.from('";\n')]);
+      expect(run().status).toBe(1);
+    } finally {
+      rmSync(work, { recursive: true, force: true });
+    }
+  }, 60_000);
+});
+
+// QA of 2b6b414: whether a contextual word is read closed up was decided for
+// the whole text, so one acceptable "Spremljeno na uređaju" anywhere in it
+// kept a second, cut "Spre|mljeno" from being read at all. It is decided for
+// each place the word stands in.
+describe("a contextual word cut by a boundary next to one that says where", () => {
+  const B = PHRASE_BREAK;
+  const EN = "saved (without saying where)";
+  /** What it is, the parts of the text, the entries found. */
+  const BESIDE: readonly [string, readonly string[], readonly string[]][] = [
+    ["the phrase before the cut word, in its part", ["Spremljeno na uređaju. Spre", "mljeno"], [HR]],
+    ["the phrase after the cut word, in its part", ["Spre", "mljeno. Spremljeno na uređaju"], [HR]],
+    ["the English phrase before the cut word, in its part", ["Saved on this device. Sa", "ved"], [EN]],
+    ["the English phrase after the cut word, in its part", ["Sa", "ved. Saved on this device"], [EN]],
+    ["the phrase in a part before", ["Spremljeno na uređaju", "Spre", "mljeno"], [HR]],
+    ["the phrase in a part after", ["Spre", "mljeno", "Spremljeno na poslužitelju"], [HR]],
+    ["the English phrase in a part before", ["Saved to the server", "sa", "ved"], [EN]],
+    ["the English phrase in a part after", ["sa", "ved", "Saved on your device"], [EN]],
+    ["the phrase on both sides", ["Spremljeno na uređaju", "Spre", "mljeno", "Spremljeno na poslužitelju"], [HR]],
+    ["the phrase on both sides and other parts around", ["Opis", "Saved on this device", "sa", "ved", "Saved on the server", "Kraj"], [EN]],
+    ["the phrase before, a part for every letter of the word", ["Opis", "Spremljeno na uređaju", ..."spremljeno", "Kraj"], [HR]],
+    ["the phrase after, a part for every letter of the word", ["Opis", ..."saved", "Saved on this device", "Kraj"], [EN]],
+    ["the phrase before in its part, the word cut twice", ["Opis", "Spremljeno na uređaju, spre", "mlje", "no", "Kraj"], [HR]],
+    ["the phrase before, quotation marks at the cut", ["Spremljeno na uređaju", `Spre${cp(0x201d)}`, `${cp(0x201e)}mljeno`, "Kraj"], [HR]],
+    ["the phrase before in its part, quotation marks at the cut", [`Spremljeno na uređaju. Spre${cp(0x201d)}`, `${cp(0x201e)}mljeno`], [HR]],
+    // The whole word is taken out of the phrase of the cut one: what follows it does not say where the cut one was saved.
+    ["the phrase right after the cut word, in its part", ["Spre", "mljeno Spremljeno na uređaju"], [HR]],
+    ["the English phrase right after the cut word, in its part", ["sa", "ved Saved on this device"], [EN]],
+    ["the Croatian phrase and a cut English word", ["Spremljeno na uređaju", "sa", "ved"], [EN]],
+    ["the English phrase and a cut Croatian word", ["Saved on this device. Spre", "mljeno"], [HR]],
+    ["both phrases and both words cut", ["Spremljeno na uređaju", "Saved on this device", "Spre", "mljeno", "Opis", "sa", "ved"], [HR, EN]],
+    ["the phrase twice and the cut word between them in one part", ["Spremljeno na uređaju. Spre", "mljeno. Spremljeno na poslužitelju"], [HR]],
+    // Nothing to report: every place the word stands in says where.
+    ["the phrase and a cut word with its place in the same part", ["Opis", "Spremljeno na uređaju", "Spre", "mljeno na poslužitelju", "Kraj"], []],
+    ["the English phrase and a cut word with its place in the same part", ["Opis", "Saved on this device", "sa", "ved to the server", "Kraj"], []],
+    ["the phrase twice in one part, a part after", ["Spremljeno na uređaju. Spremljeno na poslužitelju", "Predano"], []],
+    ["the phrase in three parts next to each other", ["Spremljeno na uređaju", "Spremljeno na poslužitelju", "Saved on this device", "Predano"], []],
+    ["the phrase and plain words cut", ["Spremljeno na uređaju", "Pred", "ano", "Saved on this device"], []],
+  ];
+
+  it.each(BESIDE)("%s", (_, parts, expected) => {
+    const joined = parts.join(B);
+    expect(findForbiddenTermsInMarkup(joined, joined).map((term) => term.entry)).toEqual(expected);
+    // Empty parts between them change nothing.
+    const padded = parts.join(B + B);
+    expect(findForbiddenTermsInMarkup(padded, padded).map((term) => term.entry)).toEqual(expected);
+    // And the text as written holds none of it.
+    expect(findForbiddenTermsInMarkup(joined, joined, false)).toEqual([]);
+  });
+
+  /** What it is, the JSX, the entries of the scan. */
+  const IN_JSX: readonly [string, string, readonly string[]][] = [
+    ["an empty element, the phrase before", "<p>Spremljeno na uređaju. Spre<i />mljeno</p>", [HR]],
+    ["an empty element, the phrase after", "<p>Spre<i />mljeno. Spremljeno na uređaju</p>", [HR]],
+    ["an empty element, the English phrase before", "<p>Saved on this device. Sa<i />ved</p>", [EN]],
+    ["an empty element, the English phrase after", "<p>Sa<i />ved. Saved on this device</p>", [EN]],
+    ["blocks, the phrase before", "<div><p>Spremljeno na uređaju</p><p>Spre</p><p>mljeno</p></div>", [HR]],
+    ["blocks, the phrase after", "<div><p>Spre</p><p>mljeno</p><p>Spremljeno na uređaju</p></div>", [HR]],
+    ["blocks, the English phrase before", "<ul><li>Saved on this device</li><li>Sa</li><li>ved</li></ul>", [EN]],
+    ["blocks, the English phrase after", "<ul><li>Sa</li><li>ved</li><li>Saved on this device</li></ul>", [EN]],
+    ["an array, the phrase before", '<p>{["Spremljeno na uređaju. Spre", undefined, "mljeno"]}</p>', [HR]],
+    ["an array, the phrase after", '<p>{["Spre", undefined, "mljeno. Spremljeno na uređaju"]}</p>', [HR]],
+    ["an array, the English phrase before", '<p>{["Saved on this device. Sa", undefined, "ved"]}</p>', [EN]],
+    ["an array, the English phrase after", '<p>{["Sa", n, "ved. ", "Saved on this device"]}</p>', [EN]],
+    ["a computed value, the phrase before", "<p>Spremljeno na poslužitelju. Spre{n}mljeno</p>", [HR]],
+    ["a computed value, the phrase right after", "<p>Spre{n}mljeno Spremljeno na uređaju</p>", [HR]],
+    ["an attribute, the English phrase before", '<img alt={"Saved on this device. Sa" + n + "ved"} />', [EN]],
+    // Nothing to report.
+    ["an empty element in a word that says where, the phrase before", "<p>Spremljeno na uređaju. Spre<i />mljeno na poslužitelju</p>", []],
+    ["blocks that each say where", "<div><p>Spremljeno na uređaju</p><p>Saved on this device</p><p>Predano</p></div>", []],
+  ];
+
+  it.each(IN_JSX)("in %s", (_, line, expected) => {
+    write("src/components/Case.tsx", component([line]));
+    const found = scanUiText(root!);
+    expect(found.flatMap((finding) => finding.terms.map((term) => term.entry))).toEqual(expected);
+    // The cut word is not there to see as written, so the finding says that the parts were joined.
+    for (const finding of found) expect(finding.text).toContain(CLOSED_UP_NOTE);
+    expect(findUnreadableText(root!)).toEqual([]);
   });
 });

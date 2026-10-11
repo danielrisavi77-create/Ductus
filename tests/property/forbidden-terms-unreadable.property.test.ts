@@ -160,6 +160,38 @@ test.prop([sample, fc.array(fc.nat(), { minLength: 1, maxLength: 20 }), neighbou
   },
 );
 
+// QA of 2b6b414: a contextual word cut by boundaries is found although the
+// same word stands whole, with its place, anywhere else in the text: in a
+// part of its own or in the part the cut word begins or ends in.
+const WHERE = ["Spremljeno na uređaju", "spremljeno na poslužitelju", "Saved on this device", "saved to the server", "Spremljena na uređaju"];
+const beside = fc.array(fc.tuple(fc.constantFrom(...WHERE, ...NEIGHBOURS), fc.constantFrom(PHRASE_BREAK, ". ", `.${PHRASE_BREAK}`)), { maxLength: 4 });
+const CUT_WORDS: readonly [string, string][] = [
+  ["spremljeno", "spremljeno (bez pojašnjenja)"],
+  ["Spremljena", "spremljeno (bez pojašnjenja)"],
+  ["saved", "saved (without saying where)"],
+  ["SAVED", "saved (without saying where)"],
+];
+
+test.prop([fc.constantFrom(...CUT_WORDS), fc.array(fc.nat(), { minLength: 1, maxLength: 9 }), beside, beside, fc.constantFrom(PHRASE_BREAK, ". ")])(
+  "a contextual word cut by boundaries is found whatever says where next to it",
+  ([word, entry], cuts, before, after, end) => {
+    const at = new Set(cuts.map((cut) => 1 + (cut % (word.length - 1))));
+    const cut = [...word].map((letter, index) => (at.has(index) ? PHRASE_BREAK + letter : letter)).join("");
+    const joined = before.map(([text, glue]) => text + glue).join("") + cut + (after.length > 0 ? end : "") + after.map(([text, glue]) => text + glue).join("");
+    expect(findForbiddenTermsInMarkup(joined, joined).map((term) => term.entry)).toContain(entry);
+  },
+);
+
+// And the other way: texts that say where, whole, next to plain words make no
+// finding however they are set next to each other.
+test.prop([fc.array(fc.tuple(fc.constantFrom(...WHERE, "Opis", "Rok", "Kraj", "2", "Rok predaje."), fc.constantFrom(PHRASE_BREAK, ". ", `.${PHRASE_BREAK}`, PHRASE_BREAK + PHRASE_BREAK)), { maxLength: 8 })])(
+  "contextual words that say where are not reported whatever stands next to them",
+  (pieces) => {
+    const joined = pieces.map(([text, glue]) => text + glue).join("");
+    expect(findForbiddenTermsInMarkup(joined, joined)).toEqual([]);
+  },
+);
+
 // Review of 8325bb0: a window takes a bounded number of parts, so an entry cut
 // over a long run of parts that the dictionary reads as nothing is either
 // found or the text is reported as one with too long a run.
