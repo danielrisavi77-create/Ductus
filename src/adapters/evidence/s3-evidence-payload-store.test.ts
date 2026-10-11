@@ -2199,8 +2199,13 @@ describe("S3EvidencePayloadStore.verifyIdentity (P3)", () => {
     new TextEncoder().encode(
       typeof value === "string" ? value : JSON.stringify(value),
     );
+  // S3 answers a missing key with a `NoSuchKey` document.
   const withLabel = (bytes: Uint8Array | null) => {
-    const s3 = fakeS3();
+    const s3 = fakeS3((call) =>
+      call.path === LABEL_PATH && !s3.objects.has(LABEL_PATH)
+        ? s3Error(404, "NoSuchKey")
+        : null,
+    );
     if (bytes !== null) s3.objects.set(LABEL_PATH, bytes);
     return s3;
   };
@@ -2229,6 +2234,11 @@ describe("S3EvidencePayloadStore.verifyIdentity (P3)", () => {
       "a label over 1 KiB",
       label(JSON.stringify({ institutionId: INSTITUTION, region: "eu-central-1" }) + " ".repeat(1_024)),
     ],
+    // Larger than a segment too: still not a label, not an unreadable object.
+    [
+      "a label over 2 MiB",
+      label(JSON.stringify({ institutionId: INSTITUTION, region: "eu-central-1" }) + " ".repeat(3 * 1_024 * 1_024)),
+    ],
   ])("answers mismatch for %s", async (_, bytes) => {
     await expect(verify(withLabel(bytes))).resolves.toEqual({ status: "mismatch" });
   });
@@ -2238,6 +2248,13 @@ describe("S3EvidencePayloadStore.verifyIdentity (P3)", () => {
     ["access denied", () => s3Error(403, "AccessDenied"), "storage_get_status_403"],
     ["a wrong region", () => s3Error(400, "AuthorizationHeaderMalformed"), "storage_signature_rejected"],
     ["a network failure", () => Promise.reject(new TypeError("fetch failed")), "storage_request_failed"],
+    ["a missing bucket", () => s3Error(404, "NoSuchBucket"), "storage_get_status_404"],
+    [
+      "a 404 that is not from S3",
+      () => Promise.resolve(new Response("<html>Not Found</html>", { status: 404 })),
+      "storage_get_status_404",
+    ],
+    ["a 404 with no body", () => Promise.resolve(new Response(null, { status: 404 })), "storage_get_status_404"],
   ])("answers unavailable, never mismatch, on %s (P7)", async (_, answer, reason) => {
     const s3 = fakeS3(() => answer());
 
@@ -2304,7 +2321,7 @@ describe("S3EvidencePayloadStore.verifyIdentity (P3)", () => {
     let now = performance.now();
     const s3 = fakeS3(() => {
       now += 1_000_000;
-      return Promise.resolve(new Response(null, { status: 404 }));
+      return s3Error(404, "NoSuchKey");
     });
     const { store } = storeWith(s3.fetch, { requestTimeoutMs: 60_000 });
     const clock = vi.spyOn(performance, "now").mockImplementation(() => now);
@@ -2313,6 +2330,38 @@ describe("S3EvidencePayloadStore.verifyIdentity (P3)", () => {
     } finally {
       clock.mockRestore();
     }
+  });
+
+  it("stops reading the label past 1 KiB, without waiting for the rest", async () => {
+    const endless = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(2_048).fill(0x20));
+      },
+    });
+    const s3 = fakeS3(() => Promise.resolve(new Response(endless, { status: 200 })));
+    // Reading on would wait for the rest and end in a timeout instead.
+    const { store } = storeWith(s3.fetch, { requestTimeoutMs: 200 });
+
+    await expect(store.verifyIdentity({ institutionId: INSTITUTION })).resolves.toEqual({
+      status: "mismatch",
+    });
+  });
+
+  it("a refused signature that arrives after the deadline is a timeout, with no log", async () => {
+    let now = performance.now();
+    const s3 = fakeS3(() => {
+      now += 1_000_000;
+      return s3Error(403, "SignatureDoesNotMatch");
+    });
+    const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 60_000 });
+    const clock = vi.spyOn(performance, "now").mockImplementation(() => now);
+    try {
+      await expect(store.verifyIdentity({ institutionId: INSTITUTION })).resolves.toEqual(timeout);
+    } finally {
+      clock.mockRestore();
+    }
+    await logged();
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it("reads the institution once and compares under that reading", async () => {
