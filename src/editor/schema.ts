@@ -26,6 +26,7 @@ import Paragraph from "@tiptap/extension-paragraph";
 import Placeholder from "@tiptap/extension-placeholder";
 import Text from "@tiptap/extension-text";
 
+import { createNodeIdentityPlugin, mintMissingIds, repeatedNodeIds, type NodeIdMinter } from "./identity";
 import { NODE_ID_ATTRIBUTE } from "./interop";
 
 export { NODE_ID_ATTRIBUTE };
@@ -51,9 +52,58 @@ export const DEFAULT_PLACEHOLDER = "Počni pisati…";
  * and identity is what comments, evidence and revisions anchor to. With the
  * flag off the new block arrives with no id and the interop layer mints a
  * fresh one.
+ *
+ * The attribute is only where the id is kept. Which block owns which id is
+ * decided by the plugin from `identity.ts`: content that is pasted, dropped
+ * or inserted by a script never brings an id with it, and a block that was
+ * already in the document never loses its own.
  */
-export const NodeIdentity = Extension.create({
+export type NodeIdentityOptions = {
+  mint?: NodeIdMinter;
+  /**
+   * Told which ids the initial content held more than once, before they are
+   * repaired. The default writes a console warning.
+   */
+  onRepeatedInitialId?: (ids: readonly string[]) => void;
+};
+
+/**
+ * Initial content (`content` of the editor) is not the way in for a stored
+ * document: nothing validates it, so an id held twice is repaired by position
+ * instead of being refused. `replaceWithStoredDocument` is that way in. This
+ * makes the repair visible, so a stored document cannot take the wrong way
+ * unnoticed.
+ */
+function warnRepeatedInitialId(ids: readonly string[]): void {
+  console.warn(
+    `Editor content held ${ids.length} node id(s) more than once; the later blocks got new ids. ` +
+      "Load stored documents with replaceWithStoredDocument, which refuses such a document.",
+  );
+}
+
+export const NodeIdentity = Extension.create<NodeIdentityOptions>({
   name: "nodeIdentity",
+
+  addOptions() {
+    return {};
+  },
+
+  addProseMirrorPlugins() {
+    return [createNodeIdentityPlugin(this.options.mint)];
+  },
+
+  // A document created empty has a block with no id yet. It gets one before
+  // the author types, not as a side effect of the first keystroke.
+  onCreate() {
+    const repeated = repeatedNodeIds(this.editor.state.doc);
+    if (repeated.length > 0) {
+      (this.options.onRepeatedInitialId ?? warnRepeatedInitialId)(repeated);
+    }
+    const tr = mintMissingIds(this.editor.state, this.options.mint);
+    if (tr && !this.editor.isDestroyed) {
+      this.editor.view.dispatch(tr.setMeta("preventUpdate", true));
+    }
+  },
 
   addGlobalAttributes() {
     return [
