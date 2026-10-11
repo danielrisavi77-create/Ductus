@@ -156,6 +156,8 @@ describe("loadEvidenceStorageConfig", () => {
     ["a list at the top", envWith([domainA]), /must be an object/],
     ["no timeout", envWith({ domains: [domainA] }), /requestTimeoutMs is missing/],
     ["no domain list", envWith({ requestTimeoutMs: 5_000 }), /domains must be a list/],
+    ["a domain list that is text", envWith({ requestTimeoutMs: 5_000, domains: "fak-a" }), /domains must be a list/],
+    ["a domain list that is an object", envWith({ requestTimeoutMs: 5_000, domains: {} }), /domains must be a list/],
     ["an unknown top-level field", envWith(config([domainA], { fallbackBucket: "x" })), /unknown field/],
     ["an unknown domain field", envWith(config([{ ...domainA, default: true }])), /domain 0: unknown field/],
     ["a domain that is not an object", envWith(config(["fak-a"])), /domain 0 must be an object/],
@@ -248,6 +250,19 @@ describe("loadEvidenceStorageConfig", () => {
         loadEvidenceStorageConfig(envWith(config(shared, { sharedCredentials: "loopback-only" })))
           .domains.map((d) => keysOf(d).accessKeyId),
       ).toEqual(["key-a", "key-a"]);
+    });
+
+    it("refuses a shared key in production, even with every endpoint on loopback (P9)", () => {
+      const shared = [
+        { ...domainA, endpoint: "https://127.0.0.1:9001" },
+        { ...domainB, endpoint: "https://127.0.0.1:9002", accessKeyIdVar: domainA.accessKeyIdVar, secretAccessKeyVar: domainA.secretAccessKeyVar },
+      ];
+      const env = envWith(config(shared, { sharedCredentials: "loopback-only" }));
+
+      expect(loadEvidenceStorageConfig(env).domains).toHaveLength(2);
+      expect(refusal({ ...env, NODE_ENV: "production" }).message).toMatch(
+        /sharedCredentials is not allowed in production/,
+      );
     });
 
     it.each([

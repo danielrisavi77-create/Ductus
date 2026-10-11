@@ -122,8 +122,10 @@ function endpointFrom(value: Record<string, unknown>, where: string): string {
  *
  * Every endpoint is https, or http only to loopback (S14). Two domains never
  * share an institution, a bucket name or an access key (P9).
- * Sharing a key is allowed only with `"sharedCredentials": "loopback-only"`
- * and only when every endpoint is on loopback, i.e. locally and in CI.
+ * Sharing a key is allowed only with `"sharedCredentials": "loopback-only"`,
+ * only when every endpoint is on loopback and never when NODE_ENV is
+ * `production`, as for plain http in the adapter: loopback alone may be a
+ * local proxy to real storage.
  */
 export function loadEvidenceStorageConfig(
   env: Env = process.env,
@@ -147,6 +149,9 @@ export function loadEvidenceStorageConfig(
   }
   if (sharedCredentials !== undefined && sharedCredentials !== "loopback-only") {
     fail(`${where}: sharedCredentials may only be "loopback-only"`);
+  }
+  if (sharedCredentials !== undefined && env.NODE_ENV === "production") {
+    fail(`${where}: sharedCredentials is not allowed in production`);
   }
   if (!Array.isArray(domains)) fail(`${where}: domains must be a list`);
 
