@@ -45,6 +45,13 @@ export type S3EvidencePayloadStoreConfig = {
 
 const BUCKET = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
+/**
+ * The object an operator writes into each bucket when it is provisioned:
+ * `{"institutionId":"<uuid>","region":"<region>"}`. Read only, never written
+ * by the application (BACKEND 4.1, P3).
+ */
+export const STORAGE_IDENTITY_KEY = "ductus-storage-identity.json";
+const MAX_IDENTITY_BYTES = 1_024;
 /** Enough for the `<Code>` of an S3 error document; the rest is never read. */
 const MAX_ERROR_BODY_BYTES = 4_096;
 /**
@@ -195,8 +202,51 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     return { status: "conflict" };
   }
 
+  /**
+   * Reads the bucket's identity label and compares it with what this domain
+   * is configured for. Only GET; a missing, malformed or different label is
+   * `mismatch`, a failed read `unavailable`.
+   */
+  async verifyIdentity(expected: {
+    institutionId: string;
+  }): Promise<
+    | { status: "verified" }
+    | { status: "mismatch" }
+    | { status: "unavailable"; reason: string }
+  > {
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), this.config.requestTimeoutMs);
+    try {
+      const got = await this.send(
+        "GET",
+        [this.config.bucket, STORAGE_IDENTITY_KEY],
+        null,
+        abort.signal,
+      );
+      if (!got.ok) return this.unavailable(got.reason);
+      if (got.status === 404) return { status: "mismatch" };
+      if (got.status !== 200 || got.body === null) {
+        return {
+          status: "unavailable",
+          reason: `storage_get_status_${got.status}`,
+        };
+      }
+      return identityMatches(got.body, {
+        institutionId: expected.institutionId,
+        region: this.config.region,
+      })
+        ? { status: "verified" }
+        : { status: "mismatch" };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   /** Configuration faults are also logged, by fixed reason only. */
-  private unavailable(reason: string): EvidencePayloadPutResult {
+  private unavailable(reason: string): {
+    status: "unavailable";
+    reason: string;
+  } {
     if (reason === "storage_clock_skew" || reason === "storage_signature_rejected") {
       this.warn("evidence storage refused the request signature", { reason });
     }
@@ -247,6 +297,32 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
       };
     }
   }
+}
+
+/** Exactly the two expected fields with the expected values, nothing else. */
+function identityMatches(
+  body: Uint8Array,
+  expected: { institutionId: string; region: string },
+): boolean {
+  if (body.byteLength > MAX_IDENTITY_BYTES) return false;
+  let label: unknown;
+  try {
+    label = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(body));
+  } catch {
+    return false;
+  }
+  if (typeof label !== "object" || label === null || Array.isArray(label)) {
+    return false;
+  }
+  const keys = Object.keys(label).sort();
+  const fields = label as Record<string, unknown>;
+  return (
+    keys.length === 2 &&
+    keys[0] === "institutionId" &&
+    keys[1] === "region" &&
+    fields.institutionId === expected.institutionId &&
+    fields.region === expected.region
+  );
 }
 
 /** The fixed reason for a known S3 error code, or null; the body never leaves. */
