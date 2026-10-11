@@ -1,6 +1,6 @@
 import { createHash, generateKeyPairSync, sign as nodeSign } from "node:crypto";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { EvidenceReceiptPayloadV2, SignedEvidenceReceiptV2 } from "./evidence-receipt";
 import {
@@ -292,6 +292,43 @@ describe("verifier of receipt v2: what was signed (plan attacks 2, 3, 4, 6 and 1
     }
   });
 
+  it("refuses a signature or a key of another size without decoding it", async () => {
+    const decode = vi.spyOn(globalThis, "atob");
+    try {
+      const decodedSizes = () => decode.mock.calls.map(([text]) => text.length);
+      const key = testKey("kljuc-izmisljeni-1");
+      const signed = key.sign(contract.payload);
+      const signatureText = signed.signature.signatureBase64Url;
+      const keyText = key.trusted.keyBase64Url;
+      // Unpadded base64url: 64 bytes are 86 characters, 44 bytes are 59.
+      expect([signatureText.length, keyText.length]).toEqual([86, 59]);
+      expect(await verifySignedEvidenceReceiptV2(signed, EXPECTED, [key.trusted])).toEqual({
+        ok: true,
+        payload: contract.payload,
+      });
+      expect(decodedSizes()).toEqual([86, 59]);
+
+      for (const signatureBase64Url of ["A".repeat(1 << 20), `${signatureText}A`, signatureText.slice(0, -1)]) {
+        decode.mockClear();
+        const signature = { ...signed.signature, signatureBase64Url };
+        expect(await verifySignedEvidenceReceiptV2({ ...signed, signature }, EXPECTED, [key.trusted])).toEqual(
+          refused("receipt_malformed"),
+        );
+        expect(decodedSizes()).toEqual([]);
+      }
+      for (const keyBase64Url of ["A".repeat(1 << 20), `${keyText}A`, keyText.slice(0, -1)]) {
+        decode.mockClear();
+        expect(await verifySignedEvidenceReceiptV2(signed, EXPECTED, [{ ...key.trusted, keyBase64Url }])).toEqual(
+          refused("key_unknown"),
+        );
+        // Only the signature of the receipt was decoded, never the key.
+        expect(decodedSizes()).toEqual([86]);
+      }
+    } finally {
+      decode.mockRestore();
+    }
+  });
+
   it("answers with a refusal, never an exception, for anything that is not plain data", async () => {
     const honest = signedOf(contract);
     for (const value of [
@@ -425,7 +462,7 @@ describe("verifier of receipt v2: evidence domain and key scope (supplement D1, 
   });
 });
 
-describe("verifier of receipt v2: rotation and revocation (supplement D8 to D10; plan answer 6105652638, V1 to V4)", () => {
+describe("verifier of receipt v2: rotation and revocation (supplement D8 to D10; plan answer 6105652638; owner decision 6105677746)", () => {
   // The contract receipt was accepted at 06:05:00.000; T is one millisecond later.
   const T = "2026-10-03T06:05:00.001Z";
   const AFTER = "2026-10-03T06:06:00.000Z";
@@ -479,7 +516,8 @@ describe("verifier of receipt v2: rotation and revocation (supplement D8 to D10;
     }
   });
 
-  it("V4, stricter than the plan answer: refuses a revoked key also for a receipt accepted before the revocation", async () => {
+  it("refuses a revoked key also for a receipt accepted before the revocation (owner decision, option A)", async () => {
+    // Issue 87, comment 6105677746: every receipt of a revoked key is invalid.
     // `acceptedAt` is signed by the revoked key itself, so the holder of a
     // compromised key writes any earlier time. Without a time anchor the key
     // does not control, an honest old receipt and a back-dated one look alike.

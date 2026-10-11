@@ -105,6 +105,11 @@ function decodeBase64Url(
   text: string,
   length: number,
 ): Uint8Array<ArrayBuffer> | null {
+  // Unpadded base64url of n bytes is ceil(4n/3) characters. Asked first, so
+  // a value of any other size is refused before it is decoded or copied.
+  if (text.length !== Math.ceil((length * 4) / 3)) {
+    return null;
+  }
   try {
     const binary = atob(text.replaceAll("-", "+").replaceAll("_", "/"));
     const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
@@ -133,13 +138,13 @@ function decodeBase64Url(
  *   issue 202).
  * - A retired key, one past `validTo` and never revoked, still vouches for a
  *   receipt with `acceptedAt` before `validTo`, and for none from there on.
- * - A revoked key vouches for nothing, whatever `acceptedAt` says. This is
- *   stricter than docs/ARCHITECTURE.md section 8 and than V4 of the plan
- *   answer, which keep what was signed before the revocation. Telling such a
- *   receipt from one back-dated by the holder of the key needs a time anchor
- *   the key does not control (a checkpoint or a timestamp); that is not in
- *   this slice. Until then such a receipt verifies once the new key of the
- *   domain has signed it again.
+ * - A revoked key vouches for nothing, whatever `acceptedAt` says: that field
+ *   is signed by the key itself, so its holder writes any earlier time. Owner
+ *   decision of 11 October 2026, option A (issue 87, comment 6105677746): all
+ *   receipts of a revoked key are invalid and the server issues them again
+ *   under the active key of the domain, with the same payload. Accepting a
+ *   receipt from before the revocation needs a time anchor the key does not
+ *   control and comes with the domain log (wave 2).
  * - `validFrom` is never compared with `acceptedAt`: a receipt reserved
  *   before a rotation is signed afterwards by the new key of the same domain.
  * - Not told apart here: a retired key used after its retirement for a
@@ -147,6 +152,10 @@ function decodeBase64Url(
  *   outside only anchoring in the log does.
  * - A receipt of another revision, also an earlier one of the same
  *   transaction, is refused: a duplicate never passes for a newer commit.
+ * - The segment is not bound here. A commit may have more than one receipt,
+ *   so `ok: true` does not say that the caller's own segment was accepted:
+ *   the caller compares `payload.segmentHash` (and `segmentId` where it has
+ *   one) with the segment it sent.
  */
 export async function verifySignedEvidenceReceiptV2(
   signedReceipt: unknown,
