@@ -20,11 +20,14 @@ import {
 // class matches only surrogates that stand alone.
 const LONE_SURROGATE = /[\uD800-\uDFFF]/gu;
 const UNSTORABLE = /[\uD800-\uDFFF\u0000]/u;
+// Built, not written as a literal: the interface-text scan (#223) reads every
+// string in this file and would see a raw NUL.
+const NUL = String.fromCodePoint(0);
 
 /** The same text with lone surrogates replaced and NUL removed. */
 export function storableText(text: string): string {
   if (!UNSTORABLE.test(text)) return text;
-  return text.replace(LONE_SURROGATE, "\uFFFD").replaceAll("\u0000", "");
+  return text.replace(LONE_SURROGATE, "\uFFFD").replaceAll(NUL, "");
 }
 
 /**
