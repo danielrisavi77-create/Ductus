@@ -232,9 +232,12 @@ export class LocalDocumentSaver {
       // while a newer read overtakes the retry too (#206 Codex r4240797922);
       // a retry behind what it was asked to reach means the journal itself
       // went back. Each retry needs `seen` to grow, so the loop ends.
-      // Anything but a number (a stored BigInt makes `Math.max` throw) is left
-      // to `consistent()`, which reports it as corrupt (#206 Codex r4240729191).
-      const recorded = typeof meta?.localSeq === "number" ? meta.localSeq : 0;
+      // Anything but a sequence (a stored BigInt makes `Math.max` throw, a NaN
+      // would stop every later retry) is left to `consistent()`, which reports
+      // it as corrupt (#206 Codex r4240729191, qa206j VAŽNO).
+      const localSeq: unknown = meta?.localSeq;
+      const recorded = typeof localSeq === "number" && Number.isSafeInteger(localSeq) && localSeq >= 0
+        ? localSeq : 0;
       if (recorded < this.seen && recorded >= floor) return await this.read(basis, this.seen);
       this.seen = Math.max(this.seen, recorded);
       const stored = snapshot ? validateDocument(snapshot.document) : null;

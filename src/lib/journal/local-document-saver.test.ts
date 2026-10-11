@@ -109,6 +109,23 @@ describe("LocalDocumentSaver: normal path and reload (controls)", () => {
     expect(target.snapshot().state).toBe("LOCAL_DURABLE");
   });
 
+  it("the next write carries the revision the loaded snapshot holds (#206 qa206j MANJE)", async () => {
+    for (const revision of [0, 23, 2 ** 40, Number.MAX_SAFE_INTEGER]) {
+      const real = journal(scope());
+      const createdAt = "2026-10-10T20:00:00.000Z";
+      await real.saveLocal(DOC, {
+        kind: "REPLACE_DOCUMENT", clientTransactionId: `rev-${revision}`, baseRevision: revision,
+        document: text("učitano"), createdAt,
+      }, createdAt, 0);
+      const target = saver(real);
+      expect((await target.load()).kind).toBe("ready");
+      await type(target, "novo");
+      const { snapshot, pending } = await real.read(DOC);
+      expect(pending.at(-1)!.tx).toMatchObject({ baseRevision: revision, document: text("novo") });
+      expect(snapshot!.revision).toBe(revision);
+    }
+  });
+
   it("two documents in one scope both save", async () => {
     const at = scope();
     const a = new LocalDocumentSaver(journal(at), "doc-a", deps);
@@ -1466,6 +1483,70 @@ describe("LocalDocumentSaver: resume() contract (#206 r6)", () => {
     const stale = (value: string) => ({ kind: "recovery", reason: "stale", document: text(value) });
     expect(results).toEqual([stale("B2"), stale("B3"), stale("B3")]);
     expect(calls).toBe(5);
+  });
+
+  it("r6: a NaN sequence read as corrupt never stops a later held read from reading again (#206 qa206j VAŽNO)", async () => {
+    const at = scope();
+    const real = journal(at);
+    let armed = false;
+    let open = () => {};
+    let entered = () => {};
+    const held = new Promise<void>((resolve) => { entered = resolve; });
+    const target = saver(patched(real, {
+      // Held after it has read: its contents are older than what comes next.
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        const contents = await real.read(...args);
+        if (armed) {
+          armed = false;
+          const gate = new Promise<void>((resolve) => { open = resolve; });
+          entered();
+          await gate;
+        }
+        return contents;
+      },
+    }));
+    const writer = saver(journal(at));
+    await writer.load();
+    await type(writer, "staro");
+    expect((await target.load()).kind).toBe("ready");
+    const db = (real as unknown as { db: Dexie }).db;
+    await db.table("meta").update(DOC, { localSeq: Number.NaN });
+    expect(await target.load()).toEqual({ kind: "recovery", reason: "corrupt", document: null });
+    await db.table("meta").update(DOC, { localSeq: 1 });
+    armed = true;
+    const older = target.load();
+    await held;
+    await type(writer, "novo");
+    const stale = { kind: "recovery", reason: "stale", document: text("novo") };
+    expect(await target.load()).toEqual(stale);
+    open();
+    expect(await older).toEqual(stale);
+    await target.settled();
+    expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+  });
+
+  it("r6: settled() called between two resumes waits for both, not for the first one's end (#206 qa206j MANJE)", async () => {
+    const at = scope();
+    const { a, b } = await staleTab(at);
+    await type(b, "B2");
+    let fired = false;
+    let done = false;
+    let second: Promise<LoadResult> | undefined;
+    // After the first resume's read is stale, before that resume has ended.
+    a.subscribe((s) => {
+      if (fired || s.state !== "ERROR") return;
+      fired = true;
+      queueMicrotask(() => queueMicrotask(() => {
+        void a.settled().then(() => { done = true; });
+        second = a.resume(text("drugi odabir"));
+      }));
+    });
+    expect(await a.resume(text("prvi odabir"))).toEqual({ kind: "recovery", reason: "stale", document: text("B2") });
+    expect(second).toBeDefined();
+    expect((await second!).kind).toBe("ready");
+    for (let i = 0; i < 5; i += 1) await new Promise((resolve) => setImmediate(resolve));
+    expect(done).toBe(true);
+    expect((await rows(at)).at(-1)).toEqual(text("drugi odabir"));
   });
 
   it("r6: text proposed while a failed read halted the saver is written by the next ready reload", async () => {
