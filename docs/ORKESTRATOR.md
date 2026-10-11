@@ -154,7 +154,7 @@ Orkestrator prati samo sesije koje rade na repou Ductus (Ductura). Ostale sesije
 | CLI posao drugog providera (Codex, Grok) | orkestrator, u potpunosti | writer kad ta kvota postoji; pregled samo kao advisory nalaz |
 | Sesija u oblaku ili desktop aplikaciji | desktop sesije i stalne sesije pokreće Daniel; jednokratne review i QA sesije te jednokratne pisce u oblaku pokreće orkestrator (vidi niže); orkestrator im šalje zadatak i prati ih preko GitHuba | kanonski review i QA; dugi poslovi; pisanje bez lokalnog stoga |
 
-**Sesija u oblaku koju pokreće orkestrator (Daniel, 10. 10. 2026.).** Orkestrator smije sam, bez pitanja, pokrenuti review ili QA sesiju u oblaku kad mu zatreba, kao jednokratnu rutinu, alatom za rutine u oblaku koji mu je dostupan u njegovu runtimeu (naziv alata ovisi o okruženju). Sve QA sesije i jednokratne review sesije otvara orkestrator (review: Daniel, 11. 10. 2026.); sesija dobiva neutralan zadatak i karticu svoje uloge iz `.claude/uloge/` i gasi se nakon verdikta. Desktop sesije pokreće samo Daniel. Uvjeti:
+**Sesija u oblaku koju pokreće orkestrator (Daniel, 10. 10. 2026.).** Orkestrator smije sam, bez pitanja, pokrenuti review ili QA sesiju u oblaku kad mu zatreba, kao jednokratnu rutinu, alatom za rutine u oblaku koji mu je dostupan u njegovu runtimeu (naziv alata ovisi o okruženju). Sve QA sesije i jednokratne review sesije otvara orkestrator (review: Daniel, 11. 10. 2026.), osim reviewa PR-a koji je napisao pisac kojeg je pokrenuo orkestrator (odlomak "Jednokratni pisac u oblaku", zadnji uvjet); sesija dobiva neutralan zadatak i karticu svoje uloge iz `.claude/uloge/` i gasi se nakon verdikta. Desktop sesije pokreće samo Daniel. Uvjeti:
 
 - na `critical` PR-u koji je orkestratorov vlastiti ili PR njegova podagenta (`claude:a:*`) barem jedan od dva PASS-a mora doći iz sesije koju je otvorio Daniel. Zato orkestrator za takve PR-ove pokreće samo QA, a review daje sesija koju je otvorio Daniel; PASS dviju sesija koje je obje pokrenuo orkestrator ne zadovoljava uvjet za spajanje takvog PR-a;
 
@@ -177,7 +177,7 @@ Orkestrator prati samo sesije koje rade na repou Ductus (Ductura). Ostale sesije
 - kad patch jednokratnog pisca commita druga sesija, pisac patcha i sesija koja ga commita obje su autori PR-a: obje se imenuju u opisu PR-a i nijedna ne daje review ni QA verdikt na tom PR-u;
 - jednokratni pisac ne može slati poruke (§5), pa je trag rada na PR-u (`SESSIONS.md` §2 t. 4) jedini signal da je napredovao ili stao. Stalne sesije u oblaku koje je otvorio Daniel javljaju se i porukom po §5;
 - svako pokretanje orkestrator bilježi na koordinacijskom issueu (trenutačno #87): PR ili zadatak, slot, model, ID rutine i polazni head;
-- pisac i reviewer istog PR-a nikad nisu oboje orkestratorovi: PR jednokratnog pisca dobiva review od sesije koju je otvorio Daniel, kao u prvom uvjetu odlomka iznad.
+- pisac i reviewer istog PR-a nikad nisu oboje orkestratorovi (D-106): PR koji napiše pisac kojeg je pokrenuo orkestrator, jednokratni pisac u oblaku ili lokalni podagent `claude:a:*`, dobiva review od sesije koju je otvorio Daniel, za svaki risk; QA za takav PR smije pokrenuti orkestrator.
 
 **Plan napada prije koda (Daniel, 10. 10. 2026.; mjesto objave: https://github.com/danielrisavi77-create/Ductus/pull/165#issuecomment-6100851850).** Za svaki zadatak s `Risk: critical` orkestrator prije dodjele pokreće sesiju koja napiše plan napada: jednokratnu QA ili review sesiju u oblaku. Pravila:
 
