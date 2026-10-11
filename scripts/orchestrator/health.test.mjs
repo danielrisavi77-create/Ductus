@@ -327,6 +327,8 @@ test("U1/N1/N2: old-head FAIL, App-less, quoted, fenced and non-first-line verdi
     verdict(H2, "FAIL", 300),
     verdict(H1, "FAIL", 300, { performed_via_github_app: null }),
     verdict(H1, "FAIL", 300, { author_association: "NONE" }),
+    verdict(H1, "FAIL", 300, { author_association: "COLLABORATOR", user: { login: "helper", type: "User" } }),
+    verdict(H1, "FAIL", 300, { user: { login: "app[bot]", type: "Bot" } }),
     comment(`> Agent-Review: claude:rev:reviewer\n> Review-Head: ${H1}\n> Review-Verdict: FAIL`, { created_at: at(300) }),
     comment(`\`\`\`\nAgent-Review: claude:rev:reviewer\nReview-Head: ${H1}\nReview-Verdict: FAIL\n\`\`\``, { created_at: at(300) }),
     comment(`Hi\nAgent-Review: claude:rev:reviewer\nReview-Head: ${H1}\nReview-Verdict: FAIL`, { created_at: at(300) }),

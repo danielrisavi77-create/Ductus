@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { evaluateGate, field } from "./review-gate-core.mjs";
+import { TRUSTED_VERDICT_LOGINS, evaluateGate, field, trustedAuthor } from "./review-gate-core.mjs";
 
 const head = "a".repeat(40);
 const author = "claude:a:backend";
@@ -187,13 +187,43 @@ test("untrusted outsider cannot spoof a review PASS", () => {
   assert.equal(result.state, "pending");
 });
 
-test("trusted collaborator review can satisfy the gate", () => {
-  const result = evaluate({
-    body: prBody(),
-    headSha: head,
-    comments: [review({ login: "trusted-reviewer", association: "COLLABORATOR", appSlug: "claude" })],
-  });
-  assert.equal(result.state, "success");
+test("write access alone does not make a collaborator or member a verdict author", () => {
+  for (const association of ["COLLABORATOR", "MEMBER"]) {
+    const result = evaluate({
+      body: prBody(),
+      headSha: head,
+      comments: [review({ login: "trusted-reviewer", association, appSlug: "claude" })],
+    });
+    assert.equal(result.state, "pending");
+  }
+  assert.deepEqual(TRUSTED_VERDICT_LOGINS, []);
+  assert.ok(Object.isFrozen(TRUSTED_VERDICT_LOGINS));
+});
+
+test("listed collaborator review can satisfy the gate", () => {
+  for (const association of ["COLLABORATOR", "MEMBER"]) {
+    const result = evaluateGate({
+      body: prBody(),
+      headSha: head,
+      ownerLogin,
+      trustedLogins: ["trusted-reviewer"],
+      comments: [review({ login: "trusted-reviewer", association, appSlug: "claude" })],
+    });
+    assert.equal(result.state, "success");
+  }
+});
+
+test("a listed login counts only as a person with write access", () => {
+  const listed = { user: { login: "trusted-reviewer", type: "User" }, author_association: "COLLABORATOR" };
+  assert.equal(trustedAuthor(listed, ["trusted-reviewer"]), true);
+  assert.equal(trustedAuthor({ ...listed, user: { login: "trusted-reviewer", type: "Bot" } }, ["trusted-reviewer"]), false);
+  for (const association of ["NONE", "CONTRIBUTOR", "FIRST_TIME_CONTRIBUTOR", undefined]) {
+    assert.equal(trustedAuthor({ ...listed, author_association: association }, ["trusted-reviewer"]), false);
+  }
+  assert.equal(trustedAuthor({ ...listed, user: { type: "User" } }, ["trusted-reviewer"]), false);
+  assert.equal(trustedAuthor({ ...listed, user: { login: "Trusted-Reviewer", type: "User" } }, ["trusted-reviewer"]), false);
+  assert.equal(trustedAuthor({ user: { login: "x", type: "User" }, author_association: "OWNER" }), true);
+  assert.equal(trustedAuthor({ user: { login: "x[bot]", type: "Bot" }, author_association: "OWNER" }), false);
 });
 
 // Shape of a recorded App bot comment (issue comment 6111258117 on #267); GitHub
