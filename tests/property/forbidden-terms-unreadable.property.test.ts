@@ -1,6 +1,11 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
 import { fc, test } from "@fast-check/vitest";
 import { expect } from "vitest";
 
+import { findUnreadableText, scanUiText } from "../../scripts/forbidden-terms/scan";
 import { findForbiddenTerms, findForbiddenTermsInMarkup, unreadableCharacters, PHRASE_BREAK } from "../../scripts/forbidden-terms/terms";
 
 // A dictionary entry with one of its letters swapped for a letter that looks
@@ -65,3 +70,37 @@ test.prop([fc.constantFrom(...SAMPLES, ...ENGLISH), fc.array(fc.nat(), { minLeng
   const found = findForbiddenTermsInMarkup(joined, joined).map((term) => term.entry);
   for (const entry of expected) expect(found).toContain(entry);
 });
+
+// QA of f8722f4: a space of another width, a symbol without ink or a symbol
+// drawn like a letter, put between two halves of an entry as a part of its
+// own, never passes, whatever the halves and however the text is put together.
+const ODD_PARTS = [0x2009, 0x200a, 0x202f, 0x2002, 0x2005, 0x2006, 0x205f, 0x3000, 0x1680, 0x2800, 0x1d159, 0x2228, 0x222a, 0x2218, 0xa2, 0xb4, 0x2192, 0x1f600];
+const WAYS: readonly ((before: string, odd: string, after: string) => string)[] = [
+  (before, odd, after) => `<p>${before}{${odd}}${after}</p>`,
+  (before, odd, after) => `<p>${before}<span>{${odd}}</span>${after}</p>`,
+  (before, odd, after) => `<p><b>${before}</b><i>{${odd}}</i><b>${after}</b></p>`,
+  (before, odd, after) => `<p>{[${JSON.stringify(before)}, ${odd}, ${JSON.stringify(after)}]}</p>`,
+  (before, odd, after) => `<p>{\`${before}\${${odd}}${after}\`}</p>`,
+  (before, odd, after) => `<img alt={${JSON.stringify(before)} + ${odd} + ${JSON.stringify(after)}} />`,
+  (before, odd, after) => `<p>${before}{n}{${odd}}${after}</p>`,
+  (before, odd, after) => `<div><div>${before}</div><div>{${odd}}</div><div>${after}</div></div>`,
+];
+
+test.prop([sample, fc.nat(), fc.array(fc.constantFrom(...ODD_PARTS), { minLength: 1, maxLength: 2 }), fc.constantFrom(...WAYS)])(
+  "an entry with an odd part of its own between two of its letters never passes",
+  (text, at, codes, way) => {
+    const letters = [...text];
+    // Between two letters: a part next to the space of a phrase leaves the phrase whole.
+    const places = letters.flatMap((_, index) => (index > 0 && letters[index - 1] !== " " && letters[index] !== " " ? [index] : []));
+    const index = places[at % places.length]!;
+    const root = mkdtempSync(path.join(tmpdir(), "ductus-terms-"));
+    try {
+      mkdirSync(path.join(root, "src", "components"), { recursive: true });
+      const line = way(letters.slice(0, index).join(""), JSON.stringify(String.fromCodePoint(...codes)), letters.slice(index).join(""));
+      writeFileSync(path.join(root, "src", "components", "Case.tsx"), `export const Case = ({ n }: Props) => (\n  ${line}\n);\n`);
+      expect(scanUiText(root).length + findUnreadableText(root).length).toBeGreaterThan(0);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);

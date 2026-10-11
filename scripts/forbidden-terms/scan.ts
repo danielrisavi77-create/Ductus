@@ -869,8 +869,11 @@ export interface Unreadable {
  * by the repository test, are:
  *
  * - every string of a scanned file, interface text or not, that holds a
- *   character on `unreadableCharacters`: a letter of another script, a code
- *   point that is no character, an inkless symbol or space inside a word.
+ *   character on `unreadableCharacters`: a letter or digit of another
+ *   script, a code point that is no character, a symbol or an unusual space
+ *   between two letters. The same is asked of every text put together from
+ *   parts, read closed up, so that such a character cannot come in as a part
+ *   of its own between two parts with letters.
  *   The scope is wide on purpose, for the reason `scanUiText` checks every
  *   string against the Croatian entries: a string outside the text the scan
  *   reads can still reach the interface through a variable, and a letter
@@ -892,12 +895,20 @@ export function findUnreadableText(root: string): Unreadable[] {
     const content = readFileSync(path.join(root, file), "utf8");
     const read = kind === null ? NOTHING_READ : locate(file, content, kind);
     const others = kind === "catalogue" || !isCode(file) ? [] : stringsOutside(read.texts, file, content);
-    for (const text of [...read.texts, ...others]) {
-      const characters = unreadableCharacters(text.text);
-      if (characters.length > 0) unreadable.push({ file, line: text.line, reason: `characters outside interface text: ${characters.join(", ")} (${UNREADABLE_HINTS.characters})` });
+    const strings = [...read.texts, ...others].map((text) => ({ ...text, characters: unreadableCharacters(text.text) }));
+    for (const text of strings) {
+      if (text.characters.length > 0) unreadable.push({ file, line: text.line, reason: `characters outside interface text: ${text.characters.join(", ")} (${UNREADABLE_HINTS.characters})` });
     }
     for (const unit of read.units) {
       if (unit.overflowed) unreadable.push({ file, line: unit.line, reason: `more than ${MAX_READINGS} readings of one text (${UNREADABLE_HINTS.readings})` });
+      // A character that is harmless by itself can stand between two parts
+      // with letters, so the text is read as the parts make it, closed up as
+      // the dictionary reads it. What a string of the unit already reported
+      // is not reported a second time.
+      const reported = new Set(strings.filter((text) => unit.start <= text.start && text.end <= unit.end).flatMap((text) => text.characters));
+      const joined = unit.readings.flatMap(([text]) => unreadableCharacters(text.replaceAll(PHRASE_BREAK, "")));
+      const characters = [...new Set(joined)].filter((code) => !reported.has(code));
+      if (characters.length > 0) unreadable.push({ file, line: unit.line, reason: `characters outside interface text, where its parts meet: ${characters.join(", ")} (${UNREADABLE_HINTS.characters})` });
     }
   }
   return unreadable;

@@ -264,11 +264,27 @@ export function findForbiddenTermsInMarkup(joined: string, spaced: string, close
   });
 }
 
-/** White space that may stand between two letters of one text without being reported. */
+/**
+ * White space that may stand between two letters of one text without being
+ * reported. The narrow no-break space (U+202F) is left out on purpose: it is
+ * thin enough to cut a word without showing, and where typography wants it,
+ * between a number and its unit, it does not stand between two letters.
+ */
 const PLAIN_SPACE = /[ \u00A0]/u;
-/** A run of symbols and spaces that touches a letter on both sides. */
-const INSIDE_A_WORD = /(?<=\p{L})[\p{So}\p{Zs}]+(?=\p{L})/gu;
-const NEVER_TEXT = /[\p{Co}\p{Cn}\p{Cs}]/gu;
+/** A run of anything but letters and digits that touches a letter on both sides. */
+const BETWEEN_LETTERS = /(?<=\p{L})[^\p{L}\p{N}]+(?=\p{L})/gu;
+/** A symbol or a space, of any kind. */
+const SYMBOL_OR_SPACE = /[\p{S}\p{Zs}]/u;
+/** A mathematical, currency or modifier symbol that touches a letter. */
+const SYMBOL_AT_A_LETTER = /(?<=\p{L})[\p{Sm}\p{Sc}\p{Sk}]|[\p{Sm}\p{Sc}\p{Sk}](?=\p{L})/gu;
+/**
+ * Private use, unassigned and surrogate code points, and control characters.
+ * The five controls that are white space (tab, line feed, vertical tab, form
+ * feed, carriage return) are text: code that reads white space names them.
+ */
+const NEVER_TEXT = /[\p{Co}\p{Cn}\p{Cs}]|(?![\t\n\v\f\r])\p{Cc}/gu;
+/** A character typed on a keyboard; what it looks like is for the reader of the source to judge. */
+const isAscii = (char: string): boolean => char.codePointAt(0)! < 0x80;
 
 /**
  * Characters that interface text may not hold, each once, as `U+XXXX`. The
@@ -279,16 +295,35 @@ const NEVER_TEXT = /[\p{Co}\p{Cn}\p{Cs}]/gu;
  * - a letter that does not fold to `a`-`z` (`foldLetters`): Cyrillic, Greek,
  *   a dotless i, an IPA letter. Croatian letters and other Latin letters with
  *   a diacritic fold, and so do the compatibility forms NFKC knows;
- * - a private use, unassigned or surrogate code point, wherever it stands;
- * - a symbol with no ink (a Braille blank, a musical null note) or a space
- *   other than `PLAIN_SPACE` between two letters with no plain space next to it.
+ * - a digit or number that does not fold to ASCII digits and Latin letters:
+ *   the digits of other scripts, some of which are drawn like a Latin letter;
+ * - a private use, unassigned or surrogate code point and a control character
+ *   that is not white space, wherever it stands;
+ * - between two letters with no `PLAIN_SPACE` between them: every symbol and
+ *   every space that is not ASCII. That is a symbol with no ink (a Braille
+ *   blank), a space of another width, a symbol drawn like a letter (a
+ *   mathematical operator, a currency sign) and also an emoji, which is
+ *   reported on purpose: two words with only a symbol between them read as
+ *   one to the dictionary's reader as well, so they are set apart with a space;
+ * - a mathematical, currency or modifier symbol that is not ASCII and touches
+ *   a letter on either side, since it can stand for the first or the last
+ *   letter of a word. Other symbols at the edge of a word (a degree sign, a
+ *   trade mark) are left alone, because that is where they are written.
+ *
+ * ASCII symbols and digits are not reported whatever they resemble.
  */
 export function unreadableCharacters(text: string): string[] {
   const found: string[] = [...(text.match(NEVER_TEXT) ?? [])];
-  for (const char of text) if (/\p{L}/u.test(char) && !/^[a-z]*$/.test(foldLetters(char))) found.push(char);
+  for (const char of text) {
+    const folded = foldLetters(char);
+    if (/\p{L}/u.test(char) ? !/^[a-z]*$/.test(folded) : /\p{N}/u.test(char) && /[^a-z0-9]/.test(folded.replace(/[^\p{L}\p{N}]/gu, ""))) found.push(char);
+  }
   // Without what the dictionary matching drops anyway, so that such a character next to the run does not hide it.
   const bare = text.replace(INVISIBLE, "").replace(/\p{M}/gu, "");
-  for (const run of bare.match(INSIDE_A_WORD) ?? []) if (!PLAIN_SPACE.test(run)) found.push(...run);
+  for (const run of bare.match(BETWEEN_LETTERS) ?? []) {
+    if (!PLAIN_SPACE.test(run)) found.push(...[...run].filter((char) => SYMBOL_OR_SPACE.test(char) && !isAscii(char)));
+  }
+  found.push(...(bare.match(SYMBOL_AT_A_LETTER) ?? []).filter((char) => !isAscii(char)));
   const codes = found.map((char) => `U+${char.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")}`);
   return [...new Set(codes)];
 }
