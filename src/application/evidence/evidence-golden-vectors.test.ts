@@ -12,6 +12,7 @@ import type {
   EvidenceChainReader,
   EvidencePayloadReader,
 } from "@/application/ports/evidence-reconstruction";
+import { EDIT_STEP_FORMAT_V1, parseEditSteps } from "@/domain/document/edit-step";
 import { MAX_EVIDENCE_SEGMENT_BYTES } from "@/domain/forensics/evidence-chain-v2";
 import type { SignedEvidenceReceipt } from "@/domain/forensics/evidence-receipt";
 import type { EvidenceStepReplayerV2 } from "@/domain/forensics/evidence-replay-v2";
@@ -43,36 +44,53 @@ const goldenKey = goldenKeyVerifier(chain.verificationKey);
 const emptyDocument = chain.documentStates[0];
 const finalDocument = chain.documentStates[chain.documentStates.length - 1];
 
-type TextDocument = { nodes: { id: string; text: string }[] };
+type TextNode = { type: "text"; text: string; marks: [] };
+type ParagraphDocument = {
+  schemaVersion: 1;
+  nodes: { type: "paragraph"; id: string; children: TextNode[] }[];
+};
 
-/** The invented step format of the vectors: insert text at a UTF-16 offset of one node. */
-const replayer: EvidenceStepReplayerV2<TextDocument> = {
-  transactionFormat: chain.segments[0].segment.captureContext.transactionFormat,
-  load: (canonical) => structuredClone(canonical as TextDocument),
-  apply: (document, event) =>
-    event.steps.reduce<TextDocument>((current, step) => {
-      const { kind, nodeId, offset, text, ...unknown } = step;
-      const node = current.nodes.find((candidate) => candidate.id === nodeId);
+/**
+ * The steps of the vectors in ductus-edit-steps-v1: each inserts plain text
+ * at a ProseMirror position of a paragraph document. Only that subset is
+ * replayed here; text of a paragraph starts at 1, and every paragraph adds 2.
+ */
+const replayer: EvidenceStepReplayerV2<ParagraphDocument> = {
+  transactionFormat: EDIT_STEP_FORMAT_V1,
+  load: (canonical) => structuredClone(canonical as ParagraphDocument),
+  apply: (document, event) => {
+    const parsed = parseEditSteps(EDIT_STEP_FORMAT_V1, event.steps);
+    if (!parsed.ok) throw new Error("unsupported step");
+    return parsed.steps.reduce<ParagraphDocument>((current, step) => {
+      const content = step.stepType === "replace" ? step.slice?.content : undefined;
+      const [inserted, ...rest] = content ?? [];
       if (
-        kind !== "insert-text" ||
-        node === undefined ||
-        typeof offset !== "number" ||
-        !Number.isInteger(offset) ||
-        offset < 0 ||
-        offset > node.text.length ||
-        typeof text !== "string" ||
-        Object.keys(unknown).length > 0
+        step.stepType !== "replace" ||
+        step.from !== step.to ||
+        step.structure !== undefined ||
+        step.slice?.openStart !== undefined ||
+        step.slice?.openEnd !== undefined ||
+        inserted?.type !== "text" ||
+        (inserted.marks ?? []).length > 0 ||
+        rest.length > 0
       ) {
         throw new Error("unsupported step");
       }
-      return {
-        nodes: current.nodes.map((other) =>
-          other === node
-            ? { id: node.id, text: node.text.slice(0, offset) + text + node.text.slice(offset) }
-            : other,
-        ),
-      };
-    }, document),
+      let start = 1;
+      const nodes = current.nodes.map((node) => {
+        const text = node.children[0]?.text ?? "";
+        const offset = step.from - start;
+        start += text.length + 2;
+        if (offset < 0 || offset > text.length) return node;
+        const next = text.slice(0, offset) + inserted.text + text.slice(offset);
+        return { ...node, children: [{ type: "text" as const, text: next, marks: [] as [] }] };
+      });
+      if (nodes.every((node, index) => node === current.nodes[index])) {
+        throw new Error("unsupported step");
+      }
+      return { ...current, nodes };
+    }, document);
+  },
   toCanonical: (document) => document,
 };
 

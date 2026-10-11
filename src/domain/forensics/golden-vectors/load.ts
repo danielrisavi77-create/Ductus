@@ -105,6 +105,17 @@ export type GoldenVectors = {
       reason: "invalid";
     }[];
   };
+  /** DAN-183 (Z10): only steps of the closed format ductus-edit-steps-v1. */
+  stepFormat: {
+    /** The chain segments of this file before DAN-183, byte for byte, with the test insert format. */
+    formerSegments: {
+      name: string;
+      formerSegmentHash: string;
+      byteLength: number;
+      canonicalUtf8Hex: string;
+      reason: "invalid";
+    }[];
+  };
   sizeLimit: {
     maxSegmentBytes: number;
     segmentWithoutPadding: EvidenceSegmentV2;

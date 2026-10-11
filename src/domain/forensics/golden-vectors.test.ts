@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
+import { EDIT_STEP_FORMAT_V1, parseEditSteps } from "../document/edit-step";
 import {
   MAX_EVIDENCE_SEGMENT_BYTES,
   verifyCanonicalEvidencePayloadV2,
@@ -156,8 +157,12 @@ describe("golden vectors: segment hash and chain", () => {
     expect(MAX_EVIDENCE_SEGMENT_BYTES).toBe(sizeLimit.maxSegmentBytes);
     const padded = (extra: string) => {
       const segment = structuredClone(sizeLimit.segmentWithoutPadding);
-      segment.events[0].steps[0].text =
-        sizeLimit.padding.unit.repeat(sizeLimit.padding.count) + extra;
+      const text = sizeLimit.padding.unit.repeat(sizeLimit.padding.count) + extra;
+      // The padding is the text of the one inserted text node of the first step.
+      segment.events[0].steps[0] = {
+        ...segment.events[0].steps[0],
+        slice: { content: [{ type: "text", text }] },
+      };
       return utf8.encode(canonicalizeJcs(segment));
     };
 
@@ -219,6 +224,40 @@ describe("golden vectors: time in a segment (D-24, D-56)", () => {
     expect(formerSegments.map((former) => former.formerSegmentHash)).toEqual([
       "8a95172066e145b5b890b9a73a3b4ccedbdceaf46ec8c373d2b35e94328f692e",
       "af2a408d76db01c7b95962f8f854a460b3491879f39b033ebed725587e948cb4",
+    ]);
+  });
+});
+
+describe("golden vectors: step format (DAN-183)", () => {
+  const { formerSegments } = vectors.stepFormat;
+
+  it("writes every chain step in the closed format ductus-edit-steps-v1", () => {
+    for (const { segment } of chain.segments) {
+      expect(segment.captureContext).toEqual({
+        editorModel: "prosemirror",
+        transactionFormat: EDIT_STEP_FORMAT_V1,
+      });
+      for (const event of segment.events) {
+        expect(parseEditSteps(segment.captureContext.transactionFormat, event.steps).ok).toBe(true);
+      }
+    }
+  });
+
+  it.each(formerSegments)("keeps $name byte for byte, with the test insert format", (former) => {
+    const bytes = fromHex(former.canonicalUtf8Hex);
+    const text = strictText(bytes) ?? "";
+    expect(createHash("sha256").update(bytes).digest("hex")).toBe(former.formerSegmentHash);
+    expect(bytes.byteLength).toBe(former.byteLength);
+    expect(canonicalizeJcs(JSON.parse(text))).toBe(text);
+    const segment = JSON.parse(text) as { captureContext: { transactionFormat: string } };
+    expect(segment.captureContext.transactionFormat).toBe("ductus-test-insert-text-v0");
+  });
+
+  it("keeps both chain segments from before DAN-183 as former vectors", () => {
+    // The segment hashes of the file before DAN-183.
+    expect(formerSegments.map((former) => former.formerSegmentHash)).toEqual([
+      "51238852b959a72b9efcb2474f3a1a55389bc18e41f5279e8ecb2d9d0de0e5c5",
+      "2f84791c701f57d122195c947dd63fb52f8260d188a0cd41d48a5dcf6ab16659",
     ]);
   });
 });
