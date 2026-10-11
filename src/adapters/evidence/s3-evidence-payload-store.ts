@@ -274,15 +274,23 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
       canonicalPayload: given.canonicalPayload,
     };
     const abort = new AbortController();
+    // Runs synchronously up to its first fetch, whose deadline check is the
+    // last clock reading; the timer gets what is left of the deadline from
+    // there, never a fresh interval. No reading at all leaves nothing.
+    const run = this.attempt(input, phase, abort.signal);
+    const left = phase.deadline - phase.read;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const expired = new Promise<EvidencePayloadPutResult>((resolve) => {
-      timer = setTimeout(() => {
-        resolve(this.expire(input, phase));
-        abort.abort();
-      }, this.requestTimeoutMs);
+      timer = setTimeout(
+        () => {
+          resolve(this.expire(input, phase));
+          abort.abort();
+        },
+        Number.isFinite(left) ? Math.max(0, Math.ceil(left)) : 0,
+      );
     });
     try {
-      return await Promise.race([this.attempt(input, phase, abort.signal), expired]);
+      return await Promise.race([run, expired]);
     } finally {
       clearTimeout(timer);
     }
@@ -356,10 +364,9 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
         reason: `storage_get_status_${get.status}`,
       };
     }
-    // The input's hash was checked against the bytes sent, so the hash of
-    // the bytes at the key decides; a byte comparison could add nothing short
-    // of a SHA-256 collision.
-    const same = sha256Hex(get.body) === input.segmentHash;
+    // Only identical bytes are the same object, as after a 200: the port
+    // promises bytes, not a hash.
+    const same = sameBytes(get.body, bytes);
     // Checked after comparing, right before the outcome: past the deadline
     // neither existing nor conflict, and no late conflict log.
     if (late(phase)) return this.expire(input, phase);

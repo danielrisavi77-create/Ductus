@@ -1432,8 +1432,8 @@ describe("one monotonic deadline (QA qa233d)", () => {
   ])(
     "a deadline that passes while comparing the bytes at the key is a timeout, not %s",
     async (_, held) => {
-      // Hashing the read-back is the first non-empty hash after the GET; it
-      // spends the whole deadline on this clock.
+      // Comparing the read-back byte by byte is the first comparison after
+      // the GET; it spends the whole deadline on this clock.
       let now = performance.now();
       let afterGet = false;
       let spent = 0;
@@ -1443,25 +1443,25 @@ describe("one monotonic deadline (QA qa233d)", () => {
       });
       s3.objects.set(keyOf(PACKAGE, hashOf(payload("a"))), new TextEncoder().encode(payload(held)));
       const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 60_000 });
-      const hash = Object.getPrototypeOf(createHash("sha256")) as {
-        update: (data: Uint8Array) => unknown;
-      };
-      const realUpdate = hash.update;
-      const update = vi
-        .spyOn(hash, "update")
-        .mockImplementation(function (this: unknown, data: Uint8Array) {
-          if (afterGet && data.byteLength > 0) {
+      const realEvery = Uint8Array.prototype.every;
+      const every = vi
+        .spyOn(Uint8Array.prototype, "every")
+        .mockImplementation(function (
+          this: Uint8Array,
+          ...args: Parameters<Uint8Array["every"]>
+        ) {
+          if (afterGet) {
             now += 1_000_000;
             spent += 1;
           }
-          return realUpdate.call(this, data);
+          return realEvery.apply(this, args);
         });
       const clock = vi.spyOn(performance, "now").mockImplementation(() => now);
       try {
         await expect(put(store, "a")).resolves.toEqual(timeout);
       } finally {
         clock.mockRestore();
-        update.mockRestore();
+        every.mockRestore();
       }
       expect(spent).toBe(1);
       expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
@@ -2158,5 +2158,36 @@ describe("the input is read once (QA qa233f)", () => {
       spy.mockRestore();
     }
     expect(s3.calls).toEqual([]);
+  });
+
+  it("gives the timer only what a slow getter left of the deadline", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const clock = { now: 100 };
+    const spy = vi.spyOn(performance, "now").mockImplementation(() => clock.now);
+    try {
+      const s3 = fakeS3(() => new Promise<Response>(() => undefined));
+      const { store } = storeWith(s3.fetch, { requestTimeoutMs: 100 });
+      const input = {
+        institutionId: INSTITUTION,
+        evidencePackageId: PACKAGE,
+        segmentHash: hashOf(payload("a")),
+        get canonicalPayload() {
+          clock.now += 70;
+          return payload("a");
+        },
+      };
+      let result: unknown;
+      void store.putImmutable(input).then((r) => (result = r));
+
+      await vi.advanceTimersByTimeAsync(29);
+      expect(result).toBeUndefined();
+      await vi.advanceTimersByTimeAsync(1);
+      await logged();
+      expect(result).toEqual({ status: "unavailable", reason: "storage_timeout" });
+      expect(s3.fetch.mock.calls[0][1]?.signal?.aborted).toBe(true);
+    } finally {
+      spy.mockRestore();
+      vi.useRealTimers();
+    }
   });
 });
