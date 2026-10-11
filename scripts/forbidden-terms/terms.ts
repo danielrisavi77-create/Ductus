@@ -273,8 +273,19 @@ export function findForbiddenTermsInMarkup(joined: string, spaced: string, close
 const PLAIN_SPACE = /[ \u00A0]/u;
 /** A run of anything but letters and digits that touches a letter on both sides. */
 const BETWEEN_LETTERS = /(?<=\p{L})[^\p{L}\p{N}]+(?=\p{L})/gu;
-/** A symbol or a space, of any kind. */
-const SYMBOL_OR_SPACE = /[\p{S}\p{Zs}]/u;
+/** A symbol, a space or a punctuation mark, of any kind. */
+const SYMBOL_SPACE_OR_MARK = /[\p{S}\p{Zs}\p{P}]/u;
+/**
+ * The punctuation marks outside ASCII that Croatian and English write between
+ * two letters with no space: the hyphen and the non-breaking hyphen (U+2010,
+ * U+2011), the en dash and the em dash (U+2013, U+2014), the apostrophe
+ * (U+2019) and the ellipsis (U+2026). None of them is drawn like a letter.
+ * Every other mark outside ASCII is reported there, because some are (an
+ * upright bar, a dot at the height of a letter) and nobody can tell them
+ * apart in a review. Quotation marks and brackets stand at the edge of a
+ * word, next to a space or to ASCII punctuation, where nothing is asked.
+ */
+const MARKS_INSIDE_A_WORD: ReadonlySet<number> = new Set([0x2010, 0x2011, 0x2013, 0x2014, 0x2019, 0x2026]);
 /** A mathematical, currency or modifier symbol that touches a letter. */
 const SYMBOL_AT_A_LETTER = /(?<=\p{L})[\p{Sm}\p{Sc}\p{Sk}]|[\p{Sm}\p{Sc}\p{Sk}](?=\p{L})/gu;
 /**
@@ -299,12 +310,13 @@ const isAscii = (char: string): boolean => char.codePointAt(0)! < 0x80;
  *   the digits of other scripts, some of which are drawn like a Latin letter;
  * - a private use, unassigned or surrogate code point and a control character
  *   that is not white space, wherever it stands;
- * - between two letters with no `PLAIN_SPACE` between them: every symbol and
- *   every space that is not ASCII. That is a symbol with no ink (a Braille
- *   blank), a space of another width, a symbol drawn like a letter (a
- *   mathematical operator, a currency sign) and also an emoji, which is
- *   reported on purpose: two words with only a symbol between them read as
- *   one to the dictionary's reader as well, so they are set apart with a space;
+ * - between two letters with no `PLAIN_SPACE` between them: every symbol,
+ *   every space and every punctuation mark that is not ASCII, except the
+ *   marks on `MARKS_INSIDE_A_WORD`. That is a symbol with no ink (a Braille
+ *   blank), a space of another width, a symbol or a mark drawn like a letter
+ *   (a mathematical operator, a currency sign, an upright bar) and also an
+ *   emoji, which is reported on purpose: two words with only a symbol
+ *   between them are set apart with a space;
  * - a mathematical, currency or modifier symbol that is not ASCII and touches
  *   a letter on either side, since it can stand for the first or the last
  *   letter of a word. Other symbols at the edge of a word (a degree sign, a
@@ -321,7 +333,8 @@ export function unreadableCharacters(text: string): string[] {
   // Without what the dictionary matching drops anyway, so that such a character next to the run does not hide it.
   const bare = text.replace(INVISIBLE, "").replace(/\p{M}/gu, "");
   for (const run of bare.match(BETWEEN_LETTERS) ?? []) {
-    if (!PLAIN_SPACE.test(run)) found.push(...[...run].filter((char) => SYMBOL_OR_SPACE.test(char) && !isAscii(char)));
+    if (PLAIN_SPACE.test(run)) continue;
+    found.push(...[...run].filter((char) => SYMBOL_SPACE_OR_MARK.test(char) && !isAscii(char) && !MARKS_INSIDE_A_WORD.has(char.codePointAt(0)!)));
   }
   found.push(...(bare.match(SYMBOL_AT_A_LETTER) ?? []).filter((char) => !isAscii(char)));
   const codes = found.map((char) => `U+${char.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")}`);

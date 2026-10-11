@@ -131,6 +131,28 @@ describe("characters interface text may not hold", () => {
     ["mathematical symbol in place of the last letter", `Sumnjiv${cp(0x2218)}`, ["U+2218"]],
     ["currency sign in place of the first letter", `${cp(0xa2)}opied`, ["U+00A2"]],
     ["modifier symbol at the end of a word", `Rizik${cp(0x2c5)}`, ["U+02C5"]],
+    // Review of 2bc1f81: a punctuation mark outside ASCII stands between two letters only if it is written there.
+    ["connector mark between two letters (Pc)", `Sum${cp(0x203f)}njivo`, ["U+203F"]],
+    ["full width low line between two letters (Pc)", `Sum${cp(0xff3f)}njivo`, ["U+FF3F"]],
+    ["upright dash between two letters (Pd)", `Sumnj${cp(0xfe31)}vo`, ["U+FE31"]],
+    ["figure dash between two letters (Pd)", `Sum${cp(0x2012)}njivo`, ["U+2012"]],
+    ["opening quotation mark between two letters (Ps)", `Sum${cp(0x201e)}njivo`, ["U+201E"]],
+    ["full width opening bracket between two letters (Ps)", `Sum${cp(0xff08)}njivo`, ["U+FF08"]],
+    ["full width closing bracket between two letters (Pe)", `Sum${cp(0xff09)}njivo`, ["U+FF09"]],
+    ["closing bracket of another kind between two letters (Pe)", `Sum${cp(0x2046)}njivo`, ["U+2046"]],
+    ["opening double quotation mark between two letters (Pi)", `Sum${cp(0x201c)}njivo`, ["U+201C"]],
+    ["opening angle quotation mark between two letters (Pi)", `Sum${cp(0xab)}njivo`, ["U+00AB"]],
+    ["closing double quotation mark between two letters (Pf)", `Sum${cp(0x201d)}njivo`, ["U+201D"]],
+    ["closing angle quotation mark between two letters (Pf)", `Sum${cp(0xbb)}njivo`, ["U+00BB"]],
+    ["upright bar of another script between two letters (Po)", `Sumnj${cp(0x5c0)}vo`, ["U+05C0"]],
+    ["double upright line between two letters (Po)", `Sumnj${cp(0x2016)}vo`, ["U+2016"]],
+    ["inverted exclamation mark between two letters (Po)", `R${cp(0xa1)}zik`, ["U+00A1"]],
+    ["dagger between two letters (Po)", `Au${cp(0x2020)}enticnost`, ["U+2020"]],
+    ["middle dot between two letters (Po)", `Sum${cp(0xb7)}njivo`, ["U+00B7"]],
+    ["hyphenation point between two letters (Po)", `Sum${cp(0x2027)}njivo`, ["U+2027"]],
+    ["full width full stop between two letters (Po)", `Sum${cp(0xff0e)}njivo`, ["U+FF0E"]],
+    ["a mark that is not written there, next to one that is", `Sum${cp(0x2013, 0x5c0)}njivo`, ["U+05C0"]],
+    ["quotation mark after a line break with no space, since only a plain space sets words apart", `kraj.\n${cp(0x201e)}Sada${cp(0x201d)}`, ["U+201E"]],
     ["digit of another script inside a word", `R${cp(0x661)}zik`, ["U+0661"]],
     ["digit of another script drawn like a letter, at the end of a word", `Skriven${cp(0x7c0)}`, ["U+07C0"]],
     ["number of another script drawn like a letter", `Skriven${cp(0x3007)}`, ["U+3007"]],
@@ -151,6 +173,13 @@ describe("characters interface text may not hold", () => {
     ["inkless character next to a plain space", `Rok ${cp(0x2800)}predaje`, []],
     ["punctuation, digits and line breaks", "Rok: 2. 11. 2026. (14:05)\n„Predaj” – 50 %", []],
     ["emoji after a word", "Predano 🎉", []],
+    ["the marks written between two letters: apostrophe (Pf)", `it${cp(0x2019)}s, rock${cp(0x2019)}n${cp(0x2019)}roll`, []],
+    ["the marks written between two letters: hyphen and non-breaking hyphen (Pd)", `e${cp(0x2010)}indeks, e${cp(0x2011)}indeks`, []],
+    ["the marks written between two letters: en dash and em dash (Pd)", `Zagreb${cp(0x2013)}Split, rok${cp(0x2014)}danas`, []],
+    ["the marks written between two letters: ellipsis (Po)", `Pričekaj${cp(0x2026)}spremno`, []],
+    ["ASCII marks between two letters", "on-line, it's, a.b, a_b, a/b, (a)b, a:b, a\"b\"c, a!b, a,b;c", []],
+    ["quotation marks and brackets at the edge of a word", `Gumb ${cp(0x201e)}Predaj${cp(0x201d)} i ${cp(0xab)}Natrag${cp(0xbb)}, (${cp(0x201c)}Rok${cp(0x201d)}), ${cp(0x2018)}da${cp(0x2019)}`, []],
+    ["marks outside ASCII at the edge of a word or between digits", `${cp(0xa1)}Hola!, Autor${cp(0x2020)}, 3${cp(0xb7)}4, Naslov ${cp(0xb7)} Autor, ${cp(0x2022)} Stavka`, []],
     ["narrow no-break space between a number and its unit", `5${cp(0x202f)}kg i 20${cp(0x202f)}%`, []],
     ["numbers that fold to ASCII digits and Latin letters", "m², ½ sata, ① korak, Ⅳ. poglavlje, １２", []],
     ["ASCII symbols between letters, which the source shows as they are", "a+b, x=y, C|D, cijena$dan, a~b, a^b, a`b, a<b>c", []],
@@ -166,6 +195,25 @@ describe("characters interface text may not hold", () => {
 
   it.each(CHARACTERS)("%s", (_, text, expected) => {
     expect(unreadableCharacters(text)).toEqual(expected);
+  });
+
+  // Every code point, so that no category is left to chance: outside ASCII,
+  // a mark, a symbol or a space between two letters is reported unless it is
+  // one of these, which are written out here a second time on purpose.
+  it("reports every punctuation mark, symbol and space outside ASCII between two letters, but for a short list", () => {
+    const written = [0xa0, 0x2010, 0x2011, 0x2013, 0x2014, 0x2019, 0x2026];
+    const passed: number[] = [];
+    let seen = 0;
+    for (let code = 0x80; code <= 0x10ffff; code += 1) {
+      if (code >= 0xd800 && code <= 0xdfff) continue;
+      const char = cp(code);
+      if (!/[\p{P}\p{S}\p{Zs}]/u.test(char)) continue;
+      seen += 1;
+      if (unreadableCharacters(`Sum${char}njivo`).length === 0) passed.push(code);
+      else expect(unreadableCharacters(`Sum${char}njivo`)).toEqual([`U+${code.toString(16).toUpperCase().padStart(4, "0")}`]);
+    }
+    expect(seen).toBeGreaterThan(8000);
+    expect(passed).toEqual(written);
   });
 
   it("leaves what the dictionary already takes out of a word to the dictionary", () => {
@@ -243,6 +291,8 @@ describe("text the scan cannot read", () => {
   it.each([
     ["a symbol in place of the first letter, as a part of its own", `<p>{${part(0x222b)}}umnjivo</p>`, "U+222B"],
     ["a symbol in place of the last letter, as a part of its own", `<p>Sumnjiv<b>{${part(0x2218)}}</b></p>`, "U+2218"],
+    ["a mark drawn like a letter, as a part of its own", `<p>Sumnj{${part(0x5c0)}}vo</p>`, "U+05C0"],
+    ["a mark that is not written between two letters, between two elements", `<p><b>Natrag</b><i>{${part(0xb7)}}</i><b>Dalje</b></p>`, "U+00B7"],
     ["a symbol between two parts of an attribute", `<img alt={["Natrag", ${part(0x2192)}, "Dalje"]} />`, "U+2192"],
     // Closed up, as the dictionary reads it: an unknown part does not keep the symbol from the word.
     ["a symbol in place of the first letter, with an unknown part after it", `<p>{${part(0x222b)}}<span />umnjivo</p>`, "U+222B"],
@@ -258,6 +308,8 @@ describe("text the scan cannot read", () => {
     ["an odd space next to a plain one", `<p>Rok {${part(0x2009)}}predaje</p>`],
     ["an odd space between a number and its unit", `<p>5{${part(0x202f)}}kg</p>`],
     ["a symbol set apart by plain spaces in parts of their own", `<p>Natrag{" "}<span>{${part(0x2192)}}</span>{" "}Dalje</p>`],
+    ["a dash as a part of its own between two words", `<p><b>Zagreb</b>{${part(0x2013)}}<b>Split</b></p>`],
+    ["a mark set apart by plain spaces in parts of their own", `<p>Natrag{" "}<span>{${part(0xb7)}}</span>{" "}Dalje</p>`],
     ["words in parts next to each other", "<tr><td>Od</td><td>do</td><td><b>Rok</b>predaje</td></tr>"],
     ["an odd space at the end of the text", `<p>Predano{${part(0x2009)}}</p>`],
   ])("does not report %s", (_, line) => {

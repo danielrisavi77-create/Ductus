@@ -71,10 +71,27 @@ test.prop([fc.constantFrom(...SAMPLES, ...ENGLISH), fc.array(fc.nat(), { minLeng
   for (const entry of expected) expect(found).toContain(entry);
 });
 
+// Review of 2bc1f81: a punctuation mark outside ASCII that is not written
+  // between two letters, one of each category, put between two letters of an
+  // entry, alone or next to marks that are written there.
+const MARKS = [0x203f, 0xff3f, 0xfe31, 0x2012, 0x201e, 0xff08, 0xff09, 0x2046, 0x201c, 0xab, 0x201d, 0xbb, 0x5c0, 0x2016, 0xa1, 0x2020, 0xb7, 0x2027, 0xff0e];
+const WRITTEN = [0x2010, 0x2011, 0x2013, 0x2014, 0x2019, 0x2026];
+
+test.prop([sample, fc.nat(), fc.constantFrom(...MARKS), fc.array(fc.constantFrom(...WRITTEN), { maxLength: 2 }), fc.boolean()])(
+  "an entry with a mark that is not written inside a word between two of its letters never passes",
+  (text, at, mark, written, first) => {
+    const letters = [...text];
+    const places = letters.flatMap((_, index) => (index > 0 && letters[index - 1] !== " " && letters[index] !== " " ? [index] : []));
+    const index = places[at % places.length]!;
+    const run = String.fromCodePoint(...(first ? [mark, ...written] : [...written, mark]));
+    expect(caught(letters.slice(0, index).join("") + run + letters.slice(index).join(""))).toBe(true);
+  },
+);
+
 // QA of f8722f4: a space of another width, a symbol without ink or a symbol
 // drawn like a letter, put between two halves of an entry as a part of its
 // own, never passes, whatever the halves and however the text is put together.
-const ODD_PARTS = [0x2009, 0x200a, 0x202f, 0x2002, 0x2005, 0x2006, 0x205f, 0x3000, 0x1680, 0x2800, 0x1d159, 0x2228, 0x222a, 0x2218, 0xa2, 0xb4, 0x2192, 0x1f600];
+const ODD_PARTS = [0x2009, 0x200a, 0x202f, 0x2002, 0x2005, 0x2006, 0x205f, 0x3000, 0x1680, 0x2800, 0x1d159, 0x2228, 0x222a, 0x2218, 0xa2, 0xb4, 0x2192, 0x1f600, ...MARKS];
 const WAYS: readonly ((before: string, odd: string, after: string) => string)[] = [
   (before, odd, after) => `<p>${before}{${odd}}${after}</p>`,
   (before, odd, after) => `<p>${before}<span>{${odd}}</span>${after}</p>`,
