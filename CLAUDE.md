@@ -46,7 +46,7 @@ Granice botova:
 
 Pravila za Claude sesije:
 
-- Novi posao uzima se samo iz issuea s labelom `ready-for-claude`, redom `security`, `bug`, `plan-napada`. Na početku makni `ready-for-claude`, stavi `claude:in-progress` i u komentaru navedi granu.
+- Novi posao uzima se samo iz issuea s labelom `ready-for-claude`, redom `security`, `bug`, `plan-napada`. Na početku makni `ready-for-claude`, stavi `claude:in-progress` i u komentaru navedi granu. Labela je ulaz, ne prioritet: issue bez `DAN` tiketa nije zadatak, a unutar istog reda prioritet je iz Lineara.
 - Svaki PR veže issue (`Closes #N`) i Linear oznaku `DAN-xxx`. Prije nego što PR označiš spremnim za review, pokreni `pnpm orch:overlap`.
 - Na review i QA komentare botova odgovori u istoj niti: popravi ili obrazloži.
 - Kad Sinkronizacija prijavi odstupanje, `STATE.md` se ažurira zasebnim malim docs PR-om.
