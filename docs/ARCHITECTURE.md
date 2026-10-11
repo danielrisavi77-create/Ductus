@@ -40,10 +40,10 @@ Smjer ovisnosti je prema unutra: `app` i features pozivaju application; applicat
 
 | Sloj | Izbor | Status |
 | --- | --- | --- |
-| Sučelje | Next.js (App Router), React, TypeScript; sadržaj radova se ne renderira na poslužitelju | [ODLUČENO D-08, dio o aplikaciji], preneseno iz `pisac-editor` |
+| Sučelje | Next.js (App Router), React, TypeScript; sadržaj radova se ne renderira na poslužitelju | [ODLUČENO D-08, dio o aplikaciji: Next.js; ostali detalji retka PRIJEDLOG], preneseno iz `pisac-editor` |
 | Editor | Tiptap / ProseMirror | [PRIJEDLOG D-08], preneseno |
 | Lokalna pohrana | Dexie (IndexedDB), journal s 8 stanja sinkronizacije | [PRIJEDLOG D-08], preneseno |
-| API | Next.js API rute s verzijom protokola (ne Server Actions), u web procesu bez materijala ključeva | [ODLUČENO D-08, dio o aplikaciji], BACKEND §3 |
+| API | Next.js API rute s verzijom protokola (ne Server Actions), u web procesu bez materijala ključeva | [ODLUČENO D-08, dio o aplikaciji: Next.js i worker; API rute s verzijom protokola i bez Server Actions PRIJEDLOG; web proces bez materijala ključeva: D-71], BACKEND §3 |
 | Pozadinski rad | Zaseban worker proces (Node): red poslova pg-boss, potpisivanje, rekonstrukcija, čuvanje, e-pošta, dnevni korijen | [ODLUČENO D-74] |
 | Baza | PostgreSQL s RLS-om, uloge po namjeni, upravljana usluga s povratom u točku (PITR) | [ODLUČENO D-08, dio o aplikaciji; usluga i dobavljač PRIJEDLOG do B0.1], dobavljač u §9 |
 | Pohrana objekata | S3-kompatibilan privatni bucket po domeni evidencije (jedna ustanova u jednoj regiji), objekti adresirani hashom, putanja `v2/<ustanova>/<paket>/<hash>.json` | [ODLUČENO D-08, dio o aplikaciji; D-102] |
