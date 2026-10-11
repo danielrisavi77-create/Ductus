@@ -1,6 +1,6 @@
 # Ductus: plan i program backenda
 
-Verzija 0.3 · 3. 10. 2026. · Odgovorna osoba: Daniel Rišavi · Status: PRIJEDLOG (čeka potvrdu dijela D-08 o dobavljačima i trošku, rok B0.1 16. 11. 2026., te D-72, D-73 (osim izbora vlastitog OIDC klijenta, odlučenog 11. 10. 2026.) i D-75; D-71 i D-74 potvrđene 10. 10. 2026.; dio D-08 o aplikaciji i D-34 odlučeni 11. 10. 2026., D-71 i D-72 dopunjeni 11. 10. 2026. domenom evidencije, D-102)
+Verzija 0.3 · 3. 10. 2026. · Odgovorna osoba: Daniel Rišavi · Status: PRIJEDLOG (čeka potvrdu dijela D-08 o dobavljačima i trošku, rok B0.1 16. 11. 2026., te D-72, D-73 (samo izbor biblioteke; vlastiti OIDC klijent odlučen 11. 10. 2026., a sesije u bazi i identitet u RLS-u potvrđeni u D-90) i D-75; D-71 i D-74 potvrđene 10. 10. 2026.; dio D-08 o aplikaciji i D-34 odlučeni 11. 10. 2026., D-71 i D-72 dopunjeni 11. 10. 2026. domenom evidencije, D-102)
 
 Ovaj dokument zamjenjuje otvoreni D-08. Izvori: dokument "Pisač: Backend arhitektura i vizija vNext" (dalje vNext), tri istraživanja (hosting, potpisi i vrijeme, prijava i ovlasti), `ARCHITECTURE.md` v0.2, te dva neovisna pregleda (arhitektonsko-sigurnosni i provjera činjenica na primarnim izvorima). **Verzija 0.1 imala je pogrešku koja je mijenjala preporuku: Scaleway Managed PostgreSQL nema PITR ni na jednom tipu čvora** (provjereno u službenom repozitoriju dokumentacije `scaleway/docs-content`, commit od 2. 10. 2026.). Ova verzija to ispravlja i ugrađuje ostale nalaze pregleda (šest kritičnih, 19 važnih). Cijene su s datumom 3. 10. 2026.; gdje nešto nije potvrđeno s primarnog izvora, piše NEPROVJERENO.
 
@@ -293,7 +293,7 @@ Backend nije posebna faza nego okomiti rez kroz M0 do M11. **Procjena dodatka pr
 | --- | --- | --- | --- | --- |
 | B0.1 Spike okruženja | UpCloud VM + Managed PG, skripta uloga, PITR povrat u točku, RTT, log parametri, KMS ključ | Zapis s brojkama; PITR radi ili se odabire varijanta B | prije M2; pomaknut naprijed 11. 10. 2026., rok 16. 11. 2026., uz tri dodatne provjere (§5) | 2 do 3 |
 | B0.2 Spike rekonstrukcije | ProseMirror u Nodeu za 15.000 i 80.000 riječi na stvarnom stroju | Vrijeme, memorija, volumen; granice posla određene | prije M3 | 1 do 2 |
-| B0.3 Odluka | Vlasnik potvrđuje dio D-08 o dobavljačima i trošku, D-72, D-73 (osim izbora vlastitog OIDC klijenta, odlučenog 11. 10. 2026.) i D-75 prema rezultatima (D-71 i D-74 potvrđene 10. 10. 2026.; dio D-08 o aplikaciji odlučen 11. 10. 2026.) | ODLUČENO u `DECISIONS.md` | | 0 |
+| B0.3 Odluka | Vlasnik potvrđuje dio D-08 o dobavljačima i trošku, D-72, D-73 (samo izbor biblioteke; vlastiti OIDC klijent odlučen 11. 10. 2026., a sesije u bazi i identitet u RLS-u potvrđeni u D-90) i D-75 prema rezultatima (D-71 i D-74 potvrđene 10. 10. 2026.; dio D-08 o aplikaciji odlučen 11. 10. 2026.) | ODLUČENO u `DECISIONS.md` | | 0 |
 | B0.4 Prepis ARCHITECTURE | Cijeli dokument (uključujući §2, §3, §8, §11), §12 s točnim popisom prijenosa | Bez Supabasea i Netlifyja | M0 | 1 do 2 |
 | B1 Okruženja | `docker compose` (Postgres, S3-kompatibilna pohrana (RustFS), Mailpit, lažni OIDC), OpenTofu (dva računa), CI deploy, migracijski alat, `sops`/`age`, uloge, Caddy, deploy s VM-a | `docker compose up` i `npm test` zeleno; staging se podiže iz koda | M0 | 5 do 7 |
 | B2 Identitet | OIDC klijent s popisom iz §4.3, sesije, `current_actor()`, `withActor`, test GUC-a, odjava | Prijava na AAI Labu; svi testovi iz §4.3 zeleni; nema lažnog pružatelja u produkciji | M1 | 3 do 5 (uz sigurnosni pregled, neovisan o autoru) |
@@ -315,7 +315,7 @@ Redoslijed i kontrolna točka 15. 12. 2026.:
 
 ## 9. Što treba od vlasnika
 
-- Potvrditi ili promijeniti dio D-08 o dobavljačima i trošku, D-72, D-73 (osim izbora vlastitog OIDC klijenta, odlučenog 11. 10. 2026.) i D-75 (D-71 i D-74 potvrđene 10. 10. 2026.; dio D-08 o aplikaciji odlučen 11. 10. 2026.; vidi i odluku o troškovima u §7).
+- Potvrditi ili promijeniti dio D-08 o dobavljačima i trošku, D-72, D-73 (samo izbor biblioteke; vlastiti OIDC klijent odlučen 11. 10. 2026., a sesije u bazi i identitet u RLS-u potvrđeni u D-90) i D-75 (D-71 i D-74 potvrđene 10. 10. 2026.; dio D-08 o aplikaciji odlučen 11. 10. 2026.; vidi i odluku o troškovima u §7).
 - Računi: UpCloud, Scaleway (Object Storage, TEM), AWS (samo KMS, IAM korisnik s uskim ovlastima), 2FA svugdje, agent dobiva ograničene ključeve po okolišu.
 - **FPZG, ne Srce, je prvi korak za AAI:** zamoliti odgovornu osobu FPZG-a za AAI@EduHr da (1) e-poštom na `aai@srce.hr` ovlasti Daniela za AAI@EduHr Lab i (2) registrira Ductus kao uslugu FPZG-a u Registru resursa (OIDC klijent, redirect URI, scopeovi). Tekst zahtjeva je u Dodatku B.
 - FINA: tek kad postoji obrt (ili ako FPZG želi biti ugovorna strana); do tada dva besplatna TSA-a.
