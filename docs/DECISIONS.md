@@ -115,7 +115,7 @@ Trag: komentari na issueu #87 (`issuecomment-` brojevi niže), dani u sesiji ork
 
 ## Odlučeno (12. 10. 2026.): prednost demoa, zamrzavanje procesa, Grok botovi
 
-Trag: komentar na issueu #87, `issuecomment-6114554995` (zapis orkestratora po vlasnikovoj poruci u sesiji orkestratora, iz revizije sustava). Brojevi D-107 do D-111 dodijeljeni su ovim PR-om. Ostalih 13 odluka iz revizije čeka vlasnika.
+Trag: komentar na issueu #87, `issuecomment-6114554995` (zapis orkestratora po vlasnikovoj poruci u sesiji orkestratora, iz revizije sustava). Brojevi D-107 do D-112 dodijeljeni su ovim PR-om. D-112 je vlasnik donio iste sesije u sesiji orkestratora i potvrdio u sesiji pisca Platforme (trag F-063). Ostalih 13 odluka iz revizije čeka vlasnika.
 
 | Broj | Odluka | Razlog |
 | --- | --- | --- |
@@ -124,6 +124,7 @@ Trag: komentar na issueu #87, `issuecomment-6114554995` (zapis orkestratora po v
 | D-109 | **Potvrđeno 12. 10. 2026. (Daniel).** Za `critical` PR-ove Grok je kanonski drugi provider za QA, preko zasebne sesije `grok-by-xai` (već u `APP_RUNTIMES`), ne preko `ductus-botovi[bot]`. Review ostaje Claude | Odluka vlasnika iz revizije sustava |
 | D-110 | **Potvrđeno 12. 10. 2026. (Daniel).** Grok botovi se smanjuju na: Izvjestitelj (8:45, 18:05, petkom 15:17; brojke iz `orch:metrics`, `orch:health`, `pr-status`), Registar (Trijaža i Sinkronizacija zajedno, javlja samo nova neslaganja), Review (savjetodavan, prije kanonskog reviewa), QA-CI kao skripta i Sigurnost. Independent QA odgođen je do T3. Na nalaz bota nakon kanonskog PASS-a ne pusha se, osim ako je nalaz označen kao blokirajući (`CLAUDE.md`) | Odluka vlasnika iz revizije sustava |
 | D-111 | **Potvrđeno 12. 10. 2026. (Daniel).** Zadaci s demo lanca koje dodjeljuje orkestrator izuzeti su od labele `ready-for-claude`. Trijaža labelira samo issuee izvan lanca (`CLAUDE.md`) | Odluka vlasnika iz revizije sustava |
+| D-112 | **Potvrđeno 12. 10. 2026. (Daniel; trag F-063).** Noćni prozor iz `docs/ORKESTRATOR.md` §4 ne obuhvaća PR-ove koji diraju dokumente s pravilima (`docs/ORKESTRATOR.md`, `docs/ENGINEERING_SYSTEM.md`, `docs/SESSIONS.md`, `CLAUDE.md`, `AGENTS.md`, `docs/DECISIONS.md`), skill i definiciju orkestratora, `scripts/orchestrator/pr-ready.mjs` i `gh.mjs` ni išta u `scripts/engineering/`. Takvi PR-ovi uvijek čekaju vlasnikovu naredbu s brojem PR-a. Sigurnosna iznimka od zamrzavanja (D-108 (a)) | Sigurnosni razlog; pojedinosti se ne objavljuju u javnom repou |
 
 ## Prijedlozi koji čekaju potvrdu
 
