@@ -225,36 +225,35 @@ export class LocalDocumentSaver {
     try {
       const contents = await this.journal.read(this.documentId);
       const { snapshot, meta, pending } = contents;
-      // The journal only grows, so a read behind what this saver already saw
-      // was overtaken by a newer read of its own while it was held:
-      // it would report a false `stale`, or a `ready` that lifts a newer
-      // `stale` and shows older text, so read again (#206 r6 model). Again
-      // while a newer read overtakes the retry too (#206 Codex r4240797922);
-      // a retry behind what it was asked to reach means the journal itself
-      // went back. Each retry needs `seen` to grow, so the loop ends.
-      // Anything but a sequence (a stored BigInt makes `Math.max` throw, a NaN
-      // would stop every later retry) is left to `consistent()`, which reports
-      // it as corrupt (#206 Codex r4240729191, qa206j VAŽNO).
-      const localSeq: unknown = meta?.localSeq;
-      const recorded = typeof localSeq === "number" && Number.isSafeInteger(localSeq) && localSeq >= 0
-        ? localSeq : 0;
-      if (recorded < this.seen && recorded >= floor) return await this.read(basis, this.seen);
-      this.seen = Math.max(this.seen, recorded);
       const stored = snapshot ? validateDocument(snapshot.document) : null;
-      // Measured before any field changes, so a malformed row is `corrupt`
+      // Checked before anything is applied, so a malformed row is `corrupt`
       // and never a half-applied read (#206 qa206c MANJE 2).
       let chars = 0;
+      let malformed = false;
       for (const row of pending) {
         // A BigInt or a cycle throws; that row is as unsendable (#206 Codex r4240729191).
         let json: unknown;
         try { json = JSON.stringify(row?.tx); } catch { json = undefined; }
-        if (typeof json !== "string") return this.haltWith("corrupt", this.recover("corrupt", null));
+        if (typeof json !== "string") { malformed = true; break; }
         chars += json.length;
       }
-      if ((meta && !snapshot) || (snapshot && !meta) || (stored && !stored.ok) ||
-          !consistent(this.documentId, contents, stored?.ok ? stored.doc : null)) {
-        return this.haltWith("corrupt", this.recover("corrupt", null));
-      }
+      const valid = !malformed && !((meta && !snapshot) || (snapshot && !meta) || (stored && !stored.ok)) &&
+        consistent(this.documentId, contents, stored?.ok ? stored.doc : null);
+      // The journal only grows, so a read behind what this saver already
+      // accepted was overtaken by a newer read of its own while it was held:
+      // it would report a false `stale`, or a `ready` that lifts a newer
+      // `stale` and shows older text, so read again (#206 r6 model). Again
+      // while a newer read overtakes the retry too (#206 Codex r4240797922);
+      // a retry behind what it was asked to reach means the journal itself
+      // went back. Each retry needs `seen` to grow, so the loop ends. Only an
+      // accepted read moves `seen`, and a refused one counts as sequence 0:
+      // a sequence its own rows contradict would lift the floor of a later
+      // retry above the journal and let an overtaken result through, and an
+      // overtaken refusal would halt over a newer read (#206 qa206k VAŽNO).
+      const recorded = valid ? meta?.localSeq ?? 0 : 0;
+      if (recorded < this.seen && recorded >= floor) return await this.read(basis, this.seen);
+      if (!valid) return this.haltWith("corrupt", this.recover("corrupt", null));
+      this.seen = Math.max(this.seen, recorded);
       const restored = restoreSyncState(contents);
       if (restored === "CONFLICT" || restored === "RECOVERY_REQUIRED") {
         this.halted = true;

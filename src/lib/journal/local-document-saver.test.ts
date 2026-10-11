@@ -1529,6 +1529,89 @@ describe("LocalDocumentSaver: resume() contract (#206 r6)", () => {
     expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
   });
 
+  // #206 qa206k VAŽNO: valid sequences the rows contradict, and the values a
+  // weaker sequence guard would let through.
+  const refusedSeqs: [string, unknown][] = [
+    ["3", 3], ["999", 999], ["MAX_SAFE_INTEGER", Number.MAX_SAFE_INTEGER], ["Infinity", Number.POSITIVE_INFINITY],
+    ["1.5", 1.5], ["MAX_SAFE_INTEGER + 1", Number.MAX_SAFE_INTEGER + 1],
+  ];
+  for (const [name, bad] of refusedSeqs) it(`r6: a ${name} sequence refused as corrupt never lets a held retry undo a newer recovery (#206 qa206k VAŽNO)`, async () => {
+    const at = scope();
+    const real = journal(at);
+    let armed = 0;
+    let open = () => {};
+    let entered = () => {};
+    const held = new Promise<void>((resolve) => { entered = resolve; });
+    const target = saver(patched(real, {
+      // The second read that still sees the old text is held after reading.
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        const contents = await real.read(...args);
+        if (armed > 0 && contents.meta?.localSeq === 1 && ++armed === 3) {
+          const gate = new Promise<void>((resolve) => { open = resolve; });
+          entered();
+          await gate;
+        }
+        return contents;
+      },
+    }));
+    const writer = saver(journal(at));
+    await writer.load();
+    await type(writer, "staro");
+    expect((await target.load()).kind).toBe("ready");
+    const db = (real as unknown as { db: Dexie }).db;
+    await db.table("meta").update(DOC, { localSeq: bad });
+    expect(await target.load()).toEqual({ kind: "recovery", reason: "corrupt", document: null });
+    await db.table("meta").update(DOC, { localSeq: 1 });
+    armed = 1;
+    const older = target.load();
+    await Promise.race([held, older]);
+    await type(writer, "novo");
+    const stale = { kind: "recovery", reason: "stale", document: text("novo") };
+    expect(await target.load()).toEqual(stale);
+    open();
+    await older;
+    await target.settled();
+    expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+  });
+
+  for (const [name, bad] of refusedSeqs) it(`r6: a held read that saw a ${name} sequence reads again rather than halt over a newer recovery (#206 qa206k VAŽNO)`, async () => {
+    const at = scope();
+    const real = journal(at);
+    let armed = false;
+    let open = () => {};
+    let entered = () => {};
+    const held = new Promise<void>((resolve) => { entered = resolve; });
+    const target = saver(patched(real, {
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        const contents = await real.read(...args);
+        if (armed) {
+          armed = false;
+          const gate = new Promise<void>((resolve) => { open = resolve; });
+          entered();
+          await gate;
+        }
+        return contents;
+      },
+    }));
+    const writer = saver(journal(at));
+    await writer.load();
+    await type(writer, "staro");
+    expect((await target.load()).kind).toBe("ready");
+    const db = (real as unknown as { db: Dexie }).db;
+    await db.table("meta").update(DOC, { localSeq: bad });
+    armed = true;
+    const older = target.load();
+    await held;
+    await db.table("meta").update(DOC, { localSeq: 1 });
+    await type(writer, "novo");
+    const stale = { kind: "recovery", reason: "stale", document: text("novo") };
+    expect(await target.load()).toEqual(stale);
+    open();
+    expect(await older).toEqual(stale);
+    await target.settled();
+    expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+  });
+
   it("r6: settled() called between two resumes waits for both, not for the first one's end (#206 qa206j MANJE)", async () => {
     const at = scope();
     const { a, b } = await staleTab(at);
@@ -1814,6 +1897,22 @@ describe("LocalDocumentSaver: a journal whose rows disagree (#206 qa206e V-1)", 
       await db.table("meta").update(DOC, { lastError: cycle });
     }],
   ];
+  it("17: a snapshot without meta or pending rows is corrupt, never shown as saved (#206 qa206k MANJE)", async () => {
+    const { real } = await damaged(async (db) => {
+      await db.table("pending").clear();
+      await db.table("meta").delete(DOC);
+    });
+    const before = await real.read(DOC);
+    expect(before.snapshot).not.toBeNull();
+    expect(before.meta).toBeNull();
+    expect(before.pending).toEqual([]);
+    const fresh = saver(real);
+    expect(await fresh.load()).toEqual({ kind: "recovery", reason: "corrupt", document: null });
+    expect(fresh.snapshot()).toMatchObject({ state: "RECOVERY_REQUIRED", failure: "corrupt" });
+    await type(fresh, "zamjena");
+    expect(await real.read(DOC)).toEqual(before);
+  });
+
   for (const [name, damage] of cases) {
     it(`17: ${name} is corrupt, never older or empty text shown as saved, and nothing is written`, async () => {
       const { real } = await damaged(damage);
