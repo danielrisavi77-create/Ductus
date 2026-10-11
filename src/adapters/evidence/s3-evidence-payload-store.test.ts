@@ -1256,3 +1256,94 @@ describe("write proof (#155, S1 to S6)", () => {
     expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
   });
 });
+
+describe("one monotonic deadline (QA qa233d)", () => {
+  const timeout = { status: "unavailable", reason: "storage_timeout" };
+  const unverified = { status: "unavailable", reason: "storage_write_unverified" };
+  /** Holds the event loop, so a timer set before it can only fire late. */
+  const block = (ms: number) => {
+    const end = performance.now() + ms;
+    while (performance.now() < end) {
+      // busy on purpose
+    }
+  };
+  /** A 200 whose body hands over `bytes`, then blocks before it closes. */
+  const closingLate = (bytes: Uint8Array) => {
+    let pulls = 0;
+    return new Response(
+      new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (pulls++ === 0) {
+            controller.enqueue(bytes.slice());
+            return;
+          }
+          block(60);
+          controller.close();
+        },
+      }),
+      { status: 200 },
+    );
+  };
+  const idsOfA = {
+    institutionId: INSTITUTION,
+    evidencePackageId: PACKAGE,
+    segmentHash: hashOf(payload("a")),
+  };
+
+  it.each<[string, (s3: ReturnType<typeof fakeS3>, call: Call) => Promise<Response> | null]>([
+    ["answers late", () => (block(60), null)],
+    [
+      "closes its body late",
+      (s3, call) => Promise.resolve(closingLate(s3.objects.get(call.path)!)),
+    ],
+  ])(
+    "a read-back that %s past the deadline is unverified, logged once, never stored",
+    async (_, readBack) => {
+      const s3: ReturnType<typeof fakeS3> = fakeS3((call) =>
+        call.method === "GET" ? readBack(s3, call) : null,
+      );
+      const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+
+      await expect(put(store, "a")).resolves.toEqual(unverified);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(warn.mock.calls).toEqual([["evidence payload write unverified", idsOfA]]);
+    },
+  );
+
+  it("a PUT echo that arrives past the deadline confirms nothing and starts no read-back", async () => {
+    const s3: ReturnType<typeof fakeS3> = fakeS3((call) =>
+      call.method === "PUT" ? (block(60), null) : null,
+    );
+    const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+
+    await expect(put(store, "a")).resolves.toEqual(timeout);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(s3.calls.map((c) => c.method)).toEqual(["PUT"]);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("a comparison read that answers past the deadline is not existing", async () => {
+    const s3: ReturnType<typeof fakeS3> = fakeS3((call) =>
+      call.method === "GET" ? (block(60), null) : null,
+    );
+    s3.objects.set(keyOf(PACKAGE, hashOf(payload("a"))), new TextEncoder().encode(payload("a")));
+    const { store } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+
+    await expect(put(store, "a")).resolves.toEqual(timeout);
+    expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
+  });
+
+  it("answers stored only within the deadline, even when no timer is late", async () => {
+    const text = "a".repeat(2_097_000);
+    const s3 = fakeS3();
+    const { store } = storeWith(s3.fetch, { requestTimeoutMs: 1 });
+
+    const started = performance.now();
+    const result = await put(store, text);
+    const elapsed = performance.now() - started;
+
+    // Hashing, signing and comparing 2 MB takes far longer than 1 ms.
+    expect(elapsed).toBeGreaterThan(1);
+    expect(result).toMatchObject({ status: "unavailable" });
+  });
+});

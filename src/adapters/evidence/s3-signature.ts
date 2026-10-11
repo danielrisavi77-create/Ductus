@@ -49,27 +49,54 @@ export function assertS3SigningConfig(
   region: unknown,
   credentials: unknown,
 ): asserts credentials is S3Credentials {
+  assertRegion(region);
+  readS3Credentials(credentials);
+}
+
+function assertRegion(region: unknown): asserts region is string {
   if (typeof region !== "string" || !REGION.test(region)) {
     throw new TypeError("S3 region is not valid");
   }
-  assertS3Credentials(credentials);
 }
 
-function assertS3Credentials(
-  credentials: unknown,
-): asserts credentials is S3Credentials {
-  const { accessKeyId, secretAccessKey } = (credentials ?? {}) as Record<
-    string,
-    unknown
-  >;
+/**
+ * The one error for keys that are missing, invalid or cannot be read. Built
+ * here, never from a caught error: a getter or Proxy that throws may put the
+ * secret in its message, so nothing of it (message, stack or cause) is kept.
+ */
+function invalidCredentials(): TypeError {
+  const error = new TypeError("S3 credentials are not valid");
+  Object.defineProperty(error, "stack", {
+    value: "TypeError: S3 credentials are not valid",
+    configurable: true,
+    writable: true,
+  });
+  return error;
+}
+
+/**
+ * Reads each key once and returns that same validated value, so a getter
+ * cannot pass one value and have another used.
+ */
+function readS3Credentials(credentials: unknown): S3Credentials {
+  let accessKeyId: unknown;
+  let secretAccessKey: unknown;
+  try {
+    const source = (credentials ?? {}) as Record<string, unknown>;
+    accessKeyId = source.accessKeyId;
+    secretAccessKey = source.secretAccessKey;
+  } catch {
+    throw invalidCredentials();
+  }
   if (
     typeof accessKeyId !== "string" ||
     !ACCESS_KEY_ID.test(accessKeyId) ||
     typeof secretAccessKey !== "string" ||
     !SECRET_ACCESS_KEY.test(secretAccessKey)
   ) {
-    throw new TypeError("S3 credentials are not valid");
+    throw invalidCredentials();
   }
+  return { accessKeyId, secretAccessKey };
 }
 
 const REDACTED = "[S3 credentials redacted]";
@@ -87,12 +114,7 @@ export class S3SecretCredentials {
   readonly #secretAccessKey: string;
 
   constructor(credentials: S3Credentials) {
-    const { accessKeyId, secretAccessKey } = (credentials ?? {}) as Record<
-      string,
-      unknown
-    >;
-    const keys = { accessKeyId, secretAccessKey };
-    assertS3Credentials(keys);
+    const keys = readS3Credentials(credentials);
     this.#accessKeyId = keys.accessKeyId;
     this.#secretAccessKey = keys.secretAccessKey;
     Object.freeze(this);
@@ -231,7 +253,8 @@ export function signS3Request(input: {
   if (!AMZ_DATE.test(amzDate)) {
     throw new TypeError("S3 signing time is out of range");
   }
-  assertS3SigningConfig(input.region, input.credentials);
+  assertRegion(input.region);
+  const credentials = readS3Credentials(input.credentials);
 
   const headers: Record<string, string> = {};
   for (const [name, value] of Object.entries(input.headers)) {
@@ -262,7 +285,7 @@ export function signS3Request(input: {
     payloadSha256Hex: digest.toString("hex"),
     region: input.region,
     service: "s3",
-    credentials: input.credentials,
+    credentials,
     amzDate,
   });
   const sent: Record<string, string> = {};

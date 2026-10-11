@@ -113,8 +113,17 @@ const unverified = (): EvidencePayloadPutResult => ({
   reason: "storage_write_unverified",
 });
 
-/** Set once the PUT echo matches, before the read-back starts. */
-type WritePhase = { echoConfirmed: boolean };
+/**
+ * State of one `putImmutable` call. `deadline` is on the monotonic clock
+ * (`performance.now`), so a late timer or a changed wall clock moves nothing.
+ */
+type WritePhase = {
+  deadline: number;
+  /** Set once the PUT echo matches within the deadline, before the read-back. */
+  echoConfirmed: boolean;
+  /** Set once the deadline has answered the call, by the timer or a check. */
+  expired: boolean;
+};
 
 const idsOf = (input: {
   institutionId: string;
@@ -244,21 +253,21 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     const path = [this.bucket, ...key];
     const storageRef = evidenceStorageRef(this.storageDomain, key);
     // One deadline for the whole call, so a slow PUT leaves the read-back
-    // only what is left of it. The race ends the call even when a fetch
-    // ignores the signal, and an answer after the deadline never counts.
-    // Once the PUT echo is confirmed the object may exist, so a deadline
-    // during the read-back is an unverified write, logged here once.
+    // only what is left of it. The deadline itself is a monotonic instant,
+    // checked after every answer and before every request and outcome, so
+    // a timer that fires late (a busy event loop) cannot let a late answer
+    // count. The timer only stops the waiting: its race ends the call even
+    // when a fetch ignores the signal.
     const abort = new AbortController();
-    const phase: WritePhase = { echoConfirmed: false };
+    const phase: WritePhase = {
+      deadline: performance.now() + this.requestTimeoutMs,
+      echoConfirmed: false,
+      expired: false,
+    };
     let timer: ReturnType<typeof setTimeout> | undefined;
     const expired = new Promise<EvidencePayloadPutResult>((resolve) => {
       timer = setTimeout(() => {
-        if (phase.echoConfirmed) {
-          this.log("evidence payload write unverified", idsOf(input));
-          resolve(unverified());
-        } else {
-          resolve(timedOut());
-        }
+        resolve(this.expire(input, phase));
         abort.abort();
       }, this.requestTimeoutMs);
     });
@@ -286,6 +295,9 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
   ): Promise<EvidencePayloadPutResult> {
     // The signer adds and signs If-None-Match: * and the SHA-256 checksum.
     const put = await this.send("PUT", path, bytes, signal);
+    // A late answer, a matching echo included, confirms nothing and starts
+    // no further request: the deadline answers storage_timeout.
+    if (late(phase)) return this.expire(input, phase);
     if (!put.ok) return this.unavailable(put.reason);
     if (put.status === 200) {
       return this.verify(input, path, bytes, put, storageRef, phase, signal);
@@ -309,7 +321,10 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
       sha256Hex(get.body) === input.segmentHash &&
       sameBytes(get.body, bytes)
     ) {
-      return { status: "existing", storageRef };
+      // Never existing past the deadline, however late the timer fires.
+      return late(phase)
+        ? this.expire(input, phase)
+        : { status: "existing", storageRef };
     }
     this.log("evidence payload conflict", idsOf(input));
     return { status: "conflict" };
@@ -338,10 +353,15 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     if (put.checksum === sent) {
       phase.echoConfirmed = true;
       const get = await this.send("GET", path, null, signal);
-      // Past the deadline, which already answered and logged this write.
-      if (signal.aborted) return unverified();
-      if (get.ok && get.status === 200 && get.body !== null) {
-        if (sameBytes(get.body, bytes)) return { status: "stored", storageRef };
+      const same =
+        get.ok && get.status === 200 && get.body !== null
+          ? sameBytes(get.body, bytes)
+          : null;
+      // Past the deadline, comparing included: an unverified write, logged
+      // once by `expire`, never stored.
+      if (late(phase)) return this.expire(input, phase);
+      if (same === true) return { status: "stored", storageRef };
+      if (same === false) {
         this.log("evidence payload conflict", ids);
         return { status: "conflict" };
       }
@@ -354,6 +374,22 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
       return unverified();
     }
     this.log("evidence payload write unverified", ids);
+    return unverified();
+  }
+
+  /**
+   * The deadline's answer, the same whether the timer or a check reaches it
+   * first. Once the PUT echo is confirmed the object may exist, so it is an
+   * unverified write, logged exactly once; before that it is a timeout.
+   */
+  private expire(
+    input: { institutionId: string; evidencePackageId: string; segmentHash: string },
+    phase: WritePhase,
+  ): EvidencePayloadPutResult {
+    const first = !phase.expired;
+    phase.expired = true;
+    if (!phase.echoConfirmed) return timedOut();
+    if (first) this.log("evidence payload write unverified", idsOf(input));
     return unverified();
   }
 
@@ -430,6 +466,11 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
       };
     }
   }
+}
+
+/** Whether the call's deadline has passed, by the monotonic clock. */
+function late(phase: WritePhase): boolean {
+  return phase.expired || performance.now() >= phase.deadline;
 }
 
 /**
