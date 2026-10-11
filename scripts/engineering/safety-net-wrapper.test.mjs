@@ -689,6 +689,77 @@ test("review: a configuration too large or too slow to read is refused within th
   });
 });
 
+// Several trees, each under the limit and together over it: the budget is one for all of them.
+test("review: the limits are one shared budget across all trees (entries, bytes, time)", { timeout: 120000 }, () => {
+  withTree({ bin: "allow" }, (tree) => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-shared-"));
+    const realNow = Date.now;
+    try {
+      const home = path.join(base, "home");
+      const named = path.join(base, "named");
+      const empty = path.join(base, "empty");
+      const treeA = path.join(home, ".cc-safety-net");
+      for (const dir of [treeA, named, empty]) fs.mkdirSync(dir, { recursive: true });
+      const both = { ...process.env, HOME: home, USERPROFILE: home, CC_SAFETY_NET_HOME: named };
+      const onlyA = { ...process.env, HOME: home, USERPROFILE: home };
+      delete onlyA.CC_SAFETY_NET_HOME;
+      const onlyB = { ...process.env, HOME: empty, USERPROFILE: empty, CC_SAFETY_NET_HOME: named };
+      const attempt = (env, limits) => decide({ root: tree.root, input: event("Bash", "ls"), env, limits });
+      const fill = (count, size) => {
+        for (const dir of [treeA, named]) {
+          fs.rmSync(dir, { recursive: true, force: true });
+          fs.mkdirSync(dir, { recursive: true });
+          for (let i = 0; i < count; i++) fs.writeFileSync(path.join(dir, `f${i}.json`), size ? Buffer.alloc(size) : "{}");
+        }
+      };
+      const expectShared = (limits, label) => {
+        assert.equal(attempt(onlyA, limits).code, 0, `${label}: the first tree alone is under the limit`);
+        assert.equal(attempt(onlyB, limits).code, 0, `${label}: the second tree alone is under the limit`);
+        const together = attempt(both, limits);
+        assert.equal(together.code, 2, `${label}: together they are over it`);
+        assert.equal(together.stdout, "", label);
+        assert.match(together.stderr, /too large or too slow/, label);
+      };
+      // Entries: 15 + 15 (+ the project's few) against 25.
+      fill(15, 0);
+      expectShared({ maxEntries: 25 }, "entries");
+      // Bytes: 600 KiB + 600 KiB against 1 MiB.
+      fill(1, 600 * 1024);
+      expectShared({ maxBytes: 1024 * 1024 }, "bytes");
+      // Time, on a clock that advances one millisecond per reading: 20 + 20 entries against 40 ms.
+      fill(20, 0);
+      let now = 1_700_000_000_000;
+      Date.now = () => now++;
+      expectShared({ maxMs: 40 }, "time");
+      // The project's own tree draws on the same budget as the user's.
+      const project = path.join(tree.root, ".cc-safety-net");
+      fs.rmSync(treeA, { recursive: true, force: true });
+      fs.rmSync(named, { recursive: true, force: true });
+      fs.mkdirSync(named, { recursive: true });
+      const onlyNamed = { ...onlyB };
+      const withProject = (count, size, limits, label) => {
+        const extra = path.join(project, "extra");
+        fs.rmSync(extra, { recursive: true, force: true });
+        assert.equal(attempt(onlyNamed, limits).code, 0, `${label}: the project tree alone is under the limit`);
+        fs.mkdirSync(extra, { recursive: true });
+        for (let i = 0; i < count; i++) fs.writeFileSync(path.join(extra, `p${i}.json`), size ? Buffer.alloc(size) : "{}");
+        fs.rmSync(named, { recursive: true, force: true });
+        fs.mkdirSync(named, { recursive: true });
+        for (let i = 0; i < count; i++) fs.writeFileSync(path.join(named, `u${i}.json`), size ? Buffer.alloc(size) : "{}");
+        const together = attempt(onlyNamed, limits);
+        assert.equal(together.code, 2, `${label}: project and user together are over it`);
+        assert.match(together.stderr, /too large or too slow/, label);
+        fs.rmSync(extra, { recursive: true, force: true });
+      };
+      withProject(15, 0, { maxEntries: 30 }, "project entries");
+      withProject(1, 600 * 1024, { maxBytes: 1024 * 1024 }, "project bytes");
+    } finally {
+      Date.now = realNow;
+      fs.rmSync(base, { recursive: true, force: true });
+    }
+  });
+});
+
 test("review: the instruction in the message is a command that passes", () => {
   for (const dir of ["tree", "dir with spaces"]) {
     withTree({ dir, bin: "allow" }, (tree) => {
