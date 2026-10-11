@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { EvidenceOutboxItem } from "@/application/ports/evidence-outbox";
+import { EDIT_STEP_FORMAT_V1 } from "@/domain/document/edit-step";
 import type { SignedEvidenceReceipt } from "@/domain/forensics/evidence-receipt";
 import {
   EVIDENCE_CANONICALIZATION_V2,
@@ -37,14 +38,16 @@ function segment(): EvidenceSegmentV2 {
       {
         sequence: 1,
         source: "editor",
-        steps: [{ stepType: "replace", from: 1, to: 1 }],
+        steps: [
+          { stepType: "replace", from: 1, to: 1, slice: { content: [{ type: "text", text: "A" }] } },
+        ],
         beforeDocumentHash: A,
         afterDocumentHash: B,
       },
     ],
     captureContext: {
       editorModel: "prosemirror",
-      transactionFormat: "prosemirror-step-json-v1",
+      transactionFormat: EDIT_STEP_FORMAT_V1,
     },
     evidenceProfileId: "standard-v1",
   };
