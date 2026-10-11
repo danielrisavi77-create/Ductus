@@ -31,6 +31,7 @@ const GOLDEN: EvidenceDomainKey = {
   keyBase64Url: Buffer.from(fromHex(chain.verificationKey.spkiDerHex)).toString("base64url"),
   evidenceDomainId: DOMAIN_A,
   purpose: "receipt",
+  validFrom: "2026-01-01T00:00:00.000Z",
   validTo: null,
   revokedAt: null,
 };
@@ -344,7 +345,7 @@ describe("verifier of receipt v2: what was signed (plan attacks 2, 3, 4, 6 and 1
   });
 });
 
-describe("verifier of receipt v2: evidence domain and key scope (supplement D1, D6, D7, D12)", () => {
+describe("verifier of receipt v2: evidence domain and key scope (supplement D1, D6, D7, D12; plan answer V5, V6)", () => {
   it("refuses a receipt of domain B where domain A is expected (D1)", async () => {
     const keyB = testKey("kljuc-domene-b", { evidenceDomainId: DOMAIN_B });
     const ofB = keyB.sign({ ...contract.payload, evidenceDomainId: DOMAIN_B });
@@ -361,21 +362,21 @@ describe("verifier of receipt v2: evidence domain and key scope (supplement D1, 
     ).toEqual(refused("domain_mismatch"));
   });
 
-  it("refuses a payload of domain A signed by a key of domain B (D6)", async () => {
+  it("refuses a payload of domain A signed by a key of domain B (D6, V5)", async () => {
     const keyB = testKey("kljuc-domene-b", { evidenceDomainId: DOMAIN_B });
     expect(await verifySignedEvidenceReceiptV2(keyB.sign(contract.payload), EXPECTED, [GOLDEN, keyB.trusted])).toEqual(
       refused("key_scope"),
     );
   });
 
-  it("refuses the checkpoint key of the same domain (D7)", async () => {
+  it("refuses the checkpoint key of the same domain (D7, V5)", async () => {
     const checkpoint = testKey("kljuc-kontrolne-tocke-a", { purpose: "checkpoint" });
     expect(
       await verifySignedEvidenceReceiptV2(checkpoint.sign(contract.payload), EXPECTED, [GOLDEN, checkpoint.trusted]),
     ).toEqual(refused("key_scope"));
   });
 
-  it("refuses a key id the list does not hold exactly once (D12)", async () => {
+  it("refuses a key id the list does not hold exactly once (D12, V6)", async () => {
     const key = testKey("kljuc-izmisljeni-1");
     const signed = key.sign(contract.payload);
     const sameIdInB = { ...key.trusted, evidenceDomainId: DOMAIN_B };
@@ -385,7 +386,7 @@ describe("verifier of receipt v2: evidence domain and key scope (supplement D1, 
     expect((await verifySignedEvidenceReceiptV2(signed, EXPECTED, [GOLDEN, key.trusted])).ok).toBe(true);
   });
 
-  it("refuses a signature that names a key it was not made with", async () => {
+  it("refuses a signature that names a key it was not made with, or a version the list does not hold (V6)", async () => {
     const key = testKey("kljuc-izmisljeni-1");
     const signed = key.sign(contract.payload);
     const renamed = { ...signed, signature: { ...signed.signature, keyId: GOLDEN.keyId } };
@@ -402,6 +403,10 @@ describe("verifier of receipt v2: evidence domain and key scope (supplement D1, 
     ["no purpose", { purpose: undefined }],
     ["another purpose", { purpose: "root" }],
     ["a date that is no canonical instant", { validTo: "2026-10-04" }],
+    ["no start of validity", { validFrom: undefined }],
+    ["a start of validity that is no canonical instant", { validFrom: "2026-01-01" }],
+    ["no word on revocation", { revokedAt: undefined }],
+    ["a revocation time that is no canonical instant", { revokedAt: "2026-10-04" }],
     ["a public key that is not 44 bytes of SPKI", { keyBase64Url: "AQID" }],
     ["a public key of 44 bytes that is no key", { keyBase64Url: Buffer.alloc(44, 1).toString("base64url") }],
   ])("refuses a trusted key with %s", async (_name, change) => {
@@ -420,45 +425,87 @@ describe("verifier of receipt v2: evidence domain and key scope (supplement D1, 
   });
 });
 
-describe("verifier of receipt v2: rotation and revocation (supplement D8, D10)", () => {
-  // The contract receipt was accepted at 06:05:00.000.
-  const ROTATED_AT = "2026-10-03T06:05:00.001Z";
+describe("verifier of receipt v2: rotation and revocation (supplement D8 to D10; plan answer 6105652638, V1 to V4)", () => {
+  // The contract receipt was accepted at 06:05:00.000; T is one millisecond later.
+  const T = "2026-10-03T06:05:00.001Z";
+  const AFTER = "2026-10-03T06:06:00.000Z";
   const acceptedAt = (time: string) => ({ ...contract.payload, acceptedAt: time, receiptId: "receipt-kasnija" });
+  const accepted = (payload: EvidenceReceiptPayloadV2) => ({ ok: true, payload });
 
-  it("still verifies an old receipt after the key was retired, and new ones under the new key (D8)", async () => {
-    const retired = testKey("kljuc-a-2025", { validTo: ROTATED_AT });
-    const active = testKey("kljuc-a-2026");
+  it("V1: accepts a receipt reserved under the old key and signed by the new one after the rotation (D9)", async () => {
+    const k1 = testKey("kljuc-a-2025", { validTo: T });
+    const k2 = testKey("kljuc-a-2026", { validFrom: T });
+    const keys = [k1.trusted, k2.trusted];
+    // Reserved while K1 was the key of the domain, before K2 was valid at all.
+    expect(Date.parse(contract.payload.acceptedAt)).toBeLessThan(Date.parse(k2.trusted.validFrom));
+    expect(await verifySignedEvidenceReceiptV2(k2.sign(contract.payload), EXPECTED, keys)).toEqual(
+      accepted(contract.payload),
+    );
+
+    // The start of validity bounds the moment of signing, never `acceptedAt`.
+    const k3 = testKey("kljuc-a-2027", { validFrom: "2027-01-01T00:00:00.000Z" });
+    expect(await verifySignedEvidenceReceiptV2(k3.sign(contract.payload), EXPECTED, [...keys, k3.trusted])).toEqual(
+      accepted(contract.payload),
+    );
+  });
+
+  it("V2: a retired key vouches for what was accepted before its validity ended, and for nothing later (D8)", async () => {
+    const retired = testKey("kljuc-a-2025", { validTo: T });
+    const active = testKey("kljuc-a-2026", { validFrom: T });
     const keys = [retired.trusted, active.trusted];
 
-    expect((await verifySignedEvidenceReceiptV2(retired.sign(contract.payload), EXPECTED, keys)).ok).toBe(true);
-    const later = acceptedAt("2026-10-03T06:06:00.000Z");
-    const signedByActive = active.sign(later);
-    expect(signedByActive.signature.keyId).toBe("kljuc-a-2026");
-    expect((await verifySignedEvidenceReceiptV2(signedByActive, EXPECTED, keys)).ok).toBe(true);
-
-    // The retired key vouches for nothing accepted from the end of its validity on.
-    expect(await verifySignedEvidenceReceiptV2(retired.sign(later), EXPECTED, keys)).toEqual(refused("key_not_valid"));
-    expect(await verifySignedEvidenceReceiptV2(retired.sign(acceptedAt(ROTATED_AT)), EXPECTED, keys)).toEqual(
-      refused("key_not_valid"),
+    // Expired, never revoked, `acceptedAt` before `validTo`: still a good receipt.
+    expect(retired.trusted.revokedAt).toBeNull();
+    expect(await verifySignedEvidenceReceiptV2(retired.sign(contract.payload), EXPECTED, keys)).toEqual(
+      accepted(contract.payload),
     );
-  });
-
-  it("verifies a receipt reserved before the rotation and signed by the new key afterwards", async () => {
-    const active = testKey("kljuc-a-2026");
-    expect((await verifySignedEvidenceReceiptV2(active.sign(contract.payload), EXPECTED, [active.trusted])).ok).toBe(
-      true,
-    );
-  });
-
-  it("refuses what a revoked key signed for a time from the revocation on (D10)", async () => {
-    const revoked = testKey("kljuc-a-opozvan", { revokedAt: ROTATED_AT });
-    expect((await verifySignedEvidenceReceiptV2(revoked.sign(contract.payload), EXPECTED, [revoked.trusted])).ok).toBe(
-      true,
-    );
-    for (const time of [ROTATED_AT, "2026-10-03T06:06:00.000Z", "2027-01-01T00:00:00.000Z"]) {
-      expect(await verifySignedEvidenceReceiptV2(revoked.sign(acceptedAt(time)), EXPECTED, [revoked.trusted])).toEqual(
+    for (const time of [T, AFTER, "2027-01-01T00:00:00.000Z"]) {
+      expect(await verifySignedEvidenceReceiptV2(retired.sign(acceptedAt(time)), EXPECTED, keys)).toEqual(
         refused("key_not_valid"),
       );
     }
+    // What is accepted after the rotation carries the new key.
+    const later = active.sign(acceptedAt(AFTER));
+    expect(later.signature.keyId).toBe("kljuc-a-2026");
+    expect(await verifySignedEvidenceReceiptV2(later, EXPECTED, keys)).toEqual(accepted(later.payload));
+  });
+
+  it("V3: refuses a revoked key for a receipt accepted from the revocation on (D10)", async () => {
+    const revoked = testKey("kljuc-a-opozvan", { revokedAt: T });
+    for (const time of [T, AFTER, "2027-01-01T00:00:00.000Z"]) {
+      expect(await verifySignedEvidenceReceiptV2(revoked.sign(acceptedAt(time)), EXPECTED, [revoked.trusted])).toEqual(
+        refused("key_revoked"),
+      );
+    }
+  });
+
+  it("V4, stricter than the plan answer: refuses a revoked key also for a receipt accepted before the revocation", async () => {
+    // `acceptedAt` is signed by the revoked key itself, so the holder of a
+    // compromised key writes any earlier time. Without a time anchor the key
+    // does not control, an honest old receipt and a back-dated one look alike.
+    const revoked = testKey("kljuc-a-opozvan", { revokedAt: T });
+    const honest = revoked.sign(contract.payload);
+    expect(Date.parse(contract.payload.acceptedAt)).toBeLessThan(Date.parse(T));
+    expect(await verifySignedEvidenceReceiptV2(honest, EXPECTED, [revoked.trusted])).toEqual(refused("key_revoked"));
+    const backDated = revoked.sign(acceptedAt("2026-01-02T00:00:00.000Z"));
+    expect(await verifySignedEvidenceReceiptV2(backDated, EXPECTED, [revoked.trusted])).toEqual(refused("key_revoked"));
+
+    // Retired first and revoked afterwards: the revocation still decides.
+    const both = testKey("kljuc-a-oboje", { validTo: T, revokedAt: AFTER });
+    expect(await verifySignedEvidenceReceiptV2(both.sign(contract.payload), EXPECTED, [both.trusted])).toEqual(
+      refused("key_revoked"),
+    );
+
+    // The way back for an honest receipt: the new key of the domain signs the
+    // same payload again. Its digest, the leaf of the log, does not change.
+    const k2 = testKey("kljuc-a-2026", { validFrom: T });
+    const signedAgain = k2.sign(contract.payload);
+    expect([honest.payloadDigestSha256, signedAgain.payloadDigestSha256]).toEqual([
+      contract.payloadDigestSha256,
+      contract.payloadDigestSha256,
+    ]);
+    expect(await verifySignedEvidenceReceiptV2(signedAgain, EXPECTED, [revoked.trusted, k2.trusted])).toEqual(
+      accepted(contract.payload),
+    );
   });
 });

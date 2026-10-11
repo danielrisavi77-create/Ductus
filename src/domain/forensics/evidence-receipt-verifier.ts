@@ -26,9 +26,14 @@ export type EvidenceKeyPurpose = "receipt" | "checkpoint";
 export type EvidenceDomainKey = PublicVerificationKey & {
   evidenceDomainId: string;
   purpose: EvidenceKeyPurpose;
+  /**
+   * Start of validity. It bounds the moment of signing, which only the server
+   * knows; the verifier never compares it with `acceptedAt`.
+   */
+  validFrom: string;
   /** End of validity, exclusive; null while the key is the active one. */
   validTo: string | null;
-  /** When the key was revoked; null if it never was. */
+  /** When the key was revoked; null if it never was. A revoked key verifies nothing. */
   revokedAt: string | null;
 };
 
@@ -48,6 +53,7 @@ export type EvidenceReceiptRefusal =
   | "digest_mismatch"
   | "key_unknown"
   | "key_scope"
+  | "key_revoked"
   | "key_not_valid"
   | "signature_invalid";
 
@@ -82,11 +88,13 @@ function isEvidenceDomainKey(value: unknown): value is EvidenceDomainKey {
   }
   // Whatever else the entry holds stays in `publicKey`, whose validator
   // refuses every field it does not know.
-  const { evidenceDomainId, purpose, validTo, revokedAt, ...publicKey } = value;
+  const { evidenceDomainId, purpose, validFrom, validTo, revokedAt, ...publicKey } =
+    value;
   return (
     isPublicVerificationKey(publicKey) &&
     isEvidenceDomainId(evidenceDomainId) &&
     (purpose === "receipt" || purpose === "checkpoint") &&
+    canonicalInstant(validFrom) &&
     (validTo === null || canonicalInstant(validTo)) &&
     (revokedAt === null || canonicalInstant(revokedAt))
   );
@@ -119,10 +127,24 @@ function decodeBase64Url(
  * - The key is found by the `keyId` of the signature and must belong to the
  *   domain named in the signed payload, with the purpose `receipt`. A key of
  *   another domain or a checkpoint key of the same domain is refused.
- * - `acceptedAt` must lie before the end of the key's validity and before its
- *   revocation, so a retired key still vouches for what it signed earlier.
- *   There is no lower bound on purpose: a receipt reserved before a rotation
- *   may be signed afterwards by the new key of the same domain.
+ * - What counts for a key is the moment of signing, and that moment is not in
+ *   the signed payload. The server holds a key to it when it attaches the
+ *   signature; here only `acceptedAt` is known (plan answer 6105652638 on
+ *   issue 202).
+ * - A retired key, one past `validTo` and never revoked, still vouches for a
+ *   receipt with `acceptedAt` before `validTo`, and for none from there on.
+ * - A revoked key vouches for nothing, whatever `acceptedAt` says. This is
+ *   stricter than docs/ARCHITECTURE.md section 8 and than V4 of the plan
+ *   answer, which keep what was signed before the revocation. Telling such a
+ *   receipt from one back-dated by the holder of the key needs a time anchor
+ *   the key does not control (a checkpoint or a timestamp); that is not in
+ *   this slice. Until then such a receipt verifies once the new key of the
+ *   domain has signed it again.
+ * - `validFrom` is never compared with `acceptedAt`: a receipt reserved
+ *   before a rotation is signed afterwards by the new key of the same domain.
+ * - Not told apart here: a retired key used after its retirement for a
+ *   payload with an earlier `acceptedAt`. The server rule closes that; from
+ *   outside only anchoring in the log does.
  * - A receipt of another revision, also an earlier one of the same
  *   transaction, is refused: a duplicate never passes for a newer commit.
  */
@@ -184,10 +206,14 @@ export async function verifySignedEvidenceReceiptV2(
     ) {
       return refuse("key_scope");
     }
-    const acceptedAt = Date.parse(payload.acceptedAt);
+    // `acceptedAt` is signed by the key under judgement, so it says nothing
+    // about a revoked key: whoever holds that key writes any earlier time.
+    if (key.revokedAt !== null) {
+      return refuse("key_revoked");
+    }
     if (
-      (key.validTo !== null && acceptedAt >= Date.parse(key.validTo)) ||
-      (key.revokedAt !== null && acceptedAt >= Date.parse(key.revokedAt))
+      key.validTo !== null &&
+      Date.parse(payload.acceptedAt) >= Date.parse(key.validTo)
     ) {
       return refuse("key_not_valid");
     }
