@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { EDIT_STEP_FORMAT_V1 } from "@/domain/document/edit-step";
+
 import { sha256WebCrypto } from "./crypto";
 import {
   canonicalEvidenceSegmentV2,
@@ -53,7 +55,7 @@ function fixture(): EvidenceSegmentV2 {
     ],
     captureContext: {
       editorModel: "prosemirror",
-      transactionFormat: "prosemirror-step-json-v1",
+      transactionFormat: EDIT_STEP_FORMAT_V1,
     },
     evidenceProfileId: "standard-v1",
   };
@@ -63,19 +65,21 @@ describe("EvidenceSegmentV2", () => {
   it("has a stable independent canonical/hash vector", async () => {
     const segment = fixture();
     const canonical =
-      '{"canonicalization":"RFC8785-JCS","captureContext":{"editorModel":"prosemirror","transactionFormat":"prosemirror-step-json-v1"},"documentId":"doc-1","events":[{"afterDocumentHash":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","beforeDocumentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","sequence":1,"source":"editor","steps":[{"from":1,"slice":{"content":[{"text":"A","type":"text"}]},"stepType":"replace","to":1}],"touchedNodeIds":["p1"]}],"evidenceProfileId":"standard-v1","evidenceSchema":"ductus-evidence-segment-v2","finalDocumentHash":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","hashAlgorithm":"sha256","initialDocumentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","observedEndedAt":"2026-10-02T20:01:00.000Z","observedStartedAt":"2026-10-02T20:00:00.000Z","predecessorSegmentHash":null,"segmentId":"segment-1","sequenceFrom":1,"sequenceTo":1,"sessionId":"session-1"}';
+      '{"canonicalization":"RFC8785-JCS","captureContext":{"editorModel":"prosemirror","transactionFormat":"ductus-edit-steps-v1"},"documentId":"doc-1","events":[{"afterDocumentHash":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","beforeDocumentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","sequence":1,"source":"editor","steps":[{"from":1,"slice":{"content":[{"text":"A","type":"text"}]},"stepType":"replace","to":1}],"touchedNodeIds":["p1"]}],"evidenceProfileId":"standard-v1","evidenceSchema":"ductus-evidence-segment-v2","finalDocumentHash":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","hashAlgorithm":"sha256","initialDocumentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","observedEndedAt":"2026-10-02T20:01:00.000Z","observedStartedAt":"2026-10-02T20:00:00.000Z","predecessorSegmentHash":null,"segmentId":"segment-1","sequenceFrom":1,"sequenceTo":1,"sessionId":"session-1"}';
 
     expect(canonicalEvidenceSegmentV2(segment)).toBe(canonical);
     await expect(digestEvidenceSegmentV2(segment)).resolves.toEqual({
       canonical,
-      byteLength: 973,
-      sha256: "c548a1723a1b3ab6782ebf9d4c9083180653dd5b1a768599e0779052a902c957",
+      byteLength: 969,
+      sha256: "1153ad7c2f19bf82249d9809435989b8345d84e14093700755e19a07c19e0b2a",
     });
 
     // The vector this test pinned before the decision of 10 October 2026: the
-    // same segment with time on its event and seconds in its end. Its bytes
-    // are unchanged (same hash as then) and it is refused now.
+    // same segment with time on its event and seconds in its end, in the
+    // transaction format it then named. Its bytes are unchanged (same hash as
+    // then) and it is refused now.
     const former = canonical
+      .replace('"transactionFormat":"ductus-edit-steps-v1"', '"transactionFormat":"prosemirror-step-json-v1"')
       .replace('"sequence":1,', '"elapsedMs":500,"occurredAt":"2026-10-02T20:00:00.500Z","sequence":1,')
       .replace("T20:01:00.000Z", "T20:00:01.000Z");
     expect(await sha256WebCrypto(former)).toBe(
