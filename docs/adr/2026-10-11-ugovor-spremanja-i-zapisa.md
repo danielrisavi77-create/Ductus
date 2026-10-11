@@ -1,7 +1,7 @@
 # ADR: jedan ugovor za spremanje dokumenta i zapis pisanja
 
 - **Status:** PRIHVAĆENO 11. 10. 2026. odlukom vlasnika. Trag: komentar `issuecomment-6105502093` na issueu 87, koji je objavio orkestrator s odlukama danim u njegovoj sesiji. Odluke su prepisane u §8. Stavke iz §9 i dalje nisu provjerene.
-- **Dopune nakon prihvaćanja (review PR-a 246):** u §5.3 dodane su provjera konteksta odsječka (t. 3), prethodna provjera ključa ponavljanja prije zapisa objekta (t. 5), ponovna provjera identiteta i ovlasti unutar transakcije (t. 7 i 8) i odlomak o potpisu u demou; u §5.5 uzrok praznine je naveden kao ovisnost koja blokira. Odluke iz §8 i značenje polja potvrde iz §5.1 nisu mijenjani.
+- **Dopune nakon prihvaćanja (review PR-a 246):** u §5.3 dodane su provjera konteksta odsječka (t. 3), prethodna provjera ključa ponavljanja prije zapisa objekta (t. 5) i ponovna provjera identiteta i ovlasti unutar transakcije (t. 7 i 8). Potpis u demou (t. 14 i odlomak iza popisa) i potvrda kodova uzroka praznine (§5.5) slijede dvije naknadne odluke vlasnika iz komentara `issuecomment-6105792585` na issueu 87, prepisane u §8 kao odluke 6 i 7. Odluke 1 do 5 i značenje polja potvrde iz §5.1 nisu mijenjani.
 - **Datum:** 11. 10. 2026.
 - **Zadatak:** stavka 0.3 plana u issueu 239. Samo dokument; ne mijenja kod ni druge dokumente.
 - **Stanje koda:** `main` na `1912cac`. Brojevi redaka vrijede za taj commit.
@@ -110,22 +110,29 @@ Prije transakcije:
 2. odsječak je bajt po bajt JCS oblik valjanog odsječka; dokument je valjan;
 3. kontekst odsječka: `documentId` u odsječku jednak je dokumentu iz zahtjeva, a `evidenceProfileId` profilu paketa koji poslužitelj sam izvodi iz tog dokumenta. Odsječak koji imenuje drugi dokument ili profil odbija se kao `invalid`, kao što gateway radi i danas (`evidence-gateway.ts` r. 227 do 233);
 4. otisak JCS oblika dokumenta jednak je `finalDocumentHash` odsječka;
-5. prethodna provjera ključa ponavljanja, čitanjem: poznat ključ s istim sadržajem vraća prijašnji ishod, a s drugim sadržajem `txid_reused`, u oba slučaja bez novog objekta, prihvata i potpisa (`BACKEND.md` §4.1, "Ponovno slanje"). Ovlast ide prije ove provjere; zabrane novog prihvata (točka 8) idu poslije nje, da ne stanu ispred oporavka već prihvaćenog zahtjeva;
-6. objekt se zapisuje u spremište, samo za ključ koji prethodna provjera ne poznaje.
+5. prethodna provjera ključa ponavljanja, čitanjem: poznat ključ s istim sadržajem vraća prijašnji ishod, a s drugim sadržajem `txid_reused`, u oba slučaja bez novog objekta, prihvata i potpisa (`BACKEND.md` §4.1, "Ponovno slanje"). U demou poznat ključ uvijek ima potpisanu potvrdu (točka 14). Ovlast ide prije ove provjere; zabrane novog prihvata (točka 8) idu poslije nje, da ne stanu ispred oporavka već prihvaćenog zahtjeva;
+6. objekt se zapisuje u spremište, samo za ključ koji prethodna provjera ne poznaje. Ako transakcija zatim ne uspije, pa i zbog potpisa, objekt ostaje siroče; ponovljeni zahtjev s istim bajtovima nailazi na isti objekt i ne stvara novi.
 
 U jednoj transakciji, uz zaključan redak dokumenta:
 
 7. identitet se ponovno izvodi iz `current_actor()` unutar RPC-a, nikad iz parametra, i ponovno se provjerava članstvo. Provjera prije transakcije nije dovoljna, jer se sesija, članstvo ili zadatak mogu promijeniti između nje i zaključavanja retka;
-8. ključ ponavljanja, ponovno i mjerodavno, zbog utrke dvaju istih zahtjeva (isti sadržaj vraća prijašnji ishod, drugi sadržaj `txid_reused`). Samo za novi prihvat zatim: verzija zadatka i je li zadatak otvoren, te granice paketa;
+8. ključ ponavljanja, ponovno i mjerodavno, zbog utrke dvaju istih zahtjeva (isti sadržaj vraća prijašnji ishod, drugi sadržaj `txid_reused`). U demou ključ postoji samo ako je i potpis uspio, pa je prijašnji ishod uvijek potpisana potvrda. Samo za novi prihvat zatim: verzija zadatka i je li zadatak otvoren, te granice paketa;
 9. bazna revizija jednaka je tekućoj;
 10. prethodnik odsječka jednak je glavi lanca;
 11. redni broj prvog događaja veći je od zadnjeg prihvaćenog (vraćanje unatrag odbija se uvijek);
 12. nastavak: redni broj je točno sljedeći i `initialDocumentHash` jednak je otisku spremljenog dokumenta, ili zahtjev nosi prijavu praznine;
-13. upis: revizija, dokument i njegov otisak, odsječak, nova glava, potvrda bez potpisa (u produkciji stanje `pending_signature`), i redak praznine ako je prijavljena.
+13. upis: revizija, dokument i njegov otisak, odsječak, nova glava, potvrda, i redak praznine ako je prijavljena;
+14. potpis, u demou unutar iste transakcije: potvrda se potpisuje i potpis se priključuje prije nego što se transakcija potvrdi. Ako potpis ne uspije, cijela se transakcija poništava: nema ni revizije, ni odsječka, ni potvrde, ni retka praznine.
 
-Tek zatim potpis. Točke 4 i 12 su stavka 0.5 plana (§7).
+Točke 4 i 12 su stavka 0.5 plana (§7).
 
-**Potpis u demou (dopuna D-98).** U demou nema workera ni reda poslova, a klijent nikad ne dobiva odgovor `pending_signature`: web proces potpisuje razvojnim ključem u istom zahtjevu, odmah nakon transakcije, i vraća potpisanu potvrdu. Ako proces stane između transakcije i potpisa, u bazi ostaje prihvat bez potpisa. Oporavak ne traži worker: klijent ionako ponavlja isti zahtjev dok ne provjeri potpisanu potvrdu (`drain.ts`), a poslužitelj za poznati ključ s nepotpisanim prihvatom potpisuje postojeći zapis umjesto novog prihvata, kao što gateway već radi (`evidence-gateway.ts` r. 277 do 279). Nepotpisani prihvat je u demou kratko međustanje oporavka, a ne tok koji netko čeka. Ako se dopuna D-98 čita strože, tako da nepotpisan prihvat ne smije ni nastati, potpis mora ući u istu transakciju; to ovaj zapis ne odlučuje i mora se riješiti u planu napada koraka koji uvodi RPC.
+**Potpis u demou (odluka vlasnika, komentar `issuecomment-6105792585` na issueu 87; prepisana u §8).** Potpis ulazi u istu transakciju kao i spremanje. U demou ne postoji stanje u kojem je prihvat zapisan, a nije potpisan; dopuna D-98 ("u demou nema tog stanja") čita se doslovno i ne mijenja se. Ako potpis ne uspije, ne uspijeva cijelo spremanje i klijent ponavlja s istim ključem. Iz toga slijedi:
+
+- U demou odgovori `committed` i `duplicate` uvijek nose potpisanu potvrdu; `pending_signature` nije odgovor u demou.
+- Ponovljeni zahtjev nalazi ili cijeli potpisan prihvat (pa je `duplicate` s istom potvrdom) ili ništa (pa se cijelo spremanje ponavlja). Put "potpiši postojeći nepotpisani prihvat", koji gateway danas ima (`evidence-gateway.ts` r. 277 do 279), u demou se ne koristi.
+- Transakcija i brava na retku dokumenta drže se dok traje potpis. U demou potpisuje web proces razvojnim ključem, u istom procesu. Kako točno potpis ulazi u transakciju (redoslijed poziva između web procesa i RPC-a) određuje plan napada koraka koji uvodi RPC.
+
+Izvan demoa i dalje vrijede `BACKEND.md` §3 pravilo 3 i `ARCHITECTURE.md` §5 t. 3 do 5: potpisuje worker, a potvrda do tada stoji u stanju `pending_signature`. Vrijedi li stroža varijanta i izvan demoa, otvoreno je pitanje (§8).
 
 Potvrda v2 time tvrdi tri stvari: da su ti bajtovi odsječka primljeni i pohranjeni; da nastavljaju lanac iza navedenog prethodnika; i da je dokument s otiskom `finalDocumentHash` spremljen kao revizija `revision`. To značenje treba zapisati uz vektor potvrde (stavka 0.1), jer se polja ne mijenjaju, a mijenja se ono što potpis jamči.
 
@@ -133,13 +140,14 @@ Potvrda v2 time tvrdi tri stvari: da su ti bajtovi odsječka primljeni i pohranj
 
 | Ishod | Znači | Klijent |
 | --- | --- | --- |
-| `committed`, `duplicate` | Spremljeno; potvrda potpisana ili čeka potpis | "Spremljeno na poslužitelju" tek kad provjeri potpisanu potvrdu. |
+| `committed`, `duplicate` | Spremljeno. U demou je potvrda uvijek potpisana; izvan demoa može čekati potpis (`pending_signature`) | "Spremljeno na poslužitelju" tek kad provjeri potpisanu potvrdu. |
 | `stale_base`, `chain_conflict` | Poslužitelj je dalje ili drugdje; odgovor nosi reviziju, otisak glave, zadnji redni broj i otisak dokumenta | Usklađivanje (niže). |
 | `not_continuous` | Odsječak se veže na glavu, ali ne nastavlja slijed ili dokument, a praznina nije prijavljena | Kao gore. Poslužitelj nikad sam ne pretvara takav zahtjev u prazninu. |
 | `txid_reused` | Isti ključ, drugi sadržaj | Postojeći oporavak (`RECOVERY_REQUIRED`). |
 | `document_mismatch`, `invalid`, `too_large` | Zahtjev nije ispravan i neće biti ni pri ponavljanju | Ne ponavlja. Tekst ostaje "spremljen na uređaju"; put dalje je §5.5. |
 | `unauthenticated`, `unauthorized`, `not_found`, `not_accepting` | Sesija, članstvo ili zadatak ne dopuštaju novi prihvat (točke 1, 7 i 8) | Ne ponavlja isti zahtjev. Tekst ostaje "spremljen na uređaju"; nova prijava ili stanje zadatka određuju što dalje. |
 | nedostupno, izgubljen odgovor | Ne zna se | Ponavlja isti zahtjev. |
+| potpis nije uspio (demo) | Ništa nije spremljeno: transakcija je poništena | Ponavlja isti zahtjev s istim ključem. Kako se ishod zove na žici, određuje plan napada koraka koji uvodi RPC. |
 
 Usklađivanje, uvijek istim redom:
 
@@ -157,13 +165,13 @@ Usklađivanje, uvijek istim redom:
 - Događaji iz samog odsječka prekida ostaju u lancu i u pohrani, ali se ne provjeravaju reprodukcijom, jer poslužitelj nema stanje od kojeg polaze. Praznina zato obuhvaća i taj odsječak (najviše 30 sekundi pisanja).
 - Prekidi koji se vide iz potpisanih odsječaka moraju se jedan prema jedan poklapati s recima praznina. Prekid bez retka i redak bez prekida su greška koja blokira predaju.
 - Rad bez mreže i povratak **nije** prekid: red se čuva i šalje redom.
-- **Uzrok praznine je tehnički kod iz zatvorenog popisa, a ne tekst za prikaz.** Popis još nije potvrđen, i to je ovisnost koja blokira: korak B-8 koji uvodi polje `gap` (tablica praznina i RPC) ne spaja se dok popis nije potvrđen u planu napada tog koraka, jer kod ulazi u redak baze, u otisak sadržaja za ključ ponavljanja i u mjerenja. Prijedlog, izveden iz slučajeva u §5.4: `local_record_lost` (klijent ne može nastaviti lanac jer mu nedostaje dio vlastitog reda ili je odsječak konačno odbijen) i `conflict_kept_local` (autor je u sukobu dvaju uređaja zadržao svoju verziju; odluka 3 u §8). Tekst koji uz prazninu vide student i nastavnik određuje Product/UX i smije se mijenjati bez promjene spremljenih kodova.
+- **Uzrok praznine je tehnički kod iz zatvorenog popisa, a ne tekst za prikaz.** Popis još nije potvrđen, i to je ovisnost koja blokira jedan korak: kodove potvrđuje plan napada za korak B-8 s poljem `gap`, a vlasnik ih vidi prije koda; do tada čeka samo taj korak, a ostali koraci B-8 idu dalje (odluka 7 u §8). Kod ulazi u redak baze, u otisak sadržaja za ključ ponavljanja i u mjerenja. Prijedlog, izveden iz slučajeva u §5.4: `local_record_lost` (klijent ne može nastaviti lanac jer mu nedostaje dio vlastitog reda ili je odsječak konačno odbijen) i `conflict_kept_local` (autor je u sukobu dvaju uređaja zadržao svoju verziju; odluka 3 u §8). Tekst koji uz prazninu vide student i nastavnik određuje Product/UX i smije se mijenjati bez promjene spremljenih kodova.
 
 Razmotreno i odbačeno za sada: prekid zapisati kao jedan događaj u lancu koji stanje poslužitelja zamjenjuje stanjem uređaja. Lanac bi ostao neprekinut i rekonstrukcija ne bi trebala sačuvani dokument. Ali to mijenja odobreni tekst `ARCHITECTURE.md` §5 i §6, ovisi o formatu koraka (stavka 0.4) i o reprodukciji koje na `main` još nema, i lako se prikaže kao jedan velik unos bez izvora umjesto kao praznina.
 
 ### 5.6 Mjerenja koja ugovor mora izložiti
 
-Broj ishoda po vrsti (osobito `stale_base`, `chain_conflict`, `not_continuous`, `txid_reused`), broj prijavljenih praznina po uzroku, broj siročadi u spremištu i broj potvrda koje čekaju potpis. Bez toga se greška u klijentu koja proizvodi praznine vidi tek u predaji.
+Broj ishoda po vrsti (osobito `stale_base`, `chain_conflict`, `not_continuous`, `txid_reused`), broj prijavljenih praznina po uzroku, broj siročadi u spremištu, broj spremanja poništenih zbog neuspjelog potpisa (demo) i broj potvrda koje čekaju potpis (izvan demoa). Bez toga se greška u klijentu koja proizvodi praznine vidi tek u predaji.
 
 ### 5.7 Što ulazi prije demoa, a što poslije
 
@@ -201,11 +209,17 @@ Vlasniku je postavljeno pet pitanja. Odluke su prepisane doslovno iz komentara `
 
 Isti komentar navodi i posljedice: pisac DAN-54 smije zaključiti zlatne vektore prema točki 5, a planovi 241 i 242 više ne čekaju ovu odluku.
 
-I dalje otvoreno, izvan ovih pet odluka:
+Dva pitanja koja je otvorio review PR-a 246 vlasnik je odlučio naknadno. Odluke su prepisane doslovno iz komentara `issuecomment-6105792585` na issueu 87 (11. 10. 2026.), bez dopuna:
 
-- **Zatvoreni popis tehničkih kodova uzroka praznine** nije potvrđen. Blokira korak B-8 koji uvodi polje `gap`; prijedlog i mjesto potvrde su u §5.5.
+6. **Pitanje:** smije li u demou kratko postojati prihvat koji je zapisan, a nije potpisan.
+   **Odluka:** "**Nepotpisan prihvat u demou: stroža varijanta.** Potpis ulazi u istu transakciju kao i spremanje. U demou ne postoji stanje u kojem je prihvat zapisan, a nije potpisan; dopuna D-98 („u demou nema tog stanja”) čita se doslovno. Ako potpis ne uspije, ne uspijeva cijelo spremanje i klijent ponavlja s istim ključem."
+7. **Pitanje:** tko potvrđuje zatvoreni popis kodova uzroka praznine.
+   **Odluka:** "**Kodovi uzroka praznine:** potvrđuje ih plan napada za korak B-8 s poljem `gap`; vlasnik ih vidi prije koda. Do tada čeka samo taj korak; ostali koraci B-8 idu dalje."
+
+I dalje otvoreno, izvan ovih odluka:
+
+- **Potpis unutar transakcije izvan demoa.** Odluka 6 govori o demou, gdje web proces potpisuje razvojnim ključem u istom procesu. Izvan demoa `BACKEND.md` §3 pravilo 3 traži da web proces ne drži materijal ključa i da potpisuje worker preko servisa ključeva, uz stanje `pending_signature`. Ako bi stroža varijanta vrijedila i tamo, vanjski poziv potpisa išao bi unutar transakcije baze, uz zaključan redak dokumenta. Ovaj zapis to ne rješava.
 - **Tekst koji uz prazninu vide student i nastavnik** (`PRODUCT.md` §9) određuje Product/UX. Ne blokira B-8, jer se ne sprema.
-- **Potpis u demou:** čita li se dopuna D-98 tako da nepotpisan prihvat smije kratko postojati radi oporavka (§5.3).
 - Tok "promjena uređaja" i dalje nema nositelja (stavka 1.6 plana).
 
 ## 9. Što nisam mogao provjeriti
@@ -214,12 +228,12 @@ I dalje otvoreno, izvan ovih pet odluka:
 - **Veličine.** Brojke iz B0.2 mjerene su na zamjenskoj shemi, bez ID-ova čvorova koje Ductusov dokument nosi. Veličina odsječka za 30 sekundi pisanja je procjena. Granica od 1 MiB po dokumentu ujedno je gornja granica veličine rada; koliko je to riječi u Ductusovoj shemi, nije izmjereno.
 - **Trošak na klijentu.** Svaki događaj nosi otisak dokumenta prije i poslije. Ako se računa nad cijelim dokumentom pri svakom događaju, to je 11 do 14 ms po događaju za 80.000 riječi na poslužiteljskom vCPU-u; u pregledniku nije izmjereno. Hvatanje zapisa na `main` još ne postoji.
 - **Volumen zapisa u bazi** zbog prepisivanja tekućeg dokumenta pri svakom commitu, trajanje upisa objekta i potpisa preko servisa ključeva.
-- **Dohvat potpisane potvrde u produkciji.** Ako se potvrda koja čeka potpis dohvaća ponavljanjem cijelog zahtjeva, svaki upit nosi cijeli dokument. Vjerojatno treba malo čitanje po ID-u transakcije; u demou se potpisuje u istom procesu pa se to ne vidi.
+- **Dohvat potpisane potvrde u produkciji.** Ako se potvrda koja čeka potpis dohvaća ponavljanjem cijelog zahtjeva, svaki upit nosi cijeli dokument. Vjerojatno treba malo čitanje po ID-u transakcije; u demou je potvrda potpisana u istoj transakciji pa se to ne vidi.
 - **Granica lokalnog reda.** U `src/lib/journal/atomic-dexie-journal.ts` nisam našao granicu veličine reda.
 - **Tko prazni red kad su otvorena dva taba.** Nisam našao zaključavanje pražnjenja između tabova.
 - **Otvoreni PR-ovi 206, 232, 233 i 240** pročitani su po opisu i popisu datoteka, ne redak po redak. PR 213 spojen je tijekom rada; pročitano je zaglavlje formata koraka.
 - **Izvorni `pisac-editor`** nije dostupan; što su njegovi RPC-i radili znam samo iz komentara u kodu.
-- **Linear** nije čitan; s issuea 87 pročitana su samo četiri navedena komentara i komentar s odlukama iz §8. PR 243 upisuje odluke od 11. 10. u dokumente; ovdje se pozivam na komentare, ne na brojeve odluka iz tog PR-a.
+- **Linear** nije čitan; s issuea 87 pročitana su samo četiri navedena komentara i dva komentara s odlukama iz §8. PR 243 upisuje odluke od 11. 10. u dokumente; ovdje se pozivam na komentare, ne na brojeve odluka iz tog PR-a.
 
 ## 10. Što slijedi nakon odluke
 
@@ -227,15 +241,16 @@ Zasebnim zadacima, ne ovim PR-om. Isti popis stoji u opisu PR-a 246.
 
 U docs PR-u odluka:
 
-- `docs/DECISIONS.md`: nova odluka s brojem, s pet točaka iz komentara 6105502093.
+- `docs/DECISIONS.md`: nova odluka s brojem, s pet točaka iz komentara 6105502093 i dvije iz komentara 6105792585.
 - `docs/PLAN-DEMO.md`, kriterij B-12 "uključujući prazninu", i dopuna D-98 "bez tablice kontrolnih točaka": napomena da se tumače prema odluci 4. D-98 ostaje.
+- `docs/PLAN-DEMO.md` §7 t. 4, dopuna D-98 "u demou nema ni reda poslova ni tog stanja": napomena da se čita doslovno i da potpis ulazi u istu transakciju kao i spremanje (odluka 6). D-98 ostaje.
 - `docs/ARCHITECTURE.md` §5: t. 2 (odsječak nosi ID transakcije klijenta), odlomak o praznini i odlomak "Kontrolne točke" ("uvijek kad otkrije prazninu"), koji treba reći da se uz redak praznine čuva dokument od kojeg rekonstrukcija nastavlja.
 - `docs/ARCHITECTURE.md` §6 t. 3 ("rekonstrukcija kreće od kontrolne točke spremljene na kraju praznine"): isto.
 - `docs/BACKEND.md` §2 ("ADR u M3, prije koda"): uputa na ovaj zapis.
 
 Ostali zadaci:
 
-- Dopuna plana napada B-8 (issue 155, točke 17 do 21), uključujući potvrdu popisa uzroka praznine (§5.5) i čitanje dopune D-98 za potpis u demou (§5.3).
+- Dopuna plana napada B-8 (issue 155, točke 17 do 21): potpis unutar iste transakcije u demou i poništenje cijelog spremanja kad potpis ne uspije (odluka 6, §5.3 t. 14), te potvrda popisa kodova uzroka praznine za korak s poljem `gap`, koji vlasnik vidi prije koda (odluka 7, §5.5).
 - Dopuna plana potvrde v2 (issue 202, napad 5: koji ID transakcije potvrda nosi).
 - Preimenovanje ugovora u `src/domain/serverSync/contract.ts`.
 - Uklanjanje zasebnog reda zapisa iz `src/application/evidence/evidence-outbox.ts` u korist jednog reda.
