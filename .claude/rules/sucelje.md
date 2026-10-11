@@ -4,6 +4,9 @@ paths:
   - "app/**/*.css"
   - "src/components/**"
   - "src/lib/i18n/**"
+  - "**/labels.ts"
+  - "**/messages.ts"
+  - "src/editor/schema.ts"
 ---
 
 # Područje: tekst i izgled sučelja

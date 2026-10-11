@@ -152,12 +152,18 @@ test("every repo path and skill named in cards and rules exists", () => {
     ...mdFiles(cardsDir).map((n) => path.join(cardsDir, n)),
     ...rules.map((r) => path.join(rulesDir, r.name)),
   ];
-  const skills = new Set(readdirSync(path.join(root, ".claude/skills")));
+  const hasSkill = (name) =>
+    [".claude/skills", ".agents/skills"].every((dir) =>
+      existsSync(path.join(root, dir, name, "SKILL.md")),
+    );
   for (const file of files) {
     const rel = path.relative(root, file);
     for (const [, token] of read(file).matchAll(/`([^`\n]+)`/g)) {
       if (/^ductus-[a-z-]+$/.test(token)) {
-        assert.ok(skills.has(token), `${rel}: skill ${token} does not exist`);
+        assert.ok(
+          hasSkill(token),
+          `${rel}: skill ${token} needs SKILL.md in .claude/skills and .agents/skills`,
+        );
         continue;
       }
       if (/[\s<*]/.test(token) || token.startsWith("origin/")) continue;
@@ -175,6 +181,22 @@ test("every repo path and skill named in cards and rules exists", () => {
         `${rel}: ${token} does not exist`,
       );
     }
+  }
+});
+
+test("the UI rule covers every live scanner text module", () => {
+  const rule = parseRule(read(path.join(rulesDir, "sucelje.md")));
+  assert.ok(rule);
+  const scanner = read(path.join(root, "scripts/forbidden-terms/scan.ts"));
+  const block = scanner.match(
+    /UI_TEXT_MODULES: readonly string\[\] = \[([\s\S]*?)\];/,
+  );
+  assert.ok(block, "scan.ts declares UI_TEXT_MODULES");
+  const globs = [...block[1].matchAll(/^\s*"([^"]+)",/gm)].map((m) => m[1]);
+  assert.ok(globs.length > 0);
+  for (const glob of globs) {
+    if (!tracked.some((f) => globMatches(glob, f))) continue;
+    assert.ok(rule.paths.includes(glob), `sucelje.md must list "${glob}"`);
   }
 });
 

@@ -13,7 +13,7 @@ Prije ove kartice pročitaj `zajednicko.md`. Identitet: `<runtime>:<slot>:qa`, r
 - Za svaki nalaz napiši je li dostižan kroz stvarnog pozivatelja; nalaz izvan ugovora je manji (#87 komentari `6109041185` i `6109015743`).
 
 ## Tijek
-1. QA tek kad pregled na istom headu završi bez nalaza (#87 komentar `6107190134`); utvrdi točan head i testiraj samo njega.
+1. QA tek kad pregled na istom headu završi PASS-om bez blokirajućih nalaza (#87 komentari `6107190134`, `6104646540`); utvrdi točan head i testiraj samo njega.
 2. Napadaj: offline, ponovni pokušaj, utrka, pogrešan akter, rub preglednika (`.claude/skills/ductus-qa/SKILL.md`). Testove koje pišeš drži u lokalnoj kopiji ili zasebnom QA branchu, nikad u grani pisca.
 3. Verdikt kao zaseban kanonski komentar čija je prva neprazna linija `QA-Agent:`, s konkretnim `QA-Scope` (`docs/ENGINEERING_SYSTEM.md` §6).
 4. Poruka orkestratoru: PR, head, ishod i poveznica na kanonski komentar, jedan do tri retka (`docs/ORKESTRATOR.md` §5, `zajednicko.md`).
