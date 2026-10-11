@@ -2,16 +2,23 @@
 /**
  * Random model of one to three tabs saving one document into one journal
  * (#206 qa206c). Each tab's writes may succeed, fail (quota, unknown, closed
- * store) or hang until released, a read may fail once or return late, and
- * loads (overlapping too), resumes, proposes and page reloads interleave
- * freely, with 0-12 IndexedDB tasks between steps. Four invariants hold
+ * store) or hang until released, a read may fail once, start late or return
+ * late, and loads (overlapping too), resumes, proposes and page reloads
+ * interleave freely, with 0-12 IndexedDB tasks between steps. Time is counted
+ * in IndexedDB tasks only, never on a clock, so a sequence of steps always
+ * runs the same way, under any load (#206 r6). Five invariants hold
  * throughout:
  * 1. LOCAL_DURABLE only for text this tab wrote, or for a clean tab whose
  *    last read still saw the text it loaded;
- * 2. a successful write only ever replaces journal text this tab was shown;
+ * 2. a successful write only ever replaces journal text this tab was shown:
+ *    its first read, its own write, or the recovery shown when `resume()`
+ *    was called; a recovery shown later does not count (#206 r6 finding 1);
  * 3. `stale` only after another tab committed past this tab's base;
  * 4. once every write is released and settled, no tab is left in
- *    SAVING_LOCAL, and a tab in LOCAL_DURABLE has its text in the journal.
+ *    SAVING_LOCAL, and a tab in LOCAL_DURABLE has its text in the journal;
+ * 5. then also a tab without a failure whose last propose or resume came
+ *    after its last edit has the editor's text in the journal (#206 r6
+ *    finding 2).
  * All text here is synthetic.
  */
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -37,9 +44,12 @@ function plain(doc: CanonicalDocument | null | undefined): string {
   const node = doc?.nodes[0];
   return node && "children" in node ? node.children.map((c) => ("text" in c ? c.text : "")).join("") : "";
 }
-const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 1));
 /** One IndexedDB task: a read or write needs several, so a step may end mid-way. */
 const task = () => new Promise<void>((resolve) => setImmediate(resolve));
+/** Enough IndexedDB tasks for any read or write that is not held to finish. */
+async function tick(): Promise<void> {
+  for (let i = 0; i < 100; i += 1) await task();
+}
 
 type Mode = "ok" | "quota" | "unknown" | "closed" | "gate";
 const op = fc.oneof(
@@ -56,6 +66,7 @@ const op = fc.oneof(
   },
   { arbitrary: fc.record({ kind: fc.constant("readFail" as const), tab: fc.nat(2) }), weight: 1 },
   { arbitrary: fc.record({ kind: fc.constant("slowRead" as const), tab: fc.nat(2) }), weight: 2 },
+  { arbitrary: fc.record({ kind: fc.constant("lateRead" as const), tab: fc.nat(2) }), weight: 2 },
   { arbitrary: fc.record({ kind: fc.constant("release" as const), tab: fc.nat(2) }), weight: 1 },
   { arbitrary: fc.record({ kind: fc.constant("tick" as const), tab: fc.nat(2) }), weight: 2 },
   { arbitrary: fc.record({ kind: fc.constant("reload" as const), tab: fc.nat(2) }), weight: 1 },
@@ -72,13 +83,19 @@ type Tab = {
   readFails: boolean;
   /** The next read returns only on release, with what the journal held when it ran. */
   readSlow: boolean;
+  /** The next read starts only on release, with what the journal holds then. */
+  readLate: boolean;
   gated: (() => void)[];
   writing: number;
-  loading: Promise<void> | null;
+  /** `load()` calls still running. */
+  loads: Set<Promise<void>>;
+  resumes: number;
   instanceLoaded: boolean;
   last: LoadResult | null;
   editor: string;
   edits: number;
+  /** `edits` at the last propose or resume; -1 before any (5). */
+  proposedEdits: number;
   clean: boolean;
   loadedText: string;
   loadedAt: number;
@@ -115,6 +132,10 @@ async function run(tabCount: number, ops: readonly Op[]): Promise<void> {
         if (tab.readFails) {
           tab.readFails = false;
           throw Object.assign(new Error("closed"), { name: "DatabaseClosedError" });
+        }
+        if (tab.readLate) {
+          tab.readLate = false;
+          await new Promise<void>((resolve) => { tab.gated.push(resolve); });
         }
         const contents = await tab.journal.read(...args);
         if (tab.readSlow) {
@@ -177,7 +198,8 @@ async function run(tabCount: number, ops: readonly Op[]): Promise<void> {
       if (result.reason === "stale") {
         staleEvents.push({ tab: tab.id, maxBase: Math.max(...tab.base), where: "recovery" });
       }
-      tab.known.add(readAt);
+      // Shown, but known (2) only once `resume()` answers it.
+      shownAt.set(tab, readAt);
       return;
     }
     if (result.kind !== "ready") return;
@@ -192,13 +214,28 @@ async function run(tabCount: number, ops: readonly Op[]): Promise<void> {
     }
   };
 
+  const shownAt = new Map<Tab, number>();
   const startLoad = (tab: Tab, resuming: boolean) => {
     const saver = tab.saver;
     const call = tab.loadCalls++;
-    const promise = caller.run(call, () => (resuming ? saver.resume(text(tab.editor)) : saver.load()))
+    if (resuming) {
+      // 2: the author chose against the recovery on screen now.
+      tab.known.add(shownAt.get(tab) ?? -1);
+      tab.proposedEdits = tab.edits;
+      tab.resumes += 1;
+    }
+    const loads = tab.loads;
+    const promise: Promise<void> = caller
+      .run(call, () => (resuming ? saver.resume(text(tab.editor)) : saver.load()))
       .then((result) => loaded(tab, saver, result, resuming, call), () => {})
-      .finally(() => { if (tab.loading === promise) tab.loading = null; });
-    tab.loading = promise;
+      .finally(() => {
+        if (resuming) {
+          if (tab.saver === saver) tab.resumes -= 1;
+        } else {
+          loads.delete(promise);
+        }
+      });
+    if (!resuming) loads.add(promise);
     track(promise);
   };
 
@@ -214,19 +251,23 @@ async function run(tabCount: number, ops: readonly Op[]): Promise<void> {
     tab.failure = null;
     tab.readAt = new Map();
     tab.loadCalls = 0;
+    tab.loads = new Set();
+    tab.resumes = 0;
+    tab.proposedEdits = -1;
+    shownAt.delete(tab);
     startLoad(tab, false);
   };
 
   try {
     for (let id = 0; id < tabCount; id += 1) {
       const tab = {
-        id, journal: new AtomicDexieJournal(at, idb), mode: "ok", readFails: false, readSlow: false, gated: [], writing: 0,
-        loading: null, loadedText: "", loadedAt: 0, lastReadAt: 0, edits: 0,
+        id, journal: new AtomicDexieJournal(at, idb), mode: "ok", readFails: false, readSlow: false,
+        readLate: false, gated: [], writing: 0, loadedText: "", loadedAt: 0, lastReadAt: 0, edits: 0,
       } as unknown as Tab;
       tabs.push(tab);
       fresh(tab);
     }
-    await Promise.all(tabs.map((tab) => tab.loading));
+    await Promise.all(tabs.flatMap((tab) => [...tab.loads]));
 
     const checkStale = (label: string) => {
       for (const event of staleEvents.splice(0)) {
@@ -248,18 +289,29 @@ async function run(tabCount: number, ops: readonly Op[]): Promise<void> {
           break;
         case "propose":
           if (!tab.instanceLoaded) break;
+          tab.proposedEdits = tab.edits;
           track(tab.saver.propose(text(tab.editor)));
           break;
         case "load":
           // Loads may overlap (#206 V1); a resume waits for them.
           startLoad(tab, false);
           break;
-        case "resume":
-          if (!tab.loading && tab.last?.kind === "recovery" &&
+        case "resume": {
+          // One at a time: the UI disables the choice while it runs.
+          if (tab.resumes > 0) break;
+          // The author chooses only once the loads in progress are shown,
+          // unless one is held: then the choice is against the one on screen.
+          await task();
+          for (let i = 0; tab.loads.size > 0 && tab.gated.length === 0; i += 1) {
+            if (i > 100_000) throw new Error("a load neither finishes nor waits on a gate");
+            await task();
+          }
+          if (tab.last?.kind === "recovery" &&
               (tab.last.reason === "stale" || tab.last.reason === "unsaved")) {
             startLoad(tab, true);
           }
           break;
+        }
         case "mode":
           tab.mode = step.mode;
           break;
@@ -269,6 +321,9 @@ async function run(tabCount: number, ops: readonly Op[]): Promise<void> {
         case "slowRead":
           tab.readSlow = true;
           break;
+        case "lateRead":
+          tab.readLate = true;
+          break;
         case "release":
           for (const open of tab.gated.splice(0)) open();
           break;
@@ -276,8 +331,9 @@ async function run(tabCount: number, ops: readonly Op[]): Promise<void> {
           await tick();
           break;
         case "reload":
-          if (!tab.loading && tab.writing === 0 && tab.gated.length === 0) {
+          if (tab.loads.size === 0 && tab.resumes === 0 && tab.writing === 0 && tab.gated.length === 0) {
             tab.readSlow = false;
+            tab.readLate = false;
             fresh(tab);
           }
           break;
@@ -305,6 +361,11 @@ async function run(tabCount: number, ops: readonly Op[]): Promise<void> {
           !(tab.clean && documentsEqual(stored.snapshot?.document ?? text(""), text(tab.editor)))) {
         violations.push(`4: tab ${tab.id} LOCAL_DURABLE but "${tab.editor}" is not in the journal`);
       }
+      const { failure } = tab.saver.snapshot();
+      if (failure === null && tab.instanceLoaded && tab.proposedEdits === tab.edits &&
+          !rows.includes(tab.editor) && plain(stored.snapshot?.document) !== tab.editor) {
+        violations.push(`5: tab ${tab.id} proposed "${tab.editor}" without a failure, but it is not in the journal`);
+      }
     }
     expect(violations).toEqual([]);
   } finally {
@@ -331,4 +392,22 @@ const C1: Op[] = [
 test.prop([fc.array(step, { minLength: 5, maxLength: 40 })], { numRuns, examples: [[C1]] })(
   "1 tab: the only writer never sees stale",
   (ops) => run(1, ops),
+);
+
+/**
+ * Review r6 finding 1: a load() overlapping resume() shows newer text of the
+ * other tab, which the author never chose against; always run first.
+ */
+const N1: Op[] = [
+  { kind: "edit", tab: 1 }, { kind: "propose", tab: 1 }, { kind: "tick", tab: 1 },
+  { kind: "edit", tab: 0 }, { kind: "propose", tab: 0 }, { kind: "tick", tab: 0 },
+  { kind: "load", tab: 0 }, { kind: "tick", tab: 0 },
+  { kind: "lateRead", tab: 0 }, { kind: "resume", tab: 0 },
+  { kind: "edit", tab: 1 }, { kind: "propose", tab: 1 }, { kind: "tick", tab: 1 },
+  { kind: "load", tab: 0 }, { kind: "tick", tab: 0 },
+  { kind: "release", tab: 0 }, { kind: "tick", tab: 0 },
+];
+test.prop([fc.array(step, { minLength: 5, maxLength: 40 })], { numRuns, examples: [[N1]] })(
+  "2 tabs: resume() writes only over the recovery shown when it was called",
+  (ops) => run(2, ops),
 );

@@ -101,6 +101,13 @@ export function reasonOf(failure: SaverFailure): LocalSaveFailureReason {
 
 type Candidate = { doc: CanonicalDocument; gen: number };
 
+/**
+ * What one `resume()` may write over: the journal sequence whose text the
+ * recovery showed when the author chose (#206 r6 finding 1), and that
+ * choice's gen. Only this saver's own writes advance `at`.
+ */
+type Basis = { at: number; readonly gen: number };
+
 export class LocalDocumentSaver {
   private state: SyncState = "EDITING";
   private failure: SaverFailure | null = null;
@@ -121,10 +128,15 @@ export class LocalDocumentSaver {
   private recovery: RecoveryReason | null = null;
   /**
    * The journal sequence whose text the last recovery showed; this saver's
-   * own writes advance it, so `resume()` compares with it only after they
-   * settled (#206 C1).
+   * own writes advance it (#206 C1). `resume()` copies it when called, as
+   * the text the author saw, so a later load cannot move it (#206 r6).
    */
   private shown = 0;
+  /** The bases of the `resume()` calls still running; own writes advance them. */
+  private readonly bases = new Set<Basis>();
+  private resuming = 0;
+  /** The newest gen ever queued, so `resume()` never queues behind a newer text. */
+  private queuedGen = 0;
   private next: Candidate | null = null;
   private flight: Promise<void> | null = null;
   /** Set while any `load()` reads; no write starts until the last one resolves. */
@@ -178,16 +190,16 @@ export class LocalDocumentSaver {
    * without it; only a halting one stays halted until `resume()`.
    */
   load(): Promise<LoadResult> {
-    return this.loadFor(false);
+    return this.loadFor(null);
   }
 
-  private async loadFor(resuming: boolean): Promise<LoadResult> {
+  private async loadFor(basis: Basis | null): Promise<LoadResult> {
     if (this.readers++ === 0) {
       this.reading = new Promise<void>((resolve) => { this.release = resolve; });
     }
     try {
       await this.settled();
-      return await this.read(resuming);
+      return await this.read(basis);
     } finally {
       if (--this.readers === 0) {
         this.reading = null;
@@ -197,7 +209,7 @@ export class LocalDocumentSaver {
     }
   }
 
-  private async read(resuming: boolean): Promise<LoadResult> {
+  private async read(basis: Basis | null): Promise<LoadResult> {
     try {
       const contents = await this.journal.read(this.documentId);
       const { snapshot, meta, pending } = contents;
@@ -223,14 +235,14 @@ export class LocalDocumentSaver {
       const document = stored?.ok ? stored.doc : null;
       const at = meta?.localSeq ?? 0;
       // Read after `settled()`: a write of this saver that was in flight
-      // when `resume()` was called has advanced `shown` by now (#206 C1).
-      const expected = resuming ? this.shown : this.loaded ? this.seq : at;
+      // when `resume()` was called has advanced the basis by now (#206 C1).
+      const expected = basis ? basis.at : this.loaded ? this.seq : at;
       if (at !== expected) {
         return this.haltWith("stale", this.recover("stale", document, at));
       }
       // A halting failure already halted this saver in `fail()` and only a
       // ready read lifts that, so the recovery itself changes no state.
-      if (this.unsaved && !resuming) return this.recover("unsaved", document, at);
+      if (this.unsaved && !basis) return this.recover("unsaved", document, at);
       // A ready read after an `unavailable` one is a deliberate retry: the
       // sequence below is re-read, so saving may resume from it.
       this.loaded = true;
@@ -243,11 +255,12 @@ export class LocalDocumentSaver {
       this.durable = document;
       this.rows = pending.length;
       this.chars = chars;
-      if (resuming) {
+      if (basis) {
         // The chosen text is not written yet, so nothing is claimed saved
-        // (#206 A1), and a candidate left from before the failure is dropped:
-        // the chosen text supersedes it (#206 MANJE 3).
-        this.next = null;
+        // (#206 A1), and a candidate left from before the choice is dropped:
+        // the chosen text supersedes it (#206 MANJE 3). One proposed while
+        // this read ran is newer than the choice and stays (#206 r6 finding 2).
+        if (this.next && this.next.gen < basis.gen) this.next = null;
         this.state = "EDITING";
       } else {
         // Step 1 has no server: whatever meta says, the most this tab can
@@ -279,6 +292,12 @@ export class LocalDocumentSaver {
    * that sequence. The result is that of the re-read; the write's outcome is
    * in the snapshot. A `corrupt` or `sticky` journal is never written over,
    * so `resume()` throws there.
+   *
+   * The text the recovery showed is fixed when `resume()` is called, not when
+   * it reads: a `load()` overlapping it may show newer text, which the author
+   * did not see (#206 r6 finding 1). A candidate proposed while it reads is
+   * newer than `doc`, so it is kept and written instead (#206 r6 finding 2);
+   * if the read is stale, it waits like `doc` and the next `resume()` drops it.
    */
   async resume(doc: CanonicalDocument): Promise<LoadResult> {
     if (this.recovery !== "unsaved" && this.recovery !== "stale") {
@@ -287,9 +306,20 @@ export class LocalDocumentSaver {
     // `doc` is the editor's text now: typing during the read must not let
     // the write claim the newer text as saved (#206 qa206c model).
     const gen = (this.gen += 1);
-    const result = await this.loadFor(true);
-    if (result.kind === "ready" && !this.halted) await this.queue({ doc, gen });
-    return result;
+    const basis: Basis = { at: this.shown, gen };
+    this.bases.add(basis);
+    this.resuming += 1;
+    try {
+      const result = await this.loadFor(basis);
+      if (result.kind === "ready" && !this.halted) {
+        if (this.queuedGen < gen) await this.queue({ doc, gen });
+        else await this.settled();
+      }
+      return result;
+    } finally {
+      this.bases.delete(basis);
+      this.resuming -= 1;
+    }
   }
 
   /**
@@ -305,21 +335,29 @@ export class LocalDocumentSaver {
 
   /**
    * The debounced candidate for the current text; the newest one wins. A
-   * halted saver drops it (its state already says so); proposing before a
-   * `ready` load is a caller bug and throws instead of dropping text silently.
+   * halted saver keeps it unwritten (its state already says so): a ready
+   * reload after an `unavailable` read writes it, and a `resume()` writes it
+   * if it is newer than the chosen text, so text proposed meanwhile is not
+   * lost (#206 r6 finding 2). Proposing before a `ready` load is a caller
+   * bug and throws instead of dropping text silently; after a first load
+   * that halted, the text is dropped, as there is nothing to write it over.
    */
   propose(doc: CanonicalDocument): Promise<void> {
-    if (this.halted) return Promise.resolve();
-    if (!this.loaded) throw new Error("LocalDocumentSaver.propose() before a ready load()");
+    if (!this.loaded && !this.resuming) {
+      if (this.halted) return Promise.resolve();
+      throw new Error("LocalDocumentSaver.propose() before a ready load()");
+    }
     return this.queue({ doc, gen: this.gen });
   }
 
   private queue(candidate: Candidate): Promise<void> {
     this.next = candidate;
+    this.queuedGen = Math.max(this.queuedGen, candidate.gen);
     // During a reload the candidate waits; `load()` starts it once read.
     if (this.reading) return this.reading.then(() => this.settled());
-    this.flight ??= this.drain();
-    return this.flight;
+    // A halted saver holds it; `drain()` would end at once and never clear `flight`.
+    if (!this.halted) this.flight ??= this.drain();
+    return this.flight ?? Promise.resolve();
   }
 
   /** Resolves once nothing is queued or in flight (`pagehide`, tests). */
@@ -359,6 +397,7 @@ export class LocalDocumentSaver {
       const result = await this.journal.saveLocal(this.documentId, tx, tx.createdAt, this.seq);
       // This saver's own write moves the journal past nothing the author lacks.
       if (this.shown === this.seq) this.shown = result.localSeq;
+      for (const basis of this.bases) if (basis.at === this.seq) basis.at = result.localSeq;
       this.seq = result.localSeq;
       this.durable = result.snapshot.document;
       this.rows += 1;
