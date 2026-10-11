@@ -119,10 +119,12 @@ export class LocalDocumentSaver {
   private unsaved = false;
   /** Why the last `load()` returned `recovery`; null after a `ready` one. */
   private recovery: RecoveryReason | null = null;
-  /** The journal sequence whose text the last recovery showed. */
+  /**
+   * The journal sequence whose text the last recovery showed; this saver's
+   * own writes advance it, so `resume()` compares with it only after they
+   * settled (#206 C1).
+   */
   private shown = 0;
-  /** Set while `resume()` reads: the journal must still be at this sequence. */
-  private resumeAt: number | null = null;
   private next: Candidate | null = null;
   private flight: Promise<void> | null = null;
   /** Set while any `load()` reads; no write starts until the last one resolves. */
@@ -175,13 +177,17 @@ export class LocalDocumentSaver {
    * ERROR across the reload, so the next `propose()` tries again exactly as
    * without it; only a halting one stays halted until `resume()`.
    */
-  async load(): Promise<LoadResult> {
+  load(): Promise<LoadResult> {
+    return this.loadFor(false);
+  }
+
+  private async loadFor(resuming: boolean): Promise<LoadResult> {
     if (this.readers++ === 0) {
       this.reading = new Promise<void>((resolve) => { this.release = resolve; });
     }
     try {
       await this.settled();
-      return await this.read();
+      return await this.read(resuming);
     } finally {
       if (--this.readers === 0) {
         this.reading = null;
@@ -191,11 +197,19 @@ export class LocalDocumentSaver {
     }
   }
 
-  private async read(): Promise<LoadResult> {
+  private async read(resuming: boolean): Promise<LoadResult> {
     try {
       const contents = await this.journal.read(this.documentId);
       const { snapshot, meta, pending } = contents;
       const stored = snapshot ? validateDocument(snapshot.document) : null;
+      // Measured before any field changes, so a malformed row is `corrupt`
+      // and never a half-applied read (#206 qa206c MANJE 2).
+      let chars = 0;
+      for (const row of pending) {
+        const json: unknown = JSON.stringify(row?.tx);
+        if (typeof json !== "string") return this.haltWith("corrupt", this.recover("corrupt", null));
+        chars += json.length;
+      }
       if ((meta && !snapshot) || (snapshot && !meta) || (stored && !stored.ok)) {
         return this.haltWith("corrupt", this.recover("corrupt", null));
       }
@@ -208,15 +222,15 @@ export class LocalDocumentSaver {
       }
       const document = stored?.ok ? stored.doc : null;
       const at = meta?.localSeq ?? 0;
-      const expected = this.resumeAt ?? (this.loaded ? this.seq : at);
+      // Read after `settled()`: a write of this saver that was in flight
+      // when `resume()` was called has advanced `shown` by now (#206 C1).
+      const expected = resuming ? this.shown : this.loaded ? this.seq : at;
       if (at !== expected) {
         return this.haltWith("stale", this.recover("stale", document, at));
       }
-      if (this.unsaved && this.resumeAt === null) {
-        const failure = this.failure ?? "unknown";
-        const result = this.recover("unsaved", document, at);
-        return HALTING.has(failure) ? this.haltWith(failure, result) : result;
-      }
+      // A halting failure already halted this saver in `fail()` and only a
+      // ready read lifts that, so the recovery itself changes no state.
+      if (this.unsaved && !resuming) return this.recover("unsaved", document, at);
       // A ready read after an `unavailable` one is a deliberate retry: the
       // sequence below is re-read, so saving may resume from it.
       this.loaded = true;
@@ -228,11 +242,19 @@ export class LocalDocumentSaver {
       this.baseRevision = snapshot?.revision ?? 0;
       this.durable = document;
       this.rows = pending.length;
-      this.chars = pending.reduce((sum, row) => sum + JSON.stringify(row.tx).length, 0);
-      // Step 1 has no server: whatever meta says, the most this tab can
-      // claim is that the bytes are on this device.
-      // Text typed before or during the read is not what the journal holds.
-      this.state = this.durable && this.gen === this.cleanGen && !this.next ? "LOCAL_DURABLE" : "EDITING";
+      this.chars = chars;
+      if (resuming) {
+        // The chosen text is not written yet, so nothing is claimed saved
+        // (#206 A1), and a candidate left from before the failure is dropped:
+        // the chosen text supersedes it (#206 MANJE 3).
+        this.next = null;
+        this.state = "EDITING";
+      } else {
+        // Step 1 has no server: whatever meta says, the most this tab can
+        // claim is that the bytes are on this device.
+        // Text typed before or during the read is not what the journal holds.
+        this.state = this.durable && this.gen === this.cleanGen && !this.next ? "LOCAL_DURABLE" : "EDITING";
+      }
       this.emit();
       return { kind: "ready", document: this.durable ?? emptyDocument() };
     } catch (error) {
@@ -262,16 +284,11 @@ export class LocalDocumentSaver {
     if (this.recovery !== "unsaved" && this.recovery !== "stale") {
       throw new Error("LocalDocumentSaver.resume() without an unsaved or stale recovery");
     }
-    this.resumeAt = this.shown;
-    let result: LoadResult;
-    try {
-      result = await this.load();
-    } finally {
-      this.resumeAt = null;
-    }
-    if (result.kind !== "ready") return result;
-    this.edit();
-    await this.propose(doc);
+    // `doc` is the editor's text now: typing during the read must not let
+    // the write claim the newer text as saved (#206 qa206c model).
+    const gen = (this.gen += 1);
+    const result = await this.loadFor(true);
+    if (result.kind === "ready" && !this.halted) await this.queue({ doc, gen });
     return result;
   }
 
@@ -294,7 +311,11 @@ export class LocalDocumentSaver {
   propose(doc: CanonicalDocument): Promise<void> {
     if (this.halted) return Promise.resolve();
     if (!this.loaded) throw new Error("LocalDocumentSaver.propose() before a ready load()");
-    this.next = { doc, gen: this.gen };
+    return this.queue({ doc, gen: this.gen });
+  }
+
+  private queue(candidate: Candidate): Promise<void> {
+    this.next = candidate;
     // During a reload the candidate waits; `load()` starts it once read.
     if (this.reading) return this.reading.then(() => this.settled());
     this.flight ??= this.drain();
