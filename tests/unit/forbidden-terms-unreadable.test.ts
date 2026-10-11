@@ -8,8 +8,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import ts from "typescript";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { CLOSED_UP_NOTE, UNREADABLE_HINTS, findMisplacedUiText, findUnreadableText, isolatedHost, scanUiText, syntaxErrors } from "../../scripts/forbidden-terms/scan";
-import { MAX_WINDOW_PARTS, PHRASE_BREAK, closedUpPastQuotes, findForbiddenTerms, findForbiddenTermsInMarkup, unreadableCharacters, windowsCutShort } from "../../scripts/forbidden-terms/terms";
+import { CLOSED_UP_NOTE, UNREADABLE_HINTS, findMisplacedUiText, findUnreadSourceFiles, findUnreadableText, isolatedHost, scanUiText, syntaxErrors } from "../../scripts/forbidden-terms/scan";
+import { MAX_WINDOW_PARTS, PHRASE_BREAK, closedUpPastQuotes, findForbiddenTerms, findForbiddenTermsInMarkup, shownText, unreadableCharacters, windowsCutShort } from "../../scripts/forbidden-terms/terms";
 
 const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const HR = "spremljeno (bez pojašnjenja)";
@@ -1073,6 +1073,171 @@ describe("the text of a finding for a string that writes the code point of the m
   it("leaves every other string as it is written", () => {
     write("src/domain/sync/labels.ts", 'export const A = " Sumnjivo \\\\uFFFF danas ";\n');
     expect(scanUiText(root!).map((finding) => finding.text)).toEqual([" Sumnjivo \\uFFFF danas "]);
+  });
+});
+
+// QA of 212f991: the code point of the mark, and a control of text direction,
+// still came out as they are in the reason for an import and in a text that
+// stands in the wrong module. Every string a check hands over now goes
+// through one function, which writes such a character by its escape.
+describe("what a check hands over shows no character that a log cannot show", () => {
+  // Written here a second time: what the guard reports wherever it stands.
+  const HIDDEN = new RegExp(`[\\p{Co}\\p{Cn}\\p{Cs}\\p{Zl}\\p{Zp}]|(?![\\t\\n\\v\\f\\r])\\p{Cc}|(?![${cp(0xad, 0x200b, 0x200c, 0x200d)}])\\p{Cf}`, "u");
+  const escape = (value: number): string => (value > 0xffff ? `\\u{${value.toString(16).toUpperCase()}}` : `\\u${value.toString(16).toUpperCase().padStart(4, "0")}`);
+  /** Every string in what a check returned, but for the entries of the dictionary. */
+  const strings = (value: unknown): string[] => {
+    if (typeof value === "string") return [value];
+    if (Array.isArray(value)) return value.flatMap(strings);
+    if (value !== null && typeof value === "object") return Object.entries(value).flatMap(([key, inner]) => (key === "terms" ? [] : strings(inner)));
+    return [];
+  };
+  /** What it is, the code point, how a source writes it by its escape. */
+  const ODD: readonly [string, number][] = [
+    ["the mark of a boundary", 0xffff],
+    ["right-to-left override", 0x202e],
+    ["right-to-left mark", 0x200f],
+    ["line separator", 0x2028],
+    ["paragraph separator", 0x2029],
+    ["byte order mark", 0xfeff],
+    ["C0 control character", 0x1],
+    ["C1 control character", 0x85],
+    ["private use code point", 0xe000],
+    ["surrogate without its pair", 0xd800],
+    ["unassigned code point", 0x2065],
+  ];
+
+  it.each(ODD)("the three ways of the QA, with %s", (_, value) => {
+    const [written, shown] = [`\\u${value.toString(16).toUpperCase().padStart(4, "0")}`, escape(value)];
+    write("src/C.tsx", `import x from "./x${written}.json";\nexport const C = <p>Predano</p>;\n`);
+    expect(findUnreadableText(root!)).toEqual([{ file: "src/C.tsx", line: 1, reason: `import of "./x${shown}.json", a data file the scan cannot find (${UNREADABLE_HINTS.dataFile})` }]);
+    write("src/C.tsx", `import x from "./x${written}.test";\nexport const C = <p>Predano</p>;\n`);
+    expect(findUnreadableText(root!)).toEqual([{ file: "src/C.tsx", line: 1, reason: `import of the test module "./x${shown}.test" (${UNREADABLE_HINTS.testModule})` }]);
+    write("src/C.tsx", "export const C = <p>Predano</p>;\n");
+    write("src/other.ts", `export const x = "Čuvaj${written} tekst";\n`);
+    expect(findMisplacedUiText(root!)).toEqual([{ file: "src/other.ts", line: 1, text: `Čuvaj${shown} tekst` }]);
+  });
+
+  it.each(ODD)("every public check, with %s in every place a text comes from", (_, value) => {
+    const written = `\\u${value.toString(16).toUpperCase().padStart(4, "0")}`;
+    const shown = escape(value);
+    write("src/components/Case.tsx", [
+      `import a from "./a${written}.test";`,
+      `import b from "./b${written}.json";`,
+      "export const Case = ({ n }: Props) => (",
+      "  <main>",
+      `    <p>{"Sumnjivo${written} danas"}</p>`,
+      `    <img alt={"Kopirano${written}"} />`,
+      `    <p>Spremljeno {n} {"${written}"}</p>`,
+      "  </main>",
+      ");",
+      "",
+    ].join("\n"));
+    write("src/domain/sync/labels.ts", `export const A = "Prepisano${written} jučer";\n`);
+    write("src/domain/sync/state.ts", `export const A = "Vjerojatnost${written}";\nexport const B = "Čuvaj${written} tekst";\n`);
+    // A catalogue holds the character as itself; JSON can write a control character and a lone surrogate only by an escape.
+    write("src/lib/i18n/hr.json", `{\n  "a": "Skriveno${value < 0x20 || value === 0xd800 ? written.toLowerCase() : cp(value)} danas"\n}\n`);
+    write(`src/old${value === 0x202e || value === 0x200f ? cp(value) : ""}.js`, "export const A = 1;\n");
+
+    const scanned = scanUiText(root!);
+    const guarded = findUnreadableText(root!);
+    const misplaced = findMisplacedUiText(root!);
+    const unread = findUnreadSourceFiles(root!);
+    for (const text of [scanned, guarded, misplaced, unread].flatMap(strings)) expect(text).not.toMatch(HIDDEN);
+
+    // What is found, and where, is what it was; only the text shown is another.
+    expect(scanned.map((finding) => [finding.file, finding.line, finding.terms.map((term) => term.entry).join(", "), finding.text])).toEqual([
+      ["src/components/Case.tsx", 5, "sumnjivo", `Sumnjivo${shown} danas`],
+      ["src/components/Case.tsx", 6, "kopirano", `Kopirano${shown}`],
+      // A part is shown trimmed, and the mark, the two separators and the byte order mark are white space to that: the part is empty.
+      ["src/components/Case.tsx", 7, HR, [0xffff, 0x2028, 0x2029, 0xfeff].includes(value) ? "Spremljeno" : `Spremljeno | ${shown}`],
+      ["src/domain/sync/labels.ts", 1, "prepisano", `Prepisano${shown} jučer`],
+      ["src/domain/sync/state.ts", 1, "vjerojatnost", `Vjerojatnost${shown}`],
+      ["src/lib/i18n/hr.json", 2, "skriveno", `Skriveno${shown} danas`],
+    ]);
+    expect(guarded.filter((entry) => entry.reason.startsWith("import of")).map((entry) => [entry.file, entry.line, entry.reason.split(" (")[0]])).toEqual([
+      ["src/components/Case.tsx", 1, `import of the test module "./a${shown}.test"`],
+      ["src/components/Case.tsx", 2, `import of "./b${shown}.json", a data file the scan cannot find`],
+    ]);
+    expect(guarded.filter((entry) => !entry.reason.startsWith("import of")).map((entry) => [entry.file, entry.line])).toEqual([
+      ["src/components/Case.tsx", 5],
+      ["src/components/Case.tsx", 6],
+      ["src/components/Case.tsx", 7],
+      ["src/domain/sync/labels.ts", 1],
+      ["src/domain/sync/state.ts", 1],
+      ["src/domain/sync/state.ts", 2],
+      ["src/lib/i18n/hr.json", 2],
+    ]);
+    expect(misplaced).toEqual([{ file: "src/domain/sync/state.ts", line: 2, text: `Čuvaj${shown} tekst` }]);
+    expect(unread).toEqual([value === 0x202e || value === 0x200f ? `src/old${shown}.js` : "src/old.js"]);
+  });
+
+  it.each([
+    ["a file that is not UTF-8", Buffer.from([0x22, 0xff, 0x22]), /not valid UTF-8/],
+    ["a file that does not parse", Buffer.from("export const = ;\n"), /does not parse/],
+  ])("shows the path of %s in the error by its escapes", (_, content, message) => {
+    root ??= mkdtempSync(path.join(tmpdir(), "ductus-terms-"));
+    mkdirSync(path.join(root, "src"), { recursive: true });
+    writeFileSync(path.join(root, "src", `a${cp(0x202e)}b${cp(0x200f)}.ts`), content);
+    for (const check of [scanUiText, findUnreadableText, findMisplacedUiText]) {
+      let thrown: unknown;
+      try {
+        check(root);
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown).toBeInstanceOf(Error);
+      const error = thrown as Error;
+      expect(error.message).toMatch(message);
+      expect(error.message).toContain("src/a\\u202Eb\\u200F.ts");
+      expect(error.message).not.toMatch(HIDDEN);
+      expect(error.stack).not.toMatch(HIDDEN);
+    }
+  });
+
+  it("shows the path of a file by its escapes in what every check finds in it", () => {
+    write(`src/c${cp(0x202e)}d.tsx`, `export const C = () => <p>Sumnjivo, predan${cp(0x43e)}</p>;\n`);
+    write(`src/m${cp(0x200f)}n.ts`, 'export const A = "Čuvaj ovaj tekst";\n');
+    expect(scanUiText(root!).map((finding) => [finding.file, finding.line, finding.terms.map((term) => term.entry).join(", ")])).toEqual([["src/c\\u202Ed.tsx", 1, "sumnjivo"]]);
+    expect(findUnreadableText(root!).map((entry) => [entry.file, entry.line])).toEqual([["src/c\\u202Ed.tsx", 1]]);
+    expect(findMisplacedUiText(root!)).toEqual([{ file: "src/m\\u200Fn.ts", line: 1, text: "Čuvaj ovaj tekst" }]);
+  });
+
+  it("shows what a catalogue that is not JSON holds, in the error, by its escapes", () => {
+    write("src/lib/i18n/hr.json", `{ "a": ${cp(0x202e)}oops${cp(0xfeff)} }\n`);
+    for (const check of [scanUiText, findUnreadableText]) {
+      let thrown: unknown;
+      try {
+        check(root!);
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown).toBeInstanceOf(SyntaxError);
+      expect((thrown as Error).message).toContain("\\u202E");
+      expect((thrown as Error).message).not.toMatch(HIDDEN);
+      expect((thrown as Error).stack).not.toMatch(HIDDEN);
+    }
+  });
+
+  it("writes by its escape every character that the guard reports wherever it stands, and no other", () => {
+    const wrong: string[] = [];
+    let escaped = 0;
+    for (let value = 0; value <= 0x10ffff; value += 1) {
+      const char = cp(value);
+      const hidden = HIDDEN.test(char);
+      if (hidden) escaped += 1;
+      if (shownText(char) !== (hidden ? escape(value) : char)) wrong.push(value.toString(16));
+      // The guard reports the same ones; the many code points of private use and without a character are asked at their ends below.
+      if (!/[\p{Co}\p{Cn}]/u.test(char) && (unreadableCharacters(`Rok ${char} predaje`).length > 0) !== hidden && !/[\p{L}\p{N}]/u.test(char)) wrong.push(`guard ${value.toString(16)}`);
+    }
+    expect(wrong).toEqual([]);
+    expect(escaped).toBeGreaterThan(900_000);
+    for (const value of [0x378, 0xe000, 0xf8ff, 0xffff, 0xf0000, 0x10ffff]) expect(unreadableCharacters(cp(value))).toHaveLength(1);
+    // What a reader can see, white space and the four that are left to the dictionary stay as they are.
+    const plain = `Čekanje „šuma” – 50 %\t\n\r 🎉 ${cp(0xa0, 0xad, 0x200b, 0x200c, 0x200d, 0x2009, 0x430)}`;
+    expect(shownText(plain)).toBe(plain);
+    expect(shownText(`a${cp(0xffff)}b${cp(0xe0001)}c${cp(0x10ffff)}`)).toBe("a\\uFFFFb\\u{E0001}c\\u{10FFFF}");
+    // Shown twice is shown once.
+    expect(shownText(shownText(`a${cp(0x202e)}b`))).toBe("a\\u202Eb");
   });
 });
 

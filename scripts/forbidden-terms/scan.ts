@@ -4,7 +4,7 @@ import path from "node:path";
 import ts from "typescript";
 
 import { decodeEntities } from "./entities";
-import { FORBIDDEN_TERMS, MAX_WINDOW_PARTS, PHRASE_BREAK, closedUpPastQuotes, findForbiddenTerms, findForbiddenTermsInMarkup, unreadableCharacters, windowsCutShort, type ForbiddenTerm } from "./terms";
+import { FORBIDDEN_TERMS, MAX_WINDOW_PARTS, PHRASE_BREAK, closedUpPastQuotes, findForbiddenTerms, findForbiddenTermsInMarkup, shownText, unreadableCharacters, windowsCutShort, type ForbiddenTerm } from "./terms";
 
 /**
  * Finds interface text in the source tree and checks it against the
@@ -841,10 +841,28 @@ export const UNREADABLE_HINTS = {
   dataFile: "the strings of an imported .json file are read like a catalogue, and this one is not where the import says; import it by a path from the importing file or from @/",
 } as const;
 
-/** How the mark of a boundary is shown when a source writes that code point in a string: by its escape. */
-const MARK_WRITTEN = `\\u${PHRASE_BREAK.codePointAt(0)!.toString(16).toUpperCase()}`;
-/** A string as a finding shows it. The code point of the mark is never shown as it is: no log can show it. */
-const asShown = <T extends { readonly text: string }>(piece: T): T => (piece.text.includes(PHRASE_BREAK) ? { ...piece, text: piece.text.replaceAll(PHRASE_BREAK, MARK_WRITTEN) } : piece);
+/**
+ * What a public check hands over. Every string that comes from a scanned
+ * file (a text, the reason of the guard with the name of an import in it,
+ * the path of a file, the message of an error) leaves the scan through here
+ * and through `shownText`, so a character that no log can show is written by
+ * its escape. Only what is shown changes: what is found, and where, does not.
+ */
+function handOver<T>(check: () => T, show: (result: T) => T): T {
+  try {
+    return show(check());
+  } catch (error) {
+    if (error instanceof Error) {
+      // The stack repeats the message as it was when the error was made.
+      const stack = error.stack;
+      error.message = shownText(error.message);
+      if (stack !== undefined) error.stack = shownText(stack);
+    }
+    throw error;
+  }
+}
+/** A piece of text or a finding, as it is handed over. */
+const shownPiece = <T extends UiText>(piece: T): T => ({ ...piece, file: shownText(piece.file), text: shownText(piece.text) });
 
 /**
  * Findings in what was read from one file, in source order. A piece is
@@ -856,7 +874,7 @@ function findingsIn(file: string, read: Read): Finding[] {
   const placed: { at: number; start: number; end: number; finding: Finding }[] = [];
   for (const text of read.texts) {
     const terms = findForbiddenTerms(text.check ?? text.text).filter((term) => !(text.part && term.contextual));
-    if (terms.length > 0) placed.push({ at: text.start, start: text.start, end: text.end, finding: { ...asShown(withoutSpan(text)), terms } });
+    if (terms.length > 0) placed.push({ at: text.start, start: text.start, end: text.end, finding: { ...withoutSpan(text), terms } });
   }
   const pieces = [...placed];
   const units = read.units.map((unit) => {
@@ -930,7 +948,10 @@ const isCode = (file: string): boolean => isModule(file) || file.endsWith(".tsx"
  * `.tsx`, never to exempt it.
  */
 export function findUnreadSourceFiles(root: string): string[] {
-  return [...sourceFiles(root)].filter((file) => /\.(?:[cm]?jsx?|mdx)$/.test(file)).sort();
+  return handOver(
+    () => [...sourceFiles(root)].filter((file) => /\.(?:[cm]?jsx?|mdx)$/.test(file)).sort(),
+    (files) => files.map(shownText),
+  );
 }
 
 /** How a file under `app/` or `src/` is read; `null` when the scan does not read it. */
@@ -950,15 +971,20 @@ function scanKind(file: string): Kind | null {
  * dictionary; every other string in a code file against its Croatian entries.
  */
 export function scanUiText(root: string): Finding[] {
-  const findings: Finding[] = [];
-  const check = (text: UiText, terms: ForbiddenTerm[]): void => {
-    if (terms.length > 0) findings.push({ ...asShown(text), terms });
-  };
-  for (const { file, read, others } of scannedFiles(root)) {
-    findings.push(...findingsIn(file, read));
-    for (const text of others) check(withoutSpan(text), findForbiddenTerms(text.check ?? text.text, "hr"));
-  }
-  return findings;
+  return handOver(
+    () => {
+      const findings: Finding[] = [];
+      const check = (text: UiText, terms: ForbiddenTerm[]): void => {
+        if (terms.length > 0) findings.push({ ...text, terms });
+      };
+      for (const { file, read, others } of scannedFiles(root)) {
+        findings.push(...findingsIn(file, read));
+        for (const text of others) check(withoutSpan(text), findForbiddenTerms(text.check ?? text.text, "hr"));
+      }
+      return findings;
+    },
+    (findings) => findings.map(shownPiece),
+  );
 }
 
 /** The name of a test file as an import writes it, with its extension or without. */
@@ -1045,6 +1071,13 @@ export interface Unreadable {
  * an element with that many alternatives; there are no exemptions.
  */
 export function findUnreadableText(root: string): Unreadable[] {
+  return handOver(
+    () => unreadableIn(root),
+    (found) => found.map((entry) => ({ ...entry, file: shownText(entry.file), reason: shownText(entry.reason) })),
+  );
+}
+
+function unreadableIn(root: string): Unreadable[] {
   const unreadable: Unreadable[] = [];
   for (const { file, read, others, imports } of scannedFiles(root)) {
     for (const { name, line } of imports) {
@@ -1087,6 +1120,13 @@ export function findUnreadableText(root: string): Unreadable[] {
  * text in a module outside the list is not caught.
  */
 export function findMisplacedUiText(root: string): UiText[] {
+  return handOver(
+    () => misplacedIn(root),
+    (found) => found.map(shownPiece),
+  );
+}
+
+function misplacedIn(root: string): UiText[] {
   const misplaced: UiText[] = [];
   for (const file of sourceFiles(root)) {
     if (!isModule(file) || isUiTextModule(file)) continue;

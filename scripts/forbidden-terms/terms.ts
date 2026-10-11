@@ -459,6 +459,25 @@ const SEPARATOR = /[\p{Zl}\p{Zp}]/gu;
  * whole category is reported and no list of it is kept that could go stale.
  */
 const FORMAT = /(?![\u00AD\u200B\u200C\u200D])\p{Cf}/gu;
+/** Every character that `unreadableCharacters` reports wherever it stands. */
+const NOT_SHOWN = new RegExp(`${NEVER_TEXT.source}|${SEPARATOR.source}|${FORMAT.source}`, "gu");
+
+/**
+ * `text` as a finding or an error may show it: every character that the guard
+ * reports wherever it stands is written by its escape, `\uXXXX` or
+ * `\u{XXXXX}`. Such a character shows as nothing in a log, breaks its line or
+ * turns the text around it, and the mark of a boundary (`PHRASE_BREAK`) is one
+ * of them. White space, letters and everything a reader can see stay as they
+ * are, so the text can still be found in the source.
+ */
+export function shownText(text: string): string {
+  return text.replace(NOT_SHOWN, (char) => {
+    const code = char.codePointAt(0)!;
+    const hex = code.toString(16).toUpperCase();
+    return code > 0xffff ? `\\u{${hex}}` : `\\u${hex.padStart(4, "0")}`;
+  });
+}
+
 /** A character typed on a keyboard; what it looks like is for the reader of the source to judge. */
 const isAscii = (char: string): boolean => char.codePointAt(0)! < 0x80;
 
