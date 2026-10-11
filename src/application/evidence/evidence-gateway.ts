@@ -3,6 +3,7 @@ import {
   type AuthorizationPort,
 } from "@/application/ports/authorization";
 import {
+  evidencePayloadExceedsLimit,
   validateEvidenceIngestCommandV2,
   type EvidenceIngestCommandV2,
   type EvidenceIngestOutcome,
@@ -17,15 +18,18 @@ import type {
 } from "@/application/ports/evidence-trust";
 import type { SigningKeyProvider } from "@/application/ports/signing-key-provider";
 import {
+  decideEvidenceRetry,
+  verifyCanonicalEvidencePayloadV2,
+} from "@/domain/forensics/evidence-chain-v2";
+import {
   digestEvidenceReceiptPayload,
+  isEvidenceReceiptPayloadV1,
+  isSignedEvidenceReceipt,
   type SignedEvidenceReceipt,
 } from "@/domain/forensics/evidence-receipt";
-import {
-  canonicalEvidenceSegmentV2,
-  digestEvidenceSegmentV2,
-  isEvidenceSegmentV2,
-  type EvidenceSegmentV2,
-} from "@/domain/forensics/evidence-segment-v2";
+import type { EvidenceSegmentV2 } from "@/domain/forensics/evidence-segment-v2";
+import { isSignatureEnvelope } from "@/domain/forensics/signature";
+import { isPlainObject } from "@/domain/json";
 
 type GatewayDependencies = {
   authorization: AuthorizationPort;
@@ -57,38 +61,20 @@ function descriptorMatchesSegment(
   );
 }
 
-async function parseAndVerifyCanonicalPayload(
-  command: EvidenceIngestCommandV2,
-): Promise<
-  | { ok: true; segment: EvidenceSegmentV2 }
-  | { ok: false; reason: "invalid" | "too_large" }
-> {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(command.canonicalPayload);
-  } catch {
-    return { ok: false, reason: "invalid" };
-  }
+/** What the repository returned is not an acceptance this code may act on. */
+function malformedRecord(): EvidenceIngestOutcome {
+  return {
+    status: "unavailable",
+    stage: "repository",
+    reason: "stored acceptance is malformed",
+  };
+}
 
-  if (!isEvidenceSegmentV2(parsed)) {
-    return { ok: false, reason: "invalid" };
-  }
-
-  const canonical = canonicalEvidenceSegmentV2(parsed);
-  if (canonical !== command.canonicalPayload) {
-    return { ok: false, reason: "invalid" };
-  }
-
-  const digest = await digestEvidenceSegmentV2(parsed);
-  if (
-    digest.sha256 !== command.descriptor.segmentHash ||
-    digest.byteLength !== command.descriptor.payloadBytes ||
-    !descriptorMatchesSegment(command, parsed)
-  ) {
-    return { ok: false, reason: "invalid" };
-  }
-
-  return { ok: true, segment: parsed };
+/** A stored receipt leaves only if it is still a well-formed signed receipt. */
+function storedReceiptOutcome(receipt: unknown): EvidenceIngestOutcome {
+  return isSignedEvidenceReceipt(receipt)
+    ? { status: "duplicate", receipt }
+    : malformedRecord();
 }
 
 export class EvidenceGateway implements EvidenceIngestPort {
@@ -97,15 +83,26 @@ export class EvidenceGateway implements EvidenceIngestPort {
   private async signAcceptedRecord(
     record: EvidenceAcceptanceRecord,
   ): Promise<EvidenceIngestOutcome> {
+    // Never sign a payload with a field nobody validated, or one that has no
+    // canonical form to take a digest of.
+    if (!isEvidenceReceiptPayloadV1(record.receiptPayload)) {
+      return malformedRecord();
+    }
     const receiptDigest = await digestEvidenceReceiptPayload(
       record.receiptPayload,
-    );
+    ).catch(() => null);
+    if (receiptDigest === null) {
+      return malformedRecord();
+    }
 
     let signedReceipt: SignedEvidenceReceipt;
     try {
       const signature = await this.dependencies.signer.sign(
         receiptDigest.bytes,
       );
+      if (!isSignatureEnvelope(signature)) {
+        throw new Error("signer returned a malformed signature");
+      }
       if (
         !(await this.dependencies.signer.verify(
           receiptDigest.bytes,
@@ -148,25 +145,74 @@ export class EvidenceGateway implements EvidenceIngestPort {
       };
     }
     if (attached.status === "already_attached") {
-      return { status: "duplicate", receipt: attached.receipt };
+      return storedReceiptOutcome(attached.receipt);
     }
 
     return { status: "accepted", receipt: signedReceipt };
   }
 
+  /**
+   * Order of the checks, each before the next one touches any state:
+   *
+   * 1. a principal from the session (never from the command);
+   * 2. the one size limit (D-96) and the shape of the command, both without
+   *    reading any state, so they say nothing about what exists;
+   * 3. authorization, for the package id the client named. Until it allows,
+   *    nothing about the package is looked up, so a package that does not
+   *    exist, one bound to another document and one that is simply not the
+   *    caller's all answer `unauthorized`;
+   * 4. the package context (document and profile);
+   * 5. a retry under the same idempotency key, decided by the received bytes;
+   * 6. only for a new acceptance: closed package, package limit, verification
+   *    of the bytes, storage and `reserve`.
+   */
   async ingest(
     request: EvidenceIngestRequestV2,
   ): Promise<EvidenceIngestOutcome> {
-    if (!request.principalId?.trim()) {
+    if (
+      typeof request.principalId !== "string" ||
+      !request.principalId.trim()
+    ) {
       return { status: "unauthorized" };
+    }
+
+    const command: unknown = request.command;
+    const received = isPlainObject(command)
+      ? command.canonicalPayload
+      : undefined;
+    if (typeof received === "string" && evidencePayloadExceedsLimit(received)) {
+      return { status: "too_large" };
     }
     if (!validateEvidenceIngestCommandV2(request.command)) {
       return { status: "invalid" };
     }
+    const { clientRequestId, descriptor, canonicalPayload } = request.command;
+    const evidencePackageId = descriptor.evidencePackageId;
 
-    const contextResult = await this.dependencies.contexts.resolve(
-      request.command.descriptor.evidencePackageId,
-    );
+    const authz = await this.dependencies.authorization.check({
+      principalId: request.principalId,
+      action: "append_evidence",
+      resource: {
+        type: "evidence_package",
+        id: evidencePackageId,
+      },
+      consistency: requiredAuthorizationConsistency("append_evidence"),
+      context: request.authorizationContext,
+    });
+    if (authz.status === "unavailable") {
+      return {
+        status: "unavailable",
+        stage: "authorization",
+        reason: authz.reason,
+      };
+    }
+    // Anything but an explicit allow is a refusal.
+    if (authz.status !== "allow") {
+      return { status: "unauthorized" };
+    }
+
+    const contextResult =
+      await this.dependencies.contexts.resolve(evidencePackageId);
     if (contextResult.status === "unavailable") {
       return {
         status: "unavailable",
@@ -180,38 +226,18 @@ export class EvidenceGateway implements EvidenceIngestPort {
 
     const context = contextResult.context;
     if (
-      context.documentId !== request.command.descriptor.documentId ||
-      context.evidenceProfileId !== request.command.descriptor.evidenceProfileId
+      context.evidencePackageId !== evidencePackageId ||
+      context.documentId !== descriptor.documentId ||
+      context.evidenceProfileId !== descriptor.evidenceProfileId
     ) {
       return { status: "invalid" };
     }
 
-    const authz = await this.dependencies.authorization.check({
-      principalId: request.principalId,
-      action: "append_evidence",
-      resource: {
-        type: "evidence_package",
-        id: context.evidencePackageId,
-      },
-      consistency: requiredAuthorizationConsistency("append_evidence"),
-      context: request.authorizationContext,
-    });
-    if (authz.status === "unavailable") {
-      return {
-        status: "unavailable",
-        stage: "authorization",
-        reason: authz.reason,
-      };
-    }
-    if (authz.status === "deny") {
-      return { status: "unauthorized" };
-    }
-
     const lookup = await this.dependencies.repository.lookup({
       principalId: request.principalId,
-      evidencePackageId: context.evidencePackageId,
-      clientRequestId: request.command.clientRequestId,
-      descriptor: request.command.descriptor,
+      evidencePackageId,
+      clientRequestId,
+      descriptor,
     });
 
     if (lookup.status === "unavailable") {
@@ -224,39 +250,61 @@ export class EvidenceGateway implements EvidenceIngestPort {
     if (lookup.status === "idempotency_conflict") {
       return { status: "idempotency_conflict" };
     }
-    if (lookup.status === "duplicate_signed") {
-      if (!lookup.record.signedReceipt) {
-        return {
-          status: "unavailable",
-          stage: "repository",
-          reason: "signed record missing receipt",
-        };
+    if (
+      lookup.status === "duplicate_signed" ||
+      lookup.status === "duplicate_pending"
+    ) {
+      // The same descriptor is not yet the same submission (DAN-46): the
+      // original acceptance is confirmed only for the bytes it was given for.
+      const resent = await verifyCanonicalEvidencePayloadV2(canonicalPayload);
+      if (!resent.ok) {
+        return { status: resent.reason };
       }
-      return { status: "duplicate", receipt: lookup.record.signedReceipt };
-    }
-    if (lookup.status === "duplicate_pending") {
-      return this.signAcceptedRecord(lookup.record);
+      let decision: ReturnType<typeof decideEvidenceRetry>;
+      try {
+        decision = decideEvidenceRetry({
+          acceptedSegmentHash: lookup.record.descriptor.segmentHash,
+          // A different descriptor is `idempotency_conflict` above.
+          descriptorMatches: true,
+          receivedPayloadSha256: resent.sha256,
+        });
+      } catch {
+        return malformedRecord();
+      }
+      if (decision !== "duplicate") {
+        return { status: "invalid" };
+      }
+      return lookup.status === "duplicate_signed"
+        ? storedReceiptOutcome(lookup.record.signedReceipt)
+        : this.signAcceptedRecord(lookup.record);
     }
 
     if (!context.acceptsEvidence) {
       return { status: "not_accepting" };
     }
-    if (request.command.descriptor.payloadBytes > context.maxPayloadBytes) {
+    if (descriptor.payloadBytes > context.maxPayloadBytes) {
       return { status: "too_large" };
     }
 
     // Canonicalizing and hashing the payload is the expensive step, so it runs
-    // only after authorization and the size limit; descriptorMatchesSegment
-    // ties the descriptor fields used above to the verified segment.
-    const verified = await parseAndVerifyCanonicalPayload(request.command);
+    // only after authorization and the size limits. The hash is the one of the
+    // received bytes; the declared one only has to agree with it.
+    const verified = await verifyCanonicalEvidencePayloadV2(canonicalPayload);
     if (!verified.ok) {
       return { status: verified.reason };
     }
+    if (
+      verified.sha256 !== descriptor.segmentHash ||
+      verified.byteLength !== descriptor.payloadBytes ||
+      !descriptorMatchesSegment(request.command, verified.segment)
+    ) {
+      return { status: "invalid" };
+    }
 
     const stored = await this.dependencies.payloadStore.putImmutable({
-      evidencePackageId: context.evidencePackageId,
-      segmentHash: request.command.descriptor.segmentHash,
-      canonicalPayload: request.command.canonicalPayload,
+      evidencePackageId,
+      segmentHash: verified.sha256,
+      canonicalPayload,
     });
     if (stored.status === "unavailable") {
       return {
@@ -270,10 +318,10 @@ export class EvidenceGateway implements EvidenceIngestPort {
     }
 
     const reserved = await this.dependencies.repository.reserve({
-      clientRequestId: request.command.clientRequestId,
+      clientRequestId,
       principalId: request.principalId,
       storageRef: stored.storageRef,
-      descriptor: request.command.descriptor,
+      descriptor,
     });
 
     if (reserved.status === "unavailable") {
@@ -316,14 +364,9 @@ export class EvidenceGateway implements EvidenceIngestPort {
       };
     }
     if (reserved.status === "duplicate_signed") {
-      if (!reserved.record.signedReceipt) {
-        return {
-          status: "unavailable",
-          stage: "repository",
-          reason: "signed record missing receipt",
-        };
-      }
-      return { status: "duplicate", receipt: reserved.record.signedReceipt };
+      // Same key and descriptor as a concurrent request; the bytes were
+      // verified against that descriptor's hash just above.
+      return storedReceiptOutcome(reserved.record.signedReceipt);
     }
 
     return this.signAcceptedRecord(reserved.record);

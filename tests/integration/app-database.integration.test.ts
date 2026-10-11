@@ -127,12 +127,13 @@ describe("withActor over APP_DATABASE_URL", () => {
     const inner = vi.fn(async () => "inner");
     const started = Date.now();
 
-    await expect(nested(null, () => nested(null, inner))).rejects.toThrow(/timeout/i);
+    // withActor refuses the inner call before it asks the pool for a second
+    // connection, so it fails at once instead of waiting out the connection timeout.
+    await expect(nested(null, () => nested(null, inner))).rejects.toThrow(/nested call/);
 
     const waited = Date.now() - started;
     expect(inner).not.toHaveBeenCalled();
-    expect(waited).toBeGreaterThanOrEqual(APP_CONNECTION_TIMEOUT_MS - 250);
-    expect(waited).toBeLessThan(APP_IDLE_IN_TRANSACTION_TIMEOUT_MS);
+    expect(waited).toBeLessThan(APP_CONNECTION_TIMEOUT_MS);
     // The outer transaction was rolled back and its connection is usable again.
     expect(await nested(null, async (tx) => (await tx.query("SELECT 1 AS one")).rows[0].one)).toBe(1);
   });

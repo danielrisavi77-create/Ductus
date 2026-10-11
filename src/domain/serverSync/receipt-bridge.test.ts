@@ -1,11 +1,28 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { ackedRevision, isRetryable, outcomeToEvents } from "../sync/drain";
+import { emptyDocument } from "../document";
+import { ackedRevision, isRetryable, outcomeToEvents, type AnswerFlight } from "../sync/drain";
+import type { PendingTransaction } from "../sync/journal-types";
 import { parseCommitOutcome } from "./contract";
 
 const DOCUMENT_ID = "11111111-1111-4111-8111-111111111111";
 const TRANSACTION_ID = "test-tx-1";
 const SIGNED = { receiptSchema: "synthetic-test", signature: "not-a-real-signature" };
+
+const SENT: PendingTransaction = {
+  documentId: DOCUMENT_ID,
+  localSeq: 1,
+  tx: {
+    kind: "REPLACE_DOCUMENT",
+    clientTransactionId: TRANSACTION_ID,
+    baseRevision: 4,
+    document: emptyDocument(() => "aaaaaaaa-0000-4000-8000-000000000001"),
+    createdAt: "2026-10-10T10:00:00.000Z",
+  },
+  queuedAt: "2026-10-10T10:00:00.000Z",
+};
+/** The answer's flight: the sent row is still the only queued row. */
+const ALONE: AnswerFlight = { sent: SENT, pending: [SENT] };
 
 function verification(revision: number, result = true) {
   return {
@@ -32,7 +49,7 @@ describe("canonical wire parser -> sync ACK boundary (DAN-25)", () => {
       const parsed = parseCommitOutcome(raw);
       expect(parsed).toEqual(raw);
       expect(ackedRevision(parsed)).toBeNull();
-      const events = await outcomeToEvents(parsed, verification(5), false);
+      const events = await outcomeToEvents(parsed, verification(5), ALONE);
       expect(events).toEqual([{ type: "SYNC_ACK" }]);
       expect(ackedRevision(parsed)).toBe(5);
     },
@@ -45,7 +62,7 @@ describe("canonical wire parser -> sync ACK boundary (DAN-25)", () => {
         status, revision: 5, receipt: { status: "pending_signature" },
       });
       expect(parsed.status).toBe(status);
-      expect(await outcomeToEvents(parsed, verification(5), false)).toEqual([]);
+      expect(await outcomeToEvents(parsed, verification(5), ALONE)).toEqual([]);
       expect(isRetryable(parsed)).toBe(true);
       expect(ackedRevision(parsed)).toBeNull();
     },
@@ -56,7 +73,7 @@ describe("canonical wire parser -> sync ACK boundary (DAN-25)", () => {
       status: "committed", revision: 5,
       receipt: { status: "signed", signedReceipt: SIGNED },
     });
-    expect(await outcomeToEvents(parsed, verification(5, false), false)).toEqual([
+    expect(await outcomeToEvents(parsed, verification(5, false), ALONE)).toEqual([
       { type: "SYNC_FAILED", retryable: false },
     ]);
     expect(ackedRevision(parsed)).toBeNull();
@@ -67,7 +84,7 @@ describe("canonical wire parser -> sync ACK boundary (DAN-25)", () => {
       status: "duplicate", revision: 6,
       receipt: { status: "signed", signedReceipt: SIGNED },
     });
-    expect(await outcomeToEvents(parsed, verification(5), false)).toEqual([
+    expect(await outcomeToEvents(parsed, verification(5), ALONE)).toEqual([
       { type: "SYNC_FAILED", retryable: false },
     ]);
     expect(ackedRevision(parsed)).toBeNull();
@@ -82,7 +99,7 @@ describe("canonical wire parser -> sync ACK boundary (DAN-25)", () => {
       ...verification(5),
       expected: { documentId: "other-document", clientTransactionId: TRANSACTION_ID, revision: 5 },
     };
-    expect(await outcomeToEvents(parsed, invalidBinding, false)).toEqual([
+    expect(await outcomeToEvents(parsed, invalidBinding, ALONE)).toEqual([
       { type: "SYNC_FAILED", retryable: false },
     ]);
     expect(ackedRevision(parsed)).toBeNull();

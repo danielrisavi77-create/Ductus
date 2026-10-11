@@ -20,6 +20,7 @@ import {
   nextAwaitingReceipt,
   outcomeToEvents,
   planDrain,
+  type AnswerFlight,
   type AwaitingReceipt,
   type CommitReceiptVerification,
   type DrainOutcome,
@@ -76,6 +77,9 @@ function pendingSignature(status: "committed" | "duplicate", revision: number): 
   return { status, revision, receipt: { status: "pending_signature" } };
 }
 
+/** Row 1 was sent and is still the only queued row. */
+const FIRST_ALONE: AnswerFlight = { sent: row(1, 1), pending: [row(1, 1)] };
+
 function reduce(state: SyncState, events: readonly SyncEvent[]): SyncState {
   return events.reduce(syncReducer, state);
 }
@@ -88,7 +92,7 @@ describe("verified receipt for a held older row (QA finding 1)", () => {
     const plan1 = planDrain([first], meta("SYNCING"));
     expect(newerRowsQueued([first], plan1.send)).toBe(false);
     const landed = pendingSignature("committed", 2);
-    let state = reduce("SYNCING", await outcomeToEvents(landed, verification("tx-1", 2), newerRowsQueued([first], plan1.send)));
+    let state = reduce("SYNCING", await outcomeToEvents(landed, verification("tx-1", 2), { sent: plan1.send!, pending: [first] }));
     expect(state).toBe("SYNCING");
     let awaiting = nextAwaitingReceipt(first, landed, null);
 
@@ -107,7 +111,7 @@ describe("verified receipt for a held older row (QA finding 1)", () => {
     expect(plan2.send).toBe(first);
     expect(newerRowsQueued([first, second], plan2.send)).toBe(true);
     const replay = signed("duplicate", 2);
-    const events = await outcomeToEvents(replay, verification("tx-1", 2), newerRowsQueued([first, second], plan2.send));
+    const events = await outcomeToEvents(replay, verification("tx-1", 2), { sent: plan2.send!, pending: [first, second] });
 
     // The receipt is for "a"; the author is looking at "b". Not SYNCED.
     expect(events).toEqual([]);
@@ -128,14 +132,14 @@ describe("verified receipt for a held older row (QA finding 1)", () => {
 
     // Its own commit with a pending signature is still not SYNCED …
     const landed2 = pendingSignature("committed", 3);
-    state = reduce(state, await outcomeToEvents(landed2, verification("tx-2", 3), newerRowsQueued([second], plan3.send)));
+    state = reduce(state, await outcomeToEvents(landed2, verification("tx-2", 3), { sent: plan3.send!, pending: [second] }));
     expect(state).toBe("SYNCING");
     awaiting = nextAwaitingReceipt(second, landed2, awaiting);
 
     // … and SYNCED arrives only with the signed receipt for the newest row.
     const plan4 = planDrain([second], meta("SYNCING"), awaiting);
     const replay2 = signed("duplicate", 3);
-    state = reduce(state, await outcomeToEvents(replay2, verification("tx-2", 3), newerRowsQueued([second], plan4.send)));
+    state = reduce(state, await outcomeToEvents(replay2, verification("tx-2", 3), { sent: plan4.send!, pending: [second] }));
     expect(state).toBe("SYNCED");
     expect(nextAwaitingReceipt(second, replay2, awaiting)).toBeNull();
   });
@@ -164,30 +168,43 @@ describe("verified receipt for a held older row (QA finding 1)", () => {
     expect(newerRowsQueued(null as never, sent)).toBe(true);
   });
 
-  it("withholds the ACK for anything but an explicit false", async () => {
-    for (const flag of [true, 1, "false", null, undefined, {}] as unknown as boolean[]) {
+  it("withholds the ACK when the flight cannot be read", async () => {
+    const first = row(1, 1);
+    const unreadable = [
+      true,
+      false,
+      null,
+      undefined,
+      {},
+      { sent: null, pending: [first] },
+      { sent: first, pending: "x" },
+      { sent: first },
+      { sent: { ...first, documentId: "" }, pending: [first] },
+    ] as unknown as AnswerFlight[];
+    for (const flight of unreadable) {
       const outcome = signed("committed", 2);
-      expect(await outcomeToEvents(outcome, verification("tx-1", 2), flag)).toEqual([]);
+      expect(await outcomeToEvents(outcome, verification("tx-1", 2), flight)).toEqual([]);
+      // The revision is still verified: a bad flight withholds SYNCED, not the base.
       expect(ackedRevision(outcome)).toBe(2);
     }
   });
 
-  it("withholds the ACK when the caller leaves the argument out (review finding 1)", async () => {
+  it("withholds the ACK when the caller leaves the flight out (review finding 1)", async () => {
     // The parameter is required: a caller that forgets it does not compile.
     const omitted = signed("committed", 2);
-    // @ts-expect-error newerRowsQueued has no default and must be passed
+    // @ts-expect-error the flight has no default and must be passed
     expect(await outcomeToEvents(omitted, verification("tx-1", 2))).toEqual([]);
     expect(ackedRevision(omitted)).toBe(2);
 
     // And a caller that slips past the compiler still gets no ACK.
     const missing = signed("duplicate", 2);
     expect(
-      await outcomeToEvents(missing, verification("tx-1", 2), undefined as unknown as boolean),
+      await outcomeToEvents(missing, verification("tx-1", 2), undefined as unknown as AnswerFlight),
     ).toEqual([]);
     expect(ackedRevision(missing)).toBe(2);
 
-    // Control: the explicit false is what emits it.
-    expect(await outcomeToEvents(signed("committed", 2), verification("tx-1", 2), false)).toEqual([
+    // Control: the flight of the newest queued row is what emits it.
+    expect(await outcomeToEvents(signed("committed", 2), verification("tx-1", 2), FIRST_ALONE)).toEqual([
       { type: "SYNC_ACK" },
     ]);
   });
@@ -210,7 +227,7 @@ describe("verified receipt for a held older row (QA finding 1)", () => {
     // With nothing newer queued the receipt of the re-read row is SYNCED.
     const state = reduce(
       "SYNCING",
-      await outcomeToEvents(signed("committed", 2), verification("tx-1", 2), newerRowsQueued(reread, plan.send)),
+      await outcomeToEvents(signed("committed", 2), verification("tx-1", 2), { sent: plan.send!, pending: reread }),
     );
     expect(state).toBe("SYNCED");
 
@@ -242,7 +259,7 @@ describe("verified receipt for a held older row (QA finding 1)", () => {
     const events = await outcomeToEvents(
       outcome,
       { ...verification("tx-1", 2), verify: async () => false },
-      true,
+      { sent: row(1, 1), pending: [row(1, 1), row(2, 1)] },
     );
     expect(events).toEqual([{ type: "SYNC_FAILED", retryable: false }]);
     expect(ackedRevision(outcome)).toBeNull();
@@ -252,7 +269,7 @@ describe("verified receipt for a held older row (QA finding 1)", () => {
 describe("a verified outcome is bound to its transaction (QA finding 2)", () => {
   it("does not release another row's hold", async () => {
     const outcomeOfFirst = signed("duplicate", 2);
-    await outcomeToEvents(outcomeOfFirst, verification("tx-1", 2), false);
+    await outcomeToEvents(outcomeOfFirst, verification("tx-1", 2), FIRST_ALONE);
     expect(ackedRevision(outcomeOfFirst)).toBe(2);
 
     const second = row(2, 2);
@@ -263,7 +280,10 @@ describe("a verified outcome is bound to its transaction (QA finding 2)", () => 
 
   it("does not release a hold on the same key in another document", async () => {
     const outcome = signed("duplicate", 2);
-    await outcomeToEvents(outcome, verification("tx-1", 2, OTHER_DOC), false);
+    await outcomeToEvents(outcome, verification("tx-1", 2, OTHER_DOC), {
+      sent: row(1, 1, OTHER_DOC),
+      pending: [row(1, 1, OTHER_DOC)],
+    });
     const first = row(1, 1);
     expect(nextAwaitingReceipt(first, outcome, null)).toEqual({
       documentId: DOC,
@@ -274,7 +294,7 @@ describe("a verified outcome is bound to its transaction (QA finding 2)", () => 
 
   it("releases the hold for the row it was verified for", async () => {
     const outcome = signed("duplicate", 2);
-    await outcomeToEvents(outcome, verification("tx-1", 2), false);
+    await outcomeToEvents(outcome, verification("tx-1", 2), FIRST_ALONE);
     expect(nextAwaitingReceipt(row(1, 1), outcome, null)).toBeNull();
   });
 });

@@ -92,7 +92,8 @@ const textReplayer: EvidenceStepReplayerV2<ReplayDocument> = {
           documentId: DOCUMENT,
           sequence: event.sequence,
           revision: 0,
-          occurredAt: event.occurredAt,
+          // An event of a segment has no time; the older replay domain asks for one.
+          occurredAt: "2026-10-12T08:00:00.000Z",
           actorId: STUDENT,
           actorRole: "student",
           payload,
@@ -123,8 +124,6 @@ async function buildSegment(
   for (const [index, text] of texts.entries()) {
     const event: EvidenceEventV2 = {
       sequence: sequenceFrom + index,
-      occurredAt: `2026-10-12T08:${minute}:0${index + 1}.000Z`,
-      elapsedMs: (index + 1) * 400,
       source: "editor",
       steps: [{ kind: "insert-text", nodeId: NODE, offset: document.nodes[0].text.length, text }],
       touchedNodeIds: [NODE],
@@ -145,7 +144,7 @@ async function buildSegment(
     sequenceFrom,
     sequenceTo: sequenceFrom + events.length - 1,
     observedStartedAt: `2026-10-12T08:${minute}:00.000Z`,
-    observedEndedAt: `2026-10-12T08:${minute}:30.000Z`,
+    observedEndedAt: `2026-10-12T08:${minute}:00.000Z`,
     initialDocumentHash,
     finalDocumentHash: hash,
     predecessorSegmentHash: predecessor,
@@ -352,6 +351,45 @@ const TAMPERING: [name: string, reason: string, index: number | null, tamper: Ta
         s.map((entry, at) =>
           at === 1 && entry.receipt
             ? { ...entry, receipt: { ...entry.receipt, payload: { ...entry.receipt.payload, acceptedAt: "\ud800" } } }
+            : entry,
+        ),
+      ),
+  ],
+  [
+    // Passes the shape check (any non-empty id does) and fails at the digest.
+    "a receipt whose id has no canonical form",
+    "receipt_mismatch",
+    1,
+    (env) =>
+      chainWith(env, (s) =>
+        s.map((entry, at) =>
+          at === 1 && entry.receipt
+            ? { ...entry, receipt: { ...entry.receipt, payload: { ...entry.receipt.payload, receiptId: "\ud800" } } }
+            : entry,
+        ),
+      ),
+  ],
+  [
+    // The signature covers the payload only, so it still verifies.
+    "a receipt with a field next to its signed payload",
+    "receipt_mismatch",
+    1,
+    (env) =>
+      chainWith(env, (s) =>
+        s.map((entry, at) =>
+          at === 1 && entry.receipt ? { ...entry, receipt: { ...entry.receipt, note: "izmišljeno" } } : entry,
+        ),
+      ),
+  ],
+  [
+    "a receipt whose signature carries an unknown field",
+    "receipt_mismatch",
+    2,
+    (env) =>
+      chainWith(env, (s) =>
+        s.map((entry, at) =>
+          at === 2 && entry.receipt
+            ? { ...entry, receipt: { ...entry.receipt, signature: { ...entry.receipt.signature, note: "izmišljeno" } } }
             : entry,
         ),
       ),

@@ -74,7 +74,15 @@ describe("golden vectors: document hash", () => {
     }
     const hashAfter = new Map(chain.documentStates.map((s) => [s.afterSequence, s.sha256]));
     const events = chain.segments.flatMap((vector) => vector.segment.events);
-    expect(events.map((event) => event.sequence)).toEqual([1, 2, 3]);
+    expect(events.map((event) => event.sequence)).toEqual([1, 2, 3, 4, 5]);
+    // Keyless input and a change with no attribution (D-54) are in the accepted chain.
+    expect(events.map((event) => event.source)).toEqual([
+      "editor",
+      "paste",
+      "composition",
+      "keyless-input",
+      "unattributed",
+    ]);
     for (const event of events) {
       expect(event.beforeDocumentHash).toBe(hashAfter.get(event.sequence - 1));
       expect(event.afterDocumentHash).toBe(hashAfter.get(event.sequence));
@@ -166,6 +174,52 @@ describe("golden vectors: segment hash and chain", () => {
     const tooLarge = { ok: false, reason: sizeLimit.overLimit.reason };
     expect(await verifyCanonicalEvidencePayloadV2(overLimit)).toEqual(tooLarge);
     expect(await verifyCanonicalEvidencePayloadV2(strictText(overLimit))).toEqual(tooLarge);
+  });
+});
+
+describe("golden vectors: time in a segment (D-24, D-56)", () => {
+  const { formerSegments } = vectors.eventTime;
+
+  it("stores two whole minutes and no other time in each accepted segment", () => {
+    for (const { segment, canonicalUtf8Hex } of chain.segments) {
+      const text = strictText(fromHex(canonicalUtf8Hex)) ?? "";
+      expect(text.match(/\d{2}:\d{2}:\d{2}[^"]*/g)).toEqual([
+        segment.observedEndedAt.slice(11),
+        segment.observedStartedAt.slice(11),
+      ]);
+      expect(segment.observedStartedAt).toMatch(/T\d{2}:\d{2}:00\.000Z$/);
+      expect(segment.observedEndedAt).toMatch(/T\d{2}:\d{2}:00\.000Z$/);
+      expect(text).not.toMatch(/occurredAt|elapsedMs/);
+    }
+    // One segment runs across a minute boundary; the next lies within the minute it ended in.
+    const [first, second] = chain.segments.map((vector) => vector.segment);
+    expect(first.observedEndedAt).not.toBe(first.observedStartedAt);
+    expect([second.observedStartedAt, second.observedEndedAt]).toEqual([
+      first.observedEndedAt,
+      first.observedEndedAt,
+    ]);
+  });
+
+  it.each(formerSegments)("refuses $name, valid before the decision", async (former) => {
+    const bytes = fromHex(former.canonicalUtf8Hex);
+    const text = strictText(bytes) ?? "";
+    // The bytes are the ones the first revision published: same hash, canonical JCS.
+    expect(createHash("sha256").update(bytes).digest("hex")).toBe(former.formerSegmentHash);
+    expect(bytes.byteLength).toBe(former.byteLength);
+    expect(canonicalizeJcs(JSON.parse(text))).toBe(text);
+    expect(text).toMatch(/"elapsedMs":[0-9.]+,"occurredAt":"/);
+
+    expect(isEvidenceSegmentV2(JSON.parse(text))).toBe(false);
+    expect(await verifyCanonicalEvidencePayloadV2(bytes)).toEqual({ ok: false, reason: former.reason });
+    expect(await verifyCanonicalEvidencePayloadV2(text)).toEqual({ ok: false, reason: former.reason });
+  });
+
+  it("keeps both chain segments of the first revision as refused vectors", () => {
+    // The segment hashes of the file as merged for DAN-127.
+    expect(formerSegments.map((former) => former.formerSegmentHash)).toEqual([
+      "8a95172066e145b5b890b9a73a3b4ccedbdceaf46ec8c373d2b35e94328f692e",
+      "af2a408d76db01c7b95962f8f854a460b3491879f39b033ebed725587e948cb4",
+    ]);
   });
 });
 

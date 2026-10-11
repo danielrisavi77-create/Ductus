@@ -21,6 +21,7 @@
 
 import { validateDocument, type CanonicalDocument, type DocumentTransaction } from "../document";
 import { isPlainObject, ownProperty } from "../json";
+import { SERVER_SYNC_ERROR_MESSAGES } from "./messages";
 
 /** Every status `pisac_commit_document` can return, and nothing else. */
 export const COMMIT_STATUSES = [
@@ -116,15 +117,6 @@ export type ServerSyncErrorCode =
   | "citanje"
   | "slanje"
   | "odgovor-neispravan";
-
-export const SERVER_SYNC_ERROR_MESSAGES: Record<ServerSyncErrorCode, string> = {
-  "zapis-neispravan": "Zapis rada nije u ispravnom obliku, pa nije poslan.",
-  prevelik: "Dokument je prevelik za spremanje.",
-  "rad-nepoznat": "Rad nije pronađen na poslužitelju.",
-  citanje: "Rad trenutačno nije moguće dohvatiti s poslužitelja.",
-  slanje: "Promjena nije poslana na poslužitelj. Pokušat ćemo ponovno.",
-  "odgovor-neispravan": "Poslužitelj je vratio odgovor koji nije moguće pročitati.",
-};
 
 /**
  * Narrows an untrusted code (a query parameter, a serialised error) to a

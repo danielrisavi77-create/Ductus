@@ -16,7 +16,9 @@ const driverPool = dirname(createRequire(driverEntry).resolve("pg-pool"));
 
 function sessionScoped(source: string): string[] {
   const calls = source.match(/set_config\s*\([^)]*\)/gi) ?? [];
-  const statements = source.match(/["'`]\s*SET\s+(?!LOCAL\s)[A-Za-z_]/g) ?? [];
+  // SET where a statement starts: after a quote, a semicolon or a comment, in
+  // any case. SET LOCAL and SET TRANSACTION end with the transaction.
+  const statements = source.match(/(?:["'`;]|\*\/|--[^\n]*\n)\s*SET\s+(?!LOCAL\s|TRANSACTION\s|CONSTRAINTS\s)[A-Za-z_]/gi) ?? [];
   return [...calls.filter((call) => !/,\s*true\s*\)$/.test(call)), ...statements];
 }
 
@@ -31,6 +33,13 @@ describe("session-scoped settings", () => {
     expect(sessionScoped("q(\"SELECT set_config('app.session_token', $1, false)\")")).toHaveLength(1);
     expect(sessionScoped("q('SET app.session_token = 1'); q(`SET SESSION ROLE x`)")).toHaveLength(2);
     expect(sessionScoped("q(\"SELECT set_config('a', $1, true)\"); q('SET LOCAL ROLE x')")).toEqual([]);
+    // QA on #148: lower case, after a semicolon, after a comment.
+    expect(sessionScoped("q('set app.session_token = 1')")).toHaveLength(1);
+    expect(sessionScoped("q('SELECT 1; SET app.session_token = 1')")).toHaveLength(1);
+    expect(sessionScoped("q(`COMMIT;set role ductus_app`)")).toHaveLength(1);
+    expect(sessionScoped("q('SET SESSION AUTHORIZATION it_login')")).toHaveLength(1);
+    expect(sessionScoped("q(`/* x */ SET role x`); q(`-- x\n  Set role y`)")).toHaveLength(2);
+    expect(sessionScoped("q(`set local role x; SET TRANSACTION READ ONLY`); q('UPDATE t SET a = 1')")).toEqual([]);
   });
 
   it.each([

@@ -27,6 +27,7 @@ import {
   outcomeToEvents,
   planDrain,
   scheduleAfterOutcome,
+  type AnswerFlight,
   type AwaitingReceipt,
   type DrainOutcome,
   type RetrySchedules,
@@ -72,6 +73,7 @@ const R8 = row(8, "Uvod v1, drugi odlomak");
 const R9 = row(9, "Uvod v1, treći odlomak");
 const QUEUE = [R7, R8, R9];
 const D2_R3 = row(3, "Sažetak", D2);
+const R7_ON_D2 = { ...R7, documentId: D2 };
 const SERVER_DOC = doc("b", "Uvod v1a");
 const HELD_R7: AwaitingReceipt = { documentId: D1, localSeq: 7, clientTransactionId: "T7" };
 const REUSED: DrainOutcome = { status: "txid_reused" };
@@ -82,6 +84,11 @@ function meta(state: SyncState, documentId = D1) {
 
 function reduce(state: SyncState, events: readonly SyncEvent[]): SyncState {
   return events.reduce(syncReducer, state);
+}
+
+/** The answer's flight: `sent` went out, and `pending` is the queue the answer finds. */
+function flight(sent: PendingTransaction, pending: readonly PendingTransaction[] = QUEUE): AnswerFlight {
+  return { sent, pending };
 }
 
 function verification(clientTransactionId: string, revision: number, documentId = D1) {
@@ -100,7 +107,7 @@ function signedDuplicate(revision: number): DrainOutcome {
 async function diverge(): Promise<{ marker: AwaitingReceipt | null; state: SyncState }> {
   const plan = planDrain(QUEUE, meta("SYNCING"), HELD_R7);
   expect(plan.send).toBe(R7);
-  const events = await outcomeToEvents(REUSED, verification("T7", 0), true);
+  const events = await outcomeToEvents(REUSED, verification("T7", 0), flight(R7));
   return {
     marker: nextAwaitingReceipt(R7, REUSED, HELD_R7),
     state: reduce(reduce("LOCAL_DURABLE", [{ type: "SYNC_STARTED" }]), events),
@@ -173,7 +180,7 @@ describe("held txid_reused — finite exit (DAN-135)", () => {
 
   it("6: the same key never earns SYNCED without a verified receipt for it", async () => {
     // Even if the bytes looked equal locally, txid_reused is not a success.
-    expect(await outcomeToEvents(REUSED, verification("T7", 0), false)).toEqual([
+    expect(await outcomeToEvents(REUSED, verification("T7", 0), flight(R7, [R7]))).toEqual([
       { type: "SYNC_KEY_DIVERGED" },
     ]);
     const unsigned: DrainOutcome = {
@@ -181,14 +188,14 @@ describe("held txid_reused — finite exit (DAN-135)", () => {
       revision: SERVER_REVISION,
       receipt: { status: "pending_signature" },
     };
-    expect(await outcomeToEvents(unsigned, verification("T7", SERVER_REVISION), false)).toEqual([]);
+    expect(await outcomeToEvents(unsigned, verification("T7", SERVER_REVISION), flight(R7, [R7]))).toEqual([]);
     // An unverified duplicate after divergence keeps the diverged hold.
     const diverged = nextAwaitingReceipt(R7, REUSED, HELD_R7);
     expect(nextAwaitingReceipt(R7, unsigned, diverged)).toBe(diverged);
   });
 
   it("11: txid_reused never becomes CONFLICT, from any state where it is legal", async () => {
-    const events = await outcomeToEvents(REUSED, verification("T7", 0), true);
+    const events = await outcomeToEvents(REUSED, verification("T7", 0), flight(R7));
     expect(events.some((e) => e.type === "SYNC_STALE_BASE")).toBe(false);
     for (const s of SYNC_STATES) {
       // Legal: RECOVERY_REQUIRED. Illegal: the state stays as it was.
@@ -238,7 +245,7 @@ describe("held txid_reused — backoff (DAN-135)", () => {
     ];
     for (const outcome of outcomes) {
       const held = nextAwaitingReceipt(R7, outcome, HELD_R7);
-      const events = await outcomeToEvents(outcome, verification("T7", 5), true);
+      const events = await outcomeToEvents(outcome, verification("T7", 5), flight(R7));
       const schedules = scheduleAfterOutcome(new Map(), D1, held, T0, half);
       if (isRetryable(outcome)) {
         expect(isDiverged(held)).toBe(false);
@@ -259,15 +266,15 @@ describe("held txid_reused — the marker (DAN-135)", () => {
     const { marker } = await diverge();
 
     const forT8 = signedDuplicate(6);
-    await outcomeToEvents(forT8, verification("T8", 6), true);
+    await outcomeToEvents(forT8, verification("T8", 6), flight(R8));
     expect(nextAwaitingReceipt(R8, forT8, marker)).toBe(marker);
 
     const forD2 = signedDuplicate(5);
-    await outcomeToEvents(forD2, verification("T7", 5, D2), true);
+    await outcomeToEvents(forD2, verification("T7", 5, D2), flight(R7_ON_D2, [R7_ON_D2]));
     expect(nextAwaitingReceipt(R7, forD2, marker)).toBe(marker);
 
     const forT7 = signedDuplicate(5);
-    await outcomeToEvents(forT7, verification("T7", 5), true);
+    await outcomeToEvents(forT7, verification("T7", 5), flight(R7));
     expect(nextAwaitingReceipt(R7, forT7, marker)).toBeNull();
   });
 
@@ -280,18 +287,18 @@ describe("held txid_reused — the marker (DAN-135)", () => {
       expect(kept, status).toBe(marker);
       expect(isDiverged(kept), status).toBe(true);
       expect(planDrain(QUEUE, meta(state), kept).send, status).toBeNull();
-      expect(reduce(state, await outcomeToEvents(late, verification("T7", 0), true)), status).toBe(
+      expect(reduce(state, await outcomeToEvents(late, verification("T7", 0), flight(R7))), status).toBe(
         "RECOVERY_REQUIRED",
       );
     }
     // Its own verified receipt still releases it afterwards.
     const forT7 = signedDuplicate(5);
-    await outcomeToEvents(forT7, verification("T7", 5), true);
+    await outcomeToEvents(forT7, verification("T7", 5), flight(R7));
     expect(nextAwaitingReceipt(R7, forT7, marker)).toBeNull();
   });
 
   it("a late txid_reused for r8 while r7 is held marks the hold, so the state survives a restart", async () => {
-    const lateForR8 = await outcomeToEvents(REUSED, verification("T8", 0), true);
+    const lateForR8 = await outcomeToEvents(REUSED, verification("T8", 0), flight(R8));
     expect(lateForR8).toEqual([{ type: "SYNC_KEY_DIVERGED" }]);
     const state = reduce(reduce("LOCAL_DURABLE", [{ type: "SYNC_STARTED" }]), lateForR8);
     expect(state).toBe("RECOVERY_REQUIRED");

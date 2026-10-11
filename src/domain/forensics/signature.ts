@@ -1,3 +1,5 @@
+import { hasOnlyKeys, isPlainObject } from "../json";
+
 export type SignatureAlgorithm =
   | "Ed25519"
   | "ECDSA_P256_SHA256"
@@ -22,6 +24,14 @@ export type PublicVerificationKey = {
 };
 
 const BASE64URL = /^[A-Za-z0-9_-]+$/;
+// A field outside these sets is covered by no signature, so it is refused
+// rather than carried along next to one.
+const SIGNATURE_ENVELOPE_KEYS: ReadonlySet<string> = new Set<
+  keyof SignatureEnvelope
+>(["algorithm", "keyId", "keyVersion", "signatureEncoding", "signatureBase64Url"]);
+const PUBLIC_VERIFICATION_KEY_KEYS: ReadonlySet<string> = new Set<
+  keyof PublicVerificationKey
+>(["algorithm", "keyId", "keyVersion", "encoding", "keyBase64Url"]);
 
 function nonEmptyBounded(value: unknown, max: number): value is string {
   return (
@@ -54,10 +64,10 @@ function encodingMatchesAlgorithm(
 export function isSignatureEnvelope(
   value: unknown,
 ): value is SignatureEnvelope {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (!isPlainObject(value) || !hasOnlyKeys(value, SIGNATURE_ENVELOPE_KEYS)) {
     return false;
   }
-  const v = value as Record<string, unknown>;
+  const v = value;
   if (!isSignatureAlgorithm(v.algorithm)) return false;
 
   return (
@@ -72,10 +82,13 @@ export function isSignatureEnvelope(
 export function isPublicVerificationKey(
   value: unknown,
 ): value is PublicVerificationKey {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (
+    !isPlainObject(value) ||
+    !hasOnlyKeys(value, PUBLIC_VERIFICATION_KEY_KEYS)
+  ) {
     return false;
   }
-  const v = value as Record<string, unknown>;
+  const v = value;
 
   return (
     isSignatureAlgorithm(v.algorithm) &&

@@ -66,6 +66,11 @@ export type AuthorizationDecision =
  *
  * Identity providers do not implement this contract. They establish a
  * principal; this port decides what that principal may do to a Pisač resource.
+ *
+ * A resource that does not exist is answered exactly like one the principal
+ * may not touch: `deny`. Callers ask this port before they look the resource
+ * up, so an adapter that told the two apart would let anyone probe which ids
+ * exist.
  */
 export interface AuthorizationPort {
   check(request: AuthorizationCheck): Promise<AuthorizationDecision>;

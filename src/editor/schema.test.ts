@@ -90,4 +90,11 @@ describe("NodeIdentity", () => {
     expect(attribute.keepOnSplit).toBe(false);
     expect(attribute.default).toBeNull();
   });
+
+  it("brings the plugin that decides which block owns which id", () => {
+    const plugins = NodeIdentity.config.addProseMirrorPlugins?.call({ options: {} } as never);
+    expect(plugins).toHaveLength(1);
+    expect(plugins?.[0].spec.appendTransaction).toBeTypeOf("function");
+    expect(plugins?.[0].props.transformPasted).toBeTypeOf("function");
+  });
 });

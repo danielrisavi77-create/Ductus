@@ -1,4 +1,6 @@
 import { canonicalBlock, field } from "./metadata-parser.mjs";
+import { evaluateMetadata } from "./pr-metadata-core.mjs";
+import { changedPaths, ownerCommandPaths } from "./protected-paths.mjs";
 
 const RISK_VALUES = new Set(["low", "standard", "critical"]);
 const AGENT_RE =
@@ -157,6 +159,13 @@ function latestVerdicts(entries, {
   return latest;
 }
 
+function currentNegative(verdicts) {
+  for (const result of verdicts.values()) {
+    if (result.verdict === "FAIL" || result.verdict === "BLOCK") return result;
+  }
+  return null;
+}
+
 export function evaluateGate({
   body,
   headSha,
@@ -199,14 +208,32 @@ export function evaluateGate({
     headSha,
   });
 
-  for (const [, review] of reviews) {
-    if (review.identity.principal === authorPrincipal) continue;
-    if (review.verdict === "FAIL" || review.verdict === "BLOCK") {
-      return {
-        state: "pending",
-        description: `Independent review ${review.verdict.toLowerCase()} on current head.`,
-      };
-    }
+  const qa = latestVerdicts(trusted, {
+    agentField: "QA-Agent",
+    headField: "QA-Head",
+    verdictField: "QA-Verdict",
+    role: "qa",
+    headSha,
+    extraField: "QA-Scope",
+  });
+
+  // A current FAIL or BLOCK holds the gate whatever the PR body declares. The
+  // body is written by the party under review, so the declared author and the
+  // declared risk only ever discount a PASS; they never discount a negative
+  // verdict, for review and QA alike.
+  const negativeReview = currentNegative(reviews);
+  if (negativeReview) {
+    return {
+      state: "pending",
+      description: `Independent review ${negativeReview.verdict.toLowerCase()} on current head.`,
+    };
+  }
+  const negativeQa = currentNegative(qa);
+  if (negativeQa) {
+    return {
+      state: "pending",
+      description: `Independent QA ${negativeQa.verdict.toLowerCase()} on current head.`,
+    };
   }
 
   const passingReviews = [...reviews.values()].filter(
@@ -224,25 +251,6 @@ export function evaluateGate({
   );
 
   if (risk === "critical") {
-    const qa = latestVerdicts(trusted, {
-      agentField: "QA-Agent",
-      headField: "QA-Head",
-      verdictField: "QA-Verdict",
-      role: "qa",
-      headSha,
-      extraField: "QA-Scope",
-    });
-
-    for (const [, result] of qa) {
-      if (result.identity.principal === authorPrincipal) continue;
-      if (result.verdict === "FAIL" || result.verdict === "BLOCK") {
-        return {
-          state: "pending",
-          description: `Independent QA ${result.verdict.toLowerCase()} on current head.`,
-        };
-      }
-    }
-
     const qaPasses = [...qa.values()].filter(
       (result) =>
         result.identity.principal !== authorPrincipal &&
@@ -294,6 +302,34 @@ export function evaluateGate({
     description: risk === "critical"
       ? "Independently authenticated review and QA are valid for current head."
       : "Independently authenticated review is valid for current head.",
+  };
+}
+
+/**
+ * Whole decision for one PR from REST data: `pr` (GET pulls/{n}), `files` (its
+ * files list) and the issue comments. Every description is a fixed text.
+ */
+export function evaluatePullRequest({ pr, files, comments, ownerLogin }) {
+  const listed = files ?? [];
+  // The floor is only as good as the list: a cut or unread list fails closed.
+  if (!(pr.changed_files <= listed.length)) {
+    return { result: { state: "failure", description: "Changed file list is incomplete; the risk floor cannot be computed." } };
+  }
+  const paths = changedPaths(listed);
+  const metadata = evaluateMetadata({ body: pr.body ?? "", files: paths });
+  if (!metadata.ok) return { metadata, result: { state: "failure", description: metadata.message } };
+  if (pr.auto_merge && ownerCommandPaths(paths).length > 0) {
+    return {
+      metadata,
+      result: {
+        state: "pending",
+        description: "Auto-merge is enabled on a PR that needs the owner's merge command (D-97); disable auto-merge.",
+      },
+    };
+  }
+  return {
+    metadata,
+    result: evaluateGate({ body: pr.body ?? "", headSha: pr.head.sha, ownerLogin, comments }),
   };
 }
 

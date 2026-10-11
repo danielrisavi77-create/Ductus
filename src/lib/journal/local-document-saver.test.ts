@@ -15,7 +15,7 @@ import type { SyncState } from "../../domain/sync/states";
 import { storableText } from "../../editor/storable-text";
 import { AtomicDexieJournal, JournalError } from "./atomic-dexie-journal";
 import {
-  failureOf, LocalDocumentSaver, type SaverDeps, type SaverSnapshot,
+  failureOf, LocalDocumentSaver, reasonOf, type SaverDeps, type SaverSnapshot,
 } from "./local-document-saver";
 
 const DOC = "local-demo-document";
@@ -341,6 +341,367 @@ describe("LocalDocumentSaver: failures (#197 attacks 5, 6, 7, 4, 17, 13)", () =>
     expect((await journal(at).read(DOC)).snapshot?.document).toEqual(text("drugo"));
   });
 
+  it("6: a reload after a failed write keeps the failure and never claims the journal's older text", async () => {
+    const at = scope();
+    const real = journal(at);
+    let failNext = false;
+    const target = saver(patched(real, {
+      saveLocal: async (...args: Parameters<AtomicDexieJournal["saveLocal"]>) => {
+        if (failNext) { failNext = false; throw new Error("transient"); }
+        return real.saveLocal(...args);
+      },
+    }));
+    await target.load();
+    await type(target, "prvo");
+    failNext = true;
+    target.edit();
+    const [, loaded] = await Promise.all([target.propose(text("drugo")), target.load()]);
+    expect(loaded).toEqual({ kind: "recovery", reason: "unsaved", document: text("prvo") });
+    expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "unknown" });
+    expect(await target.load()).toEqual({ kind: "recovery", reason: "unsaved", document: text("prvo") });
+    expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "unknown" });
+    // A failure that does not halt stays retryable across the reload.
+    await type(target, "treće");
+    expect(target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+    const stored = await journal(at).read(DOC);
+    expect(stored.pending).toHaveLength(2);
+    expect(stored.snapshot?.document).toEqual(text("treće"));
+    expect(await target.load()).toEqual({ kind: "ready", document: text("treće") });
+  });
+
+  it("6: a full store across a reload stays retryable and saves once space returns (#206 review)", async () => {
+    const at = scope();
+    const real = journal(at);
+    let full = false;
+    const quota = () => Object.assign(new Error("full"), { name: "QuotaExceededError" });
+    const target = saver(patched(real, {
+      saveLocal: async (...args: Parameters<AtomicDexieJournal["saveLocal"]>) => {
+        if (full) throw quota();
+        return real.saveLocal(...args);
+      },
+    }));
+    await target.load();
+    await type(target, "prvi");
+    full = true;
+    await type(target, "drugi");
+    expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "quota" });
+    full = false;
+    await type(target, "drugi");
+    expect(target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+    full = true;
+    await type(target, "treći");
+    expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "quota" });
+    full = false;
+    expect(await target.load()).toEqual({ kind: "recovery", reason: "unsaved", document: text("drugi") });
+    expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "quota" });
+    await type(target, "treći");
+    expect(target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+    expect((await journal(at).read(DOC)).snapshot?.document).toEqual(text("treći"));
+    expect(await saver(journal(at)).load()).toEqual({ kind: "ready", document: text("treći") });
+  });
+
+  it("6: resume() after a halting failure saves the editor's text over the journal's older one", async () => {
+    const at = scope();
+    const real = journal(at);
+    let closed = false;
+    const target = saver(patched(real, {
+      saveLocal: async (...args: Parameters<AtomicDexieJournal["saveLocal"]>) => {
+        if (closed) throw Object.assign(new Error("closed"), { name: "DatabaseClosedError" });
+        return real.saveLocal(...args);
+      },
+    }));
+    await target.load();
+    await type(target, "staro");
+    closed = true;
+    await type(target, "iz editora");
+    expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "unavailable" });
+    closed = false;
+    expect(await target.load()).toEqual({ kind: "recovery", reason: "unsaved", document: text("staro") });
+    await type(target, "iz editora");
+    expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "unavailable" });
+    expect(await target.resume(text("iz editora"))).toEqual({ kind: "ready", document: text("staro") });
+    expect(target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+    expect((await journal(at).read(DOC)).snapshot?.document).toEqual(text("iz editora"));
+    expect(await saver(journal(at)).load()).toEqual({ kind: "ready", document: text("iz editora") });
+    expect(await target.load()).toEqual({ kind: "ready", document: text("iz editora") });
+  });
+
+  it("4, 6: resume() in a stale tab saves the chosen text and keeps the other writer's in the rows", async () => {
+    const at = scope();
+    const first = saver(journal(at));
+    const second = saver(journal(at));
+    await Promise.all([first.load(), second.load()]);
+    await type(first, "A");
+    await type(second, "B");
+    expect(second.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+    expect(await second.load()).toEqual({ kind: "recovery", reason: "stale", document: text("A") });
+    expect(await second.resume(text("B"))).toEqual({ kind: "ready", document: text("A") });
+    expect(second.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+    const stored = await journal(at).read(DOC);
+    expect(stored.snapshot?.document).toEqual(text("B"));
+    expect(stored.pending.some((row) => documentsEqual(row.tx.document, text("A")))).toBe(true);
+    // The tab that lost the race is now the stale one.
+    await type(first, "A2");
+    expect(first.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+  });
+
+  it("4, 6: resume() never writes over text another writer saved after the recovery (#206 review)", async () => {
+    const at = scope();
+    const a = saver(journal(at));
+    const b = saver(journal(at));
+    await Promise.all([a.load(), b.load()]);
+    await type(b, "B1");
+    await type(a, "A1");
+    expect(await a.load()).toEqual({ kind: "recovery", reason: "stale", document: text("B1") });
+    await type(b, "B2 newer");
+    expect(b.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+    expect(await a.resume(text("A2"))).toEqual({ kind: "recovery", reason: "stale", document: text("B2 newer") });
+    expect(a.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+    expect((await journal(at).read(DOC)).snapshot?.document).toEqual(text("B2 newer"));
+    // Once the author has seen "B2 newer", resuming over it is a choice.
+    expect(await a.resume(text("A2"))).toEqual({ kind: "ready", document: text("B2 newer") });
+    expect(a.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+    const stored = await journal(at).read(DOC);
+    expect(stored.snapshot?.document).toEqual(text("A2"));
+    expect(stored.pending.some((row) => documentsEqual(row.tx.document, text("B2 newer")))).toBe(true);
+  });
+
+  it("6: resume() after an unsaved recovery never writes over another writer's later text", async () => {
+    const at = scope();
+    const real = journal(at);
+    let closed = false;
+    const a = saver(patched(real, {
+      saveLocal: async (...args: Parameters<AtomicDexieJournal["saveLocal"]>) => {
+        if (closed) throw Object.assign(new Error("closed"), { name: "DatabaseClosedError" });
+        return real.saveLocal(...args);
+      },
+    }));
+    await a.load();
+    await type(a, "staro");
+    closed = true;
+    await type(a, "iz editora");
+    closed = false;
+    expect(await a.load()).toEqual({ kind: "recovery", reason: "unsaved", document: text("staro") });
+    const b = saver(journal(at));
+    await b.load();
+    await type(b, "druga kartica");
+    expect(await a.resume(text("iz editora"))).toEqual({ kind: "recovery", reason: "stale", document: text("druga kartica") });
+    expect((await journal(at).read(DOC)).snapshot?.document).toEqual(text("druga kartica"));
+    expect(await a.resume(text("iz editora"))).toMatchObject({ kind: "ready" });
+    expect((await journal(at).read(DOC)).snapshot?.document).toEqual(text("iz editora"));
+  });
+
+  it("4, 6: a writer between resume()'s read and its write makes it stale, never overwritten", async () => {
+    const at = scope();
+    const real = journal(at);
+    let race: (() => Promise<void>) | null = null;
+    const a = saver(patched(real, {
+      saveLocal: async (...args: Parameters<AtomicDexieJournal["saveLocal"]>) => {
+        const before = race;
+        race = null;
+        if (before) await before();
+        return real.saveLocal(...args);
+      },
+    }));
+    const b = saver(journal(at));
+    await Promise.all([a.load(), b.load()]);
+    await type(b, "B1");
+    await type(a, "A1");
+    expect(await a.load()).toMatchObject({ kind: "recovery", reason: "stale" });
+    race = () => type(b, "B2 u utrci");
+    expect(await a.resume(text("A2"))).toEqual({ kind: "ready", document: text("B1") });
+    expect(a.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+    expect((await journal(at).read(DOC)).snapshot?.document).toEqual(text("B2 u utrci"));
+    expect(await a.load()).toEqual({ kind: "recovery", reason: "stale", document: text("B2 u utrci") });
+  });
+
+  it("6: resume() after a full store that this saver's own later write cleared is not stale", async () => {
+    const at = scope();
+    const real = journal(at);
+    let full = false;
+    const target = saver(patched(real, {
+      saveLocal: async (...args: Parameters<AtomicDexieJournal["saveLocal"]>) => {
+        if (full) throw Object.assign(new Error("full"), { name: "QuotaExceededError" });
+        return real.saveLocal(...args);
+      },
+    }));
+    await target.load();
+    await type(target, "prvi");
+    full = true;
+    await type(target, "drugi");
+    full = false;
+    expect(await target.load()).toMatchObject({ kind: "recovery", reason: "unsaved" });
+    await type(target, "drugi");
+    expect(await target.resume(text("odabrani"))).toEqual({ kind: "ready", document: text("drugi") });
+    expect(target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+    expect((await journal(at).read(DOC)).snapshot?.document).toEqual(text("odabrani"));
+  });
+
+  it("resume() refuses without an unsaved or stale recovery and never writes then", async () => {
+    const real = journal(scope());
+    let writes = 0;
+    const counting = (over: Partial<AtomicDexieJournal>) => patched(real, {
+      ...over,
+      saveLocal: async (...args: Parameters<AtomicDexieJournal["saveLocal"]>) => {
+        writes += 1;
+        return real.saveLocal(...args);
+      },
+    });
+    const fresh = saver(counting({}));
+    await expect(fresh.resume(text("x"))).rejects.toThrow(/without an unsaved or stale recovery/);
+    await fresh.load();
+    await expect(fresh.resume(text("x"))).rejects.toThrow(/without an unsaved or stale recovery/);
+    const corrupt = saver(counting({
+      read: async () => ({ snapshot: null, pending: [], meta: { documentId: DOC, localSeq: 2, state: "LOCAL_DURABLE" } }) as never,
+    }));
+    expect(await corrupt.load()).toEqual({ kind: "recovery", reason: "corrupt", document: null });
+    await expect(corrupt.resume(text("x"))).rejects.toThrow(/without an unsaved or stale recovery/);
+    const sticky = saver(counting({
+      read: async () => ({
+        snapshot: { documentId: DOC, revision: 1, document: text("sačuvaj"), savedAt: "2026-10-10T20:00:00.000Z" },
+        pending: [],
+        meta: { documentId: DOC, localSeq: 1, state: "CONFLICT" as const },
+      }),
+    }));
+    expect(await sticky.load()).toEqual({ kind: "recovery", reason: "sticky", document: text("sačuvaj") });
+    await expect(sticky.resume(text("x"))).rejects.toThrow(/without an unsaved or stale recovery/);
+    expect(sticky.snapshot().state).toBe("CONFLICT");
+    expect(writes).toBe(0);
+  });
+
+  it("4, 6: a reload in a stale tab keeps it stopped, whether the write was in flight or done", async () => {
+    const at = scope();
+    const first = saver(journal(at));
+    const second = saver(journal(at));
+    await Promise.all([first.load(), second.load()]);
+    await type(first, "A");
+    second.edit();
+    const [, during] = await Promise.all([second.propose(text("B")), second.load()]);
+    expect(during).toEqual({ kind: "recovery", reason: "stale", document: text("A") });
+    expect(second.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+    const after = await second.load();
+    expect(after).toEqual({ kind: "recovery", reason: "stale", document: text("A") });
+    expect(second.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+  });
+
+  it("4, 6: a reload never claims text another writer saved after this tab's last write", async () => {
+    const at = scope();
+    const first = saver(journal(at));
+    await first.load();
+    await type(first, "eins");
+    const second = saver(journal(at));
+    await second.load();
+    await type(second, "zwei");
+    expect(await first.load()).toEqual({ kind: "recovery", reason: "stale", document: text("zwei") });
+    expect(first.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+  });
+
+  it("6: text typed before or during a reload is not claimed by it", async () => {
+    const real = journal(scope());
+    let reads = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let entered!: () => void;
+    const reading = new Promise<void>((resolve) => { entered = resolve; });
+    const target = saver(patched(real, {
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        if ((reads += 1) === 3) { entered(); await gate; }
+        return real.read(...args);
+      },
+    }));
+    await target.load();
+    await type(target, "prvo");
+    target.edit();
+    expect((await target.load()).kind).toBe("ready");
+    expect(target.snapshot().state).toBe("EDITING");
+    await type(target, "drugo");
+    const reload = target.load();
+    await reading;
+    target.edit();
+    release();
+    expect((await reload).kind).toBe("ready");
+    expect(target.snapshot().state).toBe("EDITING");
+  });
+
+  it("6: a candidate waiting on a reload is not claimed by it, even without a new edit", async () => {
+    const real = journal(scope());
+    let reads = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let entered!: () => void;
+    const reading = new Promise<void>((resolve) => { entered = resolve; });
+    const target = saver(patched(real, {
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        if ((reads += 1) === 2) { entered(); await gate; }
+        return real.read(...args);
+      },
+    }));
+    await target.load();
+    await type(target, "prvo");
+    const reload = target.load();
+    await reading;
+    const flight = target.propose(text("drugo"));
+    const states = record(target);
+    release();
+    await reload;
+    await flight;
+    expect(states.map((s) => s.state)).toEqual(["EDITING", "SAVING_LOCAL", "LOCAL_DURABLE"]);
+  });
+
+  it("6: overlapping reloads hold writes until the last read, so the only writer is not stale", async () => {
+    const at = scope();
+    const real = journal(at);
+    let reads = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const target = saver(patched(real, {
+      // The third read sees the journal, then is held: it returns what it saw.
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        const contents = await real.read(...args);
+        if ((reads += 1) === 3) await gate;
+        return contents;
+      },
+    }));
+    await target.load();
+    await type(target, "prvo");
+    const first = target.load();
+    const second = target.load();
+    await first;
+    target.edit();
+    const flight = target.propose(text("drugo"));
+    // Time for a write that does not wait to finish before the held read returns.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    release();
+    await Promise.all([second, flight]);
+    await type(target, "treće");
+    expect(target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+    expect((await journal(at).read(DOC)).pending).toHaveLength(3);
+  });
+
+  it("4: a halting failure drops the candidate queued behind it", async () => {
+    const real = journal(scope());
+    let writes = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const target = saver(patched(real, {
+      saveLocal: async () => {
+        writes += 1;
+        await gate;
+        throw new JournalError("stale_local_sequence");
+      },
+    }));
+    await target.load();
+    target.edit();
+    const flight = target.propose(text("a"));
+    target.edit();
+    void target.propose(text("b"));
+    release();
+    await flight;
+    await target.settled();
+    expect(writes).toBe(1);
+    expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+  });
+
   it("6: the store closing during a write halts saving", async () => {
     const real = journal(scope());
     let writes = 0;
@@ -387,6 +748,22 @@ describe("LocalDocumentSaver: failures (#197 attacks 5, 6, 7, 4, 17, 13)", () =>
     expect(again.snapshot().capacity).toBe("full");
     await type(again, "r7");
     expect(again.snapshot().failure).toBe("limit");
+  });
+
+  it("7: the character bound counts the rows this saver wrote", async () => {
+    const probe = scope();
+    const measure = saver(journal(probe));
+    await measure.load();
+    await type(measure, words(100));
+    const size = JSON.stringify((await journal(probe).read(DOC)).pending[0]!.tx).length;
+    const at = scope();
+    const target = saver(journal(at), { limits: { maxPendingRows: 100, maxPendingChars: Math.floor(size * 1.5) } });
+    await target.load();
+    await type(target, words(100));
+    expect(target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+    await type(target, words(100));
+    expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "limit" });
+    expect((await journal(at).read(DOC)).pending).toHaveLength(1);
   });
 
   it("7: the character bound stops a single oversized write", async () => {
@@ -458,7 +835,7 @@ describe("LocalDocumentSaver: failures (#197 attacks 5, 6, 7, 4, 17, 13)", () =>
         read: async () => contents as never,
         saveLocal: async () => { writes += 1; throw new Error("unreachable"); },
       }));
-      expect(await target.load()).toEqual({ kind: "recovery", document: null });
+      expect(await target.load()).toEqual({ kind: "recovery", reason: "corrupt", document: null });
       expect(target.snapshot()).toMatchObject({ state: "RECOVERY_REQUIRED", failure: "corrupt" });
       await type(target, "");
       expect(target.snapshot()).toMatchObject({ state: "RECOVERY_REQUIRED", failure: "corrupt" });
@@ -479,7 +856,7 @@ describe("LocalDocumentSaver: failures (#197 attacks 5, 6, 7, 4, 17, 13)", () =>
         saveLocal: async () => { writes += 1; throw new Error("unreachable"); },
       }));
       const loaded = await target.load();
-      expect(loaded.kind).toBe("recovery");
+      expect(loaded).toMatchObject({ kind: "recovery", reason: "sticky" });
       expect(loaded.kind === "recovery" && documentsEqual(loaded.document!, text("sačuvaj"))).toBe(true);
       expect(target.snapshot().state).toBe(state);
       await type(target, "");
@@ -522,6 +899,493 @@ describe("LocalDocumentSaver: failures (#197 attacks 5, 6, 7, 4, 17, 13)", () =>
     expect(failureOf(named("SecurityError"))).toBe("unavailable");
     expect(failureOf(new JournalError("duplicate_transaction"))).toBe("unknown");
     expect(failureOf(null)).toBe("unknown");
+  });
+
+  it("reports the queue bound as a full store and a stale journal as unknown to the reducer", () => {
+    expect(reasonOf("limit")).toBe("quota");
+    expect(reasonOf("stale")).toBe("unknown");
+    expect(reasonOf("quota")).toBe("quota");
+    expect(reasonOf("corrupt")).toBe("corrupt");
+  });
+});
+
+describe("LocalDocumentSaver: resume and reload races (#206 qa206c)", () => {
+  type Mode = "ok" | "quota" | "gate" | "stale";
+  /** saveLocal by mode; a gated write waits for `open()`, then runs as "ok". */
+  function moded(real: AtomicDexieJournal) {
+    const control = { mode: "ok" as Mode, writes: 0, open: () => {} };
+    const fake = patched(real, {
+      saveLocal: async (...args: Parameters<AtomicDexieJournal["saveLocal"]>) => {
+        control.writes += 1;
+        const mode = control.mode;
+        if (mode === "quota") throw Object.assign(new Error("full"), { name: "QuotaExceededError" });
+        if (mode === "gate" || mode === "stale") {
+          await new Promise<void>((resolve) => { control.open = resolve; });
+          if (mode === "stale") throw new JournalError("stale_local_sequence");
+        }
+        return real.saveLocal(...args);
+      },
+    });
+    return { fake, control };
+  }
+
+  it("C1: resume() while the only writer's own write is in flight is not stale", async () => {
+    const at = scope();
+    const { fake, control } = moded(journal(at));
+    const s = saver(fake);
+    await s.load();
+    await type(s, "prvi");
+    control.mode = "quota";
+    await type(s, "drugi");
+    expect(s.snapshot()).toMatchObject({ state: "ERROR", failure: "quota" });
+    expect(await s.load()).toEqual({ kind: "recovery", reason: "unsaved", document: text("prvi") });
+    control.mode = "gate";
+    s.edit();
+    const w = s.propose(text("treći"));
+    const res = s.resume(text("treći"));
+    control.mode = "ok";
+    control.open();
+    await w;
+    expect(await res).toEqual({ kind: "ready", document: text("treći") });
+    expect(s.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+    expect((await journal(at).read(DOC)).snapshot?.document).toEqual(text("treći"));
+  });
+
+  it("A1: resume() claims nothing saved before the chosen text is written", async () => {
+    const at = scope();
+    const a = saver(journal(at));
+    const b = saver(journal(at));
+    await Promise.all([a.load(), b.load()]);
+    await type(b, "B");
+    await type(a, "A");
+    expect(await a.load()).toMatchObject({ kind: "recovery", reason: "stale" });
+    const states = record(a);
+    expect(await a.resume(text("A1"))).toEqual({ kind: "ready", document: text("B") });
+    expect(states.map((s) => s.state)).toEqual(["EDITING", "SAVING_LOCAL", "LOCAL_DURABLE"]);
+  });
+
+  it("A1: a tab that never typed is not shown saved for text the journal lacks", async () => {
+    const at = scope();
+    const real = journal(at);
+    const a = saver(real);
+    const b = saver(journal(at));
+    await Promise.all([a.load(), b.load()]);
+    await type(b, "B");
+    expect(await a.load()).toEqual({ kind: "recovery", reason: "stale", document: text("B") });
+    const claims: string[] = [];
+    a.subscribe((s) => {
+      if (s.state !== "LOCAL_DURABLE") return;
+      void real.read(DOC).then((stored) => {
+        claims.push(documentsEqual(stored.snapshot!.document, text("")) ? "written" : "missing");
+      });
+    });
+    await a.resume(text(""));
+    await a.settled();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(claims).toEqual(["written"]);
+  });
+
+  it("MANJE 1b: overlapping reloads start no write until the last one has read", async () => {
+    const at = scope();
+    const real = journal(at);
+    const { fake, control } = moded(real);
+    let reads = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const target = saver(patched(fake, {
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        if ((reads += 1) === 3) await gate;
+        return real.read(...args);
+      },
+    }));
+    await target.load();
+    await type(target, "prvo");
+    const first = target.load();
+    const second = target.load();
+    await first;
+    target.edit();
+    const flight = target.propose(text("drugo"));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(control.writes).toBe(1);
+    release();
+    expect((await second).kind).toBe("ready");
+    await flight;
+    expect(control.writes).toBe(2);
+    expect(target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+  });
+
+  it("MANJE 1a: a reload after a halting write failure writes nothing until resume()", async () => {
+    const at = scope();
+    const { fake, control } = moded(journal(at));
+    const target = saver(fake);
+    await target.load();
+    await type(target, "prvo");
+    control.mode = "stale";
+    target.edit();
+    const flight = target.propose(text("drugo"));
+    control.open();
+    await flight;
+    control.mode = "ok";
+    expect(await target.load()).toEqual({ kind: "recovery", reason: "unsaved", document: text("prvo") });
+    expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+    await type(target, "treće");
+    expect(await target.load()).toMatchObject({ kind: "recovery", reason: "unsaved" });
+    await type(target, "četvrto");
+    expect(control.writes).toBe(2);
+    expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+  });
+
+  it("MANJE 2: a pending row without a transaction is corrupt and changes nothing", async () => {
+    const at = scope();
+    const real = journal(at);
+    let broken = false;
+    let writes = 0;
+    const read = async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+      const contents = await real.read(...args);
+      return broken ? { ...contents, pending: [...contents.pending, { localSeq: 9 } as never] } : contents;
+    };
+    const target = saver(patched(real, {
+      read,
+      saveLocal: async (...args: Parameters<AtomicDexieJournal["saveLocal"]>) => {
+        writes += 1;
+        return real.saveLocal(...args);
+      },
+    }));
+    await target.load();
+    await type(target, "prvo");
+    broken = true;
+    expect(await target.load()).toEqual({ kind: "recovery", reason: "corrupt", document: null });
+    expect(target.snapshot()).toMatchObject({ state: "RECOVERY_REQUIRED", failure: "corrupt" });
+    await type(target, "drugo");
+    expect(writes).toBe(1);
+    const fresh = saver(patched(real, { read }));
+    expect(await fresh.load()).toEqual({ kind: "recovery", reason: "corrupt", document: null });
+  });
+
+  it("MANJE 3: a candidate queued behind a halting failure is not written before the chosen text", async () => {
+    const at = scope();
+    const { fake, control } = moded(journal(at));
+    const target = saver(fake);
+    await target.load();
+    await type(target, "prvo");
+    control.mode = "stale";
+    target.edit();
+    const flight = target.propose(text("drugo"));
+    target.edit();
+    void target.propose(text("staro u redu"));
+    control.open();
+    await flight;
+    await target.settled();
+    control.mode = "ok";
+    expect(await target.load()).toMatchObject({ kind: "recovery", reason: "unsaved" });
+    expect(await target.resume(text("odabrano"))).toEqual({ kind: "ready", document: text("prvo") });
+    expect(control.writes).toBe(3);
+    const stored = await journal(at).read(DOC);
+    expect(stored.pending.map((row) => row.tx.document)).toEqual([text("prvo"), text("odabrano")]);
+    expect(target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+  });
+
+  it("model: text typed while resume() reads is not claimed by the chosen text's write", async () => {
+    const at = scope();
+    const real = journal(at);
+    let hold: Promise<void> | null = null;
+    const a = saver(
+      patched(real, {
+        read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+          const contents = await real.read(...args);
+          if (hold) await hold;
+          return contents;
+        },
+      }),
+    );
+    const b = saver(journal(at));
+    await Promise.all([a.load(), b.load()]);
+    await type(b, "B");
+    expect(await a.load()).toMatchObject({ kind: "recovery", reason: "stale" });
+    let release!: () => void;
+    hold = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const resumed = a.resume(text("odabrano"));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    a.edit();
+    hold = null;
+    release();
+    expect(await resumed).toEqual({ kind: "ready", document: text("B") });
+    await a.settled();
+    expect((await journal(at).read(DOC)).snapshot?.document).toEqual(text("odabrano"));
+    expect(a.snapshot()).toMatchObject({ state: "EDITING", failure: null });
+  });
+});
+
+describe("LocalDocumentSaver: resume() contract (#206 r6)", () => {
+  /**
+   * The real journal whose next `read()` after `hold()` waits before it reads:
+   * `entered` resolves once that read is held, `open()` lets it read.
+   */
+  function heldRead(real: AtomicDexieJournal) {
+    let armed = false;
+    let calls = 0;
+    let open = () => {};
+    let entered: Promise<void> = Promise.resolve();
+    let enter = () => {};
+    const fake = patched(real, {
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        calls += 1;
+        if (armed) {
+          armed = false;
+          const gate = new Promise<void>((resolve) => { open = resolve; });
+          enter();
+          await gate;
+        }
+        return real.read(...args);
+      },
+    });
+    return {
+      fake,
+      hold: () => {
+        armed = true;
+        entered = new Promise<void>((resolve) => { enter = resolve; });
+      },
+      entered: () => entered,
+      /** Resolves once `count` reads have been called. */
+      called: async (count: number) => {
+        while (calls < count) await new Promise((resolve) => setImmediate(resolve));
+      },
+      open: () => open(),
+    };
+  }
+  async function rows(at: string): Promise<CanonicalDocument[]> {
+    return (await journal(at).read(DOC)).pending.map((row) => row.tx.document);
+  }
+  /** Tab A over a held journal with a stale recovery showing B's "B1". */
+  async function staleTab(at: string) {
+    const control = heldRead(journal(at));
+    const a = saver(control.fake);
+    const b = saver(journal(at));
+    await Promise.all([a.load(), b.load()]);
+    await type(b, "B1");
+    await type(a, "A");
+    expect(await a.load()).toEqual({ kind: "recovery", reason: "stale", document: text("B1") });
+    return { a, b, control };
+  }
+
+  it("r6 finding 1: an overlapping load() showing newer text does not let resume() write over it", async () => {
+    const at = scope();
+    const { a, b, control } = await staleTab(at);
+    control.hold();
+    const resumed = a.resume(text("A2"));
+    await control.entered();
+    await type(b, "B2 newer");
+    expect(await a.load()).toEqual({ kind: "recovery", reason: "stale", document: text("B2 newer") });
+    control.open();
+    expect(await resumed).toEqual({ kind: "recovery", reason: "stale", document: text("B2 newer") });
+    await a.settled();
+    expect(await rows(at)).toEqual([text("B1"), text("B2 newer")]);
+    expect(a.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+    // The newer text was shown, so choosing against it now writes.
+    expect((await a.resume(text("A3"))).kind).toBe("ready");
+    await a.settled();
+    expect(await rows(at)).toEqual([text("B1"), text("B2 newer"), text("A3")]);
+  });
+
+  it("r6 finding 2: unsaved: text proposed while resume() reads is written, not the older choice", async () => {
+    const at = scope();
+    const real = journal(at);
+    const control = heldRead(real);
+    let full = false;
+    const s = saver(patched(control.fake, {
+      saveLocal: async (...args: Parameters<AtomicDexieJournal["saveLocal"]>) => {
+        if (full) throw Object.assign(new Error("full"), { name: "QuotaExceededError" });
+        return real.saveLocal(...args);
+      },
+    }));
+    await s.load();
+    await type(s, "prvi");
+    full = true;
+    await type(s, "drugi");
+    full = false;
+    expect(await s.load()).toEqual({ kind: "recovery", reason: "unsaved", document: text("prvi") });
+    control.hold();
+    const resumed = s.resume(text("odabrano"));
+    await control.entered();
+    s.edit();
+    const proposed = s.propose(text("odabrano i novo"));
+    control.open();
+    expect(await resumed).toEqual({ kind: "ready", document: text("prvi") });
+    await proposed;
+    await s.settled();
+    expect(await rows(at)).toEqual([text("prvi"), text("odabrano i novo")]);
+    expect(s.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+  });
+
+  it("r6 finding 2: stopped tab: text proposed while resume() reads waits and is written", async () => {
+    const at = scope();
+    const { a, control } = await staleTab(at);
+    control.hold();
+    const resumed = a.resume(text("odabrano"));
+    await control.entered();
+    a.edit();
+    const proposed = a.propose(text("odabrano i novo"));
+    control.open();
+    expect(await resumed).toEqual({ kind: "ready", document: text("B1") });
+    await proposed;
+    await a.settled();
+    expect(await rows(at)).toEqual([text("B1"), text("odabrano i novo")]);
+    expect(a.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+  });
+
+  it("r6: a resume that stays stale writes nothing proposed during it", async () => {
+    const at = scope();
+    const { a, b, control } = await staleTab(at);
+    control.hold();
+    const resumed = a.resume(text("odabrano"));
+    await control.entered();
+    await type(b, "B2");
+    a.edit();
+    const proposed = a.propose(text("novo"));
+    control.open();
+    expect(await resumed).toEqual({ kind: "recovery", reason: "stale", document: text("B2") });
+    await proposed;
+    await a.settled();
+    expect(await rows(at)).toEqual([text("B1"), text("B2")]);
+    expect(a.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+    // The next choice supersedes the candidate left from the stale resume.
+    expect((await a.resume(text("drugi odabir"))).kind).toBe("ready");
+    await a.settled();
+    expect(await rows(at)).toEqual([text("B1"), text("B2"), text("drugi odabir")]);
+    expect(a.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+  });
+
+  it("r6: two resumes: the later choice is written last", async () => {
+    for (const heldFirst of [true, false]) {
+      const at = scope();
+      const { a, control } = await staleTab(at);
+      const before = 2;
+      await control.called(before);
+      if (heldFirst) control.hold();
+      const first = a.resume(text("prvi odabir"));
+      if (!heldFirst) {
+        await control.called(before + 1);
+        control.hold();
+      }
+      const second = a.resume(text("drugi odabir"));
+      await control.entered();
+      control.open();
+      expect((await first).kind).toBe("ready");
+      expect((await second).kind).toBe("ready");
+      await a.settled();
+      expect((await rows(at)).at(-1)).toEqual(text("drugi odabir"));
+      expect(a.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+    }
+  });
+
+  it("r6: a read held past this tab's own newer read is read again, not a false stale", async () => {
+    const at = scope();
+    const real = journal(at);
+    let armed = false;
+    let open = () => {};
+    let entered = () => {};
+    let readDone = () => {};
+    const held = new Promise<void>((resolve) => { entered = resolve; });
+    const a = saver(patched(real, {
+      // Held after it has read: its contents are older than what comes next.
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        const contents = await real.read(...args);
+        if (armed) {
+          armed = false;
+          const gate = new Promise<void>((resolve) => { open = resolve; });
+          entered();
+          await gate;
+        } else {
+          readDone();
+        }
+        return contents;
+      },
+    }));
+    const nextRead = () => new Promise<void>((resolve) => { readDone = resolve; })
+      .then(() => new Promise((resolve) => setImmediate(resolve)));
+    const b = saver(journal(at));
+    await Promise.all([a.load(), b.load()]);
+    armed = true;
+    const old = a.load();
+    await held;
+    await type(b, "B1");
+    expect(await a.load()).toEqual({ kind: "recovery", reason: "stale", document: text("B1") });
+    // The resume reads the shown sequence and is ready before the held read
+    // returns, so the held read is behind this saver's own sequence.
+    const read = nextRead();
+    const resumed = a.resume(text("A"));
+    await read;
+    open();
+    expect((await old).kind).toBe("ready");
+    expect((await resumed).kind).toBe("ready");
+    await a.settled();
+    expect((await rows(at)).at(-1)).toEqual(text("A"));
+    expect(a.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+  });
+
+  it("r6: a read held from before a stale read never lifts the halt or shows older text", async () => {
+    const at = scope();
+    const real = journal(at);
+    let armed = false;
+    let open = () => {};
+    let entered = () => {};
+    const held = new Promise<void>((resolve) => { entered = resolve; });
+    const a = saver(patched(real, {
+      // Held after it has read: its contents are older than what comes next.
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        const contents = await real.read(...args);
+        if (armed) {
+          armed = false;
+          const gate = new Promise<void>((resolve) => { open = resolve; });
+          entered();
+          await gate;
+        }
+        return contents;
+      },
+    }));
+    const b = saver(journal(at));
+    await Promise.all([a.load(), b.load()]);
+    armed = true;
+    const old = a.load();
+    await held;
+    await type(b, "B1");
+    expect(await a.load()).toEqual({ kind: "recovery", reason: "stale", document: text("B1") });
+    open();
+    expect(await old).toEqual({ kind: "recovery", reason: "stale", document: text("B1") });
+    expect(a.snapshot()).toMatchObject({ state: "ERROR", failure: "stale" });
+    expect(await a.resume(text("A"))).toEqual({ kind: "ready", document: text("B1") });
+    await a.settled();
+    expect((await rows(at)).at(-1)).toEqual(text("A"));
+  });
+
+  it("r6: text proposed while a failed read halted the saver is written by the next ready reload", async () => {
+    const at = scope();
+    const real = journal(at);
+    let reads = 0;
+    let writes = 0;
+    const target = saver(patched(real, {
+      read: (...args: Parameters<AtomicDexieJournal["read"]>) => (reads += 1) === 2
+        ? Promise.reject(Object.assign(new Error("no idb"), { name: "MissingAPIError" }))
+        : real.read(...args),
+      saveLocal: (...args: Parameters<AtomicDexieJournal["saveLocal"]>) => {
+        writes += 1;
+        return real.saveLocal(...args);
+      },
+    }));
+    expect((await target.load()).kind).toBe("ready");
+    await type(target, "prije greške");
+    expect(await target.load()).toEqual({ kind: "unavailable" });
+    const before = writes;
+    target.edit();
+    await target.propose(text("za vrijeme greške"));
+    expect(writes).toBe(before);
+    expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "unavailable" });
+    expect((await target.load()).kind).toBe("ready");
+    await target.settled();
+    expect((await rows(at)).at(-1)).toEqual(text("za vrijeme greške"));
+    expect(target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
   });
 });
 
