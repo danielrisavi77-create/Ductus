@@ -268,6 +268,15 @@ describe("golden vectors: step format (DAN-183)", () => {
     expect(segment.captureContext.transactionFormat).toBe("ductus-test-insert-text-v0");
   });
 
+  // DAN-183c: the step shape is closed, so the test insert format is refused.
+  it.each(formerSegments)("refuses $name, written before the closed step format", async (former) => {
+    const bytes = fromHex(former.canonicalUtf8Hex);
+    const text = strictText(bytes) ?? "";
+    expect(isEvidenceSegmentV2(JSON.parse(text))).toBe(false);
+    expect(await verifyCanonicalEvidencePayloadV2(bytes)).toEqual({ ok: false, reason: former.reason });
+    expect(await verifyCanonicalEvidencePayloadV2(text)).toEqual({ ok: false, reason: former.reason });
+  });
+
   it("keeps both chain segments from before DAN-183 as former vectors", () => {
     // The segment hashes of the file before DAN-183.
     expect(formerSegments.map((former) => former.formerSegmentHash)).toEqual([
