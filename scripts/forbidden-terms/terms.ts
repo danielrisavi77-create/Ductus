@@ -234,14 +234,131 @@ export function findForbiddenTerms(text: string, lang?: Language): ForbiddenTerm
  * reading does not hold the whole word at all, an element split the word
  * itself (`<b>S</b>premljeno`) and there is nothing to clear it with. Both
  * readings of a contextual entry keep where a phrase ends (`foldPhrases`).
+ *
+ * A third reading closes the text up: every `PHRASE_BREAK` is taken out, so
+ * what stands on the two sides of an unknown part or of an element boundary
+ * is read as one word. The scan cannot know that such a part shows anything
+ * (`Sum<span />njivo`) or that an element is set apart from its neighbours,
+ * so no boundary keeps an entry from being found. A contextual entry is read
+ * closed up only when its word is not whole otherwise.
+ *
+ * This is the stricter side on purpose. Two elements that do stand apart
+ * (two items of a list) are read closed up as well, because a class or a
+ * style the scan does not read can set any two elements in one line, so the
+ * end of one and the start of the next can make an entry nobody sees as one
+ * word. `closedUp: false` leaves this reading out; the scan uses it to tell
+ * such a finding apart and to say so where it reports it (`findingsIn`).
  */
-export function findForbiddenTermsInMarkup(joined: string, spaced: string): ForbiddenTerm[] {
+export function findForbiddenTermsInMarkup(joined: string, spaced: string, closedUp = true): ForbiddenTerm[] {
   const shown = foldText(joined);
   const apart = foldText(spaced);
+  const closed = foldText(joined.replaceAll(PHRASE_BREAK, ""));
+  const closedPhrases = foldPhrases(joined.replaceAll(PHRASE_BREAK, ""));
+  // Closed up past the quotation marks at a boundary too: see `closedUpPastQuotes`.
+  const tight = foldText(closedUpPastQuotes(joined));
+  const tightPhrases = foldPhrases(closedUpPastQuotes(joined));
   const shownPhrases = foldPhrases(joined);
   const apartPhrases = foldPhrases(spaced);
   return FORBIDDEN_TERMS.filter((entry) => {
-    if (!entry.contextual) return entry.pattern.test(shown) || entry.pattern.test(apart);
-    return entry.pattern.test(shownPhrases) && (entry.pattern.test(apartPhrases) || !entry.contextual.word.test(apartPhrases));
+    if (!entry.contextual) return entry.pattern.test(shown) || entry.pattern.test(apart) || (closedUp && (entry.pattern.test(closed) || entry.pattern.test(tight)));
+    if (entry.pattern.test(shownPhrases) && (entry.pattern.test(apartPhrases) || !entry.contextual.word.test(apartPhrases))) return true;
+    // The word itself put together across something unknown: there is no whole word to judge without closing it.
+    return closedUp && !entry.contextual.word.test(shownPhrases) && (entry.pattern.test(closedPhrases) || entry.pattern.test(tightPhrases));
   });
+}
+
+/** The quotation marks of Croatian and English outside ASCII. */
+const QUOTATION_MARKS: ReadonlySet<number> = new Set([0xab, 0xbb, 0x2018, 0x2019, 0x201a, 0x201c, 0x201d, 0x201e]);
+/** What stands between two words around a `PHRASE_BREAK`, the break included. */
+const AROUND_A_BREAK = /[^\p{L}\p{N}]*\n[^\p{L}\p{N}]*/gu;
+
+/**
+ * `joined` closed up, and without the quotation marks that stand between two
+ * words where a `PHRASE_BREAK` stands between them. A paragraph that ends
+ * with a quotation mark, or begins with one, is ordinary text, so
+ * `findUnreadableText` does not report such a mark there. It may leave it out
+ * only because the dictionary reads the text without it as well: an entry cut
+ * at a boundary with a quotation mark at the cut is found here.
+ */
+export function closedUpPastQuotes(joined: string): string {
+  return joined.replace(AROUND_A_BREAK, (run) => [...run].filter((char) => char !== PHRASE_BREAK && !QUOTATION_MARKS.has(char.codePointAt(0)!)).join(""));
+}
+
+/**
+ * White space that may stand between two letters of one text without being
+ * reported. The narrow no-break space (U+202F) is left out on purpose: it is
+ * thin enough to cut a word without showing, and where typography wants it,
+ * between a number and its unit, it does not stand between two letters.
+ */
+const PLAIN_SPACE = /[ \u00A0]/u;
+/** A run of anything but letters and digits that touches a letter on both sides. */
+const BETWEEN_LETTERS = /(?<=\p{L})[^\p{L}\p{N}]+(?=\p{L})/gu;
+/** A symbol, a space or a punctuation mark, of any kind. */
+const SYMBOL_SPACE_OR_MARK = /[\p{S}\p{Zs}\p{P}]/u;
+/**
+ * The punctuation marks outside ASCII that Croatian and English write between
+ * two letters with no space: the hyphen and the non-breaking hyphen (U+2010,
+ * U+2011), the en dash and the em dash (U+2013, U+2014), the apostrophe
+ * (U+2019) and the ellipsis (U+2026). None of them is drawn like a letter.
+ * Every other mark outside ASCII is reported there, because some are (an
+ * upright bar, a dot at the height of a letter) and nobody can tell them
+ * apart in a review. That holds for quotation marks and brackets too, and
+ * ASCII punctuation next to them does not change it: only a plain space sets
+ * two words apart. `findUnreadableText` leaves out the quotation marks next
+ * to an element boundary (`closedUpPastQuotes`).
+ */
+const MARKS_INSIDE_A_WORD: ReadonlySet<number> = new Set([0x2010, 0x2011, 0x2013, 0x2014, 0x2019, 0x2026]);
+/** A mathematical, currency or modifier symbol that touches a letter. */
+const SYMBOL_AT_A_LETTER = /(?<=\p{L})[\p{Sm}\p{Sc}\p{Sk}]|[\p{Sm}\p{Sc}\p{Sk}](?=\p{L})/gu;
+/**
+ * Private use, unassigned and surrogate code points, and control characters.
+ * The five controls that are white space (tab, line feed, vertical tab, form
+ * feed, carriage return) are text: code that reads white space names them.
+ */
+const NEVER_TEXT = /[\p{Co}\p{Cn}\p{Cs}]|(?![\t\n\v\f\r])\p{Cc}/gu;
+/** A character typed on a keyboard; what it looks like is for the reader of the source to judge. */
+const isAscii = (char: string): boolean => char.codePointAt(0)! < 0x80;
+
+/**
+ * Characters that interface text may not hold, each once, as `U+XXXX`. The
+ * dictionary is matched on letters, so a character that only looks
+ * like a letter, or like nothing at all, would take a word past it. Such a
+ * character is reported for what it is, whatever word it stands in:
+ *
+ * - a letter that does not fold to `a`-`z` (`foldLetters`): Cyrillic, Greek,
+ *   a dotless i, an IPA letter. Croatian letters and other Latin letters with
+ *   a diacritic fold, and so do the compatibility forms NFKC knows;
+ * - a digit or number that does not fold to ASCII digits and Latin letters:
+ *   the digits of other scripts, some of which are drawn like a Latin letter;
+ * - a private use, unassigned or surrogate code point and a control character
+ *   that is not white space, wherever it stands;
+ * - between two letters with no `PLAIN_SPACE` between them: every symbol,
+ *   every space and every punctuation mark that is not ASCII, except the
+ *   marks on `MARKS_INSIDE_A_WORD`. That is a symbol with no ink (a Braille
+ *   blank), a space of another width, a symbol or a mark drawn like a letter
+ *   (a mathematical operator, a currency sign, an upright bar) and also an
+ *   emoji, which is reported on purpose: two words with only a symbol
+ *   between them are set apart with a space;
+ * - a mathematical, currency or modifier symbol that is not ASCII and touches
+ *   a letter on either side, since it can stand for the first or the last
+ *   letter of a word. Other symbols at the edge of a word (a degree sign, a
+ *   trade mark) are left alone, because that is where they are written.
+ *
+ * ASCII symbols and digits are not reported whatever they resemble.
+ */
+export function unreadableCharacters(text: string): string[] {
+  const found: string[] = [...(text.match(NEVER_TEXT) ?? [])];
+  for (const char of text) {
+    const folded = foldLetters(char);
+    if (/\p{L}/u.test(char) ? !/^[a-z]*$/.test(folded) : /\p{N}/u.test(char) && /[^a-z0-9]/.test(folded.replace(/[^\p{L}\p{N}]/gu, ""))) found.push(char);
+  }
+  // Without what the dictionary matching drops anyway, so that such a character next to the run does not hide it.
+  const bare = text.replace(INVISIBLE, "").replace(/\p{M}/gu, "");
+  for (const run of bare.match(BETWEEN_LETTERS) ?? []) {
+    if (PLAIN_SPACE.test(run)) continue;
+    found.push(...[...run].filter((char) => SYMBOL_SPACE_OR_MARK.test(char) && !isAscii(char) && !MARKS_INSIDE_A_WORD.has(char.codePointAt(0)!)));
+  }
+  found.push(...(bare.match(SYMBOL_AT_A_LETTER) ?? []).filter((char) => !isAscii(char)));
+  const codes = found.map((char) => `U+${char.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")}`);
+  return [...new Set(codes)];
 }
