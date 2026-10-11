@@ -1,6 +1,8 @@
 import { fc, test } from "@fast-check/vitest";
 import { describe, expect } from "vitest";
 
+import { EDIT_STEP_FORMAT_V1 } from "@/domain/document/edit-step";
+
 import { sha256WebCrypto } from "./crypto";
 import {
   decideEvidenceRetry,
@@ -31,7 +33,8 @@ type ChainSpec = EventSpec[][];
 type BuiltChain = { payloads: string[]; head: EvidenceChainHeadV2 };
 
 const eventSpec = fc.record({
-  text: fc.string({ unit: "binary", maxLength: 12 }),
+  // A v1 insertion carries non-empty text without NUL.
+  text: fc.string({ unit: "binary", minLength: 1, maxLength: 12 }).filter((text) => !text.includes("\0")),
   source: fc.constantFrom(...EVIDENCE_SOURCES_V2),
 });
 const chainSpec = (minLength: number): fc.Arbitrary<ChainSpec> =>
@@ -80,13 +83,15 @@ async function buildChain(spec: ChainSpec, options: ChainOptions = {}): Promise<
       events: events.map((event, offset) => ({
         sequence: sequence + offset,
         source: event.source,
-        steps: [{ stepType: "replace", from: 1, to: 1, text: event.text }],
+        steps: [
+          { stepType: "replace", from: 1, to: 1, slice: { content: [{ type: "text", text: event.text }] } },
+        ],
         beforeDocumentHash: documentHash(revision + offset),
         afterDocumentHash: documentHash(revision + offset + 1),
       })),
       captureContext: {
         editorModel: "prosemirror",
-        transactionFormat: "prosemirror-step-json-v1",
+        transactionFormat: EDIT_STEP_FORMAT_V1,
       },
       evidenceProfileId: "standard-v1",
     };
@@ -208,7 +213,7 @@ describe("evidence segment chain v2", () => {
       const index = pick % payloads.length;
       const changed = [...payloads];
       changed[index] = rewrite(payloads[index], (segment) => {
-        segment.events[0].steps[0].text += suffix;
+        (segment.events[0].steps[0].slice as { content: { text: string }[] }).content[0].text += suffix;
       });
       fc.pre(changed[index] !== payloads[index]);
 

@@ -2,7 +2,7 @@
 
 Ovaj je dokument ulazna točka za Codex i druge agente koji automatski čitaju `AGENTS.md`. Ductus podržava eksplicitne načine rada: **worker**, **review**, **qa**, **bug-hunter**, **product-ux** i **orchestrator**. Provider ili račun ne određuju ulogu.
 
-Prije rada pročitaj `CLAUDE.md`, `STATE.md`, `docs/ENGINEERING_SYSTEM.md` i `docs/MULTI-ACCOUNT.md`. Za detalje o paralelnom radu čitaj `docs/SESSIONS.md`; orkestrator dodatno čita `docs/ORKESTRATOR.md`.
+Prije rada pročitaj `CLAUDE.md`, `STATE.md`, `docs/ENGINEERING_SYSTEM.md` i `docs/MULTI-ACCOUNT.md`. Za detalje o paralelnom radu čitaj `docs/SESSIONS.md`; orkestrator dodatno čita `docs/ORKESTRATOR.md`. Sesija s dodijeljenom ulogom (pisac Backend, Frontend ili Platforma, reviewer, QA) čita i svoju karticu u `.claude/uloge/` (počni od `README.md`); kartice vrijede za svaki runtime, a pravila u `.claude/rules/` učitava samo Claude Code.
 
 ## Odabir načina rada
 

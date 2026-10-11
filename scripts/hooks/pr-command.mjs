@@ -38,10 +38,22 @@ export function extractBody(command, cwd) {
 }
 
 // Files the branch changes against origin/main, or null when that cannot be
-// read. A rename is listed under both names.
+// read. A rename is listed under both names. Paths are relative to the
+// repository root whatever the directory the command runs in, and the call
+// overrides every user or repository setting that could narrow or reshape
+// that list: diff.relative (limits it to the working directory), submodule
+// ignore settings, external diff and textconv drivers, replacement objects.
+// (Rename detection is switched off by the flag, quoting by -z.)
 export function changedFiles(cwd) {
   try {
-    const out = execFileSync("git", ["diff", "--name-only", "--no-renames", "-z", "origin/main...HEAD"], {
+    const args = [
+      "--no-replace-objects",
+      "-c", "diff.relative=false",
+      "-c", "diff.ignoreSubmodules=none",
+      "diff", "--name-only", "--no-renames", "--no-ext-diff", "--no-textconv", "--ignore-submodules=none",
+      "-z", "origin/main...HEAD",
+    ];
+    const out = execFileSync("git", args, {
       cwd,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],

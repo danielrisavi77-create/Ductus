@@ -1,6 +1,8 @@
 import { fc, test } from "@fast-check/vitest";
 import { describe, expect } from "vitest";
 
+import { EDIT_STEP_FORMAT_V1 } from "@/domain/document/edit-step";
+
 import { verifyCanonicalEvidencePayloadV2 } from "./evidence-chain-v2";
 import { canonicalizeJcs, type JcsJsonValue } from "./jcs";
 
@@ -9,7 +11,8 @@ import { canonicalizeJcs, type JcsJsonValue } from "./jcs";
  * the fields of the format, a segment that is accepted carries no time per
  * event and no time finer than a minute. Step text is generated without
  * digits, because the text of the work is content and not a field of the
- * format. All content is generated.
+ * format; a v1 insertion carries at least one character. All content is
+ * generated.
  */
 
 type Loose = Record<string, JcsJsonValue>;
@@ -56,7 +59,7 @@ const WHOLE_MINUTE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00\.000Z$/;
 const ANY_TIME = /\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})/g;
 
 describe("evidence segment v2: time", () => {
-  test.prop([observedTimes, place, fc.oneof(instant, wholeMinute), fc.stringMatching(/^[a-z ]{0,12}$/)], {
+  test.prop([observedTimes, place, fc.oneof(instant, wholeMinute), fc.stringMatching(/^[a-z ]{1,12}$/)], {
     numRuns: 300,
   })(
     "a segment is accepted exactly when its times are two whole minutes and it has no other time field",
@@ -64,7 +67,7 @@ describe("evidence segment v2: time", () => {
       const event: Loose = {
         sequence: 1,
         source: "editor",
-        steps: [{ stepType: "replace", from: 1, to: 1, text }],
+        steps: [{ stepType: "replace", from: 1, to: 1, slice: { content: [{ type: "text", text }] } }],
         touchedNodeIds: ["p1"],
         beforeDocumentHash: A,
         afterDocumentHash: B,
@@ -84,7 +87,7 @@ describe("evidence segment v2: time", () => {
         finalDocumentHash: B,
         predecessorSegmentHash: null,
         events: [event],
-        captureContext: { editorModel: "prosemirror", transactionFormat: "prosemirror-step-json-v1" },
+        captureContext: { editorModel: "prosemirror", transactionFormat: EDIT_STEP_FORMAT_V1 },
         evidenceProfileId: "standard-v1",
       };
       PLACES[where](segment, event, time);

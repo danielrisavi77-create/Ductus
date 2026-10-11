@@ -1,7 +1,13 @@
 import { readFile } from "node:fs/promises";
 import process from "node:process";
 
-import { evaluatePullRequest } from "./review-gate-core.mjs";
+import {
+  MAX_MERGE_STEPS,
+  carriedHeadCandidates,
+  evaluatePullRequest,
+  onlyBaseMerges,
+  sameChange,
+} from "./review-gate-core.mjs";
 
 const context = "Engineering review gate";
 
@@ -43,6 +49,47 @@ function prNumberFromEvent(event) {
   return null;
 }
 
+// Walks first parents from `head` until `earlier`, a non-merge commit or the
+// step limit, whichever comes first.
+async function firstParentPath(owner, repo, head, earlier) {
+  const path = [];
+  let sha = head;
+  for (let step = 0; step <= MAX_MERGE_STEPS && sha; step += 1) {
+    const commit = await api(`/repos/${owner}/${repo}/commits/${sha}`);
+    path.push({ sha: commit.sha, parents: commit.parents });
+    if (commit.sha.toLowerCase() === earlier.toLowerCase() || commit.parents.length < 2) break;
+    sha = commit.parents[0]?.sha;
+  }
+  return path;
+}
+
+// D-101: earlier heads whose verdicts still hold because only base merges
+// followed and the PR diff is unchanged. Any API error carries nothing.
+async function carriedHeads(owner, repo, pr, comments) {
+  const carried = new Set();
+  const candidates = carriedHeadCandidates(comments, pr.head.sha);
+  if (candidates.length === 0) return carried;
+  const compare = (range) => api(`/repos/${owner}/${repo}/compare/${range}?per_page=100`);
+  let current;
+  try {
+    current = await compare(`${pr.base.sha}...${pr.head.sha}`);
+  } catch (error) {
+    console.log(`Carry-over check failed closed: ${error.message}`);
+    return carried;
+  }
+  for (const sha of candidates) {
+    try {
+      const path = await firstParentPath(owner, repo, pr.head.sha, sha);
+      if (!onlyBaseMerges(path, sha)) continue;
+      if (sameChange(current, await compare(`${pr.base.sha}...${sha}`))) carried.add(sha);
+    } catch (error) {
+      // A head that is gone or unreadable simply does not carry.
+      console.log(`Carry-over check for ${sha} failed closed: ${error.message}`);
+    }
+  }
+  return carried;
+}
+
 async function setStatus(repository, sha, result, targetUrl) {
   const [owner, repo] = repository.split("/");
   await api(`/repos/${owner}/${repo}/statuses/${sha}`, {
@@ -78,6 +125,7 @@ async function main() {
     files: changedFiles,
     comments,
     ownerLogin: owner,
+    carriedHeads: await carriedHeads(owner, repo, pr, comments),
   });
 
   await setStatus(repository, pr.head.sha, result, pr.html_url);
