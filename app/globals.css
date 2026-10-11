@@ -618,3 +618,17 @@ main:focus {
     animation: none;
   }
 }
+
+/* Local editor on /rad (F-3 step 1b). */
+
+.editor-surface .ProseMirror {
+  min-height: 12em;
+}
+
+.editor-surface .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--ink-3);
+  pointer-events: none;
+}
