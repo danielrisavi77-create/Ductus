@@ -78,17 +78,23 @@ const REDACTED = "[S3 credentials redacted]";
  * S3 keys sealed for configuration. The values live only in native private
  * fields, so enumeration, spreading, `JSON.stringify`, `String` and
  * `util.inspect` (hidden properties and getters included) of the keys or of a
- * configuration that holds them show a redaction mark. The keys are copied
- * and validated when sealed; the error never names a value.
+ * configuration that holds them show a redaction mark. Each key is read once
+ * when sealed, and that same value is validated and stored, so a getter
+ * cannot pass one value and seal another; the error never names a value.
  */
 export class S3SecretCredentials {
   readonly #accessKeyId: string;
   readonly #secretAccessKey: string;
 
   constructor(credentials: S3Credentials) {
-    assertS3Credentials(credentials);
-    this.#accessKeyId = credentials.accessKeyId;
-    this.#secretAccessKey = credentials.secretAccessKey;
+    const { accessKeyId, secretAccessKey } = (credentials ?? {}) as Record<
+      string,
+      unknown
+    >;
+    const keys = { accessKeyId, secretAccessKey };
+    assertS3Credentials(keys);
+    this.#accessKeyId = keys.accessKeyId;
+    this.#secretAccessKey = keys.secretAccessKey;
     Object.freeze(this);
   }
 

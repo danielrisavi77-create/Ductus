@@ -746,6 +746,27 @@ describe("S3EvidencePayloadStore", () => {
     expect(Object.isFrozen(sealed)).toBe(true);
   });
 
+  it("seals the same key values it validated, reading each once", () => {
+    const reads = { accessKeyId: 0, secretAccessKey: 0 };
+    // A getter that answers a valid key first and a different one after.
+    const shifting = {
+      get accessKeyId() {
+        return reads.accessKeyId++ === 0 ? "fake-id-first" : "fake id other!";
+      },
+      get secretAccessKey() {
+        return reads.secretAccessKey++ === 0 ? "fake-secret-first" : "";
+      },
+    };
+
+    const sealed = new S3SecretCredentials(shifting);
+
+    expect(S3SecretCredentials.reveal(sealed)).toEqual({
+      accessKeyId: "fake-id-first",
+      secretAccessKey: "fake-secret-first",
+    });
+    expect(reads).toEqual({ accessKeyId: 1, secretAccessKey: 1 });
+  });
+
   it("refuses plain keys in place of sealed ones, naming no value", () => {
     const secret = ["kanarinac", "plain", Date.now().toString(36)].join("-");
     for (const credentials of [
@@ -1059,10 +1080,11 @@ describe("write proof (#155, S1 to S6)", () => {
 
     await expect(put(store, "a")).resolves.toEqual(unverified);
     expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
-    expect(warn).toHaveBeenCalledWith(
-      "evidence payload write unverified",
-      expect.objectContaining({ segmentHash: hashOf(payload("a")) }),
-    );
+    expect(warn).toHaveBeenCalledWith("evidence payload write unverified", {
+      institutionId: INSTITUTION,
+      evidencePackageId: PACKAGE,
+      segmentHash: hashOf(payload("a")),
+    });
   });
 
   it.each([
