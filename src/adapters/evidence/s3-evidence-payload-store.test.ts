@@ -2133,4 +2133,30 @@ describe("the input is read once (QA qa233f)", () => {
     await logged();
     expect(warn.mock.calls).toEqual([["evidence payload write unverified", idsOf("a")]]);
   });
+
+  it("spends the call's deadline on a slow getter and sends nothing after it", async () => {
+    const s3 = fakeS3();
+    const clock = { now: 100 };
+    const spy = vi.spyOn(performance, "now").mockImplementation(() => clock.now);
+    const { store } = storeWith(s3.fetch, { requestTimeoutMs: 60_000 });
+    const input = {
+      institutionId: INSTITUTION,
+      evidencePackageId: PACKAGE,
+      segmentHash: hashOf(payload("a")),
+      get canonicalPayload() {
+        clock.now += 60_001;
+        return payload("a");
+      },
+    };
+
+    try {
+      expect(await store.putImmutable(input)).toEqual({
+        status: "unavailable",
+        reason: "storage_timeout",
+      });
+    } finally {
+      spy.mockRestore();
+    }
+    expect(s3.calls).toEqual([]);
+  });
 });

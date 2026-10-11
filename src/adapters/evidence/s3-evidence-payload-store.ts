@@ -246,15 +246,6 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     segmentHash: string;
     canonicalPayload: string;
   }): Promise<EvidencePayloadPutResult> {
-    // Each field is read exactly once, here: the check, the key, the
-    // comparison and the logged identifiers all use these values, so a caller
-    // that changes its object (or a getter) during the call cannot rebind them.
-    const input = {
-      institutionId: given.institutionId,
-      evidencePackageId: given.evidencePackageId,
-      segmentHash: given.segmentHash,
-      canonicalPayload: given.canonicalPayload,
-    };
     // One deadline for the whole call, so checking the input and a slow PUT
     // leave the read-back only what is left of it. The deadline itself is a
     // monotonic instant, checked by `send` right before every request and
@@ -271,6 +262,17 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     // A start that cannot be read leaves the deadline at -Infinity: late.
     const start = readClock(phase);
     if (start !== null) phase.deadline = start + this.requestTimeoutMs;
+    // Each field is read exactly once, here, after the deadline starts, so a
+    // slow getter spends the call's time, not a fresh one. The check, the key,
+    // the comparison and the logged identifiers all use these values, so a
+    // caller that changes its object (or a getter) during the call cannot
+    // rebind them.
+    const input = {
+      institutionId: given.institutionId,
+      evidencePackageId: given.evidencePackageId,
+      segmentHash: given.segmentHash,
+      canonicalPayload: given.canonicalPayload,
+    };
     const abort = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const expired = new Promise<EvidencePayloadPutResult>((resolve) => {
