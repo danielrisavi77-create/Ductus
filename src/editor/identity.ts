@@ -29,7 +29,11 @@
  * Stored documents enter through `replaceWithStoredDocument` (or as the
  * initial content of the state) and are taken as they are: an id that is
  * malformed in stored content is still reported by `tiptapToCanonical`, not
- * repaired, and ids are never re-minted on load.
+ * repaired, and ids are never re-minted on load. `replaceWithStoredDocument`
+ * refuses a document that holds an id twice. Initial content is checked by
+ * nobody, so there the one thing repaired is a repeated id: the earlier block
+ * keeps it and the later one is given a new id once, in the state, instead of
+ * a different one at every conversion.
  *
  * What a plugin cannot do: it sees transactions, so code that replaces the
  * whole editor state, or edits while the editor is unmounted (Tiptap attaches
@@ -39,7 +43,7 @@
 
 import { Fragment, Slice, type Node as PmNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey, type EditorState, type Transaction } from "@tiptap/pm/state";
-import { Mapping } from "@tiptap/pm/transform";
+import { Mapping, Step, StepResult, type Mappable } from "@tiptap/pm/transform";
 
 import {
   isNodeId,
@@ -73,17 +77,19 @@ type Fix = { pos: number; id: unknown };
  */
 type Trace = { next: Block[]; kept: Map<number, unknown>; removed: Block[]; gone: Block[] };
 
-/** The trace of a single transaction, computed once for both plugin hooks. */
-const traces = new WeakMap<Transaction, { steps: number; result: Trace }>();
+/**
+ * The trace of a single applied transaction, computed once for both plugin
+ * hooks. Only asked for transactions the state has applied, which no longer
+ * change.
+ */
+const traces = new WeakMap<Transaction, Trace>();
 
 function traceOf(tr: Transaction): Trace {
-  const found = traces.get(tr);
-  // A transaction can still grow after it was looked at once.
-  if (found && found.steps === tr.steps.length) {
-    return found.result;
+  let result = traces.get(tr);
+  if (!result) {
+    result = trace(tr.before, tr.doc, tr.mapping);
+    traces.set(tr, result);
   }
-  const result = trace(tr.before, tr.doc, tr.mapping);
-  traces.set(tr, { steps: tr.steps.length, result });
   return result;
 }
 
@@ -184,7 +190,7 @@ function holderOf(blocks: readonly Block[], pos: number): Block | undefined {
 function trace(oldDoc: PmNode, newDoc: PmNode, mapping: Mapping): Trace {
   const next = blocksOf(newDoc);
   const byPos = new Map(next.map((block) => [block.pos, block]));
-  const claims = new Map<number, { at: number; old: Block }>();
+  const claims = new Map<number, Block>();
   const empty: Block[] = [];
   const removed: Block[] = [];
   const gone: Block[] = [];
@@ -196,22 +202,20 @@ function trace(oldDoc: PmNode, newDoc: PmNode, mapping: Mapping): Trace {
       (at === null ? empty : removed).push(old);
       continue;
     }
-    const rival = claims.get(heir.pos);
-    if (rival && rival.at <= at) {
+    // Position maps keep order and the old blocks come in document order, so
+    // a block that already claimed this heir is the one with the earlier text.
+    if (claims.has(heir.pos)) {
       removed.push(old);
       continue;
     }
-    if (rival) {
-      removed.push(rival.old);
-    }
-    claims.set(heir.pos, { at, old });
+    claims.set(heir.pos, old);
   }
   for (const old of empty) {
     const opening = mapping.mapResult(old.pos, 1);
     const content = mapping.mapResult(old.pos + 1, 1);
     const pos = !opening.deletedAfter ? opening.pos : !content.deleted ? content.pos - 1 : -1;
     if (byPos.has(pos) && !claims.has(pos)) {
-      claims.set(pos, { at: pos, old });
+      claims.set(pos, old);
     } else {
       removed.push(old);
       gone.push(old);
@@ -219,7 +223,7 @@ function trace(oldDoc: PmNode, newDoc: PmNode, mapping: Mapping): Trace {
   }
 
   const kept = new Map<number, unknown>();
-  for (const [pos, { old }] of claims) {
+  for (const [pos, old] of claims) {
     kept.set(pos, idOf(old.node));
   }
   return { next, kept, removed, gone };
@@ -258,8 +262,12 @@ function plan({ next, kept, gone }: Trace, remembered: Removed, mint: NodeIdMint
   };
 
   // Blocks that never had an id (a document created empty) are settled last.
-  for (const [pos, id] of kept) {
-    if (id !== null && id !== undefined) {
+  // So is a block whose id an earlier block already holds: that can only come
+  // from content the state was created with, which no validator has seen, and
+  // leaving it would make every later conversion mint a different id for it.
+  for (const { pos } of next) {
+    const id = kept.get(pos);
+    if (id !== null && id !== undefined && !(typeof id === "string" && taken.has(id.toLowerCase()))) {
       claim(pos, id);
     }
   }
@@ -276,7 +284,7 @@ function plan({ next, kept, gone }: Trace, remembered: Removed, mint: NodeIdMint
     for (const [key, left] of groupBySignature(gone)) {
       const arrived = arrivalGroups.get(key);
       const id = idOf(left[0].node);
-      if (left.length === 1 && arrived?.length === 1 && isNodeId(id) && !taken.has(id.toLowerCase())) {
+      if (left.length === 1 && arrived?.length === 1 && typeof id === "string" && !taken.has(id.toLowerCase())) {
         claim(arrived[0].pos, id);
       }
     }
@@ -333,7 +341,7 @@ function remember(remembered: Removed, tr: Transaction): Removed {
 
 /** Same type, attributes and content; the id is not compared. */
 function sameBlock(a: PmNode | undefined, b: PmNode): boolean {
-  return a !== undefined && a.type === b.type && a.content.eq(b.content) && signature(a.copy()) === signature(b.copy());
+  return a !== undefined && a.content.eq(b.content) && signature(a.copy()) === signature(b.copy());
 }
 
 /** A transaction that gives every block without an id a minted one, or null. */
@@ -342,11 +350,64 @@ export function mintMissingIds(state: EditorState, mint: NodeIdMinter = newNodeI
   return fixes.length === 0 ? null : applyFixes(state.tr, fixes).setMeta("addToHistory", false);
 }
 
-function applyFixes(tr: Transaction, fixes: readonly Fix[]): Transaction {
-  for (const { pos, id } of fixes) {
-    tr.setNodeAttribute(pos, NODE_ID_ATTRIBUTE, id);
+/**
+ * Sets the ids of many blocks in one pass over the document. One attribute
+ * step per block copies the document once per block, which makes a large
+ * paste quadratic. Like an attribute step it changes no positions.
+ */
+class SetNodeIds extends Step {
+  constructor(readonly fixes: readonly Fix[]) {
+    super();
   }
-  return tr;
+
+  apply(doc: PmNode): StepResult {
+    const ids = new Map(this.fixes.map((fix) => [fix.pos, fix.id]));
+    let found = 0;
+    const rewrite = (fragment: Fragment, start: number): Fragment => {
+      const nodes: PmNode[] = [];
+      let changed = false;
+      let pos = start;
+      fragment.forEach((node) => {
+        let out = node;
+        if (ids.has(pos) && carriesId(node)) {
+          found += 1;
+          out = node.type.create({ ...node.attrs, [NODE_ID_ATTRIBUTE]: ids.get(pos) }, node.content, node.marks);
+        } else if (!node.isTextblock && !node.isLeaf) {
+          out = node.copy(rewrite(node.content, pos + 1));
+        }
+        // `copy` returns the node itself when nothing below it changed.
+        changed ||= out !== node;
+        nodes.push(out);
+        pos += node.nodeSize;
+      });
+      return changed ? Fragment.fromArray(nodes) : fragment;
+    };
+    const content = rewrite(doc.content, 0);
+    return found === ids.size ? StepResult.ok(doc.copy(content)) : StepResult.fail("No block at a node id position");
+  }
+
+  invert(doc: PmNode): Step {
+    const wanted = new Set(this.fixes.map((fix) => fix.pos));
+    return new SetNodeIds(
+      blocksOf(doc).filter((block) => wanted.has(block.pos)).map((block) => ({ pos: block.pos, id: idOf(block.node) })),
+    );
+  }
+
+  map(mapping: Mappable): Step | null {
+    const fixes = this.fixes.flatMap(({ pos, id }) => {
+      const mapped = mapping.mapResult(pos, 1);
+      return mapped.deletedAfter ? [] : [{ pos: mapped.pos, id }];
+    });
+    return fixes.length === 0 ? null : new SetNodeIds(fixes);
+  }
+
+  toJSON(): { stepType: string; fixes: readonly Fix[] } {
+    return { stepType: "setNodeIds", fixes: this.fixes };
+  }
+}
+
+function applyFixes(tr: Transaction, fixes: readonly Fix[]): Transaction {
+  return tr.step(new SetNodeIds(fixes));
 }
 
 /** The plugin that keeps block identity. One per editor state. */

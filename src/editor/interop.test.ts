@@ -257,35 +257,75 @@ describe("node id strategy", () => {
     ]);
   });
 
-  it("treats the same id in another case as a duplicate and re-mints it, so the document keeps a canonical form", () => {
-    for (const variant of [ID_A.toUpperCase(), `${ID_A.slice(0, 4).toUpperCase()}${ID_A.slice(4)}`]) {
-      const result = tiptapToCanonical(
-        {
-          type: "doc",
-          content: [
-            { type: "paragraph", attrs: { [NODE_ID_ATTRIBUTE]: ID_A } },
-            { type: "paragraph", attrs: { [NODE_ID_ATTRIBUTE]: variant } },
-          ],
-        },
-        factory(ID_B),
-      );
+  /** An id with hex letters, so that another letter case is a different string. */
+  const LETTERED = "abcdefab-cdef-4abc-8def-abcdefabcdef" as NodeId;
 
-      expect(result.ok).toBe(true);
-      expect(result.ok && result.doc.nodes.map((node) => node.id)).toEqual([ID_A, ID_B]);
-    }
-  });
-
-  it("does not accept a minted id that is already in use in another case", () => {
+  it.each([
+    ["upper case", LETTERED.toUpperCase()],
+    ["mixed case", `${LETTERED.slice(0, 4).toUpperCase()}${LETTERED.slice(4)}`],
+  ])("treats the same id in %s as a duplicate and re-mints it, so the document keeps a canonical form", (_name, variant) => {
+    expect(variant).not.toBe(LETTERED);
     const result = tiptapToCanonical(
       {
         type: "doc",
-        content: [{ type: "paragraph", attrs: { [NODE_ID_ATTRIBUTE]: ID_A } }, { type: "paragraph" }],
+        content: [
+          { type: "paragraph", attrs: { [NODE_ID_ATTRIBUTE]: LETTERED } },
+          { type: "paragraph", attrs: { [NODE_ID_ATTRIBUTE]: variant } },
+        ],
       },
-      () => ID_A.toUpperCase() as NodeId,
+      factory(ID_B),
     );
 
     expect(result.ok).toBe(true);
-    expect(result.ok && result.doc.nodes[1].id.toLowerCase()).not.toBe(ID_A);
+    expect(result.ok && result.doc.nodes.map((node) => node.id)).toEqual([LETTERED, ID_B]);
+  });
+
+  it("treats a lower-case id that follows its upper-case form as a duplicate too", () => {
+    const upper = LETTERED.toUpperCase();
+    const result = tiptapToCanonical(
+      {
+        type: "doc",
+        content: [
+          { type: "paragraph", attrs: { [NODE_ID_ATTRIBUTE]: upper } },
+          { type: "paragraph", attrs: { [NODE_ID_ATTRIBUTE]: LETTERED } },
+        ],
+      },
+      factory(ID_B),
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.doc.nodes.map((node) => node.id)).toEqual([upper, ID_B]);
+  });
+
+  it("remembers a minted id without regard to case, so a later block cannot repeat it in another case", () => {
+    const result = tiptapToCanonical(
+      {
+        type: "doc",
+        content: [{ type: "paragraph" }, { type: "paragraph", attrs: { [NODE_ID_ATTRIBUTE]: LETTERED } }],
+      },
+      factory(LETTERED.toUpperCase() as NodeId, ID_B),
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.doc.nodes.map((node) => node.id)).toEqual([LETTERED.toUpperCase(), ID_B]);
+    expect(result.ok && validateDocument(result.doc).ok).toBe(true);
+  });
+
+  it("does not accept a minted id that is already in use in another case", () => {
+    const minted = LETTERED.toUpperCase() as NodeId;
+    expect(minted).not.toBe(LETTERED);
+    const result = tiptapToCanonical(
+      {
+        type: "doc",
+        content: [{ type: "paragraph", attrs: { [NODE_ID_ATTRIBUTE]: LETTERED } }, { type: "paragraph" }],
+      },
+      () => minted,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.doc.nodes[0].id).toBe(LETTERED);
+    expect(result.ok && result.doc.nodes[1].id.toLowerCase()).not.toBe(LETTERED);
+    expect(result.ok && validateDocument(result.doc).ok).toBe(true);
   });
 
   it("passes the block index to the id factory", () => {

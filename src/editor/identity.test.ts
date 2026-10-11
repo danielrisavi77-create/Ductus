@@ -461,6 +461,150 @@ describe.each(ID_CARRYING_TYPES)("block identity (%s)", (type) => {
     });
   });
 
+  it("a copy of a block that was removed and brought back by undo is a new block", () => {
+    const editor = open(abc(type));
+    const original = editor.state.doc.child(1);
+    editor.commands.deleteRange({ from: posOf(editor, 1), to: posOf(editor, 2) });
+    editor.commands.undo();
+    expect(seen(editor)).toEqual(ORIGINALS);
+
+    // Same id, same content: all that sets it apart is that the original is back.
+    editor.view.dispatch(editor.state.tr.insert(endOf(editor), original));
+
+    const blocks = seen(editor);
+    expect(blocks.slice(0, 3)).toEqual(ORIGINALS);
+    expect(blocks[3].text).toBe(TEXT_B);
+    expectNew([blocks[3].id], 1);
+  });
+
+  it("two copies of a removed block inserted together are both new", () => {
+    const editor = open(abc(type));
+    const original = editor.state.doc.child(1);
+    editor.commands.deleteRange({ from: posOf(editor, 1), to: posOf(editor, 2) });
+    editor.view.dispatch(editor.state.tr.insert(endOf(editor), [original, original]));
+
+    const blocks = seen(editor);
+    expect(blocks.slice(0, 2)).toEqual([ORIGINALS[0], ORIGINALS[2]]);
+    expectNew(blocks.slice(2).map((entry) => entry.id), 2);
+  });
+
+  describe("a move that cannot be told apart", () => {
+    const stripped = (editor: Editor, index: number) => {
+      const node = editor.state.doc.child(index);
+      return node.type.create({ ...node.attrs, [NODE_ID_ATTRIBUTE]: null }, node.content);
+    };
+
+    it("two identical blocks removed, one identical block inserted: it is new", () => {
+      const editor = open({ type: "doc", content: [block(type, ID_A, TEXT_A), block(type, ID_B, "Isti."), block(type, ID_C, "Isti.")] });
+      const arrival = stripped(editor, 1);
+      const tr = editor.state.tr.delete(posOf(editor, 1), endOf(editor));
+      editor.view.dispatch(tr.insert(0, arrival));
+
+      const blocks = seen(editor);
+      expect(blocks[1]).toEqual(ORIGINALS[0]);
+      expectNew([blocks[0].id], 1);
+    });
+
+    it("one block removed, two identical blocks inserted: both are new", () => {
+      const editor = open(abc(type));
+      const arrival = stripped(editor, 1);
+      const tr = editor.state.tr.delete(posOf(editor, 1), posOf(editor, 2));
+      editor.view.dispatch(tr.insert(0, [arrival, arrival]));
+
+      const blocks = seen(editor);
+      expect(blocks.slice(2)).toEqual([ORIGINALS[0], ORIGINALS[2]]);
+      expectNew(blocks.slice(0, 2).map((entry) => entry.id), 2);
+    });
+
+    it("the moved block's id is already held by another block: the moved block is new", () => {
+      // Content the editor was opened with can hold the same id twice.
+      const editor = open({ type: "doc", content: [block(type, ID_A, TEXT_A), block(type, ID_A, TEXT_B), block(type, ID_C, TEXT_C)] });
+      const arrival = stripped(editor, 1);
+      const tr = editor.state.tr.delete(posOf(editor, 1), posOf(editor, 2));
+      editor.view.dispatch(tr.insert(tr.doc.content.size, arrival));
+
+      const blocks = seen(editor);
+      expect(blocks.slice(0, 2)).toEqual([ORIGINALS[0], ORIGINALS[2]]);
+      expect(blocks[2].text).toBe(TEXT_B);
+      expectNew([blocks[2].id], 1);
+    });
+  });
+
+  it("a block opened with a malformed id is the same block after a move: the id is still reported, not replaced", () => {
+    const editor = open({ type: "doc", content: [block(type, "not-a-uuid", "Učitano."), block(type, ID_B, TEXT_B)] });
+    const node = editor.state.doc.child(0);
+    const tr = editor.state.tr.delete(0, node.nodeSize);
+    editor.view.dispatch(tr.insert(tr.doc.content.size, node));
+
+    const result = project(editor);
+    expect(!result.ok && result.errors).toEqual([
+      { path: `$.content[1].attrs.${NODE_ID_ATTRIBUTE}`, code: "TIPTAP_NODE_ID_INVALID" },
+    ]);
+  });
+
+  it("a move is decided before a restore: the arrival takes the id of the block that left in this transaction", () => {
+    const editor = open({ type: "doc", content: [block(type, ID_A, TEXT_A), block(type, ID_B, "Isti."), block(type, ID_C, "Isti.")] });
+    const earlier = editor.state.doc.child(1);
+    editor.view.dispatch(editor.state.tr.delete(posOf(editor, 1), posOf(editor, 2)));
+    // Identical to the block removed before and to the one removed now; it carries the id of the first.
+    const tr = editor.state.tr.delete(posOf(editor, 1), endOf(editor));
+    editor.view.dispatch(tr.insert(0, earlier));
+
+    expect(seen(editor)).toEqual([{ id: ID_C, text: "Isti." }, ORIGINALS[0]]);
+  });
+
+  it("a block that stayed where it was is never taken for the arrival of a move", () => {
+    // Opened with a block that has no id yet and is identical to B.
+    const editor = open({ type: "doc", content: [block(type, ID_A, TEXT_A), block(type, ID_B, TEXT_B), block(type, null, TEXT_B)] });
+    editor.view.dispatch(editor.state.tr.delete(posOf(editor, 1), posOf(editor, 2)));
+
+    const blocks = seen(editor);
+    expect(blocks[0]).toEqual(ORIGINALS[0]);
+    expect(blocks[1].text).toBe(TEXT_B);
+    expectNew([blocks[1].id], 1);
+  });
+
+  it("a change of selection alone changes nothing, even with a block that has no id yet", () => {
+    const editor = open({ type: "doc", content: [block(type, ID_A, TEXT_A), block(type, null, TEXT_B)] });
+    let transactions = 0;
+    editor.on("transaction", () => {
+      transactions += 1;
+    });
+    editor.commands.setTextSelection(3);
+
+    expect(transactions).toBe(1);
+    expect(editor.getJSON().content[1].attrs?.[NODE_ID_ATTRIBUTE]).toBeNull();
+  });
+
+  it("changing the type of an empty block keeps the id", () => {
+    const editor = open({ type: "doc", content: [block(type, ID_A, TEXT_A), block(type, ID_B, ""), block(type, ID_C, TEXT_C)] });
+    editor.commands.setTextSelection(posOf(editor, 1) + 1);
+    editor.commands.setNode(type === "heading" ? "paragraph" : "heading", { level: 3 });
+
+    expect(editor.getJSON().content[1].type).not.toBe(type);
+    expect(seen(editor).map((entry) => entry.id)).toEqual([ID_A, ID_B, ID_C]);
+  });
+
+  describe.each([
+    ["exactly", ID_A as string],
+    ["in another letter case", ID_A.toUpperCase()],
+  ])("content the editor was opened with holds the same id twice, %s", (_name, twin) => {
+    const twice = (): TiptapDocumentJSON => ({
+      type: "doc",
+      content: [block(type, ID_A, TEXT_A), block(type, twin, TEXT_B), block(type, ID_C, TEXT_C)],
+    });
+
+    it("the first edit leaves the id with the earlier block and gives the later one a new id that stays", () => {
+      const editor = open(twice());
+      editor.view.dispatch(editor.state.tr.insertText("!", endOf(editor) - 1));
+
+      const blocks = seen(editor);
+      expect([blocks[0], blocks[2]]).toEqual([ORIGINALS[0], { id: ID_C, text: `${TEXT_C}!` }]);
+      expectNew([blocks[1].id], 1);
+      expect(editor.getJSON().content.map((node) => node.attrs?.[NODE_ID_ATTRIBUTE])).toEqual(blocks.map((entry) => entry.id));
+    });
+  });
+
   it("an anchor on a block resolves on that block only, never on a copy", () => {
     const editor = open(abc(type));
     const anchor = createTextAnchor({ nodeId: ID_B, nodeText: TEXT_B, start: 6, end: 10 });

@@ -1,5 +1,6 @@
 import { Editor } from "@tiptap/core";
 import { Slice } from "@tiptap/pm/model";
+import { Transform } from "@tiptap/pm/transform";
 import { describe, expect, it } from "vitest";
 
 import { paragraphNode, textNode, DOCUMENT_SCHEMA_VERSION, type CanonicalDocument, type NodeId } from "../domain/document";
@@ -190,6 +191,30 @@ describe("removed blocks", () => {
     expect(canonicalIds(editor)).toEqual(nodes.map((node) => node.id));
   });
 
+  it("come back with their id only as the same block: a heading of another level is a new block", () => {
+    const heading = (level: number) => ({
+      type: "heading",
+      attrs: { [NODE_ID_ATTRIBUTE]: ID_B, level },
+      content: [{ type: "text", text: "Naslov." }],
+    });
+    const editor = new Editor({
+      element: null,
+      extensions: createEditorExtensions(),
+      content: { type: "doc", content: [canonicalToTiptap(STORED).content[0], heading(1)] },
+    });
+    editor.view.updateState(editor.state.reconfigure({ plugins: editor.extensionManager.plugins }));
+    const from = editor.state.doc.child(0).nodeSize;
+    editor.view.dispatch(editor.state.tr.delete(from, editor.state.doc.content.size));
+
+    editor.view.dispatch(editor.state.tr.insert(from, editor.schema.nodeFromJSON(heading(2))));
+    const [, other] = canonicalIds(editor);
+    expect(other).toMatch(MINTED);
+    expect(other).not.toBe(ID_B);
+
+    editor.view.dispatch(editor.state.tr.insert(editor.state.doc.content.size, editor.schema.nodeFromJSON(heading(1))));
+    expect(canonicalIds(editor)).toEqual([ID_A, other, ID_B]);
+  });
+
   it(`are remembered for ${REMOVAL_MEMORY} removing transactions; an older one comes back as a new block`, () => {
     const count = REMOVAL_MEMORY + 1;
     const nodes = Array.from({ length: count + 1 }, (_, index) =>
@@ -212,6 +237,94 @@ describe("removed blocks", () => {
   });
 });
 
+describe("removed blocks: what counts towards the memory", () => {
+  const numbered = (count: number) =>
+    Array.from({ length: count }, (_, index) =>
+      paragraphNode(`${String(index).padStart(8, "0")}-0000-4000-8000-000000000000` as NodeId, [textNode(`blok ${index}`)]),
+    );
+  const removeFirst = (editor: Editor) =>
+    editor.view.dispatch(editor.state.tr.delete(0, editor.state.doc.child(0).nodeSize));
+
+  it("edits that remove nothing do not age it", () => {
+    const nodes = numbered(2);
+    const editor = open(doc(...nodes));
+    const removed = editor.state.doc.child(0);
+    removeFirst(editor);
+    for (let index = 0; index <= REMOVAL_MEMORY; index += 1) {
+      editor.view.dispatch(editor.state.tr.insertText("a", 1));
+    }
+    // One more removal, so that the memory is pruned at all.
+    editor.view.dispatch(editor.state.tr.insert(editor.state.doc.content.size, editor.schema.nodes.paragraph.create()));
+    editor.view.dispatch(editor.state.tr.delete(editor.state.doc.child(0).nodeSize, editor.state.doc.content.size));
+
+    editor.view.dispatch(editor.state.tr.insert(0, removed));
+    expect(canonicalIds(editor)[0]).toBe(nodes[0].id);
+  });
+
+  it("a block removed a second time is aged from its second removal, and does not keep older ones alive", () => {
+    const nodes = numbered(REMOVAL_MEMORY + 3);
+    const editor = open(doc(...nodes));
+    const again = editor.state.doc.child(0);
+    const older = editor.state.doc.child(1);
+    removeFirst(editor); // removal 1: `again`
+    removeFirst(editor); // removal 2: `older`
+    editor.view.dispatch(editor.state.tr.insert(0, again));
+    expect(canonicalIds(editor)[0]).toBe(nodes[0].id);
+    removeFirst(editor); // removal 3: `again` once more
+    for (let removal = 4; removal <= REMOVAL_MEMORY + 2; removal += 1) {
+      removeFirst(editor);
+    }
+
+    editor.view.dispatch(editor.state.tr.insert(0, [older, again]));
+    const [first, second] = canonicalIds(editor);
+    expect(first).toMatch(MINTED);
+    expect(first).not.toBe(nodes[1].id);
+    expect(second).toBe(nodes[0].id);
+  });
+});
+
+describe("the step that writes ids", () => {
+  const blank = { type: "doc", content: [{ type: "paragraph" }, { type: "paragraph" }, { type: "paragraph" }] };
+
+  function minting() {
+    const editor = new Editor({ element: null, extensions: createEditorExtensions(), content: blank });
+    const tr = mintMissingIds(editor.state)!;
+    return { before: editor.state.doc, after: tr.doc, step: tr.steps[0], steps: tr.steps.length };
+  }
+
+  it("is one step for any number of blocks, changes no positions and inverts to the document as it was", () => {
+    const { before, after, step, steps } = minting();
+
+    expect(steps).toBe(1);
+    expect(step.getMap().mapResult(3, 1)).toMatchObject({ pos: 3, deleted: false });
+    expect(after.content.size).toBe(before.content.size);
+    expect(step.invert(before).apply(after).doc?.eq(before)).toBe(true);
+  });
+
+  it("follows its blocks through an earlier change and lets go of a block that was removed", () => {
+    const { before, after, step } = minting();
+    const removal = new Transform(before).delete(2, 4);
+    const mapped = step.map(removal.mapping);
+
+    const expected = [after.child(0), after.child(2)].map((node) => node.attrs[NODE_ID_ATTRIBUTE]);
+    const result = mapped?.apply(removal.doc);
+    expect(result?.failed).toBeNull();
+    expect(result?.doc?.content.content.map((node) => node.attrs[NODE_ID_ATTRIBUTE])).toEqual(expected);
+    expect(step.map(new Transform(before).delete(0, before.content.size).mapping)).toBeNull();
+  });
+
+  it("fails, and does not guess, when a position no longer holds a block", () => {
+    const { before, step } = minting();
+    const shorter = new Transform(before).delete(4, 6).doc;
+    const withText = new Transform(before).insert(1, before.type.schema.text("abc")).doc;
+
+    expect(step.apply(shorter).failed).toEqual(expect.any(String));
+    expect(step.apply(shorter).doc).toBeNull();
+    // Position 2 now lies inside the text of the first block.
+    expect(step.apply(withText).failed).toEqual(expect.any(String));
+  });
+});
+
 describe("blocks that never had an id", () => {
   it("get one in a transaction that is not part of the undo history", () => {
     const editor = open();
@@ -229,6 +342,34 @@ describe("blocks that never had an id", () => {
     expect(ids(editor)).toEqual([id]);
   });
 
+  it.each([
+    ["exactly", ID_A as string],
+    ["in another letter case", ID_A.toUpperCase()],
+  ])("also repairs an id that the initial content holds twice, %s: the earlier block keeps it", (_name, twin) => {
+    const paragraph = (id: string, text: string) => ({
+      type: "paragraph",
+      attrs: { [NODE_ID_ATTRIBUTE]: id },
+      content: [{ type: "text", text }],
+    });
+    // What the editor does when it is created: no edit has happened yet.
+    const editor = new Editor({
+      element: null,
+      extensions: createEditorExtensions(),
+      content: { type: "doc", content: [paragraph(ID_A, "Prvi."), paragraph(twin, "Drugi."), paragraph(ID_C, "Treći.")] },
+    });
+    editor.view.updateState(editor.state.reconfigure({ plugins: editor.extensionManager.plugins }));
+    editor.view.dispatch(mintMissingIds(editor.state)!);
+
+    const [first, second, third] = ids(editor) as string[];
+    expect([first, third]).toEqual([ID_A, ID_C]);
+    expect(second).toMatch(MINTED);
+    expect(second.toLowerCase()).not.toBe(ID_A);
+    // Settled in the editor: two conversions in a row agree.
+    expect(canonicalIds(editor)).toEqual([first, second, third]);
+    expect(canonicalIds(editor)).toEqual([first, second, third]);
+    expect(mintMissingIds(editor.state)).toBeNull();
+  });
+
   it("does not touch an id that is present, malformed or not", () => {
     const editor = open();
     editor.view.updateState(
@@ -238,6 +379,46 @@ describe("blocks that never had an id", () => {
     );
 
     expect(mintMissingIds(editor.state)).toBeNull();
+  });
+
+  /** An editor whose minter hands out `first` once and real ids after that. */
+  function openMinting(first: NodeId, content: CanonicalDocument): Editor {
+    let used = false;
+    const mint = () => {
+      if (used) {
+        return crypto.randomUUID() as NodeId;
+      }
+      used = true;
+      return first;
+    };
+    return open(
+      content,
+      createEditorExtensions().map((extension) =>
+        extension.name === "nodeIdentity" ? NodeIdentity.configure({ mint }) : extension,
+      ),
+    );
+  }
+
+  it("never accepts a minted id that a block already holds: the holder keeps it", () => {
+    const editor = openMinting(ID_A, STORED);
+    editor.view.dispatch(editor.state.tr.insert(0, editor.schema.nodes.paragraph.create()));
+
+    const [added, ...rest] = ids(editor) as string[];
+    expect(rest).toEqual([ID_A, ID_B, ID_C]);
+    expect(added).toMatch(MINTED);
+    expect(added).not.toBe(ID_A);
+  });
+
+  it("never accepts a minted id that a block holds in another letter case", () => {
+    const upper = ID_B.toUpperCase() as NodeId;
+    const editor = openMinting(ID_B, doc(paragraphNode(ID_A), paragraphNode(upper)));
+    editor.view.dispatch(editor.state.tr.insert(0, editor.schema.nodes.paragraph.create()));
+
+    const [added, ...rest] = ids(editor) as string[];
+    expect(rest).toEqual([ID_A, upper]);
+    expect(added).toMatch(MINTED);
+    expect(added).not.toBe(ID_B);
+    expect(canonicalIds(editor)).toEqual([added, ID_A, upper]);
   });
 
   it("uses the minter the extension was configured with", () => {
