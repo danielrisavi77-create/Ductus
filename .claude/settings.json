@@ -141,12 +141,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node",
-            "args": [
-              "${CLAUDE_PROJECT_DIR}/node_modules/cc-safety-net/dist/bin/cc-safety-net.js",
-              "hook",
-              "--coding-cli"
-            ],
+            "shell": "bash",
+            "command": "command -v node >/dev/null 2>&1 && [ -f \"$CLAUDE_PROJECT_DIR/scripts/hooks/safety-net.mjs\" ] || { echo 'Safety hook cannot run: node or scripts/hooks/safety-net.mjs is missing. Run pnpm install --frozen-lockfile in a terminal.' >&2; exit 2; }; node \"$CLAUDE_PROJECT_DIR/scripts/hooks/safety-net.mjs\"; rc=$?; [ \"$rc\" -eq 0 ] && exit 0; [ \"$rc\" -eq 2 ] && exit 2; echo \"Safety hook failed unexpectedly (status $rc). Run pnpm install --frozen-lockfile in a terminal.\" >&2; exit 2",
+            "onFailure": "block",
             "timeout": 10
           }
         ]
