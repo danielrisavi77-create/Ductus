@@ -7,28 +7,25 @@ import { readFileSync, realpathSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
+import { ghList, toPr } from "./gh.mjs";
 import {
   MANUAL, checkFailStalls, checkMainCi, checkQueue, checkSafetyNet, exitCode, hookTargets, joinPath,
   parseWorktrees, queueItems, render, watched,
 } from "./health-core.mjs";
 
 export const QUEUE_ISSUE = 87; // coordination issue (docs/ORKESTRATOR.md §8)
-const PR_LIMIT = 1000;
-const PR_LIST_FLAGS = new Set(["--state", "--limit", "--json"]);
 
-/** True only for the calls this script needs: `gh api` GET, `gh pr list`, `git worktree list`. */
+/**
+ * True only for the calls this script needs: `gh api <path>` (a GET with no
+ * flags, never GraphQL) and `git worktree list`. Lists are read page by page
+ * (gh.mjs ghList), so neither `--paginate` nor `gh pr list` is needed; both
+ * fail in cloud sessions (Link headers to repositories/{id}, GraphQL 403).
+ */
 export function readOnlyCall(cmd, args) {
   const a = args.map(String);
   if (cmd === "git") return a.join(" ") === "worktree list --porcelain -z";
   if (cmd !== "gh") return false;
-  if (a[0] === "api") {
-    const rest = a.slice(1).filter((x) => x !== "--paginate" && x !== "--slurp");
-    return rest.length === 1 && !rest[0].startsWith("-") && !rest[0].startsWith("graphql");
-  }
-  if (a[0] === "pr" && a[1] === "list") {
-    return a.slice(2).every((x, i) => (i % 2 === 0 ? PR_LIST_FLAGS.has(x) : !x.startsWith("-")));
-  }
-  return false;
+  return a.length === 2 && a[0] === "api" && !a[1].startsWith("-") && !a[1].startsWith("graphql");
 }
 
 const run = promisify(execFile);
@@ -64,18 +61,11 @@ export async function health({ exec = defaultExec, fsView = defaultFs, now = Dat
     if (!out) throw new Error(`empty response from gh ${args[0]}`);
     return JSON.parse(out);
   };
-  const pages = async (path) => {
-    const p = await json(["api", "--paginate", "--slurp", path]);
-    if (!Array.isArray(p)) throw new Error(`unexpected response for ${path}`);
-    return p;
-  };
-  // Every page is an array of objects (comments, statuses); anything else is not a list.
-  const list = async (path) => {
-    const p = await pages(path);
-    if (!p.every((page) => Array.isArray(page) && page.every((x) => x && typeof x === "object" && !Array.isArray(x)))) {
-      throw new Error(`unexpected page for ${path}`);
-    }
-    return p.flat();
+  // Every page is an array of objects (comments, statuses, PRs); anything else is not a list.
+  const list = async (path, key) => {
+    const items = await ghList(path, call, { key });
+    if (!items.every((x) => x && typeof x === "object" && !Array.isArray(x))) throw new Error(`unexpected page for ${path}`);
+    return items;
   };
   const findings = [];
   const guard = async (check, fn) => {
@@ -108,9 +98,7 @@ export async function health({ exec = defaultExec, fsView = defaultFs, now = Dat
   let prs = null;
   let comments = new Map();
   await guard("pr-list", async () => {
-    const all = await json(["pr", "list", "--state", "all", "--limit", String(PR_LIMIT),
-      "--json", "number,state,isDraft,headRefOid,headRefName"]);
-    if (!Array.isArray(all) || all.length >= PR_LIMIT) throw new Error("PR list missing or possibly cut at the limit");
+    const all = (await list("repos/{owner}/{repo}/pulls?state=all&per_page=100")).map(toPr);
     if (!all.length) throw new Error("PR list is empty");
     const read = await Promise.all(all.filter(watched).map((pr) =>
       list(`repos/{owner}/{repo}/issues/${pr.number}/comments?per_page=100`).then((c) => [pr.number, c], () => null)));
@@ -136,8 +124,7 @@ export async function health({ exec = defaultExec, fsView = defaultFs, now = Dat
     const sha = branch?.commit?.sha;
     const rsc = branch?.protection?.required_status_checks;
     const required = [...new Set([...(rsc?.contexts ?? []), ...(rsc?.checks ?? []).map((c) => c?.context)])].filter(Boolean);
-    const checkRuns = (await pages(`repos/{owner}/{repo}/commits/${sha}/check-runs?per_page=100`))
-      .flatMap((p) => { if (!Array.isArray(p?.check_runs)) throw new Error("unexpected check-runs page"); return p.check_runs; });
+    const checkRuns = await list(`repos/{owner}/{repo}/commits/${sha}/check-runs?per_page=100`, "check_runs");
     const statuses = await list(`repos/{owner}/{repo}/commits/${sha}/statuses?per_page=100`);
     return checkMainCi({ sha, required, checkRuns, statuses });
   });
