@@ -569,7 +569,9 @@ main:focus {
   line-height: 1.5;
 }
 
-/* The rule above drops the browser outline; keyboard focus must stay visible. */
+/* The rule above drops the browser outline; keyboard focus must stay visible.
+   Browsers match :focus-visible on a text field after a mouse click too, so the
+   writer always sees where typing goes; that is intended, not a leak. */
 .editor-surface .ProseMirror:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 4px;

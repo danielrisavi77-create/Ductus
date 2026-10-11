@@ -10,6 +10,8 @@ import { expect, test, type Page } from "@playwright/test";
 const NODE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const BLOCKED = "Ova kartica ništa ne sprema dok je druga otvorena.";
+const QUOTA = "Na uređaju nema dovoljno prostora, pa se promjene više ne spremaju. Izvezi tekst da ga ne izgubiš.";
+const STALE = "Dokument je u međuvremenu promijenjen na drugom mjestu, pa ova kartica više ne sprema. Izvezi tekst, zatim ponovno učitaj stranicu.";
 const editorOf = (page: Page) => page.getByRole("textbox", { name: "Tekst rada" });
 /** The provider's phase, for states whose notice is not the point of the test. */
 const phaseOf = (page: Page) => page.locator(".editor-surface");
@@ -95,6 +97,37 @@ async function journalled(page: Page): Promise<void> {
     const { shown, stored } = await shownAndStored(page);
     return JSON.stringify(shown) === JSON.stringify(stored);
   }).toBe(true);
+}
+
+/**
+ * Lets a test fill the device and free it again: while full, every IndexedDB
+ * write fails as a browser over its quota fails it.
+ */
+async function deviceSpace(page: Page): Promise<{ fill(): Promise<void>; free(): Promise<void> }> {
+  await page.addInitScript(() => {
+    const { put, add } = IDBObjectStore.prototype;
+    const refuse = function (this: IDBObjectStore): IDBRequest {
+      throw new DOMException("Made-up full device", "QuotaExceededError");
+    };
+    Object.assign(window, {
+      __ductusFill: () => Object.assign(IDBObjectStore.prototype, { put: refuse, add: refuse }),
+      __ductusFree: () => Object.assign(IDBObjectStore.prototype, { put, add }),
+    });
+  });
+  const call = (name: string) => async () => {
+    await page.evaluate((name) => (window as unknown as Record<string, () => void>)[name]!(), name);
+  };
+  return { fill: call("__ductusFill"), free: call("__ductusFree") };
+}
+
+/** The text the export button gives, read from the downloaded file. */
+async function exported(page: Page): Promise<string> {
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Izvezi tekst" }).click();
+  const file = await download;
+  expect(file.suggestedFilename()).toBe("ductus-rad.txt");
+  const { readFile } = await import("node:fs/promises");
+  return readFile(await file.path(), "utf8");
 }
 
 async function axe(page: Page): Promise<void> {
@@ -273,32 +306,81 @@ test.describe("local editor (#197)", () => {
   });
 
   test("5: a full device is an error that stays while typing on, with an export", async ({ page }) => {
-    await page.addInitScript(() => {
-      const refuse = function (this: IDBObjectStore): IDBRequest {
-        throw new DOMException("Made-up full device", "QuotaExceededError");
-      };
-      (window as unknown as { __ductusFull: () => void }).__ductusFull = () => {
-        IDBObjectStore.prototype.put = refuse;
-        IDBObjectStore.prototype.add = refuse;
-      };
-    });
+    const device = await deviceSpace(page);
     await openEditor(page);
-    await page.evaluate(() => (window as unknown as { __ductusFull: () => void }).__ductusFull());
+    await device.fill();
     await typeInto(page, "Tekst koji ne stane");
-    const alert = "Na uređaju nema dovoljno prostora, pa se promjene više ne spremaju. Izvezi tekst da ga ne izgubiš.";
-    await expect(noticeOf(page)).toHaveText(alert);
+    await expect(noticeOf(page)).toHaveText(QUOTA);
 
     await page.keyboard.type(" i dalje");
-    await expect(noticeOf(page)).toHaveText(alert);
+    await expect(noticeOf(page)).toHaveText(QUOTA);
     await axe(page);
+    expect(await exported(page)).toBe("Tekst koji ne stane i dalje");
+  });
 
-    const download = page.waitForEvent("download");
-    await page.getByRole("button", { name: "Izvezi tekst" }).click();
-    const file = await download;
-    expect(file.suggestedFilename()).toBe("ductus-rad.txt");
-    const path = await file.path();
-    const { readFile } = await import("node:fs/promises");
-    expect(await readFile(path, "utf8")).toBe("Tekst koji ne stane i dalje");
+  test("5: once the device has room again, the next save lifts the error and keeps all the text", async ({ page }) => {
+    const device = await deviceSpace(page);
+    await openEditor(page);
+    await device.fill();
+    await typeInto(page, "Napisano bez prostora");
+    await expect(noticeOf(page)).toHaveText(QUOTA);
+
+    await device.free();
+    await page.keyboard.type(" i nakon");
+    await expect(noticeOf(page)).toBeEmpty();
+    await expect(page.getByRole("button", { name: "Izvezi tekst" })).toHaveCount(0);
+    await journalled(page);
+
+    await page.reload();
+    await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+    await expect(editorOf(page)).toHaveText("Napisano bez prostora i nakon");
+    await expect(noticeOf(page)).toBeEmpty();
+  });
+
+  test("the export keeps every paragraph, an empty one too, and the letters as typed", async ({ page }) => {
+    const device = await deviceSpace(page);
+    await openEditor(page);
+    await device.fill();
+    await typeInto(page, "Prvi čćžšđ");
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("Treći ŽĆ!");
+    await expect(noticeOf(page)).toHaveText(QUOTA);
+    expect(await exported(page)).toBe("Prvi čćžšđ\n\n\n\nTreći ŽĆ!");
+  });
+
+  test("a journal moved by another writer stops saving here for good, with an export of the shown text", async ({ page }) => {
+    await openEditor(page);
+    await typeInto(page, "Tekst ove kartice");
+    await journalled(page);
+    // Another writer: the stored sequence moves on behind this tab's back.
+    await page.evaluate(async () => {
+      const request = <T>(r: IDBRequest<T>) => new Promise<T>((resolve, reject) => {
+        r.onsuccess = () => resolve(r.result);
+        r.onerror = () => reject(r.error);
+      });
+      for (const { name } of await indexedDB.databases()) {
+        const db = await request(indexedDB.open(name!));
+        if (!db.objectStoreNames.contains("meta")) {
+          db.close();
+          continue;
+        }
+        const store = db.transaction("meta", "readwrite").objectStore("meta");
+        const [row] = await request(store.getAll()) as { localSeq: number }[];
+        row!.localSeq += 1;
+        await request(store.put(row));
+        db.close();
+        return;
+      }
+      throw new Error("no journal database");
+    });
+
+    await page.keyboard.type(" i dalje");
+    await expect(noticeOf(page)).toHaveText(STALE);
+    await page.keyboard.type(" još");
+    await expect(noticeOf(page)).toHaveText(STALE);
+    await expect(editorOf(page)).toHaveText("Tekst ove kartice i dalje još");
+    expect(await exported(page)).toBe("Tekst ove kartice i dalje još");
   });
 
   test("a refused wait for the lock tells the author instead of staying blocked", async ({ page }) => {
@@ -333,6 +415,19 @@ test.describe("local editor (#197)", () => {
       return { visible: el.matches(":focus-visible"), outline: s.outlineStyle, width: s.outlineWidth };
     });
     expect(style).toEqual({ visible: true, outline: "solid", width: "2px" });
+  });
+
+  // Browsers match :focus-visible on a text field after a click as well; the
+  // writer always sees where typing goes (app/globals.css).
+  test("mouse focus on the editor is visible as well", async ({ page }) => {
+    await openEditor(page);
+    await editorOf(page).click();
+    await expect(editorOf(page)).toBeFocused();
+    const style = await editorOf(page).evaluate((el) => ({
+      visible: el.matches(":focus-visible"),
+      outline: getComputedStyle(el).outlineStyle,
+    }));
+    expect(style).toEqual({ visible: true, outline: "solid" });
   });
 
   test("14: axe finds nothing on the ready editor with saved text", async ({ page }) => {
