@@ -48,7 +48,8 @@ export type GoldenPayloadEdit = {
   recanonicalizesToBase: boolean;
   /**
    * JCS writes the parsed edit as the base with `find` replaced by this: the
-   * edited bytes differ from their own canonical form exactly there.
+   * edited bytes differ from their own canonical form exactly there, and
+   * the verifier accepts that canonical twin. Only with text `find`.
    */
   canonicalReplace?: string;
   /** The edited bytes are canonical JCS; only the validator rejects them. */
