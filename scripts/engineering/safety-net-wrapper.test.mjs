@@ -892,26 +892,38 @@ const withOriginMain = (dir) => {
   gitIn(dir, "update-ref", "refs/remotes/origin/main", "HEAD");
 };
 
-test("A13c the temporary repositories and the precheck ignore an inherited GIT_DIR", () => {
+test("A13c the test helpers drop inherited GIT_* variables, so a decoy repository is never read or written", () => {
   const decoy = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-decoy-"));
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-pre3-"));
-  const saved = process.env.GIT_DIR;
+  // Hooks and CI runners export these; the helpers must neither obey nor leak them.
+  const names = ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_CONFIG_GLOBAL", "GIT_CEILING_DIRECTORIES", "GIT_OBJECT_DIRECTORY", "GIT_NAMESPACE"];
+  const saved = Object.fromEntries(names.map((name) => [name, process.env[name]]));
   try {
     withOriginMain(decoy);
     const refBefore = gitIn(decoy, "rev-parse", "refs/remotes/origin/main").stdout;
     process.env.GIT_DIR = path.join(decoy, ".git");
+    process.env.GIT_WORK_TREE = decoy;
+    process.env.GIT_INDEX_FILE = path.join(decoy, "index-decoy");
+    process.env.GIT_CONFIG_GLOBAL = path.join(decoy, "gitconfig-decoy");
+    process.env.GIT_CEILING_DIRECTORIES = base;
+    process.env.GIT_OBJECT_DIRECTORY = path.join(decoy, "objects-decoy");
+    process.env.GIT_NAMESPACE = "decoy";
+    assert.deepEqual(Object.keys(gitFreeEnv()).filter((key) => key.toUpperCase().startsWith("GIT_")), [], "no GIT_* reaches a child");
     // A plain directory: with the inherited GIT_DIR the decoy would make the file list readable.
     const body = path.join(base, "body.md");
     fs.writeFileSync(body, "Agent: claude:a:platforma\nRisk: low\nTask: DAN-1\n");
     const go = () => spawnSync(process.execPath, [precheck], { input: JSON.stringify({ tool_input: { command: `gh pr create --title t --body-file "${body}"` }, cwd: base }), encoding: "utf8", env: gitFreeEnv() });
-    assert.equal(go().status, 2, "no repository in the directory: blocked, whatever GIT_DIR says");
+    assert.equal(go().status, 2, "no repository in the directory: blocked, whatever the inherited GIT_* say");
     withOriginMain(base);
     assert.equal(go().status, 0);
     assert.equal(gitIn(decoy, "rev-parse", "refs/remotes/origin/main").stdout, refBefore, "the decoy repository is untouched");
     assert.equal(gitIn(decoy, "log", "--oneline").stdout.trim().split("\n").length, 1, "no extra commit landed in the decoy");
+    assert.equal(fs.existsSync(path.join(decoy, "index-decoy")), false, "no decoy index was created");
   } finally {
-    if (saved === undefined) delete process.env.GIT_DIR;
-    else process.env.GIT_DIR = saved;
+    for (const name of names) {
+      if (saved[name] === undefined) delete process.env[name];
+      else process.env[name] = saved[name];
+    }
     fs.rmSync(base, { recursive: true, force: true });
     fs.rmSync(decoy, { recursive: true, force: true });
   }
@@ -936,7 +948,7 @@ test("A13b the PR metadata precheck blocks when the changed files cannot be read
   }
 });
 
-test("A13the PR metadata precheck blocks when it throws on a PR command, and ignores other commands", () => {
+test("A13 the PR metadata precheck blocks when it throws on a PR command, and ignores other commands", () => {
   // The preload makes the metadata parser throw, as an internal error would.
   const base = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-pre-"));
   try {
