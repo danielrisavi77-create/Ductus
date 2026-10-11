@@ -6,12 +6,12 @@ import { evaluateChecks, summarizeThreads } from "./orchestrator-core.mjs";
 
 const rest = (over = {}) => ({
   number: 7, title: "t", body: null, state: "open", draft: false, merged_at: null, mergeable: true,
-  head: { sha: "abc123" }, base: { ref: "main" }, created_at: "2026-10-01T00:00:00Z", auto_merge: null, ...over,
+  head: { sha: "abc123", ref: "feat/x" }, base: { ref: "main" }, created_at: "2026-10-01T00:00:00Z", auto_merge: null, ...over,
 });
 
 test("toPr maps REST fields to the gh-CLI names", () => {
   assert.deepEqual(toPr(rest()), {
-    number: 7, title: "t", body: "", state: "OPEN", isDraft: false, headRefOid: "abc123", baseRefName: "main",
+    number: 7, title: "t", body: "", state: "OPEN", isDraft: false, headRefOid: "abc123", headRefName: "feat/x", baseRefName: "main",
     createdAt: "2026-10-01T00:00:00Z", mergedAt: null, mergeable: "MERGEABLE", autoMergeRequest: null,
   });
   assert.equal(toPr(rest({ mergeable: false })).mergeable, "CONFLICTING");
