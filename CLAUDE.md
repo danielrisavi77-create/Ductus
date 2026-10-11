@@ -38,7 +38,8 @@ Uz Claude sesije radi šest vanjskih Grok botova. Komuniciraju isključivo preko
 
 Granice botova:
 
-- Pišu pod zasebnim GitHub računom s ulogom Triage, ne pod vlasnikovim računom.
+- Pišu isključivo kao aplikacija `ductus-botovi[bot]` (vlastita GitHub aplikacija instalirana samo na ovaj repo), ne pod računom s ulogom Triage ni pod vlasnikovim računom (#87, `issuecomment-6111535494`).
+- Ne rade implementaciju: ostaju na labelama i komentarima (#87, `issuecomment-6111858205`).
 - Nikad ne pišu retke `Agent-Review:`, `Review-Head:`, `Review-Verdict:`, `QA-Agent:`, `QA-Head:`, `QA-Verdict:`, `Owner-Override`, `Owner-Command` ni `Command-Head`.
 - Ne pišu na issue #87; pregledi idu u issue "Botovi: dnevni pregled".
 - Najviše jedan komentar po botu po headu PR-a, i nijedan ako nema nalaza. Nalaz ima datoteku i redak, scenarij i redak "Dohvatljivo kroz:".
@@ -47,7 +48,7 @@ Granice botova:
 Pravila za Claude sesije:
 
 - Novi posao uzima se samo iz issuea s labelom `ready-for-claude`, redom `security`, `bug`, `plan-napada`. Na početku makni `ready-for-claude`, stavi `claude:in-progress` i u komentaru navedi granu. Labela je ulaz, ne prioritet: issue bez `DAN` tiketa nije zadatak, a unutar istog reda prioritet je iz Lineara.
-- Svaki PR veže issue (`Closes #N`) i Linear oznaku `DAN-xxx`. Prije nego što PR označiš spremnim za review, pokreni `pnpm orch:overlap`.
+- Svaki PR veže issue (`Closes #N`) i Linear oznaku `DAN-xxx`. Iznimka: docs PR orkestratora ili audita koji samo upisuje vlasnikovu odluku ili nalaz audita u `Task:` navodi svoj izvor (komentar na #87 ili issue s planom) umjesto `Closes #N` i `DAN-xxx`. Prije nego što PR označiš spremnim za review, pokreni `pnpm orch:overlap`.
 - Na review i QA komentare botova odgovori u istoj niti: popravi ili obrazloži.
 - Kad Sinkronizacija prijavi odstupanje, `STATE.md` se ažurira zasebnim malim docs PR-om.
 - Pitanje botu postavlja se issueom ili komentarom s labelom `pitanje-za-grok`. Smjer je jedan: Claude pita, botovi ne nalažu Claude sesijama.
