@@ -26,12 +26,12 @@ Ductus bilježi kako rad nastaje i olakšava razgovor o radu. Zaključak o vaše
 
 ### 3. Koje podatke obrađujemo
 
-- **Prijava.** Prijavljujete se isključivo AAI@EduHr računom. Od AAI-ja dobivamo oznaku vašeg računa (`hrEduPersonUniqueID`), matičnu ustanovu `[i ostale atribute iz popisa u 04, kad bude potvrđen]`. OIB ne tražimo.
+- **Prijava.** Prijavljujete se isključivo AAI@EduHr računom. Od AAI-ja dobivamo i trajno spremamo oznaku vašeg računa (`hrEduPersonUniqueID`), oznaku izdavatelja prijave i identifikator korisnika kod izdavatelja (`sub`); matična ustanova služi za odabir ustanove i ne sprema se uz vaš račun. Izvedeno je upravo to. `[Dodatni atributi iz popisa u 04 tek kad budu potvrđeni.]` OIB ne tražimo.
 - **Rad.** Tekst koji pišete i promjene teksta, sažete u odsječke do 30 sekundi s vremenom zaokruženim na minutu. Bilježi se i je li promjena vaša, nastavnikova ili mentorova.
 - **Događaji u radu.** Veliko lijepljenje (veličina i vrijeme), uvoz datoteke (naziv, vrsta, veličina), oznaka koju sami odaberete uz lijepljeni tekst, vaše napomene, izjava o pomoći alata i razgovori koje sami priložite.
 - **Nastava.** Upis u kolegij, potvrda ove obavijesti i vrijeme potvrde, predaje, komentari i prijedlozi nastavnika, produljenja roka.
 - **Tko je otvorio vaš rad.** Vidite tko je i kada otvorio vaš rad.
-- `[VARIJANTA, samo mentorski radovi i tek nakon odluke o D-56: vrijeme promjena u koracima od 100 ms, isključivo za reprodukciju rada. Najavljuje se prije pisanja, nikad unatrag.]`
+- `[VARIJANTA, samo mentorski radovi i tek nakon pravnog mišljenja i izmjene Ustava (D-56): vrijeme promjena u koracima od 100 ms, isključivo za reprodukciju rada. Najavljuje se prije pisanja, nikad unatrag.]`
 
 ### 4. Što ne bilježimo
 
@@ -41,8 +41,8 @@ Koju ste tipku pritisnuli i koliko dugo ste je držali. Brzinu tipkanja i stanke
 
 - Vi uvijek vidite točno ono što vidi nastavnik ili mentor.
 - `[VARIJANTA A (D-06): Nastavnik ili mentor vidi trenutno stanje spremljeno na poslužitelju, osvježeno najviše svakih 5 minuta, od prvog dana.]` `[VARIJANTA B (D-39): Nastavnik ili mentor vidi stanje na kraju svake sesije pisanja.]` Ne vidi tipkanje uživo. Može vidjeti i tekst koji ste kasnije obrisali, ako je bio u stanju koje je poslužitelj primio.
-- Administrator ustanove vidi tko je kada pristupio kojem radu, ali ne vidi sadržaj rada.
-- Održavatelj Ductusa ne čita sadržaj radova, osim zabilježenog pristupa podrške uz pristanak ustanove i u skladu s ugovorom o obradi.
+- `[VARIJANTA, samo uz D-56: U mentorskom radu mentor može pokrenuti reprodukciju kako je rad rastao, za cijeli rad ili jedan odlomak, uključujući tekst koji ste obrisali i prethodne verzije odlomka, uz oznake lijepljenja, uvoza, izmjena i konzultacija. Vidite istu reprodukciju i vidite kad ju je mentor gledao; uz trenutak reprodukcije možete dodati napomenu. Ritam se ne mjeri: nema brzine tipkanja ni statistike stanki. Od kojeg je trenutka reprodukcija dostupna mentoru: odluka, u izvorima nije određeno.]` tko je kada pristupio kojem radu, ali ne vidi sadržaj rada.
+- Održavatelj Ductusa ne čita sadržaj radova, osim zabilježenog pristupa podrške uz pristanak ustanove i u skladu s ugovorom o obradi `[planirano, PRODUCT §3: ugovor, zapis pristupa i ovlast operatera ne postoje; ODLUKA]`.
 
 ### 6. Zašto smijemo obrađivati podatke
 
@@ -67,7 +67,7 @@ Podatke obrađuju podizvršitelji navedeni u `[prilogu, popis iz 04, tek kad bud
 
 ### 9. Vaša prava
 
-Imate pravo na pristup svojim podacima, ispravak, brisanje, ograničenje obrade, prigovor i prenosivost, u mjeri koju propisuje zakon. Svoj rad i svoju evidenciju možete u svakom trenutku izvesti iz Ductusa. Ako se povučete iz pilota, predani radovi ostaju po pravilima ustanove, a sve ostalo se briše. `[Kako i kome podnosite zahtjev, rok odgovora: odluka ustanove. U izgradnji još ne postoji postupak za ispravak i brisanje.]` Pritužbu možete podnijeti nadzornom tijelu: Agenciji za zaštitu osobnih podataka.
+Imate pravo na pristup svojim podacima, ispravak, brisanje, ograničenje obrade, prigovor i prenosivost, u mjeri koju propisuje zakon. Svoj rad i svoju evidenciju možete u svakom trenutku izvesti iz Ductusa `[planirano, PRODUCT §6: izvoz nije izgrađen; ne objavljivati dok ne postoji]`. Ako se povučete iz pilota, predani radovi ostaju po pravilima ustanove, a ostali sadržaj se briše (D-12). `[Pravnik i ustanova određuju koji tehnički artefakti ostaju nakon brisanja (hashevi lanca, potvrde, javno objavljen ukupan broj) i na kojoj osnovi; dok to ne bude odlučeno, ne obećava se brisanje "svega".]` `[Kako i kome podnosite zahtjev, rok odgovora: odluka ustanove. U izgradnji još ne postoji postupak za ispravak i brisanje.]` Pritužbu možete podnijeti nadzornom tijelu: Agenciji za zaštitu osobnih podataka.
 
 ### 10. Što student može učiniti uz svaki zapis
 

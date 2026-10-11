@@ -41,7 +41,7 @@
 | Pogrešni pokušaji upisa brišu se tek pri sljedećem pokušaju istog korisnika | Komentar uz `enrollment_attempt` u `20261010180000_institution_model.sql` | `[IZVEDBA]` |
 | Sesije nemaju posao čišćenja nakon isteka | `identity.session` | `[IZVEDBA]` |
 | Opseg `openid profile` odstupa od popisa u PRODUCT §4 | `src/server/auth/oidc.ts` | `[IZVEDBA]` |
-| Journal ostaje na uređaju nakon isteka sesije bez odjave | BACKEND §4.3 | `[IZVEDBA]` |
+| Brisanje lokalnog dnevnika nije spojeno u odjavu (`destroyForLogout()` nema produkcijskog poziva); dnevnik ostaje i nakon isteka sesije bez odjave | `app/api/auth/logout/route.ts`, `src/lib/journal/atomic-dexie-journal.ts`, BACKEND §4.3 | `[IZVEDBA]` |
 
 ## D. Dokazi koji moraju postojati prije prvog stvarnog studenta
 

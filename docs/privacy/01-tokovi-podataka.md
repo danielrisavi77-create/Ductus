@@ -46,7 +46,7 @@ Hashevi lanca i čvorovi Merkle stabla ne brišu se (ne sadrže sadržaj; ARCHIT
 
 | Podatak | Gdje | Rok čuvanja |
 | --- | --- | --- |
-| Lokalni dnevnik promjena (Dexie) | Preglednik studenta; izgrađeno (`src/lib/journal/atomic-dexie-journal.ts`). Briše se pri odjavi; odjava se blokira dok ima nesinkroniziranih promjena. Istek sesije nije odjava: dnevnik ostaje do ponovne prijave istog korisnika | Do odjave ili sinkronizacije |
+| Lokalni dnevnik promjena (Dexie) | Preglednik studenta. Izgrađena je samo klasa (`src/lib/journal/atomic-dexie-journal.ts`) s ugovorom: briše se pri odjavi, odjava se blokira dok ima nesinkroniziranih promjena. Ugovor **nije spojen u tok odjave**: ruta `app/api/auth/logout/route.ts` zatvara poslužiteljsku sesiju, a nijedan produkcijski kod ne poziva `destroyForLogout()` `[IZVEDBA]`. Istek sesije nije odjava: dnevnik ostaje do ponovne prijave istog korisnika (planirano) | Do odjave ili sinkronizacije |
 | Sigurnosni zapisi poslužitelja (IP, podaci o uređaju) | Smiju postojati samo odvojeno od evidencije (PRODUCT §9); planirano | Rok nije predložen `[ODLUKA]` |
 | Praćenje grešaka bez tijela zahtjeva; gumb "Prijavi problem" (stanje spremanja i verzija, bez sadržaja; D-69) | Planirano; GlitchTip ili Sentry EU nije odabran | Rok nije predložen |
 | E-pošta obavijesti (nastavniku o novoj reviziji) | Planirano (Scaleway TEM); nije jasno odakle adresa | Rok nije predložen `[ODLUKA]` |
@@ -59,4 +59,4 @@ Koja je tipka pritisnuta i koliko je držana; izvedene mjere (brzina, pauze, obr
 
 ## F. Povlačenje studenta (D-12)
 
-Predani radovi ostaju po pravilima fakulteta, sve ostalo se briše. Mehanizam brisanja, potvrda studentu i obuhvat kopija nisu izgrađeni ni opisani `[IZVEDBA]`.
+Predani radovi ostaju po pravilima fakulteta, sve ostalo se briše (D-12); hashevi lanca i čvorovi Merkle stabla ostaju (odjeljak C), pa "sve" treba precizirati `[ODLUKA]`. Mehanizam brisanja, potvrda studentu i obuhvat kopija nisu izgrađeni ni opisani `[IZVEDBA]`.
