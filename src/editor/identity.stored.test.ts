@@ -1,11 +1,11 @@
 import { Editor } from "@tiptap/core";
 import { Slice } from "@tiptap/pm/model";
-import { Transform } from "@tiptap/pm/transform";
+import { Step, Transform } from "@tiptap/pm/transform";
 import { describe, expect, it } from "vitest";
 
 import { paragraphNode, textNode, DOCUMENT_SCHEMA_VERSION, type CanonicalDocument, type NodeId } from "../domain/document";
 
-import { mintMissingIds, replaceWithStoredDocument, withoutNodeIds, REMOVAL_MEMORY } from "./identity";
+import { mintMissingIds, repeatedNodeIds, replaceWithStoredDocument, withoutNodeIds, REMOVAL_MEMORY } from "./identity";
 import { canonicalToTiptap, tiptapToCanonical } from "./interop";
 import { createEditorExtensions, NodeIdentity, NODE_ID_ATTRIBUTE } from "./schema";
 
@@ -313,6 +313,19 @@ describe("the step that writes ids", () => {
     expect(step.map(new Transform(before).delete(0, before.content.size).mapping)).toBeNull();
   });
 
+  it("has no JSON form: writing it out fails at once, and nothing reads one back", () => {
+    const { before, step } = minting();
+
+    expect(() => step.toJSON()).toThrow(/cannot be serialised/);
+    expect(() => JSON.stringify([step])).toThrow(/cannot be serialised/);
+    expect(() =>
+      Step.fromJSON(before.type.schema, {
+        stepType: "setNodeIds",
+        fixes: [{ pos: 0, id: "aaaaaaaa-0000-4000-8000-00000000000a" }],
+      }),
+    ).toThrow(/No step type setNodeIds/);
+  });
+
   it("fails, and does not guess, when a position no longer holds a block", () => {
     const { before, step } = minting();
     const shorter = new Transform(before).delete(4, 6).doc;
@@ -368,6 +381,20 @@ describe("blocks that never had an id", () => {
     expect(canonicalIds(editor)).toEqual([first, second, third]);
     expect(canonicalIds(editor)).toEqual([first, second, third]);
     expect(mintMissingIds(editor.state)).toBeNull();
+  });
+
+  it("names the ids the content holds more than once, in any letter case, and nothing else", () => {
+    const paragraph = (id: unknown) => ({ type: "paragraph", attrs: { [NODE_ID_ATTRIBUTE]: id } });
+    const state = (...found: unknown[]) =>
+      new Editor({
+        element: null,
+        extensions: createEditorExtensions(),
+        content: { type: "doc", content: found.map(paragraph) },
+      }).state.doc;
+
+    expect(repeatedNodeIds(state(ID_A, ID_B, ID_C, null, null))).toEqual([]);
+    expect(repeatedNodeIds(state(ID_A, ID_B, ID_A.toUpperCase(), ID_B, ID_B, ID_C))).toEqual([ID_A, ID_B]);
+    expect(repeatedNodeIds(state("not-a-uuid", "not-a-uuid"))).toEqual(["not-a-uuid"]);
   });
 
   it("does not touch an id that is present, malformed or not", () => {

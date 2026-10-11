@@ -302,6 +302,41 @@ test.describe("block identity in the browser", () => {
     expect((await blocksWhen(page, 2)).map((block) => block.id)).toEqual([first.id, second.id]);
   });
 
+  for (const [name, twin] of [["exactly", A.id], ["in another letter case", A.id.toUpperCase()]] as const) {
+    test(`initial content that holds an id twice, ${name}: repaired when the editor is created, and it says so`, async ({ page }) => {
+      const warnings: string[] = [];
+      page.on("console", (message) => {
+        if (message.type() === "warning") {
+          warnings.push(message.text());
+        }
+      });
+      const seed = structuredClone(SEED);
+      seed.content[1].attrs.nodeId = twin;
+      await openIdentityHarness(page, seed);
+
+      const attributes = await editorOf(page).locator("[data-node-id]").evaluateAll((nodes) =>
+        nodes.map((node) => node.getAttribute("data-node-id")!),
+      );
+      expect([attributes[0], attributes[2]]).toEqual([A.id, C.id]);
+      expectNew([attributes[1]]);
+      expect((await blocksOf(page)).map((block) => block.id)).toEqual(attributes);
+      await expect.poll(() => warnings.filter((text) => text.includes("replaceWithStoredDocument")).length).toBe(1);
+    });
+  }
+
+  test("content without a repeated id raises no warning when the editor is created", async ({ page }) => {
+    const warnings: string[] = [];
+    page.on("console", (message) => {
+      if (message.type() === "warning") {
+        warnings.push(message.text());
+      }
+    });
+    await openIdentityHarness(page, SEED);
+
+    expect((await blocksOf(page)).map((block) => block.id)).toEqual([A.id, B.id, C.id]);
+    expect(warnings.filter((text) => text.includes("replaceWithStoredDocument"))).toEqual([]);
+  });
+
   test("Enter at the very start of a block leaves its id with its text", async ({ page }) => {
     await openIdentityHarness(page, SEED);
     await caret(page, await contentStart(page, 1));

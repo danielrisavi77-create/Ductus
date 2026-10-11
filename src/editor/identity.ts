@@ -353,7 +353,8 @@ export function mintMissingIds(state: EditorState, mint: NodeIdMinter = newNodeI
 /**
  * Sets the ids of many blocks in one pass over the document. One attribute
  * step per block copies the document once per block, which makes a large
- * paste quadratic. Like an attribute step it changes no positions.
+ * paste quadratic. Like an attribute step it changes no positions. Unlike
+ * one it has no JSON form (see `toJSON`).
  */
 class SetNodeIds extends Step {
   constructor(readonly fixes: readonly Fix[]) {
@@ -401,9 +402,36 @@ class SetNodeIds extends Step {
     return fixes.length === 0 ? null : new SetNodeIds(fixes);
   }
 
-  toJSON(): { stepType: string; fixes: readonly Fix[] } {
-    return { stepType: "setNodeIds", fixes: this.fixes };
+  /**
+   * Not serialisable, on purpose, and it says so here instead of failing when
+   * someone else reads the JSON. A faithful `fromJSON` could not check what it
+   * reads: an inverted step carries whatever the attribute held before,
+   * malformed values included, so it would be a way to write any id into a
+   * document for every consumer that applies steps outside this plugin. No
+   * code serialises editor steps today; one that needs to must send the
+   * document, or get a format that the receiving side re-derives ids for.
+   */
+  toJSON(): never {
+    throw new Error("SetNodeIds cannot be serialised: block ids are derived by the identity plugin, not replayed from JSON");
   }
+}
+
+/**
+ * Ids that more than one block of `doc` holds, compared the way the validator
+ * compares them. Only content the state was created with can hold one; it is
+ * what `mintMissingIds` then repairs, so the caller can say that it did.
+ */
+export function repeatedNodeIds(doc: PmNode): string[] {
+  const seen = new Set<string>();
+  const repeated = new Set<string>();
+  for (const { node } of blocksOf(doc)) {
+    const id = idOf(node);
+    if (typeof id === "string") {
+      const key = id.toLowerCase();
+      (seen.has(key) ? repeated : seen).add(key);
+    }
+  }
+  return [...repeated];
 }
 
 function applyFixes(tr: Transaction, fixes: readonly Fix[]): Transaction {
