@@ -237,6 +237,53 @@ describe("readBodyWithLimit (#155 items 10 and 12, HTTP part)", () => {
     expect(result.ok && [...result.bytes]).toEqual([...raw]);
   });
 
+  it("returns body_stream_error, not a throw or partial bytes, when the stream fails mid-read", async () => {
+    let pulls = 0;
+    for (const headers of [{}, { "content-length": "4096" }] as Record<
+      string,
+      string
+    >[]) {
+      pulls = 0;
+      const failing = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (pulls++ === 0)
+            controller.enqueue(new Uint8Array(1024).fill(0x61));
+          else controller.error(new Error("connection reset"));
+        },
+      });
+      expect(
+        await readBodyWithLimit(streamed(failing, headers), LIMIT),
+      ).toEqual({ ok: false, status: 400, reason: "body_stream_error" });
+    }
+  });
+
+  it("keeps the 413 refusal when cancelling the stream itself fails", async () => {
+    const declared = new ReadableStream<Uint8Array>({
+      cancel() {
+        throw new Error("cancel failed");
+      },
+    });
+    expect(
+      await readBodyWithLimit(
+        streamed(declared, { "content-length": String(LIMIT + 1) }),
+        LIMIT,
+      ),
+    ).toEqual({ ok: false, status: 413, reason: "body_too_large" });
+    const undeclared = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.enqueue(new Uint8Array(LIMIT + 1));
+      },
+      cancel() {
+        throw new Error("cancel failed");
+      },
+    });
+    expect(await readBodyWithLimit(streamed(undeclared), LIMIT)).toEqual({
+      ok: false,
+      status: 413,
+      reason: "body_too_large",
+    });
+  });
+
   it("returns an empty body as zero bytes", async () => {
     const result = await readBodyWithLimit(
       new Request(URL_INGEST, { method: "POST" }),

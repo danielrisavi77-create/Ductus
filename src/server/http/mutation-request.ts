@@ -56,7 +56,10 @@ export type LimitedBodyResult =
   | {
       ok: false;
       status: 400;
-      reason: "content_length_invalid" | "content_length_mismatch";
+      reason:
+        | "content_length_invalid"
+        | "content_length_mismatch"
+        | "body_stream_error";
     };
 
 const DECIMAL = /^(0|[1-9][0-9]{0,15})$/;
@@ -67,6 +70,15 @@ const DECIMAL = /^(0|[1-9][0-9]{0,15})$/;
  * length is cut off at the first byte past the limit, and the rest of the
  * stream is cancelled rather than drained. A declared length that does not
  * match the bytes received is refused too.
+ *
+ * A body stream that fails mid-read (client gone, connection reset) is
+ * returned as body_stream_error, never thrown, and no partial bytes leave
+ * this function; the caller stores nothing and has no exception to forget.
+ *
+ * There is deliberately no time limit here: a slow client can hold the
+ * request open while it trickles up to maxBytes. Bounding that is the
+ * obligation of the route (B-8j2) or the infrastructure (Node server request
+ * timeout or the reverse proxy), not of this reader.
  */
 export async function readBodyWithLimit(
   request: Request,
@@ -79,12 +91,12 @@ export async function readBodyWithLimit(
   let declared: number | null = null;
   if (header !== null) {
     if (!DECIMAL.test(header)) {
-      await request.body?.cancel();
+      await cancelQuietly(request.body);
       return { ok: false, status: 400, reason: "content_length_invalid" };
     }
     declared = Number(header);
     if (declared > maxBytes) {
-      await request.body?.cancel();
+      await cancelQuietly(request.body);
       return { ok: false, status: 413, reason: "body_too_large" };
     }
   }
@@ -101,14 +113,19 @@ export async function readBodyWithLimit(
   let size = 0;
   try {
     for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      size += value.byteLength;
+      let chunk: ReadableStreamReadResult<Uint8Array>;
+      try {
+        chunk = await reader.read();
+      } catch {
+        return { ok: false, status: 400, reason: "body_stream_error" };
+      }
+      if (chunk.done) break;
+      size += chunk.value.byteLength;
       if (size > maxBytes) {
-        await reader.cancel();
+        await cancelQuietly(reader);
         return { ok: false, status: 413, reason: "body_too_large" };
       }
-      chunks.push(value);
+      chunks.push(chunk.value);
     }
   } finally {
     reader.releaseLock();
@@ -123,4 +140,15 @@ export async function readBodyWithLimit(
     offset += chunk.byteLength;
   }
   return { ok: true, bytes };
+}
+
+/** The refusal is already decided; a failing cancel must not turn it into a throw. */
+async function cancelQuietly(
+  target: { cancel(): Promise<void> } | null,
+): Promise<void> {
+  try {
+    await target?.cancel();
+  } catch {
+    // The stream is already errored or closed; nothing left to release.
+  }
 }
