@@ -18,7 +18,7 @@ Backend (hosting, prijava, evidencija, korijen i žig, operacije) razrađen je u
 
 | Faza | Sadržaj | Izlazni kriterij | Procjena |
 | --- | --- | --- | --- |
-| **M0 Temelj** | Prijenos jezgre iz `pisac-editor` s testovima; CI (lint, typecheck, unit, property, E2E, axe, Gitleaks, zizmor, Semgrep, OSV); lefthook; `docker compose` okruženje (Postgres, S3-kompatibilna pohrana, Mailpit, lažni OIDC; MinIO više nema sliku, lokalno RustFS) u CI-ju; kod iza sučelja dok D-08 nije potvrđen | Svi preneseni testovi zeleni, isti broj kao u izvoru; CI zelen na `main` | 2 do 3 |
+| **M0 Temelj** | Prijenos jezgre iz `pisac-editor` s testovima; CI (lint, typecheck, unit, property, E2E, axe, Gitleaks, zizmor, Semgrep, OSV); lefthook; `docker compose` okruženje (Postgres, S3-kompatibilna pohrana, Mailpit, lažni OIDC; MinIO više nema sliku, lokalno RustFS) u CI-ju; kod iza sučelja dok dio D-08 o dobavljačima i trošku nije potvrđen | Svi preneseni testovi zeleni, isti broj kao u izvoru; CI zelen na `main` | 2 do 3 |
 | **M1 AAI spike** | Prijava preko AAI@EduHr Laba kroz vlastiti OIDC klijent (D-73); provjera da nema spajanja računa po e-pošti i mapiranja hrEdu atributa; lažni pružatelj za CI | Prijava na Labu radi; `app_user` vezan uz `hrEduPersonUniqueID`; test dokazuje da lažni pružatelj ne postoji u produkciji | 1 do 2 |
 | **M2 Model fakulteta** | Fakultet, kolegij, članstvo, zadatak i verzije zadatka, potvrda obavijesti, mentorstvo, uloge, pravilo AI-ja kolegija (D-52), oznaka prilagodbe (D-50); upis kodom; pgTAP matrica pristupa | Matrica pristupa zelena za sve kombinacije uloga, uključujući mentora | 4 do 5 |
 | **M3 Evidencija** | Sažimanje transakcija u odsječke s autorom, ruta `ingest`, hash lanac, kontrolne točke, praznine, offline oznaka, oznaka lijepljenja (D-43), vrsta dokaza (D-44), spike programskog unosa (D-54); journal vezan uz korisnika i brisanje pri odjavi | Property testovi: izmjena, brisanje ili preslagivanje odsječka ruši provjeru; idempotentno ponovno slanje; oporavak prekida između Storagea, RPC-a i potpisa; izmjereno CPU vrijeme rekonstrukcije doktorskog rada | 7 do 9 |
@@ -51,7 +51,7 @@ Sastanak s FPZG-om održava se kad je demo gotov. Demo je prvi dio pravog sustav
 
 **Namjerno izvan demoa:** AAI prijava (lažni OIDC pružatelj s jasnom oznakom "demo prijava"), AI pomoćnik, Lekta paket osim jednog citatnog stila, uvoz i izvoz, dnevni korijen, mentorski radovi, reprodukcija.
 
-**Gdje radi:** na tvom računalu (Docker) za sastanak; javna staging adresa samo ako je B0.1 već odrađen, kako se kod ne bi vezao uz dobavljača prije D-08.
+**Gdje radi:** na tvom računalu (Docker) za sastanak; javna staging adresa samo ako je B0.1 već odrađen, kako se kod ne bi vezao uz dobavljača prije potvrde dijela D-08 o dobavljačima.
 
 **Izlazni kriterij:** prolaz 1 do 5 snimljen, E2E test tog prolaza zelen u CI-ju, nijedan stvarni osobni podatak.
 

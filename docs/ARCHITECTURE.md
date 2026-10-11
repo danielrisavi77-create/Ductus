@@ -6,7 +6,7 @@ Verzija 0.4 · 3. 10. 2026. · Odgovorna osoba: Daniel Rišavi
 
 Cilj: najjednostavnija arhitektura koja pouzdano ispunjava `PRODUCT.md` za pilot na jednom fakultetu, koju jedna osoba uz AI agente može održavati, i koja se kasnije može proširiti bez prepisivanja. Ciljna arhitektura vNext ostaje referenca (D-75); što se iz nje prihvaća i odgađa zapisano je u BACKEND §2, a odgođeni elementi imaju okidač u §11.
 
-**Odnos prema `BACKEND.md`:** BACKEND je detaljan plan backenda i ima prednost u pojedinostima (topologija, uloge, prijava, evidencija, kopije, trošak, program B0 do B9). Ovaj dokument daje cjelinu sustava i upućuje na BACKEND gdje je on mjerodavan. D-71 i D-74 vlasnik je potvrdio 10. 10. 2026. D-08 je 11. 10. 2026. razdvojen (komentar 6105246182 na issueu #87): dio o aplikaciji (Next.js i worker, PostgreSQL s RLS-om i ulogama, pohrana kompatibilna sa S3, vlastiti OIDC klijent, sve u EU-u) je **ODLUČEN**, a dio o dobavljačima i trošku ostaje **PRIJEDLOG** do provjere B0.1 (rok 16. 11. 2026.). Odnos D-08 prema B0.2 nije odlučen. Sve što ovisi o dijelu D-08 o dobavljačima i trošku, o D-72, D-73 i D-75 vrijedi kao **PRIJEDLOG** dok vlasnik te odluke ne potvrdi (B0.3); retci §1 koje odluka od 11. 10. 2026. ne navodi (Editor, Lokalna pohrana, E-pošta) ostaju označeni kao prijedlog.
+**Odnos prema `BACKEND.md`:** BACKEND je detaljan plan backenda i ima prednost u pojedinostima (topologija, uloge, prijava, evidencija, kopije, trošak, program B0 do B9). Ovaj dokument daje cjelinu sustava i upućuje na BACKEND gdje je on mjerodavan. D-71 i D-74 vlasnik je potvrdio 10. 10. 2026. D-08 je 11. 10. 2026. razdvojen (komentar 6105246182 na issueu #87): dio o aplikaciji (Next.js i worker, PostgreSQL s RLS-om i ulogama, pohrana kompatibilna sa S3, vlastiti OIDC klijent, sve u EU-u) je **ODLUČEN**, a dio o dobavljačima i trošku ostaje **PRIJEDLOG** do provjere B0.1 (rok 16. 11. 2026.). Odnos D-08 prema B0.2 nije odlučen. Sve što ovisi o dijelu D-08 o dobavljačima i trošku, o D-72, D-73 (osim izbora vlastitog OIDC klijenta, odlučenog 11. 10. 2026.) i D-75 vrijedi kao **PRIJEDLOG** dok vlasnik te odluke ne potvrdi (B0.3); retci §1 koje odluka od 11. 10. 2026. ne navodi (Editor, Lokalna pohrana, E-pošta) ostaju označeni kao prijedlog.
 
 ## 0.1 Status implementacije i granice repozitorija
 
@@ -48,7 +48,7 @@ Smjer ovisnosti je prema unutra: `app` i features pozivaju application; applicat
 | Baza | PostgreSQL s RLS-om, uloge po namjeni, upravljana usluga s povratom u točku (PITR) | [ODLUČENO D-08, dio o aplikaciji; usluga i dobavljač PRIJEDLOG do B0.1], dobavljač u §9 |
 | Pohrana objekata | S3-kompatibilan privatni bucket po domeni evidencije (jedna ustanova u jednoj regiji), objekti adresirani hashom, putanja `v2/<ustanova>/<paket>/<hash>.json` | [ODLUČENO D-08, dio o aplikaciji; D-102] |
 | Prijava | AAI@EduHr preko OpenID Connecta | [ODLUČENO D-09] |
-| Izvedba prijave | Vlastiti OIDC klijent, sesije u bazi | [PRIJEDLOG D-73] |
+| Izvedba prijave | Vlastiti OIDC klijent, sesije u bazi | [ODLUČENO D-08, dio o aplikaciji: vlastiti OIDC klijent; ostatak D-73 PRIJEDLOG] |
 | Potpis | Dva odvojena Ed25519 ključa u KMS-u, potpisuje samo worker | [ODLUČENO D-71] |
 | Neovisno vrijeme | Dnevni korijen s RFC 3161 žigom, val 2 | [PRIJEDLOG D-72] |
 | E-pošta | Transakcijska usluga u EU-u preko SMTP-a ili API-ja | [PRIJEDLOG D-08] |
@@ -190,7 +190,7 @@ Sadržaj odsječaka živi u privatnom bucketu, adresiran svojim hashom, odvojeno
 
 ## 4. Prijava
 
-Mjerodavno je BACKEND §4.3 [PRIJEDLOG D-73]; ovdje je tijek.
+Mjerodavno je BACKEND §4.3 [vlastiti OIDC klijent ODLUČEN 11. 10. 2026. (D-08, dio o aplikaciji); ostatak D-73 PRIJEDLOG]; ovdje je tijek.
 
 1. Gumb "Prijava AAI@EduHr računom" pokreće OIDC Authorization Code s PKCE-om iz Next.js rute prema `login.aaiedu.hr` (produkcija) ili `fed-lab.aaiedu.hr` (staging). Klijenta u Registru resursa registrira FPZG kao svoju uslugu; Daniel to kao fizička osoba ne može sam.
 2. Vlastiti OIDC klijent provjerava `state`, `nonce`, `iss`, `aud`, `azp`, `exp`, `iat`, algoritam i JWKS, čita atribute s userinfo endpointa i provjerava da je `sub` jednak onom iz ID tokena. Biblioteka (Better Auth s isključenim povezivanjem računa ili `openid-client`) bira se na M1 spikeu.

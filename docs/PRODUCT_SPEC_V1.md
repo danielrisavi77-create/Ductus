@@ -556,7 +556,7 @@ Može biti dio Course Dashboarda ili zaseban prikaz.
 - vizualno isticanje segmenata;
 - statusni sažetak u donjoj traci.
 
-Ovaj Product Spec ne uklanja niti zamjenjuje te elemente izvan nastavničkog prikaza.
+Ovaj Product Spec ne uklanja niti zamjenjuje te elemente izvan nastavničkog prikaza; za njih i dalje vrijedi §18.3.
 
 ## 12.2 T6 — Detaljna provenijencija
 
