@@ -899,7 +899,7 @@
       {
         "name": "negative-zero",
         "class": "non-canonical",
-        "note": "A step that puts an empty paragraph before the first block, with its position written as -0. The same step written with 0 is canonical and accepted, so only the comparison with the canonical bytes refuses the spelling -0.",
+        "note": "A step that puts an empty paragraph before the first block, with its position written as -0. Two layers refuse it: the closed step format reads -0 as an invalid position, and JCS writes the parsed value as 0, so the bytes differ from their canonical form. The same step written with 0 is canonical and accepted.",
         "base": 0,
         "find": "{\"from\":1,\"slice\":{\"content\":[{\"text\":\"\u0110: \",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}",
         "replace": "{\"from\":-0,\"slice\":{\"content\":[{\"attrs\":{\"nodeId\":null},\"type\":\"paragraph\"}]},\"stepType\":\"replace\",\"to\":0}",
