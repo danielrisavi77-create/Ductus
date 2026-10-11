@@ -5,7 +5,6 @@ import {
   MAX_MERGE_STEPS,
   carriedHeadCandidates,
   evaluatePullRequest,
-  onlyBaseMerges,
   sameChange,
 } from "./review-gate-core.mjs";
 
@@ -49,15 +48,15 @@ function prNumberFromEvent(event) {
   return null;
 }
 
-// Walks first parents from `head` until `earlier`, a non-merge commit or the
-// step limit, whichever comes first.
-async function firstParentPath(owner, repo, head, earlier) {
+// Walks first parents from `head` until a non-merge commit or the step limit,
+// whichever comes first.
+async function firstParentPath(owner, repo, head) {
   const path = [];
   let sha = head;
   for (let step = 0; step <= MAX_MERGE_STEPS && sha; step += 1) {
     const commit = await api(`/repos/${owner}/${repo}/commits/${sha}`);
     path.push({ sha: commit.sha, parents: commit.parents });
-    if (commit.sha.toLowerCase() === earlier.toLowerCase() || commit.parents.length < 2) break;
+    if (commit.parents.length < 2) break;
     sha = commit.parents[0]?.sha;
   }
   return path;
@@ -67,21 +66,29 @@ async function firstParentPath(owner, repo, head, earlier) {
 // followed and the PR diff is unchanged. Any API error carries nothing.
 async function carriedHeads(owner, repo, pr, comments) {
   const carried = new Set();
-  const candidates = carriedHeadCandidates(comments, pr.head.sha);
-  if (candidates.length === 0) return carried;
   const compare = (range) => api(`/repos/${owner}/${repo}/compare/${range}?per_page=100`);
+  let candidates;
   let current;
   try {
+    const path = await firstParentPath(owner, repo, pr.head.sha);
+    const { heads, reason } = carriedHeadCandidates(comments, pr.head.sha, path);
+    if (reason) console.log(`Carry-over refused: ${reason}.`);
+    candidates = heads;
+    if (candidates.length === 0) return carried;
     current = await compare(`${pr.base.sha}...${pr.head.sha}`);
   } catch (error) {
     console.log(`Carry-over check failed closed: ${error.message}`);
     return carried;
   }
   for (const sha of candidates) {
+    const range = `${pr.base.sha}...${sha}`;
     try {
-      const path = await firstParentPath(owner, repo, pr.head.sha, sha);
-      if (!onlyBaseMerges(path, sha)) continue;
-      if (sameChange(current, await compare(`${pr.base.sha}...${sha}`))) carried.add(sha);
+      const same = sameChange(current, await compare(range));
+      console.log(
+        `Carry-over ${same ? "accepted" : "rejected"}: head ${sha}, base ${pr.base.sha}, ` +
+          `compared ${pr.base.sha}...${pr.head.sha} with ${range}.`,
+      );
+      if (same) carried.add(sha);
     } catch (error) {
       // A head that is gone or unreadable simply does not carry.
       console.log(`Carry-over check for ${sha} failed closed: ${error.message}`);

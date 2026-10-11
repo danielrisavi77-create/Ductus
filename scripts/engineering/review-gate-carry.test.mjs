@@ -71,26 +71,53 @@ test("Owner Override never carries to a later head", () => {
   assert.equal(result.state, "pending");
 });
 
-test("candidates are trusted canonical heads, newest first, without the current head", () => {
+const merge = (sha) => ({ sha, parents: [{}, {}] });
+const plain = (sha) => ({ sha, parents: [{}] });
+
+test("candidates are trusted canonical heads behind base merges, in walk order, without the current head", () => {
   const outsider = comment(`Agent-Review: claude:b:reviewer\nReview-Head: ${"c".repeat(40)}\nReview-Verdict: PASS\n`, {
     association: "NONE",
   });
   const fenced = comment(`\`\`\`\nAgent-Review: claude:b:reviewer\nReview-Head: ${"d".repeat(40)}\nReview-Verdict: PASS\n\`\`\`\n`);
-  const heads = carriedHeadCandidates(
+  const path = [merge(head), merge("c".repeat(40)), merge("d".repeat(40)), merge("e".repeat(40)), plain(earlier)];
+  const { heads, reason } = carriedHeadCandidates(
     [review(earlier), outsider, fenced, qa(head), review("E".repeat(40)), qa(earlier)],
     head,
+    path,
   );
-  assert.deepEqual(heads, [earlier, "e".repeat(40)]);
+  assert.equal(reason, null);
+  assert.deepEqual(heads, ["e".repeat(40), earlier]);
 });
 
-test("candidates are capped", () => {
-  const comments = Array.from({ length: 9 }, (_, i) => review(String(i).repeat(40)));
-  assert.equal(carriedHeadCandidates(comments, head).length, MAX_CARRIED_HEADS);
+test("a head behind a non-merge commit is not a candidate", () => {
+  const path = [merge(head), plain("c".repeat(40))];
+  const { heads } = carriedHeadCandidates([review(earlier), review("c".repeat(40))], head, path);
+  assert.deepEqual(heads, ["c".repeat(40)]);
+  assert.deepEqual(carriedHeadCandidates([review(earlier)], head, [plain(head)]).heads, []);
+});
+
+test("more verdict heads than the cap carry nothing, so an older FAIL is never dropped", () => {
+  const shas = Array.from({ length: MAX_CARRIED_HEADS + 1 }, (_, i) => String(i + 1).repeat(40));
+  const path = [merge(head), ...shas.slice(0, -1).map(merge), plain(shas.at(-1))];
+  // The oldest head holds a FAIL; the newer ones hold PASS verdicts.
+  const comments = [review(shas.at(-1), "FAIL"), ...shas.slice(0, -1).map((sha) => qa(sha))];
+  const { heads, reason } = carriedHeadCandidates(comments, head, path);
+  assert.deepEqual(heads, []);
+  assert.match(reason, /more than 5/);
+  const fewer = shas.slice(0, -1);
+  const within = carriedHeadCandidates(comments.slice(1), head, [merge(head), ...fewer.slice(0, -1).map(merge), plain(fewer.at(-1))]);
+  assert.equal(within.heads.length, MAX_CARRIED_HEADS);
+});
+
+test("an unfinished first-parent walk carries nothing", () => {
+  const path = Array.from({ length: MAX_MERGE_STEPS + 1 }, (_, i) => merge(i === 1 ? earlier : String(i % 10).repeat(40)));
+  const { heads, reason } = carriedHeadCandidates([review(earlier)], head, [merge(head), ...path.slice(1)]);
+  assert.deepEqual(heads, []);
+  assert.match(reason, /non-merge/);
+  assert.deepEqual(carriedHeadCandidates([], head, []), { heads: [], reason: null });
 });
 
 test("only merge commits on the first-parent path allow a carry", () => {
-  const merge = (sha) => ({ sha, parents: [{}, {}] });
-  const plain = (sha) => ({ sha, parents: [{}] });
   assert.equal(onlyBaseMerges([merge(head), merge("c".repeat(40)), plain(earlier)], earlier), true);
   assert.equal(onlyBaseMerges([merge(head), plain("c".repeat(40)), plain(earlier)], earlier), false);
   assert.equal(onlyBaseMerges([plain(head), plain(earlier)], earlier), false);
@@ -111,10 +138,28 @@ test("the PR diff must be identical file by file", () => {
   assert.equal(sameChange(big, big), false);
 });
 
-test("a file without a patch compares by blob SHA", () => {
+test("a file without a patch never carries", () => {
   const binary = (sha) => ({ filename: "x.png", status: "modified", sha });
-  assert.equal(sameChange({ files: [binary("1".repeat(40))] }, { files: [binary("1".repeat(40))] }), true);
-  assert.equal(sameChange({ files: [binary("1".repeat(40))] }, { files: [binary("2".repeat(40))] }), false);
+  assert.equal(sameChange({ files: [binary("1".repeat(40))] }, { files: [binary("1".repeat(40))] }), false);
+  assert.equal(sameChange({ files: [file("a.mjs"), binary("1".repeat(40))] }, { files: [file("a.mjs"), binary("1".repeat(40))] }), false);
+  const renamed = { filename: "b.png", previous_filename: "a.png", status: "renamed", sha: "1".repeat(40) };
+  assert.equal(sameChange({ files: [renamed] }, { files: [renamed] }), false);
+});
+
+test("a merge that changes the base side of the PR's hunk does not carry", () => {
+  // Same head side, different base side: the PR now undoes a newer base change.
+  const before = { files: [file("a.mjs", "@@ -1 +1 @@\n-a\n+b")] };
+  const after = { files: [file("a.mjs", "@@ -1 +1 @@\n-c\n+b")] };
+  assert.equal(sameChange(after, before), false);
+});
+
+test("a success that counts a carried verdict names the earlier head", () => {
+  const comments = [review(earlier), qa(head)];
+  const result = evaluateGate({ body: body("critical"), headSha: head, ownerLogin, comments, carriedHeads: new Set([earlier]) });
+  assert.equal(result.state, "success");
+  assert.match(result.description, /Carried from bbbbbbb\.$/);
+  const current = evaluateGate({ body: body(), headSha: head, ownerLogin, comments: [review(head)] });
+  assert.doesNotMatch(current.description, /Carried/);
 });
 
 test("evaluatePullRequest passes carried heads to the gate", () => {
