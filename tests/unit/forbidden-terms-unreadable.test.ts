@@ -630,7 +630,7 @@ describe("a file the scan cannot read", () => {
     writeFileSync(path.join(root!, ...relative.split("/")), Buffer.from(bytes));
   };
   /** The checks that read a file: the guard for misplaced text reads only the modules outside the text modules. */
-  const readBy = (file: string): (keyof typeof CHECKS)[] => names.filter((name) => name !== "findMisplacedUiText" || (file.endsWith(".ts") && !file.endsWith("labels.ts")));
+  const readBy = (file: string): (keyof typeof CHECKS)[] => names.filter((name) => name !== "findMisplacedUiText" || (file.endsWith("ts") && !file.endsWith(".tsx") && !/(?:labels|messages)\.ts$/.test(file)));
   /** What it is, the file, its content, the error. */
   const BROKEN: readonly [string, string, string, RegExp][] = [
     ["a component with an element that is not closed", "src/components/Case.tsx", "export const C = <p>Predano", /^src\/components\/Case\.tsx:1: the file does not parse, so the scan cannot read it \(TS\d+, 2 in all\)$/],
@@ -638,6 +638,13 @@ describe("a file the scan cannot read", () => {
     ["a text module with a string that is not closed", "src/domain/sync/labels.ts", 'export const LABEL = "Predano;\n', /^src\/domain\/sync\/labels\.ts:1: the file does not parse/],
     ["a module outside the text modules", "src/domain/sync/state.ts", "export const STATE = {;\n", /^src\/domain\/sync\/state\.ts:1: the file does not parse/],
     ["a module under app", "app/api/status/route.ts", "export function GET( {\n", /^app\/api\/status\/route\.ts:[12]: the file does not parse/],
+    // Review of f08b750: the errors are asked for through the compiler's own interface, for both kinds of file.
+    ["a component with a closing tag of another element", "src/components/Case.tsx", "export const C = () => <p>Predano</div>;\n", /^src\/components\/Case\.tsx:1: the file does not parse, so the scan cannot read it \(TS\d+, \d+ in all\)$/],
+    ["a component with an expression that is not closed", "src/components/Case.tsx", 'import { Icon } from "./Icon";\n\nexport const C = () => <p>{"Predano"</p>;\n', /^src\/components\/Case\.tsx:3: the file does not parse/],
+    ["a component with a second element next to the first", "app/rad/page.tsx", "export default function Page() {\n  return <p>Rok</p><p>Predano</p>;\n}\n", /^app\/rad\/page\.tsx:2: the file does not parse/],
+    ["a text module with a template that is not closed", "src/domain/sync/messages.ts", "export const MESSAGE = `Predano ${1;\n", /^src\/domain\/sync\/messages\.ts:[12]: the file does not parse, so the scan cannot read it \(TS\d+, \d+ in all\)$/],
+    ["a module with JSX, which a module cannot hold", "src/domain/sync/state.ts", "export const STATE = <p>Predano</p>;\n", /^src\/domain\/sync\/state\.ts:1: the file does not parse/],
+    ["a module with the other extension", "src/domain/sync/state.mts", "export const STATE = [1, 2;\n", /^src\/domain\/sync\/state\.mts:1: the file does not parse/],
   ];
 
   it.each(BROKEN)("stops on %s", (_, file, content, message) => {
@@ -671,6 +678,18 @@ describe("a file the scan cannot read", () => {
     // A byte order mark is kept in what is read, as it was, so a catalogue that starts with one is not JSON.
     write("src/lib/i18n/hr.json", `${cp(0xfeff)}{ "title": "Rok" }\n`);
     expect(() => scanUiText(root!)).toThrow(SyntaxError);
+  });
+
+  // Only syntax stops a check. What a type checker would refuse (a module that
+  // is not there, a value of the wrong type, a name nobody declared) is for
+  // `tsc` to say, and such a file is read like any other.
+  it("reads a file that parses although it would not type check", () => {
+    write("src/components/Case.tsx", 'import { Missing } from "./nowhere";\nimport type { Props } from "@/none";\n\nconst count: number = "tri";\n\nexport const Case = (props: Props) => <Missing {...props} value={undeclared}>Sumnjivo {count}</Missing>;\n');
+    write("src/domain/sync/state.ts", 'import { nothing } from "node:nothing";\n\nexport const STATE: string = nothing satisfies number;\nexport enum Kind {\n  A = "a",\n}\ndeclare const later: unique symbol;\nexport type Later = typeof later;\n');
+    write("app/api/status/route.ts", "export async function GET(): Promise<Response> {\n  return await fetch(missing);\n}\n");
+    expect(scanUiText(root!).flatMap((finding) => finding.terms.map((term) => term.entry))).toEqual(["sumnjivo"]);
+    expect(findUnreadableText(root!)).toEqual([]);
+    expect(findMisplacedUiText(root!)).toEqual([]);
   });
 
   it("reads files that parse and are UTF-8 as before, with or without a byte order mark", () => {
@@ -724,6 +743,13 @@ describe("a file the scan cannot read", () => {
       write("src/components/Case.tsx", component(["<p>Rok predaje</p>"]));
       writeBytes("src/domain/sync/state.ts", [...Buffer.from('export const STATE = "a'), 0xfe, ...Buffer.from('";\n')]);
       expect(run().status).toBe(1);
+      // A module that does not parse, with the component next to it in order.
+      write("src/domain/sync/state.ts", "export const STATE = {;\n");
+      const plain = run();
+      expect(plain.status).toBe(1);
+      expect(plain.stderr).toContain("src/domain/sync/state.ts:1: the file does not parse, so the scan cannot read it");
+      write("src/domain/sync/state.ts", "export const STATE = {};\n");
+      expect(run()).toMatchObject({ status: 0, stderr: "" });
     } finally {
       rmSync(work, { recursive: true, force: true });
     }

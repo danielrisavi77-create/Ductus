@@ -696,6 +696,27 @@ interface Read {
 
 const NOTHING_READ: Read = { texts: [], units: [] };
 
+/**
+ * The syntax errors of a parsed file, asked for through a program that holds
+ * only that file: no library, no imports resolved, nothing read from disk and
+ * nothing parsed a second time.
+ */
+function syntaxErrors(source: ts.SourceFile): readonly ts.DiagnosticWithLocation[] {
+  const host: ts.CompilerHost = {
+    getSourceFile: () => source,
+    getDefaultLibFileName: () => "lib.d.ts",
+    writeFile: () => undefined,
+    getCurrentDirectory: () => "/",
+    getCanonicalFileName: (name) => name,
+    useCaseSensitiveFileNames: () => true,
+    getNewLine: () => "\n",
+    fileExists: () => true,
+    readFile: () => undefined,
+  };
+  const options: ts.CompilerOptions = { noLib: true, noResolve: true, types: [], jsx: ts.JsxEmit.Preserve };
+  return ts.createProgram({ rootNames: [source.fileName], options, host }).getSyntacticDiagnostics(source);
+}
+
 function locate(file: string, content: string, kind: Kind): Read {
   const texts: Located[] = [];
   const units: Unit[] = [];
@@ -715,11 +736,9 @@ function locate(file: string, content: string, kind: Kind): Read {
   const source = ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true, scriptKind);
   const lineAt = (position: number): number => source.getLineAndCharacterOfPosition(position).line + 1;
   // What the parser made of a file it could not parse is a guess, and text it
-  // guessed wrong is text that was never checked. The parser keeps its errors
-  // on the file it returns; a file without that list is not trusted either.
-  const errors = (source as { parseDiagnostics?: readonly ts.DiagnosticWithLocation[] }).parseDiagnostics;
-  if (!Array.isArray(errors)) throw new Error(`${file}: the parser did not say whether the file parses, so the scan cannot read it`);
-  const [first] = errors as readonly ts.DiagnosticWithLocation[];
+  // guessed wrong is text that was never checked.
+  const errors = syntaxErrors(source);
+  const [first] = errors;
   if (first) throw new Error(`${file}:${lineAt(first.start)}: the file does not parse, so the scan cannot read it (TS${first.code}, ${errors.length} in all)`);
   const collect =
     (part?: true): Collect =>
