@@ -1,12 +1,12 @@
 // Pure logic for the orchestrator helper scripts. No gh/git calls here.
 import { canonicalBlock, field } from "../engineering/metadata-parser.mjs";
+import { trustedAuthor } from "../engineering/review-gate-core.mjs";
 import {
   changedPaths, D97_MANUAL_PATHS, D97_PATHS, matchesPath, normalizePath,
 } from "../engineering/protected-paths.mjs";
 
 export const GATE_CONTEXT = "Engineering review gate";
 const SHA_RE = /^[0-9a-f]{40}$/i;
-const TRUSTED = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 
 const KINDS = {
   review: { agent: "Agent-Review", head: "Review-Head", verdict: "Review-Verdict" },
@@ -91,7 +91,7 @@ export function parseVerdicts(comments, kind) {
   const k = KINDS[kind];
   return (comments ?? [])
     .map((c, index) => ({ c, index }))
-    .filter(({ c }) => TRUSTED.has(c?.author_association) && canonicalBlock(c?.body, k.agent))
+    .filter(({ c }) => trustedAuthor(c) && canonicalBlock(c?.body, k.agent))
     .map(({ c, index }) => ({
       agent: field(c.body, k.agent),
       head: field(c.body, k.head),

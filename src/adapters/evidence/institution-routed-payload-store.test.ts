@@ -1,13 +1,16 @@
 import { createHash } from "node:crypto";
+import { inspect } from "node:util";
 
 import { describe, expect, it, vi } from "vitest";
 
 import { EvidenceStorageConfigError } from "./evidence-storage-config";
 import {
   InstitutionRoutedPayloadStore,
+  STORAGE_UNAVAILABLE,
   type DomainPayloadStore,
 } from "./institution-routed-payload-store";
 import { STORAGE_IDENTITY_KEY } from "./s3-evidence-payload-store";
+import { S3SecretCredentials } from "./s3-signature";
 
 // Invented institutions and credentials; nothing here is real.
 const FAK_A = "00000000-0000-4000-8000-00000000000a";
@@ -38,6 +41,12 @@ function fakeDomain(identity: () => Promise<Identity>) {
 }
 
 const verified = () => Promise.resolve<Identity>({ status: "verified" });
+
+/** The only unavailable answer that leaves the router. */
+const UNAVAILABLE = { status: "unavailable", reason: STORAGE_UNAVAILABLE };
+
+/** The router logs in a later macrotask; this lets it run. */
+const logged = () => new Promise((resolve) => setImmediate(resolve));
 
 function routerWith(domains: Record<string, ReturnType<typeof fakeDomain>>) {
   const warn = vi.fn();
@@ -70,23 +79,22 @@ describe("InstitutionRoutedPayloadStore", () => {
 
   it("answers unavailable for an institution without a domain, never another bucket (P2)", async () => {
     const a = fakeDomain(verified);
-    const { router } = routerWith({ [FAK_A]: a });
+    const { router, warn } = routerWith({ [FAK_A]: a });
 
-    await expect(router.putImmutable(input(FAK_C))).resolves.toEqual({
-      status: "unavailable",
-      reason: "storage_domain_not_configured",
-    });
+    await expect(router.putImmutable(input(FAK_C))).resolves.toEqual(UNAVAILABLE);
     expect(a.verifyIdentity).not.toHaveBeenCalled();
     expect(a.putImmutable).not.toHaveBeenCalled();
+    await logged();
+    expect(warn).toHaveBeenCalledWith("evidence storage domain is not configured", {
+      institutionId: FAK_C,
+      reason: "storage_domain_not_configured",
+    });
   });
 
   it("answers unavailable with no domains at all (P2)", async () => {
     const { router } = routerWith({});
 
-    await expect(router.putImmutable(input(FAK_A))).resolves.toEqual({
-      status: "unavailable",
-      reason: "storage_domain_not_configured",
-    });
+    await expect(router.putImmutable(input(FAK_A))).resolves.toEqual(UNAVAILABLE);
   });
 
   it.each(["", "not-a-uuid", FAK_A.toUpperCase()])(
@@ -116,20 +124,21 @@ describe("InstitutionRoutedPayloadStore", () => {
   it("disables a domain whose label does not match, with no write (P3)", async () => {
     const a = fakeDomain(() => Promise.resolve({ status: "mismatch" }));
     const { router, warn } = routerWith({ [FAK_A]: a });
-    const mismatch = {
-      status: "unavailable",
-      reason: "storage_domain_identity_mismatch",
-    };
 
-    await expect(router.putImmutable(input(FAK_A))).resolves.toEqual(mismatch);
-    await expect(router.putImmutable(input(FAK_A))).resolves.toEqual(mismatch);
+    await expect(router.putImmutable(input(FAK_A))).resolves.toEqual(UNAVAILABLE);
+    await expect(router.putImmutable(input(FAK_A))).resolves.toEqual(UNAVAILABLE);
 
     expect(a.verifyIdentity).toHaveBeenCalledTimes(1);
     expect(a.putImmutable).not.toHaveBeenCalled();
+    await logged();
     expect(warn).toHaveBeenCalledOnce();
     expect(warn).toHaveBeenCalledWith(
       "evidence storage identity label does not match",
-      { storageDomain: "fak-0", institutionId: FAK_A },
+      {
+        storageDomain: "fak-0",
+        institutionId: FAK_A,
+        reason: "storage_domain_identity_mismatch",
+      },
     );
   });
 
@@ -150,13 +159,15 @@ describe("InstitutionRoutedPayloadStore", () => {
       status: "unavailable",
       reason: "storage_get_status_503",
     });
-    const { router } = routerWith({ [FAK_A]: a });
+    const { router, warn } = routerWith({ [FAK_A]: a });
 
-    await expect(router.putImmutable(input(FAK_A))).resolves.toEqual({
-      status: "unavailable",
-      reason: "storage_get_status_503",
-    });
+    await expect(router.putImmutable(input(FAK_A))).resolves.toEqual(UNAVAILABLE);
     expect(a.putImmutable).not.toHaveBeenCalled();
+    await logged();
+    expect(warn).toHaveBeenCalledWith(
+      "evidence storage identity label could not be read",
+      { storageDomain: "fak-0", reason: "storage_get_status_503" },
+    );
     await expect(router.putImmutable(input(FAK_A))).resolves.toMatchObject({
       status: "stored",
     });
@@ -167,11 +178,47 @@ describe("InstitutionRoutedPayloadStore", () => {
     const a = fakeDomain(() => Promise.reject(new Error("boom")));
     const { router } = routerWith({ [FAK_A]: a });
 
-    await expect(router.putImmutable(input(FAK_A))).resolves.toEqual({
-      status: "unavailable",
-      reason: "storage_request_failed",
-    });
+    await expect(router.putImmutable(input(FAK_A))).resolves.toEqual(UNAVAILABLE);
     expect(a.putImmutable).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "storage_get_encoded",
+    "storage_get_status_503",
+    "storage_signature_rejected",
+    "storage_timeout",
+  ])("answers a write that is unavailable with %s by the one public reason", async (reason) => {
+    const a = fakeDomain(verified);
+    a.putImmutable.mockResolvedValueOnce({ status: "unavailable", reason } as never);
+    const { router, warn } = routerWith({ [FAK_A]: a });
+
+    await expect(router.putImmutable(input(FAK_A))).resolves.toEqual(UNAVAILABLE);
+    await logged();
+    expect(warn).toHaveBeenCalledWith("evidence storage domain is unavailable", {
+      storageDomain: "fak-0",
+      reason,
+    });
+  });
+
+  it("answers a write that throws as unavailable", async () => {
+    const a = fakeDomain(verified);
+    a.putImmutable.mockRejectedValueOnce(new Error("boom"));
+    const { router } = routerWith({ [FAK_A]: a });
+
+    await expect(router.putImmutable(input(FAK_A))).resolves.toEqual(UNAVAILABLE);
+  });
+
+  it("keeps the outcome when the logger throws or rejects", async () => {
+    const throwing = new InstitutionRoutedPayloadStore([], () => {
+      throw new Error("logger down");
+    });
+    await expect(throwing.putImmutable(input(FAK_A))).resolves.toEqual(UNAVAILABLE);
+    const rejecting = new InstitutionRoutedPayloadStore(
+      [],
+      (() => Promise.reject(new Error("logger down"))) as never,
+    );
+    await expect(rejecting.putImmutable(input(FAK_A))).resolves.toEqual(UNAVAILABLE);
+    await logged();
   });
 
   it("shares one identity read between concurrent writes", async () => {
@@ -186,9 +233,8 @@ describe("InstitutionRoutedPayloadStore", () => {
     await Promise.resolve();
     answer({ status: "unavailable", reason: "storage_timeout" });
 
-    const unavailable = { status: "unavailable", reason: "storage_timeout" };
-    await expect(first).resolves.toEqual(unavailable);
-    await expect(second).resolves.toEqual(unavailable);
+    await expect(first).resolves.toEqual(UNAVAILABLE);
+    await expect(second).resolves.toEqual(UNAVAILABLE);
     expect(a.verifyIdentity).toHaveBeenCalledTimes(1);
   });
 
@@ -245,8 +291,14 @@ function fakeS3(regionOf: Record<string, string>) {
         : new Response(null, { status: 404 });
     }
     if (objects.has(path)) return new Response(null, { status: 412 });
-    objects.set(path, (init!.body as Uint8Array).slice());
-    return new Response(null, { status: 200 });
+    const body = (init!.body as Uint8Array).slice();
+    objects.set(path, body);
+    return new Response(null, {
+      status: 200,
+      headers: {
+        "x-amz-checksum-sha256": createHash("sha256").update(body).digest("base64"),
+      },
+    });
   });
   const label = (bucket: string, institutionId: string) =>
     objects.set(
@@ -263,15 +315,31 @@ const s3Domain = (
   institutionId: string,
   bucket: string,
   overrides: Record<string, string> = {},
-) => ({
-  label,
-  institutionId,
-  endpoint: "https://s3.example.eu",
-  region: "eu-central-1",
-  bucket,
-  credentials: { accessKeyId: `id-${label}`, secretAccessKey: `secret-${label}` },
-  ...overrides,
-});
+) => {
+  const domain = {
+    label,
+    institutionId,
+    endpoint: "https://s3.example.eu",
+    region: "eu-central-1",
+    bucket,
+    ...overrides,
+  };
+  return {
+    ...domain,
+    credentials: new S3SecretCredentials({
+      accessKeyId: `id-${label}`,
+      secretAccessKey: `secret-${label}`,
+    }),
+    capability: {
+      provider: "fake-s3",
+      endpoint: domain.endpoint,
+      conditionalWrite: "verified" as const,
+      checksumEcho: "verified" as const,
+      verifiedOn: "2026-10-01",
+      contractTest: "unit/fake-s3",
+    },
+  };
+};
 
 describe("InstitutionRoutedPayloadStore.fromConfig", () => {
   it("stores one hash in two institutions as two new objects (P5)", async () => {
@@ -313,10 +381,7 @@ describe("InstitutionRoutedPayloadStore.fromConfig", () => {
       { fetch: s3.fetch, warn: vi.fn() },
     );
 
-    await expect(router.putImmutable(input(FAK_A))).resolves.toEqual({
-      status: "unavailable",
-      reason: "storage_signature_rejected",
-    });
+    await expect(router.putImmutable(input(FAK_A))).resolves.toEqual(UNAVAILABLE);
     expect(s3.calls).toEqual([
       { method: "GET", path: `/ductus-fak-a/${STORAGE_IDENTITY_KEY}` },
     ]);
@@ -330,11 +395,62 @@ describe("InstitutionRoutedPayloadStore.fromConfig", () => {
       { fetch: s3.fetch, warn: vi.fn() },
     );
 
-    await expect(router.putImmutable(input(FAK_A))).resolves.toEqual({
-      status: "unavailable",
-      reason: "storage_domain_identity_mismatch",
-    });
+    await expect(router.putImmutable(input(FAK_A))).resolves.toEqual(UNAVAILABLE);
     expect(s3.calls.map((c) => c.method)).toEqual(["GET"]);
+  });
+
+  it("keeps the secret out of every view of the router", async () => {
+    const s3 = fakeS3({ "ductus-fak-a": "eu-central-1" });
+    s3.label("ductus-fak-a", FAK_A);
+    const router = InstitutionRoutedPayloadStore.fromConfig(
+      { requestTimeoutMs: 1_000, domains: [s3Domain("fak-a-eu-1", FAK_A, "ductus-fak-a")] },
+      // Not the mock itself: it keeps every signed request, the router does not.
+      { fetch: (url, init) => s3.fetch(url, init), warn: () => undefined },
+    );
+    await expect(router.putImmutable(input(FAK_A))).resolves.toMatchObject({
+      status: "stored",
+    });
+
+    const deep = { depth: Infinity, showHidden: true, getters: true };
+    const views = [
+      JSON.stringify(router),
+      String(router),
+      inspect(router, deep),
+      inspect(router, { ...deep, customInspect: false }),
+      JSON.stringify(Object.entries(router)),
+    ].join("\n");
+    expect(views).not.toContain("secret-fak-a-eu-1");
+    expect(views).not.toContain("id-fak-a-eu-1");
+  });
+
+  it("refuses a domain without a confirmed capability, naming only the domain", () => {
+    const domain = s3Domain("fak-a-eu-1", FAK_A, "ductus-fak-a");
+    expect(() =>
+      InstitutionRoutedPayloadStore.fromConfig({
+        requestTimeoutMs: 1_000,
+        domains: [
+          {
+            ...domain,
+            capability: { ...domain.capability, endpoint: "https://other.example.eu" },
+          },
+        ],
+      }),
+    ).toThrow(/^storage domain fak-a-eu-1: S3 storage capability/);
+  });
+
+  it("refuses a loopback http endpoint unless the caller allows it", () => {
+    const domain = s3Domain("local-a", FAK_A, "ductus-fak-a", {
+      endpoint: "http://127.0.0.1:9100",
+    });
+    const config = { requestTimeoutMs: 1_000, domains: [domain] };
+    expect(() => InstitutionRoutedPayloadStore.fromConfig(config)).toThrow(
+      EvidenceStorageConfigError,
+    );
+    expect(() =>
+      InstitutionRoutedPayloadStore.fromConfig(config, {
+        allowPlainHttpOnLoopback: true,
+      }),
+    ).not.toThrow();
   });
 
   it.each<[string, Record<string, string>]>([

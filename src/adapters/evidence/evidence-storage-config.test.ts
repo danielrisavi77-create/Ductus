@@ -1,3 +1,5 @@
+import { inspect } from "node:util";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -5,6 +7,7 @@ import {
   EvidenceStorageConfigError,
   loadEvidenceStorageConfig,
 } from "./evidence-storage-config";
+import { S3SecretCredentials } from "./s3-signature";
 
 // Invented institutions and credentials; nothing here is a real secret.
 const FAK_A = "00000000-0000-4000-8000-00000000000a";
@@ -18,6 +21,14 @@ const credentialVars = (name: string) => ({
   secretAccessKeyVar: `EVIDENCE_S3_${name}_SECRET`,
 });
 
+const capability = {
+  provider: "fake-s3",
+  endpoint: "https://s3.example.eu",
+  conditionalWrite: "verified",
+  checksumEcho: "verified",
+  verifiedOn: "2026-10-01",
+  contractTest: "unit/fake-s3",
+};
 const domainA = {
   label: "fak-a-eu-1",
   institutionId: FAK_A,
@@ -25,6 +36,7 @@ const domainA = {
   region: "eu-central-1",
   bucket: "ductus-fak-a",
   ...credentialVars("FAK_A"),
+  capability,
 };
 const domainB = {
   ...domainA,
@@ -70,29 +82,71 @@ function refusal(env: Record<string, string | undefined>): Error {
   throw new Error("configuration was accepted");
 }
 
+/** The plain keys of a loaded domain, read the way only the adapter reads them. */
+const keysOf = (domain: { credentials: S3SecretCredentials }) =>
+  S3SecretCredentials.reveal(domain.credentials);
+
 describe("loadEvidenceStorageConfig", () => {
   it("loads one domain per institution with credentials from the named variables", () => {
-    expect(loadEvidenceStorageConfig(envWith(config([domainA, domainB])))).toEqual({
-      requestTimeoutMs: 5_000,
-      domains: [
-        {
-          label: "fak-a-eu-1",
-          institutionId: FAK_A,
-          endpoint: "https://s3.example.eu",
-          region: "eu-central-1",
-          bucket: "ductus-fak-a",
-          credentials: { accessKeyId: "key-a", secretAccessKey: SECRET_A },
-        },
-        {
-          label: "fak-b-eu-1",
-          institutionId: FAK_B,
-          endpoint: "https://s3.example.eu",
-          region: "eu-central-1",
-          bucket: "ductus-fak-b",
-          credentials: { accessKeyId: "key-b", secretAccessKey: SECRET_B },
-        },
-      ],
-    });
+    const loaded = loadEvidenceStorageConfig(envWith(config([domainA, domainB])));
+    expect(loaded.requestTimeoutMs).toBe(5_000);
+    expect(
+      loaded.domains.map(({ credentials, ...rest }) => ({
+        ...rest,
+        credentials: keysOf({ credentials }),
+      })),
+    ).toEqual([
+      {
+        label: "fak-a-eu-1",
+        institutionId: FAK_A,
+        endpoint: "https://s3.example.eu",
+        region: "eu-central-1",
+        bucket: "ductus-fak-a",
+        credentials: { accessKeyId: "key-a", secretAccessKey: SECRET_A },
+        capability,
+      },
+      {
+        label: "fak-b-eu-1",
+        institutionId: FAK_B,
+        endpoint: "https://s3.example.eu",
+        region: "eu-central-1",
+        bucket: "ductus-fak-b",
+        credentials: { accessKeyId: "key-b", secretAccessKey: SECRET_B },
+        capability,
+      },
+    ]);
+  });
+
+  it("holds the keys sealed, so no view of the configuration shows them", () => {
+    const loaded = loadEvidenceStorageConfig(envWith(config([domainA, domainB])));
+    for (const domain of loaded.domains) {
+      expect(domain.credentials).toBeInstanceOf(S3SecretCredentials);
+    }
+    const deep = { depth: Infinity, showHidden: true, getters: true };
+    const views = [
+      JSON.stringify(loaded),
+      inspect(loaded, deep),
+      inspect(loaded, { ...deep, customInspect: false }),
+      JSON.stringify(loaded.domains.map((d) => Object.entries(d))),
+      JSON.stringify(loaded.domains.map((d) => ({ ...d.credentials }))),
+    ].join("\n");
+    for (const value of [SECRET_A, SECRET_B, "key-a", "key-b"]) {
+      expect(views).not.toContain(value);
+    }
+  });
+
+  it.each([
+    ["a space inside", "secret a canary"],
+    ["a leading space", " secret-a-canary"],
+    ["a trailing space", "secret-a-canary "],
+    ["a tab", "secret-a\tcanary"],
+  ])("stops startup on a secret with %s, naming no value", (_, secret) => {
+    const env = envWith(config([domainA]), { EVIDENCE_S3_FAK_A_SECRET: secret });
+    const error = refusal(env);
+    expect(error.message).toBe(
+      `${EVIDENCE_STORAGE_DOMAINS}: domain fak-a-eu-1: credentials are not valid`,
+    );
+    expect(inspect(error, { depth: Infinity, showHidden: true })).not.toContain(secret.trim());
   });
 
   it.each<[string, Record<string, string | undefined>, RegExp]>([
@@ -102,6 +156,8 @@ describe("loadEvidenceStorageConfig", () => {
     ["a list at the top", envWith([domainA]), /must be an object/],
     ["no timeout", envWith({ domains: [domainA] }), /requestTimeoutMs is missing/],
     ["no domain list", envWith({ requestTimeoutMs: 5_000 }), /domains must be a list/],
+    ["a domain list that is text", envWith({ requestTimeoutMs: 5_000, domains: "fak-a" }), /domains must be a list/],
+    ["a domain list that is an object", envWith({ requestTimeoutMs: 5_000, domains: {} }), /domains must be a list/],
     ["an unknown top-level field", envWith(config([domainA], { fallbackBucket: "x" })), /unknown field/],
     ["an unknown domain field", envWith(config([{ ...domainA, default: true }])), /domain 0: unknown field/],
     ["a domain that is not an object", envWith(config(["fak-a"])), /domain 0 must be an object/],
@@ -109,6 +165,8 @@ describe("loadEvidenceStorageConfig", () => {
     ["an upper-case institution", envWith(config([{ ...domainA, institutionId: FAK_A.toUpperCase() }])), /not a lowercase UUID/],
     ["a missing bucket", envWith(config([{ ...domainA, bucket: "" }])), /bucket is missing/],
     ["a missing region", envWith(config([{ ...domainA, region: undefined }])), /region is missing/],
+    ["a missing capability", envWith(config([{ ...domainA, capability: undefined }])), /capability is missing/],
+    ["a capability that is not an object", envWith(config([{ ...domainA, capability: "verified" }])), /capability is missing/],
   ])("stops startup on %s", (_, env, message) => {
     expect(refusal(env).message).toMatch(message);
   });
@@ -190,8 +248,21 @@ describe("loadEvidenceStorageConfig", () => {
       expect(refusal(envWith(config(shared))).message).toMatch(/share one access key/);
       expect(
         loadEvidenceStorageConfig(envWith(config(shared, { sharedCredentials: "loopback-only" })))
-          .domains.map((d) => d.credentials.accessKeyId),
+          .domains.map((d) => keysOf(d).accessKeyId),
       ).toEqual(["key-a", "key-a"]);
+    });
+
+    it("refuses a shared key in production, even with every endpoint on loopback (P9)", () => {
+      const shared = [
+        { ...domainA, endpoint: "https://127.0.0.1:9001" },
+        { ...domainB, endpoint: "https://127.0.0.1:9002", accessKeyIdVar: domainA.accessKeyIdVar, secretAccessKeyVar: domainA.secretAccessKeyVar },
+      ];
+      const env = envWith(config(shared, { sharedCredentials: "loopback-only" }));
+
+      expect(loadEvidenceStorageConfig(env).domains).toHaveLength(2);
+      expect(refusal({ ...env, NODE_ENV: "production" }).message).toMatch(
+        /sharedCredentials is not allowed in production/,
+      );
     });
 
     it.each([

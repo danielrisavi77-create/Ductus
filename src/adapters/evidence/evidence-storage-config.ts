@@ -3,7 +3,8 @@ import {
   isStorageDomainLabel,
 } from "@/application/ports/evidence-object-key";
 
-import type { S3Credentials } from "./s3-signature";
+import type { S3StorageCapability } from "./s3-evidence-payload-store";
+import { S3SecretCredentials } from "./s3-signature";
 
 /**
  * One storage domain: one bucket of one institution in one region (BACKEND
@@ -19,7 +20,13 @@ export type EvidenceStorageDomain = {
   endpoint: string;
   region: string;
   bucket: string;
-  credentials: S3Credentials;
+  /** Sealed: no enumeration, JSON or inspection of the configuration shows a key. */
+  credentials: S3SecretCredentials;
+  /**
+   * The contract test confirmation for this domain's endpoint (#155). Checked
+   * in full by the adapter when the domain's store is built, at startup.
+   */
+  capability: S3StorageCapability;
 };
 
 export type EvidenceStorageConfig = {
@@ -48,6 +55,7 @@ const DOMAIN_FIELDS = new Set([
   "bucket",
   "accessKeyIdVar",
   "secretAccessKeyVar",
+  "capability",
 ]);
 
 function fail(message: string): never {
@@ -114,8 +122,10 @@ function endpointFrom(value: Record<string, unknown>, where: string): string {
  *
  * Every endpoint is https, or http only to loopback (S14). Two domains never
  * share an institution, a bucket name or an access key (P9).
- * Sharing a key is allowed only with `"sharedCredentials": "loopback-only"`
- * and only when every endpoint is on loopback, i.e. locally and in CI.
+ * Sharing a key is allowed only with `"sharedCredentials": "loopback-only"`,
+ * only when every endpoint is on loopback and never when NODE_ENV is
+ * `production`, as for plain http in the adapter: loopback alone may be a
+ * local proxy to real storage.
  */
 export function loadEvidenceStorageConfig(
   env: Env = process.env,
@@ -140,8 +150,14 @@ export function loadEvidenceStorageConfig(
   if (sharedCredentials !== undefined && sharedCredentials !== "loopback-only") {
     fail(`${where}: sharedCredentials may only be "loopback-only"`);
   }
+  if (sharedCredentials !== undefined && env.NODE_ENV === "production") {
+    fail(`${where}: sharedCredentials is not allowed in production`);
+  }
   if (!Array.isArray(domains)) fail(`${where}: domains must be a list`);
 
+  // Plain access key ids live only here, for the uniqueness check, and never
+  // leave this function; the configuration holds sealed keys.
+  const accessKeyIds = new Map<string, string>();
   const out: EvidenceStorageDomain[] = domains.map((entry: unknown, i) => {
     const at = `${where}: domain ${i}`;
     if (!isRecord(entry)) fail(`${at} must be an object`);
@@ -153,20 +169,33 @@ export function loadEvidenceStorageConfig(
     if (!isInstitutionId(institutionId)) {
       fail(`${named}: institutionId is not a lowercase UUID`);
     }
+    const endpoint = endpointFrom(entry, named);
+    const region = text(entry, "region", named);
+    const bucket = text(entry, "bucket", named);
+    const capability = entry.capability;
+    if (!isRecord(capability)) fail(`${named}: capability is missing`);
+    const accessKeyId = secretFrom(env, text(entry, "accessKeyIdVar", named), named);
+    const secretAccessKey = secretFrom(
+      env,
+      text(entry, "secretAccessKeyVar", named),
+      named,
+    );
+    let credentials: S3SecretCredentials;
+    try {
+      credentials = new S3SecretCredentials({ accessKeyId, secretAccessKey });
+    } catch {
+      // The sealing error names no value; this one names only the domain.
+      fail(`${named}: credentials are not valid`);
+    }
+    accessKeyIds.set(label, accessKeyId);
     return {
       label,
       institutionId,
-      endpoint: endpointFrom(entry, named),
-      region: text(entry, "region", named),
-      bucket: text(entry, "bucket", named),
-      credentials: {
-        accessKeyId: secretFrom(env, text(entry, "accessKeyIdVar", named), named),
-        secretAccessKey: secretFrom(
-          env,
-          text(entry, "secretAccessKeyVar", named),
-          named,
-        ),
-      },
+      endpoint,
+      region,
+      bucket,
+      credentials,
+      capability: { ...capability } as S3StorageCapability,
     };
   });
 
@@ -178,7 +207,7 @@ export function loadEvidenceStorageConfig(
       fail(`${where}: sharedCredentials is allowed only on loopback endpoints`);
     }
   } else {
-    unique(out, (d) => d.credentials.accessKeyId, "access key");
+    unique(out, (d) => accessKeyIds.get(d.label) ?? "", "access key");
   }
   return { requestTimeoutMs, domains: out };
 }

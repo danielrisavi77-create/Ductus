@@ -1,9 +1,12 @@
 import { randomBytes } from "node:crypto";
 
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { loadEvidenceStorageConfig } from "@/adapters/evidence/evidence-storage-config";
-import { InstitutionRoutedPayloadStore } from "@/adapters/evidence/institution-routed-payload-store";
+import {
+  InstitutionRoutedPayloadStore,
+  STORAGE_UNAVAILABLE,
+} from "@/adapters/evidence/institution-routed-payload-store";
 import { STORAGE_IDENTITY_KEY } from "@/adapters/evidence/s3-evidence-payload-store";
 import { sha256Hex, signS3Request } from "@/adapters/evidence/s3-signature";
 
@@ -50,10 +53,50 @@ async function rawPut(path: string[], body: Uint8Array<ArrayBuffer>) {
   return response.status;
 }
 
+/**
+ * Refuses any target but a loopback store before the first request: the
+ * shared local key and plain HTTP are allowed only there.
+ */
+function assertLocalTarget() {
+  const url = new URL(S3_ENDPOINT);
+  if (url.protocol !== "http:" || !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname)) {
+    throw new Error("S3_ENDPOINT must name the local store of compose.yaml");
+  }
+}
+
+// The local store as the contract test of this stack confirmed it.
+const capability = {
+  provider: "rustfs-local",
+  endpoint: S3_ENDPOINT,
+  conditionalWrite: "verified",
+  checksumEcho: "verified",
+  verifiedOn: "2026-10-11",
+  contractTest: "local-stack/s3-evidence-payload-store.integration",
+};
+
+async function rawGetStatus(path: string[]) {
+  const signed = signS3Request({
+    method: "GET",
+    endpoint: new URL(S3_ENDPOINT),
+    path,
+    headers: {},
+    body: new Uint8Array(),
+    region,
+    credentials,
+    now: new Date(),
+  });
+  const response = await fetch(signed.url, { headers: signed.headers, redirect: "error" });
+  await response.arrayBuffer();
+  return response.status;
+}
+
+/** Lets the macrotask the router writes its log line in run. */
+const logged = () => new Promise<void>((resolve) => setImmediate(resolve));
+
 const label = (institutionId: string) =>
   new TextEncoder().encode(JSON.stringify({ institutionId, region }));
 
-function routerFromEnv() {
+function routerFromEnv(warn: (message: string, fields: Record<string, string>) => void = () => undefined) {
   const domains = Object.entries(buckets).map(([institutionId, bucket]) => ({
     label: bucket.replace("ductus-domain-", "local-"),
     institutionId,
@@ -62,6 +105,7 @@ function routerFromEnv() {
     bucket,
     accessKeyIdVar: "EVIDENCE_S3_LOCAL_KEY_ID",
     secretAccessKeyVar: "EVIDENCE_S3_LOCAL_SECRET",
+    capability,
   }));
   const config = loadEvidenceStorageConfig({
     EVIDENCE_STORAGE_DOMAINS: JSON.stringify({
@@ -73,7 +117,8 @@ function routerFromEnv() {
     EVIDENCE_S3_LOCAL_SECRET: credentials.secretAccessKey,
   });
   return InstitutionRoutedPayloadStore.fromConfig(config, {
-    warn: () => undefined,
+    warn,
+    allowPlainHttpOnLoopback: true,
   });
 }
 
@@ -94,6 +139,7 @@ function segment(institutionId: string) {
 // an operator provisions. Creating a bucket is retried for a bounded time
 // because storage can answer before it accepts writes.
 beforeAll(async () => {
+  assertLocalTarget();
   for (const bucket of Object.values(buckets)) {
     let status = 0;
     for (let attempt = 0; attempt < 40; attempt += 1) {
@@ -137,17 +183,29 @@ describe("InstitutionRoutedPayloadStore against the local object store", () => {
     });
   });
 
-  it("writes nothing to a disabled domain (P3)", async () => {
-    await expect(routerFromEnv().putImmutable(segment(FAK_C))).resolves.toEqual({
+  it("writes nothing to a disabled domain and names the cause only in the log (P3)", async () => {
+    const warn = vi.fn();
+    const input = segment(FAK_C);
+    await expect(routerFromEnv(warn).putImmutable(input)).resolves.toEqual({
       status: "unavailable",
-      reason: "storage_domain_identity_mismatch",
+      reason: STORAGE_UNAVAILABLE,
     });
+    await logged();
+    expect(warn.mock.calls.map(([, fields]) => fields.reason)).toContain(
+      "storage_domain_identity_mismatch",
+    );
+    expect(await rawGetStatus([buckets[FAK_C], "v2", FAK_C, input.evidencePackageId, `${input.segmentHash}.json`])).toBe(404);
   });
 
   it("answers an institution without a domain as unavailable (P2)", async () => {
-    await expect(routerFromEnv().putImmutable(segment(FAK_D))).resolves.toEqual({
+    const warn = vi.fn();
+    await expect(routerFromEnv(warn).putImmutable(segment(FAK_D))).resolves.toEqual({
       status: "unavailable",
-      reason: "storage_domain_not_configured",
+      reason: STORAGE_UNAVAILABLE,
     });
+    await logged();
+    expect(warn.mock.calls.map(([, fields]) => fields.reason)).toEqual([
+      "storage_domain_not_configured",
+    ]);
   });
 });

@@ -1,9 +1,11 @@
 import { createHash, createHmac } from "node:crypto";
+import { inspect } from "node:util";
 
 import { describe, expect, it } from "vitest";
 
 import {
   assertS3SigningConfig,
+  S3SecretCredentials,
   sha256Hex,
   signS3Request,
   sigV4Authorization,
@@ -227,11 +229,14 @@ describe("signS3Request: input it refuses (plan S1 to S10)", () => {
     },
   );
 
-  it("refuses an empty secret (S10)", () => {
-    expect(() =>
-      assertS3SigningConfig("us-east-1", { ...credentials, secretAccessKey: "" }),
-    ).toThrow(TypeError);
-  });
+  it.each(["", " ", "\n", "a\nb", "ab\n", "a\tb", "a".repeat(129)])(
+    "refuses the secret %j (S10)",
+    (secretAccessKey) => {
+      expect(() =>
+        assertS3SigningConfig("us-east-1", { ...credentials, secretAccessKey }),
+      ).toThrow(TypeError);
+    },
+  );
 });
 
 describe("signS3Request: what it signs", () => {
@@ -310,5 +315,64 @@ describe("signS3Request: what it signs", () => {
     expect(text).not.toContain(secretAccessKey);
     expect(text).not.toContain(signingKey.toString("hex"));
     expect(text).not.toContain(signingKey.toString("base64"));
+  });
+});
+
+describe("reading the keys (QA qa233d)", () => {
+  // A key whose read throws an error that holds the secret: a getter and a
+  // Proxy, as a configuration loader might build them.
+  const secretAccessKey = ["kanarinac", "getter", Date.now().toString(36)].join("-");
+  const failing = () => {
+    throw new Error(`cannot read ${secretAccessKey}`, { cause: secretAccessKey });
+  };
+  const sources: [string, () => unknown][] = [
+    [
+      "a throwing getter",
+      () => ({
+        accessKeyId: "fake-id",
+        get secretAccessKey() {
+          return failing();
+        },
+      }),
+    ],
+    ["a Proxy whose get throws", () => new Proxy({}, { get: failing })],
+  ];
+  const views = (error: unknown) =>
+    [
+      String(error),
+      inspect(error, { depth: Infinity, showHidden: true }),
+      (error as Error).stack ?? "",
+      String((error as Error).cause ?? ""),
+    ].join("\n");
+
+  it.each(sources)("answers %s with a fixed error that names nothing it read", (_, source) => {
+    const attempts = [
+      () => new S3SecretCredentials(source() as never),
+      () => assertS3SigningConfig("us-east-1", source()),
+      () => sign({ credentials: source() as never }),
+    ];
+    for (const attempt of attempts) {
+      const error = thrown(attempt);
+      expect(error).toBeInstanceOf(TypeError);
+      expect((error as Error).message).toBe("S3 credentials are not valid");
+      expect((error as Error).cause).toBeUndefined();
+      expect(views(error)).not.toContain(secretAccessKey);
+      expect(views(error)).not.toContain("kanarinac");
+    }
+  });
+
+  it("signs with the key values it validated, reading each once", () => {
+    const reads = { accessKeyId: 0, secretAccessKey: 0 };
+    const shifting = {
+      get accessKeyId() {
+        return reads.accessKeyId++ === 0 ? credentials.accessKeyId : "other-id";
+      },
+      get secretAccessKey() {
+        return reads.secretAccessKey++ === 0 ? credentials.secretAccessKey : "other";
+      },
+    };
+
+    expect(sign({ credentials: shifting })).toEqual(sign());
+    expect(reads).toEqual({ accessKeyId: 1, secretAccessKey: 1 });
   });
 });

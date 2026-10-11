@@ -25,6 +25,7 @@ import {
   type EvidenceSegmentV2,
 } from "@/domain/forensics/evidence-segment-v2";
 import { sha256WebCrypto } from "@/domain/forensics/crypto";
+import { EDIT_STEP_FORMAT_V1 } from "@/domain/document/edit-step";
 import { MAX_EVIDENCE_SEGMENT_BYTES } from "@/domain/forensics/evidence-chain-v2";
 import { buildEvidenceIngestCommandV2 } from "./evidence-outbox";
 import { EvidenceGateway } from "./evidence-gateway";
@@ -103,18 +104,27 @@ class EditableRepository extends InMemoryEvidenceAcceptanceRepository {
   }
 }
 
+/** A closed v1 step that inserts `text` at the start of the first paragraph. */
+const insertText = (text: string): EvidenceSegmentV2["events"][number]["steps"][number] => ({
+  stepType: "replace",
+  from: 1,
+  to: 1,
+  slice: { content: [{ type: "text", text }] },
+});
+
 /** A canonical segment of exactly `bytes` UTF-8 bytes, mostly two-byte characters. */
 async function segmentOfSize(bytes: number): Promise<EvidenceSegmentV2> {
   const sized = (text: string): EvidenceSegmentV2 => {
     const value = segment();
-    value.events[0].steps = [{ stepType: "replace", from: 1, to: 1, text }];
+    value.events[0].steps = [insertText(text)];
     return value;
   };
+  // An insertion has at least one character: measure with one ASCII byte.
   const empty = (await buildEvidenceIngestCommandV2({
     evidencePackageId: "evidence-1",
     clientRequestId: "sizing",
-    segment: sized(""),
-  })).descriptor.payloadBytes;
+    segment: sized("a"),
+  })).descriptor.payloadBytes - 1;
   const room = bytes - empty;
   return sized("č".repeat(Math.floor(room / 2)) + "a".repeat(room % 2));
 }
@@ -152,7 +162,7 @@ function segment(input: {
       {
         sequence,
         source: "editor",
-        steps: [{ stepType: "replace", from: 1, to: 1 }],
+        steps: [insertText("A")],
         touchedNodeIds: ["p1"],
         beforeDocumentHash: before,
         afterDocumentHash: after,
@@ -160,7 +170,7 @@ function segment(input: {
     ],
     captureContext: {
       editorModel: "prosemirror",
-      transactionFormat: "prosemirror-step-json-v1",
+      transactionFormat: EDIT_STEP_FORMAT_V1,
     },
     evidenceProfileId: input.profile ?? "standard-v1",
   };
@@ -913,6 +923,19 @@ describe("EvidenceGateway", () => {
       s.payloadStore.get("evidence-1", cmd.descriptor.segmentHash)
         ?.canonicalPayload,
     ).toBe(planted);
+    expect(s.repository.records()).toHaveLength(0);
+    expect(s.signer.signCalls).toBe(0);
+  });
+
+  it("answers invalid and reserves and signs nothing when the store refuses the object as invalid", async () => {
+    const s = setup();
+    vi.spyOn(s.payloadStore, "putImmutable").mockResolvedValue({
+      status: "invalid",
+    });
+    const reserve = vi.spyOn(s.repository, "reserve");
+
+    expect(await ingest(s)).toEqual({ status: "invalid" });
+    expect(reserve).not.toHaveBeenCalled();
     expect(s.repository.records()).toHaveLength(0);
     expect(s.signer.signCalls).toBe(0);
   });

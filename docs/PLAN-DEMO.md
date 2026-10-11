@@ -21,7 +21,7 @@ Prema `PROGRAM.md`, na izmišljenom zadatku, lokalno u Dockeru, s lažnom prijav
 
 ## 2. Temelji demoa
 
-**Odlučeno:** D-07, D-10, D-11 i D-24 (potvrđeni u D-81), citatni stil kopiran iz Lekte (D-83), sučelje samo na hrvatskom s tekstovima u ključevima (D-84), izgled editora i nastavničkog sučelja po prototipu (D-85).
+**Odlučeno:** D-07, D-10, D-11 i D-24 (potvrđeni u D-81), citatni stil kopiran iz Lekte (D-83), sučelje samo na hrvatskom s tekstovima u ključevima (D-84; izravni hrvatski tekst izvan kataloga: odgođeno do engleskog, D-70 dopuna 11. 10. 2026.), izgled editora i nastavničkog sučelja po prototipu (D-85).
 
 **Gradi se iza sučelja, jer je promjena jeftina (status uz svaku stavku):** OIDC klijent `openid-client` (D-73 bira biblioteku na M1), red poslova pg-boss (D-74, potvrđeno 10. 10. 2026.), potpis razvojnim Ed25519 ključem umjesto KMS-a (D-71, potvrđeno 10. 10. 2026.), lokalni Postgres i S3-kompatibilna pohrana umjesto dobavljača (D-08). Ništa od toga ne veže demo uz dobavljača.
 
@@ -36,7 +36,7 @@ Prema `PROGRAM.md`, na izmišljenom zadatku, lokalno u Dockeru, s lažnom prijav
 | T3 | 19. do 25. 10. | Evidencija na poslužitelju s potpisanim potvrdama; nastavnik vidi stanje i komentira; obavijest S3 i upis kodom |
 | T4 | 26. 10. do 1. 11. | Predaja s rekonstrukcijom, sažetak procesa, E2E prolaz 1 do 5 zelen u CI-ju; proba u subotu 31. 10. |
 
-Na svakoj kontrolnoj točki orkestrator uspoređuje stanje s tablicom i, ako se kasni, primjenjuje rezove iz §5 i javlja Danielu.
+Na svakoj kontrolnoj točki orkestrator uspoređuje stanje s tablicom i, ako se kasni, primjenjuje rezove iz §5 i javlja Danielu. **Stanje 11. 10. 2026. (D-105; issue #87, komentar 6105201573):** zasad se ništa ne reže; rok srijeda 14. 10. za #206 je točka u kojoj orkestrator ponovno iznosi stanje, ne automatski rez. Već primijenjeno iz D-98 time nije promijenjeno.
 
 ## 4. Zadaci
 
@@ -65,11 +65,11 @@ Oznaka uloge: P Platforma, B Backend, F Frontend, K kratkotrajna sesija, D Danie
 | B-5 | Uloge baze (`ductus_migrator`, `ductus_app`, `ductus_worker`, `ductus_evidence`), sesije u bazi, `current_actor()`, `withActor` (BACKEND §3, §4.3) | P-4 | Tablica sesija s uključenim RLS-om i retkom u pgTAP matrici; pgTAP: `ductus_app` ne vidi tablicu sesija ni uz isključen `REVOKE`; test da GUC ne ostaje na vezi | T2 |
 | B-6 | Prijava preko lažnog OIDC-a: `openid-client`, PKCE, `state`, `nonce`, sesija u bazi, kolačić `__Host-`, odjava; test da produkcijska konfiguracija nema lažnog pružatelja | B-5, P-3 | Prijava i odjava rade; navedeni testovi zeleni | T2 |
 | B-7 | Model fakulteta za demo (dio M2): fakultet, kolegij, članstvo, upis kodom, zadatak i verzija zadatka, potvrda obavijesti; RLS i pgTAP matrica | B-5 | Matrica pristupa zelena za studenta, nastavnika i stranca (drugi kolegij) | T2 do T3 |
-| B-8 | Evidencija (dio M3): ruta `ingest`, odsječci (D-24), jedan RPC za CAS reviziju i `reserve`, hash lanac, spremanje u lokalnu S3 pohranu, idempotentno ponovno slanje | B-3, B-7 | Property testovi: izmjena, brisanje ili preslagivanje odsječka ruši provjeru; ponovno slanje ne duplicira; RPC izvodi identitet iz `current_actor()` i pgTAP dokazuje da `ductus_app` ne može dodati evidenciju s tuđim principalom; RLS i pgTAP retci za sve nove tablice evidencije; `ingest` odbija zahtjev s pogrešnim ili nedostajućim `Origin` i `Sec-Fetch-Site` (test) | T3 |
+| B-8 | Evidencija (dio M3): ruta `ingest`, odsječci (D-24), jedan RPC za CAS reviziju i `reserve`, hash lanac, spremanje u lokalnu S3 pohranu, idempotentno ponovno slanje | B-3, B-7, #240 (D-103) | Property testovi: izmjena, brisanje ili preslagivanje odsječka ruši provjeru; ponovno slanje ne duplicira; RPC izvodi identitet iz `current_actor()` i pgTAP dokazuje da `ductus_app` ne može dodati evidenciju s tuđim principalom; RLS i pgTAP retci za sve nove tablice evidencije; `ingest` odbija zahtjev s pogrešnim ili nedostajućim `Origin` i `Sec-Fetch-Site` (test); svaka nova tablica rada, dokumenta, evidencije i predaje nosi ključ ustanove, složeni strani ključ koji sprječava miješanje ustanova (kao u postojećem modelu ustanove), RLS vezan uz ustanovu i retke u pgTAP matrici s personama druge ustanove (D-103) | T3 |
 | B-9 | **Izlazi iz demoa (D-98 dopuna, 10. 10. 2026.; ide nakon demoa).** Worker: pg-boss, potpis potvrda razvojnim ključem, `attach_signature`; stanje `pending_signature` | B-4, B-8 | Potvrda potpisana po D-92 i prolazi ugovorni known-answer vektor iz BACKEND §4.1 (točni ulazni bajtovi, `D`, potpis testnim ključem), uključujući negativne slučajeve (potpis nad punim JCS-om, nad samim `D`, s drugim prefiksom ili nad izmijenjenim payloadom se odbija; v1 `pending_signature` ne potpisuje se v2 putem); pad workera ostavlja `pending_signature` i oporavlja se | T3 |
 | B-10 | Komentari uz odlomak: tablica, RPC, RLS, pgTAP | B-7 | Student vidi komentar na svom radu; stranac ne vidi ništa | T3 |
 | B-11 | Pogled nastavnika: spremljeno stanje rada s osvježavanjem po P-03 (polling, D-06); podaci za brz put (D-80): zadnja promjena, otvoreni zahtjevi, lijepljenja bez izvora, stanje izjave | B-8 | Nastavnik ne dobiva novo stanje češće od P-03; test | T3 do T4 |
-| B-12 | Predaja (dio M7): `requested_at` iz sata baze, rekonstrukcija (za demo u web procesu, od prvog događaja, bez tablice kontrolnih točaka; D-98 dopuna), JCS usporedba, nepodudarnost blokira predaju (D-11), praznina vidljiva, potpisana potvrda | B-4, B-8 (B-9 nakon demoa; D-98 dopuna) | Rekonstrukcija podudarna na scenarijima uključujući prazninu; nepodudarnost blokira | T4 |
+| B-12 | Predaja (dio M7): `requested_at` iz sata baze, rekonstrukcija (za demo u web procesu, od prvog događaja, bez tablice kontrolnih točaka; D-98 dopuna), JCS usporedba, nepodudarnost blokira predaju (D-11), praznina vidljiva, potpisana potvrda | B-4, B-8 (B-9 nakon demoa; D-98 dopuna) | Rekonstrukcija podudarna na scenarijima uključujući prazninu; nepodudarnost blokira; nove tablice predaje nose ključ ustanove (D-103) | T4 |
 | B-13 | Sažetak procesa: jedna funkcija za studenta i nastavnika (pravilo 5), sesije (P-01), lijepljenja (P-02), praznine, vrsta dokaza (D-44), stanje zapisa | B-8 | Test jednakosti studentskog i nastavničkog prikaza, uključujući API (D-80 točka 6) | T4 |
 | B-14 | Tanki prolaz kritičnog puta (D-98 t. 1, §7): `ingest` → rekonstrukcija → JCS usporedba, bez sučelja, baze i workera | B-3, B-4 | `ingest` jednog odsječka, rekonstrukcija i JCS usporedba prolaze od početka do kraja nad in-memory adapterima i razvojnim potpisnikom, kao automatski test u CI-ju | T2 (18. 10.) |
 
@@ -80,7 +80,7 @@ Oznaka uloge: P Platforma, B Backend, F Frontend, K kratkotrajna sesija, D Danie
 | F-1 | Plan prijenosa editora, journala i sinkronizacije (samo čitanje) | | Plan poslan orkestratoru | T1 |
 | F-2 | M0.3a prijenos `src/domain/sync`, `document`, `diff`, `serverSync` | P-1, F-1 | Isti broj testova kao u izvoru | T1 do T2 |
 | F-3 | M0.3b editor (Tiptap), journal (Dexie) i klijent sinkronizacije s testovima; adapteri prema Supabaseu zamijenjeni sučeljem | F-2 | Isti broj testova kao u izvoru | T2 |
-| F-4 | Ljuska aplikacije po odobrenom dizajnu: tokeni, raspored, navigacija, tekstovi u ključevima (hr) | P-1, D-2 | Snimke zaslona odgovaraju odobrenom dizajnu; axe bez kritičnih nalaza | T2 |
+| F-4 | Ljuska aplikacije po odobrenom dizajnu: tokeni, raspored, navigacija, tekstovi u ključevima (hr; D-84, uz dopunu D-70 od 11. 10. 2026.) | P-1, D-2 | Snimke zaslona odgovaraju odobrenom dizajnu; axe bez kritičnih nalaza | T2 |
 | F-5 | Ekran "demo prijava" i odjava; odjava s nesinkroniziranim promjenama blokirana uz poruku; journal prethodnog korisnika obrisan pri promjeni korisnika | B-6, F-4 | E2E: prijava, odjava, blokada | T2 do T3 |
 | F-6 | Nastavnik: stvaranje kolegija i zadatka s obaviješću S3 i popisom dopuštenih i zabranjenih uporaba iz FPZG čl. 8 | B-7, F-4 | E2E: nastavnik stvara zadatak | T3 |
 | F-7 | Student: upis kodom, prvi ekran zadatka (obavijest i čl. 8), potvrda; prije potvrde nema slanja evidencije | B-7, F-4 | E2E; test da prije potvrde ništa ne ide na poslužitelj | T3 |
@@ -104,7 +104,7 @@ Oznaka uloge: P Platforma, B Backend, F Frontend, K kratkotrajna sesija, D Danie
 
 ## 5. Rezovi ako se kasni
 
-Redoslijed je odobren (D-87). Primjenjuju se redom, tek na kontrolnoj točki, kad orkestrator utvrdi kašnjenje; Daniel dobiva obavijest uz svaki primijenjeni rez:
+Redoslijed je odobren (D-87). Primjenjuju se redom, tek na kontrolnoj točki, kad orkestrator utvrdi kašnjenje; Daniel dobiva obavijest uz svaki primijenjeni rez. **Stanje 11. 10. 2026. (D-105; issue #87, komentar 6105201573):** zasad se ništa ne reže; rok srijeda 14. 10. za #206 je točka u kojoj orkestrator ponovno iznosi stanje, ne automatski rez. Već primijenjeno iz D-98 time nije promijenjeno. Redoslijed rezova:
 
 1. Dvije izmišljene povijesti (K-3, dio za D-80 točku 3) prikazuju se kao unaprijed pripremljen primjer umjesto u živom prolazu.
 2. Brz put za nastavnika (F-11) ide nakon demoa; nastavnik vidi rad i sažetak kroz F-9 i F-10.
@@ -125,7 +125,7 @@ Detaljan plan faze nastaje tek kad je okidač ispunjen; do tada vrijedi tablica 
 | M4 Lekta paket | Odluka o licenci Lekte |
 | M5 do M7 ostatak | Demo spojen i Danielove primjedbe s probe; D-34 za izravne izmjene |
 | M10 Podaci | D-30 (rokovi čuvanja) od FPZG-a |
-| M11 GO uvjeti | D-08 potvrđen nakon B0.1 i B0.2; računi dobavljača |
+| M11 GO uvjeti | dio D-08 o dobavljačima i trošku potvrđen nakon B0.1 (i B0.2, odnos nije odlučen; vidi `STATE.md`); računi dobavljača |
 
 ## 7. Kritični put i rezerva [ODLUČENO D-98]
 

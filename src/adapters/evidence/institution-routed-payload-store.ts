@@ -11,17 +11,12 @@ import {
 import {
   S3EvidencePayloadStore,
   type S3EvidencePayloadStoreConfig,
+  type StorageIdentityResult,
 } from "./s3-evidence-payload-store";
 
 /** What the router needs from one domain's store. */
 export type DomainPayloadStore = EvidencePayloadStore & {
-  verifyIdentity(expected: {
-    institutionId: string;
-  }): Promise<
-    | { status: "verified" }
-    | { status: "mismatch" }
-    | { status: "unavailable"; reason: string }
-  >;
+  verifyIdentity(expected: { institutionId: string }): Promise<StorageIdentityResult>;
 };
 
 type Domain = {
@@ -34,10 +29,16 @@ type Domain = {
 
 type Unavailable = { status: "unavailable"; reason: string };
 
-const MISMATCH: Unavailable = {
+/**
+ * The one reason that leaves the router. Which domain is missing, refused
+ * its label or failed, and how, is for the operator log only: the caller's
+ * answer may reach the client.
+ */
+export const STORAGE_UNAVAILABLE = "storage_unavailable";
+const UNAVAILABLE: Unavailable = Object.freeze({
   status: "unavailable",
-  reason: "storage_domain_identity_mismatch",
-};
+  reason: STORAGE_UNAVAILABLE,
+});
 
 type Warn = (message: string, fields: Record<string, string>) => void;
 
@@ -83,7 +84,10 @@ export class InstitutionRoutedPayloadStore implements EvidencePayloadStore {
   /** One S3 store per configured domain; a bad value stops startup. */
   static fromConfig(
     config: EvidenceStorageConfig,
-    options: Pick<S3EvidencePayloadStoreConfig, "fetch" | "now" | "warn"> = {},
+    options: Pick<
+      S3EvidencePayloadStoreConfig,
+      "fetch" | "now" | "warn" | "allowPlainHttpOnLoopback"
+    > = {},
   ): InstitutionRoutedPayloadStore {
     return new InstitutionRoutedPayloadStore(
       config.domains.map((domain) => {
@@ -97,6 +101,7 @@ export class InstitutionRoutedPayloadStore implements EvidencePayloadStore {
               bucket: domain.bucket,
               storageDomain: domain.label,
               credentials: domain.credentials,
+              capability: domain.capability,
               requestTimeoutMs: config.requestTimeoutMs,
               ...options,
             }),
@@ -128,14 +133,44 @@ export class InstitutionRoutedPayloadStore implements EvidencePayloadStore {
     if (!isInstitutionId(input.institutionId)) return { status: "invalid" };
     const domain = this.domains.get(input.institutionId);
     if (domain === undefined) {
-      return { status: "unavailable", reason: "storage_domain_not_configured" };
+      this.log("evidence storage domain is not configured", {
+        institutionId: input.institutionId,
+        reason: "storage_domain_not_configured",
+      });
+      return UNAVAILABLE;
     }
     if (domain.state === "unverified") {
       const failed = await this.verify(domain);
-      if (failed !== null) return failed;
+      if (failed !== null) return UNAVAILABLE;
     }
-    if (domain.state === "disabled") return MISMATCH;
-    return domain.store.putImmutable(input);
+    if (domain.state === "disabled") return UNAVAILABLE;
+    let stored: EvidencePayloadPutResult;
+    try {
+      stored = await domain.store.putImmutable(input);
+    } catch {
+      stored = { status: "unavailable", reason: "storage_request_failed" };
+    }
+    if (stored.status !== "unavailable") return stored;
+    this.log("evidence storage domain is unavailable", {
+      storageDomain: domain.label,
+      reason: stored.reason,
+    });
+    return UNAVAILABLE;
+  }
+
+  /**
+   * Written in a later macrotask, like the adapter's log: a logger that
+   * throws, blocks or rejects can neither delay nor change the outcome.
+   */
+  private log(message: string, fields: Record<string, string>): void {
+    setImmediate(() => {
+      try {
+        const result: unknown = this.warn(message, fields);
+        void Promise.resolve(result).catch(() => undefined);
+      } catch {
+        // Dropped on purpose.
+      }
+    });
   }
 
   /** One identity read at a time per domain; null once it is verified. */
@@ -154,7 +189,7 @@ export class InstitutionRoutedPayloadStore implements EvidencePayloadStore {
         institutionId: domain.institutionId,
       });
     } catch {
-      return { status: "unavailable", reason: "storage_request_failed" };
+      result = { status: "unavailable", reason: "storage_request_failed" };
     }
     if (result.status === "verified") {
       domain.state = "verified";
@@ -162,12 +197,17 @@ export class InstitutionRoutedPayloadStore implements EvidencePayloadStore {
     }
     if (result.status === "mismatch") {
       domain.state = "disabled";
-      this.warn("evidence storage identity label does not match", {
+      this.log("evidence storage identity label does not match", {
         storageDomain: domain.label,
         institutionId: domain.institutionId,
+        reason: "storage_domain_identity_mismatch",
       });
-      return MISMATCH;
+      return UNAVAILABLE;
     }
-    return result;
+    this.log("evidence storage identity label could not be read", {
+      storageDomain: domain.label,
+      reason: result.reason,
+    });
+    return UNAVAILABLE;
   }
 }

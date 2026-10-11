@@ -8,6 +8,7 @@ import {
   type EvidenceIngestCommandV2,
 } from "./evidence-ingest";
 import { MAX_EVIDENCE_SEGMENT_BYTES } from "@/domain/forensics/evidence-chain-v2";
+import { loadGoldenVectors } from "@/domain/forensics/golden-vectors/load";
 import {
   EVIDENCE_CANONICALIZATION_V2,
   EVIDENCE_HASH_ALGORITHM_V2,
@@ -86,6 +87,52 @@ describe("evidence ingest v2 boundary", () => {
         },
       }),
     ).toBe(false);
+  });
+
+  it("counts the events of a range exactly, up to the largest safe integer", () => {
+    const { accepted, rejected } = loadGoldenVectors().sequenceRanges;
+    const withRange = (range: { sequenceFrom: number; sequenceTo: number; eventCount: number }) =>
+      isEvidenceSegmentDescriptorV2({
+        ...validCommand().descriptor,
+        sequenceFrom: range.sequenceFrom,
+        sequenceTo: range.sequenceTo,
+        eventCount: range.eventCount,
+      });
+    expect(accepted.length).toBeGreaterThanOrEqual(6);
+    for (const range of accepted) expect(withRange(range), range.name).toBe(true);
+    for (const range of rejected) expect(withRange(range), range.name).toBe(false);
+
+    // In a double, from + count - 1 rounds each of these back to the end of
+    // the range, so a check written that way takes them.
+    const rounding = rejected.filter((range) => range.name.startsWith("rounding"));
+    expect(rounding).toHaveLength(3);
+    for (const { sequenceFrom, sequenceTo, eventCount } of rounding) {
+      expect(sequenceFrom + eventCount - 1).toBe(sequenceTo);
+      expect(sequenceTo - sequenceFrom).not.toBe(eventCount - 1);
+    }
+  });
+
+  it("refuses a range of no event and one that ends before it starts, also where the count agrees with it", () => {
+    const { rejected } = loadGoldenVectors().sequenceRanges;
+    const refuses = (name: string) => {
+      const { sequenceFrom, sequenceTo, eventCount } = rejected.find((range) => range.name === name)!;
+      const range = { sequenceFrom, sequenceTo, eventCount };
+      expect(isEvidenceSegmentDescriptorV2({ ...validCommand().descriptor, ...range }), name).toBe(false);
+      return range;
+    };
+    expect(isEvidenceSegmentDescriptorV2(validCommand().descriptor)).toBe(true);
+    // to - from = count - 1 holds for these three, so it is not that equation
+    // which refuses them: a range holds an event and does not end before it starts.
+    for (const name of ["empty-range", "empty-range-above-one", "negative-count"]) {
+      const { sequenceFrom, sequenceTo, eventCount } = refuses(name);
+      expect(sequenceTo - sequenceFrom, name).toBe(eventCount - 1);
+      expect(eventCount, name).toBeLessThan(1);
+      expect(sequenceTo, name).toBeLessThan(sequenceFrom);
+    }
+    expect(refuses("empty-range-above-one")).toEqual({ sequenceFrom: 5, sequenceTo: 4, eventCount: 0 });
+    // Each of the two rules where the other one is kept.
+    expect(refuses("no-event-in-one-number")).toEqual({ sequenceFrom: 1, sequenceTo: 1, eventCount: 0 });
+    expect(refuses("end-before-start")).toEqual({ sequenceFrom: 2, sequenceTo: 1, eventCount: 1 });
   });
 
   it("accepts only whole UTC minutes as observed times (D-24)", () => {

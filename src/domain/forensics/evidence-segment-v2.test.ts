@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { EDIT_STEP_FORMAT_V1 } from "@/domain/document/edit-step";
+
 import { sha256WebCrypto } from "./crypto";
 import {
   canonicalEvidenceSegmentV2,
@@ -12,6 +14,7 @@ import {
   isEvidenceSegmentV2,
   type EvidenceSegmentV2,
 } from "./evidence-segment-v2";
+import { loadGoldenVectors } from "./golden-vectors/load";
 
 const A = "a".repeat(64);
 const B = "b".repeat(64);
@@ -52,7 +55,7 @@ function fixture(): EvidenceSegmentV2 {
     ],
     captureContext: {
       editorModel: "prosemirror",
-      transactionFormat: "prosemirror-step-json-v1",
+      transactionFormat: EDIT_STEP_FORMAT_V1,
     },
     evidenceProfileId: "standard-v1",
   };
@@ -62,19 +65,21 @@ describe("EvidenceSegmentV2", () => {
   it("has a stable independent canonical/hash vector", async () => {
     const segment = fixture();
     const canonical =
-      '{"canonicalization":"RFC8785-JCS","captureContext":{"editorModel":"prosemirror","transactionFormat":"prosemirror-step-json-v1"},"documentId":"doc-1","events":[{"afterDocumentHash":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","beforeDocumentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","sequence":1,"source":"editor","steps":[{"from":1,"slice":{"content":[{"text":"A","type":"text"}]},"stepType":"replace","to":1}],"touchedNodeIds":["p1"]}],"evidenceProfileId":"standard-v1","evidenceSchema":"ductus-evidence-segment-v2","finalDocumentHash":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","hashAlgorithm":"sha256","initialDocumentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","observedEndedAt":"2026-10-02T20:01:00.000Z","observedStartedAt":"2026-10-02T20:00:00.000Z","predecessorSegmentHash":null,"segmentId":"segment-1","sequenceFrom":1,"sequenceTo":1,"sessionId":"session-1"}';
+      '{"canonicalization":"RFC8785-JCS","captureContext":{"editorModel":"prosemirror","transactionFormat":"ductus-edit-steps-v1"},"documentId":"doc-1","events":[{"afterDocumentHash":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","beforeDocumentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","sequence":1,"source":"editor","steps":[{"from":1,"slice":{"content":[{"text":"A","type":"text"}]},"stepType":"replace","to":1}],"touchedNodeIds":["p1"]}],"evidenceProfileId":"standard-v1","evidenceSchema":"ductus-evidence-segment-v2","finalDocumentHash":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","hashAlgorithm":"sha256","initialDocumentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","observedEndedAt":"2026-10-02T20:01:00.000Z","observedStartedAt":"2026-10-02T20:00:00.000Z","predecessorSegmentHash":null,"segmentId":"segment-1","sequenceFrom":1,"sequenceTo":1,"sessionId":"session-1"}';
 
     expect(canonicalEvidenceSegmentV2(segment)).toBe(canonical);
     await expect(digestEvidenceSegmentV2(segment)).resolves.toEqual({
       canonical,
-      byteLength: 973,
-      sha256: "c548a1723a1b3ab6782ebf9d4c9083180653dd5b1a768599e0779052a902c957",
+      byteLength: 969,
+      sha256: "1153ad7c2f19bf82249d9809435989b8345d84e14093700755e19a07c19e0b2a",
     });
 
     // The vector this test pinned before the decision of 10 October 2026: the
-    // same segment with time on its event and seconds in its end. Its bytes
-    // are unchanged (same hash as then) and it is refused now.
+    // same segment with time on its event and seconds in its end, in the
+    // transaction format it then named. Its bytes are unchanged (same hash as
+    // then) and it is refused now.
     const former = canonical
+      .replace('"transactionFormat":"ductus-edit-steps-v1"', '"transactionFormat":"prosemirror-step-json-v1"')
       .replace('"sequence":1,', '"elapsedMs":500,"occurredAt":"2026-10-02T20:00:00.500Z","sequence":1,')
       .replace("T20:01:00.000Z", "T20:00:01.000Z");
     expect(await sha256WebCrypto(former)).toBe(
@@ -95,6 +100,57 @@ describe("EvidenceSegmentV2", () => {
     const wrongFinal = fixture();
     wrongFinal.finalDocumentHash = "c".repeat(64);
     expect(isEvidenceSegmentV2(wrongFinal)).toBe(false);
+  });
+
+  it("counts its events against its range exactly, up to the largest safe integer", () => {
+    const { accepted, rejected } = loadGoldenVectors().sequenceRanges;
+    const hash = (index: number) => index.toString(16).padStart(64, "0");
+    /** A segment with `eventCount` events numbered from `sequenceFrom`, as a client would number them. */
+    const withRange = (sequenceFrom: number, sequenceTo: number, eventCount: number): EvidenceSegmentV2 => ({
+      ...fixture(),
+      sequenceFrom,
+      sequenceTo,
+      initialDocumentHash: hash(0),
+      finalDocumentHash: hash(eventCount),
+      events: Array.from({ length: eventCount }, (_, index) => ({
+        ...fixture().events[0],
+        sequence: sequenceFrom + index,
+        beforeDocumentHash: hash(index),
+        afterDocumentHash: hash(index + 1),
+      })),
+    });
+    const small = (range: { eventCount: number }) => range.eventCount <= 8;
+    expect(accepted.filter(small).map((range) => range.name)).toEqual(
+      expect.arrayContaining(["largest-number-alone", "last-two-numbers"]),
+    );
+    for (const range of accepted.filter(small)) {
+      expect(isEvidenceSegmentV2(withRange(range.sequenceFrom, range.sequenceTo, range.eventCount)), range.name).toBe(
+        true,
+      );
+    }
+    const refusedNames = rejected.filter(small).map((range) => range.name);
+    expect(refusedNames).toEqual(
+      expect.arrayContaining([
+        "rounding-two-events-at-largest-number",
+        "rounding-three-events-in-last-two-numbers",
+        "end-above-safe-integer",
+        "empty-range",
+      ]),
+    );
+    for (const range of rejected.filter(small)) {
+      const segment = withRange(range.sequenceFrom, range.sequenceTo, range.eventCount);
+      expect(isEvidenceSegmentV2(segment), range.name).toBe(false);
+      // Nor with every event numbered by the end of the range instead.
+      for (const event of segment.events) event.sequence = range.sequenceTo;
+      expect(isEvidenceSegmentV2(segment), range.name).toBe(false);
+    }
+
+    // The two that a check written as from + length - 1 takes: the sum rounds
+    // to the end of the range, and the last event carries 2^53.
+    const two = withRange(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER, 2);
+    expect(two.sequenceFrom + two.events.length - 1).toBe(two.sequenceTo);
+    expect(two.events.map((event) => event.sequence)).toEqual([9007199254740991, 9007199254740992]);
+    expect(isEvidenceSegmentV2(two)).toBe(false);
   });
 
   it("orders events by sequence alone and refuses any time on an event", () => {
