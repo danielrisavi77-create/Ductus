@@ -1,4 +1,4 @@
-import { LocalDocumentProvider, LocalEditor, LocalStatus } from "@/components/editor/LocalDocument";
+import { LocalDocumentProvider, LocalEditor, LocalWordCount } from "@/components/editor/LocalDocument";
 import WorkspaceShell, { RailSection } from "@/components/shell/WorkspaceShell";
 import { wordsHr } from "@/lib/i18n/hr";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
@@ -53,7 +53,7 @@ export default function WorkspacePage() {
         </>
       }
       panel={<p className="rail-empty">{t.workspace.sidePanelEmpty}</p>}
-      status={scope ? <LocalStatus /> : <span>{wordsHr(0)}</span>}
+      status={scope ? <LocalWordCount /> : <span>{wordsHr(0)}</span>}
     >
       <div className="sheet-area">
         <article className="sheet">

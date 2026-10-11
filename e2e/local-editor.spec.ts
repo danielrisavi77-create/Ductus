@@ -7,15 +7,11 @@ import { expect, test, type Page } from "@playwright/test";
  * Only made-up text is typed or pasted.
  */
 
-const SAVED = "Spremljeno na uređaju";
-const EDITING = "Uređivanje";
-const ERROR = "Greška";
-const BLOCKED = "Dokument je otvoren u drugoj kartici.";
 const NODE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const editorOf = (page: Page) => page.getByRole("textbox", { name: "Tekst rada" });
-const chipOf = (page: Page) => page.locator(".sync-chip");
-const noticeOf = (page: Page) => page.locator(".editor-notice[role=alert]");
+/** The provider's phase; the notices that tell the author why are step 1b-2b. */
+const phaseOf = (page: Page) => page.locator(".editor-surface");
 
 async function openEditor(page: Page): Promise<void> {
   await page.goto("/rad");
@@ -82,10 +78,21 @@ async function shownAndStored(page: Page): Promise<{ shown: string[]; stored: st
       const store = db.transaction("snapshots", "readonly").objectStore("snapshots");
       const [row] = await request(store.getAll()) as { document: { nodes: { children: { text: string }[] }[] } }[];
       db.close();
-      return { shown, stored: row!.document.nodes.map((node) => node.children.map((c) => c.text).join("")) };
+      return { shown, stored: row ? row.document.nodes.map((node) => node.children.map((c) => c.text).join("")) : [] };
     }
-    throw new Error("no journal database");
+    return { shown, stored: [] };
   });
+}
+
+/**
+ * Waits until the journal stores exactly the text the editor shows. The save
+ * chip is step 1b-3, so this reads the journal itself, not what the UI claims.
+ */
+async function journalled(page: Page): Promise<void> {
+  await expect.poll(async () => {
+    const { shown, stored } = await shownAndStored(page);
+    return JSON.stringify(shown) === JSON.stringify(stored);
+  }).toBe(true);
 }
 
 async function axe(page: Page): Promise<void> {
@@ -96,117 +103,73 @@ async function axe(page: Page): Promise<void> {
 }
 
 test.describe("local editor (#197)", () => {
-  test("reload: saved text and word count come back, and the chip only says what is on the device", async ({ page }) => {
+  test("reload: saved text and word count come back", async ({ page }) => {
     await openEditor(page);
-    await expect(chipOf(page)).toHaveText(EDITING);
     await typeInto(page, "Prva rečenica izmišljenog rada.");
     await page.keyboard.press("Enter");
     await page.keyboard.type("Drugi odlomak.");
-    await expect(chipOf(page)).toHaveText(SAVED);
+    await journalled(page);
     await expect(page.getByText("6 riječi")).toBeVisible();
 
     await page.reload();
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
     await expect(editorOf(page).locator("p")).toHaveText(["Prva rečenica izmišljenog rada.", "Drugi odlomak."]);
-    await expect(chipOf(page)).toHaveText(SAVED);
+    await journalled(page);
     await expect(page.getByText("6 riječi")).toBeVisible();
   });
 
-  test("9: right after a keystroke the chip says editing, never saved", async ({ page }) => {
-    await openEditor(page);
-    await typeInto(page, "Spremljeno");
-    await expect(chipOf(page)).toHaveText(SAVED);
-    await page.keyboard.type(" još");
-    // The debounce has not run yet: the new text is not on the device.
-    await expect(chipOf(page)).toHaveText(EDITING);
-    await expect(chipOf(page)).toHaveText(SAVED);
-  });
-
   // A browser may end the page before the pagehide flush commits, so what is
-  // guaranteed is the text up to the last "Spremljeno na uređaju"; at most
-  // the debounce window after it can be lost, and never while claimed saved.
+  // guaranteed is the text up to the last save; at most the debounce window
+  // after it can be lost, and a commit is whole or absent, never a part.
   test("1: a reload right after typing keeps everything up to the last save", async ({ page }) => {
     await openEditor(page);
     await typeInto(page, "Spremljeni dio");
-    await expect(chipOf(page)).toHaveText(SAVED);
+    await journalled(page);
     await page.keyboard.type(" i zadnja misao");
-    await expect(chipOf(page)).toHaveText(EDITING);
     await page.reload();
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
     const text = await editorOf(page).innerText();
     expect(["Spremljeni dio", "Spremljeni dio i zadnja misao"]).toContain(text.trim());
-    await expect(chipOf(page)).toHaveText(SAVED);
+    // What is shown after the reload is the journal's text, nothing else.
+    expect((await shownAndStored(page)).stored).toEqual([text.trim()]);
   });
 
   test("4: a second tab is read-only and blocked, and takes over once the first closes", async ({ page, context }) => {
     await openEditor(page);
     await typeInto(page, "Tekst iz prve kartice");
-    await expect(chipOf(page)).toHaveText(SAVED);
+    await journalled(page);
 
     const second = await context.newPage();
     await second.goto("/rad");
-    await expect(chipOf(second)).toHaveText(BLOCKED);
-    await expect(second.getByText("Ova kartica ništa ne sprema dok je druga otvorena.", { exact: false })).toBeVisible();
+    await expect(phaseOf(second)).toHaveAttribute("data-phase", "blocked");
     await expect(editorOf(second)).toHaveAttribute("contenteditable", "false");
+    // Nothing is loaded before the lock: the blocked tab shows no text at all.
+    await expect(editorOf(second)).toHaveText("");
     await expect(editorOf(second)).toHaveAttribute("aria-readonly", "true");
     await axe(second);
 
     await typeInto(page, ", dopisan");
-    await expect(chipOf(page)).toHaveText(SAVED);
+    await journalled(page);
     await page.close();
 
     // The journal is read again, so the text written after the second tab opened is there.
     await expect(editorOf(second)).toHaveAttribute("contenteditable", "true");
     await expect(editorOf(second)).toHaveText("Tekst iz prve kartice, dopisan");
-    await expect(chipOf(second)).toHaveText(SAVED);
+    await expect(phaseOf(second)).toHaveAttribute("data-phase", "ready");
     await typeInto(second, " i nastavljen");
-    await expect(chipOf(second)).toHaveText(SAVED);
+    await journalled(second);
     await second.reload();
     await expect(editorOf(second)).toHaveText("Tekst iz prve kartice, dopisan i nastavljen");
   });
 
-  test("6: without IndexedDB the chip is an error and the editor stays read-only", async ({ page }) => {
+  test("6: without IndexedDB the editor stays read-only", async ({ page }) => {
     await page.addInitScript(() => {
       Object.defineProperty(window, "indexedDB", { value: undefined, configurable: true });
     });
     await page.goto("/rad");
-    await expect(chipOf(page)).toHaveText(ERROR);
-    await expect(noticeOf(page)).toHaveText(
-      "Spremanje na ovom uređaju nije dostupno. Izvezi tekst da ga ne izgubiš.",
-    );
+    await expect(phaseOf(page)).toHaveAttribute("data-phase", "unavailable");
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "false");
     await axe(page);
-  });
-
-  test("5: a full device is an error that stays while typing on, with an export", async ({ page }) => {
-    await page.addInitScript(() => {
-      const refuse = function (this: IDBObjectStore): IDBRequest {
-        throw new DOMException("Made-up full device", "QuotaExceededError");
-      };
-      (window as unknown as { __ductusFull: () => void }).__ductusFull = () => {
-        IDBObjectStore.prototype.put = refuse;
-        IDBObjectStore.prototype.add = refuse;
-      };
-    });
-    await openEditor(page);
-    await page.evaluate(() => (window as unknown as { __ductusFull: () => void }).__ductusFull());
-    await typeInto(page, "Tekst koji ne stane");
-    await expect(chipOf(page)).toHaveText(ERROR);
-    const alert = "Na uređaju nema dovoljno prostora, pa se promjene više ne spremaju. Izvezi tekst da ga ne izgubiš.";
-    await expect(noticeOf(page)).toHaveText(alert);
-
-    await page.keyboard.type(" i dalje");
-    await expect(noticeOf(page)).toHaveText(alert);
-    await expect(chipOf(page)).not.toHaveText(SAVED);
-    await axe(page);
-
-    const download = page.waitForEvent("download");
-    await page.getByRole("button", { name: "Izvezi tekst" }).click();
-    const file = await download;
-    expect(file.suggestedFilename()).toBe("ductus-rad.txt");
-    const path = await file.path();
-    const { readFile } = await import("node:fs/promises");
-    expect(await readFile(path, "utf8")).toBe("Tekst koji ne stane i dalje");
   });
 
   test("11: pasted rich HTML is reduced to the schema and gets fresh, unique ids", async ({ page }) => {
@@ -235,7 +198,7 @@ test.describe("local editor (#197)", () => {
         (target as unknown as { editor: { view: { pasteHTML(html: string): boolean } } }).editor.view.pasteHTML(html);
       }
     });
-    await expect(chipOf(page)).toHaveText(SAVED);
+    await journalled(page);
     expect(await page.evaluate(() => (window as unknown as { __pasted?: boolean }).__pasted)).toBeUndefined();
     await expect(editorOf(page).locator("script, img, table")).toHaveCount(0);
 
@@ -260,11 +223,9 @@ test.describe("local editor (#197)", () => {
     expect(reloaded).toEqual(ids);
   });
 
-  test("10: pasted NUL and a lone surrogate never leave the chip saying saved over other text", async ({ page }) => {
+  test("10: pasted NUL and a lone surrogate are shown as the journal stores them", async ({ page }) => {
     await openEditor(page);
     await editorOf(page).click();
-    // A fresh document is not saved yet, so the chip below can only be the paste's.
-    await expect(chipOf(page)).not.toHaveText(SAVED);
     await page.evaluate(() => {
       const text = "a\u0000b\uD800c";
       const data = new DataTransfer();
@@ -277,7 +238,7 @@ test.describe("local editor (#197)", () => {
         (target as unknown as { editor: { view: { pasteText(text: string): boolean } } }).editor.view.pasteText(text);
       }
     });
-    await expect(chipOf(page)).toHaveText(SAVED);
+    await journalled(page);
     const saved = await shownAndStored(page);
     expect(saved.shown).toEqual(["ab\uFFFDc"]);
     expect(saved.stored).toEqual(saved.shown);
@@ -290,7 +251,7 @@ test.describe("local editor (#197)", () => {
   test("14: axe finds nothing on the ready editor with saved text", async ({ page }) => {
     await openEditor(page);
     await typeInto(page, "Pristupačan izmišljeni tekst");
-    await expect(chipOf(page)).toHaveText(SAVED);
+    await journalled(page);
     await axe(page);
   });
 
@@ -301,7 +262,7 @@ test.describe("local editor (#197)", () => {
     await page.keyboard.type("Drugi odlomak, čćžšđ");
     await page.keyboard.press("Enter");
     await page.keyboard.type("Treći odlomak");
-    await expect(chipOf(page)).toHaveText(SAVED);
+    await journalled(page);
     const ids = await blockIds(page);
     expect(ids).toHaveLength(3);
     expect(await storedIds(page, null)).toEqual(ids);
@@ -309,7 +270,6 @@ test.describe("local editor (#197)", () => {
     for (let round = 0; round < 2; round++) {
       await page.reload();
       await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
-      await expect(chipOf(page)).toHaveText(SAVED);
       expect(await blockIds(page)).toEqual(ids);
     }
 
@@ -317,14 +277,50 @@ test.describe("local editor (#197)", () => {
     await page.keyboard.press("End");
     await page.keyboard.press("Enter");
     await page.keyboard.type("Četvrti odlomak");
-    await expect(chipOf(page)).toHaveText(SAVED);
+    await journalled(page);
     const grown = await blockIds(page);
     expect(grown.slice(0, 3)).toEqual(ids);
     expect(grown).toHaveLength(4);
     await page.reload();
-    await expect(chipOf(page)).toHaveText(SAVED);
+    await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
     expect(await blockIds(page)).toEqual(grown);
     expect(await storedIds(page, null)).toEqual(grown);
+  });
+
+  test("stored text the editor would change on entry is refused, never shown as loaded", async ({ page }) => {
+    await openEditor(page);
+    await typeInto(page, "Izmišljeni odlomak");
+    await journalled(page);
+    // A journal holding only a snapshot with a lone surrogate: valid to the
+    // saver, but the editor would show U+FFFD instead of what is stored.
+    await page.evaluate(async () => {
+      const request = <T>(r: IDBRequest<T>) => new Promise<T>((resolve, reject) => {
+        r.onsuccess = () => resolve(r.result);
+        r.onerror = () => reject(r.error);
+      });
+      for (const { name } of await indexedDB.databases()) {
+        const db = await request(indexedDB.open(name!));
+        if (!db.objectStoreNames.contains("snapshots")) {
+          db.close();
+          continue;
+        }
+        const tx = db.transaction(["snapshots", "pending"], "readwrite");
+        const snapshots = tx.objectStore("snapshots");
+        const [row] = await request(snapshots.getAll()) as { document: { nodes: { children: { text: string }[] }[] } }[];
+        row!.document.nodes[0]!.children[0]!.text = "a\uD800b";
+        await request(snapshots.put(row));
+        await request(tx.objectStore("pending").clear());
+        db.close();
+        return;
+      }
+      throw new Error("no journal database");
+    });
+
+    await page.reload();
+    await expect(phaseOf(page)).toHaveAttribute("data-phase", "recovery");
+    await expect(editorOf(page)).toHaveAttribute("contenteditable", "false");
+    await expect(editorOf(page)).toHaveText("");
+    expect((await shownAndStored(page)).stored).toEqual(["a\uD800b"]);
   });
 
   for (const repeat of ["same", "upper"] as const) {
@@ -333,15 +329,14 @@ test.describe("local editor (#197)", () => {
       await typeInto(page, "Prvi izmišljeni odlomak");
       await page.keyboard.press("Enter");
       await page.keyboard.type("Drugi izmišljeni odlomak");
-      await expect(chipOf(page)).toHaveText(SAVED);
+      await journalled(page);
       const tampered = await storedIds(page, repeat);
       expect(tampered[1]!.toLowerCase()).toBe(tampered[0]!.toLowerCase());
 
       await page.reload();
-      await expect(noticeOf(page)).toContainText("Lokalni zapis nije moguće pouzdano pročitati.");
+      await expect(phaseOf(page)).toHaveAttribute("data-phase", "recovery");
       await expect(editorOf(page)).toHaveAttribute("contenteditable", "false");
       await expect(editorOf(page)).toHaveAttribute("aria-readonly", "true");
-      await expect(chipOf(page)).not.toHaveText(SAVED);
       // No block shows the repeated id under a new one: nothing was loaded.
       expect(await blockIds(page)).not.toContain(tampered[1]);
       await editorOf(page).click({ force: true });
