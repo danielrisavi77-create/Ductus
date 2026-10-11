@@ -118,6 +118,8 @@ Provider-Fallback: chatgpt-codex-connector — kvota iscrpljena
 
 Razmak dolazi odmah iza imena pružatelja, bez zareza ili drugog znaka: gate čita prvu riječ doslovno, a 10. 10. 2026. odbio je PASS zbog zareza iza imena. Izvor oblika je `scripts/engineering/review-gate-core.mjs` (`fallbackSlug`), pa uz promjenu parsera vrijedi kod, a ne ova rečenica.
 
+Uputa za `critical` PR traži da svaki nalaz ima redak `Dohvatljivo kroz: <stvarni pozivatelj i okolina>` ili `Dohvatljivo kroz: nije pokazano`, a svaki manji nalaz oznaku „blokira” ili „ne blokira” (`docs/ENGINEERING_SYSTEM.md` §14).
+
 ## 4. Štednja tokena
 
 - **Rotacija sesije.** Svaki potez ponovno šalje cijeli kontekst sesije, pa je duga sesija skupa i kad radi malo. Uloga (Platforma, Backend, Frontend) nastavlja u istoj sesiji dok joj kontekst ne prijeđe oko 150.000 tokena; tada zapiše predaju u izvještaj, orkestrator je arhivira (sesiju u oblaku ili desktop aplikaciji arhivira Daniel) i otvara se svježa sesija iste uloge. Kratkotrajna sesija se arhivira čim joj je PR spojen. Iznimka je orkestrator: njegova sesija se ne zamjenjuje, nego osvježava sažimanjem po `docs/ORKESTRATOR.md` §7.
