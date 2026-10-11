@@ -2268,8 +2268,8 @@ describe("LocalDocumentSaver: an older read never applies over a newer one (#206
    * or by throwing when `fail` is set.
    */
   function holding(real: AtomicDexieJournal) {
-    let armed: { fail: boolean } | null = null;
-    let finish = (): void => {};
+    type Plan = { fail: boolean; finish: () => void };
+    let armed: Plan | null = null;
     let failNext = false;
     let calls = 0;
     const target = saver(patched(real, {
@@ -2281,7 +2281,7 @@ describe("LocalDocumentSaver: an older read never applies over a newer one (#206
         armed = null;
         const contents = await real.read(...args);
         return new Promise<Contents>((resolve, reject) => {
-          finish = () => (plan.fail ? reject(closed()) : resolve(contents));
+          plan.finish = () => (plan.fail ? reject(closed()) : resolve(contents));
         });
       },
     }));
@@ -2289,13 +2289,20 @@ describe("LocalDocumentSaver: an older read never applies over a newer one (#206
       target,
       calls: () => calls,
       failNext: () => { failNext = true; },
-      /** Starts a load whose read is held; resolves once the read has read. */
-      async hold(fail: boolean): Promise<{ load: Promise<LoadResult>; finish: () => void }> {
-        armed = { fail };
-        const load = target.load();
+      /**
+       * Starts a load, or the read `start` begins, whose read is held;
+       * resolves once the read has read.
+       */
+      async hold(
+        fail: boolean, start: () => Promise<LoadResult> = () => target.load(),
+      ): Promise<{ load: Promise<LoadResult>; finish: () => void }> {
+        // Each hold() finishes its own read, however many are held at once.
+        const plan: Plan = { fail, finish: () => {} };
+        armed = plan;
+        const load = start();
         while (armed) await new Promise((resolve) => setImmediate(resolve));
         await new Promise((resolve) => setImmediate(resolve));
-        return { load, finish: () => finish() };
+        return { load, finish: () => plan.finish() };
       },
     };
   }
@@ -2428,5 +2435,117 @@ describe("LocalDocumentSaver: an older read never applies over a newer one (#206
     const fresh = holding(real);
     expect(await fresh.target.load()).toEqual({ kind: "recovery", reason: "corrupt", document: null });
     expect(fresh.calls()).toBe(1);
+  });
+  // The tests below pin down guards a mutant could drop while every other
+  // test still passed (#206 qa206l MANJE 1 to 4, review 6108190306).
+  const tables = ["snapshots", "pending", "meta"] as const;
+  const dbOf = (real: AtomicDexieJournal) => (real as unknown as { db: Dexie }).db;
+  /** Every stored row, to put the journal back to this point later. */
+  async function capture(real: AtomicDexieJournal): Promise<unknown[][]> {
+    return Promise.all(tables.map((name) => dbOf(real).table(name).toArray()));
+  }
+  /** Puts the journal back to `rows` in one transaction: it went back. */
+  async function rollBack(real: AtomicDexieJournal, rows: unknown[][]): Promise<void> {
+    const db = dbOf(real);
+    await db.transaction("rw", [...tables], async () => {
+      for (const [i, name] of tables.entries()) {
+        await db.table(name).clear();
+        await db.table(name).bulkPut(rows[i]);
+      }
+    });
+  }
+
+  it("a stale recovery after the journal went back resumes with the sequence it read (#206 qa206l MANJE 1)", async () => {
+    const at = scope();
+    const { real, writer } = await ready(at);
+    const older = await capture(real);
+    await type(writer, "drugo");
+    const h = holding(real);
+    expect((await h.target.load()).kind).toBe("ready");
+    await rollBack(real, older);
+    expect(await h.target.load()).toEqual({ kind: "recovery", reason: "stale", document: text("staro") });
+    // The next write must expect the sequence the journal holds now, not the
+    // highest one this saver ever saw.
+    expect((await h.target.resume(text("izbor"))).kind).toBe("ready");
+    await h.target.settled();
+    expect((await rows(at)).at(-1)).toEqual(text("izbor"));
+    expect(h.target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+  });
+
+  it("a journal that went back is read twice by every later load(), not once (#206 qa206l MANJE 4)", async () => {
+    const at = scope();
+    const { real, writer } = await ready(at);
+    const older = await capture(real);
+    await type(writer, "drugo");
+    const h = holding(real);
+    expect((await h.target.load()).kind).toBe("ready");
+    await rollBack(real, older);
+    // The highest sequence seen is kept, so each load() finds the journal
+    // behind it and checks once more before it shows the older text.
+    const reads: number[] = [];
+    for (let i = 0; i < 3; i += 1) {
+      const before = h.calls();
+      expect(await h.target.load()).toEqual({ kind: "recovery", reason: "stale", document: text("staro") });
+      reads.push(h.calls() - before);
+    }
+    expect(reads).toEqual([2, 2, 2]);
+  });
+
+  it("a damaged meta put back is read once per load(): a refused read never raises the floor", async () => {
+    const at = scope();
+    const { real } = await ready(at);
+    const h = holding(real);
+    expect((await h.target.load()).kind).toBe("ready");
+    await dbOf(real).table("meta").update(DOC, { localSeq: 999 });
+    expect(await h.target.load()).toEqual({ kind: "recovery", reason: "corrupt", document: null });
+    await dbOf(real).table("meta").update(DOC, { localSeq: 1 });
+    for (let i = 0; i < 3; i += 1) {
+      const before = h.calls();
+      const loaded = await h.target.load();
+      expect(loaded.kind === "ready" && documentsEqual(loaded.document, text("staro"))).toBe(true);
+      expect(h.calls() - before).toBe(1);
+    }
+  });
+
+  it("resume() overtaken by a later stale load() still writes the chosen text (#206 qa206l MANJE 2)", async () => {
+    const at = scope();
+    const { real, writer } = await ready(at);
+    const h = holding(real);
+    expect((await h.target.load()).kind).toBe("ready");
+    await type(writer, "novo");
+    await type(h.target, "moje");
+    const stale = { kind: "recovery", reason: "stale", document: text("novo") };
+    expect(await h.target.load()).toEqual(stale);
+    const resumed = await h.hold(false, () => h.target.resume(text("izbor")));
+    // Started later, this load() is applied first; the overtaken resume()
+    // reads again with the text the author chose from, so it is not stale.
+    expect(await h.target.load()).toEqual(stale);
+    resumed.finish();
+    expect(await resumed.load).toEqual({ kind: "ready", document: text("novo") });
+    await h.target.settled();
+    expect((await rows(at)).at(-1)).toEqual(text("izbor"));
+    expect(h.target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+  });
+
+  it("(b) an older read that throws never lets a middle read apply over a newer corrupt (#206 qa206l MANJE 3)", async () => {
+    const at = scope();
+    const { real, writer } = await ready(at);
+    const h = holding(real);
+    expect((await h.target.load()).kind).toBe("ready");
+    const first = await h.hold(true);
+    const middle = await h.hold(false);
+    await type(writer, "novo");
+    await dbOf(real).table("meta").update(DOC, { localSeq: 999 });
+    const corrupt = { kind: "recovery", reason: "corrupt", document: null };
+    expect(await h.target.load()).toEqual(corrupt);
+    first.finish();
+    expect(await first.load).toEqual({ kind: "unavailable" });
+    // The throw keeps the newest applied read, so the middle read, which read
+    // "staro", is behind it and reads the damage again.
+    middle.finish();
+    expect(await middle.load).toEqual(corrupt);
+    await h.target.settled();
+    expect(h.target.snapshot()).toMatchObject({ state: "RECOVERY_REQUIRED", failure: "corrupt" });
+    expect((await rows(at)).at(-1)).toEqual(text("novo"));
   });
 });
