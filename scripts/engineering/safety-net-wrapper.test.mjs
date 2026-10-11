@@ -583,27 +583,105 @@ test("review: the real package never lets a changed linked policy through behind
       const base = run(tree, "Bash", "ls", undefined, env);
       assert.equal(base.code, 0, `baseline: ${base.stderr}`);
       const policy = path.join(userDir, "policy.json");
+      // A policy that really switches a built-in protection off (checked against the package).
+      const weakening = '{"version":1,"destructive_command_protection":{"enabled":false}}';
+      let linked = true;
       const linkPolicy = () => {
         try {
           fs.symlinkSync(target, policy, "file");
         } catch {
           // Creating file links needs a privilege on Windows; CI (Linux) must have it.
           assert.ok(!IN_CI, "symlinks must be available in CI");
+          linked = false;
           fs.writeFileSync(policy, fs.readFileSync(target));
         }
       };
+      // Writes the "target"; without a working link the policy file itself is written too.
+      const setTarget = (content) => {
+        fs.writeFileSync(target, content);
+        if (!linked) fs.writeFileSync(policy, content);
+      };
       for (const [label, change] of [
         ["policy link added", linkPolicy],
-        ["policy target garbage", () => fs.writeFileSync(target, "{ not json")],
-        ["policy target emptied", () => fs.writeFileSync(target, "")],
-        ["policy target changed", () => fs.writeFileSync(target, '{"changed":true}')],
-        ["policy target removed", () => fs.rmSync(target)],
+        ["policy target garbage", () => setTarget("{ not json")],
+        ["policy target emptied", () => setTarget("")],
+        ["policy target changed", () => setTarget('{"changed":true}')],
+        ["policy target removed", () => { fs.rmSync(target); if (!linked) fs.rmSync(policy, { force: true }); }],
       ]) {
         change();
         for (const command of ["git add -A", "git push --force origin x", "git commit --no-verify -m x"]) {
           const result = run(tree, "Bash", command, undefined, env);
           assert.ok(safe(result), `${label}: ${command} -> ${result.code} ${result.stdout}`);
         }
+      }
+      // The case that matters: a good verdict is remembered for a harmless linked
+      // policy, then its target is swapped for one that really switches a built-in
+      // protection off. The package alone would then let the force push through.
+      setTarget('{"version":1}');
+      const ok = run(tree, "Bash", "ls", undefined, env);
+      assert.equal(ok.code, 0, `harmless linked policy: ${ok.stderr}`);
+      assert.equal(run(tree, "Bash", "ls", undefined, env).code, 0);
+      setTarget(weakening);
+      const swapped = run(tree, "Bash", "git push --force origin x", undefined, env);
+      assert.equal(swapped.code, 2, `weakening policy behind the link: ${swapped.stdout}`);
+      assert.equal(swapped.stdout, "");
+      // And the package really does let it through on its own with that policy.
+      const direct = spawnSync(process.execPath, [path.join(tree.root, "node_modules", "cc-safety-net", "dist", "bin", "cc-safety-net.js"), "hook", "--coding-cli"], {
+        input: event("Bash", "git push --force origin x", tree.root),
+        encoding: "utf8",
+        env,
+        cwd: tree.root,
+      });
+      assert.doesNotMatch(direct.stdout, /deny/, "the weakening policy does weaken the package");
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  });
+});
+
+test("review: a configuration too large or too slow to read is refused within the budget, never let through", { timeout: 120000 }, () => {
+  withTree({ bin: "allow" }, (tree) => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-limit-"));
+    try {
+      const config = path.join(home, ".cc-safety-net");
+      const many = path.join(home, "many");
+      const big = path.join(home, "big");
+      fs.mkdirSync(config, { recursive: true });
+      fs.mkdirSync(many);
+      fs.mkdirSync(big);
+      for (let i = 0; i < 30; i++) fs.writeFileSync(path.join(many, `f${i}.json`), "{}");
+      fs.writeFileSync(path.join(big, "huge.bin"), Buffer.alloc(2 * 1024 * 1024));
+      const env = { ...process.env, HOME: home, USERPROFILE: home };
+      const linkDir = (target, name) => fs.symlinkSync(target, path.join(config, name), process.platform === "win32" ? "junction" : "dir");
+      const probes = () => (fs.readFileSync(tree.calls, "utf8").match(/p/g) ?? []).length;
+      const refused = (limits, label) => {
+        const before = probes();
+        const started = Date.now();
+        const result = decide({ root: tree.root, input: event("Bash", "ls"), env, limits });
+        assert.equal(result.code, 2, `${label}: ${result.stdout}`);
+        assert.equal(result.stdout, "", label);
+        assert.match(result.stderr, /too large or too slow/, label);
+        assert.ok(Date.now() - started < 4000, `${label}: answered within the budget`);
+        // The refusal comes before any probe: nothing was asked of the package for it.
+        assert.equal(probes(), before, label);
+      };
+      assert.equal(run(tree, "Bash", "ls", undefined, env).code, 0, "baseline under the default limits");
+      linkDir(many, "many");
+      refused({ maxEntries: 20 }, "many entries behind a link");
+      assert.equal(run(tree, "Bash", "ls", undefined, env).code, 0, "within the default limits it still works");
+      fs.rmSync(path.join(config, "many"), { recursive: true, force: true });
+      linkDir(big, "big");
+      refused({ maxBytes: 1024 * 1024 }, "a big file behind a link");
+      assert.equal(run(tree, "Bash", "ls", undefined, env).code, 0, "within the default limits it still works (2 MiB)");
+      refused({ maxMs: -1 }, "time budget");
+      // A big file linked directly (needs a privilege on Windows; CI must have it).
+      fs.rmSync(path.join(config, "big"), { recursive: true, force: true });
+      try {
+        fs.symlinkSync(path.join(big, "huge.bin"), path.join(config, "huge.bin"), "file");
+        refused({ maxBytes: 1024 * 1024 }, "a big file linked directly");
+      } catch (error) {
+        if (error?.code !== "EPERM") throw error;
+        assert.ok(!IN_CI, "symlinks must be available in CI");
       }
     } finally {
       fs.rmSync(home, { recursive: true, force: true });

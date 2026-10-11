@@ -75,32 +75,50 @@ const fingerprint = (file) => {
 };
 
 // Content hash of a whole directory tree (names, kinds, file contents, link
-// targets). `skip` lists relative paths left out. Throws when the tree is
-// unreasonably large, which makes the caller refuse to remember a verdict.
-const MAX_ENTRIES = 5000;
-export function treeDigest(dir, skip = []) {
+// targets). `skip` lists relative paths left out. The walk is bounded by entry
+// count, bytes read and time, shared through `budget`: the first overrun throws
+// a LimitError, so a link to a huge directory or file is refused quickly instead
+// of being read to the end. A caller that gets the error must block.
+export const DEFAULT_LIMITS = { maxEntries: 5000, maxBytes: 8 * 1024 * 1024, maxMs: 1500 };
+export class LimitError extends Error {}
+export const newBudget = (limits = DEFAULT_LIMITS) => ({ ...DEFAULT_LIMITS, ...limits, entries: 0, bytes: 0, deadline: Date.now() + (limits.maxMs ?? DEFAULT_LIMITS.maxMs) });
+
+export function treeDigest(dir, skip = [], budget = newBudget()) {
   try {
     fs.lstatSync(dir);
   } catch {
     return "absent";
   }
+  const check = () => {
+    if (++budget.entries > budget.maxEntries) throw new LimitError(`more than ${budget.maxEntries} entries`);
+    if (Date.now() > budget.deadline) throw new LimitError(`more than ${budget.maxMs} ms`);
+  };
   const hash = createHash("sha256");
-  let count = 0;
   const seen = new Set();
   const walk = (current, rel) => {
-    let entries;
+    const entries = [];
     try {
-      entries = fs.readdirSync(current, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1));
-    } catch {
+      const handle = fs.opendirSync(current);
+      try {
+        for (let entry = handle.readSync(); entry; entry = handle.readSync()) {
+          check();
+          entries.push(entry);
+        }
+      } finally {
+        handle.closeSync();
+      }
+    } catch (error) {
+      if (error instanceof LimitError) throw error;
       hash.update(`unreadable:${rel}\n`);
       return;
     }
+    entries.sort((a, b) => (a.name < b.name ? -1 : 1));
     for (const entry of entries) {
       const name = rel ? `${rel}/${entry.name}` : entry.name;
       if (skip.includes(name)) continue;
-      if (++count > MAX_ENTRIES) throw new Error("too many entries");
       const full = path.join(current, entry.name);
       let kind = entry.isDirectory() ? "d" : entry.isFile() ? "f" : "o";
+      let size = 0;
       if (entry.isSymbolicLink()) {
         // The package follows links in the user configuration, so what a link
         // points to counts, not only where it points.
@@ -114,6 +132,7 @@ export function treeDigest(dir, skip = []) {
         try {
           const stat = fs.statSync(full);
           kind = stat.isDirectory() ? "d" : stat.isFile() ? "f" : "o";
+          size = stat.size;
           if (kind === "d") {
             const real = fs.realpathSync(full);
             if (seen.has(real)) continue;
@@ -128,6 +147,15 @@ export function treeDigest(dir, skip = []) {
         hash.update(`d:${name}\n`);
         walk(full, name);
       } else if (kind === "f") {
+        if (!size) {
+          try {
+            size = fs.statSync(full).size;
+          } catch {
+            size = 0;
+          }
+        }
+        budget.bytes += size;
+        if (budget.bytes > budget.maxBytes) throw new LimitError(`more than ${budget.maxBytes} bytes`);
         hash.update(`f:${name}:`);
         try {
           hash.update(fs.readFileSync(full));
@@ -219,22 +247,20 @@ export function userConfigDirs(root, env) {
 }
 const envNames = (env) => [...new Set([...ENV_NAMES, ...Object.keys(env).filter((name) => name.startsWith("CC_SAFETY_NET_") || name.startsWith("SAFETY_NET_"))])].sort();
 
-// Returns the key, or null when the state cannot be described reliably.
-function stateKey(root, rulebookDir, env) {
-  try {
-    const bin = path.join(root, "node_modules", "cc-safety-net", "dist", "bin");
-    const parts = [
-      rulebookDir,
-      fingerprint(path.join(bin, "cc-safety-net.js")),
-      fingerprint(path.join(bin, "hook.js")),
-      `project:${treeDigest(path.join(rulebookDir, PROJECT_CONFIG))}`,
-      ...userConfigDirs(root, env).map((dir) => `user:${dir}:${treeDigest(dir, USER_SKIP)}`),
-      ...envNames(env).map((name) => `env:${name}=${env[name] ?? "<unset>"}`),
-    ];
-    return createHash("sha256").update(parts.join("|")).digest("hex");
-  } catch {
-    return null;
-  }
+// The key of the state, or a LimitError when the configuration is too large or
+// too slow to describe within the limits (the caller then blocks).
+function stateKey(root, rulebookDir, env, limits) {
+  const bin = path.join(root, "node_modules", "cc-safety-net", "dist", "bin");
+  const budget = newBudget(limits);
+  const parts = [
+    rulebookDir,
+    fingerprint(path.join(bin, "cc-safety-net.js")),
+    fingerprint(path.join(bin, "hook.js")),
+    `project:${treeDigest(path.join(rulebookDir, PROJECT_CONFIG), [], budget)}`,
+    ...userConfigDirs(root, env).map((dir) => `user:${dir}:${treeDigest(dir, USER_SKIP, budget)}`),
+    ...envNames(env).map((name) => `env:${name}=${env[name] ?? "<unset>"}`),
+  ];
+  return createHash("sha256").update(parts.join("|")).digest("hex");
 }
 
 // Remembered verdicts live in a directory private to the current user; one that
@@ -282,13 +308,23 @@ function runPackage(root, input, timeout, env) {
 // probe asks it about commands it must deny, run in the directory whose
 // rulebook applies. The verdict is remembered per state key, so the extra runs
 // happen once per state.
-function probe(root, rulebookDir, deadline, env) {
-  const key = stateKey(root, rulebookDir, env);
-  const dir = key ? markDir() : null;
-  if (key && dir && hasVerdict(dir, key)) return null;
+const failure = (problem, hint) => ({ problem, hint });
+function probe(root, rulebookDir, deadline, env, limits) {
+  let key;
+  try {
+    key = stateKey(root, rulebookDir, env, limits);
+  } catch (error) {
+    if (!(error instanceof LimitError)) throw error;
+    return failure(
+      `the safety check cannot verify the configuration it depends on: .cc-safety-net under ${rulebookDir} or the user's .cc-safety-net is too large or too slow to read (${error.message}), for example a link to a big directory or file`,
+      "Remove or shrink what the links in those directories point to, then retry",
+    );
+  }
+  const dir = markDir();
+  if (dir && hasVerdict(dir, key)) return null;
   for (const command of PROBES) {
     const left = deadline - Date.now();
-    if (left <= 0) return "the control probe ran out of time";
+    if (left <= 0) return failure("the control probe ran out of time");
     const event = JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", cwd: rulebookDir, tool_input: { command } });
     const run = runPackage(root, event, left, env);
     let decision;
@@ -298,10 +334,10 @@ function probe(root, rulebookDir, deadline, env) {
       decision = undefined;
     }
     if (!(run.status === 0 && decision === "deny") && run.status !== 2) {
-      return `the control probe "${command}" was not denied (silent or stubbed package, or the project rulebook ${RULEBOOK.join("/")} in ${rulebookDir} is invalid)`;
+      return failure(`the control probe "${command}" was not denied (silent or stubbed package, or the project rulebook ${RULEBOOK.join("/")} in ${rulebookDir} is invalid)`);
     }
   }
-  if (key && dir) {
+  if (dir) {
     try {
       fs.writeFileSync(path.join(dir, key), key, { mode: 0o600 });
     } catch {
@@ -360,7 +396,7 @@ const denies = (stdout) => {
 };
 
 // Pure decision: { code, stdout, stderr }. `input` is the raw hook stdin.
-export function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS_TIMEOUT_MS, env = process.env }) {
+export function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS_TIMEOUT_MS, env = process.env, limits }) {
   const deadline = Date.now() + timeoutMs;
   const command = commandOf(input);
   // The exact install command is the way out of an unusable package.
@@ -392,8 +428,8 @@ export function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS_TIMEO
   }
   // Any clean answer is checked once per state, not only a silent one: a stub
   // that prints "{}" or an allow decision is as useless as one that prints nothing.
-  const probeProblem = probe(root, rulebookDir, deadline, env);
-  if (probeProblem) return unusable(probeProblem);
+  const refused = probe(root, rulebookDir, deadline, env, limits);
+  if (refused) return unusable(refused.problem, refused.hint);
 
   // Run 2: in a subdirectory the project rules live in a parent the package does not search.
   if (rulebookDir !== cwd && !denies(first.stdout)) {
