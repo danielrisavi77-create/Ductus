@@ -14,7 +14,7 @@ Kako izgleda jedan zahtjev kojim klijent sprema tekst i predaje zapis o pisanju,
 
 ## 2. Provjerene činjenice
 
-Svaka tvrdnja iz nalaza provjerena je čitanjem koda. Ništa nije pokrenuto (vidi §9).
+Svaka tvrdnja iz nalaza provjerena je čitanjem koda, ne ciljanim pokretanjem (vidi §9).
 
 | # | Tvrdnja | Stoji? | Dokaz |
 | --- | --- | --- | --- |
@@ -186,7 +186,7 @@ Za Product/UX, ne za vlasnika: zatvoreni popis uzroka praznine i tekst koji uz p
 
 ## 9. Što nisam mogao provjeriti
 
-- **Ništa nije pokrenuto.** Radno stablo nema instalirane ovisnosti; sve tvrdnje dolaze iz čitanja koda i dokumenata.
+- **Nijedna tvrdnja nije provjerena ciljanim pokretanjem.** Sve dolaze iz čitanja koda i dokumenata. Postojeći jedinični i property testovi prošli su pri slanju ove grane, uključujući test naveden u retku 7; to potvrđuje samo da kod radi kako je pročitan.
 - **Veličine.** Brojke iz B0.2 mjerene su na zamjenskoj shemi, bez ID-ova čvorova koje Ductusov dokument nosi. Veličina odsječka za 30 sekundi pisanja je procjena. Granica od 1 MiB po dokumentu ujedno je gornja granica veličine rada; koliko je to riječi u Ductusovoj shemi, nije izmjereno.
 - **Trošak na klijentu.** Svaki događaj nosi otisak dokumenta prije i poslije. Ako se računa nad cijelim dokumentom pri svakom događaju, to je 11 do 14 ms po događaju za 80.000 riječi na poslužiteljskom vCPU-u; u pregledniku nije izmjereno. Hvatanje zapisa na `main` još ne postoji.
 - **Volumen zapisa u bazi** zbog prepisivanja tekućeg dokumenta pri svakom commitu, trajanje upisa objekta i potpisa preko servisa ključeva.
