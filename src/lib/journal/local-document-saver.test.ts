@@ -1521,6 +1521,60 @@ describe("LocalDocumentSaver: a halt racing a ready read (#206 qa206d)", () => {
   });
 });
 
+describe("LocalDocumentSaver: a journal whose rows disagree (#206 qa206e V-1)", () => {
+  type Damage = (db: Dexie) => Promise<unknown>;
+  /** Two saves, then one damage straight on the tables, as storage damage would. */
+  async function damaged(damage: Damage): Promise<{ real: AtomicDexieJournal; db: Dexie }> {
+    const real = journal(scope());
+    const first = saver(real);
+    await first.load();
+    await type(first, "starije");
+    await type(first, "najnovije");
+    const db = (real as unknown as { db: Dexie }).db;
+    await damage(db);
+    return { real, db };
+  }
+  const cases: [string, Damage][] = [
+    ["(a) a snapshot older than the newest pending row", (db) =>
+      db.table("snapshots").update(DOC, { document: text("starije") })],
+    ["(b) pending rows without snapshot and meta", async (db) => {
+      await db.table("snapshots").delete(DOC);
+      await db.table("meta").delete(DOC);
+    }],
+    ["(c) a pending row of an unknown kind", (db) =>
+      db.table("pending").update([DOC, 2], { "tx.kind": "UNKNOWN_SYNTHETIC" })],
+    ["an unknown meta state", (db) => db.table("meta").update(DOC, { state: "UNKNOWN_SYNTHETIC" })],
+    ["a negative local sequence", (db) => db.table("meta").update(DOC, { localSeq: -1 })],
+    ["a pending row past the recorded sequence", (db) => db.table("meta").update(DOC, { localSeq: 1 })],
+  ];
+  for (const [name, damage] of cases) {
+    it(`17: ${name} is corrupt, never older or empty text shown as saved, and nothing is written`, async () => {
+      const { real } = await damaged(damage);
+      const before = await real.read(DOC);
+      const fresh = saver(real);
+      expect(await fresh.load()).toEqual({ kind: "recovery", reason: "corrupt", document: null });
+      expect(fresh.snapshot()).toMatchObject({ state: "RECOVERY_REQUIRED", failure: "corrupt" });
+      await type(fresh, "zamjena");
+      expect(fresh.snapshot()).toMatchObject({ state: "RECOVERY_REQUIRED", failure: "corrupt" });
+      expect(await real.read(DOC)).toEqual(before);
+    });
+  }
+
+  // "Newest pending row is the snapshot" holds only while rows remain: once an
+  // ACK clears them (F-8), snapshot and meta alone are a whole journal.
+  it("17: snapshot and meta with no pending rows, or with only the newest left, still load", async () => {
+    for (const keep of [0, 1]) {
+      const { real } = await damaged((db) =>
+        db.table("pending").where("[documentId+localSeq]").between([DOC, 1], [DOC, 2 - keep], true, true).delete());
+      expect((await real.read(DOC)).pending).toHaveLength(keep);
+      const fresh = saver(real);
+      const loaded = await fresh.load();
+      expect(loaded.kind === "ready" && documentsEqual(loaded.document, text("najnovije"))).toBe(true);
+      expect(fresh.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+    }
+  });
+});
+
 describe("LocalDocumentSaver: stored text (#197 attack 10)", () => {
   it("10: a lone surrogate and NUL are stored in a form the server accepts", async () => {
     const at = scope();

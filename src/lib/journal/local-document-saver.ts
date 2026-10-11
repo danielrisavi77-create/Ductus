@@ -12,10 +12,13 @@
  * (written by `saveLocal`); transient states live in memory only.
  */
 
-import { emptyDocument, validateDocument, type CanonicalDocument } from "../../domain/document";
+import {
+  documentsEqual, emptyDocument, validateDocument, type CanonicalDocument,
+} from "../../domain/document";
+import type { JournalContents } from "../../domain/sync/journal-types";
 import { restoreSyncState } from "../../domain/sync/restore";
 import {
-  syncReducer, type LocalSaveFailureReason, type SyncEvent, type SyncState,
+  SYNC_STATES, syncReducer, type LocalSaveFailureReason, type SyncEvent, type SyncState,
 } from "../../domain/sync/states";
 import { storableDocument } from "../../editor/storable-text";
 import type { AtomicDexieJournal } from "./atomic-dexie-journal";
@@ -234,7 +237,8 @@ export class LocalDocumentSaver {
         if (typeof json !== "string") return this.haltWith("corrupt", this.recover("corrupt", null));
         chars += json.length;
       }
-      if ((meta && !snapshot) || (snapshot && !meta) || (stored && !stored.ok)) {
+      if ((meta && !snapshot) || (snapshot && !meta) || (stored && !stored.ok) ||
+          !consistent(this.documentId, contents, stored?.ok ? stored.doc : null)) {
         return this.haltWith("corrupt", this.recover("corrupt", null));
       }
       const restored = restoreSyncState(contents);
@@ -478,4 +482,37 @@ export class LocalDocumentSaver {
       }
     }
   }
+}
+
+/**
+ * Whether the journal's rows agree with each other, so that what `read()`
+ * shows is the newest text this device holds (#206 qa206e V-1). `saveLocal`
+ * writes snapshot, pending row and meta in one transaction, so a row of an
+ * unknown kind, a sequence out of order, or a snapshot that is not the newest
+ * pending text can only come from damage, and loading it would show older or
+ * empty text as saved. Pending rows are never cleared in step 1; once an ACK
+ * clears a prefix (F-8), the newest row still left is still the snapshot.
+ */
+function consistent(
+  documentId: string, { snapshot, pending, meta }: JournalContents,
+  stored: CanonicalDocument | null,
+): boolean {
+  if (!meta) return pending.length === 0;
+  if (meta.documentId !== documentId || !Number.isSafeInteger(meta.localSeq) ||
+      meta.localSeq < 0 || !(SYNC_STATES as readonly string[]).includes(meta.state) ||
+      snapshot?.documentId !== documentId) return false;
+  let previous = 0;
+  for (const row of pending) {
+    const tx = row?.tx;
+    if (!row || row.documentId !== documentId || !Number.isSafeInteger(row.localSeq) ||
+        row.localSeq <= previous || row.localSeq > meta.localSeq ||
+        tx?.kind !== "REPLACE_DOCUMENT" || typeof tx.clientTransactionId !== "string" ||
+        !validateDocument(tx.document).ok) return false;
+    previous = row.localSeq;
+  }
+  const last = pending.at(-1);
+  if (!last) return true;
+  const newest = validateDocument(last.tx.document);
+  return last.localSeq === meta.localSeq && newest.ok && stored !== null &&
+    documentsEqual(newest.doc, stored);
 }
