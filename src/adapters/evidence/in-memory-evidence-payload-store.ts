@@ -1,4 +1,8 @@
 import { canonicalizeJcs } from "@/domain/forensics/jcs";
+import {
+  evidenceObjectKey,
+  evidenceStorageRef,
+} from "@/application/ports/evidence-object-key";
 import type {
   EvidencePayloadReadResult,
   EvidencePayloadReader,
@@ -17,9 +21,13 @@ export class InMemoryEvidencePayloadStore
   implements EvidencePayloadStore, EvidencePayloadReader
 {
   private readonly payloads = new Map<string, StoredPayload>();
+  // A package row belongs to one institution, as the composite key in the
+  // database enforces; the reader finds the institution through it.
+  private readonly packageInstitutions = new Map<string, string>();
   unavailableReason: string | null = null;
 
   async putImmutable(input: {
+    institutionId: string;
     evidencePackageId: string;
     segmentHash: string;
     canonicalPayload: string;
@@ -28,10 +36,12 @@ export class InMemoryEvidencePayloadStore
       return { status: "unavailable", reason: this.unavailableReason };
     }
 
-    const key = canonicalizeJcs([
-      input.evidencePackageId,
-      input.segmentHash,
-    ]);
+    const path = evidenceObjectKey(input);
+    const owner = this.packageInstitutions.get(input.evidencePackageId);
+    if (!path || (owner !== undefined && owner !== input.institutionId)) {
+      return { status: "invalid" };
+    }
+    const key = canonicalizeJcs([...path]);
     const existing = this.payloads.get(key);
     if (existing) {
       return existing.canonicalPayload === input.canonicalPayload
@@ -39,8 +49,8 @@ export class InMemoryEvidencePayloadStore
         : { status: "conflict" };
     }
 
-    const storageRef =
-      `memory://evidence/${encodeURIComponent(input.evidencePackageId)}/${input.segmentHash}`;
+    const storageRef = evidenceStorageRef("memory", path);
+    this.packageInstitutions.set(input.evidencePackageId, input.institutionId);
     this.payloads.set(key, {
       storageRef,
       canonicalPayload: input.canonicalPayload,
@@ -55,9 +65,7 @@ export class InMemoryEvidencePayloadStore
     if (this.unavailableReason) {
       return { status: "unavailable", reason: this.unavailableReason };
     }
-    const stored = this.payloads.get(
-      canonicalizeJcs([input.evidencePackageId, input.segmentHash]),
-    );
+    const stored = this.find(input.evidencePackageId, input.segmentHash);
     return stored
       ? {
           status: "found",
@@ -70,10 +78,20 @@ export class InMemoryEvidencePayloadStore
     evidencePackageId: string,
     segmentHash: string,
   ): StoredPayload | null {
-    const value = this.payloads.get(
-      canonicalizeJcs([evidencePackageId, segmentHash]),
-    );
+    const value = this.find(evidencePackageId, segmentHash);
     return value ? structuredClone(value) : null;
+  }
+
+  private find(
+    evidencePackageId: string,
+    segmentHash: string,
+  ): StoredPayload | undefined {
+    const path = evidenceObjectKey({
+      institutionId: this.packageInstitutions.get(evidencePackageId),
+      evidencePackageId,
+      segmentHash,
+    });
+    return path ? this.payloads.get(canonicalizeJcs([...path])) : undefined;
   }
 
   get size(): number {
