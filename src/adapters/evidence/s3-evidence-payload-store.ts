@@ -240,12 +240,21 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
       config.warn ?? ((message, fields) => console.warn(message, fields));
   }
 
-  async putImmutable(input: {
+  async putImmutable(given: {
     institutionId: string;
     evidencePackageId: string;
     segmentHash: string;
     canonicalPayload: string;
   }): Promise<EvidencePayloadPutResult> {
+    // Each field is read exactly once, here: the check, the key, the
+    // comparison and the logged identifiers all use these values, so a caller
+    // that changes its object (or a getter) during the call cannot rebind them.
+    const input = {
+      institutionId: given.institutionId,
+      evidencePackageId: given.evidencePackageId,
+      segmentHash: given.segmentHash,
+      canonicalPayload: given.canonicalPayload,
+    };
     // One deadline for the whole call, so checking the input and a slow PUT
     // leave the read-back only what is left of it. The deadline itself is a
     // monotonic instant, checked by `send` right before every request and

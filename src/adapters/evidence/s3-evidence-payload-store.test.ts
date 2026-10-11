@@ -2037,3 +2037,100 @@ describe("the log line waits until the caller resumes (QA qa233e, macrotask)", (
     }
   });
 });
+
+describe("the input is read once (QA qa233f)", () => {
+  const otherAt = (status: number) => {
+    const s3 = fakeS3((call) =>
+      call.method === "PUT" ? Promise.resolve(new Response(null, { status })) : null,
+    );
+    s3.objects.set(keyOf(PACKAGE, hashOf(payload("a"))), new TextEncoder().encode(payload("b")));
+    return s3;
+  };
+  const idsOf = (text: string) => ({
+    institutionId: INSTITUTION,
+    evidencePackageId: PACKAGE,
+    segmentHash: hashOf(payload(text)),
+  });
+
+  it.each([412, 409])("does not rebind the input hash after PUT %i", async (status) => {
+    const s3 = otherAt(status);
+    const { store, warn } = storeWith(s3.fetch);
+    const input = {
+      institutionId: INSTITUTION,
+      evidencePackageId: PACKAGE,
+      segmentHash: hashOf(payload("a")),
+      canonicalPayload: payload("a"),
+    };
+
+    const pending = store.putImmutable(input);
+    input.segmentHash = hashOf(payload("b"));
+
+    expect(await pending).toEqual({ status: "conflict" });
+    await logged();
+    expect(warn.mock.calls).toEqual([["evidence payload conflict", idsOf("a")]]);
+  });
+
+  it("checks, keys and stores under one reading of a field that changes", async () => {
+    const s3 = fakeS3();
+    const { store } = storeWith(s3.fetch);
+    let reads = 0;
+    const input = {
+      institutionId: INSTITUTION,
+      evidencePackageId: PACKAGE,
+      canonicalPayload: payload("a"),
+      get segmentHash() {
+        reads += 1;
+        return hashOf(payload(reads === 1 ? "a" : "b"));
+      },
+    };
+
+    const outcome = await put(store, "a").then(() => store.putImmutable(input));
+
+    expect(reads).toBe(1);
+    expect(outcome).toEqual({ status: "existing", storageRef: expect.any(String) });
+    expect(s3.calls.map((call) => call.path)).toEqual(
+      Array(s3.calls.length).fill(keyOf(PACKAGE, hashOf(payload("a")))),
+    );
+    expect([...s3.objects.keys()]).toEqual([keyOf(PACKAGE, hashOf(payload("a")))]);
+  });
+
+  it("logs the identifiers it checked, not ones changed during the call", async () => {
+    const s3 = fakeS3((call) =>
+      call.method === "PUT" ? Promise.resolve(new Response(null, { status: 200 })) : null,
+    );
+    const { store, warn } = storeWith(s3.fetch);
+    const input = {
+      institutionId: INSTITUTION,
+      evidencePackageId: PACKAGE,
+      segmentHash: hashOf(payload("a")),
+      canonicalPayload: payload("a"),
+    };
+
+    const pending = store.putImmutable(input);
+    input.evidencePackageId = "paket-izmisljeni-2";
+    input.segmentHash = hashOf(payload("b"));
+
+    expect(await pending).toEqual({ status: "unavailable", reason: "storage_write_unverified" });
+    await logged();
+    expect(warn.mock.calls).toEqual([["evidence payload write unverified", idsOf("a")]]);
+  });
+
+  it("logs the identifiers it checked when the deadline ends the read-back", async () => {
+    const s3 = fakeS3((call, signal) => (call.method === "GET" ? hang(signal) : null));
+    const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+    const input = {
+      institutionId: INSTITUTION,
+      evidencePackageId: PACKAGE,
+      segmentHash: hashOf(payload("a")),
+      canonicalPayload: payload("a"),
+    };
+
+    const pending = store.putImmutable(input);
+    input.evidencePackageId = "paket-izmisljeni-2";
+    input.segmentHash = hashOf(payload("b"));
+
+    expect(await pending).toEqual({ status: "unavailable", reason: "storage_write_unverified" });
+    await logged();
+    expect(warn.mock.calls).toEqual([["evidence payload write unverified", idsOf("a")]]);
+  });
+});
