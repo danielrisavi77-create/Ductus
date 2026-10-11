@@ -70,9 +70,11 @@ function sameHead(value, headSha) {
   return Boolean(value && SHA_RE.test(value) && value.toLowerCase() === headSha.toLowerCase());
 }
 
+// A verdict is a person's comment posted through an App; a bot account's own
+// comment never counts, whatever association GitHub reports for it.
 function trustedComments(items) {
   return (items ?? [])
-    .filter((item) => TRUSTED_ASSOCIATIONS.has(item?.author_association))
+    .filter((item) => TRUSTED_ASSOCIATIONS.has(item?.author_association) && item?.user?.type !== "Bot")
     .map((item, index) => ({
       body: item?.body ?? "",
       login: item?.user?.login ?? null,
