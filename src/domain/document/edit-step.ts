@@ -154,7 +154,8 @@ function reject(code: EditStepRejection, path: string): never {
   throw new Rejected(code, path);
 }
 
-const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);const SHA256_HEX = /^[0-9a-f]{64}$/;
+const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+const SHA256_HEX = /^[0-9a-f]{64}$/;
 /**
  * A node id in a step is a random UUID (version 4) in lower case, and nothing
  * else. Versions 1, 6 and 7 carry a timestamp finer than a minute, which a
@@ -417,11 +418,10 @@ function slice(value: unknown, path: string, budget: Budget): EditStepSlice {
   return parsed;
 }
 
-/** A slice of one empty block that is open only at its end. */
+/** A slice of one block that is open only at its end, with or without text. */
 function isBlockOpening(parsed: EditStepSlice): boolean {
-  const only = parsed.content[0];
   return (
-    parsed.content.length === 1 && only.type !== "text" && !("content" in only) &&
+    parsed.content.length === 1 && parsed.content[0].type !== "text" &&
     "openEnd" in parsed && !("openStart" in parsed)
   );
 }
@@ -460,8 +460,12 @@ function replaceStep(value: unknown, path: string, budget: Budget): EditStepV1 {
   const parsed = "slice" in own ? slice(own.slice, `${path}.slice`, budget) : null;
   if (parsed) {
     newBlocksHaveNoId(parsed, `${path}.slice`);
-    // Replacing only the opening of a block changes its type or attributes
-    // and keeps its content: that step is written as `replaceAround`.
+    // One position replaced by one block open at its end: the position is
+    // the opening of a block and the slice writes that opening again. If the
+    // new opening differs, the step changes the block's type or attributes,
+    // which is written as `replaceAround`. If it is the same, the opening was
+    // removed only to be put back, and text the slice brings is written as an
+    // insertion of text. Either way this is not a form of its own.
     if (to === from + 1 && isBlockOpening(parsed)) {
       reject("not_canonical", `${path}.slice`);
     }

@@ -79,9 +79,10 @@ const slice: fc.Arbitrary<TestSlice> = fc.oneof(textRun.map((list) => ({ content
 const hasText = (s: TestSlice) =>
   s.content.some((item) => (item as Block).type === "text" || "content" in (item as Block));
 const isSplit = (s: TestSlice) => "openStart" in s && "openEnd" in s && !hasText(s);
-/** One empty block open at its end: over one position it would only retype a block. */
+/** One block open at its end: over one position it only rewrites the opening of a block. */
 const isBlockOpening = (s: TestSlice | undefined) =>
-  s !== undefined && s.content.length === 1 && !hasText(s) && "openEnd" in s && !("openStart" in s);
+  s !== undefined && s.content.length === 1 && (s.content[0] as Block).type !== "text" &&
+  "openEnd" in s && !("openStart" in s);
 const range = fc.tuple(position, fc.integer({ min: 1, max: 5_000 }));
 const boundary = fc.tuple(position, fc.constantFrom(1, 2));
 

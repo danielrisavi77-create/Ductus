@@ -399,22 +399,76 @@ describe("edit step format: steps ProseMirror really produces", () => {
   // QA of #213 (third round, M3). A slice open at its end whose last block is
   // of another type changes the type of the block it continues and inserts
   // text in one step. Not intended: a change of type is `replaceAround` only.
-  // The validator cannot tell without the document what the block was, so the
+  const retyped = { type: "heading", attrs: { level: 1, nodeId: A }, content: [{ type: "text", text: "Z" }] };
+
+  // With one block the step alone shows it, whatever the document: one
+  // position replaced by one block open at its end rewrites an opening.
+  it("refuses a replace of one position by one block open at its end", () => {
+    const step = { stepType: "replace", from: 0, to: 1, structure: true, slice: { content: [retyped], openEnd: 1 } };
+    // ProseMirror would apply it and turn the paragraph into a heading.
+    expect(Step.fromJSON(schema, step).apply(start).doc?.firstChild?.type.name).toBe("heading");
+    expect(parseEditStep(step)).toEqual({ ok: false, code: "not_canonical", path: "$.slice" });
+  });
+
+  // Why that refusal blocks nothing legitimate: wherever ProseMirror can apply
+  // a step of this shape, it does exactly one thing, it writes the block of
+  // the slice over the opening of the block that starts there. So the opening
+  // either comes back unchanged (the text alone is an insertion of text) or
+  // is changed (`replaceAround`). Everywhere else the step does not apply.
+  it("a step of that shape only ever rewrites the opening of a block", () => {
+    const blocks = [
+      { type: "paragraph", attrs: { nodeId: A } },
+      { type: "paragraph", attrs: { nodeId: null }, content: [{ type: "text", text: "Z" }] },
+      { type: "heading", attrs: { level: 2, nodeId: B }, content: [{ type: "text", text: "Z" }] },
+      { type: "heading", attrs: { level: 3, nodeId: null } },
+    ];
+    const starts: number[] = [];
+    start.forEach((_node, offset) => starts.push(offset));
+    let applied = 0;
+    for (let from = 0; from < start.content.size; from += 1) {
+      for (const block of blocks) {
+        const step = Step.fromJSON(schema, {
+          stepType: "replace", from, to: from + 1, slice: { content: [block], openEnd: 1 },
+        });
+        let doc: PmNode | null = null;
+        try {
+          doc = step.apply(start).doc;
+        } catch {
+          doc = null;
+        }
+        if (!starts.includes(from)) {
+          expect(doc, `position ${from}`).toBeNull();
+          continue;
+        }
+        applied += 1;
+        const index = starts.indexOf(from);
+        const before = start.child(index);
+        const after = (doc as PmNode).child(index);
+        expect((doc as PmNode).childCount).toBe(start.childCount);
+        expect(after.type.name).toBe(block.type);
+        expect({ ...after.attrs }).toEqual(block.attrs);
+        expect(after.textContent).toBe(("content" in block ? "Z" : "") + before.textContent);
+      }
+    }
+    expect(applied).toBe(starts.length * blocks.length);
+  });
+
+  // With a new block in front the same change hides in a step that may be
+  // legitimate (a block inserted before, text added to the next one). The
+  // validator cannot tell without the document what the block was, so the
   // step passes by its shape; the replayer must refuse it (obligation 3: the
   // block on an open side equals the block it continues, type and level too).
-  it("accepts by shape a replace that would change the type of the block it continues", () => {
+  it("accepts by shape a longer replace that would change the type of the block it continues", () => {
+    const fresh = { type: "paragraph", attrs: { nodeId: null }, content: [{ type: "text", text: "x" }] };
     const step = {
       stepType: "replace", from: 0, to: 1, structure: true,
-      slice: {
-        content: [{ type: "heading", attrs: { level: 1, nodeId: A }, content: [{ type: "text", text: "Z" }] }],
-        openEnd: 1,
-      },
+      slice: { content: [fresh, retyped], openEnd: 1 },
     };
     const result = parseEditStep(step);
     if (!result.ok) throw new Error(`${result.code} at ${result.path}`);
     const applied = Step.fromJSON(schema, result.step).apply(start);
-    expect(applied.doc?.firstChild?.type.name).toBe("heading");
-    expect(applied.doc?.firstChild?.textContent).toBe("ZPrvi izmišljeni odlomak.");
+    expect(applied.doc?.child(1).type.name).toBe("heading");
+    expect(applied.doc?.child(1).textContent).toBe("ZPrvi izmišljeni odlomak.");
   });
 
   // What ProseMirror writes when the editor has not cleared the id of a new
