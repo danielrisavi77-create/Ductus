@@ -168,7 +168,11 @@ export function LocalDocumentProvider({
       setPhase("loading");
       const journal = new AtomicDexieJournal(scope);
       const saver = new LocalDocumentSaver(journal, documentId);
-      const unsubscribe = saver.subscribe(setSnapshot);
+      // The cleanup's flush may still emit after `setSnapshot(null)`; what the
+      // old saver reports then must not come back as the next lock's notice.
+      const unsubscribe = saver.subscribe((next) => {
+        if (!disposed) setSnapshot(next);
+      });
       try {
         const result = await saver.load();
         if (disposed) return;
