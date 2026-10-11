@@ -58,7 +58,9 @@ const eslintConfig = [
       "node_modules/**",
       "public/**",
       "playwright-report/**",
+      "playwright-report-login/**",
       "test-results/**",
+      "test-results-login/**",
     ],
   },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
@@ -84,8 +86,8 @@ const eslintConfig = [
     },
   },
   {
-    // Integration tests check the compose stack directly.
-    files: ["src/server/db/**", "tests/integration/**"],
+    // Integration tests and the full login E2E check the compose stack directly.
+    files: ["src/server/db/**", "tests/integration/**", "e2e/login/**"],
     rules: {
       "no-restricted-imports": "off",
       "database-boundary/no-restricted-dynamic-imports": "off",

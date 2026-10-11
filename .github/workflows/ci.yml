@@ -92,6 +92,17 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 14
+      # The full login through "Demo prijava" needs `next dev` (D-09 refuses
+      # the fake provider in the build above); Chromium only (owner decision).
+      - name: Full login E2E
+        run: pnpm test:e2e:login
+      - name: Upload login Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report-login
+          path: playwright-report-login/
+          retention-days: 14
       - if: failure()
         run: docker compose logs
       - if: always()

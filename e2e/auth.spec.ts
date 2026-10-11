@@ -6,7 +6,8 @@ import { expect, test } from "@playwright/test";
 // test or development (playwright.config.ts starts the same build three
 // times). The login route answers with the neutral page and never sends the
 // browser to the fake provider. The full login through the fake provider is
-// covered by tests/unit/auth/flow.test.ts against an in-process provider.
+// covered by tests/unit/auth/flow.test.ts against an in-process provider and
+// by e2e/login/login.spec.ts against `next dev` (pnpm test:e2e:login).
 const SERVERS = [
   { nodeEnv: "unset", origin: "http://localhost:3000" },
   { nodeEnv: "test", origin: "http://localhost:3001" },
