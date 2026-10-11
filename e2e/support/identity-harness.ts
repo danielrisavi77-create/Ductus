@@ -138,7 +138,8 @@ async function withLock<T>(lock: string, staleMs: number, run: () => Promise<T>)
       await mkdir(lock);
       break;
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+      // Windows answers EPERM or EBUSY while another worker is still removing the directory.
+      if (!["EEXIST", "EPERM", "EBUSY"].includes((error as NodeJS.ErrnoException).code ?? "")) {
         throw error;
       }
       const held = await stat(lock).catch(() => null);
