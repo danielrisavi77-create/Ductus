@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { inspect } from "node:util";
 
 import { describe, expect, it, vi } from "vitest";
 
@@ -558,6 +559,58 @@ describe("S3EvidencePayloadStore", () => {
     expect(seen).not.toContain("constructed");
     expect(text).not.toContain(secret);
     expect(text.toLowerCase()).not.toContain(secret.toLowerCase());
+  });
+
+  it("keeps the secret out of every view of the instance and its errors", async () => {
+    const secret = ["kanarinac", "inst", Date.now().toString(36)].join("-");
+    const credentials = { accessKeyId: "fake-id", secretAccessKey: secret };
+    const now = () => new Date("2026-10-11T00:00:00Z");
+    const s3 = fakeS3();
+    const { store } = storeWith(s3.fetch, { credentials, now });
+
+    const own = Reflect.ownKeys(store).map((key) =>
+      String((store as unknown as Record<PropertyKey, unknown>)[key]),
+    );
+    const forIn: string[] = [];
+    for (const key in store) forIn.push(key);
+    const views = [
+      JSON.stringify(store),
+      JSON.stringify(Object.entries(store)),
+      JSON.stringify({ ...store }),
+      JSON.stringify(own),
+      JSON.stringify(forIn),
+      inspect(store, { depth: Infinity, showHidden: true, getters: true }),
+      String(store),
+    ].join("\n");
+    expect(views).not.toContain(secret);
+    expect(views).not.toMatch(/fake-id|secretAccessKey|credentials/);
+
+    // A later change to the caller's object does not reach signing.
+    const copy = { ...credentials };
+    credentials.secretAccessKey = "zamijenjeno";
+    const fresh = fakeS3();
+    await expect(put(store, "a")).resolves.toMatchObject({ status: "stored" });
+    await put(storeWith(fresh.fetch, { credentials: copy, now }).store, "a");
+    expect(s3.calls[0].headers.get("authorization")).toBe(
+      fresh.calls[0].headers.get("authorization"),
+    );
+
+    const messages: string[] = [];
+    for (const bad of [
+      { credentials: { accessKeyId: "", secretAccessKey: secret } },
+      { credentials: { accessKeyId: "a/b", secretAccessKey: secret } },
+      { credentials: { accessKeyId: "a", secretAccessKey: secret }, region: "" },
+      { credentials: { accessKeyId: "a", secretAccessKey: secret }, requestTimeoutMs: 0 },
+    ]) {
+      try {
+        storeWith(fakeS3().fetch, bad);
+        messages.push("constructed");
+      } catch (error) {
+        messages.push(inspect(error, { depth: Infinity, showHidden: true }));
+      }
+    }
+    expect(messages).not.toContain("constructed");
+    expect(messages.join("\n")).not.toContain(secret);
   });
 
   it("does not follow a redirect and makes no second request (S13)", async () => {

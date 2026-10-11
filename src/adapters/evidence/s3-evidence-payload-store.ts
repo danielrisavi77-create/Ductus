@@ -74,6 +74,16 @@ type Fetched =
  */
 export class S3EvidencePayloadStore implements EvidencePayloadStore {
   private readonly endpoint: URL;
+  private readonly region: string;
+  private readonly bucket: string;
+  private readonly storageDomain: string;
+  private readonly requestTimeoutMs: number;
+  /**
+   * A native private field: the keys are not reachable by enumeration,
+   * `JSON.stringify` or `util.inspect` of the instance, and the copy keeps
+   * a later change to the caller's object out of the signer.
+   */
+  readonly #credentials: Readonly<S3Credentials>;
   private readonly fetch: typeof fetch;
   private readonly now: () => Date;
   private readonly warn: (
@@ -81,7 +91,7 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
     fields: Record<string, string>,
   ) => void;
 
-  constructor(private readonly config: S3EvidencePayloadStoreConfig) {
+  constructor(config: S3EvidencePayloadStoreConfig) {
     const endpoint = new URL(config.endpoint);
     if (
       !(
@@ -113,6 +123,14 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
       );
     }
     this.endpoint = endpoint;
+    this.region = config.region;
+    this.bucket = config.bucket;
+    this.storageDomain = config.storageDomain;
+    this.requestTimeoutMs = timeout;
+    this.#credentials = Object.freeze({
+      accessKeyId: config.credentials.accessKeyId,
+      secretAccessKey: config.credentials.secretAccessKey,
+    });
     this.fetch = config.fetch ?? globalThis.fetch;
     this.now = config.now ?? (() => new Date());
     this.warn =
@@ -138,12 +156,12 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
       return { status: "invalid" };
     }
 
-    const path = [this.config.bucket, ...key];
-    const storageRef = evidenceStorageRef(this.config.storageDomain, key);
+    const path = [this.bucket, ...key];
+    const storageRef = evidenceStorageRef(this.storageDomain, key);
     // One deadline for the whole call, so a slow PUT leaves the read-back
     // only what is left of it.
     const abort = new AbortController();
-    const timer = setTimeout(() => abort.abort(), this.config.requestTimeoutMs);
+    const timer = setTimeout(() => abort.abort(), this.requestTimeoutMs);
     try {
       return await this.write(input, path, bytes, storageRef, abort.signal);
     } finally {
@@ -216,8 +234,8 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
         path,
         headers: method === "PUT" ? { "content-type": "application/json" } : {},
         body: body ?? new Uint8Array(),
-        region: this.config.region,
-        credentials: this.config.credentials,
+        region: this.region,
+        credentials: this.#credentials,
         now: this.now(),
       });
       const response = await this.fetch(signed.url, {
