@@ -62,7 +62,8 @@ export interface EvidenceIngestPort {
 }
 
 const SHA256_HEX = /^[0-9a-f]{64}$/;
-// Becomes part of an object key (`v2/<package>/<hash>.json`, BACKEND 4.1):
+// Becomes part of an object key (`v2/<institution>/<package>/<hash>.json`,
+// `evidenceObjectKey`, BACKEND 4.1):
 // ASCII only, no dots, slashes, escapes or whitespace, and lowercase only, so
 // two ids never differ by case alone. Another form is refused, not normalized.
 const EVIDENCE_PACKAGE_ID = /^[a-z0-9][a-z0-9_-]{0,127}$/;
