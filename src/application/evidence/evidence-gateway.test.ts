@@ -25,9 +25,13 @@ import {
   type EvidenceSegmentV2,
 } from "@/domain/forensics/evidence-segment-v2";
 import { sha256WebCrypto } from "@/domain/forensics/crypto";
+import { EDIT_STEP_FORMAT_V1 } from "@/domain/document/edit-step";
 import { MAX_EVIDENCE_SEGMENT_BYTES } from "@/domain/forensics/evidence-chain-v2";
 import { buildEvidenceIngestCommandV2 } from "./evidence-outbox";
 import { EvidenceGateway } from "./evidence-gateway";
+
+// A synthetic institution; no real one is used in tests.
+const INSTITUTION_ID = "00000000-0000-4000-8000-00000000000a";
 
 const A = "a".repeat(64);
 const B = "b".repeat(64);
@@ -100,18 +104,27 @@ class EditableRepository extends InMemoryEvidenceAcceptanceRepository {
   }
 }
 
+/** A closed v1 step that inserts `text` at the start of the first paragraph. */
+const insertText = (text: string): EvidenceSegmentV2["events"][number]["steps"][number] => ({
+  stepType: "replace",
+  from: 1,
+  to: 1,
+  slice: { content: [{ type: "text", text }] },
+});
+
 /** A canonical segment of exactly `bytes` UTF-8 bytes, mostly two-byte characters. */
 async function segmentOfSize(bytes: number): Promise<EvidenceSegmentV2> {
   const sized = (text: string): EvidenceSegmentV2 => {
     const value = segment();
-    value.events[0].steps = [{ stepType: "replace", from: 1, to: 1, text }];
+    value.events[0].steps = [insertText(text)];
     return value;
   };
+  // An insertion has at least one character: measure with one ASCII byte.
   const empty = (await buildEvidenceIngestCommandV2({
     evidencePackageId: "evidence-1",
     clientRequestId: "sizing",
-    segment: sized(""),
-  })).descriptor.payloadBytes;
+    segment: sized("a"),
+  })).descriptor.payloadBytes - 1;
   const room = bytes - empty;
   return sized("č".repeat(Math.floor(room / 2)) + "a".repeat(room % 2));
 }
@@ -149,7 +162,7 @@ function segment(input: {
       {
         sequence,
         source: "editor",
-        steps: [{ stepType: "replace", from: 1, to: 1 }],
+        steps: [insertText("A")],
         touchedNodeIds: ["p1"],
         beforeDocumentHash: before,
         afterDocumentHash: after,
@@ -157,7 +170,7 @@ function segment(input: {
     ],
     captureContext: {
       editorModel: "prosemirror",
-      transactionFormat: "prosemirror-step-json-v1",
+      transactionFormat: EDIT_STEP_FORMAT_V1,
     },
     evidenceProfileId: input.profile ?? "standard-v1",
   };
@@ -178,6 +191,7 @@ function setup() {
   const authorization = new FakeAuthorization();
   const contexts = new InMemoryEvidenceContextPort([
     {
+      institutionId: INSTITUTION_ID,
       evidencePackageId: "evidence-1",
       documentId: "doc-1",
       evidenceProfileId: "standard-v1",
@@ -465,6 +479,7 @@ describe("EvidenceGateway", () => {
     expect((await ingest(s, otherProfile)).status).toBe("invalid");
 
     s.contexts.set({
+      institutionId: INSTITUTION_ID,
       evidencePackageId: "evidence-1",
       documentId: "different-doc",
       evidenceProfileId: "standard-v1",
@@ -531,6 +546,7 @@ describe("EvidenceGateway", () => {
 
     const tooLarge = setup();
     tooLarge.contexts.set({
+      institutionId: INSTITUTION_ID,
       evidencePackageId: "evidence-1",
       documentId: "doc-1",
       evidenceProfileId: "standard-v1",
@@ -541,6 +557,7 @@ describe("EvidenceGateway", () => {
 
     const closed = setup();
     closed.contexts.set({
+      institutionId: INSTITUTION_ID,
       evidencePackageId: "evidence-1",
       documentId: "doc-1",
       evidenceProfileId: "standard-v1",
@@ -643,6 +660,7 @@ describe("EvidenceGateway", () => {
     expect(s.payloadStore.size).toBe(1);
 
     s.contexts.set({
+      institutionId: INSTITUTION_ID,
       evidencePackageId: "evidence-1",
       documentId: "doc-1",
       evidenceProfileId: "standard-v1",
@@ -793,6 +811,7 @@ describe("EvidenceGateway", () => {
       vi.spyOn(s.contexts, "resolve").mockResolvedValue({
         status: "found",
         context: {
+          institutionId: INSTITUTION_ID,
           evidencePackageId: "evidence-2",
           documentId: "doc-1",
           evidenceProfileId: "standard-v1",
@@ -802,6 +821,57 @@ describe("EvidenceGateway", () => {
       });
 
       expect(await ingest(s)).toEqual({ status: "invalid" });
+      expect(s.payloadStore.size).toBe(0);
+      expect(s.repository.records()).toHaveLength(0);
+    });
+
+    it("takes the institution of the object key only from the server's package row (P1, U1)", async () => {
+      const s = setup();
+      const cmd = await command();
+      const other = "00000000-0000-4000-8000-00000000000b";
+      for (const forged of [
+        { ...cmd, institutionId: other },
+        { ...cmd, descriptor: { ...cmd.descriptor, institutionId: other } },
+      ]) {
+        expect(await ingest(s, forged)).toEqual({ status: "invalid" });
+      }
+      expect(s.payloadStore.size).toBe(0);
+
+      const put = vi.spyOn(s.payloadStore, "putImmutable");
+      expect((await ingest(s, cmd)).status).toBe("accepted");
+      expect(put).toHaveBeenCalledOnce();
+      expect(put.mock.calls[0][0].institutionId).toBe(INSTITUTION_ID);
+      expect(s.repository.records()[0].storageRef).toBe(
+        `memory:v2/${INSTITUTION_ID}/evidence-1/${cmd.descriptor.segmentHash}.json`,
+      );
+    });
+
+    it.each([
+      undefined,
+      "",
+      "00000000-0000-4000-8000-00000000000A",
+      "{00000000-0000-4000-8000-00000000000a}",
+      "00000000000040008000000000000000a",
+      "../00000000-0000-4000-8000-00000000000a",
+    ])("stores nothing when the server's package row carries institution %j", async (institutionId) => {
+      const s = setup();
+      vi.spyOn(s.contexts, "resolve").mockResolvedValue({
+        status: "found",
+        context: {
+          institutionId: institutionId as unknown as string,
+          evidencePackageId: "evidence-1",
+          documentId: "doc-1",
+          evidenceProfileId: "standard-v1",
+          maxPayloadBytes: MAX_EVIDENCE_SEGMENT_BYTES,
+          acceptsEvidence: true,
+        },
+      });
+
+      expect(await ingest(s)).toEqual({
+        status: "unavailable",
+        stage: "context",
+        reason: "evidence context is malformed",
+      });
       expect(s.payloadStore.size).toBe(0);
       expect(s.repository.records()).toHaveLength(0);
     });
@@ -842,6 +912,7 @@ describe("EvidenceGateway", () => {
     const cmd = await command();
     const planted = '{"planted":true}';
     await s.payloadStore.putImmutable({
+      institutionId: INSTITUTION_ID,
       evidencePackageId: "evidence-1",
       segmentHash: cmd.descriptor.segmentHash,
       canonicalPayload: planted,
@@ -852,6 +923,19 @@ describe("EvidenceGateway", () => {
       s.payloadStore.get("evidence-1", cmd.descriptor.segmentHash)
         ?.canonicalPayload,
     ).toBe(planted);
+    expect(s.repository.records()).toHaveLength(0);
+    expect(s.signer.signCalls).toBe(0);
+  });
+
+  it("answers invalid and reserves and signs nothing when the store refuses the object as invalid", async () => {
+    const s = setup();
+    vi.spyOn(s.payloadStore, "putImmutable").mockResolvedValue({
+      status: "invalid",
+    });
+    const reserve = vi.spyOn(s.repository, "reserve");
+
+    expect(await ingest(s)).toEqual({ status: "invalid" });
+    expect(reserve).not.toHaveBeenCalled();
     expect(s.repository.records()).toHaveLength(0);
     expect(s.signer.signCalls).toBe(0);
   });
@@ -1013,6 +1097,7 @@ describe("EvidenceGateway", () => {
       const actual = cmd.descriptor.payloadBytes;
       const s = setup();
       s.contexts.set({
+        institutionId: INSTITUTION_ID,
         evidencePackageId: "evidence-1",
         documentId: "doc-1",
         evidenceProfileId: "standard-v1",

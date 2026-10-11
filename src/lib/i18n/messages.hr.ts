@@ -1,8 +1,10 @@
 /**
- * Interface text, Croatian (D-84: every string in keys from day one).
+ * Interface text, Croatian (D-84: demo interface text in keys).
  *
- * Components read text only from here, never inline, so `messages.en.ts`
- * (D-70) is a second table of the same shape and nothing else. Words from the
+ * Components read text from here, so `messages.en.ts` (D-70) is a second
+ * table of the same shape and nothing else. Tidying direct Croatian text
+ * outside this catalogue waits for English (D-70, 11 Oct 2026) and is not a
+ * separate task until then. Words from the
  * forbidden vocabulary in docs/PRODUCT.md §5 never appear here;
  * `messages.test.ts` checks that.
  *
