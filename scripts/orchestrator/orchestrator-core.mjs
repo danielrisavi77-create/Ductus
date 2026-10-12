@@ -112,11 +112,11 @@ export function countCanonical(comments) {
 const GATE_VERDICTS = new Set(["PASS", "FAIL", "BLOCK"]);
 
 // Identity as the gate keys it (ENGINEERING_SYSTEM §6): App slug + runtime:slot,
-// with codex and chatgpt normalised to openai.
+// with codex and chatgpt normalised to openai and the slot without letter case (#130).
 function identityKey(entry) {
   const [runtime = "", slot = ""] = (entry.agent ?? "").split(":");
   const rt = runtime === "codex" || runtime === "chatgpt" ? "openai" : runtime;
-  return `${entry.appSlug ?? ""}|${rt}:${slot}`;
+  return `${entry.appSlug ?? ""}|${rt}:${slot.toLowerCase()}`;
 }
 
 /**
