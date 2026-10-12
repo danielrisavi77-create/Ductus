@@ -7,6 +7,7 @@ import { test } from "@playwright/test";
 const PAGES = [
   { name: "home", path: "/" },
   { name: "workspace", path: "/rad" },
+  { name: "teacher-courses", path: "/nastavnik/kolegiji" },
 ];
 const LOCALES = ["hr"] as const;
 // The dark theme follows the system setting (design v6, D-89).
