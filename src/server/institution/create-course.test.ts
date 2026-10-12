@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { handleCreateCourse, type CreateCourseDeps } from "./create-course";
-import type { WithActor } from "@/server/db/with-actor";
+import type { ActorTransaction, WithActor } from "@/server/db/with-actor";
 
 const ORIGIN = "http://localhost:3000";
 const URL = `${ORIGIN}/api/institution/courses`;
@@ -29,8 +29,10 @@ function port({ code, id }: { code?: string; id?: string } = {}) {
     if (code) throw Object.assign(new Error("do not leak raw SQL values"), { code });
     return { rows: [{ id: id ?? UUID }], rowCount: 1 };
   });
-  const withActor: WithActor = vi.fn(async (_token, fn) =>
-    fn({ query } as unknown as Parameters<Parameters<WithActor>[1]>[0])) as WithActor;
+  const withActor = vi.fn(async (
+    _token: string | null | undefined,
+    fn: (tx: ActorTransaction) => Promise<unknown>,
+  ) => fn({ query } as unknown as ActorTransaction)) as unknown as WithActor;
   const deps: CreateCourseDeps = { withActor, expectedOrigin: ORIGIN, sessionToken: TOKEN };
   return { deps, withActor, query };
 }
@@ -66,7 +68,7 @@ describe("F-6a / DAN-35 course API contract", () => {
   });
 
   it("rejects absent/malformed session without accessing the database", async () => {
-    for (const sessionToken of [undefined, "", "not-a-token", "!" .repeat(43)]) {
+    for (const sessionToken of [undefined, "", "not-a-token", "!".repeat(43)]) {
       const { deps, withActor } = port();
       expect((await handleCreateCourse(request(), { ...deps, sessionToken })).status).toBe(401);
       expect(withActor).not.toHaveBeenCalled();
