@@ -20,7 +20,7 @@ function request(
   return new Request(URL, {
     method: "POST",
     headers: { origin: ORIGIN, "sec-fetch-site": "same-origin", "content-type": "application/json", ...headers },
-    body,
+    body: typeof body === "string" ? body : new Uint8Array(body).buffer,
   });
 }
 
@@ -52,12 +52,13 @@ describe("F-6a / DAN-35 course API contract", () => {
   });
 
   it("rejects absent, opaque and cross-site Origin before reading body or calling the database", async () => {
-    for (const headers of [
+    const cases: Record<string, string>[] = [
       { origin: "" },
       { origin: "null" },
       { origin: "https://evil.example" },
       { origin: ORIGIN, "sec-fetch-site": "same-site" },
-    ]) {
+    ];
+    for (const headers of cases) {
       const { deps, query } = port();
       const input = request(JSON.stringify(VALID), headers);
       const response = await handleCreateCourse(input, deps);
