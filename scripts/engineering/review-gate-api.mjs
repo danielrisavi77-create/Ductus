@@ -70,16 +70,30 @@ export function createApi({
   }
 }
 
+// True only when GitHub says `sha` is contained in `baseRef` (compare status
+// "behind" or "identical"). Any other answer, or an error, is false.
+async function inBase(api, owner, repo, baseRef, sha, signal) {
+  const result = await api(`/repos/${owner}/${repo}/compare/${encodeURIComponent(baseRef)}...${sha}?per_page=1`, { signal });
+  return result?.status === "behind" || result?.status === "identical";
+}
+
 // Walks first parents from `head` until a non-merge commit or the step limit,
-// whichever comes first.
-export async function firstParentPath(api, owner, repo, head, signal) {
+// whichever comes first. A two-parent merge is marked `mergesBase` when its
+// second parent is in the base branch (#231, question 1); an octopus merge is
+// never checked and never carries.
+export async function firstParentPath(api, owner, repo, head, signal, baseRef) {
   const path = [];
   let sha = head;
   for (let step = 0; step <= MAX_MERGE_STEPS && sha; step += 1) {
     const commit = await api(`/repos/${owner}/${repo}/commits/${sha}`, { signal });
-    path.push({ sha: commit.sha, parents: commit.parents });
-    if (commit.parents.length < 2) break;
-    sha = commit.parents[0]?.sha;
+    const parents = commit.parents;
+    const mergesBase =
+      parents.length === 2 && typeof baseRef === "string" && baseRef !== "" && typeof parents[1]?.sha === "string"
+        ? await inBase(api, owner, repo, baseRef, parents[1].sha, signal)
+        : false;
+    path.push({ sha: commit.sha, parents, mergesBase });
+    if (parents.length < 2) break;
+    sha = parents[0]?.sha;
   }
   return path;
 }
@@ -93,7 +107,7 @@ export async function carriedHeads(api, owner, repo, pr, comments, { budgetMs = 
   let candidates;
   let current;
   try {
-    const path = await firstParentPath(api, owner, repo, pr.head.sha, signal);
+    const path = await firstParentPath(api, owner, repo, pr.head.sha, signal, pr.base?.ref);
     const { heads, reason } = carriedHeadCandidates(comments, pr.head.sha, path);
     if (reason) log(`Carry-over refused: ${reason}.`);
     candidates = heads;
