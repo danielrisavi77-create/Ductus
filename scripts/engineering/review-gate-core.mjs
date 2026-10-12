@@ -136,6 +136,14 @@ function findOwnerOverride(entries, headSha, ownerLogin) {
   );
 }
 
+function compareOrder(a, b) {
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] > b[i]) return 1;
+    if (a[i] < b[i]) return -1;
+  }
+  return 0;
+}
+
 function latestVerdicts(entries, {
   agentField,
   headField,
@@ -171,13 +179,14 @@ function latestVerdicts(entries, {
 
     const key = `${identity.appSlug}|${identity.principal}`;
     const previous = latest.get(key);
+    // #231, question 4 (owner delegated, 12 Oct 2026): a verdict on the current
+    // head always beats a carried one of the same principal, however late the
+    // carried one was posted, so a later PASS on an older head never lifts a
+    // FAIL or BLOCK given on the current head.
+    const current = sameHead(head, headSha) ? 1 : 0;
     const order = [entry.createdAt, entry.index];
-    if (
-      !previous ||
-      order[0] > previous.order[0] ||
-      (order[0] === previous.order[0] && order[1] > previous.order[1])
-    ) {
-      latest.set(key, { agent, head: head.toLowerCase(), verdict, extra, fallback, identity, order });
+    if (!previous || compareOrder([current, ...order], [previous.current, ...previous.order]) > 0) {
+      latest.set(key, { agent, head: head.toLowerCase(), verdict, extra, fallback, identity, order, current });
     }
   }
 
@@ -392,8 +401,12 @@ export function carriedHeadCandidates(comments, headSha, path) {
 
 /**
  * `path` is the first-parent walk from the current head, newest first, as
- * GET commits/{sha} objects. It must reach `earlier` through merge commits
- * only; the merged-in side is judged by `sameChange`.
+ * GET commits/{sha} objects. It must reach `earlier` through merges of the
+ * base branch only: every step before it has exactly two parents (no octopus)
+ * and `mergesBase === true`, which the runner sets only after GitHub confirmed
+ * that the second parent is contained in the base branch (#231, question 1;
+ * D-101 "spajanje osnovne grane"). The merged-in change is judged by
+ * `sameChange`.
  */
 export function onlyBaseMerges(path, earlier) {
   const target = earlier?.toLowerCase();
@@ -402,7 +415,7 @@ export function onlyBaseMerges(path, earlier) {
   return (
     end > 0 &&
     end <= MAX_MERGE_STEPS &&
-    steps.slice(0, end).every((commit) => (commit?.parents?.length ?? 0) >= 2)
+    steps.slice(0, end).every((commit) => commit?.parents?.length === 2 && commit?.mergesBase === true)
   );
 }
 
