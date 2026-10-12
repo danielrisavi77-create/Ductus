@@ -94,7 +94,10 @@ Gate:
 - svi standard gateovi;
 - neovisni reviewer;
 - zaseban QA/adversarial PASS na aktualnom headu;
-- sintetički staging prolaz kad BACKEND §6 točka 12 vrijedi.
+- sintetički staging prolaz kad BACKEND §6 točka 12 vrijedi;
+- pravila rada za `critical` PR iz §14.
+
+Izuzeće od QA-e (vlasnik, 11. 10. 2026., #87, `issuecomment-6112538306` i `6112555187`): `critical` PR koji mijenja samo testove ili samo dokumente, uključivo dokumente koji određuju gate i pravila rada te testove gatea u `scripts/engineering/`, ne traži zaseban QA PASS. Neovisni review ostaje. Izuzeće ne mijenja put spajanja: PR koji dira putanju iz D-97 spaja se po `docs/ORKESTRATOR.md` §4 (vlasnikova naredba s brojem PR-a, a noću i noćni prozor kad je uključen), ostali kao i dosad. Gate provodi pravilo od #275 (`qaExemption` u `scripts/engineering/protected-paths.mjs`) i gleda samo popis datoteka, nikad tijelo PR-a. "Testovi" su sve datoteke pod `tests/`, `e2e/` ili `db/tests/` (i pomoćne datoteke, fixturei i postavke u tim mapama, bez obzira na nastavak) te `*.test.*` i `*.spec.*` u js/ts varijantama; "dokumenti" su sve `*.md` datoteke, uključivo `.claude/agents/*.md` i `SKILL.md`. PR koji mijenja i testove i dokumente nije izuzet, kao ni PR koji uz njih mijenja bilo koju drugu datoteku (Python testovi i konfiguracije testova izvan tih mapa nisu "testovi" u ovom smislu). Preimenovanje se broji pod starim i novim imenom.
 
 Za posebno osjetljiv auth/RLS/crypto PR Orkestrator može tražiti drugog reviewera iz drugog providera.
 
@@ -171,7 +174,7 @@ Novi AI provider ne dobiva trust samo zato što se deklarira u komentaru. Prvi k
 
 PR metadata i review/QA komentari koriste **jedan zajednički parser** (`scripts/engineering/metadata-parser.mjs`) kako CI i review gate ne bi različito tumačili fenced ili uvučene Markdown primjere.
 
-Novi push poništava review i QA jer `*-Head` više nije jednak aktualnom PR headu. Iznimka (D-101): verdikt na ranijem headu vrijedi i dalje kad su svi kasniji commiti samo spajanja osnovne grane (merge commiti) i diff PR-a prema osnovnoj grani identičan je onome na tom headu; gate to provjerava preko GitHub API-ja (hod po prvom roditelju i compare) i na svaku grešku ne prenosi ništa. Owner Override se nikad ne prenosi. Formalni GitHub review state nije ulaz u ovaj agent gate; agent verdicti idu kroz kanonske PR komentare.
+Novi push poništava review i QA jer `*-Head` više nije jednak aktualnom PR headu. Iznimka (D-101): verdikt na ranijem headu vrijedi i dalje kad su svi kasniji commiti samo spajanja osnovne grane (merge commiti) i diff PR-a prema osnovnoj grani identičan je onome na tom headu; gate to provjerava preko GitHub API-ja (hod po prvom roditelju i compare) i na svaku grešku ne prenosi ništa. Datoteka bez patcha (npr. binarna, prevelika ili čisto preimenovanje) ne prenosi ništa jer compare ne pokazuje njezinu stranu osnovne grane. Hod koji ne stigne do commita koji nije merge, ili više od pet headova s verdiktom iza samih spajanja, također ne prenose ništa, da stariji `FAIL` ili `BLOCK` ne ispadne tiho. Kad uspjeh gatea broji prenesen verdikt, status navodi s kojeg je heada prenesen. Owner Override se nikad ne prenosi. Formalni GitHub review state nije ulaz u ovaj agent gate; agent verdicti idu kroz kanonske PR komentare.
 
 ## 7. Owner Override
 
@@ -219,6 +222,7 @@ Product/UX i Bug Hunter nikad ne preskaču issue fazu i ne prelaze ravno u imple
 - Draft smije zaostajati dok se radi.
 - Prije ready-for-review autor ponovno dohvaća `main` i provjerava stvarni overlap.
 - Ako je `main` promijenio datoteku koju PR dira, autor osvježava branch prije reviewa.
+- PR se spaja samo ako njegov head sadrži aktualni `main` (zaštita grane, 11. 10. 2026.). PR koji je na redu u gateu spaja `main` neposredno prije reviewa (§15).
 - Svaki push nakon reviewa automatski invalidira review preko `Review-Head`, osim čistog spajanja osnovne grane bez promjene diffa PR-a (D-101).
 - Orkestrator ne tretira staro zeleno stanje kao dokaz za novi head.
 - Stackani PR-ovi su dopušteni samo kada je ovisnost eksplicitna u opisu; nakon spajanja baze child PR se vraća na `main`.
@@ -232,6 +236,7 @@ Ciljno GitHub pravilo za `main`:
 - delete: zabranjen;
 - PR obvezan;
 - unresolved conversations: zabranjuju merge;
+- grana mora biti ažurna prije spajanja (`strict`, uključeno 11. 10. 2026.; mijenja samo Daniel);
 - obvezni statusi:
   - `Lint, typecheck, test and build`
   - `Local stack (compose.yaml)`
@@ -239,6 +244,8 @@ Ciljno GitHub pravilo za `main`:
   - `Dependency review`
   - `Engineering review gate`
 - merge metoda: squash.
+
+Noćno spajanje D-97 PR-ova (vlasnik, 11. 10. 2026., #87, `issuecomment-6112586958`) opisano je u `docs/ORKESTRATOR.md` §4; ne mijenja zaštitu grane ni obvezne statuse.
 
 Trust/governance putanje su označene u `.github/CODEOWNERS`. Dok je Daniel jedini GitHub code owner i ujedno autor većine PR-ova, branch protection **ne smije** uključiti obvezni Code Owner approval jer GitHub ne dopušta odobravanje vlastitog PR-a. Kad postoji drugi stvarni GitHub code-owner identitet, #53 može uključiti taj zahtjev. Do tada zaštitu daju critical risk floor, neovisni App-authenticated review/QA i Owner Override samo kao eksplicitna iznimka.
 
@@ -273,9 +280,50 @@ Nakon mergea Orkestrator:
 
 Normalno najviše:
 - 3 aktivna writer PR-a;
-- 2 PR-a u reviewu;
-- 1 critical PR u QA-u.
+- 1 PR u gateu (review, QA ili čekanje spajanja), i kad je to D-97 PR koji čeka vlasnika (§15);
+- 1 PR alata u radu (§16).
 
 Četvrti writer dopušten je samo ako ne dijeli datoteke, migracije, ugovore ni redoslijed s ostala tri.
 
 Cilj nije maksimalan broj paralelnih agenata nego minimalno vrijeme od zadatka do provjerenog mergea.
+
+## 14. Pravila rada za critical PR (D-106)
+
+Vrijede za svaki `critical` PR uz gate iz §5; gate se njima ne mijenja. Izvor je vlasnikova odluka od 11. 10. 2026. (D-106). Kartice u `.claude/uloge/`, pravila u `.claude/rules/` i skillovi upućuju na ovaj odjeljak, ne na komentare na issueima.
+
+1. **Ugovor prije koda.** Prije pisanja, u planu napada ili opisu PR-a stoje ova polja:
+   - **Invarijanta:** jedna rečenica.
+   - **Mjesta:** popis svih mjesta gdje invarijanta mora vrijediti.
+   - **Stvarni pozivatelj:** produkcijska datoteka koja kod poziva, ili "još ne postoji". Ako ne postoji, opis kaže što PR jamči dok pozivatelja nema i što se odgađa do spajanja u proizvod.
+   - **Poznate granice:** što izričito nije dio jamstva i za koje pozivatelje jamstvo vrijedi.
+   - **Što bi ovaj PR moglo oboriti na QA-i?:** piščeva procjena najslabijeg mjesta (ulaz za §17).
+
+   Bez tih polja orkestrator PR ne stavlja u red za review, a reviewer ga ne reviewa nagađanjem nego javlja orkestratoru.
+2. **Poznate granice i suženje ugovora.** "Poznata granica" ili suženi ugovor u opisu PR-a umanjuje nalaz reviewa ili QA-e samo uz trag vlasnikova odobrenja (komentar ili zapis odluke s datumom). Nikad ne umanjuje nalaz koji dira tvrdo pravilo iz `CLAUDE.md`, `docs/PRODUCT.md` §5 ili granicu povjerenja; takav nalaz ostaje kakav jest. Odobreno suženje zapisuje uvjet koji granicu ponovno otvara (primjer: jamstva adaptera pohrane iz #233 vrijede za ulaz kakav predaje gateway; svaki novi pozivatelj ponovno otvara granicu i traži vlastiti plan napada).
+3. **Veličina.** Vrijede oba ograničenja: svaki PR najviše oko 400 promijenjenih redaka koda, veći uz obrazloženje u opisu (`CLAUDE.md`); `critical` PR uz to najviše oko 300 redaka produkcijskog koda, veći se dijeli prije reviewa, a iznimku odobrava vlasnik.
+4. **Stalan QA kriterij.** QA zadatak koristi isti tekst za sve PR-ove: FAIL samo za kvar koda (pogrešan ishod, gubitak podatka, prolaz kroz zaštitu, kršenje `docs/PRODUCT.md` §5). Jaz u testovima, preživjeli mutant bez dokazanog kvara i nepotpun opis su manji nalazi: bilježe se i idu u naknadni korak. Orkestrator u zadatak ne dopisuje strože kriterije.
+5. **Oblik nalaza.** Svaki nalaz reviewa i QA-e ima redak **"Dohvatljivo kroz"**: pozivatelj i ulaz koji on stvarno može proizvesti, ili "nije pokazano". To je oblik izvještaja, ne kriterij; presuda ostaje reviewerova odnosno QA-ina. Uz svaki manji nalaz stoji "blokira" ili "ne blokira". Manji nalaz koji dira samo testove ili dokumentaciju, uz PASS i "ne blokira", ne traži novi push ni novi krug; prati se u zasebnom zadatku. Manji nalaz u produkcijskom kodu zatvara se novim headom prije spajanja.
+6. **Najviše dva kruga.** Drugi FAIL reviewa ili QA-e na istom korijenu zaustavlja ispravke: pisac ne pusha treći ispravak, nego se piše novi ugovor (točka 1) ili se PR dijeli (točka 3). Krugovi se broje i po PR-u: treći krug na istom PR-u ide vlasniku s popisom krugova. Dva ispravka zaredom koja uvedu novi nalaz u istom kodu također idu vlasniku.
+7. **Nedokazana dostižnost.** Nalaz čiji je redak "Dohvatljivo kroz" "nije pokazano", ili koji traži pozivatelja koji ne postoji, ne ide piscu na ispravak nego vlasniku, s izborom: ispraviti, ili suziti ugovor i zapisati poznatu granicu s uvjetom koji je ponovno otvara (točka 2).
+
+## 15. Gate i spajanje (D-106)
+
+- **Strogo jedan po jedan.** U gateu (review, QA, čekanje spajanja) je u svakom trenutku najviše jedan PR, i kad je to D-97 PR koji čeka vlasnika. Redoslijed određuje orkestrator.
+- **Ažurna grana.** PR koji je na redu spaja `main` neposredno prije reviewa (§9). Čisto spajanje `main` koje ne mijenja diff PR-a prenosi review i QA verdikt (D-101); svaka druga promjena traži review i QA na novom headu.
+- **Review i QA istodobno.** Za `critical` PR review i QA kreću istodobno na istom headu. QA ne čita review prije vlastitog verdikta. Ako review padne, QA na tom headu ne vrijedi.
+- **Nakon spajanja.** Orkestrator čeka CI na `main` prije sljedećeg spajanja, zatim pokreće `pnpm orch:ready` za sljedeći PR u redu i traži spajanje `main` prije nego se na stari head potroše review i QA.
+- **Zaštita grane.** Postavke zaštite (uključujući `strict`) mijenja samo vlasnik.
+
+## 16. Skripte: okidač i vlasnik
+
+Svaka skripta ima zapisan okidač (kada se pokreće) i vlasnika (tko ili što je pokreće). PR koji uvodi skriptu uvodi i njezino automatsko pokretanje; skripta bez okidača nije dovršen korak. Granice: spajanje i pokretanje QA sesije ne idu automatski, a D-97 PR-ovi i dalje čekaju vlasnikovu naredbu. Provjera ulaza u red za review blokira spajanje tek kad je vlasnik doda među obvezne provjere u zaštiti grane; do tada samo upozorava. U radu je najviše jedan PR alata odjednom.
+
+## 17. Dnevna petlja učenja
+
+1. **Okidač.** Analiza se radi za svaki slučaj u danu u kojem PR uđe u treći krug, QA padne nakon review PASS-a ili `main` pocrveni.
+2. **Dva pitanja za svaki slučaj.** Na kojem se najranijem koraku ovo moglo vidjeti? Koje bi polje ili provjera na tom koraku to pokazalo?
+3. **Prijedlog je polje ili provjera, ne savjet.** Svaki prijedlog glasi "dodaj polje ovdje" ili "dodaj provjeru ovdje"; vlasnik ga odobri ili odbije. Ništa se ne mijenja bez njegove odluke.
+4. **Pitanje unaprijed.** Ako QA padne na nečemu što nije pisalo u retku "Što bi ovaj PR moglo oboriti na QA-i?" (§14, točka 1), to je ulaz za točku 2.
+5. **Čišćenje.** Jednom tjedno petlja gleda unatrag: polje ili provjera koja mjesec dana nije ništa uhvatila predlaže se za brisanje.
+
+Dok alata za dnevne podatke nema, dnevni popis na kraju radnog dana piše orkestrator na issueu #87.

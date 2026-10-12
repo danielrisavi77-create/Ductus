@@ -1,7 +1,7 @@
 // Pure logic of `pnpm orch:health` (DAN-139): no gh, git or fs calls here.
 // Inputs are already-read data; outputs are findings {level, check, text}.
 import { canonicalBlock, field, metadataLines } from "../engineering/metadata-parser.mjs";
-import { verifiedCommentIdentity } from "../engineering/review-gate-core.mjs";
+import { trustedAuthor, verifiedCommentIdentity } from "../engineering/review-gate-core.mjs";
 
 /** One heartbeat of the orchestrator loop, in minutes (docs/ORKESTRATOR.md §10). */
 export const HEARTBEAT_MIN = 30;
@@ -12,7 +12,6 @@ export const CLOUD_QA_MIN = 20; // manual: the script cannot see cloud sessions
 
 export const LEVELS = ["FAIL", "NEPROVJERENO", "WARN", "PASS", "RUČNO"];
 const SHA_RE = /^[0-9a-f]{40}$/i;
-const TRUSTED = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
 const ORCH_RE = /\((?:claude|codex|chatgpt|grok):[A-Za-z0-9_-]+:orchestrator\)/;
 const RED = new Set(["failure", "cancelled", "timed_out", "action_required", "startup_failure", "error"]);
 const SAFE_NAME = /^[\w .,()/:-]{1,80}$/;
@@ -30,13 +29,13 @@ const longer = (now, at, limitMin) => now - at > limitMin * 60000;
 export const printable = (s) => String(s).replace(/[\u0000-\u001f\u007f-\u009f]/g, "?");
 
 /**
- * Canonical verdicts only: trusted association, first non-empty line outside
+ * Canonical verdicts only: an author the gate trusts, first non-empty line outside
  * code, full head SHA, and an App identity the gate accepts (review-gate-core).
  */
 export function canonicalVerdicts(comments) {
   const out = [];
   for (const [index, c] of (comments ?? []).entries()) {
-    if (!TRUSTED.has(c?.author_association)) continue;
+    if (!trustedAuthor(c)) continue;
     const body = c?.body ?? "";
     for (const k of KINDS) {
       if (!canonicalBlock(body, k.agent)) continue;

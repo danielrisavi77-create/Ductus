@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { EDIT_STEP_FORMAT_V1 } from "../document/edit-step";
+
 import {
   isEvidenceReceiptPayloadV1,
   isSignedEvidenceReceipt,
@@ -72,14 +74,14 @@ function segmentWithProfile(evidenceProfileId: string) {
       {
         sequence: 1,
         source: "editor",
-        steps: [{ stepType: "replace", from: 1, to: 1 }],
+        steps: [{ stepType: "replace", from: 1, to: 1, slice: { content: [{ type: "text", text: "a" }] } }],
         beforeDocumentHash: A,
         afterDocumentHash: B,
       },
     ],
     captureContext: {
       editorModel: "prosemirror",
-      transactionFormat: "prosemirror-step-json-v1",
+      transactionFormat: EDIT_STEP_FORMAT_V1,
     },
     evidenceProfileId,
   };

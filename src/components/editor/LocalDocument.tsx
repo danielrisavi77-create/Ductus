@@ -5,12 +5,11 @@
  *
  * One provider owns the editor, the Web Lock and the `LocalDocumentSaver`;
  * the sheet (`LocalEditor`) and the word count (`LocalWordCount`) only render
- * what it holds. Nothing here touches the network. The save chip is step 1b-3.
+ * what it holds. Nothing here touches the network.
  *
  * - One writer per document: the tab holding the Web Lock journals; any other
- *   tab stays empty and read-only and reads the journal once the lock is free
- *   (#197 attack 4). Every state but `ready` is read-only; the notices that
- *   say why (blocked, recovery, unavailable, a failed save) are step 1b-2b.
+ *   tab shows the blocked notice, stays read-only and reads the journal again
+ *   once the lock is free (#197 attack 4).
  * - Every change calls `edit()` at once; the canonical candidate is built and
  *   proposed after a debounce and on `pagehide` or a hidden page (attack 1).
  * - Block ids belong to the identity plugin (#226): it mints them and strips
@@ -28,6 +27,8 @@ import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 
 import type { CanonicalDocument } from "@/domain/document";
+import { chipContent, type ChipContent } from "@/domain/sync/labels";
+import type { SyncState } from "@/domain/sync/states";
 import { countWords, NODE_ID_ATTRIBUTE, tiptapToCanonical } from "@/editor/interop";
 import { replaceWithStoredDocument } from "@/editor/identity";
 import { createEditorExtensions } from "@/editor/schema";
@@ -36,17 +37,23 @@ import { storableDocument } from "@/editor/storable-text";
 import { wordsHr } from "@/lib/i18n/hr";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
-import { LocalDocumentSaver } from "@/lib/journal/local-document-saver";
+import {
+  LocalDocumentSaver, type SaverFailure, type SaverSnapshot,
+} from "@/lib/journal/local-document-saver";
 
 /** Quiet time after the last change before a candidate is proposed. */
 const DEBOUNCE_MS = 400;
+const EXPORT_FILE_NAME = "ductus-rad.txt";
 
 type Phase = "loading" | "blocked" | "ready" | "recovery" | "unavailable";
+type Failure = SaverFailure | "invalid";
 
 type LocalDocumentValue = {
   editor: Editor | null;
   phase: Phase;
+  snapshot: SaverSnapshot | null;
   words: number;
+  invalid: boolean;
 };
 
 const LocalDocumentContext = createContext<LocalDocumentValue | null>(null);
@@ -77,7 +84,9 @@ export function LocalDocumentProvider({
   scope, documentId, children,
 }: { scope: string; documentId: string; children: ReactNode }) {
   const [phase, setPhase] = useState<Phase>("loading");
+  const [snapshot, setSnapshot] = useState<SaverSnapshot | null>(null);
   const [words, setWords] = useState(0);
+  const [invalid, setInvalid] = useState(false);
   const saverRef = useRef<LocalDocumentSaver | null>(null);
   const editorRef = useRef<Editor | null>(null);
   const readyRef = useRef(false);
@@ -97,8 +106,10 @@ export function LocalDocumentProvider({
     // remain, the journal would hold other text than shown, so it is refused.
     if (!candidate.ok || !sameIds(editor, candidate.doc) ||
         storableDocument(candidate.doc) !== candidate.doc) {
+      setInvalid(true);
       return;
     }
+    setInvalid(false);
     setWords(countWords(candidate.doc));
     void saver.propose(candidate.doc);
   });
@@ -159,10 +170,16 @@ export function LocalDocumentProvider({
       setPhase("loading");
       const journal = new AtomicDexieJournal(scope);
       const saver = new LocalDocumentSaver(journal, documentId);
+      // The cleanup's flush may still emit after `setSnapshot(null)`; what the
+      // old saver reports then must not come back as the next lock's notice.
+      const unsubscribe = saver.subscribe((next) => {
+        if (!disposed) setSnapshot(next);
+      });
       try {
         const result = await saver.load();
         if (disposed) return;
         saverRef.current = saver;
+        setSnapshot(saver.snapshot());
         if (result.kind !== "unavailable" && result.document) {
           // The only way stored ids enter the editor (#226): validated, never
           // re-minted. A refused document is a journal this tab cannot trust,
@@ -187,6 +204,7 @@ export function LocalDocumentProvider({
         });
       } finally {
         await saver.settled();
+        unsubscribe();
         journal.close();
       }
     };
@@ -195,8 +213,12 @@ export function LocalDocumentProvider({
       if (lock) return write(lock);
       if (disposed) return undefined;
       setPhase("blocked");
+      // A refused wait would leave this tab blocked for good; say instead
+      // that this device does not save (an abort on cleanup is disposed).
       return void locks.request(`ductus-journal:${scope}:${documentId}`, { signal: abort.signal }, write)
-        .catch(() => undefined);
+        .catch(() => {
+          if (!disposed) setPhase("unavailable");
+        });
     }).catch(() => {
       if (!disposed) setPhase("unavailable");
     });
@@ -206,6 +228,9 @@ export function LocalDocumentProvider({
       disposed = true;
       readyRef.current = false;
       saverRef.current = null;
+      // A notice belongs to the saver it came from, not to the next document.
+      setSnapshot(null);
+      setInvalid(false);
       // Read-only until the next lock is held, so nothing typed in between is
       // lost to the next load (the editor may outlive this effect).
       if (!editor.isDestroyed) editor.setEditable(false, false);
@@ -214,18 +239,109 @@ export function LocalDocumentProvider({
     };
   }, [editor, scope, documentId]);
 
-  const value: LocalDocumentValue = { editor, phase, words };
+  const value: LocalDocumentValue = { editor, phase, snapshot, words, invalid };
   return <LocalDocumentContext.Provider value={value}>{children}</LocalDocumentContext.Provider>;
 }
 
-/** The sheet: the editor itself, read-only in every phase but `ready`. */
-export function LocalEditor() {
-  const { editor, phase } = useLocalDocument();
-  // `data-phase` is for tests and styling only; it carries no text.
-  return <EditorContent editor={editor} className="editor-surface" data-phase={phase} />;
+/** Why saving stopped, as far as the saver or the provider knows. */
+function failureOf({ phase, snapshot, invalid }: LocalDocumentValue): Failure | null {
+  return invalid ? "invalid" : snapshot?.failure ?? (phase === "unavailable" ? "unavailable" : null);
 }
 
-/** Word count for the status bar; the save chip joins it in step 1b-3. */
+const FAILURE_TEXT: Record<Failure, string> = {
+  quota: t.editor.failureQuota,
+  unavailable: t.editor.failureUnavailable,
+  limit: t.editor.failureLimit,
+  stale: t.editor.failureStale,
+  unknown: t.editor.failureUnknown,
+  invalid: t.editor.failureInvalid,
+  corrupt: t.editor.recovery,
+};
+
+function exportText(editor: Editor): void {
+  const text = editor.getText({ blockSeparator: "\n\n" });
+  const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = EXPORT_FILE_NAME;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+/** The sheet: notices, the export escape hatch and the editor itself. */
+export function LocalEditor() {
+  const value = useLocalDocument();
+  const { editor, phase } = value;
+  const failure = failureOf(value);
+  const alert = phase === "recovery" ? t.editor.recovery : failure ? FAILURE_TEXT[failure] : null;
+  const canExport = editor !== null && (alert !== null) && !editor.isEmpty;
+  return (
+    <>
+      {/* Live regions exist before their text does, so it is announced. */}
+      <div className="editor-notice" role="alert">
+        {alert ? <p>{alert}</p> : null}
+      </div>
+      <div className="editor-notice" role="status">
+        {phase === "blocked" ? <p>{t.editor.blockedHint}</p> : null}
+      </div>
+      {canExport ? (
+        <button type="button" className="btn editor-export" onClick={() => exportText(editor)}>
+          {t.editor.exportText}
+        </button>
+      ) : null}
+      {/* `data-phase` is for tests and styling only; it carries no text. */}
+      <EditorContent editor={editor} className="editor-surface" data-phase={phase} />
+    </>
+  );
+}
+
+type Chip = ChipContent & { state: SyncState | "blocked" };
+
+/**
+ * What the save chip says, or null while the journal is still being read.
+ * Order matters: a blocked tab journals nothing, a refused document and any
+ * failure outrank whatever the saver last reported, so the chip never says
+ * "Spremljeno na uređaju" while a notice says saving has stopped (#197
+ * attacks 5 and 9). Only the saver's own state, reached after `saveLocal`
+ * resolved, can say it.
+ */
+function chipOf(value: LocalDocumentValue): Chip | null {
+  if (value.phase === "blocked") return { ...chipContent("EDITING", true), state: "blocked" };
+  const failure = failureOf(value);
+  const state: SyncState | null = value.phase === "recovery" || failure === "corrupt"
+    ? "RECOVERY_REQUIRED"
+    : failure ? "ERROR"
+    : value.phase === "ready" && value.snapshot ? value.snapshot.state
+    : null;
+  return state ? { ...chipContent(state), state } : null;
+}
+
+/**
+ * The save state in the status bar (#197 step 1 and line 53). The chip itself
+ * is not live: it changes when typing starts and again when it pauses, which
+ * a screen reader would read out over the typing. The polite region beside it
+ * says only that the text is now on the device (attack 14); a failure is
+ * announced by the alert above the sheet, a blocked tab by its status notice.
+ */
+export function LocalSaveChip() {
+  const chip = chipOf(useLocalDocument());
+  return (
+    <>
+      {chip ? (
+        // `data-state` is for tests only; the label carries the meaning.
+        <span className="sync-chip" data-tone={chip.tone} data-state={chip.state}>
+          <span className="sync-chip__dot" aria-hidden="true" />
+          {chip.text}
+        </span>
+      ) : null}
+      <span className="visually-hidden" role="status">
+        {chip?.state === "LOCAL_DURABLE" ? chip.text : null}
+      </span>
+    </>
+  );
+}
+
+/** Word count for the status bar. */
 export function LocalWordCount() {
   return <span>{wordsHr(useLocalDocument().words)}</span>;
 }

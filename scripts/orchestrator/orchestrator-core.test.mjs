@@ -40,6 +40,14 @@ test("verdicts in code fences, non-first lines and untrusted authors are ignored
   assert.equal(countCanonical(comments), 0);
 });
 
+test("verdicts count only from authors the gate trusts", () => {
+  const as = (association, user) => ({ ...review(H1, "PASS", "2026-10-10T10:00:00Z"), author_association: association, user });
+  assert.equal(countCanonical([as("OWNER", { login: "o", type: "User" })]), 1);
+  assert.equal(countCanonical([as("COLLABORATOR", { login: "helper", type: "User" })]), 0);
+  assert.equal(countCanonical([as("MEMBER", { login: "helper", type: "User" })]), 0);
+  assert.equal(countCanonical([as("OWNER", { login: "app[bot]", type: "Bot" })]), 0);
+});
+
 test("qa verdicts parse separately", () => {
   const qa = c(`QA-Agent: claude:c:qa\nQA-Head: ${H1}\nQA-Verdict: block`);
   assert.equal(latestVerdict([qa], "qa", H1).verdict, "BLOCK");

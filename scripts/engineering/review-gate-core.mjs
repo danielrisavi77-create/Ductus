@@ -1,12 +1,17 @@
 import { canonicalBlock, field } from "./metadata-parser.mjs";
 import { evaluateMetadata } from "./pr-metadata-core.mjs";
-import { changedPaths, ownerCommandPaths } from "./protected-paths.mjs";
+import { changedPaths, ownerCommandPaths, qaExemption } from "./protected-paths.mjs";
 
 const RISK_VALUES = new Set(["low", "standard", "critical"]);
 const AGENT_RE =
   /^(claude|codex|chatgpt|grok):[A-Za-z0-9_-]+:(orchestrator|platforma|backend|frontend|reviewer|qa|bug-hunter|product-ux|short)$/;
 const SHA_RE = /^[0-9a-f]{40}$/i;
-const TRUSTED_ASSOCIATIONS = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
+const LISTED_ASSOCIATIONS = new Set(["MEMBER", "COLLABORATOR"]);
+
+// Write access alone does not make an account a verdict author: the owner
+// always is, a member or collaborator only when its login is listed here.
+// Adding a login is a D-97 change; never list a bot or triage account.
+export const TRUSTED_VERDICT_LOGINS = Object.freeze([]);
 const VERDICTS = new Set(["PASS", "FAIL", "BLOCK"]);
 
 export const APP_RUNTIMES = new Map([
@@ -70,9 +75,22 @@ function sameHead(value, headSha) {
   return Boolean(value && SHA_RE.test(value) && value.toLowerCase() === headSha.toLowerCase());
 }
 
-function trustedComments(items) {
+/**
+ * True when a comment's author may record a verdict or override: never a bot
+ * account, whatever association GitHub reports; the owner; or a listed login.
+ * Shared with the orchestrator scripts so they count what the gate counts.
+ */
+export function trustedAuthor(item, logins = TRUSTED_VERDICT_LOGINS) {
+  if (item?.user?.type === "Bot") return false;
+  if (item?.author_association === "OWNER") return true;
+  const login = item?.user?.login;
+  return LISTED_ASSOCIATIONS.has(item?.author_association) && typeof login === "string" && logins.includes(login);
+}
+
+// A verdict is a person's comment posted through an App.
+function trustedComments(items, logins) {
   return (items ?? [])
-    .filter((item) => TRUSTED_ASSOCIATIONS.has(item?.author_association))
+    .filter((item) => trustedAuthor(item, logins))
     .map((item, index) => ({
       body: item?.body ?? "",
       login: item?.user?.login ?? null,
@@ -159,11 +177,22 @@ function latestVerdicts(entries, {
       order[0] > previous.order[0] ||
       (order[0] === previous.order[0] && order[1] > previous.order[1])
     ) {
-      latest.set(key, { agent, verdict, extra, fallback, identity, order });
+      latest.set(key, { agent, head: head.toLowerCase(), verdict, extra, fallback, identity, order });
     }
   }
 
   return latest;
+}
+
+// Names the earlier heads behind a success that counts carried verdicts, so the
+// status shows when D-101 decided it.
+function carriedNote(counted, headSha) {
+  const heads = [...new Set(
+    counted
+      .map((result) => result.head)
+      .filter((head) => !sameHead(head, headSha)),
+  )];
+  return heads.length === 0 ? "" : ` Carried from ${heads.map((head) => head.slice(0, 7)).join(", ")}.`;
 }
 
 function currentNegative(verdicts) {
@@ -179,6 +208,8 @@ export function evaluateGate({
   ownerLogin,
   comments = [],
   carriedHeads = new Set(),
+  trustedLogins = TRUSTED_VERDICT_LOGINS,
+  qaExempt = null,
 }) {
   const authorAgent = field(body, "Agent");
   const authorRuntime = declaredRuntime(authorAgent);
@@ -202,7 +233,7 @@ export function evaluateGate({
     return { state: "failure", description: "Missing repository owner identity." };
   }
 
-  const trusted = trustedComments(comments);
+  const trusted = trustedComments(comments, trustedLogins);
 
   if (findOwnerOverride(trusted, headSha, ownerLogin)) {
     return { state: "success", description: `Owner override recorded for ${risk} risk.` };
@@ -260,12 +291,23 @@ export function evaluateGate({
     passingReviews.map((review) => review.identity.appSlug),
   );
 
+  const qaPasses = [...qa.values()].filter(
+    (result) =>
+      result.identity.principal !== authorPrincipal &&
+      result.verdict === "PASS",
+  );
+
+  // ENGINEERING_SYSTEM §5: a critical PR changing only tests or only
+  // documents needs no QA PASS. `qaExempt` comes from the changed file list,
+  // never from the body; a current QA FAIL or BLOCK above still holds.
+  if (risk === "critical" && qaExempt) {
+    return {
+      state: "success",
+      description: `Independently authenticated review is valid for current head (critical, ${qaExempt} only: QA not required).${carriedNote(passingReviews, headSha)}`,
+    };
+  }
+
   if (risk === "critical") {
-    const qaPasses = [...qa.values()].filter(
-      (result) =>
-        result.identity.principal !== authorPrincipal &&
-        result.verdict === "PASS",
-    );
     const separateAppPass = qaPasses.some(
       (result) => !passingReviewerApps.has(result.identity.appSlug),
     );
@@ -295,7 +337,7 @@ export function evaluateGate({
     if (fallbackPass) {
       return {
         state: "success",
-        description: `Independent review and same-App QA valid for current head (quota fallback: ${fallbackPass.fallback}).`,
+        description: `Independent review and same-App QA valid for current head (quota fallback: ${fallbackPass.fallback}).${carriedNote([...passingReviews, fallbackPass], headSha)}`,
       };
     }
 
@@ -307,33 +349,45 @@ export function evaluateGate({
     }
   }
 
+  const counted = risk === "critical" ? [...passingReviews, ...qaPasses] : passingReviews;
   return {
     state: "success",
-    description: risk === "critical"
+    description: (risk === "critical"
       ? "Independently authenticated review and QA are valid for current head."
-      : "Independently authenticated review is valid for current head.",
+      : "Independently authenticated review is valid for current head.") + carriedNote(counted, headSha),
   };
 }
 
 /**
- * Earlier heads named by trusted canonical review or QA blocks, newest first,
- * that the runner may test for a carry-over. The Owner Override never carries.
+ * Earlier heads that the runner may test for a carry-over: heads named by
+ * trusted canonical review or QA blocks that lie on `path`, the first-parent
+ * walk from the current head (newest first, GET commits/{sha} objects), behind
+ * merge commits only. A head the walk cannot see would be dropped silently,
+ * and with it a FAIL or BLOCK, so an unfinished walk or more than
+ * MAX_CARRIED_HEADS such heads carries nothing. The Owner Override never
+ * carries.
  */
-export function carriedHeadCandidates(comments, headSha) {
-  const heads = [];
-  for (const entry of trustedComments(comments).sort(
-    (a, b) => b.createdAt - a.createdAt || b.index - a.index,
-  )) {
+export function carriedHeadCandidates(comments, headSha, path) {
+  const named = new Set();
+  for (const entry of trustedComments(comments)) {
     for (const [block, headField] of [["Agent-Review", "Review-Head"], ["QA-Agent", "QA-Head"]]) {
       if (!canonicalBlock(entry.body, block)) continue;
       const head = field(entry.body, headField)?.toLowerCase();
-      if (head && SHA_RE.test(head) && head !== headSha.toLowerCase() && !heads.includes(head)) {
-        heads.push(head);
-      }
+      if (head && SHA_RE.test(head) && head !== headSha.toLowerCase()) named.add(head);
     }
-    if (heads.length >= MAX_CARRIED_HEADS) break;
   }
-  return heads.slice(0, MAX_CARRIED_HEADS);
+  if (named.size === 0) return { heads: [], reason: null };
+  const steps = path ?? [];
+  if (!steps.some((commit) => (commit?.parents?.length ?? 0) < 2)) {
+    return { heads: [], reason: "first-parent walk did not reach a non-merge commit" };
+  }
+  const heads = steps
+    .map((commit) => commit?.sha?.toLowerCase())
+    .filter((sha) => named.has(sha) && onlyBaseMerges(steps, sha));
+  if (heads.length > MAX_CARRIED_HEADS) {
+    return { heads: [], reason: `more than ${MAX_CARRIED_HEADS} verdict heads behind base merges` };
+  }
+  return { heads, reason: null };
 }
 
 /**
@@ -357,23 +411,46 @@ function changeKey(file) {
     file?.filename ?? null,
     file?.previous_filename ?? null,
     file?.status ?? null,
-    file?.patch ?? null,
-    typeof file?.patch === "string" ? null : file?.sha ?? null,
+    file?.patch,
   ]);
 }
 
 /**
  * `current` and `earlier` are GET compare/{base}...{head} for the current and
- * the earlier head: the PR's own diff must be identical, file by file.
+ * the earlier head: the PR's own diff must be identical, file by file. A
+ * file without a patch (binary, too large) shows only its head side, so the
+ * PR's effect on the base cannot be compared and nothing carries.
  */
 export function sameChange(current, earlier) {
   const a = current?.files ?? [];
   const b = earlier?.files ?? [];
   if (a.length === 0 || a.length !== b.length || a.length >= COMPARE_FILE_CAP) return false;
+  if ([...a, ...b].some((file) => typeof file?.patch !== "string")) return false;
   const keys = (files) => files.map(changeKey).sort();
   const left = keys(a);
   const right = keys(b);
   return left.every((key, index) => key === right[index]);
+}
+
+/**
+ * Heads among `candidates` whose PR diff equals `current`. `compareHead(sha)`
+ * returns GET compare/{base}...{sha}. All or nothing: if any compare fails,
+ * no head carries, so a carryable FAIL is never dropped while a PASS carries.
+ */
+export async function carriedByCompare(candidates, current, compareHead, log = () => {}) {
+  const carried = new Set();
+  for (const sha of candidates) {
+    let same;
+    try {
+      same = sameChange(current, await compareHead(sha));
+    } catch (error) {
+      log(`Carry-over check for ${sha} failed closed, nothing carries: ${error.message}`);
+      return new Set();
+    }
+    log(`Carry-over ${same ? "accepted" : "rejected"}: head ${sha}.`);
+    if (same) carried.add(sha);
+  }
+  return carried;
 }
 
 /**
@@ -400,7 +477,14 @@ export function evaluatePullRequest({ pr, files, comments, ownerLogin, carriedHe
   }
   return {
     metadata,
-    result: evaluateGate({ body: pr.body ?? "", headSha: pr.head.sha, ownerLogin, comments, carriedHeads }),
+    result: evaluateGate({
+      body: pr.body ?? "",
+      headSha: pr.head.sha,
+      ownerLogin,
+      comments,
+      carriedHeads,
+      qaExempt: qaExemption(paths),
+    }),
   };
 }
 
