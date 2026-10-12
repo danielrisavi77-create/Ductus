@@ -23,11 +23,11 @@ const codex = (body, ms, extra = {}) => ({
   created_at: iso(ms),
   ...extra,
 });
-const byOwner = (body, ms) => ({
+const byOwner = (body, ms, slug = "claude") => ({
   body,
   user: { login: ownerLogin },
   author_association: "OWNER",
-  performed_via_github_app: { slug: "claude" },
+  performed_via_github_app: { slug },
   created_at: iso(ms),
 });
 const review = (ms) => byOwner(`Agent-Review: claude:b:reviewer\nReview-Head: ${head}\nReview-Verdict: PASS\n`, ms);
@@ -81,4 +81,19 @@ test("B: the phrase anywhere but at the opening of the comment is no evidence (#
 
 test("B: leading whitespace before the message is still the opening (#128)", () => {
   assert.equal(evaluate([codex(`\n  ${QUOTA}`, 0), review(10 * MIN), fallbackQa(20 * MIN)]).state, "success");
+});
+
+// C (owner decision, #128 issuecomment-6123209198): the fallback needs valid
+// quota evidence for any one other registered App, not for every other App.
+// Grok has no registered quota message, yet Grok review + Grok QA may pass on
+// Codex evidence alone.
+test("C: Grok review and Grok QA pass on Codex quota evidence alone (#128)", () => {
+  const grokReview = byOwner(`Agent-Review: grok:b:reviewer\nReview-Head: ${head}\nReview-Verdict: PASS\n`, 10 * MIN, "grok-by-xai");
+  const grokQa = byOwner(
+    `QA-Agent: grok:c:qa\nQA-Head: ${head}\nQA-Verdict: PASS\nQA-Scope: offline + wrong actor\nProvider-Fallback: chatgpt-codex-connector\n`,
+    20 * MIN,
+    "grok-by-xai",
+  );
+  assert.equal(evaluate([codex(QUOTA, 0), grokReview, grokQa]).state, "success");
+  assert.equal(evaluate([grokReview, grokQa]).state, "pending");
 });
