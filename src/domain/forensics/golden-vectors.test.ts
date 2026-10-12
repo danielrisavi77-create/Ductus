@@ -148,7 +148,7 @@ describe("golden vectors: segment hash and chain", () => {
     }
     if (edit.canonicalReplace !== undefined) {
       // The edit is not canonical at exactly the spot it changes, and its
-      // canonical twin is accepted, so only the byte check refuses it.
+      // canonical twin is accepted, so the byte check refuses the spelling.
       expect(edit.findHex ?? edit.replaceHex).toBeUndefined();
       const canonical = applyPayloadEdit(fromHex(base.canonicalUtf8Hex), {
         ...edit,
@@ -165,6 +165,32 @@ describe("golden vectors: segment hash and chain", () => {
       expect(canonicalizeJcs(JSON.parse(text ?? ""))).toBe(text);
       expect(isEvidenceSegmentV2(JSON.parse(text ?? ""))).toBe(false);
     }
+  });
+
+  // F-066 (DAN-183c): -0 is refused by two layers. The closed step format
+  // reads it as an invalid position, and the byte check refuses its spelling;
+  // the twin written with 0 passes both, so each layer is pinned on its own.
+  it("refuses negative-zero in the step format and in the bytes", async () => {
+    const edit = vectors.segmentPayloads.rejected.find((candidate) => candidate.name === "negative-zero");
+    if (edit?.replace === undefined || edit.canonicalReplace === undefined) {
+      throw new Error("vector negative-zero");
+    }
+    const base = fromHex(chain.segments[edit.base].canonicalUtf8Hex);
+    const text = strictText(applyPayloadEdit(base, edit)) ?? "";
+    const twin = strictText(applyPayloadEdit(base, { ...edit, replace: edit.canonicalReplace })) ?? "";
+
+    expect(Object.is((JSON.parse(edit.replace) as { from: unknown }).from, -0)).toBe(true);
+    expect(parseEditSteps(EDIT_STEP_FORMAT_V1, [JSON.parse(edit.replace)])).toEqual({
+      ok: false,
+      code: "invalid_position",
+      path: "$[0].from",
+    });
+    expect(isEvidenceSegmentV2(JSON.parse(text))).toBe(false);
+    expect(canonicalizeJcs(JSON.parse(text))).toBe(twin);
+
+    expect(parseEditSteps(EDIT_STEP_FORMAT_V1, [JSON.parse(edit.canonicalReplace)]).ok).toBe(true);
+    expect(isEvidenceSegmentV2(JSON.parse(twin))).toBe(true);
+    expect(await verifyCanonicalEvidencePayloadV2(twin)).toMatchObject({ ok: true });
   });
 
   it("accepts a segment of exactly the limit and rejects one byte more", async () => {
@@ -266,6 +292,15 @@ describe("golden vectors: step format (DAN-183)", () => {
     expect(canonicalizeJcs(JSON.parse(text))).toBe(text);
     const segment = JSON.parse(text) as { captureContext: { transactionFormat: string } };
     expect(segment.captureContext.transactionFormat).toBe("ductus-test-insert-text-v0");
+  });
+
+  // DAN-183c: the step shape is closed, so the test insert format is refused.
+  it.each(formerSegments)("refuses $name, written before the closed step format", async (former) => {
+    const bytes = fromHex(former.canonicalUtf8Hex);
+    const text = strictText(bytes) ?? "";
+    expect(isEvidenceSegmentV2(JSON.parse(text))).toBe(false);
+    expect(await verifyCanonicalEvidencePayloadV2(bytes)).toEqual({ ok: false, reason: former.reason });
+    expect(await verifyCanonicalEvidencePayloadV2(text)).toEqual({ ok: false, reason: former.reason });
   });
 
   it("keeps both chain segments from before DAN-183 as former vectors", () => {
