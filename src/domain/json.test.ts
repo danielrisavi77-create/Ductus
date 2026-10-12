@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isPlainObject, ownProperty } from "./json";
+import { hasOnlyKeys, isPlainObject, ownProperty } from "./json";
 
 /**
  * The prototype rule these two encode is a security rule (F1-10), and it is
@@ -39,6 +39,32 @@ describe("isPlainObject", () => {
     expect(isPlainObject(new Date())).toBe(false);
     expect(isPlainObject(new Map())).toBe(false);
     expect(isPlainObject(() => {})).toBe(false);
+  });
+});
+
+describe("hasOnlyKeys", () => {
+  const allowed = new Set(["status", "revision"]);
+
+  it("accepts any subset of the allowed keys", () => {
+    expect(hasOnlyKeys({}, allowed)).toBe(true);
+    expect(hasOnlyKeys({ status: "committed" }, allowed)).toBe(true);
+    expect(hasOnlyKeys({ status: "committed", revision: 1 }, allowed)).toBe(true);
+  });
+
+  it("rejects one unknown key, also one that is undefined or named like a prototype member", () => {
+    expect(hasOnlyKeys({ status: "committed", extra: 1 }, allowed)).toBe(false);
+    expect(hasOnlyKeys({ extra: undefined }, allowed)).toBe(false);
+    expect(hasOnlyKeys(JSON.parse('{"__proto__": 1}'), allowed)).toBe(false);
+    expect(hasOnlyKeys(JSON.parse('{"constructor": 1}'), allowed)).toBe(false);
+  });
+
+  it("counts symbol and non-enumerable keys as unknown", () => {
+    expect(hasOnlyKeys({ [Symbol("hidden")]: 1 } as Record<string, unknown>, allowed)).toBe(false);
+    const hidden = Object.defineProperty({ status: "committed" }, "extra", {
+      value: 1,
+      enumerable: false,
+    });
+    expect(hasOnlyKeys(hidden, allowed)).toBe(false);
   });
 });
 

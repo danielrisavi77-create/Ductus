@@ -110,8 +110,9 @@ const NOTHING_TO_SEND: DrainPlan = { send: null, supersededUpTo: null };
  * True when the queue holds a row that is not provably OLDER than `sent` — a
  * held replay with later edits behind it, or rows parked at an unsafe
  * boundary. A verified receipt for `sent` then vouches for older text than
- * the author is looking at; the result is handed to `outcomeToEvents`, which
- * withholds SYNC_ACK. Anything that cannot be ordered counts as newer.
+ * the author is looking at, so `outcomeToEvents` withholds SYNC_ACK. It asks
+ * this itself, of the queue the answer finds (#181). Anything that cannot be
+ * ordered counts as newer.
  *
  * The sent row is recognised by document, sequence and transaction id, never
  * by object reference: the runner re-reads the queue from the journal, which
@@ -128,24 +129,10 @@ export function newerRowsQueued(
   if (!Array.isArray(pending)) {
     return true;
   }
-  const sentDocumentId = sent.documentId;
-  const sentTransactionId = sent.tx?.clientTransactionId;
-  const identifiable =
-    typeof sentDocumentId === "string" &&
-    sentDocumentId.trim() !== "" &&
-    typeof sentTransactionId === "string" &&
-    sentTransactionId.trim() !== "" &&
-    typeof sent.localSeq === "number" &&
-    Number.isFinite(sent.localSeq);
+  const identifiable = isIdentifiable(sent);
   let sentSeen = false;
   return pending.some((row) => {
-    if (
-      identifiable &&
-      !sentSeen &&
-      row?.documentId === sentDocumentId &&
-      row.localSeq === sent.localSeq &&
-      row.tx?.clientTransactionId === sentTransactionId
-    ) {
+    if (identifiable && !sentSeen && isSameIdentity(identityOf(row), identityOf(sent))) {
       sentSeen = true;
       return false;
     }
@@ -156,6 +143,42 @@ export function newerRowsQueued(
       sequence < sent.localSeq
     );
   });
+}
+
+type RowIdentity = { documentId: string; localSeq: number; clientTransactionId: string };
+
+function identityOf(row: PendingTransaction | null | undefined): Partial<RowIdentity> {
+  return {
+    documentId: row?.documentId,
+    localSeq: row?.localSeq,
+    clientTransactionId: row?.tx?.clientTransactionId,
+  };
+}
+
+/** A row can be told apart from every other only by a non-empty document, sequence and key. */
+function isIdentifiable(row: PendingTransaction | null | undefined): boolean {
+  const { documentId, localSeq, clientTransactionId } = identityOf(row);
+  return (
+    typeof documentId === "string" &&
+    documentId.trim() !== "" &&
+    typeof clientTransactionId === "string" &&
+    clientTransactionId.trim() !== "" &&
+    typeof localSeq === "number" &&
+    Number.isFinite(localSeq)
+  );
+}
+
+/**
+ * The one identity check of the drain (DAN-110, DAN-135, #181): document,
+ * sequence and transaction id, never object reference, since the runner
+ * re-reads rows from the journal as new objects.
+ */
+function isSameIdentity(a: Partial<RowIdentity>, b: Partial<RowIdentity>): boolean {
+  return (
+    a.documentId === b.documentId &&
+    a.localSeq === b.localSeq &&
+    a.clientTransactionId === b.clientTransactionId
+  );
 }
 
 /**
@@ -524,24 +547,113 @@ const RETRYABLE: SyncEvent[] = [{ type: "SYNC_FAILED", retryable: true }];
  */
 const VERIFIED_COMMIT_REVISIONS = new WeakMap<object, CommitReceiptExpectation>();
 
+/** Answers `outcomeToEvents` found for a row the queue no longer owes (#181). */
+const NOT_OWED = new WeakSet<object>();
+
 /**
- * `newerRowsQueued` is `newerRowsQueued(pending, plan.send)` for the queue
- * and plan that produced the send. When it is anything but `false`, a verified receipt still records
- * its revision (so `ackedRevision` moves the base and `nextAwaitingReceipt`
- * releases the hold) but emits NO event: the receipt covers older text than
- * the newest queued row, and SYNCED may only ever describe what the author is
- * looking at. The runner sees `ackedRevision(outcome) !== null` with no event
- * and plans the next send straight away; SYNC_ACK comes with the receipt of
- * the newest row.
+ * The flight an answer belongs to: the row it was sent for, and the queue for
+ * that row's document as the journal holds it WHEN THE ANSWER IS PROCESSED,
+ * never as it was at send time (#181). An answer can arrive late, after a
+ * retry of the same row was answered and the row left the queue, or while a
+ * newer row is in flight; only the queue of now can tell.
+ */
+export type AnswerFlight = {
+  sent: PendingTransaction;
+  pending: readonly PendingTransaction[];
+};
+
+/**
+ * A flight can be read only when `sent` and every row of `pending` are
+ * identifiable rows of the same document. A queue holding another document's
+ * row, or a row that cannot be told apart, is not that document's queue, so
+ * the absence of `sent` from it proves nothing.
+ */
+function isReadable(flight: AnswerFlight): boolean {
+  const sent = flight?.sent;
+  const pending = flight?.pending;
+  return (
+    isIdentifiable(sent) &&
+    Array.isArray(pending) &&
+    pending.every((row) => isIdentifiable(row) && row.documentId === sent.documentId)
+  );
+}
+
+/**
+ * The flight is readable and its queue no longer holds `sent`: whatever the
+ * answer says is about a row that is already settled (acknowledged, refused
+ * and rebased, or salvaged). A flight that cannot be read is NOT treated as
+ * settled, so a refusal is never swallowed because the caller passed garbage
+ * or another document's queue (#183 attack 10).
+ */
+function isSettled(flight: AnswerFlight): boolean {
+  if (!isReadable(flight)) {
+    return false;
+  }
+  return !flight.pending.some((row) => isSameIdentity(identityOf(row), identityOf(flight.sent)));
+}
+
+/**
+ * A verified receipt earns SYNC_ACK only for the flight's own row, and only
+ * when that row is the newest the queue holds (`newerRowsQueued` of the queue
+ * the answer finds). SYNC_ACK carries no identity, so this is the only place
+ * that can refuse it for someone else's answer.
+ */
+function earnsAck(flight: AnswerFlight, expected: CommitReceiptExpectation): boolean | null {
+  if (!isReadable(flight)) {
+    return false;
+  }
+  const sent = flight.sent;
+  if (
+    expected.documentId !== sent.documentId ||
+    expected.clientTransactionId !== sent.tx.clientTransactionId
+  ) {
+    // The receipt was checked against another row than the one this flight sent.
+    return null;
+  }
+  return !newerRowsQueued(flight.pending, sent);
+}
+
+/**
+ * `flight` names the row that was sent and the queue the answer finds (#181).
  *
- * The argument is required on purpose: a default would acknowledge for every
- * caller that forgot it. A missing or `undefined` value withholds the ACK.
+ * An answer for a row the queue no longer holds is late and changes nothing:
+ * no event, no verification, no revision for `ackedRevision`, and
+ * `nextAwaitingReceipt` keeps the hold it had. Its row was settled by an
+ * earlier answer, so a late `stale_base` is no conflict, a late `txid_reused`
+ * no recovery, and a late signed receipt no SYNCED for text that is not the
+ * newest.
+ *
+ * An answer for a row the queue still owes is never dropped: refusals and
+ * failures surface whatever arrived first. A verified receipt records its
+ * revision (so `ackedRevision` moves the base and `nextAwaitingReceipt`
+ * releases the hold), but emits SYNC_ACK only when no newer row is queued:
+ * SYNCED may only ever describe what the author is looking at. The runner
+ * sees `ackedRevision(outcome) !== null` with no event and plans the next
+ * send straight away; SYNC_ACK comes with the receipt of the newest row.
+ *
+ * Because SYNC_ACK needs an empty queue once the acknowledged rows are
+ * removed, SYNCED is never reached with a row still owed, and the states
+ * table may keep ignoring refusals in SYNCED (#183 t. 9).
+ *
+ * The argument is required on purpose, and the domain reads the queue itself:
+ * a flag remembered by the caller from send time is exactly what #181 broke.
+ * An unreadable flight never acknowledges.
  */
 export async function outcomeToEvents(
   outcome: DrainOutcome,
   verification: CommitReceiptVerification,
-  newerRowsQueued: boolean,
+  flight: AnswerFlight,
 ): Promise<SyncEvent[]> {
+  if (outcome !== null && typeof outcome === "object") {
+    // Every call decides afresh: an outcome processed again in another
+    // flight must not keep what an earlier call vouched for.
+    VERIFIED_COMMIT_REVISIONS.delete(outcome);
+    NOT_OWED.delete(outcome);
+    if (isSettled(flight)) {
+      NOT_OWED.add(outcome);
+      return [];
+    }
+  }
   switch (outcome?.status) {
     case "committed":
     case "duplicate": {
@@ -574,6 +686,15 @@ export async function outcomeToEvents(
       ) {
         return FATAL;
       }
+      const expected: CommitReceiptExpectation = {
+        documentId: verification.expected.documentId,
+        clientTransactionId: verification.expected.clientTransactionId,
+        revision: outcome.revision,
+      };
+      const ack = earnsAck(flight, expected);
+      if (ack === null) {
+        return FATAL;
+      }
       try {
         const verified = await verification.verify(
           (receipt as { signedReceipt: unknown }).signedReceipt,
@@ -583,12 +704,8 @@ export async function outcomeToEvents(
           return FATAL;
         }
         // Bound to the commit it was verified for, not just to this object.
-        VERIFIED_COMMIT_REVISIONS.set(outcome, {
-          documentId: verification.expected.documentId,
-          clientTransactionId: verification.expected.clientTransactionId,
-          revision: outcome.revision,
-        });
-        return newerRowsQueued === false ? ACK : [];
+        VERIFIED_COMMIT_REVISIONS.set(outcome, expected);
+        return ack ? ACK : [];
       } catch {
         return FATAL;
       }
@@ -702,12 +819,20 @@ const KEY_REFUSED: ReadonlySet<string> = new Set([
  *
  * "Verified" is `ackedRevision`, i.e. only an outcome that `outcomeToEvents`
  * itself vouched for can release the hold.
+ *
+ *   any answer `outcomeToEvents` found settled → `previous`, unchanged: the
+ *                               queue no longer holds `sent`, so a late answer
+ *                               for it neither releases, sets nor diverges a
+ *                               hold (#181). Call `outcomeToEvents` first.
  */
 export function nextAwaitingReceipt(
   sent: PendingTransaction,
   outcome: DrainOutcome,
   previous: AwaitingReceipt | null,
 ): AwaitingReceipt | null {
+  if (outcome !== null && typeof outcome === "object" && NOT_OWED.has(outcome)) {
+    return previous;
+  }
   const status: unknown = outcome?.status;
   if (status === "committed" || status === "duplicate") {
     // The verification must be for THIS row: a verified outcome reused or
@@ -759,10 +884,13 @@ export function nextAwaitingReceipt(
 }
 
 function isSameRow(marker: AwaitingReceipt, sent: PendingTransaction): boolean {
-  return (
-    marker.documentId === sent?.documentId &&
-    marker.localSeq === sent?.localSeq &&
-    marker.clientTransactionId === sent?.tx?.clientTransactionId
+  return isSameIdentity(
+    {
+      documentId: marker.documentId,
+      localSeq: marker.localSeq,
+      clientTransactionId: marker.clientTransactionId,
+    },
+    identityOf(sent),
   );
 }
 

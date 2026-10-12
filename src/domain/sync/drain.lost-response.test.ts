@@ -115,7 +115,7 @@ describe("DAN-110 plan #158 — lost response", () => {
     // r7 goes out; the CAS lands on revision 5 but the answer is lost.
     apply([{ type: "SYNC_STARTED" }]);
     expect(planDrain([r7], meta(state)).send).toBe(r7);
-    apply(await outcomeToEvents(LOST, verification(r7, 5), false));
+    apply(await outcomeToEvents(LOST, verification(r7, 5), { sent: r7, pending: [r7] }));
     expect(state).toBe("ERROR");
     let awaiting = nextAwaitingReceipt(r7, LOST, null);
     expect(awaiting).toEqual({ documentId: D1, localSeq: 7, clientTransactionId: "T7" });
@@ -130,7 +130,7 @@ describe("DAN-110 plan #158 — lost response", () => {
     // The replay answers duplicate 5: the base moves, but r8 is newer, so no ACK.
     apply([{ type: "SYNC_STARTED" }]);
     const dup = answer("duplicate", 5, r7);
-    apply(await outcomeToEvents(dup, verification(r7, 5), newerRowsQueued(queue, replay.send)));
+    apply(await outcomeToEvents(dup, verification(r7, 5), { sent: replay.send!, pending: queue }));
     expect(state).toBe("SYNCING");
     const base = ackedRevision(dup);
     expect(base).toBe(5);
@@ -146,7 +146,7 @@ describe("DAN-110 plan #158 — lost response", () => {
       await outcomeToEvents(
         answer("committed", 6, r8),
         verification(r8, 6),
-        newerRowsQueued(queue, next.send),
+        { sent: next.send!, pending: queue },
       ),
     );
     expect(state).toBe("SYNCED");
@@ -170,7 +170,7 @@ describe("DAN-110 plan #158 — lost response", () => {
     const unreadable = serverSyncErrorToOutcome("odgovor-neispravan");
     expect(unreadable).toEqual(LOST);
     expect(isRetryable(unreadable)).toBe(true);
-    expect(await outcomeToEvents(unreadable, verification(r7, 5), true)).toEqual([
+    expect(await outcomeToEvents(unreadable, verification(r7, 5), { sent: r7, pending: [r7, r8] })).toEqual([
       { type: "SYNC_FAILED", retryable: true },
     ]);
     const awaiting = nextAwaitingReceipt(r7, unreadable, null);
@@ -195,7 +195,7 @@ describe("DAN-110 plan #158 — lost response", () => {
       expect(parsed).toEqual({ status: "invalid" });
       const outcome = parsed as DrainOutcome;
       expect(ackedRevision(outcome)).toBeNull();
-      expect(await outcomeToEvents(outcome, verification(r7, 5), true)).toEqual([
+      expect(await outcomeToEvents(outcome, verification(r7, 5), { sent: r7, pending: [r7, r8] })).toEqual([
         { type: "SYNC_FAILED", retryable: false },
       ]);
       // The CAS may have landed behind the cut: hold r7 exactly like a lost answer.
@@ -245,24 +245,33 @@ describe("DAN-110 plan #158 — lost response", () => {
     const plan = planDrain([r7, r8], meta("ERROR"), awaiting);
     expect(plan.send).toBe(r7);
     const committed = answer("committed", 5, r7);
-    expect(await outcomeToEvents(committed, verification(r7, 5), true)).toEqual([]);
+    expect(await outcomeToEvents(committed, verification(r7, 5), { sent: r7, pending: [r7, r8] })).toEqual([]);
     expect(ackedRevision(committed)).toBe(5);
     expect(nextAwaitingReceipt(r7, committed, awaiting)).toBeNull();
   });
 
   it("6: a late first answer and the replay's answer move the base once and ACK nothing", async () => {
+    // r7 was first sent alone, so a flag taken at send time would have said
+    // "nothing newer" (#181). The answers are judged against the queue they
+    // find: r8 is queued behind r7, and after the first one r7 is gone.
+    const sentAlone: PendingTransaction[] = [r7];
+    expect(newerRowsQueued(sentAlone, r7)).toBe(false);
     const awaiting = nextAwaitingReceipt(r7, LOST, null);
     let queue = [r7, r8];
     const bases: Array<number | null> = [];
+    const holds: unknown[] = [];
     for (const late of [answer("committed", 5, r7), answer("duplicate", 5, r7)]) {
-      expect(await outcomeToEvents(late, verification(r7, 5), newerRowsQueued(queue, r7))).toEqual(
+      expect(await outcomeToEvents(late, verification(r7, 5), { sent: r7, pending: queue })).toEqual(
         [],
       );
       bases.push(ackedRevision(late));
-      expect(nextAwaitingReceipt(r7, late, awaiting)).toBeNull();
+      holds.push(nextAwaitingReceipt(r7, late, awaiting));
       queue = queue.filter((r) => r.localSeq > r7.localSeq);
     }
-    expect(bases).toEqual([5, 5]);
+    // The first releases the hold and moves the base; the second finds r7
+    // settled and changes nothing, so the hold it is handed comes back as is.
+    expect(bases).toEqual([5, null]);
+    expect(holds).toEqual([null, awaiting]);
     expect(queue).toEqual([r8]);
     expect(fastForwardBase(fastForwardBase(r8.tx, 5), 5).baseRevision).toBe(5);
   });
@@ -270,24 +279,25 @@ describe("DAN-110 plan #158 — lost response", () => {
   it("7, 8: a verified answer for another key or another document never releases the hold", async () => {
     const held = nextAwaitingReceipt(r8, LOST, null);
     const forR7 = answer("duplicate", 5, r7);
-    await outcomeToEvents(forR7, verification(r7, 5), false);
+    await outcomeToEvents(forR7, verification(r7, 5), { sent: r7, pending: [r7] });
     expect(nextAwaitingReceipt(r8, forR7, held)).toEqual(held);
 
     const heldR7 = nextAwaitingReceipt(r7, LOST, null);
     const sameKeyD2 = answer("duplicate", 5, r7, D2);
-    await outcomeToEvents(sameKeyD2, verification(r7, 5, D2), false);
+    const r7OnD2 = { ...r7, documentId: D2 };
+    await outcomeToEvents(sameKeyD2, verification(r7, 5, D2), { sent: r7OnD2, pending: [r7OnD2] });
     expect(nextAwaitingReceipt(r7, sameKeyD2, heldR7)).toEqual(heldR7);
   });
 
   it("9: a pending or bad signature on the replay keeps r7 held and never lets r8 out", async () => {
     const awaiting = nextAwaitingReceipt(r7, LOST, null);
     const pending = answer("duplicate", 5, null);
-    expect(await outcomeToEvents(pending, verification(r7, 5), true)).toEqual([]);
+    expect(await outcomeToEvents(pending, verification(r7, 5), { sent: r7, pending: [r7, r8] })).toEqual([]);
     expect(ackedRevision(pending)).toBeNull();
     expect(nextAwaitingReceipt(r7, pending, awaiting)).toEqual(awaiting);
 
     const forged = answer("duplicate", 5, r8);
-    expect(await outcomeToEvents(forged, verification(r7, 5), true)).toEqual([
+    expect(await outcomeToEvents(forged, verification(r7, 5), { sent: r7, pending: [r7, r8] })).toEqual([
       { type: "SYNC_FAILED", retryable: false },
     ]);
     expect(ackedRevision(forged)).toBeNull();
@@ -302,7 +312,7 @@ describe("DAN-110 plan #158 — lost response", () => {
     // rebase (CONFLICT loop) or, once r7 is gone, stalls the queue for good.
     const awaiting = nextAwaitingReceipt(r7, LOST, null);
     const stale: DrainOutcome = { status: "stale_base", currentRevision: 5 };
-    const events = await outcomeToEvents(stale, verification(r7, 5), true);
+    const events = await outcomeToEvents(stale, verification(r7, 5), { sent: r7, pending: [r7, r8] });
     expect(events).toEqual([{ type: "SYNC_STALE_BASE" }]);
     expect(syncReducer("SYNCING", events[0]!)).toBe("CONFLICT");
     expect(ackedRevision(stale)).toBeNull();
@@ -333,7 +343,7 @@ describe("DAN-110 plan #158 — lost response", () => {
   it("11b: a fatal refusal of the replayed key ends the hold, shows ERROR and lets a new version out", async () => {
     const awaiting = nextAwaitingReceipt(r7, LOST, null);
     const refused: DrainOutcome = { status: "invalid_document" };
-    expect(await outcomeToEvents(refused, verification(r7, 5), true)).toEqual([
+    expect(await outcomeToEvents(refused, verification(r7, 5), { sent: r7, pending: [r7, r8] })).toEqual([
       { type: "SYNC_FAILED", retryable: false },
     ]);
     expect(syncReducer("SYNCING", { type: "SYNC_FAILED", retryable: false })).toBe("ERROR");
@@ -355,7 +365,7 @@ describe("DAN-110 plan #158 — lost response", () => {
     expect(planDrain([r3], meta("LOCAL_DURABLE", D2), null).send).toBe(r3);
     expect(planDrain([r3], meta("LOCAL_DURABLE", D2), heldD1).send).toBeNull();
     const d2Ack = answer("committed", 2, r3);
-    await outcomeToEvents(d2Ack, verification(r3, 2), false);
+    await outcomeToEvents(d2Ack, verification(r3, 2), { sent: r3, pending: [r3] });
     expect(nextAwaitingReceipt(r7, d2Ack, heldD1)).toEqual(heldD1);
   });
 });
@@ -479,7 +489,7 @@ describe("DAN-110 replay outcome table", () => {
       const events = await outcomeToEvents(
         outcome,
         verification(r7, expected.revision),
-        newerRowsQueued(queue, r7),
+        { sent: r7, pending: queue },
       );
       expect(events).toEqual(expected.events);
       expect(events.some((e) => e.type === "SYNC_ACK")).toBe(false);
@@ -540,7 +550,7 @@ describe("DAN-110 every status and parser output, without a hold", () => {
     const expected = released ? "no hold" : name === "txid_reused" ? "diverged r7" : "hold r7";
     it(`${name} → ${expected}`, async () => {
       if (outcome !== null && outcome !== undefined) {
-        await outcomeToEvents(outcome, verification(r7, 5), true);
+        await outcomeToEvents(outcome, verification(r7, 5), { sent: r7, pending: [r7, r8] });
       }
       const after = nextAwaitingReceipt(r7, outcome, null);
       if (expected === "hold r7") {

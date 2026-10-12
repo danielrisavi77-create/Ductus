@@ -19,10 +19,10 @@ if (!nums.length || nums.some((x) => !Number.isInteger(x) || x <= 0) ||
 }
 
 async function take(n) {
-  const pr = await ghJson(["pr", "view", String(n), "--json", "headRefOid"]);
+  const pr = await ghJson(["api", `repos/{owner}/{repo}/pulls/${n}`]);
   const comments = await prComments(n);
-  if (!pr.headRefOid) throw new Error("no head in response");
-  return snapshot(pr.headRefOid, comments);
+  if (!pr.head?.sha) throw new Error("no head in response");
+  return snapshot(pr.head.sha, comments);
 }
 
 const base = new Map();

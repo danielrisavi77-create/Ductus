@@ -11,7 +11,6 @@ import {
 import {
   COMMIT_STATUSES,
   MAX_DOCUMENT_BYTES,
-  SERVER_SYNC_ERROR_MESSAGES,
   commitRequestFromTransaction,
   documentByteLength,
   exceedsDocumentSizeLimit,
@@ -19,6 +18,7 @@ import {
   parseEnsureOutcome,
   parseServerSyncErrorCode,
 } from "./contract";
+import { SERVER_SYNC_ERROR_MESSAGES } from "./messages";
 
 const DOC_ID = "9f1d8a52-5b6e-4a1a-9c0d-2f4b6e8a1c33";
 const VALID_PENDING_RECEIPT = { status: "pending_signature" } as const;

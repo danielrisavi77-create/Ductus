@@ -11,6 +11,8 @@
  * - no NaN/Infinity;
  * - no lone UTF-16 surrogates;
  * - object keys recursively sorted by raw UTF-16 code units;
+ * - arrays and objects nested no deeper than MAX_JCS_DEPTH (a local limit,
+ *   not part of the RFC);
  * - array order preserved;
  * - no emitted whitespace.
  */
@@ -20,6 +22,16 @@ export type JcsJsonValue =
   | JcsJsonPrimitive
   | JcsJsonValue[]
   | { [key: string]: JcsJsonValue };
+
+/**
+ * Deepest nesting of arrays and objects a value may have and still have a
+ * canonical form. Without a limit the answer for a very deep value is a stack
+ * overflow, which depends on the JavaScript engine: the browser and the server
+ * could then disagree on whether the same value can be hashed. The limit is
+ * far above what an editor document or its steps nest to and far below any
+ * engine's stack; it changes only on both sides at once.
+ */
+export const MAX_JCS_DEPTH = 256;
 
 function fail(reason: string): never {
   throw new Error(`jcs: ${reason}`);
@@ -56,7 +68,11 @@ function serializePrimitive(value: JcsJsonPrimitive): string {
   return serialized;
 }
 
-function serialize(value: unknown, active: WeakSet<object>): string {
+function serialize(
+  value: unknown,
+  active: WeakSet<object>,
+  depth: number,
+): string {
   if (
     value === null ||
     typeof value === "boolean" ||
@@ -82,6 +98,10 @@ function serialize(value: unknown, active: WeakSet<object>): string {
   if (active.has(value)) {
     fail("cyclic value");
   }
+  // Checked before descending, so the recursion itself never goes deeper.
+  if (depth >= MAX_JCS_DEPTH) {
+    fail("nesting too deep");
+  }
 
   active.add(value);
   try {
@@ -92,7 +112,7 @@ function serialize(value: unknown, active: WeakSet<object>): string {
         if (!(index in value)) {
           fail("sparse array");
         }
-        items.push(serialize(value[index], active));
+        items.push(serialize(value[index], active, depth + 1));
       }
       return "[" + items.join(",") + "]";
     }
@@ -116,7 +136,7 @@ function serialize(value: unknown, active: WeakSet<object>): string {
         fail("accessor property");
       }
       parts.push(
-        `${JSON.stringify(key)}:${serialize(descriptor.value, active)}`,
+        `${JSON.stringify(key)}:${serialize(descriptor.value, active, depth + 1)}`,
       );
     }
 
@@ -133,7 +153,7 @@ function serialize(value: unknown, active: WeakSet<object>): string {
  * objects. Unsupported JS-only values fail closed.
  */
 export function canonicalizeJcs(value: unknown): string {
-  return serialize(value, new WeakSet<object>());
+  return serialize(value, new WeakSet<object>(), 0);
 }
 
 export function jcsUtf8Bytes(value: unknown): Uint8Array {

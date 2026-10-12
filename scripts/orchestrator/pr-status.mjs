@@ -1,13 +1,22 @@
 // Table of all open PRs. Read-only. Usage: node pr-status.mjs [--json]
-import { ghJson, prComments, readGate } from "./gh.mjs";
-import { formatVerdict, latestVerdict, parseAgentRisk } from "./orchestrator-core.mjs";
+import { checkRollup, openPrsWithPaths, prComments, readGate } from "./gh.mjs";
+import {
+  evaluateChecks, formatOverlaps, formatVerdict, latestVerdict, overlapPairs, overlapsOf, parseAgentRisk,
+} from "./orchestrator-core.mjs";
 
 const json = process.argv.includes("--json");
 
+function formatChecks({ total, bad }) {
+  if (!total) return "none";
+  if (!bad.length) return `green ${total}`;
+  return `${bad.length}/${total} ${bad.slice(0, 3).map((b) => `${b.name}=${b.state}`).join(", ")}`;
+}
+
 async function row(pr) {
-  const [gate, comments] = await Promise.all([
+  const [gate, comments, rollup] = await Promise.all([
     readGate(pr.headRefOid).then((g) => (g?.error ? undefined : g)),
     prComments(pr.number).catch(() => undefined),
+    checkRollup(pr.headRefOid).catch(() => undefined),
   ]);
   const { agent, risk } = parseAgentRisk(pr.body);
   const review = comments ? latestVerdict(comments, "review", pr.headRefOid) : undefined;
@@ -19,6 +28,7 @@ async function row(pr) {
     draft: pr.isDraft,
     agent,
     risk,
+    ci: rollup ? formatChecks(evaluateChecks(rollup)) : "?",
     gate: gate === undefined ? "?" : gate ? `${gate.state}: ${(gate.description ?? "").slice(0, 60)}` : "none",
     review: comments ? formatVerdict(review) : "?",
     qa: comments ? formatVerdict(qa) : "?",
@@ -26,17 +36,15 @@ async function row(pr) {
 }
 
 try {
-  const prs = await ghJson([
-    "pr", "list", "--state", "open", "--limit", "200",
-    "--json", "number,headRefOid,baseRefName,isDraft,body",
-  ]);
-  const rows = await Promise.all(prs.sort((a, b) => a.number - b.number).map(row));
+  const prs = await openPrsWithPaths();
+  const pairs = overlapPairs(prs);
+  const rows = (await Promise.all(prs.map(row))).map((r) => ({ ...r, overlaps: overlapsOf(r.number, prs, pairs) }));
   if (json) {
     console.log(JSON.stringify(rows, null, 2));
   } else {
     for (const r of rows) {
       console.log(
-        `#${r.number} ${r.head} ${r.base}${r.draft ? " DRAFT" : ""} | ${r.agent ?? "-"} | ${r.risk ?? "-"} | gate ${r.gate} | review ${r.review} | qa ${r.qa}`,
+        `#${r.number} ${r.head} ${r.base}${r.draft ? " DRAFT" : ""} | ${r.agent ?? "-"} | ${r.risk ?? "-"} | ci ${r.ci} | gate ${r.gate} | review ${r.review} | qa ${r.qa} | preklapa: ${formatOverlaps(r.overlaps)}`,
       );
     }
     if (!rows.length) console.log("no open PRs");

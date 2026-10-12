@@ -12,7 +12,10 @@ import {
   type EvidenceChainFailureV2,
   type EvidenceChainHeadV2,
 } from "@/domain/forensics/evidence-chain-v2";
-import { digestEvidenceReceiptPayload } from "@/domain/forensics/evidence-receipt";
+import {
+  digestEvidenceReceiptPayload,
+  isSignedEvidenceReceipt,
+} from "@/domain/forensics/evidence-receipt";
 import {
   findEvidenceStartBreakV2,
   replayEvidenceSegmentsV2,
@@ -130,7 +133,8 @@ function unavailable(
  *    `predecessor_mismatch`, `document_mismatch`; then `head_mismatch`.
  * 4. `no_evidence`: the head is `null` and no segment is listed.
  * 5. Receipts, per segment: `receipt_missing`, `receipt_mismatch` (also a
- *    receipt with no canonical form), `unavailable` (verification),
+ *    receipt with an unknown or malformed field, or with no canonical form),
+ *    `unavailable` (verification),
  *    `receipt_signature_invalid`.
  * 6. `invalid_document`: the starting document cannot be loaded or hashed.
  * 7. The first break is located: at the start (index 0) when the first
@@ -206,6 +210,9 @@ export async function reconstructAndCompareEvidence<TDocument>(
 
     const receipt = entry.receipt;
     if (receipt === null) return mismatch("receipt_missing", index);
+    // The signature covers the payload only; a field next to it, or a payload
+    // of another shape, is not what was issued.
+    if (!isSignedEvidenceReceipt(receipt)) return mismatch("receipt_mismatch", index);
     // A payload with no canonical form has no digest, so it is not the signed one.
     const digest = await digestEvidenceReceiptPayload(receipt.payload).catch(() => null);
     if (

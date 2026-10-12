@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { EvidenceOutboxItem } from "@/application/ports/evidence-outbox";
+import { EDIT_STEP_FORMAT_V1 } from "@/domain/document/edit-step";
 import type { SignedEvidenceReceipt } from "@/domain/forensics/evidence-receipt";
 import {
   EVIDENCE_CANONICALIZATION_V2,
@@ -29,24 +30,24 @@ function segment(): EvidenceSegmentV2 {
     sequenceFrom: 1,
     sequenceTo: 1,
     observedStartedAt: "2026-10-03T06:00:00.000Z",
-    observedEndedAt: "2026-10-03T06:00:01.000Z",
+    observedEndedAt: "2026-10-03T06:01:00.000Z",
     initialDocumentHash: A,
     finalDocumentHash: B,
     predecessorSegmentHash: null,
     events: [
       {
         sequence: 1,
-        occurredAt: "2026-10-03T06:00:00.500Z",
-        elapsedMs: 500,
         source: "editor",
-        steps: [{ stepType: "replace", from: 1, to: 1 }],
+        steps: [
+          { stepType: "replace", from: 1, to: 1, slice: { content: [{ type: "text", text: "A" }] } },
+        ],
         beforeDocumentHash: A,
         afterDocumentHash: B,
       },
     ],
     captureContext: {
       editorModel: "prosemirror",
-      transactionFormat: "prosemirror-step-json-v1",
+      transactionFormat: EDIT_STEP_FORMAT_V1,
     },
     evidenceProfileId: "standard-v1",
   };
@@ -253,6 +254,39 @@ describe("Evidence Outbox state machine", () => {
     );
     expect(final.status).toBe("blocked");
     expect(final.receipt).toBeUndefined();
+  });
+
+  it("does not settle an item with a receipt that carries a field nobody validated", async () => {
+    const item = beginEvidenceOutboxAttempt(
+      await createEvidenceOutboxItem({
+        id: "outbox-unknown-field",
+        evidencePackageId: "evidence-1",
+        clientRequestId: "request-unknown-field",
+        segment: segment(),
+        createdAt: "2026-10-03T06:01:00.000Z",
+      }),
+      "2026-10-03T06:02:00.000Z",
+    );
+    const settle = (receipt: SignedEvidenceReceipt) =>
+      applyEvidenceOutboxOutcome(
+        item,
+        { status: "accepted", receipt },
+        "2026-10-03T06:02:01.000Z",
+      );
+    const valid = receiptFor(item);
+    expect(settle(valid).status).toBe("accepted");
+
+    for (const forged of [
+      { ...valid, note: "x" },
+      { ...valid, payload: { ...valid.payload, note: "x" } },
+      { ...valid, signature: { ...valid.signature, note: "x" } },
+      { ...valid, signature: { ...valid.signature, signatureBase64Url: "" } },
+    ]) {
+      const final = settle(forged);
+      expect(final.status).toBe("blocked");
+      expect(final.lastFailure).toBe("invalid");
+      expect(final.receipt).toBeUndefined();
+    }
   });
 
   it("builds payload and descriptor from one snapshot of the segment", async () => {

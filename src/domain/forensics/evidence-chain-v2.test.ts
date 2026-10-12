@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { EDIT_STEP_FORMAT_V1 } from "@/domain/document/edit-step";
+
 import { sha256WebCrypto } from "./crypto";
 import {
   decideEvidenceRetry,
@@ -14,6 +16,7 @@ import {
   EVIDENCE_HASH_ALGORITHM_V2,
   EVIDENCE_SEGMENT_SCHEMA_V2,
 } from "./evidence-segment-v2";
+import { MAX_JCS_DEPTH } from "./jcs";
 
 const A = "a".repeat(64);
 const B = "b".repeat(64);
@@ -30,24 +33,22 @@ function canonicalFixture(text: string): string {
     sequenceFrom: 1,
     sequenceTo: 1,
     observedStartedAt: "2026-10-02T20:00:00.000Z",
-    observedEndedAt: "2026-10-02T20:00:30.000Z",
+    observedEndedAt: "2026-10-02T20:01:00.000Z",
     initialDocumentHash: A,
     finalDocumentHash: B,
     predecessorSegmentHash: null,
     events: [
       {
         sequence: 1,
-        occurredAt: "2026-10-02T20:00:10.000Z",
-        elapsedMs: 0,
         source: "editor",
-        steps: [{ stepType: "replace", from: 1, to: 1, text }],
+        steps: [{ stepType: "replace", from: 1, to: 1, slice: { content: [{ type: "text", text }] } }],
         beforeDocumentHash: A,
         afterDocumentHash: B,
       },
     ],
     captureContext: {
       editorModel: "prosemirror",
-      transactionFormat: "prosemirror-step-json-v1",
+      transactionFormat: EDIT_STEP_FORMAT_V1,
     },
     evidenceProfileId: "standard-v1",
   });
@@ -172,5 +173,57 @@ describe("evidence payload and chain edge cases", () => {
     expect(
       await verifyEvidenceChainV2([], { segmentHash: "a".repeat(64), segmentCount: 1 }),
     ).toEqual({ ok: false, reason: "head_mismatch", index: null });
+  });
+
+  it("answers head_mismatch for a well-typed head with a count no package can have", async () => {
+    const hash = "a".repeat(64);
+    for (const segmentCount of [0, -1]) {
+      expect(
+        await verifyEvidenceChainV2([], { segmentHash: hash, segmentCount }),
+      ).toEqual({ ok: false, reason: "head_mismatch", index: null });
+    }
+  });
+
+  it("throws on a head that is not a hash with an integer count, instead of reading it as empty", async () => {
+    const hash = "a".repeat(64);
+    for (const head of [
+      {},
+      { segmentHash: undefined, segmentCount: undefined },
+      { segmentHash: hash },
+      { segmentCount: 1 },
+      { segmentHash: hash.toUpperCase(), segmentCount: 1 },
+      { segmentHash: hash, segmentCount: Number.NaN },
+      { segmentHash: hash, segmentCount: 1.5 },
+      { segmentHash: hash, segmentCount: "1" },
+      undefined,
+      "head",
+    ]) {
+      await expect(
+        verifyEvidenceChainV2([], head as never),
+      ).rejects.toThrow("expectedHead is not a chain head");
+    }
+  });
+
+  it("answers invalid, never a stack overflow, for a step nested past the JCS limit", async () => {
+    // The text value sits eight levels down: segment, events, event, steps,
+    // step, slice, content, text node. Since DAN-183c the closed step shape
+    // refuses any nesting in place of text, so even the deepest depth JCS
+    // still reads is invalid; the JCS boundary itself is pinned in jcs.test.ts.
+    const deepest = MAX_JCS_DEPTH - 8;
+    const withNesting = (depth: number) =>
+      canonicalFixture("x").replace(
+        '"text":"x"',
+        `"text":${"[".repeat(depth)}${"]".repeat(depth)}`,
+      );
+
+    expect(await verifyCanonicalEvidencePayloadV2(canonicalFixture("x"))).toMatchObject({
+      ok: true,
+    });
+    for (const depth of [1, deepest, deepest + 1, 5_000, 100_000]) {
+      expect(await verifyCanonicalEvidencePayloadV2(withNesting(depth))).toEqual({
+        ok: false,
+        reason: "invalid",
+      });
+    }
   });
 });

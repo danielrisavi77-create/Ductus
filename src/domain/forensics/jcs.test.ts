@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { sha256WebCrypto } from "./crypto";
-import { canonicalizeJcs } from "./jcs";
+import { canonicalizeJcs, MAX_JCS_DEPTH } from "./jcs";
 
 describe("RFC 8785 JCS", () => {
   it("matches the RFC 8785 serialization sample and an independent SHA-256 vector", async () => {
@@ -89,6 +89,66 @@ describe("RFC 8785 JCS", () => {
     expect(canonicalizeJcs({ n: -0, small: 0.000001, large: 1e30 })).toBe(
       '{"large":1e+30,"n":0,"small":0.000001}',
     );
+  });
+
+  describe("nesting limit", () => {
+    const nested = (depth: number, leaf: unknown = 1, withObjects = false) => {
+      let value = leaf;
+      for (let level = 0; level < depth; level++) {
+        value = withObjects && level % 2 === 0 ? { k: value } : [value];
+      }
+      return value;
+    };
+
+    // The limit decides what both sides may hash, so it is part of the v2
+    // format (docs/BACKEND.md section 4.1). The numbers are written out here
+    // on purpose: changing the constant alone must fail this test.
+    it("is 256 levels: a value 256 deep has a canonical form, one 257 deep has none", () => {
+      expect(MAX_JCS_DEPTH).toBe(256);
+      expect(canonicalizeJcs(nested(256))).toBe(
+        "[".repeat(256) + "1" + "]".repeat(256),
+      );
+      expect(() => canonicalizeJcs(nested(256, 1, true))).not.toThrow();
+      expect(() => canonicalizeJcs(nested(257))).toThrow("jcs: nesting too deep");
+      expect(() => canonicalizeJcs(nested(257, 1, true))).toThrow(
+        "jcs: nesting too deep",
+      );
+    });
+
+    it("canonicalizes a value nested exactly to the limit", () => {
+      expect(canonicalizeJcs(nested(MAX_JCS_DEPTH))).toBe(
+        "[".repeat(MAX_JCS_DEPTH) + "1" + "]".repeat(MAX_JCS_DEPTH),
+      );
+      expect(() => canonicalizeJcs(nested(MAX_JCS_DEPTH, 1, true))).not.toThrow();
+      // An empty container is a level too.
+      expect(() => canonicalizeJcs(nested(MAX_JCS_DEPTH - 1, []))).not.toThrow();
+      expect(() => canonicalizeJcs(nested(MAX_JCS_DEPTH - 1, {}))).not.toThrow();
+    });
+
+    it("rejects one level more with its own error, whatever sits at the bottom", () => {
+      for (const value of [
+        nested(MAX_JCS_DEPTH + 1),
+        nested(MAX_JCS_DEPTH + 1, "x", true),
+        nested(MAX_JCS_DEPTH, []),
+        nested(MAX_JCS_DEPTH, {}),
+        { steps: nested(MAX_JCS_DEPTH) },
+      ]) {
+        expect(() => canonicalizeJcs(value)).toThrow("jcs: nesting too deep");
+      }
+    });
+
+    it("gives the same error far past the depth where a stack would overflow", () => {
+      for (const depth of [5_000, 20_000, 200_000]) {
+        expect(() => canonicalizeJcs(nested(depth))).toThrow(
+          "jcs: nesting too deep",
+        );
+      }
+    });
+
+    it("does not count siblings: a wide value is not a deep one", () => {
+      const wide = Array.from({ length: 10_000 }, (_, index) => ({ index }));
+      expect(() => canonicalizeJcs(wide)).not.toThrow();
+    });
   });
 
   it("rejects sparse arrays instead of hashing them as shorter arrays", () => {

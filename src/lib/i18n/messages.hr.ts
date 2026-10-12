@@ -1,8 +1,10 @@
 /**
- * Interface text, Croatian (D-84: every string in keys from day one).
+ * Interface text, Croatian (D-84: demo interface text in keys).
  *
- * Components read text only from here, never inline, so `messages.en.ts`
- * (D-70) is a second table of the same shape and nothing else. Words from the
+ * Components read text from here, so `messages.en.ts` (D-70) is a second
+ * table of the same shape and nothing else. Tidying direct Croatian text
+ * outside this catalogue waits for English (D-70, 11 Oct 2026) and is not a
+ * separate task until then. Words from the
  * forbidden vocabulary in docs/PRODUCT.md §5 never appear here;
  * `messages.test.ts` checks that.
  *
@@ -46,6 +48,25 @@ export const hr = {
     documentLabel: "Tekst rada",
     documentNotEditable: "Pisanje ovdje još nije moguće.",
     status: "Stanje rada",
+  },
+  editor: {
+    placeholder: "Počni pisati…",
+    blockedHint: "Ova kartica ništa ne sprema dok je druga otvorena. Kad je zatvoriš, tekst se ovdje ponovno učitava.",
+    failureQuota: "Na uređaju nema dovoljno prostora, pa se promjene više ne spremaju. Izvezi tekst da ga ne izgubiš.",
+    failureUnavailable: "Spremanje na ovom uređaju nije dostupno. Izvezi tekst da ga ne izgubiš.",
+    failureLimit: "Lokalni zapis je dosegao granicu, pa se promjene više ne spremaju. Izvezi tekst da ga ne izgubiš.",
+    failureStale: "Dokument je u međuvremenu promijenjen na drugom mjestu, pa ova kartica više ne sprema. Izvezi tekst, zatim ponovno učitaj stranicu.",
+    failureUnknown: "Spremanje nije uspjelo. Izvezi tekst da ga ne izgubiš.",
+    failureInvalid: "Ovaj tekst nije moguće spremiti. Izvezi ga da ga ne izgubiš.",
+    recovery: "Lokalni zapis nije moguće pouzdano pročitati. Ostaje netaknut, a ova kartica ništa ne sprema.",
+    exportText: "Izvezi tekst",
+  },
+  auth: {
+    failedTitle: "Prijava nije dovršena",
+    failedBody: "Prijavu nije bilo moguće dovršiti. Pokušaj ponovno; ako se ponovi, javi se koordinatoru na svojoj ustanovi.",
+    unavailableBody: "Prijava preko AAI@EduHr trenutačno ne odgovara. Pokušaj ponovno za nekoliko minuta.",
+    retry: "Pokušaj ponovno",
+    home: "Na početnu",
   },
 } as const;
 

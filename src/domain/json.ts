@@ -25,6 +25,22 @@ export function isPlainObject(value: unknown): value is Record<string, unknown> 
 }
 
 /**
+ * True when the object has no own key outside `allowed`.
+ *
+ * A validator that only reads the fields it knows lets everything else travel
+ * on: into a hash, a signature or a row nobody checked. Symbol and
+ * non-enumerable keys count as unknown too.
+ */
+export function hasOnlyKeys(
+  value: Record<string, unknown>,
+  allowed: ReadonlySet<string>,
+): boolean {
+  return Reflect.ownKeys(value).every(
+    (key) => typeof key === "string" && allowed.has(key),
+  );
+}
+
+/**
  * Own, non-inherited property. `in` and a bare index would both walk the
  * prototype chain, so `{"__proto__": ...}` or a `status` of `"constructor"`
  * would otherwise sail through.

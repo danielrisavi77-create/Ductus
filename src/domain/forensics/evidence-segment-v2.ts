@@ -1,3 +1,4 @@
+import { EDIT_STEP_FORMAT_V1, parseEditSteps } from "../document/edit-step";
 import { sha256WebCrypto } from "./crypto";
 import { canonicalizeJcs, type JcsJsonValue } from "./jcs";
 
@@ -5,6 +6,23 @@ export const EVIDENCE_SEGMENT_SCHEMA_V2 = "ductus-evidence-segment-v2" as const;
 export const EVIDENCE_CANONICALIZATION_V2 = "RFC8785-JCS" as const;
 export const EVIDENCE_HASH_ALGORITHM_V2 = "sha256" as const;
 
+/**
+ * What a change of the document is attributed to. The set is closed: a value
+ * outside it is refused, and a new one needs a new format version.
+ *
+ * Attribution is positive or absent (D-54, owner decisions of 10 October 2026).
+ * `editor` is written only for a change the capture layer positively
+ * attributed to typing in the editor, never for want of a better value.
+ * `composition` is written only when the capture layer has positive proof
+ * that the character was composed with physical keys. In every other case,
+ * also when there is no proof or the proof is ambiguous, `keyless-input` is
+ * written. `keyless-input` is text entered without key events (dictation, an
+ * on-screen keyboard, an input method with no such proof); its size is the
+ * size of its steps. Every change with no positive attribution is
+ * `unattributed`, and so is a paste or a drop whose event cannot be relied on.
+ * The server cannot observe attribution: it keeps the set closed, and the
+ * capture layer keeps these rules.
+ */
 export const EVIDENCE_SOURCES_V2 = [
   "editor",
   "paste",
@@ -12,16 +30,26 @@ export const EVIDENCE_SOURCES_V2 = [
   "drop",
   "composition",
   "system-replacement",
+  "keyless-input",
+  "unattributed",
 ] as const;
 
 export type EvidenceSourceV2 = (typeof EVIDENCE_SOURCES_V2)[number];
 
+/**
+ * The editor models a segment may name. The list is closed, like the step
+ * format: a free text here could carry anything, a time included (B-8, #155).
+ */
+export const EVIDENCE_EDITOR_MODELS_V2 = ["prosemirror"] as const;
+
 export type EvidenceStepV2 = { [key: string]: JcsJsonValue };
 
+/**
+ * An event has no time of its own (D-24, D-56): events are ordered by
+ * `sequence` alone, and the segment carries two whole minutes.
+ */
 export type EvidenceEventV2 = {
   sequence: number;
-  occurredAt: string;
-  elapsedMs: number;
   source: EvidenceSourceV2;
   steps: EvidenceStepV2[];
   touchedNodeIds?: string[];
@@ -59,10 +87,19 @@ export type EvidenceSegmentDigestV2 = {
   sha256: string;
 };
 
+/**
+ * Longest evidence profile id, in UTF-16 code units. One limit for the
+ * segment, its descriptor and the receipt: with separate limits a segment
+ * could be valid while no valid receipt can be issued for it.
+ */
+export const MAX_EVIDENCE_PROFILE_ID_LENGTH = 120;
+
 const SHA256_HEX = /^[0-9a-f]{64}$/;
+const WHOLE_MINUTE_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00\.000Z$/;
 const MAX_ID_LENGTH = 256;
 const MAX_EVENTS = 5000;
 const SOURCES = new Set<string>(EVIDENCE_SOURCES_V2);
+const EDITOR_MODELS = new Set<string>(EVIDENCE_EDITOR_MODELS_V2);
 const SEGMENT_KEYS = new Set([
   "evidenceSchema",
   "canonicalization",
@@ -83,8 +120,6 @@ const SEGMENT_KEYS = new Set([
 ]);
 const EVENT_KEYS = new Set([
   "sequence",
-  "occurredAt",
-  "elapsedMs",
   "source",
   "steps",
   "touchedNodeIds",
@@ -100,11 +135,14 @@ function hasOnlyKeys(
   return Object.keys(value).every((key) => allowed.has(key));
 }
 
-function nonEmptyBounded(value: unknown): value is string {
+function nonEmptyBounded(
+  value: unknown,
+  max = MAX_ID_LENGTH,
+): value is string {
   return (
     typeof value === "string" &&
     value.trim().length > 0 &&
-    value.length <= MAX_ID_LENGTH
+    value.length <= max
   );
 }
 
@@ -112,8 +150,14 @@ function isSha256(value: unknown): value is string {
   return typeof value === "string" && SHA256_HEX.test(value);
 }
 
-function isCanonicalIsoInstant(value: unknown): value is string {
-  if (typeof value !== "string") return false;
+/**
+ * The form of the two times of a segment: a whole minute in UTC, written
+ * `YYYY-MM-DDTHH:mm:00.000Z`. A time with seconds or milliseconds, in another
+ * zone or in another spelling is refused, never rounded: the bytes are
+ * addressed by their hash, so the server cannot change them.
+ */
+export function isEvidenceMinuteV2(value: unknown): value is string {
+  if (typeof value !== "string" || !WHOLE_MINUTE_UTC.test(value)) return false;
   const time = Date.parse(value);
   return Number.isFinite(time) && new Date(time).toISOString() === value;
 }
@@ -124,14 +168,13 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
-function isStep(value: unknown): value is EvidenceStepV2 {
-  if (!isPlainObject(value)) return false;
-  try {
-    canonicalizeJcs(value);
-    return true;
-  } catch {
-    return false;
-  }
+/**
+ * The steps of one event are read with the closed format, and the answer is
+ * yes or no. The parser builds a clean copy; it is never used, since the hash
+ * is over the bytes that were sent and a cleaned copy is not what was sent.
+ */
+function areSteps(value: unknown): value is EvidenceStepV2[] {
+  return parseEditSteps(EDIT_STEP_FORMAT_V1, value).ok;
 }
 
 function isSortedUniqueStrings(value: unknown): value is string[] {
@@ -148,25 +191,13 @@ function isSortedUniqueStrings(value: unknown): value is string[] {
 function isEvent(
   value: unknown,
   expectedSequence: number,
-  start: number,
-  end: number,
-  previousElapsed: number,
 ): value is EvidenceEventV2 {
   if (!isPlainObject(value) || !hasOnlyKeys(value, EVENT_KEYS)) return false;
   if (
     value.sequence !== expectedSequence ||
-    !isCanonicalIsoInstant(value.occurredAt) ||
-    Date.parse(value.occurredAt) < start ||
-    Date.parse(value.occurredAt) > end ||
-    typeof value.elapsedMs !== "number" ||
-    !Number.isFinite(value.elapsedMs) ||
-    value.elapsedMs < 0 ||
-    value.elapsedMs < previousElapsed ||
     typeof value.source !== "string" ||
     !SOURCES.has(value.source) ||
-    !Array.isArray(value.steps) ||
-    value.steps.length === 0 ||
-    !value.steps.every(isStep) ||
+    !areSteps(value.steps) ||
     !isSha256(value.beforeDocumentHash) ||
     !isSha256(value.afterDocumentHash)
   ) {
@@ -191,12 +222,12 @@ export function isEvidenceSegmentV2(value: unknown): value is EvidenceSegmentV2 
     !nonEmptyBounded(value.documentId) ||
     !nonEmptyBounded(value.sessionId) ||
     !nonEmptyBounded(value.segmentId) ||
-    !nonEmptyBounded(value.evidenceProfileId) ||
+    !nonEmptyBounded(value.evidenceProfileId, MAX_EVIDENCE_PROFILE_ID_LENGTH) ||
     !Number.isSafeInteger(value.sequenceFrom) ||
     Number(value.sequenceFrom) < 1 ||
     !Number.isSafeInteger(value.sequenceTo) ||
-    !isCanonicalIsoInstant(value.observedStartedAt) ||
-    !isCanonicalIsoInstant(value.observedEndedAt) ||
+    !isEvidenceMinuteV2(value.observedStartedAt) ||
+    !isEvidenceMinuteV2(value.observedEndedAt) ||
     Date.parse(value.observedEndedAt) < Date.parse(value.observedStartedAt) ||
     !isSha256(value.initialDocumentHash) ||
     !isSha256(value.finalDocumentHash) ||
@@ -209,30 +240,30 @@ export function isEvidenceSegmentV2(value: unknown): value is EvidenceSegmentV2 
     value.events.length > MAX_EVENTS ||
     !isPlainObject(value.captureContext) ||
     !hasOnlyKeys(value.captureContext, CAPTURE_CONTEXT_KEYS) ||
-    !nonEmptyBounded(value.captureContext.editorModel) ||
-    !nonEmptyBounded(value.captureContext.transactionFormat)
+    typeof value.captureContext.editorModel !== "string" ||
+    !EDITOR_MODELS.has(value.captureContext.editorModel) ||
+    value.captureContext.transactionFormat !== EDIT_STEP_FORMAT_V1
   ) {
     return false;
   }
 
   const sequenceFrom = Number(value.sequenceFrom);
   const sequenceTo = Number(value.sequenceTo);
-  if (sequenceTo !== sequenceFrom + value.events.length - 1) return false;
+  // Counted as to - from, which is exact for safe integers: from + count - 1
+  // can round in a double and pass a segment with more events than its range.
+  // With it every from + index below is at most sequenceTo, so exact too.
+  if (sequenceTo - sequenceFrom !== value.events.length - 1) return false;
 
-  const start = Date.parse(value.observedStartedAt);
-  const end = Date.parse(value.observedEndedAt);
-  let previousElapsed = 0;
   let previousAfter = value.initialDocumentHash;
 
   for (let index = 0; index < value.events.length; index++) {
     const event = value.events[index];
     if (
-      !isEvent(event, sequenceFrom + index, start, end, previousElapsed) ||
+      !isEvent(event, sequenceFrom + index) ||
       event.beforeDocumentHash !== previousAfter
     ) {
       return false;
     }
-    previousElapsed = event.elapsedMs;
     previousAfter = event.afterDocumentHash;
   }
 

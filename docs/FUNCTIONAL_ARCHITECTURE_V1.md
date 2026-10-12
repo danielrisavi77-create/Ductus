@@ -732,7 +732,7 @@ Ako Ductura ne zna podrijetlo sadržaja, to je eksplicitno stanje:
 
 Ne izmišlja se uzrok.
 
-Owner-design semantics iz Product Speca mogu prikazivati udio/postotak, ali engine izvorno čuva samo event/range činjenice; aggregation je presentation/query sloj.
+Owner-design semantics iz Product Speca mogu prikazivati udio/postotak, ali engine izvorno čuva samo event/range činjenice; aggregation je presentation/query sloj. Za nastavnički prikaz ta je dozvola nadjačana (D-105; `docs/PRODUCT.md` §5 pravilo 2): samo opisni prikaz, bez postotaka i bez zaključka o autorstvu.
 
 ---
 

@@ -1,0 +1,1632 @@
+{
+  "vectorSchema": "ductus-golden-vectors-v1",
+  "about": [
+    "Golden vectors for canonicalization and hashing of Ductus evidence v2 (DAN-127). All data is invented.",
+    "The file is ASCII: every non-ASCII character is written as a \\u escape. Read it with a JSON parser from the file bytes, not through a bundler import, which may rewrite keys such as __proto__.",
+    "The expected values were derived outside the repository (RFC texts, hand-written canonical strings, an independent implementation). Never regenerate them from the code under test: a change that alters any value is a change of the evidence contract."
+  ],
+  "definitions": {
+    "canonicalBytes": "UTF-8 encoding of the RFC 8785 (JCS) serialization of a JSON value. No Unicode normalization. A lone surrogate or a non-finite number has no canonical form.",
+    "documentHash": "Lowercase hex SHA-256 of the canonical bytes of the canonical document JSON.",
+    "segmentHash": "Lowercase hex SHA-256 of the canonical bytes of an evidence segment v2. The server hashes the bytes it received and accepts them only when they are the canonical bytes of a valid segment.",
+    "chain": "predecessorSegmentHash is the segmentHash of the segment accepted before it, null for the first. The head is the last segmentHash together with the number of segments.",
+    "segmentTime": "observedStartedAt and observedEndedAt are whole minutes in UTC, written YYYY-MM-DDTHH:mm:00.000Z. An event has no time; events are ordered by sequence.",
+    "eventSource": "One of editor, paste, cut, drop, composition, system-replacement, keyless-input and unattributed; no other value and no default. editor is written only for a change positively attributed to typing in the editor. composition is written only when the capture layer has positive proof that the character was composed with physical keys; in every other case, also when there is no proof or the proof is ambiguous, keyless-input is written. keyless-input is text entered without key events (dictation, an on-screen keyboard, an input method with no such proof). unattributed is every change with no positive attribution, and a paste or a drop whose event cannot be relied on. The server cannot check these rules; the capture layer keeps them.",
+    "receiptDigest": "Lowercase hex SHA-256 of the canonical bytes of the receipt payload v1 (payloadDigestSha256).",
+    "receiptSignatureV1": "Ed25519 (RFC 8032, pure) over the canonical bytes of the receipt payload v1; raw 64-byte signature, base64url without padding. Decision D-92 replaces this for receipt v2.",
+    "receiptDigestV2": "Lowercase hex SHA-256 of the canonical bytes of the receipt payload v2 (payloadDigestSha256). D below is its 32 raw bytes.",
+    "receiptSignatureV2": "Ed25519 (RFC 8032, pure) over the 59 bytes UTF-8(ductus-evidence-receipt-v2) || 0x0a || D (decision D-92); raw 64-byte signature, base64url without padding. Never over the canonical bytes of the payload and never over D alone.",
+    "evidenceDomainId": "The identifier of an evidence domain (one institution in one region) in the signed receipt v2: a canonical lowercase version 4 UUID of 36 characters. Random, opaque and immutable; never derived from the id or the name of an institution, from a region or from a time."
+  },
+  "jcs": {
+    "accepted": [
+      {
+        "name": "rfc8785-primitives",
+        "class": "published",
+        "note": "RFC 8785 3.2.2 to 3.2.4; the expected bytes are the hex dump printed in 3.2.4.",
+        "input": {"numbers": [333333333.33333329, 1E30, 4.50, 2e-3, 0.000000000000000000000000001], "string": "\u20ac$\u000F\u000aA'\u0042\u0022\u005c\\\"\/", "literals": [null, true, false]},
+        "canonical": "{\"literals\":[null,true,false],\"numbers\":[333333333.3333333,1e+30,4.5,0.002,1e-27],\"string\":\"\u20ac$\\u000f\\nA'B\\\"\\\\\\\\\\\"/\"}",
+        "utf8Hex": "7b226c69746572616c73223a5b6e756c6c2c747275652c66616c73655d2c226e756d62657273223a5b3333333333333333332e333333333333332c31652b33302c342e352c302e3030322c31652d32375d2c22737472696e67223a22e282ac245c75303030665c6e4127425c225c5c5c5c5c222f227d",
+        "sha256": "2d5e01a318d0f0879ab568c4be289c8b1f64ef8921a53c6277d5e069978baacb"
+      },
+      {
+        "name": "rfc8785-sorting",
+        "class": "published",
+        "note": "RFC 8785 3.2.3; the RFC prints the expected order of the values.",
+        "input": {"\u20ac": "Euro Sign", "\r": "Carriage Return", "\ufb33": "Hebrew Letter Dalet With Dagesh", "1": "One", "\ud83d\ude00": "Emoji: Grinning Face", "\u0080": "Control", "\u00f6": "Latin Small Letter O With Diaeresis"},
+        "canonical": "{\"\\r\":\"Carriage Return\",\"1\":\"One\",\"\u0080\":\"Control\",\"\u00f6\":\"Latin Small Letter O With Diaeresis\",\"\u20ac\":\"Euro Sign\",\"\ud83d\ude00\":\"Emoji: Grinning Face\",\"\ufb33\":\"Hebrew Letter Dalet With Dagesh\"}",
+        "utf8Hex": "7b225c72223a2243617272696167652052657475726e222c2231223a224f6e65222c22c280223a22436f6e74726f6c222c22c3b6223a224c6174696e20536d616c6c204c6574746572204f205769746820446961657265736973222c22e282ac223a224575726f205369676e222c22f09f9880223a22456d6f6a693a204772696e6e696e672046616365222c22efacb3223a22486562726577204c65747465722044616c6574205769746820446167657368227d",
+        "sha256": "5e321556d22018a9656991a9e94f77ec175fa193e52a2429d312f8419ec8b08c"
+      },
+      {
+        "name": "key-order-utf16-not-code-point",
+        "class": "key-order",
+        "note": "U+1F600 is D83D DE00 in UTF-16 and sorts before U+FF5E; by code point it would sort after.",
+        "input": {"\uff5e": 2, "\ud83d\ude00": 1},
+        "canonical": "{\"\ud83d\ude00\":1,\"\uff5e\":2}",
+        "utf8Hex": "7b22f09f9880223a312c22efbd9e223a327d",
+        "sha256": "5848fd4854a6ce2c6f23359368eef2f1a8d667176e91a9b74a92b7086fa7b207"
+      },
+      {
+        "name": "key-order-prefix-and-empty-key",
+        "class": "key-order",
+        "note": "A shorter key precedes its extensions; the empty key is first.",
+        "input": {"ab": 1, "": 2, "aa": 3, "a": 4},
+        "canonical": "{\"\":2,\"a\":4,\"aa\":3,\"ab\":1}",
+        "utf8Hex": "7b22223a322c2261223a342c226161223a332c226162223a317d",
+        "sha256": "41f1e45da14d27a56c944d70a102079f83d66e8e5164b5338a5ee53dcab32d71"
+      },
+      {
+        "name": "key-order-integer-like-keys",
+        "class": "key-order",
+        "note": "Keys are strings: no numeric order, although JavaScript enumerates such keys numerically.",
+        "input": {"10": 1, "9": 2, "1": 3, "02": 4, "2": 5},
+        "canonical": "{\"02\":4,\"1\":3,\"10\":1,\"2\":5,\"9\":2}",
+        "utf8Hex": "7b223032223a342c2231223a332c223130223a312c2232223a352c2239223a327d",
+        "sha256": "089bf13fc67706f305e3ca059c2e42fad827996fa17e1c1062b50e7350f65a51"
+      },
+      {
+        "name": "key-order-case-and-punctuation",
+        "class": "key-order",
+        "note": "Plain code unit order: - A B _ a b.",
+        "input": {"b": 1, "B": 2, "_": 3, "a": 4, "A": 5, "-": 6},
+        "canonical": "{\"-\":6,\"A\":5,\"B\":2,\"_\":3,\"a\":4,\"b\":1}",
+        "utf8Hex": "7b222d223a362c2241223a352c2242223a322c225f223a332c2261223a342c2262223a317d",
+        "sha256": "27813f71013ee06898bbc4e7843a299f5772d895aa6b6c15ad83b078429b9d86"
+      },
+      {
+        "name": "key-order-prototype-names",
+        "class": "key-order",
+        "note": "__proto__ and friends are ordinary own keys.",
+        "input": {"constructor": 1, "__proto__": 2, "toString": 3, "hasOwnProperty": 4},
+        "canonical": "{\"__proto__\":2,\"constructor\":1,\"hasOwnProperty\":4,\"toString\":3}",
+        "utf8Hex": "7b225f5f70726f746f5f5f223a322c22636f6e7374727563746f72223a312c226861734f776e50726f7065727479223a342c22746f537472696e67223a337d",
+        "sha256": "3dd3e70e50671dff7787bdd457d68faf3694a99ee9db025c5085bc06f6e606c9"
+      },
+      {
+        "name": "key-order-escaped-keys",
+        "class": "key-order",
+        "note": "Keys are sorted in raw form and escaped afterwards.",
+        "input": {"\n": 1, "\"": 2, "\\": 3, "\u0000": 4},
+        "canonical": "{\"\\u0000\":4,\"\\n\":1,\"\\\"\":2,\"\\\\\":3}",
+        "utf8Hex": "7b225c7530303030223a342c225c6e223a312c225c22223a322c225c5c223a337d",
+        "sha256": "485d4f3acf677f4a71261f449e08cbbe4f105b17c697b61f4756716dcb5cbc2d"
+      },
+      {
+        "name": "key-order-croatian-letters",
+        "class": "key-order",
+        "note": "Locale independent: not the Croatian alphabetical order.",
+        "input": {"\u0161": 1, "s": 2, "z": 3, "\u017e": 4, "\u010d": 5, "c": 6, "\u0111": 7, "d": 8},
+        "canonical": "{\"c\":6,\"d\":8,\"s\":2,\"z\":3,\"\u010d\":5,\"\u0111\":7,\"\u0161\":1,\"\u017e\":4}",
+        "utf8Hex": "7b2263223a362c2264223a382c2273223a322c227a223a332c22c48d223a352c22c491223a372c22c5a1223a312c22c5be223a347d",
+        "sha256": "4ce257cb01794f557e9547c39f59134f729410df65344ee18cae5b583a60d8fe"
+      },
+      {
+        "name": "key-order-recursive-arrays-kept",
+        "class": "key-order",
+        "note": "Objects are sorted at every level; array order is kept.",
+        "input": {"b": [{"z": 1, "y": 2}, 3, 1, 2], "a": {"d": null, "c": true}},
+        "canonical": "{\"a\":{\"c\":true,\"d\":null},\"b\":[{\"y\":2,\"z\":1},3,1,2]}",
+        "utf8Hex": "7b2261223a7b2263223a747275652c2264223a6e756c6c7d2c2262223a5b7b2279223a322c227a223a317d2c332c312c325d7d",
+        "sha256": "766b0e2b0e3fb1de843d284f4660524d98eed4090fac21f8ce033b7eedd4f3ca"
+      },
+      {
+        "name": "unicode-nfc-and-nfd-stay-distinct",
+        "class": "unicode",
+        "note": "No normalization: U+010D and c + U+030C are different bytes, as values and as keys.",
+        "input": {"\u010d": "nfc", "c\u030c": "nfd", "values": ["\u010d", "c\u030c"]},
+        "canonical": "{\"c\u030c\":\"nfd\",\"values\":[\"\u010d\",\"c\u030c\"],\"\u010d\":\"nfc\"}",
+        "utf8Hex": "7b2263cc8c223a226e6664222c2276616c756573223a5b22c48d222c2263cc8c225d2c22c48d223a226e6663227d",
+        "sha256": "e8520577f6f577509d2c8d3cd327792f692a8eb72e94a0a85a34df89e062f4a6"
+      },
+      {
+        "name": "unicode-control-characters",
+        "class": "unicode",
+        "note": "U+0000 to U+001F use the short escapes or lowercase \\u00xx; U+007F, U+0080, U+2028 and U+2029 are not escaped.",
+        "input": "\u0000\u0001\u0002\u0003\u0004\u0005\u0006\u0007\u0008\u0009\u000A\u000B\u000C\u000D\u000E\u000F\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001A\u001B\u001C\u001D\u001E\u001F\u007F\u0080\u2028\u2029",
+        "canonical": "\"\\u0000\\u0001\\u0002\\u0003\\u0004\\u0005\\u0006\\u0007\\b\\t\\n\\u000b\\f\\r\\u000e\\u000f\\u0010\\u0011\\u0012\\u0013\\u0014\\u0015\\u0016\\u0017\\u0018\\u0019\\u001a\\u001b\\u001c\\u001d\\u001e\\u001f\u007f\u0080\u2028\u2029\"",
+        "utf8Hex": "225c75303030305c75303030315c75303030325c75303030335c75303030345c75303030355c75303030365c75303030375c625c745c6e5c75303030625c665c725c75303030655c75303030665c75303031305c75303031315c75303031325c75303031335c75303031345c75303031355c75303031365c75303031375c75303031385c75303031395c75303031615c75303031625c75303031635c75303031645c75303031655c75303031667fc280e280a8e280a922",
+        "sha256": "589cd2ec819c19f5d9a91e23d3e51e26e71b5bfb9333db29476fc253fe7a5ed3"
+      },
+      {
+        "name": "unicode-quote-backslash-solidus",
+        "class": "unicode",
+        "note": "Only the quote and the backslash are escaped.",
+        "input": "\"\\\/<>&'",
+        "canonical": "\"\\\"\\\\/<>&'\"",
+        "utf8Hex": "225c225c5c2f3c3e262722",
+        "sha256": "cb63ddc6fcc956ad841db4b79db6f25ec9aff4737e72f478bc1e32f2d8f0af6d"
+      },
+      {
+        "name": "unicode-astral-and-bmp-edges",
+        "class": "unicode",
+        "note": "Valid pairs and BMP edges pass unchanged: U+1F600, U+FFFF, U+FEFF, U+FFFD, U+E000, U+D7FF, U+10FFFF, ZWJ, RLO.",
+        "input": "\ud83d\ude00\uffff\ufeff\ufffd\ue000\ud7ff\udbff\udfff\u200d\u202e",
+        "canonical": "\"\ud83d\ude00\uffff\ufeff\ufffd\ue000\ud7ff\udbff\udfff\u200d\u202e\"",
+        "utf8Hex": "22f09f9880efbfbfefbbbfefbfbdee8080ed9fbff48fbfbfe2808de280ae22",
+        "sha256": "b1f647730526554feeb1d81fd230d950046d6fcb183258bd58f43053b99ce4ee"
+      },
+      {
+        "name": "unicode-croatian-text",
+        "class": "unicode",
+        "note": "Invented sentence with Croatian letters.",
+        "input": {"tekst": "Izmi\u0161ljeni odlomak: \u010d\u0107\u0111\u0161\u017e \u010c\u0106\u0110\u0160\u017d."},
+        "canonical": "{\"tekst\":\"Izmi\u0161ljeni odlomak: \u010d\u0107\u0111\u0161\u017e \u010c\u0106\u0110\u0160\u017d.\"}",
+        "utf8Hex": "7b2274656b7374223a22497a6d69c5a16c6a656e69206f646c6f6d616b3a20c48dc487c491c5a1c5be20c48cc486c490c5a0c5bd2e227d",
+        "sha256": "442710f6472baa3ad7903838176dd4030e71af871be7b24fa12c198fd4cabd5b"
+      },
+      {
+        "name": "numbers-same-value-different-spelling",
+        "class": "numbers",
+        "note": "The spelling of the input does not survive.",
+        "input": [1.0, 1e0, 10E-1, 100e-2, -0, -0.0, 0e5, 1E3, 1.50, 0.1e1],
+        "canonical": "[1,1,1,1,0,0,0,1000,1.5,1]",
+        "utf8Hex": "5b312c312c312c312c302c302c302c313030302c312e352c315d",
+        "sha256": "b92288edb45001bfd80f61e7c9693f7505e8d80ba63a3f7e0ff3755beefccd75"
+      },
+      {
+        "name": "numbers-exponent-thresholds",
+        "class": "numbers",
+        "note": "Exponent form starts at 1e21 and at 1e-7.",
+        "input": [1e20, 1e21, 123456789012345678901, 1e-6, 1e-7, 0.00001, 0.000001234, 1.5e-7],
+        "canonical": "[100000000000000000000,1e+21,123456789012345680000,0.000001,1e-7,0.00001,0.000001234,1.5e-7]",
+        "utf8Hex": "5b3130303030303030303030303030303030303030302c31652b32312c3132333435363738393031323334353638303030302c302e3030303030312c31652d372c302e30303030312c302e3030303030313233342c312e35652d375d",
+        "sha256": "7c98723126a383f5c613686ad5aadfa7d0b466cfd30daf569158034f4dfdbf50"
+      },
+      {
+        "name": "numbers-precision-edges",
+        "class": "numbers",
+        "note": "2^53 and its neighbours, classic binary fractions, the largest and smallest doubles.",
+        "input": [9007199254740991, 9007199254740992, 9007199254740993, -9007199254740993, 4294967296, 0.1, 0.2, 0.30000000000000004, 1.7976931348623157e308, 5e-324, 2.2250738585072014e-308],
+        "canonical": "[9007199254740991,9007199254740992,9007199254740992,-9007199254740992,4294967296,0.1,0.2,0.30000000000000004,1.7976931348623157e+308,5e-324,2.2250738585072014e-308]",
+        "utf8Hex": "5b393030373139393235343734303939312c393030373139393235343734303939322c393030373139393235343734303939322c2d393030373139393235343734303939322c343239343936373239362c302e312c302e322c302e33303030303030303030303030303030342c312e37393736393331333438363233313537652b3330382c35652d3332342c322e32323530373338353835303732303134652d3330385d",
+        "sha256": "897a5b0ddb387255e4acf1c733693ab2a23a88a1be473faa04054ac61a16d978"
+      },
+      {
+        "name": "empty-containers-and-strings",
+        "class": "empty",
+        "note": "Empty object, array, string and key, alone and nested.",
+        "input": {"a": {}, "b": [], "c": "", "d": null, "e": [[], {}, "", null, [{}]], "": ""},
+        "canonical": "{\"\":\"\",\"a\":{},\"b\":[],\"c\":\"\",\"d\":null,\"e\":[[],{},\"\",null,[{}]]}",
+        "utf8Hex": "7b22223a22222c2261223a7b7d2c2262223a5b5d2c2263223a22222c2264223a6e756c6c2c2265223a5b5b5d2c7b7d2c22222c6e756c6c2c5b7b7d5d5d7d",
+        "sha256": "2b02c5528bbcc62b00e39adad937379d6a1a54d7a6f571f04c41812c09d68a6a"
+      },
+      {
+        "name": "empty-top-level-null",
+        "class": "empty",
+        "note": "A scalar at the top level.",
+        "input": null,
+        "canonical": "null",
+        "utf8Hex": "6e756c6c",
+        "sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+      },
+      {
+        "name": "empty-top-level-string",
+        "class": "empty",
+        "note": "A scalar at the top level.",
+        "input": "",
+        "canonical": "\"\"",
+        "utf8Hex": "2222",
+        "sha256": "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126"
+      },
+      {
+        "name": "empty-top-level-false",
+        "class": "empty",
+        "note": "A scalar at the top level.",
+        "input": false,
+        "canonical": "false",
+        "utf8Hex": "66616c7365",
+        "sha256": "fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa"
+      },
+      {
+        "name": "empty-top-level-zero",
+        "class": "empty",
+        "note": "A scalar at the top level.",
+        "input": 0,
+        "canonical": "0",
+        "utf8Hex": "30",
+        "sha256": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+      },
+      {
+        "name": "empty-top-level-array",
+        "class": "empty",
+        "note": "An empty container at the top level.",
+        "input": [ ],
+        "canonical": "[]",
+        "utf8Hex": "5b5d",
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      {
+        "name": "empty-top-level-object",
+        "class": "empty",
+        "note": "An empty container at the top level.",
+        "input": { },
+        "canonical": "{}",
+        "utf8Hex": "7b7d",
+        "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+      },
+      {
+        "name": "nesting-64-arrays",
+        "class": "nesting",
+        "note": "64 nested arrays.",
+        "input": [[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]],
+        "canonical": "[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]",
+        "utf8Hex": "5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d",
+        "sha256": "b3ff3b51ce17ef2a2a68203329ff0e73738c07df874044149c283b28841a0035"
+      },
+      {
+        "name": "nesting-32-objects-and-arrays",
+        "class": "nesting",
+        "note": "32 levels of object and array, keys out of order at every level.",
+        "input": {"z": [{"z": [{"z": [{"z": [{"z": [{"z": [{"z": [{"z": [{"z": [{"z": [{"z": [{"z": [{"z": [{"z": [{"z": [{"z": [1], "a": 16}], "a": 15}], "a": 14}], "a": 13}], "a": 12}], "a": 11}], "a": 10}], "a": 9}], "a": 8}], "a": 7}], "a": 6}], "a": 5}], "a": 4}], "a": 3}], "a": 2}], "a": 1},
+        "canonical": "{\"a\":1,\"z\":[{\"a\":2,\"z\":[{\"a\":3,\"z\":[{\"a\":4,\"z\":[{\"a\":5,\"z\":[{\"a\":6,\"z\":[{\"a\":7,\"z\":[{\"a\":8,\"z\":[{\"a\":9,\"z\":[{\"a\":10,\"z\":[{\"a\":11,\"z\":[{\"a\":12,\"z\":[{\"a\":13,\"z\":[{\"a\":14,\"z\":[{\"a\":15,\"z\":[{\"a\":16,\"z\":[1]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}]}",
+        "utf8Hex": "7b2261223a312c227a223a5b7b2261223a322c227a223a5b7b2261223a332c227a223a5b7b2261223a342c227a223a5b7b2261223a352c227a223a5b7b2261223a362c227a223a5b7b2261223a372c227a223a5b7b2261223a382c227a223a5b7b2261223a392c227a223a5b7b2261223a31302c227a223a5b7b2261223a31312c227a223a5b7b2261223a31322c227a223a5b7b2261223a31332c227a223a5b7b2261223a31342c227a223a5b7b2261223a31352c227a223a5b7b2261223a31362c227a223a5b315d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d5d7d",
+        "sha256": "83030c09f17452d0ca6cbe866b12a8e7881237f1246d1fedd26506f3b5453422"
+      },
+      {
+        "name": "unknown-keys-are-kept",
+        "class": "unknown-fields",
+        "note": "The canonicalizer keeps every key; rejecting unknown fields is the job of the validators.",
+        "input": {"evidenceSchema": "ductus-evidence-segment-v2", "zzNepoznato": true, "_skriveno": null, "Extra": [1]},
+        "canonical": "{\"Extra\":[1],\"_skriveno\":null,\"evidenceSchema\":\"ductus-evidence-segment-v2\",\"zzNepoznato\":true}",
+        "utf8Hex": "7b224578747261223a5b315d2c225f736b726976656e6f223a6e756c6c2c2265766964656e6365536368656d61223a226475637475732d65766964656e63652d7365676d656e742d7632222c227a7a4e65706f7a6e61746f223a747275657d",
+        "sha256": "f752ab182f6cb187e1e0fac39f5047ac04656eeb272b744fc61b8828cb1770ad"
+      }
+    ],
+    "numbers": [
+      {"ieee754": "0000000000000000", "canonical": "0"},
+      {"ieee754": "8000000000000000", "canonical": "0"},
+      {"ieee754": "0000000000000001", "canonical": "5e-324"},
+      {"ieee754": "8000000000000001", "canonical": "-5e-324"},
+      {"ieee754": "7fefffffffffffff", "canonical": "1.7976931348623157e+308"},
+      {"ieee754": "ffefffffffffffff", "canonical": "-1.7976931348623157e+308"},
+      {"ieee754": "4340000000000000", "canonical": "9007199254740992"},
+      {"ieee754": "c340000000000000", "canonical": "-9007199254740992"},
+      {"ieee754": "4430000000000000", "canonical": "295147905179352830000"},
+      {"ieee754": "7fffffffffffffff", "rejects": "non-finite number"},
+      {"ieee754": "7ff0000000000000", "rejects": "non-finite number"},
+      {"ieee754": "44b52d02c7e14af5", "canonical": "9.999999999999997e+22"},
+      {"ieee754": "44b52d02c7e14af6", "canonical": "1e+23"},
+      {"ieee754": "44b52d02c7e14af7", "canonical": "1.0000000000000001e+23"},
+      {"ieee754": "444b1ae4d6e2ef4e", "canonical": "999999999999999700000"},
+      {"ieee754": "444b1ae4d6e2ef4f", "canonical": "999999999999999900000"},
+      {"ieee754": "444b1ae4d6e2ef50", "canonical": "1e+21"},
+      {"ieee754": "3eb0c6f7a0b5ed8c", "canonical": "9.999999999999997e-7"},
+      {"ieee754": "3eb0c6f7a0b5ed8d", "canonical": "0.000001"},
+      {"ieee754": "41b3de4355555553", "canonical": "333333333.3333332"},
+      {"ieee754": "41b3de4355555554", "canonical": "333333333.33333325"},
+      {"ieee754": "41b3de4355555555", "canonical": "333333333.3333333"},
+      {"ieee754": "41b3de4355555556", "canonical": "333333333.3333334"},
+      {"ieee754": "41b3de4355555557", "canonical": "333333333.33333343"},
+      {"ieee754": "becbf647612f3696", "canonical": "-0.0000033333333333333333"},
+      {"ieee754": "43143ff3c1cb0959", "canonical": "1424953923781206.2"}
+    ],
+    "rejected": [
+      {
+        "name": "surrogate-lone-high",
+        "class": "unicode",
+        "note": "A high surrogate with nothing after it.",
+        "input": "\ud800",
+        "rejects": "lone surrogate"
+      },
+      {
+        "name": "surrogate-lone-low",
+        "class": "unicode",
+        "note": "A low surrogate with nothing before it.",
+        "input": "\udc00",
+        "rejects": "lone surrogate"
+      },
+      {
+        "name": "surrogate-reversed-pair",
+        "class": "unicode",
+        "note": "Low then high.",
+        "input": "\ude00\ud83d",
+        "rejects": "lone surrogate"
+      },
+      {
+        "name": "surrogate-high-at-end-of-text",
+        "class": "unicode",
+        "note": "Text cut in the middle of a pair.",
+        "input": "Izmi\u0161ljeno \ud83d",
+        "rejects": "lone surrogate"
+      },
+      {
+        "name": "surrogate-high-before-bmp",
+        "class": "unicode",
+        "note": "A high surrogate followed by an ordinary character.",
+        "input": "\ud83dx",
+        "rejects": "lone surrogate"
+      },
+      {
+        "name": "surrogate-in-key",
+        "class": "unicode",
+        "note": "Keys are checked like values.",
+        "input": {"\udfff": 1},
+        "rejects": "lone surrogate"
+      },
+      {
+        "name": "surrogate-nested",
+        "class": "unicode",
+        "note": "Deep inside the value.",
+        "input": [[{"a": ["ok", "\ud800"]}]],
+        "rejects": "lone surrogate"
+      },
+      {
+        "name": "number-overflow",
+        "class": "numbers",
+        "note": "A JSON number beyond the double range parses to Infinity.",
+        "input": 1e999,
+        "rejects": "non-finite number"
+      },
+      {
+        "name": "number-negative-overflow-nested",
+        "class": "numbers",
+        "note": "The same, negative and nested.",
+        "input": {"a": [-1e999]},
+        "rejects": "non-finite number"
+      }
+    ]
+  },
+  "documents": [
+    {
+      "name": "editor-like-document",
+      "note": "An invented document in an editor-like JSON shape. The vector fixes the JCS form and the hash of this JSON value only; how the editor serializes its model is not defined here.",
+      "value": {"type": "doc", "content": [{"type": "heading", "attrs": {"level": 1, "id": "naslov-1"}, "content": [{"type": "text", "text": "Izmi\u0161ljeni naslov"}]}, {"type": "paragraph", "attrs": {"id": "odlomak-1"}, "content": [{"type": "text", "text": "Prva re\u010denica. "}, {"type": "text", "marks": [{"type": "bold"}], "text": "Istaknuto"}, {"type": "text", "marks": [{"type": "italic"}], "text": " i nagla\u0161eno."}]}, {"type": "paragraph", "attrs": {"id": "odlomak-2"}}]},
+      "utf8Hex": "7b22636f6e74656e74223a5b7b226174747273223a7b226964223a226e61736c6f762d31222c226c6576656c223a317d2c22636f6e74656e74223a5b7b2274657874223a22497a6d69c5a16c6a656e69206e61736c6f76222c2274797065223a2274657874227d5d2c2274797065223a2268656164696e67227d2c7b226174747273223a7b226964223a226f646c6f6d616b2d31227d2c22636f6e74656e74223a5b7b2274657874223a2250727661207265c48d656e6963612e20222c2274797065223a2274657874227d2c7b226d61726b73223a5b7b2274797065223a22626f6c64227d5d2c2274657874223a22497374616b6e75746f222c2274797065223a2274657874227d2c7b226d61726b73223a5b7b2274797065223a226974616c6963227d5d2c2274657874223a222069206e61676c61c5a1656e6f2e222c2274797065223a2274657874227d5d2c2274797065223a22706172616772617068227d2c7b226174747273223a7b226964223a226f646c6f6d616b2d32227d2c2274797065223a22706172616772617068227d5d2c2274797065223a22646f63227d",
+      "sha256": "0682232a88d60715e623e5c04e1706665d1ea95bb96cbdccee3297b10b2108b4"
+    },
+    {
+      "name": "editor-like-document-reordered",
+      "note": "The same value with other key order and 1.0 for 1: same bytes, same hash.",
+      "value": {"content": [{"content": [{"text": "Izmi\u0161ljeni naslov", "type": "text"}], "type": "heading", "attrs": {"id": "naslov-1", "level": 1.0}}, {"content": [{"text": "Prva re\u010denica. ", "type": "text"}, {"text": "Istaknuto", "type": "text", "marks": [{"type": "bold"}]}, {"text": " i nagla\u0161eno.", "marks": [{"type": "italic"}], "type": "text"}], "attrs": {"id": "odlomak-1"}, "type": "paragraph"}, {"attrs": {"id": "odlomak-2"}, "type": "paragraph"}], "type": "doc"},
+      "utf8Hex": "7b22636f6e74656e74223a5b7b226174747273223a7b226964223a226e61736c6f762d31222c226c6576656c223a317d2c22636f6e74656e74223a5b7b2274657874223a22497a6d69c5a16c6a656e69206e61736c6f76222c2274797065223a2274657874227d5d2c2274797065223a2268656164696e67227d2c7b226174747273223a7b226964223a226f646c6f6d616b2d31227d2c22636f6e74656e74223a5b7b2274657874223a2250727661207265c48d656e6963612e20222c2274797065223a2274657874227d2c7b226d61726b73223a5b7b2274797065223a22626f6c64227d5d2c2274657874223a22497374616b6e75746f222c2274797065223a2274657874227d2c7b226d61726b73223a5b7b2274797065223a226974616c6963227d5d2c2274657874223a222069206e61676c61c5a1656e6f2e222c2274797065223a2274657874227d5d2c2274797065223a22706172616772617068227d2c7b226174747273223a7b226964223a226f646c6f6d616b2d32227d2c2274797065223a22706172616772617068227d5d2c2274797065223a22646f63227d",
+      "sha256": "0682232a88d60715e623e5c04e1706665d1ea95bb96cbdccee3297b10b2108b4"
+    },
+    {
+      "name": "editor-like-document-nfd",
+      "note": "One letter decomposed (c + U+030C): another document, another hash.",
+      "value": {"type": "doc", "content": [{"type": "heading", "attrs": {"level": 1, "id": "naslov-1"}, "content": [{"type": "text", "text": "Izmi\u0161ljeni naslov"}]}, {"type": "paragraph", "attrs": {"id": "odlomak-1"}, "content": [{"type": "text", "text": "Prva rec\u030cenica. "}, {"type": "text", "marks": [{"type": "bold"}], "text": "Istaknuto"}, {"type": "text", "marks": [{"type": "italic"}], "text": " i nagla\u0161eno."}]}, {"type": "paragraph", "attrs": {"id": "odlomak-2"}}]},
+      "utf8Hex": "7b22636f6e74656e74223a5b7b226174747273223a7b226964223a226e61736c6f762d31222c226c6576656c223a317d2c22636f6e74656e74223a5b7b2274657874223a22497a6d69c5a16c6a656e69206e61736c6f76222c2274797065223a2274657874227d5d2c2274797065223a2268656164696e67227d2c7b226174747273223a7b226964223a226f646c6f6d616b2d31227d2c22636f6e74656e74223a5b7b2274657874223a225072766120726563cc8c656e6963612e20222c2274797065223a2274657874227d2c7b226d61726b73223a5b7b2274797065223a22626f6c64227d5d2c2274657874223a22497374616b6e75746f222c2274797065223a2274657874227d2c7b226d61726b73223a5b7b2274797065223a226974616c6963227d5d2c2274657874223a222069206e61676c61c5a1656e6f2e222c2274797065223a2274657874227d5d2c2274797065223a22706172616772617068227d2c7b226174747273223a7b226964223a226f646c6f6d616b2d32227d2c2274797065223a22706172616772617068227d5d2c2274797065223a22646f63227d",
+      "sha256": "55b29e4dfd9d68ec0358c8fa859fe20abfce7a8514e55862dacd0bcbe640bd7d"
+    }
+  ],
+  "chain": {
+    "note": "Two chained segments from the empty document to a signed receipt for each. Documents are canonical documents (schemaVersion 1) of two paragraphs with invented UUID v4 ids. Steps are in the closed format ductus-edit-steps-v1: each one inserts one text node at a ProseMirror position (UTF-16), with no marks. Receipts are signed with the Ed25519 test key published as TEST 1 in RFC 8032 section 7.1; only its public half is stored here. signingSeedSha256 is the SHA-256 of the 32 private bytes printed in the RFC, so that a test can show those bytes are in none of the vector files.",
+    "evidencePackageId": "paket-izmisljeni-zv-1",
+    "principalId": "student-izmisljeni-zv-1",
+    "documentStates": [
+      {
+        "afterSequence": 0,
+        "value": {
+          "schemaVersion": 1,
+          "nodes": [
+            {"type": "paragraph", "id": "5f0c1e8a-3b7d-4c2e-9a61-0d4e8b2f7c13", "children": []},
+            {"type": "paragraph", "id": "8b3e2d71-6c4f-4a90-b5d2-e17f0a9c3b46", "children": []}
+          ]
+        },
+        "sha256": "df89679f4a77a27f4c669a12c443a728423d36f1247b693733c96b455f172535"
+      },
+      {
+        "afterSequence": 1,
+        "value": {
+          "schemaVersion": 1,
+          "nodes": [
+            {
+              "type": "paragraph",
+              "id": "5f0c1e8a-3b7d-4c2e-9a61-0d4e8b2f7c13",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "Izmi\u0161ljeni po\u010detak o \u010daju i \u0161umi. ",
+                  "marks": []
+                }
+              ]
+            },
+            {"type": "paragraph", "id": "8b3e2d71-6c4f-4a90-b5d2-e17f0a9c3b46", "children": []}
+          ]
+        },
+        "sha256": "d51563468ff4df2afb2a6f7909c7426108a7e0b1425fa7e6847d71f3e5419d1e"
+      },
+      {
+        "afterSequence": 2,
+        "value": {
+          "schemaVersion": 1,
+          "nodes": [
+            {
+              "type": "paragraph",
+              "id": "5f0c1e8a-3b7d-4c2e-9a61-0d4e8b2f7c13",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "\u0110: Izmi\u0161ljeni po\u010detak o \u010daju i \u0161umi. Zalijepljeni dio \ud83d\ude00. ",
+                  "marks": []
+                }
+              ]
+            },
+            {"type": "paragraph", "id": "8b3e2d71-6c4f-4a90-b5d2-e17f0a9c3b46", "children": []}
+          ]
+        },
+        "sha256": "c4653a345dc2b69e192e1cccc63c6bdaec210c1d806da446d2150bdf38e1111f"
+      },
+      {
+        "afterSequence": 3,
+        "value": {
+          "schemaVersion": 1,
+          "nodes": [
+            {
+              "type": "paragraph",
+              "id": "5f0c1e8a-3b7d-4c2e-9a61-0d4e8b2f7c13",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "\u0110: Izmi\u0161ljeni po\u010detak o \u010daju i \u0161umi. Zalijepljeni dio \ud83d\ude00. ",
+                  "marks": []
+                }
+              ]
+            },
+            {
+              "type": "paragraph",
+              "id": "8b3e2d71-6c4f-4a90-b5d2-e17f0a9c3b46",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "Zavr\u0161etak s razdvojenim znakom c\u030c.",
+                  "marks": []
+                }
+              ]
+            }
+          ]
+        },
+        "sha256": "a884e607936573e126f06a230f4a6047bcf83c4aa15f0d2c3c6eb912da4003e0"
+      },
+      {
+        "afterSequence": 4,
+        "value": {
+          "schemaVersion": 1,
+          "nodes": [
+            {
+              "type": "paragraph",
+              "id": "5f0c1e8a-3b7d-4c2e-9a61-0d4e8b2f7c13",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "\u0110: Izmi\u0161ljeni po\u010detak o \u010daju i \u0161umi. Zalijepljeni dio \ud83d\ude00. ",
+                  "marks": []
+                }
+              ]
+            },
+            {
+              "type": "paragraph",
+              "id": "8b3e2d71-6c4f-4a90-b5d2-e17f0a9c3b46",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "Zavr\u0161etak s razdvojenim znakom c\u030c. Dio unesen bez tipki.",
+                  "marks": []
+                }
+              ]
+            }
+          ]
+        },
+        "sha256": "8ee142105f7354a6cf5b0d64cc117bb0a22e7d6221be697bc28de749998a9203"
+      },
+      {
+        "afterSequence": 5,
+        "value": {
+          "schemaVersion": 1,
+          "nodes": [
+            {
+              "type": "paragraph",
+              "id": "5f0c1e8a-3b7d-4c2e-9a61-0d4e8b2f7c13",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "\u0110: Izmi\u0161ljeni po\u010detak o \u010daju i \u0161umi. Zalijepljeni dio \ud83d\ude00. ",
+                  "marks": []
+                }
+              ]
+            },
+            {
+              "type": "paragraph",
+              "id": "8b3e2d71-6c4f-4a90-b5d2-e17f0a9c3b46",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "Zavr\u0161etak s razdvojenim znakom c\u030c. Dio unesen bez tipki. Dio bez atribucije.",
+                  "marks": []
+                }
+              ]
+            }
+          ]
+        },
+        "sha256": "aca7b39f72ca9ea84fb7b23127592aa65481bce62044d7bf0a3e4b6345060163"
+      }
+    ],
+    "expectedDocumentReordered": {
+      "nodes": [
+        {
+          "children": [
+            {
+              "marks": [],
+              "text": "\u0110: Izmi\u0161ljeni po\u010detak o \u010daju i \u0161umi. Zalijepljeni dio \ud83d\ude00. ",
+              "type": "text"
+            }
+          ],
+          "id": "5f0c1e8a-3b7d-4c2e-9a61-0d4e8b2f7c13",
+          "type": "paragraph"
+        },
+        {
+          "children": [
+            {
+              "marks": [],
+              "text": "Zavr\u0161etak s razdvojenim znakom c\u030c. Dio unesen bez tipki. Dio bez atribucije.",
+              "type": "text"
+            }
+          ],
+          "id": "8b3e2d71-6c4f-4a90-b5d2-e17f0a9c3b46",
+          "type": "paragraph"
+        }
+      ],
+      "schemaVersion": 1
+    },
+    "segments": [
+      {
+        "clientRequestId": "zahtjev-zv-1",
+        "segment": {
+          "evidenceSchema": "ductus-evidence-segment-v2",
+          "canonicalization": "RFC8785-JCS",
+          "hashAlgorithm": "sha256",
+          "documentId": "dokument-izmisljeni-zv-1",
+          "sessionId": "sesija-izmisljena-zv-1",
+          "segmentId": "odsjecak-zv-1",
+          "sequenceFrom": 1,
+          "sequenceTo": 2,
+          "observedStartedAt": "2026-10-12T08:01:00.000Z",
+          "observedEndedAt": "2026-10-12T08:02:00.000Z",
+          "initialDocumentHash": "df89679f4a77a27f4c669a12c443a728423d36f1247b693733c96b455f172535",
+          "finalDocumentHash": "c4653a345dc2b69e192e1cccc63c6bdaec210c1d806da446d2150bdf38e1111f",
+          "predecessorSegmentHash": null,
+          "events": [
+            {
+              "sequence": 1,
+              "source": "editor",
+              "steps": [
+                {
+                  "stepType": "replace",
+                  "from": 1,
+                  "to": 1,
+                  "slice": {
+                    "content": [
+                      {
+                        "type": "text",
+                        "text": "Izmi\u0161ljeni po\u010detak o \u010daju i \u0161umi. "
+                      }
+                    ]
+                  }
+                }
+              ],
+              "touchedNodeIds": ["5f0c1e8a-3b7d-4c2e-9a61-0d4e8b2f7c13"],
+              "beforeDocumentHash": "df89679f4a77a27f4c669a12c443a728423d36f1247b693733c96b455f172535",
+              "afterDocumentHash": "d51563468ff4df2afb2a6f7909c7426108a7e0b1425fa7e6847d71f3e5419d1e"
+            },
+            {
+              "sequence": 2,
+              "source": "paste",
+              "steps": [
+                {
+                  "stepType": "replace",
+                  "from": 35,
+                  "to": 35,
+                  "slice": {
+                    "content": [{"type": "text", "text": "Zalijepljeni dio \ud83d\ude00. "}]
+                  }
+                },
+                {
+                  "stepType": "replace",
+                  "from": 1,
+                  "to": 1,
+                  "slice": {"content": [{"type": "text", "text": "\u0110: "}]}
+                }
+              ],
+              "touchedNodeIds": ["5f0c1e8a-3b7d-4c2e-9a61-0d4e8b2f7c13"],
+              "beforeDocumentHash": "d51563468ff4df2afb2a6f7909c7426108a7e0b1425fa7e6847d71f3e5419d1e",
+              "afterDocumentHash": "c4653a345dc2b69e192e1cccc63c6bdaec210c1d806da446d2150bdf38e1111f"
+            }
+          ],
+          "captureContext": {
+            "editorModel": "prosemirror",
+            "transactionFormat": "ductus-edit-steps-v1"
+          },
+          "evidenceProfileId": "standard-v1"
+        },
+        "canonicalUtf8Hex": "7b2263616e6f6e6963616c697a6174696f6e223a22524643383738352d4a4353222c2263617074757265436f6e74657874223a7b22656469746f724d6f64656c223a2270726f73656d6972726f72222c227472616e73616374696f6e466f726d6174223a226475637475732d656469742d73746570732d7631227d2c22646f63756d656e744964223a22646f6b756d656e742d697a6d69736c6a656e692d7a762d31222c226576656e7473223a5b7b226166746572446f63756d656e7448617368223a2264353135363334363866663464663261666232613666373930396337343236313038613765306231343235666137653638343764373166336535343139643165222c226265666f7265446f63756d656e7448617368223a2264663839363739663461373761323766346336363961313263343433613732383432336433366631323437623639333733336339366234353566313732353335222c2273657175656e6365223a312c22736f75726365223a22656469746f72222c227374657073223a5b7b2266726f6d223a312c22736c696365223a7b22636f6e74656e74223a5b7b2274657874223a22497a6d69c5a16c6a656e6920706fc48d6574616b206f20c48d616a75206920c5a1756d692e20222c2274797065223a2274657874227d5d7d2c227374657054797065223a227265706c616365222c22746f223a317d5d2c22746f75636865644e6f6465496473223a5b2235663063316538612d336237642d346332652d396136312d306434653862326637633133225d7d2c7b226166746572446f63756d656e7448617368223a2263343635336133343564633262363965313932653163636363363363366264616563323130633164383036646134343664323135306264663338653131313166222c226265666f7265446f63756d656e7448617368223a2264353135363334363866663464663261666232613666373930396337343236313038613765306231343235666137653638343764373166336535343139643165222c2273657175656e6365223a322c22736f75726365223a227061737465222c227374657073223a5b7b2266726f6d223a33352c22736c696365223a7b22636f6e74656e74223a5b7b2274657874223a225a616c696a65706c6a656e692064696f20f09f98802e20222c2274797065223a2274657874227d5d7d2c227374657054797065223a227265706c616365222c22746f223a33357d2c7b2266726f6d223a312c22736c696365223a7b22636f6e74656e74223a5b7b2274657874223a22c4903a20222c2274797065223a2274657874227d5d7d2c227374657054797065223a227265706c616365222c22746f223a317d5d2c22746f75636865644e6f6465496473223a5b2235663063316538612d336237642d346332652d396136312d306434653862326637633133225d7d5d2c2265766964656e636550726f66696c654964223a227374616e646172642d7631222c2265766964656e6365536368656d61223a226475637475732d65766964656e63652d7365676d656e742d7632222c2266696e616c446f63756d656e7448617368223a2263343635336133343564633262363965313932653163636363363363366264616563323130633164383036646134343664323135306264663338653131313166222c2268617368416c676f726974686d223a22736861323536222c22696e697469616c446f63756d656e7448617368223a2264663839363739663461373761323766346336363961313263343433613732383432336433366631323437623639333733336339366234353566313732353335222c226f62736572766564456e6465644174223a22323032362d31302d31325430383a30323a30302e3030305a222c226f62736572766564537461727465644174223a22323032362d31302d31325430383a30313a30302e3030305a222c227072656465636573736f725365676d656e7448617368223a6e756c6c2c227365676d656e744964223a226f64736a6563616b2d7a762d31222c2273657175656e636546726f6d223a312c2273657175656e6365546f223a322c2273657373696f6e4964223a22736573696a612d697a6d69736c6a656e612d7a762d31227d",
+        "byteLength": 1554,
+        "segmentHash": "235ac97a4b0085e19aaeae36abd7fe38f683e3b35f873ef46f0f198b01771875",
+        "descriptor": {
+          "evidencePackageId": "paket-izmisljeni-zv-1",
+          "documentId": "dokument-izmisljeni-zv-1",
+          "sessionId": "sesija-izmisljena-zv-1",
+          "segmentId": "odsjecak-zv-1",
+          "evidenceSchema": "ductus-evidence-segment-v2",
+          "canonicalization": "RFC8785-JCS",
+          "hashAlgorithm": "sha256",
+          "evidenceProfileId": "standard-v1",
+          "sequenceFrom": 1,
+          "sequenceTo": 2,
+          "eventCount": 2,
+          "observedStartedAt": "2026-10-12T08:01:00.000Z",
+          "observedEndedAt": "2026-10-12T08:02:00.000Z",
+          "segmentHash": "235ac97a4b0085e19aaeae36abd7fe38f683e3b35f873ef46f0f198b01771875",
+          "predecessorSegmentHash": null,
+          "payloadBytes": 1554
+        },
+        "receipt": {
+          "payload": {
+            "receiptSchema": "ductus-evidence-receipt-v1",
+            "receiptId": "potvrda-zv-1",
+            "evidencePackageId": "paket-izmisljeni-zv-1",
+            "documentId": "dokument-izmisljeni-zv-1",
+            "sessionId": "sesija-izmisljena-zv-1",
+            "segmentId": "odsjecak-zv-1",
+            "segmentHash": "235ac97a4b0085e19aaeae36abd7fe38f683e3b35f873ef46f0f198b01771875",
+            "predecessorSegmentHash": null,
+            "previousReceiptId": null,
+            "evidenceSchema": "ductus-evidence-segment-v2",
+            "evidenceProfileId": "standard-v1",
+            "sequenceFrom": 1,
+            "sequenceTo": 2,
+            "eventCount": 2,
+            "payloadBytes": 1554,
+            "acceptedAt": "2026-10-12T08:45:00.000Z"
+          },
+          "canonicalUtf8Hex": "7b2261636365707465644174223a22323032362d31302d31325430383a34353a30302e3030305a222c22646f63756d656e744964223a22646f6b756d656e742d697a6d69736c6a656e692d7a762d31222c226576656e74436f756e74223a322c2265766964656e63655061636b6167654964223a2270616b65742d697a6d69736c6a656e692d7a762d31222c2265766964656e636550726f66696c654964223a227374616e646172642d7631222c2265766964656e6365536368656d61223a226475637475732d65766964656e63652d7365676d656e742d7632222c227061796c6f61644279746573223a313535342c227072656465636573736f725365676d656e7448617368223a6e756c6c2c2270726576696f7573526563656970744964223a6e756c6c2c22726563656970744964223a22706f74767264612d7a762d31222c2272656365697074536368656d61223a226475637475732d65766964656e63652d726563656970742d7631222c227365676d656e7448617368223a2232333561633937613462303038356531396161656165333661626437666533386636383365336233356638373365663436663066313938623031373731383735222c227365676d656e744964223a226f64736a6563616b2d7a762d31222c2273657175656e636546726f6d223a312c2273657175656e6365546f223a322c2273657373696f6e4964223a22736573696a612d697a6d69736c6a656e612d7a762d31227d",
+          "payloadDigestSha256": "cc0b8e2e9dddaf759498ecbad6f41a026fa27dc37d18189afc027466ee0ff727",
+          "signature": {
+            "algorithm": "Ed25519",
+            "keyId": "ductus-golden-rfc8032-test-1",
+            "keyVersion": "1",
+            "signatureEncoding": "raw",
+            "signatureBase64Url": "Ytsu--Or_K9Ov9gSCVfx6Onatm3Kwc5q3N_dQ5vei79PWcRGmqKda_Ep-1qui2VS7mNX08pfYBbU4YkmI6zUCg"
+          }
+        }
+      },
+      {
+        "clientRequestId": "zahtjev-zv-2",
+        "segment": {
+          "evidenceSchema": "ductus-evidence-segment-v2",
+          "canonicalization": "RFC8785-JCS",
+          "hashAlgorithm": "sha256",
+          "documentId": "dokument-izmisljeni-zv-1",
+          "sessionId": "sesija-izmisljena-zv-2",
+          "segmentId": "odsjecak-zv-2",
+          "sequenceFrom": 3,
+          "sequenceTo": 5,
+          "observedStartedAt": "2026-10-12T08:02:00.000Z",
+          "observedEndedAt": "2026-10-12T08:02:00.000Z",
+          "initialDocumentHash": "c4653a345dc2b69e192e1cccc63c6bdaec210c1d806da446d2150bdf38e1111f",
+          "finalDocumentHash": "aca7b39f72ca9ea84fb7b23127592aa65481bce62044d7bf0a3e4b6345060163",
+          "predecessorSegmentHash": "235ac97a4b0085e19aaeae36abd7fe38f683e3b35f873ef46f0f198b01771875",
+          "events": [
+            {
+              "sequence": 3,
+              "source": "composition",
+              "steps": [
+                {
+                  "stepType": "replace",
+                  "from": 61,
+                  "to": 61,
+                  "slice": {
+                    "content": [
+                      {"type": "text", "text": "Zavr\u0161etak s razdvojenim znakom c\u030c."}
+                    ]
+                  }
+                }
+              ],
+              "beforeDocumentHash": "c4653a345dc2b69e192e1cccc63c6bdaec210c1d806da446d2150bdf38e1111f",
+              "afterDocumentHash": "a884e607936573e126f06a230f4a6047bcf83c4aa15f0d2c3c6eb912da4003e0"
+            },
+            {
+              "sequence": 4,
+              "source": "keyless-input",
+              "steps": [
+                {
+                  "stepType": "replace",
+                  "from": 95,
+                  "to": 95,
+                  "slice": {"content": [{"type": "text", "text": " Dio unesen bez tipki."}]}
+                }
+              ],
+              "touchedNodeIds": ["8b3e2d71-6c4f-4a90-b5d2-e17f0a9c3b46"],
+              "beforeDocumentHash": "a884e607936573e126f06a230f4a6047bcf83c4aa15f0d2c3c6eb912da4003e0",
+              "afterDocumentHash": "8ee142105f7354a6cf5b0d64cc117bb0a22e7d6221be697bc28de749998a9203"
+            },
+            {
+              "sequence": 5,
+              "source": "unattributed",
+              "steps": [
+                {
+                  "stepType": "replace",
+                  "from": 117,
+                  "to": 117,
+                  "slice": {"content": [{"type": "text", "text": " Dio bez atribucije."}]}
+                }
+              ],
+              "touchedNodeIds": ["8b3e2d71-6c4f-4a90-b5d2-e17f0a9c3b46"],
+              "beforeDocumentHash": "8ee142105f7354a6cf5b0d64cc117bb0a22e7d6221be697bc28de749998a9203",
+              "afterDocumentHash": "aca7b39f72ca9ea84fb7b23127592aa65481bce62044d7bf0a3e4b6345060163"
+            }
+          ],
+          "captureContext": {
+            "editorModel": "prosemirror",
+            "transactionFormat": "ductus-edit-steps-v1"
+          },
+          "evidenceProfileId": "standard-v1"
+        },
+        "canonicalUtf8Hex": "7b2263616e6f6e6963616c697a6174696f6e223a22524643383738352d4a4353222c2263617074757265436f6e74657874223a7b22656469746f724d6f64656c223a2270726f73656d6972726f72222c227472616e73616374696f6e466f726d6174223a226475637475732d656469742d73746570732d7631227d2c22646f63756d656e744964223a22646f6b756d656e742d697a6d69736c6a656e692d7a762d31222c226576656e7473223a5b7b226166746572446f63756d656e7448617368223a2261383834653630373933363537336531323666303661323330663461363034376263663833633461613135663064326333633665623931326461343030336530222c226265666f7265446f63756d656e7448617368223a2263343635336133343564633262363965313932653163636363363363366264616563323130633164383036646134343664323135306264663338653131313166222c2273657175656e6365223a332c22736f75726365223a22636f6d706f736974696f6e222c227374657073223a5b7b2266726f6d223a36312c22736c696365223a7b22636f6e74656e74223a5b7b2274657874223a225a617672c5a16574616b20732072617a64766f6a656e696d207a6e616b6f6d2063cc8c2e222c2274797065223a2274657874227d5d7d2c227374657054797065223a227265706c616365222c22746f223a36317d5d7d2c7b226166746572446f63756d656e7448617368223a2238656531343231303566373335346136636635623064363463633131376262306132326537643632323162653639376263323864653734393939386139323033222c226265666f7265446f63756d656e7448617368223a2261383834653630373933363537336531323666303661323330663461363034376263663833633461613135663064326333633665623931326461343030336530222c2273657175656e6365223a342c22736f75726365223a226b65796c6573732d696e707574222c227374657073223a5b7b2266726f6d223a39352c22736c696365223a7b22636f6e74656e74223a5b7b2274657874223a222044696f20756e6573656e2062657a207469706b692e222c2274797065223a2274657874227d5d7d2c227374657054797065223a227265706c616365222c22746f223a39357d5d2c22746f75636865644e6f6465496473223a5b2238623365326437312d366334662d346139302d623564322d653137663061396333623436225d7d2c7b226166746572446f63756d656e7448617368223a2261636137623339663732636139656138346662376232333132373539326161363534383162636536323034346437626630613365346236333435303630313633222c226265666f7265446f63756d656e7448617368223a2238656531343231303566373335346136636635623064363463633131376262306132326537643632323162653639376263323864653734393939386139323033222c2273657175656e6365223a352c22736f75726365223a22756e61747472696275746564222c227374657073223a5b7b2266726f6d223a3131372c22736c696365223a7b22636f6e74656e74223a5b7b2274657874223a222044696f2062657a2061747269627563696a652e222c2274797065223a2274657874227d5d7d2c227374657054797065223a227265706c616365222c22746f223a3131377d5d2c22746f75636865644e6f6465496473223a5b2238623365326437312d366334662d346139302d623564322d653137663061396333623436225d7d5d2c2265766964656e636550726f66696c654964223a227374616e646172642d7631222c2265766964656e6365536368656d61223a226475637475732d65766964656e63652d7365676d656e742d7632222c2266696e616c446f63756d656e7448617368223a2261636137623339663732636139656138346662376232333132373539326161363534383162636536323034346437626630613365346236333435303630313633222c2268617368416c676f726974686d223a22736861323536222c22696e697469616c446f63756d656e7448617368223a2263343635336133343564633262363965313932653163636363363363366264616563323130633164383036646134343664323135306264663338653131313166222c226f62736572766564456e6465644174223a22323032362d31302d31325430383a30323a30302e3030305a222c226f62736572766564537461727465644174223a22323032362d31302d31325430383a30323a30302e3030305a222c227072656465636573736f725365676d656e7448617368223a2232333561633937613462303038356531396161656165333661626437666533386636383365336233356638373365663436663066313938623031373731383735222c227365676d656e744964223a226f64736a6563616b2d7a762d32222c2273657175656e636546726f6d223a332c2273657175656e6365546f223a352c2273657373696f6e4964223a22736573696a612d697a6d69736c6a656e612d7a762d32227d",
+        "byteLength": 1872,
+        "segmentHash": "a861531b9e3cf371c05a6c73e938db71396d874b0dede36f06088190c9b60c44",
+        "descriptor": {
+          "evidencePackageId": "paket-izmisljeni-zv-1",
+          "documentId": "dokument-izmisljeni-zv-1",
+          "sessionId": "sesija-izmisljena-zv-2",
+          "segmentId": "odsjecak-zv-2",
+          "evidenceSchema": "ductus-evidence-segment-v2",
+          "canonicalization": "RFC8785-JCS",
+          "hashAlgorithm": "sha256",
+          "evidenceProfileId": "standard-v1",
+          "sequenceFrom": 3,
+          "sequenceTo": 5,
+          "eventCount": 3,
+          "observedStartedAt": "2026-10-12T08:02:00.000Z",
+          "observedEndedAt": "2026-10-12T08:02:00.000Z",
+          "segmentHash": "a861531b9e3cf371c05a6c73e938db71396d874b0dede36f06088190c9b60c44",
+          "predecessorSegmentHash": "235ac97a4b0085e19aaeae36abd7fe38f683e3b35f873ef46f0f198b01771875",
+          "payloadBytes": 1872
+        },
+        "receipt": {
+          "payload": {
+            "receiptSchema": "ductus-evidence-receipt-v1",
+            "receiptId": "potvrda-zv-2",
+            "evidencePackageId": "paket-izmisljeni-zv-1",
+            "documentId": "dokument-izmisljeni-zv-1",
+            "sessionId": "sesija-izmisljena-zv-2",
+            "segmentId": "odsjecak-zv-2",
+            "segmentHash": "a861531b9e3cf371c05a6c73e938db71396d874b0dede36f06088190c9b60c44",
+            "predecessorSegmentHash": "235ac97a4b0085e19aaeae36abd7fe38f683e3b35f873ef46f0f198b01771875",
+            "previousReceiptId": "potvrda-zv-1",
+            "evidenceSchema": "ductus-evidence-segment-v2",
+            "evidenceProfileId": "standard-v1",
+            "sequenceFrom": 3,
+            "sequenceTo": 5,
+            "eventCount": 3,
+            "payloadBytes": 1872,
+            "acceptedAt": "2026-10-12T08:46:30.250Z"
+          },
+          "canonicalUtf8Hex": "7b2261636365707465644174223a22323032362d31302d31325430383a34363a33302e3235305a222c22646f63756d656e744964223a22646f6b756d656e742d697a6d69736c6a656e692d7a762d31222c226576656e74436f756e74223a332c2265766964656e63655061636b6167654964223a2270616b65742d697a6d69736c6a656e692d7a762d31222c2265766964656e636550726f66696c654964223a227374616e646172642d7631222c2265766964656e6365536368656d61223a226475637475732d65766964656e63652d7365676d656e742d7632222c227061796c6f61644279746573223a313837322c227072656465636573736f725365676d656e7448617368223a2232333561633937613462303038356531396161656165333661626437666533386636383365336233356638373365663436663066313938623031373731383735222c2270726576696f7573526563656970744964223a22706f74767264612d7a762d31222c22726563656970744964223a22706f74767264612d7a762d32222c2272656365697074536368656d61223a226475637475732d65766964656e63652d726563656970742d7631222c227365676d656e7448617368223a2261383631353331623965336366333731633035613663373365393338646237313339366438373462306465646533366630363038383139306339623630633434222c227365676d656e744964223a226f64736a6563616b2d7a762d32222c2273657175656e636546726f6d223a332c2273657175656e6365546f223a352c2273657373696f6e4964223a22736573696a612d697a6d69736c6a656e612d7a762d32227d",
+          "payloadDigestSha256": "3e50087752648c068d491bc770d00e4c0d8e9649398f654eda892e6e21208ed7",
+          "signature": {
+            "algorithm": "Ed25519",
+            "keyId": "ductus-golden-rfc8032-test-1",
+            "keyVersion": "1",
+            "signatureEncoding": "raw",
+            "signatureBase64Url": "xzlO9tPNjIxF2U1scKkseTH3gtwsvDBYhKxjNBSuVndwOW6kgf1dhmZPhZ1lW-UqfeFZzZWVG7fEdlRjOQSLAA"
+          }
+        }
+      }
+    ],
+    "head": {
+      "segmentHash": "a861531b9e3cf371c05a6c73e938db71396d874b0dede36f06088190c9b60c44",
+      "segmentCount": 2
+    },
+    "verificationKey": {
+      "algorithm": "Ed25519",
+      "keyId": "ductus-golden-rfc8032-test-1",
+      "keyVersion": "1",
+      "encoding": "spki-der",
+      "spkiDerHex": "302a300506032b6570032100d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+      "signingSeedSha256": "644d50ab64864c20a12b3c4656d46b4a48f69ef7c47ecdc8415cd28316b22ef5"
+    }
+  },
+  "segmentPayloads": {
+    "note": "Byte edits of chain.segments[base].canonicalUtf8Hex that must not be accepted. find/replace are UTF-8 text, findHex/replaceHex are bytes; find occurs exactly once. recanonicalizesToBase: the edited bytes parse to the same segment, so only the bytes are wrong. canonicalReplace: JCS writes the parsed edit as the base with find replaced by canonicalReplace, so the edited bytes differ from their own canonical form exactly there. canonicalJcs: the edited bytes are canonical JCS, so the segment validator is what rejects them.",
+    "rejected": [
+      {
+        "name": "space-after-colon",
+        "class": "non-canonical",
+        "note": "Insignificant whitespace.",
+        "base": 0,
+        "find": "\"sequenceFrom\":1,",
+        "replace": "\"sequenceFrom\": 1,",
+        "reason": "invalid",
+        "recanonicalizesToBase": true,
+        "canonicalJcs": false
+      },
+      {
+        "name": "trailing-line-feed",
+        "class": "non-canonical",
+        "note": "A line feed after the closing brace.",
+        "base": 0,
+        "find": "\"sessionId\":\"sesija-izmisljena-zv-1\"}",
+        "replace": "\"sessionId\":\"sesija-izmisljena-zv-1\"}\n",
+        "reason": "invalid",
+        "recanonicalizesToBase": true,
+        "canonicalJcs": false
+      },
+      {
+        "name": "leading-space",
+        "class": "non-canonical",
+        "note": "A space before the opening brace.",
+        "base": 0,
+        "find": "{\"canonicalization\"",
+        "replace": " {\"canonicalization\"",
+        "reason": "invalid",
+        "recanonicalizesToBase": true,
+        "canonicalJcs": false
+      },
+      {
+        "name": "reordered-keys",
+        "class": "non-canonical",
+        "note": "Two keys swapped.",
+        "base": 0,
+        "find": "\"sequenceFrom\":1,\"sequenceTo\":2,",
+        "replace": "\"sequenceTo\":2,\"sequenceFrom\":1,",
+        "reason": "invalid",
+        "recanonicalizesToBase": true,
+        "canonicalJcs": false
+      },
+      {
+        "name": "number-exponent-form",
+        "class": "non-canonical",
+        "note": "1 written as 1e0.",
+        "base": 0,
+        "find": "\"sequenceFrom\":1,",
+        "replace": "\"sequenceFrom\":1e0,",
+        "reason": "invalid",
+        "recanonicalizesToBase": true,
+        "canonicalJcs": false
+      },
+      {
+        "name": "number-fraction-form",
+        "class": "non-canonical",
+        "note": "2 written as 2.0.",
+        "base": 0,
+        "find": "\"sequenceTo\":2,",
+        "replace": "\"sequenceTo\":2.0,",
+        "reason": "invalid",
+        "recanonicalizesToBase": true,
+        "canonicalJcs": false
+      },
+      {
+        "name": "negative-zero",
+        "class": "non-canonical",
+        "note": "A step that puts an empty paragraph before the first block, with its position written as -0. Two layers refuse it: the closed step format reads -0 as an invalid position, and JCS writes the parsed value as 0, so the bytes differ from their canonical form. The same step written with 0 is canonical and accepted.",
+        "base": 0,
+        "find": "{\"from\":1,\"slice\":{\"content\":[{\"text\":\"\u0110: \",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}",
+        "replace": "{\"from\":-0,\"slice\":{\"content\":[{\"attrs\":{\"nodeId\":null},\"type\":\"paragraph\"}]},\"stepType\":\"replace\",\"to\":0}",
+        "canonicalReplace": "{\"from\":0,\"slice\":{\"content\":[{\"attrs\":{\"nodeId\":null},\"type\":\"paragraph\"}]},\"stepType\":\"replace\",\"to\":0}",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": false
+      },
+      {
+        "name": "needless-escape",
+        "class": "non-canonical",
+        "note": "An ASCII letter written as an escape.",
+        "base": 0,
+        "find": "\"source\":\"editor\"",
+        "replace": "\"source\":\"\\u0065ditor\"",
+        "reason": "invalid",
+        "recanonicalizesToBase": true,
+        "canonicalJcs": false
+      },
+      {
+        "name": "escaped-non-ascii",
+        "class": "non-canonical",
+        "note": "What an ASCII-only serializer emits for a Croatian letter.",
+        "base": 0,
+        "find": "Izmi\u0161ljeni",
+        "replace": "Izmi\\u0161ljeni",
+        "reason": "invalid",
+        "recanonicalizesToBase": true,
+        "canonicalJcs": false
+      },
+      {
+        "name": "duplicate-key",
+        "class": "non-canonical",
+        "note": "A key repeated with the same value.",
+        "base": 0,
+        "find": "\"sequenceTo\":2,",
+        "replace": "\"sequenceTo\":2,\"sequenceTo\":2,",
+        "reason": "invalid",
+        "recanonicalizesToBase": true,
+        "canonicalJcs": false
+      },
+      {
+        "name": "byte-order-mark",
+        "class": "encoding",
+        "note": "A UTF-8 byte order mark before the JSON text.",
+        "base": 0,
+        "find": "{\"canonicalization\"",
+        "replace": "\ufeff{\"canonicalization\"",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": false
+      },
+      {
+        "name": "invalid-utf8-byte",
+        "class": "encoding",
+        "note": "0xFF inside a string.",
+        "base": 0,
+        "findHex": "497a6d69c5a16c6a656e69",
+        "replaceHex": "497a6d69ff6c6a656e69",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": false
+      },
+      {
+        "name": "overlong-utf8",
+        "class": "encoding",
+        "note": "The letter I as the overlong sequence C1 89.",
+        "base": 0,
+        "findHex": "497a6d69c5a16c6a656e69",
+        "replaceHex": "c1897a6d69c5a16c6a656e69",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": false
+      },
+      {
+        "name": "cesu8-surrogates",
+        "class": "encoding",
+        "note": "U+1F600 as two three-byte surrogates (CESU-8).",
+        "base": 0,
+        "findHex": "f09f9880",
+        "replaceHex": "eda0bdedb880",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": false
+      },
+      {
+        "name": "uppercase-hash",
+        "class": "validator",
+        "note": "Hashes are lowercase hex; the bytes are canonical JCS, the segment is not valid.",
+        "base": 0,
+        "find": "\"initialDocumentHash\":\"df89679f4a77a27f4c669a12c443a728423d36f1247b693733c96b455f172535\"",
+        "replace": "\"initialDocumentHash\":\"DF89679F4A77A27F4C669A12C443A728423D36F1247B693733C96B455F172535\"",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": true
+      },
+      {
+        "name": "unknown-field-segment",
+        "class": "unknown-fields",
+        "note": "An extra field on the segment, in canonical position.",
+        "base": 0,
+        "find": "\"sessionId\":\"sesija-izmisljena-zv-1\"}",
+        "replace": "\"sessionId\":\"sesija-izmisljena-zv-1\",\"zzNepoznato\":1}",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": true
+      },
+      {
+        "name": "unknown-field-proto",
+        "class": "unknown-fields",
+        "note": "An own key named __proto__ on the segment.",
+        "base": 0,
+        "find": "{\"canonicalization\"",
+        "replace": "{\"__proto__\":1,\"canonicalization\"",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": true
+      },
+      {
+        "name": "unknown-field-event",
+        "class": "unknown-fields",
+        "note": "An author smuggled into an event.",
+        "base": 0,
+        "find": ",\"beforeDocumentHash\":\"df89679f4a77a27f4c669a12c443a728423d36f1247b693733c96b455f172535\"",
+        "replace": ",\"authorId\":\"student-izmisljeni-zv-9\",\"beforeDocumentHash\":\"df89679f4a77a27f4c669a12c443a728423d36f1247b693733c96b455f172535\"",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": true
+      },
+      {
+        "name": "unknown-field-capture-context",
+        "class": "unknown-fields",
+        "note": "An extra field in captureContext.",
+        "base": 0,
+        "find": "\"transactionFormat\":\"ductus-edit-steps-v1\"}",
+        "replace": "\"transactionFormat\":\"ductus-edit-steps-v1\",\"userAgent\":\"izmisljeni-preglednik\"}",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": true
+      },
+      {
+        "name": "event-time-elapsed-ms",
+        "class": "event-time",
+        "note": "elapsedMs on an event, even when it is zero.",
+        "base": 0,
+        "find": "\"sequence\":1,\"source\":\"editor\"",
+        "replace": "\"elapsedMs\":0,\"sequence\":1,\"source\":\"editor\"",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": true
+      },
+      {
+        "name": "event-time-occurred-at",
+        "class": "event-time",
+        "note": "occurredAt on an event, even as a whole minute.",
+        "base": 0,
+        "find": "\"sequence\":1,\"source\":\"editor\"",
+        "replace": "\"occurredAt\":\"2026-10-12T08:01:00.000Z\",\"sequence\":1,\"source\":\"editor\"",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": true
+      },
+      {
+        "name": "event-time-both-as-before",
+        "class": "event-time",
+        "note": "Both fields, as the first revision of these vectors had them.",
+        "base": 0,
+        "find": "\"sequence\":1,\"source\":\"editor\"",
+        "replace": "\"elapsedMs\":0,\"occurredAt\":\"2026-10-12T08:01:01.000Z\",\"sequence\":1,\"source\":\"editor\"",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": true
+      },
+      {
+        "name": "time-precision-start-seconds",
+        "class": "time-precision",
+        "note": "observedStartedAt with seconds.",
+        "base": 0,
+        "find": "\"observedStartedAt\":\"2026-10-12T08:01:00.000Z\"",
+        "replace": "\"observedStartedAt\":\"2026-10-12T08:01:02.000Z\"",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": true
+      },
+      {
+        "name": "time-precision-start-millisecond",
+        "class": "time-precision",
+        "note": "observedStartedAt one millisecond into the minute.",
+        "base": 0,
+        "find": "\"observedStartedAt\":\"2026-10-12T08:01:00.000Z\"",
+        "replace": "\"observedStartedAt\":\"2026-10-12T08:01:00.001Z\"",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": true
+      },
+      {
+        "name": "time-precision-end-seconds",
+        "class": "time-precision",
+        "note": "observedEndedAt with seconds.",
+        "base": 0,
+        "find": "\"observedEndedAt\":\"2026-10-12T08:02:00.000Z\"",
+        "replace": "\"observedEndedAt\":\"2026-10-12T08:01:30.000Z\"",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": true
+      },
+      {
+        "name": "time-precision-end-last-millisecond",
+        "class": "time-precision",
+        "note": "observedEndedAt at the last millisecond of a minute.",
+        "base": 0,
+        "find": "\"observedEndedAt\":\"2026-10-12T08:02:00.000Z\"",
+        "replace": "\"observedEndedAt\":\"2026-10-12T08:01:59.999Z\"",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": true
+      },
+      {
+        "name": "time-form-other-zone",
+        "class": "time-form",
+        "note": "The same instant written with a +02:00 offset.",
+        "base": 0,
+        "find": "\"observedStartedAt\":\"2026-10-12T08:01:00.000Z\"",
+        "replace": "\"observedStartedAt\":\"2026-10-12T10:01:00.000+02:00\"",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": true
+      },
+      {
+        "name": "time-form-without-milliseconds",
+        "class": "time-form",
+        "note": "A whole minute written without milliseconds.",
+        "base": 0,
+        "find": "\"observedStartedAt\":\"2026-10-12T08:01:00.000Z\"",
+        "replace": "\"observedStartedAt\":\"2026-10-12T08:01:00Z\"",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": true
+      },
+      {
+        "name": "time-form-without-seconds",
+        "class": "time-form",
+        "note": "A whole minute written without seconds.",
+        "base": 0,
+        "find": "\"observedStartedAt\":\"2026-10-12T08:01:00.000Z\"",
+        "replace": "\"observedStartedAt\":\"2026-10-12T08:01Z\"",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": true
+      },
+      {
+        "name": "source-outside-the-set",
+        "class": "closed-set",
+        "note": "A source that is not one of the eight values.",
+        "base": 0,
+        "find": "\"source\":\"editor\"",
+        "replace": "\"source\":\"keyboard\"",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": true
+      },
+      {
+        "name": "source-missing",
+        "class": "closed-set",
+        "note": "An event without a source is not taken for typing.",
+        "base": 0,
+        "find": "\"sequence\":1,\"source\":\"editor\"",
+        "replace": "\"sequence\":1",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": true
+      },
+      {
+        "name": "time-in-capture-context",
+        "class": "unknown-fields",
+        "note": "captureContext has no place for a time.",
+        "base": 0,
+        "find": "\"captureContext\":{\"editorModel\"",
+        "replace": "\"captureContext\":{\"capturedAt\":\"2026-10-12T08:01:00.000Z\",\"editorModel\"",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": true
+      },
+      {
+        "name": "time-in-touched-node-entry",
+        "class": "closed-shape",
+        "note": "A touched node id is a string, never an object with a time.",
+        "base": 0,
+        "find": "\u0161umi. \",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}],\"touchedNodeIds\":[\"5f0c1e8a-3b7d-4c2e-9a61-0d4e8b2f7c13\"]",
+        "replace": "\u0161umi. \",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}],\"touchedNodeIds\":[{\"at\":\"2026-10-12T08:01:00.000Z\",\"id\":\"5f0c1e8a-3b7d-4c2e-9a61-0d4e8b2f7c13\"}]",
+        "reason": "invalid",
+        "recanonicalizesToBase": false,
+        "canonicalJcs": true
+      }
+    ]
+  },
+  "eventTime": {
+    "note": "Owner decision of 10 October 2026 (D-24, D-56): a segment carries no time per event and no time finer than a minute, and the server refuses a segment that does; it never rounds one. formerSegments are the two chain segments of the first revision of this file (DAN-127), byte for byte: canonical JCS that was valid then and must be refused now, because its events carry occurredAt and elapsedMs and its observed times carry seconds. formerSegmentHash is the hash that revision published for them. The edits with the classes event-time, time-precision, time-form and closed-shape under segmentPayloads.rejected, and time-in-capture-context, each break one rule on the current first segment.",
+    "formerSegments": [
+      {
+        "name": "former-odsjecak-zv-1",
+        "formerSegmentHash": "8a95172066e145b5b890b9a73a3b4ccedbdceaf46ec8c373d2b35e94328f692e",
+        "byteLength": 1556,
+        "canonicalUtf8Hex": "7b2263616e6f6e6963616c697a6174696f6e223a22524643383738352d4a4353222c2263617074757265436f6e74657874223a7b22656469746f724d6f64656c223a22746573742d746578742d6e6f646573222c227472616e73616374696f6e466f726d6174223a226475637475732d746573742d696e736572742d746578742d7630227d2c22646f63756d656e744964223a22646f6b756d656e742d697a6d69736c6a656e692d7a762d31222c226576656e7473223a5b7b226166746572446f63756d656e7448617368223a2230326361636435333637643238306335616530613739626339323631306437356261376666303264303234363839323463346537643731353934313838633239222c226265666f7265446f63756d656e7448617368223a2234366139363239653233666432303761633233306436633034326230326434316363383665363764363834666661326566613961333138666431396464636337222c22656c61707365644d73223a302c226f636375727265644174223a22323032362d31302d31325430383a30313a30312e3030305a222c2273657175656e6365223a312c22736f75726365223a22656469746f72222c227374657073223a5b7b226b696e64223a22696e736572742d74657874222c226e6f64654964223a226f646c6f6d616b2d31222c226f6666736574223a302c2274657874223a22497a6d69c5a16c6a656e6920706fc48d6574616b206f20c48d616a75206920c5a1756d692e20227d5d2c22746f75636865644e6f6465496473223a5b226f646c6f6d616b2d31225d7d2c7b226166746572446f63756d656e7448617368223a2239613236356338383161343661326665303738333738336630663339333736663933303438613530353337313064373938353266353332373238626663663838222c226265666f7265446f63756d656e7448617368223a2230326361636435333637643238306335616530613739626339323631306437356261376666303264303234363839323463346537643731353934313838633239222c22656c61707365644d73223a313235302e352c226f636375727265644174223a22323032362d31302d31325430383a30313a30322e3235305a222c2273657175656e6365223a322c22736f75726365223a227061737465222c227374657073223a5b7b226b696e64223a22696e736572742d74657874222c226e6f64654964223a226f646c6f6d616b2d31222c226f6666736574223a33342c2274657874223a225a616c696a65706c6a656e692064696f20f09f98802e20227d2c7b226b696e64223a22696e736572742d74657874222c226e6f64654964223a226f646c6f6d616b2d31222c226f6666736574223a302c2274657874223a22c4903a20227d5d2c22746f75636865644e6f6465496473223a5b226f646c6f6d616b2d31225d7d5d2c2265766964656e636550726f66696c654964223a227374616e646172642d7631222c2265766964656e6365536368656d61223a226475637475732d65766964656e63652d7365676d656e742d7632222c2266696e616c446f63756d656e7448617368223a2239613236356338383161343661326665303738333738336630663339333736663933303438613530353337313064373938353266353332373238626663663838222c2268617368416c676f726974686d223a22736861323536222c22696e697469616c446f63756d656e7448617368223a2234366139363239653233666432303761633233306436633034326230326434316363383665363764363834666661326566613961333138666431396464636337222c226f62736572766564456e6465644174223a22323032362d31302d31325430383a30313a33302e3030305a222c226f62736572766564537461727465644174223a22323032362d31302d31325430383a30313a30302e3030305a222c227072656465636573736f725365676d656e7448617368223a6e756c6c2c227365676d656e744964223a226f64736a6563616b2d7a762d31222c2273657175656e636546726f6d223a312c2273657175656e6365546f223a322c2273657373696f6e4964223a22736573696a612d697a6d69736c6a656e612d7a762d31227d",
+        "reason": "invalid"
+      },
+      {
+        "name": "former-odsjecak-zv-2",
+        "formerSegmentHash": "af2a408d76db01c7b95962f8f854a460b3491879f39b033ebed725587e948cb4",
+        "byteLength": 1127,
+        "canonicalUtf8Hex": "7b2263616e6f6e6963616c697a6174696f6e223a22524643383738352d4a4353222c2263617074757265436f6e74657874223a7b22656469746f724d6f64656c223a22746573742d746578742d6e6f646573222c227472616e73616374696f6e466f726d6174223a226475637475732d746573742d696e736572742d746578742d7630227d2c22646f63756d656e744964223a22646f6b756d656e742d697a6d69736c6a656e692d7a762d31222c226576656e7473223a5b7b226166746572446f63756d656e7448617368223a2263393965356264396133646130626335376161656336623338303163376165316565616565656566373866323466373632333263613562336239666436653236222c226265666f7265446f63756d656e7448617368223a2239613236356338383161343661326665303738333738336630663339333736663933303438613530353337313064373938353266353332373238626663663838222c22656c61707365644d73223a3430302c226f636375727265644174223a22323032362d31302d31325430383a30323a30352e3030305a222c2273657175656e6365223a332c22736f75726365223a22636f6d706f736974696f6e222c227374657073223a5b7b226b696e64223a22696e736572742d74657874222c226e6f64654964223a226f646c6f6d616b2d32222c226f6666736574223a302c2274657874223a225a617672c5a16574616b20732072617a64766f6a656e696d207a6e616b6f6d2063cc8c2e227d5d7d5d2c2265766964656e636550726f66696c654964223a227374616e646172642d7631222c2265766964656e6365536368656d61223a226475637475732d65766964656e63652d7365676d656e742d7632222c2266696e616c446f63756d656e7448617368223a2263393965356264396133646130626335376161656336623338303163376165316565616565656566373866323466373632333263613562336239666436653236222c2268617368416c676f726974686d223a22736861323536222c22696e697469616c446f63756d656e7448617368223a2239613236356338383161343661326665303738333738336630663339333736663933303438613530353337313064373938353266353332373238626663663838222c226f62736572766564456e6465644174223a22323032362d31302d31325430383a30323a33302e3030305a222c226f62736572766564537461727465644174223a22323032362d31302d31325430383a30323a30302e3030305a222c227072656465636573736f725365676d656e7448617368223a2238613935313732303636653134356235623839306239613733613362346363656462646365616634366563386333373364326233356539343332386636393265222c227365676d656e744964223a226f64736a6563616b2d7a762d32222c2273657175656e636546726f6d223a332c2273657175656e6365546f223a332c2273657373696f6e4964223a22736573696a612d697a6d69736c6a656e612d7a762d32227d",
+        "reason": "invalid"
+      }
+    ]
+  },
+  "stepFormat": {
+    "note": "DAN-183 (Z10): a segment carries only steps of the closed format ductus-edit-steps-v1. formerSegments are the two chain segments of this file before DAN-183b, byte for byte: canonical JCS whose captureContext names the invented test format ductus-test-insert-text-v0 and whose steps are insert-text at an offset of one node. formerSegmentHash is the hash the file published for them.",
+    "formerSegments": [
+      {
+        "name": "former-v0-odsjecak-zv-1",
+        "formerSegmentHash": "51238852b959a72b9efcb2474f3a1a55389bc18e41f5279e8ecb2d9d0de0e5c5",
+        "byteLength": 1443,
+        "canonicalUtf8Hex": "7b2263616e6f6e6963616c697a6174696f6e223a22524643383738352d4a4353222c2263617074757265436f6e74657874223a7b22656469746f724d6f64656c223a22746573742d746578742d6e6f646573222c227472616e73616374696f6e466f726d6174223a226475637475732d746573742d696e736572742d746578742d7630227d2c22646f63756d656e744964223a22646f6b756d656e742d697a6d69736c6a656e692d7a762d31222c226576656e7473223a5b7b226166746572446f63756d656e7448617368223a2230326361636435333637643238306335616530613739626339323631306437356261376666303264303234363839323463346537643731353934313838633239222c226265666f7265446f63756d656e7448617368223a2234366139363239653233666432303761633233306436633034326230326434316363383665363764363834666661326566613961333138666431396464636337222c2273657175656e6365223a312c22736f75726365223a22656469746f72222c227374657073223a5b7b226b696e64223a22696e736572742d74657874222c226e6f64654964223a226f646c6f6d616b2d31222c226f6666736574223a302c2274657874223a22497a6d69c5a16c6a656e6920706fc48d6574616b206f20c48d616a75206920c5a1756d692e20227d5d2c22746f75636865644e6f6465496473223a5b226f646c6f6d616b2d31225d7d2c7b226166746572446f63756d656e7448617368223a2239613236356338383161343661326665303738333738336630663339333736663933303438613530353337313064373938353266353332373238626663663838222c226265666f7265446f63756d656e7448617368223a2230326361636435333637643238306335616530613739626339323631306437356261376666303264303234363839323463346537643731353934313838633239222c2273657175656e6365223a322c22736f75726365223a227061737465222c227374657073223a5b7b226b696e64223a22696e736572742d74657874222c226e6f64654964223a226f646c6f6d616b2d31222c226f6666736574223a33342c2274657874223a225a616c696a65706c6a656e692064696f20f09f98802e20227d2c7b226b696e64223a22696e736572742d74657874222c226e6f64654964223a226f646c6f6d616b2d31222c226f6666736574223a302c2274657874223a22c4903a20227d5d2c22746f75636865644e6f6465496473223a5b226f646c6f6d616b2d31225d7d5d2c2265766964656e636550726f66696c654964223a227374616e646172642d7631222c2265766964656e6365536368656d61223a226475637475732d65766964656e63652d7365676d656e742d7632222c2266696e616c446f63756d656e7448617368223a2239613236356338383161343661326665303738333738336630663339333736663933303438613530353337313064373938353266353332373238626663663838222c2268617368416c676f726974686d223a22736861323536222c22696e697469616c446f63756d656e7448617368223a2234366139363239653233666432303761633233306436633034326230326434316363383665363764363834666661326566613961333138666431396464636337222c226f62736572766564456e6465644174223a22323032362d31302d31325430383a30323a30302e3030305a222c226f62736572766564537461727465644174223a22323032362d31302d31325430383a30313a30302e3030305a222c227072656465636573736f725365676d656e7448617368223a6e756c6c2c227365676d656e744964223a226f64736a6563616b2d7a762d31222c2273657175656e636546726f6d223a312c2273657175656e6365546f223a322c2273657373696f6e4964223a22736573696a612d697a6d69736c6a656e612d7a762d31227d",
+        "reason": "invalid"
+      },
+      {
+        "name": "former-v0-odsjecak-zv-2",
+        "formerSegmentHash": "2f84791c701f57d122195c947dd63fb52f8260d188a0cd41d48a5dcf6ab16659",
+        "byteLength": 1756,
+        "canonicalUtf8Hex": "7b2263616e6f6e6963616c697a6174696f6e223a22524643383738352d4a4353222c2263617074757265436f6e74657874223a7b22656469746f724d6f64656c223a22746573742d746578742d6e6f646573222c227472616e73616374696f6e466f726d6174223a226475637475732d746573742d696e736572742d746578742d7630227d2c22646f63756d656e744964223a22646f6b756d656e742d697a6d69736c6a656e692d7a762d31222c226576656e7473223a5b7b226166746572446f63756d656e7448617368223a2263393965356264396133646130626335376161656336623338303163376165316565616565656566373866323466373632333263613562336239666436653236222c226265666f7265446f63756d656e7448617368223a2239613236356338383161343661326665303738333738336630663339333736663933303438613530353337313064373938353266353332373238626663663838222c2273657175656e6365223a332c22736f75726365223a22636f6d706f736974696f6e222c227374657073223a5b7b226b696e64223a22696e736572742d74657874222c226e6f64654964223a226f646c6f6d616b2d32222c226f6666736574223a302c2274657874223a225a617672c5a16574616b20732072617a64766f6a656e696d207a6e616b6f6d2063cc8c2e227d5d7d2c7b226166746572446f63756d656e7448617368223a2238373536333230666131353164333332383564636636373632393432633165313663383938623936353630323337326461336165663433656435666166646263222c226265666f7265446f63756d656e7448617368223a2263393965356264396133646130626335376161656336623338303163376165316565616565656566373866323466373632333263613562336239666436653236222c2273657175656e6365223a342c22736f75726365223a226b65796c6573732d696e707574222c227374657073223a5b7b226b696e64223a22696e736572742d74657874222c226e6f64654964223a226f646c6f6d616b2d32222c226f6666736574223a33342c2274657874223a222044696f20756e6573656e2062657a207469706b692e227d5d2c22746f75636865644e6f6465496473223a5b226f646c6f6d616b2d32225d7d2c7b226166746572446f63756d656e7448617368223a2236353530633638373561346433333133616335383033316431653033616337633666303239353761393333356634366236366464653939613561303662313634222c226265666f7265446f63756d656e7448617368223a2238373536333230666131353164333332383564636636373632393432633165313663383938623936353630323337326461336165663433656435666166646263222c2273657175656e6365223a352c22736f75726365223a22756e61747472696275746564222c227374657073223a5b7b226b696e64223a22696e736572742d74657874222c226e6f64654964223a226f646c6f6d616b2d32222c226f6666736574223a35362c2274657874223a222044696f2062657a2061747269627563696a652e227d5d2c22746f75636865644e6f6465496473223a5b226f646c6f6d616b2d32225d7d5d2c2265766964656e636550726f66696c654964223a227374616e646172642d7631222c2265766964656e6365536368656d61223a226475637475732d65766964656e63652d7365676d656e742d7632222c2266696e616c446f63756d656e7448617368223a2236353530633638373561346433333133616335383033316431653033616337633666303239353761393333356634366236366464653939613561303662313634222c2268617368416c676f726974686d223a22736861323536222c22696e697469616c446f63756d656e7448617368223a2239613236356338383161343661326665303738333738336630663339333736663933303438613530353337313064373938353266353332373238626663663838222c226f62736572766564456e6465644174223a22323032362d31302d31325430383a30323a30302e3030305a222c226f62736572766564537461727465644174223a22323032362d31302d31325430383a30323a30302e3030305a222c227072656465636573736f725365676d656e7448617368223a2235313233383835326239353961373262396566636232343734663361316135353338396263313865343166353237396538656362326439643064653065356335222c227365676d656e744964223a226f64736a6563616b2d7a762d32222c2273657175656e636546726f6d223a332c2273657175656e6365546f223a352c2273657373696f6e4964223a22736573696a612d697a6d69736c6a656e612d7a762d32227d",
+        "reason": "invalid"
+      }
+    ]
+  },
+  "sizeLimit": {
+    "maxSegmentBytes": 2097152,
+    "note": "Set the text of the one text node inserted by events[0].steps[0] of segmentWithoutPadding (steps[0].slice.content[0].text) to padding.unit repeated padding.count times. The unit is two UTF-8 bytes and one UTF-16 code unit, so the limit is seen to count bytes. The document hashes in the segment are those of the padded document. overLimit appends extraText to that text.",
+    "segmentWithoutPadding": {
+      "evidenceSchema": "ductus-evidence-segment-v2",
+      "canonicalization": "RFC8785-JCS",
+      "hashAlgorithm": "sha256",
+      "documentId": "dokument-izmisljeni-zv-1",
+      "sessionId": "sesija-izmisljena-zv-3",
+      "segmentId": "odsjecak-zv-granicni",
+      "sequenceFrom": 1,
+      "sequenceTo": 1,
+      "observedStartedAt": "2026-10-12T08:03:00.000Z",
+      "observedEndedAt": "2026-10-12T08:03:00.000Z",
+      "initialDocumentHash": "af2b7dc2234514b287980b373ed247484eb3d039dbf89c069b672891189e28df",
+      "finalDocumentHash": "50861d0a6574885c00b0f233ef0ec13e1f7e159b063dd7e5f956295a6161f054",
+      "predecessorSegmentHash": null,
+      "events": [
+        {
+          "sequence": 1,
+          "source": "paste",
+          "steps": [
+            {
+              "stepType": "replace",
+              "from": 1,
+              "to": 1,
+              "slice": {"content": [{"type": "text", "text": ""}]}
+            }
+          ],
+          "beforeDocumentHash": "af2b7dc2234514b287980b373ed247484eb3d039dbf89c069b672891189e28df",
+          "afterDocumentHash": "50861d0a6574885c00b0f233ef0ec13e1f7e159b063dd7e5f956295a6161f054"
+        }
+      ],
+      "captureContext": {"editorModel": "prosemirror", "transactionFormat": "ductus-edit-steps-v1"},
+      "evidenceProfileId": "standard-v1"
+    },
+    "padding": {"unit": "\u010d", "count": 1048083},
+    "atLimit": {
+      "byteLength": 2097152,
+      "sha256": "d20895a71da34f931ad642df3b553a6a5f39fc1b04db78f788d0591d6d2a439b"
+    },
+    "overLimit": {"extraText": "a", "byteLength": 2097153, "reason": "too_large"}
+  },
+  "receiptV2": {
+    "note": "Receipt v2 (D-92, DAN-54). The signed payload carries revision, clientTransactionId, evidenceDomainId and principalId next to the fields of receipt v1. The signature is Ed25519 (RFC 8032, pure) over signingInputHex: the 26 bytes of the text ductus-evidence-receipt-v2, one line feed (0x0a) and the 32 raw bytes of payloadDigestSha256, 59 bytes in all. accepted[0] is the contract vector of docs/BACKEND.md section 4.1, with the fields in the order of RFC 8785: clientTransactionId after acceptedAt, evidenceDomainId between eventCount and evidencePackageId, principalId between previousReceiptId and receiptId, revision after receiptSchema. Signatures are made with the key chain.verificationKey. The evidence domain ids and the principal ids are random version 4 UUIDs drawn for this file; they name no institution and no person. revision and clientTransactionId mean the commit in which the segment of the receipt was accepted (owner decision of 11 October 2026, issue 87 comment 6105502093, point 5). A revision may have more than one receipt, and the sequence numbers of a segment say nothing about the revision: accepted[0] is the first receipt of its package and carries revision 7. principalId is the author the server took from the session of the request that sent the segment, never a value the client wrote. acceptedAt is the start of the UTC minute in which the server accepted the segment, written YYYY-MM-DDTHH:mm:00.000Z; every other form is refused and none is rounded (issue 87 comment 6107934097, point 2). A receipt v2 states three things: the bytes with segmentHash were received and stored, they continue the chain after predecessorSegmentHash, and the document whose hash is the finalDocumentHash of that segment was saved as revision. rejectedPayloads change accepted[0].payload: set replaces or adds fields, remove deletes them. The class acceptance-fields holds one change for each rule of the fields a receipt v2 shares with a receipt v1. The class accepted-at-minute holds instants a receipt v1 may carry and a receipt v2 may not. The class principal-id holds the author left out and in every form it may not have. rejectedSignatures are valid signatures of the same key over messageHex, which is not the signing input of accepted[0]. keyEntry is what the entry of the trusted key list for chain.verificationKey holds next to the key itself: it belongs to evidenceDomainId with the purpose receipt, is active (validTo null) and was never revoked. rejectedKeys change that entry: under each changed entry the unchanged accepted[0], whose signature is valid, is refused with reason. acceptedKeys change it too, and under each of them accepted[0] still verifies. validFrom and validTo of a key are whole UTC minutes in the form of acceptedAt, and a retired key that was never revoked vouches for a receipt with acceptedAt < validTo (owner decision of 11 October 2026, issue 87 comment 6108490197): an entry whose validFrom or validTo has any other form is no key (key_unknown) and is never rounded, so a key that ends inside a minute is refused as a key and no receipt is judged by it. Nor is an entry a key unless validFrom < validTo.",
+    "signingPrefix": "ductus-evidence-receipt-v2",
+    "keyEntry": {"evidenceDomainId": "d21fe0a3-103c-42e5-a29e-c102f9030af5", "purpose": "receipt", "validFrom": "2026-01-01T00:00:00.000Z", "validTo": null, "revokedAt": null},
+    "evidenceDomainId": "d21fe0a3-103c-42e5-a29e-c102f9030af5",
+    "otherEvidenceDomainId": "563c63c2-cd22-42cb-93a8-8580d5a8b743",
+    "principalId": "72cd1705-85fc-4754-a382-c2500d038368",
+    "otherPrincipalId": "dd3a67f2-8eae-4394-ba7e-ce136438f910",
+    "accepted": [
+      {
+        "name": "contract",
+        "note": "The first receipt of a package. One Croatian letter in the transaction id shows that the bytes are UTF-8.",
+        "payload": {
+          "receiptSchema": "ductus-evidence-receipt-v2",
+          "receiptId": "receipt-1",
+          "evidenceDomainId": "d21fe0a3-103c-42e5-a29e-c102f9030af5",
+          "evidencePackageId": "evidence-1",
+          "documentId": "doc-1",
+          "revision": 7,
+          "clientTransactionId": "tx-\u0161-1",
+          "principalId": "72cd1705-85fc-4754-a382-c2500d038368",
+          "sessionId": "session-1",
+          "segmentId": "segment-1",
+          "segmentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "predecessorSegmentHash": null,
+          "previousReceiptId": null,
+          "evidenceSchema": "ductus-evidence-segment-v2",
+          "evidenceProfileId": "standard-v1",
+          "sequenceFrom": 1,
+          "sequenceTo": 1,
+          "eventCount": 1,
+          "payloadBytes": 123,
+          "acceptedAt": "2026-10-03T06:05:00.000Z"
+        },
+        "canonical": "{\"acceptedAt\":\"2026-10-03T06:05:00.000Z\",\"clientTransactionId\":\"tx-\u0161-1\",\"documentId\":\"doc-1\",\"eventCount\":1,\"evidenceDomainId\":\"d21fe0a3-103c-42e5-a29e-c102f9030af5\",\"evidencePackageId\":\"evidence-1\",\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v2\",\"payloadBytes\":123,\"predecessorSegmentHash\":null,\"previousReceiptId\":null,\"principalId\":\"72cd1705-85fc-4754-a382-c2500d038368\",\"receiptId\":\"receipt-1\",\"receiptSchema\":\"ductus-evidence-receipt-v2\",\"revision\":7,\"segmentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"segmentId\":\"segment-1\",\"sequenceFrom\":1,\"sequenceTo\":1,\"sessionId\":\"session-1\"}",
+        "canonicalUtf8Hex": "7b2261636365707465644174223a22323032362d31302d30335430363a30353a30302e3030305a222c22636c69656e745472616e73616374696f6e4964223a2274782dc5a12d31222c22646f63756d656e744964223a22646f632d31222c226576656e74436f756e74223a312c2265766964656e6365446f6d61696e4964223a2264323166653061332d313033632d343265352d613239652d633130326639303330616635222c2265766964656e63655061636b6167654964223a2265766964656e63652d31222c2265766964656e636550726f66696c654964223a227374616e646172642d7631222c2265766964656e6365536368656d61223a226475637475732d65766964656e63652d7365676d656e742d7632222c227061796c6f61644279746573223a3132332c227072656465636573736f725365676d656e7448617368223a6e756c6c2c2270726576696f7573526563656970744964223a6e756c6c2c227072696e636970616c4964223a2237326364313730352d383566632d343735342d613338322d633235303064303338333638222c22726563656970744964223a22726563656970742d31222c2272656365697074536368656d61223a226475637475732d65766964656e63652d726563656970742d7632222c227265766973696f6e223a372c227365676d656e7448617368223a2261616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161222c227365676d656e744964223a227365676d656e742d31222c2273657175656e636546726f6d223a312c2273657175656e6365546f223a312c2273657373696f6e4964223a2273657373696f6e2d31227d",
+        "byteLength": 650,
+        "payloadDigestSha256": "017cf1f3c88b10c1c39ea5d21eade560b838f1bdea4603c79a06886d90d2d706",
+        "signingInputHex": "6475637475732d65766964656e63652d726563656970742d76320a017cf1f3c88b10c1c39ea5d21eade560b838f1bdea4603c79a06886d90d2d706",
+        "signatureHex": "0d5276f2d2167892fb5ce379189b85b6fc1616417941bb899726d53ab78e9d43f5ca72fe4a4dcf94770c695550022f4ce1fea38cae6fcf5b74fc5eb44448fb0b",
+        "signature": {"algorithm": "Ed25519", "keyId": "ductus-golden-rfc8032-test-1", "keyVersion": "1", "signatureEncoding": "raw", "signatureBase64Url": "DVJ28tIWeJL7XON5GJuFtvwWFkF5QbuJlybVOreOnUP1ynL-Sk3PlHcMaVVQAi9M4f6jjK5vz1t0_F60REj7Cw"}
+      },
+      {
+        "name": "edges",
+        "note": "The largest revision, a transaction id of exactly 128 UTF-16 code units with Croatian letters and U+1F600, a predecessor and a previous receipt.",
+        "payload": {
+          "receiptSchema": "ductus-evidence-receipt-v2",
+          "receiptId": "receipt-2",
+          "evidenceDomainId": "d21fe0a3-103c-42e5-a29e-c102f9030af5",
+          "evidencePackageId": "evidence-1",
+          "documentId": "doc-1",
+          "revision": 9007199254740991,
+          "clientTransactionId": "\u010d\u0107\u0111\u0161\u017e-\ud83d\ude00xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "principalId": "72cd1705-85fc-4754-a382-c2500d038368",
+          "sessionId": "session-1",
+          "segmentId": "segment-2",
+          "segmentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "predecessorSegmentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "previousReceiptId": "receipt-1",
+          "evidenceSchema": "ductus-evidence-segment-v2",
+          "evidenceProfileId": "standard-v1",
+          "sequenceFrom": 2,
+          "sequenceTo": 4,
+          "eventCount": 3,
+          "payloadBytes": 4096,
+          "acceptedAt": "2026-10-03T06:07:00.000Z"
+        },
+        "canonical": "{\"acceptedAt\":\"2026-10-03T06:07:00.000Z\",\"clientTransactionId\":\"\u010d\u0107\u0111\u0161\u017e-\ud83d\ude00xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\",\"documentId\":\"doc-1\",\"eventCount\":3,\"evidenceDomainId\":\"d21fe0a3-103c-42e5-a29e-c102f9030af5\",\"evidencePackageId\":\"evidence-1\",\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v2\",\"payloadBytes\":4096,\"predecessorSegmentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"previousReceiptId\":\"receipt-1\",\"principalId\":\"72cd1705-85fc-4754-a382-c2500d038368\",\"receiptId\":\"receipt-2\",\"receiptSchema\":\"ductus-evidence-receipt-v2\",\"revision\":9007199254740991,\"segmentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"segmentId\":\"segment-2\",\"sequenceFrom\":2,\"sequenceTo\":4,\"sessionId\":\"session-1\"}",
+        "canonicalUtf8Hex": "7b2261636365707465644174223a22323032362d31302d30335430363a30373a30302e3030305a222c22636c69656e745472616e73616374696f6e4964223a22c48dc487c491c5a1c5be2df09f9880787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878222c22646f63756d656e744964223a22646f632d31222c226576656e74436f756e74223a332c2265766964656e6365446f6d61696e4964223a2264323166653061332d313033632d343265352d613239652d633130326639303330616635222c2265766964656e63655061636b6167654964223a2265766964656e63652d31222c2265766964656e636550726f66696c654964223a227374616e646172642d7631222c2265766964656e6365536368656d61223a226475637475732d65766964656e63652d7365676d656e742d7632222c227061796c6f61644279746573223a343039362c227072656465636573736f725365676d656e7448617368223a2261616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161222c2270726576696f7573526563656970744964223a22726563656970742d31222c227072696e636970616c4964223a2237326364313730352d383566632d343735342d613338322d633235303064303338333638222c22726563656970744964223a22726563656970742d32222c2272656365697074536368656d61223a226475637475732d65766964656e63652d726563656970742d7632222c227265766973696f6e223a393030373139393235343734303939312c227365676d656e7448617368223a2262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262626262222c227365676d656e744964223a227365676d656e742d32222c2273657175656e636546726f6d223a322c2273657175656e6365546f223a342c2273657373696f6e4964223a2273657373696f6e2d31227d",
+        "byteLength": 863,
+        "payloadDigestSha256": "48b3a1779a2135b223ae9565e42dbe62fb5649b7bc5a8db21e3d25a88ff2d13b",
+        "signingInputHex": "6475637475732d65766964656e63652d726563656970742d76320a48b3a1779a2135b223ae9565e42dbe62fb5649b7bc5a8db21e3d25a88ff2d13b",
+        "signatureHex": "7e66f2120cd84631a8ebb9b8aaedd05f2e1455ddb57a78916607e6a8169f6f95e4a50e20bb3097af068e6e6f3b5d628fd7524273211c477bf4e735cb0248fb07",
+        "signature": {"algorithm": "Ed25519", "keyId": "ductus-golden-rfc8032-test-1", "keyVersion": "1", "signatureEncoding": "raw", "signatureBase64Url": "fmbyEgzYRjGo67m4qu3QXy4UVd21eniRZgfmqBafb5XkpQ4guzCXrwaObm87XWKP11JCcyEcR3v05zXLAkj7Bw"}
+      }
+    ],
+    "former": {
+      "note": "The contract vector of receipt v2 as docs/BACKEND.md section 4.1 carried it before DAN-54, without revision, clientTransactionId, evidenceDomainId and principalId. No code in this repository signed receipt v2 before that change. Canonical JCS that must be refused now; its signature is valid for its own signingInputHex.",
+      "canonical": "{\"acceptedAt\":\"2026-10-03T06:05:00.000Z\",\"documentId\":\"doc-1\",\"eventCount\":1,\"evidencePackageId\":\"evidence-1\",\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v2\",\"payloadBytes\":123,\"predecessorSegmentHash\":null,\"previousReceiptId\":null,\"receiptId\":\"receipt-1\",\"receiptSchema\":\"ductus-evidence-receipt-v2\",\"segmentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"segmentId\":\"segment-1\",\"sequenceFrom\":1,\"sequenceTo\":1,\"sessionId\":\"session-1\"}",
+      "canonicalUtf8Hex": "7b2261636365707465644174223a22323032362d31302d30335430363a30353a30302e3030305a222c22646f63756d656e744964223a22646f632d31222c226576656e74436f756e74223a312c2265766964656e63655061636b6167654964223a2265766964656e63652d31222c2265766964656e636550726f66696c654964223a227374616e646172642d7631222c2265766964656e6365536368656d61223a226475637475732d65766964656e63652d7365676d656e742d7632222c227061796c6f61644279746573223a3132332c227072656465636573736f725365676d656e7448617368223a6e756c6c2c2270726576696f7573526563656970744964223a6e756c6c2c22726563656970744964223a22726563656970742d31222c2272656365697074536368656d61223a226475637475732d65766964656e63652d726563656970742d7632222c227365676d656e7448617368223a2261616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161222c227365676d656e744964223a227365676d656e742d31222c2273657175656e636546726f6d223a312c2273657175656e6365546f223a312c2273657373696f6e4964223a2273657373696f6e2d31227d",
+      "payloadDigestSha256": "c829e34d42c491db3ab19132c9caa4574bfd86c752e9fa64c26470662e3566e6",
+      "signingInputHex": "6475637475732d65766964656e63652d726563656970742d76320ac829e34d42c491db3ab19132c9caa4574bfd86c752e9fa64c26470662e3566e6",
+      "signatureHex": "d191cc6e6134bf467c5fd9fda054f3d97b965c7d798251907191cc056f74a06922c0db4906903cbc1ce3fefe4ccacba8858da78e42f05233beaeec0f863bb403",
+      "signature": {"algorithm": "Ed25519", "keyId": "ductus-golden-rfc8032-test-1", "keyVersion": "1", "signatureEncoding": "raw", "signatureBase64Url": "0ZHMbmE0v0Z8X9n9oFTz2XuWXH15glGQcZHMBW90oGkiwNtJBpA8vBzj_v5MysuohY2njkLwUjO-ruwPhju0Aw"}
+    },
+    "rejectedPayloads": [
+      {"name": "former-shape", "class": "former-shape", "note": "The v2 payload as it was before DAN-54: none of the four fields.", "remove": ["revision", "clientTransactionId", "evidenceDomainId", "principalId"]},
+      {"name": "without-revision", "class": "former-shape", "note": "Each of the four fields is required.", "remove": ["revision"]},
+      {"name": "without-client-transaction-id", "class": "former-shape", "note": "Each of the four fields is required.", "remove": ["clientTransactionId"]},
+      {"name": "without-evidence-domain-id", "class": "former-shape", "note": "Each of the four fields is required.", "remove": ["evidenceDomainId"]},
+      {"name": "schema-v1-with-v2-fields", "class": "schema", "note": "A v1 record does not become v2 by gaining fields.", "set": {"receiptSchema": "ductus-evidence-receipt-v1"}},
+      {"name": "schema-unknown", "class": "schema", "note": "No other schema name.", "set": {"receiptSchema": "ductus-evidence-receipt-v3"}},
+      {"name": "revision-zero", "class": "revision", "note": "0 is a document with no commit yet.", "set": {"revision": 0}},
+      {"name": "revision-negative", "class": "revision", "note": "Below the first revision.", "set": {"revision": -1}},
+      {"name": "revision-fraction", "class": "revision", "note": "Not a whole number.", "set": {"revision": 1.5}},
+      {"name": "revision-above-safe-integer", "class": "revision", "note": "2^53: not exact in a double.", "set": {"revision": 9007199254740992}},
+      {"name": "revision-as-string", "class": "revision", "note": "A number written as text.", "set": {"revision": "7"}},
+      {"name": "revision-as-array", "class": "revision", "note": "One receipt carries one revision.", "set": {"revision": [7]}},
+      {"name": "revision-null", "class": "revision", "note": "Null is not a revision.", "set": {"revision": null}},
+      {"name": "revision-boolean", "class": "revision", "note": "True is not a revision.", "set": {"revision": true}},
+      {"name": "transaction-id-empty", "class": "client-transaction-id", "note": "Empty.", "set": {"clientTransactionId": ""}},
+      {"name": "transaction-id-blank", "class": "client-transaction-id", "note": "Only a space.", "set": {"clientTransactionId": " "}},
+      {"name": "transaction-id-too-long", "class": "client-transaction-id", "note": "129 UTF-16 code units; the limit is 128.", "set": {"clientTransactionId": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}},
+      {"name": "transaction-id-nul", "class": "client-transaction-id", "note": "U+0000.", "set": {"clientTransactionId": "tx\u0000"}},
+      {"name": "transaction-id-line-feed", "class": "client-transaction-id", "note": "U+000A.", "set": {"clientTransactionId": "tx\n1"}},
+      {"name": "transaction-id-delete", "class": "client-transaction-id", "note": "U+007F.", "set": {"clientTransactionId": "tx\u007f"}},
+      {"name": "transaction-id-c1-control", "class": "client-transaction-id", "note": "U+0085.", "set": {"clientTransactionId": "tx\u0085"}},
+      {"name": "transaction-id-lone-high-surrogate", "class": "client-transaction-id", "note": "A high surrogate with nothing after it.", "set": {"clientTransactionId": "tx\ud800"}},
+      {"name": "transaction-id-lone-low-surrogate", "class": "client-transaction-id", "note": "A low surrogate with nothing before it.", "set": {"clientTransactionId": "\udc00tx"}},
+      {"name": "transaction-id-as-number", "class": "client-transaction-id", "note": "Not text.", "set": {"clientTransactionId": 7}},
+      {"name": "transaction-id-as-array", "class": "client-transaction-id", "note": "One receipt carries one transaction id.", "set": {"clientTransactionId": ["tx-1"]}},
+      {"name": "transaction-id-null", "class": "client-transaction-id", "note": "Null is not an id.", "set": {"clientTransactionId": null}},
+      {"name": "domain-id-uppercase", "class": "evidence-domain-id", "note": "The canonical form is lowercase.", "set": {"evidenceDomainId": "D21FE0A3-103C-42E5-A29E-C102F9030AF5"}},
+      {"name": "domain-id-without-hyphens", "class": "evidence-domain-id", "note": "32 hex digits with no hyphens.", "set": {"evidenceDomainId": "d21fe0a3103c42e5a29ec102f9030af5"}},
+      {"name": "domain-id-version-1", "class": "evidence-domain-id", "note": "A version 1 UUID carries a time and a node.", "set": {"evidenceDomainId": "d21fe0a3-103c-12e5-a29e-c102f9030af5"}},
+      {"name": "domain-id-version-7", "class": "evidence-domain-id", "note": "A version 7 UUID starts with a time.", "set": {"evidenceDomainId": "0199c0a3-103c-72e5-a29e-c102f9030af5"}},
+      {"name": "domain-id-other-variant", "class": "evidence-domain-id", "note": "The variant digit is none of 8, 9, a, b.", "set": {"evidenceDomainId": "d21fe0a3-103c-42e5-c29e-c102f9030af5"}},
+      {"name": "domain-id-nil", "class": "evidence-domain-id", "note": "The nil UUID.", "set": {"evidenceDomainId": "00000000-0000-0000-0000-000000000000"}},
+      {"name": "domain-id-braces", "class": "evidence-domain-id", "note": "Wrapped in braces.", "set": {"evidenceDomainId": "{d21fe0a3-103c-42e5-a29e-c102f9030af5}"}},
+      {"name": "domain-id-urn", "class": "evidence-domain-id", "note": "With the URN prefix.", "set": {"evidenceDomainId": "urn:uuid:d21fe0a3-103c-42e5-a29e-c102f9030af5"}},
+      {"name": "domain-id-trailing-line-feed", "class": "evidence-domain-id", "note": "A line feed after the last digit.", "set": {"evidenceDomainId": "d21fe0a3-103c-42e5-a29e-c102f9030af5\n"}},
+      {"name": "domain-id-short", "class": "evidence-domain-id", "note": "35 characters.", "set": {"evidenceDomainId": "d21fe0a3-103c-42e5-a29e-c102f9030af"}},
+      {"name": "domain-id-a-name", "class": "evidence-domain-id", "note": "A readable name is not an identifier of a domain.", "set": {"evidenceDomainId": "ustanova-izmisljena-1"}},
+      {"name": "domain-id-as-number", "class": "evidence-domain-id", "note": "Not text.", "set": {"evidenceDomainId": 7}},
+      {"name": "domain-id-null", "class": "evidence-domain-id", "note": "Null is not an id.", "set": {"evidenceDomainId": null}},
+      {"name": "principal-id-missing", "class": "principal-id", "note": "Required: a receipt v2 without its author is the form of this payload before the author was added.", "remove": ["principalId"]},
+      {"name": "principal-id-empty", "class": "principal-id", "note": "Empty.", "set": {"principalId": ""}},
+      {"name": "principal-id-a-name", "class": "principal-id", "note": "A readable name is not the id of the author.", "set": {"principalId": "student-izmisljeni-zv-1"}},
+      {"name": "principal-id-an-address", "class": "principal-id", "note": "Nor is an identifier of the form a login uses.", "set": {"principalId": "student-izmisljeni-zv-1@ustanova-izmisljena.invalid"}},
+      {"name": "principal-id-uppercase", "class": "principal-id", "note": "The canonical form is lowercase.", "set": {"principalId": "72CD1705-85FC-4754-A382-C2500D038368"}},
+      {"name": "principal-id-without-hyphens", "class": "principal-id", "note": "32 hex digits with no hyphens.", "set": {"principalId": "72cd170585fc4754a382c2500d038368"}},
+      {"name": "principal-id-version-1", "class": "principal-id", "note": "A version 1 UUID carries a time and a node.", "set": {"principalId": "72cd1705-85fc-1754-a382-c2500d038368"}},
+      {"name": "principal-id-version-7", "class": "principal-id", "note": "A version 7 UUID starts with a time.", "set": {"principalId": "0199c0a3-85fc-7754-a382-c2500d038368"}},
+      {"name": "principal-id-other-variant", "class": "principal-id", "note": "The variant digit is none of 8, 9, a, b.", "set": {"principalId": "72cd1705-85fc-4754-c382-c2500d038368"}},
+      {"name": "principal-id-nil", "class": "principal-id", "note": "The nil UUID.", "set": {"principalId": "00000000-0000-0000-0000-000000000000"}},
+      {"name": "principal-id-braces", "class": "principal-id", "note": "Wrapped in braces.", "set": {"principalId": "{72cd1705-85fc-4754-a382-c2500d038368}"}},
+      {"name": "principal-id-urn", "class": "principal-id", "note": "With the URN prefix.", "set": {"principalId": "urn:uuid:72cd1705-85fc-4754-a382-c2500d038368"}},
+      {"name": "principal-id-trailing-line-feed", "class": "principal-id", "note": "A line feed after the last digit.", "set": {"principalId": "72cd1705-85fc-4754-a382-c2500d038368\n"}},
+      {"name": "principal-id-short", "class": "principal-id", "note": "35 characters.", "set": {"principalId": "72cd1705-85fc-4754-a382-c2500d03836"}},
+      {"name": "principal-id-as-number", "class": "principal-id", "note": "Not text.", "set": {"principalId": 7}},
+      {"name": "principal-id-as-array", "class": "principal-id", "note": "One receipt carries one author.", "set": {"principalId": ["72cd1705-85fc-4754-a382-c2500d038368"]}},
+      {"name": "principal-id-as-object", "class": "principal-id", "note": "Not an object with the id in it.", "set": {"principalId": {"id": "72cd1705-85fc-4754-a382-c2500d038368"}}},
+      {"name": "principal-id-null", "class": "principal-id", "note": "Null is not an id.", "set": {"principalId": null}},
+      {"name": "unknown-institution-id", "class": "unknown-fields", "note": "The payload names the domain and never the institution.", "set": {"institutionId": "ustanova-izmisljena-1"}},
+      {"name": "unknown-region", "class": "unknown-fields", "note": "Nor the region.", "set": {"region": "regija-izmisljena-1"}},
+      {"name": "unknown-author-id", "class": "unknown-fields", "note": "The author has one name in the payload, principalId.", "set": {"authorId": "72cd1705-85fc-4754-a382-c2500d038368"}},
+      {"name": "unknown-key-id", "class": "unknown-fields", "note": "The key is named by the signature, not by the payload.", "set": {"keyId": "ductus-golden-rfc8032-test-1"}},
+      {"name": "receipt-id-missing", "class": "acceptance-fields", "note": "Required.", "remove": ["receiptId"]},
+      {"name": "receipt-id-empty", "class": "acceptance-fields", "note": "Empty.", "set": {"receiptId": ""}},
+      {"name": "receipt-id-blank", "class": "acceptance-fields", "note": "Only a space.", "set": {"receiptId": " "}},
+      {"name": "receipt-id-too-long", "class": "acceptance-fields", "note": "257 UTF-16 code units; the limit is 256.", "set": {"receiptId": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}},
+      {"name": "receipt-id-as-number", "class": "acceptance-fields", "note": "Not text.", "set": {"receiptId": 7}},
+      {"name": "evidence-package-id-missing", "class": "acceptance-fields", "note": "Required.", "remove": ["evidencePackageId"]},
+      {"name": "evidence-package-id-empty", "class": "acceptance-fields", "note": "Empty.", "set": {"evidencePackageId": ""}},
+      {"name": "evidence-package-id-blank", "class": "acceptance-fields", "note": "Only a space.", "set": {"evidencePackageId": " "}},
+      {"name": "evidence-package-id-too-long", "class": "acceptance-fields", "note": "257 UTF-16 code units; the limit is 256.", "set": {"evidencePackageId": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}},
+      {"name": "evidence-package-id-as-number", "class": "acceptance-fields", "note": "Not text.", "set": {"evidencePackageId": 7}},
+      {"name": "document-id-missing", "class": "acceptance-fields", "note": "Required.", "remove": ["documentId"]},
+      {"name": "document-id-empty", "class": "acceptance-fields", "note": "Empty.", "set": {"documentId": ""}},
+      {"name": "document-id-blank", "class": "acceptance-fields", "note": "Only a space.", "set": {"documentId": " "}},
+      {"name": "document-id-too-long", "class": "acceptance-fields", "note": "257 UTF-16 code units; the limit is 256.", "set": {"documentId": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}},
+      {"name": "document-id-as-number", "class": "acceptance-fields", "note": "Not text.", "set": {"documentId": 7}},
+      {"name": "session-id-missing", "class": "acceptance-fields", "note": "Required.", "remove": ["sessionId"]},
+      {"name": "session-id-empty", "class": "acceptance-fields", "note": "Empty.", "set": {"sessionId": ""}},
+      {"name": "session-id-blank", "class": "acceptance-fields", "note": "Only a space.", "set": {"sessionId": " "}},
+      {"name": "session-id-too-long", "class": "acceptance-fields", "note": "257 UTF-16 code units; the limit is 256.", "set": {"sessionId": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}},
+      {"name": "session-id-as-number", "class": "acceptance-fields", "note": "Not text.", "set": {"sessionId": 7}},
+      {"name": "segment-id-missing", "class": "acceptance-fields", "note": "Required.", "remove": ["segmentId"]},
+      {"name": "segment-id-empty", "class": "acceptance-fields", "note": "Empty.", "set": {"segmentId": ""}},
+      {"name": "segment-id-blank", "class": "acceptance-fields", "note": "Only a space.", "set": {"segmentId": " "}},
+      {"name": "segment-id-too-long", "class": "acceptance-fields", "note": "257 UTF-16 code units; the limit is 256.", "set": {"segmentId": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}},
+      {"name": "segment-id-as-number", "class": "acceptance-fields", "note": "Not text.", "set": {"segmentId": 7}},
+      {"name": "segment-hash-missing", "class": "acceptance-fields", "note": "Required.", "remove": ["segmentHash"]},
+      {"name": "segment-hash-uppercase", "class": "acceptance-fields", "note": "The canonical form is lowercase hex.", "set": {"segmentHash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}},
+      {"name": "segment-hash-short", "class": "acceptance-fields", "note": "63 hex digits.", "set": {"segmentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}},
+      {"name": "segment-hash-long", "class": "acceptance-fields", "note": "65 hex digits.", "set": {"segmentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}},
+      {"name": "segment-hash-not-hex", "class": "acceptance-fields", "note": "64 characters that are not hex digits.", "set": {"segmentHash": "gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg"}},
+      {"name": "segment-hash-null", "class": "acceptance-fields", "note": "Null is not a hash.", "set": {"segmentHash": null}},
+      {"name": "predecessor-hash-missing", "class": "acceptance-fields", "note": "Required: null for the first segment, never absent.", "remove": ["predecessorSegmentHash"]},
+      {"name": "predecessor-hash-empty", "class": "acceptance-fields", "note": "Empty text is neither null nor a hash.", "set": {"predecessorSegmentHash": ""}},
+      {"name": "predecessor-hash-uppercase", "class": "acceptance-fields", "note": "The canonical form is lowercase hex.", "set": {"predecessorSegmentHash": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}},
+      {"name": "predecessor-hash-short", "class": "acceptance-fields", "note": "63 hex digits.", "set": {"predecessorSegmentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}},
+      {"name": "predecessor-hash-as-number", "class": "acceptance-fields", "note": "Not text.", "set": {"predecessorSegmentHash": 0}},
+      {"name": "previous-receipt-id-missing", "class": "acceptance-fields", "note": "Required: null for the first receipt, never absent.", "remove": ["previousReceiptId"]},
+      {"name": "previous-receipt-id-empty", "class": "acceptance-fields", "note": "Empty text is neither null nor an id.", "set": {"previousReceiptId": ""}},
+      {"name": "previous-receipt-id-too-long", "class": "acceptance-fields", "note": "257 UTF-16 code units; the limit is 256.", "set": {"previousReceiptId": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}},
+      {"name": "previous-receipt-id-as-number", "class": "acceptance-fields", "note": "Not text.", "set": {"previousReceiptId": 0}},
+      {"name": "evidence-schema-missing", "class": "acceptance-fields", "note": "Required.", "remove": ["evidenceSchema"]},
+      {"name": "evidence-schema-other", "class": "acceptance-fields", "note": "No other schema of a segment.", "set": {"evidenceSchema": "ductus-evidence-segment-v1"}},
+      {"name": "evidence-schema-null", "class": "acceptance-fields", "note": "Null is not a schema.", "set": {"evidenceSchema": null}},
+      {"name": "evidence-profile-id-missing", "class": "acceptance-fields", "note": "Required.", "remove": ["evidenceProfileId"]},
+      {"name": "evidence-profile-id-empty", "class": "acceptance-fields", "note": "Empty.", "set": {"evidenceProfileId": ""}},
+      {"name": "evidence-profile-id-too-long", "class": "acceptance-fields", "note": "121 UTF-16 code units; the limit is 120.", "set": {"evidenceProfileId": "ppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp"}},
+      {"name": "evidence-profile-id-as-number", "class": "acceptance-fields", "note": "Not text.", "set": {"evidenceProfileId": 1}},
+      {"name": "sequence-from-missing", "class": "acceptance-fields", "note": "Required.", "remove": ["sequenceFrom"]},
+      {"name": "sequence-from-zero", "class": "acceptance-fields", "note": "Sequence numbers start at 1.", "set": {"sequenceFrom": 0, "sequenceTo": 0}},
+      {"name": "sequence-from-negative", "class": "acceptance-fields", "note": "Below the first sequence number.", "set": {"sequenceFrom": -1, "sequenceTo": -1}},
+      {"name": "sequence-from-fraction", "class": "acceptance-fields", "note": "Not a whole number.", "set": {"sequenceFrom": 1.5, "sequenceTo": 1.5}},
+      {"name": "sequence-from-as-string", "class": "acceptance-fields", "note": "A number written as text.", "set": {"sequenceFrom": "1"}},
+      {"name": "sequence-from-above-safe-integer", "class": "acceptance-fields", "note": "2^53: not exact in a double.", "set": {"sequenceFrom": 9007199254740992, "sequenceTo": 9007199254740992}},
+      {"name": "sequence-to-missing", "class": "acceptance-fields", "note": "Required.", "remove": ["sequenceTo"]},
+      {"name": "sequence-to-below-from", "class": "acceptance-fields", "note": "The range ends before it starts.", "set": {"sequenceFrom": 2, "sequenceTo": 1}},
+      {"name": "sequence-to-fraction", "class": "acceptance-fields", "note": "Not a whole number.", "set": {"sequenceTo": 1.5}},
+      {"name": "sequence-to-as-string", "class": "acceptance-fields", "note": "A number written as text.", "set": {"sequenceTo": "1"}},
+      {"name": "sequence-to-above-safe-integer", "class": "acceptance-fields", "note": "2^53 as the end of a range whose start and count are safe integers and agree with it.", "set": {"sequenceFrom": 2, "sequenceTo": 9007199254740992, "eventCount": 9007199254740991}},
+      {"name": "event-count-missing", "class": "acceptance-fields", "note": "Required.", "remove": ["eventCount"]},
+      {"name": "event-count-zero", "class": "acceptance-fields", "note": "A receipt is for at least one event.", "set": {"eventCount": 0}},
+      {"name": "event-count-fraction", "class": "acceptance-fields", "note": "Not a whole number.", "set": {"eventCount": 1.5}},
+      {"name": "event-count-as-string", "class": "acceptance-fields", "note": "A number written as text.", "set": {"eventCount": "1"}},
+      {"name": "event-count-above-range", "class": "acceptance-fields", "note": "Two events in a range of one sequence number.", "set": {"eventCount": 2}},
+      {"name": "event-count-below-range", "class": "acceptance-fields", "note": "Two events in a range of three sequence numbers.", "set": {"sequenceTo": 3, "eventCount": 2}},
+      {"name": "event-count-rounding-at-largest-number", "class": "acceptance-fields", "note": "One sequence number, the largest safe integer, and two events: from + count - 1 rounds back to it in a double.", "set": {"sequenceFrom": 9007199254740991, "sequenceTo": 9007199254740991, "eventCount": 2}},
+      {"name": "event-count-rounding-at-largest-count", "class": "acceptance-fields", "note": "The range from 2 to the largest safe integer holds one event fewer than that integer; from + count - 1 rounds to it in a double.", "set": {"sequenceFrom": 2, "sequenceTo": 9007199254740991, "eventCount": 9007199254740991}},
+      {"name": "payload-bytes-missing", "class": "acceptance-fields", "note": "Required.", "remove": ["payloadBytes"]},
+      {"name": "payload-bytes-zero", "class": "acceptance-fields", "note": "A stored segment is never empty.", "set": {"payloadBytes": 0}},
+      {"name": "payload-bytes-negative", "class": "acceptance-fields", "note": "Below zero.", "set": {"payloadBytes": -1}},
+      {"name": "payload-bytes-fraction", "class": "acceptance-fields", "note": "Not a whole number.", "set": {"payloadBytes": 123.5}},
+      {"name": "payload-bytes-as-string", "class": "acceptance-fields", "note": "A number written as text.", "set": {"payloadBytes": "123"}},
+      {"name": "payload-bytes-above-safe-integer", "class": "acceptance-fields", "note": "2^53: not exact in a double.", "set": {"payloadBytes": 9007199254740992}},
+      {"name": "accepted-at-missing", "class": "acceptance-fields", "note": "Required.", "remove": ["acceptedAt"]},
+      {"name": "accepted-at-empty", "class": "acceptance-fields", "note": "Empty.", "set": {"acceptedAt": ""}},
+      {"name": "accepted-at-date-only", "class": "acceptance-fields", "note": "A date with no time.", "set": {"acceptedAt": "2026-10-03"}},
+      {"name": "accepted-at-without-milliseconds", "class": "acceptance-fields", "note": "The canonical form carries three decimals.", "set": {"acceptedAt": "2026-10-03T06:05:00Z"}},
+      {"name": "accepted-at-with-offset", "class": "acceptance-fields", "note": "The same instant with an offset instead of Z.", "set": {"acceptedAt": "2026-10-03T08:05:00.000+02:00"}},
+      {"name": "accepted-at-impossible-date", "class": "acceptance-fields", "note": "Month 13.", "set": {"acceptedAt": "2026-13-03T06:05:00.000Z"}},
+      {"name": "accepted-at-trailing-space", "class": "acceptance-fields", "note": "A space after the Z.", "set": {"acceptedAt": "2026-10-03T06:05:00.000Z "}},
+      {"name": "accepted-at-lowercase", "class": "acceptance-fields", "note": "Lowercase t and z.", "set": {"acceptedAt": "2026-10-03t06:05:00.000z"}},
+      {"name": "accepted-at-as-number", "class": "acceptance-fields", "note": "Milliseconds as a number.", "set": {"acceptedAt": 1790834700000}},
+      {"name": "accepted-at-with-seconds", "class": "accepted-at-minute", "note": "Half a minute in.", "set": {"acceptedAt": "2026-10-03T06:05:30.000Z"}},
+      {"name": "accepted-at-with-milliseconds", "class": "accepted-at-minute", "note": "A quarter of a second in.", "set": {"acceptedAt": "2026-10-03T06:05:00.250Z"}},
+      {"name": "accepted-at-one-millisecond", "class": "accepted-at-minute", "note": "One millisecond into the minute.", "set": {"acceptedAt": "2026-10-03T06:05:00.001Z"}},
+      {"name": "accepted-at-last-millisecond", "class": "accepted-at-minute", "note": "The last millisecond of the minute before.", "set": {"acceptedAt": "2026-10-03T06:04:59.999Z"}},
+      {"name": "accepted-at-without-seconds", "class": "accepted-at-minute", "note": "The same minute with seconds left out: the one form carries them as zeros.", "set": {"acceptedAt": "2026-10-03T06:05Z"}},
+      {"name": "accepted-at-year-of-six-digits", "class": "accepted-at-minute", "note": "A whole minute of a year the form has no place for.", "set": {"acceptedAt": "+010000-01-01T00:00:00.000Z"}},
+      {"name": "accepted-at-year-before-zero", "class": "accepted-at-minute", "note": "A whole minute of a year the form has no place for.", "set": {"acceptedAt": "-000001-01-01T00:00:00.000Z"}}
+    ],
+    "rejectedSignatures": [
+      {"name": "signed-full-jcs", "note": "The receipt v1 way: over the canonical bytes of the payload.", "messageHex": "7b2261636365707465644174223a22323032362d31302d30335430363a30353a30302e3030305a222c22636c69656e745472616e73616374696f6e4964223a2274782dc5a12d31222c22646f63756d656e744964223a22646f632d31222c226576656e74436f756e74223a312c2265766964656e6365446f6d61696e4964223a2264323166653061332d313033632d343265352d613239652d633130326639303330616635222c2265766964656e63655061636b6167654964223a2265766964656e63652d31222c2265766964656e636550726f66696c654964223a227374616e646172642d7631222c2265766964656e6365536368656d61223a226475637475732d65766964656e63652d7365676d656e742d7632222c227061796c6f61644279746573223a3132332c227072656465636573736f725365676d656e7448617368223a6e756c6c2c2270726576696f7573526563656970744964223a6e756c6c2c227072696e636970616c4964223a2237326364313730352d383566632d343735342d613338322d633235303064303338333638222c22726563656970744964223a22726563656970742d31222c2272656365697074536368656d61223a226475637475732d65766964656e63652d726563656970742d7632222c227265766973696f6e223a372c227365676d656e7448617368223a2261616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161222c227365676d656e744964223a227365676d656e742d31222c2273657175656e636546726f6d223a312c2273657175656e6365546f223a312c2273657373696f6e4964223a2273657373696f6e2d31227d", "signatureBase64Url": "N313tE_mMuSwmW8_uKjx3vXLczEnOsZ5tsGfFm432FReoksEsLJq7jXU8x1cc8LfLAtoSR9jWQ3FRZQ44VNgDw"},
+      {"name": "signed-digest-only", "note": "Over the 32 bytes of the digest, with no prefix.", "messageHex": "017cf1f3c88b10c1c39ea5d21eade560b838f1bdea4603c79a06886d90d2d706", "signatureBase64Url": "tDlsA6--DlDTiPJ8_JNI3kXotZRgAGUXAUnLr8Fg_x3VG7NwOVZriQgO8cAxA_YUCfgDvYn502lGq24gJWIVAw"},
+      {"name": "signed-digest-as-hex-text", "note": "The prefix and the line feed, then the digest as 64 hex characters.", "messageHex": "6475637475732d65766964656e63652d726563656970742d76320a30313763663166336338386231306331633339656135643231656164653536306238333866316264656134363033633739613036383836643930643264373036", "signatureBase64Url": "eiTbtzA75YXYuc3BXg5xc-dDl_OSvqm8fK64fEvAUJks5U-u7BL_kwLerWIslLjun98FxhPeMIWRpshM1-jxAA"},
+      {"name": "signed-v1-prefix", "note": "The digest under the prefix of receipt v1.", "messageHex": "6475637475732d65766964656e63652d726563656970742d76310a017cf1f3c88b10c1c39ea5d21eade560b838f1bdea4603c79a06886d90d2d706", "signatureBase64Url": "DXWUaAcnCcqR43PBDz6cp6BJhehX4JcipuCrgLjo-ZZy1CYRMR1H3bKBoz4yDiIvFBQI6JZEehlgBIvjm8IDDg"},
+      {"name": "signed-without-separator", "note": "The prefix and the digest with no line feed between them.", "messageHex": "6475637475732d65766964656e63652d726563656970742d7632017cf1f3c88b10c1c39ea5d21eade560b838f1bdea4603c79a06886d90d2d706", "signatureBase64Url": "4AVvEE7-gThpbDYzq_vPSE0ay9W4KrIJlbEgs6hdqppkfs66M9QRo_JYuUAbt-QylPxth76nl-WZQ78aTRVGDA"},
+      {"name": "signed-trailing-line-feed", "note": "The right 59 bytes followed by one more line feed.", "messageHex": "6475637475732d65766964656e63652d726563656970742d76320a017cf1f3c88b10c1c39ea5d21eade560b838f1bdea4603c79a06886d90d2d7060a", "signatureBase64Url": "xztvpJwfA04I9uk3jSEjs5ozyN5mb84599FSV5k2MKezJwMPYg9Y78r17RRwHk24lRM8yU7CslReIu4nsZbjBA"}
+    ],
+    "rejectedKeys": [
+      {"name": "key-of-other-domain", "note": "The key of another evidence domain, though the signature is its own.", "set": {"evidenceDomainId": "563c63c2-cd22-42cb-93a8-8580d5a8b743"}, "reason": "key_scope"},
+      {"name": "key-for-checkpoints", "note": "The checkpoint key of the same domain signs no receipt.", "set": {"purpose": "checkpoint"}, "reason": "key_scope"},
+      {"name": "key-of-other-domain-for-checkpoints", "note": "Neither the domain nor the purpose.", "set": {"evidenceDomainId": "563c63c2-cd22-42cb-93a8-8580d5a8b743", "purpose": "checkpoint"}, "reason": "key_scope"},
+      {"name": "key-without-domain", "note": "A key that names no domain belongs to none.", "remove": ["evidenceDomainId"], "reason": "key_unknown"},
+      {"name": "key-domain-null", "note": "Null is not a domain.", "set": {"evidenceDomainId": null}, "reason": "key_unknown"},
+      {"name": "key-domain-empty", "note": "Empty.", "set": {"evidenceDomainId": ""}, "reason": "key_unknown"},
+      {"name": "key-domain-uppercase", "note": "The domain of the payload in capitals is not that domain.", "set": {"evidenceDomainId": "D21FE0A3-103C-42E5-A29E-C102F9030AF5"}, "reason": "key_unknown"},
+      {"name": "key-domain-list", "note": "A key belongs to exactly one domain.", "set": {"evidenceDomainId": ["d21fe0a3-103c-42e5-a29e-c102f9030af5", "563c63c2-cd22-42cb-93a8-8580d5a8b743"]}, "reason": "key_unknown"},
+      {"name": "key-without-purpose", "note": "A key with no purpose signs nothing.", "remove": ["purpose"], "reason": "key_unknown"},
+      {"name": "key-purpose-null", "note": "Null is not a purpose.", "set": {"purpose": null}, "reason": "key_unknown"},
+      {"name": "key-purpose-unknown", "note": "No purpose outside the closed set.", "set": {"purpose": "root"}, "reason": "key_unknown"},
+      {"name": "key-purpose-list", "note": "A key has exactly one purpose.", "set": {"purpose": ["receipt", "checkpoint"]}, "reason": "key_unknown"},
+      {"name": "key-purpose-uppercase", "note": "The purpose in another spelling.", "set": {"purpose": "Receipt"}, "reason": "key_unknown"},
+      {"name": "key-retired-at-accepted-at", "note": "validTo is the acceptedAt of the receipt: the end of validity is exclusive.", "set": {"validTo": "2026-10-03T06:05:00.000Z"}, "reason": "key_not_valid"},
+      {"name": "key-retired-a-minute-before-accepted-at", "note": "validTo is the whole minute before acceptedAt.", "set": {"validTo": "2026-10-03T06:04:00.000Z"}, "reason": "key_not_valid"},
+      {"name": "key-valid-to-inside-the-minute-of-the-receipt", "note": "A rotation inside the minute the receipt names. No key ends there: the entry is no key, and the receipt is not judged by it.", "set": {"validTo": "2026-10-03T06:05:30.000Z"}, "reason": "key_unknown"},
+      {"name": "key-valid-to-with-seconds", "note": "After the minute of the receipt, yet on no whole minute: rounded neither down to 06:06 nor up to 06:07.", "set": {"validTo": "2026-10-03T06:06:30.000Z"}, "reason": "key_unknown"},
+      {"name": "key-valid-to-with-milliseconds", "note": "One millisecond after a whole minute.", "set": {"validTo": "2026-10-03T06:06:00.001Z"}, "reason": "key_unknown"},
+      {"name": "key-valid-to-last-millisecond-of-a-minute", "note": "One millisecond before a whole minute.", "set": {"validTo": "2026-10-03T06:06:59.999Z"}, "reason": "key_unknown"},
+      {"name": "key-valid-to-without-milliseconds", "note": "A whole minute in another spelling.", "set": {"validTo": "2026-10-03T06:06:00Z"}, "reason": "key_unknown"},
+      {"name": "key-valid-to-without-seconds", "note": "A whole minute in another spelling.", "set": {"validTo": "2026-10-03T06:06Z"}, "reason": "key_unknown"},
+      {"name": "key-valid-to-with-offset", "note": "A whole minute of UTC written with an offset.", "set": {"validTo": "2026-10-03T08:06:00.000+02:00"}, "reason": "key_unknown"},
+      {"name": "key-valid-to-date-only", "note": "A date is not an instant.", "set": {"validTo": "2026-10-04"}, "reason": "key_unknown"},
+      {"name": "key-valid-to-number", "note": "Milliseconds since the epoch, as a number.", "set": {"validTo": 1791007560000}, "reason": "key_unknown"},
+      {"name": "key-without-valid-to", "note": "The end of validity of an active key is written as null, never left out.", "remove": ["validTo"], "reason": "key_unknown"},
+      {"name": "key-valid-from-with-seconds", "note": "The start of validity is held to the form of the end.", "set": {"validFrom": "2026-01-01T00:00:30.000Z"}, "reason": "key_unknown"},
+      {"name": "key-valid-from-with-milliseconds", "note": "One millisecond after a whole minute.", "set": {"validFrom": "2026-01-01T00:00:00.001Z"}, "reason": "key_unknown"},
+      {"name": "key-valid-from-without-milliseconds", "note": "A whole minute in another spelling.", "set": {"validFrom": "2026-01-01T00:00:00Z"}, "reason": "key_unknown"},
+      {"name": "key-valid-from-null", "note": "Every key has a start of validity.", "set": {"validFrom": null}, "reason": "key_unknown"},
+      {"name": "key-without-valid-from", "note": "Every key has a start of validity.", "remove": ["validFrom"], "reason": "key_unknown"},
+      {"name": "key-valid-to-before-valid-from", "note": "Both on whole minutes and both after the receipt, but the validity ends a minute before it starts.", "set": {"validFrom": "2027-01-01T00:00:00.000Z", "validTo": "2026-12-31T23:59:00.000Z"}, "reason": "key_unknown"},
+      {"name": "key-valid-to-at-valid-from", "note": "A validity of no length: the end is exclusive, so the key was never valid.", "set": {"validFrom": "2027-01-01T00:00:00.000Z", "validTo": "2027-01-01T00:00:00.000Z"}, "reason": "key_unknown"}
+    ],
+    "acceptedKeys": [
+      {"name": "key-retired-one-minute-after-accepted-at", "note": "validTo is the whole minute after acceptedAt: the nearest end of validity the receipt is still before.", "set": {"validTo": "2026-10-03T06:06:00.000Z"}},
+      {"name": "key-retired-a-year-later", "note": "Retired long after the receipt.", "set": {"validTo": "2027-10-03T06:05:00.000Z"}},
+      {"name": "key-valid-from-at-accepted-at", "note": "The start of validity is inclusive.", "set": {"validFrom": "2026-10-03T06:05:00.000Z"}},
+      {"name": "key-valid-from-after-accepted-at", "note": "validFrom bounds the moment of signing and is never compared with acceptedAt: a receipt reserved before a rotation is signed by the new key.", "set": {"validFrom": "2026-10-03T06:06:00.000Z"}},
+      {"name": "key-valid-for-one-minute", "note": "The shortest validity there is: validFrom < validTo by one minute.", "set": {"validFrom": "2026-10-03T06:05:00.000Z", "validTo": "2026-10-03T06:06:00.000Z"}}
+    ]
+  },
+  "ed25519Points": {
+    "note": "Encodings of points of edwards25519 (RFC 8032, 5.1.3) for a verifier that judges a public key and the R of a signature by their bytes. accepted are canonical encodings of points of the prime-order subgroup: multiples of the base point and the public key of chain.verificationKey. rejected hold four classes. small-order: the eight points whose order divides 8, found as [L]Q for points Q. mixed-order: points on the curve outside the prime-order subgroup, namely the public key of chain.verificationKey plus each small-order point but the identity, and the points with y = 3 and y = 4. not-on-curve: a y below p for which x^2 = (y^2 - 1)/(d y^2 + 1) has no root. non-canonical: a y at or above p = 2^255 - 19, or the sign of x set where x is 0. No point of the prime-order subgroup has y below 19, so none has a second spelling. mixedOrderSignature is a signature over receiptV2.accepted[0].signingInputHex for which [S]B = R + [h]A holds with A the mixed-order key pointHex and h = SHA-512(R || A || M), both as it is and reduced modulo L: the nonce was picked so that h is a multiple of 8. A runtime that checks that equation and does not refuse the key verifies it; a runtime that multiplies both sides by 8 verifies every signature made with that scalar. All values were derived by arithmetic outside this repository.",
+    "accepted": [
+      {"name": "base-point", "pointHex": "5866666666666666666666666666666666666666666666666666666666666666"},
+      {"name": "two-times-base-point", "pointHex": "c9a3f86aae465f0e56513864510f3997561fa2c9e85ea21dc2292309f3cd6022"},
+      {"name": "three-times-base-point", "pointHex": "d4b4f5784868c3020403246717ec169ff79e26608ea126a1ab69ee77d1b16712"},
+      {"name": "golden-verification-key", "pointHex": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"}
+    ],
+    "rejected": [
+      {"name": "identity", "class": "small-order", "pointHex": "0100000000000000000000000000000000000000000000000000000000000000"},
+      {"name": "order-2", "class": "small-order", "pointHex": "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f"},
+      {"name": "order-4-1", "class": "small-order", "pointHex": "0000000000000000000000000000000000000000000000000000000000000000"},
+      {"name": "order-4-2", "class": "small-order", "pointHex": "0000000000000000000000000000000000000000000000000000000000000080"},
+      {"name": "order-8-1", "class": "small-order", "pointHex": "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05"},
+      {"name": "order-8-2", "class": "small-order", "pointHex": "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85"},
+      {"name": "order-8-3", "class": "small-order", "pointHex": "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a"},
+      {"name": "order-8-4", "class": "small-order", "pointHex": "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa"},
+      {"name": "golden-key-plus-order-2-1", "class": "mixed-order", "pointHex": "16a567fe7d4ef5482ab4012c369bf8c5f11e8d0c2559dcda50fde59708f8aee5"},
+      {"name": "golden-key-plus-order-4-1", "class": "mixed-order", "pointHex": "40c7570f4dd54835b9131184410ed4a0cc93e7d9ad053cbc6d07a62426999582"},
+      {"name": "golden-key-plus-order-4-2", "class": "mixed-order", "pointHex": "ad38a8f0b22ab7ca46ecee7bbef12b5f336c182652fac34392f859dbd9666a7d"},
+      {"name": "golden-key-plus-order-8-1", "class": "mixed-order", "pointHex": "3b5b475c4b82dd1572799fc546f4c6c03e478c6654aa4c7f945b347ea32af60d"},
+      {"name": "golden-key-plus-order-8-2", "class": "mixed-order", "pointHex": "5ca7ced5657291c4cb376e2929ebbb0747dee3aee81452ea424f42974f81fdba"},
+      {"name": "golden-key-plus-order-8-3", "class": "mixed-order", "pointHex": "9158312a9a8d6e3b34c891d6d61444f8b8211c5117ebad15bdb0bd68b07e0245"},
+      {"name": "golden-key-plus-order-8-4", "class": "mixed-order", "pointHex": "b2a4b8a3b47d22ea8d86603ab90b393fc1b87399ab55b3806ba4cb815cd509f2"},
+      {"name": "y-3", "class": "mixed-order", "pointHex": "0300000000000000000000000000000000000000000000000000000000000000"},
+      {"name": "y-4", "class": "mixed-order", "pointHex": "0400000000000000000000000000000000000000000000000000000000000000"},
+      {"name": "y-2", "class": "not-on-curve", "pointHex": "0200000000000000000000000000000000000000000000000000000000000000"},
+      {"name": "y-7", "class": "not-on-curve", "pointHex": "0700000000000000000000000000000000000000000000000000000000000000"},
+      {"name": "y-8", "class": "not-on-curve", "pointHex": "0800000000000000000000000000000000000000000000000000000000000000"},
+      {"name": "y-p-minus-2", "class": "not-on-curve", "pointHex": "ebffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f"},
+      {"name": "identity-with-sign-of-x", "class": "non-canonical", "pointHex": "0100000000000000000000000000000000000000000000000000000000000080"},
+      {"name": "order-2-with-sign-of-x", "class": "non-canonical", "pointHex": "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"},
+      {"name": "y-p-second-spelling-of-0", "class": "non-canonical", "pointHex": "edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f"},
+      {"name": "y-p-plus-1-second-spelling-of-1", "class": "non-canonical", "pointHex": "eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f"},
+      {"name": "y-p-plus-3-second-spelling-of-3", "class": "non-canonical", "pointHex": "f0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f"},
+      {"name": "y-2-255-minus-1", "class": "non-canonical", "pointHex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f"},
+      {"name": "all-bits-set", "class": "non-canonical", "pointHex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"}
+    ],
+    "mixedOrderSignature": {"pointHex": "3b5b475c4b82dd1572799fc546f4c6c03e478c6654aa4c7f945b347ea32af60d", "signatureHex": "1c743ad074eba478da429536129aaf0c135bd58023b483170110f21a7f119be683a2ba3971aa1613032391e1ae10e1f8da9255d12e6428b7ae88c2d90f81c60a", "signatureBase64Url": "HHQ60HTrpHjaQpU2EpqvDBNb1YAjtIMXARDyGn8Rm-aDoro5caoWEwMjkeGuEOH42pJV0S5kKLeuiMLZD4HGCg"}
+  },
+  "sequenceRanges": {
+    "note": "Ranges of sequence numbers with the number of events they are said to hold, for every validator that reads sequenceFrom, sequenceTo and a count together: the ingest descriptor, the segment (where the count is the number of its events) and both receipts. A range holds sequenceTo - sequenceFrom + 1 events. The rejected ranges named rounding pass a check written sequenceFrom + eventCount - 1 = sequenceTo in IEEE 754 doubles, where the sum rounds to an even number. The rejected ranges empty-range, empty-range-above-one and negative-count agree with sequenceTo - sequenceFrom = eventCount - 1 and hold no event: a range holds at least one event and never ends before it starts, whatever the count says.",
+    "accepted": [
+      {"name": "one-event", "sequenceFrom": 1, "sequenceTo": 1, "eventCount": 1},
+      {"name": "three-events", "sequenceFrom": 2, "sequenceTo": 4, "eventCount": 3},
+      {"name": "largest-number-alone", "sequenceFrom": 9007199254740991, "sequenceTo": 9007199254740991, "eventCount": 1},
+      {"name": "last-two-numbers", "sequenceFrom": 9007199254740990, "sequenceTo": 9007199254740991, "eventCount": 2},
+      {"name": "every-number", "sequenceFrom": 1, "sequenceTo": 9007199254740991, "eventCount": 9007199254740991},
+      {"name": "every-number-but-the-first", "sequenceFrom": 2, "sequenceTo": 9007199254740991, "eventCount": 9007199254740990}
+    ],
+    "rejected": [
+      {"name": "rounding-two-events-at-largest-number", "note": "One sequence number, the largest safe integer, and two events.", "sequenceFrom": 9007199254740991, "sequenceTo": 9007199254740991, "eventCount": 2},
+      {"name": "rounding-three-events-in-last-two-numbers", "note": "Two sequence numbers and three events.", "sequenceFrom": 9007199254740990, "sequenceTo": 9007199254740991, "eventCount": 3},
+      {"name": "rounding-largest-count-from-2", "note": "The range from 2 holds one event fewer than the largest safe integer.", "sequenceFrom": 2, "sequenceTo": 9007199254740991, "eventCount": 9007199254740991},
+      {"name": "end-above-safe-integer", "note": "2^53 as the end: not exact in a double, though the count agrees with it.", "sequenceFrom": 9007199254740991, "sequenceTo": 9007199254740992, "eventCount": 2},
+      {"name": "count-above-range", "note": "Two events in a range of one sequence number.", "sequenceFrom": 1, "sequenceTo": 1, "eventCount": 2},
+      {"name": "count-below-range", "note": "Two events in a range of three sequence numbers.", "sequenceFrom": 1, "sequenceTo": 3, "eventCount": 2},
+      {"name": "count-one-below-largest-range", "note": "One event too few for the whole range.", "sequenceFrom": 1, "sequenceTo": 9007199254740991, "eventCount": 9007199254740990},
+      {"name": "end-before-start", "note": "The range ends before it starts.", "sequenceFrom": 2, "sequenceTo": 1, "eventCount": 1},
+      {"name": "empty-range", "note": "No event: the end is one below the start, which agrees with a count of 0.", "sequenceFrom": 1, "sequenceTo": 0, "eventCount": 0},
+      {"name": "start-at-zero", "note": "Sequence numbers start at 1.", "sequenceFrom": 0, "sequenceTo": 0, "eventCount": 1},
+      {"name": "empty-range-above-one", "note": "No event, with both ends valid numbers on their own: the count agrees with the range, so only the rules that a range holds an event and does not end before it starts refuse it.", "sequenceFrom": 5, "sequenceTo": 4, "eventCount": 0},
+      {"name": "negative-count", "note": "The end two below the start agrees with a count of -1.", "sequenceFrom": 3, "sequenceTo": 1, "eventCount": -1},
+      {"name": "no-event-in-one-number", "note": "A range of one sequence number said to hold no event.", "sequenceFrom": 1, "sequenceTo": 1, "eventCount": 0}
+    ]
+  }
+}
