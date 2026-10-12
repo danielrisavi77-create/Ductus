@@ -4,7 +4,7 @@
 
 ## Kako radi
 
-- `.github/workflows/free-ai-pr-review.yml` pokreće se na otvoren, ponovno otvoren ili izmijenjen PR (i kada draft postane spreman).
+- `.github/workflows/free-ai-pr-review.yml` pokreće se na otvoren, ponovno otvoren ili izmijenjen PR (i kada draft postane spreman), **samo ako PR dolazi iz istog repozitorija**. Fork PR-ovi se preskaču kako ne bi trošili vlasnikovu besplatnu AI kvotu.
 - Koristi isključivo **zaštićeni `main`** i GitHubov API za diff; ne checkouta niti izvršava kod s PR-a.
 - U `Actions → Advisory free AI PR review → Summary` zapisuje nalaze uz datoteku, dodani redak, konkretan scenarij i prijedlog. Nema komentarâ, commita, mergea, deploya ni kanonskih `Review-Verdict` / `QA-Verdict` polja.
 - Ako nema ključa, ispiše jasan `Preskočeno` umjesto lažnog `Bez nalaza`. Ako model nije dostupan, status je `Nedostupno`.
