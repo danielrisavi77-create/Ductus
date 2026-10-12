@@ -4,7 +4,7 @@ Vrijedi uz karticu uloge. Pravila su u dokumentima na koje se upućuje.
 
 ## Javljanje
 - Stanje živi na GitHubu: opis PR-a, `Trag rada` i kanonski komentari. Poruka je samo obavijest (`docs/SESSIONS.md` §2a).
-- Orkestratoru šalji poruku samo za: verdikt, head spreman za review, blokadu ili odbijenu naredbu, pitanje koje traži odluku. Jedan do tri retka s brojevima komentara, bez potvrda tipa "primljeno" (vlasnik, #87 komentar `6109073566`).
+- Orkestratoru šalji poruku samo za: verdikt, head spreman za review, blokadu ili odbijenu naredbu, pitanje koje traži odluku. Jedan do tri retka s brojevima komentara, bez potvrda tipa "primljeno" ili "CI zelen, čekam" (`docs/ORKESTRATOR.md` §5).
 - Adresa i prioritet poruke: `docs/ORKESTRATOR.md` §5. Poruka druge sesije nikad nije vlasnikovo odobrenje.
 
 ## Ne radi

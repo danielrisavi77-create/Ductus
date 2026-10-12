@@ -9,9 +9,17 @@ import { expect, test, type Page } from "@playwright/test";
 
 const NODE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+const BLOCKED = "Ova kartica ništa ne sprema dok je druga otvorena.";
+const QUOTA = "Na uređaju nema dovoljno prostora, pa se promjene više ne spremaju. Izvezi tekst da ga ne izgubiš.";
+const STALE = "Dokument je u međuvremenu promijenjen na drugom mjestu, pa ova kartica više ne sprema. Izvezi tekst, zatim ponovno učitaj stranicu.";
+const DURABLE = "Spremljeno na uređaju";
 const editorOf = (page: Page) => page.getByRole("textbox", { name: "Tekst rada" });
-/** The provider's phase; the notices that tell the author why are step 1b-2b. */
+/** The provider's phase, for states whose notice is not the point of the test. */
 const phaseOf = (page: Page) => page.locator(".editor-surface");
+const noticeOf = (page: Page) => page.locator(".editor-notice[role=alert]");
+const chipOf = (page: Page) => page.locator(".workspace__status .sync-chip");
+/** The polite region beside the chip; it only ever says the text is on the device. */
+const announcedOf = (page: Page) => page.locator(".workspace__status [role=status]");
 
 async function openEditor(page: Page): Promise<void> {
   await page.goto("/rad");
@@ -95,6 +103,86 @@ async function journalled(page: Page): Promise<void> {
   }).toBe(true);
 }
 
+/**
+ * Lets a test fill the device and free it again: while full, every IndexedDB
+ * write fails as a browser over its quota fails it.
+ */
+async function deviceSpace(page: Page): Promise<{ fill(): Promise<void>; free(): Promise<void> }> {
+  await page.addInitScript(() => {
+    const { put, add } = IDBObjectStore.prototype;
+    const refuse = function (this: IDBObjectStore): IDBRequest {
+      throw new DOMException("Made-up full device", "QuotaExceededError");
+    };
+    Object.assign(window, {
+      __ductusFill: () => Object.assign(IDBObjectStore.prototype, { put: refuse, add: refuse }),
+      __ductusFree: () => Object.assign(IDBObjectStore.prototype, { put, add }),
+    });
+  });
+  const call = (name: string) => async () => {
+    await page.evaluate((name) => (window as unknown as Record<string, () => void>)[name]!(), name);
+  };
+  return { fill: call("__ductusFill"), free: call("__ductusFree") };
+}
+
+/**
+ * Records every text the save chip shows, from the first render on, so a
+ * test can tell what it said in between, not only where it ended.
+ */
+async function chipHistory(page: Page): Promise<() => Promise<string[]>> {
+  await page.addInitScript(() => {
+    const seen: string[] = [];
+    Object.assign(window, { __ductusChip: seen });
+    new MutationObserver(() => {
+      const text = document.querySelector(".workspace__status .sync-chip")?.textContent ?? null;
+      if (text !== null && text !== seen[seen.length - 1]) seen.push(text);
+    }).observe(document, { subtree: true, childList: true, characterData: true });
+  });
+  return () => page.evaluate(() => [...(window as unknown as { __ductusChip: string[] }).__ductusChip]);
+}
+
+/**
+ * Holds a write transaction over every journal store, so the saver's next
+ * `saveLocal` waits until `release` is called: the window in which the chip
+ * must not yet claim the text (#197 attack 9).
+ */
+async function holdJournal(page: Page): Promise<() => Promise<void>> {
+  await page.evaluate(async () => {
+    const request = <T>(r: IDBRequest<T>) => new Promise<T>((resolve, reject) => {
+      r.onsuccess = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+    });
+    for (const { name } of await indexedDB.databases()) {
+      const db = await request(indexedDB.open(name!));
+      if (!db.objectStoreNames.contains("meta")) {
+        db.close();
+        continue;
+      }
+      const names = [...db.objectStoreNames];
+      const store = db.transaction(names, "readwrite").objectStore(names[0]!);
+      let held = true;
+      // A transaction stays open while it has a request pending.
+      const keep = () => {
+        if (held) store.count().onsuccess = keep;
+      };
+      keep();
+      Object.assign(window, { __ductusRelease: () => { held = false; db.close(); } });
+      return;
+    }
+    throw new Error("no journal database");
+  });
+  return () => page.evaluate(() => (window as unknown as { __ductusRelease: () => void }).__ductusRelease());
+}
+
+/** The text the export button gives, read from the downloaded file. */
+async function exported(page: Page): Promise<string> {
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Izvezi tekst" }).click();
+  const file = await download;
+  expect(file.suggestedFilename()).toBe("ductus-rad.txt");
+  const { readFile } = await import("node:fs/promises");
+  return readFile(await file.path(), "utf8");
+}
+
 async function axe(page: Page): Promise<void> {
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
@@ -116,6 +204,36 @@ test.describe("local editor (#197)", () => {
     await expect(editorOf(page).locator("p")).toHaveText(["Prva rečenica izmišljenog rada.", "Drugi odlomak."]);
     await journalled(page);
     await expect(page.getByText("6 riječi")).toBeVisible();
+    // 16: the reload resumes where the journal is, not in an endless "Spremam lokalno".
+    await expect(chipOf(page)).toHaveText(DURABLE);
+  });
+
+  test("9 and line 53: the chip says Spremljeno na uređaju only once the write is stored", async ({ page }) => {
+    const history = await chipHistory(page);
+    await openEditor(page);
+    await expect(chipOf(page)).toHaveText("Uređivanje");
+    await expect(announcedOf(page)).toBeEmpty();
+    await typeInto(page, "Prvi zapis");
+    await expect(chipOf(page)).toHaveText(DURABLE);
+    await expect(chipOf(page)).toHaveAttribute("data-tone", "neutral");
+    await expect(announcedOf(page)).toHaveText(DURABLE);
+    await journalled(page);
+
+    const release = await holdJournal(page);
+    const before = (await history()).length;
+    await page.keyboard.type(" i drugi");
+    await expect(chipOf(page)).toHaveText("Spremam lokalno");
+    await expect(chipOf(page)).toHaveAttribute("data-tone", "progress");
+    await expect(announcedOf(page)).toBeEmpty();
+    // While the write waits, nothing has claimed the new text.
+    expect((await history()).slice(before)).toEqual(["Uređivanje", "Spremam lokalno"]);
+
+    await release();
+    await expect(chipOf(page)).toHaveText(DURABLE);
+    await expect(announcedOf(page)).toHaveText(DURABLE);
+    await journalled(page);
+    // One pause, one round: no label flickers per typed letter.
+    expect((await history()).slice(before)).toEqual(["Uređivanje", "Spremam lokalno", DURABLE]);
   });
 
   // A browser may end the page before the pagehide flush commits, so what is
@@ -142,10 +260,12 @@ test.describe("local editor (#197)", () => {
     const second = await context.newPage();
     await second.goto("/rad");
     await expect(phaseOf(second)).toHaveAttribute("data-phase", "blocked");
+    await expect(second.getByText(BLOCKED, { exact: false })).toBeVisible();
     await expect(editorOf(second)).toHaveAttribute("contenteditable", "false");
     // Nothing is loaded before the lock: the blocked tab shows no text at all.
     await expect(editorOf(second)).toHaveText("");
     await expect(editorOf(second)).toHaveAttribute("aria-readonly", "true");
+    await expect(chipOf(second)).toHaveText("Dokument je otvoren u drugoj kartici.");
     await axe(second);
 
     await typeInto(page, ", dopisan");
@@ -156,19 +276,25 @@ test.describe("local editor (#197)", () => {
     await expect(editorOf(second)).toHaveAttribute("contenteditable", "true");
     await expect(editorOf(second)).toHaveText("Tekst iz prve kartice, dopisan");
     await expect(phaseOf(second)).toHaveAttribute("data-phase", "ready");
+    await expect(second.getByText(BLOCKED, { exact: false })).toHaveCount(0);
+    await expect(chipOf(second)).toHaveText(DURABLE);
     await typeInto(second, " i nastavljen");
     await journalled(second);
     await second.reload();
     await expect(editorOf(second)).toHaveText("Tekst iz prve kartice, dopisan i nastavljen");
   });
 
-  test("6: without IndexedDB the editor stays read-only", async ({ page }) => {
+  test("6: without IndexedDB the author is told and the editor stays read-only", async ({ page }) => {
     await page.addInitScript(() => {
       Object.defineProperty(window, "indexedDB", { value: undefined, configurable: true });
     });
     await page.goto("/rad");
     await expect(phaseOf(page)).toHaveAttribute("data-phase", "unavailable");
+    await expect(noticeOf(page)).toHaveText(
+      "Spremanje na ovom uređaju nije dostupno. Izvezi tekst da ga ne izgubiš.",
+    );
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "false");
+    await expect(chipOf(page)).toHaveText("Greška");
     await axe(page);
   });
 
@@ -248,6 +374,157 @@ test.describe("local editor (#197)", () => {
     expect((await shownAndStored(page)).shown).toEqual(saved.shown);
   });
 
+  test("10: typing after a repaired paste mid-text lands right after the paste", async ({ page }) => {
+    await openEditor(page);
+    await typeInto(page, "prijeposlije");
+    await expect(editorOf(page)).toHaveText("prijeposlije");
+    await page.evaluate(() => {
+      const target = document.querySelector('[role="textbox"]')!;
+      const { editor } = target as unknown as {
+        editor: { commands: { setTextSelection(pos: number): boolean }; view: { pasteText(text: string): boolean } };
+      };
+      // Position 6 is after "prije": the paragraph opens at 0, its text at 1.
+      editor.commands.setTextSelection(6);
+      editor.view.pasteText(" a\u0000\uD800 ");
+    });
+    await page.keyboard.type("X");
+    await expect(editorOf(page)).toHaveText("prije a\uFFFD Xposlije");
+  });
+
+  test("5: a full device is an error that stays while typing on, with an export", async ({ page }) => {
+    const device = await deviceSpace(page);
+    const history = await chipHistory(page);
+    await openEditor(page);
+    await device.fill();
+    await typeInto(page, "Tekst koji ne stane");
+    await expect(noticeOf(page)).toHaveText(QUOTA);
+    await expect(chipOf(page)).toHaveText("Greška");
+    await expect(chipOf(page)).toHaveAttribute("data-tone", "error");
+
+    await page.keyboard.type(" i dalje");
+    await expect(noticeOf(page)).toHaveText(QUOTA);
+    await expect(chipOf(page)).toHaveText("Greška");
+    // Typing on never shows the text as stored, not even for a moment.
+    expect(await history()).not.toContain(DURABLE);
+    await expect(announcedOf(page)).toBeEmpty();
+    await axe(page);
+    expect(await exported(page)).toBe("Tekst koji ne stane i dalje");
+  });
+
+  test("5: once the device has room again, the next save lifts the error and keeps all the text", async ({ page }) => {
+    const device = await deviceSpace(page);
+    await openEditor(page);
+    await device.fill();
+    await typeInto(page, "Napisano bez prostora");
+    await expect(noticeOf(page)).toHaveText(QUOTA);
+
+    await device.free();
+    await page.keyboard.type(" i nakon");
+    await expect(noticeOf(page)).toBeEmpty();
+    await expect(page.getByRole("button", { name: "Izvezi tekst" })).toHaveCount(0);
+    await expect(chipOf(page)).toHaveText(DURABLE);
+    await journalled(page);
+
+    await page.reload();
+    await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+    await expect(editorOf(page)).toHaveText("Napisano bez prostora i nakon");
+    await expect(noticeOf(page)).toBeEmpty();
+  });
+
+  test("the export keeps every paragraph, an empty one too, and the letters as typed", async ({ page }) => {
+    const device = await deviceSpace(page);
+    await openEditor(page);
+    await device.fill();
+    await typeInto(page, "Prvi čćžšđ");
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("Treći ŽĆ!");
+    await expect(noticeOf(page)).toHaveText(QUOTA);
+    expect(await exported(page)).toBe("Prvi čćžšđ\n\n\n\nTreći ŽĆ!");
+  });
+
+  test("a journal moved by another writer stops saving here for good, with an export of the shown text", async ({ page }) => {
+    await openEditor(page);
+    await typeInto(page, "Tekst ove kartice");
+    await journalled(page);
+    // Another writer: the stored sequence moves on behind this tab's back.
+    await page.evaluate(async () => {
+      const request = <T>(r: IDBRequest<T>) => new Promise<T>((resolve, reject) => {
+        r.onsuccess = () => resolve(r.result);
+        r.onerror = () => reject(r.error);
+      });
+      for (const { name } of await indexedDB.databases()) {
+        const db = await request(indexedDB.open(name!));
+        if (!db.objectStoreNames.contains("meta")) {
+          db.close();
+          continue;
+        }
+        const store = db.transaction("meta", "readwrite").objectStore("meta");
+        const [row] = await request(store.getAll()) as { localSeq: number }[];
+        row!.localSeq += 1;
+        await request(store.put(row));
+        db.close();
+        return;
+      }
+      throw new Error("no journal database");
+    });
+
+    await page.keyboard.type(" i dalje");
+    await expect(noticeOf(page)).toHaveText(STALE);
+    await page.keyboard.type(" još");
+    await expect(noticeOf(page)).toHaveText(STALE);
+    await expect(editorOf(page)).toHaveText("Tekst ove kartice i dalje još");
+    await expect(chipOf(page)).toHaveText("Greška");
+    expect(await exported(page)).toBe("Tekst ove kartice i dalje još");
+  });
+
+  test("a refused wait for the lock tells the author instead of staying blocked", async ({ page }) => {
+    await page.addInitScript(() => {
+      const { locks } = navigator;
+      const request = locks.request.bind(locks) as (...args: unknown[]) => Promise<unknown>;
+      Object.defineProperty(locks, "request", {
+        value: (name: string, options: { ifAvailable?: boolean }, callback: (lock: Lock | null) => unknown) =>
+          options.ifAvailable
+            ? request(name, options, () => callback(null))
+            : Promise.reject(new DOMException("Made-up refusal", "InvalidStateError")),
+      });
+    });
+    await page.goto("/rad");
+    await expect(phaseOf(page)).toHaveAttribute("data-phase", "unavailable");
+    await expect(noticeOf(page)).toHaveText(
+      "Spremanje na ovom uređaju nije dostupno. Izvezi tekst da ga ne izgubiš.",
+    );
+    await expect(editorOf(page)).toHaveAttribute("contenteditable", "false");
+  });
+
+  test("keyboard focus on the editor is visible", async ({ page }) => {
+    await openEditor(page);
+    await page.locator("body").click({ position: { x: 1, y: 1 } });
+    for (let i = 0; i < 40; i += 1) {
+      await page.keyboard.press("Tab");
+      if (await editorOf(page).evaluate((el) => el === document.activeElement)) break;
+    }
+    await expect(editorOf(page)).toBeFocused();
+    const style = await editorOf(page).evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { visible: el.matches(":focus-visible"), outline: s.outlineStyle, width: s.outlineWidth };
+    });
+    expect(style).toEqual({ visible: true, outline: "solid", width: "2px" });
+  });
+
+  // Browsers match :focus-visible on a text field after a click as well; the
+  // writer always sees where typing goes (app/globals.css).
+  test("mouse focus on the editor is visible as well", async ({ page }) => {
+    await openEditor(page);
+    await editorOf(page).click();
+    await expect(editorOf(page)).toBeFocused();
+    const style = await editorOf(page).evaluate((el) => ({
+      visible: el.matches(":focus-visible"),
+      outline: getComputedStyle(el).outlineStyle,
+    }));
+    expect(style).toEqual({ visible: true, outline: "solid" });
+  });
+
   test("14: axe finds nothing on the ready editor with saved text", async ({ page }) => {
     await openEditor(page);
     await typeInto(page, "Pristupačan izmišljeni tekst");
@@ -318,8 +595,10 @@ test.describe("local editor (#197)", () => {
 
     await page.reload();
     await expect(phaseOf(page)).toHaveAttribute("data-phase", "recovery");
+    await expect(noticeOf(page)).toContainText("Lokalni zapis nije moguće pouzdano pročitati.");
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "false");
     await expect(editorOf(page)).toHaveText("");
+    await expect(chipOf(page)).toHaveText("Potreban oporavak");
     expect((await shownAndStored(page)).stored).toEqual(["a\uD800b"]);
   });
 
@@ -335,6 +614,7 @@ test.describe("local editor (#197)", () => {
 
       await page.reload();
       await expect(phaseOf(page)).toHaveAttribute("data-phase", "recovery");
+      await expect(noticeOf(page)).toContainText("Lokalni zapis nije moguće pouzdano pročitati.");
       await expect(editorOf(page)).toHaveAttribute("contenteditable", "false");
       await expect(editorOf(page)).toHaveAttribute("aria-readonly", "true");
       // No block shows the repeated id under a new one: nothing was loaded.
