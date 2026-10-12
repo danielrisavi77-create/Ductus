@@ -32,6 +32,11 @@ export type ReviewRequestWithConditions = {
   conditions?: ValidityCondition[];
 };
 
+/** Feature flag. U spikeu se čita iz env; u produkciji iz configa. */
+export function isConditionalValidityEnabled(): boolean {
+  return process.env.CONDITIONAL_VALIDITY === "true";
+}
+
 /** Konzervativni normalizator za spike (whitespace + trailing punctuation). */
 export function normalizeForComparison(text: string): string {
   return text
@@ -72,7 +77,7 @@ export function applyRevisionToConditions(
   conditions: ValidityCondition[] | undefined,
   currentTextInRange: string,
 ): ValidityCondition[] {
-  if (!conditions) return [];
+  if (!conditions || !isConditionalValidityEnabled()) return conditions ?? [];
   return conditions.map((c) => {
     if (needsReReview(c, currentTextInRange)) {
       return { ...c, status: "needs_re_review" as const };
