@@ -692,19 +692,60 @@ describe("thin critical path: ingest, signed receipt, reconstruction, JCS compar
   });
 
   it.each<[string, string, (segment: EvidenceSegmentV2) => void]>([
-    ["a step with an unknown field", "step_failed", (s) => void (s.events[0].steps[0].authorId = STRANGER)],
     ["a step outside the text", "step_failed", (s) => void Object.assign(s.events[0].steps[0], { from: 100, to: 100 })],
-    [
-      "a transaction format without a replayer",
-      "unsupported_format",
-      (s) => void (s.captureContext.transactionFormat = "prosemirror-step-json-v1"),
-    ],
   ])("fails closed for %s", async (_name, reason, spoil) => {
     const env = setup();
     const built = await buildSegment(1, EMPTY, ["Tekst."], null);
     spoil(built.segment);
     expect((await ingestSegment(env, built.segment)).outcome.status).toBe("accepted");
     expect(await reconstruct(env, built.document)).toEqual({ status: "mismatch", reason, index: 0 });
+  });
+
+  // DAN-183c: the step shape is closed at the segment boundary, so a step with
+  // an unknown field or a transaction format without a replayer never reaches
+  // ingest, and stored bytes carrying either are an invalid segment, not a replay.
+  type Loose = { events: { steps: Record<string, unknown>[] }[]; captureContext: Record<string, unknown> };
+  it.each<[string, (segment: Loose) => void]>([
+    ["a step with an unknown field", (s) => void (s.events[0].steps[0].authorId = STRANGER)],
+    [
+      "a transaction format without a replayer",
+      (s) => void (s.captureContext.transactionFormat = "prosemirror-step-json-v1"),
+    ],
+  ])("refuses %s before ingest and on stored bytes", async (_name, spoil) => {
+    const env = setup();
+    const built = await buildSegment(1, EMPTY, ["Tekst."], null);
+    const spoiled = structuredClone(built.segment);
+    spoil(spoiled as unknown as Loose);
+    await expect(ingestSegment(env, spoiled)).rejects.toThrow("evidence-v2: invalid segment");
+
+    const chain = await ingestChain(env);
+    const stored = JSON.parse(env.payloadStore.get(PACKAGE, chain.hashes[1])?.canonicalPayload ?? "null");
+    spoil(stored);
+    const bytes = utf8(canonicalizeJcs(stored));
+    expect(await reconstruct(env, chain.target, payloadWith(env, chain.hashes[1], bytes))).toEqual({
+      status: "mismatch",
+      reason: "invalid_segment",
+      index: 1,
+    });
+  });
+
+  // Z7 (#155): a stored record with a surplus step field is an invalid
+  // segment, refused before any hash or replay, never read as a cleaned copy.
+  it.each<[string, JcsJsonValue]>([
+    ["occurredAt", "2026-10-11T08:00:00.500Z"],
+    ["elapsedMs", 0],
+  ])("refuses stored canonical bytes whose step carries %s", async (key, value) => {
+    const env = setup();
+    const chain = await ingestChain(env);
+    const stored = JSON.parse(env.payloadStore.get(PACKAGE, chain.hashes[1])?.canonicalPayload ?? "null");
+    stored.events[0].steps[0][key] = value;
+    const bytes = utf8(canonicalizeJcs(stored));
+
+    expect(await reconstruct(env, chain.target, payloadWith(env, chain.hashes[1], bytes))).toEqual({
+      status: "mismatch",
+      reason: "invalid_segment",
+      index: 1,
+    });
   });
 
   it("reports a break in the event sequence instead of replaying across it", async () => {

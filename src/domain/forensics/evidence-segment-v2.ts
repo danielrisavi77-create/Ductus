@@ -1,3 +1,4 @@
+import { EDIT_STEP_FORMAT_V1, parseEditSteps } from "../document/edit-step";
 import { sha256WebCrypto } from "./crypto";
 import { canonicalizeJcs, type JcsJsonValue } from "./jcs";
 
@@ -34,6 +35,12 @@ export const EVIDENCE_SOURCES_V2 = [
 ] as const;
 
 export type EvidenceSourceV2 = (typeof EVIDENCE_SOURCES_V2)[number];
+
+/**
+ * The editor models a segment may name. The list is closed, like the step
+ * format: a free text here could carry anything, a time included (B-8, #155).
+ */
+export const EVIDENCE_EDITOR_MODELS_V2 = ["prosemirror"] as const;
 
 export type EvidenceStepV2 = { [key: string]: JcsJsonValue };
 
@@ -92,6 +99,7 @@ const WHOLE_MINUTE_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00\.000Z$/;
 const MAX_ID_LENGTH = 256;
 const MAX_EVENTS = 5000;
 const SOURCES = new Set<string>(EVIDENCE_SOURCES_V2);
+const EDITOR_MODELS = new Set<string>(EVIDENCE_EDITOR_MODELS_V2);
 const SEGMENT_KEYS = new Set([
   "evidenceSchema",
   "canonicalization",
@@ -160,14 +168,13 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
-function isStep(value: unknown): value is EvidenceStepV2 {
-  if (!isPlainObject(value)) return false;
-  try {
-    canonicalizeJcs(value);
-    return true;
-  } catch {
-    return false;
-  }
+/**
+ * The steps of one event are read with the closed format, and the answer is
+ * yes or no. The parser builds a clean copy; it is never used, since the hash
+ * is over the bytes that were sent and a cleaned copy is not what was sent.
+ */
+function areSteps(value: unknown): value is EvidenceStepV2[] {
+  return parseEditSteps(EDIT_STEP_FORMAT_V1, value).ok;
 }
 
 function isSortedUniqueStrings(value: unknown): value is string[] {
@@ -190,9 +197,7 @@ function isEvent(
     value.sequence !== expectedSequence ||
     typeof value.source !== "string" ||
     !SOURCES.has(value.source) ||
-    !Array.isArray(value.steps) ||
-    value.steps.length === 0 ||
-    !value.steps.every(isStep) ||
+    !areSteps(value.steps) ||
     !isSha256(value.beforeDocumentHash) ||
     !isSha256(value.afterDocumentHash)
   ) {
@@ -235,8 +240,9 @@ export function isEvidenceSegmentV2(value: unknown): value is EvidenceSegmentV2 
     value.events.length > MAX_EVENTS ||
     !isPlainObject(value.captureContext) ||
     !hasOnlyKeys(value.captureContext, CAPTURE_CONTEXT_KEYS) ||
-    !nonEmptyBounded(value.captureContext.editorModel) ||
-    !nonEmptyBounded(value.captureContext.transactionFormat)
+    typeof value.captureContext.editorModel !== "string" ||
+    !EDITOR_MODELS.has(value.captureContext.editorModel) ||
+    value.captureContext.transactionFormat !== EDIT_STEP_FORMAT_V1
   ) {
     return false;
   }
