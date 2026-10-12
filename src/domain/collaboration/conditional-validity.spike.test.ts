@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   applyRevisionToConditions,
   hasNeedsReReview,
@@ -24,6 +24,13 @@ function makeCondition(
 }
 
 describe("conditional-validity spike (S-UV1)", () => {
+  beforeEach(() => {
+    process.env.CONDITIONAL_VALIDITY = "true";
+  });
+  afterEach(() => {
+    delete process.env.CONDITIONAL_VALIDITY;
+  });
+
   describe("normalizeForComparison", () => {
     it("collapses whitespace and trims trailing punctuation", () => {
       expect(normalizeForComparison("  hello   world.  ")).toBe("hello world");
@@ -92,6 +99,13 @@ describe("conditional-validity spike (S-UV1)", () => {
 
     it("returns empty array when no conditions", () => {
       expect(applyRevisionToConditions(undefined, "any")).toEqual([]);
+    });
+
+    it("does nothing when feature flag is off", () => {
+      delete process.env.CONDITIONAL_VALIDITY;
+      const conditions = [makeCondition()];
+      const updated = applyRevisionToConditions(conditions, "potpuno novi tekst");
+      expect(updated[0]?.status).toBe("valid");
     });
   });
 
