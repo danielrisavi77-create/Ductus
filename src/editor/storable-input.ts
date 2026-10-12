@@ -20,17 +20,17 @@
  * where it was.
  *
  * More than `MAX_REPAIR_STEPS` offending runs, as a paste can bring, are
- * repaired with one step from the first run to the last (F-067): each step
- * rebuilds the blocks above it and the transaction keeps every intermediate
- * document, so one step per run grows as runs times document size. Blocks,
- * their ids, marks and text between the runs are kept; a caret inside that
- * range moves to its end.
+ * repaired with one `RepairRuns` step (F-067): each step rebuilds the blocks
+ * above it and the transaction keeps every intermediate document, so one step
+ * per run grows as runs times document size. Its position map lists only the
+ * runs, like the steps it stands for, so the identity plugin sees the same
+ * change either way and every block keeps its id (F-071).
  */
 
 import { Extension } from "@tiptap/core";
-import { Fragment, type Node as PmNode, type Schema, Slice } from "@tiptap/pm/model";
+import { Fragment, type Mark, type Node as PmNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey, type Transaction } from "@tiptap/pm/state";
-import { AddMarkStep, RemoveMarkStep } from "@tiptap/pm/transform";
+import { AddMarkStep, RemoveMarkStep, Step, StepMap, StepResult, type Mappable } from "@tiptap/pm/transform";
 
 import { storableText } from "./storable-text";
 
@@ -60,15 +60,120 @@ function runsOf(block: PmNode, start: number): Run[] {
   return runs;
 }
 
-/** `content` with every text node, at any depth, made storable and emptied ones dropped. */
-function storableContent(content: Fragment, schema: Schema): Fragment {
+/**
+ * Text a step puts in place of `from`..`to`, with `marks`. The range holds
+ * only text, inside one text block; an empty range inserts.
+ */
+type Repair = { from: number; to: number; text: string; marks: readonly Mark[] };
+
+/**
+ * Replaces many text ranges in one pass over the document, rebuilding each
+ * touched block once. Its map lists only those ranges, exactly as one replace
+ * step per range would, so every other position, block and id maps through
+ * unchanged. Like `SetNodeIds` in `identity.ts` it has no JSON form.
+ */
+export class RepairRuns extends Step {
+  /** `repairs` in document order, not overlapping. */
+  constructor(readonly repairs: readonly Repair[]) {
+    super();
+  }
+
+  apply(doc: PmNode): StepResult {
+    const byBlock = new Map<number, Repair[]>();
+    for (const repair of this.repairs) {
+      if (repair.to < repair.from || repair.from < 0 || repair.to > doc.content.size) return StepResult.fail("Repair out of range");
+      const $from = doc.resolve(repair.from);
+      if (!$from.parent.isTextblock || repair.to > $from.end()) return StepResult.fail("Repair outside one text block");
+      const start = $from.start() - 1;
+      const repairs = byBlock.get(start);
+      if (repairs) repairs.push(repair);
+      else byBlock.set(start, [repair]);
+    }
+    let failed = false;
+    const rewrite = (fragment: Fragment, start: number): Fragment => {
+      const nodes: PmNode[] = [];
+      let changed = false;
+      let pos = start;
+      fragment.forEach((node) => {
+        let out = node;
+        const repairs = byBlock.get(pos);
+        if (repairs) {
+          const content = repairBlock(node, pos + 1, repairs);
+          if (content === null) failed = true;
+          else out = node.copy(content);
+        } else if (!node.isTextblock && !node.isLeaf) {
+          out = node.copy(rewrite(node.content, pos + 1));
+        }
+        changed ||= out !== node;
+        nodes.push(out);
+        pos += node.nodeSize;
+      });
+      return changed ? Fragment.fromArray(nodes) : fragment;
+    };
+    const content = rewrite(doc.content, 0);
+    return failed ? StepResult.fail("Repair over something other than text") : StepResult.ok(doc.copy(content));
+  }
+
+  getMap(): StepMap {
+    return new StepMap(this.repairs.flatMap(({ from, to, text }) => [from, to - from, text.length]));
+  }
+
+  invert(doc: PmNode): Step {
+    let shift = 0;
+    return new RepairRuns(
+      this.repairs.map(({ from, to, text, marks }) => {
+        const start = from + shift;
+        shift += text.length - (to - from);
+        return { from: start, to: start + text.length, text: doc.textBetween(from, to), marks };
+      }),
+    );
+  }
+
+  map(mapping: Mappable): Step | null {
+    const repairs = this.repairs.flatMap((repair) => {
+      const from = mapping.mapResult(repair.from, 1);
+      const to = mapping.mapResult(repair.to, -1);
+      return from.deletedAcross || to.deletedAcross || to.pos < from.pos ? [] : [{ ...repair, from: from.pos, to: to.pos }];
+    });
+    return repairs.length === 0 ? null : new RepairRuns(repairs);
+  }
+
+  toJSON(): never {
+    throw new Error("RepairRuns cannot be serialised: it is derived from the document by the storable input plugin");
+  }
+}
+
+/** The content of `block` (content starting at `start`) with `repairs` applied, or null when one covers a non-text node. */
+function repairBlock(block: PmNode, start: number, repairs: readonly Repair[]): Fragment | null {
   const nodes: PmNode[] = [];
-  content.forEach((node) => {
-    if (!node.isText) return void nodes.push(node.isLeaf ? node : node.copy(storableContent(node.content, schema)));
-    const text = storableText(node.text!);
-    if (text !== "") nodes.push(schema.text(text, node.marks));
+  const schema = block.type.schema;
+  const insert = (repair: Repair) => {
+    if (repair.text !== "") nodes.push(schema.text(repair.text, repair.marks));
+  };
+  let next = 0;
+  let pos = start;
+  let ok = true;
+  block.forEach((node) => {
+    const end = pos + node.nodeSize;
+    if (!node.isText) {
+      while (next < repairs.length && repairs[next]!.from === pos && repairs[next]!.to === pos) insert(repairs[next++]!);
+      if (next < repairs.length && repairs[next]!.from < end) ok = false;
+      nodes.push(node);
+    } else {
+      let cursor = pos;
+      while (next < repairs.length && repairs[next]!.from < end) {
+        const repair = repairs[next++]!;
+        if (repair.from < cursor || repair.to > end) ok = false;
+        if (repair.from > cursor) nodes.push(node.cut(cursor - pos, repair.from - pos));
+        insert(repair);
+        cursor = Math.max(cursor, repair.to);
+      }
+      if (cursor < end) nodes.push(node.cut(cursor - pos));
+    }
+    pos = end;
   });
-  return Fragment.fromArray(nodes);
+  while (next < repairs.length && repairs[next]!.from === pos && repairs[next]!.to === pos) insert(repairs[next++]!);
+  return ok && next === repairs.length ? Fragment.fromArray(nodes) : null;
 }
 
 /**
@@ -116,11 +221,7 @@ export function createStorableInputPlugin(): Plugin {
       if (runs.length === 0) return null;
       const tr = newState.tr;
       if (runs.length > MAX_REPAIR_STEPS) {
-        const from = runs[0]!.from;
-        const to = runs[runs.length - 1]!.to;
-        const slice = newState.doc.slice(from, to);
-        tr.replace(from, to, new Slice(storableContent(slice.content, newState.schema), slice.openStart, slice.openEnd));
-        return tr;
+        return tr.step(new RepairRuns(runs.map(({ from, to, text, node }) => ({ from, to, text, marks: node.marks }))));
       }
       // From the end, so earlier positions stay valid.
       for (const { from, to, text, node } of runs.reverse()) {

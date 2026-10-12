@@ -1,14 +1,14 @@
 import { Editor } from "@tiptap/core";
 import { Fragment, Slice } from "@tiptap/pm/model";
 import { TextSelection, type Transaction } from "@tiptap/pm/state";
-import { ReplaceStep } from "@tiptap/pm/transform";
+import { ReplaceStep, type Step } from "@tiptap/pm/transform";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { CanonicalDocument, NodeId } from "../domain/document";
 
 import { tiptapToCanonical, type TiptapDocumentJSON } from "./interop";
 import { createEditorExtensions, NODE_ID_ATTRIBUTE } from "./schema";
-import { StorableInput } from "./storable-input";
+import { RepairRuns, StorableInput } from "./storable-input";
 import { storableDocument } from "./storable-text";
 
 /**
@@ -18,6 +18,8 @@ import { storableDocument } from "./storable-text";
 
 const ID_A = "aaaaaaaa-0000-4000-8000-00000000000a" as NodeId;
 const ID_B = "bbbbbbbb-0000-4000-8000-00000000000b" as NodeId;
+const ID_C = "cccccccc-0000-4000-8000-00000000000c" as NodeId;
+const ID_D = "dddddddd-0000-4000-8000-00000000000d" as NodeId;
 
 const editors: Editor[] = [];
 afterEach(() => {
@@ -27,7 +29,7 @@ afterEach(() => {
 function editorWith(texts: string[]): Editor {
   const content: TiptapDocumentJSON = {
     type: "doc",
-    content: [ID_A, ID_B].slice(0, texts.length).map((id, index) => ({
+    content: [ID_A, ID_B, ID_C, ID_D].slice(0, texts.length).map((id, index) => ({
       type: "paragraph", attrs: { [NODE_ID_ATTRIBUTE]: id }, content: [{ type: "text", text: texts[index]! }],
     })),
   };
@@ -205,13 +207,26 @@ describe("StorableInput", () => {
   });
 
   // F-067: many offending runs are repaired in one step, so the cost does not
-  // grow as runs times document size.
+  // grow as runs times document size. F-071: that step maps only the runs.
 
-  function repairSteps(editor: Editor, tr: Transaction): ReplaceStep[] {
+  function repairSteps(editor: Editor, tr: Transaction): Step[] {
     const { state, transactions } = editor.state.applyTransaction(tr);
     editor.view.updateState(state);
     // Block ids the identity plugin gives new blocks are its own step, not a repair.
-    return transactions.slice(1).flatMap((t) => t.steps.filter((step) => step instanceof ReplaceStep));
+    return transactions
+      .slice(1)
+      .flatMap((t) => t.steps.filter((step) => step instanceof ReplaceStep || step instanceof RepairRuns));
+  }
+
+  /** Id and text of every block, in order. */
+  function blocks(editor: Editor): [string, string][] {
+    const out: [string, string][] = [];
+    editor.state.doc.forEach((node) => out.push([node.attrs[NODE_ID_ATTRIBUTE] as string, node.textContent]));
+    return out;
+  }
+
+  function idOfText(editor: Editor, text: string): string | undefined {
+    return blocks(editor).find(([, shownText]) => shownText === text)?.[0];
   }
 
   it("up to eight runs are still repaired one step each", () => {
@@ -221,12 +236,15 @@ describe("StorableInput", () => {
     expectStorable(editor);
   });
 
-  it("more runs are one step from the first to the last run, and the caret ends after the paste", () => {
+  it("more runs are one step that maps only the runs, and the caret stays after the paste", () => {
     const editor = editorWith(["prije poslije"]);
     caretAt(editor, 7);
     const steps = repairSteps(editor, editor.state.tr.insertText("a\uD800\u0000".repeat(9)));
-    // The first run starts at 8, the last ends at 7 + 27.
-    expect(steps.map(({ from, to }) => [from, to])).toEqual([[8, 34]]);
+    expect(steps).toHaveLength(1);
+    const ranges: number[][] = [];
+    steps[0]!.getMap().forEach((from, to, newFrom, newTo) => ranges.push([from, to, newFrom, newTo]));
+    // Each "\uD800\u0000" at 8 + 3i becomes one U+FFFD at 8 + 2i.
+    expect(ranges).toEqual(Array.from({ length: 9 }, (_, i) => [8 + 3 * i, 10 + 3 * i, 8 + 2 * i, 9 + 2 * i]));
     expect(editor.state.doc.textContent).toBe(`prije ${"a\uFFFD".repeat(9)}poslije`);
     expect(editor.state.selection.from).toBe(7 + 18);
     expectStorable(editor);
@@ -273,6 +291,62 @@ describe("StorableInput", () => {
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids).toContain(ID_A);
     expect(ids).toContain(ID_B);
+    expectStorable(editor);
+  });
+
+  it("F-071: inserts around an existing block's text leave its id on that text, not on the inserted text", () => {
+    const editor = editorWith(["stari tekst odlomka", "drugi"]);
+    const inserted = [..."NOVI TEKST"].map((c) => `\u0000${c}`).join("");
+    const tr = editor.state.tr.insertText("\u0000", 20).insertText(inserted, 1).split(1 + inserted.length);
+    expect(repairSteps(editor, tr)).toHaveLength(1);
+    expect(blocks(editor).map(([, text]) => text)).toEqual(["NOVI TEKST", "stari tekst odlomka", "drugi"]);
+    expect(idOfText(editor, "stari tekst odlomka")).toBe(ID_A);
+    expect(idOfText(editor, "NOVI TEKST")).not.toBe(ID_A);
+    expect(idOfText(editor, "drugi")).toBe(ID_B);
+    expectStorable(editor);
+  });
+
+  it("F-071: untouched identical blocks between the runs keep their ids", () => {
+    const editor = editorWith(["Prvi", "isto", "isto", "Zadnji"]);
+    const runs = "x\u0000".repeat(5);
+    const end = editor.state.doc.content.size - 1;
+    const tr = editor.state.tr.insertText(runs, end).insertText(runs, 1);
+    expect(repairSteps(editor, tr)).toHaveLength(1);
+    expect(blocks(editor)).toEqual([
+      [ID_A, "xxxxxPrvi"],
+      [ID_B, "isto"],
+      [ID_C, "isto"],
+      [ID_D, "Zadnjixxxxx"],
+    ]);
+    expectStorable(editor);
+  });
+
+  it("F-071: a block whose end alone got runs keeps its id", () => {
+    const editor = editorWith(["Prvi", "Drugi"]);
+    const runs = "x\u0000".repeat(5);
+    const tr = editor.state.tr.insertText(runs, 12).insertText(runs, 1);
+    expect(repairSteps(editor, tr)).toHaveLength(1);
+    expect(blocks(editor)).toEqual([
+      [ID_A, "xxxxxPrvi"],
+      [ID_B, "Drugixxxxx"],
+    ]);
+    expectStorable(editor);
+  });
+
+  it("undo and redo of a repair with many runs give back the same text and ids", () => {
+    const editor = editorWith(["Prvi", "isto", "Zadnji"]);
+    const runs = "y\uD800".repeat(5);
+    const end = editor.state.doc.content.size - 1;
+    editor.view.dispatch(editor.state.tr.insertText(runs, end).insertText(runs, 1));
+    const after = shown(editor);
+    editor.commands.undo();
+    expect(blocks(editor)).toEqual([
+      [ID_A, "Prvi"],
+      [ID_B, "isto"],
+      [ID_C, "Zadnji"],
+    ]);
+    editor.commands.redo();
+    expect(shown(editor)).toEqual(after);
     expectStorable(editor);
   });
 });
