@@ -9,7 +9,7 @@ export interface CourseDraft {
 }
 
 export type CourseCreation =
-  | { kind: "created"; id: string }
+  | { kind: "available"; id: string }
   | { kind: "invalid" | "unauthorized" | "forbidden" | "conflict" | "unavailable" };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -52,7 +52,7 @@ export async function createCourse(draft: CourseDraft, send: typeof fetch = fetc
         !("id" in data) || typeof data.id !== "string" || !UUID.test(data.id)) {
       return { kind: "unavailable" };
     }
-    return { kind: "created", id: data.id };
+    return { kind: "available", id: data.id };
   } catch {
     return { kind: "unavailable" };
   }
