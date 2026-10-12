@@ -25,8 +25,10 @@ export const APP_RUNTIMES = new Map([
 
 // Quota exhaustion is accepted only from the provider's own App, with a
 // message observed on a real PR. Never guess a pattern for other providers.
+// The message must open the comment (#128): every observed one does, and a
+// review, code block or reply that quotes the phrase is no evidence.
 export const QUOTA_EXHAUSTED_PATTERNS = new Map([
-  ["chatgpt-codex-connector", /reached your Codex usage limits/i],
+  ["chatgpt-codex-connector", /^\s*You have reached your Codex usage limits/i],
 ]);
 
 export const QUOTA_FALLBACK_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -102,22 +104,29 @@ function trustedComments(items, logins) {
     .filter((entry) => entry.body);
 }
 
+// Evidence holds only while the exhausted App shows nothing else (#128): a
+// later comment of the same App that is not a quota message proves it works
+// again, whether it came before or after the QA comment.
 function quotaEvidence(items) {
-  return (items ?? [])
+  const appComments = (items ?? [])
     .map((item, index) => {
       const slug = item?.performed_via_github_app?.slug ?? null;
       const pattern = slug ? QUOTA_EXHAUSTED_PATTERNS.get(slug) : null;
-      if (
-        !pattern ||
-        item?.user?.type !== "Bot" ||
-        item?.user?.login !== `${slug}[bot]` ||
-        !pattern.test(item?.body ?? "")
-      ) {
-        return null;
-      }
-      return { appSlug: slug, createdAt: Date.parse(item?.created_at ?? "") || index };
+      if (!pattern || item?.user?.type !== "Bot" || item?.user?.login !== `${slug}[bot]`) return null;
+      return {
+        appSlug: slug,
+        createdAt: Date.parse(item?.created_at ?? "") || index,
+        exhausted: pattern.test(item?.body ?? ""),
+      };
     })
     .filter(Boolean);
+  return appComments.filter(
+    (item) =>
+      item.exhausted &&
+      !appComments.some(
+        (other) => other.appSlug === item.appSlug && !other.exhausted && other.createdAt > item.createdAt,
+      ),
+  );
 }
 
 function fallbackSlug(value) {
