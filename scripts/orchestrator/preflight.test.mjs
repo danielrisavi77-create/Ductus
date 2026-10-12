@@ -22,12 +22,14 @@ const BODY = [
   "- **Što bi ovaj PR moglo oboriti na QA-i?:** oblik opisa koji parser ne prepoznaje",
 ].join("\n");
 const ok = (name) => ({ name, status: "COMPLETED", conclusion: "SUCCESS", completedAt: "2026-10-12T10:00:00Z" });
-const ROLLUP = ["Lint, typecheck, test and build", "Local stack (compose.yaml)", "Security scanners"].map(ok);
+const REQUIRED = ["Lint, typecheck, test and build", "Local stack (compose.yaml)", "Security scanners", "Dependency review"];
+const ROLLUP = REQUIRED.map(ok);
 const PR = { state: "OPEN", isDraft: false, baseRefName: "main", headRefOid: HEAD, body: BODY };
 const input = (over = {}) => ({
   mainSha: MAIN,
   compare: { status: "ahead", behind_by: 0 },
   rollup: ROLLUP,
+  required: [...REQUIRED, "Engineering review gate"],
   ...over,
   pr: { ...PR, ...over.pr },
 });
@@ -110,4 +112,35 @@ test("the PR template alone does not pass preflight", () => {
   const template = readFileSync(new URL("../../.github/pull_request_template.md", import.meta.url), "utf8");
   const checks = evaluatePreflight(input({ pr: { body: template } }));
   assert.deepEqual(fails(checks), ["task", ...CONTRACT_LINES.map((l) => `contract:${l}`)]);
+});
+
+test("CI green means every required check of main, not whatever checks the head has", () => {
+  const notCi = [ok("Engineering gate evaluator"), ok("GitGuardian Security Checks")];
+  const checks = evaluatePreflight(input({ rollup: notCi }));
+  assert.deepEqual(fails(checks), ["ci"]);
+  const ci = checks.find((c) => c.id === "ci").text;
+  for (const name of REQUIRED) assert.ok(ci.includes(name), name);
+  assert.deepEqual(fails(evaluatePreflight(input({ rollup: [...ROLLUP.slice(1), ...notCi] }))), ["ci"]);
+});
+
+test("unread required checks are a FAIL; only the review gate may be missing", () => {
+  assert.deepEqual(fails(evaluatePreflight(input({ required: null }))), ["ci"]);
+  assert.deepEqual(fails(evaluatePreflight(input({ required: [] }))), ["ci"]);
+  assert.deepEqual(fails(evaluatePreflight(input({ required: ["Engineering review gate"] }))), ["ci"]);
+  assert.deepEqual(fails(evaluatePreflight(input({ required: REQUIRED }))), []);
+});
+
+test("description and check-name text is never echoed unfiltered", () => {
+  const evil = "\u001b]8;;http://x\u0007click\u001b]8;;\u0007";
+  const long = "x".repeat(81);
+  for (const bad of [evil, long, "a\nFAIL fake"]) {
+    const body = BODY.replace("Task: #249 P1-1", `Task: ${bad}`);
+    const red = [...ROLLUP.slice(1), { ...ROLLUP[0], conclusion: bad }, { ...ok(bad), conclusion: "FAILURE" }];
+    const checks = evaluatePreflight(input({ pr: { body }, rollup: red, required: [...REQUIRED, bad] }));
+    for (const c of checks) assert.ok(!c.text.includes(bad), `${c.id}: ${c.text}`);
+    assert.ok(checks.some((c) => c.text.includes("<not printed>")));
+    assert.ok(checks.find((c) => c.id === "task").text.includes("filled"));
+  }
+  const odd = evaluatePreflight(input({ pr: { state: evil, baseRefName: long } }));
+  for (const c of odd) assert.ok(!c.text.includes(evil) && !c.text.includes(long), c.text);
 });

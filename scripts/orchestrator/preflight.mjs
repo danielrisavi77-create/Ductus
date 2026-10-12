@@ -26,14 +26,17 @@ const attempt = async (fn) => {
 try {
   const pr = await prView(n);
   const { owner, repo } = await repoId();
-  // One main SHA for the whole run, so the report names what it compared against.
-  const main = await attempt(() => ghJson(["api", `repos/${owner}/${repo}/commits/main`]));
-  const mainSha = main?.sha ?? null;
+  // One read of main for the whole run: the SHA the report compares against and
+  // the required status contexts of its branch protection.
+  const main = await attempt(() => ghJson(["api", `repos/${owner}/${repo}/branches/main`]));
+  const mainSha = main?.commit?.sha ?? null;
+  const rsc = main?.protection?.required_status_checks;
+  const required = rsc ? [...(rsc.contexts ?? []), ...(rsc.checks ?? []).map((c) => c?.context)] : null;
   const compare = mainSha && pr.headRefOid
     ? await attempt(() => ghJson(["api", `repos/${owner}/${repo}/compare/${mainSha}...${pr.headRefOid}`]))
     : null;
   const rollup = pr.headRefOid ? await attempt(() => checkRollup(pr.headRefOid)) : null;
-  const checks = evaluatePreflight({ pr, mainSha, compare, rollup, expectHead });
+  const checks = evaluatePreflight({ pr, mainSha, compare, rollup, required, expectHead });
   console.log(`PR #${n} head ${String(pr.headRefOid ?? "?").slice(0, 8)} main ${String(mainSha ?? "?").slice(0, 8)}`);
   for (const c of checks) console.log(`${c.level.padEnd(4)} ${c.text}`);
   const ok = preflightPass(checks);

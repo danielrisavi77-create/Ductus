@@ -1,7 +1,7 @@
 // P1-1: the checks the orchestrator runs before it starts review or QA
 // (docs/ORKESTRATOR.md, "prije pokretanja reviewa ili QA-e"). Pure: no gh/git.
 import { field } from "../engineering/metadata-parser.mjs";
-import { evaluateChecks } from "./orchestrator-core.mjs";
+import { evaluateChecks, GATE_CONTEXT, latestChecks } from "./orchestrator-core.mjs";
 
 // ENGINEERING_SYSTEM §14 lines the orchestrator requires besides `Task:`.
 export const CONTRACT_LINES = [
@@ -12,6 +12,11 @@ export const CONTRACT_LINES = [
 
 const SHA_RE = /^[0-9a-f]{40}$/i;
 const PLACEHOLDER_RE = /^<[^>]*>$/;
+// Same allow-list as health-core: anything else is author- or app-controlled
+// text that is not echoed to the terminal.
+const SAFE_NAME = /^[\w .,()/:-]{1,80}$/;
+const shown = (s) => (SAFE_NAME.test(String(s ?? "")) ? String(s) : "<not printed>");
+const names = (list) => list.map(shown).join(", ");
 
 const filled = (v) => {
   const t = String(v ?? "").trim();
@@ -67,16 +72,18 @@ export function contractText(body, label) {
  *   mainSha   main head the PR is compared against
  *   compare   REST compare of mainSha...head ({status, behind_by}) or null when unread
  *   rollup    checkRollup(head) or null when unread
+ *   required  required status contexts of main's branch protection, or null when unread;
+ *             each one except the review gate must be reported on the head
  *   expectHead optional head the caller planned for; a different head fails
  */
-export function evaluatePreflight({ pr, mainSha, compare, rollup, expectHead = null }) {
+export function evaluatePreflight({ pr, mainSha, compare, rollup, required, expectHead = null }) {
   const out = [];
   const add = (ok, id, text) => out.push({ level: ok ? "PASS" : "FAIL", id, text });
   const head = String(pr.headRefOid ?? "");
 
-  add(pr.state === "OPEN", "open", `state ${pr.state}`);
+  add(pr.state === "OPEN", "open", `state ${shown(pr.state)}`);
   add(!pr.isDraft, "draft", pr.isDraft ? "PR is a draft" : "not a draft");
-  add(pr.baseRefName === "main", "base", `base ${pr.baseRefName}`);
+  add(pr.baseRefName === "main", "base", `base ${shown(pr.baseRefName)}`);
   if (expectHead != null) {
     add(SHA_RE.test(head) && head.toLowerCase() === String(expectHead).toLowerCase(), "head",
       head.toLowerCase() === String(expectHead).toLowerCase()
@@ -91,7 +98,7 @@ export function evaluatePreflight({ pr, mainSha, compare, rollup, expectHead = n
   else add(true, "main", `head contains main ${mainSha.slice(0, 8)}`);
 
   const task = field(pr.body ?? "", "Task");
-  add(filled(task), "task", filled(task) ? `Task: ${task}` : "description lacks a filled `Task:` line");
+  add(filled(task), "task", filled(task) ? "`Task:` filled" : "description lacks a filled `Task:` line");
   for (const label of CONTRACT_LINES) {
     const text = contractText(pr.body, label);
     add(filled(text), `contract:${label}`, filled(text)
@@ -99,12 +106,19 @@ export function evaluatePreflight({ pr, mainSha, compare, rollup, expectHead = n
       : `description lacks a filled "${label}" line${text === null ? "" : " (label without text)"}`);
   }
 
+  // "CI green" means every required context of main reported green on this
+  // head; other check runs (the pull_request_target gate evaluator, GitGuardian)
+  // must not stand in for a pull_request run that never started.
+  const req = Array.isArray(required) ? [...new Set(required.filter((n) => n && n !== GATE_CONTEXT))] : [];
   if (!rollup) add(false, "ci", "CI checks could not be read");
+  else if (!req.length) add(false, "ci", "required checks of main could not be read");
   else {
+    const reported = new Set(latestChecks(rollup).map((c) => c.name ?? c.context));
+    const missing = req.filter((n) => !reported.has(n));
     const ck = evaluateChecks(rollup);
-    if (ck.total === 0) add(false, "ci", "no CI checks reported");
-    else if (ck.bad.length) add(false, "ci", `CI not green: ${ck.bad.map((b) => `${b.name}=${b.state}`).join(", ")}`);
-    else add(true, "ci", `CI green (${ck.total} checks)`);
+    if (missing.length) add(false, "ci", `required check(s) not reported on the head: ${names(missing)}`);
+    else if (ck.bad.length) add(false, "ci", `CI not green: ${ck.bad.map((b) => `${shown(b.name)}=${shown(b.state)}`).join(", ")}`);
+    else add(true, "ci", `CI green (${req.length} required, ${ck.total} checks)`);
   }
   return out;
 }
