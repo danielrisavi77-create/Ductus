@@ -108,19 +108,21 @@ Izvedeno iz Ustava; svako pravilo ima test ili provjeru u PR-u.
 
 ### Rječnik sučelja
 
-Svaki redak vrijedi za sve oblike i složenice istog korijena (npr. kopirao, prepisivanje, vjerojatno) i za drugi red riječi, osim radnji pod „Dopuštene radnje” (odluka vlasnika, 12. 10. 2026., #179).
+Svaki redak vrijedi za sve oblike i složenice istog korijena (npr. kopirao, prepisivanje, vjerojatno) i za drugi red riječi, osim radnji pod „Dopuštene radnje” i osim kad redak sam navodi uvjet (odluka vlasnika, 12. 10. 2026., #179; tablice A i B ondje prihvaćene su kako jesu, uključujući retke s uvjetom).
 
 | Ne koristiti nikad | Engleski ekvivalenti (D-90 t.3) | Koristiti umjesto toga |
 | --- | --- | --- |
 | sumnjivo, rizik, anomalija, upozorenje o studentu | suspicious, suspected, doubt, risk (i low-risk, riskless), anomaly, warning about the student | (ništa; činjenice se prikazuju bez oznake) |
-| AI postotak (i udio AI-ja, ljudski udio, postotak ljudskosti, broj uz AI ili ljudsko), vjerojatnost (i vjerojatno), autentičnost, autenticitet, napisao AI | AI percentage, AI share, human share, humanness, probability, probably, likelihood, authenticity, written by AI | iz AI pomoćnika (model, vrijeme) |
+| AI postotak (i udio AI-ja, ljudski udio, postotak ljudskosti, broj ili % uz AI, ljudsko, podrijetlo ili izvor), vjerojatnost (i vjerojatno), autentičnost, autenticitet, napisao AI | AI percentage, AI share, human share, humanness, probability, probably, likelihood, authenticity, written by AI | iz AI pomoćnika (model, vrijeme) |
 | verificirano autorstvo, dokaz autorstva | verified authorship, proof of authorship | zapis je cjelovit i neizmijenjen od primitka |
-| kopirano, prepisano, tuđi tekst, tuđe riječi, nije vlastiti / njegov / njezin | copied, copying, copy-paste, someone else's text, not their own | zalijepljeno (izvor nije opažen) |
-| nestali podaci, nedostajući podaci, izgubljeni podaci, skriveno, sakriveno, prikriveno | missing data, lost data, hidden, concealed | praznina u zapisu |
+| kopirano, prepisano; tuđi tekst, tuđe riječi, nije vlastiti / njegov / njezin (samo kao fraza; sama riječ „tuđi” nije zabranjena) | copied, copying, copy-paste, someone else's text, not their own | zalijepljeno (izvor nije opažen) |
+| nestali podaci, skriveno, sakriveno, prikriveno | vanished data, hidden, concealed | praznina u zapisu |
+| nedostajući podaci, izgubljeni podaci (samo o zapisu procesa u nastavničkom prikazu i sažetku; ne u porukama o oporavku na studentovu uređaju) | missing data, lost data (isti uvjet) | praznina u zapisu |
 | plagijat, plagiranje | plagiarism | (ništa; za podrijetlo „iz izvora X”) |
 | izvornost, originalnost | originality, unoriginal | zapis je cjelovit i neizmijenjen od primitka |
 | integritet (i u tehničkom značenju) | integrity | cjelovitost zapisa |
-| neobično, neuobičajeno, nepravilnost | unusual, atypical, irregularity | (ništa; opis činjenice bez ocjene) |
+| neobično, neuobičajeno | unusual, atypical | (ništa; opis činjenice bez ocjene) |
+| nepravilnost, nepravilno (samo o radu ili studentu, u sažetku i nastavničkom prikazu) | irregularity (isti uvjet) | (ništa; opis činjenice bez ocjene) |
 | ljudski napisano, napisao čovjek | human-written, written by a human | opaženo pisanje u uređivaču |
 | spremljeno (bez pojašnjenja) | saved (without saying where) | spremljeno na uređaju / spremljeno na poslužitelju / predano |
 
