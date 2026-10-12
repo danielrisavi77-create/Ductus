@@ -1,4 +1,10 @@
 import type { TextAnchor } from "./anchor";
+import {
+  applyRevisionToConditions,
+  hasNeedsReReview,
+  isConditionalValidityEnabled,
+  type ValidityCondition,
+} from "./conditional-validity";
 
 export const REVISION_REQUEST_STATUSES = [
   "OPEN",
@@ -18,6 +24,8 @@ export type RevisionRequest = {
   target: TextAnchor;
   instruction: string;
   status: RevisionRequestStatus;
+  /** Spike S-UV1: uvjeti valjanosti (JSONB). Opcionalno. */
+  conditions?: ValidityCondition[];
 };
 
 export type StudentResponse = {
@@ -95,4 +103,36 @@ export function requestClarification(state: RevisionRequestState): TransitionRes
 export function markRereviewRequired(state: RevisionRequestState): TransitionResult {
   if (state.request.status !== "ACCEPTED_FOR_REVISION") return { ok: false, reason: "wrong-state" };
   return { ok: true, value: { ...state, request: { ...state.request, status: "REREVIEW_REQUIRED" } } };
+}
+
+/**
+ * Spike S-UV1: primijeni uvjetovanu valjanost na prihvaćeni zahtjev.
+ * Ako flag nije uključen ili nema conditions, vraća stanje neizmijenjeno.
+ * Ako se detektira promjena, postavlja REREVIEW_REQUIRED i ažurira conditions.
+ */
+export function applyConditionalValidity(
+  state: RevisionRequestState,
+  currentTextInRange: string,
+): RevisionRequestState {
+  if (!isConditionalValidityEnabled()) return state;
+  if (state.request.status !== "ACCEPTED_FOR_REVISION") return state;
+  if (!state.request.conditions?.length) return state;
+
+  const updatedConditions = applyRevisionToConditions(
+    state.request.conditions,
+    currentTextInRange,
+  );
+
+  if (!hasNeedsReReview(updatedConditions)) {
+    return { ...state, request: { ...state.request, conditions: updatedConditions } };
+  }
+
+  return {
+    ...state,
+    request: {
+      ...state.request,
+      status: "REREVIEW_REQUIRED",
+      conditions: updatedConditions,
+    },
+  };
 }
