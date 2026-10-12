@@ -1,6 +1,6 @@
 # Ductus: Product UI & Design System
 
-Verzija 0.1 · 13. 10. 2026.  
+Verzija 0.2 · 13. 10. 2026.  
 Izvor: vizualni koncept (13 slajdova) — Product UI & Design System.
 
 Ovaj dokument sažima vizualni jezik, principe i ekrane koje treba usvojiti.  
@@ -26,24 +26,25 @@ Funkcionalni tokovi ostaju u `docs/PRODUCT.md`. Ovaj dokument definira **kako to
 ## 2. Paleta boja (Slide 12)
 
 ### Primarne
-- **Primarna zelena** (`#0D9488` / teal) — akcija, povjerenje, pozitivni statusi
-- **Primarna tamna** — pozadine, kartice
-- **Primarna svijetla** — hover, sekundarni naglasci
+- **Primarna zelena** (`#14B8A6` / teal) — akcija, povjerenje, pozitivni statusi
+- **Primarna tamna** (`#0D9488`)
+- **Primarna svijetla** (`#5EEAD4`)
 
 ### Semantičke
-- **Uspjeh** — zelena / teal
-- **Informacija** — plava
-- **Upozorenje** — žuta / amber
-- **Greška** — crvena
+- **Uspjeh** `#22C55E`
+- **Informacija** `#3B82F6`
+- **Upozorenje** `#F59E0B`
+- **Greška** `#EF4444`
 
 ### Neutralne (dark)
-- Pozadine: vrlo tamne (gotovo crne s blagim zelenim nijansom)
-- Površine: tamno sive / navy
-- Border: suptilni
-- Tekst: bijeli / svijetlo sivi
-- Tekst sekundarni: muted
+- Pozadina `#0A0F0E`
+- Površina 1 `#111827`
+- Površina 2 `#1F2937`
+- Border `#334155`
+- Tekst primarni `#F8FAFC`
+- Tekst sekundarni `#94A3B8`
 
-**Pravilo:** Semantičke boje se koriste samo za status, nikad za "sumnju" ili rangiranje.
+**Pravilo:** Semantičke boje se koriste samo za status, nikad za "sumnju" ili rangiranje. Poštivati rječnik iz `PRODUCT.md` §5.
 
 ---
 
@@ -59,50 +60,93 @@ Funkcionalni tokovi ostaju u `docs/PRODUCT.md`. Ovaj dokument definira **kako to
 - Progress indikatori
 - Empty states i onboarding kartice
 
-Sve komponente moraju poštivati rječnik iz `PRODUCT.md` §5 (nema zabranjenih riječi).
+Sve komponente moraju poštivati rječnik iz `PRODUCT.md` §5.
 
 ---
 
-## 4. Ekrani (Slides 2–10)
+## 4. Detaljno mapiranje ekrana → funkcije → implementacija
 
-| Slide | Ekran | Uloga | Ključni elementi |
-|-------|-------|-------|-------------------|
-| 2 | Javni website | Javno | Hero, vrijednosna ponuda, CTA |
-| 3 | Studentski editor | Student | Editor + sidebar strukture + AI panel (ako dopušten) |
-| 4 | Mentorski pregled | Mentor | Pregled rada + evidence panel + komentari |
-| 5 | Replay / reprodukcija | Mentor | Vremenska crta + reprodukcija rasta dokumenta |
-| 6 | Predaja i deklaracija | Student | "Spremno za predaju?" + izjava + kontrolni popis |
-| 7 | Faculty Policy Engine | Admin / Nastavnik | Pravila fakulteta i kolegija |
-| 8 | Course dashboard | Nastavnik | Pregled kolegija, statusi studenata |
-| 9 | Institutional admin | Admin | Administracija ustanove, metrike |
-| 10 | Audit & appeals paket | Admin / Nastavnik | Paket dokaza, verifikacija |
+### 4.1 Javni website (Landing)
+**Funkcije:** Hero, CTA (Zatraži demo), kartice vrijednosti, sekcije Za studente / Za mentore, GDPR, testimonial.  
+**Implementacija:** Statična Next.js stranica ili zasebni marketing site. Komponente iz design systema.  
+**Prioritet:** P2.  
+**Issue:** Marketing website.
 
-### Prioritet za pilot (val 1–2)
-1. Studentski editor (Slide 3)
-2. Ekran prije početka rada / S3 (iz prethodnog mockupa)
-3. Moji radovi / S2
-4. Čarobnjak za stvaranje zadatka / T3
-5. Mentorski pregled (Slide 4)
-6. Predaja (Slide 6)
+### 4.2 Studentski editor
+**Funkcije:** Lijeva struktura (poglavlja + progress + riječi), toolbar, Tiptap editor, desni panel (Asistent / Literatura / Upute / Komentari), status bar (spremljeno, riječi, napredak).  
+**Implementacija:** Postojeći Tiptap + kanonski model. Asistent iza flaga (D-77). Status bar vezan na M3 + D-63.  
+**Prioritet:** P0 (val 1, M5).  
+**Issue:** Editor struktura + status + desni panel.
 
-Ostali ekrani (policy engine, admin, replay) idu u kasnije valove.
+### 4.3 Reprodukcija / Replay
+**Funkcije:** Vremenska crta sjednica, highlight promjena, detalji sjednice, diff odabranog događaja, legenda podrijetla, kontrole reprodukcije.  
+**Implementacija:** Na M3 evidenciji + D-56 (samo mentorski radovi). Projekcija sjednica + diffovi.  
+**Prioritet:** P2 (val 3).  
+**Issue:** Replay (D-56).
+
+### 4.4 Predaja i deklaracija
+**Funkcije:** Provjera spremnosti (rekonstrukcija, lanac, konzistentnost), izjava studenta (alati + način AI-ja), detalji rada, gumb Predaj.  
+**Implementacija:** M7 + D-40 + D-77. Kontrolni popis D-62.  
+**Prioritet:** P0 (val 1, M7).  
+**Issue:** Predaja ekran + izjava.
+
+### 4.5 Faculty Policy Engine
+**Funkcije:** Tri stupca (Dopušteno / Mora se deklarirati / Nije dopušteno), toggleovi, dodatne postavke, preview izjave, povijest verzija, primjena na fakultet/kolegij.  
+**Implementacija:** D-52 + fakultetska konfiguracija. Verzionirana pravila. Veza na S3 i izjavu.  
+**Prioritet:** P1 (val 2).  
+**Issue:** Policy Engine.
+
+### 4.6 Course / Teacher Dashboard
+**Funkcije:** Lista predmeta, pregled zadatka (statistike), tablica studenata (status, rekonstrukcija, praznine, dovršenost), feed aktivnosti.  
+**Implementacija:** M2 + M6 + M7. Projekcije bez risk scorea. "Dokazni nedostaci" = D-61 praznine.  
+**Prioritet:** P0/P1.  
+**Issue:** Nastavnički dashboard.
+
+### 4.7 Institutional Admin
+**Funkcije:** Metrike, graf predaja, status sustava, AAI status, pohrana, audit log, GDPR pravila.  
+**Implementacija:** M2 + M10 + M11. Projekcije + revizijski trag.  
+**Prioritet:** P1/P2.  
+**Issue:** Institutional admin dashboard.
+
+### 4.8 Audit & Appeals paket
+**Funkcije:** Finalni dokument, procesna crta, rezultat rekonstrukcije, verzije, izjava, politika, kriptografska potvrda, verifikacija, izvoz.  
+**Implementacija:** D-49 + M3 + M7. Prenosivi paket s opsegom.  
+**Napomena:** Tekst "Nema indikacija neautentičnog autorstva" je zabranjen (D-01 + rječnik). Zamijeniti neutralnim.  
+**Prioritet:** P1 (val 2).  
+**Issue:** Audit paket (D-49).
 
 ---
 
-## 5. Veza s postojećim dokumentima
+## 5. Preporučeni redoslijed
 
-- Funkcionalni tokovi i pravila: `docs/PRODUCT.md`
-- Rječnik sučelja: `PRODUCT.md` §5
-- UX evaluacija povjerenja: `docs/UX-EVAL.md`
+| Prioritet | Ekran | Val | Ovisnosti |
+|-----------|-------|-----|-----------|
+| P0 | Design system tokeni + komponente | 1 | — |
+| P0 | Studentski editor | 1 | M5 |
+| P0 | Predaja + izjava | 1 | M7 |
+| P0/P1 | Nastavnički dashboard | 1–2 | M2, M6 |
+| P1 | Policy Engine | 2 | D-52 |
+| P1 | Audit paket | 2 | M3, M7 |
+| P2 | Replay | 3 | M3, D-56 |
+| P2 | Institutional admin | 2–3 | M10, M11 |
+| P2 | Javni website | — | — |
+
+---
+
+## 6. Veza s postojećim dokumentima
+
+- Funkcionalni tokovi: `docs/PRODUCT.md`
+- Rječnik: `PRODUCT.md` §5
+- UX evaluacija: `docs/UX-EVAL.md`
 - Arhitektura: `docs/ARCHITECTURE.md`
 
 ---
 
-## 6. Sljedeći koraci
+## 7. Sljedeći koraci
 
 - [ ] Potvrditi paletu i principe
-- [ ] Razbiti ekrane u implementacijske issuee
-- [ ] Odlučiti o komponentnoj biblioteci (npr. shadcn/ui + Tailwind prilagođen paleti)
-- [ ] Uskladiti s postojećim Tiptap editorom
+- [ ] Kreirati implementacijske issuee po prioritetu
+- [ ] Odlučiti o komponentnoj biblioteci (shadcn/ui + Tailwind)
+- [ ] Uskladiti s Tiptap editorom
 
 **Status:** predloženo za usvajanje.
