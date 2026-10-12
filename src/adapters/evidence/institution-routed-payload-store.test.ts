@@ -208,6 +208,38 @@ describe("InstitutionRoutedPayloadStore", () => {
     await expect(router.putImmutable(input(FAK_A))).resolves.toEqual(UNAVAILABLE);
   });
 
+  it("answers a store that resolves to no result as unavailable, with no write", async () => {
+    const a = fakeDomain(() => Promise.resolve(undefined as never));
+    const { router } = routerWith({ [FAK_A]: a });
+
+    await expect(router.putImmutable(input(FAK_A))).resolves.toEqual(UNAVAILABLE);
+    expect(a.putImmutable).not.toHaveBeenCalled();
+
+    const b = fakeDomain(verified);
+    b.putImmutable.mockResolvedValueOnce(undefined as never);
+    const { router: other } = routerWith({ [FAK_B]: b });
+    await expect(other.putImmutable(input(FAK_B))).resolves.toEqual(UNAVAILABLE);
+  });
+
+  it("reads the input once, so a getter cannot move the write to another institution", async () => {
+    const a = fakeDomain(verified);
+    const b = fakeDomain(verified);
+    const { router } = routerWith({ [FAK_A]: a, [FAK_B]: b });
+    let reads = 0;
+    const given = {
+      ...input(FAK_A),
+      get institutionId() {
+        reads += 1;
+        return reads === 1 ? FAK_A : FAK_B;
+      },
+    };
+
+    await expect(router.putImmutable(given)).resolves.toMatchObject({ status: "stored" });
+    expect(reads).toBe(1);
+    expect(a.putImmutable).toHaveBeenCalledWith(input(FAK_A));
+    expect(b.putImmutable).not.toHaveBeenCalled();
+  });
+
   it("keeps the outcome when the logger throws or rejects", async () => {
     const throwing = new InstitutionRoutedPayloadStore([], () => {
       throw new Error("logger down");

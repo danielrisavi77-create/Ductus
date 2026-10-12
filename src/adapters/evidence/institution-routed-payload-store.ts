@@ -124,12 +124,22 @@ export class InstitutionRoutedPayloadStore implements EvidencePayloadStore {
     return Object.fromEntries(domains.map((d) => [d.label, d.state]));
   }
 
-  async putImmutable(input: {
+  async putImmutable(given: {
     institutionId: string;
     evidencePackageId: string;
     segmentHash: string;
     canonicalPayload: string;
   }): Promise<EvidencePayloadPutResult> {
+    // Each field is read exactly once, here, like the adapter reads its
+    // input: the check, the choice of domain and the write all use these
+    // values, so a getter or a caller that changes its object during the
+    // call cannot send one institution's key to another's bucket.
+    const input = {
+      institutionId: given.institutionId,
+      evidencePackageId: given.evidencePackageId,
+      segmentHash: given.segmentHash,
+      canonicalPayload: given.canonicalPayload,
+    };
     if (!isInstitutionId(input.institutionId)) return { status: "invalid" };
     const domain = this.domains.get(input.institutionId);
     if (domain === undefined) {
@@ -148,6 +158,10 @@ export class InstitutionRoutedPayloadStore implements EvidencePayloadStore {
     try {
       stored = await domain.store.putImmutable(input);
     } catch {
+      stored = { status: "unavailable", reason: "storage_request_failed" };
+    }
+    // A store that answers outside its type is a failed request, not a throw.
+    if (!isObject(stored)) {
       stored = { status: "unavailable", reason: "storage_request_failed" };
     }
     if (stored.status !== "unavailable") return stored;
@@ -191,6 +205,9 @@ export class InstitutionRoutedPayloadStore implements EvidencePayloadStore {
     } catch {
       result = { status: "unavailable", reason: "storage_request_failed" };
     }
+    if (!isObject(result)) {
+      result = { status: "unavailable", reason: "storage_request_failed" };
+    }
     if (result.status === "verified") {
       domain.state = "verified";
       return null;
@@ -210,4 +227,8 @@ export class InstitutionRoutedPayloadStore implements EvidencePayloadStore {
     });
     return UNAVAILABLE;
   }
+}
+
+function isObject(value: unknown): boolean {
+  return typeof value === "object" && value !== null;
 }
