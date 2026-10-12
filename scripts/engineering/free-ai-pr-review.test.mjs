@@ -70,16 +70,16 @@ test('report sanitizes model-supplied markdown and never prints control verdicts
 
 test('workflow rejects fork PRs before secret access and executes only trusted default branch', () => {
   const workflow = readFileSync(new URL('../../.github/workflows/free-ai-pr-review.yml', import.meta.url), 'utf8');
-  assert.match(workflow, /^on: # zizmor: ignore\\[dangerous-triggers\\]/m);
-  assert.match(workflow, /^    if: github\\.event\\.pull_request\\.draft == false && github\\.event\\.pull_request\\.head\\.repo\\.full_name == github\\.repository$/m);
-  assert.match(workflow, /ref: \\$\\{\\{ github\\.event\\.repository\\.default_branch \\}\\}/);
+  assert.match(workflow, /^on: # zizmor: ignore\[dangerous-triggers\]/m);
+  assert.match(workflow, /^    if: github\.event\.pull_request\.draft == false && github\.event\.pull_request\.head\.repo\.full_name == github\.repository$/m);
+  assert.ok(workflow.includes('ref: $' + '{{ github.event.repository.default_branch }}'));
   assert.match(workflow, /persist-credentials: false/);
   assert.match(workflow, /^  contents: read$/m);
   assert.match(workflow, /^  pull-requests: read$/m);
-  assert.doesNotMatch(workflow, /\\b(?:issues|statuses|contents|pull-requests): write\\b/);
+  assert.doesNotMatch(workflow, /\b(?:issues|statuses|contents|pull-requests): write\b/);
 });
 
 test('workflow never checks out attacker-controlled PR refs', () => {
   const workflow = readFileSync(new URL('../../.github/workflows/free-ai-pr-review.yml', import.meta.url), 'utf8');
-  assert.doesNotMatch(workflow, /ref:\\s*\\$\\{\\{\\s*(?:github\\.event\\.pull_request|github\\.head_ref|github\\.event\\.issue)/);
+  assert.doesNotMatch(workflow, /ref:\s*\$\{\{\s*(?:github\.event\.pull_request|github\.head_ref|github\.event\.issue)/);
 });
