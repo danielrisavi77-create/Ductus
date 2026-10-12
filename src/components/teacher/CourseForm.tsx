@@ -31,7 +31,7 @@ export default function CourseForm() {
     }
   }
 
-  const error = result && result.kind !== "created" ? t.teacherCourses.errors[result.kind] : null;
+  const error = result && result.kind !== "available" ? t.teacherCourses.errors[result.kind] : null;
   return (
     <form className={styles.form} onSubmit={submit}>
       <fieldset className={styles.fields} disabled={pending}>
@@ -77,7 +77,7 @@ export default function CourseForm() {
         <button className="btn" type="submit">{pending ? t.teacherCourses.pending : t.teacherCourses.submit}</button>
       </fieldset>
       {error ? <p className={styles.notice} role="alert">{error}</p> : null}
-      {result?.kind === "created" ? (
+      {result?.kind === "available" ? (
         <p className={styles.notice} role="status" aria-live="polite">
           {t.teacherCourses.created} <code>{result.id}</code>
         </p>
