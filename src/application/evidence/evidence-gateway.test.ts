@@ -25,6 +25,7 @@ import {
   type EvidenceSegmentV2,
 } from "@/domain/forensics/evidence-segment-v2";
 import { sha256WebCrypto } from "@/domain/forensics/crypto";
+import { canonicalizeJcs } from "@/domain/forensics/jcs";
 import { EDIT_STEP_FORMAT_V1 } from "@/domain/document/edit-step";
 import { MAX_EVIDENCE_SEGMENT_BYTES } from "@/domain/forensics/evidence-chain-v2";
 import { buildEvidenceIngestCommandV2 } from "./evidence-outbox";
@@ -443,6 +444,33 @@ describe("EvidenceGateway", () => {
     expect(s.payloadStore.size).toBe(0);
     expect(s.repository.records()).toHaveLength(0);
   });
+
+  // Z5 (#155): a canonical, self-consistent package with a surplus step field
+  // is refused, never cleaned: no object, no record and no signature.
+  it.each(["occurredAt", "elapsedMs", "note"])(
+    "refuses a canonical package whose step carries %s",
+    async (key) => {
+      const s = setup();
+      const cmd = await command();
+      const crafted = JSON.parse(cmd.canonicalPayload);
+      crafted.events[0].steps[0][key] = key === "elapsedMs" ? 0 : "2026-10-03T06:00:00.500Z";
+      const canonicalPayload = canonicalizeJcs(crafted);
+      const surplus = {
+        ...cmd,
+        canonicalPayload,
+        descriptor: {
+          ...cmd.descriptor,
+          payloadBytes: new TextEncoder().encode(canonicalPayload).byteLength,
+          segmentHash: await sha256WebCrypto(canonicalPayload),
+        },
+      };
+
+      expect(await ingest(s, surplus)).toEqual({ status: "invalid" });
+      expect(s.payloadStore.size).toBe(0);
+      expect(s.repository.records()).toHaveLength(0);
+      expect(s.signer.signCalls).toBe(0);
+    },
+  );
 
   it("rejects a canonical payload whose descriptor claims a different hash", async () => {
     const s = setup();
