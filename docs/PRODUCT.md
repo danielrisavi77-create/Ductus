@@ -108,14 +108,34 @@ Izvedeno iz Ustava; svako pravilo ima test ili provjeru u PR-u.
 
 ### Rječnik sučelja
 
-| Ne koristiti nikad | Koristiti umjesto toga |
-| --- | --- |
-| sumnjivo, rizik, anomalija, upozorenje o studentu | (ništa; činjenice se prikazuju bez oznake) |
-| AI postotak, vjerojatnost, autentičnost, napisao AI | iz AI pomoćnika (model, vrijeme) |
-| verificirano autorstvo, dokaz autorstva | zapis je cjelovit i neizmijenjen od primitka |
-| kopirano, prepisano | zalijepljeno (izvor nije opažen) |
-| nestali podaci, skriveno | praznina u zapisu |
-| spremljeno (bez pojašnjenja) | spremljeno na uređaju / spremljeno na poslužitelju / predano |
+Svaki redak vrijedi za sve oblike i složenice istog korijena (npr. kopirao, prepisivanje, vjerojatno) i za drugi red riječi, osim radnji pod „Dopuštene radnje” (odluka vlasnika, 12. 10. 2026., #179).
+
+| Ne koristiti nikad | Engleski ekvivalenti (D-90 t.3) | Koristiti umjesto toga |
+| --- | --- | --- |
+| sumnjivo, rizik, anomalija, upozorenje o studentu | suspicious, suspected, doubt, risk (i low-risk, riskless), anomaly, warning about the student | (ništa; činjenice se prikazuju bez oznake) |
+| AI postotak (i udio AI-ja, ljudski udio, postotak ljudskosti, broj uz AI ili ljudsko), vjerojatnost (i vjerojatno), autentičnost, autenticitet, napisao AI | AI percentage, AI share, human share, humanness, probability, probably, likelihood, authenticity, written by AI | iz AI pomoćnika (model, vrijeme) |
+| verificirano autorstvo, dokaz autorstva | verified authorship, proof of authorship | zapis je cjelovit i neizmijenjen od primitka |
+| kopirano, prepisano, tuđi tekst, tuđe riječi, nije vlastiti / njegov / njezin | copied, copying, copy-paste, someone else's text, not their own | zalijepljeno (izvor nije opažen) |
+| nestali podaci, nedostajući podaci, izgubljeni podaci, skriveno, sakriveno, prikriveno | missing data, lost data, hidden, concealed | praznina u zapisu |
+| plagijat, plagiranje | plagiarism | (ništa; za podrijetlo „iz izvora X”) |
+| izvornost, originalnost | originality, unoriginal | zapis je cjelovit i neizmijenjen od primitka |
+| integritet (i u tehničkom značenju) | integrity | cjelovitost zapisa |
+| neobično, neuobičajeno, nepravilnost | unusual, atypical, irregularity | (ništa; opis činjenice bez ocjene) |
+| ljudski napisano, napisao čovjek | human-written, written by a human | opaženo pisanje u uređivaču |
+| spremljeno (bez pojašnjenja) | saved (without saying where) | spremljeno na uređaju / spremljeno na poslužitelju / predano |
+
+Dopuštene radnje (ne krše Rječnik):
+
+- „Kopiraj navod”, „kopiranje navoda”, „Kopirano u međuspremnik” i „Copy citation” (D-59);
+- „Sakrij …” kao radnja nad sučeljem;
+- „Preuzmi / preuzeto” u značenju preuzimanja datoteke;
+- „odstupanje od pravila” u provjeri oblika;
+- „izvorni / originalni” kao pridjev za datoteku, oblik ili tekst navoda;
+- „nepravilan format” i slične poruke provjere unosa;
+- postotak napretka i učitavanja (D-63);
+- negacije poput „ne procjenjuje autorstvo” i „bez presude o autorstvu”.
+
+Tekst iz `config/faculties/**` provjerava se kao i ostali tekst sučelja; doslovni citat pravilnika izuzima se samo u izričito označenom polju za citat, nikad cijela datoteka.
 
 ---
 
