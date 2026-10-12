@@ -222,7 +222,7 @@ Kašnjenje u odnosu na `PLAN-DEMO.md` §3 orkestrator prijavljuje s prijedlogom 
 
 ## 10. Provjera zastoja (`pnpm orch:health`)
 
-Korak 0 svakog poteza (§9). Skripta `scripts/orchestrator/health.mjs` samo čita (`gh api` GET, `gh pr list`, `git worktree list`), ništa ne piše na GitHub ni u repo i nema predmemoriju; svaki ispis su podaci pročitani u tom pokretu. Pragovi su konstante u `scripts/orchestrator/health-core.mjs` i ovdje se samo citiraju:
+Korak 0 svakog poteza (§9). Skripta `scripts/orchestrator/health.mjs` samo čita (`gh api` GET bez zastavica, liste stranicu po stranicu, i `git worktree list`; `gh pr list` i GraphQL ne koristi jer u cloud sesijama ne rade), ništa ne piše na GitHub ni u repo i nema predmemoriju; svaki ispis su podaci pročitani u tom pokretu. Pragovi su konstante u `scripts/orchestrator/health-core.mjs` i ovdje se samo citiraju:
 
 - prag zastoja (konstanta `HEARTBEAT_MIN`, ime iz vremena otkucaja; otkucaja po rasporedu nema, §9): 30 min;
 - review ili QA FAIL/BLOCK na aktualnom headu bez novog pusha dulje od 30 min je FAIL; starost se mjeri od `created_at` verdikt komentara, nikad od datuma commita;
