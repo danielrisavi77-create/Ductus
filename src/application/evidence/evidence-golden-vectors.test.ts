@@ -12,7 +12,9 @@ import type {
   EvidenceChainReader,
   EvidencePayloadReader,
 } from "@/application/ports/evidence-reconstruction";
+import { EDIT_STEP_FORMAT_V1, parseEditSteps } from "@/domain/document/edit-step";
 import { MAX_EVIDENCE_SEGMENT_BYTES } from "@/domain/forensics/evidence-chain-v2";
+import { canonicalizeJcs } from "@/domain/forensics/jcs";
 import type { SignedEvidenceReceipt } from "@/domain/forensics/evidence-receipt";
 import type { EvidenceStepReplayerV2 } from "@/domain/forensics/evidence-replay-v2";
 import {
@@ -27,6 +29,9 @@ import { EvidenceGateway } from "./evidence-gateway";
 import { buildEvidenceIngestCommandV2 } from "./evidence-outbox";
 import { reconstructAndCompareEvidence } from "./evidence-reconstruction";
 
+// A synthetic institution; no real one is used in tests.
+const INSTITUTION_ID = "00000000-0000-4000-8000-00000000000a";
+
 /**
  * Golden vectors (DAN-127) through the application layer. The client side
  * (outbox) and the server side (gateway, reconstruction) read the same file
@@ -40,36 +45,64 @@ const goldenKey = goldenKeyVerifier(chain.verificationKey);
 const emptyDocument = chain.documentStates[0];
 const finalDocument = chain.documentStates[chain.documentStates.length - 1];
 
-type TextDocument = { nodes: { id: string; text: string }[] };
+type TextNode = { type: "text"; text: string; marks: [] };
+type ParagraphDocument = {
+  schemaVersion: 1;
+  nodes: { type: "paragraph"; id: string; children: TextNode[] }[];
+};
 
-/** The invented step format of the vectors: insert text at a UTF-16 offset of one node. */
-const replayer: EvidenceStepReplayerV2<TextDocument> = {
-  transactionFormat: chain.segments[0].segment.captureContext.transactionFormat,
-  load: (canonical) => structuredClone(canonical as TextDocument),
-  apply: (document, event) =>
-    event.steps.reduce<TextDocument>((current, step) => {
-      const { kind, nodeId, offset, text, ...unknown } = step;
-      const node = current.nodes.find((candidate) => candidate.id === nodeId);
+/**
+ * The steps of the vectors in ductus-edit-steps-v1: each inserts plain text
+ * at a ProseMirror position of a paragraph document. Only that subset is
+ * replayed here; text of a paragraph starts at 1, and every paragraph adds 2.
+ * A paragraph is read as at most one text node without marks; any other
+ * paragraph is refused, so a later vector with marks fails instead of
+ * replaying the first node only.
+ */
+function plainText(node: ParagraphDocument["nodes"][number]): string {
+  const [first, ...rest] = node.children;
+  if (rest.length > 0 || (first !== undefined && (first.type !== "text" || first.marks.length > 0))) {
+    throw new Error("unsupported paragraph");
+  }
+  return first?.text ?? "";
+}
+
+const replayer: EvidenceStepReplayerV2<ParagraphDocument> = {
+  transactionFormat: EDIT_STEP_FORMAT_V1,
+  load: (canonical) => structuredClone(canonical as ParagraphDocument),
+  apply: (document, event) => {
+    const parsed = parseEditSteps(EDIT_STEP_FORMAT_V1, event.steps);
+    if (!parsed.ok) throw new Error("unsupported step");
+    return parsed.steps.reduce<ParagraphDocument>((current, step) => {
+      const content = step.stepType === "replace" ? step.slice?.content : undefined;
+      const [inserted, ...rest] = content ?? [];
       if (
-        kind !== "insert-text" ||
-        node === undefined ||
-        typeof offset !== "number" ||
-        !Number.isInteger(offset) ||
-        offset < 0 ||
-        offset > node.text.length ||
-        typeof text !== "string" ||
-        Object.keys(unknown).length > 0
+        step.stepType !== "replace" ||
+        step.from !== step.to ||
+        step.structure !== undefined ||
+        step.slice?.openStart !== undefined ||
+        step.slice?.openEnd !== undefined ||
+        inserted?.type !== "text" ||
+        (inserted.marks ?? []).length > 0 ||
+        rest.length > 0
       ) {
         throw new Error("unsupported step");
       }
-      return {
-        nodes: current.nodes.map((other) =>
-          other === node
-            ? { id: node.id, text: node.text.slice(0, offset) + text + node.text.slice(offset) }
-            : other,
-        ),
-      };
-    }, document),
+      let start = 1;
+      const nodes = current.nodes.map((node) => {
+        const text = plainText(node);
+        const offset = step.from - start;
+        start += text.length + 2;
+        if (offset < 0 || offset > text.length) return node;
+        const next = text.slice(0, offset) + inserted.text + text.slice(offset);
+        return { ...node, children: [{ type: "text" as const, text: next, marks: [] as [] }] };
+      });
+      if (nodes.every((node, index) => node === current.nodes[index])) {
+        throw new Error("unsupported step");
+      }
+      return { ...current, nodes };
+    }, document);
+  },
   toCanonical: (document) => document,
 };
 
@@ -116,6 +149,26 @@ function storedRecord(receiptOf = signedReceiptOf): {
 const reconstruction = { evidencePackageId: chain.evidencePackageId, initialDocument: emptyDocument.value };
 const matched = { status: "match", head: chain.head, documentSha256: finalDocument.sha256 };
 
+describe("golden vectors: test replayer", () => {
+  // QA M1 (#257): a paragraph of several text nodes, or one with marks, is
+  // refused rather than replayed from its first node only.
+  const [event] = chain.segments[0].segment.events;
+  // Marks are outside the replayed subset, so the document is built untyped.
+  const paragraph = (children: unknown[]) =>
+    ({ schemaVersion: 1, nodes: [{ type: "paragraph", id: "odlomak-zv", children }] }) as ParagraphDocument;
+
+  it("replays a paragraph of one plain text node", () => {
+    expect(() => replayer.apply(paragraph([]), event)).not.toThrow();
+  });
+
+  it.each<[string, unknown[]]>([
+    ["two text nodes", [{ type: "text", text: "A", marks: [] }, { type: "text", text: "B", marks: [] }]],
+    ["a marked text node", [{ type: "text", text: "A", marks: [{ type: "bold" }] }]],
+  ])("refuses a paragraph of %s", (_name, children) => {
+    expect(() => replayer.apply(paragraph(children), event)).toThrow("unsupported paragraph");
+  });
+});
+
 describe("golden vectors: client side (outbox)", () => {
   it.each(chain.segments)("builds the command of $segment.segmentId byte for byte", async (vector) => {
     const command = await commandOf(vector);
@@ -140,6 +193,7 @@ describe("golden vectors: server side (gateway and reconstruction)", () => {
     };
     const contexts = new InMemoryEvidenceContextPort([
       {
+        institutionId: INSTITUTION_ID,
         evidencePackageId: chain.evidencePackageId,
         documentId: chain.segments[0].segment.documentId,
         evidenceProfileId: chain.segments[0].segment.evidenceProfileId,
@@ -192,8 +246,15 @@ describe("golden vectors: server side (gateway and reconstruction)", () => {
     ).toEqual(matched);
   });
 
-  it("leaves no object, no record and no signature for a segment that carries time (D-24, D-56)", async () => {
+  it("leaves no object, no record and no signature for a refused segment (D-24, D-56, DAN-183)", async () => {
     const [base] = chain.segments;
+    // The base with only its transaction format changed, written as canonical
+    // JCS: the format is closed, so every value but ductus-edit-steps-v1 is refused.
+    const withFormat = (transactionFormat: string) => {
+      const segment = structuredClone(base.segment);
+      segment.captureContext = { ...segment.captureContext, transactionFormat };
+      return utf8.encode(canonicalizeJcs(segment));
+    };
     // The first former segment only: like the base it is the first of its chain.
     const cases = [
       { name: "control", accepted: true, bytes: fromHex(base.canonicalUtf8Hex) },
@@ -207,6 +268,18 @@ describe("golden vectors: server side (gateway and reconstruction)", () => {
       ...vectors.eventTime.formerSegments
         .slice(0, 1)
         .map((former) => ({ name: former.name, accepted: false, bytes: fromHex(former.canonicalUtf8Hex) })),
+      ...vectors.stepFormat.formerSegments
+        .slice(0, 1)
+        .map((former) => ({ name: former.name, accepted: false, bytes: fromHex(former.canonicalUtf8Hex) })),
+      { name: "format-v1-rewritten", accepted: true, bytes: withFormat(EDIT_STEP_FORMAT_V1) },
+      ...[
+        "ductus-test-insert-text-v0",
+        "prosemirror-step-json-v1",
+        "ductus-edit-steps-v2",
+        "DUCTUS-EDIT-STEPS-V1",
+        "ductus-edit-steps-v1 ",
+        "",
+      ].map((format) => ({ name: `format-${JSON.stringify(format)}`, accepted: false, bytes: withFormat(format) })),
     ];
     expect(cases.map((entry) => entry.name)).toEqual(
       expect.arrayContaining([
@@ -217,8 +290,12 @@ describe("golden vectors: server side (gateway and reconstruction)", () => {
         "time-form-other-zone",
         "time-in-capture-context",
         "former-odsjecak-zv-1",
+        vectors.stepFormat.formerSegments[0].name,
+        'format-"ductus-test-insert-text-v0"',
       ]),
     );
+    // The rewritten v1 base is the base byte for byte, so the control is honest.
+    expect(toHex(withFormat(EDIT_STEP_FORMAT_V1))).toBe(base.canonicalUtf8Hex);
 
     // `faithful` copies ids and times from the bytes into the descriptor, as an
     // honest client does; otherwise the descriptor keeps the valid ones of the
@@ -249,6 +326,7 @@ describe("golden vectors: server side (gateway and reconstruction)", () => {
           authorization: { check: async () => ({ status: "allow" }) },
           contexts: new InMemoryEvidenceContextPort([
             {
+              institutionId: INSTITUTION_ID,
               evidencePackageId: chain.evidencePackageId,
               documentId: descriptor.documentId,
               evidenceProfileId: descriptor.evidenceProfileId,

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { EDIT_STEP_FORMAT_V1 } from "@/domain/document/edit-step";
+
 import { sha256WebCrypto } from "./crypto";
 import {
   decideEvidenceRetry,
@@ -39,14 +41,14 @@ function canonicalFixture(text: string): string {
       {
         sequence: 1,
         source: "editor",
-        steps: [{ stepType: "replace", from: 1, to: 1, text }],
+        steps: [{ stepType: "replace", from: 1, to: 1, slice: { content: [{ type: "text", text }] } }],
         beforeDocumentHash: A,
         afterDocumentHash: B,
       },
     ],
     captureContext: {
       editorModel: "prosemirror",
-      transactionFormat: "prosemirror-step-json-v1",
+      transactionFormat: EDIT_STEP_FORMAT_V1,
     },
     evidenceProfileId: "standard-v1",
   });
@@ -203,18 +205,21 @@ describe("evidence payload and chain edge cases", () => {
   });
 
   it("answers invalid, never a stack overflow, for a step nested past the JCS limit", async () => {
-    // The step value sits five levels down: segment, events, event, steps, step.
-    const deepest = MAX_JCS_DEPTH - 5;
+    // The text value sits eight levels down: segment, events, event, steps,
+    // step, slice, content, text node. Since DAN-183c the closed step shape
+    // refuses any nesting in place of text, so even the deepest depth JCS
+    // still reads is invalid; the JCS boundary itself is pinned in jcs.test.ts.
+    const deepest = MAX_JCS_DEPTH - 8;
     const withNesting = (depth: number) =>
       canonicalFixture("x").replace(
         '"text":"x"',
         `"text":${"[".repeat(depth)}${"]".repeat(depth)}`,
       );
 
-    expect(await verifyCanonicalEvidencePayloadV2(withNesting(deepest))).toMatchObject({
+    expect(await verifyCanonicalEvidencePayloadV2(canonicalFixture("x"))).toMatchObject({
       ok: true,
     });
-    for (const depth of [deepest + 1, 5_000, 100_000]) {
+    for (const depth of [1, deepest, deepest + 1, 5_000, 100_000]) {
       expect(await verifyCanonicalEvidencePayloadV2(withNesting(depth))).toEqual({
         ok: false,
         reason: "invalid",
