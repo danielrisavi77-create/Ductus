@@ -32,9 +32,11 @@ type EventSpec = { text: string; source: (typeof EVIDENCE_SOURCES_V2)[number] };
 type ChainSpec = EventSpec[][];
 type BuiltChain = { payloads: string[]; head: EvidenceChainHeadV2 };
 
+// A v1 insertion carries non-empty, well-formed text without NUL.
+const v1Text = (maxLength: number) =>
+  fc.string({ unit: "binary", minLength: 1, maxLength }).filter((text) => !text.includes("\0"));
 const eventSpec = fc.record({
-  // A v1 insertion carries non-empty text without NUL.
-  text: fc.string({ unit: "binary", minLength: 1, maxLength: 12 }).filter((text) => !text.includes("\0")),
+  text: v1Text(12),
   source: fc.constantFrom(...EVIDENCE_SOURCES_V2),
 });
 const chainSpec = (minLength: number): fc.Arbitrary<ChainSpec> =>
@@ -206,7 +208,7 @@ describe("evidence segment chain v2", () => {
     },
   );
 
-  test.prop([chainSpec(1), fc.nat(), fc.string({ minLength: 1, maxLength: 4 })])(
+  test.prop([chainSpec(1), fc.nat(), v1Text(4)])(
     "changing one segment breaks verification, even when it stays well-formed",
     async (spec, pick, suffix) => {
       const { payloads, head } = await buildChain(spec);
@@ -228,7 +230,7 @@ describe("evidence segment chain v2", () => {
     },
   );
 
-  test.prop([chainSpec(1), fc.nat(), fc.string({ minLength: 1, maxLength: 4 })])(
+  test.prop([chainSpec(1), fc.nat(), v1Text(4)])(
     "re-linking every later segment after a change still misses the recorded head",
     async (spec, pick, suffix) => {
       const { head } = await buildChain(spec);
