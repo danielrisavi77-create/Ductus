@@ -1,8 +1,7 @@
 name: Advisory free AI PR review
 
 # Privileged event, but NEVER checks out or executes PR code.
-# zizmor: ignore[dangerous-triggers] trusted default-branch read-only analysis
-on:
+on: # zizmor: ignore[dangerous-triggers] trusted default-branch read-only analysis; PR code is never checked out or executed
   pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review]
 
@@ -16,7 +15,7 @@ concurrency:
 
 jobs:
   advisory-review:
-    if: github.event.pull_request.draft == false
+    if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
