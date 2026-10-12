@@ -1,6 +1,8 @@
 import { fc, test } from "@fast-check/vitest";
 import { describe, expect } from "vitest";
 
+import { EDIT_STEP_FORMAT_V1 } from "@/domain/document/edit-step";
+
 import { sha256WebCrypto } from "./crypto";
 import {
   decideEvidenceRetry,
@@ -30,8 +32,11 @@ type EventSpec = { text: string; source: (typeof EVIDENCE_SOURCES_V2)[number] };
 type ChainSpec = EventSpec[][];
 type BuiltChain = { payloads: string[]; head: EvidenceChainHeadV2 };
 
+// A v1 insertion carries non-empty, well-formed text without NUL.
+const v1Text = (maxLength: number) =>
+  fc.string({ unit: "binary", minLength: 1, maxLength }).filter((text) => !text.includes("\0"));
 const eventSpec = fc.record({
-  text: fc.string({ unit: "binary", maxLength: 12 }),
+  text: v1Text(12),
   source: fc.constantFrom(...EVIDENCE_SOURCES_V2),
 });
 const chainSpec = (minLength: number): fc.Arbitrary<ChainSpec> =>
@@ -73,22 +78,22 @@ async function buildChain(spec: ChainSpec, options: ChainOptions = {}): Promise<
       sequenceFrom: sequence,
       sequenceTo: sequence + events.length - 1,
       observedStartedAt: "2026-10-02T20:00:00.000Z",
-      observedEndedAt: "2026-10-02T20:00:30.000Z",
+      observedEndedAt: "2026-10-02T20:01:00.000Z",
       initialDocumentHash: documentHash(revision),
       finalDocumentHash: documentHash(revision + events.length),
       predecessorSegmentHash: predecessor,
       events: events.map((event, offset) => ({
         sequence: sequence + offset,
-        occurredAt: "2026-10-02T20:00:10.000Z",
-        elapsedMs: offset,
         source: event.source,
-        steps: [{ stepType: "replace", from: 1, to: 1, text: event.text }],
+        steps: [
+          { stepType: "replace", from: 1, to: 1, slice: { content: [{ type: "text", text: event.text }] } },
+        ],
         beforeDocumentHash: documentHash(revision + offset),
         afterDocumentHash: documentHash(revision + offset + 1),
       })),
       captureContext: {
         editorModel: "prosemirror",
-        transactionFormat: "prosemirror-step-json-v1",
+        transactionFormat: EDIT_STEP_FORMAT_V1,
       },
       evidenceProfileId: "standard-v1",
     };
@@ -203,14 +208,14 @@ describe("evidence segment chain v2", () => {
     },
   );
 
-  test.prop([chainSpec(1), fc.nat(), fc.string({ minLength: 1, maxLength: 4 })])(
+  test.prop([chainSpec(1), fc.nat(), v1Text(4)])(
     "changing one segment breaks verification, even when it stays well-formed",
     async (spec, pick, suffix) => {
       const { payloads, head } = await buildChain(spec);
       const index = pick % payloads.length;
       const changed = [...payloads];
       changed[index] = rewrite(payloads[index], (segment) => {
-        segment.events[0].steps[0].text += suffix;
+        (segment.events[0].steps[0].slice as { content: { text: string }[] }).content[0].text += suffix;
       });
       fc.pre(changed[index] !== payloads[index]);
 
@@ -225,7 +230,7 @@ describe("evidence segment chain v2", () => {
     },
   );
 
-  test.prop([chainSpec(1), fc.nat(), fc.string({ minLength: 1, maxLength: 4 })])(
+  test.prop([chainSpec(1), fc.nat(), v1Text(4)])(
     "re-linking every later segment after a change still misses the recorded head",
     async (spec, pick, suffix) => {
       const { head } = await buildChain(spec);

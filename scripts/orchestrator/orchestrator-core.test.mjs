@@ -40,6 +40,14 @@ test("verdicts in code fences, non-first lines and untrusted authors are ignored
   assert.equal(countCanonical(comments), 0);
 });
 
+test("verdicts count only from authors the gate trusts", () => {
+  const as = (association, user) => ({ ...review(H1, "PASS", "2026-10-10T10:00:00Z"), author_association: association, user });
+  assert.equal(countCanonical([as("OWNER", { login: "o", type: "User" })]), 1);
+  assert.equal(countCanonical([as("COLLABORATOR", { login: "helper", type: "User" })]), 0);
+  assert.equal(countCanonical([as("MEMBER", { login: "helper", type: "User" })]), 0);
+  assert.equal(countCanonical([as("OWNER", { login: "app[bot]", type: "Bot" })]), 0);
+});
+
 test("qa verdicts parse separately", () => {
   const qa = c(`QA-Agent: claude:c:qa\nQA-Head: ${H1}\nQA-Verdict: block`);
   assert.equal(latestVerdict([qa], "qa", H1).verdict, "BLOCK");
@@ -64,7 +72,7 @@ test("file intersection and D-97 detection", () => {
   assert.deepEqual(intersectFiles(null, ["a"]), []);
   assert.deepEqual(
     d97Matches(["src/x.ts", ".github/workflows/ci.yml", "scripts/engineering/a.mjs", "CLAUDE.md", "docs/PRODUCT.md", "scripts/orchestrator/a.mjs", ".claude/skills/x/SKILL.md", "lefthook.yml"]),
-    [".github/workflows/ci.yml", "scripts/engineering/a.mjs", "CLAUDE.md", ".claude/skills/x/SKILL.md", "lefthook.yml"],
+    [".github/workflows/ci.yml", "scripts/engineering/a.mjs", "CLAUDE.md", "scripts/orchestrator/a.mjs", ".claude/skills/x/SKILL.md", "lefthook.yml"],
   );
   assert.deepEqual(d97Matches(["xCLAUDE.md", ".github2/a"]), []);
   assert.deepEqual(d97ManualMatches(["docs/DECISIONS.md", "a"]), ["docs/DECISIONS.md"]);
@@ -187,6 +195,21 @@ test("D-97 and draft are INFO only", () => {
   assert.match(r.find((x) => x.id === "d97").text, /Daniel/);
   assert.ok(r.find((x) => x.id === "d97-manual"));
   assert.equal(r.find((x) => x.id === "draft").text, "draft");
+});
+
+test("the orchestrator tools and the agent plugin are D-97 paths in any spelling", () => {
+  const files = ["scripts/orchestrator/orchestrator-core.mjs", "plugins/ductura-engineering/skills/x/SKILL.md"];
+  assert.deepEqual(d97Matches(files), files);
+  assert.match(evaluateReady(ready({ files })).find((x) => x.id === "d97").text, /orchestrator-core\.mjs, plugins\/ductura-engineering/);
+  assert.deepEqual(d97Matches(["./Scripts\\Orchestrator\\gh.mjs", "claude.md", ".GITHUB/x"]), ["Scripts/Orchestrator/gh.mjs", "claude.md", ".GITHUB/x"]);
+  assert.deepEqual(d97ManualMatches(["Docs/decisions.md"]), ["Docs/decisions.md"]);
+});
+
+test("an unread file list fails readiness instead of reporting no D-97 paths", () => {
+  const r = evaluateReady(ready({ files: null }));
+  assert.equal(r.find((x) => x.id === "files").level, "FAIL");
+  assert.equal(allRequiredPass(r), false);
+  assert.equal(evaluateReady(ready({ files: [] })).find((x) => x.id === "files"), undefined);
 });
 
 // DAN-118. Shape of `gh pr view --json statusCheckRollup` for PR #145 on head 13a47cae.

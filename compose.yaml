@@ -35,9 +35,10 @@ services:
     command: ["/data"]
     ports:
       - "127.0.0.1:9100:9000"
-    # Anonymous listing must be refused (403); any HTTP answer means it is up.
+    # Ready only when the S3 layer refuses anonymous listing (403). A 503 or
+    # no answer means it is not yet taking requests, so --wait holds the stack.
     healthcheck:
-      test: ["CMD-SHELL", "curl -s -o /dev/null http://localhost:9000/"]
+      test: ["CMD-SHELL", "curl -s -o /dev/null -w '%{http_code}' http://localhost:9000/ | grep -qx 403"]
       interval: 2s
       timeout: 3s
       retries: 30

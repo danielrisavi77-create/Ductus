@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+import { EDIT_STEP_FORMAT_V1 } from "../document/edit-step";
 
 import {
   isEvidenceReceiptPayloadV1,
@@ -64,24 +66,22 @@ function segmentWithProfile(evidenceProfileId: string) {
     sequenceFrom: 1,
     sequenceTo: 1,
     observedStartedAt: "2026-10-03T06:00:00.000Z",
-    observedEndedAt: "2026-10-03T06:00:01.000Z",
+    observedEndedAt: "2026-10-03T06:01:00.000Z",
     initialDocumentHash: A,
     finalDocumentHash: B,
     predecessorSegmentHash: null,
     events: [
       {
         sequence: 1,
-        occurredAt: "2026-10-03T06:00:00.000Z",
-        elapsedMs: 0,
         source: "editor",
-        steps: [{ stepType: "replace", from: 1, to: 1 }],
+        steps: [{ stepType: "replace", from: 1, to: 1, slice: { content: [{ type: "text", text: "a" }] } }],
         beforeDocumentHash: A,
         afterDocumentHash: B,
       },
     ],
     captureContext: {
       editorModel: "prosemirror",
-      transactionFormat: "prosemirror-step-json-v1",
+      transactionFormat: EDIT_STEP_FORMAT_V1,
     },
     evidenceProfileId,
   };
@@ -122,6 +122,31 @@ describe("evidence receipt validators", () => {
     expect(isSignedEvidenceReceipt(Object.create(signed()))).toBe(false);
     expect(isEvidenceReceiptPayloadV1([payload()])).toBe(false);
     expect(isEvidenceReceiptPayloadV1(null)).toBe(false);
+  });
+
+  it("count the events of a range exactly, up to the largest safe integer", () => {
+    const LARGEST = Number.MAX_SAFE_INTEGER;
+    const range = (sequenceFrom: number, sequenceTo: number, eventCount: number) =>
+      isEvidenceReceiptPayloadV1({ ...payload(), sequenceFrom, sequenceTo, eventCount });
+    expect(range(1, LARGEST, LARGEST)).toBe(true);
+    expect(range(LARGEST, LARGEST, 1)).toBe(true);
+    // In a double, from + count - 1 rounds each of these back to the end of the range.
+    expect(range(LARGEST, LARGEST, 2)).toBe(false);
+    expect(range(2, LARGEST, LARGEST)).toBe(false);
+  });
+
+  it("reject a signature text longer than any signature, before reading it", () => {
+    const withSignatureText = (signatureBase64Url: string) =>
+      isSignedEvidenceReceipt({ ...signed(), signature: { ...signed().signature, signatureBase64Url } });
+    const matched = vi.spyOn(RegExp.prototype, "test");
+    try {
+      expect(withSignatureText("A".repeat(4096))).toBe(true);
+      expect(withSignatureText("A".repeat(4097))).toBe(false);
+      expect(withSignatureText("A".repeat(1 << 20))).toBe(false);
+      expect(Math.max(...matched.mock.calls.map(([text]) => String(text).length))).toBe(4096);
+    } finally {
+      matched.mockRestore();
+    }
   });
 
   it("still reject a missing or malformed known field", () => {

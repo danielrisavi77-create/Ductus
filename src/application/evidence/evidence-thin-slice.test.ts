@@ -36,6 +36,10 @@ import { applyForensicEvent, type ReplayDocument } from "@/domain/forensics/repl
 import { EvidenceGateway } from "./evidence-gateway";
 import { buildEvidenceIngestCommandV2 } from "./evidence-outbox";
 import { reconstructAndCompareEvidence } from "./evidence-reconstruction";
+import { EDIT_STEP_FORMAT_V1, parseEditSteps } from "@/domain/document/edit-step";
+
+// A synthetic institution; no real one is used in tests.
+const INSTITUTION_ID = "00000000-0000-4000-8000-00000000000a";
 
 // B-14 (D-98 t. 1): ingest -> signed receipt -> reconstruction -> JCS comparison
 // over the in-memory adapters and the development signer. All data is invented.
@@ -44,7 +48,8 @@ const DOCUMENT = "dokument-izmisljeni-1";
 const STUDENT = "student-izmisljeni-1";
 const STRANGER = "stranac-izmisljeni-1";
 const NODE = "odlomak-1";
-const FORMAT = "ductus-test-insert-text-v0";
+/** Position of the first character of the one paragraph, as ProseMirror counts it. */
+const TEXT_START = 1;
 const EMPTY: ReplayDocument = { nodes: [{ id: NODE, text: "" }] };
 const THREE = ["Prvi izmišljeni odlomak. ", "Drugi dio teksta. ", "Završna rečenica."];
 const utf8 = (text: string) => new TextEncoder().encode(text);
@@ -63,27 +68,54 @@ const startBreak = (sequenceFrom: number, documentHashBreak: boolean) => ({
   },
 });
 
+/** A `ductus-edit-steps-v1` step that inserts plain `text` at `offset` of the paragraph. */
+const insertText = (offset: number, text: string): EvidenceEventV2["steps"][number] => ({
+  stepType: "replace",
+  from: TEXT_START + offset,
+  to: TEXT_START + offset,
+  slice: { content: [{ type: "text", text }] },
+});
+type InsertTextSlice = { content: { text: string }[] };
+/** The text an `insertText` step inserts. */
+const insertedText = (step: EvidenceEventV2["steps"][number]) =>
+  (step.slice as InsertTextSlice | undefined)?.content[0]?.text;
+/** Changes the text an `insertText` step inserts, in place. */
+const setInsertedText = (step: EvidenceEventV2["steps"][number], text: string) => {
+  (step.slice as InsertTextSlice).content[0].text = text;
+};
+
 /**
- * Stand-in for the editor's step code (ProseMirror in Node arrives with B-12):
- * one step is one `insert-text` payload of the existing replay domain. Strict
- * on purpose, so an unknown step kind or field fails the replay.
+ * Stand-in for the editor's step code (the ProseMirror replayer arrives with
+ * B-12): reads steps through `parseEditSteps`, so an unknown field or shape
+ * fails the replay, and replays only what `insertText` writes, a plain text
+ * insertion into the one paragraph, as an `insert-text` payload of the
+ * existing replay domain. Every other v1 step fails the replay.
  */
 const textReplayer: EvidenceStepReplayerV2<ReplayDocument> = {
-  transactionFormat: FORMAT,
+  transactionFormat: EDIT_STEP_FORMAT_V1,
   load: (canonical) => structuredClone(canonical as unknown as ReplayDocument),
-  apply: (document, event) =>
-    event.steps.reduce((current, step, index) => {
-      const { kind, nodeId, offset, text, ...unknown } = step;
+  apply: (document, event) => {
+    const parsed = parseEditSteps(EDIT_STEP_FORMAT_V1, event.steps);
+    if (!parsed.ok) throw new Error("unsupported step");
+    return parsed.steps.reduce((current, step, index) => {
       if (
-        kind !== "insert-text" ||
-        typeof nodeId !== "string" ||
-        typeof offset !== "number" ||
-        typeof text !== "string" ||
-        Object.keys(unknown).length > 0
+        step.stepType !== "replace" ||
+        step.from !== step.to ||
+        step.slice === undefined ||
+        "openStart" in step.slice ||
+        "openEnd" in step.slice ||
+        step.slice.content.length !== 1
       ) {
         throw new Error("unsupported step");
       }
-      const payload = { kind, nodeId, offset, text } as const;
+      const [node] = step.slice.content;
+      if (node.type !== "text" || node.marks !== undefined) throw new Error("unsupported step");
+      const payload = {
+        kind: "insert-text",
+        nodeId: NODE,
+        offset: step.from - TEXT_START,
+        text: node.text,
+      } as const;
       return applyForensicEvent(
         current,
         createForensicEvent({
@@ -92,13 +124,15 @@ const textReplayer: EvidenceStepReplayerV2<ReplayDocument> = {
           documentId: DOCUMENT,
           sequence: event.sequence,
           revision: 0,
-          occurredAt: event.occurredAt,
+          // An event of a segment has no time; the older replay domain asks for one.
+          occurredAt: "2026-10-12T08:00:00.000Z",
           actorId: STUDENT,
           actorRole: "student",
           payload,
         }),
       );
-    }, document),
+    }, document);
+  },
   toCanonical: (document) => ({
     nodes: document.nodes.map((node) => ({ id: node.id, text: node.text })),
   }),
@@ -123,10 +157,8 @@ async function buildSegment(
   for (const [index, text] of texts.entries()) {
     const event: EvidenceEventV2 = {
       sequence: sequenceFrom + index,
-      occurredAt: `2026-10-12T08:${minute}:0${index + 1}.000Z`,
-      elapsedMs: (index + 1) * 400,
       source: "editor",
-      steps: [{ kind: "insert-text", nodeId: NODE, offset: document.nodes[0].text.length, text }],
+      steps: [insertText(document.nodes[0].text.length, text)],
       touchedNodeIds: [NODE],
       beforeDocumentHash: hash,
       afterDocumentHash: hash,
@@ -145,12 +177,12 @@ async function buildSegment(
     sequenceFrom,
     sequenceTo: sequenceFrom + events.length - 1,
     observedStartedAt: `2026-10-12T08:${minute}:00.000Z`,
-    observedEndedAt: `2026-10-12T08:${minute}:30.000Z`,
+    observedEndedAt: `2026-10-12T08:${minute}:00.000Z`,
     initialDocumentHash,
     finalDocumentHash: hash,
     predecessorSegmentHash: predecessor,
     events,
-    captureContext: { editorModel: "test-text-nodes", transactionFormat: FORMAT },
+    captureContext: { editorModel: "prosemirror", transactionFormat: EDIT_STEP_FORMAT_V1 },
     evidenceProfileId: "standard-v1",
   };
   return { segment, document };
@@ -169,6 +201,7 @@ function setup() {
   };
   const contexts = new InMemoryEvidenceContextPort([
     {
+      institutionId: INSTITUTION_ID,
       evidencePackageId: PACKAGE,
       documentId: DOCUMENT,
       evidenceProfileId: "standard-v1",
@@ -448,8 +481,10 @@ const driftedReplayer: EvidenceStepReplayerV2<ReplayDocument> = {
   ...textReplayer,
   apply: (document, event) => {
     const [step] = event.steps;
-    const changed = step.text === SIX[1] ? { ...event, steps: [{ ...step, text: "Drugo. " }] } : event;
-    return textReplayer.apply(document, changed);
+    if (insertedText(step) !== SIX[1]) return textReplayer.apply(document, event);
+    const changed = structuredClone(step);
+    setInsertedText(changed, "Drugo. ");
+    return textReplayer.apply(document, { ...event, steps: [changed] });
   },
 };
 const receiptOf =
@@ -644,7 +679,7 @@ describe("thin critical path: ingest, signed receipt, reconstruction, JCS compar
   it("fails replay when the steps do not produce the recorded document hash", async () => {
     const env = setup();
     const built = await buildSegment(1, EMPTY, ["Izvorni tekst."], null);
-    built.segment.events[0].steps[0].text = "Podmetnuti tekst.";
+    setInsertedText(built.segment.events[0].steps[0], "Podmetnuti tekst.");
     // Ingest does not replay steps, so the segment is accepted and signed.
     expect((await ingestSegment(env, built.segment)).outcome.status).toBe("accepted");
     for (const text of ["Izvorni tekst.", "Podmetnuti tekst."]) {
@@ -657,19 +692,60 @@ describe("thin critical path: ingest, signed receipt, reconstruction, JCS compar
   });
 
   it.each<[string, string, (segment: EvidenceSegmentV2) => void]>([
-    ["a step with an unknown field", "step_failed", (s) => void (s.events[0].steps[0].authorId = STRANGER)],
-    ["a step outside the text", "step_failed", (s) => void (s.events[0].steps[0].offset = 99)],
-    [
-      "a transaction format without a replayer",
-      "unsupported_format",
-      (s) => void (s.captureContext.transactionFormat = "prosemirror-step-json-v1"),
-    ],
+    ["a step outside the text", "step_failed", (s) => void Object.assign(s.events[0].steps[0], { from: 100, to: 100 })],
   ])("fails closed for %s", async (_name, reason, spoil) => {
     const env = setup();
     const built = await buildSegment(1, EMPTY, ["Tekst."], null);
     spoil(built.segment);
     expect((await ingestSegment(env, built.segment)).outcome.status).toBe("accepted");
     expect(await reconstruct(env, built.document)).toEqual({ status: "mismatch", reason, index: 0 });
+  });
+
+  // DAN-183c: the step shape is closed at the segment boundary, so a step with
+  // an unknown field or a transaction format without a replayer never reaches
+  // ingest, and stored bytes carrying either are an invalid segment, not a replay.
+  type Loose = { events: { steps: Record<string, unknown>[] }[]; captureContext: Record<string, unknown> };
+  it.each<[string, (segment: Loose) => void]>([
+    ["a step with an unknown field", (s) => void (s.events[0].steps[0].authorId = STRANGER)],
+    [
+      "a transaction format without a replayer",
+      (s) => void (s.captureContext.transactionFormat = "prosemirror-step-json-v1"),
+    ],
+  ])("refuses %s before ingest and on stored bytes", async (_name, spoil) => {
+    const env = setup();
+    const built = await buildSegment(1, EMPTY, ["Tekst."], null);
+    const spoiled = structuredClone(built.segment);
+    spoil(spoiled as unknown as Loose);
+    await expect(ingestSegment(env, spoiled)).rejects.toThrow("evidence-v2: invalid segment");
+
+    const chain = await ingestChain(env);
+    const stored = JSON.parse(env.payloadStore.get(PACKAGE, chain.hashes[1])?.canonicalPayload ?? "null");
+    spoil(stored);
+    const bytes = utf8(canonicalizeJcs(stored));
+    expect(await reconstruct(env, chain.target, payloadWith(env, chain.hashes[1], bytes))).toEqual({
+      status: "mismatch",
+      reason: "invalid_segment",
+      index: 1,
+    });
+  });
+
+  // Z7 (#155): a stored record with a surplus step field is an invalid
+  // segment, refused before any hash or replay, never read as a cleaned copy.
+  it.each<[string, JcsJsonValue]>([
+    ["occurredAt", "2026-10-11T08:00:00.500Z"],
+    ["elapsedMs", 0],
+  ])("refuses stored canonical bytes whose step carries %s", async (key, value) => {
+    const env = setup();
+    const chain = await ingestChain(env);
+    const stored = JSON.parse(env.payloadStore.get(PACKAGE, chain.hashes[1])?.canonicalPayload ?? "null");
+    stored.events[0].steps[0][key] = value;
+    const bytes = utf8(canonicalizeJcs(stored));
+
+    expect(await reconstruct(env, chain.target, payloadWith(env, chain.hashes[1], bytes))).toEqual({
+      status: "mismatch",
+      reason: "invalid_segment",
+      index: 1,
+    });
   });
 
   it("reports a break in the event sequence instead of replaying across it", async () => {

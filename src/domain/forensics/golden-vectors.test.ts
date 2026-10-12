@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
+import { EDIT_STEP_FORMAT_V1, parseEditSteps } from "../document/edit-step";
 import {
   MAX_EVIDENCE_SEGMENT_BYTES,
   verifyCanonicalEvidencePayloadV2,
@@ -74,7 +75,15 @@ describe("golden vectors: document hash", () => {
     }
     const hashAfter = new Map(chain.documentStates.map((s) => [s.afterSequence, s.sha256]));
     const events = chain.segments.flatMap((vector) => vector.segment.events);
-    expect(events.map((event) => event.sequence)).toEqual([1, 2, 3]);
+    expect(events.map((event) => event.sequence)).toEqual([1, 2, 3, 4, 5]);
+    // Keyless input and a change with no attribution (D-54) are in the accepted chain.
+    expect(events.map((event) => event.source)).toEqual([
+      "editor",
+      "paste",
+      "composition",
+      "keyless-input",
+      "unattributed",
+    ]);
     for (const event of events) {
       expect(event.beforeDocumentHash).toBe(hashAfter.get(event.sequence - 1));
       expect(event.afterDocumentHash).toBe(hashAfter.get(event.sequence));
@@ -137,10 +146,51 @@ describe("golden vectors: segment hash and chain", () => {
     if (edit.recanonicalizesToBase) {
       expect(toHex(jcsUtf8Bytes(JSON.parse(text ?? "")))).toBe(base.canonicalUtf8Hex);
     }
+    if (edit.canonicalReplace !== undefined) {
+      // The edit is not canonical at exactly the spot it changes, and its
+      // canonical twin is accepted, so the byte check refuses the spelling.
+      expect(edit.findHex ?? edit.replaceHex).toBeUndefined();
+      const canonical = applyPayloadEdit(fromHex(base.canonicalUtf8Hex), {
+        ...edit,
+        replace: edit.canonicalReplace,
+      });
+      expect(canonicalizeJcs(JSON.parse(text ?? ""))).toBe(strictText(canonical));
+      expect(await verifyCanonicalEvidencePayloadV2(canonical)).toMatchObject({ ok: true });
+    }
+    if (edit.class === "non-canonical") {
+      expect(edit.recanonicalizesToBase || edit.canonicalReplace !== undefined).toBe(true);
+      expect(canonicalizeJcs(JSON.parse(text ?? ""))).not.toBe(text);
+    }
     if (edit.canonicalJcs) {
       expect(canonicalizeJcs(JSON.parse(text ?? ""))).toBe(text);
       expect(isEvidenceSegmentV2(JSON.parse(text ?? ""))).toBe(false);
     }
+  });
+
+  // F-066 (DAN-183c): -0 is refused by two layers. The closed step format
+  // reads it as an invalid position, and the byte check refuses its spelling;
+  // the twin written with 0 passes both, so each layer is pinned on its own.
+  it("refuses negative-zero in the step format and in the bytes", async () => {
+    const edit = vectors.segmentPayloads.rejected.find((candidate) => candidate.name === "negative-zero");
+    if (edit?.replace === undefined || edit.canonicalReplace === undefined) {
+      throw new Error("vector negative-zero");
+    }
+    const base = fromHex(chain.segments[edit.base].canonicalUtf8Hex);
+    const text = strictText(applyPayloadEdit(base, edit)) ?? "";
+    const twin = strictText(applyPayloadEdit(base, { ...edit, replace: edit.canonicalReplace })) ?? "";
+
+    expect(Object.is((JSON.parse(edit.replace) as { from: unknown }).from, -0)).toBe(true);
+    expect(parseEditSteps(EDIT_STEP_FORMAT_V1, [JSON.parse(edit.replace)])).toEqual({
+      ok: false,
+      code: "invalid_position",
+      path: "$[0].from",
+    });
+    expect(isEvidenceSegmentV2(JSON.parse(text))).toBe(false);
+    expect(canonicalizeJcs(JSON.parse(text))).toBe(twin);
+
+    expect(parseEditSteps(EDIT_STEP_FORMAT_V1, [JSON.parse(edit.canonicalReplace)]).ok).toBe(true);
+    expect(isEvidenceSegmentV2(JSON.parse(twin))).toBe(true);
+    expect(await verifyCanonicalEvidencePayloadV2(twin)).toMatchObject({ ok: true });
   });
 
   it("accepts a segment of exactly the limit and rejects one byte more", async () => {
@@ -148,8 +198,12 @@ describe("golden vectors: segment hash and chain", () => {
     expect(MAX_EVIDENCE_SEGMENT_BYTES).toBe(sizeLimit.maxSegmentBytes);
     const padded = (extra: string) => {
       const segment = structuredClone(sizeLimit.segmentWithoutPadding);
-      segment.events[0].steps[0].text =
-        sizeLimit.padding.unit.repeat(sizeLimit.padding.count) + extra;
+      const text = sizeLimit.padding.unit.repeat(sizeLimit.padding.count) + extra;
+      // The padding is the text of the one inserted text node of the first step.
+      segment.events[0].steps[0] = {
+        ...segment.events[0].steps[0],
+        slice: { content: [{ type: "text", text }] },
+      };
       return utf8.encode(canonicalizeJcs(segment));
     };
 
@@ -166,6 +220,95 @@ describe("golden vectors: segment hash and chain", () => {
     const tooLarge = { ok: false, reason: sizeLimit.overLimit.reason };
     expect(await verifyCanonicalEvidencePayloadV2(overLimit)).toEqual(tooLarge);
     expect(await verifyCanonicalEvidencePayloadV2(strictText(overLimit))).toEqual(tooLarge);
+  });
+});
+
+describe("golden vectors: time in a segment (D-24, D-56)", () => {
+  const { formerSegments } = vectors.eventTime;
+
+  it("stores two whole minutes and no other time in each accepted segment", () => {
+    for (const { segment, canonicalUtf8Hex } of chain.segments) {
+      const text = strictText(fromHex(canonicalUtf8Hex)) ?? "";
+      expect(text.match(/\d{2}:\d{2}:\d{2}[^"]*/g)).toEqual([
+        segment.observedEndedAt.slice(11),
+        segment.observedStartedAt.slice(11),
+      ]);
+      expect(segment.observedStartedAt).toMatch(/T\d{2}:\d{2}:00\.000Z$/);
+      expect(segment.observedEndedAt).toMatch(/T\d{2}:\d{2}:00\.000Z$/);
+      expect(text).not.toMatch(/occurredAt|elapsedMs/);
+    }
+    // One segment runs across a minute boundary; the next lies within the minute it ended in.
+    const [first, second] = chain.segments.map((vector) => vector.segment);
+    expect(first.observedEndedAt).not.toBe(first.observedStartedAt);
+    expect([second.observedStartedAt, second.observedEndedAt]).toEqual([
+      first.observedEndedAt,
+      first.observedEndedAt,
+    ]);
+  });
+
+  it.each(formerSegments)("refuses $name, valid before the decision", async (former) => {
+    const bytes = fromHex(former.canonicalUtf8Hex);
+    const text = strictText(bytes) ?? "";
+    // The bytes are the ones the first revision published: same hash, canonical JCS.
+    expect(createHash("sha256").update(bytes).digest("hex")).toBe(former.formerSegmentHash);
+    expect(bytes.byteLength).toBe(former.byteLength);
+    expect(canonicalizeJcs(JSON.parse(text))).toBe(text);
+    expect(text).toMatch(/"elapsedMs":[0-9.]+,"occurredAt":"/);
+
+    expect(isEvidenceSegmentV2(JSON.parse(text))).toBe(false);
+    expect(await verifyCanonicalEvidencePayloadV2(bytes)).toEqual({ ok: false, reason: former.reason });
+    expect(await verifyCanonicalEvidencePayloadV2(text)).toEqual({ ok: false, reason: former.reason });
+  });
+
+  it("keeps both chain segments of the first revision as refused vectors", () => {
+    // The segment hashes of the file as merged for DAN-127.
+    expect(formerSegments.map((former) => former.formerSegmentHash)).toEqual([
+      "8a95172066e145b5b890b9a73a3b4ccedbdceaf46ec8c373d2b35e94328f692e",
+      "af2a408d76db01c7b95962f8f854a460b3491879f39b033ebed725587e948cb4",
+    ]);
+  });
+});
+
+describe("golden vectors: step format (DAN-183)", () => {
+  const { formerSegments } = vectors.stepFormat;
+
+  it("writes every chain step in the closed format ductus-edit-steps-v1", () => {
+    for (const { segment } of chain.segments) {
+      expect(segment.captureContext).toEqual({
+        editorModel: "prosemirror",
+        transactionFormat: EDIT_STEP_FORMAT_V1,
+      });
+      for (const event of segment.events) {
+        expect(parseEditSteps(segment.captureContext.transactionFormat, event.steps).ok).toBe(true);
+      }
+    }
+  });
+
+  it.each(formerSegments)("keeps $name byte for byte, with the test insert format", (former) => {
+    const bytes = fromHex(former.canonicalUtf8Hex);
+    const text = strictText(bytes) ?? "";
+    expect(createHash("sha256").update(bytes).digest("hex")).toBe(former.formerSegmentHash);
+    expect(bytes.byteLength).toBe(former.byteLength);
+    expect(canonicalizeJcs(JSON.parse(text))).toBe(text);
+    const segment = JSON.parse(text) as { captureContext: { transactionFormat: string } };
+    expect(segment.captureContext.transactionFormat).toBe("ductus-test-insert-text-v0");
+  });
+
+  // DAN-183c: the step shape is closed, so the test insert format is refused.
+  it.each(formerSegments)("refuses $name, written before the closed step format", async (former) => {
+    const bytes = fromHex(former.canonicalUtf8Hex);
+    const text = strictText(bytes) ?? "";
+    expect(isEvidenceSegmentV2(JSON.parse(text))).toBe(false);
+    expect(await verifyCanonicalEvidencePayloadV2(bytes)).toEqual({ ok: false, reason: former.reason });
+    expect(await verifyCanonicalEvidencePayloadV2(text)).toEqual({ ok: false, reason: former.reason });
+  });
+
+  it("keeps both chain segments from before DAN-183 as former vectors", () => {
+    // The segment hashes of the file before DAN-183.
+    expect(formerSegments.map((former) => former.formerSegmentHash)).toEqual([
+      "51238852b959a72b9efcb2474f3a1a55389bc18e41f5279e8ecb2d9d0de0e5c5",
+      "2f84791c701f57d122195c947dd63fb52f8260d188a0cd41d48a5dcf6ab16659",
+    ]);
   });
 });
 
@@ -248,6 +391,11 @@ describe("golden vectors: the signing key", () => {
     const files = [
       ...readdirSync(directory).map((name) => new URL(name, directory)),
       new URL("./golden-vectors.test.ts", import.meta.url),
+      new URL("./evidence-receipt-v2.test.ts", import.meta.url),
+      new URL("./evidence-receipt-verifier.test.ts", import.meta.url),
+      new URL("./ed25519-encoding.test.ts", import.meta.url),
+      new URL("./evidence-segment-v2.test.ts", import.meta.url),
+      new URL("../../application/ports/evidence-ingest.test.ts", import.meta.url),
       new URL("../../application/evidence/evidence-golden-vectors.test.ts", import.meta.url),
     ];
     expect(files.length).toBeGreaterThanOrEqual(4);

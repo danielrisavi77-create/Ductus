@@ -4,7 +4,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(35);
+SELECT plan(37);
 
 -- Group roles: none can log in or step around RLS.
 SELECT bag_eq(
@@ -20,20 +20,21 @@ SELECT is_empty(
 );
 
 -- Logins come from the environment, never from a migration. The local stack
--- provisions exactly one (db/local/app-login.sql): the login of the web
--- process. It carries no attribute of its own; what it may do comes from its
--- single membership in ductus_app, listed further down, and from nothing
--- granted or set on the login itself, checked after the ductus_app rows.
+-- provisions exactly two: the login of the web process
+-- (db/local/app-login.sql) and the login of the login callback
+-- (db/local/auth-login.sql). They carry no attribute of their own; what each
+-- may do comes from its single membership, listed further down, and from
+-- nothing granted or set on the login itself, checked after the ductus_app rows.
 SELECT bag_eq(
   $$ SELECT rolname::text FROM pg_roles WHERE rolname LIKE 'ductus\_%' AND rolcanlogin $$,
-  ARRAY['ductus_app_local'],
-  'the local application login is the only ductus_* role with a login'
+  ARRAY['ductus_app_local', 'ductus_auth_local'],
+  'the local application and login-callback logins are the only ductus_* roles with a login'
 );
-SELECT is(
-  (SELECT rolinherit AND NOT (rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb OR rolreplication)
-   FROM pg_roles WHERE rolname = 'ductus_app_local'),
-  true,
-  'ductus_app_local has no SUPERUSER, BYPASSRLS, CREATEROLE, CREATEDB or REPLICATION'
+SELECT is_empty(
+  $$ SELECT rolname::text FROM pg_roles
+     WHERE rolname IN ('ductus_app_local', 'ductus_auth_local')
+       AND NOT (rolinherit AND NOT (rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb OR rolreplication)) $$,
+  'ductus_app_local and ductus_auth_local have no SUPERUSER, BYPASSRLS, CREATEROLE, CREATEDB or REPLICATION'
 );
 
 -- The migrator is the only role with DDL, yet it is neither a superuser nor
@@ -67,8 +68,9 @@ SELECT is_empty(
 -- would let a role become an owner role unnoticed. Every membership that
 -- involves a ductus_* role, as group or as member, is therefore listed with
 -- its options: the migrator administers the roles it created and may SET ROLE
--- to the two owner roles; the local login inherits ductus_app and nothing
--- else. Any other row fails the comparison.
+-- to the two owner roles; the web process login inherits ductus_app and the
+-- login-callback login ductus_auth, each nothing else. Any other row fails
+-- the comparison.
 CREATE TEMP VIEW ductus_membership AS
   SELECT pg_get_userbyid(member) || ' in ' || pg_get_userbyid(roleid) || ':'
          || CASE WHEN admin_option THEN ' admin' ELSE '' END
@@ -86,13 +88,14 @@ CREATE TEMP VIEW allowed_membership AS
     'ductus_migrator in ductus_identity: admin',
     'ductus_migrator in ductus_evidence: set',
     'ductus_migrator in ductus_identity: set',
-    'ductus_app_local in ductus_app: inherit'
+    'ductus_app_local in ductus_app: inherit',
+    'ductus_auth_local in ductus_auth: inherit'
   ]) AS membership;
 
 SELECT bag_eq(
   'SELECT membership FROM ductus_membership',
   'SELECT membership FROM allowed_membership',
-  'the only memberships: the migrator as creator and with SET on the two owner roles, the local login in ductus_app'
+  'the only memberships: the migrator as creator and with SET on the two owner roles, the local logins in ductus_app and ductus_auth'
 );
 -- Negative controls: the comparison above must notice a membership that is
 -- not on the list. Each one is added, seen and taken back.
@@ -103,6 +106,14 @@ SELECT bag_ne(
   'a second membership of the local login is noticed'
 );
 REVOKE ductus_auth FROM ductus_app_local;
+-- The login callback never holds the rights of the web process.
+GRANT ductus_app TO ductus_auth_local;
+SELECT bag_ne(
+  'SELECT membership FROM ductus_membership',
+  'SELECT membership FROM allowed_membership',
+  'ductus_app for the login-callback login is noticed'
+);
+REVOKE ductus_app FROM ductus_auth_local;
 GRANT ductus_app TO ductus_app_local WITH SET TRUE;
 SELECT bag_ne(
   'SELECT membership FROM ductus_membership',
@@ -163,8 +174,15 @@ SELECT ok(
 -- grant or a setting placed on the login itself would pass them. A login here
 -- is every ductus_* role that can log in and every login that is a member of
 -- a ductus_* role, so the rows below follow the membership list, not a name.
+-- Each login is held to its group: ductus_auth for a login whose only
+-- ductus_* membership is ductus_auth (the login callback), ductus_app for
+-- every other, including one with no membership at all.
 CREATE TEMP VIEW ductus_login AS
-  SELECT r.oid, r.rolname::text AS login FROM pg_roles r
+  SELECT r.oid, r.rolname::text AS login,
+         CASE WHEN ARRAY(SELECT DISTINCT pg_get_userbyid(m.roleid)::text FROM pg_auth_members m
+                         WHERE m.member = r.oid AND pg_get_userbyid(m.roleid) LIKE 'ductus\_%') = ARRAY['ductus_auth']
+              THEN 'ductus_auth'::name ELSE 'ductus_app'::name END AS grp
+  FROM pg_roles r
   WHERE r.rolcanlogin
     AND (r.rolname LIKE 'ductus\_%'
          OR EXISTS (SELECT 1 FROM pg_auth_members m
@@ -176,7 +194,7 @@ CREATE TEMP VIEW login_dependency AS
   SELECT l.login || ': ' || d.classid::regclass::text || ' (' || d.deptype::text || ')' AS found
   FROM ductus_login l
   JOIN pg_shdepend d ON d.refclassid = 'pg_authid'::regclass AND d.refobjid = l.oid;
--- The same seen from the other side: nothing the login may do that ductus_app
+-- The same seen from the other side: nothing the login may do that its group
 -- may not. PUBLIC grants reach both, so they do not show here.
 CREATE TEMP VIEW login_extra_privilege AS
   SELECT l.login || ': ' || p.privilege || ' on ' || c.oid::regclass::text AS found
@@ -184,38 +202,38 @@ CREATE TEMP VIEW login_extra_privilege AS
   CROSS JOIN pg_class c
   CROSS JOIN unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) AS p(privilege)
   WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f')
-    AND has_table_privilege(l.oid, c.oid, p.privilege) AND NOT has_table_privilege('ductus_app', c.oid, p.privilege)
+    AND has_table_privilege(l.oid, c.oid, p.privilege) AND NOT has_table_privilege(l.grp, c.oid, p.privilege)
   UNION ALL
   SELECT l.login || ': column ' || p.privilege || ' on ' || c.oid::regclass::text
   FROM ductus_login l
   CROSS JOIN pg_class c
   CROSS JOIN unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'REFERENCES']) AS p(privilege)
   WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f')
-    AND has_any_column_privilege(l.oid, c.oid, p.privilege) AND NOT has_any_column_privilege('ductus_app', c.oid, p.privilege)
+    AND has_any_column_privilege(l.oid, c.oid, p.privilege) AND NOT has_any_column_privilege(l.grp, c.oid, p.privilege)
   UNION ALL
   SELECT l.login || ': ' || p.privilege || ' on sequence ' || c.oid::regclass::text
   FROM ductus_login l
   CROSS JOIN pg_class c
   CROSS JOIN unnest(ARRAY['USAGE', 'SELECT', 'UPDATE']) AS p(privilege)
   WHERE c.relkind = 'S'
-    AND has_sequence_privilege(l.oid, c.oid, p.privilege) AND NOT has_sequence_privilege('ductus_app', c.oid, p.privilege)
+    AND has_sequence_privilege(l.oid, c.oid, p.privilege) AND NOT has_sequence_privilege(l.grp, c.oid, p.privilege)
   UNION ALL
   SELECT l.login || ': EXECUTE on ' || f.oid::regprocedure::text
   FROM ductus_login l
   CROSS JOIN pg_proc f
-  WHERE has_function_privilege(l.oid, f.oid, 'EXECUTE') AND NOT has_function_privilege('ductus_app', f.oid, 'EXECUTE')
+  WHERE has_function_privilege(l.oid, f.oid, 'EXECUTE') AND NOT has_function_privilege(l.grp, f.oid, 'EXECUTE')
   UNION ALL
   SELECT l.login || ': ' || p.privilege || ' on schema ' || n.nspname
   FROM ductus_login l
   CROSS JOIN pg_namespace n
   CROSS JOIN unnest(ARRAY['USAGE', 'CREATE']) AS p(privilege)
-  WHERE has_schema_privilege(l.oid, n.oid, p.privilege) AND NOT has_schema_privilege('ductus_app', n.oid, p.privilege)
+  WHERE has_schema_privilege(l.oid, n.oid, p.privilege) AND NOT has_schema_privilege(l.grp, n.oid, p.privilege)
   UNION ALL
   SELECT l.login || ': ' || p.privilege || ' on the database'
   FROM ductus_login l
   CROSS JOIN unnest(ARRAY['CREATE', 'TEMPORARY', 'CONNECT']) AS p(privilege)
   WHERE has_database_privilege(l.oid, current_database(), p.privilege)
-    AND NOT has_database_privilege('ductus_app', current_database(), p.privilege);
+    AND NOT has_database_privilege(l.grp, current_database(), p.privilege);
 -- ALTER ROLE ... SET and ALTER DATABASE ... SET change what a new connection
 -- starts with: a search_path, a role, row_security. Neither a ductus_* role,
 -- nor a login, nor this database as a whole carries one.
@@ -234,7 +252,7 @@ SELECT is_empty(
 );
 SELECT is_empty(
   'SELECT found FROM login_extra_privilege',
-  'no login may do anything that ductus_app may not'
+  'no login may do anything that its group may not'
 );
 SELECT is_empty(
   'SELECT found FROM login_setting',
@@ -252,6 +270,14 @@ SELECT isnt_empty(
   'a table privilege granted to the login itself is noticed as a right beyond ductus_app'
 );
 REVOKE SELECT ON identity.session FROM ductus_app_local;
+-- The login callback is held to ductus_auth, not to ductus_app: a right that
+-- ductus_app has, granted to that login, is still a right beyond its group.
+GRANT EXECUTE ON FUNCTION identity.close_current_session() TO ductus_auth_local;
+SELECT isnt_empty(
+  $$ SELECT found FROM login_extra_privilege WHERE found LIKE 'ductus\_auth\_local: %' $$,
+  'a ductus_app right granted to the login-callback login is noticed as a right beyond ductus_auth'
+);
+REVOKE EXECUTE ON FUNCTION identity.close_current_session() FROM ductus_auth_local;
 GRANT CREATE ON DATABASE ductus TO ductus_app_local;
 SELECT isnt_empty(
   'SELECT found FROM login_dependency',

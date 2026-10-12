@@ -10,6 +10,7 @@ import {
   HARD_AT,
   LARGE_DOC_BYTES,
   MODE_NAMES,
+  NODE_MAJOR,
   ORCHESTRATOR_LIMIT,
   ORCHESTRATOR_REMIND_AT,
   OUTLINE_LIMIT,
@@ -17,6 +18,7 @@ import {
   ROTATE_AT,
   STATE_LIMIT,
   budgetNotice,
+  envNotice,
   isProtected,
   lastContext,
   outline,
@@ -373,6 +375,70 @@ test("real project path rejects targets outside the project or under a deny rule
   const viaLink = (file) => file.replace(path.resolve("link"), root);
   assert.equal(realProjectPath(path.resolve("link"), path.resolve("link", "STATE.md"), viaLink).relative, "STATE.md");
   assert.equal(realProjectPath(root, at("..notes.md"), realpath).relative, "..notes.md");
+});
+
+test("environment notice names an old Node and a missing or stale install, and is silent when ready", () => {
+  const ready = { node: `${NODE_MAJOR}.1.0`, lock: "lock: 1\n", installed: "lock: 1\n" };
+  assert.equal(envNotice(ready), null);
+  assert.equal(envNotice({ ...ready, node: `${NODE_MAJOR + 1}.0.0` }), null);
+  for (const node of [`${NODE_MAJOR - 2}.22.0`, "", "v24.0.0", undefined]) {
+    assert.match(envNotice({ ...ready, node }), new RegExp(`older than ${NODE_MAJOR} \\(\\.nvmrc\\).*not proof`), String(node));
+  }
+  assert.match(envNotice({ ...ready, installed: undefined }), /node_modules is missing; run pnpm install --frozen-lockfile/);
+  assert.match(envNotice({ ...ready, installed: "lock: 0\n" }), /node_modules does not match pnpm-lock\.yaml; run pnpm install --frozen-lockfile/);
+  assert.match(envNotice({ ...ready, installed: "lock: 0\n" }), /only on main or a branch you write, never on a head you review or test/);
+  const both = envNotice({ node: "22.0.0", lock: "a", installed: undefined });
+  assert.equal(both.split("\n").length, 1);
+  assert.match(both, /^Environment check: Node 22\.0\.0 .*\. node_modules is missing; .*\.$/);
+});
+
+test("the Node major of the notice is the one in .nvmrc and package.json engines", () => {
+  assert.equal(fs.readFileSync(path.join(repo, ".nvmrc"), "utf8").trim(), String(NODE_MAJOR));
+  const pkg = JSON.parse(fs.readFileSync(path.join(repo, "package.json"), "utf8"));
+  assert.equal(pkg.engines.node, `>=${NODE_MAJOR}`);
+});
+
+test("start entry point checks the install only in a checkout with a lockfile and never through a link", async (t) => {
+  const { base, dir, outside } = sandbox();
+  const installed = path.join(dir, "node_modules", ".pnpm", "lock.yaml");
+  const missing = /node_modules is missing/;
+  const stale = /node_modules does not match/;
+  try {
+    fs.writeFileSync(path.join(dir, "STATE.md"), "# Stanje rada\n");
+    // No lockfile: not a checkout to install, so STATE.md alone, as before.
+    assert.doesNotMatch(raw("start", { cwd: dir }, dir), /Environment check/);
+    fs.writeFileSync(path.join(dir, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+    const first = run("start", { cwd: dir }, dir).additionalContext;
+    assert.match(first, missing);
+    assert.match(first, /^Environment check: [^\n]*\n\n.*STATE\.md as of session start[\s\S]*# Stanje rada/);
+    fs.mkdirSync(path.dirname(installed), { recursive: true });
+    fs.writeFileSync(installed, "lockfileVersion: '8.0'\n");
+    assert.match(run("start", { cwd: dir }, dir).additionalContext, stale);
+    fs.writeFileSync(installed, "lockfileVersion: '9.0'\n");
+    const ready = run("start", { cwd: dir }, dir).additionalContext;
+    assert.doesNotMatch(ready, /node_modules/);
+    assert.match(ready, /# Stanje rada/);
+    // A STATE.md the hook does not load still leaves the install notice.
+    fs.rmSync(path.join(dir, "STATE.md"));
+    fs.rmSync(installed);
+    assert.match(run("start", { cwd: dir }, dir).additionalContext, /^Environment check: [^\n]*$/);
+    // A link out of the project counts as no install: its target is never read.
+    const target = path.join(outside, "lock.yaml");
+    fs.writeFileSync(target, "lockfileVersion: '9.0'\n");
+    await t.test("installed lockfile linked out of the repo", (t) => {
+      if (!fileLink(t, target, installed)) return;
+      assert.match(run("start", { cwd: dir }, dir).additionalContext, missing);
+      fs.rmSync(installed);
+    });
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("the longest STATE.md that is loaded still fits the hook context limit with the notice", () => {
+  const notice = envNotice({ node: "0.0.0", lock: "a", installed: undefined });
+  const context = `${notice}\n\n${stateContext(path.join(repo, "STATE.md"), "x".repeat(STATE_LIMIT))}`;
+  assert.ok(context.length < 10_000, `${context.length} characters`);
 });
 
 test("start entry point loads only the project's own STATE.md, never a link target", async (t) => {

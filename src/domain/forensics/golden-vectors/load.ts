@@ -2,7 +2,10 @@ import { createPublicKey, verify } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 import type { EvidenceChainHeadV2 } from "../evidence-chain-v2";
-import type { SignedEvidenceReceipt } from "../evidence-receipt";
+import type {
+  EvidenceReceiptPayloadV2,
+  SignedEvidenceReceipt,
+} from "../evidence-receipt";
 import type { EvidenceSegmentV2 } from "../evidence-segment-v2";
 import type { JcsJsonValue } from "../jcs";
 import type { SignatureEnvelope } from "../signature";
@@ -33,6 +36,8 @@ export type GoldenSegmentVector = {
 /** One edit of the canonical bytes of `chain.segments[base]`. */
 export type GoldenPayloadEdit = {
   name: string;
+  /** Why the edit is refused, for example non-canonical bytes or an unknown field. */
+  class: string;
   base: number;
   find?: string;
   replace?: string;
@@ -41,6 +46,12 @@ export type GoldenPayloadEdit = {
   reason: "invalid";
   /** The edited text parses to the same value as the base segment. */
   recanonicalizesToBase: boolean;
+  /**
+   * JCS writes the parsed edit as the base with `find` replaced by this: the
+   * edited bytes differ from their own canonical form exactly there, and
+   * the verifier accepts that canonical twin. Only with text `find`.
+   */
+  canonicalReplace?: string;
   /** The edited bytes are canonical JCS; only the validator rejects them. */
   canonicalJcs: boolean;
 };
@@ -57,6 +68,20 @@ export type GoldenVerificationKey = {
   spkiDerHex: string;
   /** SHA-256 of the 32 private bytes, which are stored nowhere in these files. */
   signingSeedSha256: string;
+};
+
+/** A receipt v2 with every value the D-92 signature is built from. */
+export type GoldenReceiptV2Vector = {
+  name: string;
+  payload: EvidenceReceiptPayloadV2;
+  canonical: string;
+  canonicalUtf8Hex: string;
+  byteLength: number;
+  payloadDigestSha256: string;
+  /** `UTF-8("ductus-evidence-receipt-v2") || 0x0a || D`, 59 bytes. */
+  signingInputHex: string;
+  signatureHex: string;
+  signature: SignatureEnvelope;
 };
 
 export type GoldenVectors = {
@@ -77,6 +102,28 @@ export type GoldenVectors = {
     verificationKey: GoldenVerificationKey;
   };
   segmentPayloads: { rejected: GoldenPayloadEdit[] };
+  /** Owner decision of 10 October 2026 (D-24, D-56): no time per event, none finer than a minute. */
+  eventTime: {
+    /** The chain segments of the first revision of the file, byte for byte. Valid then, refused now. */
+    formerSegments: {
+      name: string;
+      formerSegmentHash: string;
+      byteLength: number;
+      canonicalUtf8Hex: string;
+      reason: "invalid";
+    }[];
+  };
+  /** DAN-183 (Z10): only steps of the closed format ductus-edit-steps-v1. */
+  stepFormat: {
+    /** The chain segments of this file before DAN-183, byte for byte, with the test insert format. */
+    formerSegments: {
+      name: string;
+      formerSegmentHash: string;
+      byteLength: number;
+      canonicalUtf8Hex: string;
+      reason: "invalid";
+    }[];
+  };
   sizeLimit: {
     maxSegmentBytes: number;
     segmentWithoutPadding: EvidenceSegmentV2;
@@ -84,6 +131,70 @@ export type GoldenVectors = {
     atLimit: { byteLength: number; sha256: string };
     overLimit: { extraText: string; byteLength: number; reason: "too_large" };
   };
+  /** Receipt v2 (D-92, DAN-54): `accepted[0]` is the contract vector of docs/BACKEND.md section 4.1. */
+  receiptV2: {
+    signingPrefix: string;
+    evidenceDomainId: string;
+    otherEvidenceDomainId: string;
+    /** The author of both accepted receipts, and another one. Invented. */
+    principalId: string;
+    otherPrincipalId: string;
+    accepted: GoldenReceiptV2Vector[];
+    /** The contract vector before DAN-54, without the four fields. Refused now. */
+    former: Omit<GoldenReceiptV2Vector, "name" | "payload" | "byteLength">;
+    /** Changes of `accepted[0].payload` that no validator may accept. */
+    rejectedPayloads: {
+      name: string;
+      class: string;
+      set?: Record<string, JcsJsonValue>;
+      remove?: string[];
+    }[];
+    /** Valid signatures of the same key over `messageHex`, which is not the signing input. */
+    rejectedSignatures: { name: string; messageHex: string; signatureBase64Url: string }[];
+    /** Changes of the trusted key entry under which `accepted[0]` is refused with `reason`. */
+    rejectedKeys: {
+      name: string;
+      set?: Record<string, JcsJsonValue>;
+      remove?: string[];
+      reason: "key_scope" | "key_unknown" | "key_not_valid";
+    }[];
+    /** What the unchanged entry of the trusted key list holds next to the key itself. */
+    keyEntry: {
+      evidenceDomainId: string;
+      purpose: "receipt";
+      validFrom: string;
+      validTo: null;
+      revokedAt: null;
+    };
+    /** Changes of that entry under which `accepted[0]` still verifies. */
+    acceptedKeys: { name: string; set: Record<string, JcsJsonValue> }[];
+  };
+  /** Encodings of points a verifier takes or refuses as a key and as the R of a signature. */
+  ed25519Points: {
+    accepted: { name: string; pointHex: string }[];
+    rejected: {
+      name: string;
+      class: "small-order" | "mixed-order" | "not-on-curve" | "non-canonical";
+      pointHex: string;
+    }[];
+    /**
+     * Satisfies the RFC 8032 equation over `receiptV2.accepted[0].signingInputHex`
+     * under the public point `pointHex`, which is of mixed order.
+     */
+    mixedOrderSignature: { pointHex: string; signatureHex: string; signatureBase64Url: string };
+  };
+  /** Ranges of sequence numbers with a count of events, for the descriptor, the segment and the receipts. */
+  sequenceRanges: {
+    accepted: GoldenSequenceRange[];
+    rejected: GoldenSequenceRange[];
+  };
+};
+
+export type GoldenSequenceRange = {
+  name: string;
+  sequenceFrom: number;
+  sequenceTo: number;
+  eventCount: number;
 };
 
 /**

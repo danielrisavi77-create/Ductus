@@ -2,11 +2,11 @@
 
 Verzija 0.4 · 3. 10. 2026. · Odgovorna osoba: Daniel Rišavi
 
-> **Povijesna napomena:** verzije 0.1 i 0.2 ovog dokumenta opisivale su varijantu na Supabaseu (baza, prijava, Storage, Edge Functions, Realtime, `pg_cron`, Vault) i Netlifyju (hosting sučelja). Ta varijanta je napuštena prijedlogom u `docs/BACKEND.md` v0.3 (D-08); razlozi su u BACKEND §1. Verzija 0.3 opisuje sustav preko sučelja (portova) koja ne ovise o dobavljaču, a konkretni dobavljači navedeni su samo u §9 i uvijek uvjetno.
+> **Povijesna napomena:** verzije 0.1 i 0.2 ovog dokumenta opisivale su varijantu na Supabaseu (baza, prijava, Storage, Edge Functions, Realtime, `pg_cron`, Vault) i Netlifyju (hosting sučelja). Ta varijanta je napuštena prijedlogom u `docs/BACKEND.md` v0.3 (D-08; dio o aplikaciji odlučen 11. 10. 2026.); razlozi su u BACKEND §1. Verzija 0.3 opisuje sustav preko sučelja (portova) koja ne ovise o dobavljaču, a konkretni dobavljači navedeni su samo u §9 i uvijek uvjetno.
 
 Cilj: najjednostavnija arhitektura koja pouzdano ispunjava `PRODUCT.md` za pilot na jednom fakultetu, koju jedna osoba uz AI agente može održavati, i koja se kasnije može proširiti bez prepisivanja. Ciljna arhitektura vNext ostaje referenca (D-75); što se iz nje prihvaća i odgađa zapisano je u BACKEND §2, a odgođeni elementi imaju okidač u §11.
 
-**Odnos prema `BACKEND.md`:** BACKEND je detaljan plan backenda i ima prednost u pojedinostima (topologija, uloge, prijava, evidencija, kopije, trošak, program B0 do B9). Ovaj dokument daje cjelinu sustava i upućuje na BACKEND gdje je on mjerodavan. D-71 i D-74 vlasnik je potvrdio 10. 10. 2026. Sve što ovisi o D-08, D-72, D-73 i D-75 vrijedi kao **PRIJEDLOG** dok vlasnik te odluke ne potvrdi (B0.3), a D-08 je uvjetan i rezultatima spikeova B0.1 i B0.2.
+**Odnos prema `BACKEND.md`:** BACKEND je detaljan plan backenda i ima prednost u pojedinostima (topologija, uloge, prijava, evidencija, kopije, trošak, program B0 do B9). Ovaj dokument daje cjelinu sustava i upućuje na BACKEND gdje je on mjerodavan. D-71 i D-74 vlasnik je potvrdio 10. 10. 2026. D-08 je 11. 10. 2026. razdvojen (komentar 6105246182 na issueu #87): dio o aplikaciji (Next.js i worker, PostgreSQL s RLS-om i ulogama, pohrana kompatibilna sa S3, vlastiti OIDC klijent, sve u EU-u) je **ODLUČEN**, a dio o dobavljačima i trošku ostaje **PRIJEDLOG** do provjere B0.1 (rok 16. 11. 2026.). Odnos D-08 prema B0.2 nije odlučen. Sve što ovisi o dijelu D-08 o dobavljačima i trošku, o D-72, D-73 (samo izbor biblioteke; vlastiti OIDC klijent odlučen 11. 10. 2026., a sesije u bazi i identitet u RLS-u potvrđeni u D-90) i D-75 vrijedi kao **PRIJEDLOG** dok vlasnik te odluke ne potvrdi (B0.3); retci §1 koje odluka od 11. 10. 2026. ne navodi (Editor, Lokalna pohrana, E-pošta) ostaju označeni kao prijedlog.
 
 ## 0.1 Status implementacije i granice repozitorija
 
@@ -40,24 +40,24 @@ Smjer ovisnosti je prema unutra: `app` i features pozivaju application; applicat
 
 | Sloj | Izbor | Status |
 | --- | --- | --- |
-| Sučelje | Next.js (App Router), React, TypeScript; sadržaj radova se ne renderira na poslužitelju | [PRIJEDLOG D-08], preneseno iz `pisac-editor` |
+| Sučelje | Next.js (App Router), React, TypeScript; sadržaj radova se ne renderira na poslužitelju | [ODLUČENO D-08, dio o aplikaciji: Next.js; ODLUČENO D-74: bez server-side renderiranja sadržaja; ostali detalji retka (App Router, React, TypeScript) PRIJEDLOG], preneseno iz `pisac-editor` |
 | Editor | Tiptap / ProseMirror | [PRIJEDLOG D-08], preneseno |
 | Lokalna pohrana | Dexie (IndexedDB), journal s 8 stanja sinkronizacije | [PRIJEDLOG D-08], preneseno |
-| API | Next.js API rute s verzijom protokola (ne Server Actions), u web procesu bez materijala ključeva | [PRIJEDLOG D-08], BACKEND §3 |
+| API | Next.js API rute s verzijom protokola (ne Server Actions), u web procesu bez materijala ključeva | [ODLUČENO D-08, dio o aplikaciji: Next.js i worker; API rute s verzijom protokola i bez Server Actions PRIJEDLOG; web proces bez materijala ključeva: D-71], BACKEND §3 |
 | Pozadinski rad | Zaseban worker proces (Node): red poslova pg-boss, potpisivanje, rekonstrukcija, čuvanje, e-pošta, dnevni korijen | [ODLUČENO D-74] |
-| Baza | PostgreSQL s RLS-om, uloge po namjeni, upravljana usluga s povratom u točku (PITR) | [PRIJEDLOG D-08], dobavljač u §9 |
-| Pohrana objekata | S3-kompatibilan privatni bucket, objekti adresirani hashom | [PRIJEDLOG D-08] |
+| Baza | PostgreSQL s RLS-om, uloge po namjeni, upravljana usluga s povratom u točku (PITR) | [ODLUČENO D-08, dio o aplikaciji; usluga i dobavljač PRIJEDLOG do B0.1], dobavljač u §9 |
+| Pohrana objekata | S3-kompatibilan privatni bucket po domeni evidencije (jedna ustanova u jednoj regiji), objekti adresirani hashom, putanja `v2/<ustanova>/<paket>/<hash>.json` | [ODLUČENO D-08, dio o aplikaciji; D-102] |
 | Prijava | AAI@EduHr preko OpenID Connecta | [ODLUČENO D-09] |
-| Izvedba prijave | Vlastiti OIDC klijent, sesije u bazi | [PRIJEDLOG D-73] |
+| Izvedba prijave | Vlastiti OIDC klijent, sesije u bazi | [vlastiti OIDC klijent ODLUČEN 11. 10. 2026. (D-08, dio o aplikaciji); sesije u bazi i identitet u RLS-u potvrđeni u D-90; PRIJEDLOG samo izbor biblioteke (D-73)] |
 | Potpis | Dva odvojena Ed25519 ključa u KMS-u, potpisuje samo worker | [ODLUČENO D-71] |
 | Neovisno vrijeme | Dnevni korijen s RFC 3161 žigom, val 2 | [PRIJEDLOG D-72] |
-| E-pošta | Transakcijska usluga u EU-u preko SMTP-a ili API-ja | [PRIJEDLOG D-08] |
+| E-pošta | Transakcijska usluga u EU-u preko SMTP-a ili API-ja | [ODLUČENO D-08, dio o aplikaciji: u EU-u; usluga i dobavljač PRIJEDLOG do B0.1] |
 | Obavijesti | Polling svakih 30 do 60 s, obavijest o reviziji najviše jednom po P-03 prozoru | [ODLUČENO D-74] |
 | Testovi | Vitest (unit, property i ugovorni), Playwright (E2E i axe), pgTAP (RLS, uloge, matrica pristupa) | Preneseno i prošireno |
 | Pravila fakulteta | Zajednički paket s Lektom (generirani podaci pravila, citatni stilovi, predlošci naslovne stranice) | [ODLUČENO D-25] |
 | AI pomoćnik | Nije u pilotu; student koristi vlastiti alat izvan Ductusa i prilaže ispis razgovora uz izjavu | [ODLUČENO D-77] |
 
-Kod se piše iza sučelja (§2a) dok D-08 nije potvrđen. Nema OpenFGA servisa, transparency loga, Redisa, zasebnog reda poruka ni zasebnog API servera osim workera.
+Kod se piše iza sučelja (§2a) dok dio D-08 o dobavljačima i trošku nije potvrđen (B0.1, rok 16. 11. 2026.). Nema OpenFGA servisa, transparency loga, Redisa, zasebnog reda poruka ni zasebnog API servera osim workera.
 
 ## 2. Moduli
 
@@ -115,6 +115,8 @@ Sve tablice imaju uključen RLS i retke u pgTAP matrici pristupa. Pristup ide kr
 | `app_user` | id, izdavatelj i `hrEduPersonUniqueID` (jedinstveni par), `sub`, ustanova, ime za prikaz, posljednja prijava | Sam korisnik; nastavnik vidi ime studenata u svom kolegiju |
 | `session` | hash tokena, korisnik, ustanova, nastala, istječe, zatvorena (odjava ili back-channel logout) | Nitko izravno; samo `current_actor()` |
 
+Sesiju otvara samo `identity.open_session`, koju izvršava jedino `ductus_auth` iz povratne rute prijave nakon provjere OIDC odgovora; prima izdavatelja, `sub`, `hrEduPersonUniqueID`, `hrEduPersonHomeOrg` i SHA-256 tokena, nikad sam token (B-6, D-90). Ustanovu bira po stupcu `identity.institution.aai_home_org`: jedinstven DNS naziv malim slovima (oznake razdvojene točkom, bez prazne oznake i bez završne točke, najviše 253 znaka; `CHECK` u migraciji), piše ga samo vlasnik `ductus_identity` (lokalni i CI seed, u produkciji provisioning), a `NULL` znači da ustanova ne prima prijave. Pristigli homeOrg se uspoređuje nakon uklanjanja rubnih razmaka i spuštanja ASCII slova; nepoznat, prazan ili znak sličan ASCII-ju daje odbijenu prijavu (`ZD503`) s neutralnom porukom koja ne otkriva postoji li ustanova. Uz to `hrEduPersonUniqueID` mora imati oblik `lokalni@realm` s točno jednim `@`, lokalni dio ne smije biti prazan ni sadržavati razmak, separator, kontrolni ni nevidljivi formatni znak, a realm mora nakon iste normalizacije biti jednak homeOrg-u. Inače je odgovor isti `ZD503`, upit na ustanovu se izvodi jednako kao za nepoznatu ustanovu (jednak ishod i jednaki upiti, trajanje se ne jamči) i ne nastaje ni račun ni sesija, i to pri svakoj prijavi, pa i za postojeće račune. Spremljeni `hrEduPersonUniqueID` se ne kanonizira: razlika u veličini slova ili rubnom razmaku u realmu, drukčija Unicode normalizacija te nevidljivi znak izvan klase Cf daju zasebne vrijednosti iste ustanove; sesija za drugu ustanovu time ne nastaje. Ta provjera ne štiti od pružatelja koji može po volji izdati obje vrijednosti; jamči li AAI@EduHr tu jednakost, još nije potvrđeno (Srce ili Lab).
+
 ### Ustanova i nastava
 
 | Tablica | Ključni stupci | Tko čita |
@@ -159,6 +161,8 @@ Sve tablice imaju uključen RLS i retke u pgTAP matrici pristupa. Pristup ide kr
 
 Tablice za ugrađeni AI pomoćnik (`ai_transfer`, `ai_conversation`, šifrirani ključ pružatelja) nisu u pilotu (D-77, §11). Ako se vrate, ključ se šifrira aplikacijski (AES-256-GCM s AAD-om, BACKEND §4.5), ne u bazi.
 
+**Ključ ustanove i domena evidencije (D-103, D-102; odluke vlasnika 11. 10. 2026.).** Tablice rada, dokumenta, evidencije i predaje nose ključ ustanove izravno, uvodi se u B-8 prije nego što te tablice nastanu. Svaka takva tablica ima složeni strani ključ koji sprječava miješanje ustanova (kao u modelu ustanove), RLS vezan uz ustanovu i retke u pgTAP matrici s personama druge ustanove. `evidence.signing_key` od prvog dana nosi doseg (domena evidencije), a potpisani sadržaj potvrde v2 nosi neproziran, nepromjenjiv identifikator domene evidencije. Migracija preduvjeta za postojeće tablice zadataka i potvrda obavijesti ide kao zaseban `critical` PR prije prve tablice rada.
+
 ### Predaja i pregled
 
 | Tablica | Ključni stupci | Tko čita |
@@ -186,7 +190,7 @@ Sadržaj odsječaka živi u privatnom bucketu, adresiran svojim hashom, odvojeno
 
 ## 4. Prijava
 
-Mjerodavno je BACKEND §4.3 [PRIJEDLOG D-73]; ovdje je tijek.
+Mjerodavno je BACKEND §4.3 [vlastiti OIDC klijent ODLUČEN 11. 10. 2026. (D-08, dio o aplikaciji); sesije u bazi i identitet u RLS-u potvrđeni u D-90; PRIJEDLOG samo izbor biblioteke (D-73)]; ovdje je tijek.
 
 1. Gumb "Prijava AAI@EduHr računom" pokreće OIDC Authorization Code s PKCE-om iz Next.js rute prema `login.aaiedu.hr` (produkcija) ili `fed-lab.aaiedu.hr` (staging). Klijenta u Registru resursa registrira FPZG kao svoju uslugu; Daniel to kao fizička osoba ne može sam.
 2. Vlastiti OIDC klijent provjerava `state`, `nonce`, `iss`, `aud`, `azp`, `exp`, `iat`, algoritam i JWKS, čita atribute s userinfo endpointa i provjerava da je `sub` jednak onom iz ID tokena. Biblioteka (Better Auth s isključenim povezivanjem računa ili `openid-client`) bira se na M1 spikeu.
@@ -198,6 +202,8 @@ Mjerodavno je BACKEND §4.3 [PRIJEDLOG D-73]; ovdje je tijek.
 
 **Lažni OIDC pružatelj** postoji samo lokalno i u CI-ju (D-09); CI test dokazuje da ga produkcijska konfiguracija nema. Demo (D-76) koristi njega, uz jasnu oznaku "demo prijava".
 
+**Priprema za drugog izdavatelja (D-104).** Model računa priprema se za drugog izdavatelja identiteta prije prvih stvarnih računa (rok: prije M1); podatkovni model ne smije biti tvrdo vezan uz jedan izdavatelj. D-09 ostaje na snazi: prijava studenata je isključivo AAI@EduHr i nijedan drugi način prijave se ne dodaje. Zadatak je `critical` i traži plan napada.
+
 **Kraj AAI računa:** kad student izgubi AAI račun, više se ne može prijaviti. Njegov rad i evidenciju na zahtjev izvozi administrator ustanove. Promjena matične ustanove stvara novi `hrEduPersonUniqueID`; spajanje računa radi samo administrator, uz zapis u revizijski trag.
 
 ## 5. Put jedne promjene
@@ -206,7 +212,7 @@ Mjerodavno je BACKEND §4.3 [PRIJEDLOG D-73]; ovdje je tijek.
 2. Transakcije se sažimaju u odsječak od najviše 30 sekundi. Odsječak nosi sve korake, jedno zaokruženo vrijeme i ID transakcije klijenta.
 3. Drain šalje odsječak verzioniranoj API ruti za ingest u web procesu, koja redom:
    1. provjerava sesiju (`current_actor()`), članstvo, verziju zadatka i je li zadatak otvoren; autora određuje iz sesije, nikad iz polja klijenta;
-   2. provjerava da su primljeni bajtovi jednaki ponovno izračunatom JCS nizu, računa SHA-256 i zapisuje objekt u bucket na adresu tog hasha (bez prepisivanja; postojeći objekt prihvaća se tek nakon usporedbe bajtova);
+   2. provjerava da su primljeni bajtovi jednaki ponovno izračunatom JCS nizu, računa SHA-256 i zapisuje objekt u bucket domene evidencije na adresu tog hasha, putanja `v2/<ustanova>/<paket>/<hash>.json` (D-102; bez prepisivanja; postojeći objekt prihvaća se tek nakon usporedbe bajtova);
    3. poziva **jedan RPC** koji u istoj transakciji radi CAS reviziju dokumenta i `reserve` odsječka: provjerava redoslijed i baznu reviziju, upisuje reviziju i metapodatke, nastavlja hash lanac i stvara potvrdu u stanju `pending_signature`. Ponovljeni ID transakcije vraća isti rezultat. Ako RPC padne, objekt ostaje siroče (BACKEND §2, ADR u M3).
 4. Worker preuzima posao (tijelo posla je samo ID), radi HEAD objekta, potpisuje D-92 prefiksirani 59B digest-poruku za v2 potvrde ključem potvrda preko porta potpisa (a v1 `pending_signature` ostaje na izvornom schema-specifičnom putu) i priključuje potpis (`attach_signature` provjerava digest i da je ključ poznat i neopozvan).
 5. Tek kad klijent dobije potpisanu potvrdu, stanje postaje "spremljeno na poslužitelju". Dok potpis čeka, klijent ostaje u stanju čekanja; ako worker ili KMS ne rade, potvrde ostaju `pending_signature` i backlog je alarm.
@@ -224,7 +230,7 @@ Lokalna osnovica B0.2 (`docs/spikes/B0.2.md`) pokazala je da CPU i memorija nisu
 - **Pogled na rad u nastajanju (D-06):** nastavnik ili mentor dobiva trenutno spremljeno stanje dokumenta kroz RPC koji provjerava odnos. Klijent provjerava novo stanje pollingom svakih 30 do 60 s; obavijest o novoj reviziji nastaje najviše jednom po P-03 prozoru (i po D-39 samo na kraju sesije; D-39 je potvrđena, a odnos s D-06 otvoren je u Owner queue, do odluke vrijedi D-06). Tipkanje se ne prenosi uživo. [ODLUČENO D-74]
 - **Komentari:** vezani uz raspon teksta preko sidra (preneseno iz `collaboration/anchor` u `pisac-editor`). Ako se tekst ispod sidra promijeni toliko da se sidro ne može pouzdano pronaći, komentar se prikazuje kao "sidro nije pouzdano", nikad na krivom mjestu.
 - **Prijedlozi:** spremaju se odvojeno od dokumenta (`suggestion`), pa ne stvaraju sukob s pisanjem studenta. Kad ga student prihvati, koraci prijedloga primjenjuju se kao nova revizija s autorom "nastavnik (prihvaćeni prijedlog)".
-- **Izravne izmjene (D-21, [PRIJEDLOG D-34]):** izravna izmjena je prijedlog koji studentov klijent automatski primjenjuje, pa dokument uvijek ima jednog pisača; student može vratiti način na prijedloge. **Otvoreno pitanje (BACKEND §4.1):** revizija tada nastaje na studentovu klijentu, a autor mora biti "nastavnik" bez povjerenja u polje klijenta (npr. potpisani zahtjev nastavnikove sesije koji klijent prilaže). Rješenje se određuje u M6; do tada D-34 ostaje PRIJEDLOG.
+- **Izravne izmjene (D-21, [ODLUČENO D-34, 11. 10. 2026.]):** izravna izmjena je prijedlog koji studentov klijent automatski primjenjuje, pa dokument uvijek ima jednog pisača; student može vratiti način na prijedloge. Prijedlog sprema poslužitelj pod nastavnikovom sesijom; studentov zapis nosi izvor „primijenjeni prijedlog” i oznaku prijedloga; poslužitelj uspoređuje primijenjeno s pohranjenim prijedlogom, a razliku bilježi kao studentovu promjenu. Mjesto u formatu zapisa rezervira se jednom, prije prve stvarne evidencije (BACKEND §4.1).
 - **Zahtjev za doradu (D-45, val 2):** pri prihvaćanju se sprema hash sidrenog raspona; ako se raspon kasnije promijeni, projekcija prikazuje "promijenjeno nakon prihvaćanja". Deterministički, bez AI-ja.
 - **Pripisivanje:** autor je dio svakog odsječka evidencije i određuje ga poslužitelj iz sesije.
 
@@ -267,7 +273,7 @@ Rokovi se unose i prikazuju u zoni Europe/Zagreb; promjena na zimsko računanje 
 
 [ODLUČENO D-71]; pojedinosti u BACKEND §1 i §4.1.
 
-- Dva odvojena Ed25519 ključa u KMS-u: **ključ potvrda** i **ključ dnevnog korijena**. Materijal ključa ne napušta KMS; za D-92 u KMS ide prefiksirani digest (59 B), a za D-93 točan UTF-8 C2SP tekst kontrolne točke sa završnim LF (RAW, bez prethodnog hashiranja). Potpisuje samo worker; web proces nema pristup ni materijalu ni pravu potpisa.
+- Dva odvojena Ed25519 ključa u KMS-u, **po domeni evidencije** (D-102): **ključ potvrda** i **ključ dnevnog korijena** (kontrolne točke). Materijal ključa ne napušta KMS; za D-92 u KMS ide prefiksirani digest (59 B), a za D-93 točan UTF-8 C2SP tekst kontrolne točke sa završnim LF (RAW, bez prethodnog hashiranja). Potpisuje samo worker; web proces nema pristup ni materijalu ni pravu potpisa.
 - Lokalno i u CI-ju koristi se razvojni potpisnik iza istog porta; konfiguracijska brava sprječava razvojni potpisnik u produkciji.
 - Javni ključevi svih verzija su u `evidence.signing_key` s namjenom i razdobljem valjanosti, pa se stare potvrde mogu provjeriti i nakon rotacije (C-46).
 - Rotacija: jednom godišnje i pri svakoj sumnji na kompromitaciju.
@@ -275,7 +281,7 @@ Rokovi se unose i prikazuju u zoni Europe/Zagreb; promjena na zimsko računanje 
 
 ## 8a. Dnevni korijen i vanjsko vrijeme
 
-[PRIJEDLOG D-72; dio o stablu odlučen u D-93], val 2; potpisane potvrde i hash lanac su u valu 1. Pojedinosti i granice tvrdnje u BACKEND §4.2.
+[PRIJEDLOG D-72; dio o stablu odlučen u D-93; dnevnik je po domeni evidencije, D-102], val 2; potpisane potvrde i hash lanac su u valu 1. Pojedinosti i granice tvrdnje u BACKEND §4.2.
 
 - Jedan kumulativni append-only log (RFC 6962/9162) umjesto dnevnih stabala (D-93). Digest lista bira se po `receiptSchema`: v1 koristi `SHA-256(JCS(receiptPayloadV1))`, a v2 koristi D iz D-92; list je `SHA-256(0x00 ‖ D_schema)`. Verifikator prema `receiptSchema` bira odgovarajući payload, digest i provjeravatelj potpisa, uz očuvanje izvornog payloada i potpisa. Cutover gate aktivira se prije inventara neovisno o broju zapisa. `reserve` i promjena gatea koriste istu transakcijsku serijalizacijsku bravu: prihvat koji je dobije prvi mora završiti prije snapshot-a, a nakon zatvaranja gatea `reserve` vraća ponovljivu privremenu grešku i ne potvrđuje zapis. Gate ostaje zatvoren tijekom inventara, validacije i mapiranja cijelog pre-log skupa u nepromjenjivu `evidence.log_entry` tablicu determinističkim redom kanonskog UTC `acceptedAt` uzlazno, zatim bajtovnim leksikografskim redoslijedom UTF-8 za `receiptId`, uzastopnim 0-based indeksima. Neispravan ili nepotpun inventar ili neuspjela objava blokira cutover i ostavlja gate zatvorenim. Prva potpisana, žigosana cutover kontrolna točka mora sadržavati sve mapirane potvrde, biti neovisno trajno pohranjena izvan baze i imati `tree_size` jednak njihovu broju; tek tada se gate otvara. Prazan inventar započinje s `tree_size = 0` i praznim RFC 6962 korijenom. B5 test pokreće `reserve` konkurentno s cutoverom praznog inventara i dokazuje da nema prihvata između snapshot-a i pohrane prve točke te da prvi prihvat nakon otvaranja dobiva indeks 0. Nakon cutover-a novi zapisi dobivaju sljedeći gapless indeks pri prihvatu; B4 test pokriva konkurentne prihvate, rollback i idempotentni retry. Worker jednom dnevno objavljuje kontrolnu točku C2SP tlog-checkpoint i consistency dokaz prema prethodnim točkama. Točan broj stvarnih potvrda je javan; pilot prihvaća tu objavu i bilježi je u DPIA (BACKEND §4.2 t. 8); popunjavajući listovi samo ako ustanova to zatraži i uz domenski model iz zasebnog PR-a (D-93); dok ga nema, `tree_size` odgovara samo stvarnim potvrdama.
 - Prije potpisa KMS-om signer čita potpunu append-only povijest ishodišta iz neovisne pohrane izvan domene povrata baze i uspoređuje kandidata sa svim ranijim potpisanim kontrolnim točkama. Manji `tree_size`, jednaka veličina s drugim korijenom, nevaljan consistency dokaz ili nedostupna vanjska povijest blokiraju potpis; jednaki postojeći checkpoint vraća se idempotentno, a veći mora biti konzistentan prema svima. B5 test povrata baze potvrđuje da se regresivna ili razgranata kontrolna točka ne potpisuje, ne žigoše i ne objavljuje te da se indeksi ne resetiraju. Valjana kontrolna točka nakon te provjere potpisuje se ključem dnevnog korijena i šalje na žig dvama neovisnim RFC 3161 TSA-ovima. Dan bez ijednog valjanog žiga je alarm; konzistentna kontrolna točka tada se može objaviti "bez žiga", a posao ponavlja.
@@ -291,7 +297,7 @@ Rokovi se unose i prikazuju u zoni Europe/Zagreb; promjena na zimsko računanje 
 | Staging | Kao produkcija, privremeno | Upravljana baza iste vrste kao produkcija | Iste vrste usluga kao produkcija (bucket, KMS) | AAI@EduHr Lab | Samo sintetički |
 | Produkcija | VM u EU-u: Caddy, web, worker | Upravljani PostgreSQL s PITR-om, bez javne adrese | Privatni S3 bucket, transakcijska e-pošta u EU-u, KMS | AAI@EduHr | Stvarni, tek nakon GO uvjeta |
 
-**Dobavljači [PRIJEDLOG D-08, uvjetan]:** UpCloud (VM i Managed PostgreSQL s PITR-om, ista privatna mreža), Scaleway (Object Storage i TEM), AWS (samo KMS, eu-central-1). Rezerva za bazu je Neon; alternativa B je Hetzner s PostgreSQL-om i WAL-G-om. Potvrda tek nakon B0.1 (povrat u točku, uloge, latencija, cijene) i B0.2 (rekonstrukcija); trošak premašuje D-66 i odluka je vlasnika (BACKEND §1, §5, §7). Do tada kod ne ovisi o dobavljaču (§2a), a demo (D-76) radi lokalno.
+**Dobavljači [PRIJEDLOG D-08, uvjetan]:** UpCloud (VM i Managed PostgreSQL s PITR-om, ista privatna mreža), Scaleway (Object Storage i TEM), AWS (samo KMS, eu-central-1). Rezerva za bazu je Neon; alternativa B je Hetzner s PostgreSQL-om i WAL-G-om. Dio D-08 o aplikaciji odlučen je 11. 10. 2026.; B0.1 je pomaknut naprijed (rok 16. 11. 2026., treba račune dobavljača). Potvrda dobavljača tek nakon B0.1 (povrat u točku, uloge, latencija, cijene, uvjetni upis i ključevi po spremniku, PostgreSQL 17 i ovlasti nad ulogama) i B0.2 (rekonstrukcija); trošak premašuje D-66 i odluka je vlasnika (BACKEND §1, §5, §7). Do tada kod ne ovisi o dobavljaču (§2a), a demo (D-76) radi lokalno.
 
 Pravila koja vrijede neovisno o dobavljaču (BACKEND §3, §4.7, §4.8):
 

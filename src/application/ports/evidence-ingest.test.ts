@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   evidencePayloadExceedsLimit,
+  isEvidencePackageId,
   isEvidenceSegmentDescriptorV2,
   validateEvidenceIngestCommandV2,
   type EvidenceIngestCommandV2,
 } from "./evidence-ingest";
 import { MAX_EVIDENCE_SEGMENT_BYTES } from "@/domain/forensics/evidence-chain-v2";
+import { loadGoldenVectors } from "@/domain/forensics/golden-vectors/load";
 import {
   EVIDENCE_CANONICALIZATION_V2,
   EVIDENCE_HASH_ALGORITHM_V2,
@@ -87,6 +89,73 @@ describe("evidence ingest v2 boundary", () => {
     ).toBe(false);
   });
 
+  it("counts the events of a range exactly, up to the largest safe integer", () => {
+    const { accepted, rejected } = loadGoldenVectors().sequenceRanges;
+    const withRange = (range: { sequenceFrom: number; sequenceTo: number; eventCount: number }) =>
+      isEvidenceSegmentDescriptorV2({
+        ...validCommand().descriptor,
+        sequenceFrom: range.sequenceFrom,
+        sequenceTo: range.sequenceTo,
+        eventCount: range.eventCount,
+      });
+    expect(accepted.length).toBeGreaterThanOrEqual(6);
+    for (const range of accepted) expect(withRange(range), range.name).toBe(true);
+    for (const range of rejected) expect(withRange(range), range.name).toBe(false);
+
+    // In a double, from + count - 1 rounds each of these back to the end of
+    // the range, so a check written that way takes them.
+    const rounding = rejected.filter((range) => range.name.startsWith("rounding"));
+    expect(rounding).toHaveLength(3);
+    for (const { sequenceFrom, sequenceTo, eventCount } of rounding) {
+      expect(sequenceFrom + eventCount - 1).toBe(sequenceTo);
+      expect(sequenceTo - sequenceFrom).not.toBe(eventCount - 1);
+    }
+  });
+
+  it("refuses a range of no event and one that ends before it starts, also where the count agrees with it", () => {
+    const { rejected } = loadGoldenVectors().sequenceRanges;
+    const refuses = (name: string) => {
+      const { sequenceFrom, sequenceTo, eventCount } = rejected.find((range) => range.name === name)!;
+      const range = { sequenceFrom, sequenceTo, eventCount };
+      expect(isEvidenceSegmentDescriptorV2({ ...validCommand().descriptor, ...range }), name).toBe(false);
+      return range;
+    };
+    expect(isEvidenceSegmentDescriptorV2(validCommand().descriptor)).toBe(true);
+    // to - from = count - 1 holds for these three, so it is not that equation
+    // which refuses them: a range holds an event and does not end before it starts.
+    for (const name of ["empty-range", "empty-range-above-one", "negative-count"]) {
+      const { sequenceFrom, sequenceTo, eventCount } = refuses(name);
+      expect(sequenceTo - sequenceFrom, name).toBe(eventCount - 1);
+      expect(eventCount, name).toBeLessThan(1);
+      expect(sequenceTo, name).toBeLessThan(sequenceFrom);
+    }
+    expect(refuses("empty-range-above-one")).toEqual({ sequenceFrom: 5, sequenceTo: 4, eventCount: 0 });
+    // Each of the two rules where the other one is kept.
+    expect(refuses("no-event-in-one-number")).toEqual({ sequenceFrom: 1, sequenceTo: 1, eventCount: 0 });
+    expect(refuses("end-before-start")).toEqual({ sequenceFrom: 2, sequenceTo: 1, eventCount: 1 });
+  });
+
+  it("accepts only whole UTC minutes as observed times (D-24)", () => {
+    const withTimes = (times: Partial<EvidenceIngestCommandV2["descriptor"]>) =>
+      validateEvidenceIngestCommandV2({
+        ...validCommand(),
+        descriptor: { ...validCommand().descriptor, ...times },
+      });
+
+    // One minute at both ends is a segment within that minute.
+    expect(withTimes({ observedEndedAt: "2026-10-03T06:00:00.000Z" })).toBe(true);
+    for (const time of [
+      "2026-10-03T06:00:30.000Z",
+      "2026-10-03T06:00:00.001Z",
+      "2026-10-03T06:00:59.999Z",
+      "2026-10-03T08:00:00.000+02:00",
+      "2026-10-03T06:00:00Z",
+    ]) {
+      expect(withTimes({ observedStartedAt: time })).toBe(false);
+      expect(withTimes({ observedEndedAt: time })).toBe(false);
+    }
+  });
+
   it("rejects descriptors with unknown fields", () => {
     expect(
       validateEvidenceIngestCommandV2({
@@ -151,5 +220,22 @@ describe("evidence ingest v2 boundary", () => {
     // Written out: the descriptor has its own copy of the check.
     expect(withProfile("p".repeat(120))).toBe(true);
     expect(withProfile("p".repeat(121))).toBe(false);
+  });
+
+  it("takes only package ids that are safe as one object key segment", () => {
+    const withPackage = (evidencePackageId: string) =>
+      validateEvidenceIngestCommandV2({
+        ...validCommand(),
+        descriptor: { ...validCommand().descriptor, evidencePackageId },
+      });
+    // The gateway and the payload store share this one check.
+    for (const id of ["a", "0", "evidence-1", "a_b-c", "a".repeat(128)]) {
+      expect(isEvidencePackageId(id)).toBe(true);
+      expect(withPackage(id)).toBe(true);
+    }
+    for (const id of ["", "Evidence-1", "-a", "a/b", "..", "a.b", "a\n", "ａ", "a".repeat(129)]) {
+      expect(isEvidencePackageId(id)).toBe(false);
+      expect(withPackage(id)).toBe(false);
+    }
   });
 });
