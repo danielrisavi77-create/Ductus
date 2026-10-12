@@ -41,7 +41,7 @@ export const hr = {
     policyLabel: "Pravila uporabe AI-ja",
     policyProhibited: "AI pomoć nije dopuštena",
     policyPartial: "AI pomoć je djelomično dopuštena",
-    policyEncouraged: "AI pomoć je dopuštena uz pravila zadatka",
+    policyEncouraged: "AI pomoć se potiče uz pravila kolegija",
     submit: "Stvori kolegij",
     pending: "Stvaranje kolegija…",
     created: "Kolegij je zabilježen. Identifikator:",
