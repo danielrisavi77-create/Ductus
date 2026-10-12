@@ -1,0 +1,145 @@
+import { describe, expect, it } from "vitest";
+import {
+  applyRevisionToConditions,
+  hasNeedsReReview,
+  needsReReview,
+  normalizeForComparison,
+  simpleHash,
+  type ValidityCondition,
+} from "./conditional-validity";
+
+function makeCondition(
+  overrides: Partial<ValidityCondition> = {},
+): ValidityCondition {
+  return {
+    kind: "text_range",
+    revision_id: "rev-1",
+    text_snapshot_hash: simpleHash(normalizeForComparison("broj sudionika je 42")),
+    text_excerpt: "broj sudionika je 42",
+    status: "valid",
+    accepted_at: "2026-10-13T00:00:00Z",
+    accepted_by: "teacher-1",
+    ...overrides,
+  };
+}
+
+describe("conditional-validity spike (S-UV1)", () => {
+  describe("normalizeForComparison", () => {
+    it("collapses whitespace and trims trailing punctuation", () => {
+      expect(normalizeForComparison("  hello   world.  ")).toBe("hello world");
+      expect(normalizeForComparison("test!")).toBe("test");
+    });
+  });
+
+  describe("needsReReview", () => {
+    it("returns false when status is not valid", () => {
+      const c = makeCondition({ status: "needs_re_review" });
+      expect(needsReReview(c, "anything")).toBe(false);
+    });
+
+    it("detects word change inside range", () => {
+      const c = makeCondition();
+      expect(needsReReview(c, "broj sudionika je 43")).toBe(true);
+    });
+
+    it("ignores trivial whitespace and trailing punctuation", () => {
+      const c = makeCondition();
+      expect(needsReReview(c, "  broj sudionika je 42.  ")).toBe(false);
+    });
+
+    it("detects semantic change: povezano je -> uzrokuje", () => {
+      const original = "rezultati su povezani s prethodnim radovima";
+      const c = makeCondition({
+        text_snapshot_hash: simpleHash(normalizeForComparison(original)),
+        text_excerpt: original,
+      });
+      expect(needsReReview(c, "rezultati uzrokuju promjene")).toBe(true);
+    });
+
+    it("detects protected number change", () => {
+      const c = makeCondition({
+        kind: "protected_element",
+        protected_kind: "number",
+        protected_value: "42",
+        text_snapshot_hash: undefined,
+      });
+      expect(needsReReview(c, "broj sudionika je 43")).toBe(true);
+      expect(needsReReview(c, "broj sudionika je 42")).toBe(false);
+    });
+  });
+
+  describe("applyRevisionToConditions", () => {
+    it("marks only the changed condition as needs_re_review", () => {
+      const conditions = [
+        makeCondition({ text_excerpt: "prva tvrdnja" }),
+        makeCondition({
+          text_excerpt: "druga tvrdnja",
+          text_snapshot_hash: simpleHash(normalizeForComparison("druga tvrdnja")),
+        }),
+      ];
+      const updated = applyRevisionToConditions(conditions, "promijenjena prva tvrdnja");
+      expect(updated[0]?.status).toBe("needs_re_review");
+      expect(updated[1]?.status).toBe("valid");
+    });
+
+    it("keeps old confirmation visible (does not delete)", () => {
+      const conditions = [makeCondition()];
+      const updated = applyRevisionToConditions(conditions, "potpuno novi tekst");
+      expect(updated).toHaveLength(1);
+      expect(updated[0]?.status).toBe("needs_re_review");
+      expect(updated[0]?.text_excerpt).toBe("broj sudionika je 42");
+    });
+
+    it("returns empty array when no conditions", () => {
+      expect(applyRevisionToConditions(undefined, "any")).toEqual([]);
+    });
+  });
+
+  describe("hasNeedsReReview", () => {
+    it("returns true when any condition needs re-review", () => {
+      const conditions = [
+        makeCondition(),
+        makeCondition({ status: "needs_re_review" }),
+      ];
+      expect(hasNeedsReReview(conditions)).toBe(true);
+    });
+
+    it("returns false when all are valid", () => {
+      expect(hasNeedsReReview([makeCondition()])).toBe(false);
+    });
+  });
+
+  describe("manual scenario (Croatian)", () => {
+    it("flags re-review when number and claim strength change", () => {
+      const original =
+        "Istraživanje je pokazalo da je broj sudionika 42 i da su rezultati povezani s prethodnim radovima.";
+      const conditions: ValidityCondition[] = [
+        {
+          kind: "text_range",
+          revision_id: "rev-1",
+          text_snapshot_hash: simpleHash(normalizeForComparison(original)),
+          text_excerpt: original.slice(0, 80),
+          status: "valid",
+          accepted_at: "2026-10-13T00:00:00Z",
+          accepted_by: "teacher-1",
+        },
+        {
+          kind: "protected_element",
+          revision_id: "rev-1",
+          protected_kind: "number",
+          protected_value: "42",
+          status: "valid",
+          accepted_at: "2026-10-13T00:00:00Z",
+          accepted_by: "teacher-1",
+        },
+      ];
+
+      const updatedText =
+        "Istraživanje je pokazalo da je broj sudionika 43 i da rezultati uzrokuju promjene.";
+
+      const result = applyRevisionToConditions(conditions, updatedText);
+      expect(result.some((c) => c.status === "needs_re_review")).toBe(true);
+      expect(hasNeedsReReview(result)).toBe(true);
+    });
+  });
+});
