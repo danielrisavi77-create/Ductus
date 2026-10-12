@@ -1,0 +1,44 @@
+/*
+ * Joins the two subset faces of each family (index.ts) into the variable that
+ * globals.css reads, followed by a metric-adjusted fallback face that holds
+ * the layout steady until the real font arrives (font-display: swap).
+ *
+ * The fallback numbers are the ones the Google font loader generated for these
+ * families before the files moved into the repository (DAN-121). They are
+ * written out here because `next/font/local` derives slightly different ones
+ * from a subset file, and the swap should not shift text any more than it did.
+ */
+
+@font-face {
+  font-family: "Instrument Sans Fallback";
+  src: local("Arial");
+  ascent-override: 94.42%;
+  descent-override: 24.33%;
+  line-gap-override: 0%;
+  size-adjust: 102.74%;
+}
+
+@font-face {
+  font-family: "Newsreader Fallback";
+  src: local("Times New Roman");
+  ascent-override: 69.68%;
+  descent-override: 25.12%;
+  line-gap-override: 0%;
+  size-adjust: 105.48%;
+}
+
+@font-face {
+  font-family: "JetBrains Mono Fallback";
+  src: local("Arial");
+  ascent-override: 75.79%;
+  descent-override: 22.29%;
+  line-gap-override: 0%;
+  size-adjust: 134.59%;
+}
+
+:root {
+  --font-ui: var(--font-ui-latin), var(--font-ui-latin-ext), "Instrument Sans Fallback";
+  --font-display:
+    var(--font-display-latin), var(--font-display-latin-ext), "Newsreader Fallback";
+  --font-mono: var(--font-mono-latin), var(--font-mono-latin-ext), "JetBrains Mono Fallback";
+}

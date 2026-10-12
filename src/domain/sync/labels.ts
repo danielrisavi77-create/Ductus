@@ -7,9 +7,10 @@
  *
  * Constitution rules this file encodes:
  *   - There is never a generic "Saved"/"Spremljeno". Each of the eight states
- *     carries its own label, taken verbatim from docs/F1_PLAN.md §3, and the
- *     map is a `Record` over `SyncState` so a ninth state cannot compile
- *     without its own wording.
+ *     carries its own label, and the map is a `Record` over `SyncState` so a
+ *     ninth state cannot compile without its own wording. The two labels that
+ *     say "spremljeno" use the forms docs/PRODUCT.md §5 ("Rječnik sučelja")
+ *     prescribes; docs/PLAN-DEMO.md F-8 names the same two states.
  *   - Local durable state is not canonical server state. LOCAL_DURABLE says
  *     "Spremljeno na uređaju" — the words "na uređaju" are the whole point
  *     (the form docs/PRODUCT.md §5 prescribes instead of a bare "spremljeno") — and it
@@ -40,9 +41,10 @@ export type SyncStateLabel = {
 };
 
 /**
- * THE label table. Wording is verbatim from docs/F1_PLAN.md §3 ("Croatian UI
- * label" column) — the plan is the source of truth for user-facing strings,
- * so the UI cannot quietly drift into friendlier but less accurate words.
+ * THE label table, and the one home of the save-state wording, so the UI
+ * cannot quietly drift into friendlier but less accurate words. Where
+ * docs/PRODUCT.md §5 ("Rječnik sučelja") prescribes a form, the label is that
+ * form: "spremljeno na uređaju" and "spremljeno na poslužitelju".
  *
  * `Record<SyncState, …>` gives compile-time exhaustiveness in both
  * directions: a new state fails to build until it is given a label, and a
@@ -60,8 +62,15 @@ export const SYNC_STATE_LABELS: Record<SyncState, SyncStateLabel> = {
    */
   LOCAL_DURABLE: { label: "Spremljeno na uređaju", tone: "neutral" },
   SYNCING: { label: "Sinkroniziram", tone: "progress" },
-  /* The one state that has earned the all-clear: the server holds it. */
-  SYNCED: { label: "Sinkronizirano", tone: "ok" },
+  /*
+   * The one state that has earned the all-clear. The words "na poslužitelju"
+   * are a claim, and the reducer reaches the state only with a signed receipt
+   * (docs/ARCHITECTURE.md §5 t. 5) or an explicit decision to take the
+   * server's document. A third way in is a reload: `restoreSyncState` resumes
+   * a recorded SYNCED, and only while the journal holds a snapshot and an
+   * empty queue.
+   */
+  SYNCED: { label: "Spremljeno na poslužitelju", tone: "ok" },
   /*
    * Not an error — nothing is broken and nothing is lost — but it needs an
    * explicit decision from the author (F1-5a), hence `warn`.

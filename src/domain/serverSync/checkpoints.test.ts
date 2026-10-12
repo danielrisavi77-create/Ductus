@@ -3,8 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   CHECKPOINT_NAME_MAX_LENGTH,
   CHECKPOINT_STATUSES,
-  UNSYNCED_CHANGES_NOTE,
-  checkpointCreatedMessage,
   checkpointNameErrorCode,
   formatCheckpointDate,
   parseCheckpointList,
@@ -12,6 +10,7 @@ import {
   parseCheckpointRow,
   validateCheckpointName,
 } from "./checkpoints";
+import { UNSYNCED_CHANGES_NOTE, checkpointCreatedMessage } from "./messages";
 
 describe("validateCheckpointName", () => {
   it("trims the author's name without rewriting it", () => {

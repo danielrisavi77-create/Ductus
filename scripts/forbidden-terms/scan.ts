@@ -1,0 +1,1157 @@
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import path from "node:path";
+
+import ts from "typescript";
+
+import { decodeEntities } from "./entities";
+import { FORBIDDEN_TERMS, MAX_WINDOW_PARTS, PHRASE_BREAK, closedUpPastQuotes, findForbiddenTerms, findForbiddenTermsInMarkup, shownText, unreadableCharacters, windowsCutShort, type ForbiddenTerm } from "./terms";
+
+/**
+ * Finds interface text in the source tree and checks it against the
+ * dictionary (docs/PRODUCT.md 5). Only text a person can read is checked:
+ * identifiers, comments, class names, import paths, SQL, log lines and DOM
+ * attribute values are not, so technical code may use words like `hidden`
+ * or `saved_at` freely.
+ *
+ * - Interface text modules (`UI_TEXT_MODULES`), JSON catalogues
+ *   (`src/lib/i18n/**` `.json`) and static web app manifests under `app/**`:
+ *   every string value; object keys, import paths and literal types are
+ *   skipped. A `+` chain or a template in a text module is also read as one
+ *   text put together from parts, as it is in JSX. A `.json` file that a
+ *   scanned code file imports from anywhere else is read the same way.
+ * - Components (`app/**` and `src/**` `.tsx`): JSX text, strings rendered from
+ *   JSX expressions, the string value of every JSX attribute that is not on
+ *   `TECHNICAL_ATTRIBUTES`, and the Next.js metadata described below. JSX text
+ *   and attribute strings are read as React renders them: HTML entities are
+ *   decoded and line breaks follow the JSX rules. The content of every element
+ *   is also read as one text, put together from its pieces, so a phrase that
+ *   markup splits (`Nestali <strong>podaci</strong>`) is still found. A phrase
+ *   goes on through an inline element and a `<br />`; it ends at any other
+ *   element, at a component and at a computed value (`PHRASE_BREAK`). That
+ *   text is read as written, as a sighted person sees it and as a screen
+ *   reader speaks it, and an entry found in any reading is reported (see
+ *   `hiding`). Hiding content can add a finding and never takes one away.
+ *   Where a phrase ends, a word does not: the text is also read closed up
+ *   over every such boundary (`findForbiddenTermsInMarkup`).
+ * - `findUnreadableText` reports what cannot be matched at all: characters
+ *   that are not Croatian or English text, and a text with too many readings.
+ * - Any other `.ts` module under `app/**`: the Next.js metadata only, that is
+ *   the `metadata` export, what `generateMetadata` and `generateImageMetadata`
+ *   return, and the `alt` export of `opengraph-image` and `twitter-image`.
+ * - Every other string in a `.ts` or `.tsx` module: checked against the
+ *   Croatian entries only. Code is written in English, so a Croatian entry in
+ *   a string is interface text wherever it stands, while the English entries
+ *   (`hidden`, `saved`, `risk`) are ordinary words in SQL, log lines and DOM
+ *   code. `findMisplacedUiText` reports other Croatian text in a `.ts` module
+ *   outside the list, so interface text cannot move out of scope.
+ *
+ * Test files (`*.test.*`, `*.spec.*`) and declaration files are not read, so a
+ * scanned file may not import a test module (`findUnreadableText`).
+ */
+export interface UiText {
+  readonly file: string;
+  readonly line: number;
+  readonly text: string;
+}
+
+export interface Finding extends UiText {
+  readonly terms: readonly ForbiddenTerm[];
+}
+
+/**
+ * The `.ts` modules that hold interface text, as globs over repository paths.
+ * Every string value in them is checked, so they should hold text and the
+ * code that picks it; SQL, log lines and DOM code belong elsewhere. A module
+ * that starts to hold interface text is named to match a pattern below or is
+ * added here. This is the only list: there are no exemptions per file or per
+ * finding.
+ */
+export const UI_TEXT_MODULES: readonly string[] = [
+  // Message catalogues.
+  "src/lib/i18n/**",
+  // Label and message modules wherever they live (today src/domain/sync/labels.ts).
+  "**/labels.ts",
+  "**/messages.ts",
+  "**/copy.ts",
+  // Messages for loading, sending and checkpoints live in
+  // src/domain/serverSync/messages.ts, matched by "**/messages.ts" above.
+  // The editor placeholder.
+  "src/editor/schema.ts",
+  // The web app manifest: name, short name and description of the application.
+  "app/**/manifest.ts",
+];
+
+const SCANNED_DIRS = ["app", "src"];
+const CATALOGUE_DIR = "src/lib/i18n/";
+const SKIPPED_DIRS = new Set(["node_modules", ".next"]);
+const TEST_FILE = /\.(?:test|spec)\.[cm]?tsx?$/;
+const CROATIAN_LETTER = /[čćđšž]/iu;
+const STARTS_WITH_CAPITAL = /^[^\p{L}]*\p{Lu}/u;
+
+function looksLikeCroatianUiText(text: string): boolean {
+  const trimmed = text.trim();
+  return CROATIAN_LETTER.test(trimmed) && (/\s/u.test(trimmed) || STARTS_WITH_CAPITAL.test(trimmed));
+}
+
+/**
+ * JSX attributes whose value is never shown or read out to a person: it is a
+ * token from a fixed set, a reference to another element, an address or
+ * styling. Every other attribute is read, including `value`, `children` and
+ * the props of the project's own components, because that is how text reaches
+ * a component. `data-*` attributes are technical as a family (see
+ * `isTechnicalAttribute`). An attribute belongs here only for what the
+ * platform does with it, never because of the file it is used in.
+ */
+export const TECHNICAL_ATTRIBUTES: ReadonlySet<string> = new Set([
+  // Styling.
+  "className",
+  "class",
+  "style",
+  // Identity and references to other elements.
+  "id",
+  "name",
+  "key",
+  "ref",
+  "slot",
+  "htmlFor",
+  "for",
+  "form",
+  "list",
+  "aria-activedescendant",
+  "aria-controls",
+  "aria-describedby",
+  "aria-details",
+  "aria-errormessage",
+  "aria-flowto",
+  "aria-labelledby",
+  "aria-owns",
+  // Addresses.
+  "href",
+  "src",
+  "srcSet",
+  "action",
+  "formAction",
+  "poster",
+  // Tokens from a fixed set.
+  "type",
+  "role",
+  "hidden",
+  "lang",
+  "dir",
+  "rel",
+  "target",
+  "method",
+  "encType",
+  "autoComplete",
+  "inputMode",
+  "loading",
+  "decoding",
+  "crossOrigin",
+  "referrerPolicy",
+  "aria-atomic",
+  "aria-autocomplete",
+  "aria-busy",
+  "aria-checked",
+  "aria-current",
+  "aria-disabled",
+  "aria-expanded",
+  "aria-haspopup",
+  "aria-hidden",
+  "aria-invalid",
+  "aria-live",
+  "aria-modal",
+  "aria-orientation",
+  "aria-pressed",
+  "aria-relevant",
+  "aria-selected",
+  "aria-sort",
+]);
+
+function isTechnicalAttribute(name: string): boolean {
+  return TECHNICAL_ATTRIBUTES.has(name) || name.startsWith("data-");
+}
+
+/**
+ * HTML elements that set their text inside a line of the parent (phrasing
+ * content). Their content is read as part of the parent's text and joined to
+ * it without a space, as the browser does: `Sum<b>njivo</b>` is one word. Any
+ * other element, and every component, is a text of its own: it is read by
+ * itself and stands in the parent's text between phrase breaks.
+ */
+export const INLINE_ELEMENTS: ReadonlySet<string> = new Set([
+  "a",
+  "abbr",
+  "b",
+  "bdi",
+  "bdo",
+  "cite",
+  "code",
+  "data",
+  "del",
+  "dfn",
+  "em",
+  "i",
+  "ins",
+  "kbd",
+  "mark",
+  "q",
+  "s",
+  "samp",
+  "small",
+  "span",
+  "strong",
+  "sub",
+  "sup",
+  "time",
+  "u",
+  "var",
+]);
+
+/** Who a text reaches: a sighted person, or a person who hears it from a screen reader. */
+type Audience = "sighted" | "spoken";
+const AUDIENCES: readonly Audience[] = ["sighted", "spoken"];
+/** Whether an element is kept from one audience; `maybe` when the source does not say, or says it can change. */
+type Hiding = "no" | "yes" | "maybe";
+
+/**
+ * Class names that take content away from the eye and leave it to a screen
+ * reader. Like `HIDING_CLASSES`, this is a convention the stylesheet has to
+ * keep; these two lists are the only place such a name is recognised. A name
+ * counts with a variant in front too (`md:sr-only`).
+ */
+export const VISUALLY_HIDDEN_CLASSES: ReadonlySet<string> = new Set(["sr-only", "visually-hidden"]);
+/** Class names that take content away from everyone (`display: none`, `visibility: hidden`). */
+export const HIDING_CLASSES: ReadonlySet<string> = new Set(["hidden", "invisible", "collapse"]);
+/** Inline style values that take content away from everyone. */
+const HIDING_STYLES: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  ["display", new Set(["none"])],
+  ["visibility", new Set(["hidden", "collapse"])],
+  ["contentVisibility", new Set(["hidden"])],
+]);
+
+const METADATA_FUNCTIONS = new Set(["generateMetadata", "generateImageMetadata"]);
+const IMAGE_ROUTE_FILE = /(?:^|\/)(?:opengraph|twitter)-image\.[cm]?tsx?$/;
+const MANIFEST_FILE = /^app\/(?:.*\/)?manifest\.(?:json|webmanifest)$/;
+
+// Path segments are compared literally. A double star segment stands for any
+// number of directories, including none; as the last segment it stands for
+// everything below. No other wildcard is supported, and no RegExp is built.
+function matchesSegments(pattern: readonly string[], file: readonly string[]): boolean {
+  if (pattern.length === 0) return file.length === 0;
+  const [head, ...rest] = pattern;
+  if (head !== "**") return file.length > 0 && file[0] === head && matchesSegments(rest, file.slice(1));
+  if (rest.length === 0) return file.length > 0;
+  return file.some((_, skipped) => matchesSegments(rest, file.slice(skipped)));
+}
+
+const UI_TEXT_PATTERNS = UI_TEXT_MODULES.map((glob) => glob.split("/"));
+
+/** Whether `file` (repository path with forward slashes) is on `UI_TEXT_MODULES`. */
+export function isUiTextModule(file: string): boolean {
+  const segments = file.split("/");
+  return UI_TEXT_PATTERNS.some((pattern) => matchesSegments(pattern, segments));
+}
+
+/**
+ * Takes a piece of text read from `node`; `at` is where the text starts when
+ * that is not where the node starts. `check` is the text to check when it is
+ * not the text to show: the same text with a phrase break at computed parts.
+ */
+type Collect = (node: ts.Node, text: string, at?: number, check?: string) => void;
+
+/** One text in the two readings `findForbiddenTermsInMarkup` takes: pieces joined as rendered, and with a space at every element boundary. */
+type Reading = readonly [joined: string, spaced: string];
+
+const EMPTY: Reading = ["", ""];
+/** Something that is shown but cannot be read: no phrase goes on through it. */
+const UNKNOWN: Reading = [PHRASE_BREAK, PHRASE_BREAK];
+/** A `<br />`: the words on both sides are still read as one phrase. */
+const LINE_BREAK: Reading = [" ", " "];
+/** An inline element one audience does not get: nothing in the text, an element boundary between its neighbours. */
+const HIDDEN: Reading = ["", " "];
+/** Most readings kept for one text; see `inSequence` in `componentText`. */
+const MAX_READINGS = 64;
+
+const exactly = (text: string): Reading[] => [[text, text]];
+const distinct = (readings: readonly Reading[]): Reading[] => [...new Map(readings.map((reading) => [reading.join("\u0000"), reading])).values()];
+
+interface Reader {
+  /** Text that stands by itself and is checked against every entry. */
+  readonly text: Collect;
+  /** A piece of a unit: checked by itself, except for contextual entries, which the unit decides. */
+  readonly part: Collect;
+  /** The content of an element or the value of an attribute expression, in every form it can be rendered. */
+  readonly unit: (at: number, start: number, end: number, readings: readonly Reading[], overflowed: boolean) => void;
+}
+
+/**
+ * JSX text as React renders it: lines are trimmed where they meet a line
+ * break, empty lines are dropped, the rest is joined with single spaces and
+ * HTML entities are decoded. White space next to a tag on the same line stays.
+ */
+export function jsxTextValue(raw: string): string {
+  const lines = raw.split(/\r\n|\n|\r/);
+  const kept = lines
+    .map((line, index) => {
+      const fromStart = index > 0 ? line.trimStart() : line;
+      return index < lines.length - 1 ? fromStart.trimEnd() : fromStart;
+    })
+    .filter((line) => line !== "");
+  return decodeEntities(kept.join(" "));
+}
+
+/** The operands of a `+` chain, left to right; any other expression is its own single operand. */
+function operands(expression: ts.Expression): ts.Expression[] {
+  if (ts.isParenthesizedExpression(expression)) return operands(expression.expression);
+  if (ts.isBinaryExpression(expression) && expression.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+    return [...operands(expression.left), ...operands(expression.right)];
+  }
+  return [expression];
+}
+
+const isPlainString = (node: ts.Node): node is ts.StringLiteral | ts.NoSubstitutionTemplateLiteral =>
+  ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node);
+
+/**
+ * Strings an expression can render: literals, both branches of `?:`,
+ * `&&`/`||`/`??` operands, `+` chains and templates. In a `+` chain adjacent
+ * literals are joined as written and anything computed leaves a space, as a
+ * template placeholder does; the computed parts are then read in turn.
+ */
+function renderedStrings(expression: ts.Expression, collect: Collect): void {
+  if (isPlainString(expression)) {
+    collect(expression, expression.text);
+  } else if (ts.isTemplateExpression(expression)) {
+    collect(expression, [expression.head.text, ...expression.templateSpans.map((s) => s.literal.text)].join(" "));
+    for (const span of expression.templateSpans) renderedStrings(span.expression, collect);
+  } else if (
+    ts.isParenthesizedExpression(expression) ||
+    ts.isAsExpression(expression) ||
+    ts.isSatisfiesExpression(expression) ||
+    ts.isNonNullExpression(expression)
+  ) {
+    renderedStrings(expression.expression, collect);
+  } else if (ts.isArrayLiteralExpression(expression)) {
+    for (const item of expression.elements) renderedStrings(item, collect);
+  } else if (ts.isConditionalExpression(expression)) {
+    renderedStrings(expression.whenTrue, collect);
+    renderedStrings(expression.whenFalse, collect);
+  } else if (ts.isBinaryExpression(expression)) {
+    const operator = expression.operatorToken.kind;
+    if (operator === ts.SyntaxKind.BarBarToken || operator === ts.SyntaxKind.QuestionQuestionToken) {
+      renderedStrings(expression.left, collect);
+      renderedStrings(expression.right, collect);
+    } else if (operator === ts.SyntaxKind.AmpersandAmpersandToken) {
+      renderedStrings(expression.right, collect);
+    } else if (operator === ts.SyntaxKind.PlusToken) {
+      const parts = operands(expression);
+      if (parts.some(isPlainString)) {
+        collect(expression, parts.map((part) => (isPlainString(part) ? part.text : " ")).join(""));
+      }
+      for (const part of parts) if (!isPlainString(part)) renderedStrings(part, collect);
+    }
+  }
+}
+
+/** Whether `node` is a call of `import()` or `require()`. */
+function isLoad(node: ts.Node): node is ts.CallExpression {
+  return ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(node.expression) && node.expression.text === "require"));
+}
+
+/** Whether `node` is the name of a module handed to `import()` or `require()`. */
+function isLoadedModule(node: ts.Node): boolean {
+  return isLoad(node.parent) && node.parent.arguments[0] === node;
+}
+
+/**
+ * Every string value below `node`, except object keys and the module
+ * specifiers of `import` and `export` declarations. The name handed to
+ * `import()` or `require()` is still read as a string, as it always was: a
+ * function of that name may be the code's own. `imported` takes the name of every module that is imported, handed on,
+ * loaded with `import()` or required, and where it is named. A module loaded
+ * by a name that is not one string (a `+` chain, a template with a place, a
+ * variable) comes without a name: the scan cannot tell what is loaded.
+ */
+function allStrings(node: ts.Node, collect: Collect, imported?: (at: ts.Node, name: string | null) => void): void {
+  const visit = (current: ts.Node): void => {
+    if (ts.isImportDeclaration(current) || ts.isExportDeclaration(current)) {
+      if (current.moduleSpecifier && isPlainString(current.moduleSpecifier)) imported?.(current.moduleSpecifier, current.moduleSpecifier.text);
+      return;
+    }
+    if (ts.isImportTypeNode(current)) return;
+    if (isLoad(current) && current.arguments[0] && !isPlainString(current.arguments[0])) imported?.(current.arguments[0], null);
+    if (ts.isStringLiteral(current) || ts.isNoSubstitutionTemplateLiteral(current)) {
+      const parent = current.parent;
+      if (ts.isExternalModuleReference(parent) || isLoadedModule(current)) imported?.(current, current.text);
+      const isKey = (ts.isPropertyAssignment(parent) || ts.isPropertySignature(parent)) && parent.name === current;
+      const isTypeOnly = ts.isLiteralTypeNode(parent);
+      if (!isKey && !isTypeOnly) collect(current, current.text);
+      return;
+    }
+    if (ts.isTemplateExpression(current)) {
+      const pieces = [current.head.text, ...current.templateSpans.map((s) => s.literal.text)];
+      collect(current, pieces.join(" "), undefined, pieces.join(PHRASE_BREAK));
+    }
+    ts.forEachChild(current, visit);
+  };
+  visit(node);
+}
+
+/** What a metadata function returns: every `return` in its own body, or the body of an arrow without braces. */
+function returnedStrings(body: ts.Node, collect: Collect): void {
+  if (!ts.isBlock(body)) {
+    allStrings(body, collect);
+    return;
+  }
+  const visit = (node: ts.Node): void => {
+    if (ts.isFunctionLike(node)) return;
+    if (ts.isReturnStatement(node) && node.expression) allStrings(node.expression, collect);
+    else ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(body, visit);
+}
+
+type JsxNode = ts.JsxElement | ts.JsxFragment | ts.JsxSelfClosingElement;
+const isJsxNode = (node: ts.Node): node is JsxNode =>
+  ts.isJsxElement(node) || ts.isJsxFragment(node) || ts.isJsxSelfClosingElement(node);
+
+const RENDERS_NOTHING = new Set([ts.SyntaxKind.NullKeyword, ts.SyntaxKind.TrueKeyword, ts.SyntaxKind.FalseKeyword]);
+
+const neverSet = (node: ts.Expression): boolean =>
+  node.kind === ts.SyntaxKind.FalseKeyword || node.kind === ts.SyntaxKind.NullKeyword || (ts.isIdentifier(node) && node.text === "undefined");
+
+const LOGICAL_OPERATORS = new Set([ts.SyntaxKind.AmpersandAmpersandToken, ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken]);
+
+/** Every string written anywhere inside `node`; with `keys`, also the names of object literal properties (`cn({ hidden: a })`). */
+function stringsWithin(node: ts.Node, keys = false): string[] {
+  if (isPlainString(node)) return [node.text];
+  if (keys && ts.isIdentifier(node) && ts.isObjectLiteralElementLike(node.parent) && node.parent.name === node) return [node.text];
+  if (ts.isTemplateExpression(node)) {
+    return [node.head.text, ...node.templateSpans.flatMap((span) => [...stringsWithin(span.expression, keys), span.literal.text])];
+  }
+  const found: string[] = [];
+  ts.forEachChild(node, (child) => void found.push(...stringsWithin(child, keys)));
+  return found;
+}
+
+/**
+ * Whether the attributes of an element keep its content from `audience`.
+ *
+ * - `aria-hidden` keeps it from a screen reader: without a value or with
+ *   `true` always, with `false` never, with anything else maybe.
+ * - A class on `VISUALLY_HIDDEN_CLASSES` keeps it from the eye: always when it
+ *   is written as one string without variants, otherwise maybe. Class names
+ *   are looked for in every string of the value and in the keys of object
+ *   literals in it (`cn("sr-only", { hidden: a })`).
+ * - The `hidden` attribute, a class on `HIDING_CLASSES` and an inline style
+ *   on `HIDING_STYLES` that hides, or is computed, keep it from both, and only
+ *   maybe: such content is there to be shown at some point (`styleMayHide`).
+ * - Spread props can carry any of these: maybe, for both.
+ *
+ * Not covered, because the value is not in the element: a class or a `style`
+ * that comes from a variable or a CSS module, a class name put together with
+ * a computed piece (`"sr-" + suffix`), a rule in a stylesheet, and what a
+ * parent element or a component does to its children.
+ *
+ * Not covered either: inline styles that hide from the eye without a property
+ * on `HIDING_STYLES`, such as `opacity: 0`, `fontSize: 0`, a `clip` or
+ * `clipPath`, a position off the screen, a zero `width` or `height` with
+ * `overflow: "hidden"`, or text in the colour of the background.
+ */
+function hiding(source: ts.SourceFile, element: ts.JsxOpeningElement, audience: Audience): Hiding {
+  let result: Hiding = "no";
+  const maybe = (): void => void (result = result === "yes" ? "yes" : "maybe");
+  for (const attribute of element.attributes.properties) {
+    if (ts.isJsxSpreadAttribute(attribute)) {
+      maybe();
+      continue;
+    }
+    // HTML attribute names are not case sensitive: `aria-Hidden` reaches the page as `aria-hidden`.
+    const name = attribute.name.getText(source).toLowerCase();
+    const written = attribute.initializer;
+    const value = written && ts.isJsxExpression(written) ? written.expression : written;
+    if (name === "aria-hidden" && audience === "spoken") {
+      // Only the two values as ARIA writes them are certain; `"TRUE"` or `" true "` is maybe.
+      const token = value && isPlainString(value) ? value.text : undefined;
+      if (value === undefined || value.kind === ts.SyntaxKind.TrueKeyword || token === "true") result = "yes";
+      else if (!neverSet(value) && token !== "false") maybe();
+    } else if (name === "hidden") {
+      if (value === undefined || !neverSet(value)) maybe();
+    } else if ((name === "classname" || name === "class") && value) {
+      // Each string by itself, and all of them in a row for a name put together from pieces (`"sr-" + "only"`).
+      const strings = stringsWithin(value, true);
+      const classes = [...strings, strings.join("")].flatMap((text) => text.split(/\s+/).filter(Boolean));
+      // A variant stands in front of the name (`md:hidden`), the important mark on either side (`!hidden`, `hidden!`).
+      const named = (list: ReadonlySet<string>): boolean => classes.some((token) => list.has(token.slice(token.lastIndexOf(":") + 1).replace(/^!|!$/g, "")));
+      if (named(HIDING_CLASSES)) maybe();
+      if (audience === "sighted" && named(VISUALLY_HIDDEN_CLASSES)) {
+        if (isPlainString(value) && !classes.some((token) => token.includes(":"))) result = "yes";
+        else maybe();
+      }
+    } else if (name === "style" && value && styleMayHide(value)) {
+      maybe();
+    }
+  }
+  return result;
+}
+
+/**
+ * Whether a `style` value may set a property on `HIDING_STYLES` to a value
+ * that hides. An object literal is read property by property; a spread, a
+ * computed key and a computed value may hide. Brackets and type assertions
+ * are looked through, and every branch of `?:`, `&&`, `||` and `??` is read.
+ * Any other expression may hide when it names such a property anywhere
+ * (`Object.assign({}, { display: "none" })`).
+ */
+function styleMayHide(value: ts.Expression): boolean {
+  if (ts.isParenthesizedExpression(value) || ts.isAsExpression(value) || ts.isSatisfiesExpression(value) || ts.isNonNullExpression(value)) {
+    return styleMayHide(value.expression);
+  }
+  if (ts.isConditionalExpression(value)) return styleMayHide(value.whenTrue) || styleMayHide(value.whenFalse);
+  if (ts.isBinaryExpression(value) && LOGICAL_OPERATORS.has(value.operatorToken.kind)) return styleMayHide(value.left) || styleMayHide(value.right);
+  if (!ts.isObjectLiteralExpression(value)) {
+    const names = (node: ts.Node): boolean =>
+      ((ts.isIdentifier(node) || isPlainString(node)) && HIDING_STYLES.has(node.text)) || (ts.forEachChild(node, names) ?? false);
+    return names(value);
+  }
+  return value.properties.some((property) => {
+    if (ts.isSpreadAssignment(property) || (property.name && ts.isComputedPropertyName(property.name))) return true;
+    const hides = property.name && (ts.isIdentifier(property.name) || isPlainString(property.name)) ? HIDING_STYLES.get(property.name.text) : undefined;
+    if (!hides) return false;
+    const set = ts.isPropertyAssignment(property) ? property.initializer : undefined;
+    // CSS keywords are not case sensitive, and white space around a value does not count.
+    return !set || !isPlainString(set) || hides.has(set.text.trim().toLowerCase());
+  });
+}
+
+/** A `+` chain or a template with placeholders: text put together from parts. */
+const isComposition = (node: ts.Node): boolean => ts.isTemplateExpression(node) || (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken);
+
+/** What holds `node`, looking out through brackets, type assertions and the placeholder of a template. */
+function holder(node: ts.Node): ts.Node {
+  const outer = node.parent;
+  return ts.isParenthesizedExpression(outer) || ts.isAsExpression(outer) || ts.isSatisfiesExpression(outer) || ts.isNonNullExpression(outer) || ts.isTemplateSpan(outer) ? holder(outer) : outer;
+}
+
+/**
+ * JSX text, rendered strings, attributes and Next.js metadata; in a `.ts` file
+ * only the metadata is left. With `composed`, every `+` chain and template of
+ * the file is a text put together from parts as well, wherever it stands: that
+ * is how a text module writes one (`"Sum" + "njivo"`), and it is read the way
+ * the same expression is read in JSX, closed up over the parts that are
+ * computed.
+ */
+function componentText(source: ts.SourceFile, reader: Reader, composed = false): void {
+  const isImageRoute = IMAGE_ROUTE_FILE.test(source.fileName);
+  /** Inline elements and fragments already read as part of the unit around them. */
+  const absorbed = new Set<ts.Node>();
+  /** The audience the text is being read for; none while it is read as written, with nothing hidden. */
+  let audience: Audience | undefined;
+  /** Set when the text being read has more readings than are kept; see `findUnreadableText`. */
+  let overflowed = false;
+
+  // Readings of parts that follow one another. A part that would take the
+  // count past MAX_READINGS is read as unknown text and its alternatives go to
+  // `alone`, to be checked by themselves.
+  const inSequence = (parts: readonly Reading[][], alone: Reading[]): Reading[] => {
+    let all: Reading[] = [EMPTY];
+    for (const part of parts) {
+      let options = part;
+      if (all.length * part.length > MAX_READINGS) {
+        alone.push(...part);
+        options = [UNKNOWN];
+        overflowed = true;
+      }
+      all = distinct(all.flatMap(([joined, spaced]) => options.map(([j, s]): Reading => [joined + j, spaced + s])));
+    }
+    return all;
+  };
+
+  // Every text an expression can render. Both branches of `?:`, `||` and `??`
+  // are alternatives, `&&` can also render nothing, `+` and templates put
+  // their parts in a row, and anything computed is unknown text.
+  const expressionReadings = (expression: ts.Expression, alone: Reading[]): Reading[] => {
+    if (isPlainString(expression)) return exactly(expression.text);
+    if (RENDERS_NOTHING.has(expression.kind)) return [EMPTY];
+    if (isJsxNode(expression)) return elementReadings(expression, alone);
+    if (ts.isArrayLiteralExpression(expression)) {
+      // React renders the items of an array one after another, with nothing between them.
+      const items = expression.elements.map((item) => (ts.isSpreadElement(item) || ts.isOmittedExpression(item) ? [UNKNOWN] : expressionReadings(item, alone)));
+      return inSequence(items, alone);
+    }
+    if (ts.isTemplateExpression(expression)) {
+      const parts = [exactly(expression.head.text)];
+      for (const span of expression.templateSpans) {
+        parts.push(expressionReadings(span.expression, alone), exactly(span.literal.text));
+      }
+      return inSequence(parts, alone);
+    }
+    if (
+      ts.isParenthesizedExpression(expression) ||
+      ts.isAsExpression(expression) ||
+      ts.isSatisfiesExpression(expression) ||
+      ts.isNonNullExpression(expression)
+    ) {
+      return expressionReadings(expression.expression, alone);
+    }
+    if (ts.isConditionalExpression(expression)) {
+      return distinct([...expressionReadings(expression.whenTrue, alone), ...expressionReadings(expression.whenFalse, alone)]);
+    }
+    if (ts.isBinaryExpression(expression)) {
+      const operator = expression.operatorToken.kind;
+      if (operator === ts.SyntaxKind.BarBarToken || operator === ts.SyntaxKind.QuestionQuestionToken) {
+        return distinct([...expressionReadings(expression.left, alone), ...expressionReadings(expression.right, alone)]);
+      }
+      if (operator === ts.SyntaxKind.AmpersandAmpersandToken) {
+        return distinct([EMPTY, ...expressionReadings(expression.right, alone)]);
+      }
+      if (operator === ts.SyntaxKind.PlusToken) {
+        return inSequence(
+          operands(expression).map((part) => expressionReadings(part, alone)),
+          alone,
+        );
+      }
+    }
+    return [UNKNOWN];
+  };
+
+  const contentReadings = (node: ts.JsxElement | ts.JsxFragment, alone: Reading[]): Reading[] =>
+    inSequence(
+      node.children.map((child) => {
+        if (ts.isJsxText(child)) return exactly(jsxTextValue(child.text));
+        if (ts.isJsxExpression(child)) return child.expression ? expressionReadings(child.expression, alone) : [EMPTY];
+        return elementReadings(child, alone);
+      }),
+      alone,
+    );
+
+  // An element as it stands in the text around it. An element without
+  // children shows something unknown (an icon), except `br`, a line break,
+  // and `wbr`, which shows nothing. A fragment is its content. Any element
+  // that is not inline ends the phrase on both sides; see `INLINE_ELEMENTS`.
+  const elementReadings = (node: JsxNode, alone: Reading[]): Reading[] => {
+    if (ts.isJsxSelfClosingElement(node)) {
+      const tag = node.tagName.getText(source);
+      return [tag === "wbr" ? EMPTY : tag === "br" ? LINE_BREAK : UNKNOWN];
+    }
+    if (ts.isJsxFragment(node)) {
+      absorbed.add(node);
+      return contentReadings(node, alone);
+    }
+    if (!INLINE_ELEMENTS.has(node.openingElement.tagName.getText(source))) {
+      return contentReadings(node, alone).map(([joined, spaced]): Reading => [PHRASE_BREAK + joined + PHRASE_BREAK, PHRASE_BREAK + spaced + PHRASE_BREAK]);
+    }
+    // An inline element is part of the text only for the audience that gets it.
+    absorbed.add(node);
+    const hidden = audience ? hiding(source, node.openingElement, audience) : "no";
+    const shown = contentReadings(node, alone).map(([joined, spaced]): Reading => [joined, ` ${spaced} `]);
+    if (hidden === "no") return shown;
+    return hidden === "maybe" ? distinct([...shown, HIDDEN]) : [HIDDEN];
+  };
+
+  // A text in every reading it has. First as written, with nothing hidden:
+  // what hides content is only a claim in the source (a class is hidden by a
+  // stylesheet the scan does not read), so no attribute can take a finding
+  // away. Then for each audience, then the parts that are read by themselves.
+  const forEveryone = (read: (alone: Reading[]) => Reading[]): Reading[] => {
+    const alone: Reading[] = [];
+    overflowed = false;
+    const readings = [undefined, ...AUDIENCES].flatMap((to) => {
+      audience = to;
+      return read(alone);
+    });
+    return distinct([...readings, ...alone]);
+  };
+
+  const textStart = (node: ts.JsxText): number => node.end - node.text.trimStart().length;
+
+  /** Where the content of an element starts: its first text or, failing that, its first child. */
+  const contentStart = (node: ts.JsxElement | ts.JsxFragment): number => {
+    for (const child of node.children) {
+      if (!ts.isJsxText(child)) return child.getStart(source);
+      if (child.text.trim() !== "") return textStart(child);
+    }
+    return node.getStart(source);
+  };
+
+  const visit = (node: ts.Node): void => {
+    if (composed && isComposition(node) && !isComposition(holder(node))) {
+      const readings = forEveryone((alone) => expressionReadings(node as ts.Expression, alone));
+      reader.unit(node.getStart(source), node.pos, node.end, readings, overflowed);
+    }
+    if ((ts.isJsxElement(node) || ts.isJsxFragment(node)) && !absorbed.has(node)) {
+      const readings = forEveryone((alone) => contentReadings(node, alone));
+      reader.unit(contentStart(node), node.children.pos, node.children.end, readings, overflowed);
+    } else if (ts.isJsxText(node)) {
+      const value = jsxTextValue(node.text);
+      if (value.trim() !== "") reader.part(node, value, textStart(node));
+    } else if (ts.isJsxExpression(node) && node.expression && !ts.isJsxAttribute(node.parent)) {
+      renderedStrings(node.expression, reader.part);
+    } else if (ts.isJsxAttribute(node) && node.initializer && !isTechnicalAttribute(node.name.getText(source))) {
+      if (ts.isStringLiteral(node.initializer)) reader.text(node.initializer, decodeEntities(node.initializer.text));
+      else if (ts.isJsxExpression(node.initializer) && node.initializer.expression) {
+        const expression = node.initializer.expression;
+        renderedStrings(expression, reader.part);
+        const readings = forEveryone((alone) => expressionReadings(expression, alone));
+        reader.unit(expression.getStart(source), expression.pos, expression.end, readings, overflowed);
+      }
+    } else if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+      const name = node.name.text;
+      if (name === "metadata" || (name === "alt" && isImageRoute)) {
+        allStrings(node.initializer, reader.text);
+        return;
+      }
+      const value = node.initializer;
+      if (METADATA_FUNCTIONS.has(name) && (ts.isArrowFunction(value) || ts.isFunctionExpression(value))) {
+        returnedStrings(value.body, reader.text);
+      }
+    } else if (ts.isFunctionDeclaration(node) && node.name && METADATA_FUNCTIONS.has(node.name.text) && node.body) {
+      returnedStrings(node.body, reader.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+}
+
+type Kind = "catalogue" | "component";
+/** How locate reads a file: by a kind, or only for its strings and imports. */
+type How = Kind | "strings";
+
+/** A piece of text with the span of source it was read from (both zero in JSON). */
+interface Located extends UiText {
+  readonly start: number;
+  readonly end: number;
+  /** Set for a piece of a unit; see `Reader`. */
+  readonly part?: true;
+  /** The text to check when it is not `text`; see `Collect`. */
+  readonly check?: string;
+}
+
+/** Text put together from pieces: where it starts, the span that holds its pieces and its readings. */
+interface Unit {
+  readonly line: number;
+  readonly at: number;
+  readonly start: number;
+  readonly end: number;
+  readonly readings: readonly Reading[];
+  /** Set when the text has more readings than `MAX_READINGS`, so some part of it was read as unknown. */
+  readonly overflowed: boolean;
+}
+
+/** A module that a code file names in an `import`, an `export … from`, an `import()` or a `require()`. */
+interface Import {
+  /** `null` when an `import()` or a `require()` is handed a name that is not one string. */
+  readonly name: string | null;
+  readonly line: number;
+}
+
+interface Read {
+  readonly texts: Located[];
+  readonly units: Unit[];
+  readonly imports: Import[];
+}
+
+const NOTHING_READ: Read = { texts: [], units: [], imports: [] };
+
+/**
+ * The syntax errors of a parsed file, asked for through a program that holds
+ * only that file: no library, nothing read from disk and nothing parsed a
+ * second time. No import is resolved either: the host answers every module
+ * name with nothing and says of every other file that it is not there.
+ */
+export function syntaxErrors(source: ts.SourceFile, host: ts.CompilerHost = isolatedHost(source)): readonly ts.DiagnosticWithLocation[] {
+  const options: ts.CompilerOptions = { noLib: true, noResolve: true, types: [], jsx: ts.JsxEmit.Preserve };
+  return ts.createProgram({ rootNames: [source.fileName], options, host }).getSyntacticDiagnostics(source);
+}
+
+/** The host of `syntaxErrors`: it knows one file and finds no other. */
+export function isolatedHost(source: ts.SourceFile): ts.CompilerHost {
+  return {
+    getSourceFile: () => source,
+    getDefaultLibFileName: () => "lib.d.ts",
+    writeFile: () => undefined,
+    getCurrentDirectory: () => "/",
+    getCanonicalFileName: (name) => name,
+    useCaseSensitiveFileNames: () => true,
+    getNewLine: () => "\n",
+    fileExists: () => false,
+    readFile: () => undefined,
+    resolveModuleNameLiterals: (names) => names.map(() => ({ resolvedModule: undefined })),
+    resolveTypeReferenceDirectiveReferences: (names) => names.map(() => ({ resolvedTypeReferenceDirective: undefined })),
+  };
+}
+
+function locate(file: string, content: string, kind: How): Read {
+  const texts: Located[] = [];
+  const units: Unit[] = [];
+  if (file.toLowerCase().endsWith(".json") || file.endsWith(".webmanifest")) {
+    const lines = content.split("\n");
+    const walk = (value: unknown): void => {
+      if (typeof value === "string") {
+        const line = lines.findIndex((row) => row.includes(JSON.stringify(value).slice(1, -1))) + 1;
+        texts.push({ file, line, text: value, start: 0, end: 0 });
+      } else if (Array.isArray(value)) value.forEach(walk);
+      else if (value !== null && typeof value === "object") Object.values(value).forEach(walk);
+    };
+    walk(JSON.parse(content));
+    return { texts, units, imports: [] };
+  }
+  const scriptKind = file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+  const source = ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true, scriptKind);
+  const lineAt = (position: number): number => source.getLineAndCharacterOfPosition(position).line + 1;
+  // What the parser made of a file it could not parse is a guess, and text it
+  // guessed wrong is text that was never checked.
+  const errors = syntaxErrors(source);
+  const [first] = errors;
+  if (first) throw new Error(`${file}:${lineAt(first.start)}: the file does not parse, so the scan cannot read it (TS${first.code}, ${errors.length} in all)`);
+  const collect =
+    (part?: true): Collect =>
+    (node, text, at, check) => {
+      const start = at ?? node.getStart(source);
+      texts.push({ file, line: lineAt(start), text, start, end: node.getEnd(), ...(part && { part }), ...(check !== undefined && { check }) });
+    };
+  const unit: Reader["unit"] = (at, start, end, readings, overflowed) => units.push({ line: lineAt(at), at, start, end, readings, overflowed });
+  const imports: Import[] = [];
+  if (kind === "component") componentText(source, { text: collect(), part: collect(true), unit });
+  else allStrings(source, collect(), (at, name) => imports.push({ name, line: lineAt(at.getStart(source)) }));
+  // A text module also puts text together with `+` and templates; those are read as in JSX.
+  if (kind === "catalogue") componentText(source, { text: () => undefined, part: () => undefined, unit }, true);
+  return { texts, units, imports };
+}
+
+const withoutSpan = ({ file, line, text }: UiText): UiText => ({ file, line, text });
+
+/**
+ * The pieces of interface text in one source file. `catalogue` reads every
+ * string value, `component` only what a component renders (see the module
+ * comment). `scanUiText` also checks the pieces of one element put together.
+ */
+export function extractUiText(file: string, content: string, kind: Kind): UiText[] {
+  return locate(file, content, kind).texts.map(withoutSpan);
+}
+
+/** The strings of a code file that lie outside everything in `read`. */
+function stringsOutside(read: readonly Located[], file: string, content: string): Located[] {
+  return locate(file, content, "strings").texts.filter((text) => !read.some((seen) => seen.start <= text.start && text.end <= seen.end));
+}
+
+/** Stands in the text of a finding made only by the closed up reading; see `findForbiddenTermsInMarkup`. */
+export const CLOSED_UP_NOTE =
+  'found with the parts on both sides of "|" joined: an element boundary or an unknown part does not keep an entry apart, so reword one side or put the parts in one element';
+/** How to fix each kind of `findUnreadableText` report; the hint is part of its reason. */
+export const UNREADABLE_HINTS = {
+  characters:
+    "write interface text with Croatian or English letters and plain spaces; every string of a scanned file is checked, because interface text can stand in any of them, so for a string that is not interface text build the character with String.fromCodePoint, which names it in the source",
+  meeting:
+    'the text is read with its parts and elements joined, and between two letters only a plain space sets words apart: an element boundary, a line break and ASCII punctuation do not. Put {" "} between the two parts or elements, or write the character out of the text. Croatian and English quotation marks next to an element boundary are not reported',
+  readings: "put the conditional or possibly hidden inline parts into elements of their own, so that no element has that many alternatives",
+  parts: "a word cut over that many parts would not be found, so write the text in fewer parts",
+  testModule: "test files are not read, so what such a module shows would pass unchecked; give the module a name that is not a test's, or do not import it from code that runs",
+  dataFile: "the strings of an imported .json file are read like a catalogue, and this one is not where the import says; import it by a path from the importing file or from @/",
+  computedModule: "the scan follows a module by the name the source writes, so what a name put together when the code runs loads would pass unchecked; write the name as one string",
+} as const;
+
+/**
+ * What a public check hands over. Every string that comes from a scanned
+ * file (a text, the reason of the guard with the name of an import in it,
+ * the path of a file, the message of an error) leaves the scan through here
+ * and through `shownText`, so a character that no log can show is written by
+ * its escape. Only what is shown changes: what is found, and where, does not.
+ */
+function handOver<T>(check: () => T, show: (result: T) => T): T {
+  try {
+    return show(check());
+  } catch (error) {
+    if (error instanceof Error) {
+      // The stack repeats the message as it was when the error was made.
+      const stack = error.stack;
+      error.message = shownText(error.message);
+      if (stack !== undefined) error.stack = shownText(stack);
+    }
+    throw error;
+  }
+}
+/** A piece of text or a finding, as it is handed over. */
+const shownPiece = <T extends UiText>(piece: T): T => ({ ...piece, file: shownText(piece.file), text: shownText(piece.text) });
+
+/**
+ * Findings in what was read from one file, in source order. A piece is
+ * reported where it stands. A unit is reported for the entries that nothing
+ * inside it was reported for: a phrase that only exists once the pieces are
+ * put together, or a contextual entry.
+ */
+function findingsIn(file: string, read: Read): Finding[] {
+  const placed: { at: number; start: number; end: number; finding: Finding }[] = [];
+  for (const text of read.texts) {
+    const terms = findForbiddenTerms(text.check ?? text.text).filter((term) => !(text.part && term.contextual));
+    if (terms.length > 0) placed.push({ at: text.start, start: text.start, end: text.end, finding: { ...withoutSpan(text), terms } });
+  }
+  const pieces = [...placed];
+  const units = read.units.map((unit) => {
+    const hits = unit.readings.map(([joined, spaced]) => ({ text: joined, spaced, terms: findForbiddenTermsInMarkup(joined, spaced) }));
+    return { ...unit, hits, terms: new Set(hits.flatMap((hit) => hit.terms)) };
+  });
+  for (const unit of units) {
+    const holds = (other: { start: number; end: number }): boolean => unit.start <= other.start && other.end <= unit.end;
+    const reported = new Set([
+      ...pieces.filter(holds).flatMap((piece) => piece.finding.terms),
+      ...units.filter((inner) => holds(inner) && !(inner.start === unit.start && inner.end === unit.end)).flatMap((inner) => [...inner.terms]),
+    ]);
+    const terms = FORBIDDEN_TERMS.filter((term) => unit.terms.has(term) && !reported.has(term));
+    const hit = unit.hits.find((candidate) => candidate.terms.some((term) => terms.includes(term)));
+    if (!hit) continue;
+    // An entry that is there only once the text is closed up cannot be seen in
+    // the text as written, so the finding shows the parts and says what joined them.
+    const open = findForbiddenTermsInMarkup(hit.text, hit.spaced, false);
+    const asWritten = terms.some((term) => open.includes(term));
+    // The mark of a boundary is no character and is never shown: the parts are
+    // shown trimmed, with " | " between them, and a boundary at an end of the
+    // text shows nothing. A text without a boundary is shown as it is.
+    const parts = hit.text.split(PHRASE_BREAK).map((part) => part.trim()).filter((part) => part !== "");
+    const shown = hit.text.includes(PHRASE_BREAK) ? parts.join(" | ") : hit.text;
+    const text = asWritten ? shown : `${parts.join(" | ")} (${CLOSED_UP_NOTE})`;
+    placed.push({ ...unit, finding: { file, line: unit.line, text, terms } });
+  }
+  return placed.sort((a, b) => a.at - b.at).map((entry) => entry.finding);
+}
+
+/** Non-test files under `app/` and `src/`, as repository paths with forward slashes. */
+function* sourceFiles(root: string): Generator<string> {
+  const walk = function* (dir: string): Generator<string> {
+    for (const entry of readdirSync(path.join(root, dir), { withFileTypes: true })) {
+      const relative = `${dir}/${entry.name}`;
+      if (entry.isDirectory()) {
+        if (!SKIPPED_DIRS.has(entry.name)) yield* walk(relative);
+      } else if (!TEST_FILE.test(entry.name)) {
+        yield relative;
+      }
+    }
+  };
+  for (const dir of SCANNED_DIRS) if (existsSync(path.join(root, dir))) yield* walk(dir);
+}
+
+const UTF8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+
+/**
+ * The text of a scanned file. Bytes that are not UTF-8 are an error: read
+ * leniently they become U+FFFD, which matches no entry, so the file would
+ * pass with text nobody checked.
+ */
+function readSource(root: string, file: string): string {
+  const bytes = readFileSync(path.join(root, file));
+  try {
+    return UTF8.decode(bytes);
+  } catch (cause) {
+    throw new Error(`${file}: the file is not valid UTF-8, so the scan cannot read it`, { cause });
+  }
+}
+
+const isModule = (file: string): boolean => /\.[cm]?ts$/.test(file) && !/\.d\.[cm]?ts$/.test(file);
+const isCode = (file: string): boolean => isModule(file) || file.endsWith(".tsx");
+
+/**
+ * Guard for the file types the scan does not read: `.js`, `.jsx`, `.mjs`,
+ * `.cjs` and `.mdx` under `app/` and `src/` (repository paths, sorted). The
+ * project is TypeScript, so there are none today. A file of this kind would
+ * hold interface text the scan never looks at and leave it green, so the
+ * repository test fails on every one. The fix is to write the file as `.ts` or
+ * `.tsx`, never to exempt it.
+ */
+export function findUnreadSourceFiles(root: string): string[] {
+  return handOver(
+    () => [...sourceFiles(root)].filter((file) => /\.(?:[cm]?jsx?|mdx)$/.test(file)).sort(),
+    (files) => files.map(shownText),
+  );
+}
+
+/** How a file under `app/` or `src/` is read; `null` when the scan does not read it. */
+function scanKind(file: string): Kind | null {
+  if (file.endsWith(".tsx")) return "component";
+  if (isModule(file)) {
+    if (isUiTextModule(file)) return "catalogue";
+    return file.startsWith("app/") ? "component" : null;
+  }
+  if (file.endsWith(".json") && file.startsWith(CATALOGUE_DIR)) return "catalogue";
+  return MANIFEST_FILE.test(file) ? "catalogue" : null;
+}
+
+/**
+ * Every piece of interface text in the repository at `root` that uses a
+ * forbidden term. Text the file's kind reads is checked against the whole
+ * dictionary; every other string in a code file against its Croatian entries.
+ */
+export function scanUiText(root: string): Finding[] {
+  return handOver(
+    () => {
+      const findings: Finding[] = [];
+      const check = (text: UiText, terms: ForbiddenTerm[]): void => {
+        if (terms.length > 0) findings.push({ ...text, terms });
+      };
+      for (const { file, read, others } of scannedFiles(root)) {
+        findings.push(...findingsIn(file, read));
+        for (const text of others) check(withoutSpan(text), findForbiddenTerms(text.check ?? text.text, "hr"));
+      }
+      return findings;
+    },
+    (findings) => findings.map(shownPiece),
+  );
+}
+
+/** The name of a test file as an import writes it, with its extension or without. */
+const TEST_MODULE = /\.(?:test|spec)(?:\.[cm]?[jt]sx?)?$/;
+
+/**
+ * The `.json` file that an import in `file` names, as a repository path, when
+ * it is one the scan does not read as a catalogue already: code that imports
+ * it can show its strings, so it is read like a catalogue. `null` when the
+ * scan cannot tell which file is meant or the file is not there, `undefined`
+ * when the import is of something else. A name is followed from the folder of
+ * the file and from `@/`, which the project sets to `src/`.
+ */
+function importedData(root: string, file: string, name: string): string | null | undefined {
+  if (!name.toLowerCase().endsWith(".json")) return undefined;
+  const target = name.startsWith("@/") ? path.posix.normalize(`src/${name.slice(2)}`) : name.startsWith(".") ? path.posix.join(path.posix.dirname(file), name) : "..";
+  if (target.startsWith("..") || !existsSync(path.join(root, target))) return null;
+  return scanKind(target) === "catalogue" ? undefined : target;
+}
+
+/** A scanned file as read: by its kind, with the other strings of a code file and the modules it imports. */
+interface Scanned {
+  readonly file: string;
+  readonly read: Read;
+  readonly others: Located[];
+  readonly imports: readonly Import[];
+}
+
+/**
+ * Every file the scan reads, in the order of `sourceFiles`, and after them
+ * the `.json` files that those import from anywhere else (`importedData`).
+ */
+function* scannedFiles(root: string): Generator<Scanned> {
+  const data = new Set<string>();
+  for (const file of sourceFiles(root)) {
+    const kind = scanKind(file);
+    if (kind === null && !isCode(file)) continue;
+    const content = readSource(root, file);
+    const read = kind === null ? NOTHING_READ : locate(file, content, kind);
+    // Every string of a code file, and what it imports, whatever its kind reads.
+    const all = kind === "catalogue" || !isCode(file) ? read : locate(file, content, "strings");
+    const others = all === read ? [] : all.texts.filter((text) => !read.texts.some((seen) => seen.start <= text.start && text.end <= seen.end));
+    for (const { name } of all.imports) data.add((name === null ? null : importedData(root, file, name)) ?? "");
+    yield { file, read, others, imports: all.imports };
+  }
+  data.delete("");
+  for (const file of [...data].sort()) yield { file, read: locate(file, readSource(root, file), "catalogue"), others: [], imports: [] };
+}
+
+export interface Unreadable {
+  readonly file: string;
+  readonly line: number;
+  /** What the scan cannot read there; it names code points and never quotes the text. */
+  readonly reason: string;
+}
+
+/**
+ * Guard for text the dictionary cannot be matched on. Reported, and so failed
+ * by the repository test, are:
+ *
+ * - every string of a scanned file, interface text or not, that holds a
+ *   character on `unreadableCharacters`: a letter or digit of another
+ *   script, a code point that is no character, a symbol or an unusual space
+ *   between two letters. The same is asked of every text put together from
+ *   parts, read closed up, so that such a character cannot come in as a part
+ *   of its own between two parts with letters.
+ *   The scope is wide on purpose, for the reason `scanUiText` checks every
+ *   string against the Croatian entries: a string outside the text the scan
+ *   reads can still reach the interface through a variable, and a letter
+ *   that only looks Latin is not something a reviewer can see. A string that
+ *   is not interface text and needs such a character builds it with
+ *   `String.fromCodePoint`, so the source names the character; the guard is
+ *   not narrowed and no file is exempt;
+ * - every text with more readings than the scan keeps (`MAX_READINGS`), where
+ *   a part was read as unknown instead of in each of its forms;
+ * - every text with a longer run of parts without letters than the dictionary
+ *   reads across (`windowsCutShort`);
+ * - every import of a test module (`TEST_MODULE`) from a scanned file: test
+ *   files are not read, and a page that imports one shows what is in it;
+ * - every import of a `.json` file the scan cannot find and so cannot read
+ *   like a catalogue (`importedData`);
+ * - every `import()` and `require()` of a module whose name is not one
+ *   string: the scan cannot tell which file is loaded, so it cannot read it.
+ *
+ * The fix is to write the text with Croatian or English letters, or to split
+ * an element with that many alternatives; there are no exemptions.
+ */
+export function findUnreadableText(root: string): Unreadable[] {
+  return handOver(
+    () => unreadableIn(root),
+    (found) => found.map((entry) => ({ ...entry, file: shownText(entry.file), reason: shownText(entry.reason) })),
+  );
+}
+
+function unreadableIn(root: string): Unreadable[] {
+  const unreadable: Unreadable[] = [];
+  for (const { file, read, others, imports } of scannedFiles(root)) {
+    for (const { name, line } of imports) {
+      if (name === null) {
+        unreadable.push({ file, line, reason: `import() or require() of a module whose name is not one string (${UNREADABLE_HINTS.computedModule})` });
+        continue;
+      }
+      if (TEST_MODULE.test(name)) unreadable.push({ file, line, reason: `import of the test module "${name}" (${UNREADABLE_HINTS.testModule})` });
+      if (importedData(root, file, name) === null) unreadable.push({ file, line, reason: `import of "${name}", a data file the scan cannot find (${UNREADABLE_HINTS.dataFile})` });
+    }
+    const strings = [...read.texts, ...others].map((text) => ({ ...text, characters: unreadableCharacters(text.text) }));
+    for (const text of strings) {
+      if (text.characters.length > 0) unreadable.push({ file, line: text.line, reason: `characters outside interface text: ${text.characters.join(", ")} (${UNREADABLE_HINTS.characters})` });
+    }
+    for (const unit of read.units) {
+      if (unit.overflowed) unreadable.push({ file, line: unit.line, reason: `more than ${MAX_READINGS} readings of one text (${UNREADABLE_HINTS.readings})` });
+      if (unit.readings.some(([text]) => windowsCutShort(text))) unreadable.push({ file, line: unit.line, reason: `more than ${MAX_WINDOW_PARTS} parts of one text next to each other with hardly a letter between them (${UNREADABLE_HINTS.parts})` });
+      // A character that is harmless by itself can stand between two parts
+      // with letters, so the text is read as the parts make it, closed up as
+      // the dictionary reads it. What a string of the unit already reported
+      // is not reported a second time. A Croatian or English quotation mark
+      // next to a boundary is ordinary text (a paragraph that begins with
+      // one) and is not reported, since the dictionary reads the text without
+      // it as well (`closedUpPastQuotes`); any other mark there is reported.
+      const reported = new Set(strings.filter((text) => unit.start <= text.start && text.end <= unit.end).flatMap((text) => text.characters));
+      const joined = unit.readings.flatMap(([text]) => unreadableCharacters(closedUpPastQuotes(text)));
+      const characters = [...new Set(joined)].filter((code) => !reported.has(code));
+      if (characters.length > 0) unreadable.push({ file, line: unit.line, reason: `characters outside interface text, where its parts meet: ${characters.join(", ")} (${UNREADABLE_HINTS.meeting})` });
+    }
+  }
+  return unreadable;
+}
+
+/**
+ * Guard for the narrow scope above: strings in a `.ts` module that is not on
+ * `UI_TEXT_MODULES` which have a Croatian letter (č, ć, đ, š, ž) and either
+ * white space or a capital first letter. Such a string looks like interface
+ * text that the scan would not read. The fix is to move it into a listed
+ * module or to extend the list, never to exempt the file.
+ *
+ * A single lower-case word ("može" in a word list) is data, not a label, and
+ * is not reported. Text without a Croatian letter is not reported either;
+ * `scanUiText` still checks it against the Croatian dictionary entries. English
+ * text in a module outside the list is not caught.
+ */
+export function findMisplacedUiText(root: string): UiText[] {
+  return handOver(
+    () => misplacedIn(root),
+    (found) => found.map(shownPiece),
+  );
+}
+
+function misplacedIn(root: string): UiText[] {
+  const misplaced: UiText[] = [];
+  for (const file of sourceFiles(root)) {
+    if (!isModule(file) || isUiTextModule(file)) continue;
+    const content = readSource(root, file);
+    const kind = scanKind(file);
+    const read = kind === null ? NOTHING_READ : locate(file, content, kind);
+    for (const text of stringsOutside(read.texts, file, content)) {
+      if (looksLikeCroatianUiText(text.text)) misplaced.push(withoutSpan(text));
+    }
+  }
+  return misplaced;
+}

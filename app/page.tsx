@@ -1,8 +1,22 @@
+import Link from "next/link";
+
+import AppHeader from "@/components/shell/AppHeader";
+import { messagesHr as t } from "@/lib/i18n/messages.hr";
+
 export default function HomePage() {
   return (
-    <main>
-      <h1>Ductus</h1>
-      <p>Kako je rad nastao, bez presude o autorstvu.</p>
-    </main>
+    <>
+      <AppHeader />
+      <main id="sadrzaj" tabIndex={-1} className="page">
+        <h1>{t.app.name}</h1>
+        <p>{t.app.tagline}</p>
+        <p>{t.home.lead}</p>
+        <p>
+          <Link className="btn" href="/rad">
+            {t.home.openWorkspace}
+          </Link>
+        </p>
+      </main>
+    </>
   );
 }

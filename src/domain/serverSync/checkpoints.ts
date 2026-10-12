@@ -115,15 +115,6 @@ export type CheckpointErrorCode =
   | "citanje"
   | "odgovor-neispravan";
 
-export const CHECKPOINT_ERROR_MESSAGES: Record<CheckpointErrorCode, string> = {
-  "naziv-prazan": "Kontrolna točka treba naziv.",
-  "naziv-dug": `Naziv kontrolne točke smije imati najviše ${CHECKPOINT_NAME_MAX_LENGTH} znakova.`,
-  "rad-nepoznat": "Rad nije pronađen na poslužitelju.",
-  spremanje: "Kontrolnu točku nije bilo moguće stvoriti. Pokušaj ponovno.",
-  citanje: "Popis kontrolnih točaka nije moguće dohvatiti.",
-  "odgovor-neispravan": "Poslužitelj je vratio odgovor koji nije moguće pročitati.",
-};
-
 /** The code a rejected name maps to. */
 export function checkpointNameErrorCode(
   reason: CheckpointNameFailure,
@@ -131,26 +122,6 @@ export function checkpointNameErrorCode(
   return reason === "empty" ? "naziv-prazan" : "naziv-dug";
 }
 
-/**
- * The sentence shown after a checkpoint is made.
- *
- * It names the revision on purpose. A checkpoint is of the SERVER's revision,
- * and a message that only said "spremljeno" would be exactly the generic
- * claim the constitution forbids — the author could not tell which version
- * they had just bookmarked.
- */
-export function checkpointCreatedMessage(name: string, revision: number): string {
-  return `Kontrolna točka „${name}” stvorena (revizija ${revision}).`;
-}
-
-/**
- * Shown next to that sentence whenever the pending queue is not empty.
- *
- * Not a warning and not an error: it is the honest half of the claim above.
- * The checkpoint holds the server's revision, so whatever is still queued
- * locally is not in it, and the author has to be told before they rely on it.
- */
-export const UNSYNCED_CHANGES_NOTE = "Nesinkronizirane promjene nisu uključene.";
 
 /**
  * A revision as PostgREST serialises a `bigint`. Fractional, negative,

@@ -62,7 +62,7 @@ Zaseban workflow, a ne izmjena `ci.yml`, da se ne sudara s otvorenim PR-om #13 i
 | --- | --- | --- | --- |
 | `brianc/node-postgres` (`pg`) | MIT | B-5 | Veza prema bazi; `withActor` postavlja GUC sa `SET LOCAL` unutar transakcije. pg-boss koristi isti `pg`, pa jedan klijent umjesto dva |
 | `panva/openid-client` | MIT | B-6 | OIDC s PKCE, `state`, `nonce` [PRIJEDLOG D-73]; Better Auth (`better-auth/better-auth`) ostaje kandidat za M1 spike |
-| `timgit/pg-boss` | MIT | B-9, B-12 | Red poslova u workeru, `migrate: false` [PRIJEDLOG D-74] |
+| `timgit/pg-boss` | MIT | B-9, B-12 | Red poslova u workeru, `migrate: false` [ODLUČENO D-74] |
 | `colinhacks/zod` | MIT | B-6, B-8, B-12 | Provjera ulaza ruta i tijela `ingest`; greška bez ispisa sadržaja |
 | `paulmillr/noble-curves` | MIT | B-4 (ako treba) | Ed25519 samo ako `node:crypto` ne pokrije razvojni potpisnik; prvo probati `node:crypto` |
 | `pinojs/pino` | MIT | B-8, B-9 | Strukturirani logovi s `redact` za tijela i tekst rada (BACKEND §4.9); canary test |
@@ -73,7 +73,7 @@ Zaseban workflow, a ne izmjena `ci.yml`, da se ne sudara s otvorenim PR-om #13 i
 | --- | --- | --- | --- |
 | `PeculiarVentures/PKI.js` | BSD-3 (GitHub ne prepoznaje) | M3 ostatak, dnevni korijen | RFC 3161 vremenski žigovi od dva besplatna TSA-a (D-72) |
 | `transparency-dev/merkle` | Apache-2.0 | Dnevni korijen | Go referenca i ispitni vektori za RFC 6962 consistency dokaze; implementacija je naša, u TypeScriptu |
-| `aws/aws-sdk-js-v3` (`client-kms`, `client-s3`) | Apache-2.0 | B0.1, M11 | KMS potpis nad digestom (D-71) i S3 adapter; tek nakon D-08 |
+| `aws/aws-sdk-js-v3` (`client-kms`, `client-s3`) | Apache-2.0 | B0.1, M11 | KMS Ed25519 RAW: potvrde nad D-92 prefiksiranim digestom; C2SP D-93 nad izvornim tekstom bilješke (bez potpisnih redaka); S3 adapter: pohrana kompatibilna sa S3 odlučena je 11. 10. 2026. (D-08, dio o aplikaciji); integracija stvarnog dobavljača pohrane čeka B0.1 |
 | `getsentry/sentry-javascript` | MIT (GitHub ne prepoznaje) | M11 | SDK za GlitchTip EU, `sendDefaultPii: false`, `beforeSend` bez tijela |
 | `opentofu/opentofu`, `UpCloudLtd/terraform-provider-upcloud`, `scaleway/terraform-provider-scaleway` | MPL-2.0 | B0.1, M11 | `infra/` za okoliše; tek nakon računa dobavljača |
 | `caddyserver/caddy` | Apache-2.0 | M11 | TLS, HSTS, access log bez query stringova |
@@ -205,20 +205,20 @@ Pregledani i ne uključuju se: `pr-review-toolkit`, `code-review`, `feature-dev`
 
 ## 9. Alati za štednju tokena — pregled 10. 10. 2026. (DAN-93)
 
-Podaci su s GitHub API-ja i iz README-a na dan pregleda. Ništa nije instalirano ni pokrenuto; ponašanje na Windowsu je prema dokumentaciji, ne prema testu. Tvrdnje o uštedi su tvrdnje samih projekata, osim gdje piše drukčije. Nijedan alat nije dodan ovim zadatkom.
+Podaci su s GitHub API-ja i iz README-a na dan pregleda. Ništa nije instalirano ni pokrenuto; ponašanje na Windowsu je prema dokumentaciji, ne prema testu. Tvrdnje o uštedi su tvrdnje samih projekata, osim gdje piše drukčije. DAN-93 nije dodao nijedan alat. DAN-96 je, po Danielovoj odluci od 10. 10. 2026., dodao one označene s „Dodano”; za njih je ponašanje na Windowsu provjereno pokretanjem.
 
 Mjerenje iz `docs/SESSIONS.md` §4a određuje redoslijed: najviše troše veličina konteksta i početni kontekst, a izlaz naredbi je sporedan. Zato su alati koji komprimiraju izlaz naredbi ispod mjerenja i vlastitih hookova.
 
 | Repozitorij | Licenca | Što radi | Odluka |
 | --- | --- | --- | --- |
 | [ccusage/ccusage](https://github.com/ccusage/ccusage) | MIT | Potrošnja po sesiji i danu iz lokalnih zapisa. | Već u uporabi (`scripts/usage-report.ps1`). |
-| [getagentseal/codeburn](https://github.com/getagentseal/codeburn) | MIT | Potrošnja za Claude Code i Codex; `optimize` nalazi nekorištene MCP poslužitelje i ponovljena čitanja. | Probati samo izvještaj; `--apply` i `guard install` mijenjaju konfiguraciju. |
-| [agent-sh/agnix](https://github.com/agent-sh/agnix) | MIT/Apache-2.0 | Linter za `CLAUDE.md`, `AGENTS.md`, `SKILL.md`, hookove i MCP konfiguraciju; ima GitHub Action. | Kandidat za CI; zaseban Platformin zadatak. |
+| [getagentseal/codeburn](https://github.com/getagentseal/codeburn) | MIT | Potrošnja za Claude Code i Codex; `optimize` nalazi nekorištene MCP poslužitelje i ponovljena čitanja. | Dodano (DAN-96): `pnpm tokens:codeburn` pokreće `codeburn@0.9.25 optimize` preko `pnpm dlx`. Samo izvještaj; `--apply` i `guard install` se ne koriste jer mijenjaju konfiguraciju. |
+| [agent-sh/agnix](https://github.com/agent-sh/agnix) | MIT/Apache-2.0 | Linter za `CLAUDE.md`, `AGENTS.md`, `SKILL.md`, hookove i MCP konfiguraciju; ima GitHub Action. | Dodano (DAN-96): `pnpm agents:lint` pokreće `agnix@0.57.0` preko `pnpm dlx`; postinstall skida binarnu datoteku s GitHub izdanja i provjerava SHA-256. Prvi prolaz: 0 grešaka, 3 upozorenja. Nije u CI-ju. |
 | [rtk-ai/rtk](https://github.com/rtk-ai/rtk) | Apache-2.0 | PreToolUse hook koji Bash naredbe zamjenjuje inačicama sa sažetim izlazom (git, tsc, vitest, playwright, eslint, gh). | Proba uz mjerenje. Sve naredbe prolaze kroz nepotpisanu binarnu datoteku; pokrivenost PowerShell alata nije potvrđena; čuva lokalnu povijest naredbi. |
-| [kenryu42/cc-safety-net](https://github.com/kenryu42/cc-safety-net) | MIT | PreToolUse čuvar koji parsira naredbe (vidi kroz `bash -c`) i blokira destruktivni git/rm i čitanje tajni. | Kandidat: pokriva rupu u `deny` pravilima, koja ne vide `sh -c`. |
+| [kenryu42/cc-safety-net](https://github.com/kenryu42/cc-safety-net) | MIT | PreToolUse čuvar koji parsira naredbe (vidi kroz `bash -c`) i blokira destruktivni git/rm i čitanje tajni. | Dodano (DAN-96): devDependency `cc-safety-net@2.6.1`, PreToolUse hook za Bash i PowerShell, projektna pravila u `.cc-safety-net/rules/`. Hook zove vlastiti omotač `scripts/hooks/safety-net.mjs` (DAN-137) koji blokira (izlaz 2) pri grešci analize, kad paket ili `dist/bin/hook.js` nedostaje ili je prazan, kad je pogrešne verzije ili kad kontrolna proba ne dobije deny za poznate zabranjene naredbe (tihi ili podmetnut paket, rulebook koji nedostaje od `cwd`-a naredbe do korijena checkouta); zapamćeni verdikt probe vrijedi samo dok se ne promijeni nijedan ulaz koji paket čita (datoteke paketa, projektni i korisnički `.cc-safety-net/`, `CC_SAFETY_NET_*`; popis u `docs/SESSIONS.md` §4a); sam paket bez instalacije daje izlaz 1, što Claude Code ne blokira, pa se ne zove izravno. Vodi lokalni dnevnik u `~/.cc-safety-net/logs`. |
 | [karanb192/claude-code-hooks](https://github.com/karanb192/claude-code-hooks) | MIT | Zbirka Node hookova; `protect-tests` blokira brisanje i preskakanje testova. | Preuzeti ideju `protect-tests` vlastitim kodom; mali repo, bez izjave o Windowsu. |
-| [supabase/agent-skills](https://github.com/supabase/agent-skills) | MIT | Skillovi za RLS, migracije i Postgres. | Samo za Backend i Security profile, kad počne B-5a. |
-| [microsoft/playwright-cli](https://github.com/microsoft/playwright-cli) | Apache-2.0 | CLI i skill umjesto Playwright MCP-a. | Kandidat za QA i Bug Hunter. |
+| [supabase/agent-skills](https://github.com/supabase/agent-skills) | MIT | Skillovi za RLS, migracije i Postgres. | Dodano (DAN-96): samo `supabase-postgres-best-practices`, kopiran s commita `c9be0e9` u `.claude/skills/` (vidi `SOURCE.md` ondje). To je namjerna iznimka od pravila da su projektni skillovi tanki adapteri: sadržaj je tuđi i ne uređuje se. Skill `supabase` nije dodan: Ductus nije na Supabase platformi. |
+| [microsoft/playwright-cli](https://github.com/microsoft/playwright-cli) | Apache-2.0 | CLI i skill umjesto Playwright MCP-a. | Dodano (DAN-96) bez nove ovisnosti: CLI je dio `@playwright/test` 1.63 (`pnpm exec playwright cli`); skill `ductus-browser-cli` upućuje na priloženu dokumentaciju. |
 | [sirmalloc/ccstatusline](https://github.com/sirmalloc/ccstatusline) | MIT | Statusna linija s postotkom konteksta i istekom cachea. | Nije potrebno: postoji vlastita statusna linija i hook `budget`. |
 | [oraios/serena](https://github.com/oraios/serena) | GPL-3.0-or-later | MCP za simbolički pristup kodu preko LSP-a. | Ne sada: preklapa se s `typescript-lsp` i dodaje MCP alate u svaki kontekst. |
 | [DeusData/codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp) | MIT | Graf koda u SQLiteu, 17 MCP alata. | Ne: nepotpisana binarna datoteka, instalater piše u konfiguraciju svih agenata. |

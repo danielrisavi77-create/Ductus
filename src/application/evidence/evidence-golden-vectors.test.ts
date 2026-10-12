@@ -1,0 +1,392 @@
+import { createHash } from "node:crypto";
+
+import { describe, expect, it, vi } from "vitest";
+
+import { DevelopmentEd25519SigningKeyProvider } from "@/adapters/crypto/development-ed25519-signer";
+import { InMemoryEvidenceAcceptanceRepository } from "@/adapters/evidence/in-memory-evidence-acceptance-repository";
+import { InMemoryEvidenceContextPort } from "@/adapters/evidence/in-memory-evidence-context";
+import { InMemoryEvidencePayloadStore } from "@/adapters/evidence/in-memory-evidence-payload-store";
+import type { AuthorizationPort } from "@/application/ports/authorization";
+import type { EvidenceSegmentDescriptorV2 } from "@/application/ports/evidence-ingest";
+import type {
+  EvidenceChainReader,
+  EvidencePayloadReader,
+} from "@/application/ports/evidence-reconstruction";
+import { EDIT_STEP_FORMAT_V1, parseEditSteps } from "@/domain/document/edit-step";
+import { MAX_EVIDENCE_SEGMENT_BYTES } from "@/domain/forensics/evidence-chain-v2";
+import { canonicalizeJcs } from "@/domain/forensics/jcs";
+import type { SignedEvidenceReceipt } from "@/domain/forensics/evidence-receipt";
+import type { EvidenceStepReplayerV2 } from "@/domain/forensics/evidence-replay-v2";
+import {
+  applyPayloadEdit,
+  fromHex,
+  goldenKeyVerifier,
+  loadGoldenVectors,
+  toHex,
+  type GoldenSegmentVector,
+} from "@/domain/forensics/golden-vectors/load";
+import { EvidenceGateway } from "./evidence-gateway";
+import { buildEvidenceIngestCommandV2 } from "./evidence-outbox";
+import { reconstructAndCompareEvidence } from "./evidence-reconstruction";
+
+// A synthetic institution; no real one is used in tests.
+const INSTITUTION_ID = "00000000-0000-4000-8000-00000000000a";
+
+/**
+ * Golden vectors (DAN-127) through the application layer. The client side
+ * (outbox) and the server side (gateway, reconstruction) read the same file
+ * as the domain test, so neither can drift from the other unnoticed. All data
+ * is invented.
+ */
+const vectors = loadGoldenVectors();
+const { chain } = vectors;
+const utf8 = new TextEncoder();
+const goldenKey = goldenKeyVerifier(chain.verificationKey);
+const emptyDocument = chain.documentStates[0];
+const finalDocument = chain.documentStates[chain.documentStates.length - 1];
+
+type TextNode = { type: "text"; text: string; marks: [] };
+type ParagraphDocument = {
+  schemaVersion: 1;
+  nodes: { type: "paragraph"; id: string; children: TextNode[] }[];
+};
+
+/**
+ * The steps of the vectors in ductus-edit-steps-v1: each inserts plain text
+ * at a ProseMirror position of a paragraph document. Only that subset is
+ * replayed here; text of a paragraph starts at 1, and every paragraph adds 2.
+ * A paragraph is read as at most one text node without marks; any other
+ * paragraph is refused, so a later vector with marks fails instead of
+ * replaying the first node only.
+ */
+function plainText(node: ParagraphDocument["nodes"][number]): string {
+  const [first, ...rest] = node.children;
+  if (rest.length > 0 || (first !== undefined && (first.type !== "text" || first.marks.length > 0))) {
+    throw new Error("unsupported paragraph");
+  }
+  return first?.text ?? "";
+}
+
+const replayer: EvidenceStepReplayerV2<ParagraphDocument> = {
+  transactionFormat: EDIT_STEP_FORMAT_V1,
+  load: (canonical) => structuredClone(canonical as ParagraphDocument),
+  apply: (document, event) => {
+    const parsed = parseEditSteps(EDIT_STEP_FORMAT_V1, event.steps);
+    if (!parsed.ok) throw new Error("unsupported step");
+    return parsed.steps.reduce<ParagraphDocument>((current, step) => {
+      const content = step.stepType === "replace" ? step.slice?.content : undefined;
+      const [inserted, ...rest] = content ?? [];
+      if (
+        step.stepType !== "replace" ||
+        step.from !== step.to ||
+        step.structure !== undefined ||
+        step.slice?.openStart !== undefined ||
+        step.slice?.openEnd !== undefined ||
+        inserted?.type !== "text" ||
+        (inserted.marks ?? []).length > 0 ||
+        rest.length > 0
+      ) {
+        throw new Error("unsupported step");
+      }
+      let start = 1;
+      const nodes = current.nodes.map((node) => {
+        const text = plainText(node);
+        const offset = step.from - start;
+        start += text.length + 2;
+        if (offset < 0 || offset > text.length) return node;
+        const next = text.slice(0, offset) + inserted.text + text.slice(offset);
+        return { ...node, children: [{ type: "text" as const, text: next, marks: [] as [] }] };
+      });
+      if (nodes.every((node, index) => node === current.nodes[index])) {
+        throw new Error("unsupported step");
+      }
+      return { ...current, nodes };
+    }, document);
+  },
+  toCanonical: (document) => document,
+};
+
+const commandOf = (vector: GoldenSegmentVector) =>
+  buildEvidenceIngestCommandV2({
+    evidencePackageId: chain.evidencePackageId,
+    clientRequestId: vector.clientRequestId,
+    segment: vector.segment,
+  });
+
+const signedReceiptOf = ({ receipt }: GoldenSegmentVector): SignedEvidenceReceipt => ({
+  payload: receipt.payload,
+  payloadDigestSha256: receipt.payloadDigestSha256,
+  signature: receipt.signature,
+});
+
+/** Readers that serve the record exactly as the vector file stores it. */
+function storedRecord(receiptOf = signedReceiptOf): {
+  chain: EvidenceChainReader;
+  payloads: EvidencePayloadReader;
+} {
+  return {
+    chain: {
+      readChain: async () => ({
+        status: "found",
+        head: chain.head,
+        segments: chain.segments.map((vector) => ({
+          segmentHash: vector.segmentHash,
+          receipt: receiptOf(vector),
+        })),
+      }),
+    },
+    payloads: {
+      readImmutable: async ({ segmentHash }) => {
+        const vector = chain.segments.find((candidate) => candidate.segmentHash === segmentHash);
+        return vector
+          ? { status: "found", bytes: fromHex(vector.canonicalUtf8Hex) }
+          : { status: "not_found" };
+      },
+    },
+  };
+}
+
+const reconstruction = { evidencePackageId: chain.evidencePackageId, initialDocument: emptyDocument.value };
+const matched = { status: "match", head: chain.head, documentSha256: finalDocument.sha256 };
+
+describe("golden vectors: test replayer", () => {
+  // QA M1 (#257): a paragraph of several text nodes, or one with marks, is
+  // refused rather than replayed from its first node only.
+  const [event] = chain.segments[0].segment.events;
+  // Marks are outside the replayed subset, so the document is built untyped.
+  const paragraph = (children: unknown[]) =>
+    ({ schemaVersion: 1, nodes: [{ type: "paragraph", id: "odlomak-zv", children }] }) as ParagraphDocument;
+
+  it("replays a paragraph of one plain text node", () => {
+    expect(() => replayer.apply(paragraph([]), event)).not.toThrow();
+  });
+
+  it.each<[string, unknown[]]>([
+    ["two text nodes", [{ type: "text", text: "A", marks: [] }, { type: "text", text: "B", marks: [] }]],
+    ["a marked text node", [{ type: "text", text: "A", marks: [{ type: "bold" }] }]],
+  ])("refuses a paragraph of %s", (_name, children) => {
+    expect(() => replayer.apply(paragraph(children), event)).toThrow("unsupported paragraph");
+  });
+});
+
+describe("golden vectors: client side (outbox)", () => {
+  it.each(chain.segments)("builds the command of $segment.segmentId byte for byte", async (vector) => {
+    const command = await commandOf(vector);
+    expect(command.clientRequestId).toBe(vector.clientRequestId);
+    expect(command.descriptor).toEqual(vector.descriptor);
+    expect(toHex(utf8.encode(command.canonicalPayload))).toBe(vector.canonicalUtf8Hex);
+  });
+});
+
+describe("golden vectors: server side (gateway and reconstruction)", () => {
+  it("accepts the client commands, stores their bytes and issues the stored receipts", async () => {
+    let current = 0;
+    const authorization: AuthorizationPort = {
+      check: async ({ principalId, action, resource }) => ({
+        status:
+          principalId === chain.principalId &&
+          action === "append_evidence" &&
+          resource.id === chain.evidencePackageId
+            ? "allow"
+            : "deny",
+      }),
+    };
+    const contexts = new InMemoryEvidenceContextPort([
+      {
+        institutionId: INSTITUTION_ID,
+        evidencePackageId: chain.evidencePackageId,
+        documentId: chain.segments[0].segment.documentId,
+        evidenceProfileId: chain.segments[0].segment.evidenceProfileId,
+        maxPayloadBytes: MAX_EVIDENCE_SEGMENT_BYTES,
+        acceptsEvidence: true,
+      },
+    ]);
+    const payloadStore = new InMemoryEvidencePayloadStore();
+    // Time and receipt id are the two inputs the server adds; the file fixes them.
+    const repository = new InMemoryEvidenceAcceptanceRepository({
+      clock: () => chain.segments[current].receipt.payload.acceptedAt,
+      idFactory: () => chain.segments[current].receipt.payload.receiptId,
+    });
+    const signer = new DevelopmentEd25519SigningKeyProvider("zlatni-vektori-dev", "v1");
+    const sign = vi.spyOn(signer, "sign");
+    const gateway = new EvidenceGateway({ authorization, contexts, payloadStore, repository, signer });
+
+    for (const [index, vector] of chain.segments.entries()) {
+      current = index;
+      const outcome = await gateway.ingest({
+        principalId: chain.principalId,
+        command: await commandOf(vector),
+      });
+      if (outcome.status !== "accepted") throw new Error(`segment ${index}: ${outcome.status}`);
+      expect(outcome.receipt.payload).toEqual(vector.receipt.payload);
+      expect(outcome.receipt.payloadDigestSha256).toBe(vector.receipt.payloadDigestSha256);
+
+      // The development key is new on every run, so its signature cannot be
+      // pinned. What is pinned are the bytes the gateway hands to the signer:
+      // they are the bytes the stored signature was made over.
+      const signedBytes = sign.mock.calls[index][0];
+      expect(toHex(signedBytes)).toBe(vector.receipt.canonicalUtf8Hex);
+      expect(await goldenKey.verify(signedBytes, vector.receipt.signature)).toBe(true);
+
+      const stored = await payloadStore.readImmutable({
+        evidencePackageId: chain.evidencePackageId,
+        segmentHash: vector.segmentHash,
+      });
+      if (stored.status !== "found") throw new Error(`segment ${index}: bytes ${stored.status}`);
+      expect(toHex(stored.bytes)).toBe(vector.canonicalUtf8Hex);
+    }
+
+    const accepted = await repository.readChain(chain.evidencePackageId);
+    expect(accepted).toMatchObject({ status: "found", head: chain.head });
+    expect(
+      await reconstructAndCompareEvidence(
+        { chain: repository, payloads: payloadStore, signer, replayer },
+        { ...reconstruction, expectedDocument: finalDocument.value },
+      ),
+    ).toEqual(matched);
+  });
+
+  it("leaves no object, no record and no signature for a refused segment (D-24, D-56, DAN-183)", async () => {
+    const [base] = chain.segments;
+    // The base with only its transaction format changed, written as canonical
+    // JCS: the format is closed, so every value but ductus-edit-steps-v1 is refused.
+    const withFormat = (transactionFormat: string) => {
+      const segment = structuredClone(base.segment);
+      segment.captureContext = { ...segment.captureContext, transactionFormat };
+      return utf8.encode(canonicalizeJcs(segment));
+    };
+    // The first former segment only: like the base it is the first of its chain.
+    const cases = [
+      { name: "control", accepted: true, bytes: fromHex(base.canonicalUtf8Hex) },
+      ...vectors.segmentPayloads.rejected
+        .filter((edit) => edit.canonicalJcs)
+        .map((edit) => ({
+          name: edit.name,
+          accepted: false,
+          bytes: applyPayloadEdit(fromHex(chain.segments[edit.base].canonicalUtf8Hex), edit),
+        })),
+      ...vectors.eventTime.formerSegments
+        .slice(0, 1)
+        .map((former) => ({ name: former.name, accepted: false, bytes: fromHex(former.canonicalUtf8Hex) })),
+      ...vectors.stepFormat.formerSegments
+        .slice(0, 1)
+        .map((former) => ({ name: former.name, accepted: false, bytes: fromHex(former.canonicalUtf8Hex) })),
+      { name: "format-v1-rewritten", accepted: true, bytes: withFormat(EDIT_STEP_FORMAT_V1) },
+      ...[
+        "ductus-test-insert-text-v0",
+        "prosemirror-step-json-v1",
+        "ductus-edit-steps-v2",
+        "DUCTUS-EDIT-STEPS-V1",
+        "ductus-edit-steps-v1 ",
+        "",
+      ].map((format) => ({ name: `format-${JSON.stringify(format)}`, accepted: false, bytes: withFormat(format) })),
+    ];
+    expect(cases.map((entry) => entry.name)).toEqual(
+      expect.arrayContaining([
+        "event-time-elapsed-ms",
+        "event-time-occurred-at",
+        "time-precision-start-seconds",
+        "time-precision-end-last-millisecond",
+        "time-form-other-zone",
+        "time-in-capture-context",
+        "former-odsjecak-zv-1",
+        vectors.stepFormat.formerSegments[0].name,
+        'format-"ductus-test-insert-text-v0"',
+      ]),
+    );
+    // The rewritten v1 base is the base byte for byte, so the control is honest.
+    expect(toHex(withFormat(EDIT_STEP_FORMAT_V1))).toBe(base.canonicalUtf8Hex);
+
+    // `faithful` copies ids and times from the bytes into the descriptor, as an
+    // honest client does; otherwise the descriptor keeps the valid ones of the
+    // base segment, so that only the check of the bytes can refuse.
+    for (const faithful of [true, false]) {
+      for (const { name, accepted, bytes } of cases) {
+        const canonicalPayload = new TextDecoder().decode(bytes);
+        const sent = JSON.parse(canonicalPayload) as Record<string, string>;
+        const descriptor = {
+          ...base.descriptor,
+          ...(faithful
+            ? {
+                documentId: sent.documentId,
+                sessionId: sent.sessionId,
+                segmentId: sent.segmentId,
+                observedStartedAt: sent.observedStartedAt,
+                observedEndedAt: sent.observedEndedAt,
+              }
+            : {}),
+          segmentHash: createHash("sha256").update(bytes).digest("hex"),
+          payloadBytes: bytes.byteLength,
+        } as EvidenceSegmentDescriptorV2;
+        const payloadStore = new InMemoryEvidencePayloadStore();
+        const repository = new InMemoryEvidenceAcceptanceRepository();
+        const signer = new DevelopmentEd25519SigningKeyProvider("zlatni-vektori-dev", "v1");
+        const sign = vi.spyOn(signer, "sign");
+        const gateway = new EvidenceGateway({
+          authorization: { check: async () => ({ status: "allow" }) },
+          contexts: new InMemoryEvidenceContextPort([
+            {
+              institutionId: INSTITUTION_ID,
+              evidencePackageId: chain.evidencePackageId,
+              documentId: descriptor.documentId,
+              evidenceProfileId: descriptor.evidenceProfileId,
+              maxPayloadBytes: MAX_EVIDENCE_SEGMENT_BYTES,
+              acceptsEvidence: true,
+            },
+          ]),
+          payloadStore,
+          repository,
+          signer,
+        });
+
+        const outcome = await gateway.ingest({
+          principalId: chain.principalId,
+          command: { clientRequestId: "zahtjev-zv-odbijen", descriptor, canonicalPayload },
+        });
+        const label = `${name}, ${faithful ? "faithful" : "base"} descriptor`;
+        expect(outcome.status, label).toBe(accepted ? "accepted" : "invalid");
+        expect(payloadStore.size, label).toBe(accepted ? 1 : 0);
+        expect(repository.records(), label).toHaveLength(accepted ? 1 : 0);
+        expect(sign, label).toHaveBeenCalledTimes(accepted ? 1 : 0);
+      }
+    }
+  });
+
+  it("reconstructs the stored record under the stored signatures", async () => {
+    const dependencies = { ...storedRecord(), signer: goldenKey, replayer };
+    expect(
+      await reconstructAndCompareEvidence(dependencies, {
+        ...reconstruction,
+        expectedDocument: finalDocument.value,
+      }),
+    ).toEqual(matched);
+    // The same document with its keys in another order is the same document.
+    expect(
+      await reconstructAndCompareEvidence(dependencies, {
+        ...reconstruction,
+        expectedDocument: chain.expectedDocumentReordered,
+      }),
+    ).toEqual(matched);
+    // Every earlier state is a different document.
+    expect(
+      await reconstructAndCompareEvidence(dependencies, {
+        ...reconstruction,
+        expectedDocument: chain.documentStates[2].value,
+      }),
+    ).toEqual({ status: "mismatch", reason: "target_mismatch", index: null });
+  });
+
+  it("does not accept a stored signature moved to the other receipt", async () => {
+    const [first, second] = chain.segments;
+    const swapped = storedRecord((vector) => ({
+      ...signedReceiptOf(vector),
+      signature: (vector === first ? second : first).receipt.signature,
+    }));
+    expect(
+      await reconstructAndCompareEvidence(
+        { ...swapped, signer: goldenKey, replayer },
+        { ...reconstruction, expectedDocument: finalDocument.value },
+      ),
+    ).toEqual({ status: "mismatch", reason: "receipt_signature_invalid", index: 0 });
+  });
+});

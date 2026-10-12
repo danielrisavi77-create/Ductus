@@ -59,26 +59,51 @@ Orkestrator ne piše proizvodni kod. Dodjeljuje zadatke, provjerava gateove, rje
 
 ## 5. Skills
 
-Repo sadrži adaptere za podržane runtimee:
+Repo sadrži adaptere za podržane runtimee (19 projektnih skillova `ductus-*`, iste mape u obje lokacije; uz njih je u `.claude/skills/` i preuzeti `supabase-postgres-best-practices`, koji nije adapter i nema kopiju u `.agents/skills/`, vidi `docs/REPOZITORIJI.md`):
 
 ```
 .claude/skills/
   ductus-worker/
   ductus-handoff/
+  ductus-browser-cli/
   ductus-orchestrator/
   ductus-review/
   ductus-qa/
+  ductus-attack-plan/
   ductus-bug-hunter/
   ductus-product-ux/
+  ductus-ci-change/
+  ductus-identity-isolation/
+  ductus-local-storage-logout/
+  ductus-new-table/
+  ductus-offline-recovery/
+  ductus-provenance-invariants/
+  ductus-rules-change/
+  ductus-sync-states/
+  ductus-synthetic-data/
+  ductus-ui-copy/
+  supabase-postgres-best-practices/
 
 .agents/skills/
   ductus-worker/
   ductus-handoff/
+  ductus-browser-cli/
   ductus-orchestrator/
   ductus-review/
   ductus-qa/
+  ductus-attack-plan/
   ductus-bug-hunter/
   ductus-product-ux/
+  ductus-ci-change/
+  ductus-identity-isolation/
+  ductus-local-storage-logout/
+  ductus-new-table/
+  ductus-offline-recovery/
+  ductus-provenance-invariants/
+  ductus-rules-change/
+  ductus-sync-states/
+  ductus-synthetic-data/
+  ductus-ui-copy/
 ```
 
 Skillovi su namjerno tanki. Ne dupliciraju proizvodna pravila; upućuju na kanonske dokumente u korijenu i `docs/`. Tako se jedna promjena pravila ne mora ručno kopirati u više skillova.

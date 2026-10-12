@@ -10,8 +10,63 @@ const BASE_URL = `http://localhost:${PORT}`;
 const webServerCommand =
   process.env.E2E_NO_BUILD === "1" ? "pnpm start" : "pnpm build && pnpm start";
 
+/**
+ * How a server is started with respect to the local demo journal (F-3 step 1b):
+ * on, off as deployed by default, or switched on in a deployment that must
+ * refuse it (#197 attack 12).
+ */
+type LocalJournal = "on" | "off" | "refused";
+
+const LOCAL_JOURNAL_ENV: Record<LocalJournal, Record<string, string>> = {
+  on: { DUCTUS_LOCAL_DEMO_JOURNAL: "1", DUCTUS_DEPLOYMENT: "ci" },
+  off: {},
+  refused: { DUCTUS_LOCAL_DEMO_JOURNAL: "1", DUCTUS_DEPLOYMENT: "production" },
+};
+
+/**
+ * `next start` on a port with the login configured as "Demo prijava", the
+ * local demo journal as given, and NODE_ENV set at start when given.
+ */
+function server(
+  port: number,
+  command: string,
+  journal: LocalJournal,
+  nodeEnv?: "test" | "development",
+) {
+  const baseUrl = `http://localhost:${port}`;
+  return {
+    command: `${command} -p ${port}`,
+    url: baseUrl,
+    // The server under test reaches the compose database as the local
+    // application login (.env.example); the application has no default.
+    env: {
+      APP_DATABASE_URL:
+        process.env.APP_DATABASE_URL ??
+        "postgres://ductus_app_local:ductus-app-local-only@127.0.0.1:54329/ductus",
+      // "Demo prijava" configured on purpose: the production build must refuse
+      // it (D-09, e2e/auth.spec.ts). Local-only values from .env.example.
+      DUCTUS_AUTH_PROVIDER: "fake-oidc",
+      OIDC_ISSUER: "http://localhost:8090",
+      OIDC_REDIRECT_URI: `${baseUrl}/api/auth/callback`,
+      OIDC_CLIENT_ID: "ductus-local",
+      OIDC_CLIENT_SECRET: "ductus-local-only",
+      // The local demo journal is read by /rad at request time, so the same
+      // build runs with it, without it and with it refused.
+      ...LOCAL_JOURNAL_ENV[journal],
+      ...(nodeEnv ? { NODE_ENV: nodeEnv } : {}),
+    },
+    // A server already on the port may be `next dev` or an older build, so it
+    // is reused only on explicit request.
+    reuseExistingServer: process.env.E2E_REUSE_SERVER === "1",
+    timeout: 240_000,
+  };
+}
+
 export default defineConfig({
   testDir: "e2e",
+  // The full login needs `next dev` and runs on its own config
+  // (playwright.login.config.ts, `pnpm test:e2e:login`).
+  testIgnore: "login/**",
   // Evidence must be reproducible: a flaky pass is not a pass.
   retries: 0,
   // The HTML report carries screenshots, videos and traces; CI uploads it as
@@ -37,12 +92,18 @@ export default defineConfig({
     { name: "firefox", use: { ...devices["Desktop Firefox"] } },
     { name: "webkit", use: { ...devices["Desktop Safari"] } },
   ],
-  webServer: {
-    command: webServerCommand,
-    url: BASE_URL,
-    // A server already on the port may be `next dev` or an older build, so it
-    // is reused only on explicit request.
-    reuseExistingServer: process.env.E2E_REUSE_SERVER === "1",
-    timeout: 240_000,
-  },
+  // The first three servers run the build with the local demo journal on; the
+  // second and third give NODE_ENV=test and development at start: D-09 must
+  // hold for every NODE_ENV, because the build fixes it (e2e/auth.spec.ts).
+  // The fourth is the build as deployed, without the journal, and the fifth
+  // switches the journal on in a deployment that must refuse it: /rad keeps
+  // the read-only sheet on both (e2e/shell.spec.ts). Servers start in order,
+  // so the build runs once.
+  webServer: [
+    server(PORT, webServerCommand, "on"),
+    server(PORT + 1, "pnpm start", "on", "test"),
+    server(PORT + 2, "pnpm start", "on", "development"),
+    server(PORT + 3, "pnpm start", "off"),
+    server(PORT + 4, "pnpm start", "refused"),
+  ],
 });

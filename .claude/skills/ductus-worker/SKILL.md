@@ -33,6 +33,11 @@ When fixing review or QA findings on an open PR:
 - do not force a fix for a finding you disagree with: reject it with a reason in the `Review:` field (`docs/SESSIONS.md` §2 step 5 and §3);
 - refetch `main`, check real overlap and refresh the branch if `main` changed a file the PR touches; a stacked PR states its dependency (`docs/ENGINEERING_SYSTEM.md` §9);
 - stage with `git add <paths>` and rerun `pnpm lint`, `pnpm typecheck`, `pnpm test` (`CLAUDE.md`; `docs/SESSIONS.md` §2 step 3);
-- after the push, confirm the head on origin equals the local head (`pnpm orch:push`, i.e. `scripts/orchestrator/push-verify.mjs`); every push invalidates earlier review and QA (`docs/ENGINEERING_SYSTEM.md` §6 and §9);
+- after the push, confirm the head on origin equals the local head (`pnpm orch:push`, i.e. `scripts/orchestrator/push-verify.mjs`); every push invalidates earlier review and QA, except a clean base merge that leaves the PR diff unchanged (D-101) (`docs/ENGINEERING_SYSTEM.md` §6 and §9);
 - update the `IZVJEŠTAJ` in the PR description with the new head and an answer to every finding (`docs/SESSIONS.md` §3);
 - never publish `Agent-Review`, `QA-Agent` or `Owner-Override`, and never merge (`docs/ENGINEERING_SYSTEM.md` §3 and §7; `docs/SESSIONS.md` §2 step 7).
+
+Work trail, attack plan and temp files (`docs/SESSIONS.md` §2 step 4 and §3; `docs/ORKESTRATOR.md` §8):
+- after every push, before waiting on CI, leave a short `Trag rada` PR comment in the `docs/SESSIONS.md` §3 form (full head, what changed, what waits, open questions); the final `IZVJEŠTAJ` stays mandatory;
+- when the task links an attack plan, turn every item into a test or explain in the PR description why it does not apply, give the table "stavka plana → test", and attack your own solution before pushing;
+- keep temp files only in your own task-named subfolder of the shared temp dir (owner decision: https://github.com/danielrisavi77-create/Ductus/pull/165#issuecomment-6100851850).

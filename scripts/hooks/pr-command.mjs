@@ -1,5 +1,6 @@
 // Shared parsing of `gh pr create` / `gh pr edit` commands for the Claude
 // Code hooks in this directory.
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -34,4 +35,31 @@ export function extractBody(command, cwd) {
   // Drop the opening quote, or the whole `"$(cat <<'EOF'` line of a heredoc.
   body = /^["']?\$\(/.test(body) ? body.slice(body.indexOf("\n") + 1) : body.replace(/^["']/, "");
   return body;
+}
+
+// Files the branch changes against origin/main, or null when that cannot be
+// read. A rename is listed under both names. Paths are relative to the
+// repository root whatever the directory the command runs in, and the call
+// overrides every user or repository setting that could narrow or reshape
+// that list: diff.relative (limits it to the working directory), submodule
+// ignore settings, external diff and textconv drivers, replacement objects.
+// (Rename detection is switched off by the flag, quoting by -z.)
+export function changedFiles(cwd) {
+  try {
+    const args = [
+      "--no-replace-objects",
+      "-c", "diff.relative=false",
+      "-c", "diff.ignoreSubmodules=none",
+      "diff", "--name-only", "--no-renames", "--no-ext-diff", "--no-textconv", "--ignore-submodules=none",
+      "-z", "origin/main...HEAD",
+    ];
+    const out = execFileSync("git", args, {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    return out.split("\0").filter(Boolean);
+  } catch {
+    return null;
+  }
 }

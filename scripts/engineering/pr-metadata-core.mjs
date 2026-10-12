@@ -1,31 +1,34 @@
 import { field } from "./metadata-parser.mjs";
+import { D97_MANUAL_PATHS, D97_PATHS, matchesPath, normalizePath } from "./protected-paths.mjs";
 
 const RISK_RANK = { low: 0, standard: 1, critical: 2 };
 const AGENT_RE =
   /^(claude|codex|chatgpt|grok):[A-Za-z0-9_-]+:(orchestrator|platforma|backend|frontend|reviewer|qa|bug-hunter|product-ux|short)$/;
 
-function criticalReason(filename) {
-  if (
-    filename === "CLAUDE.md" ||
-    filename === "AGENTS.md" ||
-    filename === "docs/PRODUCT.md" ||
-    filename === "docs/ENGINEERING_SYSTEM.md" ||
-    filename === ".github/CODEOWNERS" ||
-    filename.startsWith(".github/workflows/") ||
-    filename.startsWith("scripts/engineering/") ||
-    filename.startsWith("scripts/forbidden-terms/") ||
-    filename.startsWith("db/tests/")
-  ) {
-    return "governance/trust-critical path";
-  }
+// Critical floor by path: who may write, review, merge or bypass a check
+// (every D-97 path), text loaded into every session, safety rules, scanner
+// exceptions, database roles and migrations, the actor boundary, and tests.
+// A test under tests/ can be the only enforcement of a guard, so the whole
+// directory and its runner configuration carry the floor of the guards.
+export const CRITICAL_PATHS = [
+  ...D97_PATHS,
+  "docs/PRODUCT.md",
+  "STATE.md",
+  ".worktreeinclude",
+  "osv-scanner.toml",
+  "vitest.config.ts",
+  ".cc-safety-net/",
+  "plugins/",
+  "scripts/forbidden-terms/",
+  "db/migrations/",
+  "db/local/",
+  "db/tests/",
+  "src/server/db/",
+  "tests/",
+];
 
-  if (
-    /^db\/migrations\/.*(?:role|session|identity|evidence|submission|retention|auth|rls|policy|grant)/i.test(
-      filename,
-    )
-  ) {
-    return "security-sensitive migration";
-  }
+function criticalReason(filename) {
+  if (matchesPath(filename, CRITICAL_PATHS)) return "governance/trust-critical path";
 
   if (
     /^(src|app)\//.test(filename) &&
@@ -44,11 +47,10 @@ function criticalReason(filename) {
 }
 
 function standardReason(filename) {
+  if (matchesPath(filename, D97_MANUAL_PATHS)) return "decision record, D-97 by content";
   if (
-    /^(src|app|db|infra|e2e)\//.test(filename) ||
-    /^\.github\/workflows\//.test(filename) ||
-    /^scripts\//.test(filename) ||
-    /^(package\.json|pnpm-lock\.yaml|compose\.yaml|eslint\.config\.mjs|next\.config\.ts|playwright\.config\.ts|vitest\.config\.ts|tsconfig\.json|lefthook\.yml)$/.test(
+    /^(src|app|db|infra|e2e|scripts)\//.test(filename) ||
+    /^(package\.json|pnpm-lock\.yaml|compose\.yaml|eslint\.config\.mjs|next\.config\.ts|playwright\.config\.ts|tsconfig\.json)$/.test(
       filename,
     )
   ) {
@@ -57,27 +59,24 @@ function standardReason(filename) {
   return null;
 }
 
+/** Floor from the changed paths. Separators, a leading "./" and letter case do not matter. */
 export function minimumRisk(files) {
   let rank = 0;
   const reasons = [];
+  const labels = new Set();
 
-  for (const filename of files) {
+  for (const original of files) {
+    const filename = normalizePath(original).toLowerCase();
     const critical = criticalReason(filename);
-    if (critical) {
-      rank = Math.max(rank, 2);
-      reasons.push(`${filename}: ${critical}`);
-      continue;
-    }
-
-    const standard = standardReason(filename);
-    if (standard) {
-      rank = Math.max(rank, 1);
-      reasons.push(`${filename}: ${standard}`);
-    }
+    const reason = critical ?? standardReason(filename);
+    if (!reason) continue;
+    rank = Math.max(rank, critical ? 2 : 1);
+    reasons.push(`${original}: ${reason}`);
+    labels.add(reason);
   }
 
   const risk = Object.entries(RISK_RANK).find(([, value]) => value === rank)?.[0] ?? "low";
-  return { risk, reasons };
+  return { risk, reasons, labels: [...labels] };
 }
 
 export function evaluateMetadata({ body, files }) {
@@ -97,9 +96,11 @@ export function evaluateMetadata({ body, files }) {
 
   const minimum = minimumRisk(files);
   if (RISK_RANK[risk] < RISK_RANK[minimum.risk]) {
+    // Fixed labels only: the message becomes a commit status, so it carries no file name.
     return {
       ok: false,
-      message: `Declared Risk ${risk} is below minimum ${minimum.risk}: ${minimum.reasons.join("; ")}`,
+      message: `Declared Risk ${risk} is below minimum ${minimum.risk} (${minimum.labels.join("; ")}).`,
+      reasons: minimum.reasons,
     };
   }
 

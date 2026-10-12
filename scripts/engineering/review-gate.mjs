@@ -1,8 +1,12 @@
 import { readFile } from "node:fs/promises";
 import process from "node:process";
 
-import { evaluateMetadata } from "./pr-metadata-core.mjs";
-import { evaluateGate } from "./review-gate-core.mjs";
+import {
+  MAX_MERGE_STEPS,
+  carriedByCompare,
+  carriedHeadCandidates,
+  evaluatePullRequest,
+} from "./review-gate-core.mjs";
 
 const context = "Engineering review gate";
 
@@ -44,6 +48,41 @@ function prNumberFromEvent(event) {
   return null;
 }
 
+// Walks first parents from `head` until a non-merge commit or the step limit,
+// whichever comes first.
+async function firstParentPath(owner, repo, head) {
+  const path = [];
+  let sha = head;
+  for (let step = 0; step <= MAX_MERGE_STEPS && sha; step += 1) {
+    const commit = await api(`/repos/${owner}/${repo}/commits/${sha}`);
+    path.push({ sha: commit.sha, parents: commit.parents });
+    if (commit.parents.length < 2) break;
+    sha = commit.parents[0]?.sha;
+  }
+  return path;
+}
+
+// D-101: earlier heads whose verdicts still hold because only base merges
+// followed and the PR diff is unchanged. Any API error carries nothing.
+async function carriedHeads(owner, repo, pr, comments) {
+  const compare = (range) => api(`/repos/${owner}/${repo}/compare/${range}?per_page=100`);
+  let candidates;
+  let current;
+  try {
+    const path = await firstParentPath(owner, repo, pr.head.sha);
+    const { heads, reason } = carriedHeadCandidates(comments, pr.head.sha, path);
+    if (reason) console.log(`Carry-over refused: ${reason}.`);
+    candidates = heads;
+    if (candidates.length === 0) return new Set();
+    current = await compare(`${pr.base.sha}...${pr.head.sha}`);
+  } catch (error) {
+    console.log(`Carry-over check failed closed: ${error.message}`);
+    return new Set();
+  }
+  console.log(`Carry-over compares ${pr.base.sha}...<head> with ${pr.base.sha}...${pr.head.sha}.`);
+  return carriedByCompare(candidates, current, (sha) => compare(`${pr.base.sha}...${sha}`), console.log);
+}
+
 async function setStatus(repository, sha, result, targetUrl) {
   const [owner, repo] = repository.split("/");
   await api(`/repos/${owner}/${repo}/statuses/${sha}`, {
@@ -74,26 +113,17 @@ async function main() {
     apiAll(`/repos/${owner}/${repo}/pulls/${number}/files`),
   ]);
 
-  const metadata = evaluateMetadata({
-    body: pr.body ?? "",
-    files: changedFiles.map((item) => item.filename),
+  const { metadata, result } = evaluatePullRequest({
+    pr,
+    files: changedFiles,
+    comments,
+    ownerLogin: owner,
+    carriedHeads: await carriedHeads(owner, repo, pr, comments),
   });
-
-  const result = metadata.ok
-    ? evaluateGate({
-        body: pr.body ?? "",
-        headSha: pr.head.sha,
-        ownerLogin: owner,
-        comments,
-      })
-    : {
-        state: "failure",
-        description: metadata.message,
-      };
 
   await setStatus(repository, pr.head.sha, result, pr.html_url);
   console.log(`${context}: ${result.state} — ${result.description}`);
-  if (metadata.ok) {
+  if (metadata?.ok) {
     console.log(`Risk: declared=${metadata.risk}, minimum=${metadata.minimumRisk}`);
   }
 }

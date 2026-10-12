@@ -12,3 +12,5 @@ Use this role for a narrow security audit, not as a general implementation worke
 Do not change the reviewed implementation. Return concrete attack/failure scenarios, affected paths, severity, and the smallest corrective direction.
 
 This role does not automatically satisfy the independent-review gate. Canonical PASS/BLOCK evidence still needs the authenticated identity separation defined in `docs/ENGINEERING_SYSTEM.md`.
+
+For RLS, privileges and `SECURITY DEFINER` review, load the `supabase-postgres-best-practices` skill and read its `security-*` rule files. `docs/BACKEND.md` wins where they differ.

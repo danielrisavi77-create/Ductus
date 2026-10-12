@@ -1,4 +1,8 @@
 import type {
+  EvidenceChainReadResult,
+  EvidenceChainReader,
+} from "@/application/ports/evidence-reconstruction";
+import type {
   EvidenceAcceptanceIdentity,
   EvidenceAcceptanceRecord,
   EvidenceAcceptanceRepository,
@@ -15,6 +19,8 @@ import { canonicalizeJcs } from "@/domain/forensics/jcs";
 type ChainHead = {
   segmentHash: string;
   receiptId: string;
+  /** Number of segments accepted into the package so far. */
+  segmentCount: number;
 };
 
 function cloneRecord(record: EvidenceAcceptanceRecord): EvidenceAcceptanceRecord {
@@ -34,7 +40,7 @@ function requestKey(input: {
 }
 
 export class InMemoryEvidenceAcceptanceRepository
-  implements EvidenceAcceptanceRepository
+  implements EvidenceAcceptanceRepository, EvidenceChainReader
 {
   private readonly clock: () => string;
   private readonly idFactory: () => string;
@@ -171,6 +177,7 @@ export class InMemoryEvidenceAcceptanceRepository
     this.heads.set(input.descriptor.evidencePackageId, {
       segmentHash: input.descriptor.segmentHash,
       receiptId: record.receiptPayload.receiptId,
+      segmentCount: (head?.segmentCount ?? 0) + 1,
     });
 
     return { status: "reserved", record: cloneRecord(record) };
@@ -224,6 +231,29 @@ export class InMemoryEvidenceAcceptanceRepository
     record.status = "signed";
     record.signedReceipt = structuredClone(input.signedReceipt);
     return { status: "attached" };
+  }
+
+  async readChain(evidencePackageId: string): Promise<EvidenceChainReadResult> {
+    if (this.lookupUnavailableReason) {
+      return { status: "unavailable", reason: this.lookupUnavailableReason };
+    }
+    const head = this.heads.get(evidencePackageId);
+    // byReceipt keeps insertion order, which is the order of acceptance.
+    const segments = [...this.byReceipt.values()]
+      .filter((record) => record.descriptor.evidencePackageId === evidencePackageId)
+      .map((record) => ({
+        segmentHash: record.descriptor.segmentHash,
+        receipt: record.signedReceipt
+          ? structuredClone(record.signedReceipt)
+          : null,
+      }));
+    return {
+      status: "found",
+      head: head
+        ? { segmentHash: head.segmentHash, segmentCount: head.segmentCount }
+        : null,
+      segments,
+    };
   }
 
   records(): readonly EvidenceAcceptanceRecord[] {

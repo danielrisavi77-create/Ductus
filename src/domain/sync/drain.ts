@@ -24,6 +24,9 @@
  *   - A commit whose receipt is still owed holds the queue: only that same
  *     idempotency key is replayed, never a newer row on the un-advanced base
  *     (that would be answered `stale_base` — a conflict with ourselves).
+ *   - A send whose answer was lost holds the queue the same way. The CAS may
+ *     have landed without the client hearing of it, so the row stays held
+ *     until the server gives a verified answer for that idempotency key.
  */
 
 import type { DocumentTransaction } from "../document";
@@ -107,8 +110,9 @@ const NOTHING_TO_SEND: DrainPlan = { send: null, supersededUpTo: null };
  * True when the queue holds a row that is not provably OLDER than `sent` — a
  * held replay with later edits behind it, or rows parked at an unsafe
  * boundary. A verified receipt for `sent` then vouches for older text than
- * the author is looking at; the result is handed to `outcomeToEvents`, which
- * withholds SYNC_ACK. Anything that cannot be ordered counts as newer.
+ * the author is looking at, so `outcomeToEvents` withholds SYNC_ACK. It asks
+ * this itself, of the queue the answer finds (#181). Anything that cannot be
+ * ordered counts as newer.
  *
  * The sent row is recognised by document, sequence and transaction id, never
  * by object reference: the runner re-reads the queue from the journal, which
@@ -125,24 +129,10 @@ export function newerRowsQueued(
   if (!Array.isArray(pending)) {
     return true;
   }
-  const sentDocumentId = sent.documentId;
-  const sentTransactionId = sent.tx?.clientTransactionId;
-  const identifiable =
-    typeof sentDocumentId === "string" &&
-    sentDocumentId.trim() !== "" &&
-    typeof sentTransactionId === "string" &&
-    sentTransactionId.trim() !== "" &&
-    typeof sent.localSeq === "number" &&
-    Number.isFinite(sent.localSeq);
+  const identifiable = isIdentifiable(sent);
   let sentSeen = false;
   return pending.some((row) => {
-    if (
-      identifiable &&
-      !sentSeen &&
-      row?.documentId === sentDocumentId &&
-      row.localSeq === sent.localSeq &&
-      row.tx?.clientTransactionId === sentTransactionId
-    ) {
+    if (identifiable && !sentSeen && isSameIdentity(identityOf(row), identityOf(sent))) {
       sentSeen = true;
       return false;
     }
@@ -155,20 +145,72 @@ export function newerRowsQueued(
   });
 }
 
+type RowIdentity = { documentId: string; localSeq: number; clientTransactionId: string };
+
+function identityOf(row: PendingTransaction | null | undefined): Partial<RowIdentity> {
+  return {
+    documentId: row?.documentId,
+    localSeq: row?.localSeq,
+    clientTransactionId: row?.tx?.clientTransactionId,
+  };
+}
+
+/** A row can be told apart from every other only by a non-empty document, sequence and key. */
+function isIdentifiable(row: PendingTransaction | null | undefined): boolean {
+  const { documentId, localSeq, clientTransactionId } = identityOf(row);
+  return (
+    typeof documentId === "string" &&
+    documentId.trim() !== "" &&
+    typeof clientTransactionId === "string" &&
+    clientTransactionId.trim() !== "" &&
+    typeof localSeq === "number" &&
+    Number.isFinite(localSeq)
+  );
+}
+
 /**
- * The queue row whose compare-and-set the server has already accepted, but
- * whose signed receipt has not been verified yet (`nextAwaitingReceipt`).
+ * The one identity check of the drain (DAN-110, DAN-135, #181): document,
+ * sequence and transaction id, never object reference, since the runner
+ * re-reads rows from the journal as new objects.
+ */
+function isSameIdentity(a: Partial<RowIdentity>, b: Partial<RowIdentity>): boolean {
+  return (
+    a.documentId === b.documentId &&
+    a.localSeq === b.localSeq &&
+    a.clientTransactionId === b.clientTransactionId
+  );
+}
+
+/**
+ * The queue row whose compare-and-set the server has accepted, or MAY have
+ * accepted, but whose signed receipt has not been verified yet
+ * (`nextAwaitingReceipt`). "May have" is a send whose answer never arrived:
+ * the commit can exist on the server without the client knowing.
  *
  * While this is set the local base has NOT been fast-forwarded (only a
  * verified receipt may do that), so every newer row still names the old base.
  * The caller keeps it for as long as the row is owed and hands it back to
- * `planDrain`; persisting it across a reload is the journal's job, not this
- * module's.
+ * `planDrain`.
+ *
+ * Persisting it is the journal's job, not this module's, and it has to happen
+ * BEFORE the request leaves (`awaitingReceiptFor`): a tab closed mid-flight
+ * learns no outcome at all, and a reload that finds no marker would send the
+ * newest row on the old base — the same self-inflicted CONFLICT.
  */
 export type AwaitingReceipt = {
   documentId: string;
   localSeq: number;
   clientTransactionId: string;
+  /**
+   * Set once the server has answered `txid_reused` (DAN-135) for this row,
+   * or for another row while this one was held: a key is on the server with
+   * other document bytes. The answer is
+   * deterministic, so the row is never sent again (`planDrain`), and newer
+   * rows stay behind it because that commit may have moved the base. Only an
+   * explicit recovery decision clears it, in the same journal transaction that
+   * records the decision. It carries the cause, never document text.
+   */
+  diverged?: "txid_reused";
 };
 
 function isAwaitingReceipt(value: unknown): value is AwaitingReceipt {
@@ -181,8 +223,38 @@ function isAwaitingReceipt(value: unknown): value is AwaitingReceipt {
     marker.documentId.trim() !== "" &&
     isLocalSeq(marker.localSeq) &&
     typeof marker.clientTransactionId === "string" &&
-    marker.clientTransactionId.trim() !== ""
+    marker.clientTransactionId.trim() !== "" &&
+    (marker.diverged === undefined || marker.diverged === "txid_reused")
   );
+}
+
+/**
+ * True when `marker` is a well-formed hold the server has answered
+ * `txid_reused`. The runner reads this where `planDrain` sends nothing, and
+ * dispatches `SYNC_KEY_DIVERGED` so the document shows RECOVERY_REQUIRED
+ * instead of stalling in silence.
+ */
+export function isDiverged(marker: AwaitingReceipt | null | undefined): boolean {
+  return isAwaitingReceipt(marker) && marker.diverged === "txid_reused";
+}
+
+/**
+ * The marker for `sent`: what the runner stores durably before sending it, and
+ * what a send with an unknown or unacknowledged outcome leaves behind.
+ *
+ * Never throws. A row without a usable document, sequence or key yields a
+ * marker that `planDrain` rejects as malformed, so the queue stalls visibly
+ * instead of sending a newer row on a base that may already be gone.
+ */
+export function awaitingReceiptFor(sent: PendingTransaction): AwaitingReceipt {
+  const documentId = sent?.documentId;
+  const localSeq = sent?.localSeq;
+  const clientTransactionId = sent?.tx?.clientTransactionId;
+  return {
+    documentId: typeof documentId === "string" ? documentId : "",
+    localSeq: isLocalSeq(localSeq) ? localSeq : -1,
+    clientTransactionId: typeof clientTransactionId === "string" ? clientTransactionId : "",
+  };
 }
 
 /**
@@ -256,10 +328,22 @@ function isSendable(row: PendingTransaction): boolean {
  * row is still the one that commit replaced. Sending a newer row now would be
  * answered `stale_base` and put the author in CONFLICT with their own commit.
  * The plan therefore replays exactly the awaited row (same idempotency key,
- * which the server answers as `duplicate`) and leaves newer rows queued. If
+ * which the server answers as `duplicate`) and leaves newer rows queued. The
+ * same holds for a row whose answer was lost: if its CAS landed the replay is
+ * a `duplicate`, and if it never arrived the replay is the commit itself. If
  * the awaited row cannot be proved safe to replay — gone, a different key,
  * at or past an unsafe boundary, or the marker itself is malformed — nothing
  * is sent: a visible stall is recoverable, a self-inflicted CONFLICT is sticky.
+ * The hold itself always ends: a verified answer for the held row releases
+ * it, and so does any answer in which the server refused the held key
+ * (`nextAwaitingReceipt`). A lost, cut-off, unreadable or unknown answer and
+ * `unauthenticated` keep it, because none of them proves the key missed; the
+ * first four also start it when nothing was held.
+ *
+ * A diverged hold (`txid_reused`) sends nothing at all: replaying the row
+ * would only earn the same answer, and a newer row would go out on a base
+ * that commit may have moved. The document leaves this through an explicit
+ * recovery decision (`isDiverged`, `SYNC_KEY_DIVERGED`), never by itself.
  */
 export function planDrain(
   pending: readonly PendingTransaction[],
@@ -301,7 +385,7 @@ export function planDrain(
   }
 
   const held = awaitingReceipt ?? null;
-  if (held !== null && !isAwaitingReceipt(held)) {
+  if (held !== null && (!isAwaitingReceipt(held) || held.diverged !== undefined)) {
     return NOTHING_TO_SEND;
   }
 
@@ -414,6 +498,7 @@ export function nextAttemptDelayMs(
 const ACK: SyncEvent[] = [{ type: "SYNC_ACK" }];
 const STALE: SyncEvent[] = [{ type: "SYNC_STALE_BASE" }];
 const FATAL: SyncEvent[] = [{ type: "SYNC_FAILED", retryable: false }];
+const DIVERGED: SyncEvent[] = [{ type: "SYNC_KEY_DIVERGED" }];
 const RETRYABLE: SyncEvent[] = [{ type: "SYNC_FAILED", retryable: true }];
 
 /**
@@ -431,9 +516,12 @@ const RETRYABLE: SyncEvent[] = [{ type: "SYNC_FAILED", retryable: true }];
  *                               because a retry here is an overwrite.
  *   too_large  → SYNC_FAILED(false)  the document will not fit; the same bytes
  *                               will not fit on the tenth try either.
- *   txid_reused → SYNC_FAILED(false) the same idempotency key was used for
- *                               different content. That is a client bug, and
- *                               retrying it cannot fix it.
+ *   txid_reused → SYNC_KEY_DIVERGED  the server holds this idempotency key
+ *                               with different document bytes. Retrying
+ *                               cannot change a deterministic answer, and
+ *                               ERROR would invite exactly that (DAN-135):
+ *                               RECOVERY_REQUIRED, where the author chooses
+ *                               between the two versions. Never CONFLICT.
  *   not_found / unauthenticated / invalid_document /
  *   invalid_client_transaction_id / invalid
  *              → SYNC_FAILED(false)  nothing about the request improves by
@@ -441,6 +529,8 @@ const RETRYABLE: SyncEvent[] = [{ type: "SYNC_FAILED", retryable: true }];
  *                               row is gone, or the payload is not sendable.
  *   transport_error → SYNC_FAILED(true)  no server answer was learned;
  *                               the queue remains owed and backoff applies.
+ *                               The retry is the SAME row, as below: the
+ *                               commit may have landed unheard.
  *   pending_signature → no event and a retry; the CAS landed, but its receipt
  *                               is not ready for acknowledgement. The retry is
  *                               the SAME row (`nextAwaitingReceipt`, then
@@ -457,24 +547,113 @@ const RETRYABLE: SyncEvent[] = [{ type: "SYNC_FAILED", retryable: true }];
  */
 const VERIFIED_COMMIT_REVISIONS = new WeakMap<object, CommitReceiptExpectation>();
 
+/** Answers `outcomeToEvents` found for a row the queue no longer owes (#181). */
+const NOT_OWED = new WeakSet<object>();
+
 /**
- * `newerRowsQueued` is `newerRowsQueued(pending, plan.send)` for the queue
- * and plan that produced the send. When it is anything but `false`, a verified receipt still records
- * its revision (so `ackedRevision` moves the base and `nextAwaitingReceipt`
- * releases the hold) but emits NO event: the receipt covers older text than
- * the newest queued row, and SYNCED may only ever describe what the author is
- * looking at. The runner sees `ackedRevision(outcome) !== null` with no event
- * and plans the next send straight away; SYNC_ACK comes with the receipt of
- * the newest row.
+ * The flight an answer belongs to: the row it was sent for, and the queue for
+ * that row's document as the journal holds it WHEN THE ANSWER IS PROCESSED,
+ * never as it was at send time (#181). An answer can arrive late, after a
+ * retry of the same row was answered and the row left the queue, or while a
+ * newer row is in flight; only the queue of now can tell.
+ */
+export type AnswerFlight = {
+  sent: PendingTransaction;
+  pending: readonly PendingTransaction[];
+};
+
+/**
+ * A flight can be read only when `sent` and every row of `pending` are
+ * identifiable rows of the same document. A queue holding another document's
+ * row, or a row that cannot be told apart, is not that document's queue, so
+ * the absence of `sent` from it proves nothing.
+ */
+function isReadable(flight: AnswerFlight): boolean {
+  const sent = flight?.sent;
+  const pending = flight?.pending;
+  return (
+    isIdentifiable(sent) &&
+    Array.isArray(pending) &&
+    pending.every((row) => isIdentifiable(row) && row.documentId === sent.documentId)
+  );
+}
+
+/**
+ * The flight is readable and its queue no longer holds `sent`: whatever the
+ * answer says is about a row that is already settled (acknowledged, refused
+ * and rebased, or salvaged). A flight that cannot be read is NOT treated as
+ * settled, so a refusal is never swallowed because the caller passed garbage
+ * or another document's queue (#183 attack 10).
+ */
+function isSettled(flight: AnswerFlight): boolean {
+  if (!isReadable(flight)) {
+    return false;
+  }
+  return !flight.pending.some((row) => isSameIdentity(identityOf(row), identityOf(flight.sent)));
+}
+
+/**
+ * A verified receipt earns SYNC_ACK only for the flight's own row, and only
+ * when that row is the newest the queue holds (`newerRowsQueued` of the queue
+ * the answer finds). SYNC_ACK carries no identity, so this is the only place
+ * that can refuse it for someone else's answer.
+ */
+function earnsAck(flight: AnswerFlight, expected: CommitReceiptExpectation): boolean | null {
+  if (!isReadable(flight)) {
+    return false;
+  }
+  const sent = flight.sent;
+  if (
+    expected.documentId !== sent.documentId ||
+    expected.clientTransactionId !== sent.tx.clientTransactionId
+  ) {
+    // The receipt was checked against another row than the one this flight sent.
+    return null;
+  }
+  return !newerRowsQueued(flight.pending, sent);
+}
+
+/**
+ * `flight` names the row that was sent and the queue the answer finds (#181).
  *
- * The argument is required on purpose: a default would acknowledge for every
- * caller that forgot it. A missing or `undefined` value withholds the ACK.
+ * An answer for a row the queue no longer holds is late and changes nothing:
+ * no event, no verification, no revision for `ackedRevision`, and
+ * `nextAwaitingReceipt` keeps the hold it had. Its row was settled by an
+ * earlier answer, so a late `stale_base` is no conflict, a late `txid_reused`
+ * no recovery, and a late signed receipt no SYNCED for text that is not the
+ * newest.
+ *
+ * An answer for a row the queue still owes is never dropped: refusals and
+ * failures surface whatever arrived first. A verified receipt records its
+ * revision (so `ackedRevision` moves the base and `nextAwaitingReceipt`
+ * releases the hold), but emits SYNC_ACK only when no newer row is queued:
+ * SYNCED may only ever describe what the author is looking at. The runner
+ * sees `ackedRevision(outcome) !== null` with no event and plans the next
+ * send straight away; SYNC_ACK comes with the receipt of the newest row.
+ *
+ * Because SYNC_ACK needs an empty queue once the acknowledged rows are
+ * removed, SYNCED is never reached with a row still owed, and the states
+ * table may keep ignoring refusals in SYNCED (#183 t. 9).
+ *
+ * The argument is required on purpose, and the domain reads the queue itself:
+ * a flag remembered by the caller from send time is exactly what #181 broke.
+ * An unreadable flight never acknowledges.
  */
 export async function outcomeToEvents(
   outcome: DrainOutcome,
   verification: CommitReceiptVerification,
-  newerRowsQueued: boolean,
+  flight: AnswerFlight,
 ): Promise<SyncEvent[]> {
+  if (outcome !== null && typeof outcome === "object") {
+    // Every call decides afresh: an outcome processed again in another
+    // flight must not keep what an earlier call vouched for.
+    VERIFIED_COMMIT_REVISIONS.delete(outcome);
+    NOT_OWED.delete(outcome);
+    if (isSettled(flight)) {
+      NOT_OWED.add(outcome);
+      return [];
+    }
+  }
   switch (outcome?.status) {
     case "committed":
     case "duplicate": {
@@ -507,6 +686,15 @@ export async function outcomeToEvents(
       ) {
         return FATAL;
       }
+      const expected: CommitReceiptExpectation = {
+        documentId: verification.expected.documentId,
+        clientTransactionId: verification.expected.clientTransactionId,
+        revision: outcome.revision,
+      };
+      const ack = earnsAck(flight, expected);
+      if (ack === null) {
+        return FATAL;
+      }
       try {
         const verified = await verification.verify(
           (receipt as { signedReceipt: unknown }).signedReceipt,
@@ -516,12 +704,8 @@ export async function outcomeToEvents(
           return FATAL;
         }
         // Bound to the commit it was verified for, not just to this object.
-        VERIFIED_COMMIT_REVISIONS.set(outcome, {
-          documentId: verification.expected.documentId,
-          clientTransactionId: verification.expected.clientTransactionId,
-          revision: outcome.revision,
-        });
-        return newerRowsQueued === false ? ACK : [];
+        VERIFIED_COMMIT_REVISIONS.set(outcome, expected);
+        return ack ? ACK : [];
       } catch {
         return FATAL;
       }
@@ -530,8 +714,9 @@ export async function outcomeToEvents(
       return STALE;
     case "transport_error":
       return RETRYABLE;
-    case "too_large":
     case "txid_reused":
+      return DIVERGED;
+    case "too_large":
     case "not_found":
     case "unauthenticated":
     case "invalid_document":
@@ -543,7 +728,14 @@ export async function outcomeToEvents(
   }
 }
 
-/** True when the queue should be handed to the server again after a wait. */
+/**
+ * True when the queue should be handed to the server again after a wait.
+ *
+ * The one retry rule (DAN-135): a send is repeated automatically only when
+ * this is true. Every other answer that keeps a hold is either a diverged
+ * hold (`txid_reused`, RECOVERY_REQUIRED) or a visible ERROR the author may
+ * retry by hand; either way `mayAttempt` still gates the next send.
+ */
 export function isRetryable(outcome: DrainOutcome): boolean {
   if (outcome?.status === "transport_error") {
     return true;
@@ -563,44 +755,223 @@ export function ackedRevision(outcome: DrainOutcome): number | null {
 }
 
 /**
+ * Answers in which the server read the key and refused it: the key is not on
+ * the server, because a key that had landed is answered `duplicate`.
+ * `txid_reused` is deliberately absent: it says the key IS on the server, with
+ * other bytes, so the commit it names may have moved the base.
+ */
+const KEY_REFUSED: ReadonlySet<string> = new Set([
+  "stale_base",
+  "too_large",
+  "not_found",
+  "invalid_document",
+  "invalid_client_transaction_id",
+]);
+
+/**
  * What the queue is waiting on after `sent` was answered with `outcome`.
  *
- *   committed / duplicate, receipt verified → null: the base may move on.
+ *   committed / duplicate, receipt verified → null: the base may move on,
+ *                               except a diverged hold, which only its own
+ *                               row's verified receipt releases.
  *   committed / duplicate, anything else    → `sent`: the CAS landed, so newer
  *                               rows are stale until this exact commit is
  *                               acknowledged. That includes a pending
  *                               signature, a missing or malformed receipt and
  *                               a receipt that failed verification.
- *   every other answer          → `previous`, unchanged: nothing new landed
- *                               (or nothing was learned), so whatever was owed
+ *   stale_base / too_large / not_found / invalid_document /
+ *   invalid_client_transaction_id
+ *                               → null when `sent` is the held row, else
+ *                               `previous`; a diverged hold is always kept
+ *                               (`previous`), since a late refusal is no
+ *                               recovery decision. The server read this key and
+ *                               refused it, and a key that had landed would
+ *                               have been answered `duplicate`. Nothing is
+ *                               owed for it any more, so the hold ends here;
+ *                               keeping it would replay the refused row after
+ *                               every rebase (a CONFLICT loop) or, once the
+ *                               row is gone, stall the queue for good. The
+ *                               refusal itself still surfaces as CONFLICT or
+ *                               ERROR (`outcomeToEvents`), and no ACK follows.
+ *   unauthenticated             → `previous`, unchanged: the session was
+ *                               refused before the key was read, so this send
+ *                               landed nothing, and whatever was owed before
  *                               is still owed.
+ *   txid_reused                 → `sent`, marked diverged, unless another
+ *                               row is held (then `previous`, marked
+ *                               diverged, so the hold agrees with the
+ *                               SYNC_KEY_DIVERGED this answer emits). The key is on
+ *                               the server with other bytes, so the commit
+ *                               under it may have moved the base: newer rows
+ *                               stay behind it, and the row itself is never
+ *                               replayed (`planDrain`). Only the author's
+ *                               recovery decision clears it.
+ *   transport_error / invalid / anything else
+ *                               → `previous`, or `sent` when nothing was
+ *                               held. The answer was lost, cut off or
+ *                               unreadable (`parseCommitOutcome` turns a
+ *                               truncated `committed` into `invalid`), so the
+ *                               CAS may have moved the base, and a newer row
+ *                               sent on the old one would be `stale_base`
+ *                               against the author's own commit. Replaying
+ *                               `sent` is safe: `duplicate` if it landed, the
+ *                               commit itself if it did not.
  *
  * "Verified" is `ackedRevision`, i.e. only an outcome that `outcomeToEvents`
  * itself vouched for can release the hold.
+ *
+ *   any answer `outcomeToEvents` found settled → `previous`, unchanged: the
+ *                               queue no longer holds `sent`, so a late answer
+ *                               for it neither releases, sets nor diverges a
+ *                               hold (#181). Call `outcomeToEvents` first.
  */
 export function nextAwaitingReceipt(
   sent: PendingTransaction,
   outcome: DrainOutcome,
   previous: AwaitingReceipt | null,
 ): AwaitingReceipt | null {
-  if (outcome?.status !== "committed" && outcome?.status !== "duplicate") {
-    return previous ?? null;
+  if (outcome !== null && typeof outcome === "object" && NOT_OWED.has(outcome)) {
+    return previous;
   }
-  // The verification must be for THIS row: a verified outcome reused or
-  // cached for another row or document releases nothing.
-  const verified = VERIFIED_COMMIT_REVISIONS.get(outcome);
-  if (
-    verified !== undefined &&
-    verified.documentId === sent.documentId &&
-    verified.clientTransactionId === sent.tx.clientTransactionId
-  ) {
-    return null;
+  const status: unknown = outcome?.status;
+  if (status === "committed" || status === "duplicate") {
+    // The verification must be for THIS row: a verified outcome reused or
+    // cached for another row or document releases nothing.
+    const verified = VERIFIED_COMMIT_REVISIONS.get(outcome);
+    // A diverged hold is released only by its own row (plan #166 t. 10): a
+    // late verified answer for a newer row says nothing about the key the
+    // server holds with other bytes.
+    if (isDiverged(previous) && !isSameRow(previous!, sent)) {
+      return previous;
+    }
+    if (
+      verified !== undefined &&
+      verified.documentId === sent?.documentId &&
+      verified.clientTransactionId === sent?.tx?.clientTransactionId
+    ) {
+      return null;
+    }
+    // An unverified answer never downgrades a diverged hold back to replay.
+    if (isDiverged(previous) && isSameRow(previous!, sent)) {
+      return previous;
+    }
+    return awaitingReceiptFor(sent);
   }
-  return {
-    documentId: sent.documentId,
-    localSeq: sent.localSeq,
-    clientTransactionId: sent.tx.clientTransactionId,
-  };
+  if (status === "txid_reused") {
+    if (previous != null && !isSameRow(previous, sent)) {
+      // `outcomeToEvents` answers SYNC_KEY_DIVERGED whichever row this was,
+      // so the hold must say so too: RECOVERY_REQUIRED with a sendable hold
+      // behind it could not be rebuilt after a restart.
+      return isDiverged(previous) ? previous : { ...previous, diverged: "txid_reused" };
+    }
+    return { ...awaitingReceiptFor(sent), diverged: "txid_reused" };
+  }
+  if (typeof status === "string" && KEY_REFUSED.has(status)) {
+    // A late refusal never releases a diverged hold (plan #166 t. 10, 11):
+    // only the author's recovery decision or its own verified receipt does.
+    if (isDiverged(previous)) {
+      return previous;
+    }
+    if (previous == null) {
+      return null;
+    }
+    return isSameRow(previous, sent) ? null : previous;
+  }
+  if (status === "unauthenticated") {
+    return previous;
+  }
+  return previous ?? awaitingReceiptFor(sent);
+}
+
+function isSameRow(marker: AwaitingReceipt, sent: PendingTransaction): boolean {
+  return isSameIdentity(
+    {
+      documentId: marker.documentId,
+      localSeq: marker.localSeq,
+      clientTransactionId: marker.clientTransactionId,
+    },
+    identityOf(sent),
+  );
+}
+
+/** When a document's held row may next be sent, and how many sends preceded it. */
+export type RetrySchedule = { attempt: number; notBefore: number };
+
+/** Per-document retry schedules. One document's wait never delays another's. */
+export type RetrySchedules = ReadonlyMap<string, RetrySchedule>;
+
+/**
+ * The schedule after an answer for `documentId` (DAN-135, plan #166 t. 7-9).
+ *
+ * `heldAfter` is `nextAwaitingReceipt(...)` for that answer. While a row is
+ * still held, every further send of it (automatic or a manual retry out of
+ * ERROR) waits `nextAttemptDelayMs(attempt)` from `nowMs`, and `attempt` keeps
+ * growing. The schedule ends only when the hold does, or when it diverges and
+ * no send is planned at all. A new EDIT does not reset it: an author typing
+ * against a server in trouble must not turn backoff into a hot loop.
+ *
+ * Pure: returns a new map and never mutates `schedules`.
+ */
+export function scheduleAfterOutcome(
+  schedules: RetrySchedules,
+  documentId: string,
+  heldAfter: AwaitingReceipt | null,
+  nowMs: number,
+  jitterFn: () => number = Math.random,
+): RetrySchedules {
+  const next = new Map(schedules);
+  if (heldAfter === null || isDiverged(heldAfter)) {
+    next.delete(documentId);
+    return next;
+  }
+  const attempt = (schedules.get(documentId)?.attempt ?? 0) + 1;
+  next.set(documentId, { attempt, notBefore: nowMs + nextAttemptDelayMs(attempt, jitterFn) });
+  return next;
+}
+
+/**
+ * Whether `documentId` may be sent at `nowMs`. A document without a schedule
+ * owes no wait, so a stalled document never holds back a healthy one.
+ */
+export function mayAttempt(schedules: RetrySchedules, documentId: string, nowMs: number): boolean {
+  const schedule = schedules.get(documentId);
+  return schedule === undefined || nowMs >= schedule.notBefore;
+}
+
+/**
+ * True when adopting the server's version would drop local rows newer than
+ * the held one (`held` null: any queued row of the document). Owner decision
+ * on #166 (record: #87, comment 6100954183): such an adoption needs the
+ * author's explicit confirmation.
+ */
+export function adoptDiscardsNewerRows(
+  queue: readonly PendingTransaction[],
+  documentId: string,
+  held: AwaitingReceipt | null,
+): boolean {
+  return queue.some(
+    (row) =>
+      row?.documentId === documentId &&
+      (held === null || held.documentId !== documentId || row.localSeq > held.localSeq),
+  );
+}
+
+/**
+ * The events for "take the server's version" out of RECOVERY_REQUIRED. Without
+ * `confirmed === true` while newer local rows would be dropped there is no
+ * event at all, so the state cannot move: a missing confirmation is never
+ * read as consent.
+ */
+export function adoptServerEvents(
+  queue: readonly PendingTransaction[],
+  documentId: string,
+  held: AwaitingReceipt | null,
+  confirmed: boolean,
+): SyncEvent[] {
+  if (confirmed !== true && adoptDiscardsNewerRows(queue, documentId, held)) {
+    return [];
+  }
+  return [{ type: "RECOVERED", via: "adopt-server" }];
 }
 
 /**
@@ -641,15 +1012,19 @@ export function fastForwardBase(
  * Maps a `ServerSyncError` code from the commit server action onto a drain
  * outcome, so the runner sees one vocabulary.
  *
- * `slanje` and `citanje` are the two codes that mean "the round trip did not
- * complete" — Postgres unreachable, the RPC erroring out — and they are the
- * only retryable ones. The rest describe the payload or the row, and repeating
- * them changes nothing.
+ * `slanje` and `citanje` mean "the round trip did not complete" — Postgres
+ * unreachable, the RPC erroring out. `odgovor-neispravan` means the answer
+ * came back truncated or unreadable, so the CAS may well have landed: like a
+ * lost answer, it must hold the sent row and replay the same key (DAN-110),
+ * never drop the hold and let a newer row out on the old base. These three
+ * are the only retryable ones. The rest describe the payload or the row, and
+ * repeating them changes nothing.
  */
 export function serverSyncErrorToOutcome(code: ServerSyncErrorCode): DrainOutcome {
   switch (code) {
     case "slanje":
     case "citanje":
+    case "odgovor-neispravan":
       return { status: "transport_error" };
     case "prevelik":
       return { status: "too_large" };
@@ -657,8 +1032,6 @@ export function serverSyncErrorToOutcome(code: ServerSyncErrorCode): DrainOutcom
       return { status: "not_found" };
     case "zapis-neispravan":
       return { status: "invalid_document" };
-    case "odgovor-neispravan":
-      return { status: "invalid" };
     default:
       return { status: "invalid" };
   }

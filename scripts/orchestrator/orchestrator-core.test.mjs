@@ -40,6 +40,14 @@ test("verdicts in code fences, non-first lines and untrusted authors are ignored
   assert.equal(countCanonical(comments), 0);
 });
 
+test("verdicts count only from authors the gate trusts", () => {
+  const as = (association, user) => ({ ...review(H1, "PASS", "2026-10-10T10:00:00Z"), author_association: association, user });
+  assert.equal(countCanonical([as("OWNER", { login: "o", type: "User" })]), 1);
+  assert.equal(countCanonical([as("COLLABORATOR", { login: "helper", type: "User" })]), 0);
+  assert.equal(countCanonical([as("MEMBER", { login: "helper", type: "User" })]), 0);
+  assert.equal(countCanonical([as("OWNER", { login: "app[bot]", type: "Bot" })]), 0);
+});
+
 test("qa verdicts parse separately", () => {
   const qa = c(`QA-Agent: claude:c:qa\nQA-Head: ${H1}\nQA-Verdict: block`);
   assert.equal(latestVerdict([qa], "qa", H1).verdict, "BLOCK");
@@ -64,7 +72,7 @@ test("file intersection and D-97 detection", () => {
   assert.deepEqual(intersectFiles(null, ["a"]), []);
   assert.deepEqual(
     d97Matches(["src/x.ts", ".github/workflows/ci.yml", "scripts/engineering/a.mjs", "CLAUDE.md", "docs/PRODUCT.md", "scripts/orchestrator/a.mjs", ".claude/skills/x/SKILL.md", "lefthook.yml"]),
-    [".github/workflows/ci.yml", "scripts/engineering/a.mjs", "CLAUDE.md", ".claude/skills/x/SKILL.md", "lefthook.yml"],
+    [".github/workflows/ci.yml", "scripts/engineering/a.mjs", "CLAUDE.md", "scripts/orchestrator/a.mjs", ".claude/skills/x/SKILL.md", "lefthook.yml"],
   );
   assert.deepEqual(d97Matches(["xCLAUDE.md", ".github2/a"]), []);
   assert.deepEqual(d97ManualMatches(["docs/DECISIONS.md", "a"]), ["docs/DECISIONS.md"]);
@@ -187,4 +195,75 @@ test("D-97 and draft are INFO only", () => {
   assert.match(r.find((x) => x.id === "d97").text, /Daniel/);
   assert.ok(r.find((x) => x.id === "d97-manual"));
   assert.equal(r.find((x) => x.id === "draft").text, "draft");
+});
+
+test("the orchestrator tools and the agent plugin are D-97 paths in any spelling", () => {
+  const files = ["scripts/orchestrator/orchestrator-core.mjs", "plugins/ductura-engineering/skills/x/SKILL.md"];
+  assert.deepEqual(d97Matches(files), files);
+  assert.match(evaluateReady(ready({ files })).find((x) => x.id === "d97").text, /orchestrator-core\.mjs, plugins\/ductura-engineering/);
+  assert.deepEqual(d97Matches(["./Scripts\\Orchestrator\\gh.mjs", "claude.md", ".GITHUB/x"]), ["Scripts/Orchestrator/gh.mjs", "claude.md", ".GITHUB/x"]);
+  assert.deepEqual(d97ManualMatches(["Docs/decisions.md"]), ["Docs/decisions.md"]);
+});
+
+test("an unread file list fails readiness instead of reporting no D-97 paths", () => {
+  const r = evaluateReady(ready({ files: null }));
+  assert.equal(r.find((x) => x.id === "files").level, "FAIL");
+  assert.equal(allRequiredPass(r), false);
+  assert.equal(evaluateReady(ready({ files: [] })).find((x) => x.id === "files"), undefined);
+});
+
+// DAN-118. Shape of `gh pr view --json statusCheckRollup` for PR #145 on head 13a47cae.
+const run = (name, conclusion, startedAt, completedAt, workflowName = "CI") =>
+  ({ __typename: "CheckRun", name, conclusion, status: conclusion ? "COMPLETED" : "IN_PROGRESS", startedAt, completedAt, workflowName });
+const LINT = "Lint, typecheck, test and build";
+const RERUN = [
+  run(LINT, "FAILURE", "2026-10-10T14:34:37Z", "2026-10-10T14:34:57Z"),
+  run(LINT, "SUCCESS", "2026-10-10T14:37:20Z", "2026-10-10T14:38:15Z"),
+  run("Dependency review", "SUCCESS", "2026-10-10T14:31:31Z", "2026-10-10T14:31:38Z", "Dependency review"),
+  run("Dependency review", "SUCCESS", "2026-10-10T14:37:20Z", "2026-10-10T14:37:24Z", "Dependency review"),
+];
+
+test("CI: only the newest run of each check counts", () => {
+  assert.deepEqual(evaluateChecks(RERUN), { total: 2, bad: [] });
+  assert.deepEqual(evaluateChecks([...RERUN].reverse()), { total: 2, bad: [] });
+  const r = evaluateReady(ready({ rollup: RERUN }));
+  assert.equal(r.find((x) => x.id === "ci").text, "CI green (2 checks)");
+  assert.equal(allRequiredPass(r), true);
+});
+
+test("CI: a newer failing or unfinished run of a check is not hidden by an older green one", () => {
+  const green = run(LINT, "SUCCESS", "2026-10-10T14:34:37Z", "2026-10-10T14:34:57Z");
+  for (const [state, newer] of [
+    ["FAILURE", run(LINT, "FAILURE", "2026-10-10T14:37:20Z", "2026-10-10T14:38:15Z")],
+    ["IN_PROGRESS", run(LINT, "", "2026-10-10T14:37:20Z", null)],
+    ["CANCELLED", run(LINT, "CANCELLED", "2026-10-10T14:37:20Z", "2026-10-10T14:37:21Z")],
+  ]) {
+    for (const rollup of [[green, newer], [newer, green]]) {
+      assert.deepEqual(evaluateChecks(rollup), { total: 1, bad: [{ name: LINT, state }] });
+    }
+  }
+});
+
+test("CI: runs are never merged across workflows, and unknown order keeps the failure", () => {
+  const other = run(LINT, "FAILURE", "2026-10-10T14:00:00Z", "2026-10-10T14:01:00Z", "Other workflow");
+  assert.deepEqual(evaluateChecks([other, ...RERUN]).bad, [{ name: LINT, state: "FAILURE" }]);
+  const undated = [{ name: "t", conclusion: "FAILURE" }, { name: "t", conclusion: "SUCCESS" }];
+  for (const rollup of [undated, [...undated].reverse()]) {
+    assert.deepEqual(evaluateChecks(rollup), { total: 1, bad: [{ name: "t", state: "FAILURE" }] });
+  }
+  const statuses = [
+    { context: "legacy", state: "FAILURE", startedAt: "2026-10-10T14:00:00Z" },
+    { context: "legacy", state: "SUCCESS", startedAt: "2026-10-10T14:05:00Z" },
+  ];
+  assert.deepEqual(evaluateChecks(statuses), { total: 1, bad: [] });
+});
+
+test("readiness: an unreadable gate is reported as a read error, not as a missing status", () => {
+  const r = evaluateReady(ready({ gate: { error: "HTTP 502: Bad Gateway" } }));
+  const gate = r.find((x) => x.id === "gate");
+  assert.equal(gate.level, "FAIL");
+  assert.match(gate.text, /gate could not be read on aaaaaaaa \(read error, not a missing status; retry\): HTTP 502/);
+  assert.doesNotMatch(gate.text, /gate missing/);
+  assert.equal(allRequiredPass(r), false);
+  assert.match(evaluateReady(ready({ gate: null })).find((x) => x.id === "gate").text, /^gate missing on aaaaaaaa$/);
 });
