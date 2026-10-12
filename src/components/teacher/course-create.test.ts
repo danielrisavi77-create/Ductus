@@ -13,7 +13,7 @@ describe("F-6b course form transport contract", () => {
   it("posts only the course fields to the existing same-origin endpoint", async () => {
     const send = vi.fn(async () => Response.json({ id: ID }, { status: 200 })) as unknown as typeof fetch;
     const result = await createCourse({ ...valid, institutionId: "forged", userId: "forged" } as typeof valid, send);
-    expect(result).toEqual({ kind: "created", id: ID });
+    expect(result).toEqual({ kind: "available", id: ID });
     expect(send).toHaveBeenCalledTimes(1);
     const [path, options] = (send as ReturnType<typeof vi.fn>).mock.calls[0]!;
     expect(path).toBe("/api/institution/courses");
