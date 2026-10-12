@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as fc from "fast-check";
 import {
   applyRevisionToConditions,
@@ -9,6 +9,13 @@ import {
 } from "./conditional-validity";
 
 describe("conditional-validity property tests (S-UV1)", () => {
+  beforeEach(() => {
+    process.env.CONDITIONAL_VALIDITY = "true";
+  });
+  afterEach(() => {
+    delete process.env.CONDITIONAL_VALIDITY;
+  });
+
   it("trivial whitespace and trailing punctuation never trigger re-review", () => {
     fc.assert(
       fc.property(
