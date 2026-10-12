@@ -34,9 +34,11 @@ export default async function TeacherCoursesPage() {
             </p>
             {access === "denied" ? (
               <p>
-                <Link href="/api/auth/login?returnTo=%2Fnastavnik%2Fkolegiji">
+                {/* This API route starts an OIDC login. Use a real navigation
+                    rather than Next's prefetchable client-side Link. */}
+                <a href="/api/auth/login?returnTo=%2Fnastavnik%2Fkolegiji">
                   {t.teacherCourses.signIn}
-                </Link>
+                </a>
               </p>
             ) : null}
           </>
