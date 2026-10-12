@@ -44,7 +44,7 @@ export const hr = {
     policyEncouraged: "AI pomoć je dopuštena uz pravila zadatka",
     submit: "Stvori kolegij",
     pending: "Stvaranje kolegija…",
-    created: "Kolegij je stvoren. Identifikator:",
+    created: "Kolegij je zabilježen. Identifikator:",
     errors: {
       invalid: "Provjeri naziv, akademsku godinu i pravila kolegija.",
       unauthorized: "Prijava nije valjana. Prijavi se ponovno.",
