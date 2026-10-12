@@ -2,7 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 // Every page added later gets a row here; WCAG 2.1 AA is the pilot target.
-const PAGES = ["/", "/rad"];
+const PAGES = ["/", "/rad", "/nastavnik/kolegiji"];
 
 // The dark theme follows the system setting and has its own tokens, so its
 // contrast is checked separately from the light one.
