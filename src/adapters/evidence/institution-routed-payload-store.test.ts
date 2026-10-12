@@ -221,6 +221,25 @@ describe("InstitutionRoutedPayloadStore", () => {
     await expect(other.putImmutable(input(FAK_B))).resolves.toEqual(UNAVAILABLE);
   });
 
+  it.each([
+    ["an empty object", {}],
+    ["stored without a reference", { status: "stored" }],
+    ["existing with an empty reference", { status: "existing", storageRef: "" }],
+    ["an unknown status", { status: "saved", storageRef: "fake:ref" }],
+    ["unavailable without a reason", { status: "unavailable" }],
+  ])("answers a write that resolves to %s as unavailable, never as stored", async (_, answer) => {
+    const a = fakeDomain(verified);
+    a.putImmutable.mockResolvedValueOnce(answer as never);
+    const { router, warn } = routerWith({ [FAK_A]: a });
+
+    await expect(router.putImmutable(input(FAK_A))).resolves.toEqual(UNAVAILABLE);
+    await logged();
+    expect(warn).toHaveBeenCalledWith("evidence storage domain is unavailable", {
+      storageDomain: "fak-0",
+      reason: "storage_request_failed",
+    });
+  });
+
   it("reads the input once, so a getter cannot move the write to another institution", async () => {
     const a = fakeDomain(verified);
     const b = fakeDomain(verified);

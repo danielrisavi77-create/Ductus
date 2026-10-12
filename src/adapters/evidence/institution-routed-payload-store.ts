@@ -160,8 +160,10 @@ export class InstitutionRoutedPayloadStore implements EvidencePayloadStore {
     } catch {
       stored = { status: "unavailable", reason: "storage_request_failed" };
     }
-    // A store that answers outside its type is a failed request, not a throw.
-    if (!isObject(stored)) {
+    // A store that answers outside its type is a failed request, not a throw
+    // and not a success: only a closed status passes, and a stored or
+    // existing object only with a reference to it.
+    if (!isPutResult(stored)) {
       stored = { status: "unavailable", reason: "storage_request_failed" };
     }
     if (stored.status !== "unavailable") return stored;
@@ -229,6 +231,22 @@ export class InstitutionRoutedPayloadStore implements EvidencePayloadStore {
   }
 }
 
-function isObject(value: unknown): boolean {
+function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function isPutResult(value: unknown): value is EvidencePayloadPutResult {
+  if (!isObject(value)) return false;
+  switch (value.status) {
+    case "stored":
+    case "existing":
+      return typeof value.storageRef === "string" && value.storageRef !== "";
+    case "conflict":
+    case "invalid":
+      return true;
+    case "unavailable":
+      return typeof value.reason === "string";
+    default:
+      return false;
+  }
 }
