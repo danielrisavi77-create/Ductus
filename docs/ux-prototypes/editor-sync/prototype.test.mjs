@@ -6,7 +6,9 @@ import { test } from 'node:test';
 
 const html = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
 const script = html.match(/<script id="scratch-model">([\s\S]*?)<\/script>/)?.[1];
-const inlineScriptBodies = source => [...source.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi)]
+// Inspects this controlled fixture; not a general HTML parser or sanitizer.
+// Include browser-accepted end-tag attributes/slashes, but not script-like names.
+const inlineScriptBodies = source => [...source.matchAll(/<script(?=[\t\n\f\r />])[^>]*>([\s\S]*?)<\/script(?=[\t\n\f\r />])[^>]*>/gi)]
   .map(match => match[1]);
 const context = {};
 if (script) runInNewContext(script, context, { timeout: 1000 });
@@ -188,4 +190,14 @@ test('CSP inspection includes uppercase and mixed-case script tags', () => {
   assert.deepEqual(inlineScriptBodies(
     '<script>first</script><SCRIPT>second</SCRIPT><ScRiPt>third</sCrIpT >',
   ), ['first', 'second', 'third']);
+});
+
+test('CSP inspection recognizes browser-accepted end-tag suffixes', () => {
+  for (const ending of ['</script\t\n bar>', '</script foo="bar">', '</script/>']) {
+    assert.deepEqual(inlineScriptBodies('<script>body' + ending), ['body'], ending);
+  }
+});
+test('script-like tag names do not delimit an inline script body', () => {
+  assert.deepEqual(inlineScriptBodies('<scripture>not a script</scripture>'), []);
+  assert.deepEqual(inlineScriptBodies('<script>body</script-foo>tail</script>'), ['body</script-foo>tail']);
 });
