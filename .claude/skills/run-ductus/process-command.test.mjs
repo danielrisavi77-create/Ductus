@@ -7,9 +7,9 @@ test('Linux uses pnpm with separate argv, never shell', () => {
   assert.deepEqual(pnpmCommand('serve', { platform: 'linux', port: 3111 }), {
     command: 'pnpm', args: ['exec', 'next', 'start', '-p', '3111'],
   });
+});
 
-
-test('Windows uses fixed cmd.exe commands without Node shell:true', () => {
+test('Windows uses a fixed cmd.exe shim without Node shell:true', () => {
   assert.deepEqual(pnpmCommand('build', { platform: 'win32' }), {
     command: 'cmd.exe', args: ['/d', '/s', '/c', 'pnpm build'],
   });
