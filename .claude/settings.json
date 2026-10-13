@@ -177,11 +177,9 @@
         "hooks": [
           {
             "type": "command",
-            "if": "Edit(scripts/orchestrator/**)",
             "command": "node",
             "args": [
-              "--test",
-              "${CLAUDE_PROJECT_DIR}/scripts/orchestrator/*.test.mjs"
+              "${CLAUDE_PROJECT_DIR}/scripts/hooks/orchestrator-tests.mjs"
             ],
             "asyncRewake": true,
             "timeout": 120
