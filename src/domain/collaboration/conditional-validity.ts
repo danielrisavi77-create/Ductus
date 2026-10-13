@@ -49,7 +49,8 @@ export function normalizeForComparison(text: string): string {
   return text
     .replace(/\s+/g, " ")
     .trim()
-    .replace(/[.,;:!?]+$/g, "");
+    .replace(/(?:\s*[.,;:!?])+$/g, "")
+    .trim();
 }
 
 /** Jednostavan hash za spike (ne kriptografski). U produkciji zamijeniti. */

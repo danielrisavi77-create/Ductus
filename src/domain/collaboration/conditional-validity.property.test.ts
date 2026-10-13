@@ -20,7 +20,9 @@ describe("conditional-validity property tests (S-UV1)", () => {
     fc.assert(
       fc.property(
         fc.string({ minLength: 1, maxLength: 200 }),
-        fc.string({ minLength: 0, maxLength: 10 }),
+        fc.array(fc.constantFrom(" ", "\t", "\n", ".", ",", ";", ":", "!", "?"), {
+          maxLength: 10,
+        }).map((parts) => parts.join("")),
         (base, noise) => {
           const original = base.trim();
           if (!original) return true;
@@ -34,7 +36,7 @@ describe("conditional-validity property tests (S-UV1)", () => {
             accepted_by: "t",
           };
 
-          const trivial = `  ${original}${noise.replace(/[a-zA-Z0-9]/g, "")}.  `;
+          const trivial = `  ${original}${noise}.  `;
           const result = applyRevisionToConditions([condition], trivial);
           return !hasNeedsReReview(result);
         },

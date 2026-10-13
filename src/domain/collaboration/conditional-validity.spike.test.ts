@@ -35,6 +35,8 @@ describe("conditional-validity spike (S-UV1)", () => {
     it("collapses whitespace and trims trailing punctuation", () => {
       expect(normalizeForComparison("  hello   world.  ")).toBe("hello world");
       expect(normalizeForComparison("test!")).toBe("test");
+      expect(normalizeForComparison("  test ! ?.  ")).toBe("test");
+      expect(normalizeForComparison(" ! . ")).toBe("");
     });
   });
 
