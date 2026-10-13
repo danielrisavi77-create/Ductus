@@ -16,6 +16,9 @@ Paralelno s fazama teče tvoj red (`STATE.md`, Owner queue): Srce, FPZG, pravni 
 
 Backend (hosting, prijava, evidencija, korijen i žig, operacije) razrađen je u `docs/BACKEND.md` §8 kao okomiti rez kroz ove faze; dodatak realno 18 do 25 večeri (zaseban red u valu 1) uz spikeove B0.1 i B0.2 prije M2.
 
+**Razgraničenje vizuala (D-115):** funkcionalni elementi M5 navedeni u ovoj tablici i podjeli valova ne znače da je dizajn prototipa v6 (D-89) još kanonski. Za izgled, tokene i komponente vrijedi novi `docs/design/DESIGN-SYSTEM.md` nakon njegova formalnog prihvaćanja; D-115 zamjenjuje vizualni dio D-85, ali ne mijenja funkcionalne izlazne kriterije M5. 
+
+
 | Faza | Sadržaj | Izlazni kriterij | Procjena |
 | --- | --- | --- | --- |
 | **M0 Temelj** | Prijenos jezgre iz `pisac-editor` s testovima; CI (lint, typecheck, unit, property, E2E, axe, Gitleaks, zizmor, Semgrep, OSV); lefthook; `docker compose` okruženje (Postgres, S3-kompatibilna pohrana, Mailpit, lažni OIDC; MinIO više nema sliku, lokalno RustFS) u CI-ju; kod iza sučelja dok dio D-08 o dobavljačima i trošku nije potvrđen | Svi preneseni testovi zeleni, isti broj kao u izvoru; CI zelen na `main` | 2 do 3 |
