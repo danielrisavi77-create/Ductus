@@ -66,6 +66,54 @@ function runsOf(block: PmNode, start: number): Run[] {
  */
 type Repair = { from: number; to: number; text: string; marks: readonly Mark[] };
 
+type IdentityMapResult = { pos: number; deleted: boolean; deletedAfter: boolean };
+
+/**
+ * `StepMap` preserves the exact position semantics but scans every earlier
+ * range for each query. Identity traces old blocks in document order, so let
+ * that caller advance through repair ranges once instead.
+ */
+class RepairRunsMap extends StepMap {
+  private readonly identityRanges: readonly number[];
+  private identityRange = 0;
+  private identityDiff = 0;
+  private identityLastPos = -1;
+
+  constructor(ranges: readonly number[]) {
+    super(ranges);
+    this.identityRanges = ranges;
+  }
+
+  /** Map ascending positions for the identity trace; falls back safely on a rewind. */
+  mapIdentityPosition(pos: number, assoc: number): IdentityMapResult {
+    if (pos < this.identityLastPos) {
+      this.identityRange = 0;
+      this.identityDiff = 0;
+    }
+    this.identityLastPos = pos;
+
+    while (this.identityRange < this.identityRanges.length) {
+      const index = this.identityRange;
+      const start = this.identityRanges[index]!;
+      if (start > pos) break;
+      const oldSize = this.identityRanges[index + 1]!;
+      const newSize = this.identityRanges[index + 2]!;
+      const end = start + oldSize;
+      if (pos <= end) {
+        const side = !oldSize ? assoc : pos === start ? -1 : pos === end ? 1 : assoc;
+        return {
+          pos: start + this.identityDiff + (side < 0 ? 0 : newSize),
+          deleted: oldSize > 0 && (assoc < 0 ? pos !== start : pos !== end),
+          deletedAfter: oldSize > 0 && pos < end,
+        };
+      }
+      this.identityDiff += newSize - oldSize;
+      this.identityRange += 3;
+    }
+    return { pos: pos + this.identityDiff, deleted: false, deletedAfter: false };
+  }
+}
+
 /**
  * Replaces many text ranges in one pass over the document, rebuilding each
  * touched block once. Its map lists only those ranges, exactly as one replace
@@ -115,7 +163,8 @@ export class RepairRuns extends Step {
   }
 
   getMap(): StepMap {
-    return new StepMap(this.repairs.flatMap(({ from, to, text }) => [from, to - from, text.length]));
+    const ranges = this.repairs.flatMap(({ from, to, text }) => [from, to - from, text.length]);
+    return new RepairRunsMap(ranges);
   }
 
   invert(doc: PmNode): Step {

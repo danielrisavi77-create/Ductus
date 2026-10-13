@@ -1,8 +1,8 @@
 import { Editor } from "@tiptap/core";
 import { Fragment, Slice } from "@tiptap/pm/model";
 import { TextSelection, type Transaction } from "@tiptap/pm/state";
-import { ReplaceStep, type Step } from "@tiptap/pm/transform";
-import { afterEach, describe, expect, it } from "vitest";
+import { ReplaceStep, StepMap, type Step } from "@tiptap/pm/transform";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { CanonicalDocument, NodeId } from "../domain/document";
 
@@ -35,6 +35,21 @@ function editorWith(texts: string[]): Editor {
   };
   const editor = new Editor({ element: null, extensions: [...createEditorExtensions(), StorableInput], content });
   // Tiptap attaches its plugins when it mounts; without a DOM they are attached here.
+  editor.view.updateState(editor.state.reconfigure({ plugins: editor.extensionManager.plugins }));
+  editors.push(editor);
+  return editor;
+}
+
+function editorWithManyBlocks(count: number): Editor {
+  const content: TiptapDocumentJSON = {
+    type: "doc",
+    content: Array.from({ length: count }, (_, index) => ({
+      type: "paragraph",
+      attrs: { [NODE_ID_ATTRIBUTE]: `00000000-0000-4000-8000-${index.toString(16).padStart(12, "0")}` },
+      content: [{ type: "text", text: `original-${index}` }],
+    })),
+  };
+  const editor = new Editor({ element: null, extensions: [...createEditorExtensions(), StorableInput], content });
   editor.view.updateState(editor.state.reconfigure({ plugins: editor.extensionManager.plugins }));
   editors.push(editor);
   return editor;
@@ -292,6 +307,37 @@ describe("StorableInput", () => {
     expect(ids).toContain(ID_A);
     expect(ids).toContain(ID_B);
     expectStorable(editor);
+  });
+
+  it("maps a many-run repair across many existing blocks in one ordered pass", () => {
+    const count = 4_000;
+    const editor = editorWithManyBlocks(count);
+    const { schema } = editor.state;
+    const pasted = Array.from({ length: count }, (_, index) =>
+      schema.nodes.paragraph!.create(null, schema.text(`pasted-${index}\u0000`)));
+    const insertAt = editor.state.doc.child(0).nodeSize;
+    const tr = editor.state.tr.replace(insertAt, insertAt, new Slice(Fragment.from(pasted), 0, 0));
+
+    const originalMapResult = StepMap.prototype.mapResult;
+    let repairMapQueries = 0;
+    const spy = vi.spyOn(StepMap.prototype, "mapResult").mockImplementation(function (this: StepMap, pos, assoc) {
+      const ranges = (this as unknown as { ranges: readonly number[] }).ranges;
+      if (ranges.length >= count * 3) repairMapQueries += 1;
+      return originalMapResult.call(this, pos, assoc);
+    });
+    try {
+      repairSteps(editor, tr);
+      expect(repairMapQueries).toBeLessThan(10);
+    } finally {
+      spy.mockRestore();
+    }
+
+    expect(editor.state.doc.textContent).not.toContain("\u0000");
+    const firstOriginal = editor.state.doc.child(0);
+    const lastOriginal = [...Array(editor.state.doc.childCount)].map((_, index) => editor.state.doc.child(index))
+      .find((node) => node.textContent.endsWith(`original-${count - 1}`));
+    expect(firstOriginal.attrs[NODE_ID_ATTRIBUTE]).toBe("00000000-0000-4000-8000-000000000000");
+    expect(lastOriginal?.attrs[NODE_ID_ATTRIBUTE]).toBe(`00000000-0000-4000-8000-${(count - 1).toString(16).padStart(12, "0")}`);
   });
 
   it("F-071: inserts around an existing block's text leave its id on that text, not on the inserted text", () => {
