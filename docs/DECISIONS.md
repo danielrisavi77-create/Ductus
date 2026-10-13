@@ -126,6 +126,15 @@ Trag: komentar na issueu #87, `issuecomment-6114554995` (zapis orkestratora po v
 | D-111 | **Potvrđeno 12. 10. 2026. (Daniel).** Zadaci s demo lanca koje dodjeljuje orkestrator izuzeti su od labele `ready-for-claude`. Trijaža labelira samo issuee izvan lanca (`CLAUDE.md`) | Odluka vlasnika iz revizije sustava |
 | D-112 | **Potvrđeno 12. 10. 2026. (Daniel; trag F-063).** Noćni prozor iz `docs/ORKESTRATOR.md` §4 ne obuhvaća PR-ove koji diraju dokumente s pravilima (`docs/ORKESTRATOR.md`, `docs/ENGINEERING_SYSTEM.md`, `docs/SESSIONS.md`, `CLAUDE.md`, `AGENTS.md`, `docs/DECISIONS.md`), skill i definiciju orkestratora, `scripts/orchestrator/pr-ready.mjs` i `gh.mjs` ni išta u `scripts/engineering/`. Takvi PR-ovi uvijek čekaju vlasnikovu naredbu s brojem PR-a. Sigurnosna iznimka od zamrzavanja (D-108 (a)) | Sigurnosni razlog; pojedinosti se ne objavljuju u javnom repou |
 
+## Odlučeno (12. 10. 2026.): redoslijed reviewa i iznimke od zamrzavanja
+
+Trag: komentari na issueu #87 `issuecomment-6127202099`, `6127287778` i `6133470901` te na PR-u #308 `6133266741` (zapisi vlasnikovih odluka iz sesija monitoring agenta i reviewa, dok su Claude pretplata i Codex kvota bile iscrpljene). Brojevi D-113 i D-114 dodijeljeni su ovim PR-om.
+
+| Broj | Odluka | Razlog |
+| --- | --- | --- |
+| D-113 | **Potvrđeno 12. 10. 2026. (Daniel; `6127202099`).** Mijenja D-109 u dijelu o reviewu: neovisni review najprije daje Grok (`grok-by-xai`); Claude daje review samo kad su iscrpljene i Grok i Codex pretplata. QA za `critical` PR i dalje mora doći s drugog Appa od reviewera (`docs/ENGINEERING_SYSTEM.md` §6), pa uz Grok review QA daje Claude ili Codex. Gate se ne mijenja | Odluka vlasnika dok su Claude pretplata i Codex kvota bile iscrpljene, a Grok dostupan |
+| D-114 | **Potvrđeno 12. 10. 2026. (Daniel; `6127202099`, `6127287778`, `6133470901`, #308 `6133266741`).** Iznimke od zamrzavanja D-108: odmrznuti su #220, #221, #180, #94, #270, #266, #234 i #262; #308 (DAN-200) ulazi kao izričita iznimka (spojen istog dana uz vlasnikov `Owner-Override` koji preskače samo QA, #308 `6133550175`); #282 i #283 ne čekaju. Uz to: #94 ide putem (a), samo Mistral, i dijeli se na manje PR-ove (§14 t. 3); kanonska inačica šest skillova s popisa `knownDrift` u `tests/unit/skill-copies.test.ts` je `.agents/skills/`; #291 i #296 idu bez DAN oznake; #298 ide prije #297. Ostatak D-108 vrijedi | Vlasnikove odluke o opsegu iz istog dana; D-108 navodi popis PR-ova koji čekaju, a taj popis je ovim odlukama zastario |
+
 ## Prijedlozi koji čekaju potvrdu
 
 | Broj | Odluka | Prijedlog |
