@@ -4,6 +4,7 @@ import {
   hasNeedsReReview,
   isConditionalValidityEnabled,
   type ValidityCondition,
+  type CurrentConditionText,
 } from "./conditional-validity";
 
 export const REVISION_REQUEST_STATUSES = [
@@ -112,7 +113,7 @@ export function markRereviewRequired(state: RevisionRequestState): TransitionRes
  */
 export function applyConditionalValidity(
   state: RevisionRequestState,
-  currentTextInRange: string,
+  currentTextInRange: CurrentConditionText,
 ): RevisionRequestState {
   if (!isConditionalValidityEnabled()) return state;
   if (state.request.status !== "ACCEPTED_FOR_REVISION") return state;
