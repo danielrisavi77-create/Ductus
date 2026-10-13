@@ -63,6 +63,19 @@ describe("conditional-validity spike (S-UV1)", () => {
       expect(needsReReview(c, "rezultati uzrokuju promjene")).toBe(true);
     });
 
+    it("does not mistake a numeric substring or decimal extension for the protected number", () => {
+      const c = makeCondition({
+        kind: "protected_element",
+        protected_kind: "number",
+        protected_value: "42",
+        text_snapshot_hash: undefined,
+      });
+      expect(needsReReview(c, "broj sudionika je 142")).toBe(true);
+      expect(needsReReview(c, "broj sudionika je 420")).toBe(true);
+      expect(needsReReview(c, "broj sudionika je 42.0")).toBe(true);
+      expect(needsReReview(c, "broj sudionika je 42.")).toBe(false);
+    });
+
     it("detects protected number change", () => {
       const c = makeCondition({
         kind: "protected_element",
@@ -84,7 +97,9 @@ describe("conditional-validity spike (S-UV1)", () => {
           text_snapshot_hash: simpleHash(normalizeForComparison("druga tvrdnja")),
         }),
       ];
-      const updated = applyRevisionToConditions(conditions, "promijenjena prva tvrdnja");
+      const updated = applyRevisionToConditions(conditions, (condition) =>
+        condition.text_excerpt === "druga tvrdnja" ? "druga tvrdnja" : "promijenjena prva tvrdnja",
+      );
       expect(updated[0]?.status).toBe("needs_re_review");
       expect(updated[1]?.status).toBe("valid");
     });
@@ -95,6 +110,13 @@ describe("conditional-validity spike (S-UV1)", () => {
       expect(updated).toHaveLength(1);
       expect(updated[0]?.status).toBe("needs_re_review");
       expect(updated[0]?.text_excerpt).toBe("broj sudionika je 42");
+    });
+
+    it("fails conservatively for a range that cannot be resolved", () => {
+      const c = makeCondition();
+      const result = applyRevisionToConditions([c], () => null);
+      expect(result).toHaveLength(1);
+      expect(result[0]?.status).toBe("needs_re_review");
     });
 
     it("returns empty array when no conditions", () => {
