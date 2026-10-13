@@ -34,7 +34,7 @@ describe("Claude workflow owner-only security contract", () => {
     expect(mention).toMatch(/^\s+issue_comment:\s*$/m);
     expect(mention).toMatch(/github\.event\.comment\.user\.login == github\.repository_owner/);
     expect(mention).toMatch(/contains\(github\.event\.comment\.body, '@claude'\)/);
-    expect(mention).not.toMatch(/^\s+(?:pull_request|issues|pull_request_review|pull_request_review_comment):/m);
+    expect(mention).not.toMatch(/^ {2}(?:pull_request|issues|pull_request_review|pull_request_review_comment):/m);
     expect(mention).toMatch(/CLAUDE_CODE_OAUTH_TOKEN is not configured/);
   });
 });
