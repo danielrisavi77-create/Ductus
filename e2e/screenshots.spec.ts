@@ -1,4 +1,6 @@
-import { test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+import { messagesHr as t } from "../src/lib/i18n/messages.hr";
 
 // docs/SESSIONS.md 6: every frontend PR shows each screen wide and mobile, in
 // hr and en. Each project (desktop, mobile) runs this once and the images go
@@ -7,6 +9,7 @@ import { test } from "@playwright/test";
 const PAGES = [
   { name: "home", path: "/" },
   { name: "workspace", path: "/rad" },
+  { name: "teacher-courses", path: "/nastavnik/kolegiji" },
 ];
 const LOCALES = ["hr"] as const;
 // The dark theme follows the system setting (design v6, D-89).
@@ -14,13 +17,27 @@ const SCHEMES = ["light", "dark"] as const;
 // Wide (three columns), the 1100 px break (rails under the sheet) and a phone.
 const WIDTHS = [1440, 1000, 390] as const;
 
+// A protected SSR page can legitimately keep auth/link requests in flight.
+// For its anonymous screenshot, wait for the actual, expected denial state
+// and loaded fonts. networkidle is neither a security nor rendering proof.
+async function readyForScreenshot(page: Page, name: string) {
+  if (name === "teacher-courses") {
+    await expect(page.getByRole("heading", { name: t.teacherCourses.title })).toBeVisible();
+    await expect(page.getByText(t.teacherCourses.denied)).toBeVisible();
+    await page.evaluate(() => document.fonts.ready.then(() => true));
+    return;
+  }
+  await page.waitForLoadState("networkidle");
+}
+
+
 for (const locale of LOCALES) {
   for (const { name, path } of PAGES) {
     for (const colorScheme of SCHEMES) {
       test(`screenshot: ${name} (${locale}, ${colorScheme})`, async ({ page }, testInfo) => {
         await page.emulateMedia({ colorScheme });
         await page.goto(path);
-        await page.waitForLoadState("networkidle");
+        await readyForScreenshot(page, name);
         await testInfo.attach(`${testInfo.project.name}-${locale}-${name}-${colorScheme}.png`, {
           body: await page.screenshot({ fullPage: true }),
           contentType: "image/png",
@@ -32,7 +49,7 @@ for (const locale of LOCALES) {
           await page.setViewportSize({ width, height: 900 });
           await page.emulateMedia({ colorScheme });
           await page.goto(path);
-          await page.waitForLoadState("networkidle");
+          await readyForScreenshot(page, name);
           await testInfo.attach(`${testInfo.project.name}-${locale}-${name}-${width}-${colorScheme}.png`, {
             body: await page.screenshot({ fullPage: true }),
             contentType: "image/png",

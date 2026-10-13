@@ -16,6 +16,9 @@ export default function HomePage() {
             {t.home.openWorkspace}
           </Link>
         </p>
+        <p>
+          <Link href="/nastavnik/kolegiji">{t.home.openTeacherCourses}</Link>
+        </p>
       </main>
     </>
   );
