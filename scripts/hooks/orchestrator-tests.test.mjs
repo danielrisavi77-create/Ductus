@@ -61,6 +61,45 @@ test("the hook process runs the orchestrator suite from the event checkout", () 
   assert.equal(result.stderr, "");
 });
 
+test("the hook returns asyncRewake with diagnostics when tests fail or are missing", (t) => {
+  const hookPath = path.resolve("scripts", "hooks", "orchestrator-tests.mjs");
+  const makeCheckout = () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-hook-failure-"));
+    fs.mkdirSync(path.join(root, "scripts", "orchestrator"), { recursive: true });
+    fs.writeFileSync(path.join(root, "package.json"), "{}\n");
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    return root;
+  };
+  const runHook = (root) => spawnSync(process.execPath, [hookPath], {
+    cwd: root,
+    encoding: "utf8",
+    input: JSON.stringify({
+      tool_name: "Edit",
+      tool_input: { file_path: path.join(root, "scripts", "orchestrator", "changed.mjs") },
+      cwd: root,
+    }),
+    timeout: 120_000,
+    windowsHide: true,
+    env: Object.fromEntries(Object.entries(process.env).filter(([name]) => name !== "NODE_TEST_CONTEXT")),
+  });
+
+  const failingRoot = makeCheckout();
+  fs.writeFileSync(path.join(failingRoot, "scripts", "orchestrator", "failure.test.mjs"),
+    'import test from "node:test"; test("forced failure", () => { throw new Error("forced failure"); });\n');
+  const changedFile = path.join(failingRoot, "scripts", "orchestrator", "changed.mjs");
+  assert.equal(findProjectRoot(failingRoot), failingRoot);
+  assert.equal(isOrchestratorEdit(fileInput("Edit", changedFile, failingRoot), failingRoot), true);
+  const failed = runHook(failingRoot);
+  assert.equal(failed.status, 2, `${failed.stdout}\n${failed.stderr}\n${failed.error?.message || ""}`);
+  assert.match(failed.stderr, /Orchestrator tests failed/);
+  assert.match(failed.stderr, /forced failure/);
+
+  const emptyRoot = makeCheckout();
+  const empty = runHook(emptyRoot);
+  assert.equal(empty.status, 2, empty.stderr || empty.error?.message);
+  assert.match(empty.stderr, /No orchestrator test files were found/);
+});
+
 test("only a successful test run avoids asyncRewake; every failure becomes exit code 2", () => {
   assert.equal(hookExitCode(0), 0);
   assert.equal(hookExitCode(1), 2);
