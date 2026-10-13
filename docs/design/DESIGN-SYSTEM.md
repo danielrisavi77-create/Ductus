@@ -123,10 +123,10 @@ Sve komponente moraju poštivati Rječnik iz `PRODUCT.md` §5.
 **Prioritet:** P1/P2.  
 **Issue:** #331, #333.
 
-### 4.8 Prenosivi zapis (Audit & Appeals paket)
+### 4.8 Prenosivi zapis i osporavanje (D-49, D-80 t.7)
 **Funkcije:** Finalni dokument, procesna crta, rezultat rekonstrukcije, verzije, izjava, politika, kriptografska potvrda, provjera cjelovitosti zapisa u pregledniku bez računa (QR), izvoz.  
 **Implementacija:** D-49 + M3 + M7. Prenosivi paket s opsegom.  
-**Napomena:** Tekst "Nema indikacija neautentičnog autorstva" je zabranjen (D-01 + Rječnik). Zamjena: "zapis je cjelovit i neizmijenjen od primitka".  
+**Napomena:** Tekst "Nema indikacija neautentičnog autorstva" je zabranjen (D-01 + Rječnik). Zamjena: "zapis je cjelovit i neizmijenjen od primitka". U sučelju se ne koristi engleski naziv "Audit & Appeals" (D-90 t.3).  
 **Prioritet:** P1 (val 2).  
 **Issue:** #329.
 
