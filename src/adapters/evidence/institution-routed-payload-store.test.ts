@@ -182,6 +182,28 @@ describe("InstitutionRoutedPayloadStore", () => {
     expect(a.putImmutable).not.toHaveBeenCalled();
   });
 
+  it.each([{}, { status: "unavailable" }, {
+    status: "unavailable",
+    get reason() {
+      throw new Error("identity reason getter failed");
+    },
+  }, Object.defineProperty({}, "status", {
+    get() {
+      throw new Error("identity status getter failed");
+    },
+  })])("normalizes an invalid identity result to an unavailable reason", async (answer) => {
+    const a = fakeDomain(async () => answer as never);
+    const { router, warn } = routerWith({ [FAK_A]: a });
+
+    await expect(router.putImmutable(input(FAK_A))).resolves.toEqual(UNAVAILABLE);
+    expect(a.putImmutable).not.toHaveBeenCalled();
+    await logged();
+    expect(warn).toHaveBeenCalledWith("evidence storage identity label could not be read", {
+      storageDomain: "fak-0",
+      reason: "storage_request_failed",
+    });
+  });
+
   it.each([
     "storage_get_encoded",
     "storage_get_status_503",
@@ -239,6 +261,46 @@ describe("InstitutionRoutedPayloadStore", () => {
       reason: "storage_request_failed",
     });
   });
+
+  it("answers a write whose result getter throws as unavailable", async () => {
+    const a = fakeDomain(verified);
+    a.putImmutable.mockResolvedValueOnce({
+      status: "stored",
+      get storageRef() {
+        throw new Error("storage result getter failed");
+      },
+    } as never);
+    const { router, warn } = routerWith({ [FAK_A]: a });
+
+    await expect(router.putImmutable(input(FAK_A))).resolves.toEqual(UNAVAILABLE);
+    await logged();
+    expect(warn).toHaveBeenCalledWith("evidence storage domain is unavailable", {
+      storageDomain: "fak-0",
+      reason: "storage_request_failed",
+    });
+  });
+
+  it.each(["institutionId", "evidencePackageId", "segmentHash", "canonicalPayload"] as const)(
+    "answers an input whose %s getter throws as unavailable",
+    async (field) => {
+      const a = fakeDomain(verified);
+      const given = input(FAK_A);
+      Object.defineProperty(given, field, {
+        get() {
+          throw new Error("storage input getter failed");
+        },
+      });
+      const { router, warn } = routerWith({ [FAK_A]: a });
+
+      await expect(router.putImmutable(given)).resolves.toEqual(UNAVAILABLE);
+      expect(a.verifyIdentity).not.toHaveBeenCalled();
+      expect(a.putImmutable).not.toHaveBeenCalled();
+      await logged();
+      expect(warn).toHaveBeenCalledWith("evidence storage request could not be read", {
+        reason: "storage_request_failed",
+      });
+    },
+  );
 
   it("reads the input once, so a getter cannot move the write to another institution", async () => {
     const a = fakeDomain(verified);
