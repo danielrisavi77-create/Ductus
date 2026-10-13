@@ -171,6 +171,22 @@
             "timeout": 30
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Edit(scripts/orchestrator/**)",
+            "command": "node",
+            "args": [
+              "--test",
+              "${CLAUDE_PROJECT_DIR}/scripts/orchestrator/*.test.mjs"
+            ],
+            "asyncRewake": true,
+            "timeout": 120
+          }
+        ]
       }
     ]
   },
