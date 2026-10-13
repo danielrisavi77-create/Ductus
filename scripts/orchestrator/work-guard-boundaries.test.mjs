@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -80,7 +80,14 @@ for (const mode of ['retargeted remote name', 'different fetch and push URL', 'u
       export const pushVerdict = (pushed, local, remote) => ({ ok: pushed && local === remote, reason: 'fixture' });
     `);
     const result = legacy ? null : { ok: true, state: 'ALLOWED', head: f.base, pushUrl: approved };
-    writeFileSync(join(f.work, 'work-guard.mjs'), `export const guardPush = async () => (${JSON.stringify(result)});\n`);
+    writeFileSync(join(f.work, 'guard-result.json'), JSON.stringify(result));
+    writeFileSync(join(f.work, 'work-guard.mjs'), `
+      import { readFileSync } from 'node:fs';
+      export const guardPush = async () => JSON.parse(readFileSync(new URL('./guard-result.json', import.meta.url), 'utf8'));
+    `);
+    const guardSource = readFileSync(join(f.work, 'work-guard.mjs'), 'utf8');
+    assert.ok(!guardSource.includes(f.base), 'fixture commit must be data, not generated code');
+    assert.ok(!guardSource.includes(approved), 'fixture destination must be data, not generated code');
     const child = spawnSync(process.execPath, [join(f.work, 'push-verify.mjs')], {
       cwd: f.work, encoding: 'utf8', timeout: 10000,
       env: { ...process.env, GIT_ALLOW_PROTOCOL: 'file' },
