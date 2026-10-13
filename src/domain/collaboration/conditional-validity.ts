@@ -10,6 +10,13 @@ export type ValidityConditionKind = "text_range" | "protected_element";
 
 export type ValidityConditionStatus = "valid" | "needs_re_review" | "superseded";
 
+// Callers with multiple independent anchors must resolve text per condition.
+// A literal string remains supported for a single common anchored range.
+// Missing or failed resolution is treated conservatively as changed.
+export type CurrentConditionText =
+  | string
+  | ((condition: ValidityCondition) => string | null | undefined);
+
 export type ValidityCondition = {
   kind: ValidityConditionKind;
   revision_id: string;
@@ -67,7 +74,12 @@ export function needsReReview(
   }
 
   if (condition.protected_value && condition.protected_kind === "number") {
-    return !currentTextInRange.includes(condition.protected_value);
+    // substring matching would incorrectly accept 142 or 42.0 as the old 42.
+    // A protected numeric value is only present as a complete number token.
+    const tokens = currentTextInRange.match(
+      /(?<![\\p{L}\\p{N}])[+\\-\\u2212]?\\p{N}+(?:[.,]\\p{N}+)*(?![\\p{L}\\p{N}])/gu,
+    ) ?? [];
+    return !tokens.includes(condition.protected_value);
   }
 
   return false;
@@ -75,11 +87,21 @@ export function needsReReview(
 
 export function applyRevisionToConditions(
   conditions: ValidityCondition[] | undefined,
-  currentTextInRange: string,
+  currentTextInRange: CurrentConditionText,
 ): ValidityCondition[] {
   if (!conditions || !isConditionalValidityEnabled()) return conditions ?? [];
   return conditions.map((c) => {
-    if (needsReReview(c, currentTextInRange)) {
+    if (c.status !== "valid") return c;
+    let current: string | null | undefined;
+    try {
+      current = typeof currentTextInRange === "function"
+        ? currentTextInRange(c)
+        : currentTextInRange;
+    } catch {
+      // The expected text could not be read: never imply a valid confirmation.
+      current = null;
+    }
+    if (typeof current !== "string" || needsReReview(c, current)) {
       return { ...c, status: "needs_re_review" as const };
     }
     return c;
