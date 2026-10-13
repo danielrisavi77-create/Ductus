@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { chromium } from "@playwright/test";
+import { pnpmCommand } from "./process-command.mjs";
 
 const args = process.argv.slice(2);
 const opt = (name, fallback) => {
@@ -17,23 +18,27 @@ const opt = (name, fallback) => {
 const port = Number(opt("port", "3111"));
 const out = opt("out", join(tmpdir(), "run-ductus"));
 const base = `http://127.0.0.1:${port}`;
-const shell = process.platform === "win32";
+const windows = process.platform === "win32";
+// Validate the port before building or starting a process.
+const buildPlan = pnpmCommand("build");
+const serverPlan = pnpmCommand("serve", { port });
 mkdirSync(out, { recursive: true });
 
 if (!args.includes("--skip-build") || !existsSync(".next")) {
-  const build = spawnSync("pnpm", ["build"], { stdio: "inherit", shell });
+  const build = spawnSync(buildPlan.command, buildPlan.args, { stdio: "inherit", shell: false, windowsHide: true });
   if (build.status !== 0) throw new Error("pnpm build failed");
 }
 
 // The editor needs the flag AND a local/ci/demo deployment. No database is
 // involved: the journal is IndexedDB in the browser.
-const server = spawn("pnpm", ["exec", "next", "start", "-p", String(port)], {
+const server = spawn(serverPlan.command, serverPlan.args, {
   stdio: ["ignore", "inherit", "inherit"],
-  shell,
+  shell: false,
+  windowsHide: true,
   env: { ...process.env, DUCTUS_LOCAL_DEMO_JOURNAL: "1", DUCTUS_DEPLOYMENT: "local" },
 });
 const stop = () => {
-  if (shell) spawnSync("taskkill", ["/pid", String(server.pid), "/t", "/f"]);
+  if (windows && server.pid) spawnSync("taskkill", ["/pid", String(server.pid), "/t", "/f"], { shell: false, windowsHide: true });
   else server.kill("SIGTERM");
 };
 

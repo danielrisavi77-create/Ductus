@@ -3,7 +3,7 @@ name: run-ductus
 description: Build, run, and drive the Ductus web app (Next.js, pnpm). Use when asked to start Ductus, build it, take a screenshot of its UI, or interact with the running app in a real browser.
 ---
 
-Ductus is a Next.js 15 App Router app. Drive it with `.claude/skills/run-ductus/driver.mjs`: it builds, starts `next start` on a free port with the local demo journal on, drives `/rad` in Playwright Chromium (types invented text, reloads, checks it is restored), saves a screenshot and stops the server. Run it from the repo root. No Docker stack is needed: the journal is IndexedDB in the browser.
+Ductus is a Next.js App Router app. Drive it with `.claude/skills/run-ductus/driver.mjs`: it builds, starts `next start` on a free port with the local demo journal on, drives `/rad` in Playwright Chromium (types invented text, reloads, checks it is restored), saves a screenshot and stops the server. Run it from the repo root. No Docker stack is needed: the journal is IndexedDB in the browser.
 
 ## Setup
 
@@ -42,4 +42,4 @@ About 5300 tests pass in ~65 s. Under load `forbidden-terms` and `pr-metadata-pr
 ## Troubleshooting
 
 - **`editor stays read-only: flag or deployment not honoured`**: the server was not started with both variables (or something else owns the port and answered instead). Stop it and rerun.
-- **`DeprecationWarning: Passing args to a child process with shell option true`** and the `pnpm.overrides` `[WARN]`: harmless output on Windows.
+- **Windows child processes:** fixed pnpm build/start commands run through `cmd.exe /d /s /c` with Node `shell: false`; arbitrary command arguments and reserved ports are rejected. `pnpm.overrides` `[WARN]` may still appear.
