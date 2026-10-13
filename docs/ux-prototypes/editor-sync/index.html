@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="hr" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-v1PiPXE6eORhjbhILsh4AjUDaXLbzg8LCW+bsBnwoQU=' 'sha256-fdl4tpG4USV4F3O80C/oKdL20KioT6RUuJyZk1i74Nc='; style-src 'unsafe-inline'; connect-src 'none'; img-src 'none'; font-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Ductus · Prototip spremanja</title>
+<style>
+/* Frozen subset of app/globals.css, design v6 (D-89), main 76b0855.
+   System font fallbacks only: this file makes no external requests. */
+:root { --ground:#edefea; --sheet:#fff; --chrome:#f7f8f5; --ink:#191c19;
+  --ink-2:#4a504a; --ink-3:#5a605a; --rule:#dce0d8; --rule-2:#e9ece6;
+  --accent:#2f6f5e; --accent-hover:#245849; --accent-soft:#2f6f5e14;
+  --lift:0 1px 1px #1a1d1b08,0 10px 34px -8px #1a1d1b1f;
+  --pulse:900ms; color-scheme:light; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--ground); color:var(--ink); font:13.5px/1.5 system-ui,sans-serif; }
+button,select,input,textarea { font:inherit; color:inherit; }
+button,select { cursor:pointer; }
+button { min-height:44px; padding:9px 12px; border:1px solid var(--rule); border-radius:7px; background:var(--sheet); text-align:left; }
+button:hover:not(:disabled) { border-color:var(--accent); background:var(--accent-soft); }
+button:disabled { cursor:not-allowed; color:var(--ink-3); background:var(--rule-2); }
+:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+[hidden] { display:none!important; }
+.skip { position:absolute; top:-60px; left:12px; z-index:9; background:white; padding:10px; color:var(--accent); }
+.skip:focus { top:8px; }
+.prototype { padding:10px 20px; background:var(--ink); color:white; display:flex; flex-wrap:wrap; justify-content:space-between; gap:3px 18px; }
+.prototype strong { font-weight:650; }
+.prototype span { color:#e0e4df; font-size:12px; }
+.bar { min-height:56px; padding:10px 20px; background:var(--chrome); border-bottom:1px solid var(--rule); display:flex; align-items:center; flex-wrap:wrap; gap:12px; }
+.brand { font-size:17px; font-weight:650; letter-spacing:-.02em; }
+.context { color:var(--ink-3); font-size:12px; letter-spacing:.07em; text-transform:uppercase; }
+.badge { border:1px dashed var(--ink-3); border-radius:4px; padding:2px 8px; font-size:12px; color:var(--ink-3); }
+.bar .badge { margin-left:auto; }
+.workspace { display:grid; grid-template-columns:208px minmax(0,1fr) 326px; min-height:calc(100vh - 118px); }
+.rail,.lab { padding:24px 18px; background:var(--chrome); }
+.rail { border-right:1px solid var(--rule); }
+.lab { border-left:1px solid var(--rule); }
+.eyebrow { margin:0 0 14px; font-size:11px; font-weight:650; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-3); }
+.rail p { color:var(--ink-3); font-size:12.5px; }
+.outline { padding:0; list-style:none; margin:0 0 38px; }
+.outline li { padding:8px 10px; border-radius:5px; margin-bottom:3px; }
+.outline .current { background:var(--accent-soft); color:var(--accent); font-weight:600; }
+.outline small { display:inline-block; width:21px; color:var(--ink-3); }
+main { min-width:0; padding:24px 24px 38px; }
+.status-card { max-width:756px; margin:0 auto 18px; display:flex; align-items:flex-start; gap:11px; padding:15px 17px; border:1px solid var(--rule); background:var(--chrome); border-radius:8px; }
+.dot { width:8px; height:8px; flex:none; border-radius:50%; background:var(--ink-3); margin-top:7px; }
+.status-title { margin:0 0 3px; font-weight:650; font-size:14px; }
+.status-description { margin:0; font-size:12.5px; color:var(--ink-2); }
+[data-tone="ok"] .dot { background:var(--accent); }
+[data-tone="ok"] { border-color:#a2bcae; }
+[data-tone="warn"] .dot,[data-tone="error"] .dot { background:#8a6420; }
+[data-tone="progress"] .dot { animation:pulse var(--pulse) ease-in-out infinite alternate; }
+@keyframes pulse { to { opacity:.3; } }
+@media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; } }
+.sheet { max-width:756px; margin:auto; padding:46px 54px 32px; background:var(--sheet); border-radius:3px; box-shadow:var(--lift); }
+.document-meta { text-align:center; color:var(--ink-3); font-size:11px; letter-spacing:.11em; text-transform:uppercase; }
+h1 { text-align:center; margin:17px 0 26px; font:700 20px/1.4 "Times New Roman",Times,serif; }
+textarea { display:block; width:100%; min-height:330px; padding:0; border:0; resize:vertical; background:transparent; font:16px/1.75 "Times New Roman",Times,serif; }
+textarea:disabled { color:var(--ink-3); cursor:not-allowed; }
+.paper-note { border-top:1px solid var(--rule-2); padding-top:16px; margin:20px 0 0; font-size:11.5px; color:var(--ink-3); }
+.footer { max-width:756px; margin:14px auto 0; display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; color:var(--ink-3); font-size:12px; }
+.offline-note { max-width:756px; margin:12px auto 0; border-left:2px solid var(--ink-3); padding:3px 12px; color:var(--ink-2); font-size:12px; }
+h2 { font-size:17px; margin:0 0 5px; font-weight:650; }
+.intro { margin:0 0 18px; color:var(--ink-3); font-size:12px; }
+label { display:block; font-weight:600; font-size:12px; margin-bottom:6px; }
+select { width:100%; border:1px solid var(--rule); background:var(--sheet); border-radius:6px; padding:10px; min-height:44px; }
+.field { margin-bottom:16px; }
+.steps { display:grid; gap:7px; margin:16px 0; }
+.steps button { display:flex; gap:8px; align-items:center; }
+.steps b { display:grid; place-items:center; width:22px; height:22px; border:1px solid var(--rule); border-radius:50%; flex:none; font:600 11px system-ui; }
+.primary { background:var(--accent); color:white; border-color:var(--accent); }
+.primary:hover:not(:disabled) { background:var(--accent-hover); color:white; }
+.network { width:100%; display:flex; align-items:center; justify-content:space-between; }
+.network span { font-size:12px; color:var(--ink-3); }
+.separator { border:0; border-top:1px solid var(--rule); margin:19px 0; }
+.row { display:flex; gap:8px; }
+.row select { min-width:0; flex:1; }
+.row button { flex:none; }
+.readout { font:11px/1.7 ui-monospace,monospace; color:var(--ink-2); white-space:pre-wrap; margin:14px 0 0; padding:12px; border:1px solid var(--rule); border-radius:6px; overflow-wrap:anywhere; }
+.feedback { margin:12px 0 0; min-height:36px; color:var(--ink-2); font-size:12px; }
+#resolve { width:100%; margin-top:12px; }
+input[type="range"] { width:100%; accent-color:var(--accent); }
+.motion-value { color:var(--ink-3); font-size:11px; }
+details { margin-top:17px; }
+summary { cursor:pointer; min-height:32px; font-weight:600; font-size:12px; }
+details p { color:var(--ink-3); font-size:12px; }
+#reset { width:100%; margin-top:16px; font-size:12px; }
+.loading { margin:0 0 20px; padding:14px; background:var(--chrome); border:1px dashed var(--rule); color:var(--ink-3); }
+@media(max-width:1150px) { .workspace { grid-template-columns:minmax(0,1fr) 310px; } .rail { display:none; } .sheet { padding:40px 32px 28px; } }
+@media(max-width:760px) { .workspace { grid-template-columns:1fr; } .lab { border-left:0; border-top:1px solid var(--rule); } main { padding:18px 12px 26px; } .sheet { padding:30px 24px 24px; } textarea { min-height:260px; } .prototype,.bar { padding-left:14px; padding-right:14px; } .prototype span,.context,.badge,.intro,label,.footer,.paper-note,.status-description,.feedback,summary,details p,.motion-value,.network span,#reset { font-size:13px; } .readout { font-size:12px; } .bar .badge { margin-left:0; } }
+</style>
+</head>
+<body>
+<a class="skip" href="#text">Preskoči na tekst rada</a>
+<div class="prototype"><strong>Prototip — simulirana stanja</strong><span>Ništa se stvarno ne sprema niti šalje. Unos nestaje zatvaranjem ili osvježavanjem.</span></div>
+<header class="bar"><span class="brand">Ductus</span><span class="context">Radni prostor / UX pilot</span><span class="badge">DAN-203 · izmišljeni podaci</span></header>
+<div class="workspace">
+<aside class="rail" aria-label="Struktura primjera">
+  <p class="eyebrow">Struktura rada</p><ol class="outline"><li class="current"><small>01</small> Uvod</li><li><small>02</small> Rasprava</li><li><small>03</small> Zaključak</li></ol>
+  <p class="eyebrow">O ovom prikazu</p><p>Provjeravamo razumije li student gdje je njegov tekst i koji je sljedeći korak.</p><p>Ovo nije pravi editor ni funkcionalni demo aplikacije.</p>
+</aside>
+<main aria-label="Studentski prikaz">
+  <section class="status-card" id="status-card" aria-label="Stanje rada" data-tone="neutral"><span class="dot" aria-hidden="true"></span><div><p class="status-title" id="status" role="status" aria-live="polite" aria-atomic="true">Uređivanje</p><p class="status-description" id="description">Promjene još nisu spremljene na uređaju.</p></div></section>
+  <article class="sheet"><p class="document-meta">Seminarski rad · sintetički primjer</p><h1>Razgovor u zajednici</h1>
+    <p class="loading" id="loading" hidden>Učitavanje izmišljenog primjera… Promijeni scenarij za nastavak.</p>
+    <label class="eyebrow" for="text">Tekst rada</label><textarea id="text" spellcheck="false" maxlength="12000" aria-describedby="paper-note" placeholder="Počni pisati…"></textarea>
+    <p class="paper-note" id="paper-note">Piši samo izmišljeni tekst. Spremanje i potvrde u ovom prikazu isključivo su simulacija; nema trajne pohrane.</p>
+  </article>
+  <div class="footer"><span id="wordcount">Broj riječi: 0</span><span id="connection">Simulirana veza: dostupna</span></div>
+  <p class="offline-note" id="offline-origin" hidden>Dio teksta nastao je bez mreže. Ta oznaka ostaje i nakon simulirane sinkronizacije.</p>
+</main>
+<aside class="lab" aria-labelledby="lab-heading">
+  <p class="eyebrow">Kontrole prototipa</p><h2 id="lab-heading">Isprobaj spremanje</h2><p class="intro">Ručno prolazi kroz korake. Brojevi verzija i kontrole desno nisu dio studentskog sučelja.</p>
+  <div class="field"><label for="scenario">Početni scenarij (zamjenjuje unos)</label><select id="scenario">
+    <option value="writing">Pisanje</option><option value="empty">Prazan dokument</option><option value="loading">Učitavanje</option>
+    <option value="saving">Spremam lokalno</option><option value="local">Spremljeno na uređaju</option><option value="offline">Rad bez mreže</option>
+    <option value="syncing">Slanje u tijeku</option><option value="synced">Potvrđena trenutačna verzija</option><option value="conflict">Sukob verzija</option>
+    <option value="error">Nema prostora na uređaju</option><option value="recovery">Potreban oporavak</option><option value="blocked">Druga kartica drži dokument</option>
+  </select></div>
+  <button type="button" class="network" id="network" aria-pressed="false">Prekini vezu</button>
+  <div class="steps"><button type="button" id="local"><b aria-hidden="true">1</b><span id="local-label">Pokreni lokalno spremanje</span></button>
+    <button type="button" id="send"><b aria-hidden="true">2</b>Pošalji spremljenu verziju</button>
+    <button type="button" class="primary" id="ack"><b aria-hidden="true">3</b>Dostavi valjanu potvrdu</button></div>
+  <p class="intro">U 1. koraku klikni ponovno da završiš simulirano lokalno spremanje. Za 3. korak simuliramo provjeru potpisa — ne provodimo kriptografiju.</p>
+  <hr class="separator"><label for="receipt">Potvrda koju treba odbiti</label><div class="row"><select id="receipt"><option value="unsigned">Bez potpisa</option><option value="invalid">Neispravan potpis</option><option value="stale">Starija verzija</option></select><button type="button" id="reject">Dostavi</button></div>
+  <button type="button" id="resolve" hidden>Zadrži lokalni primjer i započni oporavak</button>
+  <p id="feedback" class="feedback" role="status" aria-live="polite" aria-atomic="true">Prvo promijeni tekst ili odaberi početni scenarij.</p>
+  <pre class="readout" id="readout" aria-label="Dijagnostika simulacije"></pre>
+  <details><summary>Puls i predaja odluke</summary><label for="motion">Trajanje pulsa stanja u tijeku</label><input id="motion" type="range" min="400" max="1600" step="100" value="900"><span class="motion-value" id="motion-value">--pulse: 900ms;</span><p>Postavka smanjenog kretanja u pregledniku ima prednost. U zadatak zapiši scenarij, što je poruka značila, predloženu izmjenu i ovu vrijednost. Ne prepisuj simulaciju u proizvodni kod.</p></details>
+  <button type="button" id="reset">Vrati izmišljeni primjer (briše unos)</button>
+</aside>
+</div>
+<noscript>Za interakcije prototipa uključi JavaScript. Nijedno prikazano stanje nije dokaz stvarnog spremanja.</noscript>
+<script id="scratch-model">
+/* Simulation only. Not the production reducer, a receipt parser or a signer. */
+globalThis.EditorScratch = (() => {
+  const labels = Object.freeze({
+    EDITING:['Uređivanje','neutral'], SAVING_LOCAL:['Spremam lokalno','progress'],
+    LOCAL_DURABLE:['Spremljeno na uređaju','neutral'], SYNCING:['Sinkroniziram','progress'],
+    SYNCED:['Spremljeno na poslužitelju','ok'], CONFLICT:['Sukob','warn'],
+    ERROR:['Greška','error'], RECOVERY_REQUIRED:['Potreban oporavak','error']
+  });
+  const initial = () => ({ state:'EDITING', revision:1, localRevision:0, confirmedRevision:0,
+    savingRevision:null, sendingRevision:null, online:true, offlineOrigin:false,
+    blocked:false, loading:false, errorKind:null, note:'' });
+  const locked = s => s.blocked || s.loading || ['CONFLICT','RECOVERY_REQUIRED'].includes(s.state);
+  function reduce(previous, event) {
+    const s = {...previous};
+    if (event.type === 'NETWORK') {
+      if (typeof event.online !== 'boolean') return s;
+      s.online = event.online;
+      if (!s.online && s.state === 'SYNCING') { s.state='ERROR'; s.errorKind='network'; }
+      s.note=s.online ? 'Veza je vraćena. To nije potvrda spremanja.' : 'Veza je prekinuta samo u simulaciji.';
+      return s;
+    }
+    if (event.type === 'KEEP_LOCAL' && !s.blocked && !s.loading && ['CONFLICT','RECOVERY_REQUIRED'].includes(s.state)) {
+      s.state='SAVING_LOCAL'; s.savingRevision=s.revision; s.errorKind=null;
+      s.note='Izričito je odabran lokalni primjer. Potvrda poslužitelja i dalje nedostaje.'; return s;
+    }
+    if (locked(s)) return s;
+    switch (event.type) {
+      case 'EDIT':
+        s.revision++; s.state='EDITING'; s.savingRevision=null; s.errorKind=null;
+        s.offlineOrigin ||= !s.online; s.note='Nova izmjena nije pokrivena prethodnom potvrdom.'; break;
+      case 'LOCAL_START':
+        if (!['EDITING','ERROR'].includes(s.state)) break;
+        s.state='SAVING_LOCAL'; s.savingRevision=s.revision; s.note='Simulirano lokalno spremanje je u tijeku.'; break;
+      case 'LOCAL_OK':
+        if (s.state !== 'SAVING_LOCAL' || event.revision !== s.savingRevision || event.revision !== s.revision) break;
+        s.localRevision=s.revision; s.savingRevision=null; s.state='LOCAL_DURABLE'; s.errorKind=null;
+        s.note='Lokalno spremljen primjer još nije potvrđen na poslužitelju.'; break;
+      case 'LOCAL_FAIL':
+        if (s.state !== 'SAVING_LOCAL') break;
+        s.state=event.reason === 'corrupt' ? 'RECOVERY_REQUIRED' : 'ERROR'; s.errorKind=event.reason; s.savingRevision=null; break;
+      case 'SEND':
+        if (!s.online || s.localRevision !== s.revision || !['LOCAL_DURABLE','ERROR'].includes(s.state)) break;
+        s.state='SYNCING'; s.sendingRevision=s.revision; s.errorKind=null; s.note='Slanje nije potvrda spremanja.'; break;
+      case 'ACK':
+        if (s.online && s.state === 'SYNCING' && event.signed === true && event.valid === true &&
+            event.revision === s.sendingRevision && event.revision === s.revision && event.revision === s.localRevision) {
+          s.state='SYNCED'; s.confirmedRevision=s.revision; s.sendingRevision=null;
+          s.note='Simulirana valjana potvrda odnosi se na trenutačnu verziju.';
+        } else s.note='Potvrda nije prihvaćena za trenutačni tekst. Stanje ostaje nepromijenjeno.';
+        break;
+      case 'CONFLICT':
+        if (s.state === 'SYNCING') { s.state='CONFLICT'; s.note='Nastavak traži izričit odabir.'; }
+        break;
+    }
+    return s;
+  }
+  function scenario(name) {
+    let s=initial();
+    const step=e => { s=reduce(s,e); };
+    if (name === 'loading') return {...s,loading:true};
+    if (name === 'blocked') return {...s,blocked:true};
+    if (name === 'offline') { step({type:'NETWORK',online:false}); step({type:'EDIT'}); }
+    if (['saving','local','offline','syncing','synced','conflict','error','recovery'].includes(name)) step({type:'LOCAL_START'});
+    if (name === 'error' || name === 'recovery') step({type:'LOCAL_FAIL',reason:name === 'error' ? 'quota' : 'corrupt'});
+    if (['local','offline','syncing','synced','conflict'].includes(name)) step({type:'LOCAL_OK',revision:s.revision});
+    if (['syncing','synced','conflict'].includes(name)) step({type:'SEND'});
+    if (name === 'synced') step({type:'ACK',revision:s.revision,signed:true,valid:true});
+    if (name === 'conflict') step({type:'CONFLICT'});
+    return s;
+  }
+  function view(s) {
+    const descriptions = {
+      EDITING:'Promjene još nisu spremljene na uređaju.', SAVING_LOCAL:'Spremanje na uređaju još traje. Pričekaj završetak.',
+      LOCAL_DURABLE:'Tekst je na uređaju, ali još nema potvrde poslužitelja.', SYNCING:'Čekamo valjanu potpisanu potvrdu za trenutačni tekst.',
+      SYNCED:'Trenutačna verzija ima potvrdu poslužitelja. Nova izmjena treba novu potvrdu.',
+      CONFLICT:'Postoje različite verzije. Nastavak traži tvoju odluku.', ERROR:s.errorKind === 'network' ? 'Slanje nije uspjelo. Lokalni primjer je zadržan.' : 'Lokalno spremanje nije uspjelo. Nemoj zatvarati stvarni rad bez sigurne kopije.',
+      RECOVERY_REQUIRED:'Lokalni zapis nije moguće pouzdano pročitati. Za nastavak je potrebna odluka.'
+    };
+    const [label,tone]=labels[s.state];
+    return { label:s.blocked ? 'Dokument je otvoren u drugoj kartici.' : s.loading ? 'Učitavanje primjera' : label,
+      tone:s.blocked ? 'warn' : s.loading ? 'neutral' : tone, editable:!locked(s),
+      description:s.blocked ? 'Ova kartica ne sprema. U prototipu odaberi drugi scenarij za nastavak.' : s.loading ? 'Prikaz se učitava; nema nove potvrde spremanja.' : descriptions[s.state] };
+  }
+  return Object.freeze({labels,initial,reduce,scenario,view});
+})();
+</script>
+<script id="scratch-ui">
+(() => {
+  const api=globalThis.EditorScratch, byId=id=>document.getElementById(id);
+  const sample='Zajednički razgovor počinje pitanjem koje sudionici razumiju. U ovom izmišljenom primjeru promatramo kako predstaviti različite prijedloge i objasniti razloge koji ih podupiru.\n\nJasan prikaz mogućnosti ostavlja prostor za usporedbu. Sudionik može promijeniti mišljenje, nadopuniti obrazloženje ili postaviti novo pitanje.\n\nZaključak treba povezati iznesene razloge i jasno naznačiti što ostaje otvoreno. Ovaj tekst služi samo za isprobavanje sučelja.';
+  let state=api.initial();
+  const editor=byId('text'); editor.value=sample;
+  function render() {
+    const v=api.view(state);
+    byId('status').textContent=v.label; byId('description').textContent=v.description;
+    byId('status-card').dataset.tone=v.tone; editor.disabled=!v.editable;
+    editor.setAttribute('aria-busy',String(state.loading)); byId('loading').hidden=!state.loading;
+    byId('network').textContent=state.online ? 'Prekini vezu' : 'Vrati vezu';
+    byId('network').setAttribute('aria-pressed',String(!state.online));
+    byId('connection').textContent='Simulirana veza: '+(state.online ? 'dostupna' : 'bez mreže');
+    byId('offline-origin').hidden=!state.offlineOrigin;
+    byId('local-label').textContent=state.state === 'SAVING_LOCAL' ? 'Završi lokalno spremanje' : 'Pokreni lokalno spremanje';
+    byId('local').disabled=!v.editable || !['EDITING','ERROR','SAVING_LOCAL'].includes(state.state);
+    byId('send').disabled=!v.editable || !state.online || state.localRevision !== state.revision || !['LOCAL_DURABLE','ERROR'].includes(state.state);
+    byId('ack').disabled=!v.editable || !state.online || state.sendingRevision === null;
+    byId('reject').disabled=byId('ack').disabled;
+    byId('resolve').hidden=!['CONFLICT','RECOVERY_REQUIRED'].includes(state.state);
+    byId('resolve').textContent=state.state === 'CONFLICT' ? 'Izričito zadrži lokalni primjer' : 'Zadrži lokalni primjer i započni oporavak';
+    byId('feedback').textContent=state.note || 'Prvo promijeni tekst ili odaberi početni scenarij.';
+    byId('readout').textContent='SAMO SIMULACIJA\nStanje: '+state.state+'\nTekst: v'+state.revision+' · uređaj: v'+state.localRevision+'\nPoslužitelj: v'+state.confirmedRevision+' · u slanju: '+(state.sendingRevision === null ? '—' : 'v'+state.sendingRevision);
+    byId('wordcount').textContent='Broj riječi: '+(editor.value.trim() ? editor.value.trim().split(/\s+/u).length : 0);
+  }
+  function dispatch(event) { state=api.reduce(state,event); render(); }
+  function reset() { state=api.scenario(byId('scenario').value); editor.value=byId('scenario').value === 'empty' ? '' : sample; render(); }
+  editor.addEventListener('input',()=>dispatch({type:'EDIT'}));
+  byId('scenario').addEventListener('change',reset);
+  byId('network').addEventListener('click',()=>dispatch({type:'NETWORK',online:!state.online}));
+  byId('local').addEventListener('click',()=>dispatch(state.state === 'SAVING_LOCAL' ? {type:'LOCAL_OK',revision:state.savingRevision} : {type:'LOCAL_START'}));
+  byId('send').addEventListener('click',()=>dispatch({type:'SEND'}));
+  byId('ack').addEventListener('click',()=>dispatch({type:'ACK',revision:state.sendingRevision,signed:true,valid:true}));
+  byId('reject').addEventListener('click',()=> { const kind=byId('receipt').value; dispatch({type:'ACK',revision:kind === 'stale' ? Math.max(0,state.sendingRevision-1) : state.sendingRevision,signed:kind !== 'unsigned',valid:kind !== 'invalid'}); });
+  byId('resolve').addEventListener('click',()=>dispatch({type:'KEEP_LOCAL'}));
+  byId('motion').addEventListener('input',()=> { const ms=byId('motion').value+'ms'; document.documentElement.style.setProperty('--pulse',ms); byId('motion-value').textContent='--pulse: '+ms+';'; });
+  byId('reset').addEventListener('click',()=> { byId('scenario').value='writing'; reset(); });
+  render();
+})();
+</script>
+</body>
+</html>
