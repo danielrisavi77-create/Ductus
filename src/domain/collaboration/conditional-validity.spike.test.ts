@@ -73,6 +73,7 @@ describe("conditional-validity spike (S-UV1)", () => {
       expect(needsReReview(c, "broj sudionika je 142")).toBe(true);
       expect(needsReReview(c, "broj sudionika je 420")).toBe(true);
       expect(needsReReview(c, "broj sudionika je 42.0")).toBe(true);
+      expect(needsReReview(c, "broj sudionika je -42")).toBe(true);
       expect(needsReReview(c, "broj sudionika je 42.")).toBe(false);
     });
 

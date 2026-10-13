@@ -76,7 +76,7 @@ export function needsReReview(
   if (condition.protected_value && condition.protected_kind === "number") {
     // substring matching would incorrectly accept 142 or 42.0 as the old 42.
     // A protected numeric value is only present as a complete number token.
-    const tokens = currentTextInRange.match(
+    const tokens: string[] = currentTextInRange.match(
       /(?<![\p{L}\p{N}])[+\-\u2212]?\p{N}+(?:[.,]\p{N}+)*(?![\p{L}\p{N}])/gu,
     ) ?? [];
     return !tokens.includes(condition.protected_value);
