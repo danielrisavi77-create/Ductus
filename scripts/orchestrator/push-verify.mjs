@@ -6,6 +6,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 import { parseLsRemote, pushVerdict, resolvePushTarget } from "./orchestrator-core.mjs";
+import { guardPush } from "./work-guard.mjs";
 
 const run = promisify(execFile);
 const git = async (...args) => (await run("git", args, { windowsHide: true })).stdout.trim();
@@ -37,11 +38,20 @@ try {
   process.exit(2);
 }
 
+// The existing push path automatically enforces a configured task snapshot.
+// No configuration preserves the existing path; incomplete configuration blocks.
+const guard = await guardPush({ remote, src, dst, currentBranch });
+if (guard) {
+  console.log(JSON.stringify(guard));
+  if (!guard.ok) process.exit(1);
+}
+
 // Full ref names: a tag or remote-tracking ref of the same name cannot be picked up instead.
 const srcRef = src === "HEAD" ? "HEAD" : `refs/heads/${src}`;
+const pushSource = guard?.ok ? guard.head : srcRef;
 let pushOk = true;
 try {
-  await git("push", remote, `${srcRef}:refs/heads/${dst}`);
+  await git("push", remote, `${pushSource}:refs/heads/${dst}`);
 } catch (e) {
   pushOk = false;
   console.error(`git push failed: ${e.stderr?.trim() || e.message}`);
@@ -52,7 +62,7 @@ try {
 let local = null;
 let remoteSha = null;
 try {
-  local = await git("rev-parse", "--verify", `${srcRef}^{commit}`);
+  local = await git("rev-parse", "--verify", `${pushSource}^{commit}`);
   remoteSha = parseLsRemote(await git("ls-remote", remote, `refs/heads/${dst}`), dst);
 } catch (e) {
   console.error(`verification failed: ${e.stderr?.trim() || e.message}`);
