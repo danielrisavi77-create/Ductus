@@ -6,6 +6,11 @@ Jedna lokalna HTML datoteka za Danielovu procjenu iskustva prije promjene pravog
 Odobrenje ovog pilota ne odobrava novi dizajn, produkcijsku implementaciju, merge ni deploy.
 Nema novog agenta, skilla, CI gatea, produkcijske rute ni aplikacijske ovisnosti.
 
+**Dizajnerska granica (13. 10.):** v6 ovdje je samo snimka koda na navedenom SHA-u,
+ne novi vizualni standard. D-115 iz vlasnikove odluke na #323 (komentar 6135542923),
+zapisivan kroz #345 i #324, zamjenjuje taj vizualni smjer; prijelaz stvarnih tokena
+pripada #334. Ovaj pilot ne poništava odluku i ne implementira paralelni redizajn.
+
 ## Otvori i isprobaj
 
 Otvori `index.html` u pregledniku na računalu. Ne treba build, račun ni poslužitelj.
@@ -59,7 +64,8 @@ Iz korijena repozitorija:
 
 ```sh
 node --test docs/ux-prototypes/editor-sync/prototype.test.mjs
-node docs/ux-prototypes/editor-sync/browser-check.mjs chromium
+node docs/ux-prototypes/editor-sync/browser-check.mjs chromium file
+node docs/ux-prototypes/editor-sync/browser-check.mjs chromium memory
 ```
 
 Prva naredba koristi samo ugrađene Node alate. Druga koristi postojeći
@@ -69,10 +75,17 @@ Verifikator po potrebi prima `DUCTUS_PLAYWRIGHT_MODULE` (instalirani modul) i
 `DUCTUS_BROWSER_EXECUTABLE` (lokalni izvršni program). Ne mijenja aplikacijske postavke.
 Snimke i JSON izvještaj zapisuje u novu privremenu mapu čiju putanju ispisuje.
 
-Browser provjera učitava sadržaj u memoriju (`setContent`), provjerava CSP, klikove,
-te širine 390/760/1024/1440 px. **Ne provjerava otvaranje preko file://, stvarni iPhone,
-produkcijsku aplikaciju, punu pristupačnost ni trajni oporavak nakon pada preglednika.**
-Rezultati za konkretan head idu u PR. Naredbe iznad nisu dodane globalnom CI-ju i
+Način `file` stvarno otvara `file://` HTML i osvježava stranicu; zadani `memory`
+zadržava prethodnu `setContent` provjeru bez promjene postojeće naredbe. Oba načina provjeravaju CSP, klikove,
+uklanjanje unosa nakon ponovnog učitavanja, tipkovnički put do editora, oznake kontrola
+i širine 390/760/1024/1440 px. Dopuštene su samo dvije navigacije na sam HTML
+u načinu `file`; svaki drugi zahtjev ruši provjeru. Node test zasebno računa SHA-256
+ugrađenih skripti i uspoređuje ih s CSP-om.
+**Ne provjerava stvarni iPhone, produkcijsku aplikaciju, punu pristupačnost ni
+trajni oporavak nakon pada preglednika.**
+Ako preglednik pravilom administratora blokira `file://`, način `file` završava
+greškom; nema tihog prelaska na `memory` ni zaobilaženja politike. Takav pokušaj
+nije uspješan test lokalne datoteke. Rezultati za konkretan head idu u PR. Naredbe iznad nisu dodane globalnom CI-ju i
 ne zamjenjuju `pnpm lint`, `pnpm typecheck`, `pnpm test` ni `pnpm build` nad cijelim repo-om.
 
 ## Predaja vizualne odluke

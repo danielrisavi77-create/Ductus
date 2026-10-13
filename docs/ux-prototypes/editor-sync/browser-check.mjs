@@ -5,27 +5,39 @@ import { join } from 'node:path';
 
 // Uses the repo's existing Playwright dependency. An isolated verifier may
 // supply an installed Playwright module/executable without changing the repo.
-const engines = await import(process.env.DUCTUS_PLAYWRIGHT_MODULE || '@playwright/test');
 const engine = process.argv[2] || 'chromium';
 assert.ok(['chromium', 'firefox', 'webkit'].includes(engine), 'Unsupported browser');
-const html = await readFile(new URL('./index.html', import.meta.url), 'utf8');
+const mode = process.argv[3] || 'memory';
+assert.ok(['file', 'memory'].includes(mode), 'Unsupported load mode: use file or memory');
+const engines = await import(process.env.DUCTUS_PLAYWRIGHT_MODULE || '@playwright/test');
+const source = new URL('./index.html', import.meta.url);
+const html = await readFile(source, 'utf8');
 const output = await mkdtemp(join(tmpdir(), 'ductus-scratch-'));
 const browser = await engines[engine].launch({
   headless: true,
   ...(process.env.DUCTUS_BROWSER_EXECUTABLE ? { executablePath: process.env.DUCTUS_BROWSER_EXECUTABLE } : {}),
 });
-const checks = [], errors = [], requests = [];
+const checks = [], errors = [], requests = [], navigations = [];
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1050 } });
   page.on('pageerror', e => errors.push(e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
-  page.on('request', r => requests.push(r.url()));
-  // In-memory document: tests rendering/CSP/interactions, not file:// navigation.
-  await page.setContent(html);
+  page.on('request', r => {
+    if (mode === 'file' && r.isNavigationRequest() && r.frame() === page.mainFrame() && r.url().split('#')[0] === source.href) {
+      navigations.push(r.url());
+    } else requests.push(r.url());
+  });
+  if (mode === 'file') await page.goto(source.href, { waitUntil: 'load' });
+  else await page.setContent(html);
   const status = () => page.locator('#status').innerText();
   const select = name => page.selectOption('#scenario', name);
   const check = (name, pass) => { assert.ok(pass, name); checks.push(name); };
+  check('requested load mode used', page.url() === (mode === 'file' ? source.href : 'about:blank'));
   check('initial EDITING rendered under CSP', await status() === 'Uređivanje');
+  await page.keyboard.press('Tab');
+  check('keyboard reaches skip link', await page.locator('.skip').evaluate(el => el === document.activeElement));
+  await page.keyboard.press('Enter');
+  check('skip link focuses editor', await page.locator('#text').evaluate(el => el === document.activeElement));
   await page.screenshot({ path: join(output, 'desktop.png'), fullPage: true });
   await page.click('#local'); check('local saving starts', await status() === 'Spremam lokalno');
   await page.click('#local'); check('local is not server', await status() === 'Spremljeno na uređaju');
@@ -55,7 +67,8 @@ try {
   await select('empty'); check('empty', await page.locator('#text').inputValue() === '');
   await page.fill('#text', '<script>window.injected=1</script>');
   check('text is not executable HTML', await page.evaluate('window.injected === undefined'));
-  await page.setContent(html);
+  if (mode === 'file') await page.reload({ waitUntil: 'load' });
+  else await page.setContent(html);
   check('reinitializing document forgets input', !(await page.locator('#text').inputValue()).includes('window.injected'));
   await select('syncing'); await page.emulateMedia({ reducedMotion: 'reduce' });
   check('reduced motion stops pulse', await page.locator('.dot').evaluate(el => getComputedStyle(el).animationName) === 'none');
@@ -71,9 +84,12 @@ try {
   await page.screenshot({ path: join(output, 'mobile.png'), fullPage: true });
   await page.setViewportSize({ width: 1440, height: 1050 }); await select('syncing');
   await page.screenshot({ path: join(output, 'sending.png'), fullPage: true });
+  check('controls have accessible labels', await page.locator('button, select, input, textarea').evaluateAll(elements =>
+    elements.every(el => Boolean(el.getAttribute('aria-label') || el.labels?.length || el.textContent.trim()))));
+  check('document navigations match mode', navigations.length === (mode === 'file' ? 2 : 0));
   check('no external requests', requests.length === 0);
   check('no browser errors', errors.length === 0);
-  const result = { browser: engine, version: browser.version(), mode: 'in-memory HTML (setContent)', passed: checks.length, checks, errors, requests };
+  const result = { browser: engine, version: browser.version(), mode, documentNavigations: navigations.length, passed: checks.length, checks, errors, requests };
   await writeFile(join(output, 'results.json'), JSON.stringify(result, null, 2) + '\n');
   console.log(JSON.stringify({ ...result, output }, null, 2));
 } finally {

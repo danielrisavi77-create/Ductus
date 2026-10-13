@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { runInNewContext } from 'node:vm';
 import { test } from 'node:test';
 
@@ -128,3 +129,55 @@ if (model) {
     assert.equal(s.revision, 1);
   });
 }
+
+// These are artefact/packaging regressions, not production cryptography tests.
+test('CSP hashes match every executable inline script byte for byte', () => {
+  const csp = html.match(/http-equiv="Content-Security-Policy" content="([^"]+)"/)?.[1];
+  assert.ok(csp, 'CSP must be present');
+  const directive = csp.split(';').find(part => part.trim().startsWith('script-src '));
+  assert.ok(directive, 'explicit script-src required');
+  const allowed = [...directive.matchAll(/'sha256-([^']+)'/g)].map(match => match[1]).sort();
+  const actual = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)]
+    .map(match => createHash('sha256').update(match[1]).digest('base64')).sort();
+  assert.equal(actual.length, 2);
+  assert.deepEqual(allowed, actual);
+  assert.doesNotMatch(directive, /unsafe-inline|unsafe-eval|https?:|\*/);
+});
+test('canonical state names are exhaustive rather than merely the same count', () => {
+  assert.deepEqual(Object.keys(model.labels).sort(), [
+    'EDITING', 'SAVING_LOCAL', 'LOCAL_DURABLE', 'SYNCING',
+    'SYNCED', 'CONFLICT', 'ERROR', 'RECOVERY_REQUIRED',
+  ].sort());
+});
+test('every selectable scenario has a valid state and display label', () => {
+  const scenarios = html.match(/<select id="scenario">([\s\S]*?)<\/select>/)?.[1];
+  const names = [...scenarios.matchAll(/value="([^"]+)"/g)].map(match => match[1]);
+  assert.equal(names.length, 12);
+  for (const name of names) {
+    const state = model.scenario(name);
+    assert.ok(Object.hasOwn(model.labels, state.state), name);
+    assert.ok(model.view(state).label, name);
+  }
+});
+test('all HTML control IDs are unique and every explicit label has a target', () => {
+  const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
+  assert.equal(ids.length, new Set(ids).size);
+  for (const [, target] of html.matchAll(/<label\b[^>]*\bfor="([^"]+)"/g)) {
+    assert.ok(ids.includes(target), target);
+  }
+});
+test('network retry still requires a fresh matching receipt', () => {
+  const pending = flow(start, finish, send, { type: 'NETWORK', online: false },
+    { type: 'NETWORK', online: true }, ack);
+  assert.equal(pending.state, 'ERROR');
+  assert.equal(pending.confirmedRevision, 0);
+  const retried = model.reduce(pending, send);
+  assert.equal(retried.state, 'SYNCING');
+  assert.equal(model.reduce(retried, ack).state, 'SYNCED');
+});
+test('returning the network without a new edit preserves an existing confirmation', () => {
+  const saved = flow(start, finish, send, ack, { type: 'NETWORK', online: false },
+    { type: 'NETWORK', online: true });
+  assert.equal(saved.state, 'SYNCED');
+  assert.equal(saved.confirmedRevision, saved.revision);
+});
