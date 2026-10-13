@@ -6,6 +6,8 @@ import { test } from 'node:test';
 
 const html = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
 const script = html.match(/<script id="scratch-model">([\s\S]*?)<\/script>/)?.[1];
+const inlineScriptBodies = source => [...source.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi)]
+  .map(match => match[1]);
 const context = {};
 if (script) runInNewContext(script, context, { timeout: 1000 });
 const model = context.EditorScratch;
@@ -137,8 +139,8 @@ test('CSP hashes match every executable inline script byte for byte', () => {
   const directive = csp.split(';').find(part => part.trim().startsWith('script-src '));
   assert.ok(directive, 'explicit script-src required');
   const allowed = [...directive.matchAll(/'sha256-([^']+)'/g)].map(match => match[1]).sort();
-  const actual = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)]
-    .map(match => createHash('sha256').update(match[1]).digest('base64')).sort();
+  const actual = inlineScriptBodies(html)
+    .map(body => createHash('sha256').update(body).digest('base64')).sort();
   assert.equal(actual.length, 2);
   assert.deepEqual(allowed, actual);
   assert.doesNotMatch(directive, /unsafe-inline|unsafe-eval|https?:|\*/);
@@ -180,4 +182,10 @@ test('returning the network without a new edit preserves an existing confirmatio
     { type: 'NETWORK', online: true });
   assert.equal(saved.state, 'SYNCED');
   assert.equal(saved.confirmedRevision, saved.revision);
+});
+
+test('CSP inspection includes uppercase and mixed-case script tags', () => {
+  assert.deepEqual(inlineScriptBodies(
+    '<script>first</script><SCRIPT>second</SCRIPT><ScRiPt>third</sCrIpT >',
+  ), ['first', 'second', 'third']);
 });
