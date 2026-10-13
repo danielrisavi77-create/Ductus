@@ -70,6 +70,7 @@ export async function runWorkGuard(options, deps = {}) {
   try {
     const contract = await readContract(options.contractFile);
     const branch = await git('symbolic-ref', '--short', 'HEAD');
+    if (options.expectedBranch !== undefined && branch !== options.expectedBranch) return blocked('PUSH_TARGET');
     const head = await git('rev-parse', '--verify', 'HEAD^{commit}');
     const baseSha = await main();
     if (!/^[0-9a-f]{40}$/.test(baseSha)) return blocked('INVALID_BASE');
@@ -77,6 +78,7 @@ export async function runWorkGuard(options, deps = {}) {
     await git('merge-base', '--is-ancestor', baseSha, head);
     const changed = [
       ...await paths('diff', '--name-only', '--no-renames', '-z', baseSha, head, '--'),
+      ...await paths('diff', '--name-only', '--no-renames', '-z', '--cached', head, '--'),
       ...await paths('diff', '--name-only', '--no-renames', '-z', 'HEAD', '--'),
       ...await paths('ls-files', '--others', '--exclude-standard', '-z'),
     ];
@@ -104,8 +106,9 @@ export async function guardPush(target, env = process.env, deps = {}) {
     const allowed = ['https://github.com/', 'git@github.com:', 'ssh://git@github.com/']
       .flatMap(prefix => [prefix + WORK_REPO, prefix + WORK_REPO + '.git']);
     if (!allowed.includes(url)) return blocked('PUSH_TARGET');
-    return await runWorkGuard({ contractFile: env.DUCTUS_WORK_CONTRACT,
+    const result = await runWorkGuard({ contractFile: env.DUCTUS_WORK_CONTRACT, expectedBranch: target.dst,
       task: env.DUCTUS_WORK_TASK, agent: env.DUCTUS_WORK_AGENT }, deps);
+    return result.ok ? { ...result, pushUrl: url } : result;
   } catch { return blocked('READ_FAILED'); }
 }
 

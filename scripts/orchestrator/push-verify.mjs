@@ -44,6 +44,8 @@ const guard = await guardPush({ remote, src, dst, currentBranch });
 if (guard) {
   console.log(JSON.stringify(guard));
   if (!guard.ok) process.exit(1);
+  // Pin the checked endpoint for BOTH push and verification, not a mutable remote name.
+  remote = guard.pushUrl;
 }
 
 // Full ref names: a tag or remote-tracking ref of the same name cannot be picked up instead.
