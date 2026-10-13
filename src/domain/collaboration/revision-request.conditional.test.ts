@@ -101,6 +101,37 @@ describe("applyConditionalValidity integration (S-UV1)", () => {
     expect(result.request.status).toBe("ACCEPTED_FOR_REVISION");
   });
 
+  it("reopens only the changed anchored range when multiple conditions are accepted", () => {
+    const first = "tekst prvog odlomka";
+    const second = "tekst drugog odlomka";
+    const state = acceptedState([
+      {
+        kind: "text_range",
+        revision_id: "rev-1",
+        text_snapshot_hash: simpleHash(normalizeForComparison(first)),
+        text_excerpt: first,
+        status: "valid",
+        accepted_at: "2026-10-13T00:00:00Z",
+        accepted_by: "t",
+      },
+      {
+        kind: "text_range",
+        revision_id: "rev-1",
+        text_snapshot_hash: simpleHash(normalizeForComparison(second)),
+        text_excerpt: second,
+        status: "valid",
+        accepted_at: "2026-10-13T00:00:00Z",
+        accepted_by: "t",
+      },
+    ]);
+    const result = applyConditionalValidity(state, (condition) =>
+      condition.text_excerpt === first ? "izmijenjen prvi odlomak" : second,
+    );
+    expect(result.request.status).toBe("REREVIEW_REQUIRED");
+    expect(result.request.conditions?.map((c) => c.status)).toEqual(["needs_re_review", "valid"]);
+    expect(result.request.conditions?.map((c) => c.text_excerpt)).toEqual([first, second]);
+  });
+
   it("does nothing when there are no conditions", () => {
     const state = acceptedState();
     const result = applyConditionalValidity(state, "anything");
