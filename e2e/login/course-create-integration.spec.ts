@@ -79,16 +79,29 @@ test("F-6 integrated: real teacher login, explicit grant, HTTP course creation a
     });
 
     await test.step("4. Poslužitelj stvarno bilježi isti kolegij u ustanovi nastavnika", async () => {
-      const rows = await withActor(teacherToken, async (tx) => tx.query<{
-        id: string; own_institution: boolean; name: string; ai_policy: string;
-      }>(
-        `SELECT id, institution_id = (SELECT app.current_institution_id()) AS own_institution,
-                name, ai_policy FROM institution.course WHERE id = $1::uuid`,
-        [courseId],
-      ));
-      expect(rows.rows).toEqual([{
-        id: courseId, own_institution: true, name: COURSE_NAME, ai_policy: "partially_allowed",
+      const course = await withActor(teacherToken, async (tx) => {
+        const rows = await tx.query<{
+          id: string; own_institution: boolean; created_by_actor: boolean;
+          name: string; ai_policy: string;
+        }>(
+          `SELECT id, institution_id = (SELECT app.current_institution_id()) AS own_institution,
+                  created_by = (SELECT app.current_user_id()) AS created_by_actor,
+                  name, ai_policy FROM institution.course WHERE id = $1::uuid`,
+          [courseId],
+        );
+        const memberships = await tx.query<{ role: string }>(
+          `SELECT role FROM institution.course_member
+            WHERE course_id = $1::uuid AND user_id = (SELECT app.current_user_id())
+              AND member_to IS NULL`,
+          [courseId],
+        );
+        return { rows: rows.rows, memberships: memberships.rows };
+      });
+      expect(course.rows).toEqual([{
+        id: courseId, own_institution: true, created_by_actor: true,
+        name: COURSE_NAME, ai_policy: "partially_allowed",
       }]);
+      expect(course.memberships).toEqual([{ role: "teacher" }]);
     });
 
     await test.step("5. Ponovljen POST vraća isti kolegij bez duplikata", async () => {
