@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createDemoEnvironment } from "./up.mjs";
+import { createDemoEnvironment, runDemoLifecycle } from "./up.mjs";
 
 test("demo environment uses only local Compose services and creates an auth password", () => {
   const env = createDemoEnvironment({
@@ -65,4 +65,39 @@ test("configured auth password must match the local auth URL", () => {
     }),
     /AUTH_DATABASE_URL and DUCTUS_AUTH_LOCAL_PASSWORD do not match/,
   );
+});
+
+test("one-command demo runs the stack, migrations, seed, and app in order", async () => {
+  const calls = [];
+  const env = { marker: "same-environment" };
+  const code = await runDemoLifecycle(env, async (script, receivedEnv) => {
+    calls.push([script, receivedEnv]);
+    return 0;
+  });
+
+  assert.equal(code, 0);
+  assert.deepEqual(calls.map(([script]) => script), ["stack:up", "db:migrate", "db:seed", "dev"]);
+  assert.ok(calls.every(([, receivedEnv]) => receivedEnv === env));
+});
+
+test("CI preparation uses the same steps and omits only the app server", async () => {
+  const calls = [];
+  const code = await runDemoLifecycle({}, async (script) => {
+    calls.push(script);
+    return 0;
+  }, false);
+
+  assert.equal(code, 0);
+  assert.deepEqual(calls, ["stack:up", "db:migrate", "db:seed"]);
+});
+
+test("demo preparation stops at the first failed step", async () => {
+  const calls = [];
+  const code = await runDemoLifecycle({}, async (script) => {
+    calls.push(script);
+    return script === "db:migrate" ? 1 : 0;
+  });
+
+  assert.equal(code, 1);
+  assert.deepEqual(calls, ["stack:up", "db:migrate"]);
 });

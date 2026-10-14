@@ -116,16 +116,27 @@ function runPnpm(script, env) {
   });
 }
 
-async function startDemo(env) {
-  console.log("Starting the local Ductus demo stack, migrations, synthetic institutions, and app.");
-  console.log("A local auth password is generated for this run and is not written to disk or printed.");
-  for (const script of ["stack:up", "db:migrate", "db:seed", "dev"]) {
-    const code = await runPnpm(script, env);
+/** Run the shared clean-runner preparation sequence; CI omits only the dev server. */
+export async function runDemoLifecycle(env, runScript = runPnpm, includeApp = true) {
+  const scripts = includeApp
+    ? ["stack:up", "db:migrate", "db:seed", "dev"]
+    : ["stack:up", "db:migrate", "db:seed"];
+  for (const script of scripts) {
+    const code = await runScript(script, env);
     if (code !== 0) {
-      process.exitCode = code;
-      return;
+      return code;
     }
   }
+  return 0;
+}
+
+async function startDemo(env, prepareOnly) {
+  console.log(prepareOnly
+    ? "Preparing the local Ductus demo stack, migrations, and synthetic institutions."
+    : "Starting the local Ductus demo stack, migrations, synthetic institutions, and app.");
+  console.log("A local auth password is generated for this run and is not written to disk or printed.");
+  const code = await runDemoLifecycle(env, runPnpm, !prepareOnly);
+  if (code !== 0) process.exitCode = code;
 }
 
 async function main() {
@@ -140,7 +151,7 @@ async function main() {
 
   process.on("SIGINT", () => forwardSignal("SIGINT"));
   process.on("SIGTERM", () => forwardSignal("SIGTERM"));
-  await startDemo(env);
+  await startDemo(env, process.argv.includes("--prepare-only"));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

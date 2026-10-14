@@ -74,7 +74,9 @@ jobs:
       - run: pnpm db:migrate
       - name: pgTAP (pg_prove)
         run: pnpm test:db
-      - run: pnpm db:seed
+      # Exercise the P7 setup path after pgTAP's isolated fixtures; it seeds
+      # only the local institutions before integration and E2E tests.
+      - run: pnpm demo:prepare
       - run: pnpm test:integration
       - run: pnpm build
       # docs/TESTING.md 2: Chromium, Firefox and WebKit.
