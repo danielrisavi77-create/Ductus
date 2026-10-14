@@ -1,7 +1,36 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createDemoEnvironment, runDemoLifecycle } from "./up.mjs";
+import { createDemoEnvironment, pnpmInvocation, runDemoLifecycle } from "./up.mjs";
+
+test("demo starts the active pnpm CLI through Node without a shell", () => {
+  assert.deepEqual(
+    pnpmInvocation(
+      { npm_execpath: "C:\\Program Files\\pnpm\\pnpm.cjs" },
+      "stack:up",
+      "win32",
+      "C:\\Program Files\\nodejs\\node.exe",
+    ),
+    {
+      command: "C:\\Program Files\\nodejs\\node.exe",
+      args: ["C:\\Program Files\\pnpm\\pnpm.cjs", "stack:up"],
+    },
+  );
+});
+
+test("demo requires pnpm lifecycle context for a safe Windows launch", () => {
+  assert.throws(
+    () => pnpmInvocation({}, "stack:up", "win32"),
+    /Run the demo through pnpm/,
+  );
+});
+
+test("demo uses the pnpm executable directly outside Windows", () => {
+  assert.deepEqual(pnpmInvocation({}, "stack:up", "linux"), {
+    command: "pnpm",
+    args: ["stack:up"],
+  });
+});
 
 test("demo environment uses only local Compose services and creates an auth password", () => {
   const env = createDemoEnvironment({

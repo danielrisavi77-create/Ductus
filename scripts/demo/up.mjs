@@ -79,6 +79,16 @@ export function createDemoEnvironment(source = process.env) {
   };
 }
 
+export function pnpmInvocation(env, script, platform = process.platform, nodeExecutable = process.execPath) {
+  if (typeof env.npm_execpath === "string" && env.npm_execpath.length > 0) {
+    return { command: nodeExecutable, args: [env.npm_execpath, script] };
+  }
+  if (platform === "win32") {
+    throw new Error("Run the demo through pnpm so its CLI can be started without a shell.");
+  }
+  return { command: "pnpm", args: [script] };
+}
+
 function forwardSignal(signal) {
   stopSignal ??= signal;
   try {
@@ -91,11 +101,18 @@ function forwardSignal(signal) {
 function runPnpm(script, env) {
   if (stopSignal) return Promise.resolve(stopSignal === "SIGINT" ? 130 : 143);
 
+  let invocation;
+  try {
+    invocation = pnpmInvocation(env, script);
+  } catch (error) {
+    console.error(error.message);
+    return Promise.resolve(1);
+  }
+
   return new Promise((resolve) => {
-    const child = spawn("pnpm", [script], {
+    const child = spawn(invocation.command, invocation.args, {
       cwd: root,
       env,
-      shell: process.platform === "win32",
       stdio: "inherit",
       windowsHide: true,
     });
