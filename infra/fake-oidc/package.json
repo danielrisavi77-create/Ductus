@@ -5,7 +5,7 @@
   "packageManager": "pnpm@10.33.0",
   "scripts": {
     "start": "node server.mjs",
-    "test": "node --test accounts.test.mjs"
+    "test": "node --test accounts.test.mjs accounts.integration.test.mjs"
   },
   "dependencies": {
     "oidc-provider": "9.12.2"
