@@ -1,6 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { NextRequest } from "next/server";
+import { describe, expect, it, vi } from "vitest";
 
+import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import type { ActorTransaction, WithActor } from "@/server/db/with-actor";
+import { createAssignmentPostHandler } from "./assignment-route";
 import { createAssignmentResponse } from "./create-assignment";
 
 type QueryRow = Record<string, unknown>;
@@ -34,6 +37,35 @@ function request(
       ...headers,
     },
     body,
+  });
+}
+
+function routedRequest(
+  body: BodyInit,
+  headers: Record<string, string> = {},
+): NextRequest {
+  const url = `https://attacker.example/api/institution/courses/${COURSE}/assignments`;
+  const requestHeaders = new Headers({
+    origin: ORIGIN,
+    "content-type": "application/json",
+    "idempotency-key": REQUEST_ID,
+    host: new URL(url).host,
+    ...headers,
+  });
+  const requestValue = new NextRequest(url, {
+    method: "POST",
+    headers: requestHeaders,
+    body,
+    duplex: "half",
+  } as unknown as ConstructorParameters<typeof NextRequest>[1]);
+  requestValue.cookies.set(SESSION_COOKIE_NAME, "cookie-session-token");
+  return requestValue;
+}
+
+function assignmentPost(withActor: WithActor) {
+  return createAssignmentPostHandler({
+    withActor,
+    getRedirectUri: () => `${ORIGIN}/api/auth/callback`,
   });
 }
 
@@ -74,6 +106,7 @@ describe("createAssignmentResponse", () => {
     const response = await send(JSON.stringify(INPUT), withActor);
     expect(response.status).toBe(201);
     expect(await response.json()).toEqual({ id: ASSIGNMENT_ID });
+    expect(response.headers.get("cache-control")).toBe("no-store");
     expect(withActor.calls).toHaveLength(1);
     const [token] = withActor.calls[0]!;
     expect(token).toBe("session-token");
@@ -84,6 +117,7 @@ describe("createAssignmentResponse", () => {
     const foreign = request(JSON.stringify(INPUT), { origin: "https://evil.example" });
     const response = await send(JSON.stringify(INPUT), withActor, foreign);
     expect(response.status).toBe(403);
+    expect(response.headers.get("cache-control")).toBe("no-store");
     expect(foreign.bodyUsed).toBe(false);
     expect(withActor.calls).toHaveLength(0);
   });
@@ -93,10 +127,20 @@ describe("createAssignmentResponse", () => {
       [{ "idempotency-key": "not-a-uuid" }, 400, "invalid_idempotency_key"],
       [{ "content-type": "text/plain" }, 415, "unsupported_media_type"],
     ] as const) {
-      const response = await send(JSON.stringify(INPUT), dependencies(), request(JSON.stringify(INPUT), headers));
+      const withActor = dependencies();
+      const response = await send(JSON.stringify(INPUT), withActor, request(JSON.stringify(INPUT), headers));
       expect(response.status).toBe(status);
       await expect(response.json()).resolves.toEqual({ error });
+      expect(withActor.calls).toHaveLength(0);
     }
+
+    const withActor = dependencies();
+    const missingKeyRequest = request(JSON.stringify(INPUT));
+    missingKeyRequest.headers.delete("idempotency-key");
+    const missingKeyResponse = await send(JSON.stringify(INPUT), withActor, missingKeyRequest);
+    expect(missingKeyResponse.status).toBe(400);
+    await expect(missingKeyResponse.json()).resolves.toEqual({ error: "invalid_idempotency_key" });
+    expect(withActor.calls).toHaveLength(0);
   });
 
   it.each([
@@ -149,6 +193,7 @@ describe("createAssignmentResponse", () => {
     const withActor = dependencies(ASSIGNMENT_ID, { code, message: "sensitive input" });
     const response = await send(JSON.stringify(INPUT), withActor);
     expect(response.status).toBe(status);
+    expect(response.headers.get("cache-control")).toBe("no-store");
     expect(await response.json()).toEqual({ error });
   });
 
@@ -157,5 +202,68 @@ describe("createAssignmentResponse", () => {
     const response = await createAssignmentResponse(request(JSON.stringify(INPUT)), "token", withActor, ORIGIN, "../not-a-uuid");
     expect(response.status).toBe(400);
     expect(withActor.calls).toHaveLength(0);
+  });
+
+  it("uses the session cookie and configured OIDC origin instead of Host", async () => {
+    const withActor = dependencies();
+    const response = await assignmentPost(withActor)(
+      routedRequest(JSON.stringify(INPUT), { host: "attacker.example" }),
+      { params: Promise.resolve({ courseId: COURSE }) },
+    );
+    expect(response.status).toBe(201);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(withActor.calls).toEqual([["cookie-session-token"]]);
+
+    const spoofedActor = dependencies();
+    const spoofedOrigin = routedRequest(JSON.stringify(INPUT), {
+      host: "attacker.example",
+      origin: "https://attacker.example",
+    });
+    const denied = await assignmentPost(spoofedActor)(spoofedOrigin, {
+      params: Promise.resolve({ courseId: COURSE }),
+    });
+    expect(denied.status).toBe(403);
+    expect(denied.headers.get("cache-control")).toBe("no-store");
+    expect(spoofedActor.calls).toHaveLength(0);
+  });
+
+  it("rejects cross-site Fetch Metadata at the HTTP boundary before opening a transaction", async () => {
+    const withActor = dependencies();
+    const requestValue = routedRequest(JSON.stringify(INPUT), { "sec-fetch-site": "cross-site" });
+    const response = await assignmentPost(withActor)(requestValue, {
+      params: Promise.resolve({ courseId: COURSE }),
+    });
+    expect(response.status).toBe(403);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(requestValue.bodyUsed).toBe(false);
+    expect(withActor.calls).toHaveLength(0);
+  });
+
+  it("times out a slow request body at the HTTP boundary without opening a transaction", async () => {
+    vi.useFakeTimers();
+    const withActor = dependencies();
+    const streamState = { cancelled: false };
+    const slowBody = new ReadableStream<Uint8Array>({
+      pull() {
+        return new Promise<void>(() => {});
+      },
+      cancel() {
+        streamState.cancelled = true;
+      },
+    });
+    try {
+      const responsePromise = assignmentPost(withActor)(routedRequest(slowBody), {
+        params: Promise.resolve({ courseId: COURSE }),
+      });
+      await vi.advanceTimersByTimeAsync(10_000);
+      const response = await responsePromise;
+      expect(response.status).toBe(408);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      await expect(response.json()).resolves.toEqual({ error: "body_timeout" });
+      expect(streamState.cancelled).toBe(true);
+      expect(withActor.calls).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
