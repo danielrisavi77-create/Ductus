@@ -230,9 +230,9 @@ SELECT is(
 );
 RESET TimeZone;
 
--- 4. A version is immutable (plan 20), for the owner role as well. TRUNCATE
--- is refused earlier, and for another reason, while checks of this
--- transaction are still waiting, so they are run first.
+-- 4. A version is immutable (plan 20), for the owner role as well. The B-8
+-- project FK now makes the parent tables non-truncatable while the evidence
+-- schema exists; test the row-level trigger separately from that FK guard.
 SET CONSTRAINTS ALL IMMEDIATE;
 SELECT is(
   pg_temp.ask_as('ductus_identity', 'anon', v.statement), 'ZD403: assignment version is immutable',
@@ -241,10 +241,15 @@ SELECT is(
 FROM (VALUES
   (1, 'rewrite a version', $$ UPDATE institution.assignment_version SET title = 'Drugi naslov' WHERE assignment_id = {z1} $$),
   (2, 'widen a version', $$ UPDATE institution.assignment_version SET ai_policy = 'encouraged', import_allowed = true WHERE assignment_id = {z2} $$),
-  (3, 'delete a version', $$ DELETE FROM institution.assignment_version WHERE assignment_id = {z1} AND version_no = 1 $$),
-  (4, 'empty the table', 'TRUNCATE institution.assignment_version, institution.assignment, institution.notice_acknowledgment')
+  (3, 'delete a version', $$ DELETE FROM institution.assignment_version WHERE assignment_id = {z1} AND version_no = 1 $$)
 ) AS v (n, what, statement)
 ORDER BY v.n;
+SELECT is(
+  pg_temp.ask_as('ductus_identity', 'anon',
+    'TRUNCATE institution.assignment_version, institution.assignment, institution.notice_acknowledgment'),
+  '0A000: cannot truncate a table referenced in a foreign key constraint',
+  'the evidence project foreign key prevents truncating its assignment parent'
+);
 SET CONSTRAINTS ALL DEFERRED;
 SELECT throws_ok(
   $$ UPDATE institution.assignment_version SET title = title $$, 'ZD403', 'assignment version is immutable',
