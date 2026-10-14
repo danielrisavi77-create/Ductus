@@ -74,6 +74,7 @@ function dependencies(
   rejection?: { code: string; message: string },
 ) {
   const calls: Array<[string | null | undefined]> = [];
+  const queries: Array<{ sql: string; values?: readonly unknown[] }> = [];
   const withActor = Object.assign(async <T>(
       token: string | null | undefined,
       fn: (tx: ActorTransaction) => Promise<T>,
@@ -81,13 +82,13 @@ function dependencies(
       calls.push([token]);
     if (rejection) throw rejection;
     const tx: ActorTransaction = {
-      query: async <Row extends QueryRow = QueryRow>() => ({
-        rows: [{ id: responseId } as unknown as Row],
-        rowCount: 1,
-      }),
+      query: async <Row extends QueryRow = QueryRow>(sql: string, values?: readonly unknown[]) => {
+        queries.push({ sql, values });
+        return { rows: [{ id: responseId } as unknown as Row], rowCount: 1 };
+      },
     };
     return fn(tx);
-  }, { calls });
+  }, { calls, queries });
   return withActor as WithActor & typeof withActor;
 }
 
@@ -110,6 +111,23 @@ describe("createAssignmentResponse", () => {
     expect(withActor.calls).toHaveLength(1);
     const [token] = withActor.calls[0]!;
     expect(token).toBe("session-token");
+    expect(withActor.queries).toHaveLength(1);
+    expect(withActor.queries[0]!.sql).toMatch(/\$1::uuid,\s*\$2::uuid,\s*\$3::text/);
+    expect(withActor.queries[0]!.sql).toContain("$11::boolean");
+    expect(withActor.queries[0]!.sql).not.toContain(INPUT.title);
+    expect(withActor.queries[0]!.values).toEqual([
+      COURSE,
+      REQUEST_ID,
+      INPUT.title,
+      INPUT.instructions,
+      INPUT.workType,
+      INPUT.opensAt,
+      INPUT.dueAt,
+      INPUT.aiPolicy,
+      INPUT.aiPurposes,
+      INPUT.evidenceProfile,
+      INPUT.importAllowed,
+    ]);
   });
 
   it("refuses a cross-origin request before reading its body or opening a transaction", async () => {
@@ -141,6 +159,14 @@ describe("createAssignmentResponse", () => {
     expect(missingKeyResponse.status).toBe(400);
     await expect(missingKeyResponse.json()).resolves.toEqual({ error: "invalid_idempotency_key" });
     expect(withActor.calls).toHaveLength(0);
+
+    const noContentTypeActor = dependencies();
+    const noContentTypeRequest = request(JSON.stringify(INPUT));
+    noContentTypeRequest.headers.delete("content-type");
+    const noContentTypeResponse = await send(JSON.stringify(INPUT), noContentTypeActor, noContentTypeRequest);
+    expect(noContentTypeResponse.status).toBe(415);
+    await expect(noContentTypeResponse.json()).resolves.toEqual({ error: "unsupported_media_type" });
+    expect(noContentTypeActor.calls).toHaveLength(0);
   });
 
   it.each([
