@@ -35,6 +35,9 @@ SELECT ok(
                     'evidence.acceptance_retry_matches(uuid,text,uuid,bigint,text,text,text)'::regprocedure)
       AND acl.grantee = 0 AND acl.privilege_type = 'EXECUTE'
   ), 'helper functions have no public or app EXECUTE grant');
+SELECT ok((SELECT prosecdef AND 'search_path=""' = ANY(proconfig)
+  FROM pg_proc WHERE oid = 'evidence.acceptance_retry_matches(uuid,text,uuid,bigint,text,text,text)'::regprocedure),
+  'retry verifier is SECURITY DEFINER with an empty search_path');
 SELECT is((SELECT sequence_from FROM evidence.validate_segment_descriptor_v2(pg_temp.descriptor(), repeat('b',64))),
   1::bigint, 'the canonical descriptor validates');
 SELECT is((SELECT payload_bytes FROM evidence.validate_segment_descriptor_v2(pg_temp.descriptor(), repeat('b',64))),
