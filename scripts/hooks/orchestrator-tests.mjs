@@ -54,9 +54,15 @@ function runTests(root) {
   if (testFiles.length === 0) {
     return Promise.resolve({ code: 2, stdout: "", stderr: "No orchestrator test files were found.\n" });
   }
+  // Node's test runner sets NODE_TEST_CONTEXT. If this hook is invoked from a
+  // test, inheriting that variable into a nested `node --test` can skip test
+  // discovery and falsely report success.
+  const env = { ...process.env };
+  delete env.NODE_TEST_CONTEXT;
   return new Promise((resolve) => {
     const child = spawn(process.execPath, ["--test", ...testFiles], {
       cwd: root,
+      env,
       windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
     });
