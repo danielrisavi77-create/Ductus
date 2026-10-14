@@ -119,6 +119,34 @@ function blockContainers(line) {
   return { content, containers };
 }
 
+function withoutHtmlComments(input) {
+  let output = "";
+  let inComment = false;
+  for (let index = 0; index < input.length;) {
+    if (!inComment && input.startsWith("<!--", index)) {
+      inComment = true;
+      output += "    ";
+      index += 4;
+      continue;
+    }
+    if (inComment) {
+      if (input.startsWith("-->", index)) {
+        inComment = false;
+        output += "   ";
+        index += 3;
+        continue;
+      }
+      const char = input[index];
+      output += char === "\r" || char === "\n" ? char : " ";
+      index += 1;
+      continue;
+    }
+    output += input[index];
+    index += 1;
+  }
+  return output;
+}
+
 function fencedContent(line, containers) {
   const normalized = stripContainerPath(line, containers);
   return normalized.containers.length === containers.length ? normalized.content : null;
@@ -174,7 +202,7 @@ function maskCode(lines) {
  */
 export function contractText(body, label) {
   const want = label.toLowerCase().replace(/\?$/, "");
-  const source = String(body ?? "").replace(/<!--[\s\S]*?-->/g, "").split(/\r?\n/);
+  const source = withoutHtmlComments(String(body ?? "")).split(/\r?\n/);
   const lines = maskCode(source);
   const fieldItem = (l) => /^\s*([-+*]|\d+\.)?\s*\*\*[^*]+\*\*/.test(blockquoteContent(l).content);
   for (let i = 0; i < lines.length; i += 1) {

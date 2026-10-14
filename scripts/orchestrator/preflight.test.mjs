@@ -142,6 +142,8 @@ test("code fences and HTML comments never satisfy a line", () => {
   assert.equal(contractText([">     Stvarni pozivatelj: uvučeni-kod.mjs"].join("\n"), "Stvarni pozivatelj"), null);
   assert.equal(contractText("<!-- Stvarni pozivatelj: a.mjs -->", "Stvarni pozivatelj"), null);
   assert.equal(contractText("<!--\nPoznate granice: x\n-->", "Poznate granice"), null);
+  assert.equal(contractText("<!--\nPoznate granice: hidden\n-->\nPoznate granice: visible", "Poznate granice"), "visible");
+  assert.equal(contractText("<!--\nPoznate granice: hidden", "Poznate granice"), null);
   assert.equal(contractText(["````markdown", "```", "Stvarni pozivatelj: lažni.mjs", "```", "````"].join("\n"), "Stvarni pozivatelj"), null);
   assert.equal(contractText(["~~~md", "```", "Poznate granice: lažno", "~~~", "~~~"].join("\n"), "Poznate granice"), null);
   assert.equal(contractText(["    Stvarni pozivatelj: uvučeni-kod.mjs"].join("\n"), "Stvarni pozivatelj"), null);
