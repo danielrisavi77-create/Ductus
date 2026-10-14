@@ -75,7 +75,63 @@ jobs:
       - name: pgTAP (pg_prove)
         run: pnpm test:db
       - run: pnpm db:seed
-      - run: pnpm test:integration
+      - name: Provision disposable DAN-189 race database
+        id: dan189_race_db
+        shell: bash
+        run: |
+          set -euo pipefail
+          container="ductus-dan189-race-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          port=54330
+          password="$(openssl rand -hex 24)"
+          echo "::add-mask::${password}"
+
+          docker run --detach --name "$container" \
+            --publish "127.0.0.1:${port}:5432" \
+            --env POSTGRES_DB=ductus_dan189_race \
+            --env POSTGRES_USER=ductus \
+            --env "POSTGRES_PASSWORD=${password}" \
+            "$DUCTUS_POSTGRES_IMAGE"
+
+          ready=false
+          for attempt in {1..60}; do
+            if docker exec "$container" pg_isready --username ductus --dbname ductus_dan189_race >/dev/null 2>&1; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [[ "$ready" != true ]]; then
+            docker logs "$container"
+            echo "::error::Disposable DAN-189 PostgreSQL did not become ready"
+            exit 1
+          fi
+
+          docker exec --interactive "$container" \
+            psql --username ductus --dbname ductus_dan189_race \
+            --set ON_ERROR_STOP=1 --quiet < db/local/migrator.sql
+
+          migrator_url="postgres://ductus:${password}@127.0.0.1:${port}/ductus_dan189_race?sslmode=disable&role=ductus_migrator"
+          pnpm exec dbmate --url "$migrator_url" --no-dump-schema --wait up --strict
+
+          database_url="postgres://ductus:${password}@127.0.0.1:${port}/ductus_dan189_race?sslmode=disable"
+          echo "::add-mask::${database_url}"
+          echo "database_url=${database_url}" >> "$GITHUB_OUTPUT"
+      - name: Integration tests
+        env:
+          DAN189_RACE_DATABASE_URL: ${{ steps.dan189_race_db.outputs.database_url }}
+        run: pnpm test:integration
+      - name: Remove disposable DAN-189 race database
+        if: always()
+        env:
+          DAN189_RACE_CONTAINER: ductus-dan189-race-${{ github.run_id }}-${{ github.run_attempt }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if docker container inspect "$DAN189_RACE_CONTAINER" >/dev/null 2>&1; then
+            docker container rm --force --volumes "$DAN189_RACE_CONTAINER"
+          else
+            echo "No disposable DAN-189 race database container needs cleanup."
+          fi
       - run: pnpm build
       # docs/TESTING.md 2: Chromium, Firefox and WebKit.
       - name: Install browsers
