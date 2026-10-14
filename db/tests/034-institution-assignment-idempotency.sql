@@ -4,14 +4,20 @@ BEGIN;
 \ir fixtures/institution.inc
 SET LOCAL lc_messages TO 'C';
 
-SELECT plan(14);
+SELECT plan(23);
 
-CREATE FUNCTION pg_temp.create_with_key(p_actor text, p_course text, p_key text, p_title text DEFAULT 'Esej o izmišljenoj temi')
+CREATE FUNCTION pg_temp.create_with_key(
+  p_actor text, p_course text, p_key text, p_title text DEFAULT 'Esej o izmišljenoj temi',
+  p_instructions text DEFAULT 'Prvi red uputa.', p_work_type text DEFAULT 'essay',
+  p_opens_at text DEFAULT '2026-11-02 08:00+01', p_due_at text DEFAULT '2026-12-01 23:59+01',
+  p_ai_policy text DEFAULT 'partially_allowed', p_ai_purposes text[] DEFAULT ARRAY['proofreading']::text[],
+  p_evidence_profile text DEFAULT 'basic', p_import_allowed boolean DEFAULT false
+)
 RETURNS text LANGUAGE sql AS $f$
   SELECT pg_temp.ask(p_actor, format(
-    'SELECT institution.create_assignment(%s, %L, %L, %L, %L, %L, %L, %L, %L::text[], %L, %L)',
-    p_course, p_key, p_title, 'Prvi red uputa.', 'essay', '2026-11-02 08:00+01', '2026-12-01 23:59+01',
-    'partially_allowed', '{proofreading}', 'basic', false))
+    'SELECT institution.create_assignment(%s, %L::uuid, %L, %L, %L, %L::timestamptz, %L::timestamptz, %L, %L::text[], %L, %L)',
+    p_course, p_key, p_title, p_instructions, p_work_type, p_opens_at, p_due_at,
+    p_ai_policy, p_ai_purposes, p_evidence_profile, p_import_allowed))
 $f$;
 
 SELECT is(
@@ -28,6 +34,10 @@ SELECT is(
     now() + interval '1 day', 'partially_allowed', '{proofreading}', 'basic', false) $$),
   'ZD422: invalid input', 'a request key is required'
 );
+SELECT is(
+  pg_temp.create_with_key('petra', '{k1}', '00000000-0000-4000-8000-000000000042'),
+  'ZD403: forbidden', 'a teacher from another tenant cannot create on this course'
+);
 
 CREATE TEMP TABLE first_request AS
 SELECT pg_temp.create_with_key('vesna', '{k1}', '00000000-0000-4000-8000-000000000001') AS id;
@@ -40,6 +50,20 @@ SELECT is(
   pg_temp.create_with_key('vesna', '{k1}', '00000000-0000-4000-8000-000000000001', 'Drugi naslov'),
   'ZD409: conflict', 'the same key cannot silently change the title'
 );
+SELECT is(pg_temp.create_with_key('vesna', '{k1}', '00000000-0000-4000-8000-000000000001', p_instructions => 'Drugi red uputa.'),
+  'ZD409: conflict', 'the same key cannot silently change instructions');
+SELECT is(pg_temp.create_with_key('vesna', '{k1}', '00000000-0000-4000-8000-000000000001', p_work_type => 'short_paper'),
+  'ZD409: conflict', 'the same key cannot silently change work type');
+SELECT is(pg_temp.create_with_key('vesna', '{k1}', '00000000-0000-4000-8000-000000000001', p_opens_at => '2026-11-03 08:00+01'),
+  'ZD409: conflict', 'the same key cannot silently change opening time');
+SELECT is(pg_temp.create_with_key('vesna', '{k1}', '00000000-0000-4000-8000-000000000001', p_due_at => '2026-12-02 23:59+01'),
+  'ZD409: conflict', 'the same key cannot silently change due time');
+SELECT is(pg_temp.create_with_key('vesna', '{k1}', '00000000-0000-4000-8000-000000000001', p_ai_purposes => ARRAY['formatting']::text[]),
+  'ZD409: conflict', 'the same key cannot silently change AI purposes');
+SELECT is(pg_temp.create_with_key('vesna', '{k1}', '00000000-0000-4000-8000-000000000001', p_evidence_profile => 'extended'),
+  'ZD409: conflict', 'the same key cannot silently change evidence profile');
+SELECT is(pg_temp.create_with_key('vesna', '{k1}', '00000000-0000-4000-8000-000000000001', p_import_allowed => true),
+  'ZD409: conflict', 'the same key cannot silently change import policy');
 SELECT is(
   (SELECT count(*) FROM institution.assignment WHERE created_by = pg_temp.id('vesna') AND request_id = '00000000-0000-4000-8000-000000000001'),
   1::bigint, 'the original key has one assignment row'
@@ -57,14 +81,19 @@ SELECT is(
   'the same UUID key is independent for another authenticated creator'
 );
 SELECT is(
+  pg_temp.create_with_key('petra', '{k3}', '00000000-0000-4000-8000-000000000001', 'Esej Petre', p_ai_policy => 'encouraged'),
+  'ZD409: conflict', 'the same key cannot silently change AI policy'
+);
+SELECT is(
   (SELECT count(*) FROM institution.assignment WHERE request_id = '00000000-0000-4000-8000-000000000001'),
   2::bigint, 'the key is unique per creator, not globally'
 );
 SELECT is(
-  pg_temp.ask('vesna', $$ SELECT institution.publish_assignment_version({z1}, 2, 'Nova verzija',
-    'Prvi red uputa.', 'essay', '2026-11-02 08:00+01', '2026-12-01 23:59+01',
-    'partially_allowed', '{proofreading}', 'basic', false) $$),
-  '3', 'fixture publication still works alongside the overload'
+  pg_temp.ask('vesna', format(
+    'SELECT institution.publish_assignment_version(%L::uuid, 1, %L, %L, %L, %L::timestamptz, %L::timestamptz, %L, %L::text[], %L, %L)',
+    (SELECT id FROM first_request), 'Nova verzija', 'Prvi red uputa.', 'essay', '2026-11-02 08:00+01',
+    '2026-12-01 23:59+01', 'partially_allowed', ARRAY['proofreading']::text[], 'basic', false)),
+  '2', 'the first request receives a later immutable version'
 );
 SELECT is(
   pg_temp.create_with_key('vesna', '{k1}', '00000000-0000-4000-8000-000000000001'),

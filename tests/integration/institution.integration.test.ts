@@ -465,9 +465,12 @@ describe("assignments and removal over withActor", () => {
       );
       firstId = first.rows[0].id;
       const waitingRetry = createWithKey(course, requestId);
+      const waitingConflict = createWithKey(course, requestId, "Utrka s promijenjenim sadržajem").catch(refusal);
       expect(await answeredSoon(waitingRetry)).toBe(false);
+      expect(await answeredSoon(waitingConflict)).toBe(false);
       await creator.query("COMMIT");
       expect(await waitingRetry).toBe(firstId);
+      expect(await waitingConflict).toEqual({ code: "ZD409", message: "conflict" });
     } finally {
       await creator.end();
     }
