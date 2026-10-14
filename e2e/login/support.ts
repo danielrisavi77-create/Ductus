@@ -44,7 +44,7 @@ export async function appCookie(context: BrowserContext, name: string) {
 }
 
 /** A button on the provider's "Demo prijava" page (infra/fake-oidc). */
-export type DemoAccount = "Demo studentica" | "Demo nastavnik";
+export type DemoAccount = "Demo studentica" | "Demo student 2" | "Demo nastavnik";
 
 /** Signs in as a demo account (the student unless named) and returns the callback URL the provider sent. */
 export async function signIn(page: Page, returnTo: string, account: DemoAccount = "Demo studentica"): Promise<string> {

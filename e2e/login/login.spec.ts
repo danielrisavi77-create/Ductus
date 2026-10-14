@@ -26,6 +26,19 @@ test("the demo student signs in and lands on returnTo with a session", async ({ 
   });
 });
 
+test("the second demo student signs in as a distinct account", async ({ page, context }) => {
+  await signIn(page, "/", "Demo student 2");
+
+  const session = await appCookie(context, SESSION_COOKIE);
+  expect(session).toBeDefined();
+  expect(await sessionRow(session!.value)).toEqual({
+    institution: "demo-fakultet",
+    unique_id: "demo-student-2@demo.ductus.test",
+    closed_at: null,
+    close_reason: null,
+  });
+});
+
 test("logout closes the session and clears the cookie", async ({ page, context }) => {
   await signIn(page, "/");
   const token = (await appCookie(context, SESSION_COOKIE))!.value;

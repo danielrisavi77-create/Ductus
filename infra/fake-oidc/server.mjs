@@ -13,6 +13,7 @@ const REDIRECT_URI = process.env.REDIRECT_URI ?? "http://localhost:3000/api/auth
 const DEMO_HOME_ORG = "demo.ductus.test";
 const ACCOUNTS = {
   "demo-student": { name: "Demo studentica", affiliation: "student" },
+  "demo-student-2": { name: "Demo student 2", affiliation: "student" },
   "demo-teacher": { name: "Demo nastavnik", affiliation: "employee" },
 };
 

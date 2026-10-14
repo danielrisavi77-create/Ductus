@@ -21,6 +21,8 @@
     "test:integration": "vitest run --project integration",
     "stack:up": "docker compose up -d --build --wait",
     "stack:down": "docker compose down -v",
+    "demo:up": "pnpm stack:up && pnpm db:migrate && pnpm db:seed && pnpm dev",
+    "demo:teacher:provision": "node scripts/demo/provision-teacher.mjs",
     "db:new": "dbmate new",
     "db:provision": "docker compose exec -T postgres psql -U ductus -d ductus -v ON_ERROR_STOP=1 -q < db/local/migrator.sql",
     "db:provision:app": "docker compose exec -T postgres psql -U ductus -d ductus -v ON_ERROR_STOP=1 -q < db/local/app-login.sql",
