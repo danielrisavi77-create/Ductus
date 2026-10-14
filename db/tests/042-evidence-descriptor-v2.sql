@@ -24,11 +24,15 @@ SELECT ok(
   AND has_function_privilege('ductus_evidence', 'evidence.canonical_receipt_v2(jsonb)', 'EXECUTE')
   AND has_function_privilege('ductus_evidence', 'evidence.validate_segment_descriptor_v2(jsonb,text)', 'EXECUTE')
   AND NOT has_function_privilege('ductus_identity', 'evidence.validate_segment_descriptor_v2(jsonb,text)', 'EXECUTE')
+  AND has_function_privilege('ductus_evidence', 'evidence.acceptance_retry_matches(uuid,text,uuid,bigint,text,text,text)', 'EXECUTE')
+  AND NOT has_function_privilege('ductus_app', 'evidence.acceptance_retry_matches(uuid,text,uuid,bigint,text,text,text)', 'EXECUTE')
+  AND NOT has_function_privilege('ductus_identity', 'evidence.acceptance_retry_matches(uuid,text,uuid,bigint,text,text,text)', 'EXECUTE')
   AND NOT EXISTS (
     SELECT 1 FROM pg_proc p
     CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) acl
     WHERE p.oid IN ('evidence.canonical_receipt_v2(jsonb)'::regprocedure,
-                    'evidence.validate_segment_descriptor_v2(jsonb,text)'::regprocedure)
+                    'evidence.validate_segment_descriptor_v2(jsonb,text)'::regprocedure,
+                    'evidence.acceptance_retry_matches(uuid,text,uuid,bigint,text,text,text)'::regprocedure)
       AND acl.grantee = 0 AND acl.privilege_type = 'EXECUTE'
   ), 'helper functions have no public or app EXECUTE grant');
 SELECT is((SELECT sequence_from FROM evidence.validate_segment_descriptor_v2(pg_temp.descriptor(), repeat('b',64))),

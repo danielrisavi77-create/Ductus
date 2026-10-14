@@ -144,6 +144,37 @@ END
 $$;
 REVOKE ALL ON FUNCTION evidence.validate_segment_descriptor_v2(jsonb, text) FROM PUBLIC;
 
+-- Bind a retry to the committed revision and storage location behind its receipt.
+CREATE FUNCTION evidence.acceptance_retry_matches(
+  p_receipt_id uuid, p_document_id text, p_principal_id uuid, p_expected_revision bigint,
+  p_initial_document_hash text, p_final_document_hash text, p_storage_ref text
+) RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = ''
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+      FROM evidence.receipt r
+      JOIN evidence.package p
+        ON p.id = r.evidence_package_id AND p.institution_id = r.institution_id
+       AND p.document_id = p_document_id AND p.principal_id = p_principal_id
+      JOIN evidence.document_revision committed
+        ON committed.document_id = p.document_id AND committed.institution_id = p.institution_id
+       AND committed.revision = (r.receipt_payload::jsonb->>'revision')::bigint
+       AND committed.base_revision = p_expected_revision AND committed.principal_id = p_principal_id
+       AND committed.content_hash = p_final_document_hash
+      JOIN evidence.document_revision initial
+        ON initial.document_id = committed.document_id AND initial.institution_id = committed.institution_id
+       AND initial.revision = committed.base_revision AND initial.principal_id = p_principal_id
+       AND initial.content_hash = p_initial_document_hash
+      JOIN evidence.segment s
+        ON s.id = r.segment_id AND s.evidence_package_id = r.evidence_package_id
+       AND s.institution_id = r.institution_id AND s.document_id = p.document_id
+       AND s.principal_id = p_principal_id AND s.storage_ref = p_storage_ref
+     WHERE r.id = p_receipt_id AND r.principal_id = p_principal_id
+  )
+$$;
+REVOKE ALL ON FUNCTION evidence.acceptance_retry_matches(uuid, text, uuid, bigint, text, text, text) FROM PUBLIC;
+
 RESET ROLE;
 SET LOCAL ROLE ductus_migrator;
 REVOKE CREATE ON SCHEMA evidence FROM ductus_evidence;
@@ -155,6 +186,7 @@ GRANT CREATE ON SCHEMA evidence TO ductus_evidence;
 GRANT ductus_evidence TO ductus_identity WITH INHERIT FALSE, SET TRUE;
 SET LOCAL ROLE ductus_identity;
 SET LOCAL ROLE ductus_evidence;
+DROP FUNCTION IF EXISTS evidence.acceptance_retry_matches(uuid, text, uuid, bigint, text, text, text);
 DROP FUNCTION evidence.validate_segment_descriptor_v2(jsonb, text);
 DROP FUNCTION evidence.canonical_receipt_v2(jsonb);
 RESET ROLE;
