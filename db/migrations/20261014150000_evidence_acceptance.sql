@@ -150,29 +150,7 @@ BEGIN
     ELSIF v_existing.payload_sha256 <> p_payload_sha256 OR v_existing.segment_id <> p_descriptor->>'segmentId'
           OR v_existing.evidence_package_id <> p_evidence_package_id THEN
       RETURN QUERY SELECT 'invalid'::text, NULL::bigint, NULL::text, NULL::uuid, NULL::text;
-    ELSIF NOT EXISTS (
-      SELECT 1
-        FROM evidence.document_revision committed
-        JOIN evidence.document_revision initial
-          ON initial.document_id = committed.document_id
-         AND initial.institution_id = committed.institution_id
-         AND initial.revision = committed.base_revision
-        JOIN evidence.segment s
-          ON s.id = v_existing.segment_id
-         AND s.evidence_package_id = v_package.id
-         AND s.institution_id = v_package.institution_id
-         AND s.document_id = v_document.id
-         AND s.principal_id = v_actor.user_id
-       WHERE committed.document_id = v_document.id
-         AND committed.institution_id = v_document.institution_id
-         AND committed.principal_id = v_actor.user_id
-         AND committed.revision = (v_existing.receipt_payload::jsonb->>'revision')::bigint
-         AND committed.base_revision = p_expected_revision
-         AND initial.principal_id = v_actor.user_id
-         AND initial.content_hash = p_initial_document_hash
-         AND committed.content_hash = p_final_document_hash
-         AND s.storage_ref = p_storage_ref
-    ) THEN
+    ELSIF NOT evidence.acceptance_retry_matches(v_existing.id, v_document.id, v_actor.user_id, p_expected_revision, p_initial_document_hash, p_final_document_hash, p_storage_ref) THEN
       RETURN QUERY SELECT 'idempotency_conflict'::text, NULL::bigint, NULL::text, NULL::uuid, NULL::text;
     ELSE
       RETURN QUERY SELECT
