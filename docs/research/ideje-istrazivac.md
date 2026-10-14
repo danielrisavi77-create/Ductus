@@ -1,6 +1,6 @@
 # Ductus Istraživač — popis ideja
 
-Popis vodi **Ductus Istraživač** (istraživački bot). Svaki dan (oko 7:20, Europe/Zagreb) pretražuje web: konkurenciju i slične alate, nova istraživanja o AI detekciji i provenance pisanja, regulativu (EU AI Act, GDPR, pravila sveučilišta) i UX/tehničke ideje za stack (Next.js, Tiptap, Dexie, Postgres). Najbolje prijedloge upisuje ovdje i u dnevni komentar u #271.
+Popis vodi **Ductus Istraživač** (istraživački bot). Planirani dnevni postupak (oko 7:20, Europe/Zagreb) pretraživao bi web o konkurenciji i sličnim alatima, novim istraživanjima o AI detekciji i provenance pisanja, regulativi (EU AI Act, GDPR, pravila sveučilišta) te UX/tehničkim idejama za stack (Next.js, Tiptap, Dexie, Postgres). Najbolje bi prijedloge upisivao ovdje i u dnevni komentar u #271. Ta dnevna automatizacija još nije implementirana.
 
 Svrha popisa: da se ideje ne ponavljaju i da se prati ishod. Status: `predloženo` → `prihvaćeno` / `odbijeno` → `provedeno`. Status mijenja Daniel; bot ga samo usklađuje s onim što vidi u issueima, PR-ovima, Linearu i komentarima.
 
