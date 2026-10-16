@@ -485,6 +485,16 @@ export async function carriedByCompare(candidates, current, compareHead, log = (
  * files list), the issue comments and the PR reviews (quota evidence only).
  * Every description is a fixed text.
  */
+// The PR an event is about. A workflow_run comes from the unprivileged
+// review relay (#128): GitHub lists the PR only for same-repository heads.
+export function prNumberFromEvent(event) {
+  if (event?.pull_request?.number) return event.pull_request.number;
+  if (event?.issue?.pull_request && event.issue.number) return event.issue.number;
+  const runPrs = event?.workflow_run?.pull_requests;
+  if (Array.isArray(runPrs) && runPrs.length === 1 && Number.isSafeInteger(runPrs[0]?.number)) return runPrs[0].number;
+  return null;
+}
+
 export function evaluatePullRequest({ pr, files, comments, prReviews, ownerLogin, carriedHeads }) {
   const listed = files ?? [];
   // The floor is only as good as the list: a cut or unread list fails closed.

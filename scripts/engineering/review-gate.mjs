@@ -6,6 +6,7 @@ import {
   carriedByCompare,
   carriedHeadCandidates,
   evaluatePullRequest,
+  prNumberFromEvent,
 } from "./review-gate-core.mjs";
 
 const context = "Engineering review gate";
@@ -40,12 +41,6 @@ async function apiAll(path) {
     if (page === 100) throw new Error(`Pagination limit reached for ${path}`);
   }
   return items;
-}
-
-function prNumberFromEvent(event) {
-  if (event.pull_request?.number) return event.pull_request.number;
-  if (event.issue?.pull_request && event.issue?.number) return event.issue.number;
-  return null;
 }
 
 // Walks first parents from `head` until a non-merge commit or the step limit,

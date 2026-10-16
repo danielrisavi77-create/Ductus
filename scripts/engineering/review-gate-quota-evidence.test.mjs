@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { evaluateGate } from "./review-gate-core.mjs";
+import { evaluateGate, prNumberFromEvent } from "./review-gate-core.mjs";
 
 // #128: quota evidence holds only while the exhausted App shows nothing else.
 // A. A later comment of the same App that is not a quota message proves it
@@ -136,4 +136,15 @@ test("control: an earlier PR review of the App, or one by another account, keeps
 test("A: a PR review of the App with an unreadable time voids the evidence, failing closed (#128)", () => {
   const comments = [codex(QUOTA, 0), review(10 * MIN), fallbackQa(20 * MIN)];
   assert.equal(evaluateWithReviews(comments, [{ ...codexReview(0), submitted_at: null }]).state, "pending");
+});
+
+test("the runner finds the PR of a relayed review, and nothing else (#128)", () => {
+  assert.equal(prNumberFromEvent({ pull_request: { number: 7 } }), 7);
+  assert.equal(prNumberFromEvent({ issue: { number: 8, pull_request: {} } }), 8);
+  assert.equal(prNumberFromEvent({ issue: { number: 9 } }), null);
+  assert.equal(prNumberFromEvent({ workflow_run: { pull_requests: [{ number: 295 }] } }), 295);
+  // A fork head lists no PR, and more than one PR is ambiguous: evaluate nothing.
+  assert.equal(prNumberFromEvent({ workflow_run: { pull_requests: [] } }), null);
+  assert.equal(prNumberFromEvent({ workflow_run: { pull_requests: [{ number: 1 }, { number: 2 }] } }), null);
+  assert.equal(prNumberFromEvent({ workflow_run: { pull_requests: [{ number: "3" }] } }), null);
 });
