@@ -69,7 +69,7 @@ describe("validateCheckpointName", () => {
   });
 
   it("still accepts names in any script, emoji and a no-break space between words", () => {
-    for (const input of ["Čakavski žargon", "한글 и م", "Poglavlje\u00a0II", "Kraj 📚"]) {
+    for (const input of ["Čakavski žargon", "한글 и م", "Poglavlje\u00a0II", "Kraj 📚", "\u3405\u{E0100}"]) {
       expect(validateCheckpointName(input)).toEqual({ ok: true, value: input });
     }
   });
