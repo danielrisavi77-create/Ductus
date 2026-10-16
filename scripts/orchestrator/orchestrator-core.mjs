@@ -1,6 +1,6 @@
 // Pure logic for the orchestrator helper scripts. No gh/git calls here.
 import { canonicalBlock, field } from "../engineering/metadata-parser.mjs";
-import { trustedAuthor } from "../engineering/review-gate-core.mjs";
+import { commentTime, trustedAuthor } from "../engineering/review-gate-core.mjs";
 import {
   changedPaths, D97_MANUAL_PATHS, D97_PATHS, matchesPath, normalizePath,
 } from "../engineering/protected-paths.mjs";
@@ -98,7 +98,7 @@ export function parseVerdicts(comments, kind) {
       verdict: field(c.body, k.verdict)?.toUpperCase() ?? null,
       author: c.user?.login ?? null,
       appSlug: c.performed_via_github_app?.slug ?? null,
-      createdAt: Date.parse(c.created_at ?? "") || index,
+      createdAt: commentTime(c) || index,
       index,
     }))
     .sort((a, b) => a.createdAt - b.createdAt || a.index - b.index);

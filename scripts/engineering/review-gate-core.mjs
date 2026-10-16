@@ -91,6 +91,19 @@ export function trustedAuthor(item, logins = TRUSTED_VERDICT_LOGINS) {
   return LISTED_ASSOCIATIONS.has(item?.author_association) && typeof login === "string" && logins.includes(login);
 }
 
+/**
+ * When a comment last said what it says now: its last edit, else its creation
+ * (#129). An edit keeps `created_at`, so a comment written early and rewritten
+ * later must not count from the early time. NaN when neither time is readable.
+ * Shared with the orchestrator scripts so they order what the gate orders.
+ */
+export function commentTime(item) {
+  const created = Date.parse(item?.created_at ?? "");
+  const updated = Date.parse(item?.updated_at ?? "");
+  if (Number.isNaN(updated)) return created;
+  return Number.isNaN(created) ? updated : Math.max(created, updated);
+}
+
 // A verdict is a person's comment posted through an App.
 function trustedComments(items, logins) {
   return (items ?? [])
@@ -100,7 +113,7 @@ function trustedComments(items, logins) {
       login: item?.user?.login ?? null,
       association: item?.author_association ?? null,
       appSlug: item?.performed_via_github_app?.slug ?? null,
-      createdAt: Date.parse(item?.created_at ?? "") || index,
+      createdAt: commentTime(item) || index,
       index,
     }))
     .filter((entry) => entry.body);
