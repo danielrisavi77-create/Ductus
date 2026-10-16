@@ -108,15 +108,18 @@ async function main() {
 
   const [owner, repo] = repository.split("/");
   const pr = await api(`/repos/${owner}/${repo}/pulls/${number}`);
-  const [comments, changedFiles] = await Promise.all([
+  const [comments, changedFiles, reviews] = await Promise.all([
     apiAll(`/repos/${owner}/${repo}/issues/${number}/comments`),
     apiAll(`/repos/${owner}/${repo}/pulls/${number}/files`),
+    // Only for quota evidence (#128): a PR review of the exhausted App voids it.
+    apiAll(`/repos/${owner}/${repo}/pulls/${number}/reviews`),
   ]);
 
   const { metadata, result } = evaluatePullRequest({
     pr,
     files: changedFiles,
     comments,
+    prReviews: reviews,
     ownerLogin: owner,
     carriedHeads: await carriedHeads(owner, repo, pr, comments),
   });

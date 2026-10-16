@@ -97,3 +97,43 @@ test("C: Grok review and Grok QA pass on Codex quota evidence alone (#128)", () 
   assert.equal(evaluate([codex(QUOTA, 0), grokReview, grokQa]).state, "success");
   assert.equal(evaluate([grokReview, grokQa]).state, "pending");
 });
+
+// Real shape of PR #97 (review FAIL on this PR, 12 Oct 2026): Codex keeps one
+// "Codex Review Summary" comment and edits it in place, and posts the review
+// itself as a PR review, which the issue comments list never shows.
+const evaluateWithReviews = (comments, reviews) =>
+  evaluateGate({ body: "Agent: chatgpt:a:backend\nRisk: critical\nTask: B-1\n", headSha: head, ownerLogin, comments, prReviews: reviews });
+const codexReview = (ms, user = { login: "chatgpt-codex-connector[bot]", type: "Bot" }) => ({
+  user,
+  state: "COMMENTED",
+  body: "Codex Review",
+  submitted_at: iso(ms),
+});
+
+test("A: a summary created before the quota message and edited after it voids the evidence (#128)", () => {
+  const summary = codex("### Codex Review Summary\n\nCompleted.", -10 * MIN, { updated_at: iso(5 * MIN) });
+  assert.equal(evaluate([summary, codex(QUOTA, 0), review(10 * MIN), fallbackQa(20 * MIN)]).state, "pending");
+});
+
+test("control: a summary edited before the quota message keeps the evidence (#128)", () => {
+  const summary = codex("### Codex Review Summary\n\nCompleted.", -10 * MIN, { updated_at: iso(-5 * MIN) });
+  assert.equal(evaluate([summary, codex(QUOTA, 0), review(10 * MIN), fallbackQa(20 * MIN)]).state, "success");
+});
+
+test("A: a PR review of the exhausted App after the quota message voids the evidence (#128)", () => {
+  const comments = [codex(QUOTA, 0), review(10 * MIN), fallbackQa(20 * MIN)];
+  assert.equal(evaluateWithReviews(comments, [codexReview(5 * MIN)]).state, "pending");
+  assert.equal(evaluateWithReviews(comments, [codexReview(30 * MIN)]).state, "pending");
+});
+
+test("control: an earlier PR review of the App, or one by another account, keeps the evidence (#128)", () => {
+  const comments = [codex(QUOTA, 0), review(10 * MIN), fallbackQa(20 * MIN)];
+  assert.equal(evaluateWithReviews(comments, [codexReview(-5 * MIN)]).state, "success");
+  assert.equal(evaluateWithReviews(comments, [codexReview(5 * MIN, { login: "chatgpt-codex-connector[bot]", type: "User" })]).state, "success");
+  assert.equal(evaluateWithReviews(comments, [codexReview(5 * MIN, { login: ownerLogin, type: "User" })]).state, "success");
+});
+
+test("A: a PR review of the App with an unreadable time voids the evidence, failing closed (#128)", () => {
+  const comments = [codex(QUOTA, 0), review(10 * MIN), fallbackQa(20 * MIN)];
+  assert.equal(evaluateWithReviews(comments, [{ ...codexReview(0), submitted_at: null }]).state, "pending");
+});

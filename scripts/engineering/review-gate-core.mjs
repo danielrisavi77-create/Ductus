@@ -105,25 +105,42 @@ function trustedComments(items, logins) {
 }
 
 // Evidence holds only while the exhausted App shows nothing else (#128): a
-// later comment of the same App that is not a quota message proves it works
-// again, whether it came before or after the QA comment.
-function quotaEvidence(items) {
+// later comment of the same App that is not a quota message, a later edit of
+// one (Codex edits one review summary in place), or a later PR review of the
+// App proves it works again, whether that came before or after the QA comment.
+const lastActivity = (item) => {
+  const created = Date.parse(item?.created_at ?? "");
+  const updated = Date.parse(item?.updated_at ?? "");
+  return Number.isNaN(updated) ? created : Math.max(created || 0, updated);
+};
+
+function quotaEvidence(items, reviews = []) {
   const appComments = (items ?? [])
     .map((item, index) => {
       const slug = item?.performed_via_github_app?.slug ?? null;
       const pattern = slug ? QUOTA_EXHAUSTED_PATTERNS.get(slug) : null;
       if (!pattern || item?.user?.type !== "Bot" || item?.user?.login !== `${slug}[bot]`) return null;
+      const exhausted = pattern.test(item?.body ?? "");
       return {
         appSlug: slug,
-        createdAt: Date.parse(item?.created_at ?? "") || index,
-        exhausted: pattern.test(item?.body ?? ""),
+        createdAt: (exhausted ? Date.parse(item?.created_at ?? "") : lastActivity(item)) || index,
+        exhausted,
       };
     })
     .filter(Boolean);
+  // A PR review carries no App slug, only the App's bot account.
+  const appReviews = (reviews ?? [])
+    .map((review) => {
+      const slug = [...QUOTA_EXHAUSTED_PATTERNS.keys()].find((name) => review?.user?.login === `${name}[bot]`);
+      if (!slug || review?.user?.type !== "Bot") return null;
+      return { appSlug: slug, createdAt: Date.parse(review?.submitted_at ?? "") || Infinity, exhausted: false };
+    })
+    .filter(Boolean);
+  const activity = [...appComments, ...appReviews];
   return appComments.filter(
     (item) =>
       item.exhausted &&
-      !appComments.some(
+      !activity.some(
         (other) => other.appSlug === item.appSlug && !other.exhausted && other.createdAt > item.createdAt,
       ),
   );
@@ -216,6 +233,7 @@ export function evaluateGate({
   headSha,
   ownerLogin,
   comments = [],
+  prReviews = [],
   carriedHeads = new Set(),
   trustedLogins = TRUSTED_VERDICT_LOGINS,
   qaExempt = null,
@@ -324,7 +342,7 @@ export function evaluateGate({
     // Quota fallback: while another registered App proves on this PR that its
     // quota is exhausted, QA may come from the reviewer's App, but only from a
     // principal that is neither the author nor any passing reviewer.
-    const evidence = quotaEvidence(comments);
+    const evidence = quotaEvidence(comments, prReviews);
     const passingReviewerPrincipals = new Set(
       passingReviews.map((review) => review.identity.principal),
     );
@@ -464,9 +482,10 @@ export async function carriedByCompare(candidates, current, compareHead, log = (
 
 /**
  * Whole decision for one PR from REST data: `pr` (GET pulls/{n}), `files` (its
- * files list) and the issue comments. Every description is a fixed text.
+ * files list), the issue comments and the PR reviews (quota evidence only).
+ * Every description is a fixed text.
  */
-export function evaluatePullRequest({ pr, files, comments, ownerLogin, carriedHeads }) {
+export function evaluatePullRequest({ pr, files, comments, prReviews, ownerLogin, carriedHeads }) {
   const listed = files ?? [];
   // The floor is only as good as the list: a cut or unread list fails closed.
   if (!(pr.changed_files <= listed.length)) {
@@ -491,6 +510,7 @@ export function evaluatePullRequest({ pr, files, comments, ownerLogin, carriedHe
       headSha: pr.head.sha,
       ownerLogin,
       comments,
+      prReviews,
       carriedHeads,
       qaExempt: qaExemption(paths),
     }),
