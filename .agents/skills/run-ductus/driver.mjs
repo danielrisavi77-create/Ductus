@@ -4,7 +4,7 @@
 // Usage: node .claude/skills/run-ductus/driver.mjs [--port 3111] [--out DIR] [--skip-build] [--headed]
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { constants, tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { chromium } from "@playwright/test";
@@ -58,6 +58,14 @@ const stop = () => {
     } catch {}
   }
 };
+// Ctrl+C or a kill ends Node without running the finally below, and the
+// detached group would outlive the driver and keep the port.
+for (const signal of ["SIGINT", "SIGTERM"]) {
+  process.once(signal, () => {
+    stop();
+    process.exit(128 + constants.signals[signal]);
+  });
+}
 
 let browser;
 try {
