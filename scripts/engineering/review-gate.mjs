@@ -38,6 +38,11 @@ async function setStatus(repository, sha, result, targetUrl) {
   });
 }
 
+// A run that fails after the head is known marks that head pending, so an
+// older success never outlives a failed re-evaluation.
+const RUN_FAILED = { state: "pending", description: "Gate run failed before a verdict; re-run the gate." };
+let knownHead = null;
+
 async function main() {
   const event = JSON.parse(await readFile(process.env.GITHUB_EVENT_PATH, "utf8"));
   const repository = process.env.GITHUB_REPOSITORY;
@@ -49,7 +54,11 @@ async function main() {
   }
 
   const [owner, repo] = repository.split("/");
+  if (event.pull_request?.head?.sha) {
+    knownHead = { repository, sha: event.pull_request.head.sha, url: event.pull_request.html_url };
+  }
   const pr = await api(`/repos/${owner}/${repo}/pulls/${number}`);
+  knownHead = { repository, sha: pr.head.sha, url: pr.html_url };
   const [comments, changedFiles, reviews] = await Promise.all([
     apiAll(`/repos/${owner}/${repo}/issues/${number}/comments`),
     apiAll(`/repos/${owner}/${repo}/pulls/${number}/files`),
@@ -73,7 +82,13 @@ async function main() {
   }
 }
 
-main().catch((error) => {
+main().catch(async (error) => {
   console.error(error);
   process.exitCode = 1;
+  if (!knownHead) return;
+  try {
+    await setStatus(knownHead.repository, knownHead.sha, RUN_FAILED, knownHead.url);
+  } catch (statusError) {
+    console.error(`Could not mark the head pending after the failure: ${statusError.message}`);
+  }
 });
