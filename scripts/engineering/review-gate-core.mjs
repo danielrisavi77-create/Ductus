@@ -108,6 +108,8 @@ function trustedComments(items, logins) {
 // later comment of the same App that is not a quota message, a later edit of
 // one (Codex edits one review summary in place), or a later PR review of the
 // App proves it works again, whether that came before or after the QA comment.
+// GitHub times have one-second resolution, so activity in the same second as
+// the quota message also counts as later: the order is unknown, fail closed.
 const lastActivity = (item) => {
   const created = Date.parse(item?.created_at ?? "");
   const updated = Date.parse(item?.updated_at ?? "");
@@ -123,7 +125,8 @@ function quotaEvidence(items, reviews = []) {
       const exhausted = pattern.test(item?.body ?? "");
       return {
         appSlug: slug,
-        createdAt: (exhausted ? Date.parse(item?.created_at ?? "") : lastActivity(item)) || index,
+        // An unreadable time of other App activity counts as latest: fail closed.
+        createdAt: exhausted ? Date.parse(item?.created_at ?? "") || index : lastActivity(item) || Infinity,
         exhausted,
       };
     })
@@ -141,7 +144,7 @@ function quotaEvidence(items, reviews = []) {
     (item) =>
       item.exhausted &&
       !activity.some(
-        (other) => other.appSlug === item.appSlug && !other.exhausted && other.createdAt > item.createdAt,
+        (other) => other.appSlug === item.appSlug && !other.exhausted && other.createdAt >= item.createdAt,
       ),
   );
 }

@@ -148,3 +148,16 @@ test("the runner finds the PR of a relayed review, and nothing else (#128)", () 
   assert.equal(prNumberFromEvent({ workflow_run: { pull_requests: [{ number: 1 }, { number: 2 }] } }), null);
   assert.equal(prNumberFromEvent({ workflow_run: { pull_requests: [{ number: "3" }] } }), null);
 });
+
+test("A: App activity in the same second as the quota message voids the evidence, failing closed (#128)", () => {
+  const base = [review(10 * MIN), fallbackQa(20 * MIN)];
+  assert.equal(evaluate([codex(QUOTA, 0), codex("### Codex Review Summary\n\nCompleted.", 0), ...base]).state, "pending");
+  assert.equal(evaluateWithReviews([codex(QUOTA, 0), ...base], [codexReview(0)]).state, "pending");
+  // Control: one second earlier, the activity predates the quota message.
+  assert.equal(evaluate([codex("### Codex Review Summary\n\nCompleted.", -1000), codex(QUOTA, 0), ...base]).state, "success");
+});
+
+test("A: an App comment with an unreadable time voids the evidence, failing closed (#128)", () => {
+  const unreadable = { ...codex("### Codex Review Summary\n\nCompleted.", 0), created_at: null, updated_at: null };
+  assert.equal(evaluate([unreadable, codex(QUOTA, 0), review(10 * MIN), fallbackQa(20 * MIN)]).state, "pending");
+});
