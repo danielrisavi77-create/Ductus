@@ -257,6 +257,29 @@ test("a verdict on the current head beats a later carried verdict of the same pr
     });
     assert.equal(replaced.state, "success", `${verdict}(carried) then PASS(current)`);
   }
+  // Review 6217178508 (eaaa2ab): an intermediate carried FAIL or BLOCK must
+  // not make the current FAIL or BLOCK disappear before a later carried PASS.
+  for (const currentVerdict of ["FAIL", "BLOCK"]) {
+    for (const middle of ["FAIL", "BLOCK"]) {
+      const result = evaluateGate({
+        body: body("critical"),
+        headSha: head,
+        comments: [review(head, currentVerdict), review(earlier, middle), review(earlier, "PASS"), qa(head)],
+        ownerLogin,
+        carriedHeads: new Set([earlier]),
+      });
+      assert.equal(result.state, "pending", `${currentVerdict}(current), ${middle}(carried), PASS(carried)`);
+    }
+    // Control: the normal fix on the current head still clears it.
+    const fixedAfter = evaluateGate({
+      body: body("critical"),
+      headSha: head,
+      comments: [review(head, currentVerdict), review(earlier, currentVerdict), review(head, "PASS"), qa(head)],
+      ownerLogin,
+      carriedHeads: new Set([earlier]),
+    });
+    assert.equal(fixedAfter.state, "success", `${currentVerdict} then PASS on the current head`);
+  }
   // A carried PASS still counts when the principal has nothing on the current head.
   const carried = evaluateGate({ body: body("critical"), headSha: head, comments: [review(earlier), qa(head)], ownerLogin, carriedHeads: new Set([earlier]) });
   assert.equal(carried.state, "success");

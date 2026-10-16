@@ -181,11 +181,11 @@ const NEGATIVE = new Set(["FAIL", "BLOCK"]);
 // lifts a FAIL or BLOCK on the current head. The one exception is a FAIL or
 // BLOCK on a carried head posted later than the current-head verdict: it still
 // blocks, so an older PASS never outlives the principal's later objection.
-function supersedes(next, previous) {
-  const later = compareOrder(next.order, previous.order) > 0;
-  if (next.current === previous.current) return later;
-  if (next.current) return !(NEGATIVE.has(previous.verdict) && compareOrder(previous.order, next.order) > 0);
-  return later && NEGATIVE.has(next.verdict);
+function prevailing({ current, carried }) {
+  if (!current) return carried;
+  if (!carried) return current;
+  const carriedLater = compareOrder(carried.order, current.order) > 0;
+  return carriedLater && NEGATIVE.has(carried.verdict) ? carried : current;
 }
 
 function latestVerdicts(entries, {
@@ -222,13 +222,17 @@ function latestVerdicts(entries, {
     }
 
     const key = `${identity.appSlug}|${identity.principal}`;
-    const previous = latest.get(key);
     const candidate = { agent, head: head.toLowerCase(), verdict, extra, fallback, identity,
       order: [entry.createdAt, entry.index], current: sameHead(head, headSha) };
-    if (!previous || supersedes(candidate, previous)) latest.set(key, candidate);
+    // Keep the latest current and the latest carried verdict apart, so a
+    // later carried verdict never makes the current one disappear.
+    const slots = latest.get(key) ?? { current: null, carried: null };
+    const slot = candidate.current ? "current" : "carried";
+    if (!slots[slot] || compareOrder(candidate.order, slots[slot].order) > 0) slots[slot] = candidate;
+    latest.set(key, slots);
   }
 
-  return latest;
+  return new Map([...latest].map(([key, slots]) => [key, prevailing(slots)]));
 }
 
 // Names the earlier heads behind a success that counts carried verdicts, so the
