@@ -235,6 +235,28 @@ test("a verdict on the current head beats a later carried verdict of the same pr
     carriedHeads: new Set([earlier]),
   });
   assert.equal(fixed.state, "success");
+  // Owner decision 16 Oct 2026 (review 6217017710): a later FAIL or BLOCK of
+  // the same principal on a carried head still blocks an older current PASS.
+  for (const verdict of ["FAIL", "BLOCK"]) {
+    const later = evaluateGate({
+      body: body("critical"),
+      headSha: head,
+      comments: [review(head, "PASS"), review(earlier, verdict), qa(head)],
+      ownerLogin,
+      carriedHeads: new Set([earlier]),
+    });
+    assert.equal(later.state, "pending", `PASS(current) then ${verdict}(carried)`);
+    assert.match(later.description, new RegExp(verdict.toLowerCase()), verdict);
+    // An older carried FAIL or BLOCK is replaced by a later current PASS.
+    const replaced = evaluateGate({
+      body: body("critical"),
+      headSha: head,
+      comments: [review(earlier, verdict), review(head, "PASS"), qa(head)],
+      ownerLogin,
+      carriedHeads: new Set([earlier]),
+    });
+    assert.equal(replaced.state, "success", `${verdict}(carried) then PASS(current)`);
+  }
   // A carried PASS still counts when the principal has nothing on the current head.
   const carried = evaluateGate({ body: body("critical"), headSha: head, comments: [review(earlier), qa(head)], ownerLogin, carriedHeads: new Set([earlier]) });
   assert.equal(carried.state, "success");

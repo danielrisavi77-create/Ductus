@@ -144,6 +144,21 @@ function compareOrder(a, b) {
   return 0;
 }
 
+const NEGATIVE = new Set(["FAIL", "BLOCK"]);
+
+// #231, question 4 (owner delegated 12 Oct 2026; tightened by the owner on
+// 16 Oct 2026 after review 6217017710): within one principal, a verdict on the
+// current head beats a carried one, so a later PASS on an older head never
+// lifts a FAIL or BLOCK on the current head. The one exception is a FAIL or
+// BLOCK on a carried head posted later than the current-head verdict: it still
+// blocks, so an older PASS never outlives the principal's later objection.
+function supersedes(next, previous) {
+  const later = compareOrder(next.order, previous.order) > 0;
+  if (next.current === previous.current) return later;
+  if (next.current) return !(NEGATIVE.has(previous.verdict) && compareOrder(previous.order, next.order) > 0);
+  return later && NEGATIVE.has(next.verdict);
+}
+
 function latestVerdicts(entries, {
   agentField,
   headField,
@@ -179,15 +194,9 @@ function latestVerdicts(entries, {
 
     const key = `${identity.appSlug}|${identity.principal}`;
     const previous = latest.get(key);
-    // #231, question 4 (owner delegated, 12 Oct 2026): a verdict on the current
-    // head always beats a carried one of the same principal, however late the
-    // carried one was posted, so a later PASS on an older head never lifts a
-    // FAIL or BLOCK given on the current head.
-    const current = sameHead(head, headSha) ? 1 : 0;
-    const order = [entry.createdAt, entry.index];
-    if (!previous || compareOrder([current, ...order], [previous.current, ...previous.order]) > 0) {
-      latest.set(key, { agent, head: head.toLowerCase(), verdict, extra, fallback, identity, order, current });
-    }
+    const candidate = { agent, head: head.toLowerCase(), verdict, extra, fallback, identity,
+      order: [entry.createdAt, entry.index], current: sameHead(head, headSha) };
+    if (!previous || supersedes(candidate, previous)) latest.set(key, candidate);
   }
 
   return latest;
