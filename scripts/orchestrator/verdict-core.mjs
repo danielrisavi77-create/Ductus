@@ -52,8 +52,15 @@ const reportText = (report) => String(report ?? "").replace(/^(?:[ \t]*\r?\n)+/,
 
 const LABEL_RE = /^\[(KRITIČNO|VAŽNO|MANJE)\]/;
 // ES §14.5: every minor finding says "blokira" or "ne blokira" on its label line
-const NON_BLOCKING_RE = /(?:^|[^\p{L}])ne blokira(?![\p{L}])/iu;
+const NON_BLOCKING_RE = /(?:^|[^\p{L}])ne blokira(?![\p{L}])/giu;
 const BLOCKING_RE = /(?:^|[^\p{L}])blokira(?![\p{L}])/iu;
+// "blokira" left once every "ne blokira" is taken out; both on one line is no status at all
+const minorStatus = (line) => {
+  const nonBlocking = line.match(NON_BLOCKING_RE) !== null;
+  const blocking = BLOCKING_RE.test(line.replace(NON_BLOCKING_RE, " "));
+  if (nonBlocking && blocking) return "both";
+  return nonBlocking ? "non-blocking" : blocking ? "blocking" : null;
+};
 const TOTALS_RE = /^Ukupno:\s*(\d+)\s*kritičn\w*,\s*(\d+)\s*važn\w*,\s*(\d+)\s*manj\w*\.?$/i;
 const NONE_RE = /^Bez nalaza\.?$/i;
 
@@ -77,7 +84,7 @@ const FIELD_FAMILY_RE = /^(agent|review|qa|provider|owner|override|command)-[a-z
  * (review skill); when there are findings or a totals line, exactly one totals
  * line closes the report and matches the labels. Both are read from the
  * active Markdown lines, so code blocks neither count nor close a report.
- * Every MANJE line says "blokira" or "ne blokira" (ES §14.5). A PASS with a
+ * Every MANJE line says exactly one of "blokira" or "ne blokira" (ES §14.5). A PASS with a
  * KRITIČNO, VAŽNO or blocking MANJE finding is refused for reviewer and QA
  * alike (QA skill: PASS only when every required scenario passes).
  */
@@ -101,9 +108,10 @@ function findingsProblem(text, active, { role, verdict }) {
     if (!m) continue;
     labels[m[1]] += 1;
     if (m[1] !== "MANJE") continue;
-    if (NON_BLOCKING_RE.test(l)) continue;
-    if (!BLOCKING_RE.test(l)) return `minor finding must say 'blokira' or 'ne blokira' on its line (ES §14.5): ${l}`;
-    blockingMinor += 1;
+    const status = minorStatus(l);
+    if (status === "both") return `minor finding says both 'blokira' and 'ne blokira'; keep exactly one (ES §14.5): ${l}`;
+    if (status === null) return `minor finding must say 'blokira' or 'ne blokira' on its line (ES §14.5): ${l}`;
+    if (status === "blocking") blockingMinor += 1;
   }
   const closing = active.filter((l) => TOTALS_RE.test(l) || NONE_RE.test(l));
   const last = text.split(/\r?\n/).at(-1);
@@ -127,7 +135,8 @@ function findingsProblem(text, active, { role, verdict }) {
 
 const principal = (agent) => {
   const [runtime, slot] = agent.split(":");
-  return `${runtime === "codex" || runtime === "chatgpt" ? "openai" : runtime}:${slot}`;
+  // a slot names one principal whatever its letter case, as in the gate (#130)
+  return `${runtime === "codex" || runtime === "chatgpt" ? "openai" : runtime}:${slot.toLowerCase()}`;
 };
 const PR_AGENT_RE = /^(claude|codex|chatgpt|grok):[A-Za-z0-9_-]+:[a-z-]+$/;
 

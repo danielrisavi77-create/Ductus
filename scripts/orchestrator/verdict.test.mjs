@@ -310,3 +310,30 @@ test("review FAIL 6213108460/3: model-pair fallback only for the §6 pair", () =
   assert.equal(parseVerdictArgs(args("codex:q:qa", "Astra (astra-1)", "grok-by-xai — kvota")).error, undefined);
   assert.equal(parseVerdictArgs(args("chatgpt:q:qa", "astra", "grok — x")).error, undefined);
 });
+
+test("review FAIL on 97bfa12: a minor finding that says both 'ne blokira' and 'blokira' is refused", () => {
+  const totals = "\nUkupno: 0 kritično, 0 važno, 1 manje.";
+  for (const role of ["reviewer", "qa"]) {
+    for (const verdict of ["PASS", "FAIL"]) {
+      for (const line of [
+        "[MANJE] a.mjs:1 — ne blokira, ali blokira spajanje",
+        "[MANJE] a.mjs:1 — blokira; ne blokira",
+        "[MANJE] a.mjs:1 — Ne blokira (Blokira demo)",
+      ]) {
+        assert.match(checkReport(`${line}${totals}`, { role, verdict }) ?? "", /both 'blokira' and 'ne blokira'/, `${role} ${verdict}: ${line}`);
+      }
+    }
+    // controls: one status, repeated or next to similar words, still reads as that status
+    assert.equal(checkReport(`[MANJE] a.mjs:1 — ne blokira, ponavljam: ne blokira${totals}`, { role, verdict: "PASS" }), null);
+    assert.equal(checkReport(`[MANJE] a.mjs:1 — ne blokira; neblokirajuće i blokirano nisu status${totals}`, { role, verdict: "PASS" }), null);
+    assert.match(checkReport(`[MANJE] a.mjs:1 — blokira, nije neblokirajuće${totals}`, { role, verdict: "PASS" }) ?? "", /blocking MANJE/);
+  }
+});
+
+test("#130 on main: the author's slot is one principal whatever its letter case", () => {
+  for (const agent of ["claude:cloudw:reviewer", "claude:CLOUDW:qa", "claude:CloudW:reviewer"]) {
+    assert.match(authorProblem(PR_BODY, agent), /author/, agent);
+  }
+  assert.match(authorProblem("Agent: codex:S1:backend\nRisk: standard\nTask: DAN-1", "chatgpt:s1:reviewer"), /author/);
+  assert.equal(authorProblem(PR_BODY, "claude:cloudx:reviewer"), null);
+});
