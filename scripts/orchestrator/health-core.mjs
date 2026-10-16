@@ -104,6 +104,8 @@ const SLOT_RE = /(?<![\w:-])`?((?:claude|codex|chatgpt|grok):[A-Za-z0-9_-]+)(?::
 const FULL_SHA = /(?<![0-9a-f])[0-9a-f]{40}(?![0-9a-f])/i;
 const FULL_SHA_G = new RegExp(FULL_SHA.source, "gi");
 const principal = (slot) => slot.replace(/^(?:codex|chatgpt):/, "openai:"); // as review-gate-core
+// The gate keys a slot without letter case (#130); the queue keeps the spelling for display.
+const samePrincipal = (a, b) => a.toLowerCase() === b.toLowerCase();
 const noParens = (s) => s.replace(/\([^()]*\)/g, "");
 
 const SENTENCE_END = /[.!?](?=\s|$)/;
@@ -147,7 +149,7 @@ function classify(line) {
   const rest = tail.slice(first.index + first[0].length);
   const clause = rest.search(CLAUSE_END) < 0 ? rest : rest.slice(0, rest.search(CLAUSE_END));
   const slot = principal(first[1]);
-  if ([...clause.matchAll(SLOT_RE)].some((m) => principal(m[1]) !== slot)) return loose("više slotova iza strelice");
+  if ([...clause.matchAll(SLOT_RE)].some((m) => !samePrincipal(principal(m[1]), slot))) return loose("više slotova iza strelice");
   return { number: prs[0], head: SHA_RE.test(head[1]) ? head[1].toLowerCase() : null, slots: [slot] };
 }
 
@@ -231,7 +233,7 @@ export function checkQueue({ queue, prs, comments, now }) {
       out.push(f("NEPROVJERENO", "red-87", `#${pr.number}: komentari nisu pročitani`));
       continue;
     }
-    if (latestOnHead(canonicalVerdicts(list), item.head).some((v) => item.slots.includes(v.principal))) {
+    if (latestOnHead(canonicalVerdicts(list), item.head).some((v) => item.slots.some((slot) => samePrincipal(slot, v.principal)))) {
       cleared += 1;
       continue;
     }
