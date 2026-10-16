@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import process from "node:process";
 
 import { carriedHeads, createApi } from "./review-gate-api.mjs";
-import { evaluatePullRequest } from "./review-gate-core.mjs";
+import { evaluatePullRequest, prNumberFromEvent } from "./review-gate-core.mjs";
 
 const context = "Engineering review gate";
 
@@ -23,12 +23,6 @@ async function apiAll(path) {
     if (page === 100) throw new Error(`Pagination limit reached for ${path}`);
   }
   return items;
-}
-
-function prNumberFromEvent(event) {
-  if (event.pull_request?.number) return event.pull_request.number;
-  if (event.issue?.pull_request && event.issue?.number) return event.issue.number;
-  return null;
 }
 
 async function setStatus(repository, sha, result, targetUrl) {
@@ -56,15 +50,18 @@ async function main() {
 
   const [owner, repo] = repository.split("/");
   const pr = await api(`/repos/${owner}/${repo}/pulls/${number}`);
-  const [comments, changedFiles] = await Promise.all([
+  const [comments, changedFiles, reviews] = await Promise.all([
     apiAll(`/repos/${owner}/${repo}/issues/${number}/comments`),
     apiAll(`/repos/${owner}/${repo}/pulls/${number}/files`),
+    // Only for quota evidence (#128): a PR review of the exhausted App voids it.
+    apiAll(`/repos/${owner}/${repo}/pulls/${number}/reviews`),
   ]);
 
   const { metadata, result } = evaluatePullRequest({
     pr,
     files: changedFiles,
     comments,
+    prReviews: reviews,
     ownerLogin: owner,
     carriedHeads: await carriedHeads(api, owner, repo, pr, comments),
   });

@@ -12,6 +12,37 @@ const orchestratorDir = new URL("../orchestrator/", import.meta.url);
 const JOB_NAME = "Lint, typecheck, test and build";
 const STEP_NAME = "Engineering system unit tests";
 
+// Whole job block: from the job key to the next job key (2-space indent) or a
+// top-level key. YAML does not fix key order, so a job-level `if:` or
+// `continue-on-error` may sit before `name:`, between `name:` and `steps:` or
+// after the `steps:` block; each would skip or soften every step of the job.
+function jobBlock(ci) {
+  const nameAt = ci.indexOf(`    name: ${JOB_NAME}\n`);
+  assert.ok(nameAt >= 0, "the required job must keep its name");
+  // Start at the job key (2-space indent) above the name, so keys written
+  // before `name:` are part of the block too.
+  const keyAt = ci.slice(0, nameAt).search(/\n {2}[\w-]+:\n(?: {4}.*\n)*$/);
+  assert.ok(keyAt >= 0, "name belongs to a job key");
+  const job = ci.slice(keyAt + 1);
+  const firstLineEnd = job.indexOf("\n");
+  const rest = job.slice(firstLineEnd);
+  const end = rest.search(/\n(?: {2}["']?[\w-]+["']?\s*:|[^\s#])/);
+  const block = job.slice(0, firstLineEnd + (end < 0 ? rest.length : end));
+  assert.match(block, /^ {4}steps:$/m, "the required job has steps");
+  return block;
+}
+
+// Job-level keys sit at exactly 4 spaces; step-level `if:` lines are deeper.
+// Quoted keys ("if": false) are the same key to YAML.
+const JOB_IF = /^ {4}["']?if["']?\s*:/m;
+const JOB_CONTINUE = /^ {4}["']?continue-on-error["']?\s*:/m;
+
+function assertJobNotSkippable(ci) {
+  const block = jobBlock(ci);
+  assert.doesNotMatch(block, JOB_IF, "required job must not have a job-level if");
+  assert.doesNotMatch(block, JOB_CONTINUE, "required job must not be non-blocking");
+}
+
 async function stepBlock() {
   const ci = await readFile(ciPath, "utf8");
   const nameAt = ci.indexOf(`    name: ${JOB_NAME}\n`);
@@ -47,6 +78,42 @@ test("CI node:test step cannot be skipped or made non-blocking", async () => {
   assert.doesNotMatch(step, /continue-on-error/);
   assert.doesNotMatch(step, /working-directory/);
   assert.doesNotMatch(step, /shell:/);
+});
+
+test("the required job itself cannot be skipped or made non-blocking (#195 item 4)", async () => {
+  const ci = await readFile(ciPath, "utf8");
+  assertJobNotSkippable(ci);
+  // The guard must catch each job-level weakening (checked on in-memory copies).
+  const header = `    name: ${JOB_NAME}\n`;
+  // End of the required job: the line before the next job key.
+  const nameAt = ci.indexOf(header);
+  const nextJob = nameAt + ci.slice(nameAt).search(/\n {2}[\w-]+:\n/) + 1;
+  assert.ok(nextJob > nameAt, "the required job is followed by another job");
+  const extras = [
+    "    if: github.event_name == 'push'\n",
+    "    continue-on-error: true\n",
+    '    "if": false\n',
+    "    'continue-on-error': true\n",
+    "    if : false\n",
+  ];
+  for (const extra of extras) {
+    const placements = {
+      "after name": ci.replace(header, header + extra),
+      "before name": ci.replace(header, extra + header),
+      "after steps": ci.slice(0, nextJob) + extra + ci.slice(nextJob),
+    };
+    for (const [where, weakened] of Object.entries(placements)) {
+      assert.notEqual(weakened, ci);
+      assert.throws(() => assertJobNotSkippable(weakened), `${extra.trim()} ${where}`);
+    }
+  }
+  // Control: a step-level `if:` inside the job (deeper indent) and a job-level
+  // `if:` in another job are not the required job's own keys.
+  const stepIf = ci.slice(0, nextJob) + "      - if: false\n        run: true\n" + ci.slice(nextJob);
+  assert.doesNotThrow(() => assertJobNotSkippable(stepIf));
+  const otherJob = ci.slice(0, nextJob) + ci.slice(nextJob).replace(/\n {4}name: /, "\n    if: false\n    name: ");
+  assert.notEqual(otherJob, ci);
+  assert.doesNotThrow(() => assertJobNotSkippable(otherJob));
 });
 
 test("orchestrator tests are not skipped, todo or focused with only", async () => {
