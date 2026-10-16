@@ -51,6 +51,9 @@ export function parseVerdictArgs(args) {
 const reportText = (report) => String(report ?? "").replace(/^(?:[ \t]*\r?\n)+/, "").trimEnd();
 
 const LABEL_RE = /^\[(KRITIČNO|VAŽNO|MANJE)\]/;
+// ES §14.5: every minor finding says "blokira" or "ne blokira" on its label line
+const NON_BLOCKING_RE = /(?:^|[^\p{L}])ne blokira(?![\p{L}])/iu;
+const BLOCKING_RE = /(?:^|[^\p{L}])blokira(?![\p{L}])/iu;
 const TOTALS_RE = /^Ukupno:\s*(\d+)\s*kritičn\w*,\s*(\d+)\s*važn\w*,\s*(\d+)\s*manj\w*\.?$/i;
 const NONE_RE = /^Bez nalaza\.?$/i;
 
@@ -72,9 +75,11 @@ const FIELD_FAMILY_RE = /^(agent|review|qa|provider|owner|override|command)-[a-z
  * Report checks, decided by the gate parser: the report may not carry a line
  * the gate would read as a field. Findings are `[KRITIČNO|VAŽNO|MANJE]` lines
  * (review skill); when there are findings or a totals line, exactly one totals
- * line closes the report and matches the labels. A PASS with a KRITIČNO or
- * VAŽNO finding is refused for reviewer and QA alike (QA skill: PASS only
- * when every required scenario passes).
+ * line closes the report and matches the labels. Both are read from the
+ * active Markdown lines, so code blocks neither count nor close a report.
+ * Every MANJE line says "blokira" or "ne blokira" (ES §14.5). A PASS with a
+ * KRITIČNO, VAŽNO or blocking MANJE finding is refused for reviewer and QA
+ * alike (QA skill: PASS only when every required scenario passes).
  */
 export function checkReport(report, opts) {
   const { role } = opts;
@@ -90,26 +95,32 @@ export function checkReport(report, opts) {
 
 function findingsProblem(text, active, { role, verdict }) {
   const labels = { KRITIČNO: 0, VAŽNO: 0, MANJE: 0 };
+  let blockingMinor = 0;
   for (const l of active) {
     const m = l.match(LABEL_RE);
-    if (m) labels[m[1]] += 1;
+    if (!m) continue;
+    labels[m[1]] += 1;
+    if (m[1] !== "MANJE") continue;
+    if (NON_BLOCKING_RE.test(l)) continue;
+    if (!BLOCKING_RE.test(l)) return `minor finding must say 'blokira' or 'ne blokira' on its line (ES §14.5): ${l}`;
+    blockingMinor += 1;
   }
-  const lines = text.split(/\r?\n/).map((l) => l.trim());
-  const closing = lines.filter((l) => TOTALS_RE.test(l) || NONE_RE.test(l));
+  const closing = active.filter((l) => TOTALS_RE.test(l) || NONE_RE.test(l));
+  const last = text.split(/\r?\n/).at(-1);
   const found = labels.KRITIČNO + labels.VAŽNO + labels.MANJE;
   if (closing.length === 0) {
     if (role === "reviewer" || found > 0) return "report must end with 'Ukupno: N kritično, N važno, N manje.' or 'Bez nalaza.'";
   } else {
     if (closing.length > 1) return "report has more than one totals line";
-    if (closing[0] !== lines.at(-1)) return "the totals line must be the last line of the report";
+    if (closing[0] !== last.trim() || /^(?: {4}|\t)/.test(last)) return "the totals line must be the last line of the report";
     const t = closing[0].match(TOTALS_RE);
     if (!t && found > 0) return "'Bez nalaza.' with labelled findings above it";
     if (t && (Number(t[1]) !== labels.KRITIČNO || Number(t[2]) !== labels.VAŽNO || Number(t[3]) !== labels.MANJE)) {
       return `totals line does not match the labels (${labels.KRITIČNO} kritično, ${labels.VAŽNO} važno, ${labels.MANJE} manje)`;
     }
   }
-  if (verdict === "PASS" && labels.KRITIČNO + labels.VAŽNO > 0) {
-    return "PASS with open KRITIČNO or VAŽNO findings; resolve them or use FAIL";
+  if (verdict === "PASS" && labels.KRITIČNO + labels.VAŽNO + blockingMinor > 0) {
+    return "PASS with open KRITIČNO, VAŽNO or blocking MANJE findings; resolve them or use FAIL";
   }
   return null;
 }
@@ -130,10 +141,15 @@ export function authorProblem(prBody, agent) {
 
 const appFor = (runtime) => [...APP_RUNTIMES].find(([, rs]) => rs.has(runtime))?.[0] ?? null;
 
+// §6 fallback par modela: the third provider is absent; Fable on Claude, Astra on ChatGPT/Codex
+const ABSENT_PROVIDERS = new Set(["grok", "grok-by-xai"]);
+const PAIR_MODEL = { claude: /^Fable\b/i, codex: /^Astra\b/i, chatgpt: /^Astra\b/i };
+
 /**
  * §6 fallback line `<provider> — <razlog>`. Quota fallback (a registered
  * exhausted App) is QA only and never names the App that posts the verdict;
- * the model-pair fallback (either role) records the model with --model.
+ * the model-pair fallback (either role) names the absent third provider and
+ * records the model that runtime uses in the pair with --model.
  */
 export function fallbackProblem({ fallback, agent, role, model }) {
   if (fallback === undefined) return null;
@@ -144,7 +160,11 @@ export function fallbackProblem({ fallback, agent, role, model }) {
   if (QUOTA_EXHAUSTED_PATTERNS.has(slug)) {
     return role === "qa" ? null : "quota fallback is for QA verdicts only (§6 kvotni fallback)";
   }
-  return model ? null : "a model-pair fallback records the model: add --model (§6 fallback par modela)";
+  if (!ABSENT_PROVIDERS.has(slug)) return `--fallback names ${m[1]}, neither a registered exhausted App nor the absent third provider (§6)`;
+  const runtime = agent.split(":")[0];
+  if (!PAIR_MODEL[runtime]) return `${runtime} is not in the §6 model pair (Fable on Claude, Astra on ChatGPT/Codex)`;
+  if (!model) return "a model-pair fallback records the model: add --model (§6 fallback par modela)";
+  return PAIR_MODEL[runtime].test(model) ? null : `--model ${model} is not the §6 pair model for ${runtime} (${runtime === "claude" ? "Fable" : "Astra"})`;
 }
 
 const REPO = "danielrisavi77-create/Ductus";

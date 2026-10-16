@@ -51,7 +51,7 @@ test("checkReport enforces the totals line and refuses PASS with blocking findin
   assert.match(checkReport("", r), /needs a report/);
   assert.equal(checkReport("", { role: "qa", verdict: "PASS" }), null);
   assert.equal(checkReport("x\nBez nalaza.", r), null);
-  assert.equal(checkReport("[MANJE] a.mjs:1\nUkupno: 0 kritično, 0 važno, 1 manje.", r), null);
+  assert.equal(checkReport("[MANJE] a.mjs:1 — ne blokira\nUkupno: 0 kritično, 0 važno, 1 manje.", r), null);
   assert.match(checkReport("[VAŽNO] a.mjs:1\nUkupno: 0 kritično, 1 važno, 0 manje.", r), /PASS with open/);
   assert.equal(checkReport("[KRITIČNO] a.mjs:1\nUkupno: 1 kritično, 0 važno, 0 manje.", { role: "reviewer", verdict: "FAIL" }), null);
   assert.match(checkReport("nalazi bez zbroja", r), /must end with/);
@@ -125,7 +125,7 @@ test("#222/1 readOnlyCall admits only three GET paths of this repository", () =>
 });
 
 const PR_BODY = "Agent: claude:cloudW:platforma\nRisk: critical\nTask: DAN-1";
-const REPORT = "[MANJE] a.mjs:3 ime\nUkupno: 0 kritično, 0 važno, 1 manje.";
+const REPORT = "[MANJE] a.mjs:3 ime — ne blokira\nUkupno: 0 kritično, 0 važno, 1 manje.";
 
 function fakeGh({ fullName = EXPECTED_REPO, prHead = HEAD, refHead = HEAD, body = PR_BODY, state = "open", fork = false } = {}) {
   const calls = [];
@@ -211,7 +211,7 @@ test("#222/6 totals line: one, last, matching the labels, never with a blocking 
     [R, "[VAŽNO] a:1\nUkupno: 0 kritično, 1 važno, 0 manje.\nUkupno: 0 kritično, 1 važno, 0 manje.", /more than one/],
     [R, "[VAŽNO] a:1\n[VAŽNO] b:2\nUkupno: 0 kritično, 1 važno, 0 manje.", /does not match/],
     [P, "Ukupno: 0 kritično, 0 važno, 0 manje.\nBez nalaza.", /more than one/],
-    [P, "[MANJE] a:1\nBez nalaza.", /Bez nalaza/],
+    [P, "[MANJE] a:1 — ne blokira\nBez nalaza.", /Bez nalaza/],
     [P, "    [KRITIČNO] primjer u kodu\nBez nalaza.", null],
     [P, "```\n[VAŽNO] u bloku\n```\nBez nalaza.", null],
     [Q, "[KRITIČNO] scenarij 2 pada\nUkupno: 1 kritično, 0 važno, 0 manje.", /PASS with open/],
@@ -265,7 +265,7 @@ test("#222/9 fallback only in the forms §6 allows", () => {
   assert.match(fallbackProblem({ agent: "claude:r:reviewer", role: "reviewer", fallback: "chatgpt-codex-connector — kvota" }), /QA verdicts only/);
   // §6 fallback par modela: either role, the model recorded
   assert.match(fallbackProblem({ ...r, fallback: "grok-by-xai — par modela" }), /--model/);
-  assert.equal(fallbackProblem({ ...r, fallback: "grok-by-xai — par modela", model: "m" }), null);
+  assert.equal(fallbackProblem({ ...r, fallback: "grok-by-xai — par modela", model: "Astra" }), null);
   assert.match(fallbackProblem({ ...q, fallback: "kvota" }), /<provider> — <razlog>/);
 });
 
@@ -276,4 +276,37 @@ test("#222 false-block controls: valid verdicts and code with colons pass", asyn
   assert.equal(verifyComposed(composeVerdict({ ...fail, report: code }), fail), null);
   assert.equal(checkReport("Bez nalaza.", parseVerdictArgs(base)), null);
   assert.equal((await cli(qa)).code, 0);
+});
+
+test("review FAIL 6213108460/1: PASS refuses a blocking minor finding", () => {
+  const P = { role: "reviewer", verdict: "PASS" };
+  const totals = "\nUkupno: 0 kritično, 0 važno, 1 manje.";
+  assert.match(checkReport(`[MANJE] src/example.mjs:1 — blokira${totals}`, P) ?? "", /blocking MANJE/);
+  assert.match(checkReport(`[MANJE] a.mjs:1 Blokira spajanje${totals}`, { role: "qa", verdict: "PASS" }) ?? "", /blocking MANJE/);
+  assert.match(checkReport(`[MANJE] a.mjs:1 bez statusa${totals}`, P) ?? "", /'blokira' or 'ne blokira'/);
+  assert.match(checkReport(`[MANJE] a.mjs:1 neblokirajuće${totals}`, P) ?? "", /'blokira' or 'ne blokira'/);
+  assert.equal(checkReport(`[MANJE] a.mjs:1 — ne blokira${totals}`, P), null);
+  assert.equal(checkReport(`[MANJE] a.mjs:1 — blokira${totals}`, { role: "reviewer", verdict: "FAIL" }), null);
+});
+
+test("review FAIL 6213108460/2: the closing line is read from active Markdown lines", () => {
+  const P = { role: "reviewer", verdict: "PASS" };
+  assert.equal(checkReport("Primjer:\n```\nBez nalaza.\n```\nBez nalaza.", P), null);
+  assert.equal(checkReport("Primjer:\n```\nUkupno: 1 kritično, 0 važno, 0 manje.\n```\nBez nalaza.", P), null);
+  assert.match(checkReport("x\n    Bez nalaza.", P) ?? "", /must end with/);
+  assert.match(checkReport("Bez nalaza.\n    Bez nalaza.", P) ?? "", /last line/);
+  assert.match(checkReport("Bez nalaza.\n```\nkod\n```", P) ?? "", /last line/);
+});
+
+test("review FAIL 6213108460/3: model-pair fallback only for the §6 pair", () => {
+  const args = (agent, model, fallback) => ["7", "--agent", agent, "--head", HEAD, "--verdict", "PASS",
+    ...(agent.endsWith(":qa") ? ["--qa-scope", "x"] : []), "--model", model, "--fallback", fallback];
+  assert.ok(parseVerdictArgs(args("codex:q:qa", "Fable", "claude — unavailable")).error);
+  assert.ok(parseVerdictArgs(args("codex:q:qa", "Fable", "grok — kvota nedostupna")).error);
+  assert.ok(parseVerdictArgs(args("claude:r:reviewer", "Astra", "grok — kvota nedostupna")).error);
+  assert.ok(parseVerdictArgs(args("grok:q:qa", "Astra", "grok-by-xai — x")).error);
+  assert.ok(parseVerdictArgs(args("claude:r:reviewer", "Fable", "openai — x")).error);
+  assert.equal(parseVerdictArgs(args("claude:r:reviewer", "Fable", "Grok — pretplata ili kvota nedostupna")).error, undefined);
+  assert.equal(parseVerdictArgs(args("codex:q:qa", "Astra (astra-1)", "grok-by-xai — kvota")).error, undefined);
+  assert.equal(parseVerdictArgs(args("chatgpt:q:qa", "astra", "grok — x")).error, undefined);
 });
