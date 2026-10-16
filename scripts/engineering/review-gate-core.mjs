@@ -25,8 +25,10 @@ export const APP_RUNTIMES = new Map([
 
 // Quota exhaustion is accepted only from the provider's own App, with a
 // message observed on a real PR. Never guess a pattern for other providers.
+// The message must open the comment (#128): every observed one does, and a
+// review, code block or reply that quotes the phrase is no evidence.
 export const QUOTA_EXHAUSTED_PATTERNS = new Map([
-  ["chatgpt-codex-connector", /reached your Codex usage limits/i],
+  ["chatgpt-codex-connector", /^\s*You have reached your Codex usage limits/i],
 ]);
 
 export const QUOTA_FALLBACK_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -102,22 +104,49 @@ function trustedComments(items, logins) {
     .filter((entry) => entry.body);
 }
 
-function quotaEvidence(items) {
-  return (items ?? [])
+// Evidence holds only while the exhausted App shows nothing else (#128): a
+// later comment of the same App that is not a quota message, a later edit of
+// one (Codex edits one review summary in place), or a later PR review of the
+// App proves it works again, whether that came before or after the QA comment.
+// GitHub times have one-second resolution, so activity in the same second as
+// the quota message also counts as later: the order is unknown, fail closed.
+const lastActivity = (item) => {
+  const created = Date.parse(item?.created_at ?? "");
+  const updated = Date.parse(item?.updated_at ?? "");
+  return Number.isNaN(updated) ? created : Math.max(created || 0, updated);
+};
+
+function quotaEvidence(items, reviews = []) {
+  const appComments = (items ?? [])
     .map((item, index) => {
       const slug = item?.performed_via_github_app?.slug ?? null;
       const pattern = slug ? QUOTA_EXHAUSTED_PATTERNS.get(slug) : null;
-      if (
-        !pattern ||
-        item?.user?.type !== "Bot" ||
-        item?.user?.login !== `${slug}[bot]` ||
-        !pattern.test(item?.body ?? "")
-      ) {
-        return null;
-      }
-      return { appSlug: slug, createdAt: Date.parse(item?.created_at ?? "") || index };
+      if (!pattern || item?.user?.type !== "Bot" || item?.user?.login !== `${slug}[bot]`) return null;
+      const exhausted = pattern.test(item?.body ?? "");
+      return {
+        appSlug: slug,
+        // An unreadable time of other App activity counts as latest: fail closed.
+        createdAt: exhausted ? Date.parse(item?.created_at ?? "") || index : lastActivity(item) || Infinity,
+        exhausted,
+      };
     })
     .filter(Boolean);
+  // A PR review carries no App slug, only the App's bot account.
+  const appReviews = (reviews ?? [])
+    .map((review) => {
+      const slug = [...QUOTA_EXHAUSTED_PATTERNS.keys()].find((name) => review?.user?.login === `${name}[bot]`);
+      if (!slug || review?.user?.type !== "Bot") return null;
+      return { appSlug: slug, createdAt: Date.parse(review?.submitted_at ?? "") || Infinity, exhausted: false };
+    })
+    .filter(Boolean);
+  const activity = [...appComments, ...appReviews];
+  return appComments.filter(
+    (item) =>
+      item.exhausted &&
+      !activity.some(
+        (other) => other.appSlug === item.appSlug && !other.exhausted && other.createdAt >= item.createdAt,
+      ),
+  );
 }
 
 function fallbackSlug(value) {
@@ -207,6 +236,7 @@ export function evaluateGate({
   headSha,
   ownerLogin,
   comments = [],
+  prReviews = [],
   carriedHeads = new Set(),
   trustedLogins = TRUSTED_VERDICT_LOGINS,
   qaExempt = null,
@@ -315,7 +345,7 @@ export function evaluateGate({
     // Quota fallback: while another registered App proves on this PR that its
     // quota is exhausted, QA may come from the reviewer's App, but only from a
     // principal that is neither the author nor any passing reviewer.
-    const evidence = quotaEvidence(comments);
+    const evidence = quotaEvidence(comments, prReviews);
     const passingReviewerPrincipals = new Set(
       passingReviews.map((review) => review.identity.principal),
     );
@@ -455,9 +485,20 @@ export async function carriedByCompare(candidates, current, compareHead, log = (
 
 /**
  * Whole decision for one PR from REST data: `pr` (GET pulls/{n}), `files` (its
- * files list) and the issue comments. Every description is a fixed text.
+ * files list), the issue comments and the PR reviews (quota evidence only).
+ * Every description is a fixed text.
  */
-export function evaluatePullRequest({ pr, files, comments, ownerLogin, carriedHeads }) {
+// The PR an event is about. A workflow_run comes from the unprivileged
+// review relay (#128): GitHub lists the PR only for same-repository heads.
+export function prNumberFromEvent(event) {
+  if (event?.pull_request?.number) return event.pull_request.number;
+  if (event?.issue?.pull_request && event.issue.number) return event.issue.number;
+  const runPrs = event?.workflow_run?.pull_requests;
+  if (Array.isArray(runPrs) && runPrs.length === 1 && Number.isSafeInteger(runPrs[0]?.number)) return runPrs[0].number;
+  return null;
+}
+
+export function evaluatePullRequest({ pr, files, comments, prReviews, ownerLogin, carriedHeads }) {
   const listed = files ?? [];
   // The floor is only as good as the list: a cut or unread list fails closed.
   if (!(pr.changed_files <= listed.length)) {
@@ -482,6 +523,7 @@ export function evaluatePullRequest({ pr, files, comments, ownerLogin, carriedHe
       headSha: pr.head.sha,
       ownerLogin,
       comments,
+      prReviews,
       carriedHeads,
       qaExempt: qaExemption(paths),
     }),
