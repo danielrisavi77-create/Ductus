@@ -349,3 +349,16 @@ export function overrideBlock(head, reason) {
   if (!/^[0-9a-f]{40}$/.test(head ?? "")) throw new Error(`not a full head SHA: ${head}`);
   return `Owner-Override: PASS\nOverride-Head: ${head}\nOverride-Reason: ${reason}\n`;
 }
+
+/**
+ * What `orch:override` prints for one PR read from GitHub: stdout is only the
+ * block, so pasting all of it is a valid comment (the gate requires
+ * `Owner-Override:` as the first non-empty line); the context goes to stderr.
+ */
+export function overrideOutput(n, pr, reason) {
+  if (pr?.state !== "open") throw new Error(`PR is ${pr?.merged_at ? "merged" : pr?.state}`);
+  return {
+    stdout: overrideBlock(pr.head?.sha, reason),
+    stderr: `# PR #${n} (head ${pr.head.sha.slice(0, 8)}); a new push makes this block stale\n`,
+  };
+}
