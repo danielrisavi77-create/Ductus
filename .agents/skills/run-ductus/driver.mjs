@@ -29,17 +29,34 @@ if (!args.includes("--skip-build") || !existsSync(".next")) {
   if (build.status !== 0) throw new Error("pnpm build failed");
 }
 
+// Something already answering on the port would be driven instead of this
+// build (a server left over from an earlier run, another branch), so refuse.
+const answers = await fetch(`${base}/rad`).then(() => true, () => false);
+if (answers) throw new Error(`port ${port} already answers; stop that server or pass --port`);
+
 // The editor needs the flag AND a local/ci/demo deployment. No database is
-// involved: the journal is IndexedDB in the browser.
+// involved: the journal is IndexedDB in the browser. On Linux and macOS the
+// server gets its own process group, so stop() reaches next-server and not
+// only the pnpm wrapper.
 const server = spawn(serverPlan.command, serverPlan.args, {
   stdio: ["ignore", "inherit", "inherit"],
   shell: false,
+  detached: !windows,
   windowsHide: true,
   env: { ...process.env, DUCTUS_LOCAL_DEMO_JOURNAL: "1", DUCTUS_DEPLOYMENT: "local" },
 });
+let exited = false;
+server.on("exit", () => {
+  exited = true;
+});
 const stop = () => {
-  if (windows && server.pid) spawnSync("taskkill", ["/pid", String(server.pid), "/t", "/f"], { shell: false, windowsHide: true });
-  else server.kill("SIGTERM");
+  if (!server.pid || exited) return;
+  if (windows) spawnSync("taskkill", ["/pid", String(server.pid), "/t", "/f"], { shell: false, windowsHide: true });
+  else {
+    try {
+      process.kill(-server.pid, "SIGTERM");
+    } catch {}
+  }
 };
 
 let browser;
@@ -48,6 +65,7 @@ try {
     try {
       if ((await fetch(`${base}/rad`)).ok) break;
     } catch {}
+    if (exited) throw new Error("server exited before it became ready");
     if (i > 60) throw new Error("server did not become ready in 30 s");
     await sleep(500);
   }
