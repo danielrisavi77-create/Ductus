@@ -8,7 +8,7 @@ BEGIN;
 \ir fixtures/institution.inc
 SET LOCAL lc_messages TO 'C';
 
-SELECT plan(281);
+SELECT plan(282);
 
 CREATE FUNCTION pg_temp.attempts(p_name text) RETURNS bigint
 LANGUAGE sql AS $$ SELECT count(*) FROM institution.enrollment_attempt WHERE user_id = pg_temp.id(p_name) $$;
@@ -212,7 +212,8 @@ FROM (VALUES
   (9, U&'a\0085b', false, 'a C1 control is refused'),
   (10, '', false, 'an empty name is refused'),
   (11, repeat(U&'\3164', 200) || 'a', false, 'a visible character does not excuse 201 characters'),
-  (12, U&'Kolegij \+01F4DA', true, 'an emoji beside a name passes')
+  (12, U&'Kolegij \+01F4DA', true, 'an emoji beside a name passes'),
+  (13, U&'\3405\+0E0100', true, 'an ideographic variation sequence (U+E0100) passes')
 ) AS v (n, name, expected, what)
 ORDER BY v.n;
 SELECT matches(
