@@ -1,10 +1,10 @@
-function fenceInfo(line) {
+export function fenceInfo(line) {
   const match = line.match(/^ {0,3}((?:`{3,})|(?:~{3,}))/);
   if (!match) return null;
   return { char: match[1][0], length: match[1].length };
 }
 
-function closesFence(line, fence) {
+export function closesFence(line, fence) {
   if (!line || line.startsWith("    ") || line.startsWith("\t")) return false;
   const trimmed = line.trim();
   const pattern = fence.char === "`" ? /^`+\s*$/ : /^~+\s*$/;
