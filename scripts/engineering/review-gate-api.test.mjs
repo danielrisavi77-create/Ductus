@@ -11,7 +11,7 @@ const earlier = "b".repeat(40);
 const baseSha = "e".repeat(40);
 const mainParent = "f".repeat(40);
 const ownerLogin = "danielrisavi77-create";
-const pr = { head: { sha: head }, base: { sha: baseSha } };
+const pr = { head: { sha: head }, base: { sha: baseSha, ref: "main" } };
 const quiet = () => {};
 
 const review = (sha) => ({
@@ -30,6 +30,7 @@ const json = (value) => ({ ok: true, status: 200, json: async () => value, text:
 function routes(path) {
   if (path.endsWith(`/commits/${head}`)) return { sha: head, parents: [{ sha: earlier }, { sha: mainParent }] };
   if (path.endsWith(`/commits/${earlier}`)) return { sha: earlier, parents: [{ sha: "0".repeat(40) }] };
+  if (path.includes(`/compare/main...${mainParent}`)) return { status: "behind", files: [] };
   if (path.includes("/compare/")) return files;
   throw new Error(`unexpected ${path}`);
 }
@@ -139,6 +140,38 @@ test("the carry-over budget ends the check even when each call is within its own
 test("an unavailable earlier commit (404) carries nothing and does not throw", async () => {
   const fetchImpl = async (url) =>
     url.includes(`/commits/${earlier}`)
+      ? { ok: false, status: 404, text: async () => "Not Found" }
+      : json(routes(url.replace("https://api.test", "")));
+  const api = createApi({ fetchImpl, baseUrl: "https://api.test", token: "t" });
+  assert.equal((await carriedHeads(api, "o", "r", pr, comments, { log: quiet })).size, 0);
+});
+
+// #231, question 1: the runner marks a merge as a base merge only when GitHub
+// says its second parent is in the base branch.
+test("a merge whose second parent is not in the base branch carries nothing", async () => {
+  for (const status of ["ahead", "diverged", undefined]) {
+    const fetchImpl = async (url) => {
+      const path = url.replace("https://api.test", "");
+      if (path.includes(`/compare/main...${mainParent}`)) return json({ status, files: [] });
+      return json(routes(path));
+    };
+    const api = createApi({ fetchImpl, baseUrl: "https://api.test", token: "t" });
+    assert.equal((await carriedHeads(api, "o", "r", pr, comments, { log: quiet })).size, 0, String(status));
+  }
+});
+
+test("the base check asks about the second parent against the base branch name", async () => {
+  const { fetchImpl, calls } = fakeFetch();
+  const api = createApi({ fetchImpl, baseUrl: "https://api.test", token: "t" });
+  assert.equal((await carriedHeads(api, "o", "r", pr, comments, { log: quiet })).size, 1);
+  assert.ok(calls.some((path) => path === `/repos/o/r/compare/main...${mainParent}?per_page=1`), calls.join("\n"));
+  const noRef = { ...pr, base: { sha: baseSha } };
+  assert.equal((await carriedHeads(api, "o", "r", noRef, comments, { log: quiet })).size, 0);
+});
+
+test("an error on the base check carries nothing", async () => {
+  const fetchImpl = async (url) =>
+    url.includes(`/compare/main...${mainParent}`)
       ? { ok: false, status: 404, text: async () => "Not Found" }
       : json(routes(url.replace("https://api.test", "")));
   const api = createApi({ fetchImpl, baseUrl: "https://api.test", token: "t" });
