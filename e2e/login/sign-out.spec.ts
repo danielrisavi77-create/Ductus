@@ -101,3 +101,55 @@ test("a second tab of the same document does not sign out under the first", asyn
   await expectStillSignedIn(second, token);
   await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
 });
+
+test("row 9: a first save the device refuses keeps sign-out refused and the text exportable", async ({ page, context }) => {
+  // Journal writes fail as on a full device; only the logout fence could
+  // still be written, so the journal alone would look empty.
+  await page.addInitScript(() => {
+    const { put, add } = IDBObjectStore.prototype;
+    const refuse = (original: typeof put) => function (this: IDBObjectStore, ...args: Parameters<typeof put>) {
+      if (this.name === "control") return original.apply(this, args);
+      throw new DOMException("Made-up full device", "QuotaExceededError");
+    };
+    Object.assign(IDBObjectStore.prototype, { put: refuse(put), add: refuse(add) });
+  });
+  await signIn(page, "/rad");
+  const token = (await appCookie(context, SESSION_COOKIE))!.value;
+  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+  await editorOf(page).click();
+  await page.keyboard.type("Nacrt A: plava bilježnica");
+  await expect(chipOf(page)).toHaveAttribute("data-state", "ERROR");
+
+  await logoutOf(page).click();
+  await expect(noticeOf(page)).toHaveText(t.auth.logoutUnsynced);
+  await expect(page.getByRole("button", { name: t.editor.exportText })).toBeVisible();
+  await expect(editorOf(page)).toHaveText("Nacrt A: plava bilježnica");
+  await expectStillSignedIn(page, token);
+});
+
+test("a tab waiting for the document stops for good when another tab signs out", async ({ page, context }) => {
+  await signIn(page, "/rad");
+  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+  const second = await context.newPage();
+  await second.goto("/rad");
+  await expect(phaseOf(second)).toHaveAttribute("data-phase", "blocked");
+
+  await logoutOf(page).click();
+  await page.waitForURL("http://localhost:3000/");
+  await expect(phaseOf(second)).toHaveAttribute("data-phase", "signed-out");
+  await expect(noticeOf(second)).toHaveText(t.auth.signedOutElsewhere);
+  // The first tab has left and freed the lock; the second never takes it,
+  // so the deleted journal is not created again.
+  await page.close();
+  await second.waitForTimeout(1_000);
+  await expect(phaseOf(second)).toHaveAttribute("data-phase", "signed-out");
+  await expect(editorOf(second)).toHaveAttribute("contenteditable", "false");
+  const names = await second.evaluate(async () => (await indexedDB.databases()).map((d) => d.name));
+  expect(names.filter((name) => name?.startsWith("ductus-journal-v1-"))).toEqual([]);
+});
+
+test("with a session the home page offers no second sign-in", async ({ page }) => {
+  await signIn(page, "/");
+  await expect(page.getByRole("link", { name: t.home.openWorkspace })).toBeVisible();
+  await expect(page.getByRole("link", { name: t.auth.signIn })).toHaveCount(0);
+});

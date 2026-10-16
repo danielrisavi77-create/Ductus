@@ -52,7 +52,14 @@ import {
 const DEBOUNCE_MS = 400;
 const EXPORT_FILE_NAME = "ductus-rad.txt";
 
-type Phase = "loading" | "blocked" | "ready" | "recovery" | "unavailable";
+type Phase = "loading" | "blocked" | "ready" | "recovery" | "unavailable" | "signed-out";
+
+/**
+ * Tabs of one browser tell each other that a scope was signed out. A tab that
+ * hears its own scope stops for good: it never takes the document's lock
+ * again, so it cannot re-create the journal that sign-out just deleted.
+ */
+const SIGN_OUT_CHANNEL = "ductus-sign-out";
 type Failure = SaverFailure | "invalid";
 
 /**
@@ -183,6 +190,19 @@ export function LocalDocumentProvider({
       setPhase("unavailable");
       return;
     }
+    const channel = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(SIGN_OUT_CHANNEL);
+    if (channel) {
+      channel.onmessage = (event: MessageEvent) => {
+        if (event.data !== scope) return;
+        // The lock is not released here: the tab that signed out may hold it
+        // until it has left the page.
+        disposed = true;
+        readyRef.current = false;
+        abort.abort();
+        if (!editor.isDestroyed) editor.setEditable(false, false);
+        setPhase("signed-out");
+      };
+    }
 
     // Runs while this tab holds the lock; resolving releases it.
     const write = async (lock: Lock | null): Promise<void> => {
@@ -242,6 +262,17 @@ export function LocalDocumentProvider({
           readyRef.current = false;
           editor.setEditable(false, false);
           await saver.settled();
+          // The journal alone cannot tell: a first save that failed leaves
+          // it empty while the sheet holds text. Text that is not on the
+          // server keeps sign-out refused whatever the journal holds.
+          const saved = saver.snapshot();
+          if (!editor.isEmpty && (saved.failure !== null || saved.state !== "SYNCED")) {
+            if (!disposed) {
+              readyRef.current = true;
+              editor.setEditable(true, false);
+            }
+            return "unsynced";
+          }
           try {
             await journal.destroyForLogout();
             return "done";
@@ -298,6 +329,7 @@ export function LocalDocumentProvider({
       if (!editor.isDestroyed) editor.setEditable(false, false);
       abort.abort();
       release?.();
+      channel?.close();
     };
   }, [editor, scope, documentId]);
 
@@ -306,6 +338,11 @@ export function LocalDocumentProvider({
       ? await logoutRef.current()
       : await clearWithoutEditor(scope, documentId);
     setLogoutRefusal(outcome === "done" ? null : outcome);
+    if (outcome === "done" && typeof BroadcastChannel !== "undefined") {
+      const channel = new BroadcastChannel(SIGN_OUT_CHANNEL);
+      channel.postMessage(scope);
+      channel.close();
+    }
     return outcome;
   };
 
@@ -383,6 +420,7 @@ export function LocalEditor() {
   const { editor, phase, logoutRefusal } = value;
   const failure = failureOf(value);
   const alert = logoutRefusal ? LOGOUT_REFUSAL_TEXT[logoutRefusal]
+    : phase === "signed-out" ? t.auth.signedOutElsewhere
     : phase === "recovery" ? t.editor.recovery : failure ? FAILURE_TEXT[failure] : null;
   const canExport = editor !== null && (alert !== null) && !editor.isEmpty;
   return (
@@ -478,7 +516,7 @@ export function LocalLogout() {
   };
   return (
     <form method="post" action="/api/auth/logout" onSubmit={onSubmit}>
-      <button type="submit" className="btn" disabled={working || phase === "loading"}>
+      <button type="submit" className="btn" disabled={working || phase === "loading" || phase === "signed-out"}>
         {working ? t.auth.loggingOut : t.auth.logout}
       </button>
     </form>

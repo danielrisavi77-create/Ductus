@@ -74,6 +74,7 @@ export const hr = {
       "Odjava još nije moguća: promjene ovog rada nisu na poslužitelju. Ništa nije izbrisano. Ako moraš otići s ovog računala, izvezi tekst i ponesi ga sa sobom.",
     logoutOtherTab: "Ovaj rad je otvoren u drugoj kartici. Odjavi se ondje ili zatvori tu karticu, pa pokušaj ponovno.",
     logoutFailed: "Odjava nije dovršena. Ponovno učitaj stranicu i pokušaj opet.",
+    signedOutElsewhere: "Odjava je provedena u drugoj kartici, pa ova kartica više ništa ne sprema. Ponovno učitaj stranicu.",
   },
 } as const;
 
