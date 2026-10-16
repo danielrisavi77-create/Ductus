@@ -80,12 +80,13 @@ export type CheckpointNameResult =
 /**
  * Characters a name may not hold: controls (NUL included, which Postgres text
  * cannot store), bidirectional and zero-width marks, the soft hyphen, the
- * combining grapheme joiner and tag characters (U+E0000-E007F; the
- * ideographic variation selectors after them stay allowed). The same class as
- * `institution.is_plain_label` (issue #182), so a name looks like what it is.
+ * combining grapheme joiner, the shorthand and musical format controls and
+ * tag characters (U+E0000-E007F; the ideographic variation selectors after
+ * them stay allowed). The class of `institution.is_plain_label` (issue #182)
+ * plus the two format blocks, so a name looks like what it is.
  */
 const FORBIDDEN_NAME_CHARACTER =
-  /[\u0000-\u001F\u007F-\u009F\u00AD\u034F\u061C\u180E\u200B-\u200F\u2028-\u202E\u2060-\u206F\uFEFF\uFFF9-\uFFFB\u{E0000}-\u{E007F}]/u;
+  /[\u0000-\u001F\u007F-\u009F\u00AD\u034F\u061C\u180E\u200B-\u200F\u2028-\u202E\u2060-\u206F\uFEFF\uFFF9-\uFFFB\u{1BCA0}-\u{1BCA3}\u{1D173}-\u{1D17A}\u{E0000}-\u{E007F}]/u;
 /** A half of a surrogate pair standing alone; canonical JSON refuses it. */
 const LONE_SURROGATE = /[\uD800-\uDFFF]/u;
 /** One character that renders as something, by the visible class of `institution.is_plain_label`. */

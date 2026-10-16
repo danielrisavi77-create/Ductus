@@ -57,7 +57,7 @@ describe("validateCheckpointName", () => {
 
   // Issue #292: what would be refused later (JCS, Postgres text) or shows as nothing.
   it("refuses a lone surrogate, NUL and invisible marks inside a name", () => {
-    for (const input of ["\ud800", "Prije\udc00 lekture", "a\u0000", "a\u200bb", "K1\u{E0041}", "K1\u034f", "a\u202eb"]) {
+    for (const input of ["\ud800", "Prije\udc00 lekture", "a\u0000", "a\u200bb", "K1\u{E0041}", "K1\u034f", "a\u202eb", "\u{1BCA0}", "a\u{1D173}b"]) {
       expect(validateCheckpointName(input)).toEqual({ ok: false, reason: "invalid_characters" });
     }
   });
