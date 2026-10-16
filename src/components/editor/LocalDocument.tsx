@@ -21,10 +21,17 @@
  * - Text the journal would store differently (NUL, a lone surrogate) is made
  *   storable in the editor itself (`StorableInput`), so the editor never
  *   shows other text than the journal holds once a save has succeeded.
+ * - Signing out (F-5, plan #376) deletes the journal first and ends the
+ *   session only after that succeeded. The journal refuses while it holds
+ *   work the server has not confirmed, and until F-3 sends anything that is
+ *   every change, so after any edit signing out stays blocked and the text
+ *   stays exportable. Nothing here offers a way around that refusal.
  */
 
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  createContext, useContext, useEffect, useRef, useState, type FormEvent, type ReactNode,
+} from "react";
 
 import type { CanonicalDocument } from "@/domain/document";
 import { chipContent, type ChipContent } from "@/domain/sync/labels";
@@ -36,7 +43,7 @@ import { StorableInput } from "@/editor/storable-input";
 import { storableDocument } from "@/editor/storable-text";
 import { wordsHr } from "@/lib/i18n/hr";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
-import { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
+import { AtomicDexieJournal, JournalError } from "@/lib/journal/atomic-dexie-journal";
 import {
   LocalDocumentSaver, type SaverFailure, type SaverSnapshot,
 } from "@/lib/journal/local-document-saver";
@@ -48,12 +55,22 @@ const EXPORT_FILE_NAME = "ductus-rad.txt";
 type Phase = "loading" | "blocked" | "ready" | "recovery" | "unavailable";
 type Failure = SaverFailure | "invalid";
 
+/**
+ * Why signing out did not happen: work the server has not confirmed, the
+ * document open in another tab, or a deletion that did not finish.
+ */
+type LogoutRefusal = "unsynced" | "other-tab" | "failed";
+type LogoutOutcome = "done" | LogoutRefusal;
+
 type LocalDocumentValue = {
   editor: Editor | null;
   phase: Phase;
   snapshot: SaverSnapshot | null;
   words: number;
   invalid: boolean;
+  logoutRefusal: LogoutRefusal | null;
+  /** Deletes this scope's journal for sign-out; never ends the session itself. */
+  clearForLogout: () => Promise<LogoutOutcome>;
 };
 
 const LocalDocumentContext = createContext<LocalDocumentValue | null>(null);
@@ -87,6 +104,9 @@ export function LocalDocumentProvider({
   const [snapshot, setSnapshot] = useState<SaverSnapshot | null>(null);
   const [words, setWords] = useState(0);
   const [invalid, setInvalid] = useState(false);
+  const [logoutRefusal, setLogoutRefusal] = useState<LogoutRefusal | null>(null);
+  // Set while this tab holds the lock with an editable document.
+  const logoutRef = useRef<(() => Promise<LogoutOutcome>) | null>(null);
   const saverRef = useRef<LocalDocumentSaver | null>(null);
   const editorRef = useRef<Editor | null>(null);
   const readyRef = useRef(false);
@@ -168,7 +188,24 @@ export function LocalDocumentProvider({
     const write = async (lock: Lock | null): Promise<void> => {
       if (!lock || disposed) return;
       setPhase("loading");
-      const journal = new AtomicDexieJournal(scope);
+      let journal = new AtomicDexieJournal(scope);
+      // An earlier sign-out was cut off after its fence: finish it before
+      // anything is read. The fence exists only when nothing was unsynced,
+      // so this deletes no work (journal contract, sign-in).
+      try {
+        if (await journal.hasPendingLogout()) {
+          await journal.destroyForLogout();
+          journal = new AtomicDexieJournal(scope);
+        }
+      } catch {
+        journal.close();
+        if (!disposed) setPhase("unavailable");
+        return;
+      }
+      if (disposed) {
+        journal.close();
+        return;
+      }
       const saver = new LocalDocumentSaver(journal, documentId);
       // The cleanup's flush may still emit after `setSnapshot(null)`; what the
       // old saver reports then must not come back as the next lock's notice.
@@ -198,11 +235,36 @@ export function LocalDocumentProvider({
         readyRef.current = true;
         editor.setEditable(true, false);
         setPhase("ready");
+        logoutRef.current = async () => {
+          // What was typed goes to the journal first, so the check below
+          // sees it; nothing typed after this point is accepted.
+          flush();
+          readyRef.current = false;
+          editor.setEditable(false, false);
+          await saver.settled();
+          try {
+            await journal.destroyForLogout();
+            return "done";
+          } catch (error) {
+            if (error instanceof JournalError && error.code === "unsynced_work") {
+              // Nothing was fenced or deleted: writing goes on as before.
+              if (!disposed) {
+                readyRef.current = true;
+                editor.setEditable(true, false);
+              }
+              return "unsynced";
+            }
+            // The fence may stand, so this journal saves nothing more; a
+            // reload finishes or retries the deletion (sign-in above).
+            return "failed";
+          }
+        };
         await new Promise<void>((resolve) => {
           release = resolve;
           if (disposed) resolve();
         });
       } finally {
+        logoutRef.current = null;
         await saver.settled();
         unsubscribe();
         journal.close();
@@ -239,8 +301,49 @@ export function LocalDocumentProvider({
     };
   }, [editor, scope, documentId]);
 
-  const value: LocalDocumentValue = { editor, phase, snapshot, words, invalid };
+  const clearForLogout = async (): Promise<LogoutOutcome> => {
+    const outcome = logoutRef.current
+      ? await logoutRef.current()
+      : await clearWithoutEditor(scope, documentId);
+    setLogoutRefusal(outcome === "done" ? null : outcome);
+    return outcome;
+  };
+
+  const value: LocalDocumentValue = {
+    editor, phase, snapshot, words, invalid, logoutRefusal, clearForLogout,
+  };
   return <LocalDocumentContext.Provider value={value}>{children}</LocalDocumentContext.Provider>;
+}
+
+/**
+ * Sign-out from a tab that does not write the document: still loading, read
+ * only, or refused by the journal. It takes the document's lock so no other
+ * tab writes during the check; if another tab holds it, that tab signs out.
+ */
+async function clearWithoutEditor(scope: string, documentId: string): Promise<LogoutOutcome> {
+  // Without IndexedDB nothing was ever stored on this device.
+  if (typeof indexedDB === "undefined" || !indexedDB) return "done";
+  const destroy = async (): Promise<LogoutOutcome> => {
+    const journal = new AtomicDexieJournal(scope);
+    try {
+      await journal.destroyForLogout();
+      return "done";
+    } catch (error) {
+      return error instanceof JournalError && error.code === "unsynced_work" ? "unsynced" : "failed";
+    } finally {
+      journal.close();
+    }
+  };
+  const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
+  if (!locks) return destroy();
+  try {
+    return await locks.request(
+      `ductus-journal:${scope}:${documentId}`, { ifAvailable: true },
+      (lock) => (lock ? destroy() : "other-tab"),
+    );
+  } catch {
+    return "failed";
+  }
 }
 
 /** Why saving stopped, as far as the saver or the provider knows. */
@@ -258,6 +361,12 @@ const FAILURE_TEXT: Record<Failure, string> = {
   corrupt: t.editor.recovery,
 };
 
+const LOGOUT_REFUSAL_TEXT: Record<LogoutRefusal, string> = {
+  unsynced: t.auth.logoutUnsynced,
+  "other-tab": t.auth.logoutOtherTab,
+  failed: t.auth.logoutFailed,
+};
+
 function exportText(editor: Editor): void {
   const text = editor.getText({ blockSeparator: "\n\n" });
   const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
@@ -271,9 +380,10 @@ function exportText(editor: Editor): void {
 /** The sheet: notices, the export escape hatch and the editor itself. */
 export function LocalEditor() {
   const value = useLocalDocument();
-  const { editor, phase } = value;
+  const { editor, phase, logoutRefusal } = value;
   const failure = failureOf(value);
-  const alert = phase === "recovery" ? t.editor.recovery : failure ? FAILURE_TEXT[failure] : null;
+  const alert = logoutRefusal ? LOGOUT_REFUSAL_TEXT[logoutRefusal]
+    : phase === "recovery" ? t.editor.recovery : failure ? FAILURE_TEXT[failure] : null;
   const canExport = editor !== null && (alert !== null) && !editor.isEmpty;
   return (
     <>
@@ -344,4 +454,33 @@ export function LocalSaveChip() {
 /** Word count for the status bar. */
 export function LocalWordCount() {
   return <span>{wordsHr(useLocalDocument().words)}</span>;
+}
+
+/**
+ * The sign-out button of the workspace bar (F-5). A real form posting to the
+ * logout route, submitted only once the journal of this scope is deleted; a
+ * refusal leaves the session open and says why above the sheet, next to the
+ * text export.
+ */
+export function LocalLogout() {
+  const { phase, clearForLogout } = useLocalDocument();
+  const [working, setWorking] = useState(false);
+  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (working) return;
+    const form = event.currentTarget;
+    setWorking(true);
+    void clearForLogout().then((outcome) => {
+      // `submit()` skips this handler, so the check runs exactly once.
+      if (outcome === "done") form.submit();
+      else setWorking(false);
+    }, () => setWorking(false));
+  };
+  return (
+    <form method="post" action="/api/auth/logout" onSubmit={onSubmit}>
+      <button type="submit" className="btn" disabled={working || phase === "loading"}>
+        {working ? t.auth.loggingOut : t.auth.logout}
+      </button>
+    </form>
+  );
 }

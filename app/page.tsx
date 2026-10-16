@@ -14,7 +14,11 @@ export default function HomePage() {
         <p>
           <Link className="btn" href="/rad">
             {t.home.openWorkspace}
-          </Link>
+          </Link>{" "}
+          {/* A plain link: the login route answers with a redirect to the provider. */}
+          <a className="btn" href={`/api/auth/login?returnTo=${encodeURIComponent("/rad")}`}>
+            {t.auth.signIn}
+          </a>
         </p>
       </main>
     </>

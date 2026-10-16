@@ -67,6 +67,13 @@ export const hr = {
     unavailableBody: "Prijava preko AAI@EduHr trenutačno ne odgovara. Pokušaj ponovno za nekoliko minuta.",
     retry: "Pokušaj ponovno",
     home: "Na početnu",
+    signIn: "Prijava",
+    logout: "Odjava",
+    loggingOut: "Odjava…",
+    logoutUnsynced:
+      "Odjava još nije moguća: promjene ovog rada nisu na poslužitelju. Ništa nije izbrisano. Ako moraš otići s ovog računala, izvezi tekst i ponesi ga sa sobom.",
+    logoutOtherTab: "Ovaj rad je otvoren u drugoj kartici. Odjavi se ondje ili zatvori tu karticu, pa pokušaj ponovno.",
+    logoutFailed: "Odjava nije dovršena. Ponovno učitaj stranicu i pokušaj opet.",
   },
 } as const;
 
