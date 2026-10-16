@@ -54,10 +54,12 @@ function principalRuntime(runtime) {
   return runtime === "codex" || runtime === "chatgpt" ? "openai" : runtime;
 }
 
+// A slot names one principal whatever its letter case (#130): `claude:B` is
+// `claude:b`, so the author or a reviewer cannot pass as another party.
 function declaredPrincipal(agent) {
   if (!agent || !AGENT_RE.test(agent)) return null;
   const [runtime, slot] = agent.split(":");
-  return `${principalRuntime(runtime)}:${slot}`;
+  return `${principalRuntime(runtime)}:${slot.toLowerCase()}`;
 }
 
 export function verifiedCommentIdentity(entry, declaredAgent) {
@@ -89,6 +91,19 @@ export function trustedAuthor(item, logins = TRUSTED_VERDICT_LOGINS) {
   return LISTED_ASSOCIATIONS.has(item?.author_association) && typeof login === "string" && logins.includes(login);
 }
 
+/**
+ * When a comment last said what it says now: its last edit, else its creation
+ * (#129). An edit keeps `created_at`, so a comment written early and rewritten
+ * later must not count from the early time. NaN when neither time is readable.
+ * Shared with the orchestrator scripts so they order what the gate orders.
+ */
+export function commentTime(item) {
+  const created = Date.parse(item?.created_at ?? "");
+  const updated = Date.parse(item?.updated_at ?? "");
+  if (Number.isNaN(updated)) return created;
+  return Number.isNaN(created) ? updated : Math.max(created, updated);
+}
+
 // A verdict is a person's comment posted through an App.
 function trustedComments(items, logins) {
   return (items ?? [])
@@ -98,7 +113,7 @@ function trustedComments(items, logins) {
       login: item?.user?.login ?? null,
       association: item?.author_association ?? null,
       appSlug: item?.performed_via_github_app?.slug ?? null,
-      createdAt: Date.parse(item?.created_at ?? "") || index,
+      createdAt: commentTime(item) || index,
       index,
     }))
     .filter((entry) => entry.body);
@@ -165,6 +180,29 @@ function findOwnerOverride(entries, headSha, ownerLogin) {
   );
 }
 
+function compareOrder(a, b) {
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] > b[i]) return 1;
+    if (a[i] < b[i]) return -1;
+  }
+  return 0;
+}
+
+const NEGATIVE = new Set(["FAIL", "BLOCK"]);
+
+// #231, question 4 (owner delegated 12 Oct 2026; tightened by the owner on
+// 16 Oct 2026 after review 6217017710): within one principal, a verdict on the
+// current head beats a carried one, so a later PASS on an older head never
+// lifts a FAIL or BLOCK on the current head. The one exception is a FAIL or
+// BLOCK on a carried head posted later than the current-head verdict: it still
+// blocks, so an older PASS never outlives the principal's later objection.
+function prevailing({ current, carried }) {
+  if (!current) return carried;
+  if (!carried) return current;
+  const carriedLater = compareOrder(carried.order, current.order) > 0;
+  return carriedLater && NEGATIVE.has(carried.verdict) ? carried : current;
+}
+
 function latestVerdicts(entries, {
   agentField,
   headField,
@@ -199,18 +237,17 @@ function latestVerdicts(entries, {
     }
 
     const key = `${identity.appSlug}|${identity.principal}`;
-    const previous = latest.get(key);
-    const order = [entry.createdAt, entry.index];
-    if (
-      !previous ||
-      order[0] > previous.order[0] ||
-      (order[0] === previous.order[0] && order[1] > previous.order[1])
-    ) {
-      latest.set(key, { agent, head: head.toLowerCase(), verdict, extra, fallback, identity, order });
-    }
+    const candidate = { agent, head: head.toLowerCase(), verdict, extra, fallback, identity,
+      order: [entry.createdAt, entry.index], current: sameHead(head, headSha) };
+    // Keep the latest current and the latest carried verdict apart, so a
+    // later carried verdict never makes the current one disappear.
+    const slots = latest.get(key) ?? { current: null, carried: null };
+    const slot = candidate.current ? "current" : "carried";
+    if (!slots[slot] || compareOrder(candidate.order, slots[slot].order) > 0) slots[slot] = candidate;
+    latest.set(key, slots);
   }
 
-  return latest;
+  return new Map([...latest].map(([key, slots]) => [key, prevailing(slots)]));
 }
 
 // Names the earlier heads behind a success that counts carried verdicts, so the
@@ -422,8 +459,12 @@ export function carriedHeadCandidates(comments, headSha, path) {
 
 /**
  * `path` is the first-parent walk from the current head, newest first, as
- * GET commits/{sha} objects. It must reach `earlier` through merge commits
- * only; the merged-in side is judged by `sameChange`.
+ * GET commits/{sha} objects. It must reach `earlier` through merges of the
+ * base branch only: every step before it has exactly two parents (no octopus)
+ * and `mergesBase === true`, which the runner sets only after GitHub confirmed
+ * that the second parent is contained in the base branch (#231, question 1;
+ * D-101 "spajanje osnovne grane"). The merged-in change is judged by
+ * `sameChange`.
  */
 export function onlyBaseMerges(path, earlier) {
   const target = earlier?.toLowerCase();
@@ -432,7 +473,7 @@ export function onlyBaseMerges(path, earlier) {
   return (
     end > 0 &&
     end <= MAX_MERGE_STEPS &&
-    steps.slice(0, end).every((commit) => (commit?.parents?.length ?? 0) >= 2)
+    steps.slice(0, end).every((commit) => commit?.parents?.length === 2 && commit?.mergesBase === true)
   );
 }
 

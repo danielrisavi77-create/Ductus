@@ -1,6 +1,6 @@
 // Pure logic for the orchestrator helper scripts. No gh/git calls here.
 import { canonicalBlock, field } from "../engineering/metadata-parser.mjs";
-import { trustedAuthor } from "../engineering/review-gate-core.mjs";
+import { commentTime, trustedAuthor } from "../engineering/review-gate-core.mjs";
 import {
   changedPaths, D97_MANUAL_PATHS, D97_PATHS, matchesPath, normalizePath,
 } from "../engineering/protected-paths.mjs";
@@ -98,7 +98,7 @@ export function parseVerdicts(comments, kind) {
       verdict: field(c.body, k.verdict)?.toUpperCase() ?? null,
       author: c.user?.login ?? null,
       appSlug: c.performed_via_github_app?.slug ?? null,
-      createdAt: Date.parse(c.created_at ?? "") || index,
+      createdAt: commentTime(c) || index,
       index,
     }))
     .sort((a, b) => a.createdAt - b.createdAt || a.index - b.index);
@@ -112,11 +112,11 @@ export function countCanonical(comments) {
 const GATE_VERDICTS = new Set(["PASS", "FAIL", "BLOCK"]);
 
 // Identity as the gate keys it (ENGINEERING_SYSTEM §6): App slug + runtime:slot,
-// with codex and chatgpt normalised to openai.
+// with codex and chatgpt normalised to openai and the slot without letter case (#130).
 function identityKey(entry) {
   const [runtime = "", slot = ""] = (entry.agent ?? "").split(":");
   const rt = runtime === "codex" || runtime === "chatgpt" ? "openai" : runtime;
-  return `${entry.appSlug ?? ""}|${rt}:${slot}`;
+  return `${entry.appSlug ?? ""}|${rt}:${slot.toLowerCase()}`;
 }
 
 /**
