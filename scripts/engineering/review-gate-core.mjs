@@ -54,10 +54,12 @@ function principalRuntime(runtime) {
   return runtime === "codex" || runtime === "chatgpt" ? "openai" : runtime;
 }
 
+// A slot names one principal whatever its letter case (#130): `claude:B` is
+// `claude:b`, so the author or a reviewer cannot pass as another party.
 function declaredPrincipal(agent) {
   if (!agent || !AGENT_RE.test(agent)) return null;
   const [runtime, slot] = agent.split(":");
-  return `${principalRuntime(runtime)}:${slot}`;
+  return `${principalRuntime(runtime)}:${slot.toLowerCase()}`;
 }
 
 export function verifiedCommentIdentity(entry, declaredAgent) {
