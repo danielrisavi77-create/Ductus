@@ -71,14 +71,28 @@ export type CheckpointSummary = {
   createdAt: string;
 };
 
-export type CheckpointNameFailure = "empty" | "too_long";
+export type CheckpointNameFailure = "empty" | "too_long" | "invalid_characters";
 
 export type CheckpointNameResult =
   | { ok: true; value: string }
   | { ok: false; reason: CheckpointNameFailure };
 
 /**
- * Trim + length only, counted in code points.
+ * Characters a name may not hold: controls (NUL included, which Postgres text
+ * cannot store), bidirectional and zero-width marks, the soft hyphen, the
+ * combining grapheme joiner and tag characters. The same class as
+ * `institution.is_plain_label` (issue #182), so a name looks like what it is.
+ */
+const FORBIDDEN_NAME_CHARACTER =
+  /[\u0000-\u001F\u007F-\u009F\u00AD\u034F\u061C\u180E\u200B-\u200F\u2028-\u202E\u2060-\u206F\uFEFF\uFFF9-\uFFFB\u{E0000}-\u{E0FFF}]/u;
+/** A half of a surrogate pair standing alone; canonical JSON refuses it. */
+const LONE_SURROGATE = /[\uD800-\uDFFF]/u;
+/** One character that renders as something, by the visible class of `institution.is_plain_label`. */
+const VISIBLE_CHARACTER =
+  /[^\s\u00A0\u034F\u115F\u1160\u1680\u17B4\u17B5\u180B-\u180D\u2000-\u200A\u202F\u205F\u2800\u3000\u3164\uFE00-\uFE0F\uFFA0\u{E0000}-\u{E0FFF}]/u;
+
+/**
+ * Trim, characters and length, counted in code points.
  *
  * Inner whitespace is deliberately preserved, exactly as project titles are:
  * the name is the author's, and collapsing it would silently rewrite their
@@ -97,6 +111,12 @@ export function validateCheckpointName(input: unknown): CheckpointNameResult {
   if (value === "") {
     return { ok: false, reason: "empty" };
   }
+  if (LONE_SURROGATE.test(value) || FORBIDDEN_NAME_CHARACTER.test(value)) {
+    return { ok: false, reason: "invalid_characters" };
+  }
+  if (!VISIBLE_CHARACTER.test(value)) {
+    return { ok: false, reason: "empty" };
+  }
   if ([...value].length > CHECKPOINT_NAME_MAX_LENGTH) {
     return { ok: false, reason: "too_long" };
   }
@@ -110,6 +130,7 @@ export function validateCheckpointName(input: unknown): CheckpointNameResult {
 export type CheckpointErrorCode =
   | "naziv-prazan"
   | "naziv-dug"
+  | "naziv-neispravan"
   | "rad-nepoznat"
   | "spremanje"
   | "citanje"
@@ -119,7 +140,8 @@ export type CheckpointErrorCode =
 export function checkpointNameErrorCode(
   reason: CheckpointNameFailure,
 ): CheckpointErrorCode {
-  return reason === "empty" ? "naziv-prazan" : "naziv-dug";
+  if (reason === "empty") return "naziv-prazan";
+  return reason === "too_long" ? "naziv-dug" : "naziv-neispravan";
 }
 
 
