@@ -69,7 +69,8 @@ describe("F-7 acknowledgment transport contract (#314 proposal)", () => {
     expect(await acknowledgeNotice(ID, 1, send as unknown as typeof fetch)).toEqual({ kind });
   });
 
-  it.each([[{}], [{ acknowledgedAt: "jučer" }], [{ acknowledgedAt: 1 }], [[AT]], [null]])(
+  it.each([[{}], [{ acknowledgedAt: "jučer" }], [{ acknowledgedAt: 1 }], [[AT]], [null],
+    [{ acknowledgedAt: "2026-02-31T09:00:00Z" }], [{ acknowledgedAt: "2026-11-03T24:00:00Z" }]])(
     "never claims an acknowledgment on a malformed reply %o",
     async (body) => {
       const send = vi.fn(async () => Response.json(body));

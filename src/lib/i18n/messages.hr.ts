@@ -73,6 +73,10 @@ export const hr = {
         bachelor_thesis: "Završni rad",
         master_thesis: "Diplomski rad",
         essay: "Esej",
+        // Accepted by the server (create-assignment.ts), not offered by the form yet.
+        short_paper: "Podnesak",
+        specialist_thesis: "Specijalistički rad",
+        doctoral_thesis: "Doktorski rad",
       },
       opensAt: "Otvaranje",
       dueAt: "Rok",
@@ -215,6 +219,8 @@ export const hr = {
       history: "Povijest verzija i sažetak procesa, isti kao što ga vidiš ti.",
       noVerdict: "Ductus ne procjenjuje autorstvo ni korištenje AI-ja.",
     },
+    // D-05, PRODUCT §6 "Profili evidencije": only for the extended profile.
+    teacherExtended: "Usporedbu verzija na kraju sesija i poslanih verzija.",
     retention: "Zapis se čuva uz rad do isteka roka koji propisuje fakultet.",
     note: "Prije konačne predaje uz rad možeš dodati napomenu. Napomene se samo dodaju.",
     checkbox: "Pročitao/la sam obavijest. Znam što se bilježi i što nastavnik vidi.",
