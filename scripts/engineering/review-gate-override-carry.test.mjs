@@ -78,3 +78,43 @@ test("an override without a reason does not carry", () => {
 test("a current-head override still works without any carry", () => {
   assert.equal(evaluate([override(head)]).state, "success");
 });
+
+// Owner decision on #413 (MANJE 3): a later FAIL or BLOCK on the current head
+// voids a carried override; an override given on the current head still wins.
+const verdictQa = (sha, verdict) =>
+  comment(`QA-Agent: claude:c:qa
+QA-Head: ${sha}
+QA-Verdict: ${verdict}
+QA-Scope: x
+`, { appSlug: "claude" });
+const verdictReview = (sha, verdict) =>
+  comment(`Agent-Review: claude:b:reviewer
+Review-Head: ${sha}
+Review-Verdict: ${verdict}
+`, { appSlug: "claude" });
+
+test("a QA FAIL or BLOCK on the current head voids a carried override", () => {
+  for (const verdict of ["FAIL", "BLOCK"]) {
+    const result = evaluate([override(earlier), verdictQa(head, verdict)], new Set([earlier]));
+    assert.equal(result.state, "pending", verdict);
+  }
+});
+
+test("a review FAIL or BLOCK on the current head voids a carried override", () => {
+  for (const verdict of ["FAIL", "BLOCK"]) {
+    assert.equal(evaluate([override(earlier), verdictReview(head, verdict)], new Set([earlier])).state, "pending", verdict);
+  }
+});
+
+test("an override given on the current head after a FAIL still passes", () => {
+  assert.equal(evaluate([verdictQa(head, "FAIL"), override(head)], new Set([earlier])).state, "success");
+});
+
+test("a negative verdict on the earlier override head does not void its carried override", () => {
+  const comments = [verdictQa(earlier, "FAIL"), override(earlier)];
+  assert.equal(evaluate(comments, new Set([earlier])).state, "success");
+});
+
+test("a PASS on the current head does not disturb a carried override", () => {
+  assert.equal(evaluate([override(earlier), verdictQa(head, "PASS")], new Set([earlier])).state, "success");
+});

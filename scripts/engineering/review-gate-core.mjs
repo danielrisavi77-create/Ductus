@@ -350,8 +350,24 @@ export function evaluateGate({
 
   const trusted = trustedComments(comments, trustedLogins);
 
-  if (findOwnerOverride(trusted, headSha, ownerLogin, carriedHeads)) {
+  if (findOwnerOverride(trusted, headSha, ownerLogin)) {
     return { state: "success", description: `Owner override recorded for ${risk} risk.` };
+  }
+
+  // A carried override (owner decision, #87 issuecomment-6242103643) holds only
+  // while the current head itself has no FAIL or BLOCK from review or QA; a
+  // negative verdict on an earlier head never voids it.
+  if (findOwnerOverride(trusted, headSha, ownerLogin, carriedHeads)) {
+    const onHead = (agentField, headField, verdictField, role, extraField) =>
+      currentNegative(latestVerdicts(trusted, {
+        agentField, headField, verdictField, role, headSha, extraField, carriedHeads: new Set(),
+      }));
+    const negative =
+      onHead("Agent-Review", "Review-Head", "Review-Verdict", "reviewer") ||
+      onHead("QA-Agent", "QA-Head", "QA-Verdict", "qa", "QA-Scope");
+    if (!negative) {
+      return { state: "success", description: `Owner override carried for ${risk} risk.` };
+    }
   }
 
   const reviews = latestVerdicts(trusted, {
