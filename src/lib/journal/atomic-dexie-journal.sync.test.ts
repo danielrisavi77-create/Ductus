@@ -178,6 +178,17 @@ describe("F-3 3a: recordAnswer", () => {
     expect((await journal.read(ID)).snapshot?.revision).toBe(5);
   });
 
+  it("a later local save keeps the acknowledged base instead of the editor's older one", async () => {
+    const journal = open();
+    const [first] = await queued(journal, 1);
+    await journal.beginSend(ID, first!);
+    await answer(journal, first!, signed(5), verification(first!, 5), "SYNCED");
+    // The editor still holds the base it loaded (0).
+    const saved = await journal.saveLocal(ID, tx("tx-2", 0), UTC, 1);
+    expect(saved.snapshot.revision).toBe(5);
+    expect((await journal.read(ID)).snapshot?.revision).toBe(5);
+  });
+
   it("a verified receipt for a different row deletes nothing", async () => {
     const journal = open();
     const [first, second] = await queued(journal, 2);

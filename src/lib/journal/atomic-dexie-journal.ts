@@ -316,8 +316,12 @@ export class AtomicDexieJournal {
           throw new JournalError("sequence_exhausted");
         }
         const localSeq = high + 1;
+        // The base never moves back: the editor keeps the base it loaded,
+        // while `recordAnswer` may have moved it onto this client's own ACK,
+        // which the new candidate was written on top of.
         const snapshot: JournalSnapshot = {
-          documentId, revision: tx.baseRevision, document: tx.document, savedAt,
+          documentId, revision: Math.max(snapshotBefore?.revision ?? 0, tx.baseRevision),
+          document: tx.document, savedAt,
         };
         const pending: PendingTransaction = {
           documentId, localSeq, tx, queuedAt: savedAt,
