@@ -139,6 +139,14 @@ Trag: komentari na issueu #87 `issuecomment-6127202099`, `6127287778` i `6133470
 | D-121 | **Potvrđeno 17. 10. 2026. (Daniel; `#87` komentar 6230987605, doslovno „Radi sve provjere preko Claudea onda, najbrže”).** Review i QA odsad daju Claude sesije: review sesije u oblaku koje otvara vlasnik, QA jednokratna sesija po PR-u. **Dopunjuje D-119 i D-120** (Codex i Grok više nisu preduvjet). Za `critical` PR gate i dalje traži QA s drugog Appa od reviewera, pa kad su review i QA s Claude Appa, PR prolazi samo uz vlasnikov `Owner-Override` za taj head; orkestrator ga ne piše. Promjena samog gatea nije dio ove odluke | Brzina demo lanca |
 | D-122 | **Potvrđeno 17. 10. 2026. (Daniel; `#87` komentar 6233852560).** Lokalni zapis studenta u IndexedDB ostaje nešifriran za demo (kontrolirana računala). Šifriranje ili rok trajanja lokalnog zapisa obvezni su prije pilota. Vezano uz D-118 i #380 | Poznata granica u opisu #380; pilot ne smije krenuti bez ovoga |
 
+## Odlučeno (17. 10. 2026.): odjava
+
+Trag: komentar na issueu #87 `issuecomment-6233309491` (vlasnikova odluka u sesiji orkestratora, uz sigurnosni nalaz F-072). Broj D-118 dodijeljen je ovim PR-om; D-115 do D-117 rezervirani su u otvorenom PR-u #345.
+
+| Broj | Odluka | Razlog |
+| --- | --- | --- |
+| D-118 | **Potvrđeno 17. 10. 2026. (Daniel; `6233309491`).** Odjava uvijek zatvara sesiju na poslužitelju i kolačić sesije, i kad postoje nesinkronizirane promjene. Nepredani lokalni zapis ostaje u pregledniku vezan samo uz tog studenta, nedostupan drugoj osobi, i nastavlja se kad se isti student ponovno prijavi. Mijenja kriterij prihvata 13 u `docs/PRODUCT.md` §13 i redak o odjavi u `docs/ARCHITECTURE.md` (sigurnosne mjere) | Blokirana odjava ostavljala je sesiju otvorenom na zajedničkom računalu; ovako se rad ne gubi, a sljedeća osoba ne ulazi u tuđu sesiju |
+
 ## Prijedlozi koji čekaju potvrdu
 
 | Broj | Odluka | Prijedlog |

@@ -332,4 +332,4 @@ Demo prolazi cijeli put na sintetičkom radu s unaprijed poznatim ishodom. Za va
 10. Kontrolirana praznina prikazuje se kao praznina.
 11. Tekst napisan i obrisan unutar iste sesije ne pojavljuje se ni u jednom pregledu povijesti, sažetku ni usporedbi; [val 3] u mentorskom radu pojavljuje se samo u reprodukciji, a ista reprodukcija rekonstruira predani rad bajt za bajt.
 12. Drugi student i nastavnik drugog kolegija ne mogu otvoriti ni rad ni evidenciju. Test gađa poslužitelj i bazu, ne samo sučelje.
-13. Nakon odjave na istom pregledniku nema studentovog lokalnog zapisa; odjava s nesinkroniziranim promjenama je blokirana uz poruku.
+13. Odjava uvijek zatvara sesiju, i s nesinkroniziranim promjenama; nakon odjave druga osoba na istom pregledniku ne vidi studentov lokalni zapis, a nepredani zapis nastavlja se kad se isti student ponovno prijavi (D-118).
