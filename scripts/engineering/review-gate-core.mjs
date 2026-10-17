@@ -210,14 +210,17 @@ function fallbackSlug(value) {
   return value?.split(/\s+/)[0]?.toLowerCase() ?? null;
 }
 
-function findOwnerOverride(entries, headSha, ownerLogin) {
+// The override counts for the current head, or for an earlier head the runner
+// confirmed as carried (clean base merges, unchanged PR diff; owner decision
+// #87 issuecomment-6242103643). Author checks do not depend on the head.
+function findOwnerOverride(entries, headSha, ownerLogin, carriedHeads = new Set()) {
   return entries.some(({ body, login, association, appSlug }) =>
     canonicalBlock(body, "Owner-Override") &&
     association === "OWNER" &&
     login === ownerLogin &&
     appSlug === null &&
     field(body, "Owner-Override")?.toUpperCase() === "PASS" &&
-    sameHead(field(body, "Override-Head"), headSha) &&
+    (sameHead(field(body, "Override-Head"), headSha) || carriedHeads.has(field(body, "Override-Head")?.toLowerCase())) &&
     Boolean(field(body, "Override-Reason")),
   );
 }
@@ -347,7 +350,7 @@ export function evaluateGate({
 
   const trusted = trustedComments(comments, trustedLogins);
 
-  if (findOwnerOverride(trusted, headSha, ownerLogin)) {
+  if (findOwnerOverride(trusted, headSha, ownerLogin, carriedHeads)) {
     return { state: "success", description: `Owner override recorded for ${risk} risk.` };
   }
 
@@ -498,13 +501,13 @@ export function evaluateGate({
  * walk from the current head (newest first, GET commits/{sha} objects), behind
  * merge commits only. A head the walk cannot see would be dropped silently,
  * and with it a FAIL or BLOCK, so an unfinished walk or more than
- * MAX_CARRIED_HEADS such heads carries nothing. The Owner Override never
- * carries.
+ * MAX_CARRIED_HEADS such heads carries nothing. An Owner Override head is
+ * named like a verdict head and judged by the same walk and diff checks.
  */
 export function carriedHeadCandidates(comments, headSha, path) {
   const named = new Set();
   for (const entry of trustedComments(comments)) {
-    for (const [block, headField] of [["Agent-Review", "Review-Head"], ["QA-Agent", "QA-Head"]]) {
+    for (const [block, headField] of [["Agent-Review", "Review-Head"], ["QA-Agent", "QA-Head"], ["Owner-Override", "Override-Head"]]) {
       if (!canonicalBlock(entry.body, block)) continue;
       const head = field(entry.body, headField)?.toLowerCase();
       if (head && SHA_RE.test(head) && head !== headSha.toLowerCase()) named.add(head);
