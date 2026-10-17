@@ -140,6 +140,10 @@ pre-commit:
 
 pre-push:
   commands:
+    lint:
+      env:
+        CI: "true"
+      run: pnpm lint
     typecheck:
       env:
         CI: "true"
