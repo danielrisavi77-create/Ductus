@@ -12,8 +12,12 @@ const APPLICATION_FILES = ["app/api/probe/route.ts", "src/application/probe.ts"]
 const EXCEPTION_FILES = ["src/server/db/probe.ts", "tests/integration/probe.integration.test.ts"];
 const SOURCE_FORMS = ["quoted", "template"] as const;
 
+// The specifiers are the fixed list above. Each is checked to hold only the
+// characters of a package path, so pasting it between quotes or backticks
+// cannot end the literal or open an interpolation.
 function dynamicImport(specifier: string, form: (typeof SOURCE_FORMS)[number]) {
-  const source = form === "quoted" ? JSON.stringify(specifier) : `\`${specifier}\``;
+  if (!/^[a-z0-9@/._-]+$/i.test(specifier)) throw new Error(`not a plain package specifier: ${specifier}`);
+  const source = form === "quoted" ? `"${specifier}"` : `\`${specifier}\``;
   return `export async function probe() { return import(${source}); }\n`;
 }
 

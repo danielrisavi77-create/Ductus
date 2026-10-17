@@ -52,8 +52,8 @@ test("mergedPrs keeps merged PRs from the date on, ascending", async () => {
 });
 
 test("checkRollup joins check runs and statuses in the rollup shape evaluateChecks reads", async () => {
-  const run = (name, status, conclusion, suite = 1, started = "2026-10-01T00:00:00Z") => ({
-    name, status, conclusion, started_at: started, completed_at: null, check_suite: { id: suite },
+  const run = (name, status, conclusion, suite = 1, started = "2026-10-01T00:00:00Z", appId = 15368) => ({
+    name, status, conclusion, started_at: started, completed_at: null, app: { id: appId }, check_suite: { id: suite },
   });
   const rollup = await checkRollup("abc", {
     list: async (path, _exec, opts) => (opts?.key === "check_runs"
@@ -63,6 +63,8 @@ test("checkRollup joins check runs and statuses in the rollup shape evaluateChec
   });
   const ck = evaluateChecks(rollup);
   assert.equal(ck.total, 4);
+  assert.ok(rollup.filter((item) => item.name).every((item) => item.appId === 15368));
+  assert.equal(rollup.find((item) => item.context)?.appId, undefined);
   // the e2e re-run wins; "test" from another suite stays a separate check
   assert.deepEqual(ck.bad, [{ name: "lint", state: "IN_PROGRESS" }, { name: "test", state: "FAILURE" }]);
   // a completed run without conclusion is not green
