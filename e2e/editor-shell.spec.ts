@@ -95,6 +95,16 @@ test.describe("editor shell", () => {
     await expect(items.nth(1)).toHaveAttribute("data-level", "2");
     await expect(outlineOf(page).getByRole("button", { name: "Pojmovi" })).toHaveAttribute("aria-current", "location");
 
+    // The editor has focus as soon as the click is handled, not a frame later:
+    // a key typed in between would go to the button and be lost.
+    const focusedAtOnce = await outlineOf(page).getByRole("button", { name: "Uvod" }).evaluate((button) => {
+      // A pointer press moves focus to the button before the click.
+      (button as HTMLElement).focus();
+      (button as HTMLElement).click();
+      return document.activeElement?.getAttribute("contenteditable") === "true";
+    });
+    expect(focusedAtOnce).toBe(true);
+
     await outlineOf(page).getByRole("button", { name: "Uvod" }).click();
     await expect(outlineOf(page).getByRole("button", { name: "Uvod" })).toHaveAttribute("aria-current", "location");
     // The cursor is at the start of the heading: typing goes in front of it.

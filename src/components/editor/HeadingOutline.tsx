@@ -33,7 +33,10 @@ export default function HeadingOutline() {
   const go = (entry: OutlineEntry) => {
     if (!editor || editor.isDestroyed) return;
     // Inside the heading, before its first letter; read-only text still takes a cursor.
-    editor.chain().focus().setTextSelection(entry.pos + 1).scrollIntoView().run();
+    editor.chain().setTextSelection(entry.pos + 1).scrollIntoView().run();
+    // Tiptap's focus command waits for the next frame, and keys typed before it
+    // would go to this button and be lost; ProseMirror focuses at once.
+    editor.view.focus();
   };
 
   return (
