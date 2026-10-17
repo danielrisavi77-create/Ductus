@@ -206,6 +206,11 @@ test.describe("local editor (#197)", () => {
     await expect(page.getByText("6 riječi")).toBeVisible();
     // 16: the reload resumes where the journal is, not in an endless "Spremam lokalno".
     await expect(chipOf(page)).toHaveText(DURABLE);
+    // Opening a stored document is not announced; the next save in this tab is.
+    await expect(announcedOf(page)).toBeEmpty();
+    await typeInto(page, " Dodatak.");
+    await journalled(page);
+    await expect(announcedOf(page)).toHaveText(DURABLE);
   });
 
   test("9 and line 53: the chip says Spremljeno na uređaju only once the write is stored", async ({ page }) => {
