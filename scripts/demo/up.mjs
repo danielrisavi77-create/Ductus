@@ -24,6 +24,8 @@ function localDatabaseUrl(name, value, username) {
     || !LOCAL_HOSTS.has(url.hostname)
     || url.port !== "54329"
     || url.pathname !== "/ductus"
+    || url.search !== ""
+    || url.hash !== ""
     || decodeURIComponent(url.username) !== username
   ) {
     throw new Error(`${name} must use the local ductus database on 127.0.0.1:54329 as ${username}.`);

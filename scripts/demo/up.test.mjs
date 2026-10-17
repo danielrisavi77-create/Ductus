@@ -86,6 +86,21 @@ test("demo environment rejects non-local database URLs", () => {
   );
 });
 
+test("demo environment rejects a host override in the database URL query", () => {
+  assert.throws(
+    () => createDemoEnvironment({
+      APP_DATABASE_URL: "postgres://ductus_app_local:ductus-app-local-only@127.0.0.1:54329/ductus?host=db.example.com",
+    }),
+    /APP_DATABASE_URL must use the local ductus database/,
+  );
+  assert.throws(
+    () => createDemoEnvironment({
+      AUTH_DATABASE_URL: "postgres://ductus_auth_local@127.0.0.1:54329/ductus?host=db.example.com",
+    }),
+    /AUTH_DATABASE_URL must use the local ductus database/,
+  );
+});
+
 test("configured auth password must match the local auth URL", () => {
   assert.throws(
     () => createDemoEnvironment({
