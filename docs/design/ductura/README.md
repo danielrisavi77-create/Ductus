@@ -5,7 +5,7 @@
 - Ovo je dizajnerska referenca, ne produkcijski kod.
 - Mjerodavne su vlasničke odluke (#87 `issuecomment-6235542273`, D-123 do D-126 u `docs/DECISIONS.md`); imaju prednost pred §9 „Otvorena pitanja”.
 - Mjere (demo) se ne grade (D-56).
-- Prototip povlači React i Babel s unpkg samo za pregled u pregledniku (`support.js`); aplikacija ih ne koristi.
+- Prototip povlači React i Babel s unpkg samo za pregled u pregledniku (runtime `support.js` nije u repou, vidi niže); aplikacija ih ne koristi.
 
 ---
 
@@ -25,7 +25,7 @@ Ime u sučelju je **Ductura** (CLAUDE.md projekta). U repou i odlukama stoji Duc
 
 Datoteke u ovoj mapi su **dizajnerske reference u HTML-u**: prototipi koji pokazuju izgled i ponašanje. Nisu produkcijski kod. Zadatak je ekrane **izgraditi u postojećem stogu repoa** (Next.js, React, TypeScript strict, Tiptap editor, Dexie journal, tekstovi u ključevima prema D-84), njegovim obrascima i bibliotekama.
 
-- `*.dc.html` otvaraju se izravno u pregledniku (uz `support.js` u istoj mapi). Predložak je HTML s `{{ }}` rupama, a logika je klasa `Component` u `<script data-dc-script>` na dnu datoteke. Sva stanja, tekstovi, pravila i izračuni su u toj klasi.
+- `*.dc.html` otvaraju se izravno u pregledniku samo uz runtime `support.js`, koji nije u repou (odluka vlasnika 17. 10. 2026.; prototip se otvara iz izvornog zipa ili Claude Designa). Predložak je HTML s `{{ }}` rupama, a logika je klasa `Component` u `<script data-dc-script>` na dnu datoteke. Sva stanja, tekstovi, pravila i izračuni su u toj klasi.
 - Editor u prototipu je `contenteditable`. U aplikaciji je to Tiptap (F-3): oznake (navod, komentar, rupa, fusnota, unakrsna referenca, uvezeno) postaju **marks/nodes** u shemi, ne `span`ovi s klasama.
 - Svi podaci su izmišljeni (Student A–D, Nastavnik A, Autor A–C). Nijedan stvarni osobni podatak.
 
@@ -149,6 +149,6 @@ Bijeli list: tekst i oznake u `<helmet><style>` editora, selektori `.ed[data-she
 
 - `editor-v11.dc.html`: editor, zadnja verzija (v2–v10 su povijest u projektu).
 - `pregled-radova-v2.dc.html`: mentorski ekran.
-- `support.js`: runtime za otvaranje `.dc.html` u pregledniku.
+- `support.js`: runtime za otvaranje `.dc.html` u pregledniku. Uklonjen iz repoa (odluka vlasnika 17. 10. 2026., Semgrep nalazi); čuva se u izvornom zipu i u Claude Designu.
 - `PROVJERE.md`: provjere, profil pravila, zapisi uz rad (§6c), zajednički zapis mentora i studenta (§6d).
 - `analiza.dc.html`: analiza frontenda (ekrani, 135 radnji iz showcasea, pravila, sukobi s repoom).
