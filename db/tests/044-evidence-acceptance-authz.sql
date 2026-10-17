@@ -30,9 +30,9 @@ SELECT is_empty(
 SELECT is_empty(
   $$ SELECT table_name || ':' || privilege
        FROM unnest(ARRAY['domain','project','document','document_revision','package','segment','receipt']) AS tables(table_name)
-       CROSS JOIN unnest(ARRAY['INSERT','UPDATE','DELETE']) AS privileges(privilege)
+       CROSS JOIN unnest(ARRAY['INSERT','UPDATE','DELETE','TRUNCATE']) AS privileges(privilege)
       WHERE has_table_privilege('ductus_app', 'evidence.' || table_name, privilege) $$,
-  'ductus_app has no direct evidence DML');
+  'ductus_app has no direct evidence DML or TRUNCATE');
 
 SELECT matches(pg_temp.ask_as('ductus_test_stranger', 'ana',
   $$ SELECT outcome FROM app.commit_evidence_segment('pkg-a','request-denied',0,repeat('a',64),repeat('d',64),
@@ -45,7 +45,7 @@ SELECT is(pg_temp.call('expired','pkg-a','request-expired',pg_temp.descriptor(),
 SELECT is(pg_temp.call('tomo','pkg-a','request-cross-tenant',pg_temp.descriptor(),0,repeat('a',64),repeat('d',64),repeat('b',64)),
   'unauthorized', 'a different institution cannot probe a package request');
 SELECT is(pg_temp.call('boris','pkg-a','request-nonmember',pg_temp.descriptor(),0,repeat('a',64),repeat('d',64),repeat('b',64)),
-  'unauthorized', 'a same-institution non-member cannot probe a package request');
+  'unauthorized', 'a same-institution student cannot reserve on another student''s package');
 SELECT is(pg_temp.call('ana','pkg-a','request-context',
   pg_temp.descriptor(p_package=>'pkg-b',p_document=>'doc-b'),0,repeat('a',64),repeat('d',64),repeat('b',64)),
   'context_mismatch', 'the descriptor cannot mix package and document context');
@@ -62,6 +62,16 @@ SELECT is(pg_temp.call_with_spoofed_user_id(), 'duplicate_pending',
   'a forged user-id GUC cannot replace the active session identity');
 SELECT is(pg_temp.ask('ana', $$ SELECT principal_id::text FROM evidence.receipt WHERE client_request_id='request-auth' $$),
   pg_temp.id('ana')::text, 'the accepted receipt records the session principal');
+-- Authorization precedes the idempotency lookup: an existing request id of
+-- another student is neither recovered nor confirmed.
+SELECT is(pg_temp.call('tomo','pkg-a','request-auth',pg_temp.descriptor(),0,repeat('a',64),repeat('d',64),repeat('b',64)),
+  'unauthorized', 'a different institution cannot recover an existing request');
+SELECT is(pg_temp.call('tomo','pkg-a','request-auth',pg_temp.descriptor(),0,repeat('a',64),repeat('d',64),repeat('b',64),'receipt_payload'),
+  NULL, 'a different institution gets no receipt for an existing request');
+SELECT is(pg_temp.call('boris','pkg-a','request-auth',pg_temp.descriptor(),0,repeat('a',64),repeat('d',64),repeat('b',64)),
+  'unauthorized', 'a same-institution student cannot recover another student''s request');
+SELECT is(pg_temp.call('boris','pkg-a','request-auth',pg_temp.descriptor(),0,repeat('a',64),repeat('d',64),repeat('b',64),'receipt_payload'),
+  NULL, 'a same-institution student gets no receipt for another student''s request');
 
 CREATE SCHEMA evidence_attack;
 CREATE FUNCTION evidence_attack.length(text) RETURNS integer LANGUAGE sql IMMUTABLE AS $$ SELECT 1 $$;
@@ -80,6 +90,19 @@ END
 $$;
 SELECT is(pg_temp.call_with_hostile_search_path(), 'invalid',
   'a caller-controlled search_path cannot shadow RPC built-ins');
+
+-- Plan #356 item 2: the package owner who is no longer an active student of
+-- the assignment's course (member_to set, as remove_student writes it) cannot
+-- reserve a new, otherwise valid segment. Last block: it ends Ana's membership.
+UPDATE institution.course_member SET member_to = now()
+ WHERE course_id = pg_temp.id('k1') AND user_id = pg_temp.id('ana') AND member_to IS NULL;
+SELECT is(pg_temp.call('ana','pkg-a','request-removed',
+  pg_temp.descriptor(p_segment=>'segment-a-2',p_sequence_from=>2,p_sequence_to=>2,p_hash=>repeat('c',64),p_predecessor=>repeat('b',64)),
+  1,repeat('d',64),repeat('e',64),repeat('c',64)),
+  'unauthorized', 'a student removed from the course cannot reserve on their own package');
+SELECT is((SELECT current_revision::text || ':' ||
+  (SELECT count(*) FROM evidence.segment WHERE evidence_package_id='pkg-a')
+  FROM evidence.document WHERE id='doc-a'), '1:1', 'the refused removed student writes nothing');
 
 SELECT * FROM finish();
 ROLLBACK;

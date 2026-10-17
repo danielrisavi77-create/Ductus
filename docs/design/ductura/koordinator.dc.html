@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;background:#0F110E;color:#E9EBE6;font-family:"Instrument Sans",system-ui,sans-serif;font-size:13px}
+*{box-sizing:border-box}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+select{font:inherit;color:#E9EBE6}
+a{color:#8FB0E0;text-decoration:none}
+a:hover{color:#B3CAEC}
+:focus-visible{outline:2px solid #8FD1B9;outline-offset:2px;border-radius:6px}
+</style>
+</helmet>
+<div data-screen-label="Koordinator" style="min-height:100vh;display:flex;flex-direction:column">
+  <header style="position:sticky;top:0;z-index:20;height:52px;display:flex;align-items:center;gap:14px;padding:0 20px;border-bottom:1px solid #232722;background:#121511">
+    <span style="font-family:Newsreader,Georgia,serif;font-size:20px;font-weight:600">Ductura</span>
+    <span style="font-size:12.5px;color:#8E958D">Koordinator FPZG-a</span>
+    <select value="{{ year }}" onChange="{{ setYear }}" aria-label="Akademska godina" style="margin-left:auto;background:#0F110E;border:1px solid #2C312B;border-radius:7px;padding:5px 8px;font-size:12.5px"><option>2026./2027.</option><option>2025./2026.</option></select>
+  </header>
+  <main style="flex:1;width:100%;max-width:1000px;margin:0 auto;padding:44px 24px 72px;display:flex;flex-direction:column;align-items:center;gap:28px">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center">
+      <h1 style="margin:0;font-family:Newsreader,Georgia,serif;font-size:clamp(32px,4.6vw,46px);font-weight:300;letter-spacing:-.02em">Pregled po kolegijima</h1>
+      <span style="font-size:13px;line-height:1.55;color:#A6ADA5;max-width:56ch">Samo zbrojevi. Pojedinačne radove vide mentor i povjerenstvo, a ovdje se ne prikazuju ni imena studenata.</span>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:10px">
+      <sc-for list="{{ totals }}" as="t" hint-placeholder-count="4"><div style="min-width:130px;padding:14px 18px;background:#141712;border:1px solid #232722;border-radius:12px;display:flex;flex-direction:column;align-items:center;gap:2px"><span style="font-family:Newsreader,Georgia,serif;font-size:30px;font-weight:400">{{ t.n }}</span><span style="font-size:12px;color:#8E958D">{{ t.k }}</span></div></sc-for>
+    </div>
+    <div style="width:100%;overflow-x:auto;background:#141712;border:1px solid #232722;border-radius:12px">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:640px">
+        <thead><tr style="color:#8E958D;font-size:12px;text-align:right"><th scope="col" style="text-align:left;font-weight:500;padding:12px 16px">Kolegij</th><th scope="col" style="font-weight:500;padding:12px 10px">Upisano</th><th scope="col" style="font-weight:500;padding:12px 10px">Piše se</th><th scope="col" style="font-weight:500;padding:12px 10px">U doradi</th><th scope="col" style="font-weight:500;padding:12px 10px">Predano</th><th scope="col" style="font-weight:500;padding:12px 16px">Rok prošao bez predaje</th></tr></thead>
+        <tbody>
+          <sc-for list="{{ rows }}" as="r" hint-placeholder-count="4"><tr style="border-top:1px solid #232722;text-align:right"><th scope="row" style="text-align:left;font-weight:500;padding:12px 16px"><span style="display:flex;flex-direction:column;gap:2px"><span>{{ r.c }}</span><span style="font-size:11.5px;color:#8E958D;font-weight:400">{{ r.m }}</span></span></th><td style="padding:12px 10px">{{ r.e }}</td><td style="padding:12px 10px">{{ r.w }}</td><td style="padding:12px 10px">{{ r.d }}</td><td style="padding:12px 10px">{{ r.s }}</td><td style="{{ r.lateStyle }}">{{ r.l }}</td></tr></sc-for>
+        </tbody>
+      </table>
+    </div>
+    <section aria-labelledby="rok-h" style="width:100%;display:flex;flex-direction:column;align-items:center;gap:10px">
+      <h2 id="rok-h" style="margin:0;font-family:Newsreader,Georgia,serif;font-size:20px;font-weight:400">Sljedeći rokovi</h2>
+      <sc-for list="{{ dues }}" as="d" hint-placeholder-count="3"><div style="display:flex;gap:16px;font-size:13px"><span style="color:#8E958D;min-width:90px;text-align:right">{{ d.d }}</span><span style="min-width:260px">{{ d.t }}</span></div></sc-for>
+    </section>
+    <span style="font-size:11.5px;color:#767D75;text-align:center;max-width:60ch;line-height:1.5">Ductura ne prikazuje koliko tko piše ni koliko vremena provodi u radu. Izmišljeni podaci.</span>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { year: "2026./2027." };
+  renderVals() {
+    const past = this.state.year !== "2026./2027.";
+    const R = past
+      ? [["Završni rad · Politologija", "6 mentora", 41, 0, 0, 39, 2], ["Završni rad · Novinarstvo", "4 mentora", 22, 0, 0, 22, 0], ["Kolegij A · seminarski", "Nastavnik A", 30, 0, 0, 30, 0]]
+      : [["Završni rad · Politologija", "6 mentora", 38, 21, 9, 8, 0], ["Završni rad · Novinarstvo", "4 mentora", 19, 12, 4, 3, 0], ["Kolegij A · seminarski", "Nastavnik A", 24, 9, 6, 8, 1], ["Kolegij B · seminarski", "Nastavnik C", 17, 14, 2, 1, 0]];
+    const sum = i => R.reduce((a, r) => a + r[i], 0);
+    return {
+      year: this.state.year, setYear: e => this.setState({ year: e.target.value }),
+      totals: [{ k: "upisano", n: sum(2) }, { k: "piše se", n: sum(3) }, { k: "u doradi", n: sum(4) }, { k: "predano", n: sum(5) }],
+      rows: R.map(r => ({ c: r[0], m: r[1], e: r[2], w: r[3], d: r[4], s: r[5], l: r[6], lateStyle: { padding: "12px 16px", color: r[6] ? "#D3AC63" : "#767D75" } })),
+      dues: past ? [{ d: "—", t: "Sve predaje su zaključene." }] : [{ d: "24. 10. 2026.", t: "Kolegij A · predaja etape 1" }, { d: "20. 1. 2027.", t: "Kolegij B · seminarski rad" }, { d: "15. 6. 2027.", t: "Završni radovi · predaja" }],
+    };
+  }
+}
+</script>
+</body>
+</html>

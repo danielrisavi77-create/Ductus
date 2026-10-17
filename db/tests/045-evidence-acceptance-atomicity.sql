@@ -28,6 +28,13 @@ SELECT is(pg_temp.ask_as('ductus_evidence','ana', $$ SELECT receipt_payload=evid
 SELECT is(pg_temp.ask('ana', $$ SELECT receipt_payload::jsonb->>'acceptedAt' ~
   '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:00[.]000Z$'
   FROM evidence.receipt WHERE evidence_package_id='pkg-a' $$), 'true', 'acceptedAt is a canonical UTC minute');
+SELECT is(pg_temp.ask('ana', $$ SELECT receipt_payload::jsonb->>'receiptId' = id::text
+  FROM evidence.receipt WHERE evidence_package_id='pkg-a' $$), 'true', 'receiptId names the persisted receipt row');
+SELECT is(pg_temp.ask('ana', $$ SELECT r.receipt_payload::jsonb->>'acceptedAt'
+    = to_char(s.accepted_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:00.000"Z"')
+  FROM evidence.receipt r JOIN evidence.segment s
+    ON s.evidence_package_id = r.evidence_package_id AND s.id = r.segment_id
+  WHERE r.evidence_package_id='pkg-a' $$), 'true', 'acceptedAt is the minute the segment was accepted');
 
 SELECT is(pg_temp.call('ana','pkg-a','request-1',pg_temp.descriptor(),0,repeat('a',64),repeat('d',64),repeat('b',64)),
   'duplicate_pending', 'an identical retry returns the pending receipt');
@@ -62,10 +69,10 @@ SELECT is(pg_temp.call('ana','pkg-a','request-too-large',
 UPDATE evidence.package SET max_payload_bytes=2097152 WHERE id='pkg-a';
 
 SELECT is(pg_temp.call('ana','pkg-a','request-gap',
-  pg_temp.descriptor(p_segment=>'segment-gap',p_sequence_from=>3,p_sequence_to=>3,p_hash=>repeat('c',64)),
+  pg_temp.descriptor(p_segment=>'segment-gap',p_sequence_from=>3,p_sequence_to=>3,p_hash=>repeat('c',64),p_predecessor=>repeat('b',64)),
   1,repeat('d',64),repeat('e',64),repeat('c',64)), 'chain_conflict', 'a sequence gap is rejected');
 SELECT is(pg_temp.call('ana','pkg-a','request-gap-current',
-  pg_temp.descriptor(p_segment=>'segment-gap-2',p_sequence_from=>3,p_sequence_to=>3,p_hash=>repeat('c',64)),
+  pg_temp.descriptor(p_segment=>'segment-gap-2',p_sequence_from=>3,p_sequence_to=>3,p_hash=>repeat('c',64),p_predecessor=>repeat('b',64)),
   1,repeat('d',64),repeat('e',64),repeat('c',64),'expected_previous_segment_hash'), repeat('b',64),
   'chain conflict returns the current segment hash');
 SELECT is(pg_temp.call('ana','pkg-a','request-stale',
@@ -107,11 +114,26 @@ SELECT is(pg_temp.ask('ana', $$ SELECT count(*) FROM evidence.receipt WHERE evid
 SELECT is(pg_temp.call('ana','pkg-a','request-rollback',
   pg_temp.descriptor(p_segment=>'segment-a-2',p_sequence_from=>2,p_sequence_to=>2,p_hash=>repeat('c',64),p_predecessor=>repeat('b',64)),
   1,repeat('d',64),repeat('e',64),repeat('c',64)), 'reserved', 'rollback leaves the revision and request key reusable');
+SELECT is(pg_temp.ask('ana', $$ SELECT concat_ws(':',
+    second.receipt_payload::jsonb->>'previousReceiptId' = first.id::text,
+    second.receipt_payload::jsonb->>'predecessorSegmentHash' = repeat('b',64),
+    second.previous_receipt_id = first.id)
+  FROM evidence.receipt first, evidence.receipt second
+  WHERE first.client_request_id='request-1' AND second.client_request_id='request-rollback' $$),
+  't:t:t', 'a non-initial receipt names the previous receipt and segment hash');
 
 UPDATE evidence.receipt SET status='signed',signature='{"signature":"synthetic"}'::jsonb,key_id='synthetic-key'
  WHERE client_request_id='request-1';
 SELECT is(pg_temp.call('ana','pkg-a','request-1',pg_temp.descriptor(),0,repeat('a',64),repeat('d',64),repeat('b',64)),
-  'duplicate_signed', 'a signed retry returns the original accepted receipt');
+  'duplicate_signed', 'a signed retry reports the signed state');
+SELECT is(pg_temp.call('ana','pkg-a','request-1',pg_temp.descriptor(),0,repeat('a',64),repeat('d',64),repeat('b',64),'receipt_payload'),
+  pg_temp.ask('ana', $$ SELECT receipt_payload FROM evidence.receipt WHERE client_request_id='request-1' $$),
+  'a signed retry returns the original receipt bytes');
+SELECT is(pg_temp.call('ana','pkg-a','request-1',pg_temp.descriptor(),0,repeat('a',64),repeat('d',64),repeat('b',64),'receipt_id'),
+  pg_temp.ask('ana', $$ SELECT id::text FROM evidence.receipt WHERE client_request_id='request-1' $$),
+  'a signed retry returns the original receipt id');
+SELECT is(pg_temp.call('ana','pkg-a','request-1',pg_temp.descriptor(),0,repeat('a',64),repeat('d',64),repeat('b',64),'committed_revision'),
+  '1', 'a signed retry returns the original committed revision');
 
 SELECT * FROM finish();
 ROLLBACK;
