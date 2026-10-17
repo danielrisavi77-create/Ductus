@@ -1,7 +1,7 @@
 // Pure logic of `pnpm orch:health` (DAN-139): no gh, git or fs calls here.
 // Inputs are already-read data; outputs are findings {level, check, text}.
 import { canonicalBlock, field, metadataLines } from "../engineering/metadata-parser.mjs";
-import { trustedAuthor, verifiedCommentIdentity } from "../engineering/review-gate-core.mjs";
+import { commentTime, trustedAuthor, verifiedCommentIdentity } from "../engineering/review-gate-core.mjs";
 
 /** One heartbeat of the orchestrator loop, in minutes (docs/ORKESTRATOR.md §10). */
 export const HEARTBEAT_MIN = 30;
@@ -46,7 +46,7 @@ export function canonicalVerdicts(comments) {
       if (!identity || !agent.endsWith(`:${k.role}`) || !SHA_RE.test(head ?? "")) continue;
       if (!["PASS", "FAIL", "BLOCK"].includes(verdict)) continue;
       out.push({ kind: k.kind, agent, principal: identity.principal, head: head.toLowerCase(), verdict, index,
-        key: `${k.kind}|${identity.appSlug}|${identity.principal}`, at: Date.parse(c?.created_at ?? "") });
+        key: `${k.kind}|${identity.appSlug}|${identity.principal}`, at: commentTime(c) });
     }
   }
   return out;
@@ -104,6 +104,8 @@ const SLOT_RE = /(?<![\w:-])`?((?:claude|codex|chatgpt|grok):[A-Za-z0-9_-]+)(?::
 const FULL_SHA = /(?<![0-9a-f])[0-9a-f]{40}(?![0-9a-f])/i;
 const FULL_SHA_G = new RegExp(FULL_SHA.source, "gi");
 const principal = (slot) => slot.replace(/^(?:codex|chatgpt):/, "openai:"); // as review-gate-core
+// The gate keys a slot without letter case (#130); the queue keeps the spelling for display.
+const samePrincipal = (a, b) => a.toLowerCase() === b.toLowerCase();
 const noParens = (s) => s.replace(/\([^()]*\)/g, "");
 
 const SENTENCE_END = /[.!?](?=\s|$)/;
@@ -147,7 +149,7 @@ function classify(line) {
   const rest = tail.slice(first.index + first[0].length);
   const clause = rest.search(CLAUSE_END) < 0 ? rest : rest.slice(0, rest.search(CLAUSE_END));
   const slot = principal(first[1]);
-  if ([...clause.matchAll(SLOT_RE)].some((m) => principal(m[1]) !== slot)) return loose("više slotova iza strelice");
+  if ([...clause.matchAll(SLOT_RE)].some((m) => !samePrincipal(principal(m[1]), slot))) return loose("više slotova iza strelice");
   return { number: prs[0], head: SHA_RE.test(head[1]) ? head[1].toLowerCase() : null, slots: [slot] };
 }
 
@@ -231,7 +233,7 @@ export function checkQueue({ queue, prs, comments, now }) {
       out.push(f("NEPROVJERENO", "red-87", `#${pr.number}: komentari nisu pročitani`));
       continue;
     }
-    if (latestOnHead(canonicalVerdicts(list), item.head).some((v) => item.slots.includes(v.principal))) {
+    if (latestOnHead(canonicalVerdicts(list), item.head).some((v) => item.slots.some((slot) => samePrincipal(slot, v.principal)))) {
       cleared += 1;
       continue;
     }

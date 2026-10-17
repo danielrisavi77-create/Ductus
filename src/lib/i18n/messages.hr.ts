@@ -15,9 +15,12 @@
  *     to the state machine it describes.
  */
 
+/** The product name on screen (D-124): one value, read through `app.name`. */
+const APP_NAME = "Ductura";
+
 export const hr = {
   app: {
-    name: "Ductus",
+    name: APP_NAME,
     tagline: "Kako je rad nastao, bez presude o autorstvu.",
   },
   shell: {
@@ -25,8 +28,40 @@ export const hr = {
     demoBadge: "Demo · izmišljeni podaci",
   },
   home: {
-    lead: "Ductus ne procjenjuje autorstvo ni korištenje AI-ja. Prije početka vidiš što nastavnik vidi i od kada.",
+    lead: `${APP_NAME} ne procjenjuje autorstvo ni korištenje AI-ja. Prije početka vidiš što nastavnik vidi i od kada.`,
     openWorkspace: "Otvori radni prostor",
+    openTeacher: "Novi kolegij i zadatak",
+  },
+  // F-6 (DAN-35): text of screen 2 of the design handoff (docs/design/ductura).
+  teacher: {
+    title: "Novi kolegij i zadatak",
+    denied: "Za ovaj račun nije dopušteno stvaranje kolegija.",
+    unavailable: "Provjera nastavničke uloge trenutačno nije dostupna. Pokušaj ponovno.",
+    signIn: "Prijavi se",
+    backHome: "Na početnu",
+    course: {
+      heading: "Kolegij",
+      name: "Naziv",
+      year: "Akademska godina",
+      years: { "2026/2027": "2026./2027.", "2025/2026": "2025./2026." },
+      policy: "Pravila uporabe AI-ja",
+      policies: {
+        prohibited: "AI pomoć nije dopuštena",
+        partially_allowed: "AI pomoć je djelomično dopuštena",
+        encouraged: "AI pomoć se potiče uz pravila kolegija",
+      },
+      submit: "Stvori kolegij",
+      pending: "Stvaranje kolegija…",
+      created: "Kolegij je stvoren.",
+      nameMissing: "Upiši naziv kolegija.",
+      errors: {
+        invalid: "Provjeri naziv, akademsku godinu i pravila kolegija.",
+        unauthorized: "Prijava nije valjana. Prijavi se ponovno.",
+        forbidden: "Za ovaj račun nije dopušteno stvaranje kolegija.",
+        conflict: "Kolegij s tim nazivom već postoji uz druga pravila.",
+        unavailable: "Stvaranje kolegija nije potvrđeno. Pokušaj ponovno.",
+      },
+    },
   },
   workspace: {
     title: "Radni prostor",
@@ -34,6 +69,9 @@ export const hr = {
     modeWriting: "Pisanje",
     modeTeacherView: "Kako vidi nastavnik",
     soon: "uskoro",
+    sheetTheme: "Tema lista",
+    sheetThemeLight: "Bijeli list",
+    sheetThemeDark: "Tamni list",
     structure: "Struktura",
     structureLabel: "Struktura rada",
     structureEmpty: "Naslovi će se pojaviti ovdje.",
@@ -67,6 +105,14 @@ export const hr = {
     unavailableBody: "Prijava preko AAI@EduHr trenutačno ne odgovara. Pokušaj ponovno za nekoliko minuta.",
     retry: "Pokušaj ponovno",
     home: "Na početnu",
+    signIn: "Prijava",
+    logout: "Odjava",
+    loggingOut: "Odjava…",
+    logoutUnsaved:
+      "Ovaj uređaj nije mogao pohraniti dio teksta, pa bi se odjavom izgubio. Izvezi tekst, a zatim ponovno odaberi „Odjava”.",
+    logoutFailed: "Odjava nije dovršena jer poslužitelj nije odgovorio. Ništa nije izbrisano. Provjeri vezu i pokušaj ponovno.",
+    signedOutElsewhere:
+      "Prijava s kojom je ova kartica otvorena više ne vrijedi: u drugoj kartici provedena je odjava ili nova prijava. Ova kartica više ništa ne prikazuje ni ne sprema. Ponovno učitaj stranicu.",
   },
 } as const;
 

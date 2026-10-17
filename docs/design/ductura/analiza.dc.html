@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<title>Ductura · analiza frontenda</title>
+<style>
+@font-face{font-family:"Instrument Sans";src:url(app/fonts/InstrumentSans-latin.woff2) format("woff2"),url(app/fonts/InstrumentSans-latin-ext.woff2) format("woff2");font-weight:400 700;font-display:swap}
+@font-face{font-family:"Newsreader";src:url(app/fonts/Newsreader-latin.woff2) format("woff2"),url(app/fonts/Newsreader-latin-ext.woff2) format("woff2");font-weight:400 700;font-display:swap}
+@font-face{font-family:"JetBrains Mono";src:url(app/fonts/JetBrainsMono-latin.woff2) format("woff2"),url(app/fonts/JetBrainsMono-latin-ext.woff2) format("woff2");font-display:swap}
+body{margin:0;background:#0b1110;color:#e8efed;font-family:"Instrument Sans",ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#2dd4bf}a:hover{color:#14B8A6}
+</style>
+</helmet>
+<main style="max-width:1080px;margin:0 auto;padding:56px 24px 96px;display:flex;flex-direction:column;gap:56px;font-size:15px;line-height:1.6">
+
+<header style="display:flex;flex-direction:column;gap:14px">
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <span style="font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#a3b1ad">Analiza prije izrade · 17. 10. 2026.</span>
+    <span style="font-size:12px;padding:1px 8px;border:1px dashed #2a3935;border-radius:4px;color:#a3b1ad">radni dokument</span>
+  </div>
+  <h1 style="margin:0;font-family:Newsreader,Georgia,serif;font-weight:500;font-size:44px;line-height:1.1;letter-spacing:-.01em;text-wrap:balance">Ductura frontend: što sve treba napraviti</h1>
+  <p style="margin:0;max-width:680px;color:#a3b1ad;font-size:17px;text-wrap:pretty">Sažetak repozitorija Ductus (PRODUCT, PRODUCT_SPEC_V1, PLAN-DEMO, FEATURES, STATE, kod u app/ i src/), Linear projekta Ductus i prototipa Pisač. Popis ekrana, naredbi i opcija, pravila koja dizajn ne smije prekršiti i otvorena pitanja prije izrade.</p>
+</header>
+
+<section style="display:flex;flex-direction:column;gap:16px">
+  <h2 style="margin:0;font-family:Newsreader,Georgia,serif;font-weight:500;font-size:28px">1. Izvori</h2>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px">
+    <div style="background:#131b19;border:1px solid #2a3935;border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:6px">
+      <div style="display:flex;justify-content:space-between;gap:8px"><strong>GitHub Ductus</strong><span style="font-size:12px;color:#2dd4bf">pročitano</span></div>
+      <span style="color:#a3b1ad;font-size:14px">Plan proizvoda, spec ekrana, demo plan, tokeni v6 (globals.css), 8 stanja spremanja, katalog tekstova, ljuska /rad.</span>
+    </div>
+    <div style="background:#131b19;border:1px solid #2a3935;border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:6px">
+      <div style="display:flex;justify-content:space-between;gap:8px"><strong>Linear</strong><span style="font-size:12px;color:#2dd4bf">pročitano</span></div>
+      <span style="color:#a3b1ad;font-size:14px">82 zadatka. Frontend: DAN-210 tokeni D-115, DAN-211 editor F-8, DAN-37, DAN-49, DAN-35 (F-6), DAN-203 prototip spremanja.</span>
+    </div>
+    <div style="background:#131b19;border:1px solid #2a3935;border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:6px">
+      <div style="display:flex;justify-content:space-between;gap:8px"><strong>prototipeditor.netlify.app</strong><span style="font-size:12px;color:#2dd4bf">pročitano</span></div>
+      <span style="color:#a3b1ad;font-size:14px">Izvor je pisac-editor/public/legacy. Pokrenut lokalno i pročitan cijeli app.js; pregled u odjeljku 4a.</span>
+    </div>
+    <div style="background:#131b19;border:1px solid #2a3935;border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:6px">
+      <div style="display:flex;justify-content:space-between;gap:8px"><strong>Ductus demo ekrani</strong><span style="font-size:12px;color:#2dd4bf">pročitano</span></div>
+      <span style="color:#a3b1ad;font-size:14px">Priložena datoteka, raspakirana: šest odobrenih ekrana demoa. Pregled u 4b.</span>
+    </div>
+    <div style="background:#131b19;border:1px solid #2a3935;border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:6px">
+      <div style="display:flex;justify-content:space-between;gap:8px"><strong>Ductura showcase v2</strong><span style="font-size:12px;color:#2dd4bf">pročitano</span></div>
+      <span style="color:#a3b1ad;font-size:14px">Priložena datoteka: interaktivni mock, 135 radnji. Pregled u 4c.</span>
+    </div>
+    <div style="background:#131b19;border:1px solid #2a3935;border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:6px">
+      <div style="display:flex;justify-content:space-between;gap:8px"><strong>Dizajnerski sustav</strong><span style="font-size:12px;color:#d9ae5b">prazan</span></div>
+      <span style="color:#a3b1ad;font-size:14px">Priloženi sustav nema datoteka. Koristim tokene D-115 iz PR-a #386 (tamna ljuska, svijetli list) i fontove Instrument Sans, Newsreader, JetBrains Mono.</span>
+    </div>
+  </div>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:16px">
+  <h2 style="margin:0;font-family:Newsreader,Georgia,serif;font-weight:500;font-size:28px">2. Pravila koja vrijede za svaki ekran</h2>
+  <p style="margin:0;max-width:720px;color:#a3b1ad">Iz PRODUCT.md §5 i odluke D-105. Kršenje bilo kojeg od ovih je kritičan bug, čak i kad je mockup drukčiji.</p>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1px;background:#2a3935;border:1px solid #2a3935;border-radius:10px;overflow:hidden">
+    <div style="background:#131b19;padding:16px 18px"><strong>Bez presude.</strong> <span style="color:#a3b1ad">Nikad tvrdnja o autorstvu, nema postotka AI-ja ni ljudskosti, ocjene rizika, sumnje, rangiranja ni boje koja ocjenjuje studenta.</span></div>
+    <div style="background:#131b19;padding:16px 18px"><strong>Isti prikaz.</strong> <span style="color:#a3b1ad">Student vidi točno što vidi nastavnik, iz iste funkcije. Prekidač "Kako vidi nastavnik" već postoji u ljusci.</span></div>
+    <div style="background:#131b19;padding:16px 18px"><strong>Obavijest prvo.</strong> <span style="color:#a3b1ad">Prvi ekran svakog zadatka je S3. Prije potvrde nema evidencije. Potvrda nije privola i ne smije tako izgledati.</span></div>
+    <div style="background:#131b19;padding:16px 18px"><strong>Nikad samo "spremljeno".</strong> <span style="color:#a3b1ad">Uvijek "na uređaju", "na poslužitelju" ili "predano". Zeleni ton smije imati samo stanje s potpisanom potvrdom.</span></div>
+    <div style="background:#131b19;padding:16px 18px"><strong>Praznina je praznina.</strong> <span style="color:#a3b1ad">"Praznina u zapisu", nikad nestalo ili skriveno. Lijepljenje: "zalijepljeno (izvor nije opažen)".</span></div>
+    <div style="background:#131b19;padding:16px 18px"><strong>Nastavnički prikaz s postocima (odluka 17. 10.).</strong> <span style="color:#a3b1ad">Nastavnik dobiva zaseban prikaz s postocima podrijetla, "AI doprinos" i oznakama "U SKLADU". Student ih ne vidi. Proturječi D-105 i PRODUCT §5 t. 2 i 5, pa treba zapis odluke u DECISIONS.md.</span></div>
+    <div style="background:#131b19;padding:16px 18px"><strong>Napredak bez trake (17. 10.).</strong> <span style="color:#a3b1ad">Samo riječi i stranice naspram opsega. Bez trake i postotka.</span></div>
+    <div style="background:#131b19;padding:16px 18px"><strong>Pristupačnost.</strong> <span style="color:#a3b1ad">WCAG 2.1 AA, ciljevi 32 px u gustim trakama i 44 px drugdje, boja nikad jedini nositelj stanja, tekst na mobitelu najmanje 13 px.</span></div>
+  </div>
+  <div style="background:#131b19;border:1px solid #2a3935;border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:10px">
+    <span style="font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#a3b1ad">Osam stanja spremanja (src/domain/sync/labels.ts)</span>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      <sc-for list="{{ syncStates }}" as="s" hint-placeholder-count="8">
+        <span style="display:inline-flex;align-items:center;gap:8px;padding:5px 12px;border:1px solid #2a3935;border-radius:999px;font-size:13px"><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#a3b1ad">{{ s.key }}</span>{{ s.label }}</span>
+      </sc-for>
+      <span style="display:inline-flex;align-items:center;padding:5px 12px;border:1px dashed #d9ae5b;border-radius:999px;font-size:13px">Dokument je otvoren u drugoj kartici.</span>
+    </div>
+  </div>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:16px">
+  <h2 style="margin:0;font-family:Newsreader,Georgia,serif;font-weight:500;font-size:28px">3. Karta ekrana</h2>
+  <p style="margin:0;max-width:720px;color:#a3b1ad">48 ekrana iz PRODUCT_SPEC_V1 §2. Oznaka faze je redoslijed iz §21 i PLAN-DEMO; "dizajn" je stanje iz speca.</p>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;font-size:13px">
+    <span style="padding:3px 10px;border-radius:999px;background:#14B8A6;color:#04201c;font-weight:600">Demo 2. 11.</span>
+    <span style="padding:3px 10px;border-radius:999px;border:1px solid #2dd4bf;color:#2dd4bf">P1 pilot</span>
+    <span style="padding:3px 10px;border-radius:999px;border:1px solid #a3b1ad;color:#e8efed">P2 ustanova</span>
+    <span style="padding:3px 10px;border-radius:999px;border:1px dashed #a3b1ad;color:#a3b1ad">P3 kasnije</span>
+  </div>
+  <sc-for list="{{ groups }}" as="g" hint-placeholder-count="5">
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <h3 style="margin:8px 0 0;font-size:13px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#a3b1ad">{{ g.title }}</h3>
+      <div style="border:1px solid #2a3935;border-radius:10px;overflow:hidden">
+        <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="4">
+          <div style="display:grid;grid-template-columns:52px minmax(0,1.1fr) minmax(0,2fr) 110px;gap:14px;align-items:baseline;padding:11px 16px;border-top:1px solid #1e2a27;background:#131b19">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#a3b1ad">{{ r.id }}</span>
+            <strong style="font-weight:600">{{ r.name }}</strong>
+            <span style="color:#a3b1ad;font-size:14px">{{ r.note }}</span>
+            <span style="{{ r.badgeStyle }}">{{ r.phase }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-for>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:16px">
+  <h2 style="margin:0;font-family:Newsreader,Georgia,serif;font-weight:500;font-size:28px">4. Naredbe i opcije po području</h2>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px">
+    <sc-for list="{{ commands }}" as="c" hint-placeholder-count="8">
+      <div style="background:#131b19;border:1px solid #2a3935;border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:10px">
+        <strong style="font-size:16px">{{ c.title }}</strong>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          <sc-for list="{{ c.items }}" as="i" hint-placeholder-count="6">
+            <span style="padding:3px 9px;border-radius:6px;background:#1e2a27;font-size:13px">{{ i }}</span>
+          </sc-for>
+        </div>
+        <span style="color:#a3b1ad;font-size:13px">{{ c.note }}</span>
+      </div>
+    </sc-for>
+  </div>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:16px">
+  <h2 style="margin:0;font-family:Newsreader,Georgia,serif;font-weight:500;font-size:28px">4a. Prototip Pisač, pregled koda</h2>
+  <p style="margin:0;max-width:720px;color:#a3b1ad">prototipeditor.netlify.app je pisac-editor/public/legacy (index.html, app.js 75 KB, styles.css). Pokrenuo sam ga i pročitao sve funkcije prikaza. Ovo prenosim u Ducturu, uz oznaku što smije ostati.</p>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px">
+    <sc-for list="{{ proto }}" as="p" hint-placeholder-count="8">
+      <div style="background:#131b19;border:1px solid #2a3935;border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline"><strong style="font-size:16px">{{ p.title }}</strong><span style="font-size:12px;color:#2dd4bf;white-space:nowrap">{{ p.fate }}</span></div>
+        <ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;color:#c5d0cd;font-size:14px">
+          <sc-for list="{{ p.items }}" as="i" hint-placeholder-count="4"><li>{{ i }}</li></sc-for>
+        </ul>
+      </div>
+    </sc-for>
+  </div>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:16px">
+  <h2 style="margin:0;font-family:Newsreader,Georgia,serif;font-weight:500;font-size:28px">4b. Ductus demo ekrani (odobreni mockupi)</h2>
+  <p style="margin:0;max-width:720px;color:#a3b1ad">Šest ekrana na 1280 px, svaki zaseban DC. Paleta: pozadina #0A0F0E, plohe #111827 / #1F2937, crte #334155, rub kontrola #64748B, teal #14B8A6 (hover #0D9488, poveznice #5EEAD4), bez mreže #F59E0B, potvrda #22C55E, komentar #D9AE5B. Fontovi Source Sans 3 i Source Serif 4. Odluka 17. 10.: ove boje ostaju, točno usklađivanje kasnije.</p>
+  <div style="border:1px solid #2a3935;border-radius:10px;overflow:hidden">
+    <sc-for list="{{ demoScreens }}" as="d" hint-placeholder-count="6">
+      <div style="display:grid;grid-template-columns:40px minmax(0,1fr) minmax(0,2.4fr);gap:14px;align-items:baseline;padding:12px 16px;border-top:1px solid #1e2a27;background:#131b19">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#a3b1ad">{{ d.n }}</span>
+        <strong style="font-weight:600">{{ d.t }}</strong>
+        <span style="color:#c5d0cd;font-size:14px">{{ d.d }}</span>
+      </div>
+    </sc-for>
+  </div>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:16px">
+  <h2 style="margin:0;font-family:Newsreader,Georgia,serif;font-weight:500;font-size:28px">4c. Ductura showcase v2 (interaktivni mock)</h2>
+  <p style="margin:0;max-width:720px;color:#a3b1ad">Samostalna aplikacija bez poslužitelja, 14. 10. 2026. Bočna navigacija, uloge student i nastavnica, katalog stvarnih FPZG kolegija, 135 radnji. Ovo je najpotpuniji popis naredbi; grupirano po području.</p>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px">
+    <sc-for list="{{ showcase }}" as="c" hint-placeholder-count="10">
+      <div style="background:#131b19;border:1px solid #2a3935;border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:10px">
+        <strong style="font-size:16px">{{ c.title }}</strong>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          <sc-for list="{{ c.items }}" as="i" hint-placeholder-count="6">
+            <span style="padding:3px 9px;border-radius:6px;background:#1e2a27;font-size:13px">{{ i }}</span>
+          </sc-for>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:16px">
+  <h2 style="margin:0;font-family:Newsreader,Georgia,serif;font-weight:500;font-size:28px">5. Sukobi i otvorena pitanja</h2>
+  <div style="display:flex;flex-direction:column;border:1px solid #2a3935;border-radius:10px;overflow:hidden">
+    <sc-for list="{{ conflicts }}" as="q" hint-placeholder-count="7">
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:18px;padding:14px 18px;border-top:1px solid #1e2a27;background:#131b19">
+        <strong style="font-weight:600">{{ q.t }}</strong>
+        <span style="color:#a3b1ad;font-size:14px">{{ q.d }}</span>
+      </div>
+    </sc-for>
+  </div>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:16px">
+  <h2 style="margin:0;font-family:Newsreader,Georgia,serif;font-weight:500;font-size:28px">6. Predloženi redoslijed izrade</h2>
+  <ol style="margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px">
+    <sc-for list="{{ plan }}" as="p" hint-placeholder-count="6">
+      <li style="display:grid;grid-template-columns:44px minmax(0,1fr);gap:14px;align-items:baseline">
+        <span style="font-family:Newsreader,Georgia,serif;font-size:26px;color:#2dd4bf">{{ p.n }}</span>
+        <div style="display:flex;flex-direction:column;gap:2px"><strong>{{ p.t }}</strong><span style="color:#a3b1ad;font-size:14px">{{ p.d }}</span></div>
+      </li>
+    </sc-for>
+  </ol>
+</section>
+
+</main>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const B = {
+      demo: "justify-self:start;padding:2px 9px;border-radius:999px;background:#14B8A6;color:#04201c;font-size:12px;font-weight:600;white-space:nowrap",
+      p1: "justify-self:start;padding:2px 9px;border-radius:999px;border:1px solid #2dd4bf;color:#2dd4bf;font-size:12px;white-space:nowrap",
+      p2: "justify-self:start;padding:2px 9px;border-radius:999px;border:1px solid #a3b1ad;color:#e8efed;font-size:12px;white-space:nowrap",
+      p3: "justify-self:start;padding:2px 9px;border-radius:999px;border:1px dashed #a3b1ad;color:#a3b1ad;font-size:12px;white-space:nowrap",
+    };
+    const L = { demo: "Demo", p1: "P1", p2: "P2", p3: "P3" };
+    const toStyle = s => Object.fromEntries(s.split(";").map(x => { const [k, v] = x.split(":"); return [k.trim().replace(/-([a-z])/g, (_, c) => c.toUpperCase()), v.trim()]; }));
+    const row = (id, name, note, ph) => ({ id, name, note, phase: L[ph], badgeStyle: toStyle(B[ph]) });
+    const groups = [
+      { title: "Ulaz i ljuska", rows: [
+        row("—", "Ljuska aplikacije", "Tamna ljuska #0b1110, teal #14b8a6 s tamnim tekstom, svijetli list s tamnijim tealom #0f766e, prekidač Svijetli / Tamni list (D-115, PR #386). Oznaka 'Demo · izmišljeni podaci'.", "demo"),
+        row("S1", "Prijava", "Demo prijava (lažni OIDC), poslije AAI@EduHr. Greška i nedostupnost prijave, odjava blokirana uz nesinkronizirane promjene.", "demo"),
+        row("W1–W7", "Javne stranice", "Početna, kako radi, za fakultete, sigurnost, pilot, kontakt, nabava.", "p2"),
+      ]},
+      { title: "Student", rows: [
+        row("S2", "Moji radovi", "Zadaci, kolegij, rok, stanje (nije započeto / u tijeku / poslano / predano), komentari, upis kodom kolegija.", "p1"),
+        row("S3", "Obavijest zadatka", "Što se bilježi i ne bilježi, što nastavnik vidi i od kada, FPZG čl. 8, čuvanje. Gumb potvrde.", "demo"),
+        row("S4", "Uređivač", "Struktura lijevo, list u sredini, panel desno, traka stanja dolje. Prekidač Pisanje / Kako vidi nastavnik.", "demo"),
+        row("S4a", "Literatura", "Bilježnica izvora, DOI/ISBN, Citiraj, Kopiraj navod; uvoz BibTeX/RIS i PDF kasnije.", "p1"),
+        row("S4b", "Komentari i prijedlozi", "Odgovori, prihvati, odbij, riješeno; zahtjevi za doradu sa stanjem.", "demo"),
+        row("S4c", "Verzije", "Ciklus nacrt → pregled → dorada → nova verzija → predaja.", "p1"),
+        row("S4d", "Reprodukcija", "Samo mentorski radovi, čeka D-56 i izmjenu Ustava.", "p3"),
+        row("S5", "Pregled prije predaje", "Isti sažetak kao nastavnik, otvorena mjesta, kontrolni popis, napomena. Ništa ne blokira osim rekonstrukcije.", "demo"),
+        row("S6", "Izjava o GenUI", "Alati, model, svrha, faza, ljudska pomoć, prilagodba, ispis vanjskih razgovora.", "p1"),
+        row("S7", "Potvrda predaje", "Vrijeme poslužitelja, hash, potpisana potvrda, QR, izvoz rada i izjave.", "demo"),
+        row("S8", "Napomene i osporavanje", "Napomene se samo dodaju; ispravak upućuje na staru. 'Tko je otvorio moj rad'.", "p1"),
+      ]},
+      { title: "Nastavnik i mentor", rows: [
+        row("T1", "Moji kolegiji", "Kolegiji, semestar, broj studenata, aktivni zadaci.", "p1"),
+        row("T2", "Pregled kolegija", "Popis studenata po prezimenu, stanje rada, zadnja izmjena. Bez boja upozorenja i sortiranja po brojkama.", "demo"),
+        row("T3", "Novi zadatak", "Čarobnjak u 5 koraka: osnovno, oblik i opseg, AI i uvoz, evidencija, nacrti i predaja (DAN-35).", "demo"),
+        row("T5", "Pregled rada / brz put", "Tekst rada, četiri retka, stanje zapisa (D-80). Zaseban nastavnički sloj: postoci podrijetla, AI doprinos, oznake 'U SKLADU' u panelu pravila (odluka 17. 10.).", "demo"),
+        row("T6", "Sažetak procesa", "Sesije, lijepljenja, uvozi, praznine, izmjene nastavnika, vrsta dokaza (opaženo / uvezeno / izjavljeno).", "demo"),
+        row("T8", "Usporedba verzija", "Lijevo/desno ili u retku, pripisivanje autoru. Prošireni profil.", "p1"),
+        row("T9", "Komentari i dorade", "Komentar uz odlomak, prijedlog, zahtjev za doradu, objavi sve, banka komentara.", "demo"),
+        row("T10–T12", "Konzultacije, produljenje, obrana", "Zapis konzultacije uz verziju, produljenje s razlogom, priprema za razgovor.", "p3"),
+      ]},
+      { title: "Administracija ustanove", rows: [
+        row("A1–A3", "Pregled, korisnici, kolegiji", "Potvrda uloga nastavnika, kolegiji po godini. Bez pristupa sadržaju radova.", "p2"),
+        row("A4", "Pravila (policy)", "Dopušteno / mora se deklarirati / nije dopušteno, verzije, datum važenja, nasljeđivanje.", "p1"),
+        row("A5–A9", "Čuvanje, revizija, integracije, izvoz, stanje sustava", "Pravno zadržavanje, revizijski trag pristupa, AAI, izlaz iz usluge, sigurnosne kopije.", "p2"),
+      ]},
+      { title: "Revizija i žalbe", rows: [
+        row("C1–C6", "Slučajevi i paket dokaza", "Vremenski ograničen pristup povjerenstva, revizija pristupa, snimka pravila, kriptografska provjera, PDF/ZIP.", "p2"),
+      ]},
+    ];
+    return {
+      syncStates: [
+        { key: "EDITING", label: "Uređivanje" }, { key: "SAVING_LOCAL", label: "Spremam lokalno" },
+        { key: "LOCAL_DURABLE", label: "Spremljeno na uređaju" }, { key: "SYNCING", label: "Sinkroniziram" },
+        { key: "SYNCED", label: "Spremljeno na poslužitelju" }, { key: "CONFLICT", label: "Sukob" },
+        { key: "ERROR", label: "Greška" }, { key: "RECOVERY_REQUIRED", label: "Potreban oporavak" },
+      ],
+      groups,
+      commands: [
+        { title: "Traka alata uređivača", items: ["Poništi", "Ponovi", "Odlomak", "Naslov 1", "Naslov 2", "Podebljano", "Kurziv", "Popis", "Blok-citat", "Citat", "Bibliografija", "Fusnota", "Tablica", "Grafikon", "Poziv na prikaz", "Komentar"], note: "Demo (DAN-211): Naslov 1, Naslov 2, Citat, Bibliografija. Ostalo iz prototipa Pisač dolazi u val 2." },
+        { title: "Lijeva traka", items: ["Struktura (naslovi)", "Popis tablica", "Popis grafikona", "Fusnote", "Opseg po poglavlju"], note: "Struktura se gradi iz naslova u dokumentu. Prazna stanja već postoje u katalogu tekstova." },
+        { title: "Desni panel", items: ["Upute zadatka", "Literatura", "Komentari", "Asistent"], note: "Asistent sa svrhama (objašnjenje pojma, jezična dorada, prijevod...) je izvan pilota (D-77)." },
+        { title: "Traka stanja", items: ["Stanje spremanja", "Bez mreže (tekst + ikona)", "Riječi / opseg", "Stranice", "Dani do roka"], note: "Primjer iz prototipa: '0 / 10.000–15.000 riječi'. Bez trake napretka." },
+        { title: "Stil citiranja", items: ["FPZG", "APA", "Chicago"], note: "Demo: samo FPZG (K-2, iz Lekte)." },
+        { title: "Postavke zadatka (T3)", items: ["Naslov i upute", "Vrsta rada", "Otvaranje i rok", "Opseg", "Profil fakulteta", "Dopuštene uporabe čl. 8", "Dopušten uvoz", "Ciklusi verzija", "Profil evidencije: Osnovni / Prošireni", "Objava komentara: odmah / zajedno"], note: "Nakon prve potvrde studenta zadatak se zaključava; profil se može samo suziti." },
+        { title: "Radnje nad prijedlozima", items: ["Prihvati", "Odbij", "Odgovori", "Označi riješenim", "Način: prijedlozi / izravno"], note: "Student uvijek može vratiti način na prijedloge." },
+        { title: "Izvoz", items: ["Izvezi tekst", "DOCX (FPZG)", "PDF", "Potvrda predaje (PDF)", "Paket za Merlin"], note: "Demo: samo 'Izvezi tekst' kao spas pri greški spremanja." },
+      ],
+      demoScreens: [
+        { n: "1", t: "Demo prijava", d: "Lijevo 'Prijava u Ductus' s gumbom AAI@EduHr i objašnjenjem; desno iscrtkana kartica 'demo prijava · lažni pružatelj' s izborom Student A / Student B / Nastavnik A." },
+        { n: "2", t: "Prvi ekran zadatka (S3)", d: "'Korak 1 od 2'. Kartice: Zadatak (naslov, vrsta, rok, upute, pravila oblika), Što nastavnik vidi (teal rub), Što se bilježi / ne bilježi, čl. 8 zatvoren popis s kvačicama, Čuvanje i napomene, Potvrda (nije privola) → 'Potvrdi i otvori editor'." },
+        { n: "3", t: "Editor", d: "Zaglavlje: kolegij / zadatak, čipovi 'Bez mreže' i 'Spremljeno na uređaju', Svijetli / Tamni list, Predaj, Odjava. Traka: Naslov 1, Naslov 2, Citat, Bibliografija, 'Citiranje prema FPZG stilu'. Lijevo struktura + napredak riječima i stranicama. Bijeli list. Desno komentari nastavnika i okvir 'Bez mreže'. Dno: legenda stanja spremanja." },
+        { n: "4", t: "Predaja", d: "Koraci 1 Provjera zapisa, 2 Izjava, 3 Potvrda. Rekonstrukcija 'Podudara se', praznine; izjava složena iz zapisa + vanjski alati + potvrda; desno Sažetak procesa (sesije, lijepljenja, AI, bez mreže, praznine, stanje zapisa) i iscrtkana potvrda o predaji." },
+        { n: "5", t: "Nastavnički pogled", d: "Lijevo tablica studenata po prezimenu (stanje, zadnja promjena). Sredina: 'rad u nastajanju', brzi pregled od pet redaka, tekst s oznakama podrijetla po odlomku. Desno komentar uz odlomak s opcijom 'zahtjev za doradu'." },
+        { n: "6", t: "Obrazac zadatka", d: "Osnovno (naslov, upute, vrsta, profil oblika, otvaranje, rok, opseg riječi i stranica), čl. 8 kvačice (samo sužavanje), profil evidencije Osnovni / Prošireni, ostatak obrasca i pregled za studenta." },
+      ],
+      showcase: [
+        { title: "Navigacija i ljuska", items: ["Pregled", "Radovi", "Kolegiji FPZG-a", "Moji studenti", "Rokovi i plan", "Komentari", "Postavke", "Obavijesti", "Zamijeni ulogu", "Promijeni temu", "Vodič (tour)", "O prototipu"] },
+        { title: "Javna i ulaz", items: ["Početna", "Kako radi", "Za koga", "Ulaz za studente", "Ulaz za nastavnike", "Izbor studija i godine"] },
+        { title: "Student", items: ["Tvoj sljedeći korak", "Nastavi pisati", "Moji kolegiji", "Katalog: pretraga, filtri, upis", "Ogledni zadatak", "Obavijest 'Prije prve rečenice'"] },
+        { title: "Radni prostor rada", items: ["Uređivač / Rad i komentari", "Zajednički pregled", "Verzije rada", "Dokument", "Izvori", "Dorade", "Mentorstvo", "Pravila", "Paket predaje"] },
+        { title: "Uređivač", items: ["Struktura i skok na naslov", "Oblikovanje i stilovi", "Tablica", "Fusnota", "Umetni citat", "Komentar na odabrani tekst", "Izvezi tekst", "DOCX", "Ispis"] },
+        { title: "Izvori", items: ["Dodaj bilješku izvora", "Ručni izvor", "Otvori / preuzmi", "Citiraj", "Privatna bilješka"] },
+        { title: "Dorade i prijedlozi", items: ["Novi zahtjev (naslov, kriteriji)", "Odgovori", "Prihvati", "Vrati uz razlog", "Pronađi u tekstu", "Prijedlog izmjene: prihvati / odbij uz razlog", "Banka komentara", "Filtar: Otvoreno, Za pregled, Prihvaćeno, Ponovno otvoreno"] },
+        { title: "Verzije", items: ["Spremi verziju", "Odaberi verziju", "Usporedi", "Pregledano", "Promjene od zadnjeg pregleda"] },
+        { title: "Mentorstvo", items: ["Konzultacije (datum, tema, koraci, verzija)", "Ključni rokovi: predloži, dogovori", "Plan: dodaj i označi korak"] },
+        { title: "Pravila zadatka", items: ["Opseg", "Rok", "Uvoz", "Profil evidencije", "Povijest pravila", "Produljenje roka (verzija, dani)"] },
+        { title: "Predaja i paket", items: ["Na pregled", "Predaj", "Izjava o pomoći (uporaba, detalji, ljudska pomoć)", "Prilozi: konzultacije, odgovori, datoteka", "Paket: DOCX, ZIP, ispis", "Pogledaj kao nastavnica"] },
+        { title: "Povjerenstvo i ustanova", items: ["Dodijeli pristup povjerenstvu (rok)", "Opozovi", "Zapisnik DOCX", "Potvrđivanje nastavničkih uloga", "Postavke ustanove", "Rok čuvanja", "Izvoz"] },
+      ],
+      proto: [
+        { title: "Gornja traka", fate: "preuzima se", items: ["Marka + kontekst 'FPZG · diplomski'", "Struktura (Ctrl+\\), Način fokusa (Ctrl+.), Traži (Ctrl+F)", "Prekidač Student / Mentor"] },
+        { title: "Traka alata", fate: "preuzima se", items: ["Poništi, Ponovi | Odlomak, Naslov, Podnaslov | B, I, Popis, Blok-citat", "Tablica, Grafikon, Poziv (na prikaz), Fusnota, Komentar na odabrano", "Stil citiranja: FPZG / APA / Chicago", "Traka Traži / Zamijeni: Dalje, Zamijeni, Sve"] },
+        { title: "Lijeva traka", fate: "preuzima se", items: ["Struktura s riječima po poglavlju i ukupno", "Popis tablica, Popis grafikona (automatska numeracija)", "Fusnote"] },
+        { title: "List", fate: "preuzima se", items: ["Naslov rada + 'Diplomski rad · Sveučilište u Zagrebu, FPZG'", "Citat u tekstu (Lindblom, 1959: 82) vezan uz izvor", "Generirano: Fusnote i Literatura (bibliografija u stilu)", "Tablica/grafikon s naslovom i 'Izvor: izradio autor.'"] },
+        { title: "Desni panel", fate: "preuzima se", items: ["Asistent: svrha (objašnjenje pojma, brainstorming, jezična dorada, prijevod, restrukturiranje, generiranje teksta), upit, Pošalji, Umetni → 'uskoro'", "Literatura: kartice izvora (knjiga / članak / institucijski autor), Citiraj (pita stranicu), Kopiraj navod, 'citirano 2×'", "Upute: provjera oblika (opseg, ≥ N izvora, ≥ N knjiga, svaki prikaz spomenut, fusnote samo objasnidbene, naslovi ne verzalom, odlomak ≥ 3 rečenice)", "Komentari: citat odabranog teksta, tekst, pokaži, označi riješenim"] },
+        { title: "Traka stanja", fate: "prilagođava se", items: ["'zapisano' → 8 stanja iz labels.ts", "'zapisnik = dokument' → 'Rekonstrukcija se podudara'", "481 / 10.000–15.000 riječi, ≈ 2 str., +0 ove sesije, 62 dana do roka", "Traka napretka i traka podrijetla izlaze (odluka 17. 10.)", "Ritam 'zn/s · najduža stanka' izlazi (PRODUCT §5 t. 4)", "'5 za popraviti' / 'Upute u skladu' ostaje (provjera oblika)"] },
+        { title: "Mentorski prikaz", fate: "samo nastavnik", items: ["Podrijetlo teksta: 6.1 % nepoznato, traka i tablica kategorija (tipkano, zalijepljeno iz literature, AI umetnuto, predložak, nepoznato)", "Rukopis s provenijencijom: obojeni dijelovi, legenda, klik → genealogija", "Politika fakulteta: oznake 'u skladu / za pregled / prekoračeno'", "Zapisnik događaja s lancem hash-eva", "Stalna napomena: 'Nije samostalan temelj disciplinskog postupka.'"] },
+        { title: "Reprodukcija", fate: "kasnije", items: ["▶ Reprodukcija, brzina stvarni ritam / 20× / 100×, klizač", "Samo mentorski radovi, čeka D-56"] },
+      ],
+      conflicts: [
+        { t: "Ime proizvoda · odlučeno", d: "Ductura u cijelom sučelju (17. 10.). Kod i katalog tekstova (app.name) još kažu Ductus." },
+        { t: "Tema · riješeno", d: "Tokeni D-115 pročitani iz PR-a #386: ljuska #0b1110 / #101816, crta #2a3935, tekst #e8efed / #c5d0cd / #a3b1ad, teal #14b8a6 i hover #2dd4bf s tekstom #04201c; svijetli list #ffffff s tealom #0f766e." },
+        { t: "Postoci za nastavnika · odlučeno, treba zapis", d: "Nastavnik ima vlastiti prikaz s postocima i oznakama; student ga ne vidi. To mijenja D-105 i odstupa od pravila 2 i 5 (PRODUCT §5) i UX-EVAL §5. Crtam ga kao zaseban prikaz; za implementaciju treba nova D-odluka i Risk: critical PR." },
+        { t: "AI asistent · odlučeno", d: "Kartica Asistent u desnom panelu s oznakom 'uskoro'; svrhe vidljive, slanje isključeno." },
+        { t: "Reprodukcija (Replay)", d: "Vizualno definirana, ali čeka pravno mišljenje i Ustav C-14/C-19. Nije za demo." },
+        { t: "D-06 naspram D-39", d: "Vidi li nastavnik spremljeno stanje do P-03 ili samo na kraju sesije. Utječe na tekst obavijesti S3 i T5." },
+        { t: "Jezik", d: "Demo samo hrvatski, engleski od vala 1 (D-70). Svi tekstovi idu u ključeve kataloga." },
+        { t: "Dvije palete", d: "Demo ekrani (#0A0F0E, #111827, teal #14B8A6, Source Sans 3) i PR #386 (#0b1110, #101816, Instrument Sans) se razlikuju. Gradim na paleti demo ekrana, kako si odlučio; točno usklađivanje kasnije." },
+        { t: "Ime u mockupima", d: "Demo ekrani kažu 'Ductus', showcase 'Ductura'. Gradim s 'Ductura'." },
+        { t: "Showcase: ugrađeni AI", d: "Showcase nema AI pomoćnika, prototip Pisač ima. Ostaje kartica 'uskoro'." },
+        { t: "Oznaka 'prekoračeno' u prototipu", d: "Prototip ima crvenu oznaku 'prekoračeno' (boja --breach). D-62 tu boju briše. Za nastavnika predlažem 'u skladu / za pregled' bez crvene, ili potvrdi da i 'prekoračeno' ostaje." },
+      ],
+      plan: [
+        { n: "1", t: "Sustav: tokeni D-115 i komponente", d: "Ljuska, list, gumbi, čip stanja, rail sekcije, panel, oznake. Iz globals.css i PR #386." },
+        { n: "2", t: "Uređivač S4 sa svim stanjima", d: "Traka alata, struktura, panel, traka stanja; osam stanja spremanja, bez mreže, druga kartica, greške s 'Izvezi tekst'." },
+        { n: "3", t: "Studentski tok demoa", d: "Prijava S1 → upis kodom → obavijest S3 → uređivač → pregled S5 → potvrda S7." },
+        { n: "4", t: "Nastavnički tok demoa", d: "Novi kolegij i zadatak T3 → pregled kolegija T2 → brz put T5 → komentar T9 → sažetak procesa T6." },
+        { n: "5", t: "P1 ekrani", d: "Moji radovi S2, literatura S4a, verzije S4c, izjava S6, pravila A4, usporedba T8." },
+        { n: "6", t: "P2 i P3", d: "Administracija, revizija i žalbe, javne stranice, reprodukcija." },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>
