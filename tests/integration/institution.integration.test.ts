@@ -398,6 +398,23 @@ describe("institution functions over withActor", () => {
 });
 
 describe("assignments and removal over withActor", () => {
+  const createWithKey = (
+    courseId: string,
+    requestId: string,
+    title = "Idempotentni zadatak",
+  ) =>
+    withActor(people.teacher.token, async (tx) => {
+      const created = await tx.query<{ id: string }>(
+        `SELECT institution.create_assignment(
+          $1::uuid, $2::uuid, $3::text, 'Upute za izmišljeni zadatak.', 'essay',
+          '2026-11-02T08:00:00+01:00'::timestamptz, '2026-12-01T23:59:00+01:00'::timestamptz,
+          'partially_allowed', '{proofreading}'::text[], 'basic', false
+        ) AS id`,
+        [courseId, requestId, title],
+      );
+      return created.rows[0].id;
+    });
+
   const publish = (expected: number) =>
     withActor(people.teacher.token, async (tx) => {
       const result = await tx.query<{ version: number }>(PUBLISH, [assignment, expected]);
@@ -431,6 +448,53 @@ describe("assignments and removal over withActor", () => {
       Array.from({ length: 7 }, () => ({ code: "ZD409", message: "conflict" })),
     );
     expect(await versions()).toEqual({ current_version: 2, versions: [1, 2] });
+  });
+
+  it("concurrent assignment-create retries return one row and reject changed content or course", async () => {
+    const requestId = randomUUID();
+    const creator = await openTransaction(people.teacher.token);
+    let firstId: string;
+    try {
+      const first = await creator.query<{ id: string }>(
+        `SELECT institution.create_assignment(
+          $1::uuid, $2::uuid, $3::text, 'Upute za izmišljeni zadatak.', 'essay',
+          '2026-11-02T08:00:00+01:00'::timestamptz, '2026-12-01T23:59:00+01:00'::timestamptz,
+          'partially_allowed', '{proofreading}'::text[], 'basic', false
+        ) AS id`,
+        [course, requestId, "Idempotentni zadatak"],
+      );
+      firstId = first.rows[0].id;
+      const waitingRetry = createWithKey(course, requestId);
+      const waitingConflict = createWithKey(course, requestId, "Utrka s promijenjenim sadržajem").catch(refusal);
+      expect(await answeredSoon(waitingRetry)).toBe(false);
+      expect(await answeredSoon(waitingConflict)).toBe(false);
+      await creator.query("COMMIT");
+      expect(await waitingRetry).toBe(firstId);
+      expect(await waitingConflict).toEqual({ code: "ZD409", message: "conflict" });
+    } finally {
+      await creator.end();
+    }
+
+    const retries = await Promise.all(Array.from({ length: 10 }, () => createWithKey(course, requestId)));
+    expect(retries).toEqual(Array.from({ length: 10 }, () => firstId));
+    expect(await count("SELECT count(*) FROM institution.assignment WHERE created_by = $1 AND request_id = $2", [people.teacher.id, requestId])).toBe(1);
+    expect(await createWithKey(course, requestId, "Izmijenjen naslov").catch(refusal)).toEqual({
+      code: "ZD409",
+      message: "conflict",
+    });
+
+    const otherCourse = await withActor(people.teacher.token, async (tx) => {
+      const created = await tx.query<{ id: string }>(
+        "SELECT institution.create_course($1, '2026/2027', 'partially_allowed') AS id",
+        [`Drugi izmišljeni kolegij ${randomBytes(4).toString("hex")}`],
+      );
+      return created.rows[0].id;
+    });
+    expect(await createWithKey(otherCourse, requestId).catch(refusal)).toEqual({
+      code: "ZD409",
+      message: "conflict",
+    });
+    expect(await count("SELECT count(*) FROM institution.assignment WHERE created_by = $1 AND request_id = $2", [people.teacher.id, requestId])).toBe(1);
   });
 
   it("a notice is confirmed for the version that is current at commit, or not at all", async () => {
