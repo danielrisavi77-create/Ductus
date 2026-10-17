@@ -1,30 +1,32 @@
 /*
- * Ductus design tokens, D-115 (replaces design v6, D-89).
+ * Ductus design tokens. Values from the token table of the design handoff
+ * (docs/design/ductura/README.md §8, D-123); the structure is D-115's.
  *
  * The shell is dark and does not follow the system setting. The writing sheet
- * is light by default and carries its own token scope (`.sheet`), switched to
- * dark by `data-sheet-theme="dark"`; the writer's choice is kept only in the
- * browser (SheetFrame). Primary is teal #14B8A6 with dark text on it. Teal on
- * the white sheet would be 2.5:1, so the light sheet uses a darker teal for
- * text and focus. Origin colours keep their v6 values (light on the sheet,
- * dark in the shell) and show where text came from, never a judgement; no
- * --breach colour (D-62). Targets are at least 32 px in dense bars, 44 px
- * elsewhere.
+ * carries its own token scope (`.sheet`): dark by default, white when the
+ * writer switches it (`data-sheet-theme="light"`, SheetFrame); the choice is
+ * kept only in the browser. Primary is #6FBFA5 with #0E1C17 text on it; on
+ * the white sheet the handoff's darker green #2F7A63 carries text and focus.
+ * The server save state (SYNCED) has its own colour, --synced, so it never
+ * reads as the primary or as the pulsing "saving" state. Origin colours show
+ * where text came from, never a judgement; no --breach colour (D-62).
+ * Targets are at least 32 px in dense bars, 44 px elsewhere.
  */
 
 :root {
-  --ground: #0b1110;
-  --sheet: #131b19;
-  --chrome: #101816;
-  --ink: #e8efed;
-  --ink-2: #c5d0cd;
-  --ink-3: #a3b1ad;
-  --rule: #2a3935;
-  --rule-2: #1e2a27;
-  --accent: #14b8a6;
-  --accent-hover: #2dd4bf;
-  --accent-ink: #04201c;
-  --accent-soft: #14b8a61f;
+  --ground: #0f110e;
+  --sheet: #161a15;
+  --chrome: #141712;
+  --ink: #e9ebe6;
+  --ink-2: #a6ada5;
+  --ink-3: #8e958d;
+  --rule: #2c312b;
+  --rule-2: #232722;
+  --accent: #6fbfa5;
+  --accent-hover: #8ccdb7;
+  --accent-ink: #0e1c17;
+  --accent-soft: #6fbfa51f;
+  --synced: #8fb0e0;
   --p-internal: #8fb0e0;
   --p-unknown: #9e9a90;
   --p-template: #7e7a70;
@@ -40,18 +42,27 @@
   color-scheme: dark;
 }
 
-/* Light sheet (default). */
+/* Dark sheet (default): the shell's own tokens on the handoff's sheet colour. */
 .sheet {
+  --sheet: #161a15;
+  color-scheme: dark;
+}
+
+/*
+ * White sheet. --ink-3 is #6a706a, not the prototype's #8a908a (3.3:1 on
+ * white, below WCAG AA for the placeholder text); both are handoff values.
+ */
+.sheet[data-sheet-theme="light"] {
   --sheet: #ffffff;
   --ink: #191c19;
-  --ink-2: #3f4a46;
-  --ink-3: #56615d;
-  --rule: #d3dbd8;
-  --rule-2: #e6ebe9;
-  --accent: #0f766e;
-  --accent-hover: #0b5f58;
+  --ink-2: #5a605a;
+  --ink-3: #6a706a;
+  --rule: #dce0d8;
+  --rule-2: #f7f8f5;
+  --accent: #2f7a63;
+  --accent-hover: #2f6f5e;
   --accent-ink: #ffffff;
-  --accent-soft: #0f766e14;
+  --accent-soft: #2f7a631a;
   --p-internal: #4a6fa5;
   --p-unknown: #6e6a62;
   --p-template: #9a9488;
@@ -60,28 +71,6 @@
   --cmt-ink: #8a6420;
   --cmt-bg: #b8862a26;
   color-scheme: light;
-}
-
-/* Dark sheet: the shell's own tokens, on a sheet one step above the ground. */
-.sheet[data-sheet-theme="dark"] {
-  --sheet: #161f1d;
-  --ink: #e8efed;
-  --ink-2: #c5d0cd;
-  --ink-3: #a3b1ad;
-  --rule: #2f403b;
-  --rule-2: #22302c;
-  --accent: #14b8a6;
-  --accent-hover: #2dd4bf;
-  --accent-ink: #04201c;
-  --accent-soft: #14b8a61f;
-  --p-internal: #8fb0e0;
-  --p-unknown: #9e9a90;
-  --p-template: #7e7a70;
-  --p-ai: #d3ac63;
-  --cmt: #d9ae5b;
-  --cmt-ink: #d9ae5b;
-  --cmt-bg: #d9ae5b2b;
-  color-scheme: dark;
 }
 
 * {
@@ -665,9 +654,14 @@ main:focus {
   animation: sync-pulse 1.2s ease-in-out infinite;
 }
 
+/* SYNCED: own colour and a filled dot, never the primary's (D-123). */
+.sync-chip[data-tone="ok"] {
+  font-weight: 600;
+}
+
 .sync-chip[data-tone="ok"] .sync-chip__dot {
-  border-color: var(--accent);
-  background: var(--accent);
+  border-color: var(--synced);
+  background: var(--synced);
 }
 
 .sync-chip[data-tone="warn"] .sync-chip__dot {

@@ -4,15 +4,15 @@ import { expect, test, type Page } from "@playwright/test";
 // Every page added later gets a row here; WCAG 2.1 AA is the pilot target.
 const PAGES = ["/", "/rad"];
 
-// The shell is always dark (D-115); the sheet is light by default and has a
-// dark theme with its own tokens, so each sheet theme is checked on its own.
+// The shell is always dark (D-115); the sheet is dark by default and has a
+// white theme with its own tokens (D-123), so each sheet theme is checked on its own.
 const SCHEMES = ["light", "dark"] as const;
 
 /** Chooses the sheet theme the way a writer does, through the switch. */
 async function chooseSheetTheme(page: Page, theme: (typeof SCHEMES)[number]) {
-  if (theme === "light") return;
-  await page.getByRole("button", { name: "Tamni list" }).click();
-  await expect(page.locator("article.sheet")).toHaveAttribute("data-sheet-theme", "dark");
+  if (theme === "dark") return;
+  await page.getByRole("button", { name: "Bijeli list" }).click();
+  await expect(page.locator("article.sheet")).toHaveAttribute("data-sheet-theme", "light");
 }
 
 for (const path of PAGES) {

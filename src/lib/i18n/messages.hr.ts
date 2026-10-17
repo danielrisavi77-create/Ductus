@@ -15,9 +15,12 @@
  *     to the state machine it describes.
  */
 
+/** The product name on screen (D-124): one value, read through `app.name`. */
+const APP_NAME = "Ductura";
+
 export const hr = {
   app: {
-    name: "Ductus",
+    name: APP_NAME,
     tagline: "Kako je rad nastao, bez presude o autorstvu.",
   },
   shell: {
@@ -25,7 +28,7 @@ export const hr = {
     demoBadge: "Demo · izmišljeni podaci",
   },
   home: {
-    lead: "Ductus ne procjenjuje autorstvo ni korištenje AI-ja. Prije početka vidiš što nastavnik vidi i od kada.",
+    lead: `${APP_NAME} ne procjenjuje autorstvo ni korištenje AI-ja. Prije početka vidiš što nastavnik vidi i od kada.`,
     openWorkspace: "Otvori radni prostor",
   },
   workspace: {
@@ -35,7 +38,7 @@ export const hr = {
     modeTeacherView: "Kako vidi nastavnik",
     soon: "uskoro",
     sheetTheme: "Tema lista",
-    sheetThemeLight: "Svijetli list",
+    sheetThemeLight: "Bijeli list",
     sheetThemeDark: "Tamni list",
     structure: "Struktura",
     structureLabel: "Struktura rada",

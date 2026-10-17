@@ -9,12 +9,12 @@ const PAGES = [
   { name: "workspace", path: "/rad" },
 ];
 const LOCALES = ["hr"] as const;
-// The shell is always dark (D-115); the sheet theme (light, dark) is chosen with the switch on /rad.
+// The shell is always dark (D-115); the sheet is dark by default, white with the switch on /rad (D-123).
 const SCHEMES = ["light", "dark"] as const;
 
 async function chooseSheetTheme(page: Page, path: string, theme: (typeof SCHEMES)[number]) {
-  if (path !== "/rad" || theme === "light") return;
-  await page.getByRole("button", { name: "Tamni list" }).click();
+  if (path !== "/rad" || theme === "dark") return;
+  await page.getByRole("button", { name: "Bijeli list" }).click();
 }
 // Wide (three columns), the 1100 px break (rails under the sheet) and a phone.
 const WIDTHS = [1440, 1000, 390] as const;
