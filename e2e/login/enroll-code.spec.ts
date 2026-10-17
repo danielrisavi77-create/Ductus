@@ -32,3 +32,16 @@ test("signed-in student gets no enrollment without the server", async ({ page })
   expect(posts).toEqual(["/api/institution/enrollments"]);
   await expect(page.getByText(e.enrolled)).toHaveCount(0);
 });
+
+test("a session the server closed offers sign-in again", async ({ page }) => {
+  await signIn(page, "/upis", "Demo studentica");
+  // Stands in for the #314 route answering a cookie whose session has ended.
+  await page.route("**/api/institution/enrollments", (route) => route.fulfill({ status: 401, body: "" }));
+
+  await page.getByLabel(e.label).fill("ab12-cd34-ef56-7890");
+  await page.getByRole("button", { name: e.submit }).click();
+  await expect(page.locator("form").getByRole("alert")).toHaveText(e.errors.unauthorized);
+  await expect(page.locator("form").getByRole("link", { name: t.student.signIn }))
+    .toHaveAttribute("href", "/api/auth/login?returnTo=%2Fupis");
+  await expect(page.getByText(e.enrolled)).toHaveCount(0);
+});

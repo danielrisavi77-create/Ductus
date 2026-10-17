@@ -8,6 +8,8 @@ import { enrollWithCode, type Enrollment } from "./enroll-code";
 import styles from "./AssignmentNotice.module.css";
 
 const e = t.student.enroll;
+// An API route that starts an OIDC login: a real navigation, not a Link.
+export const SIGN_IN_HREF = `/api/auth/login?returnTo=${encodeURIComponent("/upis")}`;
 
 export default function EnrollForm() {
   const [code, setCode] = useState("");
@@ -43,6 +45,8 @@ export default function EnrollForm() {
       />
       <button type="submit" disabled={sending || !code.trim()}>{sending ? e.sending : e.submit}</button>
       {result ? <p role="alert">{e.errors[result.kind]}</p> : null}
+      {/* The cookie can outlive a session the server closed; give a way back in. */}
+      {result?.kind === "unauthorized" ? <p><a href={SIGN_IN_HREF}>{t.student.signIn}</a></p> : null}
     </form>
   );
 }
