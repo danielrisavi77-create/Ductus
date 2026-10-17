@@ -29,7 +29,7 @@ Prototipi su referenca izgleda i ponašanja, ne kod. Sva logika je u klasi `Comp
 2. Osam stanja spremanja, rad bez mreže, druga kartica (F-8).
 3. Naslovi, navod kao običan tekst u demou (odluka vlasnika, #87 `issuecomment-6236582503`, PLAN-DEMO F-8, dopuna D-98; atom nakon demoa), bibliografija FPZG (F-8, K-2).
 4. Komentar uz odlomak, pogled nastavnika (F-9, B-10, B-11).
-5. Prijava v5 bez e-pošte i putovnice; upis + obavijest S3 (F-5, F-7). **Tekst obavijesti tek nakon odluke iz §4.1.** U demou tekst ploče "Što Ductura čuva" i obavijesti S3 slijedi važeće D-24 i D-56, ne prototip (PRIJEDLOG dizajna, ne gradi: zapis svakog unosa i istraga).
+5. Prijava v5 bez e-pošte i putovnice; upis + obavijest S3 (F-5, F-7). **Tekst obavijesti tek nakon odluke iz §4.1.** U demou tekst ploče "Što Ductura čuva" i obavijesti S3 slijedi važeće D-24 i D-56 i odluku #87 `issuecomment-6237014519` (hash po spremljenom koraku, B-8; mentor vidi povijest verzija i sažetak procesa kao student, B-13; bez bilježenja pojedinačnih unosa), ne prototip (PRIJEDLOG dizajna, ne gradi: zapis svakog unosa i istraga).
 6. Predaja, sažetak procesa isti za oba (F-10, B-12, B-13).
 7. Brz put (F-11).
 
