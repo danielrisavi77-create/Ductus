@@ -34,6 +34,9 @@ export default async function HomePage() {
             </>
           )}
         </p>
+        <p>
+          <Link href="/nastavnik/kolegiji">{t.home.openTeacher}</Link>
+        </p>
       </main>
     </>
   );

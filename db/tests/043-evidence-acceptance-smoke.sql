@@ -69,15 +69,27 @@ SELECT ok(
 );
 SELECT ok(
   NOT has_function_privilege('ductus_app', 'evidence.canonical_receipt_v2(jsonb)', 'EXECUTE')
-  AND NOT has_function_privilege('ductus_test_stranger', 'app.current_assignment_role(uuid)', 'EXECUTE')
+  AND NOT has_function_privilege('ductus_test_stranger', 'app.lock_student_assignment(uuid)', 'EXECUTE')
   AND NOT EXISTS (
     SELECT 1 FROM pg_proc p
     CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) acl
-    WHERE p.oid IN ('evidence.canonical_receipt_v2(jsonb)'::regprocedure, 'app.current_assignment_role(uuid)'::regprocedure)
+    WHERE p.oid IN ('evidence.canonical_receipt_v2(jsonb)'::regprocedure, 'app.lock_student_assignment(uuid)'::regprocedure)
       AND acl.grantee = 0 AND acl.privilege_type = 'EXECUTE'
   ), 'internal receipt and identity helpers are not public entrypoints'
 );
+SELECT is(
+  (SELECT xmax::text FROM institution.course_member
+    WHERE course_id = pg_temp.id('k1') AND user_id = pg_temp.id('ana') AND member_to IS NULL),
+  '0', 'before any acceptance nothing holds Ana''s membership row'
+);
 SELECT is(pg_temp.call(), 'reserved', 'a valid synthetic segment is reserved atomically');
+-- ADR 2026-10-11 5.3 t. 7: the membership the acceptance relies on stays
+-- locked until commit, so a removal cannot commit between check and write.
+SELECT isnt(
+  (SELECT xmax::text FROM institution.course_member
+    WHERE course_id = pg_temp.id('k1') AND user_id = pg_temp.id('ana') AND member_to IS NULL),
+  '0', 'the acceptance locks the student membership it relies on'
+);
 SELECT is(pg_temp.ask('ana', $$ SELECT current_revision::text || ':' || current_content_hash
   FROM evidence.document WHERE id = 'doc-a' $$), '1:' || repeat('d',64), 'the document revision and hash advance together');
 SELECT is(pg_temp.ask('ana', $$ SELECT concat_ws(':',
@@ -97,6 +109,49 @@ SELECT is(pg_temp.ask('ana', $$ SELECT concat_ws(':',
   (SELECT count(*) FROM evidence.segment WHERE evidence_package_id='pkg-a'),
   (SELECT count(*) FROM evidence.receipt WHERE evidence_package_id='pkg-a')) $$),
   '1:1:1:1', 'an idempotent retry does not write a second revision or reservation');
+
+-- ADR 2026-10-11 5.3 t. 8 and PRODUCT 6 (S3): a new acceptance needs the
+-- current assignment version to be acknowledged and open. A new version is
+-- written as publish_assignment_version writes it.
+CREATE FUNCTION pg_temp.publish(p_version integer, p_opens_at timestamptz) RETURNS void
+LANGUAGE sql AS $$
+  INSERT INTO institution.assignment_version (
+    assignment_id, version_no, title, instructions, work_type, opens_at, due_at, ai_policy, ai_purposes,
+    evidence_profile, import_allowed, created_by
+  )
+  SELECT v.assignment_id, p_version, v.title, v.instructions, v.work_type, p_opens_at,
+         p_opens_at + interval '30 days', v.ai_policy, v.ai_purposes, v.evidence_profile, v.import_allowed,
+         v.created_by
+    FROM institution.assignment_version v
+   WHERE v.assignment_id = pg_temp.id('z1') AND v.version_no = 2;
+  UPDATE institution.assignment SET current_version = p_version WHERE id = pg_temp.id('z1');
+$$;
+CREATE FUNCTION pg_temp.next(p_request text) RETURNS text
+LANGUAGE sql AS $$
+  SELECT pg_temp.ask('ana', format(
+    'SELECT outcome FROM app.commit_evidence_segment(%L, %L, 1, %L, %L, %L::jsonb, %L, %L)',
+    'pkg-a', p_request, repeat('d',64), repeat('e',64),
+    pg_temp.descriptor(p_segment => 'segment-a-2', p_sequence_from => 2, p_sequence_to => 2,
+                       p_hash => repeat('c',64), p_predecessor => repeat('b',64))::text,
+    repeat('c',64), 'synthetic://pkg-a/' || p_request
+  ))
+$$;
+
+SELECT pg_temp.publish(3, now() - interval '1 day');
+SELECT is(pg_temp.next('request-unacknowledged'), 'not_accepting',
+  'no new evidence before the student acknowledges the current version');
+SELECT is(pg_temp.call(), 'duplicate_pending',
+  'an already accepted request is still recovered after a new version');
+SELECT pg_temp.publish(4, now() + interval '1 day');
+SELECT is(pg_temp.ask('ana', 'SELECT institution.acknowledge_notice({z1}, 4) IS NOT NULL'), 'true',
+  'Ana acknowledges the version that opens tomorrow');
+SELECT is(pg_temp.next('request-not-open'), 'not_accepting',
+  'no new evidence while the current version has not opened');
+SELECT pg_temp.publish(5, now() - interval '1 day');
+SELECT is(pg_temp.ask('ana', 'SELECT institution.acknowledge_notice({z1}, 5) IS NOT NULL'), 'true',
+  'Ana acknowledges the open current version');
+SELECT is(pg_temp.next('request-open'), 'reserved',
+  'an acknowledged, open current version accepts the next segment');
 
 SELECT * FROM finish();
 ROLLBACK;

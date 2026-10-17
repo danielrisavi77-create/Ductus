@@ -10,12 +10,49 @@ GRANT USAGE ON SCHEMA app TO ductus_evidence;
 GRANT ductus_evidence TO ductus_identity WITH INHERIT FALSE, SET TRUE;
 
 SET LOCAL ROLE ductus_identity;
-CREATE FUNCTION app.current_assignment_role(p_assignment_id uuid) RETURNS text
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path = ''
-AS $$ SELECT institution.actor_assignment_role(p_assignment_id) $$;
-REVOKE ALL ON FUNCTION app.current_assignment_role(uuid) FROM PUBLIC;
+-- The authority rows of one acceptance (ADR 2026-10-11 5.3 t. 7 and 8): the
+-- assignment row, then the caller's open student membership, both FOR SHARE
+-- until the caller commits. A new version (publish_assignment_version takes
+-- the assignment FOR UPDATE) or a removal (remove_student updates the
+-- membership) waits for the acceptance, and an acceptance that waited on them
+-- re-reads the committed row. No row: not an active student of the assignment.
+CREATE FUNCTION app.lock_student_assignment(p_assignment_id uuid)
+RETURNS TABLE (current_version integer, opens_at timestamptz, acknowledged boolean)
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = ''
+AS $$
+DECLARE
+  v_actor record;
+  v_assignment institution.assignment%ROWTYPE;
+BEGIN
+  SELECT * INTO v_actor FROM app.current_actor();
+  IF v_actor.user_id IS NULL OR v_actor.institution_id IS NULL THEN
+    RETURN;
+  END IF;
+  SELECT a.* INTO v_assignment FROM institution.assignment a
+   WHERE a.id = p_assignment_id AND a.institution_id = v_actor.institution_id
+   FOR SHARE;
+  IF NOT FOUND THEN
+    RETURN;
+  END IF;
+  PERFORM 1 FROM institution.course_member m
+   WHERE m.course_id = v_assignment.course_id AND m.institution_id = v_actor.institution_id
+     AND m.user_id = v_actor.user_id AND m.role = 'student' AND m.member_to IS NULL
+   FOR SHARE;
+  IF NOT FOUND THEN
+    RETURN;
+  END IF;
+  RETURN QUERY
+  SELECT v.version_no, v.opens_at, EXISTS (
+           SELECT 1 FROM institution.notice_acknowledgment n
+            WHERE n.assignment_id = v.assignment_id AND n.version_no = v.version_no
+              AND n.student_id = v_actor.user_id AND n.institution_id = v_actor.institution_id)
+    FROM institution.assignment_version v
+   WHERE v.assignment_id = v_assignment.id AND v.version_no = v_assignment.current_version;
+END
+$$;
+REVOKE ALL ON FUNCTION app.lock_student_assignment(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION app.current_actor() TO ductus_evidence;
-GRANT EXECUTE ON FUNCTION app.current_assignment_role(uuid) TO ductus_evidence;
+GRANT EXECUTE ON FUNCTION app.lock_student_assignment(uuid) TO ductus_evidence;
 
 SET LOCAL ROLE ductus_evidence;
 
@@ -45,6 +82,7 @@ DECLARE
   v_package evidence.package%ROWTYPE;
   v_project evidence.project%ROWTYPE;
   v_document evidence.document%ROWTYPE;
+  v_assignment record;
   v_existing evidence.receipt%ROWTYPE;
   v_previous_receipt uuid;
   v_new_receipt uuid;
@@ -102,8 +140,9 @@ BEGIN
   v_event_count := v_descriptor.event_count;
   v_payload_bytes := v_descriptor.payload_bytes;
   -- The app is authorized for this specific student assignment before any
-  -- idempotency lookup. Both rows are locked in a fixed order to serialize
-  -- concurrent reserves and avoid replaying a request after ownership changes.
+  -- idempotency lookup. Rows are locked in one fixed order: package,
+  -- assignment, membership, document; this serializes concurrent reserves and
+  -- holds the authority rows until commit.
   SELECT p.* INTO v_package
     FROM evidence.package p
    WHERE p.id = p_evidence_package_id AND p.institution_id = v_actor.institution_id
@@ -116,8 +155,12 @@ BEGIN
   SELECT pr.* INTO v_project
     FROM evidence.project pr
    WHERE pr.id = v_package.project_id AND pr.institution_id = v_package.institution_id;
-  IF NOT FOUND OR v_project.principal_id <> v_actor.user_id
-     OR app.current_assignment_role(v_project.assignment_id) IS DISTINCT FROM 'student' THEN
+  IF NOT FOUND OR v_project.principal_id <> v_actor.user_id THEN
+    RETURN QUERY SELECT 'unauthorized'::text, NULL::bigint, NULL::text, NULL::uuid, NULL::text;
+    RETURN;
+  END IF;
+  SELECT * INTO v_assignment FROM app.lock_student_assignment(v_project.assignment_id);
+  IF NOT FOUND THEN
     RETURN QUERY SELECT 'unauthorized'::text, NULL::bigint, NULL::text, NULL::uuid, NULL::text;
     RETURN;
   END IF;
@@ -163,7 +206,10 @@ BEGIN
     RETURN;
   END IF;
 
-  IF NOT v_package.accepts_evidence THEN
+  -- New acceptance only (ADR 5.3 t. 8, PRODUCT 6 S3): the locked current
+  -- version must be acknowledged by the student and open.
+  IF NOT v_package.accepts_evidence OR NOT v_assignment.acknowledged
+     OR v_assignment.opens_at > pg_catalog.clock_timestamp() THEN
     RETURN QUERY SELECT 'not_accepting'::text, NULL::bigint, NULL::text, NULL::uuid, NULL::text;
     RETURN;
   END IF;
@@ -289,8 +335,8 @@ RESET ROLE;
 SET LOCAL ROLE ductus_migrator;
 SET LOCAL ROLE ductus_identity;
 REVOKE EXECUTE ON FUNCTION app.current_actor() FROM ductus_evidence;
-REVOKE EXECUTE ON FUNCTION app.current_assignment_role(uuid) FROM ductus_evidence;
-DROP FUNCTION app.current_assignment_role(uuid);
+REVOKE EXECUTE ON FUNCTION app.lock_student_assignment(uuid) FROM ductus_evidence;
+DROP FUNCTION app.lock_student_assignment(uuid);
 
 RESET ROLE;
 SET LOCAL ROLE ductus_migrator;

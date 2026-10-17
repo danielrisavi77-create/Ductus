@@ -4,6 +4,7 @@ import {
   LocalDocumentProvider, LocalEditor, LocalLogout, LocalSaveChip, LocalWordCount,
 } from "@/components/editor/LocalDocument";
 import SessionObserver from "@/components/shell/SessionObserver";
+import SheetFrame from "@/components/shell/SheetFrame";
 import WorkspaceShell, { RailSection } from "@/components/shell/WorkspaceShell";
 import { wordsHr } from "@/lib/i18n/hr";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
@@ -99,7 +100,7 @@ export default async function WorkspacePage() {
       )}
     >
       <div className="sheet-area">
-        <article className="sheet">
+        <SheetFrame>
           <h1 className="manuscript manuscript__title">{t.workspace.documentUntitled}</h1>
           {scope ? (
             <LocalEditor />
@@ -117,7 +118,7 @@ export default async function WorkspacePage() {
               </p>
             </div>
           )}
-        </article>
+        </SheetFrame>
       </div>
     </WorkspaceShell>
   );
