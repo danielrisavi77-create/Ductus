@@ -1,5 +1,7 @@
 import { cookies } from "next/headers";
 
+import EditorToolbar from "@/components/editor/EditorToolbar";
+import HeadingOutline from "@/components/editor/HeadingOutline";
 import {
   LocalDocumentProvider, LocalEditor, LocalLogout, LocalSaveChip, LocalWordCount,
 } from "@/components/editor/LocalDocument";
@@ -64,7 +66,9 @@ async function journalFor(): Promise<{
 /**
  * The writing workspace. With a journal, the sheet is the editor and the
  * status bar shows the save state (F-3 step 1b); without one the shell shows
- * its empty states and a sheet that says it cannot be written in. Signing out
+ * its empty states and a sheet that says it cannot be written in. With a
+ * journal, the toolbar sits above the sheet and the structure rail lists the
+ * headings of the text (F-8 step 1). Signing out
  * always ends the session (D-118, `LocalLogout`).
  */
 export default async function WorkspacePage() {
@@ -79,7 +83,7 @@ export default async function WorkspacePage() {
       rail={
         <>
           <RailSection title={t.workspace.structure}>
-            <p className="rail-empty">{t.workspace.structureEmpty}</p>
+            {scope ? <HeadingOutline /> : <p className="rail-empty">{t.workspace.structureEmpty}</p>}
           </RailSection>
           <RailSection title={t.workspace.tables}>
             <p className="rail-empty">{t.workspace.tablesEmpty}</p>
@@ -99,6 +103,7 @@ export default async function WorkspacePage() {
         <span>{wordsHr(0)}</span>
       )}
     >
+      {scope ? <EditorToolbar /> : null}
       <div className="sheet-area">
         <SheetFrame>
           <h1 className="manuscript manuscript__title">{t.workspace.documentUntitled}</h1>

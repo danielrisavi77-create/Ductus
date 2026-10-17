@@ -67,6 +67,21 @@ export const hr = {
     recovery: "Lokalni zapis nije moguće pouzdano pročitati. Ostaje netaknut, a ova kartica ništa ne sprema.",
     exportText: "Izvezi tekst",
   },
+  toolbar: {
+    label: "Oblikovanje teksta",
+    paragraph: "Odlomak",
+    heading1: "Naslov 1",
+    heading2: "Naslov 2",
+    heading3: "Naslov 3",
+    bold: "Podebljano",
+    italic: "Kurziv",
+    undo: "Poništi",
+    redo: "Ponovi",
+  },
+  outline: {
+    label: "Naslovi u radu",
+    untitledHeading: "Naslov bez teksta",
+  },
   auth: {
     failedTitle: "Prijava nije dovršena",
     failedBody: "Prijavu nije bilo moguće dovršiti. Pokušaj ponovno; ako se ponovi, javi se koordinatoru na svojoj ustanovi.",
