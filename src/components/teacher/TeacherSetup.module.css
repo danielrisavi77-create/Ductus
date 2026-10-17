@@ -9,31 +9,54 @@
   max-width: none;
 }
 
+@media (min-width: 1000px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr) 340px;
+  }
+  .preview {
+    position: sticky;
+    top: 24px;
+  }
+}
+
 .forms {
   display: grid;
   gap: 24px;
   min-width: 0;
-  max-width: 640px;
 }
 
-.card {
+.card,
+.preview {
   padding: 20px;
   border: 1px solid var(--rule);
   border-radius: 10px;
   background: var(--sheet);
 }
 
-.card h2 {
+.card h2,
+.preview h2 {
   margin-top: 0;
 }
 
-.fields {
+.fields,
+.tools {
   display: grid;
   gap: 16px;
   min-width: 0;
   margin: 0;
   padding: 0;
   border: 0;
+}
+
+.tools legend {
+  padding: 0;
+  font-weight: 600;
+}
+
+.pair {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 }
 
 .field {
@@ -55,13 +78,45 @@
   font-weight: 400;
 }
 
-.control:focus-visible {
+.control:focus-visible,
+.check input:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
-.fields:disabled .control {
-  cursor: not-allowed;
+.check {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-height: 44px;
+}
+
+.check input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+}
+
+.listHead {
+  margin: 4px 0 0;
+  font-weight: 600;
+}
+
+.banned,
+.summary {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--ink-2);
+}
+
+.hint {
+  margin: 8px 0 0;
+  color: var(--ink-2);
+}
+
+.brief {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .notice {
@@ -70,4 +125,8 @@
   border-left: 3px solid var(--accent);
   background: var(--chrome);
   color: var(--ink);
+}
+
+.fields:disabled .control {
+  cursor: not-allowed;
 }
