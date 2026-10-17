@@ -4,7 +4,7 @@ BEGIN;
 \ir fixtures/institution.inc
 SET LOCAL lc_messages TO 'C';
 
-SELECT plan(23);
+SELECT plan(29);
 
 CREATE FUNCTION pg_temp.create_with_key(
   p_actor text, p_course text, p_key text, p_title text DEFAULT 'Esej o izmišljenoj temi',
@@ -108,6 +108,34 @@ SELECT is(
   has_function_privilege('ductus_test_stranger',
     'institution.create_assignment(uuid,uuid,text,text,text,timestamptz,timestamptz,text,text[],text,boolean)', 'EXECUTE'),
   false, 'PUBLIC may not call the overload'
+);
+
+-- Refusals: role and content are checked before a key is reserved, and a
+-- refused request leaves no row behind that would hold its key.
+SELECT is(
+  pg_temp.create_with_key('marko', '{k1}', '00000000-0000-4000-8000-000000000007'),
+  'ZD403: forbidden', 'a teacher of another course cannot create on this course'
+);
+SELECT is(
+  pg_temp.create_with_key('vesna', '{k1}', '00000000-0000-4000-8000-000000000007', p_ai_policy => 'encouraged'),
+  'ZD422: invalid input', 'an AI policy wider than the course is refused'
+);
+SELECT is(
+  pg_temp.create_with_key('vesna', '{k1}', '00000000-0000-4000-8000-000000000007', p_work_type => 'novel'),
+  'ZD422: invalid input', 'an unknown work type is refused'
+);
+SELECT is(
+  pg_temp.create_with_key('vesna', '{k1}', '00000000-0000-4000-8000-000000000007',
+    p_opens_at => '2026-12-02 08:00+01', p_due_at => '2026-12-01 23:59+01'),
+  'ZD422: invalid input', 'an opening time after the due time is refused'
+);
+SELECT is(
+  (SELECT count(*) FROM institution.assignment WHERE request_id = '00000000-0000-4000-8000-000000000007'),
+  0::bigint, 'refused requests reserve no key'
+);
+SELECT matches(
+  pg_temp.create_with_key('vesna', '{k1}', '00000000-0000-4000-8000-000000000007'),
+  '^[0-9a-f-]{36}$', 'a key refused for invalid content stays free for a valid request'
 );
 
 SELECT * FROM finish();
