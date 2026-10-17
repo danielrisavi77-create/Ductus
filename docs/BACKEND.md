@@ -214,23 +214,33 @@ Expand/migrate/contract i pgTAP u CI-ju bez `supabase start` vrijede i dalje.
 
 Ugovor prije koda (issue #177; vlasnikova odluka na #87, `issuecomment-6236582503`). Komentar je **zaseban zapis sa sidrom** koji klijent prikazuje kao dekoraciju. Nikad nije oznaka u dokumentu, nikad ne mijenja dokument, reviziju, segment, potvrdu ni hash; dokument ima jednog pisača (D-34). Napadi 1 do 12 iz #177 su kriterij prihvata.
 
-**Shema i vlasništvo.** Nova shema `collaboration` (vlasnik `ductus_migrator`), tablica `collaboration.comment` i RPC-ovi u vlasništvu `ductus_identity` (on već posjeduje `app.current_actor()` i `institution.actor_assignment_role()`). Komentar nije evidencija: `ductus_identity` ne dobiva pravo pisanja ni čitanja tablica sheme `evidence`. Vezu dokumenta čita jedna uska funkcija `evidence.document_scope(p_document_id text) RETURNS (institution_id uuid, assignment_id uuid, principal_id uuid)` u vlasništvu `ductus_evidence`, `SECURITY DEFINER`, prazan `search_path`, `EXECUTE` samo za `ductus_identity` (uz `USAGE` na shemi `evidence`); `ductus_app` je ne izvršava (provjera iz `040` ostaje). Nema stranog ključa prema `evidence.document`: brisanje dokumenta po pravilu čuvanja ne smije ovisiti o komentarima; postojanje se provjerava pri upisu.
+**Shema i vlasništvo.** Nova shema `collaboration` (vlasnik `ductus_migrator`); tablice i RPC-ovi su u vlasništvu `ductus_identity` (on već posjeduje `app.current_actor()` i `institution.actor_assignment_role()`). Komentar nije evidencija: `ductus_identity` ne dobiva nikakvo pravo na shemi `evidence` (provjera iz `040` ostaje). Vezu dokumenta čita jedna uska funkcija `collaboration.document_scope(p_document_id text) RETURNS (institution_id uuid, assignment_id uuid, principal_id uuid)` u vlasništvu `ductus_evidence`, `SECURITY DEFINER`, prazan `search_path`, `EXECUTE` samo za `ductus_identity`; `ductus_app` je ne izvršava. `ductus_evidence` dobiva `USAGE` i `CREATE` na shemi `collaboration` samo dok migracija stvara tu funkciju i gubi ih na kraju migracije. Nema stranog ključa prema `evidence.document`: brisanje dokumenta po pravilu čuvanja ne smije ovisiti o komentarima; postojanje se provjerava pri upisu.
 
-**Tablica `collaboration.comment`.**
+**Tablica `collaboration.comment_thread`** (jedna nit, jedno sidro).
 
 | Stupac | Tip i ograničenje |
 | --- | --- |
 | `id` | `uuid`, PK, generira baza |
-| `institution_id` | `uuid NOT NULL`, iz `document_scope`, nikad iz parametra |
+| `institution_id`, `assignment_id`, `owner_id` | `uuid NOT NULL`, iz `document_scope` pri stvaranju, nikad iz parametra |
 | `document_id` | `text NOT NULL` |
-| `thread_id` | `uuid NOT NULL`; za korijen jednak `id`, za odgovor korijen niti (isti dokument i ustanova, provjera u RPC-u) |
+| `anchor` | `jsonb NOT NULL`, oblik `TextAnchor` iz `src/domain/collaboration/anchor.ts` (`CHECK`) |
+| `state` | `text NOT NULL CHECK IN ('open','answered','resolved')` |
+| `created_by` | `uuid NOT NULL`, iz `app.current_actor()` |
+| `created_at`, `updated_at` | `timestamptz NOT NULL DEFAULT now()` |
+
+**Tablica `collaboration.comment`** (komentari niti redom).
+
+| Stupac | Tip i ograničenje |
+| --- | --- |
+| `id` | `uuid`, PK, generira baza |
+| `thread_id`, `institution_id` | `uuid NOT NULL`, strani ključ na nit iste ustanove |
+| `position` | `integer NOT NULL`, 1 do 10000, `UNIQUE (thread_id, position)`; 1 je nastavnikov komentar koji otvara nit |
 | `author_id` | `uuid NOT NULL`, iz `app.current_actor()`; nema parametra autora |
 | `author_role` | `text NOT NULL CHECK IN ('teacher','student')`, iz `actor_assignment_role` u trenutku upisa |
-| `body` | `text NOT NULL`, granice ispod |
-| `anchor` | `jsonb NULL`; samo na korijenu, oblik `TextAnchor` iz `src/domain/collaboration/anchor.ts` |
+| `body` | `text NOT NULL`, granice ispod (`CHECK`) |
 | `created_at` | `timestamptz NOT NULL DEFAULT now()` |
 
-Stanje niti je u zasebnoj tablici `collaboration.comment_thread(id uuid PK = id korijena, institution_id, document_id, state text CHECK IN ('open','answered','resolved'), updated_at)`. Tekst komentara je nepromjenjiv; u B-10 nema uređivanja ni brisanja komentara (brisanje ide uz pravila čuvanja, D-50 i kasniji korak).
+Tekst komentara je nepromjenjiv; u B-10 nema uređivanja ni brisanja komentara (brisanje ide uz pravila čuvanja, D-50 i kasniji korak). Odgovor zaključava redak niti, pa istodobni odgovori dobivaju različite pozicije.
 
 **Tko što smije.** Odnos se računa pri svakom pozivu iz `document_scope` i `actor_assignment_role`, bez predmemorije, pa uklonjeni nastavnik gubi i čitanje i pisanje odmah (§4.4).
 
@@ -259,16 +269,16 @@ Odgovor u niti `resolved` je `ZD409` (nit se prvo ponovno otvara). Ostali prijel
 - `collaboration.create_comment(p_document_id text, p_body text, p_anchor jsonb) RETURNS uuid`: samo nastavnik; vraća `id` nove niti.
 - `collaboration.reply_comment(p_thread_id uuid, p_body text) RETURNS uuid`
 - `collaboration.resolve_thread(p_thread_id uuid) RETURNS void`, `collaboration.reopen_thread(p_thread_id uuid) RETURNS void`
-- `collaboration.list_comments(p_document_id text) RETURNS TABLE (thread_id, comment_id, position, author_role, is_own, body, anchor, state, created_window)`: **ista funkcija i isti oblik izlaza za studenta i nastavnika** (`PRODUCT.md` §5 t. 5).
+- `collaboration.list_comments(p_document_id text) RETURNS TABLE (thread_id, comment_id, comment_position, author_role, is_own, body, anchor, state, created_window)`; `anchor` je popunjen samo u retku pozicije 1: **ista funkcija i isti oblik izlaza za studenta i nastavnika** (`PRODUCT.md` §5 t. 5).
 
-Klijent nema `INSERT`, `UPDATE` ni `DELETE` ni na jednoj tablici sheme `collaboration`; `ductus_app` ima samo `SELECT` kroz RLS politiku jednaku pravilu čitanja gore (napad 4). Tablice imaju `FORCE ROW LEVEL SECURITY` i retke u pgTAP matrici.
+`ductus_app` nema nikakvu ovlast ni na jednoj tablici sheme `collaboration`, ni `SELECT`: izravno čitanje otkrilo bi točna vremena i ID-ove osoba, pa klijent čita samo kroz `list_comments` (napad 4). Tablice imaju `FORCE ROW LEVEL SECURITY` sa samo vlasnikovom politikom, pa ni pogrešno dodijeljen grant ne pokazuje ni ne mijenja nijedan redak; retci su u pgTAP matrici.
 
-**Što se nikad ne vraća.** `author_id` drugih osoba, `institution_id`, točno vrijeme (`created_at` se vraća samo zaokružen na prozor P-03 od 5 minuta, `created_window`; redoslijed nosi `position`), sadržaj dokumenta, segmenti, hashevi i revizije. Poslužitelj **ne razrješuje sidro** prema sadržaju i ne vraća nikakav isječak dokumenta: vraća sidro kako ga je nastavnik spremio, iz teksta koji je već vidio, a klijent ga razrješuje lokalno s `resolveTextAnchor` (exact, moved, ambiguous, missing). Zato poziv ne može otkriti tekst noviji od nastavnikova pogleda (napad 8). Neprouzdano sidro (`ambiguous`, `missing`) prikazuje se kao "sidro nije pouzdano" uz komentar koji ostaje vidljiv, nikad na pogrešnom mjestu (napad 7). Student ne stvara sidro jer bi ono nosilo njegov noviji tekst.
+**Što se nikad ne vraća.** `author_id` drugih osoba, `institution_id`, točno vrijeme (`created_at` se vraća samo zaokružen na prozor P-03 od 5 minuta, `created_window`; redoslijed nosi `comment_position`), sadržaj dokumenta, segmenti, hashevi i revizije. Poslužitelj **ne razrješuje sidro** prema sadržaju i ne vraća nikakav isječak dokumenta: vraća sidro kako ga je nastavnik spremio, iz teksta koji je već vidio, a klijent ga razrješuje lokalno s `resolveTextAnchor` (exact, moved, ambiguous, missing). Zato poziv ne može otkriti tekst noviji od nastavnikova pogleda (napad 8). Neprouzdano sidro (`ambiguous`, `missing`) prikazuje se kao "sidro nije pouzdano" uz komentar koji ostaje vidljiv, nikad na pogrešnom mjestu (napad 7). Student ne stvara sidro jer bi ono nosilo njegov noviji tekst.
 
 **Granice ulaza** (Zod u `src/domain/collaboration/comment.ts`, ista pravila kao `CHECK` u bazi):
 
 - `body`: nakon NFC normalizacije 1 do 2000 znakova, nije samo bjelina; odbijaju se kontrolni znakovi osim `\n` i `\t` te dvosmjerni nadjačavajući znakovi (U+202A do U+202E, U+2066 do U+2069).
-- `anchor`: točno polja `nodeId` (do 64), `quote` (1 do 500), `prefix` i `suffix` (do 64), `startHint` i `endHint` (cijeli brojevi ≥ 0, `startHint` < `endHint`); nepoznato polje je odbijeno; isti zabranjeni znakovi.
+- `anchor`: točno polja `nodeId` (UUID kao `isNodeId` u `src/domain/document/schema.ts`), `quote` (1 do 500 znakova), `prefix` i `suffix` (do 64), `startHint` i `endHint` (cijeli brojevi, 0 ≤ `startHint` < `endHint` ≤ 1 000 000); nepoznato ili nedostajuće polje je odbijeno; isti zabranjeni znakovi kao u `body`. Duljine se broje u kodnim točkama, kao `char_length` u bazi.
 - Tijelo HTTP zahtjeva do 16 KiB; nepoznata polja odbijena (`.strict()`). Pogreška je `ZD422` bez odjeka ulaza.
 - Prikaz je uvijek tekst (React tekstni čvor), nikad HTML ni Markdown (napad 10).
 
@@ -280,10 +290,10 @@ Klijent nema `INSERT`, `UPDATE` ni `DELETE` ni na jednoj tablici sheme `collabor
 
 | Napad | Dokaz |
 | --- | --- |
-| 1, 12 | pgTAP: N2, Student B, N1 druge ustanove, administrator i bez sesije dobivaju `ZD403`/`ZD401` i prazan `SELECT`; nepostojeći dokument daje isti `ZD403` |
-| 2 | pgTAP: nastavnik s `member_to` u prošlosti odmah dobiva `ZD403` i prazan `SELECT` |
+| 1, 12 | pgTAP: N2, Student B, N1 druge ustanove, administrator i bez sesije dobivaju `ZD403`/`ZD401` na svakom RPC-u, i na `list_comments`; nepostojeći dokument ili nit daje isti `ZD403`; neovlašten poziv s neispravnim ulazom i dalje dobiva `ZD403`, ne `ZD422` |
+| 2 | pgTAP: nastavnik sa zatvorenim članstvom (`member_to`) odmah dobiva `ZD403` na čitanju i pisanju |
 | 3 | pgTAP i katalog: nema parametra autora; `author_id` jednak akteru |
-| 4 | pgTAP: izravni `INSERT`/`UPDATE`/`DELETE` pod `ductus_app` odbijeni; katalog ovlasti `bag_eq` |
+| 4 | pgTAP: izravni `SELECT`/`INSERT`/`UPDATE`/`DELETE` pod `ductus_app` odbijeni (`42501`), uz pogrešno dodijeljen grant 0 redaka; katalog: `ductus_app` izvršava točno pet RPC-ova (`bag_eq`) |
 | 5 | pgTAP: svaki redak tablice prijelaza i svaki nedopušten prijelaz (`ZD409`) |
 | 6 | pgTAP: hash, revizija i segmenti jednaki prije i poslije |
 | 7 | unit (`anchor.test.ts`): obrisan, premješten, izmijenjen i dupliciran odlomak daju `missing`/`moved`/`ambiguous`, nikad pogrešan raspon; pgTAP: komentar ostaje u `list_comments` |
