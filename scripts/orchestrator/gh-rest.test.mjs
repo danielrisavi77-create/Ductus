@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { checkRollup, ghList, mergedPrs, prView, reviewThreads, toPr } from "./gh.mjs";
+import { ccrThreads, checkRollup, ghList, graphqlThreads, mergedPrs, prView, reviewThreads, toPr } from "./gh.mjs";
 import { evaluateChecks, summarizeThreads } from "./orchestrator-core.mjs";
 
 const rest = (over = {}) => ({
@@ -72,9 +72,9 @@ test("checkRollup joins check runs and statuses in the rollup shape evaluateChec
   assert.deepEqual(evaluateChecks(odd).bad, [{ name: "x", state: "COMPLETED" }]);
 });
 
-test("reviewThreads maps CCR threads to the node shape and reads authors only when needed", async () => {
+test("ccrThreads maps CCR threads to the node shape and reads authors only when needed", async () => {
   const lists = [];
-  const nodes = await reviewThreads(7, {
+  const nodes = await ccrThreads(7, {
     json: async () => [
       { resolved: true, comment_ids: [1] },
       { resolved: false, comment_ids: [2, 3] },
@@ -84,9 +84,66 @@ test("reviewThreads maps CCR threads to the node shape and reads authors only wh
   assert.deepEqual(lists, ["repos/{owner}/{repo}/pulls/7/comments?per_page=100"]);
   assert.deepEqual(summarizeThreads(nodes), { count: 1, authors: ["b"] });
 
-  const none = await reviewThreads(7, { json: async () => [{ resolved: true, comment_ids: [1] }], list: async () => assert.fail("no read") });
+  const none = await ccrThreads(7, { json: async () => [{ resolved: true, comment_ids: [1] }], list: async () => assert.fail("no read") });
   assert.deepEqual(summarizeThreads(none), { count: 0, authors: [] });
-  await assert.rejects(reviewThreads(7, { json: async () => ({ message: "x" }) }), /unexpected/);
+  await assert.rejects(ccrThreads(7, { json: async () => ({ message: "x" }) }), /unexpected/);
+  // a thread without a boolean resolved flag is not read as resolved
+  await assert.rejects(ccrThreads(7, { json: async () => [{ comment_ids: [1] }], list: async () => [] }), /without resolved/);
+});
+
+const REPO = async () => ({ owner: "o", repo: "r" });
+const thread = (isResolved, login) => ({ isResolved, comments: { nodes: [{ author: { login } }] } });
+const gqlPage = (nodes, { next = null, total = nodes.length } = {}) => ({
+  data: { repository: { pullRequest: { reviewThreads: {
+    totalCount: total, pageInfo: { hasNextPage: next !== null, endCursor: next }, nodes,
+  } } } },
+});
+
+test("graphqlThreads reads every page with the cursor and keeps open threads open", async () => {
+  const calls = [];
+  const pages = [gqlPage([thread(true, "a"), thread(false, "b")], { next: "c1", total: 3 }), gqlPage([thread(false, "c")], { total: 3 })];
+  const nodes = await graphqlThreads(7, { repo: REPO, json: async (args) => { calls.push(args); return pages[calls.length - 1]; } });
+  assert.deepEqual(summarizeThreads(nodes), { count: 2, authors: ["b", "c"] });
+  assert.equal(calls.length, 2);
+  for (const args of calls) {
+    assert.deepEqual(args.slice(0, 2), ["api", "graphql"]);
+    assert.ok(args.includes("owner=o") && args.includes("repo=r") && args.includes("n=7"));
+  }
+  assert.ok(!calls[0].some((a) => a.startsWith("after=")));
+  assert.ok(calls[1].includes("after=c1"));
+  // no threads at all is a complete, empty read
+  assert.deepEqual(summarizeThreads(await graphqlThreads(7, { repo: REPO, json: async () => gqlPage([]) })), { count: 0, authors: [] });
+});
+
+test("graphqlThreads throws on every answer that is not a complete thread list", async () => {
+  const bad = [
+    { errors: [{ message: "x" }], data: null },
+    { data: { repository: { pullRequest: null } } },
+    { data: { repository: null } },
+    {},
+    null,
+    gqlPage([{ comments: { nodes: [] } }]), // isResolved missing
+    gqlPage([thread("false", "a")]), // isResolved not boolean
+    gqlPage([thread(false, "a")], { total: 2 }), // fewer threads than totalCount
+    gqlPage([thread(false, "a")], { next: "" }), // next page without cursor
+    { data: { repository: { pullRequest: { reviewThreads: { totalCount: 0, nodes: [] } } } } }, // no pageInfo
+  ];
+  for (const body of bad) {
+    await assert.rejects(graphqlThreads(7, { repo: REPO, json: async () => body }), Error, JSON.stringify(body));
+  }
+  // a cursor that never ends is cut, not trusted
+  await assert.rejects(graphqlThreads(7, { repo: REPO, json: async () => gqlPage([], { next: "again" }) }), /pages/);
+});
+
+test("reviewThreads uses graphql, falls back to the ccr route, and throws when both fail", async () => {
+  const open = [thread(false, "x")];
+  const fail = (m) => async () => { throw new Error(m); };
+  assert.deepEqual(await reviewThreads(7, { graphql: async () => open, ccr: async () => assert.fail("not reached") }), open);
+  assert.deepEqual(await reviewThreads(7, { graphql: fail("HTTP 403"), ccr: async () => open }), open);
+  await assert.rejects(
+    reviewThreads(7, { graphql: fail("HTTP 403"), ccr: fail("HTTP 404: Not Found") }),
+    /graphql: HTTP 403; ccr: HTTP 404: Not Found/,
+  );
 });
 
 test("ghList requests pages by number until a short page, and picks a keyed array", async () => {
