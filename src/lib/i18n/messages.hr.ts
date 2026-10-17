@@ -27,6 +27,38 @@ export const hr = {
   home: {
     lead: "Ductus ne procjenjuje autorstvo ni korištenje AI-ja. Prije početka vidiš što nastavnik vidi i od kada.",
     openWorkspace: "Otvori radni prostor",
+    openTeacher: "Novi kolegij i zadatak",
+  },
+  // F-6 (DAN-35): text of screen 2 of the design handoff (docs/design/ductura).
+  teacher: {
+    title: "Novi kolegij i zadatak",
+    denied: "Za ovaj račun nije dopušteno stvaranje kolegija.",
+    unavailable: "Provjera nastavničke uloge trenutačno nije dostupna. Pokušaj ponovno.",
+    signIn: "Prijavi se",
+    backHome: "Na početnu",
+    course: {
+      heading: "Kolegij",
+      name: "Naziv",
+      year: "Akademska godina",
+      years: { "2026/2027": "2026./2027.", "2025/2026": "2025./2026." },
+      policy: "Pravila uporabe AI-ja",
+      policies: {
+        prohibited: "AI pomoć nije dopuštena",
+        partially_allowed: "AI pomoć je djelomično dopuštena",
+        encouraged: "AI pomoć se potiče uz pravila kolegija",
+      },
+      submit: "Stvori kolegij",
+      pending: "Stvaranje kolegija…",
+      created: "Kolegij je stvoren.",
+      nameMissing: "Upiši naziv kolegija.",
+      errors: {
+        invalid: "Provjeri naziv, akademsku godinu i pravila kolegija.",
+        unauthorized: "Prijava nije valjana. Prijavi se ponovno.",
+        forbidden: "Za ovaj račun nije dopušteno stvaranje kolegija.",
+        conflict: "Kolegij s tim nazivom već postoji uz druga pravila.",
+        unavailable: "Stvaranje kolegija nije potvrđeno. Pokušaj ponovno.",
+      },
+    },
   },
   workspace: {
     title: "Radni prostor",
