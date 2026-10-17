@@ -8,22 +8,16 @@ import { createWithActor, type WithActor } from "@/server/db/with-actor";
 // DAN-189 / attack plan #356 item 5: pgTAP can establish CAS semantics but
 // cannot prove a real lock race inside one transaction. This uses two app
 // connections and synthetic rows to race separate requests against one doc.
-// Never fall back to the shared local app stack. This destructive fixture
-// creates and drops roles and synthetic rows, so it requires a disposable DB.
-const ADMIN_URL = process.env.DAN189_RACE_DATABASE_URL;
-if (!ADMIN_URL) {
-  throw new Error("Set DAN189_RACE_DATABASE_URL to a disposable local DAN-189 race-test database.");
+// Like every other integration file it runs against the compose stack that
+// the Local stack CI job migrates (DATABASE_URL, compose default otherwise):
+// it creates one random login and random synthetic rows only, and removes
+// exactly those afterwards. A non-loopback address is refused, so the
+// fixture never reaches a shared or remote database.
+const SAFE_ADMIN_URL: string =
+  process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
+if (!["127.0.0.1", "localhost", "[::1]"].includes(new URL(SAFE_ADMIN_URL).hostname)) {
+  throw new Error("The evidence race test runs only against a loopback database (DATABASE_URL).");
 }
-const adminUrl = new URL(ADMIN_URL);
-if (
-  adminUrl.hostname !== "127.0.0.1" ||
-  !adminUrl.port ||
-  adminUrl.port === "54329" ||
-  adminUrl.pathname !== "/ductus_dan189_race"
-) {
-  throw new Error("DAN189_RACE_DATABASE_URL must target 127.0.0.1:<isolated-port>/ductus_dan189_race, never port 54329.");
-}
-const SAFE_ADMIN_URL: string = ADMIN_URL;
 const suffix = randomBytes(5).toString("hex");
 const login = `it_evidence_${suffix}`;
 const applicationName = `it_evidence_${suffix}`;
