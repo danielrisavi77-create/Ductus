@@ -157,6 +157,13 @@ async function insertFixture() {
                ARRAY[]::text[], 'extended', false, $2)`,
       [assignmentId, teacherId],
     );
+    // A new acceptance needs the current version acknowledged and open
+    // (ADR 2026-10-11 5.3 t. 8, PRODUCT 6 S3; #368).
+    await client.query(
+      `INSERT INTO institution.notice_acknowledgment (assignment_id, version_no, student_id, institution_id)
+       VALUES ($1, 1, $2, $3)`,
+      [assignmentId, studentId, institutionId],
+    );
 
     await client.query(
       "INSERT INTO evidence.domain (id, institution_id, region) VALUES ($1, $2, $3)",
@@ -209,6 +216,7 @@ async function removeFixture() {
       await admin.query("DELETE FROM evidence.document WHERE id = $1", [documentId]);
       await admin.query("DELETE FROM evidence.project WHERE id = $1", [projectId]);
       await admin.query("DELETE FROM evidence.domain WHERE id = $1", [evidenceDomainId]);
+      await admin.query("DELETE FROM institution.notice_acknowledgment WHERE assignment_id = $1", [assignmentId]);
       await admin.query("DELETE FROM institution.assignment_version WHERE assignment_id = $1", [assignmentId]);
       await admin.query("DELETE FROM institution.assignment WHERE id = $1", [assignmentId]);
       await admin.query("DELETE FROM institution.course_member WHERE course_id = $1", [courseId]);
