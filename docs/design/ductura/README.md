@@ -7,7 +7,7 @@
 - Mjere (demo) se ne grade (D-56).
 - Prototip povlači React i Babel s unpkg samo za pregled u pregledniku (runtime `support.js` nije u repou, vidi §2 i §10); aplikacija ih ne koristi.
 - **PRIJEDLOG dizajna, ne gradi:** istraga i zapis svakog unosa (§5.5, `PROVJERE.md` §6e, `INTEGRACIJA.md` §3.2 dio „ako se odobri §4.1” i §3.3, ekran `istraga.dc.html`, tekst obavijesti S3 u `demo-tok-v2.dc.html`). Sukobljava se s D-24 (vrijeme ne finije od minute), D-56 i D-125; čeka vlasnikovu D-odluku i pravno mišljenje (GDPR čl. 35). Tekst obavijesti S3 u demou slijedi važeće D-24 i D-56, ne opis iz prototipa.
-- **PRIJEDLOG (D-133, D-134):** komentar kao mark u shemi i navod kao atom (`INTEGRACIJA.md` §3.1). Za demo vrijedi PLAN-DEMO F-8: navod kao običan tekst (dopuna D-98).
+- **Vlasnikova odluka (#87 `issuecomment-6236582503`) za `INTEGRACIJA.md` §3.1:** navod je u demou običan tekst (PLAN-DEMO F-8, dopuna D-98), a atom postaje nakon demoa, prije prve stvarne evidencije. Komentar je zaseban zapis sa sidrom, prikazan kao dekoracija, ne mark u dokumentu (D-34). Zapisivanje u `docs/DECISIONS.md` i `docs/PLAN-DEMO.md` ide zasebnim PR-om. Brz put (F-11) je u demou, T4.
 - Datoteke u ovoj mapi imaju kebab-case imena; imena iz izvornog paketa (`Ductura Editor v11.dc.html` itd.) u tekstu su preslikana u imena iz repoa. Vodič (`Ductura Vodič`) nije u repou.
 
 ---

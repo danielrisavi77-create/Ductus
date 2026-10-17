@@ -50,7 +50,7 @@ Prototipi su referenca izgleda i ponašanja, ne kod. Sva logika je u klasi `Comp
 ## 3. Kako spojiti
 
 ### 3.1 Editor (Tiptap)
-> **Napomena u repou:** komentar kao mark i navod kao atom su PRIJEDLOG (D-133, D-134). Za demo vrijedi PLAN-DEMO F-8: navod kao običan tekst (dopuna D-98).
+> **Napomena u repou (odluka vlasnika, #87 `issuecomment-6236582503`):** navod je u demou običan tekst (PLAN-DEMO F-8, dopuna D-98); atom nakon demoa, prije prve stvarne evidencije. Komentar je zaseban zapis sa sidrom, prikazan kao dekoracija, ne mark u dokumentu (D-34); popis oznaka ispod koji komentar navodi kao mark ne vrijedi.
 
 - Oznake iz prototipa postaju **marks/nodes**: `citation` (atom, attrs `sourceId, page`), `comment` (mark, `commentId`), `gap` (`[?] [izvor] [provjeri] [broj]`), `footnote`, `crossRef` (`targetId`), `imported` (mark), `figure`/`table` s `caption` i `source`.
 - Spajanje susjednih navoda: plugin koji pri renderu grupira susjedne `citation` čvorove; u dokumentu ostaju zasebni.
