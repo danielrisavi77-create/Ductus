@@ -60,6 +60,31 @@ type Phase = "loading" | "blocked" | "ready" | "recovery" | "unavailable" | "sig
  * again, so it cannot re-create the journal that sign-out just deleted.
  */
 const SIGN_OUT_CHANNEL = "ductus-sign-out";
+
+/**
+ * The same news, kept for tabs that were not listening yet: when a scope was
+ * last signed out, by this browser's clock. A tab whose page was loaded
+ * before that time got its scope from a session that has ended, so it never
+ * opens the journal. A sign-in is a new page load, so it is not affected.
+ */
+const SIGNED_OUT_KEY = (scope: string) => `ductus-signed-out:${scope}`;
+
+function markSignedOut(scope: string): void {
+  try {
+    localStorage.setItem(SIGNED_OUT_KEY(scope), String(Date.now()));
+  } catch {
+    // Without storage only the channel tells the other tabs.
+  }
+}
+
+function signedOutSinceLoad(scope: string): boolean {
+  try {
+    const at = Number(localStorage.getItem(SIGNED_OUT_KEY(scope)));
+    return Number.isFinite(at) && at > 0 && at >= performance.timeOrigin;
+  } catch {
+    return false;
+  }
+}
 type Failure = SaverFailure | "invalid";
 
 /**
@@ -190,23 +215,35 @@ export function LocalDocumentProvider({
       setPhase("unavailable");
       return;
     }
+    // The lock is not released here: the tab that signed out may hold it
+    // until it has left the page.
+    const stopSignedOut = () => {
+      disposed = true;
+      readyRef.current = false;
+      abort.abort();
+      if (!editor.isDestroyed) editor.setEditable(false, false);
+      setPhase("signed-out");
+    };
+    if (signedOutSinceLoad(scope)) {
+      stopSignedOut();
+      return;
+    }
     const channel = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(SIGN_OUT_CHANNEL);
     if (channel) {
       channel.onmessage = (event: MessageEvent) => {
-        if (event.data !== scope) return;
-        // The lock is not released here: the tab that signed out may hold it
-        // until it has left the page.
-        disposed = true;
-        readyRef.current = false;
-        abort.abort();
-        if (!editor.isDestroyed) editor.setEditable(false, false);
-        setPhase("signed-out");
+        if (event.data === scope) stopSignedOut();
       };
     }
 
     // Runs while this tab holds the lock; resolving releases it.
     const write = async (lock: Lock | null): Promise<void> => {
       if (!lock || disposed) return;
+      // A sign-out this tab did not hear (it was not listening yet) has left
+      // its mark before the tab that signed out let go of the lock.
+      if (signedOutSinceLoad(scope)) {
+        stopSignedOut();
+        return;
+      }
       setPhase("loading");
       let journal = new AtomicDexieJournal(scope);
       // An earlier sign-out was cut off after its fence: finish it before
@@ -275,6 +312,7 @@ export function LocalDocumentProvider({
           }
           try {
             await journal.destroyForLogout();
+            markSignedOut(scope);
             return "done";
           } catch (error) {
             if (error instanceof JournalError && error.code === "unsynced_work") {
@@ -364,6 +402,7 @@ async function clearWithoutEditor(scope: string, documentId: string): Promise<Lo
     const journal = new AtomicDexieJournal(scope);
     try {
       await journal.destroyForLogout();
+      markSignedOut(scope);
       return "done";
     } catch (error) {
       return error instanceof JournalError && error.code === "unsynced_work" ? "unsynced" : "failed";

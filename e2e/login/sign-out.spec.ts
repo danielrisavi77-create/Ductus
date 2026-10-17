@@ -148,6 +148,28 @@ test("a tab waiting for the document stops for good when another tab signs out",
   expect(names.filter((name) => name?.startsWith("ductus-journal-v1-"))).toEqual([]);
 });
 
+test("a tab that missed the sign-out news still never reopens the journal", async ({ page, context }) => {
+  await signIn(page, "/rad");
+  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+  // Loaded before the sign-out but not listening for it, as a tab that is
+  // still starting up would be.
+  const second = await context.newPage();
+  await second.addInitScript(() => {
+    Reflect.deleteProperty(window, "BroadcastChannel");
+  });
+  await second.goto("/rad");
+  await expect(phaseOf(second)).toHaveAttribute("data-phase", "blocked");
+
+  await logoutOf(page).click();
+  await page.waitForURL("http://localhost:3000/");
+  await page.close();
+  await expect(phaseOf(second)).toHaveAttribute("data-phase", "signed-out");
+  await expect(noticeOf(second)).toHaveText(t.auth.signedOutElsewhere);
+  await expect(editorOf(second)).toHaveAttribute("contenteditable", "false");
+  const names = await second.evaluate(async () => (await indexedDB.databases()).map((d) => d.name));
+  expect(names.filter((name) => name?.startsWith("ductus-journal-v1-"))).toEqual([]);
+});
+
 test("with a session the home page offers no second sign-in", async ({ page }) => {
   await signIn(page, "/");
   await expect(page.getByRole("link", { name: t.home.openWorkspace })).toBeVisible();
