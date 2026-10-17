@@ -34,7 +34,7 @@ export type WorkspaceShellProps = {
 };
 
 /**
- * The writing workspace from design v6 (D-89): 46 px top bar, 236 px left
+ * The writing workspace from design v6 (D-89, superseded by D-115; switch in #334): 46 px top bar, 236 px left
  * rail, sheet of at most 756 px, 322 px right rail, 34 px status bar.
  *
  * The DOM order is the same at every width: sheet (`main`), instructions,

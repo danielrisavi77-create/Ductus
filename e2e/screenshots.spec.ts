@@ -9,7 +9,7 @@ const PAGES = [
   { name: "workspace", path: "/rad" },
 ];
 const LOCALES = ["hr"] as const;
-// The dark theme follows the system setting (design v6, D-89).
+// The dark theme follows the system setting (design v6, D-89, superseded by D-115; switch in #334).
 const SCHEMES = ["light", "dark"] as const;
 // Wide (three columns), the 1100 px break (rails under the sheet) and a phone.
 const WIDTHS = [1440, 1000, 390] as const;

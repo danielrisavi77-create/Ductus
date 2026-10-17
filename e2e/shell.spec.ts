@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-// The F-4 shell (design v6, D-89): three columns on a wide screen, the sheet
+// The F-4 shell (design v6, D-89, superseded by D-115; switch in #334): three columns on a wide screen, the sheet
 // first and the rails as sections under it below 1100 px (DAN-131).
 test.describe("workspace shell", () => {
   test("wide: rails beside the sheet, writing view marked current", async ({ page }) => {

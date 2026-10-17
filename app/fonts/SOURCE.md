@@ -1,6 +1,6 @@
 # Interface fonts: source, version, checksums, licences
 
-The three interface font families of design v6 (D-89) are kept in this
+The three interface font families of design v6 (D-89, superseded by D-115; switch in #334) are kept in this
 directory and loaded with `next/font/local` (`index.ts`), so `pnpm build` needs
 no network access (DAN-121) and the browser gets them from our own origin.
 
