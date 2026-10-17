@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;background:#0F110E;color:#E9EBE6;font-family:"Instrument Sans",system-ui,sans-serif;font-size:13px}
+*{box-sizing:border-box}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+button:disabled{cursor:not-allowed}
+textarea,input,select{font:inherit;color:#E9EBE6}
+a{color:#8FB0E0;text-decoration:none}
+a:hover{color:#B3CAEC}
+:focus-visible{outline:2px solid #8FD1B9;outline-offset:2px;border-radius:6px}
+::selection{background:#D9AE5B55}
+</style>
+</helmet>
+<div style="min-height:100vh;display:flex;flex-direction:column">
+  <header style="flex:none;height:48px;display:flex;align-items:center;gap:14px;padding:0 16px;border-bottom:1px solid #2C312B;background:#141712;position:sticky;top:0;z-index:20">
+    <span style="font-family:Newsreader,Georgia,serif;font-size:19px;font-weight:600">Ductura</span>
+    <nav aria-label="Demo tok" style="display:flex;gap:2px;overflow-x:auto;min-width:0">
+      <sc-for list="{{ nav }}" as="n" hint-placeholder-count="5"><button type="button" onClick="{{ n.on }}" aria-current="{{ n.cur }}" style="{{ n.style }}">{{ n.label }}</button></sc-for>
+    </nav>
+    <span style="margin-left:auto;font-size:11.5px;color:#767D75;white-space:nowrap">demo</span>
+    <sc-if value="{{ user }}" hint-placeholder-val="{{ false }}">
+      <span style="font-size:12.5px;color:#A6ADA5;white-space:nowrap">{{ user.name }} · {{ user.role }}</span>
+      <button type="button" onClick="{{ askLogout }}" style="padding:4px 10px;border-radius:7px;font-size:12px;color:#A6ADA5;border:1px solid #2C312B" style-hover="color:#E9EBE6">Odjava</button>
+    </sc-if>
+  </header>
+
+  <sc-if value="{{ scLogin }}" hint-placeholder-val="{{ true }}">
+    <main data-screen-label="1 Prijava" style="flex:1;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:40px;align-items:center;max-width:960px;width:100%;margin:0 auto;padding:56px 24px">
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <h1 style="margin:0;font-family:Newsreader,Georgia,serif;font-size:32px;font-weight:600;line-height:1.15">Prijava u Ducturu</h1>
+        <p style="margin:0;font-size:14px;line-height:1.6;color:#A6ADA5;max-width:42ch;text-wrap:pretty">Studenti i nastavnici FPZG-a prijavljuju se korisničkim računom AAI@EduHr. Ductura ne pamti lozinku.</p>
+        <button type="button" disabled="{{ true }}" style="align-self:flex-start;padding:9px 16px;border-radius:7px;font-size:13px;font-weight:600;background:#232722;color:#767D75">Prijava s AAI@EduHr</button>
+        <span style="font-size:12px;color:#767D75">Dostupno u pilotu. Demo koristi lažnog pružatelja prijave.</span>
+      </div>
+      <section aria-label="Demo prijava" style="border:1px dashed #4A5049;border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:10px">
+        <span style="font-size:12px;font-weight:600;color:#D3AC63">demo prijava · lažni pružatelj</span>
+        <span style="font-size:12.5px;line-height:1.5;color:#A6ADA5">Izmišljene osobe. Nijedan stvarni osobni podatak.</span>
+        <sc-for list="{{ people }}" as="p" hint-placeholder-count="3">
+          <button type="button" onClick="{{ p.on }}" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;border:1px solid #2C312B;text-align:left" style-hover="background:#1E221D;border-color:#4A5049">
+            <span style="flex:none;width:30px;height:30px;border-radius:50%;background:#232722;display:grid;place-items:center;font-size:12px;font-weight:600;color:#C5CBC3">{{ p.ini }}</span>
+            <span style="display:flex;flex-direction:column;gap:1px"><span style="font-size:13.5px;font-weight:600">{{ p.name }}</span><span style="font-size:12px;color:#8E958D">{{ p.role }}</span></span>
+            <span style="margin-left:auto;font-size:12px;color:#8FB0E0">Prijavi se</span>
+          </button>
+        </sc-for>
+        <sc-if value="{{ resumeNote }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;line-height:1.5;color:#6FBFA5">{{ resumeNote }}</span></sc-if>
+      </section>
+    </main>
+  </sc-if>
+
+  <sc-if value="{{ scTask }}" hint-placeholder-val="{{ false }}">
+    <main data-screen-label="2 Novi zadatak" style="flex:1;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:24px;max-width:1180px;width:100%;margin:0 auto;padding:28px 24px 60px;align-items:start">
+      <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
+        <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;color:#8E958D">Nastavnik A</span><h1 style="margin:0;font-family:Newsreader,Georgia,serif;font-size:26px;font-weight:600">Novi kolegij i zadatak</h1></div>
+        <section style="background:#141712;border:1px solid #232722;border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:12px">
+          <span style="font-size:13px;font-weight:600">Kolegij</span>
+          <div style="display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:10px">
+            <label style="display:flex;flex-direction:column;gap:4px;font-size:12px;color:#A6ADA5">Naziv<input value="{{ f.course }}" onChange="{{ set.course }}" style="background:#0F110E;border:1px solid #2C312B;border-radius:7px;padding:7px 9px;font-size:13px"></label>
+            <label style="display:flex;flex-direction:column;gap:4px;font-size:12px;color:#A6ADA5">Akademska godina<select value="{{ f.year }}" onChange="{{ set.year }}" style="background:#0F110E;border:1px solid #2C312B;border-radius:7px;padding:7px 9px;font-size:13px"><option>2026./2027.</option><option>2025./2026.</option></select></label>
+          </div>
+          <sc-if value="{{ courseMade }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px"><span style="font-size:12px;color:#A6ADA5">Kod za upis</span><span style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:17px;letter-spacing:.08em">{{ code }}</span><button type="button" onClick="{{ copyCode }}" style="font-size:12px;color:#8FB0E0">Kopiraj</button><span style="font-size:11.5px;color:#767D75">Studenti upisuju kolegij ovim kodom.</span></div>
+          </sc-if>
+          <sc-if value="{{ courseNotMade }}" hint-placeholder-val="{{ true }}"><button type="button" onClick="{{ makeCourse }}" style="align-self:flex-start;padding:6px 12px;border-radius:7px;font-size:12.5px;color:#E9EBE6;border:1px solid #4A5049" style-hover="background:#1E221D">Stvori kolegij</button></sc-if>
+        </section>
+        <section style="background:#141712;border:1px solid #232722;border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:12px">
+          <span style="font-size:13px;font-weight:600">Zadatak</span>
+          <label style="display:flex;flex-direction:column;gap:4px;font-size:12px;color:#A6ADA5">Naslov<input value="{{ f.title }}" onChange="{{ set.title }}" style="background:#0F110E;border:1px solid #2C312B;border-radius:7px;padding:7px 9px;font-size:13px"></label>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px">
+            <label style="display:flex;flex-direction:column;gap:4px;font-size:12px;color:#A6ADA5">Vrsta rada<select value="{{ f.kind }}" onChange="{{ set.kind }}" style="background:#0F110E;border:1px solid #2C312B;border-radius:7px;padding:7px 9px;font-size:13px"><option>Seminarski rad</option><option>Završni rad</option><option>Diplomski rad</option><option>Esej</option></select></label>
+            <label style="display:flex;flex-direction:column;gap:4px;font-size:12px;color:#A6ADA5">Otvaranje<input type="date" value="{{ f.open }}" onChange="{{ set.open }}" style="background:#0F110E;border:1px solid #2C312B;border-radius:7px;padding:6px 8px;font-size:13px;color-scheme:dark"></label>
+            <label style="display:flex;flex-direction:column;gap:4px;font-size:12px;color:#A6ADA5">Rok<input type="date" value="{{ f.due }}" onChange="{{ set.due }}" style="background:#0F110E;border:1px solid #2C312B;border-radius:7px;padding:6px 8px;font-size:13px;color-scheme:dark"></label>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12px;color:#A6ADA5">Opseg<input type="number" value="{{ f.min }}" onChange="{{ set.min }}" aria-label="Najmanje riječi" style="width:90px;background:#0F110E;border:1px solid #2C312B;border-radius:7px;padding:6px 8px;font-size:13px">–<input type="number" value="{{ f.max }}" onChange="{{ set.max }}" aria-label="Najviše riječi" style="width:90px;background:#0F110E;border:1px solid #2C312B;border-radius:7px;padding:6px 8px;font-size:13px">riječi · profil oblika FPZG</div>
+          <label style="display:flex;flex-direction:column;gap:4px;font-size:12px;color:#A6ADA5">Upute studentima<textarea value="{{ f.brief }}" onChange="{{ set.brief }}" rows="4" style="background:#0F110E;border:1px solid #2C312B;border-radius:7px;padding:7px 9px;font-size:13px;line-height:1.5;resize:vertical"></textarea></label>
+        </section>
+        <section style="background:#141712;border:1px solid #232722;border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px"><span style="font-size:13px;font-weight:600">Uporaba alata (FPZG čl. 8)</span><span style="font-size:11.5px;color:#767D75">Popis možeš samo suziti.</span></div>
+          <span style="font-size:12px;font-weight:600;color:#A6ADA5">Dopušteno u ovom zadatku</span>
+          <sc-for list="{{ allowed }}" as="a" hint-placeholder-count="5">
+            <label style="display:flex;gap:9px;align-items:flex-start;font-size:13px;line-height:1.45"><input type="checkbox" checked="{{ a.on }}" onChange="{{ a.toggle }}" style="margin-top:3px;accent-color:#6FBFA5"><span style="{{ a.style }}">{{ a.t }}</span></label>
+          </sc-for>
+          <span style="font-size:12px;font-weight:600;color:#A6ADA5;margin-top:4px">Nije dopušteno</span>
+          <sc-for list="{{ banned }}" as="b" hint-placeholder-count="3"><span style="display:flex;gap:9px;font-size:13px;line-height:1.45;color:#C5CBC3"><span style="flex:none;width:13px;color:#E07A6A">×</span>{{ b }}</span></sc-for>
+          <span style="font-size:11px;color:#767D75">Stavke su sažetak za demo. U aplikaciji se tekst preuzima doslovno iz Pravilnika FPZG-a.</span>
+        </section>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+          <button type="button" onClick="{{ publish }}" disabled="{{ pubDis }}" style="{{ pubStyle }}">{{ pubLabel }}</button>
+          <span style="font-size:12px;color:#8E958D">{{ pubNote }}</span>
+        </div>
+      </div>
+      <aside aria-label="Kako vidi student" style="position:sticky;top:68px;display:flex;flex-direction:column;gap:10px;min-width:0">
+        <span style="font-size:12px;font-weight:600;color:#A6ADA5">Kako vidi student: obavijest prije prve rečenice</span>
+        <div style="background:#141712;border:1px solid #232722;border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 120px);overflow-y:auto">
+          <span style="font-size:11.5px;color:#8E958D">Korak 1 od 2</span>
+          <b style="font-family:Newsreader,Georgia,serif;font-size:19px;font-weight:600">{{ s3.title }}</b>
+          <span style="font-size:12.5px;color:#A6ADA5">{{ s3.meta }}</span>
+          <p style="margin:0;font-size:13px;line-height:1.55;white-space:pre-wrap">{{ s3.brief }}</p>
+          <div style="display:flex;flex-direction:column;gap:5px;padding-top:10px;border-top:1px solid #232722"><span style="font-size:12px;font-weight:600;color:#A6ADA5">Dopušteno</span><sc-for list="{{ s3.allowed }}" as="x" hint-placeholder-count="3"><span style="font-size:12.5px;display:flex;gap:7px"><span style="color:#6FBFA5">✓</span>{{ x }}</span></sc-for><span style="font-size:12px;font-weight:600;color:#A6ADA5;margin-top:4px">Nije dopušteno</span><sc-for list="{{ s3.banned }}" as="x" hint-placeholder-count="3"><span style="font-size:12.5px;display:flex;gap:7px"><span style="color:#E07A6A">×</span>{{ x }}</span></sc-for></div>
+          <span style="font-size:11.5px;color:#767D75">Ostatak obavijesti (što se bilježi, što nastavnik vidi, čuvanje) jednak je za sve zadatke.</span>
+        </div>
+      </aside>
+    </main>
+  </sc-if>
+
+  <sc-if value="{{ scNotice }}" hint-placeholder-val="{{ false }}">
+    <main data-screen-label="3 Upis i obavijest" style="flex:1;max-width:640px;width:100%;margin:0 auto;padding:48px 24px 72px;display:flex;flex-direction:column;align-items:center;gap:20px;text-align:center">
+      <sc-if value="{{ notEnrolled }}" hint-placeholder-val="{{ true }}">
+        <section style="width:min(440px,100%);background:linear-gradient(180deg,#191D18,#141712);border:1px solid #2A2F29;border-radius:16px;box-shadow:inset 0 1px 0 #ffffff0d,0 24px 50px -24px #000a;padding:30px;display:flex;flex-direction:column;align-items:center;gap:12px">
+          <h1 style="margin:0;font-family:Newsreader,Georgia,serif;font-size:28px;font-weight:400;letter-spacing:-.01em">Upiši kolegij</h1>
+          <span style="font-size:13px;line-height:1.5;color:#A6ADA5">Kod ti daje nastavnik.</span>
+          <div style="display:flex;gap:8px;width:100%"><input ref="{{ codeRef }}" onKeyDown="{{ codeKey }}" aria-label="Kod kolegija" placeholder="{{ code }}" style="flex:1;min-width:0;background:#0F110E;border:1px solid #2C312B;border-radius:9px;padding:10px 12px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:15px;letter-spacing:.08em;text-transform:uppercase;text-align:center"><button type="button" onClick="{{ enroll }}" style="padding:10px 18px;border-radius:9px;font-size:13.5px;font-weight:600;background:#6FBFA5;color:#0E1C17">Upiši</button></div>
+          <sc-if value="{{ codeErr }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;color:#E07A6A">{{ codeErr }}</span></sc-if>
+        </section>
+      </sc-if>
+      <sc-if value="{{ enrolled }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
+          <span style="font-size:12px;color:#8E958D">{{ f.course }} · {{ f.year }} · korak 1 od 2</span>
+          <h1 style="margin:0;font-family:Newsreader,Georgia,serif;font-size:clamp(34px,5vw,48px);font-weight:300;line-height:1.05;letter-spacing:-.02em">Prije prve <span style="font-style:italic;font-weight:400;color:#BFE3D5">rečenice</span></h1>
+        </div>
+        <section style="width:100%;background:linear-gradient(180deg,#191D18,#141712);border:1px solid #2A2F29;border-radius:16px;box-shadow:inset 0 1px 0 #ffffff0d,0 24px 50px -24px #000a;padding:26px 28px;display:flex;flex-direction:column;align-items:center;gap:10px">
+          <span style="font-size:12px;color:#8E958D">Zadatak</span>
+          <b style="font-family:Newsreader,Georgia,serif;font-size:21px;font-weight:600;line-height:1.3;text-wrap:balance">{{ s3.title }}</b>
+          <span style="font-size:12.5px;color:#A6ADA5">{{ s3.meta }}</span>
+          <p style="margin:4px 0 0;font-size:13.5px;line-height:1.6;white-space:pre-wrap;text-wrap:pretty;color:#C5CBC3;max-width:52ch">{{ s3.brief }}</p>
+          <div style="width:100%;margin-top:10px;padding-top:14px;border-top:1px solid #232722;display:flex;flex-direction:column;align-items:center;gap:8px">
+            <span style="font-size:12px;color:#8E958D">Uporaba alata u ovom zadatku (FPZG čl. 8)</span>
+            <div style="display:flex;flex-direction:column;gap:6px;text-align:left">
+              <sc-for list="{{ s3.allowed }}" as="x" hint-placeholder-count="3"><span style="font-size:13px;display:flex;gap:9px"><span style="flex:none;color:#6FBFA5">✓</span>{{ x }}</span></sc-for>
+              <sc-for list="{{ s3.banned }}" as="x" hint-placeholder-count="3"><span style="font-size:13px;display:flex;gap:9px"><span style="flex:none;color:#E07A6A">×</span>{{ x }}</span></sc-for>
+            </div>
+          </div>
+        </section>
+        <button type="button" onClick="{{ openRec }}" aria-haspopup="dialog" style="display:flex;align-items:center;gap:8px;font-size:13px;color:#A6ADA5" style-hover="color:#E9EBE6"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.8 4.5 5.6v5.6c0 4.6 3.1 8.4 7.5 10 4.4-1.6 7.5-5.4 7.5-10V5.6z"></path><path d="m8.8 12.1 2.3 2.3 4.3-4.6"></path></svg>Što se bilježi i što nastavnik vidi</button>
+        <sc-if value="{{ notAcked }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:12px;padding-top:4px">
+            <label style="display:flex;gap:9px;align-items:flex-start;font-size:13.5px;line-height:1.5;text-align:left"><input type="checkbox" checked="{{ ackBox }}" onChange="{{ setAckBox }}" style="margin-top:4px;accent-color:#6FBFA5">Pročitao sam obavijest. Znam što se bilježi i što nastavnik vidi.</label>
+            <button type="button" onClick="{{ ack }}" disabled="{{ ackDis }}" style="{{ ackStyle }}">Potvrdi i otvori editor</button>
+            <span style="font-size:12px;color:#8E958D">Potvrda nije privola. Prije potvrde ništa se ne šalje na poslužitelj.</span>
+          </div>
+        </sc-if>
+        <sc-if value="{{ acked }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:10px"><span style="font-size:13px;color:#6FBFA5">Potvrđeno {{ acked }}. Zapis počinje s prvom izmjenom.</span><a href="Ductura Editor v11.dc.html" style="padding:11px 20px;border-radius:9px;background:#6FBFA5;color:#0E1C17;font-size:14px;font-weight:600">Otvori editor</a></div>
+        </sc-if>
+      </sc-if>
+    </main>
+    <sc-if value="{{ recOpen }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ closeRec }}" style="position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:24px;background:#070807B3;backdrop-filter:blur(6px)">
+        <div role="dialog" aria-modal="true" aria-labelledby="rec-h" onClick="{{ stop }}" style="width:min(560px,100%);max-height:calc(100vh - 48px);overflow:auto;background:linear-gradient(180deg,#1B1F1A,#131612);border:1px solid #2A2F29;border-radius:18px;box-shadow:inset 0 1px 0 #ffffff12,0 40px 90px -30px #000;padding:30px;display:flex;flex-direction:column;align-items:center;gap:18px;text-align:center">
+          <span style="display:grid;place-items:center;width:44px;height:44px;border-radius:50%;background:#6FBFA51A;color:#8FD1B9"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.8 4.5 5.6v5.6c0 4.6 3.1 8.4 7.5 10 4.4-1.6 7.5-5.4 7.5-10V5.6z"></path><path d="m8.8 12.1 2.3 2.3 4.3-4.6"></path></svg></span>
+          <h2 id="rec-h" style="margin:0;font-family:Newsreader,Georgia,serif;font-size:26px;font-weight:400;letter-spacing:-.01em">Što se bilježi</h2>
+          <p style="margin:0;font-size:13.5px;line-height:1.6;color:#C5CBC3;text-wrap:pretty;max-width:46ch">Od prve izmjene nastavnik vidi spremljeno stanje rada, osvježeno najviše svakih 5 minuta, uz komentare, zahtjeve za doradu i sažetak procesa, isti koji vidiš ti. Pojedinačne unose i vrijeme pisanja vidi samo u istrazi koju odobri koordinator ili etičko povjerenstvo. O istrazi dobiješ obavijest, vidiš isti prikaz i imaš 15 dana za pisano očitovanje.</p>
+          <div style="width:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px;text-align:left;padding-top:14px;border-top:1px solid #232722">
+            <div style="display:flex;flex-direction:column;gap:8px"><span style="font-size:12px;color:#8E958D">Bilježi se</span><sc-for list="{{ logged }}" as="x" hint-placeholder-count="4"><span style="font-size:13px;line-height:1.45;display:flex;gap:9px"><span style="flex:none;color:#6FBFA5">✓</span>{{ x }}</span></sc-for></div>
+            <div style="display:flex;flex-direction:column;gap:8px"><span style="font-size:12px;color:#8E958D">Ne bilježi se</span><sc-for list="{{ notLogged }}" as="x" hint-placeholder-count="4"><span style="font-size:13px;line-height:1.45;display:flex;gap:9px"><span style="flex:none;color:#8E958D">×</span>{{ x }}</span></sc-for></div>
+          </div>
+          <p style="margin:0;padding-top:14px;border-top:1px solid #232722;width:100%;font-size:12.5px;line-height:1.55;color:#A6ADA5;text-wrap:pretty">Zapis se čuva uz rad do isteka roka koji propisuje fakultet. Nastavnik i ti vidite isti zapis. Nitko izvan kolegija nema pristup.</p>
+          <button type="button" onClick="{{ closeRec }}" style="padding:10px 22px;border-radius:10px;font-size:13px;font-weight:600;background:#232722;box-shadow:inset 0 1px 0 #ffffff14" style-hover="background:#2C312B">U redu</button>
+        </div>
+      </div>
+    </sc-if>
+  </sc-if>
+
+  <sc-if value="{{ scSubmit }}" hint-placeholder-val="{{ false }}">
+    <main data-screen-label="4 Predaja" style="flex:1;max-width:1120px;width:100%;margin:0 auto;padding:28px 24px 60px;display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 16px"><h1 style="margin:0;font-family:Newsreader,Georgia,serif;font-size:26px;font-weight:600">Predaja rada</h1><span style="font-size:12.5px;color:#A6ADA5">{{ s3.title }}</span></div>
+      <ol style="list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px 18px">
+        <sc-for list="{{ steps }}" as="t" hint-placeholder-count="3"><li style="{{ t.style }}"><span style="{{ t.num }}">{{ t.n }}</span>{{ t.label }}</li></sc-for>
+      </ol>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:20px;align-items:start">
+        <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+          <sc-if value="{{ st1 }}" hint-placeholder-val="{{ true }}">
+            <section style="background:#141712;border:1px solid #232722;border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:2px">
+              <sc-for list="{{ checks }}" as="c" hint-placeholder-count="3">
+                <div style="display:flex;gap:10px;padding:9px 0;border-bottom:1px solid #1E221D">
+                  <i style="{{ c.dot }}"></i>
+                  <div style="display:flex;flex-direction:column;gap:3px;min-width:0"><span style="font-size:13px;font-weight:600">{{ c.k }}</span><span style="font-size:13px;line-height:1.5;color:#C5CBC3">{{ c.v }}</span><sc-if value="{{ c.sub }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;line-height:1.5;color:#8E958D">{{ c.sub }}</span></sc-if></div>
+                </div>
+              </sc-for>
+            </section>
+            <sc-if value="{{ mismatch }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><button type="button" onClick="{{ exportText }}" style="padding:6px 12px;border-radius:7px;font-size:12.5px;color:#E9EBE6;border:1px solid #4A5049">Izvezi tekst</button><button type="button" onClick="{{ support }}" style="padding:6px 12px;border-radius:7px;font-size:12.5px;color:#A6ADA5;border:1px solid #2C312B">Javi podršci</button><span style="font-size:12px;color:#8E958D">Rad ostaje spremljen. Ništa nije izgubljeno.</span></div>
+            </sc-if>
+            <div style="display:flex;gap:10px;align-items:center"><button type="button" onClick="{{ toStep2 }}" disabled="{{ mismatch }}" style="{{ nextStyle }}">Dalje: izjava</button><sc-if value="{{ mismatch }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;color:#E07A6A">Predaja nije moguća dok se zapis ne podudara.</span></sc-if></div>
+          </sc-if>
+          <sc-if value="{{ st2 }}" hint-placeholder-val="{{ false }}">
+            <section style="background:#141712;border:1px solid #232722;border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:10px">
+              <span style="font-size:12px;font-weight:600;color:#A6ADA5">Iz zapisa</span>
+              <p style="margin:0;font-family:Newsreader,Georgia,serif;font-size:15px;line-height:1.6;text-wrap:pretty">{{ declFromLog }}</p>
+              <label style="display:flex;flex-direction:column;gap:4px;font-size:12px;color:#A6ADA5">Alati izvan Ducture<input value="{{ tools }}" onChange="{{ setTools }}" placeholder="Npr. DeepL za prijevod sažetka. Prazno ako nisi koristio nijedan." style="background:#0F110E;border:1px solid #2C312B;border-radius:7px;padding:7px 9px;font-size:13px"></label>
+              <p style="margin:0;font-family:Newsreader,Georgia,serif;font-size:15px;line-height:1.6;text-wrap:pretty">{{ declTools }}</p>
+              <label style="display:flex;gap:9px;align-items:flex-start;font-size:13.5px;line-height:1.5"><input type="checkbox" checked="{{ agree }}" onChange="{{ setAgree }}" style="margin-top:4px;accent-color:#6FBFA5">Izjavljujem da sam rad napisao samostalno i da sam naveo sve izvore i alate.</label>
+            </section>
+            <div style="display:flex;gap:10px;align-items:center"><button type="button" onClick="{{ submit }}" disabled="{{ subDis }}" style="{{ subStyle }}">Predaj rad</button><button type="button" onClick="{{ back1 }}" style="padding:6px 10px;font-size:12.5px;color:#A6ADA5">Natrag</button></div>
+          </sc-if>
+          <sc-if value="{{ st3 }}" hint-placeholder-val="{{ false }}">
+            <section aria-label="Potvrda o predaji" style="border:1px dashed #4A5049;border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;align-items:baseline;gap:10px"><b style="font-family:Newsreader,Georgia,serif;font-size:19px;font-weight:600">Potvrda o predaji</b><span style="margin-left:auto;font-size:12px;color:#6FBFA5">potpisano</span></div>
+              <sc-for list="{{ receipt }}" as="r" hint-placeholder-count="6"><div style="display:grid;grid-template-columns:150px minmax(0,1fr);gap:10px;font-size:13px"><span style="color:#8E958D">{{ r.k }}</span><span style="{{ r.style }}">{{ r.v }}</span></div></sc-for>
+              <span style="font-size:11.5px;line-height:1.5;color:#767D75">Vrijeme je sa sata poslužitelja. Demo potpisuje razvojnim ključem koji ne vrijedi izvan demoa.</span>
+              <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" onClick="{{ dlReceipt }}" style="padding:6px 12px;border-radius:7px;font-size:12.5px;color:#E9EBE6;border:1px solid #4A5049">Preuzmi potvrdu (PDF)</button><button type="button" onClick="{{ reset }}" style="padding:6px 10px;font-size:12.5px;color:#A6ADA5">Ponovi demo predaje</button></div>
+            </section>
+          </sc-if>
+        </div>
+        <aside aria-label="Sažetak procesa" style="background:#141712;border:1px solid #232722;border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:2px">
+          <div style="display:flex;align-items:baseline;gap:8px;padding-bottom:6px"><span style="font-size:13px;font-weight:600">Sažetak procesa</span><span style="margin-left:auto;font-size:11.5px;color:#8E958D">Isti prikaz vidi nastavnik.</span></div>
+          <sc-for list="{{ summary }}" as="r" hint-placeholder-count="7"><div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:10px;padding:7px 0;border-top:1px solid #1E221D;font-size:13px"><span style="color:#A6ADA5">{{ r.k }}</span><span>{{ r.v }}</span></div></sc-for>
+        </aside>
+      </div>
+    </main>
+  </sc-if>
+
+  <sc-if value="{{ scQuick }}" hint-placeholder-val="{{ false }}">
+    <div data-screen-label="5 Brz put" style="flex:1;display:flex;min-height:0">
+      <nav aria-label="Studenti" style="flex:0 1 230px;min-width:170px;border-right:1px solid #2C312B;background:#141712;padding:12px 8px;display:flex;flex-direction:column;gap:2px">
+        <span style="padding:2px 8px 8px;font-size:12px;font-weight:600;color:#A6ADA5">{{ f.course }} · po prezimenu</span>
+        <sc-for list="{{ studs }}" as="st" hint-placeholder-count="4">
+          <button type="button" onClick="{{ st.pick }}" aria-current="{{ st.cur }}" style="{{ st.style }}" style-hover="background:#1E221D"><span style="font-size:13px;font-weight:600">{{ st.name }}</span><span style="font-size:12px;color:#A6ADA5">{{ st.state }}</span><span style="font-size:11px;color:#8E958D">{{ st.when }}</span></button>
+        </sc-for>
+      </nav>
+      <main style="flex:1;min-width:0;padding:22px 24px 60px;display:flex;flex-direction:column;gap:14px;max-width:820px;margin:0 auto">
+        <div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px"><h1 style="margin:0;font-family:Newsreader,Georgia,serif;font-size:24px;font-weight:600">{{ q.name }}</h1><span style="font-size:12.5px;color:#A6ADA5">{{ q.state }}</span>
+          <span style="margin-left:auto;display:flex;gap:2px;background:#232722;padding:2px;border-radius:7px"><sc-for list="{{ qTabs }}" as="t" hint-placeholder-count="2"><button type="button" onClick="{{ t.on }}" aria-pressed="{{ t.sel }}" style="{{ t.style }}">{{ t.label }}</button></sc-for></span>
+        </div>
+        <sc-if value="{{ q.has }}" hint-placeholder-val="{{ true }}">
+          <dl style="margin:0;display:grid;grid-template-columns:max-content minmax(0,1fr);gap:6px 16px;padding:12px 14px;background:#141712;border:1px solid #232722;border-radius:8px;font-size:13px">
+            <sc-for list="{{ q.lines }}" as="l" hint-placeholder-count="4"><dt style="color:#A6ADA5">{{ l.k }}</dt><dd style="margin:0"><sc-if value="{{ l.on }}" hint-placeholder-val="{{ false }}"><button type="button" onClick="{{ l.on }}" style="padding:0;color:#8FB0E0;text-align:left">{{ l.v }}</button></sc-if><sc-if value="{{ l.plain }}" hint-placeholder-val="{{ true }}">{{ l.v }}</sc-if></dd></sc-for>
+          </dl>
+          <span style="font-size:12px;color:#8E958D">{{ q.rec }}</span>
+          <sc-if value="{{ qText }}" hint-placeholder-val="{{ true }}">
+            <article style="background:#161A15;border:1px solid #232722;border-radius:6px;padding:clamp(16px,4vw,30px) clamp(16px,4vw,36px);display:flex;flex-direction:column;gap:6px">
+              <sc-for list="{{ q.paras }}" as="p" hint-placeholder-count="4">
+                <div style="{{ p.wrap }}" style-hover="background:#1A1E19">
+                  <div style="display:flex;gap:10px;align-items:flex-start">
+                    <p style="margin:0;flex:1;font-family:Newsreader,Georgia,serif;font-size:16px;line-height:1.7;text-wrap:pretty">{{ p.t }}</p>
+                    <button type="button" onClick="{{ p.cm }}" aria-label="Komentar uz odlomak" title="Komentar uz odlomak" style="flex:none;margin-top:4px;padding:2px 7px;border-radius:6px;font-size:11.5px;color:#8E958D;border:1px solid #2C312B" style-hover="color:#E9EBE6">Komentar</button>
+                  </div>
+                  <sc-if value="{{ p.tag }}" hint-placeholder-val="{{ false }}"><span style="font-size:11.5px;color:#9E9A90">{{ p.tag }}</span></sc-if>
+                  <sc-for list="{{ p.cms }}" as="c" hint-placeholder-count="0"><div style="display:flex;flex-direction:column;gap:2px;padding:6px 10px;background:#D9AE5B14;border-radius:6px"><span style="font-size:11px;color:#D9AE5B">{{ c.meta }}</span><span style="font-size:12.5px;line-height:1.5">{{ c.t }}</span></div></sc-for>
+                  <sc-if value="{{ p.composing }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;gap:6px;padding-top:4px">
+                      <textarea ref="{{ cmRef }}" rows="3" onKeyDown="{{ cmKey }}" aria-label="Komentar" placeholder="Komentar uz odlomak…" style="width:100%;background:#0F110E;border:1px solid #2C312B;border-radius:7px;padding:6px 8px;font-size:12.5px;resize:vertical"></textarea>
+                      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><button type="button" onClick="{{ cmSave }}" style="background:#6FBFA5;color:#0E1C17;padding:4px 10px;border-radius:7px;font-size:12px;font-weight:600">Objavi</button><button type="button" onClick="{{ cmCancel }}" style="padding:4px 8px;font-size:12px;color:#A6ADA5">Odustani</button><label style="display:flex;gap:6px;align-items:center;font-size:12px;color:#A6ADA5"><input type="checkbox" checked="{{ asReq }}" onChange="{{ setAsReq }}" style="accent-color:#6FBFA5">Zahtjev za doradu</label></div>
+                    </div>
+                  </sc-if>
+                </div>
+              </sc-for>
+            </article>
+          </sc-if>
+          <sc-if value="{{ qSum }}" hint-placeholder-val="{{ false }}">
+            <section style="background:#141712;border:1px solid #232722;border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:2px">
+              <div style="display:flex;align-items:baseline;gap:8px;padding-bottom:6px"><span style="font-size:13px;font-weight:600">Sažetak procesa</span><span style="margin-left:auto;font-size:11.5px;color:#8E958D">Isti prikaz vidi student.</span></div>
+              <sc-for list="{{ summary }}" as="r" hint-placeholder-count="7"><div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:10px;padding:7px 0;border-top:1px solid #1E221D;font-size:13px"><span style="color:#A6ADA5">{{ r.k }}</span><span>{{ r.v }}</span></div></sc-for>
+            </section>
+          </sc-if>
+        </sc-if>
+        <sc-if value="{{ q.none }}" hint-placeholder-val="{{ false }}"><p style="margin:24px 0;font-size:13px;color:#8E958D">Student još nije potvrdio obavijest. Nema zapisa.</p></sc-if>
+      </main>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ logoutDlg }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeLogout }}" style="position:fixed;inset:0;z-index:88;background:#0008"></div>
+    <div role="dialog" aria-label="Odjava" style="position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:89;width:440px;max-width:calc(100vw - 32px);background:#1A1E19;border:1px solid #2C312B;border-radius:10px;padding:16px;box-shadow:0 20px 44px -14px #000d;display:flex;flex-direction:column;gap:10px">
+      <b style="font-size:14px;font-weight:600">Odjava</b>
+      <p style="margin:0;font-size:13px;line-height:1.55;color:#C5CBC3">{{ logoutDlg.text }}</p>
+      <span style="font-size:12px;line-height:1.5;color:#8E958D">Zapis ostaje vezan uz tebe i šalje se pri sljedećoj prijavi. Osoba koja se prijavi nakon tebe na ovom uređaju ne vidi tvoj rad.</span>
+      <div style="display:flex;gap:8px"><button type="button" onClick="{{ doLogout }}" style="background:#6FBFA5;color:#0E1C17;padding:6px 12px;border-radius:7px;font-size:12.5px;font-weight:600">Odjavi se</button><button type="button" onClick="{{ closeLogout }}" style="padding:6px 10px;font-size:12.5px;color:#A6ADA5">Ostani</button></div>
+    </div>
+  </sc-if>
+  <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}"><div role="status" style="position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#232722;border:1px solid #2C312B;border-radius:8px;padding:7px 14px;font-size:12.5px;z-index:90">{{ toast }}</div></sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;mismatch&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: false, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Predaja&quot;}, &quot;gap&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Predaja&quot;}}">
+const ALLOWED = ["Objašnjenje pojma ili teorije", "Pretraživanje i pronalaženje literature", "Jezična i pravopisna dorada vlastitog teksta", "Prijevod izvora za vlastito razumijevanje", "Prijedlog strukture ili plana rada"];
+const BANNED = ["Generiranje teksta koji se predaje kao vlastiti", "Izmišljanje ili preoblikovanje izvora i podataka", "Predaja prijevoda kao vlastitog teksta"];
+const PEOPLE = [{ id: "sa", name: "Student A", role: "student · 3. godina", ini: "SA", kind: "student" }, { id: "sb", name: "Student B", role: "student · 3. godina", ini: "SB", kind: "student" }, { id: "na", name: "Nastavnik A", role: "nastavnik i mentor", ini: "NA", kind: "teacher" }];
+const PARAS = [
+  "Čitanje naglas u prvim godinama školovanja opisuje se kao jedan od temelja kasnijeg jezičnog razvoja. Ovaj rad razmatra kako se taj navod prenosi u nastavnu praksu i što o njemu kažu dostupni izvori.",
+  "Prema jednoj od uvriježenih tvrdnji, redovito zajedničko čitanje proširuje rječnik djeteta (Autor A, 2019b). Autor B (2021) tu tvrdnju nadopunjuje opažanjima iz razreda.",
+  "Zajedničko čitanje u razredu stvara prilike za razgovor o značenju nepoznatih riječi, a učitelj pritom modelira strategije razumijevanja.",
+  "Brojna istraživanja pokazuju da djeca koja jako puno čitaju uvijek razvijaju bogatiji leksik. Smatram da je to posebno važno u prvim razredima, gdje prema MZO čitanje naglas ima istaknuto mjesto u kurikulumu.",
+  "Istraživanje je provedeno u tri razreda. Podaci su prikupljeni kratkim upitnikom za učitelje. Odgovori su analizirani prema duljini radnog staža."];
+const pad = x => String(x).padStart(2, "0");
+const stamp = () => { const z = new Date(); return z.getDate() + ". " + (z.getMonth() + 1) + ". " + z.getFullYear() + "., " + pad(z.getHours()) + ":" + pad(z.getMinutes()); };
+const hrDate = v => { if (!v) return "—"; const [y, m, d] = v.split("-"); return +d + ". " + +m + ". " + y + "."; };
+const PB = { background: "#6FBFA5", color: "#0E1C17", padding: "7px 14px", borderRadius: 7, fontSize: 13, fontWeight: 600 };
+const PBD = { background: "#232722", color: "#767D75", padding: "7px 14px", borderRadius: 7, fontSize: 13, fontWeight: 600 };
+class Component extends DCLogic {
+  codeRef = React.createRef(); cmRef = React.createRef();
+  state = {
+    screen: 0, user: null, unsynced: 3, logout: false, toast: "", resumed: {},
+    f: { course: "Kolegij A", year: "2026./2027.", title: "Čitanje naglas i rječnik djece u prvim razredima", kind: "Seminarski rad", open: "2026-10-01", due: "2026-11-30", min: 2000, max: 2500, brief: "Postavi istraživačko pitanje, prikaži tri do pet izvora i zaključi odgovorom na pitanje. Navodi prema stilu FPZG-a." },
+    allowed: ALLOWED.map(() => true), course: false, published: false, enrolled: false, codeErr: "", ackBox: false, acked: null,
+    step: 1, tools: "", agree: false, receipt: null, sel: "a", qView: "text", composing: null, asReq: false,
+    cms: { a: [{ pi: 1, meta: "Komentar 1 · Nastavnik A · 16. 10. 2026.", t: "Dodaj uz ovu tvrdnju stranicu u navodu." }] }, hl: null,
+  };
+  flash(t) { clearTimeout(this.tt); this.setState({ toast: t }); this.tt = setTimeout(() => this.setState({ toast: "" }), 2600); }
+  go(i) { if (i === 0) { location.href = "Ductura Prijava v5.dc.html"; return; } this.setState({ screen: i, composing: null }); }
+  componentDidMount() {
+    const u = new URLSearchParams(location.search).get("u"), x = PEOPLE.find(p => p.id === u);
+    if (x) this.setState({ user: x, screen: x.kind === "teacher" ? 1 : 2 });
+    this.onKey = e => { if (e.key === "Escape" && this.state.rec) this.setState({ rec: false }); }; addEventListener("keydown", this.onKey);
+  }
+  componentDidUpdate() { if (this._hadUser && !this.state.user) location.href = "Ductura Prijava v5.dc.html"; this._hadUser = !!this.state.user; }
+  componentWillUnmount() { removeEventListener("keydown", this.onKey); }
+  renderVals() {
+    const s = this.state, p = this.props, mismatch = p.mismatch ?? false, gap = p.gap ?? true, f = s.f;
+    const NAV = ["1 Prijava", "2 Novi zadatak", "3 Upis i obavijest", "4 Predaja", "5 Brz put"];
+    const nav = NAV.map((label, i) => ({ label, cur: s.screen === i ? "page" : "false", on: () => this.go(i), style: { flex: "none", padding: "4px 9px", borderRadius: 6, fontSize: 12, whiteSpace: "nowrap", color: s.screen === i ? "#E9EBE6" : "#8E958D", background: s.screen === i ? "#232722" : "transparent" } }));
+    const set = {}; ["course", "year", "title", "kind", "open", "due", "min", "max", "brief"].forEach(k => set[k] = e => { const v = e.target.value; this.setState(st => ({ f: Object.assign({}, st.f, { [k]: v }), published: false })); });
+    const code = "FPZG-7K4Q";
+    const allowedList = ALLOWED.filter((_, i) => s.allowed[i]), bannedList = ALLOWED.filter((_, i) => !s.allowed[i]).concat(BANNED);
+    const s3 = { title: f.title, meta: f.kind + " · otvoreno od " + hrDate(f.open) + " · rok " + hrDate(f.due) + " · " + Number(f.min).toLocaleString("hr-HR") + "–" + Number(f.max).toLocaleString("hr-HR") + " riječi", brief: f.brief, allowed: allowedList, banned: bannedList };
+    const pubOk = s.course && f.title.trim();
+    const summary = [
+      { k: "Sesije pisanja", v: "9, od 2. 10. do 17. 10. 2026." },
+      { k: "Lijepljenja", v: "2 · jedno s navedenim izvorom" },
+      { k: "Uvezeni tekst", v: "nema" },
+      { k: "Rad bez mreže", v: "1 put, zapis vraćen" },
+      { k: "Praznine u zapisu", v: gap ? "1 · 14. 10., 21:10–21:40" : "nema" },
+      { k: "Vrsta dokaza", v: "opaženo u Ducturi; vanjski alati izjavljeni" },
+      { k: "Stanje zapisa", v: mismatch ? "ne podudara se" : gap ? "potpun, s jednom prazninom" : "potpun" },
+    ];
+    const dot = c => ({ flex: "none", width: 8, height: 8, borderRadius: "50%", marginTop: 6, background: c });
+    const checks = [
+      { k: "Zapis na uređaju i poslužitelju", v: "Usklađen. Sve izmjene su na poslužitelju.", sub: false, dot: dot("#6FBFA5") },
+      mismatch ? { k: "Rekonstrukcija", v: "Ne podudara se. Tekst sastavljen iz zapisa razlikuje se od teksta u editoru.", sub: "Predaja je blokirana. Izvezi tekst i javi podršci; nastavnik dobiva obavijest da predaja čeka.", dot: dot("#E07A6A") } : { k: "Rekonstrukcija", v: "Podudara se. Poslužitelj je iz zapisa sastavio isti tekst.", sub: false, dot: dot("#6FBFA5") },
+      gap ? { k: "Praznina u zapisu", v: "14. 10., 21:10–21:40. Izmjene iz tog razdoblja nisu stigle na poslužitelj.", sub: "Praznina ne sprječava predaju. Vidi je i nastavnik, u sažetku procesa.", dot: dot("#D3AC63") } : { k: "Praznine u zapisu", v: "Nema.", sub: false, dot: dot("#6FBFA5") },
+    ];
+    const steps = [["1", "Provjera zapisa"], ["2", "Izjava"], ["3", "Potvrda"]].map(([n, label], i) => { const on = s.step === i + 1, done = s.step > i + 1; return { n: done ? "✓" : n, label, style: { display: "flex", alignItems: "center", gap: 7, fontSize: 13, color: on ? "#E9EBE6" : "#8E958D", fontWeight: on ? 600 : 400 }, num: { width: 20, height: 20, borderRadius: "50%", display: "grid", placeItems: "center", fontSize: 11, background: on ? "#6FBFA5" : done ? "#2F5C4F" : "#232722", color: on ? "#0E1C17" : done ? "#C5E8DC" : "#8E958D" } }; });
+    const tools = s.tools.trim(), subDis = !s.agree;
+    const h = (() => { const t = PARAS.join("\n"); let a = 0x811c9dc5; for (let i = 0; i < t.length; i++) a = Math.imul(a ^ t.charCodeAt(i), 16777619) >>> 0; return a.toString(16).padStart(8, "0"); })();
+    const receipt = s.receipt ? [
+      { k: "Rad", v: f.title, style: {} }, { k: "Student", v: "Student A", style: {} }, { k: "Kolegij", v: f.course + " · " + f.year, style: {} },
+      { k: "Predano", v: s.receipt, style: {} }, { k: "Sažetak dokumenta", v: "SHA-256 " + (h + h.split("").reverse().join("")).slice(0, 16) + "…", style: { fontFamily: "ui-monospace,Menlo,Consolas,monospace", fontSize: 12.5 } },
+      { k: "Potpis", v: "Ed25519 · razvojni ključ", style: { color: "#D3AC63" } }, { k: "Stanje zapisa", v: summary[6].v, style: {} },
+    ] : [];
+    const STU = [
+      { id: "a", name: "Student A", state: "Čeka doradu", when: "zadnja promjena 17. 10., 10:42", has: true },
+      { id: "b", name: "Student B", state: "Na pregledu", when: "zadnja promjena 16. 10., 21:05", has: true },
+      { id: "c", name: "Student C", state: "Predano", when: "15. 10., 18:30", has: true },
+      { id: "d", name: "Student D", state: "Nije započeto", when: "nema zapisa", has: false },
+    ];
+    const studs = STU.map(x => ({ name: x.name, state: x.state, when: x.when, cur: x.id === s.sel ? "true" : "false", pick: () => this.setState({ sel: x.id, composing: null, hl: null }), style: { display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1, padding: "8px 10px", borderRadius: 8, textAlign: "left", background: x.id === s.sel ? "#232722" : "transparent" } }));
+    const cur = STU.find(x => x.id === s.sel), cms = s.cms[s.sel] || [], reqs = cms.filter(c => c.req).length + (s.sel === "a" ? 1 : 0);
+    const q = { name: cur.name, state: cur.state, has: cur.has, none: !cur.has, rec: "Spremljeno stanje na poslužitelju · osvježava se najviše svakih 5 minuta · stanje zapisa: " + summary[6].v,
+      lines: [
+        { k: "Zadnja promjena", v: cur.when.replace("zadnja promjena ", ""), on: false, plain: true },
+        { k: "Otvoreni zahtjevi", v: reqs ? reqs + " " + (reqs === 1 ? "zahtjev za doradu" : "zahtjeva za doradu") + (s.sel === "a" ? ", rok 24. 10." : "") : "nema", on: false, plain: true },
+        { k: "Lijepljenja bez izvora", v: s.sel === "a" ? "1 · Analiza, 4. odlomak" : "nema", on: s.sel === "a" ? () => this.setState({ hl: 3, qView: "text" }) : false, plain: s.sel !== "a" },
+        { k: "Izjava", v: cur.state === "Predano" ? "predana s radom" : "još nije predana", on: false, plain: true },
+      ],
+      paras: PARAS.map((t, i) => ({ t, tag: s.sel === "a" && i === 3 ? "zalijepljeno · izvor nije naveden" : false,
+        wrap: { display: "flex", flexDirection: "column", gap: 6, padding: "6px 8px", margin: "0 -8px", borderRadius: 6, background: s.hl === i ? "#9E9A9022" : "transparent" },
+        cms: cms.filter(c => c.pi === i), composing: s.composing === i,
+        cm: () => this.setState({ composing: i, asReq: false }, () => setTimeout(() => this.cmRef.current && this.cmRef.current.focus(), 30)) })) };
+    const saveCm = () => { const t = ((this.cmRef.current && this.cmRef.current.value) || "").trim(); if (!t) return; const n = cms.length + 1, req = s.asReq;
+      this.setState(st => ({ composing: null, cms: Object.assign({}, st.cms, { [st.sel]: (st.cms[st.sel] || []).concat([{ pi: st.composing, req, meta: "Komentar " + n + " · Nastavnik A · " + stamp() + (req ? " · zahtjev za doradu" : ""), t }]) }) }));
+      this.flash(req ? "Zahtjev za doradu je poslan. Student ga vidi uz odlomak." : "Komentar je objavljen. Student ga vidi uz odlomak."); };
+    const qTabs = [["text", "Tekst rada"], ["sum", "Sažetak procesa"]].map(([id, label]) => ({ label, sel: s.qView === id ? "true" : "false", on: () => this.setState({ qView: id }), style: { padding: "3px 10px", borderRadius: 5, fontSize: 12, color: s.qView === id ? "#E9EBE6" : "#A6ADA5", background: s.qView === id ? "#1A1E19" : "transparent" } }));
+    return {
+      nav, user: s.user ? { name: s.user.name, role: s.user.kind === "teacher" ? "nastavnik" : "student" } : false,
+      askLogout: () => this.setState({ logout: true }), closeLogout: () => this.setState({ logout: false }),
+      logoutDlg: s.logout ? { text: s.user && s.user.kind === "student" && s.unsynced ? "Imaš " + s.unsynced + " izmjene spremljene samo na ovom uređaju. Odjava zatvara sesiju." : "Odjava zatvara sesiju na ovom uređaju." } : false,
+      doLogout: () => { const u = s.user; this.setState(st => ({ logout: false, user: null, screen: 0, resumed: u && u.kind === "student" && st.unsynced ? Object.assign({}, st.resumed, { [u.id]: st.unsynced }) : st.resumed })); this.flash("Odjavljen si."); },
+      scLogin: s.screen === 0, scTask: s.screen === 1, scNotice: s.screen === 2, scSubmit: s.screen === 3, scQuick: s.screen === 4,
+      people: PEOPLE.map(x => ({ name: x.name, role: x.role, ini: x.ini, on: () => { const n = s.resumed[x.id]; this.setState(st => ({ user: x, screen: x.kind === "teacher" ? 1 : 2, unsynced: n ? 0 : st.unsynced, resumed: Object.assign({}, st.resumed, { [x.id]: 0 }) })); this.flash(n ? "Prijavljen si. " + n + " izmjene s prošle sesije poslane su na poslužitelj." : "Prijavljen si kao " + x.name + "."); } })),
+      resumeNote: Object.entries(s.resumed).filter(([, n]) => n).map(([id, n]) => PEOPLE.find(x => x.id === id).name + ": " + n + " izmjene čekaju sljedeću prijavu.").join(" ") || false,
+      f, set, courseMade: s.course, courseNotMade: !s.course, code,
+      makeCourse: () => { if (!f.course.trim()) { this.flash("Upiši naziv kolegija."); return; } this.setState({ course: true }); this.flash("Kolegij je stvoren."); },
+      copyCode: () => { try { navigator.clipboard.writeText(code); } catch (e) {} this.flash("Kod je kopiran."); },
+      allowed: ALLOWED.map((t, i) => ({ t, on: s.allowed[i], style: { color: s.allowed[i] ? "#E9EBE6" : "#767D75", textDecoration: s.allowed[i] ? "none" : "line-through" }, toggle: () => this.setState(st => ({ allowed: st.allowed.map((v, j) => j === i ? !v : v), published: false })) })),
+      banned: BANNED, s3,
+      publish: () => { if (!pubOk) return; this.setState({ published: true }); this.flash("Zadatak je objavljen. Studenti s kodom vide obavijest prije prve rečenice."); },
+      pubDis: !pubOk || s.published, pubStyle: !pubOk || s.published ? PBD : PB, pubLabel: s.published ? "Objavljeno" : "Objavi zadatak",
+      pubNote: !s.course ? "Prvo stvori kolegij." : s.published ? "Izmjena zadatka nakon objave stvara novu verziju; studenti je ponovno potvrđuju." : "Studenti dobivaju obavijest kad upišu kolegij.",
+      notEnrolled: !s.enrolled, enrolled: s.enrolled, codeRef: this.codeRef, codeErr: s.codeErr || false,
+      enroll: () => { const v = ((this.codeRef.current && this.codeRef.current.value) || "").trim().toUpperCase(); if (!v) { this.setState({ codeErr: v ? "Kod ne postoji. Provjeri ga s nastavnikom." : "Upiši kod." }); return; } this.setState({ enrolled: true, codeErr: "" }); },
+      codeKey: e => { if (e.key === "Enter") { e.preventDefault(); this.renderVals().enroll(); } },
+      logged: ["Svaki unos i brisanje s vremenom, povezani lancem hasheva", "Kada i koliko dugo pišeš (vidi se samo u istrazi)", "Lijepljenje, uz izvor ako ga navedeš", "Uvoz teksta, uz tvoju izjavu", "Razdoblja bez mreže i praznine u zapisu"],
+      notLogged: ["Pokreti miša", "Sadržaj drugih kartica i aplikacija", "Kamera, mikrofon i zaslon", "Ništa prije potvrde ove obavijesti"],
+      recOpen: !!s.rec, openRec: () => this.setState({ rec: true }), closeRec: () => this.setState({ rec: false }), stop: e => e.stopPropagation(),
+      notAcked: !s.acked, acked: s.acked || false, ackBox: s.ackBox, setAckBox: e => this.setState({ ackBox: e.target.checked }),
+      ackDis: !s.ackBox, ackStyle: s.ackBox ? PB : PBD, ack: () => { if (!s.ackBox) return; this.setState({ acked: stamp() }); this.flash("Potvrđeno. Zapis počinje s prvom izmjenom."); },
+      steps, st1: s.step === 1, st2: s.step === 2, st3: s.step === 3, checks, mismatch, nextStyle: mismatch ? PBD : PB,
+      toStep2: () => { if (!mismatch) this.setState({ step: 2 }); }, back1: () => this.setState({ step: 1 }),
+      exportText: () => this.flash("Tekst je izvezen kao .txt."), support: () => this.flash("Podrška je obaviještena. Nastavnik vidi da predaja čeka."),
+      declFromLog: "Rad je nastao u Ducturi u 9 sesija između 2. 10. i 17. 10. 2026. Dva odlomka su zalijepljena; za jedan je naveden izvor. Uvezenog teksta nema.",
+      tools: s.tools, setTools: e => this.setState({ tools: e.target.value }),
+      declTools: tools ? "Izvan Ducture koristio sam: " + tools + ". Sadržaj koji sam tako dobio provjerio sam i preoblikovao." : "Izvan Ducture nisam koristio alate umjetne inteligencije.",
+      agree: s.agree, setAgree: e => this.setState({ agree: e.target.checked }), subDis, subStyle: subDis ? PBD : PB,
+      submit: () => { if (subDis) return; this.setState({ step: 3, receipt: stamp() }); this.flash("Rad je predan. Potvrda je potpisana."); },
+      receipt, dlReceipt: () => this.flash("U aplikaciji se preuzima PDF potvrde."), reset: () => this.setState({ step: 1, agree: false, receipt: null }),
+      summary, studs, q, qTabs, qText: s.qView === "text", qSum: s.qView === "sum",
+      cmRef: this.cmRef, cmSave: saveCm, cmCancel: () => this.setState({ composing: null }), asReq: s.asReq, setAsReq: e => this.setState({ asReq: e.target.checked }),
+      cmKey: e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveCm(); } if (e.key === "Escape") this.setState({ composing: null }); },
+      toast: s.toast || false,
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 // Pure logic for the orchestrator helper scripts. No gh/git calls here.
 import { canonicalBlock, field } from "../engineering/metadata-parser.mjs";
-import { trustedAuthor } from "../engineering/review-gate-core.mjs";
+import { commentTime, trustedAuthor } from "../engineering/review-gate-core.mjs";
 import {
   changedPaths, D97_MANUAL_PATHS, D97_PATHS, matchesPath, normalizePath,
 } from "../engineering/protected-paths.mjs";
@@ -98,7 +98,7 @@ export function parseVerdicts(comments, kind) {
       verdict: field(c.body, k.verdict)?.toUpperCase() ?? null,
       author: c.user?.login ?? null,
       appSlug: c.performed_via_github_app?.slug ?? null,
-      createdAt: Date.parse(c.created_at ?? "") || index,
+      createdAt: commentTime(c) || index,
       index,
     }))
     .sort((a, b) => a.createdAt - b.createdAt || a.index - b.index);
@@ -112,11 +112,11 @@ export function countCanonical(comments) {
 const GATE_VERDICTS = new Set(["PASS", "FAIL", "BLOCK"]);
 
 // Identity as the gate keys it (ENGINEERING_SYSTEM §6): App slug + runtime:slot,
-// with codex and chatgpt normalised to openai.
+// with codex and chatgpt normalised to openai and the slot without letter case (#130).
 function identityKey(entry) {
   const [runtime = "", slot = ""] = (entry.agent ?? "").split(":");
   const rt = runtime === "codex" || runtime === "chatgpt" ? "openai" : runtime;
-  return `${entry.appSlug ?? ""}|${rt}:${slot}`;
+  return `${entry.appSlug ?? ""}|${rt}:${slot.toLowerCase()}`;
 }
 
 /**
@@ -325,4 +325,40 @@ export function pushVerdict(pushOk, localSha, remoteSha) {
 
 export function parseAgentRisk(body) {
   return { agent: field(body, "Agent"), risk: field(body, "Risk") };
+}
+
+/**
+ * `orch:override` arguments: PR numbers and a required `--reason`. The reason
+ * is one line, since the gate reads `Override-Reason:` as a single field.
+ */
+export function parseOverrideArgs(args) {
+  const nums = [];
+  let reason = null;
+  for (let i = 0; i < args.length; i += 1) {
+    if (args[i] === "--reason") reason = args[++i] ?? null;
+    else if (/^#?\d+$/.test(args[i]) && Number(args[i].replace("#", "")) > 0) nums.push(Number(args[i].replace("#", "")));
+    else throw new Error(`unknown argument: ${args[i]}`);
+  }
+  reason = reason?.replace(/\s+/g, " ").trim() || null;
+  if (!nums.length || !reason) throw new Error('usage: orch:override <pr...> --reason "<concrete reason>"');
+  return { nums: [...new Set(nums)], reason };
+}
+
+/** The canonical override comment (ENGINEERING_SYSTEM §7) for one head. */
+export function overrideBlock(head, reason) {
+  if (!/^[0-9a-f]{40}$/.test(head ?? "")) throw new Error(`not a full head SHA: ${head}`);
+  return `Owner-Override: PASS\nOverride-Head: ${head}\nOverride-Reason: ${reason}\n`;
+}
+
+/**
+ * What `orch:override` prints for one PR read from GitHub: stdout is only the
+ * block, so pasting all of it is a valid comment (the gate requires
+ * `Owner-Override:` as the first non-empty line); the context goes to stderr.
+ */
+export function overrideOutput(n, pr, reason) {
+  if (pr?.state !== "open") throw new Error(`PR is ${pr?.merged_at ? "merged" : pr?.state}`);
+  return {
+    stdout: overrideBlock(pr.head?.sha, reason),
+    stderr: `# PR #${n} (head ${pr.head.sha.slice(0, 8)}); a new push makes this block stale\n`,
+  };
 }

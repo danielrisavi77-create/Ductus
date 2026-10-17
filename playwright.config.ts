@@ -80,10 +80,9 @@ export default defineConfig({
     video: process.env.CI ? "on" : "retain-on-failure",
     trace: "retain-on-failure",
   },
-  // Browser policy (docs/TESTING.md 2). Chromium is required on every PR;
-  // Firefox and WebKit are required for editor, sync, offline, clipboard, auth
-  // and submission changes. CI runs all three engines on every PR, which
-  // covers each of those classes without a path filter that could miss one.
+  // Browser policy (docs/TESTING.md 2, owner decision D-108 d). CI runs the
+  // Chromium projects (`desktop`, `mobile`) on every PR and all four on every
+  // push to main and nightly (.github/workflows/ci.yml).
   // `mobile` is a Chromium viewport: an addition, never a stand-in for WebKit.
   // Every spec runs in every project; locally, `--project desktop` runs one.
   projects: [

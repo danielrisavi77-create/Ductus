@@ -42,7 +42,7 @@ Zaseban workflow, a ne izmjena `ci.yml`, da se ne sudara s otvorenim PR-om #13 i
 | Repozitorij | Licenca | Zadatak | Uporaba |
 | --- | --- | --- | --- |
 | `ueberdosis/tiptap` | MIT | P-9, F-3, F-8 | Editor (preneseno iz `pisac-editor`): naslovi, citat, bibliografija; shema u F4 |
-| `dexie/Dexie.js` | Apache-2.0 | P-9, F-3, F-5, F-8 | Journal s 8 stanja sinkronizacije; brisanje pri odjavi i promjeni korisnika |
+| `dexie/Dexie.js` | Apache-2.0 | P-9, F-3, F-5, F-8 | Journal s 8 stanja sinkronizacije; brisanje sinkroniziranog zapisa pri odjavi (D-118); nepredani zapis ostaje vezan uz studenta |
 | `dumbmatter/fakeIndexedDB` | Apache-2.0 | P-9, F-3 | Testovi journala u Vitestu bez preglednika |
 
 ### Platforma

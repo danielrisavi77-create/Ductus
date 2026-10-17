@@ -7,7 +7,7 @@ Popis provjera prije predaje PR-a koji mijenja odjavu, brisanje lokalne pohrane 
 
 Pročitati `docs/PRODUCT.md` §13 t. 13, `docs/BACKEND.md` §4.3, `docs/ARCHITECTURE.md` §10, `docs/TESTING.md` §2 i §3 (t. 1, 5 i 6) i `STATE.md` "Ne smije se izgubiti". Svaka stavka traži test:
 
-1. Odjava s nesinkroniziranim promjenama je blokirana uz poruku; provjera i brisanje u istoj su transakciji, da upis između njih ne može biti izgubljen.
+1. Odjava uvijek zatvara sesiju i kolačić, i s nesinkroniziranim promjenama (D-118). Nepredani zapis ostaje vezan uz tog studenta: druga osoba ga ne vidi, a nastavlja se pri ponovnoj prijavi istog studenta. Provjera i brisanje sinkroniziranog zapisa u istoj su transakciji, da upis između njih ne može biti izgubljen.
 2. Zastarjeli tab ne stvara ponovno obrisanu bazu, ni kad mu preglednik sam zatvori vezu (`versionchange`, `pagehide`, `onclose`).
 3. Brisanje koje ne uspije ponavlja se; blokirano brisanje završava definiranim ishodom u ograničenom vremenu, a ne tihom odjavom.
 4. Istodobna odjava iz dva taba; prijava istog i drugog korisnika nakon prekinute odjave; istek sesije nije odjava i ne briše journal.

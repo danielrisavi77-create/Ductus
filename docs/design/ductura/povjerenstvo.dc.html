@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;background:#0F110E;color:#E9EBE6;font-family:"Instrument Sans",system-ui,sans-serif;font-size:13px}
+*{box-sizing:border-box}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+select,textarea{font:inherit;color:#E9EBE6}
+a{color:#8FB0E0;text-decoration:none}
+a:hover{color:#B3CAEC}
+:focus-visible{outline:2px solid #8FD1B9;outline-offset:2px;border-radius:6px}
+</style>
+</helmet>
+<div data-screen-label="Povjerenstvo" style="min-height:100vh;display:flex;flex-direction:column">
+  <header style="position:sticky;top:0;z-index:20;height:52px;display:flex;align-items:center;gap:14px;padding:0 20px;border-bottom:1px solid #232722;background:#121511">
+    <span style="font-family:Newsreader,Georgia,serif;font-size:20px;font-weight:600">Ductura</span>
+    <span style="font-size:12.5px;color:#8E958D">Povjerenstvo</span>
+    <span style="margin-left:auto;font-size:12.5px;color:#A6ADA5">Nastavnik B · član povjerenstva</span>
+  </header>
+  <div style="flex:1;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:28px;max-width:1240px;width:100%;margin:0 auto;padding:32px 24px 72px;align-items:start">
+    <main aria-label="Rad" style="min-width:0;display:flex;flex-direction:column;gap:18px;grid-column:span 2">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center">
+        <span style="font-size:12px;color:#8E958D">Završni rad · Politologija · Student A · mentor Nastavnik A</span>
+        <h1 style="margin:0;font-family:Newsreader,Georgia,serif;font-size:clamp(28px,3.4vw,40px);font-weight:300;line-height:1.15;letter-spacing:-.015em;text-wrap:balance">Čitanje naglas i rječnik djece u prvim razredima</h1>
+        <span style="font-size:12px;color:#767D75">Predano 12. 6. 2027. · zaključano za izmjene</span>
+      </div>
+      <article style="background:#161A15;border:1px solid #232722;border-radius:10px;padding:clamp(20px,4vw,44px) clamp(20px,5vw,56px);display:flex;flex-direction:column;gap:14px">
+        <sc-for list="{{ paras }}" as="p" hint-placeholder-count="5">
+          <sc-if value="{{ p.h }}" hint-placeholder-val="{{ false }}"><h2 style="margin:10px 0 0;font-family:Newsreader,Georgia,serif;font-size:19px;font-weight:600">{{ p.h }}</h2></sc-if>
+          <sc-if value="{{ p.t }}" hint-placeholder-val="{{ true }}"><p style="margin:0;font-family:Newsreader,Georgia,serif;font-size:16.5px;line-height:1.75;text-wrap:pretty">{{ p.t }}</p></sc-if>
+        </sc-for>
+        <span style="padding-top:8px;text-align:center;font-size:12px;color:#767D75">Ogledni ulomak · cijeli rad ima 9 840 riječi</span>
+      </article>
+    </main>
+    <aside aria-label="Putovnica i ocjena" style="position:sticky;top:72px;display:flex;flex-direction:column;gap:16px;min-width:0">
+      <section style="background:#141712;border:1px solid #232722;border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:baseline;gap:8px"><b style="font-size:13.5px">Putovnica rada</b><span style="margin-left:auto;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:#8FD1B9;letter-spacing:.04em">DUC-7Q4M-2K9X</span></div>
+        <dl style="margin:0;display:grid;grid-template-columns:max-content minmax(0,1fr);gap:7px 12px;font-size:12.5px">
+          <sc-for list="{{ pass }}" as="r" hint-placeholder-count="5"><dt style="color:#8E958D">{{ r.k }}</dt><dd style="margin:0">{{ r.v }}</dd></sc-for>
+        </dl>
+      </section>
+      <section style="background:#141712;border:1px solid #232722;border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:12px">
+        <b style="font-size:13.5px">Moja ocjena po rubrici</b>
+        <sc-for list="{{ rubric }}" as="r" hint-placeholder-count="5">
+          <label style="display:grid;grid-template-columns:minmax(0,1fr) 72px;gap:10px;align-items:center;font-size:12.5px;line-height:1.4"><span>{{ r.t }}</span><select value="{{ r.v }}" onChange="{{ r.set }}" style="background:#0F110E;border:1px solid #2C312B;border-radius:7px;padding:6px 8px"><option value="">–</option><option value="5">5</option><option value="4">4</option><option value="3">3</option><option value="2">2</option><option value="1">1</option></select></label>
+        </sc-for>
+        <textarea value="{{ note }}" onChange="{{ setNote }}" rows="3" aria-label="Obrazloženje" placeholder="Obrazloženje za zapisnik…" style="background:#0F110E;border:1px solid #2C312B;border-radius:8px;padding:8px 10px;font-size:12.5px;resize:vertical"></textarea>
+        <div style="display:flex;align-items:center;gap:10px"><button type="button" onClick="{{ submit }}" disabled="{{ subDis }}" style="{{ subStyle }}">{{ subLabel }}</button><span style="font-size:12px;color:#8E958D">{{ subNote }}</span></div>
+      </section>
+      <section style="display:flex;flex-direction:column;gap:6px;padding:0 4px">
+        <span style="font-size:12px;color:#8E958D">Povjerenstvo</span>
+        <sc-for list="{{ members }}" as="m" hint-placeholder-count="3"><div style="display:flex;gap:8px;font-size:12.5px"><span>{{ m.n }}</span><span style="{{ m.c }}">{{ m.s }}</span></div></sc-for>
+        <span style="padding-top:6px;font-size:11.5px;line-height:1.5;color:#767D75">Ocjene ostalih članova vidiš tek kad svi predaju. Mentorove privatne bilješke i komentari iz dorade nisu dio ovog prikaza.</span>
+      </section>
+    </aside>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const R = ["Istraživačko pitanje i cilj", "Teorijski okvir i izvori", "Metoda i analiza", "Zaključak odgovara na pitanje", "Oblik i navođenje (FPZG)"];
+class Component extends DCLogic {
+  state = { r: R.map(() => ""), note: "", sent: false };
+  renderVals() {
+    const s = this.state, full = s.r.every(Boolean);
+    return {
+      paras: [
+        { h: "1. Uvod" },
+        { t: "Čitanje naglas u prvim razredima osnovne škole često se opisuje kao jedna od najjednostavnijih aktivnosti za razvoj rječnika. Ovaj rad pita koliko se ta tvrdnja može potvrditi na primjeru hrvatskih škola i koje uvjete pritom treba ispuniti." },
+        { t: "Djeca kojoj se svakodnevno čita pokazuju veći rječnik od vršnjaka (Autor A, 2019b: 14), no učinak ovisi o tome razgovara li se o pročitanom (Autor C, 2017: 7; MZO, 2023)." },
+        { h: "2. Teorijski okvir" },
+        { t: "U ovom poglavlju razlikuju se tri pojma koja se u literaturi često miješaju: čitanje naglas, zajedničko čitanje i dijaloško čitanje. Razlika je u ulozi djeteta tijekom čitanja." },
+      ].map(p => ({ h: p.h || false, t: p.t || false })),
+      pass: [
+        { k: "Predano", v: "12. 6. 2027. u 14:02" },
+        { k: "Piše se u Ducturi", v: "od 1. 10. 2026." },
+        { k: "Runde dorade", v: "3, sve zaključene" },
+        { k: "AI pomoćnik", v: "Korišten za provjeru pravopisa, prema izjavi i zapisu" },
+        { k: "Uvezeni tekst", v: "Nema" },
+      ],
+      rubric: R.map((t, i) => ({ t, v: s.r[i], set: e => { const v = e.target.value; this.setState(st => ({ r: st.r.map((x, j) => j === i ? v : x) })); } })),
+      note: s.note, setNote: e => this.setState({ note: e.target.value }),
+      subDis: !full || s.sent, subLabel: s.sent ? "Predano" : "Predaj ocjenu",
+      subStyle: { padding: "9px 16px", borderRadius: 9, fontWeight: 600, background: full && !s.sent ? "#6FBFA5" : "#232722", color: full && !s.sent ? "#0E1C17" : "#767D75" },
+      subNote: s.sent ? "Mentor je obaviješten." : full ? "Nakon predaje ne možeš mijenjati." : "Ocijeni sve stavke.",
+      submit: () => this.setState({ sent: true }),
+      members: [
+        { n: "Nastavnik A · mentor", s: "predano", c: { marginLeft: "auto", color: "#8FD1B9" } },
+        { n: "Nastavnik B · ti", s: s.sent ? "predano" : "u tijeku", c: { marginLeft: "auto", color: s.sent ? "#8FD1B9" : "#D3AC63" } },
+        { n: "Vanjski član C", s: "nije otvoreno", c: { marginLeft: "auto", color: "#8E958D" } },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

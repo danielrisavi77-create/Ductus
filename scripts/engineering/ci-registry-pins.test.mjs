@@ -14,7 +14,7 @@ test("CI pins all stack images outside Docker Hub while local defaults stay inta
   const sources = new Map([
     ["DUCTUS_OBJECTS_IMAGE", "ghcr.io/rustfs/rustfs:1.0.0"],
     ["DUCTUS_MAIL_IMAGE", "ghcr.io/axllent/mailpit:v1.31.4"],
-    ["DUCTUS_OIDC_BASE_IMAGE", "public.ecr.aws/docker/library/node:24.21.0-alpine"],
+    ["DUCTUS_OIDC_BASE_IMAGE", "mirror.gcr.io/library/node:24.21.0-alpine"],
   ]);
   for (const [name, source] of sources) {
     const match = ci.match(new RegExp(`^\\s+${name}:\\s*["']?([^\\s"']+)["']?$`, "m"));
@@ -31,7 +31,7 @@ test("CI pins all stack images outside Docker Hub while local defaults stay inta
 });
 
 test("Postgres (built with pgTAP) takes a registry-pinned base image in CI and no hard-coded FROM", () => {
-  const source = "public.ecr.aws/docker/library/postgres:17.11-trixie";
+  const source = "mirror.gcr.io/library/postgres:17.11-trixie";
   const match = ci.match(/^\s+DUCTUS_POSTGRES_IMAGE:\s*["']?([^\s"']+)["']?$/m);
   assert.ok(match, "DUCTUS_POSTGRES_IMAGE must be set in the CI stack job");
   assert.ok(match[1].startsWith(source + "@sha256:"), "DUCTUS_POSTGRES_IMAGE wrong provenance");
