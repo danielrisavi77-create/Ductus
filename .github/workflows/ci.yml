@@ -4,14 +4,20 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Nightly run on main with all three browser engines (D-108 d).
+  schedule:
+    - cron: "17 1 * * *"
 
 permissions:
   contents: read
   pull-requests: read
 
+# A newer push cancels an older run only on a pull request. Every run on main
+# (push or nightly) gets its own group, so none is cancelled or dropped from
+# the queue (D-108 d).
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -79,13 +85,27 @@ jobs:
       - run: pnpm demo:prepare
       - run: pnpm test:integration
       - run: pnpm build
-      # docs/TESTING.md 2: Chromium, Firefox and WebKit.
+      # Owner decision D-108 d: Chromium (desktop and mobile viewport) on a
+      # pull request; Chromium, Firefox and WebKit on main and nightly.
       - name: Install browsers
-        run: pnpm exec playwright install --with-deps chromium firefox webkit
+        env:
+          ALL_ENGINES: ${{ github.event_name != 'pull_request' }}
+        run: |
+          if [ "$ALL_ENGINES" = "true" ]; then
+            pnpm exec playwright install --with-deps chromium firefox webkit
+          else
+            pnpm exec playwright install --with-deps chromium
+          fi
       - name: E2E tests
         env:
           E2E_NO_BUILD: "1"
-        run: pnpm test:e2e
+          ALL_ENGINES: ${{ github.event_name != 'pull_request' }}
+        run: |
+          if [ "$ALL_ENGINES" = "true" ]; then
+            pnpm test:e2e
+          else
+            pnpm test:e2e --project=desktop --project=mobile
+          fi
       # Screenshots (desktop and mobile), videos and failure traces for the PR.
       - name: Upload Playwright report
         if: ${{ !cancelled() }}

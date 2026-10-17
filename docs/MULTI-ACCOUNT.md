@@ -59,13 +59,18 @@ Orkestrator ne piše proizvodni kod. Dodjeljuje zadatke, provjerava gateove, rje
 
 ## 5. Skills
 
-Repo sadrži adaptere za podržane runtimee (19 projektnih skillova `ductus-*`, iste mape u obje lokacije; uz njih je u `.claude/skills/` i preuzeti `supabase-postgres-best-practices`, koji nije adapter i nema kopiju u `.agents/skills/`, vidi `docs/REPOZITORIJI.md`):
+Repo sadrži adaptere za podržane runtimee (27 projektnih skillova `ductus-*`, iste mape u obje lokacije; uz njih je u `.claude/skills/` i preuzeti `supabase-postgres-best-practices`, koji nije adapter i nema kopiju u `.agents/skills/`, vidi `docs/REPOZITORIJI.md`):
 
 ```
 .claude/skills/
   ductus-worker/
   ductus-handoff/
   ductus-browser-cli/
+  ductus-app-map/
+  ductus-auth-aai/
+  ductus-database/
+  ductus-editor-document/
+  ductus-evidence-forensics/
   ductus-orchestrator/
   ductus-review/
   ductus-qa/
@@ -79,15 +84,23 @@ Repo sadrži adaptere za podržane runtimee (19 projektnih skillova `ductus-*`, 
   ductus-offline-recovery/
   ductus-provenance-invariants/
   ductus-rules-change/
+  ductus-sync-journal/
   ductus-sync-states/
   ductus-synthetic-data/
+  ductus-testing-map/
   ductus-ui-copy/
+  ductus-ui-shell-i18n/
   supabase-postgres-best-practices/
 
 .agents/skills/
   ductus-worker/
   ductus-handoff/
   ductus-browser-cli/
+  ductus-app-map/
+  ductus-auth-aai/
+  ductus-database/
+  ductus-editor-document/
+  ductus-evidence-forensics/
   ductus-orchestrator/
   ductus-review/
   ductus-qa/
@@ -101,9 +114,12 @@ Repo sadrži adaptere za podržane runtimee (19 projektnih skillova `ductus-*`, 
   ductus-offline-recovery/
   ductus-provenance-invariants/
   ductus-rules-change/
+  ductus-sync-journal/
   ductus-sync-states/
   ductus-synthetic-data/
+  ductus-testing-map/
   ductus-ui-copy/
+  ductus-ui-shell-i18n/
 ```
 
 Skillovi su namjerno tanki. Ne dupliciraju proizvodna pravila; upućuju na kanonske dokumente u korijenu i `docs/`. Tako se jedna promjena pravila ne mora ručno kopirati u više skillova.
