@@ -163,21 +163,85 @@ export function repoId() {
   return cachedRepo;
 }
 
+const THREADS_QUERY = `query($owner: String!, $repo: String!, $n: Int!, $after: String) {
+  repository(owner: $owner, name: $repo) {
+    pullRequest(number: $n) {
+      reviewThreads(first: 100, after: $after) {
+        totalCount
+        pageInfo { hasNextPage endCursor }
+        nodes { isResolved comments(first: 1) { nodes { author { login } } } }
+      }
+    }
+  }
+}`;
+
+/**
+ * Review threads through GraphQL (pullRequest.reviewThreads), every page.
+ * Throws on any answer that is not a complete thread list, so a failed read
+ * is never "no open threads".
+ */
+export async function graphqlThreads(n, { json = ghJson, repo = repoId } = {}) {
+  const { owner, repo: name } = await repo();
+  const out = [];
+  let after = null;
+  for (let page = 0; page < MAX_PAGES; page += 1) {
+    const args = ["api", "graphql", "-f", `query=${THREADS_QUERY}`, "-f", `owner=${owner}`, "-f", `repo=${name}`, "-F", `n=${n}`];
+    if (after) args.push("-f", `after=${after}`);
+    const body = await json(args);
+    if (body?.errors) throw new Error("graphql review threads: errors in response");
+    const rt = body?.data?.repository?.pullRequest?.reviewThreads;
+    if (!rt || !Array.isArray(rt.nodes) || typeof rt.pageInfo?.hasNextPage !== "boolean") {
+      throw new Error("unexpected graphql review threads response");
+    }
+    for (const t of rt.nodes) {
+      if (typeof t?.isResolved !== "boolean") throw new Error("review thread without isResolved");
+      out.push(t);
+    }
+    if (!rt.pageInfo.hasNextPage) {
+      if (out.length !== rt.totalCount) throw new Error(`read ${out.length} of ${rt.totalCount} review threads`);
+      return out;
+    }
+    after = rt.pageInfo.endCursor;
+    if (typeof after !== "string" || !after) throw new Error("review threads page without endCursor");
+  }
+  throw new Error(`review threads: more than ${MAX_PAGES} pages`);
+}
+
 /**
  * Review threads through the REST route cloud sessions are given
  * (GET pulls/{n}/ccr/review_threads), in the GraphQL node shape that
  * summarizeThreads reads. Authors come from one pulls/{n}/comments list.
  */
-export async function reviewThreads(n, { json = ghJson, list = ghList } = {}) {
+export async function ccrThreads(n, { json = ghJson, list = ghList } = {}) {
   const threads = await json(["api", `repos/{owner}/{repo}/pulls/${n}/ccr/review_threads`]);
   if (!Array.isArray(threads)) throw new Error("unexpected review_threads response");
+  if (threads.some((t) => typeof t?.resolved !== "boolean")) throw new Error("review thread without resolved");
   const open = threads.filter((t) => !t.resolved);
   const login = new Map();
   if (open.length) {
     for (const c of await list(`repos/{owner}/{repo}/pulls/${n}/comments?per_page=100`)) login.set(c.id, c.user?.login);
   }
   return threads.map((t) => ({
-    isResolved: Boolean(t.resolved),
+    isResolved: t.resolved,
     comments: { nodes: [{ author: { login: login.get(t.comment_ids?.[0]) ?? "?" } }] },
   }));
+}
+
+/**
+ * Review threads of PR n in the GraphQL node shape. GraphQL first (works
+ * locally; the ccr route answers 404 there since 2026-10-17), then the ccr
+ * REST route (cloud sessions, where GraphQL is refused). Throws only when
+ * both reads fail, with both reasons.
+ */
+export async function reviewThreads(n, { graphql = graphqlThreads, ccr = ccrThreads } = {}) {
+  try {
+    return await graphql(n);
+  } catch (first) {
+    try {
+      return await ccr(n);
+    } catch (second) {
+      const why = (e) => String(e?.stderr || e?.message || e).trim().split("\n")[0];
+      throw new Error(`review threads unreadable: graphql: ${why(first)}; ccr: ${why(second)}`);
+    }
+  }
 }
