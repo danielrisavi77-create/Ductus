@@ -179,7 +179,7 @@ Sadržaj odsječaka živi u privatnom bucketu, adresiran svojim hashom, odvojeno
 
 | Klasa | Primjeri | Prijedlog roka (potvrđuje FPZG, D-30) |
 | --- | --- | --- |
-| Lokalni zapis na uređaju | Dexie journal | Do sinkronizacije; briše se pri odjavi ili prijavi drugog korisnika |
+| Lokalni zapis na uređaju | Dexie journal | Do sinkronizacije; nakon odjave nepredani zapis ostaje vezan uz studenta i nedostupan drugoj osobi (D-118); rok trajanja prije pilota (D-122) |
 | Sesije | `session` | Do isteka ili odjave, zatim kratko radi revizije |
 | Radne verzije | Revizije i kontrolne točke projekta | Do kraja akademske godine zadatka |
 | Evidencija | Odsječci, potvrde, praznine, uvozi | Kao predaja |
