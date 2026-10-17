@@ -122,8 +122,8 @@ test("settings.json routes Bash and PowerShell through the wrapper, not the bare
 });
 
 test("analysis limit stays below the hook timeout in settings.json", async () => {
-  const { ANALYSIS_TIMEOUT_MS } = await import("../hooks/safety-net.mjs");
-  assert.ok(ANALYSIS_TIMEOUT_MS <= hookEntry.timeout * 1000 - 5000, "at least 5 s of start-up margin");
+  const { ANALYSIS_TIMEOUT_MS, DEFAULT_LIMITS } = await import("../hooks/safety-net.mjs");
+  assert.ok(ANALYSIS_TIMEOUT_MS + DEFAULT_LIMITS.maxMs <= hookEntry.timeout * 1000 - 5000, "analysis budget plus configuration read leaves 5 s of start-up margin");
 });
 
 for (const tool of TOOLS) {
