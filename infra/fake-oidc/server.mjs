@@ -5,7 +5,7 @@
 import { createServer } from "node:http";
 
 import Provider from "oidc-provider";
-import { DEMO_ACCOUNTS, demoAccountClaims } from "./accounts.mjs";
+import { ACCOUNTS, demoAccountClaims, isDemoAccountId } from "./accounts.mjs";
 
 const PORT = Number(process.env.PORT ?? 8080);
 const ISSUER = process.env.ISSUER ?? `http://localhost:${PORT}`;
@@ -54,7 +54,7 @@ const escapeHtml = (text) =>
   text.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
 
 function loginPage(uid) {
-  const buttons = Object.entries(DEMO_ACCOUNTS)
+  const buttons = Object.entries(ACCOUNTS)
     .map(
       ([id, account]) =>
         `<button type="submit" name="account" value="${escapeHtml(id)}">${escapeHtml(account.name)}</button>`,
@@ -87,7 +87,7 @@ async function handleInteraction(req, res) {
     return;
   }
   const accountId = (await readForm(req)).get("account");
-  if (req.method !== "POST" || !accountId || !Object.hasOwn(DEMO_ACCOUNTS, accountId)) {
+  if (req.method !== "POST" || !isDemoAccountId(accountId)) {
     res.writeHead(400, { "content-type": "text/plain; charset=utf-8" });
     res.end("Nepoznat demo račun.");
     return;

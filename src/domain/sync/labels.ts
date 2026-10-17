@@ -110,3 +110,33 @@ export function chipContent(state: SyncState, blocked = false): ChipContent {
   const entry = SYNC_STATE_LABELS[state];
   return { text: entry.label, tone: entry.tone };
 }
+
+/** What a local-only editor knows when it picks the chip (F-3, plan #197). */
+export type LocalChipInput = {
+  /** Another tab holds the document's writer lock. */
+  readonly blocked: boolean;
+  /** The stored document was refused or the journal is corrupt. */
+  readonly recoveryRequired: boolean;
+  /** Saving has stopped for any other reason (quota, a stale write, ...). */
+  readonly failed: boolean;
+  /** The saver's own state; null while the journal is still being read. */
+  readonly saverState: SyncState | null;
+};
+
+export type LocalChip = ChipContent & { readonly state: SyncState | "blocked" };
+
+/**
+ * The chip of the local editor, or null while there is nothing to say yet.
+ *
+ * Order matters: a blocked tab journals nothing, and a refused document or
+ * any failure outranks whatever the saver last reported, so the chip never
+ * says "Spremljeno na uređaju" while a notice says saving has stopped (#197
+ * attacks 5 and 9). Only the saver's own state can say it.
+ */
+export function localChip(input: LocalChipInput): LocalChip | null {
+  if (input.blocked) return { ...chipContent("EDITING", true), state: "blocked" };
+  const state: SyncState | null = input.recoveryRequired ? "RECOVERY_REQUIRED"
+    : input.failed ? "ERROR"
+    : input.saverState;
+  return state ? { ...chipContent(state), state } : null;
+}

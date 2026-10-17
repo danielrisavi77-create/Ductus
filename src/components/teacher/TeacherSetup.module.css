@@ -1,0 +1,132 @@
+/* Screen 2 of the design handoff, on the shared tokens (app/globals.css, #386). */
+.layout {
+  display: grid;
+  gap: 24px;
+  align-items: start;
+}
+
+:global(.page) > .layout {
+  max-width: none;
+}
+
+@media (min-width: 1000px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr) 340px;
+  }
+  .preview {
+    position: sticky;
+    top: 24px;
+  }
+}
+
+.forms {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+
+.card,
+.preview {
+  padding: 20px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--sheet);
+}
+
+.card h2,
+.preview h2 {
+  margin-top: 0;
+}
+
+.fields,
+.tools {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.tools legend {
+  padding: 0;
+  font-weight: 600;
+}
+
+.pair {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.field {
+  display: grid;
+  gap: 7px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.control {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--ink-3);
+  border-radius: 7px;
+  padding: 10px 12px;
+  background: var(--sheet);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 400;
+}
+
+.control:focus-visible,
+.check input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.check {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-height: 44px;
+}
+
+.check input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+}
+
+.listHead {
+  margin: 4px 0 0;
+  font-weight: 600;
+}
+
+.banned,
+.summary {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--ink-2);
+}
+
+.hint {
+  margin: 8px 0 0;
+  color: var(--ink-2);
+}
+
+.brief {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.notice {
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  border-left: 3px solid var(--accent);
+  background: var(--chrome);
+  color: var(--ink);
+}
+
+.fields:disabled .control {
+  cursor: not-allowed;
+}
