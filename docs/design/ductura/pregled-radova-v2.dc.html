@@ -24,9 +24,9 @@ a:hover{color:#B3CAEC}
   <header style="flex:none;height:48px;display:flex;align-items:center;gap:14px;padding:0 16px;border-bottom:1px solid #2C312B;background:#141712">
     <span style="font-family:Newsreader,Georgia,serif;font-size:19px;font-weight:600">Ductura</span>
     <span style="font-size:12.5px;color:#A6ADA5">Kolegij A / Zadatak 1 / Pregled radova</span>
-    <button type="button" role="switch" aria-checked="{{ mOn }}" onClick="{{ toggleM }}" title="Ritam unosa i postoci podrijetla za demo. Vidi samo mentor." style="margin-left:auto;display:flex;align-items:center;gap:7px;font-size:12px;color:#A6ADA5"><span style="{{ mTrack }}"><span style="{{ mKnob }}"></span></span>Mjere (demo)</button>
+    
     <span style="font-size:12.5px;color:#A6ADA5">Nastavnik A</span>
-    <a href="editor-v11.dc.html" style="font-size:12.5px">Editor</a>
+    <a href="Ductura Editor v11.dc.html" style="font-size:12.5px">Editor</a>
   </header>
   <div style="flex:1;min-height:0;display:flex">
     <nav aria-label="Radovi studenata" style="flex:0 1 230px;min-width:170px;border-right:1px solid #2C312B;background:#141712;overflow-y:auto;padding:12px 8px;display:flex;flex-direction:column;gap:2px">
@@ -35,6 +35,7 @@ a:hover{color:#B3CAEC}
         <button type="button" onClick="{{ st.pick }}" aria-current="{{ st.cur }}" style="{{ st.style }}" style-hover="background:#1E221D">
           <span style="font-size:13px;font-weight:600;color:#E9EBE6">{{ st.name }}</span>
           <span style="{{ st.stStyle }}">{{ st.status }}</span>
+          <sc-if value="{{ st.inv }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px;color:#D3AC63">{{ st.inv }}</span></sc-if>
           <span style="font-size:11px;color:#8E958D">{{ st.when }}</span>
         </button>
       </sc-for>
@@ -120,6 +121,21 @@ a:hover{color:#B3CAEC}
           <span style="font-size:12px;color:#A6ADA5">{{ revOpen }}</span>
           <div style="display:flex;gap:6px"><button type="button" onClick="{{ revSend }}" style="background:#6FBFA5;color:#0E1C17;padding:4px 10px;border-radius:7px;font-size:12px;font-weight:500">Zatraži doradu</button></div>
           <div style="display:flex;flex-direction:column;gap:6px;padding-top:10px;border-top:1px solid #232722">
+            <sc-if value="{{ invNone }}" hint-placeholder-val="{{ true }}">
+              <sc-if value="{{ invForm }}" hint-placeholder-val="{{ false }}">
+                <textarea value="{{ invReason }}" onChange="{{ setInvReason }}" rows="3" aria-label="Razlog sumnje" placeholder="Razlog sumnje. Vide ga koordinator i student." style="width:100%;background:#0F110E;border:1px solid #2C312B;border-radius:7px;padding:6px 8px;font-size:12.5px;line-height:1.5;resize:vertical"></textarea>
+                <div style="display:flex;gap:6px"><button type="button" onClick="{{ invSend }}" disabled="{{ invSendDis }}" style="{{ invSendStyle }}">Pošalji koordinatoru</button><button type="button" onClick="{{ invCancel }}" style="padding:4px 10px;border-radius:7px;font-size:12px;color:#A6ADA5">Odustani</button></div>
+              </sc-if>
+              <sc-if value="{{ invNoForm }}" hint-placeholder-val="{{ true }}"><button type="button" onClick="{{ invStart }}" style="align-self:flex-start;padding:4px 10px;border-radius:7px;font-size:12px;color:#D3AC63;border:1px solid #3A3426">Zatraži istragu…</button></sc-if>
+              <span style="font-size:11px;line-height:1.45;color:#767D75">Samo kad postoji sumnja. Odobrava koordinator ili etičko povjerenstvo, a student odmah dobiva obavijest i vidi isti prikaz.</span>
+            </sc-if>
+            <sc-if value="{{ invState }}" hint-placeholder-val="{{ false }}">
+              <span style="font-size:12px;font-weight:600;color:#D3AC63">Istraga · {{ invState }}</span>
+              <span style="font-size:11.5px;line-height:1.45;color:#A6ADA5">{{ invNote }}</span>
+              <div style="display:flex;gap:10px;flex-wrap:wrap"><a href="Ductura Istraga.dc.html" style="font-size:12px">Otvori istragu</a><button type="button" onClick="{{ invAdvance }}" style="font-size:12px;color:#8E958D;padding:0">{{ invAdvLabel }}</button></div>
+            </sc-if>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;padding-top:10px;border-top:1px solid #232722">
             <span style="font-size:11.5px;font-weight:600;color:#8E958D">Dnevnik</span>
             <sc-for list="{{ log }}" as="l" hint-placeholder-count="2"><div style="display:flex;flex-direction:column;gap:1px"><span style="font-size:12.5px">{{ l.what }}</span><span style="font-size:11px;color:#8E958D">{{ l.meta }}</span></div></sc-for>
           </div>
@@ -202,7 +218,7 @@ const pl = (n, a, b, c) => { const m = n % 10, h = n % 100; return m === 1 && h 
 class Component extends DCLogic {
   paperRef = React.createRef(); cmRef = React.createRef(); revRef = React.createRef();
   state = {
-    sel: "a", tab: "cm", view: "text", draft: null, toast: null, mOn: false, rp: 1000, playing: false, retFor: null,
+    sel: "a", tab: "cm", view: "text", draft: null, toast: null, mOn: false, inv: {}, invForm: false, invReason: "", rp: 1000, playing: false, retFor: null,
     templates: [{ t: "Navodu nedostaje stranica.", rule: RULES.page }, { t: "Ova tvrdnja treba izvor.", rule: RULES.claim }, { t: "Podijeli rečenicu na dvije.", rule: RULES.sent }, { t: "Definiraj pojam pri prvoj uporabi.", rule: RULES.def }],
     st: {
       a: { title: "Čitanje naglas i rječnik djece u prvim razredima", origin: ["typed", "typed", "pasted", "typed", "typed", "ai", "typed", "unknown", "typed", "typed"], sessions: "9 sesija · ukupno 6 h 40 min · 2. 10. – 17. 10. 2026", reviewed: { round: 1, when: "16. 10., 18:30" }, after: { stage: "Nacrt", n: 4 }, crit: [{ n: "Istraživačko pitanje i okvir", v: "" }, { n: "Metodologija", v: "" }, { n: "Analiza i argumentacija", v: "" }, { n: "Forma i citiranje", v: "" }], report: "",
@@ -250,8 +266,17 @@ class Component extends DCLogic {
     return L.join("\n");
   }
   extra(v) {
+    const INV2 = { pending: "čeka odobrenje", open: "otvorena", closed: "zatvorena" };
     const s = this.state, cur = s.st[s.sel], last = cur.rounds[cur.rounds.length - 1] || [], n = cur.rounds.length, out = {};
     out.tabs = [["cm", "Komentari"], ["rev", "Dorada"], ["ko", "Konzultacije"], ["et", "Etape"], ["iz", "Izvješće"]].map(([id, label]) => ({ label, sel: s.tab === id ? "true" : "false", on: () => this.setState({ tab: id }), style: { flex: "none", padding: "11px 0 9px", fontSize: 12, fontWeight: s.tab === id ? 600 : 400, color: s.tab === id ? "#E9EBE6" : "#A6ADA5", borderBottom: "2px solid " + (s.tab === id ? "#6FBFA5" : "transparent") } }));
+    { const iv = (s.inv || {})[s.sel], reason = s.invReason || "";
+      out.invNone = !iv; out.invForm = !iv && !!s.invForm; out.invNoForm = !iv && !s.invForm; out.invReason = reason;
+      out.setInvReason = e => this.setState({ invReason: e.target.value }); out.invStart = () => this.setState({ invForm: true }); out.invCancel = () => this.setState({ invForm: false, invReason: "" });
+      out.invSendDis = !reason.trim(); out.invSendStyle = { padding: "4px 10px", borderRadius: 7, fontSize: 12, fontWeight: 500, background: reason.trim() ? "#6FBFA5" : "#232722", color: reason.trim() ? "#0E1C17" : "#767D75" };
+      out.invSend = () => { if (!reason.trim()) return; this.setState(st => ({ inv: Object.assign({}, st.inv, { [st.sel]: "pending" }), invForm: false, invReason: "" })); this.upd(x => ({ log: x.log.concat([{ what: "Zatražena istraga", meta: "Nastavnik A · " + stamp() }]) })); this.flash("Zahtjev je poslan koordinatoru. Student će dobiti obavijest kad se istraga odobri."); };
+      out.invState = iv ? INV2[iv] : false; out.invNote = iv === "pending" ? "Zapis unosa ostaje zatvoren dok koordinator ne odluči." : iv === "open" ? "Rok za očitovanje studenta 1. 11. 2026. Ocjena se ne mijenja dok istraga traje." : "Ishod: razgovor sa studentom. Student vidi ishod i obrazloženje.";
+      out.invAdvLabel = iv === "pending" ? "Demo: odobri" : iv === "open" ? "Demo: zatvori" : "Demo: ukloni";
+      out.invAdvance = () => this.setState(st => { const n = Object.assign({}, st.inv), c = n[st.sel]; if (c === "pending") n[st.sel] = "open"; else if (c === "open") n[st.sel] = "closed"; else delete n[st.sel]; return { inv: n }; }); }
     out.tabKo = s.tab === "ko"; out.tabEt = s.tab === "et"; out.tabIz = s.tab === "iz";
     out.mOn = s.mOn ? "true" : "false";
     out.mTrack = { position: "relative", flex: "none", width: 26, height: 14, borderRadius: 7, background: s.mOn ? "#6FBFA5" : "#2C312B", transition: "background .15s" };
@@ -308,9 +333,10 @@ class Component extends DCLogic {
   renderVals() { const v = this.base(); return Object.assign(v, this.extra(v)); }
   base() {
     const s = this.state, cur = s.st[s.sel], last = cur.rounds[cur.rounds.length - 1], prev = cur.rounds[cur.rounds.length - 2];
+    const INV = { pending: "čeka odobrenje", open: "otvorena", closed: "zatvorena" };
     const ST = { revise: ["Čeka doradu", "#D3AC63"], review: ["Dorada stigla na pregled", "#8FB0E0"], accepted: ["Prihvaćeno", "#6FBFA5"], none: ["Nije započeto", "#8E958D"] };
     const btn = (label, on, primary) => ({ label, on, style: primary ? { background: "#6FBFA5", color: "#0E1C17", padding: "4px 11px", borderRadius: 7, fontSize: 12, fontWeight: 500 } : { padding: "4px 10px", borderRadius: 7, fontSize: 12, color: "#A6ADA5", border: "1px solid #2C312B" } });
-    const students = ["a", "b", "c", "d"].map(k => { const x = s.st[k], on = k === s.sel; return { name: x.name, status: ST[x.status][0], when: x.when, cur: on ? "true" : "false", pick: () => this.setState({ sel: k, draft: null, view: "text" }), style: { display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1, padding: "8px 10px", borderRadius: 8, textAlign: "left", background: on ? "#232722" : "transparent" }, stStyle: { fontSize: 12, color: ST[x.status][1] } }; });
+    const students = ["a", "b", "c", "d"].map(k => { const x = s.st[k], on = k === s.sel; return { name: x.name, status: ST[x.status][0], when: x.when, cur: on ? "true" : "false", pick: () => this.setState({ sel: k, draft: null, view: "text" }), style: { display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1, padding: "8px 10px", borderRadius: 8, textAlign: "left", background: on ? "#232722" : "transparent" }, stStyle: { fontSize: 12, color: ST[x.status][1] }, inv: (s.inv || {})[k] ? "istraga · " + INV[(s.inv || {})[k]] : false }; });
     const actions = cur.status === "review" ? [btn("Zatraži novu doradu", () => this.setState({ tab: "rev" })), btn("Prihvati rad", () => { this.upd(x => ({ status: "accepted", log: x.log.concat([{ what: "Rad prihvaćen", meta: "runda " + x.rounds.length + " · Nastavnik A · " + stamp() }]) })); this.flash("Rad je prihvaćen. Student ga može predati."); }, true)]
       : cur.status === "revise" ? [btn("Promijeni zahtjev", () => this.setState({ tab: "rev" }))] : cur.status === "accepted" ? [btn("Ocjena", () => this.setState({ tab: "iz" }), true)] : [];
     const views = [["text", "Tekst"], ["diff", "Promjene od runde " + (cur.rounds.length - 1)], ["origin", "Podrijetlo teksta"]].filter(v => v[0] !== "diff" || prev).map(([id, label]) => ({ label, sel: s.view === id ? "true" : "false", on: () => this.setState({ view: id, draft: null }), style: { padding: "2px 8px", borderRadius: 6, fontSize: 12, color: s.view === id ? "#E9EBE6" : "#A6ADA5", background: s.view === id ? "#232722" : "transparent" } }));

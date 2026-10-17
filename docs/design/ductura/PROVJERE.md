@@ -233,3 +233,18 @@ Tisuću istodobnih radova znači tisuću preglednika koji računaju za sebe. Pos
 2. Mentor smije prilagoditi pravila za pojedini rad (§6b).
 3. Što ustanova ne propisuje, to se ne računa i ne prikazuje.
 4. Nastavnik vidi službene rokove, student svoje. Student može uključiti da nastavnik vidi i njegove rokove (§6a).
+
+
+## §6e Zapis unosa i istraga
+
+> **PRIJEDLOG dizajna, ne gradi.** Sukobljava se s D-24 (vrijeme ne finije od minute), D-56 i D-125; čeka vlasnikovu D-odluku i pravno mišljenje (GDPR čl. 35). Tekst obavijesti S3 u demou slijedi važeće D-24 i D-56, ne opis iz prototipa.
+
+- Od potvrde obavijesti bilježi se svaki unos i brisanje: `{t, op: i|d, pos, s|n}`. Svaki zapis nosi `h_i = SHA-256(h_{i-1} ‖ JSON(zapis))`; `h_0` je hash zadatka i studenta. Poslužitelj prima zapise u skupinama i provjerava lanac pri primitku.
+- PRODUCT.md §5 ostaje na snazi: u redovnim prikazima nema mjera ritma, trajanja ni vremena pisanja.
+- Zapis unosa i vrijeme pisanja otvaraju se samo u istrazi: zahtjev mentora (obrazloženje obavezno) → odobrenje koordinatora ili etičkog povjerenstva → obavijest studentu odmah.
+- Istraga obuhvaća cijeli rad. Mentor i student vide isti prikaz: vremensku crtu sesija i reprodukciju nastanka teksta.
+- Student ima 15 dana za pisano očitovanje u Ducturi.
+- Ishodi: zatvoreno bez nalaza · razgovor sa studentom · upućeno stegovnom postupku · ocjena se ne mijenja. Ishod i obrazloženje vidi student.
+- Svaki pristup prikazu istrage upisuje se u dnevnik pristupa (tko, kada).
+- Zapis se čuva do isteka roka koji propisuje fakultet, kao rad.
+- Prekid lanca (izmijenjen ili nedostajući zapis) prikazuje se u istrazi s rednim brojem prvog neispravnog zapisa.
