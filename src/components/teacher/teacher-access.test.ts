@@ -17,7 +17,7 @@ describe("F-6b teacher-only screen", () => {
   it("does not contact the DB without a valid session cookie", async () => {
     const { withActor, query } = actor(true);
     for (const token of [undefined, "", "invalid", "!".repeat(43)]) {
-      expect(await teacherAccess(token, withActor)).toBe("denied");
+      expect(await teacherAccess(token, withActor)).toBe("signedOut");
     }
     expect(query).not.toHaveBeenCalled();
   });

@@ -32,6 +32,7 @@ export const hr = {
   // F-6 (DAN-35): text of screen 2 of the design handoff (docs/design/ductura).
   teacher: {
     title: "Novi kolegij i zadatak",
+    signedOut: "Prijavi se nastavničkim računom.",
     denied: "Za ovaj račun nije dopušteno stvaranje kolegija.",
     unavailable: "Provjera nastavničke uloge trenutačno nije dostupna. Pokušaj ponovno.",
     signIn: "Prijavi se",
@@ -49,7 +50,8 @@ export const hr = {
       },
       submit: "Stvori kolegij",
       pending: "Stvaranje kolegija…",
-      created: "Kolegij je stvoren.",
+      // create_course returns the existing id for an identical repeat.
+      created: "Kolegij je spreman.",
       nameMissing: "Upiši naziv kolegija.",
       errors: {
         invalid: "Provjeri naziv, akademsku godinu i pravila kolegija.",

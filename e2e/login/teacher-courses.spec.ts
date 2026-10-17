@@ -10,7 +10,7 @@ import { signIn } from "./support";
 test("anonymous visitor never sees the teacher-only course and assignment form", async ({ page }) => {
   await page.goto("/nastavnik/kolegiji");
   await expect(page.getByRole("heading", { name: t.teacher.title })).toBeVisible();
-  await expect(page.getByText(t.teacher.denied)).toBeVisible();
+  await expect(page.getByText(t.teacher.signedOut)).toBeVisible();
   await expect(page.getByRole("button", { name: t.teacher.course.submit })).toHaveCount(0);
 });
 
@@ -29,7 +29,7 @@ test("does not start the OIDC login without a click", async ({ page }) => {
     }
   });
   await page.goto("/nastavnik/kolegiji");
-  await expect(page.getByText(t.teacher.denied)).toBeVisible();
+  await expect(page.getByText(t.teacher.signedOut)).toBeVisible();
   const login = page.getByRole("link", { name: t.teacher.signIn });
   await expect(login).toBeVisible();
   expect(loginRequests).toHaveLength(0);

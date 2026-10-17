@@ -27,9 +27,9 @@ export default async function TeacherCoursesPage() {
         ) : (
           <>
             <p role="status">
-              {access === "unavailable" ? t.teacher.unavailable : t.teacher.denied}
+              {t.teacher[access]}
             </p>
-            {access === "denied" ? (
+            {access !== "unavailable" ? (
               <p>
                 {/* This API route starts an OIDC login. Use a real navigation
                     rather than Next's prefetchable client-side Link. */}
