@@ -224,7 +224,14 @@ describe("edit steps v1 replayer: positions, identity and fail-closed", () => {
 
   it("refuses a step that changes nothing and a step ProseMirror cannot apply", () => {
     refused(doc, [{ stepType: "removeMark", from: 1, to: 5, mark: { type: "bold" } }]).toThrow("step_changes_nothing");
-    refused(doc, [{ stepType: "addMark", from: 16, to: 20, mark: { type: "bold" } }]).not.toThrow();
+    // Text between two blocks: the shape is valid, ProseMirror's own check fails.
+    refused(doc, [{ stepType: "replace", from: 18, to: 18, slice: { content: [{ type: "text", text: "x" }] } }])
+      .toThrow("step_does_not_apply");
+  });
+
+  it("accepts a mark across a block boundary", () => {
+    const { steps, after } = capture(doc, (tr) => tr.addMark(16, 22, schema.marks.bold.create()));
+    expect(replayer.apply(doc, event(steps)).toJSON()).toEqual(after.toJSON());
   });
 
   it("refuses an unknown format and a malformed step before touching the document", () => {
