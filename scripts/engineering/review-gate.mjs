@@ -59,11 +59,13 @@ async function main() {
   }
   const pr = await api(`/repos/${owner}/${repo}/pulls/${number}`);
   knownHead = { repository, sha: pr.head.sha, url: pr.html_url };
-  const [comments, changedFiles, reviews] = await Promise.all([
+  const [comments, changedFiles, reviews, reviewComments] = await Promise.all([
     apiAll(`/repos/${owner}/${repo}/issues/${number}/comments`),
     apiAll(`/repos/${owner}/${repo}/pulls/${number}/files`),
     // Only for quota evidence (#128): a PR review of the exhausted App voids it.
     apiAll(`/repos/${owner}/${repo}/pulls/${number}/reviews`),
+    // D-139: Codex threads and their replies (second-session QA path only).
+    apiAll(`/repos/${owner}/${repo}/pulls/${number}/comments`),
   ]);
 
   const { metadata, result } = evaluatePullRequest({
@@ -71,6 +73,7 @@ async function main() {
     files: changedFiles,
     comments,
     prReviews: reviews,
+    reviewComments,
     ownerLogin: owner,
     carriedHeads: await carriedHeads(api, owner, repo, pr, comments),
   });
