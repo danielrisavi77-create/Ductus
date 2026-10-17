@@ -238,6 +238,102 @@ Expand/migrate/contract i pgTAP u CI-ju bez `supabase start` vrijede i dalje.
    - Prikaz ostaje opisni (D-105): bez postotka, udjela, zbroja lijepljenja, poretka po veličini, boje i ocjene (`docs/PRODUCT.md` §5 pravila 2 i 3, §7 „Zabranjeno u sažetku”).
    - Brzina tipkanja, pauze i ritam nisu dio ovog prikaza. Bilježenje ritma postoji samo kao D-56: samo u mentorskim radovima, vrijeme promjena u koracima od 100 ms isključivo za reprodukciju, bez ikakve mjere, i tek nakon pravnog mišljenja i izmjene Ustava C-14 i C-19. To je izvan opsega B-11 i demoa.
 
+### 4.11 Komentari uz odlomak (B-10, DAN-86)
+
+Ugovor prije koda (issue #177; vlasnikova odluka na #87, `issuecomment-6236582503`). Komentar je **zaseban zapis sa sidrom** koji klijent prikazuje kao dekoraciju. Nikad nije oznaka u dokumentu, nikad ne mijenja dokument, reviziju, segment, potvrdu ni hash; dokument ima jednog pisača (D-34). Napadi 1 do 12 iz #177 su kriterij prihvata.
+
+**Shema i vlasništvo.** Nova shema `collaboration` (vlasnik `ductus_migrator`); tablice i RPC-ovi su u vlasništvu `ductus_identity` (on već posjeduje `app.current_actor()` i `institution.actor_assignment_role()`). Komentar nije evidencija: `ductus_identity` ne dobiva nikakvo pravo na shemi `evidence` (provjera iz `040` ostaje). Vezu dokumenta čita jedna uska funkcija `collaboration.document_scope(p_document_id text) RETURNS (institution_id uuid, assignment_id uuid, principal_id uuid)` u vlasništvu `ductus_evidence`, `SECURITY DEFINER`, prazan `search_path`, `EXECUTE` samo za `ductus_identity`; `ductus_app` je ne izvršava. `ductus_evidence` dobiva `USAGE` i `CREATE` na shemi `collaboration` samo dok migracija stvara tu funkciju i gubi ih na kraju migracije. Nema stranog ključa prema `evidence.document`: brisanje dokumenta po pravilu čuvanja ne smije ovisiti o komentarima; postojanje se provjerava pri upisu.
+
+**Tablica `collaboration.comment_thread`** (jedna nit, jedno sidro).
+
+| Stupac | Tip i ograničenje |
+| --- | --- |
+| `id` | `uuid`, PK, generira baza |
+| `institution_id`, `assignment_id`, `owner_id` | `uuid NOT NULL`, iz `document_scope` pri stvaranju, nikad iz parametra |
+| `document_id` | `text NOT NULL` |
+| `anchor` | `jsonb NOT NULL`, oblik `TextAnchor` iz `src/domain/collaboration/anchor.ts` (`CHECK`) |
+| `state` | `text NOT NULL CHECK IN ('open','answered','resolved')` |
+| `created_by` | `uuid NOT NULL`, iz `app.current_actor()` |
+| `created_at`, `updated_at` | `timestamptz NOT NULL DEFAULT now()` |
+
+**Tablica `collaboration.comment`** (komentari niti redom).
+
+| Stupac | Tip i ograničenje |
+| --- | --- |
+| `id` | `uuid`, PK, generira baza |
+| `thread_id`, `institution_id` | `uuid NOT NULL`, strani ključ na nit iste ustanove |
+| `position` | `integer NOT NULL`, 1 do 10000, `UNIQUE (thread_id, position)`; 1 je nastavnikov komentar koji otvara nit |
+| `author_id` | `uuid NOT NULL`, iz `app.current_actor()`; nema parametra autora |
+| `author_role` | `text NOT NULL CHECK IN ('teacher','student')`, iz `actor_assignment_role` u trenutku upisa |
+| `body` | `text NOT NULL`, granice ispod (`CHECK`) |
+| `created_at` | `timestamptz NOT NULL DEFAULT now()` |
+
+Tekst komentara je nepromjenjiv; u B-10 nema uređivanja ni brisanja komentara (brisanje ide uz pravila čuvanja, D-50 i kasniji korak). Odgovor zaključava redak niti, pa istodobni odgovori dobivaju različite pozicije.
+
+**Tko što smije.** Odnos se računa pri svakom pozivu iz `document_scope` i `actor_assignment_role`, bez predmemorije, pa uklonjeni nastavnik gubi i čitanje i pisanje odmah (§4.4).
+
+| Akter | Čita | Novi korijen sa sidrom | Odgovor | Promjena stanja |
+| --- | --- | --- | --- | --- |
+| Student vlasnik dokumenta (`principal_id` = akter, ista ustanova, `actor_assignment_role` = `student`) | sve niti svog dokumenta | ne | da | ne |
+| Nastavnik kolegija tog zadatka (`actor_assignment_role` = `teacher`, otvoreno članstvo) | sve niti dokumenta | da | da | da |
+| Svi ostali (N2 drugog kolegija, Student B istog kolegija, N1 druge ustanove, administrator, istekla ili nepostojeća sesija) | ništa | ne | ne | ne |
+
+Sesija bez aktera: `ZD401`. Svaki drugi odbijen slučaj, uključujući nepostojeći dokument ili nit: `ZD403` s istom porukom, bez razlike u obliku odgovora (napadi 1 i 12).
+
+**Stanja niti.** Jedini prijelazi; svaki drugi je `ZD409`:
+
+| Iz | U | Okidač |
+| --- | --- | --- |
+| (nema) | `open` | nastavnik stvara korijen |
+| `open` | `answered` | odgovor studenta |
+| `answered` | `open` | odgovor nastavnika |
+| `open`, `answered` | `resolved` | nastavnik `resolve_thread` |
+| `resolved` | `open` | nastavnik `reopen_thread` |
+
+Odgovor u niti `resolved` je `ZD409` (nit se prvo ponovno otvara). Ostali prijelazi (npr. odgovor nastavnika na `open`, odgovor studenta na `answered`) ne mijenjaju stanje.
+
+**RPC potpisi** (`SECURITY DEFINER`, `SET search_path = ''`, `EXECUTE` samo `ductus_app`):
+
+- `collaboration.create_comment(p_document_id text, p_body text, p_anchor jsonb) RETURNS uuid`: samo nastavnik; vraća `id` nove niti.
+- `collaboration.reply_comment(p_thread_id uuid, p_body text) RETURNS uuid`
+- `collaboration.resolve_thread(p_thread_id uuid) RETURNS void`, `collaboration.reopen_thread(p_thread_id uuid) RETURNS void`
+- `collaboration.list_comments(p_document_id text) RETURNS TABLE (thread_id, comment_id, comment_position, author_role, is_own, body, anchor, state, created_window)`; `anchor` je popunjen samo u retku pozicije 1: **ista funkcija i isti oblik izlaza za studenta i nastavnika** (`PRODUCT.md` §5 t. 5).
+
+`ductus_app` nema nikakvu ovlast ni na jednoj tablici sheme `collaboration`, ni `SELECT`: izravno čitanje otkrilo bi točna vremena i ID-ove osoba, pa klijent čita samo kroz `list_comments` (napad 4). Tablice imaju `FORCE ROW LEVEL SECURITY` sa samo vlasnikovom politikom, pa ni pogrešno dodijeljen grant ne pokazuje ni ne mijenja nijedan redak; retci su u pgTAP matrici.
+
+**Što se nikad ne vraća.** `author_id` drugih osoba, `institution_id`, točno vrijeme (`created_at` se vraća samo zaokružen na prozor P-03 od 5 minuta, `created_window`; redoslijed nosi `comment_position`), sadržaj dokumenta, segmenti, hashevi i revizije. Poslužitelj **ne razrješuje sidro** prema sadržaju i ne vraća nikakav isječak dokumenta: vraća sidro kako ga je nastavnik spremio, iz teksta koji je već vidio, a klijent ga razrješuje lokalno s `resolveTextAnchor` (exact, moved, ambiguous, missing). Zato poziv ne može otkriti tekst noviji od nastavnikova pogleda (napad 8). Neprouzdano sidro (`ambiguous`, `missing`) prikazuje se kao "sidro nije pouzdano" uz komentar koji ostaje vidljiv, nikad na pogrešnom mjestu (napad 7). Student ne stvara sidro jer bi ono nosilo njegov noviji tekst.
+
+**Granice ulaza** (strogi validator bez nove ovisnosti u `src/domain/collaboration/comment.ts`, po uzoru na `src/server/institution/create-course.ts`; ista pravila kao `CHECK` u bazi):
+
+- `body`: nakon NFC normalizacije 1 do 2000 znakova, nije samo bjelina; odbijaju se kontrolni znakovi osim `\n` i `\t` te dvosmjerni nadjačavajući znakovi (U+202A do U+202E, U+2066 do U+2069).
+- `anchor`: točno polja `nodeId` (UUID kao `isNodeId` u `src/domain/document/schema.ts`), `quote` (1 do 500 znakova), `prefix` i `suffix` (do 64), `startHint` i `endHint` (cijeli brojevi, 0 ≤ `startHint` < `endHint` ≤ 1 000 000); nepoznato ili nedostajuće polje je odbijeno; isti zabranjeni znakovi kao u `body`. Duljine se broje u kodnim točkama, kao `char_length` u bazi.
+- Tijelo HTTP zahtjeva do 16 KiB; dopuštena su samo točno propisana polja, nepoznato polje se odbija. Pogreška je `ZD422` bez odjeka ulaza.
+- Prikaz je uvijek tekst (React tekstni čvor), nikad HTML ni Markdown (napad 10).
+
+**Evidencija netaknuta.** Nijedan RPC ne čita ni ne piše `evidence.document_revision`, `segment`, `package` ni `receipt`; pgTAP potvrđuje da su `current_revision`, `current_content_hash` i lanac segmenata jednaki prije i poslije komentara (napad 6). Riječi poput "rizik" ili "sumnjivo" u komentaru nastavnika se ne filtriraju (kontrola lažnog blokiranja); rječnik zabranjenih izraza vrijedi za tekst sučelja, ne za korisnikov unos.
+
+**Logovi.** Samo ID-ovi (`document_id`, `thread_id`, kod greške), nikad `body` ni `anchor` (§4.9, napad 11).
+
+**Napadi iz #177 na testove.**
+
+| Napad | Dokaz |
+| --- | --- |
+| 1, 12 | pgTAP: N2, Student B, N1 druge ustanove, administrator i bez sesije dobivaju `ZD403`/`ZD401` na svakom RPC-u, i na `list_comments`; nepostojeći dokument ili nit daje isti `ZD403`; neovlašten poziv s neispravnim ulazom i dalje dobiva `ZD403`, ne `ZD422` |
+| 2 | pgTAP: nastavnik sa zatvorenim članstvom (`member_to`) odmah dobiva `ZD403` na čitanju i pisanju |
+| 3 | pgTAP i katalog: nema parametra autora; `author_id` jednak akteru |
+| 4 | pgTAP: izravni `SELECT`/`INSERT`/`UPDATE`/`DELETE` pod `ductus_app` odbijeni (`42501`), uz pogrešno dodijeljen grant 0 redaka; katalog: `ductus_app` izvršava točno pet RPC-ova (`bag_eq`) |
+| 5 | pgTAP: svaki redak tablice prijelaza i svaki nedopušten prijelaz (`ZD409`) |
+| 6 | pgTAP: hash, revizija i segmenti jednaki prije i poslije |
+| 7 | unit (`anchor.test.ts`): obrisan, premješten, izmijenjen i dupliciran odlomak daju `missing`/`moved`/`ambiguous`, nikad pogrešan raspon; pgTAP: komentar ostaje u `list_comments` |
+| 8 | pgTAP i katalog: izlaz `list_comments` nema stupca sa sadržajem dokumenta |
+| 9 | unit (validator) i pgTAP (`CHECK`): prazno, 1 MB, kontrolni znakovi, RTL override, nepoznato polje |
+| 10 | unit/e2e u koraku sučelja: `<script>` u tekstu prikazan doslovno |
+| 11 | unit: log rute sadrži samo ID-ove (canary) |
+
+**Koraci.** (1) ovaj ugovor; (2) migracija, RLS, RPC-ovi i pgTAP matrica; (3) ugovor ulaza (validator), poslužiteljski omotač i ruta s unit testovima (`Closes #177`). Prikaz u editoru je Frontendov korak.
+
+**Poznate granice do B-11.** Nastavnikovo pravo komentiranja još ne ovisi o vidljivosti prema D-37, P-03 i potvrdi obavijesti; B-11 (§4.10, PR #395) to veže. Sidro se ne provjerava prema reviziji koju je nastavnik vidio jer bi provjera prema trenutačnoj reviziji bila bočni kanal (napad 8); vezanje uz reviziju pogleda dolazi s B-11.
+
 ## 5. Što još nije potvrđeno (spike prije odluke)
 
 | Stavka | Provjera | Gdje |
