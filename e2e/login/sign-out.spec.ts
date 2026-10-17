@@ -1,0 +1,266 @@
+import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+
+import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
+import { appCookie, SESSION_COOKIE, sessionRow, signIn } from "./support";
+
+// F-5 (DAN-34, plan #376): the writing page of a signed-in person and the
+// sign-out that always ends the session (D-118). Every test runs in a
+// fresh browser context, so IndexedDB and the provider's cookies start empty.
+// All text is invented.
+
+const editorOf = (page: Page) => page.getByRole("textbox", { name: t.workspace.documentLabel });
+const phaseOf = (page: Page) => page.locator(".editor-surface");
+const noticeOf = (page: Page) => page.locator(".editor-notice[role=alert]");
+const chipOf = (page: Page) => page.locator(".workspace__status .sync-chip");
+const logoutOf = (page: Page) => page.getByRole("button", { name: t.auth.logout });
+
+async function writeAndWait(page: Page, text: string): Promise<void> {
+  await editorOf(page).click();
+  await page.keyboard.type(text);
+  await expect(chipOf(page)).toHaveAttribute("data-state", "LOCAL_DURABLE");
+}
+
+async function journalNames(page: Page): Promise<(string | undefined)[]> {
+  const names = await page.evaluate(async () => (await indexedDB.databases()).map((d) => d.name));
+  return names.filter((name) => name?.startsWith("ductus-journal-v1-"));
+}
+
+/** The fake provider remembers who signed in; forgetting it shows the account choice again. */
+async function forgetProviderLogin(context: BrowserContext): Promise<void> {
+  await context.clearCookies({ name: /^_session/ });
+}
+
+async function expectStillSignedIn(page: Page, token: string): Promise<void> {
+  expect((await appCookie(page.context(), SESSION_COOKIE))?.value).toBe(token);
+  expect(await sessionRow(token)).toMatchObject({ closed_at: null });
+}
+
+test("row 1: without a session /rad shows no one as signed in", async ({ page, context }) => {
+  await page.goto("/rad");
+  await expect(logoutOf(page)).toHaveCount(0);
+
+  // A cookie of the right shape that no open session has: nothing is shown
+  // as signed in, no journal opens, and signing in again is offered.
+  await context.addCookies([{
+    name: SESSION_COOKIE, value: "Z".repeat(43), domain: "localhost", path: "/",
+    secure: true, httpOnly: true, sameSite: "Lax",
+  }]);
+  await page.goto("/rad");
+  await expect(logoutOf(page)).toHaveCount(0);
+  await expect(page.getByRole("link", { name: t.auth.signIn })).toHaveAttribute(
+    "href", "/api/auth/login?returnTo=%2Frad",
+  );
+  await expect(page.locator(".editor-surface")).toHaveCount(0);
+});
+
+test("row 1: sign-in leads to an editable sheet; sign-out of an unchanged document ends the session", async ({ page, context }) => {
+  await page.goto("/");
+  await page.getByRole("link", { name: t.auth.signIn }).click();
+  await page.getByRole("button", { name: "Demo studentica" }).click();
+  await page.waitForURL("http://localhost:3000/rad");
+  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+  const token = (await appCookie(context, SESSION_COOKIE))!.value;
+
+  await logoutOf(page).click();
+  await page.waitForURL("http://localhost:3000/");
+  expect(await appCookie(context, SESSION_COOKIE)).toBeUndefined();
+  expect(await sessionRow(token)).toMatchObject({ close_reason: "logout", closed_at: expect.any(Date) });
+  // Nothing was written, so nothing of that person stays on the device.
+  const names = await page.evaluate(async () => (await indexedDB.databases()).map((d) => d.name));
+  expect(names.filter((name) => name?.startsWith("ductus-journal-v1-"))).toEqual([]);
+});
+
+// D-118: sign-out always ends the session. Work the server has not confirmed
+// stays in the person's own journal and comes back at their next sign-in;
+// another account in the same browser never sees it.
+test("rows 2, 3 and 5: a local change does not hold the session open; the text waits for the same person", async ({ page, context }) => {
+  await signIn(page, "/rad");
+  const token = (await appCookie(context, SESSION_COOKIE))!.value;
+  await writeAndWait(page, "Nacrt A: plava bilježnica");
+
+  await logoutOf(page).click();
+  await page.waitForURL("http://localhost:3000/");
+  expect(await appCookie(context, SESSION_COOKIE)).toBeUndefined();
+  expect(await sessionRow(token)).toMatchObject({ close_reason: "logout", closed_at: expect.any(Date) });
+  expect(await journalNames(page)).toHaveLength(1);
+
+  // Another account in this browser: an empty sheet, and its sign-out
+  // leaves the first journal alone.
+  await forgetProviderLogin(context);
+  await signIn(page, "/rad", "Demo nastavnik");
+  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+  await expect(editorOf(page)).toHaveText("");
+  await logoutOf(page).click();
+  await page.waitForURL("http://localhost:3000/");
+
+  await forgetProviderLogin(context);
+  await signIn(page, "/rad");
+  await expect(editorOf(page)).toHaveText("Nacrt A: plava bilježnica");
+  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+});
+
+test("row 3: a sign-out the server never got deletes nothing and says so", async ({ page, context }) => {
+  await signIn(page, "/rad");
+  const token = (await appCookie(context, SESSION_COOKIE))!.value;
+  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+  await page.route("**/api/auth/logout", (route) => route.abort("internetdisconnected"));
+
+  // Even an unchanged document keeps its journal while the session is open.
+  await logoutOf(page).click();
+  await expect(noticeOf(page)).toHaveText(t.auth.logoutFailed);
+  await expectStillSignedIn(page, token);
+  expect(await journalNames(page)).toHaveLength(1);
+
+  await writeAndWait(page, "Nacrt A: plava bilježnica");
+  await logoutOf(page).click();
+  await expect(noticeOf(page)).toHaveText(t.auth.logoutFailed);
+  expect(page.url()).toBe("http://localhost:3000/rad");
+  await expectStillSignedIn(page, token);
+  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+  await writeAndWait(page, ", dopuna");
+
+  await page.unroute("**/api/auth/logout");
+  await logoutOf(page).click();
+  await page.waitForURL("http://localhost:3000/");
+  expect(await sessionRow(token)).toMatchObject({ close_reason: "logout" });
+  await forgetProviderLogin(context);
+  await signIn(page, "/rad");
+  await expect(editorOf(page)).toHaveText("Nacrt A: plava bilježnica, dopuna");
+});
+
+test("sign-out from a second tab ends the session and empties the writing tab", async ({ page, context }) => {
+  await signIn(page, "/rad");
+  const token = (await appCookie(context, SESSION_COOKIE))!.value;
+  await writeAndWait(page, "Nacrt A: plava bilježnica");
+
+  const second = await context.newPage();
+  await second.goto("/rad");
+  await expect(phaseOf(second)).toHaveAttribute("data-phase", "blocked");
+  await logoutOf(second).click();
+  await second.waitForURL("http://localhost:3000/");
+  expect(await sessionRow(token)).toMatchObject({ close_reason: "logout" });
+
+  await expect(phaseOf(page)).toHaveAttribute("data-phase", "signed-out");
+  await expect(noticeOf(page)).toHaveText(t.auth.signedOutElsewhere);
+  await expect(editorOf(page)).toHaveText("");
+  await expect(editorOf(page)).toHaveAttribute("contenteditable", "false");
+  await expect(page.getByRole("button", { name: t.editor.exportText })).toHaveCount(0);
+  // The button still works there; it never stays disabled.
+  await expect(logoutOf(page)).toBeEnabled();
+
+  await page.close();
+  await forgetProviderLogin(context);
+  await signIn(second, "/rad");
+  await expect(editorOf(second)).toHaveText("Nacrt A: plava bilježnica");
+});
+
+test("row 9: text the device could not store is announced once, then sign-out goes ahead", async ({ page, context }) => {
+  // Journal writes fail as on a full device; only the logout fence could
+  // still be written, so the journal alone would look empty.
+  await page.addInitScript(() => {
+    const { put, add } = IDBObjectStore.prototype;
+    const refuse = (original: typeof put) => function (this: IDBObjectStore, ...args: Parameters<typeof put>) {
+      if (this.name === "control") return original.apply(this, args);
+      throw new DOMException("Made-up full device", "QuotaExceededError");
+    };
+    Object.assign(IDBObjectStore.prototype, { put: refuse(put), add: refuse(add) });
+  });
+  await signIn(page, "/rad");
+  const token = (await appCookie(context, SESSION_COOKIE))!.value;
+  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+  await editorOf(page).click();
+  await page.keyboard.type("Nacrt A: plava bilježnica");
+  await expect(chipOf(page)).toHaveAttribute("data-state", "ERROR");
+
+  await logoutOf(page).click();
+  await expect(noticeOf(page)).toHaveText(t.auth.logoutUnsaved);
+  await expect(page.getByRole("button", { name: t.editor.exportText })).toBeVisible();
+  await expect(editorOf(page)).toHaveText("Nacrt A: plava bilježnica");
+  await expectStillSignedIn(page, token);
+
+  await logoutOf(page).click();
+  await page.waitForURL("http://localhost:3000/");
+  expect(await sessionRow(token)).toMatchObject({ close_reason: "logout" });
+});
+
+test("a sign-in through the login route stops the tab of the session it replaced", async ({ page, context }) => {
+  await signIn(page, "/rad");
+  await writeAndWait(page, "Nacrt A: plava bilježnica");
+
+  // No sign-out at all: another account signs in straight through the route.
+  await forgetProviderLogin(context);
+  const second = await context.newPage();
+  await signIn(second, "/rad", "Demo nastavnik");
+  await expect(editorOf(second)).toHaveText("");
+
+  await expect(phaseOf(page)).toHaveAttribute("data-phase", "signed-out");
+  await expect(editorOf(page)).toHaveText("");
+  await expect(editorOf(page)).toHaveAttribute("contenteditable", "false");
+});
+
+test("a tab opened before a sign-out works again after the next sign-in", async ({ page, context }) => {
+  await signIn(page, "/");
+  const second = await context.newPage();
+  await second.goto("/rad");
+  await expect(editorOf(second)).toHaveAttribute("contenteditable", "true");
+  await logoutOf(second).click();
+  await second.waitForURL("http://localhost:3000/");
+  await forgetProviderLogin(context);
+  await signIn(second, "/rad");
+  await second.close();
+
+  // The first tab never reloaded; its link renders /rad under the new cookie.
+  await page.getByRole("link", { name: t.home.openWorkspace }).click();
+  await page.waitForURL("http://localhost:3000/rad");
+  await expect(phaseOf(page)).toHaveAttribute("data-phase", "ready");
+  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+});
+
+test("a tab waiting for the document stops for good when another tab signs out", async ({ page, context }) => {
+  await signIn(page, "/rad");
+  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+  const second = await context.newPage();
+  await second.goto("/rad");
+  await expect(phaseOf(second)).toHaveAttribute("data-phase", "blocked");
+
+  await logoutOf(page).click();
+  await page.waitForURL("http://localhost:3000/");
+  await expect(phaseOf(second)).toHaveAttribute("data-phase", "signed-out");
+  await expect(noticeOf(second)).toHaveText(t.auth.signedOutElsewhere);
+  // The first tab has left and freed the lock; the second never takes it,
+  // so the deleted journal is not created again.
+  await page.close();
+  await second.waitForTimeout(1_000);
+  await expect(phaseOf(second)).toHaveAttribute("data-phase", "signed-out");
+  await expect(editorOf(second)).toHaveAttribute("contenteditable", "false");
+  const names = await second.evaluate(async () => (await indexedDB.databases()).map((d) => d.name));
+  expect(names.filter((name) => name?.startsWith("ductus-journal-v1-"))).toEqual([]);
+});
+
+test("a tab that missed the sign-out news still never reopens the journal", async ({ page, context }) => {
+  await signIn(page, "/rad");
+  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+  // Loaded before the sign-out but not listening for it, as a tab that is
+  // still starting up would be.
+  const second = await context.newPage();
+  await second.addInitScript(() => {
+    Reflect.deleteProperty(window, "BroadcastChannel");
+  });
+  await second.goto("/rad");
+  await expect(phaseOf(second)).toHaveAttribute("data-phase", "blocked");
+
+  await logoutOf(page).click();
+  await page.waitForURL("http://localhost:3000/");
+  await page.close();
+  await expect(phaseOf(second)).toHaveAttribute("data-phase", "signed-out");
+  await expect(noticeOf(second)).toHaveText(t.auth.signedOutElsewhere);
+  await expect(editorOf(second)).toHaveAttribute("contenteditable", "false");
+  const names = await second.evaluate(async () => (await indexedDB.databases()).map((d) => d.name));
+  expect(names.filter((name) => name?.startsWith("ductus-journal-v1-"))).toEqual([]);
+});
+
+test("with a session the home page offers no second sign-in", async ({ page }) => {
+  await signIn(page, "/");
+  await expect(page.getByRole("link", { name: t.home.openWorkspace })).toBeVisible();
+  await expect(page.getByRole("link", { name: t.auth.signIn })).toHaveCount(0);
+});
