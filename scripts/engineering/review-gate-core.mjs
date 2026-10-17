@@ -31,6 +31,12 @@ export const QUOTA_EXHAUSTED_PATTERNS = new Map([
   ["chatgpt-codex-connector", /^\s*You have reached your Codex usage limits/i],
 ]);
 
+// D-139: a critical QA PASS may come from a second Claude session when Codex
+// reviewed the current head, answered every thread and the QA names that head.
+const CODEX_BOT_LOGIN = "chatgpt-codex-connector[bot]";
+const SECOND_SESSION_RE = /^claude-second-session \u2014 Codex review na headu ([0-9a-f]{40})$/i;
+const CODEX_REVIEW_STATES = new Set(["COMMENTED", "APPROVED", "CHANGES_REQUESTED"]);
+
 export const QUOTA_FALLBACK_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 // D-101: a verdict on an earlier head carries to the current head only when
@@ -164,6 +170,26 @@ function quotaEvidence(items, reviews = []) {
   );
 }
 
+const isCodexBot = (user) => user?.type === "Bot" && user?.login === CODEX_BOT_LOGIN;
+
+function codexReviewedHead(prReviews, headSha) {
+  return (prReviews ?? []).some(
+    (review) => isCodexBot(review?.user) && sameHead(review?.commit_id, headSha) && CODEX_REVIEW_STATES.has(review?.state),
+  );
+}
+
+// A Codex thread is answered once a reply from someone other than Codex sits
+// under its root comment. A list that was not read answers nothing: fail closed.
+function codexThreadsAnswered(reviewComments) {
+  if (!Array.isArray(reviewComments)) return false;
+  const answered = new Set(
+    reviewComments.filter((item) => item?.in_reply_to_id && !isCodexBot(item?.user)).map((item) => item.in_reply_to_id),
+  );
+  return reviewComments
+    .filter((item) => isCodexBot(item?.user) && !item?.in_reply_to_id)
+    .every((root) => answered.has(root.id));
+}
+
 function fallbackSlug(value) {
   return value?.split(/\s+/)[0]?.toLowerCase() ?? null;
 }
@@ -221,7 +247,8 @@ function latestVerdicts(entries, {
     const head = field(entry.body, headField);
     const verdict = field(entry.body, verdictField)?.toUpperCase() ?? null;
     const extra = extraField ? field(entry.body, extraField) : null;
-    const fallback = fallbackSlug(field(entry.body, "Provider-Fallback"));
+    const fallbackLine = field(entry.body, "Provider-Fallback");
+    const fallback = fallbackSlug(fallbackLine);
     const identity = verifiedCommentIdentity(entry, agent);
 
     if (
@@ -237,7 +264,7 @@ function latestVerdicts(entries, {
     }
 
     const key = `${identity.appSlug}|${identity.principal}`;
-    const candidate = { agent, head: head.toLowerCase(), verdict, extra, fallback, identity,
+    const candidate = { agent, head: head.toLowerCase(), verdict, extra, fallback, fallbackLine, identity,
       order: [entry.createdAt, entry.index], current: sameHead(head, headSha) };
     // Keep the latest current and the latest carried verdict apart, so a
     // later carried verdict never makes the current one disappear.
@@ -274,6 +301,7 @@ export function evaluateGate({
   ownerLogin,
   comments = [],
   prReviews = [],
+  reviewComments = null,
   carriedHeads = new Set(),
   trustedLogins = TRUSTED_VERDICT_LOGINS,
   qaExempt = null,
@@ -408,6 +436,26 @@ export function evaluateGate({
       };
     }
 
+    // D-139: second Claude session. Needs its own slot (not author, not a
+    // passing reviewer), the declaration naming this head, a Codex review on
+    // this head and every Codex thread answered. Never carried: the line
+    // names one head.
+    const secondSession = separateAppPass || fallbackPass
+      ? null
+      : qaPasses.find(
+          (result) =>
+            result.identity.appSlug === "claude" &&
+            result.current &&
+            !passingReviewerPrincipals.has(result.identity.principal) &&
+            sameHead(SECOND_SESSION_RE.exec(result.fallbackLine ?? "")?.[1], headSha),
+        );
+    if (secondSession && codexReviewedHead(prReviews, headSha) && codexThreadsAnswered(reviewComments)) {
+      return {
+        state: "success",
+        description: `Independent review and second Claude session QA valid for current head (D-139: Codex review on head, threads answered).${carriedNote(passingReviews, headSha)}`,
+      };
+    }
+
     if (!separateAppPass) {
       return {
         state: "pending",
@@ -539,7 +587,7 @@ export function prNumberFromEvent(event) {
   return null;
 }
 
-export function evaluatePullRequest({ pr, files, comments, prReviews, ownerLogin, carriedHeads }) {
+export function evaluatePullRequest({ pr, files, comments, prReviews, reviewComments, ownerLogin, carriedHeads }) {
   const listed = files ?? [];
   // The floor is only as good as the list: a cut or unread list fails closed.
   if (!(pr.changed_files <= listed.length)) {
@@ -565,6 +613,7 @@ export function evaluatePullRequest({ pr, files, comments, prReviews, ownerLogin
       ownerLogin,
       comments,
       prReviews,
+      reviewComments,
       carriedHeads,
       qaExempt: qaExemption(paths),
     }),
