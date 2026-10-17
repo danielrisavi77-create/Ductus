@@ -179,9 +179,9 @@ test.describe("workspace shell", () => {
       // sheet's editor, then the structure toggle; Enter opens.
       if (tabVisitsLinks(browserName)) {
         await expect(page.getByRole("textbox", { name: "Tekst rada" })).toHaveAttribute("contenteditable", "true");
-        // Skip link, Ductura, Pisanje, Kako vidi nastavnik, the two sheet theme
-        // buttons, the editor, then the panel.
-        for (let i = 0; i < 8; i += 1) await page.keyboard.press("Tab");
+        // Skip link, Ductura, Pisanje, Kako vidi nastavnik, the toolbar (one
+        // stop), the two sheet theme buttons, the editor, then the panel.
+        for (let i = 0; i < 9; i += 1) await page.keyboard.press("Tab");
         await expect(panelToggle).toBeFocused();
         await page.keyboard.press("Enter");
         await expect(panelToggle).toHaveAttribute("aria-expanded", "true");
