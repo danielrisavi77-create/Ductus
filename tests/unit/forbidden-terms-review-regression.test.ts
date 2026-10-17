@@ -1,0 +1,55 @@
+import { describe, expect, it } from "vitest";
+
+import { findForbiddenTerms, findForbiddenTermsInMarkup } from "../../scripts/forbidden-terms/terms";
+
+// #297 advisory findings 1, 2 and the superlative part of 4; PRODUCT §5.
+// Keep both directions of a text-ownership phrase. Do not change the
+// contextual rules for missing/lost data or the deferred bare adverb.
+describe("dictionary review regressions (DAN-134)", () => {
+  it.each([
+    "Copied to clipboard",
+    "Copied to the clipboard.",
+    "COPIED TO THE CLIPBOARD",
+    "Copied\u00a0to\u00a0clipboard",
+    "Cop\u200bied to clipboard",
+    "Copy citation",
+    "Kopirano u međuspremnik",
+    "Nije njegov red",
+    "Nije njezin red",
+    "Nije njen uređaj",
+    "Za ovo nije vlastiti uređaj",
+    "Nije njihova mapa",
+    "Nevjerojatno iskustvo",
+  ])("allows neutral UI action or phrase %j", (text) => {
+    expect(findForbiddenTerms(text)).toEqual([]);
+    expect(findForbiddenTermsInMarkup(text, text)).toEqual([]);
+  });
+
+  it.each([
+    ["Copied", "copied"],
+    ["Copied from a document", "copied"],
+    ["Copying detected", "copied"],
+    ["Copy-paste", "copied"],
+    ["Copied to clipboardX", "copied"],
+    ["Copied to the clipboard2", "copied"],
+    ["Copied to clipboard; copied", "copied"],
+    ["Nije njegov tekst", "tuđi tekst"],
+    ["Nije njezin tekst", "tuđi tekst"],
+    ["Nije njen tekst", "tuđi tekst"],
+    ["Nije vlastiti rad", "tuđi tekst"],
+    ["Tekst nije njegov", "tuđi tekst"],
+    ["Odlomak nije vlastiti", "tuđi tekst"],
+    ["Riječi nisu njegove. Tuđe riječi.", "tuđi tekst"],
+    ["Najvjerojatnije", "vjerojatnost"],
+    ["Najvjerojatniji", "vjerojatnost"],
+    ["Najvjerojatnija", "vjerojatnost"],
+    ["Najvjerojatnijeg", "vjerojatnost"],
+    ["Najvjerojatnijima", "vjerojatnost"],
+    ["Naj\u200bvjerojatnije", "vjerojatnost"],
+    ["Vjerojatnije", "vjerojatnost"],
+    ["Vjerojatnost", "vjerojatnost"],
+  ])("still flags %j as %s", (text, entry) => {
+    expect(findForbiddenTerms(text).map((term) => term.entry)).toContain(entry);
+    expect(findForbiddenTermsInMarkup(text, text).map((term) => term.entry)).toContain(entry);
+  });
+});
