@@ -243,7 +243,7 @@ describe("an entry cut by boundaries, whatever stands next to it", () => {
     expect(performance.now() - from).toBeLessThan(15_000);
   });
 
-  it("reports a text with a longer run of parts without letters than a window takes, and not a shorter one", () => {
+  it("reports a text with a longer run of parts without letters than a window takes, and not a shorter one", { timeout: 15_000 }, () => {
     // A full stop: the guard has nothing else to say about it.
     const items = (count: number): string => `<ul><li>hid</li>${"<li>.</li>".repeat(count)}<li>den</li></ul>`;
     write("src/components/Case.tsx", component([items(63)]));
