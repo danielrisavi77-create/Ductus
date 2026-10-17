@@ -39,6 +39,20 @@ export function principalScope(userId: string, institutionId: string): string {
     .digest("hex");
 }
 
+/** Plain-text label of the session tag; never the database's token digest. */
+export const SESSION_TAG_LABEL = "ductus-session-tag-v1";
+
+/**
+ * Which cookie a page was rendered under, for the tabs of one browser (F-5,
+ * D-118; src/client/session-marks.ts): a SHA-256 hex of the label and the
+ * token, or null without a well-formed cookie. It says nothing about whether
+ * the session is open, and it is not the digest the database keeps.
+ */
+export function sessionTag(token: string | undefined): string | null {
+  if (token === undefined || !TOKEN_FORMAT.test(token)) return null;
+  return createHash("sha256").update(`${SESSION_TAG_LABEL}\n${token}`, "utf8").digest("hex");
+}
+
 export async function sessionPrincipal(
   token: string | undefined,
   withActor: WithActor,

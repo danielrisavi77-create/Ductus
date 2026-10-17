@@ -1,9 +1,10 @@
 // @vitest-environment node
 /**
- * The journal side of sign-out on /rad (F-5, plan #376 rows 2 to 5). The page
- * deletes a principal's journal before it ends the session, and only when the
- * journal agrees. Until F-3 sends anything, a single local change keeps that
- * refusal in place. All accounts and text here are synthetic.
+ * The journal side of sign-out on /rad (F-5, plan #376 rows 2 to 5, D-118).
+ * Sign-out always ends the session; afterwards the page deletes a principal's
+ * journal only when the journal agrees. Until F-3 sends anything, a single
+ * local change keeps the journal, under that principal's scope alone. All
+ * accounts and text here are synthetic.
  */
 import { afterEach, describe, expect, it } from "vitest";
 import Dexie from "dexie";
@@ -57,14 +58,14 @@ afterEach(async () => {
 });
 
 describe("sign-out of a principal's journal", () => {
-  it("row 1: a document opened and never changed signs out, and the journal is gone", async () => {
+  it("row 1: a document opened and never changed is deleted after sign-out", async () => {
     const own = journal(SCOPE_A);
     expect((await saver(own).load()).kind).toBe("ready");
     expect(await refusal(own)).toBe("none");
     expect((await journal(SCOPE_A).read(DOC)).snapshot).toBeNull();
   });
 
-  it("rows 2 and 3: one local change refuses sign-out and keeps the text readable", async () => {
+  it("rows 2 and 3: one local change keeps the journal through sign-out, text readable", async () => {
     const own = journal(SCOPE_A);
     const target = saver(own);
     await target.load();
@@ -76,13 +77,13 @@ describe("sign-out of a principal's journal", () => {
     expect(await own.hasPendingLogout()).toBe(false);
     await write(target, "Nacrt A: plava bilježnica, dopuna");
     expect(target.snapshot().state).toBe("LOCAL_DURABLE");
-    // Asking again, as the button does, refuses again: there is no second path.
+    // Asking again refuses again: no path deletes unconfirmed work.
     expect(await refusal(journal(SCOPE_A))).toBe("unsynced_work");
     const read = await journal(SCOPE_A).read(DOC);
     expect(documentsEqual(read.snapshot!.document, text("Nacrt A: plava bilježnica, dopuna"))).toBe(true);
   });
 
-  it("row 4: after the tab is gone, a new tab still refuses sign-out over the stored change", async () => {
+  it("row 4: after the tab is gone, a new tab still keeps the stored change from deletion", async () => {
     const crashed = journal(SCOPE_A);
     const target = saver(crashed);
     await target.load();

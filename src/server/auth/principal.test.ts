@@ -4,7 +4,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { ActorTransaction, WithActor } from "@/server/db/with-actor";
 
-import { PRINCIPAL_SCOPE_LABEL, principalScope, sessionPrincipal } from "./principal";
+import {
+  PRINCIPAL_SCOPE_LABEL, principalScope, SESSION_TAG_LABEL, sessionPrincipal, sessionTag,
+} from "./principal";
 
 // F-5, plan #376 rows 1 and 7: the journal scope comes from the session the
 // database recognises, never from anything else in the request.
@@ -67,6 +69,20 @@ describe("sessionPrincipal", () => {
     expect(log).toHaveBeenCalledWith("session check failed", "DatabaseError");
     expect(JSON.stringify(log.mock.calls)).not.toContain(TOKEN);
     log.mockRestore();
+  });
+});
+
+describe("sessionTag", () => {
+  it("is a labelled digest of the cookie, never the database's token digest", () => {
+    const tag = sessionTag(TOKEN);
+    expect(tag).toBe(createHash("sha256").update(`${SESSION_TAG_LABEL}\n${TOKEN}`, "utf8").digest("hex"));
+    expect(tag).not.toBe(createHash("sha256").update(TOKEN, "utf8").digest("hex"));
+    expect(tag).not.toContain(TOKEN);
+    expect(sessionTag("B".repeat(43))).not.toBe(tag);
+  });
+
+  it.each([undefined, "", "A".repeat(42), `${"A".repeat(42)}=`])("is null for %s", (token) => {
+    expect(sessionTag(token)).toBeNull();
   });
 });
 
