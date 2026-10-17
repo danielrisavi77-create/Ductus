@@ -59,6 +59,11 @@ export function createDemoEnvironment(source = process.env) {
   if (authPassword.length < 16) {
     throw new Error("DUCTUS_AUTH_LOCAL_PASSWORD must be at least 16 characters.");
   }
+  if (authPassword.includes("%")) {
+    // A percent sign is not round-tripped between the URL and the role password
+    // (the URL setter keeps it, pg decodes it), so setup would succeed and sign-in fail.
+    throw new Error("DUCTUS_AUTH_LOCAL_PASSWORD and the AUTH_DATABASE_URL password must not contain a percent sign.");
+  }
   authUrl.password = authPassword;
 
   return {

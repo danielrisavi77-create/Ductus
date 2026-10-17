@@ -111,6 +111,30 @@ test("configured auth password must match the local auth URL", () => {
   );
 });
 
+test("auth password with a percent sign is rejected before setup", () => {
+  const url = "postgres://ductus_auth_local@127.0.0.1:54329/ductus";
+  const message = /must not contain a percent sign/;
+  assert.throws(() => createDemoEnvironment({ AUTH_DATABASE_URL: url, DUCTUS_AUTH_LOCAL_PASSWORD: "%41%41%41%41%41%41%41%41" }), message);
+  assert.throws(() => createDemoEnvironment({ AUTH_DATABASE_URL: url, DUCTUS_AUTH_LOCAL_PASSWORD: "p@ss:w/rd#?%20 0123456789" }), message);
+  assert.throws(
+    () => createDemoEnvironment({ AUTH_DATABASE_URL: `postgres://ductus_auth_local:${"abc%2541def" + "0123456789"}@127.0.0.1:54329/ductus` }),
+    message,
+  );
+  // The rejection never repeats the password.
+  try {
+    createDemoEnvironment({ AUTH_DATABASE_URL: url, DUCTUS_AUTH_LOCAL_PASSWORD: "aaaaaaaa%41aaaaaaaa" });
+    assert.fail("expected a rejection");
+  } catch (error) {
+    assert.doesNotMatch(error.message, /aaaaaaaa/);
+  }
+});
+
+test("auth password with URL-special characters round-trips through the URL", () => {
+  const password = "p@ss:w/rd#?& 0123456789";
+  const env = createDemoEnvironment({ DUCTUS_AUTH_LOCAL_PASSWORD: password });
+  assert.equal(decodeURIComponent(new URL(env.AUTH_DATABASE_URL).password), password);
+});
+
 test("one-command demo runs the stack, migrations, seed, and app in order", async () => {
   const calls = [];
   const env = { marker: "same-environment" };
