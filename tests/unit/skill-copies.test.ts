@@ -6,9 +6,10 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 // Project skills exist once per runtime (docs/MULTI-ACCOUNT.md §5). The
-// .claude and .agents copies of a skill must be byte-identical; skills from
-// the ductura-engineering plugin are canonical there and both runtime copies
-// are thin adapters that pin the canonical SKILL.md by SHA-256.
+// .claude and .agents copies of a skill must be byte-identical; D-114 names
+// .agents/skills as canonical for the six previously drifting skills. Skills
+// from the ductura-engineering plugin are canonical there and both runtime
+// copies are thin adapters that pin the canonical SKILL.md by SHA-256.
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const runtimes = [".claude/skills", ".agents/skills"] as const;
 const plugin = "plugins/ductura-engineering/skills";
@@ -17,17 +18,6 @@ const plugin = "plugins/ductura-engineering/skills";
 const singleLocation: Record<string, string> = {
   "supabase-postgres-best-practices":
     "third-party copy in .claude/skills only, not an adapter (docs/REPOZITORIJI.md, DAN-96)",
-};
-
-// Copies that differ today. Found by DAN-138/2 and left as they are until the
-// owner decides which wording is canonical; remove an entry once aligned.
-const knownDrift: Record<string, string> = {
-  "ductus-bug-hunter/SKILL.md": "zatečeno, čeka odluku",
-  "ductus-orchestrator/SKILL.md": "zatečeno, čeka odluku",
-  "ductus-product-ux/SKILL.md": "zatečeno, čeka odluku",
-  "ductus-qa/SKILL.md": "zatečeno, čeka odluku",
-  "ductus-review/SKILL.md": "zatečeno, čeka odluku",
-  "ductus-worker/SKILL.md": "zatečeno, čeka odluku",
 };
 
 function skillNames(dir: string): string[] {
@@ -73,10 +63,7 @@ describe("skill copies", () => {
         }
       }
     }
-    const unexpected = drift.filter((line) => !(line.split(":")[0]! in knownDrift));
-    expect(unexpected, "skill copies drifted; align them or record the drift").toEqual([]);
-    const stale = Object.keys(knownDrift).filter((key) => !drift.some((line) => line.startsWith(`${key}:`)));
-    expect(stale, "knownDrift entries that match again; remove them").toEqual([]);
+    expect(drift, "skill copies must stay aligned with the canonical project skills").toEqual([]);
   });
 
   it("pins each plugin skill's canonical SKILL.md in both runtime adapters", () => {
