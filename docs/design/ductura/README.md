@@ -6,7 +6,7 @@
 - Mjerodavne su vlasničke odluke (#87 `issuecomment-6235542273`, D-123 do D-126 u `docs/DECISIONS.md`); imaju prednost pred §9 „Otvorena pitanja”.
 - Mjere (demo) se ne grade (D-56).
 - Prototip povlači React i Babel s unpkg samo za pregled u pregledniku (runtime `support.js` nije u repou, vidi §2 i §10); aplikacija ih ne koristi.
-- **PRIJEDLOG dizajna, ne gradi:** istraga i zapis svakog unosa (§5.5, `PROVJERE.md` §6e, `INTEGRACIJA.md` §3.2 dio „ako se odobri §4.1” i §3.3, ekran `istraga.dc.html`, tekst obavijesti S3 u `demo-tok-v2.dc.html`). Sukobljava se s D-24 (vrijeme ne finije od minute), D-56 i D-125; čeka vlasnikovu D-odluku i pravno mišljenje (GDPR čl. 35). Tekst obavijesti S3 u demou slijedi važeće D-24 i D-56, ne opis iz prototipa.
+- **PRIJEDLOG dizajna, ne gradi:** istraga i zapis svakog unosa, uključujući ploču "Što Ductura čuva" u `prijava-v5.dc.html` (§5.5, `PROVJERE.md` §6e, `INTEGRACIJA.md` §3.2 dio „ako se odobri §4.1” i §3.3, ekran `istraga.dc.html`, tekst obavijesti S3 u `demo-tok-v2.dc.html`). Sukobljava se s D-24 (vrijeme ne finije od minute), D-56 i D-125; čeka vlasnikovu D-odluku i pravno mišljenje (GDPR čl. 35). Tekst obavijesti S3 u demou slijedi važeće D-24 i D-56, ne opis iz prototipa.
 - **Vlasnikova odluka (#87 `issuecomment-6236582503`) za `INTEGRACIJA.md` §3.1:** navod je u demou običan tekst (PLAN-DEMO F-8, dopuna D-98), a atom postaje nakon demoa, prije prve stvarne evidencije. Komentar je zaseban zapis sa sidrom, prikazan kao dekoracija, ne mark u dokumentu (D-34). Zapisivanje u `docs/DECISIONS.md` i `docs/PLAN-DEMO.md` ide zasebnim PR-om. Brz put (F-11) je u demou, T4.
 - Datoteke u ovoj mapi imaju kebab-case imena; imena iz izvornog paketa (`Ductura Editor v11.dc.html` itd.) u tekstu su preslikana u imena iz repoa. Vodič (`Ductura Vodič`) nije u repou.
 
@@ -71,7 +71,7 @@ Prototip je širi od demoa 2. 11. 2026. Za gradnju vrijedi:
    - **Struktura** (lijevo, ~260 px, `#141712`, desna crta `#2C312B`): stablo poglavlja, oznaka trenutnog, sklapanje, povlačenje, `⋯` radnje, cilj riječi, stanje (skica / u radu / gotovo), rok, kontrolni popis, kartica pod mišem. Ispod 1240 px sklopiva.
    - **List** (sredina, max ~720 px teksta): Newsreader 16.5–17 px, prored 1.7. Tamni list `#161A15`, bijeli list `#FFFFFF` s tekstom `#1C160B`-tonovima (vidi CSS u `<helmet>` datoteke, selektori `.ed[data-sheet=light]`).
    - **Desni panel** (~330 px, `#141712`): kartice **Asistent · Literatura · Nacrt · Upute · Komentari · Rad** (+ Izvor kad je otvoren). Kartice su tekst 12 px s podcrtom aktivne `inset 0 -2px 0 #6FBFA5`, traka kartica je `flex:none; overflow-x:auto`, ljepljiva na vrhu. Ispod 1000 px panel se otvara gumbom ▥ preko teksta.
-4. **Traka stanja** (dno): stanje spremanja, „Zapis uključen” (klik otvara što se bilježi), "210 / 2 000–2 500 riječi · ≈ 1 str.", broj rupa (klik otvara popis), broj riječi označenog teksta.
+4. **Traka stanja** (dno): stanje spremanja, „Zapis uključen” (klik otvara što se bilježi; zapis po unosu je PRIJEDLOG dizajna, ne gradi, u demou D-24 i D-56), "210 / 2 000–2 500 riječi · ≈ 1 str.", broj rupa (klik otvara popis), broj riječi označenog teksta.
 
 **Kartice desnog panela**
 - **Literatura**: traženje, `+ Izvor`, `Uvezi` (BibTeX/RIS/Zotero), skupine Citirano / Nije citirano, upozorenja uz izvor, "citirano 2× ›" kruži kroz mjesta, bilješke iz čitanja sa stranicom (povlačenje u tekst umeće „citat” (Autor, godina: str.)), Izvori po poglavljima, jezik izvora, Navodi bez izvora (Pokaži / Poveži / Dodaj).
@@ -84,10 +84,10 @@ Prototip je širi od demoa 2. 11. 2026. Za gradnju vrijedi:
 
 ### 5.2 Pregled radova (`pregled-radova-v2.dc.html`)
 
-1. **Gornja traka** 48 px kao u editoru; desno "Nastavnik A", poveznica Editor. Prekidač "Mjere (demo)" je uklonjen: ritam i podrijetlo teksta vide se samo u istrazi (§5.5).
+1. **Gornja traka** 48 px kao u editoru; desno "Nastavnik A", poveznica Editor. Prekidač "Mjere (demo)" je uklonjen: mjere ritma i vremena vide se samo u istrazi (§5.5, PRIJEDLOG); prikaz "Podrijetlo teksta" je izbor mentora uz uvjete D-127 (zadano isključen).
 2. **Lijevo** (230 px): popis radova **abecedno**, uz ime tiha oznaka "istraga · čeka odobrenje / otvorena / zatvorena" ako postoji, ime 13/600, stanje u boji (Čeka doradu `#D3AC63`, Dorada stigla na pregled `#8FB0E0`, Prihvaćeno `#6FBFA5`, Nije započeto `#8E958D`), vrijeme 11 px. Ispod: "Popis se ne može poredati po brojevima."
 3. **Sredina** (max 720 px): ime (Newsreader 24/600), stanje · runda, radnje (Zatraži novu doradu / Prihvati rad / Ocjena). Redak "Novo od tvog pregleda … · Označi kao pregledano". Prikaz: Tekst / Promjene od runde N (diff po riječima: brisano precrtano `#D9AE5B`, dodano `#8FB0E0` na `#8FB0E022`) / Podrijetlo teksta (točka uz odlomak: napisano u Ducturi `#8FB0E0`, zalijepljeno `#9E9A90`). Rad je zaključan; označavanjem teksta otvara se novi komentar.
-4. **Desno** (330 px): kartice **Komentari · Dorada · Konzultacije · Etape · Izvješće**. Predlošci komentara s pravilom FPZG, zahtjev za doradu s rokom i dnevnikom, ispod njega "Zatraži istragu…" (razlog → koordinatoru; zatim stanje istrage), konzultacije (bilješke, dogovoreno po retku, "Dnevni red iz rada", privatne bilješke), etape (Odobri / Vrati s napomenom, "izmijenjeno nakon odobrenja"), rubrika s kriterijima koje mentor uređuje, nacrt izvješća, ocjena (nacrt dok se ne objavi).
+4. **Desno** (330 px): kartice **Komentari · Dorada · Konzultacije · Etape · Izvješće**. Predlošci komentara s pravilom FPZG, zahtjev za doradu s rokom i dnevnikom, ispod njega "Zatraži istragu…" (PRIJEDLOG dizajna, ne gradi) (razlog → koordinatoru; zatim stanje istrage), konzultacije (bilješke, dogovoreno po retku, "Dnevni red iz rada", privatne bilješke), etape (Odobri / Vrati s napomenom, "izmijenjeno nakon odobrenja"), rubrika s kriterijima koje mentor uređuje, nacrt izvješća, ocjena (nacrt dok se ne objavi).
 
 ### 5.3 Demo tok (`demo-tok-v2.dc.html`)
 
@@ -130,7 +130,7 @@ Prije odobrenja koraci 4 i 5 prikazuju samo "Zapis je zatvoren". U editoru stude
 ## 6. Ponašanje
 
 - **Stanja spremanja** (F-8): osam stanja iz `src/domain/sync/labels.ts`; SYNCED tek uz potpisanu potvrdu. Rad bez mreže zadržava oznaku do povratka. Druga kartica = samo čitanje. Greške nude "Izvezi tekst".
-- **Navodi**: navod je atom (jedan čvor), stil se mijenja globalno; dva susjedna navoda spajaju se u "(A, 2017: 7; B, 2023)" i razdvajaju kad se jedan obriše. Isti autor + ista godina → 2019a/2019b automatski.
+- **Navodi**: navod je atom (jedan čvor) *(nakon demoa; u demou običan tekst, #87 `issuecomment-6236582503`)*, stil se mijenja globalno; dva susjedna navoda spajaju se u "(A, 2017: 7; B, 2023)" i razdvajaju kad se jedan obriše. Isti autor + ista godina → 2019a/2019b automatski.
 - **Komentar**: označi tekst unutar jednog odlomka → desni klik ili gumb → polje iznad teksta; Ctrl+Enter objavi, Esc odustani. Broj se ne mijenja ni nakon brisanja.
 - **Rupe** `[?] [izvor] [provjeri] [broj]`: crveno podcrtane, blokiraju predaju.
 - **Struktura**: Ctrl+Alt+↑/↓ i Alt+Shift+↑/↓ premještaju poglavlje u fokusu; dok je fokus u strukturi, kursor u tekstu ne mijenja aktivno poglavlje.
@@ -138,7 +138,7 @@ Prije odobrenja koraci 4 i 5 prikazuju samo "Zapis je zatvoren". U editoru stude
 - **Etape**: student predaje sljedeću tek kad su sve prethodne odobrene; vraćena etapa nudi "Predaj ponovno".
 - **Predaja**: blokirana dok ima rupa i dok izjava o autorstvu nije potvrđena; žute stavke ne blokiraju.
 - **Prijelazi i animacije**: samo `background .15s`, `left .15s` (prekidači). Toast 2.6 s, dno sredina.
-- **Studentski prikaz** poštuje PRODUCT.md §5: bez postotaka, bez mjera ritma i truda, rječnik iz §5. P-6 to provjerava u CI-ju. Iznimka je samo odobrena istraga (§5.5), gdje student i mentor vide isto.
+- **Studentski prikaz** poštuje PRODUCT.md §5: bez postotaka, bez mjera ritma i truda, rječnik iz §5. P-6 to provjerava u CI-ju. Iznimka je samo odobrena istraga (§5.5, PRIJEDLOG dizajna, ne gradi), gdje student i mentor vide isto.
 
 ## 7. Stanje i podaci
 
@@ -190,7 +190,7 @@ Bijeli list: tekst i oznake u `<helmet><style>` editora, selektori `.ed[data-she
 
 ## 10. Datoteke
 
-- `prijava-v5.dc.html`: prijava (F-5). AAI@EduHr, prijava e-poštom za vanjske članove, kod zadatka (demo prihvaća bilo koji), "Što Ductura čuva", provjera putovnice bez prijave, "Pokaži demo", gumb Natrag u svim dijelovima. Tweaks `stage`, `role`.
+- `prijava-v5.dc.html`: prijava (F-5). AAI@EduHr, prijava e-poštom za vanjske članove (PRIJEDLOG dizajna, ne gradi bez odluke vlasnika; D-104, D-09 ostaje), kod zadatka (demo prihvaća bilo koji), "Što Ductura čuva" (PRIJEDLOG dizajna, ne gradi: tekst o zapisu unosa i istrazi; u demou D-24 i D-56), provjera putovnice bez prijave, "Pokaži demo", gumb Natrag u svim dijelovima. Tweaks `stage`, `role`.
 - `demo-tok-v2.dc.html`: novi zadatak, upis i obavijest, predaja, brz put.
 - `pocetna.dc.html`: početna studenta, obavijesti, paket rada.
 - `editor-v11.dc.html`: editor, zadnja verzija (v2–v10 su povijest u projektu). Tweak `istraga` (nema / otvorena / zatvorena).

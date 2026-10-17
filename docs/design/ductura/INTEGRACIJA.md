@@ -27,9 +27,9 @@ Prototipi su referenca izgleda i ponašanja, ne kod. Sva logika je u klasi `Comp
 **Faza A: demo 2. 11. 2026.** (PLAN-DEMO)
 1. Ljuska editora, traka alata, struktura, list, traka stanja (F-4, F-8).
 2. Osam stanja spremanja, rad bez mreže, druga kartica (F-8).
-3. Naslovi, navod kao atom, bibliografija FPZG (F-8, K-2).
+3. Naslovi, navod kao običan tekst u demou (odluka vlasnika, #87 `issuecomment-6236582503`, PLAN-DEMO F-8, dopuna D-98; atom nakon demoa), bibliografija FPZG (F-8, K-2).
 4. Komentar uz odlomak, pogled nastavnika (F-9, B-10, B-11).
-5. Prijava v5 bez e-pošte i putovnice; upis + obavijest S3 (F-5, F-7). **Tekst obavijesti tek nakon odluke iz §4.1.**
+5. Prijava v5 bez e-pošte i putovnice; upis + obavijest S3 (F-5, F-7). **Tekst obavijesti tek nakon odluke iz §4.1.** U demou tekst ploče "Što Ductura čuva" i obavijesti S3 slijedi važeće D-24 i D-56, ne prototip (PRIJEDLOG dizajna, ne gradi: zapis svakog unosa i istraga).
 6. Predaja, sažetak procesa isti za oba (F-10, B-12, B-13).
 7. Brz put (F-11).
 
@@ -40,7 +40,7 @@ Prototipi su referenca izgleda i ponašanja, ne kod. Sva logika je u klasi `Comp
 11. Početna, obavijesti (aplikacija + e-pošta), komentari na mobitelu.
 12. Pomoć u pisanju: @navod, /naredbe, rupe, fraze, kostur odlomka, riječ u kontekstu, prijelazi, oblik rečenica.
 13. Uvoz teksta, izvoz .docx/PDF po FPZG-u, predajni paket, putovnica + javna provjera.
-14. Povjerenstvo, koordinator, "Kako Ductura radi", prijava e-poštom.
+14. Povjerenstvo, koordinator, "Kako Ductura radi", prijava e-poštom (**PRIJEDLOG dizajna, ne gradi bez odluke vlasnika; D-104, D-09 ostaje**; pitanje ide u Owner queue).
 
 **Faza C: tek nakon pravnog mišljenja**
 15. Zapis unosa s lancem hasheva i istraga (§4.1).
@@ -75,20 +75,20 @@ Sve tablice i tko vidi što: PROVJERE.md §6c, §6d, §6e. Ključno:
 ### 3.4 Prava pristupa (RLS / middleware)
 | Uloga | Vidi |
 |---|---|
-| Student | svoj rad, komentare, sažetak procesa, istragu o sebi kad je odobrena |
+| Student | svoj rad, komentare, sažetak procesa, istragu o sebi kad je odobrena (PRIJEDLOG, §4.1, Faza C) |
 | Mentor | radove svojih kolegija; zapis unosa samo u odobrenoj istrazi |
 | Član povjerenstva | zaključan predani rad, putovnicu, svoju ocjenu; tuđe ocjene kad svi predaju |
-| Koordinator | agregate; odobrava istrage |
+| Koordinator | agregate; odobrava istrage (PRIJEDLOG, §4.1, Faza C) |
 | Javno | provjera putovnice po kodu (bez teksta i komentara) |
 
 ### 3.5 Obavijesti
-Događaji: `comment.created`, `revision.requested`, `revision.accepted`, `deadline.7d`, `deadline.1d`, `investigation.opened`, `investigation.closed`. Zadnja dva **ne mogu se isključiti**. Kanali: aplikacija, e-pošta (postavke po vrsti, Početna).
+Događaji (`investigation.*` su PRIJEDLOG, §4.1, Faza C): `comment.created`, `revision.requested`, `revision.accepted`, `deadline.7d`, `deadline.1d`, `investigation.opened`, `investigation.closed`. Zadnja dva **ne mogu se isključiti**. Kanali: aplikacija, e-pošta (postavke po vrsti, Početna).
 
 ### 3.6 Testovi koje treba dodati
-- P-6 (CI): studentski prikaz bez postotaka i mjera ritma; iznimka samo ruta `/istraga/*` uz odobrenu istragu.
+- P-6 (CI): studentski prikaz bez postotaka i mjera ritma; iznimka samo ruta `/istraga/*` uz odobrenu istragu. Iznimka za `/istraga/*` je PRIJEDLOG (§4.1, Faza C), ne ugrađuje se prije odluke.
 - Jednakost sažetka procesa za studenta i mentora (B-13).
 - Lanac hasheva: izmjena jednog zapisa → prekid točno na tom indeksu.
-- Prava: mentor bez odobrene istrage dobiva 403 na zapis unosa.
+- Prava: mentor bez odobrene istrage dobiva 403 na zapis unosa. (PRIJEDLOG, §4.1, Faza C)
 - Koordinator: odgovor ne sadrži imena ni ID-eve studenata.
 
 ## 4. Što nije riješeno
@@ -129,4 +129,4 @@ Događaji: `comment.created`, `revision.requested`, `revision.accepted`, `deadli
 - [ ] Tekst obavijesti S3, "Što Ductura čuva" i "Kako Ductura radi" pregledan s pravnikom.
 - [ ] Boje i ime odlučeni.
 - [ ] Profil FPZG potvrđen.
-- [ ] Svaki `.dc.html` otvoren u pregledniku iz ove mape (s `support.js`) bez grešaka.
+- [ ] Svaki `.dc.html` otvoren u pregledniku iz ove mape (iz izvornog zipa ili Claude Designa, jer `support.js` nije u repou) bez grešaka.
