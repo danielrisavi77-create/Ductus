@@ -5,7 +5,7 @@ WORKDIR /app
 RUN corepack enable
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --prod
-COPY server.mjs ./
+COPY server.mjs accounts.mjs ./
 USER node
 EXPOSE 8080
 CMD ["node", "server.mjs"]
