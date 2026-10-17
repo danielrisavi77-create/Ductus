@@ -34,7 +34,7 @@ export const QUOTA_EXHAUSTED_PATTERNS = new Map([
 // D-139: a critical QA PASS may come from a second Claude session when Codex
 // reviewed the current head, answered every thread and the QA names that head.
 const CODEX_BOT_LOGIN = "chatgpt-codex-connector[bot]";
-const SECOND_SESSION_RE = /^claude-second-session \u2014 Codex review na headu ([0-9a-f]{40})$/i;
+const SECOND_SESSION_RE = /^claude-second-session \u2014 Codex review na headu ([0-9a-fA-F]{40})$/;
 const CODEX_REVIEW_STATES = new Set(["COMMENTED", "APPROVED", "CHANGES_REQUESTED"]);
 
 export const QUOTA_FALLBACK_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -178,16 +178,32 @@ function codexReviewedHead(prReviews, headSha) {
   );
 }
 
-// A Codex thread is answered once a reply from someone other than Codex sits
-// under its root comment. A list that was not read answers nothing: fail closed.
-function codexThreadsAnswered(reviewComments) {
+// A Codex thread is answered once its author replied under the root comment:
+// a non-bot account that is the owner or the PR author's login. A list that
+// was not read answers nothing: fail closed.
+function codexThreadsAnswered(reviewComments, authorLogin) {
   if (!Array.isArray(reviewComments)) return false;
+  const byAuthor = (item) =>
+    item?.user?.type !== "Bot" &&
+    (item?.author_association === "OWNER" || (Boolean(authorLogin) && item?.user?.login === authorLogin));
   const answered = new Set(
-    reviewComments.filter((item) => item?.in_reply_to_id && !isCodexBot(item?.user)).map((item) => item.in_reply_to_id),
+    reviewComments.filter((item) => item?.in_reply_to_id && byAuthor(item)).map((item) => item.in_reply_to_id),
   );
   return reviewComments
     .filter((item) => isCodexBot(item?.user) && !item?.in_reply_to_id)
     .every((root) => answered.has(root.id));
+}
+
+// Principals that posted any canonical review block on this PR, whatever the
+// head or verdict (D-139: the QA session is not a reviewer of the PR).
+function reviewerPrincipals(entries) {
+  const found = new Set();
+  for (const entry of entries) {
+    if (!canonicalBlock(entry.body, "Agent-Review")) continue;
+    const principal = declaredPrincipal(field(entry.body, "Agent-Review"));
+    if (principal) found.add(principal);
+  }
+  return found;
 }
 
 function fallbackSlug(value) {
@@ -302,6 +318,7 @@ export function evaluateGate({
   comments = [],
   prReviews = [],
   reviewComments = null,
+  authorLogin = null,
   carriedHeads = new Set(),
   trustedLogins = TRUSTED_VERDICT_LOGINS,
   qaExempt = null,
@@ -440,6 +457,7 @@ export function evaluateGate({
     // passing reviewer), the declaration naming this head, a Codex review on
     // this head and every Codex thread answered. Never carried: the line
     // names one head.
+    const everReviewers = reviewerPrincipals(trusted);
     const secondSession = separateAppPass || fallbackPass
       ? null
       : qaPasses.find(
@@ -447,9 +465,10 @@ export function evaluateGate({
             result.identity.appSlug === "claude" &&
             result.current &&
             !passingReviewerPrincipals.has(result.identity.principal) &&
+            !everReviewers.has(result.identity.principal) &&
             sameHead(SECOND_SESSION_RE.exec(result.fallbackLine ?? "")?.[1], headSha),
         );
-    if (secondSession && codexReviewedHead(prReviews, headSha) && codexThreadsAnswered(reviewComments)) {
+    if (secondSession && codexReviewedHead(prReviews, headSha) && codexThreadsAnswered(reviewComments, authorLogin)) {
       return {
         state: "success",
         description: `Independent review and second Claude session QA valid for current head (D-139: Codex review on head, threads answered).${carriedNote(passingReviews, headSha)}`,
@@ -614,6 +633,7 @@ export function evaluatePullRequest({ pr, files, comments, prReviews, reviewComm
       comments,
       prReviews,
       reviewComments,
+      authorLogin: pr.user?.login ?? null,
       carriedHeads,
       qaExempt: qaExemption(paths),
     }),

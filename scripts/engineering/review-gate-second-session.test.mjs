@@ -38,9 +38,10 @@ const codexReview = (commit = head, extra = {}) => ({
   ...extra,
 });
 const thread = (id) => ({ id, user: CODEX_BOT, in_reply_to_id: null, created_at: iso(6 * MIN) });
-const reply = (id, to, user = { login: ownerLogin, type: "User" }) => ({
+const reply = (id, to, user = { login: ownerLogin, type: "User" }, association = "OWNER") => ({
   id,
   user,
+  author_association: association,
   in_reply_to_id: to,
   created_at: iso(7 * MIN),
 });
@@ -154,4 +155,45 @@ test("evaluatePullRequest passes the review comments through to the gate", () =>
     evaluatePullRequest({ pr, files, comments: ok, prReviews: [codexReview()], reviewComments, ownerLogin }).result;
   assert.equal(run([thread(1)]).state, "pending");
   assert.equal(run([thread(1), reply(2, 1)]).state, "success");
+});
+
+test("only the PR author answers a Codex thread: bots and outsiders do not", () => {
+  const bot = { login: "ductus-botovi[bot]", type: "Bot" };
+  const outsider = { login: "random-outsider", type: "User" };
+  assert.equal(evaluate({ comments: ok, reviewComments: [thread(1), reply(2, 1, bot, "NONE")] }).state, "pending");
+  assert.equal(evaluate({ comments: ok, reviewComments: [thread(1), reply(2, 1, outsider, "NONE")] }).state, "pending");
+  // a bot posing with an owner association is still a bot
+  assert.equal(evaluate({ comments: ok, reviewComments: [thread(1), reply(2, 1, bot, "OWNER")] }).state, "pending");
+});
+
+test("the author login also answers when its association is not OWNER", () => {
+  const author = { login: "pr-author", type: "User" };
+  const result = evaluateGate({
+    body: AUTHOR, headSha: head, ownerLogin, comments: ok, prReviews: [codexReview()],
+    reviewComments: [thread(1), reply(2, 1, author, "COLLABORATOR")], authorLogin: "pr-author",
+  });
+  assert.equal(result.state, "success");
+});
+
+test("the declaration wording is case-exact apart from the SHA", () => {
+  for (const fallback of [
+    `Provider-Fallback: CLAUDE-SECOND-SESSION — CODEX REVIEW NA HEADU ${head}`,
+    `Provider-Fallback: claude-second-session — codex review na headu ${head}`,
+  ]) {
+    assert.equal(evaluate({ comments: [reviewPass(), qa({ fallback })] }).state, "pending", fallback);
+  }
+  assert.equal(evaluate({ comments: [reviewPass(), qa({ fallback: line(head.toUpperCase()) })] }).state, "success");
+});
+
+test("the QA session must not have reviewed this PR on any head with any verdict", () => {
+  const oldFail = byOwner(`Agent-Review: claude:c:reviewer
+Review-Head: ${other}
+Review-Verdict: FAIL
+`, 1 * MIN);
+  assert.equal(evaluate({ comments: [oldFail, ...ok] }).state, "pending");
+  const oldPass = byOwner(`Agent-Review: claude:C:reviewer
+Review-Head: ${other}
+Review-Verdict: PASS
+`, 1 * MIN);
+  assert.equal(evaluate({ comments: [oldPass, ...ok] }).state, "pending");
 });
