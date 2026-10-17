@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,600;1,6..72,300;1,6..72,400&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;background:#0F110E;color:#E9EBE6;font-family:"Instrument Sans",system-ui,sans-serif;font-size:13px;-webkit-font-smoothing:antialiased}
+@keyframes rise{from{opacity:0;transform:translateY(16px);filter:blur(8px)}to{opacity:1;transform:none;filter:none}}
+@keyframes drift{0%,100%{transform:translate(0,0)}50%{transform:translate(4%,3%)}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+*{box-sizing:border-box}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+select,input{font:inherit;color:#E9EBE6}
+a{color:#8FB0E0;text-decoration:none}
+a:hover{color:#B3CAEC}
+:focus-visible{outline:2px solid #8FD1B9;outline-offset:2px;border-radius:6px}
+::selection{background:#D9AE5B55}
+</style>
+</helmet>
+<div data-screen-label="Prijava" style="position:relative;overflow:hidden;isolation:isolate;min-height:100vh;display:grid;grid-template-rows:auto 1fr auto;padding:28px clamp(20px,5vw,72px)">
+  <div aria-hidden="true" style="position:absolute;z-index:-1;left:-20%;top:-30%;width:90%;height:110%;background:radial-gradient(closest-side,#6FBFA512,transparent);animation:drift 18s ease-in-out infinite"></div>
+  <header style="display:grid;grid-template-columns:1fr auto 1fr;align-items:baseline;gap:14px;animation:rise .8s cubic-bezier(.2,.7,.2,1) both">
+    <span></span>
+    <span style="display:flex;align-items:baseline;gap:10px"><span style="font-family:Newsreader,Georgia,serif;font-size:25px;font-weight:600;letter-spacing:-.01em">Ductura</span><span style="font-size:11.5px;color:#767D75">demo</span></span>
+    <div style="justify-self:end;display:flex;gap:20px"><a href="Ductura Vodič.dc.html" style="font-size:12.5px;color:#8FD1B9">Pokaži demo</a><button type="button" onClick="{{ openVerify }}" style="font-size:12.5px;color:#A6ADA5" style-hover="color:#E9EBE6">Provjeri rad</button><button type="button" onClick="{{ openHelp }}" style="font-size:12.5px;color:#A6ADA5" style-hover="color:#E9EBE6">Pomoć pri prijavi</button></div>
+  </header>
+
+  <main style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));gap:clamp(32px,7vw,120px);align-items:center;max-width:1180px;width:100%;margin:0 auto;padding:48px 0">
+    <div style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:30px;min-width:0;max-width:600px;justify-self:center;width:100%">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:18px">
+        <h1 style="margin:0;font-family:Newsreader,Georgia,serif;font-size:clamp(52px,7.4vw,98px);font-weight:300;line-height:.92;letter-spacing:-.025em"><span style="display:inline-block;animation:rise 1s .05s cubic-bezier(.2,.7,.2,1) both">Prijava u</span> <span style="display:inline-block;font-style:italic;font-weight:400;color:#BFE3D5;animation:rise 1s .18s cubic-bezier(.2,.7,.2,1) both">Ducturu</span></h1>
+        <p style="margin:0;font-size:15.5px;line-height:1.6;color:#A6ADA5;max-width:40ch;text-wrap:pretty;animation:rise 1s .3s cubic-bezier(.2,.7,.2,1) both">Prostor u kojem pišeš seminarske, završne i diplomske radove, a mentor ih prati od prve rečenice do predaje.</p>
+        <p style="margin:0;font-family:Newsreader,Georgia,serif;font-style:italic;font-size:17px;line-height:1.5;color:#C5CBC3;max-width:42ch;text-wrap:pretty;animation:rise 1s .38s cubic-bezier(.2,.7,.2,1) both">Ductura ne piše umjesto tebe. Pomaže ti da napišeš svoj rad i pokažeš kako je nastao.</p>
+      </div>
+      <div style="width:100%;text-align:left">{{ manuscript }}</div>
+      <div style="display:flex;align-items:center;justify-content:center;text-align:left;gap:12px;animation:rise 1s .5s cubic-bezier(.2,.7,.2,1) both"><span style="flex:none;display:grid;place-items:center;height:40px;padding:5px 10px;border-radius:8px;background:#E9EBE6"><img src="https://commons.wikimedia.org/wiki/Special:FilePath/Faculty_of_Political_Science,_University_of_Zagreb.svg" alt="FPZG" style="height:30px;width:auto;display:block"></span><span style="display:flex;flex-direction:column;gap:2px;font-size:12px;color:#8E958D"><span>Fakultet političkih znanosti · Sveučilište u Zagrebu</span><span style="color:#767D75">Pilot ak. god. 2026./27. <span style="color:#D3AC63">[potvrditi]</span></span></span></div>
+    </div>
+
+    <section aria-label="Prijava" style="justify-self:center;text-align:center;width:min(430px,100%);background:linear-gradient(180deg,#191D18F2,#121511F2);backdrop-filter:blur(14px) saturate(1.2);border:1px solid #2A2F29;border-radius:18px;box-shadow:inset 0 1px 0 #ffffff12,inset 0 0 0 1px #00000040,0 1px 2px #0006,0 30px 60px -20px #000c,0 70px 120px -60px #6FBFA526;animation:rise 1s .25s cubic-bezier(.2,.7,.2,1) both;padding:30px 30px 24px;display:flex;flex-direction:column;gap:20px">
+
+      <sc-if value="{{ canBack }}" hint-placeholder-val="{{ false }}">
+        <button type="button" onClick="{{ goBack }}" style="align-self:center;display:flex;align-items:center;gap:7px;margin:-10px 0 -6px;padding:6px 10px 6px 8px;border-radius:8px;font-size:12.5px;color:#A6ADA5;transition:background .15s,color .15s" style-hover="background:#ffffff0a;color:#E9EBE6"><span aria-hidden="true" style="font-size:14px">←</span>{{ backLabel }}</button>
+      </sc-if>
+      <sc-if value="{{ stStart }}" hint-placeholder-val="{{ true }}">
+        <div role="tablist" aria-label="Uloga" style="display:grid;grid-template-columns:1fr 1fr;gap:2px;background:#0B0D0A;padding:4px;border-radius:11px;box-shadow:inset 0 1px 2px #0008,0 1px 0 #ffffff08">
+          <sc-for list="{{ roles }}" as="r" hint-placeholder-count="2"><button type="button" role="tab" aria-selected="{{ r.sel }}" onClick="{{ r.on }}" style="{{ r.style }}">{{ r.label }}</button></sc-for>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <b style="font-family:Newsreader,Georgia,serif;font-size:24px;font-weight:400;letter-spacing:-.01em;line-height:1.15">{{ roleHead }}</b>
+          <span style="font-size:13px;line-height:1.55;color:#A6ADA5">Prijavi se korisničkim računom AAI@EduHr, istim kojim se prijavljuješ u Studomat i Merlin.</span>
+        </div>
+        <button type="button" onClick="{{ startAai }}" style="display:flex;align-items:center;justify-content:center;gap:10px;padding:14px 18px;border-radius:11px;background:linear-gradient(180deg,#86CDB5,#62B297);color:#0B1A15;font-size:14.5px;font-weight:600;letter-spacing:.005em;box-shadow:inset 0 1px 0 #ffffff59,inset 0 -1px 0 #0000001f,0 8px 24px -8px #6FBFA580;transition:transform .15s,box-shadow .15s" style-hover="transform:translateY(-1px);box-shadow:inset 0 1px 0 #ffffff59,inset 0 -1px 0 #0000001f,0 14px 30px -10px #6FBFA5a0" style-active="transform:none">Prijava sustavom AAI@EduHr<span aria-hidden="true">→</span></button>
+        <span style="display:flex;align-items:center;justify-content:center;gap:7px;margin-top:-8px;font-size:11.5px;color:#767D75"><svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><rect x="1" y="5" width="8" height="6.5" rx="1.5" fill="none" stroke="currentColor"></rect><path d="M3 5V3.5a2 2 0 0 1 4 0V5" fill="none" stroke="currentColor"></path></svg>Lozinku upisuješ samo kod AAI@EduHr</span>
+        <div aria-hidden="true" style="display:flex;align-items:center;gap:0;font-size:11px;color:#5C635B"><i style="flex:1;height:1px;background:linear-gradient(90deg,transparent,#2A2F29)"></i><i style="flex:1;height:1px;background:linear-gradient(90deg,#2A2F29,transparent)"></i></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+          <label for="kod" style="font-size:12px;color:#A6ADA5">Uđi s kodom zadatka <span style="color:#767D75">· ako ti ga je dao nastavnik</span></label>
+          <div style="display:flex;gap:8px;align-items:center;justify-content:center;width:100%"><input id="kod" value="{{ code }}" onChange="{{ setCode }}" placeholder="FPZG-ZR-7K2" autocomplete="off" spellcheck="false" style="flex:1;min-width:0;background:#0B0D0A;border:1px solid #262B25;border-radius:10px;padding:11px 12px;font-size:13px;font-family:ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;text-transform:uppercase;box-shadow:inset 0 1px 2px #0008;outline:none;transition:border-color .15s,box-shadow .15s;text-align:center" style-focus="border-color:#6FBFA5;box-shadow:inset 0 1px 2px #0008,0 0 0 3px #6FBFA526"></div>
+          <span style="{{ codeNoteStyle }}">{{ codeNote }}</span>
+        </div>
+        <button type="button" onClick="{{ openEmail }}" style="align-self:center;text-align:center;font-size:12px;color:#8E958D;text-decoration:underline;text-underline-offset:3px" style-hover="color:#E9EBE6">Nemaš AAI@EduHr? Prijava e-poštom (vanjski članovi povjerenstva)</button>
+        <div style="display:flex;flex-direction:column;gap:8px;padding:12px 14px;background:#D3AC630A;border:1px dashed #D3AC6333;border-radius:11px">
+          <span style="font-size:11.5px;font-weight:600;color:#D3AC63">Demo prijava · lažni pružatelj</span>
+          <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:6px">
+            <sc-for list="{{ demoPeople }}" as="p" hint-placeholder-count="2"><button type="button" onClick="{{ p.on }}" style="padding:5px 10px;border-radius:7px;border:1px solid #2C312B;font-size:12.5px;color:#C5CBC3" style-hover="background:#1E221D;color:#E9EBE6">{{ p.name }}</button></sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ stRedirect }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <b style="font-size:16px;font-weight:600">Preusmjeravamo te na AAI@EduHr</b>
+          <span style="font-size:13px;line-height:1.55;color:#A6ADA5">Ondje upisuješ korisničku oznaku i lozinku. Ductura ih ne vidi i ne pamti.</span>
+        </div>
+        <div aria-hidden="true" style="height:2px;background:#232722;border-radius:1px;overflow:hidden"><div style="{{ barStyle }}"></div></div>
+        <div style="display:flex;gap:8px;align-items:center"><button type="button" onClick="{{ finishAai }}" style="padding:7px 12px;border-radius:7px;font-size:12.5px;color:#E9EBE6;border:1px solid #4A5049">Nastavi ručno</button><button type="button" onClick="{{ toStart }}" style="padding:7px 10px;font-size:12.5px;color:#A6ADA5">Odustani</button></div>
+        <span style="font-size:12px;color:#767D75">Ako se stranica ne otvori za nekoliko sekundi, nastavi ručno.</span>
+      </sc-if>
+
+      <sc-if value="{{ stError }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <b style="font-size:16px;font-weight:600">Prijava nije uspjela</b>
+          <span style="font-size:13px;line-height:1.55;color:#C5CBC3">AAI@EduHr nije potvrdio prijavu. Najčešće je razlog pogrešna lozinka ili račun koji još nije aktiviran.</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;padding:10px 12px;background:#0F110E;border-radius:8px;font-size:12px;color:#8E958D">Oznaka greške za podršku<span style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;color:#C5CBC3;letter-spacing:.04em">AAI-401 · 17. 10. 2026., 17:24</span></div>
+        <div style="display:flex;gap:8px;align-items:center"><button type="button" onClick="{{ startAai }}" style="padding:9px 14px;border-radius:8px;background:#6FBFA5;color:#0E1C17;font-size:13px;font-weight:600">Pokušaj ponovno</button><button type="button" onClick="{{ openHelp }}" style="padding:9px 10px;font-size:13px;color:#A6ADA5">Pomoć</button></div>
+      </sc-if>
+
+      <sc-if value="{{ stExpired }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <b style="font-size:16px;font-weight:600">Sesija je istekla</b>
+          <span style="font-size:13px;line-height:1.55;color:#A6ADA5">Odjavljen si nakon 8 sati bez prijave. Prijavi se ponovno i nastavi gdje si stao.</span>
+        </div>
+        <div style="display:flex;gap:10px;align-items:baseline;padding:10px 12px;background:#0F110E;border-radius:8px"><i style="flex:none;width:7px;height:7px;border-radius:50%;background:#D3AC63;align-self:center"></i><span style="font-size:12.5px;line-height:1.5;color:#C5CBC3">3 izmjene spremljene su samo na ovom uređaju. Šalju se na poslužitelj čim se prijaviš.</span></div>
+        <button type="button" onClick="{{ startAai }}" style="padding:12px 16px;border-radius:9px;background:#6FBFA5;color:#0E1C17;font-size:14px;font-weight:600">Prijavi se ponovno</button>
+      </sc-if>
+
+      <sc-if value="{{ stFirst }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <span style="font-size:12px;color:#8E958D">Prva prijava</span>
+          <b style="font-size:16px;font-weight:600">Dobro došao, {{ person }}</b>
+          <span style="font-size:13px;line-height:1.55;color:#A6ADA5">{{ firstLead }}</span>
+        </div>
+        <dl style="margin:0;display:grid;grid-template-columns:max-content minmax(0,max-content);justify-content:center;gap:8px 14px;font-size:13px;padding:14px 16px;background:#0F110E;border-radius:10px">
+          <dt style="color:#8E958D;text-align:right">Ime</dt><dd style="margin:0;text-align:left">{{ person }}</dd>
+          <dt style="color:#8E958D;text-align:right">Ustanova</dt><dd style="margin:0;text-align:left">Fakultet političkih znanosti</dd>
+          <dt style="color:#8E958D;text-align:right">Uloga</dt><dd style="margin:0;text-align:left">{{ roleName }} <span style="font-size:11.5px;color:#767D75">· iz AAI@EduHr</span></dd>
+          <sc-if value="{{ hasTask }}" hint-placeholder-val="{{ false }}"><dt style="color:#8E958D;text-align:right">Zadatak</dt><dd style="margin:0;text-align:left">{{ taskName }} <span style="font-size:11.5px;color:#767D75">· iz koda {{ codeUp }}</span></dd></sc-if>
+        </dl>
+        <sc-if value="{{ isStudent }}" hint-placeholder-val="{{ true }}">
+          <label style="display:flex;flex-direction:column;align-items:center;gap:5px;font-size:12px;color:#A6ADA5">Studij<select value="{{ prog }}" onChange="{{ setProg }}" style="background:#0F110E;border:1px solid #2C312B;border-radius:8px;padding:9px 10px;font-size:13px;width:100%;text-align:center"><sc-for list="{{ programs }}" as="o" hint-placeholder-count="6"><option value="{{ o.id }}">{{ o.label }}</option></sc-for></select></label>
+          <label style="display:flex;flex-direction:column;align-items:center;gap:5px;font-size:12px;color:#A6ADA5">Godina studija<select value="{{ year }}" onChange="{{ setYear }}" style="background:#0F110E;border:1px solid #2C312B;border-radius:8px;padding:9px 10px;font-size:13px;width:100%;text-align:center"><sc-for list="{{ years }}" as="y" hint-placeholder-count="3"><option value="{{ y.v }}">{{ y.label }}</option></sc-for></select></label>
+        </sc-if>
+        <sc-if value="{{ isTeacher }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;gap:10px;align-items:baseline;justify-content:center;padding:10px 12px;background:#0F110E;border-radius:8px"><i style="flex:none;width:7px;height:7px;border-radius:50%;background:#6FBFA5;align-self:center"></i><span style="font-size:12.5px;line-height:1.5;color:#C5CBC3">Ulogu nastavnika potvrdio je koordinator FPZG-a. Kolegije stvaraš nakon prijave.</span></div>
+        </sc-if>
+        <button type="button" onClick="{{ confirmFirst }}" style="padding:12px 16px;border-radius:9px;background:#6FBFA5;color:#0E1C17;font-size:14px;font-weight:600">Potvrdi i nastavi</button>
+        <span style="font-size:12px;color:#767D75">{{ firstFoot }}</span>
+      </sc-if>
+
+      <sc-if value="{{ stResume }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <b style="font-size:16px;font-weight:600">Dobro došao natrag, {{ person }}</b>
+          <span style="font-size:13px;line-height:1.55;color:#A6ADA5">Na ovom uređaju čekale su izmjene iz prošle sesije.</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:0;padding:4px 16px;background:#0F110E;border-radius:10px;text-align:left">
+          <sc-for list="{{ resumeRows }}" as="r" hint-placeholder-count="3"><div style="display:flex;gap:10px;align-items:baseline;padding:9px 0;border-top:1px solid #1E221D;font-size:13px"><i style="{{ r.dot }}"></i><span style="flex:1;min-width:0">{{ r.t }}</span><span style="font-size:12px;color:#8E958D">{{ r.m }}</span></div></sc-for>
+        </div>
+        <a href="Ductura Editor v11.dc.html" style="display:block;text-align:center;padding:12px 16px;border-radius:9px;background:#6FBFA5;color:#0E1C17;font-size:14px;font-weight:600">Nastavi na rad</a>
+      </sc-if>
+
+      <sc-if value="{{ stEmail }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;align-items:baseline;justify-content:center;gap:8px"><b style="font-size:16px;font-weight:600">Prijava e-poštom</b></div>
+        <span style="font-size:13px;line-height:1.55;color:#A6ADA5">Za vanjske članove povjerenstva i mentore izvan sustava AAI@EduHr. Šaljemo jednokratnu poveznicu, bez lozinke.</span>
+        <label style="display:flex;flex-direction:column;gap:5px;font-size:12px;color:#A6ADA5">E-pošta<input type="email" value="{{ email }}" onChange="{{ setEmail }}" placeholder="ime@ustanova.hr" style="background:#0F110E;border:1px solid #2C312B;border-radius:8px;padding:9px 10px;font-size:13px"></label>
+        <button type="button" onClick="{{ sendLink }}" style="padding:12px 16px;border-radius:9px;background:#6FBFA5;color:#0E1C17;font-size:14px;font-weight:600">Pošalji poveznicu</button>
+        <span style="{{ emailNoteStyle }}">{{ emailNote }}</span>
+      </sc-if>
+
+      <sc-if value="{{ stVerify }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;align-items:baseline;justify-content:center;gap:8px"><b style="font-size:16px;font-weight:600">Provjera putovnice rada</b></div>
+        <span style="font-size:13px;line-height:1.55;color:#A6ADA5">Za povjerenstvo i knjižnicu, bez prijave. Kod je otisnut na naslovnici predanog rada.</span>
+        <div style="display:flex;gap:8px"><input value="{{ vcode }}" onChange="{{ setVcode }}" onKeyDown="{{ vKey }}" placeholder="DUC-0000-0000" aria-label="Kod putovnice" autocomplete="off" spellcheck="false" style="flex:1;min-width:0;background:#0F110E;border:1px solid #2C312B;border-radius:8px;padding:9px 10px;font-size:13px;font-family:ui-monospace,Menlo,Consolas,monospace;letter-spacing:.04em;text-transform:uppercase"><button type="button" onClick="{{ runVerify }}" style="padding:9px 14px;border-radius:8px;background:#232722;font-size:13px;font-weight:600" style-hover="background:#2C312B">Provjeri</button></div>
+        <button type="button" onClick="{{ fillDemo }}" style="align-self:center;font-size:12px;color:#8E958D;text-decoration:underline;text-underline-offset:3px">Isprobaj s kodom DUC-7Q4M-2K9X</button>
+        <sc-if value="{{ vNotFound }}" hint-placeholder-val="{{ false }}"><span style="font-size:12.5px;line-height:1.5;color:#E3A59A">Rad s tim kodom ne postoji. Provjeri jesu li slova i brojke točno prepisani.</span></sc-if>
+        <sc-if value="{{ vFound }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:10px;padding:14px;background:#0F110E;border-radius:8px">
+            <div style="display:flex;flex-direction:column;gap:3px"><span style="font-family:Newsreader,Georgia,serif;font-size:16px;line-height:1.35">Čitanje naglas i rječnik djece u prvim razredima</span><span style="font-size:12px;color:#8E958D">Završni rad · Student A · mentor Nastavnik A</span></div>
+            <dl style="margin:0;display:grid;grid-template-columns:max-content minmax(0,1fr);gap:6px 14px;font-size:12.5px">
+              <dt style="color:#8E958D;text-align:right">Predano</dt><dd style="margin:0;text-align:left">14. 6. 2027., 18:02</dd>
+              <dt style="color:#8E958D;text-align:right">Dorada</dt><dd style="margin:0;text-align:left">3 runde s mentorom, sve zatvorene</dd>
+              <dt style="color:#8E958D;text-align:right">Nastanak</dt><dd style="margin:0;text-align:left">Pisano u Ducturi od 2. 3. 2027.</dd>
+              <dt style="color:#8E958D;text-align:right">AI pomoćnik</dt><dd style="margin:0;text-align:left">Izjava priložena · korišten za provjeru jezika</dd>
+            </dl>
+            <div style="display:flex;flex-direction:column;gap:6px;padding-top:2px">
+              <span style="font-size:12px;color:#8E958D">Predana datoteka</span>
+              <span style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;color:#A6ADA5;word-break:break-all">SHA-256 {{ shortHash }}</span>
+              <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><label style="padding:7px 12px;border-radius:7px;font-size:12.5px;background:#232722;cursor:pointer">Usporedi .docx<input type="file" accept=".docx,.pdf" onChange="{{ pickFile }}" style="display:none"></label><button type="button" onClick="{{ demoMatch }}" style="font-size:12px;color:#8E958D;text-decoration:underline;text-underline-offset:3px">primjer: predana datoteka</button></div>
+              <sc-if value="{{ hasCmp }}" hint-placeholder-val="{{ false }}"><span style="{{ cmpStyle }}">{{ cmpText }}</span></sc-if>
+            </div>
+          </div>
+          <span style="font-size:11.5px;line-height:1.5;color:#767D75">Putovnica ne prikazuje tekst rada ni komentare mentora.</span>
+        </sc-if>
+      </sc-if>
+
+      <sc-if value="{{ stHelp }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;align-items:baseline;justify-content:center;gap:8px"><b style="font-size:16px;font-weight:600">Pomoć pri prijavi</b></div>
+        <sc-for list="{{ helpRows }}" as="h" hint-placeholder-count="4"><div style="display:flex;flex-direction:column;gap:3px;padding:10px 0;border-top:1px solid #1E221D"><span style="font-size:13px;font-weight:600">{{ h.q }}</span><span style="font-size:12.5px;line-height:1.55;color:#A6ADA5">{{ h.a }}</span></div></sc-for>
+        <div style="display:flex;flex-direction:column;gap:3px;padding:12px 14px;background:#0F110E;border-radius:8px"><span style="font-size:12px;color:#8E958D">Podrška Ducture</span><span style="font-size:13px;color:#C5CBC3">[e-pošta podrške] · radnim danom 9–16 h</span><span style="font-size:11.5px;color:#767D75">Uz poruku pošalji oznaku greške ako je imaš.</span></div>
+      </sc-if>
+
+      <div style="border-top:1px solid #232722;padding-top:14px;display:flex;justify-content:center">
+        <button type="button" onClick="{{ togglePriv }}" aria-haspopup="dialog" style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:#A6ADA5" style-hover="color:#E9EBE6"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.8 4.5 5.6v5.6c0 4.6 3.1 8.4 7.5 10 4.4-1.6 7.5-5.4 7.5-10V5.6z"></path><path d="m8.8 12.1 2.3 2.3 4.3-4.6"></path></svg>Što Ductura čuva</button>
+      </div>
+    </section>
+  </main>
+
+  <sc-if value="{{ priv }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closePriv }}" style="position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:24px;background:#070807B3;backdrop-filter:blur(6px);animation:rise .35s cubic-bezier(.2,.7,.2,1) both">
+      <div role="dialog" aria-modal="true" aria-labelledby="priv-h" onClick="{{ stop }}" style="width:min(460px,100%);max-height:calc(100vh - 48px);overflow:auto;background:linear-gradient(180deg,#1B1F1A,#131612);border:1px solid #2A2F29;border-radius:18px;box-shadow:inset 0 1px 0 #ffffff12,0 40px 90px -30px #000;padding:30px;display:flex;flex-direction:column;align-items:center;gap:18px;text-align:center">
+        <span aria-hidden="true" style="display:grid;place-items:center;width:44px;height:44px;border-radius:50%;background:#6FBFA51A;color:#8FD1B9"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.8 4.5 5.6v5.6c0 4.6 3.1 8.4 7.5 10 4.4-1.6 7.5-5.4 7.5-10V5.6z"></path><path d="m8.8 12.1 2.3 2.3 4.3-4.6"></path></svg></span>
+        <h2 id="priv-h" style="margin:0;font-family:Newsreader,Georgia,serif;font-size:26px;font-weight:400;letter-spacing:-.01em">Što Ductura čuva</h2>
+        <ul style="list-style:none;margin:0;padding:0;width:100%;display:flex;flex-direction:column;text-align:left;font-size:13.5px;line-height:1.55;color:#C5CBC3">
+          <li style="display:flex;gap:12px;padding:10px 0;"><span aria-hidden="true" style="flex:none;color:#6FBFA5">✓</span><span>Od AAI@EduHr dobiva ime, e-poštu, ustanovu i ulogu. Lozinku ne vidi.</span></li>
+          <li style="display:flex;gap:12px;padding:10px 0;border-top:1px solid #232722"><span aria-hidden="true" style="flex:none;color:#6FBFA5">✓</span><span>Rad se počinje bilježiti tek kad u zadatku potvrdiš obavijest. Od tada se bilježi svaki unos i brisanje s vremenom, zaštićeno lancem hasheva.</span></li>
+          <li style="display:flex;gap:12px;padding:10px 0;border-top:1px solid #232722"><span aria-hidden="true" style="flex:none;color:#6FBFA5">✓</span><span>Nastavnik vidi samo radove u svojim kolegijima. Pojedinačne unose i vrijeme pisanja vidi samo u istrazi koju odobri koordinator ili etičko povjerenstvo, a ti tada vidiš isto.</span></li>
+          <li style="display:flex;gap:12px;padding:10px 0;border-top:1px solid #232722"><span aria-hidden="true" style="flex:none;color:#6FBFA5">✓</span><span>Rad se čuva na poslužitelju u Europskoj uniji.</span></li>
+          <li style="display:flex;gap:12px;padding:10px 0;border-top:1px solid #232722"><span aria-hidden="true" style="flex:none;color:#6FBFA5">✓</span><span>Tekstovi se ne koriste za učenje AI modela, ni Ducturinih ni tuđih.</span></li>
+          <li style="display:flex;gap:12px;padding:10px 0;border-top:1px solid #232722"><span aria-hidden="true" style="flex:none;color:#6FBFA5">✓</span><span>Ništa ne prodaje i ne dijeli izvan fakulteta.</span></li>
+          <li style="display:flex;gap:12px;padding:10px 0;border-top:1px solid #232722"><span aria-hidden="true" style="flex:none;color:#6FBFA5">✓</span><span>Rad i sve podatke možeš izvesti ili obrisati u postavkama.</span></li>
+        </ul>
+        <div style="display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap">
+          <a href="Ductura Kako radi.dc.html" style="font-size:12.5px;padding:9px 12px">Kako Ductura radi</a>
+          <button type="button" onClick="{{ closePriv }}" style="padding:10px 20px;border-radius:10px;font-size:13px;font-weight:600;background:#232722;box-shadow:inset 0 1px 0 #ffffff14" style-hover="background:#2C312B">U redu</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <footer style="animation:rise 1s .6s cubic-bezier(.2,.7,.2,1) both;display:flex;flex-wrap:wrap;justify-content:center;gap:6px 18px;font-size:11.5px;color:#767D75">
+    <span>Izmišljeni podaci · nijedan stvarni osobni podatak</span>
+    <span>Ductura · demo za FPZG, 2. 11. 2026.</span>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;stage&quot;: {&quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;start&quot;, &quot;redirect&quot;, &quot;error&quot;, &quot;expired&quot;, &quot;first&quot;, &quot;resume&quot;, &quot;help&quot;, &quot;verify&quot;, &quot;email&quot;], &quot;default&quot;: &quot;start&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Stanje&quot;}, &quot;role&quot;: {&quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;student&quot;, &quot;teacher&quot;], &quot;default&quot;: &quot;student&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Stanje&quot;}}">
+const PROGRAMS = [["pol-ba", "Politologija · prijediplomski", 4], ["nov-ba", "Novinarstvo · prijediplomski", 3], ["pol-ma", "Politologija · diplomski", 1], ["sig-ma", "Politologija, Nacionalna sigurnost · diplomski", 1], ["nov-ma", "Novinarstvo · diplomski", 2], ["eu-ma", "Master of European Studies · diplomski", 1]];
+const TASKS = { "FPZG-ZR-7K2": "Završni rad · Kolegij A · rok 15. 6. 2027.", "FPZG-SR-3M8": "Seminarski rad · Kolegij B · rok 20. 1. 2027." };
+const DEMO_HASH = "9f2c4a71e0b85d3361c7aa04f19e5b28d6730c4e1fa29b87c35d0e6a4b1f7c92";
+function Manuscript() {
+  const h = React.createElement, [t, setT] = React.useState(0);
+  React.useEffect(() => {
+    if (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) { setT(10000); return; }
+    let raf; const start = performance.now() + 1100;
+    const tick = n => { setT(Math.max(0, n - start) % 15000); raf = requestAnimationFrame(tick); };
+    raf = requestAnimationFrame(tick); return () => cancelAnimationFrame(raf);
+  }, []);
+  const cl = x => Math.max(0, Math.min(1, x));
+  const A = "Redovito čitanje naglas u prvim razredima povezano je s ", W1 = "bogatijim", B = "rječnikom djece", CIT = "(Autor A, 2019b: 14)", W2 = "većim";
+  const L = A.length + W1.length + 1 + B.length + 1, n1 = Math.round(cl(t / 4000) * L);
+  const a = A.slice(0, n1), w1 = W1.slice(0, Math.max(0, n1 - A.length)), sp1 = n1 > A.length + W1.length ? " " : "";
+  const b = B.slice(0, Math.max(0, n1 - A.length - W1.length - 1)), sp2 = n1 >= L ? " " : "";
+  const cit = CIT.slice(0, Math.round(cl((t - 4300) / 1000) * CIT.length)), dot = t >= 5450 ? "." : "";
+  const struck = t >= 6500, ins = t >= 6900, w2 = W2.slice(0, Math.round(cl((t - 6900) / 420) * W2.length));
+  const comment = t >= 8100, saved = t >= 9000, fade = t > 13000 ? 1 - cl((t - 13000) / 1100) : cl(t / 300 + 1);
+  const typing = t < 5500 || (t >= 6900 && t < 7400), caretOn = typing || Math.floor(t / 530) % 2 === 0;
+  const caret = h("span", { key: "c", "aria-hidden": "true", style: { display: "inline-block", width: 1.5, height: "1.05em", verticalAlign: "-.15em", marginLeft: 1, background: "#E9EBE6", opacity: caretOn ? 1 : 0 } });
+  const ease = "cubic-bezier(.2,.7,.2,1)";
+  const para = h("p", { style: { margin: 0, minHeight: "6.8em", fontFamily: "Newsreader,Georgia,serif", fontSize: 17, lineHeight: 1.7, color: "#E9EBE6", textWrap: "pretty" } }, [
+    a,
+    h("span", { key: "w1", style: { color: struck ? "#767D75" : "inherit", textDecoration: struck ? "line-through" : "none", textDecorationColor: "#E07A6A", transition: "color .5s" } }, w1),
+    ins ? h("span", { key: "w2", style: { marginLeft: ".25em", background: "#8FB0E01F", color: "#CFE0F5", borderRadius: 2, padding: "0 1px" } }, w2) : null,
+    ins ? caret : null, sp1,
+    h("span", { key: "b", style: { background: comment ? "#D9AE5B29" : "transparent", borderRadius: 2, transition: "background .6s " + ease } }, b),
+    comment ? h("sup", { key: "s", style: { fontFamily: "'Instrument Sans',sans-serif", fontSize: 10, fontWeight: 600, color: "#D9AE5B", marginLeft: 2 } }, "1") : null,
+    sp2,
+    cit ? h("span", { key: "ci", style: { color: "#8FB0E0", background: "#8FB0E014", borderRadius: 3, padding: "0 2px" } }, cit) : null,
+    dot, ins ? null : caret,
+  ]);
+  const head = h("div", { style: { display: "flex", alignItems: "baseline", gap: 10, marginBottom: 12, fontSize: 11.5, color: "#767D75" } }, [
+    h("span", { key: "l", style: { fontFamily: "Newsreader,Georgia,serif", fontSize: 15, fontWeight: 600, color: "#C5CBC3" } }, "1. Uvod"),
+    h("span", { key: "r", style: { marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 } }, [
+      h("i", { key: "d", style: { width: 6, height: 6, borderRadius: "50%", background: saved ? "#6FBFA5" : "#5C635B", boxShadow: saved ? "0 0 0 3px #6FBFA522" : "none", transition: "all .5s" } }),
+      saved ? "Spremljeno na poslužitelju" : "Spremljeno na uređaju"]),
+  ]);
+  const cm = h("div", { style: { display: "flex", gap: 10, alignItems: "baseline", marginTop: 14, paddingTop: 12, borderTop: "1px solid #1E221D", fontSize: 12.5, opacity: comment ? 1 : 0, transform: comment ? "none" : "translateY(6px)", transition: "opacity .6s " + ease + ", transform .6s " + ease } }, [
+    h("span", { key: "n", style: { color: "#D9AE5B", fontWeight: 600 } }, "1"),
+    h("span", { key: "t", style: { color: "#C5CBC3" } }, [h("span", { key: "w", style: { color: "#8E958D" } }, "Nastavnik A · "), "Navedi i drugi izvor za ovu tvrdnju."]),
+  ]);
+  return h("figure", { "aria-label": "Primjer rada u Ducturi", style: { margin: 0, background: "#141813", border: "1px solid #232722", borderRadius: 12, padding: "18px 22px 18px", boxShadow: "0 40px 70px -40px #000", animation: "rise 1s .4s " + ease + " both" } },
+    h("div", { style: { opacity: fade } }, [h("div", { key: "h" }, head), h("div", { key: "p" }, para), h("div", { key: "c" }, cm)]));
+}
+class Component extends DCLogic {
+  state = { stage: null, role: "student", person: "Student A", prog: "pol-ba", year: "3", priv: false, prog2: 0, code: "", email: "", sent: false, vcode: "", vres: null, cmp: null, known: { "Student B": true } };
+  componentDidMount() { this.onKey = e => { if (e.key === "Escape" && this.state.priv) this.setState({ priv: false }); }; addEventListener("keydown", this.onKey); }
+  componentWillUnmount() { clearInterval(this.iv); removeEventListener("keydown", this.onKey); }
+  componentDidUpdate(pp) { const a = this._prevStage || "start", b = this.stage(); if (a !== b && !this._back && a !== "redirect") this.hist = (this.hist || []).concat([a]); this._back = false; this._prevStage = b; this.dcu0(pp || {}); }
+  dcu0(pp) { if (pp.stage !== this.props.stage || pp.role !== this.props.role) { clearInterval(this.iv); this.setState({ stage: null, role: this.props.role || this.state.role }); } }
+  goBack() { clearInterval(this.iv); const h = (this.hist || []).slice(); let t = h.pop(); while (t && (t === this.stage() || t === "redirect" || t === "done")) t = h.pop(); this.hist = h; this._back = true; this.setState({ stage: t || "start", sent: false }); }
+  stage() { return this.state.stage || this.props.stage || "start"; }
+  startAai(person) {
+    clearInterval(this.iv); const p = person || (this.state.role === "teacher" ? "Nastavnik A" : "Student A");
+    this.setState({ stage: "redirect", person: p, prog2: 0 });
+    this.iv = setInterval(() => this.setState(st => { const v = st.prog2 + 4; if (v >= 100) { clearInterval(this.iv); setTimeout(() => this.finish(), 150); return { prog2: 100 }; } return { prog2: v }; }), 40);
+  }
+  verify() { const c = this.state.vcode.trim().toUpperCase(); this.setState({ vres: c === "DUC-7Q4M-2K9X" ? "ok" : c ? "no" : null }); }
+  finish() { clearInterval(this.iv); const p = this.state.person; this.setState(st => ({ stage: st.known[p] ? "resume" : "first" })); }
+  renderVals() {
+    const s = this.state, stage = this.stage(), role = s.stage ? s.role : (this.props.role || s.role), teacher = role === "teacher";
+    const roles = [["student", "Student"], ["teacher", "Nastavnik"]].map(([id, label]) => ({ label, sel: role === id ? "true" : "false", on: () => this.setState({ role: id, stage: "start" }), style: { padding: "9px 0", borderRadius: 8, fontSize: 13, fontWeight: role === id ? 600 : 500, color: role === id ? "#E9EBE6" : "#7E857D", background: role === id ? "linear-gradient(180deg,#272C26,#1E221D)" : "transparent", boxShadow: role === id ? "inset 0 1px 0 #ffffff14, 0 1px 3px #0009" : "none", transition: "color .2s, background .2s" } }));
+    const pr = PROGRAMS.find(x => x[0] === s.prog) || PROGRAMS[0];
+    this.ms = this.ms || React.createElement(Manuscript);
+    const codeT = s.code.trim().toUpperCase(), task = TASKS[codeT] || (codeT.length >= 3 ? "Zadatak iz koda · Kolegij A · rok 30. 11. 2026." : "");
+    return {
+      manuscript: this.ms, stStart: stage === "start", stRedirect: stage === "redirect", stError: stage === "error", stExpired: stage === "expired", stFirst: stage === "first", stResume: stage === "resume", stHelp: stage === "help",
+      closePriv: () => this.setState({ priv: false }), stop: e => e.stopPropagation(),
+      canBack: stage !== "start" && stage !== "done", goBack: () => this.goBack(), backLabel: ({"redirect":"Odustani","error":"Natrag na prijavu","expired":"Natrag na prijavu","first":"Natrag na prijavu","resume":"Natrag na prijavu","email":"Natrag","verify":"Natrag","help":"Natrag"})[stage] || "Natrag",
+      roles, roleHead: teacher ? "Nastavnički prostor" : "Studentski prostor",
+      demoPeople: (teacher ? ["Nastavnik A"] : ["Student A", "Student B"]).map(name => ({ name, on: () => this.startAai(name) })),
+      startAai: () => this.startAai(), finishAai: () => this.finish(), toStart: () => { clearInterval(this.iv); this.setState({ stage: "start" }); },
+      barStyle: { height: 2, width: s.prog2 + "%", background: "#6FBFA5", transition: "width .04s linear" },
+      person: s.person, roleName: teacher ? "nastavnik" : "student", isStudent: !teacher, isTeacher: teacher,
+      firstLead: teacher ? "Provjeri podatke. Ulogu potvrđuje fakultet." : "Provjeri podatke i odaberi studij. Po njemu Ductura nudi kolegije i upute za tvoju vrstu rada.",
+      programs: PROGRAMS.map(([id, label]) => ({ id, label })), prog: s.prog, setProg: e => { const v = e.target.value, n = (PROGRAMS.find(x => x[0] === v) || PROGRAMS[0])[2]; this.setState(st => ({ prog: v, year: String(Math.min(+st.year, n)) })); },
+      years: Array.from({ length: pr[2] }, (_, i) => ({ v: String(i + 1), label: (i + 1) + ". godina" })), year: s.year, setYear: e => this.setState({ year: e.target.value }),
+      confirmFirst: () => this.setState(st => ({ known: Object.assign({}, st.known, { [st.person]: true }), stage: "done" }), () => { location.href = "Ductura Demo tok v2.dc.html?u=" + ({ "Student A": "sa", "Student B": "sb", "Nastavnik A": "na" }[this.state.person] || "sa"); }),
+      firstFoot: teacher ? "Podatke mijenja koordinator fakulteta." : "Studij i godinu možeš promijeniti u postavkama.",
+      resumeRows: [
+        { t: "3 izmjene iz prošle sesije", m: "16. 10., 22:41", dot: { flex: "none", width: 7, height: 7, borderRadius: "50%", alignSelf: "center", background: "#6FBFA5" } },
+        { t: "Spremljeno na poslužitelju", m: "upravo sada", dot: { flex: "none", width: 7, height: 7, borderRadius: "50%", alignSelf: "center", background: "#6FBFA5" } },
+        { t: "Čitanje naglas i rječnik djece u prvim razredima", m: "Kolegij A", dot: { flex: "none", width: 7, height: 7, borderRadius: "50%", alignSelf: "center", background: "#3A4039" } },
+      ],
+      code: s.code, codeUp: s.code.trim().toUpperCase(), setCode: e => this.setState({ code: e.target.value }), hasTask: !!task, taskName: task || "",
+      codeNote: !codeT ? "Bez koda zadatak biraš nakon prijave." : task ? "✓ " + task : codeT.length < 3 ? "Upiši cijeli kod." : "Kod ne odgovara nijednom zadatku. Provjeri ga s nastavnikom.",
+      codeNoteStyle: { fontSize: 12, color: !codeT ? "#767D75" : task ? "#8FD1B9" : codeT.length < 3 ? "#8E958D" : "#E3A59A" },
+      stEmail: stage === "email", stVerify: stage === "verify", openEmail: () => this.setState({ stage: "email", sent: false }), openVerify: () => this.setState({ stage: "verify" }),
+      email: s.email, setEmail: e => this.setState({ email: e.target.value, sent: false }), sendLink: () => this.setState({ sent: true }),
+      emailNote: !s.sent ? "Poveznica vrijedi 15 minuta i radi samo jednom." : /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s.email) ? "Poslano na " + s.email + ". Otvori poveznicu na ovom uređaju." : "Upiši ispravnu adresu e-pošte.",
+      emailNoteStyle: { fontSize: 12, color: !s.sent ? "#767D75" : /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s.email) ? "#8FD1B9" : "#E3A59A" },
+      vcode: s.vcode, setVcode: e => this.setState({ vcode: e.target.value, vres: null, cmp: null }), vKey: e => { if (e.key === "Enter") this.verify(); }, runVerify: () => this.verify(),
+      fillDemo: () => this.setState({ vcode: "DUC-7Q4M-2K9X", cmp: null }, () => this.verify()),
+      vFound: s.vres === "ok", vNotFound: s.vres === "no", shortHash: DEMO_HASH.slice(0, 16) + "…" + DEMO_HASH.slice(-8),
+      pickFile: e => { const f = e.target.files && e.target.files[0]; if (!f) return; f.arrayBuffer().then(b => crypto.subtle.digest("SHA-256", b)).then(d => { const hx = [...new Uint8Array(d)].map(x => x.toString(16).padStart(2, "0")).join(""); this.setState({ cmp: { ok: hx === DEMO_HASH, name: f.name } }); }); e.target.value = ""; },
+      demoMatch: () => this.setState({ cmp: { ok: true, name: "Zavrsni_rad_StudentA.docx" } }),
+      hasCmp: !!s.cmp, cmpText: s.cmp ? (s.cmp.ok ? "✓ " + s.cmp.name + " istovjetna je predanoj datoteci." : "✕ " + s.cmp.name + " nije istovjetna predanoj datoteci. Rad je mijenjan nakon predaje ili je riječ o drugoj datoteci.") : "",
+      cmpStyle: { fontSize: 12.5, lineHeight: 1.5, color: s.cmp && s.cmp.ok ? "#8FD1B9" : "#E3A59A" },
+      openHelp: () => this.setState({ stage: "help" }), closeHelp: () => this.setState({ stage: "start" }),
+      helpRows: [
+        { q: "Zaboravio sam lozinku", a: "Lozinku za AAI@EduHr mijenja administrator imenika na fakultetu. Ductura je ne može promijeniti." },
+        { q: "Nemam AAI@EduHr račun", a: "Račun dobivaš upisom na fakultet. Ako ga još nemaš, javi se službi za studente." },
+        { q: "Prijava ne radi", a: "Pokušaj u drugom pregledniku ili bez proširenja. Ako i dalje ne radi, pošalji oznaku greške podršci." },
+        { q: "Prijavio sam se na tuđem računalu", a: "Odjavi se kad završiš. Izmjene koje nisu stigle na poslužitelj ostaju vezane uz tebe i šalju se pri tvojoj sljedećoj prijavi." },
+      ],
+      priv: s.priv, privOpen: s.priv ? "true" : "false", togglePriv: () => this.setState(st => ({ priv: !st.priv })),
+      chevron: { display: "inline-block", width: 10, transform: s.priv ? "rotate(90deg)" : "none", transition: "transform .15s", color: "#8E958D" },
+    };
+  }
+}
+</script>
+</body>
+</html>
