@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;background:#0F110E;color:#E9EBE6;font-family:"Instrument Sans",system-ui,sans-serif;font-size:13px}
+*{box-sizing:border-box}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+textarea,input,select{font:inherit;color:#E9EBE6}
+a{color:#8FB0E0;text-decoration:none}
+a:hover{color:#B3CAEC}
+::selection{background:#D9AE5B55}
+</style>
+</helmet>
+<div style="height:100vh;min-height:620px;display:flex;flex-direction:column">
+  <header style="flex:none;height:48px;display:flex;align-items:center;gap:14px;padding:0 16px;border-bottom:1px solid #2C312B;background:#141712">
+    <span style="font-family:Newsreader,Georgia,serif;font-size:19px;font-weight:600">Ductura</span>
+    <span style="font-size:12.5px;color:#A6ADA5">Kolegij A / Zadatak 1 / Pregled radova</span>
+    <button type="button" role="switch" aria-checked="{{ mOn }}" onClick="{{ toggleM }}" title="Ritam unosa i postoci podrijetla za demo. Vidi samo mentor." style="margin-left:auto;display:flex;align-items:center;gap:7px;font-size:12px;color:#A6ADA5"><span style="{{ mTrack }}"><span style="{{ mKnob }}"></span></span>Mjere (demo)</button>
+    <span style="font-size:12.5px;color:#A6ADA5">Nastavnik A</span>
+    <a href="editor-v11.dc.html" style="font-size:12.5px">Editor</a>
+  </header>
+  <div style="flex:1;min-height:0;display:flex">
+    <nav aria-label="Radovi studenata" style="flex:0 1 230px;min-width:170px;border-right:1px solid #2C312B;background:#141712;overflow-y:auto;padding:12px 8px;display:flex;flex-direction:column;gap:2px">
+      <div style="padding:2px 8px 8px;font-size:12px;font-weight:600;color:#A6ADA5">Radovi · abecedno</div>
+      <sc-for list="{{ students }}" as="st" hint-placeholder-count="4">
+        <button type="button" onClick="{{ st.pick }}" aria-current="{{ st.cur }}" style="{{ st.style }}" style-hover="background:#1E221D">
+          <span style="font-size:13px;font-weight:600;color:#E9EBE6">{{ st.name }}</span>
+          <span style="{{ st.stStyle }}">{{ st.status }}</span>
+          <span style="font-size:11px;color:#8E958D">{{ st.when }}</span>
+        </button>
+      </sc-for>
+      <p style="margin:10px 8px 0;font-size:11px;line-height:1.5;color:#767D75">Popis se ne može poredati po brojevima.</p>
+    </nav>
+    <main style="flex:1;min-width:0;overflow-y:auto;padding:22px 24px 60px">
+      <div style="max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px">
+          <h1 style="margin:0;font-family:Newsreader,Georgia,serif;font-size:24px;font-weight:600">{{ cur.name }}</h1>
+          <span style="font-size:12.5px;color:#A6ADA5">{{ cur.status }} · {{ cur.roundTxt }}</span>
+          <span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+            <sc-for list="{{ actions }}" as="b" hint-placeholder-count="2"><button type="button" onClick="{{ b.on }}" style="{{ b.style }}">{{ b.label }}</button></sc-for>
+          </span>
+        </div>
+        <sc-if value="{{ rv }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;font-size:12px;color:#A6ADA5"><span>{{ rv.text }}</span><sc-if value="{{ rv.can }}" hint-placeholder-val="{{ false }}"><button type="button" onClick="{{ rv.mark }}" style="padding:0;font-size:12px;color:#8FB0E0" style-hover="color:#B3CAEC">Označi kao pregledano</button></sc-if></div></sc-if>
+        <sc-if value="{{ hasWork }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;font-size:12px;color:#A6ADA5">
+            <span>Prikaz</span>
+            <sc-for list="{{ views }}" as="v" hint-placeholder-count="3"><button type="button" onClick="{{ v.on }}" aria-pressed="{{ v.sel }}" style="{{ v.style }}">{{ v.label }}</button></sc-for>
+            <span style="margin-left:auto">{{ viewNote }}</span>
+          </div>
+          <sc-if value="{{ showLegend }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:#A6ADA5">
+              <span style="display:flex;align-items:center;gap:6px"><i style="width:8px;height:8px;border-radius:50%;background:#8FB0E0"></i>Napisano u Ducturi</span>
+              <span style="display:flex;align-items:center;gap:6px"><i style="width:8px;height:8px;border-radius:50%;background:#9E9A90"></i>Zalijepljeno, izvor nije opažen</span>
+            </div>
+          </sc-if>
+          <sc-if value="{{ m }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;gap:10px;padding:12px 14px;background:#141712;border:1px solid #2C312B;border-radius:8px">
+              <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;gap:2px"><sc-for list="{{ m.bar }}" as="b" hint-placeholder-count="3"><i style="{{ b.style }}"></i></sc-for></div>
+              <div style="display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:#A6ADA5"><sc-for list="{{ m.bar }}" as="b" hint-placeholder-count="3"><span style="display:flex;gap:6px;align-items:center"><i style="{{ b.dot }}"></i>{{ b.label }}<b style="font-weight:600;color:#E9EBE6;font-variant-numeric:tabular-nums">{{ b.pct }}</b></span></sc-for></div>
+              <div style="font-size:12px;color:#A6ADA5">{{ m.sessions }}</div>
+              <div style="display:flex;align-items:center;gap:10px"><button type="button" onClick="{{ m.play }}" style="padding:4px 10px;border-radius:7px;font-size:12px;color:#A6ADA5;border:1px solid #2C312B;flex:none">{{ m.playLabel }}</button><input type="range" min="0" max="1000" value="{{ m.pos }}" onChange="{{ m.scrub }}" aria-label="Reprodukcija nastanka teksta" style="flex:1;min-width:0;accent-color:#6FBFA5"><span style="flex:none;font-size:11.5px;color:#8E958D;font-variant-numeric:tabular-nums">{{ m.posLabel }}</span></div>
+              <span style="font-size:11px;color:#767D75">Demo mjere. Student ih ne vidi. Lijevo od odlomka je ritam unosa.</span>
+            </div>
+          </sc-if>
+          <article ref="{{ paperRef }}" onMouseUp="{{ onSel }}" style="background:#161A15;border:1px solid #232722;border-radius:6px;padding:clamp(18px,4vw,34px) clamp(16px,4vw,40px) 36px;display:flex;flex-direction:column;gap:14px">
+            <sc-for list="{{ paras }}" as="p" hint-placeholder-count="3">
+              <div style="display:flex;gap:12px">
+                <sc-if value="{{ p.rh }}" hint-placeholder-val="{{ false }}"><div title="{{ p.rhTitle }}" style="flex:none;width:44px;height:24px;margin-top:4px;display:flex;align-items:flex-end;gap:1px"><sc-for list="{{ p.rh }}" as="h" hint-placeholder-count="8"><i style="{{ h.s }}"></i></sc-for></div></sc-if>
+                <sc-if value="{{ p.dot }}" hint-placeholder-val="{{ false }}"><i title="{{ p.dotTitle }}" style="{{ p.dotStyle }}"></i></sc-if>
+                <p data-pi="{{ p.i }}" style="margin:0;flex:1;font-family:Newsreader,Georgia,serif;font-size:16.5px;line-height:1.7;color:#E9EBE6;text-wrap:pretty"><sc-for list="{{ p.segs }}" as="g" hint-placeholder-count="1"><span onClick="{{ g.on }}" style="{{ g.style }}">{{ g.t }}</span></sc-for></p>
+              </div>
+            </sc-for>
+          </article>
+          <p style="margin:0;font-size:11.5px;color:#767D75">Zadnje stanje spremljeno na poslužitelju, osvježava se najviše svakih 5 minuta. Označi tekst za komentar.</p>
+        </sc-if>
+        <sc-if value="{{ noWork }}" hint-placeholder-val="{{ false }}"><p style="margin:30px 0;font-size:13px;color:#8E958D">Student još nije započeo rad.</p></sc-if>
+      </div>
+    </main>
+    <aside aria-label="Samo za mentora" style="flex:0 1 330px;min-width:260px;border-left:1px solid #2C312B;background:#141712;display:flex;flex-direction:column;min-height:0">
+      <div role="tablist" style="flex:none;display:flex;gap:12px;padding:0 12px;overflow-x:auto;border-bottom:1px solid #2C312B">
+        <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4"><button type="button" role="tab" aria-selected="{{ t.sel }}" onClick="{{ t.on }}" style="{{ t.style }}">{{ t.label }}</button></sc-for>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:14px 16px 24px;display:grid;grid-template-columns:minmax(0,1fr);grid-auto-rows:max-content;align-content:start;gap:12px">
+        <sc-if value="{{ tabCm }}" hint-placeholder-val="{{ true }}">
+          <sc-if value="{{ draft }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;gap:7px;padding-bottom:12px;border-bottom:1px solid #232722">
+              <span style="font-size:11.5px;font-weight:600;color:#D9AE5B">Novi komentar</span>
+              <span style="font-family:Newsreader,Georgia,serif;font-style:italic;font-size:13px;color:#A6ADA5">„{{ draft.quote }}”</span>
+              <textarea ref="{{ cmRef }}" rows="3" onKeyDown="{{ cmKey }}" placeholder="Komentar…" aria-label="Komentar" style="width:100%;background:#0F110E;border:1px solid #2C312B;border-radius:7px;padding:6px 8px;font-size:12.5px;resize:vertical"></textarea>
+              <sc-if value="{{ draft.rule }}" hint-placeholder-val="{{ false }}"><span style="font-size:11.5px;color:#8FB0E0">Pravilo: {{ draft.rule }}</span></sc-if>
+              <div style="display:flex;flex-wrap:wrap;gap:4px 10px">
+                <sc-for list="{{ templates }}" as="tp" hint-placeholder-count="4"><button type="button" onClick="{{ tp.use }}" title="{{ tp.rule }}" style="padding:0;font-size:12px;color:#A6ADA5;text-align:left" style-hover="color:#E9EBE6">+ {{ tp.t }}</button></sc-for>
+              </div>
+              <div style="display:flex;gap:6px"><button type="button" onClick="{{ cmSave }}" style="background:#6FBFA5;color:#0E1C17;padding:4px 10px;border-radius:7px;font-size:12px;font-weight:500">Objavi</button><button type="button" onClick="{{ cmCancel }}" style="padding:4px 8px;font-size:12px;color:#A6ADA5">Odustani</button><button type="button" onClick="{{ tplSave }}" style="margin-left:auto;padding:0;font-size:11.5px;color:#8E958D">Spremi kao predložak</button></div>
+            </div>
+          </sc-if>
+          <sc-for list="{{ comments }}" as="c" hint-placeholder-count="2">
+            <div onClick="{{ c.on }}" style="{{ c.style }}">
+              <div style="display:flex;gap:7px;align-items:baseline"><b style="font-size:11px;color:#D9AE5B">{{ c.n }}</b><span style="font-size:11px;color:#8E958D">{{ c.when }}</span><span style="margin-left:auto;font-size:11px;color:#8E958D">{{ c.state }}</span></div>
+              <span style="font-family:Newsreader,Georgia,serif;font-style:italic;font-size:12.5px;color:#8E958D">„{{ c.quote }}”</span>
+              <span style="font-size:12.5px;line-height:1.5">{{ c.text }}</span>
+              <sc-if value="{{ c.rule }}" hint-placeholder-val="{{ false }}"><span style="font-size:11.5px;color:#8FB0E0">Pravilo: {{ c.rule }}</span></sc-if>
+            </div>
+          </sc-for>
+          <sc-if value="{{ noComments }}" hint-placeholder-val="{{ false }}"><p style="margin:0;font-size:12px;color:#8E958D">Nema komentara. Označi tekst u radu.</p></sc-if>
+        </sc-if>
+        <sc-if value="{{ tabRev }}" hint-placeholder-val="{{ false }}">
+          <span style="font-size:12px;color:#A6ADA5">{{ revHead }}</span>
+          <textarea ref="{{ revRef }}" rows="4" placeholder="Što treba doraditi" aria-label="Što treba doraditi" style="width:100%;background:#0F110E;border:1px solid #2C312B;border-radius:7px;padding:6px 8px;font-size:12.5px;resize:vertical"></textarea>
+          <label style="display:flex;gap:8px;align-items:center;font-size:12px;color:#A6ADA5">Rok<input type="date" value="{{ revDue }}" onChange="{{ setDue }}" style="background:#0F110E;border:1px solid #2C312B;border-radius:6px;padding:3px 6px;color-scheme:dark"></label>
+          <span style="font-size:12px;color:#A6ADA5">{{ revOpen }}</span>
+          <div style="display:flex;gap:6px"><button type="button" onClick="{{ revSend }}" style="background:#6FBFA5;color:#0E1C17;padding:4px 10px;border-radius:7px;font-size:12px;font-weight:500">Zatraži doradu</button></div>
+          <div style="display:flex;flex-direction:column;gap:6px;padding-top:10px;border-top:1px solid #232722">
+            <span style="font-size:11.5px;font-weight:600;color:#8E958D">Dnevnik</span>
+            <sc-for list="{{ log }}" as="l" hint-placeholder-count="2"><div style="display:flex;flex-direction:column;gap:1px"><span style="font-size:12.5px">{{ l.what }}</span><span style="font-size:11px;color:#8E958D">{{ l.meta }}</span></div></sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ tabKo }}" hint-placeholder-val="{{ false }}">
+          <span style="font-size:11.5px;font-weight:600;color:#8E958D">Nova konzultacija</span>
+          <textarea ref="{{ koNotesRef }}" rows="4" aria-label="Bilješke s konzultacija" placeholder="Bilješke s konzultacija" style="width:100%;background:#0F110E;border:1px solid #2C312B;border-radius:7px;padding:6px 8px;font-size:12.5px;line-height:1.5;resize:vertical"></textarea>
+          <textarea ref="{{ koTasksRef }}" rows="3" aria-label="Dogovoreno" placeholder="Dogovoreno, jedan zadatak po retku" style="width:100%;background:#0F110E;border:1px solid #2C312B;border-radius:7px;padding:6px 8px;font-size:12.5px;line-height:1.5;resize:vertical"></textarea>
+          <div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" onClick="{{ koSave }}" style="background:#6FBFA5;color:#0E1C17;padding:4px 10px;border-radius:7px;font-size:12px;font-weight:500">Spremi</button><button type="button" onClick="{{ koAgenda }}" style="padding:4px 10px;border-radius:7px;font-size:12px;color:#A6ADA5;border:1px solid #2C312B">Dnevni red iz rada</button></div>
+          <span style="font-size:11px;color:#767D75">Dogovoreno postaje studentov popis zadataka u editoru.</span>
+          <div style="display:flex;flex-direction:column;gap:10px;padding-top:10px;border-top:1px solid #232722">
+            <span style="font-size:11.5px;font-weight:600;color:#8E958D">Prethodne konzultacije</span>
+            <sc-for list="{{ consults }}" as="k" hint-placeholder-count="1">
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <span style="font-size:11.5px;color:#8E958D">{{ k.when }}</span>
+                <sc-if value="{{ k.notes }}" hint-placeholder-val="{{ false }}"><span style="font-size:12.5px;line-height:1.5;white-space:pre-wrap">{{ k.notes }}</span></sc-if>
+                <sc-for list="{{ k.tasks }}" as="t" hint-placeholder-count="1"><span style="{{ t.style }}"><span style="flex:none;width:12px;color:#8E958D">{{ t.mark }}</span>{{ t.t }}</span></sc-for>
+              </div>
+            </sc-for>
+            <sc-if value="{{ noConsults }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;color:#8E958D">Još nema zapisa.</span></sc-if>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;padding-top:10px;border-top:1px solid #232722">
+            <span style="font-size:11.5px;font-weight:600;color:#8E958D">Privatne bilješke</span>
+            <textarea value="{{ note }}" onChange="{{ setNote }}" rows="4" aria-label="Privatne bilješke" placeholder="Student ih ne vidi." style="width:100%;background:#0F110E;border:1px solid #2C312B;border-radius:7px;padding:6px 8px;font-size:12.5px;line-height:1.5;resize:vertical"></textarea>
+          </div>
+        </sc-if>
+        <sc-if value="{{ tabEt }}" hint-placeholder-val="{{ false }}">
+          <sc-for list="{{ stages }}" as="g" hint-placeholder-count="5">
+            <div style="display:flex;flex-direction:column;gap:4px;padding:6px 0;border-bottom:1px solid #1E221D">
+              <div style="display:flex;gap:8px;align-items:baseline"><span style="font-size:12.5px;font-weight:500">{{ g.n }}</span><span style="margin-left:auto;font-size:11px;color:#8E958D">{{ g.d }}</span></div>
+              <span style="{{ g.stStyle }}">{{ g.st }}</span>
+              <sc-if value="{{ g.note }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;color:#A6ADA5">Napomena: {{ g.note }}</span></sc-if>
+              <sc-if value="{{ g.pending }}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:6px;margin-top:2px"><button type="button" onClick="{{ g.approve }}" style="background:#6FBFA5;color:#0E1C17;padding:4px 10px;border-radius:7px;font-size:12px;font-weight:500">Odobri</button><button type="button" onClick="{{ g.ret }}" style="padding:4px 10px;border-radius:7px;font-size:12px;color:#A6ADA5;border:1px solid #2C312B">Vrati s napomenom</button></div></sc-if>
+              <sc-if value="{{ g.returning }}" hint-placeholder-val="{{ false }}"><textarea ref="{{ retRef }}" rows="2" aria-label="Napomena studentu" placeholder="Napomena studentu" style="width:100%;background:#0F110E;border:1px solid #2C312B;border-radius:7px;padding:6px 8px;font-size:12.5px;line-height:1.5;resize:vertical"></textarea><div style="display:flex;gap:6px"><button type="button" onClick="{{ g.retSend }}" style="background:#6FBFA5;color:#0E1C17;padding:4px 10px;border-radius:7px;font-size:12px;font-weight:500">Vrati</button><button type="button" onClick="{{ g.retCancel }}" style="padding:4px 8px;font-size:12px;color:#A6ADA5">Odustani</button></div></sc-if>
+            </div>
+          </sc-for>
+          <span style="font-size:12px;color:#A6ADA5">{{ after }}</span>
+          <span style="font-size:11px;color:#767D75">Odobrenje i vraćanje bilježe se u dnevnik.</span>
+        </sc-if>
+        <sc-if value="{{ tabIz }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:11.5px;font-weight:600;color:#8E958D">Rubrika</span><span style="font-size:11px;color:#767D75">Kriterije uređuješ ti.</span></div>
+          <sc-for list="{{ crit }}" as="c" hint-placeholder-count="4">
+            <div style="display:flex;gap:6px;align-items:center"><input value="{{ c.name }}" onChange="{{ c.rename }}" aria-label="Naziv kriterija" style="flex:1;min-width:0;background:transparent;border:0;border-bottom:1px solid #232722;padding:3px 0;font-size:12.5px"><select value="{{ c.score }}" onChange="{{ c.set }}" aria-label="Ocjena kriterija" style="flex:none;background:#0F110E;border:1px solid #2C312B;border-radius:6px;padding:2px 4px;font-size:12px"><option value="">—</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select><button type="button" onClick="{{ c.del }}" aria-label="Ukloni kriterij" style="flex:none;width:20px;color:#767D75" style-hover="color:#E9EBE6">×</button></div>
+          </sc-for>
+          <button type="button" onClick="{{ addCrit }}" style="align-self:flex-start;padding:0;font-size:12px;color:#A6ADA5" style-hover="color:#E9EBE6">+ Kriterij</button>
+          <div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" onClick="{{ genRep }}" style="background:#6FBFA5;color:#0E1C17;padding:4px 10px;border-radius:7px;font-size:12px;font-weight:500">Nacrt mentorskog izvješća</button><sc-if value="{{ hasReport }}" hint-placeholder-val="{{ false }}"><button type="button" onClick="{{ copyRep }}" style="padding:4px 10px;border-radius:7px;font-size:12px;color:#A6ADA5;border:1px solid #2C312B">Kopiraj</button></sc-if></div>
+          <sc-if value="{{ hasReport }}" hint-placeholder-val="{{ false }}"><textarea value="{{ report }}" onChange="{{ setReport }}" rows="14" aria-label="Nacrt izvješća" style="width:100%;background:#0F110E;border:1px solid #2C312B;border-radius:7px;padding:6px 8px;font-size:12.5px;line-height:1.5;resize:vertical;font-size:12px"></textarea><span style="font-size:11px;color:#767D75">Nacrt iz rubrike, komentara, etapa i konzultacija. Uređuješ ga i potpisuješ ti.</span></sc-if>
+          <div style="display:flex;flex-direction:column;gap:8px;padding-top:10px;border-top:1px solid #232722">
+            <span style="font-size:11.5px;font-weight:600;color:#8E958D">Ocjena</span>
+            <span style="{{ gradeStateStyle }}">{{ gradeState }}</span>
+            <label style="display:flex;gap:8px;align-items:center;font-size:12px;color:#A6ADA5">Ocjena<select value="{{ grade }}" onChange="{{ setGrade }}" style="background:#0F110E;border:1px solid #2C312B;border-radius:6px;padding:3px 6px"><option value="">—</option><option value="5">izvrstan (5)</option><option value="4">vrlo dobar (4)</option><option value="3">dobar (3)</option><option value="2">dovoljan (2)</option><option value="1">nedovoljan (1)</option></select></label>
+            <textarea value="{{ gradeText }}" onChange="{{ setGradeText }}" rows="4" aria-label="Obrazloženje" placeholder="Obrazloženje ocjene" style="width:100%;background:#0F110E;border:1px solid #2C312B;border-radius:7px;padding:6px 8px;font-size:12.5px;line-height:1.5;resize:vertical"></textarea>
+            <div style="display:flex;gap:6px"><button type="button" onClick="{{ publish }}" style="{{ pubStyle }}">{{ pubLabel }}</button></div>
+          </div>
+        </sc-if>
+      </div>
+    </aside>
+  </div>
+  <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}"><div role="status" style="position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#232722;border:1px solid #2C312B;border-radius:8px;padding:7px 14px;font-size:12.5px;z-index:90">{{ toast }}</div></sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const R1A = ["Čitanje naglas u prvim godinama školovanja često se opisuje kao jedan od temelja kasnijeg jezičnog razvoja. Ovaj rad razmatra kako se taj navod prenosi u nastavnu praksu.","Prema jednoj od uvriježenih tvrdnji, redovito zajedničko čitanje proširuje rječnik djeteta (Autor A, 2019). Autor B (2021) tu tvrdnju nadopunjuje opažanjima iz razreda.","„Primjer navoda koji se u radu prenosi doslovno i označuje kao citat.” (Autor A, 2019: 14)","U ovom poglavlju razlikuju se tri pojma koja se u literaturi često miješaju: rječnik, fonološka svjesnost i razumijevanje pročitanog.","Rječnik se ovdje shvaća kao broj riječi koje dijete razumije i aktivno koristi.","Zajedničko čitanje u razredu stvara prilike za razgovor o značenju nepoznatih riječi, a učitelj pritom modelira strategije razumijevanja."];
+const R2A = ["Čitanje naglas u prvim godinama školovanja opisuje se kao jedan od temelja kasnijeg jezičnog razvoja. Ovaj rad razmatra kako se taj navod prenosi u nastavnu praksu i što o njemu kažu dostupni izvori.","Prema jednoj od uvriježenih tvrdnji, redovito zajedničko čitanje proširuje rječnik djeteta (Autor A, 2019b). Autor B (2021) tu tvrdnju nadopunjuje opažanjima iz razreda. Slično opaža i jedno domaće istraživanje (Horvat, 2020).","„Primjer navoda koji se u radu prenosi doslovno i označuje kao citat.” (Autor A, 2019b: 14)","U ovom poglavlju razlikuju se tri pojma koja se u literaturi često miješaju: rječnik, fonološka svjesnost i razumijevanje pročitanog.","Rječnik se ovdje shvaća kao broj riječi koje dijete razumije i aktivno koristi.","Zajedničko čitanje u razredu stvara prilike za razgovor o značenju nepoznatih riječi, a učitelj pritom modelira strategije razumijevanja. Učiteljice su u većini razreda birale kratke slikovnice koje se mogu pročitati u nekoliko minuta i čitale ih na početku sata, a razgovor o nepoznatim riječima uglavnom je izostajao jer je nakon čitanja trebalo prijeći na zadatke iz udžbenika koje je predviđao plan. Učitelji čitaju naglas svaki tjedan. Učitelji rijetko razgovaraju o novim riječima.","Kako pokazuje Tablica 2, u 8 razreda čita se naglas nekoliko puta tjedno, a svakodnevno u njih 4. Slični su obrasci opisani i u drugim europskim zemljama [izvor].","Brojna istraživanja pokazuju da djeca koja jako puno čitaju uvijek razvijaju bogatiji leksik. Smatram da je to posebno važno u prvim razredima, gdje prema MZO čitanje naglas ima istaknuto mjesto u kurikulumu.","Zajedničko čitanje u razredu stvara prilike za razgovor o značenju nepoznatih riječi, a učitelj pritom modelira strategije razumijevanja koje učenici kasnije primjenjuju samostalno.","Istraživanje je provedeno u tri razreda. Podaci su prikupljeni kratkim upitnikom za učitelje. Odgovori su analizirani prema duljini radnog staža."];
+const R1B = ["Digitalni udžbenici u nižim razredima mijenjaju način na koji učenici prate nastavu.", "Istraživanja pokazuju da učenici brže pronalaze informacije, ali ih slabije pamte (Autor C, 2017).", "Razlike među školama su velike."];
+const R2B = ["Digitalni udžbenici u nižim razredima mijenjaju način na koji učenici prate nastavu.", "Istraživanja pokazuju da učenici brže pronalaze informacije, ali ih slabije pamte (Autor C, 2017: 7).", "Razlike među školama su velike, osobito u opremljenosti razreda (MZO, 2023)."];
+const R1C = ["Pojam pismenosti u kurikulumu proširen je na medijsku i digitalnu pismenost.", "Rad uspoređuje dva kurikuluma i pokazuje da se ishodi preklapaju u trećini slučajeva."];
+const RULES = { page: "Doslovni navod i preuzeta tvrdnja navode stranicu: (Autor, godina: str.).", claim: "Svaka tvrdnja koja nije opće poznata ima navod izvora.", sent: "Rečenica dulja od 35 riječi dijeli se na dvije.", def: "Pojam se definira pri prvoj uporabi." };
+const pad = x => String(x).padStart(2, "0");
+const stamp = () => { const z = new Date(); return z.getDate() + ". " + (z.getMonth() + 1) + "., " + pad(z.getHours()) + ":" + pad(z.getMinutes()); };
+function wdiff(a, b) {
+  const A = a.split(/(\s+)/), B = b.split(/(\s+)/), n = A.length, m = B.length, L = Array.from({ length: n + 1 }, () => new Int16Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) L[i][j] = A[i] === B[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+  const out = []; let i = 0, j = 0; const push = (k, t) => { const l = out[out.length - 1]; if (l && l.k === k) l.t += t; else out.push({ k, t }); };
+  while (i < n && j < m) { if (A[i] === B[j]) { push("=", A[i]); i++; j++; } else if (L[i + 1][j] >= L[i][j + 1]) push("-", A[i++]); else push("+", B[j++]); }
+  while (i < n) push("-", A[i++]); while (j < m) push("+", B[j++]); return out;
+}
+const OC = { typed: ["Tipkano u Ducturi", "#8FB0E0"], pasted: ["Zalijepljeno", "#9E9A90"], ai: ["Iz AI pomoćnika", "#D3AC63"], unknown: ["Nepoznato podrijetlo", "#C98F7F"] };
+const pl = (n, a, b, c) => { const m = n % 10, h = n % 100; return m === 1 && h !== 11 ? a : m >= 2 && m <= 4 && (h < 12 || h > 14) ? b : c; };
+class Component extends DCLogic {
+  paperRef = React.createRef(); cmRef = React.createRef(); revRef = React.createRef();
+  state = {
+    sel: "a", tab: "cm", view: "text", draft: null, toast: null, mOn: false, rp: 1000, playing: false, retFor: null,
+    templates: [{ t: "Navodu nedostaje stranica.", rule: RULES.page }, { t: "Ova tvrdnja treba izvor.", rule: RULES.claim }, { t: "Podijeli rečenicu na dvije.", rule: RULES.sent }, { t: "Definiraj pojam pri prvoj uporabi.", rule: RULES.def }],
+    st: {
+      a: { title: "Čitanje naglas i rječnik djece u prvim razredima", origin: ["typed", "typed", "pasted", "typed", "typed", "ai", "typed", "unknown", "typed", "typed"], sessions: "9 sesija · ukupno 6 h 40 min · 2. 10. – 17. 10. 2026", reviewed: { round: 1, when: "16. 10., 18:30" }, after: { stage: "Nacrt", n: 4 }, crit: [{ n: "Istraživačko pitanje i okvir", v: "" }, { n: "Metodologija", v: "" }, { n: "Analiza i argumentacija", v: "" }, { n: "Forma i citiranje", v: "" }], report: "",
+        stages: [{ n: "Prijava teme", st: "ok", d: "20. 9." }, { n: "Nacrt", st: "ok", d: "30. 9." }, { n: "Prvo poglavlje", st: "sub", d: "15. 10." }, { n: "Cijeli nacrt", st: "no" }, { n: "Predajna verzija", st: "no" }],
+        consults: [{ when: "9. 10. 2026.", notes: "Tema je preširoka. Teorijski okvir ima premalo izvora.", tasks: [{ t: "Napisati istraživačko pitanje u Uvodu", done: true }, { t: "Dodati tri izvora u Teorijski okvir", done: false }, { t: "Suziti temu na prve razrede", done: true }] }],
+        name: "Student A", status: "revise", when: "17. 10., 10:42", due: "2026-10-24", rounds: [R1A, R2A], paste: [2, 7], note: "", grade: "", gradeText: "", published: false, comments: [{ id: "a1", n: 1, pi: 1, q: "redovito zajedničko čitanje proširuje rječnik djeteta", text: "Dodaj uz ovu tvrdnju stranicu u navodu i razradi je jednom rečenicom.", rule: RULES.page, when: "16. 10., 18:20", resolved: true }], log: [{ what: "Prva predaja na pregled", meta: "runda 1 · Student A · 15. 10." }, { what: "Zatražena dorada", meta: "runda 1 · Nastavnik A · 16. 10." }] },
+      b: { title: "Digitalni udžbenici u nižim razredima", origin: ["typed", "typed", "unknown"], sessions: "6 sesija · ukupno 4 h 05 min · 28. 9. – 16. 10. 2026", reviewed: { round: 1, when: "14. 10., 09:20" }, after: null, crit: [{ n: "Istraživačko pitanje i okvir", v: "" }, { n: "Metodologija", v: "" }, { n: "Analiza i argumentacija", v: "" }, { n: "Forma i citiranje", v: "" }], report: "",
+        stages: [{ n: "Prijava teme", st: "ok", d: "18. 9." }, { n: "Nacrt", st: "ok", d: "29. 9." }, { n: "Prvo poglavlje", st: "ok", d: "8. 10." }, { n: "Cijeli nacrt", st: "sub", d: "16. 10." }, { n: "Predajna verzija", st: "no" }],
+        consults: [], name: "Student B", status: "review", when: "16. 10., 21:05", due: "", rounds: [R1B, R2B], paste: [], note: "", grade: "", gradeText: "", published: false, comments: [{ id: "b1", n: 1, pi: 1, q: "slabije pamte (Autor C, 2017)", text: "Navodu nedostaje stranica.", rule: RULES.page, when: "14. 10., 09:10", resolved: true }], log: [{ what: "Zatražena dorada", meta: "runda 1 · Nastavnik A · 14. 10." }, { what: "Dorada poslana na pregled", meta: "runda 2 · Student B · 16. 10." }] },
+      c: { title: "Pismenost u kurikulumu", origin: ["typed", "typed"], sessions: "11 sesija · ukupno 9 h 15 min · 15. 9. – 15. 10. 2026", reviewed: { round: 1, when: "15. 10., 18:40" }, after: null, crit: [{ n: "Istraživačko pitanje i okvir", v: "5" }, { n: "Metodologija", v: "4" }, { n: "Analiza i argumentacija", v: "5" }, { n: "Forma i citiranje", v: "5" }], report: "",
+        stages: [{ n: "Prijava teme", st: "ok", d: "15. 9." }, { n: "Nacrt", st: "ok", d: "25. 9." }, { n: "Prvo poglavlje", st: "ok", d: "2. 10." }, { n: "Cijeli nacrt", st: "ok", d: "10. 10." }, { n: "Predajna verzija", st: "sub", d: "15. 10." }],
+        consults: [{ when: "1. 10. 2026.", notes: "Usporedba je jasna.", tasks: [{ t: "Dodati tablicu ishoda", done: true }] }], name: "Student C", status: "accepted", when: "15. 10., 18:30", due: "", rounds: [R1C], paste: [], note: "", grade: "5", gradeText: "Jasno postavljena usporedba, dosljedni navodi.", published: false, comments: [], log: [{ what: "Rad prihvaćen", meta: "runda 1 · Nastavnik A · 15. 10." }] },
+      d: { title: "", origin: [], sessions: "", reviewed: { round: 0, when: "" }, after: null, crit: [{ n: "Istraživačko pitanje i okvir", v: "" }, { n: "Metodologija", v: "" }, { n: "Analiza i argumentacija", v: "" }, { n: "Forma i citiranje", v: "" }], report: "", stages: [{ n: "Prijava teme", st: "no" }, { n: "Nacrt", st: "no" }, { n: "Prvo poglavlje", st: "no" }, { n: "Cijeli nacrt", st: "no" }, { n: "Predajna verzija", st: "no" }], consults: [], name: "Student D", status: "none", when: "Nema", due: "", rounds: [], paste: [], note: "", grade: "", gradeText: "", published: false, comments: [], log: [] },
+    },
+  };
+  flash(t) { clearTimeout(this.tt); this.setState({ toast: t }); this.tt = setTimeout(() => this.setState({ toast: null }), 2600); }
+  upd(f) { this.setState(s => ({ st: { ...s.st, [s.sel]: { ...s.st[s.sel], ...f(s.st[s.sel]) } } })); }
+  onSel() {
+    const s = this.state; if (s.view !== "text" && s.view !== "origin") return; const sel = getSelection(); if (!sel.rangeCount || sel.isCollapsed) return;
+    const r = sel.getRangeAt(0), p0 = r.startContainer.parentElement && r.startContainer.parentElement.closest("p[data-pi]"), p1 = r.endContainer.parentElement && r.endContainer.parentElement.closest("p[data-pi]");
+    if (!p0 || p0 !== p1) { this.flash("Označi tekst unutar jednog odlomka."); return; }
+    const pre = document.createRange(); pre.setStart(p0, 0); pre.setEnd(r.startContainer, r.startOffset); const start = pre.toString().length, q = r.toString();
+    if (!q.trim()) return; this.setState({ tab: "cm", draft: { pi: +p0.dataset.pi, start, q, rule: null } }, () => setTimeout(() => this.cmRef.current && this.cmRef.current.focus(), 30));
+  }
+  saveCm() {
+    const d = this.state.draft, t = ((this.cmRef.current && this.cmRef.current.value) || "").trim(); if (!d || !t) return;
+    this.upd(x => ({ comments: x.comments.concat([{ id: "c" + Date.now(), n: x.comments.reduce((m, c) => Math.max(m, c.n), 0) + 1, pi: d.pi, q: d.q, text: t, rule: d.rule, when: stamp(), resolved: false }]) }));
+    getSelection().removeAllRanges(); this.setState({ draft: null }); this.flash("Komentar je objavljen. Student ga vidi u radu.");
+  }
+  koNotesRef = React.createRef(); koTasksRef = React.createRef(); retRef = React.createRef();
+  componentWillUnmount() { clearInterval(this.pl); }
+  stopPlay() { clearInterval(this.pl); this.pl = null; if (this.state.playing) this.setState({ playing: false }); }
+  togglePlay() {
+    if (this.state.playing) { this.stopPlay(); return; }
+    this.setState(st => ({ playing: true, rp: st.rp >= 1000 ? 0 : st.rp }));
+    this.pl = setInterval(() => this.setState(st => { const r = Math.min(1000, st.rp + 6); if (r >= 1000) { clearInterval(this.pl); return { rp: r, playing: false }; } return { rp: r }; }), 40);
+  }
+  shares(x) { const last = x.rounds[x.rounds.length - 1] || [], tot = last.reduce((a, t) => a + t.length, 0) || 1, by = {}; last.forEach((t, i) => { const k = x.origin[i] || "typed"; by[k] = (by[k] || 0) + t.length; }); return Object.keys(OC).filter(k => by[k]).map(k => [k, Math.round(by[k] / tot * 100)]); }
+  rhythm(t, k, i) { if (k !== "typed") { const at = (i * 5 + 3) % 14; return Array.from({ length: 14 }, (_, j) => j === at ? 22 : 1); } return Array.from({ length: 14 }, (_, j) => 5 + ((t.charCodeAt(j * 3 % t.length) * 7 + j * 13) % 15)); }
+  reportText(x) {
+    const sc = x.crit.filter(c => c.v), avg = sc.length ? sc.reduce((a, c) => a + +c.v, 0) / sc.length : 0, ok = x.stages.filter(g => g.st === "ok").map(g => g.n), solved = x.comments.filter(c => c.resolved).length;
+    const L = ["MENTORSKO IZVJEŠĆE (nacrt)", "", "Student: " + x.name, "Rad: " + (x.title || "—"), "", "Ocjena po kriterijima:"].concat(x.crit.map((c, i) => (i + 1) + ". " + c.n + ": " + (c.v ? c.v + "/5" : "nije ocijenjeno")), ["", "Tijek izrade: " + x.rounds.length + " " + pl(x.rounds.length, "runda", "runde", "rundi") + " pregleda, " + solved + " " + pl(solved, "riješen komentar", "riješena komentara", "riješenih komentara") + ", " + x.consults.length + " " + pl(x.consults.length, "konzultacija", "konzultacije", "konzultacija") + ". Odobrene etape: " + (ok.join(", ") || "nijedna") + "."]);
+    if (this.state.mOn && x.rounds.length) L.push("", "Podrijetlo teksta (demo mjere): " + this.shares(x).map(([k, p]) => ({ typed: "tipkano u Ducturi", pasted: "zalijepljeno", ai: "iz AI pomoćnika", unknown: "nepoznato podrijetlo" })[k] + " " + p + " %").join(", ") + ". " + x.sessions + ".");
+    L.push("", "Preporuka: " + (sc.length < x.crit.length ? "[dovrši ocjenu po kriterijima]" : avg >= 2.5 ? "rad je spreman za predaju." : "rad još nije spreman za predaju."));
+    return L.join("\n");
+  }
+  extra(v) {
+    const s = this.state, cur = s.st[s.sel], last = cur.rounds[cur.rounds.length - 1] || [], n = cur.rounds.length, out = {};
+    out.tabs = [["cm", "Komentari"], ["rev", "Dorada"], ["ko", "Konzultacije"], ["et", "Etape"], ["iz", "Izvješće"]].map(([id, label]) => ({ label, sel: s.tab === id ? "true" : "false", on: () => this.setState({ tab: id }), style: { flex: "none", padding: "11px 0 9px", fontSize: 12, fontWeight: s.tab === id ? 600 : 400, color: s.tab === id ? "#E9EBE6" : "#A6ADA5", borderBottom: "2px solid " + (s.tab === id ? "#6FBFA5" : "transparent") } }));
+    out.tabKo = s.tab === "ko"; out.tabEt = s.tab === "et"; out.tabIz = s.tab === "iz";
+    out.mOn = s.mOn ? "true" : "false";
+    out.mTrack = { position: "relative", flex: "none", width: 26, height: 14, borderRadius: 7, background: s.mOn ? "#6FBFA5" : "#2C312B", transition: "background .15s" };
+    out.mKnob = { position: "absolute", top: 2, left: s.mOn ? 14 : 2, width: 10, height: 10, borderRadius: "50%", background: s.mOn ? "#0E1C17" : "#8E958D", transition: "left .15s" };
+    out.toggleM = () => { this.stopPlay(); this.setState(st => ({ mOn: !st.mOn, rp: 1000, view: st.mOn && st.view === "metrics" ? "text" : !st.mOn ? "metrics" : st.view, draft: null })); };
+    if (s.mOn && n) out.views = v.views.concat([{ label: "Mjere", sel: s.view === "metrics" ? "true" : "false", on: () => this.setState({ view: "metrics", draft: null }), style: { padding: "2px 8px", borderRadius: 6, fontSize: 12, color: s.view === "metrics" ? "#E9EBE6" : "#D3AC63", background: s.view === "metrics" ? "#232722" : "transparent" } }]);
+    const R = cur.reviewed;
+    if (!n) out.rv = false;
+    else if (R.round < n) { const prev = cur.rounds[R.round - 1] || [], ch = last.filter((t, i) => t !== prev[i]).length, solved = cur.comments.filter(c => c.resolved).length; out.rv = { text: "Novo od tvog pregleda (" + R.when + "): " + ch + " " + pl(ch, "izmijenjen odlomak", "izmijenjena odlomka", "izmijenjenih odlomaka") + (solved ? ", " + solved + " " + pl(solved, "riješen komentar", "riješena komentara", "riješenih komentara") : "") + ".", can: true, mark: () => { this.upd(() => ({ reviewed: { round: n, when: stamp() } })); this.flash("Pregled je zabilježen. Sljedeći put vidiš samo novo."); } }; }
+    else out.rv = { text: "Pregledano " + R.when + ". Sljedeći put vidiš samo novo.", can: false, mark: null };
+    out.paras = v.paras.map(p => Object.assign({}, p, { rh: false, rhTitle: "" }));
+    out.m = false;
+    if (s.mOn && s.view === "metrics" && n) {
+      const tot = last.reduce((a, t) => a + t.length, 0), reveal = Math.round(s.rp / 1000 * tot); let acc = 0;
+      out.paras = last.map((t, i) => {
+        const k = cur.origin[i] || "typed", shown = Math.max(0, Math.min(t.length, reveal - acc)); acc += t.length;
+        const segs = [{ t: t.slice(0, shown), style: {}, on: null }, { t: t.slice(shown), style: { color: "#3A4039" }, on: null }].filter(g => g.t);
+        return { i: String(i), segs, dot: true, dotTitle: OC[k][0], dotStyle: { flex: "none", width: 8, height: 8, borderRadius: "50%", marginTop: 11, background: OC[k][1] }, rh: this.rhythm(t, k, i).map(h => ({ s: { flex: 1, height: h, background: OC[k][1], opacity: .8, borderRadius: 1 } })), rhTitle: k === "typed" ? "Ritam unosa: tipkano u više navrata" : "Tekst je stigao odjednom" };
+      });
+      const bar = this.shares(cur).map(([k, p]) => ({ label: OC[k][0], pct: p + " %", style: { width: p + "%", background: OC[k][1] }, dot: { width: 8, height: 8, borderRadius: "50%", background: OC[k][1] } }));
+      out.m = { bar, sessions: cur.sessions, play: () => this.togglePlay(), playLabel: s.playing ? "Zaustavi" : "▶ Reprodukcija", pos: s.rp, scrub: e => { this.stopPlay(); this.setState({ rp: +e.target.value }); }, posLabel: s.rp >= 1000 ? "cijeli rad" : reveal + " / " + tot + " zn." };
+      out.viewNote = "Mjere vidi samo mentor.";
+    }
+    out.koNotesRef = this.koNotesRef; out.koTasksRef = this.koTasksRef; out.retRef = this.retRef;
+    out.koAgenda = () => {
+      const open = cur.comments.filter(c => !c.resolved).length, pend = cur.stages.filter(g => g.st === "sub").map(g => g.n), todo = [].concat(...cur.consults.map(k => k.tasks.filter(t => !t.done).map(t => t.t)));
+      const el = this.koNotesRef.current; if (el) { el.value = ["Dnevni red", "1. Otvoreni komentari: " + open, "2. Etapa na čekanju: " + (pend.join(", ") || "nema"), "3. Dogovoreno, još nije gotovo: " + (todo.join("; ") || "sve je gotovo"), "4. Što student treba od mentora"].join("\n"); el.focus(); }
+    };
+    out.koSave = () => {
+      const nt = (this.koNotesRef.current.value || "").trim(), tk = (this.koTasksRef.current.value || "").split("\n").map(x => x.trim()).filter(Boolean);
+      if (!nt && !tk.length) { this.flash("Upiši bilješke ili dogovoreno."); return; }
+      this.upd(x => ({ consults: x.consults.concat([{ when: stamp(), notes: nt, tasks: tk.map(t => ({ t, done: false })) }]), log: x.log.concat([{ what: "Konzultacija", meta: "Nastavnik A · " + stamp() }]) }));
+      this.koNotesRef.current.value = ""; this.koTasksRef.current.value = ""; this.flash(tk.length ? "Konzultacija je spremljena. Dogovoreno je sada na studentovu popisu zadataka." : "Konzultacija je spremljena.");
+    };
+    out.consults = cur.consults.slice().reverse().map(k => ({ when: k.when, notes: k.notes || false, tasks: k.tasks.map(t => ({ t: t.t, mark: t.done ? "✓" : "○", style: { display: "flex", gap: 6, fontSize: 12.5, lineHeight: 1.45, color: t.done ? "#8E958D" : "#E9EBE6", textDecoration: t.done ? "line-through" : "none" } })) }));
+    out.noConsults = !cur.consults.length;
+    const SG = { ok: ["odobreno", "#6FBFA5"], sub: ["predano, čeka tvoje odobrenje", "#8FB0E0"], ret: ["vraćeno s napomenom", "#D3AC63"], no: ["nije predano", "#767D75"] };
+    const setStage = (i, f) => this.upd(x => ({ stages: x.stages.map((y, j) => j === i ? Object.assign({}, y, f) : y) }));
+    out.stages = cur.stages.map((g, i) => ({ n: (i + 1) + ". " + g.n, st: SG[g.st][0], stStyle: { fontSize: 11.5, color: SG[g.st][1] }, d: g.d || "", note: g.st === "ret" && g.note ? g.note : false, pending: g.st === "sub" && s.retFor !== i, returning: s.retFor === i,
+      approve: () => { setStage(i, { st: "ok", d: stamp() }); this.upd(x => ({ after: null, log: x.log.concat([{ what: "Odobrena etapa „" + g.n + "”", meta: "Nastavnik A · " + stamp() }]) })); this.flash("Etapa je odobrena. Izmjene nakon odobrenja vidjet ćeš ovdje."); },
+      ret: () => this.setState({ retFor: i }, () => setTimeout(() => this.retRef.current && this.retRef.current.focus(), 30)),
+      retSend: () => { const t = ((this.retRef.current && this.retRef.current.value) || "").trim(); if (!t) { this.flash("Upiši napomenu."); return; } setStage(i, { st: "ret", note: t, d: stamp() }); this.upd(x => ({ log: x.log.concat([{ what: "Vraćena etapa „" + g.n + "”", meta: "Nastavnik A · " + stamp() }]) })); this.setState({ retFor: null }); this.flash("Etapa je vraćena studentu s napomenom."); },
+      retCancel: () => this.setState({ retFor: null }) }));
+    const lastOk = cur.stages.filter(g => g.st === "ok").pop();
+    out.after = cur.after ? "Izmijenjeno nakon odobrenja etape „" + cur.after.stage + "”: " + cur.after.n + " " + pl(cur.after.n, "odlomak", "odlomka", "odlomaka") + "." : lastOk ? "Nema izmjena nakon odobrenja etape „" + lastOk.n + "”." : "Još nema odobrene etape.";
+    const setCrit = (i, f) => this.upd(x => ({ crit: x.crit.map((y, j) => j === i ? Object.assign({}, y, f) : y) }));
+    out.crit = cur.crit.map((c, i) => ({ name: c.n, score: c.v, rename: e => setCrit(i, { n: e.target.value }), set: e => setCrit(i, { v: e.target.value }), del: () => this.upd(x => ({ crit: x.crit.filter((_, j) => j !== i) })) }));
+    out.addCrit = () => this.upd(x => ({ crit: x.crit.concat([{ n: "Novi kriterij", v: "" }]) }));
+    out.genRep = () => this.upd(x => ({ report: this.reportText(x) }));
+    out.hasReport = !!cur.report; out.report = cur.report; out.setReport = e => { const val = e.target.value; this.upd(() => ({ report: val })); };
+    out.copyRep = () => { try { navigator.clipboard.writeText(cur.report); } catch (e) {} this.flash("Nacrt je kopiran."); };
+    return out;
+  }
+  renderVals() { const v = this.base(); return Object.assign(v, this.extra(v)); }
+  base() {
+    const s = this.state, cur = s.st[s.sel], last = cur.rounds[cur.rounds.length - 1], prev = cur.rounds[cur.rounds.length - 2];
+    const ST = { revise: ["Čeka doradu", "#D3AC63"], review: ["Dorada stigla na pregled", "#8FB0E0"], accepted: ["Prihvaćeno", "#6FBFA5"], none: ["Nije započeto", "#8E958D"] };
+    const btn = (label, on, primary) => ({ label, on, style: primary ? { background: "#6FBFA5", color: "#0E1C17", padding: "4px 11px", borderRadius: 7, fontSize: 12, fontWeight: 500 } : { padding: "4px 10px", borderRadius: 7, fontSize: 12, color: "#A6ADA5", border: "1px solid #2C312B" } });
+    const students = ["a", "b", "c", "d"].map(k => { const x = s.st[k], on = k === s.sel; return { name: x.name, status: ST[x.status][0], when: x.when, cur: on ? "true" : "false", pick: () => this.setState({ sel: k, draft: null, view: "text" }), style: { display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1, padding: "8px 10px", borderRadius: 8, textAlign: "left", background: on ? "#232722" : "transparent" }, stStyle: { fontSize: 12, color: ST[x.status][1] } }; });
+    const actions = cur.status === "review" ? [btn("Zatraži novu doradu", () => this.setState({ tab: "rev" })), btn("Prihvati rad", () => { this.upd(x => ({ status: "accepted", log: x.log.concat([{ what: "Rad prihvaćen", meta: "runda " + x.rounds.length + " · Nastavnik A · " + stamp() }]) })); this.flash("Rad je prihvaćen. Student ga može predati."); }, true)]
+      : cur.status === "revise" ? [btn("Promijeni zahtjev", () => this.setState({ tab: "rev" }))] : cur.status === "accepted" ? [btn("Ocjena", () => this.setState({ tab: "iz" }), true)] : [];
+    const views = [["text", "Tekst"], ["diff", "Promjene od runde " + (cur.rounds.length - 1)], ["origin", "Podrijetlo teksta"]].filter(v => v[0] !== "diff" || prev).map(([id, label]) => ({ label, sel: s.view === id ? "true" : "false", on: () => this.setState({ view: id, draft: null }), style: { padding: "2px 8px", borderRadius: 6, fontSize: 12, color: s.view === id ? "#E9EBE6" : "#A6ADA5", background: s.view === id ? "#232722" : "transparent" } }));
+    const segStyle = { "=": {}, "-": { color: "#A6ADA5", textDecoration: "line-through", textDecorationColor: "#D9AE5B" }, "+": { color: "#8FB0E0", background: "#8FB0E022", borderRadius: 2 } };
+    const paras = (last || []).map((t, i) => {
+      let segs;
+      if (s.view === "diff") segs = wdiff(prev[i] || "", t).map(g => ({ t: g.t, style: segStyle[g.k], on: null }));
+      else {
+        const cs = cur.comments.filter(c => c.pi === i).map(c => ({ c, a: t.indexOf(c.q) })).filter(x => x.a >= 0).sort((x, y) => x.a - y.a); segs = []; let at = 0;
+        cs.forEach(({ c, a }) => { if (a < at) return; if (a > at) segs.push({ t: t.slice(at, a), style: {}, on: null }); segs.push({ t: c.q, style: c.resolved ? { borderBottom: "1px dotted #767D75", cursor: "pointer" } : { background: "#D9AE5B2B", borderBottom: "1px solid #D9AE5B", cursor: "pointer" }, on: () => this.setState({ tab: "cm", focus: c.id }) }); at = a + c.q.length; });
+        if (at < t.length) segs.push({ t: t.slice(at), style: {}, on: null });
+      }
+      const pasted = cur.paste.includes(i), dot = s.view === "origin";
+      return { i: String(i), segs, dot, dotTitle: pasted ? "Zalijepljeno, izvor nije opažen" : "Napisano u Ducturi", dotStyle: { flex: "none", width: 8, height: 8, borderRadius: "50%", marginTop: 11, background: pasted ? "#9E9A90" : "#8FB0E0" } };
+    });
+    const nRounds = cur.rounds.length, changed = prev ? last.filter((t, i) => t !== prev[i]).length : 0;
+    const viewNote = s.view === "diff" ? changed + (changed === 1 ? " izmijenjen odlomak" : " izmijenjena odlomka") + " od runde " + (nRounds - 1) : s.view === "origin" ? "Oznake vidi i student." : "";
+    const tabs = [["cm", "Komentari"], ["rev", "Dorada"], ["note", "Bilješke"], ["grade", "Ocjena"]].map(([id, label]) => ({ label, sel: s.tab === id ? "true" : "false", on: () => this.setState({ tab: id }), style: { padding: "11px 0 9px", fontSize: 12, fontWeight: s.tab === id ? 600 : 400, color: s.tab === id ? "#E9EBE6" : "#A6ADA5", borderBottom: "2px solid " + (s.tab === id ? "#6FBFA5" : "transparent") } }));
+    const comments = cur.comments.slice().sort((a, b) => b.n - a.n).map(c => ({ n: String(c.n), when: c.when, state: c.resolved ? "riješeno" : "otvoreno", quote: c.q, text: c.text, rule: c.rule || false, on: () => this.setState({ focus: c.id }), style: { display: "flex", flexDirection: "column", gap: 4, padding: "8px 10px", margin: "0 -10px", borderRadius: 8, background: s.focus === c.id ? "#1E221D" : "transparent", opacity: c.resolved ? 0.6 : 1, cursor: "pointer" } }));
+    const open = cur.comments.filter(c => !c.resolved).length;
+    const templates = s.templates.map(tp => ({ t: tp.t, rule: tp.rule || false, use: () => { const el = this.cmRef.current; if (el) { el.value = (el.value ? el.value.trimEnd() + " " : "") + tp.t; el.focus(); } this.setState(st => ({ draft: st.draft ? { ...st.draft, rule: tp.rule || st.draft.rule } : null })); } }));
+    return {
+      students, cur: { name: cur.name, status: ST[cur.status][0], roundTxt: nRounds ? "runda " + nRounds + " · " + cur.when : "bez predaje" }, actions,
+      hasWork: nRounds > 0, noWork: nRounds === 0, views, viewNote, showLegend: s.view === "origin", paras, paperRef: this.paperRef, onSel: () => this.onSel(),
+      tabs, tabCm: s.tab === "cm", tabRev: s.tab === "rev", tabNote: s.tab === "note", tabGrade: s.tab === "grade",
+      draft: s.draft ? { quote: s.draft.q.length > 120 ? s.draft.q.slice(0, 120) + "…" : s.draft.q, rule: s.draft.rule || false } : false, cmRef: this.cmRef, templates, comments, noComments: !cur.comments.length && !s.draft,
+      cmSave: () => this.saveCm(), cmCancel: () => { getSelection().removeAllRanges(); this.setState({ draft: null }); },
+      cmKey: e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); this.saveCm(); } if (e.key === "Escape") this.setState({ draft: null }); },
+      tplSave: () => { const t = ((this.cmRef.current && this.cmRef.current.value) || "").trim(); if (!t) return; this.setState(st => ({ templates: st.templates.concat([{ t, rule: st.draft && st.draft.rule }]) })); this.flash("Spremljeno u predloške."); },
+      revHead: cur.status === "revise" ? "Dorada je već zatražena. Novi tekst zamjenjuje stari zahtjev." : "Runda " + (nRounds + 1) + ". Student dobiva obavijest.", revRef: this.revRef, revDue: cur.due, setDue: e => { const v = e.target.value; this.upd(() => ({ due: v })); },
+      revOpen: open ? "Uz zahtjev idu otvoreni komentari: " + open : "Nema otvorenih komentara. Dodaj ih prije zahtjeva ili opiši doradu tekstom.",
+      revSend: () => { const t = ((this.revRef.current && this.revRef.current.value) || "").trim(); if (!t) { this.flash("Upiši što treba doraditi."); return; } this.upd(x => ({ status: "revise", log: x.status === "revise" ? x.log : x.log.concat([{ what: "Zatražena dorada", meta: "runda " + x.rounds.length + " · Nastavnik A · " + stamp() }]) })); this.revRef.current.value = ""; this.flash("Dorada je zatražena. Student dobiva obavijest."); },
+      log: cur.log.slice().reverse(),
+      note: cur.note, setNote: e => { const v = e.target.value; this.upd(() => ({ note: v })); },
+      grade: cur.grade, setGrade: e => { const v = e.target.value; this.upd(() => ({ grade: v, published: false })); }, gradeText: cur.gradeText, setGradeText: e => { const v = e.target.value; this.upd(() => ({ gradeText: v, published: false })); },
+      gradeState: cur.published ? "Objavljeno studentu." : "Nacrt. Student ga ne vidi dok ga ne objaviš.", gradeStateStyle: { fontSize: 12, color: cur.published ? "#6FBFA5" : "#A6ADA5" },
+      pubLabel: cur.published ? "Povuci objavu" : "Objavi studentu", pubStyle: cur.published ? { padding: "4px 10px", borderRadius: 7, fontSize: 12, color: "#A6ADA5", border: "1px solid #2C312B" } : { background: "#6FBFA5", color: "#0E1C17", padding: "4px 11px", borderRadius: 7, fontSize: 12, fontWeight: 500 },
+      publish: () => { if (!cur.grade && !cur.published) { this.flash("Odaberi ocjenu."); return; } this.upd(x => ({ published: !x.published })); },
+      toast: s.toast || false,
+    };
+  }
+}
+</script>
+</body>
+</html>

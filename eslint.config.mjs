@@ -55,6 +55,7 @@ const eslintConfig = [
     ignores: [
       ".next/**",
       ".claude/worktrees/**",
+      "docs/design/ductura/**",
       "next-env.d.ts",
       "node_modules/**",
       "public/**",
