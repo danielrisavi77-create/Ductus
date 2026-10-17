@@ -1,26 +1,57 @@
 /*
- * Ductus design tokens and shell layout, design v6 (D-89).
+ * Ductus design tokens, D-115 (replaces design v6, D-89).
  *
- * Tokens come from the Pisač prototype (pisac-editor/public/legacy) with the
- * approved deviations: secondary text #5A605A instead of #8A908A for
- * contrast, targets of at least 32 px in dense bars and 44 px elsewhere, and
- * no --breach colour (D-62). Origin colours show where text came from, never
- * a judgement.
+ * The shell is dark and does not follow the system setting. The writing sheet
+ * is light by default and carries its own token scope (`.sheet`), switched to
+ * dark by `data-sheet-theme="dark"`; the writer's choice is kept only in the
+ * browser (SheetFrame). Primary is teal #14B8A6 with dark text on it. Teal on
+ * the white sheet would be 2.5:1, so the light sheet uses a darker teal for
+ * text and focus. Origin colours keep their v6 values (light on the sheet,
+ * dark in the shell) and show where text came from, never a judgement; no
+ * --breach colour (D-62). Targets are at least 32 px in dense bars, 44 px
+ * elsewhere.
  */
 
 :root {
-  --ground: #edefea;
+  --ground: #0b1110;
+  --sheet: #131b19;
+  --chrome: #101816;
+  --ink: #e8efed;
+  --ink-2: #c5d0cd;
+  --ink-3: #a3b1ad;
+  --rule: #2a3935;
+  --rule-2: #1e2a27;
+  --accent: #14b8a6;
+  --accent-hover: #2dd4bf;
+  --accent-ink: #04201c;
+  --accent-soft: #14b8a61f;
+  --p-internal: #8fb0e0;
+  --p-unknown: #9e9a90;
+  --p-template: #7e7a70;
+  --p-ai: #d3ac63;
+  --cmt: #d9ae5b;
+  --cmt-ink: #d9ae5b;
+  --cmt-bg: #d9ae5b2b;
+  --lift: 0 1px 1px #0007, 0 12px 34px -10px #000a;
+  --ff-ui: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
+  --ff-display: var(--font-display), Georgia, serif;
+  --ff-mono: var(--font-mono), ui-monospace, Menlo, monospace;
+  --ff-manuscript: "Times New Roman", Times, Tinos, "Liberation Serif", serif;
+  color-scheme: dark;
+}
+
+/* Light sheet (default). */
+.sheet {
   --sheet: #ffffff;
-  --chrome: #f7f8f5;
   --ink: #191c19;
-  --ink-2: #4a504a;
-  --ink-3: #5a605a;
-  --rule: #dce0d8;
-  --rule-2: #e9ece6;
-  --accent: #2f6f5e;
-  --accent-hover: #245849;
+  --ink-2: #3f4a46;
+  --ink-3: #56615d;
+  --rule: #d3dbd8;
+  --rule-2: #e6ebe9;
+  --accent: #0f766e;
+  --accent-hover: #0b5f58;
   --accent-ink: #ffffff;
-  --accent-soft: #2f6f5e14;
+  --accent-soft: #0f766e14;
   --p-internal: #4a6fa5;
   --p-unknown: #6e6a62;
   --p-template: #9a9488;
@@ -28,38 +59,29 @@
   --cmt: #b8862a;
   --cmt-ink: #8a6420;
   --cmt-bg: #b8862a26;
-  --lift: 0 1px 1px #1a1d1b08, 0 10px 34px -8px #1a1d1b1f;
-  --ff-ui: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
-  --ff-display: var(--font-display), Georgia, serif;
-  --ff-mono: var(--font-mono), ui-monospace, Menlo, monospace;
-  --ff-manuscript: "Times New Roman", Times, Tinos, "Liberation Serif", serif;
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --ground: #0f110e;
-    --sheet: #191c18;
-    --chrome: #141712;
-    --ink: #e9ebe6;
-    --ink-2: #c3c9c2;
-    --ink-3: #a6ada5;
-    --rule: #2c312b;
-    --rule-2: #232722;
-    --accent: #6fbfa5;
-    --accent-hover: #8ccdb7;
-    --accent-ink: #0e1c17;
-    --accent-soft: #6fbfa51f;
-    --p-internal: #8fb0e0;
-    --p-unknown: #9e9a90;
-    --p-template: #7e7a70;
-    --p-ai: #d3ac63;
-    --cmt: #d9ae5b;
-    --cmt-ink: #d9ae5b;
-    --cmt-bg: #d9ae5b2b;
-    --lift: 0 1px 1px #0007, 0 12px 34px -10px #000a;
-    color-scheme: dark;
-  }
+/* Dark sheet: the shell's own tokens, on a sheet one step above the ground. */
+.sheet[data-sheet-theme="dark"] {
+  --sheet: #161f1d;
+  --ink: #e8efed;
+  --ink-2: #c5d0cd;
+  --ink-3: #a3b1ad;
+  --rule: #2f403b;
+  --rule-2: #22302c;
+  --accent: #14b8a6;
+  --accent-hover: #2dd4bf;
+  --accent-ink: #04201c;
+  --accent-soft: #14b8a61f;
+  --p-internal: #8fb0e0;
+  --p-unknown: #9e9a90;
+  --p-template: #7e7a70;
+  --p-ai: #d3ac63;
+  --cmt: #d9ae5b;
+  --cmt-ink: #d9ae5b;
+  --cmt-bg: #d9ae5b2b;
+  color-scheme: dark;
 }
 
 * {
@@ -481,15 +503,49 @@ main:focus {
   margin: 0 auto;
   padding: 56px 76px 48px;
   background: var(--sheet);
+  color: var(--ink);
   border-radius: 3px;
-  box-shadow: var(--lift);
+  /* The lift is invisible on the dark ground; a 1 px rule keeps the sheet's edge (review #156, c). */
+  box-shadow: 0 0 0 1px var(--rule), var(--lift);
 }
 
-/* The lift is invisible on the dark ground; a 1 px rule keeps the sheet's edge (review #156, c). */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .sheet {
-    box-shadow: 0 0 0 1px var(--rule), var(--lift);
-  }
+/* Sheet theme switch, above the sheet in the dark shell. */
+.sheet-theme {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: 756px;
+  margin: 0 auto 10px;
+}
+
+.sheet-theme__options {
+  display: inline-flex;
+  border: 1px solid var(--rule);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.sheet-theme__option {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* Pressed is shown by a check mark and weight as well as by colour. */
+.sheet-theme__option[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.sheet-theme__option[aria-pressed="true"]::before {
+  content: "\2713\00a0";
 }
 
 @media (max-width: 640px) {

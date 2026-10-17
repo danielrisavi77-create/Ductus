@@ -230,13 +230,46 @@ test.describe("workspace shell", () => {
     }
   }
 
-  test("dark: the sheet has a visible 1 px rule border", async ({ page }) => {
-    await page.emulateMedia({ colorScheme: "dark" });
+  test("the sheet has a visible 1 px rule border on the dark shell", async ({ page }) => {
     await page.goto("/rad");
     const shadow = await page
       .locator("article.sheet")
       .evaluate((element) => getComputedStyle(element).boxShadow);
     expect(shadow).toMatch(/0px 0px 0px 1px/);
+  });
+
+  test("shell is dark whatever the system says, the sheet is light by default (D-115)", async ({ page }) => {
+    for (const colorScheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme });
+      await page.goto("/rad");
+      const body = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+      expect(body).toBe("rgb(11, 17, 16)");
+      const sheet = page.locator("article.sheet");
+      await expect(sheet).toHaveAttribute("data-sheet-theme", "light");
+      expect(await sheet.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(255, 255, 255)");
+    }
+  });
+
+  test("the sheet theme switch works, is announced and is remembered only in the browser", async ({ page }) => {
+    await page.goto("/rad");
+    const light = page.getByRole("button", { name: "Svijetli list" });
+    const dark = page.getByRole("button", { name: "Tamni list" });
+    await expect(light).toHaveAttribute("aria-pressed", "true");
+    await expect(dark).toHaveAttribute("aria-pressed", "false");
+    await dark.click();
+    const sheet = page.locator("article.sheet");
+    await expect(sheet).toHaveAttribute("data-sheet-theme", "dark");
+    await expect(dark).toHaveAttribute("aria-pressed", "true");
+    await page.reload();
+    await expect(sheet).toHaveAttribute("data-sheet-theme", "dark");
+    await page.getByRole("button", { name: "Svijetli list" }).click();
+    await expect(sheet).toHaveAttribute("data-sheet-theme", "light");
+  });
+
+  test("a stored value that is not a theme leaves the sheet light", async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem("ductus.sheetTheme", "sepia"));
+    await page.goto("/rad");
+    await expect(page.locator("article.sheet")).toHaveAttribute("data-sheet-theme", "light");
   });
 
   test("the brand link on the workspace is a comfortable target", async ({ page }) => {
