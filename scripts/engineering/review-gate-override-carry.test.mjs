@@ -118,3 +118,38 @@ test("a negative verdict on the earlier override head does not void its carried 
 test("a PASS on the current head does not disturb a carried override", () => {
   assert.equal(evaluate([override(earlier), verdictQa(head, "PASS")], new Set([earlier])).state, "success");
 });
+
+// claude:review413b: the voiding check must see carried heads too. A FAIL or
+// BLOCK posted after the override, on the current or a carried head, voids it.
+const mid = "c".repeat(40);
+
+test("a QA FAIL on a carried head posted after the override voids it (merge B, FAIL on B, merge C)", () => {
+  const comments = [override(earlier), verdictQa(mid, "FAIL")];
+  assert.equal(evaluate(comments, new Set([earlier, mid])).state, "pending");
+});
+
+test("a FAIL or BLOCK on the override head posted after the override voids it once carried", () => {
+  for (const make of [verdictQa, verdictReview]) {
+    for (const verdict of ["FAIL", "BLOCK"]) {
+      const comments = [override(earlier), make(earlier, verdict)];
+      assert.equal(evaluate(comments, new Set([earlier])).state, "pending", verdict);
+    }
+  }
+});
+
+test("a carried FAIL posted before the override does not void it", () => {
+  const comments = [verdictQa(mid, "FAIL"), override(earlier)];
+  assert.equal(evaluate(comments, new Set([earlier, mid])).state, "success");
+});
+
+test("a later PASS by the same session supersedes its earlier carried FAIL", () => {
+  const comments = [override(earlier), verdictQa(mid, "FAIL"), verdictQa(mid, "PASS")];
+  assert.equal(evaluate(comments, new Set([earlier, mid])).state, "success");
+});
+
+test("invalid override comments do not count against the carried-head limit", () => {
+  const heads = Array.from({ length: 6 }, (_, i) => String(i + 1).repeat(40));
+  const bad = heads.map((sha) => override(sha, { appSlug: "claude" }));
+  const path = [merge(head), ...heads.map((sha) => merge(sha)), plain("9".repeat(40))];
+  assert.equal(carriedHeadCandidates([...bad, override("9".repeat(40))], head, path).heads.length, 1);
+});
