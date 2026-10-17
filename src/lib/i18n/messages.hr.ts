@@ -67,6 +67,14 @@ export const hr = {
     unavailableBody: "Prijava preko AAI@EduHr trenutačno ne odgovara. Pokušaj ponovno za nekoliko minuta.",
     retry: "Pokušaj ponovno",
     home: "Na početnu",
+    signIn: "Prijava",
+    logout: "Odjava",
+    loggingOut: "Odjava…",
+    logoutUnsaved:
+      "Ovaj uređaj nije mogao pohraniti dio teksta, pa bi se odjavom izgubio. Izvezi tekst, a zatim ponovno odaberi „Odjava”.",
+    logoutFailed: "Odjava nije dovršena jer poslužitelj nije odgovorio. Ništa nije izbrisano. Provjeri vezu i pokušaj ponovno.",
+    signedOutElsewhere:
+      "Prijava s kojom je ova kartica otvorena više ne vrijedi: u drugoj kartici provedena je odjava ili nova prijava. Ova kartica više ništa ne prikazuje ni ne sprema. Ponovno učitaj stranicu.",
   },
 } as const;
 
