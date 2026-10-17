@@ -32,8 +32,13 @@ foreach ($wt in $worktrees) {
     }
     if (-not $isMerged -and $state -ne 'CLOSED') { continue }
 
-    if (git -C $wt.Path status --porcelain) {
-        Write-Output "skip (uncommitted changes): $($wt.Path)"
+    $status = git -C $wt.Path status --porcelain --untracked-files=all --ignored=matching
+    if ($LASTEXITCODE -ne 0) {
+        Write-Output "skip (git status failed): $($wt.Path)"
+        continue
+    }
+    if ($status) {
+        Write-Output "skip (worktree contains uncommitted, untracked, or ignored files): $($wt.Path)"
         continue
     }
     Write-Output "remove: $($wt.Path) [$($wt.Branch)]"
