@@ -607,6 +607,81 @@ main:focus {
   color: var(--accent);
 }
 
+/* F-8 step 1: the toolbar sits above the sheet, as wide as the sheet. */
+.workspace__main > .editor-toolbar {
+  max-width: 756px;
+  margin: 12px auto 0;
+  padding: 4px 6px;
+  border: 1px solid var(--rule);
+  border-radius: 7px;
+  background: var(--chrome);
+}
+
+.editor-toolbar .btn:hover {
+  background: var(--rule-2);
+  color: var(--ink);
+}
+
+/* Unavailable is said by aria-disabled; the faded look only repeats it. */
+.editor-toolbar .btn[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Heading list in the structure rail (F-8 step 1). */
+.outline {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.outline__link {
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  padding: 3px 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  text-align: left;
+}
+
+.outline__item[data-level="2"] .outline__link {
+  padding-left: 19px;
+}
+
+.outline__item[data-level="3"] .outline__link {
+  padding-left: 31px;
+}
+
+.outline__link:hover {
+  background: var(--rule-2);
+  color: var(--ink);
+}
+
+/* The current section: weight and a rule as well as colour. */
+.outline__link[aria-current="location"] {
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.outline__untitled {
+  font-style: italic;
+  color: var(--ink-3);
+}
+
+/* Phone: no interface text under 13 px (review #156, 5). Repeated here because
+   the rules above come after the phone block and would win over it. */
+@media (max-width: 640px) {
+  .editor-toolbar .btn,
+  .outline__link {
+    font-size: 13px;
+  }
+}
+
 .editor-surface .ProseMirror {
   outline: none;
   font-family: var(--ff-manuscript);

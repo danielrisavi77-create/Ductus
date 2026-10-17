@@ -128,7 +128,7 @@ export default function EditorToolbar() {
           <button
             key={tool.key}
             type="button"
-            className="editor-toolbar__button"
+            className="btn editor-toolbar__button"
             data-tool={tool.key}
             aria-label={tool.label}
             title={tool.label}
