@@ -113,7 +113,7 @@ test("settings.json routes Bash and PowerShell through the wrapper, not the bare
   assert.equal(hookEntry.shell, "bash");
   // Claude Code >= 2.1.295: a hook that cannot start, times out or exits other than 0/2 blocks.
   assert.equal(hookEntry.onFailure, "block");
-  assert.ok(hookEntry.timeout >= 8, "hook timeout leaves room for the wrapper analysis limit");
+  assert.equal(hookEntry.timeout, 30, "hook timeout survives Node start-up on a loaded machine");
   const all = JSON.stringify(settings.hooks);
   assert.ok(!/node_modules\/cc-safety-net/.test(all), "no hook calls node_modules directly");
   for (const group of settings.hooks.PreToolUse) {
@@ -123,7 +123,7 @@ test("settings.json routes Bash and PowerShell through the wrapper, not the bare
 
 test("analysis limit stays below the hook timeout in settings.json", async () => {
   const { ANALYSIS_TIMEOUT_MS } = await import("../hooks/safety-net.mjs");
-  assert.ok(ANALYSIS_TIMEOUT_MS < hookEntry.timeout * 1000);
+  assert.ok(ANALYSIS_TIMEOUT_MS <= hookEntry.timeout * 1000 - 5000, "at least 5 s of start-up margin");
 });
 
 for (const tool of TOOLS) {
