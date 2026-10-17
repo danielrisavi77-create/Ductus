@@ -148,5 +148,41 @@ SELECT ok(NOT has_table_privilege('ductus_identity','evidence.project','SELECT')
   AND NOT has_table_privilege('ductus_worker','evidence.project','SELECT'),
   'other service roles receive no direct evidence SELECT');
 
+-- The evidence domain id is the signed evidenceDomainId: UUID version 4 only
+-- (docs/BACKEND.md 4.1). A generated id passes; any other version, the nil id
+-- and a wrong variant are refused by the table itself.
+SELECT is(pg_temp.ask_as('ductus_evidence','anon', $$ WITH d AS (INSERT INTO evidence.domain (institution_id,region)
+     VALUES ({fak_a},'eu-west-1') RETURNING id) SELECT count(*) FROM d $$),
+  '1', 'a generated evidence domain id is a UUID version 4');
+SELECT matches(pg_temp.ask_as('ductus_evidence','anon', format(
+     $$ INSERT INTO evidence.domain (id,institution_id,region) VALUES (%L,{fak_a},%L) $$, v.id, v.region)),
+  '^23514:', 'an evidence domain id cannot be ' || v.what)
+FROM (VALUES
+  ('00000000-0000-1000-8000-0000000000d3', 'eu-north-1', 'a version 1 UUID'),
+  ('00000000-0000-7000-8000-0000000000d4', 'eu-south-1', 'a version 7 UUID'),
+  ('00000000-0000-4000-c000-0000000000d5', 'eu-south-2', 'a UUID of another variant'),
+  ('00000000-0000-0000-0000-000000000000', 'eu-north-2', 'the nil UUID')
+) AS v (id, region, what);
+
+-- A mistaken grant is not access: with USAGE and a direct table privilege
+-- granted for this transaction only, the RLS policies still refuse a web
+-- write and show a role without a policy no rows.
+GRANT INSERT, UPDATE, DELETE ON evidence.project TO ductus_app;
+SELECT matches(pg_temp.ask('ana', $$ INSERT INTO evidence.project (id,institution_id,assignment_id,principal_id)
+     VALUES ('granted-project',{fak_a},{z1},{ana}) $$),
+  '^42501: new row violates row-level security policy', 'a mistaken INSERT grant still lets no web write through');
+SELECT is(pg_temp.ask('ana', $$ WITH u AS (UPDATE evidence.project SET assignment_id = {z1} RETURNING 1)
+     SELECT count(*) FROM u $$), '0', 'a mistaken UPDATE grant still changes no evidence row');
+SELECT is(pg_temp.ask('ana', $$ WITH d AS (DELETE FROM evidence.project RETURNING 1) SELECT count(*) FROM d $$),
+  '0', 'a mistaken DELETE grant still removes no evidence row');
+REVOKE INSERT, UPDATE, DELETE ON evidence.project FROM ductus_app;
+GRANT USAGE ON SCHEMA evidence TO ductus_worker;
+GRANT SELECT ON evidence.project, evidence.receipt TO ductus_worker;
+SELECT is(pg_temp.ask_as('ductus_worker','ana',
+     $$ SELECT (SELECT count(*) FROM evidence.project) + (SELECT count(*) FROM evidence.receipt) $$),
+  '0', 'a mistaken SELECT grant shows a role without a policy no evidence rows');
+REVOKE SELECT ON evidence.project, evidence.receipt FROM ductus_worker;
+REVOKE USAGE ON SCHEMA evidence FROM ductus_worker;
+
 SELECT * FROM finish();
 ROLLBACK;

@@ -26,9 +26,11 @@ Ductus ne testira samo radi li funkcija, nego može li se vjerovati zapisu, ovla
 
 ## 2. Browser politika
 
-- Chromium: svaki frontend/E2E PR.
-- Firefox: editor, sync, journal, clipboard, auth i submission PR-ovi.
-- WebKit: editor, IndexedDB/Dexie, offline, Web Locks, clipboard, auth i submission PR-ovi.
+- CI (P1-3, 12. 10. 2026.): na PR-u se E2E vrti samo na Chromiumu (desktop i mobilni viewport); na `main` i u noćnom pokretanju vrte se sva tri enginea (Chromium, Firefox, WebKit). Crveni Firefox ili WebKit na `main` ili noću je nalaz za sljedeći dan, ne tiha regresija.
+- Chromium: svaki frontend/E2E PR, u CI-ju PR-a.
+- Firefox: editor, sync, journal, clipboard, auth i submission PR-ovi. CI PR-a ga ne pokreće, pa dokaz daje QA (lokalni ili ručno pokrenut prolaz na headu PR-a, zapisan u QA nalazu).
+- WebKit: editor, IndexedDB/Dexie, offline, Web Locks, clipboard, auth i submission PR-ovi. Dokaz kao za Firefox.
+- QA obveza: PR koji dira `src/lib/journal/`, sync, prijavu ili odjavu ne dobiva QA PASS bez dokaza o prolazu na sva tri enginea na aktualnom headu.
 - Prije pilota cijeli acceptance path mora proći na Chromiumu, Firefoxu i WebKitu.
 - Iznimka samo za demo (D-98 dopuna, 10. 10. 2026.): demo spec K-4 obvezan je do 1. 11. samo na Chromiumu; Firefox i WebKit prolaze informativno i ne blokiraju spajanje. Pravilo za pilot se ne mijenja.
 - Mobilni viewport je dodatak, ne zamjena za WebKit.
