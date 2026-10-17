@@ -48,6 +48,12 @@ export function mayRecord(state: NoticeState): boolean {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
 
+// A shape match is not enough: Date.parse rolls 2026-02-31 over into March.
+function isInstant(value: string): boolean {
+  const ms = Date.parse(value);
+  return ISO.test(value) && !Number.isNaN(ms) && new Date(ms).toISOString().slice(0, 19) === value.slice(0, 19);
+}
+
 /** Success only for HTTP 200 with a server time; server error bodies are ignored. */
 export async function acknowledgeNotice(
   assignmentId: string,
@@ -71,8 +77,7 @@ export async function acknowledgeNotice(
     if (response.status !== 200) return { kind: "unavailable" };
     const data: unknown = await response.json();
     if (!data || typeof data !== "object" || Array.isArray(data) || !("acknowledgedAt" in data) ||
-        typeof data.acknowledgedAt !== "string" || !ISO.test(data.acknowledgedAt) ||
-        Number.isNaN(Date.parse(data.acknowledgedAt))) {
+        typeof data.acknowledgedAt !== "string" || !isInstant(data.acknowledgedAt)) {
       return { kind: "unavailable" };
     }
     return { kind: "acknowledged", at: data.acknowledgedAt };

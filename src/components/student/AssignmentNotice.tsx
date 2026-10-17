@@ -12,6 +12,7 @@ import styles from "./AssignmentNotice.module.css";
 
 const s = t.student;
 const tools = t.teacher.tools;
+const workTypes: Record<string, string> = t.teacher.assignment.workTypes;
 
 const never = () => () => {};
 
@@ -49,8 +50,8 @@ export default function AssignmentNotice({ view }: { view: NoticeView }) {
       <p className={styles.hint}>{s.step}</p>
       <h1 id="zadatak">{view.title}</h1>
       <p className={styles.hint}>
-        {t.teacher.assignment.workTypes[view.workType]} · {s.opensFrom} {day(view.opensAt)} · {s.due}{" "}
-        {time(view.dueAt)}
+        {workTypes[view.workType] ? `${workTypes[view.workType]} · ` : null}
+        {s.opensFrom} {day(view.opensAt)} · {s.due} {time(view.dueAt)}
       </p>
       <p className={styles.brief}>{view.instructions}</p>
 
@@ -76,7 +77,10 @@ export default function AssignmentNotice({ view }: { view: NoticeView }) {
         <h2>{s.notRecordedHeading}</h2>
         <ul>{Object.values(s.notRecorded).map((text) => <li key={text}>{text}</li>)}</ul>
         <h2>{s.teacherHeading}</h2>
-        <ul>{Object.values(s.teacher).map((text) => <li key={text}>{text}</li>)}</ul>
+        <ul>
+          {Object.values(s.teacher).map((text) => <li key={text}>{text}</li>)}
+          {view.evidenceProfile === "extended" ? <li>{s.teacherExtended}</li> : null}
+        </ul>
         <p>{s.retention}</p>
         <p>{s.note}</p>
       </section>

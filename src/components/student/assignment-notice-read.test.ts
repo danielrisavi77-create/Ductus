@@ -7,11 +7,13 @@ import { readNotice } from "./assignment-notice-read";
 const TOKEN = "A".repeat(43);
 const ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const row = {
+  user_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
   role: "student",
   version_no: 2,
   title: "Izborni sustavi u Europi",
   instructions: "Usporedi dva izmišljena izborna sustava.",
   work_type: "seminar_paper",
+  evidence_profile: "basic",
   opens_at: new Date("2026-11-02T08:00:00Z"),
   due_at: new Date("2026-11-30T22:59:00Z"),
   ai_policy: "partially_allowed",
@@ -46,6 +48,7 @@ describe("F-7 notice read", () => {
         title: row.title,
         instructions: row.instructions,
         workType: "seminar_paper",
+        evidenceProfile: "basic",
         opensAt: "2026-11-02T08:00:00.000Z",
         dueAt: "2026-11-30T22:59:00.000Z",
         aiPurposes: ["proofreading", "translation"],
@@ -53,7 +56,21 @@ describe("F-7 notice read", () => {
       },
     });
     expect(query).toHaveBeenCalledWith(expect.stringContaining("a.current_version"), [ID]);
-    expect((query.mock.calls[0] as unknown as [string])[0]).not.toMatch(/\b(INSERT|UPDATE|DELETE)\b/i);
+    const sql = (query.mock.calls[0] as unknown as [string])[0];
+    expect(sql).not.toMatch(/\b(INSERT|UPDATE|DELETE)\b/i);
+    // A teacher may read every acknowledgment: the subquery must stay on the caller's own row.
+    expect(sql).toMatch(/n\.student_id = me\.user_id/);
+  });
+
+  it("tells a closed or expired session apart from an assignment without access", async () => {
+    for (const rows of [[{ ...row, user_id: null }], [{ ...row, user_id: null, role: null }], []]) {
+      expect(await readNotice(TOKEN, ID, actor(rows).withActor)).toEqual({ kind: "signedOut" });
+    }
+  });
+
+  it("passes on the evidence profile and work types the form does not offer", async () => {
+    const read = await readNotice(TOKEN, ID, actor([{ ...row, evidence_profile: "extended", work_type: "doctoral_thesis" }]).withActor);
+    expect(read.kind === "available" && read.view).toMatchObject({ evidenceProfile: "extended", workType: "doctoral_thesis" });
   });
 
   it("shows no allowed purposes when use is prohibited, and keeps a prior acknowledgment", async () => {
@@ -64,7 +81,7 @@ describe("F-7 notice read", () => {
   });
 
   it("shows no notice to a teacher, an outsider or for a missing assignment", async () => {
-    for (const rows of [[{ ...row, role: "teacher" }], [{ ...row, role: null }], []]) {
+    for (const rows of [[{ ...row, role: "teacher" }], [{ ...row, role: null }]]) {
       expect(await readNotice(TOKEN, ID, actor(rows).withActor)).toEqual({ kind: "notFound" });
     }
   });
