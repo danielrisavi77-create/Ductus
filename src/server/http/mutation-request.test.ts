@@ -284,6 +284,24 @@ describe("readBodyWithLimit (#155 items 10 and 12, HTTP part)", () => {
     });
   });
 
+  it("cancels a slow body at the route's absolute read deadline", async () => {
+    const state = { cancelled: false };
+    const slow = new ReadableStream<Uint8Array>({
+      pull() {
+        return new Promise<void>(() => {});
+      },
+      cancel() {
+        state.cancelled = true;
+      },
+    });
+    expect(await readBodyWithLimit(streamed(slow), LIMIT, 20)).toEqual({
+      ok: false,
+      status: 408,
+      reason: "body_timeout",
+    });
+    expect(state.cancelled).toBe(true);
+  });
+
   it("returns an empty body as zero bytes", async () => {
     const result = await readBodyWithLimit(
       new Request(URL_INGEST, { method: "POST" }),
