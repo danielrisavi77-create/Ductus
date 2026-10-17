@@ -95,7 +95,7 @@ CREATE TEMP VIEW allowed_membership AS
 SELECT bag_eq(
   'SELECT membership FROM ductus_membership',
   'SELECT membership FROM allowed_membership',
-  'the only memberships: the migrator as creator and with SET on the two owner roles, the local logins in ductus_app and ductus_auth'
+  'the only memberships: the migrator as creator and with SET on the owner roles, plus the local logins in ductus_app and ductus_auth'
 );
 -- Negative controls: the comparison above must notice a membership that is
 -- not on the list. Each one is added, seen and taken back.
