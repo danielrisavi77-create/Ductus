@@ -44,6 +44,8 @@ jobs:
       - name: Engineering system unit tests
         run: shopt -s failglob; node --test scripts/engineering/*.test.mjs scripts/orchestrator/*.test.mjs
       - run: pnpm test:property
+      - name: Demo launcher and fake OIDC account tests
+        run: pnpm test:demo && pnpm test:fake-oidc
       - run: pnpm build
 
   # E2E runs here, against the compose stack, so routes that need the
