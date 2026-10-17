@@ -191,7 +191,7 @@ Bijeli list: tekst i oznake u `<helmet><style>` editora, selektori `.ed[data-she
 
 ## 10. Datoteke
 
-- `prijava-v5.dc.html`: prijava (F-5). AAI@EduHr, prijava e-poštom za vanjske članove (PRIJEDLOG dizajna, ne gradi bez odluke vlasnika; D-104, D-09 ostaje), kod zadatka (demo prihvaća bilo koji), "Što Ductura čuva" (PRIJEDLOG dizajna, ne gradi: tekst o zapisu unosa i istrazi; u demou D-24 i D-56), provjera putovnice bez prijave, "Pokaži demo", gumb Natrag u svim dijelovima. Tweaks `stage`, `role`.
+- `prijava-v5.dc.html`: prijava (F-5). AAI@EduHr, prijava e-poštom za vanjske članove (PRIJEDLOG dizajna, ne gradi bez odluke vlasnika; D-104, D-09 ostaje), kod zadatka (demo prihvaća bilo koji), "Što Ductura čuva" (PRIJEDLOG dizajna, ne gradi: tekst o zapisu unosa i istrazi; u demou D-24, D-56 i odluka #87 `issuecomment-6237014519`), provjera putovnice bez prijave, "Pokaži demo", gumb Natrag u svim dijelovima. Tweaks `stage`, `role`.
 - `demo-tok-v2.dc.html`: novi zadatak, upis i obavijest, predaja, brz put.
 - `pocetna.dc.html`: početna studenta, obavijesti, paket rada.
 - `editor-v11.dc.html`: editor, zadnja verzija (v2–v10 su povijest u projektu). Tweak `istraga` (nema / otvorena / zatvorena).
