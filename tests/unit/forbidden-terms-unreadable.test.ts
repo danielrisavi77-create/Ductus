@@ -26,6 +26,12 @@ const write = (relative: string, content: string): void => {
   mkdirSync(path.dirname(file), { recursive: true });
   writeFileSync(file, content);
 };
+/** Puts the value where the fixture marks its one gap with "|"; a fixture with no gap or with more than one is a mistake in the test. */
+const fill = (content: string, value: string): string => {
+  const parts = content.split("|");
+  if (parts.length !== 2) throw new Error(`a fixture needs exactly one "|", found ${parts.length - 1}`);
+  return parts.join(value);
+};
 const component = (lines: readonly string[]): string =>
   ["export const Case = ({ a, b, c, d, e, f, g, n }: Props) => (", ...lines.map((line) => `  ${line}`), ");", ""].join("\n");
 
@@ -800,12 +806,12 @@ describe("a line break written in the text is not a boundary to close up", () =>
   ];
 
   it.each(WRITTEN.flatMap(([what, file, content]) => SPACES.map(([space, escape, raw]) => [what, space, file, content, escape, raw] as const)))("%s with %s between two halves of an entry", (_, __, file, content, escape, raw) => {
-    write(file, content.replace("|", escape));
+    write(file, fill(content, escape));
     expect(entries()).toEqual([]);
     expect(findUnreadableText(root!)).toEqual([]);
     // Only a template can hold the white space as itself.
     if (content.includes("`") && raw !== null) {
-      write(file, content.replace("|", raw));
+      write(file, fill(content, raw));
       expect(entries()).toEqual([]);
       expect(findUnreadableText(root!)).toEqual([]);
     }
@@ -964,11 +970,11 @@ describe("separators and format characters", () => {
 
   it.each(NAMED.flatMap(([what, value]) => PLACES.map(([where, file, content]) => [what, where, value, file, content] as const)))("reports a %s between the letters of an entry in %s", (_, __, value, file, content) => {
     // Written as itself.
-    write(file, content.replace("|", cp(value)));
+    write(file, fill(content, cp(value)));
     expect(reported()).toEqual([[file, code(value)]]);
     // Written by its escape; an attribute without braces has none.
     if (!content.includes('alt="')) {
-      write(file, content.replace("|", escape(value)));
+      write(file, fill(content, escape(value)));
       expect(reported()).toEqual([[file, code(value)]]);
     }
   });
@@ -1011,7 +1017,7 @@ describe("separators and format characters", () => {
 
   it("reports such a character as a part of its own between two parts with letters", () => {
     for (const value of [0x2028, 0x2029, 0x202e, 0x200f, 0x2060]) {
-      write("src/components/Case.tsx", `export const Case = () => <p>Sum{${JSON.stringify(cp(value))}}njivo</p>;\n`);
+      write("src/components/Case.tsx", `export const Case = () => <p>Sum{"${cp(value)}"}njivo</p>;\n`);
       expect(reported()).toEqual([["src/components/Case.tsx", code(value)]]);
     }
   });
@@ -1143,7 +1149,7 @@ describe("the text of a finding for a string that writes the code point of the m
     ["a catalogue", "src/lib/i18n/hr.json", '{ "title": "Sumnjivo|danas" }\n'],
   ])("shows the escape in %s", (_, file, content) => {
     for (const written of [B, "\\uFFFF"]) {
-      write(file, content.replace("|", written));
+      write(file, fill(content, written));
       const found = scanUiText(root!);
       expect(found.map((finding) => [finding.file, finding.terms.map((term) => term.entry).join(", ")])).toContainEqual([file, "sumnjivo"]);
       for (const finding of found) expect(finding.text).not.toContain(B);

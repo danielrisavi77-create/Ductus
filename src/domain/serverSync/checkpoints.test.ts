@@ -55,9 +55,29 @@ describe("validateCheckpointName", () => {
     expect(validateCheckpointName(`${emoji}🙂`).ok).toBe(false);
   });
 
+  // Issue #292: what would be refused later (JCS, Postgres text) or shows as nothing.
+  it("refuses a lone surrogate, NUL and invisible marks inside a name", () => {
+    for (const input of ["\ud800", "Prije\udc00 lekture", "a\u0000", "a\u200bb", "K1\u{E0041}", "K1\u034f", "a\u202eb", "\u{1BCA0}", "a\u{1D173}b"]) {
+      expect(validateCheckpointName(input)).toEqual({ ok: false, reason: "invalid_characters" });
+    }
+  });
+
+  it("refuses a name that shows as nothing", () => {
+    for (const input of ["\u3164", "\u2800\u2800", "\u00a0\u3000"]) {
+      expect(validateCheckpointName(input)).toEqual({ ok: false, reason: "empty" });
+    }
+  });
+
+  it("still accepts names in any script, emoji and a no-break space between words", () => {
+    for (const input of ["Čakavski žargon", "한글 и م", "Poglavlje\u00a0II", "Kraj 📚", "\u3405\u{E0100}"]) {
+      expect(validateCheckpointName(input)).toEqual({ ok: true, value: input });
+    }
+  });
+
   it("maps each rejection to its own Croatian error code", () => {
     expect(checkpointNameErrorCode("empty")).toBe("naziv-prazan");
     expect(checkpointNameErrorCode("too_long")).toBe("naziv-dug");
+    expect(checkpointNameErrorCode("invalid_characters")).toBe("naziv-neispravan");
   });
 });
 
