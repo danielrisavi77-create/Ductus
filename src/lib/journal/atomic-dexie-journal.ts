@@ -5,7 +5,9 @@
  *
  * The caller supplies a stable SHA-256 hex digest of the authenticated
  * principal (not an email, access token or other identifying raw value).
- * No editor, network, receipt verifier or recovery integration here.
+ * No editor, network, receipt verifier or recovery integration here: the
+ * send bookkeeping (`beginSend`, `recordAnswer`) trusts only what
+ * `outcomeToEvents` has already verified (`ackedRevision`).
  *
  * Contract for the auth flow (F-5); nothing here calls it yet:
  * - Sign-in, before anything reads or saves: construct the journal for the
@@ -31,12 +33,17 @@ import { commitRequestFromTransaction } from "../../domain/serverSync/contract";
 import type {
   JournalContents, JournalSnapshot, PendingTransaction, SyncMeta,
 } from "../../domain/sync/journal-types";
-import { SYNC_STATES } from "../../domain/sync/states";
+import {
+  ackedRevision, awaitingReceiptFor, isDiverged, nextAwaitingReceipt,
+  type AwaitingReceipt, type DrainOutcome,
+} from "../../domain/sync/drain";
+import { SYNC_STATES, type SyncState } from "../../domain/sync/states";
 
 export type JournalErrorCode =
   | "invalid_input" | "incomplete_store" | "sticky_state"
   | "duplicate_transaction" | "sequence_exhausted" | "stale_local_sequence"
-  | "unsynced_work" | "logout_in_progress" | "logout_blocked";
+  | "unsynced_work" | "logout_in_progress" | "logout_blocked"
+  | "not_queued" | "held_elsewhere" | "unconfirmed_sync";
 
 export class JournalError extends Error {
   constructor(readonly code: JournalErrorCode) {
@@ -51,6 +58,20 @@ export type LocalSaveResult = {
   pending: PendingTransaction;
   meta: SyncMeta;
 };
+
+/** What `recordAnswer` left in the journal. */
+export type AnswerResult = {
+  meta: SyncMeta;
+  /** Rows still owed after the answer, ascending by `localSeq`. */
+  pending: PendingTransaction[];
+  /** The verified revision the answer acknowledged, or null. */
+  ackedRevision: number | null;
+};
+
+/** States an answer may record; EDITING and SAVING_LOCAL belong to the editor. */
+const ANSWER_STATES: ReadonlySet<SyncState> = new Set<SyncState>([
+  "LOCAL_DURABLE", "SYNCING", "SYNCED", "CONFLICT", "ERROR", "RECOVERY_REQUIRED",
+]);
 
 type JournalControl = { key: "logout"; state: "closing" };
 
@@ -107,6 +128,44 @@ function validDocumentId(raw: unknown): raw is string {
 
 function validSeq(raw: unknown, min = 0): raw is number {
   return typeof raw === "number" && Number.isSafeInteger(raw) && raw >= min;
+}
+
+function validSent(documentId: string, sent: PendingTransaction): boolean {
+  return sent?.documentId === documentId && validSeq(sent.localSeq, 1) &&
+    typeof sent.tx?.clientTransactionId === "string" && sent.tx.clientTransactionId.trim() !== "";
+}
+
+function sameRow(a: PendingTransaction | AwaitingReceipt, sent: PendingTransaction): boolean {
+  const txid = "tx" in a ? a.tx?.clientTransactionId : a.clientTransactionId;
+  return a.documentId === sent.documentId && a.localSeq === sent.localSeq &&
+    txid === sent.tx.clientTransactionId;
+}
+
+function sticky(state: SyncState | undefined): boolean {
+  return state === "CONFLICT" || state === "RECOVERY_REQUIRED";
+}
+
+/**
+ * The store holds a document consistently: meta and snapshot together, a
+ * known state, and rows of this document within the sequence high-water mark.
+ */
+function assertConsistent(
+  documentId: string, prior: SyncMeta | undefined, snapshot: JournalSnapshot | undefined,
+  rows: readonly PendingTransaction[],
+): void {
+  if ((!prior && (snapshot || rows.length > 0)) ||
+      (prior && (!snapshot ||
+        !validSeq(prior.localSeq) ||
+        !(SYNC_STATES as readonly string[]).includes(prior.state)))) {
+    throw new JournalError("incomplete_store");
+  }
+  const high = prior?.localSeq ?? 0;
+  if (rows.some((row) =>
+    row.documentId !== documentId || !validSeq(row.localSeq, 1) ||
+    row.localSeq > high || typeof row.tx?.clientTransactionId !== "string"
+  )) {
+    throw new JournalError("incomplete_store");
+  }
 }
 
 function canonicalUtc(raw: unknown): raw is string {
@@ -242,26 +301,13 @@ export class AtomicDexieJournal {
         // this same object store. A stale tab cannot save between the
         // pre-delete check and deletion of the previous principal's journal.
         if (logoutFence) throw new JournalError("logout_in_progress");
-        if ((!prior && (snapshotBefore || rows.length > 0)) ||
-            (prior && (!snapshotBefore ||
-              !validSeq(prior.localSeq) ||
-              !(SYNC_STATES as readonly string[]).includes(prior.state)))) {
-          throw new JournalError("incomplete_store");
-        }
-        if (prior?.state === "CONFLICT" || prior?.state === "RECOVERY_REQUIRED") {
-          throw new JournalError("sticky_state");
-        }
+        assertConsistent(documentId, prior, snapshotBefore, rows);
+        if (sticky(prior?.state)) throw new JournalError("sticky_state");
         const high = prior?.localSeq ?? 0;
         // Cross-tab optimistic CAS: a stale tab must not overwrite a newer
         // local snapshot even though IndexedDB serializes the actual writes.
         if (expectedLocalSeq !== high) {
           throw new JournalError("stale_local_sequence");
-        }
-        if (rows.some((row) =>
-          row.documentId !== documentId || !validSeq(row.localSeq, 1) ||
-          row.localSeq > high || typeof row.tx?.clientTransactionId !== "string"
-        )) {
-          throw new JournalError("incomplete_store");
         }
         if (rows.some((row) => row.tx.clientTransactionId === tx.clientTransactionId)) {
           throw new JournalError("duplicate_transaction");
@@ -276,7 +322,12 @@ export class AtomicDexieJournal {
         const pending: PendingTransaction = {
           documentId, localSeq, tx, queuedAt: savedAt,
         };
-        const meta: SyncMeta = { documentId, localSeq, state: "LOCAL_DURABLE" };
+        // A send in flight stays owed: the marker survives the save, or a
+        // reload would send the new row on a base that may already be gone.
+        const meta: SyncMeta = {
+          documentId, localSeq, state: "LOCAL_DURABLE",
+          ...(prior?.awaitingReceipt ? { awaitingReceipt: prior.awaitingReceipt } : {}),
+        };
 
         // A failure in any later put MUST roll back every earlier put.
         await this.db.snapshots.put(snapshot);
@@ -285,6 +336,100 @@ export class AtomicDexieJournal {
         return { localSeq, snapshot, pending, meta };
       },
     ));
+  }
+
+  /**
+   * Records that `sent` is about to leave, BEFORE the request does: the
+   * marker (`awaitingReceiptFor`) and SYNCING in one transaction. A hold
+   * already on `sent` is kept as it is; a hold on another row, or a diverged
+   * one, refuses (`held_elsewhere`), since `planDrain` would never send it.
+   */
+  async beginSend(documentId: string, sent: PendingTransaction): Promise<SyncMeta> {
+    if (!validDocumentId(documentId) || !validSent(documentId, sent)) {
+      throw new JournalError("invalid_input");
+    }
+    return this.whileUsable(() => this.db.transaction(
+      "rw", this.db.snapshots, this.db.pending, this.db.meta, this.db.control,
+      async () => {
+        const { prior, rows } = await this.readForAnswer(documentId);
+        if (sticky(prior.state)) throw new JournalError("sticky_state");
+        if (!rows.some((row) => sameRow(row, sent))) throw new JournalError("not_queued");
+        const held = prior.awaitingReceipt;
+        if (held && (isDiverged(held) || !sameRow(held, sent))) {
+          throw new JournalError("held_elsewhere");
+        }
+        const meta: SyncMeta = {
+          ...prior, state: "SYNCING", awaitingReceipt: held ?? awaitingReceiptFor(sent),
+        };
+        await this.db.meta.put(meta);
+        return meta;
+      },
+    ));
+  }
+
+  /**
+   * Records the server's answer to `sent`. Call `outcomeToEvents` first: only
+   * an outcome it verified has an `ackedRevision`, and one it found settled
+   * changes nothing here (`nextAwaitingReceipt`).
+   *
+   * Rows up to `sent.localSeq` are deleted only when the answer is a verified
+   * receipt for `sent`, `sent` is still queued and the hold is released; the
+   * snapshot's base revision then moves forward, never back. `state` (null
+   * keeps the stored one) may be SYNCED only when that deletion happened and
+   * left the queue empty (`unconfirmed_sync`), in the same transaction.
+   * A CONFLICT or RECOVERY_REQUIRED stays until a recovery decision.
+   */
+  async recordAnswer(
+    documentId: string, sent: PendingTransaction, outcome: DrainOutcome, state: SyncState | null,
+  ): Promise<AnswerResult> {
+    if (!validDocumentId(documentId) || !validSent(documentId, sent) ||
+        (state !== null && !ANSWER_STATES.has(state))) {
+      throw new JournalError("invalid_input");
+    }
+    return this.whileUsable(() => this.db.transaction(
+      "rw", this.db.snapshots, this.db.pending, this.db.meta, this.db.control,
+      async () => {
+        const { prior, snapshot, rows } = await this.readForAnswer(documentId);
+        if (sticky(prior.state) && state !== null && state !== prior.state) {
+          throw new JournalError("sticky_state");
+        }
+        const after = nextAwaitingReceipt(sent, outcome, prior.awaitingReceipt ?? null);
+        const acked = ackedRevision(outcome);
+        const settles = acked !== null && after === null && rows.some((row) => sameRow(row, sent));
+        const remaining = settles ? rows.filter((row) => row.localSeq > sent.localSeq) : rows;
+        if (state === "SYNCED" && (!settles || remaining.length > 0)) {
+          throw new JournalError("unconfirmed_sync");
+        }
+        const meta: SyncMeta = { ...prior, state: state ?? prior.state };
+        if (after) meta.awaitingReceipt = after;
+        else delete meta.awaitingReceipt;
+        if (settles) {
+          await this.db.pending.bulkDelete(
+            rows.filter((row) => row.localSeq <= sent.localSeq)
+              .map((row): [string, number] => [documentId, row.localSeq]),
+          );
+          if (acked > snapshot.revision) await this.db.snapshots.put({ ...snapshot, revision: acked });
+        }
+        await this.db.meta.put(meta);
+        return { meta, pending: remaining, ackedRevision: settles ? acked : null };
+      },
+    ));
+  }
+
+  /** Fence and consistency checks shared by the send bookkeeping. */
+  private async readForAnswer(documentId: string): Promise<{
+    prior: SyncMeta; snapshot: JournalSnapshot; rows: PendingTransaction[];
+  }> {
+    const [logoutFence, prior, snapshot, rows] = await Promise.all([
+      this.db.control.get("logout"),
+      this.db.meta.get(documentId),
+      this.db.snapshots.get(documentId),
+      this.db.pending.where("documentId").equals(documentId).sortBy("localSeq"),
+    ]);
+    if (logoutFence) throw new JournalError("logout_in_progress");
+    assertConsistent(documentId, prior, snapshot, rows);
+    if (!prior || !snapshot) throw new JournalError("not_queued");
+    return { prior, snapshot, rows };
   }
 
   close(): void {
