@@ -48,6 +48,25 @@ SELECT is((SELECT count(*) FROM evidence.validate_segment_descriptor_v2(pg_temp.
   0::bigint, 'missing fields are rejected');
 SELECT is((SELECT count(*) FROM evidence.validate_segment_descriptor_v2(jsonb_set(pg_temp.descriptor(), '{sequenceFrom}', '1.5'), repeat('b',64))),
   0::bigint, 'fractional sequence numbers are rejected');
+-- An integral number written with a fraction (1.0) keeps that form in jsonb
+-- text; it must come back as "invalid" (no row), never as a cast error.
+CREATE FUNCTION pg_temp.outcome(p_descriptor jsonb) RETURNS text LANGUAGE plpgsql AS $$
+BEGIN
+  RETURN CASE WHEN EXISTS (SELECT 1 FROM evidence.validate_segment_descriptor_v2(p_descriptor, repeat('b',64)))
+    THEN 'valid' ELSE 'invalid' END;
+EXCEPTION WHEN OTHERS THEN
+  RETURN 'error ' || SQLSTATE;
+END
+$$;
+SELECT is(pg_temp.outcome(jsonb_set(pg_temp.descriptor(), ARRAY[v.field], v.value::jsonb)), 'invalid',
+  v.field || ' written as ' || v.value || ' is invalid without an error')
+FROM (VALUES
+  (1, 'sequenceFrom', '1.0'), (2, 'sequenceTo', '1.0'), (3, 'eventCount', '1.0'),
+  (4, 'payloadBytes', '123.0'), (5, 'payloadBytes', '12300e-2')
+) AS v (n, field, value)
+ORDER BY v.n;
+SELECT is(pg_temp.outcome(jsonb_set(pg_temp.descriptor(), '{payloadBytes}', '1.23e2')), 'valid',
+  'an exponent that jsonb stores as a plain integer (1.23e2 is 123) stays valid');
 SELECT is((SELECT count(*) FROM evidence.validate_segment_descriptor_v2(jsonb_set(pg_temp.descriptor(), '{eventCount}', '5001'), repeat('b',64))),
   0::bigint, 'event counts over the protocol limit are rejected');
 SELECT is((SELECT count(*) FROM evidence.validate_segment_descriptor_v2(jsonb_set(pg_temp.descriptor(), '{segmentHash}', to_jsonb(repeat('c',64))), repeat('b',64))),

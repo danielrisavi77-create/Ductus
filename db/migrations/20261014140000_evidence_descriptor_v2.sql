@@ -111,6 +111,12 @@ BEGIN
      OR (p_descriptor->'predecessorSegmentHash' <> 'null'::jsonb
          AND (pg_catalog.jsonb_typeof(p_descriptor->'predecessorSegmentHash') <> 'string'
               OR p_descriptor->>'predecessorSegmentHash' !~ '^[0-9a-f]{64}$'))
+     -- jsonb keeps an integral number written with a fraction (1.0) in that
+     -- form; only plain digits may reach the bigint/integer casts below.
+     OR p_descriptor->>'sequenceFrom' !~ '^[0-9]+$'
+     OR p_descriptor->>'sequenceTo' !~ '^[0-9]+$'
+     OR p_descriptor->>'eventCount' !~ '^[0-9]+$'
+     OR p_descriptor->>'payloadBytes' !~ '^[0-9]+$'
      OR (p_descriptor->>'sequenceFrom')::numeric <> trunc((p_descriptor->>'sequenceFrom')::numeric)
      OR (p_descriptor->>'sequenceTo')::numeric <> trunc((p_descriptor->>'sequenceTo')::numeric)
      OR (p_descriptor->>'eventCount')::numeric <> trunc((p_descriptor->>'eventCount')::numeric)
