@@ -11,8 +11,11 @@ GRANT ductus_evidence TO ductus_identity WITH INHERIT FALSE, SET TRUE;
 
 SET LOCAL ROLE ductus_identity;
 
+-- The domain id is signed into receipt v2 as evidenceDomainId: a lowercase
+-- canonical UUID version 4 (docs/BACKEND.md 4.1), so the table holds no other.
 CREATE TABLE evidence.domain (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid()
+    CHECK (id::text ~ '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'),
   institution_id uuid NOT NULL REFERENCES identity.institution (id),
   region text NOT NULL CHECK (region ~ '^[a-z0-9]+(-[a-z0-9]+)*$'),
   created_at timestamptz NOT NULL DEFAULT now(),
