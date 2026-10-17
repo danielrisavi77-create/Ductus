@@ -7,14 +7,16 @@ const CSS = readFileSync(join(process.cwd(), "app", "globals.css"), "utf8");
 
 /** The declarations of the first rule whose selector is exactly `selector`. */
 function rule(selector: string): string {
-  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = new RegExp(`(?:^|\\n)${escaped}\\s*\\{([^}]*)\\}`).exec(CSS);
-  if (!match) throw new Error(`no rule for ${selector}`);
-  return match[1];
+  const start = CSS.split("\n").findIndex((line) => line.trim() === `${selector} {`);
+  if (start === -1) throw new Error(`no rule for ${selector}`);
+  const lines = CSS.split("\n").slice(start + 1);
+  const end = lines.findIndex((line) => line.trim() === "}");
+  return lines.slice(0, end === -1 ? undefined : end).join("\n");
 }
 
 function token(block: string, name: string): string | undefined {
-  return new RegExp(`${name}:\\s*([^;]+);`).exec(block)?.[1].trim().toLowerCase();
+  const line = block.split("\n").find((l) => l.trim().startsWith(`${name}:`));
+  return line?.slice(line.indexOf(":") + 1).replace(";", "").trim().toLowerCase();
 }
 
 describe("design tokens (D-123)", () => {
