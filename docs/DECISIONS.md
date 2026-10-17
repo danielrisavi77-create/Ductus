@@ -135,6 +135,14 @@ Trag: komentari na issueu #87 `issuecomment-6127202099`, `6127287778` i `6133470
 | D-113 | **Potvrđeno 12. 10. 2026. (Daniel; `6127202099`).** Mijenja D-109 u dijelu o reviewu: neovisni review najprije daje Grok (`grok-by-xai`); Claude daje review samo kad su iscrpljene i Grok i Codex pretplata. QA za `critical` PR i dalje mora doći s drugog Appa od reviewera (`docs/ENGINEERING_SYSTEM.md` §6), pa uz Grok review QA daje Claude ili Codex. Gate se ne mijenja | Odluka vlasnika dok su Claude pretplata i Codex kvota bile iscrpljene, a Grok dostupan |
 | D-114 | **Potvrđeno 12. 10. 2026. (Daniel; `6127202099`, `6127287778`, `6133470901`, #308 `6133266741`).** Iznimke od zamrzavanja D-108: odmrznuti su #220, #221, #180, #94, #270, #266, #234 i #262; #308 (DAN-200) ulazi kao izričita iznimka (spojen istog dana uz vlasnikov `Owner-Override` koji preskače samo QA, #308 `6133550175`); #282 i #283 ne čekaju. Uz to: #94 ide putem (a), samo Mistral, i dijeli se na manje PR-ove (§14 t. 3); kanonska inačica šest skillova s popisa `knownDrift` u `tests/unit/skill-copies.test.ts` je `.agents/skills/`; #291 i #296 idu bez DAN oznake; #298 ide prije #297. Ostatak D-108 vrijedi | Vlasnikove odluke o opsegu iz istog dana; D-108 navodi popis PR-ova koji čekaju, a taj popis je ovim odlukama zastario |
 
+## Odlučeno (17. 10. 2026.): odjava
+
+Trag: komentar na issueu #87 `issuecomment-6233309491` (vlasnikova odluka u sesiji orkestratora, uz sigurnosni nalaz F-072). Broj D-118 dodijeljen je ovim PR-om; D-115 do D-117 rezervirani su u otvorenom PR-u #345.
+
+| Broj | Odluka | Razlog |
+| --- | --- | --- |
+| D-118 | **Potvrđeno 17. 10. 2026. (Daniel; `6233309491`).** Odjava uvijek zatvara sesiju na poslužitelju i kolačić sesije, i kad postoje nesinkronizirane promjene. Nepredani lokalni zapis ostaje u pregledniku vezan samo uz tog studenta, nedostupan drugoj osobi, i nastavlja se kad se isti student ponovno prijavi. Mijenja kriterij prihvata 13 u `docs/PRODUCT.md` §13 i redak o odjavi u `docs/ARCHITECTURE.md` (sigurnosne mjere) | Blokirana odjava ostavljala je sesiju otvorenom na zajedničkom računalu; ovako se rad ne gubi, a sljedeća osoba ne ulazi u tuđu sesiju |
+
 ## Prijedlozi koji čekaju potvrdu
 
 | Broj | Odluka | Prijedlog |
