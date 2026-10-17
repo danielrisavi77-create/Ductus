@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;background:#0F110E;color:#E9EBE6;font-family:"Instrument Sans",system-ui,sans-serif;font-size:13px}
+*{box-sizing:border-box}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+button:disabled{cursor:not-allowed}
+textarea,input,select{font:inherit;color:#E9EBE6}
+a{color:#8FB0E0;text-decoration:none}
+a:hover{color:#B3CAEC}
+:focus-visible{outline:2px solid #8FD1B9;outline-offset:2px;border-radius:6px}
+::selection{background:#D9AE5B55}
+</style>
+</helmet>
+<div data-screen-label="Istraga" style="min-height:100vh;display:flex;flex-direction:column">
+  <header style="position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:14px;padding:10px 20px;border-bottom:1px solid #232722;background:#121511;flex-wrap:wrap">
+    <span style="font-family:Newsreader,Georgia,serif;font-size:20px;font-weight:600">Ductura</span>
+    <span style="font-size:12.5px;color:#8E958D">Istraga · Završni rad · Student A</span>
+    <nav aria-label="Koraci istrage" style="margin-left:auto;display:flex;gap:2px;flex-wrap:wrap">
+      <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="6"><button type="button" onClick="{{ t.on }}" aria-current="{{ t.cur }}" style="{{ t.style }}">{{ t.label }}</button></sc-for>
+    </nav>
+  </header>
+
+  <main style="flex:1;width:100%;max-width:980px;margin:0 auto;padding:40px 24px 80px;display:flex;flex-direction:column;align-items:center;gap:24px">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center">
+      <span style="font-size:12px;color:#8E958D">{{ who }}</span>
+      <h1 style="margin:0;font-family:Newsreader,Georgia,serif;font-size:clamp(30px,4.4vw,44px);font-weight:300;letter-spacing:-.02em;line-height:1.1">{{ heading }}</h1>
+      <span style="font-size:12.5px;color:#A6ADA5">{{ statusLine }}</span>
+    </div>
+
+    <sc-if value="{{ s1 }}" hint-placeholder-val="{{ true }}">
+      <section style="width:min(560px,100%);background:#141712;border:1px solid #232722;border-radius:14px;padding:24px;display:flex;flex-direction:column;gap:14px">
+        <dl style="margin:0;display:grid;grid-template-columns:max-content minmax(0,1fr);gap:7px 14px;font-size:13px"><dt style="color:#8E958D">Rad</dt><dd style="margin:0">Čitanje naglas i rječnik djece u prvim razredima</dd><dt style="color:#8E958D">Student</dt><dd style="margin:0">Student A</dd><dt style="color:#8E958D">Obuhvat</dt><dd style="margin:0">Cijeli rad, od potvrde obavijesti 1. 10. 2026.</dd></dl>
+        <label style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:#A6ADA5">Razlog sumnje<textarea value="{{ reason }}" onChange="{{ setReason }}" rows="4" disabled="{{ requested }}" placeholder="Opiši što te navodi na sumnju. Obrazloženje vide koordinator i student." style="background:#0F110E;border:1px solid #2C312B;border-radius:9px;padding:10px 12px;font-size:13px;line-height:1.5;resize:vertical"></textarea></label>
+        <span style="font-size:12px;line-height:1.5;color:#8E958D">Zahtjev odobrava koordinator ili etičko povjerenstvo. Student dobiva obavijest čim se istraga otvori i vidi isti prikaz kao ti.</span>
+        <div style="display:flex;justify-content:center"><button type="button" onClick="{{ sendReq }}" disabled="{{ reqDis }}" style="{{ reqStyle }}">{{ reqLabel }}</button></div>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{ s2 }}" hint-placeholder-val="{{ false }}">
+      <section style="width:min(560px,100%);background:#141712;border:1px solid #232722;border-radius:14px;padding:24px;display:flex;flex-direction:column;gap:14px">
+        <sc-if value="{{ noReq }}" hint-placeholder-val="{{ false }}"><span style="text-align:center;color:#8E958D">Još nema zahtjeva. Mentor ga šalje u koraku 1.</span></sc-if>
+        <sc-if value="{{ requested }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;color:#8E958D">Nastavnik A traži istragu · {{ reqDate }}</span><p style="margin:0;font-size:13.5px;line-height:1.55;white-space:pre-wrap">{{ reason }}</p></div>
+          <label style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:#A6ADA5">Odlučuje<select value="{{ approver }}" onChange="{{ setApprover }}" disabled="{{ decided }}" style="background:#0F110E;border:1px solid #2C312B;border-radius:8px;padding:8px 10px;font-size:13px"><option>Koordinator FPZG-a</option><option>Etičko povjerenstvo FPZG-a</option></select></label>
+          <label style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:#A6ADA5">Obrazloženje odluke<textarea value="{{ apNote }}" onChange="{{ setApNote }}" rows="2" disabled="{{ decided }}" style="background:#0F110E;border:1px solid #2C312B;border-radius:9px;padding:9px 12px;font-size:13px;resize:vertical"></textarea></label>
+          <div style="display:flex;justify-content:center;gap:10px"><button type="button" onClick="{{ reject }}" disabled="{{ decided }}" style="padding:10px 16px;border-radius:9px;border:1px solid #2C312B;color:#C5CBC3">Odbij</button><button type="button" onClick="{{ approve }}" disabled="{{ decided }}" style="{{ apStyle }}">Odobri i obavijesti studenta</button></div>
+          <sc-if value="{{ decidedNote }}" hint-placeholder-val="{{ false }}"><span role="status" style="text-align:center;font-size:12.5px;color:#8FD1B9">{{ decidedNote }}</span></sc-if>
+        </sc-if>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{ s3 }}" hint-placeholder-val="{{ false }}">
+      <section style="width:min(560px,100%);background:linear-gradient(180deg,#191D18,#141712);border:1px solid #2A2F29;border-radius:16px;padding:28px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center">
+        <sc-if value="{{ notOpen }}" hint-placeholder-val="{{ false }}"><span style="color:#8E958D">Obavijest se šalje kad se istraga odobri.</span></sc-if>
+        <sc-if value="{{ isOpen }}" hint-placeholder-val="{{ false }}">
+          <span style="font-size:12px;color:#8E958D">Obavijest · e-pošta i u aplikaciji · {{ openDate }}</span>
+          <b style="font-family:Newsreader,Georgia,serif;font-size:22px;font-weight:600;line-height:1.3">Otvorena je istraga za tvoj završni rad</b>
+          <p style="margin:0;font-size:13.5px;line-height:1.6;color:#C5CBC3;max-width:46ch;text-wrap:pretty">Mentor Nastavnik A zatražio je istragu, a {{ approverLc }} ju je odobrio. Istraga obuhvaća cijeli rad. Vidiš isti prikaz kao mentor: kada si pisao i kako je tekst nastajao.</p>
+          <div style="width:100%;padding:12px 14px;background:#0F110E;border-radius:10px;text-align:left;display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;color:#8E958D">Razlog koji je naveo mentor</span><span style="font-size:13px;line-height:1.5;white-space:pre-wrap">{{ reason }}</span></div>
+          <span style="font-size:13px">Rok za pisano očitovanje: <b>{{ dueDate }}</b> (15 dana)</span>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center"><button type="button" onClick="{{ goView }}" style="padding:10px 18px;border-radius:9px;background:#232722;font-weight:600">Otvori prikaz istrage</button><button type="button" onClick="{{ goReply }}" style="padding:10px 18px;border-radius:9px;background:#6FBFA5;color:#0E1C17;font-weight:600">Napiši očitovanje</button></div>
+          <span style="font-size:11.5px;color:#767D75">Ocjena se ne mijenja dok istraga traje.</span>
+        </sc-if>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{ locked }}" hint-placeholder-val="{{ false }}"><section style="width:min(520px,100%);padding:28px;background:#141712;border:1px solid #232722;border-radius:14px;text-align:center;display:flex;flex-direction:column;gap:6px"><b style="font-size:14px">Zapis je zatvoren</b><span style="font-size:13px;line-height:1.55;color:#A6ADA5">Zapis unosa i vrijeme pisanja otvaraju se tek kad koordinator ili etičko povjerenstvo odobri istragu.</span></section></sc-if>
+    <sc-if value="{{ s4 }}" hint-placeholder-val="{{ false }}">
+      <span style="font-size:12px;color:#8E958D;text-align:center">Isti prikaz vide mentor i student. Svaki pristup upisuje se u dnevnik.</span>
+      <section aria-labelledby="sess-h" style="width:100%;background:#141712;border:1px solid #232722;border-radius:14px;padding:20px 22px;display:flex;flex-direction:column;gap:12px">
+        <b id="sess-h" style="text-align:center;font-size:14px">Vremenska crta sesija</b>
+        <div style="display:grid;grid-template-columns:150px minmax(0,1fr) 170px;gap:14px;font-size:11px;color:#767D75"><span></span><span style="position:relative;height:14px"><sc-for list="{{ ticks }}" as="tk" hint-placeholder-count="5"><span style="{{ tk.st }}">{{ tk.l }}</span></sc-for></span><span></span></div>
+        <sc-for list="{{ sessions }}" as="x" hint-placeholder-count="3">
+          <button type="button" onClick="{{ x.go }}" title="Reproduciraj od početka ove sesije" style="display:grid;grid-template-columns:150px minmax(0,1fr) 170px;gap:14px;align-items:center;font-size:12.5px;text-align:left;padding:6px 0;border-radius:8px" style-hover="background:#191D18">
+            <span style="display:flex;flex-direction:column;gap:1px"><span>{{ x.day }}</span><span style="color:#8E958D">{{ x.span }}</span></span>
+            <span style="position:relative;height:12px;border-radius:6px;background:repeating-linear-gradient(90deg,#0F110E 0 calc(25% - 1px),#1E221D calc(25% - 1px) 25%)"><span style="{{ x.bar }}"></span><sc-for list="{{ x.marks }}" as="m" hint-placeholder-count="0"><span title="{{ m.t }}" style="{{ m.st }}"></span></sc-for></span>
+            <span style="color:#A6ADA5">{{ x.dur }} · {{ x.ops }}</span>
+          </button>
+        </sc-for>
+        <span style="display:flex;justify-content:center;flex-wrap:wrap;gap:6px 18px;font-size:12.5px;color:#C5CBC3;padding-top:4px;border-top:1px solid #1E221D"><sc-for list="{{ origin }}" as="o" hint-placeholder-count="3"><span><b style="font-weight:600">{{ o.n }}</b> <span style="color:#8E958D">{{ o.k }}</span></span></sc-for></span>
+        <span style="display:flex;justify-content:center;gap:16px;font-size:11.5px;color:#8E958D"><span style="display:flex;gap:6px;align-items:center"><i style="width:14px;height:6px;border-radius:3px;background:#4A7A69"></i>tipkanje</span><span style="display:flex;gap:6px;align-items:center"><i style="width:4px;height:12px;border-radius:2px;background:#D3AC63"></i>lijepljenje</span></span>
+      </section>
+      <section aria-labelledby="play-h" style="width:100%;background:#141712;border:1px solid #232722;border-radius:14px;padding:20px 22px;display:flex;flex-direction:column;gap:14px">
+        <b id="play-h" style="text-align:center;font-size:14px">Reprodukcija nastanka teksta</b>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center">
+          <button type="button" onClick="{{ togglePlay }}" aria-label="{{ playLabel }}" style="width:40px;height:40px;border-radius:50%;background:#6FBFA5;color:#0E1C17;font-size:14px;font-weight:700">{{ playIcon }}</button>
+          <input type="range" min="0" max="{{ evMax }}" value="{{ k }}" onChange="{{ setK }}" aria-label="Položaj u zapisu" style="flex:1;min-width:200px;accent-color:#6FBFA5">
+          <span style="display:flex;gap:2px;background:#0F110E;padding:2px;border-radius:7px"><sc-for list="{{ speeds }}" as="v" hint-placeholder-count="3"><button type="button" onClick="{{ v.on }}" aria-pressed="{{ v.sel }}" style="{{ v.style }}">{{ v.label }}</button></sc-for></span>
+        </div>
+        <span style="display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:6px 14px;font-size:12.5px;color:#A6ADA5"><span>Unos {{ k }} od {{ evMax }} · {{ kTime }} · <span style="{{ kOpStyle }}">{{ kOp }}</span></span><button type="button" onClick="{{ toPaste }}" style="padding:3px 9px;border-radius:6px;font-size:12px;color:#D3AC63;border:1px solid #3A3426">Idi na lijepljenje</button></span>
+        <div style="background:#F4F1EA;color:#1A1D19;border-radius:10px;box-shadow:0 1px 0 #ffffff14 inset,0 20px 40px -20px #000c;padding:clamp(18px,4vw,36px);min-height:180px;font-family:Newsreader,Georgia,serif;font-size:17px;line-height:1.75;white-space:pre-wrap;text-wrap:pretty">{{ before }}<span style="{{ lastStyle }}">{{ last }}</span><span style="display:inline-block;width:2px;height:1.1em;vertical-align:-.15em;background:#2F6F5A"></span>{{ after }}</div>
+      </section>
+      <section aria-labelledby="log-h" style="width:min(560px,100%);display:flex;flex-direction:column;align-items:center;gap:8px">
+        <b id="log-h" style="font-size:13px">Dnevnik pristupa</b>
+        <sc-for list="{{ access }}" as="a" hint-placeholder-count="3"><div style="display:flex;gap:14px;font-size:12.5px"><span style="min-width:150px;text-align:right;color:#8E958D">{{ a.t }}</span><span style="min-width:220px">{{ a.w }}</span></div></sc-for>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{ s5 }}" hint-placeholder-val="{{ false }}">
+      <section style="width:min(640px,100%);background:#141712;border:1px solid #232722;border-radius:14px;padding:24px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center">
+        <span style="{{ chainBadge }}">{{ chainStatus }}</span>
+        <span style="font-size:12.5px;line-height:1.55;color:#A6ADA5;max-width:52ch">Svaki unos nosi hash prethodnog. Ako se ijedan unos izmijeni ili ukloni, lanac se prekida od tog mjesta. Hashevi se računaju SHA-256 u ovom pregledniku.</span>
+        <div style="width:100%;overflow-x:auto;text-align:left">
+          <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:520px">
+            <thead><tr style="color:#8E958D"><th scope="col" style="text-align:right;font-weight:500;padding:6px 8px">#</th><th scope="col" style="text-align:left;font-weight:500;padding:6px 8px">Vrijeme</th><th scope="col" style="text-align:left;font-weight:500;padding:6px 8px">Unos</th><th scope="col" style="text-align:left;font-weight:500;padding:6px 8px">Hash</th><th scope="col" style="padding:6px 8px"></th></tr></thead>
+            <tbody><sc-for list="{{ chainRows }}" as="r" hint-placeholder-count="8"><tr style="border-top:1px solid #1E221D"><td style="text-align:right;padding:6px 8px;color:#8E958D">{{ r.i }}</td><td style="padding:6px 8px;white-space:nowrap">{{ r.t }}</td><td style="padding:6px 8px;font-family:ui-monospace,Menlo,Consolas,monospace">{{ r.op }}</td><td style="padding:6px 8px;font-family:ui-monospace,Menlo,Consolas,monospace;color:#A6ADA5">{{ r.h }}</td><td style="{{ r.okStyle }}">{{ r.ok }}</td></tr></sc-for></tbody>
+          </table>
+        </div>
+        <span style="font-size:11.5px;color:#767D75">Prikazani su prvih 6 unosa, unosi oko lijepljenja i zadnja 2.</span>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center"><button type="button" onClick="{{ reverify }}" style="padding:9px 16px;border-radius:9px;background:#232722;font-weight:600">Provjeri ponovno</button><button type="button" onClick="{{ toggleTamper }}" style="padding:9px 14px;border-radius:9px;border:1px dashed #4A5049;color:#D3AC63">{{ tamperLabel }}</button></div>
+      </section>
+    </sc-if>
+
+    <sc-if value="{{ s6 }}" hint-placeholder-val="{{ false }}">
+      <div style="width:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:18px;align-items:start">
+        <section style="background:#141712;border:1px solid #232722;border-radius:14px;padding:22px;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;text-align:center"><b style="font-size:14px">Očitovanje studenta</b><span style="font-size:12px;color:#8E958D">Rok {{ dueDate }}</span></div>
+          <textarea value="{{ reply }}" onChange="{{ setReply }}" rows="7" disabled="{{ replied }}" aria-label="Očitovanje" placeholder="Objasni kako je tekst nastao. Mentor i odlučitelj vide očitovanje u cijelosti." style="background:#0F110E;border:1px solid #2C312B;border-radius:9px;padding:10px 12px;font-size:13px;line-height:1.55;resize:vertical"></textarea>
+          <div style="display:flex;justify-content:center"><button type="button" onClick="{{ sendReply }}" disabled="{{ replyDis }}" style="{{ replyStyle }}">{{ replyLabel }}</button></div>
+        </section>
+        <section style="background:#141712;border:1px solid #232722;border-radius:14px;padding:22px;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;text-align:center"><b style="font-size:14px">Ishod</b><span style="font-size:12px;color:#8E958D">{{ approver }}</span></div>
+          <div role="radiogroup" aria-label="Ishod" style="display:flex;flex-direction:column;gap:6px">
+            <sc-for list="{{ outcomes }}" as="o" hint-placeholder-count="4"><button type="button" role="radio" aria-checked="{{ o.selS }}" onClick="{{ o.pick }}" disabled="{{ closed }}" style="{{ o.style }}"><span style="{{ o.dot }}"></span><span>{{ o.t }}</span></button></sc-for>
+          </div>
+          <textarea value="{{ outNote }}" onChange="{{ setOutNote }}" rows="3" disabled="{{ closed }}" aria-label="Obrazloženje ishoda" placeholder="Obrazloženje. Vidi ga student." style="background:#0F110E;border:1px solid #2C312B;border-radius:9px;padding:10px 12px;font-size:13px;resize:vertical"></textarea>
+          <div style="display:flex;justify-content:center"><button type="button" onClick="{{ close }}" disabled="{{ closeDis }}" style="{{ closeStyle }}">{{ closeLabel }}</button></div>
+          <sc-if value="{{ closeNote }}" hint-placeholder-val="{{ false }}"><span role="status" style="text-align:center;font-size:12.5px;color:#8FD1B9">{{ closeNote }}</span></sc-if>
+        </section>
+      </div>
+    </sc-if>
+  </main>
+  <footer style="padding:16px;text-align:center;font-size:11.5px;color:#767D75">Izmišljeni podaci · demo istrage</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const T0 = Date.UTC(2026, 9, 14, 17, 2, 0);
+const S1 = "Čitanje naglas u prvim razredima često se opisuje kao jedna od najjednostavnijih aktivnosti za razvoj rječnika.";
+const S2 = " Djeca kojoj se svakodnevno čita pokazuju bogatiji rječnik od vršnjaka (Autor A, 2019b: 14).";
+const S3 = " Učinak ipak ovisi o tome razgovara li se s djecom o pročitanom, postavljaju li im se pitanja i potiče li ih se da priču prepričaju vlastitim riječima.";
+function rng(seed) { return () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }; }
+function build() {
+  const r = rng(7), ev = []; let t = T0, len = 0, sp = 0;
+  const type = (str, typoEvery) => { for (let i = 0; i < str.length; i++) { t += 110 + Math.floor(r() * 220); if (typoEvery && i && i % typoEvery === 0) { ev.push({ t, op: "i", pos: len, s: "x" }); len++; t += 300; ev.push({ t, op: "d", pos: len - 1, n: 1 }); len--; t += 150; } ev.push({ t, op: "i", pos: len, s: str[i] }); len++; if (str[i] === " ") { sp++; if (sp % 4 === 0) t += 60000 + Math.floor(r() * 180000); } } };
+  type(S1, 37);
+  t = Date.UTC(2026, 9, 15, 19, 5, 0); type(S2, 41);
+  t += 95000; ev.push({ t, op: "i", pos: len, s: S3, paste: true }); len += S3.length;
+  t = Date.UTC(2026, 9, 16, 20, 1, 0); const p = (S1 + S2).indexOf("bogatiji");
+  for (let i = 0; i < 8; i++) { t += 140; ev.push({ t, op: "d", pos: p + 7 - i, n: 1 }); }
+  let pos = p; for (const c of "veći") { t += 180; ev.push({ t, op: "i", pos: pos++, s: c }); }
+  return ev;
+}
+const EV = build();
+const pad = n => String(n).padStart(2, "0");
+const loc = ms => { const d = new Date(ms + 2 * 3600e3); return { day: d.getUTCDate() + ". " + (d.getUTCMonth() + 1) + ". " + d.getUTCFullYear() + ".", hm: pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()), hms: pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()) + ":" + pad(d.getUTCSeconds()) }; };
+async function sha(s) { const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, "0")).join(""); }
+const OUT = ["Zatvoreno bez nalaza", "Razgovor sa studentom", "Upućeno stegovnom postupku", "Ocjena se ne mijenja"];
+class Component extends DCLogic {
+  state = { tab: 0, reason: "Treći odlomak Uvoda stilom se razlikuje od ostatka rada i pojavio se odjednom između dvije runde.", requested: false, reqDate: "", approver: "Koordinator FPZG-a", apNote: "", decision: null, openDate: "", k: EV.length, playing: false, speed: 10, chain: null, stored: null, tamper: false, reply: "", replied: false, out: null, outNote: "", closed: false };
+  async componentDidMount() {
+    let h = await sha("zadatak:FPZG-ZR-7K2|student:A"); const stored = [];
+    for (const e of EV) { h = await sha(h + JSON.stringify(e)); stored.push(h); }
+    this.setState({ stored }, () => this.verify());
+  }
+  componentWillUnmount() { clearInterval(this.iv); }
+  async verify() {
+    const ev = EV.map((e, i) => this.state.tamper && i === 120 ? Object.assign({}, e, { s: "y" }) : e);
+    let h = await sha("zadatak:FPZG-ZR-7K2|student:A"), bad = -1; const res = [];
+    for (let i = 0; i < ev.length; i++) { h = await sha(h + JSON.stringify(ev[i])); const ok = bad < 0 && h === this.state.stored[i]; if (!ok && bad < 0) bad = i; res.push(bad < 0); }
+    this.setState({ chain: { res, bad } });
+  }
+  play() { clearInterval(this.iv); this.iv = setInterval(() => { const k = Math.min(EV.length, this.state.k + Math.max(1, Math.round(this.state.speed / 5))); this.setState({ k, playing: k < EV.length }); if (k >= EV.length) clearInterval(this.iv); }, 40); }
+  renderVals() {
+    const s = this.state, open = s.decision === "ok";
+    const ch = s.chain;
+    const TABS = ["1 Zahtjev", "2 Odobrenje", "3 Obavijest", "4 Prikaz", "5 Lanac", "6 Očitovanje i ishod"];
+    const WHO = ["Nastavnik A · mentor · Pregled radova", s.approver, "Student A", "Nastavnik A i Student A", "Provjera lanca hasheva", "Student, mentor i odlučitelj"];
+    const H = ["Zahtjev za istragu", "Odobrenje istrage", "Obavijest studentu", "Prikaz istrage", "Provjera zapisa", "Očitovanje i ishod"];
+    const status = s.closed ? "Istraga zatvorena: " + s.out : open ? "Istraga otvorena " + s.openDate + " · rok za očitovanje 1. 11. 2026." : s.decision === "no" ? "Zahtjev odbijen" : s.requested ? "Zahtjev čeka odobrenje" : "Zahtjev nije poslan";
+    // reconstruct
+    let txt = "", lastA = -1, lastB = -1;
+    for (let i = 0; i < s.k; i++) { const e = EV[i]; if (e.op === "i") { txt = txt.slice(0, e.pos) + e.s + txt.slice(e.pos); if (i === s.k - 1) { lastA = e.pos; lastB = e.pos + e.s.length; } } else { txt = txt.slice(0, e.pos) + txt.slice(e.pos + e.n); if (i === s.k - 1) { lastA = lastB = e.pos; } } }
+    if (lastA < 0) lastA = lastB = txt.length;
+    const ke = EV[Math.max(0, s.k - 1)], kl = loc(ke.t);
+    // sessions
+    const sess = []; EV.forEach((e, i) => { const l = sess[sess.length - 1]; if (!l || e.t - l.end > 10 * 60e3) sess.push({ start: e.t, end: e.t, ins: 0, del: 0, paste: [] }); const c = sess[sess.length - 1]; c.end = e.t; if (e.op === "i") c.ins += e.s.length; else c.del += e.n; if (e.paste) c.paste.push(e); });
+    const sessions = sess.map(x => { const k0 = EV.findIndex(e => e.t === x.start); const a = loc(x.start), b = loc(x.end), dayStart = Date.UTC(new Date(x.start).getUTCFullYear(), new Date(x.start).getUTCMonth(), new Date(x.start).getUTCDate(), 15), W = 8 * 3600e3, L = v => Math.max(0, Math.min(100, (v - dayStart) / W * 100));
+      return { go: () => { clearInterval(this.iv); this.setState({ k: k0 + 1, playing: false }); }, day: a.day, span: a.hm + "–" + b.hm, dur: Math.max(1, Math.round((x.end - x.start) / 60e3)) + " min", ops: "+" + x.ins + " / −" + x.del + " znakova",
+        bar: { position: "absolute", top: 3, height: 6, borderRadius: 3, background: "#4A7A69", left: L(x.start) + "%", width: Math.max(.8, L(x.end) - L(x.start)) + "%" },
+        marks: x.paste.map(p => ({ t: "Lijepljenje " + p.s.length + " znakova u " + loc(p.t).hm, st: { position: "absolute", top: 0, width: 4, height: 12, borderRadius: 2, background: "#D3AC63", left: L(p.t) + "%" } })) }; });
+    // chain rows
+    const pi = EV.findIndex(e => e.paste), idxs = [...new Set([0, 1, 2, 3, 4, 5, 119, 120, 121, pi - 1, pi, pi + 1, EV.length - 2, EV.length - 1])].filter(i => i >= 0 && i < EV.length).sort((a, b) => a - b);
+    const opTxt = e => e.op === "i" ? (e.paste ? "lijepljenje " + e.s.length + " zn." : "+ „" + (s.tamper && EV.indexOf(e) === 120 ? "y" : e.s) + "”") + " @" + e.pos : "− " + e.n + " @" + e.pos;
+    const sp = v => ({ label: v + "×", sel: s.speed === v ? "true" : "false", on: () => this.setState({ speed: v }), style: { padding: "4px 9px", borderRadius: 5, fontSize: 12, background: s.speed === v ? "#2C312B" : "transparent", color: s.speed === v ? "#E9EBE6" : "#8E958D" } });
+    const btn = (on, primary) => ({ padding: "10px 18px", borderRadius: 9, fontWeight: 600, background: on ? (primary || "#6FBFA5") : "#232722", color: on ? "#0E1C17" : "#767D75" });
+    return {
+      tabs: TABS.map((label, i) => { const done = [s.requested, !!s.decision, open, open && s.k < EV.length, open && !!ch && ch.bad < 0, s.closed][i], avail = i < 2 || open; return { label: (done && s.tab !== i ? "✓ " : "") + label, cur: s.tab === i ? "page" : "false", on: () => this.setState({ tab: i }), style: { padding: "5px 10px", borderRadius: 7, fontSize: 12, background: s.tab === i ? "#232722" : "transparent", color: s.tab === i ? "#E9EBE6" : done ? "#8FD1B9" : avail ? "#8E958D" : "#4A5049" } }; }),
+      who: WHO[s.tab], heading: H[s.tab], statusLine: status,
+      s1: s.tab === 0, s2: s.tab === 1, s3: s.tab === 2, s4: s.tab === 3 && open, s5: s.tab === 4 && open, locked: (s.tab === 3 || s.tab === 4) && !open, s6: s.tab === 5,
+      reason: s.reason, setReason: e => this.setState({ reason: e.target.value }), requested: s.requested, noReq: !s.requested, reqDate: s.reqDate,
+      reqDis: s.requested || !s.reason.trim(), reqStyle: btn(!s.requested && !!s.reason.trim()), reqLabel: s.requested ? "Zahtjev poslan" : "Pošalji zahtjev",
+      sendReq: () => this.setState({ requested: true, reqDate: "17. 10. 2026. u 10:12", tab: 1 }),
+      approver: s.approver, approverLc: s.approver.charAt(0).toLowerCase() + s.approver.slice(1), setApprover: e => this.setState({ approver: e.target.value }),
+      apNote: s.apNote, setApNote: e => this.setState({ apNote: e.target.value }), decided: !!s.decision, apStyle: btn(!s.decision),
+      approve: () => this.setState({ decision: "ok", openDate: "17. 10. 2026." }), reject: () => this.setState({ decision: "no" }),
+      decidedNote: s.decision === "ok" ? "Odobreno. Student je obaviješten e-poštom i u aplikaciji." : s.decision === "no" ? "Odbijeno. Mentor je obaviješten, a zapis unosa ostaje zatvoren." : false,
+      isOpen: open, notOpen: !open, openDate: s.openDate, dueDate: "1. 11. 2026.",
+      goView: () => this.setState({ tab: 3 }), goReply: () => this.setState({ tab: 5 }),
+      sessions, evMax: EV.length, k: s.k,
+      origin: (() => { let ty = 0, pa = 0, de = 0; EV.forEach(e => { if (e.op === "d") de += e.n; else if (e.paste) pa += e.s.length; else ty += e.s.length; }); return [{ n: ty, k: "znakova tipkano" }, { n: pa, k: "zalijepljeno" }, { n: 0, k: "iz AI pomoćnika" }, { n: de, k: "obrisano" }]; })(),
+      ticks: [17, 19, 21, 23, 1].map((h, i) => ({ l: pad(h) + ":00", st: { position: "absolute", left: (i * 25) + "%", transform: i === 0 ? "none" : i === 4 ? "translateX(-100%)" : "translateX(-50%)" } })),
+      toPaste: () => { clearInterval(this.iv); this.setState({ k: pi + 1, playing: false }); },
+      access: [{ t: "17. 10. 2026. 10:31", w: "Nastavnik A · mentor" }, { t: "17. 10. 2026. 11:05", w: "Student A" }, { t: "17. 10. 2026. 11:40", w: s.approver }],
+      setK: e => { clearInterval(this.iv); this.setState({ k: +e.target.value, playing: false }); },
+      togglePlay: () => { if (s.playing) { clearInterval(this.iv); this.setState({ playing: false }); } else { this.setState({ playing: true, k: s.k >= EV.length ? 0 : s.k }, () => this.play()); } },
+      playIcon: s.playing ? "❚❚" : "▶", playLabel: s.playing ? "Zaustavi" : "Reproduciraj", speeds: [sp(1), sp(10), sp(50)],
+      kTime: kl.day + " " + kl.hms, kOp: ke.paste ? "lijepljenje " + ke.s.length + " znakova" : ke.op === "i" ? "unos" : "brisanje",
+      kOpStyle: { color: ke.paste ? "#D3AC63" : "#A6ADA5" },
+      before: txt.slice(0, lastA), last: txt.slice(lastA, lastB), after: txt.slice(lastB),
+      lastStyle: { background: ke.paste ? "#D3AC6355" : "#6FBFA540", borderRadius: 3 },
+      chainStatus: !ch ? "Računam hasheve…" : ch.bad < 0 ? "✓ Lanac je cjelovit · " + EV.length + " unosa" : "✕ Lanac je prekinut kod unosa " + (ch.bad + 1),
+      chainBadge: { padding: "8px 16px", borderRadius: 20, fontSize: 13.5, fontWeight: 600, background: !ch ? "#232722" : ch.bad < 0 ? "#6FBFA51F" : "#E07A6A26", color: !ch ? "#A6ADA5" : ch.bad < 0 ? "#8FD1B9" : "#F0A598" },
+      chainRows: idxs.map(i => ({ i: i + 1, t: loc(EV[i].t).day + " " + loc(EV[i].t).hms, op: opTxt(EV[i]), h: s.stored ? s.stored[i].slice(0, 16) + "…" : "…", ok: !ch ? "" : ch.res[i] ? "✓" : "✕", okStyle: { padding: "6px 8px", textAlign: "center", color: ch && !ch.res[i] ? "#F0A598" : "#8FD1B9" } })),
+      reverify: () => { this.setState({ chain: null }); this.verify(); },
+      toggleTamper: () => this.setState(st => ({ tamper: !st.tamper, chain: null }), () => this.verify()), tamperLabel: s.tamper ? "Vrati izvorni zapis" : "Demo: izmijeni unos 121",
+      reply: s.reply, setReply: e => this.setState({ reply: e.target.value }), replied: s.replied, replyDis: s.replied || !s.reply.trim() || !open,
+      replyStyle: btn(!s.replied && !!s.reply.trim() && open), replyLabel: s.replied ? "Očitovanje poslano" : open ? "Pošalji očitovanje" : "Istraga nije otvorena",
+      sendReply: () => this.setState({ replied: true }),
+      outcomes: OUT.map(t => ({ t, selS: s.out === t ? "true" : "false", pick: () => this.setState({ out: t }), dot: { flex: "none", width: 14, height: 14, borderRadius: "50%", border: "2px solid " + (s.out === t ? "#6FBFA5" : "#4A5049"), boxShadow: s.out === t ? "inset 0 0 0 3px #0F110E" : "none", background: s.out === t ? "#6FBFA5" : "transparent" }, style: { display: "flex", gap: 10, alignItems: "center", textAlign: "left", padding: "9px 12px", borderRadius: 9, fontSize: 13, background: s.out === t ? "#1E221D" : "#0F110E", border: "1px solid " + (s.out === t ? "#4A5049" : "#232722"), opacity: s.closed && s.out !== t ? .5 : 1 } })),
+      closed: s.closed, outNote: s.outNote, setOutNote: e => this.setState({ outNote: e.target.value }),
+      closeDis: s.closed || !s.out || !open, closeStyle: btn(!s.closed && !!s.out && open), closeLabel: s.closed ? "Istraga zatvorena" : "Zatvori istragu s ishodom",
+      close: () => this.setState({ closed: true }),
+      closeNote: s.closed ? "Student je obaviješten o ishodu i obrazloženju." + (s.replied ? "" : " Očitovanje nije stiglo prije zatvaranja.") : false,
+    };
+  }
+}
+</script>
+</body>
+</html>

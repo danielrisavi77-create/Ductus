@@ -147,6 +147,17 @@ Trag: komentar na issueu #87 `issuecomment-6233309491` (vlasnikova odluka u sesi
 | --- | --- | --- |
 | D-118 | **Potvrđeno 17. 10. 2026. (Daniel; `6233309491`).** Odjava uvijek zatvara sesiju na poslužitelju i kolačić sesije, i kad postoje nesinkronizirane promjene. Nepredani lokalni zapis ostaje u pregledniku vezan samo uz tog studenta, nedostupan drugoj osobi, i nastavlja se kad se isti student ponovno prijavi. Mijenja kriterij prihvata 13 u `docs/PRODUCT.md` §13 i redak o odjavi u `docs/ARCHITECTURE.md` (sigurnosne mjere) | Blokirana odjava ostavljala je sesiju otvorenom na zajedničkom računalu; ovako se rad ne gubi, a sljedeća osoba ne ulazi u tuđu sesiju |
 
+## Odlučeno (17. 10. 2026.): dizajn „Ductura editor i Pregled radova”
+
+Trag: komentar na issueu #87 `issuecomment-6235542273` (vlasnikove odluke uz predaju dizajna, DAN-211, F-4, F-8 do F-11; odgovori na pitanja u sesiji orkestratora). Dizajn je u `docs/design/ductura/`. Brojevi D-123 do D-126 dodijeljeni su ovim PR-om.
+
+| Broj | Odluka | Razlog |
+| --- | --- | --- |
+| D-123 | **Potvrđeno 17. 10. 2026. (Daniel; `issuecomment-6235542273`).** Boje: vrijedi tablica tokena iz predaje dizajna (naglasak `#6FBFA5`, tamna ljuska, tamni list zadano, prekidač za bijeli list). D-115 (#345) se mijenja samo u vrijednostima tokena; struktura tokena i prekidač lista ostaju. Zadatak #386 prilagođava vrijednosti | Vlasnik je predao dizajn s konačnim vrijednostima |
+| D-124 | **Potvrđeno 17. 10. 2026. (Daniel; `issuecomment-6235542273`).** Ime u sučelju je Ductura, u jednom ključu teksta (D-84). Repo, kod i dokumenti ostaju Ductus. Vezano uz D-94 (ime Ductura je uvjetno do provjere domena i žiga) | Jedno mjesto za promjenu imena ako se konačno ime promijeni |
+| D-125 | **Potvrđeno 17. 10. 2026. (Daniel; `issuecomment-6235542273`).** Opseg: gradi se cijeli prototip, ne samo demo dio iz tablice predaje. Redoslijed: najprije demo dio za 2. 11. 2026., zatim ostalo. Iznimka koju ova odluka ne mijenja: „Mjere (demo)” i bilježenje događaja unosa za mjere ne grade se dok vrijedi D-56 (pravno mišljenje i Constitution Gate C-14/C-19). Studentski prikaz ostaje u granicama `docs/PRODUCT.md` §5. Ima prednost pred §9 „Otvorena pitanja” u `docs/design/ductura/README.md` | Dizajn pokriva cijeli tok rada; demo ima prednost u redoslijedu, a D-56 ostaje na snazi |
+| D-126 | **Potvrđeno 17. 10. 2026. (Daniel; `issuecomment-6235542273`).** Profil FPZG: granice se uzimaju iz službenih Uputa FPZG-a; vlasnik upućuje na vlastiti repo Lekta kao izvor. Pravilo bez službenog izvora ne ulazi u profil | Provjere ne smiju izmišljati pravila fakulteta |
+
 ## Prijedlozi koji čekaju potvrdu
 
 | Broj | Odluka | Prijedlog |
