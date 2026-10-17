@@ -8,7 +8,7 @@ BEGIN;
 \ir fixtures/institution.inc
 SET LOCAL lc_messages TO 'C';
 
-SELECT plan(152);
+SELECT plan(154);
 
 -- The nine arguments of a version as SQL text, with up to two replaced.
 CREATE FUNCTION pg_temp.content(p_field text DEFAULT NULL, p_value text DEFAULT NULL,
@@ -231,8 +231,8 @@ SELECT is(
 RESET TimeZone;
 
 -- 4. A version is immutable (plan 20), for the owner role as well. The B-8
--- project FK prevents truncating its assignment parent; test the row trigger
--- separately from that FK guard.
+-- project FK prevents truncating its assignment parent; the row trigger and
+-- the TRUNCATE trigger are each tested apart from that FK guard.
 SET CONSTRAINTS ALL IMMEDIATE;
 SELECT is(
   pg_temp.ask_as('ductus_identity', 'anon', v.statement), 'ZD403: assignment version is immutable',
@@ -250,6 +250,35 @@ SELECT is(
   '0A000: cannot truncate a table referenced in a foreign key constraint',
   'the evidence project FK prevents truncating the assignment parent'
 );
+-- The FK guard above stops TRUNCATE before any trigger runs. With CASCADE the
+-- FK guard is satisfied, so the statement reaches the BEFORE TRUNCATE
+-- trigger; run as the operator, which no privilege check stops. A statement
+-- that does go through is rolled back here, so a missing trigger fails the
+-- assertion without emptying the fixture.
+CREATE FUNCTION pg_temp.try_rolled_back(p_sql text) RETURNS text
+LANGUAGE plpgsql AS $$
+BEGIN
+  EXECUTE p_sql;
+  RAISE EXCEPTION 'went through' USING ERRCODE = 'ZT001';
+EXCEPTION WHEN OTHERS THEN
+  RETURN SQLSTATE || ': ' || SQLERRM;
+END
+$$;
+SET LOCAL client_min_messages TO warning;
+SELECT is(
+  pg_temp.try_rolled_back('TRUNCATE institution.assignment_version, institution.assignment CASCADE'),
+  'ZD403: assignment version is immutable',
+  'nor can the operator empty the versions, even with CASCADE past the FK guard'
+);
+-- docs/TESTING.md 5: without the trigger the same TRUNCATE goes through.
+ALTER TABLE institution.assignment_version DISABLE TRIGGER assignment_version_no_truncate;
+SELECT is(
+  pg_temp.try_rolled_back('TRUNCATE institution.assignment_version, institution.assignment CASCADE'),
+  'ZT001: went through',
+  'with the TRUNCATE trigger disabled the same statement empties the versions'
+);
+ALTER TABLE institution.assignment_version ENABLE TRIGGER assignment_version_no_truncate;
+SET LOCAL client_min_messages TO notice;
 SET CONSTRAINTS ALL DEFERRED;
 SELECT throws_ok(
   $$ UPDATE institution.assignment_version SET title = title $$, 'ZD403', 'assignment version is immutable',

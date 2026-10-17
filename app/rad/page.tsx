@@ -1,12 +1,18 @@
+import { cookies } from "next/headers";
+
 import {
-  LocalDocumentProvider, LocalEditor, LocalSaveChip, LocalWordCount,
+  LocalDocumentProvider, LocalEditor, LocalLogout, LocalSaveChip, LocalWordCount,
 } from "@/components/editor/LocalDocument";
+import SessionObserver from "@/components/shell/SessionObserver";
 import WorkspaceShell, { RailSection } from "@/components/shell/WorkspaceShell";
 import { wordsHr } from "@/lib/i18n/hr";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import {
   LOCAL_DEMO_DOCUMENT_ID, LocalScopeConfigError, localScopeConfigFromEnv, resolveLocalScope,
 } from "@/lib/journal/local-scope";
+import { sessionPrincipal, sessionTag } from "@/server/auth/principal";
+import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
+import { withActor } from "@/server/db";
 
 export const metadata = {
   title: `${t.workspace.title} · ${t.app.name}`,
@@ -15,6 +21,8 @@ export const metadata = {
 // The demo journal flag is read when the request arrives, never baked into
 // the build: one build serves CI, the demo and a deployment without it.
 export const dynamic = "force-dynamic";
+
+const SIGN_IN_HREF = `/api/auth/login?returnTo=${encodeURIComponent("/rad")}`;
 
 /**
  * The local journal scope, or null. A refused configuration fails closed: the
@@ -32,15 +40,41 @@ function localScope(): string | null {
 }
 
 /**
- * The writing workspace. With the local demo journal on, the sheet is the
- * editor and the status bar shows the save state (F-3 step 1b); without it the
- * shell shows its empty states and a sheet that says it cannot be written in.
+ * The journal this request may open (F-5, plan #376). A signed-in person
+ * journals under their own scope, checked by the database on every request;
+ * a cookie that cannot be checked, or whose session has closed or expired,
+ * opens no journal at all and offers to sign in again. Only without any
+ * session cookie does the local demo journal remain, and it shows no one as
+ * signed in. `tag` and `at` name the cookie and the server time of this
+ * render for the tabs of the browser (D-118, src/client/session-marks.ts).
  */
-export default function WorkspacePage() {
-  const scope = localScope();
+async function journalFor(): Promise<{
+  scope: string | null; signedIn: boolean; signInAgain: boolean; tag: string | null; at: number;
+}> {
+  const at = Date.now();
+  const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  const tag = sessionTag(token);
+  const principal = await sessionPrincipal(token, withActor);
+  if (principal.kind === "signed-in") return { scope: principal.scope, signedIn: true, signInAgain: false, tag, at };
+  if (token !== undefined) return { scope: null, signedIn: false, signInAgain: true, tag, at };
+  return { scope: localScope(), signedIn: false, signInAgain: false, tag, at };
+}
+
+/**
+ * The writing workspace. With a journal, the sheet is the editor and the
+ * status bar shows the save state (F-3 step 1b); without one the shell shows
+ * its empty states and a sheet that says it cannot be written in. Signing out
+ * always ends the session (D-118, `LocalLogout`).
+ */
+export default async function WorkspacePage() {
+  const { scope, signedIn, signInAgain, tag, at } = await journalFor();
   const workspace = (
     <WorkspaceShell
       writingHref="/rad"
+      barExtra={scope && signedIn ? <LocalLogout /> : signInAgain ? (
+        // A plain link: the login route answers with a redirect, not a page.
+        <a className="btn" href={SIGN_IN_HREF}>{t.auth.signIn}</a>
+      ) : null}
       rail={
         <>
           <RailSection title={t.workspace.structure}>
@@ -87,11 +121,15 @@ export default function WorkspacePage() {
       </div>
     </WorkspaceShell>
   );
-  return scope ? (
-    <LocalDocumentProvider scope={scope} documentId={LOCAL_DEMO_DOCUMENT_ID}>
-      {workspace}
-    </LocalDocumentProvider>
-  ) : (
-    workspace
+  const session = signedIn && tag !== null ? { tag, at } : null;
+  return (
+    <>
+      <SessionObserver tag={tag} at={at} />
+      {scope ? (
+        <LocalDocumentProvider scope={scope} documentId={LOCAL_DEMO_DOCUMENT_ID} session={session}>
+          {workspace}
+        </LocalDocumentProvider>
+      ) : workspace}
+    </>
   );
 }
