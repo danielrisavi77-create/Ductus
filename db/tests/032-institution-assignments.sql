@@ -271,12 +271,21 @@ SELECT is(
   'nor can the operator empty the versions, even with CASCADE past the FK guard'
 );
 -- docs/TESTING.md 5: without the trigger the same TRUNCATE goes through.
+-- CASCADE also reaches the append-only evidence tables, whose own TRUNCATE
+-- triggers (041) would stop it with another message; they are set aside too,
+-- so this control isolates the assignment version trigger alone.
 ALTER TABLE institution.assignment_version DISABLE TRIGGER assignment_version_no_truncate;
+ALTER TABLE evidence.document_revision DISABLE TRIGGER evidence_revision_no_truncate;
+ALTER TABLE evidence.segment DISABLE TRIGGER evidence_segment_no_truncate;
+ALTER TABLE evidence.receipt DISABLE TRIGGER evidence_receipt_no_truncate;
 SELECT is(
   pg_temp.try_rolled_back('TRUNCATE institution.assignment_version, institution.assignment CASCADE'),
   'ZT001: went through',
   'with the TRUNCATE trigger disabled the same statement empties the versions'
 );
+ALTER TABLE evidence.receipt ENABLE TRIGGER evidence_receipt_no_truncate;
+ALTER TABLE evidence.segment ENABLE TRIGGER evidence_segment_no_truncate;
+ALTER TABLE evidence.document_revision ENABLE TRIGGER evidence_revision_no_truncate;
 ALTER TABLE institution.assignment_version ENABLE TRIGGER assignment_version_no_truncate;
 SET LOCAL client_min_messages TO notice;
 SET CONSTRAINTS ALL DEFERRED;
