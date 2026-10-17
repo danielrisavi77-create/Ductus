@@ -61,9 +61,39 @@ test("CI preserves full-history security tools and pins registry images by diges
   assert.match(ci, /fetch-depth:\s*0/);
   assert.match(ci, /0 commits scanned/);
   assert.match(ci, /- run: pnpm stack:up/);
-  assert.match(ci, /- run: pnpm test:integration/);
+  assert.match(ci, /run: pnpm test:integration/);
   assert.match(ci, /run: pnpm stack:down/);
   assert.match(ci, /- run: pnpm test:unit/);
+});
+
+test("DAN-189 race integration uses a dedicated loopback database and always removes it", () => {
+  const provisioning = ci.match(
+    /- name: Provision disposable DAN-189 race database\n(?<step>[\s\S]*?)(?=\n      - name: Integration tests)/,
+  )?.groups?.step;
+  assert.ok(provisioning, "the dedicated race database must be provisioned before integration tests");
+  assert.match(provisioning, /container="ductus-dan189-race-\$\{GITHUB_RUN_ID\}-\$\{GITHUB_RUN_ATTEMPT\}"/);
+  assert.match(provisioning, /port=54330/);
+  assert.match(provisioning, /--publish "127\.0\.0\.1:\$\{port\}:5432"/);
+  assert.match(provisioning, /POSTGRES_DB=ductus_dan189_race/);
+  assert.match(provisioning, /db\/local\/migrator\.sql/);
+  assert.match(provisioning, /dbmate --url .*--no-dump-schema --wait up --strict/);
+  assert.match(provisioning, /database_url=\$\{database_url\}.*GITHUB_OUTPUT/);
+
+  const integration = ci.match(
+    /- name: Integration tests\n(?<step>[\s\S]*?)(?=\n      - name: Remove disposable DAN-189 race database)/,
+  )?.groups?.step;
+  assert.ok(integration, "the integration test step must follow database provisioning");
+  assert.match(integration, /DAN189_RACE_DATABASE_URL:\s*\$\{\{\s*steps\.dan189_race_db\.outputs\.database_url\s*\}\}/);
+  assert.match(integration, /run: pnpm test:integration/);
+  assert.equal(ci.match(/DAN189_RACE_DATABASE_URL/g)?.length, 1, "race URL must be scoped only to integration tests");
+
+  const cleanup = ci.match(
+    /- name: Remove disposable DAN-189 race database\n(?<step>[\s\S]*?)(?=\n      - run: pnpm build)/,
+  )?.groups?.step;
+  assert.ok(cleanup, "race database cleanup must run before later stack checks");
+  assert.match(cleanup, /if: always\(\)/);
+  assert.match(cleanup, /docker container rm --force --volumes/);
+  assert.match(cleanup, /github\.run_id.*github\.run_attempt/);
 });
 
 test("Gitleaks negative smoke proves scanner rejection, not just a nonzero startup error", () => {
