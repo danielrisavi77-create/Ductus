@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { assignmentBody, createAssignment, type AssignmentDraft } from "./assignment-create";
+import { messagesHr as t } from "@/lib/i18n/messages.hr";
+
+import { AI_PURPOSES, assignmentBody, createAssignment, type AssignmentDraft } from "./assignment-create";
 
 const COURSE = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const KEY = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
@@ -97,5 +99,14 @@ describe("F-6 assignment transport contract", () => {
     expect(await createAssignment(COURSE, body, KEY, bad as unknown as typeof fetch)).toEqual({ kind: "unavailable" });
     const offline = vi.fn(async () => { throw new Error("offline"); });
     expect(await createAssignment(COURSE, body, KEY, offline as unknown as typeof fetch)).toEqual({ kind: "unavailable" });
+  });
+});
+
+describe("čl. 8 catalogue", () => {
+  it("labels exactly the database purposes, in the order of the article, and names its source", () => {
+    expect(Object.keys(t.teacher.tools.purposes).sort()).toEqual([...AI_PURPOSES].sort());
+    expect(AI_PURPOSES).toEqual(["formatting", "proofreading", "literature_search", "transcription", "translation"]);
+    expect(t.teacher.tools.source).toContain("21. 5. 2026., članak 8.");
+    expect(Object.keys(t.teacher.tools.alwaysBanned)).toHaveLength(10);
   });
 });

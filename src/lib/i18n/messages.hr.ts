@@ -87,26 +87,50 @@ export const hr = {
         unavailable: "Objava zadatka nije potvrđena. Pokušaj ponovno.",
       },
     },
-    // Item labels are a summary and wait for the verbatim text of the FPZG
-    // Pravilnik, čl. 8 (D-80); the keys of `purposes` are the database list.
+    // Verbatim text of the FPZG Smjernice, čl. 8 (owner decision on #87,
+    // 6236852400; text from #314, 6236916582). Words and punctuation are not
+    // edited, except the two places marked below. The keys of `purposes` are
+    // the database list (D-80).
     tools: {
-      heading: "Uporaba alata (FPZG čl. 8)",
+      heading: "Uporaba alata (FPZG Smjernice, čl. 8)",
       narrowOnly: "Popis možeš samo suziti.",
       allowed: "Dopušteno u ovom zadatku",
       banned: "Nije dopušteno",
       courseProhibits: "Pravila kolegija ne dopuštaju AI pomoć, pa ni ovaj zadatak.",
-      summaryNote: "Stavke su sažetak za demo. U aplikaciji se tekst preuzima doslovno iz Pravilnika FPZG-a.",
+      source:
+        "Izvor: Smjernice za uporabu generativne umjetne inteligencije u nastavi i izradi studentskih radova, Fakultetsko vijeće FPZG-a, 21. 5. 2026., članak 8. Treća natuknica stavka 1 skraćena je, a stavak 3 nije prikazan; puni tekst je u Smjernicama.",
       purposes: {
-        literature_search: "Pretraživanje i pronalaženje literature",
-        proofreading: "Jezična i pravopisna dorada vlastitog teksta",
-        translation: "Prijevod izvora za vlastito razumijevanje",
-        formatting: "Oblikovanje i uređivanje izgleda teksta",
-        transcription: "Prijepis vlastitih zvučnih zapisa",
+        formatting: "korištenje za formatiranje vlastitih pisanih radova;",
+        proofreading: "korištenje za lektoriranje i jezičnu provjeru vlastitih pisanih radova;",
+        // Not verbatim: the article's wording uses a word from the forbidden
+        // vocabulary (PRODUCT §5), as does stavak 3. Question on #314.
+        literature_search: "pronalaženje znanstvene i stručne literature (stavak 1, treća natuknica)",
+        transcription:
+          "transkribiranje intervjua te audiozapisa ili videozapisa, uz obveznu provjeru točnosti transkribiranog sadržaja i brigu o zaštiti osobnih podataka;",
+        translation:
+          "prevođenje sa stranih jezika na hrvatski jezik ili s hrvatskog jezika na strani jezik, uz obveznu provjeru značenja i terminologije.",
       },
+      conditions: {
+        own: "2) U svim navedenim slučajevima, konačni sadržaj mora proizaći iz individualnog promišljanja i rada studenta.",
+      },
+      alwaysBannedHead: "4) Neprimjerenom uporabom GenUI-ja smatra se:",
       alwaysBanned: {
-        generated: "Generiranje teksta koji se predaje kao vlastiti",
-        fabricated: "Izmišljanje ili preoblikovanje izvora i podataka",
-        translationAsOwn: "Predaja prijevoda kao vlastitog teksta",
+        texts: "generiranje dijelova ili cijelih usmenih izlaganja, podnesaka, eseja, seminarskih, završnih ili diplomskih radova;",
+        media:
+          "generiranje dijelova ili cijelih medijskih sadržaja, osim ako to nastavnik nije izričito zadao kao dio studentskog zadatka i samo u onom obliku u kojemu je to eksplicitno zadao;",
+        data:
+          "generiranje i kodiranje kvalitativnih i kvantitativnih podataka, osim ako to nastavnik nije izričito zadao kao dio studentskog zadatka i samo u onom obliku u kojemu je to eksplicitno zadao;",
+        graded:
+          "korištenje GenUI-ja za savladavanje i rješavanje ocjenskih problemskih i analitičkih zadataka, osim ako to nastavnik nije izričito zadao kao dio studentskog zadatka i samo u onom obliku u kojemu je to eksplicitno zadao;",
+        arguments: "preuzimanje argumenata, interpretacija ili zaključaka;",
+        asOwn:
+          "prikazivanje sadržaja generiranog GenUI-jem u pisanim radovima, usmenim izlaganjima i drugim oblicima radova i njihovo iznošenje kao svojih radova;",
+        unverified:
+          "korištenje neprovjerenih izvora, citata ili empirijskih podataka koji su nastali GenUI-jem te su dijelom ili u potpunosti izmišljeni;",
+        exams:
+          "korištenje GenUI-ja tijekom ispita ili provjera znanja ako to nije izrijekom dopušteno i samo u onom obliku u kojemu je to eksplicitno dopušteno;",
+        notes: "izrada sažetaka i vlastitih bilješki bez čitanja radova iz kojih se bilješke rade;",
+        ideas: "generiranje ideja za studentske radove bez aktivnog sudjelovanja studenta u razvoju argumentacije.",
       },
     },
     preview: {

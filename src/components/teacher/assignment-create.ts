@@ -7,9 +7,9 @@ export const WORK_TYPES = ["seminar_paper", "bachelor_thesis", "master_thesis", 
 export type WorkType = (typeof WORK_TYPES)[number];
 
 // The closed list of FPZG čl. 8 purposes (D-80), the same five keys the
-// database accepts. Labels are in the catalogue until the verbatim text of the
-// Pravilnik arrives.
-export const AI_PURPOSES = ["literature_search", "proofreading", "translation", "formatting", "transcription"] as const;
+// database accepts, in the order of the article. The verbatim item text is in
+// the catalogue.
+export const AI_PURPOSES = ["formatting", "proofreading", "literature_search", "transcription", "translation"] as const;
 export type AiPurpose = (typeof AI_PURPOSES)[number];
 
 export interface AssignmentDraft {

@@ -172,14 +172,18 @@ export default function TeacherSetup() {
                   <span>{tools.purposes[p]}</span>
                 </label>
               ))}
+              {Object.values(tools.conditions).map((text) => <p key={text} className={styles.hint}>{text}</p>)}
               <p className={styles.listHead}>{tools.banned}</p>
               <ul className={styles.banned}>
                 {AI_PURPOSES.filter((p) => !allowed.includes(p)).map((p) => (
                   <li key={p}><s>{tools.purposes[p]}</s></li>
                 ))}
+              </ul>
+              <p className={styles.hint}>{tools.alwaysBannedHead}</p>
+              <ul className={styles.banned}>
                 {Object.values(tools.alwaysBanned).map((text) => <li key={text}>{text}</li>)}
               </ul>
-              <p className={styles.hint}>{tools.summaryNote}</p>
+              <p className={styles.hint}>{tools.source}</p>
             </fieldset>
 
             <button className="btn" type="submit" disabled={!course}>
@@ -212,6 +216,8 @@ export default function TeacherSetup() {
             <li key={text}><span aria-hidden="true">× </span>{text}</li>
           ))}
         </ul>
+        {Object.values(tools.conditions).map((text) => <p key={text} className={styles.hint}>{text}</p>)}
+        <p className={styles.hint}>{tools.source}</p>
         <p className={styles.hint}>{t.teacher.preview.rest}</p>
       </aside>
     </div>
