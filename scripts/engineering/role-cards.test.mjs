@@ -244,7 +244,9 @@ test("the glob matcher handles the forms the rules use", () => {
 // (qa426b, review426c).
 const frontmatter = (text) =>
   text.replace(/^﻿/, "").match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/)?.[1] ?? "";
-const hasKey = (text, key) => new RegExp(`^(["']?)${key}\\1\\s*:`, "m").test(frontmatter(text));
+const frontmatterKeys = (text) =>
+  new Set([...frontmatter(text).matchAll(/^(["']?)([\w-]+)\1\s*:/gm)].map((m) => m[2]));
+const hasKey = (text, key) => frontmatterKeys(text).has(key);
 const hasPathsKey = (text) => hasKey(text, "paths");
 const FORBIDDEN_SKILL_KEYS = {
   paths: "paths: hides the skill from /name and the Skill tool (D-141)",
