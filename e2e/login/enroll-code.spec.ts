@@ -14,6 +14,9 @@ test("anonymous visitor sees no enrollment form", async ({ page }) => {
   await expect(page.getByRole("heading", { name: e.title })).toBeVisible();
   await expect(page.getByText(e.signedOut)).toBeVisible();
   await expect(page.getByLabel(e.label)).toHaveCount(0);
+  // The server page reads the sign-in URL from a module without "use client".
+  await expect(page.getByRole("link", { name: t.student.signIn }))
+    .toHaveAttribute("href", "/api/auth/login?returnTo=%2Fupis");
 });
 
 test("signed-in student gets no enrollment without the server", async ({ page }) => {

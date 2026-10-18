@@ -60,4 +60,8 @@ describe("F-7 enrollment code", () => {
     expect(Object.keys(t.student.enroll.errors).sort()).toEqual(
       ["forbidden", "invalid", "malformed", "refused", "tooManyAttempts", "unauthorized", "unavailable"]);
   });
+
+  it("promises no fixed wait after 429, since the institution sets the window", () => {
+    expect(t.student.enroll.errors.tooManyAttempts).not.toMatch(/minut|sat[ia]?\b|sekund|\d/i);
+  });
 });
