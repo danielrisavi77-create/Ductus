@@ -6,6 +6,7 @@ import {
   SYNC_STATE_LABELS,
   SYNC_TONES,
   chipContent,
+  localChip,
   type SyncTone,
 } from "./labels";
 import { SYNC_STATES, type SyncState } from "./states";
@@ -140,6 +141,53 @@ describe("chipContent", () => {
     for (const state of SYNC_STATES) {
       expect(chipContent(state)).toEqual(chipContent(state));
       expect(chipContent(state, true)).toEqual(chipContent(state, true));
+    }
+  });
+});
+
+describe("localChip", () => {
+  const ready = { blocked: false, recoveryRequired: false, failed: false };
+  const DURABLE = SYNC_STATE_LABELS.LOCAL_DURABLE.label;
+
+  it("says nothing while the journal is still being read", () => {
+    expect(localChip({ ...ready, saverState: null })).toBeNull();
+  });
+
+  it.each(SYNC_STATES)("shows the saver's own %s when nothing outranks it", (state) => {
+    expect(localChip({ ...ready, saverState: state })).toEqual({ ...chipContent(state), state });
+  });
+
+  it.each(SYNC_STATES)("a blocked tab outranks everything, %s included", (state) => {
+    for (const recoveryRequired of [false, true]) {
+      for (const failed of [false, true]) {
+        expect(localChip({ blocked: true, recoveryRequired, failed, saverState: state }))
+          .toEqual({ text: MULTI_TAB_BLOCKED_MESSAGE, tone: MULTI_TAB_BLOCKED_TONE, state: "blocked" });
+      }
+    }
+  });
+
+  it.each([...SYNC_STATES, null])("recovery outranks a failure and the saver's %s", (saverState) => {
+    for (const failed of [false, true]) {
+      expect(localChip({ blocked: false, recoveryRequired: true, failed, saverState })?.state)
+        .toBe("RECOVERY_REQUIRED");
+    }
+  });
+
+  it.each([...SYNC_STATES, null])("a failure outranks the saver's %s", (saverState) => {
+    expect(localChip({ ...ready, failed: true, saverState })?.state).toBe("ERROR");
+  });
+
+  it("says Spremljeno na uređaju only when the saver does and nothing has stopped", () => {
+    for (const blocked of [false, true]) {
+      for (const recoveryRequired of [false, true]) {
+        for (const failed of [false, true]) {
+          for (const saverState of [...SYNC_STATES, null]) {
+            const chip = localChip({ blocked, recoveryRequired, failed, saverState });
+            const durable = !blocked && !recoveryRequired && !failed && saverState === "LOCAL_DURABLE";
+            expect(chip?.text === DURABLE).toBe(durable);
+          }
+        }
+      }
     }
   });
 });

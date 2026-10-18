@@ -1,6 +1,6 @@
 ---
 name: ductus-testing-map
-description: "Map of every test layer in Ductus - vitest projects (unit, property, integration), colocated src tests, pgTAP in db/tests, Playwright e2e with both configs, scripts node --test suites, every test script in package.json, which CI job runs which layer, browser policy and mandatory adversarial scenarios, the never-delete-or-skip rule, and how synthetic fixtures are made. Use when adding, changing, running or locating tests, or touching vitest/playwright config or CI test steps in this repository."
+description: "Map of all Ductus test layers (vitest unit, property, integration; pgTAP, Playwright e2e, node --test), their scripts and CI jobs, and the never-skip rule. Use when adding, changing, running or locating tests or changing test config or CI test steps."
 ---
 
 # Ductus: router za testiranje

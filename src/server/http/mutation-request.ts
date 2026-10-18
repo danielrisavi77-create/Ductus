@@ -53,6 +53,7 @@ function canonicalOrigin(value: string): string {
 export type LimitedBodyResult =
   | { ok: true; bytes: Uint8Array }
   | { ok: false; status: 413; reason: "body_too_large" }
+  | { ok: false; status: 408; reason: "body_timeout" }
   | {
       ok: false;
       status: 400;
@@ -75,17 +76,20 @@ const DECIMAL = /^(0|[1-9][0-9]{0,15})$/;
  * returned as body_stream_error, never thrown, and no partial bytes leave
  * this function; the caller stores nothing and has no exception to forget.
  *
- * There is deliberately no time limit here: a slow client can hold the
- * request open while it trickles up to maxBytes. Bounding that is the
- * obligation of the route (B-8j2) or the infrastructure (Node server request
- * timeout or the reverse proxy), not of this reader.
+ * There is no default time limit. A mutation route that accepts a streamed
+ * body must pass timeoutMs or rely on a verified infrastructure request
+ * timeout; otherwise a slow client can hold the request open while it
+ * trickles up to maxBytes.
  */
 export async function readBodyWithLimit(
   request: Request,
   maxBytes: number,
+  timeoutMs?: number,
 ): Promise<LimitedBodyResult> {
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 0)
     throw new Error("maxBytes must be a non-negative safe integer");
+  if (timeoutMs !== undefined && (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1))
+    throw new Error("timeoutMs must be a positive safe integer");
 
   const header = request.headers.get("content-length");
   let declared: number | null = null;
@@ -111,11 +115,24 @@ export async function readBodyWithLimit(
   const reader = body.getReader();
   const chunks: Uint8Array[] = [];
   let size = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = Symbol("body_timeout");
+  const timeout = timeoutMs === undefined
+    ? undefined
+    : new Promise<typeof timedOut>((resolve) => {
+        timer = setTimeout(() => resolve(timedOut), timeoutMs);
+      });
   try {
     for (;;) {
       let chunk: ReadableStreamReadResult<Uint8Array>;
       try {
-        chunk = await reader.read();
+        const next = reader.read();
+        const result = timeout === undefined ? await next : await Promise.race([next, timeout]);
+        if (result === timedOut) {
+          await cancelQuietly(reader);
+          return { ok: false, status: 408, reason: "body_timeout" };
+        }
+        chunk = result;
       } catch {
         return { ok: false, status: 400, reason: "body_stream_error" };
       }
@@ -128,6 +145,7 @@ export async function readBodyWithLimit(
       chunks.push(chunk.value);
     }
   } finally {
+    if (timer !== undefined) clearTimeout(timer);
     reader.releaseLock();
   }
 
