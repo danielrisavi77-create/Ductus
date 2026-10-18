@@ -10,7 +10,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint .",
+    "lint": "node scripts/engineering/eslint-cached.mjs",
     "typecheck": "tsc --noEmit",
     "test:unit": "vitest run --project unit",
     "test:property": "vitest run --project property",
