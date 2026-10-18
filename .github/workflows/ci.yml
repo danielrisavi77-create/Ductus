@@ -33,7 +33,9 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # Speed only: ESLint (content strategy), tsc incremental and Next caches.
+      # Speed only: ESLint (content strategy, one folder per digest of
+      # eslint.config.mjs and the lockfile, scripts/engineering/eslint-cached.mjs),
+      # tsc incremental and Next caches.
       # A pull request saves into its own ref scope and can only restore from
       # itself or main. Never add a cache to a pull_request_target workflow.
       - name: Restore lint, typecheck and Next caches
@@ -43,9 +45,9 @@ jobs:
             node_modules/.cache/eslint
             tsconfig.tsbuildinfo
             .next/cache
-          key: build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          key: build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.mjs') }}-${{ github.sha }}
           restore-keys: |
-            build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+            build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.mjs') }}-
       - run: pnpm lint
       - run: pnpm typecheck
       - name: Engineering PR metadata

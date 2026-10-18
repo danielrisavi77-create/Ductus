@@ -97,26 +97,50 @@ test("every workflow action is pinned to a full commit SHA with its version comm
 
 // A privileged trigger runs with the base repository's cache scope; a cache
 // restored or saved there could carry attacker-controlled PR content.
-const PRIVILEGED = /^\s{2}(?:pull_request_target|workflow_run|issue_comment):/m;
+// The whole `on:` value, inline (scalar or flow array) and block form, with
+// comments dropped; a privileged event named anywhere in it counts.
+const onSection = (text) => {
+  const lines = text.split("\n");
+  const start = lines.findIndex((line) => /^["']?on["']?\s*:/.test(line));
+  if (start === -1) return "";
+  const section = [lines[start].replace(/^["']?on["']?\s*:/, "")];
+  for (const line of lines.slice(start + 1)) {
+    if (/^\S/.test(line)) break;
+    section.push(line);
+  }
+  return section.map((line) => line.replace(/#.*$/, "")).join("\n");
+};
+const isPrivileged = (text) => /\b(?:pull_request_target|workflow_run|issue_comment)\b/.test(onSection(text));
 const usesCache = (text) => /actions\/cache(?:\/(?:restore|save))?@/.test(text) || /^\s+cache(?:-dependency-path)?:/m.test(text);
 
 test("no cache in workflows with a privileged trigger; CI caches only in build and stack", () => {
-  const privileged = workflows.filter(({ text }) => PRIVILEGED.test(text));
+  const privileged = workflows.filter(({ text }) => isPrivileged(text));
   assert.ok(privileged.length > 0, "the engineering gate runs on pull_request_target");
   for (const { name, text } of privileged) {
     assert.ok(!usesCache(text), `${name}: privileged workflow must not use a cache`);
   }
-  assert.doesNotMatch(ci, PRIVILEGED, "ci.yml must not gain a privileged trigger");
+  assert.ok(!isPrivileged(ci), "ci.yml must not gain a privileged trigger");
   const jobs = ci.split(/^ {2}(?=[\w-]+:\s*$)/m);
   const cached = jobs.filter((job) => /actions\/cache@/.test(job)).map((job) => job.split(":")[0]);
   assert.deepEqual(cached, ["build", "stack"]);
 });
 
-test("the cache detector sees every form a workflow could use", () => {
+test("the build cache key changes with the ESLint config and the lockfile", () => {
+  const prefix = "build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.mjs') }}-";
+  assert.ok(ci.includes(`key: ${prefix}\${{ github.sha }}`), "build cache key");
+  assert.ok(ci.includes(`restore-keys: |\n            ${prefix}\n`), "build restore-keys");
+});
+
+test("the cache and trigger detectors see every form a workflow could use", () => {
   assert.ok(usesCache("      - uses: actions/cache@0123456789012345678901234567890123456789 # v6.1.0\n"));
   assert.ok(usesCache("      - uses: actions/cache/restore@0123456789012345678901234567890123456789 # v6\n"));
   assert.ok(usesCache("        with:\n          cache: pnpm\n"));
   assert.ok(!usesCache("      - run: pnpm lint --cache\n"));
-  assert.ok(PRIVILEGED.test("on:\n  pull_request_target:\n"));
-  assert.ok(!PRIVILEGED.test("on:\n  pull_request:\n"));
+  assert.ok(isPrivileged("on:\n  pull_request_target:\n"));
+  assert.ok(isPrivileged("on: [push, pull_request_target]\njobs:\n"));
+  assert.ok(isPrivileged("on: issue_comment\njobs:\n"));
+  assert.ok(isPrivileged("on: # note\n  workflow_run:\n    workflows: [CI]\n"));
+  assert.ok(isPrivileged("\"on\":\n  - pull_request_target\n"));
+  assert.ok(!isPrivileged("on:\n  pull_request:\njobs:\n  x:\n    name: issue_comment\n"));
+  assert.ok(!isPrivileged("on: [push] # pull_request_target later\n"));
 });
