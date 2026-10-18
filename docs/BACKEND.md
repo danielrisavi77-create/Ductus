@@ -351,7 +351,7 @@ Ugovor prije koda. **Odluka vlasnika (issue #87, komentari 6254642740 i 62547210
 
 1. **Zaseban kanal, ne evidencija.** D-24 odsječke zatvara do 30 s i vrijeme zaokružuje na minutu, pa evidencija nije dovoljno brza za prikaz uživo. Prikaz uživo zato ima vlastiti kanal: **zadnje stanje dokumenta** koje student objavljuje i koje ovlašteni čitaju.
    - Stanje nije dokaz: nema lanca hasheva, potpisa ni potvrde; ne ulazi u rekonstrukciju, predaju (B-12) ni sažetak procesa (B-13); ne čita i ne piše nijednu tablicu sheme `evidence`. Kanonski oblik dokumenta i hash dokumenta v2 (§4.1, D-133 i D-134 su PRIJEDLOG) ostaju netaknuti: kanal ih samo koristi.
-   - Šalje se cijeli kanonski dokument (JCS bajtovi sheme editora, isti oblik kao snimka iz §4.10 t. 1), nikad događaj, tipka, raspon izmjene, trajanje ili vrijeme klijenta. Iz kanala se zato ne može izračunati brzina, pauza ni ritam (`docs/PRODUCT.md` §5 pravilo 4; D-56 ostaje izvan opsega). Ne bilježi se ništa izvan editora.
+   - Šalje se cijeli kanonski dokument (JCS bajtovi sheme editora, isti oblik kao snimka iz §4.10 t. 1), nikad događaj, tipka, raspon izmjene, trajanje ili vrijeme klijenta. Kanal zato ne nosi tipke, vrijeme ni povijest, a Ductus iz njega ne računa brzinu, pauze ni ritam (`docs/PRODUCT.md` §5 pravilo 4; D-56 ostaje izvan opsega). Svojstvo samog prikaza uživo (D-142) jest da čitač vidi kad se stanje promijenilo, s točnošću svog pollinga (točka 7), i razliku dvaju stanja koja je vidio; ugovor to ne skriva, a obavijest (S3), DPIA i pravno mišljenje (D-55) moraju to reći točno ovako. Ne bilježi se ništa izvan editora.
    - Čuva se samo **zadnje** stanje: novi upis prepisuje prethodni. Nema povijesti, međustanja ni vremena upisa.
 2. **Tablica `collaboration.live_state`** (shema i vlasništvo kao §4.11: tablica i RPC-ovi u vlasništvu `ductus_identity`, opseg dokumenta iz `collaboration.document_scope`).
 
@@ -366,13 +366,15 @@ Ugovor prije koda. **Odluka vlasnika (issue #87, komentari 6254642740 i 62547210
    - PK (`document_id`, `institution_id`). Nema stranog ključa prema `evidence.document` (kao §4.11); postojanje dokumenta provjerava `document_scope` pri upisu.
    - **Nema stupca s vremenom ni brojačem.** `write_token` je neproziran: iz njega se ne čita broj upisa ni redoslijed. Vrijeme zadnjeg upisa ne postoji ni u tablici ni u odgovoru.
    - `ENABLE` i `FORCE ROW LEVEL SECURITY`, samo vlasnikova politika za `ductus_identity`. `ductus_app`, `ductus_worker` i `ductus_retention` nemaju nikakvu ovlast na tablici, ni `SELECT`; klijent piše i čita samo kroz RPC-ove iz točke 3.
-   - Rok čuvanja: klasa „Radne verzije” (`ARCHITECTURE.md` §3, C-21), briše se s dokumentom. Tekst rada u bazi ulazi u `pg_dump` i PITR (§4.10 t. 5 vrijedi i ovdje). `body` nikad ne ide u log; canary iz §4.9 pokriva i ovaj kanal.
+   - Rok čuvanja: klasa „Radne verzije” (`ARCHITECTURE.md` §3, C-21). Kaskade nema (nema stranog ključa prema dokumentu), pa redak briše samo `collaboration.delete_live_state(p_document_id text, p_institution_id uuid)` iz točke 3, koja se poziva u istoj transakciji kao brisanje dokumenta po roku i brisanje pri povlačenju studenta (D-12). Tekst rada u bazi ulazi u `pg_dump` i PITR (§4.10 t. 5 vrijedi i ovdje). `body` nikad ne ide u log; canary iz §4.9 pokriva i ovaj kanal.
 3. **RPC-ovi** (`SECURITY DEFINER`, `SET search_path = ''`, identitet i ustanova iz `current_actor()`, `EXECUTE` samo `ductus_app`):
    - `collaboration.publish_live_state(p_document_id text, p_expected_token uuid, p_body text) RETURNS TABLE (outcome text, write_token uuid)`. Smije samo student vlasnik (`collaboration.actor_role` = `student`, otvoreno članstvo) koji je potvrdio trenutnu verziju obavijesti zadatka (`institution.has_acknowledged_current`). Redak se zaključava (`FOR UPDATE`), pa je usporedba tokena i upis jedan korak. Ishodi:
      - `accepted`: `p_expected_token` jednak spremljenom (ili retka nema i parametar je `NULL`); `body` i hash se prepisuju, vraća se novi token.
      - `unchanged`: hash `p_body` jednak spremljenom; ništa se ne piše, vraća se trenutni token.
      - `conflict`: token zastario, ili je `NULL` a redak postoji; ništa se ne piše, vraća se trenutni token. Time zakašnjelo ponovno slanje ne može prepisati novije stanje.
    - `collaboration.read_live_state(p_document_id text, p_known_hash text) RETURNS TABLE (outcome text, content_hash text, body text)`. Ishodi: `state` (hash i tijelo), `unchanged` (`p_known_hash` jednak spremljenom; tijelo se ne šalje), `empty` (student još ništa nije objavio). Nikad ne vraća `write_token`, ID osoba, ustanovu ni vrijeme.
+   - `collaboration.delete_live_state(p_document_id text, p_institution_id uuid) RETURNS void`: `SECURITY DEFINER` u vlasništvu `ductus_identity`, `SET search_path = ''`, `EXECUTE` samo `ductus_retention` (ne `ductus_app`). Briše redak ako postoji; bez retka ne radi ništa. Ne prima ni ne vraća tijelo.
+   - **Redoslijed provjera u `publish_live_state`** (ishodi su tako međusobno isključivi): ovlast, valjanost ulaza, zaključavanje retka, zatim (a) hash `p_body` jednak spremljenom daje `unchanged` bez obzira na token; (b) inače token kao gore daje `accepted` ili `conflict`. Isto tijelo sa zastarjelim tokenom je dakle `unchanged` i vraća trenutni token, što objavljivaču samo osvježi token.
    - **Pogreške:** sesija bez aktera `ZD401`; svaki drugi odbijen slučaj, uključujući nepostojeći dokument, `ZD403` s istom porukom. Ovlast se provjerava **prije** valjanosti ulaza, pa neovlašten poziv s neispravnim ulazom dobiva `ZD403`, ne `ZD422`. Neispravan `p_body` vlasnika (prazan, iznad granice, neispravan oblik hasha u `p_known_hash`) je `ZD422` bez odjeka ulaza.
 4. **Ovlasti samo iz odnosa (Ustav C-23, `docs/PRODUCT.md` „Pristup nastaje isključivo iz odnosa”).** Odnos se računa pri svakom pozivu iz `document_scope` i `collaboration.actor_role`, bez predmemorije, pa uklonjeni nastavnik ili student gubi pristup odmah (§4.4).
 
@@ -398,7 +400,7 @@ Ugovor prije koda. **Odluka vlasnika (issue #87, komentari 6254642740 i 62547210
    - Kanal guranja (npr. `LISTEN/NOTIFY` i SSE) može kasnije zamijeniti polling bez promjene tablice i RPC-ova. **Pitanje za vlasnika (nije blokirajuće):** treba li ga uvesti prije pilota; ovisi o hostingu (D-08, dio o dobavljačima).
 8. **Prekid veze.**
    - Student bez mreže: editor i journal rade dalje neovisno o kanalu. Objavljivač čuva samo zadnje neposlano stanje (nema reda). Po povratku veze šalje ga sa zadnjim tokenom; na `conflict` preuzima vraćeni token i šalje ponovno (jedan pisač, D-34).
-   - Mentor vidi zadnje stanje koje je stiglo. Nema signala prisutnosti ni „student je izvan mreže”: kanal ne otkriva kad student piše ili ne piše.
+   - Mentor vidi zadnje stanje koje je stiglo. Nema zasebnog signala prisutnosti ni „student je izvan mreže”; čitač vidi samo je li se stanje promijenilo (točka 1).
    - Mentor bez mreže: stranica zadržava zadnji tekst i označava stanje **vlastite** veze; po povratku nastavlja s `If-None-Match`.
    - Odjava: objavljivač staje prije ograde odjave; redak ostaje.
    - Uklonjeni student ili nastavnik dobiva `ZD403` već pri sljedećem pozivu.
@@ -411,13 +413,15 @@ Ugovor prije koda. **Odluka vlasnika (issue #87, komentari 6254642740 i 62547210
 | --- | --- |
 | Student vlasnik: objava, ponovna objava istog tijela, čitanje | `accepted`, `unchanged`, `state` s istim bajtovima |
 | Student vlasnik: zastarjeli token; `NULL` token kad redak postoji | `conflict` s trenutnim tokenom, tijelo nepromijenjeno |
+| Student vlasnik: isto tijelo s važećim tokenom; isto tijelo sa zastarjelim tokenom | `unchanged` s trenutnim tokenom u oba slučaja, token se ne mijenja |
+| `delete_live_state` pod `ductus_retention`; brisanje dokumenta po roku i povlačenje studenta (D-12) | 0 redaka u `live_state` za taj dokument; `ductus_app` nema `EXECUTE` (`42501`) |
 | Student vlasnik bez potvrde trenutne verzije obavijesti (i nakon nove verzije zadatka) | objava `ZD403`, čitanje dopušteno |
 | Nastavnik kolegija | čitanje bajt-identično studentovu; objava `ZD403` |
 | Student B istog kolegija, nastavnik drugog kolegija iste ustanove, nastavnik sa zatvorenim članstvom, persona druge ustanove, administrator ustanove | `ZD403` na oba RPC-a, i s neispravnim ulazom |
 | Nepostojeći dokument | isti `ZD403` |
 | Bez sesije | `ZD401` |
 | Izravni `SELECT`/`INSERT`/`UPDATE`/`DELETE` pod `ductus_app`, `ductus_worker`, `ductus_retention` | `42501`; uz pogrešno dodijeljen grant 0 redaka (FORCE RLS) |
-| Katalog | `ductus_app` izvršava točno očekivani skup RPC-ova sheme `collaboration` (`bag_eq`); izlaz `read_live_state` nema stupca s tokenom, vremenom ni ID-om osobe; tablica nema stupca tipa `timestamptz` |
+| Katalog | `ductus_app` izvršava točno očekivani skup RPC-ova sheme `collaboration` (`bag_eq`), a `ductus_retention` samo `delete_live_state`; izlaz `read_live_state` nema stupca s tokenom, vremenom ni ID-om osobe; tablica nema stupca tipa `timestamptz` |
 | `CHECK` | prazno tijelo, tijelo iznad 2 097 152 bajta, hash koji ne odgovara tijelu odbijeni |
 | Evidencija | stanje dokumenta i segmenata jednako prije i poslije |
 
@@ -430,6 +434,7 @@ Ugovor prije koda. **Odluka vlasnika (issue #87, komentari 6254642740 i 62547210
 - Nastavnik još nema popis radova ni imena studenata (identitet ih ne čuva), pa FE-D10 ID dokumenta ne može dobiti iz postojećeg API-ja. **Pitanje za orkestratora:** kako FE-D10 u demou dolazi do ID-a rada.
 - Na `main` još nema produkcijskog puta koji stvara `evidence.document` (B-8); testovi ga postavljaju sami.
 - Poslužiteljsko ograničenje broja zahtjeva još ne postoji; učestalost iz točke 7 drži klijent.
+- Na `main` još nema puta brisanja dokumenta po roku ni povlačenja studenta (D-12); korak 2 uvodi `delete_live_state` i pgTAP redak, a poziva ga onaj PR koji uvodi taj put.
 
 ## 5. Što još nije potvrđeno (spike prije odluke)
 
