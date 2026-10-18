@@ -44,6 +44,7 @@ import {
 import { localChip, type LocalChip } from "@/domain/sync/labels";
 import type { SyncState } from "@/domain/sync/states";
 import { countWords, NODE_ID_ATTRIBUTE, tiptapToCanonical } from "@/editor/interop";
+import { startFreshHistory } from "@/editor/history";
 import { replaceWithStoredDocument } from "@/editor/identity";
 import { createEditorExtensions } from "@/editor/schema";
 import { StorableInput } from "@/editor/storable-input";
@@ -236,7 +237,7 @@ export function LocalDocumentProvider({
       abort.abort();
       if (!editor.isDestroyed) {
         editor.setEditable(false, false);
-        editor.commands.setContent("", { emitUpdate: false });
+        startFreshHistory(editor.view, "empty");
       }
       setWords(0);
       setPhase("signed-out");
@@ -299,6 +300,9 @@ export function LocalDocumentProvider({
       try {
         const result = await saver.load();
         if (disposed) return;
+        // Undo never reaches past this load: not into an earlier person's
+        // or document's sheet, nor into the one emptied when a session ended.
+        startFreshHistory(editor.view, "keep");
         saverRef.current = saver;
         setSnapshot(saver.snapshot());
         if (result.kind !== "unavailable" && result.document) {
@@ -417,7 +421,7 @@ export function LocalDocumentProvider({
     setLogoutNotice(null);
     if (editor && !editor.isDestroyed) {
       editor.setEditable(false, false);
-      editor.commands.setContent("", { emitUpdate: false });
+      startFreshHistory(editor.view, "empty");
     }
     await (locked ? locked.clear() : clearWithoutEditor(scope, documentId));
     return true;
