@@ -4,7 +4,7 @@ Sažetak nije izvor pravila. U sukobu vrijedi `docs/ENGINEERING_SYSTEM.md`; uz s
 
 ## Uloge i identitet
 
-- Normalno rade tri writera: Backend, Frontend i Platforma. Četvrti samo za potpuno neovisan zadatak; više od četiri nije dopušteno (§1, §13).
+- Normalno tri writera: Backend, Frontend i Platforma. Četvrti samo za potpuno neovisan zadatak; više od četiri nije dopušteno (§1, §13).
 - Autor PR-a nije njegov neovisni reviewer. Orkestrator ne piše proizvodni kod. Platforma ne potvrđuje sama da njezin sigurnosni gate hvata kvar; QA ga mora pokušati srušiti (§3).
 - Identitet agenta je `<runtime>:<slot>:<role>`. GitHub korisničko ime nije identitet (§4).
 
@@ -12,22 +12,22 @@ Sažetak nije izvor pravila. U sukobu vrijedi `docs/ENGINEERING_SYSTEM.md`; uz s
 
 - `low`: dokumentacija, copy bez promjene značenja, jednostavna konfiguracija. PR koji dira putanje ili zapise iz D-97 nije `low` (§5).
 - `standard`: frontend ponašanje, editor, adapteri, CI promjene, refaktori (§5).
-- `critical`: identity, authz, RLS, evidence, potpisi, session, submission, migracije koje mijenjaju ovlasti, `PRODUCT.md` §5 ili druga trust granica (§5).
-- Automatski risk floor računa najmanju razinu po putanjama. `CLAUDE.md`, `AGENTS.md`, `ENGINEERING_SYSTEM.md`, svaki workflow i svaka putanja iz D-97 su najmanje `critical`. Agent ne smije spustiti risk ispod semantičke ozbiljnosti promjene (§5).
+- `critical`, među ostalim: identity, authz, RLS, pgTAP matrica, evidence, potpisi, KMS, session, submission, retention, backup/restore, migracije koje mijenjaju ovlasti, `PRODUCT.md` §5 ili druga trust granica (§5).
+- Automatski risk floor računa najmanju razinu po putanjama. Među ostalim, `CLAUDE.md`, `AGENTS.md`, `ENGINEERING_SYSTEM.md`, svaki workflow i svaka putanja iz D-97 su najmanje `critical`. Agent ne smije spustiti risk ispod semantičke ozbiljnosti promjene (§5).
 
 ## Gate po razini
 
 - `low`: CI, dependency review kad je primjenjiv, jedan neovisni review ili Owner Override (§5).
 - `standard`: CI, dependency review, jedan neovisni reviewer na aktualnom headu; QA kad Orkestrator procijeni (§5).
-- `critical`: svi standard gateovi i zaseban QA PASS na aktualnom headu, uz pravila rada iz §14 (§5).
+- `critical`: svi standard gateovi, zaseban QA PASS na aktualnom headu, sintetički staging prolaz kad vrijedi `BACKEND.md` §6 t. 12 i pravila rada iz §14 (§5).
 - `critical` PR koji mijenja samo testove ili samo dokumente ne traži QA; review ostaje. PR koji mijenja i testove i dokumente nije izuzet (§5).
-- Za `critical` PASS reviewer i QA moraju biti različit GitHub App. Iznimke su kvotni fallback i druga Claude sesija (D-139), svaka uz svoje uvjete (§6).
+- Za `critical` PASS reviewer i QA moraju biti različit GitHub App. Iznimke, uz uvjete: kvotni fallback i druga Claude sesija (D-139) (§6).
 - `main`: PR obvezan, squash, obvezni statusi, nerazriješeni razgovori blokiraju spajanje (§10).
 
 ## Metadata i verdikti
 
 - PR nosi `Agent:`, `Risk:` i `Task:` (§6).
-- Review komentar počinje s `Agent-Review:`, uz `Review-Head` i `Review-Verdict`. QA komentar počinje s `QA-Agent:`, uz `QA-Head`, `QA-Verdict` i `QA-Scope` (§6).
+- Review komentar počinje s `Agent-Review:`, QA komentar s `QA-Agent:`; oba nose head i verdict (§6).
 - `FAIL` ili `BLOCK` bilo kojeg valjanog ne-autorskog reviewa ili QA-e drži gate blokiranim (§6).
 - Sesija koja je napisala plan napada ne daje review ni QA verdikt na PR-u tog zadatka (§6).
 
@@ -39,7 +39,7 @@ Sažetak nije izvor pravila. U sukobu vrijedi `docs/ENGINEERING_SYSTEM.md`; uz s
 
 ## Owner Override
 
-- Piše ga samo vlasnik repoa, zasebnim komentarom koji počinje s `Owner-Override:`, uz `Override-Head` i `Override-Reason`. Iznimka je, ne normalni tijek; governance dokaz, ne sigurnosna granica (§7).
+- Piše ga samo vlasnik repoa, zasebnim komentarom koji počinje s `Owner-Override:`, uz `Override-Head` i `Override-Reason`. Iznimka je i governance dokaz, ne sigurnosna granica (§7).
 
 ## Critical PR (D-106)
 
@@ -58,4 +58,4 @@ Sažetak nije izvor pravila. U sukobu vrijedi `docs/ENGINEERING_SYSTEM.md`; uz s
 
 ## Kontekst
 
-- Worker čita samo kanonske dokumente navedene u zadatku. Puni logovi testova čitaju se samo za pad (§11).
+- Worker čita samo kanonske dokumente navedene u zadatku (§11).
