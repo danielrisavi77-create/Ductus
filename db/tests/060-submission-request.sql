@@ -236,8 +236,12 @@ SELECT matches(pg_temp.ask_as('ductus_evidence', 'anon',
   '^ZD403:', 'the owner cannot move the request to another revision');
 SELECT matches(pg_temp.ask_as('ductus_evidence', 'anon', $$ DELETE FROM evidence.submission_request RETURNING 1 $$),
   '^ZD403:', 'the owner cannot delete a request');
-SELECT matches(pg_temp.ask_as('ductus_evidence', 'anon', $$ TRUNCATE evidence.submission_request $$),
+-- Submissions (061) reference requests, so TRUNCATE needs CASCADE; their own
+-- guard is set aside so this assertion isolates the request trigger.
+ALTER TABLE evidence.submission DISABLE TRIGGER evidence_submission_no_truncate;
+SELECT matches(pg_temp.ask_as('ductus_evidence', 'anon', $$ TRUNCATE evidence.submission_request CASCADE $$),
   '^ZD403:', 'the owner cannot truncate requests');
+ALTER TABLE evidence.submission ENABLE TRIGGER evidence_submission_no_truncate;
 
 -- Composite keys (F6, B2, D-103).
 SELECT matches(pg_temp.ask_as('ductus_evidence', 'anon', $$ INSERT INTO evidence.submission_request
