@@ -102,6 +102,16 @@ function useLocalDocument(): LocalDocumentValue {
 }
 
 /**
+ * The editor of the provider, for the toolbar and the heading list (F-8).
+ * They change the document only through editor commands, which reach the
+ * journal the same way typing does (`onUpdate`); whether writing is allowed
+ * is the editor's own `isEditable`, which only this provider sets.
+ */
+export function useLocalEditor(): Editor | null {
+  return useLocalDocument().editor;
+}
+
+/**
  * Whether the candidate holds exactly the ids the editor holds. The identity
  * plugin (#226) gives every block its id, so interop never mints one; if it
  * did, the journal would hold ids the editor lacks and a reload would not
