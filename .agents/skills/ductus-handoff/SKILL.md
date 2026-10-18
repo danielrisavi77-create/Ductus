@@ -15,6 +15,7 @@ Use when the context-budget notice appears, when a logical unit of work is done,
    - what is done, what is in progress, the exact next action;
    - checks run and their result on that SHA;
    - open questions, and anything waiting on Daniel.
+   - each trap you hit, as a line `Zamka: symptom; cause; what to do`; the orchestrator collects these into `docs/engineering/zamke.md`.
 4. Worker and control roles: tell the user in two lines where the handoff is and the one-line prompt for the fresh session (`ZADATAK <id>` plus the PR or issue link), then stop. Do not start new work in the old session.
 5. Orchestrator: do not stop and do not ask for a fresh session. After the handoff, compact the context (yourself if the runtime allows it, otherwise ask Daniel) and continue the loop.
 
