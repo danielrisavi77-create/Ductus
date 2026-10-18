@@ -1,6 +1,6 @@
 ---
 name: ductus-sync-journal
-description: "Detailed map of the Ductus sync and journal area - the local Dexie journal, the eight-state sync machine, drain planning, signed-receipt ACK, conflict, recovery, restore, logout fence and the serverSync wire contract. Use when changing or reviewing anything in src/domain/sync/, src/domain/serverSync/, src/lib/journal/ or their tests, or when a task touches SYNCED, ACK, offline, rebase, salvage or logout of local storage."
+description: "Ductus sync and journal: local Dexie journal, eight-state sync machine, drain, signed-receipt ACK, conflict, recovery, logout fence and serverSync wire contract. Use for src/domain/sync, src/domain/serverSync, src/lib/journal, SYNCED, ACK or offline."
 ---
 
 # Ductus: router za sinkronizaciju i journal

@@ -1,6 +1,6 @@
 ---
 name: ductus-app-map
-description: "Map of the whole Ductus application - stack and versions, layering of src/ and app/, which layer may import which, where db, tests, e2e, infra, scripts, config, spikes and plugins live, the path of one change through the system, environments, and a \"I need to change X, start here\" table pointing to the area skills. Use at the start of any task in this repository when you do not yet know which files or area skill apply."
+description: "Map of the Ductus app: stack, layers of src/ and app/ and allowed imports, where each area lives, and which area skill to open next. Use at the start of any task when you do not yet know which files or area skill apply."
 ---
 
 # Ductus: router za kartu repozitorija
