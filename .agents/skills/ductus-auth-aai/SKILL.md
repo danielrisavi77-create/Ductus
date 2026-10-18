@@ -1,6 +1,6 @@
 ---
 name: ductus-auth-aai
-description: "Use when touching Ductus login, sessions, cookies, identity or institution derivation, the fake OIDC provider, logout, HTTP mutation guards or the identity/session SQL - paths src/server/auth/, src/server/http/, src/server/db/ (open-session, with-actor), app/api/auth/, tests/unit/auth/, e2e/login/, playwright.login.config.ts, infra/fake-oidc/, db/migrations identity and open_session, db/tests 020-022. Hard rule D-09: students sign in only through AAI@EduHr."
+description: "Ductus login, sessions, cookies, identity, fake OIDC, logout and HTTP mutation guards. Use when touching src/server/auth, src/server/http, app/api/auth or the identity/session SQL. Hard rule D-09: students sign in only through AAI@EduHr."
 ---
 
 # Ductus: router za prijavu i identitet
