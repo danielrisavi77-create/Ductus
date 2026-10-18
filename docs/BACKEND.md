@@ -204,6 +204,15 @@ Pravila:
 
 Expand/migrate/contract i pgTAP u CI-ju bez `supabase start` vrijede i dalje.
 
+**Provjera podataka prije migracije `20261018130000_institution_plain_label_marks.sql` (#377, #446).** Migracija pooštrava `institution.is_plain_label` i staje ako neki spremljeni naziv kolegija, ustanove ili zadatka više ne prolazi. Prije deploya koji je primjenjuje pokreni nad tom bazom, s prijavom kojom radi dbmate:
+
+```powershell
+$env:DATABASE_URL = '<prijava dbmatea, lokalno postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus>'
+node src/server/db/plain-label-check.ts
+```
+
+Provjera čita pravilo i popis stupaca iz same migracije, pa radi isto i prije i nakon što je migracija primijenjena. Radi u transakciji `READ ONLY` kao `ductus_identity`, uloga pod kojom u migraciji radi zaštita, i ispisuje samo tablicu, stupac i primarni ključ svakog retka koji bi zaustavio migraciju, nikad sam naziv. Izlaz 0: takvih redaka nema; 1: redci su ispisani i deploy čeka vlasnikovu odluku o njima; 2: provjera nije mogla raditi. Nad produkcijom je pokreće operater, ne agent.
+
 ### 4.9 Opservabilnost i curenje sadržaja
 
 - Parametri baze: `log_statement=none` i da greška ne ispisuje naredbu s parametrima (provjeriti u B0.1 smije li se mijenjati; inače pozivati funkcije tako da tekst ne ide kroz parametre loga). Caddy access log bez query stringova; Next.js neuhvaćene greške bez tijela zahtjeva.
