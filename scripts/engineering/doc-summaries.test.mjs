@@ -7,9 +7,13 @@ import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { D97_PATHS, matchesPath, ownerCommandPaths } from "./protected-paths.mjs";
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SUMMARIES = [
-  { summary: "docs/ENGINEERING_SYSTEM-SAZETAK.md", full: "docs/ENGINEERING_SYSTEM.md" },];
+  { summary: "docs/ENGINEERING_SYSTEM-SAZETAK.md", full: "docs/ENGINEERING_SYSTEM.md" },
+  { summary: "docs/ORKESTRATOR-SAZETAK.md", full: "docs/ORKESTRATOR.md" },
+];
 const MAX_CHARS = 4000;
 
 const read = (rel) => readFileSync(path.join(root, rel), "utf8").replace(/^﻿/, "");
@@ -75,6 +79,13 @@ const loadRepoDoc = (name) => {
 for (const { summary, full } of SUMMARIES) {
   test(`${summary} cites only sections that exist`, () => {
     assert.deepEqual(checkSummary(read(summary), full, loadRepoDoc), []);
+  });
+  // Owner decision #87 issuecomment-6249418216: a summary sessions read first is
+  // guarded like the full document, so editing only the summary is a D-97 change.
+  test(`${summary} is a D-97 path, as ${full} is`, () => {
+    assert.ok(matchesPath(full, D97_PATHS), `${full} not in D97_PATHS`);
+    assert.ok(matchesPath(summary, D97_PATHS), `${summary} not in D97_PATHS`);
+    assert.deepEqual(ownerCommandPaths([`./${summary.toUpperCase()}`]), [summary.toUpperCase()]);
   });
 }
 
