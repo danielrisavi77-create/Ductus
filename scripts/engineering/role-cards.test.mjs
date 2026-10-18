@@ -235,3 +235,47 @@ test("the glob matcher handles the forms the rules use", () => {
   assert.ok(globMatches(".github/**", ".github/workflows/ci.yml"));
   assert.ok(!globMatches("src/editor/**", "src/editorial/x.ts"));
 });
+
+// Area skills may carry a `paths:` list so Claude Code offers them only on
+// matching files (DAN-213). The same live-glob rules apply as for path rules;
+// the app map stays unscoped because it is read before the area is known.
+const skillsDir = path.join(root, ".claude/skills");
+const skillPaths = (text) => {
+  const fm = text.match(/^---\n([\s\S]*?)\n---\n/)?.[1] ?? "";
+  if (!/^paths:/m.test(fm)) return null;
+  const m = fm.match(/^paths:\n((?: {2}- "[^"\n]+"(?:\n|$))+)/m);
+  return m ? [...m[1].matchAll(/- "([^"]+)"/g)].map((x) => x[1]) : [];
+};
+
+test("skill paths: lists are quoted globs that match tracked files", () => {
+  let scoped = 0;
+  for (const name of readdirSync(skillsDir).sort()) {
+    const file = path.join(skillsDir, name, "SKILL.md");
+    if (!existsSync(file)) continue;
+    const globs = skillPaths(read(file));
+    if (globs === null) continue;
+    scoped += 1;
+    assert.ok(globs.length > 0, `${name}: paths: must be a list of double-quoted globs`);
+    for (const glob of globs) {
+      assert.doesNotMatch(glob, /[{}[\]]/, `${name}: ${glob} must not use braces or classes`);
+      assert.doesNotMatch(glob, /^\.?\//, `${name}: ${glob} must be relative to the repo root`);
+      assert.ok(
+        tracked.some((f) => globMatches(glob, f)),
+        `${name}: ${glob} matches no tracked file`,
+      );
+    }
+  }
+  assert.ok(scoped > 0, "at least one area skill is path-scoped");
+  assert.equal(
+    skillPaths(read(path.join(skillsDir, "ductus-app-map", "SKILL.md"))),
+    null,
+    "ductus-app-map must not be path-scoped",
+  );
+});
+
+test("the skill paths: parser rejects unquoted and inline lists", () => {
+  assert.deepEqual(skillPaths('---\nname: x\npaths:\n  - "db/**"\n---\n'), ["db/**"]);
+  assert.deepEqual(skillPaths("---\nname: x\npaths:\n  - db/**\n---\n"), []);
+  assert.deepEqual(skillPaths("---\nname: x\npaths: db/**\n---\n"), []);
+  assert.equal(skillPaths("---\nname: x\n---\n"), null);
+});

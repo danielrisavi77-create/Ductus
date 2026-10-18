@@ -1,6 +1,11 @@
 ---
 name: ductus-ui-shell-i18n
-description: "Use when changing Ductus pages, layouts and UI shell - app/ (Next.js App Router routes, layout, globals.css, fonts), src/components/ (workspace shell, fonts test), src/lib/i18n/ (Croatian message catalogue and formatting), scripts/forbidden-terms/ (forbidden interface vocabulary scanner), or any user-visible text. Detailed map, text flow, the PRODUCT section 5 rules that bind what the interface may show, and change procedures."
+description: "Ductus pages, layouts and UI shell: app/ routes, src/components, the Croatian i18n catalogue and the forbidden terms scanner. Use when changing a page or any user-visible text; PRODUCT section 5 binds what the interface may show."
+paths:
+  - "app/**"
+  - "src/components/**"
+  - "src/lib/i18n/**"
+  - "scripts/forbidden-terms/**"
 ---
 
 # Ductus: router za sučelje, copy i UX

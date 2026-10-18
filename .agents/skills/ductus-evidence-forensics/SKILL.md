@@ -1,6 +1,14 @@
 ---
 name: ductus-evidence-forensics
-description: "Use when reading or changing Ductus evidence and forensics code - canonical JSON (JCS) and hashing, evidence segment/receipt formats and versions, signing and signed receipts, the institution/evidence-domain key, payload storage adapters (S3 store, storage domains with sealed keys), replay and reconstruction, size limits. Paths - src/domain/forensics/ (incl. golden-vectors), src/domain/evidence/, src/domain/json.ts, src/application/evidence/, src/application/ports/, src/adapters/evidence/, src/adapters/crypto/ and their tests. All of it is risk level critical."
+description: "Ductus evidence and forensics: JCS hashing, segment and receipt formats, signing, institution key, payload storage, replay and size limits. Use for src/domain/forensics, src/domain/evidence, src/adapters/evidence or src/adapters/crypto. Risk critical."
+paths:
+  - "src/domain/forensics/**"
+  - "src/domain/evidence/**"
+  - "src/domain/json.ts"
+  - "src/application/evidence/**"
+  - "src/application/ports/**"
+  - "src/adapters/evidence/**"
+  - "src/adapters/crypto/**"
 ---
 
 # Ductus: router za evidenciju i forenziku

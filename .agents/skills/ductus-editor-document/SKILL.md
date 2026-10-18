@@ -1,6 +1,12 @@
 ---
 name: ductus-editor-document
-description: "Use when changing or reviewing Ductus document code - src/editor/ (Tiptap schema, block identity plugin, interop, storable input and text), src/domain/document/ (canonical model, validation, normalisation, edit steps), src/domain/diff/, src/domain/citation/ (FPZG style, formatting), src/domain/collaboration/ (anchors, revision requests, share packages) and their tests. Detailed map, data flow, invariants and change procedures."
+description: "Ductus document code: Tiptap editor and schema (src/editor), canonical document model and edit steps, diff, FPZG citations and collaboration anchors. Use when changing or reviewing src/editor or src/domain/document, diff, citation or collaboration."
+paths:
+  - "src/editor/**"
+  - "src/domain/document/**"
+  - "src/domain/diff/**"
+  - "src/domain/citation/**"
+  - "src/domain/collaboration/**"
 ---
 
 # Ductus: router za editor i model dokumenta
