@@ -9,9 +9,9 @@ Kako više AI coding sesija radi na Ductusu istodobno, uključujući više Claud
 | Uloga | Posao | Vlasnik mapa | Model i napor |
 | --- | --- | --- | --- |
 | **Orkestrator** | Plan, `STATE.md`, dodjela zadataka, dnevnik, Owner queue, praćenje tokena. Ne piše kod. | `STATE.md`, `docs/` (osim ARCHITECTURE kad ga drži druga sesija), `.claude/skills/` i `.agents/skills/` (`ORKESTRATOR.md` §4) | Opus, high |
-| **Platforma** | Kostur projekta, CI, `docker compose`, lefthook, skeneri, migracijski alat, kasnije OpenTofu i operacije | korijenske konfiguracije (`package.json`, `tsconfig*`, `eslint*`, `vitest*`, `playwright*`), `.github/`, `compose.yaml`, `lefthook.yml`, `scripts/`, `infra/` | Sonnet, medium |
+| **Platforma** | Kostur projekta, CI, `docker compose`, lefthook, skeneri, migracijski alat, kasnije OpenTofu i operacije | korijenske konfiguracije (`package.json`, `tsconfig*`, `eslint*`, `vitest*`, `playwright*`), `.github/`, `compose.yaml`, `lefthook.yml`, `scripts/`, `infra/` | Opus (profil), medium; Sonnet za rutinu |
 | **Backend** | Baza, uloge, RLS, pgTAP, RPC-i, evidencija, OIDC i sesije, worker, rekonstrukcija, potpisi | `src/domain/`, `src/application/`, `src/adapters/`, `src/server/`, `db/`, `app/api/`, `tests/` za te mape | Opus, high (evidencija, ovlasti, prijava); Sonnet za rutinu |
-| **Frontend** | Editor (Tiptap), journal i sinkronizacija u pregledniku (Dexie), ekrani, hr/en, pristupačnost, zabranjene riječi | `app/` (osim `app/api/`), `src/components/`, `src/editor/`, `src/client/`, `src/lib/i18n/`, `e2e/` | Sonnet, medium; Opus za sinkronizaciju |
+| **Frontend** | Editor (Tiptap), journal i sinkronizacija u pregledniku (Dexie), ekrani, hr/en, pristupačnost, zabranjene riječi | `app/` (osim `app/api/`), `src/components/`, `src/editor/`, `src/client/`, `src/lib/i18n/`, `e2e/` | Opus (profil), medium; Sonnet za rutinu izvan sinkronizacije |
 | **Kratkotrajna** | Jedan zadatak pa se arhivira: prepis dokumenta, spike, istraživanje | zadano u zadatku | prema zadatku |
 | **Product/UX** | Tokovi, copy, dizajn, human UX evaluacija, product issuei; ne implementira vlastiti prijedlog | read-only po defaultu | medium/high |
 | **QA** | Adversarial, offline, race, browser, chaos i regression testovi; smije dodavati testove/testne alate samo u zasebnom QA zadatku/branchu | `tests/`; `e2e/` samo po eksplicitnom QA zadatku, dok feature vlasništvo ostaje Frontendu | medium/high |
@@ -20,7 +20,7 @@ Kako više AI coding sesija radi na Ductusu istodobno, uključujući više Claud
 
 **Prednost modela.** Stupac "Model i napor" je zadani model uloge. Za `critical` posao i za područja evidencije, ovlasti, prijave, sinkronizacije i sigurnosti vrijedi tablica uloga × risk → model iz `docs/ORKESTRATOR.md` §7 (Opus), čak i kad je zadani model uloge Sonnet (npr. Platforma ili Frontend na `critical` zadatku). U svim ostalim slučajevima vrijedi zadani model uloge. Vidi i "Model po ulozi" u §4.
 
-Profili `ductus-bug-hunter` i `ductus-platform-sre` u `.claude/agents/` imaju fiksan Sonnet. Orkestrator pri svakom pokretanju izričito zadaje model i effort; to ima prednost pred modelom iz profila, a zadani model bilježi se u zapisu pokretanja na #87. Profili se ovim pravilom ne mijenjaju.
+Profili u `.claude/agents/` imaju izričit model (§7, redak "`model:` u profilima"): pisci, reviewer, QA i sigurnosni pregled Opus, Bug Hunter, Product/UX i audit Sonnet, Scout Haiku. Orkestrator pri svakom pokretanju izričito zadaje model i effort; to ima prednost pred modelom iz profila, a zadani model bilježi se u zapisu pokretanja na #87. Profili se ovim pravilom ne mijenjaju.
 
 Neovisni reviewer može biti Claude, Codex, ChatGPT ili Grok s drugog `runtime:slot` identiteta od autora. Grok je dopušten kao autentificirani review/QA provider preko verificiranog GitHub App sluga `grok-by-xai`. Codex CLI je samo jedan mogući način pregleda (§5), ne jedini gate. Provider ne određuje ovlast; uloga i agent identitet je određuju.
 

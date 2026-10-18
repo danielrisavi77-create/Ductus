@@ -144,6 +144,9 @@ test("large non-Markdown files are read in ranges only (DAN-213)", () => {
     assert.equal(reviewRead({ file_path: file }, huge, () => ""), null, file);
   }
   assert.equal(reviewRead({ file_path: "docs/big.pdf", pages: "1-5" }, huge, () => ""), null);
+  // `pages` does not open a full read of other files.
+  assert.match(reviewRead({ file_path: "src/x.json", pages: "1" }, huge, () => ""), /Use Grep/);
+  assert.match(reviewRead({ file_path: "docs/big.md", pages: "1" }, huge, () => "# A\n"), /offset and limit/);
   assert.equal(reviewRead({ file_path: ".env.big" }, huge, () => ""), null, "protected paths are left to the deny rules");
   assert.equal(reviewRead({ file_path: "src/x.json" }, huge, () => "", false), null, "outside the project");
   assert.equal(reviewRead({ file_path: "src/x.json" }, undefined, () => ""), null, "missing file");

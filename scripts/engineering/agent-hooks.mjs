@@ -129,7 +129,8 @@ export function reviewRead(input, stat, readText, inProject = true) {
   if (GENERATED.some((pattern) => pattern.test(file))) {
     return `${path.posix.basename(file)} is generated output. Use Grep for the entry you need instead of reading it.`;
   }
-  const ranged = input.offset !== undefined || input.limit !== undefined || input.pages !== undefined;
+  // `pages` is not a range here: it belongs to PDFs, which VISUAL exempts anyway (#429 review).
+  const ranged = input.offset !== undefined || input.limit !== undefined;
   if (ranged || !stat) return null;
   if (!/\.md$/i.test(file)) {
     if (stat.size <= LARGE_FILE_BYTES || VISUAL.test(file)) return null;
