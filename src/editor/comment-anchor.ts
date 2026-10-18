@@ -55,6 +55,24 @@ export function anchorRange(doc: PmNode, anchor: TextAnchor): CommentRange | nul
   return range;
 }
 
+/**
+ * Places a list of items again only when the document or the list changed.
+ * The editor asks on every transaction, a cursor move included; the document
+ * of an unchanged text is the same object, so the last places are returned.
+ */
+export function createAnchorPlacer<T>(anchorOf: (item: T) => TextAnchor | null) {
+  let last: { doc: PmNode; items: readonly T[]; ranges: readonly (CommentRange | null)[] } | null = null;
+  return (doc: PmNode, items: readonly T[]): readonly (CommentRange | null)[] => {
+    if (last && last.doc === doc && last.items === items) return last.ranges;
+    const ranges = items.map((item) => {
+      const anchor = anchorOf(item);
+      return anchor ? anchorRange(doc, anchor) : null;
+    });
+    last = { doc, items, ranges };
+    return ranges;
+  };
+}
+
 export const commentHighlightKey = new PluginKey<DecorationSet>("commentHighlight");
 
 /** Marks the placed comments. A transaction with this key's meta replaces the ranges. */

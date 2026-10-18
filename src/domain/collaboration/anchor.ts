@@ -25,6 +25,9 @@ export type CreateTextAnchorInput = {
 
 const DEFAULT_CONTEXT = 24;
 
+/** More occurrences of the quote than this in one paragraph give no place. */
+export const MAX_MATCHES = 1000;
+
 export function createTextAnchor(input: CreateTextAnchorInput): TextAnchor {
   const { nodeId, nodeText, start, end } = input;
   const contextLength = input.contextLength ?? DEFAULT_CONTEXT;
@@ -54,11 +57,15 @@ function contextScore(text: string, start: number, end: number, anchor: TextAnch
 export function resolveTextAnchor(anchor: TextAnchor, nodeId: NodeId, nodeText: string): AnchorResolution {
   if (nodeId !== anchor.nodeId || anchor.quote.length === 0) return { status: "missing" };
 
+  // A short quote can occur many times in a long paragraph. Past the limit no
+  // single place is reliable, so the search stops there and gives none: the
+  // cost of a resolution stays bounded however long the paragraph is.
   const starts: number[] = [];
   let from = 0;
   while (from <= nodeText.length - anchor.quote.length) {
     const found = nodeText.indexOf(anchor.quote, from);
     if (found < 0) break;
+    if (starts.length === MAX_MATCHES) return { status: "ambiguous", matches: MAX_MATCHES + 1 };
     starts.push(found);
     from = found + 1;
   }
@@ -79,7 +86,9 @@ export function resolveTextAnchor(anchor: TextAnchor, nodeId: NodeId, nodeText: 
     return { status: "exact", start: anchor.startHint, end: anchor.endHint };
   }
 
-  const best = Math.max(...scored.map((m) => m.score));
+  // A loop, not a spread: an argument list has a size limit of its own.
+  let best = 0;
+  for (const m of scored) if (m.score > best) best = m.score;
   const winners = scored.filter((m) => m.score === best);
   if (winners.length !== 1) return { status: "ambiguous", matches: winners.length };
 
