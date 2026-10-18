@@ -161,14 +161,15 @@ BEGIN
       NULL::integer;
     RETURN;
   END IF;
-  -- The named revision must have been the current one at the click: it is
-  -- the current one now, or its successor was accepted after v_now (a commit
-  -- that held the document while this request waited for it).
+  -- The named revision must have been the current one at the click: it was
+  -- accepted no later than v_now, and it is the current one now or its
+  -- successor was accepted after v_now (a commit that held the document while
+  -- this request waited for it).
   SELECT r.* INTO v_named
     FROM evidence.document_revision r
    WHERE r.document_id = v_document.id AND r.institution_id = v_document.institution_id
      AND r.revision = p_revision;
-  IF NOT FOUND OR (p_revision <> v_document.current_revision AND NOT EXISTS (
+  IF NOT FOUND OR v_named.created_at > v_now OR (p_revision <> v_document.current_revision AND NOT EXISTS (
        SELECT 1 FROM evidence.document_revision n
         WHERE n.document_id = v_document.id AND n.institution_id = v_document.institution_id
           AND n.revision = p_revision + 1 AND n.created_at > v_now)) THEN

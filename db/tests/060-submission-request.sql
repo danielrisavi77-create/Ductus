@@ -138,6 +138,8 @@ INSERT INTO evidence.document_revision (document_id, institution_id, revision, b
 VALUES ('doc-a', pg_temp.id('fak_a'), 2, 1, pg_temp.id('ana'), repeat('f',64), clock_timestamp() + interval '1 hour');
 UPDATE evidence.document SET current_revision = 2, current_content_hash = repeat('f',64) WHERE id = 'doc-a';
 RESET ROLE;
+SELECT is(pg_temp.request('ana', 'doc-a', 2), 'stale_revision',
+  'the current revision accepted after the click is not requested with the click time');
 
 -- The request (A1, A2, A7, B2): time from the database clock at the call,
 -- revision and hash from the server's own committed revision.
