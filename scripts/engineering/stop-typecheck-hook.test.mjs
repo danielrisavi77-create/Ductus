@@ -68,6 +68,7 @@ test("runStopHook never runs twice in a row and fails open", () => {
     "tsc timed out": [{ cwd: repo }, { tsc: { status: null, error: new Error("ETIMEDOUT"), stdout: "" } }],
     "error only in an unchanged file": [{ cwd: repo }, { tsc: { status: 2, stdout: "src/z.ts(1,1): error TS1: x" } }],
     "node_modules tracked in the checkout": [{ cwd: repo }, { tracked: "node_modules/typescript/bin/tsc\0" }],
+    "differently cased node_modules tracked": [{ cwd: repo }, { tracked: "src/a.ts\0NODE_MODULES/typescript/bin/tsc\0" }],
     "tracked-file listing fails": [{ cwd: repo }, { tracked: null }],
     "tsc clean": [{ cwd: repo }, { tsc: { status: 0, stdout: "" } }],
   };
@@ -78,15 +79,16 @@ test("runStopHook never runs twice in a row and fails open", () => {
   }
 });
 
-test("a tracked node_modules/typescript is never executed", { timeout: 60_000 }, (t) => {
+for (const dir of ["node_modules", "NODE_MODULES", "Node_Modules"]) test(`a tracked ${dir}/typescript is never executed`, { timeout: 60_000 }, (t) => {
   const tmp = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "stop-tracked-")));
   t.after(() => fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5 }));
   const git = (...a) => spawnSync("git", a, { cwd: tmp, encoding: "utf8" });
   git("init", "-q");
   const marker = path.join(tmp, "ran.txt");
-  fs.mkdirSync(path.join(tmp, "node_modules", "typescript", "bin"), { recursive: true });
-  fs.writeFileSync(path.join(tmp, "node_modules", "typescript", "bin", "tsc"), `require("fs").writeFileSync(${JSON.stringify(marker)}, "x");\n`);
-  git("add", "-f", "node_modules/typescript/bin/tsc");
+  git("config", "core.ignorecase", "true");
+  fs.mkdirSync(path.join(tmp, dir, "typescript", "bin"), { recursive: true });
+  fs.writeFileSync(path.join(tmp, dir, "typescript", "bin", "tsc"), `require("fs").writeFileSync(${JSON.stringify(marker)}, "x");\n`);
+  git("add", "-f", `${dir}/typescript/bin/tsc`);
   fs.writeFileSync(path.join(tmp, "a.ts"), "export const a: number = 1;\n");
   assert.equal(runStopHook({ cwd: tmp }), undefined);
   assert.equal(fs.existsSync(marker), false, "the tracked tsc must not run");
