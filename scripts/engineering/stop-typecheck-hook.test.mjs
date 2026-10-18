@@ -42,12 +42,13 @@ test("stopDecision blocks with a capped list, or lets the session stop", () => {
   assert.match(d.reason, /and 5 more/);
 });
 
-function fakeExec({ status = " M src/a.ts", tsc = { status: 2, stdout: "src/a.ts(1,1): error TS2304: Cannot find name 'x'." } } = {}) {
+function fakeExec({ status = " M src/a.ts", tracked = "", tsc = { status: 2, stdout: "src/a.ts(1,1): error TS2304: Cannot find name 'x'." } } = {}) {
   const calls = [];
   const exec = (cmd, args) => {
     calls.push([cmd, ...args].join(" "));
     if (args[0] === "rev-parse") return { status: 0, stdout: `${repo}\n` };
     if (args[0] === "status") return status === null ? { status: 128, stdout: "" } : { status: 0, stdout: status };
+    if (args[0] === "ls-files") return { status: tracked === null ? 128 : 0, stdout: tracked ?? "" };
     return tsc;
   };
   return { exec, calls };
@@ -66,6 +67,9 @@ test("runStopHook never runs twice in a row and fails open", () => {
     "no changed TypeScript": [{ cwd: repo }, { status: " M docs/a.md" }],
     "tsc timed out": [{ cwd: repo }, { tsc: { status: null, error: new Error("ETIMEDOUT"), stdout: "" } }],
     "error only in an unchanged file": [{ cwd: repo }, { tsc: { status: 2, stdout: "src/z.ts(1,1): error TS1: x" } }],
+    "node_modules tracked in the checkout": [{ cwd: repo }, { tracked: "node_modules/typescript/bin/tsc\0" }],
+    "differently cased node_modules tracked": [{ cwd: repo }, { tracked: "src/a.ts\0NODE_MODULES/typescript/bin/tsc\0" }],
+    "tracked-file listing fails": [{ cwd: repo }, { tracked: null }],
     "tsc clean": [{ cwd: repo }, { tsc: { status: 0, stdout: "" } }],
   };
   for (const [name, [input, opts]] of Object.entries(cases)) {
@@ -73,6 +77,21 @@ test("runStopHook never runs twice in a row and fails open", () => {
     assert.equal(runStopHook(input, { exec, projectDir: undefined }), undefined, name);
     if (name === "stop_hook_active") assert.deepEqual(calls, [], "nothing runs while the hook is active");
   }
+});
+
+for (const dir of ["node_modules", "NODE_MODULES", "Node_Modules"]) test(`a tracked ${dir}/typescript is never executed`, { timeout: 60_000 }, (t) => {
+  const tmp = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "stop-tracked-")));
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5 }));
+  const git = (...a) => spawnSync("git", a, { cwd: tmp, encoding: "utf8" });
+  git("init", "-q");
+  const marker = path.join(tmp, "ran.txt");
+  git("config", "core.ignorecase", "true");
+  fs.mkdirSync(path.join(tmp, dir, "typescript", "bin"), { recursive: true });
+  fs.writeFileSync(path.join(tmp, dir, "typescript", "bin", "tsc"), `require("fs").writeFileSync(${JSON.stringify(marker)}, "x");\n`);
+  git("add", "-f", `${dir}/typescript/bin/tsc`);
+  fs.writeFileSync(path.join(tmp, "a.ts"), "export const a: number = 1;\n");
+  assert.equal(runStopHook({ cwd: tmp }), undefined);
+  assert.equal(fs.existsSync(marker), false, "the tracked tsc must not run");
 });
 
 test("the hook script exits 0 with no output on bad input and when already active", () => {
