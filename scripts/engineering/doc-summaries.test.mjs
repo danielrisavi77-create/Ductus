@@ -54,7 +54,8 @@ export function checkSummary(text, full, loadDoc) {
   }
   if (text.length > MAX_CHARS) problems.push(`summary has ${text.length} characters, limit ${MAX_CHARS}`);
   for (const line of lines) {
-    if (/^\s*-\s/.test(line) && !line.includes("§")) problems.push(`item without §: ${line.trim()}`);
+    if (!/^\s*-\s/.test(line)) continue;
+    if (!sectionRefs(line, full).some((r) => r.doc === full)) problems.push(`item without § of ${full}: ${line.trim()}`);
   }
   const refs = sectionRefs(text, full);
   if (!refs.some((r) => r.doc === full)) problems.push(`no § reference to ${full}`);
@@ -90,9 +91,11 @@ test("a missing section, a missing document and an item without § are reported"
   const load = (d) => docs[d] ?? null;
   const ok = "# S\n\nSažetak nije izvor pravila; vrijedi docs/X.md.\n\n- a (§1)\n- b (§4a, `Y.md` §2)\n";
   assert.deepEqual(checkSummary(ok, full, load), []);
-  const bad = checkSummary(`${ok}- c (§9)\n- d (\`Z.md\` §1)\n- e bez oznake\n`, full, load);
+  const bad = checkSummary(`${ok}- c (§9)\n- d (\`Z.md\` §1, §1)\n- e bez oznake\n- f (\`Y.md\` §2)\n- g (§foo)\n`, full, load);
   assert.deepEqual(bad, [
-    "item without §: - e bez oznake",
+    "item without § of docs/X.md: - e bez oznake",
+    "item without § of docs/X.md: - f (`Y.md` §2)",
+    "item without § of docs/X.md: - g (§foo)",
     "§9 is not a heading in docs/X.md",
     "§1 refers to Z.md, which does not exist",
   ]);
