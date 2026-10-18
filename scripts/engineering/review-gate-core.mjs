@@ -210,16 +210,29 @@ function fallbackSlug(value) {
   return value?.split(/\s+/)[0]?.toLowerCase() ?? null;
 }
 
-function findOwnerOverride(entries, headSha, ownerLogin) {
-  return entries.some(({ body, login, association, appSlug }) =>
+// The override counts for the current head, or for an earlier head the runner
+// confirmed as carried (clean base merges, unchanged PR diff; owner decision
+// #87 issuecomment-6242103643). Author checks do not depend on the head.
+const validOverrideShape = ({ body, association, appSlug }) =>
+  association === "OWNER" &&
+  appSlug === null &&
+  field(body, "Owner-Override")?.toUpperCase() === "PASS" &&
+  Boolean(field(body, "Override-Reason"));
+
+function ownerOverrides(entries, headSha, ownerLogin, carriedHeads = new Set()) {
+  return entries.filter(({ body, login, association, appSlug }) =>
     canonicalBlock(body, "Owner-Override") &&
     association === "OWNER" &&
     login === ownerLogin &&
     appSlug === null &&
     field(body, "Owner-Override")?.toUpperCase() === "PASS" &&
-    sameHead(field(body, "Override-Head"), headSha) &&
+    (sameHead(field(body, "Override-Head"), headSha) || carriedHeads.has(field(body, "Override-Head")?.toLowerCase())) &&
     Boolean(field(body, "Override-Reason")),
   );
+}
+
+function findOwnerOverride(entries, headSha, ownerLogin, carriedHeads) {
+  return ownerOverrides(entries, headSha, ownerLogin, carriedHeads).length > 0;
 }
 
 function compareOrder(a, b) {
@@ -349,6 +362,27 @@ export function evaluateGate({
 
   if (findOwnerOverride(trusted, headSha, ownerLogin)) {
     return { state: "success", description: `Owner override recorded for ${risk} risk.` };
+  }
+
+  // A carried override (owner decision, #87 issuecomment-6242103643) holds only
+  // while the current head itself has no FAIL or BLOCK from review or QA; a
+  // negative verdict on an earlier head never voids it.
+  const carriedOverrides = ownerOverrides(trusted, headSha, ownerLogin, carriedHeads);
+  if (carriedOverrides.length > 0) {
+    // Voided by any FAIL or BLOCK on the current head, or on a carried head
+    // when it was posted after the newest override (the `prevailing` order).
+    const overrideOrder = carriedOverrides
+      .map((entry) => [entry.createdAt, entry.index])
+      .reduce((a, b) => (compareOrder(a, b) >= 0 ? a : b));
+    const voids = (agentField, headField, verdictField, role, extraField) =>
+      [...latestVerdicts(trusted, { agentField, headField, verdictField, role, headSha, extraField, carriedHeads }).values()]
+        .some((result) => NEGATIVE.has(result.verdict) && (result.current || compareOrder(result.order, overrideOrder) > 0));
+    const negative =
+      voids("Agent-Review", "Review-Head", "Review-Verdict", "reviewer") ||
+      voids("QA-Agent", "QA-Head", "QA-Verdict", "qa", "QA-Scope");
+    if (!negative) {
+      return { state: "success", description: `Owner override carried for ${risk} risk.` };
+    }
   }
 
   const reviews = latestVerdicts(trusted, {
@@ -498,14 +532,16 @@ export function evaluateGate({
  * walk from the current head (newest first, GET commits/{sha} objects), behind
  * merge commits only. A head the walk cannot see would be dropped silently,
  * and with it a FAIL or BLOCK, so an unfinished walk or more than
- * MAX_CARRIED_HEADS such heads carries nothing. The Owner Override never
- * carries.
+ * MAX_CARRIED_HEADS such heads carries nothing. An Owner Override head is
+ * named like a verdict head and judged by the same walk and diff checks.
  */
 export function carriedHeadCandidates(comments, headSha, path) {
   const named = new Set();
   for (const entry of trustedComments(comments)) {
-    for (const [block, headField] of [["Agent-Review", "Review-Head"], ["QA-Agent", "QA-Head"]]) {
+    for (const [block, headField] of [["Agent-Review", "Review-Head"], ["QA-Agent", "QA-Head"], ["Owner-Override", "Override-Head"]]) {
       if (!canonicalBlock(entry.body, block)) continue;
+      // An override that could never count must not use up the head limit.
+      if (block === "Owner-Override" && !validOverrideShape(entry)) continue;
       const head = field(entry.body, headField)?.toLowerCase();
       if (head && SHA_RE.test(head) && head !== headSha.toLowerCase()) named.add(head);
     }
