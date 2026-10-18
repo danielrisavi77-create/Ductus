@@ -1,6 +1,6 @@
 # Engineering System: sažetak
 
-Ovaj sažetak nije izvor pravila. U sukobu vrijedi `docs/ENGINEERING_SYSTEM.md`; uz svaku stavku je njegov odjeljak.
+Sažetak nije izvor pravila. U sukobu vrijedi `docs/ENGINEERING_SYSTEM.md`; uz svaku stavku je njegov odjeljak.
 
 ## Uloge i identitet
 
@@ -53,7 +53,7 @@ Ovaj sažetak nije izvor pravila. U sukobu vrijedi `docs/ENGINEERING_SYSTEM.md`;
 
 - Nalaz s "Dohvatljivo kroz: nije pokazano" ili bez stvarnog pozivatelja ide vlasniku, ne piscu (§14).
 - Treći krug na istom PR-u ide vlasniku s popisom krugova (§14).
-- D-97 PR spaja se tek na Danielovu naredbu (§5).
+- D-97 PR spaja se tek na Danielovu naredbu; noćni prozor je u `ORKESTRATOR.md` §4 (§5, §10).
 - Zaštitu grane, uključujući `strict`, mijenja samo vlasnik (§10, §15).
 
 ## Kontekst
