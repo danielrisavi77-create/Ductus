@@ -1,7 +1,7 @@
 ---
 name: ductus-adversarial-qa
 description: Adversarially tests Ductus changes for races, offline failures, browser regressions, trust-boundary bypasses, and specification violations.
-model: inherit
+model: opus
 effort: high
 skills:
   - ductus-qa

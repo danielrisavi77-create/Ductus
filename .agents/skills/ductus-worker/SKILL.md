@@ -3,7 +3,7 @@ name: ductus-worker
 description: Implement an assigned Ductus task as an isolated worker, with repository rules, tests, PR handoff, and cross-account-safe reporting.
 ---
 
-Read `CLAUDE.md`, `AGENTS.md`, `STATE.md`, and `docs/MULTI-ACCOUNT.md`. Then read only the task-specific sources named in the assigned issue or prompt.
+Read `CLAUDE.md`, `AGENTS.md`, `STATE.md`, and `docs/ENGINEERING_SYSTEM-SAZETAK.md`. Then read only the task-specific sources named in the assigned issue or prompt; read `docs/MULTI-ACCOUNT.md` for a handoff or session rotation.
 
 Operate in **worker** mode:
 - use a dedicated branch/worktree from fresh `origin/main`;

@@ -186,7 +186,7 @@ Novi AI provider ne dobiva trust samo zato što se deklarira u komentaru. Prvi k
 
 PR metadata i review/QA komentari koriste **jedan zajednički parser** (`scripts/engineering/metadata-parser.mjs`) kako CI i review gate ne bi različito tumačili fenced ili uvučene Markdown primjere.
 
-Novi push poništava review i QA jer `*-Head` više nije jednak aktualnom PR headu. Iznimka (D-101): verdikt na ranijem headu vrijedi i dalje kad su svi kasniji commiti samo spajanja osnovne grane (merge commiti) i diff PR-a prema osnovnoj grani identičan je onome na tom headu; gate to provjerava preko GitHub API-ja (hod po prvom roditelju i compare) i na svaku grešku ne prenosi ništa. Datoteka bez patcha (npr. binarna, prevelika ili čisto preimenovanje) ne prenosi ništa jer compare ne pokazuje njezinu stranu osnovne grane. Hod koji ne stigne do commita koji nije merge, ili više od pet headova s verdiktom iza samih spajanja, također ne prenose ništa, da stariji `FAIL` ili `BLOCK` ne ispadne tiho. Kad uspjeh gatea broji prenesen verdikt, status navodi s kojeg je heada prenesen. Owner Override se prenosi pod istim uvjetima kao verdikt (samo čista spajanja osnovne grane i nepromijenjen diff PR-a prema osnovnoj grani; odluka vlasnika, `#87` komentar 6242103643); override za drugi diff ne vrijedi; kasniji `FAIL` ili `BLOCK` (review ili QA) poništava preneseni override: svaki na aktualnom headu i svaki na prenesenom headu objavljen nakon overridea, dok override dan izravno na aktualnom headu vrijedi kao dosad; autor override komentara provjerava se kao i za aktualni head. Formalni GitHub review state nije ulaz u ovaj agent gate; agent verdicti idu kroz kanonske PR komentare.
+Novi push poništava review i QA jer `*-Head` više nije jednak aktualnom PR headu. Iznimka (D-101): verdikt na ranijem headu vrijedi i dalje kad su svi kasniji commiti samo spajanja osnovne grane (merge commiti) i diff PR-a prema osnovnoj grani identičan je onome na tom headu; gate to provjerava preko GitHub API-ja (hod po prvom roditelju i compare) i na svaku grešku ne prenosi ništa. Datoteka bez patcha (npr. binarna, prevelika ili čisto preimenovanje) ne prenosi ništa jer compare ne pokazuje njezinu stranu osnovne grane. Hod koji ne stigne do commita koji nije merge, ili više od pet headova s verdiktom iza samih spajanja, također ne prenose ništa, da stariji `FAIL` ili `BLOCK` ne ispadne tiho. Kad uspjeh gatea broji prenesen verdikt, status navodi s kojeg je heada prenesen. Owner Override se prenosi pod istim uvjetima kao verdikt (samo čista spajanja osnovne grane i nepromijenjen diff PR-a prema osnovnoj grani; odluka vlasnika, `#87` komentar 6242103643); override za drugi diff ne vrijedi; najnoviji verdikt istog reviewera ili QA-a, ako je `FAIL` ili `BLOCK`, poništava preneseni override: na aktualnom headu bez obzira na vrijeme objave (i prije overridea), na prenesenom headu samo ako je objavljen nakon overridea, dok override dan izravno na aktualnom headu vrijedi kao dosad; autor override komentara provjerava se kao i za aktualni head. Formalni GitHub review state nije ulaz u ovaj agent gate; agent verdicti idu kroz kanonske PR komentare.
 
 ## 7. Owner Override
 
@@ -200,7 +200,7 @@ Override-Head: <40-znamenkasti SHA>
 Override-Reason: <konkretan razlog>
 ```
 
-Engineering gate prihvaća override samo iz zasebnog komentara GitHub vlasnika repoa čija je prva neprazna linija `Owner-Override:`, i samo za aktualni head ili za raniji head koji je prenesen prema §6 (D-101: samo čista spajanja osnovne grane i nepromijenjen diff PR-a). Ne može razlikovati je li isti vlasnički račun komentar napisao čovjek ili agent; zato je override governance dokaz, a ne sigurnosna granica.
+Engineering gate prihvaća override samo iz zasebnog komentara GitHub vlasnika repoa čija je prva neprazna linija `Owner-Override:`, i samo za aktualni head ili za raniji head koji je prenesen prema §6 (D-101: samo čista spajanja osnovne grane i nepromijenjen diff PR-a). Najnoviji verdikt istog reviewera ili QA-a, ako je `FAIL` ili `BLOCK`, poništava preneseni override: na aktualnom headu bez obzira na vrijeme objave, na prenesenom headu samo ako je objavljen nakon overridea; override dan izravno na aktualnom headu vrijedi kao dosad (D-140; `#87` komentar 6243001751). Ne može razlikovati je li isti vlasnički račun komentar napisao čovjek ili agent; zato je override governance dokaz, a ne sigurnosna granica.
 
 ## 8. Tijek promjene
 
@@ -235,7 +235,7 @@ Product/UX i Bug Hunter nikad ne preskaču issue fazu i ne prelaze ravno u imple
 - Prije ready-for-review autor ponovno dohvaća `main` i provjerava stvarni overlap.
 - Ako je `main` promijenio datoteku koju PR dira, autor osvježava branch prije reviewa.
 - PR se spaja samo ako njegov head sadrži aktualni `main` (zaštita grane, 11. 10. 2026.). PR koji je na redu u gateu spaja `main` neposredno prije reviewa (§15).
-- Svaki push nakon reviewa automatski invalidira review preko `Review-Head`, osim čistog spajanja osnovne grane bez promjene diffa PR-a (D-101).
+- Svaki push nakon reviewa automatski invalidira review preko `Review-Head`, osim čistog spajanja osnovne grane bez promjene diffa PR-a (D-101); isto vrijedi za QA verdikt i Owner Override.
 - Orkestrator ne tretira staro zeleno stanje kao dokaz za novi head.
 - Stackani PR-ovi su dopušteni samo kada je ovisnost eksplicitna u opisu; nakon spajanja baze child PR se vraća na `main`.
 
@@ -321,8 +321,8 @@ Vrijede za svaki `critical` PR uz gate iz §5; gate se njima ne mijenja. Izvor j
 ## 15. Gate i spajanje (D-106)
 
 - **Strogo jedan po jedan.** U gateu (review, QA, čekanje spajanja) je u svakom trenutku najviše jedan PR, i kad je to D-97 PR koji čeka vlasnika. Redoslijed određuje orkestrator.
-- **Ažurna grana.** PR koji je na redu spaja `main` neposredno prije reviewa (§9). Čisto spajanje `main` koje ne mijenja diff PR-a prenosi review i QA verdikt (D-101); svaka druga promjena traži review i QA na novom headu.
-- **Review i QA istodobno.** Za `critical` PR review i QA kreću istodobno na istom headu. QA ne čita review prije vlastitog verdikta. Ako review padne, QA na tom headu ne vrijedi.
+- **Ažurna grana.** PR koji je na redu spaja `main` neposredno prije reviewa (§9). Čisto spajanje `main` koje ne mijenja diff PR-a prenosi review i QA verdikt i Owner Override (D-101); svaka druga promjena traži review i QA na novom headu.
+- **Review i QA istodobno.** Za `critical` PR review i QA kreću istodobno na istom headu. QA ne čita review prije vlastitog verdikta. Ako review padne, QA na tom headu ne vrijedi. Iznimka (D-138): QA s Codexa (`chatgpt-codex-connector`) dok ima kvote, zatim s Groka (`grok-by-xai`), orkestrator pokreće tek nakon Claude review PASS-a.
 - **Nakon spajanja.** Orkestrator čeka CI na `main` prije sljedećeg spajanja, zatim pokreće `pnpm orch:ready` za sljedeći PR u redu i traži spajanje `main` prije nego se na stari head potroše review i QA.
 - **Zaštita grane.** Postavke zaštite (uključujući `strict`) mijenja samo vlasnik.
 
