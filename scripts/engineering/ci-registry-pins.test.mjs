@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
@@ -72,4 +72,51 @@ test("Gitleaks negative smoke proves scanner rejection, not just a nonzero start
   assert.match(ci, /--report-format json --report-path \/reports\/leaks\.json/);
   assert.match(ci, /finding\.get\("RuleID"\) == "ductus-synthetic-secret"/);
   assert.match(ci, /Scanner failed before producing a report/);
+});
+
+const workflowsDir = resolve(root, ".github/workflows");
+const workflows = readdirSync(workflowsDir)
+  .filter((name) => /\.ya?ml$/.test(name))
+  .sort()
+  .map((name) => ({ name, text: readFileSync(resolve(workflowsDir, name), "utf8") }));
+
+/** Every `uses:` reference outside a local `./` action, with its trailing comment. */
+const usesLines = (text) =>
+  [...text.matchAll(/^\s*(?:-\s+)?uses:\s*(\S+)(.*)$/gm)].map((m) => ({ ref: m[1], rest: m[2] }));
+
+test("every workflow action is pinned to a full commit SHA with its version comment", () => {
+  assert.ok(workflows.length > 0);
+  for (const { name, text } of workflows) {
+    for (const { ref, rest } of usesLines(text)) {
+      if (ref.startsWith("./")) continue;
+      assert.match(ref, /^[\w.-]+\/[\w./-]+@[0-9a-f]{40}$/, `${name}: ${ref} not pinned to a full SHA`);
+      assert.match(rest, /^\s+# v\d/, `${name}: ${ref} needs a "# vX" version comment`);
+    }
+  }
+});
+
+// A privileged trigger runs with the base repository's cache scope; a cache
+// restored or saved there could carry attacker-controlled PR content.
+const PRIVILEGED = /^\s{2}(?:pull_request_target|workflow_run|issue_comment):/m;
+const usesCache = (text) => /actions\/cache(?:\/(?:restore|save))?@/.test(text) || /^\s+cache(?:-dependency-path)?:/m.test(text);
+
+test("no cache in workflows with a privileged trigger; CI caches only in build and stack", () => {
+  const privileged = workflows.filter(({ text }) => PRIVILEGED.test(text));
+  assert.ok(privileged.length > 0, "the engineering gate runs on pull_request_target");
+  for (const { name, text } of privileged) {
+    assert.ok(!usesCache(text), `${name}: privileged workflow must not use a cache`);
+  }
+  assert.doesNotMatch(ci, PRIVILEGED, "ci.yml must not gain a privileged trigger");
+  const jobs = ci.split(/^ {2}(?=[\w-]+:\s*$)/m);
+  const cached = jobs.filter((job) => /actions\/cache@/.test(job)).map((job) => job.split(":")[0]);
+  assert.deepEqual(cached, ["build", "stack"]);
+});
+
+test("the cache detector sees every form a workflow could use", () => {
+  assert.ok(usesCache("      - uses: actions/cache@0123456789012345678901234567890123456789 # v6.1.0\n"));
+  assert.ok(usesCache("      - uses: actions/cache/restore@0123456789012345678901234567890123456789 # v6\n"));
+  assert.ok(usesCache("        with:\n          cache: pnpm\n"));
+  assert.ok(!usesCache("      - run: pnpm lint --cache\n"));
+  assert.ok(PRIVILEGED.test("on:\n  pull_request_target:\n"));
+  assert.ok(!PRIVILEGED.test("on:\n  pull_request:\n"));
 });
