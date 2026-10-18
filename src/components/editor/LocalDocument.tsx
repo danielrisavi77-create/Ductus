@@ -112,6 +112,15 @@ export function useLocalEditor(): Editor | null {
 }
 
 /**
+ * True once this tab has stopped for good because the session ended, here or
+ * elsewhere (D-118). Anything else that shows this person's work, such as the
+ * comment panel, must drop it at that moment, as the sheet does.
+ */
+export function useLocalSignedOut(): boolean {
+  return useLocalDocument().phase === "signed-out";
+}
+
+/**
  * Whether the candidate holds exactly the ids the editor holds. The identity
  * plugin (#226) gives every block its id, so interop never mints one; if it
  * did, the journal would hold ids the editor lacks and a reload would not
