@@ -14,7 +14,10 @@ function profiles() {
   for (const dir of fs.readdirSync(agents)) {
     for (const f of fs.readdirSync(path.join(agents, dir)).filter((x) => x.endsWith(".md"))) {
       const head = fs.readFileSync(path.join(agents, dir, f), "utf8").split(/^---$/m)[1] ?? "";
-      const get = (k) => new RegExp(`^${k}:\\s*(.+)$`, "m").exec(head)?.[1].trim();
+      const fields = Object.fromEntries(
+        head.split("\n").map((l) => /^([A-Za-z]+):\s*(.+)$/.exec(l.trim())).filter(Boolean).map((m) => [m[1], m[2].trim()]),
+      );
+      const get = (k) => fields[k];
       out[get("name")] = { model: get("model"), maxTurns: get("maxTurns") };
     }
   }
