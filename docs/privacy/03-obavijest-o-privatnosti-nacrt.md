@@ -61,7 +61,7 @@ Koju ste tipku pritisnuli i koliko dugo ste je držali. Brzinu tipkanja i stanke
 | Sesije prijave | `[rok]` |
 | Sigurnosne kopije | `[rok po vrsti kopije; brisanje je potpuno kad istekne najdulji rok]` |
 
-Neki tehnički otisci (hashevi) nastavljaju postojati nakon brisanja sadržaja da bi se mogla provjeriti cjelovitost zapisa; ne sadrže tekst rada. `[Pravnik potvrđuje je li ih potrebno opisati drukčije.]`
+Neki tehnički otisci (hashevi) nastavljaju postojati nakon brisanja sadržaja da bi se mogla provjeriti cjelovitost zapisa. Iz njih se tekst rada ne može pročitati, ali tko ima kopiju teksta može pomoću njih potvrditi da je baš taj tekst bio predan, i to uz vaš zapis o predaji. `[Pravnik potvrđuje opis i je li to osobni podatak, 05 pitanje 20.]`
 
 ### 8. Kome se podaci prenose
 
