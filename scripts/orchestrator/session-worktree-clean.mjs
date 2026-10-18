@@ -1,12 +1,12 @@
-// DAN-213 (#421): SessionStart worktree cleanup that can never take an active worktree.
-// A worktree goes only when ALL hold: it lies directly in <root>/.claude/worktrees/agent-* or
-// <parent of root>/Ductus-worktrees/*, is not locked, not the current directory, has no changes,
-// untracked files, ignored files outside REGENERABLE or operation in progress, its branch has commits of its own (not reachable from
+// DAN-213 (#421): SessionStart worktree report. REPORT ONLY (owner decision 18 Oct 2026 on #425):
+// it lists worktrees that look safe to remove and never removes a worktree or deletes a branch;
+// removal stays manual. A worktree is listed only when ALL hold: it lies directly in
+// <root>/.claude/worktrees/agent-* or <parent of root>/Ductus-worktrees/*, is not a link, not
+// locked, not the current directory, has no changes, untracked files, ignored files outside
+// REGENERABLE or operation in progress, its branch has commits of its own (not reachable from
 // origin/main), and a MERGED pull request for that branch has headRefOid equal to HEAD, merged at
 // least MIN_MERGED_AGE_MS ago, with no OPEN pull request on the same branch name. Anything unknown
-// (failed fetch, gh, git) means keep. Never --force; the local branch is deleted only after its
-// worktree is gone and while it still points at the merged head. No `git worktree prune`.
-// Usage: node session-worktree-clean.mjs [--dry-run]. Always exits 0 (fail-open hook).
+// (failed fetch, gh, git) means not listed. Usage: node session-worktree-clean.mjs. Always exits 0.
 import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, realpathSync } from "node:fs";
 import { basename, dirname, join, resolve, sep } from "node:path";
@@ -106,14 +106,14 @@ function listWorktrees(git, cwd) {
   });
 }
 
-/** Gathers facts with git and gh, then acts on decide(). Returns [{path, branch, remove, reason, done}]. */
-export function run({ cwd = process.cwd(), dryRun = false, exec = defaultExec, now = Date.now(), log = console.log } = {}) {
+/** Gathers facts with git and gh and reports decide(). Returns [{path, branch, remove, reason}]; `remove` means "safe to remove by hand". */
+export function run({ cwd = process.cwd(), exec = defaultExec, now = Date.now(), log = console.log } = {}) {
   const git = (args, dir) => exec("git", args, { cwd: dir });
   const all = listWorktrees(git, cwd);
   if (!all?.length) return [];
   const root = real(all[0].path);
   if (!git(["fetch", "origin", "--quiet"], root).ok) {
-    log("worktree cleanup: fetch failed, nothing removed");
+    log("worktree cleanup: fetch failed, nothing reported");
     return [];
   }
   const here = real(cwd);
@@ -147,29 +147,16 @@ export function run({ cwd = process.cwd(), dryRun = false, exec = defaultExec, n
       }
     }
     const d = decide(facts);
-    const item = { path, branch: wt.branch, ...d, done: false };
-    if (d.remove && !dryRun) {
-      // Re-read right before removal: another session may have switched branch since the listing.
-      const ref = git(["symbolic-ref", "-q", "HEAD"], path);
-      const sha = git(["rev-parse", "HEAD"], path);
-      if (!ref.ok || ref.out !== `refs/heads/${wt.branch}` || !sha.ok || sha.out !== facts.head) {
-        item.remove = false;
-        item.reason = "branch or HEAD changed during cleanup";
-      } else {
-        item.done = git(["worktree", "remove", wt.path], root).ok && !existsSync(wt.path);
-        // Compare-and-delete: the ref goes only if it still points at the merged head.
-        if (item.done) git(["update-ref", "-d", `refs/heads/${wt.branch}`, facts.head], root);
-      }
-    }
-    if (item.remove) log(`worktree cleanup: ${dryRun ? "would remove" : item.done ? "removed" : "FAILED to remove"} ${path} [${wt.branch}]`);
-    results.push(item);
+    // Report only: nothing is removed or deleted here.
+    if (d.remove) log(`worktree cleanup: safe to remove by hand: ${path} [${wt.branch}]`);
+    results.push({ path, branch: wt.branch, ...d });
   }
   return results;
 }
 
 if (process.argv[1] && samePath(real(process.argv[1]), fileURLToPath(import.meta.url))) {
   try {
-    run({ dryRun: process.argv.includes("--dry-run") });
+    run();
   } catch (e) {
     console.error(`worktree cleanup stopped: ${e.message}`);
   }

@@ -101,7 +101,9 @@ function setup(t) {
     }
     return { path, branch, head: git(path, "rev-parse", "HEAD") };
   };
+  const calls = [];
   const exec = (cmd, args, opts) => {
+    calls.push([cmd, ...args].join(" "));
     if (cmd !== "gh") {
       hooks[args[0]]?.(args);
       return defaultExec(cmd, args, opts);
@@ -114,7 +116,7 @@ function setup(t) {
   const clean = (opts = {}) => run({ cwd: work, exec, now: NOW, log: () => {}, ...opts });
   const agents = join(work, ".claude", "worktrees");
   const sibling = join(tmp, "Ductus-worktrees");
-  return { work, remote, prs, hooks, add, clean, agents, sibling };
+  return { work, remote, prs, hooks, calls, add, clean, agents, sibling };
 }
 
 test("githubRepo reads owner/name from https and ssh GitHub URLs only", () => {
@@ -139,30 +141,17 @@ test("defaultExec drops an inherited GH_REPO and GH_HOST", (t) => {
   assert.equal(r.out, "none none");
 });
 
-test("review #425: links, a branch switch, a moved ref and an inherited GH_REPO never remove the wrong thing", (t) => {
+test("review #425: a link at a registered path is never listed; an inherited GH_REPO is not asked", (t) => {
   const r = setup(t);
   const merged = (w) => [{ state: "MERGED", headRefOid: w.head, mergedAt: OLD }];
-  // A registered worktree whose directory was replaced by a junction to another clean, merged worktree.
+  // A registered worktree whose directory was replaced by a junction to another clean worktree with an open PR.
   const target = r.add(r.agents, "agent-target");
   const gone = r.add(r.agents, "agent-gone");
   rmSync(gone.path, { recursive: true, force: true });
   symlinkSync(target.path, gone.path, "junction");
-  // A worktree that another session switches to a new branch at the same HEAD after the listing.
-  const switched = r.add(r.agents, "agent-switched");
-  r.hooks["rev-list"] = (args) => {
-    if (args[2] === `origin/main..${switched.head}`) git(switched.path, "switch", "-q", "-c", "fresh-work");
-  };
-  // A worktree whose branch ref another session moves just before the compare-and-delete.
-  const moved = r.add(r.agents, "agent-moved");
-  let movedTo = "";
-  r.hooks["update-ref"] = (args) => {
-    if (args[2] !== `refs/heads/${moved.branch}`) return;
-    movedTo = git(r.work, "commit-tree", "-p", moved.head, "-m", "late", `${moved.head}^{tree}`);
-    git(r.work, "update-ref", `refs/heads/${moved.branch}`, movedTo);
-  };
+  const plain = r.add(r.agents, "agent-plain");
   Object.assign(r.prs, {
-    [target.branch]: [{ state: "OPEN", headRefOid: target.head }], [gone.branch]: merged(gone),
-    [switched.branch]: merged(switched), [moved.branch]: merged(moved),
+    [target.branch]: [{ state: "OPEN", headRefOid: target.head }], [gone.branch]: merged(gone), [plain.branch]: merged(plain),
   });
   const prevRepo = process.env.GH_REPO;
   process.env.GH_REPO = "someone/Ductus-fork";
@@ -171,14 +160,11 @@ test("review #425: links, a branch switch, a moved ref and an inherited GH_REPO 
   const res = r.clean();
   const by = Object.fromEntries(res.map((x) => [x.branch, x]));
   assert.match(by[gone.branch].reason, /symlink, junction/);
-  assert.equal(existsSync(join(target.path, "agent-target.txt")), true, "the link target is untouched");
-  assert.equal(by[switched.branch].reason, "branch or HEAD changed during cleanup");
-  assert.equal(existsSync(switched.path), true);
-  assert.equal(by[moved.branch].done, true, "the worktree itself was finished");
-  assert.equal(git(r.work, "rev-parse", `refs/heads/${moved.branch}`), movedTo, "a moved branch ref survives");
+  assert.equal(by[target.branch].remove, false);
+  assert.equal(by[plain.branch].remove, true, "listed through --repo acme/Ductus despite GH_REPO");
 });
 
-test("run removes only proven-finished worktrees and keeps a fresh or reused-name one", (t) => {
+test("run only reports: it lists proven-finished worktrees and never removes or deletes anything", (t) => {
   const r = setup(t);
   const done = r.add(r.agents, "agent-done");
   const sib = r.add(r.sibling, "claude-a-platforma-done");
@@ -187,11 +173,11 @@ test("run removes only proven-finished worktrees and keeps a fresh or reused-nam
   const dirty = r.add(r.agents, "agent-dirty");
   writeFileSync(join(dirty.path, "wip.txt"), "wip");
   const outside = r.add(join(r.work, "..", "other"), "agent-outside");
-  // Only regenerable ignored paths: still removed.
+  // Only regenerable ignored paths: still listed.
   mkdirSync(join(done.path, "node_modules", "pkg"), { recursive: true });
   writeFileSync(join(done.path, "node_modules", "pkg", "index.js"), "x");
   writeFileSync(join(done.path, "tsconfig.tsbuildinfo"), "x");
-  // Ignored but not regenerable: kept with the file.
+  // Ignored but not regenerable: not listed.
   const envLocal = r.add(r.agents, "agent-envlocal");
   writeFileSync(join(envLocal.path, ".env.local"), "LOCAL_ONLY=1");
   const report = r.add(r.agents, "agent-report");
@@ -205,30 +191,30 @@ test("run removes only proven-finished worktrees and keeps a fresh or reused-nam
     [envLocal.branch]: merged(envLocal), [report.branch]: merged(report),
   });
 
-  const dry = r.clean({ dryRun: true });
-  assert.deepEqual(dry.filter((x) => x.remove).map((x) => x.branch).sort(), [done.branch, sib.branch].sort());
-  assert.equal(existsSync(done.path), true, "dry run removes nothing");
-
-  r.clean();
-  for (const w of [done, sib]) {
-    assert.equal(existsSync(w.path), false, w.branch);
-    assert.equal(git(r.work, "branch", "--list", w.branch), "", `${w.branch} local branch deleted`);
-  }
-  for (const w of [fresh, reused, dirty, outside, envLocal, report]) {
+  const lines = [];
+  const res = r.clean({ log: (l) => lines.push(l) });
+  assert.deepEqual(res.filter((x) => x.remove).map((x) => x.branch).sort(), [done.branch, sib.branch].sort());
+  assert.equal(lines.filter((l) => l.includes("safe to remove by hand")).length, 2);
+  // Owner decision 18 Oct (#425): report only. Every worktree and branch is still there.
+  for (const w of [done, sib, fresh, reused, dirty, outside, envLocal, report]) {
     assert.equal(existsSync(w.path), true, w.branch);
     assert.match(git(r.work, "branch", "--list", w.branch), /\S/, `${w.branch} branch kept`);
   }
+  assert.equal(existsSync(join(done.path, "node_modules", "pkg", "index.js")), true);
+  const writes = r.calls.filter((c) => /^git (worktree (remove|prune)|branch -[dD]|update-ref|push)/.test(c));
+  assert.deepEqual(writes, [], "no removing or deleting git command is ever run");
   assert.equal(existsSync(join(dirty.path, "wip.txt")), true);
   assert.equal(existsSync(join(envLocal.path, ".env.local")), true);
   assert.equal(existsSync(join(report.path, "reports", "out.txt")), true);
 });
 
-test("run keeps everything when gh fails, fetch fails, or it runs from inside the worktree", (t) => {
+test("run lists nothing when gh fails, fetch fails, or it runs from inside the worktree", (t) => {
   const r = setup(t);
   const a = r.add(r.agents, "agent-a");
-  assert.equal(r.clean().some((x) => x.done), false, "no PR data");
+  assert.equal(r.clean().some((x) => x.remove), false, "no PR data");
   r.prs[a.branch] = [{ state: "MERGED", headRefOid: a.head, mergedAt: OLD }];
-  assert.equal(r.clean({ cwd: a.path }).some((x) => x.done), false, "current directory");
+  assert.equal(r.clean({ cwd: a.path }).some((x) => x.remove), false, "current directory");
+  assert.equal(r.clean().some((x) => x.remove), true, "listed once the PR data is there");
   git(r.work, "remote", "set-url", "origin", join(r.work, "missing.git"));
   assert.deepEqual(r.clean(), [], "fetch failed");
   assert.equal(existsSync(a.path), true);
