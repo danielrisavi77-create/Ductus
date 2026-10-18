@@ -94,11 +94,12 @@
         ]
       },
       {
+        "matcher": "startup",
         "hooks": [
           {
             "type": "command",
             "shell": "bash",
-            "command": "command -v powershell >/dev/null 2>&1 || exit 0; powershell -NoProfile -ExecutionPolicy Bypass -File \"$CLAUDE_PROJECT_DIR/scripts/cleanup-worktrees.ps1\"",
+            "command": "command -v node >/dev/null 2>&1 || exit 0; node \"$CLAUDE_PROJECT_DIR/scripts/orchestrator/session-worktree-clean.mjs\" || exit 0",
             "async": true,
             "timeout": 180
           }

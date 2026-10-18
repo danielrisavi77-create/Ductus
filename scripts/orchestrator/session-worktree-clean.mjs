@@ -1,0 +1,164 @@
+// DAN-213 (#421): SessionStart worktree report. REPORT ONLY (owner decision 18 Oct 2026 on #425):
+// it lists worktrees that look safe to remove and never removes a worktree or deletes a branch;
+// removal stays manual. A worktree is listed only when ALL hold: it lies directly in
+// <root>/.claude/worktrees/agent-* or <parent of root>/Ductus-worktrees/*, is not a link, not
+// locked, not the current directory, has no changes, untracked files, ignored files outside
+// REGENERABLE or operation in progress, its branch has commits of its own (not reachable from
+// origin/main), and a MERGED pull request for that branch has headRefOid equal to HEAD, merged at
+// least MIN_MERGED_AGE_MS ago, with no OPEN pull request on the same branch name. Anything unknown
+// (failed fetch, gh, git) means not listed. Usage: node session-worktree-clean.mjs. Always exits 0.
+import { spawnSync } from "node:child_process";
+import { existsSync, lstatSync, realpathSync } from "node:fs";
+import { basename, dirname, join, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
+
+export const MIN_MERGED_AGE_MS = 2 * 60 * 60 * 1000;
+const SHA_RE = /^[0-9a-f]{40,64}$/;
+// Inherited variables that would point git or gh at another repository (GH_REPO, GH_HOST: #425 review).
+const REPO_ENV = /^(GIT_(DIR|WORK_TREE|INDEX_FILE|COMMON_DIR|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|NAMESPACE|PREFIX)|GH_REPO|GH_HOST)$/i;
+
+/** owner/name of a GitHub remote URL (https or ssh), or null. */
+export function githubRepo(url) {
+  const m = /^(?:https:\/\/github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/.exec(String(url).trim());
+  return m ? `${m[1]}/${m[2]}` : null;
+}
+const IN_PROGRESS = ["rebase-merge", "rebase-apply", "MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "BISECT_LOG"];
+const fold = (p) => (process.platform === "win32" ? resolve(p).toLowerCase() : resolve(p));
+const real = (p) => {
+  try {
+    return realpathSync.native(p);
+  } catch {
+    return resolve(p);
+  }
+};
+const samePath = (a, b) => fold(a) === fold(b);
+const insideOrSame = (child, parent) => samePath(child, parent) || fold(child).startsWith(fold(parent) + sep);
+
+// Ignored paths that a build or test run recreates; any other ignored path (.env.local, reports/, ...) keeps the worktree.
+const REGENERABLE = [
+  /(^|\/)node_modules\/$/, /(^|\/)\.next\/$/, /(^|\/)playwright-report[^/]*\/$/, /(^|\/)test-results[^/]*\/$/,
+  /\.tsbuildinfo$/, /(^|\/)next-env\.d\.ts$/, /(^|\/)\.DS_Store$/, /(^|\/)Thumbs\.db$/,
+];
+
+/**
+ * Lines of `git status --porcelain --ignored=matching` → paths the cleanup must not lose:
+ * every changed or untracked path, and every ignored path outside REGENERABLE.
+ */
+export function unsafePaths(statusOut) {
+  return String(statusOut).split("\n").filter(Boolean).filter((line) => {
+    if (!line.startsWith("!! ")) return true;
+    const p = line.slice(3).replace(/^"|"$/g, "");
+    return !REGENERABLE.some((re) => re.test(p));
+  });
+}
+
+/** True only for a direct child agent-* of <root>/.claude/worktrees or any direct child of <parent>/Ductus-worktrees. */
+export function inScope(root, path) {
+  const dir = dirname(path);
+  if (samePath(dir, join(root, ".claude", "worktrees"))) return /^agent-.+$/.test(basename(path));
+  return samePath(dir, join(dirname(root), "Ductus-worktrees"));
+}
+
+/**
+ * Pure decision. facts: {inScope, locked, current, branch, head, dirty, inProgress,
+ * ownCommits (number|null), prs ([{state, headRefOid, mergedAt}]|null), now (ms)}.
+ * Returns {remove: boolean, reason: string}.
+ */
+export function decide(f) {
+  const keep = (reason) => ({ remove: false, reason });
+  if (!f.inScope) return keep("outside .claude/worktrees/agent-* and ../Ductus-worktrees/");
+  if (f.linked !== false) return keep("symlink, junction or not the registered worktree");
+  if (f.locked) return keep("locked");
+  if (f.current) return keep("current directory");
+  if (!f.branch) return keep("detached HEAD");
+  if (!SHA_RE.test(f.head ?? "")) return keep("HEAD unreadable");
+  if (f.dirty !== false) return keep("uncommitted, untracked or non-regenerable ignored files (or status unreadable)");
+  if (f.inProgress) return keep("rebase, merge or bisect in progress");
+  if (!Number.isInteger(f.ownCommits) || f.ownCommits < 1) return keep("no commits of its own on top of origin/main");
+  if (!Array.isArray(f.prs)) return keep("pull requests unreadable");
+  if (f.prs.some((p) => p.state === "OPEN")) return keep("an open pull request uses this branch name");
+  const merged = f.prs.find((p) => p.state === "MERGED" && p.headRefOid === f.head);
+  if (!merged) return keep("no merged pull request with this exact HEAD");
+  const at = Date.parse(merged.mergedAt ?? "");
+  if (!Number.isFinite(at) || f.now - at < MIN_MERGED_AGE_MS) return keep("merged less than 2 hours ago");
+  return { remove: true, reason: "merged pull request with this exact HEAD" };
+}
+
+export function defaultExec(cmd, args, { cwd } = {}) {
+  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !REPO_ENV.test(k)));
+  const r = spawnSync(cmd, args, {
+    cwd, encoding: "utf8", windowsHide: true, timeout: 60_000, env: { ...env, GIT_TERMINAL_PROMPT: "0", GH_PROMPT_DISABLED: "1" },
+  });
+  return { ok: r.status === 0, out: String(r.stdout ?? "").trim() };
+}
+
+function listWorktrees(git, cwd) {
+  const r = git(["worktree", "list", "--porcelain", "-z"], cwd);
+  if (!r.ok) return null;
+  return r.out.split("\0\0").filter(Boolean).map((rec) => {
+    const fields = rec.split("\0").filter(Boolean);
+    const value = (key) => fields.find((x) => x.startsWith(`${key} `))?.slice(key.length + 1);
+    return {
+      path: resolve(value("worktree") ?? ""),
+      branch: value("branch")?.replace(/^refs\/heads\//, "") ?? "",
+      locked: fields.some((x) => x === "locked" || x.startsWith("locked ")),
+    };
+  });
+}
+
+/** Gathers facts with git and gh and reports decide(). Returns [{path, branch, remove, reason}]; `remove` means "safe to remove by hand". */
+export function run({ cwd = process.cwd(), exec = defaultExec, now = Date.now(), log = console.log } = {}) {
+  const git = (args, dir) => exec("git", args, { cwd: dir });
+  const all = listWorktrees(git, cwd);
+  if (!all?.length) return [];
+  const root = real(all[0].path);
+  if (!git(["fetch", "origin", "--quiet"], root).ok) {
+    log("worktree cleanup: fetch failed, nothing reported");
+    return [];
+  }
+  const here = real(cwd);
+  // The configured URL as written (no insteadOf expansion) names the repository gh asks.
+  const url = git(["config", "--get", "remote.origin.url"], root);
+  const repo = url.ok ? githubRepo(url.out) : null;
+  const results = [];
+  for (const wt of all.slice(1)) {
+    if (!existsSync(wt.path)) continue;
+    // The registered path with only its parent resolved; a link at the last step is never followed.
+    const path = join(real(dirname(wt.path)), basename(wt.path));
+    const linked = !lstatSync(wt.path).isDirectory() || !samePath(real(wt.path), path);
+    const facts = { inScope: inScope(root, path), linked, locked: wt.locked, current: insideOrSame(here, path), branch: wt.branch, now };
+    if (facts.inScope && !linked && !facts.locked && !facts.current && facts.branch) {
+      const rp = git(["rev-parse", "--show-toplevel", "--absolute-git-dir", "HEAD"], path);
+      const [top = "", gitDir = "", head = ""] = rp.ok ? rp.out.split("\n").map((s) => s.trim()) : [];
+      if (!samePath(real(top), path)) facts.linked = true;
+      facts.head = head;
+      const st = git(["status", "--porcelain", "--untracked-files=normal", "--ignored=matching", "--ignore-submodules=none"], path);
+      facts.dirty = st.ok ? unsafePaths(st.out).length > 0 : null;
+      facts.inProgress = !gitDir || IN_PROGRESS.some((x) => existsSync(join(gitDir, x)));
+      const own = git(["rev-list", "--count", `origin/main..${head}`], root);
+      facts.ownCommits = own.ok && /^\d+$/.test(own.out) ? Number(own.out) : null;
+      if (facts.ownCommits > 0 && repo) {
+        const pr = exec("gh", ["pr", "list", "--repo", repo, "--head", wt.branch, "--state", "all", "--limit", "50", "--json", "state,headRefOid,mergedAt"], { cwd: root });
+        try {
+          facts.prs = pr.ok ? JSON.parse(pr.out) : null;
+        } catch {
+          facts.prs = null;
+        }
+      }
+    }
+    const d = decide(facts);
+    // Report only: nothing is removed or deleted here.
+    if (d.remove) log(`worktree cleanup: safe to remove by hand: ${path} [${wt.branch}]`);
+    results.push({ path, branch: wt.branch, ...d });
+  }
+  return results;
+}
+
+if (process.argv[1] && samePath(real(process.argv[1]), fileURLToPath(import.meta.url))) {
+  try {
+    run();
+  } catch (e) {
+    console.error(`worktree cleanup stopped: ${e.message}`);
+  }
+  process.exitCode = 0;
+}
