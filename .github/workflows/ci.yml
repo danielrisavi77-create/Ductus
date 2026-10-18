@@ -44,6 +44,8 @@ jobs:
       - name: Engineering system unit tests
         run: shopt -s failglob; node --test scripts/engineering/*.test.mjs scripts/orchestrator/*.test.mjs
       - run: pnpm test:property
+      - name: Demo launcher and fake OIDC account tests
+        run: pnpm test:demo && pnpm test:fake-oidc
       - run: pnpm build
 
   # E2E runs here, against the compose stack, so routes that need the
@@ -82,7 +84,9 @@ jobs:
       - run: pnpm db:migrate
       - name: pgTAP (pg_prove)
         run: pnpm test:db
-      - run: pnpm db:seed
+      # Exercise the P7 setup path after pgTAP's isolated fixtures; it seeds
+      # only the local institutions before integration and E2E tests.
+      - run: pnpm demo:prepare
       - run: pnpm test:integration
       - run: pnpm build
       # Owner decision D-108 d: Chromium (desktop and mobile viewport) on a
