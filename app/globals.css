@@ -790,3 +790,9 @@ main:focus {
 .editor-export {
   margin: 0 0 16px;
 }
+
+/* A teacher's comment next to a paragraph (F-9): a decoration, never a mark in the document. */
+.comment-mark {
+  background: var(--cmt-bg);
+  border-bottom: 1px solid var(--cmt);
+}
