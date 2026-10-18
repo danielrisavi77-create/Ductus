@@ -20,6 +20,6 @@ Kratki zapisi o preprekama na koje su sesije naišle, da sljedeća sesija ne izg
 
 ### PR i gate
 
-- **Preflight orkestratora pada na opisu PR-a.** Uzrok: nedostaje polje ugovora za critical PR. Što raditi: popuniti svih pet polja iz `docs/ENGINEERING_SYSTEM.md` §14 (Invarijanta, Mjesta, Stvarni pozivatelj, Poznate granice, "Što bi ovaj PR moglo oboriti na QA-i?"). Izvor: #437, 18. 10. 2026.
+- **Preflight orkestratora pada na opisu PR-a.** Uzrok: nedostaje polje ugovora za critical PR. Što raditi: popuniti svih pet polja iz `docs/ENGINEERING_SYSTEM.md` §14 (Invarijanta, Mjesta, Stvarni pozivatelj, Poznate granice, "Što bi ovaj PR moglo oboriti na QA-i?"). Parser traži oblik `**Polje:**`, s dvotočkom i za upitnikom (`**Što bi ovaj PR moglo oboriti na QA-i?:**`); bez nje polje se ne prepoznaje. Izvor: #437 i #448, 18. 10. 2026.
 - **Codex ne daje QA ni review.** Uzrok: kvota iscrpljena. Što raditi: to nije nalaz; QA za critical prelazi na Grok (D-138). Izvor: #437, 18. 10. 2026.
 - **Patch nadogradnja mijenja i retke lockfilea za pakete koji se ne nadograđuju.** Uzrok: pnpm normalizira ključeve peer-sufiksa. Što raditi: navesti te pakete u `IZVJEŠTAJ`-u, uz napomenu da im se verzija ne mijenja, da review to ne čita kao proširenje opsega. Izvor: #437, 18. 10. 2026.
