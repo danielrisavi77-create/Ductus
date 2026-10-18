@@ -9,9 +9,7 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SUMMARIES = [
-  { summary: "docs/ENGINEERING_SYSTEM-SAZETAK.md", full: "docs/ENGINEERING_SYSTEM.md" },
-  { summary: "docs/ORKESTRATOR-SAZETAK.md", full: "docs/ORKESTRATOR.md" },
-];
+  { summary: "docs/ENGINEERING_SYSTEM-SAZETAK.md", full: "docs/ENGINEERING_SYSTEM.md" },];
 const MAX_CHARS = 4000;
 
 const read = (rel) => readFileSync(path.join(root, rel), "utf8").replace(/^﻿/, "");
