@@ -6,6 +6,10 @@ export type Enrollment =
   | { kind: "enrolled"; courseId: string }
   | { kind: "malformed" | "refused" | "tooManyAttempts" | "unauthorized" | "forbidden" | "invalid" | "unavailable" };
 
+// An API route that starts an OIDC login: a real navigation, not a Link.
+// Kept here, not in the client form, so the server page can read the string.
+export const SIGN_IN_HREF = `/api/auth/login?returnTo=${encodeURIComponent("/upis")}`;
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** The code as `enroll_with_code` compares it: no spaces or hyphens, upper case; null if it can never match. */

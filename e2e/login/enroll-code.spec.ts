@@ -14,10 +14,15 @@ test("anonymous visitor sees no enrollment form", async ({ page }) => {
   await expect(page.getByRole("heading", { name: e.title })).toBeVisible();
   await expect(page.getByText(e.signedOut)).toBeVisible();
   await expect(page.getByLabel(e.label)).toHaveCount(0);
+  // The server page reads the sign-in URL from a module without "use client".
+  await expect(page.getByRole("link", { name: t.student.signIn }))
+    .toHaveAttribute("href", "/api/auth/login?returnTo=%2Fupis");
 });
 
 test("signed-in student gets no enrollment without the server", async ({ page }) => {
   await signIn(page, "/upis", "Demo studentica");
+  // A submit before hydration is a native GET; an unnamed input keeps the code out of the URL.
+  await expect(page.getByLabel(e.label)).not.toHaveAttribute("name", /.*/);
   const posts: string[] = [];
   page.on("request", (request) => { if (request.method() === "POST") posts.push(new URL(request.url()).pathname); });
 
