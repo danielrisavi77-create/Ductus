@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { newNodeId } from "../document";
-import { createTextAnchor, resolveTextAnchor } from "./anchor";
+import { createTextAnchor, MAX_MATCHES, resolveTextAnchor } from "./anchor";
 
 const ID = newNodeId(() => "11111111-1111-4111-8111-111111111111");
 const OTHER = newNodeId(() => "22222222-2222-4222-8222-222222222222");
@@ -73,6 +73,19 @@ describe("TextAnchor", () => {
     const a = createTextAnchor({ nodeId: ID, nodeText: text, start, end: start + quote.length });
     expect(a.quote).toBe(quote);
     expect(resolveTextAnchor(a, ID, text).status).toBe("exact");
+  });
+
+  it("gives no place, and does not throw, for a short quote that fills a long paragraph (F-093)", () => {
+    const a = createTextAnchor({ nodeId: ID, nodeText: "x a y", start: 2, end: 3 });
+    // 260 001 characters, the quote in every other one; the old position misses.
+    const long = "b" + "ab".repeat(130_000);
+    expect(resolveTextAnchor(a, ID, long)).toEqual({ status: "ambiguous", matches: MAX_MATCHES + 1 });
+  });
+
+  it("still places a quote that occurs up to the limit of matches", () => {
+    const a = createTextAnchor({ nodeId: ID, nodeText: "x a y", start: 2, end: 3 });
+    const text = "b".repeat(10) + "x a y" + " ab".repeat(MAX_MATCHES - 1);
+    expect(resolveTextAnchor(a, ID, text)).toEqual({ status: "moved", start: 12, end: 13 });
   });
 
   it("rejects invalid ranges instead of creating a poisoned anchor", () => {

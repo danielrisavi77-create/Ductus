@@ -90,7 +90,10 @@ async function post(action: "list" | "reply", input: Record<string, string>): Pr
   }
 }
 
-export async function listComments(documentId: string): Promise<ListOutcome> {
+export async function listComments(
+  documentId: string, current: () => boolean = () => true,
+): Promise<ListOutcome> {
+  if (!current()) return { kind: "signedOut" };
   const response = await post("list", { documentId });
   if (response?.status === 401) return { kind: "signedOut" };
   if (response?.status === 403) return { kind: "forbidden" };
@@ -99,7 +102,15 @@ export async function listComments(documentId: string): Promise<ListOutcome> {
   return threads ? { kind: "ok", threads } : { kind: "unavailable" };
 }
 
-export async function replyComment(threadId: string, body: string): Promise<ReplyOutcome> {
+/**
+ * `current` is asked right before the request: a reply typed under a session
+ * that has since ended in this browser is never sent, since the cookie it
+ * would carry may now be another person's (F-093).
+ */
+export async function replyComment(
+  threadId: string, body: string, current: () => boolean = () => true,
+): Promise<ReplyOutcome> {
+  if (!current()) return "signedOut";
   const response = await post("reply", { threadId, body: body.normalize("NFC") });
   switch (response?.status) {
     case 200: return "ok";

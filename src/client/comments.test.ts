@@ -84,4 +84,11 @@ describe("listComments and replyComment", () => {
       expect(await replyComment(T1, "Da.")).toBe(outcome);
     }
   });
+
+  it("sends nothing once the session of the page has ended (F-093)", async () => {
+    answer(200, { id: T2 });
+    expect(await replyComment(T1, "Da.", () => false)).toBe("signedOut");
+    expect(await listComments("doc-1", () => false)).toEqual({ kind: "signedOut" });
+    expect(fetch).not.toHaveBeenCalled();
+  });
 });
