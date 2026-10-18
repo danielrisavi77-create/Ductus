@@ -41,7 +41,6 @@ export type ProcessSummaryUnavailableReason =
 export type ProcessSummaryReadResult =
   | { status: "ok"; body: string }
   | { status: "not_found" }
-  | { status: "withheld" }
   | { status: "unavailable"; reason: ProcessSummaryUnavailableReason };
 
 const unavailable = (reason: ProcessSummaryUnavailableReason): ProcessSummaryReadResult => ({
@@ -65,7 +64,6 @@ export async function readProcessSummary(
     return unavailable("source_unavailable");
   }
   if (source.status === "not_found") return { status: "not_found" };
-  if (source.status === "withheld") return { status: "withheld" };
   if (source.status !== "found") return unavailable("source_unavailable");
 
   const payloads: Uint8Array[] = [];

@@ -35,24 +35,20 @@ GRANT EXECUTE ON FUNCTION app.process_summary_cut(text, timestamptz) TO ductus_i
 SET LOCAL ROLE ductus_identity;
 -- Outcomes: found (package and cut), not_found (no session, not the teacher
 -- of the assignment's course nor its owning student, another institution, no
--- such document or an id that cannot be one: one answer), withheld (D-37: an
--- assignment shorter than P-04, for every reader alike, until submission),
--- unavailable (the document has no package or more than one).
+-- such document or an id that cannot be one: one answer), unavailable (the
+-- document has no package or more than one). D-144 replaced D-37, so a short
+-- assignment is read like any other.
 --
--- P-03 and P-04 are the defaults of docs/DECISIONS.md ("Zadane vrijednosti
--- pragova"), as in collaboration.list_comments, until they are institution
--- settings. P-03: only segments accepted before the start of the current
--- 5-minute window (database clock, aligned in UTC), so no reader learns of
--- newer activity (BACKEND 4.10 t. 6 and 7). P-04: the current version's
--- opens_at to due_at shorter than 24 hours. A submission does not lift D-37
--- yet: the submission outcome is a later step of B-12.
+-- The cut follows BACKEND 4.10 t. 7: only segments accepted before the start
+-- of the current P-03 window (database clock, 5 minutes aligned in UTC, the
+-- default of docs/DECISIONS.md, as in collaboration.list_comments, until it
+-- is an institution setting).
 CREATE FUNCTION app.read_process_summary_source(p_document_id text)
 RETURNS TABLE (outcome text, evidence_package_id text, segment_hashes text[])
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = ''
 AS $$
 DECLARE
   v_scope record;
-  v_version record;
   v_cut record;
   v_packages integer := 0;
 BEGIN
@@ -65,15 +61,6 @@ BEGIN
   IF v_scope.institution_id IS NULL
      OR collaboration.actor_role(v_scope.institution_id, v_scope.assignment_id, v_scope.principal_id) IS NULL THEN
     RETURN QUERY SELECT 'not_found'::text, NULL::text, NULL::text[];
-    RETURN;
-  END IF;
-
-  SELECT v.opens_at, v.due_at INTO v_version
-    FROM institution.assignment a
-    JOIN institution.assignment_version v ON v.assignment_id = a.id AND v.version_no = a.current_version
-   WHERE a.id = v_scope.assignment_id AND a.institution_id = v_scope.institution_id;
-  IF NOT FOUND OR v_version.due_at - v_version.opens_at < interval '24 hours' THEN
-    RETURN QUERY SELECT 'withheld'::text, NULL::text, NULL::text[];
     RETURN;
   END IF;
 

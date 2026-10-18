@@ -6,7 +6,7 @@ BEGIN;
 SET LOCAL lc_messages TO 'C';
 SELECT no_plan();
 
--- Z4 of K1 is short (3 hours, D-37). Ana writes doc-a on Z1 (three segments,
+-- Z4 of K1 is short (3 hours, under P-04). Ana writes doc-a on Z1 (three segments,
 -- the last one accepted in the current P-03 window), doc-two on Z1 with two
 -- packages, doc-none on Z1 without a package and doc-short on Z4; Tomo writes
 -- doc-b on Z3 of fak-b.
@@ -74,8 +74,8 @@ CREATE TEMP TABLE expected (name text PRIMARY KEY, val text NOT NULL);
 INSERT INTO expected VALUES
   ('a', format('(found,pkg-a,"{%s,%s}")', repeat('1', 64), repeat('2', 64))),
   ('b', format('(found,pkg-b,{%s})', repeat('5', 64))),
+  ('short', format('(found,pkg-short,{%s})', repeat('4', 64))),
   ('not_found', '(not_found,,)'),
-  ('withheld', '(withheld,,)'),
   ('unavailable', '(unavailable,,)');
 CREATE FUNCTION pg_temp.expected(p_name text) RETURNS text
 LANGUAGE sql STABLE AS $$ SELECT val FROM expected WHERE name = p_name $$;
@@ -137,13 +137,13 @@ FROM (VALUES ('doc-b', 'a document of fak-b'), ('doc-nema', 'a missing document'
 SELECT is(pg_temp.ask('vesna', $$ SELECT row(outcome, evidence_package_id, segment_hashes)::text
   FROM app.read_process_summary_source(NULL) $$), pg_temp.expected('not_found'), 'Vesna gets not_found for a null id');
 
--- D-37 (item 8): a short assignment shows nothing before submission, to
--- every reader alike; a refused reader still gets the absence answer.
-SELECT is(pg_temp.source(a.name, 'doc-short'), pg_temp.expected('withheld'),
-  a.name || ' gets withheld for Ana''s document on the short assignment Z4')
+-- Item 8: D-144 replaced D-37, so a short assignment is read like any other,
+-- by the same readers and with the same refusals.
+SELECT is(pg_temp.source(a.name, 'doc-short'), pg_temp.expected('short'),
+  a.name || ' reads Ana''s record on the short assignment Z4 like any other')
 FROM (VALUES ('ana'), ('vesna')) AS a (name);
 SELECT is(pg_temp.source(a.name, 'doc-short'), pg_temp.expected('not_found'),
-  a.name || ' does not learn that the short assignment has a document')
+  a.name || ' gets the absence answer on the short assignment too')
 FROM (VALUES ('dora'), ('marko'), ('petra')) AS a (name);
 
 -- No package or two packages: no guess which record is the work's.

@@ -49,7 +49,7 @@ function sourceResult(rows: SourceRow[]): ProcessSummarySourceResult {
   const malformed = { status: "unavailable", reason: "source_malformed" } as const;
   if (rows.length !== 1) return malformed;
   const { outcome, evidence_package_id: packageId, segment_hashes: hashes } = rows[0];
-  if (outcome === "not_found" || outcome === "withheld") return { status: outcome };
+  if (outcome === "not_found") return { status: "not_found" };
   if (outcome === "unavailable") return { status: "unavailable", reason: "source_unavailable" };
   if (
     outcome !== "found" ||
@@ -150,8 +150,6 @@ export async function handleProcessSummaryRequest(
       });
     case "not_found":
       return refuse(404, "not_found");
-    case "withheld":
-      return refuse(409, "withheld");
     default:
       // A closed code only: never an id, a message or work content.
       console.error("process summary unavailable", read.reason);

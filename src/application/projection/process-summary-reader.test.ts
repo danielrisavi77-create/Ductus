@@ -272,14 +272,3 @@ describe("readProcessSummary fails whole, never with a partial summary", () => {
     expect(answer).toStrictEqual(unavailable("document_mismatch"));
   });
 });
-
-describe("readProcessSummary passes D-37 through", () => {
-  it("answers withheld for every reader alike and reads no payload", async () => {
-    const record = await buildRecord(WORK);
-    const store = await storeOf(record);
-    const read = vi.spyOn(store, "readImmutable");
-    const answers = await Promise.all([1, 2].map(() => readProcessSummary(deps(sourceFor({ status: "withheld" }), store), DOCUMENT)));
-    for (const answer of answers) expect(answer).toStrictEqual({ status: "withheld" });
-    expect(read).not.toHaveBeenCalled();
-  });
-});

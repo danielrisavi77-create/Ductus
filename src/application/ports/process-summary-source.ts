@@ -16,11 +16,10 @@ import type { EvidenceChainHeadV2 } from "@/domain/forensics/evidence-chain-v2";
  *   another institution and one that does not exist all give `not_found`, so
  *   the answer cannot be used to probe which ids exist (BACKEND §6 point 7).
  * - **The cut is the adapter's.** Which part of the record a viewer may see
- *   while the work is still being written (P-03, BACKEND 4.10 point 7) and
- *   whether a short assignment shows nothing before submission (D-37) are
+ *   while the work is still being written (P-03, BACKEND 4.10 point 7) is
  *   decided here, with the head and segment list cut to that state. The cut
- *   is the same for the owner and the teacher; so is `withheld`, the D-37
- *   answer before submission, which is its own outcome and not `unavailable`.
+ *   is the same for the owner and the teacher. D-144 replaced D-37: a short
+ *   assignment has no answer of its own.
  */
 export type ProcessSummarySourceResult =
   | {
@@ -32,7 +31,6 @@ export type ProcessSummarySourceResult =
       segmentHashes: string[];
     }
   | { status: "not_found" }
-  | { status: "withheld" }
   | { status: "unavailable"; reason: string };
 
 export interface ProcessSummarySource {

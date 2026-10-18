@@ -139,7 +139,7 @@ describe("process summary route: one body for the owner and the teacher (B-13, D
   it("maps every source outcome to one closed answer", async () => {
     const cases: [Record<string, unknown>[] | Error, number, string][] = [
       [[{ outcome: "not_found", evidence_package_id: null, segment_hashes: null }], 404, "not_found"],
-      [[{ outcome: "withheld", evidence_package_id: null, segment_hashes: null }], 409, "withheld"],
+      [[{ outcome: "withheld", evidence_package_id: null, segment_hashes: null }], 503, "unavailable"],
       [[{ outcome: "unavailable", evidence_package_id: null, segment_hashes: null }], 503, "unavailable"],
       [[{ outcome: "found", evidence_package_id: "Pkg!", segment_hashes: [] }], 503, "unavailable"],
       [[{ outcome: "found", evidence_package_id: PACKAGE, segment_hashes: ["x"] }], 503, "unavailable"],
