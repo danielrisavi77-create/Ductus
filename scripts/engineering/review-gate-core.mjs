@@ -31,6 +31,12 @@ export const QUOTA_EXHAUSTED_PATTERNS = new Map([
   ["chatgpt-codex-connector", /^\s*You have reached your Codex usage limits/i],
 ]);
 
+// D-139: a critical QA PASS may come from a second Claude session when Codex
+// reviewed the current head, answered every thread and the QA names that head.
+const CODEX_BOT_LOGIN = "chatgpt-codex-connector[bot]";
+const SECOND_SESSION_RE = /^claude-second-session \u2014 Codex review na headu ([0-9a-fA-F]{40})$/;
+const CODEX_REVIEW_STATES = new Set(["COMMENTED", "APPROVED", "CHANGES_REQUESTED"]);
+
 export const QUOTA_FALLBACK_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 // D-101: a verdict on an earlier head carries to the current head only when
@@ -164,20 +170,69 @@ function quotaEvidence(items, reviews = []) {
   );
 }
 
+const isCodexBot = (user) => user?.type === "Bot" && user?.login === CODEX_BOT_LOGIN;
+
+function codexReviewedHead(prReviews, headSha) {
+  return (prReviews ?? []).some(
+    (review) => isCodexBot(review?.user) && sameHead(review?.commit_id, headSha) && CODEX_REVIEW_STATES.has(review?.state),
+  );
+}
+
+// A Codex thread is answered once its author replied under the root comment:
+// a non-bot account that is the owner or the PR author's login. A list that
+// was not read answers nothing: fail closed.
+function codexThreadsAnswered(reviewComments, authorLogin) {
+  if (!Array.isArray(reviewComments)) return false;
+  const byAuthor = (item) =>
+    item?.user?.type !== "Bot" &&
+    (item?.author_association === "OWNER" || (Boolean(authorLogin) && item?.user?.login === authorLogin));
+  const answered = new Set(
+    reviewComments.filter((item) => item?.in_reply_to_id && byAuthor(item)).map((item) => item.in_reply_to_id),
+  );
+  return reviewComments
+    .filter((item) => isCodexBot(item?.user) && !item?.in_reply_to_id)
+    .every((root) => answered.has(root.id));
+}
+
+// Principals that posted any canonical review block on this PR, whatever the
+// head or verdict (D-139: the QA session is not a reviewer of the PR).
+function reviewerPrincipals(entries) {
+  const found = new Set();
+  for (const entry of entries) {
+    if (!canonicalBlock(entry.body, "Agent-Review")) continue;
+    const principal = declaredPrincipal(field(entry.body, "Agent-Review"));
+    if (principal) found.add(principal);
+  }
+  return found;
+}
+
 function fallbackSlug(value) {
   return value?.split(/\s+/)[0]?.toLowerCase() ?? null;
 }
 
-function findOwnerOverride(entries, headSha, ownerLogin) {
-  return entries.some(({ body, login, association, appSlug }) =>
+// The override counts for the current head, or for an earlier head the runner
+// confirmed as carried (clean base merges, unchanged PR diff; owner decision
+// #87 issuecomment-6242103643). Author checks do not depend on the head.
+const validOverrideShape = ({ body, association, appSlug }) =>
+  association === "OWNER" &&
+  appSlug === null &&
+  field(body, "Owner-Override")?.toUpperCase() === "PASS" &&
+  Boolean(field(body, "Override-Reason"));
+
+function ownerOverrides(entries, headSha, ownerLogin, carriedHeads = new Set()) {
+  return entries.filter(({ body, login, association, appSlug }) =>
     canonicalBlock(body, "Owner-Override") &&
     association === "OWNER" &&
     login === ownerLogin &&
     appSlug === null &&
     field(body, "Owner-Override")?.toUpperCase() === "PASS" &&
-    sameHead(field(body, "Override-Head"), headSha) &&
+    (sameHead(field(body, "Override-Head"), headSha) || carriedHeads.has(field(body, "Override-Head")?.toLowerCase())) &&
     Boolean(field(body, "Override-Reason")),
   );
+}
+
+function findOwnerOverride(entries, headSha, ownerLogin, carriedHeads) {
+  return ownerOverrides(entries, headSha, ownerLogin, carriedHeads).length > 0;
 }
 
 function compareOrder(a, b) {
@@ -221,7 +276,8 @@ function latestVerdicts(entries, {
     const head = field(entry.body, headField);
     const verdict = field(entry.body, verdictField)?.toUpperCase() ?? null;
     const extra = extraField ? field(entry.body, extraField) : null;
-    const fallback = fallbackSlug(field(entry.body, "Provider-Fallback"));
+    const fallbackLine = field(entry.body, "Provider-Fallback");
+    const fallback = fallbackSlug(fallbackLine);
     const identity = verifiedCommentIdentity(entry, agent);
 
     if (
@@ -237,7 +293,7 @@ function latestVerdicts(entries, {
     }
 
     const key = `${identity.appSlug}|${identity.principal}`;
-    const candidate = { agent, head: head.toLowerCase(), verdict, extra, fallback, identity,
+    const candidate = { agent, head: head.toLowerCase(), verdict, extra, fallback, fallbackLine, identity,
       order: [entry.createdAt, entry.index], current: sameHead(head, headSha) };
     // Keep the latest current and the latest carried verdict apart, so a
     // later carried verdict never makes the current one disappear.
@@ -274,6 +330,8 @@ export function evaluateGate({
   ownerLogin,
   comments = [],
   prReviews = [],
+  reviewComments = null,
+  authorLogin = null,
   carriedHeads = new Set(),
   trustedLogins = TRUSTED_VERDICT_LOGINS,
   qaExempt = null,
@@ -304,6 +362,27 @@ export function evaluateGate({
 
   if (findOwnerOverride(trusted, headSha, ownerLogin)) {
     return { state: "success", description: `Owner override recorded for ${risk} risk.` };
+  }
+
+  // A carried override (owner decision, #87 issuecomment-6242103643) holds only
+  // while the current head itself has no FAIL or BLOCK from review or QA; a
+  // negative verdict on an earlier head never voids it.
+  const carriedOverrides = ownerOverrides(trusted, headSha, ownerLogin, carriedHeads);
+  if (carriedOverrides.length > 0) {
+    // Voided by any FAIL or BLOCK on the current head, or on a carried head
+    // when it was posted after the newest override (the `prevailing` order).
+    const overrideOrder = carriedOverrides
+      .map((entry) => [entry.createdAt, entry.index])
+      .reduce((a, b) => (compareOrder(a, b) >= 0 ? a : b));
+    const voids = (agentField, headField, verdictField, role, extraField) =>
+      [...latestVerdicts(trusted, { agentField, headField, verdictField, role, headSha, extraField, carriedHeads }).values()]
+        .some((result) => NEGATIVE.has(result.verdict) && (result.current || compareOrder(result.order, overrideOrder) > 0));
+    const negative =
+      voids("Agent-Review", "Review-Head", "Review-Verdict", "reviewer") ||
+      voids("QA-Agent", "QA-Head", "QA-Verdict", "qa", "QA-Scope");
+    if (!negative) {
+      return { state: "success", description: `Owner override carried for ${risk} risk.` };
+    }
   }
 
   const reviews = latestVerdicts(trusted, {
@@ -408,6 +487,28 @@ export function evaluateGate({
       };
     }
 
+    // D-139: second Claude session. Needs its own slot (not author, not a
+    // passing reviewer), the declaration naming this head, a Codex review on
+    // this head and every Codex thread answered. Never carried: the line
+    // names one head.
+    const everReviewers = reviewerPrincipals(trusted);
+    const secondSession = separateAppPass || fallbackPass
+      ? null
+      : qaPasses.find(
+          (result) =>
+            result.identity.appSlug === "claude" &&
+            result.current &&
+            !passingReviewerPrincipals.has(result.identity.principal) &&
+            !everReviewers.has(result.identity.principal) &&
+            sameHead(SECOND_SESSION_RE.exec(result.fallbackLine ?? "")?.[1], headSha),
+        );
+    if (secondSession && codexReviewedHead(prReviews, headSha) && codexThreadsAnswered(reviewComments, authorLogin)) {
+      return {
+        state: "success",
+        description: `Independent review and second Claude session QA valid for current head (D-139: Codex review on head, threads answered).${carriedNote(passingReviews, headSha)}`,
+      };
+    }
+
     if (!separateAppPass) {
       return {
         state: "pending",
@@ -431,14 +532,16 @@ export function evaluateGate({
  * walk from the current head (newest first, GET commits/{sha} objects), behind
  * merge commits only. A head the walk cannot see would be dropped silently,
  * and with it a FAIL or BLOCK, so an unfinished walk or more than
- * MAX_CARRIED_HEADS such heads carries nothing. The Owner Override never
- * carries.
+ * MAX_CARRIED_HEADS such heads carries nothing. An Owner Override head is
+ * named like a verdict head and judged by the same walk and diff checks.
  */
 export function carriedHeadCandidates(comments, headSha, path) {
   const named = new Set();
   for (const entry of trustedComments(comments)) {
-    for (const [block, headField] of [["Agent-Review", "Review-Head"], ["QA-Agent", "QA-Head"]]) {
+    for (const [block, headField] of [["Agent-Review", "Review-Head"], ["QA-Agent", "QA-Head"], ["Owner-Override", "Override-Head"]]) {
       if (!canonicalBlock(entry.body, block)) continue;
+      // An override that could never count must not use up the head limit.
+      if (block === "Owner-Override" && !validOverrideShape(entry)) continue;
       const head = field(entry.body, headField)?.toLowerCase();
       if (head && SHA_RE.test(head) && head !== headSha.toLowerCase()) named.add(head);
     }
@@ -539,7 +642,7 @@ export function prNumberFromEvent(event) {
   return null;
 }
 
-export function evaluatePullRequest({ pr, files, comments, prReviews, ownerLogin, carriedHeads }) {
+export function evaluatePullRequest({ pr, files, comments, prReviews, reviewComments, ownerLogin, carriedHeads }) {
   const listed = files ?? [];
   // The floor is only as good as the list: a cut or unread list fails closed.
   if (!(pr.changed_files <= listed.length)) {
@@ -565,6 +668,8 @@ export function evaluatePullRequest({ pr, files, comments, prReviews, ownerLogin
       ownerLogin,
       comments,
       prReviews,
+      reviewComments,
+      authorLogin: pr.user?.login ?? null,
       carriedHeads,
       qaExempt: qaExemption(paths),
     }),

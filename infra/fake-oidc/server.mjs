@@ -5,16 +5,11 @@
 import { createServer } from "node:http";
 
 import Provider from "oidc-provider";
+import { ACCOUNTS, demoAccountClaims, isDemoAccountId } from "./accounts.mjs";
 
 const PORT = Number(process.env.PORT ?? 8080);
 const ISSUER = process.env.ISSUER ?? `http://localhost:${PORT}`;
 const REDIRECT_URI = process.env.REDIRECT_URI ?? "http://localhost:3000/api/auth/callback";
-
-const DEMO_HOME_ORG = "demo.ductus.test";
-const ACCOUNTS = {
-  "demo-student": { name: "Demo studentica", affiliation: "student" },
-  "demo-teacher": { name: "Demo nastavnik", affiliation: "employee" },
-};
 
 const provider = new Provider(ISSUER, {
   clients: [
@@ -44,18 +39,12 @@ const provider = new Provider(ISSUER, {
     return grant;
   },
   async findAccount(_ctx, id) {
-    const account = ACCOUNTS[id];
-    if (!account) return undefined;
+    const claims = demoAccountClaims(id);
+    if (!claims) return undefined;
     return {
       accountId: id,
       async claims() {
-        return {
-          sub: id,
-          name: account.name,
-          hrEduPersonUniqueID: `${id}@${DEMO_HOME_ORG}`,
-          hrEduPersonHomeOrg: DEMO_HOME_ORG,
-          hrEduPersonAffiliation: account.affiliation,
-        };
+        return claims;
       },
     };
   },
@@ -98,7 +87,7 @@ async function handleInteraction(req, res) {
     return;
   }
   const accountId = (await readForm(req)).get("account");
-  if (req.method !== "POST" || !accountId || !(accountId in ACCOUNTS)) {
+  if (req.method !== "POST" || !isDemoAccountId(accountId)) {
     res.writeHead(400, { "content-type": "text/plain; charset=utf-8" });
     res.end("Nepoznat demo račun.");
     return;
