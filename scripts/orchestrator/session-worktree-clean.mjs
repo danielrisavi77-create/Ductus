@@ -153,7 +153,8 @@ export function run({ cwd = process.cwd(), dryRun = false, exec = defaultExec, n
       const ref = git(["symbolic-ref", "-q", "HEAD"], path);
       const sha = git(["rev-parse", "HEAD"], path);
       if (!ref.ok || ref.out !== `refs/heads/${wt.branch}` || !sha.ok || sha.out !== facts.head) {
-        Object.assign(item, { remove: false, reason: "branch or HEAD changed during cleanup" });
+        item.remove = false;
+        item.reason = "branch or HEAD changed during cleanup";
       } else {
         item.done = git(["worktree", "remove", wt.path], root).ok && !existsSync(wt.path);
         // Compare-and-delete: the ref goes only if it still points at the merged head.
