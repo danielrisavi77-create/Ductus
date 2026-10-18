@@ -122,6 +122,10 @@ async function cleanUp(): Promise<void> {
 const post = (page: Page, action: string, data: object) =>
   page.request.post(`/api/comments/${action}`, { headers: { origin: ORIGIN }, data });
 
+/** The comment cards only; the sheet is an article as well. */
+const commentCards = (page: Page) =>
+  page.getByRole("article", { name: new RegExp(`^${t.number.replace("{n}", "\\d+")}$`) });
+
 test.afterEach(cleanUp);
 
 test("a teacher's comment next to a paragraph reaches the student, who answers", async ({ browser }) => {
@@ -196,10 +200,10 @@ test("a teacher's comment next to a paragraph reaches the student, who answers",
   await expect(editor).toHaveText("");
   release();
   await expect(student.getByText(t.signedOut)).toBeVisible();
-  await expect(student.getByRole("article")).toHaveCount(0);
+  await expect(commentCards(student)).toHaveCount(0);
   await expect(student.getByText(QUOTE)).toHaveCount(0);
   await expect(student.getByRole("textbox", { name: t.replyLabel })).toHaveCount(0);
   // Long enough for the held answer to have been handled.
   await student.waitForLoadState("networkidle");
-  await expect(student.getByRole("article")).toHaveCount(0);
+  await expect(commentCards(student)).toHaveCount(0);
 });
