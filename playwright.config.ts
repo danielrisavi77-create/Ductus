@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
+import { playwrightConsoleReporter } from "./test-output";
+
 const PORT = 3000;
 const BASE_URL = `http://localhost:${PORT}`;
 
@@ -71,7 +73,8 @@ export default defineConfig({
   retries: 0,
   // The HTML report carries screenshots, videos and traces; CI uploads it as
   // the `playwright-report` artifact of the run (docs/SESSIONS.md 6).
-  reporter: [["list"], ["html", { open: "never" }]],
+  // "line" instead of "list" in Claude Code sessions (test-output.ts).
+  reporter: [[playwrightConsoleReporter(process.env)], ["html", { open: "never" }]],
   use: {
     baseURL: BASE_URL,
     locale: "hr-HR",
