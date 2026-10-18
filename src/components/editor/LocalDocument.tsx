@@ -570,6 +570,20 @@ export function LocalSaveChip() {
   );
 }
 
+/** States in which this tab is putting the text on the device. */
+const SAVING_ON_DEVICE: readonly LocalChip["state"][] = ["EDITING", "SAVING_LOCAL", "LOCAL_DURABLE"];
+
+/**
+ * True while this tab writes the document and its saves reach the journal:
+ * the same condition under which the chip may show a local state, so the
+ * offline notice (F-8) never says text is saved on the device while the
+ * chip or a notice says saving has stopped.
+ */
+export function useLocalSavingOnDevice(): boolean {
+  const state = chipOf(useLocalDocument())?.state;
+  return state !== undefined && SAVING_ON_DEVICE.includes(state);
+}
+
 /** Word count for the status bar. */
 export function LocalWordCount() {
   return <span>{wordsHr(useLocalDocument().words)}</span>;
