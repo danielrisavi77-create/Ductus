@@ -1,15 +1,6 @@
 ---
 name: ductus-editor-document
 description: "Ductus document code: Tiptap editor and schema (src/editor), canonical document model and edit steps, diff, FPZG citations and collaboration anchors. Use when changing or reviewing src/editor or src/domain/document, diff, citation or collaboration."
-paths:
-  - "src/editor/**"
-  - "src/domain/document/**"
-  - "src/domain/diff/**"
-  - "src/domain/citation/**"
-  - "src/domain/collaboration/**"
-  - "e2e/block-identity.spec.ts"
-  - "e2e/editor-shell.spec.ts"
-  - "e2e/local-editor.spec.ts"
 ---
 
 # Ductus: router za editor i model dokumenta

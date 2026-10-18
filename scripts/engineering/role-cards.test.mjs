@@ -236,102 +236,29 @@ test("the glob matcher handles the forms the rules use", () => {
   assert.ok(!globMatches("src/editor/**", "src/editorial/x.ts"));
 });
 
-// Area skills may carry a `paths:` list so Claude Code offers them only on
-// matching files (DAN-213). The same live-glob rules apply as for path rules;
-// the app map stays unscoped because it is read before the area is known.
-const skillsDir = path.join(root, ".claude/skills");
-// Returns null without a paths: key, [] when any line of the block is not a
-// double-quoted list item (the whole block must parse), else the globs.
-const skillPaths = (text) => {
-  const lines = (text.match(/^---\n([\s\S]*?)\n---\n/)?.[1] ?? "").split("\n");
-  const start = lines.findIndex((line) => /^paths:/.test(line));
-  if (start === -1) return null;
-  if (lines[start] !== "paths:") return [];
-  const block = [];
-  for (const line of lines.slice(start + 1)) {
-    if (/^\S/.test(line)) break;
-    block.push(line);
-  }
-  const globs = block.map((line) => /^ {2}- "([^"\n]+)"$/.exec(line)?.[1]);
-  return block.length > 0 && globs.every(Boolean) ? globs : [];
-};
+// Owner decision of 18 Oct 2026 (DAN-213, #426 after qa426a): a skill with a
+// `paths:` key is neither listed nor callable by /name or the Skill tool until
+// a matching file is touched, so no project skill carries one.
+const frontmatter = (text) => text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/)?.[1] ?? "";
+const hasPathsKey = (text) => /^paths\s*:/m.test(frontmatter(text));
 
-const skillGlobs = (name) =>
-  skillPaths(read(path.join(skillsDir, name, "SKILL.md"))) ?? [];
-const covers = (name, file) => skillGlobs(name).some((glob) => globMatches(glob, file));
-
-test("skill paths: lists are quoted globs that match tracked files", () => {
-  let scoped = 0;
-  for (const name of readdirSync(skillsDir).sort()) {
-    const file = path.join(skillsDir, name, "SKILL.md");
-    if (!existsSync(file)) continue;
-    const globs = skillPaths(read(file));
-    if (globs === null) continue;
-    scoped += 1;
-    assert.ok(globs.length > 0, `${name}: paths: must be a list of double-quoted globs`);
-    for (const glob of globs) {
-      assert.doesNotMatch(glob, /[{}[\]]/, `${name}: ${glob} must not use braces or classes`);
-      assert.doesNotMatch(glob, /^\.?\//, `${name}: ${glob} must be relative to the repo root`);
-      assert.ok(
-        tracked.some((f) => globMatches(glob, f)),
-        `${name}: ${glob} matches no tracked file`,
-      );
+test("no project skill is path-scoped", () => {
+  let skills = 0;
+  for (const dir of [".claude/skills", ".agents/skills"]) {
+    for (const name of readdirSync(path.join(root, dir)).sort()) {
+      const file = path.join(root, dir, name, "SKILL.md");
+      if (!existsSync(file)) continue;
+      skills += 1;
+      assert.ok(!hasPathsKey(read(file)), `${dir}/${name}: paths: hides the skill from /name and the Skill tool`);
     }
   }
-  assert.ok(scoped > 0, "at least one area skill is path-scoped");
-  assert.equal(
-    skillPaths(read(path.join(skillsDir, "ductus-app-map", "SKILL.md"))),
-    null,
-    "ductus-app-map must not be path-scoped",
-  );
+  assert.ok(skills > 0);
 });
 
-test("the skill paths: parser rejects unquoted, inline and mixed lists", () => {
-  assert.deepEqual(skillPaths('---\nname: x\npaths:\n  - "db/**"\n---\n'), ["db/**"]);
-  assert.deepEqual(
-    skillPaths('---\npaths:\n  - "db/**"\n  - "src/x/**"\nname: x\n---\n'),
-    ["db/**", "src/x/**"],
-  );
-  assert.deepEqual(skillPaths("---\nname: x\npaths:\n  - db/**\n---\n"), []);
-  assert.deepEqual(skillPaths("---\nname: x\npaths: db/**\n---\n"), []);
-  assert.deepEqual(skillPaths('---\nname: x\npaths:\n  - "db/**"\n  - src/nope/**\n---\n'), []);
-  assert.deepEqual(skillPaths('---\nname: x\npaths:\n  - "db/**"\n  # note\n---\n'), []);
-  assert.deepEqual(skillPaths("---\nname: x\npaths:\n---\n"), []);
-  assert.equal(skillPaths("---\nname: x\n---\n"), null);
-});
-
-// Files that the old descriptions named and that live outside the area
-// folders: each must stay in its skill's scope (#426 review).
-const AREA_FILES = {
-  "ductus-database": ["scripts/db/provision-auth.mjs", "scripts/db/provision-auth.test.mjs"],
-  "ductus-evidence-forensics": [
-    "tests/integration/evidence-acceptance.integration.test.ts",
-    "tests/integration/s3-evidence-payload-store.integration.test.ts",
-    "tests/integration/institution-routed-payload-store.integration.test.ts",
-  ],
-  "ductus-auth-aai": ["tests/unit/infra/fake-oidc-accounts.test.ts", "e2e/login/login.spec.ts"],
-  "ductus-sync-journal": ["tests/unit/server-sync-messages.test.ts"],
-  "ductus-editor-document": ["e2e/block-identity.spec.ts", "e2e/local-editor.spec.ts"],
-  "ductus-ui-shell-i18n": ["tests/unit/forbidden-terms.test.ts", "tests/property/forbidden-terms.property.test.ts"],
-};
-
-test("area skills cover the files of their area outside the area folders", () => {
-  for (const [name, files] of Object.entries(AREA_FILES)) {
-    for (const file of files) {
-      assert.ok(tracked.includes(file), `${file} is no longer tracked; update AREA_FILES`);
-      assert.ok(covers(name, file), `${name}: paths: must cover ${file}`);
-    }
-  }
-});
-
-test("ductus-ui-shell-i18n covers every live scanner text module", () => {
-  const scanner = read(path.join(root, "scripts/forbidden-terms/scan.ts"));
-  const block = scanner.match(/UI_TEXT_MODULES: readonly string\[\] = \[([\s\S]*?)\];/);
-  assert.ok(block, "scan.ts declares UI_TEXT_MODULES");
-  const modules = [...block[1].matchAll(/^\s*"([^"]+)",/gm)].map((m) => m[1]);
-  for (const glob of modules) {
-    for (const file of tracked.filter((f) => globMatches(glob, f))) {
-      assert.ok(covers("ductus-ui-shell-i18n", file), `ductus-ui-shell-i18n: paths: must cover ${file}`);
-    }
-  }
+test("the paths: detector reads only the frontmatter", () => {
+  assert.ok(hasPathsKey('---\nname: x\npaths:\n  - "db/**"\n---\n'));
+  assert.ok(hasPathsKey("---\nname: x\npaths: db/**\n---\n"));
+  assert.ok(hasPathsKey('---\r\nname: x\r\npaths:\r\n  - "db/**"\r\n---\r\n'));
+  assert.ok(!hasPathsKey("---\nname: x\n---\n\npaths: in the body\n"));
+  assert.ok(!hasPathsKey("---\nname: x\ndescription: no paths: here\n---\n"));
 });

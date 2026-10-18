@@ -1,16 +1,6 @@
 ---
 name: ductus-ui-shell-i18n
 description: "Ductus pages, layouts and UI shell: app/ routes, src/components, the Croatian i18n catalogue and the forbidden terms scanner. Use when changing a page or any user-visible text; PRODUCT section 5 binds what the interface may show."
-paths:
-  - "app/**"
-  - "src/components/**"
-  - "src/lib/i18n/**"
-  - "scripts/forbidden-terms/**"
-  - "**/labels.ts"
-  - "**/messages.ts"
-  - "src/editor/schema.ts"
-  - "tests/unit/forbidden-terms*.test.ts"
-  - "tests/property/forbidden-terms*.test.ts"
 ---
 
 # Ductus: router za sučelje, copy i UX

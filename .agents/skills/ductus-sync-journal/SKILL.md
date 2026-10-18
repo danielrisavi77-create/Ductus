@@ -1,11 +1,6 @@
 ---
 name: ductus-sync-journal
 description: "Ductus sync and journal: local Dexie journal, eight-state sync machine, drain, signed-receipt ACK, conflict, recovery, logout fence and serverSync wire contract. Use for src/domain/sync, src/domain/serverSync, src/lib/journal, SYNCED, ACK or offline."
-paths:
-  - "src/domain/sync/**"
-  - "src/domain/serverSync/**"
-  - "src/lib/journal/**"
-  - "tests/unit/server-sync-messages.test.ts"
 ---
 
 # Ductus: router za sinkronizaciju i journal

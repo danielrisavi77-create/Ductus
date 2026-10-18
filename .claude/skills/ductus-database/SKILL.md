@@ -1,12 +1,6 @@
 ---
 name: ductus-database
 description: "Detailed guide to the Ductus database area - db/migrations, db/tests (pgTAP and fixtures), db/local, src/server/db (withActor, openSession), compose.yaml and the db:* scripts. Use when adding or changing a table, role, grant, RLS policy, SECURITY DEFINER function (RPC), migration, pgTAP matrix row, local stack provisioning, or the way server code reaches PostgreSQL."
-paths:
-  - "db/**"
-  - "src/server/db/**"
-  - "compose.yaml"
-  - "scripts/db/**"
-  - "tests/integration/**"
 ---
 
 # Ductus: router za bazu podataka
