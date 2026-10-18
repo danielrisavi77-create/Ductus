@@ -54,11 +54,6 @@ function contextScore(text: string, start: number, end: number, anchor: TextAnch
 export function resolveTextAnchor(anchor: TextAnchor, nodeId: NodeId, nodeText: string): AnchorResolution {
   if (nodeId !== anchor.nodeId || anchor.quote.length === 0) return { status: "missing" };
 
-  const hinted = nodeText.slice(anchor.startHint, anchor.endHint);
-  if (hinted === anchor.quote) {
-    return { status: "exact", start: anchor.startHint, end: anchor.endHint };
-  }
-
   const starts: number[] = [];
   let from = 0;
   while (from <= nodeText.length - anchor.quote.length) {
@@ -74,6 +69,16 @@ export function resolveTextAnchor(anchor: TextAnchor, nodeId: NodeId, nodeText: 
     end: start + anchor.quote.length,
     score: contextScore(nodeText, start, start + anchor.quote.length, anchor),
   }));
+
+  // The old position is exact only when the quote there keeps all of its
+  // recorded context and no other occurrence does: an edit can move another
+  // occurrence of the same quote onto the old position (#418).
+  const fullScore = (anchor.prefix ? 1 : 0) + (anchor.suffix ? 1 : 0);
+  const complete = scored.filter((m) => m.score === fullScore);
+  if (complete.length === 1 && complete[0].start === anchor.startHint && complete[0].end === anchor.endHint) {
+    return { status: "exact", start: anchor.startHint, end: anchor.endHint };
+  }
+
   const best = Math.max(...scored.map((m) => m.score));
   const winners = scored.filter((m) => m.score === best);
   if (winners.length !== 1) return { status: "ambiguous", matches: winners.length };
