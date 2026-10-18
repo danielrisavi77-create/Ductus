@@ -101,6 +101,27 @@ describe("F-3 3b: drain runner", () => {
     expect(await runner.step(ID, { manual: true })).toMatchObject({ kind: "sent", state: "ERROR" });
   });
 
+  it("a local save after a fatal answer does not lift the manual block on the held row", async () => {
+    const journal = open();
+    await queue(journal, "tx-1");
+    let clock = 0;
+    const { sent, transport } = scripted(signed(1), signed(1));
+    let receiptsTrusted = false;
+    const runner = createDrainRunner({
+      journal, transport, verify: async () => receiptsTrusted, now: () => clock, jitter: () => 0.5,
+    });
+    expect(await runner.step(ID)).toMatchObject({ kind: "sent", state: "ERROR" });
+    // The author keeps typing: the journal says LOCAL_DURABLE, tx-1 stays held.
+    await queue(journal, "tx-2");
+    expect((await journal.read(ID)).meta).toMatchObject({ state: "LOCAL_DURABLE", awaitingReceipt: { localSeq: 1 } });
+    clock = 60_000;
+    expect(await runner.step(ID)).toEqual({ kind: "needs_retry", state: "LOCAL_DURABLE" });
+    expect(sent).toHaveLength(1);
+    receiptsTrusted = true;
+    expect(await runner.step(ID, { manual: true })).toMatchObject({ kind: "sent", ackedRevision: 1 });
+    expect(sent.map((row) => row.clientTransactionId)).toEqual(["tx-1", "tx-1"]);
+  });
+
   it("a lost answer replays the same key after the backoff, never a newer row", async () => {
     const journal = open();
     await queue(journal, "tx-1");

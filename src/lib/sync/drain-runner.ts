@@ -70,10 +70,12 @@ export function createDrainRunner(deps: DrainRunnerDeps): DrainRunner {
   const now = deps.now ?? Date.now;
   const jitter = deps.jitter ?? Math.random;
   let schedules: RetrySchedules = new Map();
-  // Documents whose last answer was a failure `isRetryable` refuses. Held in
+  // Per document, the key of the row whose last answer was a failure
+  // `isRetryable` refuses. Tied to the row, not to the stored state: a local
+  // save turns ERROR into LOCAL_DURABLE but leaves the same row held. Held in
   // memory only: after a reload an ERROR gets one automatic replay of the same
   // key, which is idempotent and earns the same deterministic answer.
-  const manualOnly = new Set<string>();
+  const manualOnly = new Map<string, string>();
   const inFlight = new Set<string>();
 
   async function sendOnce(documentId: string, manual: boolean): Promise<DrainStepResult> {
@@ -86,8 +88,8 @@ export function createDrainRunner(deps: DrainRunnerDeps): DrainRunner {
     const plan = planDrain(before.pending, before.meta, before.meta?.awaitingReceipt ?? null);
     const row = plan.send;
     if (row === null) return { kind: "stalled", state: stored };
-    if (stored === "ERROR" && manualOnly.has(documentId) && !manual) {
-      return { kind: "needs_retry", state: stored };
+    if (manualOnly.get(documentId) === row.tx.clientTransactionId && !manual) {
+      return { kind: "needs_retry", state: stored ?? "ERROR" };
     }
 
     await deps.journal.beginSend(documentId, row);
@@ -123,7 +125,7 @@ export function createDrainRunner(deps: DrainRunnerDeps): DrainRunner {
     }
 
     schedules = scheduleAfterOutcome(schedules, documentId, result.meta.awaitingReceipt ?? null, now(), jitter);
-    if (result.meta.state === "ERROR" && !isRetryable(outcome)) manualOnly.add(documentId);
+    if (result.meta.state === "ERROR" && !isRetryable(outcome)) manualOnly.set(documentId, row.tx.clientTransactionId);
     else manualOnly.delete(documentId);
     return { kind: "sent", state: result.meta.state, ackedRevision: result.ackedRevision };
   }
