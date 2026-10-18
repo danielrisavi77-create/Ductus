@@ -7,6 +7,7 @@ Read `CLAUDE.md`, `AGENTS.md`, `STATE.md`, and `docs/ENGINEERING_SYSTEM-SAZETAK.
 
 Operate in **worker** mode:
 - use a dedicated branch/worktree from fresh `origin/main`;
+- skim `docs/engineering/zamke.md` for known traps before starting; it adds no rules, the documents it cites govern;
 - obey role ownership in `docs/SESSIONS.md`;
 - do not change another worker's branch;
 - run the required checks before handoff;

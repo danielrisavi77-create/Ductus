@@ -22,6 +22,7 @@
   --ink-3: #8e958d;
   --rule: #2c312b;
   --rule-2: #232722;
+  --hover: #1e221d;
   --accent: #6fbfa5;
   --accent-hover: #8ccdb7;
   --accent-ink: #0e1c17;
@@ -283,7 +284,7 @@ main:focus {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 14px;
-  min-height: 46px;
+  min-height: 48px;
   padding: 6px 14px;
   background: var(--chrome);
   border-bottom: 1px solid var(--rule);
@@ -322,16 +323,22 @@ main:focus {
   background: transparent;
   font-size: 12.5px;
   font-weight: 500;
-  color: var(--ink-3);
+  color: var(--ink-2);
   text-decoration: none;
+}
+
+.modes__item:not([aria-disabled="true"]):hover {
+  color: var(--ink);
 }
 
 .modes__item[aria-disabled="true"] {
   cursor: not-allowed;
 }
 
+/* The open view: raised segment, full ink and weight, not colour alone. */
 .modes__item[aria-current="page"] {
-  background: var(--sheet);
+  background: var(--hover);
+  font-weight: 600;
   color: var(--ink);
   box-shadow: 0 1px 2px #0000000f;
 }
@@ -339,7 +346,7 @@ main:focus {
 .workspace__body {
   flex: 1;
   display: grid;
-  grid-template-columns: 236px minmax(0, 1fr) 322px;
+  grid-template-columns: 260px minmax(0, 1fr) 330px;
   grid-template-areas: "rail main panel";
   min-height: 0;
 }
@@ -368,6 +375,52 @@ main:focus {
 
 .workspace__panel {
   border-left: 1px solid var(--rule);
+  /* The tab strip runs edge to edge; each tab panel pads itself. */
+  padding: 0;
+}
+
+/* Right panel tabs (design editor-v11 §5.1). */
+.panel-tabs__list {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  gap: 14px;
+  padding: 0 16px;
+  overflow-x: auto;
+  background: var(--chrome);
+  border-bottom: 1px solid var(--rule-2);
+}
+
+.panel-tabs__tab {
+  flex: none;
+  min-height: 36px;
+  padding: 10px 0 9px;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.panel-tabs__tab:hover {
+  color: var(--ink);
+}
+
+/* The open tab: underline and weight as well as colour. */
+.panel-tabs__tab[aria-selected="true"] {
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.panel-tabs__panel {
+  padding: 14px 16px 24px;
+}
+
+/* In the top bar the demo label is quiet text (editor-v11), not a badge. */
+.workspace__bar .demo-badge {
+  padding: 0;
+  border: 0;
 }
 
 .workspace__main {
@@ -460,10 +513,9 @@ main:focus {
   gap: 8px;
   margin: 0 0 7px;
   padding: 0 4px;
+  /* editor-v11 sets 11.5 px; 12 px is the floor for interface text. */
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: var(--ink-3);
 }
 
@@ -488,7 +540,7 @@ main:focus {
 }
 
 .sheet {
-  max-width: 756px;
+  max-width: 720px;
   margin: 0 auto;
   padding: 56px 76px 48px;
   background: var(--sheet);
@@ -504,7 +556,7 @@ main:focus {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  max-width: 756px;
+  max-width: 720px;
   margin: 0 auto 10px;
 }
 
@@ -555,6 +607,7 @@ main:focus {
   .workspace__status,
   .rail-section__title,
   .rail-empty,
+  .panel-tabs__tab,
   .editor-toolbar .btn {
     font-size: 13px;
   }
@@ -607,9 +660,9 @@ main:focus {
   color: var(--accent);
 }
 
-/* F-8 step 1: the toolbar sits above the sheet, as wide as the sheet. */
+/* F-8 step 1: the toolbar sits above the sheet, as wide as the sheet (720 px, editor-v11). */
 .workspace__main > .editor-toolbar {
-  max-width: 756px;
+  max-width: 720px;
   margin: 12px auto 0;
   padding: 4px 6px;
   border: 1px solid var(--rule);
