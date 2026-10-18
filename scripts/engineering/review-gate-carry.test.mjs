@@ -62,13 +62,13 @@ test("a carried FAIL holds the gate like a current one", () => {
   assert.match(result.description, /fail/);
 });
 
-test("Owner Override never carries to a later head", () => {
+test("Owner Override on an earlier head does not count unless that head is carried", () => {
   const result = evaluateGate({
     body: body(),
     headSha: head,
     ownerLogin,
     comments: [override(earlier)],
-    carriedHeads: new Set([earlier]),
+    carriedHeads: new Set(),
   });
   assert.equal(result.state, "pending");
 });

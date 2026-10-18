@@ -1,7 +1,7 @@
 ---
 name: ductus-security-reviewer
 description: Performs focused Ductus security review of auth, authorization, RLS, sessions, secrets, crypto, evidence, submission, and privileged workflows.
-model: inherit
+model: opus
 effort: high
 ---
 

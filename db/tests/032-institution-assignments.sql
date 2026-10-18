@@ -278,11 +278,13 @@ ALTER TABLE institution.assignment_version DISABLE TRIGGER assignment_version_no
 ALTER TABLE evidence.document_revision DISABLE TRIGGER evidence_revision_no_truncate;
 ALTER TABLE evidence.segment DISABLE TRIGGER evidence_segment_no_truncate;
 ALTER TABLE evidence.receipt DISABLE TRIGGER evidence_receipt_no_truncate;
+ALTER TABLE evidence.submission_request DISABLE TRIGGER evidence_submission_request_no_truncate;
 SELECT is(
   pg_temp.try_rolled_back('TRUNCATE institution.assignment_version, institution.assignment CASCADE'),
   'ZT001: went through',
   'with the TRUNCATE trigger disabled the same statement empties the versions'
 );
+ALTER TABLE evidence.submission_request ENABLE TRIGGER evidence_submission_request_no_truncate;
 ALTER TABLE evidence.receipt ENABLE TRIGGER evidence_receipt_no_truncate;
 ALTER TABLE evidence.segment ENABLE TRIGGER evidence_segment_no_truncate;
 ALTER TABLE evidence.document_revision ENABLE TRIGGER evidence_revision_no_truncate;

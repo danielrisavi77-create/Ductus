@@ -1,7 +1,7 @@
 ---
 name: ductus-privacy-legal-pilot
 description: Audits Ductus privacy, retention, pilot-readiness, institutional responsibilities, consent/notice, data-flow, and unresolved legal-owner decisions.
-model: inherit
+model: sonnet
 effort: high
 ---
 
