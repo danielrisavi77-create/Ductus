@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { createTextAnchor } from "@/domain/collaboration";
 import type { NodeId } from "@/domain/document";
 
-import { anchorRange, commentHighlightKey, commentHighlightPlugin } from "./comment-anchor";
+import { anchorRange, commentHighlightKey, commentHighlightPlugin, createAnchorPlacer } from "./comment-anchor";
 import { createEditorExtensions, NODE_ID_ATTRIBUTE } from "./schema";
 
 const schema = getSchema(createEditorExtensions());
@@ -43,6 +43,28 @@ describe("anchorRange", () => {
     expect(anchorRange(docOf(para(A, "Sasvim drukčije.")), anchor)).toBeNull();
     const twice = { ...anchor, prefix: "", suffix: "", startHint: 40, endHint: 48 };
     expect(anchorRange(docOf(para(A, "rečenica i rečenica")), twice)).toBeNull();
+  });
+});
+
+describe("createAnchorPlacer", () => {
+  it("resolves again only when the document or the list changed (F-093)", () => {
+    const anchor = anchorIn(A, "Uvod u temu.", "temu");
+    let resolved = 0;
+    const place = createAnchorPlacer((item: { anchor: typeof anchor | null }) => {
+      resolved += 1;
+      return item.anchor;
+    });
+    const items = [{ anchor }, { anchor: null }];
+    const doc = docOf(para(A, "Kratki uvod u temu."));
+    const first = place(doc, items);
+    expect(first.map((r) => textAt(doc, r))).toEqual(["temu", null]);
+    // A cursor move keeps the document object: nothing is resolved again.
+    expect(place(doc, items)).toBe(first);
+    expect(resolved).toBe(2);
+    const edited = docOf(para(A, "Novi uvod u temu."));
+    expect(place(edited, items).map((r) => textAt(edited, r))).toEqual(["temu", null]);
+    expect(place(edited, [...items])).not.toBe(first);
+    expect(resolved).toBe(6);
   });
 });
 

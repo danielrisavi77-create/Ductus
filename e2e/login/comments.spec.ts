@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Browser, type Page } from "@playwright/test";
 import pg from "pg";
 
 import { createTextAnchor } from "../../src/domain/collaboration";
@@ -211,4 +211,74 @@ test("a teacher's comment next to a paragraph reaches the student, who answers",
   await expect(commentCards(student)).toHaveCount(0);
   await expect(student.getByText(QUOTE)).toHaveCount(0);
   await expect(student.getByRole("textbox", { name: t.replyLabel })).toHaveCount(0);
+});
+
+// F-093: a fixed, invented paragraph id; the sheet of these tests never holds it,
+// so the comment stays in the list without a place, which is all they need.
+const UNPLACED = createTextAnchor({
+  nodeId: "0f8e2a64-1b3c-4d5e-8f60-718293a4b5c6" as NodeId, nodeText: TEXT,
+  start: TEXT.indexOf(QUOTE), end: TEXT.indexOf(QUOTE) + QUOTE.length,
+});
+
+/** The teacher and the student signed in, and one comment of the teacher's, listed on the student's /rad. */
+async function commentShown(browser: Browser, prepare: (student: Page) => Promise<unknown>) {
+  const teacher = await (await browser.newContext()).newPage();
+  const student = await (await browser.newContext()).newPage();
+  await signIn(teacher, "/", "Demo nastavnik");
+  await signIn(student, "/");
+  await seed();
+  const created = await post(teacher, "create", { documentId: LOCAL_DEMO_DOCUMENT_ID, body: "Dodaj izvor.", anchor: UNPLACED });
+  expect(created.status()).toBe(200);
+  await prepare(student);
+  await student.goto("/rad");
+  const card = student.getByRole("article", { name: t.number.replace("{n}", "1") });
+  await expect(card).toContainText(t.notPlaced, { timeout: 30_000 });
+  await card.getByRole("textbox", { name: t.replyLabel }).fill("Nacrt odgovora koji ne smije ostati.");
+  return { teacher, student, card };
+}
+
+test("without IndexedDB the panel still drops the threads when the session ends in another tab (F-093)", async ({ browser }) => {
+  const { student } = await commentShown(browser, (page) => page.addInitScript(() => {
+    Object.defineProperty(window, "indexedDB", { value: undefined, configurable: true });
+  }));
+  await expect(student.getByText(messagesHr.editor.failureUnavailable)).toBeVisible();
+
+  const second = await student.context().newPage();
+  await second.goto("/rad");
+  await second.getByRole("button", { name: messagesHr.auth.logout }).click();
+  await second.waitForURL(`${ORIGIN}/`);
+  await expect(student.getByText(t.signedOut)).toBeVisible();
+  await expect(commentCards(student)).toHaveCount(0);
+  await expect(student.getByText(QUOTE)).toHaveCount(0);
+  await expect(student.getByRole("textbox", { name: t.replyLabel })).toHaveCount(0);
+});
+
+test("a reply typed before another person signed in at this browser is never sent (F-093)", async ({ browser }) => {
+  // The tab hears no news of the new sign-in, as if it came a moment before
+  // the teacher's page recorded it; only the check right before sending is left.
+  const { teacher, student, card } = await commentShown(browser, (page) => page.addInitScript(() => {
+    Reflect.deleteProperty(window, "BroadcastChannel");
+    const add = window.addEventListener.bind(window);
+    window.addEventListener = ((type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions) => {
+      if (type !== "storage") add(type, listener, options);
+    }) as typeof window.addEventListener;
+  }));
+  const replies: string[] = [];
+  student.on("request", (request) => {
+    if (request.url().endsWith("/api/comments/reply")) replies.push(request.url());
+  });
+  const recorded = () => student.evaluate(() => localStorage.getItem("ductus-session-current"));
+  const before = await recorded();
+  // The fake provider remembers who signed in; forgetting it shows the account choice again.
+  await student.context().clearCookies({ name: /^_session/ });
+  await signIn(await student.context().newPage(), "/", "Demo nastavnik");
+  // The teacher's page has recorded its session in this browser.
+  await expect.poll(recorded).not.toBe(before);
+
+  await card.getByRole("button", { name: t.reply }).click();
+  await expect(student.getByText(t.signedOut)).toBeVisible();
+  await expect(commentCards(student)).toHaveCount(0);
+  expect(replies).toEqual([]);
+  const listed = await (await post(teacher, "list", { documentId: LOCAL_DEMO_DOCUMENT_ID })).json();
+  expect(listed.comments).toHaveLength(1);
 });
