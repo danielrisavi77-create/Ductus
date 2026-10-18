@@ -37,6 +37,7 @@ export default async function AssignmentNoticePage({ params }: { params: Promise
                 </a>
               </p>
             ) : null}
+            {read.kind === "notFound" ? <p><Link href="/upis">{t.student.enroll.title}</Link></p> : null}
           </>
         )}
         <p><Link href="/">{t.teacher.backHome}</Link></p>
