@@ -124,12 +124,35 @@ export class InstitutionRoutedPayloadStore implements EvidencePayloadStore {
     return Object.fromEntries(domains.map((d) => [d.label, d.state]));
   }
 
-  async putImmutable(input: {
+  async putImmutable(given: {
     institutionId: string;
     evidencePackageId: string;
     segmentHash: string;
     canonicalPayload: string;
   }): Promise<EvidencePayloadPutResult> {
+    // Each field is read exactly once, here, like the adapter reads its
+    // input: the check, the choice of domain and the write all use these
+    // values, so a getter or a caller that changes its object during the
+    // call cannot send one institution's key to another's bucket.
+    let input: {
+      institutionId: string;
+      evidencePackageId: string;
+      segmentHash: string;
+      canonicalPayload: string;
+    };
+    try {
+      input = {
+        institutionId: given.institutionId,
+        evidencePackageId: given.evidencePackageId,
+        segmentHash: given.segmentHash,
+        canonicalPayload: given.canonicalPayload,
+      };
+    } catch {
+      this.log("evidence storage request could not be read", {
+        reason: "storage_request_failed",
+      });
+      return UNAVAILABLE;
+    }
     if (!isInstitutionId(input.institutionId)) return { status: "invalid" };
     const domain = this.domains.get(input.institutionId);
     if (domain === undefined) {
@@ -144,16 +167,22 @@ export class InstitutionRoutedPayloadStore implements EvidencePayloadStore {
       if (failed !== null) return UNAVAILABLE;
     }
     if (domain.state === "disabled") return UNAVAILABLE;
-    let stored: EvidencePayloadPutResult;
+    let stored: unknown;
     try {
       stored = await domain.store.putImmutable(input);
     } catch {
       stored = { status: "unavailable", reason: "storage_request_failed" };
     }
-    if (stored.status !== "unavailable") return stored;
+    // Snapshot and validate once. A domain can return an object with getters,
+    // so property access must remain inside the normalization boundary.
+    const result: EvidencePayloadPutResult = normalizePutResult(stored) ?? {
+      status: "unavailable",
+      reason: "storage_request_failed",
+    };
+    if (result.status !== "unavailable") return result;
     this.log("evidence storage domain is unavailable", {
       storageDomain: domain.label,
-      reason: stored.reason,
+      reason: result.reason,
     });
     return UNAVAILABLE;
   }
@@ -183,14 +212,18 @@ export class InstitutionRoutedPayloadStore implements EvidencePayloadStore {
   }
 
   private async readIdentity(domain: Domain): Promise<Unavailable | null> {
-    let result: Awaited<ReturnType<DomainPayloadStore["verifyIdentity"]>>;
+    let raw: unknown;
     try {
-      result = await domain.store.verifyIdentity({
+      raw = await domain.store.verifyIdentity({
         institutionId: domain.institutionId,
       });
     } catch {
-      result = { status: "unavailable", reason: "storage_request_failed" };
+      raw = null;
     }
+    const result = normalizeIdentityResult(raw) ?? {
+      status: "unavailable" as const,
+      reason: "storage_request_failed",
+    };
     if (result.status === "verified") {
       domain.state = "verified";
       return null;
@@ -209,5 +242,56 @@ export class InstitutionRoutedPayloadStore implements EvidencePayloadStore {
       reason: result.reason,
     });
     return UNAVAILABLE;
+  }
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function normalizePutResult(value: unknown): EvidencePayloadPutResult | null {
+  try {
+    if (!isObject(value)) return null;
+    const status = value.status;
+    switch (status) {
+      case "stored":
+      case "existing": {
+        const storageRef = value.storageRef;
+        return typeof storageRef === "string" && storageRef !== ""
+          ? { status, storageRef }
+          : null;
+      }
+      case "conflict":
+      case "invalid":
+        return { status };
+      case "unavailable": {
+        const reason = value.reason;
+        return typeof reason === "string" ? { status, reason } : null;
+      }
+      default:
+        return null;
+    }
+  } catch {
+    return null;
+  }
+}
+
+function normalizeIdentityResult(value: unknown): StorageIdentityResult | null {
+  try {
+    if (!isObject(value)) return null;
+    const status = value.status;
+    switch (status) {
+      case "verified":
+      case "mismatch":
+        return { status };
+      case "unavailable": {
+        const reason = value.reason;
+        return typeof reason === "string" ? { status, reason } : null;
+      }
+      default:
+        return null;
+    }
+  } catch {
+    return null;
   }
 }

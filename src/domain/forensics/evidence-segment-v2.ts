@@ -58,8 +58,8 @@ export type EvidenceEventV2 = {
 };
 
 export type EvidenceCaptureContextV2 = {
-  editorModel: string;
-  transactionFormat: string;
+  editorModel: (typeof EVIDENCE_EDITOR_MODELS_V2)[number];
+  transactionFormat: typeof EDIT_STEP_FORMAT_V1;
 };
 
 export type EvidenceSegmentV2 = {
@@ -212,7 +212,19 @@ function isEvent(
   return true;
 }
 
+/**
+ * Never throws: a hostile object (a Proxy or a getter that throws when read)
+ * is not a segment, and the answer is false like for any other refusal.
+ */
 export function isEvidenceSegmentV2(value: unknown): value is EvidenceSegmentV2 {
+  try {
+    return isSegmentUnguarded(value);
+  } catch {
+    return false;
+  }
+}
+
+function isSegmentUnguarded(value: unknown): value is EvidenceSegmentV2 {
   if (!isPlainObject(value) || !hasOnlyKeys(value, SEGMENT_KEYS)) return false;
 
   if (
