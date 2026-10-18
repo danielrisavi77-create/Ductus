@@ -147,6 +147,7 @@ export async function digestSubmissionReceiptPayloadV1(payload: SubmissionReceip
   if (!isSubmissionReceiptPayloadV1(payload)) {
     throw new Error("submission receipt v1: not a v1 payload");
   }
+  // JCS refuses accessor properties, so a value cannot read differently here.
   const canonical = canonicalizeJcs(payload);
   const digest = new Uint8Array(
     await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical)),

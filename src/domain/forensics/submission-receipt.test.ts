@@ -148,6 +148,16 @@ describe("submission receipt v1: payload rules", () => {
     );
   });
 
+  it("never signs bytes that differ from the payload it judged", async () => {
+    let reads = 0;
+    const shifty = { ...contract };
+    Object.defineProperty(shifty, "afterDeadline", {
+      enumerable: true,
+      get: () => (reads++ === 0 ? false : true),
+    });
+    await expect(digestSubmissionReceiptPayloadV1(shifty)).rejects.toThrow("jcs: accessor property");
+  });
+
   it("refuses a missing key", () => {
     for (const key of Object.keys(contract)) {
       const payload: Record<string, unknown> = { ...contract };
