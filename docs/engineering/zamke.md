@@ -4,10 +4,10 @@ Kratki zapisi o preprekama na koje su sesije naišle, da sljedeća sesija ne izg
 
 ## Kako se dopunjuje
 
-- Sesija koja naiđe na zamku upisuje je u svoju predaju (`IZVJEŠTAJ` ili komentar predaje, skill `ductus-handoff`) kao redak `Zamka: simptom; uzrok; što raditi`.
-- Orkestrator te retke skupno prenosi ovamo kroz vlastiti docs PR, kao i `STATE.md` (`docs/SESSIONS.md` §1, vlasništvo nad `docs/`).
+- Sesija koja naiđe na zamku može je navesti u svojoj predaji (`IZVJEŠTAJ` ili komentar predaje) kao redak `Zamka: simptom; uzrok; što raditi`. To nije obvezno polje predaje (`docs/SESSIONS.md` §3).
+- Orkestrator odlučuje hoće li takav redak prenijeti ovamo; `docs/` je u njegovom vlasništvu (`docs/SESSIONS.md` §1).
 - Unos ima simptom, uzrok, što raditi i izvor (PR, komentar ili odjeljak). Bez tajni, bez pojedinosti sigurnosnih nalaza i bez osobnih podataka.
-- PR koji ukloni uzrok nekog unosa to navodi u `IZVJEŠTAJ`-u kao redak `Zamka: ukloniti <unos>`, a orkestrator unos briše u svom skupnom docs PR-u.
+- PR koji ukloni uzrok nekog unosa to može navesti u `IZVJEŠTAJ`-u kao redak `Zamka: ukloniti <unos>`; brisanje unosa je opet odluka orkestratora.
 
 ## Unosi
 
@@ -20,6 +20,6 @@ Kratki zapisi o preprekama na koje su sesije naišle, da sljedeća sesija ne izg
 
 ### PR i gate
 
-- **Preflight orkestratora pada na opisu PR-a.** Uzrok: nedostaje polje ugovora za critical PR. Što raditi: popuniti svih pet polja iz `docs/ENGINEERING_SYSTEM.md` §14 (Invarijanta, Mjesta, Stvarni pozivatelj, Poznate granice, "Što bi ovaj PR moglo oboriti na QA-i?"). Parser traži oblik `**Polje:**`, s dvotočkom i za upitnikom (`**Što bi ovaj PR moglo oboriti na QA-i?:**`); bez nje polje se ne prepoznaje. Izvor: #437 i #448, 18. 10. 2026.
+- **Preflight orkestratora pada na opisu PR-a.** Uzrok: nedostaje polje ugovora za critical PR. Što raditi: popuniti svih pet polja iz `docs/ENGINEERING_SYSTEM.md` §14 (Invarijanta, Mjesta, Stvarni pozivatelj, Poznate granice, "Što bi ovaj PR moglo oboriti na QA-i?"). Parser (`contractText` u `scripts/orchestrator/preflight-core.mjs`) skida oznake i traži dvotočku odmah iza naziva polja, a kod pitanja iza upitnika (`**Što bi ovaj PR moglo oboriti na QA-i?:**`); bez dvotočke polje se ne prepoznaje. Izvor: #437 i #448, 18. 10. 2026.
 - **Codex ne daje QA ni review.** Uzrok: kvota iscrpljena. Što raditi: to nije nalaz; QA za critical prelazi na Grok (D-138). Izvor: #437, 18. 10. 2026.
 - **Patch nadogradnja mijenja i retke lockfilea za pakete koji se ne nadograđuju.** Uzrok: pnpm normalizira ključeve peer-sufiksa. Što raditi: navesti te pakete u `IZVJEŠTAJ`-u, uz napomenu da im se verzija ne mijenja, da review to ne čita kao proširenje opsega. Izvor: #437, 18. 10. 2026.
