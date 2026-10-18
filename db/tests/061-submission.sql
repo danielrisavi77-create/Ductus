@@ -240,6 +240,10 @@ SELECT is(pg_temp.ask('dora', format($$ SELECT concat_ws(' ', outcome, after_dea
   'recorded t 00:00:00.000001', 'a request one microsecond after the deadline of its version is late');
 SELECT is((SELECT after_deadline::text FROM evidence.submission WHERE principal_id = pg_temp.id('dora')), 'true',
   'the stored flag agrees with the answer');
+SELECT is((SELECT after_deadline::text FROM evidence.submission WHERE principal_id = pg_temp.id('tomo')), 'false',
+  'the stored flag of a request exactly at the deadline is on time');
+SELECT is(pg_temp.record('tomo', pg_temp.req('tomo'), repeat('d',64), 'after_deadline'), 'false',
+  'the repeat answers the stored flag');
 
 -- Reading (F2, F3, F7): the student sees the own submission only; the
 -- teacher's view comes with the signed receipt.
