@@ -8,13 +8,20 @@
 // worktree is gone and while it still points at the merged head. No `git worktree prune`.
 // Usage: node session-worktree-clean.mjs [--dry-run]. Always exits 0 (fail-open hook).
 import { spawnSync } from "node:child_process";
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync, lstatSync, realpathSync } from "node:fs";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const MIN_MERGED_AGE_MS = 2 * 60 * 60 * 1000;
 const SHA_RE = /^[0-9a-f]{40,64}$/;
-const REPO_ENV = /^GIT_(DIR|WORK_TREE|INDEX_FILE|COMMON_DIR|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|NAMESPACE|PREFIX)$/i;
+// Inherited variables that would point git or gh at another repository (GH_REPO, GH_HOST: #425 review).
+const REPO_ENV = /^(GIT_(DIR|WORK_TREE|INDEX_FILE|COMMON_DIR|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|NAMESPACE|PREFIX)|GH_REPO|GH_HOST)$/i;
+
+/** owner/name of a GitHub remote URL (https or ssh), or null. */
+export function githubRepo(url) {
+  const m = /^(?:https:\/\/github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/.exec(String(url).trim());
+  return m ? `${m[1]}/${m[2]}` : null;
+}
 const IN_PROGRESS = ["rebase-merge", "rebase-apply", "MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "BISECT_LOG"];
 const fold = (p) => (process.platform === "win32" ? resolve(p).toLowerCase() : resolve(p));
 const real = (p) => {
@@ -60,6 +67,7 @@ export function inScope(root, path) {
 export function decide(f) {
   const keep = (reason) => ({ remove: false, reason });
   if (!f.inScope) return keep("outside .claude/worktrees/agent-* and ../Ductus-worktrees/");
+  if (f.linked !== false) return keep("symlink, junction or not the registered worktree");
   if (f.locked) return keep("locked");
   if (f.current) return keep("current directory");
   if (!f.branch) return keep("detached HEAD");
@@ -109,22 +117,28 @@ export function run({ cwd = process.cwd(), dryRun = false, exec = defaultExec, n
     return [];
   }
   const here = real(cwd);
+  // The configured URL as written (no insteadOf expansion) names the repository gh asks.
+  const url = git(["config", "--get", "remote.origin.url"], root);
+  const repo = url.ok ? githubRepo(url.out) : null;
   const results = [];
   for (const wt of all.slice(1)) {
     if (!existsSync(wt.path)) continue;
-    const path = real(wt.path);
-    const facts = { inScope: inScope(root, path), locked: wt.locked, current: insideOrSame(here, path), branch: wt.branch, now };
-    if (facts.inScope && !facts.locked && !facts.current && facts.branch) {
-      const rp = git(["rev-parse", "--absolute-git-dir", "HEAD"], path);
-      const [gitDir = "", head = ""] = rp.ok ? rp.out.split("\n").map((s) => s.trim()) : [];
+    // The registered path with only its parent resolved; a link at the last step is never followed.
+    const path = join(real(dirname(wt.path)), basename(wt.path));
+    const linked = !lstatSync(wt.path).isDirectory() || !samePath(real(wt.path), path);
+    const facts = { inScope: inScope(root, path), linked, locked: wt.locked, current: insideOrSame(here, path), branch: wt.branch, now };
+    if (facts.inScope && !linked && !facts.locked && !facts.current && facts.branch) {
+      const rp = git(["rev-parse", "--show-toplevel", "--absolute-git-dir", "HEAD"], path);
+      const [top = "", gitDir = "", head = ""] = rp.ok ? rp.out.split("\n").map((s) => s.trim()) : [];
+      if (!samePath(real(top), path)) facts.linked = true;
       facts.head = head;
       const st = git(["status", "--porcelain", "--untracked-files=normal", "--ignored=matching", "--ignore-submodules=none"], path);
       facts.dirty = st.ok ? unsafePaths(st.out).length > 0 : null;
       facts.inProgress = !gitDir || IN_PROGRESS.some((x) => existsSync(join(gitDir, x)));
       const own = git(["rev-list", "--count", `origin/main..${head}`], root);
       facts.ownCommits = own.ok && /^\d+$/.test(own.out) ? Number(own.out) : null;
-      if (facts.ownCommits > 0) {
-        const pr = exec("gh", ["pr", "list", "--head", wt.branch, "--state", "all", "--limit", "50", "--json", "state,headRefOid,mergedAt"], { cwd: root });
+      if (facts.ownCommits > 0 && repo) {
+        const pr = exec("gh", ["pr", "list", "--repo", repo, "--head", wt.branch, "--state", "all", "--limit", "50", "--json", "state,headRefOid,mergedAt"], { cwd: root });
         try {
           facts.prs = pr.ok ? JSON.parse(pr.out) : null;
         } catch {
@@ -135,11 +149,18 @@ export function run({ cwd = process.cwd(), dryRun = false, exec = defaultExec, n
     const d = decide(facts);
     const item = { path, branch: wt.branch, ...d, done: false };
     if (d.remove && !dryRun) {
-      item.done = git(["worktree", "remove", path], root).ok && !existsSync(path);
-      const tip = git(["rev-parse", "--verify", "--quiet", `refs/heads/${wt.branch}`], root);
-      if (item.done && tip.ok && tip.out === facts.head) git(["branch", "-D", wt.branch], root);
+      // Re-read right before removal: another session may have switched branch since the listing.
+      const ref = git(["symbolic-ref", "-q", "HEAD"], path);
+      const sha = git(["rev-parse", "HEAD"], path);
+      if (!ref.ok || ref.out !== `refs/heads/${wt.branch}` || !sha.ok || sha.out !== facts.head) {
+        Object.assign(item, { remove: false, reason: "branch or HEAD changed during cleanup" });
+      } else {
+        item.done = git(["worktree", "remove", wt.path], root).ok && !existsSync(wt.path);
+        // Compare-and-delete: the ref goes only if it still points at the merged head.
+        if (item.done) git(["update-ref", "-d", `refs/heads/${wt.branch}`, facts.head], root);
+      }
     }
-    if (d.remove) log(`worktree cleanup: ${dryRun ? "would remove" : item.done ? "removed" : "FAILED to remove"} ${path} [${wt.branch}]`);
+    if (item.remove) log(`worktree cleanup: ${dryRun ? "would remove" : item.done ? "removed" : "FAILED to remove"} ${path} [${wt.branch}]`);
     results.push(item);
   }
   return results;

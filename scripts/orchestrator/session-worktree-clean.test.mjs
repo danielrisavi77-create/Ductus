@@ -2,18 +2,18 @@
 // Throwaway repositories only; gh is faked through the injected exec.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { MIN_MERGED_AGE_MS, decide, defaultExec, inScope, run, unsafePaths } from "./session-worktree-clean.mjs";
+import { MIN_MERGED_AGE_MS, decide, defaultExec, githubRepo, inScope, run, unsafePaths } from "./session-worktree-clean.mjs";
 
 const NOW = Date.parse("2026-10-18T12:00:00Z");
 const OLD = new Date(NOW - MIN_MERGED_AGE_MS - 1000).toISOString();
 const H = "a".repeat(40);
 const base = {
-  inScope: true, locked: false, current: false, branch: "platforma/x", head: H, dirty: false,
+  inScope: true, linked: false, locked: false, current: false, branch: "platforma/x", head: H, dirty: false,
   inProgress: false, ownCommits: 2, prs: [{ state: "MERGED", headRefOid: H, mergedAt: OLD }], now: NOW,
 };
 
@@ -36,6 +36,8 @@ test("decide keeps every case it cannot prove finished", () => {
     "status unreadable": { dirty: null },
     "operation in progress": { inProgress: true },
     "out of scope": { inScope: false },
+    "symlink or junction": { linked: true },
+    "link status unknown": { linked: undefined },
     locked: { locked: true },
     "current directory": { current: true },
     "detached HEAD": { branch: "" },
@@ -83,7 +85,11 @@ function setup(t) {
   git(work, "commit", "-q", "-m", "init");
   git(work, "remote", "add", "origin", remote);
   git(work, "push", "-q", "-u", "origin", "main");
+  // origin is written as a GitHub URL (the script derives --repo from it) and rewritten to the local remote for fetch.
+  git(work, "config", `url.${remote.replaceAll("\\", "/")}.insteadOf`, "https://github.com/acme/Ductus.git");
+  git(work, "remote", "set-url", "origin", "https://github.com/acme/Ductus.git");
   const prs = {};
+  const hooks = {}; // hooks[name](args) runs just before a git call whose first argument is `name`
   /** Worktree on a new branch from main; `commit` adds one commit of its own (a push is not needed). */
   const add = (dir, branch, { commit = true } = {}) => {
     const path = join(dir, branch.replaceAll("/", "-"));
@@ -96,7 +102,11 @@ function setup(t) {
     return { path, branch, head: git(path, "rev-parse", "HEAD") };
   };
   const exec = (cmd, args, opts) => {
-    if (cmd !== "gh") return defaultExec(cmd, args, opts);
+    if (cmd !== "gh") {
+      hooks[args[0]]?.(args);
+      return defaultExec(cmd, args, opts);
+    }
+    if (args[args.indexOf("--repo") + 1] !== "acme/Ductus") return { ok: false, out: "" };
     const branch = args[args.indexOf("--head") + 1];
     const v = prs[branch];
     return v === undefined ? { ok: false, out: "" } : { ok: true, out: JSON.stringify(v) };
@@ -104,8 +114,69 @@ function setup(t) {
   const clean = (opts = {}) => run({ cwd: work, exec, now: NOW, log: () => {}, ...opts });
   const agents = join(work, ".claude", "worktrees");
   const sibling = join(tmp, "Ductus-worktrees");
-  return { work, remote, prs, add, clean, agents, sibling };
+  return { work, remote, prs, hooks, add, clean, agents, sibling };
 }
+
+test("githubRepo reads owner/name from https and ssh GitHub URLs only", () => {
+  assert.equal(githubRepo("https://github.com/acme/Ductus.git"), "acme/Ductus");
+  assert.equal(githubRepo("git@github.com:acme/Ductus.git\n"), "acme/Ductus");
+  assert.equal(githubRepo("ssh://git@github.com/acme/Ductus"), "acme/Ductus");
+  for (const u of ["https://gitlab.com/acme/Ductus.git", "/tmp/remote.git", "https://github.com/acme", ""]) {
+    assert.equal(githubRepo(u), null, u);
+  }
+});
+
+test("defaultExec drops an inherited GH_REPO and GH_HOST", (t) => {
+  const prev = { GH_REPO: process.env.GH_REPO, GH_HOST: process.env.GH_HOST };
+  Object.assign(process.env, { GH_REPO: "someone/fork", GH_HOST: "example.invalid" });
+  t.after(() => {
+    for (const [k, v] of Object.entries(prev)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  });
+  const r = defaultExec(process.execPath, ["-e", "console.log(`${process.env.GH_REPO ?? 'none'} ${process.env.GH_HOST ?? 'none'}`)"]);
+  assert.equal(r.out, "none none");
+});
+
+test("review #425: links, a branch switch, a moved ref and an inherited GH_REPO never remove the wrong thing", (t) => {
+  const r = setup(t);
+  const merged = (w) => [{ state: "MERGED", headRefOid: w.head, mergedAt: OLD }];
+  // A registered worktree whose directory was replaced by a junction to another clean, merged worktree.
+  const target = r.add(r.agents, "agent-target");
+  const gone = r.add(r.agents, "agent-gone");
+  rmSync(gone.path, { recursive: true, force: true });
+  symlinkSync(target.path, gone.path, "junction");
+  // A worktree that another session switches to a new branch at the same HEAD after the listing.
+  const switched = r.add(r.agents, "agent-switched");
+  r.hooks["rev-list"] = (args) => {
+    if (args[2] === `origin/main..${switched.head}`) git(switched.path, "switch", "-q", "-c", "fresh-work");
+  };
+  // A worktree whose branch ref another session moves just before the compare-and-delete.
+  const moved = r.add(r.agents, "agent-moved");
+  let movedTo = "";
+  r.hooks["update-ref"] = (args) => {
+    if (args[2] !== `refs/heads/${moved.branch}`) return;
+    movedTo = git(r.work, "commit-tree", "-p", moved.head, "-m", "late", `${moved.head}^{tree}`);
+    git(r.work, "update-ref", `refs/heads/${moved.branch}`, movedTo);
+  };
+  Object.assign(r.prs, {
+    [target.branch]: [{ state: "OPEN", headRefOid: target.head }], [gone.branch]: merged(gone),
+    [switched.branch]: merged(switched), [moved.branch]: merged(moved),
+  });
+  const prevRepo = process.env.GH_REPO;
+  process.env.GH_REPO = "someone/Ductus-fork";
+  t.after(() => (prevRepo === undefined ? delete process.env.GH_REPO : (process.env.GH_REPO = prevRepo)));
+
+  const res = r.clean();
+  const by = Object.fromEntries(res.map((x) => [x.branch, x]));
+  assert.match(by[gone.branch].reason, /symlink, junction/);
+  assert.equal(existsSync(join(target.path, "agent-target.txt")), true, "the link target is untouched");
+  assert.equal(by[switched.branch].reason, "branch or HEAD changed during cleanup");
+  assert.equal(existsSync(switched.path), true);
+  assert.equal(by[moved.branch].done, true, "the worktree itself was finished");
+  assert.equal(git(r.work, "rev-parse", `refs/heads/${moved.branch}`), movedTo, "a moved branch ref survives");
+});
 
 test("run removes only proven-finished worktrees and keeps a fresh or reused-name one", (t) => {
   const r = setup(t);
