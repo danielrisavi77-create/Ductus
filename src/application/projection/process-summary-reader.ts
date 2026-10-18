@@ -35,12 +35,19 @@ export type ProcessSummaryUnavailableReason =
   | "source_unavailable"
   | "payload_missing"
   | "payload_unavailable"
+  | "projection_failed"
   | EvidenceChainFailureV2;
 
 export type ProcessSummaryReadResult =
   | { status: "ok"; body: string }
   | { status: "not_found" }
+  | { status: "withheld" }
   | { status: "unavailable"; reason: ProcessSummaryUnavailableReason };
+
+const unavailable = (reason: ProcessSummaryUnavailableReason): ProcessSummaryReadResult => ({
+  status: "unavailable",
+  reason,
+});
 
 export async function readProcessSummary(
   deps: ProcessSummaryReaderDeps,
@@ -49,28 +56,56 @@ export async function readProcessSummary(
   // An id that cannot exist is answered like one that does not.
   if (!isDocumentId(documentId)) return { status: "not_found" };
 
-  const source = await deps.source.readSource(documentId);
+  // An adapter that throws instead of answering is unavailable too: its
+  // message never leaves here (QA #450, MANJE 1).
+  let source;
+  try {
+    source = await deps.source.readSource(documentId);
+  } catch {
+    return unavailable("source_unavailable");
+  }
   if (source.status === "not_found") return { status: "not_found" };
-  if (source.status !== "found") return { status: "unavailable", reason: "source_unavailable" };
+  if (source.status === "withheld") return { status: "withheld" };
+  if (source.status !== "found") return unavailable("source_unavailable");
 
   const payloads: Uint8Array[] = [];
   for (const segmentHash of source.segmentHashes) {
-    const read = await deps.payloads.readImmutable({
-      evidencePackageId: source.evidencePackageId,
-      segmentHash,
-    });
-    if (read.status === "not_found") return { status: "unavailable", reason: "payload_missing" };
-    if (read.status !== "found") return { status: "unavailable", reason: "payload_unavailable" };
-    payloads.push(read.bytes);
+    let read;
+    try {
+      read = await deps.payloads.readImmutable({
+        evidencePackageId: source.evidencePackageId,
+        segmentHash,
+      });
+    } catch {
+      return unavailable("payload_unavailable");
+    }
+    if (read.status === "not_found") return unavailable("payload_missing");
+    if (read.status !== "found") return unavailable("payload_unavailable");
+    // Own copy: the bytes checked for the document are the bytes projected.
+    payloads.push(new Uint8Array(read.bytes));
   }
 
   // The chain is checked against the head inside the projection, so bytes a
-  // store returned for the wrong hash cannot pass as the record.
-  const result = await projectProcessSummary({
-    payloads,
-    head: source.head,
-    thresholds: deps.thresholds,
-  });
-  if (!result.ok) return { status: "unavailable", reason: result.reason };
-  return { status: "ok", body: canonicalizeJcs(result.summary) };
+  // store returned for the wrong hash cannot pass as the record. Thresholds
+  // the projection refuses are a configuration fault, answered as a closed
+  // outcome rather than thrown (QA #450, MANJE 2).
+  try {
+    const result = await projectProcessSummary({
+      payloads,
+      head: source.head,
+      thresholds: deps.thresholds,
+    });
+    if (!result.ok) return unavailable(result.reason);
+    // The verified segments must be of the document asked for: a source
+    // that bound another document's package cannot pass (review #450, MANJE 1).
+    const decoder = new TextDecoder();
+    for (const payload of payloads) {
+      if ((JSON.parse(decoder.decode(payload)) as { documentId?: unknown }).documentId !== documentId) {
+        return unavailable("document_mismatch");
+      }
+    }
+    return { status: "ok", body: canonicalizeJcs(result.summary) };
+  } catch {
+    return unavailable("projection_failed");
+  }
 }

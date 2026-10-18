@@ -36,7 +36,7 @@ type Stored = { payloads: string[]; hashes: string[] };
 const at = (time: string) => `2026-10-20T${time}:00.000Z`;
 const docHash = (n: number) => n.toString(16).padStart(64, "0");
 
-async function buildRecord(segments: Segment[]): Promise<Stored> {
+async function buildRecord(segments: Segment[], documentId = DOCUMENT): Promise<Stored> {
   const payloads: string[] = [];
   const hashes: string[] = [];
   let sequence = 0;
@@ -49,7 +49,7 @@ async function buildRecord(segments: Segment[]): Promise<Stored> {
       evidenceSchema: EVIDENCE_SEGMENT_SCHEMA_V2,
       canonicalization: EVIDENCE_CANONICALIZATION_V2,
       hashAlgorithm: EVIDENCE_HASH_ALGORITHM_V2,
-      documentId: DOCUMENT,
+      documentId,
       sessionId: "session-ana",
       segmentId: `segment-${index + 1}`,
       sequenceFrom: sequence,
@@ -234,5 +234,52 @@ describe("readProcessSummary fails whole, never with a partial summary", () => {
       expect(result.status).toBe("unavailable");
       expect(result).not.toHaveProperty("body");
     }
+  });
+
+  // QA #450 MANJE 1: an adapter that throws gives the same closed outcome as one that answers.
+  it("turns a source or store that throws into unavailable, without its message", async () => {
+    const record = await buildRecord(WORK);
+    const throwingSource = { readSource: vi.fn(async () => Promise.reject(new Error("pg: relation x Lorem"))) };
+    expect(await readProcessSummary(deps(throwingSource, await storeOf(record)), DOCUMENT)).toStrictEqual(
+      unavailable("source_unavailable"),
+    );
+    const syncThrow: EvidencePayloadReader = {
+      readImmutable() {
+        throw new Error("s3 Lorem");
+      },
+    };
+    expect(await readProcessSummary(deps(sourceFor(found(record)), syncThrow), DOCUMENT)).toStrictEqual(
+      unavailable("payload_unavailable"),
+    );
+  });
+
+  // QA #450 MANJE 2: thresholds the projection refuses are a closed outcome, never a throw.
+  it("answers thresholds the projection refuses with unavailable", async () => {
+    const record = await buildRecord(WORK);
+    const store = await storeOf(record);
+    for (const sessionBreakAboveMinutes of [0, Number.NaN]) {
+      const thresholds = { ...THRESHOLDS, sessionBreakAboveMinutes };
+      expect(await readProcessSummary(deps(sourceFor(found(record)), store, thresholds), DOCUMENT)).toStrictEqual(
+        unavailable("projection_failed"),
+      );
+    }
+  });
+
+  // Review #450 MANJE 1: a source bound to another document's package does not pass.
+  it("refuses a verified record of another document", async () => {
+    const record = await buildRecord(WORK, "doc-boris-z1");
+    const answer = await readProcessSummary(deps(sourceFor(found(record)), await storeOf(record)), DOCUMENT);
+    expect(answer).toStrictEqual(unavailable("document_mismatch"));
+  });
+});
+
+describe("readProcessSummary passes D-37 through", () => {
+  it("answers withheld for every reader alike and reads no payload", async () => {
+    const record = await buildRecord(WORK);
+    const store = await storeOf(record);
+    const read = vi.spyOn(store, "readImmutable");
+    const answers = await Promise.all([1, 2].map(() => readProcessSummary(deps(sourceFor({ status: "withheld" }), store), DOCUMENT)));
+    for (const answer of answers) expect(answer).toStrictEqual({ status: "withheld" });
+    expect(read).not.toHaveBeenCalled();
   });
 });

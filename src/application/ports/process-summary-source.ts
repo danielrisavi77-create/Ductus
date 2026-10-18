@@ -19,7 +19,8 @@ import type { EvidenceChainHeadV2 } from "@/domain/forensics/evidence-chain-v2";
  *   while the work is still being written (P-03, BACKEND 4.10 point 7) and
  *   whether a short assignment shows nothing before submission (D-37) are
  *   decided here, with the head and segment list cut to that state. The cut
- *   is the same for the owner and the teacher.
+ *   is the same for the owner and the teacher; so is `withheld`, the D-37
+ *   answer before submission, which is its own outcome and not `unavailable`.
  */
 export type ProcessSummarySourceResult =
   | {
@@ -31,6 +32,7 @@ export type ProcessSummarySourceResult =
       segmentHashes: string[];
     }
   | { status: "not_found" }
+  | { status: "withheld" }
   | { status: "unavailable"; reason: string };
 
 export interface ProcessSummarySource {
