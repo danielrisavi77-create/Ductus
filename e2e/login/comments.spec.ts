@@ -177,4 +177,29 @@ test("a teacher's comment next to a paragraph reaches the student, who answers",
   const listed = await (await post(teacher, "list", { documentId: LOCAL_DEMO_DOCUMENT_ID })).json();
   expect(listed.comments.map((c: { authorRole: string; isOwn: boolean; state: string }) => [c.authorRole, c.isOwn, c.state]))
     .toEqual([["teacher", true, "answered"], ["student", false, "answered"]]);
+
+  // Sign-out in a second tab (D-118, F-088): the writing tab drops the threads
+  // and a typed reply at once, and a list answer that lands afterwards is dropped too.
+  await card.getByRole("textbox", { name: t.replyLabel }).fill("Nacrt odgovora koji ne smije ostati.");
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  await student.route("**/api/comments/list", async (route) => {
+    const response = await route.fetch();
+    await held;
+    await route.fulfill({ response });
+  });
+  await student.getByRole("button", { name: t.refresh }).click();
+  const second = await student.context().newPage();
+  await second.goto("/rad");
+  await second.getByRole("button", { name: messagesHr.auth.logout }).click();
+  await second.waitForURL(`${ORIGIN}/`);
+  await expect(editor).toHaveText("");
+  release();
+  await expect(student.getByText(t.signedOut)).toBeVisible();
+  await expect(student.getByRole("article")).toHaveCount(0);
+  await expect(student.getByText(QUOTE)).toHaveCount(0);
+  await expect(student.getByRole("textbox", { name: t.replyLabel })).toHaveCount(0);
+  // Long enough for the held answer to have been handled.
+  await student.waitForLoadState("networkidle");
+  await expect(student.getByRole("article")).toHaveCount(0);
 });

@@ -12,7 +12,7 @@
  */
 
 import { useEditorState, type Editor } from "@tiptap/react";
-import { useCallback, useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 
 import {
   listComments, replyComment, type CommentThread, type ListOutcome, type ReplyOutcome, type ThreadComment,
@@ -24,7 +24,7 @@ import { formatDateTimeHr } from "@/lib/i18n/hr";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
 import styles from "./CommentPanel.module.css";
-import { useLocalEditor } from "./LocalDocument";
+import { useLocalEditor, useLocalSignedOut } from "./LocalDocument";
 
 const t = messagesHr.comments;
 
@@ -117,10 +117,29 @@ function ThreadCard({ placed, editor, onReplied }: {
 
 export default function CommentPanel({ documentId }: { documentId: string }) {
   const editor = useLocalEditor();
+  const stopped = useLocalSignedOut();
   const [outcome, setOutcome] = useState<ListOutcome | null>(null);
+  // Bumped by every load and by the stop: an answer for an older request, or
+  // one that lands after the session ended, is dropped (F-088).
+  const generation = useRef(0);
+  const stoppedRef = useRef(false);
 
-  const load = useCallback(async () => setOutcome(await listComments(documentId)), [documentId]);
+  const load = useCallback(async () => {
+    if (stoppedRef.current) return;
+    const mine = ++generation.current;
+    const result = await listComments(documentId);
+    if (mine === generation.current && !stoppedRef.current) setOutcome(result);
+  }, [documentId]);
   useEffect(() => { void load(); }, [load]);
+
+  // The session ended (D-118): forget the threads; the cards, and with them
+  // any typed reply, are no longer rendered.
+  useEffect(() => {
+    if (!stopped) return;
+    stoppedRef.current = true;
+    generation.current += 1;
+    setOutcome(null);
+  }, [stopped]);
 
   // The highlight lives as long as this panel; it never enters the document.
   useEffect(() => {
@@ -129,7 +148,7 @@ export default function CommentPanel({ documentId }: { documentId: string }) {
     return () => { if (!editor.isDestroyed) editor.unregisterPlugin(commentHighlightKey); };
   }, [editor]);
 
-  const threads = outcome?.kind === "ok" ? outcome.threads : [];
+  const threads = !stopped && outcome?.kind === "ok" ? outcome.threads : [];
   // Placed again on every change of the text, so an edited paragraph never keeps a stale place.
   const placed = useEditorState({ editor, selector: ({ editor: e }) => placeAll(e, threads) }) ?? placeAll(null, threads);
 
@@ -141,7 +160,8 @@ export default function CommentPanel({ documentId }: { documentId: string }) {
   }, [editor, key]);
 
   let body;
-  if (outcome === null) body = <p className="rail-empty">{t.loading}</p>;
+  if (stopped) body = <p className="rail-empty" role="status">{t.signedOut}</p>;
+  else if (outcome === null) body = <p className="rail-empty">{t.loading}</p>;
   else if (outcome.kind === "forbidden") body = <p className="rail-empty">{t.notAvailable}</p>;
   else if (outcome.kind !== "ok") body = <p className="rail-empty" role="status">{t[outcome.kind]}</p>;
   else if (placed.length === 0) body = <p className="rail-empty">{t.empty}</p>;
@@ -155,7 +175,7 @@ export default function CommentPanel({ documentId }: { documentId: string }) {
       </h2>
       <div className={styles.list}>{body}</div>
       <p className={styles.note}>{t.note}</p>
-      <button type="button" className={styles.link} onClick={() => void load()}>{t.refresh}</button>
+      {stopped ? null : <button type="button" className={styles.link} onClick={() => void load()}>{t.refresh}</button>}
     </section>
   );
 }
