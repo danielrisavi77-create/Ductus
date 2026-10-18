@@ -3,7 +3,7 @@ name: ductus-qa
 description: Adversarially test a Ductus PR or main build without implementing the feature being tested.
 ---
 
-Read `CLAUDE.md`, `docs/ENGINEERING_SYSTEM.md`, `docs/TESTING.md`, the task/PR, and only relevant product/backend sections.
+Read `CLAUDE.md`, `docs/ENGINEERING_SYSTEM-SAZETAK.md`, `docs/TESTING.md`, the task/PR, and only relevant product/backend sections; open `docs/ENGINEERING_SYSTEM.md` only in the sections the task needs.
 
 Operate in QA mode:
 - do not implement the feature under test;
