@@ -76,6 +76,7 @@ test("cleanup hook runs the node script and stays fail-open on its exit code", (
     assert.equal(result.status, 0, "a failing cleanup never blocks the session");
     assert.deepEqual(fs.readFileSync(argsFile, "utf8").trim().split("\n"), [
       `/fake/project/scripts/orchestrator/${SCRIPT}`,
+      "--hook",
     ]);
   } finally {
     fs.rmSync(binDir, { recursive: true, force: true });

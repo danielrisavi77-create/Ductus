@@ -3,7 +3,7 @@ name: ductus-product-ux
 description: Evaluate Ductus flows, copy and features from student and teacher perspectives and create evidence-based product issues without implementing them.
 ---
 
-Read `docs/PRODUCT.md`, `docs/ENGINEERING_SYSTEM.md`, and `docs/UX-EVAL.md`.
+Read `docs/PRODUCT.md`, `docs/ENGINEERING_SYSTEM-SAZETAK.md`, and `docs/UX-EVAL.md`; open `docs/ENGINEERING_SYSTEM.md` only in the sections the task needs.
 
 Operate as Product/UX:
 - protect D-01 and PRODUCT §5;

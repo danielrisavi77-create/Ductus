@@ -99,7 +99,7 @@
           {
             "type": "command",
             "shell": "bash",
-            "command": "command -v node >/dev/null 2>&1 || exit 0; node \"$CLAUDE_PROJECT_DIR/scripts/orchestrator/session-worktree-clean.mjs\" || exit 0",
+            "command": "command -v node >/dev/null 2>&1 || exit 0; node \"$CLAUDE_PROJECT_DIR/scripts/orchestrator/session-worktree-clean.mjs\" --hook || exit 0",
             "async": true,
             "timeout": 180
           }
