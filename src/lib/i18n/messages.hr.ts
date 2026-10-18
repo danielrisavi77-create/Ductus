@@ -187,6 +187,13 @@ export const hr = {
     recovery: "Lokalni zapis nije moguće pouzdano pročitati. Ostaje netaknut, a ova kartica ništa ne sprema.",
     exportText: "Izvezi tekst",
   },
+  // F-8 (DAN-211): the browser reports no network. Says nothing about the
+  // server; the save chip alone tells where the text is.
+  network: {
+    offline: "Bez mreže",
+    offlineSaving: "Bez mreže. Tekst se i dalje sprema na ovom uređaju.",
+    offlineNotSaving: "Bez mreže.",
+  },
   toolbar: {
     label: "Oblikovanje teksta",
     paragraph: "Odlomak",

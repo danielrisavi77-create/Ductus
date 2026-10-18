@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import CommentPanel from "@/components/editor/CommentPanel";
 import EditorToolbar from "@/components/editor/EditorToolbar";
 import HeadingOutline from "@/components/editor/HeadingOutline";
+import { OfflineBanner, OfflineChip } from "@/components/editor/OfflineNotice";
 import {
   LocalDocumentProvider, LocalEditor, LocalLogout, LocalSaveChip, LocalWordCount,
 } from "@/components/editor/LocalDocument";
@@ -69,7 +70,8 @@ async function journalFor(): Promise<{
  * status bar shows the save state (F-3 step 1b); without one the shell shows
  * its empty states and a sheet that says it cannot be written in. With a
  * journal, the toolbar sits above the sheet and the structure rail lists the
- * headings of the text (F-8 step 1). A signed-in student sees the teacher's
+ * headings of the text (F-8 step 1). Without a network the banner and the
+ * status bar say so (F-8, DAN-211). A signed-in student sees the teacher's
  * comments in the side panel (F-9 step 1). Signing out
  * always ends the session (D-118, `LocalLogout`).
  */
@@ -83,6 +85,7 @@ export default async function WorkspacePage() {
         // A plain link: the login route answers with a redirect, not a page.
         <a className="btn" href={SIGN_IN_HREF}>{t.auth.signIn}</a>
       ) : null}
+      banner={scope ? <OfflineBanner /> : null}
       rail={
         <>
           <RailSection title={t.workspace.structure}>
@@ -104,6 +107,7 @@ export default async function WorkspacePage() {
       status={scope ? (
         <>
           <LocalSaveChip />
+          <OfflineChip />
           <LocalWordCount />
         </>
       ) : (
