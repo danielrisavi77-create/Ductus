@@ -45,6 +45,9 @@ const CRITICAL_SAMPLES = [
   "tests/unit/session-guc-scope.test.ts",
   "tests/integration/with-actor.integration.test.ts",
   "vitest.config.ts",
+  "playwright.config.ts",
+  "playwright.login.config.ts",
+  "test-output.ts",
   ...D97_PATHS.map(sample),
 ];
 
