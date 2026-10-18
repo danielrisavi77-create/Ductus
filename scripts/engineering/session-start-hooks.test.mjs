@@ -10,36 +10,49 @@ const repo = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "../..",
 );
-const bash = spawnSync("sh", ["-c", "command -v bash"], {
+const shBash = spawnSync("sh", ["-c", "command -v bash"], {
   encoding: "utf8",
 }).stdout.trim();
+// Git Bash on Windows answers with an MSYS path that Node cannot spawn.
+const bash =
+  process.platform === "win32"
+    ? spawnSync("cygpath", ["-w", shBash], { encoding: "utf8" }).stdout.trim()
+    : shBash;
+const SCRIPT = "session-worktree-clean.mjs";
 
-function cleanupHook() {
+function cleanupEntry() {
   const settings = JSON.parse(
     fs.readFileSync(path.join(repo, ".claude/settings.json"), "utf8"),
   );
-  const hooks = settings.hooks.SessionStart.flatMap((entry) => entry.hooks);
-  const matches = hooks.filter((hook) =>
-    hook.command.includes("cleanup-worktrees.ps1"),
+  const all = settings.hooks.SessionStart.flatMap((entry) =>
+    entry.hooks.map((hook) => ({ entry, hook })),
   );
   assert.equal(
-    matches.length,
-    1,
-    "exactly one SessionStart hook runs cleanup-worktrees.ps1",
+    all.filter(({ hook }) => hook.command.includes("cleanup-worktrees.ps1"))
+      .length,
+    0,
+    "the old PowerShell cleanup is no longer wired",
   );
-  assert.equal(matches[0].shell, "bash");
-  return matches[0].command;
+  const matches = all.filter(({ hook }) => hook.command.includes(SCRIPT));
+  assert.equal(matches.length, 1, `exactly one SessionStart hook runs ${SCRIPT}`);
+  assert.equal(matches[0].hook.shell, "bash");
+  return matches[0];
 }
 
 function runWithPath(binDir) {
-  return spawnSync(bash, ["-c", cleanupHook()], {
+  return spawnSync(bash, ["-c", cleanupEntry().hook.command], {
     encoding: "utf8",
     env: { PATH: binDir, CLAUDE_PROJECT_DIR: "/fake/project" },
   });
 }
 
-test("cleanup hook exits 0 silently when powershell is not installed", () => {
-  const binDir = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-nops-"));
+test("cleanup hook runs only on startup, not on resume, clear or compact", () => {
+  assert.equal(cleanupEntry().entry.matcher, "startup");
+  assert.equal(cleanupEntry().hook.async, true);
+});
+
+test("cleanup hook exits 0 silently when node is not installed", () => {
+  const binDir = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-nonode-"));
   try {
     const result = runWithPath(binDir);
     assert.equal(result.status, 0);
@@ -50,27 +63,20 @@ test("cleanup hook exits 0 silently when powershell is not installed", () => {
   }
 });
 
-test("cleanup hook runs the worktree script through powershell when it is installed", () => {
-  const binDir = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-ps-"));
+test("cleanup hook runs the node script and stays fail-open on its exit code", () => {
+  const binDir = fs.mkdtempSync(path.join(os.tmpdir(), "ductus-node-"));
   const argsFile = path.join(binDir, "args.txt");
   try {
     fs.writeFileSync(
-      path.join(binDir, "powershell"),
+      path.join(binDir, "node"),
       `#!/bin/sh\nfor a in "$@"; do printf '%s\\n' "$a"; done > '${argsFile}'\nexit 7\n`,
       { mode: 0o755 },
     );
     const result = runWithPath(binDir);
-    assert.equal(
-      result.status,
-      7,
-      "the powershell exit code is passed through",
-    );
+    assert.equal(result.status, 0, "a failing cleanup never blocks the session");
     assert.deepEqual(fs.readFileSync(argsFile, "utf8").trim().split("\n"), [
-      "-NoProfile",
-      "-ExecutionPolicy",
-      "Bypass",
-      "-File",
-      "/fake/project/scripts/cleanup-worktrees.ps1",
+      `/fake/project/scripts/orchestrator/${SCRIPT}`,
+      "--hook",
     ]);
   } finally {
     fs.rmSync(binDir, { recursive: true, force: true });

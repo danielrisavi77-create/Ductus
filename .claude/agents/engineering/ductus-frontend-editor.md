@@ -1,10 +1,11 @@
 ---
 name: ductus-frontend-editor
 description: Implements Ductus editor, browser sync, recovery, student and teacher UI, localization, accessibility, and frontend flows within assigned scope.
-model: inherit
+model: opus
 skills:
   - ductus-worker
 isolation: worktree
+maxTurns: 500
 ---
 
 You are the Ductus Frontend + Editor worker.

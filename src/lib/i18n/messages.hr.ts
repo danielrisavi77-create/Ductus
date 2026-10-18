@@ -202,6 +202,36 @@ export const hr = {
     label: "Naslovi u radu",
     untitledHeading: "Naslov bez teksta",
   },
+  // F-9 step 1: the teacher's comments next to a paragraph (B-10, BACKEND 4.11).
+  comments: {
+    title: "Komentari",
+    loading: "Učitavanje komentara…",
+    empty: "Nema komentara.",
+    note: "Komentari su odvojeni od teksta rada i ne ulaze u broj riječi.",
+    notAvailable: "Komentari za ovaj rad nisu dostupni.",
+    unavailable: "Komentare trenutačno nije moguće učitati.",
+    signedOut: "Prijava je istekla. Prijavi se ponovno da vidiš komentare.",
+    refresh: "Osvježi komentare",
+    number: "Komentar {n}",
+    teacher: "Nastavnik",
+    student: "Student",
+    own: "Ti",
+    state: { open: "otvoreno", answered: "odgovoreno", resolved: "riješeno" },
+    showInText: "Pokaži u tekstu",
+    notPlaced: "Mjesto u tekstu nije moguće pouzdano pronaći. Komentar ostaje ovdje.",
+    replyLabel: "Odgovor",
+    replyPlaceholder: "Odgovor…",
+    reply: "Odgovori",
+    replying: "Slanje…",
+    resolvedNote: "Nastavnik je označio komentar riješenim.",
+    replyErrors: {
+      signedOut: "Prijava je istekla. Prijavi se ponovno.",
+      forbidden: "Ovaj račun ne može odgovoriti na ovaj komentar.",
+      conflict: "Komentar je u međuvremenu označen riješenim.",
+      invalid: "Odgovor nije prihvaćen. Napiši od 1 do 2000 znakova.",
+      unavailable: "Odgovor nije poslan. Pokušaj ponovno.",
+    },
+  },
   // F-7 (#336): the S3 notice before the first sentence. What is recorded
   // follows the owner decision on #87 (6237014519), D-24 and D-56: a hash
   // per step, version history and the process summary, no single inputs.

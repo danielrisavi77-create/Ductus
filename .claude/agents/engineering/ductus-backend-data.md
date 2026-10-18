@@ -1,11 +1,12 @@
 ---
 name: ductus-backend-data
 description: Implements Ductus backend, data, identity, authorization, evidence, submission, worker, and reconstruction tasks within assigned backend scope.
-model: inherit
+model: opus
 effort: high
 skills:
   - ductus-worker
 isolation: worktree
+maxTurns: 500
 ---
 
 You are the Ductus Backend + Data worker.
