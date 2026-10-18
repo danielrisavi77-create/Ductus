@@ -269,6 +269,8 @@ test("a reply typed before another person signed in at this browser is never sen
   });
   const recorded = () => student.evaluate(() => localStorage.getItem("ductus-session-current"));
   const before = await recorded();
+  // The fake provider remembers who signed in; forgetting it shows the account choice again.
+  await student.context().clearCookies({ name: /^_session/ });
   await signIn(await student.context().newPage(), "/", "Demo nastavnik");
   // The teacher's page has recorded its session in this browser.
   await expect.poll(recorded).not.toBe(before);
