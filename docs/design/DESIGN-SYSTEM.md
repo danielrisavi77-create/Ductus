@@ -3,6 +3,8 @@
 Verzija 0.3 · 13. 10. 2026.  
 Izvor: vizualni koncept (13 slajdova, issue #323) — Product UI & Design System. Usvojeno odlukom **D-115** (zamjenjuje dizajn v6, D-89); komponente prema **D-116**.
 
+> **Vrijednosti boja su zamijenjene (D-123, 17. 10. 2026.).** Za izgled ekrana i vrijednosti tokena mjerodavan je dizajn Ductura u `docs/design/ductura/` (`README.md` za tokene, `INTEGRACIJA.md` za ekrane i rute) i odluke D-123 do D-126: naglasak `#6FBFA5`, tamna ljuska, tamni list zadano, prekidač za bijeli list. Kod to već provodi (`src/components/shell/tokens.test.ts`). Boje u ovom dokumentu (npr. primarna `#14B8A6`) su povijest i ne koriste se za novi rad. Struktura tokena, prekidač lista i načela ispod i dalje vrijede (D-123).
+
 Ovaj dokument sažima vizualni jezik, principe i ekrane koje treba usvojiti.  
 Funkcionalni tokovi ostaju u `docs/PRODUCT.md`. Ovaj dokument definira **kako to izgleda i kako se osjeća**.
 
