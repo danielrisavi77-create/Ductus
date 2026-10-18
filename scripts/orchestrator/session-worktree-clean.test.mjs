@@ -7,7 +7,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { MIN_MERGED_AGE_MS, decide, defaultExec, githubRepo, inScope, run, unsafePaths } from "./session-worktree-clean.mjs";
+import {
+  MIN_MERGED_AGE_MS, decide, defaultExec, githubRepo, hookOutput, inScope, main, run, unsafePaths,
+} from "./session-worktree-clean.mjs";
 
 const NOW = Date.parse("2026-10-18T12:00:00Z");
 const OLD = new Date(NOW - MIN_MERGED_AGE_MS - 1000).toISOString();
@@ -116,7 +118,7 @@ function setup(t) {
   const clean = (opts = {}) => run({ cwd: work, exec, now: NOW, log: () => {}, ...opts });
   const agents = join(work, ".claude", "worktrees");
   const sibling = join(tmp, "Ductus-worktrees");
-  return { work, remote, prs, hooks, calls, add, clean, agents, sibling };
+  return { work, remote, prs, hooks, calls, add, clean, agents, sibling, exec };
 }
 
 test("githubRepo reads owner/name from https and ssh GitHub URLs only", () => {
@@ -218,4 +220,76 @@ test("run lists nothing when gh fails, fetch fails, or it runs from inside the w
   git(r.work, "remote", "set-url", "origin", join(r.work, "missing.git"));
   assert.deepEqual(r.clean(), [], "fetch failed");
   assert.equal(existsSync(a.path), true);
+});
+
+test("#435: the whole run keeps to one time budget and lists nothing it could not finish checking", (t) => {
+  const r = setup(t);
+  const wts = ["agent-t1", "agent-t2", "agent-t3", "agent-t4"].map((b) => r.add(r.agents, b));
+  for (const w of wts) r.prs[w.branch] = [{ state: "MERGED", headRefOid: w.head, mergedAt: OLD }];
+  // Fake clock: only gh costs time (55 s each); a call longer than its timeout is cut and fails.
+  let now = 0;
+  const timeouts = [];
+  const exec = (cmd, args, opts) => {
+    timeouts.push({ timeout: opts.timeout, left: 150_000 - now });
+    if (cmd !== "gh") return r.exec(cmd, args, opts);
+    if (55_000 > opts.timeout) {
+      now += opts.timeout;
+      return { ok: false, out: "" };
+    }
+    now += 55_000;
+    return r.exec(cmd, args, opts);
+  };
+  const lines = [];
+  const res = run({ cwd: r.work, exec, now: NOW, clock: () => now, budgetMs: 150_000, log: (l) => lines.push(l) });
+  assert.ok(now <= 150_000, `run used ${now} ms of a 150000 ms budget`);
+  for (const x of timeouts) assert.ok(x.timeout <= 60_000 && x.timeout <= x.left, JSON.stringify(x));
+  assert.equal(res.filter((x) => x.remove).length, 2, "the two worktrees checked in time are listed");
+  assert.equal(res.length, 3, "the fourth worktree is not even started");
+  assert.equal(res[2].remove, false, "the worktree whose gh call was cut is not listed");
+  assert.match(lines.at(-1), /stopped after 150 s, the list is incomplete/);
+  for (const w of wts) assert.equal(existsSync(w.path), true);
+});
+
+test("#435: defaultExec stops a call at the timeout it is given", () => {
+  const start = Date.now();
+  const r = defaultExec(process.execPath, ["-e", "setTimeout(() => console.log('late'), 20000)"], { timeout: 300 });
+  assert.equal(r.ok, false);
+  assert.equal(r.out, "");
+  assert.ok(Date.now() - start < 10_000, "the child was stopped well before it finished");
+});
+
+test("#435: no call is started once the budget is spent", (t) => {
+  const r = setup(t);
+  r.add(r.agents, "agent-late");
+  const res = run({ cwd: r.work, exec: r.exec, now: NOW, budgetMs: 0, log: () => {} });
+  assert.deepEqual(res, []);
+  assert.deepEqual(r.calls, []);
+});
+
+test("#435: hook output is one JSON line with additionalContext, and nothing when nothing is listed", () => {
+  assert.equal(hookOutput([]), "");
+  assert.equal(hookOutput(["worktree cleanup: fetch failed, nothing reported"]), "");
+  const listed = "worktree cleanup: safe to remove by hand: /x/.claude/worktrees/agent-1 [agent-1]";
+  const out = hookOutput([listed, "worktree cleanup: stopped after 150 s, the list is incomplete"]);
+  assert.equal(out.endsWith("\n"), true);
+  assert.equal(out.trimEnd().includes("\n"), false, "a single line");
+  const json = JSON.parse(out);
+  assert.deepEqual(Object.keys(json), ["hookSpecificOutput"]);
+  assert.equal(json.hookSpecificOutput.hookEventName, "SessionStart");
+  assert.match(json.hookSpecificOutput.additionalContext, /safe to remove by hand: \/x\/\.claude\/worktrees\/agent-1/);
+  assert.match(json.hookSpecificOutput.additionalContext, /list is incomplete/);
+});
+
+test("#435: main writes the JSON line only with --hook and stays quiet when the run throws", () => {
+  const listed = "worktree cleanup: safe to remove by hand: /x/agent-1 [agent-1]";
+  const writes = [];
+  const errors = [];
+  const io = { write: (s) => writes.push(s), error: (s) => errors.push(s) };
+  main(["--hook"], { ...io, runFn: ({ log }) => log(listed) });
+  assert.equal(writes.length, 1);
+  assert.equal(JSON.parse(writes[0]).hookSpecificOutput.additionalContext, listed);
+  main(["--hook"], { ...io, runFn: () => [] });
+  main(["--hook"], { ...io, runFn: () => { throw new Error("boom"); } });
+  assert.equal(writes.length, 1, "nothing listed or a failed run writes nothing to stdout");
+  assert.deepEqual(errors, ["worktree cleanup stopped: boom"]);
 });

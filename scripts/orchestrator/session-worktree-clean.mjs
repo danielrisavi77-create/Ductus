@@ -6,13 +6,19 @@
 // REGENERABLE or operation in progress, its branch has commits of its own (not reachable from
 // origin/main), and a MERGED pull request for that branch has headRefOid equal to HEAD, merged at
 // least MIN_MERGED_AGE_MS ago, with no OPEN pull request on the same branch name. Anything unknown
-// (failed fetch, gh, git) means not listed. Usage: node session-worktree-clean.mjs. Always exits 0.
+// (failed fetch, gh, git) means not listed. Usage: node session-worktree-clean.mjs [--hook]. Always exits 0.
+// #435: the whole run stops after TOTAL_BUDGET_MS (an async hook's `timeout` is not enforced), and with
+// --hook stdout is one JSON line with `additionalContext` (the only output an async hook delivers), or nothing.
 import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, realpathSync } from "node:fs";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const MIN_MERGED_AGE_MS = 2 * 60 * 60 * 1000;
+// Below the hook's declared `timeout: 180`; no single git or gh call outlives the remaining budget.
+export const TOTAL_BUDGET_MS = 150_000;
+const CALL_TIMEOUT_MS = 60_000;
+const LISTED = "safe to remove by hand";
 const SHA_RE = /^[0-9a-f]{40,64}$/;
 // Inherited variables that would point git or gh at another repository (GH_REPO, GH_HOST: #425 review).
 const REPO_ENV = /^(GIT_(DIR|WORK_TREE|INDEX_FILE|COMMON_DIR|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|NAMESPACE|PREFIX)|GH_REPO|GH_HOST)$/i;
@@ -84,10 +90,10 @@ export function decide(f) {
   return { remove: true, reason: "merged pull request with this exact HEAD" };
 }
 
-export function defaultExec(cmd, args, { cwd } = {}) {
+export function defaultExec(cmd, args, { cwd, timeout = CALL_TIMEOUT_MS } = {}) {
   const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !REPO_ENV.test(k)));
   const r = spawnSync(cmd, args, {
-    cwd, encoding: "utf8", windowsHide: true, timeout: 60_000, env: { ...env, GIT_TERMINAL_PROMPT: "0", GH_PROMPT_DISABLED: "1" },
+    cwd, encoding: "utf8", windowsHide: true, timeout, env: { ...env, GIT_TERMINAL_PROMPT: "0", GH_PROMPT_DISABLED: "1" },
   });
   return { ok: r.status === 0, out: String(r.stdout ?? "").trim() };
 }
@@ -107,8 +113,22 @@ function listWorktrees(git, cwd) {
 }
 
 /** Gathers facts with git and gh and reports decide(). Returns [{path, branch, remove, reason}]; `remove` means "safe to remove by hand". */
-export function run({ cwd = process.cwd(), exec = defaultExec, now = Date.now(), log = console.log } = {}) {
-  const git = (args, dir) => exec("git", args, { cwd: dir });
+export function run({
+  cwd = process.cwd(), exec = defaultExec, now = Date.now(), log = console.log, clock = Date.now, budgetMs = TOTAL_BUDGET_MS,
+} = {}) {
+  // #435: one deadline for the whole run. A call that would start after it is not run and counts as failed,
+  // so the worktree it was for is not listed (unknown means not listed).
+  const deadline = clock() + budgetMs;
+  let expired = false;
+  const call = (cmd, args, dir) => {
+    const left = deadline - clock();
+    if (left <= 0) {
+      expired = true;
+      return { ok: false, out: "" };
+    }
+    return exec(cmd, args, { cwd: dir, timeout: Math.min(CALL_TIMEOUT_MS, left) });
+  };
+  const git = (args, dir) => call("git", args, dir);
   const all = listWorktrees(git, cwd);
   if (!all?.length) return [];
   const root = real(all[0].path);
@@ -122,6 +142,10 @@ export function run({ cwd = process.cwd(), exec = defaultExec, now = Date.now(),
   const repo = url.ok ? githubRepo(url.out) : null;
   const results = [];
   for (const wt of all.slice(1)) {
+    if (expired || clock() >= deadline) {
+      expired = true;
+      break;
+    }
     if (!existsSync(wt.path)) continue;
     // The registered path with only its parent resolved; a link at the last step is never followed.
     const path = join(real(dirname(wt.path)), basename(wt.path));
@@ -138,7 +162,7 @@ export function run({ cwd = process.cwd(), exec = defaultExec, now = Date.now(),
       const own = git(["rev-list", "--count", `origin/main..${head}`], root);
       facts.ownCommits = own.ok && /^\d+$/.test(own.out) ? Number(own.out) : null;
       if (facts.ownCommits > 0 && repo) {
-        const pr = exec("gh", ["pr", "list", "--repo", repo, "--head", wt.branch, "--state", "all", "--limit", "50", "--json", "state,headRefOid,mergedAt"], { cwd: root });
+        const pr = call("gh", ["pr", "list", "--repo", repo, "--head", wt.branch, "--state", "all", "--limit", "50", "--json", "state,headRefOid,mergedAt"], root);
         try {
           facts.prs = pr.ok ? JSON.parse(pr.out) : null;
         } catch {
@@ -146,19 +170,38 @@ export function run({ cwd = process.cwd(), exec = defaultExec, now = Date.now(),
         }
       }
     }
-    const d = decide(facts);
+    // A call cut short by the deadline left this worktree's facts incomplete: it is never listed.
+    const d = expired ? { remove: false, reason: "time limit reached" } : decide(facts);
     // Report only: nothing is removed or deleted here.
-    if (d.remove) log(`worktree cleanup: safe to remove by hand: ${path} [${wt.branch}]`);
+    if (d.remove) log(`worktree cleanup: ${LISTED}: ${path} [${wt.branch}]`);
     results.push({ path, branch: wt.branch, ...d });
   }
+  if (expired || clock() >= deadline) log(`worktree cleanup: stopped after ${Math.round(budgetMs / 1000)} s, the list is incomplete`);
   return results;
 }
 
-if (process.argv[1] && samePath(real(process.argv[1]), fileURLToPath(import.meta.url))) {
+/** The one stdout line of the async SessionStart hook: additionalContext when something is listed, else "". */
+export function hookOutput(lines) {
+  if (!lines.some((l) => l.includes(LISTED))) return "";
+  const additionalContext = lines.join("\n");
+  return `${JSON.stringify({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext } })}\n`;
+}
+
+export function main(argv, { runFn = run, write = (s) => process.stdout.write(s), error = console.error } = {}) {
+  const hook = argv.includes("--hook");
+  const lines = [];
   try {
-    run();
+    runFn({ log: hook ? (l) => lines.push(l) : console.log });
   } catch (e) {
-    console.error(`worktree cleanup stopped: ${e.message}`);
+    error(`worktree cleanup stopped: ${e.message}`);
   }
+  if (hook) {
+    const out = hookOutput(lines);
+    if (out) write(out);
+  }
+}
+
+if (process.argv[1] && samePath(real(process.argv[1]), fileURLToPath(import.meta.url))) {
+  main(process.argv.slice(2));
   process.exitCode = 0;
 }
