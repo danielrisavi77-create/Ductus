@@ -2,14 +2,18 @@
 // a summary cites must exist as a numbered heading in the document it points at,
 // so a renumbered or removed section fails CI instead of leaving a stale summary.
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { D97_PATHS, matchesPath, ownerCommandPaths } from "./protected-paths.mjs";
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SUMMARIES = [
-  { summary: "docs/ENGINEERING_SYSTEM-SAZETAK.md", full: "docs/ENGINEERING_SYSTEM.md" },];
+  { summary: "docs/ENGINEERING_SYSTEM-SAZETAK.md", full: "docs/ENGINEERING_SYSTEM.md" },
+  { summary: "docs/ORKESTRATOR-SAZETAK.md", full: "docs/ORKESTRATOR.md" },
+];
 const MAX_CHARS = 4000;
 
 const read = (rel) => readFileSync(path.join(root, rel), "utf8").replace(/^﻿/, "");
@@ -76,7 +80,58 @@ for (const { summary, full } of SUMMARIES) {
   test(`${summary} cites only sections that exist`, () => {
     assert.deepEqual(checkSummary(read(summary), full, loadRepoDoc), []);
   });
+  // Owner decision #87 issuecomment-6249418216: a summary sessions read first is
+  // guarded like the full document, so editing only the summary is a D-97 change.
+  test(`${summary} is a D-97 path, as ${full} is`, () => {
+    assert.ok(matchesPath(full, D97_PATHS), `${full} not in D97_PATHS`);
+    assert.ok(matchesPath(summary, D97_PATHS), `${summary} not in D97_PATHS`);
+    assert.deepEqual(ownerCommandPaths([`./${summary.toUpperCase()}`]), [summary.toUpperCase()]);
+  });
 }
+
+// Owner decision #87 issuecomment-6249418216: no entry document or skill sends a
+// session to the whole rule document at the start. Its first reading line names
+// the summary next to a full document, and MULTI-ACCOUNT.md only for a handoff.
+const READ_LINE = /^(Read |Prije (svakog )?rada pročitaj)/;
+const FULL_TO_SUMMARY = {
+  "docs/ENGINEERING_SYSTEM.md": "docs/ENGINEERING_SYSTEM-SAZETAK.md",
+  "docs/ORKESTRATOR.md": "docs/ORKESTRATOR-SAZETAK.md",
+};
+
+/** Problems with the first reading line of an entry document or skill. */
+export function startReadingProblems(text) {
+  const line = text.split(/\r?\n/).find((l) => READ_LINE.test(l));
+  if (!line) return [];
+  const problems = [];
+  for (const [full, summary] of Object.entries(FULL_TO_SUMMARY)) {
+    if (line.includes(full) && !line.includes(summary)) problems.push(`${full} without ${summary}`);
+  }
+  if (line.includes("docs/MULTI-ACCOUNT.md") && !/handoff|rotation|predaj|rotacij/.test(line)) {
+    problems.push("docs/MULTI-ACCOUNT.md outside a handoff or rotation");
+  }
+  return problems;
+}
+
+test("no entry document or skill starts with a whole rule document", () => {
+  const files = ["CLAUDE.md", "AGENTS.md"];
+  for (const dir of [".claude/skills", ".agents/skills"]) {
+    for (const name of readdirSync(path.join(root, dir)).sort()) {
+      const rel = `${dir}/${name}/SKILL.md`;
+      if (existsSync(path.join(root, rel))) files.push(rel);
+    }
+  }
+  const bad = files.flatMap((rel) => startReadingProblems(read(rel)).map((p) => `${rel}: ${p}`));
+  assert.deepEqual(bad, []);
+});
+
+test("the start-reading check flags a full document without its summary", () => {
+  assert.deepEqual(startReadingProblems("x\nRead `docs/ENGINEERING_SYSTEM-SAZETAK.md`; open `docs/ENGINEERING_SYSTEM.md` by section.\n"), []);
+  assert.deepEqual(startReadingProblems("Read `CLAUDE.md`, `docs/ENGINEERING_SYSTEM.md`.\n"),
+    ["docs/ENGINEERING_SYSTEM.md without docs/ENGINEERING_SYSTEM-SAZETAK.md"]);
+  assert.deepEqual(startReadingProblems("Prije rada pročitaj `docs/ORKESTRATOR.md` i `docs/MULTI-ACCOUNT.md`.\n"),
+    ["docs/ORKESTRATOR.md without docs/ORKESTRATOR-SAZETAK.md", "docs/MULTI-ACCOUNT.md outside a handoff or rotation"]);
+  assert.deepEqual(startReadingProblems("Read `docs/MULTI-ACCOUNT.md` for a handoff.\n"), []);
+});
 
 test("the check is wired to CI's engineering test glob", () => {
   const ci = read(".github/workflows/ci.yml");

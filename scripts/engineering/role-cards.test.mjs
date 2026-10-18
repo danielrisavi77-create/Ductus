@@ -238,18 +238,32 @@ test("the glob matcher handles the forms the rules use", () => {
 
 // Owner decision of 18 Oct 2026 (DAN-213, #426 after qa426a): a skill with a
 // `paths:` key is neither listed nor callable by /name or the Skill tool until
-// a matching file is touched, so no project skill carries one.
-const frontmatter = (text) => text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/)?.[1] ?? "";
-const hasPathsKey = (text) => /^paths\s*:/m.test(frontmatter(text));
+// a matching file is touched, so no project skill carries one (D-141). D-141
+// also keeps `disable-model-invocation` off every project skill.
+// A UTF-8 BOM, a quoted key and a file that ends at the closing `---` count too
+// (qa426b, review426c).
+const frontmatter = (text) =>
+  text.replace(/^﻿/, "").match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/)?.[1] ?? "";
+const frontmatterKeys = (text) =>
+  new Set([...frontmatter(text).matchAll(/^(["']?)([\w-]+)\1\s*:/gm)].map((m) => m[2]));
+const hasKey = (text, key) => frontmatterKeys(text).has(key);
+const hasPathsKey = (text) => hasKey(text, "paths");
+const FORBIDDEN_SKILL_KEYS = {
+  paths: "paths: hides the skill from /name and the Skill tool (D-141)",
+  "disable-model-invocation": "disable-model-invocation hides the skill from the model (D-141)",
+};
 
-test("no project skill is path-scoped", () => {
+test("no project skill is path-scoped or hidden from the model", () => {
   let skills = 0;
   for (const dir of [".claude/skills", ".agents/skills"]) {
     for (const name of readdirSync(path.join(root, dir)).sort()) {
       const file = path.join(root, dir, name, "SKILL.md");
       if (!existsSync(file)) continue;
       skills += 1;
-      assert.ok(!hasPathsKey(read(file)), `${dir}/${name}: paths: hides the skill from /name and the Skill tool`);
+      const text = read(file);
+      for (const [key, why] of Object.entries(FORBIDDEN_SKILL_KEYS)) {
+        assert.ok(!hasKey(text, key), `${dir}/${name}: ${why}`);
+      }
     }
   }
   assert.ok(skills > 0);
@@ -261,4 +275,16 @@ test("the paths: detector reads only the frontmatter", () => {
   assert.ok(hasPathsKey('---\r\nname: x\r\npaths:\r\n  - "db/**"\r\n---\r\n'));
   assert.ok(!hasPathsKey("---\nname: x\n---\n\npaths: in the body\n"));
   assert.ok(!hasPathsKey("---\nname: x\ndescription: no paths: here\n---\n"));
+  assert.ok(hasPathsKey('---\nname: x\n"paths": db/**\n---\n'), "double-quoted key");
+  assert.ok(hasPathsKey("---\nname: x\n'paths': db/**\n---\n"), "single-quoted key");
+  assert.ok(hasPathsKey('﻿---\nname: x\npaths:\n  - "db/**"\n---\n'), "UTF-8 BOM");
+  assert.ok(hasPathsKey("---\nname: x\npaths: db/**\n---"), "no newline after the closing ---");
+  assert.ok(!hasPathsKey('---\nname: x\n"paths\': db/**\n---\n'), "mismatched quotes are not the key");
+  assert.ok(!hasPathsKey("---\nname: x\npathsx: db/**\n---\n"));
+});
+
+test("the disable-model-invocation detector reads the same frontmatter", () => {
+  assert.ok(hasKey("---\nname: x\ndisable-model-invocation: true\n---\n", "disable-model-invocation"));
+  assert.ok(hasKey('﻿---\n"disable-model-invocation": true\n---', "disable-model-invocation"));
+  assert.ok(!hasKey("---\nname: x\n---\ndisable-model-invocation: true\n", "disable-model-invocation"));
 });
