@@ -63,6 +63,9 @@ export function runStopHook(input, { exec = spawnSync, projectDir = process.env.
   if (st.status !== 0) return undefined;
   const changed = changedTsFiles(st.stdout);
   if (!changed.size) return undefined;
+  // The checkout may be an untrusted PR head: never run a tsc that the checkout itself tracks.
+  const tracked = exec("git", ["ls-files", "-z", "--", "node_modules"], { ...opts, cwd: root });
+  if (tracked.status !== 0 || String(tracked.stdout).length > 0) return undefined;
   const tsc = path.join(root, "node_modules", "typescript", "bin", "tsc");
   if (!fs.existsSync(tsc)) return undefined;
   const r = exec(process.execPath, [tsc, "--noEmit", "--pretty", "false"], { ...opts, cwd: root, timeout: TSC_TIMEOUT_MS });
