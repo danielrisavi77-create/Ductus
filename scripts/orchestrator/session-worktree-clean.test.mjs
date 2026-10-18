@@ -2,12 +2,12 @@
 // Throwaway repositories only; gh is faked through the injected exec.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { MIN_MERGED_AGE_MS, decide, defaultExec, inScope, run } from "./session-worktree-clean.mjs";
+import { MIN_MERGED_AGE_MS, decide, defaultExec, inScope, run, unsafePaths } from "./session-worktree-clean.mjs";
 
 const NOW = Date.parse("2026-10-18T12:00:00Z");
 const OLD = new Date(NOW - MIN_MERGED_AGE_MS - 1000).toISOString();
@@ -55,6 +55,16 @@ test("inScope accepts only agent-* under .claude/worktrees and children of ../Du
   assert.equal(inScope(root, join(tmpdir(), "p", "elsewhere", "agent-1")), false);
 });
 
+test("unsafePaths lets only regenerable ignored paths through (#374 invariant)", () => {
+  const regenerable = ["!! node_modules/", "!! apps/web/node_modules/", "!! .next/", "!! playwright-report-login/",
+    "!! test-results/", "!! tsconfig.tsbuildinfo", "!! next-env.d.ts", "!! .DS_Store"];
+  assert.deepEqual(unsafePaths(regenerable.join("\n")), []);
+  for (const line of ["!! .env.local", "!! .env", "!! reports/", "!! .netlify/", "!! src/node_modules.txt",
+    "?? note.txt", " M a.txt", "A  b.txt"]) {
+    assert.deepEqual(unsafePaths(`!! node_modules/\n${line}\n`), [line], line);
+  }
+});
+
 const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.toUpperCase().startsWith("GIT_")));
 Object.assign(env, { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@example.invalid", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@example.invalid" });
 const git = (cwd, ...a) =>
@@ -68,7 +78,8 @@ function setup(t) {
   const work = join(tmp, "Ductus");
   git(tmp, "init", "-q", "-b", "main", work);
   writeFileSync(join(work, "a.txt"), "a");
-  git(work, "add", "a.txt");
+  writeFileSync(join(work, ".gitignore"), "node_modules/\n.next/\n.env.*\n*.tsbuildinfo\nreports/\n");
+  git(work, "add", "a.txt", ".gitignore");
   git(work, "commit", "-q", "-m", "init");
   git(work, "remote", "add", "origin", remote);
   git(work, "push", "-q", "-u", "origin", "main");
@@ -105,11 +116,22 @@ test("run removes only proven-finished worktrees and keeps a fresh or reused-nam
   const dirty = r.add(r.agents, "agent-dirty");
   writeFileSync(join(dirty.path, "wip.txt"), "wip");
   const outside = r.add(join(r.work, "..", "other"), "agent-outside");
+  // Only regenerable ignored paths: still removed.
+  mkdirSync(join(done.path, "node_modules", "pkg"), { recursive: true });
+  writeFileSync(join(done.path, "node_modules", "pkg", "index.js"), "x");
+  writeFileSync(join(done.path, "tsconfig.tsbuildinfo"), "x");
+  // Ignored but not regenerable: kept with the file.
+  const envLocal = r.add(r.agents, "agent-envlocal");
+  writeFileSync(join(envLocal.path, ".env.local"), "LOCAL_ONLY=1");
+  const report = r.add(r.agents, "agent-report");
+  mkdirSync(join(report.path, "reports"));
+  writeFileSync(join(report.path, "reports", "out.txt"), "r");
   const merged = (w) => [{ state: "MERGED", headRefOid: w.head, mergedAt: OLD }];
   Object.assign(r.prs, {
     [done.branch]: merged(done), [sib.branch]: merged(sib), [fresh.branch]: merged(fresh),
     [reused.branch]: [{ state: "MERGED", headRefOid: "d".repeat(40), mergedAt: OLD }],
     [dirty.branch]: merged(dirty), [outside.branch]: merged(outside),
+    [envLocal.branch]: merged(envLocal), [report.branch]: merged(report),
   });
 
   const dry = r.clean({ dryRun: true });
@@ -121,11 +143,13 @@ test("run removes only proven-finished worktrees and keeps a fresh or reused-nam
     assert.equal(existsSync(w.path), false, w.branch);
     assert.equal(git(r.work, "branch", "--list", w.branch), "", `${w.branch} local branch deleted`);
   }
-  for (const w of [fresh, reused, dirty, outside]) {
+  for (const w of [fresh, reused, dirty, outside, envLocal, report]) {
     assert.equal(existsSync(w.path), true, w.branch);
     assert.match(git(r.work, "branch", "--list", w.branch), /\S/, `${w.branch} branch kept`);
   }
   assert.equal(existsSync(join(dirty.path, "wip.txt")), true);
+  assert.equal(existsSync(join(envLocal.path, ".env.local")), true);
+  assert.equal(existsSync(join(report.path, "reports", "out.txt")), true);
 });
 
 test("run keeps everything when gh fails, fetch fails, or it runs from inside the worktree", (t) => {

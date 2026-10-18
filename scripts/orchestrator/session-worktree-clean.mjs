@@ -1,7 +1,7 @@
 // DAN-213 (#421): SessionStart worktree cleanup that can never take an active worktree.
 // A worktree goes only when ALL hold: it lies directly in <root>/.claude/worktrees/agent-* or
 // <parent of root>/Ductus-worktrees/*, is not locked, not the current directory, has no changes,
-// untracked files or operation in progress, its branch has commits of its own (not reachable from
+// untracked files, ignored files outside REGENERABLE or operation in progress, its branch has commits of its own (not reachable from
 // origin/main), and a MERGED pull request for that branch has headRefOid equal to HEAD, merged at
 // least MIN_MERGED_AGE_MS ago, with no OPEN pull request on the same branch name. Anything unknown
 // (failed fetch, gh, git) means keep. Never --force; the local branch is deleted only after its
@@ -27,6 +27,24 @@ const real = (p) => {
 const samePath = (a, b) => fold(a) === fold(b);
 const insideOrSame = (child, parent) => samePath(child, parent) || fold(child).startsWith(fold(parent) + sep);
 
+// Ignored paths that a build or test run recreates; any other ignored path (.env.local, reports/, ...) keeps the worktree.
+const REGENERABLE = [
+  /(^|\/)node_modules\/$/, /(^|\/)\.next\/$/, /(^|\/)playwright-report[^/]*\/$/, /(^|\/)test-results[^/]*\/$/,
+  /\.tsbuildinfo$/, /(^|\/)next-env\.d\.ts$/, /(^|\/)\.DS_Store$/, /(^|\/)Thumbs\.db$/,
+];
+
+/**
+ * Lines of `git status --porcelain --ignored=matching` → paths the cleanup must not lose:
+ * every changed or untracked path, and every ignored path outside REGENERABLE.
+ */
+export function unsafePaths(statusOut) {
+  return String(statusOut).split("\n").filter(Boolean).filter((line) => {
+    if (!line.startsWith("!! ")) return true;
+    const p = line.slice(3).replace(/^"|"$/g, "");
+    return !REGENERABLE.some((re) => re.test(p));
+  });
+}
+
 /** True only for a direct child agent-* of <root>/.claude/worktrees or any direct child of <parent>/Ductus-worktrees. */
 export function inScope(root, path) {
   const dir = dirname(path);
@@ -46,7 +64,7 @@ export function decide(f) {
   if (f.current) return keep("current directory");
   if (!f.branch) return keep("detached HEAD");
   if (!SHA_RE.test(f.head ?? "")) return keep("HEAD unreadable");
-  if (f.dirty !== false) return keep("uncommitted or untracked changes (or status unreadable)");
+  if (f.dirty !== false) return keep("uncommitted, untracked or non-regenerable ignored files (or status unreadable)");
   if (f.inProgress) return keep("rebase, merge or bisect in progress");
   if (!Number.isInteger(f.ownCommits) || f.ownCommits < 1) return keep("no commits of its own on top of origin/main");
   if (!Array.isArray(f.prs)) return keep("pull requests unreadable");
@@ -100,8 +118,8 @@ export function run({ cwd = process.cwd(), dryRun = false, exec = defaultExec, n
       const rp = git(["rev-parse", "--absolute-git-dir", "HEAD"], path);
       const [gitDir = "", head = ""] = rp.ok ? rp.out.split("\n").map((s) => s.trim()) : [];
       facts.head = head;
-      const st = git(["status", "--porcelain", "--untracked-files=normal", "--ignore-submodules=none"], path);
-      facts.dirty = st.ok ? st.out !== "" : null;
+      const st = git(["status", "--porcelain", "--untracked-files=normal", "--ignored=matching", "--ignore-submodules=none"], path);
+      facts.dirty = st.ok ? unsafePaths(st.out).length > 0 : null;
       facts.inProgress = !gitDir || IN_PROGRESS.some((x) => existsSync(join(gitDir, x)));
       const own = git(["rev-list", "--count", `origin/main..${head}`], root);
       facts.ownCommits = own.ok && /^\d+$/.test(own.out) ? Number(own.out) : null;
