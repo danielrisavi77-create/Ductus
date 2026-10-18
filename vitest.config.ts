@@ -40,6 +40,24 @@ export function testWorkers(
   return Math.max(1, Math.floor(available / 4));
 }
 
+/**
+ * Quieter output in Claude Code sessions (DAN-213, #420): Claude Code sets
+ * CLAUDECODE=1 in the shell of its tools; there the run prints a dot per test
+ * and console output only from failing tests, while failures are still printed
+ * in full. Humans and CI keep the default output: any CI value except empty or
+ * "false" counts as CI (the pre-push hook sets CI=true). Same rule as
+ * `isAgentRun` in test-output.ts, which the Playwright configs use; it is
+ * repeated here because the vitest config loader warns on an extensionless
+ * local import, and a test keeps the two in step.
+ */
+export function vitestAgentOutput(
+  env: Readonly<Record<string, string | undefined>>,
+): { reporters?: string[]; silent?: "passed-only" } {
+  const ci = env.CI;
+  const agent = env.CLAUDECODE === "1" && (ci === undefined || ci === "" || ci === "false");
+  return agent ? { reporters: ["dot"], silent: "passed-only" } : {};
+}
+
 export default defineConfig({
   resolve: {
     // Mirrors the `@/*` path mapping in tsconfig.json. The regex with a
@@ -55,6 +73,8 @@ export default defineConfig({
     environment: "node",
     // Set here and in no project: the projects inherit it (`extends: true`).
     maxWorkers: testWorkers(availableParallelism(), process.env),
+    // Agent sessions: dot reporter, console output of failing tests only (test-output.ts).
+    ...vitestAgentOutput(process.env),
     // Two projects so that property tests run exactly once and can be scaled
     // separately (FC_NUM_RUNS) without slowing the unit suite.
     projects: [
