@@ -5,6 +5,8 @@ paths:
   - "db/**"
   - "src/server/db/**"
   - "compose.yaml"
+  - "scripts/db/**"
+  - "tests/integration/**"
 ---
 
 # Ductus: router za bazu podataka

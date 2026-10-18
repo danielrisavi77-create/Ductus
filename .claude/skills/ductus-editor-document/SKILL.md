@@ -7,6 +7,9 @@ paths:
   - "src/domain/diff/**"
   - "src/domain/citation/**"
   - "src/domain/collaboration/**"
+  - "e2e/block-identity.spec.ts"
+  - "e2e/editor-shell.spec.ts"
+  - "e2e/local-editor.spec.ts"
 ---
 
 # Ductus: router za editor i model dokumenta

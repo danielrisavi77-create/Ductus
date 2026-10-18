@@ -16,6 +16,9 @@ paths:
   - "db/tests/020-*.sql"
   - "db/tests/021-*.sql"
   - "db/tests/022-*.sql"
+  - "tests/unit/infra/fake-oidc-accounts.test.ts"
+  - "tests/integration/open-session.integration.test.ts"
+  - "tests/integration/with-actor.integration.test.ts"
 ---
 
 # Ductus: router za prijavu i identitet

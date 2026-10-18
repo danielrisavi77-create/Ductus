@@ -9,6 +9,9 @@ paths:
   - "src/application/ports/**"
   - "src/adapters/evidence/**"
   - "src/adapters/crypto/**"
+  - "tests/integration/*evidence*.test.ts"
+  - "tests/integration/*payload-store*.test.ts"
+  - "tests/integration/institution-key-migration.integration.test.ts"
 ---
 
 # Ductus: router za evidenciju i forenziku

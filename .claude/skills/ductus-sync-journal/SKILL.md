@@ -5,6 +5,7 @@ paths:
   - "src/domain/sync/**"
   - "src/domain/serverSync/**"
   - "src/lib/journal/**"
+  - "tests/unit/server-sync-messages.test.ts"
 ---
 
 # Ductus: router za sinkronizaciju i journal

@@ -6,6 +6,11 @@ paths:
   - "src/components/**"
   - "src/lib/i18n/**"
   - "scripts/forbidden-terms/**"
+  - "**/labels.ts"
+  - "**/messages.ts"
+  - "src/editor/schema.ts"
+  - "tests/unit/forbidden-terms*.test.ts"
+  - "tests/property/forbidden-terms*.test.ts"
 ---
 
 # Ductus: router za sučelje, copy i UX
