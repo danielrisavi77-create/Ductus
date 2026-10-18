@@ -220,7 +220,7 @@ export const hr = {
       errors: {
         malformed: "Kod ima od 8 do 32 slova i brojke. Provjeri ga i upiši ponovno.",
         refused: "Kod nije prihvaćen. Provjeri ga s nastavnikom.",
-        tooManyAttempts: "Previše pokušaja u kratkom vremenu. Pokušaj ponovno za nekoliko minuta.",
+        tooManyAttempts: "Previše pokušaja. Pokušaj ponovno kasnije.",
         unauthorized: "Prijava nije valjana. Prijavi se ponovno.",
         forbidden: "Ovaj račun ne može upisati kolegij.",
         invalid: "Upis nije prihvaćen. Ponovno učitaj stranicu.",

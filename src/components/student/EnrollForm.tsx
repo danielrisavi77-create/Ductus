@@ -4,12 +4,10 @@ import { useRef, useState, type FormEvent } from "react";
 
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 
-import { enrollWithCode, type Enrollment } from "./enroll-code";
+import { enrollWithCode, SIGN_IN_HREF, type Enrollment } from "./enroll-code";
 import styles from "./AssignmentNotice.module.css";
 
 const e = t.student.enroll;
-// An API route that starts an OIDC login: a real navigation, not a Link.
-export const SIGN_IN_HREF = `/api/auth/login?returnTo=${encodeURIComponent("/upis")}`;
 
 export default function EnrollForm() {
   const [code, setCode] = useState("");
@@ -29,12 +27,12 @@ export default function EnrollForm() {
 
   if (result?.kind === "enrolled") return <p role="status">{e.enrolled}</p>;
   return (
+    // No `name` on the input: a submit before hydration must not put the code in the URL.
     <form className={styles.ack} onSubmit={submit}>
       <label htmlFor="kod">{e.label}</label>
       <p className={styles.hint} id="kod-opis">{e.hint}</p>
       <input
         id="kod"
-        name="code"
         autoComplete="off"
         spellCheck={false}
         maxLength={64}

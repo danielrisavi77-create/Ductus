@@ -21,6 +21,8 @@ test("signed-in student gets no enrollment without the server", async ({ page })
   const posts: string[] = [];
   page.on("request", (request) => { if (request.method() === "POST") posts.push(new URL(request.url()).pathname); });
 
+  // A native submit before hydration would put a named field in the URL.
+  await expect(page.getByLabel(e.label)).not.toHaveAttribute("name", /.*/);
   await page.getByLabel(e.label).fill("12-34");
   await page.getByRole("button", { name: e.submit }).click();
   await expect(page.locator("form").getByRole("alert")).toHaveText(e.errors.malformed);

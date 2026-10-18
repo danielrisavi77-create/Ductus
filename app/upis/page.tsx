@@ -2,7 +2,8 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 
 import AppHeader from "@/components/shell/AppHeader";
-import EnrollForm, { SIGN_IN_HREF } from "@/components/student/EnrollForm";
+import EnrollForm from "@/components/student/EnrollForm";
+import { SIGN_IN_HREF } from "@/components/student/enroll-code";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 
