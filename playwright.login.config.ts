@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
+import { playwrightConsoleReporter } from "./test-output";
+
 // The fake provider redirects to http://localhost:3000/api/auth/callback
 // alone (infra/fake-oidc), so the port and the host name are fixed.
 const PORT = 3000;
@@ -22,7 +24,7 @@ export default defineConfig({
   // request; one worker keeps the sessions of one test out of another.
   workers: 1,
   timeout: 90_000,
-  reporter: [["list"], ["html", { open: "never", outputFolder: "playwright-report-login" }]],
+  reporter: [[playwrightConsoleReporter(process.env)], ["html", { open: "never", outputFolder: "playwright-report-login" }]],
   outputDir: "test-results-login",
   use: {
     baseURL: BASE_URL,

@@ -33,6 +33,21 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Speed only: ESLint (content strategy, one folder per digest of
+      # eslint.config.mjs and the lockfile, scripts/engineering/eslint-cached.mjs),
+      # tsc incremental and Next caches.
+      # A pull request saves into its own ref scope and can only restore from
+      # itself or main. Never add a cache to a pull_request_target workflow.
+      - name: Restore lint, typecheck and Next caches
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            node_modules/.cache/eslint
+            tsconfig.tsbuildinfo
+            .next/cache
+          key: build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.mjs') }}-${{ github.sha }}
+          restore-keys: |
+            build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.mjs') }}-
       - run: pnpm lint
       - run: pnpm typecheck
       - name: Engineering PR metadata
@@ -72,6 +87,20 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Restore Next cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .next/cache
+          key: stack-next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            stack-next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+      # Browser binaries only; "Install browsers" below still runs and installs
+      # the system packages (--with-deps), it skips the download on a hit.
+      - name: Restore Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.event_name == 'pull_request' && 'chromium' || 'all' }}
       - run: pnpm stack:up
       # The login-callback login (db/local/auth-login.sql) gets a random
       # password per run; none lives in the repo.

@@ -107,6 +107,20 @@
         ]
       }
     ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/scripts/hooks/stop-typecheck.mjs"
+            ],
+            "timeout": 180
+          }
+        ]
+      }
+    ],
     "UserPromptSubmit": [
       {
         "hooks": [

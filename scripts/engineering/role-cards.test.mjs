@@ -235,3 +235,30 @@ test("the glob matcher handles the forms the rules use", () => {
   assert.ok(globMatches(".github/**", ".github/workflows/ci.yml"));
   assert.ok(!globMatches("src/editor/**", "src/editorial/x.ts"));
 });
+
+// Owner decision of 18 Oct 2026 (DAN-213, #426 after qa426a): a skill with a
+// `paths:` key is neither listed nor callable by /name or the Skill tool until
+// a matching file is touched, so no project skill carries one.
+const frontmatter = (text) => text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/)?.[1] ?? "";
+const hasPathsKey = (text) => /^paths\s*:/m.test(frontmatter(text));
+
+test("no project skill is path-scoped", () => {
+  let skills = 0;
+  for (const dir of [".claude/skills", ".agents/skills"]) {
+    for (const name of readdirSync(path.join(root, dir)).sort()) {
+      const file = path.join(root, dir, name, "SKILL.md");
+      if (!existsSync(file)) continue;
+      skills += 1;
+      assert.ok(!hasPathsKey(read(file)), `${dir}/${name}: paths: hides the skill from /name and the Skill tool`);
+    }
+  }
+  assert.ok(skills > 0);
+});
+
+test("the paths: detector reads only the frontmatter", () => {
+  assert.ok(hasPathsKey('---\nname: x\npaths:\n  - "db/**"\n---\n'));
+  assert.ok(hasPathsKey("---\nname: x\npaths: db/**\n---\n"));
+  assert.ok(hasPathsKey('---\r\nname: x\r\npaths:\r\n  - "db/**"\r\n---\r\n'));
+  assert.ok(!hasPathsKey("---\nname: x\n---\n\npaths: in the body\n"));
+  assert.ok(!hasPathsKey("---\nname: x\ndescription: no paths: here\n---\n"));
+});
