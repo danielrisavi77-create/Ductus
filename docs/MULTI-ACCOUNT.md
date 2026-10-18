@@ -51,7 +51,7 @@ Claude, Codex i ChatGPT mogu biti worker. Provider ne određuje vlasništvo mapa
 
 Reviewer ne mijenja granu koju pregledava. Traži kršenja tvrdih pravila, ispravnost, sigurnost, pravila proizvoda, nedostatne testove i prekoračenje opsega. Autor PR-a i neovisni reviewer ne smiju biti ista aktivna agent-instanca. Za kritične promjene koristi se drugi račun ili drugi provider kad je dostupan.
 
-Ako pretplata ili kvota za treći provider (primjerice Grok) nije dostupna, odobreni fallback par je Fable na Claudeu i Astra na ChatGPT/Codexu; modeli mogu zamijeniti uloge reviewera i QA-a. PASS-ovi i dalje moraju doći preko dva različita autentificirana Appa (`claude` i `chatgpt-codex-connector`). Dvije sesije ili modela na istom Appu ne čine neovisni par, osim uz kvotni fallback iz `docs/ENGINEERING_SYSTEM.md` §6 (strojni dokaz iscrpljene kvote drugog Appa na istom PR-u, `Provider-Fallback` u QA komentaru i QA sesija neovisna o autoru i revieweru). U fallback komentarima zabilježi model i razlog; te su oznake auditni trag, a gate ne potvrđuje sam odabrani model ni dostupnost pretplate. Ako pretplata za Claude ili ChatGPT/Codex nije dostupna, gate ostaje pending dok se ne pribavi drugi prihvaćeni App ili Daniel ne unese Owner Override.
+Ako pretplata ili kvota za treći provider (primjerice Grok) nije dostupna, odobreni fallback par je Fable na Claudeu i Astra na ChatGPT/Codexu; modeli mogu zamijeniti uloge reviewera i QA-a. PASS-ovi i dalje moraju doći preko dva različita autentificirana Appa (`claude` i `chatgpt-codex-connector`). Dvije sesije ili modela na istom Appu ne čine neovisni par, osim uz put druge Claude sesije (D-139: Codex review na headu, odgovorene niti, redak `Provider-Fallback: claude-second-session — Codex review na headu <sha>`, `docs/ENGINEERING_SYSTEM.md` §6) ili kvotni fallback iz istog odjeljka (strojni dokaz iscrpljene kvote drugog Appa na istom PR-u, `Provider-Fallback` u QA komentaru i QA sesija neovisna o autoru i revieweru). U fallback komentarima zabilježi model i razlog; te su oznake auditni trag, a gate ne potvrđuje sam odabrani model ni dostupnost pretplate. Ako pretplata za Claude ili ChatGPT/Codex nije dostupna, gate ostaje pending dok se ne pribavi drugi prihvaćeni App ili Daniel ne unese Owner Override.
 
 ### Orkestrator
 
@@ -59,13 +59,18 @@ Orkestrator ne piše proizvodni kod. Dodjeljuje zadatke, provjerava gateove, rje
 
 ## 5. Skills
 
-Repo sadrži adaptere za podržane runtimee (19 projektnih skillova `ductus-*`, iste mape u obje lokacije; uz njih je u `.claude/skills/` i preuzeti `supabase-postgres-best-practices`, koji nije adapter i nema kopiju u `.agents/skills/`, vidi `docs/REPOZITORIJI.md`):
+Repo sadrži adaptere za podržane runtimee (27 projektnih skillova `ductus-*`, iste mape u obje lokacije; uz njih je u `.claude/skills/` i preuzeti `supabase-postgres-best-practices`, koji nije adapter i nema kopiju u `.agents/skills/`, vidi `docs/REPOZITORIJI.md`):
 
 ```
 .claude/skills/
   ductus-worker/
   ductus-handoff/
   ductus-browser-cli/
+  ductus-app-map/
+  ductus-auth-aai/
+  ductus-database/
+  ductus-editor-document/
+  ductus-evidence-forensics/
   ductus-orchestrator/
   ductus-review/
   ductus-qa/
@@ -79,15 +84,23 @@ Repo sadrži adaptere za podržane runtimee (19 projektnih skillova `ductus-*`, 
   ductus-offline-recovery/
   ductus-provenance-invariants/
   ductus-rules-change/
+  ductus-sync-journal/
   ductus-sync-states/
   ductus-synthetic-data/
+  ductus-testing-map/
   ductus-ui-copy/
+  ductus-ui-shell-i18n/
   supabase-postgres-best-practices/
 
 .agents/skills/
   ductus-worker/
   ductus-handoff/
   ductus-browser-cli/
+  ductus-app-map/
+  ductus-auth-aai/
+  ductus-database/
+  ductus-editor-document/
+  ductus-evidence-forensics/
   ductus-orchestrator/
   ductus-review/
   ductus-qa/
@@ -101,9 +114,12 @@ Repo sadrži adaptere za podržane runtimee (19 projektnih skillova `ductus-*`, 
   ductus-offline-recovery/
   ductus-provenance-invariants/
   ductus-rules-change/
+  ductus-sync-journal/
   ductus-sync-states/
   ductus-synthetic-data/
+  ductus-testing-map/
   ductus-ui-copy/
+  ductus-ui-shell-i18n/
 ```
 
 Skillovi su namjerno tanki. Ne dupliciraju proizvodna pravila; upućuju na kanonske dokumente u korijenu i `docs/`. Tako se jedna promjena pravila ne mora ručno kopirati u više skillova.
