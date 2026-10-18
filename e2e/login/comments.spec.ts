@@ -159,10 +159,12 @@ test("a teacher's comment next to a paragraph reaches the student, who answers",
   expect(await student.evaluate(() => window.getSelection()?.toString())).toBe(QUOTE);
 
   // Text written before the quote moves the mark with it; the document keeps no trace of the comment.
-  await editor.press("Control+Home");
+  // "Pokaži u tekstu" left the quote selected: a click on the first line, then Home, puts the cursor before it.
+  await editor.locator("p").first().click({ position: { x: 2, y: 4 } });
+  await student.keyboard.press("Home");
   await student.keyboard.type("Uvod. ");
-  await expect(editor.locator(".comment-mark")).toHaveText(QUOTE);
   await expect(editor.locator("p").first()).toHaveText(`Uvod. ${TEXT}`);
+  await expect(editor.locator(".comment-mark")).toHaveText(QUOTE);
 
   await card.getByRole("textbox", { name: t.replyLabel }).fill("Hvala, dodat ću izvor.");
   await card.getByRole("button", { name: t.reply }).click();
