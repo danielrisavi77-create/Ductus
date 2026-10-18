@@ -243,7 +243,7 @@ Ovo je srž onoga što fakultet kupuje. Svaka brojka ima jedinicu, nazivnik i me
 
 ## 9. Što se bilježi
 
-Jedna transakcija editora otprilike odgovara jednom pritisku tipke. Zato se transakcije ne bilježe pojedinačno s vremenom: sažimaju se u **odsječke** od najviše 30 sekundi [PRIJEDLOG D-24]. Odsječak sadrži sve korake promjene, potrebne za točnu rekonstrukciju, ali samo jedno vrijeme (početak odsječka, zaokruženo na minutu) i autora. I vrijeme primitka na poslužitelju zaokružuje se na minutu u svemu što vide student i nastavnik.
+Jedna transakcija editora otprilike odgovara jednom pritisku tipke. U evidenciji se transakcije sažimaju u **odsječke** od najviše 30 sekundi (D-24, potvrđeno D-81). Odsječak sadrži sve korake promjene, potrebne za točnu rekonstrukciju, ali samo jedno vrijeme (početak odsječka, zaokruženo na minutu) i autora. Vrijeme po pojedinoj promjeni postoji samo u zasebnoj klasi podataka s kraćim rokom čuvanja, za prikaz uživo i reprodukciju (D-143), nikad u odsječku evidencije. I vrijeme primitka na poslužitelju zaokružuje se na minutu u svemu što vide student i nastavnik.
 
 | Bilježi se | Ne bilježi se |
 | --- | --- |
@@ -287,7 +287,7 @@ Student dobiva potpuno okruženje za pisanje akademskog rada. Pravila oblika dol
 
 **Kasnije:** drugi fakulteti, Merlin (LTI), "Sign in with ChatGPT".
 
-**Odlučeno, Ustav v1.4 izmijenjen:** prikaz uživo i reprodukcija znak po znak (D-142, D-143). Pilot sa stvarnim studentima čeka pravno mišljenje (D-55) i DPIA.
+**Odlučeno, Ustav v1.4 dopunjen 18. 10. 2026. (C-3, C-14, C-19, popis „Nikad”; uz izmjene od 17. 10. niže):** prikaz uživo i reprodukcija znak po znak (D-142, D-143). Pilot sa stvarnim studentima čeka pravno mišljenje (D-55) i DPIA.
 
 **Ustav v1.4 (17. 10. 2026., D-127 do D-137):** izmjene C-3, C-4, C-11, C-19 (samo studentov pogled) i C-42 posljedica su dizajna Ductura. Uvjetno: D-129 (blokada predaje) čeka pisanu potvrdu FPZG-a i upis C-42, D-131 (povijest rada) i D-135 (konzultacije) čekaju pravno mišljenje D-55. D-133 i D-134 su PRIJEDLOG (arhitektura).
 
