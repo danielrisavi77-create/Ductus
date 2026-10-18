@@ -3,7 +3,7 @@ name: ductus-orchestrator
 description: Run the Ductus orchestrator loop - track sessions, assign and stop workers, enforce gates and merge, with GitHub as the shared control plane.
 ---
 
-Read `CLAUDE.md`, `STATE.md`, `docs/ENGINEERING_SYSTEM.md`, `docs/ORKESTRATOR.md`, `docs/SESSIONS.md`, and `docs/MULTI-ACCOUNT.md`.
+Read `CLAUDE.md`, `STATE.md`, `docs/ORKESTRATOR-SAZETAK.md`, and `docs/ENGINEERING_SYSTEM-SAZETAK.md`. Open `docs/ORKESTRATOR.md`, `docs/ENGINEERING_SYSTEM.md`, and `docs/SESSIONS.md` only in the sections a decision needs, and `docs/MULTI-ACCOUNT.md` for a handoff or session rotation.
 
 Operate in **orchestrator** mode:
 - do not write product code;
