@@ -436,6 +436,92 @@ Ugovor prije koda. **Odluka vlasnika (issue #87, komentari 6254642740 i 62547210
 - Poslužiteljsko ograničenje broja zahtjeva još ne postoji; učestalost iz točke 7 drži klijent.
 - Na `main` još nema puta brisanja dokumenta po roku ni povlačenja studenta (D-12); korak 2 uvodi `delete_live_state` i pgTAP redak, a poziva ga onaj PR koji uvodi taj put.
 
+### 4.13 Ruta `ingest`: slanje odsječka i snimke (B-8, DAN-83)
+
+Ugovor prije koda za poslužiteljski ulaz evidencije. Značenje (jedno slanje nosi jedan odsječak i cijeli dokument, u jednoj transakciji, s jednim ključem ponavljanja), redoslijed provjera i ishodi su iz ADR-a `docs/adr/2026-10-11-ugovor-spremanja-i-zapisa.md` (§5.2 do §5.4, odluke vlasnika 1 do 7); snimka je iz §4.10 t. 2 i 3, potpis u demou iz `docs/PLAN-DEMO.md` §7 t. 4 (D-98) i ADR odluke 6. Ovaj odjeljak samo prevodi to u HTTP, imenuje što na `main` nedostaje i redoslijed koraka. Gdje se razlikuje od ADR-a u značenju, vrijedi ADR.
+
+**Stanje na `main` (19. 10. 2026.).** Postoje `app.commit_evidence_segment` (CAS revizije i `reserve`, potvrda v2 u stanju `pending_signature`), validator odsječka v2 (`verifyCanonicalEvidencePayloadV2`), format i sažetak potvrde v2 (`digestEvidenceReceiptPayloadV2`), S3 adapter (`putImmutable`), zaštite mutacije (`src/server/http/mutation-request.ts`) i gateway koji još izdaje potvrdu v1. Ne postoje: ruta, put koji studentu stvara rad (`evidence.project`, `document`, `package`), tablica snimki (§4.10 t. 5), RPC koji priključuje potpis, trajni razvojni ključ i adapter prema bazi. Zato danas nijedan rad nema evidenciju na poslužitelju i svaka predaja završava kao `no_evidence`.
+
+1. **Ruta `POST /api/evidence/commit`.** `runtime = "nodejs"`, `dynamic = "force-dynamic"`, `revalidate = 0`, svaki odgovor `Cache-Control: no-store` i JSON bez odjeka ulaza. ID dokumenta ne ide u URL. Prije čitanja ijednog bajta tijela, ovim redom: `checkMutationRequest` s očekivanim originom iz `OIDC_REDIRECT_URI` (kao ruta komentara; 405, 403 `forbidden`); zaglavlje `Ductus-Protocol: 1`, inače 426 `upgrade_required` (§3 t. 7); `Content-Type: application/json`, inače 415; kolačić sesije u obliku tokena, inače 401 `unauthenticated`. Tijelo se zatim čita `readBodyWithLimit` s granicom `MAX_COMMIT_REQUEST_BYTES` i vremenskom granicom (413, 408, 400).
+2. **Tijelo zahtjeva**, zatvoren skup ključeva (nepoznat ili nedostajući ključ je `invalid`); tijelo se dekodira strogo kao UTF-8 bez BOM-a:
+
+| Polje | Oblik |
+| --- | --- |
+| `documentId` | ID dokumenta iz rute rada (točka 6) |
+| `clientTransactionId` | jedini ključ ponavljanja (ADR §5.2); oblik `isReceiptClientTransactionId` (1 do 128 UTF-16 jedinica, bez kontrolnih znakova i usamljenih surogata) |
+| `baseRevision` | cijeli broj ≥ 0 |
+| `segments` | niz s točno jednim elementom (ADR §5.1 t. 2): točni JCS bajtovi odsječka v2 u standardnom base64 s paddingom |
+| `document` | točni JCS bajtovi snimke dokumenta nakon zadnjeg događaja odsječka, base64 kao gore (§4.10 t. 2; obavezno) |
+
+   - Bajtovi putuju kao base64, ne kao JSON tekst, da poslužitelj hashira točno one bajtove koje je klijent hashirao (§4.1 "Ponovno slanje": hash se računa nad primljenim bajtovima). Base64 koji se ne kodira natrag u isti tekst je `invalid`.
+   - Klijent ne šalje descriptor, paket ni autora. Descriptor gradi poslužitelj iz provjerenog odsječka (`segmentHash` i `payloadBytes` iz primljenih bajtova), paket izvodi iz dokumenta, a autora iz sesije.
+   - `gap` nije dio verzije 1 (ključ je nepoznat, dakle `invalid`). Ulazi zasebnim korakom kad plan napada potvrdi kodove uzroka i vlasnik ih vidi (ADR odluka 7).
+   - `MAX_COMMIT_REQUEST_BYTES` je jedna konstanta koju uvoze klijent i ruta, izračunata iz granice odsječka (D-96), granice snimke i 4 KiB omotnice, nikad zaseban broj. Granica snimke (`MAX_DOCUMENT_SNAPSHOT_BYTES`) je otvoreno vlasnikovo pitanje iz §4.10 t. 2 i ovdje se ne izmišlja.
+3. **Redoslijed provjera nakon čitanja tijela** (ADR §5.3; svaki korak prije sljedećeg):
+   1. oblik omotnice i polja; dekodirani odsječak iznad D-96 ili snimka iznad svoje granice je `too_large`;
+   2. **kontekst prije skupog rada**: `app.evidence_commit_context(p_document_id text, p_client_transaction_id text)` pod `withActor`. Akter bez sesije daje 401. Dokument koji ne postoji, tuđi, druge ustanove, nastavnikov poziv i uklonjen student daju isti 404 `not_found`. Inače vraća paket, ustanovu, profil, `max_payload_bytes` i je li ključ ponavljanja već poznat. Bez ovoga bi svatko s valjanim kolačićem punio spremnik;
+   3. odsječak: strogi UTF-8, `verifyCanonicalEvidencePayloadV2` (JCS bajt po bajt, zatvoreni koraci, minute D-24), `documentId` odsječka jednak `documentId` zahtjeva, profil jednak profilu paketa; inače `invalid`. Veličina iznad `max_payload_bytes` paketa je `too_large`;
+   4. snimka: strogi UTF-8, `validateDocument`, ponovni JCS bajt-identičan primljenom (inače `invalid`), SHA-256 jednak `finalDocumentHash` odsječka (inače `document_mismatch`);
+   5. objekt se zapisuje (`putImmutable`, ključ `evidenceObjectKey` iz ustanove i paketa koje je vratio kontekst) samo ako ključ ponavljanja nije poznat; za poznat ključ ruta samo izračuna isti ključ objekta i ide na korak 6 (ADR t. 5 i 6). Siroče nakon neuspjele transakcije samo se broji (§4.1);
+   6. **jedna transakcija** (`withActor`): RPC prihvata sa snimkom u istoj transakciji (§4.10 t. 2) → web proces čita vraćeni `receipt_payload`, traži da je valjan v2 i da je njegov JCS bajt-identičan vraćenom tekstu te da su `documentId`, `clientTransactionId`, `segmentHash` i `revision = baseRevision + 1` jednaki zahtjevu → potpisuje `signingInput` (D-92) razvojnim ključem i sam provjerava potpis → RPC priključuje potpis → potvrda transakcije. Svaka greška u lancu baca iznimku, `withActor` poništava cijelu transakciju i nema ni revizije, ni odsječka, ni snimke, ni potvrde (ADR odluka 6). Potpis se ne radi izvan transakcije ni nad postojećim nepotpisanim prihvatom. Time u demou nema odsječka bez potpisane potvrde, što predaja ionako blokira (vlasnikov odgovor na P3, #385 `issuecomment-6256252275`).
+4. **Ishodi na žici.** `status` i HTTP kod; imena koja klijent već poznaje (`src/domain/serverSync/contract.ts`) zadržavaju oblik, pa `parseCommitOutcome` ostaje primjenjiv za uspjeh i `stale_base`.
+
+| `status` | HTTP | Tijelo uz `status` | Klijent (ADR §5.4) |
+| --- | --- | --- | --- |
+| `committed`, `duplicate` | 200 | `revision`, `receipt: {status: "signed", signedReceipt}` | "spremljeno na poslužitelju" tek nakon provjere potpisa ključem iz rute rada |
+| `stale_base`, `chain_conflict`, `not_continuous` | 409 | `currentRevision`, `documentHash`, `headSegmentHash`, `lastSequenceTo` | usklađivanje |
+| `txid_reused` | 409 | | oporavak (`RECOVERY_REQUIRED`) |
+| `invalid`, `document_mismatch` | 422 | | ne ponavlja |
+| `too_large` | 413 | | ne ponavlja |
+| `not_accepting` | 409 | | ne ponavlja; zadatak nije otvoren, obavijest nije potvrđena ili paket više ne prima zapis |
+| `not_found` | 404 | | ne ponavlja |
+| `unauthenticated` | 401 | | čuva red, nakon prijave istog korisnika ponavlja isti zahtjev |
+| `unavailable` | 503 | `stage`: `context`, `storage`, `repository` ili `signing`; `Retry-After` | ponavlja isti zahtjev s istim ključem |
+| `upgrade_required` | 426 | | osvježava aplikaciju |
+
+   - Razlog (`reason`) nikad ne ide na žicu, samo kod u log.
+   - `duplicate_pending` iz RPC-a u demou ne smije postojati (ADR odluka 6); ako se pojavi, odgovor je 503 `repository` i incident bez sadržaja, nikad potpis tog prihvata.
+   - `pending_signature` nije odgovor u demou.
+5. **Izmjene RPC-a prihvata** (nova migracija, `CREATE OR REPLACE`; postojeća se ne mijenja, §4.8). Današnji `concurrent_conflict` spaja zastarjelu baznu reviziju i neslaganje `initialDocumentHash`, a `chain_conflict` spaja krivog prethodnika i krivi redni broj. Nova verzija vraća `stale_base` (bazna ≠ tekuća), `chain_conflict` (prethodnik ≠ glava), `not_continuous` (prethodnik = glava, a redni broj nije sljedeći ili početni hash nije hash spremljenog dokumenta) i `invalid` za vraćanje rednog broja unatrag (ADR t. 9 do 12). Uz sva tri sukoba vraća reviziju, hash dokumenta, glavu i zadnji redni broj iz istih zaključanih redaka. Za `duplicate_signed` vraća i spremljeni potpis, jer današnji RPC vraća samo `receipt_payload`, pa ponovljeni zahtjev ne bi mogao dobiti izvornu potpisanu potvrdu. Redoslijed brava ostaje paket, zadatak, članstvo, dokument. Ako potpis traje dulje od 10 s, `idle_in_transaction_session_timeout` prekida transakciju i ishod je `unavailable`.
+6. **Ruta rada `POST /api/evidence/open`** (preduvjet: bez nje klijent nema `documentId`). Tijelo `{assignmentId}`; iste zaštite kao točka 1. RPC `app.open_student_work(p_assignment_id uuid)`:
+   - samo aktivan student kolegija koji je potvrdio trenutnu verziju obavijesti (`app.lock_student_assignment`); inače 404 `not_found`. Prije potvrde nema retka rada ni slanja evidencije (F-7);
+   - idempotentno: jedan projekt po paru (zadatak, student), osiguran jedinstvenim indeksom, pa dvije kartice ne stvaraju dva rada; prvi poziv stvara projekt, dokument s revizijom 0 (known-answer iz §4.10 t. 3), njezinu snimku i paket. ID-ove generira baza; ID paketa ima oblik `isEvidencePackageId`;
+   - paket dobiva domenu evidencije ustanove (D-102). Domenu daje konfiguracija operatera (lokalno skripta `db/local`), nikad migracija; bez nje ishod je 503 `context`;
+   - profil zapisa je jedna konstanta koju dijele hvatanje zapisa na klijentu i poslužitelj; `max_payload_bytes` je D-96;
+   - odgovor: `documentId`, `evidenceProfileId`, `currentRevision`, `documentHash`, `headSegmentHash`, `lastSequenceTo`, snimka tekuće revizije (base64) i javni ključevi potvrda domene (točka 7). Ista ruta služi usklađivanju iz ADR §5.4 t. 1. Paket i ustanova ne idu na žicu.
+7. **Ključ potpisa u demou.** Današnji razvojni potpisnik stvara novi ključ u memoriji pri svakom pokretanju procesa, pa nakon ponovnog pokretanja nijedna ranija potvrda nije provjerljiva i predaja (B-12) bi je čitala kao neispravan zapis (ADR §7 (b)). Prijedlog (čeka vlasnika, pitanje 2 niže): razvojni seed od 32 bajta u lokalnoj datoteci izvan repoa (putanja iz okoline, stvara je lokalna skripta); oznaka i verzija ključa izvedene iz javnog ključa; javni ključ upisan u registar ključeva domene (`evidence.signing_key`: domena, ustanova, namjena `receipt`, javni ključ, `valid_from`, `valid_to`, `revoked_at`; RLS i pgTAP retci; upis lokalnom skriptom, ne migracijom). RPC koji priključuje potpis provjerava da `payloadDigestSha256` odgovara `receipt_payload` i da je ključ u registru za domenu paketa, s namjenom potvrde i neopozvan (§4.1). Provjeravatelji (klijent, B-12) uzimaju ključ iz registra, nikad od "trenutnog potpisnika". Bez datoteke ključa ingest je 503 `signing`; brava `NODE_ENV=production` ostaje.
+8. **Logovi.** Samo `documentId`, ishod, `stage` i kod greške. Nikad bajtovi odsječka ili snimke, tekst dokumenta ni ključ ponavljanja; canary iz §4.9 pokriva i ovu rutu.
+
+**pgTAP retci (novi RPC-ovi i tablice).** `open_student_work`: student vlasnik (prvi i ponovljeni poziv daju iste ID-ove), student bez potvrde obavijesti, nastavnik, student B, persona druge ustanove i bez sesije; paralelni prvi poziv daje jedan projekt. `evidence_commit_context`: isti odgovor za nepostojeći, tuđi i dokument druge ustanove. RPC prihvata: `stale_base`, `chain_conflict`, `not_continuous` i vraćanje unatrag kao zasebni ishodi sa stanjem iz zaključanih redaka. RPC potpisa: tuđi prihvat, već potpisan prihvat, sažetak koji ne odgovara, ključ druge domene i opozvan ključ odbijeni. `ductus_app` nema izravan DML ni na jednoj novoj tablici (uz pogrešno dodijeljen grant 0 redaka). Katalog: `ductus_app` izvršava točno očekivani skup RPC-ova.
+
+**Koraci** (svaki zaseban PR vezan uz DAN-83; plan napada je #155, a svaka njegova stavka dobiva test ili obrazloženje):
+
+1. Ovaj ugovor.
+2. Migracija: tablica snimki (§4.10 t. 5) s known-answer revizijom 0, `open_student_work` s jedinstvenim indeksom projekta, `evidence_commit_context`, pgTAP.
+3. Migracija: nova verzija RPC-a prihvata (točka 5, sa snimkom u istoj transakciji), registar ključeva i RPC potpisa (točka 7, nakon vlasnikove odluke), pgTAP.
+4. Adapter prema bazi, gateway v2 (potvrda v2, potpis u transakciji) i trajni razvojni potpisnik, s integracijskim testom koji prolazi ponovno pokretanje procesa.
+5. Rute `POST /api/evidence/open` i `POST /api/evidence/commit` s unit i integracijskim testovima: Origin i `Sec-Fetch-Site` (kriterij B-8), granice, svi ishodi iz točke 4, canary loga.
+
+**Što Frontend treba za spajanje** (F-8, klijentsko slanje nije dio ovog ugovora):
+
+- hvatanje zapisa koje proizvodi odsječak v2 i JCS snimku nakon njegova zadnjeg događaja; journal čuva snimku uz odsječak dok ne dobije potvrdu (§4.10 t. 2);
+- transport za `drain-runner` koji gradi omotnicu iz točke 2 i preslikava ishode iz točke 4 u `DrainOutcome`;
+- red se šalje redom, odsječak po odsječak. Današnje preskakanje starijih redaka reda (`supersededUpTo`, oblik `REPLACE_DOCUMENT`) ne smije preskočiti nijedan odsječak;
+- provjera potpisa ključem iz rute rada (točka 6), nikad iz odgovora koji nosi potvrdu;
+- `documentId` iz rute rada umjesto lokalne konstante.
+
+**Poznate granice.**
+
+- Prijava praznine (`gap`) nije u verziji 1, pa demo kroz rutu ne može proizvesti zabilježenu prazninu (scenarij C4 iz #385) dok kodovi uzroka nisu potvrđeni (ADR odluka 7).
+- Potpis u transakciji drži brave paketa, zadatka, članstva i dokumenta dok traje potpis razvojnim ključem (ADR §9). To vrijedi samo za demo (D-98); izvan demoa potpisuje worker.
+- Poslužiteljsko ograničenje broja zahtjeva ne postoji.
+- Predaja još ne zatvara paket (`accepts_evidence`); to veže B-12.
+
+**Otvoreno (vlasnik).**
+
+1. Granica snimke (`MAX_DOCUMENT_SNAPSHOT_BYTES`, §4.10 t. 2): ADR §5.2 piše "dokument do 1 MiB", a §4.10 t. 2 drži pitanje otvorenim s prijedlogom D-96 (2 MiB, kao §4.12). Blokira korak 5.
+2. Trajni razvojni ključ i registar ključeva prema točki 7 (ADR §7 (b), stavka 0.2). Blokira korake 3 i 4; promjena nakon prvih potpisanih potvrda je skupa, jer oznaka ključa ostaje u svakoj potvrdi.
+
 ## 5. Što još nije potvrđeno (spike prije odluke)
 
 | Stavka | Provjera | Gdje |
