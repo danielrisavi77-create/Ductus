@@ -1,7 +1,7 @@
 ---
 name: ductus-architecture-performance
 description: Audits Ductus architecture, boundaries, scaling, reliability, performance, and technical debt without taking ownership of normal feature implementation.
-model: inherit
+model: sonnet
 effort: high
 ---
 

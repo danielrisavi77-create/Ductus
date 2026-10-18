@@ -135,7 +135,9 @@ test("a teacher's comment next to a paragraph reaches the student, who answers",
   await signIn(student, "/rad");
 
   const editor = student.getByRole("textbox", { name: messagesHr.workspace.documentLabel });
-  await expect(editor).toHaveAttribute("contenteditable", "true");
+  // The first visit of /rad in a run compiles the page and the editor on
+  // `next dev`; the journal opens after that, which can exceed 5 s (#431).
+  await expect(editor).toHaveAttribute("contenteditable", "true", { timeout: 30_000 });
   await editor.click();
   await student.keyboard.type(TEXT);
   await expect(student.locator(".workspace__status .sync-chip")).toHaveAttribute("data-state", "LOCAL_DURABLE");
@@ -198,12 +200,15 @@ test("a teacher's comment next to a paragraph reaches the student, who answers",
   await second.getByRole("button", { name: messagesHr.auth.logout }).click();
   await second.waitForURL(`${ORIGIN}/`);
   await expect(editor).toHaveText("");
+  // Wait for the held answer itself, never for "networkidle": `next dev`
+  // keeps sending hot-update requests, so the page may never go idle (#431).
+  const landed = student.waitForResponse((r) => r.url().endsWith("/api/comments/list"));
   release();
+  await landed;
+  // Two frames: the answer's JSON is read and React has rendered whatever it would.
+  await student.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
   await expect(student.getByText(t.signedOut)).toBeVisible();
   await expect(commentCards(student)).toHaveCount(0);
   await expect(student.getByText(QUOTE)).toHaveCount(0);
   await expect(student.getByRole("textbox", { name: t.replyLabel })).toHaveCount(0);
-  // Long enough for the held answer to have been handled.
-  await student.waitForLoadState("networkidle");
-  await expect(commentCards(student)).toHaveCount(0);
 });

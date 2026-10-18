@@ -1,6 +1,6 @@
 ---
 name: ductus-testing-map
-description: "Map of all Ductus test layers (vitest unit, property, integration; pgTAP, Playwright e2e, node --test), their scripts and CI jobs, and the never-skip rule. Use when adding, running or locating tests or changing test config or CI test steps."
+description: "Map of all Ductus test layers (vitest unit, property, integration; pgTAP, Playwright e2e, node --test), their scripts and CI jobs, and the never-skip rule. Use when adding, changing, running or locating tests or changing test config or CI test steps."
 ---
 
 # Ductus: router za testiranje

@@ -3,7 +3,7 @@ name: ductus-bug-hunter
 description: Try to break Ductus main or staging through realistic hostile and edge-case user behavior, then file reproducible bugs without fixing them.
 ---
 
-Read `CLAUDE.md`, `docs/ENGINEERING_SYSTEM.md`, and `docs/TESTING.md`.
+Read `CLAUDE.md`, `docs/ENGINEERING_SYSTEM-SAZETAK.md`, and `docs/TESTING.md`; open `docs/ENGINEERING_SYSTEM.md` only in the sections the task needs.
 
 Operate as Bug Hunter:
 - test unexpected user sequences, multi-tab/device, offline/reconnect, large paste, stale clients, session changes and boundary cases;
