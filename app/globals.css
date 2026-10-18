@@ -1,26 +1,68 @@
 /*
- * Ductus design tokens and shell layout, design v6 (D-89).
+ * Ductus design tokens. Values from the token table of the design handoff
+ * (docs/design/ductura/README.md §8, D-123); the structure is D-115's.
  *
- * Tokens come from the Pisač prototype (pisac-editor/public/legacy) with the
- * approved deviations: secondary text #5A605A instead of #8A908A for
- * contrast, targets of at least 32 px in dense bars and 44 px elsewhere, and
- * no --breach colour (D-62). Origin colours show where text came from, never
- * a judgement.
+ * The shell is dark and does not follow the system setting. The writing sheet
+ * carries its own token scope (`.sheet`): dark by default, white when the
+ * writer switches it (`data-sheet-theme="light"`, SheetFrame); the choice is
+ * kept only in the browser. Primary is #6FBFA5 with #0E1C17 text on it; on
+ * the white sheet the handoff's darker green #2F7A63 carries text and focus.
+ * The server save state (SYNCED) has its own colour, --synced, so it never
+ * reads as the primary or as the pulsing "saving" state. Origin colours show
+ * where text came from, never a judgement; no --breach colour (D-62).
+ * Targets are at least 32 px in dense bars, 44 px elsewhere.
  */
 
 :root {
-  --ground: #edefea;
+  --ground: #0f110e;
+  --sheet: #161a15;
+  --chrome: #141712;
+  --ink: #e9ebe6;
+  --ink-2: #a6ada5;
+  --ink-3: #8e958d;
+  --rule: #2c312b;
+  --rule-2: #232722;
+  --accent: #6fbfa5;
+  --accent-hover: #8ccdb7;
+  --accent-ink: #0e1c17;
+  --accent-soft: #6fbfa51f;
+  --synced: #8fb0e0;
+  --p-internal: #8fb0e0;
+  --p-unknown: #9e9a90;
+  --p-template: #7e7a70;
+  --p-ai: #d3ac63;
+  --cmt: #d9ae5b;
+  --cmt-ink: #d9ae5b;
+  --cmt-bg: #d9ae5b2b;
+  --lift: 0 1px 1px #0007, 0 12px 34px -10px #000a;
+  --ff-ui: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
+  --ff-display: var(--font-display), Georgia, serif;
+  --ff-mono: var(--font-mono), ui-monospace, Menlo, monospace;
+  --ff-manuscript: "Times New Roman", Times, Tinos, "Liberation Serif", serif;
+  color-scheme: dark;
+}
+
+/* Dark sheet (default): the shell's own tokens on the handoff's sheet colour. */
+.sheet {
+  --sheet: #161a15;
+  color-scheme: dark;
+}
+
+/*
+ * White sheet. --ink-3 is #6a706a, not the prototype's #8a908a (3.3:1 on
+ * white, below WCAG AA for the placeholder text); both are handoff values.
+ */
+.sheet[data-sheet-theme="light"] {
   --sheet: #ffffff;
-  --chrome: #f7f8f5;
   --ink: #191c19;
-  --ink-2: #4a504a;
-  --ink-3: #5a605a;
+  --ink-2: #5a605a;
+  --ink-3: #6a706a;
   --rule: #dce0d8;
-  --rule-2: #e9ece6;
-  --accent: #2f6f5e;
-  --accent-hover: #245849;
+  --rule-2: #f7f8f5;
+  --accent: #2f7a63;
+  --accent-hover: #2f6f5e;
   --accent-ink: #ffffff;
-  --accent-soft: #2f6f5e14;
+  --accent-soft: #2f7a631a;
   --p-internal: #4a6fa5;
   --p-unknown: #6e6a62;
   --p-template: #9a9488;
@@ -28,38 +70,7 @@
   --cmt: #b8862a;
   --cmt-ink: #8a6420;
   --cmt-bg: #b8862a26;
-  --lift: 0 1px 1px #1a1d1b08, 0 10px 34px -8px #1a1d1b1f;
-  --ff-ui: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
-  --ff-display: var(--font-display), Georgia, serif;
-  --ff-mono: var(--font-mono), ui-monospace, Menlo, monospace;
-  --ff-manuscript: "Times New Roman", Times, Tinos, "Liberation Serif", serif;
   color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --ground: #0f110e;
-    --sheet: #191c18;
-    --chrome: #141712;
-    --ink: #e9ebe6;
-    --ink-2: #c3c9c2;
-    --ink-3: #a6ada5;
-    --rule: #2c312b;
-    --rule-2: #232722;
-    --accent: #6fbfa5;
-    --accent-hover: #8ccdb7;
-    --accent-ink: #0e1c17;
-    --accent-soft: #6fbfa51f;
-    --p-internal: #8fb0e0;
-    --p-unknown: #9e9a90;
-    --p-template: #7e7a70;
-    --p-ai: #d3ac63;
-    --cmt: #d9ae5b;
-    --cmt-ink: #d9ae5b;
-    --cmt-bg: #d9ae5b2b;
-    --lift: 0 1px 1px #0007, 0 12px 34px -10px #000a;
-    color-scheme: dark;
-  }
 }
 
 * {
@@ -481,15 +492,49 @@ main:focus {
   margin: 0 auto;
   padding: 56px 76px 48px;
   background: var(--sheet);
+  color: var(--ink);
   border-radius: 3px;
-  box-shadow: var(--lift);
+  /* The lift is invisible on the dark ground; a 1 px rule keeps the sheet's edge (review #156, c). */
+  box-shadow: 0 0 0 1px var(--rule), var(--lift);
 }
 
-/* The lift is invisible on the dark ground; a 1 px rule keeps the sheet's edge (review #156, c). */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .sheet {
-    box-shadow: 0 0 0 1px var(--rule), var(--lift);
-  }
+/* Sheet theme switch, above the sheet in the dark shell. */
+.sheet-theme {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: 756px;
+  margin: 0 auto 10px;
+}
+
+.sheet-theme__options {
+  display: inline-flex;
+  border: 1px solid var(--rule);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.sheet-theme__option {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* Pressed is shown by a check mark and weight as well as by colour. */
+.sheet-theme__option[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.sheet-theme__option[aria-pressed="true"]::before {
+  content: "\2713\00a0";
 }
 
 @media (max-width: 640px) {
@@ -562,6 +607,81 @@ main:focus {
   color: var(--accent);
 }
 
+/* F-8 step 1: the toolbar sits above the sheet, as wide as the sheet. */
+.workspace__main > .editor-toolbar {
+  max-width: 756px;
+  margin: 12px auto 0;
+  padding: 4px 6px;
+  border: 1px solid var(--rule);
+  border-radius: 7px;
+  background: var(--chrome);
+}
+
+.editor-toolbar .btn:hover {
+  background: var(--rule-2);
+  color: var(--ink);
+}
+
+/* Unavailable is said by aria-disabled; the faded look only repeats it. */
+.editor-toolbar .btn[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Heading list in the structure rail (F-8 step 1). */
+.outline {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.outline__link {
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  padding: 3px 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  text-align: left;
+}
+
+.outline__item[data-level="2"] .outline__link {
+  padding-left: 19px;
+}
+
+.outline__item[data-level="3"] .outline__link {
+  padding-left: 31px;
+}
+
+.outline__link:hover {
+  background: var(--rule-2);
+  color: var(--ink);
+}
+
+/* The current section: weight and a rule as well as colour. */
+.outline__link[aria-current="location"] {
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.outline__untitled {
+  font-style: italic;
+  color: var(--ink-3);
+}
+
+/* Phone: no interface text under 13 px (review #156, 5). Repeated here because
+   the rules above come after the phone block and would win over it. */
+@media (max-width: 640px) {
+  .editor-toolbar .btn,
+  .outline__link {
+    font-size: 13px;
+  }
+}
+
 .editor-surface .ProseMirror {
   outline: none;
   font-family: var(--ff-manuscript);
@@ -609,9 +729,14 @@ main:focus {
   animation: sync-pulse 1.2s ease-in-out infinite;
 }
 
+/* SYNCED: own colour and a filled dot, never the primary's (D-123). */
+.sync-chip[data-tone="ok"] {
+  font-weight: 600;
+}
+
 .sync-chip[data-tone="ok"] .sync-chip__dot {
-  border-color: var(--accent);
-  background: var(--accent);
+  border-color: var(--synced);
+  background: var(--synced);
 }
 
 .sync-chip[data-tone="warn"] .sync-chip__dot {
@@ -664,4 +789,10 @@ main:focus {
 
 .editor-export {
   margin: 0 0 16px;
+}
+
+/* A teacher's comment next to a paragraph (F-9): a decoration, never a mark in the document. */
+.comment-mark {
+  background: var(--cmt-bg);
+  border-bottom: 1px solid var(--cmt);
 }

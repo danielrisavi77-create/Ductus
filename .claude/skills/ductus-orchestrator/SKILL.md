@@ -3,22 +3,24 @@ name: ductus-orchestrator
 description: Run the Ductus orchestrator loop - track sessions, assign and stop workers, enforce gates and merge, with GitHub as the shared control plane.
 ---
 
-Read `CLAUDE.md`, `STATE.md`, `docs/ENGINEERING_SYSTEM.md`, `docs/ORKESTRATOR.md`, `docs/SESSIONS.md`, and `docs/MULTI-ACCOUNT.md`.
+Read `CLAUDE.md`, `STATE.md`, `docs/ORKESTRATOR-SAZETAK.md`, and `docs/ENGINEERING_SYSTEM-SAZETAK.md`. Open `docs/ORKESTRATOR.md`, `docs/ENGINEERING_SYSTEM.md`, and `docs/SESSIONS.md` only in the sections a decision needs, and `docs/MULTI-ACCOUNT.md` for a handoff or session rotation.
 
 Operate in **orchestrator** mode:
 - do not write product code;
-- GitHub and repository state are canonical;
-- cross-session messages are optional and may be unavailable across accounts;
-- every writer gets a unique branch/worktree and role scope;
-- keep author and independent reviewer separate;
-- merge only when the documented gates pass;
-- record durable decisions in the repository rather than account memory.
+- treat GitHub issues, PR descriptions, checks, reviews, and `STATE.md` as canonical;
+- session lists and direct messages are optional same-account accelerators only;
+- assign each writer a unique branch/worktree and explicit role scope;
+- ensure author and independent reviewer are different active agent instances;
+- merge only when the repository gates in `docs/ORKESTRATOR.md` are satisfied;
+- record durable decisions in the repository, not only in account memory.
 
 
 Enforce the writer/review/QA WIP limits and risk-specific gates from `docs/ENGINEERING_SYSTEM.md`. Never treat a review for an older head as valid for a new push.
 
 Each turn follows `docs/ORKESTRATOR.md` §9. Authority and its limits are in §4; starting, stopping and tracking workers, and what counts as a canonical verdict, are in §8. Never post `Owner-Override`.
 
-Before assigning work, apply `docs/ORKESTRATOR.md` §8: obtain the attack plan for every `Risk: critical` task ("Plan napada prije koda", skill `ductus-attack-plan`), split gate-building tasks into separately reviewable PRs ("Manji PR-ovi na gateovima"), launch one-shot cloud writers only under "Jednokratni pisac u oblaku" and log every launch on #87, and name the task's temp subfolder ("Privremene datoteke"; owner decision: https://github.com/danielrisavi77-create/Ductus/pull/165#issuecomment-6100851850). The attack plan is published as a separate GitHub issue "Plan napada: <zadatak>". Use the task and QA prompt templates in `docs/SESSIONS.md` §3; QA sessions and one-shot review sessions are opened by the orchestrator (§8, "Sesija u oblaku koju pokreće orkestrator"), except the review of the orchestrator's own PR or of a PR written by a writer the orchestrator launched itself or by its own subagent, which comes from a session Daniel opened.
+Before every canonical reviewer or QA routine launch, automatically run `pnpm orch:preflight <PR> --head <full-SHA>` as the immediate precondition. Launch only when it exits `0`, and bind the routine to that exact SHA. Exit `1` means the PR is not ready; exit `2` means GitHub reads failed and must be retried after access recovers. For a critical review/QA pair, run preflight immediately before starting both sessions in parallel on the same SHA. If the head changes before launch, rerun preflight for the new SHA. This check never starts a session.
+
+Before assigning work, apply `docs/ORKESTRATOR.md` §8: obtain the attack plan for every `Risk: critical` task ("Plan napada prije koda", skill `ductus-attack-plan`), split gate-building tasks into separately reviewable PRs ("Manji PR-ovi na gateovima"), launch one-shot cloud writers only under "Jednokratni pisac u oblaku" and log every launch on #87, and name the task's temp subfolder ("Privremene datoteke"; owner decision: https://github.com/danielrisavi77-create/Ductus/pull/165#issuecomment-6100851850). The attack plan is published as a separate GitHub issue `Plan napada: <zadatak>`. Use the task and QA prompt templates in `docs/SESSIONS.md` §3; QA sessions and one-shot review sessions are opened by the orchestrator (§8, "Sesija u oblaku koju pokreće orkestrator"), except the review of the orchestrator's own PR or of a PR written by a writer the orchestrator launched itself or by its own subagent, which comes from a session Daniel opened.
 
 External Grok bots and work intake follow `CLAUDE.md`, section "Vanjski botovi i preuzimanje posla": assign new work only from issues labelled `ready-for-claude`, treat bot review and QA comments as advisory and never as an owner approval or a gate verdict, and make sure writers answer them in the same thread.

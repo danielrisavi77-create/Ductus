@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import {
   HARD_AT,
   LARGE_DOC_BYTES,
+  LARGE_FILE_BYTES,
   MODE_NAMES,
   NODE_MAJOR,
   ORCHESTRATOR_LIMIT,
@@ -128,6 +129,27 @@ test("generated output is denied even with a range; test artefacts are readable"
   for (const file of ["docs/next-steps.md", "test-results/sync/error-context.md", "playwright-report/index.html", "node_modules/pg/lib/index.js"]) {
     assert.equal(reviewRead({ file_path: file, limit: 5 }, { size: 10 }, () => ""), null);
   }
+});
+
+test("large non-Markdown files are read in ranges only (DAN-213)", () => {
+  const huge = { size: 145_211 };
+  for (const file of ["src/domain/forensics/golden-vectors/evidence-v2.json", "docs/design/ductura/editor-v11.dc.html", "src/lib/journal/local-document-saver.test.ts"]) {
+    assert.match(reviewRead({ file_path: file }, huge, () => ""), /145 KB\. Use Grep .* offset and limit/);
+    assert.equal(reviewRead({ file_path: file, offset: 1, limit: 200 }, huge, () => ""), null);
+    assert.equal(reviewRead({ file_path: file, limit: 200 }, huge, () => ""), null);
+  }
+  assert.equal(reviewRead({ file_path: "src/domain/json.ts" }, { size: LARGE_FILE_BYTES }, () => ""), null);
+  assert.match(reviewRead({ file_path: "src/domain/json.ts" }, { size: LARGE_FILE_BYTES + 1 }, () => ""), /Use Grep/);
+  for (const file of ["docs/design/shot.PNG", "docs/scan.pdf", "a/b.jpeg"]) {
+    assert.equal(reviewRead({ file_path: file }, huge, () => ""), null, file);
+  }
+  assert.equal(reviewRead({ file_path: "docs/big.pdf", pages: "1-5" }, huge, () => ""), null);
+  // `pages` does not open a full read of other files.
+  assert.match(reviewRead({ file_path: "src/x.json", pages: "1" }, huge, () => ""), /Use Grep/);
+  assert.match(reviewRead({ file_path: "docs/big.md", pages: "1" }, huge, () => "# A\n"), /offset and limit/);
+  assert.equal(reviewRead({ file_path: ".env.big" }, huge, () => ""), null, "protected paths are left to the deny rules");
+  assert.equal(reviewRead({ file_path: "src/x.json" }, huge, () => "", false), null, "outside the project");
+  assert.equal(reviewRead({ file_path: "src/x.json" }, undefined, () => ""), null, "missing file");
 });
 
 test("lastContext sums all three usage fields of the newest main-thread call", () => {

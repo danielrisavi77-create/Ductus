@@ -107,7 +107,7 @@ CI i Engineering review gate ponovno računaju minimalnu razinu prema promijenje
 - obični docs-only može biti `low`;
 - runtime kod, infra, izvršne skripte i `docs/DECISIONS.md` (zapisi iz D-97 ne mogu se prepoznati po putanji) najmanje `standard`;
 - identity/auth/authz/OIDC/login/evidence/ingest/submission/retention/crypto/signing/forensics/session/JCS/signature/replay, request middleware, sve `app/api/**` trust granice koje sadrže te segmente, security migracije, pgTAP matrica, forbidden-terms gate, `PRODUCT.md`, `CLAUDE.md`, `AGENTS.md`, `ENGINEERING_SYSTEM.md`, CODEOWNERS i **svaki GitHub workflow** najmanje `critical`;
-- najmanje `critical` je i svaka putanja iz D-97 (`D97_PATHS` u `scripts/engineering/protected-paths.mjs`: cijeli `.github/`, `.claude/`, `.agents/`, `scripts/engineering/`, `scripts/hooks/`, `scripts/orchestrator/`, `plugins/ductura-engineering/`, `lefthook.yml` i nabrojeni dokumenti pravila) te `STATE.md`, `.worktreeinclude`, `.cc-safety-net/`, `osv-scanner.toml`, `plugins/`, `db/migrations/` (sve migracije), `db/local/`, `src/server/db/`, cijeli `tests/` i `vitest.config.ts`. Test u `tests/` može biti jedina provedba čuvara, pa nosi razinu čuvara; nova datoteka u `tests/` zato je `critical` bez dopune popisa.
+- najmanje `critical` je i svaka putanja iz D-97 (`D97_PATHS` u `scripts/engineering/protected-paths.mjs`: cijeli `.github/`, `.claude/`, `.agents/`, `scripts/engineering/`, `scripts/hooks/`, `scripts/orchestrator/`, `plugins/ductura-engineering/`, `lefthook.yml` i nabrojeni dokumenti pravila) te `STATE.md`, `.worktreeinclude`, `.cc-safety-net/`, `osv-scanner.toml`, `plugins/`, `db/migrations/` (sve migracije), `db/local/`, `src/server/db/`, cijeli `tests/`, `vitest.config.ts`, `playwright.config.ts`, `playwright.login.config.ts` i `test-output.ts` (učitavaju se pri pokretanju testova). Test u `tests/` može biti jedina provedba čuvara, pa nosi razinu čuvara; nova datoteka u `tests/` zato je `critical` bez dopune popisa.
 
 Usporedba putanja ne ovisi o velikim i malim slovima, kosim crtama ni prefiksu `./`; preimenovana datoteka broji se pod oba imena, a obrisana pod svojim. Ako GitHub ne vrati cijeli popis promijenjenih datoteka, gate pada zatvoreno (`failure`). Poruka o preniskom `Risk` u statusu je nepromjenjiv tekst bez imena datoteka; imena su u logu CI posla.
 
@@ -156,17 +156,29 @@ Radi auditabilnosti, fallback komentar bilježi model u ulozi koju je obavio, np
 
 Dok je kvota drugog providera dokazano iskorištena, `critical` QA PASS smije doći s istog Appa kao reviewer PASS, ali samo iz neovisne sesije. Gate ga prihvaća kad su ispunjeni svi uvjeti:
 
-1. **Strojni dokaz kvote.** Na istom PR-u postoji komentar samog iscrpljenog Appa (korisnik `<slug>[bot]`, `performed_via_github_app.slug` jednak `<slug>`) s porukom o iscrpljenoj kvoti, objavljen prije QA komentara i najviše 24 sata ranije. Deklaracija sesije nije dokaz. Trenutno je registriran samo `chatgpt-codex-connector` (poruka "reached your Codex usage limits"); obrazac za drugi App dodaje se tek nakon stvarno opažene poruke, kao kod registracije providera. Ako je dokaz stariji od 24 sata, svjež se dobiva novim pozivom tog Appa na PR-u (za Codex komentar `@codex review`).
+1. **Strojni dokaz kvote.** Na istom PR-u postoji komentar samog iscrpljenog Appa (korisnik `<slug>[bot]`, `performed_via_github_app.slug` jednak `<slug>`) s porukom o iscrpljenoj kvoti, objavljen prije QA komentara i najviše 24 sata ranije. Deklaracija sesije nije dokaz. Trenutno je registriran samo `chatgpt-codex-connector` (poruka "reached your Codex usage limits"); obrazac za drugi App dodaje se tek nakon stvarno opažene poruke, kao kod registracije providera. Ako je dokaz stariji od 24 sata, svjež se dobiva novim pozivom tog Appa na PR-u (za Codex komentar `@codex review`). Poruka mora otvarati komentar: citat te rečenice u reviewu, bloku koda ili odgovoru nije dokaz. Dokaz prestaje vrijediti čim isti App na tom PR-u objavi kasniji komentar koji nije poruka o kvoti, kasnije uredi takav komentar (Codex uređuje jedan sažetak reviewa na mjestu) ili objavi kasniji PR review, jer tada dokazivo radi (#128). PR review ili komentar Appa bez čitljivog vremena, kao i aktivnost u istoj sekundi kao poruka o kvoti, također poništava dokaz, jer se redoslijed ne može utvrditi. Gate se ponovno računa i kad stigne PR review: workflow "Engineering gate review signal" bez ikakvih ovlasti samo prenosi taj događaj, a "Engineering review gate" se na njegov završetak (`workflow_run`) pokreće s default brancha. Granica: za PR iz forka GitHub ne navodi PR uz `workflow_run`, pa se gate preračuna tek na idući komentar ili push.
 2. **Deklaracija u QA komentaru.** Kanonski QA blok sadrži `Provider-Fallback: <slug iscrpljenog Appa> — <razlog>`, npr. `Provider-Fallback: chatgpt-codex-connector — kvota iscrpljena`. Slug ne smije biti App koji objavljuje QA.
 3. **Neovisan principal.** QA `runtime:slot` razlikuje se od autora i od svakog reviewera koji je dao PASS na tom headu.
+
+Dovoljan je valjan dokaz kvote za *jedan* drugi registrirani App; ne traži se dokaz za sve ostale Appove. Primjer: Grok reviewer PASS i Grok QA PASS s `Provider-Fallback: chatgpt-codex-connector` uz valjan Codex dokaz prolaze, iako je Claude App možda dostupan. Odluka vlasnika 12. 10. 2026. (#128, `issuecomment-6123209198`); zaključava je test u `scripts/engineering/review-gate-quota-evidence.test.mjs`.
 
 Uz strojne uvjete vrijedi governance pravilo neovisnosti: QA sesija je nova sesija s vlastitim slotom, nije pisala ni reviewala taj PR, nije podagent reviewer sesije i ne polazi od reviewerova izvještaja. Scenarije gradi i izvodi sama, a reviewerove nalaze smije pročitati tek nakon vlastitog verdikta. Ako je moguće, koristi drugi model od reviewera i bilježi ga kao `QA-Model`.
 
 Fallback ne mijenja ništa drugo: QA `FAIL` ili `BLOCK` bilo koje valjane ne-autorske sesije i dalje blokira, novi push poništava i review i QA (osim prijenosa iz D-101), a status gatea navodi da je korišten kvotni fallback. Kad se kvota vrati, novi `critical` PR-ovi opet traže QA s drugog Appa; već spojeni PR-ovi se ne otvaraju ponovno.
 
-Bez strojnog dokaza kvote dvije sesije ili dva modela unutar istog Appa ne zadovoljavaju odvojeni critical PASS. Gate tada ostaje pending dok nije dostupan drugi prihvaćeni App, dok ne nastane dokaz kvote ili dok Daniel ne zabilježi aktualni `Owner-Override` prema §7.
+Bez strojnog dokaza kvote i bez uvjeta iz sljedećeg odjeljka (D-139) dvije sesije ili dva modela unutar istog Appa ne zadovoljavaju odvojeni critical PASS. Gate tada ostaje pending dok nije dostupan drugi prihvaćeni App, dok ne nastane dokaz kvote ili dok Daniel ne zabilježi aktualni `Owner-Override` prema §7.
 
 GitHub commit/PR API u ovom osobnom repou ne daje pouzdan App identitet autora svakog commita, pa **autor ≠ reviewer/QA nije kriptografski/stvarno autentificiran ovim gateom**. Ipak, gate kao defense-in-depth uspoređuje deklarirani author `runtime:slot` iz PR metadata s deklariranim reviewer/QA `runtime:slot` i odbija isti principal pod drugom ulogom. To ne zamjenjuje governance pravilo: Orkestrator i dalje mora dodijeliti odvojene instance/račune. Ako se kasnije uvedu zasebni GitHub identiteti/Appovi za writere, ova provjera se može pooštriti.
+
+### Druga Claude sesija za critical QA (D-139)
+
+Treći izvor `critical` QA PASS-a, uz zaseban App (D-138) i kvotni fallback: druga, neovisna Claude sesija, iako je review dao Claude App. Odluka vlasnika: `#87` komentar 6241681114. Vrijede SVA tri uvjeta:
+
+1. **Vlastiti slot.** QA sesija ima vlastiti `runtime:slot` koji nije autor, reviewer tog PR-a (na bilo kojem headu, s bilo kojim verdiktom) ni pisac plana napada. Gate strojno odbija autora i svakog principala koji je na tom PR-u objavio kanonski review blok, na bilo kojem headu i s bilo kojim verdiktom; pisca plana napada ne zna, to je governance pravilo iz §6.
+2. **Codex na headu, niti odgovorene.** Na aktualnom headu postoji Codex review (App `chatgpt-codex-connector`, PR review s `commit_id` jednakim headu), a svaka njegova nit ima odgovor autora, popravkom ili obrazloženjem. Gate čita odgovor kao komentar u niti čiji autor nije Bot i ima asocijaciju OWNER ili je login autora PR-a (odgovor drugog bota ili vanjskog korisnika ne broji); nerazriješena nit i dalje blokira spajanje zaštitom grane. Codex komentar bez PR reviewa (npr. sažetak „nema nalaza” kao običan komentar) nema head u API-ju i ne vrijedi kao dokaz.
+3. **Redak u QA komentaru.** Kanonski QA blok sadrži točno `Provider-Fallback: claude-second-session — Codex review na headu <sha>` s punim SHA-om aktualnog heada; tekst retka je točan i osjetljiv na velika i mala slova, osim SHA-a. Redak imenuje jedan head, pa se ne prenosi preko D-101.
+
+Ako Codexa nema, vrijedi redoslijed iz D-138: Grok, kvotni fallback, zatim `Owner-Override`. Ovaj put ne mijenja ništa drugo: QA `FAIL` ili `BLOCK` bilo koje valjane sesije i dalje blokira, novi push poništava review i QA, a status gatea navodi da je korišten ovaj put. Gate kod je u zasebnom D-97 PR-u (#411); do njegova spajanja vrijedi stanje bez ovog puta.
 
 ### Provider registration pravilo
 
@@ -174,7 +186,7 @@ Novi AI provider ne dobiva trust samo zato što se deklarira u komentaru. Prvi k
 
 PR metadata i review/QA komentari koriste **jedan zajednički parser** (`scripts/engineering/metadata-parser.mjs`) kako CI i review gate ne bi različito tumačili fenced ili uvučene Markdown primjere.
 
-Novi push poništava review i QA jer `*-Head` više nije jednak aktualnom PR headu. Iznimka (D-101): verdikt na ranijem headu vrijedi i dalje kad su svi kasniji commiti samo spajanja osnovne grane (merge commiti) i diff PR-a prema osnovnoj grani identičan je onome na tom headu; gate to provjerava preko GitHub API-ja (hod po prvom roditelju i compare) i na svaku grešku ne prenosi ništa. Datoteka bez patcha (npr. binarna, prevelika ili čisto preimenovanje) ne prenosi ništa jer compare ne pokazuje njezinu stranu osnovne grane. Hod koji ne stigne do commita koji nije merge, ili više od pet headova s verdiktom iza samih spajanja, također ne prenose ništa, da stariji `FAIL` ili `BLOCK` ne ispadne tiho. Kad uspjeh gatea broji prenesen verdikt, status navodi s kojeg je heada prenesen. Owner Override se nikad ne prenosi. Formalni GitHub review state nije ulaz u ovaj agent gate; agent verdicti idu kroz kanonske PR komentare.
+Novi push poništava review i QA jer `*-Head` više nije jednak aktualnom PR headu. Iznimka (D-101): verdikt na ranijem headu vrijedi i dalje kad su svi kasniji commiti samo spajanja osnovne grane (merge commiti) i diff PR-a prema osnovnoj grani identičan je onome na tom headu; gate to provjerava preko GitHub API-ja (hod po prvom roditelju i compare) i na svaku grešku ne prenosi ništa. Datoteka bez patcha (npr. binarna, prevelika ili čisto preimenovanje) ne prenosi ništa jer compare ne pokazuje njezinu stranu osnovne grane. Hod koji ne stigne do commita koji nije merge, ili više od pet headova s verdiktom iza samih spajanja, također ne prenose ništa, da stariji `FAIL` ili `BLOCK` ne ispadne tiho. Kad uspjeh gatea broji prenesen verdikt, status navodi s kojeg je heada prenesen. Owner Override se prenosi pod istim uvjetima kao verdikt (samo čista spajanja osnovne grane i nepromijenjen diff PR-a prema osnovnoj grani; odluka vlasnika, `#87` komentar 6242103643); override za drugi diff ne vrijedi; najnoviji verdikt istog reviewera ili QA-a, ako je `FAIL` ili `BLOCK`, poništava preneseni override: na aktualnom headu bez obzira na vrijeme objave (i prije overridea), na prenesenom headu samo ako je objavljen nakon overridea, dok override dan izravno na aktualnom headu vrijedi kao dosad; autor override komentara provjerava se kao i za aktualni head. Formalni GitHub review state nije ulaz u ovaj agent gate; agent verdicti idu kroz kanonske PR komentare.
 
 ## 7. Owner Override
 
@@ -188,7 +200,7 @@ Override-Head: <40-znamenkasti SHA>
 Override-Reason: <konkretan razlog>
 ```
 
-Engineering gate prihvaća override samo iz zasebnog komentara GitHub vlasnika repoa čija je prva neprazna linija `Owner-Override:`, i samo za aktualni head. Ne može razlikovati je li isti vlasnički račun komentar napisao čovjek ili agent; zato je override governance dokaz, a ne sigurnosna granica.
+Engineering gate prihvaća override samo iz zasebnog komentara GitHub vlasnika repoa čija je prva neprazna linija `Owner-Override:`, i samo za aktualni head ili za raniji head koji je prenesen prema §6 (D-101: samo čista spajanja osnovne grane i nepromijenjen diff PR-a). Najnoviji verdikt istog reviewera ili QA-a, ako je `FAIL` ili `BLOCK`, poništava preneseni override: na aktualnom headu bez obzira na vrijeme objave, na prenesenom headu samo ako je objavljen nakon overridea; override dan izravno na aktualnom headu vrijedi kao dosad (D-140; `#87` komentar 6243001751). Ne može razlikovati je li isti vlasnički račun komentar napisao čovjek ili agent; zato je override governance dokaz, a ne sigurnosna granica.
 
 ## 8. Tijek promjene
 
@@ -223,7 +235,7 @@ Product/UX i Bug Hunter nikad ne preskaču issue fazu i ne prelaze ravno u imple
 - Prije ready-for-review autor ponovno dohvaća `main` i provjerava stvarni overlap.
 - Ako je `main` promijenio datoteku koju PR dira, autor osvježava branch prije reviewa.
 - PR se spaja samo ako njegov head sadrži aktualni `main` (zaštita grane, 11. 10. 2026.). PR koji je na redu u gateu spaja `main` neposredno prije reviewa (§15).
-- Svaki push nakon reviewa automatski invalidira review preko `Review-Head`, osim čistog spajanja osnovne grane bez promjene diffa PR-a (D-101).
+- Svaki push nakon reviewa automatski invalidira review preko `Review-Head`, osim čistog spajanja osnovne grane bez promjene diffa PR-a (D-101); isto vrijedi za QA verdikt i Owner Override.
 - Orkestrator ne tretira staro zeleno stanje kao dokaz za novi head.
 - Stackani PR-ovi su dopušteni samo kada je ovisnost eksplicitna u opisu; nakon spajanja baze child PR se vraća na `main`.
 
@@ -309,14 +321,14 @@ Vrijede za svaki `critical` PR uz gate iz §5; gate se njima ne mijenja. Izvor j
 ## 15. Gate i spajanje (D-106)
 
 - **Strogo jedan po jedan.** U gateu (review, QA, čekanje spajanja) je u svakom trenutku najviše jedan PR, i kad je to D-97 PR koji čeka vlasnika. Redoslijed određuje orkestrator.
-- **Ažurna grana.** PR koji je na redu spaja `main` neposredno prije reviewa (§9). Čisto spajanje `main` koje ne mijenja diff PR-a prenosi review i QA verdikt (D-101); svaka druga promjena traži review i QA na novom headu.
-- **Review i QA istodobno.** Za `critical` PR review i QA kreću istodobno na istom headu. QA ne čita review prije vlastitog verdikta. Ako review padne, QA na tom headu ne vrijedi.
+- **Ažurna grana.** PR koji je na redu spaja `main` neposredno prije reviewa (§9). Čisto spajanje `main` koje ne mijenja diff PR-a prenosi review i QA verdikt i Owner Override (D-101); svaka druga promjena traži review i QA na novom headu.
+- **Review i QA istodobno.** Za `critical` PR review i QA kreću istodobno na istom headu. QA ne čita review prije vlastitog verdikta. Ako review padne, QA na tom headu ne vrijedi. Iznimka (D-138): QA s Codexa (`chatgpt-codex-connector`) dok ima kvote, zatim s Groka (`grok-by-xai`), orkestrator pokreće tek nakon Claude review PASS-a.
 - **Nakon spajanja.** Orkestrator čeka CI na `main` prije sljedećeg spajanja, zatim pokreće `pnpm orch:ready` za sljedeći PR u redu i traži spajanje `main` prije nego se na stari head potroše review i QA.
 - **Zaštita grane.** Postavke zaštite (uključujući `strict`) mijenja samo vlasnik.
 
 ## 16. Skripte: okidač i vlasnik
 
-Svaka skripta ima zapisan okidač (kada se pokreće) i vlasnika (tko ili što je pokreće). PR koji uvodi skriptu uvodi i njezino automatsko pokretanje; skripta bez okidača nije dovršen korak. Granice: spajanje i pokretanje QA sesije ne idu automatski, a D-97 PR-ovi i dalje čekaju vlasnikovu naredbu. Provjera ulaza u red za review blokira spajanje tek kad je vlasnik doda među obvezne provjere u zaštiti grane; do tada samo upozorava. U radu je najviše jedan PR alata odjednom.
+Svaka skripta ima zapisan okidač (kada se pokreće) i vlasnika (tko ili što je pokreće). PR koji uvodi skriptu uvodi i njezino automatsko pokretanje; skripta bez okidača nije dovršen korak. Okidač za `orch:preflight` je odluka orkestratora da pokrene kanonski review ili QA: projektna vještina orkestratora obvezno poziva `pnpm orch:preflight <pr> --head <puni-sha>` neposredno prije pokretanja i ne pokreće sesiju ako izlaz nije `0`. Vlasnik skripte i njezina okidača je orkestrator. Naredba ne pokreće sesiju. Granice: spajanje i pokretanje QA sesije ne idu automatski, a D-97 PR-ovi i dalje čekaju vlasnikovu naredbu. Provjera ulaza u red za review blokira spajanje tek kad je vlasnik doda među obvezne provjere u zaštiti grane; do tada samo upozorava. U radu je najviše jedan PR alata odjednom.
 
 ## 17. Dnevna petlja učenja
 
