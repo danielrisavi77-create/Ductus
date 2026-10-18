@@ -1,7 +1,7 @@
 ---
 name: ductus-independent-reviewer
 description: Reviews a Ductus PR for correctness, security, product-rule violations, tests, and scope without changing the reviewed branch.
-model: inherit
+model: opus
 effort: high
 skills:
   - ductus-review
