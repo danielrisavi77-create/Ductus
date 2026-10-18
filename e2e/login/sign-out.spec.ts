@@ -198,6 +198,33 @@ test("a sign-in through the login route stops the tab of the session it replaced
   await expect(editorOf(page)).toHaveAttribute("contenteditable", "false");
 });
 
+test("a stopped tab that opens the next person's sheet starts with nothing to undo", async ({ page, context }) => {
+  await signIn(page, "/rad");
+  await writeAndWait(page, "Nacrt A: plava bilježnica");
+
+  await forgetProviderLogin(context);
+  const second = await context.newPage();
+  await signIn(second, "/rad", "Demo nastavnik");
+  await expect(phaseOf(page)).toHaveAttribute("data-phase", "signed-out");
+  await expect(editorOf(page)).toHaveText("");
+  await second.close();
+
+  // The old tab never reloads: its own link renders /rad under the new cookie.
+  await page.getByRole("link", { name: t.workspace.modeWriting }).click();
+  await expect(phaseOf(page)).toHaveAttribute("data-phase", "ready");
+  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+  await expect(page.getByRole("button", { name: t.toolbar.undo })).toBeDisabled();
+
+  await editorOf(page).click();
+  await page.keyboard.press("ControlOrMeta+z");
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(editorOf(page)).toHaveText("");
+  await page.waitForTimeout(1_000);
+  await page.reload();
+  await expect(phaseOf(page)).toHaveAttribute("data-phase", "ready");
+  await expect(editorOf(page)).toHaveText("");
+});
+
 test("a tab opened before a sign-out works again after the next sign-in", async ({ page, context }) => {
   await signIn(page, "/");
   const second = await context.newPage();
