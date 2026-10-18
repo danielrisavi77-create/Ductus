@@ -252,7 +252,11 @@ describe("golden vectors: server side (gateway and reconstruction)", () => {
     // JCS: the format is closed, so every value but ductus-edit-steps-v1 is refused.
     const withFormat = (transactionFormat: string) => {
       const segment = structuredClone(base.segment);
-      segment.captureContext = { ...segment.captureContext, transactionFormat };
+      // Typed as the closed format, so the refused values need the cast.
+      segment.captureContext = {
+        ...segment.captureContext,
+        transactionFormat: transactionFormat as typeof EDIT_STEP_FORMAT_V1,
+      };
       return utf8.encode(canonicalizeJcs(segment));
     };
     // The first former segment only: like the base it is the first of its chain.
