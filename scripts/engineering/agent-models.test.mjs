@@ -11,15 +11,14 @@ const agents = path.join(repo, ".claude", "agents");
 
 function profiles() {
   const out = {};
-  for (const dir of fs.readdirSync(agents)) {
-    for (const f of fs.readdirSync(path.join(agents, dir)).filter((x) => x.endsWith(".md"))) {
-      const head = fs.readFileSync(path.join(agents, dir, f), "utf8").split(/^---$/m)[1] ?? "";
-      const fields = Object.fromEntries(
-        head.split("\n").map((l) => /^([A-Za-z]+):\s*(.+)$/.exec(l.trim())).filter(Boolean).map((m) => [m[1], m[2].trim()]),
-      );
-      const get = (k) => fields[k];
-      out[get("name")] = { model: get("model"), maxTurns: get("maxTurns") };
-    }
+  // Claude Code loads profiles from the whole tree, so every nested .md counts (#429 review).
+  const files = fs.readdirSync(agents, { recursive: true }).map(String).filter((x) => x.endsWith(".md"));
+  for (const f of files) {
+    const head = fs.readFileSync(path.join(agents, f), "utf8").split(/^---$/m)[1] ?? "";
+    const fields = Object.fromEntries(
+      head.split("\n").map((l) => /^([A-Za-z]+):\s*(.+)$/.exec(l.trim())).filter(Boolean).map((m) => [m[1], m[2].trim()]),
+    );
+    out[fields.name ?? f] = { model: fields.model, maxTurns: fields.maxTurns };
   }
   return out;
 }
