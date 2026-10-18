@@ -6,6 +6,7 @@ import HeadingOutline from "@/components/editor/HeadingOutline";
 import {
   LocalDocumentProvider, LocalEditor, LocalLogout, LocalSaveChip, LocalWordCount,
 } from "@/components/editor/LocalDocument";
+import PanelTabs from "@/components/shell/PanelTabs";
 import SessionObserver from "@/components/shell/SessionObserver";
 import SheetFrame from "@/components/shell/SheetFrame";
 import WorkspaceShell, { RailSection } from "@/components/shell/WorkspaceShell";
@@ -96,11 +97,25 @@ export default async function WorkspacePage() {
           </RailSection>
         </>
       }
-      panel={scope && signedIn ? (
-        <CommentPanel documentId={LOCAL_DEMO_DOCUMENT_ID} session={session} />
-      ) : (
-        <p className="rail-empty">{t.workspace.sidePanelEmpty}</p>
-      )}
+      panel={
+        <PanelTabs
+          label={t.workspace.panelTabs}
+          initial="comments"
+          tabs={[
+            { id: "sources", label: t.workspace.tabSources, content: <p className="rail-empty">{t.workspace.sourcesEmpty}</p> },
+            { id: "instructions", label: t.workspace.tabInstructions, content: <p className="rail-empty">{t.workspace.instructionsEmpty}</p> },
+            {
+              id: "comments",
+              label: t.workspace.tabComments,
+              content: scope && signedIn ? (
+                <CommentPanel documentId={LOCAL_DEMO_DOCUMENT_ID} session={session} />
+              ) : (
+                <p className="rail-empty">{t.workspace.commentsEmpty}</p>
+              ),
+            },
+          ]}
+        />
+      }
       status={scope ? (
         <>
           <LocalSaveChip />

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-// The F-4 shell (design v6, D-89): three columns on a wide screen, the sheet
+// The F-4 shell (design editor-v11, FE-D1): three columns on a wide screen, the sheet
 // first and the rails as sections under it below 1100 px (DAN-131).
 test.describe("workspace shell", () => {
   test("wide: rails beside the sheet, writing view marked current", async ({ page }) => {
@@ -13,11 +13,11 @@ test.describe("workspace shell", () => {
     });
     const [r, s, p] = await Promise.all([rail.boundingBox(), sheet.boundingBox(), panel.boundingBox()]);
     expect(r && s && p).toBeTruthy();
-    expect(r!.width).toBeCloseTo(236, 0);
-    expect(p!.width).toBeCloseTo(322, 0);
+    expect(r!.width).toBeCloseTo(260, 0);
+    expect(p!.width).toBeCloseTo(330, 0);
     expect(r!.x + r!.width).toBeLessThanOrEqual(s!.x);
     expect(s!.x + s!.width).toBeLessThanOrEqual(p!.x);
-    expect(s!.width).toBeLessThanOrEqual(756);
+    expect(s!.width).toBeLessThanOrEqual(720);
     await expect(
       page.getByRole("navigation", { name: "Prikaz" }).getByRole("link", { name: "Pisanje" }),
     ).toHaveAttribute("aria-current", "page");
@@ -143,7 +143,7 @@ test.describe("workspace shell", () => {
     for (const toggle of await page.locator(".rail-toggle").all()) {
       await expect(toggle).toBeHidden();
     }
-    await expect(page.getByText("Upute zadatka, literatura i komentari")).toBeVisible();
+    await expect(page.getByText("Komentari nastavnika prikazuju se ovdje.")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Struktura", exact: true })).toBeVisible();
   });
 
@@ -173,7 +173,7 @@ test.describe("workspace shell", () => {
         const box = await toggle.boundingBox();
         expect(box!.height).toBeGreaterThanOrEqual(44);
       }
-      await expect(page.getByText("Upute zadatka, literatura i komentari")).toBeHidden();
+      await expect(page.getByText("Komentari nastavnika prikazuju se ovdje.")).toBeHidden();
 
       // Keyboard: the panel toggle comes right after the top bar and the
       // sheet's editor, then the structure toggle; Enter opens.
@@ -185,7 +185,10 @@ test.describe("workspace shell", () => {
         await expect(panelToggle).toBeFocused();
         await page.keyboard.press("Enter");
         await expect(panelToggle).toHaveAttribute("aria-expanded", "true");
-        await expect(page.getByText("Upute zadatka, literatura i komentari")).toBeVisible();
+        await expect(page.getByText("Komentari nastavnika prikazuju se ovdje.")).toBeVisible();
+        // The open panel's tab list is one stop, then the structure toggle.
+        await page.keyboard.press("Tab");
+        await expect(panel.getByRole("tab", { name: "Komentari" })).toBeFocused();
         await page.keyboard.press("Tab");
         await expect(railToggle).toBeFocused();
         await page.keyboard.press("Space");
@@ -230,6 +233,52 @@ test.describe("workspace shell", () => {
       });
     }
   }
+
+  test("top bar: brand and demo label first, then the view switch (editor-v11)", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/rad");
+    const bar = page.locator(".workspace__bar");
+    const [brand, demo, modes] = await Promise.all([
+      bar.getByRole("link", { name: "Ductura" }).boundingBox(),
+      bar.locator(".demo-badge").boundingBox(),
+      bar.getByRole("navigation", { name: "Prikaz" }).boundingBox(),
+    ]);
+    expect(brand!.x + brand!.width).toBeLessThanOrEqual(demo!.x);
+    expect(demo!.x + demo!.width).toBeLessThanOrEqual(modes!.x);
+    expect((await bar.boundingBox())!.height).toBeGreaterThanOrEqual(48);
+  });
+
+  test("right panel: tabs in design order, Komentari open, arrow keys move and open", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/rad");
+    const panel = page.getByRole("complementary", { name: "Upute, literatura i komentari" });
+    const list = panel.getByRole("tablist", { name: "Bočni panel" });
+    const tabs = list.getByRole("tab");
+    await expect(tabs).toHaveText(["Literatura", "Upute", "Komentari"]);
+    const comments = list.getByRole("tab", { name: "Komentari" });
+    await expect(comments).toHaveAttribute("aria-selected", "true");
+    // One Tab stop: only the open tab is in the Tab order.
+    await expect(list.locator('[role="tab"][tabindex="0"]')).toHaveCount(1);
+    await expect(panel.getByRole("tabpanel")).toHaveCount(1);
+    await expect(panel.getByRole("tabpanel")).toHaveText("Komentari nastavnika prikazuju se ovdje.");
+
+    await comments.focus();
+    await page.keyboard.press("ArrowRight");
+    const sources = list.getByRole("tab", { name: "Literatura" });
+    await expect(sources).toBeFocused();
+    await expect(sources).toHaveAttribute("aria-selected", "true");
+    await expect(panel.getByRole("tabpanel")).toHaveText("Literatura rada prikazuje se ovdje.");
+    await page.keyboard.press("End");
+    await expect(comments).toBeFocused();
+    await page.keyboard.press("ArrowLeft");
+    const instructions = list.getByRole("tab", { name: "Upute" });
+    await expect(instructions).toHaveAttribute("aria-selected", "true");
+    await expect(panel.getByRole("tabpanel")).toHaveText("Upute zadatka prikazuju se ovdje.");
+    await page.keyboard.press("Home");
+    await expect(sources).toBeFocused();
+    await instructions.click();
+    await expect(panel.getByRole("tabpanel")).toHaveAccessibleName("Upute");
+  });
 
   test("the sheet has a visible 1 px rule border on the dark shell", async ({ page }) => {
     await page.goto("/rad");
