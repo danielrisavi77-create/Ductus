@@ -75,6 +75,7 @@ async function journalFor(): Promise<{
  */
 export default async function WorkspacePage() {
   const { scope, signedIn, signInAgain, tag, at } = await journalFor();
+  const session = signedIn && tag !== null ? { tag, at } : null;
   const workspace = (
     <WorkspaceShell
       writingHref="/rad"
@@ -96,7 +97,7 @@ export default async function WorkspacePage() {
         </>
       }
       panel={scope && signedIn ? (
-        <CommentPanel documentId={LOCAL_DEMO_DOCUMENT_ID} />
+        <CommentPanel documentId={LOCAL_DEMO_DOCUMENT_ID} session={session} />
       ) : (
         <p className="rail-empty">{t.workspace.sidePanelEmpty}</p>
       )}
@@ -133,7 +134,6 @@ export default async function WorkspacePage() {
       </div>
     </WorkspaceShell>
   );
-  const session = signedIn && tag !== null ? { tag, at } : null;
   return (
     <>
       <SessionObserver tag={tag} at={at} />

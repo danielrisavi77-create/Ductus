@@ -17,8 +17,10 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type Keyboard
 import {
   listComments, replyComment, type CommentThread, type ListOutcome, type ReplyOutcome, type ThreadComment,
 } from "@/client/comments";
+import { watchSessionEnd, type SessionWatch } from "@/client/session-end";
+import type { SessionMark } from "@/client/session-marks";
 import {
-  anchorRange, commentHighlightKey, commentHighlightPlugin, type CommentRange,
+  commentHighlightKey, commentHighlightPlugin, createAnchorPlacer, type CommentRange,
 } from "@/editor/comment-anchor";
 import { formatDateTimeHr } from "@/lib/i18n/hr";
 import { messagesHr } from "@/lib/i18n/messages.hr";
@@ -30,19 +32,16 @@ const t = messagesHr.comments;
 
 type Placed = { thread: CommentThread; range: CommentRange | null };
 
-function placeAll(editor: Editor | null, threads: readonly CommentThread[]): Placed[] {
-  if (!editor || editor.isDestroyed) return threads.map((thread) => ({ thread, range: null }));
-  const { doc } = editor.state;
-  return threads.map((thread) => ({ thread, range: thread.anchor ? anchorRange(doc, thread.anchor) : null }));
-}
+const NO_THREADS: readonly CommentThread[] = [];
+const NO_RANGES: readonly (CommentRange | null)[] = [];
 
 function who(comment: ThreadComment): string {
   if (comment.isOwn) return t.own;
   return comment.role === "teacher" ? t.teacher : t.student;
 }
 
-function ThreadCard({ placed, editor, onReplied }: {
-  placed: Placed; editor: Editor | null; onReplied: () => void;
+function ThreadCard({ placed, editor, current, onReplied }: {
+  placed: Placed; editor: Editor | null; current: () => boolean; onReplied: () => void;
 }) {
   const { thread, range } = placed;
   const [draft, setDraft] = useState("");
@@ -60,7 +59,7 @@ function ThreadCard({ placed, editor, onReplied }: {
     event?.preventDefault();
     if (sending || draft.trim() === "") return;
     setSending(true);
-    const outcome = await replyComment(thread.id, draft);
+    const outcome = await replyComment(thread.id, draft, current);
     setSending(false);
     if (outcome !== "ok") return setError(outcome);
     setDraft("");
@@ -115,21 +114,40 @@ function ThreadCard({ placed, editor, onReplied }: {
   );
 }
 
-export default function CommentPanel({ documentId }: { documentId: string }) {
+export default function CommentPanel({ documentId, session = null }: {
+  documentId: string; session?: SessionMark | null;
+}) {
   const editor = useLocalEditor();
-  const stopped = useLocalSignedOut();
+  // The panel hears the end of the session itself as well: the sheet hears it
+  // only once the journal is open, which a browser without IndexedDB or Web
+  // Locks never reaches (F-093).
+  const [sessionEnded, setSessionEnded] = useState(false);
+  const stopped = useLocalSignedOut() || sessionEnded;
   const [outcome, setOutcome] = useState<ListOutcome | null>(null);
   // Bumped by every load and by the stop: an answer for an older request, or
   // one that lands after the session ended, is dropped (F-088).
   const generation = useRef(0);
   const stoppedRef = useRef(false);
+  const watchRef = useRef<SessionWatch | null>(null);
+  const tag = session?.tag ?? null;
+  const at = session?.at ?? 0;
+  useEffect(() => {
+    const watch = watchSessionEnd(tag === null ? null : { tag, at }, () => setSessionEnded(true));
+    watchRef.current = watch;
+    return () => {
+      watch.close();
+      if (watchRef.current === watch) watchRef.current = null;
+    };
+  }, [tag, at]);
+  // Asked right before every request: false once the session has ended.
+  const current = useCallback(() => !stoppedRef.current && !(watchRef.current?.ended() ?? false), []);
 
   const load = useCallback(async () => {
-    if (stoppedRef.current) return;
+    if (!current()) return;
     const mine = ++generation.current;
-    const result = await listComments(documentId);
+    const result = await listComments(documentId, current);
     if (mine === generation.current && !stoppedRef.current) setOutcome(result);
-  }, [documentId]);
+  }, [documentId, current]);
   useEffect(() => { void load(); }, [load]);
 
   // The session ended (D-118): forget the threads; the cards, and with them
@@ -148,9 +166,16 @@ export default function CommentPanel({ documentId }: { documentId: string }) {
     return () => { if (!editor.isDestroyed) editor.unregisterPlugin(commentHighlightKey); };
   }, [editor]);
 
-  const threads = !stopped && outcome?.kind === "ok" ? outcome.threads : [];
-  // Placed again on every change of the text, so an edited paragraph never keeps a stale place.
-  const placed = useEditorState({ editor, selector: ({ editor: e }) => placeAll(e, threads) }) ?? placeAll(null, threads);
+  const threads = !stopped && outcome?.kind === "ok" ? outcome.threads : NO_THREADS;
+  // Placed again on every change of the text, so an edited paragraph never
+  // keeps a stale place; a transaction that leaves the text as it was (a
+  // cursor move) reuses the last places (F-093).
+  const [placer] = useState(() => createAnchorPlacer((thread: CommentThread) => thread.anchor));
+  const places = useEditorState({
+    editor,
+    selector: ({ editor: e }) => (!e || e.isDestroyed ? NO_RANGES : placer(e.state.doc, threads)),
+  }) ?? NO_RANGES;
+  const placed: Placed[] = threads.map((thread, i) => ({ thread, range: places[i] ?? null }));
 
   const ranges = placed.flatMap((p) => (p.range && p.thread.state !== "resolved" ? [p.range] : []));
   const key = JSON.stringify(ranges);
@@ -165,7 +190,7 @@ export default function CommentPanel({ documentId }: { documentId: string }) {
   else if (outcome.kind === "forbidden") body = <p className="rail-empty">{t.notAvailable}</p>;
   else if (outcome.kind !== "ok") body = <p className="rail-empty" role="status">{t[outcome.kind]}</p>;
   else if (placed.length === 0) body = <p className="rail-empty">{t.empty}</p>;
-  else body = placed.map((p) => <ThreadCard key={p.thread.id} placed={p} editor={editor} onReplied={() => void load()} />);
+  else body = placed.map((p) => <ThreadCard key={p.thread.id} placed={p} editor={editor} current={current} onReplied={() => void load()} />);
 
   return (
     <section className="rail-section" aria-labelledby="comments-title">
