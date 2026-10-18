@@ -238,8 +238,8 @@ test("the glob matcher handles the forms the rules use", () => {
 
 // Owner decision of 18 Oct 2026 (DAN-213, #426 after qa426a): a skill with a
 // `paths:` key is neither listed nor callable by /name or the Skill tool until
-// a matching file is touched, so no project skill carries one (D-141). The
-// #426 contract also keeps `disable-model-invocation` off every project skill.
+// a matching file is touched, so no project skill carries one (D-141). D-141
+// also keeps `disable-model-invocation` off every project skill.
 // A UTF-8 BOM, a quoted key and a file that ends at the closing `---` count too
 // (qa426b, review426c).
 const frontmatter = (text) =>
@@ -248,7 +248,7 @@ const hasKey = (text, key) => new RegExp(`^(["']?)${key}\\1\\s*:`, "m").test(fro
 const hasPathsKey = (text) => hasKey(text, "paths");
 const FORBIDDEN_SKILL_KEYS = {
   paths: "paths: hides the skill from /name and the Skill tool (D-141)",
-  "disable-model-invocation": "disable-model-invocation hides the skill from the model (#426 contract)",
+  "disable-model-invocation": "disable-model-invocation hides the skill from the model (D-141)",
 };
 
 test("no project skill is path-scoped or hidden from the model", () => {
