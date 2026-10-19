@@ -157,8 +157,9 @@ describe("commitEvidenceRequest", () => {
 
   it.each([
     ["unavailable", { status: "unavailable", reason: "storage_unavailable" }, { status: "unavailable", stage: "storage", code: "storage_unavailable" }],
-    ["conflict", { status: "conflict" }, { status: "invalid" }],
-    ["invalid", { status: "invalid" }, { status: "invalid" }],
+    // A fault of the store, never of the client: a retry, not a refusal (review468a 1).
+    ["conflict", { status: "conflict" }, { status: "unavailable", stage: "storage", code: "storage_conflict" }],
+    ["invalid", { status: "invalid" }, { status: "unavailable", stage: "storage", code: "storage_refused" }],
   ])("maps a store answering %s and commits nothing", async (_, answer, expected) => {
     const { run, queries, payloads } = setup();
     payloads.putImmutable.mockResolvedValueOnce(answer as never);

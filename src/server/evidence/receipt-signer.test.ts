@@ -30,6 +30,15 @@ describe("createEvidenceReceiptSigner", () => {
     expect(await code(signer.publicVerificationKey())).toBe("signing_key_production");
   });
 
+  it.each([undefined, "", "staging", "Development", "test "])(
+    "refuses under NODE_ENV %j: the gate of the fake login provider, an allowlist",
+    async (nodeEnv) => {
+      const signer = createEvidenceReceiptSigner({ NODE_ENV: nodeEnv, DUCTUS_DEV_SIGNING_KEY_FILE: "/any/seed" }, tmpdir());
+      expect(signer).not.toBeInstanceOf(PersistentDevelopmentEd25519SigningKeyProvider);
+      expect(await code(signer.sign(MESSAGE))).toBe("signing_key_production");
+    },
+  );
+
   it("makes no key when none is configured: no fallback to a key in memory (T5)", async () => {
     const signer = createEvidenceReceiptSigner({ NODE_ENV: "development" }, tmpdir());
     expect(await code(signer.sign(MESSAGE))).toBe("signing_key_not_configured");

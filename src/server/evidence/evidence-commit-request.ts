@@ -43,7 +43,13 @@ export type EvidenceCommitRequestOutcome =
   | {
       status: "unavailable";
       stage: "context" | "storage" | "repository";
-      code: "context_failed" | "context_malformed" | "storage_unavailable" | "prepare_failed";
+      code:
+        | "context_failed"
+        | "context_malformed"
+        | "storage_unavailable"
+        | "storage_conflict"
+        | "storage_refused"
+        | "prepare_failed";
     };
 
 export type EvidenceCommitRequestDependencies = EvidenceCommitDependencies & {
@@ -126,11 +132,17 @@ async function prepareAndCommit(
     if (located.status !== "ok") return { status: "unavailable", stage: "storage", code: "storage_unavailable" };
     storageRef = located.storageRef;
   } else {
-    // Verified JCS bytes are valid UTF-8, so this decodes exactly them.
+    // Verified JCS bytes are valid UTF-8, so this decodes exactly them. The
+    // route hands over a buffer it alone holds, so they are the bytes verified.
     const canonicalPayload = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(segment);
     const stored = await deps.payloads.putImmutable({ ...key, canonicalPayload });
     if (stored.status === "unavailable") return { status: "unavailable", stage: "storage", code: "storage_unavailable" };
-    if (stored.status !== "stored" && stored.status !== "existing") return { status: "invalid" };
+    // The key is the hash of verified bytes and the server's own package, so a
+    // conflict or a refusal is a fault of the store, never of the client.
+    if (stored.status === "conflict") return { status: "unavailable", stage: "storage", code: "storage_conflict" };
+    if (stored.status !== "stored" && stored.status !== "existing") {
+      return { status: "unavailable", stage: "storage", code: "storage_refused" };
+    }
     storageRef = stored.storageRef;
   }
 

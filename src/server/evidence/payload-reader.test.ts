@@ -78,6 +78,10 @@ describe("createEvidencePayloadReader (B-13 step 4, B2)", () => {
         status: "unavailable",
         reason: "storage_not_configured",
       });
+      // Ingest writes and names nothing either, and never in another bucket.
+      const unconfigured = { status: "unavailable", reason: "storage_not_configured" };
+      await expect(reader.putImmutable({ institutionId: FAK_A, ...read, canonicalPayload: "{}" })).resolves.toEqual(unconfigured);
+      await expect(reader.storageRefFor({ institutionId: FAK_A, ...read })).resolves.toEqual(unconfigured);
       expect(log).toHaveBeenCalledTimes(1);
       expect(JSON.stringify(log.mock.calls)).not.toContain(SECRET);
       expect(JSON.stringify(log.mock.calls)).not.toContain("TESTKEYID");
