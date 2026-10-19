@@ -1,7 +1,8 @@
 import { expect, test } from "@playwright/test";
 
-// The F-4 shell (design editor-v11, FE-D1): three columns on a wide screen, the sheet
-// first and the rails as sections under it below 1100 px (DAN-131).
+// The F-4 shell (design editor-v11, FE-D1): three columns on a wide screen; below
+// 1240 px the structure rail folds under the sheet, below 1000 px the panel too
+// (README §5.1, FE-D2; DAN-131).
 test.describe("workspace shell", () => {
   test("wide: rails beside the sheet, writing view marked current", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
@@ -117,7 +118,7 @@ test.describe("workspace shell", () => {
 
   // One DOM order (sheet, instructions, structure) at every width; CSS places
   // the rails with grid areas, never with `order`.
-  for (const width of [1440, 1000, 390]) {
+  for (const width of [1440, 1100, 990, 390]) {
     test(`order at ${width} px: DOM, Tab and reading order are one`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
       await page.goto("/rad");
@@ -136,18 +137,72 @@ test.describe("workspace shell", () => {
     });
   }
 
-  test("wide: no rail toggles, rail content always shown", async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.goto("/rad");
-    await expect(page.locator(".rail-toggle")).toHaveCount(2);
-    for (const toggle of await page.locator(".rail-toggle").all()) {
-      await expect(toggle).toBeHidden();
-    }
-    await expect(page.getByText("Komentari nastavnika prikazuju se ovdje.")).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Struktura", exact: true })).toBeVisible();
-  });
+  // 1240 px is the first width with three columns (README §5.1: folds below 1240).
+  for (const width of [1440, 1240]) {
+    test(`wide ${width} px: no rail toggles, rail content always shown`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.goto("/rad");
+      await expect(page.locator(".rail-toggle")).toHaveCount(2);
+      for (const toggle of await page.locator(".rail-toggle").all()) {
+        await expect(toggle).toBeHidden();
+      }
+      await expect(page.getByText("Komentari nastavnika prikazuju se ovdje.")).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Struktura", exact: true })).toBeVisible();
+      const [r, s] = await Promise.all([
+        page.getByRole("complementary", { name: "Struktura rada" }).boundingBox(),
+        page.locator("article.sheet").boundingBox(),
+      ]);
+      expect(r!.x + r!.width).toBeLessThanOrEqual(s!.x);
+    });
+  }
 
-  for (const width of [1000, 390]) {
+  // From 1000 px up to 1239 px the panel stays beside the sheet and only the
+  // structure folds under it; 1000 px is the first width that keeps the panel.
+  for (const width of [1239, 1000]) {
+    test(`middle ${width} px: panel beside the sheet, structure folded under it`, async ({
+      page,
+      browserName,
+    }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/rad");
+      const sheet = await page.locator("article.sheet").boundingBox();
+      const panel = page.getByRole("complementary", {
+        name: "Upute, literatura i komentari",
+      });
+      const rail = page.getByRole("complementary", { name: "Struktura rada" });
+      const [p, r] = await Promise.all([panel.boundingBox(), rail.boundingBox()]);
+      expect(p!.width).toBeCloseTo(330, 0);
+      expect(sheet!.x + sheet!.width).toBeLessThanOrEqual(p!.x);
+      expect(sheet!.y + sheet!.height).toBeLessThanOrEqual(r!.y);
+      expect(r!.x + r!.width).toBeLessThanOrEqual(p!.x + 1);
+
+      const panelToggle = panel.getByRole("button", { name: "Upute, literatura i komentari" });
+      const railToggle = rail.getByRole("button", { name: "Struktura rada" });
+      await expect(panelToggle).toBeHidden();
+      await expect(page.getByText("Komentari nastavnika prikazuju se ovdje.")).toBeVisible();
+      await expect(railToggle).toBeVisible();
+      await expect(railToggle).toHaveAttribute("aria-expanded", "false");
+      expect((await railToggle.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      await expect(page.getByRole("heading", { name: "Struktura", exact: true })).toBeHidden();
+
+      // Keyboard: after the editor the panel's tab list (one stop), then the
+      // structure toggle; the hidden panel toggle is not a stop.
+      if (tabVisitsLinks(browserName)) {
+        await expect(page.getByRole("textbox", { name: "Tekst rada" })).toHaveAttribute("contenteditable", "true");
+        for (let i = 0; i < 9; i += 1) await page.keyboard.press("Tab");
+        await expect(panel.getByRole("tab", { name: "Komentari" })).toBeFocused();
+        await page.keyboard.press("Tab");
+        await expect(railToggle).toBeFocused();
+        await page.keyboard.press("Enter");
+      } else {
+        await railToggle.click();
+      }
+      await expect(railToggle).toHaveAttribute("aria-expanded", "true");
+      await expect(page.getByRole("heading", { name: "Struktura", exact: true })).toBeVisible();
+    });
+  }
+
+  for (const width of [999, 390]) {
     test(`narrow ${width} px: rails under the sheet open with real buttons`, async ({
       page,
       browserName,

@@ -5,14 +5,15 @@ import { useId, useState, type ReactNode } from "react";
 export type ShellRailProps = {
   /** `workspace__rail` or `workspace__panel`: places it in the grid. */
   className: string;
-  /** Landmark name, also the text of the toggle below 1100 px. */
+  /** Landmark name, also the text of the toggle when the rail is folded. */
   label: string;
   children: ReactNode;
 };
 
 /**
  * One side rail of the workspace. On a wide screen it stands beside the sheet
- * and its toggle is not rendered (CSS). Below 1100 px it sits under the sheet
+ * and its toggle is not rendered (CSS). Below its breakpoint (globals.css:
+ * 1240 px for the structure, 1000 px for the panel) it sits under the sheet
  * as a section that opens with a real button, so Tab, the screen reader and
  * the eye meet the same order: sheet, instructions, structure.
  */
