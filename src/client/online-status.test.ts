@@ -1,6 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { readOnline, subscribeOnline, type OnlineSource } from "./online-status";
+import { readOnline, subscribeOnline, useOnline, type OnlineSource } from "./online-status";
+
+const store = vi.hoisted(() => ({ calls: [] as unknown[][] }));
+vi.mock("react", () => ({
+  useSyncExternalStore: (...args: unknown[]) => {
+    store.calls.push(args);
+    return true;
+  },
+}));
 
 /** A made-up window whose network a test switches. */
 function fakeWindow(onLine: boolean) {
@@ -47,5 +55,14 @@ describe("online status (F-8, DAN-211)", () => {
     win.set(false);
     expect(calls).toBe(0);
     expect(win.count()).toBe(0);
+  });
+
+  it("hands React the same functions on every render, so typing never resubscribes", () => {
+    store.calls.length = 0;
+    useOnline();
+    useOnline();
+    const [first, second] = store.calls as [unknown[], unknown[]];
+    expect(second).toHaveLength(3);
+    second.forEach((fn, index) => expect(fn).toBe(first[index]));
   });
 });

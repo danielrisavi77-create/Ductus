@@ -39,6 +39,7 @@ const suffix = randomBytes(5).toString("hex");
 const login = `it_commit_${suffix}`;
 const password = randomBytes(24).toString("hex");
 const token = randomBytes(32).toString("base64url");
+const expiredToken = randomBytes(32).toString("base64url");
 const [institutionId, teacherId, studentId, courseId, assignmentId] = Array.from({ length: 5 }, () => randomUUID());
 const admin = new pg.Pool({ connectionString: SAFE_ADMIN_URL, max: 1 });
 let appPool: pg.Pool;
@@ -134,6 +135,11 @@ beforeAll(async () => {
       `INSERT INTO identity.session (token_hash, user_id, institution_id, expires_at)
        VALUES (sha256(convert_to($1, 'UTF8')), $2, $3, now() + interval '1 hour')`,
       [token, studentId, institutionId],
+    ],
+    [
+      `INSERT INTO identity.session (token_hash, user_id, institution_id, created_at, expires_at)
+       VALUES (sha256(convert_to($1, 'UTF8')), $2, $3, now() - interval '2 hours', now() - interval '1 hour')`,
+      [expiredToken, studentId, institutionId],
     ],
     [
       `INSERT INTO institution.course (id, institution_id, name, academic_year, ai_policy, created_by)
@@ -462,6 +468,29 @@ describe("evidence routes (B-8 step 5)", () => {
     expect(await again.text()).toBe(firstText.replace('"status":"committed"', '"status":"duplicate"'));
     expect(counts).toEqual({ puts: 1, signs: 1, attaches: 1 });
     expect(await stored()).toEqual(after);
+  });
+
+  it("answers an expired session with 401 before a single body byte is read (F-098)", async () => {
+    const { deps, counts } = countedDeps();
+    let read = false;
+    const body = new ReadableStream<Uint8Array>({
+      pull() {
+        read = true;
+        throw new Error("read before the session");
+      },
+    }, { highWaterMark: 0 });
+    const request = new Request(`${ORIGIN}/api/evidence/commit`, {
+      method: "POST",
+      headers: { origin: ORIGIN, "sec-fetch-site": "same-origin", "ductus-protocol": "1", "content-type": "application/json" },
+      body,
+      duplex: "half",
+    } as RequestInit);
+    const before = await stored();
+    const response = await handleEvidenceCommitRequest(request, { ...deps, sessionToken: expiredToken });
+    expect([response.status, await response.json()]).toEqual([401, { status: "unauthenticated" }]);
+    expect(read).toBe(false);
+    expect(counts).toEqual({ puts: 0, signs: 0, attaches: 0 });
+    expect(await stored()).toEqual(before);
   });
 
   it("answers a student removed between the context and the transaction as a document that does not exist", async () => {
