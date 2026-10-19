@@ -245,6 +245,10 @@ export class InstitutionRoutedPayloadStore
    * The reference of an object already stored under this key, with no request
    * to any store. Only the institution's own domain names it; no domain, or
    * one disabled by a mismatched identity label, is `unavailable` (P2, P3).
+   * A domain whose label is not verified yet (just after a restart) names it
+   * from the configured label: nothing is read or written here, and a label
+   * that differs from the one stored with the receipt ends the retry in the
+   * closed `txid_reused`, never in a write to another store.
    */
   async storageRefFor(given: {
     institutionId: string;

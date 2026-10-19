@@ -119,6 +119,8 @@ describe("InstitutionRoutedPayloadStore", () => {
   it("names a stored object by its own domain's label and key, with no request to any store", async () => {
     const a = fakeDomain(verified);
     const b = fakeDomain(verified);
+    // A fresh router: no label is verified yet, as just after a restart, and
+    // the reference still comes from the configured label alone (review468a 2).
     const { router } = routerWith({ [FAK_A]: a, [FAK_B]: b });
     const key = { institutionId: FAK_B, evidencePackageId: PACKAGE, segmentHash: HASH };
 

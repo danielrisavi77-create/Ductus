@@ -20,6 +20,8 @@ import { InMemoryEvidencePayloadStore } from "@/adapters/evidence/in-memory-evid
 import { loadGoldenVectors } from "@/domain/forensics/golden-vectors/load";
 import { canonicalizeJcs } from "@/domain/forensics/jcs";
 import { commitEvidenceRequest } from "@/server/evidence/evidence-commit-request";
+import { handleEvidenceCommitRequest } from "@/server/evidence/commit-route";
+import { handleEvidenceOpenRequest } from "@/server/evidence/open-route";
 
 // B-8 step 4c / DAN-83 (docs/BACKEND.md 4.13 t. 3.2, 3.6, 4 and 7): the commit
 // transaction against the real database, with the persistent development key
@@ -342,5 +344,148 @@ describe("evidence commit transaction", () => {
     );
     expect(payloads.size).toBe(1);
     expect(await stored()).toEqual(after);
+    Object.assign(chain, { revision: chain.revision + 1, documentHash: sha256(document), head: sha256(segment), sequence: n });
+  });
+});
+
+/** The next segment of the chain and the document it ends in, as the client sends them. */
+function nextEnvelope(clientTransactionId: string) {
+  const golden = loadGoldenVectors().chain;
+  const template = golden.segments[0].segment;
+  const n = chain.sequence + 1;
+  const states = golden.documentStates.map((state) => canonicalizeJcs(state.value));
+  const document = states.find((text, i) => i >= n % states.length && sha256(text) !== chain.documentHash) ?? states[0];
+  const segment = canonicalizeJcs({
+    ...template,
+    documentId,
+    sessionId: `capture-${suffix}`,
+    segmentId: `segment-${suffix}-${n}`,
+    sequenceFrom: n,
+    sequenceTo: n,
+    initialDocumentHash: chain.documentHash,
+    finalDocumentHash: sha256(document),
+    predecessorSegmentHash: chain.head,
+    evidenceProfileId: context.evidenceProfileId,
+    events: [{ ...template.events[0], sequence: n, beforeDocumentHash: chain.documentHash, afterDocumentHash: sha256(document) }],
+  });
+  const body = {
+    documentId,
+    clientTransactionId,
+    baseRevision: chain.revision,
+    segments: [Buffer.from(segment, "utf8").toString("base64")],
+    document: Buffer.from(document, "utf8").toString("base64"),
+  };
+  return { body, advance: () => Object.assign(chain, { revision: chain.revision + 1, documentHash: sha256(document), head: sha256(segment), sequence: n }) };
+}
+
+const ORIGIN = "http://localhost:3000";
+const post = (path: string, body: unknown) =>
+  new Request(`${ORIGIN}${path}`, {
+    method: "POST",
+    headers: { origin: ORIGIN, "sec-fetch-site": "same-origin", "ductus-protocol": "1", "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+/** The route's dependencies, counting every object write, signature and signature RPC. */
+function countedDeps() {
+  const counts = { puts: 0, signs: 0, attaches: 0 };
+  const store = new InMemoryEvidencePayloadStore();
+  const counting: WithActor = (t, fn) =>
+    withActor(t, (tx) =>
+      fn({
+        query: (text, values) => {
+          if (text.includes("attach_receipt_signature")) counts.attaches += 1;
+          return tx.query(text, values);
+        },
+      }),
+    );
+  const base = signerFor(join(dir, "seed"));
+  const deps = {
+    withActor: counting,
+    signer: {
+      sign: (message: Uint8Array) => {
+        counts.signs += 1;
+        return base.sign(message);
+      },
+      verify: base.verify.bind(base),
+      publicVerificationKey: base.publicVerificationKey.bind(base),
+    },
+    payloads: {
+      putImmutable: (input: Parameters<typeof store.putImmutable>[0]) => {
+        counts.puts += 1;
+        return store.putImmutable(input);
+      },
+      storageRefFor: store.storageRefFor.bind(store),
+    },
+    expectedOrigin: ORIGIN,
+    sessionToken: token,
+  };
+  return { deps, counts };
+}
+
+describe("evidence routes (B-8 step 5)", () => {
+  it("opens the same work again with its current state and the registered receipt key", async () => {
+    const response = await handleEvidenceOpenRequest(post("/api/evidence/open", { assignmentId }), {
+      withActor,
+      expectedOrigin: ORIGIN,
+      sessionToken: token,
+    });
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    const key = await signerFor(join(dir, "seed")).publicVerificationKey();
+    expect(body).toMatchObject({
+      status: "opened",
+      documentId,
+      evidenceProfileId: context.evidenceProfileId,
+      currentRevision: chain.revision,
+      documentHash: chain.documentHash,
+      headSegmentHash: chain.head,
+      lastSequenceTo: chain.sequence,
+      receiptKeys: [expect.objectContaining({ keyId: key.keyId, purpose: "receipt" })],
+    });
+    expect(sha256(Buffer.from(body.document, "base64").toString("utf8"))).toBe(chain.documentHash);
+  });
+
+  it("answers a lost response's retry with 200 duplicate, byte for byte, and no object, revision or signature (T1, T3)", async () => {
+    const { body, advance } = nextEnvelope(`tx-${suffix}-route-1`);
+    const { deps, counts } = countedDeps();
+    const first = await handleEvidenceCommitRequest(post("/api/evidence/commit", body), deps);
+    expect(first.status).toBe(200);
+    const firstText = await first.text();
+    expect(JSON.parse(firstText)).toMatchObject({ status: "committed", revision: chain.revision + 1, receipt: { status: "signed" } });
+    expect(counts).toEqual({ puts: 1, signs: 1, attaches: 1 });
+    const after = await stored();
+    advance();
+
+    const again = await handleEvidenceCommitRequest(post("/api/evidence/commit", body), deps);
+    expect(again.status).toBe(200);
+    expect(await again.text()).toBe(firstText.replace('"status":"committed"', '"status":"duplicate"'));
+    expect(counts).toEqual({ puts: 1, signs: 1, attaches: 1 });
+    expect(await stored()).toEqual(after);
+  });
+
+  it("answers a student removed between the context and the transaction as a document that does not exist", async () => {
+    const { body } = nextEnvelope(`tx-${suffix}-route-2`);
+    const { deps } = countedDeps();
+    const missing = await handleEvidenceCommitRequest(post("/api/evidence/commit", { ...body, documentId: randomUUID() }), deps);
+    const before = await stored();
+    const removing = {
+      ...deps,
+      payloads: {
+        ...deps.payloads,
+        putImmutable: async (input: Parameters<typeof deps.payloads.putImmutable>[0]) => {
+          await admin.query(
+            `UPDATE institution.course_member SET member_to = greatest(now(), member_from), removed_by = $3
+              WHERE course_id = $1 AND user_id = $2 AND member_to IS NULL`,
+            [courseId, studentId, teacherId],
+          );
+          return deps.payloads.putImmutable(input);
+        },
+      },
+    };
+    const removed = await handleEvidenceCommitRequest(post("/api/evidence/commit", body), removing);
+    expect([removed.status, await removed.text()]).toEqual([missing.status, await missing.text()]);
+    expect(removed.status).toBe(404);
+    expect(await stored()).toEqual(before);
   });
 });
