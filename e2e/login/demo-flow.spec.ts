@@ -6,7 +6,7 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import pg from "pg";
 
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
-import { appCookie, SESSION_COOKIE, sessionRow, signIn } from "./support";
+import { appCookie, clickSignOut, SESSION_COOKIE, sessionRow, signIn } from "./support";
 
 // K-4 (DAN-89; docs/PLAN-DEMO.md §1 points 1 to 5 and §7 t. 2, D-98): the demo
 // walk-through as one test. The login config records its video in CI and the
@@ -29,7 +29,6 @@ const COURSE_NAME = "Izmišljeni kolegij K-4";
 
 const editorOf = (page: Page) => page.getByRole("textbox", { name: t.workspace.documentLabel });
 const chipOf = (page: Page) => page.locator(".workspace__status .sync-chip");
-const logoutOf = (page: Page) => page.getByRole("button", { name: t.auth.logout });
 
 /** A screenshot in the report, next to the video. */
 async function snapshot(page: Page, name: string): Promise<void> {
@@ -44,7 +43,7 @@ async function forgetProviderLogin(context: BrowserContext): Promise<void> {
 /** Signs out through the button on the writing page and checks that the session is closed. */
 async function signOut(page: Page, token: string): Promise<void> {
   if (!page.url().endsWith("/rad")) await page.goto("/rad");
-  await logoutOf(page).click();
+  await clickSignOut(page);
   await page.waitForURL("http://localhost:3000/");
   expect(await appCookie(page.context(), SESSION_COOKIE)).toBeUndefined();
   expect(await sessionRow(token)).toMatchObject({ close_reason: "logout", closed_at: expect.any(Date) });
