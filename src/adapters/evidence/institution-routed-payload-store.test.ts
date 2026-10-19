@@ -116,6 +116,37 @@ describe("InstitutionRoutedPayloadStore", () => {
     },
   );
 
+  it("names a stored object by its own domain's label and key, with no request to any store", async () => {
+    const a = fakeDomain(verified);
+    const b = fakeDomain(verified);
+    const { router } = routerWith({ [FAK_A]: a, [FAK_B]: b });
+    const key = { institutionId: FAK_B, evidencePackageId: PACKAGE, segmentHash: HASH };
+
+    await expect(router.storageRefFor(key)).resolves.toEqual({
+      status: "ok",
+      storageRef: `fak-1:v2/${FAK_B}/${PACKAGE}/${HASH}.json`,
+    });
+    for (const store of [a, b]) {
+      expect(store.verifyIdentity).not.toHaveBeenCalled();
+      expect(store.putImmutable).not.toHaveBeenCalled();
+      expect(store.readImmutable).not.toHaveBeenCalled();
+    }
+  });
+
+  it.each([
+    ["an institution without a domain (P2)", FAK_C, "verified"],
+    ["a domain disabled by its label (P3)", FAK_A, "mismatch"],
+    ["an institution id of another form", FAK_A.toUpperCase(), "verified"],
+  ] as const)("gives no reference for %s", async (_, institutionId, identity) => {
+    const a = fakeDomain(() => Promise.resolve({ status: identity }));
+    const { router } = routerWith({ [FAK_A]: a });
+    // A mismatched label disables the domain on its first use.
+    if (identity === "mismatch") await router.putImmutable(input(FAK_A));
+    const key = { institutionId, evidencePackageId: PACKAGE, segmentHash: HASH };
+
+    await expect(router.storageRefFor(key)).resolves.toEqual(UNAVAILABLE);
+  });
+
   it("reads the identity label once and then only writes", async () => {
     const a = fakeDomain(verified);
     const { router } = routerWith({ [FAK_A]: a });

@@ -16,6 +16,10 @@ import {
   type EvidenceCommitInput,
 } from "@/server/evidence/evidence-commit";
 import { createEvidenceReceiptSigner } from "@/server/evidence/receipt-signer";
+import { InMemoryEvidencePayloadStore } from "@/adapters/evidence/in-memory-evidence-payload-store";
+import { loadGoldenVectors } from "@/domain/forensics/golden-vectors/load";
+import { canonicalizeJcs } from "@/domain/forensics/jcs";
+import { commitEvidenceRequest } from "@/server/evidence/evidence-commit-request";
 
 // B-8 step 4c / DAN-83 (docs/BACKEND.md 4.13 t. 3.2, 3.6, 4 and 7): the commit
 // transaction against the real database, with the persistent development key
@@ -287,5 +291,56 @@ describe("evidence commit transaction", () => {
       state: { currentRevision: 3, documentHash: chain.documentHash, headSegmentHash: chain.head, lastSequenceTo: 3 },
     });
     expect(await stored()).toEqual(before);
+  });
+
+  it("commits a request from its received bytes, and a retry of it writes no object and gets the same receipt (4d)", async () => {
+    // A segment v2 of this document, made from the invented golden segment.
+    const golden = loadGoldenVectors().chain;
+    const template = golden.segments[0].segment;
+    const document = canonicalizeJcs(golden.documentStates[1].value);
+    const n = chain.sequence + 1;
+    const segment = canonicalizeJcs({
+      ...template,
+      documentId,
+      sessionId: `capture-${suffix}`,
+      segmentId: `segment-${suffix}-${n}`,
+      sequenceFrom: n,
+      sequenceTo: n,
+      initialDocumentHash: chain.documentHash,
+      finalDocumentHash: sha256(document),
+      predecessorSegmentHash: chain.head,
+      evidenceProfileId: context.evidenceProfileId,
+      events: [{ ...template.events[0], sequence: n, beforeDocumentHash: chain.documentHash, afterDocumentHash: sha256(document) }],
+    });
+    const payloads = new InMemoryEvidencePayloadStore();
+    const deps = { withActor, signer: signerFor(join(dir, "seed")), payloads };
+    const request = {
+      documentId,
+      clientTransactionId: `tx-${suffix}-5`,
+      baseRevision: chain.revision,
+      segment: new TextEncoder().encode(segment),
+      document: new TextEncoder().encode(document),
+    };
+    const first = await commitEvidenceRequest(deps, token, request);
+    expect(first).toMatchObject({ status: "committed", revision: chain.revision + 1, signedReceipt: { payload: { segmentHash: sha256(segment) } } });
+    expect(payloads.size).toBe(1);
+    const row = await admin.query<{ storage_ref: string; body: string }>(
+      `SELECT s.storage_ref, c.body FROM evidence.segment s
+         JOIN evidence.document_checkpoint c ON c.document_id = s.document_id AND c.revision = $2
+        WHERE s.id = $1`,
+      [`segment-${suffix}-${n}`, chain.revision + 1],
+    );
+    expect(row.rows).toEqual([
+      { storage_ref: `memory:v2/${institutionId}/${context.evidencePackageId}/${sha256(segment)}.json`, body: document },
+    ]);
+    const after = await stored();
+
+    const again = await commitEvidenceRequest({ ...deps, signer: signerFor(join(dir, "seed")) }, token, request);
+    expect(again.status).toBe("duplicate");
+    expect(JSON.stringify(again.status === "duplicate" && again.signedReceipt)).toBe(
+      JSON.stringify(first.status === "committed" && first.signedReceipt),
+    );
+    expect(payloads.size).toBe(1);
+    expect(await stored()).toEqual(after);
   });
 });
