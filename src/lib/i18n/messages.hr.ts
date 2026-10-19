@@ -385,6 +385,36 @@ export const hr = {
       unavailable: "Odgovor nije poslan. Pokušaj ponovno.",
     },
   },
+  // DAN-86 step 2b: the teacher's live view of a work (D-142, BACKEND 4.12).
+  // The connection line is about this page's own requests, never the student.
+  liveView: {
+    context: "Rad uživo",
+    documentLabel: "Tekst rada",
+    loading: "Učitavanje rada…",
+    empty: "Student još nije započeo rad.",
+    note: "Tekst se osvježava dok student piše. Student vidi isti prikaz svog rada.",
+    signIn: "Prijavi se",
+    signInFirst: "Prijavi se da vidiš rad.",
+    invalid: "Ova poveznica ne vodi do rada.",
+    connection: {
+      loading: "Povezivanje…",
+      live: "Prikaz uživo",
+      retrying: "Veza je prekinuta. Prikazan je zadnji primljeni tekst. Ponovno povezivanje…",
+      paused: "Prikaz miruje dok je kartica u pozadini.",
+      signedOut: "Prijava je istekla. Prijavi se ponovno da vidiš rad.",
+      notFound: "Ovaj rad nije dostupan ovom računu.",
+    },
+  },
+  // K-3 text (PLAN-DEMO point 8, D-80 point 3; owner on #87, 6266445027 point 3):
+  // the limits of the record, with the two invented histories of the demo.
+  recordLimits: {
+    title: "Što zapis ne može pokazati",
+    lead: "Zapis pokazuje kako je tekst ušao u rad u Ducturi: utipkan, zalijepljen ili uvezen. Ne pokazuje tko je tekst smislio ni gdje je nastao prije nego što je ušao u Ducturu.",
+    exampleTitle: "Dvije izmišljene povijesti",
+    exampleA: "Student A napisao je svoj tekst izvan Ducture i uvezao ga odjednom. Zapis pokazuje jedan uvoz.",
+    exampleB: "Student B postupno je utipkao tekst koji je napisala druga osoba. Zapis pokazuje postupno pisanje u Ducturi.",
+    conclusion: "Iz zapisa se ne vidi koji je od ta dva teksta student sam napisao. Ductus zato ne procjenjuje autorstvo: zapis olakšava razgovor o radu, a zaključak donosi čovjek.",
+  },
   // F-7 (#336): the S3 notice before the first sentence. What is recorded
   // follows D-142, D-143 and D-154 (live view, per-change time, replay for the
   // mentor, i.e. the teacher of the assignment, and the same replay for the student)
