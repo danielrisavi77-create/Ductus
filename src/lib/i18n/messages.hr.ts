@@ -276,8 +276,12 @@ export const hr = {
     conclusion: "Iz zapisa se ne vidi koji je od ta dva teksta student sam napisao. Ductus zato ne procjenjuje autorstvo: zapis olakšava razgovor o radu, a zaključak donosi čovjek.",
   },
   // F-7 (#336): the S3 notice before the first sentence. What is recorded
-  // follows the owner decision on #87 (6237014519), D-24 and D-56: a hash
-  // per step, version history and the process summary, no single inputs.
+  // follows D-142, D-143 and D-154 (live view, per-change time, replay for the
+  // mentor, i.e. the teacher of the assignment, and the same replay for the student)
+  // and PRODUCT §5 rules 4 and 7; D-24 and D-81 for the 30-second steps.
+  // AssignmentNotice renders recorded, notRecorded and teacher in key order.
+  // Live view and replay are not built yet, so the notice says what will happen
+  // in this assignment; D-63 for the skipped long pauses of the replay.
   student: {
     title: "Zadatak",
     signedOut: "Prijavi se da vidiš zadatak.",
@@ -310,18 +314,22 @@ export const hr = {
     recordedHeading: "Što se bilježi",
     recorded: {
       steps: "Promjene teksta, sažete u odsječke od najviše 30 sekundi. Odsječak nosi jedno vrijeme, zaokruženo na minutu.",
+      live: "U ovom zadatku bilježit će se svaka promjena teksta, znak po znak, s redoslijedom i vremenom: unos i brisanje, lijepljenje, uvoz, prijenos iz AI pomoćnika i izmjene nastavnika. To će služiti samo prikazu uživo i reprodukciji.",
       chain: "Svaki korak spremanja dobiva hash i ulazi u lanac, pa se svaka kasnija izmjena zapisa vidi.",
       versions: "Verzije, predaja i napomene koje dodaš.",
     },
     notRecordedHeading: "Što se ne bilježi",
     notRecorded: {
-      inputs: "Pojedinačni unosi i ritam pisanja: tipke, brzina i pauze.",
+      inputs: "Koja je tipka pritisnuta i koliko je držana. Iz vremena promjena nikad se ne računaju brzina, ritam ni bilo kakva mjera. Reprodukcija preskače duge stanke i ne navodi koliko su trajale.",
       outside: "Druge aplikacije i kartice preglednika, kamera, mikrofon i zaslon.",
       device: "IP adresa i podaci o uređaju.",
     },
-    teacherHeading: "Što nastavnik vidi",
+    teacherHeading: "Što vidi nastavnik (mentor)",
     teacher: {
-      state: "Od prvog dana stanje rada spremljeno na poslužitelju, pa i tekst koji ćeš kasnije možda obrisati.",
+      state: "Od prvog dana pratit će tvoj rad uživo, dok nastaje, pa i tekst koji ćeš kasnije možda obrisati. Ono što napišeš bez mreže vidjet će tek kad se veza vrati.",
+      // D-154, PRODUCT §5 rules 5 and 7: the student sees the same replay of their own work.
+      replay: "Nastavnik (mentor) zadatka moći će reproducirati nastanak rada znak po znak, pa i obrisani tekst. Istu reprodukciju svog rada vidjet ćeš i ti.",
+      purpose: "Prikaz uživo i reprodukcija služit će praćenju nastanka rada i komentarima, nikad ocjeni ni rangiranju.",
       history: "Povijest verzija i sažetak procesa, isti kao što ga vidiš ti.",
       noVerdict: "Ductus ne procjenjuje autorstvo ni korištenje AI-ja.",
     },
@@ -329,7 +337,7 @@ export const hr = {
     teacherExtended: "Usporedbu verzija na kraju sesija i poslanih verzija.",
     retention: "Zapis se čuva uz rad do isteka roka koji propisuje fakultet.",
     note: "Prije konačne predaje uz rad možeš dodati napomenu. Napomene se samo dodaju.",
-    checkbox: "Pročitao/la sam obavijest. Znam što se bilježi i što nastavnik vidi.",
+    checkbox: "Pročitao/la sam obavijest. Znam što se bilježi i što vidi nastavnik (mentor).",
     confirm: "Potvrdi i otvori editor",
     confirming: "Potvrđivanje…",
     notConsent: "Potvrda nije privola. Prije potvrde ništa se ne šalje na poslužitelj.",
@@ -341,6 +349,51 @@ export const hr = {
       forbidden: "Ovaj račun ne može potvrditi obavijest za ovaj zadatak.",
       invalid: "Potvrda nije prihvaćena. Ponovno učitaj stranicu.",
       unavailable: "Potvrda nije zabilježena. Pokušaj ponovno.",
+    },
+  },
+  // F-10 (DAN-87): process summary, one text for every reader (PRODUCT §5
+  // rule 5, §7). Thresholds stand next to the numbers they decide (rule 12).
+  summary: {
+    title: "Sažetak procesa",
+    sameForEveryone: "Isti sažetak vide student i nastavnik.",
+    timeNote: "Vremena su po zagrebačkom vremenu, zaokružena na minutu.",
+    evidenceKind: "Vrsta dokaza",
+    evidenceKinds: { observed: "opaženo", imported: "uvezeno", declared: "izjavljeno" },
+    from: "od",
+    to: "do",
+    at: "u",
+    recordState: {
+      label: "Stanje zapisa",
+      complete: "Zapis je cjelovit",
+      has_gaps: "Zapis ima praznine (vidi popis)",
+    },
+    sessions: {
+      heading: "Sesije pisanja",
+      count: "Broj sesija",
+      threshold: "prag P-01: nova sesija počinje nakon stanke dulje od",
+      none: "Nema zabilježenih sesija.",
+    },
+    pastes: {
+      heading: "Lijepljenja",
+      listedThreshold: "prag P-02: zasebno se navodi lijepljenje veće od",
+      size: "Veličina",
+      origins: { not_observed: "izvor nije opažen" },
+      noneListed: "Nema lijepljenja većih od praga.",
+      smaller: "Manja lijepljenja, samo broj",
+      smallerThreshold: "prag P-02: najviše",
+    },
+    gaps: {
+      heading: "Praznine u zapisu",
+      explanation:
+        "Praznina u zapisu je razdoblje između dvaju dijelova zapisa koje je poslužitelj primio, za koje izmjene nisu stigle na poslužitelj. Ne govori ništa o tome kako je rad pisan.",
+      item: "Praznina u zapisu",
+      none: "Nema praznina u zapisu.",
+    },
+    // Forms after a number: nominative, and genitive after "od".
+    units: {
+      minutesGenitive: { one: "minute", few: "minute", many: "minuta" },
+      characters: { one: "znak", few: "znaka", many: "znakova" },
+      charactersGenitive: { one: "znaka", few: "znaka", many: "znakova" },
     },
   },
   auth: {
