@@ -68,15 +68,19 @@ function untouchedBody(headers: Record<string, string | undefined> = {}, method 
   return { request: new Request("http://localhost:3000/api/evidence/commit", init), state };
 }
 
-function setup(over: Partial<EvidenceCommitRouteDeps> = {}) {
+const LIVE = { user_id: "00000000-0000-4000-8000-0000000000e1", institution_id: CONTEXT_ROW.institution_id };
+
+function setup(over: Partial<EvidenceCommitRouteDeps> = {}, session: object | Error = LIVE) {
   const events: string[] = [];
   const withActor = vi.fn(async (_token: string | null, fn: (tx: ActorTransaction) => Promise<unknown>) => {
     let kind = "";
     const tx: ActorTransaction = {
       async query(text) {
-        kind = text.includes("evidence_commit_context") ? "context" : "commit";
+        kind = text.includes("current_actor") ? "session" : text.includes("evidence_commit_context") ? "context" : "commit";
         events.push(`${kind}:query`);
-        return { rows: [kind === "context" ? CONTEXT_ROW : STALE] as never[], rowCount: 1 };
+        if (kind === "session" && session instanceof Error) throw session;
+        const row = kind === "session" ? session : kind === "context" ? CONTEXT_ROW : STALE;
+        return { rows: [row] as never[], rowCount: 1 };
       },
     };
     const result = await fn(tx);
@@ -113,6 +117,9 @@ describe("POST /api/evidence/commit: before the body", () => {
     ["Ductus-Protocol 2", { "ductus-protocol": "2" }, "POST", 426, "upgrade_required"],
     ["text/plain", { "content-type": "text/plain" }, "POST", 415, "unsupported_media_type"],
     ["a declared length over the limit (#155 item 12)", { "content-length": String(MAX_COMMIT_REQUEST_BYTES + 1) }, "POST", 413, "too_large"],
+    ["a declared length that is not a number", { "content-length": "abc" }, "POST", 400, "bad_request"],
+    ["a negative declared length", { "content-length": "-1" }, "POST", 400, "bad_request"],
+    ["a declared length with a leading zero", { "content-length": "01" }, "POST", 400, "bad_request"],
   ] as const)("refuses %s without reading the body", async (_, headers, method, status, code) => {
     const { deps, withActor } = setup();
     const { request, state } = untouchedBody(headers, method);
@@ -134,6 +141,18 @@ describe("POST /api/evidence/commit: before the body", () => {
     expect([response.status, await response.json()]).toEqual([401, { status: "unauthenticated" }]);
     expect(state.read).toBe(false);
     expect(withActor).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["a closed or expired session", { user_id: null, institution_id: null }, 401, { status: "unauthenticated" }],
+    ["a session the database cannot answer for", new Error("down"), 503, { status: "unavailable", stage: "context" }],
+  ] as const)("answers %s from the database before reading the body (F-098)", async (_, session, status, body) => {
+    const { deps, events } = setup({}, session);
+    const { request, state } = untouchedBody();
+    const response = await handleEvidenceCommitRequest(request, deps);
+    expect([response.status, await response.json()]).toEqual([status, body]);
+    expect(state.read).toBe(false);
+    expect(events).toEqual(status === 401 ? ["session:query", "session:end"] : ["session:query"]);
   });
 
   it("answers 503 context when the application origin is not configured", async () => {
@@ -167,11 +186,11 @@ describe("POST /api/evidence/commit: the envelope", () => {
     ["base64 that does not encode back", { ...ENVELOPE, document: "QR==" }],
     ["url-safe base64", { ...ENVELOPE, segments: [segment.replace(/\+/g, "-").replace(/\//g, "_") + "-_"] }],
     ["a revision as text", { ...ENVELOPE, baseRevision: "3" }],
-  ])("refuses %s as invalid before any state", async (_, body) => {
-    const { deps, withActor } = setup();
+  ])("refuses %s as invalid before any state, after the session only", async (_, body) => {
+    const { deps, events } = setup();
     const response = await handleEvidenceCommitRequest(post(body), deps);
     expect([response.status, await response.json()]).toEqual([422, { status: "invalid" }]);
-    expect(withActor).not.toHaveBeenCalled();
+    expect(events).toEqual(["session:query", "session:end"]);
   });
 
   it("decodes the bytes and runs step 4d: context, then storage, then the transaction (F-097)", async () => {
@@ -188,8 +207,8 @@ describe("POST /api/evidence/commit: the envelope", () => {
     expect(payloads.putImmutable).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ segmentHash: golden.segmentHash, canonicalPayload: SEGMENT.toString("utf8") }),
     );
-    // The context transaction has ended before the object is written.
-    expect(events).toEqual(["context:query", "context:end", "put", "commit:query", "commit:end"]);
+    // The session before the body, and the context transaction ended before the object is written.
+    expect(events).toEqual(["session:query", "session:end", "context:query", "context:end", "put", "commit:query", "commit:end"]);
   });
 });
 
