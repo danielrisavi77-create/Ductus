@@ -515,7 +515,20 @@ export const hr = {
     logout: "Odjava",
     loggingOut: "Odjava…",
     logoutUnsaved:
-      "Ovaj uređaj nije mogao pohraniti dio teksta, pa bi se odjavom izgubio. Izvezi tekst, a zatim ponovno odaberi „Odjava”.",
+      "Ovaj uređaj nije mogao pohraniti dio teksta, pa bi se odjavom izgubio. Izvezi tekst prije odjave.",
+    // FE-D7 (D-118): the sign-out dialog. It speaks only of this device: the
+    // app sends nothing to the server yet, so it promises no sending (#476).
+    logoutTitle: "Odjava",
+    logoutConfirm: "Odjavi se",
+    logoutStay: "Ostani",
+    logoutPlain: "Odjava zatvara sesiju na ovom uređaju.",
+    logoutPending: {
+      one: "{n} izmjena postoji samo na ovom uređaju. Odjava zatvara sesiju.",
+      few: "{n} izmjene postoje samo na ovom uređaju. Odjava zatvara sesiju.",
+      many: "{n} izmjena postoji samo na ovom uređaju. Odjava zatvara sesiju.",
+    },
+    logoutKept:
+      "Zapis ostaje vezan uz tebe na ovom uređaju i nastavljaš ga kad se ponovno prijaviš. Osoba koja se nakon tebe prijavi na ovom uređaju ne vidi tvoj rad.",
     logoutFailed: "Odjava nije dovršena jer poslužitelj nije odgovorio. Ništa nije izbrisano. Provjeri vezu i pokušaj ponovno.",
     signedOutElsewhere:
       "Prijava s kojom je ova kartica otvorena više ne vrijedi: u drugoj kartici provedena je odjava ili nova prijava. Ova kartica više ništa ne prikazuje ni ne sprema. Ponovno učitaj stranicu.",

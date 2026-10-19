@@ -25,9 +25,10 @@
  *   typed text reaches the journal, the logout route answers, and only then
  *   is a journal with nothing unconfirmed deleted. Work the server has not
  *   confirmed stays in this person's journal, which only their next sign-in
- *   opens. Text the device could not store is the one thing sign-out would
- *   lose, so the first click says so and offers the export; a second click
- *   signs out all the same.
+ *   opens. "Odjava" first stops writing and opens a dialog (FE-D7) with the
+ *   number of saved steps the journal still holds; text the device could not
+ *   store is the one thing sign-out would lose, so the dialog says so and
+ *   offers the export. "Odjavi se" signs out all the same; "Ostani" resumes.
  * - A tab whose session has ended, here or by a sign-in that replaced the
  *   cookie, stops for good and clears the sheet (src/client/session-marks.ts).
  */
@@ -55,6 +56,9 @@ import {
   LocalDocumentSaver, type SaverFailure, type SaverSnapshot,
 } from "@/lib/journal/local-document-saver";
 
+import LogoutDialog from "./LogoutDialog";
+import type { LogoutPlan } from "./logout-plan";
+
 /** Quiet time after the last change before a candidate is proposed. */
 const DEBOUNCE_MS = 400;
 const EXPORT_FILE_NAME = "ductus-rad.txt";
@@ -63,13 +67,6 @@ type Phase = "loading" | "blocked" | "ready" | "recovery" | "unavailable" | "sig
 
 type Failure = SaverFailure | "invalid";
 
-/**
- * Why the last click on "Odjava" did not leave the page: text the device has
- * not stored (a second click signs out anyway), or a logout route that did
- * not answer (nothing was deleted and the session may still be open).
- */
-type LogoutNotice = "unsaved" | "failed";
-
 /** States in which the sheet may hold text the journal does not. */
 const NOT_STORED: readonly SyncState[] = ["EDITING", "SAVING_LOCAL", "ERROR", "RECOVERY_REQUIRED"];
 
@@ -77,6 +74,8 @@ const NOT_STORED: readonly SyncState[] = ["EDITING", "SAVING_LOCAL", "ERROR", "R
 type LockedLogout = {
   /** Stops writing, lets the typed text reach the journal; true if some of it did not. */
   quiesce: () => Promise<boolean>;
+  /** Saved steps of this document the journal still holds, or null if unreadable. */
+  pending: () => Promise<number | null>;
   resume: () => void;
   /** Deletes the journal unless it holds unconfirmed work (D-118). */
   clear: () => Promise<void>;
@@ -88,7 +87,10 @@ type LocalDocumentValue = {
   snapshot: SaverSnapshot | null;
   words: number;
   invalid: boolean;
-  logoutNotice: LogoutNotice | null;
+  /** Stops writing and says what a sign-out would leave behind (FE-D7). */
+  prepareSignOut: () => Promise<LogoutPlan>;
+  /** Writing goes on after the dialog was left with "Ostani". */
+  staySignedIn: () => void;
   /** Ends the session; resolves true once the logout route has answered. */
   signOut: () => Promise<boolean>;
 };
@@ -143,7 +145,6 @@ export function LocalDocumentProvider({
   const [snapshot, setSnapshot] = useState<SaverSnapshot | null>(null);
   const [words, setWords] = useState(0);
   const [invalid, setInvalid] = useState(false);
-  const [logoutNotice, setLogoutNotice] = useState<LogoutNotice | null>(null);
   // Set while this tab holds the lock with an editable document.
   const logoutRef = useRef<LockedLogout | null>(null);
   const channelRef = useRef<BroadcastChannel | null>(null);
@@ -334,6 +335,13 @@ export function LocalDocumentProvider({
             const saved = saver.snapshot();
             return !editor.isEmpty && (saved.failure !== null || NOT_STORED.includes(saved.state));
           },
+          pending: async () => {
+            try {
+              return (await journal.read(documentId)).pending.length;
+            } catch {
+              return null;
+            }
+          },
           resume: () => {
             if (disposed) return;
             readyRef.current = true;
@@ -395,29 +403,25 @@ export function LocalDocumentProvider({
     };
   }, [editor, scope, documentId, markTag, markAt]);
 
-  // Set once the author was told that some text is not on this device.
-  const warnedRef = useRef(false);
+  // Writing stays stopped from here until "Ostani" or the end of the
+  // session, so the count the dialog shows cannot grow behind it (I2).
+  const prepareSignOut = async (): Promise<LogoutPlan> => {
+    const locked = logoutRef.current;
+    if (!locked) return { unsaved: false, pending: null };
+    const unsaved = await locked.quiesce();
+    return { unsaved, pending: await locked.pending() };
+  };
+
+  const staySignedIn = () => logoutRef.current?.resume();
 
   const signOut = async (): Promise<boolean> => {
     const locked = logoutRef.current;
-    const unsaved = locked ? await locked.quiesce() : false;
-    if (unsaved && !warnedRef.current) {
-      warnedRef.current = true;
-      locked?.resume();
-      setLogoutNotice("unsaved");
-      return false;
-    }
-    if (!(await postLogout())) {
-      // Nothing was deleted; the session may still be open, so say so.
-      locked?.resume();
-      setLogoutNotice("failed");
-      return false;
-    }
+    // Nothing was deleted and the session may still be open; the dialog says so.
+    if (!(await postLogout())) return false;
     // The session has ended: every tab of it stops, and so does the session
     // the browser held last if it was another one.
     const ended = endAfterLogout(browserMarkStore(), markTag);
     for (const tag of ended) channelRef.current?.postMessage(tag);
-    setLogoutNotice(null);
     if (editor && !editor.isDestroyed) {
       editor.setEditable(false, false);
       startFreshHistory(editor.view, "empty");
@@ -427,7 +431,7 @@ export function LocalDocumentProvider({
   };
 
   const value: LocalDocumentValue = {
-    editor, phase, snapshot, words, invalid, logoutNotice, signOut,
+    editor, phase, snapshot, words, invalid, prepareSignOut, staySignedIn, signOut,
   };
   return <LocalDocumentContext.Provider value={value}>{children}</LocalDocumentContext.Provider>;
 }
@@ -485,11 +489,6 @@ const FAILURE_TEXT: Record<Failure, string> = {
   corrupt: t.editor.recovery,
 };
 
-const LOGOUT_NOTICE_TEXT: Record<LogoutNotice, string> = {
-  unsaved: t.auth.logoutUnsaved,
-  failed: t.auth.logoutFailed,
-};
-
 function exportText(editor: Editor): void {
   const text = editor.getText({ blockSeparator: "\n\n" });
   const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
@@ -503,10 +502,9 @@ function exportText(editor: Editor): void {
 /** The sheet: notices, the export escape hatch and the editor itself. */
 export function LocalEditor() {
   const value = useLocalDocument();
-  const { editor, phase, logoutNotice } = value;
+  const { editor, phase } = value;
   const failure = failureOf(value);
-  const alert = logoutNotice ? LOGOUT_NOTICE_TEXT[logoutNotice]
-    : phase === "signed-out" ? t.auth.signedOutElsewhere
+  const alert = phase === "signed-out" ? t.auth.signedOutElsewhere
     : phase === "recovery" ? t.editor.recovery : failure ? FAILURE_TEXT[failure] : null;
   const canExport = editor !== null && (alert !== null) && !editor.isEmpty;
   return (
@@ -593,28 +591,80 @@ export function useLocalStatus(): { loading: boolean; words: number } {
 }
 
 /**
- * The sign-out button of the workspace bar (F-5, D-118). Never disabled
- * except while a sign-out runs: whatever the journal or the tab holds, the
- * session can always be ended. Without script the form posts to the logout
- * route directly, which ends it as well.
+ * The sign-out button of the workspace bar (F-5, D-118) and its dialog
+ * (FE-D7). Disabled only while writing stops or a sign-out runs: whatever the
+ * journal or the tab holds, the dialog always offers "Odjavi se", so the
+ * session can always be ended (I1). Without script the form posts to the
+ * logout route directly, which ends it as well.
  */
 export function LocalLogout() {
-  const { signOut } = useLocalDocument();
+  const { editor, prepareSignOut, staySignedIn, signOut } = useLocalDocument();
+  const [preparing, setPreparing] = useState(false);
+  const [plan, setPlan] = useState<LogoutPlan | null>(null);
   const [working, setWorking] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (preparing || plan) return;
+    setPreparing(true);
+    setFailed(false);
+    void prepareSignOut()
+      // Writing has stopped either way; an unknown count shows no number.
+      .catch((): LogoutPlan => ({ unsaved: false, pending: null }))
+      .then((next) => {
+        setPlan(next);
+        setPreparing(false);
+      });
+  };
+  const confirm = () => {
     if (working) return;
     setWorking(true);
+    setFailed(false);
+    const failure = () => {
+      setFailed(true);
+      setWorking(false);
+    };
     void signOut().then((done) => {
       if (done) window.location.assign("/");
-      else setWorking(false);
-    }, () => setWorking(false));
+      else failure();
+    }, failure);
   };
+  const stay = () => {
+    setPlan(null);
+    setFailed(false);
+    staySignedIn();
+  };
+  // Focus goes back to "Odjava" once the dialog has closed: while the modal
+  // is open, the button behind it is inert and cannot take focus.
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (plan) wasOpen.current = true;
+    else if (wasOpen.current) {
+      wasOpen.current = false;
+      buttonRef.current?.focus();
+    }
+  }, [plan]);
   return (
-    <form method="post" action="/api/auth/logout" onSubmit={onSubmit}>
-      <button type="submit" className="btn" disabled={working}>
-        {working ? t.auth.loggingOut : t.auth.logout}
-      </button>
-    </form>
+    <>
+      <form method="post" action="/api/auth/logout" onSubmit={onSubmit}>
+        <button ref={buttonRef} type="submit" className="btn" disabled={preparing || working}>
+          {preparing || working ? t.auth.loggingOut : t.auth.logout}
+        </button>
+      </form>
+      {plan ? (
+        <LogoutDialog
+          plan={plan}
+          working={working}
+          failed={failed}
+          onConfirm={confirm}
+          onStay={stay}
+          onExport={() => {
+            if (editor && !editor.isDestroyed) exportText(editor);
+          }}
+        />
+      ) : null}
+    </>
   );
 }
