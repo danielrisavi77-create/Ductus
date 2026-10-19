@@ -19,17 +19,19 @@ export type MutationRequestRefusal =
     };
 
 /**
- * Only POST from a page of this origin. Origin is required: browsers send it
- * on every cross-origin and same-origin POST, so a request without it is not
- * from our page. Sec-Fetch-Site, when present, must also say same-origin; a
- * same-site subdomain is still another origin.
+ * Only the route's method (POST unless it says PUT) from a page of this
+ * origin. Origin is required: browsers send it on every cross-origin and
+ * same-origin POST and PUT, so a request without it is not from our page.
+ * Sec-Fetch-Site, when present, must also say same-origin; a same-site
+ * subdomain is still another origin.
  */
 export function checkMutationRequest(
   request: Request,
   expectedOrigin: string,
+  method: "POST" | "PUT" = "POST",
 ): { ok: true } | MutationRequestRefusal {
   const expected = canonicalOrigin(expectedOrigin);
-  if (request.method !== "POST")
+  if (request.method !== method)
     return { ok: false, status: 405, reason: "method_not_allowed" };
   const origin = request.headers.get("origin");
   if (origin === null || origin === "" || origin === "null")
