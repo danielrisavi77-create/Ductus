@@ -3,6 +3,7 @@ import Link from "next/link";
 import SheetFrame from "@/components/shell/SheetFrame";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 
+import { FLOW_STEPS } from "./flowSteps";
 import styles from "./Landing.module.css";
 
 /** Every way in leads to the sign-in screen (owner, #476); it offers AAI@EduHr only (D-09). */
@@ -30,6 +31,7 @@ export default function Landing() {
           <nav className={styles.nav} aria-label={l.sectionsNav}>
             <a href="#kako-radi">{l.howItWorksLink}</a>
             <a href="#za-koga">{l.forWhomLink}</a>
+            <a href="#tijek-rada">{l.flow.link}</a>
           </nav>
           {/* A plain link: the sign-in screen is its own route (FE-D3). */}
           <a className="btn" href={SIGN_IN_PATH}>
@@ -141,6 +143,33 @@ export default function Landing() {
                 <p>{body}</p>
               </li>
             ))}
+          </ol>
+        </section>
+
+        {/* Announcements only (FE-H2a): no control, nothing that acts as if a step works. */}
+        <section id="tijek-rada" className={styles.section} aria-labelledby="tijek-rada-naslov">
+          <p className={styles.eyebrow}>{l.flow.link}</p>
+          <h2 id="tijek-rada-naslov" className={styles.sectionTitle}>
+            {l.flow.title}
+          </h2>
+          <p className={styles.lead}>{l.flow.lead}</p>
+          <ol className={styles.flow}>
+            {FLOW_STEPS.map(({ key, soon }, index) => {
+              const step = l.flow.steps[key];
+              return (
+                <li key={key} className={styles.flowCard} data-soon={soon ? "true" : undefined}>
+                  <div className={styles.flowHead}>
+                    <span className={styles.flowNo} aria-hidden="true">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <span className={styles.flowName}>{step.name}</span>
+                    {soon ? <span className={styles.soon}>{l.flow.soon}</span> : null}
+                  </div>
+                  <h3>{step.title}</h3>
+                  <p>{step.body}</p>
+                </li>
+              );
+            })}
           </ol>
         </section>
 
