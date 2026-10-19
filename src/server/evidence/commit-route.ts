@@ -94,6 +94,8 @@ export async function handleEvidenceCommitRequest(request: Request, deps: Eviden
   const read = await readGuardedBody(request, deps.expectedOrigin, deps.sessionToken, {
     maxBytes: MAX_COMMIT_REQUEST_BYTES,
     timeoutMs: BODY_TIMEOUT_MS,
+    // The largest body of all: the session is checked first (F-098).
+    liveSession: deps.withActor,
   });
   if (!read.ok) return read.response;
   const envelope = parseCommitEnvelope(read.bytes);
