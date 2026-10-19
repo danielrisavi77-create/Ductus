@@ -5,13 +5,16 @@ import EditorToolbar from "@/components/editor/EditorToolbar";
 import HeadingOutline from "@/components/editor/HeadingOutline";
 import { OfflineBanner, OfflineChip } from "@/components/editor/OfflineNotice";
 import {
-  LocalDocumentProvider, LocalEditor, LocalLogout, LocalSaveChip, LocalWordCount,
+  LocalDocumentProvider, LocalEditor, LocalLogout, LocalSaveChip,
 } from "@/components/editor/LocalDocument";
+import { InstructionsPanel, WorkPanel } from "@/components/editor/SidePanels";
+import { LocalStatusLength } from "@/components/editor/StatusLength";
 import PanelTabs from "@/components/shell/PanelTabs";
 import SessionObserver from "@/components/shell/SessionObserver";
 import SheetFrame from "@/components/shell/SheetFrame";
 import WorkspaceShell, { RailSection } from "@/components/shell/WorkspaceShell";
-import { wordsHr } from "@/lib/i18n/hr";
+import { DEMO_WORK_CONTEXT } from "@/lib/i18n/demo-context.hr";
+import { DEMO_ASSIGNMENT, DEMO_WORK } from "@/lib/i18n/demo-work.hr";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import {
   LOCAL_DEMO_DOCUMENT_ID, LocalScopeConfigError, localScopeConfigFromEnv, resolveLocalScope,
@@ -73,7 +76,11 @@ async function journalFor(): Promise<{
  * journal, the toolbar sits above the sheet and the structure rail lists the
  * headings of the text (F-8 step 1). Without a network the banner and the
  * status bar say so (F-8, DAN-211). A signed-in student sees the teacher's
- * comments in the side panel (F-9 step 1). Signing out
+ * comments in the side panel (F-9 step 1). The top bar names the course and
+ * the assignment and the status bar the length against its word range, from
+ * invented demo data until /rad reads its assignment (FE-D6). With a journal,
+ * Upute and Rad show invented data of the real shape until their reads exist
+ * (FE-D9, #476). Signing out
  * always ends the session (D-118, `LocalLogout`).
  */
 export default async function WorkspacePage() {
@@ -82,6 +89,7 @@ export default async function WorkspacePage() {
   const workspace = (
     <WorkspaceShell
       writingHref="/rad"
+      context={scope ? `${DEMO_WORK_CONTEXT.course} / ${DEMO_WORK_CONTEXT.assignment}` : null}
       barExtra={scope && signedIn ? <LocalLogout /> : signInAgain ? (
         // A plain link: the login route answers with a redirect, not a page.
         <a className="btn" href={SIGN_IN_HREF}>{t.auth.signIn}</a>
@@ -106,7 +114,11 @@ export default async function WorkspacePage() {
           initial="comments"
           tabs={[
             { id: "sources", label: t.workspace.tabSources, content: <p className="rail-empty">{t.workspace.sourcesEmpty}</p> },
-            { id: "instructions", label: t.workspace.tabInstructions, content: <p className="rail-empty">{t.workspace.instructionsEmpty}</p> },
+            {
+              id: "instructions",
+              label: t.workspace.tabInstructions,
+              content: <InstructionsPanel load={scope ? { kind: "ready", value: DEMO_ASSIGNMENT } : { kind: "empty" }} />,
+            },
             {
               id: "comments",
               label: t.workspace.tabComments,
@@ -116,6 +128,11 @@ export default async function WorkspacePage() {
                 <p className="rail-empty">{t.workspace.commentsEmpty}</p>
               ),
             },
+            {
+              id: "work",
+              label: t.workspace.tabWork,
+              content: <WorkPanel load={scope ? { kind: "ready", value: DEMO_WORK } : { kind: "empty" }} />,
+            },
           ]}
         />
       }
@@ -123,10 +140,10 @@ export default async function WorkspacePage() {
         <>
           <LocalSaveChip />
           <OfflineChip />
-          <LocalWordCount />
+          <LocalStatusLength range={DEMO_WORK_CONTEXT.words} />
         </>
       ) : (
-        <span>{wordsHr(0)}</span>
+        <span>{t.workspace.statusNoJournal}</span>
       )}
     >
       {scope ? <EditorToolbar /> : null}
