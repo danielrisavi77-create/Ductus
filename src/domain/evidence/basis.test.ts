@@ -18,5 +18,15 @@ describe("EvidenceBasis",()=>{
  it("requires recheck when the claim is no longer resolvable",()=>expect(evaluateEvidenceBasis(basis(),N,"Rezultati dokazuju uzročnost.","v1")).toEqual({status:"RECHECK_REQUIRED",reason:"claim-missing"}));
  it("requires recheck when the source version changes",()=>expect(evaluateEvidenceBasis(basis(),N,claimText,"v2")).toEqual({status:"RECHECK_REQUIRED",reason:"source-version-changed"}));
  it("refuses an excerpt from another source version",()=>expect(()=>createEvidenceBasis({...basis(),excerpt:{...basis().excerpt,sourceVersion:"v2"}})).toThrow("source version"));
+ // #441: the anchor resolution decides which occurrence a basis stands for.
+ const withContext=()=>{
+  const node="Uvod. "+claimText+" Kraj.";
+  const target=createTextAnchor({nodeId:N,nodeText:node,start:6,end:6+claimText.length,contextLength:6});
+  return {...basis(),claim:createClaimRevision({claimId:"c1" as ClaimId,documentRevision:3,target,text:claimText})};
+ };
+ it("requires recheck when the claim is copied in the same node without context, never the old occurrence",()=>expect(evaluateEvidenceBasis(basis(),N,claimText+" "+claimText,"v1")).toEqual({status:"RECHECK_REQUIRED",reason:"claim-ambiguous"}));
+ it("requires recheck when the claim is copied with its full context",()=>expect(evaluateEvidenceBasis(withContext(),N,"Uvod. "+claimText+" Kraj. Uvod. "+claimText+" Kraj.","v1")).toEqual({status:"RECHECK_REQUIRED",reason:"claim-ambiguous"}));
+ it("is valid as moved, not exact, when the context at the old position changed",()=>expect(evaluateEvidenceBasis(withContext(),N,"Novo. "+claimText+" Kraj.","v1")).toEqual({status:"VALID",resolution:"moved"}));
+ it("stays exact at the old position with its full context",()=>expect(evaluateEvidenceBasis(withContext(),N,"Uvod. "+claimText+" Kraj.","v1")).toEqual({status:"VALID",resolution:"exact"}));
  it("refuses a claim whose text differs from its anchor",()=>expect(()=>createClaimRevision({claimId:"c1" as ClaimId,documentRevision:3,target:anchor,text:"drugo"})).toThrow("anchor quote"));
 });
