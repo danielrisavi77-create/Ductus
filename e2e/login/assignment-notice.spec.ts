@@ -15,8 +15,15 @@ const ADMIN_DATABASE_URL =
   process.env.E2E_ADMIN_DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
 const STUDENT = "demo-student@demo.ductus.test";
 
+/** The seed writes as the database owner, so it never runs against a database off this machine. */
+function localAdminUrl(url: string): string {
+  const host = new URL(url).hostname;
+  if (host !== "127.0.0.1" && host !== "localhost") throw new Error("the e2e seed runs only against a local database");
+  return url;
+}
+
 async function admin<T>(work: (client: pg.Client) => Promise<T>): Promise<T> {
-  const client = new pg.Client({ connectionString: ADMIN_DATABASE_URL });
+  const client = new pg.Client({ connectionString: localAdminUrl(ADMIN_DATABASE_URL) });
   await client.connect();
   try {
     return await work(client);
@@ -51,6 +58,15 @@ async function seedAssignment(): Promise<{ assignment: string; course: string }>
     return { assignment: assignment!.id, course: course!.id };
   });
 }
+
+test("the seed refuses a database that is not local", () => {
+  expect(localAdminUrl("postgres://u:p@127.0.0.1:54329/ductus")).toContain("127.0.0.1");
+  expect(localAdminUrl("postgres://u:p@localhost:5432/ductus")).toContain("localhost");
+  for (const url of ["postgres://u:p@db.example.test:5432/ductus", "postgres://u:p@127.0.0.1.example.test/ductus",
+    "postgres://u:p@10.0.0.5/ductus"]) {
+    expect(() => localAdminUrl(url)).toThrow("only against a local database");
+  }
+});
 
 test("anonymous visitor sees no notice and no confirmation", async ({ page }) => {
   const posts: string[] = [];
