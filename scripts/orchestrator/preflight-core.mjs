@@ -235,12 +235,15 @@ export function contractText(body, label) {
  *   pr        toPr() shape (state, isDraft, headRefOid, baseRefName, body)
  *   mainSha   main head the PR is compared against
  *   compare   REST compare of mainSha...head ({status, behind_by}) or null when unread
+ *   mainPaths paths changed by the main commits the head lacks (compare head...main), or null
+ *             when unread or cut at the API cap; only read when the head is behind
+ *   prPaths   every path the PR changes (renames under both names), or null when unread
  *   rollup    checkRollup(head) or null when unread
  *   required  required status contexts of main's branch protection, or null when unread;
  *             each one except the review gate must be reported on the head
  *   expectHead optional head the caller planned for; a different head fails
  */
-export function evaluatePreflight({ pr, mainSha, compare, rollup, required, expectHead = null }) {
+export function evaluatePreflight({ pr, mainSha, compare, rollup, required, expectHead = null, mainPaths = null, prPaths = null }) {
   const out = [];
   const add = (ok, id, text) => out.push({ level: ok ? "PASS" : "FAIL", id, text });
   const head = String(pr.headRefOid ?? "");
@@ -258,7 +261,19 @@ export function evaluatePreflight({ pr, mainSha, compare, rollup, required, expe
   // compare main...head: behind_by counts main commits the head lacks.
   if (!SHA_RE.test(String(mainSha ?? ""))) add(false, "main", "main head could not be read");
   else if (!compare || !Number.isInteger(compare.behind_by)) add(false, "main", `head vs main ${mainSha.slice(0, 8)} could not be compared`);
-  else if (compare.behind_by > 0) add(false, "main", `head lacks ${compare.behind_by} commit(s) of main ${mainSha.slice(0, 8)}: merge main first`);
+  else if (compare.behind_by > 0) {
+    // Owner decision (#87 issuecomment-6265641655): a head that lags passes when no
+    // missing main commit touches a file the PR changes. Unreadable lists fail.
+    const lack = `head lacks ${compare.behind_by} commit(s) of main ${mainSha.slice(0, 8)}`;
+    if (!Array.isArray(mainPaths) || !Array.isArray(prPaths) || prPaths.length === 0) {
+      add(false, "main", `${lack} and the changed-file lists could not be read: merge main first`);
+    } else {
+      const mine = new Set(prPaths);
+      const shared = mainPaths.filter((p) => mine.has(p));
+      if (shared.length > 0) add(false, "main", `${lack} and main changed ${shared.length} file(s) of this PR (${names(shared.slice(0, 3))}): merge main first`);
+      else add(true, "main", `${lack}, but none of its ${mainPaths.length} changed file(s) is in this PR`);
+    }
+  }
   else add(true, "main", `head contains main ${mainSha.slice(0, 8)}`);
 
   const task = field(pr.body ?? "", "Task");
