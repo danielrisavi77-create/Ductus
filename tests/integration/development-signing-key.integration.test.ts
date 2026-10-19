@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdtemp, readFile, rm, rmdir, symlink, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -199,6 +200,26 @@ describe("persistent development signing key", () => {
       expect(await keysFor(token)).toEqual({ status: "ok", keys: [] });
     }
     expect(await verifySignedEvidenceReceiptV2(signed, expectation, [])).toEqual({ ok: false, reason: "key_unknown" });
+  });
+
+  it("writes no seed into the repository through a link to it, also into a directory still to be made", async () => {
+    const link = join(dir, "repo-link");
+    await symlink(fileURLToPath(ROOT), link, process.platform === "win32" ? "junction" : "dir");
+    const fresh = `it-seed-${suffix}`;
+    try {
+      const refused = await run(process.execPath, [fileURLToPath(SCRIPT), "--institution", own.slug], {
+        env: env({ DUCTUS_DEV_SIGNING_KEY_FILE: join(link, fresh, "seed") }),
+      }).then(
+        () => null,
+        (error: { stderr: string }) => error.stderr,
+      );
+      expect(refused).toContain("signing_key_in_repository");
+      expect(existsSync(fileURLToPath(new URL(fresh, ROOT)))).toBe(false);
+    } finally {
+      // Remove the link itself before the temporary directory is removed, so
+      // no recursive removal can ever walk into the repository behind it.
+      await unlink(link).catch(() => rmdir(link));
+    }
   });
 
   it("makes no key without the seed file, and none in production (T5, T9)", async () => {

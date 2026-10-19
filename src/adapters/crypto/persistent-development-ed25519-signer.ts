@@ -6,8 +6,9 @@ import {
   verify as nodeVerify,
   type KeyObject,
 } from "node:crypto";
-import { lstat, readFile, realpath } from "node:fs/promises";
-import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { constants } from "node:fs";
+import { lstat, open, realpath } from "node:fs/promises";
+import { basename, dirname, isAbsolute, join, relative } from "node:path";
 
 import type {
   PublicVerificationKey,
@@ -61,6 +62,25 @@ function fail(code: DevelopmentSigningKeyFault): never {
   throw new DevelopmentSigningKeyError(code);
 }
 
+/**
+ * The real location of `path` even where its end does not exist yet: the
+ * nearest existing ancestor is resolved, links included, and the rest is
+ * appended. A link to the repository above a directory still to be made is
+ * thus judged by where it leads.
+ */
+async function realLocation(path: string): Promise<string> {
+  const rest: string[] = [];
+  let at = path;
+  for (;;) {
+    const real = await realpath(at).catch(() => null);
+    if (real !== null) return join(real, ...rest.reverse());
+    const parent = dirname(at);
+    if (parent === at) return path;
+    rest.push(basename(at));
+    at = parent;
+  }
+}
+
 function isInside(root: string, path: string): boolean {
   const rel = relative(root, path);
   return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
@@ -78,10 +98,12 @@ export class PersistentDevelopmentEd25519SigningKeyProvider implements SigningKe
   private readonly env: Readonly<Record<string, string | undefined>>;
   private readonly repositoryRoot: string;
 
-  constructor(
-    env: Readonly<Record<string, string | undefined>> = process.env,
-    repositoryRoot: string = process.cwd(),
-  ) {
+  /**
+   * `repositoryRoot` is the checkout the seed must stay out of. It is always
+   * named by the caller: a working directory is not the repository in every
+   * way the web process can be started.
+   */
+  constructor(env: Readonly<Record<string, string | undefined>>, repositoryRoot: string) {
     if (env.NODE_ENV === "production") fail("signing_key_production");
     this.env = env;
     this.repositoryRoot = repositoryRoot;
@@ -97,17 +119,26 @@ export class PersistentDevelopmentEd25519SigningKeyProvider implements SigningKe
     const path = this.env[DEV_SIGNING_KEY_FILE];
     if (path === undefined || path === "") fail("signing_key_not_configured");
     if (!isAbsolute(path)) fail("signing_key_path_not_absolute");
-    const root = await realpath(this.repositoryRoot).catch(() => resolve(this.repositoryRoot));
-    // The directory is resolved even when the file is not there yet, so a
-    // link out of the repository or into it is judged by where it leads.
-    const dir = await realpath(dirname(path)).catch(() => resolve(dirname(path)));
-    if (isInside(root, dir)) fail("signing_key_in_repository");
-    const stat = await lstat(path).catch(() => fail("signing_key_missing"));
-    if (!stat.isFile()) fail("signing_key_not_regular_file");
-    if (process.platform !== "win32" && (stat.mode & 0o077) !== 0) fail("signing_key_permissions");
-    // Judged before reading, so a path to a large file reads nothing of it.
-    if (stat.size !== SEED_BYTES) fail("signing_key_malformed");
-    const seed = await readFile(path).catch(() => fail("signing_key_missing"));
+    const root = await realLocation(this.repositoryRoot);
+    if (isInside(root, await realLocation(dirname(path)))) fail("signing_key_in_repository");
+    const linkStat = await lstat(path).catch(() => fail("signing_key_missing"));
+    if (!linkStat.isFile()) fail("signing_key_not_regular_file");
+    // Read from the one descriptor that was judged: O_NOFOLLOW (where the
+    // platform has it) refuses a link put in place after lstat.
+    const handle = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0)).catch(() =>
+      fail("signing_key_not_regular_file"),
+    );
+    let seed: Buffer;
+    try {
+      const stat = await handle.stat();
+      if (!stat.isFile()) fail("signing_key_not_regular_file");
+      if (process.platform !== "win32" && (stat.mode & 0o077) !== 0) fail("signing_key_permissions");
+      // Judged before reading, so a path to a large file reads nothing of it.
+      if (stat.size !== SEED_BYTES) fail("signing_key_malformed");
+      seed = await handle.readFile();
+    } finally {
+      await handle.close();
+    }
     if (seed.byteLength !== SEED_BYTES) fail("signing_key_malformed");
     const privateKey = createPrivateKey({
       key: Buffer.concat([PKCS8_ED25519_PREFIX, seed]),

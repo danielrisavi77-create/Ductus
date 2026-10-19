@@ -100,6 +100,16 @@ describe("persistent development signer", () => {
     expect(await fault(s.verify(MESSAGE, await signer(file("seed")).sign(MESSAGE)))).toBe(code);
   });
 
+  it("judges a seed under a link to the repository by where it leads, also before its directory exists", async () => {
+    // A directory link; a junction on Windows, which needs no privilege.
+    await symlink(repo, file("repo-link"), process.platform === "win32" ? "junction" : "dir");
+    for (const path of [file("repo-link/not-yet/seed"), file("repo-link/not-yet/deeper/seed"), file("repo-link/seed")]) {
+      expect(await fault(signer(path).sign(MESSAGE))).toBe("signing_key_in_repository");
+    }
+    // A missing directory outside the repository is only missing.
+    expect(await fault(signer(file("not-yet/seed")).sign(MESSAGE))).toBe("signing_key_missing");
+  });
+
   it("names no path or key byte in a fault", async () => {
     const canary = file("canary-path-7f3a");
     const error = await signer(canary).sign(MESSAGE).catch((e: unknown) => e as Error);
