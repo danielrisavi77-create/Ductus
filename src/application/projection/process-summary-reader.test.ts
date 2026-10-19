@@ -170,7 +170,7 @@ describe("readProcessSummary: one answer for the owner and the teacher (B-13, D-
     expect(read).not.toHaveBeenCalled();
   });
 
-  it("reads only the segments of the cut the source gives, never past it", async () => {
+  it("reads only the segments the source lists, never past its head", async () => {
     const record = await buildRecord(WORK);
     const store = await storeOf(record);
     const read = vi.spyOn(store, "readImmutable");

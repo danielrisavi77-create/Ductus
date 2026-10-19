@@ -15,17 +15,18 @@ import type { EvidenceChainHeadV2 } from "@/domain/forensics/evidence-chain-v2";
  * - **Refusal looks like absence.** A document the actor may not read, one of
  *   another institution and one that does not exist all give `not_found`, so
  *   the answer cannot be used to probe which ids exist (BACKEND §6 point 7).
- * - **The cut is the adapter's.** Which part of the record a viewer may see
- *   while the work is still being written (P-03, BACKEND 4.10 point 7) is
- *   decided here, with the head and segment list cut to that state. The cut
- *   is the same for the owner and the teacher. D-144 replaced D-37: a short
- *   assignment has no answer of its own.
+ * - **The whole record, no cut.** Owner decision 19. 10. 2026. (#87
+ *   6256655038, point 3; BACKEND 4.10 point 7): after D-142 the summary has
+ *   no P-03 cut, so the head and segment list are the package's own, every
+ *   accepted segment included. A listing that does not end at the stored head
+ *   is `unavailable`. D-144 replaced D-37: a short assignment has no answer
+ *   of its own.
  */
 export type ProcessSummarySourceResult =
   | {
       status: "found";
       evidencePackageId: string;
-      /** Head of the record as cut for the summary; `null` when empty. */
+      /** Head of the record; `null` when empty. */
       head: EvidenceChainHeadV2 | null;
       /** Segment hashes in chain order up to `head`, first accepted first. */
       segmentHashes: string[];

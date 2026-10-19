@@ -41,6 +41,7 @@ const assignmentId = randomUUID();
 const projectId = `project-${suffix}`;
 const documentId = `doc-${suffix}`;
 const packageId = `pkg-${suffix}`;
+const receiptId = randomUUID();
 
 const admin = new pg.Pool({ connectionString: SAFE_ADMIN_URL, max: 1 });
 const store = new InMemoryEvidencePayloadStore();
@@ -168,6 +169,19 @@ async function insertFixture() {
       );
       await store.putImmutable({ institutionId, evidencePackageId: packageId, segmentHash: segment.hash, canonicalPayload: segment.payload });
     }
+    // The head reserve writes: a receipt for the last segment, named by the package.
+    const last = record[record.length - 1];
+    await client.query(
+      `INSERT INTO evidence.receipt (id, evidence_package_id, institution_id, evidence_domain_id, segment_id,
+         principal_id, client_request_id, payload_sha256, descriptor, receipt_payload, status)
+       VALUES ($1, $2, $3, $4, $5, $6, 'request-ana', $7, '{}', '{}', 'pending_signature')`,
+      [receiptId, packageId, institutionId, domainId, last.id, people.ana, last.hash],
+    );
+    await client.query(
+      `UPDATE evidence.package SET head_receipt_id = $1, head_segment_hash = $2, last_sequence_to = $3
+        WHERE id = $4`,
+      [receiptId, last.hash, record.length, packageId],
+    );
     await client.query("COMMIT");
     fixtureReady = true;
   } catch (error) {
@@ -185,6 +199,7 @@ async function removeFixture() {
     // Disposable synthetic rows only; the append-only triggers stay active in
     // normal operation (same teardown as the other evidence tests).
     await admin.query("SET LOCAL session_replication_role = replica");
+    await admin.query("DELETE FROM evidence.receipt WHERE evidence_package_id = $1", [packageId]);
     await admin.query("DELETE FROM evidence.segment WHERE evidence_package_id = $1", [packageId]);
     await admin.query("DELETE FROM evidence.package WHERE id = $1", [packageId]);
     await admin.query("DELETE FROM evidence.document_revision WHERE document_id = $1", [documentId]);

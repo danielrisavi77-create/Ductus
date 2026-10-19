@@ -24,7 +24,7 @@ import {
  */
 
 export type ProcessSummaryReaderDeps = {
-  /** Already bound to the requesting actor; decides access and the cut. */
+  /** Already bound to the requesting actor; decides access and lists the record. */
   source: ProcessSummarySource;
   payloads: EvidencePayloadReader;
   /** Faculty configuration (P-01, P-02), never a request field. */
