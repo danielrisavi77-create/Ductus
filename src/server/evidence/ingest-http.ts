@@ -1,4 +1,6 @@
 import { DUCTUS_PROTOCOL_VERSION } from "@/domain/evidence/commit-envelope";
+import { sessionPrincipal } from "@/server/auth/principal";
+import type { WithActor } from "@/server/db/with-actor";
 import { checkMutationRequest, readBodyWithLimit } from "@/server/http/mutation-request";
 
 /**
@@ -8,6 +10,7 @@ import { checkMutationRequest, readBodyWithLimit } from "@/server/http/mutation-
  */
 
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
+const DECIMAL = /^(0|[1-9][0-9]{0,15})$/;
 
 export type Log = (message: string, ...codes: string[]) => void;
 
@@ -25,13 +28,17 @@ export type GuardedRequest = { ok: true; token: string; bytes: Uint8Array } | { 
 
 /**
  * Method, origin, protocol, media type and session cookie from the headers,
- * then the body as raw bytes under a byte and a time limit.
+ * then the body as raw bytes under a byte and a time limit. With
+ * `liveSession`, the session is asked of the database before the first body
+ * byte (F-098): a large body is never held for a cookie that only has the
+ * right form. A closed, expired or unknown session is 401, a database that
+ * cannot answer is 503 `context`.
  */
 export async function readGuardedBody(
   request: Request,
   expectedOrigin: string | null,
   sessionToken: string | undefined,
-  limits: { maxBytes: number; timeoutMs: number },
+  limits: { maxBytes: number; timeoutMs: number; liveSession?: WithActor },
 ): Promise<GuardedRequest> {
   const refuse = (response: Response) => ({ ok: false, response }) as const;
   if (expectedOrigin === null) return refuse(unavailable("context"));
@@ -51,6 +58,14 @@ export async function readGuardedBody(
     return refuse(reply(415, { status: "unsupported_media_type" }));
   }
   if (sessionToken === undefined || !TOKEN.test(sessionToken)) return refuse(reply(401, { status: "unauthenticated" }));
+  // A declared length that readBodyWithLimit refuses unread needs no database either.
+  const declared = request.headers.get("content-length");
+  const refusedUnread = declared !== null && !(DECIMAL.test(declared) && Number(declared) <= limits.maxBytes);
+  if (limits.liveSession !== undefined && !refusedUnread) {
+    const principal = await sessionPrincipal(sessionToken, limits.liveSession);
+    if (principal.kind === "signed-out") return refuse(reply(401, { status: "unauthenticated" }));
+    if (principal.kind !== "signed-in") return refuse(unavailable("context"));
+  }
   const body = await readBodyWithLimit(request, limits.maxBytes, limits.timeoutMs);
   if (!body.ok) {
     const status = body.status === 413 ? "too_large" : body.status === 408 ? "timeout" : "bad_request";
