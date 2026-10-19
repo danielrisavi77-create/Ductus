@@ -35,7 +35,9 @@ const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const suffix = randomBytes(5).toString("hex");
 const login = `it_subrec_${suffix}`;
 const password = randomBytes(24).toString("hex");
-const [token, classmateToken, expiredToken] = Array.from({ length: 3 }, () => randomBytes(32).toString("base64url"));
+const [token, classmateToken, expiredToken, closingToken] = Array.from({ length: 4 }, () =>
+  randomBytes(32).toString("base64url"),
+);
 const [institutionId, teacherId, studentId, classmateId, courseId, assignmentId] = Array.from({ length: 6 }, () =>
   randomUUID(),
 );
@@ -118,6 +120,7 @@ beforeAll(async () => {
     ...([
       [token, studentId],
       [classmateToken, classmateId],
+      [closingToken, studentId],
     ] as const).map(([value, user]): [string, unknown[]] => [
       `INSERT INTO identity.session (token_hash, user_id, institution_id, expires_at)
        VALUES (sha256(convert_to($1, 'UTF8')), $2, $3, now() + interval '1 hour')`,
@@ -323,6 +326,26 @@ describe("POST /api/submission (B-12 step 4b2)", () => {
     expect(await submissions()).toBe("0");
   });
 
+  it("answers a session closed while the record is reconstructed with 401, not 404, writing nothing", async () => {
+    let closed = false;
+    const closing: InstitutionEvidencePayloadReader = {
+      readImmutable: async (input) => {
+        if (!closed) {
+          closed = true;
+          await admin.query(
+            "UPDATE identity.session SET closed_at = now(), close_reason = 'logout' WHERE token_hash = sha256(convert_to($1, 'UTF8'))",
+            [closingToken],
+          );
+        }
+        return store.readImmutable(input);
+      },
+    };
+    const response = await submit(closing, closingToken);
+    expect(closed).toBe(true);
+    expect([response.status, await response.json()]).toEqual([401, { status: "unauthenticated" }]);
+    expect(await submissions()).toBe("0");
+  });
+
   it("submits the matching revision with a signed receipt of the request's time, and a repeat gets the same bytes (C1, A6, A7, E1)", async () => {
     const first = await submit();
     expect(first.status).toBe(200);
@@ -349,6 +372,10 @@ describe("POST /api/submission (B-12 step 4b2)", () => {
 
     const again = await submit();
     expect([again.status, await again.text()]).toEqual([200, text]);
+    // One submission per work (P8) and the first click binds (P5): a click that
+    // names a later revision gets the receipt of the requested one, revision 2.
+    const later = await submit(store, token, { documentId, revision: 3 });
+    expect([later.status, await later.text()]).toEqual([200, text]);
     expect(await submissions()).toBe("1");
   });
 });

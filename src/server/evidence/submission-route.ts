@@ -52,7 +52,8 @@ export async function handleSubmissionRequest(request: Request, deps: Submission
     documentId === "" ||
     typeof revision !== "number" ||
     !Number.isSafeInteger(revision) ||
-    revision < 1
+    // Revision 0 is a work with nothing saved: the database answers `no_evidence`.
+    revision < 0
   ) {
     return reply(422, { status: "invalid" });
   }

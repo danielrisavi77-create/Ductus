@@ -78,7 +78,7 @@ describe("POST /api/submission", () => {
   it.each<[string, unknown]>([
     ["a time from the client (A1)", { ...BODY, requestedAt: "2026-11-01T09:00:00.000Z" }],
     ["a document from the client (B2)", { ...BODY, document: "e30=" }],
-    ["revision 0", { ...BODY, revision: 0 }],
+    ["a negative revision", { ...BODY, revision: -1 }],
     ["a revision as text", { ...BODY, revision: "2" }],
     ["a fractional revision", { ...BODY, revision: 1.5 }],
     ["an empty document id", { ...BODY, documentId: "" }],
@@ -115,6 +115,13 @@ describe("POST /api/submission", () => {
     expect([response.status, await response.json()]).toEqual([status, body]);
     expect(queries.some((text) => text.includes("record_submission"))).toBe(false);
     expect(JSON.stringify(log.mock.calls)).not.toContain("dokument-1");
+  });
+
+  it("takes revision 0 to the database, which blocks a work with nothing saved as no_evidence", async () => {
+    const { deps, queries } = setup({ request: [{ outcome: "no_evidence" }] });
+    const response = await handleSubmissionRequest(post({ ...BODY, revision: 0 }), deps);
+    expect([response.status, await response.json()]).toEqual([409, { status: "blocked", reason: "no_evidence" }]);
+    expect(queries.some((text) => text.includes("request_submission"))).toBe(true);
   });
 
   it.each<[SubmissionOutcome, number, Record<string, unknown>]>([

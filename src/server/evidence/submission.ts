@@ -42,7 +42,8 @@ export type SubmissionDependencies = {
 const US = (column: string) => `to_char(${column} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
 const REQUEST_SQL = `SELECT outcome, submission_request_id, revision
   FROM app.request_submission($1, $2)`;
-const RECORD_SQL = "SELECT outcome, submission_id FROM app.record_submission($1::uuid, $2)";
+const ACTOR_SQL = "SELECT app.current_user_id() AS user_id";
+const RECORD_SQL ="SELECT outcome, submission_id FROM app.record_submission($1::uuid, $2)";
 const STORED_SQL = `SELECT id::text, assignment_id::text, assignment_version, revision::text, artifact_hash,
        ${US("requested_at")} AS requested_at, ${US("due_at")} AS due_at, after_deadline
   FROM evidence.submission WHERE id = $1::uuid`;
@@ -55,7 +56,7 @@ type RequestRow = { outcome: unknown; submission_request_id: unknown; revision: 
 async function request(deps: SubmissionDependencies, token: string, documentId: string, revision: number) {
   return deps.withActor(token, async (tx): Promise<SubmissionOutcome | { status: "requested"; id: string }> => {
     // A missing or ended session is told apart from a refusal (401, not 404).
-    const actor = await tx.query<{ user_id: unknown }>("SELECT app.current_user_id() AS user_id");
+    const actor = await tx.query<{ user_id: unknown }>(ACTOR_SQL);
     if (typeof actor.rows[0]?.user_id !== "string") return { status: "unauthenticated" };
     const { rows } = await tx.query<RequestRow>(REQUEST_SQL, [documentId, revision]);
     const row = rows.length === 1 ? rows[0] : undefined;
@@ -113,6 +114,9 @@ export async function submitWork(
   let stored: StoredRow | SubmissionOutcome;
   try {
     stored = await deps.withActor(token, async (tx) => {
+      // The session can end while the record is read (logout in another tab): 401, as in step 1.
+      const actor = await tx.query<{ user_id: unknown }>(ACTOR_SQL);
+      if (typeof actor.rows[0]?.user_id !== "string") return { status: "unauthenticated" } as const;
       const recorded = await tx.query<{ outcome: unknown; submission_id: unknown }>(RECORD_SQL, [
         requested.id,
         decision.artifactSha256,
