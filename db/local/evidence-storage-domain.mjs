@@ -72,8 +72,11 @@ async function s3(method, endpoint, path, credentials, body = new Uint8Array()) 
 
 export async function main(env = process.env, argv = process.argv.slice(2)) {
   if (env.NODE_ENV === "production") throw new Error("the local storage domain is refused in production");
-  const at = argv.indexOf("--institution");
-  const slug = at === -1 ? "demo-fakultet" : argv[at + 1];
+  // Nothing, or exactly `--institution <slug>`: any other argument is refused, never ignored.
+  if (!(argv.length === 0 || (argv.length === 2 && argv[0] === "--institution"))) {
+    throw new Error("the only argument is --institution <slug>");
+  }
+  const slug = argv.length === 0 ? "demo-fakultet" : argv[1];
   const bucket = `ductus-evidence-${slug}`;
   const label = `local-${slug}`;
   if (typeof slug !== "string" || !SLUG.test(slug) || bucket.length > 63) throw new Error("--institution needs a short slug");
