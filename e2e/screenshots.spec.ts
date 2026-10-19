@@ -16,8 +16,9 @@ async function chooseSheetTheme(page: Page, path: string, theme: (typeof SCHEMES
   if (path !== "/rad" || theme === "dark") return;
   await page.getByRole("button", { name: "Bijeli list" }).click();
 }
-// Wide (three columns), the 1100 px break (rails under the sheet) and a phone.
-const WIDTHS = [1440, 1000, 390] as const;
+// Wide (three columns), below 1240 px (structure under the sheet), below
+// 1000 px (both rails under the sheet) and a phone (README §5.1, FE-D2).
+const WIDTHS = [1440, 1100, 990, 390] as const;
 
 for (const locale of LOCALES) {
   for (const { name, path } of PAGES) {
