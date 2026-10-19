@@ -22,4 +22,13 @@ Na stranici „Demo prijava” dostupni su računi `Demo nastavnik`, `Demo stude
 
 Runner postavlja DB, S3, Mailpit i OIDC na lokalne Compose adrese. Odbija DB URL izvan lokalnog Composea, generira privremenu auth-lozinku ako nije zadana i ne ispisuje je niti zapisuje u datoteku. Ako sam zadaš `DUCTUS_AUTH_LOCAL_PASSWORD` ili lozinku u `AUTH_DATABASE_URL`, ona ne smije sadržavati znak `%`; runner je odbija prije postava. Nemoj postavljati lažni OIDC pružatelj za produkciju.
 
+## Evidencija (prijem odsječaka)
+
+`pnpm demo:up` i `pnpm demo:prepare` nakon seeda sami pokreću `db/local/evidence-signing-key.mjs` i `db/local/evidence-storage-domain.mjs`, pa rute `/api/evidence/open` i `/api/evidence/commit` rade bez ručnih koraka:
+
+- razvojni ključ za potvrde (seed od 32 bajta) nastaje jednom u `~/.ductus/demo-evidence-signing.seed`, izvan repozitorija, i upisuje se kao javni ključ domene evidencije ustanove `demo-fakultet`. Drugo pokretanje koristi isti seed i isti ključ. Želiš li drugu datoteku, postavi `DUCTUS_DEV_SIGNING_KEY_FILE` na apsolutnu putanju izvan repozitorija;
+- lokalni S3 spremnik `ductus-evidence-demo-fakultet` dobiva oznaku identiteta ustanove, a `EVIDENCE_STORAGE_DOMAINS` i `EVIDENCE_S3_LOCAL_*` runner prosljeđuje aplikaciji kroz njezinu okolinu. Ništa se ne zapisuje u `.env.local`.
+
+Obje skripte rade samo lokalno, odbijaju `NODE_ENV=production` i pri ponovnom pokretanju ništa ne mijenjaju. Ako aplikaciju pokrećeš zasebno s `pnpm dev`, ta okolina ne postoji; koristi `pnpm demo:up`.
+
 Seed trenutačno stvara izmišljene ustanove. Potpuni K-3 seed s nastavnikom, kolegijem, zadatkom, studentima i kontrolnim povijestima dovršava se u zasebnim koracima DAN-88.
