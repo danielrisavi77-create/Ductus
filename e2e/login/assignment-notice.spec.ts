@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
+import { expect, test, type Page } from "@playwright/test";
 import pg from "pg";
 
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
@@ -32,8 +33,19 @@ async function admin<T>(work: (client: pg.Client) => Promise<T>): Promise<T> {
   }
 }
 
+/**
+ * FE-D8: where the assignment stands in time (SQL intervals from now) and
+ * whether the student has already confirmed its notice.
+ */
+interface Seed {
+  opens?: string;
+  due?: string;
+  acknowledged?: boolean;
+}
+
 /** An invented course and assignment the demo student is a student of. */
-async function seedAssignment(): Promise<{ assignment: string; course: string }> {
+async function seedAssignment(seed: Seed = {}): Promise<{ assignment: string; course: string }> {
+  const { opens = "0 seconds", due = "30 days", acknowledged = false } = seed;
   return admin(async (client) => {
     await client.query("BEGIN");
     const { rows: [me] } = await client.query<{ id: string; institution: string }>(
@@ -49,11 +61,16 @@ async function seedAssignment(): Promise<{ assignment: string; course: string }>
     await client.query(
       `INSERT INTO institution.assignment_version (assignment_id, version_no, title, instructions, work_type, opens_at,
          due_at, ai_policy, ai_purposes, evidence_profile, import_allowed, created_by)
-       VALUES ($1, 1, 'Izmišljeni zadatak S3', 'Upute za izmišljeni zadatak.', 'essay', now(), now() + interval '30 days',
-         'prohibited', '{}', 'basic', false, $2)`, [assignment!.id, me.id]);
+       VALUES ($1, 1, 'Izmišljeni zadatak S3', 'Upute za izmišljeni zadatak.', 'essay', now() + $3::interval,
+         now() + $4::interval, 'prohibited', '{}', 'basic', false, $2)`, [assignment!.id, me.id, opens, due]);
     await client.query(
       "INSERT INTO institution.course_member (course_id, institution_id, user_id, role) VALUES ($1, $2, $3, 'student')",
       [course!.id, me.institution, me.id]);
+    if (acknowledged) {
+      await client.query(
+        `INSERT INTO institution.notice_acknowledgment (assignment_id, version_no, student_id, institution_id)
+         VALUES ($1, 1, $2, $3)`, [assignment!.id, me.id, me.institution]);
+    }
     await client.query("COMMIT");
     return { assignment: assignment!.id, course: course!.id };
   });
@@ -103,4 +120,149 @@ test("a student of the course reads the live view and the replay of D-154 before
     await admin((client) => client.query(
       "UPDATE institution.course_member SET member_to = now() WHERE course_id = $1 AND member_to IS NULL", [seeded.course]));
   }
+});
+
+// FE-D8 (#476 row 05): the Ductura layout of the notice and its states.
+const s = t.student;
+
+async function withSeed(seed: Seed, page: Page, work: (path: string) => Promise<void>) {
+  await signIn(page, PATH, "Demo studentica");
+  const seeded = await seedAssignment(seed);
+  try {
+    await work(`/zadatak/${seeded.assignment}`);
+  } finally {
+    await admin((client) => client.query(
+      "UPDATE institution.course_member SET member_to = now() WHERE course_id = $1 AND member_to IS NULL", [seeded.course]));
+  }
+}
+
+async function axe(page: Page) {
+  const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+  expect(results.violations).toEqual([]);
+}
+
+/** The check of e2e/shell.spec.ts: no visible text below `limit` px. */
+async function smallText(page: Page, limit: number): Promise<string[]> {
+  return page.evaluate((min) => {
+    const found: string[] = [];
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const element = node.parentElement;
+      if (!element || !node.textContent?.trim()) continue;
+      const rect = element.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) continue;
+      const size = parseFloat(getComputedStyle(element).fontSize);
+      if (size < min) found.push(`${size}px: ${node.textContent.trim()}`);
+    }
+    return found;
+  }, limit);
+}
+
+/** Full-page shot at 1440 and 390 px; at 390 the text is then checked against 13 px. */
+async function shoot(page: Page, name: string) {
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.screenshot({ path: test.info().outputPath(`fe-d8-${name}-${width}.png`), fullPage: true });
+  }
+  expect(await smallText(page, 13)).toEqual([]);
+}
+
+test("FE-D8: the open notice asks for the confirmation and passes axe", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await withSeed({}, page, async (path) => {
+    await page.goto(path);
+    await expect(page.getByRole("heading", { level: 1, name: "Izmišljeni zadatak S3" })).toBeVisible();
+    await expect(page.getByText(s.step)).toBeVisible();
+    await expect(page.getByRole("heading", { name: s.recordedHeading })).toBeVisible();
+    await expect(page.getByRole("status").filter({ hasText: /otvara|prošao/ })).toHaveCount(0);
+    const confirm = page.getByRole("button", { name: s.confirm });
+    await expect(confirm).toBeDisabled();
+    await page.getByRole("checkbox", { name: s.checkbox }).check();
+    await expect(confirm).toBeEnabled();
+    await axe(page);
+    await shoot(page, "obavijest");
+  });
+});
+
+test("FE-D8: a confirmation the server records leads on to writing", async ({ page }) => {
+  await withSeed({}, page, async (path) => {
+    await page.goto(path);
+    // Stands in for the #314 route, in the shape the proposal gives.
+    await page.route("**/api/institution/assignments/*/acknowledgment", (route) => route.fulfill({
+      status: 200, contentType: "application/json", body: JSON.stringify({ acknowledgedAt: "2026-10-19T09:14:00.000Z" }),
+    }));
+    await page.getByRole("checkbox", { name: s.checkbox }).check();
+    await page.getByRole("button", { name: s.confirm }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Potvrđeno" })).toBeVisible();
+    await expect(page.getByRole("link", { name: s.openEditor })).toHaveAttribute("href", "/rad");
+    await expect(page.getByRole("checkbox")).toHaveCount(0);
+  });
+});
+
+test("FE-D8: an earlier confirmation puts the way on to writing first", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await withSeed({ acknowledged: true }, page, async (path) => {
+    await page.goto(path);
+    const open = page.getByRole("link", { name: s.openEditor });
+    await expect(open).toBeVisible();
+    await expect(page.getByRole("checkbox")).toHaveCount(0);
+    const [link, tools] = await Promise.all([
+      open.boundingBox(), page.getByRole("heading", { name: s.toolsHeading }).boundingBox()]);
+    expect(link!.y).toBeLessThan(tools!.y);
+    await axe(page);
+    await shoot(page, "potvrdeno");
+  });
+});
+
+test("FE-D8: before the assignment opens the notice is shown without the confirmation", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await withSeed({ opens: "2 days" }, page, async (path) => {
+    await page.goto(path);
+    await expect(page.getByRole("status").filter({ hasText: "Zadatak se otvara" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: s.teacherHeading })).toBeVisible();
+    await expect(page.getByRole("checkbox")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: s.confirm })).toHaveCount(0);
+    await axe(page);
+    await shoot(page, "nije-otvoren");
+  });
+});
+
+test("FE-D8: past the due date the notice says so and keeps the confirmation", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await withSeed({ opens: "-10 days", due: "-1 day" }, page, async (path) => {
+    await page.goto(path);
+    await expect(page.getByRole("status").filter({ hasText: "Rok zadatka je prošao" })).toBeVisible();
+    await expect(page.getByRole("checkbox", { name: s.checkbox })).toBeVisible();
+    await axe(page);
+    await shoot(page, "rok-prosao");
+  });
+});
+
+test("FE-D8: the notice shows a loading state while the server reads it", async ({ page }) => {
+  await withSeed({}, page, async (path) => {
+    // Holds the read of the version until the loading state has been seen.
+    const client = new pg.Client({ connectionString: localAdminUrl(ADMIN_DATABASE_URL) });
+    await client.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("LOCK TABLE institution.assignment_version IN ACCESS EXCLUSIVE MODE");
+      await page.goto(path, { waitUntil: "commit" });
+      await expect(page.getByRole("status").filter({ hasText: s.loading })).toBeVisible();
+      await client.query("COMMIT");
+    } finally {
+      await client.end();
+    }
+    await expect(page.getByRole("heading", { level: 1, name: "Izmišljeni zadatak S3" })).toBeVisible();
+    await expect(page.getByText(s.loading)).toHaveCount(0);
+  });
+});
+
+test("FE-D8: without a session the error offers sign-in and passes axe", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.goto(PATH);
+  await expect(page.getByRole("status").filter({ hasText: s.signedOut })).toBeVisible();
+  await expect(page.getByRole("link", { name: s.signIn }))
+    .toHaveAttribute("href", `/api/auth/login?returnTo=${encodeURIComponent(PATH)}`);
+  await axe(page);
+  await shoot(page, "bez-prijave");
 });

@@ -276,6 +276,10 @@ export const hr = {
     },
     notFound: "Ovaj zadatak nije dostupan ovom računu. Upiši kolegij kodom koji ti daje nastavnik.",
     unavailable: "Zadatak trenutačno nije moguće učitati. Pokušaj ponovno.",
+    // FE-D8 (#476 row 05): the states around the notice; the notice text itself is unchanged.
+    loading: "Učitavanje zadatka…",
+    notOpen: "Zadatak se otvara {time}. Obavijest potvrđuješ kad se zadatak otvori.",
+    pastDue: "Rok zadatka je prošao {time}.",
     step: "Obavijest prije prve rečenice · korak 2 od 2",
     opensFrom: "otvoreno od",
     due: "rok",
