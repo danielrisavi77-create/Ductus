@@ -119,6 +119,19 @@ async function prepareAndCommit(
   };
   if (!isEvidenceSegmentDescriptorV2(descriptor)) return { status: "invalid" };
 
+  // F-099: what the acceptance would refuse for a new key is refused before
+  // storage, in its order (t. 9 to 12), against the state the context read.
+  // A known key stores nothing, so its retry goes on to its receipt.
+  if (!context.transactionKnown) {
+    const { state } = context;
+    if (state.currentRevision !== baseRevision) return { status: "stale_base", state };
+    if (s.predecessorSegmentHash !== state.headSegmentHash) return { status: "chain_conflict", state };
+    if (s.sequenceFrom <= state.lastSequenceTo) return { status: "invalid" };
+    if (s.sequenceFrom !== state.lastSequenceTo + 1 || s.initialDocumentHash !== state.documentHash) {
+      return { status: "not_continuous", state };
+    }
+  }
+
   // t. 3.5: the object is written only under a key not known yet; a known key
   // names the object it already stored, so a retry writes nothing.
   const key = {

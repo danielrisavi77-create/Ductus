@@ -34,6 +34,11 @@ const CONTEXT_ROW = {
   evidence_profile_id: golden.segment.evidenceProfileId,
   max_payload_bytes: 262144,
   transaction_known: false,
+  // The chain the golden segment continues at the envelope's base revision 3.
+  current_revision: "3",
+  document_hash: golden.segment.initialDocumentHash,
+  head_segment_hash: golden.segment.predecessorSegmentHash,
+  last_sequence_to: String(golden.segment.sequenceFrom - 1),
 };
 const STALE = { outcome: "stale_base", current_revision: "4", document_hash: "e".repeat(64), head_segment_hash: null, last_sequence_to: "8" };
 const HEADERS = { origin: ORIGIN, "sec-fetch-site": "same-origin", "ductus-protocol": "1", "content-type": "application/json" };
