@@ -47,7 +47,7 @@ Sažetak nije izvor pravila. U sukobu vrijedi `docs/ENGINEERING_SYSTEM.md`; uz s
 - Najviše oko 400 promijenjenih redaka koda, veći uz obrazloženje u opisu; `critical` i oko 300 redaka produkcijskog koda, veći se dijeli, iznimku odobrava vlasnik (§14).
 - QA FAIL samo za kvar koda. Nalaz ima "Dohvatljivo kroz"; manji nosi "blokira" ili "ne blokira"; u produkcijskom kodu zatvara se novim headom prije spajanja (§14).
 - Najviše dva kruga: drugi FAIL na istom korijenu zaustavlja ispravke (§14).
-- U gateu je najviše jedan PR. Za `critical` review i QA kreću istodobno na istom headu, QA s Codexa ili Groka tek nakon Claude review PASS-a (D-138). QA ne čita review prije vlastitog verdikta (§13, §15).
+- U gateu je najviše jedan PR. Za `critical` review i QA kreću istodobno na istom headu, i kad QA daje Codex ili Grok (D-155). QA ne čita review prije vlastitog verdikta (§13, §15).
 
 ## Kad stati i pitati vlasnika
 

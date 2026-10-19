@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import pg from "pg";
 
 import { createTextAnchor } from "../../src/domain/collaboration";
 import type { NodeId } from "../../src/domain/document";
@@ -57,6 +58,39 @@ async function signOut(page: Page, token: string): Promise<void> {
   await forgetProviderLogin(page.context());
 }
 
+const TEACHER_ID = "demo-teacher@demo.ductus.test";
+const ADMIN_DATABASE_URL =
+  process.env.E2E_ADMIN_DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
+let roleGrantedByThisTest = false;
+
+async function withAdmin<T>(work: (client: pg.Client) => Promise<T>): Promise<T> {
+  const client = new pg.Client({ connectionString: ADMIN_DATABASE_URL });
+  await client.connect();
+  try {
+    return await work(client);
+  } finally {
+    await client.end();
+  }
+}
+
+const ACTIVE_ROLE = `FROM institution.institution_role r JOIN identity.user_account u ON u.id = r.user_id
+  WHERE u.hr_edu_person_unique_id = $1 AND r.role = 'teacher' AND r.revoked_at IS NULL`;
+
+/** Whether the demo teacher holds a confirmed teacher role right now. */
+const teacherRoleActive = () => withAdmin(async (client) =>
+  (await client.query(`SELECT 1 ${ACTIVE_ROLE} AND r.confirmed_at IS NOT NULL`, [TEACHER_ID])).rowCount === 1);
+
+// Removes the operator grant this test made, and only that one (a role that was there
+// before the run stays), so the specs after it start from the state of a clean stack.
+test.afterEach(async () => {
+  if (!roleGrantedByThisTest) return;
+  await withAdmin((client) => client.query(
+    `UPDATE institution.institution_role SET revoked_at = now() WHERE id IN (SELECT r.id ${ACTIVE_ROLE} AND r.confirmed_by IS NULL)`,
+    [TEACHER_ID]));
+  roleGrantedByThisTest = false;
+});
+
+// Removes the comments, memberships and role the F-9 step opened (comment-seed.ts).
 test.afterEach(cleanUp);
 
 test("demo walk-through", async ({ browser, page, context }) => {
@@ -84,7 +118,16 @@ test("demo walk-through", async ({ browser, page, context }) => {
   // screen. The teacher role comes from the explicit local operator command of
   // K-3a (#313), run as the demo run runs it, after the teacher's first
   // sign-in; this test seeds nothing itself.
-  await test.step("1. F-6: nastavnik stvara kolegij i zadatak s obaviješću S3 i čl. 8", async () => {
+  await test.step("1. F-6: nastavnik stvara kolegij i zadatak; popisi uz čl. 8 su na ekranu", async () => {
+    // A clean stack holds no teacher role: the screen refuses first (the boundary
+    // demo-role.spec.ts proves in the database), and only then does the operator grant it.
+    // The step takes the role away again afterwards, so demo-role.spec.ts still meets a clean stack.
+    roleGrantedByThisTest = !(await teacherRoleActive());
+    if (roleGrantedByThisTest) {
+      await page.goto("/nastavnik/kolegiji");
+      await expect(page.getByText(t.teacher.denied)).toBeVisible();
+      await expect(page.getByRole("button", { name: t.teacher.course.submit })).toHaveCount(0);
+    }
     await run("node", ["scripts/demo/provision-teacher.mjs"], { cwd: ROOT });
     await page.goto("/nastavnik/kolegiji");
     await expect(page.getByRole("heading", { name: t.teacher.title })).toBeVisible();
