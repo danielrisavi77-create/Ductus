@@ -63,7 +63,7 @@ Pravilo za sve uloge: uloga sama ne daje pristup sadržaju. Pristup nastaje iskl
 | Uloga | Tko | Smije | Ne smije |
 | --- | --- | --- | --- |
 | Student | Upisan u kolegij ili dodijeljen mentoru | Pisati u svojim radovima; koristiti AI ako ga zadatak dopušta; vidjeti sve što nastavnik ili mentor vidi; prihvatiti ili odbiti prijedloge; izvesti svoj rad i evidenciju; dodati napomenu | Vidjeti tuđe radove ili tuđu evidenciju |
-| Nastavnik zadatka, odnosno mentor (jedna uloga, D-154) | Nastavnik kolegija kojem zadatak pripada ili mentor završnog, diplomskog, specijalističkog ili doktorskog rada | Stvoriti kolegij i zadatak; od prvog dana vidjeti spremljeno stanje radova svog zadatka ili radova kojima je mentor i evidenciju u opsegu profila; komentirati; predlagati izmjene ili uređivati izravno (§6) | Vidjeti radove drugih kolegija ni radove kojima nije mentor |
+| Nastavnik zadatka, odnosno mentor (jedna uloga, D-154) | Nastavnik kolegija kojem zadatak pripada ili mentor završnog, diplomskog, specijalističkog ili doktorskog rada | Stvoriti kolegij i zadatak; od prvog dana vidjeti spremljeno stanje radova svog zadatka ili radova kojima je mentor i evidenciju u opsegu profila; komentirati; predlagati izmjene ili uređivati izravno (§6) | Vidjeti radove koji nisu iz njegova zadatka i kojima nije mentor |
 | Administrator fakulteta | Imenovan od fakulteta | Potvrditi ulogu nastavnika i mentora; postavke fakulteta (dopušteni AI pružatelji, pragovi, rokovi čuvanja); revizijski trag pristupa | Čitati sadržaj radova (nema pristupa po defaultu) |
 | Operater Ductusa | Pružatelj usluge | Održavanje sustava | Čitati sadržaj, osim zabilježenog pristupa podrške uz pristanak fakulteta, kako je opisano u ugovoru o obradi |
 
