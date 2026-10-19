@@ -262,6 +262,49 @@ test("FE-D7: the dialog names what stays on this device; Ostani and Escape keep 
   await expect(editorOf(page)).toHaveText("Nacrt A: plava bilježnica, dopuna");
 });
 
+// review517 / qa517: Chromium closes a modal dialog on a repeated Escape
+// even when `cancel` is prevented. During a sign-out the dialog must stay,
+// so a failure is seen there and "Ostani" gives the sheet back.
+test("FE-D7: Escape, the backdrop or a browser close during a sign-out leave the dialog open", async ({ page, context }) => {
+  await signIn(page, "/rad");
+  const token = (await appCookie(context, SESSION_COOKIE))!.value;
+  await writeAndWait(page, "Nacrt A: plava bilježnica");
+  const dialog = logoutDialogOf(page);
+
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  await page.route("**/api/auth/logout", async (route) => {
+    await held;
+    await route.abort("internetdisconnected");
+  });
+
+  await clickSignOut(page);
+  await expect(dialog.getByRole("button", { name: t.auth.loggingOut })).toBeDisabled();
+  for (let i = 0; i < 4; i += 1) await page.keyboard.press("Escape");
+  await page.mouse.click(5, 5);
+  // A close the page did not ask for, as the browser's own close would be.
+  await page.evaluate(() => document.querySelector("dialog")?.close());
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("button", { name: t.auth.loggingOut })).toBeDisabled();
+
+  release();
+  await expect(dialog.getByRole("alert")).toHaveText(t.auth.logoutFailed);
+  await expect(dialog).toBeVisible();
+  await expectStillSignedIn(page, token);
+
+  // Without a sign-out running, a close the browser makes counts as "Ostani".
+  await page.evaluate(() => document.querySelector("dialog")?.close());
+  await expect(dialog).toHaveCount(0);
+  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+  await expect(editorOf(page)).toHaveText("Nacrt A: plava bilježnica");
+
+  // The sign-out button works again.
+  await page.unroute("**/api/auth/logout");
+  await clickSignOut(page);
+  await page.waitForURL("http://localhost:3000/");
+  expect(await sessionRow(token)).toMatchObject({ close_reason: "logout" });
+});
+
 test("a sign-in through the login route stops the tab of the session it replaced", async ({ page, context }) => {
   await signIn(page, "/rad");
   await writeAndWait(page, "Nacrt A: plava bilježnica");

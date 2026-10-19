@@ -31,6 +31,8 @@ export type LogoutDialogProps = {
 export default function LogoutDialog({ plan, working, failed, onConfirm, onStay, onExport }: LogoutDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const stayRef = useRef<HTMLButtonElement>(null);
+  // Set when React removes the dialog, so its own close is not mended.
+  const unmounting = useRef(false);
   const titleId = useId();
   const textId = useId();
   const { text, note, offerExport } = logoutText(plan);
@@ -38,9 +40,12 @@ export default function LogoutDialog({ plan, working, failed, onConfirm, onStay,
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return undefined;
+    // Development runs the effect twice (Strict Mode); the second run is a mount again.
+    unmounting.current = false;
     if (!dialog.open) dialog.showModal();
     stayRef.current?.focus();
     return () => {
+      unmounting.current = true;
       if (dialog.open) dialog.close();
     };
   }, []);
@@ -48,6 +53,17 @@ export default function LogoutDialog({ plan, working, failed, onConfirm, onStay,
   const onCancel = (event: SyntheticEvent<HTMLDialogElement>) => {
     event.preventDefault();
     if (!working) onStay();
+  };
+  // The browser may close the dialog on its own: Chromium stops honouring
+  // `preventDefault` on a repeated Escape without a new user activation
+  // (close watcher rule). While this component is mounted the dialog is
+  // wanted, so a close it did not ask for is mended: during a sign-out the
+  // dialog opens again, otherwise the close counts as "Ostani".
+  const onClose = () => {
+    const dialog = dialogRef.current;
+    if (!dialog || dialog.open || unmounting.current) return;
+    if (working) dialog.showModal();
+    else onStay();
   };
   // Only the backdrop: the content fills the dialog, so a click inside it
   // never has the dialog itself as its target.
@@ -62,6 +78,7 @@ export default function LogoutDialog({ plan, working, failed, onConfirm, onStay,
       aria-labelledby={titleId}
       aria-describedby={textId}
       onCancel={onCancel}
+      onClose={onClose}
       onClick={onBackdrop}
     >
       <div className={styles.body}>
