@@ -32,6 +32,71 @@ export const hr = {
     openWorkspace: "Otvori radni prostor",
     openTeacher: "Novi kolegij i zadatak",
   },
+  // FE-H1 (#476): public home page for a visitor without a session. Every
+  // entry leads to /prijava; sign-in is AAI@EduHr only (D-09). Live view and
+  // replay as decided in D-142..D-144 and D-154; one summary for both roles (PRODUCT §5, 5).
+  landing: {
+    sectionsNav: "Odjeljci početne stranice",
+    howItWorksLink: "Kako radi",
+    forWhomLink: "Za koga",
+    eyebrow: "Prostor za akademsko pisanje",
+    title: "Od prve rečenice do predaje,",
+    titleAccent: "uz svog nastavnika.",
+    intro: `${APP_NAME} je mjesto na kojem student piše seminarski ili završni rad, a nastavnik prati kako rad nastaje i komentira ga uz odlomke.`,
+    enter: "Prijavi se i počni",
+    aaiOnly: "Prijava isključivo preko AAI@EduHr.",
+    previewLabel: "Primjer radnog prostora: list rada i komentar nastavnika, izmišljeni podaci",
+    previewCourse: "Javne politike · seminarski rad",
+    previewTitle: "Gradski promet i održiva mobilnost",
+    previewSection: "1. Uvod",
+    previewParagraph1:
+      "Gradovi sve češće mijenjaju pravila prometa kako bi smanjili gužve i onečišćenje zraka. Ovaj rad prati kako se takve odluke donose na razini grada.",
+    previewParagraph2Start: "Istraživačko pitanje glasi: ",
+    previewParagraph2Marked: "kako javne politike oblikuju izbor prijevoza",
+    previewParagraph2End: " u gradu srednje veličine?",
+    previewCommentAuthor: "Komentar nastavnice",
+    previewCommentPlace: "uz odlomak 2",
+    previewComment: "Dobar smjer. Pitanje suzi na jedan grad i navedi razdoblje koje promatraš.",
+    previewNote: "Izmišljeni primjer",
+    forWhomTitle: "Dvije uloge, isti prikaz rada.",
+    forWhomLead: `Sažetak nastanka rada isti je za studenta i nastavnika. ${APP_NAME} ne ocjenjuje proces pisanja.`,
+    studentEyebrow: "Za studente",
+    studentTitle: "Piši u miru i znaj što se vidi.",
+    studentBody:
+      "Zadatak, rok i pravila su na jednom mjestu. Prije prve rečenice piše što nastavnik vidi i od kada, a komentari stižu uz odlomak na koji se odnose.",
+    studentPoints: {
+      notice: "Obavijest o zadatku prije početka pisanja",
+      comments: "Komentari nastavnika uz odlomke",
+      replay: "Ista reprodukcija nastanka rada koju vidi nastavnik",
+    },
+    teacherEyebrow: "Za nastavnike i mentore",
+    teacherTitle: "Prati rad dok nastaje.",
+    teacherBody:
+      "Rad vidiš uživo dok student piše i komentiraš ga dok se još može doraditi. Nastanak rada možeš reproducirati znak po znak, za razgovor sa studentom, ne za ocjenu.",
+    teacherPoints: {
+      assignment: "Zadatak s rokom i pravilima kolegija",
+      live: "Prikaz rada uživo i komentari uz odlomak",
+      summary: "Sažetak nastanka rada pri predaji, isti kao studentov",
+    },
+    howTitle: "Četiri koraka od zadatka do predaje.",
+    steps: {
+      assignmentTitle: "Zadatak i obavijest",
+      assignmentBody:
+        "Nastavnik objavi zadatak s rokom i pravilima. Prije pisanja student vidi obavijest: što nastavnik vidi, od kada i što se čuva.",
+      writingTitle: "Pisanje",
+      writingBody:
+        "Student piše u uređivaču zadatka. Nastavnik i mentor vide rad uživo dok nastaje, a student to zna prije prve rečenice.",
+      commentsTitle: "Komentari",
+      commentsBody:
+        "Nastavnik ostavlja komentar uz odlomak. Student ga vidi na istom mjestu i sam odlučuje kako će doraditi tekst.",
+      submitTitle: "Predaja s potvrdom i sažetkom",
+      submitBody:
+        "Student predaje rad i dobiva potvrdu predaje. Sažetak nastanka rada isti je za oba pogleda i nije presuda o autorstvu.",
+    },
+    closingTitle: `${APP_NAME} pokazuje kako je rad nastao.`,
+    closingAccent: "Zaključak donosi čovjek.",
+    footerNote: "Prostor za akademsko pisanje.",
+  },
   // F-6 (DAN-35): text of screen 2 of the design handoff (docs/design/ductura).
   teacher: {
     title: "Novi kolegij i zadatak",
@@ -258,20 +323,29 @@ export const hr = {
     signIn: "Prijavi se",
     enroll: {
       title: "Upis u kolegij",
+      heading: "Upiši kolegij",
       signedOut: "Prijavi se da upišeš kolegij.",
       label: "Kod kolegija",
       hint: "Kod ti daje nastavnik. Razmaci, crtice i velika ili mala slova nisu bitni.",
-      submit: "Upiši kolegij",
+      submit: "Upiši",
       sending: "Upisivanje…",
-      enrolled: "Upisan/a si u kolegij. Zadatke kolegija otvaraš poveznicom koju ti daje nastavnik.",
+      opening: "Upisan/a si u kolegij. Otvaram obavijest zadatka…",
       errors: {
         malformed: "Kod ima od 8 do 32 slova i brojke. Provjeri ga i upiši ponovno.",
-        refused: "Kod nije prihvaćen. Provjeri ga s nastavnikom.",
+        refused: "Kod ne postoji ili je istekao. Provjeri ga s nastavnikom.",
         tooManyAttempts: "Previše pokušaja. Pokušaj ponovno kasnije.",
         unauthorized: "Prijava nije valjana. Prijavi se ponovno.",
         forbidden: "Ovaj račun ne može upisati kolegij.",
         invalid: "Upis nije prihvaćen. Ponovno učitaj stranicu.",
         unavailable: "Upis trenutačno nije moguć. Pokušaj ponovno.",
+        offline: "Nema veze s poslužiteljem. Provjeri mrežu i pokušaj ponovno.",
+      },
+      course: {
+        none: "Upisan/a si u kolegij, ali u njemu zasad nema otvorenog zadatka. Kad ga nastavnik objavi, vrati se na ovu stranicu.",
+        notFound: "Ovaj kolegij nije dostupan ovom računu. Upiši ga kodom koji ti daje nastavnik.",
+        unavailable: "Zadatke kolegija trenutačno nije moguće učitati. Pokušaj ponovno.",
+        retry: "Pokušaj ponovno",
+        another: "Upiši drugi kolegij",
       },
     },
     notFound: "Ovaj zadatak nije dostupan ovom računu. Upiši kolegij kodom koji ti daje nastavnik.",

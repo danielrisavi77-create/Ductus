@@ -145,7 +145,9 @@ test("demo walk-through", async ({ page, context }) => {
   });
 
   await test.step("2. Studentica se prijavljuje demo računom", async () => {
-    await page.getByRole("link", { name: t.auth.signIn }).click();
+    // The public home page's way in is the sign-in screen (FE-H1, FE-D3);
+    // start at the login route its AAI@EduHr button links to.
+    await page.goto(`/api/auth/login?returnTo=${encodeURIComponent("/rad")}`);
     await expect(page.getByRole("heading", { level: 1, name: "Demo prijava" })).toBeVisible();
     await page.getByRole("button", { name: "Demo studentica" }).click();
     await page.waitForURL("http://localhost:3000/rad");

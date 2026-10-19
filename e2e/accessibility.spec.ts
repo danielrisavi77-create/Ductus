@@ -2,7 +2,8 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
 // Every page added later gets a row here; WCAG 2.1 AA is the pilot target.
-const PAGES = ["/", "/rad", "/nastavnik/kolegiji", "/zadatak/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "/upis"];
+const PAGES = ["/", "/rad", "/nastavnik/kolegiji", "/zadatak/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "/upis",
+  "/upis/kolegij/cccccccc-cccc-4ccc-8ccc-cccccccccccc"];
 
 // The shell is always dark (D-115); the sheet is dark by default and has a
 // white theme with its own tokens (D-123), so each sheet theme is checked on its own.
@@ -19,7 +20,8 @@ for (const path of PAGES) {
   for (const colorScheme of SCHEMES) {
     test(`axe: no WCAG 2.1 AA violations on ${path} (sheet: ${colorScheme})`, async ({ page }) => {
       await page.goto(path);
-      if (path === "/rad") await chooseSheetTheme(page, colorScheme);
+      // The home page's preview carries the same sheet switch (FE-H1).
+      if (path === "/rad" || path === "/") await chooseSheetTheme(page, colorScheme);
       const results = await new AxeBuilder({ page })
         .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
         .analyze();
