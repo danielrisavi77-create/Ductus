@@ -11,6 +11,18 @@
  * reads as the primary or as the pulsing "saving" state. Origin colours show
  * where text came from, never a judgement; no --breach colour (D-62).
  * Targets are at least 32 px in dense bars, 44 px elsewhere.
+ *
+ * Semantic names from the same table (FE-D2): --raised for dialogs and other
+ * raised surfaces, --selected for the selected item or segment, --ink-muted
+ * for the quietest marks, --warn and --error for warning and error marks.
+ * --ink-muted is the handoff's #767d75, under 4.5:1 on --chrome, --sheet and
+ * --raised (4.27, 4.16, 3.99): large text (24 px, or 18.66 px bold) and
+ * non-text marks only (at least 3:1); small quiet text uses --ink-3 (5.49:1
+ * on --raised). --raised and --selected are shell surfaces; the white sheet
+ * has no values for them, so they are not used inside the sheet.
+ * The save-state chip keeps its own colours (PR #386); these names are for
+ * new callers. The manuscript is Newsreader 16.5 px with leading 1.7
+ * (README §5.1), served from app/fonts like every other face (DAN-121).
  */
 
 :root {
@@ -23,6 +35,11 @@
   --rule: #2c312b;
   --rule-2: #232722;
   --hover: #1e221d;
+  --raised: #1a1e19;
+  --selected: #232722;
+  --ink-muted: #767d75;
+  --warn: #d3ac63;
+  --error: #e07a6a;
   --accent: #6fbfa5;
   --accent-hover: #8ccdb7;
   --accent-ink: #0e1c17;
@@ -39,7 +56,7 @@
   --ff-ui: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
   --ff-display: var(--font-display), Georgia, serif;
   --ff-mono: var(--font-mono), ui-monospace, Menlo, monospace;
-  --ff-manuscript: "Times New Roman", Times, Tinos, "Liberation Serif", serif;
+  --ff-manuscript: var(--font-display), Georgia, serif;
   color-scheme: dark;
 }
 
@@ -58,6 +75,7 @@
   --ink: #191c19;
   --ink-2: #5a605a;
   --ink-3: #6a706a;
+  --ink-muted: #6a706a;
   --rule: #dce0d8;
   --rule-2: #f7f8f5;
   --accent: #2f7a63;
@@ -68,6 +86,8 @@
   --p-unknown: #6e6a62;
   --p-template: #9a9488;
   --p-ai: #8a6a2f;
+  /* 4.05:1 on white: marks and icons only (3:1), never warning text. */
+  --warn: #a87420;
   --cmt: #b8862a;
   --cmt-ink: #8a6420;
   --cmt-bg: #b8862a26;
@@ -443,14 +463,77 @@ main:focus {
   font-variant-numeric: tabular-nums;
 }
 
-/* The rail toggles exist only where the rails are sections under the sheet. */
+/*
+ * Breakpoints of README §5.1 (FE-D2): below 1240 px the structure rail folds
+ * under the sheet, below 1000 px the right panel does too. The DOM order
+ * (sheet, panel, structure) is the same at every width; only grid areas move
+ * the rails, never `order`, so Tab and the reader keep one order (FE-D1).
+ * A folded rail opens with its own button (ShellRail); the toggle exists in
+ * the DOM at every width and is shown only while its rail is folded.
+ */
 .rail-toggle {
   display: none;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  background: transparent;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-align: left;
 }
 
-@media (max-width: 1100px) {
+.rail-toggle::after {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-left: auto;
+  border-right: 1.5px solid var(--ink-2);
+  border-bottom: 1.5px solid var(--ink-2);
+  transform: translateY(-2px) rotate(45deg);
+}
+
+.rail-toggle[aria-expanded="true"]::after {
+  transform: translateY(2px) rotate(-135deg);
+}
+
+/* Below 1240 px: sheet and panel side by side, structure folded under the sheet. */
+@media (max-width: 1239.98px) {
+  .workspace__body {
+    grid-template-columns: minmax(0, 1fr) 330px;
+    grid-template-rows: 1fr auto;
+    grid-template-areas:
+      "main panel"
+      "rail panel";
+  }
+
+  .workspace__rail {
+    padding: 0;
+    border: 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  .workspace__rail > .rail-toggle {
+    display: flex;
+  }
+
+  .workspace__rail > .rail-body {
+    padding: 4px 12px 20px;
+  }
+
+  .workspace__rail > .rail-body[data-open="false"] {
+    display: none;
+  }
+}
+
+/* Below 1000 px: one column, both rails folded under the sheet in DOM order. */
+@media (max-width: 999.98px) {
   .workspace__body {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
     grid-template-areas:
       "main"
       "panel"
@@ -458,47 +541,20 @@ main:focus {
     align-content: start;
   }
 
-  .workspace__rail,
   .workspace__panel {
-    padding: 0;
     border: 0;
     border-top: 1px solid var(--rule);
   }
 
-  .rail-toggle {
+  .workspace__panel > .rail-toggle {
     display: flex;
-    align-items: center;
-    gap: 12px;
-    width: 100%;
-    min-height: 44px;
-    padding: 0 16px;
-    border: 0;
-    background: transparent;
-    font-size: 13.5px;
-    font-weight: 600;
-    text-align: left;
   }
 
-  .rail-toggle::after {
-    content: "";
-    flex: none;
-    width: 7px;
-    height: 7px;
-    margin-left: auto;
-    border-right: 1.5px solid var(--ink-2);
-    border-bottom: 1.5px solid var(--ink-2);
-    transform: translateY(-2px) rotate(45deg);
-  }
-
-  .rail-toggle[aria-expanded="true"]::after {
-    transform: translateY(2px) rotate(-135deg);
-  }
-
-  .rail-body {
+  .workspace__panel > .rail-body {
     padding: 4px 12px 20px;
   }
 
-  .rail-body[data-open="false"] {
+  .workspace__panel > .rail-body[data-open="false"] {
     display: none;
   }
 }
@@ -615,8 +671,8 @@ main:focus {
 
 .manuscript {
   font-family: var(--ff-manuscript);
-  font-size: 16px;
-  line-height: 1.5;
+  font-size: 16.5px;
+  line-height: 1.7;
   text-align: justify;
   hyphens: auto;
 }
@@ -625,7 +681,8 @@ main:focus {
   margin: 0 0 26px;
   text-align: center;
   font-size: 19px;
-  font-weight: 700;
+  /* Newsreader is served at 400-500 (app/fonts); 700 would be a synthetic bold. */
+  font-weight: 500;
   line-height: 1.35;
 }
 
@@ -738,8 +795,8 @@ main:focus {
 .editor-surface .ProseMirror {
   outline: none;
   font-family: var(--ff-manuscript);
-  font-size: 16px;
-  line-height: 1.5;
+  font-size: 16.5px;
+  line-height: 1.7;
 }
 
 /* The rule above drops the browser outline; keyboard focus must stay visible.
