@@ -313,6 +313,51 @@ export const hr = {
       unavailable: "Potvrda nije zabilježena. Pokušaj ponovno.",
     },
   },
+  // F-10 (DAN-87): process summary, one text for every reader (PRODUCT §5
+  // rule 5, §7). Thresholds stand next to the numbers they decide (rule 12).
+  summary: {
+    title: "Sažetak procesa",
+    sameForEveryone: "Isti sažetak vide student i nastavnik.",
+    timeNote: "Vremena su po zagrebačkom vremenu, zaokružena na minutu.",
+    evidenceKind: "Vrsta dokaza",
+    evidenceKinds: { observed: "opaženo", imported: "uvezeno", declared: "izjavljeno" },
+    from: "od",
+    to: "do",
+    at: "u",
+    recordState: {
+      label: "Stanje zapisa",
+      complete: "Zapis je cjelovit",
+      has_gaps: "Zapis ima praznine (vidi popis)",
+    },
+    sessions: {
+      heading: "Sesije pisanja",
+      count: "Broj sesija",
+      threshold: "prag P-01: nova sesija počinje nakon stanke dulje od",
+      none: "Nema zabilježenih sesija.",
+    },
+    pastes: {
+      heading: "Lijepljenja",
+      listedThreshold: "prag P-02: zasebno se navodi lijepljenje veće od",
+      size: "Veličina",
+      origins: { not_observed: "izvor nije opažen" },
+      noneListed: "Nema lijepljenja većih od praga.",
+      smaller: "Manja lijepljenja, samo broj",
+      smallerThreshold: "prag P-02: najviše",
+    },
+    gaps: {
+      heading: "Praznine u zapisu",
+      explanation:
+        "Praznina u zapisu je razdoblje između dvaju dijelova zapisa koje je poslužitelj primio, za koje izmjene nisu stigle na poslužitelj. Ne govori ništa o tome kako je rad pisan.",
+      item: "Praznina u zapisu",
+      none: "Nema praznina u zapisu.",
+    },
+    // Forms after a number: nominative, and genitive after "od".
+    units: {
+      minutesGenitive: { one: "minute", few: "minute", many: "minuta" },
+      characters: { one: "znak", few: "znaka", many: "znakova" },
+      charactersGenitive: { one: "znaka", few: "znaka", many: "znakova" },
+    },
+  },
   auth: {
     failedTitle: "Prijava nije dovršena",
     failedBody: "Prijavu nije bilo moguće dovršiti. Pokušaj ponovno; ako se ponovi, javi se koordinatoru na svojoj ustanovi.",
