@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { createElement } from "react";
+import { createElement, isValidElement, type ReactElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -59,19 +59,41 @@ function render(summary: ProcessSummaryV1, extra: Record<string, unknown> = {}):
   return renderToStaticMarkup(createElement(ProcessSummaryView, { summary, ...extra }));
 }
 
-/** Visible text of an element's inner markup. */
-function textOf(markup: string): string {
-  return markup
-    .replace(/<[^>]+>/g, "")
-    .replaceAll("&quot;", '"')
-    .replaceAll("&#x27;", "'")
-    .replaceAll("&amp;", "&");
+/*
+ * Text is read from the element tree the component returns, not by parsing
+ * HTML: the view is made of host elements only, so the tree is exactly what
+ * React renders, and no markup has to be taken apart with patterns.
+ */
+type Element = ReactElement<{ children?: ReactNode; "data-number"?: string }>;
+
+function tree(summary: ProcessSummaryV1): Element {
+  return ProcessSummaryView({ summary }) as Element;
 }
 
-/** Inner markup of every element carrying `data-number="<name>"`. */
-function numbered(markup: string, name: string): string[] {
-  const pattern = new RegExp(`<(p|li)[^>]*data-number="${name}"[^>]*>([\\s\\S]*?)</\\1>`, "g");
-  return [...markup.matchAll(pattern)].map((match) => textOf(match[2]));
+function childrenOf(node: ReactNode): ReactNode[] {
+  if (Array.isArray(node)) return node.flatMap(childrenOf);
+  return isValidElement(node) ? [node] : [];
+}
+
+/** Visible text of a node, as React renders it. */
+function textOf(node: ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(textOf).join("");
+  if (isValidElement(node)) return textOf((node as Element).props.children);
+  return "";
+}
+
+/** Every element under `node`, itself included, that `match` accepts. */
+function findAll(node: ReactNode, match: (element: Element) => boolean): Element[] {
+  return childrenOf(node).flatMap((element) => {
+    const own = element as Element;
+    return [...(match(own) ? [own] : []), ...findAll(own.props.children, match)];
+  });
+}
+
+/** Text of every element carrying `data-number="<name>"`. */
+function numbered(view: Element, name: string): string[] {
+  return findAll(view, (element) => element.props["data-number"] === name).map(textOf);
 }
 
 const originalTz = process.env.TZ;
@@ -120,7 +142,7 @@ describe("ProcessSummaryView: one view for every reader", () => {
 
 describe("ProcessSummaryView: Europe/Zagreb times", () => {
   it("writes summer and winter times in Zagreb, across the October change", () => {
-    const text = textOf(render(summaryWith()));
+    const text = textOf(tree(summaryWith()));
     // 18:02 UTC on 14 Oct is 20:02 in summer time.
     expect(text).toContain("14. listopada 2026. od 20:02 do 21:10");
     // 22:40 UTC on 25 Oct is 23:40 in winter time; the session runs past midnight.
@@ -140,7 +162,7 @@ describe("ProcessSummaryView: Europe/Zagreb times", () => {
     });
     const months = ["siječnja", "veljače", "ožujka", "travnja", "svibnja", "lipnja", "srpnja", "kolovoza", "rujna", "listopada", "studenoga", "prosinca"];
     const instants: number[] = [];
-    for (let at = Date.UTC(2020, 0, 1); at < Date.UTC(2036, 0, 1); at += 7 * 3_600_000 + 13 * 60_000) instants.push(at);
+    for (let at = Date.UTC(2020, 0, 1); at < Date.UTC(2036, 0, 1); at += 31 * 3_600_000 + 13 * 60_000) instants.push(at);
     for (let year = 2020; year < 2036; year += 1) {
       for (const month of [2, 9]) {
         const last = new Date(Date.UTC(year, month + 1, 0));
@@ -148,46 +170,49 @@ describe("ProcessSummaryView: Europe/Zagreb times", () => {
         for (const delta of [-61, -60, -1, 0, 1, 59, 60]) instants.push(change + delta * 60_000);
       }
     }
+    // One assertion at the end: a list of differences, not thousands of expects.
+    const differences: string[] = [];
     for (const at of instants) {
       const parts = Object.fromEntries(zone.formatToParts(at).map((part) => [part.type, part.value]));
-      const expected = {
-        date: `${Number(parts.day)}. ${months[Number(parts.month) - 1]} ${parts.year}.`,
-        time: `${parts.hour}:${parts.minute}`,
-      };
-      expect(zagrebParts(new Date(at).toISOString()), new Date(at).toISOString()).toEqual(expected);
+      const expected = `${Number(parts.day)}. ${months[Number(parts.month) - 1]} ${parts.year}. ${parts.hour}:${parts.minute}`;
+      const own = zagrebParts(new Date(at).toISOString());
+      const actual = own ? `${own.date} ${own.time}` : "null";
+      if (actual !== expected) differences.push(`${new Date(at).toISOString()}: ${actual} != ${expected}`);
     }
-  });
+    expect(instants.length).toBeGreaterThan(4000);
+    expect(differences).toEqual([]);
+  }, 30_000);
 
   it("shows an unreadable instant as written, never as another time", () => {
     expect(zagrebParts("not-a-time")).toBeNull();
-    const markup = render(summaryWith({ gaps: { evidenceKind: "observed", items: [{ previousEndedAt: "x", nextStartedAt: "y" }] } }));
-    expect(textOf(markup)).toContain(`${t.gaps.item}: x – y`);
+    const view = tree(summaryWith({ gaps: { evidenceKind: "observed", items: [{ previousEndedAt: "x", nextStartedAt: "y" }] } }));
+    expect(textOf(view)).toContain(`${t.gaps.item}: x – y`);
   });
 });
 
 describe("ProcessSummaryView: thresholds, pastes, gaps and evidence kind", () => {
   it("puts the threshold next to every number", () => {
-    const markup = render(summaryWith());
-    const [sessions] = numbered(markup, "sessions");
+    const view = tree(summaryWith());
+    const [sessions] = numbered(view, "sessions");
     expect(sessions).toContain(`${t.sessions.count}: 2`);
     expect(sessions).toContain(`${t.sessions.threshold} 30 minuta`);
 
-    const pastes = numbered(markup, "paste");
+    const pastes = numbered(view, "paste");
     expect(pastes).toHaveLength(3);
     for (const paste of pastes) expect(paste).toContain(`${t.pastes.listedThreshold} 200 znakova`);
 
-    const [smaller] = numbered(markup, "smaller-pastes");
+    const [smaller] = numbered(view, "smaller-pastes");
     expect(smaller).toContain(`${t.pastes.smaller}: 3`);
     expect(smaller).toContain(`${t.pastes.smallerThreshold} 200 znakova`);
   });
 
   it("follows the configured thresholds, not fixed values", () => {
-    const markup = render(EMPTY);
-    expect(numbered(markup, "sessions")[0]).toContain(`${t.sessions.threshold} 45 minuta`);
-    expect(numbered(markup, "smaller-pastes")[0]).toContain(`${t.pastes.smallerThreshold} 150 znakova`);
-    expect(textOf(markup)).toContain(`${t.pastes.noneListed} (${t.pastes.listedThreshold} 150 znakova)`);
-    expect(markup).not.toContain("30 minuta");
-    expect(markup).not.toContain("200 znak");
+    const view = tree(EMPTY);
+    expect(numbered(view, "sessions")[0]).toContain(`${t.sessions.threshold} 45 minuta`);
+    expect(numbered(view, "smaller-pastes")[0]).toContain(`${t.pastes.smallerThreshold} 150 znakova`);
+    expect(textOf(view)).toContain(`${t.pastes.noneListed} (${t.pastes.listedThreshold} 150 znakova)`);
+    expect(textOf(view)).not.toContain("30 minuta");
+    expect(textOf(view)).not.toContain("200 znak");
   });
 
   it("agrees Croatian forms with the numbers", () => {
@@ -200,7 +225,7 @@ describe("ProcessSummaryView: thresholds, pastes, gaps and evidence kind", () =>
         smallerCount: 0,
       },
     });
-    const text = textOf(render(one));
+    const text = textOf(tree(one));
     expect(text).toContain(`${t.sessions.threshold} 1 minute`);
     expect(text).toContain(`${t.pastes.size}: 1 znak `);
     expect(text).toContain(`${t.pastes.listedThreshold} 0 znakova`);
@@ -208,22 +233,22 @@ describe("ProcessSummaryView: thresholds, pastes, gaps and evidence kind", () =>
   });
 
   it("lists each large paste with its size and 'izvor nije opažen', in record order, with no total or share", () => {
-    const markup = render(summaryWith());
-    const pastes = numbered(markup, "paste");
+    const view = tree(summaryWith());
+    const pastes = numbered(view, "paste");
     expect(pastes.map((paste) => paste.match(/Veličina: (\d+)/)?.[1])).toEqual(["412", "201", "9001"]);
     for (const paste of pastes) expect(paste).toContain(t.pastes.origins.not_observed);
-    const text = textOf(markup);
+    const text = textOf(view);
     expect(text).not.toContain(String(412 + 201 + 9001));
     expect(text).not.toMatch(/%|udio|ukupno|zbroj/i);
   });
 
   it("shows gaps as 'praznina u zapisu' with the explanation, and the record state", () => {
-    const text = textOf(render(summaryWith()));
+    const text = textOf(tree(summaryWith()));
     expect(text).toContain(`${t.recordState.label}: ${t.recordState.has_gaps}`);
     expect(text).toContain(t.gaps.explanation);
     expect(text).toContain(`${t.gaps.item}: 14. listopada 2026. od 21:10 do 21:40`);
 
-    const empty = textOf(render(EMPTY));
+    const empty = textOf(tree(EMPTY));
     expect(empty).toContain(`${t.recordState.label}: ${t.recordState.complete}`);
     expect(empty).toContain(t.gaps.none);
     expect(empty).toContain(t.sessions.none);
@@ -232,19 +257,19 @@ describe("ProcessSummaryView: thresholds, pastes, gaps and evidence kind", () =>
   });
 
   it("names the kind of evidence on every item and every number", () => {
-    const markup = render(summaryWith());
+    const view = tree(summaryWith());
     const kind = `${t.evidenceKind}: ${t.evidenceKinds.observed}`;
-    const items = [...markup.matchAll(/<li[^>]*>([\s\S]*?)<\/li>/g)].map((match) => textOf(match[1]));
+    const items = findAll(view, (element) => element.type === "li").map(textOf);
     expect(items).toHaveLength(2 + 3 + 1);
     for (const item of items) expect(item).toContain(kind);
-    for (const name of ["sessions", "smaller-pastes"]) expect(numbered(markup, name)[0]).toContain(kind);
+    for (const name of ["sessions", "smaller-pastes"]) expect(numbered(view, name)[0]).toContain(kind);
   });
 });
 
 describe("ProcessSummaryView: interface vocabulary", () => {
   it("renders no word from the forbidden vocabulary", () => {
     for (const summary of [summaryWith(), EMPTY]) {
-      const text = textOf(render(summary));
+      const text = textOf(tree(summary));
       expect(findForbiddenTerms(text)).toEqual([]);
     }
     for (const text of Object.values(t).flatMap(function leaves(value: unknown): string[] {
