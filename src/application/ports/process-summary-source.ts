@@ -38,6 +38,12 @@ export type ProcessSummarySourceResult =
       segmentHashes: string[];
     }
   | { status: "not_found" }
+  /**
+   * The bound session is not open (expired, closed or unknown). Separate
+   * from `not_found`, like the comment and live-view reads (DAN-85): it says
+   * only that the asker must sign in again, nothing about the document.
+   */
+  | { status: "unauthenticated" }
   | { status: "unavailable"; reason: string };
 
 export interface ProcessSummarySource {
