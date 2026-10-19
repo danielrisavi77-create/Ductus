@@ -237,7 +237,8 @@ test("description and check-name text is never echoed unfiltered", () => {
 });
 
 const BEHIND = { status: "diverged", behind_by: 3 };
-const lag = (over = {}) => input({ compare: BEHIND, prPaths: ["scripts/a.mjs", "docs/x.md"], mainPaths: ["src/b.ts"], ...over });
+const riskBody = (risk) => BODY.replace("Risk: critical", risk === null ? "Reviewer: none" : `Risk: ${risk}`);
+const lag = (over = {}) => input({ compare: BEHIND, prPaths: ["scripts/a.mjs", "docs/x.md"], mainPaths: ["src/b.ts"], ...over, pr: { body: riskBody("standard"), ...over.pr } });
 
 test("a head behind main passes when no missing main commit touches a file of the PR (#87 6265641655)", () => {
   assert.deepEqual(fails(evaluatePreflight(lag())), []);
@@ -259,4 +260,25 @@ test("a head behind main fails closed when a file list cannot be read", () => {
 
 test("a head that contains main passes as before, whatever the file lists say", () => {
   assert.deepEqual(fails(evaluatePreflight(input({ mainPaths: ["docs/x.md"], prPaths: ["docs/x.md"] }))), []);
+});
+
+test("F-101 t. 2: a critical or unclassified PR must contain main, however disjoint the paths", () => {
+  for (const risk of ["critical", "CRITICAL", "high", "", null]) {
+    const checks = evaluatePreflight(lag({ pr: { body: riskBody(risk) }, mainPaths: [] }));
+    assert.ok(fails(checks).includes("main"), `risk ${JSON.stringify(risk)} must fail while behind`);
+    assert.match(checks.find((c) => c.id === "main").text, /merge main first/);
+  }
+  // Up to date, the same critical PR passes the main check as before.
+  assert.deepEqual(fails(evaluatePreflight(input({ pr: { body: riskBody("critical") } }))), []);
+});
+
+test("F-101 t. 2: low and standard PRs keep the disjoint-lag pass, unless they touch a D-97 path", () => {
+  for (const risk of ["low", "Low", "standard", "STANDARD"]) {
+    assert.deepEqual(fails(evaluatePreflight(lag({ pr: { body: riskBody(risk) } }))), [], risk);
+  }
+  for (const path of ["scripts/orchestrator/x.mjs", ".github/workflows/ci.yml", "docs/DECISIONS.md", "SCRIPTS/Hooks/a.mjs", "lefthook.yml"]) {
+    const checks = evaluatePreflight(lag({ prPaths: ["docs/x.md", path] }));
+    assert.deepEqual(fails(checks), ["main"], path);
+    assert.match(checks.find((c) => c.id === "main").text, /D-97/);
+  }
 });
