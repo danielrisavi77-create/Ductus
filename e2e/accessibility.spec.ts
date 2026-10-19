@@ -28,7 +28,8 @@ for (const path of PAGES) {
   }
 }
 
-// Below 1100 px the rails are sections that open with a button (DAN-131);
+// Below 1240 px (structure) and 1000 px (panel) the rails are sections that
+// open with a button (DAN-131, FE-D2);
 // their content is only in the accessibility tree once opened.
 for (const colorScheme of SCHEMES) {
   test(`axe: no WCAG 2.1 AA violations on /rad with the rails open at 390 px (sheet: ${colorScheme})`, async ({
