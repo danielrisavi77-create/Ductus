@@ -38,7 +38,7 @@ export default async function HomePage() {
           </Link>
         </p>
         <p>
-          <Link href="/nastavnik/kolegiji">{t.home.openTeacher}</Link>
+          <Link href="/nastavnik/zadatak/novi">{t.home.openTeacher}</Link>
         </p>
       </main>
     </>
