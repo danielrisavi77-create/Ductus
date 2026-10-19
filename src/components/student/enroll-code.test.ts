@@ -52,13 +52,16 @@ describe("F-7 enrollment code", () => {
   it("never claims enrollment on a malformed reply or a transport failure", async () => {
     const bad = vi.fn(async () => Response.json({ courseId: "nope" }));
     expect(await enrollWithCode("AB12CD34", bad as unknown as typeof fetch)).toEqual({ kind: "unavailable" });
-    const offline = vi.fn(async () => { throw new Error("offline"); });
-    expect(await enrollWithCode("AB12CD34", offline as unknown as typeof fetch)).toEqual({ kind: "unavailable" });
+    const unreadable = vi.fn(async () => new Response("{", { status: 200 }));
+    expect(await enrollWithCode("AB12CD34", unreadable as unknown as typeof fetch)).toEqual({ kind: "unavailable" });
+    // FE-D4: a request that never reached the server says so, not "wrong code".
+    const offline = vi.fn(async () => { throw new TypeError("Failed to fetch"); });
+    expect(await enrollWithCode("AB12CD34", offline as unknown as typeof fetch)).toEqual({ kind: "offline" });
   });
 
   it("has a local message for every failure", () => {
     expect(Object.keys(t.student.enroll.errors).sort()).toEqual(
-      ["forbidden", "invalid", "malformed", "refused", "tooManyAttempts", "unauthorized", "unavailable"]);
+      ["forbidden", "invalid", "malformed", "offline", "refused", "tooManyAttempts", "unauthorized", "unavailable"]);
   });
 
   it("promises no fixed wait after 429, since the institution sets the window", () => {
