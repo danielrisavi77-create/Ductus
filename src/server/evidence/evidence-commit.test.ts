@@ -28,6 +28,7 @@ const CONTEXT: EvidenceCommitContext = {
   evidenceProfileId: "standard-v1",
   maxPayloadBytes: 262144,
   transactionKnown: false,
+  state: { currentRevision: 4, documentHash: "e".repeat(64), headSegmentHash: null, lastSequenceTo: 8 },
 };
 const DESCRIPTOR: EvidenceSegmentDescriptorV2 = {
   evidencePackageId: "pkg-1",
@@ -178,6 +179,10 @@ describe("readEvidenceCommitContext", () => {
     evidence_profile_id: "standard-v1",
     max_payload_bytes: 262144,
     transaction_known: false,
+    current_revision: "4",
+    document_hash: "e".repeat(64),
+    head_segment_hash: null,
+    last_sequence_to: "8",
   };
 
   it("returns the context the database resolved", async () => {
@@ -185,7 +190,15 @@ describe("readEvidenceCommitContext", () => {
     expect(await readEvidenceCommitContext(db.withActor, "t", "doc-1", "tx-1")).toEqual({ status: "ok", context: CONTEXT });
   });
 
-  it.each(["unauthenticated", "not_found", "invalid"])("passes %s through", async (outcome) => {
+  it("returns a head segment the database names (F-099)", async () => {
+    const db = database({ commit: [{ ...row, head_segment_hash: HASH, current_revision: 5 }] });
+    expect(await readEvidenceCommitContext(db.withActor, "t", "doc-1", "tx-1")).toEqual({
+      status: "ok",
+      context: { ...CONTEXT, state: { ...CONTEXT.state, currentRevision: 5, headSegmentHash: HASH } },
+    });
+  });
+
+  it.each(["unauthenticated", "not_found", "invalid", "not_accepting"])("passes %s through", async (outcome) => {
     const db = database({ commit: [{ outcome }] });
     expect(await readEvidenceCommitContext(db.withActor, null, "doc-1", "tx-1")).toEqual({ status: outcome });
   });
@@ -203,6 +216,11 @@ describe("readEvidenceCommitContext", () => {
     ["a limit that is not whole", [{ ...row, max_payload_bytes: 1.5 }]],
     ["a limit given as text", [{ ...row, max_payload_bytes: "262144" }]],
     ["a known flag that is no boolean", [{ ...row, transaction_known: "f" }]],
+    ["no current revision", [{ ...row, current_revision: null }]],
+    ["a negative revision", [{ ...row, current_revision: "-1" }]],
+    ["a document hash that is no hash", [{ ...row, document_hash: "e" }]],
+    ["a head that is no hash", [{ ...row, head_segment_hash: "" }]],
+    ["no last sequence", [{ ...row, last_sequence_to: null }]],
   ])("is unavailable for %s", async (_, rows) => {
     const db = database({ commit: rows });
     expect(await readEvidenceCommitContext(db.withActor, "t", "doc-1", "tx-1")).toEqual({
