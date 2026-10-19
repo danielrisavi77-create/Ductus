@@ -197,13 +197,15 @@ test.describe("local editor (#197)", () => {
     await page.keyboard.press("Enter");
     await page.keyboard.type("Drugi odlomak.");
     await journalled(page);
-    await expect(page.getByText("6 riječi")).toBeVisible();
+    // FE-D6: the count stands alone in bold, the range and the noun follow it.
+    await expect(page.locator(".workspace__status .status-length__count")).toHaveText("6");
 
     await page.reload();
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
     await expect(editorOf(page).locator("p")).toHaveText(["Prva rečenica izmišljenog rada.", "Drugi odlomak."]);
     await journalled(page);
-    await expect(page.getByText("6 riječi")).toBeVisible();
+    // FE-D6: the count stands alone in bold, the range and the noun follow it.
+    await expect(page.locator(".workspace__status .status-length__count")).toHaveText("6");
     // 16: the reload resumes where the journal is, not in an endless "Spremam lokalno".
     await expect(chipOf(page)).toHaveText(DURABLE);
     // Opening a stored document is not announced; the next save in this tab is.
