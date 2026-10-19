@@ -45,7 +45,8 @@ Sažetak nije izvor pravila. U sukobu vrijedi `docs/ENGINEERING_SYSTEM.md`; uz s
 
 - Ugovor prije koda: Invarijanta, Mjesta, Stvarni pozivatelj, Poznate granice i "Što bi ovaj PR moglo oboriti na QA-i?:" (§14).
 - Najviše oko 400 promijenjenih redaka koda, veći uz obrazloženje u opisu; `critical` i oko 300 redaka produkcijskog koda, veći se dijeli, iznimku odobrava vlasnik (§14).
-- QA FAIL samo za kvar koda. Manji nalazi se bilježe; svaki nalaz ima redak "Dohvatljivo kroz" (§14).
+- Poznata granica umanjuje nalaz samo uz trag vlasnikova odobrenja, nikad za tvrdo pravilo ili granicu povjerenja (§14).
+- QA FAIL samo za kvar koda. Svaki nalaz ima redak "Dohvatljivo kroz", a manji nalaz nosi "blokira" ili "ne blokira"; onaj u testovima ili dokumentima uz PASS ide u zaseban zadatak, onaj u produkcijskom kodu zatvara se novim headom prije spajanja (§14).
 - Najviše dva kruga: drugi FAIL na istom korijenu zaustavlja ispravke (§14).
 - U gateu je najviše jedan PR. Za `critical` review i QA kreću istodobno na istom headu, osim QA-e s Codexa ili Groka: ona tek nakon Claude review PASS-a (D-138). QA ne čita review prije vlastitog verdikta (§13, §15).
 
