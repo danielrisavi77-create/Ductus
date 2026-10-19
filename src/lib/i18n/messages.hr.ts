@@ -246,8 +246,9 @@ export const hr = {
     },
   },
   // F-7 (#336): the S3 notice before the first sentence. What is recorded
-  // follows the owner decision on #87 (6237014519), D-24 and D-56: a hash
-  // per step, version history and the process summary, no single inputs.
+  // follows D-142 and D-143 (live view, per-change time, mentor-only replay)
+  // and PRODUCT §5 rules 4 and 7; D-24 and D-81 for the 30-second steps.
+  // AssignmentNotice renders recorded, notRecorded and teacher in key order.
   student: {
     title: "Zadatak",
     signedOut: "Prijavi se da vidiš zadatak.",
@@ -280,18 +281,22 @@ export const hr = {
     recordedHeading: "Što se bilježi",
     recorded: {
       steps: "Promjene teksta, sažete u odsječke od najviše 30 sekundi. Odsječak nosi jedno vrijeme, zaokruženo na minutu.",
+      live: "Svaka promjena teksta, znak po znak, s redoslijedom i vremenom: unos i brisanje, lijepljenje, uvoz, prijenos iz AI pomoćnika i izmjene nastavnika. To služi samo prikazu uživo i reprodukciji.",
       chain: "Svaki korak spremanja dobiva hash i ulazi u lanac, pa se svaka kasnija izmjena zapisa vidi.",
       versions: "Verzije, predaja i napomene koje dodaš.",
     },
     notRecordedHeading: "Što se ne bilježi",
     notRecorded: {
-      inputs: "Pojedinačni unosi i ritam pisanja: tipke, brzina i pauze.",
+      inputs: "Koja je tipka pritisnuta i koliko je držana. Iz vremena promjena nikad se ne računaju brzina, pauze, ritam ni bilo kakva mjera.",
       outside: "Druge aplikacije i kartice preglednika, kamera, mikrofon i zaslon.",
       device: "IP adresa i podaci o uređaju.",
     },
-    teacherHeading: "Što nastavnik vidi",
+    teacherHeading: "Što vidi nastavnik (mentor)",
     teacher: {
-      state: "Od prvog dana stanje rada spremljeno na poslužitelju, pa i tekst koji ćeš kasnije možda obrisati.",
+      state: "Od prvog dana tvoj rad uživo, dok nastaje, pa i tekst koji ćeš kasnije možda obrisati.",
+      // Owner on #476 (6264128457): the student does not see the replay.
+      replay: "Samo nastavnik (mentor) može reproducirati nastanak rada znak po znak, pa i obrisani tekst. Ti tu reprodukciju ne vidiš.",
+      purpose: "Prikaz uživo i reprodukcija služe praćenju nastanka rada i komentarima, nikad ocjeni ni rangiranju.",
       history: "Povijest verzija i sažetak procesa, isti kao što ga vidiš ti.",
       noVerdict: "Ductus ne procjenjuje autorstvo ni korištenje AI-ja.",
     },
@@ -299,7 +304,7 @@ export const hr = {
     teacherExtended: "Usporedbu verzija na kraju sesija i poslanih verzija.",
     retention: "Zapis se čuva uz rad do isteka roka koji propisuje fakultet.",
     note: "Prije konačne predaje uz rad možeš dodati napomenu. Napomene se samo dodaju.",
-    checkbox: "Pročitao/la sam obavijest. Znam što se bilježi i što nastavnik vidi.",
+    checkbox: "Pročitao/la sam obavijest. Znam što se bilježi i što vidi nastavnik (mentor).",
     confirm: "Potvrdi i otvori editor",
     confirming: "Potvrđivanje…",
     notConsent: "Potvrda nije privola. Prije potvrde ništa se ne šalje na poslužitelj.",
