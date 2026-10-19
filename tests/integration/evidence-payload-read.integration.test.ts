@@ -182,12 +182,14 @@ describe("evidence payload read against the local object store (B-8i, B2)", () =
         source: {
           readSource: async () => ({
             status: "found",
+            institutionId: FAK_A,
             evidencePackageId: chain.evidencePackageId,
             head: chain.head,
             segmentHashes: chain.segments.map((vector) => vector.segmentHash),
           }),
         },
-        payloads: bindPayloadReader(router(), FAK_A),
+        // The reader binds the institution the source names (B-13 step 4).
+        payloads: router(),
         thresholds: { sessionBreakAboveMinutes: 30, pasteListedAboveCharacters: 200 },
       },
       chain.segments[0].segment.documentId,

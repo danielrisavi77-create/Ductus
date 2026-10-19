@@ -1,4 +1,7 @@
-import type { EvidencePayloadReader } from "@/application/ports/evidence-reconstruction";
+import {
+  bindPayloadReader,
+  type InstitutionEvidencePayloadReader,
+} from "@/application/ports/evidence-reconstruction";
 import type { ProcessSummarySource } from "@/application/ports/process-summary-source";
 import { isDocumentId } from "@/domain/collaboration";
 import type { EvidenceChainFailureV2 } from "@/domain/forensics/evidence-chain-v2";
@@ -26,7 +29,11 @@ import {
 export type ProcessSummaryReaderDeps = {
   /** Already bound to the requesting actor; decides access and lists the record. */
   source: ProcessSummarySource;
-  payloads: EvidencePayloadReader;
+  /**
+   * Storage of every institution; bound here to the institution the source
+   * row names (B-13 step 4), so no request field can choose the domain.
+   */
+  payloads: InstitutionEvidencePayloadReader;
   /** Faculty configuration (P-01, P-02), never a request field. */
   thresholds: ProcessSummaryThresholds;
 };
@@ -66,11 +73,12 @@ export async function readProcessSummary(
   if (source.status === "not_found") return { status: "not_found" };
   if (source.status !== "found") return unavailable("source_unavailable");
 
+  const storage = bindPayloadReader(deps.payloads, source.institutionId);
   const payloads: Uint8Array[] = [];
   for (const segmentHash of source.segmentHashes) {
     let read;
     try {
-      read = await deps.payloads.readImmutable({
+      read = await storage.readImmutable({
         evidencePackageId: source.evidencePackageId,
         segmentHash,
       });

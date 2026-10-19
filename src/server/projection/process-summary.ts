@@ -1,4 +1,5 @@
-import type { EvidencePayloadReader } from "@/application/ports/evidence-reconstruction";
+import { isInstitutionId } from "@/application/ports/evidence-object-key";
+import type { InstitutionEvidencePayloadReader } from "@/application/ports/evidence-reconstruction";
 import type {
   ProcessSummarySource,
   ProcessSummarySourceResult,
@@ -43,16 +44,22 @@ export function loadProcessSummaryThresholds(
   return { sessionBreakAboveMinutes, pasteListedAboveCharacters };
 }
 
-type SourceRow = { outcome?: unknown; evidence_package_id?: unknown; segment_hashes?: unknown };
+type SourceRow = {
+  outcome?: unknown;
+  institution_id?: unknown;
+  evidence_package_id?: unknown;
+  segment_hashes?: unknown;
+};
 
 function sourceResult(rows: SourceRow[]): ProcessSummarySourceResult {
   const malformed = { status: "unavailable", reason: "source_malformed" } as const;
   if (rows.length !== 1) return malformed;
-  const { outcome, evidence_package_id: packageId, segment_hashes: hashes } = rows[0];
+  const { outcome, institution_id: institutionId, evidence_package_id: packageId, segment_hashes: hashes } = rows[0];
   if (outcome === "not_found") return { status: "not_found" };
   if (outcome === "unavailable") return { status: "unavailable", reason: "source_unavailable" };
   if (
     outcome !== "found" ||
+    !isInstitutionId(institutionId) ||
     typeof packageId !== "string" ||
     !PACKAGE_ID.test(packageId) ||
     !Array.isArray(hashes) ||
@@ -63,6 +70,7 @@ function sourceResult(rows: SourceRow[]): ProcessSummarySourceResult {
   const segmentHashes = [...(hashes as string[])];
   return {
     status: "found",
+    institutionId,
     evidencePackageId: packageId,
     head: segmentHashes.length === 0
       ? null
@@ -71,13 +79,17 @@ function sourceResult(rows: SourceRow[]): ProcessSummarySourceResult {
   };
 }
 
-/** The source bound to one session: app.read_process_summary_source under withActor. */
+/**
+ * The source bound to one session: app.read_process_summary_source under
+ * withActor. The institution of a found record comes from that row, so the
+ * storage domain is chosen by the database, never by the request.
+ */
 export function sessionProcessSummarySource(withActor: WithActor, sessionToken: string): ProcessSummarySource {
   return {
     async readSource(documentId) {
       const result = await withActor(sessionToken, (tx) =>
         tx.query<SourceRow>(
-          "SELECT outcome, evidence_package_id, segment_hashes FROM app.read_process_summary_source($1)",
+          "SELECT outcome, institution_id, evidence_package_id, segment_hashes FROM app.read_process_summary_source($1)",
           [documentId],
         ),
       );
@@ -88,7 +100,8 @@ export function sessionProcessSummarySource(withActor: WithActor, sessionToken: 
 
 export interface ProcessSummaryRouteDeps {
   withActor: WithActor;
-  payloads: EvidencePayloadReader;
+  /** Storage of every institution; the reader binds it to the source row's. */
+  payloads: InstitutionEvidencePayloadReader;
   thresholds: ProcessSummaryThresholds | null;
   expectedOrigin: string;
   sessionToken?: string;
@@ -156,13 +169,3 @@ export async function handleProcessSummaryRequest(
       return refuse(503, "unavailable");
   }
 }
-
-/**
- * Payload reading for the route until the S3 store can read (it can only
- * write today): a record with segments is unavailable, never guessed.
- */
-export const PAYLOAD_READING_NOT_CONFIGURED: EvidencePayloadReader = {
-  async readImmutable() {
-    return { status: "unavailable", reason: "payload_reading_not_configured" };
-  },
-};
