@@ -1,6 +1,7 @@
 // P1-1: the checks the orchestrator runs before it starts review or QA
 // (docs/ORKESTRATOR.md, "prije pokretanja reviewa ili QA-e"). Pure: no gh/git.
 import { closesFence, fenceInfo, field } from "../engineering/metadata-parser.mjs";
+import { D97_MANUAL_PATHS, D97_PATHS, matchesPath } from "../engineering/protected-paths.mjs";
 import { evaluateChecks, GATE_CONTEXT, latestChecks } from "./orchestrator-core.mjs";
 
 // ENGINEERING_SYSTEM §14 lines the orchestrator requires besides `Task:`.
@@ -262,10 +263,18 @@ export function evaluatePreflight({ pr, mainSha, compare, rollup, required, expe
   if (!SHA_RE.test(String(mainSha ?? ""))) add(false, "main", "main head could not be read");
   else if (!compare || !Number.isInteger(compare.behind_by)) add(false, "main", `head vs main ${mainSha.slice(0, 8)} could not be compared`);
   else if (compare.behind_by > 0) {
-    // Owner decision (#87 issuecomment-6265641655): a head that lags passes when no
-    // missing main commit touches a file the PR changes. Unreadable lists fail.
+    // Owner decisions (#87 issuecomment-6265641655, then F-101 t. 2): a lagging head passes
+    // only for a low or standard PR that touches no D-97 path, and only when no missing main
+    // commit touches a file of the PR. Every other PR (critical, unclassified, any D-97 path)
+    // must contain main before review: what is reviewed has to be what merges. Unreadable lists fail.
     const lack = `head lacks ${compare.behind_by} commit(s) of main ${mainSha.slice(0, 8)}`;
-    if (!Array.isArray(mainPaths) || !Array.isArray(prPaths) || prPaths.length === 0) {
+    const risk = String(field(pr.body ?? "", "Risk") ?? "").trim().toLowerCase();
+    const d97 = Array.isArray(prPaths) ? prPaths.filter((p) => matchesPath(p, [...D97_PATHS, ...D97_MANUAL_PATHS])) : [];
+    if (risk !== "low" && risk !== "standard") {
+      add(false, "main", `${lack}; a ${risk === "critical" ? "critical" : "PR without a low or standard risk"} PR must contain main before review: merge main first`);
+    } else if (d97.length > 0) {
+      add(false, "main", `${lack}; the PR touches D-97 path(s) (${names(d97.slice(0, 3))}) and must contain main before review: merge main first`);
+    } else if (!Array.isArray(mainPaths) || !Array.isArray(prPaths) || prPaths.length === 0) {
       add(false, "main", `${lack} and the changed-file lists could not be read: merge main first`);
     } else {
       const mine = new Set(prPaths);
