@@ -152,6 +152,10 @@ describe("process summary route: one body for the owner and the teacher (B-13, D
       [[{ outcome: "maybe" }], 503, "unavailable"],
       [[], 503, "unavailable"],
       [new Error("relation evidence.segment Lorem ipsum"), 503, "unavailable"],
+      // DAN-85: only ZD401 is the missing session; any other code stays unavailable.
+      [Object.assign(new Error("not authenticated Lorem"), { code: "ZD401" }), 401, "unauthorized"],
+      [Object.assign(new Error("forbidden Lorem"), { code: "ZD403" }), 503, "unavailable"],
+      [Object.assign(new Error("Lorem"), { code: "zd401" }), 503, "unavailable"],
     ];
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
     for (const [rows, status, error] of cases) {
@@ -160,6 +164,17 @@ describe("process summary route: one body for the owner and the teacher (B-13, D
       expect(await response.json()).toStrictEqual({ error });
     }
     expect(JSON.stringify(log.mock.calls)).not.toMatch(/Lorem|doc-ana/);
+  });
+
+  // DAN-85 (#458 review point 1): like the comment and live-view reads.
+  it("answers a session the database does not hold as open with 401, the same as no cookie", async () => {
+    const closed = database(Object.assign(new Error("not authenticated"), { code: "ZD401" }));
+    const expired = await handleProcessSummaryRequest(post({ documentId: DOCUMENT }), deps({ withActor: closed.withActor }));
+    const noCookie = await handleProcessSummaryRequest(post({ documentId: DOCUMENT }), deps({ sessionToken: undefined }));
+    expect(expired.status).toBe(401);
+    expect(expired.headers.get("cache-control")).toBe("no-store");
+    expect(await expired.json()).toStrictEqual(await noCookie.json());
+    expect(closed.tokens).toStrictEqual([ANA]);
   });
 
   // B-13 step 4: the storage domain is the institution of the row read under withActor.
