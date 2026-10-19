@@ -125,6 +125,15 @@ export default function TeacherSetup() {
           </fieldset>
           {courseNotice ? <p className={styles.notice} role="alert">{courseNotice}</p> : null}
           {course ? <p className={styles.notice} role="status">{c.created}</p> : null}
+          {course ? (
+            // No invented code: the route for create_enrollment_code does not exist yet.
+            <div className={styles.code}>
+              <p className={styles.listHead}>
+                {c.code} <span className="soon">{t.workspace.soon}</span>
+              </p>
+              <p className={styles.hint}>{c.codeSoon}</p>
+            </div>
+          ) : null}
         </form>
 
         <form className={styles.card} onSubmit={submitAssignment} aria-labelledby="zadatak">
