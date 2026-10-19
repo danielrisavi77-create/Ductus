@@ -55,6 +55,21 @@ export async function prPaths(n, list = ghList) {
   return changedPaths(files);
 }
 
+const COMPARE_FILES_CAP = 300; // GitHub lists at most 300 files of a compare
+
+/**
+ * Every path the main commits a head lacks change (compare head...main; a
+ * rename counts under both names). One request on purpose: `per_page` pages
+ * the commits of a compare, and `files` come whole on page 1 and are null on
+ * page 2. Throws when the read fails or the list may have been cut at the cap.
+ */
+export async function mainPathsSince(head, mainSha, exec = sh) {
+  const body = await ghJson(["api", `repos/{owner}/{repo}/compare/${head}...${mainSha}`], exec);
+  if (!Array.isArray(body?.files)) throw new Error("compare response has no file list");
+  if (body.files.length >= COMPARE_FILES_CAP) throw new Error(`file list of main since ${head.slice(0, 8)} reached the ${COMPARE_FILES_CAP}-file API cap`);
+  return changedPaths(body.files);
+}
+
 /**
  * REST pull object -> the gh-CLI field names the scripts use. gh pr list/view
  * go through GraphQL, which cloud sessions cannot reach (HTTP 403).

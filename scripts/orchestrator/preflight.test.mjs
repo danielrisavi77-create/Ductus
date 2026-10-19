@@ -235,3 +235,28 @@ test("description and check-name text is never echoed unfiltered", () => {
   const odd = evaluatePreflight(input({ pr: { state: evil, baseRefName: long } }));
   for (const c of odd) assert.ok(!c.text.includes(evil) && !c.text.includes(long), c.text);
 });
+
+const BEHIND = { status: "diverged", behind_by: 3 };
+const lag = (over = {}) => input({ compare: BEHIND, prPaths: ["scripts/a.mjs", "docs/x.md"], mainPaths: ["src/b.ts"], ...over });
+
+test("a head behind main passes when no missing main commit touches a file of the PR (#87 6265641655)", () => {
+  assert.deepEqual(fails(evaluatePreflight(lag())), []);
+  assert.deepEqual(fails(evaluatePreflight(lag({ mainPaths: [] }))), []);
+});
+
+test("a head behind main fails when main changed at least one file of the PR", () => {
+  const checks = evaluatePreflight(lag({ mainPaths: ["src/b.ts", "docs/x.md"] }));
+  assert.deepEqual(fails(checks), ["main"]);
+  assert.match(checks.find((c) => c.id === "main").text, /merge main first/);
+});
+
+test("a head behind main fails closed when a file list cannot be read", () => {
+  assert.deepEqual(fails(evaluatePreflight(lag({ mainPaths: null }))), ["main"]);
+  assert.deepEqual(fails(evaluatePreflight(lag({ prPaths: null }))), ["main"]);
+  assert.deepEqual(fails(evaluatePreflight(lag({ prPaths: [] }))), ["main"]);
+  assert.deepEqual(fails(evaluatePreflight(lag({ mainPaths: undefined, prPaths: undefined }))), ["main"]);
+});
+
+test("a head that contains main passes as before, whatever the file lists say", () => {
+  assert.deepEqual(fails(evaluatePreflight(input({ mainPaths: ["docs/x.md"], prPaths: ["docs/x.md"] }))), []);
+});
