@@ -52,7 +52,7 @@ Ductus podržava sve pisane radove koje nastavnik zadaje:
 | Specijalistički rad | Prema pravilima fakulteta | Mentor |
 | Doktorski rad | Prema pravilima fakulteta | Mentor; najdulji dokumenti |
 
-Pisanje na nastavi i zadaci nalik ispitu pod nadzorom nisu podržani, jer su najbliži nadzoru tijekom ispita iz Priloga III. Akta o umjetnoj inteligenciji.
+Pisanje na nastavi i zadaci nalik ispitu pod nadzorom više nisu isključeni (D-144, D-151). Najbliži su nadzoru tijekom ispita iz Priloga III. Akta o umjetnoj inteligenciji (t. 3(d)), pa ih prije pilota sa stvarnim studentima moraju pokriti pravno mišljenje (D-55) i DPIA.
 
 ---
 
