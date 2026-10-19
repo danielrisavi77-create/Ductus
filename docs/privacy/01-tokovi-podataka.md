@@ -40,7 +40,7 @@ OIB se ne traži (PRODUCT §4). Kod trenutno čita samo `sub`, `hrEduPersonUniqu
 | Predaja: dokument, hash, `requested_at`, potvrda i potpis | Student, poslužitelj | `submission`, `evidence.receipt` | Student; nastavnik zadatka | Prema pravilniku fakulteta (prijedlog) |
 | Revizijski trag: tko je kada pristupio kojem radu (PRAVILO 17: student vidi tko je otvorio rad) | Poslužitelj | `access_log` | Administrator ustanove; student svoje | Dulje od predaje (prijedlog); tablica nije izgrađena `[IZVEDBA]` |
 
-Hashevi lanca i čvorovi Merkle stabla ne brišu se (ne sadrže sadržaj; ARCHITECTURE §3, BACKEND §4.7). Javno se objavljuje dnevni potpisani korijen i točan ukupni broj potvrda (D-93, val 2).
+Hashevi lanca i čvorovi Merkle stabla ne brišu se (ne sadrže sadržaj; ARCHITECTURE §3, BACKEND §4.7). Ipak mogu potvrditi poznati tekst: tko ima kopiju, izračuna hash i usporedi ga s potvrdom (05 pitanje 20, DPIA R16). Javno se objavljuje dnevni potpisani korijen i točan ukupni broj potvrda (D-93, val 2).
 
 ## D. Uređaj i pogon
 

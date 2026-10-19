@@ -23,12 +23,13 @@
 
 ## B. Blokira određene dijelove pilota
 
-15. `[Pravnik]` Je li vrijeme promjena u koracima od 100 ms (D-56) biometrijski podatak po čl. 4. t. 14. GDPR-a i smije li se uopće bilježiti, uz izmjenu Ustava C-14 i C-19 prije prvog bilježenja? `[ODLUKA]` (blokira val 3 i mentorske radove; do tada se ne bilježi)
+15. `[Pravnik]` Je li vrijeme promjena u koracima od 100 ms (D-56) biometrijski podatak po čl. 4. t. 14. GDPR-a i smije li se uopće bilježiti, uz izmjenu Ustava C-14 i C-19 prije prvog bilježenja? `[ODLUKA]` Istraživač (13. 10. 2026.) navodi AZOP-ovu kaznu zbog obrade biometrijskih podataka kao presedan; iznos i odluka nisu provjereni, pravnik ih potvrđuje prije uporabe. (blokira val 3 i mentorske radove; do tada se ne bilježi)
 16. `[Pravnik]` Primjenjuje li se Prilog III. točka 3(d) Akta o UI na kontrolnu točku uživo bez AI-ja i je li ta obrada razmjerna (D-55)? `[ODLUKA]` (do mišljenja isključeno)
 17. `[Vlasnik]` Zamjenjuje li D-39 odluku D-06 o učestalosti nastavničkog pogleda, jer tekst obavijesti ovisi o odgovoru (STATE, Owner queue)? `[ODLUKA]`
 18. `[Vlasnik]` Kako se tekst obavijesti o privatnosti verzionira i veže uz potvrdu studenta (otisak teksta), kad potvrda sada veže samo verziju zadatka? `[IZVEDBA]`
 19. `[Vlasnik, Ustanova]` Treba li Ductus uopće ime i e-poštu studenta, i ako treba, iz kojeg izvora, kad kod danas traži opseg `profile` a ne sprema ništa osim identifikatora? `[ODLUKA]`
-20. `[Pravnik]` Jesu li hashevi lanca, potvrde i javno objavljeni ukupan broj potvrda osobni podaci nakon brisanja sadržaja (D-93, ARCHITECTURE §3)? `[ODLUKA]`
+20. `[Pravnik]` Jesu li hashevi lanca, potvrde i javno objavljeni ukupan broj potvrda osobni podaci nakon brisanja sadržaja (D-93, ARCHITECTURE §3)? `[ODLUKA]` Test za ocjenu: izdvajanje, povezivanje i zaključivanje iz nacrta smjernica EDPB-a o anonimizaciji (javno savjetovanje do 30. 10. 2026., prema izvještaju Istraživača od 18. 10.; tekst smjernica nije provjeren u repou). Konkretan put povezivanja: `segmentHash` i `finalDocumentHash` su SHA-256 bez ključa, pa tko ima kopiju teksta (nastavnik, kolega, treća strana) može izračunati hash i usporediti ga s potvrdom koja nosi `principalId`. `removedSha256` nije dio toga jer se briše sa segmentom (BACKEND §4.1).
+20a. `[Vlasnik]` Ako pravnik ocijeni da su ti hashevi osobni podaci: hash s ključem po radu (HMAC) ili brisanje ključa pri povlačenju mijenja format evidencije i neovisnu provjeru, pa se odluka donosi prije prve stvarne evidencije (pilot), ne nakon. `[ODLUKA]`
 21. `[Ustanova]` Je li evaluacija pilota (ankete, razgovori) zasebna obrada i tko je provodi na kojoj osnovi? `[ODLUKA]`
 22. `[Vlasnik]` Koji su konačni dobavljači nakon B0.1 i B0.2 (D-08) i koju državu i grupu svaki ima? `[ODLUKA]`
 

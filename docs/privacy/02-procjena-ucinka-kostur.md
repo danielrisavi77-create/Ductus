@@ -52,6 +52,7 @@ Stupci: izgrađeno / planirano / što nedostaje. Težina i vjerojatnost ocjenjuj
 | R13 | Student ne može dokazati što mu je bilo prikazano; ustanova ne može dokazati što je student potvrdio | Potvrda veže verziju zadatka koja je nepromjenjiva | Plan 2.6 u #239 | Potvrda ne veže tekst ni otisak obavijesti o privatnosti `[IZVEDBA]` |
 | R14 | Javno vidljivi trajni tragovi (dnevni korijen, broj potvrda) | Ništa | Samo hash i ukupni broj, bez sadržaja (D-93; zapisati u DPIA) | Ocjena je li to osobni podatak `[ODLUKA]` |
 | R15 | Podaci nastavnika i mentora (revizijski trag, komentari) | Uloge i autori zadataka | `access_log` | Obavijest za zaposlenike i njihovo zastupanje `[ODLUKA]` |
+| R16 | Povezivanje studenta s poznatim tekstom nakon brisanja: hashevi bez ključa (`segmentHash`, `finalDocumentHash`) ostaju uz potvrde | Brisanje sadržaja segmenata (D-12); `removedSha256` se briše sa segmentom | Ništa | Ocjena po testu EDPB-a (05 pitanje 20) i odluka o hashu s ključem prije pilota (05 pitanje 20a) `[ODLUKA]` |
 
 ## 4. Savjetovanje i potpisi (prazno)
 
