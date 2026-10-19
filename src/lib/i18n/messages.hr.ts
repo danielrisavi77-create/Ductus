@@ -250,6 +250,7 @@ export const hr = {
   liveView: {
     context: "Rad uživo",
     documentLabel: "Tekst rada",
+    sidePanel: "Komentari i granice zapisa",
     loading: "Učitavanje rada…",
     empty: "Student još nije započeo rad.",
     note: "Tekst se osvježava dok student piše. Student vidi isti prikaz svog rada.",
@@ -263,6 +264,25 @@ export const hr = {
       paused: "Prikaz miruje dok je kartica u pozadini.",
       signedOut: "Prijava je istekla. Prijavi se ponovno da vidiš rad.",
       notFound: "Ovaj rad nije dostupan ovom računu.",
+    },
+  },
+  // DAN-86 step 2c: the teacher's comment on a marked passage of the live view
+  // (design pregled-radova-v2 "Novi komentar"; B-10, BACKEND 4.11).
+  teacherComments: {
+    hint: "Označi tekst u radu za komentar.",
+    empty: "Nema komentara. Označi tekst u radu.",
+    newTitle: "Novi komentar",
+    bodyLabel: "Tekst komentara",
+    publish: "Objavi",
+    publishing: "Objavljivanje…",
+    cancel: "Odustani",
+    resolve: "Označi riješenim",
+    reopen: "Ponovno otvori",
+    errors: {
+      signedOut: "Prijava je istekla. Prijavi se ponovno.",
+      forbidden: "Ovaj račun ne može komentirati ovaj rad.",
+      invalid: "Komentar nije prihvaćen. Napiši od 1 do 2000 znakova.",
+      unavailable: "Komentar nije objavljen. Pokušaj ponovno.",
     },
   },
   // K-3 text (PLAN-DEMO point 8, D-80 point 3; owner on #87, 6266445027 point 3):
