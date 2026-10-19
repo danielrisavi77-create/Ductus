@@ -1,5 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
+import { homedir } from "node:os";
+import { isAbsolute, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
@@ -8,6 +10,9 @@ const APP_DATABASE_USER = "ductus_app_local";
 const APP_DATABASE_PASSWORD = "ductus-app-local-only";
 const AUTH_DATABASE_USER = "ductus_auth_local";
 const EXAMPLE_AUTH_PASSWORD = "<DUCTUS_AUTH_LOCAL_PASSWORD>";
+const EVIDENCE_KEY_SCRIPT = "db/local/evidence-signing-key.mjs";
+const EVIDENCE_STORAGE_SCRIPT = "db/local/evidence-storage-domain.mjs";
+const STORAGE_DOMAINS_VAR = "EVIDENCE_STORAGE_DOMAINS";
 let activeChild;
 let stopSignal;
 
@@ -66,6 +71,14 @@ export function createDemoEnvironment(source = process.env) {
   }
   authUrl.password = authPassword;
 
+  // The development signing seed lives outside the repository, in the home
+  // directory, so every run (and every checkout) finds the same key. An
+  // absolute path set by the operator wins; the signer refuses one inside the repository.
+  const configuredSeed = source.DUCTUS_DEV_SIGNING_KEY_FILE;
+  const seedFile = configuredSeed && isAbsolute(configuredSeed)
+    ? configuredSeed
+    : join(homedir(), ".ductus", "demo-evidence-signing.seed");
+
   return {
     ...source,
     DATABASE_URL: "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus",
@@ -75,6 +88,9 @@ export function createDemoEnvironment(source = process.env) {
     S3_ENDPOINT: "http://127.0.0.1:9100",
     S3_ACCESS_KEY_ID: "ductus-local",
     S3_SECRET_ACCESS_KEY: "ductus-local-only",
+    EVIDENCE_S3_LOCAL_KEY_ID: "ductus-local",
+    EVIDENCE_S3_LOCAL_SECRET: "ductus-local-only",
+    DUCTUS_DEV_SIGNING_KEY_FILE: seedFile,
     MAILPIT_URL: "http://127.0.0.1:8025",
     SMTP_URL: "smtp://127.0.0.1:1025",
     NODE_ENV: "development",
@@ -140,24 +156,76 @@ function runPnpm(script, env) {
   });
 }
 
-/** Run the shared clean-runner preparation sequence; CI omits only the dev server. */
-export async function runDemoLifecycle(env, runScript = runPnpm, includeApp = true) {
-  const scripts = includeApp
-    ? ["stack:up", "db:migrate", "db:seed", "dev"]
-    : ["stack:up", "db:migrate", "db:seed"];
-  for (const script of scripts) {
-    const code = await runScript(script, env);
-    if (code !== 0) {
-      return code;
-    }
-  }
-  return 0;
+/** Run a local Node script (the db/local evidence scripts) and capture its stdout. */
+function runNodeCapture(script, env) {
+  if (stopSignal) return Promise.resolve({ code: stopSignal === "SIGINT" ? 130 : 143, stdout: "" });
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [script], {
+      cwd: root,
+      env,
+      stdio: ["ignore", "pipe", "inherit"],
+      windowsHide: true,
+    });
+    activeChild = child;
+    let stdout = "";
+    child.stdout.on("data", (chunk) => (stdout += chunk));
+    let settled = false;
+    const finish = (code) => {
+      if (settled) return;
+      settled = true;
+      if (activeChild === child) activeChild = undefined;
+      resolve({ code: stopSignal ? (stopSignal === "SIGINT" ? 130 : 143) : (code ?? 1), stdout });
+    };
+    child.once("error", () => {
+      console.error(`Could not start ${script}.`);
+      finish(1);
+    });
+    child.once("exit", (code) => finish(code));
+  });
 }
 
+/** The one EVIDENCE_STORAGE_DOMAINS line the storage script prints, or undefined. */
+export function parseStorageDomainsLine(stdout) {
+  const lines = stdout.split(/\r?\n/).filter((line) => line.length > 0);
+  if (lines.length !== 1 || !lines[0].startsWith(`${STORAGE_DOMAINS_VAR}=`)) return undefined;
+  const value = lines[0].slice(STORAGE_DOMAINS_VAR.length + 1);
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed?.domains) && parsed.domains.length > 0 ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Run the shared clean-runner preparation sequence; CI omits only the dev
+ * server. After the seed, the evidence signing key and the storage domain of
+ * the demo institution are registered (both idempotent), and the storage
+ * configuration goes to the app through its environment, never to disk.
+ */
+export async function runDemoLifecycle(env, runScript = runPnpm, includeApp = true, runNode = runNodeCapture) {
+  for (const script of ["stack:up", "db:migrate", "db:seed"]) {
+    const code = await runScript(script, env);
+    if (code !== 0) return code;
+  }
+
+  const key = await runNode(EVIDENCE_KEY_SCRIPT, env);
+  if (key.code !== 0) return key.code;
+  const storage = await runNode(EVIDENCE_STORAGE_SCRIPT, env);
+  if (storage.code !== 0) return storage.code;
+  const domains = parseStorageDomainsLine(storage.stdout);
+  if (domains === undefined) {
+    console.error("The evidence storage script did not print a usable storage configuration.");
+    return 1;
+  }
+  const appEnv = { ...env, [STORAGE_DOMAINS_VAR]: domains };
+
+  return includeApp ? runScript("dev", appEnv) : 0;
+}
 async function startDemo(env, prepareOnly) {
   console.log(prepareOnly
-    ? "Preparing the local Ductus demo stack, migrations, and synthetic institutions."
-    : "Starting the local Ductus demo stack, migrations, synthetic institutions, and app.");
+    ? "Preparing the local Ductus demo stack, migrations, synthetic institutions, evidence key and storage."
+    : "Starting the local Ductus demo stack, migrations, synthetic institutions, evidence key and storage, and app.");
   console.log("A local auth password is generated for this run and is not written to disk or printed.");
   const code = await runDemoLifecycle(env, runPnpm, !prepareOnly);
   if (code !== 0) process.exitCode = code;
