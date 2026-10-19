@@ -14,7 +14,12 @@
  *
  * Semantic names from the same table (FE-D2): --raised for dialogs and other
  * raised surfaces, --selected for the selected item or segment, --ink-muted
- * for the quietest text, --warn and --error for warning and error marks.
+ * for the quietest marks, --warn and --error for warning and error marks.
+ * --ink-muted is the handoff's #767d75, under 4.5:1 on --chrome, --sheet and
+ * --raised (4.27, 4.16, 3.99): large text (24 px, or 18.66 px bold) and
+ * non-text marks only (at least 3:1); small quiet text uses --ink-3 (5.49:1
+ * on --raised). --raised and --selected are shell surfaces; the white sheet
+ * has no values for them, so they are not used inside the sheet.
  * The save-state chip keeps its own colours (PR #386); these names are for
  * new callers. The manuscript is Newsreader 16.5 px with leading 1.7
  * (README §5.1), served from app/fonts like every other face (DAN-121).
@@ -81,6 +86,7 @@
   --p-unknown: #6e6a62;
   --p-template: #9a9488;
   --p-ai: #8a6a2f;
+  /* 4.05:1 on white: marks and icons only (3:1), never warning text. */
   --warn: #a87420;
   --cmt: #b8862a;
   --cmt-ink: #8a6420;
