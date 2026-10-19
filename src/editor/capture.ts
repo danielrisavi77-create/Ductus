@@ -21,7 +21,7 @@
 
 import type { Node as PmNode } from "@tiptap/pm/model";
 import type { Transaction } from "@tiptap/pm/state";
-import type { Step } from "@tiptap/pm/transform";
+import { ReplaceStep, type Step } from "@tiptap/pm/transform";
 
 import { EDIT_STEP_FORMAT_V1, parseEditSteps } from "@/domain/document/edit-step";
 import { exceedsEvidenceSegmentLimit } from "@/domain/forensics/evidence-chain-v2";
@@ -155,6 +155,62 @@ async function editStepsOf(step: Step, before: PmNode): Promise<JcsJsonValue[]> 
   return [json as JcsJsonValue];
 }
 
+/**
+ * Enter inside a block: Tiptap copies the id onto the new block, so the slice
+ * holds the same id at both ends, which the format refuses. The format writes
+ * a split with `null` on the block of the open end, the new one (ProseMirror
+ * takes its attributes from the slice), and leaves the id to `attr` steps
+ * (edit-step.test.ts, "a split that copies the id"). This finds such a split
+ * and gives where that block starts once the step is applied.
+ */
+function splitCopyingId(step: Step): number | null {
+  if (!(step instanceof ReplaceStep)) return null;
+  const { content, openEnd, size } = step.slice;
+  const first = content.firstChild;
+  const last = content.lastChild;
+  if (content.childCount < 2 || openEnd === 0 || !first || !last) return null;
+  const id: unknown = first.attrs.nodeId;
+  if (typeof id !== "string" || last.attrs.nodeId !== id) return null;
+  return step.from + size - (last.nodeSize - openEnd);
+}
+
+/** The step's JSON with `null` on the block of the open end; a copy, as the JSON shares attributes with the editor. */
+function withEndBlockUnnamed(json: JcsJsonValue): JcsJsonValue {
+  const step = json as { slice: { content: { attrs: Record<string, JcsJsonValue> }[] } };
+  const content = step.slice.content;
+  const end = content[content.length - 1]!;
+  return {
+    ...step,
+    slice: { ...step.slice, content: [...content.slice(0, -1), { ...end, attrs: { ...end.attrs, nodeId: null } }] },
+  } as unknown as JcsJsonValue;
+}
+
+/**
+ * Every step of one change as the format writes it. A block a split left
+ * without its id must get one from the identity plugin's step in the same
+ * change. At the start of a block the plugin gives the new id to the empty
+ * block in front instead, and the text keeps its own: the format has no way
+ * to write that (an `attr` step only names a block without an id), so it is
+ * refused here rather than sent as a segment the server would refuse.
+ */
+async function changeSteps(change: CapturedChange): Promise<JcsJsonValue[]> {
+  const steps: JcsJsonValue[] = [];
+  let unnamed: number[] = [];
+  for (const [i, step] of change.steps.entries()) {
+    if (unnamed.length > 0) {
+      const map = step.getMap();
+      unnamed = unnamed.map((pos) => map.map(pos, 1));
+    }
+    const fixes = nodeIdFixesOf(step);
+    if (fixes !== null) unnamed = unnamed.filter((pos) => !fixes.some((fix) => fix.pos === pos));
+    const split = splitCopyingId(step);
+    for (const json of await editStepsOf(step, change.docs[i]!)) steps.push(split !== null ? withEndBlockUnnamed(json) : json);
+    if (split !== null) unnamed.push(split);
+  }
+  if (unnamed.length > 0) throw new CaptureError("unsupported_step");
+  return steps;
+}
+
 /** Hash of the canonical form of a document; a block without its own id is refused, never given one. */
 async function documentDigest(document: PmNode): Promise<{ canonical: string; sha256: string }> {
   const candidate = tiptapToCanonical(document.toJSON(), () => {
@@ -228,7 +284,10 @@ export class EvidenceRecorder {
    * The next segment from the oldest closed events, or null if none is closed.
    * It holds as many events as fit the event limit, the 30 s span from its
    * first change to its last and D-96; the rest stay for the next call.
-   * Events leave the recorder only once a segment was built from them.
+   * Events leave the recorder once a segment was built from them, or all at
+   * once when it stops: a gap or a segment that cannot be built drops every
+   * event not yet in a segment, the sound ones before it too (fail closed;
+   * whether to drain those first is decided with the caller in 3d-2).
    */
   async takeSegment(context: SegmentContext): Promise<BuiltSegment | null> {
     if (this.failure !== null) throw new CaptureError(this.failure);
@@ -273,15 +332,13 @@ async function buildSegment(raw: readonly RawEvent[], context: SegmentContext): 
     const steps: JcsJsonValue[] = [];
     const offsets: number[] = [];
     for (const change of event.changes) {
-      for (const [i, step] of change.steps.entries()) {
-        for (const json of await editStepsOf(step, change.docs[i]!)) {
-          steps.push(json);
-          offsets.push(change.at - startedMs);
-        }
+      for (const json of await changeSteps(change)) {
+        steps.push(json);
+        offsets.push(change.at - startedMs);
       }
     }
     const parsed = parseEditSteps(EDIT_STEP_FORMAT_V1, steps);
-    if (!parsed.ok) throw new CaptureError("unsupported_step");
+    if (!parsed.ok) throw new CaptureError(parsed.code === "too_large" ? "too_large" : "unsupported_step");
     const before = previousAfter ?? (await documentDigest(event.changes[0]!.docs[0]!));
     const after = await documentDigest(event.changes[event.changes.length - 1]!.after);
     initial ??= before.sha256;

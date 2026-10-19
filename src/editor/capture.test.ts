@@ -135,6 +135,35 @@ describe("F-8 3d-1: a captured segment replays on the server's replayer", () => 
     expect(steps).toContain("attr");
     await replays(t.initial, built);
   });
+
+  // Inside a block, Tiptap copies the id onto the new block, so ProseMirror
+  // writes the split with the id twice; the format takes it with `null` on
+  // the new block and the `attr` step that follows (edit-step.test.ts).
+  it("Enter in the middle of a block replays, and the recorder keeps going", async () => {
+    const t = setup("Izmisljeni tekst");
+    t.editor.commands.setTextSelection(5);
+    t.editor.commands.splitBlock();
+    t.type("x");
+    t.recorder.close();
+    const built = (await t.recorder.takeSegment(CONTEXT))!;
+    await replays(t.initial, built);
+    expect(t.recorder.intact).toBe(true);
+    const ids = t.editor.state.doc.content.content.map((block) => block.attrs.nodeId as string);
+    expect(new Set(ids).size).toBe(2);
+  });
+
+  // At the start of a block the identity plugin names the empty block in
+  // front and the text keeps its id; an `attr` step only names a block
+  // without one, so the format cannot write it. Refused here, never sent as a
+  // segment the server would refuse (open: QA 494 finding 1).
+  it("Enter at the start of a block is refused before it is built into a segment", async () => {
+    const t = setup("Izmisljeni tekst");
+    t.editor.commands.setTextSelection(1);
+    t.editor.commands.splitBlock();
+    t.recorder.close();
+    await expect(t.recorder.takeSegment(CONTEXT)).rejects.toMatchObject({ code: "unsupported_step" });
+    expect(t.recorder.intact).toBe(false);
+  });
 });
 
 describe("F-8 3d-1: events, segments and time", () => {
@@ -238,6 +267,16 @@ describe("F-8 3d-1: events, segments and time", () => {
     expect(t.recorder.pendingEvents).toBe(0);
     expect(() => t.type("a")).toThrow(CaptureError);
     await expect(t.recorder.takeSegment(CONTEXT)).rejects.toMatchObject({ code: "unsupported_step" });
+  });
+
+  it("one event over the limit of a step or segment is too_large, and stops the recorder", async () => {
+    const t = setup();
+    t.editor.commands.setTextSelection(10);
+    t.as("paste");
+    t.editor.view.dispatch(t.editor.state.tr.insertText("z".repeat(2_200_000)));
+    t.recorder.close();
+    await expect(t.recorder.takeSegment(CONTEXT)).rejects.toMatchObject({ code: "too_large" });
+    expect(t.recorder.intact).toBe(false);
   });
 
   it("a change that does not start where the last one ended is a gap, and nothing more is recorded", () => {
