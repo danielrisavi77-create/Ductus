@@ -152,6 +152,45 @@ describe("F-8 3d-1: a captured segment replays on the server's replayer", () => 
     expect(new Set(ids).size).toBe(2);
   });
 
+  // A range that removes only the boundary of two blocks removes no content:
+  // BACKEND 4.1 writes it with `structure` and without `removedSha256`.
+  it.each([
+    ["Backspace", (editor: Editor) => editor.commands.deleteSelection()],
+    ["typing", (editor: Editor) => editor.view.dispatch(editor.state.tr.insertText("x"))],
+  ])("a selection of exactly the boundary of two blocks, then %s, replays", async (_name, edit) => {
+    const t = setup("Prvi odlomak");
+    t.editor.commands.setTextSelection(13);
+    t.editor.commands.splitBlock();
+    t.type("Drugi red");
+    t.editor.commands.setTextSelection({ from: 13, to: 15 });
+    edit(t.editor);
+    t.type("y");
+    t.recorder.close();
+    expect(t.editor.state.doc.childCount).toBe(1);
+    await replays(t.initial, (await t.recorder.takeSegment(CONTEXT))!);
+    expect(t.recorder.intact).toBe(true);
+  });
+
+  // Undo gives the identity plugin's step back with the id the block had; the
+  // block it names is removed by the next step of the same change, so it has
+  // no effect there and the format, whose `attr` only names a block without
+  // an id, does not write it.
+  it.each([["in the middle of", 5], ["at the end of", 10]])(
+    "Undo after Enter %s a block replays, and the recorder keeps going",
+    async (_name, at) => {
+      const t = setup("Odlomak B");
+      t.editor.commands.setTextSelection(at);
+      t.editor.commands.splitBlock();
+      t.as("editor", 1_000);
+      t.editor.commands.undo();
+      t.type("z");
+      t.recorder.close();
+      expect(t.editor.state.doc.childCount).toBe(1);
+      await replays(t.initial, (await t.recorder.takeSegment(CONTEXT))!);
+      expect(t.recorder.intact).toBe(true);
+    },
+  );
+
   // At the start of a block the identity plugin names the empty block in
   // front and the text keeps its id; an `attr` step only names a block
   // without one, so the format cannot write it. Refused here, never sent as a

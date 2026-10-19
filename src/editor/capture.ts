@@ -21,7 +21,7 @@
 
 import type { Node as PmNode } from "@tiptap/pm/model";
 import type { Transaction } from "@tiptap/pm/state";
-import { ReplaceStep, type Step } from "@tiptap/pm/transform";
+import { ReplaceStep, Step } from "@tiptap/pm/transform";
 
 import { EDIT_STEP_FORMAT_V1, parseEditSteps } from "@/domain/document/edit-step";
 import { exceedsEvidenceSegmentLimit } from "@/domain/forensics/evidence-chain-v2";
@@ -134,80 +134,109 @@ export async function removedSliceSha256(document: PmNode, from: number, to: num
 }
 
 /**
- * A step as the format writes it. The identity plugin's step becomes one
- * `attr` step per block (owner decision 3); its positions do not move.
+ * Whether `from..to` of `document` holds a character or a whole block: then
+ * the step carries `removedSha256`, otherwise `structure` (BACKEND 4.1; the
+ * same test as the replayer's `removesContent`).
  */
-async function editStepsOf(step: Step, before: PmNode): Promise<JcsJsonValue[]> {
-  const fixes = nodeIdFixesOf(step);
-  if (fixes !== null) {
-    return fixes.map(({ pos, id }) => ({ stepType: "attr", pos, attr: "nodeId", value: id as JcsJsonValue }));
-  }
-  let json: Record<string, unknown>;
-  try {
-    json = step.toJSON() as Record<string, unknown>;
-  } catch {
-    throw new CaptureError("unsupported_step");
-  }
-  const { stepType, from, to, structure } = json;
-  if (stepType === "replace" && typeof from === "number" && typeof to === "number" && from < to && structure !== true) {
-    json.removedSha256 = await removedSliceSha256(before, from, to);
-  }
-  return [json as JcsJsonValue];
+function removesContent(document: PmNode, from: number, to: number): boolean {
+  if (document.textBetween(from, to).length > 0) return true;
+  let wholeBlock = false;
+  document.forEach((block, offset) => {
+    wholeBlock ||= offset >= from && offset + block.nodeSize <= to;
+  });
+  return wholeBlock;
 }
 
 /**
  * Enter inside a block: Tiptap copies the id onto the new block, so the slice
  * holds the same id at both ends, which the format refuses. The format writes
  * a split with `null` on the block of the open end, the new one (ProseMirror
- * takes its attributes from the slice), and leaves the id to `attr` steps
- * (edit-step.test.ts, "a split that copies the id"). This finds such a split
- * and gives where that block starts once the step is applied.
+ * takes its attributes from the slice), and leaves the id to an `attr` step
+ * (edit-step.test.ts, "a split that copies the id").
  */
-function splitCopyingId(step: Step): number | null {
-  if (!(step instanceof ReplaceStep)) return null;
-  const { content, openEnd, size } = step.slice;
+function copiesIdInSplit(step: Step): boolean {
+  if (!(step instanceof ReplaceStep)) return false;
+  const { content, openEnd } = step.slice;
   const first = content.firstChild;
   const last = content.lastChild;
-  if (content.childCount < 2 || openEnd === 0 || !first || !last) return null;
-  const id: unknown = first.attrs.nodeId;
-  if (typeof id !== "string" || last.attrs.nodeId !== id) return null;
-  return step.from + size - (last.nodeSize - openEnd);
+  if (content.childCount < 2 || openEnd === 0 || !first || !last) return false;
+  return typeof first.attrs.nodeId === "string" && last.attrs.nodeId === first.attrs.nodeId;
 }
 
 /** The step's JSON with `null` on the block of the open end; a copy, as the JSON shares attributes with the editor. */
-function withEndBlockUnnamed(json: JcsJsonValue): JcsJsonValue {
-  const step = json as { slice: { content: { attrs: Record<string, JcsJsonValue> }[] } };
-  const content = step.slice.content;
-  const end = content[content.length - 1]!;
+function withEndBlockUnnamed(json: Record<string, unknown>): Record<string, unknown> {
+  const slice = json.slice as { content: { attrs: Record<string, unknown> }[] };
+  const end = slice.content[slice.content.length - 1]!;
   return {
-    ...step,
-    slice: { ...step.slice, content: [...content.slice(0, -1), { ...end, attrs: { ...end.attrs, nodeId: null } }] },
-  } as unknown as JcsJsonValue;
+    ...json,
+    slice: { ...slice, content: [...slice.content.slice(0, -1), { ...end, attrs: { ...end.attrs, nodeId: null } }] },
+  };
+}
+
+/** Whether a later step of the change removes the block that starts at `pos`. */
+function removedLater(steps: readonly Step[], index: number, pos: number): boolean {
+  let at = pos;
+  for (const step of steps.slice(index + 1)) {
+    const mapped = step.getMap().mapResult(at, 1);
+    if (mapped.deleted) return true;
+    at = mapped.pos;
+  }
+  return false;
 }
 
 /**
- * Every step of one change as the format writes it. A block a split left
- * without its id must get one from the identity plugin's step in the same
- * change. At the start of a block the plugin gives the new id to the empty
- * block in front instead, and the text keeps its own: the format has no way
- * to write that (an `attr` step only names a block without an id), so it is
- * refused here rather than sent as a segment the server would refuse.
+ * Every step of one change as the format writes it, applied as written to
+ * the document the server's replayer will hold, which must end as the
+ * editor's: otherwise the change is refused here, never sent as a segment
+ * the server would refuse.
+ *
+ * - The identity plugin's step becomes one `attr` step per block (owner
+ *   decision 3), and an `attr` only names a block without an id. A fix of a
+ *   block that a later step of the change removes (Undo after Enter gives the
+ *   old id back, then removes the block) has no effect and is not written.
+ * - `removedSha256` and `structure` follow BACKEND 4.1 on that document.
+ * - Enter at the start of a block, where the plugin names the empty block in
+ *   front and the text keeps its id, cannot be written and is refused.
  */
 async function changeSteps(change: CapturedChange): Promise<JcsJsonValue[]> {
   const steps: JcsJsonValue[] = [];
-  let unnamed: number[] = [];
-  for (const [i, step] of change.steps.entries()) {
-    if (unnamed.length > 0) {
-      const map = step.getMap();
-      unnamed = unnamed.map((pos) => map.map(pos, 1));
+  let doc = change.docs[0]!;
+  const apply = (json: Record<string, unknown>) => {
+    let next: PmNode | null;
+    try {
+      next = Step.fromJSON(doc.type.schema, json).apply(doc).doc;
+    } catch {
+      throw new CaptureError("unsupported_step");
     }
+    if (!next) throw new CaptureError("unsupported_step");
+    doc = next;
+    steps.push(json as JcsJsonValue);
+  };
+  for (const [index, step] of change.steps.entries()) {
     const fixes = nodeIdFixesOf(step);
-    if (fixes !== null) unnamed = unnamed.filter((pos) => !fixes.some((fix) => fix.pos === pos));
-    const split = splitCopyingId(step);
-    for (const json of await editStepsOf(step, change.docs[i]!)) steps.push(split !== null ? withEndBlockUnnamed(json) : json);
-    if (split !== null) unnamed.push(split);
+    if (fixes !== null) {
+      for (const { pos, id } of fixes) {
+        if (removedLater(change.steps, index, pos)) continue;
+        if (typeof id !== "string" || doc.nodeAt(pos)?.attrs.nodeId !== null) throw new CaptureError("unsupported_step");
+        apply({ stepType: "attr", pos, attr: "nodeId", value: id });
+      }
+      continue;
+    }
+    let json: Record<string, unknown>;
+    try {
+      json = step.toJSON() as Record<string, unknown>;
+    } catch {
+      throw new CaptureError("unsupported_step");
+    }
+    if (copiesIdInSplit(step)) json = withEndBlockUnnamed(json);
+    const { stepType, from, to, structure } = json;
+    if (stepType === "replace" && typeof from === "number" && typeof to === "number" && from < to && structure !== true) {
+      if (removesContent(doc, from, to)) json.removedSha256 = await removedSliceSha256(doc, from, to);
+      else json.structure = true;
+    }
+    apply(json);
   }
-  if (unnamed.length > 0) throw new CaptureError("unsupported_step");
+  if (!doc.eq(change.after)) throw new CaptureError("unsupported_step");
   return steps;
 }
 
