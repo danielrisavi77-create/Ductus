@@ -279,7 +279,7 @@ export class EvidenceRecorder {
     throw new CaptureError(code);
   }
 
-  /** Records one change; a change whose steps change nothing is ignored. */
+  /** Records one change; a change that leaves the document as it was is ignored. */
   record(change: CapturedChange): void {
     if (this.failure !== null) throw new CaptureError(this.failure);
     if (change.steps.length === 0) return;
@@ -288,9 +288,11 @@ export class EvidenceRecorder {
     }
     const previous = this.last;
     this.last = change;
-    // Every step left the document as it was: nothing to write, and an event
-    // of no step would be refused (`steps_empty`).
-    if (change.docs.every((doc, i) => doc.eq(change.docs[i + 1] ?? change.after))) return;
+    // The change left the document as it was: nothing to write. Its steps
+    // could replay only as steps that change nothing, or as a pair that
+    // undoes itself (`setParagraph` on a paragraph gives a block without an
+    // id, then its id back), which the replayer refuses.
+    if (change.docs[0]!.eq(change.after)) return;
     if (
       this.open &&
       (this.open.source !== change.source ||

@@ -234,6 +234,33 @@ describe("F-8 3d-1: a captured segment replays on the server's replayer", () => 
     await replays(t.initial, built);
   });
 
+  // Tiptap's setNode on a block of the same type gives two steps that each
+  // change the document and together leave it as it was (QA 494f VAŽNO 1).
+  it.each([
+    ["setParagraph on a paragraph", (editor: Editor) => editor.chain().focus().setParagraph().run(), () => {}],
+    [
+      "setHeading on a heading of the same level",
+      (editor: Editor) => editor.chain().focus().setHeading({ level: 2 }).run(),
+      (editor: Editor) => editor.chain().focus().setHeading({ level: 2 }).run(),
+    ],
+  ])("%s makes no step, and the segment replays", async (_name, edit, prepare) => {
+    const t = setup("Prvi odlomak");
+    t.editor.commands.setTextSelection(3);
+    prepare(t.editor);
+    t.recorder.close();
+    await t.recorder.takeSegment(CONTEXT);
+    const initial = canonical(t.editor);
+    t.as("editor", 1_000);
+    edit(t.editor);
+    t.as("editor", 1_000);
+    t.type("y");
+    t.recorder.close();
+    const built = (await t.recorder.takeSegment(CONTEXT))!;
+    expect(built.segment.events.flatMap((event) => event.steps)).toHaveLength(1);
+    await replays(initial, built);
+    expect(t.recorder.intact).toBe(true);
+  });
+
   it("a change whose every step changes nothing makes no event", async () => {
     const t = setup("Odlomak B");
     t.editor.commands.setTextSelection({ from: 1, to: 8 });
