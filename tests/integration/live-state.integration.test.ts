@@ -140,6 +140,7 @@ async function removeFixture() {
   try {
     // Disposable synthetic rows only (same teardown as the other evidence tests).
     await admin.query("SET LOCAL session_replication_role = replica");
+    await admin.query("DELETE FROM audit.access_log WHERE institution_id = $1", [institutionId]);
     await admin.query("DELETE FROM collaboration.live_state WHERE institution_id = $1", [institutionId]);
     await admin.query("DELETE FROM evidence.document_revision WHERE document_id = $1", [documentId]);
     await admin.query("DELETE FROM evidence.document WHERE id = $1", [documentId]);
@@ -270,6 +271,20 @@ describe("live view over the API and the RPCs (B-LIVE step 3, rule 5)", () => {
     for (const response of [await get(expiredToken), await put(expiredToken, FIRST, { "if-none-match": "*" })]) {
       expect([response.status, await response.json()]).toStrictEqual([401, { error: "unauthorized" }]);
     }
+
+    // PRODUCT 5 rule 17 (DAN-228 step 2): only Vesna's readings are in the
+    // access log of the work; Ana's own and Dora's refused ones are not. The
+    // readings above may span two 5-minute intervals, so rows are compared as
+    // distinct openings.
+    const names = new Map<string, string>(Object.entries(people).map(([name, id]) => [id, name]));
+    const openings = await admin.query<{ owner_id: string; reader_id: string; reader_role: string; surface: string }>(
+      `SELECT DISTINCT owner_id, reader_id, reader_role, surface FROM audit.access_log
+        WHERE document_id = $1 AND institution_id = $2`,
+      [documentId, institutionId],
+    );
+    expect(
+      openings.rows.map((r) => `${names.get(r.reader_id)} ${r.reader_role} ${r.surface} of ${names.get(r.owner_id)}`),
+    ).toStrictEqual(["vesna teacher live_view of ana"]);
 
     // Log canary: no text of the work reaches a log line.
     const lines = JSON.stringify([...log.mock.calls, ...warn.mock.calls]);
