@@ -48,6 +48,7 @@ export type ProcessSummaryUnavailableReason =
 export type ProcessSummaryReadResult =
   | { status: "ok"; body: string }
   | { status: "not_found" }
+  | { status: "unauthenticated" }
   | { status: "unavailable"; reason: ProcessSummaryUnavailableReason };
 
 const unavailable = (reason: ProcessSummaryUnavailableReason): ProcessSummaryReadResult => ({
@@ -71,6 +72,7 @@ export async function readProcessSummary(
     return unavailable("source_unavailable");
   }
   if (source.status === "not_found") return { status: "not_found" };
+  if (source.status === "unauthenticated") return { status: "unauthenticated" };
   if (source.status !== "found") return unavailable("source_unavailable");
 
   const storage = bindPayloadReader(deps.payloads, source.institutionId);
