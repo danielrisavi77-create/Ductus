@@ -5,7 +5,7 @@ import type { NodeId } from "../../src/domain/document";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
 import { cleanUp, ORIGIN, post, seed } from "./comment-seed";
-import { signIn } from "./support";
+import { clickSignOut, signIn } from "./support";
 
 // F-9 step 1 (DAN-86): a teacher's comment next to a paragraph reaches the
 // student on /rad, through the B-10 route and RPCs. Until the teacher view
@@ -23,6 +23,7 @@ const t = messagesHr.comments;
 const TEXT = "Gradske knjižnice su mjesto susreta i učenja.";
 const QUOTE = "mjesto susreta";
 const BODY = "Dodaj izvor za ovu tvrdnju. <img src=x onerror=alert(1)>";
+
 /** The comment cards only; the sheet is an article as well. */
 const commentCards = (page: Page) =>
   page.getByRole("article", { name: new RegExp(`^${t.number.replace("{n}", "\\d+")}$`) });
@@ -98,7 +99,7 @@ test("a teacher's comment next to a paragraph reaches the student, who answers",
   await student.getByRole("button", { name: t.refresh }).click();
   const second = await student.context().newPage();
   await second.goto("/rad");
-  await second.getByRole("button", { name: messagesHr.auth.logout }).click();
+  await clickSignOut(second);
   await second.waitForURL(`${ORIGIN}/`);
   await expect(editor).toHaveText("");
   // Wait for the held answer itself, never for "networkidle": `next dev`
@@ -146,7 +147,7 @@ test("without IndexedDB the panel still drops the threads when the session ends 
 
   const second = await student.context().newPage();
   await second.goto("/rad");
-  await second.getByRole("button", { name: messagesHr.auth.logout }).click();
+  await clickSignOut(second);
   await second.waitForURL(`${ORIGIN}/`);
   await expect(student.getByText(t.signedOut)).toBeVisible();
   await expect(commentCards(student)).toHaveCount(0);

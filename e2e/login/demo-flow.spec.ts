@@ -10,7 +10,7 @@ import type { NodeId } from "../../src/domain/document";
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
 import { cleanUp, post, seed } from "./comment-seed";
-import { appCookie, SESSION_COOKIE, sessionRow, signIn } from "./support";
+import { appCookie, clickSignOut, SESSION_COOKIE, sessionRow, signIn } from "./support";
 
 // K-4 (DAN-89; docs/PLAN-DEMO.md §1 points 1 to 5 and §7 t. 2, D-98): the demo
 // walk-through as one test. The login config records its video in CI and the
@@ -36,7 +36,6 @@ const QUOTE = "gradskim knjižnicama";
 
 const editorOf = (page: Page) => page.getByRole("textbox", { name: t.workspace.documentLabel });
 const chipOf = (page: Page) => page.locator(".workspace__status .sync-chip");
-const logoutOf = (page: Page) => page.getByRole("button", { name: t.auth.logout });
 
 /** A screenshot in the report, next to the video. */
 async function snapshot(page: Page, name: string): Promise<void> {
@@ -51,7 +50,7 @@ async function forgetProviderLogin(context: BrowserContext): Promise<void> {
 /** Signs out through the button on the writing page and checks that the session is closed. */
 async function signOut(page: Page, token: string): Promise<void> {
   if (!page.url().endsWith("/rad")) await page.goto("/rad");
-  await logoutOf(page).click();
+  await clickSignOut(page);
   await page.waitForURL("http://localhost:3000/");
   expect(await appCookie(page.context(), SESSION_COOKIE)).toBeUndefined();
   expect(await sessionRow(token)).toMatchObject({ close_reason: "logout", closed_at: expect.any(Date) });
@@ -124,17 +123,21 @@ test("demo walk-through", async ({ browser, page, context }) => {
     // The step takes the role away again afterwards, so demo-role.spec.ts still meets a clean stack.
     roleGrantedByThisTest = !(await teacherRoleActive());
     if (roleGrantedByThisTest) {
-      await page.goto("/nastavnik/kolegiji");
+      await page.goto("/nastavnik/zadatak/novi");
       await expect(page.getByText(t.teacher.denied)).toBeVisible();
       await expect(page.getByRole("button", { name: t.teacher.course.submit })).toHaveCount(0);
     }
     await run("node", ["scripts/demo/provision-teacher.mjs"], { cwd: ROOT });
-    await page.goto("/nastavnik/kolegiji");
+    await page.goto("/nastavnik/zadatak/novi");
     await expect(page.getByRole("heading", { name: t.teacher.title })).toBeVisible();
 
     await page.getByLabel(t.teacher.course.name).fill(COURSE_NAME);
     await page.getByRole("button", { name: t.teacher.course.submit }).click();
     await expect(page.getByRole("status").filter({ hasText: t.teacher.course.created })).toBeVisible();
+    // FE-D10: no enrolment code is invented while its route is missing.
+    const code = page.getByText(t.teacher.course.code, { exact: false }).first();
+    await expect(code).toContainText(t.workspace.soon);
+    await expect(page.getByText(t.teacher.course.codeSoon)).toBeVisible();
     await snapshot(page, "1-kolegij-stvoren");
 
     await page.getByLabel(t.teacher.assignment.title).fill("Izmišljeni zadatak o gradskim knjižnicama");
@@ -227,7 +230,6 @@ test("demo walk-through", async ({ browser, page, context }) => {
   // The teacher's view of the saved work (B-11) is not on main, so the part of
   // F-9 where the teacher sees the saved state stays skipped, not simulated.
   await test.step.skip("3. F-9: nastavnik vidi spremljeno stanje rada, ne tipkanje uživo", async () => {});
-
   // F-10 (demo points 4 and 5): proves that the student submits, the server
   // reconstructs the work and the comparison matches, the student gets the
   // signed receipt, and student and teacher see the same process summary,
