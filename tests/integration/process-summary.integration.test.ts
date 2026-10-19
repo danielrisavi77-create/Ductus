@@ -3,7 +3,9 @@ import { randomBytes, randomUUID } from "node:crypto";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { InMemoryEvidencePayloadStore } from "@/adapters/evidence/in-memory-evidence-payload-store";
+import { InstitutionRoutedPayloadStore } from "@/adapters/evidence/institution-routed-payload-store";
+import { STORAGE_IDENTITY_KEY } from "@/adapters/evidence/s3-evidence-payload-store";
+import { signS3Request } from "@/adapters/evidence/s3-signature";
 import { EDIT_STEP_FORMAT_V1 } from "@/domain/document/edit-step";
 import { sha256WebCrypto } from "@/domain/forensics/crypto";
 import {
@@ -13,12 +15,15 @@ import {
   EVIDENCE_SEGMENT_SCHEMA_V2,
 } from "@/domain/forensics/evidence-segment-v2";
 import { createWithActor, type WithActor } from "@/server/db/with-actor";
+import { createEvidencePayloadReader } from "@/server/evidence/payload-reader";
 import { handleProcessSummaryRequest } from "@/server/projection/process-summary";
 
-// B-13 step 3 / DAN-85, PLAN-DEMO B-13 criterion: the owner and the teacher
-// get the same bytes through the API (D-80 point 6), over the real read RPC
-// under withActor. Loopback only; one random login and random synthetic
-// rows, removed afterwards. Ana, Vesna and Dora are invented.
+// B-13 steps 3 and 4 / DAN-85, PLAN-DEMO B-13 criterion: the owner and the
+// teacher get the same bytes through the API (D-80 point 6), over the real
+// read RPC under withActor and the payloads stored in the local S3 store of
+// compose.yaml, read through the reader the route builds. Loopback only; one
+// random login, one bucket and random synthetic rows per run (database rows
+// removed afterwards). Ana, Vesna and Dora are invented.
 const SAFE_ADMIN_URL: string =
   process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
 if (!["127.0.0.1", "localhost", "[::1]"].includes(new URL(SAFE_ADMIN_URL).hostname)) {
@@ -42,9 +47,80 @@ const projectId = `project-${suffix}`;
 const documentId = `doc-${suffix}`;
 const packageId = `pkg-${suffix}`;
 const receiptId = randomUUID();
+const S3_ENDPOINT = process.env.S3_ENDPOINT ?? "http://127.0.0.1:9100";
+if (!["127.0.0.1", "localhost", "[::1]"].includes(new URL(S3_ENDPOINT).hostname)) {
+  throw new Error("The process summary test runs only against the local object store (S3_ENDPOINT).");
+}
+const s3Credentials = {
+  accessKeyId: process.env.S3_ACCESS_KEY_ID ?? "ductus-local",
+  secretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? "ductus-local-only",
+};
+const region = "us-east-1";
+const bucket = `ductus-summary-${suffix}`;
 
 const admin = new pg.Pool({ connectionString: SAFE_ADMIN_URL, max: 1 });
-const store = new InMemoryEvidencePayloadStore();
+// The same factory the route uses, over one domain for this run's institution.
+const store = createEvidencePayloadReader({
+  EVIDENCE_STORAGE_DOMAINS: JSON.stringify({
+    requestTimeoutMs: 5_000,
+    domains: [
+      {
+        label: `local-summary-${suffix}`,
+        institutionId,
+        endpoint: S3_ENDPOINT,
+        region,
+        bucket,
+        accessKeyIdVar: "EVIDENCE_S3_LOCAL_KEY_ID",
+        secretAccessKeyVar: "EVIDENCE_S3_LOCAL_SECRET",
+        capability: {
+          provider: "rustfs-local",
+          endpoint: S3_ENDPOINT,
+          conditionalWrite: "verified",
+          checksumEcho: "verified",
+          verifiedOn: "2026-10-11",
+          contractTest: "local-stack/s3-evidence-payload-store.integration",
+        },
+      },
+    ],
+  }),
+  EVIDENCE_S3_LOCAL_KEY_ID: s3Credentials.accessKeyId,
+  EVIDENCE_S3_LOCAL_SECRET: s3Credentials.secretAccessKey,
+  NODE_ENV: "test",
+});
+// Ingest writes through the same router; a refused configuration fails here.
+function writer(): InstitutionRoutedPayloadStore {
+  if (!(store instanceof InstitutionRoutedPayloadStore)) throw new Error("storage configuration was refused");
+  return store;
+}
+
+async function rawPut(path: string[], body: Uint8Array<ArrayBuffer>) {
+  const signed = signS3Request({
+    method: "PUT",
+    endpoint: new URL(S3_ENDPOINT),
+    path,
+    headers: {},
+    body,
+    region,
+    credentials: s3Credentials,
+    now: new Date(),
+  });
+  const response = await fetch(signed.url, { method: "PUT", body, headers: signed.headers, redirect: "error" });
+  await response.arrayBuffer();
+  return response.status;
+}
+
+/** This run's bucket, labelled for its institution (P3), as the operator sets it up. */
+async function createBucket() {
+  let status = 0;
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    status = await rawPut([bucket], new Uint8Array()).catch(() => 0);
+    if (status === 200 || status === 409) break;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  expect([200, 409]).toContain(status);
+  const label = new TextEncoder().encode(JSON.stringify({ institutionId, region }));
+  expect(await rawPut([bucket, STORAGE_IDENTITY_KEY], label)).toBe(200);
+}
 let appPool: pg.Pool;
 let withActor: WithActor;
 let fixtureReady = false;
@@ -167,7 +243,13 @@ async function insertFixture() {
           JSON.stringify({ segmentHash: segment.hash, payloadBytes: bytes }), segment.hash, bytes,
           `synthetic://${packageId}/${segment.id}`],
       );
-      await store.putImmutable({ institutionId, evidencePackageId: packageId, segmentHash: segment.hash, canonicalPayload: segment.payload });
+      const stored = await writer().putImmutable({
+        institutionId,
+        evidencePackageId: packageId,
+        segmentHash: segment.hash,
+        canonicalPayload: segment.payload,
+      });
+      expect(stored.status).toBe("stored");
     }
     // The head reserve writes: a receipt for the last segment, named by the package.
     const last = record[record.length - 1];
@@ -242,6 +324,7 @@ beforeAll(async () => {
     [login, password],
   );
   await admin.query(ddl.rows[0].ddl);
+  await createBucket();
   await insertFixture();
   const url = new URL(SAFE_ADMIN_URL);
   url.username = login;
@@ -268,7 +351,7 @@ afterAll(async () => {
 });
 
 describe("process summary over the API and the read RPC (B-13, D-80 point 6)", () => {
-  it("gives Ana and Vesna the same bytes and Dora the answer for a missing document", async () => {
+  it("summarises the stored record for Ana and Vesna alike, never 503, and gives Dora the answer for a missing document", async () => {
     const ana = await ask("ana");
     const vesna = await ask("vesna");
     expect(ana.status).toBe(200);

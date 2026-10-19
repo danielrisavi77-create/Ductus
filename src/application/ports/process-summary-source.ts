@@ -25,6 +25,12 @@ import type { EvidenceChainHeadV2 } from "@/domain/forensics/evidence-chain-v2";
 export type ProcessSummarySourceResult =
   | {
       status: "found";
+      /**
+       * The record's institution, as the stored row names it: the storage
+       * domain the payloads are read from (BACKEND 4.1, B2). The same for
+       * every viewer; never taken from the request.
+       */
+      institutionId: string;
       evidencePackageId: string;
       /** Head of the record; `null` when empty. */
       head: EvidenceChainHeadV2 | null;

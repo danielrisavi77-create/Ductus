@@ -10,11 +10,11 @@ import {
   EVIDENCE_SEGMENT_SCHEMA_V2,
 } from "@/domain/forensics/evidence-segment-v2";
 import type { ActorTransaction, WithActor } from "@/server/db/with-actor";
+import { STORAGE_NOT_CONFIGURED } from "@/server/evidence/payload-reader";
 
 import {
   handleProcessSummaryRequest,
   loadProcessSummaryThresholds,
-  PAYLOAD_READING_NOT_CONFIGURED,
   type ProcessSummaryRouteDeps,
 } from "./process-summary";
 
@@ -24,6 +24,8 @@ const ANA = "A".repeat(43);
 const VESNA = "V".repeat(43);
 const DOCUMENT = "doc-ana-z1";
 const PACKAGE = "pkg-ana-z1";
+const FAK_A = "11111111-1111-4111-8111-111111111111";
+const FAK_B = "22222222-2222-4222-8222-222222222222";
 const THRESHOLDS = { sessionBreakAboveMinutes: 30, pasteListedAboveCharacters: 200 };
 
 async function record(documentId = DOCUMENT) {
@@ -64,7 +66,7 @@ async function record(documentId = DOCUMENT) {
   const store = new InMemoryEvidencePayloadStore();
   for (const [i, canonicalPayload] of payloads.entries()) {
     await store.putImmutable({
-      institutionId: "11111111-1111-4111-8111-111111111111",
+      institutionId: FAK_A,
       evidencePackageId: PACKAGE,
       segmentHash: hashes[i],
       canonicalPayload,
@@ -102,7 +104,7 @@ function post(body: unknown, headers: Record<string, string> = {}, method = "POS
 function deps(over: Partial<ProcessSummaryRouteDeps>): ProcessSummaryRouteDeps {
   return {
     withActor: database([]).withActor,
-    payloads: PAYLOAD_READING_NOT_CONFIGURED,
+    payloads: STORAGE_NOT_CONFIGURED,
     thresholds: THRESHOLDS,
     expectedOrigin: ORIGIN,
     sessionToken: ANA,
@@ -115,7 +117,7 @@ afterEach(() => vi.restoreAllMocks());
 describe("process summary route: one body for the owner and the teacher (B-13, D-80 point 6)", () => {
   it("returns byte-identical JCS bodies to Ana and Vesna, uncached", async () => {
     const { store, hashes } = await record();
-    const db = database([{ outcome: "found", evidence_package_id: PACKAGE, segment_hashes: hashes }]);
+    const db = database([{ outcome: "found", institution_id: FAK_A, evidence_package_id: PACKAGE, segment_hashes: hashes }]);
     const answers = [];
     for (const sessionToken of [ANA, VESNA]) {
       answers.push(await handleProcessSummaryRequest(post({ documentId: DOCUMENT }),
@@ -141,8 +143,12 @@ describe("process summary route: one body for the owner and the teacher (B-13, D
       [[{ outcome: "not_found", evidence_package_id: null, segment_hashes: null }], 404, "not_found"],
       [[{ outcome: "withheld", evidence_package_id: null, segment_hashes: null }], 503, "unavailable"],
       [[{ outcome: "unavailable", evidence_package_id: null, segment_hashes: null }], 503, "unavailable"],
-      [[{ outcome: "found", evidence_package_id: "Pkg!", segment_hashes: [] }], 503, "unavailable"],
-      [[{ outcome: "found", evidence_package_id: PACKAGE, segment_hashes: ["x"] }], 503, "unavailable"],
+      [[{ outcome: "found", institution_id: FAK_A, evidence_package_id: "Pkg!", segment_hashes: [] }], 503, "unavailable"],
+      [[{ outcome: "found", institution_id: FAK_A, evidence_package_id: PACKAGE, segment_hashes: ["x"] }], 503, "unavailable"],
+      ...[undefined, null, "", "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA", "fak-a", 7].map(
+        (institution_id): [Record<string, unknown>[], number, string] =>
+          [[{ outcome: "found", institution_id, evidence_package_id: PACKAGE, segment_hashes: [] }], 503, "unavailable"],
+      ),
       [[{ outcome: "maybe" }], 503, "unavailable"],
       [[], 503, "unavailable"],
       [new Error("relation evidence.segment Lorem ipsum"), 503, "unavailable"],
@@ -156,10 +162,27 @@ describe("process summary route: one body for the owner and the teacher (B-13, D
     expect(JSON.stringify(log.mock.calls)).not.toMatch(/Lorem|doc-ana/);
   });
 
-  it("answers a record with segments as unavailable while payload reading is not configured", async () => {
+  // B-13 step 4: the storage domain is the institution of the row read under withActor.
+  it("reads payloads only in the institution the row names", async () => {
+    const { store, hashes } = await record();
+    const read = vi.spyOn(store, "readImmutable");
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const ours = database([{ outcome: "found", institution_id: FAK_A, evidence_package_id: PACKAGE, segment_hashes: hashes }]);
+    const ok = await handleProcessSummaryRequest(post({ documentId: DOCUMENT }), deps({ withActor: ours.withActor, payloads: store }));
+    expect(ok.status).toBe(200);
+    expect(new Set(read.mock.calls.map(([input]) => input.institutionId))).toStrictEqual(new Set([FAK_A]));
+
+    read.mockClear();
+    const theirs = database([{ outcome: "found", institution_id: FAK_B, evidence_package_id: PACKAGE, segment_hashes: hashes }]);
+    const refused = await handleProcessSummaryRequest(post({ documentId: DOCUMENT }), deps({ withActor: theirs.withActor, payloads: store }));
+    expect(refused.status).toBe(503);
+    expect(read.mock.calls.map(([input]) => input.institutionId)).toStrictEqual([FAK_B]);
+  });
+
+  it("answers a record with segments as unavailable when storage is not configured", async () => {
     const { hashes } = await record();
     vi.spyOn(console, "error").mockImplementation(() => {});
-    const db = database([{ outcome: "found", evidence_package_id: PACKAGE, segment_hashes: hashes }]);
+    const db = database([{ outcome: "found", institution_id: FAK_A, evidence_package_id: PACKAGE, segment_hashes: hashes }]);
     const response = await handleProcessSummaryRequest(post({ documentId: DOCUMENT }), deps({ withActor: db.withActor }));
     expect(response.status).toBe(503);
   });

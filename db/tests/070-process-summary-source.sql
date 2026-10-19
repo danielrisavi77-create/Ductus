@@ -92,17 +92,19 @@ SET CONSTRAINTS ALL IMMEDIATE;
 CREATE FUNCTION pg_temp.source(p_actor text, p_document text) RETURNS text
 LANGUAGE sql AS $$
   SELECT pg_temp.ask(p_actor, format(
-    'SELECT row(outcome, evidence_package_id, segment_hashes)::text FROM app.read_process_summary_source(%L)',
+    'SELECT row(outcome, institution_id, evidence_package_id, segment_hashes)::text FROM app.read_process_summary_source(%L)',
     p_document))
 $$;
+-- A found row names the record's institution (B-13 step 4): fak-a for Ana's
+-- documents, fak-b for Tomo's, whoever of their readers asks.
 CREATE TEMP TABLE expected (name text PRIMARY KEY, val text NOT NULL);
 INSERT INTO expected VALUES
-  ('a', format('(found,pkg-a,"{%s,%s,%s}")', repeat('1', 64), repeat('2', 64), repeat('3', 64))),
-  ('empty', '(found,pkg-empty,{})'),
-  ('b', format('(found,pkg-b,{%s})', repeat('5', 64))),
-  ('short', format('(found,pkg-short,{%s})', repeat('4', 64))),
-  ('not_found', '(not_found,,)'),
-  ('unavailable', '(unavailable,,)');
+  ('a', format('(found,%s,pkg-a,"{%s,%s,%s}")', pg_temp.id('fak_a'), repeat('1', 64), repeat('2', 64), repeat('3', 64))),
+  ('empty', format('(found,%s,pkg-empty,{})', pg_temp.id('fak_a'))),
+  ('b', format('(found,%s,pkg-b,{%s})', pg_temp.id('fak_b'), repeat('5', 64))),
+  ('short', format('(found,%s,pkg-short,{%s})', pg_temp.id('fak_a'), repeat('4', 64))),
+  ('not_found', '(not_found,,,)'),
+  ('unavailable', '(unavailable,,,)');
 CREATE FUNCTION pg_temp.expected(p_name text) RETURNS text
 LANGUAGE sql STABLE AS $$ SELECT val FROM expected WHERE name = p_name $$;
 
@@ -137,8 +139,8 @@ SELECT is((SELECT proargnames[1:pronargs]::text FROM pg_proc
   WHERE oid = 'app.read_process_summary_source(text)'::regprocedure),
   '{p_document_id}', 'the read RPC takes only the document: no role, institution, threshold or time (item 62)');
 SELECT is(pg_get_function_result('app.read_process_summary_source(text)'::regprocedure),
-  'TABLE(outcome text, evidence_package_id text, segment_hashes text[])',
-  'the read RPC returns an outcome, a package and segment hashes, nothing about who asks');
+  'TABLE(outcome text, institution_id uuid, evidence_package_id text, segment_hashes text[])',
+  'the read RPC returns an outcome, the record''s institution, a package and segment hashes, nothing about who asks');
 SELECT ok(NOT has_schema_privilege('ductus_identity', 'evidence', 'USAGE')
   AND NOT has_schema_privilege('ductus_identity', 'app', 'CREATE')
   AND NOT has_schema_privilege('ductus_evidence', 'app', 'CREATE')
@@ -168,7 +170,7 @@ SELECT is(pg_temp.source('vesna', d.id), pg_temp.expected('not_found'),
 FROM (VALUES ('doc-b', 'a document of fak-b'), ('doc-nema', 'a missing document'), ('', 'an empty id'),
              (' doc-a', 'an id with a blank at its edge'), ('doc-a' || chr(1), 'an id with a control character'),
              (repeat('x', 257), 'an id longer than 256 characters')) AS d (id, label);
-SELECT is(pg_temp.ask('vesna', $$ SELECT row(outcome, evidence_package_id, segment_hashes)::text
+SELECT is(pg_temp.ask('vesna', $$ SELECT row(outcome, institution_id, evidence_package_id, segment_hashes)::text
   FROM app.read_process_summary_source(NULL) $$), pg_temp.expected('not_found'), 'Vesna gets not_found for a null id');
 
 -- Item 8: D-144 replaced D-37, so a short assignment is read like any other,

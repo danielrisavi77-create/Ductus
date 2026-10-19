@@ -2,10 +2,10 @@ import type { NextRequest } from "next/server";
 
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
+import { evidencePayloadReader } from "@/server/evidence/payload-reader";
 import {
   handleProcessSummaryRequest,
   loadProcessSummaryThresholds,
-  PAYLOAD_READING_NOT_CONFIGURED,
 } from "@/server/projection/process-summary";
 
 export const runtime = "nodejs";
@@ -16,7 +16,8 @@ function unavailable(): Response {
 }
 
 // The process summary of one document (B-13). POST, so the document id never
-// lands in a URL; the origin comes from the configured OIDC callback.
+// lands in a URL; the origin comes from the configured OIDC callback. Payloads
+// come from the storage domain of the institution the read RPC names.
 export async function POST(request: NextRequest): Promise<Response> {
   const callback = process.env.OIDC_REDIRECT_URI;
   if (!callback) return unavailable();
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest): Promise<Response> {
   }
   return handleProcessSummaryRequest(request, {
     withActor,
-    payloads: PAYLOAD_READING_NOT_CONFIGURED,
+    payloads: evidencePayloadReader(),
     thresholds: loadProcessSummaryThresholds(),
     expectedOrigin,
     sessionToken: request.cookies.get(SESSION_COOKIE_NAME)?.value,
