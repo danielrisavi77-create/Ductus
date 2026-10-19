@@ -18,6 +18,8 @@ import { readEvidenceCommitContext, type EvidenceCommitContext } from "@/server/
 import { commitEvidenceRequest } from "@/server/evidence/evidence-commit-request";
 import { createEvidenceReceiptSigner } from "@/server/evidence/receipt-signer";
 import { reconstructSubmissionRecord } from "@/server/evidence/submission-record";
+import { handleSubmissionRequest } from "@/server/evidence/submission-route";
+import { digestSubmissionReceiptPayloadV1 } from "@/domain/forensics/submission-receipt";
 
 // B-12 step 4b1 / DAN-87: the reconstruction of a submission request over the
 // real database, with segments of real ductus-edit-steps-v1 steps committed
@@ -33,7 +35,7 @@ const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const suffix = randomBytes(5).toString("hex");
 const login = `it_subrec_${suffix}`;
 const password = randomBytes(24).toString("hex");
-const [token, classmateToken] = [randomBytes(32).toString("base64url"), randomBytes(32).toString("base64url")];
+const [token, classmateToken, expiredToken] = Array.from({ length: 3 }, () => randomBytes(32).toString("base64url"));
 const [institutionId, teacherId, studentId, classmateId, courseId, assignmentId] = Array.from({ length: 6 }, () =>
   randomUUID(),
 );
@@ -122,6 +124,11 @@ beforeAll(async () => {
       [value, user, institutionId],
     ]),
     [
+      `INSERT INTO identity.session (token_hash, user_id, institution_id, created_at, expires_at)
+       VALUES (sha256(convert_to($1, 'UTF8')), $2, $3, now() - interval '2 hours', now() - interval '1 hour')`,
+      [expiredToken, studentId, institutionId],
+    ],
+    [
       `INSERT INTO institution.course (id, institution_id, name, academic_year, ai_policy, created_by)
        VALUES ($1, $2, $3, '2026/2027', 'partially_allowed', $4)`,
       [courseId, institutionId, `Submission ${suffix}`, teacherId],
@@ -199,7 +206,7 @@ afterAll(async () => {
   await appPool?.end();
   await admin.query("BEGIN");
   await admin.query("SET LOCAL session_replication_role = replica");
-  for (const table of ["submission_request", "receipt", "segment", "package", "document_checkpoint", "document_revision", "signing_key"]) {
+  for (const table of ["submission", "submission_request", "receipt", "segment", "package", "document_checkpoint", "document_revision", "signing_key"]) {
     await admin.query(`DELETE FROM evidence.${table} WHERE institution_id = $1`, [institutionId]);
   }
   for (const table of ["evidence.document", "evidence.project", "evidence.domain"]) {
@@ -271,6 +278,82 @@ describe("reconstruction of a submission request over the stored record (B-12 st
     });
   });
 
+});
+
+const ORIGIN = "http://localhost:3000";
+const submit = (payloads: InstitutionEvidencePayloadReader = store, as: string = token, body: unknown = { documentId, revision: 2 }) =>
+  handleSubmissionRequest(
+    new Request(`${ORIGIN}/api/submission`, {
+      method: "POST",
+      headers: { origin: ORIGIN, "sec-fetch-site": "same-origin", "ductus-protocol": "1", "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+    { withActor, payloads, signer: signer(), expectedOrigin: ORIGIN, sessionToken: as, log: () => {} },
+  );
+
+async function submissions() {
+  const { rows } = await admin.query<{ n: string }>(
+    "SELECT count(*)::text AS n FROM evidence.submission WHERE institution_id = $1",
+    [institutionId],
+  );
+  return rows[0].n;
+}
+
+describe("POST /api/submission (B-12 step 4b2)", () => {
+  it("writes no submission for a record that does not reproduce, whatever the client knows (D-11, D1)", async () => {
+    const tampered: InstitutionEvidencePayloadReader = {
+      readImmutable: async (input) => {
+        const read = await store.readImmutable(input);
+        if (read.status !== "found") return read;
+        const text = new TextDecoder().decode(read.bytes).replace("Odlomak A", "Odlomak C");
+        return { status: "found", bytes: new TextEncoder().encode(text) };
+      },
+    };
+    const response = await submit(tampered);
+    expect([response.status, await response.json()]).toEqual([409, { status: "blocked", reason: "record_mismatch" }]);
+    // The body has no hash to offer; a stored hash from the client is refused as an unknown key.
+    expect((await submit(store, token, { documentId, revision: 2, artifactSha256: contentHashes[2] })).status).toBe(422);
+    expect(await submissions()).toBe("0");
+  });
+
+  it("answers an ended session with 401 and another student with 404, writing nothing", async () => {
+    expect((await submit(store, expiredToken)).status).toBe(401);
+    const other = await submit(store, classmateToken);
+    expect([other.status, await other.json()]).toEqual([404, { status: "not_found" }]);
+    expect(await submissions()).toBe("0");
+  });
+
+  it("submits the matching revision with a signed receipt of the request's time, and a repeat gets the same bytes (C1, A6, A7, E1)", async () => {
+    const first = await submit();
+    expect(first.status).toBe(200);
+    const text = await first.text();
+    const body = JSON.parse(text);
+    const { rows } = await admin.query<{ requested_at: string; artifact_hash: string; revision: string }>(
+      `SELECT to_char(requested_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS requested_at, artifact_hash,
+              revision::text FROM evidence.submission WHERE institution_id = $1`,
+      [institutionId],
+    );
+    expect(rows).toEqual([{ requested_at: body.receipt.payload.requestedAt, artifact_hash: contentHashes[2], revision: "2" }]);
+    expect(body.receipt.payload).toMatchObject({
+      documentId,
+      revision: 2,
+      artifactSha256: contentHashes[2],
+      evidenceRecord: "continuous",
+      afterDeadline: false,
+      principalId: studentId,
+      assignmentId,
+    });
+    const digest = await digestSubmissionReceiptPayloadV1(body.receipt.payload);
+    expect(body.receipt.payloadDigestSha256).toBe(digest.sha256);
+    expect(await signer().verify(digest.signingInput, body.receipt.signature)).toBe(true);
+
+    const again = await submit();
+    expect([again.status, await again.text()]).toEqual([200, text]);
+    expect(await submissions()).toBe("1");
+  });
+});
+
+describe("registry (last: it revokes the key)", () => {
   it("asks for a retry, never a verdict, when the registry no longer vouches for the key", async () => {
     await admin.query("UPDATE evidence.signing_key SET revoked_at = now() WHERE institution_id = $1", [institutionId]);
     const result = await reconstruct();
