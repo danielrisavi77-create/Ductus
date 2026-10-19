@@ -31,15 +31,17 @@ export function subscribeOnline(source: OnlineSource, onChange: () => void): () 
   };
 }
 
+// Defined once: React subscribes again whenever `subscribe` is a new
+// function, and the notice re-renders on every save while the author types.
+const subscribeWindow = (onChange: () => void) => subscribeOnline(window, onChange);
+const readWindow = () => readOnline(window);
+const readServer = () => true;
+
 /**
  * The browser's network as React state. The server render, and the first
  * render after it, say online, so an offline notice never comes from the
  * server and appears only once the browser itself reports no network.
  */
 export function useOnline(): boolean {
-  return useSyncExternalStore(
-    (onChange) => subscribeOnline(window, onChange),
-    () => readOnline(window),
-    () => true,
-  );
+  return useSyncExternalStore(subscribeWindow, readWindow, readServer);
 }
