@@ -256,3 +256,13 @@ test("demo environment refuses a docker target that the database URL check canno
   }
   assert.doesNotThrow(() => createDemoEnvironment({ DOCKER_HOST: "" }));
 });
+test("demo children never receive a docker or compose steering variable (F-101)", () => {
+  const env = createDemoEnvironment({
+    COMPOSE_FILE: "elsewhere.yaml", COMPOSE_PROJECT_NAME: "x", COMPOSE_PROFILES: "p", COMPOSE_ENV_FILES: "e",
+    DOCKER_CONFIG: "d", DOCKER_TLS_VERIFY: "1", DOCKER_CERT_PATH: "c", docker_buildkit: "1",
+    PATH: "p", npm_execpath: "n",
+  });
+  assert.deepEqual(Object.keys(env).filter((name) => /^(?:DOCKER_|COMPOSE_)/i.test(name)), []);
+  assert.equal(env.PATH, "p");
+  assert.equal(env.npm_execpath, "n");
+});
