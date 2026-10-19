@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MAX_EVIDENCE_SEGMENT_BYTES } from "@/domain/forensics/evidence-chain-v2";
-import { checkMutationRequest, readBodyWithLimit } from "./mutation-request";
+import { checkMutationRequest, declaredLengthRefusal, readBodyWithLimit } from "./mutation-request";
 
 const ORIGIN = "https://ductus.example";
 const URL_INGEST = `${ORIGIN}/api/v1/evidence/ingest`;
@@ -225,6 +225,25 @@ describe("readBodyWithLimit (#155 items 10 and 12, HTTP part)", () => {
       });
     },
   );
+
+  // The one rule a route asks before work it does ahead of the body (F-098).
+  it.each<[string | undefined, 400 | 413 | null]>([
+    [undefined, null],
+    ["5", null],
+    [String(LIMIT), null],
+    [String(LIMIT + 1), 413],
+    ["-1", 400],
+    ["01", 400],
+    ["abc", 400],
+  ])("declaredLengthRefusal(%j) is what readBodyWithLimit refuses unread", async (value, expected) => {
+    const headers: Record<string, string> = value === undefined ? {} : { "content-length": value };
+    expect(declaredLengthRefusal(streamed(trackedStream(5, 1).stream, headers), LIMIT)).toBe(expected);
+    if (expected === null) return;
+    const { stream, state } = trackedStream(5, 1);
+    const result = await readBodyWithLimit(streamed(stream, headers), LIMIT);
+    expect(result).toMatchObject({ ok: false, status: expected });
+    expect(state.pulled).toBeLessThanOrEqual(1);
+  });
 
   it("returns the received bytes untouched: BOM, invalid UTF-8 and NUL survive for the strict check", async () => {
     const raw = new Uint8Array([
