@@ -15,7 +15,11 @@ import {
   type EvidenceReceiptPayloadV2,
 } from "./evidence-receipt";
 import { isEvidenceMinuteV2 } from "./evidence-segment-v2";
-import { isPublicVerificationKey, type PublicVerificationKey } from "./signature";
+import {
+  isPublicVerificationKey,
+  type PublicVerificationKey,
+  type SignatureEnvelope,
+} from "./signature";
 import { hasOnlyKeys, isPlainObject } from "../json";
 
 /**
@@ -99,14 +103,14 @@ function refuse(reason: EvidenceReceiptRefusal): EvidenceReceiptVerification {
 }
 
 /** Thrown where a call of the runtime fails for a value already judged sound. */
-class RuntimeUnavailable extends Error {}
+export class RuntimeUnavailable extends Error {}
 
 /**
  * What the check uses of the runtime outside Web Crypto. Asked first: a
  * missing one would otherwise read as a fault of the receipt. Web Crypto is
  * not asked about here; each call of it is caught where it is made.
  */
-function hasCopyAndBase64(): boolean {
+export function hasCopyAndBase64(): boolean {
   return (
     typeof globalThis.structuredClone === "function" &&
     typeof globalThis.atob === "function" &&
@@ -176,6 +180,110 @@ function decodeBase64Url(
   } catch {
     return null;
   }
+}
+
+/** What a key and a signature can be refused for, the same for every receipt a receipt key signs. */
+export type ReceiptKeySignatureRefusal =
+  | "receipt_malformed"
+  | "key_unknown"
+  | "key_scope"
+  | "key_revoked"
+  | "key_not_valid"
+  | "signature_invalid";
+
+/**
+ * The one check of a signature by a receipt key of an evidence domain, for
+ * receipt v2 and for the submission receipt v1 alike: null when the
+ * signature over `signingInput` verifies under the one receipt key of
+ * `evidenceDomainId` in `trustedKeys` that `signature` names, and the reason
+ * otherwise. `signedBefore` is the instant the caller holds the key's
+ * `validTo` to (`signedBefore < validTo`); a revoked key verifies nothing.
+ * Throws `RuntimeUnavailable` where the runtime cannot make the check. The
+ * caller has already checked `structuredClone`, `atob` and `btoa`.
+ */
+export async function verifyUnderDomainReceiptKey(
+  signature: SignatureEnvelope,
+  signingInput: Uint8Array<ArrayBuffer>,
+  evidenceDomainId: string,
+  signedBefore: string,
+  trustedKeys: readonly unknown[],
+): Promise<ReceiptKeySignatureRefusal | null> {
+  const signatureBytes = decodeBase64Url(
+    signature.signatureBase64Url,
+    ED25519_SIGNATURE_BYTES,
+  );
+  // An R outside the prime-order subgroup or in a second spelling, or S at
+  // or above the group order, is refused here: runtimes do not agree on
+  // such a signature.
+  if (signatureBytes === null || !isCanonicalEd25519Signature(signatureBytes)) {
+    return "receipt_malformed";
+  }
+
+  // A key id that the list holds twice names no key (it is unique by rule).
+  const named = trustedKeys.filter(
+    (key: unknown) => isPlainObject(key) && key.keyId === signature.keyId,
+  );
+  // Checked before it is copied too, so a key of any size costs no copy.
+  const key: unknown =
+    named.length === 1 && isEvidenceDomainKey(named[0])
+      ? structuredClone(named[0])
+      : null;
+  if (!isEvidenceDomainKey(key) || key.keyVersion !== signature.keyVersion) {
+    return "key_unknown";
+  }
+  if (
+    key.algorithm !== "Ed25519" ||
+    key.purpose !== "receipt" ||
+    key.evidenceDomainId !== evidenceDomainId
+  ) {
+    return "key_scope";
+  }
+  // The time the caller passes is signed by the key under judgement, so it
+  // says nothing about a revoked key: whoever holds that key writes any
+  // earlier time.
+  if (key.revokedAt !== null) {
+    return "key_revoked";
+  }
+  if (
+    key.validTo !== null &&
+    Date.parse(signedBefore) >= Date.parse(key.validTo)
+  ) {
+    return "key_not_valid";
+  }
+
+  // An Ed25519 public key in SPKI DER is 44 bytes (RFC 8410). A point of
+  // small order as the key verifies a signature made with no private key
+  // in some runtimes, and one of mixed order verifies in some runtimes and
+  // not in others, so the key is judged here and not by the runtime.
+  const keyBytes = decodeBase64Url(key.keyBase64Url, 44);
+  const point = keyBytes === null ? null : ed25519KeyFromSpki(keyBytes);
+  if (keyBytes === null || point === null || !isSoundEd25519Point(point)) {
+    return "key_unknown";
+  }
+  // The key is sound, so from here on a call that fails is the runtime,
+  // also where it has no Web Crypto or no Ed25519 in it.
+  const valid: unknown = await Promise.resolve()
+    .then(() =>
+      globalThis.crypto.subtle.importKey(
+        "spki",
+        keyBytes,
+        { name: "Ed25519" },
+        false,
+        ["verify"],
+      ),
+    )
+    .then((publicKey) =>
+      globalThis.crypto.subtle.verify(
+        { name: "Ed25519" },
+        publicKey,
+        signatureBytes,
+        signingInput,
+      ),
+    )
+    .catch(() => {
+      throw new RuntimeUnavailable();
+    });
+  return valid === true ? null : "signature_invalid";
 }
 
 /**
@@ -269,83 +377,16 @@ export async function verifySignedEvidenceReceiptV2(
     if (receipt.payloadDigestSha256 !== digest.sha256) {
       return refuse("digest_mismatch");
     }
-    const signatureBytes = decodeBase64Url(
-      signature.signatureBase64Url,
-      ED25519_SIGNATURE_BYTES,
+    // `acceptedAt` is a whole minute and so is `validTo`: nothing is rounded.
+    const keyRefusal = await verifyUnderDomainReceiptKey(
+      signature,
+      digest.signingInput,
+      payload.evidenceDomainId,
+      payload.acceptedAt,
+      trustedKeys,
     );
-    // An R outside the prime-order subgroup or in a second spelling, or S at
-    // or above the group order, is refused here: runtimes do not agree on
-    // such a signature.
-    if (signatureBytes === null || !isCanonicalEd25519Signature(signatureBytes)) {
-      return refuse("receipt_malformed");
-    }
-
-    // A key id that the list holds twice names no key (it is unique by rule).
-    const named = trustedKeys.filter(
-      (key: unknown) => isPlainObject(key) && key.keyId === signature.keyId,
-    );
-    // Checked before it is copied too, so a key of any size costs no copy.
-    const key: unknown =
-      named.length === 1 && isEvidenceDomainKey(named[0])
-        ? structuredClone(named[0])
-        : null;
-    if (!isEvidenceDomainKey(key) || key.keyVersion !== signature.keyVersion) {
-      return refuse("key_unknown");
-    }
-    if (
-      key.algorithm !== "Ed25519" ||
-      key.purpose !== "receipt" ||
-      key.evidenceDomainId !== payload.evidenceDomainId
-    ) {
-      return refuse("key_scope");
-    }
-    // `acceptedAt` is signed by the key under judgement, so it says nothing
-    // about a revoked key: whoever holds that key writes any earlier time.
-    if (key.revokedAt !== null) {
-      return refuse("key_revoked");
-    }
-    // Both are whole minutes: `acceptedAt < validTo`, and nothing rounded.
-    if (
-      key.validTo !== null &&
-      Date.parse(payload.acceptedAt) >= Date.parse(key.validTo)
-    ) {
-      return refuse("key_not_valid");
-    }
-
-    // An Ed25519 public key in SPKI DER is 44 bytes (RFC 8410). A point of
-    // small order as the key verifies a signature made with no private key
-    // in some runtimes, and one of mixed order verifies in some runtimes and
-    // not in others, so the key is judged here and not by the runtime.
-    const keyBytes = decodeBase64Url(key.keyBase64Url, 44);
-    const point = keyBytes === null ? null : ed25519KeyFromSpki(keyBytes);
-    if (keyBytes === null || point === null || !isSoundEd25519Point(point)) {
-      return refuse("key_unknown");
-    }
-    // The key is sound, so from here on a call that fails is the runtime,
-    // also where it has no Web Crypto or no Ed25519 in it.
-    const valid: unknown = await Promise.resolve()
-      .then(() =>
-        globalThis.crypto.subtle.importKey(
-          "spki",
-          keyBytes,
-          { name: "Ed25519" },
-          false,
-          ["verify"],
-        ),
-      )
-      .then((publicKey) =>
-        globalThis.crypto.subtle.verify(
-          { name: "Ed25519" },
-          publicKey,
-          signatureBytes,
-          digest.signingInput,
-        ),
-      )
-      .catch(() => {
-        throw new RuntimeUnavailable();
-      });
-    if (valid !== true) {
-      return refuse("signature_invalid");
+    if (keyRefusal !== null) {
+      return refuse(keyRefusal);
     }
 
     // Only now, for a receipt a trusted key of its own domain did sign.
