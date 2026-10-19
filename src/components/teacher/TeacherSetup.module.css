@@ -1,4 +1,8 @@
-/* Screen 2 of the design handoff, on the shared tokens (app/globals.css, #386). */
+/*
+ * Screen 2 of the design handoff (demo-tok-v2, FE-D10), on the shared tokens
+ * (app/globals.css, D-123): the form and "Kako vidi student" side by side in
+ * two equal columns, one column below 900 px with the preview under the form.
+ */
 .layout {
   display: grid;
   gap: 24px;
@@ -9,14 +13,20 @@
   max-width: none;
 }
 
-@media (min-width: 1000px) {
+@media (min-width: 900px) {
   .layout {
-    grid-template-columns: minmax(0, 1fr) 340px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .preview {
     position: sticky;
-    top: 24px;
+    top: 68px;
   }
+}
+
+.code {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule-2);
 }
 
 .forms {
