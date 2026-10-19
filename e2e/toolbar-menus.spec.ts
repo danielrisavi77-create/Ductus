@@ -192,6 +192,33 @@ test.describe("toolbar menus, phone (390 px)", () => {
     await expect(moreMenu(second)).toBeVisible();
   });
 
+  test("a new width closes an open Više for good: focus goes to the toolbar, never back into the menu (review524)", async ({ page }) => {
+    await openEditor(page, 390);
+    await moreButton(page).click();
+    await expect(heading(page, "Naslov 1")).toBeFocused();
+
+    // Wider: the headings return to the toolbar, the menu is gone and focus
+    // is on the toolbar, not on the page body.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await expect(tool(page, "Naslov 3")).toBeVisible();
+    await expect(moreMenu(page)).toHaveCount(0);
+    await expect(toolbarOf(page).locator(":focus")).toHaveCount(1);
+
+    // Writing, then narrow again: "Više" comes back closed and the sheet keeps
+    // focus, so Enter is a new line, not a heading.
+    await editorOf(page).click();
+    await page.keyboard.type("Izmišljeni tekst");
+    await page.setViewportSize({ width: 390, height: 900 });
+    await expect(moreButton(page)).toBeVisible();
+    await expect(moreButton(page)).toHaveAttribute("aria-expanded", "false");
+    await expect(moreMenu(page)).toHaveCount(0);
+    await expect(editorOf(page)).toBeFocused();
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("Drugi redak");
+    await expect(editorOf(page).locator("h1, h2, h3")).toHaveCount(0);
+    await expect(editorOf(page).locator("p")).toHaveText(["Izmišljeni tekst", "Drugi redak"]);
+  });
+
   test("a wider window brings the headings back to the toolbar", async ({ page }) => {
     await openEditor(page, 390);
     await expect(moreButton(page)).toBeVisible();

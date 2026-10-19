@@ -127,8 +127,15 @@ export default function EditorToolbar() {
   const [collapsed, setCollapsed] = useState(0);
   const [width, setWidth] = useState(0);
   const widthRef = useRef(0);
+  // Set when a new width closed a menu that held focus (review524, 1 and 2).
+  const refocusRef = useRef(false);
 
   // A new width starts again with every tool shown (prototype fitToolbar).
+  // It also closes "Više": its tools are measured again, so the menu goes
+  // away for a moment, and left open in state it would open again later by
+  // itself and take focus from the sheet. Focus that was in it goes back to
+  // the toolbar once the new layout has settled, never to the page body.
+  // "Prikaz" never moves, so a new width leaves it as it is.
   useLayoutEffect(() => {
     const element = listRef.current;
     if (!element || typeof ResizeObserver === "undefined") return;
@@ -136,6 +143,8 @@ export default function EditorToolbar() {
       const next = Math.round(entry?.contentRect.width ?? 0);
       if (next === widthRef.current) return;
       widthRef.current = next;
+      if (element.querySelector(".editor-menu--more")?.contains(document.activeElement)) refocusRef.current = true;
+      setOpenMenu((open) => (open === "more" ? null : open));
       setCollapsed(0);
       setWidth(next);
     });
@@ -146,7 +155,15 @@ export default function EditorToolbar() {
   // Each pass that still wraps moves one more heading into "Više", before paint.
   useLayoutEffect(() => {
     const element = listRef.current;
-    if (element && collapsed < MAX_COLLAPSED && wraps(element)) setCollapsed(collapsed + 1);
+    if (!element) return;
+    if (collapsed < MAX_COLLAPSED && wraps(element)) {
+      setCollapsed(collapsed + 1);
+      return;
+    }
+    if (refocusRef.current) {
+      refocusRef.current = false;
+      element.querySelector<HTMLElement>("[data-roving][tabindex='0']")?.focus();
+    }
   }, [collapsed, width]);
 
   const { shown, more } = splitTools(TOOLS, collapsed);
@@ -210,6 +227,7 @@ export default function EditorToolbar() {
       })}
       {more.length ? (
         <ToolbarMenu
+          className="editor-menu--more"
           label={t.toolbar.more}
           menuLabel={t.toolbar.moreMenu}
           roving="more"
