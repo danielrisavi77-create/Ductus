@@ -87,12 +87,21 @@ function sourceResult(rows: SourceRow[]): ProcessSummarySourceResult {
 export function sessionProcessSummarySource(withActor: WithActor, sessionToken: string): ProcessSummarySource {
   return {
     async readSource(documentId) {
-      const result = await withActor(sessionToken, (tx) =>
-        tx.query<SourceRow>(
-          "SELECT outcome, institution_id, evidence_package_id, segment_hashes FROM app.read_process_summary_source($1)",
-          [documentId],
-        ),
-      );
+      let result;
+      try {
+        result = await withActor(sessionToken, (tx) =>
+          tx.query<SourceRow>(
+            "SELECT outcome, institution_id, evidence_package_id, segment_hashes FROM app.read_process_summary_source($1)",
+            [documentId],
+          ),
+        );
+      } catch (error) {
+        // ZD401: no open session (DAN-85), as comments.ts reads it. Anything
+        // else is rethrown; the reader turns it into unavailable, no message.
+        const code = error && typeof error === "object" && "code" in error ? error.code : undefined;
+        if (code === "ZD401") return { status: "unauthenticated" };
+        throw error;
+      }
       return sourceResult(result.rows);
     },
   };
@@ -163,6 +172,9 @@ export async function handleProcessSummaryRequest(
       });
     case "not_found":
       return refuse(404, "not_found");
+    case "unauthenticated":
+      // The same answer as a missing cookie, and as the comment and live-view reads.
+      return refuse(401, "unauthorized");
     default:
       // A closed code only: never an id, a message or work content.
       console.error("process summary unavailable", read.reason);
