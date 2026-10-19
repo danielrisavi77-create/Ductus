@@ -89,6 +89,7 @@ describe("persistent development signer", () => {
     ["a short seed", "short", "signing_key_malformed"],
     ["a long seed", "long", "signing_key_malformed"],
     ["a file in the repository", "repo/seed", "signing_key_in_repository"],
+    ["a file under a repository directory named like ..", "repo/..keys/seed", "signing_key_in_repository"],
   ])("never makes a key for %s, on every call (T5)", async (_, name, code) => {
     await writeFile(file("short"), SEED.subarray(0, 31), { mode: 0o600 });
     await writeFile(file("long"), Buffer.concat([SEED, Buffer.from([0])]), { mode: 0o600 });

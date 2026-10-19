@@ -67,6 +67,9 @@ export async function main(env = process.env, argv = process.argv.slice(2)) {
   if (fault !== null) {
     const path = env[DEV_SIGNING_KEY_FILE];
     await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+    // Judged again where the directory now exists, before a byte is written.
+    const again = await signer.publicVerificationKey().then(() => null, (error) => error);
+    if (again !== null && again.code !== "signing_key_missing") throw again;
     await writeFile(path, randomBytes(32), { flag: "wx", mode: 0o600 }).catch((error) => {
       if (error?.code !== "EEXIST") throw new Error("the seed file could not be written");
     });

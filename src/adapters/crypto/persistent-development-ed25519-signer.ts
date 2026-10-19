@@ -8,7 +8,7 @@ import {
 } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, open, realpath } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, relative } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
 
 import type {
   PublicVerificationKey,
@@ -83,7 +83,8 @@ async function realLocation(path: string): Promise<string> {
 
 function isInside(root: string, path: string): boolean {
   const rel = relative(root, path);
-  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+  // Outside only by a whole ".." segment: "..keys" is a directory in the root.
+  return !(rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel));
 }
 
 /**
