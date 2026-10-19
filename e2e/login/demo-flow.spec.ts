@@ -114,17 +114,21 @@ test("demo walk-through", async ({ page, context }) => {
     // The step takes the role away again afterwards, so demo-role.spec.ts still meets a clean stack.
     roleGrantedByThisTest = !(await teacherRoleActive());
     if (roleGrantedByThisTest) {
-      await page.goto("/nastavnik/kolegiji");
+      await page.goto("/nastavnik/zadatak/novi");
       await expect(page.getByText(t.teacher.denied)).toBeVisible();
       await expect(page.getByRole("button", { name: t.teacher.course.submit })).toHaveCount(0);
     }
     await run("node", ["scripts/demo/provision-teacher.mjs"], { cwd: ROOT });
-    await page.goto("/nastavnik/kolegiji");
+    await page.goto("/nastavnik/zadatak/novi");
     await expect(page.getByRole("heading", { name: t.teacher.title })).toBeVisible();
 
     await page.getByLabel(t.teacher.course.name).fill(COURSE_NAME);
     await page.getByRole("button", { name: t.teacher.course.submit }).click();
     await expect(page.getByRole("status").filter({ hasText: t.teacher.course.created })).toBeVisible();
+    // FE-D10: no enrolment code is invented while its route is missing.
+    const code = page.getByText(t.teacher.course.code, { exact: false }).first();
+    await expect(code).toContainText(t.workspace.soon);
+    await expect(page.getByText(t.teacher.course.codeSoon)).toBeVisible();
     await snapshot(page, "1-kolegij-stvoren");
 
     await page.getByLabel(t.teacher.assignment.title).fill("Izmišljeni zadatak o gradskim knjižnicama");

@@ -1,0 +1,15 @@
+/* FE-D10: the teacher screen of design demo-tok-v2 step 2 (D-123). */
+:global(.page).page {
+  max-width: 1180px;
+  padding-top: 28px;
+}
+
+/* The two-column form and preview take the page's width, not the 640 px of prose. */
+:global(.page).page > * {
+  max-width: none;
+}
+
+:global(.page) .title {
+  font-size: 26px;
+  font-weight: 600;
+}

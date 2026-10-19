@@ -7,6 +7,7 @@ import { test, type Page } from "@playwright/test";
 const PAGES = [
   { name: "home", path: "/" },
   { name: "workspace", path: "/rad" },
+  { name: "teacher-new", path: "/nastavnik/zadatak/novi" },
 ];
 const LOCALES = ["hr"] as const;
 // The shell is always dark (D-115); the sheet is dark by default, white with the switch on /rad (D-123).
