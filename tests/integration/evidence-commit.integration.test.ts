@@ -464,6 +464,23 @@ describe("evidence routes (B-8 step 5)", () => {
     expect(await stored()).toEqual(after);
   });
 
+  it("refuses a stale base and a package that accepts no evidence before any object is stored (F-099)", async () => {
+    const { body } = nextEnvelope(`tx-${suffix}-route-f099`);
+    const { deps, counts } = countedDeps();
+    const before = await stored();
+    const stale = await handleEvidenceCommitRequest(post("/api/evidence/commit", { ...body, baseRevision: chain.revision + 1 }), deps);
+    expect([stale.status, (await stale.json()).status]).toEqual([409, "stale_base"]);
+    await admin.query("UPDATE evidence.package SET accepts_evidence = false WHERE id = $1", [context.evidencePackageId]);
+    try {
+      const closed = await handleEvidenceCommitRequest(post("/api/evidence/commit", body), deps);
+      expect([closed.status, await closed.json()]).toEqual([409, { status: "not_accepting" }]);
+    } finally {
+      await admin.query("UPDATE evidence.package SET accepts_evidence = true WHERE id = $1", [context.evidencePackageId]);
+    }
+    expect(counts).toEqual({ puts: 0, signs: 0, attaches: 0 });
+    expect(await stored()).toEqual(before);
+  });
+
   it("answers a student removed between the context and the transaction as a document that does not exist", async () => {
     const { body } = nextEnvelope(`tx-${suffix}-route-2`);
     const { deps } = countedDeps();
