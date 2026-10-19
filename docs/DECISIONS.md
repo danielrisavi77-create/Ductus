@@ -11,7 +11,7 @@ Napomena: ova numeracija vrijedi od verzije 0.2 i ne odgovara brojevima iz ranij
 | Broj | Odluka | Razlog |
 | --- | --- | --- |
 | D-01 | Obećanje: "Ductus pokazuje kako je rad nastao. Zaključak donosi čovjek." Ductus nikad ne tvrdi tko je napisao rad ni je li AI korišten nedopušteno | Tvrdnja o autorstvu nije tehnički pouzdana (prepisivanje s drugog uređaja) i mogla bi optužiti nevinog studenta; Ustav C-9, C-10 |
-| D-02 | Kupac je fakultet; korisnici su student, nastavnik i mentor; student ima vlastitu korist. Jedno pozicioniranje, interno i javno: "Ductus bilježi kako rad nastaje i olakšava razgovor o radu" (3. 10. 2026. zamjenjuje interno "anti-AI") | Fakultet plaća i propisuje; bez studentske koristi studenti pišu drugdje |
+| D-02 | Kupac je fakultet; korisnici su student, nastavnik i mentor; student ima vlastitu korist. Jedno pozicioniranje, interno i javno: "Ductus bilježi kako rad nastaje i olakšava razgovor o radu" (3. 10. 2026. zamjenjuje interno "anti-AI"). **Nastavnik i mentor su od 19. 10. 2026. jedna uloga (D-154).** | Fakultet plaća i propisuje; bez studentske koristi studenti pišu drugdje |
 | D-03 | Podržane su sve vrste pisanih radova: podnesak (300 do 1.500 riječi), esej, seminarski, završni, diplomski, specijalistički, doktorski. Ne pisanje nalik ispitu pod nadzorom. **Dio „Ne pisanje nalik ispitu pod nadzorom” promijenjen je odlukama D-144 i D-151 (19. 10. 2026.).** | Cilj je jedno okruženje za sve radove; ispitni nadzor je visokorizičan po Aktu o UI |
 | D-04 | Fakultet odobrava i može propisati obvezno korištenje; u pilotu to odlučuje FPZG | |
 | D-05 | Nastavnik bira profil evidencije (Osnovni ili Prošireni); ~~reprodukcija pisanja ne postoji~~ **reprodukcija: vidi D-56** | C-14, C-19 |
@@ -205,7 +205,7 @@ Trag: komentari na issueu #87 `issuecomment-6256252124`, `6256655038`, `62627079
 | D-151 | **Potvrđeno 19. 10. 2026. (Daniel, odgovor „Sve da”; `#87` komentar 6262707921 t. 1 i 2).** D-144 osim D-37 i `docs/PRODUCT.md` §6 i §11 mijenja i D-03 (dio „Ne pisanje nalik ispitu pod nadzorom”) i `docs/PRODUCT.md` §2. D-03 i D-55 vežu to isključenje na Prilog III. Akta o UI (t. 3(d)). Zato pravno mišljenje (D-55) i DPIA iz D-143 moraju pokriti i Akt o UI, ne samo GDPR. `docs/privacy/` se usklađuje s D-142 do D-144 i bilježi da je DPIA potrebna; to je zaseban issue | Isključenje je bilo vezano uz rizik po Aktu o UI; taj rizik sad mora ocijeniti pravno mišljenje |
 | D-152 | **Potvrđeno 19. 10. 2026. (Daniel; `#87` komentar 6262707921 t. 3).** Istraživač objavljuje u issueu #271 kao `ductus-botovi[bot]` | Svi botovi pišu pod istom aplikacijom |
 | D-153 | **Potvrđeno 19. 10. 2026. (Daniel; `#87` komentar 6263289858).** Tekst obavijesti S3 za demo prepisuje se prema D-142 i D-143: prikaz uživo i reprodukcija moraju biti navedeni, a tekst ne smije reći da se pojedinačni unosi ne bilježe. Nositelj je na #476 (redak 1) | Postojeći tekst proturječi D-142, D-143 i `docs/PRODUCT.md` §5 pravilima 4 i 7 |
-| D-154 | **Potvrđeno 19. 10. 2026. (Daniel; `#87` komentar 6263315145).** Mentor i nastavnik zadatka su ista uloga. Reprodukciju vidi samo ta uloga, nitko drugi. Zatvara pitanje otvoreno u D-143 | Vlasnik: „Reprodukciju vidi samo mentor, odnosno nastavnik, to je jedno te isto” |
+| D-154 | **Potvrđeno 19. 10. 2026. (Daniel; `#87` komentari 6263315145 i 6263549759).** Mentor i nastavnik zadatka su jedna uloga općenito, ne samo za reprodukciju. Pristup i dalje nastaje samo iz odnosa (C-23): ta uloga vidi radove svog zadatka i radove kojima je mentor. Reprodukciju vidi samo ta uloga, nitko drugi. Mijenja D-02 i `docs/PRODUCT.md` §3, §5 pravilo 7 i §6 (Reprodukcija). Zatvara pitanje otvoreno u D-143 | Vlasnik: „Reprodukciju vidi samo mentor, odnosno nastavnik, to je jedno te isto”; na pitanje o opsegu odabrao „Jedna uloga općenito” |
 
 ## Prijedlozi koji čekaju potvrdu
 
@@ -244,7 +244,7 @@ Trag: komentari na issueu #87 `issuecomment-6256252124`, `6256655038`, `62627079
 
 | Broj | Odluka | Prijedlog |
 | --- | --- | --- |
-| D-55 | Kontrolna točka uživo | Kratko pisanje u Ductusu na fakultetu (npr. 20 minuta: plan rada ili refleksija o vlastitom radu); nastavnik ljudski uspoređuje, Ductus ništa ne analizira. Do mišljenja ostaje isključeno (D-03). Pitanje za pravnika: primjenjuje se li Prilog III. točka 3(d) Akta o UI na sustav bez AI-ja i je li obrada razmjerna po GDPR-u. Isto mišljenje pokriva bilježenje ritma iz D-56 (je li biometrijski podatak po čl. 4(14) GDPR-a i kako ga obraditi u DPIA-i) |
+| D-55 | Kontrolna točka uživo | Kratko pisanje u Ductusu na fakultetu (npr. 20 minuta: plan rada ili refleksija o vlastitom radu); nastavnik ljudski uspoređuje, Ductus ništa ne analizira. Do mišljenja ostaje isključeno (D-03). **Promijenjeno odlukama D-144 i D-151 (19. 10. 2026.): isključenje iz D-03 više ne vrijedi; pisanje nalik ispitu pod nadzorom, pa i kontrolna točka uživo, prije pilota sa stvarnim studentima treba ovo pravno mišljenje i DPIA.** Pitanje za pravnika: primjenjuje se li Prilog III. točka 3(d) Akta o UI na sustav bez AI-ja i je li obrada razmjerna po GDPR-u. Isto mišljenje pokriva bilježenje ritma iz D-56 (je li biometrijski podatak po čl. 4(14) GDPR-a i kako ga obraditi u DPIA-i) |
 
 ## Čeka FPZG
 
