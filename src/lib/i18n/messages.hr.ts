@@ -93,6 +93,66 @@ export const hr = {
       submitBody:
         "Student predaje rad i dobiva potvrdu predaje. Sažetak nastanka rada isti je za oba pogleda i nije presuda o autorstvu.",
     },
+    // FE-H2a (#476): ten announcements of the full flow. Steps the app does not
+    // have yet carry "Uskoro" and stay neutral, never a promise (PRODUCT §5).
+    flow: {
+      link: "Tijek rada",
+      title: "Cijeli tijek rada u deset koraka.",
+      lead: "Od zadatka do ustanove. Koraci s oznakom „Uskoro” su u pripremi i još nisu dio aplikacije.",
+      soon: "Uskoro",
+      steps: {
+        assignment: {
+          name: "Zadatak",
+          title: "Student zna što se od njega očekuje.",
+          body: "Nastavnik objavi zadatak s rokom, oblikom, opsegom i pravilima kolegija. Student ih vidi na jednom mjestu prije prve rečenice.",
+        },
+        writing: {
+          name: "Pisanje",
+          title: "Nacrt postaje akademski rad.",
+          body: "Student piše u uređivaču zadatka, s naslovima i navodima. Nastavnik vidi rad uživo dok nastaje, a student to zna unaprijed.",
+        },
+        sources: {
+          name: "Literatura",
+          title: "Od navoda do izvora.",
+          body: "Navod u tekstu vezan je uz izvor u popisu literature, u stilu koji propisuje fakultet.",
+        },
+        mentoring: {
+          name: "Mentorstvo",
+          title: "Komentar uz točan odlomak.",
+          body: "Nastavnik ostavlja komentar uz odlomak na koji se odnosi. Student ga vidi na istom mjestu.",
+        },
+        reply: {
+          name: "Odgovor",
+          title: "Student odgovara na komentar.",
+          body: "Odgovor stoji uz komentar, pa razgovor o odlomku ostaje na jednom mjestu. Kako će doraditi tekst, odlučuje student.",
+        },
+        versionReview: {
+          name: "Pregled verzije",
+          title: "Pregled vezan uz određenu verziju.",
+          body: "Nastavnik označi koju je verziju rada pregledao, pa oboje znaju o kojem se tekstu razgovaralo.",
+        },
+        laterChange: {
+          name: "Kasnija promjena",
+          title: "Promjena nakon pregleda traži novi pregled.",
+          body: "Kad se pregledani odlomak kasnije promijeni, nastavnik vidi da ga može ponovno pregledati.",
+        },
+        submission: {
+          name: "Predaja",
+          title: "Student zna što predaje.",
+          body: "Prije predaje student vidi točno ono što predaje, a nakon predaje dobiva potvrdu. Sažetak nastanka rada isti je za studenta i nastavnika.",
+        },
+        defence: {
+          name: "Obrana",
+          title: "Za obranu točno određena verzija.",
+          body: "Oni koji sudjeluju u obrani rada dobivaju upravo predanu verziju.",
+        },
+        institution: {
+          name: "Ustanova",
+          title: "Okvir i uloge, bez čitanja radova.",
+          body: "Ustanova postavlja pravila i uloge za svoje kolegije. Sadržaj radova pritom ne čita.",
+        },
+      },
+    },
     closingTitle: `${APP_NAME} pokazuje kako je rad nastao.`,
     closingAccent: "Zaključak donosi čovjek.",
     footerNote: "Prostor za akademsko pisanje.",
@@ -120,6 +180,10 @@ export const hr = {
       pending: "Stvaranje kolegija…",
       // create_course returns the existing id for an identical repeat.
       created: "Kolegij je spreman.",
+      // FE-D10: the code is not shown until the app can create one (#476
+      // 6273758034); an invented code would be refused at /upis.
+      code: "Kod za upis",
+      codeSoon: "Kod se ovdje prikazuje čim ga aplikacija može stvoriti. Studenti upisuju kolegij tim kodom.",
       nameMissing: "Upiši naziv kolegija.",
       errors: {
         invalid: "Provjeri naziv, akademsku godinu i pravila kolegija.",
@@ -245,6 +309,11 @@ export const hr = {
     documentLabel: "Tekst rada",
     documentNotEditable: "Pisanje ovdje još nije moguće.",
     status: "Stanje rada",
+    // FE-D6 (design editor-v11): the status bar.
+    statusLoading: "Učitavanje rada…",
+    statusNoJournal: "Ovdje se ništa ne sprema.",
+    selectedWords: "označeno {words}",
+    pagesApprox: "≈ {pages} str.",
   },
   editor: {
     placeholder: "Počni pisati…",
@@ -500,10 +569,39 @@ export const hr = {
     logout: "Odjava",
     loggingOut: "Odjava…",
     logoutUnsaved:
-      "Ovaj uređaj nije mogao pohraniti dio teksta, pa bi se odjavom izgubio. Izvezi tekst, a zatim ponovno odaberi „Odjava”.",
+      "Ovaj uređaj nije mogao pohraniti dio teksta, pa bi se odjavom izgubio. Izvezi tekst prije odjave.",
+    // FE-D7 (D-118): the sign-out dialog. It speaks only of this device: the
+    // app sends nothing to the server yet, so it promises no sending (#476).
+    logoutTitle: "Odjava",
+    logoutConfirm: "Odjavi se",
+    logoutStay: "Ostani",
+    logoutPlain: "Odjava zatvara sesiju na ovom uređaju.",
+    logoutPending: {
+      one: "{n} izmjena postoji samo na ovom uređaju. Odjava zatvara sesiju.",
+      few: "{n} izmjene postoje samo na ovom uređaju. Odjava zatvara sesiju.",
+      many: "{n} izmjena postoji samo na ovom uređaju. Odjava zatvara sesiju.",
+    },
+    logoutKept:
+      "Zapis ostaje vezan uz tebe na ovom uređaju i nastavljaš ga kad se ponovno prijaviš. Osoba koja se nakon tebe prijavi na ovom uređaju ne vidi tvoj rad.",
     logoutFailed: "Odjava nije dovršena jer poslužitelj nije odgovorio. Ništa nije izbrisano. Provjeri vezu i pokušaj ponovno.",
     signedOutElsewhere:
       "Prijava s kojom je ova kartica otvorena više ne vrijedi: u drugoj kartici provedena je odjava ili nova prijava. Ova kartica više ništa ne prikazuje ni ne sprema. Ponovno učitaj stranicu.",
+  },
+  // FE-D3 (DAN-222): /prijava, Prijava v5 of the design handoff without the
+  // e-mail sign-in and the "Što Ductura čuva" panel (D-09, #476). AAI@EduHr is
+  // the one way in; nothing here describes what is recorded (the notice of
+  // each assignment does, PRODUCT §5 rule 6).
+  prijava: {
+    title: "Prijava",
+    titleAccent: "u radni prostor",
+    lead: `${APP_NAME} je prostor u kojem pišeš seminarske, završne i diplomske radove, a mentor ih prati od prve rečenice do predaje.`,
+    motto: `${APP_NAME} ne piše umjesto tebe. Pomaže ti da napišeš svoj rad i pokažeš kako je nastao.`,
+    cardTitle: "Za studente i nastavnike",
+    cardBody: "Prijavi se korisničkim računom AAI@EduHr, istim kojim se prijavljuješ u Studomat i Merlin.",
+    button: "Prijava sustavom AAI@EduHr",
+    passwordNote: "Lozinku upisuješ samo kod AAI@EduHr.",
+    codeNote: "Kod zadatka od nastavnika upisuješ nakon prijave.",
+    help: "Ako prijava ne uspije, javi se koordinatoru na svojoj ustanovi.",
   },
 } as const;
 

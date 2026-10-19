@@ -33,6 +33,24 @@ test.describe("public home page", () => {
     await expect(page.locator("#za-koga")).toBeInViewport();
   });
 
+  test("the flow section announces ten steps and marks the coming ones (FE-H2a)", async ({ page }) => {
+    await page.goto("/");
+    const nav = page.getByRole("navigation", { name: t.landing.sectionsNav });
+    await nav.getByRole("link", { name: t.landing.flow.link }).click();
+    await expect(page).toHaveURL(/#tijek-rada$/);
+    const section = page.locator("#tijek-rada");
+    await expect(section.getByRole("heading", { level: 2, name: t.landing.flow.title })).toBeInViewport();
+    const cards = section.locator("ol > li");
+    await expect(cards).toHaveCount(10);
+    const soon = section.locator("ol > li[data-soon]");
+    await expect(soon).toHaveCount(5);
+    for (const card of await soon.all()) await expect(card).toContainText(t.landing.flow.soon);
+    await expect(cards.filter({ hasText: t.landing.flow.soon })).toHaveCount(5);
+    await expect(cards.first()).toContainText(t.landing.flow.steps.assignment.title);
+    // Announcements only: no control inside the cards.
+    await expect(section.locator("ol").locator("a, button, input, select, textarea")).toHaveCount(0);
+  });
+
   test("the skip link moves focus to the content", async ({ page }) => {
     await page.goto("/");
     await page.keyboard.press("Tab");
