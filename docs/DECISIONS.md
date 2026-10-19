@@ -192,7 +192,7 @@ Trag: komentari na issueu #87 `issuecomment-6254616769`, `6254620029`, `62546427
 
 ## Odlučeno (19. 10. 2026.): predaja, ruta evidencije, sažetak procesa, S3 i reprodukcija
 
-Trag: komentari na issueu #87 `issuecomment-6256252124`, `6256655038`, `6262707921`, `6263289858` i `6263315145`. Odluke je vlasnik donio u razgovoru s orkestratorom ili sa sesijom Platforme, a orkestrator ih je zapisao na #87. Format potvrde predaje `ductus-submission-receipt-v1` (#460) ovdje nije upisan: vlasnik ga još nije odlučio.
+Trag: komentari na issueu #87 `issuecomment-6256252124`, `6256655038`, `6262707921`, `6263289858`, `6263315145`, `6263549759` i `6266377984`. Odluke je vlasnik donio u razgovoru s orkestratorom ili sa sesijom Platforme, a orkestrator ih je zapisao na #87. Format potvrde predaje `ductus-submission-receipt-v1` (#460) ovdje nije upisan: vlasnik ga još nije odlučio.
 
 | Broj | Odluka | Razlog |
 | --- | --- | --- |
@@ -205,7 +205,7 @@ Trag: komentari na issueu #87 `issuecomment-6256252124`, `6256655038`, `62627079
 | D-151 | **Potvrđeno 19. 10. 2026. (Daniel, odgovor „Sve da”; `#87` komentar 6262707921 t. 1 i 2).** D-144 osim D-37 i `docs/PRODUCT.md` §6 i §11 mijenja i D-03 (dio „Ne pisanje nalik ispitu pod nadzorom”) i `docs/PRODUCT.md` §2. D-03 i D-55 vežu to isključenje na Prilog III. Akta o UI (t. 3(d)). Zato pravno mišljenje (D-55) i DPIA iz D-143 moraju pokriti i Akt o UI, ne samo GDPR. `docs/privacy/` se usklađuje s D-142 do D-144 i bilježi da je DPIA potrebna; to je zaseban issue | Isključenje je bilo vezano uz rizik po Aktu o UI; taj rizik sad mora ocijeniti pravno mišljenje |
 | D-152 | **Potvrđeno 19. 10. 2026. (Daniel; `#87` komentar 6262707921 t. 3).** Istraživač objavljuje u issueu #271 kao `ductus-botovi[bot]` | Svi botovi pišu pod istom aplikacijom |
 | D-153 | **Potvrđeno 19. 10. 2026. (Daniel; `#87` komentar 6263289858).** Tekst obavijesti S3 za demo prepisuje se prema D-142 i D-143: prikaz uživo i reprodukcija moraju biti navedeni, a tekst ne smije reći da se pojedinačni unosi ne bilježe. Nositelj je na #476 (redak 1) | Postojeći tekst proturječi D-142, D-143 i `docs/PRODUCT.md` §5 pravilima 4 i 7 |
-| D-154 | **Potvrđeno 19. 10. 2026. (Daniel; `#87` komentari 6263315145 i 6263549759).** Mentor i nastavnik zadatka su jedna uloga općenito, ne samo za reprodukciju. Pristup i dalje nastaje samo iz odnosa (C-23): ta uloga vidi radove svog zadatka i radove kojima je mentor. Reprodukciju vidi samo ta uloga, nitko drugi. Mijenja D-02 i `docs/PRODUCT.md` §3, §5 pravilo 7 i §6 (Reprodukcija). Zatvara pitanje otvoreno u D-143 | Vlasnik: „Reprodukciju vidi samo mentor, odnosno nastavnik, to je jedno te isto”; na pitanje o opsegu odabrao „Jedna uloga općenito” |
+| D-154 | **Potvrđeno 19. 10. 2026. (Daniel; `#87` komentari 6263315145, 6263549759 i 6266377984).** Mentor i nastavnik zadatka su jedna uloga općenito, ne samo za reprodukciju. Pristup i dalje nastaje samo iz odnosa (C-23): ta uloga vidi radove svog zadatka i radove kojima je mentor. Od ostalih uloga reprodukciju vidi samo ta uloga; student vidi istu reprodukciju svog rada (pravilo 5, C-4). Mijenja D-02 i `docs/PRODUCT.md` §3, §5 pravilo 7 i §6 (Reprodukcija). Zatvara pitanje otvoreno u D-143 | Vlasnik: „Reprodukciju vidi samo mentor, odnosno nastavnik, to je jedno te isto”; na pitanje o opsegu odabrao „Jedna uloga općenito” |
 
 ## Prijedlozi koji čekaju potvrdu
 
