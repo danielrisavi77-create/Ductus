@@ -105,6 +105,8 @@ export class PersistentDevelopmentEd25519SigningKeyProvider implements SigningKe
     const stat = await lstat(path).catch(() => fail("signing_key_missing"));
     if (!stat.isFile()) fail("signing_key_not_regular_file");
     if (process.platform !== "win32" && (stat.mode & 0o077) !== 0) fail("signing_key_permissions");
+    // Judged before reading, so a path to a large file reads nothing of it.
+    if (stat.size !== SEED_BYTES) fail("signing_key_malformed");
     const seed = await readFile(path).catch(() => fail("signing_key_missing"));
     if (seed.byteLength !== SEED_BYTES) fail("signing_key_malformed");
     const privateKey = createPrivateKey({
