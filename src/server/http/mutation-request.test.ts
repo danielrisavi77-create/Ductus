@@ -31,6 +31,20 @@ describe("checkMutationRequest (#155 item 8)", () => {
     },
   );
 
+  // B-LIVE step 3: the live route publishes with PUT; the same origin rules hold.
+  it("accepts only PUT from a route that names PUT, with the same origin checks", () => {
+    expect(checkMutationRequest(post({ origin: ORIGIN, "sec-fetch-site": "same-origin" }, "PUT"), ORIGIN, "PUT")).toEqual({ ok: true });
+    for (const method of ["POST", "GET", "PATCH", "DELETE"]) {
+      expect(checkMutationRequest(post({ origin: ORIGIN }, method), ORIGIN, "PUT")).toMatchObject({ status: 405 });
+    }
+    expect(checkMutationRequest(post({}, "PUT"), ORIGIN, "PUT")).toMatchObject({ status: 403, reason: "origin_missing" });
+    expect(checkMutationRequest(post({ origin: "https://evil.example" }, "PUT"), ORIGIN, "PUT")).toMatchObject({ status: 403 });
+    expect(checkMutationRequest(post({ origin: ORIGIN, "sec-fetch-site": "same-site" }, "PUT"), ORIGIN, "PUT")).toMatchObject({
+      status: 403,
+      reason: "cross_site",
+    });
+  });
+
   it("refuses a missing, empty or opaque Origin even when Sec-Fetch-Site says same-origin", () => {
     for (const headers of [
       { "sec-fetch-site": "same-origin" },
