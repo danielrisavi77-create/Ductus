@@ -69,6 +69,7 @@ test("runStopHook never runs twice in a row and fails open", () => {
     "error only in an unchanged file": [{ cwd: repo }, { tsc: { status: 2, stdout: "src/z.ts(1,1): error TS1: x" } }],
     "node_modules tracked in the checkout": [{ cwd: repo }, { tracked: "node_modules/typescript/bin/tsc\0" }],
     "differently cased node_modules tracked": [{ cwd: repo }, { tracked: "src/a.ts\0NODE_MODULES/typescript/bin/tsc\0" }],
+    "node_modules with a Unicode case-fold twin tracked (SEC-2026-10-18-2)": [{ cwd: repo }, { tracked: "src/a.ts\0node_module\u017F/typescript/bin/tsc\0" }],
     "tracked-file listing fails": [{ cwd: repo }, { tracked: null }],
     "tsc clean": [{ cwd: repo }, { tsc: { status: 0, stdout: "" } }],
   };
