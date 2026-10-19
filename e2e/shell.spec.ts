@@ -405,9 +405,11 @@ test.describe("workspace shell", () => {
     ).toBeVisible();
   });
 
-  test("home links to the workspace", async ({ page }) => {
+  // Without a session "/" is the public home page and its way in is /prijava
+  // (FE-H1, #476); the workspace link for a signed-in person is checked in
+  // e2e/login/sign-out.spec.ts.
+  test("home without a session leads to the sign-in screen", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("link", { name: "Otvori radni prostor" }).click();
-    await expect(page).toHaveURL(/\/rad$/);
+    await expect(page.getByRole("banner").getByRole("link", { name: "Prijava" })).toHaveAttribute("href", "/prijava");
   });
 });
