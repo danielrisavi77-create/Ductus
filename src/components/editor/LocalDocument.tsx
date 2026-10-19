@@ -4,7 +4,7 @@
  * The local-only writing surface on /rad (F-3 step 1b, plan #197).
  *
  * One provider owns the editor, the Web Lock and the `LocalDocumentSaver`;
- * the sheet (`LocalEditor`) and the word count (`LocalWordCount`) only render
+ * the sheet (`LocalEditor`) and the status bar (`useLocalStatus`) only render
  * what it holds. Nothing here touches the network.
  *
  * - One writer per document: the tab holding the Web Lock journals; any other
@@ -50,7 +50,6 @@ import { replaceWithStoredDocument } from "@/editor/identity";
 import { createEditorExtensions } from "@/editor/schema";
 import { StorableInput } from "@/editor/storable-input";
 import { storableDocument } from "@/editor/storable-text";
-import { wordsHr } from "@/lib/i18n/hr";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
 import {
@@ -100,7 +99,7 @@ const LocalDocumentContext = createContext<LocalDocumentValue | null>(null);
 
 function useLocalDocument(): LocalDocumentValue {
   const value = useContext(LocalDocumentContext);
-  if (!value) throw new Error("LocalEditor and LocalWordCount need a LocalDocumentProvider");
+  if (!value) throw new Error("LocalEditor and the status bar need a LocalDocumentProvider");
   return value;
 }
 
@@ -582,9 +581,13 @@ export function useLocalSavingOnDevice(): boolean {
   return state !== undefined && SAVING_ON_DEVICE.includes(state);
 }
 
-/** Word count for the status bar. */
-export function LocalWordCount() {
-  return <span>{wordsHr(useLocalDocument().words)}</span>;
+/**
+ * Read-only view for the status bar (FE-D6): whether the journal is still
+ * being read, and the words of the document as last proposed to it.
+ */
+export function useLocalStatus(): { loading: boolean; words: number } {
+  const { phase, words } = useLocalDocument();
+  return { loading: phase === "loading", words };
 }
 
 /**

@@ -305,6 +305,11 @@ export const hr = {
     documentLabel: "Tekst rada",
     documentNotEditable: "Pisanje ovdje još nije moguće.",
     status: "Stanje rada",
+    // FE-D6 (design editor-v11): the status bar.
+    statusLoading: "Učitavanje rada…",
+    statusNoJournal: "Ovdje se ništa ne sprema.",
+    selectedWords: "označeno {words}",
+    pagesApprox: "≈ {pages} str.",
   },
   editor: {
     placeholder: "Počni pisati…",

@@ -317,11 +317,11 @@ main:focus {
   min-width: 0;
 }
 
+/* Course and assignment beside the brand (editor-v11: 12 px, quiet, as written). */
 .brand-line__context {
   font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--ink-3);
+  overflow-wrap: anywhere;
 }
 
 .modes {
@@ -453,7 +453,7 @@ main:focus {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 16px;
+  gap: 6px 18px;
   min-height: 34px;
   padding: 6px 14px;
   background: var(--chrome);
@@ -874,6 +874,16 @@ main:focus {
   .sync-chip[data-tone="progress"] .sync-chip__dot {
     animation: none;
   }
+}
+
+/* Length in the status bar (FE-D6, editor-v11): the count stands out. */
+.status-length__count {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.status-length__selected {
+  color: var(--ink);
 }
 
 /* No network (F-8, DAN-211): text and icon, never colour alone. */
