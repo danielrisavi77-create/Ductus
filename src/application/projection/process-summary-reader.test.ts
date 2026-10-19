@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { InMemoryEvidencePayloadStore } from "@/adapters/evidence/in-memory-evidence-payload-store";
 import type {
-  EvidencePayloadReader,
   EvidencePayloadReadResult,
+  InstitutionEvidencePayloadReader,
 } from "@/application/ports/evidence-reconstruction";
 import type {
   ProcessSummarySource,
@@ -102,6 +102,7 @@ function found(record: Stored, count = record.hashes.length): Found {
   const segmentHashes = record.hashes.slice(0, count);
   return {
     status: "found",
+    institutionId: INSTITUTION,
     evidencePackageId: PACKAGE,
     head: count === 0 ? null : { segmentHash: segmentHashes[count - 1], segmentCount: count },
     segmentHashes,
@@ -116,7 +117,7 @@ function sourceFor(answer: ProcessSummarySourceResult) {
   return { readSource } satisfies ProcessSummarySource;
 }
 
-function deps(source: ProcessSummarySource, payloads: EvidencePayloadReader, thresholds = THRESHOLDS): ProcessSummaryReaderDeps {
+function deps(source: ProcessSummarySource, payloads: InstitutionEvidencePayloadReader, thresholds = THRESHOLDS): ProcessSummaryReaderDeps {
   return { source, payloads, thresholds };
 }
 
@@ -184,6 +185,23 @@ describe("readProcessSummary: one answer for the owner and the teacher (B-13, D-
     expect(JSON.parse(empty.body)).toMatchObject({ sessions: { count: 0 }, recordState: "complete" });
   });
 
+  // B-13 step 4: storage is asked only in the institution the source row names.
+  it("reads every payload from the institution the source row names, and from no other", async () => {
+    const record = await buildRecord(WORK);
+    const store = await storeOf(record);
+    const read = vi.spyOn(store, "readImmutable");
+    const answer = await readProcessSummary(deps(sourceFor(found(record)), store), DOCUMENT);
+    expect(answer.status).toBe("ok");
+    expect(new Set(read.mock.calls.map(([input]) => input.institutionId))).toStrictEqual(new Set([INSTITUTION]));
+
+    // A row naming another institution finds nothing there: that domain holds no object of this package.
+    const elsewhere = { ...found(record), institutionId: "22222222-2222-4222-8222-222222222222" };
+    expect(await readProcessSummary(deps(sourceFor(elsewhere), store), DOCUMENT)).toStrictEqual({
+      status: "unavailable",
+      reason: "payload_missing",
+    });
+  });
+
   it("shows a gap in the record to both viewers alike", async () => {
     const record = await buildRecord([WORK[0], { ...WORK[1], skip: 3 }]);
     const store = await storeOf(record);
@@ -217,13 +235,13 @@ describe("readProcessSummary fails whole, never with a partial summary", () => {
   it("refuses bytes a store returns for another hash, a head cut short and a reordered list", async () => {
     const record = await buildRecord(WORK);
     const store = await storeOf(record);
-    const swapped: EvidencePayloadReader = {
+    const swapped: InstitutionEvidencePayloadReader = {
       async readImmutable(input): Promise<EvidencePayloadReadResult> {
         const index = record.hashes.indexOf(input.segmentHash);
         return { status: "found", bytes: new TextEncoder().encode(record.payloads[index === 1 ? 2 : index]) };
       },
     };
-    const cases: [ProcessSummarySourceResult, EvidencePayloadReader][] = [
+    const cases: [ProcessSummarySourceResult, InstitutionEvidencePayloadReader][] = [
       [found(record), swapped],
       [{ ...found(record), head: found(record, 2).head }, store],
       [{ ...found(record), segmentHashes: [record.hashes[1], record.hashes[0], record.hashes[2]] }, store],
@@ -243,7 +261,7 @@ describe("readProcessSummary fails whole, never with a partial summary", () => {
     expect(await readProcessSummary(deps(throwingSource, await storeOf(record)), DOCUMENT)).toStrictEqual(
       unavailable("source_unavailable"),
     );
-    const syncThrow: EvidencePayloadReader = {
+    const syncThrow: InstitutionEvidencePayloadReader = {
       readImmutable() {
         throw new Error("s3 Lorem");
       },
