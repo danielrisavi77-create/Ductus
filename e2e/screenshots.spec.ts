@@ -48,6 +48,23 @@ for (const locale of LOCALES) {
     }
   }
 
+  // FE-D9: the Upute and Rad tabs of the right panel, wide and on a phone.
+  for (const tab of ["Upute", "Rad"] as const) {
+    for (const width of [1440, 390] as const) {
+      test(`screenshot: workspace panel ${tab} at ${width} px (${locale})`, async ({ page }, testInfo) => {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto("/rad");
+        await page.waitForLoadState("networkidle");
+        if (width === 390) await page.locator(".workspace__panel .rail-toggle").click();
+        await page.getByRole("tab", { name: tab }).click();
+        await testInfo.attach(`${testInfo.project.name}-${locale}-workspace-panel-${tab}-${width}.png`, {
+          body: await page.screenshot({ fullPage: true }),
+          contentType: "image/png",
+        });
+      });
+    }
+  }
+
   for (const colorScheme of SCHEMES) {
     test(`screenshot: workspace rails open at 390 px (${locale}, ${colorScheme})`, async ({
       page,

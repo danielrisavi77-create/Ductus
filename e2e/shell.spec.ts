@@ -309,7 +309,7 @@ test.describe("workspace shell", () => {
     const panel = page.getByRole("complementary", { name: "Upute, literatura i komentari" });
     const list = panel.getByRole("tablist", { name: "Bočni panel" });
     const tabs = list.getByRole("tab");
-    await expect(tabs).toHaveText(["Literatura", "Upute", "Komentari"]);
+    await expect(tabs).toHaveText(["Literatura", "Upute", "Komentari", "Rad"]);
     const comments = list.getByRole("tab", { name: "Komentari" });
     await expect(comments).toHaveAttribute("aria-selected", "true");
     // One Tab stop: only the open tab is in the Tab order.
@@ -319,20 +319,48 @@ test.describe("workspace shell", () => {
 
     await comments.focus();
     await page.keyboard.press("ArrowRight");
+    const work = list.getByRole("tab", { name: "Rad" });
+    await expect(work).toBeFocused();
+    await expect(panel.getByRole("tabpanel")).toContainText("Etape");
+    await page.keyboard.press("ArrowRight");
     const sources = list.getByRole("tab", { name: "Literatura" });
     await expect(sources).toBeFocused();
     await expect(sources).toHaveAttribute("aria-selected", "true");
     await expect(panel.getByRole("tabpanel")).toHaveText("Literatura rada prikazuje se ovdje.");
     await page.keyboard.press("End");
+    await expect(work).toBeFocused();
+    await page.keyboard.press("ArrowLeft");
     await expect(comments).toBeFocused();
     await page.keyboard.press("ArrowLeft");
     const instructions = list.getByRole("tab", { name: "Upute" });
     await expect(instructions).toHaveAttribute("aria-selected", "true");
-    await expect(panel.getByRole("tabpanel")).toHaveText("Upute zadatka prikazuju se ovdje.");
+    await expect(panel.getByRole("tabpanel")).toContainText("Provjera pomaže; ništa ne blokira predaju.");
     await page.keyboard.press("Home");
     await expect(sources).toBeFocused();
     await instructions.click();
     await expect(panel.getByRole("tabpanel")).toHaveAccessibleName("Upute");
+  });
+
+  test("right panel (FE-D9): Upute shows the task and allowed uses, Rad the stages with written states", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/rad");
+    const panel = page.getByRole("complementary", { name: "Upute, literatura i komentari" });
+    await panel.getByRole("tab", { name: "Upute" }).click();
+    const upute = panel.getByRole("tabpanel");
+    await expect(upute.getByRole("heading", { name: "Zadatak" })).toBeVisible();
+    await expect(upute).toContainText("Rok: 20. studenoga 2026. u 23:59");
+    await expect(upute.getByRole("heading", { name: /Dopuštena uporaba alata/ })).toBeVisible();
+    await expect(upute.getByRole("listitem")).toHaveCount(3);
+    await expect(upute.getByRole("heading", { name: /Provjera oblika/ })).toContainText("uskoro");
+
+    await panel.getByRole("tab", { name: "Rad" }).click();
+    const rad = panel.getByRole("tabpanel");
+    const stages = rad.getByRole("list").first().getByRole("listitem");
+    await expect(stages).toHaveCount(5);
+    // The state is written out, never colour alone.
+    await expect(stages.nth(2)).toContainText("vraćeno s napomenom");
+    await expect(stages.nth(2)).toContainText("Mentor: ");
+    await expect(rad.getByRole("heading", { name: "Uz rad" })).toBeVisible();
   });
 
   test("the sheet has a visible 1 px rule border on the dark shell", async ({ page }) => {
