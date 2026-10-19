@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { Editor } from "@tiptap/core";
 import type { Transaction } from "@tiptap/pm/state";
+import type { Step } from "@tiptap/pm/transform";
 import { describe, expect, it } from "vitest";
 
 import { createEditStepsV1Replayer, removedRangeSha256 } from "@/adapters/evidence/edit-steps-v1-replayer";
@@ -179,6 +180,64 @@ describe("F-8 3d-1: events, segments and time", () => {
     expect(second.segment.initialDocumentHash).toBe(first.segment.finalDocumentHash);
     expect(second.segment.sequenceFrom).toBe(2);
     expect(await t.recorder.takeSegment(CONTEXT)).toBeNull();
+  });
+
+  /** Every segment the recorder gives, each continuing the chain of the one before. */
+  async function drain(recorder: EvidenceRecorder) {
+    const segments = [];
+    let context = CONTEXT;
+    for (let built = await recorder.takeSegment(context); built; built = await recorder.takeSegment(context)) {
+      segments.push(built);
+      context = { ...CONTEXT, sequenceFrom: built.segment.sequenceTo + 1, predecessorSegmentHash: built.sha256 };
+    }
+    return segments;
+  }
+
+  /** From the first change of a segment to its last, from the separate timing record. */
+  const spanMs = (built: { timing: { events: { stepOffsetsMs: number[] }[] } }) => {
+    const offsets = built.timing.events.flatMap((e) => e.stepOffsetsMs);
+    return Math.max(...offsets) - Math.min(...offsets);
+  };
+
+  it("never spans 30 s, even when typing never pauses (D-24): 1800 characters every 100 ms", async () => {
+    const t = setup();
+    t.editor.commands.setTextSelection(10);
+    t.type("x".repeat(1_800), 100);
+    t.recorder.close();
+    const segments = await drain(t.recorder);
+    expect(segments.length).toBeGreaterThanOrEqual(6);
+    for (const built of segments) expect(spanMs(built)).toBeLessThan(MAX_SEGMENT_SPAN_MS);
+    expect(segments.flatMap((b) => b.timing.events.flatMap((e) => e.stepOffsetsMs)).length).toBe(1_800);
+    const payloads = await Promise.all(segments.map((b) => verifyCanonicalEvidencePayloadV2(b.bytes)));
+    const chain = payloads.map((p) => (p.ok ? p.segment : null));
+    expect(chain.every((segment) => segment !== null)).toBe(true);
+    const replay = await replayEvidenceSegmentsV2(t.initial, chain.map((s) => s!), createEditStepsV1Replayer());
+    expect(replay).toMatchObject({ ok: true, documentSha256: segments.at(-1)!.segment.finalDocumentHash });
+  }, 60_000);
+
+  it("an event that starts inside the span but lasts past it goes to the next segment", async () => {
+    const t = setup();
+    t.editor.commands.setTextSelection(10);
+    t.type("a");
+    t.type("b", 29_000);
+    t.type("c".repeat(200), 100);
+    t.recorder.close();
+    const segments = await drain(t.recorder);
+    expect(segments.map((b) => b.eventCount)).toEqual([1, 1]);
+    for (const built of segments) expect(spanMs(built)).toBeLessThan(MAX_SEGMENT_SPAN_MS);
+  });
+
+  it("a segment that cannot be built stops the recorder, which says so and keeps nothing", async () => {
+    const t = setup();
+    const unsupported = { toJSON: () => { throw new Error("no JSON form"); } } as unknown as Step;
+    const doc = t.editor.state.doc;
+    t.recorder.record({ steps: [unsupported], docs: [doc], after: doc, source: "editor", at: T0 });
+    t.recorder.close();
+    await expect(t.recorder.takeSegment(CONTEXT)).rejects.toMatchObject({ code: "unsupported_step" });
+    expect(t.recorder.intact).toBe(false);
+    expect(t.recorder.pendingEvents).toBe(0);
+    expect(() => t.type("a")).toThrow(CaptureError);
+    await expect(t.recorder.takeSegment(CONTEXT)).rejects.toMatchObject({ code: "unsupported_step" });
   });
 
   it("a change that does not start where the last one ended is a gap, and nothing more is recorded", () => {

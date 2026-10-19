@@ -9,13 +9,14 @@
  * - Every step is the ProseMirror step's own JSON plus `removedSha256` where
  *   the format asks for it (BACKEND 4.1, B-12), and must pass `parseEditSteps`;
  *   the parser's canonical copy is what goes into the segment.
- * - One event is every change of one source until 400 ms pass without one.
+ * - One event is every change of one source until 400 ms pass without one,
+ *   and never spans 30 s or more, so no segment does (D-24).
  * - The segment carries no time finer than a minute (D-24). The time of each
  *   step goes into a separate timing record bound to the segment by its hash
  *   (D-56 condition 3, D-143), which this module returns and never sends.
  * - A change that does not start from the document the last one ended in is
  *   a gap: the recorder stops and builds nothing more, never a segment with a
- *   hole in it.
+ *   hole in it. A segment that cannot be built stops it the same way.
  */
 
 import type { Node as PmNode } from "@tiptap/pm/model";
@@ -44,7 +45,7 @@ import { tiptapToCanonical } from "./interop";
 export const EVENT_QUIET_MS = 400;
 /** Most events in one segment (the validator's limit). */
 export const MAX_SEGMENT_EVENTS = 5000;
-/** Longest span of one segment (D-24: at most 30 s). */
+/** Every segment, from its first change to its last, spans less than this (D-24: at most 30 s). */
 export const MAX_SEGMENT_SPAN_MS = 30_000;
 
 /** One change the editor applied: a transaction and those appended to it. */
@@ -121,6 +122,8 @@ type RawEvent = { source: EvidenceSourceV2; changes: CapturedChange[] };
 const MINUTE_MS = 60_000;
 const encoder = new TextEncoder();
 const minute = (at: number) => new Date(Math.floor(at / MINUTE_MS) * MINUTE_MS).toISOString();
+const firstAt = (event: RawEvent) => event.changes[0]!.at;
+const lastAt = (event: RawEvent) => event.changes[event.changes.length - 1]!.at;
 
 /**
  * `removedSha256` of BACKEND 4.1: SHA-256 of the JCS form of
@@ -169,26 +172,41 @@ export class EvidenceRecorder {
   private closed: RawEvent[] = [];
   private open: RawEvent | null = null;
   private last: CapturedChange | null = null;
-  private broken = false;
+  private failure: CaptureFailure | null = null;
 
   constructor(private readonly quietMs = EVENT_QUIET_MS) {}
 
-  /** False once a gap was seen: nothing after it can be chained. */
+  /**
+   * False once a gap was seen or a segment could not be built: nothing after
+   * it can be chained, so `record` and `takeSegment` throw that failure again.
+   */
   get intact(): boolean {
-    return !this.broken;
+    return this.failure === null;
+  }
+
+  private stop(code: CaptureFailure): never {
+    this.failure = code;
+    this.closed = [];
+    this.open = null;
+    throw new CaptureError(code);
   }
 
   /** Records one change; a change with no step changes nothing and is ignored. */
   record(change: CapturedChange): void {
-    if (this.broken) throw new CaptureError("gap");
+    if (this.failure !== null) throw new CaptureError(this.failure);
     if (change.steps.length === 0) return;
     if (change.docs.length !== change.steps.length || (this.last !== null && change.docs[0] !== this.last.after)) {
-      this.broken = true;
-      throw new CaptureError("gap");
+      this.stop("gap");
     }
     const previous = this.last;
     this.last = change;
-    if (this.open && (this.open.source !== change.source || previous === null || change.at - previous.at > this.quietMs)) {
+    if (
+      this.open &&
+      (this.open.source !== change.source ||
+        previous === null ||
+        change.at - previous.at > this.quietMs ||
+        change.at - firstAt(this.open) >= MAX_SEGMENT_SPAN_MS)
+    ) {
       this.close();
     }
     if (this.open) this.open.changes.push(change);
@@ -208,28 +226,36 @@ export class EvidenceRecorder {
 
   /**
    * The next segment from the oldest closed events, or null if none is closed.
-   * It holds as many events as fit the event limit, the 30 s span and D-96;
-   * the rest stay for the next call. Events leave the recorder only once a
-   * segment was built from them.
+   * It holds as many events as fit the event limit, the 30 s span from its
+   * first change to its last and D-96; the rest stay for the next call.
+   * Events leave the recorder only once a segment was built from them.
    */
   async takeSegment(context: SegmentContext): Promise<BuiltSegment | null> {
+    if (this.failure !== null) throw new CaptureError(this.failure);
     if (this.closed.length === 0) return null;
-    const firstAt = this.closed[0]!.changes[0]!.at;
-    let count = 0;
+    const startedAt = firstAt(this.closed[0]!);
+    // `record` keeps every event under 30 s, so the first one always fits.
+    let count = 1;
     while (
       count < this.closed.length &&
       count < MAX_SEGMENT_EVENTS &&
-      this.closed[count]!.changes[0]!.at - firstAt < MAX_SEGMENT_SPAN_MS
+      lastAt(this.closed[count]!) - startedAt < MAX_SEGMENT_SPAN_MS
     ) {
       count += 1;
     }
     for (;;) {
-      const built = await buildSegment(this.closed.slice(0, count), context);
+      let built: BuiltSegment;
+      try {
+        built = await buildSegment(this.closed.slice(0, count), context);
+      } catch (error) {
+        if (error instanceof CaptureError) this.stop(error.code);
+        throw error;
+      }
       if (!exceedsEvidenceSegmentLimit(built.bytes.byteLength)) {
         this.closed.splice(0, count);
         return built;
       }
-      if (count === 1) throw new CaptureError("too_large");
+      if (count === 1) this.stop("too_large");
       count = Math.ceil(count / 2);
     }
   }
