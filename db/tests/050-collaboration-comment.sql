@@ -74,8 +74,9 @@ SELECT bag_eq(
       WHERE p.pronamespace = 'collaboration'::regnamespace AND has_function_privilege('ductus_app', p.oid, 'EXECUTE') $$,
   $$ VALUES ('collaboration.create_comment(text,text,jsonb)'), ('collaboration.reply_comment(uuid,text)'),
             ('collaboration.resolve_thread(uuid)'), ('collaboration.reopen_thread(uuid)'),
-            ('collaboration.list_comments(text)') $$,
-  'the web role executes exactly the five comment RPCs');
+            ('collaboration.list_comments(text)'), ('collaboration.publish_live_state(text,uuid,text)'),
+            ('collaboration.read_live_state(text,text)') $$,
+  'the web role executes exactly the five comment RPCs and the two live RPCs of 051');
 SELECT is_empty(
   $$ SELECT p.oid::regprocedure::text FROM pg_proc p
       WHERE p.oid IN ('collaboration.create_comment(text,text,jsonb)'::regprocedure,
