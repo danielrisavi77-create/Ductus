@@ -13,6 +13,9 @@ const EXAMPLE_AUTH_PASSWORD = "<DUCTUS_AUTH_LOCAL_PASSWORD>";
 const EVIDENCE_KEY_SCRIPT = "db/local/evidence-signing-key.mjs";
 const EVIDENCE_STORAGE_SCRIPT = "db/local/evidence-storage-domain.mjs";
 const STORAGE_DOMAINS_VAR = "EVIDENCE_STORAGE_DOMAINS";
+// The evidence scripts reach Postgres through docker, not through the database URLs checked below,
+// so these variables could aim them at a non-local daemon or container (F-100).
+const DOCKER_TARGET_VARS = ["DUCTUS_PSQL_CONTAINER", "DOCKER_HOST", "DOCKER_CONTEXT"];
 let activeChild;
 let stopSignal;
 
@@ -39,6 +42,11 @@ function localDatabaseUrl(name, value, username) {
 }
 
 export function createDemoEnvironment(source = process.env) {
+  for (const name of DOCKER_TARGET_VARS) {
+    if (source[name]) {
+      throw new Error(`${name} must be unset for the demo: the evidence setup must reach the local Compose database only.`);
+    }
+  }
   const appUrl = localDatabaseUrl(
     "APP_DATABASE_URL",
     source.APP_DATABASE_URL ?? "postgres://ductus_app_local:ductus-app-local-only@127.0.0.1:54329/ductus",
@@ -75,9 +83,10 @@ export function createDemoEnvironment(source = process.env) {
   // directory, so every run (and every checkout) finds the same key. An
   // absolute path set by the operator wins; the signer refuses one inside the repository.
   const configuredSeed = source.DUCTUS_DEV_SIGNING_KEY_FILE;
-  const seedFile = configuredSeed && isAbsolute(configuredSeed)
-    ? configuredSeed
-    : join(homedir(), ".ductus", "demo-evidence-signing.seed");
+  if (configuredSeed && !isAbsolute(configuredSeed)) {
+    throw new Error("DUCTUS_DEV_SIGNING_KEY_FILE must be an absolute path.");
+  }
+  const seedFile = configuredSeed || join(homedir(), ".ductus", "demo-evidence-signing.seed");
 
   return {
     ...source,
