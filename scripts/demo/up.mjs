@@ -41,6 +41,14 @@ function localDatabaseUrl(name, value, username) {
   return url;
 }
 
+// Every other DOCKER_* and COMPOSE_* variable (COMPOSE_FILE, COMPOSE_PROJECT_NAME, DOCKER_CONFIG,
+// DOCKER_TLS_VERIFY, ...) can also steer `docker compose exec` of the evidence scripts, so the
+// children never receive them (F-101). Names compare case-insensitively: Windows does.
+const DOCKER_STEERING = /^(?:DOCKER_|COMPOSE_)/i;
+function withoutDockerSteering(source) {
+  return Object.fromEntries(Object.entries(source).filter(([name]) => !DOCKER_STEERING.test(name)));
+}
+
 export function createDemoEnvironment(source = process.env) {
   for (const name of DOCKER_TARGET_VARS) {
     if (source[name]) {
@@ -89,7 +97,7 @@ export function createDemoEnvironment(source = process.env) {
   const seedFile = configuredSeed || join(homedir(), ".ductus", "demo-evidence-signing.seed");
 
   return {
-    ...source,
+    ...withoutDockerSteering(source),
     DATABASE_URL: "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus",
     APP_DATABASE_URL: appUrl.href,
     AUTH_DATABASE_URL: authUrl.href,

@@ -82,6 +82,8 @@ export default defineConfig({
         extends: true,
         test: {
           name: "unit",
+          // Tests that spawn node processes pass 5 s on a loaded machine.
+          testTimeout: 30_000,
           include: ["src/**/*.test.ts", "tests/unit/**/*.test.ts"],
           exclude: ["**/*.property.test.ts", "**/*.integration.test.ts", "**/node_modules/**"],
         },

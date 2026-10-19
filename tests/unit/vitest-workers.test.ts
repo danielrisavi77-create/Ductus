@@ -135,7 +135,7 @@ describe("the configuration", () => {
 
   it("keeps the time limits of the projects", () => {
     expect(options.test.testTimeout).toBeUndefined();
-    expect(options.test.projects.map((project) => project.test.testTimeout)).toEqual([undefined, 60_000, 30_000]);
+    expect(options.test.projects.map((project) => project.test.testTimeout)).toEqual([30_000, 60_000, 30_000]);
   });
 });
 
