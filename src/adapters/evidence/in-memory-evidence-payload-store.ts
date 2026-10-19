@@ -9,8 +9,10 @@ import type {
   InstitutionEvidencePayloadReader,
 } from "@/application/ports/evidence-reconstruction";
 import type {
+  EvidencePayloadLocator,
   EvidencePayloadPutResult,
   EvidencePayloadStore,
+  EvidenceStorageRefResult,
 } from "@/application/ports/evidence-trust";
 
 type StoredPayload = {
@@ -19,7 +21,7 @@ type StoredPayload = {
 };
 
 export class InMemoryEvidencePayloadStore
-  implements EvidencePayloadStore, EvidencePayloadReader, InstitutionEvidencePayloadReader
+  implements EvidencePayloadStore, EvidencePayloadLocator, EvidencePayloadReader, InstitutionEvidencePayloadReader
 {
   private readonly payloads = new Map<string, StoredPayload>();
   // A package row belongs to one institution, as the composite key in the
@@ -57,6 +59,21 @@ export class InMemoryEvidencePayloadStore
       canonicalPayload: input.canonicalPayload,
     });
     return { status: "stored", storageRef };
+  }
+
+  /** The reference putImmutable gives for this key, without storing anything. */
+  async storageRefFor(input: {
+    institutionId: string;
+    evidencePackageId: string;
+    segmentHash: string;
+  }): Promise<EvidenceStorageRefResult> {
+    if (this.unavailableReason) {
+      return { status: "unavailable", reason: this.unavailableReason };
+    }
+    const path = evidenceObjectKey(input);
+    return path
+      ? { status: "ok", storageRef: evidenceStorageRef("memory", path) }
+      : { status: "unavailable", reason: "storage_ref_invalid" };
   }
 
   /**

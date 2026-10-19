@@ -1,11 +1,17 @@
-import { isInstitutionId } from "@/application/ports/evidence-object-key";
+import {
+  evidenceObjectKey,
+  evidenceStorageRef,
+  isInstitutionId,
+} from "@/application/ports/evidence-object-key";
 import type {
   EvidencePayloadReadResult,
   InstitutionEvidencePayloadReader,
 } from "@/application/ports/evidence-reconstruction";
 import type {
+  EvidencePayloadLocator,
   EvidencePayloadPutResult,
   EvidencePayloadStore,
+  EvidenceStorageRefResult,
 } from "@/application/ports/evidence-trust";
 
 import {
@@ -61,7 +67,7 @@ type Warn = (message: string, fields: Record<string, string>) => void;
  * Reads (`readImmutable`) pass the same two gates.
  */
 export class InstitutionRoutedPayloadStore
-  implements EvidencePayloadStore, InstitutionEvidencePayloadReader
+  implements EvidencePayloadStore, EvidencePayloadLocator, InstitutionEvidencePayloadReader
 {
   private readonly domains = new Map<string, Domain>();
 
@@ -233,6 +239,27 @@ export class InstitutionRoutedPayloadStore
       reason: result.reason,
     });
     return UNAVAILABLE;
+  }
+
+  /**
+   * The reference of an object already stored under this key, with no request
+   * to any store. Only the institution's own domain names it; no domain, or
+   * one disabled by a mismatched identity label, is `unavailable` (P2, P3).
+   */
+  async storageRefFor(given: {
+    institutionId: string;
+    evidencePackageId: string;
+    segmentHash: string;
+  }): Promise<EvidenceStorageRefResult> {
+    // Read once, as in putImmutable: the key and the domain use the same values.
+    const { institutionId, evidencePackageId, segmentHash } = given;
+    const key = evidenceObjectKey({ institutionId, evidencePackageId, segmentHash });
+    const domain = key === null ? undefined : this.domains.get(institutionId);
+    if (key === null || domain === undefined || domain.state === "disabled") {
+      this.log("evidence storage reference is unavailable", { reason: "storage_ref_unavailable" });
+      return UNAVAILABLE;
+    }
+    return { status: "ok", storageRef: evidenceStorageRef(domain.label, key) };
   }
 
   /**

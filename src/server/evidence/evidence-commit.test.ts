@@ -199,6 +199,9 @@ describe("readEvidenceCommitContext", () => {
     ["an institution that is no uuid", [{ ...row, institution_id: null }]],
     ["an empty profile", [{ ...row, evidence_profile_id: "" }]],
     ["a limit of 0", [{ ...row, max_payload_bytes: 0 }]],
+    // review467a: a limit that is not a whole number never passes as one.
+    ["a limit that is not whole", [{ ...row, max_payload_bytes: 1.5 }]],
+    ["a limit given as text", [{ ...row, max_payload_bytes: "262144" }]],
     ["a known flag that is no boolean", [{ ...row, transaction_known: "f" }]],
   ])("is unavailable for %s", async (_, rows) => {
     const db = database({ commit: rows });

@@ -61,7 +61,7 @@ export function developmentSeedPath(path: string): string {
   return resolve(path);
 }
 
-type LoadedKey ={ privateKey: KeyObject; publicKey: KeyObject; keyId: string; keyVersion: string; spki: Buffer };
+type LoadedKey = { privateKey: KeyObject; publicKey: KeyObject; keyId: string; keyVersion: string; spki: Buffer };
 
 function fail(code: DevelopmentSigningKeyFault): never {
   throw new DevelopmentSigningKeyError(code);
