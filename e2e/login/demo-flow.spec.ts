@@ -4,7 +4,11 @@ import { promisify } from "node:util";
 
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
+import { createTextAnchor } from "../../src/domain/collaboration";
+import type { NodeId } from "../../src/domain/document";
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
+import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
+import { cleanUp, post, seed } from "./comment-seed";
 import { appCookie, SESSION_COOKIE, sessionRow, signIn } from "./support";
 
 // K-4 (DAN-89; docs/PLAN-DEMO.md §1 points 1 to 5 and §7 t. 2, D-98): the demo
@@ -25,6 +29,9 @@ const run = promisify(execFile);
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 // A fixed invented name: an identical repeat returns the same course (create_course).
 const COURSE_NAME = "Izmišljeni kolegij K-4";
+
+const TEXT = "Uvod: izmišljeni nacrt o gradskim knjižnicama.";
+const QUOTE = "gradskim knjižnicama";
 
 const editorOf = (page: Page) => page.getByRole("textbox", { name: t.workspace.documentLabel });
 const chipOf = (page: Page) => page.locator(".workspace__status .sync-chip");
@@ -50,7 +57,9 @@ async function signOut(page: Page, token: string): Promise<void> {
   await forgetProviderLogin(page.context());
 }
 
-test("demo walk-through", async ({ page, context }) => {
+test.afterEach(cleanUp);
+
+test("demo walk-through", async ({ browser, page, context }) => {
   let token = "";
 
   await test.step("1. Nastavnik se prijavljuje demo računom", async () => {
@@ -127,9 +136,35 @@ test("demo walk-through", async ({ page, context }) => {
   await test.step("2. Studentica piše, a tekst je spremljen na uređaju", async () => {
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
     await editorOf(page).click();
-    await page.keyboard.type("Uvod: izmišljeni nacrt o gradskim knjižnicama.");
+    await page.keyboard.type(TEXT);
     await expect(chipOf(page)).toHaveAttribute("data-state", "LOCAL_DURABLE");
     await snapshot(page, "2-spremljeno-na-uredaju");
+  });
+
+  // F-9 (demo point 3), the comment: the teacher leaves a comment next to a
+  // paragraph and it reaches the student. It runs here, while the student's
+  // editor is open: the comment panel lives on /rad. Until B-11 gives the
+  // teacher a screen to pick a paragraph, the teacher's step is the same POST
+  // the page will send, with the teacher's own session (as comments.spec.ts);
+  // the course and document come from the shared comment-seed helper, which
+  // removes what it opened after the test.
+  await test.step("3. F-9: nastavnik komentira odlomak, komentar stiže studentici", async () => {
+    const teacher = await (await browser.newContext()).newPage();
+    await signIn(teacher, "/", "Demo nastavnik");
+    const nodeId = (await editorOf(page).locator("p[data-node-id]").first().getAttribute("data-node-id")) as NodeId;
+    await seed();
+    const start = TEXT.indexOf(QUOTE);
+    const anchor = createTextAnchor({ nodeId, nodeText: TEXT, start, end: start + QUOTE.length });
+    const created = await post(teacher, "create", { documentId: LOCAL_DEMO_DOCUMENT_ID, body: "Dodaj izvor za ovu tvrdnju.", anchor });
+    expect(created.status()).toBe(200);
+
+    await page.getByRole("button", { name: t.comments.refresh }).click();
+    const card = page.getByRole("article", { name: t.comments.number.replace("{n}", "1") });
+    await expect(card).toContainText(t.comments.teacher);
+    await expect(card).toContainText("Dodaj izvor za ovu tvrdnju.");
+    await expect(editorOf(page).locator(".comment-mark")).toHaveText(QUOTE);
+    await snapshot(page, "3-komentar-kod-studentice");
+    await teacher.context().close();
   });
 
   // F-8 (demo point 2): proves headings, a citation and a bibliography in the
@@ -144,13 +179,9 @@ test("demo walk-through", async ({ page, context }) => {
     await snapshot(page, "2-studentica-odjavljena");
   });
 
-  // F-9 follows in its own PR: the teacher's comment is covered by
-  // e2e/login/comments.spec.ts, which writes its course and document through
-  // the admin login; carrying that into this walk-through is a separate step.
-  // F-9 (demo point 3): proves that the teacher sees the saved state of the
-  // work, not live typing (PRODUCT §5 rule 7), leaves a comment next to a
-  // paragraph, and the comment reaches the student.
-  await test.step.skip("3. F-9: nastavnik vidi spremljeno stanje i komentira odlomak", async () => {});
+  // The teacher's view of the saved work (B-11) is not on main, so the part of
+  // F-9 where the teacher sees the saved state stays skipped, not simulated.
+  await test.step.skip("3. F-9: nastavnik vidi spremljeno stanje rada, ne tipkanje uživo", async () => {});
 
   // F-10 (demo points 4 and 5): proves that the student submits, the server
   // reconstructs the work and the comparison matches, the student gets the
