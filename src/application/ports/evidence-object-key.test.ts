@@ -8,6 +8,7 @@ import {
   isInstitutionId,
   isStorageDomainLabel,
 } from "./evidence-object-key";
+import { bindPayloadReader } from "./evidence-reconstruction";
 
 // Synthetic ids only.
 const A = "00000000-0000-4000-8000-00000000000a";
@@ -121,5 +122,18 @@ describe("in-memory payload store keyed by institution", () => {
       status: "found",
       bytes: new TextEncoder().encode(payload),
     });
+  });
+
+  it("reads a package through its own institution only, also through a bound reader (B2)", async () => {
+    const store = new InMemoryEvidencePayloadStore();
+    await store.putImmutable({ institutionId: A, evidencePackageId: "paket-a", segmentHash: HASH, canonicalPayload: payload });
+    const read = { evidencePackageId: "paket-a", segmentHash: HASH };
+
+    await expect(bindPayloadReader(store, A).readImmutable(read)).resolves.toEqual({
+      status: "found",
+      bytes: new TextEncoder().encode(payload),
+    });
+    await expect(bindPayloadReader(store, B).readImmutable(read)).resolves.toEqual({ status: "not_found" });
+    await expect(store.readImmutable({ ...read, institutionId: B })).resolves.toEqual({ status: "not_found" });
   });
 });
