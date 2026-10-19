@@ -24,6 +24,8 @@ export function submissionResponse(outcome: SubmissionOutcome): Response {
       return reply(409, { status: "blocked", reason: outcome.reason });
     case "stale_revision":
       return reply(409, { status: "stale_revision", currentRevision: outcome.currentRevision });
+    case "already_requested":
+      return reply(409, { status: "already_requested", revision: outcome.revision });
     case "not_acknowledged":
     case "not_open":
       return reply(409, { status: outcome.status });

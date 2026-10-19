@@ -29,6 +29,7 @@ export type SubmissionOutcome =
   | { status: "submitted"; receipt: SignedSubmissionReceiptV1 }
   | { status: "blocked"; reason: SubmissionBlockReason }
   | { status: "stale_revision"; currentRevision: number }
+  | { status: "already_requested"; revision: number }
   | { status: "not_acknowledged" | "not_open" | "not_found" | "unauthenticated" | "invalid" }
   | { status: "unavailable"; stage: SubmissionStage; code: string };
 
@@ -62,10 +63,19 @@ async function request(deps: SubmissionDependencies, token: string, documentId: 
     const row = rows.length === 1 ? rows[0] : undefined;
     switch (row?.outcome) {
       case "requested":
-      case "existing":
-        return typeof row.submission_request_id === "string"
-          ? { status: "requested", id: row.submission_request_id }
-          : unavailable("request", "request_malformed");
+      case "existing": {
+        if (typeof row.submission_request_id !== "string") return unavailable("request", "request_malformed");
+        // The first click binds (P5, P8); a click naming another revision is told
+        // which one was requested, never answered about it (owner, #87 6264259216).
+        if (row.outcome === "existing") {
+          const requested = Number(row.revision);
+          if (row.revision === null || !Number.isSafeInteger(requested) || requested < 1) {
+            return unavailable("request", "request_malformed");
+          }
+          if (requested !== revision) return { status: "already_requested", revision: requested };
+        }
+        return { status: "requested", id: row.submission_request_id };
+      }
       case "unauthorized":
         return { status: "not_found" };
       case "invalid":

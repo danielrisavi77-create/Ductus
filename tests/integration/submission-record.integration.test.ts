@@ -373,10 +373,15 @@ describe("POST /api/submission (B-12 step 4b2)", () => {
     const again = await submit();
     expect([again.status, await again.text()]).toEqual([200, text]);
     // One submission per work (P8) and the first click binds (P5): a click that
-    // names a later revision gets the receipt of the requested one, revision 2.
+    // names a later revision is told the requested one (owner, #87 6264259216).
     const later = await submit(store, token, { documentId, revision: 3 });
-    expect([later.status, await later.text()]).toEqual([200, text]);
+    expect([later.status, await later.json()]).toEqual([409, { status: "already_requested", revision: 2 }]);
     expect(await submissions()).toBe("1");
+    const { rows: requests } = await admin.query<{ n: string; revision: string }>(
+      `SELECT count(*)::text AS n, max(revision)::text AS revision FROM evidence.submission_request WHERE institution_id = $1`,
+      [institutionId],
+    );
+    expect(requests).toEqual([{ n: "1", revision: "2" }]);
   });
 });
 

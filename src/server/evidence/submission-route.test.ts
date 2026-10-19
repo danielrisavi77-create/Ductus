@@ -11,6 +11,7 @@ import { handleSubmissionRequest, submissionResponse, type SubmissionRouteDeps }
 const ORIGIN = "http://localhost:3000";
 const HEADERS = { origin: ORIGIN, "sec-fetch-site": "same-origin", "ductus-protocol": "1", "content-type": "application/json" };
 const BODY = { documentId: "dokument-1", revision: 2 };
+const REQUEST_ID = "00000000-0000-4000-8000-0000000000f1";
 
 function post(body: unknown, headers: Record<string, string | undefined> = {}, method = "POST") {
   const merged = Object.fromEntries(Object.entries({ ...HEADERS, ...headers }).filter(([, v]) => v !== undefined)) as Record<string, string>;
@@ -104,6 +105,10 @@ describe("POST /api/submission", () => {
 
   it.each<[unknown, number, Record<string, unknown>]>([
     [{ outcome: "stale_revision", revision: "3" }, 409, { status: "stale_revision", currentRevision: 3 }],
+    [{ outcome: "existing", submission_request_id: REQUEST_ID, revision: "1" }, 409, { status: "already_requested", revision: 1 }],
+    [{ outcome: "existing", submission_request_id: REQUEST_ID, revision: "3" }, 409, { status: "already_requested", revision: 3 }],
+    [{ outcome: "existing", submission_request_id: REQUEST_ID, revision: null }, 503, { status: "unavailable", stage: "request" }],
+    [{ outcome: "existing", submission_request_id: REQUEST_ID, revision: "0" }, 503, { status: "unavailable", stage: "request" }],
     [{ outcome: "not_acknowledged" }, 409, { status: "not_acknowledged" }],
     [{ outcome: "not_open" }, 409, { status: "not_open" }],
     [{ outcome: "no_evidence" }, 409, { status: "blocked", reason: "no_evidence" }],
@@ -126,6 +131,7 @@ describe("POST /api/submission", () => {
 
   it.each<[SubmissionOutcome, number, Record<string, unknown>]>([
     [{ status: "blocked", reason: "record_mismatch" }, 409, { status: "blocked", reason: "record_mismatch" }],
+    [{ status: "already_requested", revision: 2 }, 409, { status: "already_requested", revision: 2 }],
     [{ status: "blocked", reason: "segment_unsigned" }, 409, { status: "blocked", reason: "segment_unsigned" }],
     [{ status: "blocked", reason: "record_discontinuous" }, 409, { status: "blocked", reason: "record_discontinuous" }],
     [{ status: "unavailable", stage: "verification", code: "x" }, 503, { status: "unavailable", stage: "verification" }],
