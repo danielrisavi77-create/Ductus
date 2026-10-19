@@ -59,7 +59,7 @@ INSERT INTO evidence.submission_request (
   content_hash, requested_at
 )
 VALUES
-  (pg_temp.id('fak_b'), pg_temp.id('z3'), 2, 'project-b', 'doc-b', pg_temp.id('tomo'), 1, repeat('d',64),
+  (pg_temp.id('fak_b'), pg_temp.id('z3'), 2, 'project-b', 'doc-b', pg_temp.id('tomo'), 1, pg_temp.h('d'),
    :'z3_v2_due'::timestamptz),
   (pg_temp.id('fak_a'), pg_temp.id('z1'), 3, 'project-d', 'doc-d', pg_temp.id('dora'), 1, repeat('e',64),
    :'z1_v3_due'::timestamptz + interval '1 microsecond'),
@@ -162,19 +162,19 @@ SELECT matches(pg_temp.ask('ana', format($$ INSERT INTO evidence.submission
 REVOKE INSERT ON evidence.submission FROM ductus_app;
 
 -- Who may record (F1 to F4): one answer for every refusal.
-SELECT is(pg_temp.record('anon', pg_temp.req('ana'), repeat('d',64)), 'unauthorized', 'an anonymous session is refused');
-SELECT is(pg_temp.record('expired', pg_temp.req('ana'), repeat('d',64)), 'unauthorized', 'an expired session is refused');
-SELECT is(pg_temp.record('tomo', pg_temp.req('ana'), repeat('d',64)), 'unauthorized',
+SELECT is(pg_temp.record('anon', pg_temp.req('ana'), pg_temp.h('d')), 'unauthorized', 'an anonymous session is refused');
+SELECT is(pg_temp.record('expired', pg_temp.req('ana'), pg_temp.h('d')), 'unauthorized', 'an expired session is refused');
+SELECT is(pg_temp.record('tomo', pg_temp.req('ana'), pg_temp.h('d')), 'unauthorized',
   'a student of another institution cannot complete the request');
-SELECT is(pg_temp.record('dora', pg_temp.req('ana'), repeat('d',64)), 'unauthorized',
+SELECT is(pg_temp.record('dora', pg_temp.req('ana'), pg_temp.h('d')), 'unauthorized',
   'a classmate cannot complete another student''s request');
-SELECT is(pg_temp.record('vesna', pg_temp.req('ana'), repeat('d',64)), 'unauthorized', 'the teacher cannot submit for the student');
-SELECT is(pg_temp.record('iva', pg_temp.req('ana'), repeat('d',64)), 'unauthorized', 'the administrator cannot submit for the student');
-SELECT is(pg_temp.record('ana', '00000000-0000-4000-8000-0000000000ff', repeat('d',64)), 'unauthorized',
+SELECT is(pg_temp.record('vesna', pg_temp.req('ana'), pg_temp.h('d')), 'unauthorized', 'the teacher cannot submit for the student');
+SELECT is(pg_temp.record('iva', pg_temp.req('ana'), pg_temp.h('d')), 'unauthorized', 'the administrator cannot submit for the student');
+SELECT is(pg_temp.record('ana', '00000000-0000-4000-8000-0000000000ff', pg_temp.h('d')), 'unauthorized',
   'a missing request gets the same answer as a foreign one');
 SELECT is(pg_temp.record('boris', pg_temp.req('boris'), repeat('e',64)), 'unauthorized',
   'a student who is not an active student of the assignment cannot complete the own request');
-SELECT is(pg_temp.record('ana', NULL, repeat('d',64)), 'invalid', 'a missing request id is invalid');
+SELECT is(pg_temp.record('ana', NULL, pg_temp.h('d')), 'invalid', 'a missing request id is invalid');
 SELECT is(pg_temp.record('ana', pg_temp.req('ana'), NULL), 'invalid', 'a missing hash is invalid');
 SELECT is(pg_temp.record('ana', pg_temp.req('ana'), repeat('D',64)), 'invalid', 'an upper-case hash is invalid');
 SELECT is(pg_temp.record('ana', pg_temp.req('ana'), repeat('d',63)), 'invalid', 'a short hash is invalid');
@@ -182,7 +182,7 @@ CREATE FUNCTION pg_temp.record_with_spoofed_user_id() RETURNS text LANGUAGE plpg
 DECLARE v text;
 BEGIN
   PERFORM set_config('app.user_id', pg_temp.id('ana')::text, true);
-  v := pg_temp.record('tomo', pg_temp.req('ana'), repeat('d',64));
+  v := pg_temp.record('tomo', pg_temp.req('ana'), pg_temp.h('d'));
   PERFORM set_config('app.user_id', '', true);
   RETURN v;
 END
@@ -198,10 +198,10 @@ SELECT is((SELECT count(*)::text FROM evidence.submission), '0', 'refusals write
 -- The submission (A7, B8, E1): every field from the request, the deadline of
 -- the requested version, the database clock for recorded_at.
 SELECT is(pg_temp.ask('ana', format($$ SELECT concat_ws(' ', outcome, submission_id IS NOT NULL, after_deadline)
-    FROM app.record_submission(%L, %L) $$, pg_temp.req('ana'), repeat('d',64))),
+    FROM app.record_submission(%L, %L) $$, pg_temp.req('ana'), pg_temp.h('d'))),
   'recorded t f', 'a matching reconstruction is recorded on time');
 SELECT is((SELECT concat_ws(' ', s.institution_id = r.institution_id, s.principal_id = pg_temp.id('ana'),
-    s.assignment_id = pg_temp.id('z1'), s.assignment_version, s.revision, s.artifact_hash = repeat('d',64),
+    s.assignment_id = pg_temp.id('z1'), s.assignment_version, s.revision, s.artifact_hash = pg_temp.h('d'),
     s.requested_at = r.requested_at, s.due_at = v.due_at, s.recorded_at >= s.requested_at)
   FROM evidence.submission s
   JOIN evidence.submission_request r ON r.id = s.submission_request_id
@@ -211,10 +211,10 @@ SELECT is((SELECT concat_ws(' ', s.institution_id = r.institution_id, s.principa
 
 -- Repeats (A6, P5, P8): the same row, the same time, nothing new; a later
 -- mismatch is never answered as the earlier success.
-SELECT is(pg_temp.record('ana', pg_temp.req('ana'), repeat('d',64)), 'existing', 'a repeat returns the earlier submission');
-SELECT is(pg_temp.record('ana', pg_temp.req('ana'), repeat('d',64), 'submission_id'),
+SELECT is(pg_temp.record('ana', pg_temp.req('ana'), pg_temp.h('d')), 'existing', 'a repeat returns the earlier submission');
+SELECT is(pg_temp.record('ana', pg_temp.req('ana'), pg_temp.h('d'), 'submission_id'),
   (SELECT id::text FROM evidence.submission WHERE principal_id = pg_temp.id('ana')), 'the repeat names the same submission');
-SELECT is(pg_temp.record('ana', pg_temp.req('ana'), repeat('d',64), 'requested_at'),
+SELECT is(pg_temp.record('ana', pg_temp.req('ana'), pg_temp.h('d'), 'requested_at'),
   (SELECT requested_at::text FROM evidence.submission_request WHERE principal_id = pg_temp.id('ana')),
   'the repeat keeps the original requested_at');
 SELECT is(pg_temp.record('ana', pg_temp.req('ana'), repeat('f',64)), 'artifact_mismatch',
@@ -233,7 +233,7 @@ INSERT INTO institution.assignment_version (
 UPDATE institution.assignment SET current_version = 4 WHERE id = pg_temp.id('z1');
 RESET ROLE;
 SELECT is(pg_temp.ask('tomo', format($$ SELECT concat_ws(' ', outcome, after_deadline, requested_at = due_at)
-    FROM app.record_submission(%L, %L) $$, pg_temp.req('tomo'), repeat('d',64))),
+    FROM app.record_submission(%L, %L) $$, pg_temp.req('tomo'), pg_temp.h('d'))),
   'recorded f t', 'a request exactly at the deadline is on time');
 SELECT is(pg_temp.ask('dora', format($$ SELECT concat_ws(' ', outcome, after_deadline, requested_at - due_at)
     FROM app.record_submission(%L, %L) $$, pg_temp.req('dora'), repeat('e',64))),
@@ -242,7 +242,7 @@ SELECT is((SELECT after_deadline::text FROM evidence.submission WHERE principal_
   'the stored flag agrees with the answer');
 SELECT is((SELECT after_deadline::text FROM evidence.submission WHERE principal_id = pg_temp.id('tomo')), 'false',
   'the stored flag of a request exactly at the deadline is on time');
-SELECT is(pg_temp.record('tomo', pg_temp.req('tomo'), repeat('d',64), 'after_deadline'), 'false',
+SELECT is(pg_temp.record('tomo', pg_temp.req('tomo'), pg_temp.h('d'), 'after_deadline'), 'false',
   'the repeat answers the stored flag');
 
 -- Reading (F2, F3, F7): the student sees the own submission only; the

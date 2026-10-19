@@ -102,7 +102,8 @@ SELECT is(
 SELECT bag_eq(
   $$ SELECT p.oid::regprocedure::text FROM pg_proc p
       WHERE p.proowner = 'ductus_evidence'::regrole AND has_function_privilege('ductus_app', p.oid, 'EXECUTE') $$,
-  $$ VALUES ('app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text)'),
+  $$ VALUES ('app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text)'),
+            ('app.attach_receipt_signature(uuid,text,jsonb)'),
             ('app.request_submission(text,bigint)'), ('app.record_submission(uuid,text)'),
             ('app.open_student_work(uuid)'), ('app.evidence_commit_context(text,text)') $$,
   'the web role executes exactly the expected evidence RPCs');

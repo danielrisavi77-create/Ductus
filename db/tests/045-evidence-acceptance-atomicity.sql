@@ -7,7 +7,7 @@ SELECT no_plan();
 SELECT is(pg_temp.call('ana','pkg-a','request-1',pg_temp.descriptor(),0,repeat('a',64),repeat('d',64),repeat('b',64)),
   'reserved', 'one valid segment reserves atomically');
 SELECT is(pg_temp.ask('ana', $$ SELECT current_revision::text || ':' || current_content_hash
-  FROM evidence.document WHERE id='doc-a' $$), '1:' || repeat('d',64), 'revision and document hash advance together');
+  FROM evidence.document WHERE id='doc-a' $$), '1:' || pg_temp.h('d'), 'revision and document hash advance together');
 SELECT is(pg_temp.ask('ana', $$ SELECT concat_ws(':',
   (SELECT count(*) FROM evidence.document_revision WHERE document_id='doc-a'),
   (SELECT count(*) FROM evidence.segment WHERE evidence_package_id='pkg-a'),
@@ -70,14 +70,14 @@ UPDATE evidence.package SET max_payload_bytes=2097152 WHERE id='pkg-a';
 
 SELECT is(pg_temp.call('ana','pkg-a','request-gap',
   pg_temp.descriptor(p_segment=>'segment-gap',p_sequence_from=>3,p_sequence_to=>3,p_hash=>repeat('c',64),p_predecessor=>repeat('b',64)),
-  1,repeat('d',64),repeat('e',64),repeat('c',64)), 'chain_conflict', 'a sequence gap is rejected');
+  1,repeat('d',64),repeat('e',64),repeat('c',64)), 'not_continuous', 'a sequence gap after the current head is not continuous');
 SELECT is(pg_temp.call('ana','pkg-a','request-gap-current',
   pg_temp.descriptor(p_segment=>'segment-gap-2',p_sequence_from=>3,p_sequence_to=>3,p_hash=>repeat('c',64),p_predecessor=>repeat('b',64)),
-  1,repeat('d',64),repeat('e',64),repeat('c',64),'expected_previous_segment_hash'), repeat('b',64),
-  'chain conflict returns the current segment hash');
+  1,repeat('d',64),repeat('e',64),repeat('c',64),'head_segment_hash'), repeat('b',64),
+  'a conflict returns the current segment hash');
 SELECT is(pg_temp.call('ana','pkg-a','request-stale',
   pg_temp.descriptor(p_segment=>'segment-stale',p_sequence_from=>2,p_sequence_to=>2,p_hash=>repeat('c',64),p_predecessor=>repeat('b',64)),
-  0,repeat('a',64),repeat('e',64),repeat('c',64)), 'concurrent_conflict', 'a stale document revision is rejected');
+  0,repeat('a',64),repeat('e',64),repeat('c',64)), 'stale_base', 'a stale document revision is rejected');
 SELECT is(pg_temp.call('ana','pkg-a','request-bad-hash',
   pg_temp.descriptor(p_segment=>'segment-bad-hash',p_sequence_from=>2,p_sequence_to=>2,p_hash=>repeat('c',64),p_predecessor=>repeat('b',64)),
   1,repeat('d',64),repeat('e',64),repeat('f',64)), 'invalid', 'a digest that differs from the descriptor is rejected');
@@ -89,9 +89,9 @@ SELECT is(pg_temp.call('ana','pkg-a','request-bad-predecessor',
   1,repeat('d',64),repeat('e',64),repeat('c',64)), 'chain_conflict', 'a new segment must name the current predecessor');
 SELECT is(pg_temp.call('ana','pkg-a','request-bad-initial',
   pg_temp.descriptor(p_segment=>'segment-bad-initial',p_sequence_from=>2,p_sequence_to=>2,p_hash=>repeat('c',64),p_predecessor=>repeat('b',64)),
-  1,repeat('c',64),repeat('e',64),repeat('c',64)), 'concurrent_conflict', 'the initial content hash participates in CAS');
+  1,repeat('c',64),repeat('e',64),repeat('c',64)), 'not_continuous', 'an initial content hash other than the stored one is not continuous');
 SELECT is(pg_temp.ask('ana', $$ SELECT current_revision::text || ':' || current_content_hash FROM evidence.document WHERE id='doc-a' $$),
-  '1:' || repeat('d',64), 'refused requests do not change document state');
+  '1:' || pg_temp.h('d'), 'refused requests do not change document state');
 SELECT is(pg_temp.ask('ana', $$ SELECT last_sequence_to::text || ':' || head_segment_hash FROM evidence.package WHERE id='pkg-a' $$),
   '1:' || repeat('b',64), 'refused requests do not change the evidence head');
 
@@ -134,6 +134,10 @@ SELECT is(pg_temp.call('ana','pkg-a','request-1',pg_temp.descriptor(),0,repeat('
   'a signed retry returns the original receipt id');
 SELECT is(pg_temp.call('ana','pkg-a','request-1',pg_temp.descriptor(),0,repeat('a',64),repeat('d',64),repeat('b',64),'committed_revision'),
   '1', 'a signed retry returns the original committed revision');
+SELECT is(pg_temp.call('ana','pkg-a','request-1',pg_temp.descriptor(),0,repeat('a',64),repeat('d',64),repeat('b',64),'signature'),
+  '{"signature": "synthetic"}', 'a signed retry returns the stored signature');
+SELECT is(pg_temp.call('ana','pkg-a','request-1',pg_temp.descriptor(),0,repeat('a',64),repeat('d',64),repeat('b',64),'current_revision'),
+  NULL, 'a retry carries no conflict state');
 
 SELECT * FROM finish();
 ROLLBACK;
