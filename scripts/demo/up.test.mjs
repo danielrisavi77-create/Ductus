@@ -244,8 +244,15 @@ test("demo environment gives the evidence scripts local credentials and a seed o
   assert.ok(!resolve(env.DUCTUS_DEV_SIGNING_KEY_FILE).startsWith(resolve(root)));
   // Stable across runs, so a second run finds the same seed (same key).
   assert.equal(createDemoEnvironment({}).DUCTUS_DEV_SIGNING_KEY_FILE, env.DUCTUS_DEV_SIGNING_KEY_FILE);
-  // An absolute operator path wins; a relative one is replaced, never used.
+  // An absolute operator path wins; a relative one is refused, never replaced.
   const own = resolve("/somewhere/own.seed");
   assert.equal(createDemoEnvironment({ DUCTUS_DEV_SIGNING_KEY_FILE: own }).DUCTUS_DEV_SIGNING_KEY_FILE, own);
-  assert.ok(isAbsolute(createDemoEnvironment({ DUCTUS_DEV_SIGNING_KEY_FILE: "rel.seed" }).DUCTUS_DEV_SIGNING_KEY_FILE));
+  assert.throws(() => createDemoEnvironment({ DUCTUS_DEV_SIGNING_KEY_FILE: "rel.seed" }), /absolute path/);
+});
+
+test("demo environment refuses a docker target that the database URL check cannot see (F-100)", () => {
+  for (const name of ["DUCTUS_PSQL_CONTAINER", "DOCKER_HOST", "DOCKER_CONTEXT"]) {
+    assert.throws(() => createDemoEnvironment({ [name]: "remote" }), new RegExp(name), name);
+  }
+  assert.doesNotThrow(() => createDemoEnvironment({ DOCKER_HOST: "" }));
 });
