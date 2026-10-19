@@ -53,3 +53,42 @@ export interface EvidencePayloadReader {
     segmentHash: string;
   }): Promise<EvidencePayloadReadResult>;
 }
+
+/**
+ * The storage side of the read (BACKEND 4.1, B2): an object lives in the
+ * storage domain of one institution under `v2/<institution>/<package>/<hash>.json`,
+ * so the reader needs the institution to find the bucket and the key.
+ *
+ * - `found` only for bytes whose SHA-256 is `segmentHash`: the object is
+ *   content-addressed, so other bytes under the key are not the segment.
+ * - `not_found` only when the institution's own storage says there is no
+ *   object under that key. A package of another institution is never there:
+ *   its objects sit in another domain under another prefix.
+ * - Everything else is `unavailable` and a retry may succeed: no domain or an
+ *   unverified one, a timeout, a refused or failed request, an id that cannot
+ *   form a key, and an object whose bytes do not hash to the key (logged as an
+ *   incident with ids only). None of these says anything about the record.
+ * - One request per call, no retry inside; the caller retries.
+ */
+export interface InstitutionEvidencePayloadReader {
+  readImmutable(input: {
+    institutionId: string;
+    evidencePackageId: string;
+    segmentHash: string;
+  }): Promise<EvidencePayloadReadResult>;
+}
+
+/**
+ * Binds the institution the server resolved for the record (a row read under
+ * `withActor`, never a request field) to a storage reader, giving the reader
+ * that reconstruction and the process summary take.
+ */
+export function bindPayloadReader(
+  reader: InstitutionEvidencePayloadReader,
+  institutionId: string,
+): EvidencePayloadReader {
+  return {
+    readImmutable: ({ evidencePackageId, segmentHash }) =>
+      reader.readImmutable({ institutionId, evidencePackageId, segmentHash }),
+  };
+}

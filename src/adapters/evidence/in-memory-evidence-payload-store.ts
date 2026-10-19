@@ -6,6 +6,7 @@ import {
 import type {
   EvidencePayloadReadResult,
   EvidencePayloadReader,
+  InstitutionEvidencePayloadReader,
 } from "@/application/ports/evidence-reconstruction";
 import type {
   EvidencePayloadPutResult,
@@ -18,7 +19,7 @@ type StoredPayload = {
 };
 
 export class InMemoryEvidencePayloadStore
-  implements EvidencePayloadStore, EvidencePayloadReader
+  implements EvidencePayloadStore, EvidencePayloadReader, InstitutionEvidencePayloadReader
 {
   private readonly payloads = new Map<string, StoredPayload>();
   // A package row belongs to one institution, as the composite key in the
@@ -58,12 +59,23 @@ export class InMemoryEvidencePayloadStore
     return { status: "stored", storageRef };
   }
 
+  /**
+   * With `institutionId` (the storage reader of B2), a package of another
+   * institution is `not_found`, as its object is under another prefix.
+   */
   async readImmutable(input: {
+    institutionId?: string;
     evidencePackageId: string;
     segmentHash: string;
   }): Promise<EvidencePayloadReadResult> {
     if (this.unavailableReason) {
       return { status: "unavailable", reason: this.unavailableReason };
+    }
+    if (
+      input.institutionId !== undefined &&
+      this.packageInstitutions.get(input.evidencePackageId) !== input.institutionId
+    ) {
+      return { status: "not_found" };
     }
     const stored = this.find(input.evidencePackageId, input.segmentHash);
     return stored
