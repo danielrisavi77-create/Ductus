@@ -22,7 +22,7 @@ async function openEditor(page: Page): Promise<void> {
   await openStructure(page);
 }
 
-/** Below 1100 px the structure rail sits under the sheet, closed. */
+/** Below 1240 px the structure rail sits under the sheet, closed. */
 async function openStructure(page: Page): Promise<void> {
   const toggle = page.getByRole("button", { name: "Struktura rada" });
   if (await toggle.isVisible()) await toggle.click();
