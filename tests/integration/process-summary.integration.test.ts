@@ -293,6 +293,7 @@ async function removeFixture() {
     // Disposable synthetic rows only; the append-only triggers stay active in
     // normal operation (same teardown as the other evidence tests).
     await admin.query("SET LOCAL session_replication_role = replica");
+    await admin.query("DELETE FROM audit.access_log WHERE institution_id = $1", [institutionId]);
     await admin.query("DELETE FROM evidence.receipt WHERE evidence_package_id = $1", [packageId]);
     await admin.query("DELETE FROM evidence.segment WHERE evidence_package_id = $1", [packageId]);
     await admin.query("DELETE FROM evidence.package WHERE id = $1", [packageId]);
@@ -313,6 +314,16 @@ async function removeFixture() {
     await admin.query("ROLLBACK");
     throw error;
   }
+}
+
+// The access log of the work, with names in place of ids (DAN-228 step 2).
+async function openings() {
+  const names = new Map<string, string>(Object.entries(people).map(([name, id]) => [id, name]));
+  const rows = await admin.query<{ owner_id: string; reader_id: string; reader_role: string; surface: string }>(
+    "SELECT owner_id, reader_id, reader_role, surface FROM audit.access_log WHERE document_id = $1 AND institution_id = $2",
+    [documentId, institutionId],
+  );
+  return rows.rows.map((r) => `${names.get(r.reader_id)} ${r.reader_role} ${r.surface} of ${names.get(r.owner_id)}`);
 }
 
 function ask(name: keyof typeof tokens) {
@@ -383,6 +394,10 @@ describe("process summary over the API and the read RPC (B-13, D-80 point 6)", (
     const dora = await ask("dora");
     expect(dora.status).toBe(404);
     expect(await dora.json()).toStrictEqual({ error: "not_found" });
+
+    // PRODUCT 5 rule 17 (DAN-228 step 2): Vesna's opening is logged, Ana's own
+    // read and Dora's refused one are not.
+    expect(await openings()).toStrictEqual(["vesna teacher process_summary of ana"]);
   });
 
   // DAN-85 (#458 review point 1): like the comment and live-view reads.
