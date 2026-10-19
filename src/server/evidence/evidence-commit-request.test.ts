@@ -24,6 +24,11 @@ const CONTEXT_ROW = {
   evidence_profile_id: golden.segment.evidenceProfileId,
   max_payload_bytes: 262144,
   transaction_known: false,
+  // The chain the golden segment continues: base revision 3 of REQUEST.
+  current_revision: "3",
+  document_hash: golden.segment.initialDocumentHash,
+  head_segment_hash: golden.segment.predecessorSegmentHash,
+  last_sequence_to: String(golden.segment.sequenceFrom - 1),
 };
 // The acceptance answers a stale base, so these tests stop before any signature.
 const STALE = { outcome: "stale_base", current_revision: "4", document_hash: "e".repeat(64), head_segment_hash: null, last_sequence_to: "8" };
@@ -103,6 +108,52 @@ describe("commitEvidenceRequest", () => {
       segmentHash: golden.segmentHash,
     });
     expect(queries.find((q) => q.kind === "commit")?.values[7]).toBe("memory:known-ref");
+  });
+
+  // F-099: for a new key, what the acceptance would refuse is refused before storage.
+  const read = (row: Record<string, unknown>) => ({
+    currentRevision: Number(row.current_revision),
+    documentHash: row.document_hash,
+    headSegmentHash: row.head_segment_hash,
+    lastSequenceTo: Number(row.last_sequence_to),
+  });
+  it.each<[string, Record<string, unknown>, (row: Record<string, unknown>) => unknown]>([
+    ["a stale base", { current_revision: "4" }, (row) => ({ status: "stale_base", state: read(row) })],
+    ["another head segment", { head_segment_hash: "a".repeat(64) }, (row) => ({ status: "chain_conflict", state: read(row) })],
+    ["a sequence that goes back", { last_sequence_to: String(golden.segment.sequenceFrom) }, () => ({ status: "invalid" })],
+    ["another document state", { document_hash: "c".repeat(64) }, (row) => ({ status: "not_continuous", state: read(row) })],
+  ])("refuses %s from the context's state without storing or committing", async (_, change, expected) => {
+    const row = { ...CONTEXT_ROW, ...change };
+    const { run, queries, payloads } = setup(row);
+    expect(await run()).toEqual(expected(row));
+    expect(payloads.putImmutable).not.toHaveBeenCalled();
+    expect(queries.map((q) => q.kind)).toEqual(["context"]);
+  });
+
+  it("answers not_accepting from the context without storing or committing", async () => {
+    const { run, queries, payloads } = setup({ outcome: "not_accepting" });
+    expect(await run()).toEqual({ status: "not_accepting" });
+    expect(payloads.putImmutable).not.toHaveBeenCalled();
+    expect(queries.map((q) => q.kind)).toEqual(["context"]);
+  });
+
+  it("lets a known key past a changed chain to its receipt: the acceptance decides, nothing is stored", async () => {
+    const { run, queries, payloads } = setup({ ...CONTEXT_ROW, transaction_known: true, current_revision: "9" });
+    await run();
+    expect(payloads.putImmutable).not.toHaveBeenCalled();
+    expect(queries.map((q) => q.kind)).toEqual(["context", "commit"]);
+  });
+
+  it.each([
+    ["no revision", { current_revision: null }],
+    ["a revision as a fraction", { current_revision: "1.5" }],
+    ["a document hash in capitals", { document_hash: "E".repeat(64) }],
+    ["a head that is no hash", { head_segment_hash: "x" }],
+    ["no sequence", { last_sequence_to: undefined }],
+  ])("is unavailable when the context's state has %s", async (_, change) => {
+    const { run, payloads } = setup({ ...CONTEXT_ROW, ...change });
+    expect(await run()).toEqual({ status: "unavailable", stage: "context", code: "context_malformed" });
+    expect(payloads.putImmutable).not.toHaveBeenCalled();
   });
 
   it.each([
