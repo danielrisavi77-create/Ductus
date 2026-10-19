@@ -85,18 +85,24 @@ SELECT row_eq(
   ROW('ductus_evidence'::text, true, true), 'the evidence role owns the key registry and RLS is enabled and forced');
 SELECT bag_eq(
   $$ SELECT polname::text, polroles::regrole[]::text FROM pg_policy WHERE polrelid = 'evidence.signing_key'::regclass $$,
-  $$ VALUES ('evidence_signing_key_owner', '{ductus_evidence}') $$,
-  'the only policy is the owner''s: the web role has no read policy');
-SELECT is_empty(
-  $$ SELECT a.grantee::regrole::text FROM pg_class c, aclexplode(c.relacl) a
+  $$ VALUES ('evidence_signing_key_owner', '{ductus_evidence}'), ('evidence_signing_key_read', '{ductus_app}') $$,
+  'the owner''s policy and one read policy for the web role (step 4a)');
+SELECT is(
+  (SELECT polcmd::text || ' ' || pg_get_expr(polqual, polrelid) || ' ' || coalesce(pg_get_expr(polwithcheck, polrelid), '-')
+     FROM pg_policy WHERE polrelid = 'evidence.signing_key'::regclass AND polname = 'evidence_signing_key_read'),
+  'r (institution_id = ( SELECT app.current_institution_id() AS current_institution_id)) -',
+  'the web role reads only keys of the session''s institution, and the policy allows no write');
+SELECT bag_eq(
+  $$ SELECT a.grantee::regrole::text, a.privilege_type FROM pg_class c, aclexplode(c.relacl) a
       WHERE c.oid = 'evidence.signing_key'::regclass AND a.grantee <> c.relowner $$,
-  'no role but the owner has any privilege on the key registry');
+  $$ VALUES ('ductus_app', 'SELECT') $$,
+  'the only privilege beside the owner''s is SELECT for the web role');
 SELECT ok(NOT EXISTS (
   SELECT 1 FROM unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE']) AS p
   CROSS JOIN unnest(ARRAY['ductus_app', 'ductus_worker', 'ductus_retention', 'ductus_auth', 'ductus_identity',
                           'ductus_migrator', 'ductus_test_stranger']) AS r
-  WHERE has_table_privilege(r, 'evidence.signing_key', p)
-), 'no runtime role reads or writes the key registry directly');
+  WHERE has_table_privilege(r, 'evidence.signing_key', p) AND (r, p) <> ('ductus_app', 'SELECT')
+), 'no runtime role writes the key registry, and only the web role reads it');
 SELECT bag_eq(
   $$ SELECT attname::text, format_type(atttypid, atttypmod) FROM pg_attribute
       WHERE attrelid = 'evidence.signing_key'::regclass AND attnum > 0 AND NOT attisdropped $$,
@@ -135,12 +141,16 @@ SELECT is(pg_get_function_result('app.commit_evidence_segment(text,text,bigint,t
   'TABLE(outcome text, committed_revision bigint, receipt_payload text, receipt_id uuid, signature jsonb, current_revision bigint, document_hash text, head_segment_hash text, last_sequence_to bigint)',
   'the acceptance returns the receipt, the stored signature and the conflict state');
 
--- Access matrix: no persona reads the registry, and a grant given by mistake
--- still shows no row and takes no write.
-SELECT matches(pg_temp.ask(p, 'SELECT count(*) FROM evidence.signing_key'), '^42501:', p || ' cannot read the key registry')
-  FROM unnest(ARRAY['ana', 'vesna', 'iva', 'tomo', 'anon']) AS p;
-GRANT SELECT, INSERT, UPDATE, DELETE ON evidence.signing_key TO ductus_app;
-SELECT is(pg_temp.ask('ana', 'SELECT count(*) FROM evidence.signing_key'), '0', 'with a mistaken grant RLS still shows no key');
+-- Access matrix: a member of an institution reads all of its keys, of every
+-- domain, purpose and state, and no key of another; without a session nothing.
+-- A write grant given by mistake still takes no write.
+SELECT is(pg_temp.ask(p, $$ SELECT string_agg(key_id, ',' ORDER BY key_id) FROM evidence.signing_key $$),
+  'key-a,key-checkpoint,key-future,key-other-domain,key-retired,key-revoked', p || ' reads every key of fak-a and none of fak-b')
+  FROM unnest(ARRAY['ana', 'vesna', 'iva']) AS p;
+SELECT is(pg_temp.ask('tomo', $$ SELECT string_agg(key_id, ',' ORDER BY key_id) FROM evidence.signing_key $$),
+  'key-b', 'tomo reads only the key of fak-b');
+SELECT is(pg_temp.ask('anon', 'SELECT count(*) FROM evidence.signing_key'), '0', 'without a session no key is read');
+GRANT INSERT, UPDATE, DELETE ON evidence.signing_key TO ductus_app;
 SELECT matches(pg_temp.ask('ana', format(
   $q$ INSERT INTO evidence.signing_key (key_id, key_version, evidence_domain_id, institution_id, purpose, algorithm,
         key_base64url, valid_from) VALUES ('key-x', '1', %L, %L, 'receipt', 'Ed25519', %L, date_trunc('minute', now())) $q$,
@@ -150,7 +160,7 @@ SELECT is(pg_temp.ask('ana', 'WITH u AS (UPDATE evidence.signing_key SET revoked
   '0', 'with a mistaken grant RLS lets the web role revoke nothing');
 SELECT is(pg_temp.ask('ana', 'WITH d AS (DELETE FROM evidence.signing_key RETURNING 1) SELECT count(*) FROM d'),
   '0', 'with a mistaken grant RLS lets the web role delete nothing');
-REVOKE SELECT, INSERT, UPDATE, DELETE ON evidence.signing_key FROM ductus_app;
+REVOKE INSERT, UPDATE, DELETE ON evidence.signing_key FROM ductus_app;
 
 -- The registry's own rules, as the owner.
 CREATE FUNCTION pg_temp.key_insert(p_values text) RETURNS text LANGUAGE sql AS $$
