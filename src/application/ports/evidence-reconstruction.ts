@@ -7,14 +7,18 @@ import type { SignedEvidenceReceipt } from "@/domain/forensics/evidence-receipt"
  * neither port takes a principal, and neither may be exposed to a client.
  */
 
-export type AcceptedEvidenceSegment = {
+export type AcceptedEvidenceSegment<TReceipt = SignedEvidenceReceipt> = {
   /** Hash the segment was accepted under; the address of its stored bytes. */
   segmentHash: string;
-  /** `null` while the acceptance is still `pending_signature`. */
-  receipt: SignedEvidenceReceipt | null;
+  /**
+   * The stored receipt, in the form the reconstruction's receipt check takes
+   * (v1 by default); nothing in it is trusted before that check. `null` while
+   * the acceptance is still `pending_signature`.
+   */
+  receipt: TReceipt | null;
 };
 
-export type EvidenceChainReadResult =
+export type EvidenceChainReadResult<TReceipt = SignedEvidenceReceipt> =
   | {
       status: "found";
       /**
@@ -30,12 +34,12 @@ export type EvidenceChainReadResult =
        */
       head: EvidenceChainHeadV2 | null;
       /** Accepted segments in chain order, first accepted first. */
-      segments: AcceptedEvidenceSegment[];
+      segments: AcceptedEvidenceSegment<TReceipt>[];
     }
   | { status: "unavailable"; reason: string };
 
-export interface EvidenceChainReader {
-  readChain(evidencePackageId: string): Promise<EvidenceChainReadResult>;
+export interface EvidenceChainReader<TReceipt = SignedEvidenceReceipt> {
+  readChain(evidencePackageId: string): Promise<EvidenceChainReadResult<TReceipt>>;
 }
 
 export type EvidencePayloadReadResult =
