@@ -46,11 +46,11 @@ describe("S3 notice text (D-142, D-143)", () => {
     expect(s.checkbox).toContain("što vidi nastavnik (mentor)");
   });
 
-  it("gives the replay to the mentor only and does not promise it to the student", () => {
-    expect(s.teacher.replay.startsWith("Samo nastavnik (mentor)")).toBe(true);
+  it("gives the replay to the mentor and the same replay to the student (D-154)", () => {
+    expect(s.teacher.replay.startsWith("Nastavnik (mentor) zadatka")).toBe(true);
     expect(s.teacher.replay).toContain("znak po znak");
-    expect(s.teacher.replay).toContain("Ti tu reprodukciju ne vidiš.");
-    for (const text of notice()) expect(text).not.toContain("Istu reprodukciju vidiš i ti");
+    expect(s.teacher.replay).toContain("Istu reprodukciju svog rada vidiš i ti.");
+    for (const text of notice()) expect(text).not.toMatch(/reprodukciju ne vidiš|Samo nastavnik/);
   });
 
   it("states the purpose and never grading or ranking", () => {

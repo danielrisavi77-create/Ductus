@@ -246,7 +246,8 @@ export const hr = {
     },
   },
   // F-7 (#336): the S3 notice before the first sentence. What is recorded
-  // follows D-142 and D-143 (live view, per-change time, mentor-only replay)
+  // follows D-142, D-143 and D-154 (live view, per-change time, replay for the
+  // mentor, i.e. the teacher of the assignment, and the same replay for the student)
   // and PRODUCT §5 rules 4 and 7; D-24 and D-81 for the 30-second steps.
   // AssignmentNotice renders recorded, notRecorded and teacher in key order.
   student: {
@@ -294,8 +295,8 @@ export const hr = {
     teacherHeading: "Što vidi nastavnik (mentor)",
     teacher: {
       state: "Od prvog dana tvoj rad uživo, dok nastaje, pa i tekst koji ćeš kasnije možda obrisati.",
-      // Owner on #476 (6264128457): the student does not see the replay.
-      replay: "Samo nastavnik (mentor) može reproducirati nastanak rada znak po znak, pa i obrisani tekst. Ti tu reprodukciju ne vidiš.",
+      // D-154, PRODUCT §5 rules 5 and 7: the student sees the same replay of their own work.
+      replay: "Nastavnik (mentor) zadatka može reproducirati nastanak rada znak po znak, pa i obrisani tekst. Istu reprodukciju svog rada vidiš i ti.",
       purpose: "Prikaz uživo i reprodukcija služe praćenju nastanka rada i komentarima, nikad ocjeni ni rangiranju.",
       history: "Povijest verzija i sažetak procesa, isti kao što ga vidiš ti.",
       noVerdict: "Ductus ne procjenjuje autorstvo ni korištenje AI-ja.",

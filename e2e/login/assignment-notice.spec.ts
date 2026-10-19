@@ -68,7 +68,7 @@ test("signed-in student outside the course sees no notice", async ({ page }) => 
   await expect(page.getByRole("button", { name: t.student.confirm })).toHaveCount(0);
 });
 
-test("a student of the course reads the live view and the mentor-only replay before the first sentence", async ({ page }) => {
+test("a student of the course reads the live view and the replay of D-154 before the first sentence", async ({ page }) => {
   // The account exists once it has signed in; the notice is not there yet.
   await signIn(page, PATH, "Demo studentica");
   const seeded = await seedAssignment();
@@ -81,7 +81,7 @@ test("a student of the course reads the live view and the mentor-only replay bef
     }
     await expect(page.getByText(t.student.checkbox)).toBeVisible();
     await expect(page.getByText("Pojedinačni unosi")).toHaveCount(0);
-    await expect(page.getByText("Istu reprodukciju vidiš i ti")).toHaveCount(0);
+    await expect(page.getByText("reprodukciju ne vidiš")).toHaveCount(0);
     await test.info().attach("s3-obavijest-d142-d143", { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
   } finally {
     await admin((client) => client.query(
