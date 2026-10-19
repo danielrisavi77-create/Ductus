@@ -96,7 +96,10 @@ test.describe("workspace shell", () => {
     await expect(sheetText).toHaveAttribute("contenteditable", "true");
     await expect(sheetText).toHaveAttribute("aria-readonly", "false");
     await expect(sheetText).not.toHaveAttribute("aria-disabled", "true");
-    await expect(page.locator(".soon")).toHaveCount(1);
+    // The sheet says nothing is coming; the closed Upute and Rad tabs (FE-D9)
+    // hold their own "uskoro" marks, so only the visible ones are counted.
+    await expect(page.locator("article.sheet .soon")).toHaveCount(0);
+    await expect(page.locator(".soon:visible")).toHaveCount(1);
   });
 
   // Without the flag (as deployed) and with the flag refused outside
