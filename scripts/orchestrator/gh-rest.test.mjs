@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { ccrThreads, checkRollup, ghList, graphqlThreads, mergedPrs, prView, reviewThreads, toPr } from "./gh.mjs";
+import { ccrThreads, checkRollup, ghList, graphqlThreads, mainPathsSince, mergedPrs, prView, reviewThreads, toPr } from "./gh.mjs";
 import { evaluateChecks, summarizeThreads } from "./orchestrator-core.mjs";
 
 const rest = (over = {}) => ({
@@ -156,4 +156,18 @@ test("ghList requests pages by number until a short page, and picks a keyed arra
   assert.deepEqual(calls, ["x?per_page=2&page=1", "x?per_page=2&page=2"]);
   await assert.rejects(ghList("y", async () => "{}"), /unexpected response for y/);
   await assert.rejects(ghList("z?per_page=1", async () => "[1]"), /more than 50 pages/);
+});
+
+test("mainPathsSince reads the compare once, whole, and fails closed at the 300-file cap (review495a)", async () => {
+  const calls = [];
+  const files = Array.from({ length: 157 }, (_, i) => ({ filename: `src/f${i}.ts` }));
+  const exec = async (_cmd, args) => { calls.push(args[1]); return JSON.stringify({ files }); };
+  const paths = await mainPathsSince("a".repeat(40), "b".repeat(40), exec);
+  assert.equal(paths.length, 157);
+  assert.deepEqual(calls, [`repos/{owner}/{repo}/compare/${"a".repeat(40)}...${"b".repeat(40)}`]);
+  const renamed = async () => JSON.stringify({ files: [{ filename: "n.ts", previous_filename: "o.ts" }] });
+  assert.deepEqual(await mainPathsSince("a".repeat(40), "b".repeat(40), renamed), ["n.ts", "o.ts"]);
+  const cut = async () => JSON.stringify({ files: Array.from({ length: 300 }, (_, i) => ({ filename: `f${i}` })) });
+  await assert.rejects(mainPathsSince("a".repeat(40), "b".repeat(40), cut), /300-file API cap/);
+  await assert.rejects(mainPathsSince("a".repeat(40), "b".repeat(40), async () => JSON.stringify({ files: null })), /no file list/);
 });
