@@ -29,6 +29,6 @@ Runner postavlja DB, S3, Mailpit i OIDC na lokalne Compose adrese. Odbija DB URL
 - razvojni ključ za potvrde (seed od 32 bajta) nastaje jednom u `~/.ductus/demo-evidence-signing.seed`, izvan repozitorija, i upisuje se kao javni ključ domene evidencije ustanove `demo-fakultet`. Drugo pokretanje koristi isti seed i isti ključ. Želiš li drugu datoteku, postavi `DUCTUS_DEV_SIGNING_KEY_FILE` na apsolutnu putanju izvan repozitorija;
 - lokalni S3 spremnik `ductus-evidence-demo-fakultet` dobiva oznaku identiteta ustanove, a `EVIDENCE_STORAGE_DOMAINS` i `EVIDENCE_S3_LOCAL_*` runner prosljeđuje aplikaciji kroz njezinu okolinu. Ništa se ne zapisuje u `.env.local`.
 
-Obje skripte rade samo lokalno, odbijaju `NODE_ENV=production` i pri ponovnom pokretanju ništa ne mijenjaju. Ako aplikaciju pokrećeš zasebno s `pnpm dev`, ta okolina ne postoji; koristi `pnpm demo:up`.
+Obje skripte rade samo lokalno i pri ponovnom pokretanju ništa ne mijenjaju. Skripte same odbijaju `NODE_ENV=production`, ali `pnpm demo:up` uvijek postavlja `NODE_ENV=development`, pa tu zaštitu ne nosi. Zato `pnpm demo:up` odbija pokretanje ako su postavljeni `DUCTUS_PSQL_CONTAINER`, `DOCKER_HOST` ili `DOCKER_CONTEXT` (mogli bi uputiti skripte na tuđi Docker), kao i relativan `DUCTUS_DEV_SIGNING_KEY_FILE`. Ako aplikaciju pokrećeš zasebno s `pnpm dev`, ta okolina ne postoji; koristi `pnpm demo:up`.
 
 Seed trenutačno stvara izmišljene ustanove. Potpuni K-3 seed s nastavnikom, kolegijem, zadatkom, studentima i kontrolnim povijestima dovršava se u zasebnim koracima DAN-88.
