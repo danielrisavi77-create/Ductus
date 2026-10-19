@@ -28,7 +28,7 @@ const teacherId = randomUUID();
 const studentId = randomUUID();
 const courseId = randomUUID();
 const assignmentId = randomUUID();
-const projects = [`project-${suffix}-a`, `project-${suffix}-b`];
+const projectId = `project-${suffix}`;
 const documents = [`doc-${suffix}-a`, `doc-${suffix}-b`];
 
 const admin = new pg.Pool({ connectionString: SAFE_ADMIN_URL, max: 1 });
@@ -113,12 +113,13 @@ async function insertFixture() {
        VALUES ($1, 1, $2, $3)`,
       [assignmentId, studentId, institutionId],
     );
-    for (const [index, projectId] of projects.entries()) {
-      const documentId = documents[index];
-      await client.query(
-        `INSERT INTO evidence.project (id, institution_id, assignment_id, principal_id) VALUES ($1, $2, $3, $4)`,
-        [projectId, institutionId, assignmentId, studentId],
-      );
+    // One work per student and assignment (evidence_project_one_per_student),
+    // so both documents belong to the same project.
+    await client.query(
+      `INSERT INTO evidence.project (id, institution_id, assignment_id, principal_id) VALUES ($1, $2, $3, $4)`,
+      [projectId, institutionId, assignmentId, studentId],
+    );
+    for (const documentId of documents) {
       await client.query(
         `INSERT INTO evidence.document (id, institution_id, project_id, principal_id, current_revision, current_content_hash)
          VALUES ($1, $2, $3, $4, 1, $5)`,
@@ -150,7 +151,7 @@ async function removeFixture() {
     await admin.query("DELETE FROM evidence.submission_request WHERE assignment_id = $1", [assignmentId]);
     await admin.query("DELETE FROM evidence.document_revision WHERE document_id = ANY($1)", [documents]);
     await admin.query("DELETE FROM evidence.document WHERE id = ANY($1)", [documents]);
-    await admin.query("DELETE FROM evidence.project WHERE id = ANY($1)", [projects]);
+    await admin.query("DELETE FROM evidence.project WHERE id = $1", [projectId]);
     await admin.query("DELETE FROM institution.notice_acknowledgment WHERE assignment_id = $1", [assignmentId]);
     await admin.query("DELETE FROM institution.assignment_version WHERE assignment_id = $1", [assignmentId]);
     await admin.query("DELETE FROM institution.assignment WHERE id = $1", [assignmentId]);
