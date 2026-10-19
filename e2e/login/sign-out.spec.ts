@@ -239,7 +239,10 @@ test("FE-D7: the dialog names what stays on this device; Ostani and Escape keep 
   await expect(dialog).toContainText(t.auth.logoutKept);
   const owed = await pendingRows(page);
   expect(owed).toBeGreaterThan(0);
-  await expect(dialog.getByText(new RegExp(`^${owed} izmjen`))).toBeVisible();
+  // The main sentence starts with the number: "N izmjena postoji …".
+  const sentence = (await dialog.locator("p").first().textContent()) ?? "";
+  expect(sentence).toMatch(/^\d+ izmjen/);
+  expect(Number(sentence.split(" ")[0])).toBe(owed);
   // The sheet takes no input while the dialog is open, so the number holds.
   await expect(editorOf(page)).toHaveAttribute("contenteditable", "false");
 
