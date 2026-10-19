@@ -1,10 +1,15 @@
 // F-7 (#336): the student joins a course with the code the teacher gives.
 // The browser sends only the code; identity and institution come from the
 // session. The route is the proposal on #314 (6237117691) and does not exist
-// yet, so until Backend adds it every attempt ends as `unavailable`.
+// yet, so until Backend adds it every attempt ends as `unavailable`. A request
+// that never reached the server (no network) is `offline`, so the student
+// knows to check the connection rather than the code.
 export type Enrollment =
   | { kind: "enrolled"; courseId: string }
-  | { kind: "malformed" | "refused" | "tooManyAttempts" | "unauthorized" | "forbidden" | "invalid" | "unavailable" };
+  | {
+      kind: "malformed" | "refused" | "tooManyAttempts" | "unauthorized" | "forbidden" | "invalid" | "unavailable" |
+        "offline";
+    };
 
 // An API route that starts an OIDC login: a real navigation, not a Link.
 export const SIGN_IN_HREF = `/api/auth/login?returnTo=${encodeURIComponent("/upis")}`;
@@ -23,8 +28,9 @@ export async function enrollWithCode(input: string, send: typeof fetch = fetch):
   const code = normalizeCode(input);
   // A code that cannot match is not sent, so it never spends an attempt.
   if (!code) return { kind: "malformed" };
+  let response: Response;
   try {
-    const response = await send("/api/institution/enrollments", {
+    response = await send("/api/institution/enrollments", {
       method: "POST",
       headers: { "content-type": "application/json" },
       credentials: "same-origin",
@@ -32,6 +38,10 @@ export async function enrollWithCode(input: string, send: typeof fetch = fetch):
       redirect: "error",
       body: JSON.stringify({ code }),
     });
+  } catch {
+    return { kind: "offline" };
+  }
+  try {
     if (response.status === 401) return { kind: "unauthorized" };
     if (response.status === 403) return { kind: "forbidden" };
     if (response.status === 422) return { kind: "refused" };
