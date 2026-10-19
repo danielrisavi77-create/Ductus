@@ -11,9 +11,11 @@
  * Timing (4.12 t. 7 and t. 8): one request in flight; changes meanwhile
  * merge into the last state; a new request starts at the earliest one second
  * after the start of the previous one, and only when the bytes differ from
- * the last accepted ones. Without a network only the last state waits, and
- * it goes when the network is back. A conflict takes the returned token and
- * sends the last state once more. 401 and 404 (no session, notice not
+ * what the route holds (known only while nothing is in flight, so a return
+ * to the accepted state during a request still goes). Without a network only
+ * the last state waits, and it goes when the network is back. A conflict
+ * takes the returned token and sends the last state once more, never twice
+ * for the same state. 401 and 404 (no session, notice not
  * confirmed, no right to publish) stop publishing until the page loads again.
  * These are client constants, not the thresholds P-01 to P-04.
  */
@@ -163,13 +165,19 @@ export function createLivePublisher(options: LivePublisherOptions): LivePublishe
       if (pending === text) pending = null;
       retryMs = 0;
       conflicts = 0;
+      settle();
       schedule();
       return;
     }
-    if (status === 409 && answer?.token !== undefined && conflicts === 0) {
-      // A late or second writer moved the token: take it and send the last state once more.
+    if (status === 409 && answer?.token !== undefined) {
+      // A late or second writer moved the token, so the route may hold
+      // anything: take the token and send the last state once more, but only
+      // once per state; a later change is tried afresh (no loop).
       token = answer.token;
+      accepted = null;
+      retryMs = 0;
       conflicts += 1;
+      if (conflicts > 1 && pending === text) pending = null;
       schedule();
       return;
     }
@@ -182,11 +190,24 @@ export function createLivePublisher(options: LivePublisherOptions): LivePublishe
       // The same bytes would be refused again; a later change is tried afresh.
       refused = text;
       if (pending === text) pending = null;
+      settle();
+      schedule();
       return;
     }
-    if (status === 409 && answer?.token !== undefined) token = answer.token;
+    if (status === 409) accepted = null;
+    settle();
     retryMs = retryMs === 0 ? LIVE_PUBLISH_RETRY_FIRST_MS : Math.min(retryMs * 2, LIVE_PUBLISH_RETRY_MAX_MS);
     schedule(retryMs);
+  }
+
+  /**
+   * With nothing in flight the route holds `accepted`, so a waiting state equal
+   * to it (or to bytes already refused) need not go. While a request is in
+   * flight this is not known, which is why `offer` keeps every state then and
+   * the answer decides here.
+   */
+  function settle(): void {
+    if (pending !== null && (pending === accepted || pending === refused)) pending = null;
   }
 
   return {
@@ -197,12 +218,11 @@ export function createLivePublisher(options: LivePublisherOptions): LivePublishe
       } catch {
         return;
       }
-      if (text === accepted || text === refused) {
-        pending = null;
-        return;
-      }
       if (text !== pending) conflicts = 0;
       pending = text;
+      // A return to the accepted state while another one is in flight must
+      // still go: once that answer comes, the route holds the other state.
+      if (inFlight === null) settle();
       schedule();
     },
     start() {

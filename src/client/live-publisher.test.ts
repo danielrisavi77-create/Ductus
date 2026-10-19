@@ -4,7 +4,7 @@ import type { CanonicalDocument } from "@/domain/document";
 import { canonicalizeJcs } from "@/domain/forensics/jcs";
 
 import {
-  createLivePublisher, LIVE_PUBLISH_GAP_MS, LIVE_PUBLISH_RETRY_FIRST_MS, type NetworkSource,
+  createLivePublisher, LIVE_PUBLISH_GAP_MS, type NetworkSource,
 } from "./live-publisher";
 
 // Invented text only.
@@ -160,7 +160,7 @@ describe("live publisher (BACKEND 4.12 t. 7 and 8)", () => {
     expect(s.calls).toHaveLength(1);
   });
 
-  it("takes the token of a conflict and sends the last state once more, then backs off", async () => {
+  it("takes the token of a conflict and sends the last state once more, never a second time", async () => {
     const s = setup();
     s.publisher.start();
     s.publisher.offer(doc("x"));
@@ -170,12 +170,101 @@ describe("live publisher (BACKEND 4.12 t. 7 and 8)", () => {
     expect(s.calls).toHaveLength(2);
     expect(s.calls[1]!.init.headers).toMatchObject({ "if-match": `"${TOKEN_B}"` });
 
+    // Contract #476 6275905316: at most one repeat per state, no loop.
     s.calls[1]!.resolve(answer(409, TOKEN_A));
-    await s.time.advance(LIVE_PUBLISH_RETRY_FIRST_MS - 1);
+    await s.time.advance(120_000);
     expect(s.calls).toHaveLength(2);
-    await s.time.advance(1);
+    expect(s.time.pending()).toBe(0);
+
+    // A later change is tried afresh, with the token of the last conflict.
+    s.publisher.offer(doc("xy"));
+    await s.time.advance(0);
     expect(s.calls).toHaveLength(3);
     expect(s.calls[2]!.init.headers).toMatchObject({ "if-match": `"${TOKEN_A}"` });
+  });
+
+  it("sends a return to the accepted state that came while another state was in flight", async () => {
+    const s = setup();
+    s.publisher.start();
+    s.publisher.offer(doc("A"));
+    await s.time.advance(0);
+    s.calls[0]!.resolve(answer(200, TOKEN_A));
+    await s.time.advance(LIVE_PUBLISH_GAP_MS);
+
+    s.publisher.offer(doc("AB"));
+    await s.time.advance(0);
+    expect(s.calls).toHaveLength(2);
+    // The student deletes the letter (or undoes it) before the answer comes.
+    s.publisher.offer(doc("A"));
+    s.calls[1]!.resolve(answer(200, TOKEN_B));
+    await s.time.advance(LIVE_PUBLISH_GAP_MS);
+    expect(s.calls).toHaveLength(3);
+    expect(s.calls[2]!.init.body).toBe(canonicalizeJcs(doc("A")));
+    expect(s.calls[2]!.init.headers).toMatchObject({ "if-match": `"${TOKEN_B}"` });
+  });
+
+  it("drops a return to the accepted state once the state in flight is known not to have landed", async () => {
+    const s = setup();
+    s.publisher.start();
+    s.publisher.offer(doc("A"));
+    await s.time.advance(0);
+    s.calls[0]!.resolve(answer(200, TOKEN_A));
+    await s.time.advance(LIVE_PUBLISH_GAP_MS);
+
+    // Refused: the route still holds A.
+    s.publisher.offer(doc("AB"));
+    await s.time.advance(0);
+    s.publisher.offer(doc("A"));
+    s.calls[1]!.resolve(new Response("{}", { status: 413 }));
+    await s.time.advance(60_000);
+    expect(s.calls).toHaveLength(2);
+
+    // Lost on the network: the route still holds A, and AB is no longer the last state.
+    s.publisher.offer(doc("AC"));
+    await s.time.advance(0);
+    s.publisher.offer(doc("A"));
+    s.calls[2]!.reject(new TypeError("network"));
+    await s.time.advance(60_000);
+    expect(s.calls).toHaveLength(3);
+  });
+
+  it("sends the accepted state again after a conflict on the state in flight, since the route may hold anything", async () => {
+    const s = setup();
+    s.publisher.start();
+    s.publisher.offer(doc("A"));
+    await s.time.advance(0);
+    s.calls[0]!.resolve(answer(200, TOKEN_A));
+    await s.time.advance(LIVE_PUBLISH_GAP_MS);
+
+    s.publisher.offer(doc("AB"));
+    await s.time.advance(0);
+    s.publisher.offer(doc("A"));
+    s.calls[1]!.resolve(answer(409, TOKEN_B));
+    await s.time.advance(LIVE_PUBLISH_GAP_MS);
+    expect(s.calls).toHaveLength(3);
+    expect(s.calls[2]!.init.body).toBe(canonicalizeJcs(doc("A")));
+    expect(s.calls[2]!.init.headers).toMatchObject({ "if-match": `"${TOKEN_B}"` });
+  });
+
+  it("does not resend bytes already refused when they come back while another state is in flight", async () => {
+    const s = setup();
+    s.publisher.start();
+    s.publisher.offer(doc("R"));
+    await s.time.advance(0);
+    s.calls[0]!.resolve(new Response("{}", { status: 422 }));
+    await s.time.advance(LIVE_PUBLISH_GAP_MS);
+
+    s.publisher.offer(doc("B"));
+    await s.time.advance(0);
+    s.publisher.offer(doc("R"));
+    s.calls[1]!.resolve(answer(200, TOKEN_A));
+    await s.time.advance(60_000);
+    // The route keeps B, the last state it can hold: R would be refused again,
+    // just as when R comes back with nothing in flight.
+    expect(s.calls).toHaveLength(2);
+    s.publisher.offer(doc("RC"));
+    await s.time.advance(0);
+    expect(s.calls).toHaveLength(3);
   });
 
   it.each([401, 404])("stops for good on %i", async (status) => {
