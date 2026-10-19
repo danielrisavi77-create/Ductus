@@ -39,15 +39,17 @@ export type EvidenceCommitContext = {
   evidenceProfileId: string;
   maxPayloadBytes: number;
   transactionKnown: boolean;
+  /** The chain as the context read it, unlocked: the acceptance checks it again (F-099). */
+  state: EvidenceCommitState;
 };
 
 export type EvidenceCommitContextResult =
   | { status: "ok"; context: EvidenceCommitContext }
-  | { status: "unauthenticated" | "not_found" | "invalid" }
+  | { status: "unauthenticated" | "not_found" | "invalid" | "not_accepting" }
   | { status: "unavailable"; stage: "context"; code: "context_failed" | "context_malformed" };
 
 const CONTEXT_SQL = `SELECT outcome, evidence_package_id, institution_id, evidence_domain_id, evidence_profile_id,
-       max_payload_bytes, transaction_known
+       max_payload_bytes, transaction_known, current_revision, document_hash, head_segment_hash, last_sequence_to
   FROM app.evidence_commit_context($1, $2)`;
 
 type ContextRow = Record<
@@ -57,7 +59,11 @@ type ContextRow = Record<
   | "evidence_domain_id"
   | "evidence_profile_id"
   | "max_payload_bytes"
-  | "transaction_known",
+  | "transaction_known"
+  | "current_revision"
+  | "document_hash"
+  | "head_segment_hash"
+  | "last_sequence_to",
   unknown
 >;
 
@@ -74,7 +80,12 @@ export async function readEvidenceCommitContext(
     return { status: "unavailable", stage: "context", code: "context_failed" };
   }
   const row = rows.length === 1 ? rows[0] : undefined;
-  if (row?.outcome === "unauthenticated" || row?.outcome === "not_found" || row?.outcome === "invalid") {
+  if (
+    row?.outcome === "unauthenticated" ||
+    row?.outcome === "not_found" ||
+    row?.outcome === "invalid" ||
+    row?.outcome === "not_accepting"
+  ) {
     return { status: row.outcome };
   }
   if (
@@ -90,6 +101,13 @@ export async function readEvidenceCommitContext(
   ) {
     return { status: "unavailable", stage: "context", code: "context_malformed" };
   }
+  const currentRevision = count(row.current_revision);
+  const lastSequenceTo = count(row.last_sequence_to);
+  const documentHash = row.document_hash;
+  const head = row.head_segment_hash;
+  if (currentRevision === null || lastSequenceTo === null || !isSha256Hex(documentHash) || !(head === null || isSha256Hex(head))) {
+    return { status: "unavailable", stage: "context", code: "context_malformed" };
+  }
   return {
     status: "ok",
     context: {
@@ -99,6 +117,7 @@ export async function readEvidenceCommitContext(
       evidenceProfileId: row.evidence_profile_id,
       maxPayloadBytes: Number(row.max_payload_bytes),
       transactionKnown: row.transaction_known,
+      state: { currentRevision, documentHash, headSegmentHash: head, lastSequenceTo },
     },
   };
 }
