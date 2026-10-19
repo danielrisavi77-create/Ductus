@@ -396,6 +396,11 @@
     padding-right: 16px;
   }
 
+  /* Phone: no interface text under 13 px (review #156, 5; e2e/shell.spec.ts). */
+  .eyebrow {
+    font-size: 13px;
+  }
+
   .nav {
     order: 3;
     width: 100%;
