@@ -171,6 +171,17 @@ describe("readProcessSummary: one answer for the owner and the teacher (B-13, D-
     expect(read).not.toHaveBeenCalled();
   });
 
+  // DAN-85: a session that is no longer open is its own answer, not absence.
+  it("passes a source without an open session on as unauthenticated, before reading any payload", async () => {
+    const record = await buildRecord(WORK);
+    const store = await storeOf(record);
+    const read = vi.spyOn(store, "readImmutable");
+    expect(await readProcessSummary(deps(sourceFor({ status: "unauthenticated" }), store), DOCUMENT)).toStrictEqual({
+      status: "unauthenticated",
+    });
+    expect(read).not.toHaveBeenCalled();
+  });
+
   it("reads only the segments the source lists, never past its head", async () => {
     const record = await buildRecord(WORK);
     const store = await storeOf(record);
