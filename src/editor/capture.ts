@@ -209,6 +209,9 @@ async function changeSteps(change: CapturedChange): Promise<JcsJsonValue[]> {
       throw new CaptureError("unsupported_step");
     }
     if (!next) throw new CaptureError("unsupported_step");
+    // A step that changes nothing (a selection replaced by the same content)
+    // is refused by the replayer (`step_changes_nothing`): not written.
+    if (next.eq(doc)) return;
     doc = next;
     steps.push(json as JcsJsonValue);
   };
@@ -276,7 +279,7 @@ export class EvidenceRecorder {
     throw new CaptureError(code);
   }
 
-  /** Records one change; a change with no step changes nothing and is ignored. */
+  /** Records one change; a change whose steps change nothing is ignored. */
   record(change: CapturedChange): void {
     if (this.failure !== null) throw new CaptureError(this.failure);
     if (change.steps.length === 0) return;
@@ -285,6 +288,9 @@ export class EvidenceRecorder {
     }
     const previous = this.last;
     this.last = change;
+    // Every step left the document as it was: nothing to write, and an event
+    // of no step would be refused (`steps_empty`).
+    if (change.docs.every((doc, i) => doc.eq(change.docs[i + 1] ?? change.after))) return;
     if (
       this.open &&
       (this.open.source !== change.source ||

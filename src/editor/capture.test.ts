@@ -203,6 +203,45 @@ describe("F-8 3d-1: a captured segment replays on the server's replayer", () => 
     await expect(t.recorder.takeSegment(CONTEXT)).rejects.toMatchObject({ code: "unsupported_step" });
     expect(t.recorder.intact).toBe(false);
   });
+
+  // A step that changes nothing is refused by the replayer
+  // (`step_changes_nothing`), so it is not written (review and QA 494, round 3).
+  const pasteSame = (editor: Editor) =>
+    editor.view.dispatch(editor.state.tr.replaceSelection(editor.state.selection.content()).setMeta("uiEvent", "paste"));
+  it.each([
+    ["pasting a selection over itself", 1, 8, pasteSame],
+    ["typing the selected character over itself", 9, 10, (editor: Editor) => editor.view.dispatch(editor.state.tr.insertText("B"))],
+  ])("%s replays, and the recorder keeps going", async (_name, from, to, edit) => {
+    const t = setup("Odlomak B");
+    t.editor.commands.setTextSelection({ from, to });
+    edit(t.editor);
+    t.as("editor", 1_000);
+    edit(t.editor);
+    t.type("y");
+    t.recorder.close();
+    await replays(t.initial, (await t.recorder.takeSegment(CONTEXT))!);
+    expect(t.recorder.intact).toBe(true);
+  });
+
+  it("a step that changes nothing beside one that does in the same change replays", async () => {
+    const t = setup("Odlomak B");
+    t.editor.commands.setTextSelection({ from: 1, to: 8 });
+    const tr = t.editor.state.tr.replaceSelection(t.editor.state.selection.content());
+    t.editor.view.dispatch(tr.insertText("z", tr.doc.content.size - 1));
+    t.recorder.close();
+    const built = (await t.recorder.takeSegment(CONTEXT))!;
+    expect(built.segment.events[0]!.steps).toHaveLength(1);
+    await replays(t.initial, built);
+  });
+
+  it("a change whose every step changes nothing makes no event", async () => {
+    const t = setup("Odlomak B");
+    t.editor.commands.setTextSelection({ from: 1, to: 8 });
+    pasteSame(t.editor);
+    t.recorder.close();
+    expect(await t.recorder.takeSegment(CONTEXT)).toBeNull();
+    expect(t.recorder.intact).toBe(true);
+  });
 });
 
 describe("F-8 3d-1: events, segments and time", () => {
@@ -299,7 +338,9 @@ describe("F-8 3d-1: events, segments and time", () => {
     const t = setup();
     const unsupported = { toJSON: () => { throw new Error("no JSON form"); } } as unknown as Step;
     const doc = t.editor.state.doc;
-    t.recorder.record({ steps: [unsupported], docs: [doc], after: doc, source: "editor", at: T0 });
+    // A change that changes the document: one that does not is ignored.
+    const after = t.editor.state.tr.insertText("q").doc;
+    t.recorder.record({ steps: [unsupported], docs: [doc], after, source: "editor", at: T0 });
     t.recorder.close();
     await expect(t.recorder.takeSegment(CONTEXT)).rejects.toMatchObject({ code: "unsupported_step" });
     expect(t.recorder.intact).toBe(false);
