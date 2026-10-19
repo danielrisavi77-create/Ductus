@@ -154,7 +154,7 @@ SELECT ok((SELECT s.requested_at >= m.before_call AND s.requested_at <= m.after_
   FROM evidence.submission_request s CROSS JOIN clock_mark m WHERE s.document_id = 'doc-a'),
   'requested_at is the database clock during the call, not the transaction start or a client value');
 SELECT is((SELECT concat_ws(' ', institution_id = pg_temp.id('fak_a'), principal_id = pg_temp.id('ana'),
-    assignment_id = pg_temp.id('z1'), project_id, revision, content_hash = repeat('d',64))
+    assignment_id = pg_temp.id('z1'), project_id, revision, content_hash = pg_temp.h('d'))
   FROM evidence.submission_request WHERE document_id = 'doc-a'),
   't t t project-a 1 t', 'the request pins the session principal, its institution and the committed hash');
 

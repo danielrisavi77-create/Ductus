@@ -5,26 +5,26 @@ SET LOCAL lc_messages TO 'C';
 SELECT no_plan();
 
 SELECT is((SELECT r.rolname FROM pg_proc p JOIN pg_roles r ON r.oid = p.proowner
-  WHERE p.oid = 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text)'::regprocedure),
+  WHERE p.oid = 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text)'::regprocedure),
   'ductus_evidence', 'the narrow RPC is owned by the NOLOGIN evidence role');
 SELECT ok((SELECT prosecdef AND 'search_path=""' = ANY(proconfig)
-  FROM pg_proc WHERE oid = 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text)'::regprocedure),
+  FROM pg_proc WHERE oid = 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text)'::regprocedure),
   'the RPC is SECURITY DEFINER with an empty search_path');
 SELECT ok(
-  has_function_privilege('ductus_app', 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text)', 'EXECUTE')
-  AND NOT has_function_privilege('ductus_worker', 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text)', 'EXECUTE')
-  AND NOT has_function_privilege('ductus_retention', 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text)', 'EXECUTE')
-  AND NOT has_function_privilege('ductus_auth', 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text)', 'EXECUTE')
-  AND NOT has_function_privilege('ductus_test_stranger', 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text)', 'EXECUTE')
+  has_function_privilege('ductus_app', 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text)', 'EXECUTE')
+  AND NOT has_function_privilege('ductus_worker', 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text)', 'EXECUTE')
+  AND NOT has_function_privilege('ductus_retention', 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text)', 'EXECUTE')
+  AND NOT has_function_privilege('ductus_auth', 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text)', 'EXECUTE')
+  AND NOT has_function_privilege('ductus_test_stranger', 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text)', 'EXECUTE')
   AND NOT EXISTS (
     SELECT 1 FROM pg_proc p
     CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) acl
-    WHERE p.oid = 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text)'::regprocedure
+    WHERE p.oid = 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text)'::regprocedure
       AND acl.grantee = 0 AND acl.privilege_type = 'EXECUTE'
   ), 'only ductus_app receives EXECUTE on the RPC');
 SELECT is_empty(
   $$ SELECT name FROM unnest((SELECT proargnames[1:pronargs]
-       FROM pg_proc WHERE oid = 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text)'::regprocedure)) AS name
+       FROM pg_proc WHERE oid = 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text)'::regprocedure)) AS name
       WHERE name IN ('principal_id', 'p_principal_id', 'institution_id', 'p_institution_id') $$,
   'the RPC accepts neither principal_id nor institution_id');
 SELECT is_empty(
@@ -36,7 +36,7 @@ SELECT is_empty(
 
 SELECT matches(pg_temp.ask_as('ductus_test_stranger', 'ana',
   $$ SELECT outcome FROM app.commit_evidence_segment('pkg-a','request-denied',0,repeat('a',64),repeat('d',64),
-       pg_temp.descriptor()::jsonb,repeat('b',64),'synthetic://denied') $$),
+       pg_temp.descriptor()::jsonb,repeat('b',64),'synthetic://denied',repeat('d',64)) $$),
   '^42501:.*$', 'an unrelated role cannot execute the RPC');
 SELECT is(pg_temp.call('anon','pkg-a','request-anon',pg_temp.descriptor(),0,repeat('a',64),repeat('d',64),repeat('b',64)),
   'unauthorized', 'an anonymous session is refused');
