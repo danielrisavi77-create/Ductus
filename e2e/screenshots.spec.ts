@@ -13,7 +13,7 @@ const LOCALES = ["hr"] as const;
 const SCHEMES = ["light", "dark"] as const;
 
 async function chooseSheetTheme(page: Page, path: string, theme: (typeof SCHEMES)[number]) {
-  if (path !== "/rad" || theme === "dark") return;
+  if ((path !== "/rad" && path !== "/") || theme === "dark") return;
   await page.getByRole("button", { name: "Bijeli list" }).click();
 }
 // Wide (three columns), below 1240 px (structure under the sheet), below
