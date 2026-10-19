@@ -70,6 +70,9 @@ test("runStopHook never runs twice in a row and fails open", () => {
     "node_modules tracked in the checkout": [{ cwd: repo }, { tracked: "node_modules/typescript/bin/tsc\0" }],
     "differently cased node_modules tracked": [{ cwd: repo }, { tracked: "src/a.ts\0NODE_MODULES/typescript/bin/tsc\0" }],
     "node_modules with a Unicode case-fold twin tracked (SEC-2026-10-18-2)": [{ cwd: repo }, { tracked: "src/a.ts\0node_module\u017F/typescript/bin/tsc\0" }],
+    "node_modules with a trailing dot tracked (F-101)": [{ cwd: repo }, { tracked: "src/a.ts\0node_modules./typescript/bin/tsc\0" }],
+    "node_modules with a trailing space tracked (F-101)": [{ cwd: repo }, { tracked: "src/a.ts\0node_modules /typescript/bin/tsc\0" }],
+    "node_modules with a stream suffix tracked (F-101)": [{ cwd: repo }, { tracked: "src/a.ts\0node_modules::$INDEX_ALLOCATION/typescript/bin/tsc\0" }],
     "tracked-file listing fails": [{ cwd: repo }, { tracked: null }],
     "tsc clean": [{ cwd: repo }, { tsc: { status: 0, stdout: "" } }],
   };
