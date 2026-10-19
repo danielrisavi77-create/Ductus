@@ -11,14 +11,25 @@
  * While the editor may not be written in (loading, another tab, a failure,
  * signing out) every button says so with `aria-disabled` and does nothing,
  * and stays reachable, so a keyboard user learns why nothing happens.
+ *
+ * FE-D5 (editor-v11 "Više ▾", "Prikaz ▾"): when the toolbar is too narrow the
+ * headings move, smallest first, into the "Više" menu, where each item runs
+ * the very same command with the very same check as its button; "Prikaz"
+ * holds the sheet theme. Layout, grouping and labels only: no command changes.
  */
 
 import { useEditorState, type Editor } from "@tiptap/react";
-import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import {
+  useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode,
+} from "react";
 
+import { setSheetTheme, useSheetTheme } from "@/components/shell/useSheetTheme";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
+import type { SheetTheme } from "@/lib/ui/sheet-theme";
 
 import { useLocalEditor } from "./LocalDocument";
+import ToolbarMenu from "./ToolbarMenu";
+import { MAX_COLLAPSED, rovingIndex, splitTools } from "./toolbar-menu";
 
 type ToolbarState = {
   editable: boolean;
@@ -92,25 +103,75 @@ const TOOLS: readonly Tool[] = [
   },
 ];
 
+/** Whether the toolbar's own buttons have wrapped onto a second line. */
+function wraps(toolbar: HTMLElement): boolean {
+  const buttons = toolbar.querySelectorAll<HTMLElement>("[data-roving]");
+  if (buttons.length < 2) return false;
+  const first = buttons[0]!.getBoundingClientRect();
+  const last = buttons[buttons.length - 1]!.getBoundingClientRect();
+  return last.top >= first.bottom - 1;
+}
+
+const THEMES: readonly { key: SheetTheme; label: string }[] = [
+  { key: "dark", label: t.workspace.sheetThemeDark },
+  { key: "light", label: t.workspace.sheetThemeLight },
+];
+
 export default function EditorToolbar() {
   const editor = useLocalEditor();
   const state = useEditorState({ editor, selector: ({ editor: e }) => stateOf(e) }) ?? IDLE;
+  const theme = useSheetTheme();
   const listRef = useRef<HTMLDivElement>(null);
-  const [focusAt, setFocusAt] = useState(0);
+  const [focusKey, setFocusKey] = useState<string>(TOOLS[0]!.key);
+  const [openMenu, setOpenMenu] = useState<"more" | "view" | null>(null);
+  const [collapsed, setCollapsed] = useState(0);
+  const [width, setWidth] = useState(0);
+  const widthRef = useRef(0);
 
-  // Roving focus between the buttons; Tab leaves the toolbar.
+  // A new width starts again with every tool shown (prototype fitToolbar).
+  useLayoutEffect(() => {
+    const element = listRef.current;
+    if (!element || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => {
+      const next = Math.round(entry?.contentRect.width ?? 0);
+      if (next === widthRef.current) return;
+      widthRef.current = next;
+      setCollapsed(0);
+      setWidth(next);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  // Each pass that still wraps moves one more heading into "Više", before paint.
+  useLayoutEffect(() => {
+    const element = listRef.current;
+    if (element && collapsed < MAX_COLLAPSED && wraps(element)) setCollapsed(collapsed + 1);
+  }, [collapsed, width]);
+
+  const { shown, more } = splitTools(TOOLS, collapsed);
+  const moreOpen = openMenu === "more" && more.length > 0;
+  const usableOf = (tool: Tool) => state.editable && (tool.enabled?.(state) ?? true);
+  const rovingKeys = [...shown.map((tool) => tool.key), ...(more.length ? ["more"] : []), "view"];
+  const stop = rovingKeys.includes(focusKey) ? focusKey : rovingKeys[0];
+
+  // Checked again at the click: a sign-out stops writing without a render.
+  const run = (tool: Tool): boolean => {
+    if (!usableOf(tool) || !editor || editor.isDestroyed || !editor.isEditable) return false;
+    tool.run(editor);
+    return true;
+  };
+
+  // Roving focus between the toolbar's own buttons; Tab leaves the toolbar.
+  // Keys inside an open menu are the menu's own and never reach here.
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    const buttons = Array.from(listRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? []);
+    const buttons = Array.from(listRef.current?.querySelectorAll<HTMLButtonElement>("[data-roving]") ?? []);
     const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
-    if (at === -1) return;
-    const next = event.key === "ArrowRight" ? (at + 1) % buttons.length
-      : event.key === "ArrowLeft" ? (at - 1 + buttons.length) % buttons.length
-      : event.key === "Home" ? 0
-      : event.key === "End" ? buttons.length - 1
-      : -1;
+    const next = rovingIndex(event.key, at, buttons.length);
     if (next === -1) return;
     event.preventDefault();
-    setFocusAt(next);
+    setOpenMenu(null);
+    setFocusKey(buttons[next]!.dataset.roving!);
     buttons[next]!.focus();
   };
 
@@ -122,31 +183,77 @@ export default function EditorToolbar() {
       aria-label={t.toolbar.label}
       onKeyDown={onKeyDown}
     >
-      {TOOLS.map((tool, index) => {
-        const usable = state.editable && (tool.enabled?.(state) ?? true);
+      {shown.map((tool) => {
+        const usable = usableOf(tool);
         return (
           <button
             key={tool.key}
             type="button"
             className="btn editor-toolbar__button"
             data-tool={tool.key}
+            data-roving={tool.key}
             aria-label={tool.label}
             title={tool.label}
             aria-pressed={tool.pressed ? tool.pressed(state) : undefined}
             aria-disabled={usable ? undefined : "true"}
-            tabIndex={index === focusAt ? 0 : -1}
+            tabIndex={tool.key === stop ? 0 : -1}
             // Keeps the selection in the sheet; the command refocuses it.
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => {
-              setFocusAt(index);
-              // Checked again at the click: a sign-out stops writing without a render.
-              if (usable && editor && !editor.isDestroyed && editor.isEditable) tool.run(editor);
+              setFocusKey(tool.key);
+              run(tool);
             }}
           >
             <span aria-hidden="true">{tool.glyph}</span>
           </button>
         );
       })}
+      {more.length ? (
+        <ToolbarMenu
+          label={t.toolbar.more}
+          menuLabel={t.toolbar.moreMenu}
+          roving="more"
+          tabIndex={stop === "more" ? 0 : -1}
+          open={moreOpen}
+          onOpenChange={(open) => {
+            setFocusKey("more");
+            setOpenMenu(open ? "more" : null);
+          }}
+          items={more.map((tool) => ({
+            key: tool.key,
+            label: tool.label,
+            glyph: tool.glyph,
+            role: "menuitemcheckbox",
+            checked: tool.pressed ? tool.pressed(state) : false,
+            disabled: !usableOf(tool),
+          }))}
+          // Same command, same check as the button; it refocuses the sheet.
+          onSelect={(key) => {
+            const tool = more.find((candidate) => candidate.key === key);
+            return tool && run(tool) ? "close" : "keep";
+          }}
+        />
+      ) : null}
+      <ToolbarMenu
+        className="editor-menu--end"
+        label={t.toolbar.view}
+        menuLabel={t.toolbar.viewMenu}
+        groupLabel={t.toolbar.sheet}
+        roving="view"
+        tabIndex={stop === "view" ? 0 : -1}
+        open={openMenu === "view"}
+        onOpenChange={(open) => {
+          setFocusKey("view");
+          setOpenMenu(open ? "view" : null);
+        }}
+        items={THEMES.map(({ key, label }) => ({
+          key, label, role: "menuitemradio", checked: theme === key,
+        }))}
+        onSelect={(key) => {
+          setSheetTheme(key === "light" ? "light" : "dark");
+          return "close-return";
+        }}
+      />
     </div>
   );
 }

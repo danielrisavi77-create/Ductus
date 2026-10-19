@@ -9,10 +9,16 @@ const PAGES = ["/", "/rad", "/nastavnik/kolegiji", "/zadatak/aaaaaaaa-aaaa-4aaa-
 // white theme with its own tokens (D-123), so each sheet theme is checked on its own.
 const SCHEMES = ["light", "dark"] as const;
 
-/** Chooses the sheet theme the way a writer does, through the switch. */
+/** Chooses the sheet theme the way a writer does: the switch, on /rad the "Prikaz" menu (FE-D5). */
 async function chooseSheetTheme(page: Page, theme: (typeof SCHEMES)[number]) {
   if (theme === "dark") return;
-  await page.getByRole("button", { name: "Bijeli list" }).click();
+  const view = page.getByRole("toolbar", { name: "Oblikovanje teksta" }).getByRole("button", { name: "Prikaz" });
+  if (await view.isVisible()) {
+    await view.click();
+    await page.getByRole("menuitemradio", { name: "Bijeli list" }).click();
+  } else {
+    await page.getByRole("button", { name: "Bijeli list" }).click();
+  }
   await expect(page.locator("article.sheet")).toHaveAttribute("data-sheet-theme", "light");
 }
 

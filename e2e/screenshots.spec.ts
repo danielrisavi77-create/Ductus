@@ -15,6 +15,12 @@ const SCHEMES = ["light", "dark"] as const;
 
 async function chooseSheetTheme(page: Page, path: string, theme: (typeof SCHEMES)[number]) {
   if ((path !== "/rad" && path !== "/") || theme === "dark") return;
+  if (path === "/rad") {
+    // On /rad the theme is in the toolbar's "Prikaz" menu (FE-D5).
+    await page.getByRole("toolbar", { name: "Oblikovanje teksta" }).getByRole("button", { name: "Prikaz" }).click();
+    await page.getByRole("menuitemradio", { name: "Bijeli list" }).click();
+    return;
+  }
   await page.getByRole("button", { name: "Bijeli list" }).click();
 }
 // Wide (three columns), below 1240 px (structure under the sheet), below

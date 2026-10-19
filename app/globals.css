@@ -738,6 +738,106 @@ main:focus {
   cursor: not-allowed;
 }
 
+/* FE-D5: "Više ▾" and "Prikaz ▾" (editor-v11). With the toolbar on the page
+   the sheet theme is in "Prikaz", so the switch above the sheet steps aside. */
+.workspace__main:has(> .editor-toolbar) .sheet-theme {
+  display: none;
+}
+
+.editor-menu {
+  position: relative;
+}
+
+.editor-menu--end {
+  margin-left: auto;
+}
+
+.editor-toolbar .editor-menu__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-2);
+}
+
+.editor-toolbar .editor-menu__button[aria-expanded="true"] {
+  background: var(--selected);
+  color: var(--ink);
+}
+
+/* The caret keeps the button's size: no interface text under 12/13 px. */
+.editor-menu__caret {
+  color: var(--ink-3);
+}
+
+.editor-menu__list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 76;
+  display: flex;
+  flex-direction: column;
+  min-width: 190px;
+  padding: 5px;
+  background: var(--raised);
+  border: 1px solid var(--rule);
+  border-radius: 9px;
+  box-shadow: var(--lift);
+}
+
+.editor-menu--end .editor-menu__list {
+  left: auto;
+  right: 0;
+}
+
+.editor-menu__heading {
+  padding: 6px 9px 2px;
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.editor-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.editor-menu__item:hover,
+.editor-menu__item:focus-visible {
+  background: var(--selected);
+}
+
+.editor-menu__glyph {
+  min-width: 20px;
+  color: var(--ink-2);
+}
+
+/* Checked is said by a check mark and weight as well as by colour. */
+.editor-menu__item[aria-checked="true"] {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.editor-menu__check {
+  margin-left: auto;
+}
+
+.editor-menu__item[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* Heading list in the structure rail (F-8 step 1). */
 .outline {
   margin: 0;
@@ -787,8 +887,23 @@ main:focus {
    the rules above come after the phone block and would win over it. */
 @media (max-width: 640px) {
   .editor-toolbar .btn,
+  .editor-menu__item,
+  .editor-menu__heading,
   .outline__link {
     font-size: 13px;
+  }
+
+  /* A phone: both menus open towards the left, inside the page. */
+  .editor-menu__list {
+    left: auto;
+    right: 0;
+  }
+
+  /* Touch targets of at least 44 px on a phone (FE-D5). */
+  .editor-toolbar .btn,
+  .editor-menu__item {
+    min-height: 44px;
+    min-width: 44px;
   }
 }
 
