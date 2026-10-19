@@ -5,7 +5,11 @@
  *
  * One provider owns the editor, the Web Lock and the `LocalDocumentSaver`;
  * the sheet (`LocalEditor`) and the status bar (`useLocalStatus`) only render
- * what it holds. Nothing here touches the network.
+ * what it holds. The one request it starts is the live view's publisher
+ * (`src/client/live-publisher.ts`, B-LIVE step 4): for a signed-in person it
+ * sends the last state of the document, stops before the sign-out fence and
+ * starts again on "Ostani". It is not the evidence: the journal, the drain
+ * and the save state know nothing of it.
  *
  * - One writer per document: the tab holding the Web Lock journals; any other
  *   tab shows the blocked notice, stays read-only and reads the journal again
@@ -51,6 +55,7 @@ import { createEditorExtensions } from "@/editor/schema";
 import { StorableInput } from "@/editor/storable-input";
 import { storableDocument } from "@/editor/storable-text";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
+import { createLivePublisher, type LivePublisher } from "@/client/live-publisher";
 import { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
 import {
   LocalDocumentSaver, type SaverFailure, type SaverSnapshot,
@@ -155,6 +160,9 @@ export function LocalDocumentProvider({
   const readyRef = useRef(false);
   const dirtyRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The live view's publisher (B-LIVE step 4): only while a signed-in tab
+  // holds the lock and may write. It is not the evidence and never sets SYNCED.
+  const publisherRef = useRef<LivePublisher | null>(null);
 
   // Builds and proposes the candidate for what the editor holds now.
   const flushRef = useRef(() => {
@@ -175,6 +183,7 @@ export function LocalDocumentProvider({
     setInvalid(false);
     setWords(countWords(candidate.doc));
     void saver.propose(candidate.doc);
+    publisherRef.current?.offer(candidate.doc);
   });
 
   const editor = useEditor({
@@ -231,6 +240,8 @@ export function LocalDocumentProvider({
     // browser neither reads nor writes it. The lock is kept, so this tab
     // never opens the journal again; it goes with the page.
     const stop = () => {
+      // Nothing more is published for a session that has ended.
+      publisherRef.current?.stop();
       flush();
       disposed = true;
       readyRef.current = false;
@@ -323,10 +334,17 @@ export function LocalDocumentProvider({
         readyRef.current = true;
         editor.setEditable(true, false);
         setPhase("ready");
+        // Only a signed-in person publishes; the local demo journal never does.
+        const publisher = markTag === null ? null : createLivePublisher({ documentId, current: () => !ended() });
+        publisherRef.current = publisher;
+        if (publisher && result.document) publisher.offer(result.document);
+        publisher?.start();
         logoutRef.current = {
           quiesce: async () => {
             // Nothing typed after this point is accepted.
             flush();
+            // Publishing stops before the sign-out fence (BACKEND 4.12 t. 8).
+            publisher?.stop();
             readyRef.current = false;
             editor.setEditable(false, false);
             await saver.settled();
@@ -346,6 +364,7 @@ export function LocalDocumentProvider({
             if (disposed) return;
             readyRef.current = true;
             editor.setEditable(true, false);
+            publisher?.start();
           },
           clear: async () => {
             try {
@@ -362,6 +381,8 @@ export function LocalDocumentProvider({
           if (disposed) resolve();
         });
       } finally {
+        publisherRef.current?.stop();
+        publisherRef.current = null;
         logoutRef.current = null;
         await saver.settled();
         unsubscribe();
