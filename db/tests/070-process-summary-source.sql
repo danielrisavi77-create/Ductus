@@ -163,8 +163,19 @@ FROM (VALUES ('tomo'), ('petra')) AS a (name);
 -- Refusal looks like absence (items 11 to 13, 17, 18).
 SELECT is(pg_temp.source(a.name, 'doc-a'), pg_temp.expected('not_found'),
   a.name || ' gets the answer for a missing document on Ana''s')
-FROM (VALUES ('dora'), ('marko'), ('iva'), ('boris'), ('nina'), ('lea'), ('petra'), ('tomo'),
-             ('anon'), ('expired'), ('closed'), ('unknown')) AS a (name);
+FROM (VALUES ('dora'), ('marko'), ('iva'), ('boris'), ('nina'), ('lea'), ('petra'), ('tomo')) AS a (name);
+
+-- No open session is ZD401, like the comment and live-view reads (DAN-85,
+-- #458 review point 1): checked before the input, so it is the same answer
+-- for Ana's document, a missing one and an id that cannot be one.
+SELECT is(pg_temp.source(a.name, d.id), 'ZD401: not authenticated',
+  a.name || ' is not signed in for ' || d.label)
+FROM (VALUES ('anon'), ('expired'), ('closed'), ('unknown')) AS a (name)
+CROSS JOIN (VALUES ('doc-a', 'Ana''s document'), ('doc-nema', 'a missing document'),
+                   ('', 'an empty id')) AS d (id, label);
+SELECT is(pg_temp.ask('expired', $$ SELECT row(outcome, institution_id, evidence_package_id, segment_hashes)::text
+  FROM app.read_process_summary_source(NULL) $$), 'ZD401: not authenticated',
+  'an expired session is not signed in for a null id either');
 SELECT is(pg_temp.source('vesna', d.id), pg_temp.expected('not_found'),
   'Vesna gets not_found for ' || d.label)
 FROM (VALUES ('doc-b', 'a document of fak-b'), ('doc-nema', 'a missing document'), ('', 'an empty id'),

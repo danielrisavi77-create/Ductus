@@ -41,6 +41,12 @@ const tokens = {
   ana: randomBytes(32).toString("base64url"),
   dora: randomBytes(32).toString("base64url"),
 };
+// Ana's sessions that are no longer open, and a token that never was one (DAN-85).
+const notOpen = {
+  expired: randomBytes(32).toString("base64url"),
+  closed: randomBytes(32).toString("base64url"),
+  unknown: randomBytes(32).toString("base64url"),
+};
 const courseId = randomUUID();
 const assignmentId = randomUUID();
 const projectId = `project-${suffix}`;
@@ -181,6 +187,12 @@ async function insertFixture() {
       );
     }
     await client.query(
+      `INSERT INTO identity.session (token_hash, user_id, institution_id, created_at, expires_at, closed_at, close_reason)
+       VALUES (sha256(convert_to($1, 'UTF8')), $3, $4, now() - interval '2 hours', now() - interval '1 hour', NULL, NULL),
+              (sha256(convert_to($2, 'UTF8')), $3, $4, now() - interval '1 hour', now() + interval '1 hour', now(), 'logout')`,
+      [notOpen.expired, notOpen.closed, people.ana, institutionId],
+    );
+    await client.query(
       `INSERT INTO institution.institution_role (institution_id, user_id, role, confirmed_at)
        VALUES ($1, $2, 'teacher', now())`,
       [institutionId, people.vesna],
@@ -304,6 +316,10 @@ async function removeFixture() {
 }
 
 function ask(name: keyof typeof tokens) {
+  return askWith(tokens[name]);
+}
+
+function askWith(sessionToken: string) {
   const request = new Request(`${ORIGIN}/api/process-summary`, {
     method: "POST",
     headers: { origin: ORIGIN, "sec-fetch-site": "same-origin", "content-type": "application/json" },
@@ -314,7 +330,7 @@ function ask(name: keyof typeof tokens) {
     payloads: store,
     thresholds: { sessionBreakAboveMinutes: 30, pasteListedAboveCharacters: 200 },
     expectedOrigin: ORIGIN,
-    sessionToken: tokens[name],
+    sessionToken,
   });
 }
 
@@ -367,5 +383,17 @@ describe("process summary over the API and the read RPC (B-13, D-80 point 6)", (
     const dora = await ask("dora");
     expect(dora.status).toBe(404);
     expect(await dora.json()).toStrictEqual({ error: "not_found" });
+  });
+
+  // DAN-85 (#458 review point 1): like the comment and live-view reads.
+  it("tells Ana's expired or closed session and an unknown token to sign in again with 401, not 404", async () => {
+    for (const sessionToken of Object.values(notOpen)) {
+      const response = await askWith(sessionToken);
+      expect(response.status).toBe(401);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(await response.json()).toStrictEqual({ error: "unauthorized" });
+    }
+    // Her open session still reads the summary.
+    expect((await ask("ana")).status).toBe(200);
   });
 });
