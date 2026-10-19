@@ -180,6 +180,10 @@ export const hr = {
       pending: "Stvaranje kolegija…",
       // create_course returns the existing id for an identical repeat.
       created: "Kolegij je spreman.",
+      // FE-D10: the code is not shown until the app can create one (#476
+      // 6273758034); an invented code would be refused at /upis.
+      code: "Kod za upis",
+      codeSoon: "Kod se ovdje prikazuje čim ga aplikacija može stvoriti. Studenti upisuju kolegij tim kodom.",
       nameMissing: "Upiši naziv kolegija.",
       errors: {
         invalid: "Provjeri naziv, akademsku godinu i pravila kolegija.",
@@ -305,6 +309,11 @@ export const hr = {
     documentLabel: "Tekst rada",
     documentNotEditable: "Pisanje ovdje još nije moguće.",
     status: "Stanje rada",
+    // FE-D6 (design editor-v11): the status bar.
+    statusLoading: "Učitavanje rada…",
+    statusNoJournal: "Ovdje se ništa ne sprema.",
+    selectedWords: "označeno {words}",
+    pagesApprox: "≈ {pages} str.",
   },
   editor: {
     placeholder: "Počni pisati…",
