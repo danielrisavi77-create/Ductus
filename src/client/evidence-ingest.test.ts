@@ -148,6 +148,8 @@ describe("F-8 3c: every answer of 4.13 t. 4 as a drain outcome", () => {
     [401, { status: "unauthenticated" }, { status: "unauthenticated" }],
     [503, { status: "unavailable", stage: "signing" }, { status: "transport_error" }],
     [502, null, { status: "transport_error" }],
+    [408, { status: "timeout" }, { status: "transport_error" }],
+    [408, { status: "committed" }, { status: "invalid" }],
     [426, { status: "upgrade_required" }, { status: "invalid" }],
     [404, { status: "unauthenticated" }, { status: "invalid" }],
     [200, { status: "stale_base", currentRevision: 1 }, { status: "invalid" }],

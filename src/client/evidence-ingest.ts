@@ -208,6 +208,8 @@ export function commitOutcomeFrom(httpStatus: number, body: unknown): DrainOutco
   if (refusal && refusal[0] === httpStatus) return refusal[1];
   // The server, a proxy or the network did not finish: the same key is sent again.
   if (httpStatus >= 500) return { status: "transport_error" };
+  // The body did not arrive in time, so the route read no key and stored nothing.
+  if (httpStatus === 408 && status === "timeout") return { status: "transport_error" };
   // `upgrade_required` and anything unreadable: the commit may have landed,
   // so the row stays held and nothing is retried by itself.
   return { status: "invalid" };
