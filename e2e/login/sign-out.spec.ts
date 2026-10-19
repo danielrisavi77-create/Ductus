@@ -54,8 +54,9 @@ test("row 1: without a session /rad shows no one as signed in", async ({ page, c
 });
 
 test("row 1: sign-in leads to an editable sheet; sign-out of an unchanged document ends the session", async ({ page, context }) => {
-  await page.goto("/");
-  await page.getByRole("link", { name: t.auth.signIn }).click();
+  // The home page's way in is the sign-in screen (FE-H1, FE-D3); start at
+  // the login route its AAI@EduHr button links to.
+  await page.goto(`/api/auth/login?returnTo=${encodeURIComponent("/rad")}`);
   await page.getByRole("button", { name: "Demo studentica" }).click();
   await page.waitForURL("http://localhost:3000/rad");
   await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
