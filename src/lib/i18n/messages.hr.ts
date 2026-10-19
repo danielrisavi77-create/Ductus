@@ -93,6 +93,66 @@ export const hr = {
       submitBody:
         "Student predaje rad i dobiva potvrdu predaje. Sažetak nastanka rada isti je za oba pogleda i nije presuda o autorstvu.",
     },
+    // FE-H2a (#476): ten announcements of the full flow. Steps the app does not
+    // have yet carry "Uskoro" and stay neutral, never a promise (PRODUCT §5).
+    flow: {
+      link: "Tijek rada",
+      title: "Cijeli tijek rada u deset koraka.",
+      lead: "Od zadatka do ustanove. Koraci s oznakom „Uskoro” su u pripremi i još nisu dio aplikacije.",
+      soon: "Uskoro",
+      steps: {
+        assignment: {
+          name: "Zadatak",
+          title: "Student zna što se od njega očekuje.",
+          body: "Nastavnik objavi zadatak s rokom, oblikom, opsegom i pravilima kolegija. Student ih vidi na jednom mjestu prije prve rečenice.",
+        },
+        writing: {
+          name: "Pisanje",
+          title: "Nacrt postaje akademski rad.",
+          body: "Student piše u uređivaču zadatka, s naslovima i navodima. Nastavnik vidi rad uživo dok nastaje, a student to zna unaprijed.",
+        },
+        sources: {
+          name: "Literatura",
+          title: "Od navoda do izvora.",
+          body: "Navod u tekstu vezan je uz izvor u popisu literature, u stilu koji propisuje fakultet.",
+        },
+        mentoring: {
+          name: "Mentorstvo",
+          title: "Komentar uz točan odlomak.",
+          body: "Nastavnik ostavlja komentar uz odlomak na koji se odnosi. Student ga vidi na istom mjestu.",
+        },
+        reply: {
+          name: "Odgovor",
+          title: "Student odgovara na komentar.",
+          body: "Odgovor stoji uz komentar, pa razgovor o odlomku ostaje na jednom mjestu. Kako će doraditi tekst, odlučuje student.",
+        },
+        versionReview: {
+          name: "Pregled verzije",
+          title: "Pregled vezan uz određenu verziju.",
+          body: "Nastavnik označi koju je verziju rada pregledao, pa oboje znaju o kojem se tekstu razgovaralo.",
+        },
+        laterChange: {
+          name: "Kasnija promjena",
+          title: "Promjena nakon pregleda traži novi pregled.",
+          body: "Kad se pregledani odlomak kasnije promijeni, nastavnik vidi da ga može ponovno pregledati.",
+        },
+        submission: {
+          name: "Predaja",
+          title: "Student zna što predaje.",
+          body: "Prije predaje student vidi točno ono što predaje, a nakon predaje dobiva potvrdu. Sažetak nastanka rada isti je za studenta i nastavnika.",
+        },
+        defence: {
+          name: "Obrana",
+          title: "Za obranu točno određena verzija.",
+          body: "Oni koji sudjeluju u obrani rada dobivaju upravo predanu verziju.",
+        },
+        institution: {
+          name: "Ustanova",
+          title: "Okvir i uloge, bez čitanja radova.",
+          body: "Ustanova postavlja pravila i uloge za svoje kolegije. Sadržaj radova pritom ne čita.",
+        },
+      },
+    },
     closingTitle: `${APP_NAME} pokazuje kako je rad nastao.`,
     closingAccent: "Zaključak donosi čovjek.",
     footerNote: "Prostor za akademsko pisanje.",

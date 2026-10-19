@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { FLOW_STEPS } from "@/components/landing/flowSteps";
+
 import { messagesHr } from "./messages.hr";
 
 function leaves(node: unknown, path = "landing"): [string, string][] {
@@ -52,5 +54,33 @@ describe("landing copy", () => {
     expect(all).toMatch(/reproduc|reprodukcij/);
     // The summary is the same for both roles (PRODUCT §5, 5).
     expect(messagesHr.landing.forWhomLead).toMatch(/isti je za studenta i nastavnika/);
+  });
+});
+
+describe("landing flow announcements (FE-H2a)", () => {
+  const steps = messagesHr.landing.flow.steps;
+
+  it("announces ten steps, each once, each with a name, a title and a body", () => {
+    expect(FLOW_STEPS).toHaveLength(10);
+    expect(new Set(FLOW_STEPS.map(({ key }) => key)).size).toBe(10);
+    expect(Object.keys(steps).sort()).toEqual(FLOW_STEPS.map(({ key }) => key).sort());
+    for (const { key } of FLOW_STEPS) {
+      expect(Object.keys(steps[key]).sort(), key).toEqual(["body", "name", "title"]);
+    }
+  });
+
+  it("marks exactly the steps the app does not have yet as coming (owner order, #476)", () => {
+    expect(FLOW_STEPS.filter(({ soon }) => soon).map(({ key }) => key)).toEqual([
+      "sources",
+      "versionReview",
+      "laterChange",
+      "defence",
+      "institution",
+    ]);
+    expect(messagesHr.landing.flow.soon).toBe("Uskoro");
+  });
+
+  it("names the live view in the writing step (D-142)", () => {
+    expect(steps.writing.body).toMatch(/uživo/);
   });
 });
