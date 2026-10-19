@@ -1,7 +1,7 @@
 import { DUCTUS_PROTOCOL_VERSION } from "@/domain/evidence/commit-envelope";
 import { sessionPrincipal } from "@/server/auth/principal";
 import type { WithActor } from "@/server/db/with-actor";
-import { checkMutationRequest, readBodyWithLimit } from "@/server/http/mutation-request";
+import { checkMutationRequest, declaredLengthRefusal, readBodyWithLimit } from "@/server/http/mutation-request";
 
 /**
  * What both evidence routes do before and while reading a body (BACKEND 4.13
@@ -10,7 +10,6 @@ import { checkMutationRequest, readBodyWithLimit } from "@/server/http/mutation-
  */
 
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
-const DECIMAL = /^(0|[1-9][0-9]{0,15})$/;
 
 export type Log = (message: string, ...codes: string[]) => void;
 
@@ -59,9 +58,7 @@ export async function readGuardedBody(
   }
   if (sessionToken === undefined || !TOKEN.test(sessionToken)) return refuse(reply(401, { status: "unauthenticated" }));
   // A declared length that readBodyWithLimit refuses unread needs no database either.
-  const declared = request.headers.get("content-length");
-  const refusedUnread = declared !== null && !(DECIMAL.test(declared) && Number(declared) <= limits.maxBytes);
-  if (limits.liveSession !== undefined && !refusedUnread) {
+  if (limits.liveSession !== undefined && declaredLengthRefusal(request, limits.maxBytes) === null) {
     const principal = await sessionPrincipal(sessionToken, limits.liveSession);
     if (principal.kind === "signed-out") return refuse(reply(401, { status: "unauthenticated" }));
     if (principal.kind !== "signed-in") return refuse(unavailable("context"));

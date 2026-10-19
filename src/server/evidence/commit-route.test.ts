@@ -112,6 +112,9 @@ describe("POST /api/evidence/commit: before the body", () => {
     ["Ductus-Protocol 2", { "ductus-protocol": "2" }, "POST", 426, "upgrade_required"],
     ["text/plain", { "content-type": "text/plain" }, "POST", 415, "unsupported_media_type"],
     ["a declared length over the limit (#155 item 12)", { "content-length": String(MAX_COMMIT_REQUEST_BYTES + 1) }, "POST", 413, "too_large"],
+    ["a declared length that is not a number", { "content-length": "abc" }, "POST", 400, "bad_request"],
+    ["a negative declared length", { "content-length": "-1" }, "POST", 400, "bad_request"],
+    ["a declared length with a leading zero", { "content-length": "01" }, "POST", 400, "bad_request"],
   ] as const)("refuses %s without reading the body", async (_, headers, method, status, code) => {
     const { deps, withActor } = setup();
     const { request, state } = untouchedBody(headers, method);
