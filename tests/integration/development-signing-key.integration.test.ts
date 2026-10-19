@@ -3,7 +3,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, rmdir, symlink, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
@@ -207,14 +207,21 @@ describe("persistent development signing key", () => {
     await symlink(fileURLToPath(ROOT), link, process.platform === "win32" ? "junction" : "dir");
     const fresh = `it-seed-${suffix}`;
     try {
-      const refused = await run(process.execPath, [fileURLToPath(SCRIPT), "--institution", own.slug], {
-        env: env({ DUCTUS_DEV_SIGNING_KEY_FILE: join(link, fresh, "seed") }),
-      }).then(
-        () => null,
-        (error: { stderr: string }) => error.stderr,
-      );
-      expect(refused).toContain("signing_key_in_repository");
-      expect(existsSync(fileURLToPath(new URL(fresh, ROOT)))).toBe(false);
+      // Also behind a ".." after a directory that does not exist (review465b):
+      // written by hand, because join() would fold the ".." itself.
+      const behindDotDot = [dir, "not-yet", "..", "repo-link", fresh, "seed"].join(sep);
+      for (const path of [join(link, fresh, "seed"), behindDotDot]) {
+        const refused = await run(process.execPath, [fileURLToPath(SCRIPT), "--institution", own.slug], {
+          env: env({ DUCTUS_DEV_SIGNING_KEY_FILE: path }),
+        }).then(
+          () => null,
+          (error: { stderr: string }) => error.stderr,
+        );
+        expect(refused).toContain("signing_key_in_repository");
+        // Refused before mkdir: no directory in the repository, none beside it.
+        expect(existsSync(fileURLToPath(new URL(fresh, ROOT)))).toBe(false);
+        expect(existsSync(join(dir, "not-yet"))).toBe(false);
+      }
     } finally {
       // Remove the link itself before the temporary directory is removed, so
       // no recursive removal can ever walk into the repository behind it.

@@ -22,6 +22,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   DEV_SIGNING_KEY_FILE,
   PersistentDevelopmentEd25519SigningKeyProvider,
+  developmentSeedPath,
 } from "../../src/adapters/crypto/persistent-development-ed25519-signer.ts";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -55,8 +56,11 @@ function runPsql(args) {
 
 export async function main(env = process.env, argv = process.argv.slice(2)) {
   if (env.NODE_ENV === "production") throw new Error("the development signing key is refused in production");
-  const at = argv.indexOf("--institution");
-  const slug = at === -1 ? "demo-fakultet" : argv[at + 1];
+  // Nothing, or exactly `--institution <slug>`: any other argument is refused, never ignored.
+  if (!(argv.length === 0 || (argv.length === 2 && argv[0] === "--institution"))) {
+    throw new Error("the only argument is --institution <slug>");
+  }
+  const slug = argv.length === 0 ? "demo-fakultet" : argv[1];
   if (typeof slug !== "string" || slug.length > 64 || !SLUG.test(slug)) throw new Error("--institution needs a slug");
 
   // The signer judges the path (set, absolute, outside the repository) before
@@ -65,7 +69,8 @@ export async function main(env = process.env, argv = process.argv.slice(2)) {
   const fault = await signer.publicVerificationKey().then(() => null, (error) => error);
   if (fault !== null && fault.code !== "signing_key_missing") throw fault;
   if (fault !== null) {
-    const path = env[DEV_SIGNING_KEY_FILE];
+    // The one path the signer judged, ".." folded, so mkdir makes nothing it did not judge.
+    const path = developmentSeedPath(env[DEV_SIGNING_KEY_FILE]);
     await mkdir(dirname(path), { recursive: true, mode: 0o700 });
     // Judged again where the directory now exists, before a byte is written.
     const again = await signer.publicVerificationKey().then(() => null, (error) => error);

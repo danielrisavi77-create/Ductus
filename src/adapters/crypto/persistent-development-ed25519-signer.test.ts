@@ -1,7 +1,7 @@
 import { createHash, createPublicKey, verify as nodeVerify } from "node:crypto";
 import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -104,7 +104,10 @@ describe("persistent development signer", () => {
   it("judges a seed under a link to the repository by where it leads, also before its directory exists", async () => {
     // A directory link; a junction on Windows, which needs no privilege.
     await symlink(repo, file("repo-link"), process.platform === "win32" ? "junction" : "dir");
-    for (const path of [file("repo-link/not-yet/seed"), file("repo-link/not-yet/deeper/seed"), file("repo-link/seed")]) {
+    // ".." after a directory that does not exist is folded first (review465b);
+    // written by hand, because join() would fold it itself.
+    const behindDotDot = [dir, "not-yet", "..", "repo-link", "seed-dir", "seed"].join(sep);
+    for (const path of [file("repo-link/not-yet/seed"), file("repo-link/not-yet/deeper/seed"), file("repo-link/seed"), behindDotDot]) {
       expect(await fault(signer(path).sign(MESSAGE))).toBe("signing_key_in_repository");
     }
     // A missing directory outside the repository is only missing.

@@ -30,7 +30,7 @@ const credentials = {
 const run = promisify(execFile);
 const SCRIPT = fileURLToPath(new URL("../../db/local/evidence-storage-domain.mjs", import.meta.url));
 const suffix = randomBytes(5).toString("hex");
-const [own, other] = ["own", "other"].map((name) => ({ id: randomUUID(), slug: `it-${name}-${suffix}` }));
+const [own, other, regional] = ["own", "other", "regional"].map((name) => ({ id: randomUUID(), slug: `it-${name}-${suffix}` }));
 const bucketOf = (slug: string) => `ductus-evidence-${slug}`;
 const admin = new pg.Pool({ connectionString: SAFE_ADMIN_URL, max: 1 });
 const written: string[][] = [];
@@ -47,8 +47,8 @@ function env(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
 }
 
 /** The script's stdout, or its stderr when it refuses. */
-async function provision(slug: string, extra: Record<string, string> = {}) {
-  return run(process.execPath, [SCRIPT, "--institution", slug], { env: env(extra) }).then(
+async function provision(slug: string, extra: Record<string, string> = {}, args = ["--institution", slug]) {
+  return run(process.execPath, [SCRIPT, ...args], { env: env(extra) }).then(
     ({ stdout }) => ({ ok: true as const, out: stdout.trim() }),
     (error: { stderr: string }) => ({ ok: false as const, out: error.stderr }),
   );
@@ -73,14 +73,14 @@ async function s3Delete(path: string[]) {
 }
 
 beforeAll(async () => {
-  for (const p of [own, other]) {
+  for (const p of [own, other, regional]) {
     await admin.query("INSERT INTO identity.institution (id, slug) VALUES ($1, $2)", [p.id, p.slug]);
   }
 });
 
 afterAll(async () => {
   for (const path of written.reverse()) await s3Delete(path);
-  for (const p of [own, other]) {
+  for (const p of [own, other, regional]) {
     await s3Delete([bucketOf(p.slug), STORAGE_IDENTITY_KEY]);
     await s3Delete([bucketOf(p.slug)]);
     await admin.query("DELETE FROM identity.institution WHERE id = $1", [p.id]);
@@ -134,6 +134,24 @@ describe("local evidence storage domain", () => {
     const refused = await provision(other.slug);
     expect(refused).toEqual({ ok: false, out: expect.stringContaining("labelled for another institution") });
     expect((await s3("GET", [bucket, STORAGE_IDENTITY_KEY])).text).toBe(foreign);
+  });
+
+  it("never accepts a label of this institution for another region", async () => {
+    const bucket = bucketOf(regional.slug);
+    expect([200, 409]).toContain((await s3("PUT", [bucket])).status);
+    const elsewhere = JSON.stringify({ institutionId: regional.id, region: "eu-central-1" });
+    expect((await s3("PUT", [bucket, STORAGE_IDENTITY_KEY], new TextEncoder().encode(elsewhere))).status).toBe(200);
+
+    expect(await provision(regional.slug)).toEqual({ ok: false, out: expect.stringContaining("another institution or region") });
+    expect((await s3("GET", [bucket, STORAGE_IDENTITY_KEY])).text).toBe(elsewhere);
+  });
+
+  it.each([
+    ["--institution=<slug>", [`--institution=${own.slug}`]],
+    ["an unknown argument", ["--institution", own.slug, "--force"]],
+    ["--institution without a slug", ["--institution"]],
+  ])("refuses %s instead of reading another institution", async (_, args) => {
+    expect(await provision(own.slug, {}, args)).toEqual({ ok: false, out: expect.stringContaining("--institution") });
   });
 
   it.each([

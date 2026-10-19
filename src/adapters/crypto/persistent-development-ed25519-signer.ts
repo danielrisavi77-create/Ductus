@@ -8,7 +8,7 @@ import {
 } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, open, realpath } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import type {
   PublicVerificationKey,
@@ -56,7 +56,12 @@ export function developmentKeyIdentity(spkiDer: Uint8Array): { keyId: string; ke
   return { keyId: `dev-ed25519-${fingerprint.slice(0, 16)}`, keyVersion: `spki-sha256-${fingerprint}` };
 }
 
-type LoadedKey = { privateKey: KeyObject; publicKey: KeyObject; keyId: string; keyVersion: string; spki: Buffer };
+/** The seed path as both the signer and the db/local script use it: absolute, with ".." folded. */
+export function developmentSeedPath(path: string): string {
+  return resolve(path);
+}
+
+type LoadedKey ={ privateKey: KeyObject; publicKey: KeyObject; keyId: string; keyVersion: string; spki: Buffer };
 
 function fail(code: DevelopmentSigningKeyFault): never {
   throw new DevelopmentSigningKeyError(code);
@@ -117,9 +122,13 @@ export class PersistentDevelopmentEd25519SigningKeyProvider implements SigningKe
   }
 
   private async load(): Promise<LoadedKey> {
-    const path = this.env[DEV_SIGNING_KEY_FILE];
-    if (path === undefined || path === "") fail("signing_key_not_configured");
-    if (!isAbsolute(path)) fail("signing_key_path_not_absolute");
+    const named = this.env[DEV_SIGNING_KEY_FILE];
+    if (named === undefined || named === "") fail("signing_key_not_configured");
+    if (!isAbsolute(named)) fail("signing_key_path_not_absolute");
+    // ".." is folded first, as the db/local script folds it before mkdir: a
+    // ".." after a directory that does not exist yet is then judged by where
+    // the rest of the path leads, links included, before anything is made.
+    const path = developmentSeedPath(named);
     const root = await realLocation(this.repositoryRoot);
     if (isInside(root, await realLocation(dirname(path)))) fail("signing_key_in_repository");
     const linkStat = await lstat(path).catch(() => fail("signing_key_missing"));
