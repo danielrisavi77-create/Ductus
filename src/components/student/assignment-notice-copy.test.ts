@@ -30,10 +30,14 @@ describe("S3 notice text (D-142, D-143)", () => {
   it("names the key and how long it is held as not recorded, and no measure from time", () => {
     expect(s.notRecorded.inputs).toContain("tipka");
     expect(s.notRecorded.inputs).toContain("držana");
-    expect(s.notRecorded.inputs).toContain("nikad se ne računaju brzina, pauze, ritam ni bilo kakva mjera");
+    expect(s.notRecorded.inputs).toContain("nikad se ne računaju brzina, ritam ni bilo kakva mjera");
+    // D-63: the replay skips long pauses without their length, so pauses are not "never computed".
+    expect(s.notRecorded.inputs).not.toContain("pauze");
+    expect(s.notRecorded.inputs).toContain("preskače duge stanke i ne navodi koliko su trajale");
   });
 
   it("announces every change character by character, only for the live view and the replay", () => {
+    expect(s.recorded.live.startsWith("U ovom zadatku bilježit će se")).toBe(true);
     expect(s.recorded.live).toContain("znak po znak");
     expect(s.recorded.live).toContain("prikazu uživo");
     expect(s.recorded.live).toContain("reprodukciji");
@@ -43,17 +47,20 @@ describe("S3 notice text (D-142, D-143)", () => {
     expect(s.teacherHeading).toBe("Što vidi nastavnik (mentor)");
     expect(s.teacher.state).toContain("uživo");
     expect(s.teacher.state).toContain("obrisati");
+    // Live does not reach the mentor while the student is offline.
+    expect(s.teacher.state).toContain("bez mreže vidjet će tek kad se veza vrati");
     expect(s.checkbox).toContain("što vidi nastavnik (mentor)");
   });
 
   it("gives the replay to the mentor and the same replay to the student (D-154)", () => {
-    expect(s.teacher.replay.startsWith("Nastavnik (mentor) zadatka")).toBe(true);
+    expect(s.teacher.replay.startsWith("Nastavnik (mentor) zadatka moći će")).toBe(true);
     expect(s.teacher.replay).toContain("znak po znak");
-    expect(s.teacher.replay).toContain("Istu reprodukciju svog rada vidiš i ti.");
+    expect(s.teacher.replay).toContain("Istu reprodukciju svog rada vidjet ćeš i ti.");
     for (const text of notice()) expect(text).not.toMatch(/reprodukciju ne vidiš|Samo nastavnik/);
   });
 
   it("states the purpose and never grading or ranking", () => {
+    expect(s.teacher.purpose).toContain("služit će");
     expect(s.teacher.purpose).toContain("nikad ocjeni");
     expect(s.teacher.purpose).toContain("rangiranju");
   });

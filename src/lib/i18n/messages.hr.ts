@@ -250,6 +250,8 @@ export const hr = {
   // mentor, i.e. the teacher of the assignment, and the same replay for the student)
   // and PRODUCT §5 rules 4 and 7; D-24 and D-81 for the 30-second steps.
   // AssignmentNotice renders recorded, notRecorded and teacher in key order.
+  // Live view and replay are not built yet, so the notice says what will happen
+  // in this assignment; D-63 for the skipped long pauses of the replay.
   student: {
     title: "Zadatak",
     signedOut: "Prijavi se da vidiš zadatak.",
@@ -282,22 +284,22 @@ export const hr = {
     recordedHeading: "Što se bilježi",
     recorded: {
       steps: "Promjene teksta, sažete u odsječke od najviše 30 sekundi. Odsječak nosi jedno vrijeme, zaokruženo na minutu.",
-      live: "Svaka promjena teksta, znak po znak, s redoslijedom i vremenom: unos i brisanje, lijepljenje, uvoz, prijenos iz AI pomoćnika i izmjene nastavnika. To služi samo prikazu uživo i reprodukciji.",
+      live: "U ovom zadatku bilježit će se svaka promjena teksta, znak po znak, s redoslijedom i vremenom: unos i brisanje, lijepljenje, uvoz, prijenos iz AI pomoćnika i izmjene nastavnika. To će služiti samo prikazu uživo i reprodukciji.",
       chain: "Svaki korak spremanja dobiva hash i ulazi u lanac, pa se svaka kasnija izmjena zapisa vidi.",
       versions: "Verzije, predaja i napomene koje dodaš.",
     },
     notRecordedHeading: "Što se ne bilježi",
     notRecorded: {
-      inputs: "Koja je tipka pritisnuta i koliko je držana. Iz vremena promjena nikad se ne računaju brzina, pauze, ritam ni bilo kakva mjera.",
+      inputs: "Koja je tipka pritisnuta i koliko je držana. Iz vremena promjena nikad se ne računaju brzina, ritam ni bilo kakva mjera. Reprodukcija preskače duge stanke i ne navodi koliko su trajale.",
       outside: "Druge aplikacije i kartice preglednika, kamera, mikrofon i zaslon.",
       device: "IP adresa i podaci o uređaju.",
     },
     teacherHeading: "Što vidi nastavnik (mentor)",
     teacher: {
-      state: "Od prvog dana tvoj rad uživo, dok nastaje, pa i tekst koji ćeš kasnije možda obrisati.",
+      state: "Od prvog dana pratit će tvoj rad uživo, dok nastaje, pa i tekst koji ćeš kasnije možda obrisati. Ono što napišeš bez mreže vidjet će tek kad se veza vrati.",
       // D-154, PRODUCT §5 rules 5 and 7: the student sees the same replay of their own work.
-      replay: "Nastavnik (mentor) zadatka može reproducirati nastanak rada znak po znak, pa i obrisani tekst. Istu reprodukciju svog rada vidiš i ti.",
-      purpose: "Prikaz uživo i reprodukcija služe praćenju nastanka rada i komentarima, nikad ocjeni ni rangiranju.",
+      replay: "Nastavnik (mentor) zadatka moći će reproducirati nastanak rada znak po znak, pa i obrisani tekst. Istu reprodukciju svog rada vidjet ćeš i ti.",
+      purpose: "Prikaz uživo i reprodukcija služit će praćenju nastanka rada i komentarima, nikad ocjeni ni rangiranju.",
       history: "Povijest verzija i sažetak procesa, isti kao što ga vidiš ti.",
       noVerdict: "Ductus ne procjenjuje autorstvo ni korištenje AI-ja.",
     },
