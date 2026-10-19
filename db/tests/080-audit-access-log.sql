@@ -103,16 +103,17 @@ SELECT is(pg_temp.as_owner('TRUNCATE audit.access_log'),
 SELECT is(pg_temp.rows(), 2::bigint, 'both rows are still there');
 
 -- Checks: one institution per row, a reader who is not the owner, closed lists
--- and a time to the minute.
+-- and a time to the minute. The foreign-key rows name their own work, so no
+-- other constraint answers for them.
 SELECT is(left(pg_temp.as_owner(pg_temp.row_sql('{fak_a}', '{z1}', '{ana}', '{ana}')), 6),
   '23514:', 'the owning student is never a reader of her own work');
 SELECT is(left(pg_temp.as_owner(pg_temp.row_sql('{fak_a}', '{z1}', '{ana}', '{petra}')), 6),
   '23503:', 'a reader of another institution cannot be written');
-SELECT is(left(pg_temp.as_owner(pg_temp.row_sql('{fak_a}', '{z1}', '{tomo}', '{vesna}')), 6),
+SELECT is(left(pg_temp.as_owner(pg_temp.row_sql('{fak_a}', '{z1}', '{tomo}', '{vesna}', p_document => 'doc-fk')), 6),
   '23503:', 'an owner of another institution cannot be written');
-SELECT is(left(pg_temp.as_owner(pg_temp.row_sql('{fak_a}', '{z3}', '{ana}', '{vesna}')), 6),
+SELECT is(left(pg_temp.as_owner(pg_temp.row_sql('{fak_a}', '{z3}', '{ana}', '{vesna}', p_document => 'doc-fk')), 6),
   '23503:', 'an assignment of another institution cannot be written');
-SELECT is(left(pg_temp.as_owner(pg_temp.row_sql('{fak_a}', '{nobody}', '{ana}', '{vesna}')), 6),
+SELECT is(left(pg_temp.as_owner(pg_temp.row_sql('{fak_a}', '{nobody}', '{ana}', '{vesna}', p_document => 'doc-fk')), 6),
   '23503:', 'an assignment that does not exist cannot be written');
 SELECT is(left(pg_temp.as_owner(pg_temp.row_sql('{fak_a}', '{z1}', '{ana}', '{vesna}', p_role => 'student')), 6),
   '23514:', 'a reader role outside the list is refused');
