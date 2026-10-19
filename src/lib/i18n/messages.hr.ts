@@ -519,6 +519,22 @@ export const hr = {
     signedOutElsewhere:
       "Prijava s kojom je ova kartica otvorena više ne vrijedi: u drugoj kartici provedena je odjava ili nova prijava. Ova kartica više ništa ne prikazuje ni ne sprema. Ponovno učitaj stranicu.",
   },
+  // FE-D3 (DAN-222): /prijava, Prijava v5 of the design handoff without the
+  // e-mail sign-in and the "Što Ductura čuva" panel (D-09, #476). AAI@EduHr is
+  // the one way in; nothing here describes what is recorded (the notice of
+  // each assignment does, PRODUCT §5 rule 6).
+  prijava: {
+    title: "Prijava",
+    titleAccent: "u radni prostor",
+    lead: `${APP_NAME} je prostor u kojem pišeš seminarske, završne i diplomske radove, a mentor ih prati od prve rečenice do predaje.`,
+    motto: `${APP_NAME} ne piše umjesto tebe. Pomaže ti da napišeš svoj rad i pokažeš kako je nastao.`,
+    cardTitle: "Za studente i nastavnike",
+    cardBody: "Prijavi se korisničkim računom AAI@EduHr, istim kojim se prijavljuješ u Studomat i Merlin.",
+    button: "Prijava sustavom AAI@EduHr",
+    passwordNote: "Lozinku upisuješ samo kod AAI@EduHr.",
+    codeNote: "Kod zadatka od nastavnika upisuješ nakon prijave.",
+    help: "Ako prijava ne uspije, javi se koordinatoru na svojoj ustanovi.",
+  },
 } as const;
 
 type Widen<T> = { readonly [K in keyof T]: T[K] extends string ? string : Widen<T[K]> };
