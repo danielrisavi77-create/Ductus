@@ -477,7 +477,8 @@
   }
 
   /* Phone: no interface text under 13 px (review #156, 5; e2e/shell.spec.ts). */
-  .eyebrow {
+  .eyebrow,
+  .soon {
     font-size: 13px;
   }
 
