@@ -281,11 +281,14 @@ ALTER TABLE evidence.receipt DISABLE TRIGGER evidence_receipt_no_truncate;
 ALTER TABLE evidence.submission_request DISABLE TRIGGER evidence_submission_request_no_truncate;
 ALTER TABLE evidence.submission DISABLE TRIGGER evidence_submission_no_truncate;
 ALTER TABLE evidence.document_checkpoint DISABLE TRIGGER evidence_checkpoint_no_truncate;
+-- The access log (080) references the assignment too and is append-only.
+ALTER TABLE audit.access_log DISABLE TRIGGER access_log_no_truncate;
 SELECT is(
   pg_temp.try_rolled_back('TRUNCATE institution.assignment_version, institution.assignment CASCADE'),
   'ZT001: went through',
   'with the TRUNCATE trigger disabled the same statement empties the versions'
 );
+ALTER TABLE audit.access_log ENABLE TRIGGER access_log_no_truncate;
 ALTER TABLE evidence.document_checkpoint ENABLE TRIGGER evidence_checkpoint_no_truncate;
 ALTER TABLE evidence.submission ENABLE TRIGGER evidence_submission_no_truncate;
 ALTER TABLE evidence.submission_request ENABLE TRIGGER evidence_submission_request_no_truncate;
