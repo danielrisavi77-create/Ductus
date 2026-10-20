@@ -35,6 +35,7 @@ export type ListOutcome =
   | { kind: "signedOut" | "forbidden" | "unavailable" };
 
 export type ReplyOutcome = "ok" | "signedOut" | "forbidden" | "conflict" | "invalid" | "unavailable";
+export type CreateOutcome = "ok" | "signedOut" | "forbidden" | "invalid" | "unavailable";
 
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const ROLES: ReadonlySet<string> = new Set(["teacher", "student"]);
@@ -76,7 +77,9 @@ export function threadsFromList(value: unknown): CommentThread[] | null {
   return threads.map((t, index) => ({ ...t, number: index + 1 }));
 }
 
-async function post(action: "list" | "reply", input: Record<string, string>): Promise<Response | null> {
+async function post(
+  action: "list" | "reply" | "create" | "resolve" | "reopen", input: Record<string, unknown>,
+): Promise<Response | null> {
   try {
     return await fetch(`/api/comments/${action}`, {
       method: "POST",
@@ -114,6 +117,40 @@ export async function replyComment(
   const response = await post("reply", { threadId, body: body.normalize("NFC") });
   switch (response?.status) {
     case 200: return "ok";
+    case 401: return "signedOut";
+    case 403: return "forbidden";
+    case 409: return "conflict";
+    case 422: return "invalid";
+    default: return "unavailable";
+  }
+}
+
+/**
+ * Opens a thread on a passage (teacher only; DAN-86 step 2c). The anchor is
+ * made from the text the teacher sees; the route takes nothing else.
+ */
+export async function createComment(
+  documentId: string, body: string, anchor: TextAnchor, current: () => boolean = () => true,
+): Promise<CreateOutcome> {
+  if (!current()) return "signedOut";
+  const response = await post("create", { documentId, body: body.normalize("NFC"), anchor });
+  switch (response?.status) {
+    case 200: return "ok";
+    case 401: return "signedOut";
+    case 403: return "forbidden";
+    case 422: return "invalid";
+    default: return "unavailable";
+  }
+}
+
+/** Marks a thread resolved or opens it again (teacher only); the route answers 204. */
+export async function changeThreadState(
+  threadId: string, action: "resolve" | "reopen", current: () => boolean = () => true,
+): Promise<ReplyOutcome> {
+  if (!current()) return "signedOut";
+  const response = await post(action, { threadId });
+  switch (response?.status) {
+    case 204: return "ok";
     case 401: return "signedOut";
     case 403: return "forbidden";
     case 409: return "conflict";

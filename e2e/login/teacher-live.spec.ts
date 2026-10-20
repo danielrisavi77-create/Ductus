@@ -3,9 +3,13 @@ import { createHash } from "node:crypto";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page, type Route } from "@playwright/test";
 
+import { createTextAnchor } from "../../src/domain/collaboration";
+import type { NodeId } from "../../src/domain/document";
 import { REVISION_ZERO_JCS } from "../../src/domain/document/revision-zero";
 import { canonicalizeJcs } from "../../src/domain/forensics/jcs";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
+import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
+import { cleanUp, post, seed } from "./comment-seed";
 import { signIn } from "./support";
 
 // DAN-86 step 2b: the teacher's live view of a work. The live route (GET
@@ -112,4 +116,106 @@ test("nothing published yet is said as such", async ({ page }) => {
   await expect(page.getByText(t.empty)).toBeVisible();
   // The note speaks about a shown text; with none it would contradict the line above.
   await expect(page.getByText(t.note)).toHaveCount(0);
+});
+
+test.describe("comments from the live view", () => {
+  test.afterEach(cleanUp);
+
+  test("a comment listed before any text arrives is not called lost", async ({ page }) => {
+    const c = messagesHr.comments;
+    const TEXT = "Gradske knjižnice su mjesto susreta i učenja.";
+    const start = TEXT.indexOf("mjesto");
+    const anchor = createTextAnchor({
+      nodeId: "5c4d3e2f-1a0b-4c9d-8e7f-6a5b4c3d2e1f" as NodeId, nodeText: TEXT, start, end: start + "mjesto".length,
+    });
+    await signIn(page, "/", "Demo nastavnik");
+    await seed();
+    expect((await post(page, "create", { documentId: LOCAL_DEMO_DOCUMENT_ID, body: "Dodaj izvor.", anchor })).status()).toBe(200);
+    // The text never arrives: the connection keeps retrying while the list is already here.
+    await page.route(`**/api/live/${LOCAL_DEMO_DOCUMENT_ID}`, (route) => route.fulfill({ status: 503 }));
+    await page.goto(`/nastavnik/rad/${LOCAL_DEMO_DOCUMENT_ID}`);
+    const card = page.getByRole("article", { name: c.number.replace("{n}", "1") });
+    await expect(card).toContainText("„mjesto”");
+    await expect(page.getByRole("status").filter({ hasText: t.connection.retrying })).toBeVisible();
+    await expect(card.getByText(c.notPlaced)).toHaveCount(0);
+  });
+
+  test("the teacher marks a passage, comments, and the mark follows the text", async ({ browser }) => {
+    const c = messagesHr.comments;
+    const tc = messagesHr.teacherComments;
+    const PARAGRAPH = "5c4d3e2f-1a0b-4c9d-8e7f-6a5b4c3d2e1f";
+    const TEXT = "Gradske knjižnice su mjesto susreta i učenja.";
+    const QUOTE = "mjesto susreta";
+    const BODY = "Dodaj izvor za ovu tvrdnju. <img src=x onerror=alert(1)>";
+    const at = (sentence: string) => {
+      const doc = JSON.parse(REVISION_ZERO_JCS) as { nodes: Record<string, unknown>[] };
+      doc.nodes = [{ type: "paragraph", id: PARAGRAPH, children: [{ type: "text", text: sentence, marks: [] }] }];
+      const body = canonicalizeJcs(doc);
+      return { body, hash: createHash("sha256").update(body, "utf8").digest("hex") };
+    };
+    const teacher = await (await browser.newContext()).newPage();
+    const student = await (await browser.newContext()).newPage();
+    await signIn(student, "/");
+    await signIn(teacher, "/", "Demo nastavnik");
+    await seed();
+
+    let current = at(TEXT);
+    await teacher.route(`**/api/live/${LOCAL_DEMO_DOCUMENT_ID}`, (route) => {
+      const known = route.request().headers()["if-none-match"];
+      return known === `"${current.hash}"`
+        ? route.fulfill({ status: 304, headers: { etag: `"${current.hash}"` } })
+        : route.fulfill({ status: 200, body: current.body, headers: { etag: `"${current.hash}"`, "content-type": "application/json" } });
+    });
+    await teacher.goto(`/nastavnik/rad/${LOCAL_DEMO_DOCUMENT_ID}`);
+    const text = teacher.getByRole("document", { name: t.documentLabel });
+    await expect(text.getByText(TEXT)).toBeVisible();
+    await expect(teacher.getByText(tc.hint)).toBeVisible();
+
+    // Mark the passage as a reader would, then let the page hear the mouse up.
+    await text.locator("p").evaluate((p, quote) => {
+      const node = document.createTreeWalker(p, NodeFilter.SHOW_TEXT).nextNode()!;
+      const start = node.textContent!.indexOf(quote);
+      const range = document.createRange();
+      range.setStart(node, start);
+      range.setEnd(node, start + quote.length);
+      window.getSelection()!.removeAllRanges();
+      window.getSelection()!.addRange(range);
+    }, QUOTE);
+    await text.dispatchEvent("mouseup");
+    const form = teacher.getByRole("form", { name: tc.newTitle });
+    await expect(form).toContainText(`„${QUOTE}”`);
+    await form.getByRole("textbox", { name: tc.bodyLabel }).fill(BODY);
+    await form.getByRole("button", { name: tc.publish }).click();
+
+    const card = teacher.getByRole("article", { name: c.number.replace("{n}", "1") });
+    await expect(card).toContainText(`„${QUOTE}”`);
+    await expect(card.getByText(BODY, { exact: true })).toBeVisible();
+    await expect(card.locator("img")).toHaveCount(0);
+    await expect(card).toContainText(c.state.open);
+    await expect(text.locator("mark")).toHaveText(QUOTE);
+    await test.info().attach("dan86-komentar-nastavnika", { body: await teacher.screenshot({ fullPage: true }), contentType: "image/png" });
+
+    // The student reads the same thread through the same function (PRODUCT §5 rule 5).
+    const listed = await (await student.request.post("/api/comments/list", {
+      headers: { origin: "http://localhost:3000" }, data: { documentId: LOCAL_DEMO_DOCUMENT_ID },
+    })).json();
+    expect(listed.comments.map((row: { authorRole: string; isOwn: boolean; body: string }) => [row.authorRole, row.isOwn, row.body]))
+      .toEqual([["teacher", false, BODY]]);
+
+    // The student writes before the passage: the mark moves with it.
+    current = at(`Uvod. ${TEXT}`);
+    await expect(text.getByText(`Uvod. ${TEXT}`)).toBeVisible();
+    await expect(text.locator("mark")).toHaveText(QUOTE);
+
+    // The passage is rewritten: the comment stays in the list, without a place.
+    current = at("Gradske knjižnice su prostor za sve.");
+    await expect(text.getByText("Gradske knjižnice su prostor za sve.")).toBeVisible();
+    await expect(text.locator("mark")).toHaveCount(0);
+    await expect(card).toContainText(c.notPlaced);
+
+    await card.getByRole("button", { name: tc.resolve }).click();
+    await expect(card).toContainText(c.state.resolved);
+    await card.getByRole("button", { name: tc.reopen }).click();
+    await expect(card).toContainText(c.state.open);
+  });
 });
