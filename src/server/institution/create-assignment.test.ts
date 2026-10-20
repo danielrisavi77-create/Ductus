@@ -127,7 +127,41 @@ describe("createAssignmentResponse", () => {
       INPUT.aiPurposes,
       INPUT.evidenceProfile,
       INPUT.importAllowed,
+      null,
+      null,
     ]);
+    expect(withActor.queries[0]!.sql).toContain("$12::integer, $13::integer");
+  });
+
+  it.each([
+    [{ wordMin: 2000, wordMax: 2500 }, 2000, 2500],
+    [{ wordMin: null, wordMax: null }, null, null],
+    [{ wordMin: 1500 }, 1500, null],
+    [{ wordMax: 1_000_000 }, null, 1_000_000],
+    [{ wordMin: 1, wordMax: 1 }, 1, 1],
+  ] as const)("passes the word range %j to the RPC in the last two places (DAN-229)", async (range, min, max) => {
+    const withActor = dependencies();
+    const response = await send(JSON.stringify({ ...INPUT, ...range }), withActor);
+    expect(response.status).toBe(201);
+    expect(withActor.queries[0]!.values?.slice(11)).toEqual([min, max]);
+  });
+
+  it.each([
+    { wordMin: 0 },
+    { wordMax: -1 },
+    { wordMax: 1_000_001 },
+    { wordMin: 2500, wordMax: 2000 },
+    { wordMin: 1.5 },
+    { wordMin: "2000" },
+    { wordMax: true },
+    { wordMin: [2000] },
+    { wordMin: 1e21 },
+  ])("refuses the word range %j with 422 before the database (DAN-229)", async (range) => {
+    const withActor = dependencies();
+    const response = await send(JSON.stringify({ ...INPUT, ...range }), withActor);
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toEqual({ error: "invalid_input" });
+    expect(withActor.calls).toHaveLength(0);
   });
 
   it("refuses a cross-origin request before reading its body or opening a transaction", async () => {
