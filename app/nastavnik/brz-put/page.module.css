@@ -1,0 +1,17 @@
+/* Screen 11 is wider than the reading column of .page (README §5.3 point 5). */
+.page {
+  max-width: 1180px;
+}
+
+.page > * {
+  max-width: none;
+}
+
+.intro {
+  color: var(--ink-2);
+}
+
+.sample {
+  font-size: 13px;
+  color: var(--ink-3);
+}
