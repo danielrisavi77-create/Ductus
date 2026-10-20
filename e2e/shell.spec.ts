@@ -337,24 +337,26 @@ test.describe("workspace shell", () => {
     await page.keyboard.press("ArrowLeft");
     const instructions = list.getByRole("tab", { name: "Upute" });
     await expect(instructions).toHaveAttribute("aria-selected", "true");
-    await expect(panel.getByRole("tabpanel")).toContainText("Provjera pomaže; ništa ne blokira predaju.");
+    // No readable assignment on this /rad: the empty state, never an invented task (#476).
+    await expect(panel.getByRole("tabpanel")).toHaveText("Upute zadatka prikazuju se ovdje.");
     await page.keyboard.press("Home");
     await expect(sources).toBeFocused();
     await instructions.click();
     await expect(panel.getByRole("tabpanel")).toHaveAccessibleName("Upute");
   });
 
-  test("right panel (FE-D9): Upute shows the task and allowed uses, Rad the stages with written states", async ({ page }) => {
+  // The task, its due date and the allowed uses of a readable assignment are
+  // in login/assignment-notice.spec.ts and SidePanels.test.ts (#476 contract
+  // 6280487079): without one, Upute names no task and no word range.
+  test("right panel (FE-D9): Upute without a readable assignment invents no task, Rad the stages with written states", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/rad");
     const panel = page.getByRole("complementary", { name: "Upute, literatura i komentari" });
     await panel.getByRole("tab", { name: "Upute" }).click();
     const upute = panel.getByRole("tabpanel");
-    await expect(upute.getByRole("heading", { name: "Zadatak" })).toBeVisible();
-    await expect(upute).toContainText("Rok: 20. studenoga 2026. u 23:59");
-    await expect(upute.getByRole("heading", { name: /Dopuštena uporaba alata/ })).toBeVisible();
-    await expect(upute.getByRole("listitem")).toHaveCount(3);
-    await expect(upute.getByRole("heading", { name: /Provjera oblika/ })).toContainText("uskoro");
+    await expect(upute).toHaveText("Upute zadatka prikazuju se ovdje.");
+    await expect(upute.getByRole("heading", { name: "Zadatak" })).toHaveCount(0);
+    await expect(upute).not.toContainText("riječi");
 
     await panel.getByRole("tab", { name: "Rad" }).click();
     const rad = panel.getByRole("tabpanel");

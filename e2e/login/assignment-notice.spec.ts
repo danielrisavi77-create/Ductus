@@ -132,6 +132,16 @@ test("the notice leads to /rad of its assignment, whose top bar names it", async
     await page.waitForURL(`**/rad?zadatak=${seeded.assignment}`);
     await expect(context).toHaveText(`${seeded.courseName} / Izmišljeni zadatak S3`);
     await expect(page.locator(".workspace__bar")).not.toContainText("Kolegij A");
+    // Upute shows the same read: the task, its due date, no allowed uses.
+    const panel = page.getByRole("complementary", { name: t.workspace.sidePanel });
+    await panel.getByRole("tab", { name: t.workspace.tabInstructions }).click();
+    const upute = panel.getByRole("tabpanel");
+    await expect(upute.getByRole("heading", { name: t.workspace.upute.task })).toBeVisible();
+    await expect(upute).toContainText("Izmišljeni zadatak S3");
+    await expect(upute).toContainText("Upute za izmišljeni zadatak.");
+    await expect(upute).toContainText("Rok: ");
+    await expect(upute).toContainText(t.workspace.upute.toolsNone);
+    await expect(upute.getByRole("heading", { name: /Provjera oblika/ })).toContainText("uskoro");
     await test.info().attach("rad-gornja-traka-zadatak", { body: await page.screenshot(), contentType: "image/png" });
   } finally {
     await admin((client) => client.query(
