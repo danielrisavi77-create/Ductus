@@ -3,11 +3,13 @@ import { createHash } from "node:crypto";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page, type Route } from "@playwright/test";
 
+import { createTextAnchor } from "../../src/domain/collaboration";
+import type { NodeId } from "../../src/domain/document";
 import { REVISION_ZERO_JCS } from "../../src/domain/document/revision-zero";
 import { canonicalizeJcs } from "../../src/domain/forensics/jcs";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
-import { cleanUp, seed } from "./comment-seed";
+import { cleanUp, post, seed } from "./comment-seed";
 import { signIn } from "./support";
 
 // DAN-86 step 2b: the teacher's live view of a work. The live route (GET
@@ -118,6 +120,25 @@ test("nothing published yet is said as such", async ({ page }) => {
 
 test.describe("comments from the live view", () => {
   test.afterEach(cleanUp);
+
+  test("a comment listed before any text arrives is not called lost", async ({ page }) => {
+    const c = messagesHr.comments;
+    const TEXT = "Gradske knjižnice su mjesto susreta i učenja.";
+    const start = TEXT.indexOf("mjesto");
+    const anchor = createTextAnchor({
+      nodeId: "5c4d3e2f-1a0b-4c9d-8e7f-6a5b4c3d2e1f" as NodeId, nodeText: TEXT, start, end: start + "mjesto".length,
+    });
+    await signIn(page, "/", "Demo nastavnik");
+    await seed();
+    expect((await post(page, "create", { documentId: LOCAL_DEMO_DOCUMENT_ID, body: "Dodaj izvor.", anchor })).status()).toBe(200);
+    // The text never arrives: the connection keeps retrying while the list is already here.
+    await page.route(`**/api/live/${LOCAL_DEMO_DOCUMENT_ID}`, (route) => route.fulfill({ status: 503 }));
+    await page.goto(`/nastavnik/rad/${LOCAL_DEMO_DOCUMENT_ID}`);
+    const card = page.getByRole("article", { name: c.number.replace("{n}", "1") });
+    await expect(card).toContainText("„mjesto”");
+    await expect(page.getByRole("status").filter({ hasText: t.connection.retrying })).toBeVisible();
+    await expect(card.getByText(c.notPlaced)).toHaveCount(0);
+  });
 
   test("the teacher marks a passage, comments, and the mark follows the text", async ({ browser }) => {
     const c = messagesHr.comments;

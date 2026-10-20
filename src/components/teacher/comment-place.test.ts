@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { CanonicalDocument, NodeId } from "@/domain/document";
 
-import { anchorForSelection, blockSegments, blockText, placeAnchor } from "./comment-place";
+import { anchorForSelection, blockSegments, blockText, placeAnchor, placeThreads } from "./comment-place";
 
 const P1 = "0f8e2a64-1b3c-4d5e-8f60-718293a4b5c6" as NodeId;
 const P2 = "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d" as NodeId;
@@ -65,6 +65,29 @@ describe("placeAnchor", () => {
     expect(placeAnchor(other, anchor)).toBeNull();
     expect(placeAnchor(null, anchor)).toBeNull();
     expect(placeAnchor(doc(TEXT), null)).toBeNull();
+  });
+});
+
+describe("placeThreads", () => {
+  // Codex thread on LiveWorkView.tsx:89: a list that arrives before the first
+  // text must not call every comment lost; there is no text to look in yet.
+  const start = TEXT.indexOf("mjesto");
+  const found = { anchor: anchorForSelection(doc(TEXT), P1, start, start + "mjesto".length) };
+  const gone = { anchor: anchorForSelection(doc(TEXT), P2, 0, 5) };
+  const invalid = { anchor: null };
+
+  it("calls no thread lost while no text has been shown", () => {
+    expect(placeThreads(null, [found, gone, invalid]).map((p) => [p.range, p.pending])).toEqual([
+      [null, true], [null, true], [null, true],
+    ]);
+  });
+
+  it("places what it finds once a text is shown and calls the rest lost", () => {
+    const placed = placeThreads(doc(TEXT, "Sasvim drukčiji odlomak."), [found, gone, invalid]);
+    expect(placed.map((p) => p.pending)).toEqual([false, false, false]);
+    expect(placed[0]!.range).toEqual({ nodeId: P1, start, end: start + "mjesto".length });
+    expect(placed[1]!.range).toBeNull();
+    expect(placed[2]!.range).toBeNull();
   });
 });
 

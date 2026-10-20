@@ -48,6 +48,18 @@ export function placeAnchor(doc: CanonicalDocument | null, anchor: TextAnchor | 
   return found.status === "exact" || found.status === "moved" ? { nodeId: node.id, start: found.start, end: found.end } : null;
 }
 
+/**
+ * Each thread with its place in `doc`. Before any text has been shown (`doc`
+ * null: still loading, nothing sent yet, or the connection retrying before a
+ * first text) a thread is `pending`, not lost: there is nothing to look in, so
+ * saying the place cannot be found would be untrue.
+ */
+export function placeThreads<T extends { readonly anchor: TextAnchor | null }>(
+  doc: CanonicalDocument | null, threads: readonly T[],
+): { thread: T; range: TextRange | null; pending: boolean }[] {
+  return threads.map((thread) => ({ thread, range: placeAnchor(doc, thread.anchor), pending: doc === null }));
+}
+
 export type Segment = { readonly text: string; readonly marks: readonly Mark[]; readonly marked: boolean };
 
 /**
