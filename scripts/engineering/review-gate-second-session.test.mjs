@@ -121,7 +121,7 @@ test("the QA slot must differ from author and reviewer, case-insensitively", () 
   }
 });
 
-test("a QA PASS carried from an earlier head cannot use the declaration of that head", () => {
+test("a carried declaration needs the Codex review on the declared head, not on the current one", () => {
   const result = evaluateGate({
     body: AUTHOR,
     headSha: head,

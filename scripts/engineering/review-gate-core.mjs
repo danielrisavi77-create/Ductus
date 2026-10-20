@@ -525,24 +525,32 @@ export function evaluateGate({
     }
 
     // D-139: second Claude session. Needs its own slot (not author, not a
-    // passing reviewer), the declaration naming this head, a Codex review on
-    // this head and every Codex thread answered. Never carried: the line
-    // names one head.
+    // passing reviewer), the declaration, a Codex review and every Codex
+    // thread answered. The declaration names one head and the Codex review
+    // must be on that same head; that head is the current one or, like any
+    // other verdict (D-101), an earlier head the runner confirmed as carried
+    // (clean base merges, unchanged PR diff). Threads are judged live.
     const everReviewers = reviewerPrincipals(trusted);
+    const declaredHead = (result) => {
+      const sha = SECOND_SESSION_RE.exec(result.fallbackLine ?? "")?.[1]?.toLowerCase();
+      return sha && (sameHead(sha, headSha) || carriedHeads.has(sha)) ? sha : null;
+    };
     const secondSession = separateAppPass || fallbackPass
-      ? null
-      : qaPasses.find(
-          (result) =>
+      ? false
+      : qaPasses.some((result) => {
+          const sha = declaredHead(result);
+          return (
+            sha &&
             result.identity.appSlug === "claude" &&
-            result.current &&
             !passingReviewerPrincipals.has(result.identity.principal) &&
             !everReviewers.has(result.identity.principal) &&
-            sameHead(SECOND_SESSION_RE.exec(result.fallbackLine ?? "")?.[1], headSha),
-        );
-    if (secondSession && (codexReviewedHead(prReviews, headSha) || codexCleanSummaryOnHead(comments, headSha)) && codexThreadsAnswered(reviewComments, authorLogin)) {
+            (codexReviewedHead(prReviews, sha) || codexCleanSummaryOnHead(comments, sha))
+          );
+        });
+    if (secondSession && codexThreadsAnswered(reviewComments, authorLogin)) {
       return {
         state: "success",
-        description: `Independent review and second Claude session QA valid for current head (D-139: Codex review on head, threads answered).${carriedNote(passingReviews, headSha)}`,
+        description: `Independent review and second Claude session QA valid for current head (D-139: Codex review on head, threads answered).${carriedNote([...passingReviews, ...qaPasses], headSha)}`,
       };
     }
 
@@ -581,6 +589,11 @@ export function carriedHeadCandidates(comments, headSha, path) {
       if (block === "Owner-Override" && !validOverrideShape(entry)) continue;
       const head = field(entry.body, headField)?.toLowerCase();
       if (head && SHA_RE.test(head) && head !== headSha.toLowerCase()) named.add(head);
+      // D-139: the Codex head a QA declaration names is carried like a verdict head.
+      if (block === "QA-Agent") {
+        const declared = SECOND_SESSION_RE.exec(field(entry.body, "Provider-Fallback") ?? "")?.[1]?.toLowerCase();
+        if (declared && declared !== headSha.toLowerCase()) named.add(declared);
+      }
     }
   }
   if (named.size === 0) return { heads: [], reason: null };
