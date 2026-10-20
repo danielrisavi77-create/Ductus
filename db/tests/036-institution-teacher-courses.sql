@@ -32,8 +32,8 @@ LANGUAGE sql AS $$
 $$;
 
 -- 1. Each teacher sees exactly the own courses, with the current version and the count of students.
-SELECT is(pg_temp.listing('vesna'), 'k1 K1 2026/2027 Z1 essay 2 2 opens due; k4 K4 2025/2026 - - - - - -',
-  'Vesna sees K1 with Z1 at version 2 and two students, and K4 without an assignment');
+SELECT is(pg_temp.listing('vesna'), 'k1 K1 2026/2027 Z1 essay 2 2 opens due; k4 K4 2025/2026 - - - 0 - -',
+  'Vesna sees K1 with Z1 at version 2 and two students, and K4 without an assignment or a student');
 SELECT is(pg_temp.listing('marko'), 'k2 K2 2026/2027 Z2 essay 1 0 opens due', 'Marko sees only K2, with no student');
 SELECT is(pg_temp.listing('petra'), 'k3 K3 2026/2027 Z3 essay 1 1 opens due',
   'Petra of fak-b sees only K3, never a course of fak-a');
