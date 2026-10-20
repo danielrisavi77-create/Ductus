@@ -63,9 +63,9 @@ const memberships = (userId: string) =>
 type Refusal = { code?: string; message?: string };
 const refusal = (error: Refusal): Refusal => ({ code: error.code, message: error.message });
 
-// Everything of an assignment version after its title; all of it invented.
+// Everything of an assignment version after its title, with no word range; all of it invented.
 const CONTENT =
-  "'Upute za izmišljeni zadatak.', 'essay', now(), now() + interval '30 days', 'partially_allowed', '{proofreading}'::text[], 'basic', false";
+  "'Upute za izmišljeni zadatak.', 'essay', now(), now() + interval '30 days', 'partially_allowed', '{proofreading}'::text[], 'basic', false, NULL, NULL";
 const PUBLISH = `SELECT institution.publish_assignment_version($1, $2, 'Esej', ${CONTENT}) AS version`;
 const ACKNOWLEDGE = "SELECT institution.acknowledge_notice($1, $2)";
 
@@ -408,7 +408,7 @@ describe("assignments and removal over withActor", () => {
         `SELECT institution.create_assignment(
           $1::uuid, $2::uuid, $3::text, 'Upute za izmišljeni zadatak.', 'essay',
           '2026-11-02T08:00:00+01:00'::timestamptz, '2026-12-01T23:59:00+01:00'::timestamptz,
-          'partially_allowed', '{proofreading}'::text[], 'basic', false
+          'partially_allowed', '{proofreading}'::text[], 'basic', false, NULL, NULL
         ) AS id`,
         [courseId, requestId, title],
       );
@@ -459,7 +459,7 @@ describe("assignments and removal over withActor", () => {
         `SELECT institution.create_assignment(
           $1::uuid, $2::uuid, $3::text, 'Upute za izmišljeni zadatak.', 'essay',
           '2026-11-02T08:00:00+01:00'::timestamptz, '2026-12-01T23:59:00+01:00'::timestamptz,
-          'partially_allowed', '{proofreading}'::text[], 'basic', false
+          'partially_allowed', '{proofreading}'::text[], 'basic', false, NULL, NULL
         ) AS id`,
         [course, requestId, "Idempotentni zadatak"],
       );
