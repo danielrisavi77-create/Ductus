@@ -5,50 +5,42 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { carryEnv, carryVerdict, DIFF_ARGS, normalizeDiff, refreshOnly, remoteIs } from "./carry-core.mjs";
+import { carryEnv, carryVerdict, DIFF_ARGS, gitEnv, patchIdOf, refreshOnly, remoteIs, treesProven } from "./carry-core.mjs";
 
 const ok = { state: "success" };
-const diff = "diff --git a/x b/x\nindex 1111111..2222222 100644\n--- a/x\n+++ b/x\n@@ -4,3 +4,3 @@ head\n ctx\n-a\n+b\n ctx2\n";
-const v = (over = {}) => carryVerdict({ oldDiff: diff, newDiff: diff, gate: ok, refreshed: true, ...over });
+const good = { refreshed: true, treeProven: true, oldPatchId: "a".repeat(40), newPatchId: "a".repeat(40), gate: ok };
+const v = (over = {}) => carryVerdict({ ...good, ...over });
 
-test("identical diff, refresh with main only and gate success carries", () => {
+test("a proven refresh with main only, the same patch-id and gate success carries", () => {
   assert.equal(v().carry, true);
 });
 
-test("a whitespace-only change does not carry", () => {
-  assert.equal(v({ newDiff: diff.replace("+b", "+b ") }).carry, false);
-});
-
-test("gate not success, unreadable or empty diffs do not carry", () => {
+test("every missing element of the proof stops the carry", () => {
+  assert.equal(v({ refreshed: false }).carry, false); // force push or rebuilt commits with the same diff
+  assert.equal(v({ refreshed: undefined }).carry, false);
+  assert.equal(v({ treeProven: false }).carry, false); // manual edit inside a merge commit
+  assert.equal(v({ treeProven: undefined }).carry, false);
+  assert.equal(v({ oldPatchId: null }).carry, false);
+  assert.equal(v({ newPatchId: "b".repeat(40) }).carry, false);
   assert.equal(v({ gate: { state: "pending" } }).carry, false);
   assert.equal(v({ gate: undefined }).carry, false);
   assert.equal(v({ gate: { error: "x" } }).carry, false);
-  assert.equal(v({ oldDiff: null }).carry, false);
-  assert.equal(v({ oldDiff: "", newDiff: "" }).carry, false);
 });
 
-test("a head that is not a refresh with main does not carry (review: force push, same diff)", () => {
-  assert.equal(v({ refreshed: false }).carry, false);
-  assert.equal(v({ refreshed: undefined }).carry, false);
+test("patchIdOf reads the first field only and nothing for an empty diff", () => {
+  assert.equal(patchIdOf(`${"c".repeat(40)} ${"d".repeat(40)}\n`), "c".repeat(40));
+  assert.equal(patchIdOf(""), null);
+  assert.equal(patchIdOf(undefined), null);
 });
 
-test("hunk offsets and blob ids moved by a base merge do not change the verdict; content does", () => {
-  const moved = diff.replace("index 1111111..2222222", "index 3333333..4444444").replace("@@ -4,3 +4,3 @@ head", "@@ -10,3 +10,3 @@ other");
-  assert.equal(v({ newDiff: moved }).carry, true);
-  for (const changed of [
-    moved.replace("+b", "+c"),
-    moved.replace("-a", "-z"),
-    moved.replace(" ctx2", " ctx3"),
-    moved.replace("-10,3 +10,3", "-10,3 +10,4"),
-    `${moved}@@ -50,1 +50,1 @@\n-q\n+r\n`,
-  ]) {
-    assert.equal(v({ newDiff: changed }).carry, false, changed);
-  }
-});
-
-test("normalizeDiff touches only structural lines", () => {
-  assert.equal(normalizeDiff("+index not structural\n"), "+index not structural\n");
-  assert.equal(normalizeDiff("+@@ -1 +1 @@\n"), "+@@ -1 +1 @@\n");
+test("treesProven needs every pair present, full object ids and equal", () => {
+  const t = "e".repeat(40);
+  assert.equal(treesProven([{ actual: t, merged: t }]), true);
+  assert.equal(treesProven([{ actual: t, merged: "f".repeat(40) }]), false);
+  assert.equal(treesProven([{ actual: t, merged: null }]), false);
+  assert.equal(treesProven([{ actual: t, merged: "short" }]), false);
+  assert.equal(treesProven([]), false);
+  assert.equal(treesProven(undefined), false);
 });
 
 const sha = (c) => c.repeat(40);
@@ -65,43 +57,15 @@ test("refreshOnly: only two-parent merges of main on top of the old head", () =>
   assert.equal(refreshOnly({ oldHead, chain: [{ sha: sha("c"), parents: [oldHead, sha("1"), sha("2")] }], mainContains: mainHas(sha("1"), sha("2")) }), false);
   assert.equal(refreshOnly({ oldHead, chain: [{ sha: sha("c"), parents: [sha("e"), sha("1")] }], mainContains: mainHas(sha("1")) }), false);
   assert.equal(refreshOnly({ oldHead, chain: [], mainContains: mainHas() }), false);
-  const long = Array.from({ length: 11 }, (_, i) => ({ sha: sha("1"), parents: [sha("1"), sha("1")], i }));
-  assert.equal(refreshOnly({ oldHead, chain: long, mainContains: mainHas(sha("1")) }), false);
+  const long = Array.from({ length: 11 }, () => ({ sha: sha("1"), parents: [sha("1"), sha("2")] }));
+  assert.equal(refreshOnly({ oldHead, chain: long, mainContains: mainHas(sha("2")) }), false);
   assert.equal(refreshOnly({ oldHead: "short", chain: one, mainContains: mainHas(sha("1")) }), false);
 });
 
-test("carryEnv drops variables that redirect git or gh", () => {
-  const env = carryEnv({ PATH: "p", GH_REPO: "x/y", gh_host: "h", GIT_EXTERNAL_DIFF: "e", GIT_DIR: "d", GH_TOKEN: "t" });
+test("carryEnv drops variables that redirect git or gh; gitEnv forbids replacement objects", () => {
+  const env = carryEnv({ PATH: "p", GH_REPO: "x/y", gh_host: "h", GIT_EXTERNAL_DIFF: "e", GIT_DIR: "d", GH_TOKEN: "t", GIT_NO_REPLACE_OBJECTS: "0" });
   assert.deepEqual(Object.keys(env).sort(), ["GH_TOKEN", "PATH"]);
-});
-
-// Real repository: patch-id would not see a whitespace change, and a configured external
-// diff must not replace the diff text.
-test("the real diff arguments see whitespace changes and ignore an external diff", () => {
-  const dir = mkdtempSync(join(tmpdir(), "carry-"));
-  const git = (...a) => execFileSync("git", ["-C", dir, ...a], { encoding: "utf8" });
-  try {
-    git("init", "-q");
-    git("config", "user.email", "t@example.invalid");
-    git("config", "user.name", "t");
-    writeFileSync(join(dir, "w.yml"), "a:\n  b: 1\n");
-    git("add", "w.yml");
-    git("commit", "-qm", "base");
-    git("checkout", "-qb", "p1");
-    writeFileSync(join(dir, "w.yml"), "a:\n  b: 2\n");
-    git("commit", "-qam", "p");
-    const one = git(...DIFF_ARGS, "HEAD~1", "HEAD");
-    writeFileSync(join(dir, "w.yml"), "a:\n  b:  2\n");
-    git("commit", "-qam", "q");
-    const two = git(...DIFF_ARGS, "HEAD~2", "HEAD");
-    assert.equal(carryVerdict({ oldDiff: one, newDiff: two, gate: ok, refreshed: true }).carry, false);
-
-    git("config", "diff.external", "echo SAME");
-    assert.match(git(...DIFF_ARGS, "HEAD~2", "HEAD"), /^diff --git /m);
-    assert.equal(git(...DIFF_ARGS, "HEAD~2", "HEAD"), two);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
+  assert.equal(gitEnv({ GIT_NO_REPLACE_OBJECTS: "0", PATH: "p" }).GIT_NO_REPLACE_OBJECTS, "1");
 });
 
 test("remoteIs accepts only the exact canonical repository on github.com", () => {
@@ -122,4 +86,89 @@ test("remoteIs accepts only the exact canonical repository on github.com", () =>
     "",
     undefined,
   ]) assert.equal(remoteIs(bad, repo), false, String(bad));
+});
+
+// Real repository: a clean refresh is proven by git's own merge, a merge with a moved
+// change is not, and a configured external diff cannot replace the diff text.
+const lines = (n, extra = {}) => Array.from({ length: n }, (_, i) => extra[i] ?? `line ${i}`).join("\n") + "\n";
+
+function repoWith(fn) {
+  const dir = mkdtempSync(join(tmpdir(), "carry-"));
+  const git = (...a) => execFileSync("git", ["-C", dir, ...a], { encoding: "utf8", env: gitEnv(process.env) });
+  try {
+    git("init", "-q", "-b", "main");
+    git("config", "user.email", "t@example.invalid");
+    git("config", "user.name", "t");
+    fn({ dir, git, write: (name, text) => writeFileSync(join(dir, name), text) });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const mergeTree = (git, a, b) => git("merge-tree", "--write-tree", "--no-messages", a, b).split("\n")[0].trim();
+const treeOf = (git, rev) => git("rev-parse", `${rev}^{tree}`).trim();
+test("a clean refresh is proven, a moved change inside the merge commit is not", () => {
+  repoWith(({ git, write }) => {
+    // a file with two blocks of identical context
+    const block = (tag) => `ctx1\nctx2\nctx3\nif (${tag}) check();\nctx4\nctx5\nctx6\n`;
+    write("f.txt", `${block("a")}---\n${block("b")}`);
+    write("other.txt", "x\n");
+    git("add", "f.txt", "other.txt");
+    git("commit", "-qm", "base");
+    git("checkout", "-qb", "pr");
+    write("f.txt", `${block("a").replace("if (a) check();\n", "")}---\n${block("b")}`);
+    git("commit", "-qam", "pr removes the first check");
+    const oldHead = git("rev-parse", "HEAD").trim();
+    git("checkout", "-q", "main");
+    write("other.txt", "x\ny\n");
+    git("commit", "-qam", "main moves on");
+    const mainHead = git("rev-parse", "HEAD").trim();
+
+    // honest refresh
+    git("checkout", "-q", "pr");
+    git("merge", "--no-ff", "-qm", "refresh", mainHead);
+    const honest = git("rev-parse", "HEAD").trim();
+    assert.equal(treeOf(git, honest), mergeTree(git, oldHead, mainHead));
+    assert.equal(treesProven([{ actual: treeOf(git, honest), merged: mergeTree(git, oldHead, mainHead) }]), true);
+
+    // dishonest refresh: the second parent is in main, but the tree restores the first
+    // check and removes the second one (same hunk shape, other block)
+    git("checkout", "-q", "-B", "evil", oldHead);
+    git("merge", "--no-ff", "--no-commit", "-q", mainHead);
+    write("f.txt", `${block("a")}---\n${block("b").replace("if (b) check();\n", "")}`);
+    git("add", "f.txt");
+    git("commit", "-qm", "refresh");
+    const evil = git("rev-parse", "HEAD").trim();
+    assert.notEqual(treeOf(git, evil), mergeTree(git, oldHead, mainHead));
+    assert.equal(treesProven([{ actual: treeOf(git, evil), merged: mergeTree(git, oldHead, mainHead) }]), false);
+  });
+});
+
+test("merge-tree reports no tree for a conflicting merge", () => {
+  repoWith(({ git, write }) => {
+    write("f.txt", "a\n");
+    git("add", "f.txt");
+    git("commit", "-qm", "base");
+    git("checkout", "-qb", "one");
+    write("f.txt", "one\n");
+    git("commit", "-qam", "one");
+    git("checkout", "-q", "main");
+    write("f.txt", "two\n");
+    git("commit", "-qam", "two");
+    assert.throws(() => mergeTree(git, "one", "main"));
+  });
+});
+
+test("the real diff arguments ignore a configured external diff", () => {
+  repoWith(({ git, write }) => {
+    write("w.yml", "a:\n  b: 1\n");
+    git("add", "w.yml");
+    git("commit", "-qm", "base");
+    write("w.yml", "a:\n  b: 2\n");
+    git("commit", "-qam", "p");
+    const plain = git(...DIFF_ARGS, "HEAD~1", "HEAD");
+    git("config", "diff.external", "echo SAME");
+    assert.match(git(...DIFF_ARGS, "HEAD~1", "HEAD"), /^diff --git /m);
+    assert.equal(git(...DIFF_ARGS, "HEAD~1", "HEAD"), plain);
+  });
 });
