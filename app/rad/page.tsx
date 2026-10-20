@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 import CommentPanel from "@/components/editor/CommentPanel";
 import EditorToolbar from "@/components/editor/EditorToolbar";
@@ -80,8 +81,10 @@ async function journalFor(token: string | undefined): Promise<{
  * status bar say so (F-8, DAN-211). A signed-in student sees the teacher's
  * comments in the side panel (F-9 step 1). The top bar names the course and
  * the assignment, and Upute shows its notice, only from an RLS read of the
- * assignment in `?zadatak=` that the student may see (#476 contract
- * 6280487079); otherwise neither is shown, never an invented value. The
+ * assignment in `?zadatak=` that the student may see and whose current
+ * notice they acknowledged (#476 contract 6280487079); without the
+ * acknowledgment the page sends them to the notice (PRODUCT §5 rule 6);
+ * otherwise neither is shown, never an invented value. The
  * status bar shows the length without a word range until the assignment has
  * one (DAN-229). With a journal, Rad shows invented stages of the real shape
  * until its read exists (FE-D9, #476). Signing out
@@ -94,10 +97,14 @@ export default async function WorkspacePage({
 }) {
   const assignmentId = assignmentParam((await searchParams).zadatak);
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
-  const [{ scope, signedIn, signInAgain, tag, at }, work] = await Promise.all([
+  const [{ scope, signedIn, signInAgain, tag, at }, read] = await Promise.all([
     journalFor(token),
     readWorkContext(token, assignmentId, withActor),
   ]);
+  // PRODUCT §5 rule 6: an assignment whose current notice is not acknowledged
+  // opens on its notice, never on the workspace.
+  if (read.kind === "noticeFirst" && assignmentId) redirect(`/zadatak/${assignmentId}`);
+  const work = read.kind === "ready" ? read : null;
   const session = signedIn && tag !== null ? { tag, at } : null;
   const workspace = (
     <WorkspaceShell

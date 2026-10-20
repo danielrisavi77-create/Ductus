@@ -115,7 +115,8 @@ test("a student of the course reads the live view and the replay of D-154 before
 });
 
 // #476 contract 6280487079: the notice leads to /rad?zadatak=<id>, and the top
-// bar names the course and the assignment only from that read.
+// bar names the course and the assignment only from that read, once the
+// student has acknowledged the notice.
 test("the notice leads to /rad of its assignment, whose top bar names it", async ({ page }) => {
   await signIn(page, PATH, "Demo studentica");
   const context = page.locator(".workspace__bar .brand-line__context");
@@ -124,6 +125,18 @@ test("the notice leads to /rad of its assignment, whose top bar names it", async
     await page.goto(path);
     await expect(page.locator(".workspace__bar")).toBeVisible();
     await expect(context).toHaveCount(0);
+  }
+  // PRODUCT §5 rule 6: before the current notice is acknowledged, /rad of the
+  // assignment opens its notice instead of the workspace.
+  const unread = await seedAssignment(false);
+  try {
+    await page.goto(`/rad?zadatak=${unread.assignment}`);
+    await page.waitForURL(`**/zadatak/${unread.assignment}`);
+    await expect(page.getByText(t.student.checkbox)).toBeVisible();
+    await expect(page.locator(".workspace__bar")).toHaveCount(0);
+  } finally {
+    await admin((client) => client.query(
+      "UPDATE institution.course_member SET member_to = now() WHERE course_id = $1 AND member_to IS NULL", [unread.course]));
   }
   const seeded = await seedAssignment(true);
   try {
