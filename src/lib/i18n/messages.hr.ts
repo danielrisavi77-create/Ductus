@@ -474,6 +474,15 @@ export const hr = {
   },
   // DAN-86 step 2c: the teacher's comment on a marked passage of the live view
   // (design pregled-radova-v2 "Novi komentar"; B-10, BACKEND 4.11).
+  // F-10 PR4: the state line of the summary card on the teacher's view of a
+  // work. The summary's own text is `summary`, the same for every reader.
+  summaryCard: {
+    loading: "Učitavanje sažetka…",
+    signedOut: "Prijava je istekla. Prijavi se ponovno da vidiš sažetak.",
+    notFound: "Sažetak ovog rada nije dostupan ovom računu.",
+    unavailable: "Sažetak trenutačno nije dostupan. Pokušaj ponovno.",
+    refresh: "Osvježi sažetak",
+  },
   teacherComments: {
     hint: "Označi tekst u radu za komentar.",
     empty: "Nema komentara. Označi tekst u radu.",

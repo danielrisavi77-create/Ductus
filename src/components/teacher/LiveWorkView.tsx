@@ -26,6 +26,7 @@ import { anchorForSelection, blockSegments, placeAnchor, type TextRange } from "
 import styles from "./LiveWorkView.module.css";
 import RecordLimits from "./RecordLimits";
 import { selectedRange, selectInBlock } from "./selection";
+import SummaryCard from "./SummaryCard";
 import TeacherComments, { useComments, type PlacedThread } from "./TeacherComments";
 
 const t = messagesHr.liveView;
@@ -146,6 +147,7 @@ export default function LiveWorkView({ documentId, session }: {
             onShow={show}
           />
         )}
+        {stopped ? null : <SummaryCard documentId={documentId} current={current} />}
         <RecordLimits />
       </aside>
     </div>

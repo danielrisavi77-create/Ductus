@@ -116,6 +116,51 @@ test("nothing published yet is said as such", async ({ page }) => {
   await expect(page.getByText(t.note)).toHaveCount(0);
 });
 
+test("the teacher reads the process summary once, as the same view the student gets", async ({ page }) => {
+  const s = messagesHr.summary;
+  const card = messagesHr.summaryCard;
+  const live = work("Gradske knjižnice su mjesto susreta.");
+  await serveLive(page, () => ({ status: 200, body: live.body, etag: live.hash }));
+  // Invented summary in the route's shape (ProcessSummaryV1, #515).
+  const summary = {
+    gaps: { evidenceKind: "observed", items: [] },
+    pastes: {
+      evidenceKind: "observed", listed: [{ at: { from: "2026-10-19T08:10:00.000Z", to: "2026-10-19T08:11:00.000Z" }, characters: 412, origin: "not_observed" }],
+      listedAboveCharacters: 200, smallerCount: 2,
+    },
+    recordState: "complete",
+    sessions: { breakAboveMinutes: 30, count: 1, evidenceKind: "observed", items: [{ from: "2026-10-19T08:00:00.000Z", to: "2026-10-19T08:41:00.000Z" }] },
+    summaryFormat: "ductus-process-summary-v1",
+  };
+  const bodies: string[] = [];
+  let status = 200;
+  await page.route("**/api/process-summary", async (route) => {
+    bodies.push(route.request().postData() ?? "");
+    await route.fulfill(status === 200
+      ? { status, body: canonicalizeJcs(summary), headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } }
+      : { status, body: '{"error":"unavailable"}', headers: { "content-type": "application/json" } });
+  });
+
+  await signIn(page, PATH, "Demo nastavnik");
+  const region = page.getByRole("region", { name: s.title });
+  await expect(region).toBeVisible();
+  await expect(region.getByText(s.sameForEveryone)).toBeVisible();
+  await expect(page.getByRole("document", { name: t.documentLabel }).getByText("Gradske knjižnice su mjesto susreta.")).toBeVisible();
+  // The live text keeps asking every second; the summary is read once.
+  await page.waitForTimeout(2500);
+  expect(bodies).toEqual([JSON.stringify({ documentId: DOC })]);
+
+  const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+  expect(results.violations).toEqual([]);
+  await test.info().attach("f10-sazetak-nastavnik", { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
+
+  // A failed refresh never leaves the old summary on the page.
+  status = 503;
+  await page.getByRole("button", { name: card.refresh }).click();
+  await expect(page.getByRole("status").filter({ hasText: card.unavailable })).toBeVisible();
+  await expect(page.getByText(s.sameForEveryone)).toHaveCount(0);
+  expect(bodies).toHaveLength(2);
+});
 test.describe("comments from the live view", () => {
   test.afterEach(cleanUp);
 
