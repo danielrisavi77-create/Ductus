@@ -27,7 +27,10 @@ test("the HTTP preflight never follows a redirect outside its two local origins"
   const other = await serve((_req, res) => { res.writeHead(200); res.end("unexpected"); });
   assert.throws(() => assertLocalUrl("http://localhost:3001/"));
   assert.throws(() => assertLocalUrl("http://127.0.0.1:3000/"));
-  assert.throws(() => assertLocalUrl("http://localhost:3000@evil.test/"));
+  const withUserinfo = new URL("http://localhost:3000/");
+  withUserinfo.username = "synthetic-user";
+  withUserinfo.password = "synthetic-password";
+  assert.throws(() => assertLocalUrl(withUserinfo.href));
   await assert.rejects(localResponse(target, fetch, [target, other]), /two fixed localhost origins/);
 });
 
