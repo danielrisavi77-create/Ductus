@@ -178,6 +178,43 @@ function codexReviewedHead(prReviews, headSha) {
   );
 }
 
+const CODEX_APP_SLUG = "chatgpt-codex-connector";
+const CODEX_SUMMARY_MARKER = "<!-- codex-pull-request-review-summary -->";
+const CODEX_STATE_RE = /^<!-- codex-pull-request-review-summary -->\s*<!-- codex-review-state:v1 (\{[^\r\n]*?\}) -->/;
+
+// A clean Codex review leaves no pull request review. The Codex App then
+// proves it in its edited-in-place summary comment, whose machine state names
+// the full reviewed commit. Only the App's own comment counts (bot account and
+// App slug, never a human or another App), the commit must be the current head
+// in full, and the review must be completed with no findings at all. Several
+// summaries naming this head must all be clean; one unreadable summary voids
+// the whole proof: fail closed. The receipt comment (short sha) is never evidence.
+function codexCleanSummaryOnHead(comments, headSha) {
+  const onHead = [];
+  for (const item of comments ?? []) {
+    if (!isCodexBot(item?.user) || item?.performed_via_github_app?.slug !== CODEX_APP_SLUG) continue;
+    const body = typeof item?.body === "string" ? item.body : "";
+    if (!body.startsWith(CODEX_SUMMARY_MARKER)) continue;
+    let state;
+    try {
+      state = JSON.parse(CODEX_STATE_RE.exec(body)?.[1] ?? "null");
+    } catch {
+      return false; // an unreadable Codex summary poisons the whole proof
+    }
+    const review = state?.code_review;
+    // No usable code review commit, or an open security finding, voids the proof too.
+    if (!review || typeof review !== "object" || !SHA_RE.test(review.commit_sha ?? "")) return false;
+    if (state.security_review?.has_unresolved_findings === true) return false;
+    if (sameHead(review.commit_sha, headSha)) onHead.push(review);
+  }
+  return (
+    onHead.length > 0 &&
+    onHead.every(
+      (review) =>
+        review.status === "completed" && review.has_any_findings === false && review.has_unresolved_findings === false,
+    )
+  );
+}
 // A Codex thread is answered once its author replied under the root comment:
 // a non-bot account that is the owner or the PR author's login. A list that
 // was not read answers nothing: fail closed.
@@ -502,7 +539,7 @@ export function evaluateGate({
             !everReviewers.has(result.identity.principal) &&
             sameHead(SECOND_SESSION_RE.exec(result.fallbackLine ?? "")?.[1], headSha),
         );
-    if (secondSession && codexReviewedHead(prReviews, headSha) && codexThreadsAnswered(reviewComments, authorLogin)) {
+    if (secondSession && (codexReviewedHead(prReviews, headSha) || codexCleanSummaryOnHead(comments, headSha)) && codexThreadsAnswered(reviewComments, authorLogin)) {
       return {
         state: "success",
         description: `Independent review and second Claude session QA valid for current head (D-139: Codex review on head, threads answered).${carriedNote(passingReviews, headSha)}`,
@@ -510,6 +547,24 @@ export function evaluateGate({
     }
 
     if (!separateAppPass) {
+      // DAN-39: the Codex pair is current-head only, never D-101 carry.
+      // PASS filtering and negative dominance above still apply. Declared
+      // slots are not cryptographic proof of independent sessions.
+      const codexReview = passingReviews.some(
+        (review) => review.current && review.identity.appSlug === "chatgpt-codex-connector",
+      );
+      const codexQa = qaPasses.some(
+        (result) =>
+          result.current &&
+          result.identity.appSlug === "chatgpt-codex-connector" &&
+          !passingReviewerPrincipals.has(result.identity.principal),
+      );
+      if (codexReview && codexQa) {
+        return {
+          state: "success",
+          description: "Independent Codex review and QA pair valid on exact current head.",
+        };
+      }
       return {
         state: "pending",
         description: "Critical PR: waiting for separately authenticated QA PASS.",

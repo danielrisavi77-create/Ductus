@@ -1,6 +1,7 @@
 import { expect, test, type Page, type Request } from "@playwright/test";
 import pg from "pg";
 
+import { DUCTUS_PROTOCOL_VERSION } from "../../src/domain/evidence/commit-envelope";
 import { createWithActor } from "../../src/server/db/with-actor";
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
@@ -126,10 +127,12 @@ test.afterEach(async () => {
 
 /** The live state as its owner reads it, through the same GET the teacher uses (rule 5). */
 async function readLive(page: Page): Promise<{ status: number; body: string }> {
-  return page.evaluate(async (url) => {
-    const response = await fetch(url, { cache: "no-store" });
+  return page.evaluate(async ({ url, protocol }) => {
+    const response = await fetch(url, {
+      cache: "no-store", headers: { "ductus-protocol": protocol },
+    });
     return { status: response.status, body: response.status === 200 ? await response.text() : "" };
-  }, LIVE);
+  }, { url: LIVE, protocol: DUCTUS_PROTOCOL_VERSION });
 }
 
 test("a student without a confirmed notice publishes once, gets 404 and publishes nothing more", async ({ page }) => {

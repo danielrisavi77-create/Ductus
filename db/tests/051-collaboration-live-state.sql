@@ -220,7 +220,7 @@ SELECT is(pg_temp.publish_as('dora', 'doc-d', NULL, pg_temp.val('b1')), 'ZD403: 
   'an owner without the current notice acknowledged cannot publish');
 SELECT is(pg_temp.read_as('dora', 'doc-d', NULL), 'empty||', 'she still reads her own state');
 SELECT is(pg_temp.ask('vesna', $$ SELECT institution.publish_assignment_version({z1}, 2, 'Z1', 'Nove upute za izmišljeni zadatak.',
-    'essay', now(), now() + interval '30 days', 'partially_allowed', '{proofreading}', 'extended', true) $$), '3',
+    'essay', now(), now() + interval '30 days', 'partially_allowed', '{proofreading}', 'extended', true, NULL, NULL) $$), '3',
   'the teacher publishes a third version of Z1');
 SELECT is(pg_temp.publish_as('ana', 'doc-a', pg_temp.val('t3'), pg_temp.val('b2')), 'ZD403: forbidden',
   'after a new version of the assignment the owner cannot publish until she acknowledges it');
