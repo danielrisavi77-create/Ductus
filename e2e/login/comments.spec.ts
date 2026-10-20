@@ -4,7 +4,7 @@ import { createTextAnchor } from "../../src/domain/collaboration";
 import type { NodeId } from "../../src/domain/document";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
-import { cleanUp, seed } from "./comment-seed";
+import { cleanUp, ORIGIN, post, seed } from "./comment-seed";
 import { clickSignOut, signIn } from "./support";
 
 // F-9 step 1 (DAN-86): a teacher's comment next to a paragraph reaches the
@@ -20,13 +20,9 @@ import { clickSignOut, signIn } from "./support";
 // teacher role it opened, so no other spec can read the document.
 
 const t = messagesHr.comments;
-const ORIGIN = "http://localhost:3000";
 const TEXT = "Gradske knjižnice su mjesto susreta i učenja.";
 const QUOTE = "mjesto susreta";
 const BODY = "Dodaj izvor za ovu tvrdnju. <img src=x onerror=alert(1)>";
-
-const post = (page: Page, action: string, data: object) =>
-  page.request.post(`/api/comments/${action}`, { headers: { origin: ORIGIN }, data });
 
 /** The comment cards only; the sheet is an article as well. */
 const commentCards = (page: Page) =>

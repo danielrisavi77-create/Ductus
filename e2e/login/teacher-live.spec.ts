@@ -74,6 +74,7 @@ test("the teacher sees the work as the student writes, with the limits of the re
   await expect(text.getByText("Gradske knjižnice su mjesto susreta.")).toBeVisible();
   await expect(text.getByRole("heading", { level: 2, name: "Uvod" })).toBeVisible();
   await expect(page.getByRole("status").filter({ hasText: t.connection.live })).toBeVisible();
+  await expect(page.getByText(t.note)).toBeVisible();
   await expect(page.getByRole("heading", { name: messagesHr.recordLimits.title })).toBeVisible();
   await expect(page.getByText(messagesHr.recordLimits.exampleB)).toBeVisible();
   await expect.poll(() => calls.length).toBeGreaterThan(1);
@@ -111,6 +112,8 @@ test("nothing published yet is said as such", async ({ page }) => {
   await serveLive(page, () => ({ status: 204 }));
   await signIn(page, PATH, "Demo nastavnik");
   await expect(page.getByText(t.empty)).toBeVisible();
+  // The note speaks about a shown text; with none it would contradict the line above.
+  await expect(page.getByText(t.note)).toHaveCount(0);
 });
 
 test.describe("comments from the live view", () => {

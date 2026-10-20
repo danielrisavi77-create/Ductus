@@ -1,21 +1,23 @@
+import type { Page } from "@playwright/test";
 import pg from "pg";
 
 import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
 
-// The invented course, assignment and evidence document behind the demo
-// student's /rad document, and the demo teacher who teaches it (F-9 step 1,
-// moved here from comments.spec.ts for DAN-86 step 2c). Written through the
-// admin login of the compose database, as no route creates them yet (K-3a
-// #313, F-3 drain). Revisions and assignment versions are immutable, so the
-// document and its course stay; cleanUp() removes the comments and closes the
-// memberships and the teacher role seed() opened, so no other spec can read it.
-
-const ADMIN_DATABASE_URL =
+// Shared by comments.spec.ts, demo-flow.spec.ts (F-9) and teacher-live.spec.ts
+// (DAN-86 step 2c): the invented course, assignment and evidence document behind
+// the demo student's /rad document and the demo teacher who teaches it, written
+// through the admin login of the compose database as no route creates them yet
+// (K-3a #313, F-3 drain), and the same POST the comment panel will send.
+// Revisions and assignment versions are immutable, so the document and its
+// course stay; cleanUp() removes the comments and closes the memberships and the
+// teacher role seed() opened, so no other spec can read it.
+export const ADMIN_DATABASE_URL =
   process.env.E2E_ADMIN_DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
-const TEACHER = "demo-teacher@demo.ductus.test";
-const STUDENT = "demo-student@demo.ductus.test";
+export const ORIGIN = "http://localhost:3000";
+export const TEACHER = "demo-teacher@demo.ductus.test";
+export const STUDENT = "demo-student@demo.ductus.test";
 
-async function admin<T>(work: (client: pg.Client) => Promise<T>): Promise<T> {
+export async function admin<T>(work: (client: pg.Client) => Promise<T>): Promise<T> {
   const client = new pg.Client({ connectionString: ADMIN_DATABASE_URL });
   await client.connect();
   try {
@@ -104,3 +106,6 @@ export async function cleanUp(): Promise<void> {
   seeded.course = null;
   seeded.role = null;
 }
+
+export const post = (page: Page, action: string, data: object) =>
+  page.request.post(`/api/comments/${action}`, { headers: { origin: ORIGIN }, data });
