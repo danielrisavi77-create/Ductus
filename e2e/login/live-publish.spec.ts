@@ -34,8 +34,15 @@ function recordPuts(page: Page): { at: number; body: string | null }[] {
   return puts;
 }
 
+/** The seed writes as the database owner, so it never runs against a database off this machine. */
+function localAdminUrl(url: string): string {
+  const host = new URL(url).hostname;
+  if (host !== "127.0.0.1" && host !== "localhost") throw new Error("the e2e seed runs only against a local database");
+  return url;
+}
+
 async function admin<T>(work: (client: pg.Client) => Promise<T>): Promise<T> {
-  const client = new pg.Client({ connectionString: ADMIN_DATABASE_URL });
+  const client = new pg.Client({ connectionString: localAdminUrl(ADMIN_DATABASE_URL) });
   await client.connect();
   try {
     return await work(client);
