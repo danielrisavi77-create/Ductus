@@ -22,7 +22,7 @@ import type { TextAnchor } from "@/domain/collaboration";
 import type { DocumentNode } from "@/domain/document";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
-import { anchorForSelection, blockSegments, placeAnchor, type TextRange } from "./comment-place";
+import { anchorForSelection, blockSegments, placeThreads, type TextRange } from "./comment-place";
 import styles from "./LiveWorkView.module.css";
 import RecordLimits from "./RecordLimits";
 import { selectedRange, selectInBlock } from "./selection";
@@ -86,7 +86,7 @@ export default function LiveWorkView({ documentId, session }: {
 
   const threads = !stopped && comments.outcome?.kind === "ok" ? comments.outcome.threads : [];
   // Placed again against every new state of the text: an edited paragraph never keeps a stale place.
-  const placed: PlacedThread[] = threads.map((thread) => ({ thread, range: placeAnchor(view.document, thread.anchor) }));
+  const placed: PlacedThread[] = placeThreads(view.document, threads);
   const marks = placed.flatMap((p) => (p.range && p.thread.state !== "resolved" ? [p.range] : []));
 
   // The anchor is made from the text on screen, so it never carries text the teacher has not seen (attack 8).

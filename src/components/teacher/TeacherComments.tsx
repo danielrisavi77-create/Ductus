@@ -28,12 +28,13 @@ import styles from "./LiveWorkView.module.css";
 const t = messagesHr.comments;
 const tt = messagesHr.teacherComments;
 
-export type PlacedThread = { thread: CommentThread; range: TextRange | null };
+/** `pending`: no text shown yet, so the place is not looked for and not called lost. */
+export type PlacedThread = { thread: CommentThread; range: TextRange | null; pending: boolean };
 
 function ThreadCard({ placed, current, onChanged, onShow }: {
   placed: PlacedThread; current: () => boolean; onChanged: () => void; onShow: (range: TextRange) => void;
 }) {
-  const { thread, range } = placed;
+  const { thread, range, pending } = placed;
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<Exclude<ReplyOutcome, "ok"> | null>(null);
@@ -61,7 +62,7 @@ function ThreadCard({ placed, current, onChanged, onShow }: {
         <span>{t.state[thread.state]}</span>
       </header>
       {thread.anchor ? <p className={styles.quote}>„{thread.anchor.quote}”</p> : null}
-      {range ? null : <p className={styles.muted}>{t.notPlaced}</p>}
+      {range || pending ? null : <p className={styles.muted}>{t.notPlaced}</p>}
       {first ? <p>{first.body}</p> : null}
       {first ? <p className={styles.muted}>{formatDateTimeHr(first.createdWindow)}</p> : null}
       {replies.map((reply) => (
