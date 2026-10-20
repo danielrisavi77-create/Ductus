@@ -187,8 +187,8 @@ const CODEX_STATE_RE = /<!-- codex-review-state:v1 (\{[^\r\n]*?\}) -->/;
 // the full reviewed commit. Only the App's own comment counts (bot account and
 // App slug, never a human or another App), the commit must be the current head
 // in full, and the review must be completed with no findings at all. Several
-// summaries naming this head must all be clean; anything unreadable is no
-// evidence: fail closed. The receipt comment (short sha) is never evidence.
+// summaries naming this head must all be clean; one unreadable summary voids
+// the whole proof: fail closed. The receipt comment (short sha) is never evidence.
 function codexCleanSummaryOnHead(comments, headSha) {
   const onHead = [];
   for (const item of comments ?? []) {
@@ -199,9 +199,10 @@ function codexCleanSummaryOnHead(comments, headSha) {
     try {
       review = JSON.parse(CODEX_STATE_RE.exec(body)?.[1] ?? "null")?.code_review;
     } catch {
-      continue;
+      return false; // an unreadable Codex summary poisons the whole proof
     }
-    if (sameHead(review?.commit_sha, headSha)) onHead.push(review);
+    if (!review || typeof review !== "object") return false;
+    if (sameHead(review.commit_sha, headSha)) onHead.push(review);
   }
   return (
     onHead.length > 0 &&

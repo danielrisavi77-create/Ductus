@@ -173,3 +173,9 @@ test("non-critical risk is unaffected", () => {
   const body = "Agent: claude:a:backend\nRisk: standard\nTask: B-1\n";
   assert.equal(evaluateGate({ body, headSha: head, ownerLogin, comments: [reviewPass], prReviews: [], reviewComments: [] }).state, "success");
 });
+test("a valid clean summary plus an unreadable Codex summary voids the proof (review finding)", () => {
+  for (const body of [summaryBody("{not json"), summaryBody("null"), summaryBody('{"code_review":null}'), "<!-- codex-pull-request-review-summary -->\ntruncated"]) {
+    pending([summary(), summary({ body })]);
+    pending([summary({ body }), summary()]);
+  }
+});
