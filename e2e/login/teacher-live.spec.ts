@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page, type Route } from "@playwright/test";
 
-import { CURRENT_KEY, SESSION_END_CHANNEL } from "../../src/client/session-marks";
+import { CURRENT_KEY, ENDED_KEY, SESSION_END_CHANNEL } from "../../src/client/session-marks";
 import { createTextAnchor } from "../../src/domain/collaboration";
 import type { NodeId } from "../../src/domain/document";
 import { REVISION_ZERO_JCS } from "../../src/domain/document/revision-zero";
@@ -11,7 +11,7 @@ import { canonicalizeJcs } from "../../src/domain/forensics/jcs";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
 import { cleanUp, post, seed } from "./comment-seed";
-import { signIn } from "./support";
+import { appCookie, clickSignOut, SESSION_COOKIE, sessionRow, signIn } from "./support";
 
 // DAN-86 step 2b: the teacher's live view of a work. The live route (GET
 // /api/live/<id>, PR #496, BACKEND 4.12) is not on main yet, so the browser's
@@ -123,6 +123,73 @@ test("nothing published yet is said as such", async ({ page }) => {
   await expect(page.getByText(t.empty)).toBeVisible();
   // The note speaks about a shown text; with none it would contradict the line above.
   await expect(page.getByText(t.note)).toHaveCount(0);
+});
+
+test("a session ended in another tab before hydration sends no initial summary POST", async ({ page, context }) => {
+  const logoutTab = await context.newPage();
+  await signIn(logoutTab, "/rad", "Demo nastavnik");
+  const token = (await appCookie(context, SESSION_COOKIE))!.value;
+  await expect.poll(() => logoutTab.evaluate((key) => localStorage.getItem(key), CURRENT_KEY)).not.toBeNull();
+  const mark = await logoutTab.evaluate((key) => JSON.parse(localStorage.getItem(key)!) as { tag: string }, CURRENT_KEY);
+  const lifecycle: string[] = [];
+  const requests: string[] = [];
+  const responses: number[] = [];
+  const heldScripts: string[] = [];
+  let releaseScripts = () => {};
+  const hydrationGate = new Promise<void>((resolve) => { releaseScripts = resolve; });
+  // Hold the target page's real Next scripts, not its session guard or API.
+  // Its authenticated server-rendered card arrives before React can mount it.
+  await page.route("**/_next/**", async (route) => {
+    if (route.request().resourceType() === "script") {
+      heldScripts.push(route.request().url());
+      await hydrationGate;
+    }
+    await route.continue();
+  });
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/process-summary" && request.method() === "POST") {
+      requests.push(request.postData() ?? "");
+      lifecycle.push("summary-post");
+    }
+  });
+  page.on("response", (response) => {
+    if (new URL(response.url()).pathname === "/api/process-summary") responses.push(response.status());
+  });
+  try {
+    const response = await page.goto(PATH, { waitUntil: "commit" });
+    expect(response?.status()).toBe(200);
+    await expect(page.getByRole("button", { name: messagesHr.summaryCard.refresh })).toBeVisible();
+    await expect.poll(() => heldScripts.length).toBeGreaterThan(0);
+    lifecycle.push("authenticated-card-arrived-with-scripts-held");
+    expect(requests).toEqual([]);
+
+    // Real logout closes this session in the database and persists its end
+    // in the shared browser storage while the other tab is still unhydrated.
+    await clickSignOut(logoutTab);
+    await logoutTab.waitForURL("http://localhost:3000/");
+    expect(await appCookie(context, SESSION_COOKIE)).toBeUndefined();
+    expect(await sessionRow(token)).toMatchObject({ close_reason: "logout", closed_at: expect.any(Date) });
+    expect(await page.evaluate(({ key, tag }) => {
+      return (JSON.parse(localStorage.getItem(key) ?? "[]") as string[]).includes(tag);
+    }, { key: ENDED_KEY, tag: mark.tag })).toBe(true);
+    lifecycle.push("session-closed-and-end-persisted-before-hydration");
+    expect(requests).toEqual([]);
+
+    lifecycle.push("release-hydration");
+    releaseScripts();
+    await expect(page.getByRole("status").filter({ hasText: t.connection.signedOut })).toBeVisible();
+    await expect(page.getByRole("button", { name: messagesHr.summaryCard.refresh })).toHaveCount(0);
+    lifecycle.push("hydrated-view-observed-session-end");
+    await page.waitForTimeout(250);
+    expect(requests).toEqual([]);
+  } finally {
+    releaseScripts();
+    await test.info().attach("summary-before-hydration-lifecycle", {
+      body: Buffer.from(JSON.stringify({ lifecycle, heldScripts, requests, responses }, null, 2)),
+      contentType: "application/json",
+    });
+    await logoutTab.close();
+  }
 });
 
 test("the teacher reads the process summary once, as the same view the student gets", async ({ page }) => {
