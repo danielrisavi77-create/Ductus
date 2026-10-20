@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { carriedHeadCandidates, evaluateGate } from "./review-gate-core.mjs";
+import { carriedHeadCandidates, evaluateGate, sameChange } from "./review-gate-core.mjs";
 
 // D-101 extended to the D-139 path (owner, #87 issuecomment-6292451022): the
 // Codex review and the Provider-Fallback head on an earlier head count for the
@@ -125,4 +125,31 @@ test("the declaration head becomes a carry candidate, bounded by the same walk",
   assert.deepEqual([...heads].sort(), [old, older].sort());
   // a declared head off the first-parent walk is dropped
   assert.deepEqual(carriedHeadCandidates([qa({ sha: older, declared: "d".repeat(40) })], head, path).heads, [older]);
+});
+
+// D-157: moved line numbers are not a change; a real change is.
+const diff = (patch, name = "a.ts") => ({ files: [{ filename: name, status: "modified", patch }] });
+const body = "@@ -451,14 +451,14 @@ export const hr = {\n ctx1\n-old\n+new\n ctx2";
+const shifted = "@@ -457,14 +457,14 @@ export const other = {\n ctx1\n-old\n+new\n ctx2";
+
+test("a hunk shifted by the base branch is the same change", () => {
+  assert.equal(sameChange(diff(body), diff(shifted)), true);
+  assert.equal(sameChange(diff("@@ -1 +1 @@\n-a\n+b"), diff("@@ -9 +9 @@\n-a\n+b")), true);
+});
+
+test("a changed context line, added or removed line is not the same change", () => {
+  assert.equal(sameChange(diff(body), diff(shifted.replace("ctx2", "ctxX"))), false);
+  assert.equal(sameChange(diff(body), diff(shifted.replace("+new", "+newer"))), false);
+  assert.equal(sameChange(diff(body), diff(shifted.replace("-old", "-older"))), false);
+  assert.equal(sameChange(diff(body), diff(shifted.replace("\n-old", ""))), false);
+});
+
+test("a changed line count or hunk count is not the same change", () => {
+  assert.equal(sameChange(diff(body), diff(shifted.replace("+457,14", "+457,15"))), false);
+  assert.equal(sameChange(diff(body), diff(shifted.replace("-457,14", "-457,13"))), false);
+  assert.equal(sameChange(diff(body), diff(`${shifted}\n@@ -600,1 +600,1 @@\n-x\n+y`)), false);
+});
+
+test("a content line that looks like a header is still compared", () => {
+  assert.equal(sameChange(diff("@@ -1 +1 @@\n-a\n+@@ -5 +5 @@"), diff("@@ -2 +2 @@\n-a\n+@@ -6 +6 @@")), false);
 });
