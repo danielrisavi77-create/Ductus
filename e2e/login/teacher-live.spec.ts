@@ -203,6 +203,8 @@ test.describe("comments from the live view", () => {
     const anchor = createTextAnchor({
       nodeId: "5c4d3e2f-1a0b-4c9d-8e7f-6a5b4c3d2e1f" as NodeId, nodeText: TEXT, start, end: start + "mjesto".length,
     });
+    // A clean local stack has no student identity until the first real sign-in.
+    await signIn(page, "/", "Demo studentica");
     await signIn(page, "/", "Demo nastavnik");
     await seed();
     expect((await post(page, "create", { documentId: LOCAL_DEMO_DOCUMENT_ID, body: "Dodaj izvor.", anchor })).status()).toBe(200);
