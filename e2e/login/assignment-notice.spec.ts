@@ -60,8 +60,8 @@ async function seedAssignment(acknowledged = false): Promise<{ assignment: strin
       [course!.id, me.institution, me.id]);
     if (acknowledged) {
       await client.query(
-        "INSERT INTO institution.notice_acknowledgment (assignment_id, version_no, student_id) VALUES ($1, 1, $2)",
-        [assignment!.id, me.id]);
+        `INSERT INTO institution.notice_acknowledgment (assignment_id, institution_id, version_no, student_id)
+         VALUES ($1, $2, 1, $3)`, [assignment!.id, me.institution, me.id]);
     }
     await client.query("COMMIT");
     return { assignment: assignment!.id, course: course!.id, courseName };
