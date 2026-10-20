@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-import { DEMO_WORK_CONTEXT } from "./demo-context.hr";
 import { countTextWords, groupHr, lengthLine, pagesOf } from "./length-line";
 
 const NBSP = " ";
@@ -50,7 +49,11 @@ describe("length line of the status bar (FE-D6)", () => {
     expect(lengthLine(210, 0, RANGE).selected).toBeNull();
   });
 
-  it("uses a demo range that is a real range", () => {
-    expect(DEMO_WORK_CONTEXT.words.min).toBeLessThan(DEMO_WORK_CONTEXT.words.max);
+  // #476 contract 6280487079: /rad has no word range until the assignment
+  // carries one (DAN-229), and the line then names none.
+  it("without a range names no range at any count", () => {
+    for (const words of [0, 1, 210, 2500]) {
+      expect(lengthLine(words, 0, null).rest).not.toMatch(/[–/]/u);
+    }
   });
 });

@@ -88,7 +88,7 @@ export default function AssignmentNotice({ view }: { view: NoticeView }) {
       {state.phase === "acknowledged" ? (
         <div className={styles.done}>
           <p role="status">{s.confirmed.replace("{time}", time(state.at))}</p>
-          <p><a href="/rad">{s.openEditor}</a></p>
+          <p><a href={`/rad?zadatak=${encodeURIComponent(view.assignmentId)}`}>{s.openEditor}</a></p>
         </div>
       ) : (
         <form className={styles.ack} onSubmit={confirm}>
