@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 
 import AppHeader from "@/components/shell/AppHeader";
-import SessionObserver from "@/components/shell/SessionObserver";
 import LiveWorkView from "@/components/teacher/LiveWorkView";
 import { isDocumentId } from "@/domain/collaboration";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
@@ -46,7 +45,6 @@ export default async function LiveWorkPage({ params }: { params: Promise<{ id: s
 
   return (
     <>
-      <SessionObserver tag={tag} at={at} />
       <AppHeader context={t.liveView.context} />
       <main id="sadrzaj" tabIndex={-1} className="page">
         <h1 className="visually-hidden">{t.liveView.context}</h1>
