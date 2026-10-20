@@ -58,8 +58,13 @@ function put(body: BodyInit | null = BYTES, headers: Record<string, string | nul
   });
 }
 
-function get(headers: Record<string, string> = {}): Request {
-  return new Request(`${ORIGIN}/api/live/${DOC}`, { headers: { "sec-fetch-site": "same-origin", ...headers } });
+/** A read as the live reader sends it; a header given as null is left out. */
+function get(headers: Record<string, string | null> = {}, method = "GET"): Request {
+  const all: Record<string, string | null> = { "sec-fetch-site": "same-origin", "ductus-protocol": "1", ...headers };
+  return new Request(`${ORIGIN}/api/live/${DOC}`, {
+    method,
+    headers: Object.fromEntries(Object.entries(all).filter((entry): entry is [string, string] => entry[1] !== null)),
+  });
 }
 
 // `token` given as undefined means no cookie; left out, the cookie is TOKEN.
@@ -279,6 +284,32 @@ describe("GET /api/live/[documentId]: one reading for the owner and the teacher 
       const response = await read(db, request, options);
       expect([response.status, await response.json()]).toStrictEqual([status, { error }]);
       expect(db.withActor).not.toHaveBeenCalled();
+    }
+  });
+
+  it("reads only with the protocol header, for GET and HEAD alike, before the database (F-107)", async () => {
+    for (const method of ["GET", "HEAD"]) {
+      const refused: Request[] = [
+        get({ "ductus-protocol": null }, method),
+        get({ "ductus-protocol": null, "sec-fetch-site": null }, method),
+        get({ "ductus-protocol": "2" }, method),
+        get({ "ductus-protocol": "" }, method),
+        get({ "ductus-protocol": "1, 1" }, method),
+        get({ "sec-fetch-site": "none" }, method),
+        get({ "sec-fetch-site": "cross-site" }, method),
+      ];
+      for (const request of refused) {
+        const db = database({ rows: [{ outcome: "state", content_hash: HASH, body: TEXT }] });
+        const response = await read(db, request);
+        expect(response.status).toBe(403);
+        expect(response.headers.get("cache-control")).toBe("no-store");
+        expect(db.withActor).not.toHaveBeenCalled();
+      }
+      // The header proves the page when the browser sends no Sec-Fetch-Site.
+      const db = database({ rows: [{ outcome: "state", content_hash: HASH, body: TEXT }] });
+      const response = await read(db, get({ "sec-fetch-site": null }, method));
+      expect([response.status, response.headers.get("etag")]).toStrictEqual([200, `"${HASH}"`]);
+      expect(db.withActor).toHaveBeenCalledTimes(1);
     }
   });
 });

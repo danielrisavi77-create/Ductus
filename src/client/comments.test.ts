@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { listComments, replyComment, threadsFromList } from "./comments";
+import type { TextAnchor } from "@/domain/collaboration";
+
+import { changeThreadState, createComment, listComments, replyComment, threadsFromList } from "./comments";
 
 const T1 = "aaaaaaaa-0000-4000-8000-000000000001";
 const T2 = "aaaaaaaa-0000-4000-8000-000000000002";
@@ -85,8 +87,36 @@ describe("listComments and replyComment", () => {
     }
   });
 
+  it("opens a thread with the document, the body in NFC and the anchor alone", async () => {
+    answer(200, { id: T2 });
+    expect(await createComment("doc-1", "Dodaj izvor.", anchor as TextAnchor)).toBe("ok");
+    const [url, init] = vi.mocked(fetch).mock.calls[0]!;
+    expect(url).toBe("/api/comments/create");
+    expect(JSON.parse(String(init!.body))).toEqual({ documentId: "doc-1", body: "Dodaj izvor.", anchor });
+    for (const [status, outcome] of [[401, "signedOut"], [403, "forbidden"], [422, "invalid"], [503, "unavailable"]] as const) {
+      answer(status);
+      expect(await createComment("doc-1", "Da.", anchor as TextAnchor)).toBe(outcome);
+    }
+  });
+
+  it("resolves and reopens a thread by its id, 204 being success", async () => {
+    answer(204);
+    expect(await changeThreadState(T1, "resolve")).toBe("ok");
+    expect(vi.mocked(fetch).mock.calls[0]![0]).toBe("/api/comments/resolve");
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0]![1]!.body))).toEqual({ threadId: T1 });
+    answer(204);
+    expect(await changeThreadState(T1, "reopen")).toBe("ok");
+    expect(vi.mocked(fetch).mock.calls[0]![0]).toBe("/api/comments/reopen");
+    for (const [status, outcome] of [[200, "unavailable"], [401, "signedOut"], [403, "forbidden"], [409, "conflict"], [503, "unavailable"]] as const) {
+      answer(status);
+      expect(await changeThreadState(T1, "resolve")).toBe(outcome);
+    }
+  });
+
   it("sends nothing once the session of the page has ended (F-093)", async () => {
     answer(200, { id: T2 });
+    expect(await createComment("doc-1", "Da.", anchor as TextAnchor, () => false)).toBe("signedOut");
+    expect(await changeThreadState(T1, "resolve", () => false)).toBe("signedOut");
     expect(await replyComment(T1, "Da.", () => false)).toBe("signedOut");
     expect(await listComments("doc-1", () => false)).toEqual({ kind: "signedOut" });
     expect(fetch).not.toHaveBeenCalled();

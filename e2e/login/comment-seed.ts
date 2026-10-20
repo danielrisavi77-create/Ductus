@@ -3,10 +3,14 @@ import pg from "pg";
 
 import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
 
-// Shared by comments.spec.ts and demo-flow.spec.ts (F-9): the invented course,
-// assignment and evidence document the teacher's comment hangs on, written
+// Shared by comments.spec.ts, demo-flow.spec.ts (F-9) and teacher-live.spec.ts
+// (DAN-86 step 2c): the invented course, assignment and evidence document behind
+// the demo student's /rad document and the demo teacher who teaches it, written
 // through the admin login of the compose database as no route creates them yet
 // (K-3a #313, F-3 drain), and the same POST the comment panel will send.
+// Revisions and assignment versions are immutable, so the document and its
+// course stay; cleanUp() removes the comments and closes the memberships and the
+// teacher role seed() opened, so no other spec can read it.
 export const ADMIN_DATABASE_URL =
   process.env.E2E_ADMIN_DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
 export const ORIGIN = "http://localhost:3000";
