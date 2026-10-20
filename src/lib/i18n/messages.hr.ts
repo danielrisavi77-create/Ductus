@@ -410,6 +410,12 @@ export const hr = {
     italic: "Kurziv",
     undo: "Poništi",
     redo: "Ponovi",
+    // FE-D5, editor-v11: tools that do not fit, and the sheet theme.
+    more: "Više",
+    moreMenu: "Više alata",
+    view: "Prikaz",
+    viewMenu: "Prikaz",
+    sheet: "List",
   },
   outline: {
     label: "Naslovi u radu",
