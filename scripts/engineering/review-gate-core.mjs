@@ -547,6 +547,24 @@ export function evaluateGate({
     }
 
     if (!separateAppPass) {
+      // DAN-39: the Codex pair is current-head only, never D-101 carry.
+      // PASS filtering and negative dominance above still apply. Declared
+      // slots are not cryptographic proof of independent sessions.
+      const codexReview = passingReviews.some(
+        (review) => review.current && review.identity.appSlug === "chatgpt-codex-connector",
+      );
+      const codexQa = qaPasses.some(
+        (result) =>
+          result.current &&
+          result.identity.appSlug === "chatgpt-codex-connector" &&
+          !passingReviewerPrincipals.has(result.identity.principal),
+      );
+      if (codexReview && codexQa) {
+        return {
+          state: "success",
+          description: "Independent Codex review and QA pair valid on exact current head.",
+        };
+      }
       return {
         state: "pending",
         description: "Critical PR: waiting for separately authenticated QA PASS.",
