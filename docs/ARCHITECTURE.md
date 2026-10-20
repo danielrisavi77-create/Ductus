@@ -302,7 +302,7 @@ Rokovi se unose i prikazuju u zoni Europe/Zagreb; promjena na zimsko računanje 
 Pravila koja vrijede neovisno o dobavljaču (BACKEND §3, §4.7, §4.8):
 
 - Migracije pokreće `ductus_migrator` s VM-a pri deployu, ne iz CI-ja; nikad ručno na produkciju bez prolaska kroz staging, nikad iz agenta. Expand/migrate/contract; provjera zanošenja sheme između staginga i produkcije.
-- Staging koristi iste vrste resursa kao produkcija (upravljana baza, KMS, S3), jer sintetički prolaz na njemu je uvjet za svaku komponentu koja dira povjerenje (BACKEND §6 točka 12).
+- Staging koristi iste vrste resursa kao produkcija (upravljana baza, KMS, S3). Za komponentu koja dira povjerenje sintetički prolaz na tom stagingu s povratom obvezan je prije prvog udaljenog deploya aplikacije ili pilota; za lokalni sintetički FPZG demo vrijedi uska granica iz D-159 i BACKEND §6 točka 12.
 - Kopije: PITR, dnevni šifrirani `pg_dump` kod drugog dobavljača, dnevna replika bucketa na drugi račun, mjesečna proba povrata baze i bucketa. Rezervni put na drugom računu u istom kodu infrastrukture.
 - Test u CI-ju provjerava da produkcijska konfiguracija nema lažnog OIDC pružatelja ni razvojnog potpisnika.
 
