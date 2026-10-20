@@ -99,7 +99,8 @@ export default function LiveWorkView({ documentId, session }: {
             {text}
           </div>
         </SheetFrame>
-        {stopped ? null : <p className={styles.note}>{t.note}</p>}
+        {/* The note speaks about a shown text, so it stands only beside one. */}
+        {!stopped && view.document ? <p className={styles.note}>{t.note}</p> : null}
       </div>
       <aside className={styles.aside} aria-labelledby="record-limits-title">
         <RecordLimits />
