@@ -3,7 +3,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-import { carryEnv, carryVerdict, DIFF_ARGS, refreshOnly } from "./carry-core.mjs";
+import { carryEnv, carryVerdict, DIFF_ARGS, refreshOnly, remoteIs } from "./carry-core.mjs";
 import { prView, readGate } from "./gh.mjs";
 import { EXPECTED_REPO } from "./verdict-core.mjs";
 
@@ -51,6 +51,9 @@ try {
   if (String(repo.full_name ?? "").toLowerCase() !== EXPECTED_REPO.toLowerCase()) {
     throw new Error(`this checkout points at ${repo.full_name ?? "?"}, not ${EXPECTED_REPO}`);
   }
+  // The fetch must come from the repository gh just confirmed, not from a fork behind origin.
+  const origin = (await git("remote", "get-url", "origin")).trim();
+  if (!remoteIs(origin, EXPECTED_REPO)) throw new Error(`origin (${origin}) is not ${EXPECTED_REPO}`);
   await git("fetch", "origin", "main", `refs/pull/${n}/head`);
   const pr = await prView(n);
   const newHead = pr.headRefOid;

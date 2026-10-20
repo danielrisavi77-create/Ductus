@@ -24,6 +24,12 @@ export function normalizeDiff(text) {
     .join("\n");
 }
 
+/** True only when a remote URL names exactly `repo` ("owner/name") on github.com, https or ssh. */
+export function remoteIs(url, repo) {
+  const m = /^(?:https:\/\/(?:[^@/]+@)?github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/i.exec(String(url ?? "").trim());
+  return Boolean(m) && `${m[1]}/${m[2]}`.toLowerCase() === String(repo).toLowerCase();
+}
+
 const SHA = /^[0-9a-f]{40}$/;
 export const MAX_REFRESH_COMMITS = 10;
 

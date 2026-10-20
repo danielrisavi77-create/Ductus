@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { carryEnv, carryVerdict, DIFF_ARGS, normalizeDiff, refreshOnly } from "./carry-core.mjs";
+import { carryEnv, carryVerdict, DIFF_ARGS, normalizeDiff, refreshOnly, remoteIs } from "./carry-core.mjs";
 
 const ok = { state: "success" };
 const diff = "diff --git a/x b/x\nindex 1111111..2222222 100644\n--- a/x\n+++ b/x\n@@ -4,3 +4,3 @@ head\n ctx\n-a\n+b\n ctx2\n";
@@ -102,4 +102,24 @@ test("the real diff arguments see whitespace changes and ignore an external diff
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("remoteIs accepts only the exact canonical repository on github.com", () => {
+  const repo = "danielrisavi77-create/Ductus";
+  for (const ok of [
+    "https://github.com/danielrisavi77-create/Ductus.git",
+    "https://github.com/danielrisavi77-create/Ductus",
+    "https://user@github.com/Danielrisavi77-Create/ductus.git",
+    "git@github.com:danielrisavi77-create/Ductus.git",
+    "ssh://git@github.com/danielrisavi77-create/Ductus.git",
+  ]) assert.equal(remoteIs(ok, repo), true, ok);
+  for (const bad of [
+    "https://github.com/someone/Ductus.git",
+    "https://github.com/danielrisavi77-create/Ductus-fork.git",
+    "https://evil.example/danielrisavi77-create/Ductus.git",
+    "https://github.com.evil.example/danielrisavi77-create/Ductus.git",
+    "git@github.com:danielrisavi77-create/Ductus/extra.git",
+    "",
+    undefined,
+  ]) assert.equal(remoteIs(bad, repo), false, String(bad));
 });
