@@ -2,9 +2,10 @@
 // (merge-tree results) locally and reads GitHub; it never changes a branch or the PR.
 // Usage: node carry.mjs <pr> <old-head-sha>   (exit 0 only on CARRY)
 import { execFile, execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { promisify } from "node:util";
 
-import { carryEnv, carryVerdict, DIFF_ARGS, gitEnv, patchIdOf, refreshOnly, remoteIs, treesProven } from "./carry-core.mjs";
+import { carryEnv, carryVerdict, DIFF_ARGS, gitEnv, patchIdOf, refreshOnly, remoteIs, treesProven, unsafeConfigKeys } from "./carry-core.mjs";
 import { prView, readGate } from "./gh.mjs";
 import { EXPECTED_REPO } from "./verdict-core.mjs";
 
@@ -62,6 +63,12 @@ const treePairs = async (chain) =>
   }));
 
 try {
+  // The proof must not depend on local programs or fake history: no graft file, no local
+  // setting that runs another program or changes the transport.
+  const graft = (await git("rev-parse", "--git-path", "info/grafts")).trim();
+  if (existsSync(graft)) throw new Error("this checkout has info/grafts (fake history)");
+  const unsafe = unsafeConfigKeys(await git("config", "--local", "--list", "-z"));
+  if (unsafe.length > 0) throw new Error(`local git configuration is not isolated: ${unsafe.slice(0, 3).join(", ")}`);
   // The GitHub reads must be about the canonical repository, like the local fetch.
   const repo = JSON.parse((await run("gh", ["api", "repos/{owner}/{repo}"], { windowsHide: true, env: clean })).stdout);
   if (String(repo.full_name ?? "").toLowerCase() !== EXPECTED_REPO.toLowerCase()) {

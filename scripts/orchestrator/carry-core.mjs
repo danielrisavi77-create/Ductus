@@ -8,12 +8,35 @@
 
 // Inherited variables that would point git or gh at another repository, host or index, or
 // that would let git substitute objects or run another diff program.
-const REPO_ENV = /^(GIT_(DIR|WORK_TREE|INDEX_FILE|COMMON_DIR|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|NAMESPACE|PREFIX|EXTERNAL_DIFF|NO_REPLACE_OBJECTS|REPLACE_REF_BASE|CONFIG\w*)|GH_REPO|GH_HOST|GH_ENTERPRISE_TOKEN|GITHUB_ENTERPRISE_TOKEN)$/i;
+const REPO_ENV = /^(GIT_(DIR|WORK_TREE|INDEX_FILE|COMMON_DIR|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|NAMESPACE|PREFIX|EXTERNAL_DIFF|NO_REPLACE_OBJECTS|REPLACE_REF_BASE|CONFIG\w*|SSH|SSH_COMMAND|PROXY_COMMAND|ATTR_SOURCE|CEILING_DIRECTORIES|GRAFT_FILE)|GH_REPO|GH_HOST|GH_ENTERPRISE_TOKEN|GITHUB_ENTERPRISE_TOKEN)$/i;
 
 export const carryEnv = (env) => Object.fromEntries(Object.entries(env).filter(([key]) => !REPO_ENV.test(key)));
 
-/** Environment of every git child: cleaned, and replacement objects never used. */
-export const gitEnv = (env) => ({ ...carryEnv(env), GIT_NO_REPLACE_OBJECTS: "1" });
+const NULL_DEVICE = process.platform === "win32" ? "NUL" : "/dev/null";
+
+/**
+ * Environment of every git child: cleaned, replacement objects never used, and no system
+ * or global configuration (merge drivers, ssh commands, proxies, include files).
+ */
+export const gitEnv = (env) => ({
+  ...carryEnv(env),
+  GIT_NO_REPLACE_OBJECTS: "1",
+  GIT_CONFIG_NOSYSTEM: "1",
+  GIT_CONFIG_GLOBAL: NULL_DEVICE,
+});
+
+// Settings of the local repository that run another program, change the transport or
+// pull in more configuration: none of them may influence a proof (fail-closed).
+const UNSAFE_CONFIG = /^(core\.(sshcommand|gitproxy|fsmonitor|hookspath|attributesfile|pager|editor)|merge\..+|diff\.external|diff\..+\.(command|textconv)|include\..*|includeif\..*|protocol\..*|url\..+\.(insteadof|pushinsteadof)|remote\..+\.(proxy|uploadpack|vcs)|credential\..*|http\..*)$/i;
+
+/** Keys of `git config --local --list -z` output (entries "key\nvalue\0") that are unsafe. */
+export function unsafeConfigKeys(listZ) {
+  return String(listZ ?? "")
+    .split("\0")
+    .filter(Boolean)
+    .map((entry) => entry.split("\n")[0])
+    .filter((key) => UNSAFE_CONFIG.test(key));
+}
 
 /** Fixed arguments of the PR diff fed to patch-id: no external diff, no textconv, no renames. */
 export const DIFF_ARGS = ["diff", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", "--no-renames", "--no-color"];

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { carryEnv, carryVerdict, DIFF_ARGS, gitEnv, patchIdOf, refreshOnly, remoteIs, treesProven } from "./carry-core.mjs";
+import { carryEnv, carryVerdict, DIFF_ARGS, gitEnv, patchIdOf, refreshOnly, remoteIs, treesProven, unsafeConfigKeys } from "./carry-core.mjs";
 
 const ok = { state: "success" };
 const good = { refreshed: true, treeProven: true, oldPatchId: "a".repeat(40), newPatchId: "a".repeat(40), gate: ok };
@@ -170,5 +170,27 @@ test("the real diff arguments ignore a configured external diff", () => {
     git("config", "diff.external", "echo SAME");
     assert.match(git(...DIFF_ARGS, "HEAD~1", "HEAD"), /^diff --git /m);
     assert.equal(git(...DIFF_ARGS, "HEAD~1", "HEAD"), plain);
+  });
+});
+
+test("gitEnv isolates transport, global configuration and replacement objects", () => {
+  const env = gitEnv({ GIT_SSH: "x", GIT_SSH_COMMAND: "y", GIT_PROXY_COMMAND: "z", GIT_ATTR_SOURCE: "a", PATH: "p" });
+  assert.deepEqual(Object.keys(env).filter((k) => /SSH|PROXY|ATTR/.test(k)), []);
+  assert.equal(env.GIT_CONFIG_NOSYSTEM, "1");
+  assert.match(env.GIT_CONFIG_GLOBAL, /NUL|\/dev\/null/);
+});
+
+test("unsafeConfigKeys finds settings that run programs or change the transport", () => {
+  const list = (...pairs) => pairs.map(([k, v]) => `${k}\n${v}\0`).join("");
+  assert.deepEqual(unsafeConfigKeys(list(["core.bare", "false"], ["remote.origin.url", "u"], ["user.name", "t"])), []);
+  for (const key of ["core.sshCommand", "merge.default", "merge.x.driver", "diff.external", "diff.y.textconv", "include.path", "url.x.insteadOf", "core.fsmonitor", "credential.helper"]) {
+    assert.deepEqual(unsafeConfigKeys(list([key, "v"])), [key.toLowerCase() === key ? key : key], key);
+  }
+});
+
+test("a real merge driver in the local configuration is found and git with the isolated environment ignores global ones", () => {
+  repoWith(({ git }) => {
+    git("config", "merge.evil.driver", "echo x");
+    assert.deepEqual(unsafeConfigKeys(git("config", "--local", "--list", "-z")), ["merge.evil.driver"]);
   });
 });
