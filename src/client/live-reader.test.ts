@@ -30,14 +30,16 @@ describe("readLiveState", () => {
     expect(read).toMatchObject({ kind: "state", hash: REVISION_ZERO_SHA256 });
     expect(read.kind === "state" && read.document.schemaVersion).toBe(1);
     expect(fetcher).toHaveBeenCalledWith("/api/live/rad%2F1%3Fx", {
-      method: "GET", headers: {}, credentials: "same-origin", cache: "no-store",
+      method: "GET", headers: { "ductus-protocol": "1" }, credentials: "same-origin", cache: "no-store",
     });
   });
 
   it("names the document it already holds and reads 304 for that document as unchanged", async () => {
     const fetcher = vi.fn<typeof fetch>(async () => reply(304, null, REVISION_ZERO_SHA256));
     expect(await readLiveState(DOC, REVISION_ZERO_SHA256, fetcher)).toEqual({ kind: "unchanged" });
-    expect(fetcher.mock.calls[0]![1]).toMatchObject({ headers: { "if-none-match": `"${REVISION_ZERO_SHA256}"` } });
+    expect(fetcher.mock.calls[0]![1]).toMatchObject({
+      headers: { "ductus-protocol": "1", "if-none-match": `"${REVISION_ZERO_SHA256}"` },
+    });
   });
 
   it("never shows a body that is not the exact document the ETag names", async () => {
