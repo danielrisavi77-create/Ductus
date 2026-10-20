@@ -116,7 +116,7 @@ Sadržaj upute je neutralan (`docs/ORKESTRATOR.md` §8). Kad uputa navodi kvotni
 Provider-Fallback: chatgpt-codex-connector — kvota iscrpljena
 ```
 
-Kad uputa navodi put druge Claude sesije (D-139), redak je (puni SHA aktualnog heada, tekst točan osim SHA-a):
+Kad uputa navodi put druge Claude sesije (D-139), redak je (puni SHA aktualnog heada ili heada koji je gate potvrdio kao prenesen preko čistog spajanja maina, D-157; tekst točan osim SHA-a):
 
 ```
 Provider-Fallback: claude-second-session — Codex review na headu <sha>

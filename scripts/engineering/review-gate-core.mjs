@@ -536,8 +536,8 @@ export function evaluateGate({
       return sha && (sameHead(sha, headSha) || carriedHeads.has(sha)) ? sha : null;
     };
     const secondSession = separateAppPass || fallbackPass
-      ? false
-      : qaPasses.some((result) => {
+      ? undefined
+      : qaPasses.find((result) => {
           const sha = declaredHead(result);
           return (
             sha &&
@@ -548,9 +548,10 @@ export function evaluateGate({
           );
         });
     if (secondSession && codexThreadsAnswered(reviewComments, authorLogin)) {
+      // Only the QA result that satisfied D-139 is named, never an unrelated QA PASS.
       return {
         state: "success",
-        description: `Independent review and second Claude session QA valid for current head (D-139: Codex review on head, threads answered).${carriedNote([...passingReviews, ...qaPasses], headSha)}`,
+        description: `Independent review and second Claude session QA valid for current head (D-139: Codex review on head, threads answered).${carriedNote([...passingReviews, secondSession], headSha)}`,
       };
     }
 
@@ -630,22 +631,12 @@ export function onlyBaseMerges(path, earlier) {
   );
 }
 
-// The base branch may move lines above a hunk, which changes only the start
-// numbers and the section heading of the "@@" header. Those carry no part of
-// the PR change, so they are dropped; the hunk count, the line counts, every
-// context line and every added or removed line stay compared (D-157).
-const HUNK_HEADER_RE = /^@@ -\d+(,\d+)? \+\d+(,\d+)? @@.*$/gm;
-const normalizedPatch = (patch) =>
-  typeof patch === "string"
-    ? patch.replace(HUNK_HEADER_RE, (_, oldLen = "", newLen = "") => `@@ -N${oldLen} +N${newLen} @@`)
-    : patch;
-
 function changeKey(file) {
   return JSON.stringify([
     file?.filename ?? null,
     file?.previous_filename ?? null,
     file?.status ?? null,
-    normalizedPatch(file?.patch),
+    file?.patch,
   ]);
 }
 

@@ -127,29 +127,29 @@ test("the declaration head becomes a carry candidate, bounded by the same walk",
   assert.deepEqual(carriedHeadCandidates([qa({ sha: older, declared: "d".repeat(40) })], head, path).heads, [older]);
 });
 
-// D-157: moved line numbers are not a change; a real change is.
+// QA #534: the hunk header stays part of the compared change. A merge may move a change
+// into another block with the same context; moved numbers are no proof of a base shift.
 const diff = (patch, name = "a.ts") => ({ files: [{ filename: name, status: "modified", patch }] });
-const body = "@@ -451,14 +451,14 @@ export const hr = {\n ctx1\n-old\n+new\n ctx2";
-const shifted = "@@ -457,14 +457,14 @@ export const other = {\n ctx1\n-old\n+new\n ctx2";
+const body = "@@ -3,7 +3,6 @@ function readDraft\n ctx\n-check\n ctx2";
+const moved = "@@ -16,7 +16,6 @@ function deleteSubmission\n ctx\n-check\n ctx2";
 
-test("a hunk shifted by the base branch is the same change", () => {
-  assert.equal(sameChange(diff(body), diff(shifted)), true);
-  assert.equal(sameChange(diff("@@ -1 +1 @@\n-a\n+b"), diff("@@ -9 +9 @@\n-a\n+b")), true);
+test("a hunk with other numbers or heading is not the same change", () => {
+  assert.equal(sameChange(diff(body), diff(body)), true);
+  assert.equal(sameChange(diff(body), diff(moved)), false);
+  assert.equal(sameChange(diff(body), diff(body.replace("-3,7 +3,6", "-9,7 +9,6"))), false);
 });
 
-test("a changed context line, added or removed line is not the same change", () => {
-  assert.equal(sameChange(diff(body), diff(shifted.replace("ctx2", "ctxX"))), false);
-  assert.equal(sameChange(diff(body), diff(shifted.replace("+new", "+newer"))), false);
-  assert.equal(sameChange(diff(body), diff(shifted.replace("-old", "-older"))), false);
-  assert.equal(sameChange(diff(body), diff(shifted.replace("\n-old", ""))), false);
+test("a declared head the runner did not confirm fails even when QA is on the current head", () => {
+  const comments = [review(head), qa({ sha: head, declared: old })];
+  assert.equal(evaluate({ comments, carried: [] }).state, "pending");
+  assert.equal(evaluate({ comments, carried: [older] }).state, "pending");
 });
 
-test("a changed line count or hunk count is not the same change", () => {
-  assert.equal(sameChange(diff(body), diff(shifted.replace("+457,14", "+457,15"))), false);
-  assert.equal(sameChange(diff(body), diff(shifted.replace("-457,14", "-457,13"))), false);
-  assert.equal(sameChange(diff(body), diff(`${shifted}\n@@ -600,1 +600,1 @@\n-x\n+y`)), false);
-});
-
-test("a content line that looks like a header is still compared", () => {
-  assert.equal(sameChange(diff("@@ -1 +1 @@\n-a\n+@@ -5 +5 @@"), diff("@@ -2 +2 @@\n-a\n+@@ -6 +6 @@")), false);
+test("the status names only the QA result that satisfied D-139", () => {
+  // an unrelated carried Claude QA PASS from another slot without a declaration
+  const stray = qa({ sha: older, declared: "", slot: "d" });
+  const comments = [review(head), qa({ sha: head, declared: head }), stray];
+  const result = evaluate({ comments, prReviews: [codexReview(head)], carried: [older] });
+  assert.equal(result.state, "success");
+  assert.doesNotMatch(result.description, /Carried from/);
 });
