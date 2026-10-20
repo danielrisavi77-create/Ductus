@@ -25,6 +25,7 @@
     "stack:down": "docker compose down -v",
     "demo:up": "node scripts/demo/up.mjs",
     "demo:prepare": "node scripts/demo/up.mjs --prepare-only",
+    "demo:bootstrap-accounts": "node scripts/demo/bootstrap-accounts.mjs",
     "db:new": "dbmate new",
     "db:provision": "docker compose exec -T postgres psql -U ductus -d ductus -v ON_ERROR_STOP=1 -q < db/local/migrator.sql",
     "db:provision:app": "docker compose exec -T postgres psql -U ductus -d ductus -v ON_ERROR_STOP=1 -q < db/local/app-login.sql",

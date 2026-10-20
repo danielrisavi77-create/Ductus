@@ -32,3 +32,13 @@ Runner postavlja DB, S3, Mailpit i OIDC na lokalne Compose adrese. Odbija DB URL
 Obje skripte rade samo lokalno i pri ponovnom pokretanju ništa ne mijenjaju. Skripte same odbijaju `NODE_ENV=production`, ali `pnpm demo:up` uvijek postavlja `NODE_ENV=development`, pa tu zaštitu ne nosi. Zato `pnpm demo:up` odbija pokretanje ako su postavljeni `DUCTUS_PSQL_CONTAINER`, `DOCKER_HOST` ili `DOCKER_CONTEXT` (mogli bi uputiti skripte na tuđi Docker), kao i relativan `DUCTUS_DEV_SIGNING_KEY_FILE`. Ako aplikaciju pokrećeš zasebno s `pnpm dev`, ta okolina ne postoji; koristi `pnpm demo:up`.
 
 Seed trenutačno stvara izmišljene ustanove. Potpuni K-3 seed s nastavnikom, kolegijem, zadatkom, studentima i kontrolnim povijestima dovršava se u zasebnim koracima DAN-88.
+
+## Eksplicitna prijava demo računa (DAN-88 K-3b1)
+
+Nakon `pnpm demo:prepare`, dok aplikacija već radi na `http://localhost:3000` i postojeći lažni OIDC na `http://localhost:8090`, lokalni operator ili CI može pokrenuti:
+
+```powershell
+pnpm demo:bootstrap-accounts
+```
+
+Naredba kroz stvarnu prijavu i callback otvara tri postojeća izmišljena računa, provjerava njihovu sesiju i ustanovu u lokalnoj bazi, potvrđuje nastavnika postojećim lokalnim operatorom i odjavljuje sva tri računa. Ponovno pokretanje čuva njihove identitete i jednu aktivnu nastavničku ulogu. Odbija udaljene HTTP ciljeve i Docker kontekst koji nije lokalni. Ne ispisuje ni sprema kolačiće ili tokene. Zahtijeva već pokrenut lokalni stog i aplikaciju; ne pokreće ih sama. Ovaj korak još ne stvara kolegije, zadatke ni kontrolne povijesti, a `demo:prepare` zadržava početno nepotvrđeno stanje nastavnika.
