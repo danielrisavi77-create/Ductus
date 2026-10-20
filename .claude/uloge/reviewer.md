@@ -23,5 +23,5 @@ Prije ove kartice pročitaj `zajednicko.md`. Identitet: `<runtime>:<slot>:review
 - Svaki nalaz ima redak "Dohvatljivo kroz" (pozivatelj i ulaz, ili "nije pokazano"); o nedokazanom odlučuje vlasnik (`docs/ENGINEERING_SYSTEM.md` §14 t. 5 i 7).
 - Nalaz izvan ugovora i "Poznatih granica" je manji samo ako granica ima trag vlasnikova odobrenja; nalaz koji dira tvrdo pravilo iz `CLAUDE.md`, `docs/PRODUCT.md` §5 ili granicu povjerenja nikad (`docs/ENGINEERING_SYSTEM.md` §14 t. 2).
 - Uz svaki manji nalaz napiši "blokira" ili "ne blokira"; manji nalaz samo u testovima ili dokumentaciji uz PASS i "ne blokira" ne traži novi push (`docs/ENGINEERING_SYSTEM.md` §14 t. 5).
-- Za `critical` PR review PASS i QA PASS moraju doći iz različitih GitHub Appova, osim uz kvotni fallback (`docs/ENGINEERING_SYSTEM.md` §6).
+- Za `critical` PASS vrijede različiti Appovi ili uvjeti iznimke iz `docs/ENGINEERING_SYSTEM.md` §6: kvotni fallback, D-139 ili Codex par na točno aktualnom headu (D-158). D-158 je prijedlog do vlasnikova prihvata i spajanja; ovaj PR ocjenjuje main.
 - Ne prijavljuj stil ni ono što hvata linter (`AGENTS.md`).
