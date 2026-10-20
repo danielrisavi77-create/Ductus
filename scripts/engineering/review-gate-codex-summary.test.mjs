@@ -179,3 +179,18 @@ test("a valid clean summary plus an unreadable Codex summary voids the proof (re
     pending([summary({ body }), summary()]);
   }
 });
+test("a clean summary plus another Codex summary without a usable commit voids the proof", () => {
+  for (const code of [{ commit_sha: null }, { commit_sha: undefined }, { commit_sha: "abc" }]) {
+    pending([summary(), summary({ code })]);
+  }
+});
+
+test("the state must directly follow the marker and an open security finding blocks", () => {
+  pending([summary({ body: `<!-- codex-pull-request-review-summary -->\nPR text\n<!-- codex-review-state:v1 ${state()} -->` })]);
+  const withSecurity = JSON.stringify({
+    code_review: { commit_sha: head, has_any_findings: false, has_unresolved_findings: false, status: "completed" },
+    security_review: { commit_sha: head, has_any_findings: true, has_unresolved_findings: true, status: "completed" },
+  });
+  pending([summary({ body: summaryBody(withSecurity) })]);
+  pending([summary(), summary({ body: summaryBody(withSecurity) })]);
+});

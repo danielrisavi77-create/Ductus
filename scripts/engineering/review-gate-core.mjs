@@ -180,7 +180,7 @@ function codexReviewedHead(prReviews, headSha) {
 
 const CODEX_APP_SLUG = "chatgpt-codex-connector";
 const CODEX_SUMMARY_MARKER = "<!-- codex-pull-request-review-summary -->";
-const CODEX_STATE_RE = /<!-- codex-review-state:v1 (\{[^\r\n]*?\}) -->/;
+const CODEX_STATE_RE = /^<!-- codex-pull-request-review-summary -->\s*<!-- codex-review-state:v1 (\{[^\r\n]*?\}) -->/;
 
 // A clean Codex review leaves no pull request review. The Codex App then
 // proves it in its edited-in-place summary comment, whose machine state names
@@ -195,13 +195,16 @@ function codexCleanSummaryOnHead(comments, headSha) {
     if (!isCodexBot(item?.user) || item?.performed_via_github_app?.slug !== CODEX_APP_SLUG) continue;
     const body = typeof item?.body === "string" ? item.body : "";
     if (!body.startsWith(CODEX_SUMMARY_MARKER)) continue;
-    let review;
+    let state;
     try {
-      review = JSON.parse(CODEX_STATE_RE.exec(body)?.[1] ?? "null")?.code_review;
+      state = JSON.parse(CODEX_STATE_RE.exec(body)?.[1] ?? "null");
     } catch {
       return false; // an unreadable Codex summary poisons the whole proof
     }
-    if (!review || typeof review !== "object") return false;
+    const review = state?.code_review;
+    // No usable code review commit, or an open security finding, voids the proof too.
+    if (!review || typeof review !== "object" || !SHA_RE.test(review.commit_sha ?? "")) return false;
+    if (state.security_review?.has_unresolved_findings === true) return false;
     if (sameHead(review.commit_sha, headSha)) onHead.push(review);
   }
   return (
