@@ -2,8 +2,10 @@
 -- decision of 20 Oct 2026, the range is part of the assignment for the demo).
 -- word_min and word_max are each null or an integer from 1 to 1 000 000;
 -- when both are set, word_min <= word_max. The version stays immutable. The
--- range is part of the content a create retry must repeat (D-74, #360), and a
--- new version may set any range: rule 14 narrows the AI rule, not the range.
+-- range is part of the content a create retry must repeat (D-74, #360). A new
+-- version may only drop or relax a bound (PRODUCT 5 rule 14: rules the
+-- student confirmed are never extended): no higher minimum, no lower maximum,
+-- and no bound where the current version has none.
 -- All three functions take the range as two last parameters without a
 -- default (null is "no range"), and the old signatures are gone, so no call
 -- writes a version without stating its range.
@@ -142,7 +144,7 @@ BEGIN
 END
 $$;
 
--- As 20261010200000, with the range of the new version.
+-- As 20261010200000, with the range of the new version, which may only relax.
 CREATE FUNCTION institution.publish_assignment_version(
   p_assignment_id uuid, p_expected_version integer, p_title text, p_instructions text, p_work_type text,
   p_opens_at timestamptz, p_due_at timestamptz, p_ai_policy text, p_ai_purposes text[],
@@ -175,7 +177,10 @@ BEGIN
   IF institution.ai_policy_rank(p_ai_policy) > institution.ai_policy_rank(cur.ai_policy)
      OR NOT p_ai_purposes <@ cur.ai_purposes
      OR (p_evidence_profile = 'extended' AND cur.evidence_profile = 'basic')
-     OR (p_import_allowed AND NOT cur.import_allowed) THEN
+     OR (p_import_allowed AND NOT cur.import_allowed)
+     -- Rule 14: a bound may be dropped or relaxed, never added or tightened.
+     OR (p_word_min IS NOT NULL AND (cur.word_min IS NULL OR p_word_min > cur.word_min))
+     OR (p_word_max IS NOT NULL AND (cur.word_max IS NULL OR p_word_max < cur.word_max)) THEN
     RAISE EXCEPTION 'invalid input' USING ERRCODE = 'ZD422';
   END IF;
   INSERT INTO institution.assignment_version (

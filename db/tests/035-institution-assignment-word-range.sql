@@ -1,12 +1,13 @@
 -- The word range of an assignment version (DAN-229): optional, each bound null
 -- or 1 to 1 000 000, word_min <= word_max, part of what a create retry must
--- repeat, set anew by every published version, and read under the existing
+-- repeat, set anew by every published version but only relaxed (rule 14),
+-- and read under the existing
 -- RLS. Synthetic fixtures only (fixtures/institution.inc).
 BEGIN;
 \ir fixtures/institution.inc
 SET LOCAL lc_messages TO 'C';
 
-SELECT plan(32);
+SELECT plan(40);
 
 -- create_assignment with a request key, as the route calls it.
 CREATE FUNCTION pg_temp.create_ranged(p_actor text, p_key text, p_min integer, p_max integer,
@@ -14,7 +15,7 @@ CREATE FUNCTION pg_temp.create_ranged(p_actor text, p_key text, p_min integer, p
 LANGUAGE sql AS $f$
   SELECT pg_temp.ask(p_actor, format(
     'SELECT institution.create_assignment({k1}, %L::uuid, %L, %L, %L, %L::timestamptz, %L::timestamptz, %L, %L::text[], %L, %L, %L::integer, %L::integer)',
-    p_key, p_title, 'Upute za izmiĹˇljeni zadatak.', 'essay', '2026-11-02 08:00+01', '2026-12-01 23:59+01',
+    p_key, p_title, 'Upute za izmišljeni zadatak.', 'essay', '2026-11-02 08:00+01', '2026-12-01 23:59+01',
     'partially_allowed', ARRAY['proofreading']::text[], 'basic', false, p_min, p_max))
 $f$;
 CREATE FUNCTION pg_temp.publish_ranged(p_actor text, p_assignment text, p_expected integer, p_min integer, p_max integer)
@@ -77,13 +78,31 @@ SELECT is(pg_temp.range_of(pg_temp.ask('vesna', $$ SELECT institution.create_ass
   '800-1200', 'the create without a request key stores the range');
 
 -- 5. A published version carries its own range; the earlier one keeps its.
-SELECT is(pg_temp.publish_ranged('vesna', (SELECT id FROM ranged), 1, 3000, NULL), '2',
-  'a new version may change the range');
-SELECT is(pg_temp.range_of((SELECT id FROM ranged), 2), '3000-null', 'the new version holds its range');
+-- Rule 14: a bound may only be dropped or relaxed, never added or tightened.
+SELECT is(pg_temp.publish_ranged('vesna', (SELECT id FROM ranged), 1, 1500, 3000), '2',
+  'a new version may relax both bounds');
+SELECT is(pg_temp.range_of((SELECT id FROM ranged), 2), '1500-3000', 'the new version holds its range');
 SELECT is(pg_temp.range_of((SELECT id FROM ranged), 1), '2000-2500', 'the first version keeps its range');
-SELECT is(pg_temp.publish_ranged('vesna', (SELECT id FROM ranged), 2, 4000, 3000), 'ZD422: invalid input',
-  'publish refuses a reversed range');
-SELECT is(pg_temp.publish_ranged('marko', (SELECT id FROM ranged), 2, 2000, 2500), 'ZD403: forbidden',
+SELECT is(pg_temp.publish_ranged('vesna', (SELECT id FROM ranged), 2, v.min, v.max), 'ZD422: invalid input',
+  'publish refuses ' || v.what)
+FROM (VALUES
+  (1, 1600, 3000, 'a higher lower bound'),
+  (2, 1500, 2900, 'a lower upper bound'),
+  (3, 1500, 1500, 'equal bounds inside the current range'),
+  (4, 4000, 3000, 'a reversed range')
+) AS v (n, min, max, what)
+ORDER BY v.n;
+SELECT is((SELECT current_version FROM institution.assignment WHERE id = (SELECT id FROM ranged)::uuid), 2,
+  'a refused publish writes no version');
+SELECT is(pg_temp.publish_ranged('vesna', (SELECT id FROM ranged), 2, NULL, 3000), '3',
+  'a new version may drop the lower bound');
+SELECT is(pg_temp.publish_ranged('vesna', (SELECT id FROM ranged), 3, 1, 3000), 'ZD422: invalid input',
+  'publish refuses a lower bound where the current version has none');
+SELECT is(pg_temp.publish_ranged('vesna', (SELECT id FROM ranged), 3, NULL, NULL), '4',
+  'a new version may drop the upper bound');
+SELECT is(pg_temp.publish_ranged('vesna', (SELECT id FROM ranged), 4, NULL, 1000000), 'ZD422: invalid input',
+  'publish refuses an upper bound where the current version has none');
+SELECT is(pg_temp.publish_ranged('marko', (SELECT id FROM ranged), 4, NULL, NULL), 'ZD403: forbidden',
   'a teacher of another course cannot publish a range');
 
 -- 6. The table refuses a bad range even from the owner role.
