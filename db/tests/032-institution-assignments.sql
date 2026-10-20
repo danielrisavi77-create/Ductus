@@ -10,7 +10,8 @@ SET LOCAL lc_messages TO 'C';
 
 SELECT plan(154);
 
--- The nine arguments of a version as SQL text, with up to two replaced.
+-- The eleven arguments of a version as SQL text, with up to two replaced;
+-- the word range (DAN-229) is unset here and tested in 035.
 CREATE FUNCTION pg_temp.content(p_field text DEFAULT NULL, p_value text DEFAULT NULL,
                                 p_field2 text DEFAULT NULL, p_value2 text DEFAULT NULL) RETURNS text
 LANGUAGE sql AS $f$
@@ -24,7 +25,9 @@ LANGUAGE sql AS $f$
     (6, 'ai_policy', $$'partially_allowed'$$),
     (7, 'ai_purposes', $$'{formatting,proofreading}'$$),
     (8, 'evidence_profile', $$'extended'$$),
-    (9, 'import_allowed', 'true')
+    (9, 'import_allowed', 'true'),
+    (10, 'word_min', 'NULL'),
+    (11, 'word_max', 'NULL')
   ) AS d (n, field, value)
 $f$;
 CREATE FUNCTION pg_temp.create_in(p_actor text, p_course text, p_content text) RETURNS text

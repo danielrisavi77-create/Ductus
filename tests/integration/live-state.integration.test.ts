@@ -171,9 +171,17 @@ function put(sessionToken: string, body: Uint8Array, precondition: Record<string
 }
 
 function get(sessionToken: string, id = documentId, headers: Record<string, string> = {}) {
-  const request = new Request(`${ORIGIN}/api/live/${id}`, { headers: { "sec-fetch-site": "same-origin", ...headers } });
+  const request = new Request(`${ORIGIN}/api/live/${id}`, {
+    headers: { "sec-fetch-site": "same-origin", "ductus-protocol": "1", ...headers },
+  });
   return handleLiveReadRequest(request, id, { withActor, sessionToken });
 }
+
+const openingsOfWork = async () =>
+  Number((await admin.query<{ n: string }>(
+    "SELECT count(*) AS n FROM audit.access_log WHERE document_id = $1 AND institution_id = $2",
+    [documentId, institutionId],
+  )).rows[0]?.n);
 
 beforeAll(async () => {
   const ddl = await admin.query<{ ddl: string }>(
@@ -207,6 +215,22 @@ afterAll(async () => {
 });
 
 describe("live view over the API and the RPCs (B-LIVE step 3, rule 5)", () => {
+  // Runs first: no reading of this work has been logged yet, so a refused
+  // read that wrote would show as a row (a logged interval hides a repeat).
+  it("writes no opening for a teacher's read without the protocol header (F-107)", async () => {
+    expect(await openingsOfWork()).toBe(0);
+    const variants: Record<string, string>[] = [{}, { "sec-fetch-site": "same-origin" }, { "sec-fetch-site": "none" }];
+    for (const headers of variants) {
+      const request = new Request(`${ORIGIN}/api/live/${documentId}`, { headers });
+      const refused = await handleLiveReadRequest(request, documentId, { withActor, sessionToken: tokens.vesna });
+      expect([refused.status, await refused.json()]).toStrictEqual([403, { error: "forbidden" }]);
+    }
+    expect(await openingsOfWork()).toBe(0);
+    // The same teacher with the header is logged, so the count above can see a row.
+    expect((await get(tokens.vesna)).status).toBe(204);
+    expect(await openingsOfWork()).toBe(1);
+  });
+
   it("publishes only for the owner who acknowledged the notice, reads the same bytes for her and the teacher, and keeps a newer state", async () => {
     const log = vi.spyOn(console, "error");
     const warn = vi.spyOn(console, "warn");

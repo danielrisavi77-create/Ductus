@@ -24,11 +24,11 @@ function reduce(state: NoticeState, event: NoticeEvent): NoticeState {
 // The parts below are components of their own so that the interface text
 // scan reads each one apart (tests/unit/forbidden-terms-unreadable.test.ts).
 
-function Confirmed({ text, editor }: { text: string; editor: boolean }) {
+function Confirmed({ text, editor, assignmentId }: { text: string; editor: boolean; assignmentId: string }) {
   return (
     <div className={styles.done}>
       <p role="status">{text}</p>
-      {editor ? <p><a className="btn" href="/rad">{s.openEditor}</a></p> : null}
+      {editor ? <p><a className="btn" href={`/rad?zadatak=${encodeURIComponent(assignmentId)}`}>{s.openEditor}</a></p> : null}
     </div>
   );
 }
@@ -113,7 +113,7 @@ export default function AssignmentNotice({ view, timing }: { view: NoticeView; t
   // Already confirmed on an earlier visit: the way on to writing comes first.
   const returning = view.acknowledgedAt !== null;
   const done = state.phase === "acknowledged"
-    ? <Confirmed text={s.confirmed.replace("{time}", time(state.at))} editor={timing !== "notOpen"} />
+    ? <Confirmed text={s.confirmed.replace("{time}", time(state.at))} editor={timing !== "notOpen"} assignmentId={view.assignmentId} />
     : null;
   const note = timing === "notOpen" ? s.notOpen.replace("{time}", time(view.opensAt))
     : timing === "pastDue" ? s.pastDue.replace("{time}", time(view.dueAt)) : null;

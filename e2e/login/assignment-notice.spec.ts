@@ -44,7 +44,7 @@ interface Seed {
 }
 
 /** An invented course and assignment the demo student is a student of. */
-async function seedAssignment(seed: Seed = {}): Promise<{ assignment: string; course: string }> {
+async function seedAssignment(seed: Seed = {}): Promise<{ assignment: string; course: string; courseName: string }> {
   const { opens = "0 seconds", due = "30 days", acknowledged = false } = seed;
   return admin(async (client) => {
     await client.query("BEGIN");
@@ -52,9 +52,10 @@ async function seedAssignment(seed: Seed = {}): Promise<{ assignment: string; co
       "SELECT id, institution_id AS institution FROM identity.user_account WHERE hr_edu_person_unique_id = $1", [STUDENT]);
     if (!me) throw new Error("the demo student must have signed in");
     const suffix = Date.now().toString(36);
+    const courseName = `Izmišljeni kolegij S3 ${suffix}`;
     const { rows: [course] } = await client.query<{ id: string }>(
       `INSERT INTO institution.course (institution_id, name, academic_year, ai_policy, created_by)
-       VALUES ($1, $2, '2026/2027', 'prohibited', $3) RETURNING id`, [me.institution, `Izmišljeni kolegij S3 ${suffix}`, me.id]);
+       VALUES ($1, $2, '2026/2027', 'prohibited', $3) RETURNING id`, [me.institution, courseName, me.id]);
     const { rows: [assignment] } = await client.query<{ id: string }>(
       `INSERT INTO institution.assignment (course_id, institution_id, current_version, created_by)
        VALUES ($1, $2, 1, $3) RETURNING id`, [course!.id, me.institution, me.id]);
@@ -72,7 +73,7 @@ async function seedAssignment(seed: Seed = {}): Promise<{ assignment: string; co
          VALUES ($1, 1, $2, $3)`, [assignment!.id, me.id, me.institution]);
     }
     await client.query("COMMIT");
-    return { assignment: assignment!.id, course: course!.id };
+    return { assignment: assignment!.id, course: course!.id, courseName };
   });
 }
 
@@ -187,14 +188,14 @@ test("FE-D8: the open notice asks for the confirmation and passes axe", async ({
 test("FE-D8: a confirmation the server records leads on to writing", async ({ page }) => {
   await withSeed({}, page, async (path) => {
     await page.goto(path);
-    // Stands in for the #314 route, in the shape the proposal gives.
+    // Models the existing acknowledgment contract; #541 is not on main yet.
     await page.route("**/api/institution/assignments/*/acknowledgment", (route) => route.fulfill({
       status: 200, contentType: "application/json", body: JSON.stringify({ acknowledgedAt: "2026-10-19T09:14:00.000Z" }),
     }));
     await page.getByRole("checkbox", { name: s.checkbox }).check();
     await page.getByRole("button", { name: s.confirm }).click();
     await expect(page.getByRole("status").filter({ hasText: "Potvrđeno" })).toBeVisible();
-    await expect(page.getByRole("link", { name: s.openEditor })).toHaveAttribute("href", "/rad");
+    await expect(page.getByRole("link", { name: s.openEditor })).toHaveAttribute("href", `/rad?zadatak=${path.slice("/zadatak/".length)}`);
     await expect(page.getByRole("checkbox")).toHaveCount(0);
   });
 });
@@ -222,6 +223,7 @@ test("FE-D8: before the assignment opens the notice is shown without the confirm
     await expect(page.getByRole("heading", { name: s.teacherHeading })).toBeVisible();
     await expect(page.getByRole("checkbox")).toHaveCount(0);
     await expect(page.getByRole("button", { name: s.confirm })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: s.openEditor })).toHaveCount(0);
     await axe(page);
     await shoot(page, "nije-otvoren");
   });
@@ -265,4 +267,80 @@ test("FE-D8: without a session the error offers sign-in and passes axe", async (
     .toHaveAttribute("href", `/api/auth/login?returnTo=${encodeURIComponent(PATH)}`);
   await axe(page);
   await shoot(page, "bez-prijave");
+});
+
+// #476 contract 6280487079: the notice leads to /rad?zadatak=<id>, and the top
+// bar names the course and the assignment only from that read, once the
+// student has acknowledged the notice.
+test("the notice leads to /rad of its assignment, whose top bar names it", async ({ page }) => {
+  await signIn(page, PATH, "Demo studentica");
+  const context = page.locator(".workspace__bar .brand-line__context");
+  // Not a student of this assignment, or no id at all: no course, no assignment.
+  for (const path of [`/rad?zadatak=${PATH.slice("/zadatak/".length)}`, "/rad", "/rad?zadatak=nije-id"]) {
+    await page.goto(path);
+    await expect(page.locator(".workspace__bar")).toBeVisible();
+    await expect(context).toHaveCount(0);
+  }
+  // PRODUCT §5 rule 6: before the current notice is acknowledged, /rad of the
+  // assignment opens its notice instead of the workspace.
+  const unread = await seedAssignment();
+  try {
+    await page.goto(`/rad?zadatak=${unread.assignment}`);
+    await page.waitForURL(`**/zadatak/${unread.assignment}`);
+    await expect(page.getByText(t.student.checkbox)).toBeVisible();
+    await expect(page.locator(".workspace__bar")).toHaveCount(0);
+  } finally {
+    await admin((client) => client.query(
+      "UPDATE institution.course_member SET member_to = now() WHERE course_id = $1 AND member_to IS NULL", [unread.course]));
+  }
+  const seeded = await seedAssignment({ acknowledged: true });
+  try {
+    await page.goto(`/zadatak/${seeded.assignment}`);
+    await page.getByRole("link", { name: t.student.openEditor }).click();
+    await page.waitForURL(`**/rad?zadatak=${seeded.assignment}`);
+    await expect(context).toHaveText(`${seeded.courseName} / Izmišljeni zadatak S3`);
+    await expect(page.locator(".workspace__bar")).not.toContainText("Kolegij A");
+    // Upute shows the same read: the task, its due date, no allowed uses.
+    const panel = page.getByRole("complementary", { name: t.workspace.sidePanel });
+    await panel.getByRole("tab", { name: t.workspace.tabInstructions }).click();
+    const upute = panel.getByRole("tabpanel");
+    await expect(upute.getByRole("heading", { name: t.workspace.upute.task })).toBeVisible();
+    await expect(upute).toContainText("Izmišljeni zadatak S3");
+    await expect(upute).toContainText("Upute za izmišljeni zadatak.");
+    await expect(upute).toContainText("Rok: ");
+    await expect(upute).toContainText(t.workspace.upute.toolsNone);
+    await expect(upute.getByRole("heading", { name: /Provjera oblika/ })).toContainText("uskoro");
+    await test.info().attach("rad-gornja-traka-zadatak", { body: await page.screenshot(), contentType: "image/png" });
+  } finally {
+    await admin((client) => client.query(
+      "UPDATE institution.course_member SET member_to = now() WHERE course_id = $1 AND member_to IS NULL", [seeded.course]));
+  }
+});
+
+// The error replies model the existing transport contract, not a real ack API.
+for (const [status, error] of [[401, "unauthorized"], [403, "forbidden"], [409, "stale"], [503, "unavailable"]] as const) {
+  test(`FE-D8: HTTP ${status} leaves the notice closed to the editor`, async ({ page }) => {
+    await withSeed({}, page, async (path) => {
+      await page.goto(path);
+      await page.route("**/api/institution/assignments/*/acknowledgment", (route) => route.fulfill({
+        status, contentType: "application/json", body: JSON.stringify({ error: "synthetic refusal" }),
+      }));
+      await page.getByRole("checkbox", { name: s.checkbox }).check();
+      await page.getByRole("button", { name: s.confirm }).click();
+      await expect(page.getByRole("alert")).toHaveText(s.errors[error]);
+      await expect(page.getByRole("link", { name: s.openEditor })).toHaveCount(0);
+      await expect(page.getByRole("checkbox", { name: s.checkbox })).toBeChecked();
+    });
+  });
+}
+
+test("FE-D8: an earlier confirmation cannot open the editor before opens_at", async ({ page }) => {
+  await withSeed({ opens: "2 days", acknowledged: true }, page, async (path) => {
+    await page.goto(path);
+    await expect(page.getByRole("status").filter({ hasText: "Potvrđeno" })).toBeVisible();
+    await expect(page.getByRole("status").filter({ hasText: "Zadatak se otvara" })).toBeVisible();
+    await expect(page.getByRole("checkbox")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: s.confirm })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: s.openEditor })).toHaveCount(0);
+  });
 });

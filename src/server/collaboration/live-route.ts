@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import { isDocumentId } from "@/domain/collaboration";
 import { MAX_DOCUMENT_SNAPSHOT_BYTES, verifyDocumentSnapshot } from "@/domain/document/snapshot";
+import { DUCTUS_PROTOCOL_VERSION } from "@/domain/evidence/commit-envelope";
 import { sessionPrincipal } from "@/server/auth/principal";
 import type { WithActor } from "@/server/db/with-actor";
 import { checkMutationRequest, declaredLengthRefusal, readBodyWithLimit } from "@/server/http/mutation-request";
@@ -136,7 +137,12 @@ export async function handleLiveReadRequest(
   deps: Omit<LiveRouteDeps, "expectedOrigin">,
 ): Promise<Response> {
   if (request.method !== "GET" && request.method !== "HEAD") return refuse(405, "method_not_allowed");
-  // A read is not a mutation, but a page of another site has no business here either.
+  // A teacher's read writes the access log (PRODUCT 5, rule 17), so it needs
+  // positive proof that a page of this origin sent it (F-107): the protocol
+  // header, which only a script can set and which no other origin can send
+  // without a preflight this route never answers, and Sec-Fetch-Site, when the
+  // browser sends it, saying same-origin.
+  if (request.headers.get("ductus-protocol") !== DUCTUS_PROTOCOL_VERSION) return refuse(403, "forbidden");
   const site = request.headers.get("sec-fetch-site");
   if (site !== null && site !== "same-origin") return refuse(403, "forbidden");
   const token = deps.sessionToken;

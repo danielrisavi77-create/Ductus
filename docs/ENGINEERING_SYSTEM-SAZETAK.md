@@ -21,7 +21,7 @@ Sažetak nije izvor pravila. U sukobu vrijedi `docs/ENGINEERING_SYSTEM.md`; uz s
 - `standard`: CI, dependency review, jedan neovisni reviewer na aktualnom headu; QA kad Orkestrator procijeni (§5).
 - `critical`: svi standard gateovi, zaseban QA PASS na aktualnom headu, sintetički staging prolaz kad vrijedi `BACKEND.md` §6 t. 12 i pravila rada iz §14 (§5).
 - `critical` PR koji mijenja samo testove ili samo dokumente ne traži QA; review ostaje. PR koji mijenja i testove i dokumente nije izuzet; `*.md` u testnim mapama broji se kao oboje (§5).
-- Za `critical` PASS reviewer i QA moraju biti različit GitHub App. Iznimke, uz uvjete: kvotni fallback i druga Claude sesija (D-139) (§6).
+- `critical` PASS: različiti Appovi; iznimke (§6): kvota, D-139, Codex par na aktualnom headu (D-158).
 - `main`: PR obvezan, squash, obvezni statusi, nerazriješeni razgovori blokiraju (§10).
 
 ## Metadata i verdikti
