@@ -308,7 +308,7 @@ test("tilde fenced metadata does not satisfy the gate", () => {
   assert.equal(result.state, "pending");
 });
 
-test("one ChatGPT GitHub App cannot spoof reviewer and QA by changing declared runtime", () => {
+test("one OpenAI principal cannot spoof reviewer and QA by changing declared runtime", () => {
   const result = evaluate({
     body: prBody("critical"),
     headSha: head,
@@ -318,7 +318,7 @@ test("one ChatGPT GitHub App cannot spoof reviewer and QA by changing declared r
         appSlug: "chatgpt-codex-connector",
       }),
       qa({
-        agent: "chatgpt:y:qa",
+        agent: "chatgpt:x:qa",
         appSlug: "chatgpt-codex-connector",
       }),
     ],
@@ -447,7 +447,7 @@ test("critical also requires independent QA", () => {
   assert.equal(passing.state, "success");
 });
 
-test("same authenticated GitHub App cannot satisfy both reviewer and QA", () => {
+test("independent current-head Codex pair satisfies critical QA (DAN-39)", () => {
   const result = evaluate({
     body: prBody("critical"),
     headSha: head,
@@ -462,7 +462,8 @@ test("same authenticated GitHub App cannot satisfy both reviewer and QA", () => 
       }),
     ],
   });
-  assert.equal(result.state, "pending");
+  assert.equal(result.state, "success");
+  assert.match(result.description, /Codex review and QA pair/);
 });
 
 test("Claude GitHub App cannot claim a ChatGPT QA runtime", () => {
