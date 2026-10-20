@@ -4,6 +4,7 @@ import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createWithActor, type WithActor } from "@/server/db/with-actor";
+import { handleTeacherCoursesRequest } from "@/server/institution/teacher-courses";
 
 // The institution functions (B-7) over withActor and a real ductus_app login,
 // against the compose stack (pnpm stack:up, pnpm db:migrate). What pgTAP
@@ -626,5 +627,43 @@ describe("assignments and removal over withActor", () => {
     // No argument names the author of the assignment.
     expect(await create("Esej", `, '${people.stranger.id}'`)).toMatchObject({ code: "42883" });
     expect(await count("SELECT count(*) FROM institution.assignment WHERE course_id = $1", [course])).toBe(before);
+  });
+});
+
+describe("GET /api/teacher/courses over the real function (DAN-230)", () => {
+  const courses = (token: string | undefined) =>
+    handleTeacherCoursesRequest(new Request("http://localhost:3000/api/teacher/courses"), { withActor, sessionToken: token });
+
+  it("gives the teacher the own course with its assignments, and nobody else anything", async () => {
+    const response = await courses(people.teacher.token);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { courses: { id: string; assignments: { id: string; currentVersion: number; enrolledStudents: number }[] }[] };
+    const own = await admin.query<{ course_id: string }>(
+      "SELECT course_id FROM institution.course_member WHERE user_id = $1 AND role = 'teacher' AND member_to IS NULL",
+      [people.teacher.id],
+    );
+    expect(body.courses.map((c) => c.id).sort()).toEqual(own.rows.map((r) => r.course_id).sort());
+    const main = body.courses.find((c) => c.id === course);
+    expect(main).toBeDefined();
+    const students = await count(
+      "SELECT count(*) FROM institution.course_member WHERE course_id = $1 AND role = 'student' AND member_to IS NULL",
+      [course],
+    );
+    const current = await admin.query<{ id: string; current_version: number }>(
+      "SELECT id, current_version FROM institution.assignment WHERE course_id = $1 ORDER BY id",
+      [course],
+    );
+    expect(main?.assignments.map((a) => [a.id, a.currentVersion, a.enrolledStudents]).sort())
+      .toEqual(current.rows.map((r) => [r.id, r.current_version, students]).sort());
+    expect(JSON.stringify(body)).not.toContain(people.student.id);
+
+    for (const person of [people.student, people.outsider, people.admin, people.stranger]) {
+      const refused = await courses(person.token);
+      expect([refused.status, await refused.json()]).toStrictEqual([404, { error: "not_found" }]);
+    }
+    const anonymous = await courses(undefined);
+    expect([anonymous.status, await anonymous.json()]).toStrictEqual([401, { error: "unauthorized" }]);
+    const unknown = await courses(newToken());
+    expect([unknown.status, await unknown.json()]).toStrictEqual([401, { error: "unauthorized" }]);
   });
 });
