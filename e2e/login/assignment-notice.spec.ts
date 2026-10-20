@@ -327,7 +327,7 @@ for (const [status, error] of [[401, "unauthorized"], [403, "forbidden"], [409, 
       }));
       await page.getByRole("checkbox", { name: s.checkbox }).check();
       await page.getByRole("button", { name: s.confirm }).click();
-      await expect(page.getByRole("alert")).toHaveText(s.errors[error]);
+      await expect(page.getByRole("article").getByRole("alert")).toHaveText(s.errors[error]);
       await expect(page.getByRole("link", { name: s.openEditor })).toHaveCount(0);
       await expect(page.getByRole("checkbox", { name: s.checkbox })).toBeChecked();
     });
