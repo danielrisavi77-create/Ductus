@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="hr" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ductura · dizajn v3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
+<!-- Dizajnerska referenca, ne produkcijski kod. Vizualni sustav: Ductura_showcase_v2 (repo ductura-dizajn), odluka vlasnika 21. 10. 2026.
+     (zamjenjuje D-123 u izgledu; fontovi iz app/fonts; cijela nova ljuska s bočnom navigacijom za demo).
+     Pravila proizvoda: PRODUCT §5, D-80, D-118, D-142/143, D-145/146, D-154, F-108. Svi podaci izmišljeni. Samostalna datoteka. -->
+<style>
+:root{color-scheme:dark;--bg:#091310;--surface:#0e1b17;--surface2:#12211c;--surface3:#192a23;--line:#24372e;--line2:#1b2d24;--ink:#eef3e9;--muted:#a3b5aa;--faint:#80998a;--accent:#8ee3be;--accent2:#2f6d54;--accentbg:#173c2d;--amber:#e9c58b;--amberbg:#342d20;--blue:#a2c6e5;--bluebg:#1e303d;--shadow:0 22px 80px #0003;--serif:Georgia,'Times New Roman',serif;--sans:Inter,'Segoe UI',Arial,sans-serif;--radius:14px}
+:root[data-theme=light]{color-scheme:light;--bg:#f3f4ee;--surface:#fff;--surface2:#f8f9f5;--surface3:#e9efe6;--line:#d4ded2;--line2:#e3e9df;--ink:#1a3026;--muted:#52685b;--faint:#657a6d;--accent:#216344;--accent2:#3c795b;--accentbg:#e2f0e5;--amber:#84602d;--amberbg:#f9efdc;--blue:#355b81;--bluebg:#e5eef7;--shadow:0 20px 70px #2335230b}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased}
+button,input,textarea,select{font:inherit}
+button,a,input,textarea,select{-webkit-tap-highlight-color:transparent}
+button{cursor:pointer;color:inherit}
+button:disabled{opacity:.5;cursor:not-allowed}
+button,a{touch-action:manipulation}
+a{color:inherit;text-decoration:none}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+button{border:0;background:none}
+h1,h2,h3,p{margin:0}
+h1,h2,h3{line-height:1.16;font-weight:400}
+h1,h2,.serif{font-family:var(--serif);letter-spacing:-.035em}
+h1{font-size:clamp(30px,3.1vw,46px)}
+h2{font-size:28px}
+h3{font-size:17px;font-weight:550;letter-spacing:-.02em}
+small,.small{font-size:12px}
+strong{font-weight:600}
+svg{width:20px;height:20px;flex-shrink:0;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;fill:none;vertical-align:middle}
+.muted{color:var(--muted)}
+.faint{color:var(--faint)}
+.accent{color:var(--accent)}
+.mono{font-family:ui-monospace,Consolas,monospace;font-size:12px}
+.eyebrow{font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+.flex{display:flex;align-items:center;gap:12px}
+.wrap{flex-wrap:wrap}
+.stack{display:flex;flex-direction:column;gap:18px}
+.grow{flex:1;min-width:0}
+.no-wrap{white-space:nowrap}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:44px;padding:10px 18px;border-radius:8px;border:1px solid var(--line);font-size:13px;font-weight:600;transition:background .18s,border-color .18s,transform .18s;background:var(--surface)}
+.btn:hover{background:var(--surface3);border-color:var(--faint)}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.ghost{background:none}
+.btn.compact{min-height:36px;padding:6px 12px;font-size:12px}
+.btn.block{width:100%}
+.icon-btn{width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:8px;flex-shrink:0}
+.icon-btn:hover{background:var(--surface3)}
+.text-btn{color:var(--accent);font-size:13px;display:inline-flex;gap:7px;align-items:center;min-height:40px;padding:4px 0}
+.text-btn:hover{text-decoration:underline}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface2);border-radius:6px;padding:4px 8px;font-size:11px;font-weight:500;white-space:nowrap;color:var(--muted)}
+.chip.green{color:var(--accent);background:var(--accentbg);border-color:transparent}
+.chip.amber{color:var(--amber);background:var(--amberbg);border-color:transparent}
+.chip.blue{color:var(--blue);background:var(--bluebg);border-color:transparent}
+.dot{width:6px;height:6px;display:inline-block;background:currentColor;border-radius:50%;flex-shrink:0}
+.brand{display:flex;gap:9px;align-items:center;font-family:var(--serif);font-size:29px;letter-spacing:-1.3px;line-height:1;min-height:44px}
+.brand-mark{width:27px;height:32px;color:var(--accent)}
+.brand-mark svg{width:27px;height:32px;stroke-width:1.8}
+.avatar{width:37px;height:37px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:var(--accentbg);color:var(--accent);font-size:12px;letter-spacing:.03em;flex-shrink:0;border:1px solid var(--line)}
+.avatar.alt{background:var(--bluebg);color:var(--blue)}
+.avatar.gold{background:var(--amberbg);color:var(--amber)}
+.panel{border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);overflow:hidden}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:22px 24px;border-bottom:1px solid var(--line2)}
+.panel-head h2{font-family:var(--sans);font-size:16px;font-weight:550;letter-spacing:-.02em}
+.panel-body{padding:24px}
+.divider{height:1px;background:var(--line2);margin:22px 0}
+.form-group{display:flex;flex-direction:column;gap:8px;min-width:0}
+.form-group label{font-size:12px;color:var(--muted);font-weight:600}
+.input,select,textarea.form-input{width:100%;min-height:46px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);padding:10px 13px}
+select{padding-right:28px;cursor:pointer}
+input::placeholder,textarea::placeholder{color:var(--faint)}
+.search{position:relative;flex:1;min-width:190px}
+.search svg{position:absolute;left:13px;top:14px;color:var(--faint);width:18px}
+.search input{padding-left:41px}
+.notice{display:flex;gap:11px;padding:15px 18px;border:1px solid var(--line);border-radius:9px;color:var(--muted);background:var(--surface2);font-size:12px}
+.notice svg{color:var(--accent);margin-top:1px}
+.notice p+ p{margin-top:5px}
+/* Application shell */
+.sidebar{width:236px;position:fixed;inset:0 auto 0 0;background:var(--surface);border-right:1px solid var(--line);padding:25px 17px 16px;display:flex;flex-direction:column;z-index:40}
+.sidebar .brand{padding:0 12px;margin-bottom:28px}
+.workspace{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:29px}
+.workspace-icon{font-family:var(--serif);font-size:18px;width:31px;height:35px;display:grid;place-items:center;border-radius:5px;background:var(--surface3);color:var(--accent)}
+.workspace strong{font-size:12px;display:block}
+.workspace small{font-size:10px;color:var(--faint)}
+.nav-label{font-size:10px;letter-spacing:.13em;color:var(--faint);padding:0 12px;margin:6px 0 10px;text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:12px;border-radius:7px;margin-bottom:3px;font-size:13px;min-height:44px;color:var(--muted)}
+.nav-item svg{width:18px;height:18px}
+.nav-item:hover{color:var(--ink);background:var(--surface2)}
+.nav-item.active{background:var(--accentbg);color:var(--accent)}
+.nav-count{margin-left:auto;font-size:10px;background:var(--surface3);padding:1px 6px;border-radius:5px;color:var(--muted)}
+.sidebar-bottom{margin-top:auto}
+.sidebar-note{border:1px solid var(--line);border-radius:8px;padding:14px 12px;margin:20px 0;color:var(--faint);font-size:10px;line-height:1.7}
+.sidebar-note strong{font-weight:500;color:var(--muted);display:block;font-size:11px;margin-bottom:3px}
+.user-button{width:100%;text-align:left;display:flex;gap:10px;align-items:center;padding:12px 8px;border-top:1px solid var(--line)}
+.user-button strong{font-size:12px;display:block}
+.user-button small{font-size:10px;color:var(--faint);display:block}
+.user-button>svg{width:15px;margin-left:auto;color:var(--faint)}
+.app-area{margin-left:236px;min-height:100vh}
+.app-topbar{height:76px;padding:0 36px;display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:1px solid var(--line2);background:var(--bg)}
+.breadcrumb{display:flex;gap:12px;align-items:center;font-size:12px;color:var(--faint)}
+.breadcrumb span:last-child{color:var(--muted)}
+.top-actions{display:flex;gap:12px;align-items:center}
+.demo-tag{font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.1em;display:flex;gap:6px;align-items:center}
+.top-actions .icon-btn{width:34px;height:34px;border-color:transparent}
+.mobile-menu{display:none}
+.app-content{padding:35px 36px 25px;max-width:1580px;margin:auto;animation:fadein .28s ease}
+.page-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:28px}
+.page-heading .eyebrow{margin-bottom:12px}
+.page-heading p{color:var(--muted);font-size:13px;margin-top:11px;max-width:650px}
+.page-heading .btn{flex-shrink:0}
+.date-label{font-size:11px;color:var(--faint);text-align:right;margin-bottom:8px}
+.hero-card{background:var(--surface2);border:1px solid var(--line);border-radius:14px;padding:28px 30px;display:grid;grid-template-columns:1fr 260px;gap:30px;position:relative;overflow:hidden}
+.hero-card h2{font-size:29px;line-height:1.25;max-width:570px;margin:14px 0 11px}
+.hero-card p{color:var(--muted);font-size:12px;max-width:590px}
+.hero-card .btn{margin-top:22px}
+.hero-card-side{border-left:1px solid var(--line);padding-left:30px;display:flex;flex-direction:column;justify-content:center;gap:24px}
+.mini-metric{display:flex;gap:12px}
+.mini-metric svg{color:var(--faint);width:17px;height:17px;margin-top:4px}
+.mini-metric strong{display:block;font-size:13px;font-weight:500;margin-bottom:3px}
+.mini-metric small{color:var(--faint);font-size:11px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin:26px 0;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.stat{padding:21px 23px;border-right:1px solid var(--line)}
+.stat:last-child{border-right:0}
+.stat-top{display:flex;align-items:center;justify-content:space-between;color:var(--muted);font-size:11px}
+.stat-top svg{width:17px;color:var(--faint)}
+.stat-number{font-family:var(--serif);font-size:36px;line-height:1.2;margin:9px 0 4px;letter-spacing:-.04em}
+.stat small{font-size:10px;color:var(--faint)}
+.dashboard-grid{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(280px,1fr);gap:23px}
+.work-row{display:flex;align-items:center;gap:15px;padding:20px 23px;border-bottom:1px solid var(--line2);transition:background .18s}
+.work-row:last-child{border-bottom:0}
+.work-row:hover{background:var(--surface2)}
+.work-symbol{width:42px;height:46px;border:1px solid var(--line);border-radius:7px;display:flex;align-items:center;justify-content:center;color:var(--accent);background:var(--surface2);flex-shrink:0}
+.work-symbol.gold{color:var(--amber)}
+.work-row .work-title{display:block;text-align:left;font-size:13px;font-weight:500;line-height:1.4;padding:0;min-height:26px}
+.work-title:hover{color:var(--accent)}
+.work-meta{display:flex;align-items:center;gap:8px;font-size:10px;color:var(--faint);margin-top:6px;flex-wrap:wrap}
+.work-side{display:flex;flex-direction:column;align-items:flex-end;gap:7px;flex-shrink:0}
+.work-side small{font-size:10px;color:var(--faint)}
+.arrow-link{color:var(--faint);margin-left:4px;width:28px;min-height:40px}
+.arrow-link:hover{color:var(--accent)}
+.segmented{display:inline-flex;gap:3px;background:var(--surface);border:1px solid var(--line);padding:4px;border-radius:8px}
+.segmented button{padding:8px 13px;font-size:12px;border-radius:5px;min-height:35px;color:var(--muted)}
+.segmented button.active{background:var(--surface3);color:var(--ink)}
+.key-values{display:grid;grid-template-columns:1fr auto;gap:17px;font-size:12px}
+.key-values dt{color:var(--faint)}
+.key-values dd{margin:0;color:var(--ink);text-align:right}
+.requirements{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin:23px 0}
+.requirement{padding:21px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.requirement svg{color:var(--accent);margin-bottom:15px}
+.requirement h3{font-size:14px;margin-bottom:10px}
+.requirement p{font-size:12px;color:var(--muted)}
+.table-scroll{overflow-x:auto}
+.data-table{border-collapse:collapse;width:100%;white-space:nowrap;text-align:left}
+.data-table th{padding:13px 18px;font-size:10px;text-transform:uppercase;letter-spacing:.07em;font-weight:500;color:var(--faint);background:var(--surface2);border-bottom:1px solid var(--line)}
+.data-table td{padding:17px 18px;border-bottom:1px solid var(--line2);font-size:12px}
+.data-table tr:last-child td{border:0}
+.data-table tbody tr:hover{background:var(--surface2)}
+.data-table .student-name{font-size:12px;display:block;text-align:left;padding:0}
+.data-table small{font-size:10px;display:block;color:var(--faint);margin-top:3px}
+.data-table .avatar{width:31px;height:31px;font-size:10px}
+.data-table td .btn{font-size:11px}
+.teacher-filters{display:grid;grid-template-columns:1.6fr 1.5fr .8fr 1fr;gap:12px;padding:21px}
+.teacher-callout{display:flex;align-items:center;gap:20px;border:1px solid var(--line);background:var(--surface2);padding:20px 24px;border-radius:12px}
+.teacher-callout h3{font-size:15px;margin-bottom:5px}
+.teacher-callout p{font-size:12px;color:var(--muted)}
+.teacher-callout>svg{color:var(--accent);width:28px;height:28px}
+.teacher-callout .btn{margin-left:auto;flex-shrink:0}
+/* Work space */
+.editor-heading{display:flex;align-items:center;justify-content:space-between;gap:15px;margin-bottom:20px}
+.editor-heading .work-back{display:flex;align-items:center;gap:9px;color:var(--muted);font-size:12px;min-height:40px}
+.editor-heading .flex{gap:9px}
+.editor-heading .chip{font-size:10px}
+.editor-layout{display:grid;grid-template-columns:174px minmax(0,1fr) 284px;min-height:650px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface)}
+.editor-outline{background:var(--surface);border-right:1px solid var(--line2);padding:23px 12px}
+.editor-outline .eyebrow{font-size:9px;margin:0 10px 18px}
+.outline-link{display:flex;gap:8px;align-items:center;width:100%;text-align:left;padding:12px 10px;min-height:42px;font-size:11px;margin-bottom:5px;color:var(--muted);border-radius:5px}
+.outline-link.active{background:var(--accentbg);color:var(--accent)}
+.outline-link svg{width:14px}
+.outline-tip{font-size:10px;color:var(--faint);padding:15px 9px;line-height:1.8;border-top:1px solid var(--line2);margin-top:20px}
+.editor-main{min-width:0;background:var(--surface2)}
+.editor-toolbar{display:flex;align-items:center;gap:3px;padding:8px 14px;border-bottom:1px solid var(--line);background:var(--surface);flex-wrap:wrap}
+.editor-toolbar button{min-width:32px;min-height:34px;border-radius:5px;font-size:13px;color:var(--muted);display:inline-flex;justify-content:center;align-items:center}
+.editor-toolbar button:hover{background:var(--surface3);color:var(--ink)}
+.tool-divider{width:1px;height:18px;background:var(--line);margin:0 7px}
+.toolbar-label{font-size:10px;color:var(--faint);margin-right:8px}
+.document{padding:37px 36px 23px}
+.document .eyebrow{font-size:9px;letter-spacing:.12em}
+.document h1{font-size:29px;line-height:1.35;letter-spacing:-.02em;margin:14px 0 16px;max-width:560px}
+.document-byline{font-size:10px;color:var(--faint);padding-bottom:24px;border-bottom:1px solid var(--line);margin-bottom:25px}
+.doc-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid var(--line2);padding:13px 22px;color:var(--faint);font-size:10px;background:var(--surface)}
+.editor-right{border-left:1px solid var(--line2);background:var(--surface)}
+.right-tabs{display:flex;border-bottom:1px solid var(--line);padding:0 14px;gap:15px}
+.right-tabs button{font-size:11px;min-height:50px;color:var(--muted);padding:10px 0;border-bottom:2px solid transparent}
+.right-tabs button.active{color:var(--accent);border-color:var(--accent)}
+.right-body{padding:19px 17px}
+.right-body .notice{padding:12px;font-size:10px;line-height:1.7;margin-bottom:18px}
+.comment-item{border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:12px}
+.comment-item .avatar{width:26px;height:26px;font-size:9px}
+.comment-item strong{font-size:10px;line-height:1.5;display:block}
+.comment-item small{font-size:9px;color:var(--faint)}
+.comment-item p{font-size:11px;line-height:1.8;color:var(--muted);margin:10px 0}
+.comment-item .text-btn{font-size:10px;min-height:25px}
+.comment-form textarea{resize:vertical;min-height:100px;font-size:11px}
+.comment-form label{display:block;margin:18px 0 8px;font-size:11px;color:var(--muted)}
+.comment-form .btn{margin-top:9px}
+.goal-track{height:4px;background:var(--line);border-radius:5px;overflow:hidden;margin:13px 0 8px}
+.goal-track span{display:block;height:100%;background:var(--accent)}
+/* Modal / messages */
+dialog{color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:16px;width:min(590px,calc(100vw - 28px));max-height:88vh;padding:0;box-shadow:0 30px 150px #0006}
+dialog.wide{width:min(800px,calc(100vw - 28px))}
+dialog::backdrop{background:#03100bd9;backdrop-filter:blur(5px)}
+.modal-head{padding:24px 26px;display:flex;justify-content:space-between;gap:20px;align-items:center;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface);z-index:1}
+.modal-head h2{font-size:25px}
+.modal-body{padding:25px 26px}
+.modal-body .form-group{margin-bottom:18px}
+.modal-body p{font-size:13px;color:var(--muted);line-height:1.8}
+.modal-body h3{font-size:14px;margin:20px 0 10px}
+.modal-footer{display:flex;justify-content:flex-end;gap:10px;padding:18px 26px;border-top:1px solid var(--line);background:var(--surface2)}
+.checkline{display:flex;gap:12px;align-items:flex-start;font-size:12px;color:var(--muted);margin:15px 0}
+.checkline input{width:17px;height:17px;accent-color:var(--accent);flex-shrink:0;margin-top:2px}
+.form-error{color:var(--amber);font-size:12px;margin:12px 0}
+.menu-shade{display:none}
+@keyframes fadein{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+/* Responsive layouts */
+@media(min-width:1600px){.app-content{padding-top:45px}
+.hero-card{padding:35px}
+.document{padding:42px 50px}
+}
+@media(max-width:1250px){.sidebar{width:210px;padding-left:12px;padding-right:12px}
+.app-area{margin-left:210px}
+.app-content{padding:28px 26px}
+.app-topbar{padding:0 26px}
+.dashboard-grid{grid-template-columns:1.4fr 1fr;gap:18px}
+.editor-layout{grid-template-columns:145px minmax(0,1fr) 247px}
+.document{padding:25px}
+.editor-outline{padding-left:8px;padding-right:8px}
+.stat{padding:19px}
+.hero-card{grid-template-columns:1fr 205px;gap:20px;padding:25px}
+.hero-card-side{padding-left:20px}
+.teacher-filters{grid-template-columns:1.5fr 1.4fr 1fr}
+.teacher-filters #teacher-status{grid-column:auto}
+.teacher-filters .search{grid-column:1/-1}
+}
+@media(max-width:1050px){.hero h1{font-size:53px}
+.hero-card{grid-template-columns:1fr}
+.hero-card-side{border-left:0;border-top:1px solid var(--line);padding-left:0;padding-top:20px;flex-direction:row;justify-content:space-between;gap:15px}
+.mini-metric:last-child{display:none}
+.dashboard-grid{grid-template-columns:1fr}
+.editor-layout{grid-template-columns:1fr 265px}
+.editor-outline{display:none}
+.document{padding:30px}
+.top-academic{display:none}
+.stat-top{font-size:10px}
+.stat-top svg{display:none}
+.stat-number{font-size:31px}
+.teacher-callout .btn{max-width:155px}
+}
+@media(max-width:800px){.site-header{height:76px;padding:0 23px}
+.brand{font-size:27px}
+.sidebar{transform:translateX(-100%);transition:transform .2s;width:248px}
+.sidebar.open{transform:translateX(0)}
+.menu-shade.open{display:block;position:fixed;inset:0;background:#0008;z-index:35}
+.app-area{margin-left:0}
+.mobile-menu{display:inline-flex;width:36px;height:36px}
+.app-topbar{height:64px;padding:0 21px}
+.breadcrumb{gap:8px;font-size:11px}
+.breadcrumb>span:first-child,.breadcrumb>svg{display:none}
+.top-actions{gap:5px}
+.top-actions .btn{min-height:32px;font-size:10px;padding:6px 9px}
+.demo-tag{display:none}
+.app-content{padding:25px 21px}
+.page-heading h1{font-size:34px}
+.page-heading p{font-size:12px}
+.page-heading .btn{font-size:11px;padding:8px 12px;min-height:40px}
+.date-label{display:none}
+.hero-card h2{font-size:27px}
+.hero-card{padding:23px}
+.hero-card-side{gap:18px}
+.stat{padding:16px}
+.stat-top{font-size:10px}
+.stat-number{font-size:29px}
+.stat small{font-size:9px}
+.panel-head{padding:18px 20px}
+.panel-body{padding:20px}
+.work-row{padding:18px 20px;gap:12px}
+.editor-layout{grid-template-columns:1fr 255px}
+.editor-heading{flex-wrap:wrap}
+.editor-heading .flex{gap:6px}
+.editor-heading .btn{font-size:10px;padding:8px 11px;min-height:36px}
+.requirements{grid-template-columns:1fr 1fr}
+.teacher-callout{padding:18px;gap:13px}
+.teacher-callout>svg{display:none}
+.teacher-callout p{font-size:11px}
+.teacher-callout h3{font-size:14px}
+}
+@media(max-width:560px){body{font-size:14px}
+.sidebar-note{font-size:11px}
+.nav-item{font-size:14px}
+.page-heading{align-items:flex-start;gap:14px}
+.page-heading h1{font-size:32px}
+.page-heading>.flex{flex-shrink:0}
+.page-heading .eyebrow{font-size:9px}
+.hero-card{padding:20px}
+.hero-card h2{font-size:25px}
+.hero-card p{font-size:12px}
+.hero-card-side{flex-wrap:wrap}
+.mini-metric strong{font-size:12px}
+.mini-metric small{font-size:11px}
+.stats{grid-template-columns:1fr 1fr;margin:20px 0}
+.stat{padding:17px 19px}
+.stat:nth-child(2){border-right:0}
+.stat:nth-child(-n+2){border-bottom:1px solid var(--line)}
+.stat-top{font-size:11px}
+.stat small{font-size:10px}
+.stat-top svg{display:block;width:15px}
+.work-row{padding:17px;gap:11px;flex-wrap:wrap}
+.work-symbol{width:34px;height:39px}
+.work-row .work-title{font-size:13px}
+.work-meta{font-size:11px}
+.work-side{align-items:flex-start;margin-left:45px;flex-direction:row;align-items:center;gap:12px}
+.work-row>.arrow-link{margin-left:auto}
+.work-row .grow{min-width:calc(100% - 50px)}
+.panel-head h2{font-size:15px}
+.panel-head .text-btn{font-size:11px}
+.chip{font-size:10px}
+.requirements{grid-template-columns:1fr}
+.requirement{padding:19px}
+.requirements svg{float:right;width:18px;margin-left:10px}
+.requirement p{font-size:12px}
+.editor-layout{grid-template-columns:1fr}
+.editor-right{border-left:0;border-top:1px solid var(--line)}
+.document{padding:26px 22px}
+.document h1{font-size:27px}
+.document-byline{font-size:11px}
+.document .eyebrow{font-size:10px}
+.doc-footer{font-size:10px;flex-wrap:wrap;gap:7px;padding:13px 16px}
+.right-tabs button{font-size:13px}
+.comment-item p{font-size:13px}
+.comment-item strong{font-size:12px}
+.comment-item small{font-size:11px}
+.right-body{padding:19px 22px}
+.right-body .notice{font-size:12px}
+.comment-form textarea{font-size:13px}
+.comment-form label{font-size:13px}
+.editor-heading .chip{font-size:10px}
+.editor-heading .btn{font-size:11px}
+.teacher-filters{grid-template-columns:1fr 1fr;padding:17px;gap:10px}
+.teacher-filters #teacher-course{grid-column:1/-1}
+.teacher-filters select{font-size:12px}
+.teacher-callout{flex-wrap:wrap}
+.teacher-callout .btn{margin:5px 0 0;max-width:none}
+.modal-head{padding:18px 20px}
+.modal-body{padding:21px}
+.modal-footer{padding:15px 20px}
+.modal-head h2{font-size:24px}
+.modal-body p{font-size:13px}
+.stat-top,.eyebrow{letter-spacing:.025em}
+.top-actions .icon-btn{width:32px}
+.top-actions .btn svg{display:none}
+.btn{font-size:13px}
+.segmented button{font-size:11px;padding:8px 10px}
+}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+}@media print{.sidebar,.app-topbar,.app-footer,.editor-heading,.work-tabs,.editor-outline,.editor-right,.editor-toolbar,.doc-footer{display:none!important}
+.app-area{margin:0}
+.app-content{padding:0}
+.editor-layout{display:block;border:0}
+.document,.editor-main{background:#fff;color:#000}
+body{background:white;color:black}
+}
+/* Final readability pass: compact metadata remains secondary without becoming microscopic. */
+.workspace small,.user-button small,.nav-label,.sidebar-note{font-size:11px}
+.workspace{gap:8px}
+.workspace>svg{width:14px;margin-left:auto}
+.workspace strong{font-size:13px}
+.work-meta,.work-side small{font-size:11px}
+.stat small{font-size:11px}
+.comment-item p{font-size:12px}
+.comment-item strong{font-size:11px}
+.comment-item small{font-size:10px}
+.outline-link{font-size:12px}
+@media(max-width:560px){.work-meta,.work-side small{font-size:12px}
+.comment-item p{font-size:13px}
+.comment-item strong{font-size:12px}
+.comment-item small{font-size:11px}
+.sidebar-note{font-size:12px}}
+/* Local range comments: colors encode participant roles,not an assessment. */
+[hidden]{display:none!important}
+.inline-comment-button{gap:7px;padding:6px 10px!important;color:var(--accent)!important;border:1px solid var(--line)!important;font:500 12px var(--sans)!important;margin:1px 0}
+.inline-comment-button svg{width:16px;height:16px}
+.inline-comment-button:disabled{color:var(--faint)!important;opacity:.7}
+#annotation-mirror{position:absolute;top:0;left:0;margin:0;border:0;white-space:pre-wrap;overflow-wrap:break-word;color:transparent;user-select:none;pointer-events:none}
+#inline-comment-text{min-height:102px;max-height:250px;resize:vertical;font-size:13px;display:block}
+#inline-comment-error{font-size:12px;color:var(--amber);margin-top:6px}
+.comment-role{display:block;color:var(--faint);font-size:10px;font-weight:400}
+.comment-item.comment-teacher{border-left:2px solid var(--amber)}
+.comment-item p{white-space:pre-wrap;overflow-wrap:anywhere}
+@media(max-width:560px){.inline-comment-button{min-height:36px!important;font-size:12px!important}
+.comment-item time{font-size:11px}
+.comment-role{font-size:11px}}
+.sx-reply{padding:0 0 18px;border-bottom:1px solid var(--line);margin:18px 0}
+.sx-reply strong{display:block;font-size:13px}
+.sx-reply small{display:block;color:var(--faint);font-size:11px;margin-top:6px}
+.sx-reply p{margin:14px 0!important;white-space:pre-wrap;overflow-wrap:anywhere}
+.sx-reply .chip{white-space:normal}
+#sx-print-root{display:none}
+@media print{html{color-scheme:light!important;background:white!important}
+@page{size:A4;margin:15mm;background:white}}
+/* --- Ductura v3: dopune vizualnom sustavu showcasea (isti tokeni) --- */
+#proto{position:fixed;bottom:0;left:0;right:0;z-index:90;display:flex;gap:4px;align-items:center;flex-wrap:wrap;padding:6px 12px;background:#050b09;border-top:1px dashed #2a3d33;font-size:11px}
+body{padding-bottom:64px}
+#proto b{color:var(--faint);letter-spacing:.12em;margin-right:8px;font-size:10.5px}
+#proto .pg{color:var(--faint);margin:0 4px 0 10px;text-transform:uppercase;letter-spacing:.1em;font-size:10px}
+#proto .pv{color:var(--faint);margin:0 4px 0 14px}
+#proto button{padding:3px 8px;border-radius:5px;color:var(--muted);font-size:11px}
+#proto button[aria-current=true]{background:var(--accentbg);color:var(--accent)}
+#proto .vr{border:1px solid var(--line)}#proto .vr[aria-pressed=true]{border-color:var(--accent);color:var(--ink)}
+body{min-height:100vh}
+#app{display:contents}
+.bell-dot{position:absolute;top:8px;right:9px;width:7px;height:7px;border-radius:50%;background:var(--accent);pointer-events:none}
+.bell-menu{position:absolute;right:0;top:48px;width:380px;max-width:calc(100vw - 24px);z-index:40;box-shadow:var(--shadow)}
+.bell-row{display:flex;gap:12px;align-items:center;width:100%;padding:13px 18px;border-top:1px solid var(--line2)}
+.bell-row:hover{background:var(--surface2)}.bell-row strong{display:block;font-size:13px}.bell-row small{color:var(--muted)}
+.bell-row.unread strong::after{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-left:8px;vertical-align:middle}
+.group-label{padding:14px 24px 4px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+.note-self{display:flex;gap:10px;align-items:center;margin:14px 0 18px;padding:10px 14px;border-radius:9px;background:var(--surface2);border:1px solid var(--line2);font-size:13px;color:var(--muted)}
+.note-self svg{color:var(--amber)}
+.empty-state{display:flex;flex-direction:column;align-items:center;text-align:center;gap:12px;padding:48px 24px}
+.empty-state>svg{width:34px;height:34px;color:var(--accent)}
+.empty-state h3{font-family:var(--serif);font-size:22px;font-weight:400}
+.narrow{max-width:620px}
+.code-input{font-size:18px;letter-spacing:.12em;text-transform:uppercase}
+.form-error{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:9px;background:#3a1f1a;color:#f0b3a6;font-size:13px;line-height:1.5}
+:root[data-theme=light] .form-error{background:#fbe9e5;color:#8a3324}
+.policy-box{padding:18px 20px;border-radius:11px;background:var(--accentbg);margin-bottom:8px;display:flex;flex-direction:column;gap:8px;font-size:13px}
+.policy-box .chip{align-self:flex-start}
+.notice-h{font-size:15px;margin:22px 0 8px}
+.notice-list{margin:0;padding-left:18px;color:var(--muted);font-size:13.5px;line-height:1.7}
+.notice-list li+li{margin-top:4px}
+.checkline{display:flex;gap:10px;align-items:flex-start;font-size:13.5px;line-height:1.5;cursor:pointer}
+.checkline input{margin-top:3px;accent-color:var(--accent);width:16px;height:16px}
+.ok-notice{margin:0 0 16px}
+.editor-outline .outline-link{gap:8px}
+.editor-toolbar button{display:inline-flex;align-items:center;gap:6px;padding:6px 9px;border-radius:6px;font-size:12px;color:var(--muted);min-height:32px}
+.editor-toolbar button:hover{background:var(--surface3);color:var(--ink)}
+.editor-toolbar button svg{width:15px;height:15px}
+.ms{font-family:var(--serif);font-size:16.5px;line-height:1.85;outline:none;margin-top:22px}
+.ms h3{font-family:var(--serif);font-size:19px;font-weight:400;margin:0 0 12px}
+.ms p{margin:0 0 16px;text-wrap:pretty}
+mark.cm{background:#e9c58b26;color:inherit;border-bottom:1.5px solid var(--amber);padding:0 1px}
+mark.cm sup{color:var(--amber);font-family:var(--sans);font-size:10px;margin-left:2px}
+mark.sel{background:#a2c6e522;color:inherit;border-radius:3px}
+.save-state.green{color:var(--accent)}.save-state.amber{color:var(--amber)}.save-state.blue{color:var(--blue)}
+.cq{font-family:var(--serif);font-style:italic;color:var(--faint);font-size:12.5px;margin:10px 0 4px}
+.dashboard-grid.even{grid-template-columns:1fr 1fr}
+.dashboard-grid.wide-left{grid-template-columns:minmax(0,1.05fr) minmax(0,1fr)}
+.sum-kv{grid-template-columns:minmax(120px,.8fr) 1.4fr}.sum-kv dd{text-align:left;line-height:1.55}
+.key-values dd .hash{font-size:11px;word-break:break-all;display:block;text-align:right}
+.receipt-panel{border-style:dashed}
+.receipt-seal{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--accentbg);color:var(--accent)}
+.st-green{color:var(--accent)}.st-amber{color:var(--amber)}.st-red{color:#e9917f}
+.wizard{display:flex;align-items:center;gap:10px;margin:0 0 24px;flex-wrap:wrap}
+.wz{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--faint)}
+.wz-n{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--line);font-size:12px}
+.wz-n svg{width:14px;height:14px}
+.wz.cur{color:var(--ink)}.wz.cur .wz-n{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.wz.done{color:var(--muted)}.wz.done .wz-n{background:var(--accentbg);color:var(--accent);border-color:transparent}
+.wz-line{flex:0 1 48px;height:1px;background:var(--line)}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.sticky{position:sticky;top:96px;align-self:start}
+.code-pill{display:inline-flex;align-items:center;gap:10px;padding:6px 6px 6px 14px;border-radius:100px;border:1px solid var(--line);background:var(--surface2);font-size:12px;color:var(--muted)}
+.code-pill .mono{color:var(--accent);font-size:13px;letter-spacing:.08em}
+.code-pill.big{padding:10px 10px 10px 20px}.code-pill.big .mono{font-size:20px}
+.icon-btn.sm{width:30px;height:30px;border-radius:50%}.icon-btn.sm svg{width:15px;height:15px}
+.course-ic{width:38px;height:38px;border-radius:9px;display:grid;place-items:center;background:var(--accentbg);color:var(--accent)}
+.teacher-filters.single{grid-template-columns:1fr}
+.data-table tr.sel td{background:var(--surface2)}
+.data-table tbody tr{cursor:pointer}
+.mini-doc{margin:0 24px 24px;padding:24px 28px;border-radius:10px;background:var(--bg);border:1px solid var(--line2);font-family:var(--serif);font-size:15px;line-height:1.8}
+.mini-doc p{margin:0 0 12px}
+.mini-doc .pasted{background:#9e9a901f;border-radius:4px;box-shadow:0 0 0 6px #9e9a901f}
+.pasted-tag{display:block;margin:-4px 0 12px;font-family:var(--sans);font-size:11px;color:var(--faint)}
+.editor-layout.two{grid-template-columns:minmax(0,1fr) 340px}
+.comment-form{display:flex;flex-direction:column;gap:10px;margin-top:18px}
+.prefs td,.prefs th{padding:12px 10px}.prefs td small{display:block;color:var(--faint);font-size:11.5px}
+.prefs input{accent-color:var(--accent);width:17px;height:17px}
+.skel{height:14px;border-radius:6px;background:linear-gradient(90deg,var(--surface2),var(--surface3),var(--surface2))}
+.dlg-shade{position:fixed;inset:0;background:#03100bd9;backdrop-filter:blur(5px);z-index:80}
+.dlg-box{position:fixed;top:12vh;left:50%;transform:translateX(-50%);z-index:81;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:16px;width:min(500px,calc(100vw - 28px));box-shadow:0 30px 150px #0006}
+@media (max-width:1100px){.dashboard-grid.even,.dashboard-grid.wide-left{grid-template-columns:1fr}.editor-layout.two{grid-template-columns:1fr}.sticky{position:static}}
+@media (max-width:700px){.grid-2{grid-template-columns:1fr}.wz-line{display:none}.sum-kv{grid-template-columns:1fr}.sum-kv dd{margin-bottom:8px}}
+.form-input{width:100%;min-height:46px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);padding:10px 13px;font:inherit}
+textarea.form-input{min-height:90px;resize:vertical;line-height:1.55}
+.form-input:focus{border-color:var(--accent);outline:none}
+.form-group{display:flex;flex-direction:column;gap:8px;min-width:0}.form-group label{font-size:12px;color:var(--muted);font-weight:600}
+.sidebar{bottom:64px}
+.outline-link small{display:block;margin-top:2px}
+.dashboard-grid>*{min-width:0}
+@media (max-width:700px){.panel-head{flex-wrap:wrap}.work-meta{flex-wrap:wrap}.work-row{flex-wrap:wrap}}
+.app-content>.work-back{display:inline-flex;align-items:center;gap:8px;color:var(--accent);font-size:13px;margin-bottom:22px;min-height:36px}
+.app-content>.work-back svg{width:17px;height:17px}
+.sx-reply{margin:12px 0 6px;padding:10px 12px;border-radius:8px;background:var(--surface2);font-size:12.5px;line-height:1.5;color:var(--muted)}
+.sx-reply strong{color:var(--ink);font-weight:600}
+@media (max-width:700px){#proto{max-height:38px;overflow:hidden}#proto:hover,#proto:focus-within{max-height:none}}
+/* toast (iz showcasea) */
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:200;background:var(--ink);color:var(--bg);padding:14px 20px;display:flex;align-items:center;gap:10px;box-shadow:var(--shadow);border-radius:9px;font-size:12px;max-width:90vw;animation:fadein .2s}
+.toast[hidden]{display:none}
+.toast svg{width:17px}
+/* Odluka vlasnika 21. 10. 2026.: fontovi iz repoa (app/fonts) umjesto Georgia/Inter */
+:root{--serif:Newsreader,Georgia,'Times New Roman',serif;--sans:"Instrument Sans",Inter,'Segoe UI',Arial,sans-serif}
+
+</style>
+</head>
+<body>
+<div id="proto" aria-label="Ekrani prototipa"></div>
+<div id="app"></div>
+<div id="layer"></div>
+<div id="toast" class="toast" role="status" hidden></div>
+<script>
+const iconPaths={
+ arrow:'<path d="M4 12h15M13 6l6 6-6 6"/>',back:'<path d="M20 12H5m6-6-6 6 6 6"/>',chevron:'<path d="m9 5 7 7-7 7"/>',down:'<path d="m6 9 6 6 6-6"/>',grid:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',book:'<path d="M12 5v16M3 3h5a4 4 0 0 1 4 3 4 4 0 0 1 4-3h5v16h-5a4 4 0 0 0-4 2 4 4 0 0 0-4-2H3Z"/>',file:'<path d="M14 3H5v18h14V8Z"/><path d="M14 3v6h5M8 13h8M8 16h6"/>',pen:'<path d="m15 4 5 5M4 20l5-1L21 7a2.1 2.1 0 0 0-5-5L4 14Z"/>',calendar:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 11h18M7 15h2m4 0h2"/>',clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',chat:'<path d="M21 15a3 3 0 0 1-3 3H8l-5 3V6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3Z"/><path d="M7 8h10M7 12h7"/>',users:'<circle cx="9" cy="7" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6m2 4a5 5 0 0 1 3 5v2"/>',user:'<circle cx="12" cy="7" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/>',cap:'<path d="m2 9 10-5 10 5-10 5Zm4 3v6c4 3 8 3 12 0v-6m4-3v7"/>',shield:'<path d="m12 3 8 3v6c0 4-5 8-8 10-3-2-8-6-8-10V6Z"/><path d="m8 12 3 3 5-6"/>',eye:'<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',search:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',plus:'<path d="M12 4v16M4 12h16"/>',check:'<path d="m5 12 4 4L19 6"/>',close:'<path d="m6 6 12 12M18 6 6 18"/>',settings:'<path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3" fill="var(--surface)"/><circle cx="16" cy="17" r="3" fill="var(--surface)"/>',sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1 1M18 18l1 1M5 19l1-1M18 6l1-1"/>',moon:'<path d="M21 13A9 9 0 0 1 11 3a9 9 0 1 0 10 10Z"/>',bell:'<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M9 21h6"/>',logout:'<path d="M10 3H3v18h7m5-14 5 5-5 5M8 12h12"/>',switch:'<path d="M4 7h16l-4-4M20 17H4l4 4"/>',download:'<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>',external:'<path d="M14 3h7v7m0-7L10 14m0-10H3v17h17v-7"/>',layers:'<path d="m12 3 10 5-10 5L2 8Zm-10 9 10 5 10-5M2 17l10 5 10-5"/>',list:'<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/>',menu:'<path d="M3 6h18M3 12h18M3 18h18"/>',flag:'<path d="M4 22V3h13l-2 4 2 4H4"/>',leaf:'<path d="M20 3C7 3 2 8 5 15s15 5 15-12ZM5 20 15 9"/>',link:'<path d="m10 13 4-4m-7 5-2 2a3 3 0 0 0 4 4l4-4m-2-8 4-4a3 3 0 0 1 4 4l-2 2"/>',folder:'<path d="M3 6h7l2 3h9v11H3Z"/>',save:'<path d="M4 3h13l3 3v15H4Z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/>',quote:'<path d="M9 5H3v7h6V5Zm0 7c0 5-3 7-6 7m18-14h-6v7h6V5Zm0 7c0 5-3 7-6 7"/>'};
+
+/* Ductura · dizajn v3 (vizualni sustav Ductura_showcase_v2). Dizajnerska referenca, ne produkcijski kod.
+   Svi podaci izmišljeni. Tekstovi slijede važeće odluke (D-80, D-118, D-142/143, D-145/146, D-154, F-108). */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function icon(n){return `<svg viewBox="0 0 24 24" aria-hidden="true">${iconPaths[n]||iconPaths.file}</svg>`}
+const LOGO=`<span class="brand-mark"><svg viewBox="0 0 28 34" aria-hidden="true"><path d="M5 6c7 1 12-1 17-4v7c-5 4-10 5-17 4M5 15c7 1 12-1 17-4v7c-5 4-10 5-17 4M5 24c7 1 12-1 17-4v7c-5 4-10 5-17 4"/></svg></span><span>Ductura<span class="accent">.</span></span>`;
+const chip=(t,c="")=>`<span class="chip ${c}"><span class="dot"></span>${t}</span>`;
+
+/* ---------- podaci ---------- */
+const ST={writing:["U pisanju","green"],review:["Na pregledu","blue"],revision:["Čeka doradu","amber"],submitted:["Predano","green"],notice:["Obavijest nije potvrđena",""],notstarted:["Nije započeto",""]};
+const MYWORKS=[
+ {t:"Čitanje naglas i jezični razvoj u prvim razredima",c:"Kolegij A",k:"Seminarski rad",st:"writing",due:"31. 10. 2026. u 23:59",w:"1 240 / 2 000–2 500 riječi"},
+ {t:"Osvrt na izvor: institucije i predstavništvo",c:"Kolegij B",k:"Osvrt",st:"revision",due:"14. 11. 2026. u 23:59",w:"860 / 800–1 200 riječi"},
+ {t:"Istraživački nacrt: politika stanovanja",c:"Kolegij C",k:"Esej",st:"notice",due:"20. 11. 2026. u 23:59",w:"—"}];
+const STUD=[ // po prezimenu (D-80)
+ {g:"Ana",s:"Babić",st:"writing",last:"21. 10. u 09:40",rev:0,paste:1,decl:"još nije predana",doc:1},
+ {g:"Ivan",s:"Čolak",st:"submitted",last:"20. 10. u 22:14",rev:0,paste:0,decl:"predana s radom",doc:1},
+ {g:"Marta",s:"Đurić",st:"revision",last:"19. 10. u 17:02",rev:1,paste:0,decl:"još nije predana",doc:1},
+ {g:"Petar",s:"Horvat",st:"writing",last:"21. 10. u 08:12",rev:0,paste:0,decl:"još nije predana",doc:1},
+ {g:"Luka",s:"Šimić",st:"notice",last:null,doc:0}];
+const SUMMARY=[["Stanje zapisa","Zapis je cjelovit"],["Broj sesija","4 · prag P-01: nova sesija počinje nakon stanke dulje od 30 minuta"],["Sesije pisanja","18. 10. od 10:12 do 11:05 · 19. 10. od 16:40 do 17:31 · 20. 10. od 21:02 do 22:14 · 21. 10. od 09:05 do 09:40"],["Lijepljenja","1 × 212 znakova, izvor nije opažen, 20. 10. u 21:37 · prag P-02: zasebno se navodi lijepljenje veće od 80 znakova"],["Manja lijepljenja, samo broj","3 · prag P-02: najviše 80 znakova"],["Praznine u zapisu","Nema praznina u zapisu."],["Vrsta dokaza","opaženo"]];
+const PARAS=["Čitanje naglas u prvim godinama školovanja opisuje se kao jedan od temelja kasnijeg jezičnog razvoja. Ovaj rad razmatra kako se taj navod prenosi u nastavnu praksu i što o njemu kažu dostupni izvori.",
+ "Prema jednoj od uvriježenih tvrdnji, redovito zajedničko čitanje proširuje rječnik djeteta (Autor A, 2019b). Autor B (2021) tu tvrdnju nadopunjuje opažanjima iz razreda.",
+ "Ipak, većina istraživanja provedena je u okruženjima s mnogo knjiga kod kuće, pa se rezultati ne mogu izravno prenijeti na svaki razred (Autor C, 2020: 14).",
+ "U nastavku se uspoređuju tri pristupa iz prakse i navodi što svaki od njih traži od nastavnika."];
+const NOTIF=[
+ {i:"chat",t:"Novi komentar uz odlomak",d:"Nastavnik A · Čitanje naglas i jezični razvoj",w:"prije 20 min",n:1},
+ {i:"flag",t:"Zahtjev za doradu",d:"Osvrt na izvor · rok dorade 28. 10.",w:"jučer",n:1},
+ {i:"calendar",t:"Rok za 7 dana",d:"Čitanje naglas i jezični razvoj · 31. 10. u 23:59",w:"24. 10.",n:0}];
+
+/* ---------- stanje ---------- */
+const S={role:"student",scr:"s-pregled",v:{},stud:0,view:"text",tab:"kom",bell:false,menu:false,dlg:null,theme:"dark",step:1};
+const SCR={
+ student:[["s-pregled","Pregled","grid"],["s-radovi","Moji radovi","file"],["s-obavijesti","Obavijesti","bell"],["s-upis","Upis kodom","plus"],["s-obavijest","Obavijest zadatka","shield"],["s-editor","Pisanje","pen"],["s-predaja","Predaja","check"]],
+ teacher:[["t-pregled","Pregled","grid"],["t-kolegiji","Moji kolegiji","book"],["t-novi","Novi zadatak","plus"],["t-radovi","Radovi zadatka","users"],["t-rad","Rad uživo","eye"]]};
+const VAR={"s-pregled":["sadržaj","prvi ulazak"],"s-radovi":["popis","prazno"],"s-obavijesti":["postavke"],"s-upis":["unos","odbijeno","previše pokušaja","upisana"],"s-obavijest":["prije potvrde","potvrđeno"],"s-editor":["na poslužitelju","na uređaju","bez mreže","druga kartica"],"s-predaja":["spremno","nije na poslužitelju","blokirano","predano"],
+ "t-pregled":["sadržaj","bez kolegija"],"t-kolegiji":["popis","učitavanje","greška"],"t-novi":["1 Kolegij","2 Zadatak","3 Alati","4 Objavljeno"],"t-radovi":["popis","nema studenata"],"t-rad":["veza radi","prekid veze","nema teksta"]};
+const vv=()=>S.v[S.scr]??0;
+function go(scr){S.scr=scr;S.role=scr[0]==="t"?"teacher":"student";S.bell=false;S.menu=false;render();scrollTo(0,0)}
+function setV(i){S.v[S.scr]=i;render()}
+let tt;function toast(m){const t=$("#toast");t.innerHTML=`${icon("check")}<span>${esc(m)}</span>`;t.hidden=false;clearTimeout(tt);tt=setTimeout(()=>t.hidden=true,2600)}
+
+/* ---------- ljuska ---------- */
+function shell(crumb,main){
+ const st=S.role==="student";
+ const nav=st?[["s-pregled","Pregled","grid"],["s-radovi","Moji radovi","file",3],["s-upis","Upis u kolegij","plus"],["s-obavijesti","Obavijesti","bell",2]]
+            :[["t-pregled","Pregled","grid"],["t-kolegiji","Moji kolegiji","book",3],["t-radovi","Radovi zadatka","users"],["t-novi","Novi kolegij i zadatak","plus"]];
+ const cur=S.scr==="s-editor"||S.scr==="s-obavijest"||S.scr==="s-predaja"?"s-radovi":S.scr==="t-rad"?"t-radovi":S.scr;
+ return `<div class="menu-shade ${S.menu?"open":""}" onclick="S.menu=false;render()"></div>
+ <aside class="sidebar ${S.menu?"open":""}" aria-label="Bočna navigacija">
+  <a class="brand" href="#" onclick="go('${st?"s-pregled":"t-pregled"}');return false" aria-label="Ductura, početna">${LOGO}</a>
+  <div class="workspace"><span class="workspace-icon">F</span><div><strong>FPZG</strong><small>Akademska 2026./2027.</small></div></div>
+  <div class="nav-label">${st?"Studentski prostor":"Nastavnički prostor"}</div>
+  <nav aria-label="Radni prostor">${nav.map(([k,l,i,n])=>`<button class="nav-item ${cur===k?"active":""}" onclick="go('${k}')" ${cur===k?'aria-current="page"':""}>${icon(i)}<span>${l}</span>${n?`<span class="nav-count">${n}</span>`:""}</button>`).join("")}</nav>
+  <div class="sidebar-bottom">
+   <div class="sidebar-note"><strong>${icon("leaf")} &nbsp;Demo · izmišljeni podaci.</strong>Nijedan stvarni osobni podatak.</div>
+   <button class="user-button" onclick="S.dlg='odjava';render()" aria-label="Račun i odjava"><span class="avatar ${st?"":"gold"}">${st?"AB":"NA"}</span><span><strong>${st?"Ana Babić":"Nastavnik A"}</strong><small>${st?"Studentica · 3. godina":"Nastavnik i mentor"}</small></span>${icon("logout")}</button>
+  </div></aside>
+ <div class="app-area"><header class="app-topbar"><div class="flex"><button class="icon-btn mobile-menu" onclick="S.menu=true;render()" aria-label="Otvori navigaciju">${icon("menu")}</button><div class="breadcrumb">${crumb}</div></div>
+  <div class="top-actions"><span class="top-academic small faint">2026./2027.</span><span class="demo-tag"><span class="dot"></span>Demo</span>
+   <button class="icon-btn" onclick="S.theme=S.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=S.theme;render()" aria-label="Promijeni svijetlu ili tamnu temu">${icon(S.theme==="dark"?"sun":"moon")}</button>
+   <span style="position:relative"><button class="icon-btn" onclick="S.bell=!S.bell;render()" aria-label="Obavijesti, 2 nove" aria-expanded="${S.bell}">${icon("bell")}</button>${st?`<span class="bell-dot"></span>`:""}${S.bell?bellMenu():""}</span>
+   <button class="btn compact ghost" onclick="go('${st?"t-pregled":"s-pregled"}')">${icon("switch")}${st?"Nastavnik":"Student"}</button></div></header>
+ <main class="app-content" id="main" tabindex="-1">${main}</main></div>`;
+}
+const crumb=(...p)=>p.map((x,i)=>i<p.length-1?`<span>${x}</span>${icon("chevron")}`:`<span>${x}</span>`).join("");
+function bellMenu(){return `<div class="bell-menu panel" role="dialog" aria-label="Obavijesti"><div class="panel-head" style="padding:16px 18px"><h2>Obavijesti</h2><button class="text-btn" onclick="toast('Sve označeno pročitanim')">Označi sve pročitanim</button></div>
+ ${NOTIF.map(n=>`<button class="bell-row ${n.n?"unread":""}" onclick="go('s-editor')"><span class="work-symbol">${icon(n.i)}</span><span class="grow" style="text-align:left"><strong>${n.t}</strong><small>${n.d}</small></span><small class="faint no-wrap">${n.w}</small></button>`).join("")}
+ <div style="padding:12px 18px;border-top:1px solid var(--line2)"><button class="text-btn" onclick="go('s-obavijesti')">Postavke obavijesti ${icon("arrow")}</button></div></div>`}
+const heading=(eye,h,p,right="")=>`<div class="page-heading"><div><div class="eyebrow">${eye}</div><h1>${h}</h1>${p?`<p>${p}</p>`:""}</div>${right}</div>`;
+const panel=(title,body,right="")=>`<section class="panel"><div class="panel-head"><h2>${title}</h2>${right}</div>${body}</section>`;
+const sumPanel=()=>panel("Sažetak procesa",`<div class="panel-body"><dl class="key-values sum-kv">${SUMMARY.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl><p class="small faint" style="margin-top:16px">Vremena su po zagrebačkom vremenu, zaokružena na minutu.</p></div>`,`<span class="small faint">Isti sažetak vide student i nastavnik.</span>`);
+
+/* ---------- STUDENT ---------- */
+function sPregled(){
+ const first=vv()===1;
+ const hero=first?`<section class="hero-card"><div><div class="flex"><span class="eyebrow">Prvi korak</span></div><h2>Upiši se u kolegij kodom od nastavnika.</h2><p>Nakon upisa vidiš zadatke kolegija. Pisanje počinje tek kad pročitaš obavijest zadatka.</p><button class="btn primary" onclick="go('s-upis')">${icon("plus")}Upiši se u kolegij${icon("arrow")}</button></div>
+  <div class="hero-card-side"><div class="mini-metric">${icon("shield")}<div><strong>Prije prve rečenice</strong><small>Obavijest kaže što se bilježi i što vidi nastavnik.</small></div></div><div class="mini-metric">${icon("save")}<div><strong>Tekst ostaje tvoj</strong><small>Rad se sprema na uređaju i na poslužitelju.</small></div></div></div></section>`
+ :`<section class="hero-card"><div><div class="flex"><span class="eyebrow">Nastavi gdje si stala</span>${chip("U pisanju","green")}</div><h2>${MYWORKS[0].t}</h2><p>${MYWORKS[0].c} &nbsp;·&nbsp; ${MYWORKS[0].k} &nbsp;·&nbsp; Nastavnik A</p>
+  <div class="note-self">${icon("pen")}<span><strong>Poruka sebi:</strong> dovrši primjer u 2.2 i dodaj stranicu uz navod.</span></div>
+  <button class="btn primary" onclick="go('s-editor')">${icon("pen")}Nastavi pisati${icon("arrow")}</button></div>
+  <div class="hero-card-side"><div class="mini-metric">${icon("calendar")}<div><strong>31. 10. 2026. u 23:59</strong><small>Rok za predaju</small></div></div><div class="mini-metric">${icon("chat")}<div><strong>1 otvoreni komentar</strong><small>Uz odlomak 2</small></div></div><div class="mini-metric">${icon("file")}<div><strong>1 240 riječi</strong><small>Opseg 2 000–2 500</small></div></div></div></section>`;
+ const groups=[["Čeka tebe","revision"],["Pišeš","writing"],["Prije prve rečenice","notice"]];
+ return shell(crumb("Radni prostor","Pregled"),heading("Tvoj akademski prostor","Dobro došla, Ana.","Tvoji radovi, komentari i rokovi na jednom mjestu.",`<div><div class="date-label">DEMO · 21. LISTOPADA 2026.</div></div>`)+hero+
+ (first?"":`<div class="dashboard-grid" style="margin-top:24px"><div class="stack">${panel("Moji radovi",groups.map(([g,s])=>{const w=MYWORKS.filter(x=>x.st===s);return w.length?`<div class="group-label">${g}</div>`+w.map(workRow).join(""):""}).join(""),`<button class="text-btn" onclick="go('s-radovi')">Svi radovi ${icon("arrow")}</button>`)}</div>
+ <div class="stack">${panel("Novo uz tvoj rad",`<div class="panel-body stack" style="gap:16px">${NOTIF.slice(0,2).map(n=>`<div class="flex" style="align-items:flex-start"><span class="avatar gold">NA</span><div><strong style="font-size:13px">${n.t}</strong><p class="small muted">${n.d}</p><small class="faint">${n.w}</small></div></div>`).join("")}<button class="text-btn" onclick="go('s-editor')">Otvori komentare ${icon("arrow")}</button></div>`,icon("chat"))}
+ ${panel("Upis u kolegij",`<div class="panel-body"><p class="small muted" style="margin-bottom:14px">Imaš kod od nastavnika? Upiši ga ovdje.</p><button class="btn block" onclick="go('s-upis')">${icon("plus")}Upiši kod</button></div>`)}</div></div>`));
+}
+function workRow(w){const [l,c]=ST[w.st];const target=w.st==="notice"?"s-obavijest":"s-editor";
+ return `<div class="work-row"><span class="work-symbol">${icon("file")}</span><div class="grow"><button class="work-title" onclick="go('${target}')">${w.t}</button><div class="work-meta"><span>${w.c}</span><span>·</span><span>${w.k}</span>${w.w!=="—"?`<span>·</span><span>${w.w}</span>`:""}</div></div><div class="work-side">${chip(l,c)}<small>rok ${w.due}</small></div><button class="arrow-link" onclick="go('${target}')" aria-label="Otvori ${esc(w.t)}">${icon("chevron")}</button></div>`}
+function sRadovi(){
+ const empty=vv()===1;
+ return shell(crumb("Radni prostor","Moji radovi"),heading("Tvoji pisani radovi","Svaki rad ima svoj put.","Od obavijesti zadatka do predaje i potvrde.",`<button class="btn" onclick="go('s-upis')">${icon("plus")}Upiši se u kolegij</button>`)+
+ (empty?`<section class="panel"><div class="panel-body empty-state">${icon("folder")}<h3>Još nemaš nijedan rad.</h3><p class="muted">Radovi se pojavljuju kad se upišeš u kolegij i nastavnik objavi zadatak.</p><button class="btn primary" onclick="go('s-upis')">${icon("plus")}Upiši se u kolegij</button></div></section>`
+ :`<div class="segmented" role="group" aria-label="Prikaz radova" style="margin-bottom:18px"><button class="active" aria-pressed="true">Svi</button><button>Kod mentora</button><button>Predano</button></div><section class="panel">${MYWORKS.map(workRow).join("")}</section>
+ <div class="requirements">${[["shield","Prije prve rečenice","Svaki zadatak počinje obaviješću: što se bilježi, što vidi nastavnik i koji su alati dopušteni."],["eye","Isti prikaz za oboje","Sažetak procesa isti je za tebe i za nastavnika. Bez postotaka i bez ocjene."],["download","Nakon predaje","Dobivaš potvrdu o predaji s vremenom poslužitelja i sažetkom dokumenta."]].map(([i,h,p])=>`<div class="requirement">${icon(i)}<h3>${h}</h3><p>${p}</p></div>`).join("")}</div>`));
+}
+function sObavijesti(){
+ const kinds=[["Komentari uz rad","Kad nastavnik ostavi komentar ili odgovori.",1,1],["Zahtjevi za doradu","Kad nastavnik zatraži doradu ili je prihvati.",1,1],["Rokovi","7 dana i 1 dan prije roka.",1,0]];
+ return shell(crumb("Radni prostor","Obavijesti"),heading("Obavijesti","Samo ono što pomiče rad.","Komentari, dorade i rokovi. Ništa drugo.")+
+ `<div class="dashboard-grid"><div class="stack">${panel("Nedavno",NOTIF.map(n=>`<div class="work-row"><span class="work-symbol">${icon(n.i)}</span><div class="grow"><button class="work-title" onclick="go('s-editor')">${n.t}</button><div class="work-meta"><span>${n.d}</span></div></div><div class="work-side">${n.n?chip("novo","blue"):""}<small>${n.w}</small></div></div>`).join(""),`<button class="text-btn" onclick="toast('Sve označeno pročitanim')">Označi sve pročitanim</button>`)}</div>
+ <div class="stack">${panel("Kako želiš obavijesti",`<div class="panel-body"><div class="table-scroll"><table class="data-table prefs"><thead><tr><th>Vrsta</th><th>U aplikaciji</th><th>E-pošta</th></tr></thead><tbody>${kinds.map(([k,d,a,e])=>`<tr><td><strong style="font-size:13px">${k}</strong><small>${d}</small></td><td><input type="checkbox" ${a?"checked":""} aria-label="${k} u aplikaciji"></td><td><input type="checkbox" ${e?"checked":""} aria-label="${k} e-poštom"></td></tr>`).join("")}</tbody></table></div>
+ <div class="notice">${icon("info")}<span>E-pošta ide na adresu iz AAI@EduHr računa. U demou se e-pošta ne šalje.</span></div></div>`)}</div></div>`);
+}
+function sUpis(){
+ const v=vv();
+ if(v===3) return shell(crumb("Radni prostor","Upis u kolegij"),heading("Upisana si u Kolegij A","Zadaci kolegija.","Pisanje počinje tek nakon što pročitaš i potvrdiš obavijest zadatka. Prije potvrde ništa se ne šalje na poslužitelj.")+
+  `<section class="panel"><div class="work-row"><span class="work-symbol">${icon("file")}</span><div class="grow"><span class="work-title">Zadatak 1: seminarski rad</span><div class="work-meta"><span>Seminarski rad</span><span>·</span><span>2 000–2 500 riječi</span></div></div><div class="work-side">${chip("Otvoren","green")}<small>rok 31. 10. 2026. u 23:59</small></div><button class="btn primary compact" onclick="go('s-obavijest')">Pročitaj obavijest${icon("arrow")}</button></div>
+  <div class="work-row"><span class="work-symbol">${icon("file")}</span><div class="grow"><span class="work-title">Zadatak 2: osvrt na izvor</span><div class="work-meta"><span>Osvrt</span></div></div><div class="work-side">${chip("Nije otvoren")}<small>otvara se 1. 11. 2026. u 08:00</small></div></div></section>`);
+ const err=[null,"Kod nije prihvaćen. Provjeri ga kod nastavnika i upiši ponovno.","Previše pokušaja. Pričekaj nekoliko minuta pa pokušaj ponovno."][v];
+ return shell(crumb("Radni prostor","Upis u kolegij"),`<div class="narrow">${heading("Upis u kolegij","Tvoj kod, tvoj kolegij.","Kod za upis dobivaš od nastavnika. Velika i mala slova nisu važna.")}
+ <section class="panel"><form class="panel-body stack" onsubmit="event.preventDefault();setV(3)"><div class="form-group"><label for="kod">Kod za upis</label><input id="kod" class="form-input mono code-input" placeholder="FPZG-XX-XXX" autocomplete="off" ${err?'aria-invalid="true" aria-describedby="kod-err"':""}></div>
+ ${err?`<div class="form-error" id="kod-err" role="alert">${icon("info")}${err}</div>`:""}
+ <div class="flex"><button class="btn primary" ${v===2?"disabled":""}>Upiši se${icon("arrow")}</button><button type="button" class="btn ghost" onclick="go('s-pregled')">Natrag</button></div></form></section></div>`);
+}
+function sObavijest(){
+ const ok=vv()===1;
+ const L=(h,arr)=>`<h3 class="notice-h">${h}</h3><ul class="notice-list">${arr.map(x=>`<li>${x}</li>`).join("")}</ul>`;
+ return shell(crumb("Moji radovi","Zadatak 1","Obavijest"),`<button class="work-back" onclick="go('s-radovi')">${icon("back")}Moji radovi</button>`+heading("Prije prve rečenice · korak 2 od 2","Najprije, jasna očekivanja.","Pročitaj što se bilježi i što vidi nastavnik. Tek nakon potvrde možeš pisati.")+
+ `<div class="dashboard-grid"><section class="panel"><div class="panel-head"><h2>Zadatak 1: seminarski rad</h2>${chip("Seminarski rad")}</div><div class="panel-body">
+  <div class="policy-box"><span class="chip">Uporaba alata · čl. 8</span><p><strong>Dopušteno:</strong> objašnjenje pojma ili teorije, pretraživanje literature, jezična dorada vlastitog teksta.</p><p><strong>Nije dopušteno:</strong> generiranje teksta koji se predaje kao vlastiti, izmišljanje izvora i podataka.</p><small class="faint">Tekst stavki u aplikaciji ide doslovno iz Pravilnika.</small></div>
+  ${L("Što se bilježi",["Promjene teksta, sažete u odsječke od najviše 30 sekundi. Odsječak nosi jedno vrijeme, zaokruženo na minutu.","Svaka promjena teksta, znak po znak, s redoslijedom i vremenom: unos i brisanje, lijepljenje, uvoz, prijenos iz AI pomoćnika i izmjene nastavnika. To služi samo prikazu uživo i reprodukciji.","Povijest verzija rada."])}
+  ${L("Što se ne bilježi",["Koja je tipka pritisnuta i koliko je držana. Iz vremena promjena nikad se ne računaju brzina, pauze, ritam ni bilo kakva mjera.","Ništa izvan Ducture: ni drugi programi, ni kamera, ni zaslon.","Ništa s tvog uređaja osim teksta rada."])}
+  ${L("Što vidi nastavnik (mentor)",["Od prvog dana tvoj rad uživo, dok nastaje, pa i tekst koji ćeš kasnije možda obrisati.","Samo nastavnik (mentor) može reproducirati nastanak rada znak po znak, pa i obrisani tekst.","Prikaz uživo i reprodukcija služe praćenju nastanka rada i komentarima, nikad ocjeni ni rangiranju.","Povijest verzija i sažetak procesa, isti kao što ga vidiš ti.","Ductura ne procjenjuje autorstvo ni korištenje AI-ja."])}
+  <div class="divider"></div>
+  ${ok?`<div class="notice ok-notice">${icon("check")}<span>Potvrđeno 21. 10. 2026. u 09:02. Možeš početi pisati.</span></div><button class="btn primary" onclick="go('s-editor')">${icon("pen")}Počni pisati${icon("arrow")}</button>`
+  :`<label class="checkline"><input type="checkbox" id="ack"> Pročitao/la sam obavijest. Znam što se bilježi i što vidi nastavnik (mentor).</label><p class="small faint" style="margin:10px 0 16px">Potvrda nije privola. Prije potvrde ništa se ne šalje na poslužitelj.</p><button class="btn primary" onclick="setV(1)">Potvrdi i počni${icon("arrow")}</button>`}
+ </div></section>
+ <section class="panel"><div class="panel-head"><h2>Sažetak zadatka</h2></div><div class="panel-body"><dl class="key-values"><dt>Kolegij</dt><dd>Kolegij A</dd><dt>Vrsta rada</dt><dd>Seminarski rad</dd><dt>Nastavnik</dt><dd>Nastavnik A</dd><dt>Otvoren</dt><dd>15. 10. 2026. u 08:00</dd><dt>Rok</dt><dd>31. 10. 2026. u 23:59</dd><dt>Opseg</dt><dd>2 000–2 500 riječi</dd><dt>Čuvanje</dt><dd>do isteka roka koji propisuje fakultet</dd></dl><div class="divider"></div><p class="small muted">Obavijest možeš ponovno otvoriti iz izbornika rada.</p></div></section></div>`);
+}
+function sEditor(){
+ const v=vv();
+ const save=[["Spremljeno na poslužitelju","green","check"],["Spremljeno na uređaju","","save"],["Bez mreže · spremljeno na uređaju","amber","info"],["Samo čitanje · rad je otvoren u drugoj kartici","blue","eye"]][v];
+ return shell(crumb("Moji radovi","Kolegij A","Zadatak 1"),`<div class="editor-heading"><button class="work-back" onclick="go('s-radovi')">${icon("back")}Moji radovi</button>
+  <div class="flex wrap"><div class="segmented" role="group" aria-label="Prikaz"><button class="active" aria-pressed="true">Pisanje</button><button onclick="toast('Kako vidi nastavnik: isti prikaz kao nastavnik, samo za čitanje')">Kako vidi nastavnik</button></div><button class="btn primary compact" onclick="go('s-predaja')">${icon("check")}Predaj</button></div></div>
+ ${v===2?`<div class="notice" style="margin-bottom:16px">${icon("info")}<span>Nema mreže. Piši dalje: tekst se sprema na uređaju i šalje kad se veza vrati.</span></div>`:""}
+ ${v===3?`<div class="notice" style="margin-bottom:16px">${icon("eye")}<span>Ovaj rad je otvoren u drugoj kartici. Ovdje ga samo čitaš, da se izmjene ne sudare.</span></div>`:""}
+ <div class="editor-layout"><aside class="editor-outline" aria-label="Struktura rada"><div class="eyebrow">Struktura</div>
+  ${[["Uvod","412 / 300"],["Teorijski okvir","388 / 700"],["Analiza","440 / 900"],["Zaključak","0 / 300"]].map(([t,w],i)=>`<button class="outline-link ${i===0?"active":""}">${icon("file")}<span class="grow" style="text-align:left">${i+1}. ${t}<small class="faint">${w} riječi</small></span></button>`).join("")}
+  <div class="outline-tip"><span class="eyebrow">Opseg</span><div class="goal-track"><span style="width:55%"></span></div>1 240 / 2 000–2 500 riječi</div></aside>
+ <div class="editor-main"><div class="editor-toolbar"><button title="Odlomak">¶</button><button>Naslov</button><button>Podnaslov</button><span class="tool-divider"></span><button title="Podebljano"><b>B</b></button><button title="Kurziv"><i>I</i></button><button title="Popis">•</button><button title="Blok-citat">„ ”</button><span class="tool-divider"></span><button>${icon("chat")}Komentar</button><button style="margin-left:auto">Više ▾</button><button>Prikaz ▾</button></div>
+  <div class="document"><div class="eyebrow">Kolegij A · Seminarski rad</div><h1>Čitanje naglas i jezični razvoj u prvim razredima</h1><div class="document-byline">Ana Babić &nbsp; / &nbsp; Fakultet političkih znanosti</div>
+  <div class="ms" ${v===3?"":'contenteditable="true"'} spellcheck="false" aria-label="Tekst rada"><h3>1. Uvod</h3><p>${PARAS[0]}</p><p>Prema jednoj od uvriježenih tvrdnji, <mark class="cm">redovito zajedničko čitanje proširuje rječnik djeteta<sup>1</sup></mark> (Autor A, 2019b). Autor B (2021) tu tvrdnju nadopunjuje opažanjima iz razreda.</p><p>${PARAS[2]}</p><p>${PARAS[3]}</p></div></div>
+  <div class="doc-footer"><span class="flex save-state ${save[1]}" style="gap:6px" role="status">${icon(save[2])}<span>${save[0]}</span></span><span>1 240 / 2 000–2 500 riječi · ≈ 5 str.</span></div></div>
+ <aside class="editor-right" aria-label="Upute i komentari"><div class="right-tabs"><button class="active">Komentari</button><button>Upute</button><button>Literatura</button></div><div class="right-body">
+  <div class="comment-item comment-teacher"><div class="flex"><span class="avatar gold">NA</span><div><strong>Nastavnik A <span class="comment-role">· 1</span></strong><small>20. 10. 2026. u 18:05</small></div></div><p class="cq">„redovito zajedničko čitanje proširuje rječnik…”</p><p>Navedi stranicu uz navod, prema Uputama FPZG-a.</p><div class="flex"><button class="text-btn">Odgovori</button><button class="text-btn">Označi riješenim</button></div></div>
+  <div class="notice">${icon("eye")}<span>Nastavnik vidi iste komentare.</span></div></div></aside></div>`);
+}
+function sPredaja(){
+ const v=vv(),done=v===3;
+ const C=[["check","green","Rad na poslužitelju","Zadnja izmjena je spremljena na poslužitelju (revizija 214)."],["check","green","Zapis","Zapis je cjelovit i neizmijenjen od primitka."],["check","green","Obavijest","Potvrđena 18. 10. 2026. u 10:11."]];
+ if(v===1)C[0]=["info","amber","Rad na poslužitelju","Dio izmjena još je samo na ovom uređaju. Predaja je moguća kad se spremi na poslužitelju."];
+ if(v===2)C[1]=["close","red","Zapis","Zapis s poslužitelja ne podudara se s tekstom rada."];
+ const left=done?`<section class="panel receipt-panel"><div class="panel-head"><div class="flex"><span class="receipt-seal">${icon("check")}</span><div><h2 class="serif" style="font-size:24px;font-family:var(--serif);font-weight:400">Predano</h2><small class="accent">potpis provjeren</small></div></div></div><div class="panel-body"><dl class="key-values">${[["Rad","Zadatak 1: seminarski rad"],["Student","Ana Babić"],["Kolegij","Kolegij A · 2026./2027."],["Vrijeme zahtjeva","21. 10. 2026. u 09:41 (sat poslužitelja)"],["Rok","31. 10. 2026. u 23:59 · predano prije roka"],["Revizija","214"],["SHA-256 dokumenta",'<span class="mono hash">9f2c 41ab 07de 5c13 e8a0 2b6f 91c4 d7e2 3a05 6b18 c0f9 4e72 a1d3 58b6 0e2f 7c94</span>']].map(([k,x])=>`<dt>${k}</dt><dd>${x}</dd>`).join("")}</dl><div class="divider"></div><p class="small muted">Potvrda kaže da je zapis cjelovit i neizmijenjen od primitka. Ne govori ništa o autorstvu.</p><p class="small faint" style="margin-top:6px">Demo potpisuje razvojnim ključem koji ne vrijedi izvan demoa.</p></div></section>`
+ :`<section class="panel"><div class="panel-head"><h2>Provjera prije predaje</h2></div>${C.map(([i,c,k,x])=>`<div class="work-row"><span class="work-symbol st-${c}">${icon(i)}</span><div class="grow"><span class="work-title">${k}</span><div class="work-meta"><span>${x}</span></div></div></div>`).join("")}<div class="panel-body">
+  ${v===2?`<div class="form-error" role="alert" style="margin-bottom:14px">${icon("info")}<span><strong>Predaja nije provedena.</strong> Zapis s poslužitelja ne podudara se s tekstom rada. Rad ostaje na ovom uređaju i na poslužitelju; ništa nije izgubljeno. Koordinator: koordinator@fpzg.example (demo kontakt)</span></div><button class="btn" onclick="toast('Tekst izvezen')">${icon("download")}Izvezi tekst</button>`
+  :`<button class="btn primary" ${v===0?"":"disabled"} onclick="setV(3)">${icon("check")}Predaj rad</button><p class="small faint" style="margin-top:10px">Predaja je jedna po zadatku. Nakon nje ne možeš predati drugu verziju.</p>`}</div></section>`;
+ return shell(crumb("Moji radovi","Zadatak 1","Predaja"),`<button class="work-back" onclick="go('s-editor')">${icon("back")}Natrag na rad</button>`+heading(done?"Korak 2 od 2 · potvrda":"Korak 1 od 2 · provjera zapisa","Predaja rada.","Prije predaje vidiš točno ono što predaješ. Nakon predaje dobivaš potvrdu.")+`<div class="dashboard-grid even"><div class="stack" aria-live="polite">${left}</div><div class="stack">${sumPanel()}</div></div>`);
+}
+
+/* ---------- NASTAVNIK ---------- */
+function tPregled(){
+ if(vv()===1) return shell(crumb("Radni prostor","Pregled"),heading("Tvoj nastavnički prostor","Dobar dan.","Stvori kolegij i objavi prvi zadatak.")+`<section class="panel"><div class="panel-body empty-state">${icon("book")}<h3>Nemaš kolegija u kojima predaješ.</h3><p class="muted">Studenti se upisuju kodom koji dobiješ nakon stvaranja kolegija.</p><button class="btn primary" onclick="go('t-novi')">${icon("plus")}Novi kolegij i zadatak</button></div></section>`);
+ const stats=[["Upisani studenti","users",14,"u tri kolegija"],["Pišu","pen",9,"rad u nastajanju"],["Čeka doradu","flag",2,"otvoreni zahtjevi"],["Predano","check",3,"od 14 radova"]];
+ return shell(crumb("Radni prostor","Pregled"),heading("Tvoj nastavnički prostor","Dobar dan, Nastavniče A.","Dobar komentar mijenja smjer rada.",`<button class="btn primary" onclick="go('t-novi')">${icon("plus")}Novi kolegij i zadatak</button>`)+
+ `<div class="teacher-callout">${icon("chat")}<div><h3>2 nova odgovora studenata na tvoje komentare.</h3><p>Otvori rad i nastavi razgovor uz odlomak.</p></div><button class="btn" onclick="go('t-rad')">Otvori rad${icon("arrow")}</button></div>
+ <div class="stats" style="margin-top:24px">${stats.map(([k,i,n,s])=>`<div class="stat"><div class="stat-top"><span>${k}</span>${icon(i)}</div><div class="stat-number">${n}</div><small>${s}</small></div>`).join("")}</div>
+ <div class="dashboard-grid" style="margin-top:24px"><div class="stack">${panel("Zadaci s rokom",[["Zadatak 1: seminarski rad","Kolegij A","31. 10. 2026. u 23:59","4 studenta"],["Zadatak 2: osvrt na izvor","Kolegij A","14. 11. 2026. u 23:59","4 studenta"],["Završni rad","Kolegij C","15. 1. 2027. u 23:59","2 studenta"]].map(([t,c,d,n])=>`<div class="work-row"><span class="work-symbol">${icon("file")}</span><div class="grow"><button class="work-title" onclick="go('t-radovi')">${t}</button><div class="work-meta"><span>${c}</span><span>·</span><span>${n}</span></div></div><div class="work-side"><small>rok ${d}</small></div><button class="btn compact ghost" onclick="go('t-radovi')">Radovi${icon("arrow")}</button></div>`).join(""),`<button class="text-btn" onclick="go('t-kolegiji')">Svi kolegiji ${icon("arrow")}</button>`)}</div>
+ <div class="stack">${panel("Nedavno u radovima",`<div class="panel-body stack" style="gap:16px">${[["MĐ","Marta Đurić","predala doradu","jučer u 17:02"],["IČ","Ivan Čolak","predao rad","20. 10. u 22:14"],["AB","Ana Babić","odgovorila na komentar 1","danas u 09:40"]].map(([a,n,t,w])=>`<div class="flex"><span class="avatar">${a}</span><div class="grow"><strong style="font-size:13px">${n}</strong> <span class="small muted">${t}</span><br><small class="faint">${w}</small></div></div>`).join("")}</div>`)}
+ <p class="small faint">Brojevi služe samo za pregled; po njima se studenti ne poredaju.</p></div></div>`);
+}
+function tKolegiji(){
+ const v=vv();
+ const C=[["Kolegij A","2026./2027.","FPZG-7K-Q4M",[["Zadatak 1: seminarski rad","Seminarski rad","31. 10. 2026. u 23:59",4],["Zadatak 2: osvrt na izvor","Osvrt","14. 11. 2026. u 23:59",4]]],["Kolegij B","2026./2027.",null,[]],["Kolegij C","2025./2026.","FPZG-2D-L8X",[["Završni rad","Završni rad","15. 1. 2027. u 23:59",2]]]];
+ let body;
+ if(v===1) body=`<section class="panel"><div class="panel-body stack" aria-busy="true"><div class="skel" style="width:30%"></div><div class="skel" style="width:70%"></div><div class="skel" style="width:55%"></div><small class="faint">Učitavanje kolegija…</small></div></section>`;
+ else if(v===2) body=`<div class="form-error" role="alert">${icon("info")}Kolegiji trenutačno nisu dostupni. Pokušaj ponovno.</div><button class="btn" style="margin-top:14px" onclick="setV(0)">Pokušaj ponovno</button>`;
+ else body=`<div class="stack">${C.map(([n,y,code,as])=>`<section class="panel"><div class="panel-head"><div class="flex"><span class="course-ic">${icon("book")}</span><div><h2>${n}</h2><small class="faint">${y}</small></div></div>${code?`<span class="code-pill">Kod za upis <span class="mono">${code}</span><button class="icon-btn sm" onclick="toast('Kod kopiran')" aria-label="Kopiraj kod">${icon("link")}</button></span>`:`<span class="chip">Kod za upis · uskoro</span>`}</div>
+  ${as.length?as.map(([t,k,d,s])=>`<div class="work-row"><span class="work-symbol">${icon("file")}</span><div class="grow"><button class="work-title" onclick="go('t-radovi')">${t}</button><div class="work-meta"><span>${k}</span><span>·</span><span>rok ${d}</span></div></div><div class="work-side"><small>${s} ${s<5?"studenta":"studenata"}</small></div><button class="btn compact ghost" onclick="go('t-radovi')">Radovi${icon("arrow")}</button></div>`).join(""):`<div class="panel-body"><p class="muted small">Još nema zadataka.</p></div>`}</section>`).join("")}</div>`;
+ return shell(crumb("Radni prostor","Moji kolegiji"),heading("Kolegiji u kojima predaješ","Moji kolegiji.","Poredak: akademska godina, pa naziv; zadaci po roku.",`<button class="btn primary" onclick="go('t-novi')">${icon("plus")}Novi kolegij i zadatak</button>`)+body);
+}
+function tNovi(){
+ const v=vv(); const steps=["Kolegij","Zadatak","Uporaba alata","Objava"];
+ const prog=`<div class="wizard">${steps.map((s,i)=>`<div class="wz ${i<v?"done":i===v?"cur":""}"><span class="wz-n">${i<v?icon("check"):i+1}</span><span>${s}</span></div>`).join('<i class="wz-line"></i>')}</div>`;
+ const forms=[
+  `<div class="form-group"><label>Naziv kolegija</label><input class="form-input" value="Kolegij A"></div><div class="form-group"><label>Akademska godina</label><select class="form-input"><option>2026./2027.</option><option>2025./2026.</option></select></div>`,
+  `<div class="form-group"><label>Naslov zadatka</label><input class="form-input" value="Zadatak 1: seminarski rad"></div><div class="grid-2"><div class="form-group"><label>Vrsta rada</label><select class="form-input"><option>Seminarski rad</option><option>Esej</option><option>Osvrt</option></select></div><div class="form-group"><label>Opseg (riječi)</label><div class="flex"><input class="form-input" value="2000" aria-label="Najmanje riječi"><span class="faint">–</span><input class="form-input" value="2500" aria-label="Najviše riječi"></div></div></div><div class="grid-2"><div class="form-group"><label>Otvara se</label><input class="form-input" value="15. 10. 2026. u 08:00"></div><div class="form-group"><label>Rok</label><input class="form-input" value="31. 10. 2026. u 23:59"></div></div><div class="form-group"><label>Upute</label><textarea class="form-input" rows="3">Seminarski rad o odabranoj temi kolegija, prema Uputama FPZG-a.</textarea></div>`,
+  `<p class="small muted">Popis dopuštenog možeš samo suziti. Isključena stavka prelazi u „Nije dopušteno”.</p>${["Objašnjenje pojma ili teorije","Pretraživanje i pronalaženje literature","Jezična i pravopisna dorada vlastitog teksta","Prijevod izvora za vlastito razumijevanje","Prijedlog strukture ili plana rada"].map((x,i)=>`<label class="checkline"><input type="checkbox" ${i<3?"checked":""}> ${x}</label>`).join("")}<div class="notice">${icon("shield")}<span><strong>Uvijek nije dopušteno:</strong> generiranje teksta koji se predaje kao vlastiti; izmišljanje ili preoblikovanje izvora i podataka; predaja prijevoda kao vlastitog teksta.</span></div><small class="faint">Tekst stavki u aplikaciji ide doslovno iz Pravilnika (čl. 8).</small>`,
+  `<div class="empty-state" style="padding:24px 0">${icon("check")}<h3>Zadatak je objavljen.</h3><p class="muted">Podijeli kod studentima. Upisuju se na stranici „Upis u kolegij”.</p><span class="code-pill big"><span class="mono">FPZG-7K-Q4M</span><button class="icon-btn sm" onclick="toast('Kod kopiran')" aria-label="Kopiraj kod">${icon("link")}</button></span><button class="btn" onclick="go('t-radovi')">Radovi zadatka${icon("arrow")}</button></div>`];
+ return shell(crumb("Radni prostor","Novi kolegij i zadatak"),heading("Novi kolegij i zadatak",["Kolegij.","Zadatak.","Uporaba alata.","Objavljeno."][v],"Četiri koraka. Student zadatak vidi tek nakon objave.")+prog+
+ `<div class="dashboard-grid"><section class="panel"><div class="panel-head"><h2>${steps[v]}</h2><small class="faint">Korak ${v+1} od 4</small></div><div class="panel-body stack">${forms[v]}${v<3?`<div class="flex">${v>0?`<button class="btn ghost" onclick="setV(${v-1})">${icon("back")}Natrag</button>`:""}<button class="btn primary" onclick="setV(${v+1})">${v===2?"Objavi zadatak":"Dalje"}${icon("arrow")}</button></div>`:""}</div></section>
+ <section class="panel sticky"><div class="panel-head"><h2>Kako vidi student</h2>${icon("eye")}</div><div class="panel-body"><div class="eyebrow" style="margin-bottom:8px">Kolegij A · Seminarski rad</div><h3 class="serif" style="font-family:var(--serif);font-size:22px;font-weight:400;margin-bottom:14px">Zadatak 1: seminarski rad</h3><dl class="key-values"><dt>Otvara se</dt><dd>15. 10. 2026. u 08:00</dd><dt>Rok</dt><dd>31. 10. 2026. u 23:59</dd><dt>Opseg</dt><dd>2 000–2 500 riječi</dd></dl><div class="divider"></div><p class="small"><strong>Dopušteno:</strong> <span class="muted">objašnjenje pojma ili teorije, pretraživanje literature, jezična dorada vlastitog teksta.</span></p></div></section></div>`);
+}
+function tRadovi(){
+ if(vv()===1) return shell(crumb("Moji kolegiji","Kolegij A","Zadatak 1"),heading("Kolegij A · rok 31. 10. 2026. u 23:59","Zadatak 1: seminarski rad.","")+`<section class="panel"><div class="panel-body empty-state">${icon("users")}<h3>U kolegij još nije upisan nijedan student.</h3><p class="muted">Podijeli kod za upis: <span class="mono">FPZG-7K-Q4M</span></p></div></section>`);
+ const st=STUD[S.stud];
+ const rows=STUD.map((x,i)=>{const [l,c]=ST[x.st];return `<tr class="${i===S.stud?"sel":""}" onclick="S.stud=${i};render()"><td><div class="flex"><span class="avatar">${x.g[0]}${x.s[0]}</span><div><button class="student-name">${x.s}, ${x.g}</button><small>${x.last?"zadnja promjena "+x.last:"nema zapisa"}</small></div></div></td><td>${chip(l,c)}</td><td>${x.doc?`<button class="btn compact ghost" onclick="event.stopPropagation();go('t-rad')">Otvori rad${icon("arrow")}</button>`:`<span class="small faint">—</span>`}</td></tr>`}).join("");
+ const lines=st.doc?[["Zadnja promjena",st.last],["Otvoreni zahtjevi za doradu",st.rev?`${st.rev} zahtjev za doradu`:"nema"],["Lijepljenja bez izvora",st.paste?`<button class="text-btn" style="min-height:0" onclick="S.hl=!S.hl;render()">${st.paste} · odlomak 3</button>`:"nema"],["Izjava",st.decl],["Stanje zapisa","Zapis je cjelovit"]]:[];
+ return shell(crumb("Moji kolegiji","Kolegij A","Zadatak 1"),heading("Kolegij A · rok 31. 10. 2026. u 23:59","Zadatak 1: seminarski rad.","Radovi jednog zadatka, jedan za drugim.",`<span class="code-pill">Kod za upis <span class="mono">FPZG-7K-Q4M</span></span>`)+
+ `<div class="dashboard-grid wide-left"><section class="panel"><div class="teacher-filters single"><div class="search">${icon("search")}<input class="input" placeholder="Pronađi studenta…" aria-label="Pronađi studenta"></div></div><div class="table-scroll"><table class="data-table"><thead><tr><th>Student · po prezimenu</th><th>Stanje</th><th><span class="faint">Rad</span></th></tr></thead><tbody>${rows}</tbody></table></div><div class="panel-body" style="padding-top:12px"><small class="faint">Popis se ne može poredati po brojevima ni po stanju.</small></div></section>
+ <section class="panel"><div class="panel-head"><div class="flex"><span class="avatar">${st.g[0]}${st.s[0]}</span><div><h2>${st.g} ${st.s}</h2><small class="faint">${ST[st.st][0]}</small></div></div>${st.doc?`<div class="segmented" role="group" aria-label="Prikaz rada"><button class="${S.view==="text"?"active":""}" aria-pressed="${S.view==="text"}" onclick="S.view='text';render()">Tekst rada</button><button class="${S.view==="sum"?"active":""}" aria-pressed="${S.view==="sum"}" onclick="S.view='sum';render()">Sažetak procesa</button></div>`:""}</div>
+ ${st.doc?`<div class="panel-body"><dl class="key-values">${lines.map(([k,x])=>`<dt>${k}</dt><dd>${x}</dd>`).join("")}</dl></div>${S.view==="text"?`<div class="mini-doc">${PARAS.map((p,i)=>`<p class="${S.hl&&i===2&&st.paste?"pasted":""}">${p}</p>${S.hl&&i===2&&st.paste?`<small class="pasted-tag">zalijepljeno · izvor nije naveden</small>`:""}`).join("")}</div>`:`<div class="panel-body"><dl class="key-values sum-kv">${SUMMARY.map(([k,x])=>`<dt>${k}</dt><dd>${x}</dd>`).join("")}</dl><p class="small faint" style="margin-top:14px">Isti sažetak vide student i nastavnik.</p></div>`}<div class="panel-body" style="border-top:1px solid var(--line2)"><button class="btn primary" onclick="go('t-rad')">${icon("eye")}Otvori rad uživo${icon("arrow")}</button></div>`
+ :`<div class="panel-body"><p class="muted">Student još nije potvrdio obavijest. Nema zapisa.</p></div>`}</section></div>`);
+}
+function tRad(){
+ const v=vv();
+ const conn=[["Veza radi","green"],["Veza je prekinuta. Prikazan je zadnji primljeni tekst. Ponovno povezivanje…","amber"],["Veza radi","green"]][v];
+ const doc=v===2?`<p class="muted" style="font-family:var(--sans);font-size:14px">Student još nije poslao tekst.</p>`:`<h3>1. Uvod</h3><p>${PARAS[0]}</p><p>Prema jednoj od uvriježenih tvrdnji, <mark class="cm">redovito zajedničko čitanje proširuje rječnik djeteta<sup>1</sup></mark> (Autor A, 2019b). Autor B (2021) tu tvrdnju nadopunjuje opažanjima iz razreda.</p><p><mark class="sel">${PARAS[2]}</mark></p><p>${PARAS[3]}</p>`;
+ const right=S.tab==="kom"?`<div class="notice">${icon("eye")}<span>Student vidi iste komentare.</span></div>
+  ${v===2?`<p class="muted small">Nema komentara. Označi tekst u radu.</p>`:`<div class="comment-item comment-teacher"><div class="flex"><span class="avatar gold">NA</span><div><strong>Nastavnik A <span class="comment-role">· 1</span></strong><small>20. 10. 2026. u 18:05</small></div></div><p class="cq">„redovito zajedničko čitanje proširuje rječnik…”</p><p>Navedi stranicu uz navod, prema Uputama FPZG-a.</p><div class="sx-reply"><strong>Ana Babić</strong> <span class="faint">· danas u 09:40</span><br>Dodala sam stranicu (Autor A, 2019b: 22).</div><button class="text-btn">Označi riješenim</button></div>
+  <div class="comment-form"><small class="faint">Novi komentar · „Ipak, većina istraživanja…”</small><textarea class="form-input" rows="3" aria-label="Tekst komentara" placeholder="Komentar uz označeni odlomak…"></textarea><label class="checkline small"><input type="checkbox"> Zahtjev za doradu</label><button class="btn primary block" onclick="toast('Komentar objavljen')">${icon("chat")}Objavi komentar</button></div>`}`
+  :`<dl class="key-values sum-kv">${SUMMARY.map(([k,x])=>`<dt>${k}</dt><dd>${x}</dd>`).join("")}</dl><p class="small faint" style="margin:14px 0">Isti sažetak vide student i nastavnik. Svako čitanje upisuje se u dnevnik pristupa.</p><button class="btn block" onclick="toast('Sažetak osvježen')">Osvježi sažetak</button>`;
+ return shell(crumb("Kolegij A","Zadatak 1","Ana Babić"),`<div class="editor-heading"><button class="work-back" onclick="go('t-radovi')">${icon("back")}Radovi zadatka</button><div class="flex wrap">${chip(conn[0],conn[1])}<button class="btn compact" onclick="toast('Zahtjev za doradu')">${icon("flag")}Zahtjev za doradu</button></div></div>
+ <div class="editor-layout two"><div class="editor-main"><div class="editor-toolbar"><span class="toolbar-label">Rad uživo</span><span class="chip">Samo čitanje</span><span class="tool-divider"></span><button class="inline-comment-button">${icon("chat")}<span>Komentiraj odabir</span></button></div>
+  <div class="document"><div class="eyebrow">Kolegij A · Seminarski rad</div><h1>Čitanje naglas i jezični razvoj u prvim razredima</h1><div class="document-byline">Ana Babić &nbsp; / &nbsp; Fakultet političkih znanosti</div><div class="ms">${doc}</div></div>
+  <div class="doc-footer"><span class="small">Prikazan je zadnji tekst koji je studentov preglednik poslao. To nije zapis rada i može kasniti ili zastati. Student vidi isti prikaz svog rada.</span></div></div>
+ <aside class="editor-right"><div class="right-tabs"><button class="${S.tab==="kom"?"active":""}" onclick="S.tab='kom';render()">Komentari</button><button class="${S.tab==="sum"?"active":""}" onclick="S.tab='sum';render()">Sažetak procesa</button></div><div class="right-body">${right}</div></aside></div>`);
+}
+
+/* ---------- dijalog odjave ---------- */
+function dlg(){
+ if(S.dlg!=="odjava") return "";
+ return `<div class="dlg-shade" onclick="S.dlg=null;render()"></div><div class="dlg-box" role="dialog" aria-modal="true" aria-labelledby="dlg-t"><div class="modal-head"><h2 id="dlg-t">Odjava</h2><button class="icon-btn" onclick="S.dlg=null;render()" aria-label="Zatvori">${icon("close")}</button></div>
+ <div class="modal-body"><p>Imaš 7 izmjena spremljenih na uređaju koje još nisu na poslužitelju. Odjava zatvara sesiju.</p><p class="small muted" style="margin-top:10px">Zapis ostaje vezan uz tebe na ovom uređaju i nastavljaš ga kad se ponovno prijaviš. Osoba koja se nakon tebe prijavi na ovom uređaju ne vidi tvoj rad.</p></div>
+ <div class="modal-footer"><button class="btn ghost" id="stay" onclick="S.dlg=null;render()">Ostani</button><button class="btn primary" onclick="toast('Sesija zatvorena');S.dlg=null;render()">${icon("logout")}Odjavi se</button></div></div>`;
+}
+
+/* ---------- render ---------- */
+const R={"s-pregled":sPregled,"s-radovi":sRadovi,"s-obavijesti":sObavijesti,"s-upis":sUpis,"s-obavijest":sObavijest,"s-editor":sEditor,"s-predaja":sPredaja,"t-pregled":tPregled,"t-kolegiji":tKolegiji,"t-novi":tNovi,"t-radovi":tRadovi,"t-rad":tRad};
+function render(){
+ $("#proto").innerHTML=`<b>DUCTURA · DIZAJN V3</b>`+["student","teacher"].map(r=>`<span class="pg">${r==="student"?"Student":"Nastavnik"}</span>`+SCR[r].map(([k,l])=>`<button aria-current="${k===S.scr}" onclick="go('${k}')">${l}</button>`).join("")).join("")+
+  `<span class="pv">Stanje:</span>`+(VAR[S.scr]||[]).map((x,i)=>`<button class="vr" aria-pressed="${i===vv()}" onclick="setV(${i})">${x}</button>`).join("")+`<button class="vr" onclick="S.dlg='odjava';render()">Odjava ▸</button>`;
+ $("#app").innerHTML=R[S.scr]();
+ $("#layer").innerHTML=dlg();
+ if(S.dlg) $("#stay")?.focus();
+}
+addEventListener("keydown",e=>{if(e.key==="Escape"){if(S.dlg){S.dlg=null;render()}else if(S.bell){S.bell=false;render()}}});
+render();
+
+</script>
+</body>
+</html>
