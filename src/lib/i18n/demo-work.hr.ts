@@ -23,6 +23,8 @@ export const DEMO_ASSIGNMENT: NoticeView = {
   opensAt: "2026-10-12T07:00:00.000Z",
   dueAt: "2026-11-20T22:59:00.000Z",
   aiPurposes: ["formatting", "proofreading", "literature_search"],
+  wordMin: null,
+  wordMax: null,
   acknowledgedAt: "2026-10-14T16:20:00.000Z",
 };
 

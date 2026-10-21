@@ -347,6 +347,34 @@ test("/rad shows each legal word-limit shape from the student's acknowledged ass
   }
 });
 
+test("S3 notice shows each stored word-limit shape before acknowledgment", async ({ page }) => {
+  await signIn(page, PATH, "Demo studentica");
+  const cases = [
+    { wordMin: 2000, wordMax: 2500, shown: /2\s000–2\s500 riječi/u },
+    { wordMin: 1, wordMax: null, shown: /najmanje 1 riječ/u },
+    { wordMin: null, wordMax: 1_000_000, shown: /najviše 1\s000\s000 riječi/u },
+    { wordMin: 1, wordMax: 1, shown: /1–1 riječ/u },
+    { wordMin: null, wordMax: null, shown: null },
+  ] as const;
+  for (const limits of cases) {
+    const seeded = await seedAssignment(limits);
+    try {
+      await page.goto(`/zadatak/${seeded.assignment}`);
+      const meta = page.getByRole("article").locator("header p").last();
+      await expect(meta).toBeVisible();
+      if (limits.shown) await expect(meta).toContainText(limits.shown);
+      else await expect(meta).not.toContainText(/riječ|najmanje|najviše/u);
+      await expect(page.getByRole("checkbox", { name: s.checkbox })).toBeVisible();
+      if (limits.wordMin === 2000) {
+        await test.info().attach("s3-raspon-rijeci", { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
+      }
+    } finally {
+      await admin((client) => client.query(
+        "UPDATE institution.course_member SET member_to = now() WHERE course_id = $1 AND member_to IS NULL", [seeded.course]));
+    }
+  }
+});
+
 test("/rad redirects for a stale acknowledgment, then shows only the acknowledged v2 limits", async ({ page }) => {
   await signIn(page, PATH, "Demo studentica");
   const seeded = await seedAssignment({ acknowledged: true, wordMin: 1000, wordMax: 3000 });

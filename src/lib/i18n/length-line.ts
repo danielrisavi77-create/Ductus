@@ -20,6 +20,20 @@ export function groupHr(n: number): string {
   return String(Math.trunc(n)).replace(/\B(?=(\d{3})+(?!\d))/g, NBSP);
 }
 
+/** The same range label in the teacher preview, S3 notice and editor. */
+export function wordRangeHr(range: WordRange | null): string | null {
+  if (range?.min != null && range.max != null) {
+    return `${groupHr(range.min)}–${groupHr(range.max)} ${pluralHr(range.max, "riječ", "riječi", "riječi")}`;
+  }
+  if (range?.min != null) {
+    return `${t.workspace.wordMinimum.replace("{words}", groupHr(range.min))} ${pluralHr(range.min, "riječ", "riječi", "riječi")}`;
+  }
+  if (range?.max != null) {
+    return `${t.workspace.wordMaximum.replace("{words}", groupHr(range.max))} ${pluralHr(range.max, "riječ", "riječi", "riječi")}`;
+  }
+  return null;
+}
+
 /** Approximate pages; none before the first word, then at least one. */
 export function pagesOf(words: number): number {
   return words > 0 ? Math.max(1, Math.round(words / WORDS_PER_PAGE)) : 0;
@@ -40,13 +54,8 @@ export type LengthLine = {
 };
 
 export function lengthLine(words: number, selectedWords: number, range: WordRange | null): LengthLine {
-  const noun = range?.min != null && range.max != null
-    ? ` / ${groupHr(range.min)}–${groupHr(range.max)} ${pluralHr(range.max, "riječ", "riječi", "riječi")}`
-    : range?.min != null
-      ? ` / ${t.workspace.wordMinimum.replace("{words}", groupHr(range.min))} ${pluralHr(range.min, "riječ", "riječi", "riječi")}`
-      : range?.max != null
-        ? ` / ${t.workspace.wordMaximum.replace("{words}", groupHr(range.max))} ${pluralHr(range.max, "riječ", "riječi", "riječi")}`
-        : ` ${pluralHr(words, "riječ", "riječi", "riječi")}`;
+  const target = wordRangeHr(range);
+  const noun = target ? ` / ${target}` : ` ${pluralHr(words, "riječ", "riječi", "riječi")}`;
   const pages = pagesOf(words);
   return {
     selected: selectedWords > 0 ? t.workspace.selectedWords.replace("{words}", wordsHr(selectedWords)) : null,

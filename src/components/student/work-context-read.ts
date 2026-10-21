@@ -101,6 +101,8 @@ export async function readWorkContext(
         aiPurposes: row.ai_policy === "prohibited"
           ? []
           : AI_PURPOSES.filter((p) => row.ai_purposes.includes(p)),
+        wordMin: row.word_min,
+        wordMax: row.word_max,
         acknowledgedAt: row.acknowledged_at.toISOString(),
       },
     };
