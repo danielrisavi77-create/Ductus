@@ -1,6 +1,6 @@
 # Ductura: dopuna dizajna, faza A
 
-Datoteka: `dopuna-faza-a.html`. Samostalna je i otvara se izravno u pregledniku, bez `support.js`. Snimke (1440 i 390 px) nisu u repou.
+Datoteka: `dopuna-faza-a.html`. Samostalna je i otvara se izravno u pregledniku, bez `support.js`. Snimke (1440 i 390 px) nisu u repou. Ekran i stanje biraju se u traci na vrhu datoteke (samo za prototip).
 
 To je dizajnerska referenca, ne produkcijski kod. Pravila su ista kao za `docs/design/ductura/`: tokeni iz README §8 / D-123 i izmišljeni podaci.
 
