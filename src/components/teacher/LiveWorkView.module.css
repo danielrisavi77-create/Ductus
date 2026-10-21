@@ -203,3 +203,27 @@
   color: var(--ink);
   font-weight: 600;
 }
+/* F-10 PR4: the process summary card; the summary keeps its own frame (ProcessSummaryView.module.css). */
+.summaryCard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.summaryCard > :first-child {
+  align-self: stretch;
+}
+
+.summaryState {
+  padding: 16px 18px;
+  border: 1px solid var(--rule-2);
+  border-radius: 10px;
+  background: var(--chrome);
+  font-size: 13px;
+}
+
+.summaryState h2 {
+  margin: 0;
+  font-size: 16px;
+}

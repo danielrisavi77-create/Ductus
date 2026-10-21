@@ -12,7 +12,7 @@
  * cannot show (K-3, D-80 point 3).
  */
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import { startLiveReader, type LiveView } from "@/client/live-reader";
 import { watchSessionEnd, type SessionWatch } from "@/client/session-end";
@@ -26,6 +26,7 @@ import { anchorForSelection, blockSegments, placeThreads, type TextRange } from 
 import styles from "./LiveWorkView.module.css";
 import RecordLimits from "./RecordLimits";
 import { selectedRange, selectInBlock } from "./selection";
+import SummaryCard from "./SummaryCard";
 import TeacherComments, { useComments, type PlacedThread } from "./TeacherComments";
 
 const t = messagesHr.liveView;
@@ -56,7 +57,8 @@ function useLiveView(documentId: string, session: SessionMark | null) {
   const watchRef = useRef<SessionWatch | null>(null);
   const tag = session?.tag ?? null;
   const at = session?.at ?? 0;
-  useEffect(() => {
+  // Child passive effects may read immediately, so install the guard first.
+  useLayoutEffect(() => {
     const watch = watchSessionEnd(tag === null ? null : { tag, at }, () => setEnded(true));
     watchRef.current = watch;
     return () => {
@@ -146,6 +148,7 @@ export default function LiveWorkView({ documentId, session }: {
             onShow={show}
           />
         )}
+        {stopped ? null : <SummaryCard documentId={documentId} current={current} />}
         <RecordLimits />
       </aside>
     </div>
