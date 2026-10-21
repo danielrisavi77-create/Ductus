@@ -17,6 +17,7 @@
 
 /** The product name on screen (D-124): one value, read through `app.name`. */
 const APP_NAME = "Ductura";
+const NOTICE_STEP_COUNT = "1 od 2";
 
 export const hr = {
   app: {
@@ -273,7 +274,7 @@ export const hr = {
     },
     preview: {
       heading: "Kako vidi student: obavijest prije prve rečenice",
-      step: "Korak 1 od 2",
+      step: `Korak ${NOTICE_STEP_COUNT}`,
       untitled: "Naslov zadatka",
       opensFrom: "otvoreno od",
       due: "rok",
@@ -556,7 +557,7 @@ export const hr = {
     loading: "Učitavanje zadatka…",
     notOpen: "Zadatak se otvara {time}. Obavijest potvrđuješ kad se zadatak otvori.",
     pastDue: "Rok zadatka je prošao {time}.",
-    step: "Obavijest prije prve rečenice · korak 2 od 2",
+    step: `Obavijest prije prve rečenice · korak ${NOTICE_STEP_COUNT}`,
     opensFrom: "otvoreno od",
     due: "rok",
     toolsHeading: "Uporaba alata u ovom zadatku (FPZG čl. 8)",
@@ -581,7 +582,7 @@ export const hr = {
       replay: "Nastavnik (mentor) zadatka moći će reproducirati nastanak rada znak po znak, pa i obrisani tekst. Istu reprodukciju svog rada vidjet ćeš i ti.",
       purpose: "Prikaz uživo i reprodukcija služit će praćenju nastanka rada i komentarima, nikad ocjeni ni rangiranju.",
       history: "Povijest verzija i sažetak procesa, isti kao što ga vidiš ti.",
-      noVerdict: "Ductus ne procjenjuje autorstvo ni korištenje AI-ja.",
+      noVerdict: `${APP_NAME} ne procjenjuje autorstvo ni korištenje AI-ja.`,
     },
     // D-05, PRODUCT §6 "Profili evidencije": only for the extended profile.
     teacherExtended: "Usporedbu verzija na kraju sesija i poslanih verzija.",
