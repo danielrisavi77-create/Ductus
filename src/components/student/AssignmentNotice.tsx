@@ -4,6 +4,7 @@ import { useReducer, useRef, useSyncExternalStore, type FormEvent } from "react"
 
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { formatDateHr, formatDateTimeHr } from "@/lib/i18n/hr";
+import { wordRangeHr } from "@/lib/i18n/length-line";
 import { AI_PURPOSES } from "@/components/teacher/assignment-create";
 
 import type { NoticeView } from "./assignment-notice-read";
@@ -117,6 +118,7 @@ export default function AssignmentNotice({ view, timing }: { view: NoticeView; t
     : null;
   const note = timing === "notOpen" ? s.notOpen.replace("{time}", time(view.opensAt))
     : timing === "pastDue" ? s.pastDue.replace("{time}", time(view.dueAt)) : null;
+  const rangeText = wordRangeHr({ min: view.wordMin, max: view.wordMax });
 
   return (
     <article className={styles.notice} aria-labelledby="zadatak">
@@ -126,6 +128,7 @@ export default function AssignmentNotice({ view, timing }: { view: NoticeView; t
         <p className={styles.meta}>
           {workTypes[view.workType] ? `${workTypes[view.workType]} · ` : null}
           {s.opensFrom} {day(view.opensAt)} · {s.due} {time(view.dueAt)}
+          {rangeText ? ` · ${rangeText}` : null}
         </p>
       </header>
       {note ? <TimingNote text={note} /> : null}
