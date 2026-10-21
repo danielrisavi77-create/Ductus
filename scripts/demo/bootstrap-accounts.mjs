@@ -124,14 +124,29 @@ export async function signInAccount(browser, db, account, origins = [APP, OIDC],
   const context = await browser.newContext({ serviceWorkers: "block" });
   context.setDefaultTimeout(timeoutMs);
   context.setDefaultNavigationTimeout(timeoutMs);
-  const state = { context, tokenHash: null, account, closed: false };
-  let externalRequest = false;
-  await context.route("**/*", (route) => {
-    try { assertLocalUrl(route.request().url(), origins); route.continue(); }
-    catch { externalRequest = true; route.abort(); }
-  });
+  const state = { context, tokenHash: null, account, closed: false, blocked: false };
   try {
     const page = await context.newPage();
+    await context.route("**/*", (route) => {
+      try {
+        assertLocalUrl(route.request().url(), origins);
+        // Only this frame has the per-hop guard; do not start unguarded targets.
+        if (route.request().frame() !== page.mainFrame()) fail("Unexpected demo frame.");
+      } catch { state.blocked = true; return route.abort(); }
+      return route.continue();
+    });
+    // Playwright routes only the first URL of a redirect chain. Chromium Fetch
+    // pauses every hop before HTTP is sent, including redirects back to the app.
+    const network = await context.newCDPSession(page);
+    network.on("Fetch.requestPaused", ({ requestId, request }) => {
+      let allowed = true;
+      try { assertLocalUrl(request.url, origins); }
+      catch { state.blocked = true; allowed = false; }
+      void network.send(allowed ? "Fetch.continueRequest" : "Fetch.failRequest", {
+        requestId, ...(allowed ? {} : { errorReason: "BlockedByClient" }),
+      }).catch(() => { state.blocked = true; });
+    });
+    await network.send("Fetch.enable", { patterns: [{ urlPattern: "*", requestStage: "Request" }] });
     let callbacks = 0;
     page.on("request", (request) => {
       if (new URL(request.url()).pathname === "/api/auth/callback" && new URL(request.url()).origin === origins[0]) callbacks++;
@@ -145,7 +160,7 @@ export async function signInAccount(browser, db, account, origins = [APP, OIDC],
     stage = "OIDC callback";
     await page.getByRole("button", { name: account.name, exact: true }).click();
     await page.waitForURL(`${origins[0]}/`);
-    if (externalRequest || callbacks !== 1) fail("Login did not complete one local OIDC callback.");
+    if (state.blocked || callbacks !== 1) fail("Login did not complete one local OIDC callback.");
     stage = "session cookie";
     const cookies = await context.cookies(origins[0]);
     const token = cookies.find((cookie) => cookie.name === SESSION_COOKIE)?.value;
@@ -197,6 +212,7 @@ export async function bootstrap({ browser, db, grant, origins = [APP, OIDC], tim
     const institutions = await db.institutions();
     if (institutions.length !== 2 || institutions[0].slug !== "demo-bez-prijave" || institutions[0].aai_home_org !== null ||
         institutions[1].slug !== INSTITUTION || institutions[1].aai_home_org !== HOME_ORG) fail("Demo institution seed is incomplete.");
+    if (sessions.some((session) => session.blocked)) fail("Demo request left its guarded login context.");
     await grant();
     const teacher = sessions[2];
     const roles = await db.roles(teacher.userId, teacher.institutionId);

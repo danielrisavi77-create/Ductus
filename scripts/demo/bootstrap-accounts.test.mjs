@@ -10,14 +10,14 @@ import { assertLocalUrl, bootstrap, localResponse, verifyLocalCompose } from "./
 
 const servers = [];
 after(async () => { for (const server of servers) await new Promise((done) => server.close(done)); });
-async function serve(handler) {
+async function serve(handler, host = "localhost") {
   const server = createServer(handler);
-  await new Promise((done) => server.listen(0, "localhost", done));
+  await new Promise((done) => server.listen(0, host, done));
   servers.push(server);
-  return `http://localhost:${server.address().port}`;
+  return `http://${host}:${server.address().port}`;
 }
-function redirect(res, location, cookie) {
-  res.writeHead(303, { location, ...(cookie ? { "set-cookie": cookie } : {}) });
+function redirect(res, location, cookie, status = 303) {
+  res.writeHead(status, { location, ...(cookie ? { "set-cookie": cookie } : {}) });
   res.end();
 }
 function hash(token) { return createHash("sha256").update(token).digest("hex"); }
@@ -53,20 +53,36 @@ test("the Docker preflight refuses a remote context and foreign or public contai
   assert.doesNotThrow(() => verifyLocalCompose({}, inspect([postgres, oidc])));
 });
 
-test("real browser redirects: wrong target and partial failure block grant; retry keeps identities and closes sessions", async () => {
-  let app, oidc, attack = "remote", grants = 0;
+test("real browser redirects: wrong target and partial failure block grant; retry keeps identities and closes sessions", async (t) => {
+  let app, oidc, attack = "bounce", grants = 0, forbiddenRequests = 0;
   const users = new Map();
   const sessions = new Map();
+  const bounce = (req, res) => {
+    forbiddenRequests++;
+    const account = new URL(req.url, "http://localhost").searchParams.get("account");
+    redirect(res, attack === "after-cookie" ? `${app}/` : `${app}/api/auth/callback?account=${account}`);
+  };
+  const forbidden = await serve(bounce, "127.0.0.1");
+  const forbiddenPort = await serve(bounce);
   const loginPage = `<h1>Demo prijava</h1><form method="post" action="/interaction/one/login">
     <button name="account" value="demo-student">Demo studentica</button>
     <button name="account" value="demo-student-2">Demo student 2</button>
     <button name="account" value="demo-teacher">Demo nastavnik</button></form>`;
   oidc = await serve(async (req, res) => {
-    if (req.url === "/interaction/one") { res.writeHead(200, { "content-type": "text/html" }); res.end(loginPage); return; }
+    if (req.url === "/interaction/one") {
+      const hop = `${oidc}/redirect/first?account=demo-student`;
+      const extra = attack === "popup" ? `<script>window.open("${hop}")</script>` : attack === "frame" ? `<iframe src="${hop}"></iframe>` : "";
+      res.writeHead(200, { "content-type": "text/html" }); res.end(loginPage + extra); return;
+    }
+    if (req.url.startsWith("/redirect/first?")) return redirect(res, req.url.replace("/first?", "/second?"), undefined, 307);
+    if (req.url.startsWith("/redirect/second?")) return redirect(res, `${app}/redirect?${req.url.split("?")[1]}`, undefined, 308);
     if (req.url === "/interaction/one/login" && req.method === "POST") {
       let body = "";
       for await (const chunk of req) body += chunk;
       const id = new URLSearchParams(body).get("account");
+      if (attack === "bounce") return redirect(res, `${forbidden}/?account=${id}`);
+      if (attack === "port") return redirect(res, `${forbiddenPort}/?account=${id}`);
+      if (attack === "chain") return redirect(res, `${oidc}/redirect/first?account=${id}`);
       if (attack === "remote") return redirect(res, "https://outside.example/stolen");
       if (attack === "partial" && id === "demo-student-2") { res.writeHead(503); res.end("failure"); return; }
       return redirect(res, `${app}/api/auth/callback?account=${encodeURIComponent(attack === "swap" && id === "demo-teacher" ? "demo-student" : id)}`);
@@ -76,12 +92,13 @@ test("real browser redirects: wrong target and partial failure block grant; retr
   app = await serve((req, res) => {
     const url = new URL(req.url, app);
     if (url.pathname === "/api/auth/login") return redirect(res, `${oidc}/interaction/one`);
+    if (url.pathname === "/redirect") return redirect(res, `${forbidden}/?${url.searchParams}`);
     if (url.pathname === "/api/auth/callback") {
       const id = url.searchParams.get("account");
       if (!users.has(id)) users.set(id, `user-${id}`);
       const token = randomBytes(32).toString("base64url");
       sessions.set(hash(token), { id, closed: false });
-      return redirect(res, `${app}/`, `__Host-ductus_session=${token}; Path=/; HttpOnly; Secure; SameSite=Lax`);
+      return redirect(res, attack === "after-cookie" ? `${forbidden}/` : `${app}/`, `__Host-ductus_session=${token}; Path=/; HttpOnly; Secure; SameSite=Lax`);
     }
     if (url.pathname === "/api/auth/logout" && req.method === "POST") {
       const token = /__Host-ductus_session=([^;]+)/.exec(req.headers.cookie ?? "")?.[1];
@@ -106,8 +123,19 @@ test("real browser redirects: wrong target and partial failure block grant; retr
     async roles() { return [{ count: grants ? 1 : 0 }]; },
   };
   const browser = await chromium.launch({ headless: true });
-  const run = () => bootstrap({ browser, db, origins: [app, oidc], timeoutMs: 5_000, grant: () => { grants++; } });
+  const run = () => bootstrap({ browser, db, origins: [app, oidc], timeoutMs: 5_000, grant: () => { grants++; } })
+    .catch((error) => { t.diagnostic(`${attack}: ${error.cause?.message ?? error.message}`); throw error; });
   try {
+    for (attack of ["bounce", "port", "chain", "after-cookie", "popup", "frame"]) {
+      const failure = await run().then(() => null, (error) => error);
+      assert.equal(forbiddenRequests, 0, `${attack}: no HTTP request may reach the forbidden origin`);
+      assert.ok(failure, `${attack}: a returning redirect must fail`);
+      assert.equal(grants, 0);
+      assert.ok([...sessions.values()].every((session) => session.closed));
+      assert.equal(browser.contexts().length, 0);
+      t.diagnostic(`${attack}: rejected; forbidden HTTP requests=${forbiddenRequests}; grants=${grants}; all sessions and contexts closed`);
+    }
+    attack = "remote";
     await assert.rejects(run());
     assert.equal(grants, 0);
     attack = "partial";
