@@ -107,7 +107,7 @@ export function createLivePublisher(options: LivePublisherOptions): LivePublishe
   let timer: unknown = null;
   let lastStart = Number.NEGATIVE_INFINITY;
   let retryMs = 0;
-  let conflicts = 0;
+  let conflicted: string | null = null;
   let unsubscribe: (() => void) | null = null;
 
   const clearTimer = () => {
@@ -164,7 +164,7 @@ export function createLivePublisher(options: LivePublisherOptions): LivePublishe
       accepted = text;
       if (pending === text) pending = null;
       retryMs = 0;
-      conflicts = 0;
+      conflicted = null;
       settle();
       schedule();
       return;
@@ -173,11 +173,13 @@ export function createLivePublisher(options: LivePublisherOptions): LivePublishe
       // A late or second writer moved the token, so the route may hold
       // anything: take the token and send the last state once more, but only
       // once per state; a later change is tried afresh (no loop).
+      // Track sent bytes, not offers: A's answer cannot spend B's retry, and
+      // an intermediate offer that never went out cannot renew it either.
       token = answer.token;
       accepted = null;
       retryMs = 0;
-      conflicts += 1;
-      if (conflicts > 1 && pending === text) pending = null;
+      if (conflicted === text && pending === text) pending = null;
+      conflicted = text;
       schedule();
       return;
     }
@@ -218,7 +220,6 @@ export function createLivePublisher(options: LivePublisherOptions): LivePublishe
       } catch {
         return;
       }
-      if (text !== pending) conflicts = 0;
       pending = text;
       // A return to the accepted state while another one is in flight must
       // still go: once that answer comes, the route holds the other state.

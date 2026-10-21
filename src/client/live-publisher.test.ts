@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { CanonicalDocument } from "@/domain/document";
+import { validateDocument } from "@/domain/document";
 import { canonicalizeJcs } from "@/domain/forensics/jcs";
 
 import {
@@ -17,6 +18,17 @@ function doc(text: string): CanonicalDocument {
 
 const TOKEN_A = "11111111-1111-4111-8111-111111111111";
 const TOKEN_B = "22222222-2222-4222-8222-222222222222";
+
+function validDoc(text: string): CanonicalDocument {
+  const result = validateDocument({
+    schemaVersion: 1,
+    nodes: [{
+      id: TOKEN_A, type: "paragraph", children: [{ type: "text", text, marks: [] }],
+    }],
+  });
+  if (!result.ok) throw new Error("Invalid synthetic document");
+  return result.doc;
+}
 
 type Call = { init: RequestInit; resolve: (response: Response) => void; reject: (error: unknown) => void };
 
@@ -181,6 +193,91 @@ describe("live publisher (BACKEND 4.12 t. 7 and 8)", () => {
     await s.time.advance(0);
     expect(s.calls).toHaveLength(3);
     expect(s.calls[2]!.init.headers).toMatchObject({ "if-match": `"${TOKEN_A}"` });
+  });
+
+  it.each([200, 409])("gives B its own conflict retry after A conflicts, ending with %i", async (status) => {
+    const s = setup();
+    const a = validDoc("A");
+    const b = validDoc("B");
+    s.publisher.start();
+    s.publisher.offer(a);
+    await s.time.advance(0);
+    s.publisher.offer(b);
+    await s.time.advance(0);
+    expect(s.calls).toHaveLength(1);
+
+    s.calls[0]!.resolve(answer(409, TOKEN_A));
+    await s.time.advance(LIVE_PUBLISH_GAP_MS - 1);
+    expect(s.calls).toHaveLength(1);
+    await s.time.advance(1);
+    expect(s.calls).toHaveLength(2);
+    expect(s.calls[1]!.init.headers).toMatchObject({ "if-match": `"${TOKEN_A}"` });
+
+    s.calls[1]!.resolve(answer(409, TOKEN_B));
+    await s.time.advance(LIVE_PUBLISH_GAP_MS - 1);
+    expect(s.calls).toHaveLength(2);
+    await s.time.advance(1);
+    expect(s.calls).toHaveLength(3);
+    expect(s.calls.map((call) => call.init.body)).toEqual([
+      canonicalizeJcs(a), canonicalizeJcs(b), canonicalizeJcs(b),
+    ]);
+    expect(s.calls[2]!.init.headers).toMatchObject({ "if-match": `"${TOKEN_B}"` });
+
+    s.calls[2]!.resolve(answer(status, TOKEN_A));
+    await s.time.advance(120_000);
+    expect(s.calls).toHaveLength(3);
+    expect(s.time.pending()).toBe(0);
+    expect(s.publisher.halted()).toBeNull();
+    if (status === 200) {
+      s.publisher.offer(b);
+      await s.time.advance(LIVE_PUBLISH_GAP_MS);
+      expect(s.calls).toHaveLength(3);
+    }
+  });
+
+  it("does not renew the same bytes' conflict retry for an unsent intermediate offer", async () => {
+    const s = setup();
+    s.publisher.start();
+    s.publisher.offer(validDoc("B"));
+    await s.time.advance(0);
+    s.calls[0]!.resolve(answer(409, TOKEN_A));
+    await s.time.advance(LIVE_PUBLISH_GAP_MS);
+    expect(s.calls).toHaveLength(2);
+    s.publisher.offer(validDoc("C"));
+    s.publisher.offer(validDoc("B"));
+    s.calls[1]!.resolve(answer(409, TOKEN_B));
+    await s.time.advance(120_000);
+    expect(s.calls).toHaveLength(2);
+    expect(s.time.pending()).toBe(0);
+  });
+
+  it("ignores a stale conflict body after stop and restart without consuming the new retry", async () => {
+    const s = setup();
+    s.publisher.start();
+    s.publisher.offer(validDoc("A"));
+    await s.time.advance(0);
+    let finishBody!: (body: unknown) => void;
+    const stale = answer(409, TOKEN_A);
+    stale.json = () => new Promise((resolve) => { finishBody = resolve; });
+    s.calls[0]!.resolve(stale);
+    await flush();
+    s.publisher.stop();
+    s.publisher.offer(validDoc("B"));
+    s.publisher.start();
+    await s.time.advance(LIVE_PUBLISH_GAP_MS);
+    expect(s.calls).toHaveLength(2);
+    finishBody({ token: TOKEN_A });
+    await flush();
+    expect(s.time.pending()).toBe(0);
+    s.calls[1]!.resolve(answer(409, TOKEN_B));
+    await s.time.advance(LIVE_PUBLISH_GAP_MS);
+    expect(s.calls).toHaveLength(3);
+    expect(s.calls[2]!.init.body).toBe(canonicalizeJcs(validDoc("B")));
+    expect(s.calls[2]!.init.headers).toMatchObject({ "if-match": `"${TOKEN_B}"` });
+    s.publisher.stop();
+    await s.time.advance(120_000);
+    expect(s.calls).toHaveLength(3);
+    expect(s.time.pending()).toBe(0);
   });
 
   it("sends a return to the accepted state that came while another state was in flight", async () => {
