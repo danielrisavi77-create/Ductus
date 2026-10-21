@@ -31,10 +31,18 @@ Preuzeto je doslovno:
 
 **Dijalog:** Odjava (FE-D7).
 
+**Javno, vodič i ispis (iz showcasea, po nalogu vlasnika 21. 10.):**
+13. Javna početna: zaglavlje, uvod s prikazom aplikacije, „Za koga”, „Kako radi” u 4 koraka, završni dio. Gumbi „Ulaz za studente / nastavnike” vode na `/prijava` (vlasnikova odluka od 19. 10.).
+14. Prezentacijski vodič: kartica na dnu s 10 koraka kroz pravi tok demoa (zadatak → kod → upis → obavijest → pisanje → uživo → komentar → brz put → predaja → ispis). Pokreće se s javne početne ili iz bočne trake.
+15. Ispis: A4 prijelom (naslovnica FPZG, sadržaj, tekst s fusnotom, literatura) i ploča „Oblik rada”. „Ispiši ili spremi PDF” koristi ispis preglednika, a na papir idu samo stranice rada (provjereno: 4 stranice A4). Izvoz DOCX je nakon demoa (README §4).
+
 ## Što NIJE preuzeto iz showcasea (proturječi odlukama)
 - Rečenice „ne tipkanje uživo” i „bez tipkanja uživo”: proturječe D-142, D-143 i D-154.
 - Filter i poredak radova po stanju: D-80 traži popis samo po prezimenu. Ostala je samo pretraga.
-- Oznaka „Interaktivni mock” zamijenjena je s „Demo”. Uklonjeni su i „Prezentacijski vodič” i „Prikaz ustanove” (faza B i C).
+- Oznaka „Interaktivni mock” zamijenjena je s „Demo”. „Prikaz ustanove” (faza B i C) nije uključen.
+- Koraci vodiča iz showcasea (izvori, dorade u rundama, povjerenstvo, ustanova) zamijenjeni su koracima koji postoje u demou.
+
+U svijetloj temi `--faint` je `#5e7366` umjesto `#657a6d` iz showcasea (4,61:1 na podlozi umjesto 4,17:1, prag AA za sitan tekst).
 
 Tekst sučelja provjeren je skenerom zabranjenih izraza iz repoa i nema nalaza.
 
