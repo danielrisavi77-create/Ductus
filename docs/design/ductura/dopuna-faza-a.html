@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ductura · dopuna dizajna, faza A</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
+<!--
+  Dizajnerska referenca, ne produkcijski kod. Samostalna datoteka: ne treba support.js.
+  Tokeni: docs/design/ductura/README.md §8 i app/globals.css (D-123). Svi podaci izmišljeni.
+  Tekstovi slijede važeće odluke (D-80, D-118, D-142/143, D-145/146, D-154, vlasnikovi odgovori na #476),
+  ne starije prototipe. Gdje je tekst već u messages.hr.ts, preuzet je doslovno.
+-->
+<style>
+:root{
+  --ground:#0F110E;--chrome:#141712;--sheet:#161A15;--raised:#1A1E19;--hover:#1E221D;--selected:#232722;
+  --rule:#2C312B;--rule-2:#232722;--ink:#E9EBE6;--ink-2:#A6ADA5;--ink-3:#8E958D;--ink-muted:#767D75;
+  --accent:#6FBFA5;--accent-ink:#0E1C17;--accent-soft:#6FBFA51F;--info:#8FB0E0;--info-h:#B3CAEC;
+  --warn:#D3AC63;--cmt:#D9AE5B;--error:#E07A6A;--p-unknown:#9E9A90;
+  --serif:Newsreader,Georgia,serif;--sans:"Instrument Sans",system-ui,sans-serif;--mono:"JetBrains Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:13px}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+button:disabled{cursor:not-allowed}
+input,textarea,select{font:inherit;color:var(--ink)}
+a{color:var(--info);text-decoration:none}a:hover{color:var(--info-h)}
+:focus-visible{outline:2px solid #8FD1B9;outline-offset:2px;border-radius:6px}
+::selection{background:#D9AE5B55}
+
+/* ljuska prototipa */
+.proto{position:sticky;top:0;z-index:50;display:flex;gap:6px;align-items:center;padding:6px 12px;background:#0B0D0A;border-bottom:1px dashed #3A4039;overflow-x:auto}
+.proto b{font-size:11px;color:var(--ink-muted);white-space:nowrap;margin-right:6px;font-weight:600;letter-spacing:.02em}
+.proto button{white-space:nowrap;padding:4px 9px;border-radius:6px;font-size:11.5px;color:var(--ink-3)}
+.proto button[aria-current=true]{background:var(--selected);color:var(--ink)}
+.variants{display:flex;gap:4px;align-items:center;flex-wrap:wrap;padding:6px 12px;background:#0B0D0A;border-bottom:1px solid #1A1D19;font-size:11px;color:var(--ink-muted)}
+.variants button{padding:3px 8px;border-radius:5px;border:1px solid #262A25;font-size:11px;color:var(--ink-3)}
+.variants button[aria-pressed=true]{border-color:var(--accent);color:var(--ink)}
+
+.top{height:48px;display:flex;align-items:center;gap:14px;padding:0 16px;border-bottom:1px solid var(--rule);background:var(--chrome)}
+.brand{font-family:var(--serif);font-size:19px;font-weight:600}
+.path{font-size:12.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.path span{color:var(--ink-muted);margin:0 6px}
+.demo{margin-left:auto;font-size:11.5px;color:var(--ink-muted);white-space:nowrap}
+.who{font-size:12.5px;color:var(--ink-2);white-space:nowrap}
+.seg{display:flex;gap:2px;background:var(--selected);padding:2px;border-radius:7px}
+.seg a,.seg button{padding:4px 10px;border-radius:6px;font-size:12px;color:var(--ink-2)}
+.seg [aria-current=page],.seg [aria-pressed=true]{background:var(--raised);color:var(--ink)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:7px;font-size:12.5px;font-weight:600;background:var(--accent);color:var(--accent-ink);min-height:32px}
+.btn:hover{background:#8CCDB7}
+.btn:disabled{background:var(--selected);color:var(--ink-muted)}
+.btn-o{display:inline-flex;align-items:center;padding:6px 12px;border-radius:7px;font-size:12.5px;border:1px solid #4A5049;min-height:32px}
+.btn-o:hover{background:var(--hover)}
+.btn-q{padding:6px 10px;font-size:12.5px;color:var(--ink-2);border-radius:7px}
+.btn-q:hover{color:var(--ink)}
+.page{max-width:1080px;margin:0 auto;padding:28px 24px 72px;display:flex;flex-direction:column;gap:18px}
+h1{margin:0;font-family:var(--serif);font-size:26px;font-weight:600;line-height:1.2}
+h2{margin:0;font-size:13px;font-weight:600}
+.lede{margin:0;font-size:13.5px;line-height:1.6;color:var(--ink-2);max-width:62ch}
+.card{background:var(--chrome);border:1px solid var(--rule-2);border-radius:10px;padding:16px 18px}
+.muted{color:var(--ink-3)}.tiny{font-size:11.5px;color:var(--ink-muted)}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}
+.tag{font-size:11px;padding:1px 7px;border-radius:4px;border:1px solid var(--rule);color:var(--ink-3)}
+.alert{background:#E07A6A14;padding:10px 12px;border-radius:7px;font-size:13px;line-height:1.5}
+.note{font-size:12.5px;line-height:1.5;color:var(--ink-2)}
+.skel{background:linear-gradient(90deg,#1A1E19,#232722,#1A1E19);border-radius:6px;height:14px}
+.field{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--ink-2)}
+.input{background:var(--ground);border:1px solid #4A5049;border-radius:7px;padding:9px 11px;font-size:14px;min-height:40px}
+.mono{font-family:var(--mono);letter-spacing:.04em}
+.sheet{background:var(--sheet);border:1px solid var(--rule-2);border-radius:6px;padding:clamp(16px,4vw,32px) clamp(16px,4vw,40px)}
+.sheet p{margin:0 0 12px;font-family:var(--serif);font-size:16.5px;line-height:1.7;text-wrap:pretty}
+.sheet h3{margin:0 0 10px;font-family:var(--serif);font-size:19px;font-weight:600}
+mark.c{background:#D9AE5B2B;color:inherit;border-bottom:1px solid var(--cmt);padding:0 1px}
+mark.c sup{color:var(--cmt);font-family:var(--sans);font-size:10px;margin-left:1px}
+.para-p{background:#9E9A901A;border-radius:4px;box-shadow:0 0 0 6px #9E9A901A}
+dl.kv{margin:0;display:grid;grid-template-columns:max-content minmax(0,1fr);gap:7px 18px;font-size:13px}
+dl.kv dt{color:var(--ink-2)}dl.kv dd{margin:0}
+.sumrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:10px;padding:7px 0;border-top:1px solid var(--hover);font-size:13px}
+.sumrow span:first-child{color:var(--ink-2)}
+.three{display:grid;grid-template-columns:230px minmax(0,1fr) 330px;min-height:calc(100vh - 48px - 66px)}
+.rail{background:var(--chrome);border-right:1px solid var(--rule);padding:12px 8px;display:flex;flex-direction:column;gap:2px}
+.side{background:var(--chrome);border-left:1px solid var(--rule);display:flex;flex-direction:column}
+.tabs{display:flex;gap:14px;padding:0 14px;border-bottom:1px solid var(--rule);overflow-x:auto;flex:none}
+.tabs button{padding:11px 0;font-size:12px;color:var(--ink-3);white-space:nowrap}
+.tabs [aria-selected=true]{color:var(--ink);box-shadow:inset 0 -2px 0 var(--accent)}
+.stud{display:flex;flex-direction:column;gap:1px;padding:8px 10px;border-radius:7px;text-align:left;width:100%}
+.stud:hover{background:var(--hover)}
+.stud[aria-current=true]{background:var(--selected)}
+.statusbar{height:30px;display:flex;align-items:center;gap:14px;padding:0 14px;border-top:1px solid var(--rule);background:var(--chrome);font-size:11.5px;color:var(--ink-2)}
+.dlg-back{position:fixed;inset:0;background:#0008;z-index:80}
+.dlg{position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:81;width:460px;max-width:calc(100vw - 32px);background:var(--raised);border:1px solid var(--rule);border-radius:10px;padding:18px;box-shadow:0 20px 44px -14px #000d;display:flex;flex-direction:column;gap:12px}
+.steps{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--ink-3)}
+.steps .on{color:var(--ink);font-weight:600}
+.steps i{width:18px;height:1px;background:var(--rule)}
+.receipt{border:1px dashed #4A5049;border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:9px}
+.receipt .r{display:grid;grid-template-columns:150px minmax(0,1fr);gap:10px;font-size:13px}
+.receipt .r span:first-child{color:var(--ink-3)}
+.course{display:flex;flex-direction:column;gap:0;padding:0;overflow:hidden}
+.course header{display:flex;align-items:baseline;gap:10px;padding:14px 18px;border-bottom:1px solid var(--rule-2)}
+.asg{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:14px;align-items:center;padding:12px 18px;border-top:1px solid var(--hover)}
+.asg:first-of-type{border-top:0}
+.asg:hover{background:#171A16}
+@media (max-width:1000px){.three{grid-template-columns:200px minmax(0,1fr)}.three .side{grid-column:1/-1;border-left:0;border-top:1px solid var(--rule)}}
+@media (max-width:700px){.three{grid-template-columns:1fr}.rail{border-right:0;border-bottom:1px solid var(--rule);flex-direction:row;overflow-x:auto}.stud{min-width:160px}
+  .asg{grid-template-columns:1fr;gap:6px}.receipt .r{grid-template-columns:1fr;gap:2px}.path{display:none}
+  .three{grid-template-columns:1fr!important}.demo,.who{display:none}.top{gap:8px;padding:0 10px}.seg a{padding:4px 7px}.ghost{display:none!important}}
+@media (prefers-reduced-motion:no-preference){button,a{transition:background .15s}}
+</style>
+</head>
+<body>
+<nav class="proto" aria-label="Ekrani prototipa" id="nav"></nav>
+<div class="variants" id="variants"></div>
+<div id="app"></div>
+<div id="layer"></div>
+
+<script>
+/* ---------- izmišljeni podaci ---------- */
+const COURSES=[
+ {name:"Kolegij A",year:"2026./2027.",asg:[
+   {id:"z1",title:"Zadatak 1: seminarski rad",type:"Seminarski rad",due:"31. 10. 2026. u 23:59",n:4},
+   {id:"z2",title:"Zadatak 2: osvrt na izvor",type:"Osvrt",due:"14. 11. 2026. u 23:59",n:4}]},
+ {name:"Kolegij B",year:"2026./2027.",asg:[]},
+ {name:"Kolegij C",year:"2025./2026.",asg:[{id:"z3",title:"Završni rad",type:"Završni rad",due:"15. 9. 2026. u 23:59",n:2}]}
+];
+const STUDENTS=[ // poredak: po prezimenu (D-80), ekran ga ne mijenja
+ {g:"Ana",s:"Babić",st:"writing",doc:"d-ab",last:"21. 10. u 09:40",rev:0,pastes:1,decl:"not_submitted"},
+ {g:"Ivan",s:"Čolak",st:"submitted",doc:"d-ic",last:"20. 10. u 22:14",rev:0,pastes:0,decl:"submitted"},
+ {g:"Marta",s:"Đurić",st:"revision_requested",doc:"d-md",last:"19. 10. u 17:02",rev:1,pastes:0,decl:"not_submitted"},
+ {g:"Luka",s:"Šimić",st:"notice_pending",doc:null,last:null}
+];
+const WORK={notice_pending:"Obavijest još nije potvrđena",writing:"U pisanju",revision_requested:"Čeka doradu",submitted:"Predano"};
+const WCOL={notice_pending:"#8E958D",writing:"#8FB0E0",revision_requested:"#D3AC63",submitted:"#6FBFA5"};
+const PARAS=[
+ "Čitanje naglas u prvim godinama školovanja opisuje se kao jedan od temelja kasnijeg jezičnog razvoja. Ovaj rad razmatra kako se taj navod prenosi u nastavnu praksu i što o njemu kažu dostupni izvori.",
+ "Prema jednoj od uvriježenih tvrdnji, redovito zajedničko čitanje proširuje rječnik djeteta (Autor A, 2019b). Autor B (2021) tu tvrdnju nadopunjuje opažanjima iz razreda.",
+ "Ipak, većina istraživanja provedena je u okruženjima s mnogo knjiga kod kuće, pa se rezultati ne mogu izravno prenijeti na svaki razred. Taj se odlomak oslanja na pregled Autora C (2020: 14).",
+ "U nastavku se uspoređuju tri pristupa iz prakse i navodi što svaki od njih traži od nastavnika."
+];
+const SUMMARY=[
+ ["Stanje zapisa","Zapis je cjelovit"],
+ ["Broj sesija","4 (prag P-01: nova sesija počinje nakon stanke dulje od 30 minuta)"],
+ ["Sesije pisanja","18. 10. od 10:12 do 11:05 · 19. 10. od 16:40 do 17:31 · 20. 10. od 21:02 do 22:14 · 21. 10. od 09:05 do 09:40"],
+ ["Lijepljenja","1 × 212 znakova, izvor nije opažen, 20. 10. u 21:37 (prag P-02: zasebno se navodi lijepljenje veće od 80 znakova)"],
+ ["Manja lijepljenja, samo broj","3 (prag P-02: najviše 80 znakova)"],
+ ["Praznine u zapisu","Nema praznina u zapisu."],
+ ["Vrsta dokaza","opaženo"]
+];
+
+/* ---------- stanje ---------- */
+const S={screen:"kolegiji",v:{},stud:0,view:"text",tab:"kom",step:1,code:"",dlg:null};
+const SCREENS=[
+ ["kolegiji","1 Moji kolegiji","/nastavnik",["popis","prazno","učitavanje","greška"]],
+ ["radovi","2 Radovi zadatka","/nastavnik/zadatak/[id]",["popis","nema studenata","greška"]],
+ ["uzivo","3 Rad uživo","/nastavnik/rad/[id]",["veza radi","prekid veze","nema teksta"]],
+ ["kakovidi","4 Kako vidi nastavnik","/rad/kako-vidi-nastavnik",["tekst","nema teksta"]],
+ ["upis","5 Upis kodom","/upis",["unos","odbijeno","previše pokušaja","upisan"]],
+ ["predaja","6 Predaja","/rad/[id]/predaja",["spremno","nije na poslužitelju","blokirano","novija revizija","predano"]],
+ ["odjava","7 Odjava","dijalog u /rad",["N > 0","N = 0","nije pohranjeno","greška mreže"]]
+];
+const vv=()=>S.v[S.screen]??0;
+function go(k){S.screen=k;S.dlg=null;render();scrollTo(0,0)}
+function setV(i){S.v[S.screen]=i;S.step=1;render()}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let toastT;function toast(m){const l=document.getElementById("layer");l.innerHTML=`<div role="status" style="position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#232722;border:1px solid #2C312B;border-radius:8px;padding:7px 14px;font-size:12.5px;z-index:90">${esc(m)}</div>`;clearTimeout(toastT);toastT=setTimeout(()=>l.innerHTML="",2600)}
+
+/* ---------- zajednički dijelovi ---------- */
+const topbar=(path,right="")=>`<header class="top"><span class="brand">Ductura</span><span class="path">${path}</span><span class="demo">Demo · izmišljeni podaci</span>${right}</header>`;
+const teacherTop=path=>topbar(path,`<span class="who">Nastavnik A</span><button class="btn-q" onclick="toast('Odjava (FE-D7)')">Odjava</button>`);
+const sumBlock=label=>`<section class="card" aria-label="Sažetak procesa" style="display:flex;flex-direction:column;gap:2px">
+ <div class="row" style="padding-bottom:6px"><h2>Sažetak procesa</h2><span class="tiny" style="margin-left:auto">${label}</span></div>
+ ${SUMMARY.map(([k,v])=>`<div class="sumrow"><span>${k}</span><span>${v}</span></div>`).join("")}
+ <span class="tiny" style="padding-top:8px">Vremena su po zagrebačkom vremenu, zaokružena na minutu.</span></section>`;
+
+/* ---------- 1 Moji kolegiji ---------- */
+function scrKolegiji(){
+ const v=vv();let body;
+ if(v===2) body=`<div class="card" aria-busy="true" style="display:flex;flex-direction:column;gap:12px"><div class="skel" style="width:40%"></div><div class="skel" style="width:70%"></div><div class="skel" style="width:55%"></div><span class="tiny">Učitavanje kolegija…</span></div>`;
+ else if(v===3) body=`<div class="alert" role="alert">Kolegiji trenutačno nisu dostupni. Pokušaj ponovno.</div><div><button class="btn-o" onclick="setV(0)">Pokušaj ponovno</button></div>`;
+ else if(v===1) body=`<div class="card" style="display:flex;flex-direction:column;gap:12px;align-items:flex-start;padding:28px"><h2 style="font-family:var(--serif);font-size:19px">Nemaš kolegija u kojima predaješ.</h2><p class="lede">Stvori kolegij i objavi prvi zadatak. Studenti se upisuju kodom koji dobiješ nakon stvaranja kolegija.</p><a class="btn" href="#" onclick="toast('/nastavnik/zadatak/novi');return false">Novi kolegij i zadatak</a></div>`;
+ else body=COURSES.map(c=>`<section class="card course" aria-label="${c.name}">
+   <header><h2 style="font-family:var(--serif);font-size:18px">${c.name}</h2><span class="muted" style="font-size:12.5px">${c.year}</span></header>
+   ${c.asg.length?c.asg.map(a=>`<div class="asg"><div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-size:13.5px;font-weight:600">${a.title}</span><span class="muted" style="font-size:12px">${a.type} · rok ${a.due}</span></div><span class="muted" style="font-size:12px;white-space:nowrap">${a.n} ${a.n===1?"student":a.n<5?"studenta":"studenata"}</span><a href="#" onclick="go('radovi');return false" style="font-size:12.5px;white-space:nowrap">Radovi →</a></div>`).join("")
+   :`<div style="padding:14px 18px" class="muted">Još nema zadataka.</div>`}</section>`).join("");
+ return teacherTop("Moji kolegiji")+`<main class="page">
+  <div class="row" style="align-items:flex-end"><div style="display:flex;flex-direction:column;gap:6px"><h1>Moji kolegiji</h1><p class="lede">Kolegiji u kojima predaješ i njihovi zadaci. Poredak: akademska godina, pa naziv; zadaci po roku.</p></div>
+  ${v===1?"":`<a class="btn" style="margin-left:auto" href="#" onclick="toast('/nastavnik/zadatak/novi');return false">Novi kolegij i zadatak</a>`}</div>
+  ${body}
+  <p class="tiny">Broj studenata služi samo za pregled; po njemu se ništa ne poreda.</p></main>`;
+}
+
+/* ---------- 2 Radovi zadatka (brz put, Z3 B) ---------- */
+function scrRadovi(){
+ const v=vv();
+ const head=teacherTop(`<a href="#" onclick="go('kolegiji');return false">Moji kolegiji</a><span>/</span>Kolegij A<span>/</span>Zadatak 1`);
+ if(v===2) return head+`<main class="page"><h1>Zadatak 1: seminarski rad</h1><div class="alert" role="alert">Radovi trenutačno nisu dostupni. Pokušaj ponovno.</div></main>`;
+ if(v===1) return head+`<main class="page"><h1>Zadatak 1: seminarski rad</h1><div class="card"><p style="margin:0">U kolegij još nije upisan nijedan student.</p><p class="tiny" style="margin:6px 0 0">Kod za upis vidiš na ekranu kolegija.</p></div></main>`;
+ const st=STUDENTS[S.stud];
+ const rail=STUDENTS.map((x,i)=>`<button class="stud" aria-current="${i===S.stud}" onclick="S.stud=${i};render()"><span style="font-size:13px;font-weight:600">${x.s}, ${x.g}</span><span style="font-size:12px;color:${WCOL[x.st]}">${WORK[x.st]}</span><span style="font-size:11px;color:var(--ink-3)">${x.last??"nema zapisa"}</span></button>`).join("");
+ let mid;
+ if(!st.doc) mid=`<p class="muted" style="margin:18px 0">Student još nije potvrdio obavijest. Nema zapisa.</p>`;
+ else{
+  const lines=[["Zadnja promjena",st.last],["Otvoreni zahtjevi za doradu",st.rev?`${st.rev} zahtjev za doradu`:"nema"],["Lijepljenja bez izvora",st.pastes?`<button style="padding:0;color:var(--info)" onclick="S.hl=!S.hl;render()">${st.pastes} · odlomak 3</button>`:"nema"],["Izjava",st.decl==="submitted"?"predana s radom":"još nije predana"]];
+  mid=`<dl class="kv" style="padding:4px 0 2px">${lines.map(([k,x])=>`<dt>${k}</dt><dd>${x}</dd>`).join("")}</dl>
+  <span class="tiny">Stanje zapisa: Zapis je cjelovit</span>
+  ${S.view==="text"?`<article class="sheet" aria-label="Tekst rada, samo za čitanje">${PARAS.map((p,i)=>`<p class="${S.hl&&i===2&&st.pastes?"para-p":""}">${p}</p>${S.hl&&i===2&&st.pastes?`<p class="tiny" style="margin-top:-8px;color:var(--p-unknown);font-family:var(--sans)">zalijepljeno · izvor nije naveden</p>`:""}`).join("")}</article>`:sumBlock("Isti sažetak vide student i nastavnik.")}`;
+ }
+ return head+`<div class="three" style="grid-template-columns:240px minmax(0,1fr)">
+  <nav class="rail" aria-label="Studenti"><span style="padding:2px 10px 8px;font-size:12px;font-weight:600;color:var(--ink-2)">Studenti · po prezimenu</span>${rail}
+   <span class="tiny" style="padding:10px">Popis se ne može poredati po brojevima.</span></nav>
+  <main style="padding:22px 24px 60px;display:flex;flex-direction:column;gap:14px;max-width:820px;width:100%;margin:0 auto">
+   <div class="row" style="align-items:baseline"><h1 style="font-size:24px">${st.g} ${st.s}</h1><span class="muted" style="font-size:12.5px">${WORK[st.st]}</span>
+    ${st.doc?`<span class="seg" role="group" aria-label="Prikaz rada" style="margin-left:auto"><button aria-pressed="${S.view==="text"}" onclick="S.view='text';render()">Tekst rada</button><button aria-pressed="${S.view==="sum"}" onclick="S.view='sum';render()">Sažetak procesa</button></span>`:""}</div>
+   ${mid}
+   ${st.doc?`<div><a class="btn-o" href="#" onclick="go('uzivo');return false">Otvori rad →</a> <span class="tiny" style="margin-left:8px">prikaz uživo, komentari uz odlomak</span></div>`:""}
+  </main></div>`;
+}
+
+/* ---------- 3 Rad uživo ---------- */
+function scrUzivo(){
+ const v=vv();
+ const conn=[["Veza radi","#6FBFA5"],["Veza je prekinuta. Prikazan je zadnji primljeni tekst. Ponovno povezivanje…","#D3AC63"],["Veza radi","#6FBFA5"]][v];
+ const text=v===2?`<p class="muted" style="font-family:var(--sans);font-size:13px">Student još nije poslao tekst.</p>`:
+  `<h3>1. Uvod</h3><p>${PARAS[0]}</p><p>Prema jednoj od uvriježenih tvrdnji, <mark class="c">redovito zajedničko čitanje proširuje rječnik djeteta<sup>1</sup></mark> (Autor A, 2019b). Autor B (2021) tu tvrdnju nadopunjuje opažanjima iz razreda.</p><p>${PARAS[2]}</p><p>${PARAS[3]}</p>`;
+ const side=S.tab==="kom"?`<div style="padding:14px;display:flex;flex-direction:column;gap:12px">
+   <span class="tiny">Označi tekst u radu za komentar.</span>
+   ${v===2?`<span class="muted">Nema komentara. Označi tekst u radu.</span>`:`<div style="display:flex;flex-direction:column;gap:5px;padding-bottom:12px;border-bottom:1px solid var(--rule-2)">
+     <span style="font-size:11px;color:var(--ink-3)"><b style="color:var(--cmt);font-weight:600">1</b> · 20. 10., 18:05<span style="float:right">otvoreno</span></span>
+     <span style="font-size:11.5px;color:var(--ink-3);font-family:var(--serif);font-style:italic">„redovito zajedničko čitanje proširuje rječnik…”</span>
+     <span style="font-size:12.5px;line-height:1.5">Navedi stranicu uz navod, prema Uputama FPZG-a.</span>
+     <div class="row"><button class="btn-q" style="padding:2px 0;font-size:12px" onclick="toast('Označeno riješenim')">Označi riješenim</button></div></div>
+   <div style="display:flex;flex-direction:column;gap:6px;border:1px solid var(--rule);border-radius:8px;padding:10px"><b style="font-size:12px">Novi komentar</b>
+     <span style="font-size:11.5px;color:var(--ink-3);font-family:var(--serif);font-style:italic">„većina istraživanja provedena je u okruženjima…”</span>
+     <textarea rows="3" aria-label="Tekst komentara" class="input" style="font-size:12.5px;min-height:auto"></textarea>
+     <div class="row"><button class="btn" style="min-height:28px;padding:4px 10px" onclick="toast('Komentar objavljen')">Objavi</button><button class="btn-q">Odustani</button><span class="tiny">Ctrl+Enter objavi · Esc odustani</span></div></div>`}
+  </div>`:`<div style="padding:14px;display:flex;flex-direction:column;gap:10px">${sumBlock("Isti sažetak vide student i nastavnik.")}<button class="btn-o" onclick="toast('Sažetak osvježen')">Osvježi sažetak</button><span class="tiny">Sažetak se čita pri otvaranju i na zahtjev; svako čitanje upisuje se u dnevnik pristupa.</span></div>`;
+ return teacherTop(`<a href="#" onclick="go('radovi');return false">Kolegij A / Zadatak 1</a><span>/</span>Ana Babić`)+`<div class="three" style="grid-template-columns:minmax(0,1fr) 340px">
+  <main style="padding:20px 24px 60px;display:flex;flex-direction:column;gap:12px;max-width:800px;width:100%;margin:0 auto">
+   <div class="row"><span class="muted" style="font-size:12px">Rad uživo</span><span style="margin-left:auto;display:flex;gap:6px;align-items:center;font-size:12px;color:var(--ink-2)" role="status"><i class="dot" style="background:${conn[1]}"></i>${conn[0]}</span></div>
+   <article class="sheet" aria-label="Tekst rada">${text}</article>
+   <p class="tiny" style="margin:0">Prikazan je zadnji tekst koji je studentov preglednik poslao. To nije zapis rada i može kasniti ili zastati. Student vidi isti prikaz svog rada.</p>
+  </main>
+  <aside class="side" aria-label="Komentari i sažetak"><div class="tabs" role="tablist"><button role="tab" aria-selected="${S.tab==="kom"}" onclick="S.tab='kom';render()">Komentari</button><button role="tab" aria-selected="${S.tab==="sum"}" onclick="S.tab='sum';render()">Sažetak procesa</button></div>${side}</aside></div>`;
+}
+
+/* ---------- 4 Kako vidi nastavnik ---------- */
+function scrKakoVidi(){
+ const v=vv();
+ const seg=`<nav class="seg" aria-label="Prikaz" style="margin-left:12px"><a href="#" onclick="toast('/rad');return false">Pisanje</a><a href="#" aria-current="page">Kako vidi nastavnik</a></nav>`;
+ return `<header class="top"><span class="brand">Ductura</span><span class="path">Kolegij A<span>/</span>Zadatak 1</span>${seg}<span class="demo">Demo · izmišljeni podaci</span><span class="who">Ana Babić</span></header>
+ <div class="three" style="grid-template-columns:minmax(0,1fr) 330px;min-height:calc(100vh - 48px - 66px - 30px)">
+  <main style="padding:20px 24px 60px;display:flex;flex-direction:column;gap:12px;max-width:800px;width:100%;margin:0 auto">
+   <div class="note">Ovako nastavnik vidi tvoj rad: zadnje stanje koje je stiglo na poslužitelj. Ovdje se ne piše.</div>
+   <article class="sheet" aria-label="Tekst rada, samo za čitanje">${v===1?`<p class="muted" style="font-family:var(--sans);font-size:13px">Na poslužitelju još nema stanja tvog rada, pa nastavnik još nema što vidjeti.</p>`:
+    `<h3>1. Uvod</h3><p>${PARAS[0]}</p><p>Prema jednoj od uvriježenih tvrdnji, <mark class="c">redovito zajedničko čitanje proširuje rječnik djeteta<sup>1</sup></mark> (Autor A, 2019b).</p><p>${PARAS[2]}</p>`}</article>
+  </main>
+  <aside class="side"><div class="tabs"><button aria-selected="true">Komentari</button></div><div style="padding:14px;display:flex;flex-direction:column;gap:10px">
+   ${v===1?`<span class="muted">Nema komentara.</span>`:`<div style="display:flex;flex-direction:column;gap:5px"><span style="font-size:11px;color:var(--ink-3)"><b style="color:var(--cmt);font-weight:600">1</b> · 20. 10., 18:05 · Nastavnik A<span style="float:right">otvoreno</span></span><span style="font-size:12.5px;line-height:1.5">Navedi stranicu uz navod, prema Uputama FPZG-a.</span></div>`}
+   <span class="tiny">Prikaz samo čita: odgovor i „riješeno” su u načinu Pisanje.</span></div></aside></div>
+ <div class="statusbar"><span style="display:flex;gap:6px;align-items:center"><i class="dot" style="background:#6FBFA5"></i>Na mreži</span><span style="margin-left:auto">samo za čitanje</span></div>`;
+}
+
+/* ---------- 5 Upis kodom → obavijest ---------- */
+function scrUpis(){
+ const v=vv();
+ const msg=[null,`<div class="alert" role="alert">Kod nije prihvaćen. Provjeri ga kod nastavnika i upiši ponovno.</div>`,`<div class="alert" role="alert">Previše pokušaja. Pričekaj nekoliko minuta pa pokušaj ponovno.</div>`,null][v];
+ if(v===3) return topbar("Upis u kolegij",`<span class="who">Ana Babić</span>`)+`<main class="page" style="max-width:720px">
+  <div class="row" style="gap:8px"><i class="dot" style="background:var(--accent)"></i><span style="font-size:12.5px;color:var(--accent)">Upisana si u Kolegij A.</span></div>
+  <h1>Zadaci kolegija</h1>
+  <div class="card" style="display:flex;flex-direction:column;gap:0;padding:0">
+   <div class="asg" style="grid-template-columns:minmax(0,1fr) auto"><div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:13.5px;font-weight:600">Zadatak 1: seminarski rad</span><span class="muted" style="font-size:12px">rok 31. 10. 2026. u 23:59 · 2 000–2 500 riječi</span></div><a class="btn" href="#" onclick="toast('/zadatak/[id] · obavijest prije prve rečenice');return false">Pročitaj obavijest →</a></div>
+   <div class="asg" style="grid-template-columns:minmax(0,1fr) auto"><div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:13.5px;font-weight:600">Zadatak 2: osvrt na izvor</span><span class="muted" style="font-size:12px">otvara se 1. 11. 2026. u 08:00</span></div><span class="tag">nije otvoren</span></div>
+  </div>
+  <p class="tiny">Pisanje počinje tek nakon što pročitaš i potvrdiš obavijest zadatka. Prije potvrde ništa se ne šalje na poslužitelj.</p></main>`;
+ return topbar("Upis u kolegij",`<span class="who">Ana Babić</span>`)+`<main class="page" style="max-width:520px;padding-top:56px">
+  <h1>Upis u kolegij</h1>
+  <p class="lede">Kod za upis dobivaš od nastavnika. Velika i mala slova nisu važna.</p>
+  <form class="card" style="display:flex;flex-direction:column;gap:12px" onsubmit="event.preventDefault();setV(3)">
+   <label class="field">Kod za upis<input class="input mono" value="${esc(S.code)}" oninput="S.code=this.value" placeholder="FPZG-XX-XXX" autocomplete="off" ${v?'aria-invalid="true"':""}></label>
+   ${msg??""}
+   <div class="row"><button class="btn" ${v===2?"disabled":""}>Upiši se</button><a class="btn-q" href="#" onclick="toast('Na početnu');return false">Natrag</a></div>
+  </form></main>`;
+}
+
+/* ---------- 6 Predaja ---------- */
+function scrPredaja(){
+ const v=vv(); const done=v===4;
+ const steps=`<div class="steps"><span class="${!done?"on":""}">1 Provjera zapisa</span><i></i><span class="${done?"on":""}">2 Potvrda</span></div>`;
+ const checks=[
+  ["#6FBFA5","Rad na poslužitelju",v===1?null:"Zadnja izmjena je spremljena na poslužitelju (revizija 214)."],
+  ["#6FBFA5","Zapis",v===2?null:"Zapis je cjelovit i neizmijenjen od primitka."],
+  ["#6FBFA5","Obavijest","Potvrđena 18. 10. 2026. u 10:11."]];
+ if(v===1)checks[0]=["#D3AC63","Rad na poslužitelju","Dio izmjena još je samo na ovom uređaju. Predaja je moguća kad se spremi na poslužitelju."];
+ if(v===2)checks[1]=["#E07A6A","Zapis","Zapis s poslužitelja ne podudara se s tekstom rada."];
+ let left;
+ if(done) left=`<section class="receipt" aria-label="Potvrda o predaji" tabindex="-1">
+   <div class="row" style="align-items:baseline"><b style="font-family:var(--serif);font-size:19px;font-weight:600">Predano</b><span style="margin-left:auto;font-size:12px;color:var(--accent)">potpis provjeren</span></div>
+   ${[["Rad","Zadatak 1: seminarski rad"],["Student","Ana Babić"],["Kolegij","Kolegij A · 2026./2027."],["Vrijeme zahtjeva","21. 10. 2026. u 09:41 (sat poslužitelja)"],["Rok","31. 10. 2026. u 23:59 · predano prije roka"],["Revizija","214"],["SHA-256 dokumenta",'<span class="mono" style="font-size:11.5px;word-break:break-all">9f2c 41ab 07de 5c13 e8a0 2b6f 91c4 d7e2 3a05 6b18 c0f9 4e72 a1d3 58b6 0e2f 7c94</span>']].map(([k,x])=>`<div class="r"><span>${k}</span><span>${x}</span></div>`).join("")}
+   <p style="margin:4px 0 0;font-size:12.5px;line-height:1.55;color:var(--ink-2)">Potvrda kaže da je zapis cjelovit i neizmijenjen od primitka. Ne govori ništa o autorstvu.</p>
+   <span class="tiny">Demo potpisuje razvojnim ključem koji ne vrijedi izvan demoa.</span></section>`;
+ else left=`<section class="card" style="display:flex;flex-direction:column;gap:0;padding:6px 18px">${checks.map(([c,k,x])=>`<div style="display:flex;gap:10px;padding:11px 0;border-bottom:1px solid var(--hover)"><i class="dot" style="background:${c};margin-top:5px"></i><div style="display:flex;flex-direction:column;gap:3px"><span style="font-size:13px;font-weight:600">${k}</span><span style="font-size:13px;line-height:1.5;color:#C5CBC3">${x}</span></div></div>`).join("")}</section>
+  ${v===2?`<div class="alert" role="alert"><b>Predaja nije provedena.</b> Zapis s poslužitelja ne podudara se s tekstom rada. Rad ostaje na ovom uređaju i na poslužitelju; ništa nije izgubljeno.<br><span class="muted">Koordinator: koordinator@fpzg.example · demo kontakt</span></div><div class="row"><button class="btn-o" onclick="toast('Tekst izvezen')">Izvezi tekst</button></div>`:""}
+  ${v===3?`<div class="note" role="status">Rad se promijenio nakon klika na „Predaj”. Pričekaj da se zadnja izmjena spremi na poslužitelju pa predaj ponovno.</div>`:""}
+  <div class="row"><button class="btn" ${v===0||v===3?"":"disabled"} onclick="setV(4)">${v===3?"Predaj ponovno":"Predaj"}</button><span class="tiny">Predaja je jedna po zadatku. Nakon nje ne možeš predati drugu verziju.</span></div>`;
+ return topbar(`Kolegij A<span>/</span>Zadatak 1<span>/</span>Predaja`,`<span class="who">Ana Babić</span>`)+`<main class="page">
+  <div class="row" style="align-items:baseline"><h1>Predaja rada</h1><span style="margin-left:auto">${steps}</span></div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr));gap:20px;align-items:start">
+   <div style="display:flex;flex-direction:column;gap:14px;min-width:0" aria-live="polite">${left}</div>
+   ${sumBlock("Isti sažetak vide student i nastavnik.")}
+  </div></main>`;
+}
+
+/* ---------- 7 Odjava ---------- */
+function scrOdjava(){
+ const v=vv(); S.dlg=true;
+ return `<header class="top"><span class="brand">Ductura</span><span class="path">Kolegij A<span>/</span>Zadatak 1</span><span class="demo">Demo · izmišljeni podaci</span><span class="who">Ana Babić</span><button class="btn-q" id="logoutBtn" onclick="S.dlg=true;render()">Odjava</button></header>
+ <div class="three" style="grid-template-columns:260px minmax(0,1fr) 330px;min-height:calc(100vh - 48px - 66px - 30px);opacity:.55">
+  <div class="rail ghost"></div><main style="padding:24px"><article class="sheet"><h3>1. Uvod</h3><p>${PARAS[0]}</p><p>${PARAS[1]}</p></article></main><aside class="side ghost"></aside></div>
+ <div class="statusbar"><span>${v===0?"spremljeno na uređaju":v===2?"nije pohranjeno":"spremljeno na uređaju"}</span><span>210 / 2 000–2 500 riječi · ≈ 1 str.</span></div>`;
+}
+function dlgOdjava(){
+ const v=vv(); if(S.screen!=="odjava"||!S.dlg) return "";
+ const body=[
+  `<p style="margin:0;font-size:13px;line-height:1.55;color:#C5CBC3">Imaš 7 izmjena spremljenih na uređaju koje još nisu na poslužitelju. Odjava zatvara sesiju.</p><span style="font-size:12px;line-height:1.5;color:var(--ink-3)">Zapis ostaje vezan uz tebe na ovom uređaju i nastavljaš ga kad se ponovno prijaviš. Osoba koja se nakon tebe prijavi na ovom uređaju ne vidi tvoj rad.</span>`,
+  `<p style="margin:0;font-size:13px;line-height:1.55;color:#C5CBC3">Odjava zatvara sesiju na ovom uređaju.</p>`,
+  `<p style="margin:0;font-size:13px;line-height:1.55;color:#C5CBC3">Dio teksta nije pohranjen ni na ovom uređaju. Odjavom se taj dio gubi. Izvezi tekst prije odjave.</p><div><button class="btn-o" onclick="toast('Tekst izvezen')">Izvezi tekst</button></div>`,
+  `<p style="margin:0;font-size:13px;line-height:1.55;color:#C5CBC3">Imaš 7 izmjena spremljenih na uređaju koje još nisu na poslužitelju. Odjava zatvara sesiju.</p><div class="alert" role="alert">Odjava nije dovršena: poslužitelj nije odgovorio. Ništa nije izbrisano. Pokušaj ponovno.</div>`][v];
+ return `<div class="dlg-back" onclick="S.dlg=false;render()"></div><div class="dlg" role="dialog" aria-modal="true" aria-labelledby="dt"><b id="dt" style="font-size:14px">Odjava</b>${body}
+  <div class="row"><button class="btn" style="min-height:44px" onclick="toast('Sesija zatvorena')">Odjavi se</button><button class="btn-q" style="min-height:44px" id="stay" onclick="S.dlg=false;render()">Ostani</button></div></div>`;
+}
+
+/* ---------- render ---------- */
+const R={kolegiji:scrKolegiji,radovi:scrRadovi,uzivo:scrUzivo,kakovidi:scrKakoVidi,upis:scrUpis,predaja:scrPredaja,odjava:scrOdjava};
+function render(){
+ document.getElementById("nav").innerHTML=`<b>DUCTURA · DOPUNA FAZE A</b>`+SCREENS.map(([k,l])=>`<button aria-current="${k===S.screen}" onclick="go('${k}')">${l}</button>`).join("");
+ const sc=SCREENS.find(s=>s[0]===S.screen);
+ document.getElementById("variants").innerHTML=`<span class="mono" style="margin-right:8px">${sc[2]}</span>Stanje:`+sc[3].map((x,i)=>`<button aria-pressed="${i===vv()}" onclick="setV(${i})">${x}</button>`).join("");
+ document.getElementById("app").innerHTML=R[S.screen]();
+ document.getElementById("layer").innerHTML=dlgOdjava();
+ if(S.screen==="odjava"&&S.dlg) document.getElementById("stay")?.focus();
+}
+addEventListener("keydown",e=>{if(e.key==="Escape"&&S.dlg){S.dlg=false;render();document.getElementById("logoutBtn")?.focus()}});
+render();
+</script>
+</body>
+</html>
