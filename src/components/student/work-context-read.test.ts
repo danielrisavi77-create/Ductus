@@ -138,7 +138,7 @@ describe("/rad work context read", () => {
     const { withActor, query } = actor([row]);
     expect(await readWorkContext(TOKEN, ID, withActor)).toMatchObject({
       kind: "ready", wordRange: { min: 2000, max: 2500 },
-      notice: { versionNo: 2, title: row.title },
+      notice: { versionNo: 2, title: row.title, wordMin: 2000, wordMax: 2500 },
     });
     expect(query).toHaveBeenCalledTimes(1);
     const sql = (query.mock.calls as unknown as [string][])[0]![0];
@@ -155,7 +155,10 @@ describe("/rad work context read", () => {
   ])("preserves legal limits %s/%s from the current version", async (min, max, expected) => {
     const read = await readWorkContext(TOKEN, ID, actor([{ ...notice, word_min: min, word_max: max }]).withActor);
     expect(read.kind).toBe("ready");
-    if (read.kind === "ready") expect(read.wordRange).toEqual(expected);
+    if (read.kind === "ready") {
+      expect(read.wordRange).toEqual(expected);
+      expect(read.notice).toMatchObject({ wordMin: min, wordMax: max });
+    }
   });
 
   it("shows nothing without access, after the session ended, or when a read fails", async () => {

@@ -13,7 +13,7 @@ const DATABASE_URL = process.env.E2E_ADMIN_DATABASE_URL ??
   "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
 const TEACHER = "demo-teacher@demo.ductus.test";
 
-test("teacher form persists word range and edits rotate only the changed retry key", async ({ page }) => {
+test("teacher form keeps the committed request key for an equivalent range", async ({ page }) => {
   const db = new pg.Client({ connectionString: DATABASE_URL });
   await db.connect();
   let grantedHere = false;
@@ -43,34 +43,67 @@ test("teacher form persists word range and edits rotate only the changed retry k
     await page.getByLabel(t.teacher.assignment.dueAt).fill("2026-12-15T09:00");
     await page.getByLabel(t.teacher.assignment.wordMin).fill("1200");
     await page.getByLabel(t.teacher.assignment.wordMax).fill("2500");
+    const preview = page.getByRole("complementary");
+    await expect(preview).toContainText(/1\s200–2\s500 riječi/u);
+    await page.getByLabel(t.teacher.assignment.wordMin).fill("2501");
+    await expect(preview).not.toContainText(/2\s501–2\s500 riječi/u);
+    await page.getByRole("button", { name: t.teacher.assignment.publish }).click();
+    await expect(page.getByRole("alert").filter({ hasText: t.teacher.assignment.errors.invalid })).toBeVisible();
+    await page.getByLabel(t.teacher.assignment.wordMin).fill("1200");
+    await expect(preview).toContainText(/1\s200–2\s500 riječi/u);
 
     const keys: string[] = [];
     const bodies: Array<Record<string, unknown>> = [];
+    let committedId: string | null = null;
     await page.route("**/api/institution/courses/*/assignments", async (route) => {
       const request = route.request();
       keys.push(request.headers()["idempotency-key"]!);
       bodies.push(request.postDataJSON());
-      if (keys.length <= 2) await route.abort("failed");
-      else await route.continue(); // The accepted request reaches the real POST and database.
+      if (keys.length <= 2) {
+        await route.abort("failed");
+      } else if (keys.length === 3) {
+        const response = await route.fetch(); // POST reaches the real server.
+        expect(response.status()).toBe(201);
+        committedId = (await response.json() as { id: string }).id;
+        const committed = await db.query<{ id: string; word_min: number; word_max: number }>(
+          `SELECT a.id, v.word_min, v.word_max FROM institution.assignment a
+            JOIN institution.assignment_version v ON v.assignment_id = a.id
+            WHERE v.title = $1`, [title]);
+        expect(committed.rows).toEqual([{ id: committedId, word_min: 1, word_max: 2500 }]);
+        await route.abort("failed"); // Only the browser response is lost after DB commit.
+      } else {
+        await route.continue();
+      }
     });
 
     const publish = page.getByRole("button", { name: t.teacher.assignment.publish });
     await publish.click();
     await expect(page.getByRole("alert").filter({ hasText: t.teacher.assignment.errors.unavailable })).toBeVisible();
-    await page.getByLabel(t.teacher.assignment.wordMin).fill("1500");
+    await publish.click(); // Unchanged retry preserves its key.
+    await expect(page.getByRole("alert").filter({ hasText: t.teacher.assignment.errors.unavailable })).toBeVisible();
+    await page.getByLabel(t.teacher.assignment.wordMin).fill("001");
     await publish.click();
     await expect(page.getByRole("alert").filter({ hasText: t.teacher.assignment.errors.unavailable })).toBeVisible();
+    await page.getByLabel(t.teacher.assignment.wordMin).fill("1");
+    const replay = page.waitForResponse((response) =>
+      response.url().endsWith("/assignments") && response.request().method() === "POST");
     await publish.click();
+    const replayResponse = await replay;
+    expect(replayResponse.status()).toBe(201);
+    expect((await replayResponse.json() as { id: string }).id).toBe(committedId);
     await expect(page.getByRole("status").filter({ hasText: t.teacher.assignment.publishedNotice })).toBeVisible();
 
-    expect(keys).toHaveLength(3);
-    expect(keys[0]).not.toBe(keys[1]);
-    expect(keys[1]).toBe(keys[2]);
-    expect(bodies[2]).toMatchObject({ wordMin: 1500, wordMax: 2500 });
-    const stored = await db.query<{ word_min: number; word_max: number }>(
-      `SELECT v.word_min, v.word_max FROM institution.assignment_version v
+    expect(keys).toHaveLength(4);
+    expect(keys[0]).toBe(keys[1]);
+    expect(keys[1]).not.toBe(keys[2]);
+    expect(keys[2]).toBe(keys[3]);
+    expect(bodies[2]).toEqual(bodies[3]);
+    expect(bodies[3]).toMatchObject({ wordMin: 1, wordMax: 2500 });
+    const stored = await db.query<{ id: string; word_min: number; word_max: number }>(
+      `SELECT a.id, v.word_min, v.word_max FROM institution.assignment a
+        JOIN institution.assignment_version v ON v.assignment_id = a.id
         WHERE v.title = $1`, [title]);
-    expect(stored.rows).toEqual([{ word_min: 1500, word_max: 2500 }]);
+    expect(stored.rows).toEqual([{ id: committedId, word_min: 1, word_max: 2500 }]);
     await test.info().attach("nastavnik-raspon-rijeci", {
       body: await page.screenshot({ fullPage: true }), contentType: "image/png",
     });
