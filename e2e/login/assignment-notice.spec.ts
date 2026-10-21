@@ -41,11 +41,13 @@ interface Seed {
   opens?: string;
   due?: string;
   acknowledged?: boolean;
+  wordMin?: number | null;
+  wordMax?: number | null;
 }
 
 /** An invented course and assignment the demo student is a student of. */
 async function seedAssignment(seed: Seed = {}): Promise<{ assignment: string; course: string; courseName: string }> {
-  const { opens = "0 seconds", due = "30 days", acknowledged = false } = seed;
+  const { opens = "0 seconds", due = "30 days", acknowledged = false, wordMin = null, wordMax = null } = seed;
   return admin(async (client) => {
     await client.query("BEGIN");
     const { rows: [me] } = await client.query<{ id: string; institution: string }>(
@@ -61,9 +63,9 @@ async function seedAssignment(seed: Seed = {}): Promise<{ assignment: string; co
        VALUES ($1, $2, 1, $3) RETURNING id`, [course!.id, me.institution, me.id]);
     await client.query(
       `INSERT INTO institution.assignment_version (assignment_id, version_no, title, instructions, work_type, opens_at,
-         due_at, ai_policy, ai_purposes, evidence_profile, import_allowed, created_by)
+         due_at, ai_policy, ai_purposes, evidence_profile, import_allowed, created_by, word_min, word_max)
        VALUES ($1, 1, 'Izmišljeni zadatak S3', 'Upute za izmišljeni zadatak.', 'essay', now() + $3::interval,
-         now() + $4::interval, 'prohibited', '{}', 'basic', false, $2)`, [assignment!.id, me.id, opens, due]);
+         now() + $4::interval, 'prohibited', '{}', 'basic', false, $2, $5, $6)`, [assignment!.id, me.id, opens, due, wordMin, wordMax]);
     await client.query(
       "INSERT INTO institution.course_member (course_id, institution_id, user_id, role) VALUES ($1, $2, $3, 'student')",
       [course!.id, me.institution, me.id]);
@@ -280,6 +282,9 @@ test("the notice leads to /rad of its assignment, whose top bar names it", async
     await page.goto(path);
     await expect(page.locator(".workspace__bar")).toBeVisible();
     await expect(context).toHaveCount(0);
+    const length = page.locator(".workspace__status .status-length");
+    await expect(length.locator("b")).toBeVisible();
+    await expect(length).not.toContainText(/najmanje|najviše|–/u);
   }
   // PRODUCT §5 rule 6: before the current notice is acknowledged, /rad of the
   // assignment opens its notice instead of the workspace.
@@ -311,6 +316,62 @@ test("the notice leads to /rad of its assignment, whose top bar names it", async
     await expect(upute).toContainText(t.workspace.upute.toolsNone);
     await expect(upute.getByRole("heading", { name: /Provjera oblika/ })).toContainText("uskoro");
     await test.info().attach("rad-gornja-traka-zadatak", { body: await page.screenshot(), contentType: "image/png" });
+  } finally {
+    await admin((client) => client.query(
+      "UPDATE institution.course_member SET member_to = now() WHERE course_id = $1 AND member_to IS NULL", [seeded.course]));
+  }
+});
+
+test("/rad shows each legal word-limit shape from the student's acknowledged assignment", async ({ page }) => {
+  await signIn(page, PATH, "Demo studentica");
+  const length = page.locator(".workspace__status .status-length");
+  const cases = [
+    { wordMin: 2000, wordMax: 2500, shown: /2\s000–2\s500 riječi/u },
+    { wordMin: 1, wordMax: null, shown: /najmanje 1 riječ/u },
+    { wordMin: null, wordMax: 1000000, shown: /najviše 1\s000\s000 riječi/u },
+    { wordMin: 1000000, wordMax: 1000000, shown: /1\s000\s000–1\s000\s000 riječi/u },
+    { wordMin: null, wordMax: null, shown: /^0 riječi$/u },
+  ] as const;
+  for (const limits of cases) {
+    const seeded = await seedAssignment({ ...limits, acknowledged: true });
+    try {
+      await page.goto(`/rad?zadatak=${seeded.assignment}`);
+      await expect(length).toHaveText(limits.shown);
+      if (limits.wordMin === 2000) {
+        await test.info().attach("rad-raspon-rijeci", { body: await page.screenshot(), contentType: "image/png" });
+      }
+    } finally {
+      await admin((client) => client.query(
+        "UPDATE institution.course_member SET member_to = now() WHERE course_id = $1 AND member_to IS NULL", [seeded.course]));
+    }
+  }
+});
+
+test("/rad redirects for a stale acknowledgment, then shows only the acknowledged v2 limits", async ({ page }) => {
+  await signIn(page, PATH, "Demo studentica");
+  const seeded = await seedAssignment({ acknowledged: true, wordMin: 1000, wordMax: 3000 });
+  try {
+    const { rows: [me] } = await admin((client) => client.query<{ id: string; institution_id: string }>(
+      "SELECT id, institution_id FROM identity.user_account WHERE hr_edu_person_unique_id = $1", [STUDENT]));
+    if (!me) throw new Error("the demo student must have signed in");
+    await admin(async (client) => {
+      await client.query("BEGIN");
+      await client.query(
+        `INSERT INTO institution.assignment_version (assignment_id, version_no, title, instructions, work_type,
+           opens_at, due_at, ai_policy, ai_purposes, evidence_profile, import_allowed, created_by, word_min, word_max)
+         VALUES ($1, 2, 'Izmišljeni zadatak v2', 'Upute v2.', 'essay', now(), now() + interval '30 days',
+           'prohibited', '{}', 'basic', false, $2, 2000, 2500)`, [seeded.assignment, me.id]);
+      await client.query("UPDATE institution.assignment SET current_version = 2 WHERE id = $1", [seeded.assignment]);
+      await client.query("COMMIT");
+    });
+    await page.goto(`/rad?zadatak=${seeded.assignment}`);
+    await page.waitForURL(`**/zadatak/${seeded.assignment}`);
+    await expect(page.locator(".workspace__status .status-length")).toHaveCount(0);
+    await admin((client) => client.query(
+      `INSERT INTO institution.notice_acknowledgment (assignment_id, version_no, student_id, institution_id)
+       VALUES ($1, 2, $2, $3)`, [seeded.assignment, me.id, me.institution_id]));
+    await page.goto(`/rad?zadatak=${seeded.assignment}`);
+    await expect(page.locator(".workspace__status .status-length")).toHaveText(/^0 \/ 2\s000–2\s500 riječi$/u);
   } finally {
     await admin((client) => client.query(
       "UPDATE institution.course_member SET member_to = now() WHERE course_id = $1 AND member_to IS NULL", [seeded.course]));

@@ -7,8 +7,8 @@ import { messagesHr as t } from "./messages.hr";
  * the arithmetic are tested without a DOM.
  */
 
-/** The assignment's word range, both ends inclusive. */
-export type WordRange = { readonly min: number; readonly max: number };
+/** The assignment's inclusive word limits; either end may be absent. */
+export type WordRange = { readonly min: number | null; readonly max: number | null };
 
 /** Words per page of the prototype (`Math.round(words / 300)`). */
 const WORDS_PER_PAGE = 300;
@@ -40,9 +40,13 @@ export type LengthLine = {
 };
 
 export function lengthLine(words: number, selectedWords: number, range: WordRange | null): LengthLine {
-  const noun = range
+  const noun = range?.min != null && range.max != null
     ? ` / ${groupHr(range.min)}–${groupHr(range.max)} ${pluralHr(range.max, "riječ", "riječi", "riječi")}`
-    : ` ${pluralHr(words, "riječ", "riječi", "riječi")}`;
+    : range?.min != null
+      ? ` / ${t.workspace.wordMinimum.replace("{words}", groupHr(range.min))} ${pluralHr(range.min, "riječ", "riječi", "riječi")}`
+      : range?.max != null
+        ? ` / ${t.workspace.wordMaximum.replace("{words}", groupHr(range.max))} ${pluralHr(range.max, "riječ", "riječi", "riječi")}`
+        : ` ${pluralHr(words, "riječ", "riječi", "riječi")}`;
   const pages = pagesOf(words);
   return {
     selected: selectedWords > 0 ? t.workspace.selectedWords.replace("{words}", wordsHr(selectedWords)) : null,

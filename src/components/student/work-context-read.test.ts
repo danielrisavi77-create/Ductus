@@ -23,6 +23,8 @@ const notice = {
   due_at: new Date("2026-11-30T22:59:00Z"),
   ai_policy: "prohibited",
   ai_purposes: [],
+  word_min: null,
+  word_max: null,
   acknowledged_at: new Date("2026-11-03T09:00:00Z"),
 };
 const NONE = { kind: "none" };
@@ -64,6 +66,7 @@ describe("/rad work context read", () => {
     expect(read.kind).toBe("ready");
     if (read.kind !== "ready") return;
     expect(read.course).toBe("Izmišljeni kolegij");
+    expect(read.wordRange).toBeNull();
     expect(read.notice).toMatchObject({ assignmentId: ID, versionNo: 1, title: notice.title });
     expect(withActor).toHaveBeenCalledExactlyOnceWith(TOKEN, expect.any(Function));
     expect(query).toHaveBeenCalledTimes(1);
@@ -86,7 +89,7 @@ describe("/rad work context read", () => {
       expect(expected.kind).toBe("available");
       if (expected.kind !== "available") throw new Error("invalid invented notice");
       expect(await readWorkContext(TOKEN, ID, actor([row]).withActor)).toEqual({
-        kind: "ready", course: row.course_name, notice: expected.view,
+        kind: "ready", course: row.course_name, notice: expected.view, wordRange: null,
       });
     }
   });
@@ -101,6 +104,8 @@ describe("/rad work context read", () => {
       const course = `Izmišljeni kolegij v${version}`;
       const versionRow = {
         ...notice, version_no: version, title: `Izmišljeni zadatak v${version}`,
+        word_min: version === 1 ? 100 : 200,
+        word_max: version === 1 ? 150 : 250,
         acknowledged_at: version === 1 ? notice.acknowledged_at : null,
       };
       const readsNotice = sql.includes("institution.assignment_version");
@@ -117,6 +122,7 @@ describe("/rad work context read", () => {
 
     expect(await readWorkContext(TOKEN, ID, withActor)).toMatchObject({
       kind: "ready", course: "Izmišljeni kolegij v1",
+      wordRange: { min: 100, max: 150 },
       notice: { versionNo: 1, title: "Izmišljeni zadatak v1" },
     });
     expect(currentVersion).toBe(2);
@@ -127,17 +133,43 @@ describe("/rad work context read", () => {
     expect(query).toHaveBeenCalledTimes(2);
   });
 
+  it("returns only the acknowledged current v2 limits from the same SQL statement", async () => {
+    const row = { ...notice, version_no: 2, title: "Izmišljeni zadatak v2", word_min: 2000, word_max: 2500 };
+    const { withActor, query } = actor([row]);
+    expect(await readWorkContext(TOKEN, ID, withActor)).toMatchObject({
+      kind: "ready", wordRange: { min: 2000, max: 2500 },
+      notice: { versionNo: 2, title: row.title },
+    });
+    expect(query).toHaveBeenCalledTimes(1);
+    const sql = (query.mock.calls as unknown as [string][])[0]![0];
+    expect(sql).toContain("v.word_min, v.word_max");
+    expect(sql).toContain("v.version_no = a.current_version");
+    expect(sql).toContain("n.version_no = a.current_version");
+  });
+
+  it.each([
+    [null, null, null],
+    [1, null, { min: 1, max: null }],
+    [null, 1000000, { min: null, max: 1000000 }],
+    [1000000, 1000000, { min: 1000000, max: 1000000 }],
+  ])("preserves legal limits %s/%s from the current version", async (min, max, expected) => {
+    const read = await readWorkContext(TOKEN, ID, actor([{ ...notice, word_min: min, word_max: max }]).withActor);
+    expect(read.kind).toBe("ready");
+    if (read.kind === "ready") expect(read.wordRange).toEqual(expected);
+  });
+
   it("shows nothing without access, after the session ended, or when a read fails", async () => {
+    const ranged = { ...notice, word_min: 2000, word_max: 2500 };
     // RLS hides the assignment: the notice read finds no role.
-    expect(await readWorkContext(TOKEN, ID, actor([{ ...notice, role: null }]).withActor)).toEqual(NONE);
+    expect(await readWorkContext(TOKEN, ID, actor([{ ...ranged, role: null }]).withActor)).toEqual(NONE);
     // A teacher of the course is not the student this page is for.
-    expect(await readWorkContext(TOKEN, ID, actor([{ ...notice, role: "teacher" }]).withActor)).toEqual(NONE);
-    expect(await readWorkContext(TOKEN, ID, actor([{ ...notice, role: "admin" }]).withActor)).toEqual(NONE);
+    expect(await readWorkContext(TOKEN, ID, actor([{ ...ranged, role: "teacher" }]).withActor)).toEqual(NONE);
+    expect(await readWorkContext(TOKEN, ID, actor([{ ...ranged, role: "admin" }]).withActor)).toEqual(NONE);
     // The session closed: no current user.
-    expect(await readWorkContext(TOKEN, ID, actor([{ ...notice, user_id: null }]).withActor)).toEqual(NONE);
+    expect(await readWorkContext(TOKEN, ID, actor([{ ...ranged, user_id: null }]).withActor)).toEqual(NONE);
     // The course row is hidden by RLS.
-    expect(await readWorkContext(TOKEN, ID, actor([{ ...notice, course_name: null }]).withActor)).toEqual(NONE);
-    expect(await readWorkContext(TOKEN, ID, actor([{ ...notice, version_no: null, acknowledged_at: null }]).withActor)).toEqual(NONE);
+    expect(await readWorkContext(TOKEN, ID, actor([{ ...ranged, course_name: null }]).withActor)).toEqual(NONE);
+    expect(await readWorkContext(TOKEN, ID, actor([{ ...ranged, version_no: null, acknowledged_at: null }]).withActor)).toEqual(NONE);
     expect(await readWorkContext(TOKEN, ID, actor([]).withActor)).toEqual(NONE);
     // The single query or its enclosing transaction fails.
     expect(await readWorkContext(TOKEN, ID, actor().withActor)).toEqual(NONE);
@@ -148,7 +180,7 @@ describe("/rad work context read", () => {
   // PRODUCT §5 rule 6 (review 6289920934, Codex 4322145605): the notice is the
   // first screen of every assignment, also of a new version of it.
   it("sends a student who has not acknowledged the current version to the notice in one read", async () => {
-    const { withActor, query } = actor([{ ...notice, acknowledged_at: null }]);
+    const { withActor, query } = actor([{ ...notice, word_min: 2000, word_max: 2500, acknowledged_at: null }]);
     expect(await readWorkContext(TOKEN, ID, withActor)).toEqual({ kind: "noticeFirst" });
     expect(query).toHaveBeenCalledTimes(1);
   });
