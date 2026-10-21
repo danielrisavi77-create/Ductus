@@ -17,7 +17,7 @@
 
 /** The product name on screen (D-124): one value, read through `app.name`. */
 const APP_NAME = "Ductura";
-const STUDENT_NOTICE_STEP = "Obavijest prije prve rečenice · korak 2 od 2";
+const NOTICE_STEP_COUNT = "1 od 2";
 
 export const hr = {
   app: {
@@ -274,7 +274,7 @@ export const hr = {
     },
     preview: {
       heading: "Kako vidi student: obavijest prije prve rečenice",
-      step: STUDENT_NOTICE_STEP,
+      step: `Korak ${NOTICE_STEP_COUNT}`,
       untitled: "Naslov zadatka",
       opensFrom: "otvoreno od",
       due: "rok",
@@ -557,7 +557,7 @@ export const hr = {
     loading: "Učitavanje zadatka…",
     notOpen: "Zadatak se otvara {time}. Obavijest potvrđuješ kad se zadatak otvori.",
     pastDue: "Rok zadatka je prošao {time}.",
-    step: STUDENT_NOTICE_STEP,
+    step: `Obavijest prije prve rečenice · korak ${NOTICE_STEP_COUNT}`,
     opensFrom: "otvoreno od",
     due: "rok",
     toolsHeading: "Uporaba alata u ovom zadatku (FPZG čl. 8)",
