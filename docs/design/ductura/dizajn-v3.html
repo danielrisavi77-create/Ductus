@@ -38,9 +38,12 @@ svg{width:20px;height:20px;flex-shrink:0;stroke:currentColor;stroke-width:1.6;st
 .mono{font-family:ui-monospace,Consolas,monospace;font-size:12px}
 .eyebrow{font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
 .flex{display:flex;align-items:center;gap:12px}
+.between{justify-content:space-between}
 .wrap{flex-wrap:wrap}
 .stack{display:flex;flex-direction:column;gap:18px}
 .grow{flex:1;min-width:0}
+.mt{margin-top:24px}
+.mt-sm{margin-top:12px}
 .no-wrap{white-space:nowrap}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:44px;padding:10px 18px;border-radius:8px;border:1px solid var(--line);font-size:13px;font-weight:600;transition:background .18s,border-color .18s,transform .18s;background:var(--surface)}
 .btn:hover{background:var(--surface3);border-color:var(--faint)}
@@ -81,6 +84,67 @@ input::placeholder,textarea::placeholder{color:var(--faint)}
 .notice{display:flex;gap:11px;padding:15px 18px;border:1px solid var(--line);border-radius:9px;color:var(--muted);background:var(--surface2);font-size:12px}
 .notice svg{color:var(--accent);margin-top:1px}
 .notice p+ p{margin-top:5px}
+/* Public website */
+.site-header{height:92px;display:flex;align-items:center;justify-content:space-between;gap:24px;max-width:1300px;padding:0 44px;margin:auto;border-bottom:1px solid var(--line2)}
+.site-nav{display:flex;gap:28px;font-size:13px;color:var(--muted)}
+.site-nav a{padding:12px 0}
+.site-nav a:hover{color:var(--accent)}
+.site-main{max-width:1300px;margin:auto;padding:0 44px}
+.hero{display:grid;grid-template-columns:1.03fr 1fr;align-items:center;gap:65px;padding:91px 0 65px;min-height:647px}
+.hero h1{font-size:clamp(48px,5.2vw,72px);line-height:1.05;max-width:650px;letter-spacing:-.055em;margin:25px 0 23px}
+.hero h1 em{font-weight:400;color:var(--accent)}
+.hero p{font-size:16px;line-height:1.8;color:var(--muted);max-width:430px}
+.hero-actions{margin-top:29px;gap:12px}
+.hero-note{font-size:11px;letter-spacing:.04em;color:var(--faint);margin-top:22px;display:flex;align-items:center;gap:9px}
+.overline-dot{display:inline-flex;gap:9px;align-items:center;border:1px solid var(--line);border-radius:100px;padding:7px 12px;color:var(--accent);font-size:10px;letter-spacing:.11em;text-transform:uppercase}
+.hero-visual{position:relative;padding:22px 0 36px;isolation:isolate}
+.hero-visual:before{content:'';position:absolute;width:450px;height:450px;border:1px solid var(--line);border-radius:50%;left:40px;top:-10px;z-index:-1;opacity:.55}
+.hero-visual:after{content:'';position:absolute;width:385px;height:385px;border:1px solid var(--line);border-radius:50%;left:73px;top:23px;z-index:-1;opacity:.5}
+.mini-app{background:var(--surface);border:1px solid #385347;border-radius:12px;box-shadow:var(--shadow);transform:rotate(-1deg);position:relative;width:100%;overflow:hidden}
+.mini-top{padding:13px 17px;border-bottom:1px solid var(--line);font-size:11px;display:flex;justify-content:space-between;align-items:center}
+.mini-logo{font-family:var(--serif);font-size:19px;color:var(--ink);letter-spacing:-.8px}
+.mini-body{display:grid;grid-template-columns:103px 1fr;min-height:312px}
+.mini-side{border-right:1px solid var(--line2);padding:19px 10px;color:var(--faint);font-size:9px}
+.mini-side div{padding:9px 7px;margin:5px 0;border-radius:4px}
+.mini-side div.active{color:var(--accent);background:var(--accentbg)}
+.mini-paper{padding:25px 25px 32px}
+.mini-paper .eyebrow{font-size:8px}
+.mini-paper h3{font-family:var(--serif);font-size:22px;margin:10px 0 20px;line-height:1.25;font-weight:400;letter-spacing:-.03em}
+.mini-paper h4{font-family:var(--serif);margin:0 0 8px;font-size:15px;font-weight:400}
+.mini-lines{display:flex;flex-direction:column;gap:8px}
+.mini-lines i{height:5px;background:var(--line);display:block;border-radius:3px}
+.mini-lines i:nth-child(3){width:85%;background:var(--accent2)}
+.mini-lines i:nth-child(5){width:70%}
+.mini-comment{border:1px solid var(--line);padding:13px;margin-top:20px;border-radius:6px;font-size:10px;color:var(--muted);background:var(--surface2)}
+.mini-comment strong{display:block;color:var(--accent);font-size:10px;margin-bottom:6px}
+.floating-note{position:absolute;right:-16px;bottom:10px;border:1px solid #406351;background:var(--surface2);padding:13px 18px;box-shadow:var(--shadow);border-radius:9px;display:flex;gap:11px;align-items:center;font-size:12px;transform:rotate(2deg)}
+.floating-note svg{color:var(--accent);width:27px;height:27px}
+.floating-note small{display:block;color:var(--muted);font-size:10px}
+.strip{display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:23px 0;gap:20px;font-size:12px;color:var(--muted)}
+.strip .institution{font-size:17px;font-family:var(--serif);color:var(--ink)}
+.strip .institution small{font:10px var(--sans);color:var(--faint);display:block;letter-spacing:.13em;margin-top:4px}
+.strip-item{display:flex;gap:10px;align-items:center}
+.strip-item svg{color:var(--accent)}
+.public-section{padding:75px 0}
+.public-title{display:flex;justify-content:space-between;align-items:flex-end;gap:40px;margin-bottom:35px}
+.public-title h2{font-size:40px;margin-top:12px;max-width:470px}
+.public-title p{max-width:355px;color:var(--muted);font-size:14px}
+.role-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.role-block{padding:32px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.role-block h3{font-family:var(--serif);font-size:30px;font-weight:400;margin:20px 0 12px}
+.role-block p{max-width:390px;color:var(--muted);font-size:14px;margin-bottom:20px}
+.role-top{display:flex;justify-content:space-between;align-items:center;color:var(--accent)}
+.role-top .eyebrow{color:var(--accent)}
+.role-preview{border-top:1px solid var(--line2);margin-top:24px;padding-top:15px}
+.role-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;color:var(--muted);font-size:12px}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:35px}
+.step-no{font:italic 38px var(--serif);color:var(--accent2);margin-bottom:20px}
+.step-item h3{font-size:16px;margin-bottom:12px}
+.step-item p{font-size:13px;color:var(--muted)}
+.closing{border-top:1px solid var(--line);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:35px 0;gap:30px}
+.closing h2{font-size:30px;max-width:630px;line-height:1.35}
+.site-footer{max-width:1300px;padding:26px 44px 40px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:25px;color:var(--faint);font-size:11px}
+.site-footer a{color:var(--muted)}
 /* Application shell */
 .sidebar{width:236px;position:fixed;inset:0 auto 0 0;background:var(--surface);border-right:1px solid var(--line);padding:25px 17px 16px;display:flex;flex-direction:column;z-index:40}
 .sidebar .brand{padding:0 12px;margin-bottom:28px}
@@ -243,11 +307,18 @@ dialog::backdrop{background:#03100bd9;backdrop-filter:blur(5px)}
 .stat{padding:19px}
 .hero-card{grid-template-columns:1fr 205px;gap:20px;padding:25px}
 .hero-card-side{padding-left:20px}
+.hero{gap:35px}
+.site-header,.site-main{padding-left:35px;padding-right:35px}
+.site-nav{gap:20px}
 .teacher-filters{grid-template-columns:1.5fr 1.4fr 1fr}
 .teacher-filters #teacher-status{grid-column:auto}
 .teacher-filters .search{grid-column:1/-1}
 }
 @media(max-width:1050px){.hero h1{font-size:53px}
+.hero{padding-top:65px;gap:28px}
+.hero-visual:before,.hero-visual:after{display:none}
+.site-nav{gap:18px}
+.site-nav a:nth-child(3){display:none}
 .hero-card{grid-template-columns:1fr}
 .hero-card-side{border-left:0;border-top:1px solid var(--line);padding-left:0;padding-top:20px;flex-direction:row;justify-content:space-between;gap:15px}
 .mini-metric:last-child{display:none}
@@ -259,10 +330,35 @@ dialog::backdrop{background:#03100bd9;backdrop-filter:blur(5px)}
 .stat-top{font-size:10px}
 .stat-top svg{display:none}
 .stat-number{font-size:31px}
+.steps{gap:22px}
 .teacher-callout .btn{max-width:155px}
 }
 @media(max-width:800px){.site-header{height:76px;padding:0 23px}
+.site-nav{display:none}
+.site-main{padding:0 23px}
 .brand{font-size:27px}
+.site-header .btn{min-height:38px;padding:8px 12px;font-size:11px}
+.hero{grid-template-columns:1fr;padding:55px 0 42px;gap:27px;min-height:0}
+.hero h1{font-size:58px;max-width:580px}
+.hero p{max-width:480px;font-size:15px}
+.hero-visual{max-width:540px;width:100%;margin:0 auto}
+.mini-app{transform:none}
+.floating-note{right:-5px}
+.strip{flex-wrap:wrap;gap:18px;padding:20px 0}
+.strip .institution{width:100%;font-size:16px}
+.strip-item{font-size:11px}
+.strip-item:last-child{display:none}
+.public-section{padding:48px 0}
+.public-title{display:block}
+.public-title h2{font-size:35px;margin-bottom:17px}
+.public-title p{font-size:13px}
+.role-grid{grid-template-columns:1fr}
+.steps{grid-template-columns:1fr 1fr;gap:32px}
+.role-block{padding:25px}
+.closing{display:block}
+.closing .btn{margin-top:22px}
+.closing h2{font-size:28px}
+.site-footer{padding:24px;align-items:flex-start;flex-wrap:wrap;font-size:10px}
 .sidebar{transform:translateX(-100%);transition:transform .2s;width:248px}
 .sidebar.open{transform:translateX(0)}
 .menu-shade.open{display:block;position:fixed;inset:0;background:#0008;z-index:35}
@@ -300,6 +396,22 @@ dialog::backdrop{background:#03100bd9;backdrop-filter:blur(5px)}
 .teacher-callout h3{font-size:14px}
 }
 @media(max-width:560px){body{font-size:14px}
+.hero h1{font-size:47px;line-height:1.09}
+.hero-actions{gap:10px}
+.hero-actions .btn{font-size:11px;padding:10px 12px}
+.hero .eyebrow{font-size:9px}
+.overline-dot{font-size:9px}
+.mini-paper{padding:20px 18px}
+.mini-paper h3{font-size:20px}
+.mini-side{font-size:9px}
+.mini-body{grid-template-columns:84px 1fr;min-height:295px}
+.floating-note{font-size:10px;padding:11px 14px}
+.hero-note{font-size:10px}
+.hero-visual{margin-top:8px}
+.steps{gap:26px 23px}
+.step-item h3{font-size:15px}
+.step-item p{font-size:12px}
+.site-footer{gap:14px}
 .sidebar-note{font-size:11px}
 .nav-item{font-size:14px}
 .page-heading{align-items:flex-start;gap:14px}
@@ -385,6 +497,7 @@ body{background:white;color:black}
 .comment-item strong{font-size:11px}
 .comment-item small{font-size:10px}
 .outline-link{font-size:12px}
+.site-footer button{font-size:11px}
 @media(max-width:560px){.work-meta,.work-side small{font-size:12px}
 .comment-item p{font-size:13px}
 .comment-item strong{font-size:12px}
@@ -404,11 +517,113 @@ body{background:white;color:black}
 @media(max-width:560px){.inline-comment-button{min-height:36px!important;font-size:12px!important}
 .comment-item time{font-size:11px}
 .comment-role{font-size:11px}}
+/* Showcase additions inherit the existing academic dark / mint design system. */
+.hero-actions{flex-wrap:wrap}
+.hero-actions .showcase-primary{min-height:46px}
 .sx-reply{padding:0 0 18px;border-bottom:1px solid var(--line);margin:18px 0}
 .sx-reply strong{display:block;font-size:13px}
 .sx-reply small{display:block;color:var(--faint);font-size:11px;margin-top:6px}
 .sx-reply p{margin:14px 0!important;white-space:pre-wrap;overflow-wrap:anywhere}
 .sx-reply .chip{white-space:normal}
+/* Academic page preview */
+.sx-document-layout{display:grid;grid-template-columns:238px minmax(0,1fr);gap:24px;align-items:start}
+.sx-format-panel{position:sticky;top:20px}
+.sx-format-panel .panel-head{padding:18px}
+.sx-format-panel .panel-body{padding:18px}
+.sx-format-panel h3{font:600 12px var(--sans)}
+.sx-profile-fact{display:flex;justify-content:space-between;gap:12px;font-size:11px;padding:8px 0}
+.sx-profile-fact>span{color:var(--faint)}
+.sx-profile-fact strong{text-align:right;font-weight:500}
+.sx-format-choice{width:100%}
+.sx-format-choice button{padding:7px 8px;font-size:11px;flex:1}
+.sx-finding{display:block;width:100%;text-align:left;padding:13px 0;border-bottom:1px solid var(--line)}
+.sx-finding strong{font-size:11px;display:block}
+.sx-finding span{display:block;font-size:11px;color:var(--muted);line-height:1.75;margin-top:7px}
+.sx-finding:hover strong{color:var(--accent)}
+.sx-document-scroll{min-width:0;display:flex;flex-direction:column;gap:23px}
+.sx-paper{background:#fefefd;color:#27322e;border:1px solid #e2e6df;border-radius:2px;box-shadow:0 9px 35px #0002;padding:42px 44px;margin:0 auto;width:100%;max-width:800px;min-height:680px;font:15px/1.75 Georgia,'Times New Roman',serif;overflow-wrap:anywhere}
+.sx-paper-header{font:9px/1.6 var(--sans);text-transform:uppercase;letter-spacing:.06em;color:#748378;border-bottom:1px solid #e0e5df;display:flex;gap:15px;justify-content:space-between;padding-bottom:14px;margin-bottom:33px}
+.sx-paper-footer{font:9px/1.5 var(--sans);color:#748378;border-top:1px solid #e0e5df;padding-top:12px;margin-top:35px}
+.sx-paper h1{font-family:Georgia,serif;font-size:34px;line-height:1.35;color:#21382d;margin:30px 0;letter-spacing:-.025em}
+.sx-paper h2{font-family:Georgia,serif;font-size:22px;margin:26px 0 13px;color:#21382d;line-height:1.4;break-after:avoid}
+.sx-paper h3{font:600 13px var(--sans);color:#536359}
+.sx-paper p{margin:0 0 13px;line-height:1.75}
+.sx-cover{display:flex;flex-direction:column;min-height:820px;text-align:center}
+.sx-cover .sx-paper-header{text-align:left}
+.sx-cover-institution{font:12px/1.8 var(--sans);letter-spacing:.025em;padding-top:6px}
+.sx-cover-main{margin:90px 0 75px}
+.sx-cover-main p{font-size:15px}
+.sx-cover-type{font-style:italic}
+.sx-cover-rule{height:1px;width:45px;margin:27px auto;background:#47846a}
+.sx-cover-bottom{margin-top:auto;font-size:13px}
+.sx-cover-bottom small{font:10px/1.8 var(--sans);display:inline-block;margin-top:22px;color:#748378}
+.sx-cover .sx-paper-footer{margin-top:23px}
+.sx-toc-page{min-height:550px}
+.sx-toc{margin-top:30px}
+.sx-toc a{display:grid;grid-template-columns:30px 1fr 20px;gap:12px;align-items:center;border-bottom:1px solid #e0e5df;padding:15px 0;font-size:15px;line-height:1.4;color:#344d3e}
+.sx-toc a>span{color:#819486;font:10px var(--sans)}
+.sx-toc svg{width:15px}
+.sx-paper .sx-print-note{font:10px/1.8 var(--sans);color:#7a887d;margin-top:28px}
+.sx-footnotes{border-top:1px solid #bdcabf;padding-top:15px;margin-top:32px}
+.sx-footnotes p{font-size:10px;line-height:1.75;margin-top:12px}
+.sx-footnote-ref{font:10px var(--sans);color:#296846}
+.sx-footnote-ref a{color:inherit;padding:0 2px}
+.sx-bibliography{font-size:13px;padding:10px 0 18px;line-height:1.8}
+.sx-bibliography small{font:10px/1.7 var(--sans);color:#617368;word-break:break-word}
+.sx-bibliography .text-btn{color:#2f7052;font-size:11px}
+.sx-bib-paper{min-height:500px}
+.sx-draft-style .sx-paper{min-height:0;padding:25px;box-shadow:none}
+.sx-draft-style .sx-cover,.sx-draft-style .sx-toc-page{display:none}
+.sx-draft-style .sx-body-paper p{font:14px/1.9 var(--sans)}
+/* Presentation is a separate synthetic work; small dock never overlays the document. */
+.sx-touring{padding-bottom:200px}
+.sx-tour-dock{position:fixed;z-index:60;bottom:18px;left:max(20px,calc((100vw - 1160px)/2));right:max(20px,calc((100vw - 1160px)/2));border:1px solid var(--accent2);border-radius:13px;background:var(--surface);box-shadow:0 10px 55px #0006;display:grid;grid-template-columns:1fr 320px;gap:13px 25px;padding:18px 24px}
+.sx-tour-progress{display:flex;gap:8px;grid-column:1/-1}
+.sx-tour-progress button{width:26px;height:26px;border-radius:50%;border:1px solid var(--line);color:var(--faint);font:10px var(--sans);padding:0;display:grid;place-items:center}
+.sx-tour-progress button.active{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.sx-tour-progress button.visited{background:var(--accentbg);color:var(--accent);border-color:var(--accent2)}
+.sx-tour-copy strong{display:block;font:23px/1.25 var(--serif);margin:6px 0}
+.sx-tour-copy .eyebrow{font-size:9px}
+.sx-tour-copy p{font-size:12px;line-height:1.65;color:var(--muted);max-width:670px}
+.sx-tour-controls{display:flex;flex-direction:column;justify-content:center;gap:9px}
+.sx-tour-controls>.btn{min-height:38px}
+.sx-tour-controls>.flex{gap:8px}
+.sx-tour-controls>.flex .btn{font-size:11px;min-height:30px;padding:5px 10px}
+.sx-tour-controls>.flex .btn:last-child{margin-left:auto}
+@media(max-width:1250px){.sx-document-layout{grid-template-columns:210px minmax(0,1fr);gap:18px}
+.sx-paper{padding:32px}}
+@media(max-width:1000px){.sx-document-layout{grid-template-columns:1fr}
+.sx-format-panel{position:static}
+.sx-format-panel .panel-body{display:grid;grid-template-columns:1fr 1fr;gap:8px 18px}
+.sx-format-panel .divider{display:none}
+.sx-format-panel h3{margin:12px 0}
+.sx-tour-dock{grid-template-columns:1fr 285px}
+.sx-tour-copy strong{font-size:20px}}
+@media(max-width:700px){.sx-tour-dock{left:12px;right:12px;bottom:12px;grid-template-columns:1fr;padding:15px;gap:8px}
+.sx-tour-copy p{display:none}
+.sx-tour-progress{gap:6px;justify-content:space-between}
+.sx-tour-copy strong{font-size:20px}
+.sx-tour-copy .eyebrow{font-size:9px}
+.sx-tour-controls{display:grid;grid-template-columns:1fr auto;gap:8px}
+.sx-tour-controls>.flex .btn{font-size:10px;padding:5px 7px}
+.sx-tour-controls>.flex .btn:first-child{display:none}
+.sx-tour-controls>.btn{font-size:11px;line-height:1.4;padding:7px 10px;min-height:40px}
+.sx-touring{padding-bottom:205px}}
+@media(max-width:560px){.sx-paper{padding:26px 21px;min-height:0;font-size:14px}
+.sx-paper h1{font-size:28px}
+.sx-paper h2{font-size:22px}
+.sx-paper-header{font-size:8px;gap:10px}
+.sx-cover{min-height:615px}
+.sx-cover-main{margin:50px 0}
+.sx-cover-institution{font-size:10px}
+.sx-cover-bottom small{font-size:9px}
+.sx-format-panel .panel-body{display:block}
+.sx-format-panel .divider{display:block;margin:13px 0}
+.sx-format-panel .btn{margin-top:12px}
+.sx-format-panel .small{font-size:12px}
+.sx-profile-fact{font-size:12px}
+.sx-toc a{font-size:13px;grid-template-columns:22px 1fr 14px}
+.sx-tour-progress button{width:23px;height:23px}}
 #sx-print-root{display:none}
 @media print{html{color-scheme:light!important;background:white!important}
 @page{size:A4;margin:15mm;background:white}}
@@ -514,6 +729,13 @@ textarea.form-input{min-height:90px;resize:vertical;line-height:1.55}
 .toast svg{width:17px}
 /* Odluka vlasnika 21. 10. 2026.: fontovi iz repoa (app/fonts) umjesto Georgia/Inter */
 :root{--serif:Newsreader,Georgia,'Times New Roman',serif;--sans:"Instrument Sans",Inter,'Segoe UI',Arial,sans-serif}
+/* Ispis: na papir ide samo dokument (A4) */
+@media print{body{padding:0!important;background:#fff!important}body *{visibility:hidden!important}#sx-paper-pages,#sx-paper-pages *{visibility:visible!important}#sx-paper-pages{position:absolute;left:0;top:0;width:100%;padding:0!important;overflow:visible!important}.sx-paper{break-after:page;box-shadow:none!important;margin:0 auto!important;border:0!important}#proto,.sx-tour-dock{display:none!important}}
+.site-header .brand{font-size:29px}
+.sx-touring .app-content{padding-bottom:220px}
+.sx-tour-dock{bottom:72px!important}
+:root[data-theme=light]{--faint:#5e7366}
+.sx-paper,.sx-paper h1,.sx-paper h2{font-family:var(--serif)}
 
 </style>
 </head>
@@ -557,11 +779,12 @@ const NOTIF=[
  {i:"calendar",t:"Rok za 7 dana",d:"Čitanje naglas i jezični razvoj · 31. 10. u 23:59",w:"24. 10.",n:0}];
 
 /* ---------- stanje ---------- */
-const S={role:"student",scr:"s-pregled",v:{},stud:0,view:"text",tab:"kom",bell:false,menu:false,dlg:null,theme:"dark",step:1};
+const S={tour:null,role:"student",scr:"javno",v:{},stud:0,view:"text",tab:"kom",bell:false,menu:false,dlg:null,theme:"dark",step:1};
 const SCR={
- student:[["s-pregled","Pregled","grid"],["s-radovi","Moji radovi","file"],["s-obavijesti","Obavijesti","bell"],["s-upis","Upis kodom","plus"],["s-obavijest","Obavijest zadatka","shield"],["s-editor","Pisanje","pen"],["s-predaja","Predaja","check"]],
+ public:[["javno","Javna početna","grid"]],
+ student:[["s-pregled","Pregled","grid"],["s-radovi","Moji radovi","file"],["s-obavijesti","Obavijesti","bell"],["s-upis","Upis kodom","plus"],["s-obavijest","Obavijest zadatka","shield"],["s-editor","Pisanje","pen"],["s-predaja","Predaja","check"],["s-dokument","Ispis","download"]],
  teacher:[["t-pregled","Pregled","grid"],["t-kolegiji","Moji kolegiji","book"],["t-novi","Novi zadatak","plus"],["t-radovi","Radovi zadatka","users"],["t-rad","Rad uživo","eye"]]};
-const VAR={"s-pregled":["sadržaj","prvi ulazak"],"s-radovi":["popis","prazno"],"s-obavijesti":["postavke"],"s-upis":["unos","odbijeno","previše pokušaja","upisana"],"s-obavijest":["prije potvrde","potvrđeno"],"s-editor":["na poslužitelju","na uređaju","bez mreže","druga kartica"],"s-predaja":["spremno","nije na poslužitelju","blokirano","predano"],
+const VAR={"javno":["stranica"],"s-dokument":["akademski","radni izgled"],"s-pregled":["sadržaj","prvi ulazak"],"s-radovi":["popis","prazno"],"s-obavijesti":["postavke"],"s-upis":["unos","odbijeno","previše pokušaja","upisana"],"s-obavijest":["prije potvrde","potvrđeno"],"s-editor":["na poslužitelju","na uređaju","bez mreže","druga kartica"],"s-predaja":["spremno","nije na poslužitelju","blokirano","predano"],
  "t-pregled":["sadržaj","bez kolegija"],"t-kolegiji":["popis","učitavanje","greška"],"t-novi":["1 Kolegij","2 Zadatak","3 Alati","4 Objavljeno"],"t-radovi":["popis","nema studenata"],"t-rad":["veza radi","prekid veze","nema teksta"]};
 const vv=()=>S.v[S.scr]??0;
 function go(scr){S.scr=scr;S.role=scr[0]==="t"?"teacher":"student";S.bell=false;S.menu=false;render();scrollTo(0,0)}
@@ -573,7 +796,7 @@ function shell(crumb,main){
  const st=S.role==="student";
  const nav=st?[["s-pregled","Pregled","grid"],["s-radovi","Moji radovi","file",3],["s-upis","Upis u kolegij","plus"],["s-obavijesti","Obavijesti","bell",2]]
             :[["t-pregled","Pregled","grid"],["t-kolegiji","Moji kolegiji","book",3],["t-radovi","Radovi zadatka","users"],["t-novi","Novi kolegij i zadatak","plus"]];
- const cur=S.scr==="s-editor"||S.scr==="s-obavijest"||S.scr==="s-predaja"?"s-radovi":S.scr==="t-rad"?"t-radovi":S.scr;
+ const cur=S.scr==="s-editor"||S.scr==="s-obavijest"||S.scr==="s-predaja"||S.scr==="s-dokument"?"s-radovi":S.scr==="t-rad"?"t-radovi":S.scr;
  return `<div class="menu-shade ${S.menu?"open":""}" onclick="S.menu=false;render()"></div>
  <aside class="sidebar ${S.menu?"open":""}" aria-label="Bočna navigacija">
   <a class="brand" href="#" onclick="go('${st?"s-pregled":"t-pregled"}');return false" aria-label="Ductura, početna">${LOGO}</a>
@@ -581,6 +804,7 @@ function shell(crumb,main){
   <div class="nav-label">${st?"Studentski prostor":"Nastavnički prostor"}</div>
   <nav aria-label="Radni prostor">${nav.map(([k,l,i,n])=>`<button class="nav-item ${cur===k?"active":""}" onclick="go('${k}')" ${cur===k?'aria-current="page"':""}>${icon(i)}<span>${l}</span>${n?`<span class="nav-count">${n}</span>`:""}</button>`).join("")}</nav>
   <div class="sidebar-bottom">
+   <button class="nav-item" onclick="tourStart()">${icon("layers")}Prezentacijski vodič</button>
    <div class="sidebar-note"><strong>${icon("leaf")} &nbsp;Demo · izmišljeni podaci.</strong>Nijedan stvarni osobni podatak.</div>
    <button class="user-button" onclick="S.dlg='odjava';render()" aria-label="Račun i odjava"><span class="avatar ${st?"":"gold"}">${st?"AB":"NA"}</span><span><strong>${st?"Ana Babić":"Nastavnik A"}</strong><small>${st?"Studentica · 3. godina":"Nastavnik i mentor"}</small></span>${icon("logout")}</button>
   </div></aside>
@@ -660,7 +884,7 @@ function sEditor(){
  const v=vv();
  const save=[["Spremljeno na poslužitelju","green","check"],["Spremljeno na uređaju","","save"],["Bez mreže · spremljeno na uređaju","amber","info"],["Samo čitanje · rad je otvoren u drugoj kartici","blue","eye"]][v];
  return shell(crumb("Moji radovi","Kolegij A","Zadatak 1"),`<div class="editor-heading"><button class="work-back" onclick="go('s-radovi')">${icon("back")}Moji radovi</button>
-  <div class="flex wrap"><div class="segmented" role="group" aria-label="Prikaz"><button class="active" aria-pressed="true">Pisanje</button><button onclick="toast('Kako vidi nastavnik: isti prikaz kao nastavnik, samo za čitanje')">Kako vidi nastavnik</button></div><button class="btn primary compact" onclick="go('s-predaja')">${icon("check")}Predaj</button></div></div>
+  <div class="flex wrap"><div class="segmented" role="group" aria-label="Prikaz"><button class="active" aria-pressed="true">Pisanje</button><button onclick="toast('Kako vidi nastavnik: isti prikaz kao nastavnik, samo za čitanje')">Kako vidi nastavnik</button></div><button class="btn compact ghost" onclick="go('s-dokument')">${icon("download")}Ispis</button><button class="btn primary compact" onclick="go('s-predaja')">${icon("check")}Predaj</button></div></div>
  ${v===2?`<div class="notice" style="margin-bottom:16px">${icon("info")}<span>Nema mreže. Piši dalje: tekst se sprema na uređaju i šalje kad se veza vrati.</span></div>`:""}
  ${v===3?`<div class="notice" style="margin-bottom:16px">${icon("eye")}<span>Ovaj rad je otvoren u drugoj kartici. Ovdje ga samo čitaš, da se izmjene ne sudare.</span></div>`:""}
  <div class="editor-layout"><aside class="editor-outline" aria-label="Struktura rada"><div class="eyebrow">Struktura</div>
@@ -745,6 +969,73 @@ function tRad(){
  <aside class="editor-right"><div class="right-tabs"><button class="${S.tab==="kom"?"active":""}" onclick="S.tab='kom';render()">Komentari</button><button class="${S.tab==="sum"?"active":""}" onclick="S.tab='sum';render()">Sažetak procesa</button></div><div class="right-body">${right}</div></aside></div>`);
 }
 
+
+/* ---------- JAVNA POČETNA ---------- */
+function javno(){
+ return `<header class="site-header"><a href="#" class="brand" onclick="go('javno');return false" aria-label="Ductura, početna">${LOGO}</a>
+ <nav class="site-nav" aria-label="Glavna navigacija"><a href="#kako-radi" onclick="document.getElementById('kako-radi').scrollIntoView();return false">Kako radi</a><a href="#za-koga" onclick="document.getElementById('za-koga').scrollIntoView();return false">Za studente i nastavnike</a></nav>
+ <div class="flex"><button class="btn ghost compact" onclick="toast('/prijava · AAI@EduHr')">Prijava${icon("arrow")}</button></div></header>
+ <main id="main" class="site-main" tabindex="-1"><section class="hero"><div><div class="overline-dot"><span class="dot"></span>Prostor za akademski rad</div>
+ <h1>Svaki dobar rad<br>počinje <em>idejom.</em></h1><p>Od prve bilješke do predaje. Piši, razvijaj ideje i razgovaraj s nastavnikom uz tekst, u jednom mirnom radnom prostoru.</p>
+ <div class="flex hero-actions wrap"><button class="btn primary showcase-primary" onclick="tourStart()">${icon("arrow")}Pokreni prezentaciju</button><button class="btn primary" onclick="toast('/prijava · student')">Ulaz za studente${icon("arrow")}</button><button class="btn ghost" onclick="toast('/prijava · nastavnik')">Ulaz za nastavnike</button></div>
+ <div class="hero-note">${icon("leaf")} Tvoj rad. Tvoj tekst. Razgovor uz odlomak.</div></div>
+ <div class="hero-visual"><div class="mini-app"><div class="mini-top"><span class="mini-logo">Ductura<span class="accent">.</span></span><span class="chip green" style="font-size:8px">${icon("pen")} Studentski prostor</span></div>
+ <div class="mini-body"><div class="mini-side"><span class="eyebrow" style="font-size:7px">Moj rad</span><div class="active">01 &nbsp; Uvod</div><div>02 &nbsp; Teorijski okvir</div><div>03 &nbsp; Analiza</div><div>04 &nbsp; Zaključak</div><div style="margin-top:36px">Literatura &nbsp;↗</div></div>
+ <div class="mini-paper"><div class="eyebrow">Kolegij A · nacrt</div><h3>Čitanje naglas i jezični razvoj u prvim razredima</h3><h4>1. Uvod</h4><div class="mini-lines" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><div class="mini-comment"><strong>NA &nbsp; Komentar nastavnika</strong>Navedi stranicu uz navod, prema Uputama FPZG-a.</div></div></div></div>
+ <div class="floating-note">${icon("chat")}<div>Razgovor koji pomiče rad.<small>Od prve ideje, ne tek na kraju.</small></div></div></div></section>
+ <section class="strip" aria-label="Ustanova"><div class="institution">Fakultet političkih znanosti<small>DEMO · SVEUČILIŠTE U ZAGREBU</small></div><span class="strip-item">${icon("pen")} Strukturirano pisanje</span><span class="strip-item">${icon("chat")} Komentar uz odlomak</span><span class="strip-item">${icon("eye")} Isti prikaz za oboje</span></section>
+ <section id="za-koga" class="public-section"><div class="public-title"><div><div class="eyebrow">Dvije perspektive. Jedan prostor.</div><h2>Manje traženja.<br>Više vremena za dobar rad.</h2></div><p>Zadaci, tekst, komentari i predaja imaju svoje mjesto. Student i nastavnik vide isti rad i isti sažetak.</p></div>
+ <div class="role-grid"><article class="role-block"><div class="role-top"><span class="eyebrow">01 / Za studente</span>${icon("cap")}</div><h3>Od prazne stranice<br>do jasne misli.</h3><p>Tvoji kolegiji i radovi na jednom mjestu. Prije prve rečenice znaš što se bilježi i što vidi nastavnik. Rad se sprema na uređaju i na poslužitelju.</p><button class="text-btn" onclick="go('s-pregled')">Otvori studentski prostor ${icon("arrow")}</button>
+ <div class="role-preview"><div class="role-row"><span>Kolegij A · seminarski rad</span>${chip("U pisanju","green")}</div><div class="role-row"><span>Komentar uz odlomak</span><span class="accent">Novo ↗</span></div></div></article>
+ <article class="role-block"><div class="role-top"><span class="eyebrow">02 / Za nastavnike</span>${icon("users")}</div><h3>Dobar razgovor<br>počinje uz tekst.</h3><p>Radovi tvojih zadataka, po prezimenu. Pratiš rad dok nastaje, ostavljaš komentar uz odlomak i tražiš doradu, bez pretraživanja pošte.</p><button class="text-btn" onclick="go('t-pregled')">Otvori nastavnički prostor ${icon("arrow")}</button>
+ <div class="role-preview"><div class="role-row"><span>Babić, Ana · Zadatak 1</span>${chip("U pisanju","green")}</div><div class="role-row"><span>Sažetak procesa</span><span class="accent">Isti za oboje</span></div></div></article></div></section>
+ <section id="kako-radi" class="public-section" style="padding-top:10px"><div class="public-title"><div><div class="eyebrow">Od zadatka do predaje</div><h2>Jedan prirodan tijek rada.</h2></div></div>
+ <div class="steps">${[["Upiši kolegij","Kodom od nastavnika. Zatim pročitaj obavijest zadatka: rok, opseg, pravila i što se bilježi."],["Piši i razvijaj ideju","Struktura, navodi i literatura u jednom listu. Tekst se sprema na uređaju i na poslužitelju."],["Razgovaraj o radu","Nastavnik ostavlja komentar uz odlomak ili traži doradu. Odgovaraš uz isti tekst."],["Predaj s potvrdom","Prije predaje vidiš što predaješ. Nakon predaje dobivaš potvrdu s vremenom poslužitelja."]].map(([h,p],i)=>`<article class="step-item"><div class="step-no">0${i+1}</div><h3>${h}</h3><p>${p}</p></article>`).join("")}</div></section>
+ <section class="closing"><h2>Ductura pokazuje kako rad nastaje.<br><span class="accent">Zaključak donosi čovjek.</span></h2><button class="btn primary" onclick="tourStart()">Isprobaj cijeli tijek${icon("arrow")}</button></section></main>
+ <footer class="site-footer"><span>© Ductura · FPZG</span><span>Demo · izmišljeni podaci · nijedan stvarni osobni podatak</span><button onclick="toast('Kako Ductura radi · faza B')">Kako Ductura radi ↗</button></footer>`;
+}
+
+/* ---------- ISPIS (dokument A4) ---------- */
+function sDokument(){
+ const draft=vv()===1;
+ const hdr=`<div class="sx-paper-header">Ductura · Kolegij A <span>PROFIL FPZG · NIJE POTVRĐEN</span></div>`;
+ const ftr=`<div class="sx-paper-footer">Ana Babić · Zadatak 1: seminarski rad</div>`;
+ return shell(crumb("Moji radovi","Zadatak 1","Ispis"),`<div class="editor-heading"><button class="work-back" onclick="go('s-editor')">${icon("back")}Natrag na pisanje</button>
+ <div class="flex wrap"><button class="btn compact" onclick="toast('Izvoz DOCX · nakon demoa')">${icon("download")}Izvezi DOCX</button><button class="btn primary compact" onclick="window.print()">${icon("download")}Ispiši ili spremi PDF</button></div></div>`+
+ heading("Ispis","Od nacrta do akademskog rada.","Isti tekst, oblikovan za ispis prema Uputama FPZG-a. Tekst mijenjaš u pisanju; ovdje vidiš prijelom stranica.")+
+ `<div class="sx-document-layout"><aside class="panel sx-format-panel"><div class="panel-head"><h2>Oblik rada</h2>${icon("settings")}</div><div class="panel-body"><span class="chip amber">Profil FPZG · nije potvrđen</span><p class="small muted mt-sm">Granice iz Uputa FPZG-a treba potvrditi prije pilota (README §9.4).</p><div class="divider"></div>
+ <div class="sx-profile-fact"><span>Prikaz</span><strong>A4 · akademski</strong></div><div class="sx-profile-fact"><span>Tekst</span><strong>Newsreader · prored 1,5</strong></div><div class="sx-profile-fact"><span>Struktura</span><strong>4 naslova</strong></div><div class="sx-profile-fact"><span>Opseg</span><strong>1 240 / 2 000–2 500 riječi</strong></div><div class="divider"></div>
+ <div class="segmented sx-format-choice"><button class="${draft?"active":""}" onclick="setV(1)">Radni izgled</button><button class="${draft?"":"active"}" onclick="setV(0)">Akademski</button></div>
+ <h3 class="mt">Prije ispisa</h3><button class="sx-finding" onclick="go('s-editor')"><strong>Zaključak još nije napisan</strong><span>Poglavlje 4 je prazno. Ispis je moguć i ovako.</span></button><button class="sx-finding" onclick="go('s-editor')"><strong>1 navod bez stranice</strong><span>Autor A, 2019b, u odlomku 2.</span></button></div></aside>
+ <div class="sx-document-scroll ${draft?"sx-draft-style":""}" id="sx-paper-pages">
+ <section class="sx-paper sx-cover">${hdr}<div class="sx-cover-institution">SVEUČILIŠTE U ZAGREBU<br><strong>Fakultet političkih znanosti</strong></div><div class="sx-cover-main"><p>Ana Babić</p><h1>Čitanje naglas i jezični razvoj u prvim razredima</h1><p class="sx-cover-type">Seminarski rad · Kolegij A</p><div class="sx-cover-rule"></div><p>Nastavnik: Nastavnik A</p></div><div class="sx-cover-bottom">Zagreb, 2026.<br><small>Demo · izmišljeni podaci.</small></div>${ftr}</section>
+ <section class="sx-paper sx-toc-page">${hdr}<h2>Sadržaj</h2><div class="sx-toc">${["Uvod","Teorijski okvir","Analiza","Zaključak","Literatura"].map((t,i)=>`<a href="#"><span>0${i+1}</span>${t}<span>${i+3}</span></a>`).join("")}</div><p class="sx-print-note">Sadržaj se sastavlja iz naslova. Brojevi stranica ovise o završnom ispisu.</p>${ftr}</section>
+ <section class="sx-paper sx-body-paper">${hdr}<h2>1. Uvod</h2>${PARAS.map(p=>`<p>${p}</p>`).join("")}<h2>2. Teorijski okvir</h2><p>Pojam jezičnog razvoja u ovom se radu shvaća u užem smislu, kao širenje rječnika i razumijevanja pročitanog.<sup class="sx-footnote-ref">1</sup></p><div class="sx-footnotes"><p><sup>1</sup> Usp. Autor B (2021: 7).</p></div>${ftr}</section>
+ <section class="sx-paper sx-body-paper sx-bib-paper">${hdr}<h2>Literatura</h2><div class="sx-bibliography"><p>Autor A (2019b) <em>Naslov knjige o čitanju</em>. Zagreb: Izdavač.</p><p>Autor B (2021) Naslov članka. <em>Časopis</em>, 12(3): 1–20.</p><p>Autor C (2020) <em>Pregled istraživanja</em>. Zagreb: Izdavač.</p></div>${ftr}</section></div></div>`);
+}
+
+/* ---------- VODIČ (prezentacija) ---------- */
+const TOUR=[
+ ["t-novi",0,"01 / Zadatak","Nastavnik stvara kolegij i zadatak.","Naslov, rok, opseg i dopuštena uporaba alata. Popis dopuštenog može samo suziti."],
+ ["t-novi",3,"02 / Kod","Kolegij dobiva kod za upis.","Nastavnik podijeli kod studentima. Nitko se ne upisuje bez njega."],
+ ["s-upis",0,"03 / Upis","Student se upisuje kodom.","Velika i mala slova nisu važna. Nakon upisa vidi zadatke kolegija."],
+ ["s-obavijest",0,"04 / Prije prve rečenice","Student zna što se bilježi.","Obavijest kaže što se bilježi, što se ne bilježi i što vidi nastavnik. Tek nakon potvrde piše."],
+ ["s-editor",0,"05 / Pisanje","Tekst se sprema na uređaju i na poslužitelju.","Stanje spremanja uvijek kaže gdje je tekst. Bez mreže se piše dalje."],
+ ["t-rad",0,"06 / Uživo","Nastavnik prati rad dok nastaje.","Prikaz uživo služi praćenju i komentarima, nikad ocjeni ni rangiranju."],
+ ["t-rad",0,"07 / Komentar","Komentar uz odlomak.","Nastavnik označi tekst i ostavi komentar ili zahtjev za doradu. Student odgovara uz isti tekst."],
+ ["t-radovi",0,"08 / Brz put","Radovi jednog zadatka, po prezimenu.","Četiri retka činjenica po studentu. Popis se ne može poredati po brojevima."],
+ ["s-predaja",3,"09 / Predaja","Student predaje i dobiva potvrdu.","Vrijeme sa sata poslužitelja i sažetak dokumenta. Potvrda ne govori ništa o autorstvu."],
+ ["s-dokument",0,"10 / Ispis","Rad spreman za ispis.","Naslovnica, sadržaj, tekst i literatura prema Uputama FPZG-a."]];
+function tourStart(){S.tour=0;tourGo()}
+function tourGo(){const [scr,v]=TOUR[S.tour];S.v[scr]=v;S.scr=scr;S.role=scr[0]==="t"?"teacher":"student";S.bell=false;S.menu=false;render();scrollTo(0,0)}
+function tourDock(){
+ if(S.tour==null) return "";
+ const t=TOUR[S.tour];
+ return `<aside class="sx-tour-dock" aria-label="Vođena prezentacija"><div class="sx-tour-progress">${TOUR.map((x,i)=>`<button class="${i===S.tour?"active":i<S.tour?"visited":""}" onclick="S.tour=${i};tourGo()" aria-label="Korak ${i+1}"><span>${i+1}</span></button>`).join("")}</div>
+ <div class="sx-tour-copy"><span class="eyebrow">${t[2]} · izmišljeni podaci</span><strong>${t[3]}</strong><p>${t[4]}</p></div>
+ <div class="sx-tour-controls"><div class="flex between"><button class="btn compact" ${S.tour?"":"disabled"} onclick="S.tour--;tourGo()">Natrag</button>${S.tour<TOUR.length-1?`<button class="btn primary compact" onclick="S.tour++;tourGo()">Sljedeće${icon("arrow")}</button>`:`<button class="btn primary compact" onclick="S.tour=null;go('javno')">Završi</button>`}<button class="btn compact" onclick="S.tour=null;render()">Izađi</button></div></div></aside>`;
+}
+
 /* ---------- dijalog odjave ---------- */
 function dlg(){
  if(S.dlg!=="odjava") return "";
@@ -754,12 +1045,13 @@ function dlg(){
 }
 
 /* ---------- render ---------- */
-const R={"s-pregled":sPregled,"s-radovi":sRadovi,"s-obavijesti":sObavijesti,"s-upis":sUpis,"s-obavijest":sObavijest,"s-editor":sEditor,"s-predaja":sPredaja,"t-pregled":tPregled,"t-kolegiji":tKolegiji,"t-novi":tNovi,"t-radovi":tRadovi,"t-rad":tRad};
+const R={"javno":javno,"s-dokument":sDokument,"s-pregled":sPregled,"s-radovi":sRadovi,"s-obavijesti":sObavijesti,"s-upis":sUpis,"s-obavijest":sObavijest,"s-editor":sEditor,"s-predaja":sPredaja,"t-pregled":tPregled,"t-kolegiji":tKolegiji,"t-novi":tNovi,"t-radovi":tRadovi,"t-rad":tRad};
 function render(){
- $("#proto").innerHTML=`<b>DUCTURA · DIZAJN V3</b>`+["student","teacher"].map(r=>`<span class="pg">${r==="student"?"Student":"Nastavnik"}</span>`+SCR[r].map(([k,l])=>`<button aria-current="${k===S.scr}" onclick="go('${k}')">${l}</button>`).join("")).join("")+
-  `<span class="pv">Stanje:</span>`+(VAR[S.scr]||[]).map((x,i)=>`<button class="vr" aria-pressed="${i===vv()}" onclick="setV(${i})">${x}</button>`).join("")+`<button class="vr" onclick="S.dlg='odjava';render()">Odjava ▸</button>`;
+ $("#proto").innerHTML=`<b>DUCTURA · DIZAJN V3</b>`+["public","student","teacher"].map(r=>`<span class="pg">${{public:"Javno",student:"Student",teacher:"Nastavnik"}[r]}</span>`+SCR[r].map(([k,l])=>`<button aria-current="${k===S.scr}" onclick="go('${k}')">${l}</button>`).join("")).join("")+
+  `<span class="pv">Stanje:</span>`+(VAR[S.scr]||[]).map((x,i)=>`<button class="vr" aria-pressed="${i===vv()}" onclick="setV(${i})">${x}</button>`).join("")+`<button class="vr" onclick="S.dlg='odjava';render()">Odjava ▸</button><button class="vr" onclick="tourStart()">Vodič ▸</button>`;
  $("#app").innerHTML=R[S.scr]();
- $("#layer").innerHTML=dlg();
+ $("#layer").innerHTML=dlg()+tourDock();
+ document.body.classList.toggle("sx-touring",S.tour!=null);
  if(S.dlg) $("#stay")?.focus();
 }
 addEventListener("keydown",e=>{if(e.key==="Escape"){if(S.dlg){S.dlg=null;render()}else if(S.bell){S.bell=false;render()}}});
