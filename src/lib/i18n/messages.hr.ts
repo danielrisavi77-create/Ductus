@@ -379,6 +379,8 @@ export const hr = {
     statusLoading: "Učitavanje rada…",
     statusNoJournal: "Ovdje se ništa ne sprema.",
     selectedWords: "označeno {words}",
+    wordMinimum: "najmanje {words}",
+    wordMaximum: "najviše {words}",
     pagesApprox: "≈ {pages} str.",
   },
   editor: {

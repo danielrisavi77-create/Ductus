@@ -1,4 +1,5 @@
 import type { WithActor } from "@/server/db/with-actor";
+import type { WordRange } from "@/lib/i18n/length-line";
 
 import { AI_PURPOSES } from "@/components/teacher/assignment-create";
 
@@ -33,6 +34,8 @@ interface Row {
   due_at: Date;
   ai_policy: string;
   ai_purposes: string[];
+  word_min: number | null;
+  word_max: number | null;
   acknowledged_at: Date | null;
 }
 
@@ -41,7 +44,7 @@ interface Row {
 const QUERY = `WITH me AS (SELECT app.current_user_id() AS user_id)
 SELECT me.user_id, institution.actor_assignment_role(a.id) AS role, c.name AS course_name,
   v.version_no, v.title, v.instructions, v.work_type, v.evidence_profile,
-  v.opens_at, v.due_at, v.ai_policy, v.ai_purposes,
+  v.opens_at, v.due_at, v.ai_policy, v.ai_purposes, v.word_min, v.word_max,
   (SELECT n.acknowledged_at FROM institution.notice_acknowledgment n
     WHERE n.assignment_id = a.id AND n.version_no = a.current_version AND n.student_id = me.user_id) AS acknowledged_at
 FROM me
@@ -56,6 +59,8 @@ export type WorkContextRead =
       course: string;
       /** The current version of the assignment, as on its notice, acknowledged. */
       notice: NoticeView;
+      /** Limits of that same acknowledged current version, if set. */
+      wordRange: WordRange | null;
     }
   | { kind: "noticeFirst" }
   | { kind: "none" };
@@ -82,6 +87,8 @@ export async function readWorkContext(
     return {
       kind: "ready",
       course: row.course_name,
+      wordRange: row.word_min === null && row.word_max === null
+        ? null : { min: row.word_min, max: row.word_max },
       notice: {
         assignmentId,
         versionNo: row.version_no,
