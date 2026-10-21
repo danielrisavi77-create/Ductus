@@ -1,4 +1,4 @@
-// F-6 / DAN-35: the browser sends only the nine assignment fields of the
+// F-6 / DAN-35: the browser sends only the assignment fields of the
 // create_assignment contract (#363). Identity, institution and role are never
 // form inputs; the server decides them from the session.
 import type { CoursePolicy } from "./course-create";
@@ -20,6 +20,8 @@ export interface AssignmentDraft {
   opensAt: string;
   dueAt: string;
   aiPurposes: AiPurpose[];
+  wordMin: string;
+  wordMax: string;
 }
 
 export interface AssignmentBody {
@@ -30,6 +32,8 @@ export interface AssignmentBody {
   dueAt: string;
   aiPolicy: CoursePolicy;
   aiPurposes: AiPurpose[];
+  wordMin: number | null;
+  wordMax: number | null;
   evidenceProfile: "basic";
   importAllowed: false;
 }
@@ -40,6 +44,15 @@ export type AssignmentCreation =
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const LOCAL_MINUTE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
+const WORD_COUNT = /^\d+$/;
+
+function wordCount(value: string): number | null | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (!WORD_COUNT.test(trimmed)) return undefined;
+  const count = Number(trimmed);
+  return Number.isSafeInteger(count) && count >= 1 && count <= 1_000_000 ? count : undefined;
+}
 
 function instant(local: string): string | null {
   if (!LOCAL_MINUTE.test(local)) return null;
@@ -56,8 +69,11 @@ export function assignmentBody(draft: AssignmentDraft, course: CoursePolicy): As
   const title = draft.title.trim();
   const opensAt = instant(draft.opensAt);
   const dueAt = instant(draft.dueAt);
+  const wordMin = wordCount(draft.wordMin);
+  const wordMax = wordCount(draft.wordMax);
   if (!title || Array.from(title).length > 200 || Array.from(draft.instructions).length > 20_000) return null;
   if (!WORK_TYPES.includes(draft.workType) || !opensAt || !dueAt || dueAt <= opensAt) return null;
+  if (wordMin === undefined || wordMax === undefined || (wordMin !== null && wordMax !== null && wordMin > wordMax)) return null;
   const aiPurposes = course === "prohibited" ? [] : AI_PURPOSES.filter((p) => draft.aiPurposes.includes(p));
   return {
     title,
@@ -67,6 +83,8 @@ export function assignmentBody(draft: AssignmentDraft, course: CoursePolicy): As
     dueAt,
     aiPolicy: aiPurposes.length === 0 ? "prohibited" : "partially_allowed",
     aiPurposes,
+    wordMin,
+    wordMax,
     // No form field yet; the narrowest values the contract accepts.
     evidenceProfile: "basic",
     importAllowed: false,

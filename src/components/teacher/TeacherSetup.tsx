@@ -38,6 +38,8 @@ export default function TeacherSetup() {
   const [opensAt, setOpensAt] = useState("");
   const [dueAt, setDueAt] = useState("");
   const [instructions, setInstructions] = useState("");
+  const [wordMin, setWordMin] = useState("");
+  const [wordMax, setWordMax] = useState("");
   const [purposes, setPurposes] = useState<AiPurpose[]>([...AI_PURPOSES]);
   const [assignmentResult, setAssignmentResult] = useState<AssignmentCreation | null>(null);
 
@@ -83,7 +85,7 @@ export default function TeacherSetup() {
   function submitAssignment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!course || published) return;
-    const body = assignmentBody({ title, instructions, workType, opensAt, dueAt, aiPurposes: purposes }, course.policy);
+    const body = assignmentBody({ title, instructions, workType, opensAt, dueAt, aiPurposes: purposes, wordMin, wordMax }, course.policy);
     if (!body) return setAssignmentResult({ kind: "invalid" });
     requestId.current ??= crypto.randomUUID();
     const key = requestId.current;
@@ -168,6 +170,19 @@ export default function TeacherSetup() {
               <textarea className={styles.control} rows={4} value={instructions}
                 onChange={(e) => edit(setInstructions)(e.target.value)} />
             </label>
+            <div className={styles.pair}>
+              <label className={styles.field}>
+                <span>{a.wordMin}</span>
+                <input className={styles.control} type="text" inputMode="numeric" autoComplete="off"
+                  value={wordMin} onChange={(e) => edit(setWordMin)(e.target.value)} />
+              </label>
+              <label className={styles.field}>
+                <span>{a.wordMax}</span>
+                <input className={styles.control} type="text" inputMode="numeric" autoComplete="off"
+                  value={wordMax} onChange={(e) => edit(setWordMax)(e.target.value)} />
+              </label>
+            </div>
+            <p className={styles.hint}>{a.wordRangeHint}</p>
 
             <fieldset className={styles.tools}>
               <legend>{tools.heading}</legend>
