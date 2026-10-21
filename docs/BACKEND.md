@@ -579,7 +579,7 @@ PR se ne spaja dok nije ispunjeno ili dok nije zapisano zašto nije primjenjivo.
 9. Opservabilnost bez sadržaja; canary test.
 10. Konfiguracijska brava (zatvoreno bez potpune konfiguracije).
 11. CI zelen, uključujući pgTAP i property testove.
-12. Ako dira povjerenje: **sintetički prolaz na živom stagingu koji koristi iste vrste resursa kao produkcija (upravljana baza, KMS, S3), s povratom.** Pouka iz R4: prvi stvarni RPC poziv otkrio je grešku koju je migracija prešla.
+12. Ako dira povjerenje: za **lokalni sintetički FPZG demo do 2. 11. 2026.** (D-76, D-159) dovoljan je provjerljiv prolaz s izmišljenim podacima u izoliranom lokalnom worktreeju i Dockeru, uz čiste relevantne lokalne i CI testove, propisani neovisni review i QA prema `docs/ENGINEERING_SYSTEM.md` §5, zapis punog testiranog SHA-a te dokaz povrata i čišćenja gdje je primjenjivo. To je dokaz lokalnog demoa, ne spremnosti za udaljeni deploy ili pilot. **Za svaku novu komponentu i svaku naknadnu promjenu koja dira povjerenje, prije njezina udaljenog deploya (uključujući javni preview) ili pilota obvezan je sintetički prolaz te komponente ili promjene na živom stagingu koji koristi iste vrste resursa kao produkcija (upravljana baza, KMS, S3), s povratom.** Lokalni prolaz ne mijenja ostale točke ovog popisa, RLS i auth granice, ograničenje razvojnih ključeva i lažnog OIDC-a na lokalno/CI, niti pravila za FAIL/BLOCK. Pouka iz R4: prvi stvarni RPC poziv otkrio je grešku koju je migracija prešla.
 
 Dodatna matrica kvarova:
 
