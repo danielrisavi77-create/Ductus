@@ -85,8 +85,8 @@ async function journalFor(token: string | undefined): Promise<{
  * notice they acknowledged (#476 contract 6280487079); without the
  * acknowledgment the page sends them to the notice (PRODUCT §5 rule 6);
  * otherwise neither is shown, never an invented value. The
- * status bar shows the length without a word range until the assignment has
- * one (DAN-229). With a journal, Rad shows invented stages of the real shape
+ * status bar shows the length and any limits of the acknowledged current
+ * assignment version (DAN-225/229). With a journal, Rad shows invented stages of the real shape
  * until its read exists (FE-D9, #476). Signing out
  * always ends the session (D-118, `LocalLogout`).
  */
@@ -160,7 +160,7 @@ export default async function WorkspacePage({
         <>
           <LocalSaveChip />
           <OfflineChip />
-          <LocalStatusLength range={null} />
+          <LocalStatusLength range={work?.wordRange ?? null} />
         </>
       ) : (
         <span>{t.workspace.statusNoJournal}</span>

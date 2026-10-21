@@ -32,6 +32,22 @@ describe("length line of the status bar (FE-D6)", () => {
     expect(line).toEqual({ selected: null, count: "210", rest: ` / 2${NBSP}000–2${NBSP}500 riječi · ≈ 1 str.` });
   });
 
+  it("states one-sided limits without inventing the other end", () => {
+    expect(lengthLine(210, 0, { min: 1, max: null }).rest).toBe(" / najmanje 1 riječ · ≈ 1 str.");
+    expect(lengthLine(210, 0, { min: 2000, max: null }).rest).toBe(` / najmanje 2${NBSP}000 riječi · ≈ 1 str.`);
+    expect(lengthLine(210, 0, { min: null, max: 2 }).rest).toBe(" / najviše 2 riječi · ≈ 1 str.");
+    expect(lengthLine(210, 0, { min: null, max: 1000000 }).rest).toBe(` / najviše 1${NBSP}000${NBSP}000 riječi · ≈ 1 str.`);
+    expect(lengthLine(0, 0, { min: null, max: null }).rest).toBe(" riječi");
+  });
+
+  it("keeps equal bounds, selected words and page estimate", () => {
+    expect(lengthLine(450, 1, { min: 1000000, max: 1000000 })).toEqual({
+      selected: "označeno 1 riječ",
+      count: "450",
+      rest: ` / 1${NBSP}000${NBSP}000–1${NBSP}000${NBSP}000 riječi · ≈ 2 str.`,
+    });
+  });
+
   it("without a range agrees the noun with the count", () => {
     expect(lengthLine(1, 0, null).rest).toBe(" riječ · ≈ 1 str.");
     expect(lengthLine(3, 0, null).rest).toBe(" riječi · ≈ 1 str.");
