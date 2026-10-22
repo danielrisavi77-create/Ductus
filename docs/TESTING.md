@@ -47,6 +47,15 @@ rezultatima, bez drugog pokretanja aplikacije. Dodatni JSON reporter uključuje
 se samo uz `UI_TEST_PILOT=1`; sažetak je u Actions prikazu i datoteci
 `ui-test-pilot.json` unutar postojećeg artefakta `playwright-report`.
 
+Prije punog E2E prolaza Playwright `--list` bez pokretanja testova
+izdvaja neovisni očekivani inventar svih testnih instanci po pregledniku u
+privremenu `.ci-reports/ui-pilot-inventory.json` (izvan direktorija koji
+Playwright briše prije testa). Postproces zahtijeva potpuno podudaranje
+očekivanih i opaženih ID-eva, putanja i preglednika. Nedostajući cijeli
+neodabrani spec ili pojedinačni test, i uz konzistentan `stats`, daje
+`inconclusive`; neuspjelo otkrivanje inventara ne zaustavlja obvezni puni
+E2E, ali ne može dati `no-miss-observed`.
+
 Prvi kandidat je samo obična izmjena postojeće
 `src/components/landing/Landing.module.css`. Mapira se na cijele specove
 `landing`, `home`, `shell`, `accessibility` i `screenshots`: svi provjeravaju

@@ -10,7 +10,7 @@ const root = resolve(import.meta.dirname, "../..");
 const record = (path = UI_PATH, modes = "100644 100644", status = "M") =>
   `:${modes} ${"a".repeat(40)} ${"b".repeat(40)} ${status}\0${path}\0`;
 const candidate = classifyUiDiff(record());
-const options = { cwd: root };
+const options = { cwd: root, inventory: report() };
 function report() {
   const specs = [...UI_SPECS, "e2e/auth.spec.ts"].map((file, i) => ({ file: file.slice(4), id: `test-${i}`,
     tests: ["desktop", "mobile"].map((projectName) => ({ projectName, expectedStatus: "passed", status: "expected",
@@ -140,4 +140,49 @@ test("CI pilot only observes the unfiltered full run and survives E2E failure", 
   assert.match(config, /\[playwrightConsoleReporter\(process.env\)\], \["html", \{ open: "never" \}\]/);
   assert.match(config, /process.env.UI_TEST_PILOT === "1"\n +\? \[\["json", \{ outputFile: "test-results\/ui-pilot-full.json" \}\]/);
   assert.ok(ci.indexOf("      - name: Upload Playwright report") > ci.indexOf("      - name: UI test selection pilot"));
+});
+
+test("an omitted excluded spec cannot pass despite adjusted stats", () => {
+  const r = report();
+  specs(r).pop();
+  r.stats.expected = 10;
+  const actual = compareReport(candidate, r, options);
+  assert.equal(actual.complete, false);
+  assert.equal(actual.comparison, "inconclusive");
+  assert.ok(actual.problems.includes("missing-expected-test"));
+  assert.equal(actual.expectedInventoryCount, 12);
+  assert.equal(actual.full.count, 10);
+});
+
+test("a missing excluded browser with adjusted stats remains inconclusive", () => {
+  const r = report();
+  specs(r)[5].tests.pop();
+  r.stats.expected = 11;
+  const actual = compareReport(candidate, r, options);
+  assert.equal(actual.comparison, "inconclusive");
+  assert.ok(actual.problems.includes("missing-expected-test"));
+});
+
+test("missing, incomplete or duplicate expected discovery inventory never validates a candidate", () => {
+  assert.equal(compareReport(candidate, report(), { cwd: root }).comparison, "inconclusive");
+  const removed = report();
+  specs(removed).pop();
+  assert.equal(compareReport(candidate, report(), { cwd: root, inventory: removed }).comparison, "inconclusive");
+  const duplicate = report();
+  specs(duplicate).push(specs(duplicate)[0]);
+  const actual = compareReport(candidate, report(), { cwd: root, inventory: duplicate });
+  assert.equal(actual.comparison, "inconclusive");
+  assert.ok(actual.problems.includes("duplicate-inventory-test"));
+});
+
+test("CI snapshots a no-run test inventory before the full E2E and keeps the full commands", () => {
+  const ci = readFileSync(join(root, ".github/workflows/ci.yml"), "utf8");
+  const marker = "      - name: UI pilot expected test inventory\n";
+  const discovery = ci.split(marker)[1]?.split(/\n(?= {6}- )/)[0];
+  assert.ok(discovery);
+  assert.match(discovery, /PLAYWRIGHT_JSON_OUTPUT_FILE: .ci-reports\/ui-pilot-inventory.json/);
+  assert.match(discovery, /playwright test --list --reporter=json/);
+  assert.match(discovery, /--project=desktop --project=mobile/);
+  assert.ok(ci.indexOf(marker) < ci.indexOf("      - name: E2E tests\n"));
+  assert.match(ci, /pnpm test:e2e\n {10}else\n {12}pnpm test:e2e --project=desktop --project=mobile/);
 });

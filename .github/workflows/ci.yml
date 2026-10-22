@@ -205,6 +205,18 @@ jobs:
           else
             pnpm exec playwright install --with-deps chromium
           fi
+      - name: UI pilot expected test inventory
+        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
+        env:
+          ALL_ENGINES: ${{ github.event_name != 'pull_request' }}
+          PLAYWRIGHT_JSON_OUTPUT_FILE: .ci-reports/ui-pilot-inventory.json
+        run: |
+          mkdir -p .ci-reports
+          if [ "$ALL_ENGINES" = "true" ]; then
+            pnpm exec playwright test --list --reporter=json || echo 'UI pilot inventory unavailable; comparison will be inconclusive.'
+          else
+            pnpm exec playwright test --list --reporter=json --project=desktop --project=mobile || echo 'UI pilot inventory unavailable; comparison will be inconclusive.'
+          fi
       - name: E2E tests
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         env:

@@ -45,7 +45,7 @@ const finite = (value) => Number.isFinite(value) && value >= 0;
 const outcomes = ["expected", "unexpected", "flaky", "skipped"];
 const statuses = ["passed", "failed", "timedOut", "skipped", "interrupted"];
 
-export function compareReport(plan, report, { cwd = process.cwd(), projects = ["desktop", "mobile"] } = {}) {
+export function compareReport(plan, report, { cwd = process.cwd(), projects = ["desktop", "mobile"], inventory = null } = {}) {
   const tests = [], problems = new Set(), seen = new Set();
   const problem = (reason) => problems.add(reason);
   const root = report?.config?.rootDir;
@@ -99,6 +99,49 @@ export function compareReport(plan, report, { cwd = process.cwd(), projects = ["
   for (const file of UI_SPECS) for (const project of projects) {
     if (!tests.some((t) => t.file === file && t.project === project)) problem("missing-pilot-spec");
   }
+
+  // The run's JSON cannot prove its own completeness. Playwright --list
+  // independently enumerates all expected test/browser identities before E2E.
+  const expected = new Map();
+  const inventoryRoot = inventory?.config?.rootDir;
+  if (!inventory) problem("missing-inventory");
+  if (typeof inventoryRoot !== "string" || resolve(inventoryRoot) !== resolve(cwd, "e2e")) problem("invalid-inventory-root");
+  if (!Array.isArray(inventory?.errors) || inventory.errors.length) problem("inventory-errors");
+  function visitInventory(suites) {
+    if (!Array.isArray(suites)) { problem("invalid-inventory-suites"); return; }
+    for (const suite of suites) {
+      if (!Array.isArray(suite?.specs)) { problem("invalid-inventory-specs"); continue; }
+      for (const spec of suite.specs) {
+        if (typeof spec?.file !== "string" || typeof inventoryRoot !== "string" ||
+          !Array.isArray(spec.tests) || typeof spec.id !== "string" || !spec.id) {
+          problem("invalid-inventory-spec"); continue;
+        }
+        const file = relative(cwd, resolve(inventoryRoot, spec.file)).split(sep).join("/");
+        if (!/^e2e\/(?:[\w-]+\/)*[\w-]+\.spec\.ts$/.test(file)) {
+          problem("invalid-inventory-path"); continue;
+        }
+        for (const test of spec.tests) {
+          if (typeof test?.projectName !== "string" || !projects.includes(test.projectName)) {
+            problem("invalid-inventory-project"); continue;
+          }
+          const id = spec.id + "/" + test.projectName;
+          if (expected.has(id)) problem("duplicate-inventory-test");
+          expected.set(id, file);
+        }
+      }
+      if (suite.suites !== undefined) visitInventory(suite.suites);
+    }
+  }
+  visitInventory(inventory?.suites);
+  if (!expected.size) problem("empty-inventory");
+  const actual = new Map(tests.map((t) => [t.id, t.file]));
+  for (const [id, file] of expected) {
+    if (!actual.has(id)) problem("missing-expected-test");
+    else if (actual.get(id) !== file) problem("inventory-path-mismatch");
+  }
+  for (const id of actual.keys()) if (!expected.has(id)) problem("unexpected-test");
+  if (actual.size !== expected.size) problem("inventory-count-mismatch");
+
   const summarize = (rows) => ({ count: rows.length, failures: rows.filter((t) => t.failed).length,
     testWorkMs: rows.reduce((n, t) => n + t.durationMs, 0) });
   const missed = tests.filter((t) => !t.selected && t.failed).map((t) => t.id);
@@ -106,7 +149,7 @@ export function compareReport(plan, report, { cwd = process.cwd(), projects = ["
   return {
     comparison: missed.length ? "miss-observed" : !complete ? "inconclusive"
       : plan.selection === "candidate" ? "no-miss-observed" : "not-applicable",
-    complete, problems: [...problems], missed,
+    complete, problems: [...problems], missed, expectedInventoryCount: expected.size,
     full: summarize(tests), selected: summarize(tests.filter((t) => t.selected)),
     excluded: summarize(tests.filter((t) => !t.selected)),
     candidateInventory: summarize(tests.filter((t) => UI_SPECS.includes(t.file))),
@@ -119,12 +162,13 @@ export function compareReport(plan, report, { cwd = process.cwd(), projects = ["
 export function runPilot(env = process.env, cwd = process.cwd()) {
   const plan = uiPlan({ eventName: env.EVENT_NAME, baseRef: env.PR_BASE_REF,
     baseSha: env.PR_BASE, headSha: env.PR_HEAD, cwd });
-  let report = null;
+  let report = null, inventory = null;
   try { report = JSON.parse(readFileSync(resolve(cwd, "test-results/ui-pilot-full.json"), "utf8")); } catch { /* inconclusive */ }
-  const evidence = { mode: "shadow", scope: "standard-e2e", policyVersion: 1,
+  try { inventory = JSON.parse(readFileSync(resolve(cwd, ".ci-reports/ui-pilot-inventory.json"), "utf8")); } catch { /* inconclusive */ }
+  const evidence = { mode: "shadow", scope: "standard-e2e", policyVersion: 2,
     baseSha: sha(env.PR_BASE) ? env.PR_BASE : null, headSha: sha(env.PR_HEAD) ? env.PR_HEAD : null,
     testedSha: sha(env.GITHUB_SHA) ? env.GITHUB_SHA : null, ...plan,
-    ...compareReport(plan, report, { cwd, projects: env.EVENT_NAME === "pull_request"
+    ...compareReport(plan, report, { cwd, inventory, projects: env.EVENT_NAME === "pull_request"
       ? ["desktop", "mobile"] : ["desktop", "mobile", "firefox", "webkit"] }) };
   mkdirSync(resolve(cwd, "playwright-report"), { recursive: true });
   writeFileSync(resolve(cwd, "playwright-report/ui-test-pilot.json"), JSON.stringify(evidence, null, 2) + "\n");
@@ -132,7 +176,7 @@ export function runPilot(env = process.env, cwd = process.cwd()) {
     `Selection: **${evidence.selection}** (${evidence.reason}). Comparison: **${evidence.comparison}**.\n\n` +
     `Full: ${evidence.full.count}; hypothetical selection: ${evidence.selected.count}; excluded: ${evidence.excluded.count}; missed failures: ${evidence.missed.length}.\n\n` +
     `Selected failures: ${evidence.selected.failures}. Complete report: ${evidence.complete}. Problems: ${evidence.problems.join(", ") || "none"}.\n\n` +
-    `Candidate inventory (irrespective of diff): ${evidence.candidateInventory.count}. Full run: ${evidence.fullRunDurationMs ?? "unknown"} ms.\n\n` +
+    `Expected inventory: ${evidence.expectedInventoryCount}; observed: ${evidence.full.count}. Candidate inventory (irrespective of diff): ${evidence.candidateInventory.count}. Full run: ${evidence.fullRunDurationMs ?? "unknown"} ms.\n\n` +
     `Test work: selected ${evidence.selected.testWorkMs} / full ${evidence.full.testWorkMs} ms. This is not a wall-clock speedup estimate.\n\n` +
     `All existing tests remain required. No-miss-observed is not approval to skip tests. Details: playwright-report/ui-test-pilot.json.\n`;
   if (env.GITHUB_STEP_SUMMARY) appendFileSync(env.GITHUB_STEP_SUMMARY, summary);
