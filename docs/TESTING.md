@@ -40,6 +40,35 @@ Standardni E2E (`stack-e2e`) i login E2E (`stack-login`) izvršavaju se paraleln
 - Mobilni viewport je dodatak, ne zamjena za WebKit.
 - Iznimka po odluci vlasnika: puni tok prijave preko lažnog OIDC-a („Demo prijava”, `e2e/login/`, `pnpm test:e2e:login`) radi nad `next dev`, jer produkcijski build lažnog pružatelja odbija (D-09), i obvezan je samo na Chromiumu. Odbijanje u produkcijskom buildu (`e2e/auth.spec.ts`) i dalje prolazi sva tri enginea. Pokretanje: složaj iz `compose.yaml` (baza i lažni pružatelj na 8090), `pnpm db:migrate`, `pnpm db:seed` i `AUTH_DATABASE_URL` iz `.env.example`.
 
+### Informativni UI/design odabir testova (DAN-241)
+
+CI nakon punog standardnog E2E prolaza uspoređuje hipotetski odabir s istim
+rezultatima, bez drugog pokretanja aplikacije. Dodatni JSON reporter uključuje
+se samo uz `UI_TEST_PILOT=1`; sažetak je u Actions prikazu i datoteci
+`ui-test-pilot.json` unutar postojećeg artefakta `playwright-report`.
+
+Prvi kandidat je samo obična izmjena postojeće
+`src/components/landing/Landing.module.css`. Mapira se na cijele specove
+`landing`, `home`, `shell`, `accessibility` i `screenshots`: svi provjeravaju
+javnu početnu stranicu. Dodatna/nepoznata datoteka, dodavanje, brisanje,
+preimenovanje, promjena moda, nečitljiv/prazan diff ili događaj izvan PR-a
+prema mainu traže puni skup. Diff koristi točne base/head SHA-ove; bilježi se
+i SHA stvarno testiranog merge commita. To je informativni helper s PR heada,
+bez ovlasti za promjenu CI profila ili preskakanje testova.
+
+`miss-observed` označava pad izvan odabira; `inconclusive` nepotpune ili
+nevaljane rezultate; `no-miss-observed` samo izostanak opaženog propuštenog
+kvara u tom cjelovitom prolazu. `not-applicable` znači puni odabir. Izvještaj
+čuva rezultate po testu i pregledniku, probleme, odabrane/ostale testove i
+njihov testni rad. Zbroj trajanja testova nije procjena ubrzanja CI-ja.
+`candidateInventory` pokazuje veličinu početnog kandidatnog skupa i kad diff
+zahtijeva full, bez tvrdnje da je takav diff prihvatljiv za uži odabir.
+
+Puni standardni/login E2E, ostali slojevi i main/noćni browser opseg ostaju
+obvezni. Snapshot specovi prilažu snimke bez usporedbe s referentnim slikama.
+Jedan zeleni prolaz ne opravdava stvarno preskakanje: širenje traži pregled
+uvoza/potrošača CSS-a, dokaze iz kandidatnih PR-ova i zaseban zadatak.
+
 ## 3. Obvezni adversarial scenariji prije pilota
 
 Svaki scenarij dobiva test ili zapis ručne probe.
