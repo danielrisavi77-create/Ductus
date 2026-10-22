@@ -7,20 +7,37 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-// Only these may be the sole changes of a scoped run. Everything a test can
-// read from elsewhere (config, docs, scripts, lockfile, fixtures) is not here.
-export const SCOPED_PREFIXES = ["src/", "tests/unit/", "tests/property/"];
-
 export const FULL_VARIABLE = "DUCTUS_PREPUSH_FULL";
 
-/** "full" unless every changed path lies under a scoped prefix. */
-export function plan(changedFiles, env = {}) {
-  if (env[FULL_VARIABLE] === "1") return "full";
-  if (!Array.isArray(changedFiles) || changedFiles.length === 0) return "full";
-  const scoped = changedFiles.every(
-    (file) => typeof file === "string" && SCOPED_PREFIXES.some((prefix) => file.startsWith(prefix)) && !file.includes(".."),
+// A path that ends the scoped run's path check must be plain; git quotes names
+// with unusual characters, and those never match.
+export const SAFE_PATH_RE = /^[\w./@-]+$/;
+
+const SOURCE_RE = /^src\/.+\.tsx?$/;
+const TEST_FILE_RE = /^tests\/(?:unit|property)\/.+\.test\.tsx?$/;
+
+/**
+ * Whether `vitest --changed` can stand in for the whole suite for this change:
+ * only added or modified TypeScript source or unit/property test files, because
+ * those are the files vitest follows through imports. A deleted or renamed
+ * file (its importers are no longer reachable), a data file such as JSON or
+ * SQL, test setup or helpers, config and documents are not.
+ */
+export function isScopedChange({ status, file }) {
+  return (
+    (status === "A" || status === "M") &&
+    typeof file === "string" &&
+    SAFE_PATH_RE.test(file) &&
+    !file.includes("..") &&
+    (SOURCE_RE.test(file) || TEST_FILE_RE.test(file))
   );
-  return scoped ? "scoped" : "full";
+}
+
+/** "full" unless every change passes isScopedChange. `changes`: [{status, file}]. */
+export function plan(changes, env = {}) {
+  if (env[FULL_VARIABLE] === "1") return "full";
+  if (!Array.isArray(changes) || changes.length === 0) return "full";
+  return changes.every((change) => isScopedChange(change ?? {})) ? "scoped" : "full";
 }
 
 const TEST_NAME_RE = /\.test\.tsx?$/;
@@ -66,14 +83,21 @@ function git(args, cwd) {
 export function changedAgainstMain(cwd) {
   const base = git(["merge-base", "HEAD", "origin/main"], cwd);
   if (!base) return null;
-  const names = git(["diff", "--name-only", "--no-renames", base, "HEAD"], cwd);
-  return names === null ? null : { base, files: names.split("\n").filter(Boolean) };
+  const lines = git(["diff", "--name-status", "--no-renames", base, "HEAD"], cwd);
+  if (lines === null) return null;
+  const changes = lines
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const [status, ...rest] = line.split("\t");
+      return { status, file: rest.join("\t") };
+    });
+  return { base, files: changes };
 }
 
 // pnpm is a .cmd file on Windows, which Node starts only through cmd.exe. The
 // arguments are fixed strings or test paths that passed SAFE_PATH_RE; no shell
 // option is set (Semgrep spawn-shell-true).
-export const SAFE_PATH_RE = /^[\w./@-]+$/;
 
 export function pnpmCommand(args, platform = process.platform) {
   return platform === "win32" ? ["cmd.exe", ["/d", "/s", "/c", "pnpm", ...args]] : ["pnpm", args];

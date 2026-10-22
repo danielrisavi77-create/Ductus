@@ -6,11 +6,16 @@ import { join } from "node:path";
 
 import { FULL_VARIABLE, SAFE_PATH_RE, fileReadingTests, plan, pnpmCommand } from "./pre-push-tests.mjs";
 
-test("a change to source and unit or property tests only is scoped", () => {
-  assert.equal(plan(["src/editor/a.ts", "tests/unit/a.test.ts", "tests/property/p.property.test.ts"]), "scoped");
+const M = (file) => ({ status: "M", file });
+
+test("added or modified TypeScript source and unit or property tests only is scoped", () => {
+  assert.equal(
+    plan([M("src/editor/a.ts"), M("src/components/b.tsx"), { status: "A", file: "tests/unit/a.test.ts" }, M("tests/property/p.property.test.ts")]),
+    "scoped",
+  );
 });
 
-test("anything a test could read from elsewhere runs the whole suite", () => {
+test("anything a test could reach other than through imports runs the whole suite", () => {
   for (const file of [
     "package.json",
     "pnpm-lock.yaml",
@@ -23,9 +28,25 @@ test("anything a test could read from elsewhere runs the whole suite", () => {
     "infra/fake-oidc/server.mjs",
     "db/migrations/1.sql",
     "tests/integration/a.integration.test.ts",
-    "tests/property/setup.ts-not-a-prefix/../../package.json",
+    // setup files and helpers are loaded by configuration, not by imports
+    "tests/property/setup.ts",
+    "tests/unit/helpers/fixture.ts",
+    // data files read by a helper module
+    "src/domain/forensics/golden-vectors/evidence-v2.json",
+    "src/server/db/query.sql",
+    "src/notes.md",
+    // odd names
+    "src/a b.ts",
+    "src/\"quoted\".ts",
+    "src/../package.json",
   ]) {
-    assert.equal(plan(["src/a.ts", file]), "full", file);
+    assert.equal(plan([M("src/a.ts"), M(file)]), "full", file);
+  }
+});
+
+test("a deleted, renamed or type-changed file runs the whole suite", () => {
+  for (const status of ["D", "R", "C", "T", "U", "X", "", undefined]) {
+    assert.equal(plan([M("src/a.ts"), { status, file: "src/domain/forensics/load.ts" }]), "full", String(status));
   }
 });
 
@@ -33,9 +54,11 @@ test("no changes, unknown changes and the override run the whole suite", () => {
   assert.equal(plan([]), "full");
   assert.equal(plan(null), "full");
   assert.equal(plan(undefined), "full");
-  assert.equal(plan(["src/a.ts"], { [FULL_VARIABLE]: "1" }), "full");
-  assert.equal(plan(["src/a.ts"], { [FULL_VARIABLE]: "0" }), "scoped");
+  assert.equal(plan([M("src/a.ts")], { [FULL_VARIABLE]: "1" }), "full");
+  assert.equal(plan([M("src/a.ts")], { [FULL_VARIABLE]: "0" }), "scoped");
   assert.equal(plan([42]), "full");
+  assert.equal(plan(["src/a.ts"]), "full");
+  assert.equal(plan([null]), "full");
 });
 
 test("tests that read files are found, others and node_modules are not", () => {
