@@ -70,24 +70,33 @@ export function changedAgainstMain(cwd) {
   return names === null ? null : { base, files: names.split("\n").filter(Boolean) };
 }
 
-function run(command, args, cwd) {
-  const result = spawnSync(command, args, { cwd, stdio: "inherit", shell: process.platform === "win32" });
+// pnpm is a .cmd file on Windows, which Node starts only through cmd.exe. The
+// arguments are fixed strings or test paths that passed SAFE_PATH_RE; no shell
+// option is set (Semgrep spawn-shell-true).
+export const SAFE_PATH_RE = /^[\w./@-]+$/;
+
+export function pnpmCommand(args, platform = process.platform) {
+  return platform === "win32" ? ["cmd.exe", ["/d", "/s", "/c", "pnpm", ...args]] : ["pnpm", args];
+}
+
+function run(args, cwd) {
+  const [command, commandArgs] = pnpmCommand(args);
+  const result = spawnSync(command, commandArgs, { cwd, stdio: "inherit" });
   return result.status ?? 1;
 }
 
 export function main(cwd = fileURLToPath(new URL("../../", import.meta.url)), env = process.env) {
   const changed = changedAgainstMain(cwd);
-  const mode = plan(changed?.files, env);
-  if (mode === "full") {
+  const readers = plan(changed?.files, env) === "scoped" ? fileReadingTests(cwd) : [];
+  if (plan(changed?.files, env) === "full" || !readers.every((file) => SAFE_PATH_RE.test(file))) {
     console.log("pre-push: full test run (pnpm test).");
-    return run("pnpm", ["test"], cwd);
+    return run(["test"], cwd);
   }
-  const readers = fileReadingTests(cwd);
   console.log(`pre-push: scoped run for ${changed.files.length} changed file(s) plus ${readers.length} file-reading test(s). CI runs everything.`);
   const projects = ["--project", "unit", "--project", "property"];
-  const reached = run("pnpm", ["exec", "vitest", "run", ...projects, "--changed", changed.base], cwd);
+  const reached = run(["exec", "vitest", "run", ...projects, "--changed", changed.base], cwd);
   if (reached !== 0) return reached;
-  return readers.length === 0 ? 0 : run("pnpm", ["exec", "vitest", "run", ...projects, ...readers], cwd);
+  return readers.length === 0 ? 0 : run(["exec", "vitest", "run", ...projects, ...readers], cwd);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) process.exit(main());
