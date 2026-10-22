@@ -16,10 +16,12 @@ const REQUIRED = [
   "Security scanners",
   "Dependency review",
   "Engineering review gate",
+  "Merge authorization",
 ];
 
 test("queue and merge conditions require every required status of main", () => {
-  const checks = lines
+  const queueRules = lines.slice(0, lines.findIndex((line) => line.startsWith("pull_request_rules:")));
+  const checks = queueRules
     .map((line) => /^\s*- check-success=(.+)$/.exec(line)?.[1])
     .filter(Boolean);
   assert.deepEqual(checks, REQUIRED);
@@ -28,11 +30,39 @@ test("queue and merge conditions require every required status of main", () => {
   assert.match(body, /- -draft/);
 });
 
-test("only the owner can queue or requeue a PR, and nothing queues by itself", () => {
-  assert.doesNotMatch(body, /pull_request_rules:/);
+test("only the owner can queue or requeue by command", () => {
   for (const command of ["queue", "requeue"]) {
     assert.match(body, new RegExp(`\\n  ${command}:\\n    conditions:\\n      - sender=danielrisavi77-create\\n`));
   }
+});
+
+// The rules under pull_request_rules: name -> condition lines.
+function rules() {
+  const text = body.slice(body.indexOf("pull_request_rules:"));
+  return text
+    .split(/\n  - name: /)
+    .slice(1)
+    .map((block) => ({
+      name: block.split("\n")[0],
+      conditions: [...block.matchAll(/^      - (.+)$/gm)].map((m) => m[1]),
+      queue: /actions:\n      queue:\n        name: main/.test(block),
+    }));
+}
+
+test("one rule queues a PR, and it reads only the two statuses the gate publishes", () => {
+  const all = rules();
+  assert.equal(all.length, 1);
+  assert.ok(all[0].queue);
+  assert.deepEqual(all[0].conditions, [
+    "base=main",
+    "-draft",
+    "check-success=Engineering review gate",
+    "check-success=Merge authorization",
+  ]);
+});
+
+test("Mergify never reads the description, a label or a file name (review of #565)", () => {
+  assert.doesNotMatch(body, /body~=|label=|files~=|-files|-body/);
 });
 
 test("the queue squashes and refreshes the branch by merging main (D-101)", () => {
