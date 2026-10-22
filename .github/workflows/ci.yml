@@ -20,6 +20,38 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Only protected main code classifies a PR. The PR head is fetched as an
+  # object, never checked out or executed here. Bootstrap bases without the
+  # classifier use the full path; an actual classification error blocks stack.
+  scope:
+    name: Classify CI scope
+    runs-on: ubuntu-latest
+    outputs:
+      profile: ${{ steps.classify.outputs.profile }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.ref == 'main' && github.event.pull_request.base.sha || 'main' }}
+          persist-credentials: false
+      - name: Classify immutable diff
+        id: classify
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$EVENT_NAME" != pull_request ] || [ "$PR_BASE_REF" != main ]; then
+            echo 'profile=full' >> "$GITHUB_OUTPUT"
+          elif [ ! -e scripts/engineering/ci-docs-scope.mjs ] && [ ! -L scripts/engineering/ci-docs-scope.mjs ]; then
+            echo 'profile=full' >> "$GITHUB_OUTPUT"
+          else
+            [[ "$PR_BASE" =~ ^[a-f0-9]{40}$ && "$PR_HEAD" =~ ^[a-f0-9]{40}$ ]]
+            [[ -f scripts/engineering/ci-docs-scope.mjs && ! -L scripts/engineering/ci-docs-scope.mjs ]]
+            git fetch --no-tags --depth=1 origin "$PR_HEAD"
+            node scripts/engineering/ci-docs-scope.mjs >> "$GITHUB_OUTPUT"
+          fi
+
   build:
     name: Lint, typecheck, test and build
     runs-on: ubuntu-latest
@@ -67,6 +99,10 @@ jobs:
   # database, storage or the fake OIDC provider are covered as they land.
   stack:
     name: Local stack (compose.yaml)
+    needs: scope
+    # A skipped/failed classifier must not silently turn a required job green.
+    # Runtime steps remain cancellable; the final guard rejects cancellation.
+    if: always()
     runs-on: ubuntu-latest
     # Official images pinned by their OCI index SHA-256. Local compose defaults
     # remain unchanged. CI never pulls anonymously from Docker Hub itself; the
@@ -78,16 +114,31 @@ jobs:
       DUCTUS_MAIL_IMAGE: ghcr.io/axllent/mailpit:v1.31.4@sha256:b68349e3a014b90c5610bfb26b2ae36f3892d7b8cf25ee140c6c71c98d2fcf48
       DUCTUS_OIDC_BASE_IMAGE: mirror.gcr.io/library/node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1
     steps:
+      - name: Validate CI scope
+        env:
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          PROFILE: ${{ needs.scope.outputs.profile }}
+        run: |
+          case "$SCOPE_RESULT/$PROFILE" in
+            success/full) echo 'Full application stack and browser checks.' >> "$GITHUB_STEP_SUMMARY" ;;
+            success/docs) echo 'Approved documentation-only diff: stack, DB and browser tests were not executed. Build, engineering tests and security checks remain required.' >> "$GITHUB_STEP_SUMMARY" ;;
+            *) echo 'Missing or unsuccessful CI scope classification.' >&2; exit 1 ;;
+          esac
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         with:
           persist-credentials: false
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         with:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
       - name: Restore Next cache
+        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .next/cache
@@ -97,30 +148,39 @@ jobs:
       # Browser binaries only; "Install browsers" below still runs and installs
       # the system packages (--with-deps), it skips the download on a hit.
       - name: Restore Playwright browsers
+        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: pw-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.event_name == 'pull_request' && 'chromium' || 'all' }}
       - run: pnpm stack:up
+        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
       # The login-callback login (db/local/auth-login.sql) gets a random
       # password per run; none lives in the repo.
       - name: Local auth login password
+        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         run: |
           password="$(openssl rand -hex 24)"
           echo "::add-mask::${password}"
           echo "DUCTUS_AUTH_LOCAL_PASSWORD=${password}" >> "$GITHUB_ENV"
           echo "AUTH_DATABASE_URL=postgres://ductus_auth_local:${password}@127.0.0.1:54329/ductus" >> "$GITHUB_ENV"
       - run: pnpm db:migrate
+        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
       - name: pgTAP (pg_prove)
+        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         run: pnpm test:db
       # Exercise the P7 setup path after pgTAP's isolated fixtures; it seeds
       # only the local institutions before integration and E2E tests.
       - run: pnpm demo:prepare
+        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
       - run: pnpm test:integration
+        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
       - run: pnpm build
+        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
       # Owner decision D-108 d: Chromium (desktop and mobile viewport) on a
       # pull request; Chromium, Firefox and WebKit on main and nightly.
       - name: Install browsers
+        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         env:
           ALL_ENGINES: ${{ github.event_name != 'pull_request' }}
         run: |
@@ -130,6 +190,7 @@ jobs:
             pnpm exec playwright install --with-deps chromium
           fi
       - name: E2E tests
+        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         env:
           E2E_NO_BUILD: "1"
           ALL_ENGINES: ${{ github.event_name != 'pull_request' }}
@@ -141,7 +202,7 @@ jobs:
           fi
       # Screenshots (desktop and mobile), videos and failure traces for the PR.
       - name: Upload Playwright report
-        if: ${{ !cancelled() }}
+        if: ${{ needs.scope.outputs.profile == 'full' && !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-report
@@ -150,18 +211,22 @@ jobs:
       # The full login through "Demo prijava" needs `next dev` (D-09 refuses
       # the fake provider in the build above); Chromium only (owner decision).
       - name: Full login E2E
+        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         run: pnpm test:e2e:login
       - name: Upload login Playwright report
-        if: ${{ !cancelled() }}
+        if: ${{ needs.scope.outputs.profile == 'full' && !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-report-login
           path: playwright-report-login/
           retention-days: 14
-      - if: failure()
+      - if: ${{ needs.scope.outputs.profile == 'full' && failure() }}
         run: docker compose logs
-      - if: always()
+      - if: ${{ needs.scope.outputs.profile == 'full' && always() }}
         run: pnpm stack:down
+      - name: Reject cancelled stack
+        if: cancelled()
+        run: exit 1
 
   security:
     name: Security scanners

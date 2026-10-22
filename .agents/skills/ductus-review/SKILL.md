@@ -33,4 +33,4 @@ Review-Head: <40-character PR head SHA>
 Review-Verdict: PASS | FAIL | BLOCK
 ```
 
-Do not emit PASS before findings are resolved or explicitly accepted according to the PR protocol. A push after review invalidates the PASS because the head SHA changes.
+Do not emit PASS before findings are resolved or explicitly accepted according to the PR protocol. Apply head invalidation and the verified D-101 exception in `docs/ENGINEERING_SYSTEM.md` §6/§9; the D-158 pair always needs both PASS verdicts on the exact current head.

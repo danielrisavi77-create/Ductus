@@ -38,7 +38,7 @@ Normalno rade tri stalna writera (Backend, Frontend, Platforma). Četvrti je dop
 
 1. Orkestrator šalje zadatak (predložak u §3) sesiji odgovarajuće uloge.
 2. Sesija radi u svom worktreeu na grani `<uloga>/<kratki-opis>` (npr. `backend/m0-port-domain`), od svježeg `origin/main`.
-3. Testovi i provjere lokalno zeleni (`pnpm lint`, `pnpm typecheck`, `pnpm test`); lefthook to radi pri commitu.
+3. Testovi i provjere lokalno zeleni prije commita (`pnpm lint`, `pnpm typecheck`, `pnpm test`). Lefthook pri commitu provjerava staged lint i tajne, a prije pusha izvodi puni lint, typecheck i test; puni pre-push ostaje obvezan.
 4. Sesija otvara PR (jedan korak iz `STATE.md`, do oko 400 redaka; veći PR obrazlaže zašto) i obvezno upisuje `Agent`, `Risk` i `Task` metadata iz `docs/ENGINEERING_SYSTEM.md`. Nakon svakog pusha, prije čekanja na CI, autor (podagent ili sesija) ostavlja na PR-u kratak komentar "Trag rada" (predložak u §3); završni izvještaj iz koraka 6 i dalje je obvezan (Daniel, 10. 10. 2026.).
 5. PR dobiva neovisni pregled na aktualnom headu. Za `critical` PR obvezan je i zaseban QA/adversarial PASS. Za deklarirani author guard `codex` i `chatgpt` na istom slotu tretiraju se kao isti OpenAI principal (`openai:<slot>`), jer koriste isti GitHub App. Autor, reviewer i QA moraju biti različite aktivne agent-instance po governance pravilu; gate strojno provjerava da reviewer i QA dolaze iz različitih autentificiranih GitHub Appova, osim uz neovisni Codex par samo na aktualnom headu (D-158), kvotni fallback ili put druge Claude sesije (D-139) iz `docs/ENGINEERING_SYSTEM.md` §6. Autor ispravlja prihvaćene nalaze, a odbijene obrazlaže.
 6. Sesija zapisuje izvještaj u PR (predložak u §3) i staje. Claude sesija na istom računu uz to šalje orkestratoru jednu poruku po `docs/ORKESTRATOR.md` §5; rad s drugog računa ili providera o poruci ne ovisi.
@@ -84,7 +84,7 @@ IZVJEŠTAJ <id> · status: PR otvoren | blokirano | gotovo bez PR-a
 PR: <poveznica>
 Agent: <runtime>:<slot>:<uloga>
 Napravljeno: <3 do 5 stavki>
-Testovi: <naredba i rezultat>
+Testovi: <puni testirani SHA; naredba/scenarij, rezultat i poveznica/putanja primarnog zapisa; razlikuj lokalno, CI i neovisnu QA; neizvedeno navedi izričito>
 Review: <reviewer, head, nalaz/PASS; odbijeni nalazi uz razlog>
 QA: <za critical: QA head + scope + PASS; inače n/a>
 Plan napada: <tablica "stavka plana → test" u opisu PR-a, s razlogom za svaku neprimjenjivu stavku; inače n/a>
