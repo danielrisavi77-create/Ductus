@@ -108,6 +108,7 @@ export function createLivePublisher(options: LivePublisherOptions): LivePublishe
   let lastStart = Number.NEGATIVE_INFINITY;
   let retryMs = 0;
   let conflicted: string | null = null;
+  let exhausted: string | null = null;
   let unsubscribe: (() => void) | null = null;
 
   const clearTimer = () => {
@@ -134,6 +135,10 @@ export function createLivePublisher(options: LivePublisherOptions): LivePublishe
     // Back online, the `online` event schedules the last state again.
     if (!network.isOnline()) return;
     const text = pending;
+    // Only a state that actually goes out starts a new conflict allowance.
+    // An edit that returns to unsent bytes cannot renew the exhausted retry.
+    if (text !== conflicted) conflicted = null;
+    if (text !== exhausted) exhausted = null;
     const controller = new AbortController();
     inFlight = controller;
     lastStart = now();
@@ -178,8 +183,9 @@ export function createLivePublisher(options: LivePublisherOptions): LivePublishe
       token = answer.token;
       accepted = null;
       retryMs = 0;
-      if (conflicted === text && pending === text) pending = null;
+      if (conflicted === text) exhausted = text;
       conflicted = text;
+      settle();
       schedule();
       return;
     }
@@ -209,7 +215,7 @@ export function createLivePublisher(options: LivePublisherOptions): LivePublishe
    * the answer decides here.
    */
   function settle(): void {
-    if (pending !== null && (pending === accepted || pending === refused)) pending = null;
+    if (pending !== null && (pending === accepted || pending === refused || pending === exhausted)) pending = null;
   }
 
   return {

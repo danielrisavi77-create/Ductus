@@ -251,6 +251,42 @@ describe("live publisher (BACKEND 4.12 t. 7 and 8)", () => {
     expect(s.time.pending()).toBe(0);
   });
 
+  it("does not publish A again after its conflict retry is exhausted and an edit returns to A", async () => {
+    const s = setup();
+    const a = validDoc("A");
+    const b = validDoc("AB");
+    s.publisher.start();
+    s.publisher.offer(a);
+    await s.time.advance(0);
+    s.calls[0]!.resolve(answer(409, TOKEN_A));
+    await s.time.advance(LIVE_PUBLISH_GAP_MS);
+    expect(s.calls).toHaveLength(2);
+    s.calls[1]!.resolve(answer(409, TOKEN_B));
+    await s.time.advance(0);
+
+    // The editor publishes an insertion and deletion within its debounce window.
+    s.publisher.offer(b);
+    await s.time.advance(399);
+    s.publisher.offer(a);
+    await s.time.advance(120_000);
+    expect(s.calls.map((call) => call.init.body)).toEqual([
+      canonicalizeJcs(a), canonicalizeJcs(a),
+    ]);
+    expect(s.time.pending()).toBe(0);
+
+    // Once B actually goes out, its own conflict still has one retry.
+    s.publisher.offer(b);
+    await s.time.advance(0);
+    expect(s.calls).toHaveLength(3);
+    expect(s.calls[2]!.init.body).toBe(canonicalizeJcs(b));
+    expect(s.calls[2]!.init.headers).toMatchObject({ "if-match": `"${TOKEN_B}"` });
+    s.calls[2]!.resolve(answer(409, TOKEN_A));
+    await s.time.advance(LIVE_PUBLISH_GAP_MS);
+    expect(s.calls).toHaveLength(4);
+    expect(s.calls[3]!.init.body).toBe(canonicalizeJcs(b));
+    expect(s.calls[3]!.init.headers).toMatchObject({ "if-match": `"${TOKEN_A}"` });
+  });
+
   it("ignores a stale conflict body after stop and restart without consuming the new retry", async () => {
     const s = setup();
     s.publisher.start();
