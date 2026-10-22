@@ -10,7 +10,8 @@ import { handleEnrollmentCodeRequest } from "@/server/institution/enrollment-cod
 
 // Real PostgreSQL and ductus_app login, with entirely invented fixtures.
 const admin = new pg.Pool({ connectionString: process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus", max: 3 });
-const app = new pg.Pool({ connectionString: process.env.APP_DATABASE_URL, max: 3 });
+const applicationName = `issue-code-${randomUUID()}`;
+const app = new pg.Pool({ connectionString: process.env.APP_DATABASE_URL, max: 3, application_name: applicationName });
 const withActor = createWithActor(app);
 const ORIGIN = "https://issue-code.example";
 const faculties = [randomUUID(), randomUUID()];
@@ -181,7 +182,7 @@ describe("enrollment code real POST, session and database", () => {
       const deadline = Date.now() + 3000;
       let waiting = 0;
       do {
-        waiting = Number((await admin.query("SELECT count(*) FROM pg_stat_activity WHERE wait_event_type='Lock' AND query LIKE 'SELECT institution.create_enrollment_code%'")).rows[0].count);
+        waiting = Number((await admin.query("SELECT count(*) FROM pg_stat_activity WHERE application_name=$1 AND wait_event_type='Lock' AND query LIKE 'SELECT institution.create_enrollment_code%'", [applicationName])).rows[0].count);
         if (waiting < 2) await new Promise((resolve) => setTimeout(resolve, 25));
       } while (waiting < 2 && Date.now() < deadline);
       expect(waiting).toBe(2);
