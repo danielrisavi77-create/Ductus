@@ -10,10 +10,11 @@ const playwright = await readFile(new URL("../../playwright.config.ts", import.m
 
 const ALL = `\${{ github.event_name != 'pull_request' }}`;
 
-function step(name) {
-  const start = ci.indexOf(`      - name: ${name}\n`);
+function step(name, job = "stack-e2e") {
+  const block = ci.split(`\n  ${job}:\n`)[1]?.split(/^ {2}[\w-]+:\n/m)[0] ?? "";
+  const start = block.indexOf(`      - name: ${name}\n`);
   assert.ok(start >= 0, `step "${name}" exists`);
-  const rest = ci.slice(start + 1);
+  const rest = block.slice(start + 1);
   const next = rest.search(/\n {6}- |\n {2}[\w-]+:\n/);
   return rest.slice(0, next < 0 ? undefined : next);
 }
@@ -47,6 +48,23 @@ test("outside a pull request all three engines are installed and every project r
   assert.match(install, /if \[ "\$ALL_ENGINES" = "true" \]; then\n {12}pnpm exec playwright install --with-deps chromium firefox webkit\n {10}else\n {12}pnpm exec playwright install --with-deps chromium\n {10}fi/);
   // all engines: the plain suite with no --project filter, so every project runs
   assert.match(e2e, /if \[ "\$ALL_ENGINES" = "true" \]; then\n {12}pnpm test:e2e\n {10}else\n {12}pnpm test:e2e --project=desktop --project=mobile\n {10}fi/);
+});
+
+test("the isolated login job runs the full Chromium suite and preserves both reports", () => {
+  assert.match(step("Install login browser", "stack-login"), /^ {8}run: pnpm exec playwright install --with-deps chromium$/m);
+  const login = step("Full login E2E", "stack-login");
+  assert.match(login, /^ {8}run: pnpm test:e2e:login$/m);
+  assert.match(login, /^ {8}if: success\(\) && !cancelled\(\) && needs\.scope\.outputs\.profile == 'full'$/m);
+  assert.doesNotMatch(login, /continue-on-error/);
+  for (const [job, label, report] of [
+    ["stack-e2e", "Upload Playwright report", "playwright-report"],
+    ["stack-login", "Upload login Playwright report", "playwright-report-login"],
+  ]) {
+    const upload = step(label, job);
+    assert.ok(upload.includes(`          name: ${report}\n`));
+    assert.ok(upload.includes(`          path: ${report}/\n`));
+    assert.match(upload, /^ {10}retention-days: 14$/m);
+  }
 });
 
 test("the pull request projects are Chromium and the full run includes Firefox and WebKit", () => {
