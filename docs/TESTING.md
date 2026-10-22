@@ -78,6 +78,82 @@ obvezni. Snapshot specovi prilažu snimke bez usporedbe s referentnim slikama.
 Jedan zeleni prolaz ne opravdava stvarno preskakanje: širenje traži pregled
 uvoza/potrošača CSS-a, dokaze iz kandidatnih PR-ova i zaseban zadatak.
 
+### Lokalni Playwright UI Mode, trag i izvještaj (DAN-248, dio A)
+
+Iz korijena repozitorija, u PowerShellu s Nodeom iz `.nvmrc`, instaliraj
+postojeće ovisnosti (`pnpm install --frozen-lockfile`) i Chromium preglednik
+(`pnpm exec playwright install chromium`). Provjeri da su slobodni portovi
+3000–3004 (standardni E2E), 3000 (login), 8090 (lokalni lažni OIDC),
+54329 (Postgres) i 9100 (lokalna pohrana). Koristi samo sintetičke podatke i
+lokalni `compose.yaml`; za punu lokalnu pripremu u **istoj** PowerShell sesiji:
+
+```powershell
+$authPassword = [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(24)).ToLowerInvariant()
+$env:DUCTUS_AUTH_LOCAL_PASSWORD = $authPassword
+$env:AUTH_DATABASE_URL = "postgres://ductus_auth_local:${authPassword}@127.0.0.1:54329/ductus"
+pnpm demo:prepare
+```
+
+`demo:prepare` podiže lokalni Compose, migrira bazu, postavlja sintetičke
+ustanove te priprema lokalni potpis i pohranu. Lozinka ostaje u sesiji i ne ide
+u repozitorij. Za UI Mode pokreni **jednu** od naredbi, nakon što prethodna
+završi i kad port 3000 nije zauzet:
+
+```powershell
+pnpm exec playwright test --ui --project=desktop
+pnpm exec playwright test --config playwright.login.config.ts --ui --project=login-chromium
+```
+
+Prva naredba koristi `playwright.config.ts`: produkcijski build i pet lokalnih
+servera na 3000–3004. Druga koristi `playwright.login.config.ts`: `next dev`
+na 3000 i puni tok prijave preko lokalnog lažnog OIDC-a. UI Mode je lokalni
+interaktivni odabir/proba, ne zamjena za obvezni puni `pnpm test:e2e` i
+`pnpm test:e2e:login` ni za browser politiku gore. Ako želiš ispitati jedan
+postojeći spec iz naredbenog retka, primjer je
+`pnpm test:e2e landing.spec.ts --project=desktop`; za login koristi
+`pnpm test:e2e:login prijava.spec.ts`. Ne uključuj `E2E_REUSE_SERVER=1` osim
+ako si provjerio da na portu radi baš tražena verzija i vrsta servera.
+
+Za reprodukciju pada odaberi test u UI Modeu i ponovno ga pokreni, ili pokreni
+isti spec iz CLI-ja. Obje konfiguracije već imaju `trace: "retain-on-failure"`,
+`screenshot: "only-on-failure"` i lokalni video pri padu. Po završetku
+neuspjelog testa nađi njegov `trace.zip` i otvori Trace Viewer; uz trag su
+vremenska crta, koraci, mreža i snimke stanja:
+
+```powershell
+$trace = Get-ChildItem .\test-results, .\test-results-login -Recurse -Filter trace.zip -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+pnpm exec playwright show-trace $trace
+pnpm exec playwright show-report playwright-report
+pnpm exec playwright show-report playwright-report-login
+```
+
+Otvori samo izvještaj odgovarajuće konfiguracije; login zapisuje
+`test-results-login/` i `playwright-report-login/`, standardni E2E
+`test-results/` i `playwright-report/`. Ako test prođe, prema postojećoj
+postavci nema zadržanog traga. Snimke iz `e2e/screenshots/` zasad su prilozi
+izvještaju, bez usporedbe s referentnim slikama.
+
+U GitHub Actions otvori konkretni CI run i preuzmi artefakt
+`playwright-report` iz posla **Standard E2E and database** ili `playwright-report-login` iz
+posla **Login E2E**. Artefakti punog profila čuvaju se 14 dana i prenose se
+i nakon pada testa ako run nije otkazan. Primjer za već poznat ID runa:
+
+```powershell
+$runId = 123456789 # zamijeni ID-om iz adrese konkretnog Actions runa
+gh run download $runId -n playwright-report -D .\work\playwright-report-ci
+pnpm exec playwright show-report .\work\playwright-report-ci
+```
+
+Za login zamijeni ime artefakta i odredište s `playwright-report-login`.
+Preuzeti izvještaj otvara pripadajuće tragove kroz vlastite privitke; izvan
+punog CI profila ili kod otkazanog runa artefakt možda ne postoji. Postojeći
+interaktivni browser CLI provjeri s `pnpm exec playwright cli --help`, zatim
+koristi `pnpm exec playwright cli open http://localhost:3000`,
+`pnpm exec playwright cli snapshot` i na kraju
+`pnpm exec playwright cli close` prema
+`.agents/skills/ductus-browser-cli/SKILL.md`. CLI
+koristi već instalirani Playwright 1.63; ne instalira se zaseban paket.
+
 ## 3. Obvezni adversarial scenariji prije pilota
 
 Svaki scenarij dobiva test ili zapis ručne probe.
