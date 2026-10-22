@@ -547,22 +547,26 @@ export function evaluateGate({
     }
 
     if (!separateAppPass) {
-      // DAN-39: the Codex pair is current-head only, never D-101 carry.
-      // PASS filtering and negative dominance above still apply. Declared
-      // slots are not cryptographic proof of independent sessions.
-      const codexReview = passingReviews.some(
-        (review) => review.current && review.identity.appSlug === "chatgpt-codex-connector",
+      // D-161: the Codex pair carries through a clean base merge (D-101) like
+      // any other verdict; `carriedHeads` already holds only heads behind base
+      // merges with an identical PR diff. PASS filtering and negative
+      // dominance above still apply. Declared slots are not cryptographic
+      // proof of independent sessions.
+      const codexReview = passingReviews.find(
+        (review) => review.identity.appSlug === "chatgpt-codex-connector",
       );
-      const codexQa = qaPasses.some(
+      const codexQa = qaPasses.find(
         (result) =>
-          result.current &&
           result.identity.appSlug === "chatgpt-codex-connector" &&
           !passingReviewerPrincipals.has(result.identity.principal),
       );
       if (codexReview && codexQa) {
+        const note = carriedNote([codexReview, codexQa], headSha);
         return {
           state: "success",
-          description: "Independent Codex review and QA pair valid on exact current head.",
+          description: note
+            ? `Independent Codex review and QA pair valid for current head through D-101 carry.${note}`
+            : "Independent Codex review and QA pair valid on exact current head.",
         };
       }
       return {
