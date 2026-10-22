@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 
-import { D97_MANUAL_PATHS, D97_PATHS, matchesPath } from "./protected-paths.mjs";
+import { D97_PATHS, matchesPath } from "./protected-paths.mjs";
 
 // D-161: the Mergify queue merges only on the owner's command and only when
 // every required status of `main` is green.
@@ -16,6 +16,7 @@ const REQUIRED = [
   "Security scanners",
   "Dependency review",
   "Engineering review gate",
+  "Merge authorization",
 ];
 
 test("queue and merge conditions require every required status of main", () => {
@@ -48,39 +49,20 @@ function rules() {
     }));
 }
 
-test("two rules queue a PR, each only once the engineering gate is green", () => {
+test("one rule queues a PR, and it reads only the two statuses the gate publishes", () => {
   const all = rules();
-  assert.equal(all.length, 2);
-  for (const rule of all) {
-    assert.ok(rule.queue, rule.name);
-    assert.ok(rule.conditions.includes("check-success=Engineering review gate"), rule.name);
-    assert.ok(rule.conditions.includes("base=main") && rule.conditions.includes("-draft"), rule.name);
-  }
+  assert.equal(all.length, 1);
+  assert.ok(all[0].queue);
+  assert.deepEqual(all[0].conditions, [
+    "base=main",
+    "-draft",
+    "check-success=Engineering review gate",
+    "check-success=Merge authorization",
+  ]);
 });
 
-test("the owner-command rule needs the label spoji-me and nothing else queues a critical PR", () => {
-  const [auto, owner] = rules();
-  assert.ok(owner.conditions.includes("label=spoji-me"));
-  assert.ok(auto.conditions.includes("-label=spoji-me"));
-  assert.ok(auto.conditions.includes("body~=(?m)^Risk:\\s+(low|standard)\\s*$"));
-  assert.ok(auto.conditions.includes("-body~=(?m)^Risk:\\s+critical"));
-});
-
-test("the automatic rule excludes every D-97 path and docs/DECISIONS.md, whatever the case", () => {
-  const [auto] = rules();
-  const condition = auto.conditions.find((line) => line.startsWith("-files~="));
-  assert.ok(condition);
-  const source = condition.slice("-files~=".length);
-  assert.ok(source.startsWith("(?i)"));
-  const pattern = new RegExp(source.slice("(?i)".length), "i");
-  for (const path of [...D97_PATHS, ...D97_MANUAL_PATHS]) {
-    const file = path.endsWith("/") ? `${path}some/file.txt` : path;
-    assert.match(file, pattern, file);
-    assert.match(file.toUpperCase(), pattern, file.toUpperCase());
-  }
-  for (const file of ["src/editor/a.ts", "tests/unit/a.test.ts", "docs/PRODUCT.md", "e2e/a.spec.ts", "db/migrations/1.sql", "README.md", "scripts/demo/up.mjs"]) {
-    assert.doesNotMatch(file, pattern, file);
-  }
+test("Mergify never reads the description, a label or a file name (review of #565)", () => {
+  assert.doesNotMatch(body, /body~=|label=|files~=|-files|-body/);
 });
 
 test("the queue squashes and refreshes the branch by merging main (D-101)", () => {

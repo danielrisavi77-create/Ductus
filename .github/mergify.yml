@@ -1,24 +1,23 @@
 # Mergify merge queue (D-161). Mergify is a GitHub App; nothing runs on a
-# developer machine. Two ways into the queue, both only after the Engineering
-# review gate is green:
-#   1. automatically, for a PR that declares Risk low or standard and touches
-#      no D-97 path or docs/DECISIONS.md (owner decision of 22. 10. 2026, D-161
-#      (h)). The metadata check in CI keeps the declared risk at or above the
-#      path floor, renames included, and re-runs on every Mergify merge commit;
-#   2. for every other PR (Risk critical or a D-97 path), only with the label
-#      `spoji-me`. The session sets it when the owner commands "spoji N" and
-#      after the `Owner-Command` comment (D-97, docs/ORKESTRATOR.md section 2);
-#      the owner may also tick the box Mergify posts or comment
-#      `@Mergifyio queue` himself.
+# developer machine. A PR enters the queue only when both statuses the gate
+# publishes are green (D-161 (h)):
+#   - "Engineering review gate": independent review and QA for the head;
+#   - "Merge authorization": the owner's `Owner-Command: merge` comment names
+#     this head (D-97, docs/ORKESTRATOR.md section 2), or the PR declares Risk
+#     low or standard and touches no D-97 path.
+# Mergify reads neither the PR description nor labels nor file names: the gate
+# decides with the same parser that checks the declared risk, so an edited
+# description cannot change what Mergify sees. A queue command is restricted
+# to the owner (`sender`) and still needs every status in the queue rule.
 # In the queue Mergify merges `main` into the PR branch (a clean base merge
-# keeps review and QA under D-101), waits for every required status on the
-# new head and squashes.
+# keeps review, QA and the command under D-101), waits for every required
+# status on the new head and squashes.
 # Mergify reads `.mergify.yml` and `.mergify/config.yml` before this file;
 # neither may exist (mergify-config.test.mjs), and Mergify applies the
 # configuration of the default branch only, so a PR cannot change the queue
 # before it is merged.
 # scripts/engineering/mergify-config.test.mjs keeps the contexts below equal to
-# the required statuses of `main`.
+# the required statuses of `main` plus "Merge authorization".
 
 queue_rules:
   - name: main
@@ -31,6 +30,7 @@ queue_rules:
       - check-success=Security scanners
       - check-success=Dependency review
       - check-success=Engineering review gate
+      - check-success=Merge authorization
     merge_conditions: *required
     merge_method: squash
     update_method: merge
@@ -47,24 +47,12 @@ commands_restrictions:
       - sender=danielrisavi77-create
 
 pull_request_rules:
-  - name: queue when the gate is green, for Risk low or standard without D-97 paths
+  - name: queue when the gate and the merge authorization are green
     conditions:
       - base=main
       - -draft
-      - -label=spoji-me
       - check-success=Engineering review gate
-      - body~=(?m)^Risk:\s+(low|standard)\s*$
-      - -body~=(?m)^Risk:\s+critical
-      - -files~=(?i)^(CLAUDE\.md|AGENTS\.md|docs/(ENGINEERING_SYSTEM|ENGINEERING_SYSTEM-SAZETAK|ORKESTRATOR|ORKESTRATOR-SAZETAK|SESSIONS|MULTI-ACCOUNT|AGENT_SYSTEM_V2|DECISIONS)\.md|lefthook\.yml|\.github/|scripts/(engineering|hooks|orchestrator)/|\.claude/|\.agents/|plugins/ductura-engineering/)
-    actions:
-      queue:
-        name: main
-  - name: queue when the owner commanded the merge (label spoji-me)
-    conditions:
-      - base=main
-      - -draft
-      - label=spoji-me
-      - check-success=Engineering review gate
+      - check-success=Merge authorization
     actions:
       queue:
         name: main
