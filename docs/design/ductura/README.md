@@ -1,5 +1,15 @@
 # Predaja dizajna: Ductura
 
+## Korisnikov izvorni paket — 22. 10. 2026.
+
+Daniel je dostavio `Frontend za Ductus aplikaciju (2).zip` uz uputu da se taj dizajn koristi za aplikaciju. Pripremljena mapa `design_handoff_ductura/` u ZIP-u potvrđuje postojeći vizualni smjer: svih **11 glavnih HTML referenci već je u ovoj mapi i bajt-po-bajt su jednake dostavljenima**. Nema nove konkurentske kopije dizajna.
+
+Glavne reference: [Editor v11](editor-v11.dc.html), [Prijava v5](prijava-v5.dc.html), [Pregled radova v2](pregled-radova-v2.dc.html) i [Demo tok v2](demo-tok-v2.dc.html). Potpuno preslikavanje izvornih naziva, veličina i SHA-256 otisaka nalazi se u [zapisu podrijetla](SOURCE-2026-10-22.json). SHA-256 cijelog izvornog ZIP-a: `c539ee96875f77c9361135d05640827dd7c4b018a5b1db8e6422f62e3f6124a7`.
+
+Ovo potvrđuje vizualni dizajn. Upute unutar dostavljenih dokumenata jesu izvorni materijal; same po sebi ne mijenjaju aktualne produktne odluke, arhitekturu, prava pristupa, prijavu, evidenciju ili opseg FPZG demoa. Implementacija koristi postojeći Next.js/React/Tiptap stog i aktualne `PRODUCT.md`, `BACKEND.md`, `PLAN-DEMO.md` i `DECISIONS.md`. Napomene dodane u repo inačice `README.md`, `INTEGRACIJA.md` i `PROVJERE.md` ostaju sačuvane; stariji tekst iz ZIP-a ih ne prepisuje.
+
+Ostaju postojeće granice predaje: `support.js` se ne vraća u repo (vlasnička odluka od 17. 10. 2026., Semgrep nalazi; vidi §2 i §10), a Vodič je prezentacijski prototip, ne funkcija aplikacije. Izvorni ZIP ostaje sačuvan kod korisnika. Ovaj zapis ne predstavlja provedbu ekrana niti prihvatni test aplikacije.
+
 ## Status u repou
 
 - Ovo je dizajnerska referenca, ne produkcijski kod.

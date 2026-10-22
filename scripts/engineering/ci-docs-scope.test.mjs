@@ -217,7 +217,8 @@ test("both runtime suites are independent, full-only and keep their own setup an
         assert.equal(spawnSync("bash", ["-c", block.split("        run: ")[1].trim()]).status, 1);
         continue;
       }
-      const status = block.includes("uses: actions/upload-artifact@") ? "!cancelled()"
+      const status = block.includes("uses: actions/upload-artifact@") ||
+        block.startsWith("      - name: UI test selection pilot\n") ? "!cancelled()"
         : block.includes("run: docker compose logs") ? "failure()"
           : block.includes("run: pnpm stack:down") ? "always()" : null;
       assert.equal(condition, status ? `\${{ ${full} && ${status} }}` : runtime, `${name}: ${block.split("\n")[0]}`);
