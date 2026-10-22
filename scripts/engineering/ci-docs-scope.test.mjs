@@ -105,9 +105,10 @@ test("real git errors, bad SHAs and empty diffs cannot bypass the stack", (t) =>
 });
 
 function job(name) {
-  const block = ci.match(new RegExp(`^  ${name}:\\n([\\s\\S]*?)(?=^  [\\w-]+:|$(?![\\s\\S]))`, "m"))?.[1];
-  assert.ok(block, `${name} job exists`);
-  return block;
+  const marker = `\n  ${name}:\n`;
+  const start = ci.indexOf(marker);
+  assert.ok(start >= 0, `${name} job exists`);
+  return ci.slice(start + marker.length).split(/^ {2}[\w-]+:\n/m)[0];
 }
 
 function step(block, name) {
