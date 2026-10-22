@@ -1,9 +1,13 @@
 import { randomBytes, randomUUID } from "node:crypto";
 
 import pg from "pg";
+import { NextRequest } from "next/server";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createWithActor, type WithActor } from "@/server/db/with-actor";
+import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
+import { createAcknowledgmentPostHandler } from "@/server/institution/acknowledgment-route";
+import { POST as acknowledgmentPost } from "../../app/api/institution/assignments/[assignmentId]/acknowledgment/route";
 import { handleTeacherCoursesRequest } from "@/server/institution/teacher-courses";
 
 // The institution functions (B-7) over withActor and a real ductus_app login,
@@ -539,6 +543,116 @@ describe("assignments and removal over withActor", () => {
     // Nobody else has confirmed it, the teacher included.
     expect(await acknowledgedCurrent(people.guesser.token)).toBe(false);
     expect(await acknowledgedCurrent(people.teacher.token)).toBe(false);
+  });
+
+  it("acknowledges over the HTTP boundary with a cookie actor and preserves the database time on retry", async () => {
+    const origin = "http://localhost:3000";
+    const post = createAcknowledgmentPostHandler({ withActor, getRedirectUri: () => `${origin}/auth/callback` });
+    const call = (
+      token: string | undefined,
+      versionNo: unknown = 4,
+      options: { id?: string; body?: string; headers?: Record<string, string> } = {},
+    ) => {
+      const id = options.id ?? assignment;
+      const request = new NextRequest(`${origin}/api/institution/assignments/${id}/acknowledgment`, {
+        method: "POST",
+        headers: {
+          origin,
+          "sec-fetch-site": "same-origin",
+          "content-type": "application/json",
+          ...(token ? { cookie: `${SESSION_COOKIE_NAME}=${token}` } : {}),
+          ...options.headers,
+        },
+        body: options.body ?? JSON.stringify({ versionNo }),
+      });
+      return post(request, { params: Promise.resolve({ assignmentId: id }) });
+    };
+    const rows = () => admin.query<{ acknowledged_at: Date }>(
+      "SELECT acknowledged_at FROM institution.notice_acknowledgment WHERE assignment_id = $1 AND version_no = 4 AND student_id = $2",
+      [assignment, people.guesser.id],
+    );
+
+    expect((await rows()).rows).toHaveLength(0);
+    const first = await call(people.guesser.token);
+    expect(first.status).toBe(200);
+    expect(first.headers.get("cache-control")).toBe("no-store");
+    const answer = await first.json();
+    expect(answer).toEqual({ acknowledgedAt: (await rows()).rows[0].acknowledged_at.toISOString() });
+    const retry = await call(people.guesser.token);
+    expect([retry.status, await retry.json()]).toEqual([200, answer]);
+    expect((await rows()).rows).toHaveLength(1);
+
+    // Also exercise the exported Next.js route with its real application DB pool.
+    const previousRedirect = process.env.OIDC_REDIRECT_URI;
+    process.env.OIDC_REDIRECT_URI = `${origin}/auth/callback`;
+    try {
+      const request = new NextRequest(`${origin}/api/institution/assignments/${assignment}/acknowledgment`, {
+        method: "POST",
+        headers: { origin, "content-type": "application/json", cookie: `${SESSION_COOKIE_NAME}=${people.guesser.token}` },
+        body: JSON.stringify({ versionNo: 4 }),
+      });
+      const routed = await acknowledgmentPost(request, { params: Promise.resolve({ assignmentId: assignment }) });
+      expect([routed.status, await routed.json()]).toEqual([200, answer]);
+    } finally {
+      if (previousRedirect === undefined) delete process.env.OIDC_REDIRECT_URI;
+      else process.env.OIDC_REDIRECT_URI = previousRedirect;
+    }
+
+    for (const token of [undefined, newToken(), "bad-token"]) {
+      const response = await call(token);
+      expect([response.status, await response.json()]).toEqual([401, { error: "unauthorized" }]);
+    }
+    for (const token of [people.teacher.token, people.admin.token, people.outsider.token]) {
+      const response = await call(token);
+      expect([response.status, await response.json()]).toEqual([403, { error: "forbidden" }]);
+    }
+    const inaccessible = await call(people.guesser.token, 4, { id: randomUUID() });
+    expect([inaccessible.status, await inaccessible.json()]).toEqual([403, { error: "forbidden" }]);
+    const stale = await call(people.guesser.token, 3);
+    expect([stale.status, await stale.json()]).toEqual([409, { error: "conflict" }]);
+    await admin.query("UPDATE identity.session SET closed_at = now(), close_reason = 'logout' WHERE user_id = $1", [people.guesser.id]);
+    try {
+      expect((await call(people.guesser.token)).status).toBe(401);
+    } finally {
+      await admin.query("UPDATE identity.session SET closed_at = NULL, close_reason = NULL WHERE user_id = $1", [people.guesser.id]);
+    }
+
+    for (const headers of [
+      { origin: "https://other.example", host: "localhost:3000" },
+      { origin: "http://localhost:3000", host: "other.example", "sec-fetch-site": "cross-site" },
+      { origin: "null" },
+      { origin: "" },
+    ] as Record<string, string>[]) {
+      expect((await call(people.guesser.token, 4, { headers })).status).toBe(403);
+    }
+    for (const [body, status] of [
+      ["{", 400],
+      [JSON.stringify({ versionNo: "4" }), 422],
+      [JSON.stringify({ versionNo: 4, studentId: people.student.id }), 422],
+      [JSON.stringify({ versionNo: 2_147_483_648 }), 422],
+      ["x".repeat(1025), 413],
+    ] as const) {
+      expect((await call(people.guesser.token, 4, { body })).status).toBe(status);
+    }
+    expect((await call(people.guesser.token, 4, { headers: { "content-type": "text/plain" } })).status).toBe(415);
+    expect((await call(people.guesser.token, 4, { id: "bad-id" })).status).toBe(400);
+    const misconfigured = createAcknowledgmentPostHandler({ withActor, getRedirectUri: () => "file:///bad" });
+    const brokenRequest = new NextRequest(`${origin}/api/institution/assignments/${assignment}/acknowledgment`, {
+      method: "POST", headers: { origin, "content-type": "application/json", cookie: `${SESSION_COOKIE_NAME}=${people.guesser.token}` },
+      body: JSON.stringify({ versionNo: 4 }),
+    });
+    expect((await misconfigured(brokenRequest, { params: Promise.resolve({ assignmentId: assignment }) })).status).toBe(503);
+    const failed = createAcknowledgmentPostHandler({
+      withActor: async () => { throw Object.assign(new Error("private SQL and input"), { code: "XX000" }); },
+      getRedirectUri: () => `${origin}/auth/callback`,
+    });
+    const failureRequest = new NextRequest(`${origin}/api/institution/assignments/${assignment}/acknowledgment`, {
+      method: "POST", headers: { origin, "content-type": "application/json", cookie: `${SESSION_COOKIE_NAME}=${people.guesser.token}` },
+      body: JSON.stringify({ versionNo: 4 }),
+    });
+    const failure = await failed(failureRequest, { params: Promise.resolve({ assignmentId: assignment }) });
+    expect([failure.status, await failure.json()]).toEqual([503, { error: "unavailable" }]);
+    expect((await rows()).rows).toHaveLength(1);
   });
 
   it("a removal racing with enrolments leaves the student out until the teacher allows the return", async () => {

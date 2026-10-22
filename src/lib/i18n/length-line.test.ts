@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { countTextWords, groupHr, lengthLine, pagesOf } from "./length-line";
+import { countTextWords, groupHr, lengthLine, pagesOf, wordRangeHr } from "./length-line";
 
 const NBSP = " ";
 const RANGE = { min: 2000, max: 2500 };
@@ -11,6 +11,15 @@ describe("length line of the status bar (FE-D6)", () => {
     expect(groupHr(999)).toBe("999");
     expect(groupHr(2000)).toBe(`2${NBSP}000`);
     expect(groupHr(1234567)).toBe(`1${NBSP}234${NBSP}567`);
+  });
+
+  it("gives the same optional target label to preview and notice", () => {
+    expect(wordRangeHr(null)).toBeNull();
+    expect(wordRangeHr({ min: null, max: null })).toBeNull();
+    expect(wordRangeHr({ min: 1, max: null })).toBe("najmanje 1 riječ");
+    expect(wordRangeHr({ min: null, max: 1_000_000 })).toBe(`najviše 1${NBSP}000${NBSP}000 riječi`);
+    expect(wordRangeHr(RANGE)).toBe(`2${NBSP}000–2${NBSP}500 riječi`);
+    expect(wordRangeHr({ min: 1, max: 1 })).toBe("1–1 riječ");
   });
 
   it("counts pages at 300 words, none before the first word, then at least one", () => {

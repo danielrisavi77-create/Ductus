@@ -148,11 +148,11 @@ Za `critical` PR reviewer i QA moraju biti strojno različiti po autentificirano
 
 ### Neovisni Codex review i QA na aktualnom headu (D-158)
 
-Kanonski review PASS i zaseban QA PASS smiju doći preko istog autentificiranog Appa `chatgpt-codex-connector` kad su oba na točno aktualnom punom SHA-u PR-a. Autor, reviewer i QA moraju imati tri različita normalizirana principala: `codex` i `chatgpt` dijele namespace `openai`, a veličina slova slota ne razlikuje principal. QA se mora razlikovati od **svakog važećeg reviewer PASS principala**, uključivo prenesene review PASS-ove. Oba potrebna PASS-a ovog puta moraju biti aktualna; preneseni PASS iz D-101 ne zadovoljava nijednu stranu para. Postojeća prevlast `FAIL`/`BLOCK`, filtriranje autora i parser ostaju nepromijenjeni. Status imenuje „Independent Codex review and QA pair” na aktualnom headu.
+Kanonski review PASS i zaseban QA PASS smiju doći preko istog autentificiranog Appa `chatgpt-codex-connector` kad su oba na točno aktualnom punom SHA-u PR-a. Autor, reviewer i QA moraju imati tri različita normalizirana principala: `codex` i `chatgpt` dijele namespace `openai`, a veličina slova slota ne razlikuje principal. QA se mora razlikovati od **svakog važećeg reviewer PASS principala**, uključivo prenesene review PASS-ove. Od D-161 PASS-ovi para prenose se kroz čisto spajanje osnovne grane pod istim dokazanim uvjetima D-101 kao i ostali verdikti; bez tog dokaza vrijede samo na aktualnom headu. Postojeća prevlast `FAIL`/`BLOCK`, filtriranje autora i parser ostaju nepromijenjeni. Status imenuje „Independent Codex review and QA pair” i, kad broji prenesen PASS, head s kojeg je prenesen.
 
 Ovaj put ne traži kvotni dokaz, `Provider-Fallback` ni model ID. Nativni PR review, Codex sažetak, potvrda „Reviewed commit” i advisory CLI nalaz nisu zamjena za kanonski review blok s principalom. Ostali cross-App, kvotni, D-139 i Owner Override putevi ostaju zasebni i nepromijenjeni.
 
-Različiti deklarirani slotovi nisu kriptografska potvrda zasebnih procesa ili stvarne neovisnosti. Orkestrator jamči odvojene dodjele po §14–15 i `ORKESTRATOR.md` §8: QA nije autor, reviewer, njihov podagent ni pisac plana napada te ne čita reviewerov izvještaj prije vlastitog verdikta. Zeleni CI na istom headu i svi merge uvjeti ostaju obvezni. Vlasnik je odobrio samo pripremu uskog D-97 PR-a ([#87, 6297297544](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6297297544)), ne merge ni Owner Override; PR koji uvodi pravilo ne može sam sebe legitimirati, nego ga do spajanja ocjenjuje evaluator s `main`.
+Različiti deklarirani slotovi nisu kriptografska potvrda zasebnih procesa ili stvarne neovisnosti. Orkestrator jamči odvojene dodjele po §14–15 i `ORKESTRATOR.md` §8: QA nije autor, reviewer, njihov podagent ni pisac plana napada te ne čita reviewerov izvještaj prije vlastitog verdikta. Zeleni CI na istom headu i svi merge uvjeti ostaju obvezni. D-158 je prihvaćen Danielovom [izričitom naredbom](https://github.com/danielrisavi77-create/Ductus/pull/538#issuecomment-6301459614) i spajanjem [#538](https://github.com/danielrisavi77-create/Ductus/pull/538) 20. 10. 2026. Prije toga priprema nije bila ovlast za merge; kandidat se nije mogao legitimirati vlastitim evaluatorom.
 
 ### Fallback par modela kad drugi provider nije dostupan
 
@@ -194,7 +194,7 @@ Novi AI provider ne dobiva trust samo zato što se deklarira u komentaru. Prvi k
 
 PR metadata i review/QA komentari koriste **jedan zajednički parser** (`scripts/engineering/metadata-parser.mjs`) kako CI i review gate ne bi različito tumačili fenced ili uvučene Markdown primjere.
 
-Novi push poništava review i QA jer `*-Head` više nije jednak aktualnom PR headu. Codex par D-158 uvijek traži dva aktualna PASS-a. Za ostale puteve iznimka (D-101): verdikt na ranijem headu vrijedi i dalje kad su svi kasniji commiti samo spajanja osnovne grane (merge commiti) i diff PR-a prema osnovnoj grani identičan je onome na tom headu; gate to provjerava preko GitHub API-ja (hod po prvom roditelju i compare) i na svaku grešku ne prenosi ništa. Datoteka bez patcha (npr. binarna, prevelika ili čisto preimenovanje) ne prenosi ništa jer compare ne pokazuje njezinu stranu osnovne grane. Hod koji ne stigne do commita koji nije merge, ili više od pet headova s verdiktom iza samih spajanja, također ne prenose ništa, da stariji `FAIL` ili `BLOCK` ne ispadne tiho. Kad uspjeh gatea broji prenesen verdikt, status navodi s kojeg je heada prenesen. Owner Override se prenosi pod istim uvjetima kao verdikt (samo čista spajanja osnovne grane i nepromijenjen diff PR-a prema osnovnoj grani; odluka vlasnika, `#87` komentar 6242103643); override za drugi diff ne vrijedi; najnoviji verdikt istog reviewera ili QA-a, ako je `FAIL` ili `BLOCK`, poništava preneseni override: na aktualnom headu bez obzira na vrijeme objave (i prije overridea), na prenesenom headu samo ako je objavljen nakon overridea, dok override dan izravno na aktualnom headu vrijedi kao dosad; autor override komentara provjerava se kao i za aktualni head. Formalni GitHub review state nije ulaz u ovaj agent gate; agent verdicti idu kroz kanonske PR komentare.
+Novi push poništava review i QA jer `*-Head` više nije jednak aktualnom PR headu. Iznimka (D-101), od D-161 i za Codex par D-158: verdikt na ranijem headu vrijedi i dalje kad su svi kasniji commiti samo spajanja osnovne grane (merge commiti) i diff PR-a prema osnovnoj grani identičan je onome na tom headu; gate to provjerava preko GitHub API-ja (hod po prvom roditelju i compare) i na svaku grešku ne prenosi ništa. Datoteka bez patcha (npr. binarna, prevelika ili čisto preimenovanje) ne prenosi ništa jer compare ne pokazuje njezinu stranu osnovne grane. Hod koji ne stigne do commita koji nije merge, ili više od pet headova s verdiktom iza samih spajanja, također ne prenose ništa, da stariji `FAIL` ili `BLOCK` ne ispadne tiho. Kad uspjeh gatea broji prenesen verdikt, status navodi s kojeg je heada prenesen. Owner Override se prenosi pod istim uvjetima kao verdikt (samo čista spajanja osnovne grane i nepromijenjen diff PR-a prema osnovnoj grani; odluka vlasnika, `#87` komentar 6242103643); override za drugi diff ne vrijedi; najnoviji verdikt istog reviewera ili QA-a, ako je `FAIL` ili `BLOCK`, poništava preneseni override: na aktualnom headu bez obzira na vrijeme objave (i prije overridea), na prenesenom headu samo ako je objavljen nakon overridea, dok override dan izravno na aktualnom headu vrijedi kao dosad; autor override komentara provjerava se kao i za aktualni head. Formalni GitHub review state nije ulaz u ovaj agent gate; agent verdicti idu kroz kanonske PR komentare.
 
 ## 7. Owner Override
 
@@ -212,27 +212,19 @@ Engineering gate prihvaća override samo iz zasebnog komentara GitHub vlasnika r
 
 ## 8. Tijek promjene
 
+```mermaid
+flowchart TD
+  Plan["Opseg, risk, nositelj i kriteriji"] --> Writer["Pisac: zasebna grana"]
+  Writer --> Ready["PR, CI i primjenjivi dokazi"]
+  Ready --> Review["Neovisni review"]
+  Ready --> QA["QA kad risk traži"]
+  Review --> Gate["Orkestrator provjerava gateove"]
+  QA --> Gate
+  Gate --> Merge["Squash merge i post-merge provjera"]
+  Merge --> State["Ažuriranje kanonskih zapisa"]
 ```
-Product/bug signal
-      ↓
-Orkestrator: scope + risk + owner + acceptance criteria
-      ↓
-Backend | Frontend | Platform
-      ↓
-PR + CI
-      ↓
-Independent Review
-      ↓
-QA/adversarial ako risk traži
-      ↓
-Orkestrator
-      ↓
-Squash merge
-      ↓
-Post-merge smoke
-      ↓
-STATE / issue / odluka
-```
+
+Za `critical` review i QA kreću istodobno na istom headu, uz izuzeća iz §5 i neovisnost iz §6/§15 (D-155). Dokazi se pripremaju u postojećem `IZVJEŠTAJ`-u prije poziva sesija (`ORKESTRATOR.md` §8).
 
 Product/UX i Bug Hunter nikad ne preskaču issue fazu i ne prelaze ravno u implementaciju.
 
@@ -242,7 +234,7 @@ Product/UX i Bug Hunter nikad ne preskaču issue fazu i ne prelaze ravno u imple
 - Draft smije zaostajati dok se radi.
 - Prije ready-for-review autor ponovno dohvaća `main` i provjerava stvarni overlap.
 - Ako je `main` promijenio datoteku koju PR dira, autor osvježava branch prije reviewa.
-- PR se spaja samo ako njegov head sadrži aktualni `main` (zaštita grane, 11. 10. 2026.). PR koji je na redu u gateu spaja `main` neposredno prije reviewa (§15).
+- PR se spaja samo ako njegov head sadrži aktualni `main` (zaštita grane, 11. 10. 2026.). Od D-161 granu neposredno prije spajanja osvježava merge queue (§10), ne pisac prije reviewa (§15).
 - Svaki push nakon reviewa automatski invalidira review preko `Review-Head`, osim čistog spajanja osnovne grane bez promjene diffa PR-a (D-101); isto vrijedi za QA verdikt i Owner Override.
 - Orkestrator ne tretira staro zeleno stanje kao dokaz za novi head.
 - Stackani PR-ovi su dopušteni samo kada je ovisnost eksplicitna u opisu; nakon spajanja baze child PR se vraća na `main`.
@@ -264,6 +256,8 @@ Ciljno GitHub pravilo za `main`:
   - `Dependency review`
   - `Engineering review gate`
 - merge metoda: squash.
+
+**Merge queue (D-161).** Spaja Mergify, GitHub aplikacija koju instalira vlasnik; konfiguracija je `.github/mergify.yml` (D-97 putanja); `.mergify.yml` i `.mergify/config.yml` ne smiju postojati jer bi je zasjenili, a Mergify primjenjuje samo konfiguraciju s `main`. PR ulazi u red tek kad su zeleni Engineering review gate i status „Merge authorization” (vlasnik, 22. 10. 2026., D-161 (h)). Mergify ne čita opis PR-a, labele ni datoteke; status objavljuje gate istim parserom kao provjeru rizika i zelen je kad vrijedi jedno od: PR deklarira `Risk: low` ili `standard` i ne dira D-97 putanju ni `docs/DECISIONS.md` (risk floor računa preimenovanja pod oba imena), ili postoji vlasnikov `Owner-Command: merge` s `Command-Head` jednakim headu (prenosi se kroz čisto spajanje `main`, D-101). Za `critical` ili D-97 PR sesija nakon vlasnikove izričite naredbe "spoji N" zabilježi `Owner-Command` (`docs/ORKESTRATOR.md` §2); labela nije potrebna. Komentar `@Mergifyio queue` smije napisati samo vlasnik i ne zaobilazi status. U redu Mergify spaja `main` u granu PR-a (čisto spajanje, D-101 prenosi verdikte), čeka sve obvezne statuse na novom headu i radi squash. Zaštita grane i obvezni statusi se ne mijenjaju. Ako spajanje `main` ima konflikt ili novi head ne prođe, Mergify izbacuje PR iz reda, a PR se vraća piscu.
 
 Noćno spajanje D-97 PR-ova (vlasnik, 11. 10. 2026., #87, `issuecomment-6112586958`) opisano je u `docs/ORKESTRATOR.md` §4; ne mijenja zaštitu grane ni obvezne statuse.
 
@@ -300,7 +294,7 @@ Nakon mergea Orkestrator:
 
 Normalno najviše:
 - 3 aktivna writer PR-a;
-- 1 PR u gateu (review, QA ili čekanje spajanja), i kad je to D-97 PR koji čeka vlasnika (§15);
+- 3 PR-a u gateu (review, QA ili čekanje spajanja), uključujući D-97 PR koji čeka vlasnika, ako se međusobno ne preklapaju po `pnpm orch:overlap` (D-161, §15);
 - 1 PR alata u radu (§16).
 
 Četvrti writer dopušten je samo ako ne dijeli datoteke, migracije, ugovore ni redoslijed s ostala tri.
@@ -328,9 +322,9 @@ Vrijede za svaki `critical` PR uz gate iz §5; gate se njima ne mijenja. Izvor j
 
 ## 15. Gate i spajanje (D-106)
 
-- **Strogo jedan po jedan.** U gateu (review, QA, čekanje spajanja) je u svakom trenutku najviše jedan PR, i kad je to D-97 PR koji čeka vlasnika. Redoslijed određuje orkestrator.
-- **Ažurna grana.** PR koji je na redu spaja `main` neposredno prije reviewa (§9). Codex par D-158 iz §6 uvijek traži dva PASS-a na aktualnom headu; ne koristi prijenos. Čisto spajanje `main` koje ne mijenja diff PR-a prenosi review i QA verdikt i Owner Override (D-101); svaka druga promjena traži review i QA na novom headu.
-- **Review i QA istodobno.** Za `critical` PR review i QA kreću istodobno na istom headu. QA ne čita review prije vlastitog verdikta. Ako review padne, QA na tom headu ne vrijedi. To vrijedi i za QA s Codexa (`chatgpt-codex-connector`) i s Groka (`grok-by-xai`) iz D-138 (D-155).
+- **Najviše tri, bez preklapanja.** U gateu (review, QA, čekanje spajanja) su u svakom trenutku najviše tri PR-a, uključujući D-97 PR koji čeka vlasnika, i to samo PR-ovi koji ne dijele datoteke, migracije ni ugovore (`pnpm orch:overlap`). PR koji se preklapa s nekim u gateu čeka da taj bude spojen. Redoslijed spajanja određuje orkestrator (D-161).
+- **Ažurna grana.** Pisac ne spaja `main` samo da bi grana bila ažurna; to radi merge queue nakon naredbe za spajanje (§10, D-161). `main` se ručno spaja samo zbog konflikta ili kad PR treba novi kod s `main`. Čisto spajanje `main` koje ne mijenja diff PR-a prenosi review i QA verdikt i Owner Override (D-101), od D-161 i za Codex par D-158 iz §6; svaka druga promjena traži review i QA na novom headu.
+- **Review i QA odmah i istodobno.** Review, i QA kad je potreban, kreću čim PR izađe iz nacrta i uđe u gate, bez čekanja da CI završi; za `critical` istodobno na istom headu (D-161). Ako CI padne, ispravak je novi head i verdikti na starom ne vrijede. QA ne čita review prije vlastitog verdikta. Ako review padne, QA na tom headu ne vrijedi. To vrijedi i za QA s Codexa (`chatgpt-codex-connector`) i s Groka (`grok-by-xai`) iz D-138 (D-155).
 - **Nakon spajanja.** Orkestrator čeka CI na `main` prije sljedećeg spajanja, zatim pokreće `pnpm orch:ready` za sljedeći PR u redu i traži spajanje `main` prije nego se na stari head potroše review i QA.
 - **Zaštita grane.** Postavke zaštite (uključujući `strict`) mijenja samo vlasnik.
 
@@ -341,9 +335,9 @@ Svaka skripta ima zapisan okidač (kada se pokreće) i vlasnika (tko ili što je
 ## 17. Dnevna petlja učenja
 
 1. **Okidač.** Analiza se radi za svaki slučaj u danu u kojem PR uđe u treći krug, QA padne nakon review PASS-a ili `main` pocrveni.
-2. **Dva pitanja za svaki slučaj.** Na kojem se najranijem koraku ovo moglo vidjeti? Koje bi polje ili provjera na tom koraku to pokazalo?
-3. **Prijedlog je polje ili provjera, ne savjet.** Svaki prijedlog glasi "dodaj polje ovdje" ili "dodaj provjeru ovdje"; vlasnik ga odobri ili odbije. Ništa se ne mijenja bez njegove odluke.
+2. **Dva pitanja za svaki slučaj.** Na kojem se najranijem koraku ovo moglo vidjeti? Koja postojeća provjera to treba pokriti i zašto nije?
+3. **Najprije postojeće pokriće (D-160).** Predloži konkretnu izmjenu: pokreni postojeću provjeru ranije, popravi je, objedini duplikate ili dodaj novu samo za dokazanu prazninu. Navedi kvar koji hvata, okidač i očekivani trošak; vlasnik odobri ili odbije. Ne uvodi se novo polje ili provjera po automatizmu.
 4. **Pitanje unaprijed.** Ako QA padne na nečemu što nije pisalo u retku "Što bi ovaj PR moglo oboriti na QA-i?" (§14, točka 1), to je ulaz za točku 2.
-5. **Čišćenje.** Jednom tjedno petlja gleda unatrag: polje ili provjera koja mjesec dana nije ništa uhvatila predlaže se za brisanje.
+5. **Čišćenje.** Jednom tjedno provjeri preklapanja i trošak. Uži okidač, objedinjavanje ili uklanjanje traže dokaz jednakovrijednog pokrića i vlasnikovu odluku. Mjesec bez nalaza sam po sebi nije razlog za brisanje preventivne sigurnosne provjere.
 
 Dok alata za dnevne podatke nema, dnevni popis na kraju radnog dana piše orkestrator na issueu #87.

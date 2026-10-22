@@ -1,0 +1,58 @@
+# Mergify merge queue (D-161). Mergify is a GitHub App; nothing runs on a
+# developer machine. A PR enters the queue only when both statuses the gate
+# publishes are green (D-161 (h)):
+#   - "Engineering review gate": independent review and QA for the head;
+#   - "Merge authorization": the owner's `Owner-Command: merge` comment names
+#     this head (D-97, docs/ORKESTRATOR.md section 2), or the PR declares Risk
+#     low or standard and touches no D-97 path.
+# Mergify reads neither the PR description nor labels nor file names: the gate
+# decides with the same parser that checks the declared risk, so an edited
+# description cannot change what Mergify sees. A queue command is restricted
+# to the owner (`sender`) and still needs every status in the queue rule.
+# In the queue Mergify merges `main` into the PR branch (a clean base merge
+# keeps review, QA and the command under D-101), waits for every required
+# status on the new head and squashes.
+# Mergify reads `.mergify.yml` and `.mergify/config.yml` before this file;
+# neither may exist (mergify-config.test.mjs), and Mergify applies the
+# configuration of the default branch only, so a PR cannot change the queue
+# before it is merged.
+# scripts/engineering/mergify-config.test.mjs keeps the contexts below equal to
+# the required statuses of `main` plus "Merge authorization".
+
+queue_rules:
+  - name: main
+    batch_size: 1
+    queue_conditions: &required
+      - base=main
+      - -draft
+      - check-success=Lint, typecheck, test and build
+      - check-success=Local stack (compose.yaml)
+      - check-success=Security scanners
+      - check-success=Dependency review
+      - check-success=Engineering review gate
+      - check-success=Merge authorization
+    merge_conditions: *required
+    merge_method: squash
+    update_method: merge
+
+merge_queue:
+  max_parallel_checks: 1
+
+commands_restrictions:
+  queue:
+    conditions:
+      - sender=danielrisavi77-create
+  requeue:
+    conditions:
+      - sender=danielrisavi77-create
+
+pull_request_rules:
+  - name: queue when the gate and the merge authorization are green
+    conditions:
+      - base=main
+      - -draft
+      - check-success=Engineering review gate
+      - check-success=Merge authorization
+    actions:
+      queue:
+        name: main

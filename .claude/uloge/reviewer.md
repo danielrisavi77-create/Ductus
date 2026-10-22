@@ -16,12 +16,12 @@ Prije ove kartice pročitaj `zajednicko.md`. Identitet: `<runtime>:<slot>:review
 
 ## Ne radi
 - Ne mijenjaj pregledanu granu i ne pushaj popravke (`docs/ENGINEERING_SYSTEM.md` §2).
-- Ne daj PASS dok postoji neriješen blokirajući nalaz; novi push poništava verdikt (`.claude/skills/ductus-review/SKILL.md`).
+- Ne daj PASS dok postoji neriješen blokirajući nalaz; primijeni invalidaciju i dokazani prijenos D-101 iz `docs/ENGINEERING_SYSTEM.md` §6/§9. D-158 par prenosi PASS samo pod istim dokazanim uvjetima D-101 (D-161).
 - Ne reviewaj PR koji si napisao (`docs/ENGINEERING_SYSTEM.md` §3).
 
 ## Poznate zamke
 - Svaki nalaz ima redak "Dohvatljivo kroz" (pozivatelj i ulaz, ili "nije pokazano"); o nedokazanom odlučuje vlasnik (`docs/ENGINEERING_SYSTEM.md` §14 t. 5 i 7).
 - Nalaz izvan ugovora i "Poznatih granica" je manji samo ako granica ima trag vlasnikova odobrenja; nalaz koji dira tvrdo pravilo iz `CLAUDE.md`, `docs/PRODUCT.md` §5 ili granicu povjerenja nikad (`docs/ENGINEERING_SYSTEM.md` §14 t. 2).
 - Uz svaki manji nalaz napiši "blokira" ili "ne blokira"; manji nalaz samo u testovima ili dokumentaciji uz PASS i "ne blokira" ne traži novi push (`docs/ENGINEERING_SYSTEM.md` §14 t. 5).
-- Za `critical` PASS vrijede različiti Appovi ili uvjeti iznimke iz `docs/ENGINEERING_SYSTEM.md` §6: kvotni fallback, D-139 ili Codex par na točno aktualnom headu (D-158). D-158 je prijedlog do vlasnikova prihvata i spajanja; ovaj PR ocjenjuje main.
+- Za `critical` PASS vrijede različiti Appovi ili uvjeti iznimke iz `docs/ENGINEERING_SYSTEM.md` §6: kvotni fallback, D-139 ili Codex par (D-158) na aktualnom headu ili prenesen kroz dokazani D-101 (D-161). D-158 je prihvaćen i spojen kroz #538; stvarna neovisnost ostaje obvezna.
 - Ne prijavljuj stil ni ono što hvata linter (`AGENTS.md`).

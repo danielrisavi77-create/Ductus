@@ -3,6 +3,7 @@
 import { useRef, useState, type FormEvent } from "react";
 
 import { formatDateHr } from "@/lib/i18n/hr";
+import { wordRangeHr } from "@/lib/i18n/length-line";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 
 import {
@@ -10,6 +11,7 @@ import {
   WORK_TYPES,
   assignmentBody,
   createAssignment,
+  parseWordRange,
   type AiPurpose,
   type AssignmentCreation,
   type WorkType,
@@ -19,6 +21,10 @@ import styles from "./TeacherSetup.module.css";
 
 const YEARS = Object.keys(t.teacher.course.years) as (keyof typeof t.teacher.course.years)[];
 const POLICIES = Object.keys(t.teacher.course.policies) as CoursePolicy[];
+
+function PreviewRange({ text }: { text: string | null }) {
+  return text ? <span> · {text}</span> : null;
+}
 
 // Screen 2 of the design handoff. No identity fields: the verified B-7 role on
 // the server decides who may create a course or an assignment.
@@ -38,12 +44,14 @@ export default function TeacherSetup() {
   const [opensAt, setOpensAt] = useState("");
   const [dueAt, setDueAt] = useState("");
   const [instructions, setInstructions] = useState("");
+  const [wordMin, setWordMin] = useState("");
+  const [wordMax, setWordMax] = useState("");
   const [purposes, setPurposes] = useState<AiPurpose[]>([...AI_PURPOSES]);
   const [assignmentResult, setAssignmentResult] = useState<AssignmentCreation | null>(null);
 
   const [pending, setPending] = useState(false);
   const inFlight = useRef(false);
-  const requestId = useRef<string | null>(null);
+  const request = useRef<{ body: string; id: string } | null>(null);
 
   async function guarded(work: () => Promise<void>) {
     if (inFlight.current) return;
@@ -67,11 +75,10 @@ export default function TeacherSetup() {
     });
   }
 
-  // Any edit after a refusal is a new body, so it gets a new retry key.
+  // A retry key belongs to the serialized body, not the raw form text.
   function edit<T>(set: (value: T) => void) {
     return (value: T) => {
       set(value);
-      requestId.current = null;
       setAssignmentResult(null);
     };
   }
@@ -79,14 +86,17 @@ export default function TeacherSetup() {
   const coursePolicy = course?.policy ?? aiPolicy;
   const allowed = coursePolicy === "prohibited" ? [] : AI_PURPOSES.filter((p) => purposes.includes(p));
   const published = assignmentResult?.kind === "available";
+  const previewRange = parseWordRange(wordMin, wordMax);
+  const previewRangeText = previewRange ? wordRangeHr({ min: previewRange.wordMin, max: previewRange.wordMax }) : null;
 
   function submitAssignment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!course || published) return;
-    const body = assignmentBody({ title, instructions, workType, opensAt, dueAt, aiPurposes: purposes }, course.policy);
+    const body = assignmentBody({ title, instructions, workType, opensAt, dueAt, aiPurposes: purposes, wordMin, wordMax }, course.policy);
     if (!body) return setAssignmentResult({ kind: "invalid" });
-    requestId.current ??= crypto.randomUUID();
-    const key = requestId.current;
+    const serialized = JSON.stringify(body);
+    if (request.current?.body !== serialized) request.current = { body: serialized, id: crypto.randomUUID() };
+    const key = request.current.id;
     void guarded(async () => setAssignmentResult(await createAssignment(course.id, body, key)));
   }
 
@@ -168,6 +178,19 @@ export default function TeacherSetup() {
               <textarea className={styles.control} rows={4} value={instructions}
                 onChange={(e) => edit(setInstructions)(e.target.value)} />
             </label>
+            <div className={styles.pair}>
+              <label className={styles.field}>
+                <span>{a.wordMin}</span>
+                <input className={styles.control} type="text" inputMode="numeric" autoComplete="off"
+                  value={wordMin} onChange={(e) => edit(setWordMin)(e.target.value)} />
+              </label>
+              <label className={styles.field}>
+                <span>{a.wordMax}</span>
+                <input className={styles.control} type="text" inputMode="numeric" autoComplete="off"
+                  value={wordMax} onChange={(e) => edit(setWordMax)(e.target.value)} />
+              </label>
+            </div>
+            <p className={styles.hint}>{a.wordRangeHint}</p>
 
             <fieldset className={styles.tools}>
               <legend>{tools.heading}</legend>
@@ -212,6 +235,7 @@ export default function TeacherSetup() {
         <h3>{title.trim() || t.teacher.preview.untitled}</h3>
         <p className={styles.hint}>
           {a.workTypes[workType]} · {t.teacher.preview.opensFrom} {date(opensAt)} · {t.teacher.preview.due} {date(dueAt)}
+          <PreviewRange text={previewRangeText} />
         </p>
         {instructions.trim() ? <p className={styles.brief}>{instructions}</p> : null}
         <p className={styles.listHead}>{tools.allowed}</p>
