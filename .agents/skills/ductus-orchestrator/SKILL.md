@@ -15,7 +15,7 @@ Operate in **orchestrator** mode:
 - record durable decisions in the repository, not only in account memory.
 
 
-Enforce the writer/review/QA WIP limits and risk-specific gates from `docs/ENGINEERING_SYSTEM.md`. Apply head invalidation and the verified D-101 exception from §6/§9; D-158 always requires both PASS verdicts on the exact current head.
+Enforce the writer/review/QA WIP limits and risk-specific gates from `docs/ENGINEERING_SYSTEM.md`. Apply head invalidation and the verified D-101 exception from §6/§9; the D-158 pair carries under the same verified D-101 conditions (D-161).
 
 Each turn follows `docs/ORKESTRATOR.md` §9. Authority and its limits are in §4; starting, stopping and tracking workers, and what counts as a canonical verdict, are in §8. Never post `Owner-Override`.
 
