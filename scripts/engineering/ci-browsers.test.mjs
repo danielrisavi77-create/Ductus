@@ -39,7 +39,9 @@ test("outside a pull request all three engines are installed and every project r
   const e2e = step("E2E tests");
   for (const s of [install, e2e]) {
     assert.ok(s.includes(`          ALL_ENGINES: ${ALL}\n`), "ALL_ENGINES is true for every event but pull_request");
-    assert.doesNotMatch(s, /^ {8}if:/m);
+    // Only the trusted docs classification can exempt a PR; main/nightly
+    // always produce full (ci-docs-scope.test.mjs also attacks the job guard).
+    assert.match(s, /^ {8}if: success\(\) && !cancelled\(\) && needs\.scope\.outputs\.profile == 'full'$/m);
     assert.doesNotMatch(s, /continue-on-error/);
   }
   assert.match(install, /if \[ "\$ALL_ENGINES" = "true" \]; then\n {12}pnpm exec playwright install --with-deps chromium firefox webkit\n {10}else\n {12}pnpm exec playwright install --with-deps chromium\n {10}fi/);
