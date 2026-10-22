@@ -88,7 +88,10 @@ postojeće ovisnosti (`pnpm install --frozen-lockfile`) i Chromium preglednik
 lokalni `compose.yaml`; za punu lokalnu pripremu u **istoj** PowerShell sesiji:
 
 ```powershell
-$authPassword = [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(24)).ToLowerInvariant()
+$bytes = New-Object byte[] 24
+$rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
+$authPassword = [BitConverter]::ToString($bytes).Replace('-', '').ToLowerInvariant()
 $env:DUCTUS_AUTH_LOCAL_PASSWORD = $authPassword
 $env:AUTH_DATABASE_URL = "postgres://ductus_auth_local:${authPassword}@127.0.0.1:54329/ductus"
 pnpm demo:prepare
