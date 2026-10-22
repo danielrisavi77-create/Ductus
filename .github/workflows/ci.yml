@@ -141,6 +141,9 @@ jobs:
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         with:
           persist-credentials: false
+          # Include both PR merge parents for the advisory UI diff. Missing
+          # objects select full; this never changes which tests execute.
+          fetch-depth: 2
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -202,10 +205,23 @@ jobs:
           else
             pnpm exec playwright install --with-deps chromium
           fi
+      - name: UI pilot expected test inventory
+        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
+        env:
+          ALL_ENGINES: ${{ github.event_name != 'pull_request' }}
+          PLAYWRIGHT_JSON_OUTPUT_FILE: .ci-reports/ui-pilot-inventory.json
+        run: |
+          mkdir -p .ci-reports
+          if [ "$ALL_ENGINES" = "true" ]; then
+            pnpm exec playwright test --list --reporter=json || echo 'UI pilot inventory unavailable; comparison will be inconclusive.'
+          else
+            pnpm exec playwright test --list --reporter=json --project=desktop --project=mobile || echo 'UI pilot inventory unavailable; comparison will be inconclusive.'
+          fi
       - name: E2E tests
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         env:
           E2E_NO_BUILD: "1"
+          UI_TEST_PILOT: "1"
           ALL_ENGINES: ${{ github.event_name != 'pull_request' }}
         run: |
           if [ "$ALL_ENGINES" = "true" ]; then
@@ -213,6 +229,14 @@ jobs:
           else
             pnpm test:e2e --project=desktop --project=mobile
           fi
+      - name: UI test selection pilot
+        if: ${{ needs.scope.outputs.profile == 'full' && !cancelled() }}
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/engineering/ui-test-pilot.mjs
       # Screenshots (desktop and mobile), videos and failure traces for the PR.
       - name: Upload Playwright report
         if: ${{ needs.scope.outputs.profile == 'full' && !cancelled() }}

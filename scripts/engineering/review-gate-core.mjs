@@ -283,6 +283,9 @@ const validOverrideShape = ({ body, association, appSlug }) =>
   field(body, "Owner-Override")?.toUpperCase() === "PASS" &&
   Boolean(field(body, "Override-Reason"));
 
+const validCommandShape = ({ body, association, appSlug }) =>
+  association === "OWNER" && appSlug === null && field(body, "Owner-Command")?.toLowerCase() === "merge";
+
 function ownerOverrides(entries, headSha, ownerLogin, carriedHeads = new Set()) {
   return entries.filter(({ body, login, association, appSlug }) =>
     canonicalBlock(body, "Owner-Override") &&
@@ -624,10 +627,11 @@ function evaluateGateCore({
 export function carriedHeadCandidates(comments, headSha, path) {
   const named = new Set();
   for (const entry of trustedComments(comments)) {
-    for (const [block, headField] of [["Agent-Review", "Review-Head"], ["QA-Agent", "QA-Head"], ["Owner-Override", "Override-Head"]]) {
+    for (const [block, headField] of [["Agent-Review", "Review-Head"], ["QA-Agent", "QA-Head"], ["Owner-Override", "Override-Head"], ["Owner-Command", "Command-Head"]]) {
       if (!canonicalBlock(entry.body, block)) continue;
       // An override that could never count must not use up the head limit.
       if (block === "Owner-Override" && !validOverrideShape(entry)) continue;
+      if (block === "Owner-Command" && !validCommandShape(entry)) continue;
       const head = field(entry.body, headField)?.toLowerCase();
       if (head && SHA_RE.test(head) && head !== headSha.toLowerCase()) named.add(head);
     }
@@ -739,6 +743,34 @@ export function evaluateGate(input) {
   return used ? { ...result, description: `${result.description} Grok CLI review (D-162, owner account).` } : result;
 }
 
+/**
+ * Whether the merge queue may take the PR (D-161 (h)). Mergify reads only this
+ * status, never the description or a label: the same parser that decides the
+ * risk for the gate decides it here. Green when the gate is green and either
+ * the owner's `Owner-Command: merge` comment names this head (or a head that
+ * carries to it through a clean base merge, D-101), or the PR declares Risk
+ * low or standard and touches no D-97 path. Every description is fixed text.
+ */
+export function evaluateMergeAuthorization({ gate, metadata, paths, comments, headSha, ownerLogin, carriedHeads }) {
+  if (gate?.state !== "success") return { state: "pending", description: "Waiting for the Engineering review gate." };
+  const heads = carriedHeads ?? new Set();
+  const commanded = trustedComments(comments).some(
+    (entry) =>
+      canonicalBlock(entry.body, "Owner-Command") &&
+      validCommandShape(entry) &&
+      entry.login === ownerLogin &&
+      (sameHead(field(entry.body, "Command-Head"), headSha) || heads.has(field(entry.body, "Command-Head")?.toLowerCase())),
+  );
+  if (commanded) return { state: "success", description: "Owner merge command names this head." };
+  const automatic =
+    metadata?.ok === true &&
+    (metadata.risk === "low" || metadata.risk === "standard") &&
+    metadata.minimumRisk !== "critical" &&
+    ownerCommandPaths(paths).length === 0;
+  if (automatic) return { state: "success", description: "Risk low or standard, no D-97 path: no owner command needed." };
+  return { state: "pending", description: "Needs the owner's merge command for this head (D-97 or critical)." };
+}
+
 export function evaluatePullRequest({ pr, files, comments, prReviews, reviewComments, ownerLogin, carriedHeads }) {
   const listed = files ?? [];
   // The floor is only as good as the list: a cut or unread list fails closed.
@@ -757,18 +789,28 @@ export function evaluatePullRequest({ pr, files, comments, prReviews, reviewComm
       },
     };
   }
+  const result = evaluateGate({
+    body: pr.body ?? "",
+    headSha: pr.head.sha,
+    ownerLogin,
+    comments,
+    prReviews,
+    reviewComments,
+    authorLogin: pr.user?.login ?? null,
+    carriedHeads,
+    qaExempt: qaExemption(paths),
+  });
   return {
     metadata,
-    result: evaluateGate({
-      body: pr.body ?? "",
+    result,
+    mergeAuthorization: evaluateMergeAuthorization({
+      gate: result,
+      metadata,
+      paths,
+      comments,
       headSha: pr.head.sha,
       ownerLogin,
-      comments,
-      prReviews,
-      reviewComments,
-      authorLogin: pr.user?.login ?? null,
       carriedHeads,
-      qaExempt: qaExemption(paths),
     }),
   };
 }
