@@ -34,7 +34,7 @@ Sažetak nije izvor pravila. U sukobu vrijedi `docs/ENGINEERING_SYSTEM.md`; uz s
 ## Head i invalidacija
 
 - Novi push poništava review, QA i Owner Override (§6, §9).
-- Iznimka D-101: čisto spajanje osnovne grane koje ne mijenja diff PR-a prenosi verdikt i override (§6, §15).
+- Iznimka D-101: čisto spajanje osnovne grane koje ne mijenja diff PR-a prenosi verdikt i override, i za Codex par (D-161; §6, §15).
 - Autor prije ready-for-review provjerava overlap s `main`; spaja se samo PR čiji head sadrži aktualni `main` (§9).
 
 ## Owner Override
@@ -47,7 +47,7 @@ Sažetak nije izvor pravila. U sukobu vrijedi `docs/ENGINEERING_SYSTEM.md`; uz s
 - Najviše oko 400 promijenjenih redaka koda, veći uz obrazloženje u opisu; `critical` i oko 300 redaka produkcijskog koda, veći se dijeli, iznimku odobrava vlasnik (§14).
 - QA FAIL samo za kvar koda. Nalaz ima "Dohvatljivo kroz"; manji nosi "blokira" ili "ne blokira"; u produkcijskom kodu zatvara se novim headom prije spajanja (§14).
 - Najviše dva kruga: drugi FAIL na istom korijenu zaustavlja ispravke (§14).
-- U gateu je najviše jedan PR. Za `critical` review i QA kreću istodobno na istom headu, i kad QA daje Codex ili Grok (D-155). QA ne čita review prije vlastitog verdikta (§13, §15).
+- U gateu najviše tri PR-a bez preklapanja (D-161); review i QA kreću odmah, za `critical` istodobno na istom headu, i kad QA daje Codex ili Grok (D-155). QA ne čita review prije vlastitog verdikta (§13, §15).
 
 ## Kad stati i pitati vlasnika
 

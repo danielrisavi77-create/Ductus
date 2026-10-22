@@ -1,0 +1,38 @@
+# Mergify merge queue (D-161). Mergify is a GitHub App; nothing runs on a
+# developer machine. A PR enters the queue only when the owner comments
+# `@Mergifyio queue` on it: that comment is the owner's merge command (D-97),
+# so no rule here queues a PR by itself. In the queue Mergify merges `main`
+# into the PR branch (a clean base merge keeps review and QA under D-101),
+# waits for every required status on the new head and squashes.
+# Mergify reads `.mergify.yml` and `.mergify/config.yml` before this file;
+# neither may exist (mergify-config.test.mjs), and Mergify applies the
+# configuration of the default branch only, so a PR cannot change the queue
+# before it is merged.
+# scripts/engineering/mergify-config.test.mjs keeps the contexts below equal to
+# the required statuses of `main`.
+
+queue_rules:
+  - name: main
+    batch_size: 1
+    queue_conditions: &required
+      - base=main
+      - -draft
+      - check-success=Lint, typecheck, test and build
+      - check-success=Local stack (compose.yaml)
+      - check-success=Security scanners
+      - check-success=Dependency review
+      - check-success=Engineering review gate
+    merge_conditions: *required
+    merge_method: squash
+    update_method: merge
+
+merge_queue:
+  max_parallel_checks: 1
+
+commands_restrictions:
+  queue:
+    conditions:
+      - sender=danielrisavi77-create
+  requeue:
+    conditions:
+      - sender=danielrisavi77-create

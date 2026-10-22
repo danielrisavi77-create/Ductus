@@ -126,15 +126,26 @@ test("A07: existing canonical parser and scope/role/verdict requirements still a
   pending(comments);
 });
 
-test("A08-A09,A17: both exact current heads required even with verified carry or a new push", () => {
+test("A08-A09,A17: an earlier head counts only through verified D-101 carry (D-161)", () => {
   for (const stale of [OLD, H.slice(0, 7), "z".repeat(40)]) {
     for (const [rHead, qHead] of [[stale, H], [H, stale], [stale, stale]]) {
-      for (const carriedHeads of [new Set(), new Set([OLD])]) {
-        pending([review(undefined, { head: rHead }), qa(undefined, { head: qHead })], { carriedHeads });
+      pending([review(undefined, { head: rHead }), qa(undefined, { head: qHead })]);
+      const result = gate([review(undefined, { head: rHead }), qa(undefined, { head: qHead })], {
+        carriedHeads: new Set([OLD]),
+      });
+      if (stale === OLD) {
+        assert.equal(result.state, "success");
+        assert.equal(
+          result.description,
+          `Independent Codex review and QA pair valid for current head through D-101 carry. Carried from ${OLD.slice(0, 7)}.`,
+        );
+      } else {
+        assert.equal(result.state, "pending");
       }
     }
   }
-  pending(pair(), { headSha: OLD, carriedHeads: new Set([H]) });
+  // The carried set names earlier heads only; a pair on a later head never counts.
+  pending(pair(), { headSha: OLD });
   assert.equal(gate([review(undefined, { head: H.toUpperCase() }), qa(undefined, { head: H.toUpperCase() })]).state, "success");
 });
 
