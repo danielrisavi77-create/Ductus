@@ -48,7 +48,9 @@
     "test:db": "docker compose exec -T postgres pg_prove -U ductus -d ductus --recurse --ext .sql /db/tests",
     "agents:lint": "pnpm dlx --allow-build=agnix agnix@0.57.0 .",
     "tokens:report": "node scripts/engineering/token-report.mjs",
-    "tokens:codeburn": "pnpm dlx codeburn@0.9.25 optimize"
+    "tokens:codeburn": "pnpm dlx codeburn@0.9.25 optimize",
+    "storybook": "storybook dev --host 127.0.0.1 --port 6006 --no-open --no-version-updates --disable-telemetry",
+    "storybook:build": "storybook build --output-dir node_modules/.cache/storybook-static --disable-telemetry"
   },
   "dependencies": {
     "@tiptap/core": "^3.31.3",
@@ -75,6 +77,7 @@
     "@fast-check/vitest": "^0.5.0",
     "@playwright/test": "^1.63.0",
     "@smithy/signature-v4": "5.7.4",
+    "@storybook/nextjs-vite": "10.6.3",
     "@types/node": "^24.10.2",
     "@types/pg": "^8.23.1",
     "@types/react": "^19.3.0",
@@ -86,7 +89,9 @@
     "fake-indexeddb": "^6.2.5",
     "fast-check": "^4.10.2",
     "lefthook": "^2.1.16",
+    "storybook": "10.6.3",
     "typescript": "^5.9.3",
+    "vite": "8.3.3",
     "vitest": "^5.0.1"
   },
   "pnpm": {
