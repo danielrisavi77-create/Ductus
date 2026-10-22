@@ -154,38 +154,79 @@ test("scope bootstrap and non-PR events select full without running PR code", (t
   }
 });
 
-test("required stack runs and rejects every missing, cancelled or failed classification", () => {
+test("required stack accepts only both full successes or both trusted docs skips", () => {
   const stack = job("stack");
   assert.match(stack, /^ {4}name: Local stack \(compose.yaml\)$/m);
-  assert.match(stack, /^ {4}needs: scope$/m);
+  assert.match(stack, /^ {4}needs: \[scope, stack-e2e, stack-login\]$/m);
   assert.match(stack, /^ {4}if: always\(\)$/m);
-  assert.doesNotMatch(stack, /continue-on-error/);
-  const guard = step(stack, "Validate CI scope");
-  assert.doesNotMatch(guard, /^ {8}if:/m);
+  assert.doesNotMatch(stack, /continue-on-error|uses:|pnpm |git /);
+  const guard = step(stack, "Validate stack results");
+  assert.match(guard, /^ {8}if: always\(\)$/m);
   assert.match(guard, /SCOPE_RESULT: \$\{\{ needs.scope.result \}\}/);
   assert.match(guard, /PROFILE: \$\{\{ needs.scope.outputs.profile \}\}/);
+  assert.match(guard, /E2E_RESULT: \$\{\{ needs.stack-e2e.result \}\}/);
+  assert.match(guard, /LOGIN_RESULT: \$\{\{ needs.stack-login.result \}\}/);
   const script = shell(guard);
-  for (const result of ["success", "failure", "cancelled", "skipped", ""]) {
-    for (const profile of ["docs", "full", "", "unknown", "docs\nfull"]) {
-      const run = spawnSync("bash", ["-e", "-c", script], { encoding: "utf8", env: {
-        ...process.env, SCOPE_RESULT: result, PROFILE: profile, GITHUB_STEP_SUMMARY: process.platform === "win32" ? "NUL" : "/dev/null",
-      } });
-      assert.equal(run.status === 0, result === "success" && ["docs", "full"].includes(profile), `${result}/${profile}: ${run.stderr}`);
-    }
+  const cases = [
+    [true, "success", "full", "success", "success"],
+    [true, "success", "docs", "skipped", "skipped"],
+  ];
+  for (const result of ["failure", "cancelled", "skipped", ""]) {
+    cases.push([false, result, "full", "success", "success"]);
+    cases.push([false, result, "docs", "skipped", "skipped"]);
+    cases.push([false, "success", "full", result, "success"]);
+    cases.push([false, "success", "full", "success", result]);
   }
-  // Every original runtime step remains cancellable and needs full scope.
-  for (const block of stack.split(/\n(?= {6}- )/).slice(2)) {
-    const condition = block.match(/^(?: {8}| {6}- )if: (.+)$/m)?.[1];
-    if (block.startsWith("      - name: Reject cancelled stack")) {
-      assert.equal(condition, "cancelled()");
-      assert.equal(spawnSync("bash", ["-c", block.split("        run: ")[1].trim()]).status, 1);
-      continue;
-    }
-    const status = block.includes("uses: actions/upload-artifact@") ? "!cancelled()"
-      : block.includes("run: docker compose logs") ? "failure()"
-        : block.includes("run: pnpm stack:down") ? "always()" : null;
-    assert.equal(condition, status ? `\${{ ${full} && ${status} }}` : runtime, block.split("\n")[0]);
+  for (const profile of ["", "unknown", "docs\nfull"]) {
+    cases.push([false, "success", profile, "success", "success"]);
   }
-  assert.ok(stack.includes("      - name: Reject cancelled stack\n"));
-  assert.match(stack, /if: \$\{\{ needs.scope.outputs.profile == 'full' && always\(\) \}\}/);
+  for (const result of ["failure", "cancelled", "success", ""]) {
+    cases.push([false, "success", "docs", result, "skipped"]);
+    cases.push([false, "success", "docs", "skipped", result]);
+  }
+  for (const [ok, result, profile, e2e, login] of cases) {
+    const run = spawnSync("bash", ["-e", "-c", script], { encoding: "utf8", env: {
+      ...process.env, SCOPE_RESULT: result, PROFILE: profile, E2E_RESULT: e2e,
+      LOGIN_RESULT: login,
+      GITHUB_STEP_SUMMARY: process.platform === "win32" ? "NUL" : "/dev/null",
+    } });
+    assert.equal(run.status === 0, ok, `${result}/${profile}/${e2e}/${login}: ${run.stderr}`);
+  }
+  const reject = step(stack, "Reject cancelled stack");
+  assert.match(reject, /^ {8}if: cancelled\(\)$/m);
+  assert.equal(spawnSync("bash", ["-c", reject.split("        run: ")[1].trim()]).status, 1);
+});
+
+test("both runtime suites are independent, full-only and keep their own setup and cleanup", () => {
+  for (const name of ["stack-e2e", "stack-login"]) {
+    const stack = job(name);
+    assert.match(stack, /^ {4}needs: scope$/m);
+    assert.match(stack, /^ {4}runs-on: ubuntu-latest$/m);
+    assert.ok(stack.includes(`    if: \${{ !cancelled() && needs.scope.result == 'success' && ${full} }}\n`));
+    assert.doesNotMatch(stack, /continue-on-error/);
+    for (const command of ["pnpm install --frozen-lockfile", "pnpm stack:up", "pnpm db:migrate", "pnpm demo:prepare", "pnpm stack:down"]) {
+      assert.ok(stack.includes(`run: ${command}\n`), `${name}: ${command}`);
+    }
+    assert.match(step(stack, "Local auth login password"), /openssl rand -hex 24/);
+    // Every runtime step remains cancellable and needs full scope; cleanup
+    // still runs after failure/cancellation, which the required guard rejects.
+    for (const block of stack.split(/\n(?= {6}- )/).slice(1)) {
+      const condition = block.match(/^(?: {8}| {6}- )if: (.+)$/m)?.[1];
+      if (block.startsWith("      - name: Reject cancelled stack")) {
+        assert.equal(condition, "cancelled()");
+        assert.equal(spawnSync("bash", ["-c", block.split("        run: ")[1].trim()]).status, 1);
+        continue;
+      }
+      const status = block.includes("uses: actions/upload-artifact@") ? "!cancelled()"
+        : block.includes("run: docker compose logs") ? "failure()"
+          : block.includes("run: pnpm stack:down") ? "always()" : null;
+      assert.equal(condition, status ? `\${{ ${full} && ${status} }}` : runtime, `${name}: ${block.split("\n")[0]}`);
+    }
+    assert.ok(stack.includes("      - name: Reject cancelled stack\n"));
+    assert.match(stack, /if: \$\{\{ needs.scope.outputs.profile == 'full' && always\(\) \}\}/);
+  }
+  for (const command of ["pnpm test:db", "pnpm test:integration", "pnpm build"]) {
+    assert.ok(job("stack-e2e").includes(`run: ${command}\n`), command);
+    assert.ok(!job("stack-login").includes(`run: ${command}\n`), `${command} must not be duplicated`);
+  }
 });
