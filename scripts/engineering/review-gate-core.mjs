@@ -110,6 +110,19 @@ export function commentTime(item) {
   return Number.isNaN(created) ? updated : Math.max(created, updated);
 }
 
+// A Grok review run from the owner's Grok CLI (scripts/grok-review.ps1) is
+// posted by the owner's own account, not by the App. It counts as the Grok
+// provider only when the owner writes the line `Review-Channel: grok-cli`; the
+// owner can already override the gate, so this adds no authority (D-162).
+const GROK_CLI_CHANNEL_RE = /^Review-Channel:[ \t]*grok-cli[ \t]*$/m;
+
+function commentAppSlug(item) {
+  const slug = item?.performed_via_github_app?.slug ?? null;
+  if (slug) return slug;
+  if (item?.author_association === "OWNER" && GROK_CLI_CHANNEL_RE.test(item?.body ?? "")) return "grok-by-xai";
+  return null;
+}
+
 // A verdict is a person's comment posted through an App.
 function trustedComments(items, logins) {
   return (items ?? [])
@@ -118,7 +131,7 @@ function trustedComments(items, logins) {
       body: item?.body ?? "",
       login: item?.user?.login ?? null,
       association: item?.author_association ?? null,
-      appSlug: item?.performed_via_github_app?.slug ?? null,
+      appSlug: commentAppSlug(item),
       createdAt: commentTime(item) || index,
       index,
     }))

@@ -212,15 +212,15 @@ Razinu zadaje orkestrator u zadatku; kad je ne zada, sesija bira po tablici (Dan
 
 Claude worker sesije trenutačno su na Opusu, osim gdje `docs/ORKESTRATOR.md` §7 ("Model po poslu") traži drugi model; effort orkestrator postavlja po zadatku: `low` → low, `standard` → medium, `critical` → high. Codex worker koristi model/effort koji orkestrator eksplicitno zada ili računov zadani coding model.
 
+Codex radi i desetak minuta, pa se skripta pokreće u pozadini s vremenskim ograničenjem od najmanje 20 minuta; inače se prekine prije objave komentara. Skripta pokreće `codex exec review --base origin/main` (samo diff grane); `AGENTS.md` prepoznaje review način, a nalaz ide kao komentar na PR. Codex troši ChatGPT kvotu, ne Claude kvotu. Autor ispravlja prihvaćene nalaze i u izvještaju navodi odbijene s razlogom. Kritičan nalaz koji autor ne može riješiti znači status "blokirano".
+
 Grok se isto može pokrenuti iz naredbenog retka, na SuperGrok pretplati bez API ključa:
 
 ```
-powershell -File scripts/grok-review.ps1 -Level <light|standard|critical> [-Pr <broj>] [-Post]
+powershell -File scripts/grok-review.ps1 [-Pr <broj>] [-Post -Verdict <PASS|FAIL|BLOCK>]
 ```
 
-Jednokratno: instaliraj Grok Build CLI (`npm install -g @xai-official/grok` ili `irm https://x.ai/cli/install.ps1 | iex`) i prijavi se naredbom `grok login`. Skripta odbija rad ako je postavljen `XAI_API_KEY`, jer bi zaobišao pretplatu. Bez `-Post` pregled se samo ispisuje; s `-Post` objavljuje se kao komentar s tvog GitHub računa. Takav komentar je savjetodavan: gate broji Grok review samo od Appa `grok-by-xai` (`docs/ENGINEERING_SYSTEM.md` §6).
-
-Codex radi i desetak minuta, pa se skripta pokreće u pozadini s vremenskim ograničenjem od najmanje 20 minuta; inače se prekine prije objave komentara. Skripta pokreće `codex exec review --base origin/main` (samo diff grane); `AGENTS.md` prepoznaje review način, a nalaz ide kao komentar na PR. Codex troši ChatGPT kvotu, ne Claude kvotu. Autor ispravlja prihvaćene nalaze i u izvještaju navodi odbijene s razlogom. Kritičan nalaz koji autor ne može riješiti znači status "blokirano".
+Jednokratno: instaliraj Grok Build CLI (`npm install -g @xai-official/grok` ili `irm https://x.ai/cli/install.ps1 | iex`) i prijavi se naredbom `grok login`. Skripta odbija rad ako je postavljen `XAI_API_KEY` (istekla prijava bi tiho naplatila API). Pokreće se samo nad vlastitom ili provjerenom granom, nikad u `ductus-security`, jer diff ide xAI-ju; diff veći od jedne naredbene linije ne prima (podijeli PR). Razine nema: dubinu određuje zadani model CLI-ja. Bez `-Post` pregled se samo ispisuje; s `-Post -Verdict ...` objavljuje se kanonski review komentar s tvog GitHub računa, s verdiktom koji ti daješ nakon čitanja i s retkom `Review-Channel: grok-cli`. Gate ga broji kao Grok provider (D-162, `docs/ENGINEERING_SYSTEM.md` §6).
 
 ## 6. Dizajn
 
