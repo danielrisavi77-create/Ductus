@@ -62,3 +62,31 @@ test("the channel line is ignored on a comment of a non-owner", () => {
   const result = evaluate({ body: prBody("critical", "claude:a:platforma"), comments: [stranger, claudeQa()] });
   assert.equal(result.state, "pending");
 });
+
+test("the status says when a Grok CLI comment was counted", () => {
+  const result = evaluate({ body: prBody("critical", "claude:a:platforma"), comments: [cliReview(), claudeQa()] });
+  assert.match(result.description, /Grok CLI review \(D-162, owner account\)/);
+});
+
+test("the channel line inside a code block does not count", () => {
+  const fenced = owner(
+    `Agent-Review: grok:cli:reviewer\nReview-Head: ${head}\nReview-Verdict: PASS\n\`\`\`\nReview-Channel: grok-cli\n\`\`\`\n`,
+  );
+  const result = evaluate({ body: prBody("critical", "claude:a:platforma"), comments: [fenced, claudeQa()] });
+  assert.equal(result.state, "pending");
+});
+
+test("an owner association under another login does not count", () => {
+  const other = { ...cliReview(), user: { login: "not-the-owner" } };
+  const result = evaluate({ body: prBody("critical", "claude:a:platforma"), comments: [other, claudeQa()] });
+  assert.equal(result.state, "pending");
+});
+
+test("an Owner-Override comment stays valid and is not taken for a Grok review", () => {
+  const override = owner(
+    `Owner-Override: PASS\nOverride-Head: ${head}\nOverride-Reason: test\nReview-Channel: grok-cli\n`,
+  );
+  const result = evaluate({ body: prBody("critical", "claude:a:platforma"), comments: [override] });
+  assert.equal(result.state, "success");
+  assert.doesNotMatch(result.description, /Grok CLI/);
+});

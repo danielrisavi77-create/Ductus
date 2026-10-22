@@ -1,5 +1,8 @@
+#Requires -Version 7.4
 # Independent Grok review of the current branch against origin/main, run through
 # the Grok Build CLI (SuperGrok subscription, no API key).
+# Needs PowerShell 7.4+ (pwsh): Windows PowerShell 5.1 mangles quotes passed to
+# native programs and writes a BOM.
 # One-time setup: install the CLI (`npm install -g @xai-official/grok` or
 # `irm https://x.ai/cli/install.ps1 | iex`) and sign in once with `grok login`
 # (`grok login --device-auth` on a remote shell). The CLI keeps the token in
@@ -9,7 +12,7 @@
 # Run it only on your own or an already trusted branch: the branch content
 # (diff, AGENTS.md, .claude/) is read by the CLI on your account. Never run it
 # in ductus-security, the diff would be sent to xAI.
-# Usage: powershell -File scripts/grok-review.ps1 [-Pr <number>] [-Model <id>] [-Post -Verdict <PASS|FAIL|BLOCK>]
+# Usage: pwsh -File scripts/grok-review.ps1 [-Pr <number>] [-Model <id>] [-Post -Verdict <PASS|FAIL|BLOCK>]
 # By default the review is only printed. -Post -Verdict posts it as a canonical
 # review comment from the signed-in GitHub account (the owner's). The gate counts
 # it as the Grok provider because of the line `Review-Channel: grok-cli`
@@ -65,7 +68,10 @@ if ($lines.Count -eq 0 -or $lines[-1].Trim() -notmatch '^ZAVRSENO: \d+ nalaza$')
     throw "grok output is empty or has no closing 'ZAVRSENO: N nalaza' line; not publishing it"
 }
 # The comment must not carry a command or another agent's metadata line.
-$text = ($review | Where-Object { $_ -notmatch '^\s*(@|Owner-|Agent-|QA-|Review-|Command-)' }) -join "`n"
+$kept = @($review | Where-Object { $_ -notmatch '^\s*(@|Owner-|Agent-|QA-|Review-|Command-)' })
+$removed = @($review).Count - $kept.Count
+$text = $kept -join "`n"
+if ($removed -gt 0) { $text += "`n`n(Uklonjeno $removed redaka koji bi se čitali kao naredba ili metapodatak.)" }
 
 $header = "## Neovisni pregled (Grok CLI)`n`nHead: $localHead`n`n"
 $body = $header + $text
