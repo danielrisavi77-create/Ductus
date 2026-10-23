@@ -557,24 +557,27 @@ function evaluateGateCore({
     }
 
     // D-139: second Claude session. Needs its own slot (not author, not a
-    // passing reviewer), the declaration naming this head, a Codex review on
-    // this head and every Codex thread answered. Never carried: the line
-    // names one head.
+    // passing reviewer), the declaration naming the head the QA tested, a
+    // Codex review on that head or the current one and every Codex thread
+    // answered. The QA head is the current head or one carried through clean
+    // base merges (D-101; Daniel 23. 10. 2026.), so the queue's base merge
+    // does not void it.
     const everReviewers = reviewerPrincipals(trusted);
+    const codexOn = (sha) => codexReviewedHead(prReviews, sha) || codexCleanSummaryOnHead(comments, sha);
     const secondSession = separateAppPass || fallbackPass
       ? null
       : qaPasses.find(
           (result) =>
             result.identity.appSlug === "claude" &&
-            result.current &&
             !passingReviewerPrincipals.has(result.identity.principal) &&
             !everReviewers.has(result.identity.principal) &&
-            sameHead(SECOND_SESSION_RE.exec(result.fallbackLine ?? "")?.[1], headSha),
+            sameHead(SECOND_SESSION_RE.exec(result.fallbackLine ?? "")?.[1], result.head) &&
+            (codexOn(result.head) || codexOn(headSha)),
         );
-    if (secondSession && (codexReviewedHead(prReviews, headSha) || codexCleanSummaryOnHead(comments, headSha)) && codexThreadsAnswered(reviewComments, authorLogin)) {
+    if (secondSession && codexThreadsAnswered(reviewComments, authorLogin)) {
       return {
         state: "success",
-        description: `Independent review and second Claude session QA valid for current head (D-139: Codex review on head, threads answered).${carriedNote(passingReviews, headSha)}`,
+        description: `Independent review and second Claude session QA valid for current head (D-139: Codex review on head, threads answered).${carriedNote([...passingReviews, secondSession], headSha)}`,
       };
     }
 
