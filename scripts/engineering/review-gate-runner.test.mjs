@@ -30,7 +30,7 @@ globalThis.fetch = async (url, options = {}) => {
   if (plan.fail.some((p) => path.endsWith(p))) throw new TypeError("fetch failed");
   if (/\\/pulls\\/\\d+$/.test(path)) {
     return reply(200, { number: 7, head: { sha: "${HEAD}" }, base: { sha: "${BASE}" },
-      html_url: "https://github.com/o/r/pull/7", body: "" });
+      html_url: "https://github.com/o/r/pull/7", body: "", ...plan.pr });
   }
   if (path.includes("/commits/")) return reply(200, { sha: "${HEAD}", parents: [{ sha: "${BASE}" }] });
   if (path.includes("/compare/")) return reply(200, { files: [], commits: [] });
@@ -38,7 +38,7 @@ globalThis.fetch = async (url, options = {}) => {
 };
 `;
 
-function run(event, { fail = [], statusFails = false } = {}) {
+function run(event, { fail = [], statusFails = false, pr = {} } = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), "gate-runner-"));
   const fake = path.join(dir, "fake-fetch.mjs");
   const eventPath = path.join(dir, "event.json");
@@ -53,7 +53,7 @@ function run(event, { fail = [], statusFails = false } = {}) {
       GITHUB_REPOSITORY: "o/r",
       GITHUB_API_URL: "https://api.example.test",
       GITHUB_TOKEN: "t",
-      FAKE_GH: JSON.stringify({ fail, statusFails }),
+      FAKE_GH: JSON.stringify({ fail, statusFails, pr }),
       FAKE_LOG: log,
     },
   });
@@ -100,4 +100,31 @@ test("control: a run that reads everything posts the authorization and the gate 
   assert.equal(code, 0);
   assert.deepEqual(posts.map((p) => p.body.context), ["Merge authorization", "Engineering review gate"]);
   for (const post of posts) assert.doesNotMatch(post.body.description, /failed before a verdict/);
+});
+
+const batchPr = (over = {}) => ({
+  user: { login: "mergify[bot]" },
+  head: { sha: HEAD, ref: "mergify/merge-queue/abc", repo: { full_name: "o/r" } },
+  ...over,
+});
+
+test("DAN-240: Mergify's own batch branch gets both statuses green without reading PR metadata", () => {
+  const { code, posts } = run(comment, { pr: batchPr(), fail: ["/issues/7/comments"] });
+  assert.equal(code, 0);
+  assert.deepEqual(posts.map((p) => [p.body.context, p.body.state]), [
+    ["Merge authorization", "success"],
+    ["Engineering review gate", "success"],
+  ]);
+});
+
+test("DAN-240: the batch exception needs Mergify as author, this repository and the queue branch name", () => {
+  for (const over of [
+    { user: { login: "someone" } },
+    { head: { sha: HEAD, ref: "feature/x", repo: { full_name: "o/r" } } },
+    { head: { sha: HEAD, ref: "mergify/merge-queue/abc", repo: { full_name: "fork/r" } } },
+  ]) {
+    const { posts } = run(comment, { pr: batchPr(over) });
+    assert.notEqual(posts[0].body.description, "Mergify merge-queue branch: each queued PR passed the gate.");
+    assert.doesNotMatch(posts.map((p) => p.body.state).join(), /success/);
+  }
 });

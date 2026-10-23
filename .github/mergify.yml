@@ -40,13 +40,9 @@ queue_rules:
       - check-success=Dependency review
       - check-success=Engineering review gate
       - check-success=Merge authorization
-    # The temporary branch is not a PR the gate evaluates: it carries CI only.
-    # The gate and the authorization were already required on every PR above.
-    merge_conditions:
-      - check-success=Lint, typecheck, test and build
-      - check-success=Local stack (compose.yaml)
-      - check-success=Security scanners
-      - check-success=Dependency review
+    # The temporary batch branch is a PR opened by Mergify itself; the gate
+    # marks both of its statuses green because each queued PR already passed them.
+    merge_conditions: *required
     merge_method: squash
     update_method: merge
 

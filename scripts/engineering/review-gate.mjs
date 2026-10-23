@@ -62,6 +62,22 @@ async function main() {
   }
   const pr = await api(`/repos/${owner}/${repo}/pulls/${number}`);
   knownHead = { repository, sha: pr.head.sha, url: pr.html_url };
+
+  // DAN-240: Mergify tests a batch of queued PRs on a temporary branch it opens
+  // itself. Branch protection asks for both statuses there, but every queued PR
+  // already carries a green gate and authorization on its own head.
+  if (
+    pr.user?.login === "mergify[bot]" &&
+    pr.head.repo?.full_name === repository &&
+    pr.head.ref?.startsWith("mergify/merge-queue/")
+  ) {
+    const batch = { state: "success", description: "Mergify merge-queue branch: each queued PR passed the gate." };
+    await setStatus(repository, pr.head.sha, batch, pr.html_url, authorizationContext);
+    await setStatus(repository, pr.head.sha, batch, pr.html_url);
+    console.log(`${context}: ${batch.state} — ${batch.description}`);
+    return;
+  }
+
   const [comments, changedFiles, reviews, reviewComments] = await Promise.all([
     apiAll(`/repos/${owner}/${repo}/issues/${number}/comments`),
     apiAll(`/repos/${owner}/${repo}/pulls/${number}/files`),

@@ -24,11 +24,9 @@ test("queue and merge conditions require every required status of main", () => {
   const checks = queueRules
     .map((line) => /^\s*- check-success=(.+)$/.exec(line)?.[1])
     .filter(Boolean);
-  // The queue conditions list every status; the merge conditions (the batch
-  // branch) list only the CI ones, because the gate runs on the PR (DAN-240).
-  const ci = REQUIRED.filter((name) => !name.startsWith("Engineering") && !name.startsWith("Merge auth"));
-  assert.deepEqual(checks, [...REQUIRED, ...ci]);
+  assert.deepEqual(checks, REQUIRED);
   assert.match(body, /queue_conditions: &required/);
+  assert.match(body, /merge_conditions: \*required/);
   assert.match(body, /- base=main/);
   assert.match(body, /- -draft/);
 });
