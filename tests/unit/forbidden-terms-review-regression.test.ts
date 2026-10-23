@@ -4,7 +4,7 @@ import { findForbiddenTerms, findForbiddenTermsInMarkup } from "../../scripts/fo
 
 // #297 advisory findings 1, 2 and the superlative part of 4; PRODUCT §5.
 // Keep both directions of a text-ownership phrase. Do not change the
-// contextual rules for missing/lost data or the deferred bare adverb.
+// deferred bare adverb. B8 (missing/lost data) is left out of the scan.
 describe("dictionary review regressions (DAN-134)", () => {
   it.each([
     "Copied to clipboard",
@@ -19,6 +19,9 @@ describe("dictionary review regressions (DAN-134)", () => {
     "Nije njen uređaj",
     "Za ovo nije vlastiti uređaj",
     "Nije njihova mapa",
+    "This is not their own device",
+    "This is not his own account",
+    "This is not her own folder",
     "Nevjerojatno iskustvo",
   ])("allows neutral UI action or phrase %j", (text) => {
     expect(findForbiddenTerms(text)).toEqual([]);
@@ -33,6 +36,13 @@ describe("dictionary review regressions (DAN-134)", () => {
     ["Copied to clipboardX", "copied"],
     ["Copied to the clipboard2", "copied"],
     ["Copied to clipboard; copied", "copied"],
+    ["Copied. To clipboard settings.", "copied"],
+    ["Copied\nTo clipboard settings", "copied"],
+    ["Kopirano. U međuspremniku nema sadržaja.", "kopirano"],
+    ["Kopirano\nU međuspremnik", "kopirano"],
+    ["Kopiranje. Navoda nema.", "kopirano"],
+    ["This is not their own text", "someone else's text"],
+    ["This is not his own words", "someone else's text"],
     ["Nije njegov tekst", "tuđi tekst"],
     ["Nije njezin tekst", "tuđi tekst"],
     ["Nije njen tekst", "tuđi tekst"],

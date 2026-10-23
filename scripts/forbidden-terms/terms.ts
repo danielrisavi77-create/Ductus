@@ -39,6 +39,14 @@ export interface ForbiddenTerm {
    * See `findForbiddenTermsInMarkup`.
    */
   readonly contextual?: { readonly word: RegExp };
+  /**
+   * Set when the pattern allows a phrase ("copied to clipboard") that must not
+   * be put together across the end of a sentence. The pattern is matched on
+   * `foldPhrases`, where the end of a phrase is `PHRASE_BREAK`, not a space.
+   * Unlike a contextual entry it has no word of its own to judge: it is
+   * reported wherever the pattern matches.
+   */
+  readonly readsPhrases?: true;
 }
 
 // Patterns are literals (no RegExp built from strings). Most start with
@@ -114,15 +122,19 @@ export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
     lang: "hr",
     pattern:
       /(?<![\p{L}\p{N}])(?:is|pre)?kopir(?!aj(?:te|mo)?(?![\p{L}\p{N}]))(?!anj\p{L}* navod)(?!an\p{L}* u meduspremnik)/u,
+    readsPhrases: true,
   },
   // Every form of the root (#179 A3), "prepiši" in a sync conflict included; not "prepiska" (correspondence).
   { entry: "prepisano", instead: PASTED, lang: "hr", pattern: /(?<![\p{L}\p{N}])prepis(?!k)/u },
+  // B8 of #179 ("nedostajući / izgubljeni podaci", "lost data") applies only to the record of the process in the teacher view
+  // and the summary. The scan cannot tell that from a recovery message on the student's device (F-3/F-8), so it is left out
+  // (owner, 23. 10. 2026.).
   {
     entry: "nestali podaci",
     instead: GAP,
     lang: "hr",
     pattern:
-      /(?<![\p{L}\p{N}])(?:nesta\p{L}* poda[tc]|poda[tc]\p{L}* (?:\p{L}+ ){0,2}nesta|(?:nedostajuc|izgubljen)\p{L}* poda[tc])/u,
+      /(?<![\p{L}\p{N}])(?:nesta\p{L}* poda[tc]|poda[tc]\p{L}* (?:\p{L}+ ){0,2}nesta)/u,
   },
   // The adjective and participle only (#179 A5): the imperative "Sakrij …" stays (owner decision 6).
   { entry: "skriveno", instead: GAP, lang: "hr", pattern: /(?<![\p{L}\p{N}])(?:sakriv|prikriv|skriv)en/u },
@@ -187,8 +199,14 @@ export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
   },
   { entry: "verified authorship", instead: INTACT, lang: "en", pattern: /(?<![\p{L}\p{N}])verified authorship/u },
   { entry: "proof of authorship", instead: INTACT, lang: "en", pattern: /(?<![\p{L}\p{N}])proofs? of authorship/u },
-  { entry: "copied", instead: PASTED, lang: "en", pattern: /(?<![\p{L}\p{N}])cop(?:ied(?! to (?:the )?clipboard(?![\p{L}\p{N}]))|ying|y ?past)/u },
-  { entry: "missing data", instead: GAP, lang: "en", pattern: /(?<![\p{L}\p{N}])(?:missing|lost) data/u },
+  {
+    entry: "copied",
+    instead: PASTED,
+    lang: "en",
+    pattern: /(?<![\p{L}\p{N}])cop(?:ied(?! to (?:the )?clipboard(?![\p{L}\p{N}]))|ying|y[ \uFFFF]?past)/u,
+    readsPhrases: true,
+  },
+  { entry: "missing data", instead: GAP, lang: "en", pattern: /(?<![\p{L}\p{N}])missing data/u },
   { entry: "hidden", instead: GAP, lang: "en", pattern: /(?<![\p{L}\p{N}])(?:hidden|concealed)/u },
   { entry: "plagiarism", instead: NOTHING, lang: "en", pattern: /(?<![\p{L}\p{N}])plagiar/u },
   { entry: "originality", instead: INTACT, lang: "en", pattern: /(?<![\p{L}\p{N}])(?:originality|unoriginal)/u },
@@ -199,7 +217,7 @@ export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
     entry: "someone else's text",
     instead: PASTED,
     lang: "en",
-    pattern: /(?<![\p{L}\p{N}])(?:someone else s (?:text|words)|not (?:their|his|her) own)/u,
+    pattern: /(?<![\p{L}\p{N}])(?:someone else s (?:text|words)|not (?:their|his|her) own (?:text|words?|writing|paragraph|passage))/u,
   },
   {
     entry: "written by a human",
@@ -290,7 +308,7 @@ export function findForbiddenTerms(text: string, lang?: Language): ForbiddenTerm
   const folded = foldText(text);
   const phrases = foldPhrases(text);
   return FORBIDDEN_TERMS.filter(
-    (entry) => (lang === undefined || entry.lang === lang) && entry.pattern.test(entry.contextual ? phrases : folded),
+    (entry) => (lang === undefined || entry.lang === lang) && entry.pattern.test(entry.contextual || entry.readsPhrases ? phrases : folded),
   );
 }
 
@@ -342,6 +360,7 @@ export function findForbiddenTermsInMarkup(joined: string, spaced: string, close
   const apartPhrases = foldPhrases(spaced);
   const windows = closedUp ? inWindows(joined) : NO_TERMS;
   return FORBIDDEN_TERMS.filter((entry) => {
+    if (entry.readsPhrases) return entry.pattern.test(shownPhrases) || entry.pattern.test(apartPhrases) || (closedUp && (entry.pattern.test(closedPhrases) || entry.pattern.test(tightPhrases) || windows.has(entry)));
     if (!entry.contextual) return entry.pattern.test(shown) || entry.pattern.test(apart) || (closedUp && (entry.pattern.test(closed) || entry.pattern.test(tight) || windows.has(entry)));
     if (entry.pattern.test(shownPhrases) && (entry.pattern.test(apartPhrases) || !entry.contextual.word.test(apartPhrases))) return true;
     if (!closedUp) return false;
@@ -423,7 +442,7 @@ function inWindows(joined: string): ReadonlySet<ForbiddenTerm> {
         let terms = foundInPiece.get(piece);
         if (!terms) {
           const [words, phrases] = [foldText(piece), foldPhrases(piece)];
-          terms = FORBIDDEN_TERMS.filter((entry) => entry.pattern.test(entry.contextual ? phrases : words));
+          terms = FORBIDDEN_TERMS.filter((entry) => entry.pattern.test(entry.contextual || entry.readsPhrases ? phrases : words));
           if (foundInPiece.size >= 200_000) foundInPiece.clear();
           foundInPiece.set(piece, terms);
         }
