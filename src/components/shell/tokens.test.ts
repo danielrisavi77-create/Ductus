@@ -19,12 +19,12 @@ function token(block: string, name: string): string | undefined {
   return line?.slice(line.indexOf(":") + 1).replace(";", "").trim().toLowerCase();
 }
 
-describe("design tokens (D-123)", () => {
+describe("design tokens (v3, owner decision of 21 Oct 2026)", () => {
   const root = rule(":root");
 
-  it("takes the primary and its text from the handoff table", () => {
-    expect(token(root, "--accent")).toBe("#6fbfa5");
-    expect(token(root, "--accent-ink")).toBe("#0e1c17");
+  it("takes the primary and its text from the design v3 table", () => {
+    expect(token(root, "--accent")).toBe("#8ee3be");
+    expect(token(root, "--accent-ink")).toBe("#091310");
   });
 
   // The server save state must not read as the primary or as "saving"
@@ -38,13 +38,26 @@ describe("design tokens (D-123)", () => {
     expect(dot).not.toContain("--accent");
   });
 
-  it("names the handoff's raised, selected, muted, warning and error colours (README §8)", () => {
-    expect(token(root, "--raised")).toBe("#1a1e19");
-    expect(token(root, "--hover")).toBe("#1e221d");
-    expect(token(root, "--selected")).toBe("#232722");
-    expect(token(root, "--ink-muted")).toBe("#767d75");
-    expect(token(root, "--warn")).toBe("#d3ac63");
-    expect(token(root, "--error")).toBe("#e07a6a");
+  it("names the raised, selected, muted, warning and error colours of design v3", () => {
+    expect(token(root, "--raised")).toBe("#12211c");
+    expect(token(root, "--hover")).toBe("#192a23");
+    expect(token(root, "--selected")).toBe("#192a23");
+    expect(token(root, "--ink-muted")).toBe("#6c8376");
+    expect(token(root, "--warn")).toBe("#e9c58b");
+    expect(token(root, "--error")).toBe("#e9917f");
+  });
+
+  // D-57: the origin colours keep their meaning; design v3 has none of its own.
+  it("keeps the origin colours", () => {
+    expect(token(root, "--p-internal")).toBe("#8fb0e0");
+    expect(token(root, "--p-unknown")).toBe("#9e9a90");
+    expect(token(root, "--p-template")).toBe("#7e7a70");
+    expect(token(root, "--p-ai")).toBe("#d3ac63");
+  });
+
+  it("gives the dark sheet the design v3 surface", () => {
+    expect(token(rule(".sheet"), "--sheet")).toBe("#12211c");
+    expect(token(root, "--sheet")).toBe("#12211c");
   });
 });
 
@@ -79,6 +92,22 @@ describe("contrast of the semantic tokens (FE-D2)", () => {
   it("on the white sheet --ink-muted is text-safe and --warn is a mark colour (3:1)", () => {
     expect(contrast(token(light, "--ink-muted")!, "#ffffff")).toBeGreaterThanOrEqual(4.5);
     expect(contrast(token(light, "--warn")!, "#ffffff")).toBeGreaterThanOrEqual(3);
+  });
+
+  it("keeps the primary readable: its text on it and it on its soft background are 4.5:1 or more", () => {
+    expect(contrast(dark("--accent-ink"), dark("--accent"))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(dark("--accent"), dark("--accent-soft"))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("light shell text is 4.5:1 or more on its ground and chrome, and on the primary", () => {
+    const shell = rule(':root[data-theme="light"]');
+    const value = (name: string) => token(shell, name)!;
+    for (const surface of ["--ground", "--chrome"]) {
+      for (const ink of ["--ink", "--ink-2", "--ink-3"]) {
+        expect(contrast(value(ink), value(surface))).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+    expect(contrast(value("--accent-ink"), value("--accent"))).toBeGreaterThanOrEqual(4.5);
   });
 
   it("gives the white sheet no raised or selected surface", () => {
