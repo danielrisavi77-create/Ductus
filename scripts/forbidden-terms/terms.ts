@@ -148,7 +148,7 @@ export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
     entry: "tuđi tekst",
     instead: PASTED,
     lang: "hr",
-    pattern: /(?<![\p{L}\p{N}])(?:tud\p{L}* (?:tekst|rijec)|nije (?:vlastit|njegov|njezin|njen)\p{L}* (?:tekst\p{L}*|rijec\p{L}*|odlom\p{L}*|rad(?:a|u|om|e|ovi|ova|ovima)?(?![\p{L}\p{N}]))|(?:tekst\p{L}*|rijec\p{L}*|odlom\p{L}*|rad(?:a|u|om|e|ovi|ova|ovima)?(?![\p{L}\p{N}])) nije (?:vlastit|njegov|njezin|njen))/u,
+    pattern: /(?<![\p{L}\p{N}])(?:tud\p{L}* (?:tekst|rijec)|nije (?:vlastit|njegov|njezin|njen)\p{L}* (?:tekst(?:a|u|om|ovi|ova|ovima|e)?|rijec(?:i|ju|ima)?|odlom(?:ak|ka|ku|kom|ke|ci|aka|cima)|rad(?:a|u|om|e|ovi|ova|ovima)?)(?![\p{L}\p{N}])|(?:tekst(?:a|u|om|ovi|ova|ovima|e)?|rijec(?:i|ju|ima)?|odlom(?:ak|ka|ku|kom|ke|ci|aka|cima)|rad(?:a|u|om|e|ovi|ova|ovima)?)(?![\p{L}\p{N}]) nije (?:vlastit|njegov|njezin|njen))/u,
   },
   {
     entry: "napisao čovjek",
