@@ -1,0 +1,22 @@
+// Independent probes executable without child processes or network.
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { resolve, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+const root=resolve(process.env.QA_SOURCE ?? process.cwd());
+const {planParallel,DEMO_FIRST_UNTIL}=await import(pathToFileURL(join(root,'scripts/orchestrator/plan-core.mjs')));
+const {contractState}=await import(pathToFileURL(join(root,'scripts/orchestrator/work-guard-core.mjs')));
+const {overlapPairs}=await import(pathToFileURL(join(root,'scripts/orchestrator/orchestrator-core.mjs')));
+const now=Date.parse('2026-10-24T00:00:00Z');
+const pr=(n,path=`scripts/${n}.mjs`,extra={})=>({number:n,isDraft:true,baseRefName:'main',body:`Agent: codex:s${n}:frontend\nTask: DAN-${n}`,paths:[path],...extra});
+const contract=ps=>({schema:1,repository:'danielrisavi77-create/Ductus',issuedAt:new Date(now-60000).toISOString(),expiresAt:new Date(now+60000).toISOString(),assignments:ps.map(p=>({task:`DAN-${p.number}`,agent:`codex:s${p.number}:frontend`,branch:`qa/${p.number}`,baseSha:'e9da8cd1d0f61ab468054f6079314133d9ef4bae',paths:p.paths,pr:p.number,failures:[],regressions:0,blockers:[]}))});
+const plan=(ps,c=contract(ps),extra={})=>planParallel({prs:ps,pairs:overlapPairs(ps),contract:c,now,...extra});
+const verdicts=p=>p.rows.map(x=>x.verdict);
+test('pure planning preserves every input',()=>{const ps=[pr(1),pr(2)],c=contract(ps),before=JSON.stringify({ps,c});assert.deepEqual(verdicts(plan(ps,c)),['PARALELNO','PARALELNO']);assert.equal(JSON.stringify({ps,c}),before);});
+test('F1 same role but wrong principal must remain unknown',()=>{const ps=[pr(1)],c=contract(ps);c.assignments[0].agent='claude:assigned:frontend';const p=plan(ps,c);console.log('F1',JSON.stringify(p));assert.deepEqual(verdicts(p),['NEPROVJERENO']);});
+test('F1 borrowed runtime:slot must not clear backend/UI pair',()=>{const ps=[pr(1,'src/domain/a.ts'),pr(2,'src/editor/a.ts')],c=contract(ps);ps[1].body='Agent: codex:s1:frontend\nTask: DAN-2';const p=plan(ps,c);console.log('F1-pair',JSON.stringify(p));assert.deepEqual(verdicts(p),['NEPROVJERENO','NEPROVJERENO']);});
+test('exact independent pair clears dependency only',()=>{const ps=[pr(1,'src/domain/a.ts'),pr(2,'src/editor/a.ts')];assert.deepEqual(verdicts(plan(ps)),['NEPROVJERENO','NEPROVJERENO']);assert.deepEqual(verdicts(plan(ps,contract(ps),{independent:[[2,1]]})),['PARALELNO','PARALELNO']);ps[1].body+='\nčeka #1';assert.deepEqual(verdicts(plan(ps,contract(ps),{independent:[[1,2]]})),['PARALELNO','ČEKA OVISNOST']);});
+test('D-107 boundary and blocked demo queue',()=>{const ps=[pr(1,'e2e/demo.spec.ts'),pr(2)],c=contract(ps);c.assignments[0].blockers=['decision'];for(const [at,want] of [[DEMO_FIRST_UNTIL-1,'ČEKA OVISNOST'],[DEMO_FIRST_UNTIL,'PARALELNO']]){const cc={...c,issuedAt:new Date(at-1000).toISOString(),expiresAt:new Date(at+1000).toISOString()};assert.equal(plan(ps,cc,{now:at}).rows[1].verdict,want);}});
+test('deadline exact: issuance, expiry and 15 minutes',()=>{const c=contract([pr(1)]);c.issuedAt=new Date(now).toISOString();c.expiresAt=new Date(now+900000).toISOString();for(const [at,want] of [[now-1,'STALE_CONTRACT'],[now,'VALID'],[now+899999,'VALID'],[now+900000,'STALE_CONTRACT'],[NaN,'STALE_CONTRACT']])assert.equal(contractState(c,at),want);c.expiresAt=new Date(now+900001).toISOString();assert.equal(contractState(c,now),'STALE_CONTRACT');});
+test('malformed JSON-representable contracts never parallel',()=>{const ps=[pr(1)];for(const c of [null,{},[],false,42,'bad',{...contract(ps),repository:'other/repo'}])assert.deepEqual(verdicts(plan(ps,c)),['NEPROVJERENO']);});
+test('F3 overfull gate cannot recommend four parallel PRs',()=>{const ps=[1,2,3,4].map(n=>pr(n,undefined,{isDraft:false}));const p=plan(ps);console.log('F3',JSON.stringify(p));assert.ok(verdicts(p).filter(v=>v==='PARALELNO').length<=3);});
