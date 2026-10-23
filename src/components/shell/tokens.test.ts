@@ -100,14 +100,21 @@ describe("contrast of the semantic tokens (FE-D2)", () => {
   });
 
   it("light shell text is 4.5:1 or more on its ground and chrome, and on the primary", () => {
-    const shell = rule(':root[data-theme="light"]');
+    const shell = rule('[data-theme="light"]');
     const value = (name: string) => token(shell, name)!;
     for (const surface of ["--ground", "--chrome"]) {
-      for (const ink of ["--ink", "--ink-2", "--ink-3"]) {
+      for (const ink of ["--ink", "--ink-2", "--ink-3", "--ink-muted", "--error", "--warn", "--accent"]) {
         expect(contrast(value(ink), value(surface))).toBeGreaterThanOrEqual(4.5);
       }
     }
     expect(contrast(value("--accent-ink"), value("--accent"))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("the dark sheet carries its own ink, so a light shell never puts light ink on it", () => {
+    const sheet = rule(".sheet");
+    for (const ink of ["--ink", "--ink-2", "--ink-3"]) {
+      expect(contrast(token(sheet, ink)!, token(sheet, "--sheet")!)).toBeGreaterThanOrEqual(4.5);
+    }
   });
 
   it("gives the white sheet no raised or selected surface", () => {

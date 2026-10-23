@@ -78,7 +78,8 @@ test("the teacher goes through the works by surname; lines, marking, switch and 
   const nav = page.getByRole("navigation", { name: t.studentsLabel });
   const names = (await nav.locator("button span:first-child").allTextContents());
   expect(names).toEqual(bySurname(DEMO_FAST_PATH).map(fullName));
-  await expect(page.locator("select, input, textarea, form")).toHaveCount(0);
+  // The shell's sign-out form sits outside the page; the page itself has no controls.
+  await expect(page.getByRole("main").locator("select, input, textarea, form")).toHaveCount(0);
   await snapshot(page, "brz-put-1440");
 
   // The one with a paste without a source.

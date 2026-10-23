@@ -43,7 +43,7 @@ test("teacher form keeps the committed request key for an equivalent range", asy
     await page.getByLabel(t.teacher.assignment.dueAt).fill("2026-12-15T09:00");
     await page.getByLabel(t.teacher.assignment.wordMin).fill("1200");
     await page.getByLabel(t.teacher.assignment.wordMax).fill("2500");
-    const preview = page.getByRole("complementary");
+    const preview = page.getByRole("main").getByRole("complementary");
     await expect(preview).toContainText(/1\s200–2\s500 riječi/u);
     await page.getByLabel(t.teacher.assignment.wordMin).fill("2501");
     await expect(preview).not.toContainText(/2\s501–2\s500 riječi/u);
