@@ -16,10 +16,12 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Must stay below the 10 s `timeout` of the hook in .claude/settings.json: an
-// expiry left to the harness is fail-open. One budget covers the analysis and,
-// on the first run for a package state, the control probes.
-export const ANALYSIS_TIMEOUT_MS = 8000;
+// Must stay below the 30 s `timeout` of the hook in .claude/settings.json: an
+// expiry left to the harness is fail-open. The analysis and the control probes
+// share this budget, and the probe state key adds its own configuration read
+// (DEFAULT_LIMITS.maxMs) on top: worst case ANALYSIS_TIMEOUT_MS + maxMs = 25 s,
+// leaving 5 s for Node and shell start-up.
+export const ANALYSIS_TIMEOUT_MS = 20000;
 export const RECOVERY = "Run `pnpm install --frozen-lockfile` in a terminal (or ask for exactly that command), then retry.";
 
 // The only commands allowed while the package is unusable: the whole command,
@@ -79,7 +81,7 @@ const fingerprint = (file) => {
 // count, bytes read and time, shared through `budget`: the first overrun throws
 // a LimitError, so a link to a huge directory or file is refused quickly instead
 // of being read to the end. A caller that gets the error must block.
-export const DEFAULT_LIMITS = { maxEntries: 5000, maxBytes: 8 * 1024 * 1024, maxMs: 1500 };
+export const DEFAULT_LIMITS = { maxEntries: 5000, maxBytes: 8 * 1024 * 1024, maxMs: 5000 };
 export class LimitError extends Error {}
 export const newBudget = (limits = DEFAULT_LIMITS) => ({ ...DEFAULT_LIMITS, ...limits, entries: 0, bytes: 0, deadline: Date.now() + (limits.maxMs ?? DEFAULT_LIMITS.maxMs) });
 

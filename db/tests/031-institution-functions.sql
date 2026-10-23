@@ -8,7 +8,7 @@ BEGIN;
 \ir fixtures/institution.inc
 SET LOCAL lc_messages TO 'C';
 
-SELECT plan(278);
+SELECT plan(282);
 
 CREATE FUNCTION pg_temp.attempts(p_name text) RETURNS bigint
 LANGUAGE sql AS $$ SELECT count(*) FROM institution.enrollment_attempt WHERE user_id = pg_temp.id(p_name) $$;
@@ -191,7 +191,10 @@ FROM (VALUES
   (25, U&' \3164 \2800 \115F \FFA0 \FE0F ', '2026/2027', 'prohibited', 'a name of spaces, fillers and a variation selector'),
   (26, U&'\+0E0041\+0E0042', '2026/2027', 'prohibited', 'a name of tag characters (U+E0041, U+E0042)'),
   (27, U&'inter\FFF9linear', '2026/2027', 'prohibited', 'an interlinear annotation anchor (U+FFF9) in the name'),
-  (28, U&'deprecated\206Aformat', '2026/2027', 'prohibited', 'a deprecated format character (U+206A) in the name')
+  (28, U&'deprecated\206Aformat', '2026/2027', 'prohibited', 'a deprecated format character (U+206A) in the name'),
+  -- Issue #182: invisible marks beside a visible name made a twin of K1.
+  (29, U&'K1\+0E0041', '2026/2027', 'prohibited', 'a tag character (U+E0041) after a visible name'),
+  (30, U&'K1\034F', '2026/2027', 'prohibited', 'a combining grapheme joiner (U+034F) after a visible name')
 ) AS v (n, name, academic_year, ai_policy, what)
 ORDER BY v.n;
 -- The rule itself, asked as the owner would: one visible character is enough,
@@ -208,7 +211,9 @@ FROM (VALUES
   (8, U&'a\2066b', false, 'a directional isolate is refused'),
   (9, U&'a\0085b', false, 'a C1 control is refused'),
   (10, '', false, 'an empty name is refused'),
-  (11, repeat(U&'\3164', 200) || 'a', false, 'a visible character does not excuse 201 characters')
+  (11, repeat(U&'\3164', 200) || 'a', false, 'a visible character does not excuse 201 characters'),
+  (12, U&'Kolegij \+01F4DA', true, 'an emoji beside a name passes'),
+  (13, U&'\3405\+0E0100', true, 'an ideographic variation sequence (U+E0100) passes')
 ) AS v (n, name, expected, what)
 ORDER BY v.n;
 SELECT matches(
@@ -678,8 +683,8 @@ FROM (VALUES
   (3, 'revoke_enrollment_code({k1})'),
   (4, 'remove_student({k1}, {dora})'),
   (5, 'allow_student_return({k1}, {ana})'),
-  (6, $$create_assignment({k1}, 'Zadatak', 'Upute.', 'essay', now(), now() + interval '7 days', 'prohibited', '{}', 'basic', false)$$),
-  (7, $$publish_assignment_version({z1}, 2, 'Zadatak', 'Upute.', 'essay', now(), now() + interval '7 days', 'prohibited', '{}', 'basic', false)$$)
+  (6, $$create_assignment({k1}, 'Zadatak', 'Upute.', 'essay', now(), now() + interval '7 days', 'prohibited', '{}', 'basic', false, NULL, NULL)$$),
+  (7, $$publish_assignment_version({z1}, 2, 'Zadatak', 'Upute.', 'essay', now(), now() + interval '7 days', 'prohibited', '{}', 'basic', false, NULL, NULL)$$)
 ) AS v (n, call)
 ORDER BY v.n;
 SELECT is(pg_temp.ask('iva', 'SELECT institution.revoke_teacher_role({vesna})::text'), 'false', 'revoking it again finds nothing to revoke');

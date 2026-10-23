@@ -1,7 +1,8 @@
 import { expect, test } from "@playwright/test";
 
-// The F-4 shell (design v6, D-89): three columns on a wide screen, the sheet
-// first and the rails as sections under it below 1100 px (DAN-131).
+// The F-4 shell (design editor-v11, FE-D1): three columns on a wide screen; below
+// 1240 px the structure rail folds under the sheet, below 1000 px the panel too
+// (README §5.1, FE-D2; DAN-131).
 test.describe("workspace shell", () => {
   test("wide: rails beside the sheet, writing view marked current", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
@@ -13,11 +14,11 @@ test.describe("workspace shell", () => {
     });
     const [r, s, p] = await Promise.all([rail.boundingBox(), sheet.boundingBox(), panel.boundingBox()]);
     expect(r && s && p).toBeTruthy();
-    expect(r!.width).toBeCloseTo(236, 0);
-    expect(p!.width).toBeCloseTo(322, 0);
+    expect(r!.width).toBeCloseTo(260, 0);
+    expect(p!.width).toBeCloseTo(330, 0);
     expect(r!.x + r!.width).toBeLessThanOrEqual(s!.x);
     expect(s!.x + s!.width).toBeLessThanOrEqual(p!.x);
-    expect(s!.width).toBeLessThanOrEqual(756);
+    expect(s!.width).toBeLessThanOrEqual(720);
     await expect(
       page.getByRole("navigation", { name: "Prikaz" }).getByRole("link", { name: "Pisanje" }),
     ).toHaveAttribute("aria-current", "page");
@@ -75,7 +76,7 @@ test.describe("workspace shell", () => {
       expect(outline).not.toBe("none");
     }
     // The teacher view has no address yet (F-8): it is a stop, but says it is not ready.
-    expect(stops).toEqual(["Preskoči na sadržaj", "Ductus", "Pisanje", "Kako vidi nastavnik uskoro"]);
+    expect(stops).toEqual(["Preskoči na sadržaj", "Ductura", "Pisanje", "Kako vidi nastavnik uskoro"]);
   });
 
   test("teacher view is visibly disabled until F-8; the sheet is the local editor", async ({ page }) => {
@@ -95,7 +96,10 @@ test.describe("workspace shell", () => {
     await expect(sheetText).toHaveAttribute("contenteditable", "true");
     await expect(sheetText).toHaveAttribute("aria-readonly", "false");
     await expect(sheetText).not.toHaveAttribute("aria-disabled", "true");
-    await expect(page.locator(".soon")).toHaveCount(1);
+    // The sheet says nothing is coming; the closed Upute and Rad tabs (FE-D9)
+    // hold their own "uskoro" marks, so only the visible ones are counted.
+    await expect(page.locator("article.sheet .soon")).toHaveCount(0);
+    await expect(page.locator(".soon:visible")).toHaveCount(1);
   });
 
   // Without the flag (as deployed) and with the flag refused outside
@@ -117,7 +121,7 @@ test.describe("workspace shell", () => {
 
   // One DOM order (sheet, instructions, structure) at every width; CSS places
   // the rails with grid areas, never with `order`.
-  for (const width of [1440, 1000, 390]) {
+  for (const width of [1440, 1100, 990, 390]) {
     test(`order at ${width} px: DOM, Tab and reading order are one`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
       await page.goto("/rad");
@@ -136,18 +140,73 @@ test.describe("workspace shell", () => {
     });
   }
 
-  test("wide: no rail toggles, rail content always shown", async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.goto("/rad");
-    await expect(page.locator(".rail-toggle")).toHaveCount(2);
-    for (const toggle of await page.locator(".rail-toggle").all()) {
-      await expect(toggle).toBeHidden();
-    }
-    await expect(page.getByText("Upute zadatka, literatura i komentari")).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Struktura", exact: true })).toBeVisible();
-  });
+  // 1240 px is the first width with three columns (README §5.1: folds below 1240).
+  for (const width of [1440, 1240]) {
+    test(`wide ${width} px: no rail toggles, rail content always shown`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.goto("/rad");
+      await expect(page.locator(".rail-toggle")).toHaveCount(2);
+      for (const toggle of await page.locator(".rail-toggle").all()) {
+        await expect(toggle).toBeHidden();
+      }
+      await expect(page.getByText("Komentari nastavnika prikazuju se ovdje.")).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Struktura", exact: true })).toBeVisible();
+      const [r, s] = await Promise.all([
+        page.getByRole("complementary", { name: "Struktura rada" }).boundingBox(),
+        page.locator("article.sheet").boundingBox(),
+      ]);
+      expect(r!.x + r!.width).toBeLessThanOrEqual(s!.x);
+    });
+  }
 
-  for (const width of [1000, 390]) {
+  // From 1000 px up to 1239 px the panel stays beside the sheet and only the
+  // structure folds under it; 1000 px is the first width that keeps the panel.
+  for (const width of [1239, 1000]) {
+    test(`middle ${width} px: panel beside the sheet, structure folded under it`, async ({
+      page,
+      browserName,
+    }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/rad");
+      const sheet = await page.locator("article.sheet").boundingBox();
+      const panel = page.getByRole("complementary", {
+        name: "Upute, literatura i komentari",
+      });
+      const rail = page.getByRole("complementary", { name: "Struktura rada" });
+      const [p, r] = await Promise.all([panel.boundingBox(), rail.boundingBox()]);
+      expect(p!.width).toBeCloseTo(330, 0);
+      expect(sheet!.x + sheet!.width).toBeLessThanOrEqual(p!.x);
+      expect(sheet!.y + sheet!.height).toBeLessThanOrEqual(r!.y);
+      expect(r!.x + r!.width).toBeLessThanOrEqual(p!.x + 1);
+
+      const panelToggle = panel.getByRole("button", { name: "Upute, literatura i komentari" });
+      const railToggle = rail.getByRole("button", { name: "Struktura rada" });
+      await expect(panelToggle).toBeHidden();
+      await expect(page.getByText("Komentari nastavnika prikazuju se ovdje.")).toBeVisible();
+      await expect(railToggle).toBeVisible();
+      await expect(railToggle).toHaveAttribute("aria-expanded", "false");
+      expect((await railToggle.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      await expect(page.getByRole("heading", { name: "Struktura", exact: true })).toBeHidden();
+
+      // Keyboard: after the editor the panel's tab list (one stop), then the
+      // structure toggle; the hidden panel toggle is not a stop.
+      if (tabVisitsLinks(browserName)) {
+        await expect(page.getByRole("textbox", { name: "Tekst rada" })).toHaveAttribute("contenteditable", "true");
+        // The sheet theme is in the toolbar's "Prikaz" menu (FE-D5): two stops fewer.
+        for (let i = 0; i < 7; i += 1) await page.keyboard.press("Tab");
+        await expect(panel.getByRole("tab", { name: "Komentari" })).toBeFocused();
+        await page.keyboard.press("Tab");
+        await expect(railToggle).toBeFocused();
+        await page.keyboard.press("Enter");
+      } else {
+        await railToggle.click();
+      }
+      await expect(railToggle).toHaveAttribute("aria-expanded", "true");
+      await expect(page.getByRole("heading", { name: "Struktura", exact: true })).toBeVisible();
+    });
+  }
+
+  for (const width of [999, 390]) {
     test(`narrow ${width} px: rails under the sheet open with real buttons`, async ({
       page,
       browserName,
@@ -173,18 +232,23 @@ test.describe("workspace shell", () => {
         const box = await toggle.boundingBox();
         expect(box!.height).toBeGreaterThanOrEqual(44);
       }
-      await expect(page.getByText("Upute zadatka, literatura i komentari")).toBeHidden();
+      await expect(page.getByText("Komentari nastavnika prikazuju se ovdje.")).toBeHidden();
 
       // Keyboard: the panel toggle comes right after the top bar and the
       // sheet's editor, then the structure toggle; Enter opens.
       if (tabVisitsLinks(browserName)) {
         await expect(page.getByRole("textbox", { name: "Tekst rada" })).toHaveAttribute("contenteditable", "true");
-        // Skip link, Ductus, Pisanje, Kako vidi nastavnik, the editor, then the panel.
-        for (let i = 0; i < 6; i += 1) await page.keyboard.press("Tab");
+        // Skip link, Ductura, Pisanje, Kako vidi nastavnik, the toolbar (one
+        // stop, the sheet theme is in its "Prikaz" menu, FE-D5), the editor,
+        // then the panel.
+        for (let i = 0; i < 7; i += 1) await page.keyboard.press("Tab");
         await expect(panelToggle).toBeFocused();
         await page.keyboard.press("Enter");
         await expect(panelToggle).toHaveAttribute("aria-expanded", "true");
-        await expect(page.getByText("Upute zadatka, literatura i komentari")).toBeVisible();
+        await expect(page.getByText("Komentari nastavnika prikazuju se ovdje.")).toBeVisible();
+        // The open panel's tab list is one stop, then the structure toggle.
+        await page.keyboard.press("Tab");
+        await expect(panel.getByRole("tab", { name: "Komentari" })).toBeFocused();
         await page.keyboard.press("Tab");
         await expect(railToggle).toBeFocused();
         await page.keyboard.press("Space");
@@ -230,8 +294,83 @@ test.describe("workspace shell", () => {
     }
   }
 
-  test("dark: the sheet has a visible 1 px rule border", async ({ page }) => {
-    await page.emulateMedia({ colorScheme: "dark" });
+  test("top bar: brand and demo label first, then the view switch (editor-v11)", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/rad");
+    const bar = page.locator(".workspace__bar");
+    const [brand, demo, modes] = await Promise.all([
+      bar.getByRole("link", { name: "Ductura" }).boundingBox(),
+      bar.locator(".demo-badge").boundingBox(),
+      bar.getByRole("navigation", { name: "Prikaz" }).boundingBox(),
+    ]);
+    expect(brand!.x + brand!.width).toBeLessThanOrEqual(demo!.x);
+    expect(demo!.x + demo!.width).toBeLessThanOrEqual(modes!.x);
+    expect((await bar.boundingBox())!.height).toBeGreaterThanOrEqual(48);
+  });
+
+  test("right panel: tabs in design order, Komentari open, arrow keys move and open", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/rad");
+    const panel = page.getByRole("complementary", { name: "Upute, literatura i komentari" });
+    const list = panel.getByRole("tablist", { name: "Bočni panel" });
+    const tabs = list.getByRole("tab");
+    await expect(tabs).toHaveText(["Literatura", "Upute", "Komentari", "Rad"]);
+    const comments = list.getByRole("tab", { name: "Komentari" });
+    await expect(comments).toHaveAttribute("aria-selected", "true");
+    // One Tab stop: only the open tab is in the Tab order.
+    await expect(list.locator('[role="tab"][tabindex="0"]')).toHaveCount(1);
+    await expect(panel.getByRole("tabpanel")).toHaveCount(1);
+    await expect(panel.getByRole("tabpanel")).toHaveText("Komentari nastavnika prikazuju se ovdje.");
+
+    await comments.focus();
+    await page.keyboard.press("ArrowRight");
+    const work = list.getByRole("tab", { name: "Rad" });
+    await expect(work).toBeFocused();
+    await expect(panel.getByRole("tabpanel")).toContainText("Etape");
+    await page.keyboard.press("ArrowRight");
+    const sources = list.getByRole("tab", { name: "Literatura" });
+    await expect(sources).toBeFocused();
+    await expect(sources).toHaveAttribute("aria-selected", "true");
+    await expect(panel.getByRole("tabpanel")).toHaveText("Literatura rada prikazuje se ovdje.");
+    await page.keyboard.press("End");
+    await expect(work).toBeFocused();
+    await page.keyboard.press("ArrowLeft");
+    await expect(comments).toBeFocused();
+    await page.keyboard.press("ArrowLeft");
+    const instructions = list.getByRole("tab", { name: "Upute" });
+    await expect(instructions).toHaveAttribute("aria-selected", "true");
+    // No readable assignment on this /rad: the empty state, never an invented task (#476).
+    await expect(panel.getByRole("tabpanel")).toHaveText("Upute zadatka prikazuju se ovdje.");
+    await page.keyboard.press("Home");
+    await expect(sources).toBeFocused();
+    await instructions.click();
+    await expect(panel.getByRole("tabpanel")).toHaveAccessibleName("Upute");
+  });
+
+  // The task, its due date and the allowed uses of a readable assignment are
+  // in login/assignment-notice.spec.ts and SidePanels.test.ts (#476 contract
+  // 6280487079): without one, Upute names no task and no word range.
+  test("right panel (FE-D9): Upute without a readable assignment invents no task, Rad the stages with written states", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/rad");
+    const panel = page.getByRole("complementary", { name: "Upute, literatura i komentari" });
+    await panel.getByRole("tab", { name: "Upute" }).click();
+    const upute = panel.getByRole("tabpanel");
+    await expect(upute).toHaveText("Upute zadatka prikazuju se ovdje.");
+    await expect(upute.getByRole("heading", { name: "Zadatak" })).toHaveCount(0);
+    await expect(upute).not.toContainText("riječi");
+
+    await panel.getByRole("tab", { name: "Rad" }).click();
+    const rad = panel.getByRole("tabpanel");
+    const stages = rad.getByRole("list").first().getByRole("listitem");
+    await expect(stages).toHaveCount(5);
+    // The state is written out, never colour alone.
+    await expect(stages.nth(2)).toContainText("vraćeno s napomenom");
+    await expect(stages.nth(2)).toContainText("Mentor: ");
+    await expect(rad.getByRole("heading", { name: "Uz rad" })).toBeVisible();
+  });
+
+  test("the sheet has a visible 1 px rule border on the dark shell", async ({ page }) => {
     await page.goto("/rad");
     const shadow = await page
       .locator("article.sheet")
@@ -239,9 +378,49 @@ test.describe("workspace shell", () => {
     expect(shadow).toMatch(/0px 0px 0px 1px/);
   });
 
+  test("shell is dark whatever the system says, the sheet is dark by default (D-123)", async ({ page }) => {
+    for (const colorScheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme });
+      await page.goto("/rad");
+      const body = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+      expect(body).toBe("rgb(15, 17, 14)");
+      const sheet = page.locator("article.sheet");
+      await expect(sheet).toHaveAttribute("data-sheet-theme", "dark");
+      expect(await sheet.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(22, 26, 21)");
+    }
+  });
+
+  test("the sheet theme switch works, is announced and is remembered only in the browser", async ({ page }) => {
+    // On /rad the theme is in the toolbar's "Prikaz" menu (FE-D5).
+    await page.goto("/rad");
+    const view = page.getByRole("toolbar", { name: "Oblikovanje teksta" }).getByRole("button", { name: "Prikaz" });
+    const theme = (name: string) => page.getByRole("menu", { name: "Prikaz" }).getByRole("menuitemradio", { name });
+    await view.click();
+    await expect(theme("Tamni list")).toHaveAttribute("aria-checked", "true");
+    await expect(theme("Bijeli list")).toHaveAttribute("aria-checked", "false");
+    await theme("Bijeli list").click();
+    const sheet = page.locator("article.sheet");
+    await expect(sheet).toHaveAttribute("data-sheet-theme", "light");
+    await view.click();
+    await expect(theme("Bijeli list")).toHaveAttribute("aria-checked", "true");
+    await page.keyboard.press("Escape");
+    expect(await sheet.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(255, 255, 255)");
+    await page.reload();
+    await expect(sheet).toHaveAttribute("data-sheet-theme", "light");
+    await view.click();
+    await theme("Tamni list").click();
+    await expect(sheet).toHaveAttribute("data-sheet-theme", "dark");
+  });
+
+  test("a stored value that is not a theme leaves the sheet dark", async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem("ductus.sheetTheme", "sepia"));
+    await page.goto("/rad");
+    await expect(page.locator("article.sheet")).toHaveAttribute("data-sheet-theme", "dark");
+  });
+
   test("the brand link on the workspace is a comfortable target", async ({ page }) => {
     await page.goto("/rad");
-    const box = await page.locator(".workspace__bar").getByRole("link", { name: "Ductus" }).boundingBox();
+    const box = await page.locator(".workspace__bar").getByRole("link", { name: "Ductura" }).boundingBox();
     expect(box!.height).toBeGreaterThanOrEqual(32);
   });
 
@@ -249,26 +428,28 @@ test.describe("workspace shell", () => {
     test(`home at ${width} px: content lines up with the header brand`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
       await page.goto("/");
-      const brand = await page.getByRole("banner").getByRole("link", { name: "Ductus" }).boundingBox();
+      const brand = await page.getByRole("banner").getByRole("link", { name: "Ductura" }).boundingBox();
       const heading = await page.getByRole("heading", { level: 1 }).boundingBox();
       // The brand link pads 6 px each side for its target and pulls back by 6 px.
       expect(Math.abs(brand!.x + 6 - heading!.x)).toBeLessThanOrEqual(1);
     });
   }
 
-  test("home states what Ductus does not judge", async ({ page }) => {
+  test("home states what Ductura does not judge", async ({ page }) => {
     await page.goto("/");
     await expect(
       page.getByText(
-        "Ductus ne procjenjuje autorstvo ni korištenje AI-ja. Prije početka vidiš što nastavnik vidi i od kada.",
+        "Ductura ne procjenjuje autorstvo ni korištenje AI-ja. Prije početka vidiš što nastavnik vidi i od kada.",
         { exact: true },
       ),
     ).toBeVisible();
   });
 
-  test("home links to the workspace", async ({ page }) => {
+  // Without a session "/" is the public home page and its way in is /prijava
+  // (FE-H1, #476); the workspace link for a signed-in person is checked in
+  // e2e/login/sign-out.spec.ts.
+  test("home without a session leads to the sign-in screen", async ({ page }) => {
     await page.goto("/");
-    await page.getByRole("link", { name: "Otvori radni prostor" }).click();
-    await expect(page).toHaveURL(/\/rad$/);
+    await expect(page.getByRole("banner").getByRole("link", { name: "Prijava" })).toHaveAttribute("href", "/prijava");
   });
 });

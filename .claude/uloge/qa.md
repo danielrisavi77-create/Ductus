@@ -25,4 +25,4 @@ Prije ove kartice pročitaj `zajednicko.md`. Identitet: `<runtime>:<slot>:qa`, r
 - Ne dopisuj strože kriterije od fiksnog (`docs/ENGINEERING_SYSTEM.md` §14 t. 4).
 
 ## Poznate zamke
-- Isti GitHub App ne smije dati i review i QA PASS, osim uz kvotni fallback s doslovnim retkom iz `docs/SESSIONS.md` §3.
+- Za isti App provjeri uvjete iznimke iz `docs/ENGINEERING_SYSTEM.md` §6: kvotni fallback, D-139 ili Codex par (D-158) na aktualnom headu ili prenesen kroz dokazani D-101 (D-161). Deklaracije fallbacka su u `docs/SESSIONS.md` §3. D-158 je prihvaćen i spojen kroz #538; stvarna neovisnost ostaje obvezna.

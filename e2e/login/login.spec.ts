@@ -26,6 +26,22 @@ test("the demo student signs in and lands on returnTo with a session", async ({ 
   });
 });
 
+test("the second demo student signs in and receives a distinct session identity", async ({ page, context }) => {
+  await signIn(page, "/rad", "Demo student 2");
+
+  const session = await appCookie(context, SESSION_COOKIE);
+  expect(session).toMatchObject({ httpOnly: true, secure: true, sameSite: "Lax", path: "/" });
+  expect(session!.value).toMatch(/^[A-Za-z0-9_-]{43}$/);
+  expect(await appCookie(context, LOGIN_COOKIE)).toBeUndefined();
+
+  expect(await sessionRow(session!.value)).toEqual({
+    institution: "demo-fakultet",
+    unique_id: "demo-student-2@demo.ductus.test",
+    closed_at: null,
+    close_reason: null,
+  });
+});
+
 test("logout closes the session and clears the cookie", async ({ page, context }) => {
   await signIn(page, "/");
   const token = (await appCookie(context, SESSION_COOKIE))!.value;

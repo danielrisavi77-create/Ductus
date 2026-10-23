@@ -24,6 +24,7 @@ export const SERVER_SYNC_ERROR_MESSAGES: Record<ServerSyncErrorCode, string> = {
 export const CHECKPOINT_ERROR_MESSAGES: Record<CheckpointErrorCode, string> = {
   "naziv-prazan": "Kontrolna točka treba naziv.",
   "naziv-dug": `Naziv kontrolne točke smije imati najviše ${CHECKPOINT_NAME_MAX_LENGTH} znakova.`,
+  "naziv-neispravan": "Naziv kontrolne točke sadrži znakove koji nisu dopušteni.",
   "rad-nepoznat": "Rad nije pronađen na poslužitelju.",
   spremanje: "Kontrolnu točku nije bilo moguće stvoriti. Pokušaj ponovno.",
   citanje: "Popis kontrolnih točaka nije moguće dohvatiti.",

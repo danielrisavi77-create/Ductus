@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;background:#0F110E;color:#E9EBE6;font-family:"Instrument Sans",system-ui,sans-serif;font-size:13px}
+*{box-sizing:border-box}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input{font:inherit;color:#E9EBE6}
+a{color:#8FB0E0;text-decoration:none}
+a:hover{color:#B3CAEC}
+:focus-visible{outline:2px solid #8FD1B9;outline-offset:2px;border-radius:6px}
+::selection{background:#D9AE5B55}
+</style>
+</helmet>
+<div data-screen-label="Početna" style="min-height:100vh;display:flex;flex-direction:column">
+  <a href="#glavno" style="position:absolute;left:-999px;top:8px;padding:8px 12px;background:#6FBFA5;color:#0E1C17;border-radius:8px;z-index:99" style-focus="left:12px">Preskoči na sadržaj</a>
+  <header style="position:sticky;top:0;z-index:30;height:52px;display:flex;align-items:center;gap:16px;padding:0 20px;border-bottom:1px solid #232722;background:#121511">
+    <span style="font-family:Newsreader,Georgia,serif;font-size:20px;font-weight:600">Ductura</span>
+    <nav aria-label="Glavno" style="display:flex;gap:4px"><span aria-current="page" style="padding:5px 10px;border-radius:7px;background:#232722;font-size:12.5px">Početna</span><a href="Ductura Komentari mobitel.dc.html" style="padding:5px 10px;border-radius:7px;font-size:12.5px;color:#A6ADA5">Komentari</a></nav>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:12px;position:relative">
+      <button type="button" onClick="{{ toggleBell }}" aria-expanded="{{ bellOpenS }}" aria-label="Obavijesti" style="position:relative;display:grid;place-items:center;width:34px;height:34px;border-radius:8px;color:#C5CBC3" style-hover="background:#1E221D"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6.5 2 6.5H4S6 14 6 9"></path><path d="M10 19.5a2 2 0 0 0 4 0"></path></svg><sc-if value="{{ unread }}" hint-placeholder-val="{{ true }}"><span style="position:absolute;top:4px;right:4px;min-width:15px;height:15px;padding:0 4px;border-radius:8px;background:#D3AC63;color:#1A1408;font-size:10px;font-weight:700;display:grid;place-items:center">{{ unread }}</span></sc-if></button>
+      <span style="font-size:12.5px;color:#A6ADA5">Student A</span>
+      <a href="Ductura Prijava v5.dc.html" style="padding:4px 10px;border-radius:7px;font-size:12px;color:#A6ADA5;border:1px solid #2C312B">Odjava</a>
+      <sc-if value="{{ bellOpen }}" hint-placeholder-val="{{ false }}">
+        <div role="dialog" aria-label="Obavijesti" style="position:absolute;top:44px;right:0;width:min(380px,calc(100vw - 32px));background:#171A16;border:1px solid #2A2F29;border-radius:14px;box-shadow:0 30px 60px -20px #000c;padding:8px;display:flex;flex-direction:column">
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px"><b style="font-size:13px">Obavijesti</b><button type="button" onClick="{{ toggleSettings }}" style="margin-left:auto;font-size:12px;color:#8FB0E0">{{ settingsLabel }}</button></div>
+          <sc-if value="{{ showList }}" hint-placeholder-val="{{ true }}">
+            <sc-for list="{{ notes }}" as="n" hint-placeholder-count="4"><a href="{{ n.href }}" style="display:flex;gap:10px;padding:10px;border-radius:9px;color:#E9EBE6" style-hover="background:#1E221D"><i style="{{ n.dot }}"></i><span style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-size:13px;line-height:1.4">{{ n.t }}</span><span style="font-size:11.5px;color:#8E958D">{{ n.m }}</span></span></a></sc-for>
+            <button type="button" onClick="{{ markRead }}" style="margin:4px 10px 6px;align-self:flex-start;font-size:12px;color:#A6ADA5">Označi sve pročitanim</button>
+          </sc-if>
+          <sc-if value="{{ showSettings }}" hint-placeholder-val="{{ false }}">
+            <div style="display:grid;grid-template-columns:minmax(0,1fr) 64px 64px;gap:2px 8px;align-items:center;padding:4px 10px 10px;font-size:12.5px">
+              <span></span><span style="font-size:11.5px;color:#8E958D;text-align:center">U aplikaciji</span><span style="font-size:11.5px;color:#8E958D;text-align:center">E-pošta</span>
+              <sc-for list="{{ prefs }}" as="p" hint-placeholder-count="4"><span style="padding:8px 0;border-top:1px solid #232722">{{ p.t }}</span><span style="padding:8px 0;border-top:1px solid #232722;text-align:center"><input type="checkbox" checked="{{ p.app }}" onChange="{{ p.setApp }}" aria-label="{{ p.ariaApp }}" style="accent-color:#6FBFA5"></span><span style="padding:8px 0;border-top:1px solid #232722;text-align:center"><input type="checkbox" checked="{{ p.mail }}" onChange="{{ p.setMail }}" aria-label="{{ p.ariaMail }}" style="accent-color:#6FBFA5"></span></sc-for>
+            </div>
+            <span style="padding:0 10px 10px;font-size:11.5px;line-height:1.5;color:#767D75">Ductura ne šalje podsjetnike o tome koliko pišeš. Samo o komentarima, doradama i rokovima.</span>
+          </sc-if>
+        </div>
+      </sc-if>
+    </div>
+  </header>
+
+  <main id="glavno" style="flex:1;width:100%;max-width:880px;margin:0 auto;padding:48px 24px 80px;display:flex;flex-direction:column;align-items:center;gap:36px">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center">
+      <span style="font-size:12.5px;color:#8E958D">Subota, 17. 10. 2026.</span>
+      <h1 style="margin:0;font-family:Newsreader,Georgia,serif;font-size:clamp(36px,5.4vw,56px);font-weight:300;line-height:1.05;letter-spacing:-.02em">Dobro došao, <span style="font-style:italic;font-weight:400;color:#BFE3D5">Student A</span></h1>
+    </div>
+
+    <section aria-label="Nastavi gdje si stao" style="width:100%;background:linear-gradient(180deg,#191D18,#141712);border:1px solid #2A2F29;border-radius:16px;box-shadow:inset 0 1px 0 #ffffff0d,0 24px 50px -24px #000a;padding:26px 28px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center">
+      <span style="font-size:12px;color:#8E958D">Nastavi gdje si stao · Završni rad · 2.2 Primjer iz prakse</span>
+      <b style="font-family:Newsreader,Georgia,serif;font-size:22px;font-weight:600;line-height:1.3;text-wrap:balance">Čitanje naglas i rječnik djece u prvim razredima</b>
+      <span style="font-family:Newsreader,Georgia,serif;font-style:italic;font-size:15.5px;color:#C5CBC3">„Sutra: dovrši primjer u 2.2.”</span>
+      <span style="font-size:11.5px;color:#767D75">Poruka sebi od 16. 10. u 22:14</span>
+      <a href="Ductura Editor v11.dc.html" style="margin-top:6px;padding:11px 22px;border-radius:10px;background:#6FBFA5;color:#0E1C17;font-size:14px;font-weight:600">Nastavi pisati</a>
+    </section>
+
+    <section aria-labelledby="zad-h" style="width:100%;display:flex;flex-direction:column;gap:10px">
+      <h2 id="zad-h" style="margin:0 0 4px;text-align:center;font-family:Newsreader,Georgia,serif;font-size:22px;font-weight:400">Moji radovi</h2>
+      <sc-for list="{{ tasks }}" as="t" hint-placeholder-count="3">
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 16px;align-items:center;padding:16px 18px;background:#141712;border:1px solid #232722;border-radius:12px">
+          <span style="display:flex;flex-direction:column;gap:3px;min-width:0"><span style="font-size:12px;color:#8E958D">{{ t.kind }} · {{ t.course }}</span><b style="font-size:14.5px;font-weight:600">{{ t.title }}</b><span style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;font-size:12.5px"><span style="{{ t.stStyle }}">{{ t.state }}</span><span style="color:#8E958D">{{ t.due }}</span></span></span>
+          <span style="display:flex;gap:8px;align-items:center"><sc-if value="{{ t.pkg }}" hint-placeholder-val="{{ false }}"><button type="button" onClick="{{ openPkg }}" style="padding:8px 12px;border-radius:9px;font-size:12.5px;border:1px solid #2C312B;color:#C5CBC3" style-hover="background:#1E221D">Preuzmi paket</button></sc-if><a href="{{ t.href }}" style="padding:8px 14px;border-radius:9px;font-size:12.5px;font-weight:600;background:#232722;color:#E9EBE6">{{ t.cta }}</a></span>
+        </div>
+      </sc-for>
+    </section>
+
+    <section aria-label="Upiši kolegij" style="display:flex;flex-direction:column;align-items:center;gap:8px">
+      <span style="font-size:12.5px;color:#A6ADA5">Imaš kod novog kolegija?</span>
+      <div style="display:flex;gap:8px"><input value="{{ code }}" onChange="{{ setCode }}" aria-label="Kod kolegija" placeholder="FPZG-ZR-7K2" style="width:200px;background:#0B0D0A;border:1px solid #262B25;border-radius:9px;padding:9px 12px;font-family:ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;text-transform:uppercase;text-align:center"><a href="Ductura Demo tok v2.dc.html?u=sa" style="padding:9px 16px;border-radius:9px;font-weight:600;background:#232722;color:#E9EBE6">Upiši</a></div>
+    </section>
+  </main>
+
+  <footer style="display:flex;justify-content:center;flex-wrap:wrap;gap:6px 18px;padding:18px;font-size:11.5px;color:#767D75"><span>Izmišljeni podaci</span><a href="Ductura Kako radi.dc.html" style="color:#8E958D">Kako Ductura radi</a></footer>
+
+  <sc-if value="{{ pkgOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closePkg }}" style="position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:24px;background:#070807B3;backdrop-filter:blur(6px)">
+      <div role="dialog" aria-modal="true" aria-labelledby="pkg-h" onClick="{{ stop }}" style="width:min(460px,100%);background:linear-gradient(180deg,#1B1F1A,#131612);border:1px solid #2A2F29;border-radius:18px;box-shadow:0 40px 90px -30px #000;padding:30px;display:flex;flex-direction:column;align-items:center;gap:16px;text-align:center">
+        <h2 id="pkg-h" style="margin:0;font-family:Newsreader,Georgia,serif;font-size:26px;font-weight:400">Paket rada</h2>
+        <span style="font-size:13px;line-height:1.55;color:#A6ADA5;max-width:40ch">Predani esej sa svime što ti treba za portfelj ili prijavu na diplomski studij.</span>
+        <div style="width:100%;display:flex;flex-direction:column;text-align:left">
+          <sc-for list="{{ pkgItems }}" as="p" hint-placeholder-count="4"><label style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid #232722;font-size:13px;line-height:1.45"><input type="checkbox" checked="{{ p.on }}" onChange="{{ p.toggle }}" style="margin-top:3px;accent-color:#6FBFA5"><span style="display:flex;flex-direction:column;gap:2px"><span>{{ p.t }}</span><span style="font-size:11.5px;color:#8E958D">{{ p.m }}</span></span></label></sc-for>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center"><button type="button" onClick="{{ download }}" style="padding:10px 20px;border-radius:10px;background:#6FBFA5;color:#0E1C17;font-weight:600">Preuzmi .zip</button><button type="button" onClick="{{ closePkg }}" style="padding:10px 14px;color:#A6ADA5">Zatvori</button></div>
+        <sc-if value="{{ dlNote }}" hint-placeholder-val="{{ false }}"><span role="status" style="font-size:12px;color:#8FD1B9">{{ dlNote }}</span></sc-if>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const PREFS = [["Novi komentar mentora", true, true], ["Zahtjev za doradu", true, true], ["Mentor je prihvatio doradu", true, false], ["Rok za 7 dana i za 1 dan", true, true]];
+const PKG = [["Rad", ".docx i PDF, kako je predan"], ["Literatura", "BibTeX i RIS za Zotero ili Mendeley"], ["Putovnica rada", "PDF s kodom DUC-7Q4M-2K9X za provjeru"], ["Komentari i dorade", "Svi komentari mentora i tvoji odgovori"]];
+class Component extends DCLogic {
+  state = { bell: false, settings: false, read: false, prefs: PREFS.map(p => [p[1], p[2]]), pkg: false, pkgOn: PKG.map(() => true), dl: "", code: "" };
+  componentDidMount() { this.k = e => { if (e.key === "Escape") this.setState({ pkg: false, bell: false }); }; addEventListener("keydown", this.k); }
+  componentWillUnmount() { removeEventListener("keydown", this.k); }
+  renderVals() {
+    const s = this.state, dot = c => ({ flex: "none", width: 7, height: 7, borderRadius: "50%", marginTop: 6, background: c });
+    const col = { wait: "#D3AC63", mentor: "#8FB0E0", done: "#8FD1B9" };
+    const T = [
+      { kind: "Završni rad", course: "Kolegij A", title: "Čitanje naglas i rječnik djece u prvim razredima", state: "Čeka tebe · 2 otvorena komentara", k: "wait", due: "Rok 15. 6. 2027.", href: "Ductura Editor v11.dc.html", cta: "Otvori" },
+      { kind: "Seminarski rad", course: "Kolegij B", title: "Lokalni mediji i izborna kampanja", state: "Kod mentora · runda 2 poslana 14. 10.", k: "mentor", due: "Rok 20. 1. 2027.", href: "Ductura Editor v11.dc.html", cta: "Otvori" },
+      { kind: "Esej", course: "Kolegij C", title: "Javna rasprava o školskom kurikulu", state: "Predano 3. 10. 2026.", k: "done", due: "Putovnica DUC-7Q4M-2K9X", href: "Ductura Prijava v5.dc.html", cta: "Putovnica", pkg: true },
+    ];
+    return {
+      unread: s.read ? 0 : 3, bellOpen: s.bell, bellOpenS: s.bell ? "true" : "false",
+      toggleBell: () => this.setState(st => ({ bell: !st.bell, settings: false })),
+      toggleSettings: () => this.setState(st => ({ settings: !st.settings })), settingsLabel: s.settings ? "Natrag" : "Postavke",
+      showList: !s.settings, showSettings: s.settings, markRead: () => this.setState({ read: true }),
+      notes: [
+        { t: "Nastavnik A je komentirao 2.2 Primjer iz prakse.", m: "Završni rad · danas u 9:40", href: "Ductura Editor v11.dc.html", dot: dot(s.read ? "#3A4039" : "#D3AC63") },
+        { t: "Zahtjev za doradu: dodaj stranice u navode.", m: "Završni rad · jučer", href: "Ductura Editor v11.dc.html", dot: dot(s.read ? "#3A4039" : "#D3AC63") },
+        { t: "Mentor je zaprimio rundu 2.", m: "Seminarski rad · 14. 10.", href: "Ductura Editor v11.dc.html", dot: dot(s.read ? "#3A4039" : "#8FB0E0") },
+        { t: "Rok za predaju etape za 7 dana.", m: "Završni rad · 24. 10.", href: "Ductura Editor v11.dc.html", dot: dot("#3A4039") },
+      ],
+      prefs: PREFS.map((p, i) => ({ t: p[0], app: s.prefs[i][0], mail: s.prefs[i][1], ariaApp: p[0] + " u aplikaciji", ariaMail: p[0] + " e-poštom",
+        setApp: e => { const v = e.target.checked; this.setState(st => ({ prefs: st.prefs.map((x, j) => j === i ? [v, x[1]] : x) })); },
+        setMail: e => { const v = e.target.checked; this.setState(st => ({ prefs: st.prefs.map((x, j) => j === i ? [x[0], v] : x) })); } })),
+      tasks: T.map(t => Object.assign({}, t, { pkg: !!t.pkg, stStyle: { color: col[t.k] } })),
+      openPkg: () => this.setState({ pkg: true, dl: "" }), closePkg: () => this.setState({ pkg: false }), pkgOpen: s.pkg, stop: e => e.stopPropagation(),
+      pkgItems: PKG.map((p, i) => ({ t: p[0], m: p[1], on: s.pkgOn[i], toggle: () => this.setState(st => ({ pkgOn: st.pkgOn.map((x, j) => j === i ? !x : x) })) })),
+      download: () => { const n = s.pkgOn.filter(Boolean).length; this.setState({ dl: n ? "Demo: paket s " + n + " dijela bi se sada preuzeo." : "Odaberi barem jedan dio." }); }, dlNote: s.dl || false,
+      code: s.code, setCode: e => this.setState({ code: e.target.value }),
+    };
+  }
+}
+</script>
+</body>
+</html>

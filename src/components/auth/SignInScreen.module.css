@@ -1,0 +1,181 @@
+/*
+ * Prijava v5 (docs/design/ductura/prijava-v5.dc.html) on the D-123 tokens of
+ * app/globals.css. The shell is dark only (D-115). Small quiet text uses
+ * --ink-3, not the prototype's --ink-muted, which is under 4.5:1 on --raised.
+ */
+
+.screen {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.screen::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: -20%;
+  top: -30%;
+  width: 90%;
+  height: 110%;
+  background: radial-gradient(closest-side, #6fbfa512, transparent);
+  pointer-events: none;
+}
+
+.main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr));
+  align-items: center;
+  gap: clamp(32px, 7vw, 120px);
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 48px clamp(16px, 5vw, 72px);
+}
+
+.main:focus {
+  outline: none;
+}
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  text-align: center;
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--ff-display);
+  font-size: clamp(48px, 7.4vw, 98px);
+  font-weight: 300;
+  line-height: 0.95;
+  letter-spacing: -0.025em;
+}
+
+.accent {
+  display: block;
+  font-style: italic;
+  font-weight: 400;
+  color: #bfe3d5;
+}
+
+.lead {
+  margin: 0;
+  max-width: 40ch;
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+
+.motto {
+  margin: 0;
+  max-width: 42ch;
+  font-family: var(--ff-display);
+  font-style: italic;
+  font-size: 17px;
+  line-height: 1.5;
+  color: #c5cbc3;
+  text-wrap: pretty;
+}
+
+.card {
+  justify-self: center;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: min(430px, 100%);
+  padding: 30px 30px 24px;
+  text-align: center;
+  background: linear-gradient(180deg, #191d18f2, #121511f2);
+  border: 1px solid var(--rule);
+  border-radius: 18px;
+  box-shadow:
+    inset 0 1px 0 #ffffff12,
+    0 30px 60px -20px #000c,
+    0 70px 120px -60px #6fbfa526;
+}
+
+.cardTitle {
+  margin: 0;
+  font-family: var(--ff-display);
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+.cardBody {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+
+.button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 14px 18px;
+  border-radius: 11px;
+  background: linear-gradient(180deg, #86cdb5, #62b297);
+  color: var(--accent-ink);
+  font-size: 14.5px;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow:
+    inset 0 1px 0 #ffffff59,
+    0 8px 24px -8px #6fbfa580;
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s;
+}
+
+.button:hover {
+  color: var(--accent-ink);
+  transform: translateY(-1px);
+}
+
+.note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin: -6px 0 0;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.rule {
+  width: 100%;
+  height: 1px;
+  margin: 4px 0;
+  border: 0;
+  background: linear-gradient(90deg, transparent, var(--rule), transparent);
+}
+
+.small {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button {
+    transition: none;
+  }
+
+  .button:hover {
+    transform: none;
+  }
+}

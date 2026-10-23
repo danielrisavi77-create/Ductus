@@ -23,9 +23,9 @@
 
 ## B. Blokira određene dijelove pilota
 
-15. `[Pravnik]` Je li vrijeme promjena u koracima od 100 ms (D-56) biometrijski podatak po čl. 4. t. 14. GDPR-a i smije li se uopće bilježiti, uz izmjenu Ustava C-14 i C-19 prije prvog bilježenja? `[ODLUKA]` (blokira val 3 i mentorske radove; do tada se ne bilježi)
+15. `[Pravnik]` Je li vrijeme po promjeni (znak po znak, svi zadaci, D-143; mijenja D-56) biometrijski podatak po čl. 4. t. 14. GDPR-a, je li njegovo bilježenje i reprodukcija razmjerna i uz koje uvjete se smije bilježiti u pilotu sa stvarnim studentima? `[ODLUKA]` (blokira pilot sa stvarnim studentima, ne demo; do mišljenja i DPIA-e bilježi se samo u demou i testovima s izmišljenim podacima; pitanje ostaje otvoreno)
 16. `[Pravnik]` Primjenjuje li se Prilog III. točka 3(d) Akta o UI na kontrolnu točku uživo bez AI-ja i je li ta obrada razmjerna (D-55)? `[ODLUKA]` (do mišljenja isključeno)
-17. `[Vlasnik]` Zamjenjuje li D-39 odluku D-06 o učestalosti nastavničkog pogleda, jer tekst obavijesti ovisi o odgovoru (STATE, Owner queue)? `[ODLUKA]`
+17. `[Vlasnik]` Riješeno 18. 10. 2026.: D-142 zamjenjuje D-06 i D-39 (prikaz uživo od prvog dana), a D-144 zamjenjuje D-37. Tekst obavijesti prati to; preostaje samo pitanje 15 o reprodukciji. `[RIJEŠENO]`
 18. `[Vlasnik]` Kako se tekst obavijesti o privatnosti verzionira i veže uz potvrdu studenta (otisak teksta), kad potvrda sada veže samo verziju zadatka? `[IZVEDBA]`
 19. `[Vlasnik, Ustanova]` Treba li Ductus uopće ime i e-poštu studenta, i ako treba, iz kojeg izvora, kad kod danas traži opseg `profile` a ne sprema ništa osim identifikatora? `[ODLUKA]`
 20. `[Pravnik]` Jesu li hashevi lanca, potvrde i javno objavljeni ukupan broj potvrda osobni podaci nakon brisanja sadržaja (D-93, ARCHITECTURE §3)? `[ODLUKA]`
@@ -54,4 +54,4 @@ Dopuna GO uvjetima iz `docs/PROGRAM.md`; ništa ovdje ne mijenja tu tablicu.
 - Test postupka za zahtjeve ispitanika (izvoz, brisanje) na sintetičkim podacima.
 - Zapisana proba povrata baze i bucketa; pgTAP matrica za sve nove tablice rada i evidencije.
 - Odluka D-04 i zamjenski postupak; postupak povrede podataka i osoba koja smije zaustaviti pilot.
-- Za D-56: pravno mišljenje i izmjena Ustava prije bilo kojeg bilježenja ritma; inače izričita potvrda da je isključen iz pilota.
+- Za D-142 i D-143 (prikaz uživo, vrijeme po promjeni): pravno mišljenje (D-55), koje pokriva i Prilog III. točku 3(d) Akta o UI, i DPIA prije pilota sa stvarnim studentima; do tada se vrijeme po promjeni bilježi samo u demou i testovima s izmišljenim podacima, inače izričita potvrda da je isključeno iz pilota. Tvrdnja o AZOP-ovim kriterijima za obveznu DPIA ostaje neprovjerena dok se ne provjeri na AZOP-ovu popisu (`02`).
