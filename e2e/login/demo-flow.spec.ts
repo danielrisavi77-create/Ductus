@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
-import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { expect, test, type BrowserContext, type Page, type Request } from "@playwright/test";
 import pg from "pg";
 
 import { DUCTUS_PROTOCOL_VERSION } from "../../src/domain/evidence/commit-envelope";
@@ -98,6 +98,9 @@ const ADMIN_DATABASE_URL =
 let roleGrantedByThisTest = false;
 
 async function withAdmin<T>(work: (client: pg.Client) => Promise<T>): Promise<T> {
+  if (!["127.0.0.1", "localhost"].includes(new URL(ADMIN_DATABASE_URL).hostname)) {
+    throw new Error("the K-4 fixture runs only against a local database");
+  }
   const client = new pg.Client({ connectionString: ADMIN_DATABASE_URL });
   await client.connect();
   try {
@@ -131,6 +134,14 @@ test.afterEach(cleanUp);
 const clearLiveFixture = () => withAdmin((client) => client.query(
   "DELETE FROM collaboration.live_state WHERE document_id = $1", [LOCAL_DEMO_DOCUMENT_ID]));
 test.afterEach(clearLiveFixture);
+
+// Only the reserved synthetic document's owner acknowledgment, so every run
+// exercises the real confirmation UI rather than inheriting an earlier one.
+const clearNoticeFixture = () => withAdmin((client) => client.query(
+  `DELETE FROM institution.notice_acknowledgment n USING evidence.document d, evidence.project p
+   WHERE d.id = $1 AND p.id = d.project_id AND n.assignment_id = p.assignment_id AND n.student_id = d.principal_id`,
+  [LOCAL_DEMO_DOCUMENT_ID]));
+test.afterEach(clearNoticeFixture);
 
 test("demo walk-through", async ({ browser, page, context }) => {
   let token = "";
@@ -213,13 +224,69 @@ test("demo walk-through", async ({ browser, page, context }) => {
     await snapshot(page, "2-studentica-prijavljena");
   });
 
-  // F-7 stays skipped: no route or screen hands the enrolment code to a
-  // person yet (create_enrollment_code returns it once, to a database call
-  // only), so the step needs the K-3 seed (DAN-88, Backend); it is not built here.
-  // F-7 (demo point 1, the student's side): proves enrolment by code, the
-  // assignment's first screen with the notice and art. 8, and the student's
-  // confirmation; before the confirmation nothing goes to the server.
+  // The complete F-7 still needs the teacher's code and the actual enrollment
+  // flow (#575/#542). The notice UI below uses the existing synthetic fixture;
+  // it does not join the F-6 assignment to the connected editor/evidence flow.
   await test.step.skip("2. F-7: studentica se upisuje kodom i potvrđuje obavijest", async () => {});
+
+  await test.step("2. F-7 djelomično: studentica potvrđuje obavijest kroz stvarno sučelje", async () => {
+    await seed();
+    await clearNoticeFixture();
+    const { rows: [assignment] } = await withAdmin((client) => client.query<{ id: string; version: number }>(
+      `SELECT a.id, a.current_version AS version FROM evidence.document d
+       JOIN evidence.project p ON p.id = d.project_id JOIN institution.assignment a ON a.id = p.assignment_id
+       WHERE d.id = $1`, [LOCAL_DEMO_DOCUMENT_ID]));
+    expect(assignment).toBeDefined();
+    const noticePath = `/zadatak/${assignment!.id}`;
+    const acknowledgmentPath = `/api/institution/assignments/${assignment!.id}/acknowledgment`;
+    const evidenceRequests: string[] = [];
+    const observe = (request: Request) => {
+      const path = new URL(request.url()).pathname;
+      if (/^\/api\/(evidence|live|submission)(\/|$)/.test(path)) evidenceRequests.push(path);
+    };
+    // First unmount the unscoped editor; observe only this notice's requests.
+    await page.goto(noticePath);
+    page.on("request", observe);
+    try {
+      await page.goto(`/rad?zadatak=${assignment!.id}`);
+      await page.waitForURL(`http://localhost:3000${noticePath}`);
+      await expect(page.getByRole("heading", { name: t.student.recordedHeading })).toBeVisible();
+      await expect(editorOf(page)).toHaveCount(0);
+      const confirm = page.getByRole("button", { name: t.student.confirm });
+      await expect(confirm).toBeDisabled();
+      await snapshot(page, "2-obavijest-prije-potvrde");
+      expect(evidenceRequests).toEqual([]);
+
+      await page.getByRole("checkbox", { name: t.student.checkbox }).check();
+      await expect(confirm).toBeEnabled();
+      const acknowledged = page.waitForResponse((response) => new URL(response.url()).pathname === acknowledgmentPath);
+      await confirm.click();
+      const response = await acknowledged;
+      expect(response.status()).toBe(200);
+      expect(response.request().postDataJSON()).toEqual({ versionNo: assignment!.version });
+      const body = await response.json() as { acknowledgedAt: string };
+      const { rows } = await withAdmin((client) => client.query<{ version_no: number; acknowledged_at: Date }>(
+        `SELECT n.version_no, n.acknowledged_at FROM institution.notice_acknowledgment n
+         JOIN evidence.document d ON d.principal_id = n.student_id JOIN evidence.project p ON p.id = d.project_id
+         WHERE d.id = $1 AND n.assignment_id = p.assignment_id`, [LOCAL_DEMO_DOCUMENT_ID]));
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.version_no).toBe(assignment!.version);
+      expect(rows[0]!.acknowledged_at.toISOString()).toBe(body.acknowledgedAt);
+      expect(evidenceRequests).toEqual([]);
+      await expect(page.getByRole("checkbox")).toHaveCount(0);
+      await snapshot(page, "2-obavijest-potvrdena-u-bazi");
+      await test.info().attach("2-stvarna-potvrda-obavijesti.json", {
+        body: JSON.stringify({ assignmentId: assignment!.id, versionNo: rows[0]!.version_no, ...body, evidenceRequests }, null, 2),
+        contentType: "application/json",
+      });
+    } finally {
+      page.off("request", observe);
+    }
+    await page.getByRole("link", { name: t.student.openEditor }).click();
+    await page.waitForURL(`http://localhost:3000/rad?zadatak=${assignment!.id}`);
+    await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+    await snapshot(page, "2-editor-nakon-potvrde");
+  });
 
   await test.step("2. Studentica piše, a tekst je spremljen na uređaju", async () => {
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
@@ -274,19 +341,8 @@ test("demo walk-through", async ({ browser, page, context }) => {
     const teacher = await (await browser.newContext()).newPage();
     try {
       await signIn(teacher, "/", "Demo nastavnik");
-      await seed();
       await clearLiveFixture();
-      // The live RPC requires the assignment's current notice, even for this
-      // synthetic input. Record it through the real student route, not SQL.
-      const { rows: [assignment] } = await withAdmin((client) => client.query<{ id: string; version: number }>(
-        `SELECT a.id, a.current_version AS version FROM evidence.document d
-         JOIN evidence.project p ON p.id = d.project_id JOIN institution.assignment a ON a.id = p.assignment_id
-         WHERE d.id = $1`, [LOCAL_DEMO_DOCUMENT_ID]));
-      expect(assignment).toBeDefined();
-      const acknowledged = await page.request.post(`/api/institution/assignments/${assignment!.id}/acknowledgment`, {
-        headers: { origin: "http://localhost:3000" }, data: { versionNo: assignment!.version },
-      });
-      expect(acknowledged.status()).toBe(200);
+      // The notice was acknowledged by the actual student UI before writing.
       const body = canonicalizeJcs((await localCheckpoint(page)).snapshot!.document);
       const etag = `"${createHash("sha256").update(body, "utf8").digest("hex")}"`;
       const published = await page.request.put(LIVE_PATH, {
