@@ -8,6 +8,9 @@ import { contractState } from "./work-guard-core.mjs";
 
 export const VERDICTS = ["NEPROVJERENO", "PREKLAPANJE", "ČEKA OVISNOST", "PARALELNO"];
 export const GATE_SLOTS = 3; // D-161 (a)
+// D-107: until the demo on 2 November 2026 a tooling PR enters the gate only
+// when no demo PR waits in the queue.
+export const DEMO_FIRST_UNTIL = Date.parse("2026-11-03T00:00:00+01:00");
 
 const LANE_RE = /^[a-z]+:[a-z0-9][a-z0-9_-]*:(backend|frontend|platforma)$/i;
 const TASK_RE = /\bDAN-[1-9]\d*\b/;
@@ -30,6 +33,12 @@ const touchesUi = (paths) => paths.some((p) => matchesPath(p, UI_PATHS) && !matc
 
 export function laneOf(body) {
   return LANE_RE.exec(field(body ?? "", "Agent") ?? "")?.[1].toLowerCase() ?? null;
+}
+
+/** The writer behind the Agent line (runtime and slot), or null. */
+export function writerOf(body) {
+  const agent = field(body ?? "", "Agent") ?? "";
+  return LANE_RE.test(agent) ? agent.toLowerCase().split(":").slice(0, 2).join(":") : null;
 }
 
 export function taskOf(body) {
@@ -66,6 +75,7 @@ export function planParallel({ prs, pairs, contract = null, now = Date.now(), sl
   const rows = list.map((pr) => {
     const paths = Array.isArray(pr.paths) ? pr.paths.map(normalizePath) : null;
     const lane = laneOf(pr.body);
+    const writer = writerOf(pr.body);
     const task = taskOf(pr.body);
     const reasons = { NEPROVJERENO: [], PREKLAPANJE: [], "ČEKA OVISNOST": [] };
     if (!paths) reasons.NEPROVJERENO.push("files could not be read");
@@ -91,9 +101,16 @@ export function planParallel({ prs, pairs, contract = null, now = Date.now(), sl
     if (pr.baseRefName && pr.baseRefName !== "main") reasons["ČEKA OVISNOST"].push(`based on ${pr.baseRefName}, not main`);
     const deps = declaredDependencies(pr.body, open).filter((n) => n !== pr.number);
     if (deps.length) reasons["ČEKA OVISNOST"].push(`declared dependency on ${deps.map((n) => `#${n}`).join(", ")}`);
-    return { number: pr.number, draft: Boolean(pr.isDraft), lane, task, paths,
+    return { number: pr.number, draft: Boolean(pr.isDraft), lane, writer, task, paths,
       kind: paths ? (isTooling(paths) ? "tooling" : "demo") : null, reasons };
   });
+
+  // A PR whose files are unknown may overlap with any other.
+  const unread = rows.filter((r) => !r.paths).map((r) => `#${r.number}`);
+  for (const r of rows) {
+    const others = unread.filter((n) => n !== `#${r.number}`);
+    if (others.length) r.reasons.NEPROVJERENO.push(`overlap unknown: files of ${others.join(", ")} could not be read`);
+  }
 
   // A backend contract and another writer's screens cannot be proved independent
   // from paths; only the orchestrator's explicit confirmation clears the pair.
@@ -101,7 +118,8 @@ export function planParallel({ prs, pairs, contract = null, now = Date.now(), sl
   for (const r of rows) {
     if (!r.paths || !r.lane) continue;
     for (const o of rows) {
-      if (o === r || !o.paths || !o.lane || o.lane === r.lane) continue;
+      // one writer works serially; two writers in the same role are still two writers
+      if (o === r || !o.paths || !o.lane || o.writer === r.writer) continue;
       if (confirmed.has(`${Math.min(r.number, o.number)}:${Math.max(r.number, o.number)}`)) continue;
       if ((touches(r.paths, CONTRACT_PATHS) && touchesUi(o.paths)) || (touches(o.paths, CONTRACT_PATHS) && touchesUi(r.paths))) {
         r.reasons.NEPROVJERENO.push(`possible shared contract with #${o.number} (${o.lane}); confirm by hand`);
@@ -114,8 +132,21 @@ export function planParallel({ prs, pairs, contract = null, now = Date.now(), sl
   const clean = (r) => VERDICTS.slice(0, 3).every((v) => !r.reasons[v].length);
   const waiting = rows.filter((r) => r.draft && clean(r))
     .sort((a, b) => (a.kind === b.kind ? a.number - b.number : a.kind === "demo" ? -1 : 1));
+  const admitted = new Set();
   for (const r of waiting) {
-    if (free > 0) free -= 1;
+    if (r.kind !== "demo") continue;
+    if (free > 0) {
+      free -= 1;
+      admitted.add(r.number);
+    } else r.reasons["ČEKA OVISNOST"].push(`gate full (${slots} slots)`);
+  }
+  // Any demo draft left outside the gate, ready or blocked, is still in the queue.
+  const demoQueued = now < DEMO_FIRST_UNTIL
+    ? rows.filter((r) => r.draft && r.kind !== "tooling" && !admitted.has(r.number)).map((r) => `#${r.number}`) : [];
+  for (const r of waiting) {
+    if (r.kind === "demo") continue;
+    if (demoQueued.length) r.reasons["ČEKA OVISNOST"].push(`D-107: demo PR ${demoQueued.join(", ")} waits in the queue`);
+    else if (free > 0) free -= 1;
     else r.reasons["ČEKA OVISNOST"].push(`gate full (${slots} slots)`);
   }
 

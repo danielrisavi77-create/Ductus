@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { overlapPairs } from "./orchestrator-core.mjs";
-import { declaredDependencies, isTooling, laneOf, parseArgs, planParallel, renderPlan, taskOf } from "./plan-core.mjs";
+import { DEMO_FIRST_UNTIL, declaredDependencies, isTooling, laneOf, parseArgs, planParallel, renderPlan, taskOf, writerOf } from "./plan-core.mjs";
 import { contractState } from "./work-guard-core.mjs";
 
 const NOW = Date.parse("2026-10-23T22:00:00Z");
@@ -152,7 +152,8 @@ test("rendered plan and helpers", () => {
     "#1 NEPROVJERENO (platforma, DAN-1, ?, in gate)",
     "  files could not be read",
     "  no active assignment in the work contract",
-    "#2 PARALELNO (frontend, DAN-2, demo, DRAFT)",
+    "#2 NEPROVJERENO (frontend, DAN-2, demo, DRAFT)",
+    "  overlap unknown: files of #1 could not be read",
     "Contract: VALID. Gate: 1/3. Advice only: the orchestrator decides.",
   ]);
   assert.equal(laneOf("Agent: claude:a:Frontend"), "frontend");
@@ -173,4 +174,47 @@ test("arguments: unknown ones fail, the contract defaults to the environment", (
     assert.throws(() => parseArgs(bad), /unknown or incomplete argument/);
   }
   assert.throws(() => parseArgs(["--independent", "5:5"]), /not a pair/);
+});
+
+test("a PR whose files could not be read makes every other PR's overlap unknown", () => {
+  const prs = [pr(1, "backend", null), pr(2, "frontend", ["e2e/a.spec.ts"], { isDraft: true })];
+  const p = plan(prs, contract([assignment(1, "backend"), assignment(2, "frontend")]));
+  assert.deepEqual(verdicts(p), { 1: "NEPROVJERENO", 2: "NEPROVJERENO" });
+  assert.deepEqual(p.rows[1].reasons, ["overlap unknown: files of #1 could not be read"]);
+  assert.deepEqual(p.rows[0].reasons, ["files could not be read"]);
+});
+
+test("two writers in the same role are checked for a shared contract; one writer is not", () => {
+  const prs = [pr(1, "frontend", ["src/domain/document/a.ts"]), pr(2, "frontend", ["src/editor/b.ts"])];
+  const c = contract([assignment(1, "frontend"), assignment(2, "frontend")]);
+  const p = plan(prs, c);
+  assert.deepEqual(verdicts(p), { 1: "NEPROVJERENO", 2: "NEPROVJERENO" });
+  assert.match(p.rows[1].reasons[0], /possible shared contract with #1 \(frontend\)/);
+  const same = prs.map((x) => ({ ...x, body: "Agent: codex:one:frontend\nTask: DAN-" + x.number }));
+  const one = contract([assignment(1, "frontend", { agent: "codex:one:frontend" }),
+    assignment(2, "frontend", { agent: "claude:one:frontend" })]);
+  // the contract wants different principals, so check the pair rule directly on the rows
+  const rows = planParallel({ prs: same, pairs: [], contract: one, now: NOW }).rows;
+  assert.ok(rows.every((r) => !r.reasons.some((x) => /shared contract/.test(x))));
+  assert.equal(writerOf("Agent: Codex:Slot1:frontend"), "codex:slot1");
+  assert.equal(writerOf("Agent: codex:slot1:reviewer"), null);
+});
+
+test("D-107: a tooling draft waits while any demo draft is left in the queue, until the demo", () => {
+  const prs = [pr(1, "backend", ["src/server/a.ts"], { isDraft: true }), pr(2, "platforma", ["scripts/a.mjs"], { isDraft: true })];
+  const c = contract([assignment(1, "backend", { blockers: ["decision"] }), assignment(2, "platforma")]);
+  const p = plan(prs, c);
+  assert.deepEqual(verdicts(p), { 1: "ČEKA OVISNOST", 2: "ČEKA OVISNOST" });
+  assert.deepEqual(p.rows[1].reasons, ["D-107: demo PR #1 waits in the queue"]);
+  // after the demo the rule no longer applies (contract dates moved with the clock)
+  const later = DEMO_FIRST_UNTIL + 60_000;
+  const c2 = { ...c, issuedAt: new Date(later - 60_000).toISOString(), expiresAt: new Date(later + 60_000).toISOString() };
+  assert.equal(planParallel({ prs, pairs: [], contract: c2, now: later }).rows[1].verdict, "PARALELNO");
+  // a demo draft that got a slot does not hold tooling back; a full gate then does
+  const two = [pr(1, "backend", ["src/server/a.ts"], { isDraft: true }), pr(2, "platforma", ["scripts/a.mjs"], { isDraft: true })];
+  const c3 = contract([assignment(1, "backend"), assignment(2, "platforma")]);
+  assert.deepEqual(verdicts(plan(two, c3)), { 1: "PARALELNO", 2: "PARALELNO" });
+  const full = planParallel({ prs: two, pairs: [], contract: c3, now: NOW, slots: 1 });
+  assert.deepEqual(verdicts(full), { 1: "PARALELNO", 2: "ČEKA OVISNOST" });
+  assert.deepEqual(full.rows[1].reasons, ["gate full (1 slots)"]);
 });
