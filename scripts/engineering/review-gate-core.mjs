@@ -213,9 +213,11 @@ const CODEX_STATE_RE = /^<!-- codex-pull-request-review-summary -->\s*<!-- codex
 // proves it in its edited-in-place summary comment, whose machine state names
 // the full reviewed commit. Only the App's own comment counts (bot account and
 // App slug, never a human or another App), the commit must be the current head
-// in full, and the review must be completed with no findings at all. Several
+// in full, and the review must be completed with no unresolved findings. Several
 // summaries naming this head must all be clean; one unreadable summary voids
 // the whole proof: fail closed. The receipt comment (short sha) is never evidence.
+// has_any_findings also counts findings resolved on older heads, so it is not
+// required to be false; only unresolved findings on this head void the proof (D-139, 23. 10. 2026).
 function codexCleanSummaryOnHead(comments, headSha) {
   const onHead = [];
   for (const item of comments ?? []) {
@@ -238,7 +240,7 @@ function codexCleanSummaryOnHead(comments, headSha) {
     onHead.length > 0 &&
     onHead.every(
       (review) =>
-        review.status === "completed" && review.has_any_findings === false && review.has_unresolved_findings === false,
+        review.status === "completed" && review.has_unresolved_findings === false,
     )
   );
 }
