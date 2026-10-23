@@ -1,7 +1,6 @@
-import Link from "next/link";
 import { cookies } from "next/headers";
 
-import AppHeader from "@/components/shell/AppHeader";
+import AppShell from "@/components/shell/AppShell";
 import { FastPath } from "@/components/teacher/FastPath";
 import { teacherAccess } from "@/components/teacher/teacher-access";
 import { DEMO_FAST_PATH } from "@/lib/i18n/demo-fast-path.hr";
@@ -23,9 +22,8 @@ export default async function FastPathPage() {
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
   const access = await teacherAccess(token, withActor);
   return (
-    <>
-      <AppHeader context={t.fastPath.title} />
-      <main id="sadrzaj" tabIndex={-1} className={`page ${styles.page}`}>
+    <AppShell role={access === "allowed" ? "teacher" : null} current="/nastavnik/brz-put" crumbs={[t.fastPath.title]}>
+      <div className={`page ${styles.page}`}>
         <h1>{t.fastPath.title}</h1>
         {access === "allowed" ? (
           <>
@@ -44,8 +42,7 @@ export default async function FastPathPage() {
             ) : null}
           </>
         )}
-        <p><Link href="/">{t.teacher.backHome}</Link></p>
-      </main>
-    </>
+      </div>
+    </AppShell>
   );
 }
