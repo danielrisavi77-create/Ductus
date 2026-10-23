@@ -50,15 +50,28 @@ function rules() {
 }
 
 test("one rule queues a PR, and it reads only the two statuses the gate publishes", () => {
-  const all = rules();
+  const all = rules().filter((rule) => rule.queue);
   assert.equal(all.length, 1);
-  assert.ok(all[0].queue);
   assert.deepEqual(all[0].conditions, [
     "base=main",
     "-draft",
     "check-success=Engineering review gate",
     "check-success=Merge authorization",
   ]);
+});
+
+test("the other rule only refreshes a waiting PR with a green gate, a draft or conflict is left alone", () => {
+  const others = rules().filter((rule) => !rule.queue);
+  assert.equal(others.length, 1);
+  assert.deepEqual(others[0].conditions, [
+    "base=main",
+    "-draft",
+    "-conflict",
+    '"#commits-behind>0"',
+    "check-success=Engineering review gate",
+    "-check-success=Merge authorization",
+  ]);
+  assert.match(body, /actions:\n      update: \{\}/);
 });
 
 test("Mergify never reads the description, a label or a file name (review of #565)", () => {

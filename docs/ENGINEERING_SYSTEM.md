@@ -237,7 +237,7 @@ Product/UX i Bug Hunter nikad ne preskaču issue fazu i ne prelaze ravno u imple
 - PR se spaja samo ako njegov head sadrži aktualni `main` (zaštita grane, 11. 10. 2026.). Od D-161 granu neposredno prije spajanja osvježava merge queue (§10), ne pisac prije reviewa (§15).
 - Svaki push nakon reviewa automatski invalidira review preko `Review-Head`, osim čistog spajanja osnovne grane bez promjene diffa PR-a (D-101); isto vrijedi za QA verdikt i Owner Override.
 - Orkestrator ne tretira staro zeleno stanje kao dokaz za novi head.
-- Stackani PR-ovi su dopušteni samo kada je ovisnost eksplicitna u opisu; nakon spajanja baze child PR se vraća na `main`.
+- Ugniježđeni (stacked) PR-ovi se ne uvode; zavisni posao slijedi pravilo „Zavisni PR” u §13 (D-163).
 
 ## 10. Merge pravilo
 
@@ -257,7 +257,7 @@ Ciljno GitHub pravilo za `main`:
   - `Engineering review gate`
 - merge metoda: squash.
 
-**Merge queue (D-161).** Spaja Mergify, GitHub aplikacija koju instalira vlasnik; konfiguracija je `.github/mergify.yml` (D-97 putanja); `.mergify.yml` i `.mergify/config.yml` ne smiju postojati jer bi je zasjenili, a Mergify primjenjuje samo konfiguraciju s `main`. PR ulazi u red tek kad su zeleni Engineering review gate i status „Merge authorization” (vlasnik, 22. 10. 2026., D-161 (h)). Mergify ne čita opis PR-a, labele ni datoteke; status objavljuje gate istim parserom kao provjeru rizika i zelen je kad vrijedi jedno od: PR deklarira `Risk: low` ili `standard` i ne dira D-97 putanju ni `docs/DECISIONS.md` (risk floor računa preimenovanja pod oba imena), ili postoji vlasnikov `Owner-Command: merge` s `Command-Head` jednakim headu (prenosi se kroz čisto spajanje `main`, D-101). Za `critical` ili D-97 PR sesija nakon vlasnikove izričite naredbe "spoji N" zabilježi `Owner-Command` (`docs/ORKESTRATOR.md` §2); labela nije potrebna. Komentar `@Mergifyio queue` smije napisati samo vlasnik i ne zaobilazi status. U redu Mergify spaja `main` u granu PR-a (čisto spajanje, D-101 prenosi verdikte), čeka sve obvezne statuse na novom headu i radi squash. Zaštita grane i obvezni statusi se ne mijenjaju. Ako spajanje `main` ima konflikt ili novi head ne prođe, Mergify izbacuje PR iz reda, a PR se vraća piscu.
+**Merge queue (D-161).** Spaja Mergify, GitHub aplikacija koju instalira vlasnik; konfiguracija je `.github/mergify.yml` (D-97 putanja); `.mergify.yml` i `.mergify/config.yml` ne smiju postojati jer bi je zasjenili, a Mergify primjenjuje samo konfiguraciju s `main`. PR ulazi u red tek kad su zeleni Engineering review gate i status „Merge authorization” (vlasnik, 22. 10. 2026., D-161 (h)). Mergify ne čita opis PR-a, labele ni datoteke; status objavljuje gate istim parserom kao provjeru rizika i zelen je kad vrijedi jedno od: PR deklarira `Risk: low` ili `standard` i ne dira D-97 putanju ni `docs/DECISIONS.md` (risk floor računa preimenovanja pod oba imena), ili postoji vlasnikov `Owner-Command: merge` s `Command-Head` jednakim headu (prenosi se kroz čisto spajanje `main`, D-101). Za `critical` ili D-97 PR sesija nakon vlasnikove izričite naredbe "spoji N" zabilježi `Owner-Command` (`docs/ORKESTRATOR.md` §2); labela nije potrebna. `Owner-Command` mora biti običan komentar vlasnikova računa, bez Appa (kao `Owner-Override`): sesija u oblaku ga ne može objaviti jer njezini alati komentar potpisuju Appom, pa ga vlasnik lijepi iz sučelja ili ga objavljuje lokalna sesija s vlasnikovim tokenom. PR koji čeka vlasnika, a ima zelen gate, Mergify sam osvježava čistim spajanjem `main` (`update`, D-163); naredba i verdikti prelaze (D-101). Komentar `@Mergifyio queue` smije napisati samo vlasnik i ne zaobilazi status. U redu Mergify spaja `main` u granu PR-a (čisto spajanje, D-101 prenosi verdikte), čeka sve obvezne statuse na novom headu i radi squash. Zaštita grane i obvezni statusi se ne mijenjaju. Ako spajanje `main` ima konflikt ili novi head ne prođe, Mergify izbacuje PR iz reda, a PR se vraća piscu.
 
 Noćno spajanje D-97 PR-ova (vlasnik, 11. 10. 2026., #87, `issuecomment-6112586958`) opisano je u `docs/ORKESTRATOR.md` §4; ne mijenja zaštitu grane ni obvezne statuse.
 
@@ -298,6 +298,8 @@ Normalno najviše:
 - 1 PR alata u radu (§16).
 
 Četvrti writer dopušten je samo ako ne dijeli datoteke, migracije, ugovore ni redoslijed s ostala tri.
+
+**Zavisni PR (D-163).** Ugniježđeni (stacked) PR-ovi se ne uvode: spajanje je samo squash, pa PR s bazom na grani roditelja nakon spajanja roditelja ima dupli diff i konflikt. Posao koji ovisi o PR-u u gateu može se pripremiti na vlastitoj grani, a PR se otvara tek kad roditelj uđe u `main`; nezavisni dijelovi idu kao zasebni PR-ovi iz aktualnog `main` (do tri u gateu, D-161 (a)).
 
 Cilj nije maksimalan broj paralelnih agenata nego minimalno vrijeme od zadatka do provjerenog mergea.
 
