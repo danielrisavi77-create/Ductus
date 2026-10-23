@@ -99,7 +99,7 @@ export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
   },
   // The adjective and the noun. The adverb "vjerojatno" (owner decision 4 on #179) waits for the word list
   // MODALS in src/domain/diff/diff.ts, data that every string check would read as interface text.
-  { entry: "vjerojatnost", instead: AI_ORIGIN, lang: "hr", pattern: /(?<![\p{L}\p{N}])(?:naj)?vjerojat(?:nos[tc]|an(?![\p{L}\p{N}])|n[aeiu])/u },
+  { entry: "vjerojatnost", instead: AI_ORIGIN, lang: "hr", pattern: /(?<![\p{L}\p{N}])(?:naj)?vjerojat(?:nos[tc]|an(?![\p{L}\p{N}])|n(?:[aeiu]|o[gmj]))/u },
   { entry: "autentičnost", instead: AI_ORIGIN, lang: "hr", pattern: /(?<![\p{L}\p{N}])(?:(?:ne)?autentica?n|autenticitet)/u },
   {
     entry: "napisao AI",
@@ -134,7 +134,7 @@ export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
     instead: GAP,
     lang: "hr",
     pattern:
-      /(?<![\p{L}\p{N}])(?:nesta\p{L}* poda[tc]|poda[tc]\p{L}* (?:\p{L}+ ){0,2}nesta)/u,
+      /(?<![\p{L}\p{N}])(?:nesta\p{L}* poda[tc]|poda[tc]\p{L}* (?:\p{L}+ ){0,2}nesta(?:l\p{L}*|o|j\p{L}*|n(?:ak|e|u|em)?)(?![\p{L}\p{N}]))/u,
   },
   // The adjective and participle only (#179 A5): the imperative "Sakrij …" stays (owner decision 6).
   { entry: "skriveno", instead: GAP, lang: "hr", pattern: /(?<![\p{L}\p{N}])(?:sakriv|prikriv|skriv)en/u },
