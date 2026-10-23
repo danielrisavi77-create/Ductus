@@ -8,9 +8,10 @@ BEGIN;
 \ir fixtures/institution.inc
 SET LOCAL lc_messages TO 'C';
 
-SELECT plan(152);
+SELECT plan(154);
 
--- The nine arguments of a version as SQL text, with up to two replaced.
+-- The eleven arguments of a version as SQL text, with up to two replaced;
+-- the word range (DAN-229) is unset here and tested in 035.
 CREATE FUNCTION pg_temp.content(p_field text DEFAULT NULL, p_value text DEFAULT NULL,
                                 p_field2 text DEFAULT NULL, p_value2 text DEFAULT NULL) RETURNS text
 LANGUAGE sql AS $f$
@@ -24,7 +25,9 @@ LANGUAGE sql AS $f$
     (6, 'ai_policy', $$'partially_allowed'$$),
     (7, 'ai_purposes', $$'{formatting,proofreading}'$$),
     (8, 'evidence_profile', $$'extended'$$),
-    (9, 'import_allowed', 'true')
+    (9, 'import_allowed', 'true'),
+    (10, 'word_min', 'NULL'),
+    (11, 'word_max', 'NULL')
   ) AS d (n, field, value)
 $f$;
 CREATE FUNCTION pg_temp.create_in(p_actor text, p_course text, p_content text) RETURNS text
@@ -230,9 +233,9 @@ SELECT is(
 );
 RESET TimeZone;
 
--- 4. A version is immutable (plan 20), for the owner role as well. TRUNCATE
--- is refused earlier, and for another reason, while checks of this
--- transaction are still waiting, so they are run first.
+-- 4. A version is immutable (plan 20), for the owner role as well. The B-8
+-- project FK prevents truncating its assignment parent; the row trigger and
+-- the TRUNCATE trigger are each tested apart from that FK guard.
 SET CONSTRAINTS ALL IMMEDIATE;
 SELECT is(
   pg_temp.ask_as('ductus_identity', 'anon', v.statement), 'ZD403: assignment version is immutable',
@@ -241,10 +244,62 @@ SELECT is(
 FROM (VALUES
   (1, 'rewrite a version', $$ UPDATE institution.assignment_version SET title = 'Drugi naslov' WHERE assignment_id = {z1} $$),
   (2, 'widen a version', $$ UPDATE institution.assignment_version SET ai_policy = 'encouraged', import_allowed = true WHERE assignment_id = {z2} $$),
-  (3, 'delete a version', $$ DELETE FROM institution.assignment_version WHERE assignment_id = {z1} AND version_no = 1 $$),
-  (4, 'empty the table', 'TRUNCATE institution.assignment_version, institution.assignment, institution.notice_acknowledgment')
+  (3, 'delete a version', $$ DELETE FROM institution.assignment_version WHERE assignment_id = {z1} AND version_no = 1 $$)
 ) AS v (n, what, statement)
 ORDER BY v.n;
+SELECT is(
+  pg_temp.ask_as('ductus_identity', 'anon',
+    'TRUNCATE institution.assignment_version, institution.assignment, institution.notice_acknowledgment'),
+  '0A000: cannot truncate a table referenced in a foreign key constraint',
+  'the evidence project FK prevents truncating the assignment parent'
+);
+-- The FK guard above stops TRUNCATE before any trigger runs. With CASCADE the
+-- FK guard is satisfied, so the statement reaches the BEFORE TRUNCATE
+-- trigger; run as the operator, which no privilege check stops. A statement
+-- that does go through is rolled back here, so a missing trigger fails the
+-- assertion without emptying the fixture.
+CREATE FUNCTION pg_temp.try_rolled_back(p_sql text) RETURNS text
+LANGUAGE plpgsql AS $$
+BEGIN
+  EXECUTE p_sql;
+  RAISE EXCEPTION 'went through' USING ERRCODE = 'ZT001';
+EXCEPTION WHEN OTHERS THEN
+  RETURN SQLSTATE || ': ' || SQLERRM;
+END
+$$;
+SET LOCAL client_min_messages TO warning;
+SELECT is(
+  pg_temp.try_rolled_back('TRUNCATE institution.assignment_version, institution.assignment CASCADE'),
+  'ZD403: assignment version is immutable',
+  'nor can the operator empty the versions, even with CASCADE past the FK guard'
+);
+-- docs/TESTING.md 5: without the trigger the same TRUNCATE goes through.
+-- CASCADE also reaches the append-only evidence tables, whose own TRUNCATE
+-- triggers (041) would stop it with another message; they are set aside too,
+-- so this control isolates the assignment version trigger alone.
+ALTER TABLE institution.assignment_version DISABLE TRIGGER assignment_version_no_truncate;
+ALTER TABLE evidence.document_revision DISABLE TRIGGER evidence_revision_no_truncate;
+ALTER TABLE evidence.segment DISABLE TRIGGER evidence_segment_no_truncate;
+ALTER TABLE evidence.receipt DISABLE TRIGGER evidence_receipt_no_truncate;
+ALTER TABLE evidence.submission_request DISABLE TRIGGER evidence_submission_request_no_truncate;
+ALTER TABLE evidence.submission DISABLE TRIGGER evidence_submission_no_truncate;
+ALTER TABLE evidence.document_checkpoint DISABLE TRIGGER evidence_checkpoint_no_truncate;
+-- The access log (080) references the assignment too and is append-only.
+ALTER TABLE audit.access_log DISABLE TRIGGER access_log_no_truncate;
+SELECT is(
+  pg_temp.try_rolled_back('TRUNCATE institution.assignment_version, institution.assignment CASCADE'),
+  'ZT001: went through',
+  'with the TRUNCATE trigger disabled the same statement empties the versions'
+);
+ALTER TABLE audit.access_log ENABLE TRIGGER access_log_no_truncate;
+ALTER TABLE evidence.document_checkpoint ENABLE TRIGGER evidence_checkpoint_no_truncate;
+ALTER TABLE evidence.submission ENABLE TRIGGER evidence_submission_no_truncate;
+ALTER TABLE evidence.submission_request ENABLE TRIGGER evidence_submission_request_no_truncate;
+ALTER TABLE evidence.receipt ENABLE TRIGGER evidence_receipt_no_truncate;
+ALTER TABLE evidence.segment ENABLE TRIGGER evidence_segment_no_truncate;
+ALTER TABLE evidence.document_revision ENABLE TRIGGER evidence_revision_no_truncate;
+ALTER TABLE institution.assignment_version ENABLE TRIGGER assignment_version_no_truncate;
+SET LOCAL client_min_messages TO notice;
 SET CONSTRAINTS ALL DEFERRED;
 SELECT throws_ok(
   $$ UPDATE institution.assignment_version SET title = title $$, 'ZD403', 'assignment version is immutable',

@@ -1,0 +1,136 @@
+{
+  "sourceArchive": "Frontend za Ductus aplikaciju (2).zip",
+  "sourceArchiveSha256": "c539ee96875f77c9361135d05640827dd7c4b018a5b1db8e6422f62e3f6124a7",
+  "confirmedByOwnerOn": "2026-10-22",
+  "scope": "Visual design reference; current repository decisions govern behavior and authority.",
+  "files": [
+    {
+      "archivePath": "design_handoff_ductura/Ductura Demo tok v2.dc.html",
+      "sourceBytes": 53128,
+      "sourceSha256": "ea6a641adace83ee7d3fd5e346993ae51877065075fc790d74eed3994b6b16b8",
+      "repositoryPath": "docs/design/ductura/demo-tok-v2.dc.html",
+      "repositorySha256": "ea6a641adace83ee7d3fd5e346993ae51877065075fc790d74eed3994b6b16b8",
+      "status": "identical"
+    },
+    {
+      "archivePath": "design_handoff_ductura/Ductura Editor v11.dc.html",
+      "sourceBytes": 402316,
+      "sourceSha256": "858779537c02072f5910acf0d171111ba1f39969d35dd0895565d7bb33e57ef5",
+      "repositoryPath": "docs/design/ductura/editor-v11.dc.html",
+      "repositorySha256": "858779537c02072f5910acf0d171111ba1f39969d35dd0895565d7bb33e57ef5",
+      "status": "identical"
+    },
+    {
+      "archivePath": "design_handoff_ductura/Ductura Istraga.dc.html",
+      "sourceBytes": 31641,
+      "sourceSha256": "6ae24290d54961c2fc9f87348534f4297eac070af34432b7e13da5e1f139a407",
+      "repositoryPath": "docs/design/ductura/istraga.dc.html",
+      "repositorySha256": "6ae24290d54961c2fc9f87348534f4297eac070af34432b7e13da5e1f139a407",
+      "status": "identical"
+    },
+    {
+      "archivePath": "design_handoff_ductura/Ductura Kako radi.dc.html",
+      "sourceBytes": 8331,
+      "sourceSha256": "fa404be7c06b95a1e8f2962c2cfb993f35700c4eaf14488dab38da02cd702f56",
+      "repositoryPath": "docs/design/ductura/kako-radi.dc.html",
+      "repositorySha256": "fa404be7c06b95a1e8f2962c2cfb993f35700c4eaf14488dab38da02cd702f56",
+      "status": "identical"
+    },
+    {
+      "archivePath": "design_handoff_ductura/Ductura Komentari mobitel.dc.html",
+      "sourceBytes": 6437,
+      "sourceSha256": "b060ae2625a33d9aa0fde8698e50dee946393b287fa2ffee895b921262d61b35",
+      "repositoryPath": "docs/design/ductura/komentari-mobitel.dc.html",
+      "repositorySha256": "b060ae2625a33d9aa0fde8698e50dee946393b287fa2ffee895b921262d61b35",
+      "status": "identical"
+    },
+    {
+      "archivePath": "design_handoff_ductura/Ductura Koordinator.dc.html",
+      "sourceBytes": 6252,
+      "sourceSha256": "c594be4f55968565d2f00cdd5b766b21389fd0336b3a09cfdcb11b154a61d0ea",
+      "repositoryPath": "docs/design/ductura/koordinator.dc.html",
+      "repositorySha256": "c594be4f55968565d2f00cdd5b766b21389fd0336b3a09cfdcb11b154a61d0ea",
+      "status": "identical"
+    },
+    {
+      "archivePath": "design_handoff_ductura/Ductura Povjerenstvo.dc.html",
+      "sourceBytes": 8493,
+      "sourceSha256": "98620c0b120f12d0141b4266fa21061921522082361feef28cddb91bea71a151",
+      "repositoryPath": "docs/design/ductura/povjerenstvo.dc.html",
+      "repositorySha256": "98620c0b120f12d0141b4266fa21061921522082361feef28cddb91bea71a151",
+      "status": "identical"
+    },
+    {
+      "archivePath": "design_handoff_ductura/Ductura Početna.dc.html",
+      "sourceBytes": 15695,
+      "sourceSha256": "6da9f334d6ae252ce608c03c2d26263a88f4495f98ac013909a66fea2b6b574a",
+      "repositoryPath": "docs/design/ductura/pocetna.dc.html",
+      "repositorySha256": "6da9f334d6ae252ce608c03c2d26263a88f4495f98ac013909a66fea2b6b574a",
+      "status": "identical"
+    },
+    {
+      "archivePath": "design_handoff_ductura/Ductura Pregled radova v2.dc.html",
+      "sourceBytes": 56446,
+      "sourceSha256": "f8c20574810589791b21166587fdd36c1e89206abca59c21833638ef2a5fc037",
+      "repositoryPath": "docs/design/ductura/pregled-radova-v2.dc.html",
+      "repositorySha256": "f8c20574810589791b21166587fdd36c1e89206abca59c21833638ef2a5fc037",
+      "status": "identical"
+    },
+    {
+      "archivePath": "design_handoff_ductura/Ductura Prijava v5.dc.html",
+      "sourceBytes": 42500,
+      "sourceSha256": "82ef4a64d5e56f2da2dfee7acf78bd3251996e6497bc40374374e5a199d06e56",
+      "repositoryPath": "docs/design/ductura/prijava-v5.dc.html",
+      "repositorySha256": "82ef4a64d5e56f2da2dfee7acf78bd3251996e6497bc40374374e5a199d06e56",
+      "status": "identical"
+    },
+    {
+      "archivePath": "design_handoff_ductura/Ductura Vodič.dc.html",
+      "sourceBytes": 5360,
+      "sourceSha256": "555196cc1fc07488c3988ef9eeced238cc7e384cc3081ff437d3dc45eaa214fc",
+      "repositoryPath": null,
+      "repositorySha256": null,
+      "status": "presentation-only-outside-application"
+    },
+    {
+      "archivePath": "design_handoff_ductura/Ductus analiza.dc.html",
+      "sourceBytes": 33850,
+      "sourceSha256": "b31fcd462c46702a521420d10ced71247320c93850a0ba44cc7d29b4646676f6",
+      "repositoryPath": "docs/design/ductura/analiza.dc.html",
+      "repositorySha256": "b31fcd462c46702a521420d10ced71247320c93850a0ba44cc7d29b4646676f6",
+      "status": "identical"
+    },
+    {
+      "archivePath": "design_handoff_ductura/INTEGRACIJA.md",
+      "sourceBytes": 8633,
+      "sourceSha256": "0415ab32aeb890ceb5c4ae5dc6b6d2bb3685eec77e07734e7758d526bf735eef",
+      "repositoryPath": "docs/design/ductura/INTEGRACIJA.md",
+      "repositorySha256": "f9fb0c0cfee1df24d37666d7231e32b1b9044af8d1f04c904181180669a1dc34",
+      "status": "existing-copy-with-accepted-repository-notes"
+    },
+    {
+      "archivePath": "design_handoff_ductura/PROVJERE.md",
+      "sourceBytes": 15682,
+      "sourceSha256": "4c956a13ef9116b01cff51dad3e86e3b92f60927e49363b35a0a093604b8b47b",
+      "repositoryPath": "docs/design/ductura/PROVJERE.md",
+      "repositorySha256": "0b2c3d41a526189faf164aa9bb657cdc79fc73643adbd7bc76e39bc0721aff49",
+      "status": "existing-copy-with-accepted-repository-notes"
+    },
+    {
+      "archivePath": "design_handoff_ductura/README.md",
+      "sourceBytes": 18501,
+      "sourceSha256": "f5d8cb720ac281281fa5a8659615368decb361dd21b3496fcc9b0027dc9afe81",
+      "repositoryPath": "docs/design/ductura/README.md",
+      "repositorySha256": "bc57cb9a564a0228185b266147eb5872759631dc6fb27cbb560701222262d409",
+      "status": "existing-copy-with-accepted-repository-notes"
+    },
+    {
+      "archivePath": "design_handoff_ductura/support.js",
+      "sourceBytes": 69150,
+      "sourceSha256": "8fe7df74405f3c55f49b7249c74ea1397e65d07dea2b1bd3b4a489bec2e28cbe",
+      "repositoryPath": null,
+      "repositorySha256": null,
+      "status": "excluded-by-existing-owner-security-decision"
+    }
+  ]
+}

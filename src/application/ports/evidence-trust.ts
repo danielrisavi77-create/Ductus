@@ -51,6 +51,24 @@ export interface EvidencePayloadStore {
   }): Promise<EvidencePayloadPutResult>;
 }
 
+export type EvidenceStorageRefResult =
+  | { status: "ok"; storageRef: string }
+  | { status: "unavailable"; reason: string };
+
+export interface EvidencePayloadLocator {
+  /**
+   * The `storageRef` that `putImmutable` gives for this key, computed without
+   * any request to the store: a retry under a known idempotency key names the
+   * object it already stored and writes nothing (BACKEND 4.13 t. 3.5). An
+   * institution without a usable domain is `unavailable`, never another one.
+   */
+  storageRefFor(input: {
+    institutionId: string;
+    evidencePackageId: string;
+    segmentHash: string;
+  }): Promise<EvidenceStorageRefResult>;
+}
+
 export type EvidenceAcceptanceRecord = {
   clientRequestId: string;
   principalId: string;

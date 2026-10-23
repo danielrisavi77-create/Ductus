@@ -44,3 +44,21 @@ test("privileged workflow documents the dangerous-trigger exception", async () =
   assert.match(workflow, /zizmor:\s*ignore\[dangerous-triggers\]/);
   assert.match(workflow, /PR code is never fetched or executed/);
 });
+
+const relayPath = new URL("../../.github/workflows/engineering-gate-review-signal.yml", import.meta.url);
+
+test("a PR review reaches the gate only through the unprivileged relay (#128)", async () => {
+  const workflow = await readFile(workflowPath, "utf8");
+  const relay = await readFile(relayPath, "utf8");
+
+  // The privileged gate listens to the relay by name, never to the review itself.
+  assert.match(relay, /^name:\s*Engineering gate review signal\s*$/m);
+  assert.match(workflow, /workflow_run:\s*\n\s*workflows:\s*\[Engineering gate review signal\]\s*\n\s*types:\s*\[completed\]/);
+  assert.doesNotMatch(workflow, /pull_request_review:/);
+
+  assert.match(relay, /pull_request_review:\s*\n\s*types:\s*\[submitted, edited, dismissed\]/);
+  assert.match(relay, /^permissions:\s*\{\}\s*$/m);
+  for (const forbidden of ["uses:", "secrets.", "github.token", "GITHUB_TOKEN", "${{", "workflow_run", "pull_request_target"]) {
+    assert.equal(relay.includes(forbidden), false, `review relay must stay inert: ${forbidden}`);
+  }
+});

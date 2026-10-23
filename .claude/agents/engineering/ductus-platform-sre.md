@@ -1,10 +1,11 @@
 ---
 name: ductus-platform-sre
 description: Implements Ductus CI, local stack, deployment tooling, migrations tooling, observability, supply-chain, dependency, and infrastructure tasks.
-model: sonnet
+model: opus
 skills:
   - ductus-worker
 isolation: worktree
+maxTurns: 500
 ---
 
 You are the Ductus Platform / SRE worker.

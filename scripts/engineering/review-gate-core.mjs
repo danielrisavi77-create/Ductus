@@ -1,4 +1,4 @@
-import { canonicalBlock, field } from "./metadata-parser.mjs";
+import { canonicalBlock, field, metadataLines } from "./metadata-parser.mjs";
 import { evaluateMetadata } from "./pr-metadata-core.mjs";
 import { changedPaths, ownerCommandPaths, qaExemption } from "./protected-paths.mjs";
 
@@ -25,9 +25,17 @@ export const APP_RUNTIMES = new Map([
 
 // Quota exhaustion is accepted only from the provider's own App, with a
 // message observed on a real PR. Never guess a pattern for other providers.
+// The message must open the comment (#128): every observed one does, and a
+// review, code block or reply that quotes the phrase is no evidence.
 export const QUOTA_EXHAUSTED_PATTERNS = new Map([
-  ["chatgpt-codex-connector", /reached your Codex usage limits/i],
+  ["chatgpt-codex-connector", /^\s*You have reached your Codex usage limits/i],
 ]);
+
+// D-139: a critical QA PASS may come from a second Claude session when Codex
+// reviewed the current head, answered every thread and the QA names that head.
+const CODEX_BOT_LOGIN = "chatgpt-codex-connector[bot]";
+const SECOND_SESSION_RE = /^claude-second-session \u2014 Codex review na headu ([0-9a-fA-F]{40})$/;
+const CODEX_REVIEW_STATES = new Set(["COMMENTED", "APPROVED", "CHANGES_REQUESTED"]);
 
 export const QUOTA_FALLBACK_WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -52,10 +60,12 @@ function principalRuntime(runtime) {
   return runtime === "codex" || runtime === "chatgpt" ? "openai" : runtime;
 }
 
+// A slot names one principal whatever its letter case (#130): `claude:B` is
+// `claude:b`, so the author or a reviewer cannot pass as another party.
 function declaredPrincipal(agent) {
   if (!agent || !AGENT_RE.test(agent)) return null;
   const [runtime, slot] = agent.split(":");
-  return `${principalRuntime(runtime)}:${slot}`;
+  return `${principalRuntime(runtime)}:${slot.toLowerCase()}`;
 }
 
 export function verifiedCommentIdentity(entry, declaredAgent) {
@@ -87,53 +97,234 @@ export function trustedAuthor(item, logins = TRUSTED_VERDICT_LOGINS) {
   return LISTED_ASSOCIATIONS.has(item?.author_association) && typeof login === "string" && logins.includes(login);
 }
 
+/**
+ * When a comment last said what it says now: its last edit, else its creation
+ * (#129). An edit keeps `created_at`, so a comment written early and rewritten
+ * later must not count from the early time. NaN when neither time is readable.
+ * Shared with the orchestrator scripts so they order what the gate orders.
+ */
+export function commentTime(item) {
+  const created = Date.parse(item?.created_at ?? "");
+  const updated = Date.parse(item?.updated_at ?? "");
+  if (Number.isNaN(updated)) return created;
+  return Number.isNaN(created) ? updated : Math.max(created, updated);
+}
+
+// A Grok review run from the owner's Grok CLI (scripts/grok-review.ps1) is
+// posted by the owner's own account, not by the App. It counts as the Grok
+// provider only when the account is the owner's and the owner writes the line
+// `Review-Channel: grok-cli` outside any code block. Sessions that act with the
+// owner's token can write that line too, so the gate status says when it was
+// used (D-162); the owner can already override the gate, so this adds no
+// authority.
+const GROK_CLI_LINE_RE = /^Review-Channel:[ \t]*grok-cli$/i;
+
+function viaGrokCli(item, ownerLogin) {
+  return (
+    Boolean(ownerLogin) &&
+    !item?.performed_via_github_app?.slug &&
+    item?.author_association === "OWNER" &&
+    item?.user?.login === ownerLogin &&
+    (canonicalBlock(item?.body, "Agent-Review") || canonicalBlock(item?.body, "QA-Agent")) &&
+    metadataLines(item?.body ?? "").some((line) => GROK_CLI_LINE_RE.test(line))
+  );
+}
+
+function commentAppSlug(item, ownerLogin) {
+  const slug = item?.performed_via_github_app?.slug ?? null;
+  if (slug) return slug;
+  return viaGrokCli(item, ownerLogin) ? "grok-by-xai" : null;
+}
+
 // A verdict is a person's comment posted through an App.
-function trustedComments(items, logins) {
+function trustedComments(items, logins, ownerLogin = null) {
   return (items ?? [])
     .filter((item) => trustedAuthor(item, logins))
     .map((item, index) => ({
       body: item?.body ?? "",
       login: item?.user?.login ?? null,
       association: item?.author_association ?? null,
-      appSlug: item?.performed_via_github_app?.slug ?? null,
-      createdAt: Date.parse(item?.created_at ?? "") || index,
+      appSlug: commentAppSlug(item, ownerLogin),
+      grokCli: viaGrokCli(item, ownerLogin),
+      createdAt: commentTime(item) || index,
       index,
     }))
     .filter((entry) => entry.body);
 }
 
-function quotaEvidence(items) {
-  return (items ?? [])
+// Evidence holds only while the exhausted App shows nothing else (#128): a
+// later comment of the same App that is not a quota message, a later edit of
+// one (Codex edits one review summary in place), or a later PR review of the
+// App proves it works again, whether that came before or after the QA comment.
+// GitHub times have one-second resolution, so activity in the same second as
+// the quota message also counts as later: the order is unknown, fail closed.
+const lastActivity = (item) => {
+  const created = Date.parse(item?.created_at ?? "");
+  const updated = Date.parse(item?.updated_at ?? "");
+  return Number.isNaN(updated) ? created : Math.max(created || 0, updated);
+};
+
+function quotaEvidence(items, reviews = []) {
+  const appComments = (items ?? [])
     .map((item, index) => {
       const slug = item?.performed_via_github_app?.slug ?? null;
       const pattern = slug ? QUOTA_EXHAUSTED_PATTERNS.get(slug) : null;
-      if (
-        !pattern ||
-        item?.user?.type !== "Bot" ||
-        item?.user?.login !== `${slug}[bot]` ||
-        !pattern.test(item?.body ?? "")
-      ) {
-        return null;
-      }
-      return { appSlug: slug, createdAt: Date.parse(item?.created_at ?? "") || index };
+      if (!pattern || item?.user?.type !== "Bot" || item?.user?.login !== `${slug}[bot]`) return null;
+      const exhausted = pattern.test(item?.body ?? "");
+      return {
+        appSlug: slug,
+        // An unreadable time of other App activity counts as latest: fail closed.
+        createdAt: exhausted ? Date.parse(item?.created_at ?? "") || index : lastActivity(item) || Infinity,
+        exhausted,
+      };
     })
     .filter(Boolean);
+  // A PR review carries no App slug, only the App's bot account.
+  const appReviews = (reviews ?? [])
+    .map((review) => {
+      const slug = [...QUOTA_EXHAUSTED_PATTERNS.keys()].find((name) => review?.user?.login === `${name}[bot]`);
+      if (!slug || review?.user?.type !== "Bot") return null;
+      return { appSlug: slug, createdAt: Date.parse(review?.submitted_at ?? "") || Infinity, exhausted: false };
+    })
+    .filter(Boolean);
+  const activity = [...appComments, ...appReviews];
+  return appComments.filter(
+    (item) =>
+      item.exhausted &&
+      !activity.some(
+        (other) => other.appSlug === item.appSlug && !other.exhausted && other.createdAt >= item.createdAt,
+      ),
+  );
+}
+
+const isCodexBot = (user) => user?.type === "Bot" && user?.login === CODEX_BOT_LOGIN;
+
+function codexReviewedHead(prReviews, headSha) {
+  return (prReviews ?? []).some(
+    (review) => isCodexBot(review?.user) && sameHead(review?.commit_id, headSha) && CODEX_REVIEW_STATES.has(review?.state),
+  );
+}
+
+const CODEX_APP_SLUG = "chatgpt-codex-connector";
+const CODEX_SUMMARY_MARKER = "<!-- codex-pull-request-review-summary -->";
+const CODEX_STATE_RE = /^<!-- codex-pull-request-review-summary -->\s*<!-- codex-review-state:v1 (\{[^\r\n]*?\}) -->/;
+
+// A clean Codex review leaves no pull request review. The Codex App then
+// proves it in its edited-in-place summary comment, whose machine state names
+// the full reviewed commit. Only the App's own comment counts (bot account and
+// App slug, never a human or another App), the commit must be the current head
+// in full, and the review must be completed with no unresolved findings. Several
+// summaries naming this head must all be clean; one unreadable summary voids
+// the whole proof: fail closed. The receipt comment (short sha) is never evidence.
+// has_any_findings also counts findings resolved on older heads, so it is not
+// required to be false; only unresolved findings on this head void the proof (D-139, 23. 10. 2026).
+function codexCleanSummaryOnHead(comments, headSha) {
+  const onHead = [];
+  for (const item of comments ?? []) {
+    if (!isCodexBot(item?.user) || item?.performed_via_github_app?.slug !== CODEX_APP_SLUG) continue;
+    const body = typeof item?.body === "string" ? item.body : "";
+    if (!body.startsWith(CODEX_SUMMARY_MARKER)) continue;
+    let state;
+    try {
+      state = JSON.parse(CODEX_STATE_RE.exec(body)?.[1] ?? "null");
+    } catch {
+      return false; // an unreadable Codex summary poisons the whole proof
+    }
+    const review = state?.code_review;
+    // No usable code review commit, or an open security finding, voids the proof too.
+    if (!review || typeof review !== "object" || !SHA_RE.test(review.commit_sha ?? "")) return false;
+    if (state.security_review?.has_unresolved_findings === true) return false;
+    if (sameHead(review.commit_sha, headSha)) onHead.push(review);
+  }
+  return (
+    onHead.length > 0 &&
+    onHead.every(
+      (review) =>
+        review.status === "completed" && review.has_unresolved_findings === false,
+    )
+  );
+}
+// A Codex thread is answered once its author replied under the root comment:
+// a non-bot account that is the owner or the PR author's login. A list that
+// was not read answers nothing: fail closed.
+function codexThreadsAnswered(reviewComments, authorLogin) {
+  if (!Array.isArray(reviewComments)) return false;
+  const byAuthor = (item) =>
+    item?.user?.type !== "Bot" &&
+    (item?.author_association === "OWNER" || (Boolean(authorLogin) && item?.user?.login === authorLogin));
+  const answered = new Set(
+    reviewComments.filter((item) => item?.in_reply_to_id && byAuthor(item)).map((item) => item.in_reply_to_id),
+  );
+  return reviewComments
+    .filter((item) => isCodexBot(item?.user) && !item?.in_reply_to_id)
+    .every((root) => answered.has(root.id));
+}
+
+// Principals that posted any canonical review block on this PR, whatever the
+// head or verdict (D-139: the QA session is not a reviewer of the PR).
+function reviewerPrincipals(entries) {
+  const found = new Set();
+  for (const entry of entries) {
+    if (!canonicalBlock(entry.body, "Agent-Review")) continue;
+    const principal = declaredPrincipal(field(entry.body, "Agent-Review"));
+    if (principal) found.add(principal);
+  }
+  return found;
 }
 
 function fallbackSlug(value) {
   return value?.split(/\s+/)[0]?.toLowerCase() ?? null;
 }
 
-function findOwnerOverride(entries, headSha, ownerLogin) {
-  return entries.some(({ body, login, association, appSlug }) =>
+// The override counts for the current head, or for an earlier head the runner
+// confirmed as carried (clean base merges, unchanged PR diff; owner decision
+// #87 issuecomment-6242103643). Author checks do not depend on the head.
+const validOverrideShape = ({ body, association, appSlug }) =>
+  association === "OWNER" &&
+  appSlug === null &&
+  field(body, "Owner-Override")?.toUpperCase() === "PASS" &&
+  Boolean(field(body, "Override-Reason"));
+
+const validCommandShape = ({ body, association, appSlug }) =>
+  association === "OWNER" && appSlug === null && field(body, "Owner-Command")?.toLowerCase() === "merge";
+
+function ownerOverrides(entries, headSha, ownerLogin, carriedHeads = new Set()) {
+  return entries.filter(({ body, login, association, appSlug }) =>
     canonicalBlock(body, "Owner-Override") &&
     association === "OWNER" &&
     login === ownerLogin &&
     appSlug === null &&
     field(body, "Owner-Override")?.toUpperCase() === "PASS" &&
-    sameHead(field(body, "Override-Head"), headSha) &&
+    (sameHead(field(body, "Override-Head"), headSha) || carriedHeads.has(field(body, "Override-Head")?.toLowerCase())) &&
     Boolean(field(body, "Override-Reason")),
   );
+}
+
+function findOwnerOverride(entries, headSha, ownerLogin, carriedHeads) {
+  return ownerOverrides(entries, headSha, ownerLogin, carriedHeads).length > 0;
+}
+
+function compareOrder(a, b) {
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] > b[i]) return 1;
+    if (a[i] < b[i]) return -1;
+  }
+  return 0;
+}
+
+const NEGATIVE = new Set(["FAIL", "BLOCK"]);
+
+// #231, question 4 (owner delegated 12 Oct 2026; tightened by the owner on
+// 16 Oct 2026 after review 6217017710): within one principal, a verdict on the
+// current head beats a carried one, so a later PASS on an older head never
+// lifts a FAIL or BLOCK on the current head. The one exception is a FAIL or
+// BLOCK on a carried head posted later than the current-head verdict: it still
+// blocks, so an older PASS never outlives the principal's later objection.
+function prevailing({ current, carried }) {
+  if (!current) return carried;
+  if (!carried) return current;
+  const carriedLater = compareOrder(carried.order, current.order) > 0;
+  return carriedLater && NEGATIVE.has(carried.verdict) ? carried : current;
 }
 
 function latestVerdicts(entries, {
@@ -154,7 +345,8 @@ function latestVerdicts(entries, {
     const head = field(entry.body, headField);
     const verdict = field(entry.body, verdictField)?.toUpperCase() ?? null;
     const extra = extraField ? field(entry.body, extraField) : null;
-    const fallback = fallbackSlug(field(entry.body, "Provider-Fallback"));
+    const fallbackLine = field(entry.body, "Provider-Fallback");
+    const fallback = fallbackSlug(fallbackLine);
     const identity = verifiedCommentIdentity(entry, agent);
 
     if (
@@ -170,18 +362,17 @@ function latestVerdicts(entries, {
     }
 
     const key = `${identity.appSlug}|${identity.principal}`;
-    const previous = latest.get(key);
-    const order = [entry.createdAt, entry.index];
-    if (
-      !previous ||
-      order[0] > previous.order[0] ||
-      (order[0] === previous.order[0] && order[1] > previous.order[1])
-    ) {
-      latest.set(key, { agent, head: head.toLowerCase(), verdict, extra, fallback, identity, order });
-    }
+    const candidate = { agent, head: head.toLowerCase(), verdict, extra, fallback, fallbackLine, identity,
+      order: [entry.createdAt, entry.index], current: sameHead(head, headSha) };
+    // Keep the latest current and the latest carried verdict apart, so a
+    // later carried verdict never makes the current one disappear.
+    const slots = latest.get(key) ?? { current: null, carried: null };
+    const slot = candidate.current ? "current" : "carried";
+    if (!slots[slot] || compareOrder(candidate.order, slots[slot].order) > 0) slots[slot] = candidate;
+    latest.set(key, slots);
   }
 
-  return latest;
+  return new Map([...latest].map(([key, slots]) => [key, prevailing(slots)]));
 }
 
 // Names the earlier heads behind a success that counts carried verdicts, so the
@@ -202,11 +393,14 @@ function currentNegative(verdicts) {
   return null;
 }
 
-export function evaluateGate({
+function evaluateGateCore({
   body,
   headSha,
   ownerLogin,
   comments = [],
+  prReviews = [],
+  reviewComments = null,
+  authorLogin = null,
   carriedHeads = new Set(),
   trustedLogins = TRUSTED_VERDICT_LOGINS,
   qaExempt = null,
@@ -233,10 +427,31 @@ export function evaluateGate({
     return { state: "failure", description: "Missing repository owner identity." };
   }
 
-  const trusted = trustedComments(comments, trustedLogins);
+  const trusted = trustedComments(comments, trustedLogins, ownerLogin);
 
   if (findOwnerOverride(trusted, headSha, ownerLogin)) {
     return { state: "success", description: `Owner override recorded for ${risk} risk.` };
+  }
+
+  // A carried override (owner decision, #87 issuecomment-6242103643) holds only
+  // while the current head itself has no FAIL or BLOCK from review or QA; a
+  // negative verdict on an earlier head never voids it.
+  const carriedOverrides = ownerOverrides(trusted, headSha, ownerLogin, carriedHeads);
+  if (carriedOverrides.length > 0) {
+    // Voided by any FAIL or BLOCK on the current head, or on a carried head
+    // when it was posted after the newest override (the `prevailing` order).
+    const overrideOrder = carriedOverrides
+      .map((entry) => [entry.createdAt, entry.index])
+      .reduce((a, b) => (compareOrder(a, b) >= 0 ? a : b));
+    const voids = (agentField, headField, verdictField, role, extraField) =>
+      [...latestVerdicts(trusted, { agentField, headField, verdictField, role, headSha, extraField, carriedHeads }).values()]
+        .some((result) => NEGATIVE.has(result.verdict) && (result.current || compareOrder(result.order, overrideOrder) > 0));
+    const negative =
+      voids("Agent-Review", "Review-Head", "Review-Verdict", "reviewer") ||
+      voids("QA-Agent", "QA-Head", "QA-Verdict", "qa", "QA-Scope");
+    if (!negative) {
+      return { state: "success", description: `Owner override carried for ${risk} risk.` };
+    }
   }
 
   const reviews = latestVerdicts(trusted, {
@@ -315,7 +530,7 @@ export function evaluateGate({
     // Quota fallback: while another registered App proves on this PR that its
     // quota is exhausted, QA may come from the reviewer's App, but only from a
     // principal that is neither the author nor any passing reviewer.
-    const evidence = quotaEvidence(comments);
+    const evidence = quotaEvidence(comments, prReviews);
     const passingReviewerPrincipals = new Set(
       passingReviews.map((review) => review.identity.principal),
     );
@@ -341,7 +556,54 @@ export function evaluateGate({
       };
     }
 
+    // D-139: second Claude session. Needs its own slot (not author, not a
+    // passing reviewer), the declaration naming the head the QA tested, a
+    // Codex review on that head or the current one and every Codex thread
+    // answered. The QA head is the current head or one carried through clean
+    // base merges (D-101; Daniel 23. 10. 2026.), so the queue's base merge
+    // does not void it.
+    const everReviewers = reviewerPrincipals(trusted);
+    const codexOn = (sha) => codexReviewedHead(prReviews, sha) || codexCleanSummaryOnHead(comments, sha);
+    const secondSession = separateAppPass || fallbackPass
+      ? null
+      : qaPasses.find(
+          (result) =>
+            result.identity.appSlug === "claude" &&
+            !passingReviewerPrincipals.has(result.identity.principal) &&
+            !everReviewers.has(result.identity.principal) &&
+            sameHead(SECOND_SESSION_RE.exec(result.fallbackLine ?? "")?.[1], result.head) &&
+            (codexOn(result.head) || codexOn(headSha)),
+        );
+    if (secondSession && codexThreadsAnswered(reviewComments, authorLogin)) {
+      return {
+        state: "success",
+        description: `Independent review and second Claude session QA valid for current head (D-139: Codex review on head, threads answered).${carriedNote([...passingReviews, secondSession], headSha)}`,
+      };
+    }
+
     if (!separateAppPass) {
+      // D-161: the Codex pair carries through a clean base merge (D-101) like
+      // any other verdict; `carriedHeads` already holds only heads behind base
+      // merges with an identical PR diff. PASS filtering and negative
+      // dominance above still apply. Declared slots are not cryptographic
+      // proof of independent sessions.
+      const codexReview = passingReviews.find(
+        (review) => review.identity.appSlug === "chatgpt-codex-connector",
+      );
+      const codexQa = qaPasses.find(
+        (result) =>
+          result.identity.appSlug === "chatgpt-codex-connector" &&
+          !passingReviewerPrincipals.has(result.identity.principal),
+      );
+      if (codexReview && codexQa) {
+        const note = carriedNote([codexReview, codexQa], headSha);
+        return {
+          state: "success",
+          description: note
+            ? `Independent Codex review and QA pair valid for current head through D-101 carry.${note}`
+            : "Independent Codex review and QA pair valid on exact current head.",
+        };
+      }
       return {
         state: "pending",
         description: "Critical PR: waiting for separately authenticated QA PASS.",
@@ -364,14 +626,17 @@ export function evaluateGate({
  * walk from the current head (newest first, GET commits/{sha} objects), behind
  * merge commits only. A head the walk cannot see would be dropped silently,
  * and with it a FAIL or BLOCK, so an unfinished walk or more than
- * MAX_CARRIED_HEADS such heads carries nothing. The Owner Override never
- * carries.
+ * MAX_CARRIED_HEADS such heads carries nothing. An Owner Override head is
+ * named like a verdict head and judged by the same walk and diff checks.
  */
 export function carriedHeadCandidates(comments, headSha, path) {
   const named = new Set();
   for (const entry of trustedComments(comments)) {
-    for (const [block, headField] of [["Agent-Review", "Review-Head"], ["QA-Agent", "QA-Head"]]) {
+    for (const [block, headField] of [["Agent-Review", "Review-Head"], ["QA-Agent", "QA-Head"], ["Owner-Override", "Override-Head"], ["Owner-Command", "Command-Head"]]) {
       if (!canonicalBlock(entry.body, block)) continue;
+      // An override that could never count must not use up the head limit.
+      if (block === "Owner-Override" && !validOverrideShape(entry)) continue;
+      if (block === "Owner-Command" && !validCommandShape(entry)) continue;
       const head = field(entry.body, headField)?.toLowerCase();
       if (head && SHA_RE.test(head) && head !== headSha.toLowerCase()) named.add(head);
     }
@@ -392,8 +657,12 @@ export function carriedHeadCandidates(comments, headSha, path) {
 
 /**
  * `path` is the first-parent walk from the current head, newest first, as
- * GET commits/{sha} objects. It must reach `earlier` through merge commits
- * only; the merged-in side is judged by `sameChange`.
+ * GET commits/{sha} objects. It must reach `earlier` through merges of the
+ * base branch only: every step before it has exactly two parents (no octopus)
+ * and `mergesBase === true`, which the runner sets only after GitHub confirmed
+ * that the second parent is contained in the base branch (#231, question 1;
+ * D-101 "spajanje osnovne grane"). The merged-in change is judged by
+ * `sameChange`.
  */
 export function onlyBaseMerges(path, earlier) {
   const target = earlier?.toLowerCase();
@@ -402,7 +671,7 @@ export function onlyBaseMerges(path, earlier) {
   return (
     end > 0 &&
     end <= MAX_MERGE_STEPS &&
-    steps.slice(0, end).every((commit) => (commit?.parents?.length ?? 0) >= 2)
+    steps.slice(0, end).every((commit) => commit?.parents?.length === 2 && commit?.mergesBase === true)
   );
 }
 
@@ -455,9 +724,59 @@ export async function carriedByCompare(candidates, current, compareHead, log = (
 
 /**
  * Whole decision for one PR from REST data: `pr` (GET pulls/{n}), `files` (its
- * files list) and the issue comments. Every description is a fixed text.
+ * files list), the issue comments and the PR reviews (quota evidence only).
+ * Every description is a fixed text.
  */
-export function evaluatePullRequest({ pr, files, comments, ownerLogin, carriedHeads }) {
+// The PR an event is about. A workflow_run comes from the unprivileged
+// review relay (#128): GitHub lists the PR only for same-repository heads.
+export function prNumberFromEvent(event) {
+  if (event?.pull_request?.number) return event.pull_request.number;
+  if (event?.issue?.pull_request && event.issue.number) return event.issue.number;
+  const runPrs = event?.workflow_run?.pull_requests;
+  if (Array.isArray(runPrs) && runPrs.length === 1 && Number.isSafeInteger(runPrs[0]?.number)) return runPrs[0].number;
+  return null;
+}
+
+// D-162: say in the status when a Grok CLI comment of the owner's account was
+// counted, so the quiet path stays visible.
+export function evaluateGate(input) {
+  const result = evaluateGateCore(input);
+  if (result.state !== "success") return result;
+  const used = trustedComments(input.comments, input.trustedLogins ?? TRUSTED_VERDICT_LOGINS, input.ownerLogin).some(
+    (entry) => entry.grokCli,
+  );
+  return used ? { ...result, description: `${result.description} Grok CLI review (D-162, owner account).` } : result;
+}
+
+/**
+ * Whether the merge queue may take the PR (D-161 (h)). Mergify reads only this
+ * status, never the description or a label: the same parser that decides the
+ * risk for the gate decides it here. Green when the gate is green and either
+ * the owner's `Owner-Command: merge` comment names this head (or a head that
+ * carries to it through a clean base merge, D-101), or the PR declares Risk
+ * low or standard and touches no D-97 path. Every description is fixed text.
+ */
+export function evaluateMergeAuthorization({ gate, metadata, paths, comments, headSha, ownerLogin, carriedHeads }) {
+  if (gate?.state !== "success") return { state: "pending", description: "Waiting for the Engineering review gate." };
+  const heads = carriedHeads ?? new Set();
+  const commanded = trustedComments(comments).some(
+    (entry) =>
+      canonicalBlock(entry.body, "Owner-Command") &&
+      validCommandShape(entry) &&
+      entry.login === ownerLogin &&
+      (sameHead(field(entry.body, "Command-Head"), headSha) || heads.has(field(entry.body, "Command-Head")?.toLowerCase())),
+  );
+  if (commanded) return { state: "success", description: "Owner merge command names this head." };
+  const automatic =
+    metadata?.ok === true &&
+    (metadata.risk === "low" || metadata.risk === "standard") &&
+    metadata.minimumRisk !== "critical" &&
+    ownerCommandPaths(paths).length === 0;
+  if (automatic) return { state: "success", description: "Risk low or standard, no D-97 path: no owner command needed." };
+  return { state: "pending", description: "Needs the owner's merge command for this head (D-97 or critical)." };
+}
+
+export function evaluatePullRequest({ pr, files, comments, prReviews, reviewComments, ownerLogin, carriedHeads }) {
   const listed = files ?? [];
   // The floor is only as good as the list: a cut or unread list fails closed.
   if (!(pr.changed_files <= listed.length)) {
@@ -475,15 +794,28 @@ export function evaluatePullRequest({ pr, files, comments, ownerLogin, carriedHe
       },
     };
   }
+  const result = evaluateGate({
+    body: pr.body ?? "",
+    headSha: pr.head.sha,
+    ownerLogin,
+    comments,
+    prReviews,
+    reviewComments,
+    authorLogin: pr.user?.login ?? null,
+    carriedHeads,
+    qaExempt: qaExemption(paths),
+  });
   return {
     metadata,
-    result: evaluateGate({
-      body: pr.body ?? "",
+    result,
+    mergeAuthorization: evaluateMergeAuthorization({
+      gate: result,
+      metadata,
+      paths,
+      comments,
       headSha: pr.head.sha,
       ownerLogin,
-      comments,
       carriedHeads,
-      qaExempt: qaExemption(paths),
     }),
   };
 }

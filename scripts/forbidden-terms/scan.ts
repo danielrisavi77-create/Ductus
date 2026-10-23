@@ -882,15 +882,20 @@ const shownPiece = <T extends UiText>(piece: T): T => ({ ...piece, file: shownTe
  */
 function findingsIn(file: string, read: Read): Finding[] {
   const placed: { at: number; start: number; end: number; finding: Finding }[] = [];
-  for (const text of read.texts) {
-    const terms = findForbiddenTerms(text.check ?? text.text).filter((term) => !(text.part && term.contextual));
-    if (terms.length > 0) placed.push({ at: text.start, start: text.start, end: text.end, finding: { ...withoutSpan(text), terms } });
-  }
-  const pieces = [...placed];
   const units = read.units.map((unit) => {
     const hits = unit.readings.map(([joined, spaced]) => ({ text: joined, spaced, terms: findForbiddenTermsInMarkup(joined, spaced) }));
     return { ...unit, hits, terms: new Set(hits.flatMap((hit) => hit.terms)) };
   });
+  for (const text of read.texts) {
+    // A contextual entry is decided by the unit. So is an entry that allows a phrase: a piece such as the
+    // "Copied" in `<b>Copied</b> to clipboard` is judged with its phrase, and only as long as a unit holds it.
+    const within = units.filter((unit) => unit.start <= text.start && text.end <= unit.end);
+    const terms = findForbiddenTerms(text.check ?? text.text).filter(
+      (term) => !(text.part && (term.contextual || (term.readsPhrases && within.length > 0 && !within.some((unit) => unit.terms.has(term))))),
+    );
+    if (terms.length > 0) placed.push({ at: text.start, start: text.start, end: text.end, finding: { ...withoutSpan(text), terms } });
+  }
+  const pieces = [...placed];
   for (const unit of units) {
     const holds = (other: { start: number; end: number }): boolean => unit.start <= other.start && other.end <= unit.end;
     const reported = new Set([

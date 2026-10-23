@@ -3,6 +3,8 @@ import { createHash } from "node:crypto";
 import { expect, type BrowserContext, type Page } from "@playwright/test";
 import pg from "pg";
 
+import { messagesHr } from "../../src/lib/i18n/messages.hr";
+
 // Shared by the specs that log in through the fake provider against
 // `next dev` (playwright.login.config.ts). The demo accounts are invented
 // (infra/fake-oidc); demo.ductus.test belongs to demo-fakultet (db/local/seed.sql).
@@ -44,7 +46,7 @@ export async function appCookie(context: BrowserContext, name: string) {
 }
 
 /** A button on the provider's "Demo prijava" page (infra/fake-oidc). */
-export type DemoAccount = "Demo studentica" | "Demo nastavnik";
+export type DemoAccount = "Demo studentica" | "Demo student 2" | "Demo nastavnik";
 
 /** Signs in as a demo account (the student unless named) and returns the callback URL the provider sent. */
 export async function signIn(page: Page, returnTo: string, account: DemoAccount = "Demo studentica"): Promise<string> {
@@ -59,4 +61,15 @@ export async function signIn(page: Page, returnTo: string, account: DemoAccount 
   await page.waitForURL(`http://localhost:3000${returnTo}`);
   expect(callbacks).toHaveLength(1);
   return callbacks[0]!;
+}
+
+/** The sign-out dialog of the writing page (FE-D7, D-118). */
+export function logoutDialogOf(page: Page) {
+  return page.getByRole("dialog", { name: messagesHr.auth.logoutTitle });
+}
+
+/** Signs out from the writing page: "Odjava", then "Odjavi se" in the dialog. */
+export async function clickSignOut(page: Page): Promise<void> {
+  await page.getByRole("button", { name: messagesHr.auth.logout, exact: true }).click();
+  await logoutDialogOf(page).getByRole("button", { name: messagesHr.auth.logoutConfirm }).click();
 }

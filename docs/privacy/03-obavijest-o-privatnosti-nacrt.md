@@ -9,7 +9,7 @@
 - Izgrađeni su samo prijava, sesije, upis u kolegij i potvrda obavijesti. Ostalo u odjeljku 3 (rad, događaji u radu, predaje, komentari, tko je otvorio rad), reprodukcija, izvoz i brisanje opisani su kao ciljno stanje i ne smiju se objaviti kao postojeći dok nisu izgrađeni.
 - Obavijest o privatnosti ne zamjenjuje obavijest o praćenju koja je prvi ekran svakog zadatka (PRODUCT §5 pr. 6); ona je ugrađena u nju (PROGRAM, GO uvjeti). Potvrda koju student daje nije privola i ne smije se tako prikazivati (PRODUCT §6, student 3).
 - Dok potvrda ne veže otisak teksta ove obavijesti, ne može se tvrditi da je student potvrdio upravo ovaj tekst `[IZVEDBA]`.
-- Odlomci označeni `[VARIJANTA]` ovise o neriješenom odnosu D-06 i D-39.
+- Odlomci označeni `[VARIJANTA]` ili `[PLANIRANO]` ovise o odlukama D-142 do D-144 i ne smiju se objaviti prije izgradnje prikaza uživo i reprodukcije. Prije pilota sa stvarnim studentima trebaju pravno mišljenje (D-55) i DPIA; do tada se vrijeme po promjeni bilježi samo u demou i testovima s izmišljenim podacima, pa obavijest sa stvarnim studentima ne smije tvrditi da se bilježi dok to ne vrijedi.
 
 ---
 
@@ -32,7 +32,7 @@ Ductus bilježi kako rad nastaje i olakšava razgovor o radu. Zaključak o vaše
 - **Događaji u radu.** Veliko lijepljenje (veličina i vrijeme), uvoz datoteke (naziv, vrsta, veličina), oznaka koju sami odaberete uz lijepljeni tekst, vaše napomene, izjava o pomoći alata i razgovori koje sami priložite.
 - **Nastava.** Upis u kolegij, potvrda ove obavijesti i vrijeme potvrde, predaje, komentari i prijedlozi nastavnika, produljenja roka.
 - **Tko je otvorio vaš rad.** Vidite tko je i kada otvorio vaš rad.
-- `[VARIJANTA, samo mentorski radovi i tek nakon pravnog mišljenja i izmjene Ustava (D-56): vrijeme promjena u koracima od 100 ms, isključivo za reprodukciju rada. Najavljuje se prije pisanja, nikad unatrag.]`
+- `[PLANIRANO, D-143, tek nakon pravnog mišljenja (D-55) i DPIA-e za pilot sa stvarnim studentima: svaka promjena dokumenta (unos ili brisanje znaka, lijepljenje, uvoz, prijenos iz AI pomoćnika, izmjena nastavnika) sprema se redom i s vremenom promjene, isključivo za prikaz uživo i reprodukciju rada. Odnosi se na sve zadatke, ne samo na mentorske radove. Najavljuje se prije pisanja, nikad unatrag.]`
 
 ### 4. Što ne bilježimo
 
@@ -41,8 +41,8 @@ Koju ste tipku pritisnuli i koliko dugo ste je držali. Brzinu tipkanja i stanke
 ### 5. Tko što vidi i od kada
 
 - Vi uvijek vidite točno ono što vidi nastavnik ili mentor.
-- `[VARIJANTA A (D-06): Nastavnik ili mentor vidi trenutno stanje spremljeno na poslužitelju, osvježeno najviše svakih 5 minuta, od prvog dana.]` `[VARIJANTA B (D-39): Nastavnik ili mentor vidi stanje na kraju svake sesije pisanja.]` Ne vidi tipkanje uživo. Može vidjeti i tekst koji ste kasnije obrisali, ako je bio u stanju koje je poslužitelj primio.
-- `[VARIJANTA, samo uz D-56: U mentorskom radu mentor može pokrenuti reprodukciju kako je rad rastao, za cijeli rad ili jedan odlomak, uključujući tekst koji ste obrisali i prethodne verzije odlomka, uz oznake lijepljenja, uvoza, izmjena i konzultacija. Vidite istu reprodukciju i vidite kad ju je mentor gledao; uz trenutak reprodukcije možete dodati napomenu. Ritam se ne mjeri: nema brzine tipkanja ni statistike stanki. Od kojeg je trenutka reprodukcija dostupna mentoru: odluka, u izvorima nije određeno.]`
+- `[PLANIRANO, D-142 i D-144: Mentor i nastavnik zadatka vide vaš rad dok nastaje, od prvog dana i za sve zadatke, i prikaz im se osvježava dok pišete. Vidi se samo ono što je u editoru Ducture, ništa izvan njega. Prikaz služi praćenju nastanka rada i komentarima tijekom pisanja, nikad ocjeni ni rangiranju. Vidite isti prikaz svog rada. Mogu vidjeti i tekst koji ćete kasnije obrisati.]`
+- `[PLANIRANO, D-143: Mentor može pokrenuti reprodukciju kako je rad nastajao, znak po znak, uključujući tekst koji ste obrisali, lijepljenja, uvoze i izmjene. Vidite istu reprodukciju i vidite kad ju je mentor gledao; uz trenutak reprodukcije možete dodati napomenu. Vrijeme se koristi samo kao brzina reprodukcije: ne računaju se brzina tipkanja, stanke ni ritam. Ima li reprodukciju i nastavnik kolegija ili samo mentor: otvoreno u D-143 (D-154 u PR-u #480 predlaže samo mentora, koji je nastavnik zadatka).]`
 - Administrator ustanove vidi tko je kada pristupio kojem radu, ali ne vidi sadržaj rada.
 - Održavatelj Ductusa ne čita sadržaj radova, osim zabilježenog pristupa podrške uz pristanak ustanove i u skladu s ugovorom o obradi `[planirano, PRODUCT §3: ugovor, zapis pristupa i ovlast operatera ne postoje; ODLUKA]`.
 
