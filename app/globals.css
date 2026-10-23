@@ -352,10 +352,15 @@ main:focus {
 
 /* Writing workspace */
 
+/* Inside the design v3 shell ("Pisanje"): a framed block under the shell's top bar. */
 .workspace {
-  min-height: 100vh;
+  min-height: calc(100vh - 76px);
   display: flex;
   flex-direction: column;
+  margin: 0 24px 24px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  overflow: clip;
 }
 
 .workspace__bar {
@@ -367,6 +372,20 @@ main:focus {
   padding: 6px 14px;
   background: var(--chrome);
   border-bottom: 1px solid var(--rule);
+}
+
+.workspace__bar .brand-line__context {
+  margin: 0;
+}
+
+/* Below 800 px the shell's side bar is a drawer: the workspace runs edge to edge. */
+@media (max-width: 799.98px) {
+  .workspace {
+    min-height: calc(100vh - 64px);
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+  }
 }
 
 .brand-line {
@@ -425,7 +444,7 @@ main:focus {
 .workspace__body {
   flex: 1;
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr) 330px;
+  grid-template-columns: 174px minmax(0, 1fr) 284px;
   grid-template-areas: "rail main panel";
   min-height: 0;
 }
@@ -559,10 +578,11 @@ main:focus {
   transform: translateY(2px) rotate(-135deg);
 }
 
-/* Below 1240 px: sheet and panel side by side, structure folded under the sheet. */
-@media (max-width: 1239.98px) {
+/* Design v3 breakpoints, with the shell's side bar taking 236 px: up to
+   1250 px sheet and panel side by side, structure folded under the sheet. */
+@media (max-width: 1250px) {
   .workspace__body {
-    grid-template-columns: minmax(0, 1fr) 330px;
+    grid-template-columns: minmax(0, 1fr) 284px;
     grid-template-rows: 1fr auto;
     grid-template-areas:
       "main panel"
@@ -588,8 +608,8 @@ main:focus {
   }
 }
 
-/* Below 1000 px: one column, both rails folded under the sheet in DOM order. */
-@media (max-width: 999.98px) {
+/* Up to 1050 px: one column, both rails folded under the sheet in DOM order. */
+@media (max-width: 1050px) {
   .workspace__body {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: none;
