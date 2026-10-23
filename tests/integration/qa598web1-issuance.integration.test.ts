@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
@@ -50,9 +50,16 @@ async function freshDatabase(tag: string) {
   const url = new URL(URL_ADMIN); url.pathname = `/${name}`;
   const client = new pg.Client({ connectionString: url.href });
   await client.connect(); clients.push(client);
-  for (const file of readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql")).sort()) {
-    await migrate(client, section(file, "up"));
-  }
+  // Use the existing runner: applying SQL sections alone omits dbmate's
+  // migration ledger, which the full pgTAP harness correctly requires.
+  const migrationUrl = new URL(url.href);
+  migrationUrl.searchParams.set("sslmode", "disable");
+  migrationUrl.searchParams.set("role", "ductus_migrator");
+  execFileSync("pnpm", ["exec", "dbmate", "--no-dump-schema", "up"], {
+    cwd: ROOT, encoding: "utf8", timeout: 60_000,
+    env: { ...process.env, DATABASE_URL: migrationUrl.href },
+  });
+  expect((await client.query("SELECT count(*)::int AS n FROM public.schema_migrations WHERE version='20261023190000'")).rows[0].n).toBe(1);
   return { client, url: url.href, name };
 }
 function fixture(path: string): string {
