@@ -1,12 +1,13 @@
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import pg from "pg";
 
-import { createTextAnchor } from "../../src/domain/collaboration";
-import type { NodeId } from "../../src/domain/document";
+import { DUCTUS_PROTOCOL_VERSION } from "../../src/domain/evidence/commit-envelope";
+import { canonicalizeJcs } from "../../src/domain/forensics/jcs";
 import type { JournalContents } from "../../src/domain/sync/journal-types";
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
@@ -37,6 +38,8 @@ const OFFLINE_TEXT = " Dopuna napisana bez mreže.";
 const DRAFT = TEXT + OFFLINE_TEXT;
 const QUOTE = "gradskim knjižnicama";
 const COMMENT = "Dodaj izvor za ovu tvrdnju.";
+const LIVE_PATH = `/api/live/${LOCAL_DEMO_DOCUMENT_ID}`;
+const LIVE_READ_HEADERS = { "ductus-protocol": DUCTUS_PROTOCOL_VERSION };
 
 const editorOf = (page: Page) => page.getByRole("textbox", { name: t.workspace.documentLabel });
 const chipOf = (page: Page) => page.locator(".workspace__status .sync-chip");
@@ -123,6 +126,11 @@ test.afterEach(async () => {
 
 // Removes the comments, memberships and role the F-9 step opened (comment-seed.ts).
 test.afterEach(cleanUp);
+
+// The live state is an invented fixture, separate from the evidence journal.
+const clearLiveFixture = () => withAdmin((client) => client.query(
+  "DELETE FROM collaboration.live_state WHERE document_id = $1", [LOCAL_DEMO_DOCUMENT_ID]));
+test.afterEach(clearLiveFixture);
 
 test("demo walk-through", async ({ browser, page, context }) => {
   let token = "";
@@ -258,30 +266,82 @@ test("demo walk-through", async ({ browser, page, context }) => {
     }
   });
 
-  // F-9 (demo point 3), the comment: the teacher leaves a comment next to a
-  // paragraph and it reaches the student. It runs here, while the student's
-  // editor is open: the comment panel lives on /rad. Until B-11 gives the
-  // teacher a screen to pick a paragraph, the teacher's step is the same POST
-  // the page will send, with the teacher's own session (as comments.spec.ts);
-  // the course and document come from the shared comment-seed helper, which
-  // removes what it opened after the test.
+  // F-9: actual owner PUT -> actual teacher GET -> selection and comment UI.
+  // The explicit PUT is test input while the editor publisher (#522) is pending;
+  // it proves neither automatic publication nor a signed evidence receipt.
+  // Course/document permissions use the existing synthetic comment fixture.
   await test.step("3. F-9: nastavnik komentira odlomak, komentar stiže studentici", async () => {
     const teacher = await (await browser.newContext()).newPage();
-    await signIn(teacher, "/", "Demo nastavnik");
-    const nodeId = (await editorOf(page).locator("p[data-node-id]").first().getAttribute("data-node-id")) as NodeId;
-    await seed();
-    const start = TEXT.indexOf(QUOTE);
-    const anchor = createTextAnchor({ nodeId, nodeText: DRAFT, start, end: start + QUOTE.length });
-    const created = await post(teacher, "create", { documentId: LOCAL_DEMO_DOCUMENT_ID, body: COMMENT, anchor });
-    expect(created.status()).toBe(200);
+    try {
+      await signIn(teacher, "/", "Demo nastavnik");
+      await seed();
+      await clearLiveFixture();
+      // The live RPC requires the assignment's current notice, even for this
+      // synthetic input. Record it through the real student route, not SQL.
+      const { rows: [assignment] } = await withAdmin((client) => client.query<{ id: string; version: number }>(
+        `SELECT a.id, a.current_version AS version FROM evidence.document d
+         JOIN evidence.project p ON p.id = d.project_id JOIN institution.assignment a ON a.id = p.assignment_id
+         WHERE d.id = $1`, [LOCAL_DEMO_DOCUMENT_ID]));
+      expect(assignment).toBeDefined();
+      const acknowledged = await page.request.post(`/api/institution/assignments/${assignment!.id}/acknowledgment`, {
+        headers: { origin: "http://localhost:3000" }, data: { versionNo: assignment!.version },
+      });
+      expect(acknowledged.status()).toBe(200);
+      const body = canonicalizeJcs((await localCheckpoint(page)).snapshot!.document);
+      const etag = `"${createHash("sha256").update(body, "utf8").digest("hex")}"`;
+      const published = await page.request.put(LIVE_PATH, {
+        headers: { origin: "http://localhost:3000", "content-type": "application/json", "if-none-match": "*" }, data: body,
+      });
+      expect(published.status()).toBe(200);
+      expect(await published.json()).toMatchObject({ outcome: "accepted" });
+      const ownerRead = await page.request.get(LIVE_PATH, { headers: LIVE_READ_HEADERS });
+      expect(ownerRead.status()).toBe(200);
+      expect(await ownerRead.text()).toBe(body);
+      expect(ownerRead.headers().etag).toBe(etag);
 
-    await page.getByRole("button", { name: t.comments.refresh }).click();
-    const card = page.getByRole("article", { name: t.comments.number.replace("{n}", "1") });
-    await expect(card).toContainText(t.comments.teacher);
-    await expect(card).toContainText(COMMENT);
-    await expect(editorOf(page).locator(".comment-mark")).toHaveText(QUOTE);
-    await snapshot(page, "3-komentar-kod-studentice");
-    await teacher.context().close();
+      const liveRead = teacher.waitForResponse((response) => new URL(response.url()).pathname === LIVE_PATH && response.status() === 200);
+      await teacher.goto(`/nastavnik/rad/${LOCAL_DEMO_DOCUMENT_ID}`);
+      const shown = await liveRead;
+      expect(await shown.text()).toBe(body);
+      expect(shown.headers().etag).toBe(etag);
+      const text = teacher.getByRole("document", { name: t.liveView.documentLabel });
+      await expect(text).toHaveText(DRAFT);
+      await snapshot(teacher, "3-nastavnik-vidi-objavljeni-nacrt");
+
+      await text.locator("p").evaluate((paragraph, quote) => {
+        const node = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT).nextNode()!;
+        const start = node.textContent!.indexOf(quote);
+        const range = document.createRange();
+        range.setStart(node, start);
+        range.setEnd(node, start + quote.length);
+        window.getSelection()!.removeAllRanges();
+        window.getSelection()!.addRange(range);
+      }, QUOTE);
+      await text.dispatchEvent("mouseup");
+      const form = teacher.getByRole("form", { name: t.teacherComments.newTitle });
+      await expect(form).toContainText(`„${QUOTE}”`);
+      await form.getByRole("textbox", { name: t.teacherComments.bodyLabel }).fill(COMMENT);
+      const created = teacher.waitForResponse((response) => new URL(response.url()).pathname === "/api/comments/create" && response.request().method() === "POST");
+      await form.getByRole("button", { name: t.teacherComments.publish }).click();
+      expect((await created).status()).toBe(200);
+      await expect(teacher.getByRole("article", { name: t.comments.number.replace("{n}", "1") })).toContainText(COMMENT);
+      await expect(text.locator("mark")).toHaveText(QUOTE);
+      await snapshot(teacher, "3-komentar-iz-nastavnickog-sucelja");
+      await test.info().attach("3-stvarni-live-prikaz.json", {
+        body: JSON.stringify({ document: JSON.parse(body), etag, ownerStatus: ownerRead.status(), teacherStatus: shown.status() }, null, 2),
+        contentType: "application/json",
+      });
+
+      await page.getByRole("button", { name: t.comments.refresh }).click();
+      const card = page.getByRole("article", { name: t.comments.number.replace("{n}", "1") });
+      await expect(card).toContainText(t.comments.teacher);
+      await expect(card).toContainText(COMMENT);
+      await expect(editorOf(page).locator(".comment-mark")).toHaveText(QUOTE);
+      await expect(editorOf(page)).toHaveText(DRAFT);
+      await snapshot(page, "3-komentar-kod-studentice");
+    } finally {
+      await teacher.context().close();
+    }
   });
 
   // F-8 (demo point 2): proves headings, a citation and a bibliography in the
@@ -305,6 +365,9 @@ test("demo walk-through", async ({ browser, page, context }) => {
     const listed = await post(page, "list", { documentId: LOCAL_DEMO_DOCUMENT_ID });
     expect(listed.status()).toBe(403);
     expect(await listed.json()).toEqual({ error: "forbidden" });
+    const live = await page.request.get(LIVE_PATH, { headers: LIVE_READ_HEADERS });
+    expect(live.status()).toBe(404);
+    expect(await live.json()).toEqual({ error: "not_found" });
     await snapshot(page, "2-drugi-student-izoliran");
     await signOut(page, token);
   });
@@ -320,9 +383,9 @@ test("demo walk-through", async ({ browser, page, context }) => {
     await signOut(page, token);
   });
 
-  // The teacher's view of the saved work (B-11) is not on main, so the part of
-  // F-9 where the teacher sees the saved state stays skipped, not simulated.
-  await test.step.skip("3. F-9: nastavnik vidi spremljeno stanje rada, ne tipkanje uživo", async () => {});
+  // D-142: the teacher UI reads the published live state above; automatic
+  // publication from the connected editor still waits for #522 and F-8.
+  await test.step.skip("3. F-9: nastavnik prima promjene iz povezanog editora uživo", async () => {});
   // F-10 (demo points 4 and 5): proves that the student submits, the server
   // reconstructs the work and the comparison matches, the student gets the
   // signed receipt, and student and teacher see the same process summary,
