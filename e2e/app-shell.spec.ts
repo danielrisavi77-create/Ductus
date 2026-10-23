@@ -35,6 +35,17 @@ test("the theme switch turns the shell light and the browser remembers it", asyn
   await expect(page.locator("[data-theme]")).toHaveCount(0);
 });
 
+test("the saved theme holds after a client-side navigation into another shell page", async ({ page }) => {
+  await page.goto(PATH);
+  await page.getByRole("button", { name: t.shell.theme }).click();
+  await expect(page.locator("[data-theme]").first()).toHaveAttribute("data-theme", "light");
+  await page.evaluate(() => { (window as unknown as { stayed: boolean }).stayed = true; });
+  await page.getByRole("main").getByRole("link", { name: t.teacher.backCourses }).click();
+  await expect(page).toHaveURL(/\/nastavnik$/);
+  expect(await page.evaluate(() => (window as unknown as { stayed?: boolean }).stayed)).toBe(true);
+  await expect(page.locator("[data-theme]").first()).toHaveAttribute("data-theme", "light");
+});
+
 test.describe("at 390 px", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
@@ -46,9 +57,27 @@ test.describe("at 390 px", () => {
     await menu.click();
     await expect(aside).toBeVisible();
     await expect(page.getByRole("button", { name: t.shell.closeNav })).toHaveAttribute("aria-expanded", "true");
+    // Focus moves into the drawer and the page behind it cannot be reached.
+    await expect(aside.getByRole("link", { name: t.shell.home })).toBeFocused();
+    await expect(page.locator("main#sadrzaj")).toHaveAttribute("inert", "");
     await page.keyboard.press("Escape");
     await expect(aside).toBeHidden();
     await expect(page.getByRole("button", { name: t.shell.openNav })).toBeFocused();
+    await expect(page.locator("main#sadrzaj")).not.toHaveAttribute("inert", "");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+});
+
+test.describe("at 390 px without JavaScript", () => {
+  test.use({ viewport: { width: 390, height: 844 }, javaScriptEnabled: false });
+
+  test("the side bar stays in the page above the content and ☰ is not offered", async ({ page }) => {
+    await page.goto(PATH);
+    const aside = page.getByRole("complementary", { name: t.shell.sideNav });
+    await expect(aside).toBeVisible();
+    await expect(aside.getByRole("link", { name: t.shell.home })).toBeInViewport();
+    await expect(page.getByRole("button", { name: t.shell.openNav })).toBeHidden();
+    await expect(page.getByText(t.teacher.signedOut)).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 });
