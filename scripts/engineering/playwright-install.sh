@@ -23,7 +23,7 @@ for attempt in $(seq 1 "$attempts"); do
   echo "::warning::playwright install attempt ${attempt}/${attempts} failed (exit ${status})"
   # Leave no half-finished apt behind before the next attempt.
   sudo pkill -x apt-get || true
-  sudo pkill -f /usr/lib/apt/methods || true
+  sudo pkill -f "[/]usr/lib/apt/methods" || true
   sudo dpkg --configure -a || true
 done
 
