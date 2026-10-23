@@ -298,4 +298,9 @@
   .sidebar {
     transition: transform 0.2s, visibility 0.2s;
   }
+
+  /* Visible at once on opening, so focus can move into the drawer. */
+  .sidebar[data-open="true"] {
+    transition: transform 0.2s, visibility 0s;
+  }
 }
