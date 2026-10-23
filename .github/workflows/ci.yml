@@ -99,7 +99,7 @@ jobs:
   # silently turn it green. This job does not check out or execute PR code.
   stack:
     name: Local stack (compose.yaml)
-    needs: [scope, stack-e2e, stack-login]
+    needs: [scope, stack-e2e, stack-login, stack-e2e-results]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -110,10 +110,11 @@ jobs:
           PROFILE: ${{ needs.scope.outputs.profile }}
           E2E_RESULT: ${{ needs.stack-e2e.result }}
           LOGIN_RESULT: ${{ needs.stack-login.result }}
+          EVIDENCE_RESULT: ${{ needs.stack-e2e-results.result }}
         run: |
-          case "$SCOPE_RESULT/$PROFILE/$E2E_RESULT/$LOGIN_RESULT" in
-            success/full/success/success) echo 'Both isolated application stack and browser checks passed.' >> "$GITHUB_STEP_SUMMARY" ;;
-            success/docs/skipped/skipped) echo 'Approved documentation-only diff: stack, DB and browser tests were not executed. Build, engineering tests and security checks remain required.' >> "$GITHUB_STEP_SUMMARY" ;;
+          case "$SCOPE_RESULT/$PROFILE/$E2E_RESULT/$LOGIN_RESULT/$EVIDENCE_RESULT" in
+            success/full/success/success/success) echo 'Both isolated application stack and browser checks passed.' >> "$GITHUB_STEP_SUMMARY" ;;
+            success/docs/skipped/skipped/skipped) echo 'Approved documentation-only diff: stack, DB and browser tests were not executed. Build, engineering tests and security checks remain required.' >> "$GITHUB_STEP_SUMMARY" ;;
             *) echo 'Missing, unsuccessful or unexpected CI scope/stack result.' >&2; exit 1 ;;
           esac
       - name: Reject cancelled stack
@@ -123,7 +124,11 @@ jobs:
   # Separate hosted runners give both E2E suites their own ports and database.
   # The standard suite also retains pgTAP and integration checks.
   stack-e2e:
-    name: Standard E2E and database
+    name: Standard E2E and database (${{ matrix.shard }}/2)
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     needs: scope
     if: ${{ !cancelled() && needs.scope.result == 'success' && needs.scope.outputs.profile == 'full' }}
     runs-on: ubuntu-latest
@@ -213,36 +218,41 @@ jobs:
         run: |
           mkdir -p .ci-reports
           if [ "$ALL_ENGINES" = "true" ]; then
-            pnpm exec playwright test --list --reporter=json || echo 'UI pilot inventory unavailable; comparison will be inconclusive.'
+            pnpm exec playwright test --list --reporter=json
           else
-            pnpm exec playwright test --list --reporter=json --project=desktop --project=mobile || echo 'UI pilot inventory unavailable; comparison will be inconclusive.'
+            pnpm exec playwright test --list --reporter=json --project=desktop --project=mobile
           fi
       - name: E2E tests
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         env:
           E2E_NO_BUILD: "1"
           UI_TEST_PILOT: "1"
+          E2E_SHARD: ${{ matrix.shard }}
           ALL_ENGINES: ${{ github.event_name != 'pull_request' }}
         run: |
           if [ "$ALL_ENGINES" = "true" ]; then
-            pnpm test:e2e
+            pnpm test:e2e --shard="$E2E_SHARD/2"
           else
-            pnpm test:e2e --project=desktop --project=mobile
+            pnpm test:e2e --project=desktop --project=mobile --shard="$E2E_SHARD/2"
           fi
-      - name: UI test selection pilot
+      - name: Collect shard evidence
         if: ${{ needs.scope.outputs.profile == 'full' && !cancelled() }}
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
-          PR_BASE: ${{ github.event.pull_request.base.sha }}
-          PR_HEAD: ${{ github.event.pull_request.head.sha }}
-        run: node scripts/engineering/ui-test-pilot.mjs
+        run: cp test-results/ui-pilot-full.json .ci-reports/results.json
+      - name: Upload shard evidence
+        if: ${{ needs.scope.outputs.profile == 'full' && !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-shard-${{ matrix.shard }}
+          path: .ci-reports/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
       # Screenshots (desktop and mobile), videos and failure traces for the PR.
       - name: Upload Playwright report
         if: ${{ needs.scope.outputs.profile == 'full' && !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: playwright-report/
           retention-days: 14
       - if: ${{ needs.scope.outputs.profile == 'full' && failure() }}
@@ -252,6 +262,49 @@ jobs:
       - name: Reject cancelled stack
         if: cancelled()
         run: exit 1
+
+  # Reconcile the exact test/browser inventory before the required stack status.
+  # This is an ordinary read-only CI job, never the privileged review gate.
+  stack-e2e-results:
+    name: Standard E2E inventory
+    needs: [scope, stack-e2e]
+    if: ${{ always() && !cancelled() && needs.scope.result == 'success' && needs.scope.outputs.profile == 'full' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Both parents are needed by the advisory UI pilot.
+          fetch-depth: 2
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          pattern: e2e-shard-*
+          path: .ci-reports/shards
+      - name: Verify complete E2E inventory
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: node scripts/engineering/e2e-shards.mjs
+      - name: UI test selection pilot
+        if: ${{ needs.scope.outputs.profile == 'full' && !cancelled() }}
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/engineering/ui-test-pilot.mjs
+      - name: Upload combined E2E evidence
+        if: ${{ needs.scope.outputs.profile == 'full' && !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-combined-evidence
+          path: |
+            playwright-report/ui-test-pilot.json
+            test-results/ui-pilot-full.json
+          if-no-files-found: error
+          retention-days: 14
 
   stack-login:
     name: Login E2E

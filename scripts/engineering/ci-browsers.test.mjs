@@ -47,7 +47,7 @@ test("outside a pull request all three engines are installed and every project r
   }
   assert.match(install, /if \[ "\$ALL_ENGINES" = "true" \]; then\n {12}pnpm exec playwright install --with-deps chromium firefox webkit\n {10}else\n {12}pnpm exec playwright install --with-deps chromium\n {10}fi/);
   // all engines: the plain suite with no --project filter, so every project runs
-  assert.match(e2e, /if \[ "\$ALL_ENGINES" = "true" \]; then\n {12}pnpm test:e2e\n {10}else\n {12}pnpm test:e2e --project=desktop --project=mobile\n {10}fi/);
+  assert.match(e2e, /if \[ "\$ALL_ENGINES" = "true" \]; then\n {12}pnpm test:e2e --shard="\$E2E_SHARD\/2"\n {10}else\n {12}pnpm test:e2e --project=desktop --project=mobile --shard="\$E2E_SHARD\/2"\n {10}fi/);
 });
 
 test("the isolated login job runs the full Chromium suite and preserves both reports", () => {
@@ -61,7 +61,7 @@ test("the isolated login job runs the full Chromium suite and preserves both rep
     ["stack-login", "Upload login Playwright report", "playwright-report-login"],
   ]) {
     const upload = step(label, job);
-    assert.ok(upload.includes(`          name: ${report}\n`));
+    assert.ok(upload.includes(`          name: ${report}${job === "stack-e2e" ? "-\${{ matrix.shard }}" : ""}\n`));
     assert.ok(upload.includes(`          path: ${report}/\n`));
     assert.match(upload, /^ {10}retention-days: 14$/m);
   }
