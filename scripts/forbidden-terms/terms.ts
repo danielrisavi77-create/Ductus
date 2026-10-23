@@ -124,8 +124,8 @@ export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
       /(?<![\p{L}\p{N}])(?:is|pre)?kopir(?!aj(?:te|mo)?(?![\p{L}\p{N}]))(?!anj\p{L}* navod)(?!an\p{L}* u meduspremnik)/u,
     readsPhrases: true,
   },
-  // Every form of the root (#179 A3), "prepiši" in a sync conflict included; not "prepiska" (correspondence).
-  { entry: "prepisano", instead: PASTED, lang: "hr", pattern: /(?<![\p{L}\p{N}])prepis(?!k)/u },
+  // Every form of the root (#179 A3), "prepiši" in a sync conflict included; not "prepiska" or "prepisci" (correspondence).
+  { entry: "prepisano", instead: PASTED, lang: "hr", pattern: /(?<![\p{L}\p{N}])prepis(?!k|ci(?![\p{L}\p{N}]))/u },
   // B8 of #179 ("nedostajući / izgubljeni podaci", "lost data") applies only to the record of the process in the teacher view
   // and the summary. The scan cannot tell that from a recovery message on the student's device (F-3/F-8), so it is left out
   // (owner, 23. 10. 2026.).
@@ -148,7 +148,7 @@ export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
     entry: "tuđi tekst",
     instead: PASTED,
     lang: "hr",
-    pattern: /(?<![\p{L}\p{N}])(?:tud\p{L}* (?:tekst|rijec)|nije (?:vlastit|njegov|njezin|njen)\p{L}* (?:tekst|rijec|rad|odlomak)|(?:tekst|rijec|rad|odlomak)\p{L}* nije (?:vlastit|njegov|njezin|njen))/u,
+    pattern: /(?<![\p{L}\p{N}])(?:tud\p{L}* (?:tekst|rijec)|nije (?:vlastit|njegov|njezin|njen)\p{L}* (?:tekst\p{L}*|rijec\p{L}*|odlom\p{L}*|rad(?:a|u|om|e|ovi|ova|ovima)?(?![\p{L}\p{N}]))|(?:tekst\p{L}*|rijec\p{L}*|odlom\p{L}*|rad(?:a|u|om|e|ovi|ova|ovima)?(?![\p{L}\p{N}])) nije (?:vlastit|njegov|njezin|njen))/u,
   },
   {
     entry: "napisao čovjek",
