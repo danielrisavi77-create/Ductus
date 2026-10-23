@@ -43,7 +43,7 @@ export default async function TeacherNewAssignmentPage() {
             ) : null}
           </>
         )}
-        <p><Link href="/">{t.teacher.backHome}</Link></p>
+        <p><Link href="/nastavnik">{t.teacher.backCourses}</Link></p>
       </main>
     </>
   );

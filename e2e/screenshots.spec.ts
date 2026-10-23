@@ -7,6 +7,7 @@ import { test, type Page } from "@playwright/test";
 const PAGES = [
   { name: "home", path: "/" },
   { name: "workspace", path: "/rad" },
+  { name: "teacher-courses", path: "/nastavnik" },
   { name: "teacher-new", path: "/nastavnik/zadatak/novi" },
   { name: "prijava", path: "/prijava" },
   // Signed out here; the teacher view is attached by e2e/login/fast-path.spec.ts.

@@ -108,16 +108,19 @@ export function coursesOf(rows: readonly Row[]): TeacherCourse[] | null {
     b.academicYear.localeCompare(a.academicYear) || collator.compare(a.name, b.name) || (a.id < b.id ? -1 : 1));
 }
 
-export async function handleTeacherCoursesRequest(request: Request, deps: TeacherCoursesDeps): Promise<Response> {
-  if (request.method !== "GET" && request.method !== "HEAD") return refuse(405, "method_not_allowed");
-  const site = request.headers.get("sec-fetch-site");
-  if (site !== null && site !== "same-origin") return refuse(403, "forbidden");
-  const token = deps.sessionToken;
-  if (token === undefined || !TOKEN.test(token)) return refuse(401, "unauthorized");
+export type TeacherCoursesRead =
+  | { kind: "ok"; courses: TeacherCourse[] }
+  | { kind: "unauthorized" | "not_found" | "unavailable" };
 
+/**
+ * The one read behind both the route and the server-rendered `/nastavnik`
+ * (Z3 A): the same function, the same session, the same answer.
+ */
+export async function readTeacherCourses(sessionToken: string | undefined, withActor: WithActor): Promise<TeacherCoursesRead> {
+  if (sessionToken === undefined || !TOKEN.test(sessionToken)) return { kind: "unauthorized" };
   let rows: Row[];
   try {
-    const result = await deps.withActor(token, (tx) =>
+    const result = await withActor(sessionToken, (tx) =>
       tx.query<Row>(
         `SELECT course_id::text, course_name, academic_year, assignment_id::text, title, work_type,
                 opens_at, due_at, current_version, enrolled_students
@@ -127,15 +130,26 @@ export async function handleTeacherCoursesRequest(request: Request, deps: Teache
     rows = result.rows;
   } catch (error) {
     const code = codeOf(error);
-    if (code === "ZD401") return refuse(401, "unauthorized");
-    if (code === "ZD403") return refuse(404, "not_found");
+    if (code === "ZD401") return { kind: "unauthorized" };
+    if (code === "ZD403") return { kind: "not_found" };
     console.error("teacher courses read failed", code !== undefined && SQLSTATE.test(code) ? code : "unknown");
-    return refuse(503, "unavailable");
+    return { kind: "unavailable" };
   }
   const courses = coursesOf(rows);
   if (courses === null) {
     console.error("teacher courses read failed", "row_malformed");
-    return refuse(503, "unavailable");
+    return { kind: "unavailable" };
   }
-  return Response.json({ courses }, { status: 200, headers: NO_STORE });
+  return { kind: "ok", courses };
+}
+
+const STATUS = { unauthorized: 401, not_found: 404, unavailable: 503 } as const;
+
+export async function handleTeacherCoursesRequest(request: Request, deps: TeacherCoursesDeps): Promise<Response> {
+  if (request.method !== "GET" && request.method !== "HEAD") return refuse(405, "method_not_allowed");
+  const site = request.headers.get("sec-fetch-site");
+  if (site !== null && site !== "same-origin") return refuse(403, "forbidden");
+  const read = await readTeacherCourses(deps.sessionToken, deps.withActor);
+  if (read.kind !== "ok") return refuse(STATUS[read.kind], read.kind);
+  return Response.json({ courses: read.courses }, { status: 200, headers: NO_STORE });
 }

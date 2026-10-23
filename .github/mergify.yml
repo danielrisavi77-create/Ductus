@@ -12,6 +12,11 @@
 # In the queue Mergify merges `main` into the PR branch (a clean base merge
 # keeps review, QA and the command under D-101), waits for every required
 # status on the new head and squashes.
+# A PR whose gate is green but which waits for the owner's command (Risk
+# critical or a D-97 path) is kept current by Mergify (`update`, a clean merge of
+# `main`, D-101): review, QA and the command carry through it, and the owner's
+# command is not lost when `main` moves while the PR waits. A PR that is not in
+# the gate, is a draft or has a conflict is left alone.
 # Mergify reads `.mergify.yml` and `.mergify/config.yml` before this file;
 # neither may exist (mergify-config.test.mjs), and Mergify applies the
 # configuration of the default branch only, so a PR cannot change the queue
@@ -56,3 +61,13 @@ pull_request_rules:
     actions:
       queue:
         name: main
+  - name: keep a PR that waits for the owner current with main
+    conditions:
+      - base=main
+      - -draft
+      - -conflict
+      - "#commits-behind>0"
+      - check-success=Engineering review gate
+      - -check-success=Merge authorization
+    actions:
+      update: {}
