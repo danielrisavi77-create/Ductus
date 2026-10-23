@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 
-import AppHeader from "@/components/shell/AppHeader";
+import AppShell from "@/components/shell/AppShell";
 import TeacherCourses from "@/components/teacher/TeacherCourses";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
@@ -48,9 +48,8 @@ export default async function TeacherHomePage() {
   }
 
   return (
-    <>
-      <AppHeader context={t.title} />
-      <main id="sadrzaj" tabIndex={-1} className={`page ${styles.page}`}>
+    <AppShell role={read?.kind === "ok" ? "teacher" : null} current="/nastavnik" crumbs={[t.title]}>
+      <div className={`page ${styles.page}`}>
         <div className={styles.head}>
           <div className={styles.heading}>
             <h1>{t.title}</h1>
@@ -59,8 +58,7 @@ export default async function TeacherHomePage() {
           {listed ? <Link className="btn" href="/nastavnik/zadatak/novi">{t.newCourse}</Link> : null}
         </div>
         {body}
-        <p><Link href="/">{messagesHr.teacher.backHome}</Link></p>
-      </main>
-    </>
+      </div>
+    </AppShell>
   );
 }
