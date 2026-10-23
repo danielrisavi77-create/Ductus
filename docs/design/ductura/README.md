@@ -164,6 +164,8 @@ Lokalna stanja sučelja (otvoreni dijalozi, kartica, sklopljena poglavlja, tema 
 
 ## 8. Tokeni
 
+> **Napomena u repou (23. 10. 2026.):** vrijednosti u aplikaciji sada slijede dizajn v3 (vlasnikova odluka od 21. 10. na #476, `issuecomment-6314381921`; mapiranje u ugovoru `issuecomment-6314723241`). Mjerodavne su vrijednosti u `app/globals.css`; tablica ispod ostaje zapis izvornog paketa.
+
 **Boje (tamna tema)**
 
 | Uloga | Hex |
