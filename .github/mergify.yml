@@ -9,9 +9,8 @@
 # decides with the same parser that checks the declared risk, so an edited
 # description cannot change what Mergify sees. A queue command is restricted
 # to the owner (`sender`) and still needs every status in the queue rule.
-# In the queue Mergify merges `main` into the PR branch (a clean base merge
-# keeps review, QA and the command under D-101), waits for every required
-# status on the new head and squashes.
+# In the queue Mergify builds a temporary branch from `main` plus up to three
+# queued PRs, waits for the CI statuses on it (DAN-240) and squashes each PR.
 # A PR whose gate is green but which waits for the owner's command (Risk
 # critical or a D-97 path) is kept current by Mergify (`update`, a clean merge of
 # `main`, D-101): review, QA and the command carry through it, and the owner's
@@ -26,7 +25,12 @@
 
 queue_rules:
   - name: main
-    batch_size: 1
+    # DAN-240: Mergify tests up to three queued PRs together on one temporary
+    # branch (main plus those PRs) and runs the CI once for the batch, instead
+    # of refreshing every PR with main and running the full CI one by one. The
+    # PR heads stay untouched, so review, QA and the owner's command stay valid.
+    batch_size: 3
+    batch_max_wait_time: 2 min
     queue_conditions: &required
       - base=main
       - -draft
@@ -36,12 +40,18 @@ queue_rules:
       - check-success=Dependency review
       - check-success=Engineering review gate
       - check-success=Merge authorization
-    merge_conditions: *required
+    # The temporary branch is not a PR the gate evaluates: it carries CI only.
+    # The gate and the authorization were already required on every PR above.
+    merge_conditions:
+      - check-success=Lint, typecheck, test and build
+      - check-success=Local stack (compose.yaml)
+      - check-success=Security scanners
+      - check-success=Dependency review
     merge_method: squash
     update_method: merge
 
 merge_queue:
-  max_parallel_checks: 1
+  max_parallel_checks: 2
 
 commands_restrictions:
   queue:

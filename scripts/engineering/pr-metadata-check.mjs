@@ -11,6 +11,13 @@ if (!pr) {
   process.exit(0);
 }
 
+// DAN-240: Mergify's temporary batch branch has no engineering metadata of its
+// own; every PR in the batch already passed this check and the gate.
+if (/^mergify\/merge-queue\//.test(pr.head?.ref ?? "") && pr.head.repo?.full_name === process.env.GITHUB_REPOSITORY) {
+  console.log("Mergify merge-queue branch; metadata was checked on each queued PR.");
+  process.exit(0);
+}
+
 const token = process.env.GITHUB_TOKEN;
 const repository = process.env.GITHUB_REPOSITORY;
 if (!token || !repository) throw new Error("Missing GitHub runtime environment.");
