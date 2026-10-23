@@ -21,11 +21,16 @@ const BASE_URL = `http://localhost:${PORT}`;
 export default defineConfig({
   testDir: "e2e/login",
   retries: 0,
+  metadata: { testedSha: process.env.GITHUB_SHA ?? null },
   // The tests share the demo account and the dev server compiles on first
   // request; one worker keeps the sessions of one test out of another.
   workers: 1,
   timeout: 90_000,
-  reporter: [[playwrightConsoleReporter(process.env)], ["html", { open: "never", outputFolder: "playwright-report-login" }]],
+  reporter: [
+    [playwrightConsoleReporter(process.env)],
+    ["html", { open: "never", outputFolder: "playwright-report-login" }],
+    ["json", { outputFile: "playwright-report-login/results.json" }],
+  ],
   outputDir: "test-results-login",
   use: {
     baseURL: BASE_URL,
