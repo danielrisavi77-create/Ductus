@@ -317,9 +317,19 @@ export function evaluatePreflight({ pr, mainSha, compare, rollup, required, expe
     const reported = latestChecks(rollup);
     const missing = req.filter((r) => !reported.some((c) =>
       (c.name ?? c.context) === r.context && (r.appId == null || c.appId === r.appId)));
-    const ck = evaluateChecks(rollup);
+    // At equal/missing times a non-pending duplicate must win over the one
+    // state exempted below. latestChecks still selects genuinely newer runs.
+    const pending = rollup.filter((c) => evaluateChecks([c]).bad
+      .some((b) => b.name === "Merge authorization" && b.state === "PENDING"));
+    const ck = evaluateChecks([...rollup.filter((c) => !pending.includes(c)), ...pending]);
+    // Merge authorization waits for review/QA. Only its known pending state
+    // may precede review entry; the shared merge-readiness check stays strict.
+    const readableRequired = required.every((item) => typeof item === "string" ? item.length > 0
+      : item != null && typeof item.context === "string" && item.context.length > 0
+        && (item.appId == null || (Number.isInteger(item.appId) && item.appId >= 0)));
+    const bad = ck.bad.filter((c) => !readableRequired || c.name !== "Merge authorization" || c.state !== "PENDING");
     if (missing.length) add(false, "ci", `required check(s) not reported on the head: ${names(missing.map((r) => r.appId == null ? r.context : `${r.context} app ${r.appId}`))}`);
-    else if (ck.bad.length) add(false, "ci", `CI not green: ${ck.bad.map((b) => `${shown(b.name)}=${shown(b.state)}`).join(", ")}`);
+    else if (bad.length) add(false, "ci", `CI not green: ${bad.map((b) => `${shown(b.name)}=${shown(b.state)}`).join(", ")}`);
     else add(true, "ci", `CI green (${req.length} required, ${ck.total} checks)`);
   }
   return out;

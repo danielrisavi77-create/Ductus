@@ -1,4 +1,4 @@
-import { canonicalBlock, field } from "./metadata-parser.mjs";
+import { canonicalBlock, field, metadataLines } from "./metadata-parser.mjs";
 import { evaluateMetadata } from "./pr-metadata-core.mjs";
 import { changedPaths, ownerCommandPaths, qaExemption } from "./protected-paths.mjs";
 
@@ -110,15 +110,42 @@ export function commentTime(item) {
   return Number.isNaN(created) ? updated : Math.max(created, updated);
 }
 
+// A Grok review run from the owner's Grok CLI (scripts/grok-review.ps1) is
+// posted by the owner's own account, not by the App. It counts as the Grok
+// provider only when the account is the owner's and the owner writes the line
+// `Review-Channel: grok-cli` outside any code block. Sessions that act with the
+// owner's token can write that line too, so the gate status says when it was
+// used (D-162); the owner can already override the gate, so this adds no
+// authority.
+const GROK_CLI_LINE_RE = /^Review-Channel:[ \t]*grok-cli$/i;
+
+function viaGrokCli(item, ownerLogin) {
+  return (
+    Boolean(ownerLogin) &&
+    !item?.performed_via_github_app?.slug &&
+    item?.author_association === "OWNER" &&
+    item?.user?.login === ownerLogin &&
+    (canonicalBlock(item?.body, "Agent-Review") || canonicalBlock(item?.body, "QA-Agent")) &&
+    metadataLines(item?.body ?? "").some((line) => GROK_CLI_LINE_RE.test(line))
+  );
+}
+
+function commentAppSlug(item, ownerLogin) {
+  const slug = item?.performed_via_github_app?.slug ?? null;
+  if (slug) return slug;
+  return viaGrokCli(item, ownerLogin) ? "grok-by-xai" : null;
+}
+
 // A verdict is a person's comment posted through an App.
-function trustedComments(items, logins) {
+function trustedComments(items, logins, ownerLogin = null) {
   return (items ?? [])
     .filter((item) => trustedAuthor(item, logins))
     .map((item, index) => ({
       body: item?.body ?? "",
       login: item?.user?.login ?? null,
       association: item?.author_association ?? null,
-      appSlug: item?.performed_via_github_app?.slug ?? null,
+      appSlug: commentAppSlug(item, ownerLogin),
+      grokCli: viaGrokCli(item, ownerLogin),
       createdAt: commentTime(item) || index,
       index,
     }))
@@ -186,9 +213,11 @@ const CODEX_STATE_RE = /^<!-- codex-pull-request-review-summary -->\s*<!-- codex
 // proves it in its edited-in-place summary comment, whose machine state names
 // the full reviewed commit. Only the App's own comment counts (bot account and
 // App slug, never a human or another App), the commit must be the current head
-// in full, and the review must be completed with no findings at all. Several
+// in full, and the review must be completed with no unresolved findings. Several
 // summaries naming this head must all be clean; one unreadable summary voids
 // the whole proof: fail closed. The receipt comment (short sha) is never evidence.
+// has_any_findings also counts findings resolved on older heads, so it is not
+// required to be false; only unresolved findings on this head void the proof (D-139, 23. 10. 2026).
 function codexCleanSummaryOnHead(comments, headSha) {
   const onHead = [];
   for (const item of comments ?? []) {
@@ -211,7 +240,7 @@ function codexCleanSummaryOnHead(comments, headSha) {
     onHead.length > 0 &&
     onHead.every(
       (review) =>
-        review.status === "completed" && review.has_any_findings === false && review.has_unresolved_findings === false,
+        review.status === "completed" && review.has_unresolved_findings === false,
     )
   );
 }
@@ -364,7 +393,7 @@ function currentNegative(verdicts) {
   return null;
 }
 
-export function evaluateGate({
+function evaluateGateCore({
   body,
   headSha,
   ownerLogin,
@@ -398,7 +427,7 @@ export function evaluateGate({
     return { state: "failure", description: "Missing repository owner identity." };
   }
 
-  const trusted = trustedComments(comments, trustedLogins);
+  const trusted = trustedComments(comments, trustedLogins, ownerLogin);
 
   if (findOwnerOverride(trusted, headSha, ownerLogin)) {
     return { state: "success", description: `Owner override recorded for ${risk} risk.` };
@@ -703,6 +732,17 @@ export function prNumberFromEvent(event) {
   const runPrs = event?.workflow_run?.pull_requests;
   if (Array.isArray(runPrs) && runPrs.length === 1 && Number.isSafeInteger(runPrs[0]?.number)) return runPrs[0].number;
   return null;
+}
+
+// D-162: say in the status when a Grok CLI comment of the owner's account was
+// counted, so the quiet path stays visible.
+export function evaluateGate(input) {
+  const result = evaluateGateCore(input);
+  if (result.state !== "success") return result;
+  const used = trustedComments(input.comments, input.trustedLogins ?? TRUSTED_VERDICT_LOGINS, input.ownerLogin).some(
+    (entry) => entry.grokCli,
+  );
+  return used ? { ...result, description: `${result.description} Grok CLI review (D-162, owner account).` } : result;
 }
 
 /**
