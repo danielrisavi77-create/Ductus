@@ -142,10 +142,10 @@ describe("manuscript type (README §5.1, FE-D2)", () => {
   }
 });
 
-describe("workspace breakpoints (README §5.1, FE-D2)", () => {
-  it("folds the structure below 1240 px and the panel below 1000 px, nothing at 1100 px", () => {
-    expect(CSS).toContain("@media (max-width: 1239.98px) {");
-    expect(CSS).toContain("@media (max-width: 999.98px) {");
+describe("workspace breakpoints (design v3 inside the shell, was README §5.1, FE-D2)", () => {
+  it("folds the structure up to 1250 px and the panel up to 1050 px, nothing at 1100 px", () => {
+    expect(CSS).toContain("@media (max-width: 1250px) {");
+    expect(CSS).toContain("@media (max-width: 1050px) {");
     expect(CSS).not.toMatch(/max-width: 1100px/);
   });
 });
