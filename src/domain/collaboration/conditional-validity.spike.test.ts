@@ -77,6 +77,35 @@ describe("conditional-validity spike (S-UV1)", () => {
       expect(needsReReview(c, "broj sudionika je 42.0")).toBe(true);
       expect(needsReReview(c, "broj sudionika je -42")).toBe(true);
       expect(needsReReview(c, "broj sudionika je 42.")).toBe(false);
+      expect(needsReReview(c, "masa je 42,5kg")).toBe(true);
+      expect(needsReReview(c, "masa je 42.0kg")).toBe(true);
+    });
+
+    it("fails closed for a condition that cannot be evaluated", () => {
+      const noHashRange = makeCondition({ text_snapshot_hash: undefined });
+      const negation = makeCondition({
+        kind: "protected_element",
+        protected_kind: "negation",
+        protected_value: "ne",
+        text_snapshot_hash: undefined,
+      });
+      const quote = makeCondition({
+        kind: "protected_element",
+        protected_kind: "literal_quote",
+        protected_value: "citat",
+        text_snapshot_hash: undefined,
+      });
+      const emptyNumber = makeCondition({
+        kind: "protected_element",
+        protected_kind: "number",
+        protected_value: "",
+        text_snapshot_hash: undefined,
+      });
+      for (const c of [noHashRange, negation, quote, emptyNumber]) {
+        expect(needsReReview(c, "potpuno novi tekst")).toBe(true);
+      }
+      const result = applyRevisionToConditions([negation], "potpuno novi tekst");
+      expect(result[0]?.status).toBe("needs_re_review");
     });
 
     it("detects protected number change", () => {

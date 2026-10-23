@@ -76,14 +76,16 @@ export function needsReReview(
 
   if (condition.protected_value && condition.protected_kind === "number") {
     // substring matching would incorrectly accept 142 or 42.0 as the old 42.
-    // A protected numeric value is only present as a complete number token.
+    // A protected numeric value is only present as a complete number token;
+    // the lookahead group keeps the match from backing off a decimal part.
     const tokens: string[] = currentTextInRange.match(
-      /(?<![\p{L}\p{N}])[+\-\u2212]?\p{N}+(?:[.,]\p{N}+)*(?![\p{L}\p{N}])/gu,
+      /(?<![\p{L}\p{N}])[+\-\u2212]?(?=(\p{N}+(?:[.,]\p{N}+)*))\1(?![\p{L}\p{N}])/gu,
     ) ?? [];
     return !tokens.includes(condition.protected_value);
   }
 
-  return false;
+  // A condition that cannot be evaluated never stays valid.
+  return true;
 }
 
 export function applyRevisionToConditions(
