@@ -52,3 +52,27 @@ test.describe("at 390 px", () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 });
+
+for (const [width, min] of [[1440, 12], [390, 13]] as const) {
+  test(`shell text at ${width} px is at least ${min} px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(PATH);
+    if (width < 800) await page.getByRole("button", { name: t.shell.openNav }).click();
+    const small = await page.locator("#bocna-navigacija, header").evaluateAll((roots, limit) => {
+      const found: string[] = [];
+      for (const root of roots) {
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+          const element = node.parentElement;
+          if (!element || !node.textContent?.trim()) continue;
+          const rect = element.getBoundingClientRect();
+          if (rect.width === 0 || rect.height === 0) continue;
+          const size = parseFloat(getComputedStyle(element).fontSize);
+          if (size < limit) found.push(`${size}px: ${node.textContent.trim()}`);
+        }
+      }
+      return found;
+    }, min);
+    expect(small).toEqual([]);
+  });
+}
