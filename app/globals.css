@@ -1,11 +1,12 @@
 /*
- * Ductus design tokens. Values from the token table of the design handoff
- * (docs/design/ductura/README.md §8, D-123); the structure is D-115's.
+ * Ductus design tokens. Values from the visual system of design v3
+ * (docs/design/ductura/DIZAJN-V3.md, owner decision of 21 Oct 2026 on #476,
+ * replacing D-123 in look); the names are D-123's and the structure D-115's.
  *
  * The shell is dark and does not follow the system setting. The writing sheet
  * carries its own token scope (`.sheet`): dark by default, white when the
  * writer switches it (`data-sheet-theme="light"`, SheetFrame); the choice is
- * kept only in the browser. Primary is #6FBFA5 with #0E1C17 text on it; on
+ * kept only in the browser. Primary is #8EE3BE with #091310 text on it; on
  * the white sheet the handoff's darker green #2F7A63 carries text and focus.
  * The server save state (SYNCED) has its own colour, --synced, so it never
  * reads as the primary or as the pulsing "saving" state. Origin colours show
@@ -15,10 +16,12 @@
  * Semantic names from the same table (FE-D2): --raised for dialogs and other
  * raised surfaces, --selected for the selected item or segment, --ink-muted
  * for the quietest marks, --warn and --error for warning and error marks.
- * --ink-muted is the handoff's #767d75, under 4.5:1 on --chrome, --sheet and
- * --raised (4.27, 4.16, 3.99): large text (24 px, or 18.66 px bold) and
- * non-text marks only (at least 3:1); small quiet text uses --ink-3 (5.49:1
- * on --raised). --raised and --selected are shell surfaces; the white sheet
+ * --ink-muted is #6c8376 (derived; the showcase has none), under 4.5:1 on
+ * --chrome, --sheet and --raised (4.33, 4.08, 4.08): large text (24 px, or
+ * 18.66 px bold) and non-text marks only (at least 3:1); small quiet text
+ * uses --ink-3 (5.43:1 on --raised). --warn-soft and --synced-soft are the
+ * showcase's amber and blue backgrounds; --radius is for panels and
+ * --radius-sm for buttons and fields. --raised and --selected are shell surfaces; the white sheet
  * has no values for them, so they are not used inside the sheet.
  * The save-state chip keeps its own colours (PR #386); these names are for
  * new callers. The manuscript is Newsreader 16.5 px with leading 1.7
@@ -26,32 +29,37 @@
  */
 
 :root {
-  --ground: #0f110e;
-  --sheet: #161a15;
-  --chrome: #141712;
-  --ink: #e9ebe6;
-  --ink-2: #a6ada5;
-  --ink-3: #8e958d;
-  --rule: #2c312b;
-  --rule-2: #232722;
-  --hover: #1e221d;
-  --raised: #1a1e19;
-  --selected: #232722;
-  --ink-muted: #767d75;
-  --warn: #d3ac63;
-  --error: #e07a6a;
-  --accent: #6fbfa5;
-  --accent-hover: #8ccdb7;
-  --accent-ink: #0e1c17;
-  --accent-soft: #6fbfa51f;
-  --synced: #8fb0e0;
+  --ground: #091310;
+  --sheet: #12211c;
+  --chrome: #0e1b17;
+  --ink: #eef3e9;
+  --ink-2: #a3b5aa;
+  --ink-3: #80998a;
+  --rule: #24372e;
+  --rule-2: #1b2d24;
+  --hover: #192a23;
+  --raised: #12211c;
+  --selected: #192a23;
+  --ink-muted: #6c8376;
+  --warn: #e9c58b;
+  --error: #e9917f;
+  --accent: #8ee3be;
+  --accent-hover: #99f5cd;
+  --accent-ink: #091310;
+  --accent-soft: #173c2d;
+  --synced: #a2c6e5;
   --p-internal: #8fb0e0;
   --p-unknown: #9e9a90;
   --p-template: #7e7a70;
   --p-ai: #d3ac63;
-  --cmt: #d9ae5b;
-  --cmt-ink: #d9ae5b;
-  --cmt-bg: #d9ae5b2b;
+  --cmt: #e9c58b;
+  --cmt-ink: #e9c58b;
+  --cmt-bg: #e9c58b26;
+  --warn-soft: #342d20;
+  --synced-soft: #1e303d;
+  --radius: 14px;
+  --radius-sm: 8px;
+  --shadow: 0 22px 80px #0003;
   --lift: 0 1px 1px #0007, 0 12px 34px -10px #000a;
   --ff-ui: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
   --ff-display: var(--font-display), Georgia, serif;
@@ -60,9 +68,33 @@
   color-scheme: dark;
 }
 
+/*
+ * Light shell (design v3, owner decision of 21 Oct 2026). Defined here, not
+ * switched on yet: the theme switch comes with the new shell. --ink-3 is
+ * #5e7366, not the showcase's #657a6d (4.17:1 on --ground, below AA).
+ */
+:root[data-theme="light"] {
+  --ground: #f3f4ee;
+  --chrome: #ffffff;
+  --raised: #f8f9f5;
+  --hover: #e9efe6;
+  --selected: #e9efe6;
+  --rule: #d4ded2;
+  --rule-2: #e3e9df;
+  --ink: #1a3026;
+  --ink-2: #52685b;
+  --ink-3: #5e7366;
+  --accent: #216344;
+  --accent-ink: #f3f4ee;
+  --accent-soft: #e2f0e5;
+  --warn: #84602d;
+  --synced: #355b81;
+  color-scheme: light;
+}
+
 /* Dark sheet (default): the shell's own tokens on the handoff's sheet colour. */
 .sheet {
-  --sheet: #161a15;
+  --sheet: #12211c;
   color-scheme: dark;
 }
 
