@@ -1,0 +1,95 @@
+import { execFile } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+
+import AxeBuilder from "@axe-core/playwright";
+import { expect, test, type Page } from "@playwright/test";
+import pg from "pg";
+
+import { messagesHr } from "../../src/lib/i18n/messages.hr";
+import { signIn } from "./support";
+
+// Z3 (A), "Moji kolegiji" at /nastavnik (#476 6289158306). The list comes from
+// the same read as GET /api/teacher/courses; the teacher role comes from the
+// local operator command (K-3a), as in fast-path.spec.ts, and is taken away
+// again afterwards. Course names are invented.
+
+const t = messagesHr.teacherCourses;
+const run = promisify(execFile);
+const ROOT = fileURLToPath(new URL("../../", import.meta.url));
+const TEACHER_ID = "demo-teacher@demo.ductus.test";
+const ADMIN_DATABASE_URL =
+  process.env.E2E_ADMIN_DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
+const ACTIVE_ROLE = `FROM institution.institution_role r JOIN identity.user_account u ON u.id = r.user_id
+  WHERE u.hr_edu_person_unique_id = $1 AND r.role = 'teacher' AND r.revoked_at IS NULL`;
+let roleGrantedByThisTest = false;
+
+async function withAdmin<T>(work: (client: pg.Client) => Promise<T>): Promise<T> {
+  const client = new pg.Client({ connectionString: ADMIN_DATABASE_URL });
+  await client.connect();
+  try {
+    return await work(client);
+  } finally {
+    await client.end();
+  }
+}
+
+const teacherRoleActive = () => withAdmin(async (client) =>
+  (await client.query(`SELECT 1 ${ACTIVE_ROLE} AND r.confirmed_at IS NOT NULL`, [TEACHER_ID])).rowCount === 1);
+
+test.afterEach(async () => {
+  if (!roleGrantedByThisTest) return;
+  await withAdmin((client) => client.query(
+    `UPDATE institution.institution_role SET revoked_at = now() WHERE id IN (SELECT r.id ${ACTIVE_ROLE} AND r.confirmed_by IS NULL)`,
+    [TEACHER_ID]));
+  roleGrantedByThisTest = false;
+});
+
+async function asTeacher(page: Page): Promise<void> {
+  await signIn(page, "/", "Demo nastavnik");
+  roleGrantedByThisTest = !(await teacherRoleActive());
+  await run("node", ["scripts/demo/provision-teacher.mjs"], { cwd: ROOT });
+}
+
+async function snapshot(page: Page, name: string): Promise<void> {
+  await test.info().attach(name, { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
+}
+
+test("anonymous visitor is asked to sign in; a student reads only that there are no courses", async ({ page }) => {
+  await page.goto("/nastavnik");
+  await expect(page.getByRole("heading", { level: 1, name: t.title })).toBeVisible();
+  await expect(page.getByText(messagesHr.teacher.signedOut)).toBeVisible();
+  await expect(page.getByRole("link", { name: messagesHr.teacher.signIn }))
+    .toHaveAttribute("href", "/api/auth/login?returnTo=%2Fnastavnik");
+
+  await signIn(page, "/nastavnik", "Demo studentica");
+  await expect(page.getByRole("heading", { level: 2, name: t.empty })).toBeVisible();
+  await expect(page.getByText(t.noAssignments)).toHaveCount(0);
+});
+
+test("a teacher sees their course with its assignment, in the route's order, and a way to a new one", async ({ page }) => {
+  await asTeacher(page);
+  const courseName = `Izmišljeni kolegij ${Date.now().toString(36)}`;
+  await page.goto("/nastavnik/zadatak/novi");
+  await page.getByLabel(messagesHr.teacher.course.name).fill(courseName);
+  await page.getByRole("button", { name: messagesHr.teacher.course.submit }).click();
+  await expect(page.getByRole("status").filter({ hasText: messagesHr.teacher.course.created })).toBeVisible();
+
+  // The way back from the form is the list, not the public home page.
+  await page.getByRole("link", { name: messagesHr.teacher.backCourses }).click();
+  await expect(page).toHaveURL("http://localhost:3000/nastavnik");
+  const course = page.getByRole("region", { name: courseName });
+  await expect(course).toBeVisible();
+  await expect(course.getByText(t.noAssignments)).toBeVisible();
+  await expect(page.getByRole("link", { name: t.newCourse })).toHaveAttribute("href", "/nastavnik/zadatak/novi");
+  // Nothing on the screen offers another order.
+  await expect(page.getByRole("combobox")).toHaveCount(0);
+  await expect(page.getByText(t.countNote)).toBeVisible();
+
+  const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+  expect(axe.violations).toEqual([]);
+  await snapshot(page, "nastavnik-moji-kolegiji");
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await snapshot(page, "nastavnik-moji-kolegiji-390");
+});
