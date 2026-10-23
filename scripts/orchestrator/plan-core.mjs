@@ -11,7 +11,8 @@ export const GATE_SLOTS = 3; // D-161 (a)
 
 const LANE_RE = /^[a-z]+:[a-z0-9][a-z0-9_-]*:(backend|frontend|platforma)$/i;
 const TASK_RE = /\bDAN-[1-9]\d*\b/;
-const DEPENDS_RE = /\b(?:ovisi o|depends on|stacked on|čeka)\s+#(\d+)/gi;
+// \b is ASCII-only in JavaScript and never matches before "č"; look for any letter instead.
+const DEPENDS_RE = /(?<![\p{L}\p{N}_])(?:ovisi o|depends on|stacked on|čeka)\s+#(\d+)/giu;
 
 // Paths whose change alone makes a PR tooling, not demo work (D-107).
 export const TOOLING_PATHS = [
@@ -20,8 +21,9 @@ export const TOOLING_PATHS = [
 ];
 // A backend contract another writer's screen may call without sharing a file
 // (e.g. an API route and the page that posts to it).
-export const CONTRACT_PATHS = ["app/api/", "src/server/", "src/application/", "src/domain/", "db/migrations/"];
-const UI_PATHS = ["app/", "src/components/", "src/client/", "src/editor/"];
+export const CONTRACT_PATHS = ["app/api/", "src/server/", "src/adapters/", "src/application/", "src/domain/", "db/migrations/"];
+// src/lib holds client code that calls the API (journal, sync drainRunner).
+const UI_PATHS = ["app/", "src/components/", "src/client/", "src/editor/", "src/lib/"];
 
 const touches = (paths, list) => paths.some((p) => matchesPath(p, list));
 const touchesUi = (paths) => paths.some((p) => matchesPath(p, UI_PATHS) && !matchesPath(p, ["app/api/"]));

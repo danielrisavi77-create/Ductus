@@ -95,6 +95,15 @@ test("a backend contract and another writer's screens are unproven, not parallel
   assert.match(p.rows[2].reasons[0], /possible shared contract with #575 \(backend\)/);
   // a confirmation of another pair clears nothing here
   assert.deepEqual(verdicts(plan(prs, c, [[575, 600]])), verdicts(p));
+  // client code that calls the API and backend adapters count too
+  const client = [pr(1, "backend", ["app/api/sync/route.ts"]), pr(2, "frontend", ["src/lib/sync/drainRunner.ts"]),
+    pr(3, "backend", ["src/adapters/storage/s3.ts"]), pr(4, "frontend", ["app/rad/page.tsx"])];
+  const cc = contract([assignment(1, "backend"), assignment(2, "frontend"), assignment(3, "backend", { agent: "claude:s3:backend" }), assignment(4, "frontend", { agent: "claude:s4:frontend" })]);
+  const cp = plan(client, cc);
+  assert.equal(cp.contract, "VALID");
+  assert.deepEqual(verdicts(cp), { 1: "NEPROVJERENO", 2: "NEPROVJERENO", 3: "NEPROVJERENO", 4: "NEPROVJERENO" });
+  assert.match(cp.rows[1].reasons.join("; "), /possible shared contract with #1 \(backend\)/);
+  assert.match(cp.rows[3].reasons.join("; "), /possible shared contract with #3 \(backend\)/);
   // an API route alone is not a screen: two backend-contract PRs of different writers are not flagged
   const api = [pr(1, "backend", ["src/server/a.ts"]), pr(2, "platforma", ["app/api/health/route.ts"])];
   assert.deepEqual(verdicts(plan(api, contract([assignment(1, "backend"), assignment(2, "platforma")]))),
@@ -112,6 +121,13 @@ test("a stacked base, a declared dependency or a contract blocker is ČEKA OVISN
   assert.deepEqual(p.rows.map((r) => r.reasons), [["contract blockers: decision"], ["based on lane/1, not main"],
     ["declared dependency on #1"], []]);
   assert.deepEqual(declaredDependencies("STACKED ON #7, depends on #8", new Set([7, 8])), [7, 8]);
+  for (const text of ["čeka #596", "PR čeka #596", "Task: Čeka #596", "(čeka #596)"]) {
+    assert.deepEqual(declaredDependencies(text, new Set([596])), [596], text);
+  }
+  // a word that only ends in one of the phrases is not a declaration
+  assert.deepEqual(declaredDependencies("isčeka #596, nedepends on #596", new Set([596])), []);
+  const waits = [pr(596, "platforma", ["scripts/gate.mjs"]), pr(597, "frontend", ["e2e/b.spec.ts"], { body: body("frontend", 597, "PR čeka #596") })];
+  assert.equal(plan(waits, contract([assignment(596, "platforma"), assignment(597, "frontend")])).rows[1].verdict, "ČEKA OVISNOST");
 });
 
 test("free gate slots go to demo drafts before tooling drafts; the rest wait", () => {
