@@ -55,7 +55,7 @@
 .space {
   margin: 6px 0 10px;
   padding: 0 12px;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.13em;
   text-transform: uppercase;
   color: var(--ink-3);
@@ -102,7 +102,7 @@
   padding: 14px 12px;
   border: 1px solid var(--rule);
   border-radius: var(--radius-sm);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.6;
   color: var(--ink-3);
 }
@@ -194,7 +194,7 @@
 }
 
 .demo {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ink-3);
   white-space: nowrap;
 }
@@ -280,6 +280,17 @@
 
   .demo {
     display: none;
+  }
+}
+
+/* The interface floor: 12 px, and 13 px on a phone (app/globals.css). */
+@media (max-width: 640px) {
+  .space,
+  .note,
+  .crumbs,
+  .who,
+  .signOut {
+    font-size: 13px;
   }
 }
 
