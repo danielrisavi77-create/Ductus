@@ -378,15 +378,15 @@ test.describe("workspace shell", () => {
     expect(shadow).toMatch(/0px 0px 0px 1px/);
   });
 
-  test("shell is dark whatever the system says, the sheet is dark by default (D-123)", async ({ page }) => {
+  test("shell is dark whatever the system says, the sheet is dark by default (design v3)", async ({ page }) => {
     for (const colorScheme of ["light", "dark"] as const) {
       await page.emulateMedia({ colorScheme });
       await page.goto("/rad");
       const body = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-      expect(body).toBe("rgb(15, 17, 14)");
+      expect(body).toBe("rgb(9, 19, 16)");
       const sheet = page.locator("article.sheet");
       await expect(sheet).toHaveAttribute("data-sheet-theme", "dark");
-      expect(await sheet.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(22, 26, 21)");
+      expect(await sheet.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(18, 33, 28)");
     }
   });
 
