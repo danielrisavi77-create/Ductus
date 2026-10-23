@@ -98,6 +98,19 @@ export default function AppShell({ role, current, crumbs, children }: AppShellPr
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
+  // From 800 px the side bar is no drawer, so an open one must not leave the
+  // shade and an inert page behind.
+  useEffect(() => {
+    if (!open) return;
+    const wide = window.matchMedia("(min-width: 800px)");
+    const onChange = () => {
+      if (wide.matches) setOpen(false);
+    };
+    onChange();
+    wide.addEventListener("change", onChange);
+    return () => wide.removeEventListener("change", onChange);
+  }, [open]);
+
   const close = () => {
     setOpen(false);
     menuButton.current?.focus();
@@ -128,6 +141,7 @@ export default function AppShell({ role, current, crumbs, children }: AppShellPr
                       className={styles.navItem}
                       href={item.href}
                       aria-current={item.href === current ? "page" : undefined}
+                      onClick={() => setOpen(false)}
                     >
                       {item.label}
                     </Link>

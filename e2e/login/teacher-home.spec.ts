@@ -99,6 +99,18 @@ test("a teacher sees their course with its assignment, in the route's order, and
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await snapshot(page, "nastavnik-moji-kolegiji-390");
+  // The drawer closes on its item for this very page, where no navigation happens.
+  await page.getByRole("button", { name: messagesHr.shell.openNav }).click();
+  await nav.getByRole("link", { name: messagesHr.shell.nav.courses }).click();
+  await expect(page.locator("main#sadrzaj")).not.toHaveAttribute("inert", "");
+  await expect(page.getByRole("complementary", { name: messagesHr.shell.sideNav })).toBeHidden();
+
+  // The light theme with the navigation and its current item passes axe too.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByRole("button", { name: messagesHr.shell.theme }).click();
+  await expect(page.locator("[data-theme]").first()).toHaveAttribute("data-theme", "light");
+  const lightAxe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+  expect(lightAxe.violations).toEqual([]);
 });
 
 test("without JavaScript a teacher on a phone still reaches signing out in the shell (I5)", async ({ page, browser }) => {

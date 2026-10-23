@@ -91,6 +91,13 @@ test.describe("at 390 px", () => {
     await expect(aside).toBeHidden();
     await expect(page.getByRole("button", { name: t.shell.openNav })).toBeFocused();
     await expect(page.locator("main#sadrzaj")).not.toHaveAttribute("inert", "");
+    // Widening past 800 px closes an open drawer.
+    await page.getByRole("button", { name: t.shell.openNav }).click();
+    await expect(page.locator("main#sadrzaj")).toHaveAttribute("inert", "");
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await expect(page.locator("main#sadrzaj")).not.toHaveAttribute("inert", "");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(aside).toBeHidden();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 });
