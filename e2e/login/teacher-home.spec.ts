@@ -100,3 +100,24 @@ test("a teacher sees their course with its assignment, in the route's order, and
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await snapshot(page, "nastavnik-moji-kolegiji-390");
 });
+
+test("without JavaScript a teacher on a phone still reaches signing out in the shell (I5)", async ({ page, browser }) => {
+  await asTeacher(page);
+  const context = await browser.newContext({
+    storageState: await page.context().storageState(),
+    javaScriptEnabled: false,
+    viewport: { width: 390, height: 844 },
+  });
+  try {
+    const noScript = await context.newPage();
+    await noScript.goto("/nastavnik");
+    const signOut = noScript.getByRole("button", { name: messagesHr.shell.signOut });
+    await expect(signOut).toBeVisible();
+    await signOut.click();
+    await noScript.waitForLoadState();
+    await noScript.goto("/nastavnik");
+    await expect(noScript.getByText(messagesHr.teacher.signedOut)).toBeVisible();
+  } finally {
+    await context.close();
+  }
+});

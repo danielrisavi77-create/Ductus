@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 
 import styles from "./AppShell.module.css";
 import { navFor, type ShellRole } from "./nav";
-import { saveTheme, THEME_SCRIPT } from "./theme";
+import { readTheme, saveTheme, THEME_SCRIPT } from "./theme";
 
 const ICONS = {
   menu: "M3 6h18M3 12h18M3 18h18",
@@ -68,11 +68,27 @@ export type AppShellProps = {
  */
 export default function AppShell({ role, current, crumbs, children }: AppShellProps) {
   const [open, setOpen] = useState(false);
+  const shell = useRef<HTMLDivElement>(null);
+  const sidebar = useRef<HTMLElement>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
   const items = navFor(role);
 
+  // The inline script runs only when the server's HTML is parsed; after a
+  // client-side navigation the new shell reads the saved theme here, before
+  // it is painted.
+  useLayoutEffect(() => {
+    let storage: Storage | undefined;
+    try {
+      storage = window.localStorage;
+    } catch {
+      // Storage blocked: the shell stays dark.
+    }
+    shell.current?.setAttribute("data-theme", readTheme(storage));
+  }, []);
+
   useEffect(() => {
     if (!open) return;
+    sidebar.current?.querySelector<HTMLElement>("a, button")?.focus();
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       setOpen(false);
@@ -88,10 +104,15 @@ export default function AppShell({ role, current, crumbs, children }: AppShellPr
   };
 
   return (
-    <div className={styles.shell} data-theme="dark" suppressHydrationWarning>
+    <div ref={shell} className={styles.shell} data-theme="dark" suppressHydrationWarning>
       <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      {/* Without JavaScript ☰ cannot open the drawer, so on a phone the side
+          bar, and with it signing out, stays in the page above the content (I5). */}
+      <noscript>
+        <style>{`@media (max-width: 799.98px) { .${styles.sidebar} { position: static; width: auto; transform: none; visibility: visible; } .${styles.menuButton} { display: none; } }`}</style>
+      </noscript>
       {open ? <div className={styles.shade} onClick={close} aria-hidden="true" /> : null}
-      <aside className={styles.sidebar} data-open={open} aria-label={t.shell.sideNav} id="bocna-navigacija">
+      <aside ref={sidebar} className={styles.sidebar} data-open={open} aria-label={t.shell.sideNav} id="bocna-navigacija">
         <Link className={styles.brand} href={role === "teacher" ? "/nastavnik" : "/"} aria-label={t.shell.home}>
           <Logo />
           <span>{t.app.name}</span>
@@ -158,7 +179,7 @@ export default function AppShell({ role, current, crumbs, children }: AppShellPr
             <ThemeToggle />
           </div>
         </header>
-        <main id="sadrzaj" tabIndex={-1} className={styles.content}>
+        <main id="sadrzaj" tabIndex={-1} className={styles.content} inert={open}>
           {children}
         </main>
       </div>
