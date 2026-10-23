@@ -57,6 +57,14 @@ export type AppShellProps = {
   current?: string;
   /** Breadcrumb, first to last; the last is the page itself. */
   crumbs: readonly string[];
+  /**
+   * The account control in place of the sign-out form, for a page whose
+   * sign-out has more to do (the workspace's LocalLogout, D-118), or a way to
+   * sign in again. Shown even without a role.
+   */
+  account?: ReactNode;
+  /** The page brings its own `<main id="sadrzaj">` (the workspace, FE-D1). */
+  ownMain?: boolean;
   children: ReactNode;
 };
 
@@ -66,7 +74,7 @@ export type AppShellProps = {
  * (I2); signing out is the same POST as everywhere and works without
  * JavaScript (I5). Below 800 px the side bar is a drawer behind ☰.
  */
-export default function AppShell({ role, current, crumbs, children }: AppShellProps) {
+export default function AppShell({ role, current, crumbs, account, ownMain = false, children }: AppShellProps) {
   const [open, setOpen] = useState(false);
   const shell = useRef<HTMLDivElement>(null);
   const sidebar = useRef<HTMLElement>(null);
@@ -90,7 +98,8 @@ export default function AppShell({ role, current, crumbs, children }: AppShellPr
     if (!open) return;
     sidebar.current?.querySelector<HTMLElement>("a, button")?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
+      // A modal dialog (the workspace's sign-out, D-118) takes its own Esc.
+      if (event.key !== "Escape" || document.querySelector("dialog[open]")) return;
       setOpen(false);
       menuButton.current?.focus();
     };
@@ -156,7 +165,12 @@ export default function AppShell({ role, current, crumbs, children }: AppShellPr
             <strong>{t.shell.demoBadge}</strong>
             {t.shell.demoNote}
           </p>
-          {role !== null ? (
+          {account !== undefined ? (
+            <div className={styles.account}>
+              {role !== null ? <span className={styles.who}>{t.shell.role[role]}</span> : null}
+              {account}
+            </div>
+          ) : role !== null ? (
             <form method="post" action="/api/auth/logout" className={styles.account}>
               <span className={styles.who}>{t.shell.role[role]}</span>
               <button type="submit" className={styles.signOut}>
@@ -193,9 +207,13 @@ export default function AppShell({ role, current, crumbs, children }: AppShellPr
             <ThemeToggle />
           </div>
         </header>
-        <main id="sadrzaj" tabIndex={-1} className={styles.content} inert={open}>
-          {children}
-        </main>
+        {ownMain ? (
+          <div className={styles.content} inert={open}>{children}</div>
+        ) : (
+          <main id="sadrzaj" tabIndex={-1} className={styles.content} inert={open}>
+            {children}
+          </main>
+        )}
       </div>
     </div>
   );
