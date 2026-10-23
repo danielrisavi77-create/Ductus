@@ -76,12 +76,19 @@ test("a teacher sees their course with its assignment, in the route's order, and
   await expect(page.getByRole("status").filter({ hasText: messagesHr.teacher.course.created })).toBeVisible();
 
   // The way back from the form is the list, not the public home page.
-  await page.getByRole("link", { name: messagesHr.teacher.backCourses }).click();
+  await page.getByRole("main").getByRole("link", { name: messagesHr.teacher.backCourses }).click();
   await expect(page).toHaveURL("http://localhost:3000/nastavnik");
   const course = page.getByRole("region", { name: courseName });
   await expect(course).toBeVisible();
   await expect(course.getByText(t.noAssignments)).toBeVisible();
-  await expect(page.getByRole("link", { name: t.newCourse })).toHaveAttribute("href", "/nastavnik/zadatak/novi");
+  await expect(page.getByRole("main").getByRole("link", { name: t.newCourse })).toHaveAttribute("href", "/nastavnik/zadatak/novi");
+  // The shell (design v3) lists the teacher's items only, and marks this page.
+  const nav = page.getByRole("navigation", { name: messagesHr.shell.workNav });
+  await expect(nav.getByRole("link")).toHaveText([
+    messagesHr.shell.nav.courses, messagesHr.shell.nav.newCourse, messagesHr.shell.nav.fastPath,
+  ]);
+  await expect(nav.getByRole("link", { name: messagesHr.shell.nav.courses })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("button", { name: messagesHr.shell.signOut })).toBeVisible();
   // Nothing on the screen offers another order.
   await expect(page.getByRole("combobox")).toHaveCount(0);
   await expect(page.getByText(t.countNote)).toBeVisible();
