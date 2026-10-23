@@ -1,0 +1,48 @@
+/* Z3 (A): the course list is wider than the reading column of .page. */
+:global(.page).page {
+  max-width: 1080px;
+  padding-top: 28px;
+}
+
+:global(.page).page > * {
+  max-width: none;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 20px;
+}
+
+.heading {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 320px;
+}
+
+:global(.page) .heading h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 600;
+}
+
+:global(.page) .lead {
+  margin: 0;
+  max-width: 62ch;
+  color: var(--ink-2);
+}
+
+.alert {
+  padding: 10px 12px;
+  border-radius: 7px;
+  border: 1px solid var(--error);
+}
+
+.retry {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}

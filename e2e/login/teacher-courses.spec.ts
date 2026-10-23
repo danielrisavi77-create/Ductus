@@ -14,16 +14,16 @@ test("anonymous visitor never sees the teacher-only course and assignment form",
   await expect(page.getByRole("button", { name: t.teacher.course.submit })).toHaveCount(0);
 });
 
-// FE-D10: the screen moved to /nastavnik/zadatak/novi; the old address forwards.
-test("the old teacher address forwards to the new screen, signed in or not", async ({ page }) => {
+// Z3 (A): the teacher's entry is /nastavnik; the old address forwards there.
+test("the old teacher address forwards to the course list, signed in or not", async ({ page }) => {
   await page.goto("/nastavnik/kolegiji");
-  await expect(page).toHaveURL("http://localhost:3000/nastavnik/zadatak/novi");
+  await expect(page).toHaveURL("http://localhost:3000/nastavnik");
   await expect(page.getByText(t.teacher.signedOut)).toBeVisible();
 
   await signIn(page, "/", "Demo studentica");
   await page.goto("/nastavnik/kolegiji");
-  await expect(page).toHaveURL("http://localhost:3000/nastavnik/zadatak/novi");
-  await expect(page.getByText(t.teacher.denied)).toBeVisible();
+  await expect(page).toHaveURL("http://localhost:3000/nastavnik");
+  await expect(page.getByText(t.teacherCourses.empty)).toBeVisible();
 });
 
 test("signed-in demo student cannot create a course", async ({ page }) => {

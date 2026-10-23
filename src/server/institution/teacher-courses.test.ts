@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ActorTransaction, WithActor } from "@/server/db/with-actor";
 
-import { coursesOf, handleTeacherCoursesRequest } from "./teacher-courses";
+import { coursesOf, handleTeacherCoursesRequest, readTeacherCourses } from "./teacher-courses";
 
 // Invented courses and assignments only.
 const ORIGIN = "http://localhost:3000";
@@ -165,5 +165,25 @@ describe("GET /api/teacher/courses (DAN-230)", () => {
       expect([response.status, await response.json()]).toStrictEqual([503, { error: "unavailable" }]);
     }
     expect(log).toHaveBeenCalledWith("teacher courses read failed", "row_malformed");
+  });
+});
+
+describe("readTeacherCourses (the read behind /nastavnik, Z3 A)", () => {
+  it("gives the page the same courses the route answers", async () => {
+    const db = database({ rows: [assignmentRow(COURSE_K1, Z1, "Prvi", "2026-11-20T10:00:00Z"), { ...COURSE_K2, ...EMPTY }] });
+    const page = await readTeacherCourses(TOKEN, db.withActor);
+    const route = await (await read(db)).json();
+    expect(page).toEqual({ kind: "ok", courses: route.courses });
+  });
+
+  it("names no reason beyond the route's three, and reads nothing without a well-formed cookie", async () => {
+    expect(await readTeacherCourses(TOKEN, database({ code: "ZD401" }).withActor)).toEqual({ kind: "unauthorized" });
+    expect(await readTeacherCourses(TOKEN, database({ code: "ZD403" }).withActor)).toEqual({ kind: "not_found" });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(await readTeacherCourses(TOKEN, database({ code: "XX000" }).withActor)).toEqual({ kind: "unavailable" });
+    const untouched = database({ rows: [] });
+    expect(await readTeacherCourses(undefined, untouched.withActor)).toEqual({ kind: "unauthorized" });
+    expect(await readTeacherCourses("kratko", untouched.withActor)).toEqual({ kind: "unauthorized" });
+    expect(untouched.calls).toEqual([]);
   });
 });
