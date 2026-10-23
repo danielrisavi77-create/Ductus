@@ -45,13 +45,13 @@ test("outside a pull request all three engines are installed and every project r
     assert.match(s, /^ {8}if: success\(\) && !cancelled\(\) && needs\.scope\.outputs\.profile == 'full'$/m);
     assert.doesNotMatch(s, /continue-on-error/);
   }
-  assert.match(install, /if \[ "\$ALL_ENGINES" = "true" \]; then\n {12}pnpm exec playwright install --with-deps chromium firefox webkit\n {10}else\n {12}pnpm exec playwright install --with-deps chromium\n {10}fi/);
+  assert.match(install, /if \[ "\$ALL_ENGINES" = "true" \]; then\n {12}bash scripts\/engineering\/playwright-install\.sh chromium firefox webkit\n {10}else\n {12}bash scripts\/engineering\/playwright-install\.sh chromium\n {10}fi/);
   // all engines: the plain suite with no --project filter, so every project runs
   assert.match(e2e, /if \[ "\$ALL_ENGINES" = "true" \]; then\n {12}pnpm test:e2e\n {10}else\n {12}pnpm test:e2e --project=desktop --project=mobile\n {10}fi/);
 });
 
 test("the isolated login job runs the full Chromium suite and preserves both reports", () => {
-  assert.match(step("Install login browser", "stack-login"), /^ {8}run: pnpm exec playwright install --with-deps chromium$/m);
+  assert.match(step("Install login browser", "stack-login"), /^ {8}run: bash scripts\/engineering\/playwright-install\.sh chromium$/m);
   const login = step("Full login E2E", "stack-login");
   assert.match(login, /^ {8}run: pnpm test:e2e:login$/m);
   assert.match(login, /^ {8}if: success\(\) && !cancelled\(\) && needs\.scope\.outputs\.profile == 'full'$/m);

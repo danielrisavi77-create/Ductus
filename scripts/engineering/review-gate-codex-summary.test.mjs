@@ -5,7 +5,7 @@ import { evaluateGate } from "./review-gate-core.mjs";
 
 // D-139 with a clean Codex review: Codex leaves no pull request review, only
 // its summary comment with a machine state naming the full reviewed commit
-// (owner option A, 20 Oct 2026). Everything else of D-139 stays required.
+// (owner option A, 20 Oct 2026; unresolved findings only, 23 Oct 2026). Everything else of D-139 stays required.
 const head = "a".repeat(40);
 const other = "b".repeat(40);
 const ownerLogin = "danielrisavi77-create";
@@ -110,13 +110,19 @@ test("a summary later edited for another commit no longer proves this head", () 
   pending([summary({ code: { commit_sha: other } }), receipt()]);
 });
 
-test("findings, unresolved findings, or unknown values are no evidence", () => {
+test("findings already resolved on older heads do not void a clean summary", () => {
+  const code = { has_any_findings: true, has_unresolved_findings: false };
+  assert.equal(evaluate([summary({ code })]).state, "success");
+  pending([summary({ code: { ...code, has_unresolved_findings: true } })]);
+});
+
+test("unresolved findings or unknown values are no evidence", () => {
   for (const code of [
-    { has_any_findings: true },
+    { has_any_findings: true, has_unresolved_findings: true },
     { has_unresolved_findings: true },
-    { has_any_findings: null },
+    { has_unresolved_findings: null },
     { has_unresolved_findings: "false" },
-    { has_any_findings: undefined },
+    { has_unresolved_findings: undefined },
   ]) {
     pending([summary({ code })]);
   }
