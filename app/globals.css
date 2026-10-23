@@ -195,7 +195,8 @@ button {
   background: var(--sheet);
   border: 1px solid var(--rule);
   border-radius: 7px;
-  z-index: 10;
+  /* Above the shell's side bar (40) and its shade (35). */
+  z-index: 50;
 }
 
 .skip-link:focus {

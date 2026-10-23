@@ -35,6 +35,20 @@ test("the theme switch turns the shell light and the browser remembers it", asyn
   await expect(page.locator("[data-theme]")).toHaveCount(0);
 });
 
+test("the focused skip link is drawn above the side bar", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(PATH);
+  const skip = page.getByRole("link", { name: t.shell.skipToContent });
+  await page.keyboard.press("Tab");
+  await expect(skip).toBeFocused();
+  const onTop = await skip.evaluate((link) => {
+    const box = link.getBoundingClientRect();
+    const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    return hit !== null && link.contains(hit);
+  });
+  expect(onTop).toBe(true);
+});
+
 test("the saved theme holds after a client-side navigation into another shell page", async ({ page }) => {
   await page.goto(PATH);
   await page.getByRole("button", { name: t.shell.theme }).click();
