@@ -17,6 +17,19 @@ test("a signed-out visitor gets the shell without navigation or account", async 
   await expect(page.getByText(t.teacher.signedOut)).toBeVisible();
 });
 
+// Cut (b): the student screens outside /rad get the same shell; signed out,
+// still no items and no account.
+for (const path of ["/upis", "/upis/kolegij/00000000-0000-4000-8000-000000000000", "/zadatak/00000000-0000-4000-8000-000000000000"]) {
+  test(`signed out, ${path} is inside the shell without navigation`, async ({ page }) => {
+    await page.goto(path);
+    await expect(page.getByRole("complementary", { name: t.shell.sideNav, includeHidden: true })).toBeAttached();
+    await expect(page.getByRole("navigation", { name: t.shell.workNav })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: t.shell.signOut })).toHaveCount(0);
+    await expect(page.locator("main#sadrzaj")).toHaveCount(1);
+    await expect(page.getByRole("link", { name: t.student.signIn })).toBeVisible();
+  });
+}
+
 test("the theme switch turns the shell light and the browser remembers it", async ({ page }) => {
   await page.goto(PATH);
   const shell = page.locator("[data-theme]").first();
@@ -25,7 +38,7 @@ test("the theme switch turns the shell light and the browser remembers it", asyn
   await expect(shell).toHaveAttribute("data-theme", "light");
   await page.reload();
   await expect(page.locator("[data-theme]").first()).toHaveAttribute("data-theme", "light");
-  for (const path of [PATH, "/nastavnik", "/nastavnik/brz-put"]) {
+  for (const path of [PATH, "/nastavnik", "/nastavnik/brz-put", "/upis", "/zadatak/00000000-0000-4000-8000-000000000000"]) {
     await page.goto(path);
     const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
     expect(axe.violations, path).toEqual([]);
