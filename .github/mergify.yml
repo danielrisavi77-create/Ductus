@@ -41,7 +41,7 @@ queue_rules:
     update_method: merge
 
 merge_queue:
-  max_parallel_checks: 1
+  max_parallel_checks: 3
 
 commands_restrictions:
   queue:
