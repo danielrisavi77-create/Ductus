@@ -13,7 +13,7 @@ const blocked = reason => ({ ok: false, state: 'BLOCKED', task: null, head: null
 const mark = (result, reason) => ({ ...result, ok: false, state: 'BLOCKED',
   reasons: [...new Set([...result.reasons, reason])], next: 'handoff-to-orchestrator' });
 
-async function readContract(file) {
+export async function readContract(file) {
   const handle = await open(file, 'r');
   try {
     if (!(await handle.stat()).isFile()) throw new Error('file');
