@@ -29,7 +29,7 @@ export function runShape(run, jobs) {
   if (!names.length) return null;
   const critical = names.reduce((a, b) => (perJob[b] > perJob[a] ? b : a));
   const wall = (Date.parse(run.updated_at) - Date.parse(run.run_started_at)) / MINUTE;
-  return { id: run.id, wall: Number.isFinite(wall) ? wall : null, critical, jobs: perJob };
+  return { id: run.id, wall: Number.isFinite(wall) && wall >= 0 ? wall : null, critical, jobs: perJob };
 }
 
 const stat = (values) => ({

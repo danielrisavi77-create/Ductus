@@ -29,6 +29,10 @@ test("run shape picks the slowest job and drops unfinished ones", () => {
   ]);
   assert.deepEqual(shape, { id: 1, wall: 9, critical: "slow", jobs: { fast: 1, slow: 8 } });
   assert.equal(runShape(run, []), null);
+  const backwards = runShape({ id: 2, run_started_at: run.updated_at, updated_at: run.run_started_at }, [
+    job("a", "2026-10-20T10:00:00Z", "2026-10-20T10:01:00Z"),
+  ]);
+  assert.equal(backwards.wall, null);
 });
 
 test("summary orders jobs by p50 and counts the slowest job per run", () => {
