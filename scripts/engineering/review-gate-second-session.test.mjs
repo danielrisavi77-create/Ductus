@@ -121,15 +121,45 @@ test("the QA slot must differ from author and reviewer, case-insensitively", () 
   }
 });
 
-test("a QA PASS carried from an earlier head cannot use the declaration of that head", () => {
-  const result = evaluateGate({
-    body: AUTHOR,
-    headSha: head,
-    ownerLogin,
+// Daniel 23. 10. 2026.: the queue merges the base before merging, so a D-139
+// QA carries through clean base merges (D-101) like the other verdicts.
+const carriedFrom = ({ comments, prReviews = [codexReview(other)], carriedHeads = new Set([other]) }) =>
+  evaluateGate({ body: AUTHOR, headSha: head, ownerLogin, comments, prReviews, reviewComments: [], carriedHeads });
+
+test("a QA PASS on a carried head counts with the declaration and the Codex review of that head", () => {
+  const result = carriedFrom({ comments: [reviewPass(), qa({ sha: other, fallback: line(other) })] });
+  assert.equal(result.state, "success");
+  assert.match(result.description, /second Claude session/);
+  assert.match(result.description, /Carried from bbbbbbb/);
+});
+
+test("a carried QA PASS also counts with the Codex review on the current head", () => {
+  const result = carriedFrom({
     comments: [reviewPass(), qa({ sha: other, fallback: line(other) })],
-    prReviews: [codexReview()],
-    reviewComments: [],
-    carriedHeads: new Set([other]),
+    prReviews: [codexReview(head)],
+  });
+  assert.equal(result.state, "success");
+});
+
+test("a QA PASS on a head that is not carried does not count", () => {
+  const result = carriedFrom({
+    comments: [reviewPass(), qa({ sha: other, fallback: line(other) })],
+    carriedHeads: new Set(),
+  });
+  assert.equal(result.state, "pending");
+});
+
+test("the declaration must name the head the QA tested, not the current one", () => {
+  for (const fallback of [line(head), line("c".repeat(40))]) {
+    const result = carriedFrom({ comments: [reviewPass(), qa({ sha: other, fallback })] });
+    assert.equal(result.state, "pending", fallback);
+  }
+});
+
+test("a carried QA PASS without a Codex review on either head does not count", () => {
+  const result = carriedFrom({
+    comments: [reviewPass(), qa({ sha: other, fallback: line(other) })],
+    prReviews: [codexReview("c".repeat(40))],
   });
   assert.equal(result.state, "pending");
 });
