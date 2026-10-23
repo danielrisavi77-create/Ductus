@@ -42,6 +42,7 @@ queue_rules:
 
 merge_queue:
   max_parallel_checks: 1
+  mode: isolated
 
 commands_restrictions:
   queue:
