@@ -35,3 +35,47 @@ export function logoutText(plan: LogoutPlan): LogoutText {
   const form = pluralHr(n, t.logoutPending.one, t.logoutPending.few, t.logoutPending.many);
   return { text: form.replace("{n}", String(n)), note: t.logoutKept, offerExport: false };
 }
+
+/**
+ * The copy part of the dialog (3d-2c, P3 and P4 a, #476 c.6388266201): text
+ * the device keeps outside the work after a conflict or a stopped record.
+ * Sign-out never deletes it (D-118): it stays tied to this student on this
+ * device. Restoring and discarding act on the newest copy only.
+ */
+export type CopyText = {
+  /** How many copies this device keeps outside the work. */
+  text: string;
+  /** What sign-out does with them. */
+  note: string;
+  /** Said only when there is more than one copy. */
+  newestOnly: string | null;
+};
+
+export function copyText(copies: number): CopyText | null {
+  if (!Number.isSafeInteger(copies) || copies <= 0) return null;
+  const form = pluralHr(copies, t.logoutCopy.one, t.logoutCopy.few, t.logoutCopy.many);
+  return { text: form.replace("{n}", String(copies)), note: t.logoutCopyKept, newestOnly: copies > 1 ? t.copyNewestOnly : null };
+}
+
+/**
+ * Discarding a copy takes two explicit clicks in the dialog (P3): "Odbaci
+ * kopiju" asks, and only the second click discards. Anything that is not
+ * that second click, Escape included, leaves the copy as it is.
+ */
+export type DiscardStep = "idle" | "confirm" | "working" | "failed";
+export type DiscardEvent = "ask" | "keep" | "confirm" | "done" | "error";
+
+export function nextDiscardStep(step: DiscardStep, event: DiscardEvent): DiscardStep {
+  switch (event) {
+    case "ask":
+      return step === "idle" || step === "failed" ? "confirm" : step;
+    case "keep":
+      return step === "confirm" ? "idle" : step;
+    case "confirm":
+      return step === "confirm" ? "working" : step;
+    case "done":
+      return step === "working" ? "idle" : step;
+    case "error":
+      return step === "working" ? "failed" : step;
+  }
+}
