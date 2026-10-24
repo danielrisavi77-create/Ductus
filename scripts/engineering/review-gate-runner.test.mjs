@@ -111,27 +111,24 @@ const carrier = {
   base: { sha: BASE, ref: "main", repo: { id: 1, full_name: "o/r" } },
 };
 
-test("carrier statuses come from the live API identity, not the event or missing source verdicts", () => {
+// F-115: a carrier never receives a governance status, whatever its metadata says, so a
+// descendant commit pushed onto a carrier branch can never inherit a green head.
+test("a recognized Mergify carrier gets no governance status at all", () => {
   const { code, posts } = run(comment, { pr: carrier, fail: ["/issues/7/comments"] });
   assert.equal(code, 0);
-  assert.deepEqual(posts.map((p) => [p.path, p.body.context, p.body.state]), [
-    [`/repos/o/r/statuses/${HEAD}`, "Merge authorization", "success"],
-    [`/repos/o/r/statuses/${HEAD}`, "Engineering review gate", "success"],
-  ]);
-  assert.match(posts[0].body.description, /source approvals enforced by queue conditions/);
-  // Spoofing event metadata does not change the fresh API response.
+  assert.deepEqual(posts, []);
+  // Spoofing event metadata does not change the fresh API response, and nothing is published.
   const spoof = run({ pull_request: carrier });
   assert.ok(spoof.posts.every((p) => p.body.state !== "success"));
 });
 
-test("a carrier publish failure replaces a partial success with pending on both contexts", () => {
-  const { code, posts } = run(comment, { pr: carrier, failPostNumber: 2 });
-  assert.equal(code, 1);
-  assert.deepEqual(posts.slice(-2).map((p) => [p.body.context, p.body.state]), [
-    ["Merge authorization", "pending"], ["Engineering review gate", "pending"],
-  ]);
+test("a pushed carrier branch (descendant head) is judged by the original gate, not stamped", () => {
+  // The carrier branch now points at another commit: an ordinary PR for the same head is
+  // evaluated normally and never receives success without review, QA and a command.
+  const pushed = { ...carrier, head: { ...carrier.head, sha: "c".repeat(40) } };
+  const { posts } = run(comment, { pr: { ...pushed, draft: false, user: { login: "insider", id: 5, type: "User" } } });
+  assert.ok(posts.every((p) => p.body.state !== "success"));
 });
-
 test("a renamed human branch, fork, non-draft or different bot is still subject to the original gate", () => {
   for (const changed of [
     { user: { ...carrier.user, login: "owner", id: 2, type: "User" } },

@@ -11,9 +11,10 @@
 # to the owner (`sender`) and still needs every status in the queue rule.
 # DAN-263: serial speculative checks test A, A+B, A+B+C on Mergify-owned
 # draft PRs; original heads keep their review/QA/owner approvals. All six
-# conditions remain mandatory on originals AND CI carriers. The gate recognizes
-# carriers from authenticated GitHub metadata (mergify-queue-pr.mjs), never from
-# a branch prefix alone. Mergify revalidates admission and rejects external edits
+# conditions are mandatory on the originals (queue_conditions); a CI carrier
+# carries only the four CI checks and never a governance status (F-115). The
+# gate recognizes carriers from authenticated GitHub metadata
+# (mergify-queue-pr.mjs), never from a branch prefix alone. Mergify revalidates admission and rejects external edits
 # of queue branches. See docs/engineering/mergify-rollout.md before activation.
 # A PR whose gate is green but which waits for the owner's command (Risk
 # critical or a D-97 path) is kept current by Mergify (`update`, a clean merge of
@@ -42,7 +43,16 @@ queue_rules:
       - check-success=Dependency review
       - check-success=Engineering review gate
       - check-success=Merge authorization
-    merge_conditions: *required
+    # F-115: the two governance statuses are checked on the source PRs when they enter the
+    # queue (queue_conditions) and are never stamped on a CI carrier, so the merge
+    # conditions on the carrier carry only the four CI checks.
+    merge_conditions:
+      - base=main
+      - -draft
+      - check-success=Lint, typecheck, test and build
+      - check-success=Local stack (compose.yaml)
+      - check-success=Security scanners
+      - check-success=Dependency review
     merge_method: squash
     update_method: merge
 

@@ -3,7 +3,7 @@ import process from "node:process";
 
 import { carriedHeads, createApi } from "./review-gate-api.mjs";
 import { evaluatePullRequest, prNumberFromEvent } from "./review-gate-core.mjs";
-import { isMergifyQueuePr, QUEUE_CARRIER_STATUS } from "./mergify-queue-pr.mjs";
+import { isMergifyQueuePr } from "./mergify-queue-pr.mjs";
 
 const context = "Engineering review gate";
 // What the merge queue reads (D-161 (h)); see evaluateMergeAuthorization.
@@ -63,14 +63,12 @@ async function main() {
   }
   const pr = await api(`/repos/${owner}/${repo}/pulls/${number}`);
   knownHead = { repository, sha: pr.head.sha, url: pr.html_url };
-  // Only an authenticated, open draft owned by Mergify is a CI carrier.
-  // It cannot enqueue itself (-draft). No review/owner verdict is fabricated:
-  // source PRs retain their own six required statuses and are revalidated by
-  // Mergify. This workflow still executes only trusted default-branch code.
+  // F-115: a Mergify CI carrier never receives a governance status. Its head is only a
+  // merge commit of queued source heads; stamping "success" on it would let anyone who
+  // pushes a descendant commit onto that branch open an ordinary PR with a green head.
+  // The two governance contexts are checked on the source PRs (queue_conditions) only.
   if (isMergifyQueuePr(pr, repository)) {
-    await setStatus(repository, pr.head.sha, QUEUE_CARRIER_STATUS, pr.html_url, authorizationContext);
-    await setStatus(repository, pr.head.sha, QUEUE_CARRIER_STATUS, pr.html_url);
-    console.log(QUEUE_CARRIER_STATUS.description);
+    console.log("Mergify CI carrier: no governance status is published for it (F-115).");
     return;
   }
   const [comments, changedFiles, reviews, reviewComments] = await Promise.all([
