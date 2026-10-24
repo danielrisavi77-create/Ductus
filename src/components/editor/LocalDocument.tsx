@@ -148,6 +148,8 @@ export function LocalDocumentProvider({
   // Set while this tab holds the lock with an editable document.
   const logoutRef = useRef<LockedLogout | null>(null);
   const channelRef = useRef<BroadcastChannel | null>(null);
+  // Whose journal the sheet shows (`scope` and document), or null while it is empty.
+  const sheetOwnerRef = useRef<string | null>(null);
   const markTag = session?.tag ?? null;
   const markAt = session?.at ?? 0;
   const saverRef = useRef<LocalDocumentSaver | null>(null);
@@ -216,6 +218,15 @@ export function LocalDocumentProvider({
   useEffect(() => {
     if (!editor) return;
     const flush = flushRef.current;
+    // The sheet still shows another journal: this page is now another
+    // person's or document's, though no end of the session reached this tab.
+    // It is emptied before anything else, with nothing to undo (F-086).
+    const owner = `${scope}\n${documentId}`;
+    if (sheetOwnerRef.current !== null && sheetOwnerRef.current !== owner) {
+      sheetOwnerRef.current = null;
+      if (!editor.isDestroyed) startFreshHistory(editor.view, "empty");
+      setWords(0);
+    }
     let disposed = false;
     let release: (() => void) | null = null;
     const abort = new AbortController();
@@ -239,6 +250,7 @@ export function LocalDocumentProvider({
         editor.setEditable(false, false);
         startFreshHistory(editor.view, "empty");
       }
+      sheetOwnerRef.current = null;
       setWords(0);
       setPhase("signed-out");
     };
@@ -316,6 +328,7 @@ export function LocalDocumentProvider({
           }
           setWords(countWords(result.document));
         }
+        sheetOwnerRef.current = owner;
         if (result.kind !== "ready") {
           setPhase(result.kind);
           return;
@@ -426,6 +439,7 @@ export function LocalDocumentProvider({
       editor.setEditable(false, false);
       startFreshHistory(editor.view, "empty");
     }
+    sheetOwnerRef.current = null;
     await (locked ? locked.clear() : clearWithoutEditor(scope, documentId));
     return true;
   };
