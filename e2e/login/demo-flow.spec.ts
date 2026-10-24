@@ -536,6 +536,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
   await test.step("2. F-8: naslovi, citat i bibliografija bez mreže, spremljeni na uređaju", async () => {
     const before = await localCheckpoint(page);
     expect(blocksOf(before)).toEqual(BLOCKS.slice(0, 1));
+    const viewport = page.viewportSize();
     // (b) Any request to the sync routes in this step fails it.
     const syncRequests: string[] = [];
     const observe = (request: Request) => {
@@ -552,6 +553,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
       syncRequests.length = 0;
 
       // At 1440 px every tool fits in the toolbar (toolbar-menus.spec.ts), none in "Više".
+      // The default viewport comes back in `finally`, so later steps keep their layout.
       await page.setViewportSize({ width: 1440, height: 900 });
       await expect(heading1Of(page)).toBeVisible();
       await editorOf(page).click();
@@ -574,10 +576,19 @@ test("demo walk-through", async ({ browser, page, context }) => {
       await attachCheckpoint("2-f8-tekst-bez-mreze.json", saved);
       await snapshot(page, "2-f8-naslovi-citat-literatura-bez-mreze");
 
+      // (b) Nothing went to the server during the outage.
+      expect(syncRequests).toEqual([]);
+
       // (c) A reload while the server is still out of reach. The page itself
       // needs the network to load (no service worker), so only it gets the
-      // network back; every sync route stays cut off and is counted above.
-      await page.route(isSyncUrl, (route) => route.abort("internetdisconnected"));
+      // network back; every sync route stays cut off. With the network back the
+      // live publisher (#522, BACKEND 4.12 t. 8) may send the last state: it is
+      // not evidence, and it must be exactly the saved text. Nothing else goes.
+      const livePuts: (string | null)[] = [];
+      await page.route(isSyncUrl, (route) => {
+        if (route.request().method() === "PUT" && route.request().url().endsWith(LIVE_PATH)) livePuts.push(route.request().postData());
+        return route.abort("internetdisconnected");
+      });
       await context.setOffline(false);
       await page.reload();
       await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
@@ -585,13 +596,16 @@ test("demo walk-through", async ({ browser, page, context }) => {
       await expect(chipOf(page)).toHaveAttribute("data-state", "LOCAL_DURABLE");
       const restored = await localCheckpoint(page);
       expect(restored).toEqual(saved);
-      expect(syncRequests).toEqual([]);
+      expect(syncRequests.filter((path) => path !== LIVE_PATH)).toEqual([]);
+      const savedBody = canonicalizeJcs(saved.snapshot!.document);
+      for (const body of livePuts) expect(body).toBe(savedBody);
       await attachCheckpoint("2-f8-oporavljeno-nakon-reloada.json", restored);
       await snapshot(page, "2-f8-oporavljeno-nakon-reloada");
     } finally {
       page.off("request", observe);
       await page.unroute(isSyncUrl);
       await context.setOffline(false);
+      if (viewport) await page.setViewportSize(viewport);
     }
   });
 
