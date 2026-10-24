@@ -30,6 +30,18 @@ test("queue and merge conditions require every required status of main", () => {
   assert.match(body, /- -draft/);
 });
 
+test("serial speculation preserves every intermediate result and rejects edited carriers", () => {
+  assert.match(body, /mode: serial\n/);
+  assert.match(body, /max_parallel_checks: 3\n/);
+  assert.match(body, /batch_size: 1\n/);
+  assert.match(body, /max_checks_retries: 0\n/);
+  assert.match(body, /allow_queue_branch_edit: false\n/);
+  assert.match(body, /branch_protection_injection_mode: queue\n/);
+  assert.match(body, /reset_on_external_merge: always\n/);
+  assert.match(body, /skip_intermediate_results: false\n/);
+  assert.doesNotMatch(body, /draft_bot_account:|queue_branch_prefix:|merge_bot_account:|batch_max_wait_time:/);
+});
+
 test("only the owner can queue or requeue by command", () => {
   for (const command of ["queue", "requeue"]) {
     assert.match(body, new RegExp(`\\n  ${command}:\\n    conditions:\\n      - sender=danielrisavi77-create\\n`));
@@ -49,19 +61,19 @@ function rules() {
     }));
 }
 
-test("one rule queues a PR, and it reads only the two statuses the gate publishes", () => {
-  const all = rules().filter((rule) => rule.queue);
-  assert.equal(all.length, 1);
-  assert.deepEqual(all[0].conditions, [
-    "base=main",
-    "-draft",
-    "check-success=Engineering review gate",
-    "check-success=Merge authorization",
-  ]);
+// F-114: Mergify sees only statuses, not the risk, so no rule may queue a PR by itself.
+// A PR enters the queue only by the owner's manual `queue` command.
+test("no pull_request_rule queues a PR; the owner's command is the only way in", () => {
+  const all = rules();
+  assert.ok(all.length > 0);
+  assert.equal(all.filter((rule) => rule.queue).length, 0);
+  const actions = body.slice(body.indexOf("pull_request_rules:"));
+  assert.doesNotMatch(actions, /^\s*queue\s*:/m);
+  assert.doesNotMatch(actions, /^\s*(merge|backport|copy|rebase|dismiss_reviews)\s*:/m);
+  assert.match(body, /commands_restrictions:\n  queue:\n    conditions:\n      - sender=danielrisavi77-create/);
 });
-
-test("the other rule only refreshes a waiting PR with a green gate, a draft or conflict is left alone", () => {
-  const others = rules().filter((rule) => !rule.queue);
+test("the only rule refreshes a waiting PR with a green gate, a draft or conflict is left alone", () => {
+  const others = rules();
   assert.equal(others.length, 1);
   assert.deepEqual(others[0].conditions, [
     "base=main",
@@ -78,7 +90,7 @@ test("Mergify never reads the description, a label or a file name (review of #56
   assert.doesNotMatch(body, /body~=|label=|files~=|-files|-body/);
 });
 
-test("the queue squashes and refreshes the branch by merging main (D-101)", () => {
+test("the queue squashes and retains merge updates for waiting source PRs (D-101)", () => {
   assert.match(body, /merge_method: squash/);
   assert.match(body, /update_method: merge/);
   assert.doesNotMatch(body, /update_method: rebase/);

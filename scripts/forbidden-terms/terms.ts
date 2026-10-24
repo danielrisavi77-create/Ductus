@@ -8,10 +8,13 @@
  * (`foldPhrases`). A pattern covers
  * the gender, number and case of the word the entry lists, and the compounds
  * and prefixed forms its comment names (`sumnj` and `rizik` anywhere in a word).
- * It does not cover other forms of a listed participle (the active participle
- * "kopirao" and "prepisao" or the noun "prepisivanje" are not "kopirano" and
- * "prepisano"), another word order or synonyms: the dictionary is read
- * narrowly, and widening it is the owner's decision (DAN-134).
+ * Owner decision on #179 (DAN-134, 12. 10. 2026.): an entry covers every form
+ * of the same root ("kopirao", "prepisivanje", "vjerojatan"), the word orders
+ * and synonyms of tables A and B of #179, and its English equivalents one by
+ * one. The allowed actions of section C ("Kopiraj navod", "Kopirano u
+ * međuspremnik", "Sakrij …", progress percentages) stay out of every pattern.
+ * A percentage sign is folded away, so a share by origin is caught by its
+ * words and by a number next to "AI" or "ljudski", not by the sign itself.
  */
 export type Language = "hr" | "en";
 
@@ -36,6 +39,14 @@ export interface ForbiddenTerm {
    * See `findForbiddenTermsInMarkup`.
    */
   readonly contextual?: { readonly word: RegExp };
+  /**
+   * Set when the pattern allows a phrase ("copied to clipboard") that must not
+   * be put together across the end of a sentence. The pattern is matched on
+   * `foldPhrases`, where the end of a phrase is `PHRASE_BREAK`, not a space.
+   * Unlike a contextual entry it has no word of its own to judge: it is
+   * reported wherever the pattern matches.
+   */
+  readonly readsPhrases?: true;
 }
 
 // Patterns are literals (no RegExp built from strings). Most start with
@@ -72,15 +83,24 @@ export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
     lang: "hr",
     pattern: /(?<![\p{L}\p{N}])anomal(?:ij|n|an(?![\p{L}\p{N}]))/u,
   },
-  { entry: "upozorenje o studentu", instead: NOTHING, lang: "hr", pattern: /(?<![\p{L}\p{N}])upozoren\p{L}* o student/u },
+  {
+    entry: "upozorenje o studentu",
+    instead: NOTHING,
+    lang: "hr",
+    pattern: /(?<![\p{L}\p{N}])upozoren\p{L}* o (?:\p{L}+ ){0,2}student/u,
+  },
   {
     entry: "AI postotak",
     instead: AI_ORIGIN,
     lang: "hr",
-    pattern: /(?<![\p{L}\p{N}])(?:posto[tc]\p{L}* (?:ai(?![\p{L}\p{N}])|umjetn)|ai posto[tc])/u,
+    // A share by origin with or without the word (#179 A7): "udio AI-ja", "ljudski udio", "AI: 78 %", "78 % AI".
+    pattern:
+      /(?<![\p{L}\p{N}])(?:posto[tc]\p{L}* (?:ai(?![\p{L}\p{N}])|umjetn|ljudsk)|ai posto[tc]|(?:udio|udjel\p{L}*) (?:ai(?![\p{L}\p{N}])|umjetn|ljudsk|podrijetl|izvor)|(?:ai|ljudsk\p{L}*) (?:udio|udjel)|ai \d|\d+ (?:ai(?![\p{L}\p{N}])|ljudsk))/u,
   },
-  { entry: "vjerojatnost", instead: AI_ORIGIN, lang: "hr", pattern: /(?<![\p{L}\p{N}])vjerojatnos[tc]/u },
-  { entry: "autentičnost", instead: AI_ORIGIN, lang: "hr", pattern: /(?<![\p{L}\p{N}])(?:ne)?autentica?n/u },
+  // The adjective and the noun. The adverb "vjerojatno" (owner decision 4 on #179) waits for the word list
+  // MODALS in src/domain/diff/diff.ts, data that every string check would read as interface text.
+  { entry: "vjerojatnost", instead: AI_ORIGIN, lang: "hr", pattern: /(?<![\p{L}\p{N}])(?:naj)?vjerojat(?:nos[tc]|an(?![\p{L}\p{N}])|n(?:[aeiu]|o[gmj]))/u },
+  { entry: "autentičnost", instead: AI_ORIGIN, lang: "hr", pattern: /(?<![\p{L}\p{N}])(?:(?:ne)?autentica?n|autenticitet)/u },
   {
     entry: "napisao AI",
     instead: AI_ORIGIN,
@@ -88,12 +108,55 @@ export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
     pattern:
       /(?<![\p{L}\p{N}])(?:napisa\p{L}* (?:(?:ga|je) ){0,2}(?:ai(?![\p{L}\p{N}])|umjetn)|(?:ai|umjetn\p{L}* inteligencij\p{L}*) (?:(?:ga|je) ){0,2}napisa)/u,
   },
-  { entry: "verificirano autorstvo", instead: INTACT, lang: "hr", pattern: /(?<![\p{L}\p{N}])verificiran\p{L}* autorstv/u },
+  {
+    entry: "verificirano autorstvo",
+    instead: INTACT,
+    lang: "hr",
+    pattern: /(?<![\p{L}\p{N}])(?:verificiran\p{L}* autorstv|autorstv\p{L}* (?:\p{L}+ ){0,2}verificiran)/u,
+  },
   { entry: "dokaz autorstva", instead: INTACT, lang: "hr", pattern: /(?<![\p{L}\p{N}])dokaz\p{L}* (?:o )?autorstv/u },
-  { entry: "kopirano", instead: PASTED, lang: "hr", pattern: /(?<![\p{L}\p{N}])(?:is|pre)?kopiran/u },
-  { entry: "prepisano", instead: PASTED, lang: "hr", pattern: /(?<![\p{L}\p{N}])prepisan/u },
-  { entry: "nestali podaci", instead: GAP, lang: "hr", pattern: /(?<![\p{L}\p{N}])nesta\p{L}* poda[tc]/u },
-  { entry: "skriveno", instead: GAP, lang: "hr", pattern: /(?<![\p{L}\p{N}])skriven/u },
+  // Every form of the root (#179 A1), but the imperative "Kopiraj", "kopiranje navoda" and "Kopirano u međuspremnik" (D-59, owner decision 2).
+  {
+    entry: "kopirano",
+    instead: PASTED,
+    lang: "hr",
+    pattern:
+      /(?<![\p{L}\p{N}])(?:is|pre)?kopir(?!aj(?:te|mo)?(?![\p{L}\p{N}]))(?!anj\p{L}* navod)(?!an\p{L}* u meduspremnik)/u,
+    readsPhrases: true,
+  },
+  // Every form of the root (#179 A3), "prepiši" in a sync conflict included; not "prepiska" or "prepisci" (correspondence).
+  { entry: "prepisano", instead: PASTED, lang: "hr", pattern: /(?<![\p{L}\p{N}])prepis(?!k|ci(?![\p{L}\p{N}]))/u },
+  // B8 of #179 ("nedostajući / izgubljeni podaci", "lost data") applies only to the record of the process in the teacher view
+  // and the summary. The scan cannot tell that from a recovery message on the student's device (F-3/F-8), so it is left out
+  // (owner, 23. 10. 2026.).
+  {
+    entry: "nestali podaci",
+    instead: GAP,
+    lang: "hr",
+    pattern:
+      /(?<![\p{L}\p{N}])(?:nesta\p{L}* poda[tc]|poda[tc]\p{L}* (?:\p{L}+ ){0,2}nesta(?:l\p{L}*|o|j\p{L}*|n(?:ak|e|u|em)?)(?![\p{L}\p{N}]))/u,
+  },
+  // The adjective and participle only (#179 A5): the imperative "Sakrij …" stays (owner decision 6).
+  { entry: "skriveno", instead: GAP, lang: "hr", pattern: /(?<![\p{L}\p{N}])(?:sakriv|prikriv|skriv)en/u },
+  // New rows of #179 table B. The adjectives "izvorni / originalni" and "nepravilan format" stay allowed.
+  { entry: "plagijat", instead: NOTHING, lang: "hr", pattern: /(?<![\p{L}\p{N}])plagi[jr]/u },
+  { entry: "izvornost", instead: INTACT, lang: "hr", pattern: /(?<![\p{L}\p{N}])(?:izvornos[tc]|originalnos[tc])/u },
+  { entry: "integritet", instead: "cjelovitost zapisa", lang: "hr", pattern: /(?<![\p{L}\p{N}])integritet/u },
+  { entry: "neobično", instead: NOTHING, lang: "hr", pattern: /(?<![\p{L}\p{N}])(?:neobic|neuobicajen)/u },
+  { entry: "nepravilnost", instead: NOTHING, lang: "hr", pattern: /(?<![\p{L}\p{N}])nepravilnos[tc]/u },
+  {
+    entry: "tuđi tekst",
+    instead: PASTED,
+    lang: "hr",
+    pattern: /(?<![\p{L}\p{N}])(?:tud\p{L}* (?:tekst(?:a|u|om|ovi|ova|ovima|e)?|rijec(?:i|ju|ima)?)(?![\p{L}\p{N}])|(?:nije|nisu) (?:vlastit|njegov|njezin|njen)\p{L}* (?:tekst(?:a|u|om|ovi|ova|ovima|e)?|rijec(?:i|ju|ima)?|odlom(?:ak|ka|ku|kom|ke|ci|aka|cima)|rad(?:a|u|om|e|ovi|ova|ovima)?)(?![\p{L}\p{N}])|(?:tekst(?:a|u|om|ovi|ova|ovima|e)?|rijec(?:i|ju|ima)?|odlom(?:ak|ka|ku|kom|ke|ci|aka|cima)|rad(?:a|u|om|e|ovi|ova|ovima)?)(?![\p{L}\p{N}]) (?:nije|nisu) (?:vlastit|njegov|njezin|njen)\p{L}*)/u,
+  },
+  {
+    entry: "napisao čovjek",
+    instead: "opaženo pisanje u uređivaču",
+    lang: "hr",
+    pattern:
+      /(?<![\p{L}\p{N}])(?:ljudsk\p{L}* napisa|napisa\p{L}* (?:(?:ga|je) ){0,2}covjek|covjek\p{L}* (?:(?:ga|je) ){0,2}napisa)/u,
+  },
   {
     entry: "spremljeno (bez pojašnjenja)",
     instead: "spremljeno na uređaju / spremljeno na poslužitelju / predano",
@@ -102,8 +165,8 @@ export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
     contextual: { word: /(?<![\p{L}\p{N}])spremljen\p{L}*(?![\p{L}\p{N}])/u },
   },
   // The same entries in the English interface (D-90, point 3).
-  { entry: "suspicious", instead: NOTHING, lang: "en", pattern: /(?<![\p{L}\p{N}])(?:suspic|suspect)/u },
-  { entry: "risk", instead: NOTHING, lang: "en", pattern: /(?<![\p{L}\p{N}])risk/u },
+  { entry: "suspicious", instead: NOTHING, lang: "en", pattern: /(?<![\p{L}\p{N}])(?:suspic|suspect|doubt)/u },
+  { entry: "risk", instead: NOTHING, lang: "en", pattern: /(?<![\p{L}\p{N}])(?:low|high|zero|no)?risk/u },
   { entry: "anomaly", instead: NOTHING, lang: "en", pattern: /(?<![\p{L}\p{N}])anomal(?:y|ies|ous|istic)/u },
   {
     entry: "warning about the student",
@@ -116,9 +179,10 @@ export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
     entry: "AI percentage",
     instead: AI_ORIGIN,
     lang: "en",
-    pattern: /(?<![\p{L}\p{N}])(?:ai percent|percent\p{L}* (?:of )?(?:ai(?![\p{L}\p{N}])|artificial))/u,
+    pattern:
+      /(?<![\p{L}\p{N}])(?:ai percent|percent\p{L}* (?:of )?(?:ai(?![\p{L}\p{N}])|artificial|human)|(?:ai|human) (?:share|percent|proportion)|humanness|\d+ (?:ai|human)(?![\p{L}\p{N}]))/u,
   },
-  { entry: "probability", instead: AI_ORIGIN, lang: "en", pattern: /(?<![\p{L}\p{N}])(?:probabilit|likelihood)/u },
+  { entry: "probability", instead: AI_ORIGIN, lang: "en", pattern: /(?<![\p{L}\p{N}])(?:probab(?:il|l)|likelihood)/u },
   // "authentic", "authentically", "authenticity" and "inauthentic", not "authenticate" or "authentication".
   {
     entry: "authenticity",
@@ -135,9 +199,32 @@ export const FORBIDDEN_TERMS: readonly ForbiddenTerm[] = [
   },
   { entry: "verified authorship", instead: INTACT, lang: "en", pattern: /(?<![\p{L}\p{N}])verified authorship/u },
   { entry: "proof of authorship", instead: INTACT, lang: "en", pattern: /(?<![\p{L}\p{N}])proofs? of authorship/u },
-  { entry: "copied", instead: PASTED, lang: "en", pattern: /(?<![\p{L}\p{N}])cop(?:ied|y pasted)/u },
+  {
+    entry: "copied",
+    instead: PASTED,
+    lang: "en",
+    pattern: /(?<![\p{L}\p{N}])cop(?:ied(?! to (?:the )?clipboard(?![\p{L}\p{N}]))|ying|y[ \uFFFF]?past)/u,
+    readsPhrases: true,
+  },
   { entry: "missing data", instead: GAP, lang: "en", pattern: /(?<![\p{L}\p{N}])missing data/u },
-  { entry: "hidden", instead: GAP, lang: "en", pattern: /(?<![\p{L}\p{N}])hidden/u },
+  { entry: "hidden", instead: GAP, lang: "en", pattern: /(?<![\p{L}\p{N}])(?:hidden|concealed)/u },
+  { entry: "plagiarism", instead: NOTHING, lang: "en", pattern: /(?<![\p{L}\p{N}])plagiar/u },
+  { entry: "originality", instead: INTACT, lang: "en", pattern: /(?<![\p{L}\p{N}])(?:originality|unoriginal)/u },
+  { entry: "integrity", instead: "completeness of the record", lang: "en", pattern: /(?<![\p{L}\p{N}])integrity/u },
+  { entry: "unusual", instead: NOTHING, lang: "en", pattern: /(?<![\p{L}\p{N}])(?:unusual|atypical)/u },
+  { entry: "irregularity", instead: NOTHING, lang: "en", pattern: /(?<![\p{L}\p{N}])irregularit/u },
+  {
+    entry: "someone else's text",
+    instead: PASTED,
+    lang: "en",
+    pattern: /(?<![\p{L}\p{N}])(?:someone else s (?:text|words)|not (?:their|his|her) own (?:text|words?|writing|paragraph|passage))(?![\p{L}\p{N}])/u,
+  },
+  {
+    entry: "written by a human",
+    instead: "observed writing in the editor",
+    lang: "en",
+    pattern: /(?<![\p{L}\p{N}])(?:human written|written by (?:a )?human)/u,
+  },
   {
     entry: "saved (without saying where)",
     instead: "saved on this device / saved on the server / submitted",
@@ -221,7 +308,7 @@ export function findForbiddenTerms(text: string, lang?: Language): ForbiddenTerm
   const folded = foldText(text);
   const phrases = foldPhrases(text);
   return FORBIDDEN_TERMS.filter(
-    (entry) => (lang === undefined || entry.lang === lang) && entry.pattern.test(entry.contextual ? phrases : folded),
+    (entry) => (lang === undefined || entry.lang === lang) && entry.pattern.test(entry.contextual || entry.readsPhrases ? phrases : folded),
   );
 }
 
@@ -273,6 +360,7 @@ export function findForbiddenTermsInMarkup(joined: string, spaced: string, close
   const apartPhrases = foldPhrases(spaced);
   const windows = closedUp ? inWindows(joined) : NO_TERMS;
   return FORBIDDEN_TERMS.filter((entry) => {
+    if (entry.readsPhrases) return entry.pattern.test(shownPhrases) || entry.pattern.test(apartPhrases) || (closedUp && (entry.pattern.test(closedPhrases) || entry.pattern.test(tightPhrases) || windows.has(entry)));
     if (!entry.contextual) return entry.pattern.test(shown) || entry.pattern.test(apart) || (closedUp && (entry.pattern.test(closed) || entry.pattern.test(tight) || windows.has(entry)));
     if (entry.pattern.test(shownPhrases) && (entry.pattern.test(apartPhrases) || !entry.contextual.word.test(apartPhrases))) return true;
     if (!closedUp) return false;
@@ -285,7 +373,7 @@ export function findForbiddenTermsInMarkup(joined: string, spaced: string, close
 }
 
 /** Letters and digits written in a row, with what `foldLetters` drops between them. */
-const WRITTEN_WORD = /[\p{L}\p{N}\p{M}\p{Cf}ᅟᅠㅤﾠ]+/gu;
+const WRITTEN_WORD = /[\p{L}\p{N}\p{M}\p{Cf}\u115F\u1160\u3164\uFFA0]+/gu;
 /** Stands where a whole word was taken out: it ends the phrase and no boundary is closed up over it. */
 const TAKEN_OUT = ".";
 
@@ -354,7 +442,7 @@ function inWindows(joined: string): ReadonlySet<ForbiddenTerm> {
         let terms = foundInPiece.get(piece);
         if (!terms) {
           const [words, phrases] = [foldText(piece), foldPhrases(piece)];
-          terms = FORBIDDEN_TERMS.filter((entry) => entry.pattern.test(entry.contextual ? phrases : words));
+          terms = FORBIDDEN_TERMS.filter((entry) => entry.pattern.test(entry.contextual || entry.readsPhrases ? phrases : words));
           if (foundInPiece.size >= 200_000) foundInPiece.clear();
           foundInPiece.set(piece, terms);
         }
@@ -399,7 +487,7 @@ const AROUND_A_BREAK = /[^\p{L}\p{N}]*\uFFFF[^\p{L}\p{N}]*/gu;
 
 /**
  * `joined` closed up, and without the quotation marks that stand between two
- * words where a `PHRASE_BREAK` stands between them. A paragraph that ends
+ * words where a `PHRASE_BREAK` stands. A paragraph that ends
  * with a quotation mark, or begins with one, is ordinary text, so
  * `findUnreadableText` does not report such a mark there. It may leave it out
  * only because the dictionary reads the text without it as well: an entry cut

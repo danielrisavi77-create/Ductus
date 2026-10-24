@@ -52,6 +52,13 @@ const FILES_CAP = 3000; // GitHub lists at most 3000 files of a pull request
 export async function prPaths(n, list = ghList) {
   const files = await list(`repos/{owner}/{repo}/pulls/${n}/files?per_page=100`);
   if (files.length >= FILES_CAP) throw new Error(`file list of #${n} reached the ${FILES_CAP}-file API cap`);
+  // A malformed entry is a failed read, never a shorter list.
+  const name = (v) => typeof v === "string" && v.length > 0;
+  for (const f of files) {
+    if (!name(f?.filename) || (f.status === "renamed" && !name(f.previous_filename))) {
+      throw new Error(`file list of #${n} has a malformed entry`);
+    }
+  }
   return changedPaths(files);
 }
 
