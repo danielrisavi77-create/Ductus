@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 
 import AppShell from "@/components/shell/AppShell";
+import { shellSession } from "@/components/shell/shell-session";
 import TeacherCourses from "@/components/teacher/TeacherCourses";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
@@ -48,7 +49,7 @@ export default async function TeacherHomePage() {
   }
 
   return (
-    <AppShell role={read?.kind === "ok" ? "teacher" : null} current="/nastavnik" crumbs={[t.title]}>
+    <AppShell session={shellSession(token)} role={read?.kind === "ok" ? "teacher" : null} current="/nastavnik" crumbs={[t.title]}>
       <div className={`page ${styles.page}`}>
         <div className={styles.head}>
           <div className={styles.heading}>
