@@ -649,12 +649,17 @@ export class AtomicDexieJournal {
       "rw", this.db.snapshots, this.db.pending, this.db.meta, this.db.control,
       async () => {
         const { prior, snapshot, rows } = await this.readForAnswer(documentId);
+        const stored = rows.find((row) => sameRow(row, sent));
+        // With evidence a row leaves only with its receipt or with the take of
+        // the server's version: an answer for it, from any tab, is late.
+        if (prior.evidenceHead !== undefined && stored === undefined) {
+          return { meta: prior, pending: rows as PendingTransaction<T>[], ackedRevision: null };
+        }
         if (sticky(prior.state) && state !== null && state !== prior.state) {
           throw new JournalError("sticky_state");
         }
         const after = nextAwaitingReceipt(sent, outcome, prior.awaitingReceipt ?? null);
         const acked = ackedRevision(outcome);
-        const stored = rows.find((row) => sameRow(row, sent));
         const settles = acked !== null && after === null && stored !== undefined;
         const remaining = settles ? rows.filter((row) => row.localSeq > sent.localSeq) : rows;
         if (state === "SYNCED" && (!settles || remaining.length > 0)) {
@@ -666,6 +671,9 @@ export class AtomicDexieJournal {
         const meta: SyncMeta = { ...prior, state: recorded ?? prior.state };
         if (after) meta.awaitingReceipt = after;
         else delete meta.awaitingReceipt;
+        if (prior.evidenceHead !== undefined && meta.state === "CONFLICT" && outcome?.status === "stale_base") {
+          meta.conflictRevision = Math.max(prior.conflictRevision ?? 0, outcome.currentRevision);
+        }
         // The head moves only with the verified receipt of the stored row, in
         // the transaction that deletes it.
         if (settles && stored.tx.kind === "EVIDENCE_SEGMENT") {
@@ -703,7 +711,8 @@ export class AtomicDexieJournal {
   /**
    * F-8 3d-2b: the one way out for a document with evidence that is in
    * CONFLICT or RECOVERY_REQUIRED, or whose recorder stopped once every
-   * queued row has drained. Its local text cannot be committed on top of the
+   * queued row has drained or was refused (ERROR). In CONFLICT the server's
+   * version must reach the revision the refusal named. Its local text cannot be committed on top of the
    * server's version (there is no evidence for it there), so the author takes
    * the server's version and the local text is kept as a copy until the
    * author lets it go (owner decision #476 c.6385940910). In ONE transaction:
@@ -727,11 +736,12 @@ export class AtomicDexieJournal {
         if (prior.evidenceHead === undefined || rows.some((row) => !isSegmentRow(row))) {
           throw new JournalError("mixed_queue");
         }
-        const stopped = prior.evidenceStopped !== undefined && rows.length === 0;
+        // A stopped document owes nothing, or what it owes was refused (ERROR).
+        const stopped = prior.evidenceStopped !== undefined && (rows.length === 0 || prior.state === "ERROR");
         if (!sticky(prior.state) && !stopped) throw new JournalError("not_in_recovery");
         if (expectedLocalSeq !== prior.localSeq) throw new JournalError("stale_local_sequence");
         if (prior.localSeq === Number.MAX_SAFE_INTEGER) throw new JournalError("sequence_exhausted");
-        if (opened.currentRevision < snapshot.revision ||
+        if (opened.currentRevision < Math.max(snapshot.revision, prior.conflictRevision ?? 0) ||
             opened.lastSequenceTo < prior.evidenceHead.lastSequenceTo) {
           throw new JournalError("invalid_input");
         }

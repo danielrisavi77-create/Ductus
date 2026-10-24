@@ -162,8 +162,13 @@ export type SyncMeta = {
   awaitingReceipt?: AwaitingReceipt;
   /** Set on a document with evidence; moves only on a verified receipt. */
   evidenceHead?: EvidenceHead;
-  /** Set once the recorder stopped; never cleared before logout. */
+  /** Set once the recorder stopped; cleared only by `adoptServerEvidence`. */
   evidenceStopped?: EvidenceStop;
+  /**
+   * On a document with evidence in CONFLICT: the highest revision a refusal
+   * named. The server's version that is taken must reach it.
+   */
+  conflictRevision?: number;
 };
 
 /**
