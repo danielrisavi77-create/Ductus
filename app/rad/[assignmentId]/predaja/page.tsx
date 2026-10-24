@@ -3,7 +3,6 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import AppShell from "@/components/shell/AppShell";
-import SessionObserver from "@/components/shell/SessionObserver";
 import { readShellRole } from "@/components/shell/shell-role";
 import Submission from "@/components/student/Submission";
 import { assignmentParam, readWorkContext } from "@/components/student/work-context-read";
@@ -57,19 +56,17 @@ export default async function SubmissionPage({ params }: { params: Promise<{ ass
   }
 
   const work = read.kind === "ready" ? read : null;
+  // The shell marks this session for the other tabs (D-118, F-113 t.1).
   return (
-    <>
-      <SessionObserver tag={tag} at={at} />
-      <AppShell role={role} crumbs={[t.submission.title]}>
-        <div className="page">
-          <h1>{t.submission.title}</h1>
-          {work ? <p className="muted">{`${work.course} / ${work.notice.title}`}</p> : null}
-          {body}
-          {assignmentId ? (
-            <p><Link href={`/rad?zadatak=${assignmentId}`}>{t.submission.backToWork}</Link></p>
-          ) : null}
-        </div>
-      </AppShell>
-    </>
+    <AppShell session={{ tag, at }} role={role} crumbs={[t.submission.title]}>
+      <div className="page">
+        <h1>{t.submission.title}</h1>
+        {work ? <p className="muted">{`${work.course} / ${work.notice.title}`}</p> : null}
+        {body}
+        {assignmentId ? (
+          <p><Link href={`/rad?zadatak=${assignmentId}`}>{t.submission.backToWork}</Link></p>
+        ) : null}
+      </div>
+    </AppShell>
   );
 }
