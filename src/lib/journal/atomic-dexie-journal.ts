@@ -34,20 +34,21 @@ import { verifyCanonicalEvidencePayloadV2 } from "../../domain/forensics/evidenc
 import { commitRequestFromTransaction } from "../../domain/serverSync/contract";
 import type {
   EvidenceOpening, EvidenceSegmentInput, EvidenceSegmentTransaction, EvidenceStop, EvidenceTiming,
-  JournalContents, JournalSnapshot, PendingTransaction, QueuedTransaction, SyncMeta,
+  JournalContents, JournalSnapshot, PendingTransaction, QueuedTransaction, SalvageCopy, SyncMeta,
 } from "../../domain/sync/journal-types";
 import {
-  ackedRevision, awaitingReceiptFor, isDiverged, nextAwaitingReceipt,
+  ackedRevision, adoptDiscardsNewerRows, awaitingReceiptFor, isDiverged, nextAwaitingReceipt,
   type AwaitingReceipt, type DrainOutcome, type QueuedRow,
 } from "../../domain/sync/drain";
-import { SYNC_STATES, type SyncState } from "../../domain/sync/states";
+import { SYNC_STATES, syncReducer, type SyncState } from "../../domain/sync/states";
 
 export type JournalErrorCode =
   | "invalid_input" | "incomplete_store" | "sticky_state"
   | "duplicate_transaction" | "sequence_exhausted" | "stale_local_sequence"
   | "unsynced_work" | "logout_in_progress" | "logout_blocked"
   | "not_queued" | "held_elsewhere" | "unconfirmed_sync"
-  | "queue_not_empty" | "chain_broken" | "mixed_queue" | "evidence_stopped";
+  | "queue_not_empty" | "chain_broken" | "mixed_queue" | "evidence_stopped"
+  | "not_in_recovery" | "confirmation_required";
 
 export class JournalError extends Error {
   constructor(readonly code: JournalErrorCode) {
@@ -85,6 +86,7 @@ class JournalDatabase extends Dexie {
   meta!: Table<SyncMeta, string>;
   control!: Table<JournalControl, string>;
   timings!: Table<EvidenceTiming, string>;
+  salvage!: Table<Omit<SalvageCopy, "id"> & { id?: number }, number>;
   /** Set once ANOTHER connection deletes this database (logout elsewhere). */
   deletedElsewhere = false;
   private everOpened = false;
@@ -125,6 +127,8 @@ class JournalDatabase extends Dexie {
     this.version(2).stores({ control: "key" });
     // F-8 3d-2a: the time of each step, local only, deleted with the database.
     this.version(3).stores({ timings: "segmentHash,documentId" });
+    // F-8 3d-2b: local text kept when the author took the server's version.
+    this.version(4).stores({ salvage: "++id,documentId" });
   }
 }
 
@@ -261,6 +265,23 @@ async function verifySegment(
     document: snapshot.document,
     timing: { segmentHash: payload.sha256, documentId, sequenceFrom, events: timed },
   };
+}
+
+/**
+ * The open route's answer for `documentId`, its snapshot verified as exact JCS
+ * of a valid document with `documentHash`, before any transaction.
+ */
+async function verifyOpening(documentId: string, opened: EvidenceOpening): Promise<CanonicalDocument> {
+  const head = opened?.headSegmentHash;
+  if (opened?.documentId !== documentId || !validSeq(opened.currentRevision) ||
+      !validSeq(opened.lastSequenceTo) ||
+      !(head === null || (typeof head === "string" && SHA256_HEX.test(head))) ||
+      !(opened.document instanceof Uint8Array)) {
+    throw new JournalError("invalid_input");
+  }
+  const verified = await verifyDocumentSnapshot(new Uint8Array(opened.document));
+  if (!verified.ok || verified.sha256 !== opened.documentHash) throw new JournalError("invalid_input");
+  return verified.document;
 }
 
 /** Nothing on this document is owed to, or missing from, the server. */
@@ -462,15 +483,9 @@ export class AtomicDexieJournal {
    * stopped the device holds text the server lacks (`evidence_stopped`).
    */
   async startEvidence(documentId: string, opened: EvidenceOpening, openedAt: string): Promise<SyncMeta> {
-    const head = opened?.headSegmentHash;
-    if (!validDocumentId(documentId) || !canonicalUtc(openedAt) || opened.documentId !== documentId ||
-        !validSeq(opened.currentRevision) || !validSeq(opened.lastSequenceTo) ||
-        !(head === null || (typeof head === "string" && SHA256_HEX.test(head))) ||
-        !(opened.document instanceof Uint8Array)) {
-      throw new JournalError("invalid_input");
-    }
-    const verified = await verifyDocumentSnapshot(new Uint8Array(opened.document));
-    if (!verified.ok || verified.sha256 !== opened.documentHash) throw new JournalError("invalid_input");
+    if (!validDocumentId(documentId) || !canonicalUtc(openedAt)) throw new JournalError("invalid_input");
+    const document = await verifyOpening(documentId, opened);
+    const head = opened.headSegmentHash;
     return this.whileUsable(() => this.db.transaction(
       "rw", this.db.snapshots, this.db.pending, this.db.meta, this.db.control,
       async () => {
@@ -490,7 +505,7 @@ export class AtomicDexieJournal {
           evidenceHead: { segmentHash: head, lastSequenceTo: opened.lastSequenceTo },
         };
         await this.db.snapshots.put({
-          documentId, revision: opened.currentRevision, document: verified.document, savedAt: openedAt,
+          documentId, revision: opened.currentRevision, document, savedAt: openedAt,
         });
         await this.db.meta.put(meta);
         return meta;
@@ -681,6 +696,95 @@ export class AtomicDexieJournal {
     return { prior, snapshot, rows };
   }
 
+  /**
+   * F-8 3d-2b: the one way out for a document with evidence that is in
+   * CONFLICT or RECOVERY_REQUIRED, or whose recorder stopped once every
+   * queued row has drained. Its local text cannot be committed on top of the
+   * server's version (there is no evidence for it there), so the author takes
+   * the server's version and the local text is kept as a copy until the
+   * author lets it go (owner decision #476 c.6385940910). In ONE transaction:
+   * the copy, every row of the document dropped, the snapshot, revision and
+   * head of the server, no hold, no stop, a new `localSeq` (a stale tab's
+   * write fails) and the state the decision reaches (`states.ts`).
+   * `confirmed` must be true whenever a row other than the held one is
+   * dropped (#166), and for a stopped document, whose text is replaced.
+   */
+  async adoptServerEvidence(
+    documentId: string, opened: EvidenceOpening, confirmed: boolean, decidedAt: string, expectedLocalSeq: number,
+  ): Promise<SyncMeta> {
+    if (!validDocumentId(documentId) || !canonicalUtc(decidedAt) || !validSeq(expectedLocalSeq)) {
+      throw new JournalError("invalid_input");
+    }
+    const server = await verifyOpening(documentId, opened);
+    return this.whileUsable(() => this.db.transaction(
+      "rw", [this.db.snapshots, this.db.pending, this.db.meta, this.db.control, this.db.salvage],
+      async () => {
+        const { prior, snapshot, rows } = await this.readForAnswer(documentId);
+        if (prior.evidenceHead === undefined || rows.some((row) => !isSegmentRow(row))) {
+          throw new JournalError("mixed_queue");
+        }
+        const stopped = prior.evidenceStopped !== undefined && rows.length === 0;
+        if (!sticky(prior.state) && !stopped) throw new JournalError("not_in_recovery");
+        if (expectedLocalSeq !== prior.localSeq) throw new JournalError("stale_local_sequence");
+        if (prior.localSeq === Number.MAX_SAFE_INTEGER) throw new JournalError("sequence_exhausted");
+        if (opened.currentRevision < snapshot.revision ||
+            opened.lastSequenceTo < prior.evidenceHead.lastSequenceTo) {
+          throw new JournalError("invalid_input");
+        }
+        const held = prior.awaitingReceipt ?? null;
+        if (confirmed !== true && (stopped || adoptDiscardsNewerRows(rows, documentId, held))) {
+          throw new JournalError("confirmation_required");
+        }
+        const reached = prior.state === "CONFLICT"
+          ? syncReducer(prior.state, { type: "CONFLICT_RESOLVED", via: "discard" })
+          : prior.state === "RECOVERY_REQUIRED"
+            ? syncReducer(prior.state, { type: "RECOVERED", via: "adopt-server" })
+            // Every row was acknowledged with a verified receipt; what is left
+            // is the server's version.
+            : "SYNCED";
+        await this.db.salvage.add({
+          documentId, document: snapshot.document,
+          cause: sticky(prior.state) ? prior.state as SalvageCopy["cause"] : "EVIDENCE_STOPPED",
+          ...(prior.evidenceStopped ? { evidenceStopped: prior.evidenceStopped } : {}),
+          localSeq: prior.localSeq, decidedAt,
+        });
+        await this.db.pending.bulkDelete(rows.map((row): [string, number] => [documentId, row.localSeq]));
+        await this.db.snapshots.put({
+          documentId, revision: opened.currentRevision, document: server, savedAt: decidedAt,
+        });
+        const meta: SyncMeta = {
+          documentId, localSeq: prior.localSeq + 1, state: reached,
+          evidenceHead: { segmentHash: opened.headSegmentHash, lastSequenceTo: opened.lastSequenceTo },
+        };
+        await this.db.meta.put(meta);
+        return meta;
+      },
+    ));
+  }
+
+  /** The copies kept for `documentId`, newest first. */
+  async readSalvage(documentId: string): Promise<SalvageCopy[]> {
+    if (!validDocumentId(documentId)) throw new JournalError("invalid_input");
+    return this.whileUsable(async () => {
+      const copies = await this.db.salvage.where("documentId").equals(documentId).toArray();
+      return (copies as SalvageCopy[]).sort((a, b) => b.id - a.id);
+    });
+  }
+
+  /**
+   * Deletes one copy, only on the author's explicit action: the text went
+   * back into the work through the editor, or the author discarded it.
+   */
+  async releaseSalvage(documentId: string, id: number): Promise<void> {
+    if (!validDocumentId(documentId) || !validSeq(id, 1)) throw new JournalError("invalid_input");
+    return this.whileUsable(() => this.db.transaction("rw", this.db.salvage, this.db.control, async () => {
+      if (await this.db.control.get("logout")) throw new JournalError("logout_in_progress");
+      const copy = await this.db.salvage.get(id);
+      if (copy?.documentId !== documentId) throw new JournalError("not_queued");
+      await this.db.salvage.delete(id);
+    }));
+  }
+
   close(): void {
     this.db.close();
   }
@@ -721,14 +825,15 @@ export class AtomicDexieJournal {
     // the fence remains and retrying this operation is safe, on this instance
     // or a new one.
     await this.db.transaction(
-      "rw", this.db.pending, this.db.snapshots, this.db.meta, this.db.control,
+      "rw", [this.db.pending, this.db.snapshots, this.db.meta, this.db.control, this.db.salvage],
       async () => {
-        const [pending, snapshots, metas] = await Promise.all([
-          this.db.pending.count(), this.db.snapshots.toArray(), this.db.meta.toArray(),
+        const [pending, snapshots, metas, copies] = await Promise.all([
+          this.db.pending.count(), this.db.snapshots.toArray(), this.db.meta.toArray(), this.db.salvage.count(),
         ]);
         const settled = new Set(metas.filter(settledForLogout).map((meta) => meta.documentId));
         const snapshotIds = new Set(snapshots.map((snapshot) => snapshot.documentId));
-        if (pending !== 0 ||
+        // A kept copy is the author's text, gone only when the author lets it go.
+        if (pending !== 0 || copies !== 0 ||
             snapshots.some((snapshot) => !settled.has(snapshot.documentId)) ||
             metas.some((meta) => !settled.has(meta.documentId) || !snapshotIds.has(meta.documentId))) {
           throw new JournalError("unsynced_work");

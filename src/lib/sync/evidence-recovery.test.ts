@@ -169,6 +169,27 @@ describe("F-8 3d-2b1: leaving CONFLICT and RECOVERY_REQUIRED", () => {
     expect(await journal.readSalvage(DOC)).toMatchObject([{ document: text, cause: "CONFLICT", evidenceStopped: "gap" }]);
   });
 
+  it("7: a stopped recorder with nothing owed: a confirmed take is the way out, and logout opens once the copy goes", async () => {
+    const journal = await started();
+    await save(journal, SEG[0]!);
+    const text = (await journal.readEvidence(DOC)).snapshot!.document;
+    await journal.saveUncovered(DOC, text, "unsupported_step", UTC, 1);
+    await refuses(journal, "not_in_recovery", () => journal.adoptServerEvidence(DOC, SERVER, true, DECIDED, 2));
+    await runnerFor(journal, server()).step(DOC);
+    expect((await journal.readEvidence(DOC)).meta).toMatchObject({ state: "LOCAL_DURABLE", evidenceStopped: "unsupported_step" });
+    await expect(journal.destroyForLogout()).rejects.toMatchObject({ code: "unsynced_work" });
+    const server1 = openedAfter(SEG[0]!, R0 + 1);
+    await refuses(journal, "confirmation_required", () => journal.adoptServerEvidence(DOC, server1, false, DECIDED, 2));
+    expect(await journal.adoptServerEvidence(DOC, server1, true, DECIDED, 2)).toEqual({
+      documentId: DOC, localSeq: 3, state: "SYNCED", evidenceHead: { segmentHash: SEG[0]!.sha256, lastSequenceTo: 1 },
+    });
+    const [copy] = await journal.readSalvage(DOC);
+    expect(copy).toMatchObject({ cause: "EVIDENCE_STOPPED", evidenceStopped: "unsupported_step", document: text });
+    await expect(journal.destroyForLogout()).rejects.toMatchObject({ code: "unsynced_work" });
+    await journal.releaseSalvage(DOC, copy!.id);
+    await expect(journal.destroyForLogout()).resolves.toBeUndefined();
+  });
+
   it("8: a kept copy blocks logout until the author lets it go; then everything goes", async () => {
     const journal = await refused(1, chainConflict());
     await journal.adoptServerEvidence(DOC, SERVER, true, DECIDED, 1);
