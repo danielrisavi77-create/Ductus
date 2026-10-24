@@ -287,6 +287,59 @@ describe("live publisher (BACKEND 4.12 t. 7 and 8)", () => {
     expect(s.calls[3]!.init.headers).toMatchObject({ "if-match": `"${TOKEN_A}"` });
   });
 
+  // Review FAIL 6305913033: after 409 + 409 for A, the editor offers the
+  // identical A again (typed and deleted within its debounce, so only A is
+  // offered). However often A comes back, by a timer or at once, no third A.
+  it("never sends A a third time when the identical A is offered again after 409 + 409", async () => {
+    const s = setup();
+    const a = validDoc("A");
+    s.publisher.start();
+    s.publisher.offer(a);
+    await s.time.advance(0);
+    s.calls[0]!.resolve(answer(409, TOKEN_A));
+    await s.time.advance(LIVE_PUBLISH_GAP_MS);
+    s.calls[1]!.resolve(answer(409, TOKEN_B));
+    await s.time.advance(0);
+    expect(s.time.pending()).toBe(0);
+
+    for (const wait of [0, 400, LIVE_PUBLISH_GAP_MS, 30_000]) {
+      s.publisher.offer(validDoc("A"));
+      await s.time.advance(wait);
+    }
+    s.publisher.stop();
+    s.publisher.start();
+    s.publisher.offer(a);
+    await s.time.advance(120_000);
+    expect(s.calls.map((call) => call.init.body)).toEqual([canonicalizeJcs(a), canonicalizeJcs(a)]);
+    expect(s.time.pending()).toBe(0);
+  });
+
+  // The allowance ends only when different bytes actually go out: then the
+  // route may hold them, so A is a new state for it, not a third retry.
+  it("treats A as new once a different state has gone out after A's retry was spent", async () => {
+    const s = setup();
+    const a = validDoc("A");
+    const b = validDoc("AB");
+    s.publisher.start();
+    s.publisher.offer(a);
+    await s.time.advance(0);
+    s.calls[0]!.resolve(answer(409, TOKEN_A));
+    await s.time.advance(LIVE_PUBLISH_GAP_MS);
+    s.calls[1]!.resolve(answer(409, TOKEN_B));
+    await s.time.advance(LIVE_PUBLISH_GAP_MS);
+
+    s.publisher.offer(b);
+    await s.time.advance(0);
+    expect(s.calls).toHaveLength(3);
+    s.publisher.offer(a);
+    s.calls[2]!.resolve(answer(200, TOKEN_A));
+    await s.time.advance(LIVE_PUBLISH_GAP_MS);
+    expect(s.calls.map((call) => call.init.body)).toEqual([
+      canonicalizeJcs(a), canonicalizeJcs(a), canonicalizeJcs(b), canonicalizeJcs(a),
+    ]);
+    expect(s.calls[3]!.init.headers).toMatchObject({ "if-match": `"${TOKEN_A}"` });
+  });
+
   it("ignores a stale conflict body after stop and restart without consuming the new retry", async () => {
     const s = setup();
     s.publisher.start();

@@ -15,7 +15,8 @@
  * to the accepted state during a request still goes). Without a network only
  * the last state waits, and it goes when the network is back. A conflict
  * takes the returned token and sends the last state once more, never twice
- * for the same state. 401 and 404 (no session, notice not
+ * for the same state: offering those bytes again does not renew the retry,
+ * only different bytes actually sent do. 401 and 404 (no session, notice not
  * confirmed, no right to publish) stop publishing until the page loads again.
  * These are client constants, not the thresholds P-01 to P-04.
  */
