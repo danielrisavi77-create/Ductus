@@ -217,6 +217,18 @@ describe("F-8 3d-2b1: leaving CONFLICT and RECOVERY_REQUIRED", () => {
     await expect(journal.destroyForLogout()).resolves.toBeUndefined();
   });
 
+  it("7: a stopped recorder in RECOVERY_REQUIRED: replacing its uncovered text needs a confirmation", async () => {
+    const journal = await started();
+    await save(journal, SEG[0]!);
+    const text = (await journal.readEvidence(DOC)).snapshot!.document;
+    await journal.saveUncovered(DOC, text, "gap", UTC, 1);
+    await runnerFor(journal, server(R0, () => json(409, { status: "txid_reused" }))).step(DOC);
+    expect((await journal.readEvidence(DOC)).meta).toMatchObject({ state: "RECOVERY_REQUIRED", evidenceStopped: "gap" });
+    await refuses(journal, "confirmation_required", () => journal.adoptServerEvidence(DOC, local.opened, false, DECIDED, 2));
+    await expect(journal.adoptServerEvidence(DOC, local.opened, true, DECIDED, 2)).resolves.toMatchObject({ state: "SYNCED" });
+    expect(await journal.readSalvage(DOC)).toMatchObject([{ cause: "RECOVERY_REQUIRED", evidenceStopped: "gap", document: text }]);
+  });
+
   it.each([
     ["no answer", () => new Error("connection dropped"), [trusted.key]],
     ["a refused session", () => json(401, { status: "unauthenticated" }), [trusted.key]],
