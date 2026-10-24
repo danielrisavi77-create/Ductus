@@ -125,6 +125,12 @@ export default async function WorkspacePage({
       <WorkspaceShell
         writingHref={radPath(assignmentId)}
         context={work ? `${work.course} / ${work.notice.title}` : null}
+        barExtra={signedIn && work && assignmentId ? (
+          // F-10 (#653 contract 6385776645): only for an assignment the RLS
+          // read gave this student with its notice acknowledged. A plain link:
+          // the submission page reads the server's text and sends nothing itself.
+          <a className="btn" href={`/rad/${encodeURIComponent(assignmentId)}/predaja`}>{t.workspace.submitLink}</a>
+        ) : null}
         banner={scope ? <OfflineBanner /> : null}
         rail={
           <>
