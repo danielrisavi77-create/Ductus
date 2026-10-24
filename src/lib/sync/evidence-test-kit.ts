@@ -1,8 +1,9 @@
 /**
- * Test kit for the evidence journal (F-8 3d-2a): segments the real recorder
- * captures from the editor schema, receipts signed with an Ed25519 key made
- * for the test, and journals on fake-indexeddb. Imported by tests only; every
- * key, id and text is invented.
+ * Test kit for the evidence journal and drain (F-8 3d-2a): segments the real
+ * recorder captures from the editor schema, receipts signed with an Ed25519
+ * key made for the test, a fake commit route that does the server's
+ * compare-and-set, and journals on fake-indexeddb. Imported by tests only;
+ * every key, id and text is invented.
  */
 
 import { createHash, generateKeyPairSync, sign as nodeSign } from "node:crypto";
@@ -11,18 +12,23 @@ import { Editor } from "@tiptap/core";
 import Dexie from "dexie";
 import { IDBKeyRange, indexedDB } from "fake-indexeddb";
 
-import { commitOutcomeFrom, createReceiptVerifier } from "@/client/evidence-ingest";
+import { commitOutcomeFrom, createReceiptVerifier, decodeBase64, type FetchLike } from "@/client/evidence-ingest";
 import type { EvidenceReceiptPayloadV2, SignedEvidenceReceiptV2 } from "@/domain/forensics/evidence-receipt";
 import type { EvidenceDomainKey } from "@/domain/forensics/evidence-receipt-verifier";
 import { loadGoldenVectors } from "@/domain/forensics/golden-vectors/load";
 import { canonicalizeJcs, jcsUtf8Bytes } from "@/domain/forensics/jcs";
 import { outcomeToEvents, type DrainOutcome, type QueuedRow } from "@/domain/sync/drain";
-import type { EvidenceOpening, EvidenceSegmentTransaction, PendingTransaction } from "@/domain/sync/journal-types";
+import type {
+  EvidenceOpening, EvidenceSegmentTransaction, PendingTransaction, QueuedTransaction,
+} from "@/domain/sync/journal-types";
 import { syncReducer } from "@/domain/sync/states";
 import { changeOf, EvidenceRecorder, type BuiltSegment } from "@/editor/capture";
 import { tiptapToCanonical } from "@/editor/interop";
 import { createEditorExtensions } from "@/editor/schema";
 import { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
+
+import { createDrainRunner } from "./drain-runner";
+import { createEvidenceTransport, evidenceVerifierFor } from "./evidence-transport";
 
 const { receiptV2 } = loadGoldenVectors();
 export const BASE = receiptV2.accepted[0]!.payload;
@@ -180,4 +186,63 @@ export async function answer(
   }, { sent: sent as QueuedRow, pending: after.pending as QueuedRow[] });
   const state = events.reduce(syncReducer, syncReducer(after.meta!.state, { type: "SYNC_STARTED" }));
   return journal.recordAnswer(DOC, sent, outcome, state);
+}
+
+export const json = (status: number, body: unknown) => Response.json(body, { status });
+
+export type Body = { documentId: string; clientTransactionId: string; baseRevision: number; segments: string[]; document: string };
+type Accept = (body: Body, over?: Partial<EvidenceReceiptPayloadV2>) => Response;
+export type Answer = (body: Body, accept: Accept) => Promise<Response | Error> | Response | Error;
+
+/**
+ * The commit route as far as the client can tell: a compare-and-set on the
+ * revision from `revision`, one stored commit per key (a replay is
+ * `duplicate`), and a receipt over the hash of the received segment.
+ * `answers` replace the next answers.
+ */
+export function server(revision = R0, ...answers: Answer[]) {
+  const calls: { body: Body; text: string }[] = [];
+  const keys = new Map<string, number>();
+  let inFlight = 0;
+  let maxInFlight = 0;
+  const accept: Accept = (body, over = {}) => {
+    const segmentHash = sha256(decodeBase64(body.segments[0])!);
+    const known = keys.get(body.clientTransactionId);
+    if (known === undefined && body.baseRevision !== revision) {
+      return json(409, { status: "stale_base", currentRevision: revision });
+    }
+    if (known === undefined) keys.set(body.clientTransactionId, (revision += 1));
+    const committed = keys.get(body.clientTransactionId)!;
+    const signedReceipt = trusted.sign({ documentId: DOC, clientTransactionId: body.clientTransactionId, revision: committed, segmentHash, ...over });
+    return json(200, { status: known === undefined ? "committed" : "duplicate", revision: committed, receipt: { status: "signed", signedReceipt } });
+  };
+  const fetchImpl: FetchLike = async (_url, init) => {
+    inFlight += 1;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    try {
+      const text = init.body as string;
+      const body = JSON.parse(text) as Body;
+      calls.push({ body, text });
+      await Promise.resolve();
+      const next = answers.shift();
+      const answer = next ? await next(body, accept) : accept(body);
+      if (answer instanceof Error) throw answer;
+      return answer;
+    } finally {
+      inFlight -= 1;
+    }
+  };
+  return { calls, fetchImpl, accept, get maxInFlight() { return maxInFlight; } };
+}
+
+export function runnerFor(journal: AtomicDexieJournal, net: ReturnType<typeof server>, keys = [trusted.key]) {
+  let clock = 0;
+  return createDrainRunner<QueuedTransaction>({
+    journal,
+    transport: createEvidenceTransport(net.fetchImpl),
+    verifyFor: evidenceVerifierFor({ evidenceDomainId: DOMAIN, receiptKeys: keys }),
+    // Every step is past any backoff, so only the plan decides what goes.
+    now: () => (clock += 60_000),
+    jitter: () => 0.5,
+  });
 }
