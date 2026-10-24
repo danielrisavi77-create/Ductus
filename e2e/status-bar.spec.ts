@@ -40,12 +40,9 @@ test.describe("editor top bar and status bar (FE-D6)", () => {
       await expect(bar).not.toContainText("Kolegij A");
       await expect(bar).not.toContainText("Zadatak 1");
     }
-    const [brand, demo] = await Promise.all([
-      bar.getByRole("link", { name: "Ductura" }).boundingBox(),
-      bar.locator(".demo-badge").boundingBox(),
-    ]);
-    expect(brand!.x + brand!.width).toBeLessThanOrEqual(demo!.x);
-    await expect(bar.locator(".demo-badge")).toHaveText("Demo · izmišljeni podaci");
+    // The brand and the demo label live in the design v3 shell around the workspace.
+    await expect(page.getByRole("complementary", { name: "Bočna navigacija" }).getByRole("link", { name: /Ductura/ })).toBeVisible();
+    await expect(page.getByRole("banner").getByText("Demo · izmišljeni podaci")).toBeVisible();
     await test.info().attach("rad-gornja-traka-bez-zadatka", { body: await page.screenshot(), contentType: "image/png" });
   });
 

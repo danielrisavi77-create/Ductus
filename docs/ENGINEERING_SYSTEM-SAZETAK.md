@@ -35,7 +35,7 @@ Sažetak nije izvor pravila. U sukobu vrijedi `docs/ENGINEERING_SYSTEM.md`; uz s
 
 - Novi push poništava review, QA i Owner Override (§6, §9).
 - Iznimka D-101: čisto spajanje osnovne grane koje ne mijenja diff PR-a prenosi verdikt i override, i za Codex par (D-161; §6, §15).
-- Autor prije ready-for-review provjerava overlap s `main`; spaja se samo PR čiji head sadrži aktualni `main` (§9).
+- Prije reviewa provjeriti overlap; ažurnost provjerava izvorni head ili aktivirani DAN-263 Mergify carrier (§9, §10).
 
 ## Owner Override
 

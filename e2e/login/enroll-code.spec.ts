@@ -81,6 +81,15 @@ test("anonymous visitor sees no enrollment form", async ({ page }) => {
     .toHaveAttribute("href", "/api/auth/login?returnTo=%2Fupis");
 });
 
+test("a signed-in student gets the shell with the student items only (I3)", async ({ page }) => {
+  await signIn(page, "/upis", "Demo studentica");
+  const nav = page.getByRole("navigation", { name: t.shell.workNav });
+  await expect(nav.getByRole("link")).toHaveText([t.shell.nav.workspace, t.shell.nav.enroll]);
+  await expect(nav.getByRole("link", { name: t.shell.nav.enroll })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByText(t.shell.space.student)).toBeAttached();
+  await expect(page.getByRole("button", { name: t.shell.signOut, includeHidden: true })).toBeAttached();
+});
+
 test("signed-in student gets no enrollment without the server", async ({ page }) => {
   await signIn(page, "/upis", "Demo studentica");
   const posts: string[] = [];

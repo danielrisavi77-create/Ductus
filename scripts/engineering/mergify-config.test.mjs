@@ -30,6 +30,18 @@ test("queue and merge conditions require every required status of main", () => {
   assert.match(body, /- -draft/);
 });
 
+test("serial speculation preserves every intermediate result and rejects edited carriers", () => {
+  assert.match(body, /mode: serial\n/);
+  assert.match(body, /max_parallel_checks: 3\n/);
+  assert.match(body, /batch_size: 1\n/);
+  assert.match(body, /max_checks_retries: 0\n/);
+  assert.match(body, /allow_queue_branch_edit: false\n/);
+  assert.match(body, /branch_protection_injection_mode: queue\n/);
+  assert.match(body, /reset_on_external_merge: always\n/);
+  assert.match(body, /skip_intermediate_results: false\n/);
+  assert.doesNotMatch(body, /draft_bot_account:|queue_branch_prefix:|merge_bot_account:|batch_max_wait_time:/);
+});
+
 test("only the owner can queue or requeue by command", () => {
   for (const command of ["queue", "requeue"]) {
     assert.match(body, new RegExp(`\\n  ${command}:\\n    conditions:\\n      - sender=danielrisavi77-create\\n`));
@@ -50,9 +62,8 @@ function rules() {
 }
 
 test("one rule queues a PR, and it reads only the two statuses the gate publishes", () => {
-  const all = rules();
+  const all = rules().filter((rule) => rule.queue);
   assert.equal(all.length, 1);
-  assert.ok(all[0].queue);
   assert.deepEqual(all[0].conditions, [
     "base=main",
     "-draft",
@@ -61,11 +72,25 @@ test("one rule queues a PR, and it reads only the two statuses the gate publishe
   ]);
 });
 
+test("the other rule only refreshes a waiting PR with a green gate, a draft or conflict is left alone", () => {
+  const others = rules().filter((rule) => !rule.queue);
+  assert.equal(others.length, 1);
+  assert.deepEqual(others[0].conditions, [
+    "base=main",
+    "-draft",
+    "-conflict",
+    '"#commits-behind>0"',
+    "check-success=Engineering review gate",
+    "-check-success=Merge authorization",
+  ]);
+  assert.match(body, /actions:\n      update: \{\}/);
+});
+
 test("Mergify never reads the description, a label or a file name (review of #565)", () => {
   assert.doesNotMatch(body, /body~=|label=|files~=|-files|-body/);
 });
 
-test("the queue squashes and refreshes the branch by merging main (D-101)", () => {
+test("the queue squashes and retains merge updates for waiting source PRs (D-101)", () => {
   assert.match(body, /merge_method: squash/);
   assert.match(body, /update_method: merge/);
   assert.doesNotMatch(body, /update_method: rebase/);

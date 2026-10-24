@@ -2,7 +2,8 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-import AppHeader from "@/components/shell/AppHeader";
+import AppShell from "@/components/shell/AppShell";
+import { readShellRole } from "@/components/shell/shell-role";
 import { SIGN_IN_HREF } from "@/components/student/enroll-code";
 import styles from "@/components/student/Enroll.module.css";
 import { courseHref, readOpenAssignment } from "@/components/student/open-assignment";
@@ -26,10 +27,10 @@ export default async function EnrolledCoursePage({ params }: { params: Promise<{
   const read = await readOpenAssignment(token, courseId, withActor);
   // redirect() throws, so it stays outside any try block.
   if (read.kind === "assignment") redirect(`/zadatak/${encodeURIComponent(read.assignmentId)}`);
+  const role = await readShellRole(token, withActor);
   return (
-    <>
-      <AppHeader context={t.student.enroll.title} />
-      <main id="sadrzaj" tabIndex={-1} className={`page ${styles.screen}`}>
+    <AppShell role={role} current="/upis" crumbs={[t.student.enroll.title]}>
+      <div className={`page ${styles.screen}`}>
         <section className={styles.card}>
           <h1>{t.student.enroll.title}</h1>
           <p className={styles.status} role="status">
@@ -44,7 +45,7 @@ export default async function EnrolledCoursePage({ params }: { params: Promise<{
           </div>
         </section>
         <p><Link href="/">{t.teacher.backHome}</Link></p>
-      </main>
-    </>
+      </div>
+    </AppShell>
   );
 }

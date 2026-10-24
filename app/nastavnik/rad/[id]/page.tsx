@@ -1,8 +1,9 @@
 import { cookies } from "next/headers";
 
-import AppHeader from "@/components/shell/AppHeader";
+import AppShell from "@/components/shell/AppShell";
 import SessionObserver from "@/components/shell/SessionObserver";
 import LiveWorkView from "@/components/teacher/LiveWorkView";
+import { teacherAccess } from "@/components/teacher/teacher-access";
 import { isDocumentId } from "@/domain/collaboration";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { sessionPrincipal, sessionTag } from "@/server/auth/principal";
@@ -28,6 +29,8 @@ export default async function LiveWorkPage({ params }: { params: Promise<{ id: s
   const principal = await sessionPrincipal(token, withActor);
   const session = principal.kind === "signed-in" && tag !== null ? { tag, at } : null;
   const returnTo = `/nastavnik/rad/${encodeURIComponent(id)}`;
+  // Only which navigation to show; the live route decides who may read the work.
+  const role = session !== null && (await teacherAccess(token, withActor)) === "allowed" ? "teacher" : null;
 
   let body;
   if (!isDocumentId(id)) {
@@ -47,11 +50,12 @@ export default async function LiveWorkPage({ params }: { params: Promise<{ id: s
   return (
     <>
       <SessionObserver tag={tag} at={at} />
-      <AppHeader context={t.liveView.context} />
-      <main id="sadrzaj" tabIndex={-1} className="page">
-        <h1 className="visually-hidden">{t.liveView.context}</h1>
-        {body}
-      </main>
+      <AppShell role={role} crumbs={[t.liveView.context]}>
+        <div className="page">
+          <h1 className="visually-hidden">{t.liveView.context}</h1>
+          {body}
+        </div>
+      </AppShell>
     </>
   );
 }

@@ -413,3 +413,16 @@ test("with a session the home page offers no second sign-in", async ({ page }) =
   await expect(page.getByRole("link", { name: t.home.openWorkspace })).toBeVisible();
   await expect(page.getByRole("link", { name: t.auth.signIn })).toHaveCount(0);
 });
+
+// Design v3 shell around the workspace (#476 6314969336, cut (b)): the student
+// items, and in the account place the workspace's own sign-out with its dialog
+// (I5, D-118), never a second, plain one.
+test("in the shell /rad keeps one sign-out, the one that knows the device", async ({ page }) => {
+  await signIn(page, "/rad");
+  const side = page.getByRole("complementary", { name: t.shell.sideNav });
+  const nav = side.getByRole("navigation", { name: t.shell.workNav });
+  await expect(nav.getByRole("link")).toHaveText([t.shell.nav.workspace, t.shell.nav.enroll]);
+  await expect(nav.getByRole("link", { name: t.shell.nav.workspace })).toHaveAttribute("aria-current", "page");
+  await expect(logoutOf(page)).toHaveCount(1);
+  await expect(side.getByRole("button", { name: t.auth.logout, exact: true })).toBeVisible();
+});
