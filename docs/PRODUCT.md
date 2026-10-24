@@ -52,7 +52,7 @@ Ductus podržava sve pisane radove koje nastavnik zadaje:
 | Specijalistički rad | Prema pravilima fakulteta | Mentor |
 | Doktorski rad | Prema pravilima fakulteta | Mentor; najdulji dokumenti |
 
-Pisanje na nastavi i zadaci nalik ispitu pod nadzorom nisu podržani, jer su najbliži nadzoru tijekom ispita iz Priloga III. Akta o umjetnoj inteligenciji.
+Pisanje na nastavi i zadaci nalik ispitu pod nadzorom više nisu isključeni (D-144, D-151). Najbliži su nadzoru tijekom ispita iz Priloga III. Akta o umjetnoj inteligenciji (t. 3(d)), pa ih prije pilota sa stvarnim studentima moraju pokriti pravno mišljenje (D-55) i DPIA.
 
 ---
 
@@ -63,8 +63,7 @@ Pravilo za sve uloge: uloga sama ne daje pristup sadržaju. Pristup nastaje iskl
 | Uloga | Tko | Smije | Ne smije |
 | --- | --- | --- | --- |
 | Student | Upisan u kolegij ili dodijeljen mentoru | Pisati u svojim radovima; koristiti AI ako ga zadatak dopušta; vidjeti sve što nastavnik ili mentor vidi; prihvatiti ili odbiti prijedloge; izvesti svoj rad i evidenciju; dodati napomenu | Vidjeti tuđe radove ili tuđu evidenciju |
-| Nastavnik zadatka | Nastavnik kolegija kojem zadatak pripada | Stvoriti kolegij i zadatak; od prvog dana vidjeti spremljeno stanje radova svog zadatka i evidenciju u opsegu profila; komentirati; predlagati izmjene ili uređivati izravno (§6) | Vidjeti radove drugih kolegija |
-| Mentor | Mentor završnog, diplomskog, specijalističkog ili doktorskog rada | Isto što i nastavnik, za radove kojima je mentor | Vidjeti radove kojima nije mentor |
+| Nastavnik zadatka, odnosno mentor (jedna uloga, D-154) | Nastavnik kolegija kojem zadatak pripada ili mentor završnog, diplomskog, specijalističkog ili doktorskog rada | Stvoriti kolegij i zadatak; od prvog dana vidjeti spremljeno stanje radova svog zadatka ili radova kojima je mentor i evidenciju u opsegu profila; komentirati; predlagati izmjene ili uređivati izravno (§6) | Vidjeti radove koji nisu iz njegova zadatka i kojima nije mentor |
 | Administrator fakulteta | Imenovan od fakulteta | Potvrditi ulogu nastavnika i mentora; postavke fakulteta (dopušteni AI pružatelji, pragovi, rokovi čuvanja); revizijski trag pristupa | Čitati sadržaj radova (nema pristupa po defaultu) |
 | Operater Ductusa | Pružatelj usluge | Održavanje sustava | Čitati sadržaj, osim zabilježenog pristupa podrške uz pristanak fakulteta, kako je opisano u ugovoru o obradi |
 
@@ -88,23 +87,23 @@ Pravilo za sve uloge: uloga sama ne daje pristup sadržaju. Pristup nastaje iskl
 
 Izvedeno iz Ustava; svako pravilo ima test ili provjeru u PR-u.
 
-1. Ductus nikad ne tvrdi tko je napisao rad, niti je li AI korišten nedopušteno. (C-9, C-10, D-01)
+1. Ductus nikad ne tvrdi tko je napisao rad, niti je li AI korišten nedopušteno. Oznaka mjesta unosa („Napisano u Ducturi”) navodi mjesto, ne osobu, i nije tvrdnja o autoru (D-127). (C-9, C-10, D-01)
 2. Nema postotka AI-ja, postotka ljudskosti, ocjene rizika, sumnje ni integriteta. (C-6)
 3. Nepoznato nije krivnja. Praznina u zapisu prikazuje se kao praznina, nikad kao znak nečega. (C-8)
-4. Ne bilježi se koja je tipka pritisnuta ni koliko je držana. Bilježe se promjene dokumenta, sažete u odsječke s grubim vremenom (§9). Samo u mentorskim radovima uz to se bilježi vrijeme promjena u koracima od 100 ms, isključivo za reprodukciju; iz njega se nikad ne računa brzina, pauze ni bilo kakva mjera (D-56). (C-14, traži izmjenu)
-5. Student uvijek vidi točno ono što vidi nastavnik ili mentor, generirano istom funkcijom. (C-4)
+4. Ne bilježi se koja je tipka pritisnuta ni koliko je držana. Bilježe se promjene dokumenta, sažete u odsječke s grubim vremenom (§9). Uz to se svaka promjena dokumenta, znak po znak, sprema s redoslijedom i vremenom u zasebnoj klasi podataka, isključivo za prikaz uživo i reprodukciju; iz vremena se nikad ne računa brzina, pauze, ritam ni bilo kakva mjera (D-143, D-56). (C-14, v1.4)
+5. Student uvijek vidi točno ono što o njegovu radu vidi nastavnik ili mentor, generirano istom funkcijom. Iznimka su mentorovi radni zapisi (oznaka zadnjeg pregleda, privatne bilješke, predlošci komentara, nacrt rubrike i izvješća): oni nisu prikaz rada, ne ulaze u sažetak, izvoz ni predaju, navedeni su u obavijesti i student ih može zatražiti pravom pristupa (D-130). Ocjena i obrazloženje vide se studentu tek nakon objave. (C-4)
 6. Student prije početka rada zna što nastavnik vidi i od kada: obavijest o praćenju je prvi ekran svakog zadatka. (C-3)
-7. Nastavnik vidi trenutno spremljeno stanje rada, osvježeno najviše svakih 5 minuta (P-03), ne tipkanje uživo. Povijest međustanja unutar sesije nije dostupna ni u jednom pregledu, sažetku ni usporedbi, osim u reprodukciji mentorskih radova najavljenoj prije pisanja (D-56). Student u obavijesti zna da nastavnik vidi trenutno stanje, pa i tekst koji će možda kasnije obrisati. (C-3, C-14, C-19)
-8. Svaka promjena teksta pripisana je autoru: student, nastavnik ili mentor, prihvaćeni prijedlog, AI unutar Ductusa, uvoz, lijepljenje. (C-11)
+7. Mentor i nastavnik zadatka vide rad uživo dok nastaje: promjene dokumenta pojavljuju se u njihovu prikazu u trenutku kad ih student napravi (D-142). Mentor, odnosno nastavnik zadatka (jedna uloga, D-154), može reproducirati nastanak rada znak po znak (D-143); od ostalih uloga nitko drugi. Student vidi istu reprodukciju svog rada (pravilo 5). Prikaz uživo i reprodukcija služe praćenju i komentarima, nikad ocjeni, rangiranju ni oznaci sumnje. Izvan prikaza uživo i reprodukcije povijest međustanja nije dostupna ni u jednom nastavničkom pregledu, sažetku ni usporedbi. Student smije vidjeti vlastitu povijest rada; ona se ne šalje nikome drugome, ne ulazi u sažetak, izvoz ni predaju i čuva se najviše do kraja akademske godine zadatka (D-131, uvjetno: čeka pravno mišljenje D-55). Student u obavijesti zna da mentor i nastavnik vide rad uživo, pa i tekst koji će možda kasnije obrisati, i da mentor, odnosno nastavnik zadatka, može reproducirati nastanak rada. (C-3, C-14, C-19, v1.4)
+8. Svaka promjena teksta pripisana je autoru: student, nastavnik ili mentor, prihvaćeni prijedlog, AI unutar Ductusa, uvoz, lijepljenje, vlastita inačica odlomka. Tekst koji nije u dokumentu, a može ući u njega (inačica odlomka), zapisuje se u evidenciju kad nastane, a njegov ulazak u dokument je zasebna promjena s izvorom; Ductus ne unosi tekst u dokument bez zapisa izvora (D-132). (C-11)
 9. Integritet zapisa nije dokaz autorstva. Hash i potpis govore samo da zapis nije mijenjan od primitka. (C-13)
 10. Offline zapis ostaje označen kao offline i nakon sinkronizacije. (C-15)
-11. Predaja je moguća samo ako se predani dokument može točno rekonstruirati iz zapisa. (C-42)
+11. Predaja je moguća samo ako se predani dokument može točno rekonstruirati iz zapisa. Zadatak smije dodatno tražiti samo potpunost koju student sam može ispuniti u aplikaciji: popunjena mjesta za izvor i potvrdu izjave koju propisuje fakultet; uvjet je naveden u obavijesti, ne odnosi se na podrijetlo teksta, AI, lijepljenja ni praznine u zapisu, a tehnička greška ne smije spriječiti predaju (D-129, uvjetno: čeka pisanu potvrdu FPZG-a i upis C-42). (C-42)
 12. Pravila FPZG-a su konfiguracija, ne kod. To uključuje pravila oblika (iz Lekte), dopuštene AI pružatelje i pragove u sažetku procesa. Administrator fakulteta dio te konfiguracije (pravilo AI-ja i dopušteni oblici pomoći, dopušteni pružatelji, pragovi, rokovi čuvanja) uređuje u sučelju, verzionirano; pravila akademskog pisanja (oblik, citiranje, bibliografija, naslovna stranica, opseg) dolaze iz paketa pravila Lekte i u Ductusu se samo čitaju (D-117). (C-55, C-7)
 13. Nema AI analize procesa pisanja. AI postoji samo kao pomoćnik studentu, ako ga zadatak dopušta. (Akt o UI, Prilog III.)
 14. Pravila zadatka koja je student potvrdio ne smiju se naknadno proširiti. Profil evidencije može se samo suziti. (C-3, C-18)
 15. Student nikad ne mora platiti da bi izvršio obvezu. U pilotu zadatak ne smije zahtijevati AI. (C-2)
 16. Sadržaj radova i uvezenih datoteka nikad ne mijenja pravila zadatka ni upute AI pomoćniku. (C-37)
-17. Student vidi tko je i kada otvorio njegov rad. (C-4)
+17. Student vidi tko je i kada otvorio njegov rad (dnevnik pristupa). Mentorovi radni zapisi iz pravila 5 nisu dio dnevnika pristupa (D-130). (C-4)
 
 ### Rječnik sučelja
 
@@ -135,7 +134,10 @@ Dopuštene radnje (ne krše Rječnik):
 - „izvorni / originalni” kao pridjev za datoteku, oblik ili tekst navoda;
 - „nepravilan format” i slične poruke provjere unosa;
 - postotak napretka i učitavanja (D-63);
-- negacije poput „ne procjenjuje autorstvo” i „bez presude o autorstvu”.
+- negacije poput „ne procjenjuje autorstvo” i „bez presude o autorstvu”;
+- „Napisano u Ducturi” samo kao oznaka mjesta unosa, uz uvjete iz D-127 (stalno objašnjenje „Ductus ne zna tko je tipkao”, bez zbroja i udjela);
+- „Izjava o autorstvu” samo kao naziv obrasca koji propisuje fakultet, uz oznaku „izjavljeno” (D-129, D-44);
+- „otvoreno mjesto za izvor” za oznaku u tekstu koju je student ostavio; ne miješa se s „prazninom u zapisu” (D-137).
 
 Tekst iz `config/faculties/**` provjerava se kao i ostali tekst sučelja; doslovni citat pravilnika izuzima se samo u izričito označenom polju za citat, nikad cijela datoteka.
 
@@ -147,14 +149,14 @@ Tekst iz `config/faculties/**` provjerava se kao i ostali tekst sučelja; doslov
 
 1. **Prijava** AAI@EduHr računom.
 2. **Ulaz u kolegij** kodom kolegija, ili dodjelom mentoru za završne i više radove.
-3. **Otvara zadatak (ekran S3).** Prvi ekran je obavijest: upute, rok, vrsta rada, pravila oblika (iz Lekte), dopušteni oblici pomoći i AI, što se bilježi, što se ne bilježi, da nastavnik vidi spremljeno stanje od prvog dana, koliko se dugo čuva i kako se dodaje napomena. Student potvrđuje da je pročitao. To nije privola i ne smije se tako prikazivati. Prije potvrde poslužitelj ne prima nikakvu evidenciju za taj rad. (C-3)
-4. **Piše** u editoru koji zna pravila fakulteta: struktura, oblik, citiranje, bibliografija, naslovna stranica, opseg. Stanje spremanja je uvijek vidljivo. Vidi svoj napredak: riječi po danu prema cilju, napredak po poglavlju, dane do roka (D-63).
+3. **Otvara zadatak (ekran S3).** Prvi ekran je obavijest: upute, rok, vrsta rada, pravila oblika (iz Lekte), dopušteni oblici pomoći i AI, što se bilježi, što se ne bilježi, da mentor i nastavnik vide rad uživo od prvog dana i da mentor može reproducirati nastanak rada (D-142, D-143), koliko se dugo čuva i kako se dodaje napomena. Student potvrđuje da je pročitao. To nije privola i ne smije se tako prikazivati. Prije potvrde poslužitelj ne prima nikakvu evidenciju za taj rad. (C-3)
+4. **Piše** u editoru koji zna pravila fakulteta: struktura, oblik, citiranje, bibliografija, naslovna stranica, opseg. Stanje spremanja je uvijek vidljivo. Vidi svoj napredak: riječi po danu prema cilju, napredak po poglavlju, dane do roka (D-63). Studentovi pomoćni zapisi u radu (povijest rada, inačice odlomka, odloženo) vidljivi su samo studentu i ne ulaze u sažetak, izvoz ni predaju; inačice se ipak zapisuju u evidenciju kad nastanu (D-132). Nakon demoa (D-131, D-132).
 5. **Koristi AI** ako zadatak dopušta: prijavi se svojim računom kod pružatelja kojeg fakultet dopušta (§8) i bira svrhu (lektura, prijevod, literatura...). Tekst koji iz AI-ja prenese u rad bilježi se kao "iz AI pomoćnika" sa svrhom.
 5a. **Lijepi tekst:** za veće lijepljenje može odabrati oznaku izvora (vlastite bilješke, citat, prijašnja verzija, vanjski AI, drugo); neobavezno (D-43). Ako ima odobrenu prilagodbu (npr. diktiranje), može je označiti na radu (D-50).
 6. **Uvozi postojeći tekst** (DOCX, PDF i drugi formati) ako zadatak to dopušta. Uvoz je označen događaj s nazivom, vrstom i veličinom datoteke. Ductus ne izmišlja povijest uvezenog teksta. Ponovni uvoz nakon uređivanja izvan Ductusa je novi uvoz, nikad prikazan kao pisanje u Ductusu. (C-45)
 7. **Vidi komentare i prijedloge** nastavnika ili mentora u stvarnom vremenu, jasno odvojene od svog teksta. Prijedlog prihvaća ili odbija; izravne izmjene nastavnika vidi označene. Način izmjena (prijedlozi ili izravno) student može u svakom trenutku vratiti na prijedloge.
 8. **Šalje verziju na pregled** kad zadatak ima cikluse: nacrt, komentar, nova verzija, konačna predaja. [ODLUČENO D-28]
-9. **Pregled prije konačne predaje (ekran S5).** Vidi isti prikaz kao nastavnik, otvorena mjesta (lijepljenja bez poznatog podrijetla) uz ponudu da doda oznaku (D-61) i kontrolni popis potpunosti (D-62); ništa od toga ne blokira predaju. Može dodati napomenu (npr. "prvi nacrt pisao sam rukom" ili "koristio sam diktiranje"). Napomene se samo dodaju; ispravak je nova napomena koja upućuje na staru. (C-16)
+9. **Pregled prije konačne predaje (ekran S5).** Vidi isti prikaz kao nastavnik, otvorena mjesta (lijepljenja bez poznatog podrijetla) uz ponudu da doda oznaku (D-61) i kontrolni popis potpunosti (D-62); ništa od toga ne blokira predaju. Iznimka (D-129, uvjetno, nakon demoa): predaju smiju blokirati samo otvorena mjesta za izvor i nepotvrđena izjava koju fakultet propisuje, uz poruku koja kaže koje je mjesto; žute stavke, lijepljenja, AI i praznine u zapisu ne blokiraju. Može dodati napomenu (npr. "prvi nacrt pisao sam rukom" ili "koristio sam diktiranje"). Napomene se samo dodaju; ispravak je nova napomena koja upućuje na staru. (C-16)
 10. **Konačna predaja.** Ductus složi izjavu o GenUI po FPZG čl. 9 i 15 iz zapisa (D-40); student je pregleda, dopuni vanjskim alatima i potvrdi, uz eventualno pitanje za refleksiju. Revizija se zamrzava. Student dobiva potvrdu s vremenom poslužitelja, izvoz rada u obliku koji traži fakultet, izjavu i prenosiv zapis s QR provjerom (D-49).
 11. **Izvoz.** Student u svakom trenutku može izvesti svoj rad i svoju evidenciju.
 
@@ -163,10 +165,10 @@ Tekst iz `config/faculties/**` provjerava se kao i ostali tekst sučelja; doslov
 1. **Prijava** AAI@EduHr računom.
 2. **Kolegij:** naziv, akademska godina, kod za upis, pravilo AI-ja iz izvedbenog plana (D-52). Mentor dobiva studente dodjelom.
 3. **Novi zadatak:** naslov, upute, vrsta rada (§2), profil fakulteta iz Lekte, otvaranje i rok, dopušteni oblici pomoći, dopušteni AI (unutar popisa koji dopušta fakultet), dopušten uvoz, ciklusi verzija, profil evidencije. Kad prvi student potvrdi obavijest, verzija zadatka se zaključava: izmjene stvaraju novu verziju koju studenti ponovno potvrđuju, a profil se može samo suziti.
-4. **Pregled radova:** popis studenata sa stanjem rada (nije započeto, u tijeku, poslano na pregled, predano) i vremenom zadnje izmjene. Bez oznaka, boja upozorenja ili sortiranja po "sumnjivosti". Filtar "nakon roka" uzima u obzir odobrena produljenja.
-5. **Rad u nastajanju:** trenutno spremljeno stanje rada, osvježeno najviše svakih 5 minuta, od prvog dana. [ODLUČENO D-06] Za zadatke s kratkim vremenskim prozorom pogled na rad u nastajanju nije dostupan, nego samo predaja (D-37), jer bi inače bio blizu nadzora ispita.
+4. **Pregled radova:** popis studenata sa stanjem rada (nije započeto, u tijeku, poslano na pregled, predano) i vremenom zadnje izmjene. Bez oznaka sumnje, boja upozorenja ili sortiranja po "sumnjivosti". Popis je abecedan; stanje rada u prvoj rečenici i stanje runde koje boja kodira (D-128) su dva različita prikaza. Boja smije kodirati samo stanje tijeka koje su postavili mentor i student zahtjevima i rundama (čeka doradu, dorada stigla, prihvaćeno, nije započeto), nikad kašnjenje, aktivnost, količinu rada ni stanje zapisa; stanje je uvijek i tekst, nijedna boja nije crvena (D-128). Oznaka „Napisano u Ducturi” je izbor prikaza uz uvjete iz D-127. Filtar "nakon roka" uzima u obzir odobrena produljenja.
+5. **Rad u nastajanju:** prikaz uživo od prvog dana, i za kratke zadatke. [ODLUČENO D-142, D-144]
 6. **Komentari** vezani uz odlomak, vidljivi studentu odmah ili objavljeni zajedno (D-51). Komentar može biti **zahtjev za doradu** sa stanjem (D-45).
-6a. **Konzultacije (mentor):** zapis konzultacije vezan uz verziju rada (D-47).
+6a. **Konzultacije (mentor):** zapis konzultacije vezan uz verziju rada (D-47). Zapis ima dva dijela: „Dogovoreno” (student vidi) i „Bilješka mentora” (privatni radni zapis iz D-130). Nakon demoa; uvjetno do pravnog mišljenja D-55 (D-135).
 7. **Izmjene teksta:** kao prijedlozi koje student prihvaća ili kao izravne izmjene. Način dogovaraju nastavnik i student, postavka se vidi na radu, a student je može u svakom trenutku vratiti na prijedloge. Izravna izmjena tehnički je prijedlog koji se automatski primjenjuje kod studenta (D-34). Svaka izmjena nastavnika pripisana je nastavniku. [ODLUČENO D-21]
 8. **Sažetak procesa** (§7) u svakom trenutku, uključujući prije predaje, i panel **Pravila zadatka**: pravilo i opaženo stanje, bez oznaka prolaza ili pada (D-62).
 9. **Usporedba verzija** u Proširenom profilu.
@@ -180,7 +182,7 @@ Tekst iz `config/faculties/**` provjerava se kao i ostali tekst sučelja; doslov
 | Osnovni | Spremljeno stanje rada, sažetak procesa, vremensku crtu | Zadana vrijednost |
 | Prošireni | Osnovni + usporedbu verzija na kraju sesija i poslanih verzija | Seminarski i završni radovi s više verzija |
 
-**Reprodukcija (D-56):** samo u mentorskim radovima, najavljena u obavijesti prije pisanja. Pokazuje kako je rad rastao, uključujući obrisani tekst, brzinom kojom je pisan, s oznakama lijepljenja, uvoza, AI prijenosa, izmjena nastavnika, dorada i konzultacija. Može se pokrenuti za cijeli rad ili za jedan odlomak. Uz reprodukciju stoji stalni tekst: "Ritam pisanja ne govori ništa o autorstvu ni o trudu." Nema brzine tipkanja, statistike pauza ni isticanja "brzih" ili "sporih" dijelova. Student vidi istu reprodukciju i kad ju je mentor gledao.
+**Reprodukcija (D-56, D-143):** za mentora, odnosno nastavnika zadatka (jedna uloga, D-154), znak po znak, najavljena u obavijesti prije pisanja; od ostalih uloga nitko drugi je ne vidi, a student vidi istu reprodukciju svog rada (pravilo 5). Pokazuje kako je rad rastao, uključujući obrisani tekst, brzinom kojom je pisan, s oznakama lijepljenja, uvoza, AI prijenosa, izmjena nastavnika, dorada i konzultacija. Može se pokrenuti za cijeli rad ili za jedan odlomak. Uz reprodukciju stoji stalni tekst: "Ritam pisanja ne govori ništa o autorstvu ni o trudu." Nema brzine tipkanja, statistike pauza ni isticanja "brzih" ili "sporih" dijelova. Student vidi istu reprodukciju i kad ju je mentor gledao.
 
 ### Administrator fakulteta
 
@@ -214,7 +216,7 @@ Ovo je srž onoga što fakultet kupuje. Svaka brojka ima jedinicu, nazivnik i me
 | Napomene studenta | Studentovo objašnjenje uz evidenciju | Tekst |
 | Stanje zapisa | Je li zapis cjelovit i neizmijenjen od primitka | "Zapis je cjelovit" ili "Zapis ima praznine (vidi popis)" |
 
-**Karta podrijetla [ODLUČENO D-57]:** isti događaji mogu se uključiti kao oznake u tekstu rada, na mjestu gdje su nastali; tekst napisan u Ductusu ostaje neoznačen, bez zbroja i udjela. Lijepljenje teksta kopiranog unutar Ductusa i podudaranje s odgovorom AI pomoćnika označavaju se poznatim podrijetlom (D-58).
+**Karta podrijetla [ODLUČENO D-57]:** isti događaji mogu se uključiti kao oznake u tekstu rada, na mjestu gdje su nastali; tekst napisan u Ductusu ostaje neoznačen, bez zbroja i udjela (D-127 to mijenja: oznaka mjesta „Napisano u Ducturi” dopuštena je kao izbor prikaza mentora uz uvjete iz D-127). Lijepljenje teksta kopiranog unutar Ductusa i podudaranje s odgovorom AI pomoćnika označavaju se poznatim podrijetlom (D-58).
 
 **Vrsta dokaza [ODLUČENO D-44]:** svaka stavka nosi oznaku *opaženo* (nastalo u Ductusu), *uvezeno* (iz datoteke) ili *izjavljeno* (navod studenta, npr. oznaka lijepljenja ili vanjski AI razgovor).
 
@@ -240,12 +242,12 @@ Ovo je srž onoga što fakultet kupuje. Svaka brojka ima jedinicu, nazivnik i me
 
 ## 9. Što se bilježi
 
-Jedna transakcija editora otprilike odgovara jednom pritisku tipke. Zato se transakcije ne bilježe pojedinačno s vremenom: sažimaju se u **odsječke** od najviše 30 sekundi [PRIJEDLOG D-24]. Odsječak sadrži sve korake promjene, potrebne za točnu rekonstrukciju, ali samo jedno vrijeme (početak odsječka, zaokruženo na minutu) i autora. I vrijeme primitka na poslužitelju zaokružuje se na minutu u svemu što vide student i nastavnik.
+Jedna transakcija editora otprilike odgovara jednom pritisku tipke. U evidenciji se transakcije sažimaju u **odsječke** od najviše 30 sekundi (D-24, potvrđeno D-81). Odsječak sadrži sve korake promjene, potrebne za točnu rekonstrukciju, ali samo jedno vrijeme (početak odsječka, zaokruženo na minutu) i autora. Vrijeme po pojedinoj promjeni postoji samo u zasebnoj klasi podataka s kraćim rokom čuvanja, za prikaz uživo i reprodukciju (D-143), nikad u odsječku evidencije. I vrijeme primitka na poslužitelju zaokružuje se na minutu u svemu što vide student i nastavnik.
 
 | Bilježi se | Ne bilježi se |
 | --- | --- |
 | Promjene dokumenta sažete u odsječke, s autorom (student, nastavnik, mentor) | Koja je tipka pritisnuta i koliko je držana; izvedene mjere (brzina, pauze, obrasci) |
-| Samo mentorski radovi: vrijeme promjena u koracima od 100 ms, zasebno i s kraćim rokom čuvanja (D-56) | Vrijeme promjena u ostalim radovima |
+| Svaka promjena dokumenta znak po znak, s redoslijedom i vremenom, zasebno i s kraćim rokom čuvanja, samo za prikaz uživo i reprodukciju (D-143) | Mjere izvedene iz vremena promjena |
 | Poništavanje i ponavljanje | Druge aplikacije, kartice preglednika, međuspremnik izvan zalijepljenog sadržaja |
 | Lijepljenje: veličina i vrijeme | Kamera, mikrofon, zaslon |
 | Uvoz datoteke: naziv, vrsta, veličina, hash | IP adresa i podaci o uređaju u evidenciji (smiju postojati samo u sigurnosnim logovima, odvojeno) |
@@ -280,11 +282,13 @@ Student dobiva potpuno okruženje za pisanje akademskog rada. Pravila oblika dol
 
 **[ODLUČENO D-26]** U pilot ulazi sve što je navedeno u ovom dokumentu, uključujući mentorstvo (D-33). Redoslijed puštanja unutar pilota je u `PROGRAM.md`.
 
-**Nikad (Ustav):** postotak AI-ja ili ljudskosti, ocjena rizika ili sumnje, tvrdnja o autorstvu, nadzor računala, kamere i zaslona, biometrija tipkanja, automatske sankcije, rangiranje studenata, treniranje modela na radovima, pisanje nalik ispitu pod nadzorom.
+**Nikad (Ustav):** postotak AI-ja ili ljudskosti, ocjena rizika ili sumnje, tvrdnja o autorstvu, nadzor računala, kamere i zaslona, biometrija tipkanja, automatske sankcije, rangiranje studenata, treniranje modela na radovima. Prikaz uživo dokumenta u Ducturi nije nadzor zaslona: Ductura ne vidi ništa izvan svog editora (Ustav v1.4, D-142, D-144).
 
 **Kasnije:** drugi fakulteti, Merlin (LTI), "Sign in with ChatGPT".
 
-**Odlučeno, čeka izmjenu Ustava C-14 i C-19:** reprodukcija s ritmom u mentorskim radovima (D-56), val 3.
+**Odlučeno, Ustav v1.4 dopunjen 18. 10. 2026. (C-3, C-14, C-19, popis „Nikad”; uz izmjene od 17. 10. niže):** prikaz uživo i reprodukcija znak po znak (D-142, D-143). Pilot sa stvarnim studentima čeka pravno mišljenje (D-55) i DPIA.
+
+**Ustav v1.4 (17. 10. 2026., D-127 do D-137):** izmjene C-3, C-4, C-11, C-19 (samo studentov pogled) i C-42 posljedica su dizajna Ductura. Uvjetno: D-129 (blokada predaje) čeka pisanu potvrdu FPZG-a i upis C-42, D-131 (povijest rada) i D-135 (konzultacije) čekaju pravno mišljenje D-55. D-133 i D-134 su PRIJEDLOG (arhitektura).
 
 ---
 
@@ -330,6 +334,6 @@ Demo prolazi cijeli put na sintetičkom radu s unaprijed poznatim ishodom. Za va
 8. Sažetak procesa pokazuje lijepljenje, oba uvoza, AI prenošenje, izmjene nastavnika i sesije, bez ikakve ocjene; student i nastavnik vide isto.
 9. Rekonstruirani dokument je identičan predanoj verziji u kanonskom obliku; izvoz DOCX-a odgovara FPZG obliku.
 10. Kontrolirana praznina prikazuje se kao praznina.
-11. Tekst napisan i obrisan unutar iste sesije ne pojavljuje se ni u jednom pregledu povijesti, sažetku ni usporedbi; [val 3] u mentorskom radu pojavljuje se samo u reprodukciji, a ista reprodukcija rekonstruira predani rad bajt za bajt.
+11. Tekst napisan i obrisan unutar iste sesije ne pojavljuje se ni u jednom nastavničkom pregledu povijesti, sažetku ni usporedbi (studentov pogled „Povijest rada” je iznimka, uvjetno do pravnog mišljenja D-55, D-131); [val 3] u mentorskom radu pojavljuje se samo u reprodukciji, a ista reprodukcija rekonstruira predani rad bajt za bajt.
 12. Drugi student i nastavnik drugog kolegija ne mogu otvoriti ni rad ni evidenciju. Test gađa poslužitelj i bazu, ne samo sučelje.
-13. Nakon odjave na istom pregledniku nema studentovog lokalnog zapisa; odjava s nesinkroniziranim promjenama je blokirana uz poruku.
+13. Odjava uvijek zatvara sesiju, i s nesinkroniziranim promjenama; nakon odjave druga osoba na istom pregledniku ne vidi studentov lokalni zapis, a nepredani zapis nastavlja se kad se isti student ponovno prijavi (D-118).

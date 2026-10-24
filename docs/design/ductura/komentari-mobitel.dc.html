@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;background:#0F110E;color:#E9EBE6;font-family:"Instrument Sans",system-ui,sans-serif;font-size:14px}
+*{box-sizing:border-box}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+textarea{font:inherit;color:#E9EBE6}
+a{color:#8FB0E0;text-decoration:none}
+a:hover{color:#B3CAEC}
+:focus-visible{outline:2px solid #8FD1B9;outline-offset:2px;border-radius:6px}
+</style>
+</helmet>
+<div data-screen-label="Komentari mobitel" style="max-width:480px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column">
+  <header style="position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:10px;padding:10px 12px;background:#121511;border-bottom:1px solid #232722">
+    <a href="Ductura Početna.dc.html" aria-label="Natrag na početnu" style="display:grid;place-items:center;width:44px;height:44px;border-radius:10px;color:#C5CBC3;font-size:18px">←</a>
+    <span style="display:flex;flex-direction:column;min-width:0"><b style="font-size:15px;font-weight:600">Komentari</b><span style="font-size:12px;color:#8E958D;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Završni rad · Čitanje naglas i rječnik djece</span></span>
+  </header>
+  <div role="tablist" aria-label="Filtar" style="display:flex;gap:6px;padding:12px">
+    <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="2"><button type="button" role="tab" aria-selected="{{ t.sel }}" onClick="{{ t.on }}" style="{{ t.style }}">{{ t.label }}</button></sc-for>
+  </div>
+  <main style="flex:1;display:flex;flex-direction:column;gap:10px;padding:0 12px 24px">
+    <sc-for list="{{ items }}" as="c" hint-placeholder-count="3">
+      <article style="background:#141712;border:1px solid #232722;border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px">
+        <span style="font-size:12px;color:#8E958D">{{ c.where }}</span>
+        <q style="font-family:Newsreader,Georgia,serif;font-size:15px;line-height:1.5;color:#C5CBC3;padding:8px 10px;background:#0F110E;border-radius:8px;quotes:none">{{ c.quote }}</q>
+        <div style="display:flex;flex-direction:column;gap:3px"><span style="font-size:12px;color:#D3AC63">{{ c.meta }}</span><span style="font-size:14.5px;line-height:1.5">{{ c.t }}</span></div>
+        <sc-for list="{{ c.replies }}" as="r" hint-placeholder-count="0"><div style="display:flex;flex-direction:column;gap:2px;padding-left:12px;border-left:2px solid #2C312B"><span style="font-size:12px;color:#8E958D">Ti · {{ r.when }}</span><span style="font-size:14px;line-height:1.5">{{ r.t }}</span></div></sc-for>
+        <sc-if value="{{ c.open }}" hint-placeholder-val="{{ true }}">
+          <textarea value="{{ c.draft }}" onChange="{{ c.setDraft }}" rows="2" aria-label="Odgovor" placeholder="Odgovori mentoru…" style="width:100%;background:#0F110E;border:1px solid #2C312B;border-radius:10px;padding:10px 12px;font-size:14px;resize:vertical"></textarea>
+          <div style="display:flex;gap:8px"><button type="button" onClick="{{ c.send }}" style="flex:1;min-height:44px;border-radius:10px;background:#232722;font-weight:600">Odgovori</button><button type="button" onClick="{{ c.resolve }}" style="flex:1;min-height:44px;border-radius:10px;background:#6FBFA5;color:#0E1C17;font-weight:600">Riješeno</button></div>
+        </sc-if>
+        <sc-if value="{{ c.closed }}" hint-placeholder-val="{{ false }}"><button type="button" onClick="{{ c.reopen }}" style="align-self:flex-start;min-height:44px;font-size:13px;color:#A6ADA5">Riješeno · otvori ponovno</button></sc-if>
+      </article>
+    </sc-for>
+    <sc-if value="{{ empty }}" hint-placeholder-val="{{ false }}"><span style="padding:32px 0;text-align:center;color:#8E958D">Nema komentara u ovom popisu.</span></sc-if>
+  </main>
+  <footer style="padding:14px 16px 22px;text-align:center;font-size:12.5px;line-height:1.5;color:#8E958D">Tekst rada uređuješ na računalu. Ovdje čitaš i odgovaraš na komentare.</footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:780}}">
+const C = [
+  { where: "2.2 Primjer iz prakse · odlomak 3", quote: "Djeca kojoj se svakodnevno čita pokazuju bogatiji rječnik.", meta: "Komentar 3 · Nastavnik A · danas 9:40", t: "Dodaj stranicu u navod i objasni što znači „bogatiji”." },
+  { where: "1 Uvod · odlomak 2", quote: "Brojna istraživanja potvrđuju ovu tezu.", meta: "Komentar 2 · Nastavnik A · 15. 10.", t: "Koja istraživanja? Navedi barem dva izvora." },
+  { where: "Literatura", quote: "Autor A (2019b)", meta: "Komentar 1 · Nastavnik A · 12. 10.", t: "Provjeri godinu izdanja.", done: true },
+];
+class Component extends DCLogic {
+  state = { tab: "open", done: C.map(c => !!c.done), drafts: C.map(() => ""), replies: C.map(() => []) };
+  renderVals() {
+    const s = this.state, setAt = (k, i, v) => this.setState(st => ({ [k]: st[k].map((x, j) => j === i ? v : x) }));
+    const idx = C.map((_, i) => i).filter(i => s.tab === "open" ? !s.done[i] : s.done[i]);
+    const tab = (id, label) => ({ label, sel: s.tab === id ? "true" : "false", on: () => this.setState({ tab: id }), style: { minHeight: 40, padding: "0 16px", borderRadius: 20, fontSize: 13.5, background: s.tab === id ? "#E9EBE6" : "#1A1E19", color: s.tab === id ? "#0F110E" : "#C5CBC3", fontWeight: 600 } });
+    return {
+      tabs: [tab("open", "Otvoreni · " + s.done.filter(d => !d).length), tab("done", "Riješeni · " + s.done.filter(Boolean).length)],
+      empty: !idx.length,
+      items: idx.map(i => Object.assign({}, C[i], { open: !s.done[i], closed: s.done[i], draft: s.drafts[i], replies: s.replies[i],
+        setDraft: e => setAt("drafts", i, e.target.value),
+        send: () => { const t = s.drafts[i].trim(); if (!t) return; setAt("replies", i, s.replies[i].concat([{ t, when: "sada" }])); setAt("drafts", i, ""); },
+        resolve: () => setAt("done", i, true), reopen: () => setAt("done", i, false) })),
+    };
+  }
+}
+</script>
+</body>
+</html>

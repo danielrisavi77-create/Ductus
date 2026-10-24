@@ -14,6 +14,10 @@ export const ORCHESTRATOR_REMIND_AT = 300_000;
 export const ORCHESTRATOR_LIMIT = 400_000;
 export const HARD_AT = 250_000;
 export const LARGE_DOC_BYTES = 16_000;
+// Other text files above this size are read only in ranges (offset/limit), DAN-213.
+export const LARGE_FILE_BYTES = 64_000;
+// Images and PDFs reach the model as pages or pictures, not as text lines; the size rule skips them.
+const VISUAL = /\.(png|jpe?g|gif|webp|bmp|pdf)$/i;
 export const OUTLINE_LIMIT = 80;
 // Hook additionalContext is capped at 10,000 characters by Claude Code.
 export const STATE_LIMIT = 9_000;
@@ -125,8 +129,17 @@ export function reviewRead(input, stat, readText, inProject = true) {
   if (GENERATED.some((pattern) => pattern.test(file))) {
     return `${path.posix.basename(file)} is generated output. Use Grep for the entry you need instead of reading it.`;
   }
+  // `pages` is not a range here: it belongs to PDFs, which VISUAL exempts anyway (#429 review).
   const ranged = input.offset !== undefined || input.limit !== undefined;
-  if (ranged || !/\.md$/i.test(file) || !stat || stat.size <= LARGE_DOC_BYTES) return null;
+  if (ranged || !stat) return null;
+  if (!/\.md$/i.test(file)) {
+    if (stat.size <= LARGE_FILE_BYTES || VISUAL.test(file)) return null;
+    return (
+      `${path.posix.basename(file)} is ${Math.round(stat.size / 1000)} KB. ` +
+      "Use Grep to find the lines you need, then Read with offset and limit."
+    );
+  }
+  if (stat.size <= LARGE_DOC_BYTES) return null;
   return (
     `${path.posix.basename(file)} is ${Math.round(stat.size / 1000)} KB; docs/SESSIONS.md §4 says read only the sections named in the task. ` +
     `Read again with offset and limit for the section you need. ${describeOutline(readText())}`

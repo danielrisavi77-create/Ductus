@@ -19,17 +19,19 @@ export type MutationRequestRefusal =
     };
 
 /**
- * Only POST from a page of this origin. Origin is required: browsers send it
- * on every cross-origin and same-origin POST, so a request without it is not
- * from our page. Sec-Fetch-Site, when present, must also say same-origin; a
- * same-site subdomain is still another origin.
+ * Only the route's method (POST unless it says PUT) from a page of this
+ * origin. Origin is required: browsers send it on every cross-origin and
+ * same-origin POST and PUT, so a request without it is not from our page.
+ * Sec-Fetch-Site, when present, must also say same-origin; a same-site
+ * subdomain is still another origin.
  */
 export function checkMutationRequest(
   request: Request,
   expectedOrigin: string,
+  method: "POST" | "PUT" = "POST",
 ): { ok: true } | MutationRequestRefusal {
   const expected = canonicalOrigin(expectedOrigin);
-  if (request.method !== "POST")
+  if (request.method !== method)
     return { ok: false, status: 405, reason: "method_not_allowed" };
   const origin = request.headers.get("origin");
   if (origin === null || origin === "" || origin === "null")
@@ -53,6 +55,7 @@ function canonicalOrigin(value: string): string {
 export type LimitedBodyResult =
   | { ok: true; bytes: Uint8Array }
   | { ok: false; status: 413; reason: "body_too_large" }
+  | { ok: false; status: 408; reason: "body_timeout" }
   | {
       ok: false;
       status: 400;
@@ -65,6 +68,19 @@ export type LimitedBodyResult =
 const DECIMAL = /^(0|[1-9][0-9]{0,15})$/;
 
 /**
+ * What readBodyWithLimit refuses from the declared Content-Length alone,
+ * before a byte is read: a malformed length is 400, a length over maxBytes is
+ * 413, anything else (no header included) is null. A route that does work
+ * before the body (a session lookup) asks this first, so both agree.
+ */
+export function declaredLengthRefusal(request: Request, maxBytes: number): 400 | 413 | null {
+  const header = request.headers.get("content-length");
+  if (header === null) return null;
+  if (!DECIMAL.test(header)) return 400;
+  return Number(header) > maxBytes ? 413 : null;
+}
+
+/**
  * Reads the body as raw bytes, at most maxBytes. A declared Content-Length
  * over the limit is refused without reading; an undeclared or understated
  * length is cut off at the first byte past the limit, and the rest of the
@@ -75,31 +91,30 @@ const DECIMAL = /^(0|[1-9][0-9]{0,15})$/;
  * returned as body_stream_error, never thrown, and no partial bytes leave
  * this function; the caller stores nothing and has no exception to forget.
  *
- * There is deliberately no time limit here: a slow client can hold the
- * request open while it trickles up to maxBytes. Bounding that is the
- * obligation of the route (B-8j2) or the infrastructure (Node server request
- * timeout or the reverse proxy), not of this reader.
+ * There is no default time limit. A mutation route that accepts a streamed
+ * body must pass timeoutMs or rely on a verified infrastructure request
+ * timeout; otherwise a slow client can hold the request open while it
+ * trickles up to maxBytes.
  */
 export async function readBodyWithLimit(
   request: Request,
   maxBytes: number,
+  timeoutMs?: number,
 ): Promise<LimitedBodyResult> {
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 0)
     throw new Error("maxBytes must be a non-negative safe integer");
+  if (timeoutMs !== undefined && (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1))
+    throw new Error("timeoutMs must be a positive safe integer");
 
-  const header = request.headers.get("content-length");
-  let declared: number | null = null;
-  if (header !== null) {
-    if (!DECIMAL.test(header)) {
-      await cancelQuietly(request.body);
-      return { ok: false, status: 400, reason: "content_length_invalid" };
-    }
-    declared = Number(header);
-    if (declared > maxBytes) {
-      await cancelQuietly(request.body);
-      return { ok: false, status: 413, reason: "body_too_large" };
-    }
+  const refusal = declaredLengthRefusal(request, maxBytes);
+  if (refusal !== null) {
+    await cancelQuietly(request.body);
+    return refusal === 400
+      ? { ok: false, status: 400, reason: "content_length_invalid" }
+      : { ok: false, status: 413, reason: "body_too_large" };
   }
+  const header = request.headers.get("content-length");
+  const declared = header === null ? null : Number(header);
 
   const body = request.body;
   if (body === null) {
@@ -111,11 +126,24 @@ export async function readBodyWithLimit(
   const reader = body.getReader();
   const chunks: Uint8Array[] = [];
   let size = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = Symbol("body_timeout");
+  const timeout = timeoutMs === undefined
+    ? undefined
+    : new Promise<typeof timedOut>((resolve) => {
+        timer = setTimeout(() => resolve(timedOut), timeoutMs);
+      });
   try {
     for (;;) {
       let chunk: ReadableStreamReadResult<Uint8Array>;
       try {
-        chunk = await reader.read();
+        const next = reader.read();
+        const result = timeout === undefined ? await next : await Promise.race([next, timeout]);
+        if (result === timedOut) {
+          await cancelQuietly(reader);
+          return { ok: false, status: 408, reason: "body_timeout" };
+        }
+        chunk = result;
       } catch {
         return { ok: false, status: 400, reason: "body_stream_error" };
       }
@@ -128,6 +156,7 @@ export async function readBodyWithLimit(
       chunks.push(chunk.value);
     }
   } finally {
+    if (timer !== undefined) clearTimeout(timer);
     reader.releaseLock();
   }
 

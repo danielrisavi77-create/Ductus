@@ -84,6 +84,11 @@ function textNode(segment: EvidenceSegmentV2): Json {
   return (slice(segment).content as Json[])[0];
 }
 
+/** The context as untrusted input: its fields are typed as the closed values. */
+function context(segment: EvidenceSegmentV2): Json {
+  return segment.captureContext as unknown as Json;
+}
+
 /** Canonical bytes built without the validator, as a crafted client would. */
 function craftedBytes(segment: unknown): Uint8Array {
   return new TextEncoder().encode(canonicalizeJcs(segment as JcsJsonValue));
@@ -138,7 +143,7 @@ describe("EvidenceSegmentV2 closed steps (B-8, #155)", () => {
     ` ${EDIT_STEP_FORMAT_V1}`,
   ])("refuses the transaction format %j", (format) => {
     const segment = fixture();
-    segment.captureContext.transactionFormat = format;
+    context(segment).transactionFormat = format;
     expect(isEvidenceSegmentV2(segment)).toBe(false);
   });
 
@@ -157,10 +162,26 @@ describe("EvidenceSegmentV2 closed steps (B-8, #155)", () => {
       "prosemirror ",
     ]) {
       const segment = fixture();
-      segment.captureContext.editorModel = model;
+      context(segment).editorModel = model;
       expect(isEvidenceSegmentV2(segment)).toBe(false);
     }
   });
+
+  // Z3: a name the list lookup could find on a prototype, or that differs
+  // only in a character not seen, is still not on the list.
+  it.each(["__proto__", "constructor", "toString", "hasOwnProperty", "prosemirror\u200b", "\u200bprosemirror"])(
+    "refuses the editor model %j, in the validator and in the payload check",
+    async (model) => {
+      const segment = fixture();
+      context(segment).editorModel = model;
+
+      expect(isEvidenceSegmentV2(segment)).toBe(false);
+      await expect(verifyCanonicalEvidencePayloadV2(craftedBytes(segment))).resolves.toEqual({
+        ok: false,
+        reason: "invalid",
+      });
+    },
+  );
 
   // Z4: an unknown field anywhere, time fields included.
   const levels: [string, (s: EvidenceSegmentV2) => Json][] = [
@@ -202,6 +223,40 @@ describe("EvidenceSegmentV2 closed steps (B-8, #155)", () => {
     expect(verified.ok).toBe(false);
     expect(verified).not.toHaveProperty("segment");
     expect(verified).not.toHaveProperty("sha256");
+  });
+
+  // Z10: an own key named like a prototype property, written into the bytes
+  // (JSON.parse makes it an own field), is an unknown field like any other.
+  it.each(["__proto__", "constructor"])("refuses an own %j key in a step of the payload", async (key) => {
+    const text = canonicalizeJcs(fixture() as unknown as JcsJsonValue);
+    const opening = '"steps":[{';
+    expect(text.split(opening)).toHaveLength(2);
+    // Both keys sort before every key of the step, so the bytes stay canonical.
+    const bytes = new TextEncoder().encode(text.replace(opening, `${opening}"${key}":1,`));
+
+    await expect(verifyCanonicalEvidencePayloadV2(bytes)).resolves.toEqual({
+      ok: false,
+      reason: "invalid",
+    });
+  });
+
+  // Z11: a hostile object at the segment level answers false, never throws.
+  it("answers false for a segment whose fields throw when read", () => {
+    const proxy = new Proxy(fixture(), {
+      get() {
+        throw new Error("read refused");
+      },
+    });
+    expect(isEvidenceSegmentV2(proxy)).toBe(false);
+
+    const getter = fixture();
+    Object.defineProperty(getter, "captureContext", {
+      enumerable: true,
+      get() {
+        throw new Error("read refused");
+      },
+    });
+    expect(isEvidenceSegmentV2(getter)).toBe(false);
   });
 
   // Z8: a node id in a step carries no time.
