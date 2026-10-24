@@ -5,7 +5,11 @@
  *
  * One provider owns the editor, the Web Lock and the `LocalDocumentSaver`;
  * the sheet (`LocalEditor`) and the status bar (`useLocalStatus`) only render
- * what it holds. Nothing here touches the network.
+ * what it holds. The one request it starts is the live view's publisher
+ * (`src/client/live-publisher.ts`, B-LIVE step 4): for a signed-in person it
+ * sends the last state of the document, stops before the sign-out fence and
+ * starts again on "Ostani". It is not the evidence: the journal, the drain
+ * and the save state know nothing of it.
  *
  * - One writer per document: the tab holding the Web Lock journals; any other
  *   tab shows the blocked notice, stays read-only and reads the journal again
@@ -51,6 +55,7 @@ import { createEditorExtensions } from "@/editor/schema";
 import { StorableInput } from "@/editor/storable-input";
 import { storableDocument } from "@/editor/storable-text";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
+import { createLivePublisher, type LivePublisher } from "@/client/live-publisher";
 import { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
 import {
   LocalDocumentSaver, type SaverFailure, type SaverSnapshot,
@@ -139,8 +144,19 @@ function sameIds(editor: Editor, doc: CanonicalDocument): boolean {
 }
 
 export function LocalDocumentProvider({
-  scope, documentId, session = null, children,
-}: { scope: string; documentId: string; session?: SessionMark | null; children: ReactNode }) {
+  scope, documentId, session = null, livePublish = false, children,
+}: {
+  scope: string;
+  documentId: string;
+  session?: SessionMark | null;
+  /**
+   * True only when the page read that this student acknowledged the current
+   * notice of the assignment (PRODUCT §5 rules 6 and 14, F-121): without it
+   * the publisher is never made, so no text leaves the tab.
+   */
+  livePublish?: boolean;
+  children: ReactNode;
+}) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [snapshot, setSnapshot] = useState<SaverSnapshot | null>(null);
   const [words, setWords] = useState(0);
@@ -148,6 +164,8 @@ export function LocalDocumentProvider({
   // Set while this tab holds the lock with an editable document.
   const logoutRef = useRef<LockedLogout | null>(null);
   const channelRef = useRef<BroadcastChannel | null>(null);
+  // Whose journal the sheet shows (`scope` and document), or null while it is empty.
+  const sheetOwnerRef = useRef<string | null>(null);
   const markTag = session?.tag ?? null;
   const markAt = session?.at ?? 0;
   const saverRef = useRef<LocalDocumentSaver | null>(null);
@@ -155,6 +173,9 @@ export function LocalDocumentProvider({
   const readyRef = useRef(false);
   const dirtyRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The live view's publisher (B-LIVE step 4): only while a signed-in tab
+  // holds the lock and may write. It is not the evidence and never sets SYNCED.
+  const publisherRef = useRef<LivePublisher | null>(null);
 
   // Builds and proposes the candidate for what the editor holds now.
   const flushRef = useRef(() => {
@@ -175,6 +196,7 @@ export function LocalDocumentProvider({
     setInvalid(false);
     setWords(countWords(candidate.doc));
     void saver.propose(candidate.doc);
+    publisherRef.current?.offer(candidate.doc);
   });
 
   const editor = useEditor({
@@ -216,6 +238,15 @@ export function LocalDocumentProvider({
   useEffect(() => {
     if (!editor) return;
     const flush = flushRef.current;
+    // The sheet still shows another journal: this page is now another
+    // person's or document's, though no end of the session reached this tab.
+    // It is emptied before anything else, with nothing to undo (F-086).
+    const owner = `${scope}\n${documentId}`;
+    if (sheetOwnerRef.current !== null && sheetOwnerRef.current !== owner) {
+      sheetOwnerRef.current = null;
+      if (!editor.isDestroyed) startFreshHistory(editor.view, "empty");
+      setWords(0);
+    }
     let disposed = false;
     let release: (() => void) | null = null;
     const abort = new AbortController();
@@ -231,6 +262,8 @@ export function LocalDocumentProvider({
     // browser neither reads nor writes it. The lock is kept, so this tab
     // never opens the journal again; it goes with the page.
     const stop = () => {
+      // Nothing more is published for a session that has ended.
+      publisherRef.current?.stop();
       flush();
       disposed = true;
       readyRef.current = false;
@@ -239,6 +272,7 @@ export function LocalDocumentProvider({
         editor.setEditable(false, false);
         startFreshHistory(editor.view, "empty");
       }
+      sheetOwnerRef.current = null;
       setWords(0);
       setPhase("signed-out");
     };
@@ -316,6 +350,7 @@ export function LocalDocumentProvider({
           }
           setWords(countWords(result.document));
         }
+        sheetOwnerRef.current = owner;
         if (result.kind !== "ready") {
           setPhase(result.kind);
           return;
@@ -323,10 +358,19 @@ export function LocalDocumentProvider({
         readyRef.current = true;
         editor.setEditable(true, false);
         setPhase("ready");
+        // Only a signed-in person who acknowledged the notice publishes; the
+        // local demo journal never does.
+        const publisher = markTag === null || !livePublish
+          ? null : createLivePublisher({ documentId, current: () => !ended() });
+        publisherRef.current = publisher;
+        if (publisher && result.document) publisher.offer(result.document);
+        publisher?.start();
         logoutRef.current = {
           quiesce: async () => {
             // Nothing typed after this point is accepted.
             flush();
+            // Publishing stops before the sign-out fence (BACKEND 4.12 t. 8).
+            publisher?.stop();
             readyRef.current = false;
             editor.setEditable(false, false);
             await saver.settled();
@@ -346,6 +390,7 @@ export function LocalDocumentProvider({
             if (disposed) return;
             readyRef.current = true;
             editor.setEditable(true, false);
+            publisher?.start();
           },
           clear: async () => {
             try {
@@ -362,6 +407,8 @@ export function LocalDocumentProvider({
           if (disposed) resolve();
         });
       } finally {
+        publisherRef.current?.stop();
+        publisherRef.current = null;
         logoutRef.current = null;
         await saver.settled();
         unsubscribe();
@@ -401,7 +448,7 @@ export function LocalDocumentProvider({
       window.removeEventListener("storage", recheck);
       window.removeEventListener("pageshow", recheck);
     };
-  }, [editor, scope, documentId, markTag, markAt]);
+  }, [editor, scope, documentId, markTag, markAt, livePublish]);
 
   // Writing stays stopped from here until "Ostani" or the end of the
   // session, so the count the dialog shows cannot grow behind it (I2).
@@ -426,6 +473,7 @@ export function LocalDocumentProvider({
       editor.setEditable(false, false);
       startFreshHistory(editor.view, "empty");
     }
+    sheetOwnerRef.current = null;
     await (locked ? locked.clear() : clearWithoutEditor(scope, documentId));
     return true;
   };

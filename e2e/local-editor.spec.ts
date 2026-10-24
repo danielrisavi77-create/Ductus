@@ -215,6 +215,20 @@ test.describe("local editor (#197)", () => {
     await expect(announcedOf(page)).toHaveText(DURABLE);
   });
 
+  // B-LIVE step 4 (DAN-216): only a signed-in person publishes the live view;
+  // the local demo journal, with no session, sends nothing to the route.
+  test("without a sign-in nothing is published to the live view", async ({ page }) => {
+    const live: string[] = [];
+    page.on("request", (request) => {
+      if (new URL(request.url()).pathname.startsWith("/api/live/")) live.push(request.method());
+    });
+    await openEditor(page);
+    await typeInto(page, "Izmišljena rečenica bez prijave.");
+    await journalled(page);
+    await page.waitForTimeout(2500);
+    expect(live).toEqual([]);
+  });
+
   test("9 and line 53: the chip says Spremljeno na uređaju only once the write is stored", async ({ page }) => {
     const history = await chipHistory(page);
     await openEditor(page);

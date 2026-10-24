@@ -16,12 +16,15 @@
  *   (D-56 condition 3, D-143), which this module returns and never sends.
  * - A change that does not start from the document the last one ended in is
  *   a gap: the recorder stops and builds nothing more, never a segment with a
- *   hole in it. A segment that cannot be built stops it the same way.
+ *   hole in it. An event that cannot be built stops it the same way. The
+ *   events closed before the failure still come out (F-104 t. 1).
+ * - How each step is written, ids included, is `capture-rewrite.ts` (F-8
+ *   step 3d-1b, DAN-282; contract #476 `issuecomment-6383232090`).
  */
 
 import type { Node as PmNode } from "@tiptap/pm/model";
 import type { Transaction } from "@tiptap/pm/state";
-import { ReplaceStep, Step } from "@tiptap/pm/transform";
+import { Step } from "@tiptap/pm/transform";
 
 import { EDIT_STEP_FORMAT_V1, parseEditSteps } from "@/domain/document/edit-step";
 import { exceedsEvidenceSegmentLimit } from "@/domain/forensics/evidence-chain-v2";
@@ -38,6 +41,7 @@ import {
 import { canonicalizeJcs, type JcsJsonValue } from "@/domain/forensics/jcs";
 import { sha256WebCrypto } from "@/domain/forensics/crypto";
 
+import { writtenSteps } from "./capture-rewrite";
 import { nodeIdFixesOf } from "./identity";
 import { tiptapToCanonical } from "./interop";
 
@@ -148,55 +152,19 @@ function removesContent(document: PmNode, from: number, to: number): boolean {
 }
 
 /**
- * Enter inside a block: Tiptap copies the id onto the new block, so the slice
- * holds the same id at both ends, which the format refuses. The format writes
- * a split with `null` on the block of the open end, the new one (ProseMirror
- * takes its attributes from the slice), and leaves the id to an `attr` step
- * (edit-step.test.ts, "a split that copies the id").
- */
-function copiesIdInSplit(step: Step): boolean {
-  if (!(step instanceof ReplaceStep)) return false;
-  const { content, openEnd } = step.slice;
-  const first = content.firstChild;
-  const last = content.lastChild;
-  if (content.childCount < 2 || openEnd === 0 || !first || !last) return false;
-  return typeof first.attrs.nodeId === "string" && last.attrs.nodeId === first.attrs.nodeId;
-}
-
-/** The step's JSON with `null` on the block of the open end; a copy, as the JSON shares attributes with the editor. */
-function withEndBlockUnnamed(json: Record<string, unknown>): Record<string, unknown> {
-  const slice = json.slice as { content: { attrs: Record<string, unknown> }[] };
-  const end = slice.content[slice.content.length - 1]!;
-  return {
-    ...json,
-    slice: { ...slice, content: [...slice.content.slice(0, -1), { ...end, attrs: { ...end.attrs, nodeId: null } }] },
-  };
-}
-
-/** Whether a later step of the change removes the block that starts at `pos`. */
-function removedLater(steps: readonly Step[], index: number, pos: number): boolean {
-  let at = pos;
-  for (const step of steps.slice(index + 1)) {
-    const mapped = step.getMap().mapResult(at, 1);
-    if (mapped.deleted) return true;
-    at = mapped.pos;
-  }
-  return false;
-}
-
-/**
- * Every step of one change as the format writes it, applied as written to
- * the document the server's replayer will hold, which must end as the
- * editor's: otherwise the change is refused here, never sent as a segment
- * the server would refuse.
+ * Every step of one change as the format writes it (`writtenSteps`), applied
+ * as written to the document the server's replayer will hold, which must end
+ * as the editor's: otherwise the change is refused here, never sent as a
+ * segment the server would refuse.
  *
- * - The identity plugin's step becomes one `attr` step per block (owner
- *   decision 3), and an `attr` only names a block without an id. A fix of a
- *   block that a later step of the change removes (Undo after Enter gives the
- *   old id back, then removes the block) has no effect and is not written.
- * - `removedSha256` and `structure` follow BACKEND 4.1 on that document.
- * - Enter at the start of a block, where the plugin names the empty block in
- *   front and the text keeps its id, cannot be written and is refused.
+ * - The identity plugin's steps are not written as they are. At the end of
+ *   the change every block still without an id gets the one the plugin
+ *   decided, by an `attr` step (owner decision 3), and a block whose id is
+ *   another than the plugin's refuses the change: an id is never guessed or
+ *   taken from another block.
+ * - `removedSha256` and `structure` follow BACKEND 4.1 on that document; a
+ *   range whose hash cannot be computed (half of a surrogate pair) refuses
+ *   the change.
  */
 async function changeSteps(change: CapturedChange): Promise<JcsJsonValue[]> {
   const steps: JcsJsonValue[] = [];
@@ -209,36 +177,38 @@ async function changeSteps(change: CapturedChange): Promise<JcsJsonValue[]> {
       throw new CaptureError("unsupported_step");
     }
     if (!next) throw new CaptureError("unsupported_step");
-    // A step that changes nothing (a selection replaced by the same content)
-    // is refused by the replayer (`step_changes_nothing`): not written.
+    // A step that changes nothing (a selection replaced by the same content,
+    // a block given the type it has) is refused by the replayer
+    // (`step_changes_nothing`, `replace_around_unchanged`): not written.
     if (next.eq(doc)) return;
     doc = next;
     steps.push(json as JcsJsonValue);
   };
-  for (const [index, step] of change.steps.entries()) {
-    const fixes = nodeIdFixesOf(step);
-    if (fixes !== null) {
-      for (const { pos, id } of fixes) {
-        if (removedLater(change.steps, index, pos)) continue;
-        if (typeof id !== "string" || doc.nodeAt(pos)?.attrs.nodeId !== null) throw new CaptureError("unsupported_step");
-        apply({ stepType: "attr", pos, attr: "nodeId", value: id });
-      }
-      continue;
-    }
-    let json: Record<string, unknown>;
+  for (const step of change.steps) {
+    if (nodeIdFixesOf(step) !== null) continue;
+    let written: Record<string, unknown>[];
     try {
-      json = step.toJSON() as Record<string, unknown>;
+      written = writtenSteps(doc, step.toJSON() as Record<string, unknown>);
     } catch {
       throw new CaptureError("unsupported_step");
     }
-    if (copiesIdInSplit(step)) json = withEndBlockUnnamed(json);
-    const { stepType, from, to, structure } = json;
-    if (stepType === "replace" && typeof from === "number" && typeof to === "number" && from < to && structure !== true) {
-      if (removesContent(doc, from, to)) json.removedSha256 = await removedSliceSha256(doc, from, to);
-      else json.structure = true;
+    for (const json of written) {
+      const { stepType, from, to, structure } = json;
+      if (stepType === "replace" && typeof from === "number" && typeof to === "number" && from < to && structure !== true) {
+        if (removesContent(doc, from, to)) json.removedSha256 = await removedSliceSha256(doc, from, to);
+        else json.structure = true;
+      }
+      apply(json);
     }
-    apply(json);
   }
+  if (doc.childCount !== change.after.childCount) throw new CaptureError("unsupported_step");
+  change.after.forEach((block, pos) => {
+    const id: unknown = block.attrs.nodeId;
+    const held: unknown = doc.nodeAt(pos)?.attrs.nodeId;
+    if (held === id) return;
+    if (held !== null || typeof id !== "string") throw new CaptureError("unsupported_step");
+    apply({ stepType: "attr", pos, attr: "nodeId", value: id });
+  });
   if (!doc.eq(change.after)) throw new CaptureError("unsupported_step");
   return steps;
 }
@@ -265,45 +235,57 @@ export class EvidenceRecorder {
   constructor(private readonly quietMs = EVENT_QUIET_MS) {}
 
   /**
-   * False once a gap was seen or a segment could not be built: nothing after
-   * it can be chained, so `record` and `takeSegment` throw that failure again.
+   * False once a gap was seen or an event could not be built: nothing after
+   * it can be chained, so `record` throws that failure again, and so does
+   * `takeSegment` once it has given the events closed before it.
    */
   get intact(): boolean {
     return this.failure === null;
   }
 
-  private stop(code: CaptureFailure): never {
-    this.failure = code;
-    this.closed = [];
+  /**
+   * Stops at a failure: the first `keep` closed events, all closed before
+   * it, stay for `takeSegment`; the event it arose in and every later one go.
+   */
+  private stop(code: CaptureFailure, keep: number): void {
+    this.failure ??= code;
+    this.closed = this.closed.slice(0, keep);
     this.open = null;
-    throw new CaptureError(code);
   }
 
-  /** Records one change; a change that leaves the document as it was is ignored. */
+  /**
+   * Records one change; a change that leaves the document as it was is
+   * ignored. Its time never goes back: a clock that does is held at the last
+   * time (F-104 t. 2).
+   */
   record(change: CapturedChange): void {
     if (this.failure !== null) throw new CaptureError(this.failure);
     if (change.steps.length === 0) return;
     if (change.docs.length !== change.steps.length || (this.last !== null && change.docs[0] !== this.last.after)) {
-      this.stop("gap");
+      // The open event may be the one the gap arose in: it goes too.
+      this.stop("gap", this.closed.length);
+      throw new CaptureError("gap");
     }
-    const previous = this.last;
-    this.last = change;
+    const at = this.last === null ? change.at : Math.max(change.at, this.last.at);
+    const timed = at === change.at ? change : { ...change, at };
+    this.last = timed;
     // The change left the document as it was: nothing to write. Its steps
     // could replay only as steps that change nothing, or as a pair that
     // undoes itself (`setParagraph` on a paragraph gives a block without an
-    // id, then its id back), which the replayer refuses.
+    // id, then its id back), which the replayer refuses. It does not keep the
+    // open event open either: the quiet time counts from the last change
+    // that wrote something.
     if (change.docs[0]!.eq(change.after)) return;
     if (
       this.open &&
       (this.open.source !== change.source ||
-        previous === null ||
-        change.at - previous.at > this.quietMs ||
-        change.at - firstAt(this.open) >= MAX_SEGMENT_SPAN_MS)
+        at - lastAt(this.open) > this.quietMs ||
+        at - firstAt(this.open) >= MAX_SEGMENT_SPAN_MS)
     ) {
       this.close();
     }
-    if (this.open) this.open.changes.push(change);
-    else this.open = { source: change.source, changes: [change] };
+    if (this.open) this.open.changes.push(timed);
+    else this.open = { source: change.source, changes: [timed] };
   }
 
   /** Closes the open event, e.g. when the drain is about to send. */
@@ -321,14 +303,17 @@ export class EvidenceRecorder {
    * The next segment from the oldest closed events, or null if none is closed.
    * It holds as many events as fit the event limit, the 30 s span from its
    * first change to its last and D-96; the rest stay for the next call.
-   * Events leave the recorder once a segment was built from them, or all at
-   * once when it stops: a gap or a segment that cannot be built drops every
-   * event not yet in a segment, the sound ones before it too (fail closed;
-   * whether to drain those first is decided with the caller in 3d-2).
+   * Events leave the recorder once a segment was built from them. When the
+   * recorder stops (a gap, or an event that cannot be built or is over D-96
+   * alone), the events closed before the failure still come out, in one or
+   * more segments, and only then does this throw it; the event the failure
+   * arose in and every later one never do (F-104 t. 1).
    */
   async takeSegment(context: SegmentContext): Promise<BuiltSegment | null> {
-    if (this.failure !== null) throw new CaptureError(this.failure);
-    if (this.closed.length === 0) return null;
+    if (this.closed.length === 0) {
+      if (this.failure !== null) throw new CaptureError(this.failure);
+      return null;
+    }
     const startedAt = firstAt(this.closed[0]!);
     // `record` keeps every event under 30 s, so the first one always fits.
     let count = 1;
@@ -344,16 +329,29 @@ export class EvidenceRecorder {
       try {
         built = await buildSegment(this.closed.slice(0, count), context);
       } catch (error) {
-        if (error instanceof CaptureError) this.stop(error.code);
-        throw error;
+        const failed = error instanceof EventFailure ? error : new EventFailure(0, "unsupported_step");
+        this.stop(failed.code, failed.index);
+        if (failed.index === 0) throw new CaptureError(this.failure!);
+        count = failed.index;
+        continue;
       }
       if (!exceedsEvidenceSegmentLimit(built.bytes.byteLength)) {
         this.closed.splice(0, count);
         return built;
       }
-      if (count === 1) this.stop("too_large");
+      if (count === 1) {
+        this.stop("too_large", 0);
+        throw new CaptureError(this.failure!);
+      }
       count = Math.ceil(count / 2);
     }
+  }
+}
+
+/** The failure of the event at `index` of a segment being built. */
+class EventFailure extends Error {
+  constructor(readonly index: number, readonly code: CaptureFailure) {
+    super(`evidence capture: event ${index}: ${code}`);
   }
 }
 
@@ -365,29 +363,35 @@ async function buildSegment(raw: readonly RawEvent[], context: SegmentContext): 
   let initial: string | null = null;
   let previousAfter: { canonical: string; sha256: string } | null = null;
   for (const [index, event] of raw.entries()) {
-    const sequence = context.sequenceFrom + index;
-    const steps: JcsJsonValue[] = [];
-    const offsets: number[] = [];
-    for (const change of event.changes) {
-      for (const json of await changeSteps(change)) {
-        steps.push(json);
-        offsets.push(change.at - startedMs);
+    try {
+      const sequence = context.sequenceFrom + index;
+      const steps: JcsJsonValue[] = [];
+      const offsets: number[] = [];
+      for (const change of event.changes) {
+        for (const json of await changeSteps(change)) {
+          steps.push(json);
+          offsets.push(change.at - startedMs);
+        }
       }
+      const parsed = parseEditSteps(EDIT_STEP_FORMAT_V1, steps);
+      if (!parsed.ok) throw new CaptureError(parsed.code === "too_large" ? "too_large" : "unsupported_step");
+      const before = previousAfter ?? (await documentDigest(event.changes[0]!.docs[0]!));
+      const after = await documentDigest(event.changes[event.changes.length - 1]!.after);
+      initial ??= before.sha256;
+      events.push({
+        sequence,
+        source: event.source,
+        steps: parsed.steps as unknown as EvidenceEventV2["steps"],
+        beforeDocumentHash: before.sha256,
+        afterDocumentHash: after.sha256,
+      });
+      timing.push({ sequence, stepOffsetsMs: offsets });
+      previousAfter = after;
+    } catch (error) {
+      // Any failure of the event, a hash of half a surrogate pair included
+      // (qa494h MANJE 1), is the failure of that event, never of the ones before.
+      throw new EventFailure(index, error instanceof CaptureError ? error.code : "unsupported_step");
     }
-    const parsed = parseEditSteps(EDIT_STEP_FORMAT_V1, steps);
-    if (!parsed.ok) throw new CaptureError(parsed.code === "too_large" ? "too_large" : "unsupported_step");
-    const before = previousAfter ?? (await documentDigest(event.changes[0]!.docs[0]!));
-    const after = await documentDigest(event.changes[event.changes.length - 1]!.after);
-    initial ??= before.sha256;
-    events.push({
-      sequence,
-      source: event.source,
-      steps: parsed.steps as unknown as EvidenceEventV2["steps"],
-      beforeDocumentHash: before.sha256,
-      afterDocumentHash: after.sha256,
-    });
-    timing.push({ sequence, stepOffsetsMs: offsets });
-    previousAfter = after;
   }
   const segment: EvidenceSegmentV2 = {
     evidenceSchema: EVIDENCE_SEGMENT_SCHEMA_V2,

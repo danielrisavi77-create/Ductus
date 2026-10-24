@@ -307,6 +307,22 @@ describe("login", () => {
     expect(deps.openSession).toHaveBeenCalledTimes(1);
     expect(deps.openSession.mock.calls[0][0].issuer).toBe(ISSUER);
   });
+
+  // F-123: openid-client skips its issuer check for a "/.well-known/" URL.
+  // loadAuthConfig refuses one; the client fails closed even if one reaches it.
+  it("opens no session when the discovered issuer differs from the configured one", async () => {
+    const wellKnown = { ...config, issuer: new URL(`${ISSUER}/.well-known/openid-configuration`) };
+    deps.config = wellKnown;
+    deps.oidc = createOidcClient(wellKnown, idp.fetch);
+
+    const start = await startLogin(new Request(`${APP}/api/auth/login`), deps);
+    expect(start.status).toBe(503);
+    expect(start.headers.get("location")).toBeNull();
+    await expect(deps.oidc.verify(new URL(`${APP}/api/auth/callback?code=x&state=y`), {
+      state: "y", nonce: "n", codeVerifier: "v".repeat(43),
+    })).rejects.toThrow("discovered issuer does not match OIDC_ISSUER");
+    expect(deps.openSession).not.toHaveBeenCalled();
+  });
 });
 
 describe("logout", () => {
