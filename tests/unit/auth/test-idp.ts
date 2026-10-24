@@ -40,7 +40,14 @@ function rsaKey(): { privateKey: KeyObject; jwk: Record<string, unknown> } {
   return { privateKey, jwk: publicKey.export({ format: "jwk" }) as Record<string, unknown> };
 }
 
-export function createTestIdp(account = { sub: "sub-demo-1", uniqueId: "ana@demo.ductus.test", homeOrg: "demo.ductus.test" }) {
+/**
+ * `spelledIssuer` is how the provider writes its issuer in discovery, the ID
+ * token and the callback; its endpoints stay under ISSUER.
+ */
+export function createTestIdp(
+  account = { sub: "sub-demo-1", uniqueId: "ana@demo.ductus.test", homeOrg: "demo.ductus.test" },
+  spelledIssuer: string = ISSUER,
+) {
   const key = rsaKey();
   const foreign = rsaKey();
   const grants = new Map<string, Grant>();
@@ -50,7 +57,7 @@ export function createTestIdp(account = { sub: "sub-demo-1", uniqueId: "ana@demo
   function idToken(grant: Grant): string {
     const now = Math.floor(Date.now() / 1000);
     let claims: Record<string, unknown> = {
-      iss: ISSUER,
+      iss: spelledIssuer,
       aud: CLIENT_ID,
       sub: state.account.sub,
       iat: now,
@@ -75,7 +82,7 @@ export function createTestIdp(account = { sub: "sub-demo-1", uniqueId: "ana@demo
     switch (url.pathname) {
       case "/.well-known/openid-configuration":
         return json({
-          issuer: ISSUER,
+          issuer: spelledIssuer,
           authorization_endpoint: `${ISSUER}/auth`,
           token_endpoint: `${ISSUER}/token`,
           userinfo_endpoint: `${ISSUER}/me`,
@@ -145,7 +152,7 @@ export function createTestIdp(account = { sub: "sub-demo-1", uniqueId: "ana@demo
       const callback = new URL(callbackBase);
       callback.searchParams.set("code", code);
       callback.searchParams.set("state", p.get("state") ?? "");
-      callback.searchParams.set("iss", ISSUER);
+      callback.searchParams.set("iss", spelledIssuer);
       return callback;
     },
   };
