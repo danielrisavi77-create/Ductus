@@ -79,3 +79,40 @@ export function nextDiscardStep(step: DiscardStep, event: DiscardEvent): Discard
       return step === "working" ? "failed" : step;
   }
 }
+
+/**
+ * How long a discard may run before the dialog takes it as failed. Sign-out
+ * waits for nothing a caller does (D-118), so a discard that throws or never
+ * settles must not hold the dialog: past this limit the copy counts as kept
+ * and every action is back.
+ */
+export const DISCARD_LIMIT_MS = 10_000;
+
+/** Runs a discard; rejects when it throws, rejects or outlasts the limit. */
+export function settleDiscard(run: () => Promise<void>, limitMs = DISCARD_LIMIT_MS): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("discard_timeout")), limitMs);
+    const finish = (settle: () => void) => {
+      clearTimeout(timer);
+      settle();
+    };
+    try {
+      Promise.resolve(run()).then(
+        () => finish(resolve),
+        (error: unknown) => finish(() => reject(error)),
+      );
+    } catch (error) {
+      finish(() => reject(error));
+    }
+  });
+}
+
+/**
+ * What the dialog does when the browser closes it without being asked
+ * (Chromium may skip `preventDefault` on a repeated Escape). It opens again
+ * while a sign-out or discard runs, while it asks, and right after Escape
+ * took the question back; only otherwise the close counts as "Ostani".
+ */
+export function closeReply(state: { busy: boolean; asking: boolean; withdrawn: boolean }): "reopen" | "stay" {
+  return state.busy || state.asking || state.withdrawn ? "reopen" : "stay";
+}

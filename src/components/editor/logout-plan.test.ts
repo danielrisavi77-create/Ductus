@@ -1,9 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
 import { findForbiddenTerms } from "../../../scripts/forbidden-terms/terms";
-import { copyText, logoutText, nextDiscardStep, type DiscardEvent, type DiscardStep } from "./logout-plan";
+import {
+  closeReply,
+  copyText,
+  DISCARD_LIMIT_MS,
+  logoutText,
+  nextDiscardStep,
+  settleDiscard,
+  type DiscardEvent,
+  type DiscardStep,
+} from "./logout-plan";
 
 const t = messagesHr.auth;
 
@@ -131,5 +140,54 @@ describe("discarding a copy takes two clicks (P3)", () => {
     for (const event of ["ask", "keep", "confirm"] as const) {
       expect(nextDiscardStep("working", event)).toBe("working");
     }
+  });
+});
+
+describe("a discard never holds the dialog (D-118)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("settles when the discard settles", async () => {
+    await expect(settleDiscard(async () => undefined)).resolves.toBeUndefined();
+    await expect(settleDiscard(() => Promise.reject(new Error("no")))).rejects.toThrow("no");
+  });
+
+  it("fails a discard that throws before it returns a promise", async () => {
+    const run = (() => {
+      throw new Error("sync");
+    }) as () => Promise<void>;
+    await expect(settleDiscard(run)).rejects.toThrow("sync");
+  });
+
+  it("fails a discard that never settles once the limit passes", async () => {
+    vi.useFakeTimers();
+    const settled = settleDiscard(() => new Promise<void>(() => undefined));
+    const outcome = expect(settled).rejects.toThrow("discard_timeout");
+    await vi.advanceTimersByTimeAsync(DISCARD_LIMIT_MS);
+    await outcome;
+  });
+
+  it("keeps a discard that settles before the limit", async () => {
+    vi.useFakeTimers();
+    let done!: () => void;
+    const settled = settleDiscard(() => new Promise<void>((resolve) => (done = resolve)));
+    await vi.advanceTimersByTimeAsync(DISCARD_LIMIT_MS - 1);
+    done();
+    await expect(settled).resolves.toBeUndefined();
+  });
+});
+
+describe("a close the dialog did not ask for", () => {
+  const off = { busy: false, asking: false, withdrawn: false };
+
+  it("counts as Ostani only when nothing runs, asks or was just taken back", () => {
+    expect(closeReply(off)).toBe("stay");
+    expect(closeReply({ ...off, busy: true })).toBe("reopen");
+    expect(closeReply({ ...off, asking: true })).toBe("reopen");
+  });
+
+  it("opens again after Escape took the question back (second Escape)", () => {
+    expect(closeReply({ ...off, withdrawn: true })).toBe("reopen");
   });
 });

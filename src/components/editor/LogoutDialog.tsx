@@ -20,9 +20,11 @@ import { messagesHr } from "@/lib/i18n/messages.hr";
 
 import styles from "./LogoutDialog.module.css";
 import {
+  closeReply,
   copyText,
   logoutText,
   nextDiscardStep,
+  settleDiscard,
   type DiscardEvent,
   type DiscardStep,
   type LogoutPlan,
@@ -72,31 +74,42 @@ export default function LogoutDialog({
   const discardRef = useRef<HTMLButtonElement>(null);
   // While a discard runs or is asked, nothing else in the dialog runs beside it.
   const busy = working || discard === "working";
-  const asking = discard === "confirm";
+  // The question needs the copy: when the copies are gone it goes too.
+  const asking = copy !== null && discard === "confirm";
+  const copyShown = copy !== null;
+  useEffect(() => {
+    if (!copyShown && discard === "confirm") step("keep");
+  }, [copyShown, discard]);
+  // Set when Escape took the question back, so the close the browser may
+  // send after it opens the dialog again instead of counting as "Ostani".
+  const withdrawn = useRef(false);
 
+  // The question takes the focus to "Zadrži kopiju". Once the question or a
+  // discard is over, its buttons are gone or back, so the focus returns to
+  // the copy, or to "Ostani" without one.
+  const refocus = useRef(false);
   useEffect(() => {
-    if (asking) keepRef.current?.focus();
-  }, [asking]);
-  // Once a discard settles its buttons are back or gone, so the focus that
-  // sat on a disabled button returns to the copy, or to "Ostani" without one.
-  const settling = useRef(false);
-  useEffect(() => {
-    if (discard === "working") settling.current = true;
-    else if (settling.current) {
-      settling.current = false;
+    if (discard === "confirm") {
+      refocus.current = true;
+      keepRef.current?.focus();
+    } else if (discard === "working") refocus.current = true;
+    else if (refocus.current) {
+      refocus.current = false;
       (discardRef.current ?? stayRef.current)?.focus();
     }
   }, [discard]);
 
-  const askDiscard = () => step("ask");
-  const keepCopy = () => {
-    step("keep");
-    discardRef.current?.focus();
+  const askDiscard = () => {
+    withdrawn.current = false;
+    step("ask");
   };
+  const keepCopy = () => step("keep");
   const confirmDiscard = () => {
     if (!onDiscardCopy || discard !== "confirm") return;
+    withdrawn.current = false;
     step("confirm");
-    onDiscardCopy().then(
+    // A discard that throws, rejects or hangs ends as failed (D-118).
+    settleDiscard(onDiscardCopy).then(
       () => step("done"),
       () => step("error"),
     );
@@ -117,19 +130,26 @@ export default function LogoutDialog({
 
   const onCancel = (event: SyntheticEvent<HTMLDialogElement>) => {
     event.preventDefault();
+    withdrawn.current = asking;
     if (asking) keepCopy();
     else if (!busy) onStay();
   };
   // The browser may close the dialog on its own: Chromium stops honouring
   // `preventDefault` on a repeated Escape without a new user activation
   // (close watcher rule). While this component is mounted the dialog is
-  // wanted, so a close it did not ask for is mended: during a sign-out the
-  // dialog opens again, otherwise the close counts as "Ostani".
+  // wanted, so a close it did not ask for is mended (`closeReply`). When it
+  // opens again the focus goes back where it was meant to be, never to the
+  // first button, which while asking is the one that discards.
   const onClose = () => {
     const dialog = dialogRef.current;
     if (!dialog || dialog.open || unmounting.current) return;
-    if (busy || asking) dialog.showModal();
-    else onStay();
+    if (closeReply({ busy, asking, withdrawn: withdrawn.current }) === "stay") {
+      onStay();
+      return;
+    }
+    withdrawn.current = false;
+    dialog.showModal();
+    (keepRef.current ?? discardRef.current ?? stayRef.current)?.focus();
   };
   // Only the backdrop: the content fills the dialog, so a click inside it
   // never has the dialog itself as its target.
