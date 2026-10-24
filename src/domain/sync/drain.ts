@@ -36,8 +36,11 @@ import type {
   InvalidCommitOutcome,
   ServerSyncErrorCode,
 } from "../serverSync/contract";
-import type { PendingTransaction, SyncMeta } from "./journal-types";
+import type { PendingTransaction, QueuedTransaction, SyncMeta } from "./journal-types";
 import type { SyncEvent } from "./states";
+
+/** A queued row of either kind (F-8 3d-2a): a replacement or an evidence segment. */
+export type QueuedRow = PendingTransaction<QueuedTransaction>;
 
 /**
  * The round trip failed before any server answer could be read: offline, DNS,
@@ -120,8 +123,8 @@ const NOTHING_TO_SEND: DrainPlan = { send: null, supersededUpTo: null };
  * row with the same identity is a duplicate and is not provably older.
  */
 export function newerRowsQueued(
-  pending: readonly PendingTransaction[],
-  sent: PendingTransaction | null,
+  pending: readonly QueuedRow[],
+  sent: QueuedRow | null,
 ): boolean {
   if (sent === null || sent === undefined) {
     return false;
@@ -147,7 +150,7 @@ export function newerRowsQueued(
 
 type RowIdentity = { documentId: string; localSeq: number; clientTransactionId: string };
 
-function identityOf(row: PendingTransaction | null | undefined): Partial<RowIdentity> {
+function identityOf(row: QueuedRow | null | undefined): Partial<RowIdentity> {
   return {
     documentId: row?.documentId,
     localSeq: row?.localSeq,
@@ -156,7 +159,7 @@ function identityOf(row: PendingTransaction | null | undefined): Partial<RowIden
 }
 
 /** A row can be told apart from every other only by a non-empty document, sequence and key. */
-function isIdentifiable(row: PendingTransaction | null | undefined): boolean {
+function isIdentifiable(row: QueuedRow | null | undefined): boolean {
   const { documentId, localSeq, clientTransactionId } = identityOf(row);
   return (
     typeof documentId === "string" &&
@@ -246,7 +249,7 @@ export function isDiverged(marker: AwaitingReceipt | null | undefined): boolean 
  * marker that `planDrain` rejects as malformed, so the queue stalls visibly
  * instead of sending a newer row on a base that may already be gone.
  */
-export function awaitingReceiptFor(sent: PendingTransaction): AwaitingReceipt {
+export function awaitingReceiptFor(sent: QueuedRow): AwaitingReceipt {
   const documentId = sent?.documentId;
   const localSeq = sent?.localSeq;
   const clientTransactionId = sent?.tx?.clientTransactionId;
@@ -558,8 +561,8 @@ const NOT_OWED = new WeakSet<object>();
  * newer row is in flight; only the queue of now can tell.
  */
 export type AnswerFlight = {
-  sent: PendingTransaction;
-  pending: readonly PendingTransaction[];
+  sent: QueuedRow;
+  pending: readonly QueuedRow[];
 };
 
 /**
@@ -826,7 +829,7 @@ const KEY_REFUSED: ReadonlySet<string> = new Set([
  *                               hold (#181). Call `outcomeToEvents` first.
  */
 export function nextAwaitingReceipt(
-  sent: PendingTransaction,
+  sent: QueuedRow,
   outcome: DrainOutcome,
   previous: AwaitingReceipt | null,
 ): AwaitingReceipt | null {
@@ -883,7 +886,7 @@ export function nextAwaitingReceipt(
   return previous ?? awaitingReceiptFor(sent);
 }
 
-function isSameRow(marker: AwaitingReceipt, sent: PendingTransaction): boolean {
+function isSameRow(marker: AwaitingReceipt, sent: QueuedRow): boolean {
   return isSameIdentity(
     {
       documentId: marker.documentId,
@@ -945,7 +948,7 @@ export function mayAttempt(schedules: RetrySchedules, documentId: string, nowMs:
  * author's explicit confirmation.
  */
 export function adoptDiscardsNewerRows(
-  queue: readonly PendingTransaction[],
+  queue: readonly QueuedRow[],
   documentId: string,
   held: AwaitingReceipt | null,
 ): boolean {
@@ -963,7 +966,7 @@ export function adoptDiscardsNewerRows(
  * read as consent.
  */
 export function adoptServerEvents(
-  queue: readonly PendingTransaction[],
+  queue: readonly QueuedRow[],
   documentId: string,
   held: AwaitingReceipt | null,
   confirmed: boolean,

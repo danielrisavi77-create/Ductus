@@ -5,7 +5,11 @@
  *
  * One provider owns the editor, the Web Lock and the `LocalDocumentSaver`;
  * the sheet (`LocalEditor`) and the status bar (`useLocalStatus`) only render
- * what it holds. Nothing here touches the network.
+ * what it holds. The one request it starts is the live view's publisher
+ * (`src/client/live-publisher.ts`, B-LIVE step 4): for a signed-in person it
+ * sends the last state of the document, stops before the sign-out fence and
+ * starts again on "Ostani". It is not the evidence: the journal, the drain
+ * and the save state know nothing of it.
  *
  * - One writer per document: the tab holding the Web Lock journals; any other
  *   tab shows the blocked notice, stays read-only and reads the journal again
@@ -51,12 +55,14 @@ import { createEditorExtensions } from "@/editor/schema";
 import { StorableInput } from "@/editor/storable-input";
 import { storableDocument } from "@/editor/storable-text";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
+import { createLivePublisher, type LivePublisher } from "@/client/live-publisher";
 import { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
 import {
   LocalDocumentSaver, type SaverFailure, type SaverSnapshot,
 } from "@/lib/journal/local-document-saver";
 
 import LogoutDialog from "./LogoutDialog";
+import { endRun } from "./run-refs";
 import type { LogoutPlan } from "./logout-plan";
 
 /** Quiet time after the last change before a candidate is proposed. */
@@ -139,8 +145,19 @@ function sameIds(editor: Editor, doc: CanonicalDocument): boolean {
 }
 
 export function LocalDocumentProvider({
-  scope, documentId, session = null, children,
-}: { scope: string; documentId: string; session?: SessionMark | null; children: ReactNode }) {
+  scope, documentId, session = null, livePublish = false, children,
+}: {
+  scope: string;
+  documentId: string;
+  session?: SessionMark | null;
+  /**
+   * True only when the page read that this student acknowledged the current
+   * notice of the assignment (PRODUCT §5 rules 6 and 14, F-121): without it
+   * the publisher is never made, so no text leaves the tab.
+   */
+  livePublish?: boolean;
+  children: ReactNode;
+}) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [snapshot, setSnapshot] = useState<SaverSnapshot | null>(null);
   const [words, setWords] = useState(0);
@@ -157,6 +174,9 @@ export function LocalDocumentProvider({
   const readyRef = useRef(false);
   const dirtyRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The live view's publisher (B-LIVE step 4): only while a signed-in tab
+  // holds the lock and may write. It is not the evidence and never sets SYNCED.
+  const publisherRef = useRef<LivePublisher | null>(null);
 
   // Builds and proposes the candidate for what the editor holds now.
   const flushRef = useRef(() => {
@@ -177,6 +197,7 @@ export function LocalDocumentProvider({
     setInvalid(false);
     setWords(countWords(candidate.doc));
     void saver.propose(candidate.doc);
+    publisherRef.current?.offer(candidate.doc);
   });
 
   const editor = useEditor({
@@ -242,6 +263,8 @@ export function LocalDocumentProvider({
     // browser neither reads nor writes it. The lock is kept, so this tab
     // never opens the journal again; it goes with the page.
     const stop = () => {
+      // Nothing more is published for a session that has ended.
+      publisherRef.current?.stop();
       flush();
       disposed = true;
       readyRef.current = false;
@@ -309,6 +332,9 @@ export function LocalDocumentProvider({
       const unsubscribe = saver.subscribe((next) => {
         if (!disposed) setSnapshot(next);
       });
+      // This run's own values: the refs are shared with the next run (F-125 t. 2).
+      let publisher: LivePublisher | null = null;
+      let locked: LockedLogout | null = null;
       try {
         const result = await saver.load();
         if (disposed) return;
@@ -336,10 +362,20 @@ export function LocalDocumentProvider({
         readyRef.current = true;
         editor.setEditable(true, false);
         setPhase("ready");
-        logoutRef.current = {
+        // Only a signed-in person who acknowledged the notice publishes; the
+        // local demo journal never does.
+        publisher = markTag === null || !livePublish
+          ? null : createLivePublisher({ documentId, current: () => !ended() });
+        publisherRef.current = publisher;
+        const own = publisher;
+        if (own && result.document) own.offer(result.document);
+        own?.start();
+        locked = {
           quiesce: async () => {
             // Nothing typed after this point is accepted.
             flush();
+            // Publishing stops before the sign-out fence (BACKEND 4.12 t. 8).
+            own?.stop();
             readyRef.current = false;
             editor.setEditable(false, false);
             await saver.settled();
@@ -359,6 +395,7 @@ export function LocalDocumentProvider({
             if (disposed) return;
             readyRef.current = true;
             editor.setEditable(true, false);
+            own?.start();
           },
           clear: async () => {
             try {
@@ -370,12 +407,13 @@ export function LocalDocumentProvider({
             }
           },
         };
+        logoutRef.current = locked;
         await new Promise<void>((resolve) => {
           release = resolve;
           if (disposed) resolve();
         });
       } finally {
-        logoutRef.current = null;
+        endRun({ publisher: publisherRef, logout: logoutRef }, { publisher, logout: locked });
         await saver.settled();
         unsubscribe();
         journal.close();
@@ -414,7 +452,7 @@ export function LocalDocumentProvider({
       window.removeEventListener("storage", recheck);
       window.removeEventListener("pageshow", recheck);
     };
-  }, [editor, scope, documentId, markTag, markAt]);
+  }, [editor, scope, documentId, markTag, markAt, livePublish]);
 
   // Writing stays stopped from here until "Ostani" or the end of the
   // session, so the count the dialog shows cannot grow behind it (I2).

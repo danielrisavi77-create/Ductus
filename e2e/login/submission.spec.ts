@@ -270,6 +270,36 @@ for (const [name, status, body, text] of [
   });
 }
 
+// The link from /rad (#653 contract 6385776645, P1-P4 and P7).
+const submitLinkOf = (page: Page) =>
+  page.locator(".workspace__bar").getByRole("link", { name: messagesHr.workspace.submitLink, exact: true });
+
+test("an acknowledged assignment on /rad links to its submission and sends nothing (P1, P2, P7)", async ({ page }) => {
+  await signIn(page, "/rad");
+  const assignment = await seedAssignment(true);
+  const bodies = recordSubmissions(page);
+  await page.goto(`/rad?zadatak=${assignment}`);
+  const link = submitLinkOf(page);
+  await expect(link).toBeVisible();
+  await expect(link).toHaveAttribute("href", pathOf(assignment));
+  await page.waitForTimeout(1000);
+  expect(bodies).toEqual([]);
+  await shoot(page, "poveznica");
+  await link.click();
+  await page.waitForURL(`**${pathOf(assignment)}`);
+  await expect(page.getByRole("heading", { level: 1, name: t.title })).toBeVisible();
+});
+
+test("/rad without an assignment, or with one this account cannot see, has no link to a submission (P3, P4)", async ({ page }) => {
+  await signIn(page, "/rad");
+  await expect(page.getByRole("textbox", { name: messagesHr.workspace.documentLabel })).toBeVisible();
+  await expect(submitLinkOf(page)).toHaveCount(0);
+  // An invented id no course of this account holds.
+  await page.goto("/rad?zadatak=3c2b1a09-8f7e-4d6c-9b5a-4e3d2c1b0a9f");
+  await expect(page.getByRole("textbox", { name: messagesHr.workspace.documentLabel })).toBeVisible();
+  await expect(submitLinkOf(page)).toHaveCount(0);
+});
+
 test("after a sign-out in another tab the work leaves the page and nothing is sent (criterion 7)", async ({ page, context }) => {
   await signIn(page, "/rad");
   const assignment = await seedAssignment(true);

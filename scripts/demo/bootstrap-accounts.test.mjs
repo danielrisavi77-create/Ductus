@@ -67,7 +67,8 @@ test("real browser redirects: wrong target and partial failure block grant; retr
   const loginPage = `<h1>Demo prijava</h1><form method="post" action="/interaction/one/login">
     <button name="account" value="demo-student">Demo studentica</button>
     <button name="account" value="demo-student-2">Demo student 2</button>
-    <button name="account" value="demo-teacher">Demo nastavnik</button></form>`;
+    <button name="account" value="demo-teacher">Demo nastavnik</button>
+    <button name="account" value="demo-teacher-2">Demo nastavnica</button></form>`;
   oidc = await serve(async (req, res) => {
     if (req.url === "/interaction/one") {
       const hop = `${oidc}/redirect/first?account=demo-student`;
@@ -123,7 +124,8 @@ test("real browser redirects: wrong target and partial failure block grant; retr
     async roles() { return [{ count: grants ? 1 : 0 }]; },
   };
   const browser = await chromium.launch({ headless: true });
-  const run = () => bootstrap({ browser, db, origins: [app, oidc], timeoutMs: 5_000, grant: () => { grants++; } })
+  const granted = [];
+  const run = () => bootstrap({ browser, db, origins: [app, oidc], timeoutMs: 5_000, grant: (id) => { grants++; granted.push(id); } })
     .catch((error) => { t.diagnostic(`${attack}: ${error.cause?.message ?? error.message}`); throw error; });
   try {
     for (attack of ["bounce", "port", "chain", "after-cookie", "popup", "frame"]) {
@@ -153,8 +155,10 @@ test("real browser redirects: wrong target and partial failure block grant; retr
     attack = "none";
     await run();
     await run();
-    assert.equal(users.size, 3);
-    assert.equal(grants, 2); // Existing operator is idempotent; each invocation is explicit.
+    assert.equal(users.size, 4);
+    // Existing operator is idempotent; each invocation is explicit, one per teacher and never a student.
+    assert.equal(grants, 4);
+    assert.deepEqual(granted, ["demo-teacher", "demo-teacher-2", "demo-teacher", "demo-teacher-2"]);
     assert.ok([...sessions.values()].every((session) => session.closed));
   } finally { await browser.close(); }
 });
