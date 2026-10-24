@@ -62,6 +62,7 @@ import {
 } from "@/lib/journal/local-document-saver";
 
 import LogoutDialog from "./LogoutDialog";
+import { endRun } from "./run-refs";
 import type { LogoutPlan } from "./logout-plan";
 
 /** Quiet time after the last change before a candidate is proposed. */
@@ -331,6 +332,9 @@ export function LocalDocumentProvider({
       const unsubscribe = saver.subscribe((next) => {
         if (!disposed) setSnapshot(next);
       });
+      // This run's own values: the refs are shared with the next run (F-125 t. 2).
+      let publisher: LivePublisher | null = null;
+      let locked: LockedLogout | null = null;
       try {
         const result = await saver.load();
         if (disposed) return;
@@ -360,17 +364,18 @@ export function LocalDocumentProvider({
         setPhase("ready");
         // Only a signed-in person who acknowledged the notice publishes; the
         // local demo journal never does.
-        const publisher = markTag === null || !livePublish
+        publisher = markTag === null || !livePublish
           ? null : createLivePublisher({ documentId, current: () => !ended() });
         publisherRef.current = publisher;
-        if (publisher && result.document) publisher.offer(result.document);
-        publisher?.start();
-        logoutRef.current = {
+        const own = publisher;
+        if (own && result.document) own.offer(result.document);
+        own?.start();
+        locked = {
           quiesce: async () => {
             // Nothing typed after this point is accepted.
             flush();
             // Publishing stops before the sign-out fence (BACKEND 4.12 t. 8).
-            publisher?.stop();
+            own?.stop();
             readyRef.current = false;
             editor.setEditable(false, false);
             await saver.settled();
@@ -390,7 +395,7 @@ export function LocalDocumentProvider({
             if (disposed) return;
             readyRef.current = true;
             editor.setEditable(true, false);
-            publisher?.start();
+            own?.start();
           },
           clear: async () => {
             try {
@@ -402,14 +407,13 @@ export function LocalDocumentProvider({
             }
           },
         };
+        logoutRef.current = locked;
         await new Promise<void>((resolve) => {
           release = resolve;
           if (disposed) resolve();
         });
       } finally {
-        publisherRef.current?.stop();
-        publisherRef.current = null;
-        logoutRef.current = null;
+        endRun({ publisher: publisherRef, logout: logoutRef }, { publisher, logout: locked });
         await saver.settled();
         unsubscribe();
         journal.close();
