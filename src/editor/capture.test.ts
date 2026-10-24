@@ -7,12 +7,12 @@ import { describe, expect, it } from "vitest";
 import { createEditStepsV1Replayer, removedRangeSha256 } from "@/adapters/evidence/edit-steps-v1-replayer";
 import { verifyDocumentSnapshot } from "@/domain/document/snapshot";
 import { verifyCanonicalEvidencePayloadV2 } from "@/domain/forensics/evidence-chain-v2";
-import { replayEvidenceSegmentsV2 } from "@/domain/forensics/evidence-replay-v2";
+import { digestCanonicalDocumentV2, replayEvidenceSegmentsV2 } from "@/domain/forensics/evidence-replay-v2";
 import type { EvidenceSourceV2 } from "@/domain/forensics/evidence-segment-v2";
 import type { JcsJsonValue } from "@/domain/forensics/jcs";
 
 import {
-  CaptureError, changeOf, EvidenceRecorder, MAX_SEGMENT_SPAN_MS, removedSliceSha256, type SegmentContext,
+  CaptureError, changeOf, EvidenceRecorder, MAX_SEGMENT_SPAN_MS, removedSliceSha256, type BuiltSegment, type SegmentContext,
 } from "./capture";
 import { tiptapToCanonical } from "./interop";
 import { createEditorExtensions } from "./schema";
@@ -192,16 +192,17 @@ describe("F-8 3d-1: a captured segment replays on the server's replayer", () => 
   );
 
   // At the start of a block the identity plugin names the empty block in
-  // front and the text keeps its id; an `attr` step only names a block
-  // without one, so the format cannot write it. Refused here, never sent as a
-  // segment the server would refuse (open: QA 494 finding 1).
-  it("Enter at the start of a block is refused before it is built into a segment", async () => {
+  // front and the text keeps its id. Until 3d-1b the recorder refused it
+  // (QA 494 finding 1); now it is written as a new empty block in front and
+  // the segment replays (granica 6; capture-rewrite.test.ts has the rest).
+  it("Enter at the start of a block replays, and the recorder keeps going", async () => {
     const t = setup("Izmisljeni tekst");
     t.editor.commands.setTextSelection(1);
     t.editor.commands.splitBlock();
     t.recorder.close();
-    await expect(t.recorder.takeSegment(CONTEXT)).rejects.toMatchObject({ code: "unsupported_step" });
-    expect(t.recorder.intact).toBe(false);
+    await replays(t.initial, (await t.recorder.takeSegment(CONTEXT))!);
+    expect(t.recorder.intact).toBe(true);
+    expect(t.editor.state.doc.child(1).attrs.nodeId).toBe(ID_A);
   });
 
   // A step that changes nothing is refused by the replayer
@@ -400,6 +401,156 @@ describe("F-8 3d-1: events, segments and time", () => {
     const t = setup();
     t.type("a");
     expect(await t.recorder.takeSegment(CONTEXT)).toBeNull();
+  });
+});
+
+/** Every segment the recorder gives until it has none or throws, and what it threw. */
+async function takeAll(recorder: EvidenceRecorder) {
+  const segments: BuiltSegment[] = [];
+  let context = CONTEXT;
+  try {
+    for (let built = await recorder.takeSegment(context); built; built = await recorder.takeSegment(context)) {
+      segments.push(built);
+      context = { ...CONTEXT, sequenceFrom: built.segment.sequenceTo + 1, predecessorSegmentHash: built.sha256 };
+    }
+    return { segments, thrown: null as unknown };
+  } catch (error) {
+    return { segments, thrown: error };
+  }
+}
+
+/** The editor's canonical document as segment bytes hold it. */
+const documentBytes = async (editor: Editor) => (await digestCanonicalDocumentV2(canonical(editor))).canonical;
+
+describe("F-8 3d-1b: a stop keeps the events closed before it (granica 10, F-104 t. 1)", () => {
+  // QA t. 3.
+  it("a gap while closed events wait: they come out first and replay, then the gap", async () => {
+    const t = setup();
+    t.editor.commands.setTextSelection(10);
+    t.type("a");
+    t.type("b", 1_000);
+    const sound = await documentBytes(t.editor);
+    t.type("c", 1_000);
+    const other = setup("Drugi");
+    expect(() => t.recorder.record(changeOf([other.editor.state.tr.insertText("x")], "editor", T0))).toThrow(CaptureError);
+    expect(t.recorder.intact).toBe(false);
+    expect(t.recorder.pendingEvents).toBe(2);
+    expect(() => t.type("d")).toThrow(CaptureError);
+    const { segments, thrown } = await takeAll(t.recorder);
+    expect(thrown).toMatchObject({ code: "gap" });
+    expect(segments.map((built) => built.eventCount)).toEqual([2]);
+    await replays(t.initial, segments[0]!);
+    // The open event the gap arose in ("c") is in no segment.
+    expect(new TextDecoder().decode(segments[0]!.document)).toBe(sound);
+    await expect(t.recorder.takeSegment(CONTEXT)).rejects.toMatchObject({ code: "gap" });
+  });
+
+  it("an event that cannot be built: the ones before it come out, it and the later ones never do", async () => {
+    const t = setup();
+    t.editor.commands.setTextSelection(10);
+    t.type("a");
+    t.type("b", 1_000);
+    t.recorder.close();
+    const unsupported = { toJSON: () => { throw new Error("no JSON form"); } } as unknown as Step;
+    const tr = t.editor.state.tr.insertText("q");
+    t.recorder.record({ steps: [unsupported], docs: [t.editor.state.doc], after: tr.doc, source: "editor", at: T0 + 9_000 });
+    t.recorder.close();
+    // The editor goes on from the document that change ended in, as a real one would.
+    t.editor.view.updateState(t.editor.state.apply(tr));
+    t.as("editor", 10_000);
+    t.type("c");
+    t.recorder.close();
+    expect(t.recorder.pendingEvents).toBe(4);
+    const { segments, thrown } = await takeAll(t.recorder);
+    expect(thrown).toBeInstanceOf(CaptureError);
+    expect(thrown).toMatchObject({ code: "unsupported_step" });
+    expect(segments.map((built) => [built.segment.sequenceFrom, built.segment.sequenceTo])).toEqual([[1, 2]]);
+    await replays(t.initial, segments[0]!);
+    expect(t.recorder.intact).toBe(false);
+    expect(t.recorder.pendingEvents).toBe(0);
+    expect(() => t.type("d")).toThrow(CaptureError);
+  });
+
+  it("one event over D-96 between sound ones: the one before comes out, then too_large", async () => {
+    const t = setup();
+    t.editor.commands.setTextSelection(10);
+    t.type("a");
+    t.as("paste", 1_000);
+    t.editor.view.dispatch(t.editor.state.tr.insertText("z".repeat(2_200_000)));
+    t.as("editor", 1_000);
+    t.type("c");
+    t.recorder.close();
+    const { segments, thrown } = await takeAll(t.recorder);
+    expect(thrown).toMatchObject({ code: "too_large" });
+    expect(segments.map((built) => built.eventCount)).toEqual([1]);
+    await replays(t.initial, segments[0]!);
+  });
+});
+
+describe("F-8 3d-1b: event windows and time", () => {
+  // QA t. 4 (granica 11): a change without effect does not keep an event open.
+  it.each([["without", false], ["with", true]])(
+    "the same changes give the same events %s a change without effect between them",
+    async (_name, noop) => {
+      const t = setup("Odlomak B");
+      t.editor.commands.setTextSelection(10);
+      t.type("a");
+      if (noop) {
+        t.editor.commands.setTextSelection({ from: 1, to: 8 });
+        t.as("editor", 300);
+        t.editor.view.dispatch(t.editor.state.tr.replaceSelection(t.editor.state.selection.content()));
+        t.editor.commands.setTextSelection(11);
+        t.as("editor", 300);
+      } else {
+        t.as("editor", 600);
+      }
+      t.type("b", 0);
+      t.recorder.close();
+      const built = (await t.recorder.takeSegment(CONTEXT))!;
+      expect(built.segment.events.map((event) => event.steps.length)).toEqual([1, 1]);
+      await replays(t.initial, built);
+    },
+  );
+
+  // QA t. 5 (F-104 t. 2): a clock that goes back gives no falling offset.
+  it.each([["a few seconds", -5_000], ["past a minute", -90_000]])(
+    "a clock that goes back %s: offsets never fall and every span stays under 30 s",
+    async (_name, back) => {
+      const t = setup();
+      t.editor.commands.setTextSelection(10);
+      t.type("ab", 100);
+      t.as("editor", back);
+      t.type("cd", 100);
+      t.as("editor", 29_900);
+      t.type("e", 100);
+      t.recorder.close();
+      const { segments, thrown } = await takeAll(t.recorder);
+      expect(thrown).toBeNull();
+      expect(segments.length).toBeGreaterThan(0);
+      for (const built of segments) {
+        const offsets = built.timing.events.flatMap((event) => event.stepOffsetsMs);
+        offsets.slice(1).forEach((offset, i) => expect(offset).toBeGreaterThanOrEqual(offsets[i]!));
+        expect(Math.max(...offsets) - Math.min(...offsets)).toBeLessThan(MAX_SEGMENT_SPAN_MS);
+        expect(built.segment.observedEndedAt >= built.segment.observedStartedAt).toBe(true);
+      }
+      const payloads = await Promise.all(segments.map((built) => verifyCanonicalEvidencePayloadV2(built.bytes)));
+      const chain = payloads.flatMap((payload) => (payload.ok ? [payload.segment] : []));
+      expect(await replayEvidenceSegmentsV2(t.initial, chain, createEditStepsV1Replayer())).toMatchObject({ ok: true });
+    },
+  );
+});
+
+describe("F-8 3d-1b: a hash that cannot be computed (qa494h MANJE 1)", () => {
+  // QA t. 6: half of a surrogate pair removed by a step a program made.
+  it("removing half of a surrogate pair is CaptureError unsupported_step, and stops the recorder", async () => {
+    const t = setup("Odlomak \u{1F600} B");
+    t.editor.view.dispatch(t.editor.state.tr.delete(10, 11));
+    t.recorder.close();
+    const thrown = await t.recorder.takeSegment(CONTEXT).catch((error: unknown) => error);
+    expect(thrown).toBeInstanceOf(CaptureError);
+    expect(thrown).toMatchObject({ code: "unsupported_step" });
+    expect(t.recorder.intact).toBe(false);
+    expect(() => t.type("a")).toThrow(CaptureError);
   });
 });
 
