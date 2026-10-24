@@ -143,6 +143,38 @@ const clearNoticeFixture = () => withAdmin((client) => client.query(
   [LOCAL_DEMO_DOCUMENT_ID]));
 test.afterEach(clearNoticeFixture);
 
+// K-4b (#655): F-7 enrollment by code into the F-6 course. Until the teacher
+// screen shows the code (#576), the test takes it from the real teacher HTTP
+// route; that request is test input, not a step of the teacher's screen.
+const STUDENT_ID = "demo-student@demo.ductus.test";
+const ASSIGNMENT_TITLE = "Izmišljeni zadatak o gradskim knjižnicama";
+let enrollmentCode: string | null = null;
+let enrolledCourse: string | null = null;
+
+/** The F-6 course of the demo teacher and its assignments, read as the local admin. */
+const k4Course = () => withAdmin(async (client) => {
+  const { rows } = await client.query<{ course: string; assignment: string | null }>(
+    `SELECT c.id AS course, a.id AS assignment FROM institution.course c
+       JOIN identity.user_account u ON u.id = c.created_by
+       LEFT JOIN institution.assignment a ON a.course_id = c.id
+      WHERE c.name = $1 AND u.hr_edu_person_unique_id = $2`, [COURSE_NAME, TEACHER_ID]);
+  const courses = new Set(rows.map((row) => row.course));
+  if (courses.size !== 1) throw new Error("expected exactly one K-4 course of the demo teacher");
+  return { course: rows[0]!.course, assignments: rows.flatMap((row) => (row.assignment ? [row.assignment] : [])) };
+});
+
+// Closes only the demo student's membership in the K-4 course, so the next run enrolls again.
+test.afterEach(async () => {
+  if (enrolledCourse) {
+    await withAdmin((client) => client.query(
+      `UPDATE institution.course_member m SET member_to = now() FROM identity.user_account u
+        WHERE m.course_id = $1 AND m.user_id = u.id AND u.hr_edu_person_unique_id = $2
+          AND m.role = 'student' AND m.member_to IS NULL`, [enrolledCourse, STUDENT_ID]));
+  }
+  enrolledCourse = null;
+  enrollmentCode = null;
+});
+
 test("demo walk-through", async ({ browser, page, context }) => {
   let token = "";
 
@@ -203,6 +235,21 @@ test("demo walk-through", async ({ browser, page, context }) => {
     await snapshot(page, "1-zadatak-objavljen");
   });
 
+  // Test input until #576: the teacher screen does not show the code yet, so the
+  // signed-in teacher's own session asks the real route for it (#575).
+  await test.step("1. Testni ulaz do #576: nastavnik izdaje šifru za upis kroz stvarnu rutu", async () => {
+    const { course } = await k4Course();
+    const validUntil = new Date(Date.now() + 10 * 60_000).toISOString();
+    const issued = await page.request.post(`/api/institution/courses/${course}/enrollment-code`, {
+      headers: { origin: "http://localhost:3000", "content-type": "application/json" }, data: { validUntil },
+    });
+    expect(issued.status()).toBe(200);
+    expect(issued.headers()["cache-control"]).toBe("no-store");
+    const { code } = await issued.json() as { code: string };
+    expect(code).toMatch(/^[0-9A-F]{4}(-[0-9A-F]{4}){3}$/);
+    enrollmentCode = code;
+  });
+
   await test.step("1. Nastavnik se odjavljuje", async () => {
     await signOut(page, token);
     await snapshot(page, "1-nastavnik-odjavljen");
@@ -224,10 +271,58 @@ test("demo walk-through", async ({ browser, page, context }) => {
     await snapshot(page, "2-studentica-prijavljena");
   });
 
-  // The complete F-7 still needs the teacher's code and the actual enrollment
-  // flow (#575/#542). The notice UI below uses the existing synthetic fixture;
-  // it does not join the F-6 assignment to the connected editor/evidence flow.
-  await test.step.skip("2. F-7: studentica se upisuje kodom i potvrđuje obavijest", async () => {});
+  // F-7 (demo point 2): the student enrolls with the teacher's code through the
+  // real form and route (#542) and lands on the notice of the F-6 assignment.
+  // Nothing goes to the evidence, live or submission routes on the way.
+  await test.step("2. F-7: studentica se upisuje kodom i stiže na obavijest zadatka iz koraka 1", async () => {
+    expect(enrollmentCode).not.toBeNull();
+    const { course, assignments } = await k4Course();
+    const evidenceRequests: string[] = [];
+    const observe = (request: Request) => {
+      const path = new URL(request.url()).pathname;
+      if (/^\/api\/(evidence|live|submission)(\/|$)/.test(path)) evidenceRequests.push(path);
+    };
+    await page.goto("/upis");
+    page.on("request", observe);
+    try {
+      await page.getByLabel(t.student.enroll.label).fill(enrollmentCode!.toLowerCase());
+      const response = page.waitForResponse((r) =>
+        new URL(r.url()).pathname === "/api/institution/enrollments" && r.request().method() === "POST");
+      await page.getByRole("button", { name: t.student.enroll.submit }).click();
+      const enrolled = await response;
+      enrolledCourse = course;
+      expect(enrolled.status()).toBe(200);
+      expect(enrolled.request().postDataJSON()).toEqual({ code: enrollmentCode!.replaceAll("-", "") });
+      expect(await enrolled.json()).toEqual({ courseId: course });
+
+      await page.waitForURL(/\/zadatak\/[0-9a-f-]{36}$/);
+      const assignmentId = new URL(page.url()).pathname.split("/").pop()!;
+      expect(assignments).toContain(assignmentId);
+      await expect(page.getByRole("heading", { level: 1, name: ASSIGNMENT_TITLE })).toBeVisible();
+      await expect(page.getByRole("heading", { name: t.student.teacherHeading })).toBeVisible();
+      await expect(editorOf(page)).toHaveCount(0);
+      // F-6 opens the assignment on 2 Nov 2026; before then the notice has no confirmation (FE-D8).
+      const { rows: [state] } = await withAdmin((client) => client.query<{ members: string; open: boolean }>(
+        `SELECT (SELECT count(*) FROM institution.course_member m JOIN identity.user_account u ON u.id = m.user_id
+                  WHERE m.course_id = $1 AND u.hr_edu_person_unique_id = $2 AND m.role = 'student'
+                    AND m.member_to IS NULL) AS members,
+                (SELECT v.opens_at <= now() FROM institution.assignment a JOIN institution.assignment_version v
+                  ON v.assignment_id = a.id AND v.version_no = a.current_version WHERE a.id = $3) AS open`,
+        [course, STUDENT_ID, assignmentId]));
+      expect(Number(state!.members)).toBe(1);
+      await expect(page.getByRole("checkbox", { name: t.student.checkbox })).toHaveCount(state!.open ? 1 : 0);
+      expect(evidenceRequests).toEqual([]);
+      await snapshot(page, "2-upis-kodom-obavijest-zadatka");
+    } finally {
+      page.off("request", observe);
+    }
+  });
+
+  // The rest of F-7 on the F-6 assignment: confirming its notice (possible from
+  // its opening on 2 Nov) and writing in its own document, which waits for the
+  // editor to follow the assignment (F-113). The step below confirms the notice
+  // of the synthetic fixture instead.
+  await test.step.skip("2. F-7: potvrda obavijesti zadatka iz koraka 1 i pisanje u njegovom dokumentu", async () => {});
 
   await test.step("2. F-7 djelomično: studentica potvrđuje obavijest kroz stvarno sučelje", async () => {
     await seed();
