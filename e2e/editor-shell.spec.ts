@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 /**
  * The editor shell on /rad (F-8 step 1): the toolbar above the sheet and the
@@ -13,6 +13,27 @@ const BLOCKED = "Ova kartica ništa ne sprema dok je druga otvorena.";
 const editorOf = (page: Page) => page.getByRole("textbox", { name: "Tekst rada" });
 const toolbarOf = (page: Page) => page.getByRole("toolbar", { name: "Oblikovanje teksta" });
 const tool = (page: Page, name: string) => toolbarOf(page).getByRole("button", { name, exact: true });
+/**
+ * A tool on the toolbar or, when a narrow toolbar moved it there, in "Više"
+ * (FE-D5), which this opens: the same command either way. `on` names the
+ * attribute that says whether it is on (aria-pressed, aria-checked).
+ */
+async function control(page: Page, name: string): Promise<{ target: Locator; on: string }> {
+  const button = tool(page, name);
+  if (await button.isVisible()) return { target: button, on: "aria-pressed" };
+  const more = toolbarOf(page).getByRole("button", { name: "Više" });
+  if ((await more.getAttribute("aria-expanded")) !== "true") await more.click();
+  const item = page.getByRole("menu", { name: "Više alata" }).getByRole("menuitemcheckbox", { name, exact: true });
+  return { target: item, on: "aria-checked" };
+}
+async function applyTool(page: Page, name: string): Promise<void> {
+  await (await control(page, name)).target.click();
+}
+async function expectOn(page: Page, name: string, on: boolean): Promise<void> {
+  const { target, on: attribute } = await control(page, name);
+  await expect(target).toHaveAttribute(attribute, String(on));
+  if (attribute === "aria-checked") await page.keyboard.press("Escape");
+}
 const outlineOf = (page: Page) => page.getByRole("navigation", { name: "Naslovi u radu" });
 const chipOf = (page: Page) => page.locator(".workspace__status .sync-chip");
 
@@ -31,7 +52,7 @@ async function openStructure(page: Page): Promise<void> {
 /** Types a block, turns it into a heading of `level` (or keeps a paragraph), then starts a new line. */
 async function block(page: Page, text: string, level?: 1 | 2 | 3): Promise<void> {
   await page.keyboard.type(text);
-  if (level) await tool(page, `Naslov ${level}`).click();
+  if (level) await applyTool(page, `Naslov ${level}`);
   await page.keyboard.press("End");
   await page.keyboard.press("Enter");
 }
@@ -44,9 +65,9 @@ test.describe("editor shell", () => {
 
     await editorOf(page).click();
     await page.keyboard.type("Uvod u temu");
-    await tool(page, "Naslov 1").click();
+    await applyTool(page, "Naslov 1");
     await expect(editorOf(page).locator("h1")).toHaveText("Uvod u temu");
-    await expect(tool(page, "Naslov 1")).toHaveAttribute("aria-pressed", "true");
+    await expectOn(page, "Naslov 1", true);
     await expect(tool(page, "Odlomak")).toHaveAttribute("aria-pressed", "false");
     await expect(outlineOf(page).getByRole("button")).toHaveText(["Uvod u temu"]);
 
@@ -62,7 +83,7 @@ test.describe("editor shell", () => {
     await openEditor(page);
     await editorOf(page).click();
     await page.keyboard.type("Okvir rada");
-    await tool(page, "Naslov 2").click();
+    await applyTool(page, "Naslov 2");
     await expect(outlineOf(page).getByRole("button")).toHaveText(["Okvir rada"]);
     await tool(page, "Odlomak").click();
     await expect(editorOf(page).locator("h2")).toHaveCount(0);
@@ -115,10 +136,17 @@ test.describe("editor shell", () => {
   test("the toolbar is one Tab stop and the arrow keys move inside it", async ({ page }) => {
     await openEditor(page);
     await tool(page, "Odlomak").focus();
+    // The next tool: Naslov 1, or Podebljano when a narrow toolbar moved the headings to "Više".
+    const next = (await tool(page, "Naslov 1").isVisible()) ? "Naslov 1" : "Podebljano";
     await page.keyboard.press("ArrowRight");
-    await expect(tool(page, "Naslov 1")).toBeFocused();
+    await expect(tool(page, next)).toBeFocused();
     await page.keyboard.press("End");
-    await expect(tool(page, "Ponovi")).toBeFocused();
+    // The last stop is "Prikaz" (FE-D5); the tools before it are unchanged.
+    await expect(toolbarOf(page).getByRole("button", { name: "Prikaz" })).toBeFocused();
+    await page.keyboard.press("ArrowLeft");
+    // Ponovi, or "Više" when a narrow toolbar has one.
+    await expect(toolbarOf(page).locator(":focus")).toHaveAttribute("data-roving", /^(redo|more)$/);
+    await page.keyboard.press("End");
     await page.keyboard.press("ArrowRight");
     await expect(tool(page, "Odlomak")).toBeFocused();
     await expect(toolbarOf(page).locator('button[tabindex="0"]')).toHaveCount(1);
@@ -133,9 +161,10 @@ test.describe("editor shell", () => {
     const second = await context.newPage();
     await second.goto("/rad");
     await expect(second.getByText(BLOCKED, { exact: false })).toBeVisible();
-    await expect(tool(second, "Naslov 1")).toHaveAttribute("aria-disabled", "true");
+    const heading1 = (await control(second, "Naslov 1")).target;
+    await expect(heading1).toHaveAttribute("aria-disabled", "true");
     // `force`: Playwright waits for an enabled button, and this one says it is not.
-    await tool(second, "Naslov 1").click({ force: true });
+    await heading1.click({ force: true });
     await expect(editorOf(second).locator("h1")).toHaveCount(0);
     await expect(editorOf(page).locator("h1")).toHaveCount(0);
   });

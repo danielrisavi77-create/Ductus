@@ -17,6 +17,7 @@
 
 /** The product name on screen (D-124): one value, read through `app.name`. */
 const APP_NAME = "Ductura";
+const NOTICE_STEP_COUNT = "1 od 2";
 
 export const hr = {
   app: {
@@ -26,11 +27,31 @@ export const hr = {
   shell: {
     skipToContent: "Preskoči na sadržaj",
     demoBadge: "Demo · izmišljeni podaci",
+    // Design v3 shell (#476 6314969336): only static labels and the role the
+    // server read; no names or counts the app does not have.
+    sideNav: "Bočna navigacija",
+    workNav: "Radni prostor",
+    home: `${APP_NAME}, početna`,
+    space: { teacher: "Nastavnički prostor", student: "Studentski prostor" },
+    nav: {
+      courses: "Moji kolegiji",
+      newCourse: "Novi kolegij i zadatak",
+      fastPath: "Brz put",
+      workspace: "Radni prostor",
+      enroll: "Upis u kolegij",
+    },
+    role: { teacher: "Nastavnik", student: "Student" },
+    demoNote: "Nijedan stvarni osobni podatak.",
+    signOut: "Odjava",
+    openNav: "Otvori navigaciju",
+    closeNav: "Zatvori navigaciju",
+    theme: "Promijeni svijetlu ili tamnu temu",
+    breadcrumb: "Put",
   },
   home: {
     lead: `${APP_NAME} ne procjenjuje autorstvo ni korištenje AI-ja. Prije početka vidiš što nastavnik vidi i od kada.`,
     openWorkspace: "Otvori radni prostor",
-    openTeacher: "Novi kolegij i zadatak",
+    openTeacher: "Moji kolegiji",
   },
   // FE-H1 (#476): public home page for a visitor without a session. Every
   // entry leads to /prijava; sign-in is AAI@EduHr only (D-09). Live view and
@@ -165,6 +186,7 @@ export const hr = {
     unavailable: "Provjera nastavničke uloge trenutačno nije dostupna. Pokušaj ponovno.",
     signIn: "Prijavi se",
     backHome: "Na početnu",
+    backCourses: "Moji kolegiji",
     course: {
       heading: "Kolegij",
       name: "Naziv",
@@ -210,6 +232,9 @@ export const hr = {
       opensAt: "Otvaranje",
       dueAt: "Rok",
       instructions: "Upute studentima",
+      wordMin: "Najmanji broj riječi (neobvezno)",
+      wordMax: "Najveći broj riječi (neobvezno)",
+      wordRangeHint: "Upiši cijeli broj od 1 do 1 000 000. Najmanji broj ne smije biti veći od najvećeg.",
       publish: "Objavi zadatak",
       pending: "Objavljivanje…",
       published: "Objavljeno",
@@ -218,7 +243,7 @@ export const hr = {
       studentsNotified: "Studenti dobivaju obavijest kad upišu kolegij.",
       newVersion: "Izmjena zadatka nakon objave stvara novu verziju; studenti je ponovno potvrđuju.",
       errors: {
-        invalid: "Provjeri naslov, vrstu rada, otvaranje i rok. Rok mora biti nakon otvaranja.",
+        invalid: "Provjeri naslov, vrstu rada, otvaranje, rok i raspon riječi. Rok mora biti nakon otvaranja.",
         unauthorized: "Prijava nije valjana. Prijavi se ponovno.",
         forbidden: "Za ovaj račun nije dopušteno objavljivanje zadatka u ovom kolegiju.",
         conflict: "Zadatak s istim ključem već postoji uz druge podatke. Provjeri zadatak i objavi ponovno.",
@@ -273,7 +298,7 @@ export const hr = {
     },
     preview: {
       heading: "Kako vidi student: obavijest prije prve rečenice",
-      step: "Korak 1 od 2",
+      step: `Korak ${NOTICE_STEP_COUNT}`,
       untitled: "Naslov zadatka",
       opensFrom: "otvoreno od",
       due: "rok",
@@ -281,6 +306,22 @@ export const hr = {
     },
   },
   // Screen 11, the teacher's fast path (F-11, D-80 point 2). Lines are facts in words (PRODUCT §5 rule 2).
+  // Z3 (A), #476 6289158306: the teacher's entry at /nastavnik. The order is
+  // the route's (year, name; assignments by due time) and nothing reorders it.
+  teacherCourses: {
+    title: "Moji kolegiji",
+    lead: "Kolegiji u kojima predaješ i njihovi zadaci. Poredak: akademska godina, pa naziv; zadaci po roku.",
+    newCourse: "Novi kolegij i zadatak",
+    empty: "Nemaš kolegija u kojima predaješ.",
+    emptyLead: "Stvori kolegij i objavi prvi zadatak.",
+    noAssignments: "Još nema zadataka.",
+    unavailable: "Kolegiji trenutačno nisu dostupni. Pokušaj ponovno.",
+    retry: "Pokušaj ponovno",
+    due: "rok",
+    at: "u",
+    students: { one: "student", few: "studenta", many: "studenata" },
+    countNote: "Broj studenata služi samo za pregled; po njemu se ništa ne poreda.",
+  },
   fastPath: {
     title: "Brz put",
     intro: "Radovi jednog zadatka, jedan za drugim. Prikaz samo čita; ništa ne mijenja.",
@@ -379,6 +420,8 @@ export const hr = {
     statusLoading: "Učitavanje rada…",
     statusNoJournal: "Ovdje se ništa ne sprema.",
     selectedWords: "označeno {words}",
+    wordMinimum: "najmanje {words}",
+    wordMaximum: "najviše {words}",
     pagesApprox: "≈ {pages} str.",
   },
   editor: {
@@ -410,6 +453,12 @@ export const hr = {
     italic: "Kurziv",
     undo: "Poništi",
     redo: "Ponovi",
+    // FE-D5, editor-v11: tools that do not fit, and the sheet theme.
+    more: "Više",
+    moreMenu: "Više alata",
+    view: "Prikaz",
+    viewMenu: "Prikaz",
+    sheet: "List",
   },
   outline: {
     label: "Naslovi u radu",
@@ -450,19 +499,48 @@ export const hr = {
   liveView: {
     context: "Rad uživo",
     documentLabel: "Tekst rada",
+    sidePanel: "Komentari i granice zapisa",
     loading: "Učitavanje rada…",
-    empty: "Student još nije započeo rad.",
-    note: "Tekst se osvježava dok student piše. Student vidi isti prikaz svog rada.",
+    empty: "Student još nije poslao tekst.",
+    note: "Prikazan je zadnji tekst koji je studentov preglednik poslao. To nije zapis rada i može kasniti ili zastati. Student vidi isti prikaz svog rada.",
     signIn: "Prijavi se",
     signInFirst: "Prijavi se da vidiš rad.",
     invalid: "Ova poveznica ne vodi do rada.",
     connection: {
       loading: "Povezivanje…",
-      live: "Prikaz uživo",
+      live: "Veza radi",
       retrying: "Veza je prekinuta. Prikazan je zadnji primljeni tekst. Ponovno povezivanje…",
       paused: "Prikaz miruje dok je kartica u pozadini.",
       signedOut: "Prijava je istekla. Prijavi se ponovno da vidiš rad.",
       notFound: "Ovaj rad nije dostupan ovom računu.",
+    },
+  },
+  // DAN-86 step 2c: the teacher's comment on a marked passage of the live view
+  // (design pregled-radova-v2 "Novi komentar"; B-10, BACKEND 4.11).
+  // F-10 PR4: the state line of the summary card on the teacher's view of a
+  // work. The summary's own text is `summary`, the same for every reader.
+  summaryCard: {
+    loading: "Učitavanje sažetka…",
+    signedOut: "Prijava je istekla. Prijavi se ponovno da vidiš sažetak.",
+    notFound: "Sažetak ovog rada nije dostupan ovom računu.",
+    unavailable: "Sažetak trenutačno nije dostupan. Pokušaj ponovno.",
+    refresh: "Osvježi sažetak",
+  },
+  teacherComments: {
+    hint: "Označi tekst u radu za komentar.",
+    empty: "Nema komentara. Označi tekst u radu.",
+    newTitle: "Novi komentar",
+    bodyLabel: "Tekst komentara",
+    publish: "Objavi",
+    publishing: "Objavljivanje…",
+    cancel: "Odustani",
+    resolve: "Označi riješenim",
+    reopen: "Ponovno otvori",
+    errors: {
+      signedOut: "Prijava je istekla. Prijavi se ponovno.",
+      forbidden: "Ovaj račun ne može komentirati ovaj rad.",
+      invalid: "Komentar nije prihvaćen. Napiši od 1 do 2000 znakova.",
+      unavailable: "Komentar nije objavljen. Pokušaj ponovno.",
     },
   },
   // K-3 text (PLAN-DEMO point 8, D-80 point 3; owner on #87, 6266445027 point 3):
@@ -515,7 +593,11 @@ export const hr = {
     },
     notFound: "Ovaj zadatak nije dostupan ovom računu. Upiši kolegij kodom koji ti daje nastavnik.",
     unavailable: "Zadatak trenutačno nije moguće učitati. Pokušaj ponovno.",
-    step: "Obavijest prije prve rečenice · korak 2 od 2",
+    // FE-D8 (#476 row 05): the states around the notice; the notice text itself is unchanged.
+    loading: "Učitavanje zadatka…",
+    notOpen: "Zadatak se otvara {time}. Obavijest potvrđuješ kad se zadatak otvori.",
+    pastDue: "Rok zadatka je prošao {time}.",
+    step: `Obavijest prije prve rečenice · korak ${NOTICE_STEP_COUNT}`,
     opensFrom: "otvoreno od",
     due: "rok",
     toolsHeading: "Uporaba alata u ovom zadatku (FPZG čl. 8)",
@@ -540,7 +622,7 @@ export const hr = {
       replay: "Nastavnik (mentor) zadatka moći će reproducirati nastanak rada znak po znak, pa i obrisani tekst. Istu reprodukciju svog rada vidjet ćeš i ti.",
       purpose: "Prikaz uživo i reprodukcija služit će praćenju nastanka rada i komentarima, nikad ocjeni ni rangiranju.",
       history: "Povijest verzija i sažetak procesa, isti kao što ga vidiš ti.",
-      noVerdict: "Ductus ne procjenjuje autorstvo ni korištenje AI-ja.",
+      noVerdict: `${APP_NAME} ne procjenjuje autorstvo ni korištenje AI-ja.`,
     },
     // D-05, PRODUCT §6 "Profili evidencije": only for the extended profile.
     teacherExtended: "Usporedbu verzija na kraju sesija i poslanih verzija.",

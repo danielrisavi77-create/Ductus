@@ -11,18 +11,19 @@ CREATE FUNCTION pg_temp.create_with_key(
   p_instructions text DEFAULT 'Prvi red uputa.', p_work_type text DEFAULT 'essay',
   p_opens_at text DEFAULT '2026-11-02 08:00+01', p_due_at text DEFAULT '2026-12-01 23:59+01',
   p_ai_policy text DEFAULT 'partially_allowed', p_ai_purposes text[] DEFAULT ARRAY['proofreading']::text[],
-  p_evidence_profile text DEFAULT 'basic', p_import_allowed boolean DEFAULT false
+  p_evidence_profile text DEFAULT 'basic', p_import_allowed boolean DEFAULT false,
+  p_word_min integer DEFAULT NULL, p_word_max integer DEFAULT NULL
 )
 RETURNS text LANGUAGE sql AS $f$
   SELECT pg_temp.ask(p_actor, format(
-    'SELECT institution.create_assignment(%s, %L::uuid, %L, %L, %L, %L::timestamptz, %L::timestamptz, %L, %L::text[], %L, %L)',
+    'SELECT institution.create_assignment(%s, %L::uuid, %L, %L, %L, %L::timestamptz, %L::timestamptz, %L, %L::text[], %L, %L, %L::integer, %L::integer)',
     p_course, p_key, p_title, p_instructions, p_work_type, p_opens_at, p_due_at,
-    p_ai_policy, p_ai_purposes, p_evidence_profile, p_import_allowed))
+    p_ai_policy, p_ai_purposes, p_evidence_profile, p_import_allowed, p_word_min, p_word_max))
 $f$;
 
 SELECT is(
   pg_temp.ask('anon', $$ SELECT institution.create_assignment({k1}, '00000000-0000-4000-8000-000000000001',
-    'Esej', 'Upute', 'essay', now(), now() + interval '1 day', 'partially_allowed', '{proofreading}', 'basic', false) $$),
+    'Esej', 'Upute', 'essay', now(), now() + interval '1 day', 'partially_allowed', '{proofreading}', 'basic', false, NULL, NULL) $$),
   'ZD401: not authenticated', 'an anonymous caller cannot reserve a request key'
 );
 SELECT is(
@@ -31,7 +32,7 @@ SELECT is(
 );
 SELECT is(
   pg_temp.ask('vesna', $$ SELECT institution.create_assignment({k1}, NULL, 'Esej', 'Upute', 'essay', now(),
-    now() + interval '1 day', 'partially_allowed', '{proofreading}', 'basic', false) $$),
+    now() + interval '1 day', 'partially_allowed', '{proofreading}', 'basic', false, NULL, NULL) $$),
   'ZD422: invalid input', 'a request key is required'
 );
 SELECT is(
@@ -90,7 +91,7 @@ SELECT is(
 );
 SELECT is(
   pg_temp.ask('vesna', format(
-    'SELECT institution.publish_assignment_version(%L::uuid, 1, %L, %L, %L, %L::timestamptz, %L::timestamptz, %L, %L::text[], %L, %L)',
+    'SELECT institution.publish_assignment_version(%L::uuid, 1, %L, %L, %L, %L::timestamptz, %L::timestamptz, %L, %L::text[], %L, %L, NULL, NULL)',
     (SELECT id FROM first_request), 'Nova verzija', 'Prvi red uputa.', 'essay', '2026-11-02 08:00+01',
     '2026-12-01 23:59+01', 'partially_allowed', ARRAY['proofreading']::text[], 'basic', false)),
   '2', 'the first request receives a later immutable version'
@@ -101,12 +102,12 @@ SELECT is(
 );
 SELECT is(
   has_function_privilege('ductus_app',
-    'institution.create_assignment(uuid,uuid,text,text,text,timestamptz,timestamptz,text,text[],text,boolean)', 'EXECUTE'),
+    'institution.create_assignment(uuid,uuid,text,text,text,timestamptz,timestamptz,text,text[],text,boolean,integer,integer)', 'EXECUTE'),
   true, 'ductus_app may call the overload'
 );
 SELECT is(
   has_function_privilege('ductus_test_stranger',
-    'institution.create_assignment(uuid,uuid,text,text,text,timestamptz,timestamptz,text,text[],text,boolean)', 'EXECUTE'),
+    'institution.create_assignment(uuid,uuid,text,text,text,timestamptz,timestamptz,text,text[],text,boolean,integer,integer)', 'EXECUTE'),
   false, 'PUBLIC may not call the overload'
 );
 

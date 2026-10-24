@@ -683,8 +683,8 @@ FROM (VALUES
   (3, 'revoke_enrollment_code({k1})'),
   (4, 'remove_student({k1}, {dora})'),
   (5, 'allow_student_return({k1}, {ana})'),
-  (6, $$create_assignment({k1}, 'Zadatak', 'Upute.', 'essay', now(), now() + interval '7 days', 'prohibited', '{}', 'basic', false)$$),
-  (7, $$publish_assignment_version({z1}, 2, 'Zadatak', 'Upute.', 'essay', now(), now() + interval '7 days', 'prohibited', '{}', 'basic', false)$$)
+  (6, $$create_assignment({k1}, 'Zadatak', 'Upute.', 'essay', now(), now() + interval '7 days', 'prohibited', '{}', 'basic', false, NULL, NULL)$$),
+  (7, $$publish_assignment_version({z1}, 2, 'Zadatak', 'Upute.', 'essay', now(), now() + interval '7 days', 'prohibited', '{}', 'basic', false, NULL, NULL)$$)
 ) AS v (n, call)
 ORDER BY v.n;
 SELECT is(pg_temp.ask('iva', 'SELECT institution.revoke_teacher_role({vesna})::text'), 'false', 'revoking it again finds nothing to revoke');

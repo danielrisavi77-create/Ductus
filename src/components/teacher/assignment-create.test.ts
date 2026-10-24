@@ -14,13 +14,15 @@ const draft: AssignmentDraft = {
   opensAt: "2026-11-02T09:00",
   dueAt: "2026-11-30T23:59",
   aiPurposes: ["translation", "literature_search"],
+  wordMin: "",
+  wordMax: "",
 };
 
 describe("F-6 assignment body", () => {
-  it("sends exactly the nine contract fields, purposes in list order, a narrowed policy", () => {
+  it("sends the complete contract including empty optional limits", () => {
     const body = assignmentBody(draft, "encouraged")!;
     expect(Object.keys(body).sort()).toEqual([
-      "aiPolicy", "aiPurposes", "dueAt", "evidenceProfile", "importAllowed", "instructions", "opensAt", "title", "workType",
+      "aiPolicy", "aiPurposes", "dueAt", "evidenceProfile", "importAllowed", "instructions", "opensAt", "title", "wordMax", "wordMin", "workType",
     ]);
     expect(body).toMatchObject({
       title: "Izborni sustavi u Europi",
@@ -29,6 +31,8 @@ describe("F-6 assignment body", () => {
       aiPurposes: ["literature_search", "translation"],
       evidenceProfile: "basic",
       importAllowed: false,
+      wordMin: null,
+      wordMax: null,
     });
     expect(body.opensAt).toBe(new Date("2026-11-02T09:00").toISOString());
   });
@@ -41,6 +45,27 @@ describe("F-6 assignment body", () => {
   it("drops purposes outside the closed čl. 8 list", () => {
     const forged = { ...draft, aiPurposes: ["explanation", "proofreading"] } as unknown as AssignmentDraft;
     expect(assignmentBody(forged, "partially_allowed")?.aiPurposes).toEqual(["proofreading"]);
+  });
+
+  it.each([
+    ["1", "", 1, null],
+    ["", "1000000", null, 1_000_000],
+    ["2000", "2000", 2000, 2000],
+    ["2000", "2500", 2000, 2500],
+  ])("accepts valid limits %s / %s", (min, max, expectedMin, expectedMax) => {
+    expect(assignmentBody({ ...draft, wordMin: min, wordMax: max }, "encouraged"))
+      .toMatchObject({ wordMin: expectedMin, wordMax: expectedMax });
+  });
+
+  it.each(["0", "-1", "1.5", "12xyz", "NaN", "Infinity", "1e3", "1000001"])(
+    "rejects malformed or out-of-range limit %s", (value) => {
+      expect(assignmentBody({ ...draft, wordMin: value }, "encouraged")).toBeNull();
+      expect(assignmentBody({ ...draft, wordMax: value }, "encouraged")).toBeNull();
+    },
+  );
+
+  it("rejects reversed limits", () => {
+    expect(assignmentBody({ ...draft, wordMin: "2501", wordMax: "2500" }, "encouraged")).toBeNull();
   });
 
   it.each([
