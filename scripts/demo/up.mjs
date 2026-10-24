@@ -12,6 +12,7 @@ const AUTH_DATABASE_USER = "ductus_auth_local";
 const EXAMPLE_AUTH_PASSWORD = "<DUCTUS_AUTH_LOCAL_PASSWORD>";
 const EVIDENCE_KEY_SCRIPT = "db/local/evidence-signing-key.mjs";
 const EVIDENCE_STORAGE_SCRIPT = "db/local/evidence-storage-domain.mjs";
+const DEMO_DATA_SCRIPT = "db/local/demo-k3.mjs";
 const STORAGE_DOMAINS_VAR = "EVIDENCE_STORAGE_DOMAINS";
 // The evidence scripts reach Postgres through docker, not through the database URLs checked below,
 // so these variables could aim them at a non-local daemon or container (F-100).
@@ -236,13 +237,18 @@ export async function runDemoLifecycle(env, runScript = runPnpm, includeApp = tr
     return 1;
   }
   const appEnv = { ...env, [STORAGE_DOMAINS_VAR]: domains };
+  if (!includeApp) return 0;
 
-  return includeApp ? runScript("dev", appEnv) : 0;
+  // K-3 course, assignment and enrolment (#635): demo:up only, because the CI
+  // E2E tests after demo:prepare start from an unconfirmed teacher.
+  const k3 = await runNode(DEMO_DATA_SCRIPT, env);
+  if (k3.code !== 0) return k3.code;
+  return runScript("dev", appEnv);
 }
 async function startDemo(env, prepareOnly) {
   console.log(prepareOnly
     ? "Preparing the local Ductus demo stack, migrations, synthetic institutions, evidence key and storage."
-    : "Starting the local Ductus demo stack, migrations, synthetic institutions, evidence key and storage, and app.");
+    : "Starting the local Ductus demo stack, migrations, synthetic institutions, evidence key and storage, K-3 course and enrolment, and app.");
   console.log("A local auth password is generated for this run and is not written to disk or printed.");
   const code = await runDemoLifecycle(env, runPnpm, !prepareOnly);
   if (code !== 0) process.exitCode = code;
