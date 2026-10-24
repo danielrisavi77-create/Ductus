@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 
 import AppShell from "@/components/shell/AppShell";
+import { shellSession } from "@/components/shell/shell-session";
 import TeacherSetup from "@/components/teacher/TeacherSetup";
 import { teacherAccess } from "@/components/teacher/teacher-access";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
@@ -22,6 +23,7 @@ export default async function TeacherNewAssignmentPage() {
   const access = await teacherAccess(token, withActor);
   return (
     <AppShell
+      session={shellSession(token)}
       role={access === "allowed" ? "teacher" : null}
       current="/nastavnik/zadatak/novi"
       crumbs={[t.teacherCourses.title, t.teacher.title]}
