@@ -500,13 +500,17 @@ export class AtomicDexieJournal {
         if (sticky(prior?.state)) throw new JournalError("sticky_state");
         if (prior?.evidenceStopped !== undefined) throw new JournalError("evidence_stopped");
         if (rows.length > 0) throw new JournalError("queue_not_empty");
+        // An answer the server gave before this device's last receipt, read
+        // late (a stale tab), never moves the revision or the head back.
+        if (opened.currentRevision < (snapshotBefore?.revision ?? 0) ||
+            opened.lastSequenceTo < (prior?.evidenceHead?.lastSequenceTo ?? 0)) {
+          throw new JournalError("invalid_input");
+        }
         const meta: SyncMeta = {
           ...(prior ?? { documentId, localSeq: 0, state: "LOCAL_DURABLE" }),
           evidenceHead: { segmentHash: head, lastSequenceTo: opened.lastSequenceTo },
         };
-        await this.db.snapshots.put({
-          documentId, revision: opened.currentRevision, document, savedAt: openedAt,
-        });
+        await this.db.snapshots.put({ documentId, revision: opened.currentRevision, document, savedAt: openedAt });
         await this.db.meta.put(meta);
         return meta;
       },

@@ -1,17 +1,23 @@
 # Mergify merge queue (D-161). Mergify is a GitHub App; nothing runs on a
-# developer machine. A PR enters the queue only when both statuses the gate
-# publishes are green (D-161 (h)):
+# developer machine. Mergify does NOT put a PR into the queue by itself
+# (F-114: it sees only statuses, not the risk, so an automatic queue rule could
+# merge a critical or D-97 PR). A PR enters the queue only by the owner's
+# `@Mergifyio queue` command (restricted to the owner below), and only when
+# both statuses the gate publishes are green (D-161 (h)):
 #   - "Engineering review gate": independent review and QA for the head;
 #   - "Merge authorization": the owner's `Owner-Command: merge` comment names
 #     this head (D-97, docs/ORKESTRATOR.md section 2), or the PR declares Risk
 #     low or standard and touches no D-97 path.
-# Mergify reads neither the PR description nor labels nor file names: the gate
-# decides with the same parser that checks the declared risk, so an edited
-# description cannot change what Mergify sees. A queue command is restricted
-# to the owner (`sender`) and still needs every status in the queue rule.
-# In the queue Mergify merges `main` into the PR branch (a clean base merge
-# keeps review, QA and the command under D-101), waits for every required
-# status on the new head and squashes.
+# Merging is manual, through `pr-ready`. Mergify reads neither the PR
+# description nor labels nor file names: the gate decides with the same parser
+# that checks the declared risk, so an edited description cannot change what
+# Mergify sees.
+# DAN-263: serial speculative checks test A, A+B, A+B+C on Mergify-owned
+# draft PRs; original heads keep their review/QA/owner approvals. All six
+# conditions remain mandatory on originals AND CI carriers. The gate recognizes
+# carriers from authenticated GitHub metadata (mergify-queue-pr.mjs), never from
+# a branch prefix alone. Mergify revalidates admission and rejects external edits
+# of queue branches. See docs/engineering/mergify-rollout.md before activation.
 # A PR whose gate is green but which waits for the owner's command (Risk
 # critical or a D-97 path) is kept current by Mergify (`update`, a clean merge of
 # `main`, D-101): review, QA and the command carry through it, and the owner's
@@ -27,6 +33,9 @@
 queue_rules:
   - name: main
     batch_size: 1
+    max_checks_retries: 0
+    allow_queue_branch_edit: false
+    branch_protection_injection_mode: queue
     queue_conditions: &required
       - base=main
       - -draft
@@ -41,7 +50,10 @@ queue_rules:
     update_method: merge
 
 merge_queue:
-  max_parallel_checks: 1
+  mode: serial
+  max_parallel_checks: 3
+  reset_on_external_merge: always
+  skip_intermediate_results: false
 
 commands_restrictions:
   queue:
@@ -52,15 +64,6 @@ commands_restrictions:
       - sender=danielrisavi77-create
 
 pull_request_rules:
-  - name: queue when the gate and the merge authorization are green
-    conditions:
-      - base=main
-      - -draft
-      - check-success=Engineering review gate
-      - check-success=Merge authorization
-    actions:
-      queue:
-        name: main
   - name: keep a PR that waits for the owner current with main
     conditions:
       - base=main

@@ -41,10 +41,10 @@ import type {
 import type {
   EvidenceSegmentTransaction, PendingTransaction, QueuedTransaction, SyncMeta,
 } from "./journal-types";
+import type { SyncEvent } from "./states";
 
 /** A queued row of either kind (F-8 3d-2a): a replacement or an evidence segment. */
 export type QueuedRow = PendingTransaction<QueuedTransaction>;
-import type { SyncEvent } from "./states";
 
 /**
  * The round trip failed before any server answer could be read: offline, DNS,
