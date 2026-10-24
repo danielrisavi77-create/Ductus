@@ -160,6 +160,7 @@ test("one-command demo registers the evidence key and storage before the app, in
   assert.deepEqual(calls, [
     "stack:up", "db:migrate", "db:seed",
     "db/local/evidence-signing-key.mjs", "db/local/evidence-storage-domain.mjs",
+    "db/local/demo-k3.mjs",
     "dev",
   ]);
   // The storage configuration reaches the app through its environment only.
@@ -215,6 +216,17 @@ test("a failed evidence key or storage step stops before the app and returns its
     assert.equal(result, code);
     assert.ok(!calls.includes("dev"));
   }
+});
+
+test("a failed K-3 demo data step stops before the app and returns its code (#635)", async () => {
+  const calls = [];
+  const result = await runDemoLifecycle({}, async (script) => {
+    calls.push(script);
+    return 0;
+  }, true, fakeNode(calls, { "db/local/demo-k3.mjs": { code: 5, stdout: "" } }));
+  assert.equal(result, 5);
+  assert.ok(calls.includes("db/local/demo-k3.mjs"));
+  assert.ok(!calls.includes("dev"));
 });
 
 test("an unusable storage configuration line stops the demo instead of starting without storage", async () => {
