@@ -51,13 +51,76 @@ export type JournalSnapshot = {
  * forbids per-keystroke logging, and the editor only projects after the author
  * stops typing.
  */
-export type PendingTransaction = {
+export type PendingTransaction<T extends QueuedTransaction = DocumentTransaction> = {
   documentId: string;
   /** Monotonic, per document, starting at 1. Never reused, never decreases. */
   localSeq: number;
-  tx: DocumentTransaction;
+  tx: T;
   /** ISO-8601 instant the entry was queued. */
   queuedAt: string;
+};
+
+/**
+ * F-8 3d-2a (DAN-285): one evidence segment v2 and the document after its
+ * last event, as the exact JCS bytes that were hashed and that go on the wire
+ * (BACKEND 4.13 t. 2). A document's queue holds one kind of row only; these
+ * rows are sent oldest first and never superseded (`planDrain`). The time of
+ * each step is not here: it stays in the browser (`EvidenceTiming`).
+ */
+export type EvidenceSegmentTransaction = {
+  kind: "EVIDENCE_SEGMENT";
+  clientTransactionId: string;
+  baseRevision: number;
+  segment: Uint8Array;
+  /** SHA-256 of `segment`; the receipt of this row must name it. */
+  segmentHash: string;
+  document: Uint8Array;
+  sequenceFrom: number;
+  sequenceTo: number;
+  /** ISO-8601 instant the row was queued. */
+  createdAt: string;
+};
+
+export type QueuedTransaction = DocumentTransaction | EvidenceSegmentTransaction;
+
+/**
+ * What the journal takes from the recorder (`BuiltSegment` of
+ * `src/editor/capture.ts` is assignable to it; the domain does not import the
+ * editor). Only the bytes are trusted, and only after they are verified.
+ */
+export type EvidenceSegmentInput = {
+  bytes: Uint8Array;
+  sha256: string;
+  document: Uint8Array;
+  timing: {
+    segmentHash: string;
+    sequenceFrom: number;
+    events: readonly { sequence: number; stepOffsetsMs: readonly number[] }[];
+  };
+};
+
+/** The time of every step of one segment: local only, kept until logout. */
+export type EvidenceTiming = {
+  segmentHash: string;
+  documentId: string;
+  sequenceFrom: number;
+  events: { sequence: number; stepOffsetsMs: number[] }[];
+};
+
+/** The server's head of the chain: the last segment it acknowledged. */
+export type EvidenceHead = { segmentHash: string | null; lastSequenceTo: number };
+
+/** Why the recorder stopped; the text after it is not covered by evidence. */
+export type EvidenceStop = "gap" | "unsupported_step" | "block_identity" | "too_large";
+
+/** The work as the open route reported it (`OpenedWork` of 3c is assignable). */
+export type EvidenceOpening = {
+  documentId: string;
+  currentRevision: number;
+  documentHash: string;
+  headSegmentHash: string | null;
+  lastSequenceTo: number;
+  document: Uint8Array;
 };
 
 /**
@@ -79,12 +142,20 @@ export type SyncMeta = {
    * reload replays exactly that row instead of a newer one on an old base.
    */
   awaitingReceipt?: AwaitingReceipt;
+  /** Set on a document with evidence; moves only on a verified receipt. */
+  evidenceHead?: EvidenceHead;
+  /** Set once the recorder stopped; never cleared before logout. */
+  evidenceStopped?: EvidenceStop;
 };
 
-/** Everything the journal holds about one document, read back together. */
-export type JournalContents = {
+/**
+ * Everything the journal holds about one document, read back together. `T`
+ * is the kind of row the reader's documents hold: the journal keeps one kind
+ * per document, and a document with evidence (`evidenceHead`) only segments.
+ */
+export type JournalContents<T extends QueuedTransaction = DocumentTransaction> = {
   snapshot: JournalSnapshot | null;
   /** Ascending by `localSeq`. */
-  pending: PendingTransaction[];
+  pending: PendingTransaction<T>[];
   meta: SyncMeta | null;
 };
