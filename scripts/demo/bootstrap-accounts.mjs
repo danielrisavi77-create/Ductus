@@ -15,7 +15,10 @@ const ACCOUNTS = [
   { id: "demo-student", name: "Demo studentica" },
   { id: "demo-student-2", name: "Demo student 2" },
   { id: "demo-teacher", name: "Demo nastavnik" },
+  { id: "demo-teacher-2", name: "Demo nastavnica" },
 ];
+// Both teachers get the explicit operator grant; the students never do.
+const TEACHERS = ["demo-teacher", "demo-teacher-2"];
 const SESSION_COOKIE = "__Host-ductus_session";
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const SESSION_SQL = `SELECT s.user_id, s.institution_id, s.closed_at, s.close_reason, s.expires_at,
@@ -208,15 +211,17 @@ export async function bootstrap({ browser, db, grant, origins = [APP, OIDC], tim
   let failure;
   try {
     for (const account of ACCOUNTS) sessions.push(await signInAccount(browser, db, account, origins, timeoutMs));
-    if (new Set(sessions.map((s) => s.userId)).size !== 3) fail("Demo accounts resolved to the same identity.");
+    if (new Set(sessions.map((s) => s.userId)).size !== ACCOUNTS.length) fail("Demo accounts resolved to the same identity.");
     const institutions = await db.institutions();
     if (institutions.length !== 2 || institutions[0].slug !== "demo-bez-prijave" || institutions[0].aai_home_org !== null ||
         institutions[1].slug !== INSTITUTION || institutions[1].aai_home_org !== HOME_ORG) fail("Demo institution seed is incomplete.");
     if (sessions.some((session) => session.blocked)) fail("Demo request left its guarded login context.");
-    await grant();
-    const teacher = sessions[2];
-    const roles = await db.roles(teacher.userId, teacher.institutionId);
-    if (roles[0]?.count !== 1) fail("Synthetic teacher grant was not unique and confirmed.");
+    for (const id of TEACHERS) {
+      await grant(id);
+      const teacher = sessions.find((session) => session.account.id === id);
+      const roles = await db.roles(teacher.userId, teacher.institutionId);
+      if (roles[0]?.count !== 1) fail("Synthetic teacher grant was not unique and confirmed.");
+    }
   } catch (error) { failure = error; }
   let cleanupFailed = false;
   for (const session of sessions) {
@@ -236,13 +241,14 @@ async function main() {
   const db = localDatabase(env);
   const browser = await chromium.launch({ headless: true });
   try {
-    await bootstrap({ browser, db, grant: () => {
-      const result = spawnSync(process.execPath, [fileURLToPath(new URL("./provision-teacher.mjs", import.meta.url))], {
+    await bootstrap({ browser, db, grant: (id) => {
+      const args = id === "demo-teacher" ? [] : [id];
+      const result = spawnSync(process.execPath, [fileURLToPath(new URL("./provision-teacher.mjs", import.meta.url)), ...args], {
         cwd: root, env: { ...env, DOCKER_CONTEXT: "default" }, encoding: "utf8", timeout: 30_000, windowsHide: true,
       });
       if (result.error || result.status !== 0) fail("Local teacher operator grant failed.");
     } });
-    console.log("Three local demo identities verified; teacher confirmed; sessions closed.");
+    console.log("Four local demo identities verified; both teachers confirmed; sessions closed.");
   } finally {
     await browser.close();
   }
