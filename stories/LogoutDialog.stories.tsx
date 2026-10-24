@@ -3,9 +3,13 @@ import { useState } from "react";
 
 import LogoutDialog, { type LogoutDialogProps } from "@/components/editor/LogoutDialog";
 
-type ScenarioProps = Pick<LogoutDialogProps, "plan" | "working" | "failed">;
+type ScenarioProps = Pick<LogoutDialogProps, "plan" | "working" | "failed" | "copies"> & {
+  /** How the discard of a copy settles in this preview. */
+  discardFails?: boolean;
+};
 
-function LogoutScenario(props: ScenarioProps) {
+function LogoutScenario({ discardFails = false, copies, ...props }: ScenarioProps) {
+  const [kept, setKept] = useState(copies ?? 0);
   const [open, setOpen] = useState(true);
   const [action, setAction] = useState("Još nije odabrana nijedna radnja.");
 
@@ -26,6 +30,13 @@ function LogoutScenario(props: ScenarioProps) {
           onConfirm={() => record("Odabrano: Odjavi se.")}
           onStay={() => record("Odabrano: Ostani.")}
           onExport={() => record("Odabrano: Izvezi tekst.")}
+          copies={kept}
+          onRestoreCopy={() => record("Odabrano: Vrati tekst u rad.")}
+          onDiscardCopy={async () => {
+            if (discardFails) throw new Error("preview");
+            setKept((n) => n - 1);
+            setAction("Odabrano: Odbaci kopiju.");
+          }}
         />
       )}
     </main>
@@ -66,4 +77,19 @@ export const Working: Story = {
 export const Failed: Story = {
   name: "Odjava nije uspjela",
   args: { plan: { unsaved: false, pending: 3 }, failed: true },
+};
+
+export const Copy: Story = {
+  name: "Kopija teksta ostaje",
+  args: { plan: { unsaved: false, pending: 3 }, copies: 1 },
+};
+
+export const Copies: Story = {
+  name: "Više kopija teksta",
+  args: { plan: { unsaved: false, pending: 0 }, copies: 3 },
+};
+
+export const CopyDiscardFails: Story = {
+  name: "Kopija nije odbačena",
+  args: { plan: { unsaved: false, pending: 0 }, copies: 1, discardFails: true },
 };
