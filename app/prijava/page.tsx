@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 
 import SignInScreen from "@/components/auth/SignInScreen";
 import { SIGN_IN_DEFAULT_TARGET, signInHref, signInTarget } from "@/components/auth/sign-in-link";
+import SessionObserver from "@/components/shell/SessionObserver";
+import { shellSession } from "@/components/shell/shell-session";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 
@@ -24,5 +26,12 @@ export default async function PrijavaPage({
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
   if (token && TOKEN.test(token)) redirect(SIGN_IN_DEFAULT_TARGET);
   const { returnTo } = await searchParams;
-  return <SignInScreen href={signInHref(signInTarget(returnTo))} />;
+  // Outside the shell: the sign-in screen marks the session itself (F-113 t.1).
+  const { tag, at } = shellSession(token);
+  return (
+    <>
+      <SessionObserver tag={tag} at={at} />
+      <SignInScreen href={signInHref(signInTarget(returnTo))} />
+    </>
+  );
 }

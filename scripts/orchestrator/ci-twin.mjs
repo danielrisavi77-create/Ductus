@@ -2,7 +2,7 @@
 // Read-only. Usage: node ci-twin.mjs --since YYYY-MM-DD [--limit N] [--json]
 import { ghJson, ghList } from "./gh.mjs";
 import { mapLimit } from "./metrics-core.mjs";
-import { parseTwinArgs, renderTwin, runShape, summarizeRuns } from "./ci-twin-core.mjs";
+import { isOwnRun, parseTwinArgs, renderTwin, runShape, summarizeRuns } from "./ci-twin-core.mjs";
 
 try {
   const { since, json, limit } = parseTwinArgs(process.argv.slice(2));
@@ -13,7 +13,8 @@ try {
       "api",
       `repos/{owner}/{repo}/actions/workflows/ci.yml/runs?status=success&event=pull_request&created=>=${since}&per_page=100&page=${page}`,
     ]);
-    runs.push(...body.workflow_runs);
+    // F-122: runs from forks are left out; they use the fork's workflow and its job names.
+    runs.push(...body.workflow_runs.filter(isOwnRun));
     if (body.workflow_runs.length < 100) break;
   }
   runs.length = Math.min(runs.length, limit);

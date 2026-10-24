@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 
 import AppShell from "@/components/shell/AppShell";
+import { shellSession } from "@/components/shell/shell-session";
 import { readShellRole } from "@/components/shell/shell-role";
 import AssignmentNotice from "@/components/student/AssignmentNotice";
 import styles from "@/components/student/AssignmentNotice.module.css";
@@ -24,7 +25,7 @@ export default async function AssignmentNoticePage({ params }: { params: Promise
   const [read, role] = await Promise.all([readNotice(token, id, withActor), readShellRole(token, withActor)]);
   const here = `/zadatak/${encodeURIComponent(id)}`;
   return (
-    <AppShell role={role} crumbs={[t.student.title]}>
+    <AppShell session={shellSession(token)} role={role} crumbs={[t.student.title]}>
       <div className={`page ${styles.screen}`}>
         {read.kind === "available" ? (
           <AssignmentNotice view={read.view} timing={noticeWindow(read.view.opensAt, read.view.dueAt, Date.now())} />

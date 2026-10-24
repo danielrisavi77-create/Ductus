@@ -1,9 +1,9 @@
 /**
- * Test kit for the evidence journal and drain (F-8 3d-2b): segments the real
- * recorder captures from the editor schema, a fake commit route that does the
- * server's compare-and-set and signs receipts with an Ed25519 key made for the
- * test, and journals on fake-indexeddb. Imported by tests only; every key, id
- * and text is invented.
+ * Test kit for the evidence journal and drain (F-8 3d-2a): segments the real
+ * recorder captures from the editor schema, receipts signed with an Ed25519
+ * key made for the test, a fake commit route that does the server's
+ * compare-and-set, and journals on fake-indexeddb. Imported by tests only;
+ * every key, id and text is invented.
  */
 
 import { createHash, generateKeyPairSync, sign as nodeSign } from "node:crypto";
@@ -12,12 +12,16 @@ import { Editor } from "@tiptap/core";
 import Dexie from "dexie";
 import { IDBKeyRange, indexedDB } from "fake-indexeddb";
 
-import { decodeBase64, type FetchLike } from "@/client/evidence-ingest";
+import { commitOutcomeFrom, createReceiptVerifier, decodeBase64, type FetchLike } from "@/client/evidence-ingest";
 import type { EvidenceReceiptPayloadV2, SignedEvidenceReceiptV2 } from "@/domain/forensics/evidence-receipt";
 import type { EvidenceDomainKey } from "@/domain/forensics/evidence-receipt-verifier";
 import { loadGoldenVectors } from "@/domain/forensics/golden-vectors/load";
 import { canonicalizeJcs, jcsUtf8Bytes } from "@/domain/forensics/jcs";
-import type { EvidenceOpening, QueuedTransaction } from "@/domain/sync/journal-types";
+import { outcomeToEvents, type DrainOutcome, type QueuedRow } from "@/domain/sync/drain";
+import type {
+  EvidenceOpening, EvidenceSegmentTransaction, PendingTransaction, QueuedTransaction,
+} from "@/domain/sync/journal-types";
+import { syncReducer } from "@/domain/sync/states";
 import { changeOf, EvidenceRecorder, type BuiltSegment } from "@/editor/capture";
 import { tiptapToCanonical } from "@/editor/interop";
 import { createEditorExtensions } from "@/editor/schema";
@@ -152,6 +156,38 @@ export function receiptKey(keyId: string, scope: Partial<EvidenceDomainKey> = {}
 }
 
 export const trusted = receiptKey("kljuc-izmisljeni-1");
+
+/** The commit route's answer for the oldest owed row: committed at `revision`, signed over its segment. */
+export function committed(revision: number, over: Partial<EvidenceReceiptPayloadV2> = {}, signer = trusted) {
+  return (sent: PendingTransaction<EvidenceSegmentTransaction>): DrainOutcome => commitOutcomeFrom(200, {
+    status: "committed", revision,
+    receipt: { status: "signed", signedReceipt: signer.sign({ documentId: DOC, clientTransactionId: sent.tx.clientTransactionId, revision, segmentHash: sent.tx.segmentHash, ...over }) },
+  });
+}
+
+/**
+ * One answer for the oldest owed row, recorded as a drain step records it:
+ * `beginSend`, the receipt checked against the row's own segment hash with
+ * the trusted key, the state from the events, then `recordAnswer`.
+ */
+export async function answer(
+  journal: AtomicDexieJournal, outcomeFor: (sent: PendingTransaction<EvidenceSegmentTransaction>) => DrainOutcome,
+) {
+  const sent = (await journal.readEvidence(DOC)).pending[0]!;
+  await journal.beginSend(DOC, sent);
+  const outcome = outcomeFor(sent);
+  const after = await journal.readEvidence(DOC);
+  const revision = (outcome as { revision?: unknown }).revision;
+  const verify = createReceiptVerifier({ evidenceDomainId: DOMAIN, receiptKeys: [trusted.key] },
+    (id) => (id === sent.tx.clientTransactionId ? sent.tx.segmentHash : null));
+  const events = await outcomeToEvents(outcome, {
+    expected: { documentId: DOC, clientTransactionId: sent.tx.clientTransactionId, revision: typeof revision === "number" ? revision : 0 },
+    verify,
+  }, { sent: sent as QueuedRow, pending: after.pending as QueuedRow[] });
+  const state = events.reduce(syncReducer, syncReducer(after.meta!.state, { type: "SYNC_STARTED" }));
+  return journal.recordAnswer(DOC, sent, outcome, state);
+}
+
 export const json = (status: number, body: unknown) => Response.json(body, { status });
 
 export type Body = { documentId: string; clientTransactionId: string; baseRevision: number; segments: string[]; document: string };
