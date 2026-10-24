@@ -26,13 +26,57 @@ Ductus ne testira samo radi li funkcija, nego može li se vjerovati zapisu, ovla
 
 ## 2. Browser politika
 
-- Chromium: svaki frontend/E2E PR.
-- Firefox: editor, sync, journal, clipboard, auth i submission PR-ovi.
-- WebKit: editor, IndexedDB/Dexie, offline, Web Locks, clipboard, auth i submission PR-ovi.
+CI profil (D-160): `scripts/engineering/ci-docs-scope.mjs`, izvršen iz točnog SHA-a zaštićenog `main`, dopušta izostavljanje samo runtime koraka Local stack za PR prema `main` čiji potpuni diff točnih SHA-ova sadrži isključivo obične neizvršne datoteke s njegovog uskog popisa (`README.md`, `docs/UX-EVAL.md` i šest postojećih Markdown dokumenata `docs/privacy/`). Required posao se izvršava i izričito javlja da DB/browser testovi nisu izvedeni. Build, lint, typecheck, unit/property, engineering/orchestrator testovi i skeneri ostaju. Nepoznata putanja, pravila, fixture, promjena tipa/moda ili prazan diff traže puni profil; greška klasifikacije blokira. Preimenovanje se provjerava pod oba imena. PR prema drugoj grani, `push` na main i noćni run uvijek su puni. Novi push i dalje otkazuje stare skupe korake; otkazivanje ne daje zeleni Local stack. To nije QA izuzeće niti promjena risk floora.
+
+Standardni E2E (`stack-e2e`) i login E2E (`stack-login`) izvršavaju se paralelno, svaki na zasebnom runneru s vlastitim Compose stogom, migracijama, demo podacima i čišćenjem. PgTAP, integration i produkcijski build ostaju u standardnom poslu; login koristi `next dev` i zasebnu Next predmemoriju. Obvezni status `Local stack (compose.yaml)` čeka oba posla: puni profil prolazi samo uz oba uspješna rezultata, a docs profil samo uz oba očekivano preskočena posla. Neuspješan klasifikator, nepoznat profil, kvar, neočekivano preskakanje ili otkazivanje ne daju prolaz.
+
+- CI (P1-3, 12. 10. 2026.): na PR-u se E2E vrti samo na Chromiumu (desktop i mobilni viewport); na `main` i u noćnom pokretanju vrte se sva tri enginea (Chromium, Firefox, WebKit). Crveni Firefox ili WebKit na `main` ili noću je nalaz za sljedeći dan, ne tiha regresija.
+- Chromium: svaki frontend/E2E PR, u CI-ju PR-a.
+- Firefox: editor, sync, journal, clipboard, auth i submission PR-ovi. CI PR-a ga ne pokreće, pa dokaz daje QA (lokalni ili ručno pokrenut prolaz na headu PR-a, zapisan u QA nalazu).
+- WebKit: editor, IndexedDB/Dexie, offline, Web Locks, clipboard, auth i submission PR-ovi. Dokaz kao za Firefox.
+- QA obveza: PR koji dira `src/lib/journal/`, sync, prijavu ili odjavu ne dobiva QA PASS bez dokaza o prolazu na sva tri enginea na aktualnom headu.
 - Prije pilota cijeli acceptance path mora proći na Chromiumu, Firefoxu i WebKitu.
 - Iznimka samo za demo (D-98 dopuna, 10. 10. 2026.): demo spec K-4 obvezan je do 1. 11. samo na Chromiumu; Firefox i WebKit prolaze informativno i ne blokiraju spajanje. Pravilo za pilot se ne mijenja.
 - Mobilni viewport je dodatak, ne zamjena za WebKit.
 - Iznimka po odluci vlasnika: puni tok prijave preko lažnog OIDC-a („Demo prijava”, `e2e/login/`, `pnpm test:e2e:login`) radi nad `next dev`, jer produkcijski build lažnog pružatelja odbija (D-09), i obvezan je samo na Chromiumu. Odbijanje u produkcijskom buildu (`e2e/auth.spec.ts`) i dalje prolazi sva tri enginea. Pokretanje: složaj iz `compose.yaml` (baza i lažni pružatelj na 8090), `pnpm db:migrate`, `pnpm db:seed` i `AUTH_DATABASE_URL` iz `.env.example`.
+
+### Informativni UI/design odabir testova (DAN-241)
+
+CI nakon punog standardnog E2E prolaza uspoređuje hipotetski odabir s istim
+rezultatima, bez drugog pokretanja aplikacije. Dodatni JSON reporter uključuje
+se samo uz `UI_TEST_PILOT=1`; sažetak je u Actions prikazu i datoteci
+`ui-test-pilot.json` unutar postojećeg artefakta `playwright-report`.
+
+Prije punog E2E prolaza Playwright `--list` bez pokretanja testova
+izdvaja neovisni očekivani inventar svih testnih instanci po pregledniku u
+privremenu `.ci-reports/ui-pilot-inventory.json` (izvan direktorija koji
+Playwright briše prije testa). Postproces zahtijeva potpuno podudaranje
+očekivanih i opaženih ID-eva, putanja i preglednika. Nedostajući cijeli
+neodabrani spec ili pojedinačni test, i uz konzistentan `stats`, daje
+`inconclusive`; neuspjelo otkrivanje inventara ne zaustavlja obvezni puni
+E2E, ali ne može dati `no-miss-observed`.
+
+Prvi kandidat je samo obična izmjena postojeće
+`src/components/landing/Landing.module.css`. Mapira se na cijele specove
+`landing`, `home`, `shell`, `accessibility` i `screenshots`: svi provjeravaju
+javnu početnu stranicu. Dodatna/nepoznata datoteka, dodavanje, brisanje,
+preimenovanje, promjena moda, nečitljiv/prazan diff ili događaj izvan PR-a
+prema mainu traže puni skup. Diff koristi točne base/head SHA-ove; bilježi se
+i SHA stvarno testiranog merge commita. To je informativni helper s PR heada,
+bez ovlasti za promjenu CI profila ili preskakanje testova.
+
+`miss-observed` označava pad izvan odabira; `inconclusive` nepotpune ili
+nevaljane rezultate; `no-miss-observed` samo izostanak opaženog propuštenog
+kvara u tom cjelovitom prolazu. `not-applicable` znači puni odabir. Izvještaj
+čuva rezultate po testu i pregledniku, probleme, odabrane/ostale testove i
+njihov testni rad. Zbroj trajanja testova nije procjena ubrzanja CI-ja.
+`candidateInventory` pokazuje veličinu početnog kandidatnog skupa i kad diff
+zahtijeva full, bez tvrdnje da je takav diff prihvatljiv za uži odabir.
+
+Puni standardni/login E2E, ostali slojevi i main/noćni browser opseg ostaju
+obvezni. Snapshot specovi prilažu snimke bez usporedbe s referentnim slikama.
+Jedan zeleni prolaz ne opravdava stvarno preskakanje: širenje traži pregled
+uvoza/potrošača CSS-a, dokaze iz kandidatnih PR-ova i zaseban zadatak.
 
 ## 3. Obvezni adversarial scenariji prije pilota
 

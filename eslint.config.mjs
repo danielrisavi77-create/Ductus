@@ -54,6 +54,7 @@ const eslintConfig = [
   {
     ignores: [
       ".next/**",
+      ".claude/worktrees/**",
       "next-env.d.ts",
       "node_modules/**",
       "public/**",

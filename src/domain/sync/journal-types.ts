@@ -22,6 +22,7 @@
  */
 
 import type { CanonicalDocument, DocumentTransaction } from "../document";
+import type { AwaitingReceipt } from "./drain";
 import type { LocalSaveFailureReason, SyncState } from "./states";
 
 /**
@@ -72,6 +73,12 @@ export type SyncMeta = {
   localSeq: number;
   /** Set when the last local write failed; cleared on the next success. */
   lastError?: LocalSaveFailureReason;
+  /**
+   * The row whose answer the queue is waiting on (`nextAwaitingReceipt`).
+   * Written before the request leaves and kept by every local save, so a
+   * reload replays exactly that row instead of a newer one on an old base.
+   */
+  awaitingReceipt?: AwaitingReceipt;
 };
 
 /** Everything the journal holds about one document, read back together. */

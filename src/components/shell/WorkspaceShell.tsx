@@ -19,7 +19,7 @@ export type WorkspaceShellProps = {
    */
   writingHref?: string;
   teacherViewHref?: string;
-  /** Extra controls in the top bar, before the view switch. */
+  /** Extra controls at the end of the top bar, after the view switch. */
   barExtra?: ReactNode;
   /** Shown under the top bar, e.g. the offline notice (F-8). */
   banner?: ReactNode;
@@ -34,8 +34,12 @@ export type WorkspaceShellProps = {
 };
 
 /**
- * The writing workspace from design v6 (D-89): 46 px top bar, 236 px left
- * rail, sheet of at most 756 px, 322 px right rail, 34 px status bar.
+ * The writing workspace of design editor-v11 (docs/design/ductura/README.md
+ * §5.1, FE-D1), inside the design v3 shell (#476 6314969336, "Pisanje"): a
+ * work header with the course and assignment on the left and the view switch
+ * on the right (brand, demo label and account live in the shell), a 174 px
+ * structure rail, a sheet of at most 720 px, a 284 px right panel with tabs,
+ * and the status bar, framed with `--radius`.
  *
  * The DOM order is the same at every width: sheet (`main`), instructions,
  * structure. On a wide screen `grid-template-areas` puts the structure rail
@@ -56,14 +60,8 @@ export default function WorkspaceShell({
 }: WorkspaceShellProps) {
   return (
     <div className="workspace">
-      <header className="workspace__bar">
-        <div className="brand-line">
-          <Link className="brand brand--small" href="/">
-            {t.app.name}
-          </Link>
-          {context ? <span className="brand-line__context">{context}</span> : null}
-        </div>
-        {barExtra}
+      <div className="workspace__bar">
+        {context ? <p className="brand-line brand-line__context">{context}</p> : null}
         <nav className="modes" aria-label={t.workspace.viewModes}>
           <ModeLink href={writingHref} current={mode === "writing"}>
             {t.workspace.modeWriting}
@@ -72,8 +70,8 @@ export default function WorkspaceShell({
             {t.workspace.modeTeacherView}
           </ModeLink>
         </nav>
-        <span className="demo-badge">{t.shell.demoBadge}</span>
-      </header>
+        {barExtra}
+      </div>
       {banner}
       <div className="workspace__body">
         <main id="sadrzaj" tabIndex={-1} className="workspace__main">

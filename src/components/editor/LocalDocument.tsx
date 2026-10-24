@@ -4,7 +4,7 @@
  * The local-only writing surface on /rad (F-3 step 1b, plan #197).
  *
  * One provider owns the editor, the Web Lock and the `LocalDocumentSaver`;
- * the sheet (`LocalEditor`) and the word count (`LocalWordCount`) only render
+ * the sheet (`LocalEditor`) and the status bar (`useLocalStatus`) only render
  * what it holds. Nothing here touches the network.
  *
  * - One writer per document: the tab holding the Web Lock journals; any other
@@ -21,32 +21,65 @@
  * - Text the journal would store differently (NUL, a lone surrogate) is made
  *   storable in the editor itself (`StorableInput`), so the editor never
  *   shows other text than the journal holds once a save has succeeded.
+ * - Signing out (F-5, D-118) always ends the session: writing stops, the
+ *   typed text reaches the journal, the logout route answers, and only then
+ *   is a journal with nothing unconfirmed deleted. Work the server has not
+ *   confirmed stays in this person's journal, which only their next sign-in
+ *   opens. "Odjava" first stops writing and opens a dialog (FE-D7) with the
+ *   number of saved steps the journal still holds; text the device could not
+ *   store is the one thing sign-out would lose, so the dialog says so and
+ *   offers the export. "Odjavi se" signs out all the same; "Ostani" resumes.
+ * - A tab whose session has ended, here or by a sign-in that replaced the
+ *   cookie, stops for good and clears the sheet (src/client/session-marks.ts).
  */
 
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  createContext, useContext, useEffect, useRef, useState, type FormEvent, type ReactNode,
+} from "react";
 
 import type { CanonicalDocument } from "@/domain/document";
-import { chipContent, type ChipContent } from "@/domain/sync/labels";
+import {
+  browserMarkStore, endAfterLogout, hasEnded, SESSION_END_CHANNEL, type SessionMark,
+} from "@/client/session-marks";
+import { localChip, type LocalChip } from "@/domain/sync/labels";
 import type { SyncState } from "@/domain/sync/states";
 import { countWords, NODE_ID_ATTRIBUTE, tiptapToCanonical } from "@/editor/interop";
+import { startFreshHistory } from "@/editor/history";
 import { replaceWithStoredDocument } from "@/editor/identity";
 import { createEditorExtensions } from "@/editor/schema";
 import { StorableInput } from "@/editor/storable-input";
 import { storableDocument } from "@/editor/storable-text";
-import { wordsHr } from "@/lib/i18n/hr";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
 import {
   LocalDocumentSaver, type SaverFailure, type SaverSnapshot,
 } from "@/lib/journal/local-document-saver";
 
+import LogoutDialog from "./LogoutDialog";
+import type { LogoutPlan } from "./logout-plan";
+
 /** Quiet time after the last change before a candidate is proposed. */
 const DEBOUNCE_MS = 400;
 const EXPORT_FILE_NAME = "ductus-rad.txt";
 
-type Phase = "loading" | "blocked" | "ready" | "recovery" | "unavailable";
+type Phase = "loading" | "blocked" | "ready" | "recovery" | "unavailable" | "signed-out";
+
 type Failure = SaverFailure | "invalid";
+
+/** States in which the sheet may hold text the journal does not. */
+const NOT_STORED: readonly SyncState[] = ["EDITING", "SAVING_LOCAL", "ERROR", "RECOVERY_REQUIRED"];
+
+/** What the tab holding the document's lock does for a sign-out. */
+type LockedLogout = {
+  /** Stops writing, lets the typed text reach the journal; true if some of it did not. */
+  quiesce: () => Promise<boolean>;
+  /** Saved steps of this document the journal still holds, or null if unreadable. */
+  pending: () => Promise<number | null>;
+  resume: () => void;
+  /** Deletes the journal unless it holds unconfirmed work (D-118). */
+  clear: () => Promise<void>;
+};
 
 type LocalDocumentValue = {
   editor: Editor | null;
@@ -54,14 +87,39 @@ type LocalDocumentValue = {
   snapshot: SaverSnapshot | null;
   words: number;
   invalid: boolean;
+  /** Stops writing and says what a sign-out would leave behind (FE-D7). */
+  prepareSignOut: () => Promise<LogoutPlan>;
+  /** Writing goes on after the dialog was left with "Ostani". */
+  staySignedIn: () => void;
+  /** Ends the session; resolves true once the logout route has answered. */
+  signOut: () => Promise<boolean>;
 };
 
 const LocalDocumentContext = createContext<LocalDocumentValue | null>(null);
 
 function useLocalDocument(): LocalDocumentValue {
   const value = useContext(LocalDocumentContext);
-  if (!value) throw new Error("LocalEditor and LocalWordCount need a LocalDocumentProvider");
+  if (!value) throw new Error("LocalEditor and the status bar need a LocalDocumentProvider");
   return value;
+}
+
+/**
+ * The editor of the provider, for the toolbar and the heading list (F-8).
+ * They change the document only through editor commands, which reach the
+ * journal the same way typing does (`onUpdate`); whether writing is allowed
+ * is the editor's own `isEditable`, which only this provider sets.
+ */
+export function useLocalEditor(): Editor | null {
+  return useLocalDocument().editor;
+}
+
+/**
+ * True once this tab has stopped for good because the session ended, here or
+ * elsewhere (D-118). Anything else that shows this person's work, such as the
+ * comment panel, must drop it at that moment, as the sheet does.
+ */
+export function useLocalSignedOut(): boolean {
+  return useLocalDocument().phase === "signed-out";
 }
 
 /**
@@ -81,12 +139,17 @@ function sameIds(editor: Editor, doc: CanonicalDocument): boolean {
 }
 
 export function LocalDocumentProvider({
-  scope, documentId, children,
-}: { scope: string; documentId: string; children: ReactNode }) {
+  scope, documentId, session = null, children,
+}: { scope: string; documentId: string; session?: SessionMark | null; children: ReactNode }) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [snapshot, setSnapshot] = useState<SaverSnapshot | null>(null);
   const [words, setWords] = useState(0);
   const [invalid, setInvalid] = useState(false);
+  // Set while this tab holds the lock with an editable document.
+  const logoutRef = useRef<LockedLogout | null>(null);
+  const channelRef = useRef<BroadcastChannel | null>(null);
+  const markTag = session?.tag ?? null;
+  const markAt = session?.at ?? 0;
   const saverRef = useRef<LocalDocumentSaver | null>(null);
   const editorRef = useRef<Editor | null>(null);
   const readyRef = useRef(false);
@@ -163,12 +226,71 @@ export function LocalDocumentProvider({
       setPhase("unavailable");
       return;
     }
+    // The session of this page has ended: what was typed still goes to this
+    // person's journal, then the sheet is emptied so the next person at the
+    // browser neither reads nor writes it. The lock is kept, so this tab
+    // never opens the journal again; it goes with the page.
+    const stop = () => {
+      flush();
+      disposed = true;
+      readyRef.current = false;
+      abort.abort();
+      if (!editor.isDestroyed) {
+        editor.setEditable(false, false);
+        startFreshHistory(editor.view, "empty");
+      }
+      setWords(0);
+      setPhase("signed-out");
+    };
+    const ended = () => markTag !== null && hasEnded(browserMarkStore(), { tag: markTag, at: markAt });
+    if (ended()) {
+      stop();
+      return;
+    }
+    const channel = markTag === null || typeof BroadcastChannel === "undefined"
+      ? null : new BroadcastChannel(SESSION_END_CHANNEL);
+    channelRef.current = channel;
+    if (channel) {
+      channel.onmessage = (event: MessageEvent) => {
+        if (event.data === markTag) stop();
+      };
+    }
+    // Another tab recorded an ended or a newer session; a page restored from
+    // the back-forward cache missed both.
+    const recheck = () => {
+      if (!disposed && ended()) stop();
+    };
+    window.addEventListener("storage", recheck);
+    window.addEventListener("pageshow", recheck);
 
     // Runs while this tab holds the lock; resolving releases it.
     const write = async (lock: Lock | null): Promise<void> => {
       if (!lock || disposed) return;
+      // An end this tab did not hear (it was not listening yet) was recorded
+      // before the tab that signed out let go of the lock.
+      if (ended()) {
+        stop();
+        return;
+      }
       setPhase("loading");
-      const journal = new AtomicDexieJournal(scope);
+      let journal = new AtomicDexieJournal(scope);
+      // An earlier sign-out was cut off after its fence: finish it before
+      // anything is read. The fence exists only when nothing was unsynced,
+      // so this deletes no work (journal contract, sign-in).
+      try {
+        if (await journal.hasPendingLogout()) {
+          await journal.destroyForLogout();
+          journal = new AtomicDexieJournal(scope);
+        }
+      } catch {
+        journal.close();
+        if (!disposed) setPhase("unavailable");
+        return;
+      }
+      if (disposed) {
+        journal.close();
+        return;
+      }
       const saver = new LocalDocumentSaver(journal, documentId);
       // The cleanup's flush may still emit after `setSnapshot(null)`; what the
       // old saver reports then must not come back as the next lock's notice.
@@ -178,6 +300,9 @@ export function LocalDocumentProvider({
       try {
         const result = await saver.load();
         if (disposed) return;
+        // Undo never reaches past this load: not into an earlier person's
+        // or document's sheet, nor into the one emptied when a session ended.
+        startFreshHistory(editor.view, "keep");
         saverRef.current = saver;
         setSnapshot(saver.snapshot());
         if (result.kind !== "unavailable" && result.document) {
@@ -198,11 +323,46 @@ export function LocalDocumentProvider({
         readyRef.current = true;
         editor.setEditable(true, false);
         setPhase("ready");
+        logoutRef.current = {
+          quiesce: async () => {
+            // Nothing typed after this point is accepted.
+            flush();
+            readyRef.current = false;
+            editor.setEditable(false, false);
+            await saver.settled();
+            // A first save that failed leaves the journal empty while the
+            // sheet holds text; only the saver's state tells.
+            const saved = saver.snapshot();
+            return !editor.isEmpty && (saved.failure !== null || NOT_STORED.includes(saved.state));
+          },
+          pending: async () => {
+            try {
+              return (await journal.read(documentId)).pending.length;
+            } catch {
+              return null;
+            }
+          },
+          resume: () => {
+            if (disposed) return;
+            readyRef.current = true;
+            editor.setEditable(true, false);
+          },
+          clear: async () => {
+            try {
+              await journal.destroyForLogout();
+            } catch {
+              // Unconfirmed work, or a deletion cut off after its fence: the
+              // journal stays this person's, and their next sign-in finishes
+              // a fenced deletion (above).
+            }
+          },
+        };
         await new Promise<void>((resolve) => {
           release = resolve;
           if (disposed) resolve();
         });
       } finally {
+        logoutRef.current = null;
         await saver.settled();
         unsubscribe();
         journal.close();
@@ -236,11 +396,82 @@ export function LocalDocumentProvider({
       if (!editor.isDestroyed) editor.setEditable(false, false);
       abort.abort();
       release?.();
+      channel?.close();
+      channelRef.current = null;
+      window.removeEventListener("storage", recheck);
+      window.removeEventListener("pageshow", recheck);
     };
-  }, [editor, scope, documentId]);
+  }, [editor, scope, documentId, markTag, markAt]);
 
-  const value: LocalDocumentValue = { editor, phase, snapshot, words, invalid };
+  // Writing stays stopped from here until "Ostani" or the end of the
+  // session, so the count the dialog shows cannot grow behind it (I2).
+  const prepareSignOut = async (): Promise<LogoutPlan> => {
+    const locked = logoutRef.current;
+    if (!locked) return { unsaved: false, pending: null };
+    const unsaved = await locked.quiesce();
+    return { unsaved, pending: await locked.pending() };
+  };
+
+  const staySignedIn = () => logoutRef.current?.resume();
+
+  const signOut = async (): Promise<boolean> => {
+    const locked = logoutRef.current;
+    // Nothing was deleted and the session may still be open; the dialog says so.
+    if (!(await postLogout())) return false;
+    // The session has ended: every tab of it stops, and so does the session
+    // the browser held last if it was another one.
+    const ended = endAfterLogout(browserMarkStore(), markTag);
+    for (const tag of ended) channelRef.current?.postMessage(tag);
+    if (editor && !editor.isDestroyed) {
+      editor.setEditable(false, false);
+      startFreshHistory(editor.view, "empty");
+    }
+    await (locked ? locked.clear() : clearWithoutEditor(scope, documentId));
+    return true;
+  };
+
+  const value: LocalDocumentValue = {
+    editor, phase, snapshot, words, invalid, prepareSignOut, staySignedIn, signOut,
+  };
   return <LocalDocumentContext.Provider value={value}>{children}</LocalDocumentContext.Provider>;
+}
+
+/**
+ * POST to the logout route; true only for its redirect, which comes after
+ * the session was closed and the cookie cleared. A lost request or response
+ * is false, and the caller deletes nothing.
+ */
+async function postLogout(): Promise<boolean> {
+  try {
+    const response = await fetch("/api/auth/logout", { method: "POST", redirect: "manual", cache: "no-store" });
+    return response.type === "opaqueredirect";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * After sign-out, from a tab that does not write the document: deletes the
+ * journal if no other tab holds the document and nothing is unconfirmed.
+ * Anything else leaves it to this person's next sign-in.
+ */
+async function clearWithoutEditor(scope: string, documentId: string): Promise<void> {
+  if (typeof indexedDB === "undefined" || !indexedDB) return;
+  const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
+  if (!locks) return;
+  try {
+    await locks.request(`ductus-journal:${scope}:${documentId}`, { ifAvailable: true }, async (lock) => {
+      if (!lock) return;
+      const journal = new AtomicDexieJournal(scope);
+      try {
+        await journal.destroyForLogout();
+      } finally {
+        journal.close();
+      }
+    });
+  } catch {
+    // Kept, under this person's scope only (D-118).
+  }
 }
 
 /** Why saving stopped, as far as the saver or the provider knows. */
@@ -273,7 +504,8 @@ export function LocalEditor() {
   const value = useLocalDocument();
   const { editor, phase } = value;
   const failure = failureOf(value);
-  const alert = phase === "recovery" ? t.editor.recovery : failure ? FAILURE_TEXT[failure] : null;
+  const alert = phase === "signed-out" ? t.auth.signedOutElsewhere
+    : phase === "recovery" ? t.editor.recovery : failure ? FAILURE_TEXT[failure] : null;
   const canExport = editor !== null && (alert !== null) && !editor.isEmpty;
   return (
     <>
@@ -295,36 +527,30 @@ export function LocalEditor() {
   );
 }
 
-type Chip = ChipContent & { state: SyncState | "blocked" };
-
-/**
- * What the save chip says, or null while the journal is still being read.
- * Order matters: a blocked tab journals nothing, a refused document and any
- * failure outrank whatever the saver last reported, so the chip never says
- * "Spremljeno na uređaju" while a notice says saving has stopped (#197
- * attacks 5 and 9). Only the saver's own state, reached after `saveLocal`
- * resolved, can say it.
- */
-function chipOf(value: LocalDocumentValue): Chip | null {
-  if (value.phase === "blocked") return { ...chipContent("EDITING", true), state: "blocked" };
+/** What the save chip says, or null while the journal is still being read. */
+function chipOf(value: LocalDocumentValue): LocalChip | null {
   const failure = failureOf(value);
-  const state: SyncState | null = value.phase === "recovery" || failure === "corrupt"
-    ? "RECOVERY_REQUIRED"
-    : failure ? "ERROR"
-    : value.phase === "ready" && value.snapshot ? value.snapshot.state
-    : null;
-  return state ? { ...chipContent(state), state } : null;
+  return localChip({
+    blocked: value.phase === "blocked",
+    recoveryRequired: value.phase === "recovery" || failure === "corrupt",
+    failed: failure !== null,
+    saverState: value.phase === "ready" ? value.snapshot?.state ?? null : null,
+  });
 }
 
 /**
  * The save state in the status bar (#197 step 1 and line 53). The chip itself
  * is not live: it changes when typing starts and again when it pauses, which
  * a screen reader would read out over the typing. The polite region beside it
- * says only that the text is now on the device (attack 14); a failure is
- * announced by the alert above the sheet, a blocked tab by its status notice.
+ * says only that the text is now on the device (attack 14), and only once
+ * something was typed in this tab: opening a document that is already stored
+ * changes nothing worth announcing. A failure is announced by the alert above
+ * the sheet, a blocked tab by its status notice.
  */
 export function LocalSaveChip() {
   const chip = chipOf(useLocalDocument());
+  const [edited, setEdited] = useState(false);
+  if (!edited && (chip?.state === "EDITING" || chip?.state === "SAVING_LOCAL")) setEdited(true);
   return (
     <>
       {chip ? (
@@ -335,13 +561,110 @@ export function LocalSaveChip() {
         </span>
       ) : null}
       <span className="visually-hidden" role="status">
-        {chip?.state === "LOCAL_DURABLE" ? chip.text : null}
+        {edited && chip?.state === "LOCAL_DURABLE" ? chip.text : null}
       </span>
     </>
   );
 }
 
-/** Word count for the status bar. */
-export function LocalWordCount() {
-  return <span>{wordsHr(useLocalDocument().words)}</span>;
+/** States in which this tab is putting the text on the device. */
+const SAVING_ON_DEVICE: readonly LocalChip["state"][] = ["EDITING", "SAVING_LOCAL", "LOCAL_DURABLE"];
+
+/**
+ * True while this tab writes the document and its saves reach the journal:
+ * the same condition under which the chip may show a local state, so the
+ * offline notice (F-8) never says text is saved on the device while the
+ * chip or a notice says saving has stopped.
+ */
+export function useLocalSavingOnDevice(): boolean {
+  const state = chipOf(useLocalDocument())?.state;
+  return state !== undefined && SAVING_ON_DEVICE.includes(state);
+}
+
+/**
+ * Read-only view for the status bar (FE-D6): whether the journal is still
+ * being read, and the words of the document as last proposed to it.
+ */
+export function useLocalStatus(): { loading: boolean; words: number } {
+  const { phase, words } = useLocalDocument();
+  return { loading: phase === "loading", words };
+}
+
+/**
+ * The sign-out button of the workspace bar (F-5, D-118) and its dialog
+ * (FE-D7). Disabled only while writing stops or a sign-out runs: whatever the
+ * journal or the tab holds, the dialog always offers "Odjavi se", so the
+ * session can always be ended (I1). Without script the form posts to the
+ * logout route directly, which ends it as well.
+ */
+export function LocalLogout() {
+  const { editor, prepareSignOut, staySignedIn, signOut } = useLocalDocument();
+  const [preparing, setPreparing] = useState(false);
+  const [plan, setPlan] = useState<LogoutPlan | null>(null);
+  const [working, setWorking] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  const onSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (preparing || plan) return;
+    setPreparing(true);
+    setFailed(false);
+    void prepareSignOut()
+      // Writing has stopped either way; an unknown count shows no number.
+      .catch((): LogoutPlan => ({ unsaved: false, pending: null }))
+      .then((next) => {
+        setPlan(next);
+        setPreparing(false);
+      });
+  };
+  const confirm = () => {
+    if (working) return;
+    setWorking(true);
+    setFailed(false);
+    const failure = () => {
+      setFailed(true);
+      setWorking(false);
+    };
+    void signOut().then((done) => {
+      if (done) window.location.assign("/");
+      else failure();
+    }, failure);
+  };
+  const stay = () => {
+    setPlan(null);
+    setFailed(false);
+    staySignedIn();
+  };
+  // Focus goes back to "Odjava" once the dialog has closed: while the modal
+  // is open, the button behind it is inert and cannot take focus.
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (plan) wasOpen.current = true;
+    else if (wasOpen.current) {
+      wasOpen.current = false;
+      buttonRef.current?.focus();
+    }
+  }, [plan]);
+  return (
+    <>
+      <form method="post" action="/api/auth/logout" onSubmit={onSubmit}>
+        <button ref={buttonRef} type="submit" className="btn" disabled={preparing || working}>
+          {preparing || working ? t.auth.loggingOut : t.auth.logout}
+        </button>
+      </form>
+      {plan ? (
+        <LogoutDialog
+          plan={plan}
+          working={working}
+          failed={failed}
+          onConfirm={confirm}
+          onStay={stay}
+          onExport={() => {
+            if (editor && !editor.isDestroyed) exportText(editor);
+          }}
+        />
+      ) : null}
+    </>
+  );
 }

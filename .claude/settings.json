@@ -2,7 +2,6 @@
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "env": {
     "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "200000",
-    "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet",
     "CLAUDE_CODE_GLOB_NO_IGNORE": "false",
     "CC_SAFETY_NET_WORKTREE": "1"
   },
@@ -95,12 +94,27 @@
         ]
       },
       {
+        "matcher": "startup",
         "hooks": [
           {
             "type": "command",
             "shell": "bash",
-            "command": "command -v powershell >/dev/null 2>&1 || exit 0; powershell -NoProfile -ExecutionPolicy Bypass -File \"$CLAUDE_PROJECT_DIR/scripts/cleanup-worktrees.ps1\"",
+            "command": "command -v node >/dev/null 2>&1 || exit 0; node \"$CLAUDE_PROJECT_DIR/scripts/orchestrator/session-worktree-clean.mjs\" --hook || exit 0",
             "async": true,
+            "timeout": 180
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/scripts/hooks/stop-typecheck.mjs"
+            ],
             "timeout": 180
           }
         ]
@@ -144,7 +158,7 @@
             "shell": "bash",
             "command": "command -v node >/dev/null 2>&1 && [ -f \"$CLAUDE_PROJECT_DIR/scripts/hooks/safety-net.mjs\" ] || { echo 'Safety hook cannot run: node or scripts/hooks/safety-net.mjs is missing. Run pnpm install --frozen-lockfile in a terminal.' >&2; exit 2; }; node \"$CLAUDE_PROJECT_DIR/scripts/hooks/safety-net.mjs\"; rc=$?; [ \"$rc\" -eq 0 ] && exit 0; [ \"$rc\" -eq 2 ] && exit 2; echo \"Safety hook failed unexpectedly (status $rc). Run pnpm install --frozen-lockfile in a terminal.\" >&2; exit 2",
             "onFailure": "block",
-            "timeout": 10
+            "timeout": 30
           }
         ]
       },
@@ -169,6 +183,20 @@
             "shell": "bash",
             "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/pr-auto-merge.mjs\"",
             "timeout": 30
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/scripts/hooks/orchestrator-tests.mjs"
+            ],
+            "asyncRewake": true,
+            "timeout": 120
           }
         ]
       }

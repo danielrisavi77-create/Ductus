@@ -78,7 +78,7 @@ SELECT is_empty(
 CREATE TEMP TABLE called (name text PRIMARY KEY, result text);
 INSERT INTO called VALUES
   ('create', pg_temp.ask('vesna', $$ SELECT institution.create_assignment({k1}, 'Ključ ustanove', 'Upute.',
-    'essay', '2026-11-02 08:00+01', '2026-12-01 23:59+01', 'prohibited', '{}', 'basic', false) $$));
+    'essay', '2026-11-02 08:00+01', '2026-12-01 23:59+01', 'prohibited', '{}', 'basic', false, NULL, NULL) $$));
 INSERT INTO called VALUES ('acknowledge', pg_temp.ask('dora', 'SELECT institution.acknowledge_notice({z1}, 2)'));
 SELECT is(
   (SELECT a.institution_id::text FROM institution.assignment a JOIN called c ON c.name = 'create' AND c.result = a.id::text),
@@ -170,10 +170,10 @@ FROM (VALUES
   (1, 'tomo', 'acknowledge the notice of an assignment of fak-a', 'SELECT institution.acknowledge_notice({z1}, 2)'),
   (2, 'petra', 'publish a version of an assignment of fak-a',
    $$ SELECT institution.publish_assignment_version({z1}, 2, 'Naslov', 'Upute.', 'essay', '2026-11-02 08:00+01',
-      '2026-12-01 23:59+01', 'prohibited', '{}', 'basic', false) $$),
+      '2026-12-01 23:59+01', 'prohibited', '{}', 'basic', false, NULL, NULL) $$),
   (3, 'petra', 'create an assignment in a course of fak-a',
    $$ SELECT institution.create_assignment({k1}, 'Naslov', 'Upute.', 'essay', '2026-11-02 08:00+01',
-      '2026-12-01 23:59+01', 'prohibited', '{}', 'basic', false) $$)
+      '2026-12-01 23:59+01', 'prohibited', '{}', 'basic', false, NULL, NULL) $$)
 ) AS v (n, actor, what, call)
 ORDER BY v.n;
 

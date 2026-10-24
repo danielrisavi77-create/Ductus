@@ -2,9 +2,11 @@ import fs from "node:fs";
 
 import { evaluateMetadata } from "./pr-metadata-core.mjs";
 import { changedPaths } from "./protected-paths.mjs";
+import { createApi } from "./review-gate-api.mjs";
+import { isMergifyQueuePr } from "./mergify-queue-pr.mjs";
 
 const event = JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, "utf8"));
-const pr = event.pull_request;
+let pr = event.pull_request;
 
 if (!pr) {
   console.log("Not a pull_request event; metadata check skipped.");
@@ -16,6 +18,18 @@ const repository = process.env.GITHUB_REPOSITORY;
 if (!token || !repository) throw new Error("Missing GitHub runtime environment.");
 
 const [owner, repo] = repository.split("/");
+const api = createApi({ token, baseUrl: process.env.GITHUB_API_URL ?? "https://api.github.com" });
+// A branch name alone never exempts metadata. Re-read the authenticated PR and
+// bind it to this CI run's immutable head before recognizing a queue carrier.
+const current = await api(`/repos/${owner}/${repo}/pulls/${pr.number}`);
+if (current.number !== pr.number || current.head?.sha !== pr.head?.sha) {
+  throw new Error("PR changed after this CI run started; metadata requires a new run.");
+}
+pr = current;
+if (isMergifyQueuePr(pr, repository)) {
+  console.log("Mergify CI carrier; source metadata and approvals remain required at queue entry.");
+  process.exit(0);
+}
 const files = [];
 
 for (let page = 1; page <= 30; page += 1) {

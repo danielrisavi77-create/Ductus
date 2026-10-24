@@ -6,7 +6,7 @@ Ažurira se skupno nakon spojenih PR-ova i kontrolnih točaka. Ovaj presjek čuv
 
 M0 Temelj. Prvi cilj ostaje radni demo za FPZG 2. 11. 2026. (`docs/PLAN-DEMO.md`). Ductus Engineering System v1 uvodi risk-based review, QA/Bug Hunter/Product uloge, GitHub za izvršenje i dokaze te Linear za zadatke, prioritete, nositelje i statuse.
 
-Session adresa orkestratora: `session_012PKnBC3YXckp6L2abHe7VX` (pomoćni podatak za `send_message`, `docs/ORKESTRATOR.md` §5; nije izvor istine).
+Session adresa orkestratora: `session_01JCvXpAX1i9hax8K5FFRcTy` (pomoćni podatak za `send_message`, `docs/ORKESTRATOR.md` §5; nije izvor istine).
 
 ## Owner queue (samo Daniel)
 
@@ -15,13 +15,13 @@ Agent nikad ne uzima ove stavke i nikad ne čeka na njima ako drugi posao može 
 - [x] 10. 10. 2026.: `main` zaštićen (PR obvezan; obvezni statusi CI, Local stack, Security scanners, Dependency review, Engineering review gate; neriješeni razgovori blokiraju; force push i delete zabranjeni; squash only; auto-merge i brisanje grane nakon spajanja uključeni). Administrator smije zaobići zaštitu; obvezni Code Owner review nije uključen (ENGINEERING_SYSTEM §10).
 - [ ] Proba demoa 31. 10. 2026. i snimka prolaza (PLAN-DEMO D-3, D-4).
 - [x] 10. 10. 2026.: vlasnik je potvrdio D-37, D-39, D-71 i D-74 (trag: komentar na issueu #87, `issuecomment-6101424008`; zapisano u `docs/DECISIONS.md`).
-- [ ] Razjasniti odnos D-06 i potvrđene D-39: zamjenjuje li D-39 odluku D-06 (potvrda to ne kaže; D-06 ostaje na snazi). UX test u `docs/UX-EVAL.md` §4.
+- [x] 18. 10. 2026.: odnos D-06 i D-39 riješen; obje zamjenjuje D-142 (prikaz uživo), uz D-143 (reprodukcija znak po znak) i D-144 (kratki zadaci). Ustav v1.4 izmijenjen (trag: #87 `issuecomment-6254642740`, `6254721033`).
 - [x] 11. 10. 2026.: vlasnik je odlučio (trag: komentari na issueu #87, `issuecomment-6105246182`, `6105084144`, `6105021669`, `6105034219`, `6105201573`; zapisano u `docs/DECISIONS.md`): D-08 razdvojen (dio o aplikaciji ODLUČEN, dobavljači i trošak PRIJEDLOG do B0.1, rok 16. 11. 2026.), D-34 potvrđen uz dopunu o autoru, domena evidencije (D-102), ključ ustanove (D-103), model računa za drugog izdavatelja uz nepromijenjen D-09 (D-104), nastavnički prikaz samo opisni i bez novih rezova demoa (D-105), jezik tek uz engleski (D-70). Potvrđeno i tumačenje točke 3 (komentar `6105263690`): migracije na kritičnom putu demoa (#240 i sljedeći korak B-8) se ne zaustavljaju, B0.1 kreće čim postoje računi dobavljača, rizik prepisa migracija do tada ostaje zapisan.
 - [ ] Potvrditi ili promijeniti D-16, D-20, D-38 te pragove P-01 do P-04 (D-08, dio o dobavljačima: B0.1).
 - [ ] Odnos D-08 (dio o dobavljačima, B0.1) prema B0.2: D-08 u `docs/DECISIONS.md` i `docs/PLAN-DEMO.md` traže i B0.2, nova odluka 11. 10. spominje samo B0.1. Odluka nije donesena.
 - [ ] Odnos D-105 ("zasad se ništa ne reže") prema već primijenjenom rezu iz D-98 dopune (a): D-105 ga ne poništava; vraćanje reza bila bi nova odluka.
 - [ ] Izvršitelj obrade i ugovorna strana prema ustanovi (kontroler/procesor): vlasnik rješava s ustanovom; blokira pilot, ne demo.
-- [ ] D-56: pravno mišljenje + Constitution Gate C-14/C-19 prije ikakvog bilježenja ritma; nije na kritičnom putu demoa.
+- [ ] D-142/D-143 (prikaz uživo, reprodukcija znak po znak; Ustav v1.4 izmijenjen): pravno mišljenje (D-55; biometrija po čl. 4. t. 14. GDPR-a, razmjernost, Prilog III. Akta o UI, uključujući t. 3(d) prema D-151) i DPIA prije pilota sa stvarnim studentima; ne blokira demo. Od ostalih uloga reprodukciju vidi samo mentor, odnosno nastavnik zadatka, jer je to ista uloga (D-154); student vidi istu reprodukciju svog rada (pravilo 5).
 - [ ] FPZG: koordinator pilota, kolegiji/mentori, akademski kalendar, AAI administrator, DPO, D-04, D-29, D-30, D-31, D-35, zamjenski postupak i zahtjev za ispis razgovora.
 - [ ] FPZG AAI: ovlast za AAI@EduHr Lab i kasnije registracija Ductusa kao usluge. Blokira M1, ne demo.
 - [ ] Lekta: licenca/pravo redistribucije prije punog M4 paketa.

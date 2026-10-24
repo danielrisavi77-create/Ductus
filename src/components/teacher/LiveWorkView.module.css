@@ -1,0 +1,229 @@
+/* DAN-86 step 2b: the teacher's live view, on the shared tokens (app/globals.css). */
+.layout {
+  display: grid;
+  gap: 24px;
+  align-items: start;
+}
+
+:global(.page) > .layout {
+  max-width: none;
+}
+
+@media (min-width: 1100px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr) 330px;
+  }
+  .aside {
+    position: sticky;
+    top: 24px;
+  }
+}
+
+.main {
+  min-width: 0;
+}
+
+.status {
+  max-width: 720px;
+  margin: 0 auto 10px;
+  font-size: 13px;
+}
+
+.text h2,
+.text h3,
+.text h4 {
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.text p {
+  margin: 0 0 0.9em;
+}
+
+.note {
+  max-width: 720px;
+  margin: 12px auto 0;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.limits {
+  padding: 20px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--sheet);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.limits h2 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+
+.limits h3 {
+  margin: 16px 0 6px;
+  font-size: 14px;
+}
+
+.limits ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.limits li + li {
+  margin-top: 6px;
+}
+
+.limits p:last-child {
+  margin-bottom: 0;
+}
+
+/* DAN-86 step 2c: comments beside the live text (as CommentPanel, design editor-v11 5.1). */
+.aside {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.mark {
+  background: var(--cmt-bg);
+  border-bottom: 1px solid var(--cmt);
+  color: inherit;
+}
+
+.comments {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--sheet);
+  font-size: 13px;
+}
+
+.comments h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.thread,
+.newComment {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px 10px;
+  border: 1px solid var(--rule);
+  border-left: 2px solid var(--cmt);
+  border-radius: 9px;
+}
+
+.thread p,
+.newComment p {
+  margin: 0;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.newComment h3 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.threadHead {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.quote {
+  font-family: var(--ff-display);
+  font-style: italic;
+  color: var(--ink-3);
+}
+
+.muted {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.reply {
+  padding-left: 10px;
+  border-left: 1px solid var(--rule);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.link {
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.link:hover {
+  color: var(--ink);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.form textarea,
+.newComment textarea {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 7px;
+  background: var(--ground);
+  color: var(--ink);
+  font: inherit;
+  resize: vertical;
+}
+
+.error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink);
+  font-weight: 600;
+}
+/* F-10 PR4: the process summary card; the summary keeps its own frame (ProcessSummaryView.module.css). */
+.summaryCard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.summaryCard > :first-child {
+  align-self: stretch;
+}
+
+.summaryState {
+  padding: 16px 18px;
+  border: 1px solid var(--rule-2);
+  border-radius: 10px;
+  background: var(--chrome);
+  font-size: 13px;
+}
+
+.summaryState h2 {
+  margin: 0;
+  font-size: 16px;
+}

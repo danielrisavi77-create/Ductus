@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
+import { evidenceServerEnvironment } from "./scripts/demo/login-e2e-evidence.mjs";
+import { playwrightConsoleReporter } from "./test-output";
+
 // The fake provider redirects to http://localhost:3000/api/auth/callback
 // alone (infra/fake-oidc), so the port and the host name are fixed.
 const PORT = 3000;
@@ -22,7 +25,7 @@ export default defineConfig({
   // request; one worker keeps the sessions of one test out of another.
   workers: 1,
   timeout: 90_000,
-  reporter: [["list"], ["html", { open: "never", outputFolder: "playwright-report-login" }]],
+  reporter: [[playwrightConsoleReporter(process.env)], ["html", { open: "never", outputFolder: "playwright-report-login" }]],
   outputDir: "test-results-login",
   use: {
     baseURL: BASE_URL,
@@ -46,6 +49,8 @@ export default defineConfig({
       OIDC_REDIRECT_URI: `${BASE_URL}/api/auth/callback`,
       OIDC_CLIENT_ID: "ductus-local",
       OIDC_CLIENT_SECRET: "ductus-local-only",
+      // The evidence signer and the storage domain `pnpm demo:up` gives the app (Z5).
+      ...evidenceServerEnvironment(),
     },
     reuseExistingServer: process.env.E2E_REUSE_SERVER === "1",
     timeout: 240_000,
