@@ -38,9 +38,9 @@ const open = (who: keyof typeof people, assignment: string) => withActor(tokens[
   (await tx.query<{ outcome: string; document_id: string }>(
     "SELECT outcome, document_id FROM app.open_student_work($1)", [assignment])).rows[0]!);
 const evidenceRows = async () => (await admin.query<{ n: number }>(
-  `SELECT (SELECT count(*) FROM evidence.project WHERE institution_id = $1)
+  `SELECT ((SELECT count(*) FROM evidence.project WHERE institution_id = $1)
         + (SELECT count(*) FROM evidence.document WHERE institution_id = $1)
-        + (SELECT count(*) FROM evidence.package WHERE institution_id = $1) AS n`, [home])).rows[0]!.n;
+        + (SELECT count(*) FROM evidence.package WHERE institution_id = $1))::int AS n`, [home])).rows[0]!.n;
 
 async function insertFixture(client: pg.PoolClient) {
   for (const [id, slug] of [[home, `it-wd-${suffix}`], [other, `it-wd-other-${suffix}`]]) {
@@ -162,11 +162,12 @@ describe("document of an assignment for the session, on the database (#711 B1)",
   });
 
   it("gives each assignment its own document (A8) and a classmate never the student's (A20)", async () => {
-    const first = await read("student", a.open);
+    // open_student_work is idempotent: this returns the work of the first test, or makes it.
+    const first = await open("student", a.open);
     const second = await open("student", a.second);
+    expect(await read("student", a.open)).toEqual({ kind: "document", documentId: first.document_id });
     expect(await read("student", a.second)).toEqual({ kind: "document", documentId: second.document_id });
-    expect(first).toMatchObject({ kind: "document" });
-    expect(second.document_id).not.toBe((first as { documentId: string }).documentId);
+    expect(second.document_id).not.toBe(first.document_id);
     expect(await read("classmate", a.open)).toEqual({ kind: "notOpened" });
   });
 
