@@ -34,12 +34,13 @@ tri kumulativne provjere, jedan PR po batchu, bez dodatnog čekanja pune grupe.
 - Na 2–3 mala, stvarna i već odobrena PR-a zabilježiti originalne SHA-ove, oba
   governance statusa, queue vrijeme i Mergify draft brojeve/headove.
 - Potvrditi da su draftovi od `mergify[bot]`, da svi required poslovi doista rade,
-  da dva carrier statusa navode svoju ulogu, a izvorni headovi nisu osvježavani
+  da carrier nema ni "Merge authorization" ni "Engineering review gate" (F-115), a izvorni headovi nisu osvježavani
   samo zbog reda. Draft ne smije sam ući u red niti biti zasebno spojen.
 - U kontroliranom pokusu novim pushom na izvorni PR ili povlačenjem njegova
   kanonskog odobrenja dokazati da više ne može biti spojen na starom zelenom
   batchu. Zabilježiti oba SHA-a i Mergify dequeue/rebuild rezultat. Ne koristiti
   lažni review/QA verdict kao dokaz. Ako pokus nije izveden, prihvat je nepotpun.
+- Negativan pokus F-115: dok carrier draft postoji, na njegovu granu pushati potomka (u kontroliranom pokusu), otvoriti običan PR s tim headom i potvrditi da nijedan governance status nije zelen i da Mergify taj PR ne stavlja u red; zabilježiti i Mergifyjev odgovor na vanjski push na queue granu.
 - Dokazati da neuspješan CI na kombinaciji blokira spajanje te da uspješan kasniji
   rezultat ne preskače raniji neuspjeh (`skip_intermediate_results: false`).
 - Potvrditi redoslijed squash mergeova i zelen main. Kod neočekivanog ponašanja

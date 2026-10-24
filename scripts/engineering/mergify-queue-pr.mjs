@@ -1,4 +1,5 @@
-// DAN-263: recognize a CI carrier, never a source PR approval. Mergify owns
+// DAN-263: recognize a CI carrier, never a source PR approval. A carrier gets no governance
+// status (F-115); the result is used only to skip checks that need a PR description. Mergify owns
 // admission/revalidation of the source PRs through all six queue_conditions.
 // Call only with GitHub-authenticated PR data, not a label, body or branch alone.
 export function isMergifyQueuePr(pr, repository) {
@@ -15,8 +16,3 @@ export function isMergifyQueuePr(pr, repository) {
     typeof pr.title === "string" && pr.title.startsWith("merge queue: ")
   );
 }
-
-export const QUEUE_CARRIER_STATUS = {
-  state: "success",
-  description: "Mergify CI carrier; source approvals enforced by queue conditions (DAN-263).",
-};

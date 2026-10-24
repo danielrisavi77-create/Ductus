@@ -24,8 +24,14 @@ test("queue and merge conditions require every required status of main", () => {
   const checks = queueRules
     .map((line) => /^\s*- check-success=(.+)$/.exec(line)?.[1])
     .filter(Boolean);
-  assert.deepEqual(checks, REQUIRED);
-  assert.match(body, /merge_conditions: \*required/);
+  // queue_conditions (source PRs) hold all six; merge_conditions (CI carrier) only the four CI checks (F-115).
+  const mergeStart = queueRules.findIndex((line) => line.trim() === "merge_conditions:");
+  const queueChecks = checks.slice(0, REQUIRED.length);
+  const mergeChecks = checks.slice(REQUIRED.length);
+  assert.ok(mergeStart > 0);
+  assert.deepEqual(queueChecks, REQUIRED);
+  assert.deepEqual(mergeChecks, REQUIRED.slice(0, 4));
+  assert.ok(!mergeChecks.includes("Engineering review gate") && !mergeChecks.includes("Merge authorization"));
   assert.match(body, /- base=main/);
   assert.match(body, /- -draft/);
 });
