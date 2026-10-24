@@ -20,9 +20,9 @@ export interface VerifiedLogin {
   /**
    * The issuer of the account key (F-042): the configured one in
    * `accountIssuer` form, never the provider's spelling of it. The library
-   * has already required the token `iss` to equal the discovered issuer and
-   * that one to equal OIDC_ISSUER after URL normalisation, so both name the
-   * same issuer.
+   * has already required the token `iss` to equal the discovered issuer, and
+   * discovery is refused unless that one names OIDC_ISSUER in the same form
+   * (F-123), so both name the same issuer.
    */
   issuer: string;
   idToken: Readonly<Record<string, unknown>>;
@@ -139,6 +139,14 @@ export function createOidcClient(config: AuthConfig, fetchImpl: typeof fetch = f
           ],
         },
       )
+      .then((discoveredConfiguration) => {
+        // F-123: the library skips its own issuer check for some URLs, so the
+        // account key's issuer is held to the discovered one here, fail closed.
+        if (accountIssuer(new URL(discoveredConfiguration.serverMetadata().issuer)) !== accountIssuer(config.issuer)) {
+          throw new Error("discovered issuer does not match OIDC_ISSUER");
+        }
+        return discoveredConfiguration;
+      })
       .catch((error: unknown) => {
         // A failed discovery is retried on the next login, not cached.
         discovered = undefined;
