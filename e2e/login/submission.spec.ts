@@ -119,10 +119,13 @@ function receiptFor(documentId: string, changes: Partial<typeof RECEIPT.payload>
   return { ...RECEIPT, payload: { ...RECEIPT.payload, documentId, revision: 3, ...changes } };
 }
 
+/** Criterion 9: the page in both themes, switched with the shell's own toggle, then back. */
 async function shoot(page: Page, name: string) {
-  for (const colorScheme of ["light", "dark"] as const) {
-    await page.emulateMedia({ colorScheme });
-    await test.info().attach(`f10-${name}-${colorScheme}`, { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
+  const toggle = page.getByRole("button", { name: messagesHr.shell.theme });
+  for (let i = 0; i < 2; i += 1) {
+    const theme = await page.locator("[data-theme]").first().getAttribute("data-theme");
+    await test.info().attach(`f10-${name}-${theme}`, { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
+    await toggle.click();
   }
 }
 
