@@ -92,6 +92,16 @@ describe("F-8 3d-2b1: leaving CONFLICT and RECOVERY_REQUIRED", () => {
     expect(await runnerFor(journal, server()).step(DOC)).toEqual({ kind: "idle" });
   });
 
+  it("2b: in CONFLICT the server's version must reach the revision the conflict named", async () => {
+    const journal = await refused(2, chainConflict());
+    // Nothing was acknowledged, so the page-load opening is not behind this
+    // device; it is behind the server that refused the row.
+    await refuses(journal, "invalid_input", () => journal.adoptServerEvidence(DOC, local.opened, true, DECIDED, 2));
+    await refuses(journal, "invalid_input", () =>
+      journal.adoptServerEvidence(DOC, openedAfter(OTHER[0]!, R0 + 1), true, DECIDED, 2));
+    await expect(journal.adoptServerEvidence(DOC, SERVER, true, DECIDED, 2)).resolves.toMatchObject({ state: "SYNCED" });
+  });
+
   it("3: RECOVERY_REQUIRED: only the diverged row owed needs no confirmation; a newer row does", async () => {
     const one = await refused(1, json(409, { status: "txid_reused" }));
     expect((await one.readEvidence(DOC)).meta?.state).toBe("RECOVERY_REQUIRED");
@@ -190,6 +200,23 @@ describe("F-8 3d-2b1: leaving CONFLICT and RECOVERY_REQUIRED", () => {
     await expect(journal.destroyForLogout()).resolves.toBeUndefined();
   });
 
+  it("7: a stopped recorder whose owed row the server refuses for good: a confirmed take is the way out", async () => {
+    const journal = await started();
+    await save(journal, SEG[0]!);
+    const text = (await journal.readEvidence(DOC)).snapshot!.document;
+    await journal.saveUncovered(DOC, text, "unsupported_step", UTC, 1);
+    await runnerFor(journal, server(R0, () => json(413, { status: "too_large" }))).step(DOC);
+    expect((await journal.readEvidence(DOC)).meta).toMatchObject({ state: "ERROR", evidenceStopped: "unsupported_step" });
+    await expect(journal.destroyForLogout()).rejects.toMatchObject({ code: "unsynced_work" });
+    await refuses(journal, "confirmation_required", () => journal.adoptServerEvidence(DOC, local.opened, false, DECIDED, 2));
+    await expect(journal.adoptServerEvidence(DOC, local.opened, true, DECIDED, 2)).resolves.toMatchObject({ state: "SYNCED" });
+    expect((await journal.readEvidence(DOC)).pending).toEqual([]);
+    const [copy] = await journal.readSalvage(DOC);
+    expect(copy).toMatchObject({ cause: "EVIDENCE_STOPPED", evidenceStopped: "unsupported_step", document: text });
+    await journal.releaseSalvage(DOC, copy!.id);
+    await expect(journal.destroyForLogout()).resolves.toBeUndefined();
+  });
+
   it("8: a kept copy blocks logout until the author lets it go; then everything goes", async () => {
     const journal = await refused(1, chainConflict());
     await journal.adoptServerEvidence(DOC, SERVER, true, DECIDED, 1);
@@ -224,6 +251,28 @@ describe("F-8 3d-2b1: leaving CONFLICT and RECOVERY_REQUIRED", () => {
       await journal.recordAnswer(DOC, dropped!, outcome, null);
     }
     expect(await everything(journal)).toEqual(before);
+  });
+
+  it("9b: another tab's answer for a row the take dropped changes nothing, through the runner too", async () => {
+    const journal = await started();
+    await save(journal, SEG[0]!);
+    await save(journal, SEG[1]!);
+    const [sent] = (await journal.readEvidence(DOC)).pending;
+    let taken: Awaited<ReturnType<typeof everything>> | undefined;
+    // Tab B's request is out; meanwhile tab A is refused on the same row and
+    // its author takes the server's version. Then B's connection drops.
+    const tabB = runnerFor(journal, server(R0, async () => {
+      await runnerFor(journal, server(R0, () => chainConflict())).step(DOC);
+      await journal.adoptServerEvidence(DOC, SERVER, true, DECIDED, 2);
+      taken = await everything(journal);
+      return new Error("connection dropped");
+    }));
+    await tabB.step(DOC);
+    expect(taken?.contents.meta).toMatchObject({ state: "SYNCED" });
+    expect(await everything(journal)).toEqual(taken);
+    // The state tab B computes when it read the CONFLICT before the take.
+    await journal.recordAnswer(DOC, sent!, { status: "transport_error" }, "CONFLICT");
+    expect(await everything(journal)).toEqual(taken);
   });
 
   it.each([
