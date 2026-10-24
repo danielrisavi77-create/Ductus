@@ -579,6 +579,26 @@ describe("live publisher (BACKEND 4.12 t. 7 and 8)", () => {
     expect(s.net.listeners()).toBe(0);
   });
 
+  it("sends the accepted state again after a stop aborted another state in flight", async () => {
+    const s = setup();
+    s.publisher.start();
+    s.publisher.offer(doc("a"));
+    await s.time.advance(0);
+    s.calls[0]!.resolve(answer(200, TOKEN_A));
+    await s.time.advance(0);
+    s.publisher.offer(doc("ab"));
+    await s.time.advance(LIVE_PUBLISH_GAP_MS);
+    expect(s.calls).toHaveLength(2);
+    // "Odjava", then "Ostani": the request for AB is aborted, but may have landed.
+    s.publisher.stop();
+    s.publisher.start();
+    s.publisher.offer(doc("a"));
+    await s.time.advance(LIVE_PUBLISH_GAP_MS);
+    expect(s.calls).toHaveLength(3);
+    expect(s.calls[2]!.init.body).toBe(canonicalizeJcs(doc("a")));
+    expect(s.calls[2]!.init.headers).toEqual({ "content-type": "application/json", "if-match": `"${TOKEN_A}"` });
+  });
+
   it("survives repeated starts and stops: never two in flight, and the last state goes after the last start", async () => {
     const s = setup();
     for (let i = 0; i < 5; i += 1) {

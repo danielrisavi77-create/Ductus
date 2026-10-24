@@ -13,7 +13,7 @@
  * after the start of the previous one, and only when the bytes differ from
  * what the route holds (known only while nothing is in flight and the last
  * answer was definite, so a return to the accepted state during a request,
- * or after a lost answer, still goes). Without a network only
+ * or after a lost or aborted answer, still goes). Without a network only
  * the last state waits, and it goes when the network is back. A conflict
  * takes the returned token and sends the last state once more, never twice
  * for the same state: offering those bytes again does not renew the retry,
@@ -252,6 +252,9 @@ export function createLivePublisher(options: LivePublisherOptions): LivePublishe
       unsubscribe = null;
       const flight = inFlight;
       inFlight = null;
+      // The aborted request may still have landed, so the route may no longer
+      // hold `accepted`; after a restart CAS settles what it holds.
+      if (flight !== null) accepted = null;
       flight?.abort();
     },
     halted: () => halt,
