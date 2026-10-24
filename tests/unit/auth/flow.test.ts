@@ -283,6 +283,30 @@ describe("login", () => {
       expect(logged).not.toContain(value);
     }
   });
+
+  // F-042 (DAN-174): one account key per issuer, whichever way it is spelled.
+  it.each([
+    ["the provider adds a slash after the host", ISSUER, `${ISSUER}/`],
+    ["the provider writes the scheme in capitals", ISSUER, ISSUER.replace("https", "HTTPS")],
+    ["the configuration adds a slash after the host", `${ISSUER}/`, ISSUER],
+  ])("opens the session under the configured issuer when %s", async (_name, configured, spelled) => {
+    const spelledConfig = loadAuthConfig({
+      NODE_ENV: "test",
+      DUCTUS_AUTH_PROVIDER: "fake-oidc",
+      OIDC_ISSUER: configured,
+      OIDC_CLIENT_ID: CLIENT_ID,
+      OIDC_CLIENT_SECRET: CLIENT_SECRET,
+      OIDC_REDIRECT_URI: `${APP}/api/auth/callback`,
+    });
+    idp = createTestIdp(undefined, spelled);
+    deps.config = spelledConfig;
+    deps.oidc = createOidcClient(spelledConfig, idp.fetch);
+
+    const response = await login();
+    expect(response.status).toBe(303);
+    expect(deps.openSession).toHaveBeenCalledTimes(1);
+    expect(deps.openSession.mock.calls[0][0].issuer).toBe(ISSUER);
+  });
 });
 
 describe("logout", () => {
