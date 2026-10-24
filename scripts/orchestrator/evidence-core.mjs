@@ -45,7 +45,7 @@ function verdictOf(comments, kind, head) {
   if (!comments) return null;
   const v = latestVerdict(comments, kind, head);
   if (!v) return { verdict: "none" };
-  return { verdict: v.verdict, head: String(v.head ?? "").slice(0, 8), agent: shown(v.agent), current: v.current };
+  return { verdict: v.verdict, head: SHA_RE.test(String(v.head ?? "")) ? String(v.head).slice(0, 8).toLowerCase() : "<not printed>", agent: shown(v.agent), current: v.current };
 }
 
 function checksOf(rollup) {

@@ -108,3 +108,14 @@ test("a job named __proto__ is kept", () => {
   const rollup = [{ name: "__proto__", status: "COMPLETED", conclusion: "FAILURE", workflowName: "1" }];
   assert.equal(buildEvidence({ pr: pr(), rollup }).checks.bad[0].name, "__proto__");
 });
+
+test("a verdict head that is not a SHA is not printed", () => {
+  const evil = `${String.fromCharCode(27)}[2J${String.fromCharCode(0x202e)}evil`;
+  const stale = { ...verdict("qa", H1, "PASS"), body: `QA-Agent: claude:q:qa\nQA-Head: ${evil}\nQA-Verdict: PASS\n` };
+  const e = buildEvidence({ pr: pr(), comments: [stale] });
+  assert.equal(e.qa.head, "<not printed>");
+  for (const out of [JSON.stringify(e), renderEvidence(e).join("\n")]) {
+    assert.ok(!out.includes("evil"));
+    assert.ok(!/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u202a-\u202e]/.test(out));
+  }
+});
