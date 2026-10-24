@@ -7,6 +7,7 @@ import { OfflineBanner, OfflineChip } from "@/components/editor/OfflineNotice";
 import {
   LocalDocumentProvider, LocalEditor, LocalLogout, LocalSaveChip,
 } from "@/components/editor/LocalDocument";
+import { showsInventedPanels } from "@/components/editor/demo-panels";
 import { InstructionsPanel, WorkPanel } from "@/components/editor/SidePanels";
 import { LocalStatusLength } from "@/components/editor/StatusLength";
 import PanelTabs from "@/components/shell/PanelTabs";
@@ -78,14 +79,16 @@ async function journalFor(): Promise<{
  * status bar say so (F-8, DAN-211). A signed-in student sees the teacher's
  * comments in the side panel (F-9 step 1). The top bar names the course and
  * the assignment and the status bar the length against its word range, from
- * invented demo data until /rad reads its assignment (FE-D6). With a journal,
- * Upute and Rad show invented data of the real shape until their reads exist
- * (FE-D9, #476). Signing out
+ * invented demo data until /rad reads its assignment (FE-D6). The local demo
+ * journal without a session shows invented Upute and Rad of the real shape
+ * (FE-D9, #476); a signed-in person sees their empty states until the reads
+ * exist (F-110 t.1). Signing out
  * always ends the session (D-118, `LocalLogout`).
  */
 export default async function WorkspacePage() {
   const { scope, signedIn, signInAgain, tag, at } = await journalFor();
   const session = signedIn && tag !== null ? { tag, at } : null;
+  const invented = showsInventedPanels({ scope, signedIn });
   const workspace = (
     <WorkspaceShell
       writingHref="/rad"
@@ -117,7 +120,7 @@ export default async function WorkspacePage() {
             {
               id: "instructions",
               label: t.workspace.tabInstructions,
-              content: <InstructionsPanel load={scope ? { kind: "ready", value: DEMO_ASSIGNMENT } : { kind: "empty" }} />,
+              content: <InstructionsPanel load={invented ? { kind: "ready", value: DEMO_ASSIGNMENT } : { kind: "empty" }} />,
             },
             {
               id: "comments",
@@ -131,7 +134,7 @@ export default async function WorkspacePage() {
             {
               id: "work",
               label: t.workspace.tabWork,
-              content: <WorkPanel load={scope ? { kind: "ready", value: DEMO_WORK } : { kind: "empty" }} />,
+              content: <WorkPanel load={invented ? { kind: "ready", value: DEMO_WORK } : { kind: "empty" }} />,
             },
           ]}
         />
