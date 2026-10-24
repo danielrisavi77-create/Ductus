@@ -27,11 +27,31 @@ export const hr = {
   shell: {
     skipToContent: "Preskoči na sadržaj",
     demoBadge: "Demo · izmišljeni podaci",
+    // Design v3 shell (#476 6314969336): only static labels and the role the
+    // server read; no names or counts the app does not have.
+    sideNav: "Bočna navigacija",
+    workNav: "Radni prostor",
+    home: `${APP_NAME}, početna`,
+    space: { teacher: "Nastavnički prostor", student: "Studentski prostor" },
+    nav: {
+      courses: "Moji kolegiji",
+      newCourse: "Novi kolegij i zadatak",
+      fastPath: "Brz put",
+      workspace: "Radni prostor",
+      enroll: "Upis u kolegij",
+    },
+    role: { teacher: "Nastavnik", student: "Student" },
+    demoNote: "Nijedan stvarni osobni podatak.",
+    signOut: "Odjava",
+    openNav: "Otvori navigaciju",
+    closeNav: "Zatvori navigaciju",
+    theme: "Promijeni svijetlu ili tamnu temu",
+    breadcrumb: "Put",
   },
   home: {
     lead: `${APP_NAME} ne procjenjuje autorstvo ni korištenje AI-ja. Prije početka vidiš što nastavnik vidi i od kada.`,
     openWorkspace: "Otvori radni prostor",
-    openTeacher: "Novi kolegij i zadatak",
+    openTeacher: "Moji kolegiji",
   },
   // FE-H1 (#476): public home page for a visitor without a session. Every
   // entry leads to /prijava; sign-in is AAI@EduHr only (D-09). Live view and
@@ -166,6 +186,7 @@ export const hr = {
     unavailable: "Provjera nastavničke uloge trenutačno nije dostupna. Pokušaj ponovno.",
     signIn: "Prijavi se",
     backHome: "Na početnu",
+    backCourses: "Moji kolegiji",
     course: {
       heading: "Kolegij",
       name: "Naziv",
@@ -285,6 +306,22 @@ export const hr = {
     },
   },
   // Screen 11, the teacher's fast path (F-11, D-80 point 2). Lines are facts in words (PRODUCT §5 rule 2).
+  // Z3 (A), #476 6289158306: the teacher's entry at /nastavnik. The order is
+  // the route's (year, name; assignments by due time) and nothing reorders it.
+  teacherCourses: {
+    title: "Moji kolegiji",
+    lead: "Kolegiji u kojima predaješ i njihovi zadaci. Poredak: akademska godina, pa naziv; zadaci po roku.",
+    newCourse: "Novi kolegij i zadatak",
+    empty: "Nemaš kolegija u kojima predaješ.",
+    emptyLead: "Stvori kolegij i objavi prvi zadatak.",
+    noAssignments: "Još nema zadataka.",
+    unavailable: "Kolegiji trenutačno nisu dostupni. Pokušaj ponovno.",
+    retry: "Pokušaj ponovno",
+    due: "rok",
+    at: "u",
+    students: { one: "student", few: "studenta", many: "studenata" },
+    countNote: "Broj studenata služi samo za pregled; po njemu se ništa ne poreda.",
+  },
   fastPath: {
     title: "Brz put",
     intro: "Radovi jednog zadatka, jedan za drugim. Prikaz samo čita; ništa ne mijenja.",
