@@ -1,6 +1,15 @@
 -- Shared synthetic rows and call helpers for DAN-189 RPC tests.
 \ir institution.inc
 
+-- A document in these tests is a stand-in text, such as repeat('d', 64); its
+-- hash is the SHA-256 of those bytes, as the snapshot table requires.
+CREATE FUNCTION pg_temp.sha(p_body text) RETURNS text LANGUAGE sql IMMUTABLE AS $$
+  SELECT encode(sha256(convert_to(p_body, 'UTF8')), 'hex')
+$$;
+CREATE FUNCTION pg_temp.h(p_letter text) RETURNS text LANGUAGE sql IMMUTABLE AS $$
+  SELECT pg_temp.sha(repeat(p_letter, 64))
+$$;
+
 SET CONSTRAINTS ALL DEFERRED;
 SET LOCAL ROLE ductus_evidence;
 INSERT INTO evidence.domain (id, institution_id, region) VALUES
@@ -10,11 +19,11 @@ INSERT INTO evidence.project (id, institution_id, assignment_id, principal_id) V
   ('project-a', pg_temp.id('fak_a'), pg_temp.id('z1'), pg_temp.id('ana')),
   ('project-b', pg_temp.id('fak_b'), pg_temp.id('z3'), pg_temp.id('tomo'));
 INSERT INTO evidence.document (id, institution_id, project_id, principal_id, current_content_hash) VALUES
-  ('doc-a', pg_temp.id('fak_a'), 'project-a', pg_temp.id('ana'), repeat('a',64)),
-  ('doc-b', pg_temp.id('fak_b'), 'project-b', pg_temp.id('tomo'), repeat('c',64));
+  ('doc-a', pg_temp.id('fak_a'), 'project-a', pg_temp.id('ana'), pg_temp.h('a')),
+  ('doc-b', pg_temp.id('fak_b'), 'project-b', pg_temp.id('tomo'), pg_temp.h('c'));
 INSERT INTO evidence.document_revision (document_id, institution_id, revision, principal_id, content_hash) VALUES
-  ('doc-a', pg_temp.id('fak_a'), 0, pg_temp.id('ana'), repeat('a',64)),
-  ('doc-b', pg_temp.id('fak_b'), 0, pg_temp.id('tomo'), repeat('c',64));
+  ('doc-a', pg_temp.id('fak_a'), 0, pg_temp.id('ana'), pg_temp.h('a')),
+  ('doc-b', pg_temp.id('fak_b'), 0, pg_temp.id('tomo'), pg_temp.h('c'));
 INSERT INTO evidence.package (
   id, institution_id, evidence_domain_id, document_id, project_id, principal_id,
   evidence_profile_id, max_payload_bytes
@@ -45,15 +54,18 @@ CREATE FUNCTION pg_temp.descriptor(
   )
 $$;
 
+-- p_initial and p_final are the document before and after the segment: the
+-- call sends their hashes and p_final as the snapshot.
 CREATE FUNCTION pg_temp.call(
   p_actor text, p_package text, p_request text, p_descriptor jsonb,
-  p_revision bigint, p_initial_hash text, p_final_hash text, p_payload_hash text,
+  p_revision bigint, p_initial text, p_final text, p_payload_hash text,
   p_column text DEFAULT 'outcome', p_storage_ref text DEFAULT NULL
 ) RETURNS text LANGUAGE sql AS $$
   SELECT pg_temp.ask(p_actor, format(
-    'SELECT %I FROM app.commit_evidence_segment(%L, %L, %s, %L, %L, %L::jsonb, %L, %L)',
-    p_column, p_package, p_request, p_revision, p_initial_hash, p_final_hash,
-    p_descriptor::text, p_payload_hash, coalesce(p_storage_ref, 'synthetic://' || p_package || '/' || p_request)
+    'SELECT %I FROM app.commit_evidence_segment(%L, %L, %s, %L, %L, %L::jsonb, %L, %L, %L)',
+    p_column, p_package, p_request, p_revision, pg_temp.sha(p_initial), pg_temp.sha(p_final),
+    p_descriptor::text, p_payload_hash, coalesce(p_storage_ref, 'synthetic://' || p_package || '/' || p_request),
+    p_final
   ))
 $$;
 

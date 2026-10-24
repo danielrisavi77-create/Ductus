@@ -53,6 +53,17 @@ function validContract(c) {
     && unique(c.assignments.filter(a => a.pr !== null).map(a => a.pr));
 }
 
+/** 'VALID', 'INVALID_CONTRACT' or 'STALE_CONTRACT' (the same window checkWork enforces). */
+export function contractState(contract, now) {
+  try {
+    if (!validContract(contract)) return 'INVALID_CONTRACT';
+  } catch { return 'INVALID_CONTRACT'; }
+  const issued = Date.parse(contract.issuedAt), expires = Date.parse(contract.expiresAt);
+  if (!Number.isFinite(now) || issued > now || expires <= now || expires <= issued
+      || expires - issued > 15 * 60 * 1000) return 'STALE_CONTRACT';
+  return 'VALID';
+}
+
 export function checkWork(contract, evidence = {}) {
   const reasons = new Set();
   const finish = () => ({ ok: reasons.size === 0, state: reasons.size ? 'BLOCKED' : 'ALLOWED',

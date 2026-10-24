@@ -1,6 +1,7 @@
 // P1-1: the checks the orchestrator runs before it starts review or QA
 // (docs/ORKESTRATOR.md, "prije pokretanja reviewa ili QA-e"). Pure: no gh/git.
 import { closesFence, fenceInfo, field } from "../engineering/metadata-parser.mjs";
+import { D97_MANUAL_PATHS, D97_PATHS, matchesPath } from "../engineering/protected-paths.mjs";
 import { evaluateChecks, GATE_CONTEXT, latestChecks } from "./orchestrator-core.mjs";
 
 // ENGINEERING_SYSTEM §14 lines the orchestrator requires besides `Task:`.
@@ -235,12 +236,15 @@ export function contractText(body, label) {
  *   pr        toPr() shape (state, isDraft, headRefOid, baseRefName, body)
  *   mainSha   main head the PR is compared against
  *   compare   REST compare of mainSha...head ({status, behind_by}) or null when unread
+ *   mainPaths paths changed by the main commits the head lacks (compare head...main), or null
+ *             when unread or cut at the API cap; only read when the head is behind
+ *   prPaths   every path the PR changes (renames under both names), or null when unread
  *   rollup    checkRollup(head) or null when unread
  *   required  required status contexts of main's branch protection, or null when unread;
  *             each one except the review gate must be reported on the head
  *   expectHead optional head the caller planned for; a different head fails
  */
-export function evaluatePreflight({ pr, mainSha, compare, rollup, required, expectHead = null }) {
+export function evaluatePreflight({ pr, mainSha, compare, rollup, required, expectHead = null, mainPaths = null, prPaths = null }) {
   const out = [];
   const add = (ok, id, text) => out.push({ level: ok ? "PASS" : "FAIL", id, text });
   const head = String(pr.headRefOid ?? "");
@@ -258,7 +262,27 @@ export function evaluatePreflight({ pr, mainSha, compare, rollup, required, expe
   // compare main...head: behind_by counts main commits the head lacks.
   if (!SHA_RE.test(String(mainSha ?? ""))) add(false, "main", "main head could not be read");
   else if (!compare || !Number.isInteger(compare.behind_by)) add(false, "main", `head vs main ${mainSha.slice(0, 8)} could not be compared`);
-  else if (compare.behind_by > 0) add(false, "main", `head lacks ${compare.behind_by} commit(s) of main ${mainSha.slice(0, 8)}: merge main first`);
+  else if (compare.behind_by > 0) {
+    // Owner decisions (#87 issuecomment-6265641655, then F-101 t. 2): a lagging head passes
+    // only for a low or standard PR that touches no D-97 path, and only when no missing main
+    // commit touches a file of the PR. Every other PR (critical, unclassified, any D-97 path)
+    // must contain main before review: what is reviewed has to be what merges. Unreadable lists fail.
+    const lack = `head lacks ${compare.behind_by} commit(s) of main ${mainSha.slice(0, 8)}`;
+    const risk = String(field(pr.body ?? "", "Risk") ?? "").trim().toLowerCase();
+    const d97 = Array.isArray(prPaths) ? prPaths.filter((p) => matchesPath(p, [...D97_PATHS, ...D97_MANUAL_PATHS])) : [];
+    if (risk !== "low" && risk !== "standard") {
+      add(false, "main", `${lack}; a ${risk === "critical" ? "critical" : "PR without a low or standard risk"} PR must contain main before review: merge main first`);
+    } else if (d97.length > 0) {
+      add(false, "main", `${lack}; the PR touches D-97 path(s) (${names(d97.slice(0, 3))}) and must contain main before review: merge main first`);
+    } else if (!Array.isArray(mainPaths) || !Array.isArray(prPaths) || prPaths.length === 0) {
+      add(false, "main", `${lack} and the changed-file lists could not be read: merge main first`);
+    } else {
+      const mine = new Set(prPaths);
+      const shared = mainPaths.filter((p) => mine.has(p));
+      if (shared.length > 0) add(false, "main", `${lack} and main changed ${shared.length} file(s) of this PR (${names(shared.slice(0, 3))}): merge main first`);
+      else add(true, "main", `${lack}, but none of its ${mainPaths.length} changed file(s) is in this PR`);
+    }
+  }
   else add(true, "main", `head contains main ${mainSha.slice(0, 8)}`);
 
   const task = field(pr.body ?? "", "Task");
@@ -293,9 +317,19 @@ export function evaluatePreflight({ pr, mainSha, compare, rollup, required, expe
     const reported = latestChecks(rollup);
     const missing = req.filter((r) => !reported.some((c) =>
       (c.name ?? c.context) === r.context && (r.appId == null || c.appId === r.appId)));
-    const ck = evaluateChecks(rollup);
+    // At equal/missing times a non-pending duplicate must win over the one
+    // state exempted below. latestChecks still selects genuinely newer runs.
+    const pending = rollup.filter((c) => evaluateChecks([c]).bad
+      .some((b) => b.name === "Merge authorization" && b.state === "PENDING"));
+    const ck = evaluateChecks([...rollup.filter((c) => !pending.includes(c)), ...pending]);
+    // Merge authorization waits for review/QA. Only its known pending state
+    // may precede review entry; the shared merge-readiness check stays strict.
+    const readableRequired = required.every((item) => typeof item === "string" ? item.length > 0
+      : item != null && typeof item.context === "string" && item.context.length > 0
+        && (item.appId == null || (Number.isInteger(item.appId) && item.appId >= 0)));
+    const bad = ck.bad.filter((c) => !readableRequired || c.name !== "Merge authorization" || c.state !== "PENDING");
     if (missing.length) add(false, "ci", `required check(s) not reported on the head: ${names(missing.map((r) => r.appId == null ? r.context : `${r.context} app ${r.appId}`))}`);
-    else if (ck.bad.length) add(false, "ci", `CI not green: ${ck.bad.map((b) => `${shown(b.name)}=${shown(b.state)}`).join(", ")}`);
+    else if (bad.length) add(false, "ci", `CI not green: ${bad.map((b) => `${shown(b.name)}=${shown(b.state)}`).join(", ")}`);
     else add(true, "ci", `CI green (${req.length} required, ${ck.total} checks)`);
   }
   return out;

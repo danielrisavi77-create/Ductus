@@ -1,50 +1,126 @@
 /*
- * Ductus design tokens. Values from the token table of the design handoff
- * (docs/design/ductura/README.md §8, D-123); the structure is D-115's.
+ * Ductus design tokens. Values from the visual system of design v3
+ * (docs/design/ductura/DIZAJN-V3.md, owner decision of 21 Oct 2026 on #476,
+ * replacing D-123 in look); the names are D-123's and the structure D-115's.
  *
  * The shell is dark and does not follow the system setting. The writing sheet
  * carries its own token scope (`.sheet`): dark by default, white when the
  * writer switches it (`data-sheet-theme="light"`, SheetFrame); the choice is
- * kept only in the browser. Primary is #6FBFA5 with #0E1C17 text on it; on
+ * kept only in the browser. Primary is #8EE3BE with #091310 text on it; on
  * the white sheet the handoff's darker green #2F7A63 carries text and focus.
  * The server save state (SYNCED) has its own colour, --synced, so it never
  * reads as the primary or as the pulsing "saving" state. Origin colours show
  * where text came from, never a judgement; no --breach colour (D-62).
  * Targets are at least 32 px in dense bars, 44 px elsewhere.
+ *
+ * Semantic names from the same table (FE-D2): --raised for dialogs and other
+ * raised surfaces, --selected for the selected item or segment, --ink-muted
+ * for the quietest marks, --warn and --error for warning and error marks.
+ * --ink-muted is #6c8376 (derived; the showcase has none), under 4.5:1 on
+ * --chrome, --sheet and --raised (4.33, 4.08, 4.08): large text (24 px, or
+ * 18.66 px bold) and non-text marks only (at least 3:1); small quiet text
+ * uses --ink-3 (5.43:1 on --raised). --warn-soft and --synced-soft are the
+ * showcase's amber and blue backgrounds; --radius is for panels and
+ * --radius-sm for buttons and fields. --raised and --selected are shell surfaces; the white sheet
+ * has no values for them, so they are not used inside the sheet.
+ * The save-state chip keeps its own colours (PR #386); these names are for
+ * new callers. The manuscript is Newsreader 16.5 px with leading 1.7
+ * (README §5.1), served from app/fonts like every other face (DAN-121).
  */
 
 :root {
-  --ground: #0f110e;
-  --sheet: #161a15;
-  --chrome: #141712;
-  --ink: #e9ebe6;
-  --ink-2: #a6ada5;
-  --ink-3: #8e958d;
-  --rule: #2c312b;
-  --rule-2: #232722;
-  --accent: #6fbfa5;
-  --accent-hover: #8ccdb7;
-  --accent-ink: #0e1c17;
-  --accent-soft: #6fbfa51f;
-  --synced: #8fb0e0;
+  --ground: #091310;
+  --sheet: #12211c;
+  --chrome: #0e1b17;
+  --ink: #eef3e9;
+  --ink-2: #a3b5aa;
+  --ink-3: #80998a;
+  --rule: #24372e;
+  --rule-2: #1b2d24;
+  --hover: #192a23;
+  --raised: #12211c;
+  --selected: #192a23;
+  --ink-muted: #6c8376;
+  --warn: #e9c58b;
+  --error: #e9917f;
+  --accent: #8ee3be;
+  --accent-hover: #99f5cd;
+  --accent-ink: #091310;
+  --accent-soft: #173c2d;
+  --synced: #a2c6e5;
   --p-internal: #8fb0e0;
   --p-unknown: #9e9a90;
   --p-template: #7e7a70;
   --p-ai: #d3ac63;
-  --cmt: #d9ae5b;
-  --cmt-ink: #d9ae5b;
-  --cmt-bg: #d9ae5b2b;
+  --cmt: #e9c58b;
+  --cmt-ink: #e9c58b;
+  --cmt-bg: #e9c58b26;
+  --warn-soft: #342d20;
+  --synced-soft: #1e303d;
+  --radius: 14px;
+  --radius-sm: 8px;
+  --shadow: 0 22px 80px #0003;
   --lift: 0 1px 1px #0007, 0 12px 34px -10px #000a;
   --ff-ui: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
   --ff-display: var(--font-display), Georgia, serif;
   --ff-mono: var(--font-mono), ui-monospace, Menlo, monospace;
-  --ff-manuscript: "Times New Roman", Times, Tinos, "Liberation Serif", serif;
+  --ff-manuscript: var(--font-display), Georgia, serif;
   color-scheme: dark;
+}
+
+/*
+ * Light shell (design v3, owner decision of 21 Oct 2026). It applies to the
+ * subtree of the shell element that carries `data-theme="light"` (AppShell),
+ * never to pages outside the shell. --ink-3 is #5e7366, not the showcase's
+ * #657a6d (4.17:1 on --ground, below AA); --ink-muted is the same, text-safe.
+ */
+[data-theme="light"] {
+  --ground: #f3f4ee;
+  --chrome: #ffffff;
+  --raised: #f8f9f5;
+  --hover: #e9efe6;
+  --selected: #e9efe6;
+  --rule: #d4ded2;
+  --rule-2: #e3e9df;
+  --ink: #1a3026;
+  --ink-2: #52685b;
+  --ink-3: #5e7366;
+  --accent: #216344;
+  --accent-ink: #f3f4ee;
+  --accent-soft: #e2f0e5;
+  --warn: #84602d;
+  --synced: #355b81;
+  --sheet: #ffffff;
+  --ink-muted: #5e7366;
+  --accent-hover: #1b5439;
+  --error: #a8432f;
+  --warn-soft: #f5ecdc;
+  --synced-soft: #e3edf6;
+  --cmt: #84602d;
+  --cmt-ink: #84602d;
+  --cmt-bg: #e9c58b40;
+  --lift: 0 1px 1px #0001, 0 12px 34px -10px #0002;
+  color-scheme: light;
 }
 
 /* Dark sheet (default): the shell's own tokens on the handoff's sheet colour. */
 .sheet {
-  --sheet: #161a15;
+  --sheet: #12211c;
+  /* The dark sheet keeps dark ink inside a light shell too. */
+  --ink: #eef3e9;
+  --ink-2: #a3b5aa;
+  --ink-3: #80998a;
+  --ink-muted: #6c8376;
+  --rule: #24372e;
+  --rule-2: #1b2d24;
+  --accent: #8ee3be;
+  --accent-hover: #99f5cd;
+  --accent-ink: #091310;
+  --accent-soft: #173c2d;
+  --warn: #e9c58b;
+  --cmt: #e9c58b;
+  --cmt-ink: #e9c58b;
+  --cmt-bg: #e9c58b26;
   color-scheme: dark;
 }
 
@@ -57,6 +133,7 @@
   --ink: #191c19;
   --ink-2: #5a605a;
   --ink-3: #6a706a;
+  --ink-muted: #6a706a;
   --rule: #dce0d8;
   --rule-2: #f7f8f5;
   --accent: #2f7a63;
@@ -67,6 +144,8 @@
   --p-unknown: #6e6a62;
   --p-template: #9a9488;
   --p-ai: #8a6a2f;
+  /* 4.05:1 on white: marks and icons only (3:1), never warning text. */
+  --warn: #a87420;
   --cmt: #b8862a;
   --cmt-ink: #8a6420;
   --cmt-bg: #b8862a26;
@@ -116,7 +195,8 @@ button {
   background: var(--sheet);
   border: 1px solid var(--rule);
   border-radius: 7px;
-  z-index: 10;
+  /* Above the shell's side bar (40) and its shade (35). */
+  z-index: 50;
 }
 
 .skip-link:focus {
@@ -272,10 +352,15 @@ main:focus {
 
 /* Writing workspace */
 
+/* Inside the design v3 shell ("Pisanje"): a framed block under the shell's top bar. */
 .workspace {
-  min-height: 100vh;
+  min-height: calc(100vh - 76px);
   display: flex;
   flex-direction: column;
+  margin: 0 24px 24px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  overflow: clip;
 }
 
 .workspace__bar {
@@ -283,10 +368,24 @@ main:focus {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 14px;
-  min-height: 46px;
+  min-height: 48px;
   padding: 6px 14px;
   background: var(--chrome);
   border-bottom: 1px solid var(--rule);
+}
+
+.workspace__bar .brand-line__context {
+  margin: 0;
+}
+
+/* Below 800 px the shell's side bar is a drawer: the workspace runs edge to edge. */
+@media (max-width: 799.98px) {
+  .workspace {
+    min-height: calc(100vh - 64px);
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+  }
 }
 
 .brand-line {
@@ -296,11 +395,11 @@ main:focus {
   min-width: 0;
 }
 
+/* Course and assignment beside the brand (editor-v11: 12 px, quiet, as written). */
 .brand-line__context {
   font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--ink-3);
+  overflow-wrap: anywhere;
 }
 
 .modes {
@@ -322,16 +421,22 @@ main:focus {
   background: transparent;
   font-size: 12.5px;
   font-weight: 500;
-  color: var(--ink-3);
+  color: var(--ink-2);
   text-decoration: none;
+}
+
+.modes__item:not([aria-disabled="true"]):hover {
+  color: var(--ink);
 }
 
 .modes__item[aria-disabled="true"] {
   cursor: not-allowed;
 }
 
+/* The open view: raised segment, full ink and weight, not colour alone. */
 .modes__item[aria-current="page"] {
-  background: var(--sheet);
+  background: var(--hover);
+  font-weight: 600;
   color: var(--ink);
   box-shadow: 0 1px 2px #0000000f;
 }
@@ -339,7 +444,7 @@ main:focus {
 .workspace__body {
   flex: 1;
   display: grid;
-  grid-template-columns: 236px minmax(0, 1fr) 322px;
+  grid-template-columns: 174px minmax(0, 1fr) 284px;
   grid-template-areas: "rail main panel";
   min-height: 0;
 }
@@ -368,6 +473,52 @@ main:focus {
 
 .workspace__panel {
   border-left: 1px solid var(--rule);
+  /* The tab strip runs edge to edge; each tab panel pads itself. */
+  padding: 0;
+}
+
+/* Right panel tabs (design editor-v11 §5.1). */
+.panel-tabs__list {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  gap: 14px;
+  padding: 0 16px;
+  overflow-x: auto;
+  background: var(--chrome);
+  border-bottom: 1px solid var(--rule-2);
+}
+
+.panel-tabs__tab {
+  flex: none;
+  min-height: 36px;
+  padding: 10px 0 9px;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.panel-tabs__tab:hover {
+  color: var(--ink);
+}
+
+/* The open tab: underline and weight as well as colour. */
+.panel-tabs__tab[aria-selected="true"] {
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.panel-tabs__panel {
+  padding: 14px 16px 24px;
+}
+
+/* In the top bar the demo label is quiet text (editor-v11), not a badge. */
+.workspace__bar .demo-badge {
+  padding: 0;
+  border: 0;
 }
 
 .workspace__main {
@@ -380,7 +531,7 @@ main:focus {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 16px;
+  gap: 6px 18px;
   min-height: 34px;
   padding: 6px 14px;
   background: var(--chrome);
@@ -390,14 +541,78 @@ main:focus {
   font-variant-numeric: tabular-nums;
 }
 
-/* The rail toggles exist only where the rails are sections under the sheet. */
+/*
+ * Breakpoints of README §5.1 (FE-D2): below 1240 px the structure rail folds
+ * under the sheet, below 1000 px the right panel does too. The DOM order
+ * (sheet, panel, structure) is the same at every width; only grid areas move
+ * the rails, never `order`, so Tab and the reader keep one order (FE-D1).
+ * A folded rail opens with its own button (ShellRail); the toggle exists in
+ * the DOM at every width and is shown only while its rail is folded.
+ */
 .rail-toggle {
   display: none;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  background: transparent;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-align: left;
 }
 
-@media (max-width: 1100px) {
+.rail-toggle::after {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-left: auto;
+  border-right: 1.5px solid var(--ink-2);
+  border-bottom: 1.5px solid var(--ink-2);
+  transform: translateY(-2px) rotate(45deg);
+}
+
+.rail-toggle[aria-expanded="true"]::after {
+  transform: translateY(2px) rotate(-135deg);
+}
+
+/* Design v3 breakpoints, with the shell's side bar taking 236 px: up to
+   1250 px sheet and panel side by side, structure folded under the sheet. */
+@media (max-width: 1250px) {
+  .workspace__body {
+    grid-template-columns: minmax(0, 1fr) 284px;
+    grid-template-rows: 1fr auto;
+    grid-template-areas:
+      "main panel"
+      "rail panel";
+  }
+
+  .workspace__rail {
+    padding: 0;
+    border: 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  .workspace__rail > .rail-toggle {
+    display: flex;
+  }
+
+  .workspace__rail > .rail-body {
+    padding: 4px 12px 20px;
+  }
+
+  .workspace__rail > .rail-body[data-open="false"] {
+    display: none;
+  }
+}
+
+/* Up to 1050 px: one column, both rails folded under the sheet in DOM order. */
+@media (max-width: 1050px) {
   .workspace__body {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
     grid-template-areas:
       "main"
       "panel"
@@ -405,47 +620,20 @@ main:focus {
     align-content: start;
   }
 
-  .workspace__rail,
   .workspace__panel {
-    padding: 0;
     border: 0;
     border-top: 1px solid var(--rule);
   }
 
-  .rail-toggle {
+  .workspace__panel > .rail-toggle {
     display: flex;
-    align-items: center;
-    gap: 12px;
-    width: 100%;
-    min-height: 44px;
-    padding: 0 16px;
-    border: 0;
-    background: transparent;
-    font-size: 13.5px;
-    font-weight: 600;
-    text-align: left;
   }
 
-  .rail-toggle::after {
-    content: "";
-    flex: none;
-    width: 7px;
-    height: 7px;
-    margin-left: auto;
-    border-right: 1.5px solid var(--ink-2);
-    border-bottom: 1.5px solid var(--ink-2);
-    transform: translateY(-2px) rotate(45deg);
-  }
-
-  .rail-toggle[aria-expanded="true"]::after {
-    transform: translateY(2px) rotate(-135deg);
-  }
-
-  .rail-body {
+  .workspace__panel > .rail-body {
     padding: 4px 12px 20px;
   }
 
-  .rail-body[data-open="false"] {
+  .workspace__panel > .rail-body[data-open="false"] {
     display: none;
   }
 }
@@ -460,10 +648,9 @@ main:focus {
   gap: 8px;
   margin: 0 0 7px;
   padding: 0 4px;
+  /* editor-v11 sets 11.5 px; 12 px is the floor for interface text. */
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: var(--ink-3);
 }
 
@@ -488,7 +675,7 @@ main:focus {
 }
 
 .sheet {
-  max-width: 756px;
+  max-width: 720px;
   margin: 0 auto;
   padding: 56px 76px 48px;
   background: var(--sheet);
@@ -504,7 +691,7 @@ main:focus {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  max-width: 756px;
+  max-width: 720px;
   margin: 0 auto 10px;
 }
 
@@ -555,6 +742,7 @@ main:focus {
   .workspace__status,
   .rail-section__title,
   .rail-empty,
+  .panel-tabs__tab,
   .editor-toolbar .btn {
     font-size: 13px;
   }
@@ -562,8 +750,8 @@ main:focus {
 
 .manuscript {
   font-family: var(--ff-manuscript);
-  font-size: 16px;
-  line-height: 1.5;
+  font-size: 16.5px;
+  line-height: 1.7;
   text-align: justify;
   hyphens: auto;
 }
@@ -572,7 +760,8 @@ main:focus {
   margin: 0 0 26px;
   text-align: center;
   font-size: 19px;
-  font-weight: 700;
+  /* Newsreader is served at 400-500 (app/fonts); 700 would be a synthetic bold. */
+  font-weight: 500;
   line-height: 1.35;
 }
 
@@ -607,9 +796,9 @@ main:focus {
   color: var(--accent);
 }
 
-/* F-8 step 1: the toolbar sits above the sheet, as wide as the sheet. */
+/* F-8 step 1: the toolbar sits above the sheet, as wide as the sheet (720 px, editor-v11). */
 .workspace__main > .editor-toolbar {
-  max-width: 756px;
+  max-width: 720px;
   margin: 12px auto 0;
   padding: 4px 6px;
   border: 1px solid var(--rule);
@@ -624,6 +813,106 @@ main:focus {
 
 /* Unavailable is said by aria-disabled; the faded look only repeats it. */
 .editor-toolbar .btn[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* FE-D5: "Više ▾" and "Prikaz ▾" (editor-v11). With the toolbar on the page
+   the sheet theme is in "Prikaz", so the switch above the sheet steps aside. */
+.workspace__main:has(> .editor-toolbar) .sheet-theme {
+  display: none;
+}
+
+.editor-menu {
+  position: relative;
+}
+
+.editor-menu--end {
+  margin-left: auto;
+}
+
+.editor-toolbar .editor-menu__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-2);
+}
+
+.editor-toolbar .editor-menu__button[aria-expanded="true"] {
+  background: var(--selected);
+  color: var(--ink);
+}
+
+/* The caret keeps the button's size: no interface text under 12/13 px. */
+.editor-menu__caret {
+  color: var(--ink-3);
+}
+
+.editor-menu__list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 76;
+  display: flex;
+  flex-direction: column;
+  min-width: 190px;
+  padding: 5px;
+  background: var(--raised);
+  border: 1px solid var(--rule);
+  border-radius: 9px;
+  box-shadow: var(--lift);
+}
+
+.editor-menu--end .editor-menu__list {
+  left: auto;
+  right: 0;
+}
+
+.editor-menu__heading {
+  padding: 6px 9px 2px;
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.editor-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.editor-menu__item:hover,
+.editor-menu__item:focus-visible {
+  background: var(--selected);
+}
+
+.editor-menu__glyph {
+  min-width: 20px;
+  color: var(--ink-2);
+}
+
+/* Checked is said by a check mark and weight as well as by colour. */
+.editor-menu__item[aria-checked="true"] {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.editor-menu__check {
+  margin-left: auto;
+}
+
+.editor-menu__item[aria-disabled="true"] {
   opacity: 0.45;
   cursor: not-allowed;
 }
@@ -677,16 +966,31 @@ main:focus {
    the rules above come after the phone block and would win over it. */
 @media (max-width: 640px) {
   .editor-toolbar .btn,
+  .editor-menu__item,
+  .editor-menu__heading,
   .outline__link {
     font-size: 13px;
+  }
+
+  /* A phone: both menus open towards the left, inside the page. */
+  .editor-menu__list {
+    left: auto;
+    right: 0;
+  }
+
+  /* Touch targets of at least 44 px on a phone (FE-D5). */
+  .editor-toolbar .btn,
+  .editor-menu__item {
+    min-height: 44px;
+    min-width: 44px;
   }
 }
 
 .editor-surface .ProseMirror {
   outline: none;
   font-family: var(--ff-manuscript);
-  font-size: 16px;
-  line-height: 1.5;
+  font-size: 16.5px;
+  line-height: 1.7;
 }
 
 /* The rule above drops the browser outline; keyboard focus must stay visible.
@@ -764,6 +1068,39 @@ main:focus {
   .sync-chip[data-tone="progress"] .sync-chip__dot {
     animation: none;
   }
+}
+
+/* Length in the status bar (FE-D6, editor-v11): the count stands out. */
+.status-length__count {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.status-length__selected {
+  color: var(--ink);
+}
+
+/* No network (F-8, DAN-211): text and icon, never colour alone. */
+.offline-banner p {
+  margin: 0;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--cmt-bg);
+  color: var(--ink);
+  font-family: var(--ff-ui);
+  font-size: 14px;
+}
+
+.offline-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.offline-chip__icon {
+  color: var(--cmt);
+  flex: none;
 }
 
 /* Local editor on /rad (F-3 step 1b). */

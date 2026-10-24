@@ -19,17 +19,19 @@ export type MutationRequestRefusal =
     };
 
 /**
- * Only POST from a page of this origin. Origin is required: browsers send it
- * on every cross-origin and same-origin POST, so a request without it is not
- * from our page. Sec-Fetch-Site, when present, must also say same-origin; a
- * same-site subdomain is still another origin.
+ * Only the route's method (POST unless it says PUT) from a page of this
+ * origin. Origin is required: browsers send it on every cross-origin and
+ * same-origin POST and PUT, so a request without it is not from our page.
+ * Sec-Fetch-Site, when present, must also say same-origin; a same-site
+ * subdomain is still another origin.
  */
 export function checkMutationRequest(
   request: Request,
   expectedOrigin: string,
+  method: "POST" | "PUT" = "POST",
 ): { ok: true } | MutationRequestRefusal {
   const expected = canonicalOrigin(expectedOrigin);
-  if (request.method !== "POST")
+  if (request.method !== method)
     return { ok: false, status: 405, reason: "method_not_allowed" };
   const origin = request.headers.get("origin");
   if (origin === null || origin === "" || origin === "null")
@@ -66,6 +68,19 @@ export type LimitedBodyResult =
 const DECIMAL = /^(0|[1-9][0-9]{0,15})$/;
 
 /**
+ * What readBodyWithLimit refuses from the declared Content-Length alone,
+ * before a byte is read: a malformed length is 400, a length over maxBytes is
+ * 413, anything else (no header included) is null. A route that does work
+ * before the body (a session lookup) asks this first, so both agree.
+ */
+export function declaredLengthRefusal(request: Request, maxBytes: number): 400 | 413 | null {
+  const header = request.headers.get("content-length");
+  if (header === null) return null;
+  if (!DECIMAL.test(header)) return 400;
+  return Number(header) > maxBytes ? 413 : null;
+}
+
+/**
  * Reads the body as raw bytes, at most maxBytes. A declared Content-Length
  * over the limit is refused without reading; an undeclared or understated
  * length is cut off at the first byte past the limit, and the rest of the
@@ -91,19 +106,15 @@ export async function readBodyWithLimit(
   if (timeoutMs !== undefined && (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1))
     throw new Error("timeoutMs must be a positive safe integer");
 
-  const header = request.headers.get("content-length");
-  let declared: number | null = null;
-  if (header !== null) {
-    if (!DECIMAL.test(header)) {
-      await cancelQuietly(request.body);
-      return { ok: false, status: 400, reason: "content_length_invalid" };
-    }
-    declared = Number(header);
-    if (declared > maxBytes) {
-      await cancelQuietly(request.body);
-      return { ok: false, status: 413, reason: "body_too_large" };
-    }
+  const refusal = declaredLengthRefusal(request, maxBytes);
+  if (refusal !== null) {
+    await cancelQuietly(request.body);
+    return refusal === 400
+      ? { ok: false, status: 400, reason: "content_length_invalid" }
+      : { ok: false, status: 413, reason: "body_too_large" };
   }
+  const header = request.headers.get("content-length");
+  const declared = header === null ? null : Number(header);
 
   const body = request.body;
   if (body === null) {

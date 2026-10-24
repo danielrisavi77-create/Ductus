@@ -7,17 +7,29 @@ import { test, type Page } from "@playwright/test";
 const PAGES = [
   { name: "home", path: "/" },
   { name: "workspace", path: "/rad" },
+  { name: "teacher-courses", path: "/nastavnik" },
+  { name: "teacher-new", path: "/nastavnik/zadatak/novi" },
+  { name: "prijava", path: "/prijava" },
+  // Signed out here; the teacher view is attached by e2e/login/fast-path.spec.ts.
+  { name: "brz-put", path: "/nastavnik/brz-put" },
 ];
 const LOCALES = ["hr"] as const;
 // The shell is always dark (D-115); the sheet is dark by default, white with the switch on /rad (D-123).
 const SCHEMES = ["light", "dark"] as const;
 
 async function chooseSheetTheme(page: Page, path: string, theme: (typeof SCHEMES)[number]) {
-  if (path !== "/rad" || theme === "dark") return;
+  if ((path !== "/rad" && path !== "/") || theme === "dark") return;
+  if (path === "/rad") {
+    // On /rad the theme is in the toolbar's "Prikaz" menu (FE-D5).
+    await page.getByRole("toolbar", { name: "Oblikovanje teksta" }).getByRole("button", { name: "Prikaz" }).click();
+    await page.getByRole("menuitemradio", { name: "Bijeli list" }).click();
+    return;
+  }
   await page.getByRole("button", { name: "Bijeli list" }).click();
 }
-// Wide (three columns), the 1100 px break (rails under the sheet) and a phone.
-const WIDTHS = [1440, 1000, 390] as const;
+// Wide (three columns), below 1240 px (structure under the sheet), below
+// 1000 px (both rails under the sheet) and a phone (README §5.1, FE-D2).
+const WIDTHS = [1440, 1100, 990, 390] as const;
 
 for (const locale of LOCALES) {
   for (const { name, path } of PAGES) {
@@ -44,6 +56,23 @@ for (const locale of LOCALES) {
           });
         });
       }
+    }
+  }
+
+  // FE-D9: the Upute and Rad tabs of the right panel, wide and on a phone.
+  for (const tab of ["Upute", "Rad"] as const) {
+    for (const width of [1440, 390] as const) {
+      test(`screenshot: workspace panel ${tab} at ${width} px (${locale})`, async ({ page }, testInfo) => {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto("/rad");
+        await page.waitForLoadState("networkidle");
+        if (width === 390) await page.locator(".workspace__panel .rail-toggle").click();
+        await page.getByRole("tab", { name: tab }).click();
+        await testInfo.attach(`${testInfo.project.name}-${locale}-workspace-panel-${tab}-${width}.png`, {
+          body: await page.screenshot({ fullPage: true }),
+          contentType: "image/png",
+        });
+      });
     }
   }
 

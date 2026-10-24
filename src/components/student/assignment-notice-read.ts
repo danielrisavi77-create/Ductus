@@ -23,6 +23,8 @@ export interface NoticeView {
   opensAt: string;
   dueAt: string;
   aiPurposes: AiPurpose[];
+  wordMin: number | null;
+  wordMax: number | null;
   /** Server time of the student's acknowledgment of this version, or null. */
   acknowledgedAt: string | null;
 }
@@ -43,12 +45,14 @@ interface Row {
   due_at: Date;
   ai_policy: string;
   ai_purposes: string[];
+  word_min: number | null;
+  word_max: number | null;
   acknowledged_at: Date | null;
 }
 
 const QUERY = `WITH me AS (SELECT app.current_user_id() AS user_id)
 SELECT me.user_id, institution.actor_assignment_role(a.id) AS role, v.version_no, v.title, v.instructions,
-  v.work_type, v.evidence_profile, v.opens_at, v.due_at, v.ai_policy, v.ai_purposes,
+  v.work_type, v.evidence_profile, v.opens_at, v.due_at, v.ai_policy, v.ai_purposes, v.word_min, v.word_max,
   (SELECT n.acknowledged_at FROM institution.notice_acknowledgment n
     WHERE n.assignment_id = a.id AND n.version_no = a.current_version AND n.student_id = me.user_id) AS acknowledged_at
 FROM me
@@ -77,6 +81,8 @@ export async function readNotice(token: string | undefined, assignmentId: string
         aiPurposes: row.ai_policy === "prohibited"
           ? []
           : AI_PURPOSES.filter((p) => row.ai_purposes.includes(p)),
+        wordMin: row.word_min,
+        wordMax: row.word_max,
         acknowledgedAt: row.acknowledged_at ? row.acknowledged_at.toISOString() : null,
       },
     };

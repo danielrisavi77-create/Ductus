@@ -12,6 +12,9 @@ export const TSC_TIMEOUT_MS = 150_000;
 export const MAX_SHOWN = 20;
 const TS_FILE = /\.(ts|tsx|mts|cts)$/i;
 const norm = (p) => String(p).replaceAll("\\", "/").replace(/^\.\//, "");
+// What Win32 makes of a path component: a stream suffix and trailing dots and spaces are dropped, so
+// a tracked `node_modules./x` or `node_modules /x` lands in the real node_modules (F-101).
+const win32Name = (p) => norm(p).split("/").map((part) => part.replace(/:.*$/su, "").replace(/[. ]+$/u, "")).join("/");
 
 /** `git status --porcelain -z` output → changed or untracked TypeScript paths (deleted ones dropped). */
 export function changedTsFiles(porcelainZ) {
@@ -64,9 +67,9 @@ export function runStopHook(input, { exec = spawnSync, projectDir = process.env.
   const changed = changedTsFiles(st.stdout);
   if (!changed.size) return undefined;
   // The checkout may be an untrusted PR head: never run a tsc that the checkout itself tracks.
-  // Matched in JS, case-insensitively: git pathspecs are case-sensitive, a case-insensitive filesystem is not.
+  // Matched in JS, case-insensitively and with the `u` flag (so U+017F folds to s, SEC-2026-10-18-2): git pathspecs are case-sensitive, a case-insensitive filesystem is not.
   const tracked = exec("git", ["ls-files", "-z"], { ...opts, cwd: root });
-  if (tracked.status !== 0 || String(tracked.stdout).split("\0").some((f) => /^node_modules(\/|$)/i.test(norm(f)))) return undefined;
+  if (tracked.status !== 0 || String(tracked.stdout).split("\0").some((f) => /^node_modules(\/|$)/iu.test(win32Name(f)))) return undefined;
   const tsc = path.join(root, "node_modules", "typescript", "bin", "tsc");
   if (!fs.existsSync(tsc)) return undefined;
   const r = exec(process.execPath, [tsc, "--noEmit", "--pretty", "false"], { ...opts, cwd: root, timeout: TSC_TIMEOUT_MS });

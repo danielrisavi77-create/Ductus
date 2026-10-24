@@ -6,6 +6,10 @@ import {
   isStorageDomainLabel,
 } from "@/application/ports/evidence-object-key";
 import type {
+  EvidencePayloadReadResult,
+  InstitutionEvidencePayloadReader,
+} from "@/application/ports/evidence-reconstruction";
+import type {
   EvidencePayloadPutResult,
   EvidencePayloadStore,
 } from "@/application/ports/evidence-trust";
@@ -106,6 +110,8 @@ const MAX_ERROR_BODY_BYTES = 4_096;
 type GetRead = { limit: number; notFoundCode: boolean };
 const SEGMENT_READ: GetRead = { limit: MAX_EVIDENCE_SEGMENT_BYTES, notFoundCode: false };
 const IDENTITY_READ: GetRead = { limit: MAX_IDENTITY_BYTES, notFoundCode: true };
+/** `readImmutable`: a missing object is an answer only with `NoSuchKey`. */
+const PAYLOAD_READ: GetRead = { limit: MAX_EVIDENCE_SEGMENT_BYTES, notFoundCode: true };
 /**
  * S3 error codes that name a cause the operator has to fix. Only these fixed
  * reasons leave the adapter; the error document itself is never passed on.
@@ -188,8 +194,11 @@ type Fetched =
  * doubtful answer is `unavailable`; retrying is the client's job, so the store
  * itself never retries and never follows a redirect. Requests go only to the
  * configured endpoint; the signer builds every URL from validated parts.
+ * `readImmutable` reads one object back under the same key and rules.
  */
-export class S3EvidencePayloadStore implements EvidencePayloadStore {
+export class S3EvidencePayloadStore
+  implements EvidencePayloadStore, InstitutionEvidencePayloadReader
+{
   private readonly endpoint: URL;
   private readonly region: string;
   private readonly bucket: string;
@@ -538,6 +547,88 @@ export class S3EvidencePayloadStore implements EvidencePayloadStore {
       return { status: "unavailable", reason: `storage_get_status_${got.status}` };
     }
     return matches ? { status: "verified" } : { status: "mismatch" };
+  }
+
+  /**
+   * Reads one stored payload (the read side of B-8i, for reconstruction and
+   * the process summary). One signed GET under the same key `putImmutable`
+   * writes, with the same deadline rule and no retry. `found` only for bytes
+   * whose SHA-256 is the requested hash; `not_found` only on S3's own
+   * `NoSuchKey`; every other answer is `unavailable`, so an outage, a bad id
+   * or a damaged object never reads as a missing or different record.
+   */
+  async readImmutable(given: {
+    institutionId: string;
+    evidencePackageId: string;
+    segmentHash: string;
+  }): Promise<EvidencePayloadReadResult> {
+    const phase: WritePhase = {
+      deadline: Number.NEGATIVE_INFINITY,
+      read: Number.NEGATIVE_INFINITY,
+      echoConfirmed: false,
+      expired: false,
+    };
+    const start = readClock(phase);
+    if (start !== null) phase.deadline = start + this.requestTimeoutMs;
+    // Read once, after the deadline starts, as `putImmutable` reads its input.
+    const input = {
+      institutionId: given.institutionId,
+      evidencePackageId: given.evidencePackageId,
+      segmentHash: given.segmentHash,
+    };
+    const abort = new AbortController();
+    // Synchronous up to its fetch; the timer gets only what is left from there.
+    const run = this.readPayload(input, phase, abort.signal);
+    const left = phase.deadline - phase.read;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const expired = new Promise<EvidencePayloadReadResult>((resolve) => {
+      timer = setTimeout(
+        () => {
+          phase.expired = true;
+          resolve({ status: "unavailable", reason: "storage_timeout" });
+          abort.abort();
+        },
+        Number.isFinite(left) ? Math.max(0, Math.ceil(left)) : 0,
+      );
+    });
+    try {
+      return await Promise.race([run, expired]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private async readPayload(
+    input: { institutionId: string; evidencePackageId: string; segmentHash: string },
+    phase: WritePhase,
+    signal: AbortSignal,
+  ): Promise<EvidencePayloadReadResult> {
+    const key = evidenceObjectKey(input);
+    if (key === null) {
+      return { status: "unavailable", reason: "storage_request_invalid" };
+    }
+    const signed = this.sign("GET", [this.bucket, ...key], null);
+    const got = await this.send("GET", signed, null, phase, signal, PAYLOAD_READ);
+    const intact =
+      got.ok && got.status === 200 && got.body !== null
+        ? sha256Hex(got.body) === input.segmentHash
+        : null;
+    // Before every outcome: past the deadline only a timeout, and no late log.
+    if (late(phase)) return { status: "unavailable", reason: "storage_timeout" };
+    if (!got.ok && got.reason !== "storage_object_too_large") {
+      return this.unavailable(got.reason);
+    }
+    if (got.ok && got.status === 404 && got.noSuchKey) return { status: "not_found" };
+    if (got.ok && intact === null) {
+      return { status: "unavailable", reason: `storage_get_status_${got.status}` };
+    }
+    if (got.ok && intact === true && got.body !== null) {
+      return { status: "found", bytes: got.body };
+    }
+    // More bytes than any segment, or bytes of another hash, under a
+    // content-addressed key: never passed on, and an incident for the operator.
+    this.log("evidence payload corrupt", idsOf(input));
+    return { status: "unavailable", reason: "storage_object_corrupt" };
   }
 
   /** Configuration faults are also logged, by fixed reason only. */

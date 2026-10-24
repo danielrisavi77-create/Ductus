@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MAX_EVIDENCE_SEGMENT_BYTES } from "@/domain/forensics/evidence-chain-v2";
-import { checkMutationRequest, readBodyWithLimit } from "./mutation-request";
+import { checkMutationRequest, declaredLengthRefusal, readBodyWithLimit } from "./mutation-request";
 
 const ORIGIN = "https://ductus.example";
 const URL_INGEST = `${ORIGIN}/api/v1/evidence/ingest`;
@@ -30,6 +30,20 @@ describe("checkMutationRequest (#155 item 8)", () => {
       ).toMatchObject({ status: 405 });
     },
   );
+
+  // B-LIVE step 3: the live route publishes with PUT; the same origin rules hold.
+  it("accepts only PUT from a route that names PUT, with the same origin checks", () => {
+    expect(checkMutationRequest(post({ origin: ORIGIN, "sec-fetch-site": "same-origin" }, "PUT"), ORIGIN, "PUT")).toEqual({ ok: true });
+    for (const method of ["POST", "GET", "PATCH", "DELETE"]) {
+      expect(checkMutationRequest(post({ origin: ORIGIN }, method), ORIGIN, "PUT")).toMatchObject({ status: 405 });
+    }
+    expect(checkMutationRequest(post({}, "PUT"), ORIGIN, "PUT")).toMatchObject({ status: 403, reason: "origin_missing" });
+    expect(checkMutationRequest(post({ origin: "https://evil.example" }, "PUT"), ORIGIN, "PUT")).toMatchObject({ status: 403 });
+    expect(checkMutationRequest(post({ origin: ORIGIN, "sec-fetch-site": "same-site" }, "PUT"), ORIGIN, "PUT")).toMatchObject({
+      status: 403,
+      reason: "cross_site",
+    });
+  });
 
   it("refuses a missing, empty or opaque Origin even when Sec-Fetch-Site says same-origin", () => {
     for (const headers of [
@@ -225,6 +239,25 @@ describe("readBodyWithLimit (#155 items 10 and 12, HTTP part)", () => {
       });
     },
   );
+
+  // The one rule a route asks before work it does ahead of the body (F-098).
+  it.each<[string | undefined, 400 | 413 | null]>([
+    [undefined, null],
+    ["5", null],
+    [String(LIMIT), null],
+    [String(LIMIT + 1), 413],
+    ["-1", 400],
+    ["01", 400],
+    ["abc", 400],
+  ])("declaredLengthRefusal(%j) is what readBodyWithLimit refuses unread", async (value, expected) => {
+    const headers: Record<string, string> = value === undefined ? {} : { "content-length": value };
+    expect(declaredLengthRefusal(streamed(trackedStream(5, 1).stream, headers), LIMIT)).toBe(expected);
+    if (expected === null) return;
+    const { stream, state } = trackedStream(5, 1);
+    const result = await readBodyWithLimit(streamed(stream, headers), LIMIT);
+    expect(result).toMatchObject({ ok: false, status: expected });
+    expect(state.pulled).toBeLessThanOrEqual(1);
+  });
 
   it("returns the received bytes untouched: BOM, invalid UTF-8 and NUL survive for the strict check", async () => {
     const raw = new Uint8Array([

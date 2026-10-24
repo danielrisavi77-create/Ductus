@@ -4,7 +4,7 @@ Sažetak nije izvor pravila. U sukobu vrijedi `docs/ENGINEERING_SYSTEM.md`; uz s
 
 ## Uloge i identitet
 
-- Normalno tri writera: Backend, Frontend i Platforma. Četvrti samo za potpuno neovisan zadatak; više od četiri nije dopušteno (§1, §13).
+- Normalno tri writera: Backend, Frontend i Platforma. Četvrti samo za potpuno neovisan zadatak; peti nije dopušten (§1, §13).
 - Autor PR-a nije njegov neovisni reviewer. Orkestrator ne piše proizvodni kod. Platforma ne potvrđuje sama da njezin sigurnosni gate hvata kvar; QA ga mora pokušati srušiti (§3).
 - Identitet agenta je `<runtime>:<slot>:<role>` (§4).
 
@@ -21,7 +21,7 @@ Sažetak nije izvor pravila. U sukobu vrijedi `docs/ENGINEERING_SYSTEM.md`; uz s
 - `standard`: CI, dependency review, jedan neovisni reviewer na aktualnom headu; QA kad Orkestrator procijeni (§5).
 - `critical`: svi standard gateovi, zaseban QA PASS na aktualnom headu, sintetički staging prolaz kad vrijedi `BACKEND.md` §6 t. 12 i pravila rada iz §14 (§5).
 - `critical` PR koji mijenja samo testove ili samo dokumente ne traži QA; review ostaje. PR koji mijenja i testove i dokumente nije izuzet; `*.md` u testnim mapama broji se kao oboje (§5).
-- Za `critical` PASS reviewer i QA moraju biti različit GitHub App. Iznimke, uz uvjete: kvotni fallback i druga Claude sesija (D-139) (§6).
+- `critical` PASS: različiti Appovi; iznimke (§6): kvota, D-139, Codex par na aktualnom headu (D-158).
 - `main`: PR obvezan, squash, obvezni statusi, nerazriješeni razgovori blokiraju (§10).
 
 ## Metadata i verdikti
@@ -34,20 +34,20 @@ Sažetak nije izvor pravila. U sukobu vrijedi `docs/ENGINEERING_SYSTEM.md`; uz s
 ## Head i invalidacija
 
 - Novi push poništava review, QA i Owner Override (§6, §9).
-- Iznimka D-101: čisto spajanje osnovne grane koje ne mijenja diff PR-a prenosi verdikt i override (§6, §15).
-- Prije ready-for-review autor provjerava overlap s aktualnim `main`. Spaja se samo PR čiji head sadrži aktualni `main` (§9).
+- Iznimka D-101: čisto spajanje osnovne grane koje ne mijenja diff PR-a prenosi verdikt i override, i za Codex par (D-161; §6, §15).
+- Prije reviewa provjeriti overlap; ažurnost provjerava izvorni head ili aktivirani DAN-263 Mergify carrier (§9, §10).
 
 ## Owner Override
 
-- Piše ga samo vlasnik repoa, zasebnim komentarom `Owner-Override:` s `Override-Head` i `Override-Reason`. Iznimka je i governance dokaz, ne sigurnosna granica (§7).
+- Piše ga samo vlasnik repoa, zasebnim komentarom `Owner-Override:` s `Override-Head` i `Override-Reason`. Dokaz je governance, ne sigurnosna granica (§7).
 
 ## Critical PR (D-106)
 
 - Ugovor prije koda: Invarijanta, Mjesta, Stvarni pozivatelj, Poznate granice i "Što bi ovaj PR moglo oboriti na QA-i?:" (§14).
 - Najviše oko 400 promijenjenih redaka koda, veći uz obrazloženje u opisu; `critical` i oko 300 redaka produkcijskog koda, veći se dijeli, iznimku odobrava vlasnik (§14).
-- QA FAIL samo za kvar koda. Manji nalazi se bilježe; svaki nalaz ima redak "Dohvatljivo kroz" (§14).
+- QA FAIL samo za kvar koda. Nalaz ima "Dohvatljivo kroz"; manji nosi "blokira" ili "ne blokira"; u produkcijskom kodu zatvara se novim headom prije spajanja (§14).
 - Najviše dva kruga: drugi FAIL na istom korijenu zaustavlja ispravke (§14).
-- U gateu je najviše jedan PR. Za `critical` review i QA kreću istodobno na istom headu, osim QA-e s Codexa ili Groka: ona tek nakon Claude review PASS-a (D-138). QA ne čita review prije vlastitog verdikta (§13, §15).
+- U gateu najviše tri PR-a bez preklapanja (D-161); review i QA kreću odmah, za `critical` istodobno na istom headu, i kad QA daje Codex ili Grok (D-155). QA ne čita review prije vlastitog verdikta (§13, §15).
 
 ## Kad stati i pitati vlasnika
 

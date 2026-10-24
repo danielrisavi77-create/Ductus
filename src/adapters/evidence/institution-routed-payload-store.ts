@@ -1,7 +1,17 @@
-import { isInstitutionId } from "@/application/ports/evidence-object-key";
+import {
+  evidenceObjectKey,
+  evidenceStorageRef,
+  isInstitutionId,
+} from "@/application/ports/evidence-object-key";
 import type {
+  EvidencePayloadReadResult,
+  InstitutionEvidencePayloadReader,
+} from "@/application/ports/evidence-reconstruction";
+import type {
+  EvidencePayloadLocator,
   EvidencePayloadPutResult,
   EvidencePayloadStore,
+  EvidenceStorageRefResult,
 } from "@/application/ports/evidence-trust";
 
 import {
@@ -13,11 +23,13 @@ import {
   type S3EvidencePayloadStoreConfig,
   type StorageIdentityResult,
 } from "./s3-evidence-payload-store";
+import { sha256Hex } from "./s3-signature";
 
 /** What the router needs from one domain's store. */
-export type DomainPayloadStore = EvidencePayloadStore & {
-  verifyIdentity(expected: { institutionId: string }): Promise<StorageIdentityResult>;
-};
+export type DomainPayloadStore = EvidencePayloadStore &
+  InstitutionEvidencePayloadReader & {
+    verifyIdentity(expected: { institutionId: string }): Promise<StorageIdentityResult>;
+  };
 
 type Domain = {
   label: string;
@@ -52,8 +64,11 @@ type Warn = (message: string, fields: Record<string, string>) => void;
  *   read and matched. A failed read leaves the domain unverified and is
  *   tried again on the next write; a mismatch disables the domain until the
  *   process restarts.
+ * Reads (`readImmutable`) pass the same two gates.
  */
-export class InstitutionRoutedPayloadStore implements EvidencePayloadStore {
+export class InstitutionRoutedPayloadStore
+  implements EvidencePayloadStore, EvidencePayloadLocator, InstitutionEvidencePayloadReader
+{
   private readonly domains = new Map<string, Domain>();
 
   constructor(
@@ -154,19 +169,8 @@ export class InstitutionRoutedPayloadStore implements EvidencePayloadStore {
       return UNAVAILABLE;
     }
     if (!isInstitutionId(input.institutionId)) return { status: "invalid" };
-    const domain = this.domains.get(input.institutionId);
-    if (domain === undefined) {
-      this.log("evidence storage domain is not configured", {
-        institutionId: input.institutionId,
-        reason: "storage_domain_not_configured",
-      });
-      return UNAVAILABLE;
-    }
-    if (domain.state === "unverified") {
-      const failed = await this.verify(domain);
-      if (failed !== null) return UNAVAILABLE;
-    }
-    if (domain.state === "disabled") return UNAVAILABLE;
+    const domain = await this.ready(input.institutionId);
+    if (domain === null) return UNAVAILABLE;
     let stored: unknown;
     try {
       stored = await domain.store.putImmutable(input);
@@ -185,6 +189,101 @@ export class InstitutionRoutedPayloadStore implements EvidencePayloadStore {
       reason: result.reason,
     });
     return UNAVAILABLE;
+  }
+
+  /**
+   * Reads from the one domain of the institution, under the same P2 and P3
+   * gates as a write: no domain, an unverified label or a disabled domain is
+   * `unavailable`, and no other domain is ever asked. The bytes are checked
+   * against the hash again here, so no domain store can pass on other bytes.
+   */
+  async readImmutable(given: {
+    institutionId: string;
+    evidencePackageId: string;
+    segmentHash: string;
+  }): Promise<EvidencePayloadReadResult> {
+    let input: { institutionId: string; evidencePackageId: string; segmentHash: string };
+    try {
+      input = {
+        institutionId: given.institutionId,
+        evidencePackageId: given.evidencePackageId,
+        segmentHash: given.segmentHash,
+      };
+    } catch {
+      this.log("evidence storage request could not be read", {
+        reason: "storage_request_failed",
+      });
+      return UNAVAILABLE;
+    }
+    if (!isInstitutionId(input.institutionId)) {
+      this.log("evidence storage request is not valid", {
+        reason: "storage_request_invalid",
+      });
+      return UNAVAILABLE;
+    }
+    const domain = await this.ready(input.institutionId);
+    if (domain === null) return UNAVAILABLE;
+    let read: unknown;
+    try {
+      read = await domain.store.readImmutable(input);
+    } catch {
+      read = null;
+    }
+    const result = normalizeReadResult(read, input.segmentHash) ?? {
+      status: "unavailable",
+      reason: "storage_request_failed",
+    };
+    if (result.status !== "unavailable") return result;
+    this.log("evidence storage domain is unavailable", {
+      storageDomain: domain.label,
+      reason: result.reason,
+    });
+    return UNAVAILABLE;
+  }
+
+  /**
+   * The reference of an object already stored under this key, with no request
+   * to any store. Only the institution's own domain names it; no domain, or
+   * one disabled by a mismatched identity label, is `unavailable` (P2, P3).
+   * A domain whose label is not verified yet (just after a restart) names it
+   * from the configured label: nothing is read or written here, and a label
+   * that differs from the one stored with the receipt ends the retry in the
+   * closed `txid_reused`, never in a write to another store.
+   */
+  async storageRefFor(given: {
+    institutionId: string;
+    evidencePackageId: string;
+    segmentHash: string;
+  }): Promise<EvidenceStorageRefResult> {
+    // Read once, as in putImmutable: the key and the domain use the same values.
+    const { institutionId, evidencePackageId, segmentHash } = given;
+    const key = evidenceObjectKey({ institutionId, evidencePackageId, segmentHash });
+    const domain = key === null ? undefined : this.domains.get(institutionId);
+    if (key === null || domain === undefined || domain.state === "disabled") {
+      this.log("evidence storage reference is unavailable", { reason: "storage_ref_unavailable" });
+      return UNAVAILABLE;
+    }
+    return { status: "ok", storageRef: evidenceStorageRef(domain.label, key) };
+  }
+
+  /**
+   * The domain of the institution once its label is verified, or null: none
+   * configured (P2, logged), the label not read yet or not matching (P3).
+   */
+  private async ready(institutionId: string): Promise<Domain | null> {
+    const domain = this.domains.get(institutionId);
+    if (domain === undefined) {
+      this.log("evidence storage domain is not configured", {
+        institutionId,
+        reason: "storage_domain_not_configured",
+      });
+      return null;
+    }
+    if (domain.state === "unverified") {
+      const failed = await this.verify(domain);
+      if (failed !== null) return null;
+    }
+    return domain.state === "disabled" ? null : domain;
   }
 
   /**
@@ -263,6 +362,40 @@ function normalizePutResult(value: unknown): EvidencePayloadPutResult | null {
       }
       case "conflict":
       case "invalid":
+        return { status };
+      case "unavailable": {
+        const reason = value.reason;
+        return typeof reason === "string" ? { status, reason } : null;
+      }
+      default:
+        return null;
+    }
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A copy of the domain's answer, read once. `found` holds only bytes of the
+ * requested hash; other bytes are a corrupt object, never `found`.
+ */
+function normalizeReadResult(
+  value: unknown,
+  segmentHash: string,
+): EvidencePayloadReadResult | null {
+  try {
+    if (!isObject(value)) return null;
+    const status = value.status;
+    switch (status) {
+      case "found": {
+        const bytes = value.bytes;
+        if (!(bytes instanceof Uint8Array)) return null;
+        const copy = new Uint8Array(bytes);
+        return sha256Hex(copy) === segmentHash
+          ? { status, bytes: copy }
+          : { status: "unavailable", reason: "storage_object_corrupt" };
+      }
+      case "not_found":
         return { status };
       case "unavailable": {
         const reason = value.reason;

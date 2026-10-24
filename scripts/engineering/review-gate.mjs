@@ -3,8 +3,11 @@ import process from "node:process";
 
 import { carriedHeads, createApi } from "./review-gate-api.mjs";
 import { evaluatePullRequest, prNumberFromEvent } from "./review-gate-core.mjs";
+import { isMergifyQueuePr, QUEUE_CARRIER_STATUS } from "./mergify-queue-pr.mjs";
 
 const context = "Engineering review gate";
+// What the merge queue reads (D-161 (h)); see evaluateMergeAuthorization.
+const authorizationContext = "Merge authorization";
 
 // Every call is time-limited (plan napada #231, 7.4); see review-gate-api.mjs.
 const api = createApi({
@@ -25,13 +28,13 @@ async function apiAll(path) {
   return items;
 }
 
-async function setStatus(repository, sha, result, targetUrl) {
+async function setStatus(repository, sha, result, targetUrl, statusContext = context) {
   const [owner, repo] = repository.split("/");
   await api(`/repos/${owner}/${repo}/statuses/${sha}`, {
     method: "POST",
     body: JSON.stringify({
       state: result.state,
-      context,
+      context: statusContext,
       description: result.description.slice(0, 140),
       target_url: targetUrl,
     }),
@@ -41,6 +44,7 @@ async function setStatus(repository, sha, result, targetUrl) {
 // A run that fails after the head is known marks that head pending, so an
 // older success never outlives a failed re-evaluation.
 const RUN_FAILED = { state: "pending", description: "Gate run failed before a verdict; re-run the gate." };
+const WAITING = { state: "pending", description: "Waiting for the Engineering review gate." };
 let knownHead = null;
 
 async function main() {
@@ -59,6 +63,16 @@ async function main() {
   }
   const pr = await api(`/repos/${owner}/${repo}/pulls/${number}`);
   knownHead = { repository, sha: pr.head.sha, url: pr.html_url };
+  // Only an authenticated, open draft owned by Mergify is a CI carrier.
+  // It cannot enqueue itself (-draft). No review/owner verdict is fabricated:
+  // source PRs retain their own six required statuses and are revalidated by
+  // Mergify. This workflow still executes only trusted default-branch code.
+  if (isMergifyQueuePr(pr, repository)) {
+    await setStatus(repository, pr.head.sha, QUEUE_CARRIER_STATUS, pr.html_url, authorizationContext);
+    await setStatus(repository, pr.head.sha, QUEUE_CARRIER_STATUS, pr.html_url);
+    console.log(QUEUE_CARRIER_STATUS.description);
+    return;
+  }
   const [comments, changedFiles, reviews, reviewComments] = await Promise.all([
     apiAll(`/repos/${owner}/${repo}/issues/${number}/comments`),
     apiAll(`/repos/${owner}/${repo}/pulls/${number}/files`),
@@ -68,7 +82,7 @@ async function main() {
     apiAll(`/repos/${owner}/${repo}/pulls/${number}/comments`),
   ]);
 
-  const { metadata, result } = evaluatePullRequest({
+  const { metadata, result, mergeAuthorization } = evaluatePullRequest({
     pr,
     files: changedFiles,
     comments,
@@ -78,6 +92,8 @@ async function main() {
     carriedHeads: await carriedHeads(api, owner, repo, pr, comments),
   });
 
+  // Authorization first: a stale green one must never sit beside a new green gate.
+  await setStatus(repository, pr.head.sha, mergeAuthorization ?? WAITING, pr.html_url, authorizationContext);
   await setStatus(repository, pr.head.sha, result, pr.html_url);
   console.log(`${context}: ${result.state} — ${result.description}`);
   if (metadata?.ok) {
@@ -90,6 +106,7 @@ main().catch(async (error) => {
   process.exitCode = 1;
   if (!knownHead) return;
   try {
+    await setStatus(knownHead.repository, knownHead.sha, RUN_FAILED, knownHead.url, authorizationContext);
     await setStatus(knownHead.repository, knownHead.sha, RUN_FAILED, knownHead.url);
   } catch (statusError) {
     console.error(`Could not mark the head pending after the failure: ${statusError.message}`);

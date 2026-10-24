@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
 
+import Landing from "@/components/landing/Landing";
 import AppHeader from "@/components/shell/AppHeader";
 import SessionObserver from "@/components/shell/SessionObserver";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
@@ -12,9 +13,20 @@ export default async function HomePage() {
   // the workspace. The login route stays reachable, and a sign-in that
   // replaces the cookie ends the earlier session's tabs (SessionObserver).
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  const observer = <SessionObserver tag={sessionTag(token)} at={Date.now()} />;
+  // Without a session cookie the public home page (FE-H1, #476); with one the
+  // screen stays as it was.
+  if (token === undefined) {
+    return (
+      <>
+        {observer}
+        <Landing />
+      </>
+    );
+  }
   return (
     <>
-      <SessionObserver tag={sessionTag(token)} at={Date.now()} />
+      {observer}
       <AppHeader />
       <main id="sadrzaj" tabIndex={-1} className="page">
         <h1>{t.app.name}</h1>
@@ -24,18 +36,9 @@ export default async function HomePage() {
           <Link className="btn" href="/rad">
             {t.home.openWorkspace}
           </Link>
-          {token !== undefined ? null : (
-            <>
-              {" "}
-              {/* A plain link: the login route answers with a redirect to the provider. */}
-              <a className="btn" href={`/api/auth/login?returnTo=${encodeURIComponent("/rad")}`}>
-                {t.auth.signIn}
-              </a>
-            </>
-          )}
         </p>
         <p>
-          <Link href="/nastavnik/kolegiji">{t.home.openTeacher}</Link>
+          <Link href="/nastavnik">{t.home.openTeacher}</Link>
         </p>
       </main>
     </>

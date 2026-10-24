@@ -43,27 +43,32 @@ CREATE FUNCTION pg_temp.descriptor(
   )
 $$;
 
+-- The document after a segment is a stand-in text; its hash is the SHA-256
+-- of the snapshot bytes sent with it.
+CREATE FUNCTION pg_temp.sha(p_body text) RETURNS text LANGUAGE sql IMMUTABLE AS $$
+  SELECT encode(sha256(convert_to(p_body, 'UTF8')), 'hex')
+$$;
 CREATE FUNCTION pg_temp.call(p_column text DEFAULT 'outcome') RETURNS text
 LANGUAGE sql AS $$
   SELECT pg_temp.ask('ana', format(
-    'SELECT %I FROM app.commit_evidence_segment(%L, %L, 0, %L, %L, %L::jsonb, %L, %L)',
-    p_column, 'pkg-a', 'request-smoke', repeat('a',64), repeat('d',64),
-    pg_temp.descriptor()::text, repeat('b',64), 'synthetic://pkg-a/request-smoke'
+    'SELECT %I FROM app.commit_evidence_segment(%L, %L, 0, %L, %L, %L::jsonb, %L, %L, %L)',
+    p_column, 'pkg-a', 'request-smoke', repeat('a',64), pg_temp.sha(repeat('d',64)),
+    pg_temp.descriptor()::text, repeat('b',64), 'synthetic://pkg-a/request-smoke', repeat('d',64)
   ))
 $$;
 
 SELECT ok(
   (SELECT prosecdef AND 'search_path=""' = ANY(proconfig)
-     FROM pg_proc WHERE oid = 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text)'::regprocedure),
+     FROM pg_proc WHERE oid = 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text)'::regprocedure),
   'the acceptance entrypoint is SECURITY DEFINER with an empty search_path'
 );
 SELECT ok(
-  has_function_privilege('ductus_app', 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text)', 'EXECUTE')
-  AND NOT has_function_privilege('ductus_test_stranger', 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text)', 'EXECUTE')
+  has_function_privilege('ductus_app', 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text)', 'EXECUTE')
+  AND NOT has_function_privilege('ductus_test_stranger', 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text)', 'EXECUTE')
   AND NOT EXISTS (
     SELECT 1 FROM pg_proc p
     CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) acl
-    WHERE p.oid = 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text)'::regprocedure
+    WHERE p.oid = 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text)'::regprocedure
       AND acl.grantee = 0 AND acl.privilege_type = 'EXECUTE'
   ), 'only the app role can execute the acceptance entrypoint'
 );
@@ -91,7 +96,7 @@ SELECT isnt(
   '0', 'the acceptance locks the student membership it relies on'
 );
 SELECT is(pg_temp.ask('ana', $$ SELECT current_revision::text || ':' || current_content_hash
-  FROM evidence.document WHERE id = 'doc-a' $$), '1:' || repeat('d',64), 'the document revision and hash advance together');
+  FROM evidence.document WHERE id = 'doc-a' $$), '1:' || pg_temp.sha(repeat('d',64)), 'the document revision and hash advance together');
 SELECT is(pg_temp.ask('ana', $$ SELECT concat_ws(':',
   (SELECT count(*) FROM evidence.document_revision WHERE document_id='doc-a'),
   (SELECT count(*) FROM evidence.segment WHERE evidence_package_id='pkg-a'),
@@ -129,11 +134,11 @@ $$;
 CREATE FUNCTION pg_temp.next(p_request text) RETURNS text
 LANGUAGE sql AS $$
   SELECT pg_temp.ask('ana', format(
-    'SELECT outcome FROM app.commit_evidence_segment(%L, %L, 1, %L, %L, %L::jsonb, %L, %L)',
-    'pkg-a', p_request, repeat('d',64), repeat('e',64),
+    'SELECT outcome FROM app.commit_evidence_segment(%L, %L, 1, %L, %L, %L::jsonb, %L, %L, %L)',
+    'pkg-a', p_request, pg_temp.sha(repeat('d',64)), pg_temp.sha(repeat('e',64)),
     pg_temp.descriptor(p_segment => 'segment-a-2', p_sequence_from => 2, p_sequence_to => 2,
                        p_hash => repeat('c',64), p_predecessor => repeat('b',64))::text,
-    repeat('c',64), 'synthetic://pkg-a/' || p_request
+    repeat('c',64), 'synthetic://pkg-a/' || p_request, repeat('e',64)
   ))
 $$;
 

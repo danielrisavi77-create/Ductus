@@ -154,7 +154,7 @@ SELECT ok((SELECT s.requested_at >= m.before_call AND s.requested_at <= m.after_
   FROM evidence.submission_request s CROSS JOIN clock_mark m WHERE s.document_id = 'doc-a'),
   'requested_at is the database clock during the call, not the transaction start or a client value');
 SELECT is((SELECT concat_ws(' ', institution_id = pg_temp.id('fak_a'), principal_id = pg_temp.id('ana'),
-    assignment_id = pg_temp.id('z1'), project_id, revision, content_hash = repeat('d',64))
+    assignment_id = pg_temp.id('z1'), project_id, revision, content_hash = pg_temp.h('d'))
   FROM evidence.submission_request WHERE document_id = 'doc-a'),
   't t t project-a 1 t', 'the request pins the session principal, its institution and the committed hash');
 
@@ -236,8 +236,12 @@ SELECT matches(pg_temp.ask_as('ductus_evidence', 'anon',
   '^ZD403:', 'the owner cannot move the request to another revision');
 SELECT matches(pg_temp.ask_as('ductus_evidence', 'anon', $$ DELETE FROM evidence.submission_request RETURNING 1 $$),
   '^ZD403:', 'the owner cannot delete a request');
-SELECT matches(pg_temp.ask_as('ductus_evidence', 'anon', $$ TRUNCATE evidence.submission_request $$),
+-- Submissions (061) reference requests, so TRUNCATE needs CASCADE; their own
+-- guard is set aside so this assertion isolates the request trigger.
+ALTER TABLE evidence.submission DISABLE TRIGGER evidence_submission_no_truncate;
+SELECT matches(pg_temp.ask_as('ductus_evidence', 'anon', $$ TRUNCATE evidence.submission_request CASCADE $$),
   '^ZD403:', 'the owner cannot truncate requests');
+ALTER TABLE evidence.submission ENABLE TRIGGER evidence_submission_no_truncate;
 
 -- Composite keys (F6, B2, D-103).
 SELECT matches(pg_temp.ask_as('ductus_evidence', 'anon', $$ INSERT INTO evidence.submission_request

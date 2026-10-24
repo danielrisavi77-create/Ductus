@@ -1,4 +1,4 @@
-import { defineConfig, devices } from "@playwright/test";
+import { defineConfig, devices, type ReporterDescription } from "@playwright/test";
 
 import { playwrightConsoleReporter } from "./test-output";
 
@@ -66,6 +66,7 @@ function server(
 
 export default defineConfig({
   testDir: "e2e",
+  metadata: { testedSha: process.env.GITHUB_SHA ?? null },
   // The full login needs `next dev` and runs on its own config
   // (playwright.login.config.ts, `pnpm test:e2e:login`).
   testIgnore: "login/**",
@@ -74,7 +75,11 @@ export default defineConfig({
   // The HTML report carries screenshots, videos and traces; CI uploads it as
   // the `playwright-report` artifact of the run (docs/SESSIONS.md 6).
   // "line" instead of "list" in Claude Code sessions (test-output.ts).
-  reporter: [[playwrightConsoleReporter(process.env)], ["html", { open: "never" }]],
+  reporter: [
+    [playwrightConsoleReporter(process.env)], ["html", { open: "never" }],
+    ...(process.env.UI_TEST_PILOT === "1"
+      ? [["json", { outputFile: "test-results/ui-pilot-full.json" }] as ReporterDescription] : []),
+  ],
   use: {
     baseURL: BASE_URL,
     locale: "hr-HR",

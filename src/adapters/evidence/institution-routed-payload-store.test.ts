@@ -3,6 +3,8 @@ import { inspect } from "node:util";
 
 import { describe, expect, it, vi } from "vitest";
 
+import { bindPayloadReader } from "@/application/ports/evidence-reconstruction";
+
 import { EvidenceStorageConfigError } from "./evidence-storage-config";
 import {
   InstitutionRoutedPayloadStore,
@@ -35,6 +37,10 @@ function fakeDomain(identity: () => Promise<Identity>) {
     putImmutable: vi.fn(async () => ({
       status: "stored" as const,
       storageRef: "fake:ref",
+    })),
+    readImmutable: vi.fn<DomainPayloadStore["readImmutable"]>(async () => ({
+      status: "found",
+      bytes: new TextEncoder().encode(PAYLOAD),
     })),
   };
   return store;
@@ -109,6 +115,39 @@ describe("InstitutionRoutedPayloadStore", () => {
       expect(a.verifyIdentity).not.toHaveBeenCalled();
     },
   );
+
+  it("names a stored object by its own domain's label and key, with no request to any store", async () => {
+    const a = fakeDomain(verified);
+    const b = fakeDomain(verified);
+    // A fresh router: no label is verified yet, as just after a restart, and
+    // the reference still comes from the configured label alone (review468a 2).
+    const { router } = routerWith({ [FAK_A]: a, [FAK_B]: b });
+    const key = { institutionId: FAK_B, evidencePackageId: PACKAGE, segmentHash: HASH };
+
+    await expect(router.storageRefFor(key)).resolves.toEqual({
+      status: "ok",
+      storageRef: `fak-1:v2/${FAK_B}/${PACKAGE}/${HASH}.json`,
+    });
+    for (const store of [a, b]) {
+      expect(store.verifyIdentity).not.toHaveBeenCalled();
+      expect(store.putImmutable).not.toHaveBeenCalled();
+      expect(store.readImmutable).not.toHaveBeenCalled();
+    }
+  });
+
+  it.each([
+    ["an institution without a domain (P2)", FAK_C, "verified"],
+    ["a domain disabled by its label (P3)", FAK_A, "mismatch"],
+    ["an institution id of another form", FAK_A.toUpperCase(), "verified"],
+  ] as const)("gives no reference for %s", async (_, institutionId, identity) => {
+    const a = fakeDomain(() => Promise.resolve({ status: identity }));
+    const { router } = routerWith({ [FAK_A]: a });
+    // A mismatched label disables the domain on its first use.
+    if (identity === "mismatch") await router.putImmutable(input(FAK_A));
+    const key = { institutionId, evidencePackageId: PACKAGE, segmentHash: HASH };
+
+    await expect(router.storageRefFor(key)).resolves.toEqual(UNAVAILABLE);
+  });
 
   it("reads the identity label once and then only writes", async () => {
     const a = fakeDomain(verified);
@@ -584,5 +623,121 @@ describe("InstitutionRoutedPayloadStore.fromConfig", () => {
     expect(error).toBeInstanceOf(EvidenceStorageConfigError);
     expect((error as Error).message).toMatch(/^storage domain fak-a-eu-1: /);
     expect((error as Error).message).not.toContain("secret-fak-a-eu-1");
+  });
+});
+
+describe("InstitutionRoutedPayloadStore.readImmutable (B2)", () => {
+  const BYTES = new TextEncoder().encode(PAYLOAD);
+  const ids = (institutionId: string) => ({ institutionId, evidencePackageId: PACKAGE, segmentHash: HASH });
+  const reasons = (warn: ReturnType<typeof vi.fn>) => warn.mock.calls.map(([, fields]) => fields.reason);
+
+  it("reads from the institution's own domain only, after its label is verified", async () => {
+    const a = fakeDomain(verified);
+    const b = fakeDomain(verified);
+    const { router } = routerWith({ [FAK_A]: a, [FAK_B]: b });
+
+    await expect(router.readImmutable(ids(FAK_B))).resolves.toEqual({ status: "found", bytes: BYTES });
+    expect(b.verifyIdentity).toHaveBeenCalledWith({ institutionId: FAK_B });
+    expect(b.readImmutable).toHaveBeenCalledWith(ids(FAK_B));
+    expect(a.verifyIdentity).not.toHaveBeenCalled();
+    expect(a.readImmutable).not.toHaveBeenCalled();
+  });
+
+  it("binds one institution, so a reader for it never reaches another domain", async () => {
+    const a = fakeDomain(verified);
+    const b = fakeDomain(verified);
+    a.readImmutable.mockResolvedValueOnce({ status: "not_found" });
+    const { router } = routerWith({ [FAK_A]: a, [FAK_B]: b });
+    const reader = bindPayloadReader(router, FAK_A);
+
+    await expect(reader.readImmutable({ evidencePackageId: PACKAGE, segmentHash: HASH })).resolves.toEqual({
+      status: "not_found",
+    });
+    expect(a.readImmutable).toHaveBeenCalledWith(ids(FAK_A));
+    expect(b.verifyIdentity).not.toHaveBeenCalled();
+    expect(b.readImmutable).not.toHaveBeenCalled();
+  });
+
+  it("answers an institution without a domain as unavailable, never not_found (P2)", async () => {
+    const a = fakeDomain(verified);
+    const { router, warn } = routerWith({ [FAK_A]: a });
+    await expect(router.readImmutable(ids(FAK_C))).resolves.toEqual(UNAVAILABLE);
+    await logged();
+    expect(reasons(warn)).toEqual(["storage_domain_not_configured"]);
+    expect(a.readImmutable).not.toHaveBeenCalled();
+  });
+
+  it("reads nothing from a domain whose label does not match, and retries one that could not be read (P3)", async () => {
+    const wrong = fakeDomain(() => Promise.resolve<Identity>({ status: "mismatch" }));
+    let identity: Identity = { status: "unavailable", reason: "storage_timeout" };
+    const later = fakeDomain(() => Promise.resolve(identity));
+    const { router } = routerWith({ [FAK_A]: wrong, [FAK_B]: later });
+
+    await expect(router.readImmutable(ids(FAK_A))).resolves.toEqual(UNAVAILABLE);
+    await expect(router.readImmutable(ids(FAK_A))).resolves.toEqual(UNAVAILABLE);
+    expect(wrong.verifyIdentity).toHaveBeenCalledTimes(1);
+    expect(wrong.readImmutable).not.toHaveBeenCalled();
+
+    await expect(router.readImmutable(ids(FAK_B))).resolves.toEqual(UNAVAILABLE);
+    expect(later.readImmutable).not.toHaveBeenCalled();
+    identity = { status: "verified" };
+    await expect(router.readImmutable(ids(FAK_B))).resolves.toMatchObject({ status: "found" });
+  });
+
+  it("answers an institution id that cannot be one as unavailable, asking no domain", async () => {
+    const a = fakeDomain(verified);
+    const { router, warn } = routerWith({ [FAK_A]: a });
+    await expect(router.readImmutable(ids(FAK_A.toUpperCase()))).resolves.toEqual(UNAVAILABLE);
+    await logged();
+    expect(reasons(warn)).toEqual(["storage_request_invalid"]);
+    expect(a.verifyIdentity).not.toHaveBeenCalled();
+  });
+
+  it("passes not_found on, and keeps a domain's own reason in the log only", async () => {
+    const a = fakeDomain(verified);
+    const { router, warn } = routerWith({ [FAK_A]: a });
+    a.readImmutable.mockResolvedValueOnce({ status: "not_found" });
+    await expect(router.readImmutable(ids(FAK_A))).resolves.toEqual({ status: "not_found" });
+
+    a.readImmutable.mockResolvedValueOnce({ status: "unavailable", reason: "storage_get_status_503" });
+    await expect(router.readImmutable(ids(FAK_A))).resolves.toEqual(UNAVAILABLE);
+    await logged();
+    expect(reasons(warn)).toEqual(["storage_get_status_503"]);
+  });
+
+  it.each<[string, unknown]>([
+    ["other bytes", { status: "found", bytes: new TextEncoder().encode("{}") }],
+    ["bytes that are not a byte array", { status: "found", bytes: PAYLOAD }],
+    ["an unknown status", { status: "stored", storageRef: "x" }],
+    ["a reason that is not text", { status: "unavailable", reason: 7 }],
+    ["nothing", undefined],
+  ])("never answers found for %s from a domain", async (_, answer) => {
+    const a = fakeDomain(verified);
+    a.readImmutable.mockResolvedValueOnce(answer as never);
+    const { router } = routerWith({ [FAK_A]: a });
+    await expect(router.readImmutable(ids(FAK_A))).resolves.toEqual(UNAVAILABLE);
+  });
+
+  it("answers a domain that throws, or whose answer throws when read, as unavailable", async () => {
+    const a = fakeDomain(verified);
+    const { router } = routerWith({ [FAK_A]: a });
+    a.readImmutable.mockRejectedValueOnce(new Error("bucket fak-a secret-like detail"));
+    await expect(router.readImmutable(ids(FAK_A))).resolves.toEqual(UNAVAILABLE);
+    a.readImmutable.mockResolvedValueOnce({
+      get status(): never {
+        throw new Error("getter");
+      },
+    } as never);
+    await expect(router.readImmutable(ids(FAK_A))).resolves.toEqual(UNAVAILABLE);
+  });
+
+  it("returns its own copy, so the domain cannot change the bytes afterwards", async () => {
+    const a = fakeDomain(verified);
+    const shared = new TextEncoder().encode(PAYLOAD);
+    a.readImmutable.mockResolvedValueOnce({ status: "found", bytes: shared });
+    const { router } = routerWith({ [FAK_A]: a });
+    const outcome = await router.readImmutable(ids(FAK_A));
+    shared.fill(0);
+    expect(outcome).toEqual({ status: "found", bytes: BYTES });
   });
 });

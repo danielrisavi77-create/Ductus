@@ -1,7 +1,17 @@
 import assert from "node:assert/strict";
+import { isAbsolute, resolve } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
-import { createDemoEnvironment, pnpmInvocation, runDemoLifecycle } from "./up.mjs";
+import { createDemoEnvironment, parseStorageDomainsLine, pnpmInvocation, runDemoLifecycle } from "./up.mjs";
+
+const DOMAINS_LINE = `EVIDENCE_STORAGE_DOMAINS=${JSON.stringify({ requestTimeoutMs: 10000, domains: [{ label: "local-demo-fakultet" }] })}`;
+/** Fake node runner: records the script, answers like the storage script. */
+const fakeNode = (calls, overrides = {}) => async (script) => {
+  calls.push(script);
+  if (overrides[script]) return overrides[script];
+  return { code: 0, stdout: script.endsWith("evidence-storage-domain.mjs") ? `${DOMAINS_LINE}\n` : "{}\n" };
+};
 
 test("demo starts the active pnpm CLI through Node without a shell", () => {
   assert.deepEqual(
@@ -135,28 +145,53 @@ test("auth password with URL-special characters round-trips through the URL", ()
   assert.equal(decodeURIComponent(new URL(env.AUTH_DATABASE_URL).password), password);
 });
 
-test("one-command demo runs the stack, migrations, seed, and app in order", async () => {
+test("one-command demo registers the evidence key and storage before the app, in order", async () => {
   const calls = [];
   const env = { marker: "same-environment" };
+  let appEnv;
   const code = await runDemoLifecycle(env, async (script, receivedEnv) => {
-    calls.push([script, receivedEnv]);
+    calls.push(script);
+    if (script === "dev") appEnv = receivedEnv;
+    else assert.equal(receivedEnv, env);
     return 0;
-  });
+  }, true, fakeNode(calls));
 
   assert.equal(code, 0);
-  assert.deepEqual(calls.map(([script]) => script), ["stack:up", "db:migrate", "db:seed", "dev"]);
-  assert.ok(calls.every(([, receivedEnv]) => receivedEnv === env));
+  assert.deepEqual(calls, [
+    "stack:up", "db:migrate", "db:seed",
+    "db/local/evidence-signing-key.mjs", "db/local/evidence-storage-domain.mjs",
+    "dev",
+  ]);
+  // The storage configuration reaches the app through its environment only.
+  assert.equal(appEnv.EVIDENCE_STORAGE_DOMAINS, DOMAINS_LINE.slice("EVIDENCE_STORAGE_DOMAINS=".length));
+  assert.equal(appEnv.marker, "same-environment");
+  assert.equal(env.EVIDENCE_STORAGE_DOMAINS, undefined);
 });
 
-test("CI preparation uses the same steps and omits only the app server", async () => {
+test("CI preparation runs the same steps including evidence setup and omits only the app server", async () => {
   const calls = [];
   const code = await runDemoLifecycle({}, async (script) => {
     calls.push(script);
     return 0;
-  }, false);
+  }, false, fakeNode(calls));
 
   assert.equal(code, 0);
-  assert.deepEqual(calls, ["stack:up", "db:migrate", "db:seed"]);
+  assert.deepEqual(calls, [
+    "stack:up", "db:migrate", "db:seed",
+    "db/local/evidence-signing-key.mjs", "db/local/evidence-storage-domain.mjs",
+  ]);
+});
+
+test("a second preparation run repeats the same steps and yields the same app environment", async () => {
+  const seen = [];
+  for (let run = 0; run < 2; run += 1) {
+    await runDemoLifecycle({}, async (script, receivedEnv) => {
+      if (script === "dev") seen.push(receivedEnv.EVIDENCE_STORAGE_DOMAINS);
+      return 0;
+    }, true, fakeNode([]));
+  }
+  assert.equal(seen.length, 2);
+  assert.equal(seen[0], seen[1]);
 });
 
 test("demo preparation stops at the first failed step", async () => {
@@ -164,8 +199,70 @@ test("demo preparation stops at the first failed step", async () => {
   const code = await runDemoLifecycle({}, async (script) => {
     calls.push(script);
     return script === "db:migrate" ? 1 : 0;
-  });
+  }, true, fakeNode(calls));
 
   assert.equal(code, 1);
   assert.deepEqual(calls, ["stack:up", "db:migrate"]);
+});
+
+test("a failed evidence key or storage step stops before the app and returns its code", async () => {
+  for (const [failing, code] of [["db/local/evidence-signing-key.mjs", 3], ["db/local/evidence-storage-domain.mjs", 4]]) {
+    const calls = [];
+    const result = await runDemoLifecycle({}, async (script) => {
+      calls.push(script);
+      return 0;
+    }, true, fakeNode(calls, { [failing]: { code, stdout: "" } }));
+    assert.equal(result, code);
+    assert.ok(!calls.includes("dev"));
+  }
+});
+
+test("an unusable storage configuration line stops the demo instead of starting without storage", async () => {
+  const calls = [];
+  const result = await runDemoLifecycle({}, async (script) => {
+    calls.push(script);
+    return 0;
+  }, true, fakeNode(calls, { "db/local/evidence-storage-domain.mjs": { code: 0, stdout: "something else\n" } }));
+  assert.equal(result, 1);
+  assert.ok(!calls.includes("dev"));
+});
+
+test("storage line parser accepts only one EVIDENCE_STORAGE_DOMAINS line with a domain", () => {
+  assert.ok(parseStorageDomainsLine(`${DOMAINS_LINE}\r\n`));
+  assert.equal(parseStorageDomainsLine(""), undefined);
+  assert.equal(parseStorageDomainsLine(`${DOMAINS_LINE}\nextra`), undefined);
+  assert.equal(parseStorageDomainsLine("EVIDENCE_STORAGE_DOMAINS={not json"), undefined);
+  assert.equal(parseStorageDomainsLine('EVIDENCE_STORAGE_DOMAINS={"domains":[]}'), undefined);
+});
+
+test("demo environment gives the evidence scripts local credentials and a seed outside the repository", () => {
+  const env = createDemoEnvironment({});
+  assert.equal(env.EVIDENCE_S3_LOCAL_KEY_ID, "ductus-local");
+  assert.equal(env.EVIDENCE_S3_LOCAL_SECRET, "ductus-local-only");
+  assert.ok(isAbsolute(env.DUCTUS_DEV_SIGNING_KEY_FILE));
+  const root = fileURLToPath(new URL("../../", import.meta.url));
+  assert.ok(!resolve(env.DUCTUS_DEV_SIGNING_KEY_FILE).startsWith(resolve(root)));
+  // Stable across runs, so a second run finds the same seed (same key).
+  assert.equal(createDemoEnvironment({}).DUCTUS_DEV_SIGNING_KEY_FILE, env.DUCTUS_DEV_SIGNING_KEY_FILE);
+  // An absolute operator path wins; a relative one is refused, never replaced.
+  const own = resolve("/somewhere/own.seed");
+  assert.equal(createDemoEnvironment({ DUCTUS_DEV_SIGNING_KEY_FILE: own }).DUCTUS_DEV_SIGNING_KEY_FILE, own);
+  assert.throws(() => createDemoEnvironment({ DUCTUS_DEV_SIGNING_KEY_FILE: "rel.seed" }), /absolute path/);
+});
+
+test("demo environment refuses a docker target that the database URL check cannot see (F-100)", () => {
+  for (const name of ["DUCTUS_PSQL_CONTAINER", "DOCKER_HOST", "DOCKER_CONTEXT"]) {
+    assert.throws(() => createDemoEnvironment({ [name]: "remote" }), new RegExp(name), name);
+  }
+  assert.doesNotThrow(() => createDemoEnvironment({ DOCKER_HOST: "" }));
+});
+test("demo children never receive a docker or compose steering variable (F-101)", () => {
+  const env = createDemoEnvironment({
+    COMPOSE_FILE: "elsewhere.yaml", COMPOSE_PROJECT_NAME: "x", COMPOSE_PROFILES: "p", COMPOSE_ENV_FILES: "e",
+    DOCKER_CONFIG: "d", DOCKER_TLS_VERIFY: "1", DOCKER_CERT_PATH: "c", docker_buildkit: "1",
+    PATH: "p", npm_execpath: "n",
+  });
+  assert.deepEqual(Object.keys(env).filter((name) => /^(?:DOCKER_|COMPOSE_)/i.test(name)), []);
+  assert.equal(env.PATH, "p");
+  assert.equal(env.npm_execpath, "n");
 });

@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -34,6 +34,21 @@ const packageId = `pkg-${suffix}`;
 const projectId = `project-${suffix}`;
 const documentId = `doc-${suffix}`;
 const initialHash = "a".repeat(64);
+// A synthetic receipt key of the domain: an Ed25519 SPKI around 32 random
+// bytes. The database checks the key's form and scope, never the signature.
+const keyId = `key-${suffix}`;
+const keyBase64Url = Buffer.concat([Buffer.from("302a300506032b6570032100", "hex"), randomBytes(32)]).toString("base64url");
+const envelope = {
+  algorithm: "Ed25519",
+  keyId,
+  keyVersion: "1",
+  signatureEncoding: "raw",
+  signatureBase64Url: "A".repeat(86),
+};
+
+function sha256Hex(text: string) {
+  return createHash("sha256").update(text, "utf8").digest("hex");
+}
 
 const admin = new pg.Pool({ connectionString: SAFE_ADMIN_URL, max: 1 });
 let appPool: pg.Pool;
@@ -74,9 +89,13 @@ type ReserveRow = {
   committed_revision: string | null;
   receipt_payload: string | null;
   receipt_id: string | null;
+  signature: unknown;
 };
 
-function command(segmentId: string, segmentHash: string) {
+type Next = { sequence: number; predecessor: string | null; baseRevision: number; initial: string; snapshot: string };
+const FIRST: Next = { sequence: 1, predecessor: null, baseRevision: 0, initial: initialHash, snapshot: "snapshot-one" };
+
+function command(segmentId: string, segmentHash: string, next: Next = FIRST) {
   const clientRequestId = `request-${suffix}-${segmentId.slice(-1)}`;
   const descriptor = {
     evidencePackageId: packageId,
@@ -87,13 +106,13 @@ function command(segmentId: string, segmentHash: string) {
     canonicalization: "RFC8785-JCS",
     hashAlgorithm: "sha256",
     evidenceProfileId: "standard-v1",
-    sequenceFrom: 1,
-    sequenceTo: 1,
+    sequenceFrom: next.sequence,
+    sequenceTo: next.sequence,
     eventCount: 1,
     observedStartedAt: "2026-10-14T10:00:00.000Z",
     observedEndedAt: "2026-10-14T10:00:00.000Z",
     segmentHash,
-    predecessorSegmentHash: null,
+    predecessorSegmentHash: next.predecessor,
     payloadBytes: 123,
   };
   return {
@@ -101,20 +120,22 @@ function command(segmentId: string, segmentHash: string) {
     values: [
       packageId,
       clientRequestId,
-      0,
-      initialHash,
-      "d".repeat(64),
+      next.baseRevision,
+      next.initial,
+      sha256Hex(next.snapshot),
       descriptor,
       segmentHash,
       `synthetic://${packageId}/${segmentId}`,
+      next.snapshot,
     ],
   };
 }
 
 const reserveSql = `
-  SELECT outcome, committed_revision, receipt_payload, receipt_id
-    FROM app.commit_evidence_segment($1, $2, $3, $4, $5, $6::jsonb, $7, $8)
+  SELECT outcome, committed_revision, receipt_payload, receipt_id, signature
+    FROM app.commit_evidence_segment($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9)
 `;
+const attachSql = "SELECT outcome FROM app.attach_receipt_signature($1, $2, $3::jsonb)";
 
 async function insertFixture() {
   const client = await admin.connect();
@@ -191,6 +212,12 @@ async function insertFixture() {
        VALUES ($1, $2, $3, $4, $5, $6, 'standard-v1', 2097152)`,
       [packageId, institutionId, evidenceDomainId, documentId, projectId, studentId],
     );
+    await client.query(
+      `INSERT INTO evidence.signing_key
+         (key_id, key_version, evidence_domain_id, institution_id, purpose, algorithm, key_base64url, valid_from)
+       VALUES ($1, '1', $2, $3, 'receipt', 'Ed25519', $4, date_trunc('minute', now()) - interval '1 day')`,
+      [keyId, evidenceDomainId, institutionId, keyBase64Url],
+    );
     await client.query("COMMIT");
     fixtureReady = true;
   } catch (error) {
@@ -212,6 +239,8 @@ async function removeFixture() {
       await admin.query("DELETE FROM evidence.receipt WHERE evidence_package_id = $1", [packageId]);
       await admin.query("DELETE FROM evidence.segment WHERE evidence_package_id = $1", [packageId]);
       await admin.query("DELETE FROM evidence.package WHERE id = $1", [packageId]);
+      await admin.query("DELETE FROM evidence.document_checkpoint WHERE document_id = $1", [documentId]);
+      await admin.query("DELETE FROM evidence.signing_key WHERE key_id = $1", [keyId]);
       await admin.query("DELETE FROM evidence.document_revision WHERE document_id = $1", [documentId]);
       await admin.query("DELETE FROM evidence.document WHERE id = $1", [documentId]);
       await admin.query("DELETE FROM evidence.project WHERE id = $1", [projectId]);
@@ -298,7 +327,7 @@ describe("atomic evidence reserve concurrency", () => {
     const outcomes = [firstRow, secondRow];
 
     expect(secondAnsweredBeforeRelease).toBe(false);
-    expect(outcomes.map((row) => row.outcome).sort()).toEqual(["concurrent_conflict", "reserved"]);
+    expect(outcomes.map((row) => row.outcome).sort()).toEqual(["reserved", "stale_base"]);
     expect(outcomes.filter((row) => row.outcome === "reserved")[0]?.committed_revision).toBe("1");
     expect(await admin.query("SELECT count(*)::int AS n FROM evidence.segment WHERE evidence_package_id = $1", [packageId]))
       .toMatchObject({ rows: [{ n: 1 }] });
@@ -306,5 +335,82 @@ describe("atomic evidence reserve concurrency", () => {
       .toMatchObject({ rows: [{ n: 1 }] });
     expect(await admin.query("SELECT current_revision::int AS n FROM evidence.document WHERE id = $1", [documentId]))
       .toMatchObject({ rows: [{ n: 1 }] });
+  });
+
+  // #155 T6: the race above committed its receipt without a signature. A
+  // later transaction of the same student cannot sign it.
+  it("refuses to sign a receipt reserved in another transaction", async () => {
+    const pending = await admin.query<{ id: string; receipt_payload: string }>(
+      "SELECT id, receipt_payload FROM evidence.receipt WHERE evidence_package_id = $1 AND status = 'pending_signature'",
+      [packageId],
+    );
+    expect(pending.rows).toHaveLength(1);
+    const { id, receipt_payload: payload } = pending.rows[0];
+    const outcome = await withActor(token, async (tx) =>
+      (await tx.query<{ outcome: string }>(attachSql, [id, sha256Hex(payload), envelope])).rows[0].outcome);
+    expect(outcome).toBe("other_transaction");
+    expect(await admin.query("SELECT status FROM evidence.receipt WHERE id = $1", [id]))
+      .toMatchObject({ rows: [{ status: "pending_signature" }] });
+  });
+
+  // #155 T4: two identical requests at once. The second waits for the first,
+  // which signs inside its transaction, and then gets the stored signature.
+  it("gives one acceptance and a signed duplicate to two identical concurrent requests", async () => {
+    const state = await admin.query<{ head: string; hash: string }>(
+      `SELECT k.head_segment_hash AS head, d.current_content_hash AS hash
+         FROM evidence.package k JOIN evidence.document d ON d.id = k.document_id WHERE k.id = $1`,
+      [packageId],
+    );
+    const same = command(`segment-${suffix}-t`, "e".repeat(64), {
+      sequence: 2,
+      predecessor: state.rows[0].head,
+      baseRevision: 1,
+      initial: state.rows[0].hash,
+      snapshot: "snapshot-two",
+    });
+    let firstReserved!: (row: ReserveRow & { attached: string }) => void;
+    let failFirst!: (error: unknown) => void;
+    let releaseFirst!: () => void;
+    const firstQuery = new Promise<ReserveRow & { attached: string }>((resolve, reject) => {
+      firstReserved = resolve;
+      failFirst = reject;
+    });
+    const holdFirst = new Promise<void>((resolve) => { releaseFirst = resolve; });
+    const firstRun = withActor(token, async (tx) => {
+      const row = (await tx.query<ReserveRow>(reserveSql, same.values)).rows[0];
+      const attached = (await tx.query<{ outcome: string }>(attachSql,
+        [row.receipt_id, sha256Hex(row.receipt_payload ?? ""), envelope])).rows[0].outcome;
+      firstReserved({ ...row, attached });
+      await holdFirst;
+      return row;
+    });
+    void firstRun.catch(failFirst);
+    let secondRun: Promise<ReserveRow> | undefined;
+    let secondAnsweredBeforeRelease: boolean;
+    let first: ReserveRow & { attached: string };
+    try {
+      first = await firstQuery;
+      secondRun = withActor(token, async (tx) => (await tx.query<ReserveRow>(reserveSql, same.values)).rows[0]);
+      secondAnsweredBeforeRelease = await Promise.race([
+        secondRun.then(() => true, () => true),
+        waitForBlockedReserve().then(() => false),
+      ]);
+    } finally {
+      releaseFirst();
+      await Promise.allSettled([firstRun, ...(secondRun ? [secondRun] : [])]);
+    }
+    const second = await secondRun!;
+
+    expect(secondAnsweredBeforeRelease).toBe(false);
+    expect([first.outcome, first.attached]).toEqual(["reserved", "signed"]);
+    expect(second.outcome).toBe("duplicate_signed");
+    expect(second.receipt_payload).toBe(first.receipt_payload);
+    expect(second.signature).toEqual(envelope);
+    expect(await admin.query(
+      `SELECT (SELECT count(*)::int FROM evidence.receipt WHERE evidence_package_id = $1) AS receipts,
+              (SELECT count(*)::int FROM evidence.document_checkpoint WHERE document_id = $2 AND revision = 2) AS snapshots,
+              (SELECT current_revision::int FROM evidence.document WHERE id = $2) AS revision`,
+      [packageId, documentId],
+    )).toMatchObject({ rows: [{ receipts: 2, snapshots: 1, revision: 2 }] });
   });
 });
