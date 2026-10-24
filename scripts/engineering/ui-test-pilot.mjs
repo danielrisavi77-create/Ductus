@@ -45,7 +45,7 @@ const finite = (value) => Number.isFinite(value) && value >= 0;
 const outcomes = ["expected", "unexpected", "flaky", "skipped"];
 const statuses = ["passed", "failed", "timedOut", "skipped", "interrupted"];
 
-export function compareReport(plan, report, { cwd = process.cwd(), projects = ["desktop", "mobile"], inventory = null } = {}) {
+export function compareReport(plan, report, { cwd = process.cwd(), projects = ["desktop", "mobile"], inventory = null, requirePilotSpecs = true } = {}) {
   const tests = [], problems = new Set(), seen = new Set();
   const problem = (reason) => problems.add(reason);
   const root = report?.config?.rootDir;
@@ -96,7 +96,7 @@ export function compareReport(plan, report, { cwd = process.cwd(), projects = ["
   const actualProjects = [...new Set(tests.map((t) => t.project))].sort();
   if (JSON.stringify(actualProjects) !== JSON.stringify([...projects].sort())) problem("incomplete-projects");
   // Every spec in the proposed set must be represented in every browser.
-  for (const file of UI_SPECS) for (const project of projects) {
+  for (const file of requirePilotSpecs ? UI_SPECS : []) for (const project of projects) {
     if (!tests.some((t) => t.file === file && t.project === project)) problem("missing-pilot-spec");
   }
 
