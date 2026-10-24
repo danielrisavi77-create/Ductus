@@ -10,9 +10,11 @@ import {
 } from "@/components/editor/LocalDocument";
 import { InstructionsPanel, WorkPanel } from "@/components/editor/SidePanels";
 import { LocalStatusLength } from "@/components/editor/StatusLength";
+import AppShell from "@/components/shell/AppShell";
 import PanelTabs from "@/components/shell/PanelTabs";
 import SessionObserver from "@/components/shell/SessionObserver";
 import SheetFrame from "@/components/shell/SheetFrame";
+import { readShellRole } from "@/components/shell/shell-role";
 import WorkspaceShell, { RailSection } from "@/components/shell/WorkspaceShell";
 import { assignmentParam, readWorkContext } from "@/components/student/work-context-read";
 import { DEMO_WORK } from "@/lib/i18n/demo-work.hr";
@@ -97,98 +99,103 @@ export default async function WorkspacePage({
 }) {
   const assignmentId = assignmentParam((await searchParams).zadatak);
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
-  const [{ scope, signedIn, signInAgain, tag, at }, read] = await Promise.all([
+  const [{ scope, signedIn, signInAgain, tag, at }, read, role] = await Promise.all([
     journalFor(token),
     readWorkContext(token, assignmentId, withActor),
+    readShellRole(token, withActor),
   ]);
   // PRODUCT §5 rule 6: an assignment whose current notice is not acknowledged
   // opens on its notice, never on the workspace.
   if (read.kind === "noticeFirst" && assignmentId) redirect(`/zadatak/${assignmentId}`);
   const work = read.kind === "ready" ? read : null;
   const session = signedIn && tag !== null ? { tag, at } : null;
+  // In the shell's account place: signing out always goes through LocalLogout
+  // here, which knows what the device still holds (D-118, I5).
+  const account = scope && signedIn ? <LocalLogout /> : signInAgain ? (
+    // A plain link: the login route answers with a redirect, not a page.
+    <a className="btn" href={`/api/auth/login?returnTo=${encodeURIComponent(radPath(assignmentId))}`}>{t.auth.signIn}</a>
+  ) : undefined;
   const workspace = (
-    <WorkspaceShell
-      writingHref={radPath(assignmentId)}
-      context={work ? `${work.course} / ${work.notice.title}` : null}
-      barExtra={scope && signedIn ? <LocalLogout /> : signInAgain ? (
-        // A plain link: the login route answers with a redirect, not a page.
-        <a className="btn" href={`/api/auth/login?returnTo=${encodeURIComponent(radPath(assignmentId))}`}>{t.auth.signIn}</a>
-      ) : null}
-      banner={scope ? <OfflineBanner /> : null}
-      rail={
-        <>
-          <RailSection title={t.workspace.structure}>
-            {scope ? <HeadingOutline /> : <p className="rail-empty">{t.workspace.structureEmpty}</p>}
-          </RailSection>
-          <RailSection title={t.workspace.tables}>
-            <p className="rail-empty">{t.workspace.tablesEmpty}</p>
-          </RailSection>
-          <RailSection title={t.workspace.footnotes}>
-            <p className="rail-empty">{t.workspace.footnotesEmpty}</p>
-          </RailSection>
-        </>
-      }
-      panel={
-        <PanelTabs
-          label={t.workspace.panelTabs}
-          initial="comments"
-          tabs={[
-            { id: "sources", label: t.workspace.tabSources, content: <p className="rail-empty">{t.workspace.sourcesEmpty}</p> },
-            {
-              id: "instructions",
-              label: t.workspace.tabInstructions,
-              content: <InstructionsPanel load={work ? { kind: "ready", value: work.notice } : { kind: "empty" }} />,
-            },
-            {
-              id: "comments",
-              label: t.workspace.tabComments,
-              content: scope && signedIn ? (
-                <CommentPanel documentId={LOCAL_DEMO_DOCUMENT_ID} session={session} />
-              ) : (
-                <p className="rail-empty">{t.workspace.commentsEmpty}</p>
-              ),
-            },
-            {
-              id: "work",
-              label: t.workspace.tabWork,
-              content: <WorkPanel load={scope ? { kind: "ready", value: DEMO_WORK } : { kind: "empty" }} />,
-            },
-          ]}
-        />
-      }
-      status={scope ? (
-        <>
-          <LocalSaveChip />
-          <OfflineChip />
-          <LocalStatusLength range={work?.wordRange ?? null} />
-        </>
-      ) : (
-        <span>{t.workspace.statusNoJournal}</span>
-      )}
-    >
-      {scope ? <EditorToolbar /> : null}
-      <div className="sheet-area">
-        <SheetFrame>
-          <h1 className="manuscript manuscript__title">{t.workspace.documentUntitled}</h1>
-          {scope ? (
-            <LocalEditor />
-          ) : (
-            // Not editable: the text says so, matching aria-disabled.
-            <div
-              className="manuscript"
-              role="textbox"
-              aria-multiline="true"
-              aria-disabled="true"
-              aria-label={t.workspace.documentLabel}
-            >
-              <p className="manuscript__placeholder">
-                {t.workspace.documentNotEditable} <span className="soon">{t.workspace.soon}</span>
-              </p>
-            </div>
-          )}
-        </SheetFrame>
-      </div>
-    </WorkspaceShell>
+    <AppShell role={signedIn ? role : null} current="/rad" crumbs={[t.workspace.title]} account={account} ownMain>
+      <WorkspaceShell
+        writingHref={radPath(assignmentId)}
+        context={work ? `${work.course} / ${work.notice.title}` : null}
+        banner={scope ? <OfflineBanner /> : null}
+        rail={
+          <>
+            <RailSection title={t.workspace.structure}>
+              {scope ? <HeadingOutline /> : <p className="rail-empty">{t.workspace.structureEmpty}</p>}
+            </RailSection>
+            <RailSection title={t.workspace.tables}>
+              <p className="rail-empty">{t.workspace.tablesEmpty}</p>
+            </RailSection>
+            <RailSection title={t.workspace.footnotes}>
+              <p className="rail-empty">{t.workspace.footnotesEmpty}</p>
+            </RailSection>
+          </>
+        }
+        panel={
+          <PanelTabs
+            label={t.workspace.panelTabs}
+            initial="comments"
+            tabs={[
+              { id: "sources", label: t.workspace.tabSources, content: <p className="rail-empty">{t.workspace.sourcesEmpty}</p> },
+              {
+                id: "instructions",
+                label: t.workspace.tabInstructions,
+                content: <InstructionsPanel load={work ? { kind: "ready", value: work.notice } : { kind: "empty" }} />,
+              },
+              {
+                id: "comments",
+                label: t.workspace.tabComments,
+                content: scope && signedIn ? (
+                  <CommentPanel documentId={LOCAL_DEMO_DOCUMENT_ID} session={session} />
+                ) : (
+                  <p className="rail-empty">{t.workspace.commentsEmpty}</p>
+                ),
+              },
+              {
+                id: "work",
+                label: t.workspace.tabWork,
+                content: <WorkPanel load={scope ? { kind: "ready", value: DEMO_WORK } : { kind: "empty" }} />,
+              },
+            ]}
+          />
+        }
+        status={scope ? (
+          <>
+            <LocalSaveChip />
+            <OfflineChip />
+            <LocalStatusLength range={work?.wordRange ?? null} />
+          </>
+        ) : (
+          <span>{t.workspace.statusNoJournal}</span>
+        )}
+      >
+        {scope ? <EditorToolbar /> : null}
+        <div className="sheet-area">
+          <SheetFrame>
+            <h1 className="manuscript manuscript__title">{t.workspace.documentUntitled}</h1>
+            {scope ? (
+              <LocalEditor />
+            ) : (
+              // Not editable: the text says so, matching aria-disabled.
+              <div
+                className="manuscript"
+                role="textbox"
+                aria-multiline="true"
+                aria-disabled="true"
+                aria-label={t.workspace.documentLabel}
+              >
+                <p className="manuscript__placeholder">
+                  {t.workspace.documentNotEditable} <span className="soon">{t.workspace.soon}</span>
+                </p>
+              </div>
+            )}
+          </SheetFrame>
+        </div>
+      </WorkspaceShell>
+    </AppShell>
   );
   return (
     <>

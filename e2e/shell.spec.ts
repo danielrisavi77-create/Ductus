@@ -1,8 +1,10 @@
 import { expect, test } from "@playwright/test";
 
-// The F-4 shell (design editor-v11, FE-D1): three columns on a wide screen; below
-// 1240 px the structure rail folds under the sheet, below 1000 px the panel too
-// (README §5.1, FE-D2; DAN-131).
+// The F-4 workspace (design editor-v11, FE-D1) inside the design v3 shell
+// (#476 6314969336, "Pisanje"): three columns on a wide screen; up to 1250 px
+// the structure rail folds under the sheet, up to 1050 px the panel too
+// (design v3 breakpoints with the shell's 236 px side bar; was README §5.1,
+// FE-D2; DAN-131).
 test.describe("workspace shell", () => {
   test("wide: rails beside the sheet, writing view marked current", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
@@ -14,8 +16,8 @@ test.describe("workspace shell", () => {
     });
     const [r, s, p] = await Promise.all([rail.boundingBox(), sheet.boundingBox(), panel.boundingBox()]);
     expect(r && s && p).toBeTruthy();
-    expect(r!.width).toBeCloseTo(260, 0);
-    expect(p!.width).toBeCloseTo(330, 0);
+    expect(r!.width).toBeCloseTo(174, 0);
+    expect(p!.width).toBeCloseTo(284, 0);
     expect(r!.x + r!.width).toBeLessThanOrEqual(s!.x);
     expect(s!.x + s!.width).toBeLessThanOrEqual(p!.x);
     expect(s!.width).toBeLessThanOrEqual(720);
@@ -67,16 +69,19 @@ test.describe("workspace shell", () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/rad");
     const stops: string[] = [];
-    for (let i = 0; i < 4; i += 1) {
+    for (let i = 0; i < 5; i += 1) {
       await page.keyboard.press("Tab");
       const focused = page.locator(":focus");
-      stops.push(((await focused.textContent()) ?? "").trim());
+      stops.push((await focused.getAttribute("aria-label")) ?? ((await focused.textContent()) ?? "").trim());
       expect(await focused.getAttribute("href")).not.toBe("#");
       const outline = await focused.evaluate((element) => getComputedStyle(element).outlineStyle);
       expect(outline).not.toBe("none");
     }
     // The teacher view has no address yet (F-8): it is a stop, but says it is not ready.
-    expect(stops).toEqual(["Preskoči na sadržaj", "Ductura", "Pisanje", "Kako vidi nastavnik uskoro"]);
+    // The shell's brand and theme switch come first (no session: no navigation).
+    expect(stops).toEqual([
+      "Preskoči na sadržaj", "Ductura, početna", "Promijeni svijetlu ili tamnu temu", "Pisanje", "Kako vidi nastavnik uskoro",
+    ]);
   });
 
   test("teacher view is visibly disabled until F-8; the sheet is the local editor", async ({ page }) => {
@@ -140,8 +145,8 @@ test.describe("workspace shell", () => {
     });
   }
 
-  // 1240 px is the first width with three columns (README §5.1: folds below 1240).
-  for (const width of [1440, 1240]) {
+  // 1251 px is the first width with three columns (folds up to 1250).
+  for (const width of [1440, 1251]) {
     test(`wide ${width} px: no rail toggles, rail content always shown`, async ({ page }) => {
       await page.setViewportSize({ width, height: 1000 });
       await page.goto("/rad");
@@ -159,9 +164,9 @@ test.describe("workspace shell", () => {
     });
   }
 
-  // From 1000 px up to 1239 px the panel stays beside the sheet and only the
-  // structure folds under it; 1000 px is the first width that keeps the panel.
-  for (const width of [1239, 1000]) {
+  // From 1051 px up to 1250 px the panel stays beside the sheet and only the
+  // structure folds under it; 1051 px is the first width that keeps the panel.
+  for (const width of [1250, 1051]) {
     test(`middle ${width} px: panel beside the sheet, structure folded under it`, async ({
       page,
       browserName,
@@ -174,7 +179,7 @@ test.describe("workspace shell", () => {
       });
       const rail = page.getByRole("complementary", { name: "Struktura rada" });
       const [p, r] = await Promise.all([panel.boundingBox(), rail.boundingBox()]);
-      expect(p!.width).toBeCloseTo(330, 0);
+      expect(p!.width).toBeCloseTo(284, 0);
       expect(sheet!.x + sheet!.width).toBeLessThanOrEqual(p!.x);
       expect(sheet!.y + sheet!.height).toBeLessThanOrEqual(r!.y);
       expect(r!.x + r!.width).toBeLessThanOrEqual(p!.x + 1);
@@ -192,8 +197,9 @@ test.describe("workspace shell", () => {
       // structure toggle; the hidden panel toggle is not a stop.
       if (tabVisitsLinks(browserName)) {
         await expect(page.getByRole("textbox", { name: "Tekst rada" })).toHaveAttribute("contenteditable", "true");
-        // The sheet theme is in the toolbar's "Prikaz" menu (FE-D5): two stops fewer.
-        for (let i = 0; i < 7; i += 1) await page.keyboard.press("Tab");
+        // The sheet theme is in the toolbar's "Prikaz" menu (FE-D5): two stops
+        // fewer; the shell's theme switch is one more.
+        for (let i = 0; i < 8; i += 1) await page.keyboard.press("Tab");
         await expect(panel.getByRole("tab", { name: "Komentari" })).toBeFocused();
         await page.keyboard.press("Tab");
         await expect(railToggle).toBeFocused();
@@ -206,7 +212,7 @@ test.describe("workspace shell", () => {
     });
   }
 
-  for (const width of [999, 390]) {
+  for (const width of [1050, 390]) {
     test(`narrow ${width} px: rails under the sheet open with real buttons`, async ({
       page,
       browserName,
@@ -238,10 +244,11 @@ test.describe("workspace shell", () => {
       // sheet's editor, then the structure toggle; Enter opens.
       if (tabVisitsLinks(browserName)) {
         await expect(page.getByRole("textbox", { name: "Tekst rada" })).toHaveAttribute("contenteditable", "true");
-        // Skip link, Ductura, Pisanje, Kako vidi nastavnik, the toolbar (one
-        // stop, the sheet theme is in its "Prikaz" menu, FE-D5), the editor,
-        // then the panel.
-        for (let i = 0; i < 7; i += 1) await page.keyboard.press("Tab");
+        // Skip link, the shell (Ductura and the theme switch; below 800 px ☰
+        // and the theme switch, the side bar being a closed drawer), Pisanje,
+        // Kako vidi nastavnik, the toolbar (one stop, the sheet theme is in
+        // its "Prikaz" menu, FE-D5), the editor, then the panel.
+        for (let i = 0; i < 8; i += 1) await page.keyboard.press("Tab");
         await expect(panelToggle).toBeFocused();
         await page.keyboard.press("Enter");
         await expect(panelToggle).toHaveAttribute("aria-expanded", "true");
@@ -294,18 +301,22 @@ test.describe("workspace shell", () => {
     }
   }
 
-  test("top bar: brand and demo label first, then the view switch (editor-v11)", async ({ page }) => {
+  test("work header: under the shell's top bar, the view switch at its end (design v3)", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/rad");
     const bar = page.locator(".workspace__bar");
-    const [brand, demo, modes] = await Promise.all([
-      bar.getByRole("link", { name: "Ductura" }).boundingBox(),
-      bar.locator(".demo-badge").boundingBox(),
+    const [top, header, modes] = await Promise.all([
+      page.getByRole("banner").boundingBox(),
+      bar.boundingBox(),
       bar.getByRole("navigation", { name: "Prikaz" }).boundingBox(),
     ]);
-    expect(brand!.x + brand!.width).toBeLessThanOrEqual(demo!.x);
-    expect(demo!.x + demo!.width).toBeLessThanOrEqual(modes!.x);
-    expect((await bar.boundingBox())!.height).toBeGreaterThanOrEqual(48);
+    expect(top!.y + top!.height).toBeLessThanOrEqual(header!.y);
+    expect(modes!.x + modes!.width).toBeLessThanOrEqual(header!.x + header!.width);
+    expect(modes!.x).toBeGreaterThan(header!.x + header!.width / 2);
+    expect(header!.height).toBeGreaterThanOrEqual(48);
+    // Brand and demo label are the shell's, not repeated in the work header.
+    await expect(bar.getByRole("link", { name: /Ductura/ })).toHaveCount(0);
+    await expect(page.getByRole("banner").getByText("Demo · izmišljeni podaci")).toBeVisible();
   });
 
   test("right panel: tabs in design order, Komentari open, arrow keys move and open", async ({ page }) => {
@@ -419,8 +430,9 @@ test.describe("workspace shell", () => {
   });
 
   test("the brand link on the workspace is a comfortable target", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/rad");
-    const box = await page.locator(".workspace__bar").getByRole("link", { name: "Ductura" }).boundingBox();
+    const box = await page.getByRole("complementary", { name: "Bočna navigacija" }).getByRole("link", { name: /Ductura/ }).boundingBox();
     expect(box!.height).toBeGreaterThanOrEqual(32);
   });
 
