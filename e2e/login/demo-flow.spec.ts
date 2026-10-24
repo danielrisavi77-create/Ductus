@@ -28,6 +28,18 @@ import { appCookie, clickSignOut, SESSION_COOKIE, sessionRow, signIn } from "./s
 //
 // Accounts, course and text are invented (K-3, infra/fake-oidc).
 
+// Chromium draws a native date field in the language of the browser, not of the
+// context `locale` (hr-HR in the config): on the Linux CI runner the teacher's
+// form showed "mm/dd/yyyy" and "11/02/2026, 09:00 AM". The browser of this file
+// starts in Croatian, as a Croatian teacher's browser would, so the demo
+// screenshots show the dates as the teacher sees them.
+const BROWSER_ENV = Object.fromEntries(
+  Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
+);
+test.use({
+  launchOptions: { args: ["--lang=hr-HR"], env: { ...BROWSER_ENV, LANG: "hr_HR.UTF-8", LANGUAGE: "hr" } },
+});
+
 const run = promisify(execFile);
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 // A fixed invented name: an identical repeat returns the same course (create_course).
