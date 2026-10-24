@@ -511,7 +511,7 @@ export const hr = {
       live: "Veza radi",
       retrying: "Veza je prekinuta. Prikazan je zadnji primljeni tekst. Ponovno povezivanje…",
       paused: "Prikaz miruje dok je kartica u pozadini.",
-      signedOut: "Više niste prijavljeni.",
+      signedOut: "Prijava je završila.",
       notFound: "Ovaj rad nije dostupan ovom računu.",
     },
   },

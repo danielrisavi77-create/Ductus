@@ -15,7 +15,7 @@ describe("live view wording (F-110 t.2)", () => {
   });
 
   it("the signed-out line does not name a cause", () => {
-    expect(t.connection.signedOut).toBe("Više niste prijavljeni.");
+    expect(t.connection.signedOut).toBe("Prijava je završila.");
     expect(t.connection.signedOut).not.toContain("istekla");
   });
 });
