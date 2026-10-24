@@ -204,11 +204,12 @@ jobs:
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         env:
           ALL_ENGINES: ${{ github.event_name != 'pull_request' }}
+          PLAYWRIGHT_TRY_WITHOUT_DEPS: ${{ github.event_name == 'pull_request' && '1' || '' }}
         run: |
           if [ "$ALL_ENGINES" = "true" ]; then
-            pnpm exec playwright install --with-deps chromium firefox webkit
+            bash scripts/engineering/playwright-install.sh chromium firefox webkit
           else
-            pnpm exec playwright install --with-deps chromium
+            bash scripts/engineering/playwright-install.sh chromium
           fi
       - name: UI pilot expected test inventory
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
@@ -359,7 +360,9 @@ jobs:
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
       - name: Install login browser
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
-        run: pnpm exec playwright install --with-deps chromium
+        env:
+          PLAYWRIGHT_TRY_WITHOUT_DEPS: ${{ github.event_name == 'pull_request' && '1' || '' }}
+        run: bash scripts/engineering/playwright-install.sh chromium
       # The full login through "Demo prijava" needs `next dev` (D-09 refuses
       # the fake provider in production); Chromium only (owner decision).
       - name: Full login E2E

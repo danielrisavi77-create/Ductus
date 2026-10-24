@@ -27,6 +27,26 @@ export const hr = {
   shell: {
     skipToContent: "Preskoči na sadržaj",
     demoBadge: "Demo · izmišljeni podaci",
+    // Design v3 shell (#476 6314969336): only static labels and the role the
+    // server read; no names or counts the app does not have.
+    sideNav: "Bočna navigacija",
+    workNav: "Radni prostor",
+    home: `${APP_NAME}, početna`,
+    space: { teacher: "Nastavnički prostor", student: "Studentski prostor" },
+    nav: {
+      courses: "Moji kolegiji",
+      newCourse: "Novi kolegij i zadatak",
+      fastPath: "Brz put",
+      workspace: "Radni prostor",
+      enroll: "Upis u kolegij",
+    },
+    role: { teacher: "Nastavnik", student: "Student" },
+    demoNote: "Nijedan stvarni osobni podatak.",
+    signOut: "Odjava",
+    openNav: "Otvori navigaciju",
+    closeNav: "Zatvori navigaciju",
+    theme: "Promijeni svijetlu ili tamnu temu",
+    breadcrumb: "Put",
   },
   home: {
     lead: `${APP_NAME} ne procjenjuje autorstvo ni korištenje AI-ja. Prije početka vidiš što nastavnik vidi i od kada.`,

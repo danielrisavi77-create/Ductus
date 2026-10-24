@@ -100,14 +100,21 @@ describe("contrast of the semantic tokens (FE-D2)", () => {
   });
 
   it("light shell text is 4.5:1 or more on its ground and chrome, and on the primary", () => {
-    const shell = rule(':root[data-theme="light"]');
+    const shell = rule('[data-theme="light"]');
     const value = (name: string) => token(shell, name)!;
     for (const surface of ["--ground", "--chrome"]) {
-      for (const ink of ["--ink", "--ink-2", "--ink-3"]) {
+      for (const ink of ["--ink", "--ink-2", "--ink-3", "--ink-muted", "--error", "--warn", "--accent"]) {
         expect(contrast(value(ink), value(surface))).toBeGreaterThanOrEqual(4.5);
       }
     }
     expect(contrast(value("--accent-ink"), value("--accent"))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("the dark sheet carries its own ink, so a light shell never puts light ink on it", () => {
+    const sheet = rule(".sheet");
+    for (const ink of ["--ink", "--ink-2", "--ink-3"]) {
+      expect(contrast(token(sheet, ink)!, token(sheet, "--sheet")!)).toBeGreaterThanOrEqual(4.5);
+    }
   });
 
   it("gives the white sheet no raised or selected surface", () => {
@@ -135,10 +142,10 @@ describe("manuscript type (README §5.1, FE-D2)", () => {
   }
 });
 
-describe("workspace breakpoints (README §5.1, FE-D2)", () => {
-  it("folds the structure below 1240 px and the panel below 1000 px, nothing at 1100 px", () => {
-    expect(CSS).toContain("@media (max-width: 1239.98px) {");
-    expect(CSS).toContain("@media (max-width: 999.98px) {");
+describe("workspace breakpoints (design v3 inside the shell, was README §5.1, FE-D2)", () => {
+  it("folds the structure up to 1250 px and the panel up to 1050 px, nothing at 1100 px", () => {
+    expect(CSS).toContain("@media (max-width: 1250px) {");
+    expect(CSS).toContain("@media (max-width: 1050px) {");
     expect(CSS).not.toMatch(/max-width: 1100px/);
   });
 });
