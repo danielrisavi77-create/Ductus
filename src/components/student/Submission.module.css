@@ -1,0 +1,98 @@
+/*
+ * F-10 (#476 contract 6384297464): Ductura demo-tok-v2 screen 4 "Predaja" on
+ * the D-123 tokens of app/globals.css. Text column on the left, the process
+ * summary on the right; one column below 900 px. No text below 13 px.
+ */
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 380px);
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.main,
+.aside {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.steps [aria-current="step"] {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px 22px;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--raised);
+}
+
+.card h2 {
+  margin: 0;
+  font-family: var(--ff-display);
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.receipt {
+  border-style: dashed;
+}
+
+.note,
+.muted {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 14px;
+  margin: 0;
+  font-size: 14px;
+}
+
+.facts dt {
+  color: var(--ink-3);
+}
+
+.facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.hash {
+  font-family: var(--ff-mono);
+  font-size: 13px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
