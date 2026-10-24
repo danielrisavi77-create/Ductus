@@ -66,6 +66,7 @@ function server(
 
 export default defineConfig({
   testDir: "e2e",
+  metadata: { testedSha: process.env.GITHUB_SHA ?? null },
   // The full login needs `next dev` and runs on its own config
   // (playwright.login.config.ts, `pnpm test:e2e:login`).
   testIgnore: "login/**",
