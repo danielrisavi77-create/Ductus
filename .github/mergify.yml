@@ -1,40 +1,8 @@
-# Mergify merge queue (D-161). Mergify is a GitHub App; nothing runs on a
-# developer machine. Mergify does NOT put a PR into the queue by itself
-# (F-114: it sees only statuses, not the risk, so an automatic queue rule could
-# merge a critical or D-97 PR). A PR enters the queue only by the owner's
-# `@Mergifyio queue` command (restricted to the owner below), and only when
-# both statuses the gate publishes are green (D-161 (h)):
-#   - "Engineering review gate": independent review and QA for the head;
-#   - "Merge authorization": the owner's `Owner-Command: merge` comment names
-#     this head (D-97, docs/ORKESTRATOR.md section 2), or the PR declares Risk
-#     low or standard and touches no D-97 path.
-# Merging is manual, through `pr-ready`. Mergify reads neither the PR
-# description nor labels nor file names: the gate decides with the same parser
-# that checks the declared risk, so an edited description cannot change what
-# Mergify sees.
-# DAN-263: serial speculative checks test A, A+B, A+B+C on Mergify-owned
-# draft PRs; original heads keep their review/QA/owner approvals. All six
-# conditions remain mandatory on originals AND CI carriers. The gate recognizes
-# carriers from authenticated GitHub metadata (mergify-queue-pr.mjs), never from
-# a branch prefix alone. Mergify revalidates admission and rejects external edits
-# of queue branches. See docs/engineering/mergify-rollout.md before activation.
-# A PR whose gate is green but which waits for the owner's command (Risk
-# critical or a D-97 path) is kept current by Mergify (`update`, a clean merge of
-# `main`, D-101): review, QA and the command carry through it, and the owner's
-# command is not lost when `main` moves while the PR waits. A PR that is not in
-# the gate, is a draft or has a conflict is left alone.
-# Mergify reads `.mergify.yml` and `.mergify/config.yml` before this file;
-# neither may exist (mergify-config.test.mjs), and Mergify applies the
-# configuration of the default branch only, so a PR cannot change the queue
-# before it is merged.
-# scripts/engineering/mergify-config.test.mjs keeps the contexts below equal to
-# the required statuses of `main` plus "Merge authorization".
-
+# queue rule 'main': `allow_queue_branch_edit` was removed. It was already set to `false`, the default, and the option is being retired.
 queue_rules:
   - name: main
     batch_size: 1
     max_checks_retries: 0
-    allow_queue_branch_edit: false
     branch_protection_injection_mode: queue
     queue_conditions: &required
       - base=main
