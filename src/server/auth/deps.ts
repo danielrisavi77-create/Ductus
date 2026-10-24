@@ -10,9 +10,10 @@ let deps: AuthDeps | undefined;
  * The route dependencies, built on the first request rather than at import,
  * so `next build` needs no login configuration. An invalid configuration
  * (the fake provider in a production build among them) throws here, on every
- * login.
+ * login. Module-private (F-042): `openSession` leaves this module only
+ * inside the handler of a login route, through `authRoute`.
  */
-export function authDeps(): AuthDeps {
+function authDeps(): AuthDeps {
   if (deps) return deps;
   // D-09 is a property of the build. Next replaces the literal
   // `process.env.NODE_ENV` when it compiles: `next build` writes "production",
