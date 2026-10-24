@@ -169,6 +169,11 @@ export type SyncMeta = {
    * named. The server's version that is taken must reach it.
    */
   conflictRevision?: number;
+  /**
+   * On a document with evidence in ERROR: the `localSeq` of the row the
+   * server last refused for good, with no hold left. Any other answer clears it.
+   */
+  refusedLocalSeq?: number;
 };
 
 /**

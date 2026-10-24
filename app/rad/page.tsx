@@ -88,10 +88,12 @@ async function journalFor(token: string | undefined): Promise<{
  * acknowledgment the page sends them to the notice (PRODUCT §5 rule 6);
  * otherwise neither is shown, never an invented value. The
  * status bar shows the length and any limits of the acknowledged current
- * assignment version (DAN-225/229). Only the local demo journal without a
- * session shows invented Rad stages of the real shape; a signed-in person
- * sees the empty state until its read exists (FE-D9, #476, F-110 t.1). The
- * shell marks the session for the other tabs (F-113 t.1). Signing out
+ * assignment version (DAN-225/229). Only with that acknowledgment does the
+ * tab publish the live view (B-LIVE step 4, F-121). Only the local demo
+ * journal without a session shows invented Rad stages of the real shape; a
+ * signed-in person sees the empty state until its read exists (FE-D9, #476,
+ * F-110 t.1). The shell marks the session for the other tabs (F-113 t.1).
+ * Signing out
  * always ends the session (D-118, `LocalLogout`).
  */
 export default async function WorkspacePage({
@@ -123,6 +125,12 @@ export default async function WorkspacePage({
       <WorkspaceShell
         writingHref={radPath(assignmentId)}
         context={work ? `${work.course} / ${work.notice.title}` : null}
+        barExtra={signedIn && work && assignmentId ? (
+          // F-10 (#653 contract 6385776645): only for an assignment the RLS
+          // read gave this student with its notice acknowledged. A plain link:
+          // the submission page reads the server's text and sends nothing itself.
+          <a className="btn" href={`/rad/${encodeURIComponent(assignmentId)}/predaja`}>{t.workspace.submitLink}</a>
+        ) : null}
         banner={scope ? <OfflineBanner /> : null}
         rail={
           <>
@@ -201,7 +209,8 @@ export default async function WorkspacePage({
     </AppShell>
   );
   return scope ? (
-    <LocalDocumentProvider scope={scope} documentId={LOCAL_DEMO_DOCUMENT_ID} session={session}>
+    <LocalDocumentProvider scope={scope} documentId={LOCAL_DEMO_DOCUMENT_ID} session={session}
+      livePublish={work !== null}>
       {workspace}
     </LocalDocumentProvider>
   ) : workspace;

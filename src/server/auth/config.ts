@@ -125,6 +125,12 @@ export function loadAuthConfig(env: Env = process.env): AuthConfig {
   }
 
   const issuer = url(env, "OIDC_ISSUER");
+  // F-123: the issuer itself, never its discovery document. openid-client
+  // fetches a "/.well-known/" URL as given and then skips the check that the
+  // discovered issuer equals it, so the account key would follow this value.
+  if (issuer.href.toLowerCase().includes("/.well-known/")) {
+    throw new AuthConfigError("OIDC_ISSUER must name the issuer, not its discovery document");
+  }
   const redirectUri = url(env, "OIDC_REDIRECT_URI");
   const insecure = issuer.protocol === "http:";
   if (production) {
