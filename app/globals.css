@@ -69,11 +69,12 @@
 }
 
 /*
- * Light shell (design v3, owner decision of 21 Oct 2026). Defined here, not
- * switched on yet: the theme switch comes with the new shell. --ink-3 is
- * #5e7366, not the showcase's #657a6d (4.17:1 on --ground, below AA).
+ * Light shell (design v3, owner decision of 21 Oct 2026). It applies to the
+ * subtree of the shell element that carries `data-theme="light"` (AppShell),
+ * never to pages outside the shell. --ink-3 is #5e7366, not the showcase's
+ * #657a6d (4.17:1 on --ground, below AA); --ink-muted is the same, text-safe.
  */
-:root[data-theme="light"] {
+[data-theme="light"] {
   --ground: #f3f4ee;
   --chrome: #ffffff;
   --raised: #f8f9f5;
@@ -89,12 +90,37 @@
   --accent-soft: #e2f0e5;
   --warn: #84602d;
   --synced: #355b81;
+  --sheet: #ffffff;
+  --ink-muted: #5e7366;
+  --accent-hover: #1b5439;
+  --error: #a8432f;
+  --warn-soft: #f5ecdc;
+  --synced-soft: #e3edf6;
+  --cmt: #84602d;
+  --cmt-ink: #84602d;
+  --cmt-bg: #e9c58b40;
+  --lift: 0 1px 1px #0001, 0 12px 34px -10px #0002;
   color-scheme: light;
 }
 
 /* Dark sheet (default): the shell's own tokens on the handoff's sheet colour. */
 .sheet {
   --sheet: #12211c;
+  /* The dark sheet keeps dark ink inside a light shell too. */
+  --ink: #eef3e9;
+  --ink-2: #a3b5aa;
+  --ink-3: #80998a;
+  --ink-muted: #6c8376;
+  --rule: #24372e;
+  --rule-2: #1b2d24;
+  --accent: #8ee3be;
+  --accent-hover: #99f5cd;
+  --accent-ink: #091310;
+  --accent-soft: #173c2d;
+  --warn: #e9c58b;
+  --cmt: #e9c58b;
+  --cmt-ink: #e9c58b;
+  --cmt-bg: #e9c58b26;
   color-scheme: dark;
 }
 
@@ -169,7 +195,8 @@ button {
   background: var(--sheet);
   border: 1px solid var(--rule);
   border-radius: 7px;
-  z-index: 10;
+  /* Above the shell's side bar (40) and its shade (35). */
+  z-index: 50;
 }
 
 .skip-link:focus {
@@ -325,10 +352,15 @@ main:focus {
 
 /* Writing workspace */
 
+/* Inside the design v3 shell ("Pisanje"): a framed block under the shell's top bar. */
 .workspace {
-  min-height: 100vh;
+  min-height: calc(100vh - 76px);
   display: flex;
   flex-direction: column;
+  margin: 0 24px 24px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  overflow: clip;
 }
 
 .workspace__bar {
@@ -340,6 +372,20 @@ main:focus {
   padding: 6px 14px;
   background: var(--chrome);
   border-bottom: 1px solid var(--rule);
+}
+
+.workspace__bar .brand-line__context {
+  margin: 0;
+}
+
+/* Below 800 px the shell's side bar is a drawer: the workspace runs edge to edge. */
+@media (max-width: 799.98px) {
+  .workspace {
+    min-height: calc(100vh - 64px);
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+  }
 }
 
 .brand-line {
@@ -398,7 +444,7 @@ main:focus {
 .workspace__body {
   flex: 1;
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr) 330px;
+  grid-template-columns: 174px minmax(0, 1fr) 284px;
   grid-template-areas: "rail main panel";
   min-height: 0;
 }
@@ -532,10 +578,11 @@ main:focus {
   transform: translateY(2px) rotate(-135deg);
 }
 
-/* Below 1240 px: sheet and panel side by side, structure folded under the sheet. */
-@media (max-width: 1239.98px) {
+/* Design v3 breakpoints, with the shell's side bar taking 236 px: up to
+   1250 px sheet and panel side by side, structure folded under the sheet. */
+@media (max-width: 1250px) {
   .workspace__body {
-    grid-template-columns: minmax(0, 1fr) 330px;
+    grid-template-columns: minmax(0, 1fr) 284px;
     grid-template-rows: 1fr auto;
     grid-template-areas:
       "main panel"
@@ -561,8 +608,8 @@ main:focus {
   }
 }
 
-/* Below 1000 px: one column, both rails folded under the sheet in DOM order. */
-@media (max-width: 999.98px) {
+/* Up to 1050 px: one column, both rails folded under the sheet in DOM order. */
+@media (max-width: 1050px) {
   .workspace__body {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: none;

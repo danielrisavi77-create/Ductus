@@ -1,0 +1,306 @@
+/* Design v3 shell (docs/design/ductura/dizajn-v3.html, "Application shell"), on the shared tokens. */
+.shell {
+  min-height: 100vh;
+  background: var(--ground);
+  color: var(--ink);
+}
+
+.icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 40;
+  width: 236px;
+  display: flex;
+  flex-direction: column;
+  padding: 25px 17px 16px;
+  overflow-y: auto;
+  background: var(--chrome);
+  border-right: 1px solid var(--rule);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  margin-bottom: 28px;
+  padding: 0 12px;
+  font-family: var(--ff-display);
+  font-size: 27px;
+  letter-spacing: -1px;
+  line-height: 1;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.logo {
+  width: 24px;
+  height: 29px;
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.8;
+}
+
+.space {
+  margin: 6px 0 10px;
+  padding: 0 12px;
+  font-size: 12px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.nav {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+
+.navItem:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.navItem[aria-current="page"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.bottom {
+  margin-top: auto;
+}
+
+.note {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 20px 0;
+  padding: 14px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-3);
+}
+
+.note strong {
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+.account {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 8px 0;
+  border-top: 1px solid var(--rule);
+}
+
+.who {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.signOut {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  margin-left: auto;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.signOut:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.area {
+  margin-left: 236px;
+  min-height: 100vh;
+  min-width: 0;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 76px;
+  padding: 0 36px;
+  border-bottom: 1px solid var(--rule-2);
+}
+
+.crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.crumb .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.crumb[aria-current="page"] {
+  color: var(--ink-2);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.demo {
+  font-size: 12px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.iconButton:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+/* Shows the theme the button switches to; the label says what it does either way. */
+.toDark {
+  display: none;
+}
+
+.shell[data-theme="light"] .toLight {
+  display: none;
+}
+
+.shell[data-theme="light"] .toDark {
+  display: inline-flex;
+}
+
+.toLight {
+  display: inline-flex;
+}
+
+.menuButton {
+  display: none;
+}
+
+.shade {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  background: #0008;
+}
+
+.content {
+  max-width: 1580px;
+  margin: 0 auto;
+  padding: 0;
+}
+
+@media (max-width: 799.98px) {
+  .sidebar {
+    width: 248px;
+    transform: translateX(-100%);
+    visibility: hidden;
+  }
+
+  .sidebar[data-open="true"] {
+    transform: none;
+    visibility: visible;
+  }
+
+  .area {
+    margin-left: 0;
+  }
+
+  .menuButton {
+    display: inline-flex;
+  }
+
+  .topbar {
+    min-height: 64px;
+    padding: 0 16px;
+    gap: 10px;
+  }
+
+  .demo {
+    display: none;
+  }
+}
+
+/* The interface floor: 12 px, and 13 px on a phone (app/globals.css). */
+@media (max-width: 640px) {
+  .space,
+  .note,
+  .crumbs,
+  .who,
+  .signOut {
+    font-size: 13px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .sidebar {
+    transition: transform 0.2s, visibility 0.2s;
+  }
+
+  /* Visible at once on opening, so focus can move into the drawer. */
+  .sidebar[data-open="true"] {
+    transition: transform 0.2s, visibility 0s;
+  }
+}
