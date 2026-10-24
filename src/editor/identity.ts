@@ -450,6 +450,16 @@ class SetNodeIds extends Step {
 }
 
 /**
+ * The ids a step of this plugin sets, by block position, or null for any
+ * other step. Evidence capture (F-8 3d-1) writes each as an `attr` step of
+ * `ductus-edit-steps-v1`, whose parser and replayer check every id; this
+ * plugin still never reads one back.
+ */
+export function nodeIdFixesOf(step: Step): readonly { pos: number; id: unknown }[] | null {
+  return step instanceof SetNodeIds ? step.fixes : null;
+}
+
+/**
  * Ids that more than one block of `doc` holds, compared the way the validator
  * compares them. Only content the state was created with can hold one; it is
  * what `mintMissingIds` then repairs, so the caller can say that it did.
