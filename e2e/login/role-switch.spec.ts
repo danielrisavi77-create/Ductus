@@ -126,20 +126,27 @@ test("a tab that never heard the session end starts empty when the next person's
   const recorded = () => page.evaluate(() => localStorage.getItem("ductus-session-current"));
   const before = await recorded();
   await forgetProviderLogin(page.context());
+  // The next person's own tab holds their journal for now.
   const second = await page.context().newPage();
-  await signIn(second, "/", "Demo student 2");
+  await signIn(second, "/rad", "Demo student 2");
+  await expect(phaseOf(second)).toHaveAttribute("data-phase", "ready", { timeout: 30_000 });
   await expect.poll(recorded).not.toBe(before);
-  await second.close();
 
   // The old tab never reloads: its own link renders /rad under the new cookie.
+  // While it waits for the journal, the sheet already shows nothing of before.
   await page.getByRole("link", { name: t.workspace.modeWriting }).click();
+  await expect(phaseOf(page)).toHaveAttribute("data-phase", "blocked");
+  await expect(editorOf(page)).toHaveText("");
+  await expect(page.getByText(DRAFT_REPLY)).toHaveCount(0);
+  await snapshot(page, "4-kartica-ceka-dnevnik");
+  await second.close();
   await expect(phaseOf(page)).toHaveAttribute("data-phase", "ready");
   await expect(editorOf(page)).toHaveText("");
   await nothingToUndo(page, "");
   await expect(page.getByText(TEXT)).toHaveCount(0);
   await expect(page.getByText(DRAFT_REPLY)).toHaveCount(0);
   await expect(firstCard(page)).toHaveCount(0);
-  await snapshot(page, "4-kartica-bez-vijesti");
+  await snapshot(page, "5-kartica-bez-vijesti");
 
   // The next person's journal holds only what they typed.
   await writeAndWait(page, "Moj tekst.");
