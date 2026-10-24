@@ -43,9 +43,13 @@ export default function Submission({ assignmentId, session }: { assignmentId: st
   }, [tag, at]);
   const current = useCallback(() => !(watchRef.current?.ended() ?? false), []);
 
+  // Only the last summary read started counts (Codex 4367324508): an older
+  // answer arriving later never replaces a newer one.
+  const summaryTicket = useRef(0);
   const loadSummary = useCallback(async (documentId: string, mine: number) => {
+    const ticket = ++summaryTicket.current;
     const summary = await fetchProcessSummary(documentId, current);
-    if (mine !== generation.current) return;
+    if (mine !== generation.current || ticket !== summaryTicket.current) return;
     setState((s) => (s.phase === "ready" ? { ...s, summary } : s));
   }, [current]);
 

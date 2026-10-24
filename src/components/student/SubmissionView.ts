@@ -127,7 +127,9 @@ export function SubmissionView({ state, handlers, offline = false }: {
     return h("p", { className: styles.muted, role: "status" }, t.loading);
   }
   if (state.phase === "closed") {
-    const text = state.reason === "unreadable" ? t.unreadable : t.outcome[state.reason];
+    const text = state.reason === "unreadable" ? t.unreadable
+      : state.reason === "unavailable" ? t.openUnavailable
+      : t.outcome[state.reason];
     return h(
       "div",
       { className: styles.card },

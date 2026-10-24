@@ -119,9 +119,19 @@ describe("SubmissionView (F-10)", () => {
 
   it.each(["signedOut", "notFound", "unavailable", "unreadable"] as const)("closed %s shows no text of the work", (reason) => {
     const html = render({ phase: "closed", reason });
-    expect(html).toContain(reason === "unreadable" ? t.unreadable : t.outcome[reason]);
+    expect(html).toContain(reason === "unreadable" ? t.unreadable : reason === "unavailable" ? t.openUnavailable : t.outcome[reason]);
     expect(html).not.toContain(t.submit);
     expect(html).not.toContain(t.receiptTitle);
+  });
+
+  // Codex 4367324506: without a receipt the server may have recorded the
+  // submission (signing after the record, or a lost answer), so neither the
+  // answer nor a failed open says whether the submission was recorded.
+  it("never says whether the submission was recorded when no receipt came back", () => {
+    for (const html of [render(ready({ outcome: { kind: "unavailable" } })), render({ phase: "closed", reason: "unavailable" })]) {
+      expect(html).not.toMatch(/zabilježen/i);
+      expect(html).not.toMatch(/predaja nije/i);
+    }
   });
 
   it("draws the same summary region the teacher gets for the same answer (criterion 5)", () => {

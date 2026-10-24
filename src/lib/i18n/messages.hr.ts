@@ -562,8 +562,10 @@ export const hr = {
       notOpen: "Predaja za ovaj zadatak trenutačno nije otvorena.",
       notFound: "Rad nije dostupan ovom računu.",
       signedOut: "Prijava je istekla. Prijavi se ponovno.",
-      unavailable: "Predaja nije zabilježena. Pokušaj ponovno.",
+      // No receipt came back: the server may have recorded the submission or not (Codex 4367324506).
+      unavailable: "Potvrda nije stigla, pa ishod predaje nije poznat. Pokušaj ponovno.",
     },
+    openUnavailable: "Rad trenutačno nije moguće učitati s poslužitelja. Pokušaj ponovno.",
   },
   teacherComments: {
     hint: "Označi tekst u radu za komentar.",

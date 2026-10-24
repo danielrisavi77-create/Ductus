@@ -209,6 +209,48 @@ test("a receipt for another revision is never shown", async ({ page }) => {
   await expect(page.getByRole("heading", { name: t.receiptTitle })).toHaveCount(0);
 });
 
+// Codex 4367324508: an older summary read that answers late never replaces the newer one.
+test("a summary read answering after a newer one is dropped", async ({ page }) => {
+  const card = messagesHr.summaryCard;
+  await signIn(page, "/rad");
+  const assignment = await seedAssignment(true);
+  await withText(page);
+  // Invented summary in the route's shape (ProcessSummaryV1, as teacher-live.spec.ts).
+  const summary = {
+    gaps: { evidenceKind: "observed", items: [] },
+    pastes: { evidenceKind: "observed", listed: [], listedAboveCharacters: 200, smallerCount: 0 },
+    recordState: "complete",
+    sessions: { breakAboveMinutes: 30, count: 1, evidenceKind: "observed", items: [{ from: "2026-10-19T08:00:00.000Z", to: "2026-10-19T08:41:00.000Z" }] },
+    summaryFormat: "ductus-process-summary-v1",
+  };
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  let reads = 0;
+  let firstAnswered = false;
+  await page.route("**/api/process-summary", async (route) => {
+    reads += 1;
+    if (reads === 1) {
+      // The first read (on load) is held and then fails.
+      await held;
+      await route.fulfill({ status: 503, body: '{"error":"unavailable"}', headers: { "content-type": "application/json" } });
+      firstAnswered = true;
+      return;
+    }
+    await route.fulfill({ status: 200, body: canonicalizeJcs(summary), headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
+  });
+  await page.goto(pathOf(assignment));
+  await expect(page.getByRole("button", { name: t.submit })).toBeVisible();
+  await expect.poll(() => reads).toBe(1);
+  await page.getByRole("button", { name: card.refresh }).click();
+  const region = page.getByRole("region", { name: messagesHr.summary.title });
+  await expect(region.getByText(messagesHr.summary.sameForEveryone)).toBeVisible();
+  release();
+  await expect.poll(() => firstAnswered).toBe(true);
+  await page.waitForTimeout(500);
+  await expect(region.getByText(messagesHr.summary.sameForEveryone)).toBeVisible();
+  await expect(page.getByText(card.unavailable)).toHaveCount(0);
+});
+
 for (const [name, status, body, text] of [
   ["neslaganje", 409, { status: "blocked", reason: "record_mismatch" }, t.outcome.recordMismatch],
   ["novija-verzija", 409, { status: "stale_revision", currentRevision: 4 }, t.outcome.staleRevision],
