@@ -106,7 +106,7 @@ async function run(seed: number): Promise<Outcome> {
   editor.on("transaction", ({ transaction, appendedTransactions }) => {
     const all: Transaction[] = [transaction, ...appendedTransactions];
     if (stop !== null) return;
-    const source = recordWithSource(recorder, all, observer.observation, at);
+    const source = recordWithSource(recorder, all, observer.take(all), at);
     if (source === null) return;
     expect(source, `seed ${seed}, ${action}`).not.toBe("composition");
     if (all.some((tr) => isHistoryTransaction(tr))) expect(source, `seed ${seed}, ${action}`).toBe("unattributed");

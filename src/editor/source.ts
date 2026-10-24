@@ -9,8 +9,12 @@
  *   cleared by `setTimeout(0)`: ProseMirror applies typing from a
  *   `MutationObserver` microtask of the same task, so a microtask is too soon.
  * - It keeps no time, no text and no run of keys (D-56, I5). A key waits only
- *   for the `beforeinput` of the same task, is compared with its `data` there
- *   and dropped; what stays is a few booleans and the kind of a clipboard event.
+ *   for the `beforeinput` of the same task and is compared with its `data`
+ *   there; that `data` waits only for the change of the task and is dropped.
+ *   What stays is a few booleans and the kind of a clipboard event.
+ * - What was seen belongs to one change, not to the task (F-127): the caller
+ *   passes `observer.take(transactions)`, which hands it to the first change
+ *   that edits the document and checks the inserted text against the input.
  * - `sourceOfChange` names a source only with a trusted DOM event of the same
  *   task behind it; any doubt is `unattributed` (D-54, I2). `composition` is
  *   never written in Q1: input without a key and IME composition are
@@ -24,6 +28,7 @@
 import { Extension } from "@tiptap/core";
 import { isHistoryTransaction } from "@tiptap/pm/history";
 import { Plugin, PluginKey, type Transaction } from "@tiptap/pm/state";
+import { ReplaceAroundStep, ReplaceStep } from "@tiptap/pm/transform";
 
 import type { EvidenceSourceV2 } from "@/domain/forensics/evidence-segment-v2";
 
@@ -70,6 +75,20 @@ function isKeymapKey(event: KeyboardEvent): boolean {
   return (event.ctrlKey || event.metaKey) && !event.altKey && FORMAT_KEYS.has(event.key);
 }
 
+/** The text a change inserts: the text of every replaced slice, without block or leaf separators. */
+function insertedText(transactions: readonly Transaction[]): string {
+  let text = "";
+  for (const tr of transactions) {
+    for (const step of tr.steps) {
+      if (step instanceof ReplaceStep || step instanceof ReplaceAroundStep) {
+        const { content } = step.slice;
+        text += content.textBetween(0, content.size, "", "");
+      }
+    }
+  }
+  return text;
+}
+
 /** One character (one code point) a key would type, or null for any other key. */
 function typedKey(event: KeyboardEvent): string | null {
   return [...event.key].length === 1 ? event.key : null;
@@ -78,12 +97,17 @@ function typedKey(event: KeyboardEvent): string | null {
 /**
  * Watches one editor. Add `extension` to it (its priority puts the observer
  * before every keymap, which would otherwise stop ProseMirror from asking it)
- * and read `observation` when the editor emits `transaction`.
+ * and pass `take(transactions)` to `recordWithSource` when the editor emits
+ * `transaction`.
  */
 export class SourceObserver {
   private seen: { -readonly [K in keyof SourceObservation]: SourceObservation[K] } = { ...NO_OBSERVATION };
   /** The key of a trusted keydown, kept only until a `beforeinput` or the end of the task. */
   private pendingKey: string | null = null;
+  /** The data of a trusted `insertText`, kept only until the change it belongs to or the end of the task (F-127). */
+  private inputData: string | null = null;
+  /** A trusted `insertCompositionText` was seen in this task. */
+  private compositionText = false;
   private clearing = false;
 
   readonly plugin: Plugin = new Plugin({
@@ -104,10 +128,14 @@ export class SourceObserver {
           this.pendingKey = null;
           if (!event.isTrusted) return false;
           if (event.inputType === "insertReplacementText") this.seen.replacement = true;
-          else if (event.inputType === "insertCompositionText") this.seen.keylessInput = true;
+          else if (event.inputType === "insertCompositionText") {
+            this.seen.keylessInput = true;
+            this.compositionText = true;
+          }
           else if (event.inputType === "insertText") {
             if (key !== null && event.data === key) this.seen.keyedInput = true;
             else this.seen.keylessInput = true;
+            this.inputData = event.data;
           }
           return false;
         },
@@ -129,13 +157,43 @@ export class SourceObserver {
     return { ...this.seen };
   }
 
+  /**
+   * What one change may use of what was seen (F-127). The first change of the
+   * task that edits the document takes it, so every later change of the task is
+   * `unattributed`. A typed key counts only when the change inserts exactly the
+   * text of its `beforeinput`; a keymap key only when it inserts no text; input
+   * without a key only when it inserts exactly its data. A change that does not
+   * edit the document takes nothing.
+   */
+  take(transactions: readonly Transaction[]): SourceObservation {
+    if (!transactions.some((tr) => tr.docChanged)) return this.observation;
+    const seen = this.seen;
+    const text = insertedText(transactions);
+    const sameText = this.inputData !== null && text === this.inputData;
+    const composed = this.compositionText;
+    this.forget();
+    return {
+      ...seen,
+      keyedInput: seen.keyedInput && sameText,
+      keymapKey: seen.keymapKey && text === "",
+      // Composition text has no data to compare; it is taken by the first change only.
+      keylessInput: seen.keylessInput && (sameText || composed),
+    };
+  }
+
+  private forget(): void {
+    this.seen = { ...NO_OBSERVATION };
+    this.pendingKey = null;
+    this.inputData = null;
+    this.compositionText = false;
+  }
+
   /** The first event of a task schedules the clearing at its end. */
   private touch(): void {
     if (this.clearing) return;
     this.clearing = true;
     setTimeout(() => {
-      this.seen = { ...NO_OBSERVATION };
-      this.pendingKey = null;
+      this.forget();
       this.clearing = false;
     }, 0);
   }

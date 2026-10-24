@@ -87,7 +87,7 @@ function setup(texts: readonly string[] = ["Odlomak izmisljen jedan", "Odlomak i
   let at = T0 + 5_000;
   editor.on("transaction", ({ transaction, appendedTransactions }) => {
     const all: Transaction[] = [transaction, ...appendedTransactions];
-    const source = recordWithSource(recorder, all, observer.observation, at);
+    const source = recordWithSource(recorder, all, observer.take(all), at);
     if (source !== null) {
       sources.push(source);
       changes.push({ transactions: all, at });
@@ -414,7 +414,8 @@ describe("3d-1c QA t. 7: untrusted or no event", () => {
     t.typeChar("a");
     t.pasteText(text(30));
     t.pasteText(text(30), { trusted: false });
-    expect(t.sources).toEqual(["editor", "editor", "paste", "paste"]);
+    // The trusted paste is taken by its own change; the untrusted one after it has nothing (F-127).
+    expect(t.sources).toEqual(["editor", "editor", "paste", "unattributed"]);
     await endTask();
     t.key("Enter");
     t.typeChar("b");
@@ -534,6 +535,68 @@ describe("3d-1c QA t. 8: the rest of the table", () => {
     expect(t.sources).toEqual(["editor"]);
   });
 
+  describe("F-127: what was seen belongs to one change, not to the task", () => {
+    const chunk = "Pripremljeni izmisljeni odlomak";
+    const onlyObserver = (t: Setup, event: KeyboardEvent) =>
+      t.observer.plugin.props.handleKeyDown!.call(t.observer.plugin, t.view, event);
+
+    it("a key, then a program inserting more than the key in the same change, is not editor", () => {
+      const t = setup();
+      t.select(9);
+      t.key("a");
+      t.beforeinput("insertText", "a");
+      t.view.dispatch(t.editor.state.tr.insertText(`a${chunk}`));
+      expect(t.sources).toEqual(["unattributed"]);
+    });
+
+    it("a key, its own change, then a program change in the same task: only the first is editor", () => {
+      const t = setup();
+      t.select(9);
+      t.typeChar("a");
+      t.view.dispatch(t.editor.state.tr.insertText(chunk));
+      expect(t.sources).toEqual(["editor", "unattributed"]);
+    });
+
+    it("a keymap key, then a program inserting text in the same task, is not editor", () => {
+      const t = setup();
+      t.select(9);
+      for (const key of ["Enter", "Backspace", "Delete"]) onlyObserver(t, keyEvent(key));
+      t.view.dispatch(t.editor.state.tr.insertText(chunk));
+      expect(t.sources).toEqual(["unattributed"]);
+    });
+
+    it("input without a key, then a program inserting other text, is not keyless-input", () => {
+      const t = setup();
+      t.select(9);
+      t.beforeinput("insertText", "x");
+      t.view.dispatch(t.editor.state.tr.insertText(chunk));
+      expect(t.sources).toEqual(["unattributed"]);
+    });
+
+    it("a spelling replacement and a paste are taken by their first change only", () => {
+      const t = setup();
+      t.select(9);
+      t.beforeinput("insertReplacementText", null);
+      t.view.dispatch(t.editor.state.tr.insertText("ispravak"));
+      t.view.dispatch(t.editor.state.tr.insertText(chunk));
+      t.pasteText("zalijepljeno");
+      t.view.dispatch(t.editor.state.tr.insertText(chunk).setMeta("uiEvent", "paste"));
+      expect(t.sources).toEqual(["system-replacement", "unattributed", "paste", "unattributed"]);
+    });
+
+    it("a selection change takes nothing, and the data is dropped with the change", () => {
+      const t = setup();
+      t.select(9);
+      t.key("a");
+      t.beforeinput("insertText", "a");
+      t.select(10);
+      t.select(9);
+      t.view.dispatch(t.editor.state.tr.insertText("a"));
+      expect(t.sources).toEqual(["editor"]);
+      expect((t.observer as unknown as { inputData: unknown }).inputData).toBeNull();
+    });
+  });
+
   it.each([
     ["a typed key", (t: Setup) => { t.key("a"); t.beforeinput("insertText", "a"); }],
     ["Enter", (t: Setup) => { t.key("Enter", false, false); }],
@@ -647,13 +710,15 @@ describe("3d-1c QA t. 10: privacy", () => {
       expect(json).not.toMatch(/\d/);
     }
     // A key waits only for the beforeinput of its task, and nothing outlives the task.
-    const own = t.observer as unknown as { pendingKey: unknown };
+    const own = t.observer as unknown as { pendingKey: unknown; inputData: unknown };
     t.key("x");
     t.beforeinput("insertText", "x");
     expect(own.pendingKey).toBeNull();
     t.key("y");
+    t.beforeinput("insertText", "y");
     await endTask();
     expect(own.pendingKey).toBeNull();
+    expect(own.inputData).toBeNull();
     expect(t.observer.observation).toEqual(NO_OBSERVATION);
   });
 
