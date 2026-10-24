@@ -8,9 +8,10 @@ try {
   const run = await ghJson(["api", `repos/{owner}/{repo}/actions/runs/${runId}`]);
   const jobs = await ghList(`repos/{owner}/{repo}/actions/runs/${runId}/jobs?per_page=100&filter=latest`, undefined, { key: "jobs" });
   const artifacts = (await ghJson(["api", `repos/{owner}/{repo}/actions/runs/${runId}/artifacts?per_page=100`])).artifacts ?? [];
+  // The toolchain and the allowed commands come from main, never from the run head (F-122).
   let packageJsonText = "";
   try {
-    const file = await ghJson(["api", `repos/{owner}/{repo}/contents/package.json?ref=${run.head_sha}`]);
+    const file = await ghJson(["api", `repos/{owner}/{repo}/contents/package.json?ref=main`]);
     packageJsonText = Buffer.from(file.content ?? "", "base64").toString("utf8");
   } catch {
     // The toolchain is optional context; a missing file leaves the pins empty.

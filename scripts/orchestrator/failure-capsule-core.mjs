@@ -10,8 +10,11 @@ const GITHUB_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/actions\/runs\/\d+
 // text that is not echoed to the terminal.
 const SAFE_NAME = /^[\w .,()/:=@+-]{1,100}$/;
 const VERSION = /^[\w .<>=~^|*@-]{1,40}$/;
-const RUN_STEP = /^Run (pnpm [^\n]{1,200})$/;
-const WORD = /^-{0,2}\w[\w:.=/-]{0,60}$/;
+// F-122: a reproduce command is never taken from step text. Only "Run pnpm <script>" or
+// "Run pnpm run <script>" with no further argument, and only when <script> is a script of
+// package.json on main, becomes `pnpm <script>`.
+const RUN_STEP = /^Run pnpm (?:run )?([\w:-]{1,60})$/;
+const SCRIPT_NAME = /^[\w:-]{1,60}$/;
 const FAILED = new Set(["failure", "timed_out"]);
 
 export function parseCapsuleArgs(argv) {
@@ -32,15 +35,32 @@ const shown = (s) => (SAFE_NAME.test(String(s ?? "")) ? String(s) : "<not printe
 const version = (s) => (VERSION.test(String(s ?? "")) ? String(s) : "<not printed>");
 const link = (url) => (typeof url === "string" && GITHUB_URL.test(url) ? url : null);
 
-/** The shell command of a "Run <command>" step when it is a plain pnpm call; null otherwise. */
-export function commandOf(stepName) {
-  const rest = RUN_STEP.exec(String(stepName ?? ""))?.[1];
-  if (rest === undefined) return null;
-  // Words are checked one by one after a split, so no pattern can backtrack over the whole text.
-  const words = rest.split(" ");
-  return words.length <= 12 && words.every((w, i) => (i === 0 ? w === "pnpm" : WORD.test(w))) ? rest : null;
+/** Script names of a package.json text (main's); empty for an unreadable file. */
+export function scriptsOf(packageJsonText) {
+  try {
+    const scripts = JSON.parse(packageJsonText)?.scripts;
+    return new Set(scripts && typeof scripts === "object" ? Object.keys(scripts).filter((k) => SCRIPT_NAME.test(k)) : []);
+  } catch {
+    return new Set();
+  }
 }
 
+/** `pnpm <script>` when the step is a plain run of a script that exists on main; null otherwise. */
+export function commandOf(stepName, allowed = new Set()) {
+  const script = RUN_STEP.exec(String(stepName ?? ""))?.[1];
+  return script !== undefined && allowed.has(script) ? `pnpm ${script}` : null;
+}
+
+/**
+ * True unless the run was made from this very repository. A pull_request run from a fork
+ * uses the workflow file of the fork, so its step names, job names and commit are chosen by
+ * an outsider (F-122). Missing data counts as external: fail closed.
+ */
+export function isExternalRun(run) {
+  const here = String(run?.repository?.full_name ?? "").toLowerCase();
+  const from = String(run?.head_repository?.full_name ?? "").toLowerCase();
+  return here === "" || from === "" || here !== from;
+}
 /** Toolchain pins from a package.json text; null for a field that is missing or not a string. */
 export function toolchainOf(packageJsonText) {
   let pkg;
@@ -60,6 +80,20 @@ export function toolchainOf(packageJsonText) {
 export function buildCapsule({ run, jobs, artifacts, packageJsonText }) {
   if (!FAILED.has(run?.conclusion)) throw new Error(`run ${run?.id} did not fail (conclusion: ${run?.conclusion ?? "unknown"})`);
   if (typeof run.head_sha !== "string" || !SHA_RE.test(run.head_sha)) throw new Error("run has no valid head SHA");
+  // `packageJsonText` is package.json of main, never of the run head (F-122).
+  const allowed = scriptsOf(packageJsonText);
+  if (isExternalRun(run)) {
+    // Counts and our own link only: no name, no SHA, no command from outside this repository.
+    return {
+      external: true,
+      runId: run.id,
+      url: link(run.html_url),
+      event: shown(run.event),
+      attempt: run.run_attempt,
+      failedJobs: jobs.filter((job) => FAILED.has(job.conclusion)).length,
+      toolchain: toolchainOf(packageJsonText),
+    };
+  }
   const failedJobs = jobs
     .filter((job) => FAILED.has(job.conclusion))
     .map((job) => ({
@@ -67,7 +101,7 @@ export function buildCapsule({ run, jobs, artifacts, packageJsonText }) {
       url: link(job.html_url),
       failedSteps: (job.steps ?? [])
         .filter((step) => FAILED.has(step.conclusion))
-        .map((step) => ({ number: step.number, name: shown(step.name), command: commandOf(step.name) })),
+        .map((step) => ({ number: step.number, name: shown(step.name), command: commandOf(step.name, allowed) })),
     }));
   return {
     runId: run.id,
@@ -84,6 +118,15 @@ export function buildCapsule({ run, jobs, artifacts, packageJsonText }) {
 
 
 export function renderCapsule(capsule) {
+  if (capsule.external) {
+    return [
+      `Failure capsule, run ${capsule.runId}, attempt ${capsule.attempt}: EXTERNAL RUN`,
+      "This run is not from this repository (a fork or unknown origin): its code, step names and commit are chosen by someone else.",
+      "No SHA, branch, job or step name and no reproduce command is printed. Do not check out, install or run anything from it.",
+      `Run: ${capsule.url ?? "<not printed>"}   Event: ${shown(capsule.event)}   Failed jobs: ${capsule.failedJobs}`,
+      `Toolchain (from main): packageManager ${version(capsule.toolchain.packageManager ?? "-")}, node ${version(capsule.toolchain.node ?? "-")}`,
+    ];
+  }
   const lines = [
     `Failure capsule, run ${capsule.runId}, attempt ${capsule.attempt} (names and links only, no log text)`,
     `SHA: ${capsule.headSha}`,
