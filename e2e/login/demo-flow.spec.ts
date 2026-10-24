@@ -573,6 +573,18 @@ test("demo walk-through", async ({ browser, page, context }) => {
       const [citationBlock, , entryBlock] = blocksOf(saved).slice(2);
       expect(citationBlock!.text).not.toContain(formatInText({ ...SOURCE, year: SOURCE.year + 1 }, FPZG, PAGES));
       expect(entryBlock!.text).not.toBe(formatBibliographyEntry({ ...SOURCE, year: SOURCE.year + 1 }, FPZG));
+      // The chapter heading uses the sheet type, not the browser's h1 (~33 px,
+      // synthetic bold): below 20 px, no larger than the sheet title, weight 500.
+      const typeOf = (locator: ReturnType<Page["locator"]>) =>
+        locator.evaluate((el) => {
+          const style = getComputedStyle(el);
+          return { size: parseFloat(style.fontSize), weight: Number(style.fontWeight) };
+        });
+      const chapter = await typeOf(editorOf(page).locator("h1").first());
+      const title = await typeOf(page.locator(".manuscript__title"));
+      expect(chapter.size).toBeLessThan(20);
+      expect(chapter.size).toBeLessThanOrEqual(title.size);
+      expect(chapter.weight).toBeLessThanOrEqual(500);
       await attachCheckpoint("2-f8-tekst-bez-mreze.json", saved);
       await snapshot(page, "2-f8-naslovi-citat-literatura-bez-mreze");
 
