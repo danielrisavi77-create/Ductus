@@ -29,22 +29,18 @@
  *     until the server gives a verified answer for that idempotency key.
  */
 
-import { MAX_DOCUMENT_SNAPSHOT_BYTES } from "../document/snapshot";
-import { exceedsEvidenceSegmentLimit } from "../forensics/evidence-chain-v2";
-import { isReceiptClientTransactionId } from "../forensics/evidence-receipt";
+import type { DocumentTransaction } from "../document";
 import { commitRequestFromTransaction } from "../serverSync/contract";
 import type {
   CommitOutcome,
   InvalidCommitOutcome,
   ServerSyncErrorCode,
 } from "../serverSync/contract";
-import type {
-  EvidenceSegmentTransaction, PendingTransaction, QueuedTransaction, SyncMeta,
-} from "./journal-types";
+import type { PendingTransaction, QueuedTransaction, SyncMeta } from "./journal-types";
+import type { SyncEvent } from "./states";
 
 /** A queued row of either kind (F-8 3d-2a): a replacement or an evidence segment. */
 export type QueuedRow = PendingTransaction<QueuedTransaction>;
-import type { SyncEvent } from "./states";
 
 /**
  * The round trip failed before any server answer could be read: offline, DNS,
@@ -106,12 +102,12 @@ export type DrainOutcome =
  * (every row strictly older than it). It is reported rather than acted on
  * here: dropping rows is a write, and writes do not belong in this file.
  */
-export type DrainPlan<R extends QueuedRow = PendingTransaction> = {
-  send: R | null;
+export type DrainPlan = {
+  send: PendingTransaction | null;
   supersededUpTo: number | null;
 };
 
-const NOTHING_TO_SEND: DrainPlan<never> = { send: null, supersededUpTo: null };
+const NOTHING_TO_SEND: DrainPlan = { send: null, supersededUpTo: null };
 
 /**
  * True when the queue holds a row that is not provably OLDER than `sent` — a
@@ -289,14 +285,11 @@ function isLocalSeq(value: unknown): value is number {
  * queue rather than guessed at. `REPLACE_DOCUMENT` carries the whole document,
  * which is what makes the supersession rule below sound.
  */
-function isSendable(row: QueuedRow): boolean {
+function isSendable(row: PendingTransaction): boolean {
   if (!isLocalSeq(row?.localSeq)) {
     return false;
   }
   try {
-    if (row.tx?.kind === "EVIDENCE_SEGMENT") {
-      return isSendableSegment(row.documentId, row.tx);
-    }
     // The existing wire builder owns the kind, ids, revision and byte limit
     // rules. A rejected row must also bound every removable queue prefix.
     return commitRequestFromTransaction(row.documentId, row.tx) !== null;
@@ -305,32 +298,6 @@ function isSendable(row: QueuedRow): boolean {
     // or omit the transaction. Retain it as an unsendable recovery boundary.
     return false;
   }
-}
-
-/**
- * A segment row the commit route can take (BACKEND 4.13 t. 3.1): the bytes the
- * journal verified when it queued the row, within the size limits, with a key
- * a receipt can carry. The bytes themselves are not checked again here.
- */
-function isSendableSegment(documentId: string, tx: EvidenceSegmentTransaction): boolean {
-  return (
-    typeof documentId === "string" &&
-    documentId.trim() !== "" &&
-    isReceiptClientTransactionId(tx.clientTransactionId) &&
-    Number.isSafeInteger(tx.baseRevision) &&
-    tx.baseRevision >= 0 &&
-    tx.segment instanceof Uint8Array &&
-    tx.segment.byteLength > 0 &&
-    !exceedsEvidenceSegmentLimit(tx.segment.byteLength) &&
-    tx.document instanceof Uint8Array &&
-    tx.document.byteLength > 0 &&
-    tx.document.byteLength <= MAX_DOCUMENT_SNAPSHOT_BYTES &&
-    typeof tx.segmentHash === "string" &&
-    /^[0-9a-f]{64}$/.test(tx.segmentHash) &&
-    isLocalSeq(tx.sequenceFrom) &&
-    isLocalSeq(tx.sequenceTo) &&
-    tx.sequenceTo >= tx.sequenceFrom
-  );
 }
 
 /**
@@ -380,18 +347,12 @@ function isSendableSegment(documentId: string, tx: EvidenceSegmentTransaction): 
  * would only earn the same answer, and a newer row would go out on a base
  * that commit may have moved. The document leaves this through an explicit
  * recovery decision (`isDiverged`, `SYNC_KEY_DIVERGED`), never by itself.
- *
- * Evidence segments (F-8 3d-2a) are a chain, not replacements: each row
- * continues the one before it, so the OLDEST owed row is sent, nothing is
- * superseded, and the next row goes only after this one's receipt released
- * the hold. Every rule above still applies. A queue holding both kinds has no
- * order that is right for both and sends nothing (a visible stall).
  */
-export function planDrain<R extends QueuedRow>(
-  pending: readonly R[],
+export function planDrain(
+  pending: readonly PendingTransaction[],
   meta: SyncMeta | null,
   awaitingReceipt: AwaitingReceipt | null = null,
-): DrainPlan<R> {
+): DrainPlan {
   if (!Array.isArray(pending) || pending.length === 0) {
     return NOTHING_TO_SEND;
   }
@@ -431,13 +392,7 @@ export function planDrain<R extends QueuedRow>(
     return NOTHING_TO_SEND;
   }
 
-  const kinds = new Set(pending.map((row) => row?.tx?.kind));
-  if (kinds.has("EVIDENCE_SEGMENT") && kinds.has("REPLACE_DOCUMENT")) {
-    return NOTHING_TO_SEND;
-  }
-  const inOrder = kinds.has("EVIDENCE_SEGMENT");
-
-  let newest: R | null = null;
+  let newest: PendingTransaction | null = null;
   for (const row of pending) {
     if (!isSendable(row) || row.localSeq >= barrier) {
       continue;
@@ -453,16 +408,13 @@ export function planDrain<R extends QueuedRow>(
       }
       continue;
     }
-    if (newest === null || (inOrder ? row.localSeq < newest.localSeq : row.localSeq > newest.localSeq)) {
+    if (newest === null || row.localSeq > newest.localSeq) {
       newest = row;
     }
   }
 
   if (newest === null) {
     return NOTHING_TO_SEND;
-  }
-  if (inOrder) {
-    return { send: newest, supersededUpTo: null };
   }
 
   // Every row through the send is now a unique, sendable replacement.
@@ -1046,10 +998,10 @@ export function adoptServerEvents(
  * so the idempotency key of a replayed row survives (the server's digest is
  * taken over the document alone, not the base).
  */
-export function fastForwardBase<T extends { baseRevision: number }>(
-  tx: T,
+export function fastForwardBase(
+  tx: DocumentTransaction,
   acked: number | null,
-): T {
+): DocumentTransaction {
   if (acked === null || !Number.isSafeInteger(acked)) {
     return tx;
   }
