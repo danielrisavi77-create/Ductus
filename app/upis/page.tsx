@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 
 import AppShell from "@/components/shell/AppShell";
+import { shellSession } from "@/components/shell/shell-session";
 import { readShellRole } from "@/components/shell/shell-role";
 import EnrollForm from "@/components/student/EnrollForm";
 import { SIGN_IN_HREF } from "@/components/student/enroll-code";
@@ -25,7 +26,7 @@ export default async function EnrollPage() {
   const signedIn = Boolean(token && TOKEN.test(token));
   const role = await readShellRole(token, withActor);
   return (
-    <AppShell role={role} current="/upis" crumbs={[t.student.enroll.title]}>
+    <AppShell session={shellSession(token)} role={role} current="/upis" crumbs={[t.student.enroll.title]}>
       <div className={`page ${styles.screen}`}>
         <section className={styles.card}>
           <h1>{t.student.enroll.heading}</h1>
