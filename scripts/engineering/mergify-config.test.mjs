@@ -61,19 +61,19 @@ function rules() {
     }));
 }
 
-test("one rule queues a PR, and it reads only the two statuses the gate publishes", () => {
-  const all = rules().filter((rule) => rule.queue);
-  assert.equal(all.length, 1);
-  assert.deepEqual(all[0].conditions, [
-    "base=main",
-    "-draft",
-    "check-success=Engineering review gate",
-    "check-success=Merge authorization",
-  ]);
+// F-114: Mergify sees only statuses, not the risk, so no rule may queue a PR by itself.
+// A PR enters the queue only by the owner's manual `queue` command.
+test("no pull_request_rule queues a PR; the owner's command is the only way in", () => {
+  const all = rules();
+  assert.ok(all.length > 0);
+  assert.equal(all.filter((rule) => rule.queue).length, 0);
+  const actions = body.slice(body.indexOf("pull_request_rules:"));
+  assert.doesNotMatch(actions, /^\s*queue\s*:/m);
+  assert.doesNotMatch(actions, /^\s*(merge|backport|copy|rebase|dismiss_reviews)\s*:/m);
+  assert.match(body, /commands_restrictions:\n  queue:\n    conditions:\n      - sender=danielrisavi77-create/);
 });
-
-test("the other rule only refreshes a waiting PR with a green gate, a draft or conflict is left alone", () => {
-  const others = rules().filter((rule) => !rule.queue);
+test("the only rule refreshes a waiting PR with a green gate, a draft or conflict is left alone", () => {
+  const others = rules();
   assert.equal(others.length, 1);
   assert.deepEqual(others[0].conditions, [
     "base=main",

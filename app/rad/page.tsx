@@ -8,11 +8,11 @@ import { OfflineBanner, OfflineChip } from "@/components/editor/OfflineNotice";
 import {
   LocalDocumentProvider, LocalEditor, LocalLogout, LocalSaveChip,
 } from "@/components/editor/LocalDocument";
+import { showsInventedPanels } from "@/components/editor/demo-panels";
 import { InstructionsPanel, WorkPanel } from "@/components/editor/SidePanels";
 import { LocalStatusLength } from "@/components/editor/StatusLength";
 import AppShell from "@/components/shell/AppShell";
 import PanelTabs from "@/components/shell/PanelTabs";
-import SessionObserver from "@/components/shell/SessionObserver";
 import SheetFrame from "@/components/shell/SheetFrame";
 import { readShellRole } from "@/components/shell/shell-role";
 import WorkspaceShell, { RailSection } from "@/components/shell/WorkspaceShell";
@@ -89,8 +89,11 @@ async function journalFor(token: string | undefined): Promise<{
  * otherwise neither is shown, never an invented value. The
  * status bar shows the length and any limits of the acknowledged current
  * assignment version (DAN-225/229). Only with that acknowledgment does the
- * tab publish the live view (B-LIVE step 4, F-121). With a journal, Rad shows invented stages of the real shape
- * until its read exists (FE-D9, #476). Signing out
+ * tab publish the live view (B-LIVE step 4, F-121). Only the local demo
+ * journal without a session shows invented Rad stages of the real shape; a
+ * signed-in person sees the empty state until its read exists (FE-D9, #476,
+ * F-110 t.1). The shell marks the session for the other tabs (F-113 t.1).
+ * Signing out
  * always ends the session (D-118, `LocalLogout`).
  */
 export default async function WorkspacePage({
@@ -110,6 +113,7 @@ export default async function WorkspacePage({
   if (read.kind === "noticeFirst" && assignmentId) redirect(`/zadatak/${assignmentId}`);
   const work = read.kind === "ready" ? read : null;
   const session = signedIn && tag !== null ? { tag, at } : null;
+  const invented = showsInventedPanels({ scope, signedIn });
   // In the shell's account place: signing out always goes through LocalLogout
   // here, which knows what the device still holds (D-118, I5).
   const account = scope && signedIn ? <LocalLogout /> : signInAgain ? (
@@ -117,7 +121,7 @@ export default async function WorkspacePage({
     <a className="btn" href={`/api/auth/login?returnTo=${encodeURIComponent(radPath(assignmentId))}`}>{t.auth.signIn}</a>
   ) : undefined;
   const workspace = (
-    <AppShell role={signedIn ? role : null} current="/rad" crumbs={[t.workspace.title]} account={account} ownMain>
+    <AppShell session={{ tag, at }} role={signedIn ? role : null} current="/rad" crumbs={[t.workspace.title]} account={account} ownMain>
       <WorkspaceShell
         writingHref={radPath(assignmentId)}
         context={work ? `${work.course} / ${work.notice.title}` : null}
@@ -158,7 +162,7 @@ export default async function WorkspacePage({
               {
                 id: "work",
                 label: t.workspace.tabWork,
-                content: <WorkPanel load={scope ? { kind: "ready", value: DEMO_WORK } : { kind: "empty" }} />,
+                content: <WorkPanel load={invented ? { kind: "ready", value: DEMO_WORK } : { kind: "empty" }} />,
               },
             ]}
           />
@@ -198,15 +202,10 @@ export default async function WorkspacePage({
       </WorkspaceShell>
     </AppShell>
   );
-  return (
-    <>
-      <SessionObserver tag={tag} at={at} />
-      {scope ? (
-        <LocalDocumentProvider scope={scope} documentId={LOCAL_DEMO_DOCUMENT_ID} session={session}
-          livePublish={work !== null}>
-          {workspace}
-        </LocalDocumentProvider>
-      ) : workspace}
-    </>
-  );
+  return scope ? (
+    <LocalDocumentProvider scope={scope} documentId={LOCAL_DEMO_DOCUMENT_ID} session={session}
+      livePublish={work !== null}>
+      {workspace}
+    </LocalDocumentProvider>
+  ) : workspace;
 }
