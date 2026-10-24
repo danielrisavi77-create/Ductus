@@ -108,6 +108,10 @@ export class SourceObserver {
   private inputData: string | null = null;
   /** A trusted `insertCompositionText` was seen in this task. */
   private compositionText = false;
+  /** The text of a trusted `insertReplacementText`, kept like `inputData` (F-130). */
+  private replacementText: string | null = null;
+  /** The text of a trusted composition event or `insertCompositionText`, kept like `inputData` (F-130). */
+  private composedText: string | null = null;
   private clearing = false;
 
   readonly plugin: Plugin = new Plugin({
@@ -127,10 +131,15 @@ export class SourceObserver {
           const key = this.pendingKey;
           this.pendingKey = null;
           if (!event.isTrusted) return false;
-          if (event.inputType === "insertReplacementText") this.seen.replacement = true;
+          if (event.inputType === "insertReplacementText") {
+            this.seen.replacement = true;
+            // Chromium gives the suggested text in dataTransfer, not in data.
+            this.replacementText = event.data ?? event.dataTransfer?.getData("text/plain") ?? null;
+          }
           else if (event.inputType === "insertCompositionText") {
             this.seen.keylessInput = true;
             this.compositionText = true;
+            if (event.data) this.composedText = event.data;
           }
           else if (event.inputType === "insertText") {
             if (key !== null && event.data === key) this.seen.keyedInput = true;
@@ -162,22 +171,28 @@ export class SourceObserver {
    * task that edits the document takes it, so every later change of the task is
    * `unattributed`. A typed key counts only when the change inserts exactly the
    * text of its `beforeinput`; a keymap key only when it inserts no text; input
-   * without a key only when it inserts exactly its data. A change that does not
-   * edit the document takes nothing.
+   * without a key only when it inserts exactly its data. A replacement or a
+   * composition counts only when the change inserts text that is part of the
+   * suggested or composed text: the editor inserts only what changed (F-130).
+   * A change that does not edit the document takes nothing.
    */
   take(transactions: readonly Transaction[]): SourceObservation {
     if (!transactions.some((tr) => tr.docChanged)) return this.observation;
     const seen = this.seen;
     const text = insertedText(transactions);
     const sameText = this.inputData !== null && text === this.inputData;
-    const composed = this.compositionText;
+    const partOf = (whole: string | null) => whole !== null && text !== "" && whole.includes(text);
+    const replaced = partOf(this.replacementText);
+    const composed = this.compositionText && partOf(this.composedText);
+    const composing = partOf(this.composedText);
     this.forget();
     return {
       ...seen,
       keyedInput: seen.keyedInput && sameText,
       keymapKey: seen.keymapKey && text === "",
-      // Composition text has no data to compare; it is taken by the first change only.
       keylessInput: seen.keylessInput && (sameText || composed),
+      composing: seen.composing && composing,
+      replacement: seen.replacement && replaced,
     };
   }
 
@@ -186,6 +201,8 @@ export class SourceObserver {
     this.pendingKey = null;
     this.inputData = null;
     this.compositionText = false;
+    this.replacementText = null;
+    this.composedText = null;
   }
 
   /** The first event of a task schedules the clearing at its end. */
@@ -204,9 +221,11 @@ export class SourceObserver {
     return false;
   }
 
-  private composition(event: Event): false {
+  private composition(event: CompositionEvent): false {
     this.touch();
-    if (event.isTrusted) this.seen.composing = true;
+    if (!event.isTrusted) return false;
+    this.seen.composing = true;
+    if (event.data) this.composedText = event.data;
     return false;
   }
 }
