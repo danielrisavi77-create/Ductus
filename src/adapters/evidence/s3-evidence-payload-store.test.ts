@@ -1045,6 +1045,13 @@ describe("write proof (#155, S1 to S6)", () => {
       const { port } = server.address() as AddressInfo;
       const { store } = storeWith(globalThis.fetch, {
         endpoint: `http://127.0.0.1:${port}`,
+        // A real socket runs on the real clock: under load this round trip
+        // took up to 360 ms (40-60 ms idle) and once passed the shared 1 s
+        // deadline, which rightly answers storage_timeout instead (#645).
+        // Deadlines are tested with fake timers above; here the deadline only
+        // has to be out of the way. 20 s still fails a hung server before the
+        // 30 s test timeout and stays under MAX_S3_REQUEST_TIMEOUT_MS.
+        requestTimeoutMs: 20_000,
       });
       await expect(put(store, "a")).resolves.toEqual(unverified);
       expect(methods).toEqual(["PUT"]);
