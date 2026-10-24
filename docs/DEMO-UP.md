@@ -31,7 +31,11 @@ Runner postavlja DB, S3, Mailpit i OIDC na lokalne Compose adrese. Odbija DB URL
 
 Obje skripte rade samo lokalno i pri ponovnom pokretanju ništa ne mijenjaju. Skripte same odbijaju `NODE_ENV=production`, ali `pnpm demo:up` uvijek postavlja `NODE_ENV=development`, pa tu zaštitu ne nosi. Zato `pnpm demo:up` odbija pokretanje ako su postavljeni `DUCTUS_PSQL_CONTAINER`, `DOCKER_HOST` ili `DOCKER_CONTEXT` (mogli bi uputiti skripte na tuđi Docker), kao i relativan `DUCTUS_DEV_SIGNING_KEY_FILE`. Ako aplikaciju pokrećeš zasebno s `pnpm dev`, ta okolina ne postoji; koristi `pnpm demo:up`.
 
-Seed trenutačno stvara izmišljene ustanove. Potpuni K-3 seed s nastavnikom, kolegijem, zadatkom, studentima i kontrolnim povijestima dovršava se u zasebnim koracima DAN-88.
+## Izmišljeni kolegij i zadatak (DAN-88 K-3b2)
+
+`pnpm demo:up` prije pokretanja aplikacije učitava `db/local/demo-k3.sql` (pokretač `node db/local/demo-k3.mjs`). U bazi zatim postoje potvrđeni `Demo nastavnik`, kolegij „Lokalne javne politike (izmišljeni kolegij)” i zadatak „Seminarski rad: gradske knjižnice kao javni prostor” (1500 do 2500 riječi). `Demo studentica` i `Demo student 2` upisani su u taj kolegij i potvrdili su obavijest zadatka. Svaki redak nastaje kroz isti RPC koji koristi aplikacija, pod sesijom izmišljenog računa, a te se sesije na kraju zatvaraju. Ponovno pokretanje ne dodaje ništa novo.
+
+`pnpm demo:prepare` (CI) ovaj korak ne izvodi jer E2E testovi počinju od nepotvrđenog nastavnika. Dvije izmišljene povijesti prikazuju se kao unaprijed pripremljen primjer (PLAN-DEMO §5, rez 1). Skripta ne stvara evidenciju ni potvrde (#635).
 
 ## Eksplicitna prijava demo računa (DAN-88 K-3b1)
 
