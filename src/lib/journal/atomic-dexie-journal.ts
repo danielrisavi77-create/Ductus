@@ -758,7 +758,8 @@ export class AtomicDexieJournal {
           throw new JournalError("invalid_input");
         }
         const held = prior.awaitingReceipt ?? null;
-        if (confirmed !== true && (stopped || adoptDiscardsNewerRows(rows, documentId, held))) {
+        // Text written after the recorder stopped is replaced only on the author's word.
+        if (confirmed !== true && (prior.evidenceStopped !== undefined || adoptDiscardsNewerRows(rows, documentId, held))) {
           throw new JournalError("confirmation_required");
         }
         const reached = prior.state === "CONFLICT"
