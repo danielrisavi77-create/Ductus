@@ -1,7 +1,6 @@
 // P1-1: the checks the orchestrator runs before it starts review or QA
 // (docs/ORKESTRATOR.md, "prije pokretanja reviewa ili QA-e"). Pure: no gh/git.
 import { closesFence, fenceInfo, field } from "../engineering/metadata-parser.mjs";
-import { D97_MANUAL_PATHS, D97_PATHS, matchesPath } from "../engineering/protected-paths.mjs";
 import { evaluateChecks, GATE_CONTEXT, latestChecks } from "./orchestrator-core.mjs";
 
 // ENGINEERING_SYSTEM §14 lines the orchestrator requires besides `Task:`.
@@ -230,6 +229,9 @@ export function contractText(body, label) {
   return null;
 }
 
+const AUTHORIZATION_CONTEXT = "Merge authorization";
+const RUNNING_STATES = new Set(["PENDING", "QUEUED", "IN_PROGRESS"]);
+
 /**
  * Preflight verdict for one PR. Every check is PASS or FAIL; there is no
  * "unknown counts as pass". Input:
@@ -263,18 +265,12 @@ export function evaluatePreflight({ pr, mainSha, compare, rollup, required, expe
   if (!SHA_RE.test(String(mainSha ?? ""))) add(false, "main", "main head could not be read");
   else if (!compare || !Number.isInteger(compare.behind_by)) add(false, "main", `head vs main ${mainSha.slice(0, 8)} could not be compared`);
   else if (compare.behind_by > 0) {
-    // Owner decisions (#87 issuecomment-6265641655, then F-101 t. 2): a lagging head passes
-    // only for a low or standard PR that touches no D-97 path, and only when no missing main
-    // commit touches a file of the PR. Every other PR (critical, unclassified, any D-97 path)
-    // must contain main before review: what is reviewed has to be what merges. Unreadable lists fail.
+    // D-101 (Daniel, orchestrator session 24. 10. 2026.; #87 issuecomment-6384612548): for every
+    // risk, critical and D-97 included, a lagging head may enter review when no missing main
+    // commit touches a file of the PR, because the verdict carries over a clean main merge.
+    // Unreadable file lists fail.
     const lack = `head lacks ${compare.behind_by} commit(s) of main ${mainSha.slice(0, 8)}`;
-    const risk = String(field(pr.body ?? "", "Risk") ?? "").trim().toLowerCase();
-    const d97 = Array.isArray(prPaths) ? prPaths.filter((p) => matchesPath(p, [...D97_PATHS, ...D97_MANUAL_PATHS])) : [];
-    if (risk !== "low" && risk !== "standard") {
-      add(false, "main", `${lack}; a ${risk === "critical" ? "critical" : "PR without a low or standard risk"} PR must contain main before review: merge main first`);
-    } else if (d97.length > 0) {
-      add(false, "main", `${lack}; the PR touches D-97 path(s) (${names(d97.slice(0, 3))}) and must contain main before review: merge main first`);
-    } else if (!Array.isArray(mainPaths) || !Array.isArray(prPaths) || prPaths.length === 0) {
+    if (!Array.isArray(mainPaths) || !Array.isArray(prPaths) || prPaths.length === 0) {
       add(false, "main", `${lack} and the changed-file lists could not be read: merge main first`);
     } else {
       const mine = new Set(prPaths);
@@ -308,7 +304,7 @@ export function evaluatePreflight({ pr, mainSha, compare, rollup, required, expe
   const req = Array.isArray(required)
     ? [...new Map(required
       .map((item) => typeof item === "string" ? { context: item, appId: null } : item)
-      .filter((item) => item?.context && item.context !== GATE_CONTEXT && (item.appId == null || Number.isInteger(item.appId)))
+      .filter((item) => item?.context && item.context !== GATE_CONTEXT && item.context !== AUTHORIZATION_CONTEXT && (item.appId == null || Number.isInteger(item.appId)))
       .map((item) => [`${item.context}\n${item.appId ?? "*"}`, { context: item.context, appId: item.appId ?? null }])).values()]
     : [];
   if (!rollup) add(false, "ci", "CI checks could not be read");
@@ -317,20 +313,22 @@ export function evaluatePreflight({ pr, mainSha, compare, rollup, required, expe
     const reported = latestChecks(rollup);
     const missing = req.filter((r) => !reported.some((c) =>
       (c.name ?? c.context) === r.context && (r.appId == null || c.appId === r.appId)));
-    // At equal/missing times a non-pending duplicate must win over the one
-    // state exempted below. latestChecks still selects genuinely newer runs.
-    const pending = rollup.filter((c) => evaluateChecks([c]).bad
-      .some((b) => b.name === "Merge authorization" && b.state === "PENDING"));
-    const ck = evaluateChecks([...rollup.filter((c) => !pending.includes(c)), ...pending]);
-    // Merge authorization waits for review/QA. Only its known pending state
-    // may precede review entry; the shared merge-readiness check stays strict.
-    const readableRequired = required.every((item) => typeof item === "string" ? item.length > 0
-      : item != null && typeof item.context === "string" && item.context.length > 0
-        && (item.appId == null || (Number.isInteger(item.appId) && item.appId >= 0)));
-    const bad = ck.bad.filter((c) => !readableRequired || c.name !== "Merge authorization" || c.state !== "PENDING");
+    // D-161 (b): review and QA start without waiting for CI, so a check that is still
+    // PENDING, QUEUED or IN_PROGRESS does not fail preflight; FAILURE, CANCELLED, ERROR and
+    // anything unknown still do. "Merge authorization" waits for the owner command by
+    // design (like the review gate), so it never counts as CI here; the shared
+    // merge-readiness check in orchestrator-core stays strict.
+    // At equal or missing times latestChecks keeps the first non-green entry, so a
+    // running entry is ordered after a failed one: the verdict must not depend on input order.
+    const isRunning = (c) => RUNNING_STATES.has(String(c.conclusion || c.state || c.status || "UNKNOWN").toUpperCase());
+    const ordered = rollup.filter((c) => (c.name ?? c.context) !== AUTHORIZATION_CONTEXT)
+      .map((c, i) => ({ c, i })).sort((a, b) => (isRunning(a.c) - isRunning(b.c)) || a.i - b.i).map(({ c }) => c);
+    const ck = evaluateChecks(ordered);
+    const running = ck.bad.filter((c) => RUNNING_STATES.has(c.state));
+    const bad = ck.bad.filter((c) => !RUNNING_STATES.has(c.state));
     if (missing.length) add(false, "ci", `required check(s) not reported on the head: ${names(missing.map((r) => r.appId == null ? r.context : `${r.context} app ${r.appId}`))}`);
     else if (bad.length) add(false, "ci", `CI not green: ${bad.map((b) => `${shown(b.name)}=${shown(b.state)}`).join(", ")}`);
-    else add(true, "ci", `CI green (${req.length} required, ${ck.total} checks)`);
+    else add(true, "ci", running.length ? `CI not red (${req.length} required, ${running.length} of ${ck.total} checks still running)` : `CI green (${req.length} required, ${ck.total} checks)`);
   }
   return out;
 }
