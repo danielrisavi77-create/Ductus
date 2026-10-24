@@ -114,11 +114,17 @@ function setup(texts: readonly string[] = ["Odlomak izmisljen jedan", "Odlomak i
     key(name: string, ctrl = false, shift = false, trusted = true) {
       return someProp("handleKeyDown", (f) => f(view, keyEvent(name, ctrl, shift, trusted)));
     },
-    beforeinput(inputType: string, data: string | null, trusted = true) {
-      domHandler("beforeinput", domEvent<InputEvent>("beforeinput", trusted, { inputType, data }));
+    /** A `beforeinput`; `replacement` is the text a browser puts in `dataTransfer` when `data` is null. */
+    beforeinput(inputType: string, data: string | null, trusted = true, replacement?: string) {
+      const dataTransfer = replacement === undefined ? null : { getData: (type: string) => (type === "text/plain" ? replacement : "") };
+      domHandler("beforeinput", domEvent<InputEvent>("beforeinput", trusted, { inputType, data, dataTransfer }));
     },
-    composition(type: "compositionstart" | "compositionend", trusted = true) {
-      domHandler(type, domEvent<CompositionEvent>(type, trusted));
+    composition(type: "compositionstart" | "compositionend", trusted = true, data = "") {
+      domHandler(type, domEvent<CompositionEvent>(type, trusted, { data }));
+    },
+    /** A spelling suggestion picked in the browser: Chromium gives the text in `dataTransfer`, not in `data`. */
+    replace(text: string, trusted = true) {
+      t.beforeinput("insertReplacementText", null, trusted, text);
     },
     /** One character from the keyboard: keydown, beforeinput insertText, then the DOM change. */
     typeChar(char: string, { key = true, keyTrusted = true, inputTrusted = true } = {}) {
@@ -481,7 +487,8 @@ describe("3d-1c QA t. 8: the rest of the table", () => {
     t.beforeinput("insertCompositionText", "k");
     t.view.dispatch(t.editor.state.tr.insertText("k"));
     await endTask();
-    t.composition("compositionend");
+    // The end of the composition gives the whole composed text; the change inserts only what is new.
+    t.composition("compositionend", true, "ka");
     t.view.dispatch(t.editor.state.tr.insertText("a"));
     const { sources, built } = await check(t);
     expect(sources).toEqual(["keyless-input"]);
@@ -499,12 +506,12 @@ describe("3d-1c QA t. 8: the rest of the table", () => {
   it("a trusted insertReplacementText is system-replacement; an untrusted one is unattributed", async () => {
     const t = setup();
     t.select(1, 8);
-    t.beforeinput("insertReplacementText", null);
+    t.replace("Odlomka");
     t.view.dispatch(t.editor.state.tr.insertText("Odlomka"));
     await endTask();
     t.wait(1_000);
     t.select(1, 8);
-    t.beforeinput("insertReplacementText", null, false);
+    t.replace("Odlomak", false);
     t.view.dispatch(t.editor.state.tr.insertText("Odlomak"));
     expect((await check(t)).sources).toEqual(["system-replacement", "unattributed"]);
   });
@@ -576,7 +583,7 @@ describe("3d-1c QA t. 8: the rest of the table", () => {
     it("a spelling replacement and a paste are taken by their first change only", () => {
       const t = setup();
       t.select(9);
-      t.beforeinput("insertReplacementText", null);
+      t.replace("ispravak");
       t.view.dispatch(t.editor.state.tr.insertText("ispravak"));
       t.view.dispatch(t.editor.state.tr.insertText(chunk));
       t.pasteText("zalijepljeno");
@@ -594,6 +601,78 @@ describe("3d-1c QA t. 8: the rest of the table", () => {
       t.view.dispatch(t.editor.state.tr.insertText("a"));
       expect(t.sources).toEqual(["editor"]);
       expect((t.observer as unknown as { inputData: unknown }).inputData).toBeNull();
+    });
+  });
+
+  describe("F-130", () => {
+    const chunk = "Pripremljeni izmisljeni odlomak";
+    const own = (t: Setup) => t.observer as unknown as { replacementText: unknown; composedText: unknown };
+
+    it("a picked spelling suggestion, then a program's change first, is not system-replacement", () => {
+      const t = setup();
+      t.select(1, 8);
+      t.replace("Odlomka");
+      t.view.dispatch(t.editor.state.tr.insertText(chunk));
+      expect(t.sources).toEqual(["unattributed"]);
+    });
+
+    it("a suggestion whose change inserts other text is not system-replacement, even without data", () => {
+      const t = setup();
+      t.select(1, 8);
+      t.beforeinput("insertReplacementText", null);
+      t.view.dispatch(t.editor.state.tr.insertText("Odlomka"));
+      expect(t.sources).toEqual(["unattributed"]);
+    });
+
+    it("a suggestion counts when its change inserts only the changed part of the suggested text", () => {
+      const t = setup();
+      // "Odlomak" -> "Odlomka": the editor replaces only "ak" with "ka".
+      t.select(6, 8);
+      t.replace("Odlomka");
+      t.view.dispatch(t.editor.state.tr.insertText("ka"));
+      expect(t.sources).toEqual(["system-replacement"]);
+      expect(own(t).replacementText).toBeNull();
+    });
+
+    it("a dead key or IME composition, then a program's change first, is not keyless-input", () => {
+      const t = setup();
+      t.select(9);
+      t.composition("compositionstart");
+      t.composition("compositionend", true, "é");
+      t.view.dispatch(t.editor.state.tr.insertText(chunk));
+      t.view.dispatch(t.editor.state.tr.insertText("é"));
+      expect(t.sources).toEqual(["unattributed", "unattributed"]);
+    });
+
+    it("composition text, then a program's change first, is not keyless-input", () => {
+      const t = setup();
+      t.select(9);
+      t.composition("compositionstart");
+      t.beforeinput("insertCompositionText", "k");
+      t.view.dispatch(t.editor.state.tr.insertText(chunk));
+      expect(t.sources).toEqual(["unattributed"]);
+    });
+
+    it("a composition without text, then a deletion, is not keyless-input", () => {
+      const t = setup();
+      t.select(1, 8);
+      t.composition("compositionstart");
+      t.view.dispatch(t.editor.state.tr.deleteSelection());
+      expect(t.sources).toEqual(["unattributed"]);
+    });
+
+    it("the suggested and composed text is dropped with the change and at the end of the task", async () => {
+      const t = setup();
+      t.select(9);
+      t.composition("compositionend", true, "é");
+      t.view.dispatch(t.editor.state.tr.insertText("é"));
+      expect(t.sources).toEqual(["keyless-input"]);
+      expect(own(t).composedText).toBeNull();
+      t.replace("ispravak");
+      t.composition("compositionend", true, "ü");
+      await endTask();
+      expect(own(t).replacementText).toBeNull();
+      expect(own(t).composedText).toBeNull();
     });
   });
 
@@ -710,7 +789,7 @@ describe("3d-1c QA t. 10: privacy", () => {
       expect(json).not.toMatch(/\d/);
     }
     // A key waits only for the beforeinput of its task, and nothing outlives the task.
-    const own = t.observer as unknown as { pendingKey: unknown; inputData: unknown };
+    const own = t.observer as unknown as { pendingKey: unknown; inputData: unknown; replacementText: unknown; composedText: unknown };
     t.key("x");
     t.beforeinput("insertText", "x");
     expect(own.pendingKey).toBeNull();
@@ -719,6 +798,8 @@ describe("3d-1c QA t. 10: privacy", () => {
     await endTask();
     expect(own.pendingKey).toBeNull();
     expect(own.inputData).toBeNull();
+    expect(own.replacementText ?? null).toBeNull();
+    expect(own.composedText ?? null).toBeNull();
     expect(t.observer.observation).toEqual(NO_OBSERVATION);
   });
 
