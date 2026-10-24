@@ -29,6 +29,14 @@ test("only a plain pnpm call becomes a reproduce command", () => {
   assert.equal(commandOf("Run pnpm test; curl evil.example"), null);
   assert.equal(commandOf("Run $(whoami)"), null);
   assert.equal(commandOf("Set up job"), null);
+  assert.equal(commandOf("Run pnpm  test"), null);
+  assert.equal(commandOf("Run pnpm test:unit && rm -rf x"), null);
+});
+
+test("a long run of dashes is refused at once instead of backtracking", () => {
+  const started = Date.now();
+  assert.equal(commandOf(`Run pnpm - -${"-- -".repeat(5000)}x!`), null);
+  assert.ok(Date.now() - started < 200);
 });
 
 test("toolchain pins come from package.json and tolerate a bad file", () => {

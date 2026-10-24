@@ -10,7 +10,8 @@ const GITHUB_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/actions\/runs\/\d+
 // text that is not echoed to the terminal.
 const SAFE_NAME = /^[\w .,()/:=@+-]{1,100}$/;
 const VERSION = /^[\w .<>=~^|*@-]{1,40}$/;
-const COMMAND = /^Run (pnpm [\w:.-]+(?: --?[\w.-]+(?:=[\w.:/-]+)?)*)$/;
+const RUN_STEP = /^Run (pnpm [^\n]{1,200})$/;
+const WORD = /^-{0,2}\w[\w:.=/-]{0,60}$/;
 const FAILED = new Set(["failure", "timed_out"]);
 
 export function parseCapsuleArgs(argv) {
@@ -29,7 +30,11 @@ const link = (url) => (typeof url === "string" && GITHUB_URL.test(url) ? url : n
 
 /** The shell command of a "Run <command>" step when it is a plain pnpm call; null otherwise. */
 export function commandOf(stepName) {
-  return COMMAND.exec(String(stepName ?? ""))?.[1] ?? null;
+  const rest = RUN_STEP.exec(String(stepName ?? ""))?.[1];
+  if (rest === undefined) return null;
+  // Words are checked one by one after a split, so no pattern can backtrack over the whole text.
+  const words = rest.split(" ");
+  return words.length <= 12 && words.every((w, i) => (i === 0 ? w === "pnpm" : WORD.test(w))) ? rest : null;
 }
 
 /** Toolchain pins from a package.json text; null for a field that is missing or not a string. */
