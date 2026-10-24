@@ -217,5 +217,9 @@
     "design@knowledge-work-plugins": false,
     "productivity@knowledge-work-plugins": false,
     "pdf-viewer@knowledge-work-plugins": false
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "node scripts/engineering/claude-statusline.mjs"
   }
 }
