@@ -26,6 +26,10 @@ export function parseCapsuleArgs(argv) {
   return { run, json };
 }
 
+// Every value that is not a link is filtered here, once, so the text and the JSON output
+// carry the same thing and neither can print a name outside the allowed shape.
+const shown = (s) => (SAFE_NAME.test(String(s ?? "")) ? String(s) : "<not printed>");
+const version = (s) => (VERSION.test(String(s ?? "")) ? String(s) : "<not printed>");
 const link = (url) => (typeof url === "string" && GITHUB_URL.test(url) ? url : null);
 
 /** The shell command of a "Run <command>" step when it is a plain pnpm call; null otherwise. */
@@ -45,7 +49,7 @@ export function toolchainOf(packageJsonText) {
   } catch {
     return { packageManager: null, node: null };
   }
-  const text = (v) => (typeof v === "string" ? v : null);
+  const text = (v) => (typeof v === "string" ? version(v) : null);
   return { packageManager: text(pkg?.packageManager), node: text(pkg?.engines?.node) };
 }
 
@@ -59,27 +63,25 @@ export function buildCapsule({ run, jobs, artifacts, packageJsonText }) {
   const failedJobs = jobs
     .filter((job) => FAILED.has(job.conclusion))
     .map((job) => ({
-      name: String(job.name),
+      name: shown(job.name),
       url: link(job.html_url),
       failedSteps: (job.steps ?? [])
         .filter((step) => FAILED.has(step.conclusion))
-        .map((step) => ({ number: step.number, name: String(step.name), command: commandOf(step.name) })),
+        .map((step) => ({ number: step.number, name: shown(step.name), command: commandOf(step.name) })),
     }));
   return {
     runId: run.id,
     url: link(run.html_url),
-    event: String(run.event),
+    event: shown(run.event),
     attempt: run.run_attempt,
     headSha: run.head_sha,
-    branch: String(run.head_branch ?? ""),
+    branch: shown(run.head_branch ?? ""),
     failedJobs,
-    artifacts: artifacts.map((a) => ({ name: String(a.name), expired: a.expired === true, sizeBytes: a.size_in_bytes })),
+    artifacts: artifacts.map((a) => ({ name: shown(a.name), expired: a.expired === true, sizeBytes: a.size_in_bytes })),
     toolchain: toolchainOf(packageJsonText),
   };
 }
 
-const version = (s) => (VERSION.test(String(s ?? "")) ? String(s) : "<not printed>");
-const shown = (s) => (SAFE_NAME.test(String(s ?? "")) ? String(s) : "<not printed>");
 
 export function renderCapsule(capsule) {
   const lines = [

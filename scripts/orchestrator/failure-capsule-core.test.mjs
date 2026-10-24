@@ -83,3 +83,19 @@ test("text output prints no unsafe name or link and carries no log text", () => 
   assert.match(out, /reproduce: pnpm lint/);
   assert.match(out, /node >=24/);
 });
+
+test("the capsule itself carries no value outside the allowed shape, so --json cannot print one", () => {
+  const capsule = buildCapsule({
+    run: { ...RUN, head_branch: "line1\nline2", event: "pull\u001b[0m" },
+    jobs: [job("multi\nline job", "failure", [step(1, "bad\nstep", "failure")])],
+    artifacts: [{ name: "art\nifact", expired: false, size_in_bytes: 1 }],
+    packageJsonText: JSON.stringify({ packageManager: "pnpm@1\nevil", engines: { node: ">=24" } }),
+  });
+  const json = JSON.stringify(capsule);
+  assert.ok(!json.includes("line1"));
+  assert.ok(!json.includes("evil"));
+  assert.ok(!json.includes("multi"));
+  assert.ok(!json.includes("ifact"));
+  assert.ok(!json.includes("bad"));
+  assert.equal(capsule.toolchain.node, ">=24");
+});
