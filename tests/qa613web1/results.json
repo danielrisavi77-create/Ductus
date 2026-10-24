@@ -1,0 +1,523 @@
+{
+  "sourceHead": "98471f3ba5fafe112dab510edce5eef488944351",
+  "node": "v24.19.0",
+  "cases": [
+    {
+      "name": "source blobs and package caller are exact",
+      "status": "PASS"
+    },
+    {
+      "name": "median and nearest-rank p95: empty, singleton, odd/even, n=19/20/21/100/200",
+      "status": "PASS"
+    },
+    {
+      "name": "skip incomplete/nonfinal conclusions and invalid/reversed timestamps; accept zero",
+      "status": "PASS"
+    },
+    {
+      "name": "negative/invalid wall excluded, valid job retained; zero wall included",
+      "status": "PASS"
+    },
+    {
+      "name": "matrix names remain distinct and tied critical names deterministic",
+      "status": "PASS"
+    },
+    {
+      "name": "queueMinutes library boundaries",
+      "status": "PASS"
+    },
+    {
+      "name": "shardWhatIf library formula and documented rejection boundaries",
+      "status": "PASS"
+    },
+    {
+      "name": "parser valid leap day/date edges, default and limit boundaries",
+      "status": "PASS"
+    },
+    {
+      "name": "invalid calendar dates rejected by parser",
+      "status": "FAIL",
+      "error": "AssertionError [ERR_ASSERTION]: Missing expected exception: 2026-02-29\n    at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:106:39\n    at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)\n    at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:103:7"
+    },
+    {
+      "name": "all invalid CLI limits/unknown/missing arguments exit 2 before gh",
+      "status": "FAIL",
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ Error: spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node EPERM\n+     at Object.spawnSync (node:internal/child_process:1160:20)\n+     at spawnSync (node:child_process:928:24)\n+     at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:34:18)\n+     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:112:36\n+     at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)\n+     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:108:7 {\n+   code: 'EPERM',\n+   errno: -1,\n+   path: '/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node',\n+   spawnargs: [\n+     'scripts/orchestrator/ci-twin.mjs'\n+   ],\n+   syscall: 'spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node'\n+ }\n- undefined\n\n    at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:40:10)\n    at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:112:36\n    at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)\n    at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:108:7"
+    },
+    {
+      "name": "real pnpm caller offline: --limit 1, pages, JSON statistics",
+      "status": "FAIL",
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ Error: spawnSync pnpm EPERM\n+     at Object.spawnSync (node:internal/child_process:1160:20)\n+     at spawnSync (node:child_process:928:24)\n+     at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:34:18)\n+     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:115:11\n+     at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)\n+     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:114:48 {\n+   code: 'EPERM',\n+   errno: -1,\n+   path: 'pnpm',\n+   spawnargs: [\n+     '--silent',\n+     'orch:twin',\n+     '--since',\n+     '2026-10-23',\n+     '--limit',\n+     '1',\n+     '--json'\n+   ],\n+   syscall: 'spawnSync pnpm'\n+ }\n- undefined\n\n    at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:40:10)\n    at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:115:11\n    at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)\n    at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:114:48"
+    },
+    {
+      "name": "real pnpm caller offline: --limit 100, pages, JSON statistics",
+      "status": "FAIL",
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ Error: spawnSync pnpm EPERM\n+     at Object.spawnSync (node:internal/child_process:1160:20)\n+     at spawnSync (node:child_process:928:24)\n+     at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:34:18)\n+     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:115:11\n+     at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)\n+     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:114:48 {\n+   code: 'EPERM',\n+   errno: -1,\n+   path: 'pnpm',\n+   spawnargs: [\n+     '--silent',\n+     'orch:twin',\n+     '--since',\n+     '2026-10-23',\n+     '--limit',\n+     '100',\n+     '--json'\n+   ],\n+   syscall: 'spawnSync pnpm'\n+ }\n- undefined\n\n    at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:40:10)\n    at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:115:11\n    at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)\n    at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:114:48"
+    },
+    {
+      "name": "real pnpm caller offline: --limit 101, pages, JSON statistics",
+      "status": "FAIL",
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ Error: spawnSync pnpm EPERM\n+     at Object.spawnSync (node:internal/child_process:1160:20)\n+     at spawnSync (node:child_process:928:24)\n+     at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:34:18)\n+     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:115:11\n+     at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)\n+     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:114:48 {\n+   code: 'EPERM',\n+   errno: -1,\n+   path: 'pnpm',\n+   spawnargs: [\n+     '--silent',\n+     'orch:twin',\n+     '--since',\n+     '2026-10-23',\n+     '--limit',\n+     '101',\n+     '--json'\n+   ],\n+   syscall: 'spawnSync pnpm'\n+ }\n- undefined\n\n    at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:40:10)\n    at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:115:11\n    at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)\n    at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:114:48"
+    },
+    {
+      "name": "real pnpm caller offline: --limit 150, pages, JSON statistics",
+      "status": "FAIL",
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ Error: spawnSync pnpm EPERM\n+     at Object.spawnSync (node:internal/child_process:1160:20)\n+     at spawnSync (node:child_process:928:24)\n+     at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:34:18)\n+     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:115:11\n+     at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)\n+     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:114:48 {\n+   code: 'EPERM',\n+   errno: -1,\n+   path: 'pnpm',\n+   spawnargs: [\n+     '--silent',\n+     'orch:twin',\n+     '--since',\n+     '2026-10-23',\n+     '--limit',\n+     '150',\n+     '--json'\n+   ],\n+   syscall: 'spawnSync pnpm'\n+ }\n- undefined\n\n    at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:40:10)\n    at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:115:11\n    at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)\n    at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:114:48"
+    },
+    {
+      "name": "real pnpm caller offline: --limit 200, pages, JSON statistics",
+      "status": "FAIL",
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ Error: spawnSync pnpm EPERM\n+     at Object.spawnSync (node:internal/child_process:1160:20)\n+     at spawnSync (node:child_process:928:24)\n+     at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:34:18)\n+     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:115:11\n+     at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)\n+     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:114:48 {\n+   code: 'EPERM',\n+   errno: -1,\n+   path: 'pnpm',\n+   spawnargs: [\n+     '--silent',\n+     'orch:twin',\n+     '--since',\n+     '2026-10-23',\n+     '--limit',\n+     '200',\n+     '--json'\n+   ],\n+   syscall: 'spawnSync pnpm'\n+ }\n- undefined\n\n    at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:40:10)\n    at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:115:11\n    at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)\n    at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:114:48"
+    },
+    {
+      "name": "short run page stops below requested limit; default takes 40",
+      "status": "FAIL",
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ Error: spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node EPERM\n+     at Object.spawnSync (node:internal/child_process:1160:20)\n+     at spawnSync (node:child_process:928:24)\n+     at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:34:18)\n+     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:127:11\n+     at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)\n+     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:126:7 {\n+   code: 'EPERM',\n+   errno: -1,\n+   path: '/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node',\n+   spawnargs: [\n+     'scripts/orchestrator/ci-twin.mjs',\n+     '--since',\n+     '2026-10-23',\n+     '--limit',\n+     '200',\n+     '--json'\n+   ],\n+   syscall: 'spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node'\n+ }\n- undefined\n\n    at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:40:10)\n    at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:127:11\n    at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)\n    at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:126:7"
+    },
+    {
+      "name": "jobs paginate 100+1 and exact 100 with trailing empty page",
+      "status": "FAIL",
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ Error: spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node EPERM\n+     at Object.spawnSync (node:internal/child_process:1160:20)\n+     at spawnSync (node:child_process:928:24)\n+     at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:34:18)\n+     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:133:13\n+     at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)\n+     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:131:7 {\n+   code: 'EPERM',\n+   errno: -1,\n+   path: '/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node',\n+   spawnargs: [\n+     'scripts/orchestrator/ci-twin.mjs',\n+     '--since',\n+     '2026-10-23',\n+     '--limit',\n+     '1',\n+     '--json'\n+   ],\n+   syscall: 'spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node'\n+ }\n- undefined\n\n    at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:40:10)\n    at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:133:13\n    at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)\n    at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:131:7"
+    },
+    {
+      "name": "empty/all skipped JSON and text; text rounding and no library-only output",
+      "status": "FAIL",
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ Error: spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node EPERM\n+     at Object.spawnSync (node:internal/child_process:1160:20)\n+     at spawnSync (node:child_process:928:24)\n+     at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:34:18)\n+     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:139:23\n+     at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)\n+     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:137:7 {\n+   code: 'EPERM',\n+   errno: -1,\n+   path: '/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node',\n+   spawnargs: [\n+     'scripts/orchestrator/ci-twin.mjs',\n+     '--since',\n+     '2026-10-23',\n+     '--limit',\n+     '1',\n+     '--json'\n+   ],\n+   syscall: 'spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node'\n+ }\n- undefined\n\n    at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:40:10)\n    at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:139:23\n    at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)\n    at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:137:7"
+    },
+    {
+      "name": "since inclusive date query is forwarded exactly at year/leap boundaries",
+      "status": "FAIL",
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ Error: spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node EPERM\n+     at Object.spawnSync (node:internal/child_process:1160:20)\n+     at spawnSync (node:child_process:928:24)\n+     at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:34:18)\n+     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:145:75\n+     at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)\n+     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:144:7 {\n+   code: 'EPERM',\n+   errno: -1,\n+   path: '/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node',\n+   spawnargs: [\n+     'scripts/orchestrator/ci-twin.mjs',\n+     '--since',\n+     '2024-02-29',\n+     '--json'\n+   ],\n+   syscall: 'spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node'\n+ }\n- undefined\n\n    at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:40:10)\n    at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:145:75\n    at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)\n    at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:144:7"
+    },
+    {
+      "name": "invalid calendar date CLI exits 2 without gh",
+      "status": "FAIL",
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ Error: spawnSync pnpm EPERM\n+     at Object.spawnSync (node:internal/child_process:1160:20)\n+     at spawnSync (node:child_process:928:24)\n+     at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:34:18)\n+     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:148:11\n+     at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)\n+     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:147:7 {\n+   code: 'EPERM',\n+   errno: -1,\n+   path: 'pnpm',\n+   spawnargs: [\n+     '--silent',\n+     'orch:twin',\n+     '--since',\n+     '2026-02-30',\n+     '--json'\n+   ],\n+   syscall: 'spawnSync pnpm'\n+ }\n- undefined\n\n    at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:40:10)\n    at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:148:11\n    at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)\n    at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:147:7"
+    },
+    {
+      "name": "REST failures/malformed JSON exit 2 without partial success output",
+      "status": "FAIL",
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ Error: spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node EPERM\n+     at Object.spawnSync (node:internal/child_process:1160:20)\n+     at spawnSync (node:child_process:928:24)\n+     at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:34:18)\n+     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:151:123\n+     at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)\n+     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:150:7 {\n+   code: 'EPERM',\n+   errno: -1,\n+   path: '/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node',\n+   spawnargs: [\n+     'scripts/orchestrator/ci-twin.mjs',\n+     '--since',\n+     '2026-10-23',\n+     '--limit',\n+     '1',\n+     '--json'\n+   ],\n+   syscall: 'spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node'\n+ }\n- undefined\n\n    at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:40:10)\n    at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:151:123\n    at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)\n    at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:150:7"
+    },
+    {
+      "name": "ghList rejects malformed keyed body and page cap rather than truncating",
+      "status": "PASS"
+    },
+    {
+      "name": "CLI mixed skipped/incomplete/negative wall and matrix names",
+      "status": "FAIL",
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ Error: spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node EPERM\n+     at Object.spawnSync (node:internal/child_process:1160:20)\n+     at spawnSync (node:child_process:928:24)\n+     at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:34:18)\n+     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:159:21\n+     at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)\n+     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:157:7 {\n+   code: 'EPERM',\n+   errno: -1,\n+   path: '/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node',\n+   spawnargs: [\n+     'scripts/orchestrator/ci-twin.mjs',\n+     '--since',\n+     '2026-10-23',\n+     '--limit',\n+     '2',\n+     '--json'\n+   ],\n+   syscall: 'spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node'\n+ }\n- undefined\n\n    at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:40:10)\n    at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:159:21\n    at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)\n    at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:157:7"
+    },
+    {
+      "name": "valid GitHub job name __proto__ retained by actual pnpm caller",
+      "status": "FAIL",
+      "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n+ actual - expected\n\n+ Error: spawnSync pnpm EPERM\n+     at Object.spawnSync (node:internal/child_process:1160:20)\n+     at spawnSync (node:child_process:928:24)\n+     at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:34:18)\n+     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:162:11\n+     at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)\n+     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:161:7 {\n+   code: 'EPERM',\n+   errno: -1,\n+   path: 'pnpm',\n+   spawnargs: [\n+     '--silent',\n+     'orch:twin',\n+     '--since',\n+     '2026-10-23',\n+     '--limit',\n+     '1',\n+     '--json'\n+   ],\n+   syscall: 'spawnSync pnpm'\n+ }\n- undefined\n\n    at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:40:10)\n    at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:162:11\n    at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)\n    at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:161:7"
+    },
+    {
+      "name": "ordinary Object member job names retained",
+      "status": "PASS"
+    }
+  ],
+  "executions": [
+    {
+      "command": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node",
+        "scripts/orchestrator/ci-twin.mjs"
+      ],
+      "status": 2,
+      "signal": null,
+      "error": "spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node EPERM",
+      "stdout": "",
+      "stderr": "",
+      "calls": []
+    },
+    {
+      "command": [
+        "pnpm",
+        "--silent",
+        "orch:twin",
+        "--since",
+        "2026-10-23",
+        "--limit",
+        "1",
+        "--json"
+      ],
+      "status": 2,
+      "signal": null,
+      "error": "spawnSync pnpm EPERM",
+      "stdout": "",
+      "stderr": "",
+      "calls": [
+        [
+          "api",
+          "repos/{owner}/{repo}/actions/workflows/ci.yml/runs?status=success&event=pull_request&created=>=2026-10-23&per_page=100&page=1"
+        ]
+      ]
+    },
+    {
+      "command": [
+        "pnpm",
+        "--silent",
+        "orch:twin",
+        "--since",
+        "2026-10-23",
+        "--limit",
+        "100",
+        "--json"
+      ],
+      "status": 2,
+      "signal": null,
+      "error": "spawnSync pnpm EPERM",
+      "stdout": "",
+      "stderr": "",
+      "calls": [
+        [
+          "api",
+          "repos/{owner}/{repo}/actions/workflows/ci.yml/runs?status=success&event=pull_request&created=>=2026-10-23&per_page=100&page=1"
+        ]
+      ]
+    },
+    {
+      "command": [
+        "pnpm",
+        "--silent",
+        "orch:twin",
+        "--since",
+        "2026-10-23",
+        "--limit",
+        "101",
+        "--json"
+      ],
+      "status": 2,
+      "signal": null,
+      "error": "spawnSync pnpm EPERM",
+      "stdout": "",
+      "stderr": "",
+      "calls": [
+        [
+          "api",
+          "repos/{owner}/{repo}/actions/workflows/ci.yml/runs?status=success&event=pull_request&created=>=2026-10-23&per_page=100&page=1"
+        ]
+      ]
+    },
+    {
+      "command": [
+        "pnpm",
+        "--silent",
+        "orch:twin",
+        "--since",
+        "2026-10-23",
+        "--limit",
+        "150",
+        "--json"
+      ],
+      "status": 2,
+      "signal": null,
+      "error": "spawnSync pnpm EPERM",
+      "stdout": "",
+      "stderr": "",
+      "calls": [
+        [
+          "api",
+          "repos/{owner}/{repo}/actions/workflows/ci.yml/runs?status=success&event=pull_request&created=>=2026-10-23&per_page=100&page=1"
+        ]
+      ]
+    },
+    {
+      "command": [
+        "pnpm",
+        "--silent",
+        "orch:twin",
+        "--since",
+        "2026-10-23",
+        "--limit",
+        "200",
+        "--json"
+      ],
+      "status": 2,
+      "signal": null,
+      "error": "spawnSync pnpm EPERM",
+      "stdout": "",
+      "stderr": "",
+      "calls": [
+        [
+          "api",
+          "repos/{owner}/{repo}/actions/workflows/ci.yml/runs?status=success&event=pull_request&created=>=2026-10-23&per_page=100&page=1"
+        ]
+      ]
+    },
+    {
+      "command": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node",
+        "scripts/orchestrator/ci-twin.mjs",
+        "--since",
+        "2026-10-23",
+        "--limit",
+        "200",
+        "--json"
+      ],
+      "status": 2,
+      "signal": null,
+      "error": "spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node EPERM",
+      "stdout": "",
+      "stderr": "",
+      "calls": [
+        [
+          "api",
+          "repos/{owner}/{repo}/actions/workflows/ci.yml/runs?status=success&event=pull_request&created=>=2026-10-23&per_page=100&page=1"
+        ]
+      ]
+    },
+    {
+      "command": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node",
+        "scripts/orchestrator/ci-twin.mjs",
+        "--since",
+        "2026-10-23",
+        "--limit",
+        "1",
+        "--json"
+      ],
+      "status": 2,
+      "signal": null,
+      "error": "spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node EPERM",
+      "stdout": "",
+      "stderr": "",
+      "calls": [
+        [
+          "api",
+          "repos/{owner}/{repo}/actions/workflows/ci.yml/runs?status=success&event=pull_request&created=>=2026-10-23&per_page=100&page=1"
+        ]
+      ]
+    },
+    {
+      "command": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node",
+        "scripts/orchestrator/ci-twin.mjs",
+        "--since",
+        "2026-10-23",
+        "--limit",
+        "1",
+        "--json"
+      ],
+      "status": 2,
+      "signal": null,
+      "error": "spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node EPERM",
+      "stdout": "",
+      "stderr": "",
+      "calls": [
+        [
+          "api",
+          "repos/{owner}/{repo}/actions/workflows/ci.yml/runs?status=success&event=pull_request&created=>=2026-10-23&per_page=100&page=1"
+        ]
+      ]
+    },
+    {
+      "command": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node",
+        "scripts/orchestrator/ci-twin.mjs",
+        "--since",
+        "2024-02-29",
+        "--json"
+      ],
+      "status": 2,
+      "signal": null,
+      "error": "spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node EPERM",
+      "stdout": "",
+      "stderr": "",
+      "calls": [
+        [
+          "api",
+          "repos/{owner}/{repo}/actions/workflows/ci.yml/runs?status=success&event=pull_request&created=>=2024-02-29&per_page=100&page=1"
+        ]
+      ]
+    },
+    {
+      "command": [
+        "pnpm",
+        "--silent",
+        "orch:twin",
+        "--since",
+        "2026-02-30",
+        "--json"
+      ],
+      "status": 2,
+      "signal": null,
+      "error": "spawnSync pnpm EPERM",
+      "stdout": "",
+      "stderr": "",
+      "calls": [
+        [
+          "api",
+          "repos/{owner}/{repo}/actions/workflows/ci.yml/runs?status=success&event=pull_request&created=>=2026-02-30&per_page=100&page=1"
+        ]
+      ]
+    },
+    {
+      "command": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node",
+        "scripts/orchestrator/ci-twin.mjs",
+        "--since",
+        "2026-10-23",
+        "--limit",
+        "1",
+        "--json"
+      ],
+      "status": 2,
+      "signal": null,
+      "error": "spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node EPERM",
+      "stdout": "",
+      "stderr": "",
+      "calls": [
+        [
+          "api",
+          "repos/{owner}/{repo}/actions/workflows/ci.yml/runs?status=success&event=pull_request&created=>=2026-10-23&per_page=100&page=1"
+        ]
+      ]
+    },
+    {
+      "command": [
+        "/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node",
+        "scripts/orchestrator/ci-twin.mjs",
+        "--since",
+        "2026-10-23",
+        "--limit",
+        "2",
+        "--json"
+      ],
+      "status": 2,
+      "signal": null,
+      "error": "spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node EPERM",
+      "stdout": "",
+      "stderr": "",
+      "calls": [
+        [
+          "api",
+          "repos/{owner}/{repo}/actions/workflows/ci.yml/runs?status=success&event=pull_request&created=>=2026-10-23&per_page=100&page=1"
+        ]
+      ]
+    },
+    {
+      "command": [
+        "pnpm",
+        "--silent",
+        "orch:twin",
+        "--since",
+        "2026-10-23",
+        "--limit",
+        "1",
+        "--json"
+      ],
+      "status": 2,
+      "signal": null,
+      "error": "spawnSync pnpm EPERM",
+      "stdout": "",
+      "stderr": "",
+      "calls": [
+        [
+          "api",
+          "repos/{owner}/{repo}/actions/workflows/ci.yml/runs?status=success&event=pull_request&created=>=2026-10-23&per_page=100&page=1"
+        ]
+      ]
+    }
+  ],
+  "observations": {
+    "libraryOnly": {
+      "fractional": {
+        "shards": 1.5,
+        "wall": 7.333333333333333,
+        "runnerMinutes": 11,
+        "savedWall": 2.666666666666667,
+        "extraRunnerMinutes": 1
+      },
+      "infinite": {
+        "shards": null,
+        "wall": 2,
+        "runnerMinutes": null,
+        "savedWall": 8,
+        "extraRunnerMinutes": null
+      },
+      "nonfinalWithInconsistentSuccess": 3
+    },
+    "invalidDates": [
+      {
+        "since": "2026-02-29",
+        "accepted": {
+          "since": "2026-02-29",
+          "json": false,
+          "limit": 40
+        }
+      },
+      {
+        "since": "2026-02-30",
+        "accepted": {
+          "since": "2026-02-30",
+          "json": false,
+          "limit": 40
+        }
+      },
+      {
+        "since": "2026-04-31",
+        "accepted": {
+          "since": "2026-04-31",
+          "json": false,
+          "limit": 40
+        }
+      },
+      {
+        "since": "2026-13-01",
+        "accepted": {
+          "since": "2026-13-01",
+          "json": false,
+          "limit": 40
+        }
+      },
+      {
+        "since": "2026-00-01",
+        "accepted": {
+          "since": "2026-00-01",
+          "json": false,
+          "limit": 40
+        }
+      },
+      {
+        "since": "2026-10-00",
+        "accepted": {
+          "since": "2026-10-00",
+          "json": false,
+          "limit": 40
+        }
+      }
+    ],
+    "numericArguments": [
+      {
+        "limit": "1e2",
+        "parsed": {
+          "since": "2026-10-23",
+          "json": false,
+          "limit": 100
+        }
+      },
+      {
+        "limit": "0x64",
+        "parsed": {
+          "since": "2026-10-23",
+          "json": false,
+          "limit": 100
+        }
+      },
+      {
+        "limit": " 2 ",
+        "parsed": {
+          "since": "2026-10-23",
+          "json": false,
+          "limit": 2
+        }
+      }
+    ]
+  },
+  "summary": {
+    "pass": 10,
+    "fail": 15
+  }
+}

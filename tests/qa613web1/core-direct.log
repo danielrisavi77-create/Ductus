@@ -1,0 +1,15 @@
+✔ job minutes need a finished job with sane timestamps (0.777461ms)
+✔ queue minutes are created to started (0.181646ms)
+✔ run shape picks the slowest job and drops unfinished ones (0.678729ms)
+✔ summary orders jobs by p50 and counts the slowest job per run (0.418011ms)
+✔ shard what-if keeps setup on every shard and prices the extra runners (0.313061ms)
+✔ arguments are strict (0.248342ms)
+✔ rendering says it is not a verdict (0.361641ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 10.364321

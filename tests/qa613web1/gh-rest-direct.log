@@ -1,0 +1,18 @@
+✔ toPr maps REST fields to the gh-CLI names (1.596178ms)
+✔ prView reads an UNKNOWN mergeable once more, and only for an open PR (1.701351ms)
+✔ mergedPrs keeps merged PRs from the date on, ascending (0.363356ms)
+✔ checkRollup joins check runs and statuses in the rollup shape evaluateChecks reads (0.641368ms)
+✔ ccrThreads maps CCR threads to the node shape and reads authors only when needed (0.807899ms)
+✔ graphqlThreads reads every page with the cursor and keeps open threads open (0.505035ms)
+✔ graphqlThreads throws on every answer that is not a complete thread list (2.105629ms)
+✔ reviewThreads uses graphql, falls back to the ccr route, and throws when both fail (0.520255ms)
+✔ ghList requests pages by number until a short page, and picks a keyed array (0.80617ms)
+✔ mainPathsSince reads the compare once, whole, and fails closed at the 300-file cap (review495a) (1.053675ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 15.469208

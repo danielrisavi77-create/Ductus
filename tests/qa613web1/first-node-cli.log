@@ -1,0 +1,3 @@
+ci-twin failed: Command failed: gh api repos/{owner}/{repo}/actions/workflows/ci.yml/runs?status=success&event=pull_request&created=>=2026-10-23&per_page=100&page=1
+Get "https://api.github.com/repos/danielrisavi77-create/Ductus/actions/workflows/ci.yml/runs?status=success&event=pull_request&created=>=2026-10-23&per_page=100&page=1": proxyconnect tcp: dial tcp 172.31.0.93:8080: socket: operation not permitted
+

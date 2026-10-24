@@ -1,0 +1,360 @@
+PASS source blobs and package caller are exact
+PASS median and nearest-rank p95: empty, singleton, odd/even, n=19/20/21/100/200
+PASS skip incomplete/nonfinal conclusions and invalid/reversed timestamps; accept zero
+PASS negative/invalid wall excluded, valid job retained; zero wall included
+PASS matrix names remain distinct and tied critical names deterministic
+PASS queueMinutes library boundaries
+PASS shardWhatIf library formula and documented rejection boundaries
+PASS parser valid leap day/date edges, default and limit boundaries
+FAIL invalid calendar dates rejected by parser Missing expected exception: 2026-02-29
+FAIL all invalid CLI limits/unknown/missing arguments exit 2 before gh Expected values to be strictly equal:
++ actual - expected
+
++ Error: spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node EPERM
++     at Object.spawnSync (node:internal/child_process:1160:20)
++     at spawnSync (node:child_process:928:24)
++     at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:34:18)
++     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:112:36
++     at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)
++     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:108:7 {
++   code: 'EPERM',
++   errno: -1,
++   path: '/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node',
++   spawnargs: [
++     'scripts/orchestrator/ci-twin.mjs'
++   ],
++   syscall: 'spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node'
++ }
+- undefined
+
+FAIL real pnpm caller offline: --limit 1, pages, JSON statistics Expected values to be strictly equal:
++ actual - expected
+
++ Error: spawnSync pnpm EPERM
++     at Object.spawnSync (node:internal/child_process:1160:20)
++     at spawnSync (node:child_process:928:24)
++     at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:34:18)
++     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:115:11
++     at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)
++     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:114:48 {
++   code: 'EPERM',
++   errno: -1,
++   path: 'pnpm',
++   spawnargs: [
++     '--silent',
++     'orch:twin',
++     '--since',
++     '2026-10-23',
++     '--limit',
++     '1',
++     '--json'
++   ],
++   syscall: 'spawnSync pnpm'
++ }
+- undefined
+
+FAIL real pnpm caller offline: --limit 100, pages, JSON statistics Expected values to be strictly equal:
++ actual - expected
+
++ Error: spawnSync pnpm EPERM
++     at Object.spawnSync (node:internal/child_process:1160:20)
++     at spawnSync (node:child_process:928:24)
++     at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:34:18)
++     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:115:11
++     at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)
++     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:114:48 {
++   code: 'EPERM',
++   errno: -1,
++   path: 'pnpm',
++   spawnargs: [
++     '--silent',
++     'orch:twin',
++     '--since',
++     '2026-10-23',
++     '--limit',
++     '100',
++     '--json'
++   ],
++   syscall: 'spawnSync pnpm'
++ }
+- undefined
+
+FAIL real pnpm caller offline: --limit 101, pages, JSON statistics Expected values to be strictly equal:
++ actual - expected
+
++ Error: spawnSync pnpm EPERM
++     at Object.spawnSync (node:internal/child_process:1160:20)
++     at spawnSync (node:child_process:928:24)
++     at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:34:18)
++     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:115:11
++     at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)
++     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:114:48 {
++   code: 'EPERM',
++   errno: -1,
++   path: 'pnpm',
++   spawnargs: [
++     '--silent',
++     'orch:twin',
++     '--since',
++     '2026-10-23',
++     '--limit',
++     '101',
++     '--json'
++   ],
++   syscall: 'spawnSync pnpm'
++ }
+- undefined
+
+FAIL real pnpm caller offline: --limit 150, pages, JSON statistics Expected values to be strictly equal:
++ actual - expected
+
++ Error: spawnSync pnpm EPERM
++     at Object.spawnSync (node:internal/child_process:1160:20)
++     at spawnSync (node:child_process:928:24)
++     at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:34:18)
++     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:115:11
++     at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)
++     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:114:48 {
++   code: 'EPERM',
++   errno: -1,
++   path: 'pnpm',
++   spawnargs: [
++     '--silent',
++     'orch:twin',
++     '--since',
++     '2026-10-23',
++     '--limit',
++     '150',
++     '--json'
++   ],
++   syscall: 'spawnSync pnpm'
++ }
+- undefined
+
+FAIL real pnpm caller offline: --limit 200, pages, JSON statistics Expected values to be strictly equal:
++ actual - expected
+
++ Error: spawnSync pnpm EPERM
++     at Object.spawnSync (node:internal/child_process:1160:20)
++     at spawnSync (node:child_process:928:24)
++     at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:34:18)
++     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:115:11
++     at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)
++     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:114:48 {
++   code: 'EPERM',
++   errno: -1,
++   path: 'pnpm',
++   spawnargs: [
++     '--silent',
++     'orch:twin',
++     '--since',
++     '2026-10-23',
++     '--limit',
++     '200',
++     '--json'
++   ],
++   syscall: 'spawnSync pnpm'
++ }
+- undefined
+
+FAIL short run page stops below requested limit; default takes 40 Expected values to be strictly equal:
++ actual - expected
+
++ Error: spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node EPERM
++     at Object.spawnSync (node:internal/child_process:1160:20)
++     at spawnSync (node:child_process:928:24)
++     at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:34:18)
++     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:127:11
++     at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)
++     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:126:7 {
++   code: 'EPERM',
++   errno: -1,
++   path: '/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node',
++   spawnargs: [
++     'scripts/orchestrator/ci-twin.mjs',
++     '--since',
++     '2026-10-23',
++     '--limit',
++     '200',
++     '--json'
++   ],
++   syscall: 'spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node'
++ }
+- undefined
+
+FAIL jobs paginate 100+1 and exact 100 with trailing empty page Expected values to be strictly equal:
++ actual - expected
+
++ Error: spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node EPERM
++     at Object.spawnSync (node:internal/child_process:1160:20)
++     at spawnSync (node:child_process:928:24)
++     at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:34:18)
++     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:133:13
++     at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)
++     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:131:7 {
++   code: 'EPERM',
++   errno: -1,
++   path: '/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node',
++   spawnargs: [
++     'scripts/orchestrator/ci-twin.mjs',
++     '--since',
++     '2026-10-23',
++     '--limit',
++     '1',
++     '--json'
++   ],
++   syscall: 'spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node'
++ }
+- undefined
+
+FAIL empty/all skipped JSON and text; text rounding and no library-only output Expected values to be strictly equal:
++ actual - expected
+
++ Error: spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node EPERM
++     at Object.spawnSync (node:internal/child_process:1160:20)
++     at spawnSync (node:child_process:928:24)
++     at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:34:18)
++     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:139:23
++     at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)
++     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:137:7 {
++   code: 'EPERM',
++   errno: -1,
++   path: '/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node',
++   spawnargs: [
++     'scripts/orchestrator/ci-twin.mjs',
++     '--since',
++     '2026-10-23',
++     '--limit',
++     '1',
++     '--json'
++   ],
++   syscall: 'spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node'
++ }
+- undefined
+
+FAIL since inclusive date query is forwarded exactly at year/leap boundaries Expected values to be strictly equal:
++ actual - expected
+
++ Error: spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node EPERM
++     at Object.spawnSync (node:internal/child_process:1160:20)
++     at spawnSync (node:child_process:928:24)
++     at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:34:18)
++     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:145:75
++     at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)
++     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:144:7 {
++   code: 'EPERM',
++   errno: -1,
++   path: '/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node',
++   spawnargs: [
++     'scripts/orchestrator/ci-twin.mjs',
++     '--since',
++     '2024-02-29',
++     '--json'
++   ],
++   syscall: 'spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node'
++ }
+- undefined
+
+FAIL invalid calendar date CLI exits 2 without gh Expected values to be strictly equal:
++ actual - expected
+
++ Error: spawnSync pnpm EPERM
++     at Object.spawnSync (node:internal/child_process:1160:20)
++     at spawnSync (node:child_process:928:24)
++     at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:34:18)
++     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:148:11
++     at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)
++     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:147:7 {
++   code: 'EPERM',
++   errno: -1,
++   path: 'pnpm',
++   spawnargs: [
++     '--silent',
++     'orch:twin',
++     '--since',
++     '2026-02-30',
++     '--json'
++   ],
++   syscall: 'spawnSync pnpm'
++ }
+- undefined
+
+FAIL REST failures/malformed JSON exit 2 without partial success output Expected values to be strictly equal:
++ actual - expected
+
++ Error: spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node EPERM
++     at Object.spawnSync (node:internal/child_process:1160:20)
++     at spawnSync (node:child_process:928:24)
++     at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:34:18)
++     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:151:123
++     at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)
++     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:150:7 {
++   code: 'EPERM',
++   errno: -1,
++   path: '/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node',
++   spawnargs: [
++     'scripts/orchestrator/ci-twin.mjs',
++     '--since',
++     '2026-10-23',
++     '--limit',
++     '1',
++     '--json'
++   ],
++   syscall: 'spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node'
++ }
+- undefined
+
+PASS ghList rejects malformed keyed body and page cap rather than truncating
+FAIL CLI mixed skipped/incomplete/negative wall and matrix names Expected values to be strictly equal:
++ actual - expected
+
++ Error: spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node EPERM
++     at Object.spawnSync (node:internal/child_process:1160:20)
++     at spawnSync (node:child_process:928:24)
++     at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:34:18)
++     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:159:21
++     at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)
++     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:157:7 {
++   code: 'EPERM',
++   errno: -1,
++   path: '/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node',
++   spawnargs: [
++     'scripts/orchestrator/ci-twin.mjs',
++     '--since',
++     '2026-10-23',
++     '--limit',
++     '2',
++     '--json'
++   ],
++   syscall: 'spawnSync /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/node'
++ }
+- undefined
+
+FAIL valid GitHub job name __proto__ retained by actual pnpm caller Expected values to be strictly equal:
++ actual - expected
+
++ Error: spawnSync pnpm EPERM
++     at Object.spawnSync (node:internal/child_process:1160:20)
++     at spawnSync (node:child_process:928:24)
++     at cli (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:34:18)
++     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:162:11
++     at check (file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:21:15)
++     at file:///workspace/work/qa613repo/tests/qa613web1/probe.mjs:161:7 {
++   code: 'EPERM',
++   errno: -1,
++   path: 'pnpm',
++   spawnargs: [
++     '--silent',
++     'orch:twin',
++     '--since',
++     '2026-10-23',
++     '--limit',
++     '1',
++     '--json'
++   ],
++   syscall: 'spawnSync pnpm'
++ }
+- undefined
+
+PASS ordinary Object member job names retained
+{"pass":10,"fail":15}

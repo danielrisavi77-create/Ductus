@@ -1,0 +1,19 @@
+✔ percentile is nearest rank; median is a true median (0.980761ms)
+✔ demo task ids come from table rows only (0.906632ms)
+✔ plan ids are found in Task or title, with letter suffix, not in Linear ids (9.13276ms)
+✔ prMetrics: a round is one distinct head per kind; gate rules decide its outcome (1.584457ms)
+✔ two verdicts on the same head are one round (0.261556ms)
+✔ a short head is not counted as a head or a round (4.670022ms)
+✔ a PR without verdicts or a parsable date still yields a row (0.176296ms)
+✔ summary: critical median/p90, QA rounds, demo tasks and PRs without a plan id (0.391175ms)
+✔ render puts the two T2 metrics first (0.630467ms)
+✔ mapLimit bounds concurrency and keeps input order (15.672988ms)
+✔ args: --since is required and strict (0.726189ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 41.418092

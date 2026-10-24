@@ -1,0 +1,22 @@
+{"input":{"name":"__proto__","status":"completed","conclusion":"success","created_at":"2026-10-23T00:00:00.000Z","started_at":"2026-10-23T00:00:00.000Z","completed_at":"2026-10-23T00:07:00.000Z"},"shape":null,"summary":{"runs":0,"wall":{"n":0,"p50":null,"p95":null},"jobs":[]}}
+FAIL valid __proto__ job preserves the run and duration A valid successful 7-minute job must not discard the whole run
+{"shape":{"id":613,"wall":9,"critical":"unit","jobs":{"unit":1}},"summary":{"runs":1,"wall":{"n":1,"p50":9,"p95":9},"jobs":[{"name":"unit","n":1,"p50":1,"p95":1,"critical":1}]}}
+FAIL valid __proto__ slowest job is included with ordinary jobs Expected values to be strictly equal:
++ actual - expected
+
++ 'unit'
+- '__proto__'
+
+FAIL invalid calendar date rejected: 2026-02-29 Missing expected exception.
+FAIL invalid calendar date rejected: 2026-02-30 Missing expected exception.
+FAIL invalid calendar date rejected: 2026-04-31 Missing expected exception.
+FAIL invalid calendar date rejected: 2026-13-01 Missing expected exception.
+FAIL invalid calendar date rejected: 2026-00-01 Missing expected exception.
+FAIL invalid calendar date rejected: 2026-10-00 Missing expected exception.
+PASS empty and small-sample text/JSON representations
+PASS large sample (10000), precision and null wall denominator
+PASS invalid/missing limits and unknown arguments reject in pure parser
+PASS ghList actual helper reads 0/1/100/101/200 items, GET-shaped calls only
+PASS job conclusions, timestamp offsets and equal/reversed wall
+PASS library-only boundaries remain explicitly observations, not CLI promises
+{"pass":6,"fail":8}

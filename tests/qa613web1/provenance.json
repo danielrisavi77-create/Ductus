@@ -1,0 +1,122 @@
+{
+  "agent": "codex:qa613web1:qa",
+  "sourceHead": "98471f3ba5fafe112dab510edce5eef488944351",
+  "sourceTree": "2fe41e10cc6bcdab93a90bb94f3d5b20a0114373",
+  "parents": [
+    "f5f49951410cf067d8b43894d0a948a56b16af6d",
+    "c4e52b53a1e6f6c53e116a8a36daf8131b52a47a"
+  ],
+  "base": "c4e52b53a1e6f6c53e116a8a36daf8131b52a47a",
+  "mergeBase": "c4e52b53a1e6f6c53e116a8a36daf8131b52a47a",
+  "compare": {
+    "repository_full_name": "danielrisavi77-create/Ductus",
+    "base": "c4e52b53a1e6f6c53e116a8a36daf8131b52a47a",
+    "head": "98471f3ba5fafe112dab510edce5eef488944351",
+    "status": "ahead",
+    "ahead_by": 3,
+    "behind_by": 0,
+    "total_commits": 3,
+    "too_large": null,
+    "base_commit": {
+      "sha": "c4e52b53a1e6f6c53e116a8a36daf8131b52a47a",
+      "url": "https://api.github.com/repos/danielrisavi77-create/Ductus/commits/c4e52b53a1e6f6c53e116a8a36daf8131b52a47a",
+      "html_url": "https://github.com/danielrisavi77-create/Ductus/commit/c4e52b53a1e6f6c53e116a8a36daf8131b52a47a"
+    },
+    "merge_base_commit": {
+      "sha": "c4e52b53a1e6f6c53e116a8a36daf8131b52a47a",
+      "url": "https://api.github.com/repos/danielrisavi77-create/Ductus/commits/c4e52b53a1e6f6c53e116a8a36daf8131b52a47a",
+      "html_url": "https://github.com/danielrisavi77-create/Ductus/commit/c4e52b53a1e6f6c53e116a8a36daf8131b52a47a"
+    },
+    "files": [
+      {
+        "filename": "package.json",
+        "status": "modified",
+        "additions": 1,
+        "deletions": 0,
+        "changes": 1,
+        "previous_filename": null
+      },
+      {
+        "filename": "scripts/orchestrator/ci-twin-core.mjs",
+        "status": "added",
+        "additions": 99,
+        "deletions": 0,
+        "changes": 99,
+        "previous_filename": null
+      },
+      {
+        "filename": "scripts/orchestrator/ci-twin-core.test.mjs",
+        "status": "added",
+        "additions": 73,
+        "deletions": 0,
+        "changes": 73,
+        "previous_filename": null
+      },
+      {
+        "filename": "scripts/orchestrator/ci-twin.mjs",
+        "status": "added",
+        "additions": 30,
+        "deletions": 0,
+        "changes": 30,
+        "previous_filename": null
+      }
+    ]
+  },
+  "blobs": {
+    "package.json": "12b0aa51f775c6a76530759ce026068de935c384",
+    "scripts/orchestrator/ci-twin-core.mjs": "72df07a6011c257dce3f23fa6f49f5e2a9c27cf1",
+    "scripts/orchestrator/ci-twin-core.test.mjs": "720a83bedd0e3e128eb03168a85651fe609824f7",
+    "scripts/orchestrator/ci-twin.mjs": "5ca70b02eae35b6b9f919653c41d1f6354b310ca",
+    "scripts/orchestrator/gh.mjs": "e29e3b357e2fdc7c559a948df28db759ad50f7bd",
+    "scripts/orchestrator/metrics-core.mjs": "81bb99ef20fa5cfbddc46b37afc03df834b34704",
+    "scripts/orchestrator/orchestrator-core.mjs": "a666d45d140080b70fae0769c3ef458dac3a4194",
+    "scripts/engineering/metadata-parser.mjs": "a4a6e5180f9e154b86703988d216aa8781a0a3f3",
+    "scripts/engineering/review-gate-core.mjs": "4f169fcda18f1a66156882bf97297a98b3e58e7f",
+    "scripts/engineering/protected-paths.mjs": "bddd771ce9baf0bf3da2d82c892eff44acdc5855",
+    "scripts/engineering/pr-metadata-core.mjs": "2b6c1dfef3310d13933f986a6b5e6bdd3a63d056"
+  },
+  "checkout": "Own no-hardlinks clone, missing Git objects obtained only through existing GitHub integration; blob/tree/commit object SHA-1 independently verified before writing and detached checkout. git fetch failure retained. No network permission changes.",
+  "runtime": {
+    "node": "v24.19.0",
+    "pnpm": "11.25.0",
+    "declaredPackageManager": "pnpm@10.33.0",
+    "exactModelId": null,
+    "sessionId": null
+  },
+  "commands": [
+    {
+      "command": "node --test scripts/orchestrator/ci-twin-core.test.mjs scripts/orchestrator/metrics-core.test.mjs scripts/orchestrator/gh-rest.test.mjs",
+      "exit": 0,
+      "note": "runner reports 3 file wrappers; not counted as individual case evidence"
+    },
+    {
+      "command": "node scripts/orchestrator/ci-twin-core.test.mjs",
+      "exit": 0,
+      "pass": 7
+    },
+    {
+      "command": "node scripts/orchestrator/metrics-core.test.mjs",
+      "exit": 0,
+      "pass": 11
+    },
+    {
+      "command": "node scripts/orchestrator/gh-rest.test.mjs",
+      "exit": 0,
+      "pass": 10
+    },
+    {
+      "command": "node tests/qa613web1/probe.mjs",
+      "exit": 1,
+      "rawPass": 10,
+      "rawFail": 15,
+      "classification": "1 product assertion failure; 14 scenarios blocked by spawnSync EPERM; raw failures unchanged"
+    },
+    {
+      "command": "node tests/qa613web1/core-probe.mjs",
+      "exit": 1,
+      "pass": 6,
+      "fail": 8,
+      "classification": "2 __proto__ failures, 6 invalid calendar date failures"
+    }
+  ]
+}
