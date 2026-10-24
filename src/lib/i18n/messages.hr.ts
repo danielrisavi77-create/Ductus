@@ -363,6 +363,8 @@ export const hr = {
     viewModes: "Prikaz",
     modeWriting: "Pisanje",
     modeTeacherView: "Kako vidi nastavnik",
+    // F-10: a link to the submission screen, not the act of submitting (#653 contract 6385776645).
+    submitLink: "Predaja",
     soon: "uskoro",
     sheetTheme: "Tema lista",
     sheetThemeLight: "Bijeli list",

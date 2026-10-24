@@ -22,7 +22,17 @@ import { verifyDocumentSnapshot } from "@/domain/document/snapshot";
 
 import { OUTCOME_ID, SubmissionView, type SubmissionState } from "./SubmissionView";
 
+/**
+ * The submission of one session: when the page is rendered under another
+ * session without a reload, it starts again from nothing, so no text, receipt
+ * or summary of the session before stays on it, even when the end of that
+ * session never reached this tab (review 6386405994 on #653; as CommentPanel, F-088).
+ */
 export default function Submission({ assignmentId, session }: { assignmentId: string; session: SessionMark }) {
+  return <SessionSubmission key={session.tag} assignmentId={assignmentId} session={session} />;
+}
+
+function SessionSubmission({ assignmentId, session }: { assignmentId: string; session: SessionMark }) {
   const [state, setState] = useState<SubmissionState>({ phase: "loading" });
   const [ended, setEnded] = useState(false);
   const [focusOutcome, setFocusOutcome] = useState(0);
