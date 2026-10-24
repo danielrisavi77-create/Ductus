@@ -6,6 +6,7 @@ import { emptyDocument, type DocumentTransaction } from "@/domain/document";
 import { MAX_DOCUMENT_SNAPSHOT_BYTES } from "@/domain/document/snapshot";
 import { MAX_EVIDENCE_SEGMENT_BYTES } from "@/domain/forensics/evidence-chain-v2";
 import { jcsUtf8Bytes } from "@/domain/forensics/jcs";
+import type { EvidenceOpening } from "@/domain/sync/journal-types";
 import type { BuiltSegment } from "@/editor/capture";
 import {
   answer, capture, committed, DOC, deps, journalKit, openedAfter, R0, raw, receiptKey, save, UTC, type Chain,
@@ -61,6 +62,17 @@ describe("F-8 3d-2a: journal v3", () => {
       state: "SYNCED", localSeq: 1, evidenceHead: { segmentHash: SEG[0]!.sha256, lastSequenceTo: 1 },
     });
     await expect(open().startEvidence(DOC, { ...chain.opened, documentHash: "a".repeat(64) }, UTC)).rejects.toMatchObject({ code: "invalid_input" });
+  });
+
+  it("13: startEvidence refuses a missing answer and a server behind this device, without a write", async () => {
+    await expect(open().startEvidence(DOC, null as unknown as EvidenceOpening, UTC)).rejects.toMatchObject({ code: "invalid_input" });
+    const journal = await started();
+    await save(journal, SEG[0]!);
+    await answer(journal, committed(R0 + 1));
+    // An answer of the open route from before that receipt, processed late
+    // (review676 MANJE 3, Codex 4367661620).
+    await refuses(journal, "invalid_input", () => journal.startEvidence(DOC, chain.opened, UTC));
+    await refuses(journal, "invalid_input", () => journal.startEvidence(DOC, { ...chain.opened, currentRevision: R0 + 1 }, UTC));
   });
 
   it("6: saveSegment refuses a broken chain, foreign or forged bytes and limits without a write", async () => {
