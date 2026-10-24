@@ -7,6 +7,8 @@ import { messagesHr as t } from "@/lib/i18n/messages.hr";
 
 import styles from "./AppShell.module.css";
 import { navFor, type ShellRole } from "./nav";
+import SessionObserver from "./SessionObserver";
+import type { ShellSession } from "./shell-session";
 import { readTheme, saveTheme, THEME_SCRIPT } from "./theme";
 
 const ICONS = {
@@ -53,6 +55,12 @@ function ThemeToggle() {
 export type AppShellProps = {
   /** The role the server read for this page; null shows no navigation and no account. */
   role: ShellRole | null;
+  /**
+   * The session cookie this page was rendered under (`shellSession`). The
+   * shell marks it for the other tabs, so a sign-in that returns to any page
+   * in the shell ends the earlier session's tabs (D-118, F-113 t.1).
+   */
+  session: ShellSession;
   /** The href of the navigation item this page belongs to, if any. */
   current?: string;
   /** Breadcrumb, first to last; the last is the page itself. */
@@ -74,7 +82,7 @@ export type AppShellProps = {
  * (I2); signing out is the same POST as everywhere and works without
  * JavaScript (I5). Below 800 px the side bar is a drawer behind ☰.
  */
-export default function AppShell({ role, current, crumbs, account, ownMain = false, children }: AppShellProps) {
+export default function AppShell({ role, session, current, crumbs, account, ownMain = false, children }: AppShellProps) {
   const [open, setOpen] = useState(false);
   const shell = useRef<HTMLDivElement>(null);
   const sidebar = useRef<HTMLElement>(null);
@@ -128,6 +136,7 @@ export default function AppShell({ role, current, crumbs, account, ownMain = fal
   return (
     <div ref={shell} className={styles.shell} data-theme="dark" suppressHydrationWarning>
       <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      <SessionObserver tag={session.tag} at={session.at} />
       {/* Without JavaScript ☰ cannot open the drawer, so on a phone the side
           bar, and with it signing out, stays in the page above the content (I5). */}
       <noscript>
