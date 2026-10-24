@@ -135,6 +135,19 @@ test("D-161 (b): a running check does not fail preflight; a failed one does", ()
   assert.deepEqual(fails(evaluatePreflight(input({ rollup: others }))), ["ci"]);
 });
 
+test("D-161 (b): a failed and a running entry of one check with equal times fail in either order", () => {
+  const name = REQUIRED[0];
+  const others = ROLLUP.slice(1);
+  const failed = { name, status: "COMPLETED", conclusion: "FAILURE", startedAt: "2026-10-24T10:00:00Z" };
+  const running = { name, status: "IN_PROGRESS", conclusion: "", startedAt: "2026-10-24T10:00:00Z" };
+  for (const pair of [[failed, running], [running, failed]]) {
+    assert.deepEqual(fails(evaluatePreflight(input({ rollup: [...others, ...pair] }))), ["ci"]);
+  }
+  // Positive control: the running entry alone, and a strictly newer rerun, still pass.
+  assert.deepEqual(fails(evaluatePreflight(input({ rollup: [...others, running] }))), []);
+  assert.deepEqual(fails(evaluatePreflight(input({ rollup: [...others, failed, { ...running, startedAt: "2026-10-24T11:00:00Z" }] }))), []);
+});
+
 test("review entry keeps metadata, head, base and main guards", () => {
   for (const [over, id] of [
     [{ pr: { body: BODY.replace("Task: #249 P1-1", "Task:") } }, "task"],

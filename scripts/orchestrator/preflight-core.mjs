@@ -318,7 +318,12 @@ export function evaluatePreflight({ pr, mainSha, compare, rollup, required, expe
     // anything unknown still do. "Merge authorization" waits for the owner command by
     // design (like the review gate), so it never counts as CI here; the shared
     // merge-readiness check in orchestrator-core stays strict.
-    const ck = evaluateChecks(rollup.filter((c) => (c.name ?? c.context) !== AUTHORIZATION_CONTEXT));
+    // At equal or missing times latestChecks keeps the first non-green entry, so a
+    // running entry is ordered after a failed one: the verdict must not depend on input order.
+    const isRunning = (c) => RUNNING_STATES.has(String(c.conclusion || c.state || c.status || "UNKNOWN").toUpperCase());
+    const ordered = rollup.filter((c) => (c.name ?? c.context) !== AUTHORIZATION_CONTEXT)
+      .map((c, i) => ({ c, i })).sort((a, b) => (isRunning(a.c) - isRunning(b.c)) || a.i - b.i).map(({ c }) => c);
+    const ck = evaluateChecks(ordered);
     const running = ck.bad.filter((c) => RUNNING_STATES.has(c.state));
     const bad = ck.bad.filter((c) => !RUNNING_STATES.has(c.state));
     if (missing.length) add(false, "ci", `required check(s) not reported on the head: ${names(missing.map((r) => r.appId == null ? r.context : `${r.context} app ${r.appId}`))}`);
