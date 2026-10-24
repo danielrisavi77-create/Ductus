@@ -290,3 +290,11 @@ Pragovi su postavke fakulteta (C-7, C-55); uvijek se prikazuju uz brojku na koju
 | P-03 | Osvježavanje nastavničkog pogleda | Najviše svakih 5 minuta | Pogled na rad u nastajanju |
 | P-04 | Granica kratkog zadatka (D-37) | Rok kraći od 24 sata | Vidljivost tijekom pisanja |
 | P-05 | Lijepljenje za koje se nudi oznaka (D-43) | Isto kao P-02 | Pisanje |
+
+## DAN-263: priprema spekulativnog Mergify reda (23. 10. 2026.)
+
+Daniel je nakon analize konfiguracije zatražio: „Ok, ajde sve to napravi, reci mi sto ti ja trebam odoboriti da možeš sve napraviti”. Izvršni trag: [DAN-263](https://linear.app/daniel77/issue/DAN-263), [plan napada #605](https://github.com/danielrisavi77-create/Ductus/issues/605). Odobrena je priprema i provjera; D-97 naredba za konkretni završni PR/head i živi prihvat ostaju prije aktivacije.
+
+Ovaj korak mijenja D-161(f) u dijelu provjere na izvornoj grani: serial spekulativni red s tri provjere i jednim PR-om po batchu testira kumulativne kombinacije na Mergify draft PR-ovima. Mijenja i zahtjev ažurnosti izvornog heada u ENGINEERING_SYSTEM §9/§10 samo nakon aktivacije tog reda; `strict: false` mora biti potvrđen u klasičnoj zaštiti i svim rulesetovima, ne pretpostavljen iz opisa PR-a. D-161(h), D-97, risk floor, neovisni review/QA, odobrenje izvornog SHA-a i svi obvezni statusi ostaju.
+
+Mergify je granica povjerenja za članstvo reda i revalidaciju izvornih uvjeta. Na njegovu autentificiranom CI carrieru posebni status označava tu ulogu; ne tvrdi da je obavljen novi review ili QA. Predikat i negativne probe su u mergify-queue-pr i review-gate-runner testovima; ponašanje živog pružatelja provjerava rollout pokus. `isolated` i konfiguracijski PR-ovi #601/#603/#604 nisu kumulativne dopune ovom koraku: odabire se jedna usklađena konfiguracija. #585 i #600 ostaju zasebne CI optimizacije. Upute: `docs/engineering/mergify-rollout.md`.
