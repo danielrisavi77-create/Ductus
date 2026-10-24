@@ -148,6 +148,8 @@ export function LocalDocumentProvider({
   // Set while this tab holds the lock with an editable document.
   const logoutRef = useRef<LockedLogout | null>(null);
   const channelRef = useRef<BroadcastChannel | null>(null);
+  // Whose journal the sheet shows (`scope` and document), or null while it is empty.
+  const sheetOwnerRef = useRef<string | null>(null);
   const markTag = session?.tag ?? null;
   const markAt = session?.at ?? 0;
   const saverRef = useRef<LocalDocumentSaver | null>(null);
@@ -155,8 +157,6 @@ export function LocalDocumentProvider({
   const readyRef = useRef(false);
   const dirtyRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Whose journal the sheet shows (`scope` and document), or null while it is empty.
-  const sheetOwnerRef = useRef<string | null>(null);
 
   // Builds and proposes the candidate for what the editor holds now.
   const flushRef = useRef(() => {
