@@ -11,8 +11,9 @@
  * Timing (4.12 t. 7 and t. 8): one request in flight; changes meanwhile
  * merge into the last state; a new request starts at the earliest one second
  * after the start of the previous one, and only when the bytes differ from
- * what the route holds (known only while nothing is in flight, so a return
- * to the accepted state during a request still goes). Without a network only
+ * what the route holds (known only while nothing is in flight and the last
+ * answer was definite, so a return to the accepted state during a request,
+ * or after a lost answer, still goes). Without a network only
  * the last state waits, and it goes when the network is back. A conflict
  * takes the returned token and sends the last state once more, never twice
  * for the same state: offering those bytes again does not renew the retry,
@@ -203,7 +204,10 @@ export function createLivePublisher(options: LivePublisherOptions): LivePublishe
       schedule();
       return;
     }
-    if (status === 409) accepted = null;
+    // No answer, or one that does not say what the route holds: the request
+    // may have landed (an answer lost after the write), so a return to the
+    // accepted state must still go; CAS settles what the route holds.
+    accepted = null;
     settle();
     retryMs = retryMs === 0 ? LIVE_PUBLISH_RETRY_FIRST_MS : Math.min(retryMs * 2, LIVE_PUBLISH_RETRY_MAX_MS);
     schedule(retryMs);

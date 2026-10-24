@@ -389,7 +389,7 @@ describe("live publisher (BACKEND 4.12 t. 7 and 8)", () => {
     expect(s.calls[2]!.init.headers).toMatchObject({ "if-match": `"${TOKEN_B}"` });
   });
 
-  it("drops a return to the accepted state once the state in flight is known not to have landed", async () => {
+  it("drops a return to the accepted state after a refusal, but sends it after a lost answer", async () => {
     const s = setup();
     s.publisher.start();
     s.publisher.offer(doc("A"));
@@ -405,13 +405,44 @@ describe("live publisher (BACKEND 4.12 t. 7 and 8)", () => {
     await s.time.advance(60_000);
     expect(s.calls).toHaveLength(2);
 
-    // Lost on the network: the route still holds A, and AB is no longer the last state.
+    // Lost on the network: the route may hold AC or still A, so the return
+    // to A goes once more, with the token of A (Codex 4367003542).
     s.publisher.offer(doc("AC"));
     await s.time.advance(0);
     s.publisher.offer(doc("A"));
     s.calls[2]!.reject(new TypeError("network"));
+    await s.time.advance(2000);
+    expect(s.calls).toHaveLength(4);
+    expect(s.calls[3]!.init.body).toBe(canonicalizeJcs(doc("A")));
+    expect(s.calls[3]!.init.headers).toMatchObject({ "if-match": `"${TOKEN_A}"` });
+    s.calls[3]!.resolve(answer(200, TOKEN_B));
     await s.time.advance(60_000);
+    expect(s.calls).toHaveLength(4);
+  });
+
+  // Codex 4367003542: the route stored AB but its answer was lost; the student
+  // went back to A. A must still go, or the teacher keeps AB.
+  it("sends a return to the accepted state when the answer of the state in flight was lost", async () => {
+    const s = setup();
+    s.publisher.start();
+    s.publisher.offer(doc("A"));
+    await s.time.advance(0);
+    s.calls[0]!.resolve(answer(200, TOKEN_A));
+    await s.time.advance(LIVE_PUBLISH_GAP_MS);
+
+    s.publisher.offer(doc("AB"));
+    await s.time.advance(0);
+    s.calls[1]!.reject(new TypeError("network"));
+    s.publisher.offer(doc("A"));
+    await s.time.advance(2000);
     expect(s.calls).toHaveLength(3);
+    expect(s.calls[2]!.init.body).toBe(canonicalizeJcs(doc("A")));
+    // The route moved to AB with a token unknown here: CAS answers 409 and A goes once more.
+    s.calls[2]!.resolve(answer(409, TOKEN_B));
+    await s.time.advance(LIVE_PUBLISH_GAP_MS);
+    expect(s.calls).toHaveLength(4);
+    expect(s.calls[3]!.init.body).toBe(canonicalizeJcs(doc("A")));
+    expect(s.calls[3]!.init.headers).toMatchObject({ "if-match": `"${TOKEN_B}"` });
   });
 
   it("sends the accepted state again after a conflict on the state in flight, since the route may hold anything", async () => {
