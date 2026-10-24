@@ -77,6 +77,10 @@ export type AnswerResult<T extends QueuedTransaction = DocumentTransaction> = {
 const ANSWER_STATES: ReadonlySet<SyncState> = new Set<SyncState>([
   "LOCAL_DURABLE", "SYNCING", "SYNCED", "CONFLICT", "ERROR", "RECOVERY_REQUIRED",
 ]);
+/** Answers in which the server read the row and refused it for good. */
+const FINAL_REFUSALS: ReadonlySet<unknown> = new Set([
+  "too_large", "not_found", "invalid_document", "invalid_client_transaction_id",
+]);
 
 type JournalControl = { key: "logout"; state: "closing" };
 
@@ -674,6 +678,11 @@ export class AtomicDexieJournal {
         if (prior.evidenceHead !== undefined && meta.state === "CONFLICT" && outcome?.status === "stale_base") {
           meta.conflictRevision = Math.max(prior.conflictRevision ?? 0, outcome.currentRevision);
         }
+        delete meta.refusedLocalSeq;
+        if (prior.evidenceHead !== undefined && meta.state === "ERROR" && !after &&
+            FINAL_REFUSALS.has(outcome?.status)) {
+          meta.refusedLocalSeq = sent.localSeq;
+        }
         // The head moves only with the verified receipt of the stored row, in
         // the transaction that deletes it.
         if (settles && stored.tx.kind === "EVIDENCE_SEGMENT") {
@@ -736,8 +745,11 @@ export class AtomicDexieJournal {
         if (prior.evidenceHead === undefined || rows.some((row) => !isSegmentRow(row))) {
           throw new JournalError("mixed_queue");
         }
-        // A stopped document owes nothing, or what it owes was refused (ERROR).
-        const stopped = prior.evidenceStopped !== undefined && (rows.length === 0 || prior.state === "ERROR");
+        // A stopped document owes nothing, or the server refused its oldest
+        // owed row for good and nothing is held.
+        const refused = prior.state === "ERROR" && prior.awaitingReceipt === undefined &&
+          prior.refusedLocalSeq !== undefined && prior.refusedLocalSeq === rows[0]?.localSeq;
+        const stopped = prior.evidenceStopped !== undefined && (rows.length === 0 || refused);
         if (!sticky(prior.state) && !stopped) throw new JournalError("not_in_recovery");
         if (expectedLocalSeq !== prior.localSeq) throw new JournalError("stale_local_sequence");
         if (prior.localSeq === Number.MAX_SAFE_INTEGER) throw new JournalError("sequence_exhausted");

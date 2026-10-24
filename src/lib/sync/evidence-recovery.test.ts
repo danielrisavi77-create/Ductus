@@ -231,14 +231,18 @@ describe("F-8 3d-2b1: leaving CONFLICT and RECOVERY_REQUIRED", () => {
     await refuses(journal, "not_in_recovery", () => journal.adoptServerEvidence(DOC, local.opened, true, DECIDED, 2));
   });
 
-  it("7: a refusal for good stops counting once the row is sent again and not refused", async () => {
+  it("7: a refusal for good stops counting once the row is answered otherwise", async () => {
     const journal = await started();
     await save(journal, SEG[0]!);
     const text = (await journal.readEvidence(DOC)).snapshot!.document;
     await journal.saveUncovered(DOC, text, "unsupported_step", UTC, 1);
     await runnerFor(journal, server(R0, () => json(404, { status: "not_found" }))).step(DOC);
-    await runnerFor(journal, server(R0, () => new Error("connection dropped"))).step(DOC, { manual: true });
-    expect((await journal.readEvidence(DOC)).meta).toMatchObject({ state: "ERROR" });
+    // A refused session recorded without a hold: only the cleared refusal stops the take.
+    const [row] = (await journal.readEvidence(DOC)).pending;
+    await journal.recordAnswer(DOC, row!, { status: "unauthenticated" }, "ERROR");
+    const meta = (await journal.readEvidence(DOC)).meta;
+    expect(meta).toMatchObject({ state: "ERROR" });
+    expect(meta?.awaitingReceipt).toBeUndefined();
     await refuses(journal, "not_in_recovery", () => journal.adoptServerEvidence(DOC, local.opened, true, DECIDED, 2));
   });
 
