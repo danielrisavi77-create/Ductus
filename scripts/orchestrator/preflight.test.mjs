@@ -66,8 +66,8 @@ test("each condition from ORKESTRATOR.md fails on its own", () => {
   assert.deepEqual(fails(evaluatePreflight(input({ compare: { status: "diverged", behind_by: 3 } }))), ["main"]);
   const red = [...ROLLUP.slice(1), { ...ROLLUP[0], conclusion: "FAILURE" }];
   assert.deepEqual(fails(evaluatePreflight(input({ rollup: red }))), ["ci"]);
-  const pending = [...ROLLUP.slice(1), { name: ROLLUP[0].name, status: "IN_PROGRESS", conclusion: "" }];
-  assert.deepEqual(fails(evaluatePreflight(input({ rollup: pending }))), ["ci"]);
+  const cancelled = [...ROLLUP.slice(1), { ...ROLLUP[0], conclusion: "CANCELLED" }];
+  assert.deepEqual(fails(evaluatePreflight(input({ rollup: cancelled }))), ["ci"]);
 });
 
 test("an unread input is a FAIL, never a pass", () => {
@@ -84,108 +84,63 @@ test("the gate status is not CI: a pending review gate does not block preflight"
 });
 
 const MERGE_AUTH = "Merge authorization";
-const pendingAuthorization = { context: MERGE_AUTH, state: "PENDING", startedAt: "2026-10-22T10:00:00Z" };
+const authorization = (state) => ({ context: MERGE_AUTH, state, startedAt: "2026-10-22T10:00:00Z" });
 const reviewEntry = (over = {}) => input({
-  expectHead: "c9ebfd7c32da7f05b30d9987264e929d89066371",
   required: [...REQUIRED, "Engineering review gate", MERGE_AUTH],
-  rollup: [...ROLLUP, { context: "Engineering review gate", state: "PENDING" }, pendingAuthorization],
+  rollup: [...ROLLUP, { context: "Engineering review gate", state: "PENDING" }, authorization("PENDING")],
   ...over,
-  pr: { headRefOid: "c9ebfd7c32da7f05b30d9987264e929d89066371", ...over.pr },
 });
 
-test("DAN-243: #540's head may enter review with pending Merge authorization, but cannot merge", () => {
-  const fixture = reviewEntry();
-  assert.equal(preflightExitCode(evaluatePreflight(fixture)), 0);
-  assert.deepEqual(evaluateChecks(fixture.rollup).bad, [{ name: MERGE_AUTH, state: "PENDING" }]);
-  const ready = (gate) => evaluateReady({
-    head: fixture.pr.headRefOid, rollup: fixture.rollup, gate, base: "main",
-    mergeable: "MERGEABLE", overlap: [], threads: { count: 0 }, files: [], autoMerge: false,
-  });
-  assert.deepEqual(fails(ready({ state: "pending" })), ["gate", "ci"]);
-  assert.deepEqual(fails(ready({ state: "success" })), ["ci"]);
-});
-
-test("DAN-243: only the exact known pending authorization context can precede review", () => {
-  for (const state of ["FAILURE", "ERROR", "CANCELLED", "UNKNOWN", "IN_PROGRESS", "QUEUED", ""]) {
-    const rollup = [...ROLLUP, { ...pendingAuthorization, state }];
-    assert.deepEqual(fails(evaluatePreflight(reviewEntry({ rollup }))), ["ci"], state);
+test("D-161: Merge authorization waits for the owner by design and never counts as CI", () => {
+  for (const state of ["PENDING", "FAILURE", "ERROR", "SUCCESS"]) {
+    assert.deepEqual(fails(evaluatePreflight(reviewEntry({ rollup: [...ROLLUP, authorization(state)] }))), [], state);
   }
+  // Positive control: the same exemption does not cover any other context.
   for (const context of ["Merge Authorization", "Merge authorization extra", "Other authorization"]) {
-    const rollup = [...ROLLUP, pendingAuthorization, { context, state: "PENDING" }];
+    const rollup = [...ROLLUP, authorization("PENDING"), { context, state: "FAILURE" }];
     assert.deepEqual(fails(evaluatePreflight(reviewEntry({ rollup }))), ["ci"], context);
   }
-  for (const rollup of [null, [], ROLLUP]) {
-    assert.deepEqual(fails(evaluatePreflight(reviewEntry({ rollup }))), ["ci"]);
-  }
-  for (const required of [null, [], ["Engineering review gate"]]) {
-    assert.deepEqual(fails(evaluatePreflight(reviewEntry({ required }))), ["ci"]);
-  }
-  for (const malformed of [null, {}, "", { context: MERGE_AUTH, appId: "15368" }, { context: MERGE_AUTH, appId: -1 }]) {
-    const required = [...REQUIRED, MERGE_AUTH, malformed];
-    assert.deepEqual(fails(evaluatePreflight(reviewEntry({ required }))), ["ci"], JSON.stringify(malformed));
-  }
-  assert.equal(preflightExitCode(evaluatePreflight(reviewEntry()), ["head checks"]), 2);
-  // Malformed objects are rejected by the existing parser rather than becoming a pass.
-  for (const rollup of [{}, [null]]) {
-    assert.throws(() => evaluatePreflight(reviewEntry({ rollup })));
-  }
-});
-
-test("DAN-243: pending authorization never masks other missing or non-green CI", () => {
+  // It is not a stand-in for CI: missing or red real checks still fail, and an unread rollup fails.
   for (const name of REQUIRED) {
     const others = ROLLUP.filter((c) => c.name !== name);
-    assert.deepEqual(fails(evaluatePreflight(reviewEntry({ rollup: [...others, pendingAuthorization] }))), ["ci"], name);
-    for (const conclusion of ["PENDING", "FAILURE", "CANCELLED", "UNKNOWN"]) {
-      const rollup = [...others, { ...ok(name), conclusion }, pendingAuthorization];
-      assert.deepEqual(fails(evaluatePreflight(reviewEntry({ rollup }))), ["ci"], `${name} ${conclusion}`);
-    }
-    for (const conclusion of ["SUCCESS", "SKIPPED", "NEUTRAL"]) {
-      const rollup = [...others, { ...ok(name), conclusion }, pendingAuthorization];
-      assert.deepEqual(fails(evaluatePreflight(reviewEntry({ rollup }))), [], `${name} ${conclusion}`);
-    }
+    assert.deepEqual(fails(evaluatePreflight(reviewEntry({ rollup: [...others, authorization("PENDING")] }))), ["ci"], name);
+    assert.deepEqual(fails(evaluatePreflight(reviewEntry({ rollup: [...others, { ...ok(name), conclusion: "FAILURE" }, authorization("PENDING")] }))), ["ci"], name);
   }
+  assert.deepEqual(fails(evaluatePreflight(reviewEntry({ rollup: null }))), ["ci"]);
+  // Merge readiness stays strict: the shared check still reports it.
+  assert.deepEqual(evaluateChecks(reviewEntry().rollup).bad, [{ name: MERGE_AUTH, state: "PENDING" }]);
+  assert.equal(preflightExitCode(evaluatePreflight(reviewEntry()), ["head checks"]), 2);
 });
 
-test("DAN-243: latest authorization state wins and ambiguous failures remain blocking", () => {
-  const old = { ...pendingAuthorization, startedAt: "2026-10-22T09:00:00Z" };
-  const newer = { ...pendingAuthorization, startedAt: "2026-10-22T11:00:00Z" };
-  for (const pair of [[old, { ...newer, state: "FAILURE" }], [{ ...old, state: "FAILURE" }, newer]]) {
-    for (const statuses of [pair, [...pair].reverse()]) {
-      const rollup = [...ROLLUP, ...statuses];
-      assert.deepEqual(fails(evaluatePreflight(reviewEntry({ rollup }))), pair[1].state === "PENDING" ? [] : ["ci"]);
-    }
-  }
-  for (const statuses of [
-    [pendingAuthorization, { ...pendingAuthorization, state: "FAILURE" }],
-    [{ ...pendingAuthorization, state: "FAILURE" }, pendingAuthorization],
-    [pendingAuthorization, { ...ok(MERGE_AUTH), workflowName: "other", conclusion: "CANCELLED" }],
-  ]) {
-    assert.deepEqual(fails(evaluatePreflight(reviewEntry({ rollup: [...ROLLUP, ...statuses] }))), ["ci"]);
-  }
-});
-
-test("DAN-243: pending authorization preserves App-pinned required CI", () => {
+test("D-161 (b): a running check does not fail preflight; a failed one does", () => {
   const name = REQUIRED[0];
-  const required = [{ context: name, appId: 15368 }, MERGE_AUTH];
-  const otherApp = { ...ok(name, 42), workflowName: "other-app" };
-  for (const pinned of [null, { ...ok(name, 15368), conclusion: "PENDING", workflowName: "pinned" }]) {
-    const rollup = [otherApp, ...(pinned ? [pinned] : []), pendingAuthorization];
-    assert.deepEqual(fails(evaluatePreflight(reviewEntry({ required, rollup }))), ["ci"]);
+  const others = ROLLUP.slice(1);
+  const running = [
+    { name, status: "IN_PROGRESS", conclusion: "" },
+    { name, status: "QUEUED", conclusion: "" },
+    { name, status: "COMPLETED", conclusion: "PENDING" },
+    { context: name, state: "PENDING" },
+  ];
+  for (const check of running) {
+    const checks = evaluatePreflight(input({ rollup: [...others, check] }));
+    assert.deepEqual(fails(checks), [], JSON.stringify(check));
+    assert.match(checks.find((c) => c.id === "ci").text, /still running/);
   }
-  assert.deepEqual(fails(evaluatePreflight(reviewEntry({ required, rollup: [ok(name, 15368), pendingAuthorization] }))), []);
-  // Same-name reruns retain the shared latest-check semantics even across Apps.
-  const newerWrongApp = { ...otherApp, workflowName: "", startedAt: "2026-10-23T10:00:00Z" };
-  assert.deepEqual(fails(evaluatePreflight(reviewEntry({ required, rollup: [ok(name, 15368), newerWrongApp, pendingAuthorization] }))), ["ci"]);
-  const pinnedAuthorization = [{ context: name, appId: 15368 }, { context: MERGE_AUTH, appId: 15368 }];
-  assert.deepEqual(fails(evaluatePreflight(reviewEntry({ required: pinnedAuthorization, rollup: [ok(name, 15368), pendingAuthorization] }))), ["ci"]);
+  for (const conclusion of ["FAILURE", "CANCELLED", "ERROR", "UNKNOWN", "TIMED_OUT"]) {
+    assert.deepEqual(fails(evaluatePreflight(input({ rollup: [...others, { ...ok(name), conclusion }] }))), ["ci"], conclusion);
+  }
+  // A running check next to a failed one still fails, and a check never reported still fails.
+  const red = { ...ok(REQUIRED[1]), conclusion: "FAILURE" };
+  assert.deepEqual(fails(evaluatePreflight(input({ rollup: [...ROLLUP.slice(2), { name, status: "IN_PROGRESS" }, red] }))), ["ci"]);
+  assert.deepEqual(fails(evaluatePreflight(input({ rollup: others }))), ["ci"]);
 });
 
-test("DAN-243: pending authorization cannot bypass metadata, head, base or main guards", () => {
+test("review entry keeps metadata, head, base and main guards", () => {
   for (const [over, id] of [
     [{ pr: { body: BODY.replace("Task: #249 P1-1", "Task:") } }, "task"],
     [{ pr: { baseRefName: "dev" } }, "base"],
     [{ pr: { isDraft: true } }, "draft"],
-    [{ pr: { headRefOid: HEAD } }, "head"],
+    [{ expectHead: "c".repeat(40) }, "head"],
     [{ mainSha: null }, "main"],
     [{ compare: null }, "main"],
     [{ compare: { status: "diverged", behind_by: 1 } }, "main"],
@@ -194,13 +149,7 @@ test("DAN-243: pending authorization cannot bypass metadata, head, base or main 
     const body = BODY.split("\n").filter((line) => !line.includes(`**${label}:`)).join("\n");
     assert.ok(!preflightPass(evaluatePreflight(reviewEntry({ pr: { body } }))), label);
   }
-  // Existing risk guard applies to lagging heads; fresh risk validation belongs to the review gate.
-  for (const risk of ["critical", "high", "", null]) {
-    const body = BODY.replace("Risk: critical", risk === null ? "" : `Risk: ${risk}`);
-    assert.ok(fails(evaluatePreflight(reviewEntry({ pr: { body }, compare: { behind_by: 1 }, mainPaths: [], prPaths: ["docs/x.md"] }))).includes("main"));
-  }
 });
-
 test("--head: a moved head fails, the planned head passes", () => {
   assert.deepEqual(fails(evaluatePreflight(input({ expectHead: HEAD }))), []);
   assert.deepEqual(fails(evaluatePreflight(input({ expectHead: HEAD.toUpperCase() }))), []);
@@ -381,23 +330,25 @@ test("a head that contains main passes as before, whatever the file lists say", 
   assert.deepEqual(fails(evaluatePreflight(input({ mainPaths: ["docs/x.md"], prPaths: ["docs/x.md"] }))), []);
 });
 
-test("F-101 t. 2: a critical or unclassified PR must contain main, however disjoint the paths", () => {
-  for (const risk of ["critical", "CRITICAL", "high", "", null]) {
-    const checks = evaluatePreflight(lag({ pr: { body: riskBody(risk) }, mainPaths: [] }));
-    assert.ok(fails(checks).includes("main"), `risk ${JSON.stringify(risk)} must fail while behind`);
-    assert.match(checks.find((c) => c.id === "main").text, /merge main first/);
-  }
-  // Up to date, the same critical PR passes the main check as before.
-  assert.deepEqual(fails(evaluatePreflight(input({ pr: { body: riskBody("critical") } }))), []);
-});
-
-test("F-101 t. 2: low and standard PRs keep the disjoint-lag pass, unless they touch a D-97 path", () => {
-  for (const risk of ["low", "Low", "standard", "STANDARD"]) {
-    assert.deepEqual(fails(evaluatePreflight(lag({ pr: { body: riskBody(risk) } }))), [], risk);
+test("D-101: every risk, critical and D-97 included, may enter review behind main when main touched none of its files", () => {
+  for (const risk of ["critical", "CRITICAL", "high", "low", "standard", null]) {
+    assert.deepEqual(fails(evaluatePreflight(lag({ pr: { body: riskBody(risk) }, mainPaths: ["src/b.ts"] }))), [], String(risk));
   }
   for (const path of ["scripts/orchestrator/x.mjs", ".github/workflows/ci.yml", "docs/DECISIONS.md", "SCRIPTS/Hooks/a.mjs", "lefthook.yml"]) {
-    const checks = evaluatePreflight(lag({ prPaths: ["docs/x.md", path] }));
-    assert.deepEqual(fails(checks), ["main"], path);
-    assert.match(checks.find((c) => c.id === "main").text, /D-97/);
+    for (const risk of ["critical", "standard"]) {
+      assert.deepEqual(fails(evaluatePreflight(lag({ pr: { body: riskBody(risk) }, prPaths: ["docs/x.md", path] }))), [], `${risk} ${path}`);
+    }
+  }
+});
+
+test("D-101: the same critical or D-97 PR still fails when main changed one of its files or a list is unread", () => {
+  for (const risk of ["critical", "standard"]) {
+    const pr = { body: riskBody(risk) };
+    const hit = evaluatePreflight(lag({ pr, prPaths: ["docs/DECISIONS.md", "docs/x.md"], mainPaths: ["docs/DECISIONS.md"] }));
+    assert.deepEqual(fails(hit), ["main"], risk);
+    assert.match(hit.find((c) => c.id === "main").text, /merge main first/);
+    assert.deepEqual(fails(evaluatePreflight(lag({ pr, mainPaths: null }))), ["main"], risk);
+    assert.deepEqual(fails(evaluatePreflight(lag({ pr, prPaths: null }))), ["main"], risk);
+    assert.deepEqual(fails(evaluatePreflight(lag({ pr, prPaths: [] }))), ["main"], risk);
   }
 });
