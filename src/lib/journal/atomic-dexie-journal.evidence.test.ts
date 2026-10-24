@@ -71,7 +71,7 @@ describe("F-8 3d-2a: journal v3", () => {
     await answer(journal, committed(R0 + 1));
     // An answer of the open route from before that receipt, processed late
     // (review676 MANJE 3, Codex 4367661620).
-    await refuses(journal, "invalid_input", () => journal.startEvidence(DOC, chain.opened, UTC));
+    await refuses(journal, "invalid_input", () => journal.startEvidence(DOC, openedAfter(SEG[0]!, R0), UTC));
     await refuses(journal, "invalid_input", () => journal.startEvidence(DOC, { ...chain.opened, currentRevision: R0 + 1 }, UTC));
   });
 

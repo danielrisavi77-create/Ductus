@@ -263,6 +263,23 @@ async function verifySegment(
   };
 }
 
+/**
+ * The open route's answer for `documentId`, its snapshot verified as exact JCS
+ * of a valid document with `documentHash`, before any transaction.
+ */
+async function verifyOpening(documentId: string, opened: EvidenceOpening): Promise<CanonicalDocument> {
+  const head = opened?.headSegmentHash;
+  if (opened?.documentId !== documentId || !validSeq(opened.currentRevision) ||
+      !validSeq(opened.lastSequenceTo) ||
+      !(head === null || (typeof head === "string" && SHA256_HEX.test(head))) ||
+      !(opened.document instanceof Uint8Array)) {
+    throw new JournalError("invalid_input");
+  }
+  const verified = await verifyDocumentSnapshot(new Uint8Array(opened.document));
+  if (!verified.ok || verified.sha256 !== opened.documentHash) throw new JournalError("invalid_input");
+  return verified.document;
+}
+
 /** Nothing on this document is owed to, or missing from, the server. */
 function settledForLogout(meta: SyncMeta): boolean {
   if (meta.evidenceStopped !== undefined) return false;
@@ -462,15 +479,9 @@ export class AtomicDexieJournal {
    * stopped the device holds text the server lacks (`evidence_stopped`).
    */
   async startEvidence(documentId: string, opened: EvidenceOpening, openedAt: string): Promise<SyncMeta> {
-    const head = opened?.headSegmentHash;
-    if (!validDocumentId(documentId) || !canonicalUtc(openedAt) || opened.documentId !== documentId ||
-        !validSeq(opened.currentRevision) || !validSeq(opened.lastSequenceTo) ||
-        !(head === null || (typeof head === "string" && SHA256_HEX.test(head))) ||
-        !(opened.document instanceof Uint8Array)) {
-      throw new JournalError("invalid_input");
-    }
-    const verified = await verifyDocumentSnapshot(new Uint8Array(opened.document));
-    if (!verified.ok || verified.sha256 !== opened.documentHash) throw new JournalError("invalid_input");
+    if (!validDocumentId(documentId) || !canonicalUtc(openedAt)) throw new JournalError("invalid_input");
+    const document = await verifyOpening(documentId, opened);
+    const head = opened.headSegmentHash;
     return this.whileUsable(() => this.db.transaction(
       "rw", this.db.snapshots, this.db.pending, this.db.meta, this.db.control,
       async () => {
@@ -485,13 +496,17 @@ export class AtomicDexieJournal {
         if (sticky(prior?.state)) throw new JournalError("sticky_state");
         if (prior?.evidenceStopped !== undefined) throw new JournalError("evidence_stopped");
         if (rows.length > 0) throw new JournalError("queue_not_empty");
+        // An answer the server gave before this device's last receipt, read
+        // late (a stale tab), never moves the revision or the head back.
+        if (opened.currentRevision < (snapshotBefore?.revision ?? 0) ||
+            opened.lastSequenceTo < (prior?.evidenceHead?.lastSequenceTo ?? 0)) {
+          throw new JournalError("invalid_input");
+        }
         const meta: SyncMeta = {
           ...(prior ?? { documentId, localSeq: 0, state: "LOCAL_DURABLE" }),
           evidenceHead: { segmentHash: head, lastSequenceTo: opened.lastSequenceTo },
         };
-        await this.db.snapshots.put({
-          documentId, revision: opened.currentRevision, document: verified.document, savedAt: openedAt,
-        });
+        await this.db.snapshots.put({ documentId, revision: opened.currentRevision, document, savedAt: openedAt });
         await this.db.meta.put(meta);
         return meta;
       },
