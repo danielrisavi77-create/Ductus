@@ -114,8 +114,20 @@ function ThreadCard({ placed, editor, current, onReplied }: {
   );
 }
 
+/**
+ * The panel of one session: when the page is rendered under another session
+ * without a reload, the panel starts again from nothing, so no thread, quote
+ * or typed reply of the session before stays in it, even when the end of that
+ * session never reached this tab (F-088).
+ */
 export default function CommentPanel({ documentId, session = null }: {
   documentId: string; session?: SessionMark | null;
+}) {
+  return <SessionCommentPanel key={session?.tag ?? ""} documentId={documentId} session={session} />;
+}
+
+function SessionCommentPanel({ documentId, session }: {
+  documentId: string; session: SessionMark | null;
 }) {
   const editor = useLocalEditor();
   // The panel hears the end of the session itself as well: the sheet hears it
