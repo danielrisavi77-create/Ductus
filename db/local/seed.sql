@@ -15,3 +15,11 @@ INSERT INTO identity.institution (slug, aai_home_org) VALUES
   ('demo-fakultet', 'demo.ductus.test'),
   ('demo-bez-prijave', NULL)
 ON CONFLICT (slug) DO UPDATE SET aai_home_org = EXCLUDED.aai_home_org;
+
+-- Only the invented login institution can enroll in the local demo. The
+-- table defaults are the owner's five attempts / fifteen minutes; a rerun
+-- must leave any configured display name and limits untouched.
+INSERT INTO institution.institution_settings (institution_id, display_name)
+SELECT id, 'Demo fakultet (test)'
+  FROM identity.institution WHERE slug = 'demo-fakultet'
+ON CONFLICT (institution_id) DO NOTHING;

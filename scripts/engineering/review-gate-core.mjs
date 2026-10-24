@@ -1,4 +1,4 @@
-import { canonicalBlock, field } from "./metadata-parser.mjs";
+import { canonicalBlock, field, metadataLines } from "./metadata-parser.mjs";
 import { evaluateMetadata } from "./pr-metadata-core.mjs";
 import { changedPaths, ownerCommandPaths, qaExemption } from "./protected-paths.mjs";
 
@@ -110,15 +110,42 @@ export function commentTime(item) {
   return Number.isNaN(created) ? updated : Math.max(created, updated);
 }
 
+// A Grok review run from the owner's Grok CLI (scripts/grok-review.ps1) is
+// posted by the owner's own account, not by the App. It counts as the Grok
+// provider only when the account is the owner's and the owner writes the line
+// `Review-Channel: grok-cli` outside any code block. Sessions that act with the
+// owner's token can write that line too, so the gate status says when it was
+// used (D-162); the owner can already override the gate, so this adds no
+// authority.
+const GROK_CLI_LINE_RE = /^Review-Channel:[ \t]*grok-cli$/i;
+
+function viaGrokCli(item, ownerLogin) {
+  return (
+    Boolean(ownerLogin) &&
+    !item?.performed_via_github_app?.slug &&
+    item?.author_association === "OWNER" &&
+    item?.user?.login === ownerLogin &&
+    (canonicalBlock(item?.body, "Agent-Review") || canonicalBlock(item?.body, "QA-Agent")) &&
+    metadataLines(item?.body ?? "").some((line) => GROK_CLI_LINE_RE.test(line))
+  );
+}
+
+function commentAppSlug(item, ownerLogin) {
+  const slug = item?.performed_via_github_app?.slug ?? null;
+  if (slug) return slug;
+  return viaGrokCli(item, ownerLogin) ? "grok-by-xai" : null;
+}
+
 // A verdict is a person's comment posted through an App.
-function trustedComments(items, logins) {
+function trustedComments(items, logins, ownerLogin = null) {
   return (items ?? [])
     .filter((item) => trustedAuthor(item, logins))
     .map((item, index) => ({
       body: item?.body ?? "",
       login: item?.user?.login ?? null,
       association: item?.author_association ?? null,
-      appSlug: item?.performed_via_github_app?.slug ?? null,
+      appSlug: commentAppSlug(item, ownerLogin),
+      grokCli: viaGrokCli(item, ownerLogin),
       createdAt: commentTime(item) || index,
       index,
     }))
@@ -178,6 +205,45 @@ function codexReviewedHead(prReviews, headSha) {
   );
 }
 
+const CODEX_APP_SLUG = "chatgpt-codex-connector";
+const CODEX_SUMMARY_MARKER = "<!-- codex-pull-request-review-summary -->";
+const CODEX_STATE_RE = /^<!-- codex-pull-request-review-summary -->\s*<!-- codex-review-state:v1 (\{[^\r\n]*?\}) -->/;
+
+// A clean Codex review leaves no pull request review. The Codex App then
+// proves it in its edited-in-place summary comment, whose machine state names
+// the full reviewed commit. Only the App's own comment counts (bot account and
+// App slug, never a human or another App), the commit must be the current head
+// in full, and the review must be completed with no unresolved findings. Several
+// summaries naming this head must all be clean; one unreadable summary voids
+// the whole proof: fail closed. The receipt comment (short sha) is never evidence.
+// has_any_findings also counts findings resolved on older heads, so it is not
+// required to be false; only unresolved findings on this head void the proof (D-139, 23. 10. 2026).
+function codexCleanSummaryOnHead(comments, headSha) {
+  const onHead = [];
+  for (const item of comments ?? []) {
+    if (!isCodexBot(item?.user) || item?.performed_via_github_app?.slug !== CODEX_APP_SLUG) continue;
+    const body = typeof item?.body === "string" ? item.body : "";
+    if (!body.startsWith(CODEX_SUMMARY_MARKER)) continue;
+    let state;
+    try {
+      state = JSON.parse(CODEX_STATE_RE.exec(body)?.[1] ?? "null");
+    } catch {
+      return false; // an unreadable Codex summary poisons the whole proof
+    }
+    const review = state?.code_review;
+    // No usable code review commit, or an open security finding, voids the proof too.
+    if (!review || typeof review !== "object" || !SHA_RE.test(review.commit_sha ?? "")) return false;
+    if (state.security_review?.has_unresolved_findings === true) return false;
+    if (sameHead(review.commit_sha, headSha)) onHead.push(review);
+  }
+  return (
+    onHead.length > 0 &&
+    onHead.every(
+      (review) =>
+        review.status === "completed" && review.has_unresolved_findings === false,
+    )
+  );
+}
 // A Codex thread is answered once its author replied under the root comment:
 // a non-bot account that is the owner or the PR author's login. A list that
 // was not read answers nothing: fail closed.
@@ -218,6 +284,9 @@ const validOverrideShape = ({ body, association, appSlug }) =>
   appSlug === null &&
   field(body, "Owner-Override")?.toUpperCase() === "PASS" &&
   Boolean(field(body, "Override-Reason"));
+
+const validCommandShape = ({ body, association, appSlug }) =>
+  association === "OWNER" && appSlug === null && field(body, "Owner-Command")?.toLowerCase() === "merge";
 
 function ownerOverrides(entries, headSha, ownerLogin, carriedHeads = new Set()) {
   return entries.filter(({ body, login, association, appSlug }) =>
@@ -324,7 +393,7 @@ function currentNegative(verdicts) {
   return null;
 }
 
-export function evaluateGate({
+function evaluateGateCore({
   body,
   headSha,
   ownerLogin,
@@ -358,7 +427,7 @@ export function evaluateGate({
     return { state: "failure", description: "Missing repository owner identity." };
   }
 
-  const trusted = trustedComments(comments, trustedLogins);
+  const trusted = trustedComments(comments, trustedLogins, ownerLogin);
 
   if (findOwnerOverride(trusted, headSha, ownerLogin)) {
     return { state: "success", description: `Owner override recorded for ${risk} risk.` };
@@ -488,28 +557,53 @@ export function evaluateGate({
     }
 
     // D-139: second Claude session. Needs its own slot (not author, not a
-    // passing reviewer), the declaration naming this head, a Codex review on
-    // this head and every Codex thread answered. Never carried: the line
-    // names one head.
+    // passing reviewer), the declaration naming the head the QA tested, a
+    // Codex review on that head or the current one and every Codex thread
+    // answered. The QA head is the current head or one carried through clean
+    // base merges (D-101; Daniel 23. 10. 2026.), so the queue's base merge
+    // does not void it.
     const everReviewers = reviewerPrincipals(trusted);
+    const codexOn = (sha) => codexReviewedHead(prReviews, sha) || codexCleanSummaryOnHead(comments, sha);
     const secondSession = separateAppPass || fallbackPass
       ? null
       : qaPasses.find(
           (result) =>
             result.identity.appSlug === "claude" &&
-            result.current &&
             !passingReviewerPrincipals.has(result.identity.principal) &&
             !everReviewers.has(result.identity.principal) &&
-            sameHead(SECOND_SESSION_RE.exec(result.fallbackLine ?? "")?.[1], headSha),
+            sameHead(SECOND_SESSION_RE.exec(result.fallbackLine ?? "")?.[1], result.head) &&
+            (codexOn(result.head) || codexOn(headSha)),
         );
-    if (secondSession && codexReviewedHead(prReviews, headSha) && codexThreadsAnswered(reviewComments, authorLogin)) {
+    if (secondSession && codexThreadsAnswered(reviewComments, authorLogin)) {
       return {
         state: "success",
-        description: `Independent review and second Claude session QA valid for current head (D-139: Codex review on head, threads answered).${carriedNote(passingReviews, headSha)}`,
+        description: `Independent review and second Claude session QA valid for current head (D-139: Codex review on head, threads answered).${carriedNote([...passingReviews, secondSession], headSha)}`,
       };
     }
 
     if (!separateAppPass) {
+      // D-161: the Codex pair carries through a clean base merge (D-101) like
+      // any other verdict; `carriedHeads` already holds only heads behind base
+      // merges with an identical PR diff. PASS filtering and negative
+      // dominance above still apply. Declared slots are not cryptographic
+      // proof of independent sessions.
+      const codexReview = passingReviews.find(
+        (review) => review.identity.appSlug === "chatgpt-codex-connector",
+      );
+      const codexQa = qaPasses.find(
+        (result) =>
+          result.identity.appSlug === "chatgpt-codex-connector" &&
+          !passingReviewerPrincipals.has(result.identity.principal),
+      );
+      if (codexReview && codexQa) {
+        const note = carriedNote([codexReview, codexQa], headSha);
+        return {
+          state: "success",
+          description: note
+            ? `Independent Codex review and QA pair valid for current head through D-101 carry.${note}`
+            : "Independent Codex review and QA pair valid on exact current head.",
+        };
+      }
       return {
         state: "pending",
         description: "Critical PR: waiting for separately authenticated QA PASS.",
@@ -538,10 +632,11 @@ export function evaluateGate({
 export function carriedHeadCandidates(comments, headSha, path) {
   const named = new Set();
   for (const entry of trustedComments(comments)) {
-    for (const [block, headField] of [["Agent-Review", "Review-Head"], ["QA-Agent", "QA-Head"], ["Owner-Override", "Override-Head"]]) {
+    for (const [block, headField] of [["Agent-Review", "Review-Head"], ["QA-Agent", "QA-Head"], ["Owner-Override", "Override-Head"], ["Owner-Command", "Command-Head"]]) {
       if (!canonicalBlock(entry.body, block)) continue;
       // An override that could never count must not use up the head limit.
       if (block === "Owner-Override" && !validOverrideShape(entry)) continue;
+      if (block === "Owner-Command" && !validCommandShape(entry)) continue;
       const head = field(entry.body, headField)?.toLowerCase();
       if (head && SHA_RE.test(head) && head !== headSha.toLowerCase()) named.add(head);
     }
@@ -642,6 +737,45 @@ export function prNumberFromEvent(event) {
   return null;
 }
 
+// D-162: say in the status when a Grok CLI comment of the owner's account was
+// counted, so the quiet path stays visible.
+export function evaluateGate(input) {
+  const result = evaluateGateCore(input);
+  if (result.state !== "success") return result;
+  const used = trustedComments(input.comments, input.trustedLogins ?? TRUSTED_VERDICT_LOGINS, input.ownerLogin).some(
+    (entry) => entry.grokCli,
+  );
+  return used ? { ...result, description: `${result.description} Grok CLI review (D-162, owner account).` } : result;
+}
+
+/**
+ * Whether the merge queue may take the PR (D-161 (h)). Mergify reads only this
+ * status, never the description or a label: the same parser that decides the
+ * risk for the gate decides it here. Green when the gate is green and either
+ * the owner's `Owner-Command: merge` comment names this head (or a head that
+ * carries to it through a clean base merge, D-101), or the PR declares Risk
+ * low or standard and touches no D-97 path. Every description is fixed text.
+ */
+export function evaluateMergeAuthorization({ gate, metadata, paths, comments, headSha, ownerLogin, carriedHeads }) {
+  if (gate?.state !== "success") return { state: "pending", description: "Waiting for the Engineering review gate." };
+  const heads = carriedHeads ?? new Set();
+  const commanded = trustedComments(comments).some(
+    (entry) =>
+      canonicalBlock(entry.body, "Owner-Command") &&
+      validCommandShape(entry) &&
+      entry.login === ownerLogin &&
+      (sameHead(field(entry.body, "Command-Head"), headSha) || heads.has(field(entry.body, "Command-Head")?.toLowerCase())),
+  );
+  if (commanded) return { state: "success", description: "Owner merge command names this head." };
+  const automatic =
+    metadata?.ok === true &&
+    (metadata.risk === "low" || metadata.risk === "standard") &&
+    metadata.minimumRisk !== "critical" &&
+    ownerCommandPaths(paths).length === 0;
+  if (automatic) return { state: "success", description: "Risk low or standard, no D-97 path: no owner command needed." };
+  return { state: "pending", description: "Needs the owner's merge command for this head (D-97 or critical)." };
+}
+
 export function evaluatePullRequest({ pr, files, comments, prReviews, reviewComments, ownerLogin, carriedHeads }) {
   const listed = files ?? [];
   // The floor is only as good as the list: a cut or unread list fails closed.
@@ -660,18 +794,28 @@ export function evaluatePullRequest({ pr, files, comments, prReviews, reviewComm
       },
     };
   }
+  const result = evaluateGate({
+    body: pr.body ?? "",
+    headSha: pr.head.sha,
+    ownerLogin,
+    comments,
+    prReviews,
+    reviewComments,
+    authorLogin: pr.user?.login ?? null,
+    carriedHeads,
+    qaExempt: qaExemption(paths),
+  });
   return {
     metadata,
-    result: evaluateGate({
-      body: pr.body ?? "",
+    result,
+    mergeAuthorization: evaluateMergeAuthorization({
+      gate: result,
+      metadata,
+      paths,
+      comments,
       headSha: pr.head.sha,
       ownerLogin,
-      comments,
-      prReviews,
-      reviewComments,
-      authorLogin: pr.user?.login ?? null,
       carriedHeads,
-      qaExempt: qaExemption(paths),
     }),
   };
 }

@@ -3,15 +3,17 @@ import { expect, test, type Page } from "@playwright/test";
 
 /**
  * Top bar and status bar of /rad (FE-D6, design editor-v11, #476 row 06a).
- * The course, the assignment and the word range are invented demo data until
- * /rad reads its assignment. The save chip keeps its own logic; these tests
+ * The course and the assignment come only from an RLS read of the assignment
+ * in `?zadatak=` (#476 contract 6280487079; the signed-in path is in
+ * login/assignment-notice.spec.ts), and the word range waits for DAN-229, so
+ * this demo without a session shows neither. The save chip keeps its own logic; these tests
  * show what the bars say in each state, and that nothing claims the server
  * has the text (F-3/F-8: SYNCED only with a signed receipt). Only made-up
  * text is typed.
  */
 
-const NBSP = " ";
-const RANGE = ` / 2${NBSP}000–2${NBSP}500 riječi`;
+// No word range until the assignment carries one (DAN-229): never invented.
+const RANGE = " riječi";
 const SERVER = "poslužitelju";
 
 const editorOf = (page: Page) => page.getByRole("textbox", { name: "Tekst rada" });
@@ -27,24 +29,24 @@ async function axe(page: Page): Promise<void> {
 }
 
 test.describe("editor top bar and status bar (FE-D6)", () => {
-  test("top bar: brand, then course and assignment, then the demo label", async ({ page }) => {
+  test("top bar: without a readable assignment no course and no assignment, never an invented one", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto("/rad");
     const bar = page.locator(".workspace__bar");
-    const context = bar.locator(".brand-line__context");
-    await expect(context).toHaveText("Kolegij A / Zadatak 1");
-    const [brand, path, demo] = await Promise.all([
-      bar.getByRole("link", { name: "Ductura" }).boundingBox(),
-      context.boundingBox(),
-      bar.locator(".demo-badge").boundingBox(),
-    ]);
-    expect(brand!.x + brand!.width).toBeLessThanOrEqual(path!.x);
-    expect(path!.x + path!.width).toBeLessThanOrEqual(demo!.x);
-    // The invented data is marked as such right beside it.
-    await expect(bar.locator(".demo-badge")).toHaveText("Demo · izmišljeni podaci");
+    // No session: an id, well-formed or not, reads nothing.
+    for (const path of ["/rad", "/rad?zadatak=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "/rad?zadatak=1%3B%20DROP"]) {
+      await page.goto(path);
+      await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+      await expect(bar.locator(".brand-line__context")).toHaveCount(0);
+      await expect(bar).not.toContainText("Kolegij A");
+      await expect(bar).not.toContainText("Zadatak 1");
+    }
+    // The brand and the demo label live in the design v3 shell around the workspace.
+    await expect(page.getByRole("complementary", { name: "Bočna navigacija" }).getByRole("link", { name: /Ductura/ })).toBeVisible();
+    await expect(page.getByRole("banner").getByText("Demo · izmišljeni podaci")).toBeVisible();
+    await test.info().attach("rad-gornja-traka-bez-zadatka", { body: await page.screenshot(), contentType: "image/png" });
   });
 
-  test("status bar: words against the range, pages, a selection, never the server", async ({ page }) => {
+  test("status bar: words without a range, pages, a selection, never the server", async ({ page }) => {
     await page.goto("/rad");
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
     await expect(lengthOf(page)).toHaveText(`0${RANGE}`);

@@ -17,6 +17,7 @@
 
 import type { CanonicalDocument } from "@/domain/document";
 import { verifyDocumentSnapshot } from "@/domain/document/snapshot";
+import { DUCTUS_PROTOCOL_VERSION } from "@/domain/evidence/commit-envelope";
 
 export type LiveRead =
   | { kind: "state"; hash: string; document: CanonicalDocument }
@@ -40,7 +41,11 @@ export async function readLiveState(
   try {
     response = await fetcher(`/api/live/${encodeURIComponent(documentId)}`, {
       method: "GET",
-      headers: knownHash === null ? {} : { "if-none-match": `"${knownHash}"` },
+      // The route serves only a request that carries the protocol header (F-107).
+      headers: {
+        "ductus-protocol": DUCTUS_PROTOCOL_VERSION,
+        ...(knownHash === null ? {} : { "if-none-match": `"${knownHash}"` }),
+      },
       credentials: "same-origin",
       cache: "no-store",
     });

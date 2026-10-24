@@ -23,7 +23,7 @@ Koristiti postojeći `coordinate-project-sessions` način **Prepare the next ses
 
 Zahtijevati task ID i **puni tested/reviewed head SHA**; ako jedan nedostaje, prikazati postojeće artefakte uz `UNVERIFIED`, bez verdicta prihvata. Za svaki test/review povezati isti task/repo, puni SHA, vrijeme izvođenja, uređaj/verzije, naredbu ili radnju, originalni rezultat, opseg i putanju dokaza. Razlikovati `base_sha`, završni lokalni head, testirani head, pregledani head i prihvaćeni main. Lokalni `completed` i `canonical_review:false` očuvati; ne prevoditi ih u PASS.
 
-Čitati aktualni Engineering System i stvarni gate status. Green engineering evaluator nije actual gate PASS. Kanonski review/QA komentar mora imati propisanu prvu nepraznu liniju, puni aktualni `Review-Head`/`QA-Head`, verdict i valjan autentificirani App identitet. Za critical reviewer i QA potrebni su odvojeni PASS-ovi različitih GitHub Appova; druga deklarirana uloga ili slot istog Appa to ne zadovoljava. Aktualni valjani FAIL/BLOCK ostaje blokada prema kanonskim pravilima. Novi head invalidira stare dokaze. Ne objavljivati vlastiti kanonski PASS niti Owner Override kroz ovaj reader.
+Čitati aktualni Engineering System i stvarni gate status. Green engineering evaluator nije actual gate PASS. Kanonski review/QA komentar mora imati propisanu prvu nepraznu liniju, puni aktualni `Review-Head`/`QA-Head`, verdict i valjan autentificirani App identitet. Za critical reviewer i QA potrebni su odvojeni PASS-ovi različitih GitHub Appova ili ispunjeni uvjeti iznimke iz `docs/ENGINEERING_SYSTEM.md` §6: kvotni fallback, D-139 ili Codex par na točno aktualnom headu (D-158). Sam drugi slot ili uloga nisu dokaz ispunjenih uvjeta ni stvarne neovisnosti. D-158 je prihvaćen i spojen kroz #538; izvor i uvjeti su u kanonskom §6. Aktualni valjani FAIL/BLOCK ostaje blokada prema kanonskim pravilima. Novi head invalidira stare dokaze osim izričito dopuštenog prijenosa; D-158 ne koristi carried PASS. Ne objavljivati vlastiti kanonski PASS niti Owner Override kroz ovaj reader.
 
 ## Sintetički primjeri tumačenja (nisu runtime rezultati)
 
@@ -32,7 +32,8 @@ Zahtijevati task ID i **puni tested/reviewed head SHA**; ako jedan nedostaje, pr
 | Task DAN-X ima `completed`; result.json nedostaje | Procesni status postoji; završni SHA i rezultat `UNVERIFIED`; ne stvarati artefakt. |
 | Test navodi head `1111111111111111111111111111111111111111`, PR head je `2222222222222222222222222222222222222222` | Izvorni prolaz sačuvati; `STALE` za aktualni head. |
 | Heartbeat star sat vremena, postoji reservation | Opažena zastarjela rezervacija; život procesa `UNVERIFIED`; ne zapisivati orphaned. |
-| Review PASS i QA PASS na istom headu, oba iz `chatgpt-codex-connector` | Dva komentara postoje; critical zahtjev različitih Appova nije ispunjen. |
+| Review PASS i QA PASS na istom headu, oba iz `chatgpt-codex-connector`; ostali uvjeti nisu provjereni | Dva komentara postoje; prihvat `UNVERIFIED`. Provjeriti prihvaćena pravila, kanonske blokove, aktualni puni SHA, autentifikaciju, sve principale, FAIL/BLOCK i stvarni gate status. Isti App sam po sebi ne dokazuje ni valjan ni nevaljan par. |
+| D-158 je prihvaćen i spojen; dva kanonska PASS-a iz `chatgpt-codex-connector` na točno aktualnom punom SHA-u; tri različita normalizirana principala, QA nije nijedan važeći reviewer PASS principal, nema prevladavajućeg FAIL/BLOCK i actual gate je SUCCESS | Dokazi odgovaraju prihvaćenom D-158 putu bez kvote i prijenosa. Sačuvati opaženi gate rezultat; deklarirani slotovi nisu dokaz stvarne neovisnosti, a CI i ostali merge uvjeti provjeravaju se zasebno. Ovo nije readerov kanonski PASS. |
 
 ## Odnos prema postojećim postupcima
 

@@ -30,14 +30,16 @@ describe("readLiveState", () => {
     expect(read).toMatchObject({ kind: "state", hash: REVISION_ZERO_SHA256 });
     expect(read.kind === "state" && read.document.schemaVersion).toBe(1);
     expect(fetcher).toHaveBeenCalledWith("/api/live/rad%2F1%3Fx", {
-      method: "GET", headers: {}, credentials: "same-origin", cache: "no-store",
+      method: "GET", headers: { "ductus-protocol": "1" }, credentials: "same-origin", cache: "no-store",
     });
   });
 
   it("names the document it already holds and reads 304 for that document as unchanged", async () => {
     const fetcher = vi.fn<typeof fetch>(async () => reply(304, null, REVISION_ZERO_SHA256));
     expect(await readLiveState(DOC, REVISION_ZERO_SHA256, fetcher)).toEqual({ kind: "unchanged" });
-    expect(fetcher.mock.calls[0]![1]).toMatchObject({ headers: { "if-none-match": `"${REVISION_ZERO_SHA256}"` } });
+    expect(fetcher.mock.calls[0]![1]).toMatchObject({
+      headers: { "ductus-protocol": "1", "if-none-match": `"${REVISION_ZERO_SHA256}"` },
+    });
   });
 
   it("never shows a body that is not the exact document the ETag names", async () => {
@@ -133,14 +135,19 @@ describe("startLiveReader", () => {
       () => reply(200, second, secondHash),
     ]);
     const stop = startLiveReader(h.options);
-    await h.settle();
-    expect(h.views.at(-1)).toMatchObject({ hash: REVISION_ZERO_SHA256, connection: "live", empty: false });
-    expect(h.pending()).toBe(LIVE_READ_INTERVAL_MS);
+    // A few event-loop turns do not await the real WebCrypto digest.
+    await vi.waitFor(() => {
+      expect(h.views.at(-1)).toMatchObject({ hash: REVISION_ZERO_SHA256, connection: "live", empty: false });
+      expect(h.pending()).toBe(LIVE_READ_INTERVAL_MS);
+    });
     await h.advance();
     expect(h.views).toHaveLength(1);
     expect(h.fetcher.mock.calls[1]![1]).toMatchObject({ headers: { "if-none-match": `"${REVISION_ZERO_SHA256}"` } });
     await h.advance();
-    expect(h.views.at(-1)).toMatchObject({ hash: secondHash, connection: "live" });
+    await vi.waitFor(() => {
+      expect(h.views.at(-1)).toMatchObject({ hash: secondHash, connection: "live" });
+      expect(h.pending()).toBe(LIVE_READ_INTERVAL_MS);
+    });
     stop();
     expect(h.timers).toHaveLength(0);
   });
@@ -152,7 +159,10 @@ describe("startLiveReader", () => {
       () => reply(304, null, REVISION_ZERO_SHA256),
     ]);
     startLiveReader(h.options);
-    await h.settle();
+    await vi.waitFor(() => {
+      expect(h.views.at(-1)).toMatchObject({ hash: REVISION_ZERO_SHA256, connection: "live" });
+      expect(h.pending()).toBe(LIVE_READ_INTERVAL_MS);
+    });
     const delays: (number | null)[] = [];
     for (let i = 0; i < 6; i += 1) {
       await h.advance();
@@ -200,7 +210,10 @@ describe("startLiveReader", () => {
       () => reply(304, null, REVISION_ZERO_SHA256),
     ]);
     startLiveReader(h.options);
-    await h.settle();
+    await vi.waitFor(() => {
+      expect(h.views.at(-1)).toMatchObject({ hash: REVISION_ZERO_SHA256, connection: "live" });
+      expect(h.pending()).toBe(LIVE_READ_INTERVAL_MS);
+    });
     await h.setVisible(false);
     await h.advance();
     expect(h.views.at(-1)!.connection).toBe("paused");
@@ -221,9 +234,16 @@ describe("startLiveReader", () => {
     await h.setVisible(true);
     expect(h.fetcher).toHaveBeenCalledTimes(1);
     stop();
-    release(reply(200, REVISION_ZERO_JCS, REVISION_ZERO_SHA256));
-    await h.settle();
-    expect(h.views).toEqual([]);
-    expect(h.timers).toHaveLength(0);
+    const digest = vi.spyOn(crypto.subtle, "digest");
+    try {
+      release(reply(200, REVISION_ZERO_JCS, REVISION_ZERO_SHA256));
+      await vi.waitFor(() => expect(digest).toHaveBeenCalledTimes(1));
+      await digest.mock.results[0]!.value;
+      await h.settle();
+      expect(h.views).toEqual([]);
+      expect(h.timers).toHaveLength(0);
+    } finally {
+      digest.mockRestore();
+    }
   });
 });

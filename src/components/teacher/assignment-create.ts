@@ -1,4 +1,4 @@
-// F-6 / DAN-35: the browser sends only the nine assignment fields of the
+// F-6 / DAN-35: the browser sends only the assignment fields of the
 // create_assignment contract (#363). Identity, institution and role are never
 // form inputs; the server decides them from the session.
 import type { CoursePolicy } from "./course-create";
@@ -20,6 +20,8 @@ export interface AssignmentDraft {
   opensAt: string;
   dueAt: string;
   aiPurposes: AiPurpose[];
+  wordMin: string;
+  wordMax: string;
 }
 
 export interface AssignmentBody {
@@ -30,6 +32,8 @@ export interface AssignmentBody {
   dueAt: string;
   aiPolicy: CoursePolicy;
   aiPurposes: AiPurpose[];
+  wordMin: number | null;
+  wordMax: number | null;
   evidenceProfile: "basic";
   importAllowed: false;
 }
@@ -40,6 +44,27 @@ export type AssignmentCreation =
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const LOCAL_MINUTE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
+const WORD_COUNT = /^\d+$/;
+
+export interface ParsedWordRange { wordMin: number | null; wordMax: number | null }
+
+function wordCount(value: string): number | null | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (!WORD_COUNT.test(trimmed)) return undefined;
+  const count = Number(trimmed);
+  return Number.isSafeInteger(count) && count >= 1 && count <= 1_000_000 ? count : undefined;
+}
+
+/** Null means invalid; an object with two nulls is a valid empty range. */
+export function parseWordRange(min: string, max: string): ParsedWordRange | null {
+  const wordMin = wordCount(min);
+  const wordMax = wordCount(max);
+  if (wordMin === undefined || wordMax === undefined || (wordMin !== null && wordMax !== null && wordMin > wordMax)) {
+    return null;
+  }
+  return { wordMin, wordMax };
+}
 
 function instant(local: string): string | null {
   if (!LOCAL_MINUTE.test(local)) return null;
@@ -56,8 +81,10 @@ export function assignmentBody(draft: AssignmentDraft, course: CoursePolicy): As
   const title = draft.title.trim();
   const opensAt = instant(draft.opensAt);
   const dueAt = instant(draft.dueAt);
+  const range = parseWordRange(draft.wordMin, draft.wordMax);
   if (!title || Array.from(title).length > 200 || Array.from(draft.instructions).length > 20_000) return null;
   if (!WORK_TYPES.includes(draft.workType) || !opensAt || !dueAt || dueAt <= opensAt) return null;
+  if (!range) return null;
   const aiPurposes = course === "prohibited" ? [] : AI_PURPOSES.filter((p) => draft.aiPurposes.includes(p));
   return {
     title,
@@ -67,6 +94,8 @@ export function assignmentBody(draft: AssignmentDraft, course: CoursePolicy): As
     dueAt,
     aiPolicy: aiPurposes.length === 0 ? "prohibited" : "partially_allowed",
     aiPurposes,
+    wordMin: range.wordMin,
+    wordMax: range.wordMax,
     // No form field yet; the narrowest values the contract accepts.
     evidenceProfile: "basic",
     importAllowed: false,
@@ -74,8 +103,8 @@ export function assignmentBody(draft: AssignmentDraft, course: CoursePolicy): As
 }
 
 /**
- * The retry key belongs to one body: the caller makes a new one whenever the
- * draft changes, so a retry never meets the server's 409 for a changed body.
+ * The retry key belongs to one serialized body: the caller makes a new one
+ * only when the body changes, so equivalent form text keeps the same key.
  * Success only on HTTP 201 with a valid UUID; server error text is ignored.
  */
 export async function createAssignment(

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 
-import AppHeader from "@/components/shell/AppHeader";
+import AppShell from "@/components/shell/AppShell";
 import TeacherSetup from "@/components/teacher/TeacherSetup";
 import { teacherAccess } from "@/components/teacher/teacher-access";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
@@ -21,9 +21,12 @@ export default async function TeacherNewAssignmentPage() {
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
   const access = await teacherAccess(token, withActor);
   return (
-    <>
-      <AppHeader context={t.teacher.title} />
-      <main id="sadrzaj" tabIndex={-1} className={`page ${styles.page}`}>
+    <AppShell
+      role={access === "allowed" ? "teacher" : null}
+      current="/nastavnik/zadatak/novi"
+      crumbs={[t.teacherCourses.title, t.teacher.title]}
+    >
+      <div className={`page ${styles.page}`}>
         <h1 className={styles.title}>{t.teacher.title}</h1>
         {access === "allowed" ? (
           <TeacherSetup />
@@ -43,8 +46,8 @@ export default async function TeacherNewAssignmentPage() {
             ) : null}
           </>
         )}
-        <p><Link href="/">{t.teacher.backHome}</Link></p>
-      </main>
-    </>
+        <p><Link href="/nastavnik">{t.teacher.backCourses}</Link></p>
+      </div>
+    </AppShell>
   );
 }

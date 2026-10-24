@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { DEMO_WORK_CONTEXT } from "./demo-context.hr";
-import { countTextWords, groupHr, lengthLine, pagesOf } from "./length-line";
+import { countTextWords, groupHr, lengthLine, pagesOf, wordRangeHr } from "./length-line";
 
 const NBSP = " ";
 const RANGE = { min: 2000, max: 2500 };
@@ -12,6 +11,15 @@ describe("length line of the status bar (FE-D6)", () => {
     expect(groupHr(999)).toBe("999");
     expect(groupHr(2000)).toBe(`2${NBSP}000`);
     expect(groupHr(1234567)).toBe(`1${NBSP}234${NBSP}567`);
+  });
+
+  it("gives the same optional target label to preview and notice", () => {
+    expect(wordRangeHr(null)).toBeNull();
+    expect(wordRangeHr({ min: null, max: null })).toBeNull();
+    expect(wordRangeHr({ min: 1, max: null })).toBe("najmanje 1 riječ");
+    expect(wordRangeHr({ min: null, max: 1_000_000 })).toBe(`najviše 1${NBSP}000${NBSP}000 riječi`);
+    expect(wordRangeHr(RANGE)).toBe(`2${NBSP}000–2${NBSP}500 riječi`);
+    expect(wordRangeHr({ min: 1, max: 1 })).toBe("1–1 riječ");
   });
 
   it("counts pages at 300 words, none before the first word, then at least one", () => {
@@ -33,6 +41,22 @@ describe("length line of the status bar (FE-D6)", () => {
     expect(line).toEqual({ selected: null, count: "210", rest: ` / 2${NBSP}000–2${NBSP}500 riječi · ≈ 1 str.` });
   });
 
+  it("states one-sided limits without inventing the other end", () => {
+    expect(lengthLine(210, 0, { min: 1, max: null }).rest).toBe(" / najmanje 1 riječ · ≈ 1 str.");
+    expect(lengthLine(210, 0, { min: 2000, max: null }).rest).toBe(` / najmanje 2${NBSP}000 riječi · ≈ 1 str.`);
+    expect(lengthLine(210, 0, { min: null, max: 2 }).rest).toBe(" / najviše 2 riječi · ≈ 1 str.");
+    expect(lengthLine(210, 0, { min: null, max: 1000000 }).rest).toBe(` / najviše 1${NBSP}000${NBSP}000 riječi · ≈ 1 str.`);
+    expect(lengthLine(0, 0, { min: null, max: null }).rest).toBe(" riječi");
+  });
+
+  it("keeps equal bounds, selected words and page estimate", () => {
+    expect(lengthLine(450, 1, { min: 1000000, max: 1000000 })).toEqual({
+      selected: "označeno 1 riječ",
+      count: "450",
+      rest: ` / 1${NBSP}000${NBSP}000–1${NBSP}000${NBSP}000 riječi · ≈ 2 str.`,
+    });
+  });
+
   it("without a range agrees the noun with the count", () => {
     expect(lengthLine(1, 0, null).rest).toBe(" riječ · ≈ 1 str.");
     expect(lengthLine(3, 0, null).rest).toBe(" riječi · ≈ 1 str.");
@@ -50,7 +74,11 @@ describe("length line of the status bar (FE-D6)", () => {
     expect(lengthLine(210, 0, RANGE).selected).toBeNull();
   });
 
-  it("uses a demo range that is a real range", () => {
-    expect(DEMO_WORK_CONTEXT.words.min).toBeLessThan(DEMO_WORK_CONTEXT.words.max);
+  // #476 contract 6280487079: /rad has no word range until the assignment
+  // carries one (DAN-229), and the line then names none.
+  it("without a range names no range at any count", () => {
+    for (const words of [0, 1, 210, 2500]) {
+      expect(lengthLine(words, 0, null).rest).not.toMatch(/[–/]/u);
+    }
   });
 });

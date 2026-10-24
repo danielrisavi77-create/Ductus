@@ -67,16 +67,21 @@ const pullRequest = { pull_request: { number: 7, head: { sha: HEAD }, html_url: 
 test("a failed comment read after the head is known marks the head pending", () => {
   const { code, posts } = run(comment, { fail: ["/issues/7/comments"] });
   assert.equal(code, 1);
-  assert.equal(posts.length, 1);
-  assert.equal(posts[0].path, `/repos/o/r/statuses/${HEAD}`);
-  assert.equal(posts[0].body.state, "pending");
-  assert.match(posts[0].body.description, /failed before a verdict/);
+  assert.deepEqual(posts.map((p) => p.body.context), ["Merge authorization", "Engineering review gate"]);
+  for (const post of posts) {
+    assert.equal(post.path, `/repos/o/r/statuses/${HEAD}`);
+    assert.equal(post.body.state, "pending");
+    assert.match(post.body.description, /failed before a verdict/);
+  }
 });
 
 test("a failed PR read marks the event head pending when the event names one", () => {
   const withHead = run(pullRequest, { fail: ["/pulls/7"] });
   assert.equal(withHead.code, 1);
-  assert.deepEqual(withHead.posts.map((p) => [p.path, p.body.state]), [[`/repos/o/r/statuses/${HEAD}`, "pending"]]);
+  assert.deepEqual(withHead.posts.map((p) => [p.path, p.body.state]), [
+    [`/repos/o/r/statuses/${HEAD}`, "pending"],
+    [`/repos/o/r/statuses/${HEAD}`, "pending"],
+  ]);
 
   const withoutHead = run(comment, { fail: ["/pulls/7"] });
   assert.equal(withoutHead.code, 1);
@@ -90,9 +95,9 @@ test("a failing status post still ends the run with exit 1 and no crash", () => 
   assert.match(stderr, /Could not mark the head pending/);
 });
 
-test("control: a run that reads everything posts one evaluated status and exits 0", () => {
+test("control: a run that reads everything posts the authorization and the gate status and exits 0", () => {
   const { code, posts } = run(comment);
   assert.equal(code, 0);
-  assert.equal(posts.length, 1);
-  assert.doesNotMatch(posts[0].body.description, /failed before a verdict/);
+  assert.deepEqual(posts.map((p) => p.body.context), ["Merge authorization", "Engineering review gate"]);
+  for (const post of posts) assert.doesNotMatch(post.body.description, /failed before a verdict/);
 });

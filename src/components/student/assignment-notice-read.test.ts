@@ -18,6 +18,8 @@ const row = {
   due_at: new Date("2026-11-30T22:59:00Z"),
   ai_policy: "partially_allowed",
   ai_purposes: ["translation", "explanation", "proofreading"],
+  word_min: 2000,
+  word_max: 2500,
   acknowledged_at: null,
 };
 
@@ -52,6 +54,8 @@ describe("F-7 notice read", () => {
         opensAt: "2026-11-02T08:00:00.000Z",
         dueAt: "2026-11-30T22:59:00.000Z",
         aiPurposes: ["proofreading", "translation"],
+        wordMin: 2000,
+        wordMax: 2500,
         acknowledgedAt: null,
       },
     });
@@ -60,6 +64,14 @@ describe("F-7 notice read", () => {
     expect(sql).not.toMatch(/\b(INSERT|UPDATE|DELETE)\b/i);
     // A teacher may read every acknowledgment: the subquery must stay on the caller's own row.
     expect(sql).toMatch(/n\.student_id = me\.user_id/);
+    expect(sql).toContain("v.word_min, v.word_max");
+  });
+
+  it.each([
+    [null, null], [1, null], [null, 1_000_000], [1, 1],
+  ])("preserves legal optional limits %s/%s", async (wordMin, wordMax) => {
+    const read = await readNotice(TOKEN, ID, actor([{ ...row, word_min: wordMin, word_max: wordMax }]).withActor);
+    expect(read.kind === "available" && read.view).toMatchObject({ wordMin, wordMax });
   });
 
   it("tells a closed or expired session apart from an assignment without access", async () => {

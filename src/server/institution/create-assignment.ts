@@ -5,6 +5,7 @@ import {
 import type { WithActor } from "@/server/db/with-actor";
 
 const MAX_REQUEST_BYTES = 90_000;
+const MAX_WORDS = 1_000_000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const NUL = String.fromCodePoint(0);
 const ISO_INSTANT = /^(\d{4})-(\d{2})-(\d{2})T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,6})?(?:Z|[+-](?:(?:0\d|1[0-3]):[0-5]\d|14:00))$/;
@@ -36,6 +37,8 @@ interface AssignmentInput {
   aiPurposes: string[];
   evidenceProfile: string;
   importAllowed: boolean;
+  wordMin: number | null;
+  wordMax: number | null;
 }
 
 type JsonObject = Record<string, unknown>;
@@ -73,6 +76,11 @@ function validInstant(value: unknown): value is string {
   );
 }
 
+/** Null or a whole number of words from 1 to 1 000 000, as institution.is_word_range. */
+function isWordCount(value: unknown): value is number | null {
+  return value === null || (Number.isSafeInteger(value) && (value as number) >= 1 && (value as number) <= MAX_WORDS);
+}
+
 function parseInput(value: unknown): AssignmentInput | null {
   if (!isObject(value)) return null;
   const keys = [
@@ -86,7 +94,14 @@ function parseInput(value: unknown): AssignmentInput | null {
     "evidenceProfile",
     "importAllowed",
   ];
-  if (Object.keys(value).length !== keys.length || keys.some((key) => !(key in value))) return null;
+  // The word range (DAN-229) is optional: an absent key is null, so an older client still creates.
+  const range = ["wordMin", "wordMax"].filter((key) => Object.hasOwn(value, key)).length;
+  if (Object.keys(value).length !== keys.length + range || keys.some((key) => !(key in value))) return null;
+  const wordMin = value.wordMin ?? null;
+  const wordMax = value.wordMax ?? null;
+  if (!isWordCount(wordMin) || !isWordCount(wordMax) || (wordMin !== null && wordMax !== null && wordMin > wordMax)) {
+    return null;
+  }
   if (
     typeof value.title !== "string" ||
     typeof value.instructions !== "string" ||
@@ -128,6 +143,8 @@ function parseInput(value: unknown): AssignmentInput | null {
     aiPurposes,
     evidenceProfile: value.evidenceProfile,
     importAllowed: value.importAllowed,
+    wordMin,
+    wordMax,
   };
 }
 
@@ -172,7 +189,7 @@ export async function createAssignmentResponse(
       tx.query<{ id: string }>(
         `SELECT institution.create_assignment(
           $1::uuid, $2::uuid, $3::text, $4::text, $5::text, $6::timestamptz, $7::timestamptz,
-          $8::text, $9::text[], $10::text, $11::boolean
+          $8::text, $9::text[], $10::text, $11::boolean, $12::integer, $13::integer
         ) AS id`,
         [
           courseId,
@@ -186,6 +203,8 @@ export async function createAssignmentResponse(
           input.aiPurposes,
           input.evidenceProfile,
           input.importAllowed,
+          input.wordMin,
+          input.wordMax,
         ],
       ),
     );

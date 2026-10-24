@@ -7,8 +7,8 @@ import { messagesHr as t } from "./messages.hr";
  * the arithmetic are tested without a DOM.
  */
 
-/** The assignment's word range, both ends inclusive. */
-export type WordRange = { readonly min: number; readonly max: number };
+/** The assignment's inclusive word limits; either end may be absent. */
+export type WordRange = { readonly min: number | null; readonly max: number | null };
 
 /** Words per page of the prototype (`Math.round(words / 300)`). */
 const WORDS_PER_PAGE = 300;
@@ -18,6 +18,20 @@ const NBSP = " ";
 /** "2 000", "12 500": thousands grouped with a no-break space, as in the design. */
 export function groupHr(n: number): string {
   return String(Math.trunc(n)).replace(/\B(?=(\d{3})+(?!\d))/g, NBSP);
+}
+
+/** The same range label in the teacher preview, S3 notice and editor. */
+export function wordRangeHr(range: WordRange | null): string | null {
+  if (range?.min != null && range.max != null) {
+    return `${groupHr(range.min)}–${groupHr(range.max)} ${pluralHr(range.max, "riječ", "riječi", "riječi")}`;
+  }
+  if (range?.min != null) {
+    return `${t.workspace.wordMinimum.replace("{words}", groupHr(range.min))} ${pluralHr(range.min, "riječ", "riječi", "riječi")}`;
+  }
+  if (range?.max != null) {
+    return `${t.workspace.wordMaximum.replace("{words}", groupHr(range.max))} ${pluralHr(range.max, "riječ", "riječi", "riječi")}`;
+  }
+  return null;
 }
 
 /** Approximate pages; none before the first word, then at least one. */
@@ -40,9 +54,8 @@ export type LengthLine = {
 };
 
 export function lengthLine(words: number, selectedWords: number, range: WordRange | null): LengthLine {
-  const noun = range
-    ? ` / ${groupHr(range.min)}–${groupHr(range.max)} ${pluralHr(range.max, "riječ", "riječi", "riječi")}`
-    : ` ${pluralHr(words, "riječ", "riječi", "riječi")}`;
+  const target = wordRangeHr(range);
+  const noun = target ? ` / ${target}` : ` ${pluralHr(words, "riječ", "riječi", "riječi")}`;
   const pages = pagesOf(words);
   return {
     selected: selectedWords > 0 ? t.workspace.selectedWords.replace("{words}", wordsHr(selectedWords)) : null,
