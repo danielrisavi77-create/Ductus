@@ -68,7 +68,23 @@ describe("S3 notice text (D-142, D-143)", () => {
   it("keeps the on-screen order of the lists", () => {
     expect(Object.keys(s.recorded)).toEqual(["steps", "live", "chain", "versions"]);
     expect(Object.keys(s.notRecorded)).toEqual(["inputs", "outside", "device"]);
-    expect(Object.keys(s.teacher)).toEqual(["state", "replay", "purpose", "history", "noVerdict"]);
+    expect(Object.keys(s.teacher)).toEqual(["state", "replay", "purpose", "history", "workingNotes", "noVerdict"]);
+  });
+
+  it("discloses the mentor's working records and the student's access right (D-130, #489)", () => {
+    expect(s.teacher.workingNotes.startsWith("Mentorovi radni zapisi zasad nisu dostupni. Ako se uvedu,")).toBe(true);
+    expect(s.teacher.workingNotes).toContain("oznaku zadnjeg pregleda s vremenom");
+    expect(s.teacher.workingNotes).toContain("privatne bilješke i predloške komentara");
+    expect(s.teacher.workingNotes).toContain("Nećeš ih vidjeti u aplikaciji");
+    expect(s.teacher.workingNotes).toContain("moći ćeš ih zatražiti pravom pristupa");
+  });
+
+  it("states the limits of working records without promising conditional features (D-130, D-135, D-136)", () => {
+    expect(s.teacher.workingNotes).toContain("nema mjera ni zaključaka koje je izračunala");
+    expect(s.teacher.workingNotes).toContain("Ne ulaze u sažetak, izvoz ni predaju");
+    expect(s.teacher.workingNotes).toContain("brišu se kad i rad");
+    expect(s.teacher.workingNotes).toContain("ne smiju utjecati na kašnjenje ni ocjenu");
+    expect(s.teacher.workingNotes).toContain("Rubrika, nacrt izvješća i objava ocjene zasad nisu dostupni");
   });
 
   it("claims nothing the contract leaves open", () => {

@@ -665,6 +665,8 @@ export const hr = {
       replay: "Nastavnik (mentor) zadatka moći će reproducirati nastanak rada znak po znak, pa i obrisani tekst. Istu reprodukciju svog rada vidjet ćeš i ti.",
       purpose: "Prikaz uživo i reprodukcija služit će praćenju nastanka rada i komentarima, nikad ocjeni ni rangiranju.",
       history: "Povijest verzija i sažetak procesa, isti kao što ga vidiš ti.",
+      // D-130: disclose working records and access rights without promising a build (D-135/D-136).
+      workingNotes: `Mentorovi radni zapisi zasad nisu dostupni. Ako se uvedu, obuhvaćat će oznaku zadnjeg pregleda s vremenom, privatne bilješke i predloške komentara. Nećeš ih vidjeti u aplikaciji, ali moći ćeš ih zatražiti pravom pristupa. U njima nema mjera ni zaključaka koje je izračunala ${APP_NAME}. Ne ulaze u sažetak, izvoz ni predaju, brišu se kad i rad i ne smiju utjecati na kašnjenje ni ocjenu. Rubrika, nacrt izvješća i objava ocjene zasad nisu dostupni.`,
       noVerdict: `${APP_NAME} ne procjenjuje autorstvo ni korištenje AI-ja.`,
     },
     // D-05, PRODUCT §6 "Profili evidencije": only for the extended profile.
