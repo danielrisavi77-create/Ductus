@@ -26,25 +26,44 @@ import {
   planDrain,
   scheduleAfterOutcome,
   type DrainOutcome,
+  type QueuedRow,
   type RetrySchedules,
   type SignedCommitReceiptVerifier,
 } from "../../domain/sync/drain";
 import type { DocumentTransaction } from "../../domain/document";
+import type { JournalContents, QueuedTransaction } from "../../domain/sync/journal-types";
 import { syncReducer, type SyncState } from "../../domain/sync/states";
-import { JournalError, type AtomicDexieJournal } from "../journal/atomic-dexie-journal";
+import {
+  JournalError, type AnswerResult, type AtomicDexieJournal,
+} from "../journal/atomic-dexie-journal";
 
-/** Sends one transaction. A throw is read as a lost answer (`transport_error`). */
-export type CommitTransport = (documentId: string, tx: DocumentTransaction) => Promise<DrainOutcome>;
+/**
+ * Sends one transaction. A throw is read as a lost answer (`transport_error`).
+ * `T` is the kind of row the runner's documents queue: the journal keeps one
+ * kind per document and `planDrain` sends nothing from a mixed queue, and the
+ * evidence transport checks the kind again (`createEvidenceTransport`).
+ */
+export type CommitTransport<T extends QueuedTransaction = DocumentTransaction> =
+  (documentId: string, tx: T) => Promise<DrainOutcome>;
 
-export type DrainJournal = Pick<AtomicDexieJournal, "read" | "beginSend" | "recordAnswer">;
+/** The journal as the runner uses it, over rows of either kind. */
+export type DrainJournal = Pick<AtomicDexieJournal, "beginSend"> & {
+  read(documentId: string): Promise<JournalContents<QueuedTransaction>>;
+  recordAnswer(
+    documentId: string, sent: QueuedRow, outcome: DrainOutcome, state: SyncState | null,
+  ): Promise<AnswerResult<QueuedTransaction>>;
+};
 
-export type DrainRunnerDeps = {
+export type DrainRunnerDeps<T extends QueuedTransaction = DocumentTransaction> = {
   journal: DrainJournal;
-  transport: CommitTransport;
-  verify: SignedCommitReceiptVerifier;
+  transport: CommitTransport<T>;
   now?: () => number;
   jitter?: () => number;
-};
+} & (
+  | { verify: SignedCommitReceiptVerifier; verifyFor?: never }
+  /** A verifier bound to the row as the journal stored it (F-8 3d-2a: its segment hash). */
+  | { verifyFor: (sent: QueuedRow) => SignedCommitReceiptVerifier; verify?: never }
+);
 
 export type DrainStepResult =
   /** Nothing is owed. */
@@ -66,7 +85,9 @@ export type DrainRunner = {
 
 const EDITOR_STATES: ReadonlySet<SyncState> = new Set(["EDITING", "SAVING_LOCAL"]);
 
-export function createDrainRunner(deps: DrainRunnerDeps): DrainRunner {
+export function createDrainRunner<T extends QueuedTransaction = DocumentTransaction>(
+  deps: DrainRunnerDeps<T>,
+): DrainRunner {
   const now = deps.now ?? Date.now;
   const jitter = deps.jitter ?? Math.random;
   let schedules: RetrySchedules = new Map();
@@ -95,7 +116,7 @@ export function createDrainRunner(deps: DrainRunnerDeps): DrainRunner {
     await deps.journal.beginSend(documentId, row);
     let outcome: DrainOutcome;
     try {
-      outcome = await deps.transport(documentId, fastForwardBase(row.tx, before.snapshot?.revision ?? null));
+      outcome = await deps.transport(documentId, fastForwardBase(row.tx, before.snapshot?.revision ?? null) as T);
     } catch {
       outcome = { status: "transport_error" };
     }
@@ -108,7 +129,7 @@ export function createDrainRunner(deps: DrainRunnerDeps): DrainRunner {
         clientTransactionId: row.tx.clientTransactionId,
         revision: typeof revision === "number" ? revision : 0,
       },
-      verify: deps.verify,
+      verify: deps.verifyFor ? deps.verifyFor(row) : deps.verify!,
     }, { sent: row, pending: after.pending });
 
     const current = after.meta?.state ?? "SYNCING";
