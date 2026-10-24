@@ -59,7 +59,7 @@ const opened: { course: string | null } = { course: null };
  * assignment and has confirmed its notice, so the route accepts the
  * publication. The document is made once (as comments.spec.ts makes it).
  */
-async function enrolAndConfirm(token: string): Promise<void> {
+async function enrolAndConfirm(token: string): Promise<string> {
   const assignment = await admin(async (client) => {
     await client.query("BEGIN");
     const { rows: [student] } = await client.query<{ id: string; institution: string }>(
@@ -114,6 +114,7 @@ async function enrolAndConfirm(token: string): Promise<void> {
   } finally {
     await pool.end();
   }
+  return assignment.id;
 }
 
 test.afterEach(async () => {
@@ -135,22 +136,25 @@ async function readLive(page: Page): Promise<{ status: number; body: string }> {
   }, { url: LIVE, protocol: DUCTUS_PROTOCOL_VERSION });
 }
 
-test("a student without a confirmed notice publishes once, gets 404 and publishes nothing more", async ({ page }) => {
+// F-121: the notice says nothing reaches the server before it is confirmed,
+// so a page that has not read a confirmed notice sends no text at all, not
+// even one request the route would refuse.
+test("a student without a confirmed notice publishes nothing, not even once", async ({ page }) => {
   const puts = recordPuts(page);
   await signIn(page, "/rad");
   await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
   await editorOf(page).click();
   await page.keyboard.type("Izmišljena rečenica.");
-  await expect.poll(() => puts.length).toBe(1);
+  await page.waitForTimeout(3000);
   await page.keyboard.type(" Još jedna.");
   await page.waitForTimeout(3000);
-  expect(puts).toHaveLength(1);
+  expect(puts).toEqual([]);
 });
 
 test("the signed-in student's text reaches the live route as the exact document, one request at a time", async ({ page, context }) => {
   await signIn(page, "/rad");
-  await enrolAndConfirm((await appCookie(context, SESSION_COOKIE))!.value);
-  await page.reload();
+  const assignment = await enrolAndConfirm((await appCookie(context, SESSION_COOKIE))!.value);
+  await page.goto(`/rad?zadatak=${assignment}`);
   const puts = recordPuts(page);
   await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
   await editorOf(page).click();
@@ -169,13 +173,15 @@ test("the signed-in student's text reaches the live route as the exact document,
   for (let i = 1; i < puts.length; i += 1) expect(puts[i]!.at - puts[i - 1]!.at).toBeGreaterThanOrEqual(950);
 });
 
-test("publishing stops at Odjava, starts again on Ostani, and nothing goes out after the sign-out", async ({ page }) => {
+test("publishing stops at Odjava, starts again on Ostani, and nothing goes out after the sign-out", async ({ page, context }) => {
   // The route's answers are the test's here: this test is about when requests leave.
   await page.route(`**${LIVE}`, (route) => route.request().method() === "PUT"
     ? route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ outcome: "accepted", token: TOKEN }) })
     : route.fallback());
   const puts = recordPuts(page);
   await signIn(page, "/rad");
+  const assignment = await enrolAndConfirm((await appCookie(context, SESSION_COOKIE))!.value);
+  await page.goto(`/rad?zadatak=${assignment}`);
   await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
   const dialog = logoutDialogOf(page);
 

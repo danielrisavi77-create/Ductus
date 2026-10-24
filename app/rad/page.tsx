@@ -86,7 +86,8 @@ async function journalFor(token: string | undefined): Promise<{
  * acknowledgment the page sends them to the notice (PRODUCT §5 rule 6);
  * otherwise neither is shown, never an invented value. The
  * status bar shows the length and any limits of the acknowledged current
- * assignment version (DAN-225/229). With a journal, Rad shows invented stages of the real shape
+ * assignment version (DAN-225/229). Only with that acknowledgment does the
+ * tab publish the live view (B-LIVE step 4, F-121). With a journal, Rad shows invented stages of the real shape
  * until its read exists (FE-D9, #476). Signing out
  * always ends the session (D-118, `LocalLogout`).
  */
@@ -194,7 +195,8 @@ export default async function WorkspacePage({
     <>
       <SessionObserver tag={tag} at={at} />
       {scope ? (
-        <LocalDocumentProvider scope={scope} documentId={LOCAL_DEMO_DOCUMENT_ID} session={session}>
+        <LocalDocumentProvider scope={scope} documentId={LOCAL_DEMO_DOCUMENT_ID} session={session}
+          livePublish={work !== null}>
           {workspace}
         </LocalDocumentProvider>
       ) : workspace}

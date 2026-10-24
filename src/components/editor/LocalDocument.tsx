@@ -144,8 +144,19 @@ function sameIds(editor: Editor, doc: CanonicalDocument): boolean {
 }
 
 export function LocalDocumentProvider({
-  scope, documentId, session = null, children,
-}: { scope: string; documentId: string; session?: SessionMark | null; children: ReactNode }) {
+  scope, documentId, session = null, livePublish = false, children,
+}: {
+  scope: string;
+  documentId: string;
+  session?: SessionMark | null;
+  /**
+   * True only when the page read that this student acknowledged the current
+   * notice of the assignment (PRODUCT §5 rules 6 and 14, F-121): without it
+   * the publisher is never made, so no text leaves the tab.
+   */
+  livePublish?: boolean;
+  children: ReactNode;
+}) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [snapshot, setSnapshot] = useState<SaverSnapshot | null>(null);
   const [words, setWords] = useState(0);
@@ -334,8 +345,10 @@ export function LocalDocumentProvider({
         readyRef.current = true;
         editor.setEditable(true, false);
         setPhase("ready");
-        // Only a signed-in person publishes; the local demo journal never does.
-        const publisher = markTag === null ? null : createLivePublisher({ documentId, current: () => !ended() });
+        // Only a signed-in person who acknowledged the notice publishes; the
+        // local demo journal never does.
+        const publisher = markTag === null || !livePublish
+          ? null : createLivePublisher({ documentId, current: () => !ended() });
         publisherRef.current = publisher;
         if (publisher && result.document) publisher.offer(result.document);
         publisher?.start();
@@ -422,7 +435,7 @@ export function LocalDocumentProvider({
       window.removeEventListener("storage", recheck);
       window.removeEventListener("pageshow", recheck);
     };
-  }, [editor, scope, documentId, markTag, markAt]);
+  }, [editor, scope, documentId, markTag, markAt, livePublish]);
 
   // Writing stays stopped from here until "Ostani" or the end of the
   // session, so the count the dialog shows cannot grow behind it (I2).
