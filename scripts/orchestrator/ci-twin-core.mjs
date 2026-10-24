@@ -18,12 +18,23 @@ export function queueMinutes(job) {
   return Number.isFinite(created) && Number.isFinite(start) && start >= created ? (start - created) / MINUTE : null;
 }
 
+// F-122: job names of a run are free text of whoever wrote the workflow. Only plain names are
+// kept, so a name with control characters or instruction-like text never reaches the terminal.
+const SAFE_JOB_NAME = /^[\w .,()/:=@+-]{1,100}$/;
+
+/** True only for a run made from this very repository; a fork chooses its own job names. Missing data: false. */
+export function isOwnRun(run) {
+  const here = String(run?.repository?.full_name ?? "").toLowerCase();
+  const from = String(run?.head_repository?.full_name ?? "").toLowerCase();
+  return here !== "" && here === from;
+}
+
 /** One run as { id, wall, critical, jobs }: wall clock, the slowest job and its minutes per job name. */
 export function runShape(run, jobs) {
   const perJob = Object.create(null);
   for (const job of jobs) {
     const m = jobMinutes(job);
-    if (m !== null) perJob[job.name] = m;
+    if (m !== null && SAFE_JOB_NAME.test(String(job.name ?? ""))) perJob[job.name] = m;
   }
   const names = Object.keys(perJob);
   if (!names.length) return null;

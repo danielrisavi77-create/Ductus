@@ -26,6 +26,17 @@ export interface EvidenceStepReplayerV2<TDocument> {
   toCanonical(document: TDocument): JcsJsonValue;
 }
 
+/**
+ * A replayer whose `apply` may finish later, such as one that hashes with Web
+ * Crypto in the browser (granica 8, #638). The replay awaits it; a rejected
+ * promise is a refused event, like a throw. Every synchronous replayer is one.
+ */
+export interface AsyncEvidenceStepReplayerV2<TDocument>
+  extends Omit<EvidenceStepReplayerV2<TDocument>, "apply"> {
+  /** Applies every step of the event exactly, or throws or rejects. */
+  apply(document: TDocument, event: EvidenceEventV2): TDocument | Promise<TDocument>;
+}
+
 export type EvidenceReplayFailureV2 =
   | "unsupported_format"
   | "invalid_document"
@@ -63,7 +74,7 @@ export async function digestCanonicalDocumentV2(
 export async function findEvidenceStartBreakV2<TDocument>(
   initialDocument: JcsJsonValue,
   first: EvidenceSegmentV2,
-  replayer: EvidenceStepReplayerV2<TDocument>,
+  replayer: AsyncEvidenceStepReplayerV2<TDocument>,
 ): Promise<
   | { ok: true; discontinuity: EvidenceChainDiscontinuityV2 | null }
   | { ok: false; reason: "invalid_document" }
@@ -103,7 +114,7 @@ export async function findEvidenceStartBreakV2<TDocument>(
 export async function replayEvidenceSegmentsV2<TDocument>(
   initialDocument: JcsJsonValue,
   segments: readonly EvidenceSegmentV2[],
-  replayer: EvidenceStepReplayerV2<TDocument>,
+  replayer: AsyncEvidenceStepReplayerV2<TDocument>,
 ): Promise<EvidenceReplayResultV2> {
   let document: TDocument;
   let current: { canonical: string; sha256: string };
@@ -124,7 +135,7 @@ export async function replayEvidenceSegmentsV2<TDocument>(
     }
     for (const event of segment.events) {
       try {
-        document = replayer.apply(document, event);
+        document = await replayer.apply(document, event);
         current = await digestCanonicalDocumentV2(replayer.toCanonical(document));
       } catch {
         return { ok: false, reason: "step_failed", segmentIndex, sequence: event.sequence };
