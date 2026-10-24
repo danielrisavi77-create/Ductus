@@ -157,7 +157,7 @@ test("scope bootstrap and non-PR events select full without running PR code", (t
 test("required stack accepts only both full successes or both trusted docs skips", () => {
   const stack = job("stack");
   assert.match(stack, /^ {4}name: Local stack \(compose.yaml\)$/m);
-  assert.match(stack, /^ {4}needs: \[scope, stack-e2e, stack-login\]$/m);
+  assert.match(stack, /^ {4}needs: \[scope, stack-e2e, stack-login, stack-e2e-results\]$/m);
   assert.match(stack, /^ {4}if: always\(\)$/m);
   assert.doesNotMatch(stack, /continue-on-error|uses:|pnpm |git /);
   const guard = step(stack, "Validate stack results");
@@ -166,6 +166,7 @@ test("required stack accepts only both full successes or both trusted docs skips
   assert.match(guard, /PROFILE: \$\{\{ needs.scope.outputs.profile \}\}/);
   assert.match(guard, /E2E_RESULT: \$\{\{ needs.stack-e2e.result \}\}/);
   assert.match(guard, /LOGIN_RESULT: \$\{\{ needs.stack-login.result \}\}/);
+  assert.match(guard, /EVIDENCE_RESULT: \$\{\{ needs.stack-e2e-results.result \}\}/);
   const script = shell(guard);
   const cases = [
     [true, "success", "full", "success", "success"],
@@ -184,10 +185,16 @@ test("required stack accepts only both full successes or both trusted docs skips
     cases.push([false, "success", "docs", result, "skipped"]);
     cases.push([false, "success", "docs", "skipped", result]);
   }
-  for (const [ok, result, profile, e2e, login] of cases) {
+  for (const result of ["failure", "cancelled", "skipped", ""]) {
+    cases.push([false, "success", "full", "success", "success", result]);
+  }
+  for (const result of ["failure", "cancelled", "success", ""]) {
+    cases.push([false, "success", "docs", "skipped", "skipped", result]);
+  }
+  for (const [ok, result, profile, e2e, login, evidence = profile === "docs" ? "skipped" : "success"] of cases) {
     const run = spawnSync("bash", ["-e", "-c", script], { encoding: "utf8", env: {
       ...process.env, SCOPE_RESULT: result, PROFILE: profile, E2E_RESULT: e2e,
-      LOGIN_RESULT: login,
+      LOGIN_RESULT: login, EVIDENCE_RESULT: evidence,
       GITHUB_STEP_SUMMARY: process.platform === "win32" ? "NUL" : "/dev/null",
     } });
     assert.equal(run.status === 0, ok, `${result}/${profile}/${e2e}/${login}: ${run.stderr}`);
@@ -218,7 +225,7 @@ test("both runtime suites are independent, full-only and keep their own setup an
         continue;
       }
       const status = block.includes("uses: actions/upload-artifact@") ||
-        block.startsWith("      - name: UI test selection pilot\n") ? "!cancelled()"
+        block.startsWith("      - name: Collect shard evidence\n") ? "!cancelled()"
         : block.includes("run: docker compose logs") ? "failure()"
           : block.includes("run: pnpm stack:down") ? "always()" : null;
       assert.equal(condition, status ? `\${{ ${full} && ${status} }}` : runtime, `${name}: ${block.split("\n")[0]}`);

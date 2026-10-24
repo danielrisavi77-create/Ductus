@@ -7,7 +7,6 @@ import { existsSync, mkdirSync } from "node:fs";
 import { constants, tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import { chromium } from "@playwright/test";
 import { pnpmCommand } from "./process-command.mjs";
 
 const args = process.argv.slice(2);
@@ -77,6 +76,8 @@ try {
     if (i > 60) throw new Error("server did not become ready in 30 s");
     await sleep(500);
   }
+  // Load the browser only after the server is ready; keep startup and signal cleanup independent of it.
+  const { chromium } = await import("@playwright/test");
   browser = await chromium.launch({ headless: !args.includes("--headed") });
   const context = await browser.newContext({ locale: "hr-HR", viewport: { width: 1280, height: 800 } });
   const page = await context.newPage();
