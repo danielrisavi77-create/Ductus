@@ -414,6 +414,8 @@ test("demo walk-through", async ({ browser, page, context }) => {
     await page.getByRole("link", { name: t.student.openEditor }).click();
     await page.waitForURL(`http://localhost:3000/rad?zadatak=${assignment!.id}`);
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+    // F-8 point 5: the sheet heading names the acknowledged assignment.
+    await expect(page.locator("h1.manuscript__title")).toHaveText(ASSIGNMENT_TITLE);
     await snapshot(page, "2-editor-nakon-potvrde");
   });
 

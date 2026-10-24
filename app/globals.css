@@ -763,6 +763,8 @@ main:focus {
   /* Newsreader is served at 400-500 (app/fonts); 700 would be a synthetic bold. */
   font-weight: 500;
   line-height: 1.35;
+  /* An assignment title (F-8 point 5) wraps whole, even a long unbroken word. */
+  overflow-wrap: anywhere;
 }
 
 .manuscript__placeholder {
