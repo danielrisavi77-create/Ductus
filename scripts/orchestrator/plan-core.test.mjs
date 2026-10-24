@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { prPaths } from "./gh.mjs";
 import { overlapPairs } from "./orchestrator-core.mjs";
 import { DEMO_FIRST_UNTIL, declaredDependencies, isTooling, laneOf, parseArgs, planParallel, renderPlan, taskOf, writerOf } from "./plan-core.mjs";
 import { contractState } from "./work-guard-core.mjs";
@@ -70,7 +71,7 @@ test("unread files, no writer role, no DAN task, no or wrong assignment are NEPR
 
 test("shared files and migration order are PREKLAPANJE, named on both sides", () => {
   const prs = [pr(1, "backend", ["db/migrations/0101_a.sql"]), pr(2, "platforma", ["scripts/x.mjs"]),
-    pr(3, "frontend", ["scripts/x.mjs", "e2e/a.spec.ts"]), pr(4, "backend", ["db/migrations/0102_b.sql"])];
+    pr(3, "frontend", ["scripts/x.mjs", "e2e/a.spec.ts"]), pr(4, "backend", ["db/migrations/0102_b.sql"], { isDraft: true })];
   const c = contract([assignment(1, "backend"), assignment(2, "platforma"), assignment(3, "frontend")]);
   const p = plan(prs, c);
   assert.equal(p.rows[1].verdict, "PREKLAPANJE");
@@ -115,8 +116,8 @@ test("a stacked base, a declared dependency or a contract blocker is ČEKA OVISN
     pr(3, "platforma", ["scripts/b.mjs"], { body: body("platforma", 3, "Ovisi o #1 i depends on #999, čeka #3") }),
     pr(4, "frontend", ["e2e/a.spec.ts"])];
   const c = contract([assignment(1, "backend", { blockers: ["decision"] }), assignment(2, "platforma"),
-    assignment(3, "frontend", { agent: "claude:s3:platforma" }), assignment(4, "frontend")]);
-  const p = plan(prs, c);
+    assignment(3, "platforma"), assignment(4, "frontend")]);
+  const p = planParallel({ prs, pairs: overlapPairs(prs), contract: c, now: NOW, slots: 4 });
   assert.deepEqual(verdicts(p), { 1: "ČEKA OVISNOST", 2: "ČEKA OVISNOST", 3: "ČEKA OVISNOST", 4: "PARALELNO" });
   assert.deepEqual(p.rows.map((r) => r.reasons), [["contract blockers: decision"], ["based on lane/1, not main"],
     ["declared dependency on #1"], []]);
@@ -217,4 +218,34 @@ test("D-107: a tooling draft waits while any demo draft is left in the queue, un
   const full = planParallel({ prs: two, pairs: [], contract: c3, now: NOW, slots: 1 });
   assert.deepEqual(verdicts(full), { 1: "PARALELNO", 2: "ČEKA OVISNOST" });
   assert.deepEqual(full.rows[1].reasons, ["gate full (1 slots)"]);
+});
+
+test("rough inputs never give PARALELNO: other identity, empty or malformed files, unknown base, overfull gate", async () => {
+  // the contract names another writer in the same role
+  const one = [pr(1, "frontend", ["e2e/a.spec.ts"])];
+  const other = plan(one, contract([assignment(1, "frontend", { agent: "claude:assigned:frontend" })]));
+  assert.deepEqual(other.rows[0], { ...other.rows[0], verdict: "NEPROVJERENO", reasons: ["contract assigns claude:assigned:frontend"] });
+  // a body that copies another PR's identity loses the same-writer exemption with its own assignment
+  const spoof = [pr(1, "frontend", ["src/domain/a.ts"]), pr(2, "frontend", ["src/editor/a.ts"], { body: body("frontend", 1).replace("DAN-1", "DAN-2") })];
+  const sp = plan(spoof, contract([assignment(1, "frontend"), assignment(2, "frontend")]));
+  assert.equal(sp.rows[1].verdict, "NEPROVJERENO");
+  assert.match(sp.rows[1].reasons.join("; "), /contract assigns codex:s2:frontend/);
+  // an empty list and an unknown base
+  const rough = [pr(1, "frontend", []), pr(2, "backend", ["src/server/a.ts"], { baseRefName: undefined })];
+  const rp = plan(rough, contract([assignment(1, "frontend"), assignment(2, "backend")]));
+  assert.deepEqual(rp.rows.map((r) => [r.verdict, r.reasons]), [
+    ["NEPROVJERENO", ["no changed files listed"]], ["NEPROVJERENO", ["base branch unknown"]]]);
+  // malformed file entries are a failed read
+  for (const bad of [[{ status: "modified" }], [{ filename: 123, status: "modified" }], [{ filename: "", status: "added" }],
+    [{ filename: "src/new.ts", status: "renamed" }]]) {
+    await assert.rejects(prPaths(5, async () => bad), /malformed entry/);
+  }
+  assert.deepEqual(await prPaths(5, async () => [{ filename: "src/new.ts", previous_filename: "src/old.ts", status: "renamed" }]), ["src/new.ts", "src/old.ts"]);
+  // four PRs out of draft for three slots: none is advice-ready
+  const four = [1, 2, 3, 4].map((n) => pr(n, ["backend", "frontend", "platforma", "backend"][n - 1], [`e2e/${n}.spec.ts`]));
+  const fc = contract([1, 2, 3].map((n) => assignment(n, ["backend", "frontend", "platforma"][n - 1])));
+  const fp = plan(four, fc);
+  assert.equal(fp.overfull, true);
+  assert.ok(fp.rows.every((r) => r.verdict !== "PARALELNO"));
+  assert.match(fp.rows[0].reasons.join("; "), /gate over capacity \(4 out of draft, 3 slots\)/);
 });

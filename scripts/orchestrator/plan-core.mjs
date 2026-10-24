@@ -79,6 +79,7 @@ export function planParallel({ prs, pairs, contract = null, now = Date.now(), sl
     const task = taskOf(pr.body);
     const reasons = { NEPROVJERENO: [], PREKLAPANJE: [], "ČEKA OVISNOST": [] };
     if (!paths) reasons.NEPROVJERENO.push("files could not be read");
+    else if (!paths.length) reasons.NEPROVJERENO.push("no changed files listed");
     if (!lane) reasons.NEPROVJERENO.push("no writer: Agent line names no backend, frontend or platforma role");
     if (!task) reasons.NEPROVJERENO.push("no DAN task on the Task line");
     if (state === "MISSING") reasons.NEPROVJERENO.push("assignment not checked: no work contract");
@@ -87,7 +88,10 @@ export function planParallel({ prs, pairs, contract = null, now = Date.now(), sl
       const a = assigned.get(pr.number);
       if (!a) reasons.NEPROVJERENO.push("no active assignment in the work contract");
       else {
-        if (a.agent.split(":")[2].toLowerCase() !== lane) reasons.NEPROVJERENO.push(`contract assigns ${a.agent}`);
+        // the whole identity, not only the role: the writer is what the pair rule trusts
+        if (a.agent.toLowerCase() !== (field(pr.body ?? "", "Agent") ?? "").toLowerCase()) {
+          reasons.NEPROVJERENO.push(`contract assigns ${a.agent}`);
+        }
         if (a.task !== task) reasons.NEPROVJERENO.push(`contract task ${a.task} differs`);
         if (a.blockers.length) reasons["ČEKA OVISNOST"].push(`contract blockers: ${a.blockers.join(", ")}`);
       }
@@ -98,7 +102,8 @@ export function planParallel({ prs, pairs, contract = null, now = Date.now(), sl
       const what = [p.count ? `${p.count} shared file${p.count === 1 ? "" : "s"}` : "", ...p.dirs.map((d) => `order of ${d}`)];
       reasons.PREKLAPANJE.push(`#${other}: ${what.filter(Boolean).join(", ")}`);
     }
-    if (pr.baseRefName && pr.baseRefName !== "main") reasons["ČEKA OVISNOST"].push(`based on ${pr.baseRefName}, not main`);
+    if (typeof pr.baseRefName !== "string" || !pr.baseRefName) reasons.NEPROVJERENO.push("base branch unknown");
+    else if (pr.baseRefName !== "main") reasons["ČEKA OVISNOST"].push(`based on ${pr.baseRefName}, not main`);
     const deps = declaredDependencies(pr.body, open).filter((n) => n !== pr.number);
     if (deps.length) reasons["ČEKA OVISNOST"].push(`declared dependency on ${deps.map((n) => `#${n}`).join(", ")}`);
     return { number: pr.number, draft: Boolean(pr.isDraft), lane, writer, task, paths,
@@ -128,6 +133,10 @@ export function planParallel({ prs, pairs, contract = null, now = Date.now(), sl
   }
 
   const inGate = rows.filter((r) => !r.draft).length;
+  // Over capacity no PR in the gate is advice-ready: the orchestrator picks which leave.
+  if (inGate > slots) {
+    for (const r of rows) if (!r.draft) r.reasons["ČEKA OVISNOST"].push(`gate over capacity (${inGate} out of draft, ${slots} slots)`);
+  }
   let free = Math.max(0, slots - inGate);
   const clean = (r) => VERDICTS.slice(0, 3).every((v) => !r.reasons[v].length);
   const waiting = rows.filter((r) => r.draft && clean(r))
