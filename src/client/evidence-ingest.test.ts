@@ -187,8 +187,22 @@ describe("F-8 3c: the open route", () => {
     ["a snapshot in a second spelling", openBody({ document: "QR==" })],
     ["a fractional revision", openBody({ currentRevision: 1.5 })],
     ["a short hash", openBody({ documentHash: "a" })],
+    // #733: the profile rule of the journal and segment v2.
+    ["a profile of only spaces", openBody({ evidenceProfileId: "   " })],
+    ["a profile of 121 UTF-16 units", openBody({ evidenceProfileId: "p".repeat(121) })],
+    ["a profile with a lone surrogate", openBody({ evidenceProfileId: "profil-\uD83D" })],
   ])("refuses %s", (_name, body) => {
     expect(openedWorkFrom(body)).toBeNull();
+  });
+
+  it("a profile of 60 characters outside the BMP (120 units) is read (#733)", () => {
+    expect(openedWorkFrom(openBody({ evidenceProfileId: "\u{1F4D6}".repeat(60) }))?.evidenceProfileId)
+      .toBe("\u{1F4D6}".repeat(60));
+  });
+
+  it("an answer with a refused profile is unavailable at open (#733)", async () => {
+    const { fetchImpl } = scripted(json(200, openBody({ evidenceProfileId: "   " })));
+    expect(await openWork("11111111-1111-4111-8111-111111111111", fetchImpl)).toEqual({ status: "unavailable" });
   });
 
   it.each([
