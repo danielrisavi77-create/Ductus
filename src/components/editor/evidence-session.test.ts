@@ -624,6 +624,33 @@ describe("3d-2c2 evidence session: SYNCING while a step runs (P2, #476 c.6395903
     expect(second.session.snapshot().state).toBe("LOCAL_DURABLE");
   });
 
+  it("a step that throws after its hold shows LOCAL_DURABLE, never SYNCING or SYNCED", async () => {
+    const journal = openJournal();
+    const { session } = setup({
+      journal,
+      over: {
+        createRunner: () => ({
+          async step(documentId) {
+            const row = (await journal.readEvidence(documentId)).pending[0];
+            if (!row) return { kind: "idle" };
+            await journal.beginSend(documentId, row as never);
+            throw new Error("step cut off after beginSend");
+          },
+        }),
+      },
+    });
+    const states: string[] = [];
+    await ready(session);
+    session.subscribe((s) => states.push(s.state));
+    const sheet = editorFor(session);
+    sheet.type("x");
+    await sheet.save();
+    expect((await journal.readEvidence(DOC)).meta?.state).toBe("SYNCING");
+    expect(session.snapshot().state).toBe("LOCAL_DURABLE");
+    expect(states.at(-1)).toBe("LOCAL_DURABLE");
+    expect(states).not.toContain("SYNCED");
+  });
+
   it("after a lost answer or a 503 the state comes from meta, never SYNCING", async () => {
     for (const lost of [() => new TypeError("offline"), () => json(503, {})] as Answer[]) {
       const net = server(R0, lost);
