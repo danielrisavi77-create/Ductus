@@ -57,6 +57,16 @@ REVOKE ALL ON FUNCTION evidence.keep_submitted_package_closed() FROM PUBLIC;
 CREATE TRIGGER evidence_package_stays_closed BEFORE INSERT OR UPDATE OF accepts_evidence ON evidence.package
   FOR EACH ROW EXECUTE FUNCTION evidence.keep_submitted_package_closed();
 
+-- A submission recorded before this migration closes its packages too: a
+-- repeated record_submission answers "existing" and inserts nothing, so the
+-- trigger alone would never reach it.
+UPDATE evidence.package k
+   SET accepts_evidence = false
+  FROM evidence.submission s
+  JOIN evidence.submission_request r ON r.id = s.submission_request_id AND r.institution_id = s.institution_id
+ WHERE k.document_id = r.document_id AND k.institution_id = r.institution_id
+   AND k.accepts_evidence;
+
 RESET ROLE;
 SET LOCAL ROLE ductus_migrator;
 REVOKE CREATE ON SCHEMA evidence FROM ductus_evidence;
