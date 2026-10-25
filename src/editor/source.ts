@@ -110,7 +110,7 @@ export class SourceObserver {
   private compositionText = false;
   /** The text of a trusted `insertReplacementText`, kept like `inputData` (F-130). */
   private replacementText: string | null = null;
-  /** The text of a trusted composition event or `insertCompositionText`, kept like `inputData` (F-130). */
+  /** The text of a trusted compositionend or `insertCompositionText`, kept like `inputData` (F-130, F-132). */
   private composedText: string | null = null;
   private clearing = false;
 
@@ -225,7 +225,7 @@ export class SourceObserver {
     this.touch();
     if (!event.isTrusted) return false;
     this.seen.composing = true;
-    if (event.data) this.composedText = event.data;
+    if (event.type === "compositionend" && event.data) this.composedText = event.data;
     return false;
   }
 }
