@@ -1111,6 +1111,39 @@ main:focus {
   min-height: 12em;
 }
 
+/* Sheet type from the Ductura editor (docs/design/ductura/editor-v11.dc.html,
+   `.ed p/h2/h3`). The design has two levels, chapter (h2) and subchapter (h3);
+   the editor's h1 is the chapter, h2 and h3 take the subchapter size. Headings
+   stay below the sheet title (.manuscript__title, 19 px). Newsreader is served
+   at 400-500 (app/fonts), so 500 instead of the design's 700. Colour inherits
+   from the sheet, so the dark and white sheet both apply. */
+.editor-surface .ProseMirror p {
+  margin: 0 0 6pt;
+}
+
+.editor-surface .ProseMirror h1,
+.editor-surface .ProseMirror h2,
+.editor-surface .ProseMirror h3 {
+  font-weight: 500;
+  line-height: 1.3;
+  text-align: left;
+}
+
+.editor-surface .ProseMirror h1 {
+  font-size: 18.7px;
+  margin: 18pt 0 12pt;
+}
+
+.editor-surface .ProseMirror h2,
+.editor-surface .ProseMirror h3 {
+  font-size: 16px;
+  margin: 12pt 0 6pt;
+}
+
+.editor-surface .ProseMirror > :first-child {
+  margin-top: 0;
+}
+
 .editor-surface .ProseMirror p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   float: left;

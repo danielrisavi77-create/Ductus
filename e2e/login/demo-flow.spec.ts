@@ -32,6 +32,18 @@ import { appCookie, clickSignOut, SESSION_COOKIE, sessionRow, signIn } from "./s
 //
 // Accounts, course and text are invented (K-3, infra/fake-oidc).
 
+// Chromium draws a native date field in the language of the browser, not of the
+// context `locale` (hr-HR in the config): on the Linux CI runner the teacher's
+// form showed "mm/dd/yyyy" and "11/02/2026, 09:00 AM". The browser of this file
+// starts in Croatian, as a Croatian teacher's browser would, so the demo
+// screenshots show the dates as the teacher sees them.
+const BROWSER_ENV = Object.fromEntries(
+  Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
+);
+test.use({
+  launchOptions: { args: ["--lang=hr-HR"], env: { ...BROWSER_ENV, LANG: "hr_HR.UTF-8", LANGUAGE: "hr" } },
+});
+
 const run = promisify(execFile);
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 // A fixed invented name: an identical repeat returns the same course (create_course).
@@ -184,6 +196,7 @@ const STUDENT_ID = "demo-student@demo.ductus.test";
 const ASSIGNMENT_TITLE = "Izmišljeni zadatak o gradskim knjižnicama";
 let enrollmentCode: string | null = null;
 let enrolledCourse: string | null = null;
+let k4Assignment: string | null = null;
 
 /** The F-6 course of the demo teacher and its assignments, read as the local admin. */
 const k4Course = () => withAdmin(async (client) => {
@@ -207,6 +220,7 @@ test.afterEach(async () => {
   }
   enrolledCourse = null;
   enrollmentCode = null;
+  k4Assignment = null;
 });
 
 test("demo walk-through", async ({ browser, page, context }) => {
@@ -258,7 +272,14 @@ test("demo walk-through", async ({ browser, page, context }) => {
     await snapshot(page, "1-kolegij-stvoren");
 
     await page.getByLabel(t.teacher.assignment.title).fill("Izmišljeni zadatak o gradskim knjižnicama");
-    await page.getByLabel(t.teacher.assignment.opensAt).fill("2026-11-02T09:00");
+    // K-4e (#655): opened an hour ago, so the student can confirm this very
+    // assignment in step 2; the form reads the value in the browser's time zone.
+    const opened = await page.evaluate(() => {
+      const at = new Date(Date.now() - 3_600_000);
+      const two = (n: number) => String(n).padStart(2, "0");
+      return `${at.getFullYear()}-${two(at.getMonth() + 1)}-${two(at.getDate())}T${two(at.getHours())}:${two(at.getMinutes())}`;
+    });
+    await page.getByLabel(t.teacher.assignment.opensAt).fill(opened);
     await page.getByLabel(t.teacher.assignment.dueAt).fill("2026-12-15T09:00");
     await page.getByLabel(t.teacher.assignment.instructions).fill("Napiši kratak izmišljeni rad o gradskim knjižnicama.");
     // Art. 8 lists and their source stay on the screen before anything is published.
@@ -335,7 +356,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
       await expect(page.getByRole("heading", { level: 1, name: ASSIGNMENT_TITLE })).toBeVisible();
       await expect(page.getByRole("heading", { name: t.student.teacherHeading })).toBeVisible();
       await expect(editorOf(page)).toHaveCount(0);
-      // F-6 opens the assignment on 2 Nov 2026; before then the notice has no confirmation (FE-D8).
+      // F-6 opened the assignment an hour ago, so its notice can be confirmed (FE-D8).
       const { rows: [state] } = await withAdmin((client) => client.query<{ members: string; open: boolean }>(
         `SELECT (SELECT count(*) FROM institution.course_member m JOIN identity.user_account u ON u.id = m.user_id
                   WHERE m.course_id = $1 AND u.hr_edu_person_unique_id = $2 AND m.role = 'student'
@@ -344,19 +365,46 @@ test("demo walk-through", async ({ browser, page, context }) => {
                   ON v.assignment_id = a.id AND v.version_no = a.current_version WHERE a.id = $3) AS open`,
         [course, STUDENT_ID, assignmentId]));
       expect(Number(state!.members)).toBe(1);
-      await expect(page.getByRole("checkbox", { name: t.student.checkbox })).toHaveCount(state!.open ? 1 : 0);
+      expect(state!.open).toBe(true);
+      await expect(page.getByRole("checkbox", { name: t.student.checkbox })).toHaveCount(1);
       expect(evidenceRequests).toEqual([]);
+      k4Assignment = assignmentId;
       await snapshot(page, "2-upis-kodom-obavijest-zadatka");
     } finally {
       page.off("request", observe);
     }
   });
 
-  // The rest of F-7 on the F-6 assignment: confirming its notice (possible from
-  // its opening on 2 Nov) and writing in its own document, which waits for the
-  // editor to follow the assignment (F-113). The step below confirms the notice
-  // of the synthetic fixture instead.
-  await test.step.skip("2. F-7: potvrda obavijesti zadatka iz koraka 1 i pisanje u njegovom dokumentu", async () => {});
+  // K-4e (#655): the student confirms the notice of the very assignment the
+  // teacher published in step 1 and opens it in the workspace, which names its
+  // course and title. Known limit: the editor still writes the one local demo
+  // document, which belongs to the synthetic fixture course (comment-seed.ts),
+  // so the fixture step below stays for comments and the live view.
+  await test.step("2. F-7: studentica potvrđuje obavijest zadatka iz koraka 1 i otvara ga u radu", async () => {
+    expect(k4Assignment).not.toBeNull();
+    const id = k4Assignment!;
+    await expect(page).toHaveURL(`http://localhost:3000/zadatak/${id}`);
+    const { rows: [current] } = await withAdmin((client) => client.query<{ version: number }>(
+      "SELECT current_version AS version FROM institution.assignment WHERE id = $1", [id]));
+    const confirm = page.getByRole("button", { name: t.student.confirm });
+    await expect(confirm).toBeDisabled();
+    await page.getByRole("checkbox", { name: t.student.checkbox }).check();
+    const acknowledged = page.waitForResponse((response) =>
+      new URL(response.url()).pathname === `/api/institution/assignments/${id}/acknowledgment`);
+    await confirm.click();
+    const response = await acknowledged;
+    expect(response.status()).toBe(200);
+    expect(response.request().postDataJSON()).toEqual({ versionNo: current!.version });
+    const { rows } = await withAdmin((client) => client.query<{ version_no: number }>(
+      `SELECT n.version_no FROM institution.notice_acknowledgment n JOIN identity.user_account u ON u.id = n.student_id
+        WHERE n.assignment_id = $1 AND u.hr_edu_person_unique_id = $2`, [id, STUDENT_ID]));
+    expect(rows).toEqual([{ version_no: current!.version }]);
+    await page.getByRole("link", { name: t.student.openEditor }).click();
+    await page.waitForURL(`http://localhost:3000/rad?zadatak=${id}`);
+    await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+    await expect(page.locator(".brand-line__context")).toHaveText(`${COURSE_NAME} / ${ASSIGNMENT_TITLE}`);
+    await snapshot(page, "2-rad-na-zadatku-iz-koraka-1");
+  });
 
   await test.step("2. F-7 djelomično: studentica potvrđuje obavijest kroz stvarno sučelje", async () => {
     await seed();
@@ -577,6 +625,18 @@ test("demo walk-through", async ({ browser, page, context }) => {
       const [citationBlock, , entryBlock] = blocksOf(saved).slice(2);
       expect(citationBlock!.text).not.toContain(formatInText({ ...SOURCE, year: SOURCE.year + 1 }, FPZG, PAGES));
       expect(entryBlock!.text).not.toBe(formatBibliographyEntry({ ...SOURCE, year: SOURCE.year + 1 }, FPZG));
+      // The chapter heading uses the sheet type, not the browser's h1 (~33 px,
+      // synthetic bold): below 20 px, no larger than the sheet title, weight 500.
+      const typeOf = (locator: ReturnType<Page["locator"]>) =>
+        locator.evaluate((el) => {
+          const style = getComputedStyle(el);
+          return { size: parseFloat(style.fontSize), weight: Number(style.fontWeight) };
+        });
+      const chapter = await typeOf(editorOf(page).locator("h1").first());
+      const title = await typeOf(page.locator(".manuscript__title"));
+      expect(chapter.size).toBeLessThan(20);
+      expect(chapter.size).toBeLessThanOrEqual(title.size);
+      expect(chapter.weight).toBeLessThanOrEqual(500);
       await attachCheckpoint("2-f8-tekst-bez-mreze.json", saved);
       await snapshot(page, "2-f8-naslovi-citat-literatura-bez-mreze");
 
