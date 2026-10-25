@@ -29,6 +29,7 @@ import { validateDocument, type CanonicalDocument } from "@/domain/document";
 import type { AsyncEvidenceStepReplayerV2 } from "@/domain/forensics/evidence-replay-v2";
 import { replayEvidenceSegmentsV2 } from "@/domain/forensics/evidence-replay-v2";
 import { canonicalizeJcs, type JcsJsonValue } from "@/domain/forensics/jcs";
+import { MAX_DOCUMENT_SNAPSHOT_BYTES } from "@/domain/document/snapshot";
 import type {
   EvidenceSegmentTransaction, EvidenceStop, JournalContents, SyncMeta,
 } from "@/domain/sync/journal-types";
@@ -268,6 +269,11 @@ export class EvidenceSession {
     this.unwatch();
   }
 
+  /** Closed by `close()` or by a submission: nothing more is written. */
+  private get ended(): boolean {
+    return this.closed || this.closedBy !== null;
+  }
+
   /** §4: terminal and not an error; the refused row stays in the journal untouched. */
   private closeBySubmission(): void {
     if (this.closedBy || this.closed) return;
@@ -338,7 +344,7 @@ export class EvidenceSession {
     recorder.close();
     let lastDocument: string | null = null;
     for (;;) {
-      if (this.closedBy) return false;
+      if (this.ended) return false;
       const contents = await journal.readEvidence(this.id);
       const { meta, snapshot } = contents;
       if (!meta?.evidenceHead || !snapshot || meta.localSeq !== this.seq) {
@@ -373,8 +379,14 @@ export class EvidenceSession {
         this.unsaved = null;
         return this.saveUncovered(candidate.doc, "unsupported_step");
       }
-      // §4: a submission may have closed the session during the build or replay.
-      if (this.closedBy) return false;
+      // §4: the session may have closed (submission or close()) during the build or replay.
+      if (this.ended) return false;
+      // The journal never takes a snapshot over the limit: stop evidence here
+      // instead of keeping a segment that no retry can write.
+      if (built.document.byteLength > MAX_DOCUMENT_SNAPSHOT_BYTES) {
+        this.unsaved = null;
+        return this.saveUncovered(candidate.doc, "too_large");
+      }
       this.unsaved = built;
       const result = await journal.saveSegment(this.id, built, this.now().toISOString(), this.seq);
       this.unsaved = null;
@@ -394,8 +406,8 @@ export class EvidenceSession {
   }
 
   private async saveUncovered(doc: CanonicalDocument, reason: EvidenceStop): Promise<boolean> {
-    // §4: nothing is written once a submission closed the session.
-    if (this.closedBy) return false;
+    // §4: nothing is written once the session closed.
+    if (this.ended) return false;
     this.stopped = reason;
     const meta = await this.deps.journal.saveUncovered(this.id, doc, reason, this.now().toISOString(), this.seq);
     this.seq = meta.localSeq;
