@@ -350,7 +350,9 @@ test("a stopped tab that opens the next person's sheet starts with nothing to un
 });
 
 test("a tab opened before a sign-out works again after the next sign-in", async ({ page, context }) => {
-  await signIn(page, "/");
+  // A page without the sheet: "/" now goes on to /rad (DAN-325), whose open
+  // journal would keep the second tab waiting.
+  await signIn(page, "/upis");
   const second = await context.newPage();
   await second.goto("/rad");
   await expect(editorOf(second)).toHaveAttribute("contenteditable", "true");
@@ -359,9 +361,9 @@ test("a tab opened before a sign-out works again after the next sign-in", async 
   await signIn(second, "/rad");
   await second.close();
 
-  // The first tab never reloaded; "/" sent it on to /rad (DAN-325), and its
-  // own link renders /rad under the new cookie.
-  await page.getByRole("link", { name: t.workspace.modeWriting }).click();
+  // The first tab never reloaded; its link to "/" renders under the new
+  // cookie and goes on to /rad (DAN-325).
+  await page.getByRole("link", { name: t.teacher.backHome, exact: true }).click();
   await page.waitForURL("http://localhost:3000/rad");
   await expect(phaseOf(page)).toHaveAttribute("data-phase", "ready");
   await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
