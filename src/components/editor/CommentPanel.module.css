@@ -82,7 +82,7 @@
 
 .link {
   align-self: flex-start;
-  min-height: 24px;
+  min-height: 32px;
   padding: 0;
   border: 0;
   background: none;
@@ -115,7 +115,7 @@
 
 .send {
   align-self: flex-start;
-  min-height: 28px;
+  min-height: 32px;
   padding: 3px 10px;
   border: 0;
   border-radius: 7px;
