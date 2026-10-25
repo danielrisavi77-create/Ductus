@@ -20,6 +20,7 @@ import { DUCTUS_PROTOCOL_VERSION } from "@/domain/evidence/commit-envelope";
 import { MAX_DOCUMENT_SNAPSHOT_BYTES } from "@/domain/document/snapshot";
 import { exceedsEvidenceSegmentLimit } from "@/domain/forensics/evidence-chain-v2";
 import { isReceiptClientTransactionId } from "@/domain/forensics/evidence-receipt";
+import { isEvidenceProfileIdV2 } from "@/domain/forensics/evidence-segment-v2";
 import {
   verifySignedEvidenceReceiptV2,
   type EvidenceDomainKey,
@@ -147,7 +148,8 @@ export function openedWorkFrom(value: unknown): OpenedWork | null {
   const keys = receiptDomainOf(value.receiptKeys);
   if (
     typeof documentId !== "string" || documentId === "" ||
-    typeof evidenceProfileId !== "string" || evidenceProfileId === "" ||
+    // The same rule as the journal and segment v2, so a profile they would refuse is refused here (#733).
+    !isEvidenceProfileIdV2(evidenceProfileId) ||
     !isCount(currentRevision) || !isCount(lastSequenceTo) ||
     typeof documentHash !== "string" || !SHA256_HEX.test(documentHash) ||
     !(headSegmentHash === null || (typeof headSegmentHash === "string" && SHA256_HEX.test(headSegmentHash))) ||
