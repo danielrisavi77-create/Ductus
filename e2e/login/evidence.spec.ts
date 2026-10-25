@@ -4,7 +4,7 @@ import { expect, test, type Page, type Request, type Route } from "@playwright/t
 import { canonicalizeJcs } from "../../src/domain/forensics/jcs";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { flipSignatureByte, stackCheckpoint } from "./evidence-receipt";
-import { clickSignOut, signIn } from "./support";
+import { clickSignOut, editorMounted, signIn } from "./support";
 import { admin, closeWork, seedWork, workDocument } from "./work-seed";
 
 // F-8 3d-2c2 (contract #476 c.6391714810 §6 e2e 1-12, G2 and G3
@@ -37,6 +37,8 @@ async function openSheet(page: Page): Promise<{ assignment: string; documentId: 
   const assignment = await seedWork();
   await page.goto(`/rad?zadatak=${assignment}`);
   await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: OPEN });
+  // The first opening refreshes the render into a freshly mounted editor (#731).
+  await editorMounted(page);
   return { assignment, documentId: await workDocument(assignment) };
 }
 

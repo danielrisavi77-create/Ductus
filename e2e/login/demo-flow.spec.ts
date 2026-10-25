@@ -17,7 +17,7 @@ import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
 import { workDocument } from "./work-seed";
 import { cleanUp, post, seed } from "./comment-seed";
-import { appCookie, clickSignOut, fillCodeDeadline, SAVED_HERE, SESSION_COOKIE, sessionRow, signIn } from "./support";
+import { appCookie, clickSignOut, editorMounted, fillCodeDeadline, SAVED_HERE, SESSION_COOKIE, sessionRow, signIn } from "./support";
 
 // K-4 (DAN-89; docs/PLAN-DEMO.md §1 points 1 to 5 and §7 t. 2, D-98): the demo
 // walk-through as one test. The login config records its video in CI and the
@@ -473,6 +473,8 @@ test("demo walk-through", async ({ browser, page, context }) => {
     // Back to her own work of the K-4 assignment; F-8 point 5: the sheet heading names it.
     await page.goto(`/rad?zadatak=${k4Assignment!}`);
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: 30_000 });
+    // The first opening refreshes the render into a freshly mounted editor (#731).
+    await editorMounted(page);
     await expect(page.locator("h1.manuscript__title")).toHaveText(ASSIGNMENT_TITLE);
     await snapshot(page, "2-editor-nakon-potvrde");
   });

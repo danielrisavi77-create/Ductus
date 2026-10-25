@@ -5,7 +5,7 @@ import type { NodeId } from "../../src/domain/document";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { closeWork, openWorkOf, seedWork, workDocument } from "./work-seed";
 import { ORIGIN, post } from "./comment-seed";
-import { clickSignOut, SAVED_HERE, signIn } from "./support";
+import { clickSignOut, editorMounted, SAVED_HERE, signIn } from "./support";
 
 // F-9 step 1 (DAN-86): a teacher's comment next to a paragraph reaches the
 // student on /rad?zadatak=, through the B-10 route and RPCs. Until the teacher
@@ -41,6 +41,8 @@ test("a teacher's comment next to a paragraph reaches the student, who answers",
   // The first visit of /rad in a run compiles the page and the editor on
   // `next dev`; the journal opens after that, which can exceed 5 s (#431).
   await expect(editor).toHaveAttribute("contenteditable", "true", { timeout: 30_000 });
+  // The first opening refreshes the render into a freshly mounted editor (#731).
+  await editorMounted(student);
   await editor.click();
   await student.keyboard.type(TEXT);
   await expect(student.locator(".workspace__status .sync-chip")).toHaveAttribute("data-state", SAVED_HERE);

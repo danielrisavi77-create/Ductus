@@ -4,7 +4,7 @@ import { expect, test, type Page, type Request } from "@playwright/test";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
 import { closeWork, documentsOf, seedWork, STUDENT, TEACHER, workDocument } from "./work-seed";
-import { clickSignOut, SAVED_HERE, signIn, type DemoAccount } from "./support";
+import { clickSignOut, editorMounted, SAVED_HERE, signIn, type DemoAccount } from "./support";
 
 // #711 F1 (contract 6391402093 §8 tests 1-10 and 13, amendment 6391779486):
 // `/rad?zadatak=` writes into the student's own document of the assignment,
@@ -37,6 +37,8 @@ async function signedIn(page: Page, account: DemoAccount = "Demo studentica"): P
 
 async function writable(page: Page): Promise<void> {
   await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: OPEN });
+  // The first opening refreshes the render into a freshly mounted editor (#731).
+  await editorMounted(page);
 }
 
 async function axeClean(page: Page): Promise<void> {
