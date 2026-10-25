@@ -11,6 +11,9 @@ export interface OpenSessionInput {
   subject: string;
   uniqueId: string;
   homeOrg: string;
+  /** Both or neither (#757, O1); without both the stored name is removed. */
+  givenName?: string;
+  familyName?: string;
   tokenHash: Buffer;
 }
 
@@ -37,7 +40,7 @@ SELECT CASE WHEN (SELECT NOT r.rolsuper AND NOT r.rolbypassrls
                          AND NOT pg_catalog.pg_has_role(r.oid, 'ductus_app', 'MEMBER')
                     FROM pg_catalog.pg_roles r
                    WHERE r.rolname = session_user AND session_user = current_user)
-            THEN identity.open_session($1, $2, $3, $4, $5)
+            THEN identity.open_session($1, $2, $3, $4, $5, $6, $7)
        END AS expires`;
 
 export function createOpenSession(pool: Pick<Pool, "query">): OpenSession {
@@ -49,6 +52,8 @@ export function createOpenSession(pool: Pick<Pool, "query">): OpenSession {
         input.uniqueId,
         input.homeOrg,
         input.tokenHash,
+        input.givenName ?? null,
+        input.familyName ?? null,
       ]);
       const expires = rows[0]?.expires;
       if (!(expires instanceof Date)) {

@@ -10,6 +10,13 @@ export interface LoginIdentity {
   subject: string;
   uniqueId: string;
   homeOrg: string;
+  /**
+   * givenName and sn, two separate attributes (#757, O1), never split from a
+   * display name. Present only when both are valid: a missing or invalid name
+   * costs the name, never the login.
+   */
+  givenName?: string;
+  familyName?: string;
 }
 
 export type ClaimsResult =
@@ -52,5 +59,12 @@ export function identityFromClaims(idToken: Claims, userinfo?: Claims): ClaimsRe
   if (!("value" in subject) || !("value" in uniqueId) || !("value" in homeOrg)) {
     return { ok: false, reason: "invalid_claim" };
   }
-  return { ok: true, identity: { subject: subject.value, uniqueId: uniqueId.value, homeOrg: homeOrg.value } };
+  const identity: LoginIdentity = { subject: subject.value, uniqueId: uniqueId.value, homeOrg: homeOrg.value };
+  const givenName = check(merged.givenName);
+  const familyName = check(merged.sn);
+  if ("value" in givenName && "value" in familyName) {
+    identity.givenName = givenName.value;
+    identity.familyName = familyName.value;
+  }
+  return { ok: true, identity };
 }
