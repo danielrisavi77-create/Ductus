@@ -33,7 +33,7 @@ Oznake ID-a odgovaraju tom dokumentu. Procjena je u večerima rada (oko 3 sata) 
 | F-04 | Izlaz iz usluge: izvoz svih podataka fakulteta | 2 | prije ugovora |
 | F-06 | Jezik rada odvojen od jezika sučelja (model u M2) | 2 | 1 |
 | F-09 | Paket za nabavu (DPIA, ugovor o obradi, sigurnosni opis, SLA, izjava o pristupačnosti) | dokumenti | prije pilota |
-| F-10 | Statusna stranica i postupak incidenta | 1 | 1 |
+| F-10 | Statusna stranica i postupak incidenta (oznaka iz brainstorminga; ne miješati s F-10 Predaja iz `PLAN-DEMO.md` §4) | 1 | 1 |
 | A-01 | Svrha "Objasni mi komentar" | 1 | 2 | Izvan pilota (D-77).
 | A-03 | Provjera doslovnog citata u učitanom PDF izvoru | 2 | uz S-09 |
 | A-04 | Priprema za obranu (samo student) | 2 | 3 |
