@@ -3,8 +3,8 @@ import { expect, test, type Browser, type BrowserContext, type Page } from "@pla
 import { createTextAnchor } from "../../src/domain/collaboration";
 import type { NodeId } from "../../src/domain/document";
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
-import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
-import { cleanUp, post, seed } from "./comment-seed";
+import { closeWork, openWorkOf, seedWork } from "./assignment-work";
+import { post } from "./comment-seed";
 import { clickSignOut, signIn, type DemoAccount } from "./support";
 
 // F-086 and F-088 (#476 contract 6383859615): one browser, one person after
@@ -28,16 +28,16 @@ const chipOf = (page: Page) => page.locator(".workspace__status .sync-chip");
 const undoOf = (page: Page) => page.getByRole("button", { name: t.toolbar.undo });
 const firstCard = (page: Page) => page.getByRole("article", { name: t.comments.number.replace("{n}", "1") });
 
-test.afterEach(cleanUp);
+test.afterEach(closeWork);
 
 /** The fake provider remembers who signed in; forgetting it shows the account choice again. */
 async function forgetProviderLogin(context: BrowserContext): Promise<void> {
   await context.clearCookies({ name: /^_session/ });
 }
 
-async function signInAgain(page: Page, account: DemoAccount): Promise<void> {
+async function signInAgain(page: Page, account: DemoAccount, path = "/rad"): Promise<void> {
   await forgetProviderLogin(page.context());
-  await signIn(page, "/rad", account);
+  await signIn(page, path, account);
   await expect(phaseOf(page)).toHaveAttribute("data-phase", "ready", { timeout: 30_000 });
 }
 
@@ -48,14 +48,20 @@ async function writeAndWait(page: Page, text: string): Promise<void> {
   await expect(chipOf(page)).toHaveAttribute("data-state", "LOCAL_DURABLE");
 }
 
-/** The teacher's comment on the demo document, made with the teacher's own cookie in another context. */
-async function teacherComments(browser: Browser): Promise<void> {
+/**
+ * An invented assignment of the student's, its work opened by the real route
+ * with the student's cookie (#711 F1), and the teacher's comment on that
+ * document, made with the teacher's own cookie in another context.
+ */
+async function teacherComments(browser: Browser, student: Page): Promise<string> {
   const teacher = await (await browser.newContext()).newPage();
   await signIn(teacher, "/", "Demo nastavnik");
-  await seed();
-  const created = await post(teacher, "create", { documentId: LOCAL_DEMO_DOCUMENT_ID, body: "Dodaj izvor.", anchor: UNPLACED });
+  const assignment = await seedWork({ teacher: true });
+  const documentId = await openWorkOf(student, assignment);
+  const created = await post(teacher, "create", { documentId, body: "Dodaj izvor.", anchor: UNPLACED });
   expect(created.status()).toBe(200);
   await teacher.context().close();
+  return assignment;
 }
 
 /** Undo and redo bring back nothing: the sheet keeps `text` exactly. */
@@ -73,9 +79,10 @@ async function snapshot(page: Page, name: string): Promise<void> {
 }
 
 test("student, teacher, student in one browser: no text, undo, comment or reply of the sign-in before", async ({ browser, page }) => {
-  // The demo teacher must have signed in once before seed() can name them.
+  // The student signs in first; the teacher does inside teacherComments, before the seed names both.
   await signIn(page, "/rad");
-  await teacherComments(browser);
+  const assignment = await teacherComments(browser, page);
+  await page.goto(`/rad?zadatak=${assignment}`);
 
   await writeAndWait(page, TEXT);
   await expect(undoOf(page)).toBeEnabled();
@@ -98,7 +105,7 @@ test("student, teacher, student in one browser: no text, undo, comment or reply 
   await page.waitForURL("http://localhost:3000/");
 
   // Her own journal comes back (D-118); nothing else of either sign-in does.
-  await signInAgain(page, "Demo studentica");
+  await signInAgain(page, "Demo studentica", `/rad?zadatak=${assignment}`);
   await expect(editorOf(page)).toHaveText(TEXT);
   await nothingToUndo(page, TEXT);
   await expect(firstCard(page)).toContainText(t.comments.notPlaced);
@@ -118,8 +125,8 @@ test("a tab that never heard the session end starts empty when the next person's
     }) as typeof window.addEventListener;
   });
   await signIn(page, "/rad");
-  await teacherComments(browser);
-  await page.reload();
+  const assignment = await teacherComments(browser, page);
+  await page.goto(`/rad?zadatak=${assignment}`);
   await writeAndWait(page, TEXT);
   await firstCard(page).getByRole("textbox", { name: t.comments.replyLabel }).fill(DRAFT_REPLY, { timeout: 30_000 });
 
@@ -132,9 +139,10 @@ test("a tab that never heard the session end starts empty when the next person's
   await expect(phaseOf(second)).toHaveAttribute("data-phase", "ready", { timeout: 30_000 });
   await expect.poll(recorded).not.toBe(before);
 
-  // The old tab never reloads: its own link renders /rad under the new cookie.
-  // While it waits for the journal, the sheet already shows nothing of before.
-  await page.getByRole("link", { name: t.workspace.modeWriting }).click();
+  // The old tab never reloads: the shell's link renders /rad under the new
+  // cookie (the assignment is not the next person's, #711 F1). While it waits
+  // for the journal, the sheet already shows nothing of before.
+  await page.locator('nav a[href="/rad"]').click();
   await expect(phaseOf(page)).toHaveAttribute("data-phase", "blocked");
   await expect(editorOf(page)).toHaveText("");
   await expect(page.getByText(DRAFT_REPLY)).toHaveCount(0);

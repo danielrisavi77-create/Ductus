@@ -1,5 +1,6 @@
 import type { OpenOutcome } from "@/client/evidence-ingest";
 import { LOCAL_DEMO_DOCUMENT_ID } from "@/lib/journal/local-scope";
+import type { WorkDocumentRead } from "@/server/evidence/work-document-read";
 
 import type { WorkContextRead } from "./work-context-read";
 
@@ -8,18 +9,7 @@ import type { WorkContextRead } from "./work-context-read";
 // work document, and this decides the one plan the sheet, the comments, the
 // live view and the submission link follow. Nothing here reads or writes.
 
-/**
- * Mirrors B1 #712 `WorkDocumentRead` (`src/server/evidence/work-document-read.ts`)
- * verbatim; replace with the import once #712 is merged.
- */
-export type WorkDocumentRead =
-  /** The session's own work for the assignment, the id the evidence path uses. */
-  | { kind: "document"; documentId: string }
-  /** The session may write, but its work does not exist yet: open it through POST /api/evidence/open. */
-  | { kind: "notOpened" }
-  /** An active student, but the current version is not acknowledged or not open yet. */
-  | { kind: "notAccepting" }
-  | { kind: "none" };
+export type { WorkDocumentRead };
 
 export type WorkDocumentPlanInput = {
   /** `searchParams.zadatak` as it came, before any check. */
