@@ -32,6 +32,13 @@ const issue = (name: "teacher" | "outsider" | "nonmember", target: string) => wi
 const active = async (target: string) => Number((await admin.query(
   "SELECT count(*) FROM institution.course_enrollment_code WHERE course_id = $1 AND active", [target],
 )).rows[0].count);
+const activeId = async (target: string) => (await admin.query<{ id: string }>(
+  "SELECT id FROM institution.course_enrollment_code WHERE course_id = $1 AND active", [target],
+)).rows[0]?.id;
+// DAN-292: the audit rows of one code, as kind and actor.
+const events = async (code: string) => (await admin.query(
+  "SELECT kind, actor_id, course_id FROM audit.enrollment_code_event WHERE code_id = $1", [code],
+)).rows;
 
 // Scoped snapshots of every table in these schemas detect an accidental write
 // anywhere; only this file's random fixtures enter the comparison.
@@ -41,7 +48,7 @@ async function snapshot(includeCodes = false) {
   )).rows;
   const result: Record<string, unknown> = {};
   for (const { schemaname, tablename } of tables) {
-    if (!includeCodes && tablename === "course_enrollment_code") continue;
+    if (!includeCodes && (tablename === "course_enrollment_code" || tablename === "enrollment_code_event")) continue;
     const qualified = `"${schemaname.replaceAll('"', '""')}"."${tablename.replaceAll('"', '""')}"`;
     result[`${schemaname}.${tablename}`] = (await admin.query(
       `SELECT r::text AS row FROM ${qualified} r WHERE EXISTS (SELECT 1 FROM unnest($1::text[]) n WHERE strpos(r::text, n) > 0) ORDER BY 1`,
@@ -93,6 +100,16 @@ beforeAll(async () => {
 afterAll(async () => {
   vi.unstubAllEnvs();
   await app.end();
+  // The audit trail is append-only; only this clean-up steps around it, on its own connection and for its own rows.
+  const cleaner = await admin.connect();
+  try {
+    await cleaner.query("BEGIN");
+    await cleaner.query("SET LOCAL session_replication_role = replica");
+    await cleaner.query("DELETE FROM audit.enrollment_code_event WHERE institution_id = ANY($1)", [faculties]);
+    await cleaner.query("COMMIT");
+  } finally {
+    cleaner.release();
+  }
   await admin.query("DELETE FROM institution.course_member WHERE institution_id = ANY($1)", [faculties]);
   await admin.query("DELETE FROM institution.course_enrollment_code WHERE course_id IN (SELECT id FROM institution.course WHERE institution_id = ANY($1))", [faculties]);
   await admin.query("DELETE FROM institution.course WHERE institution_id = ANY($1)", [faculties]);
@@ -145,15 +162,32 @@ describe("enrollment code revocation real POST, session and database", () => {
     if (await active(course) === 0) await issue("teacher", course);
     const before = await snapshot();
     const foreignBefore = await active(foreign), siblingBefore = await active(sibling);
+    const revokedCode = (await activeId(course))!;
+    expect(await events(revokedCode)).toEqual([]);
     const first = await post(people.second.token);
     expect(first.status).toBe(200);
     expect(first.headers.get("cache-control")).toBe("no-store");
     expect(await first.json()).toEqual({ revoked: true });
     expect(await active(course)).toBe(0);
+    // The owner's decision of 25 Oct 2026: who revoked which code of which course.
+    expect(await events(revokedCode)).toEqual([{ kind: "revoked", actor_id: people.second.id, course_id: course }]);
     const second = await post(people.teacher.token);
     expect(second.status).toBe(200);
     expect(await second.json()).toEqual({ revoked: false });
     expect([await active(foreign), await active(sibling)]).toEqual([foreignBefore, siblingBefore]);
+    expect(await events(revokedCode)).toHaveLength(1);
     expect(await snapshot()).toEqual(before);
+  });
+
+  it("two teachers revoking at once revoke the code once and leave one audit row", async () => {
+    await issue("teacher", course);
+    const code = (await activeId(course))!;
+    const answers = await Promise.all([post(people.second.token), post(people.teacher.token)]);
+    for (const answer of answers) expect(answer.status).toBe(200);
+    expect((await Promise.all(answers.map((answer) => answer.json()))).map((body) => body.revoked).sort()).toEqual([false, true]);
+    const rows = await events(code);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].kind).toBe("revoked");
+    expect([people.teacher.id, people.second.id]).toContain(rows[0].actor_id);
   });
 });
