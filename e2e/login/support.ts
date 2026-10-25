@@ -45,10 +45,17 @@ export async function appCookie(context: BrowserContext, name: string) {
   return (await context.cookies("http://localhost:3000")).find((c) => c.name === name);
 }
 
+/** Where "/" sends a signed-in person: the teacher's page or the workspace (DAN-325). */
+export const ROLE_HOME = /^http:\/\/localhost:3000\/(rad|nastavnik)$/;
+
 /** A button on the provider's "Demo prijava" page (infra/fake-oidc). */
 export type DemoAccount = "Demo studentica" | "Demo student 2" | "Demo nastavnik" | "Demo nastavnica";
 
-/** Signs in as a demo account (the student unless named) and returns the callback URL the provider sent. */
+/**
+ * Signs in as a demo account (the student unless named) and returns the callback URL the provider sent.
+ * "/" sends a signed-in person on to their own page (DAN-325), which depends on the roles the test
+ * set up, so it waits for either.
+ */
 export async function signIn(page: Page, returnTo: string, account: DemoAccount = "Demo studentica"): Promise<string> {
   const callbacks: string[] = [];
   page.on("request", (request) => {
@@ -58,7 +65,7 @@ export async function signIn(page: Page, returnTo: string, account: DemoAccount 
   await expect(page).toHaveURL(/^http:\/\/localhost:8090\/interaction\//);
   await expect(page.getByRole("heading", { level: 1, name: "Demo prijava" })).toBeVisible();
   await page.getByRole("button", { name: account }).click();
-  await page.waitForURL(`http://localhost:3000${returnTo}`);
+  await page.waitForURL(returnTo === "/" ? ROLE_HOME : `http://localhost:3000${returnTo}`);
   expect(callbacks).toHaveLength(1);
   return callbacks[0]!;
 }

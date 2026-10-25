@@ -8,7 +8,8 @@ test("/prijava renders the AAI@EduHr sign-in in Croatian", async ({ page }) => {
   await expect(page.locator("html")).toHaveAttribute("lang", "hr");
   await expect(page.getByRole("heading", { level: 1, name: "Prijava u radni prostor" })).toBeVisible();
   const button = page.getByRole("link", { name: "Prijava sustavom AAI@EduHr" });
-  await expect(button).toHaveAttribute("href", "/api/auth/login?returnTo=%2Frad");
+  // DAN-325: without a returnTo the sign-in comes back to "/", which sends each person to their own page.
+  await expect(button).toHaveAttribute("href", "/api/auth/login?returnTo=%2F");
   // D-09: no other way in, no e-mail field, no password field on this page.
   await expect(page.locator("input")).toHaveCount(0);
   await expect(page.locator('a[href^="/api/auth/login"]')).toHaveCount(1);
@@ -27,7 +28,7 @@ for (const returnTo of ["https://example.test/rad", "//example.test", "/api/auth
     await page.goto(`/prijava?returnTo=${encodeURIComponent(returnTo)}`);
     await expect(page.getByRole("link", { name: "Prijava sustavom AAI@EduHr" })).toHaveAttribute(
       "href",
-      "/api/auth/login?returnTo=%2Frad",
+      "/api/auth/login?returnTo=%2F",
     );
   });
 }

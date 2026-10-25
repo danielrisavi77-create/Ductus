@@ -359,8 +359,9 @@ test("a tab opened before a sign-out works again after the next sign-in", async 
   await signIn(second, "/rad");
   await second.close();
 
-  // The first tab never reloaded; its link renders /rad under the new cookie.
-  await page.getByRole("link", { name: t.home.openWorkspace }).click();
+  // The first tab never reloaded; "/" sent it on to /rad (DAN-325), and its
+  // own link renders /rad under the new cookie.
+  await page.getByRole("link", { name: t.workspace.modeWriting }).click();
   await page.waitForURL("http://localhost:3000/rad");
   await expect(phaseOf(page)).toHaveAttribute("data-phase", "ready");
   await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
@@ -407,10 +408,16 @@ test("a tab that missed the sign-out news still never reopens the journal", asyn
   expect(names.filter((name) => name?.startsWith("ductus-journal-v1-"))).toEqual([]);
 });
 
-test("with a session the home page offers no second sign-in", async ({ page }) => {
+// DAN-325: with a session neither the home page nor the sign-in page offers a
+// second sign-in; both send the student on to the workspace.
+test("with a session the home page and the sign-in page lead to the student's own page", async ({ page }) => {
   await signIn(page, "/");
-  await expect(page.getByRole("link", { name: t.home.openWorkspace })).toBeVisible();
-  await expect(page.getByRole("link", { name: t.auth.signIn })).toHaveCount(0);
+  await expect(page).toHaveURL("http://localhost:3000/rad");
+  for (const path of ["/", "/prijava", "/prijava?returnTo=%2Frad"]) {
+    await page.goto(path);
+    await expect(page).toHaveURL("http://localhost:3000/rad");
+    await expect(page.getByRole("link", { name: t.auth.signIn })).toHaveCount(0);
+  }
 });
 
 // Design v3 shell around the workspace (#476 6314969336, cut (b)): the student
