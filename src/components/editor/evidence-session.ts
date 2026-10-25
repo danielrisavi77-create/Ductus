@@ -65,9 +65,9 @@ export type EvidenceSessionDeps = {
   /**
    * The evidence profile the journal keeps for the document, for building
    * segments while the open route cannot be reached (O3 b, c.6392622568).
-   * TODO(BE-2): pass `(meta) => meta?.evidenceProfileId ?? null` once BE-2
-   * stores it with `startEvidence`; until then no profile is stored, and
-   * segments wait for a successful `open` (O3 a, a known limit).
+   * The browser adapter reads `meta.evidenceProfileId`, which `startEvidence`
+   * stores; without one (an older record) segments wait for a successful
+   * `open` (O3 a).
    */
   storedProfile?: (meta: SyncMeta | null) => string | null;
   now?: () => Date;
