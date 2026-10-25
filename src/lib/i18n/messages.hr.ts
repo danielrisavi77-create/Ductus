@@ -452,7 +452,8 @@ export const hr = {
     earlierDraftSummary: "Na ovom uređaju čuva se tvoj raniji tekst koji nije u ovom radu.",
     earlierDraftExplain: "Tekst ostaje gdje je i ne briše se. Ako ga želiš u ovom radu, kopiraj ga i zalijepi; zapis rada tada to bilježi kao lijepljenje.",
     earlierDraftCopy: "Kopiraj tekst",
-    earlierDraftCopied: "Kopirano u međuspremnik.",
+    // Za potvrdu: the contract text "Kopirano u međuspremnik." fails the stem list of messages.test.ts (kopiran).
+    earlierDraftCopied: "Tekst je u međuspremniku.",
     // Za potvrdu: the contract text "Tekst nije moguće kopirati." is a forbidden term (kopir-, PRODUCT §5).
     earlierDraftCopyFailed: "Tekst nije moguće staviti u međuspremnik. Izvezi ga kao datoteku.",
     earlierDraftOpen: "Otvori raniji tekst",
