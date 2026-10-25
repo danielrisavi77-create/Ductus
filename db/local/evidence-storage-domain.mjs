@@ -40,27 +40,31 @@ const capabilityFor = (endpoint) => ({
 export function institutionInvocation(env, slug, psql) {
   const options = ["-q", "-t", "-A", "-v", "ON_ERROR_STOP=1", "-v", `slug=${slug}`];
   if (psql !== undefined) {
-    const native = nativePsqlTarget(psql);
-    return { command: native.command, args: [...native.args, ...options] };
+    const native = nativePsqlTarget(psql, env);
+    return { command: native.command, args: [...native.args, "-X", ...options], env: native.env };
   }
   return { command: "docker", args: [...dockerExecArgs(env), "psql", "-U", "ductus", "-d", "ductus", ...options] };
 }
 
 /** The institution's id, read by psql in the local postgres container (as in 4a) or on its local socket. */
 function institutionId(env, slug, psql) {
-  const { command, args } = institutionInvocation(env, slug, psql);
+  const invocation = institutionInvocation(env, slug, psql);
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd: ROOT, stdio: ["pipe", "pipe", "inherit"], windowsHide: true });
+    const child = spawn(invocation.command, invocation.args, { cwd: ROOT, env: invocation.env, stdio: ["pipe", "pipe", "inherit"], windowsHide: true });
     let out = "";
     child.stdout.on("data", (chunk) => (out += chunk));
     child.once("error", () => reject(new Error("could not start psql")));
     child.once("exit", (code) => {
       const id = out.trim();
       if (code !== 0) reject(new Error("the institution could not be read"));
+      else if (id === "tcp") reject(new Error("psql reached the database over TCP; only the local socket is accepted"));
       else if (!UUID.test(id)) reject(new Error(`no institution with slug ${slug}; run pnpm db:seed first`));
       else resolve(id);
     });
-    child.stdin.end("SELECT id FROM identity.institution WHERE slug = :'slug';\n");
+    // Like the other db/local SQL, an answer is given only on the local socket.
+    child.stdin.end(
+      "SELECT CASE WHEN pg_catalog.inet_server_addr() IS NULL THEN id::text ELSE 'tcp' END FROM identity.institution WHERE slug = :'slug';\n",
+    );
   });
 }
 

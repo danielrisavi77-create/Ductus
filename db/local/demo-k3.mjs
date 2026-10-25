@@ -24,10 +24,10 @@ export const PSQL_ARGS = Object.freeze([
 ]);
 
 /** The psql invocation: docker by default, or the native target with the same options. */
-export function loadInvocation(psql) {
+export function loadInvocation(psql, env = {}) {
   if (psql === undefined) return { command: "docker", args: [...PSQL_ARGS] };
-  const native = nativePsqlTarget(psql);
-  return { command: native.command, args: [...native.args, "-X", "-q", "-v", "ON_ERROR_STOP=1"] };
+  const native = nativePsqlTarget(psql, env);
+  return { command: native.command, args: [...native.args, "-X", "-q", "-v", "ON_ERROR_STOP=1"], env: native.env };
 }
 
 export function main(env = process.env, argv = process.argv.slice(2), psql = undefined) {
@@ -36,14 +36,14 @@ export function main(env = process.env, argv = process.argv.slice(2), psql = und
   if (argv.length !== 0) return Promise.reject(new Error("K-3 demo data takes no argument"));
   let invocation;
   try {
-    invocation = loadInvocation(psql);
+    invocation = loadInvocation(psql, env);
   } catch (error) {
     return Promise.reject(error);
   }
   return new Promise((resolve, reject) => {
     // psql errors name the failing step; the functions' errors carry no input
     // and the tokens are PL/pgSQL variables, which an error context does not print.
-    const child = spawn(invocation.command, invocation.args, { cwd: ROOT, env, stdio: ["pipe", "ignore", "inherit"], windowsHide: true });
+    const child = spawn(invocation.command, invocation.args, { cwd: ROOT, env: invocation.env ?? env, stdio: ["pipe", "ignore", "inherit"], windowsHide: true });
     child.once("error", () => reject(new Error("could not start psql")));
     child.once("exit", (code) => (code === 0 ? resolve() : reject(new Error("K-3 demo data was not loaded"))));
     createReadStream(SQL_FILE).pipe(child.stdin);
