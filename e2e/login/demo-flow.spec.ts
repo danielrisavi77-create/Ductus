@@ -361,9 +361,10 @@ test("demo walk-through", async ({ browser, page, context }) => {
   await test.step("2. F-7 djelomično: studentica potvrđuje obavijest kroz stvarno sučelje", async () => {
     await seed();
     await clearNoticeFixture();
-    const { rows: [assignment] } = await withAdmin((client) => client.query<{ id: string; version: number }>(
-      `SELECT a.id, a.current_version AS version FROM evidence.document d
+    const { rows: [assignment] } = await withAdmin((client) => client.query<{ id: string; version: number; title: string }>(
+      `SELECT a.id, a.current_version AS version, v.title FROM evidence.document d
        JOIN evidence.project p ON p.id = d.project_id JOIN institution.assignment a ON a.id = p.assignment_id
+       JOIN institution.assignment_version v ON v.assignment_id = a.id AND v.version_no = a.current_version
        WHERE d.id = $1`, [LOCAL_DEMO_DOCUMENT_ID]));
     expect(assignment).toBeDefined();
     const noticePath = `/zadatak/${assignment!.id}`;
@@ -414,8 +415,9 @@ test("demo walk-through", async ({ browser, page, context }) => {
     await page.getByRole("link", { name: t.student.openEditor }).click();
     await page.waitForURL(`http://localhost:3000/rad?zadatak=${assignment!.id}`);
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
-    // F-8 point 5: the sheet heading names the acknowledged assignment.
-    await expect(page.locator("h1.manuscript__title")).toHaveText(ASSIGNMENT_TITLE);
+    // F-8 point 5: the sheet heading names the acknowledged assignment (the
+    // seeded one of the demo document, not the teacher's from step 1).
+    await expect(page.locator("h1.manuscript__title")).toHaveText(assignment!.title);
     await snapshot(page, "2-editor-nakon-potvrde");
   });
 
