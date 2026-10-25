@@ -21,17 +21,18 @@ function sources(dir: string): string[] {
 /** Every opening tag `<name ...>` of a source, attributes included. */
 function tags(source: string, name: string): string[] {
   const found: string[] = [];
-  const open = new RegExp(`<${name}[\\s>]`, "g");
-  for (const match of source.matchAll(open)) {
+  const open = `<${name}`;
+  for (let at = source.indexOf(open); at !== -1; at = source.indexOf(open, at + 1)) {
+    if (!/[\s>]/.test(source[at + open.length] ?? "")) continue;
     let depth = 0;
-    let end = match.index;
+    let end = at;
     for (; end < source.length; end += 1) {
       const c = source[end];
       if (c === "{") depth += 1;
       else if (c === "}") depth -= 1;
       else if (c === ">" && depth === 0) break;
     }
-    found.push(source.slice(match.index, end + 1));
+    found.push(source.slice(at, end + 1));
   }
   return found;
 }
