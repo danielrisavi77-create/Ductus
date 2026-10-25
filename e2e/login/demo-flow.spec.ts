@@ -680,12 +680,19 @@ test("demo walk-through", async ({ browser, page, context }) => {
       await page.reload();
       await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
       await expect(editorOf(page)).toHaveText(EXPECTED_TEXT);
-      await expect(chipOf(page)).toHaveAttribute("data-state", "LOCAL_DURABLE");
+      // The network's return may let the session try the owed rows before the
+      // reload (3d-2c2b); the cut route fails that try, and a failed send shows
+      // "Greška" (3d-2c2 O2). Either way the text is on the device, never SYNCED.
+      await expect(chipOf(page)).toHaveAttribute("data-state", /^(LOCAL_DURABLE|ERROR)$/);
       const restored = await localCheckpoint(page);
-      expect(restored).toEqual(saved);
-      // The evidence session asks for the work once on load; the route is cut
-      // off, so it stays on the journal's chain and sends nothing (3d-2c2 §2 t. 4).
-      expect(syncRequests.filter((path) => path !== livePath() && path !== "/api/evidence/open")).toEqual([]);
+      expect(restored.snapshot).toEqual(saved.snapshot);
+      expect(restored.pending).toEqual(saved.pending);
+      expect(restored.meta!.localSeq).toBe(saved.meta!.localSeq);
+      expect(restored.meta!.evidenceHead).toEqual(saved.meta!.evidenceHead);
+      // The evidence session asks for the work once on load, and may try a
+      // commit; the route cuts both off, so nothing reaches the server (3d-2c2 §2 t. 4).
+      expect(syncRequests.filter((path) =>
+        path !== livePath() && path !== "/api/evidence/open" && path !== "/api/evidence/commit")).toEqual([]);
       const savedBody = canonicalizeJcs(saved.snapshot!.document);
       for (const body of livePuts) expect(body).toBe(savedBody);
       await attachCheckpoint("2-f8-oporavljeno-nakon-reloada.json", restored);
@@ -731,7 +738,9 @@ test("demo walk-through", async ({ browser, page, context }) => {
     token = (await appCookie(context, SESSION_COOKIE))!.value;
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
     await expect(editorOf(page)).toHaveText(EXPECTED_TEXT);
-    await expect(chipOf(page)).toHaveAttribute("data-state", SAVED_HERE);
+    // A send cut off in the step above may have left "Greška"; the drain sends
+    // the owed rows again now that the routes are back (3d-2c2b).
+    await expect(chipOf(page)).toHaveAttribute("data-state", SAVED_HERE, { timeout: 30_000 });
     await expect(page.getByText(COMMENT, { exact: true })).toBeVisible();
     await snapshot(page, "2-vlasnica-nastavlja-nacrt");
     await signOut(page, token);
