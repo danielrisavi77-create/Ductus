@@ -135,6 +135,11 @@ function hasOnlyKeys(
   return Object.keys(value).every((key) => allowed.has(key));
 }
 
+/** A profile id a segment v2 takes: not blank, at most 120 UTF-16 units. */
+export function isEvidenceProfileIdV2(value: unknown): value is string {
+  return nonEmptyBounded(value, MAX_EVIDENCE_PROFILE_ID_LENGTH);
+}
+
 function nonEmptyBounded(
   value: unknown,
   max = MAX_ID_LENGTH,
@@ -234,7 +239,7 @@ function isSegmentUnguarded(value: unknown): value is EvidenceSegmentV2 {
     !nonEmptyBounded(value.documentId) ||
     !nonEmptyBounded(value.sessionId) ||
     !nonEmptyBounded(value.segmentId) ||
-    !nonEmptyBounded(value.evidenceProfileId, MAX_EVIDENCE_PROFILE_ID_LENGTH) ||
+    !isEvidenceProfileIdV2(value.evidenceProfileId) ||
     !Number.isSafeInteger(value.sequenceFrom) ||
     Number(value.sequenceFrom) < 1 ||
     !Number.isSafeInteger(value.sequenceTo) ||
