@@ -73,3 +73,13 @@ export async function clickSignOut(page: Page): Promise<void> {
   await page.getByRole("button", { name: messagesHr.auth.logout, exact: true }).click();
   await logoutDialogOf(page).getByRole("button", { name: messagesHr.auth.logoutConfirm }).click();
 }
+
+/**
+ * Signs out where nothing of this person stays on the device (D-118, O1 of
+ * #476 c.6396707923): "Odjava" leads straight to the home page. A dialog
+ * would hold the page, so the wait for "/" fails if one opens.
+ */
+export async function signOutWithoutDialog(page: Page): Promise<void> {
+  await page.getByRole("button", { name: messagesHr.auth.logout, exact: true }).click();
+  await page.waitForURL("http://localhost:3000/");
+}
