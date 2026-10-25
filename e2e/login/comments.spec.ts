@@ -5,7 +5,7 @@ import type { NodeId } from "../../src/domain/document";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { closeWork, openWorkOf, seedWork, workDocument } from "./work-seed";
 import { ORIGIN, post } from "./comment-seed";
-import { clickSignOut, editorMounted, SAVED_HERE, signIn, signOutWithoutDialog } from "./support";
+import { editorMounted, SAVED_HERE, signIn, signOutHoweverHeld, signOutWithoutDialog } from "./support";
 
 // F-9 step 1 (DAN-86): a teacher's comment next to a paragraph reaches the
 // student on /rad?zadatak=, through the B-10 route and RPCs. Until the teacher
@@ -101,7 +101,8 @@ test("a teacher's comment next to a paragraph reaches the student, who answers",
   await student.getByRole("button", { name: t.refresh }).click();
   const second = await student.context().newPage();
   await second.goto("/rad");
-  await clickSignOut(second);
+  // The dialog opens only while the evidence still waits for its receipt (3d-2c2b).
+  await signOutHoweverHeld(second);
   await second.waitForURL(`${ORIGIN}/`);
   await expect(editor).toHaveText("");
   // Wait for the held answer itself, never for "networkidle": `next dev`

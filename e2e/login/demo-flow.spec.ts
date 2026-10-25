@@ -18,7 +18,7 @@ import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
 import { workDocument } from "./work-seed";
 import { cleanUp, post, seed } from "./comment-seed";
 import {
-  appCookie, clickSignOut, editorMounted, fillCodeDeadline, SAVED_HERE, SESSION_COOKIE, sessionRow, signIn, signOutWithoutDialog,
+  appCookie, editorMounted, fillCodeDeadline, SAVED_HERE, SESSION_COOKIE, sessionRow, signIn, signOutHoweverHeld, signOutWithoutDialog,
 } from "./support";
 
 // K-4 (DAN-89; docs/PLAN-DEMO.md §1 points 1 to 5 and §7 t. 2, D-98): the demo
@@ -138,11 +138,12 @@ async function forgetProviderLogin(context: BrowserContext): Promise<void> {
 /**
  * Signs out through the button on the writing page and checks that the
  * session is closed. With nothing of this person on the device there is no
- * dialog (O1, #476 c.6396707923); `held` says which is expected.
+ * dialog (O1, #476 c.6396707923); `held` false says none may open. With the
+ * student's work, whether its receipt came before the click decides (3d-2c2b).
  */
 async function signOut(page: Page, token: string, held = true): Promise<void> {
   if (!page.url().endsWith("/rad")) await page.goto("/rad");
-  if (held) await clickSignOut(page);
+  if (held) await signOutHoweverHeld(page);
   else await signOutWithoutDialog(page);
   await page.waitForURL("http://localhost:3000/");
   expect(await appCookie(page.context(), SESSION_COOKIE)).toBeUndefined();
@@ -497,6 +498,9 @@ test("demo walk-through", async ({ browser, page, context }) => {
   // This is the local part of F-8 only. The signed server receipt below is
   // still a missing acceptance criterion, not inferred from a network return.
   await test.step("2. F-8 lokalno: prekid mreže, dopuna i oporavak nakon povratka", async () => {
+    // The receipt for the text above moves the revision (3d-2c2b): the
+    // checkpoint is read after it, so going offline is all that changes.
+    await expect(chipOf(page)).toHaveAttribute("data-state", "SYNCED", { timeout: 30_000 });
     const before = await localCheckpoint(page);
     expect(before.snapshot?.document.nodes[0]?.children.map((child) => child.text).join("")).toBe(TEXT);
     await attachCheckpoint("2-prije-prekida.json", before);
