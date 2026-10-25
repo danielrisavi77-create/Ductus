@@ -314,6 +314,8 @@ test("O2 (DAN-289): a submitted work opens read-only and sends nothing after the
   await seedSubmission(documentId);
 
   const requests = recordRequests(page);
+  // A submitted work publishes nothing to the live view, not even its opened text.
+  const live = recordRequests(page, /^\/api\/live\//);
   await page.goto(`/rad?zadatak=${assignment}`);
   await expect(page.getByRole("status").filter({ hasText: t.editor.submittedReadOnly })).toBeVisible({ timeout: OPEN });
   await expect(editorOf(page)).toContainText(TEXT);
@@ -333,5 +335,6 @@ test("O2 (DAN-289): a submitted work opens read-only and sends nothing after the
   await expect(editorOf(page)).not.toContainText("Nakon predaje.");
   expect((await localOf(page, documentId)).meta?.localSeq).toBe(before.meta?.localSeq);
   expect(requests.map(pathOf)).toEqual(["/api/evidence/open"]);
+  expect(live.map(pathOf)).toEqual([]);
   await shoot(page, "o2-predani-rad");
 });
