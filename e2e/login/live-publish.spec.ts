@@ -5,6 +5,7 @@ import { DUCTUS_PROTOCOL_VERSION } from "../../src/domain/evidence/commit-envelo
 import { createWithActor } from "../../src/server/db/with-actor";
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
+import { ensureDemoPackage, insertDemoDocument } from "./comment-seed";
 import { appCookie, logoutDialogOf, SESSION_COOKIE, signIn } from "./support";
 
 // B-LIVE step 4 (DAN-216, contract #476 6275905316): the signed-in student's
@@ -90,12 +91,9 @@ async function enrolAndConfirm(token: string): Promise<string> {
       await client.query(
         "INSERT INTO evidence.project (id, institution_id, assignment_id, principal_id) VALUES ($1, $2, $3, $4)",
         [`e2e-live-${suffix}`, student.institution, assignmentId, student.id]);
-      await client.query(
-        `INSERT INTO evidence.document (id, institution_id, project_id, principal_id, current_content_hash)
-         VALUES ($1, $2, $3, $4, repeat('0', 64))`, [LOCAL_DEMO_DOCUMENT_ID, student.institution, `e2e-live-${suffix}`, student.id]);
-      await client.query(
-        `INSERT INTO evidence.document_revision (document_id, institution_id, revision, principal_id, content_hash)
-         VALUES ($1, $2, 0, $3, repeat('0', 64))`, [LOCAL_DEMO_DOCUMENT_ID, student.institution, student.id]);
+      await insertDemoDocument(client, { institution: student.institution, student: student.id }, `e2e-live-${suffix}`);
+    } else {
+      await ensureDemoPackage(client);
     }
     await client.query(
       `INSERT INTO institution.course_member (course_id, institution_id, user_id, role) VALUES ($1, $2, $3, 'student')
