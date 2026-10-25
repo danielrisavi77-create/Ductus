@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 
 import AppShell from "@/components/shell/AppShell";
 import { shellSession } from "@/components/shell/shell-session";
-import { readShellRole } from "@/components/shell/shell-role";
+import { readShellAccount } from "@/components/shell/shell-role";
 import AssignmentNotice from "@/components/student/AssignmentNotice";
 import styles from "@/components/student/AssignmentNotice.module.css";
 import { readNotice } from "@/components/student/assignment-notice-read";
@@ -22,10 +22,10 @@ export const metadata = { title: `${t.student.title} · ${t.app.name}` };
 export default async function AssignmentNoticePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
-  const [read, role] = await Promise.all([readNotice(token, id, withActor), readShellRole(token, withActor)]);
+  const [read, { role, scope }] = await Promise.all([readNotice(token, id, withActor), readShellAccount(token, withActor)]);
   const here = `/zadatak/${encodeURIComponent(id)}`;
   return (
-    <AppShell session={shellSession(token)} role={role} crumbs={[t.student.title]}>
+    <AppShell session={shellSession(token)} role={role} scope={scope} crumbs={[t.student.title]}>
       <div className={`page ${styles.screen}`}>
         {read.kind === "available" ? (
           <AssignmentNotice view={read.view} timing={noticeWindow(read.view.opensAt, read.view.dueAt, Date.now())} />

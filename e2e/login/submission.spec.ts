@@ -7,7 +7,7 @@ import pg from "pg";
 import { RECEIPT } from "../../src/client/submission.fixture";
 import { canonicalizeJcs } from "../../src/domain/forensics/jcs";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
-import { clickSignOut, signIn } from "./support";
+import { signIn, signOutWithoutDialog } from "./support";
 
 // F-10 (#476 contract 6384297464): the student's submission page. The course,
 // assignment, membership and acknowledgment are invented and written through
@@ -280,7 +280,8 @@ test("an acknowledged assignment on /rad links to its submission and sends nothi
   const bodies = recordSubmissions(page);
   await page.goto(`/rad?zadatak=${assignment}`);
   const link = submitLinkOf(page);
-  await expect(link).toBeVisible();
+  // #711 F1: the link comes with the student's own work, opened by the page's one POST.
+  await expect(link).toBeVisible({ timeout: 30_000 });
   await expect(link).toHaveAttribute("href", pathOf(assignment));
   await page.waitForTimeout(1000);
   expect(bodies).toEqual([]);
@@ -309,7 +310,8 @@ test("after a sign-out in another tab the work leaves the page and nothing is se
   await expect(page.getByRole("button", { name: t.submit })).toBeVisible();
   const other = await context.newPage();
   await other.goto("/rad");
-  await clickSignOut(other);
+  // The free draft of this tab holds nothing: no dialog (O1, #476 c.6396707923).
+  await signOutWithoutDialog(other);
   await expect(page.getByText(t.outcome.signedOut)).toBeVisible();
   await expect(page.getByRole("document", { name: t.textLabel })).toHaveCount(0);
   await expect(page.getByRole("button", { name: t.submit })).toHaveCount(0);

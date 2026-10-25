@@ -314,6 +314,22 @@ function settledForLogout(meta: SyncMeta): boolean {
   return meta.state === "SYNCED" || (meta.localSeq === 0 && meta.evidenceHead !== undefined);
 }
 
+/** Work a sign-out must not delete; shared by `fenceAndDelete` and `peekLogoutHold` (D-118). */
+function holdsUnsynced(
+  pending: number, copies: number, snapshots: readonly { documentId: string }[], metas: readonly SyncMeta[],
+): boolean {
+  const settled = new Set(metas.filter(settledForLogout).map((meta) => meta.documentId));
+  const snapshotIds = new Set(snapshots.map((snapshot) => snapshot.documentId));
+  // A kept copy is the author's text, gone only when the author lets it go.
+  return pending !== 0 || copies !== 0 ||
+    snapshots.some((snapshot) => !settled.has(snapshot.documentId)) ||
+    metas.some((meta) => !settled.has(meta.documentId) || !snapshotIds.has(meta.documentId));
+}
+
+export type LogoutHold = { pending: number; copies: number; kept: boolean };
+
+const NOTHING_HELD: LogoutHold = { pending: 0, copies: 0, kept: false };
+
 export type JournalOptions = {
   /** How long a blocked deletion may stay blocked before `logout_blocked`. */
   logoutBlockedTimeoutMs?: number;
@@ -328,6 +344,36 @@ export class AtomicDexieJournal {
   private deletion: Promise<void> | null = null;
   private deletionBlocked = false;
   private readonly blockedListeners = new Set<() => void>();
+
+  /**
+   * What this journal holds back from a sign-out. Dexie without a schema
+   * aborts creation, so no database is made; no lock, no write, no fence.
+   * A fenced journal holds nothing by the fence's own rule.
+   */
+  static async peekLogoutHold(scopeHash: string, options?: DexieOptions): Promise<LogoutHold> {
+    if (!/^[a-f0-9]{64}$/.test(scopeHash)) throw new JournalError("invalid_input");
+    const db = new Dexie(`ductus-journal-v1-${scopeHash}`, { ...options, addons: [] });
+    try {
+      await db.open();
+      const names = new Set(db.tables.map((table) => table.name));
+      if (names.size === 0) return NOTHING_HELD;
+      const all = <T,>(name: string): Promise<T[]> => (names.has(name) ? db.table<T>(name).toArray() : Promise.resolve([]));
+      const count = (name: string): Promise<number> => (names.has(name) ? db.table(name).count() : Promise.resolve(0));
+      return await db.transaction("r", [...names], async () => {
+        const [fence, pending, copies, snapshots, metas] = await Promise.all([
+          all<JournalControl>("control"), count("pending"), count("salvage"),
+          all<{ documentId: string }>("snapshots"), all<SyncMeta>("meta"),
+        ]);
+        if (fence.some((row) => row.key === "logout")) return NOTHING_HELD;
+        return { pending, copies, kept: holdsUnsynced(pending, copies, snapshots, metas) };
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === "NoSuchDatabaseError") return NOTHING_HELD;
+      throw error;
+    } finally {
+      db.close();
+    }
+  }
 
   /** Requires an opaque 64-character lower-case SHA-256 hex principal scope. */
   constructor(scopeHash: string, options?: DexieOptions, journalOptions?: JournalOptions) {
@@ -878,14 +924,7 @@ export class AtomicDexieJournal {
         const [pending, snapshots, metas, copies] = await Promise.all([
           this.db.pending.count(), this.db.snapshots.toArray(), this.db.meta.toArray(), this.db.salvage.count(),
         ]);
-        const settled = new Set(metas.filter(settledForLogout).map((meta) => meta.documentId));
-        const snapshotIds = new Set(snapshots.map((snapshot) => snapshot.documentId));
-        // A kept copy is the author's text, gone only when the author lets it go.
-        if (pending !== 0 || copies !== 0 ||
-            snapshots.some((snapshot) => !settled.has(snapshot.documentId)) ||
-            metas.some((meta) => !settled.has(meta.documentId) || !snapshotIds.has(meta.documentId))) {
-          throw new JournalError("unsynced_work");
-        }
+        if (holdsUnsynced(pending, copies, snapshots, metas)) throw new JournalError("unsynced_work");
         await this.db.control.put({ key: "logout", state: "closing" });
       },
     );

@@ -1082,6 +1082,54 @@ main:focus {
   color: var(--ink);
 }
 
+/* #711 F1: the free draft's line under the title, and the note past the due date above the sheet. */
+.sheet-note {
+  margin: 0 0 12px;
+  color: var(--ink-2);
+  font-family: var(--ff-ui);
+  font-size: 14px;
+}
+
+.sheet-notice {
+  max-width: 720px;
+  margin: 0 auto 12px;
+  padding: 8px 16px;
+  border: 1px solid var(--rule);
+  background: var(--cmt-bg);
+  color: var(--ink);
+  font-family: var(--ff-ui);
+  font-size: 14px;
+}
+
+/* #711 F1b: the earlier draft of this device, closed above the sheet. */
+.earlier-draft {
+  max-width: 720px;
+  margin: 0 auto 12px;
+  padding: 8px 16px;
+  border: 1px solid var(--rule);
+  color: var(--ink);
+  font-family: var(--ff-ui);
+  font-size: 14px;
+}
+
+.earlier-draft summary {
+  cursor: pointer;
+}
+
+.earlier-draft__text {
+  max-height: 240px;
+  overflow: auto;
+  padding: 8px 12px;
+  border-left: 2px solid var(--rule);
+  white-space: pre-wrap;
+}
+
+.earlier-draft__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 /* No network (F-8, DAN-211): text and icon, never colour alone. */
 .offline-banner p {
   margin: 0;

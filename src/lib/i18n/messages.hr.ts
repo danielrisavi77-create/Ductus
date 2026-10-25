@@ -377,6 +377,8 @@ export const hr = {
   workspace: {
     title: "Radni prostor",
     viewModes: "Prikaz",
+    // #711 F1, za potvrdu: the name of the top bar region (course, assignment, view, submission).
+    barLabel: "Zadatak i prikaz",
     modeWriting: "Pisanje",
     modeTeacherView: "Kako vidi nastavnik",
     // F-10: a link to the submission screen, not the act of submitting (#653 contract 6385776645).
@@ -433,6 +435,29 @@ export const hr = {
     documentUntitled: "Bez naslova",
     documentLabel: "Tekst rada",
     documentNotEditable: "Pisanje ovdje još nije moguće.",
+    // #711 F1 (contract 6391402093 §3, §5, §6): /rad with and without an assignment.
+    freeNote: "Ovaj tekst nije vezan uz zadatak i ne predaje se. Zadatak otvaraš s njegove obavijesti.",
+    unavailable: "Ovaj zadatak nije dostupan ovom računu.",
+    openLoading: "Otvaram rad…",
+    openNotYet: "Zadatak se otvara {time}.",
+    openOffline: "Za prvo otvaranje rada potrebna je veza.",
+    openError: "Rad trenutačno nije moguće otvoriti.",
+    openRetry: "Pokušaj ponovno",
+    openNotAccepting: "Obavijest zadatka se promijenila ili zadatak trenutačno ne prima rad.",
+    openNoticeLink: "Otvori obavijest zadatka",
+    openReload: "Ova verzija stranice više ne može otvoriti rad. Učitaj je ponovno.",
+    openReloadButton: "Učitaj ponovno",
+    lateNote: "Rok zadatka je prošao. Pisati možeš i dalje, a predaja će biti označena kao predaja nakon roka.",
+    // #711 F1b (contract §4): the earlier draft of this device, offered only to read and copy.
+    earlierDraftSummary: "Na ovom uređaju čuva se tvoj raniji tekst koji nije u ovom radu.",
+    // Owner (#711, O3 and amendment c): until 3d-2c2 a paste is not an evidence step, so the text does not say it is recorded; the sentence returns in 3d-2c2b.
+    earlierDraftExplain: "Tekst ostaje gdje je i ne briše se. Ako ga želiš u ovom radu, kopiraj ga i zalijepi.",
+    earlierDraftCopy: "Kopiraj tekst",
+    // Owner accepted (#711 c.6396392080, b): the contract text "Kopirano u međuspremnik." fails the stem list of messages.test.ts (kopiran).
+    earlierDraftCopied: "Tekst je u međuspremniku.",
+    // Owner accepted (#711 c.6396392080, a): the contract text "Tekst nije moguće kopirati." is a forbidden term (kopir-, PRODUCT §5).
+    earlierDraftCopyFailed: "Tekst nije moguće staviti u međuspremnik. Izvezi ga kao datoteku.",
+    earlierDraftOpen: "Otvori raniji tekst",
     status: "Stanje rada",
     // FE-D6 (design editor-v11): the status bar.
     statusLoading: "Učitavanje rada…",
