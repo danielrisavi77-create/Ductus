@@ -20,6 +20,7 @@ import { DUCTUS_PROTOCOL_VERSION } from "@/domain/evidence/commit-envelope";
 import { MAX_DOCUMENT_SNAPSHOT_BYTES } from "@/domain/document/snapshot";
 import { exceedsEvidenceSegmentLimit } from "@/domain/forensics/evidence-chain-v2";
 import { isReceiptClientTransactionId } from "@/domain/forensics/evidence-receipt";
+import { isEvidenceProfileIdV2 } from "@/domain/forensics/evidence-segment-v2";
 import {
   verifySignedEvidenceReceiptV2,
   type EvidenceDomainKey,
@@ -42,6 +43,8 @@ export type OpenedWork = {
   /** The one evidence domain every receipt key belongs to. */
   evidenceDomainId: string;
   receiptKeys: readonly EvidenceDomainKey[];
+  /** True exactly when the student's submission of this work is recorded (DAN-289 O2). */
+  submitted: boolean;
 };
 
 export type OpenOutcome =
@@ -67,7 +70,7 @@ const SHA256_HEX = /^[0-9a-f]{64}$/;
 const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 const OPEN_KEYS = [
   "status", "documentId", "evidenceProfileId", "currentRevision", "documentHash",
-  "headSegmentHash", "lastSequenceTo", "document", "receiptKeys",
+  "headSegmentHash", "lastSequenceTo", "document", "receiptKeys", "submitted",
 ];
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -141,23 +144,26 @@ export function openedWorkFrom(value: unknown): OpenedWork | null {
   const own = Object.keys(value);
   if (own.length !== OPEN_KEYS.length || !OPEN_KEYS.every((key) => own.includes(key))) return null;
   const {
-    documentId, evidenceProfileId, currentRevision, documentHash, headSegmentHash, lastSequenceTo,
+    documentId, evidenceProfileId, currentRevision, documentHash, headSegmentHash, lastSequenceTo, submitted,
   } = value;
   const document = decodeBase64(value.document);
   const keys = receiptDomainOf(value.receiptKeys);
   if (
     typeof documentId !== "string" || documentId === "" ||
-    typeof evidenceProfileId !== "string" || evidenceProfileId === "" ||
+    // The same rule as the journal and segment v2, so a profile they would refuse is refused here (#733).
+    !isEvidenceProfileIdV2(evidenceProfileId) ||
     !isCount(currentRevision) || !isCount(lastSequenceTo) ||
     typeof documentHash !== "string" || !SHA256_HEX.test(documentHash) ||
     !(headSegmentHash === null || (typeof headSegmentHash === "string" && SHA256_HEX.test(headSegmentHash))) ||
-    document === null || document.byteLength > MAX_DOCUMENT_SNAPSHOT_BYTES || keys === null
+    document === null || document.byteLength > MAX_DOCUMENT_SNAPSHOT_BYTES || keys === null ||
+    // Never false by assumption: only a real boolean says whether the work is submitted.
+    typeof submitted !== "boolean"
   ) {
     return null;
   }
   return {
     documentId, evidenceProfileId, currentRevision, documentHash, headSegmentHash, lastSequenceTo,
-    document, evidenceDomainId: keys.domain, receiptKeys: keys.keys,
+    document, evidenceDomainId: keys.domain, receiptKeys: keys.keys, submitted,
   };
 }
 

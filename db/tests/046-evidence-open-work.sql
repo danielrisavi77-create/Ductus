@@ -107,7 +107,7 @@ SELECT bag_eq(
             ('app.request_submission(text,bigint)'), ('app.record_submission(uuid,text)'),
             ('app.open_student_work(uuid)'), ('app.evidence_commit_context(text,text)'),
             ('app.read_submission_record(uuid)'), ('app.prepare_submission_receipt(uuid,text,text)'),
-            ('app.assignment_works(uuid)'), ('app.fast_path_works(uuid)') $$,
+            ('app.assignment_works(uuid)'), ('app.work_submitted(uuid)'), ('app.fast_path_works(uuid)') $$,
   'the web role executes exactly the expected evidence RPCs');
 SELECT is_empty(
   $$ SELECT r || ' ' || p.oid::regprocedure::text FROM pg_proc p

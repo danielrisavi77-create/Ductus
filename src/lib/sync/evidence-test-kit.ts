@@ -104,6 +104,27 @@ export function openedAfter(segment: BuiltSegment, revision: number): EvidenceOp
   };
 }
 
+/**
+ * An open answer whose fields answer their first read with the real value and
+ * every later read with another one (#733), and the count of reads per field.
+ */
+export function shifting(opened: EvidenceOpening) {
+  const reads: Record<string, number> = {};
+  const later: Record<string, unknown> = {
+    evidenceProfileId: 7, headSegmentHash: "b".repeat(64), documentHash: "c".repeat(64),
+    currentRevision: opened.currentRevision + 5, lastSequenceTo: opened.lastSequenceTo + 5,
+    document: new Uint8Array([123, 125]),
+  };
+  const proxy = new Proxy(opened, {
+    get(target, key, receiver) {
+      const name = String(key);
+      reads[name] = (reads[name] ?? 0) + 1;
+      return reads[name]! > 1 && name in later ? later[name] : Reflect.get(target, key, receiver);
+    },
+  });
+  return { opening: proxy, reads };
+}
+
 /** Journals on fake-indexeddb under scopes starting with `prefix`, deleted by `cleanup`. */
 export function journalKit(prefix: string) {
   let serial = 0;
