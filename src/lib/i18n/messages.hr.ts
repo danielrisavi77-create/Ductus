@@ -337,6 +337,11 @@ export const hr = {
     at: "u",
     students: { one: "student", few: "studenta", many: "studenata" },
     countNote: "Broj studenata služi samo za pregled; po njemu se ništa ne poreda.",
+    // F2 (#711): links to the students' works; numbered, since names arrive with B-11.
+    worksLabel: "Radovi studenata",
+    work: "Rad",
+    noWorks: "Nijedan student još nije otvorio rad.",
+    worksUnavailable: "Radovi trenutačno nisu dostupni. Pokušaj ponovno.",
   },
   fastPath: {
     title: "Brz put",
