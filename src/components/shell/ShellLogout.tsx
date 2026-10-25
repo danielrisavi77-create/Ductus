@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
 import { readLogoutHold, shellLogoutStep } from "@/client/logout-hold";
+import type { SessionMark } from "@/client/session-marks";
 import LogoutDialog from "@/components/editor/LogoutDialog";
 import type { LogoutPlan } from "@/components/editor/logout-plan";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
@@ -10,6 +11,8 @@ import { messagesHr as t } from "@/lib/i18n/messages.hr";
 export type ShellLogoutProps = {
   /** This person's journal scope; null opens the dialog without a number. */
   scope: string | null;
+  /** The session this page was rendered under; null without a session cookie. */
+  session: SessionMark | null;
   className?: string;
   buttonClassName?: string;
   /** Before the button (who is signed in); `children` go before its label. */
@@ -22,7 +25,7 @@ export type ShellLogoutProps = {
  * this person's journal holds; nothing posts at once, else the dialog names
  * it. The same POST either way; nothing is deleted here; without JS it posts (I5).
  */
-export default function ShellLogout({ scope, className, buttonClassName, lead, children }: ShellLogoutProps) {
+export default function ShellLogout({ scope, session, className, buttonClassName, lead, children }: ShellLogoutProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [busy, setBusy] = useState(false);
@@ -37,7 +40,7 @@ export default function ShellLogout({ scope, className, buttonClassName, lead, c
     event.preventDefault();
     if (busy || plan) return;
     setBusy(true);
-    void readLogoutHold(scope).then((read) => {
+    void readLogoutHold(scope, { session }).then((read) => {
       const step = shellLogoutStep(read);
       if (step.kind === "plain") {
         post();

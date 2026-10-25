@@ -4,6 +4,7 @@ import Dexie from "dexie";
 import { indexedDB, IDBKeyRange } from "fake-indexeddb";
 
 import { editorPlan, LOGOUT_HOLD_LIMIT_MS, readLogoutHold, shellLogoutStep } from "./logout-hold";
+import { CURRENT_KEY, ENDED_KEY } from "./session-marks";
 
 // D-118 sign-out dialog (#476 c.6396619831 §6 U3, amendment c.6396707923).
 const SCOPE = "a".repeat(64);
@@ -31,6 +32,32 @@ describe("readLogoutHold (U3)", () => {
     expect(read).toBe("unknown");
     expect(peek).not.toHaveBeenCalled();
     expect(shellLogoutStep(read)).toEqual({ kind: "dialogUnknown", plan: { unsaved: false, pending: null } });
+  });
+
+  describe("the page's session", () => {
+    const PAGE = { tag: "made-up-tag-a", at: 100 };
+    const HELD = { pending: 3, copies: 1, kept: true };
+    function marks(entries: Record<string, unknown>) {
+      const data = new Map(Object.entries(entries).map(([k, v]) => [k, JSON.stringify(v)]));
+      return { getItem: (k: string) => data.get(k) ?? null, setItem: vi.fn(), removeItem: vi.fn() };
+    }
+
+    it.each([
+      ["another person signed in later", { [CURRENT_KEY]: { tag: "made-up-tag-b", at: 200 } }],
+      ["signed out in another tab", { [ENDED_KEY]: [PAGE.tag] }],
+    ])("ended (%s): no read, plain sign-out", async (_name, entries) => {
+      const peek = vi.fn(async () => HELD);
+      const read = await readLogoutHold(SCOPE, { peek, session: PAGE, store: marks(entries) });
+      expect(peek).not.toHaveBeenCalled();
+      expect(shellLogoutStep(read)).toEqual({ kind: "plain" });
+    });
+
+    it("still current: reads and shows what is held", async () => {
+      const peek = vi.fn(async () => HELD);
+      const read = await readLogoutHold(SCOPE, { peek, session: PAGE, store: marks({ [CURRENT_KEY]: PAGE }) });
+      expect(peek).toHaveBeenCalledWith(SCOPE);
+      expect(shellLogoutStep(read)).toEqual({ kind: "dialog", plan: { unsaved: false, pending: 3, copies: 1, kept: true } });
+    });
   });
 
   it("reads the scope it was given", async () => {
