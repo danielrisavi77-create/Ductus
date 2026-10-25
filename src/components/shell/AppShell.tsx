@@ -185,6 +185,7 @@ export default function AppShell({ role, session, scope, current, crumbs, accoun
           ) : role !== null ? (
             <ShellLogout
               scope={scope}
+              session={session.tag === null ? null : { tag: session.tag, at: session.at }}
               className={styles.account}
               buttonClassName={styles.signOut}
               lead={<span className={styles.who}>{t.shell.role[role]}</span>}
