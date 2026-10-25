@@ -463,8 +463,9 @@ export const hr = {
     // server's work differs (CONFLICT, RECOVERY_REQUIRED).
     evidenceConflict:
       "Rad na poslužitelju razlikuje se od teksta na ovom uređaju. Tekst ostaje na uređaju i ništa se ne šalje dok ne odlučiš kako dalje.",
-    // 3d-2c2b, za potvrdu: a send refused for good. The contract's "spremljen na
-    // ovom uređaju" fails the PRODUCT §5 scan, so "ovom" is dropped.
+    // 3d-2c2b, owner approved 25 Oct (#87 c.6397773534): a send refused for
+    // good. The contract's "spremljen na ovom uređaju" fails the PRODUCT §5
+    // scan, so "ovom" is dropped.
     sendRefused: "Tekst je spremljen na uređaju, ali ga poslužitelj nije primio. Ponovno učitaj stranicu.",
     // 3d-2c2b, owner approved 25 Oct: the package was closed by the submission (DAN-289 A1).
     submittedReadOnly:
