@@ -15,16 +15,30 @@ const MODULES = [
 
 type Size = { selector: string; px: number };
 
-/** The px font sizes of the top-level rules, outside any @media block. */
+/**
+ * The px font sizes of the top-level rules, outside any @media block, one
+ * entry per selector of a selector list, also when the list spans lines.
+ */
 function baseSizes(css: string): Size[] {
   const sizes: Size[] = [];
-  let selector = "";
+  let pending = "";
+  let selectors: string[] = [];
   let depth = 0;
-  for (const line of css.split("\n")) {
-    if (depth === 0 && line.trim().endsWith("{")) selector = line.trim().slice(0, -1).trim();
+  for (const line of css.replace(/\/\*[\s\S]*?\*\//g, "").split("\n")) {
+    if (depth === 0) {
+      pending += ` ${line}`;
+      if (line.includes("{")) {
+        const head = pending.slice(0, pending.indexOf("{")).trim();
+        selectors = head.split(",").map((selector) => selector.trim());
+        pending = "";
+      }
+    }
     const size = /^\s*font-size:\s*([\d.]+)px;/.exec(line);
-    if (size && depth === 1 && !selector.startsWith("@")) sizes.push({ selector, px: Number(size[1]) });
+    if (size && depth === 1 && !selectors[0]?.startsWith("@")) {
+      for (const selector of selectors) sizes.push({ selector, px: Number(size[1]) });
+    }
     depth += (line.match(/\{/g) ?? []).length - (line.match(/\}/g) ?? []).length;
+    if (depth === 0 && line.includes("}")) pending = "";
   }
   return sizes;
 }
