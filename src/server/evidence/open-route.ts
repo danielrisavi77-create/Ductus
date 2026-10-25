@@ -17,6 +17,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const OPEN_SQL = `SELECT outcome, document_id, evidence_profile_id, current_revision, document_hash,
        head_segment_hash, last_sequence_to, snapshot
   FROM app.open_student_work($1::uuid)`;
+// DAN-289 O2: whether the caller's own work for the assignment is submitted (true or false, nothing else).
+const SUBMITTED_SQL = `SELECT app.work_submitted($1::uuid) AS submitted`;
 // Under RLS the session sees only its own packages; the first one, as the open RPC picks it.
 const DOMAIN_SQL = `SELECT evidence_domain_id::text AS evidence_domain_id FROM evidence.package
  WHERE document_id = $1 ORDER BY created_at, id LIMIT 1`;
@@ -73,6 +75,10 @@ async function open(tx: ActorTransaction, assignmentId: string): Promise<Opened>
   ) {
     return { status: "unavailable", code: "work_malformed" };
   }
+  // Never false by assumption: an answer that is not a boolean is no answer.
+  const submittedRows = await tx.query<{ submitted: unknown }>(SUBMITTED_SQL, [assignmentId]);
+  const submitted = submittedRows.rows.length === 1 ? submittedRows.rows[0]?.submitted : undefined;
+  if (typeof submitted !== "boolean") return { status: "unavailable", code: "work_malformed" };
   const domain = await tx.query<{ evidence_domain_id: unknown }>(DOMAIN_SQL, [row.document_id]);
   const domainId = domain.rows[0]?.evidence_domain_id;
   if (typeof domainId !== "string") return { status: "unavailable", code: "work_malformed" };
@@ -91,6 +97,7 @@ async function open(tx: ActorTransaction, assignmentId: string): Promise<Opened>
       lastSequenceTo,
       document: Buffer.from(row.snapshot, "utf8").toString("base64"),
       receiptKeys,
+      submitted,
     },
   };
 }
