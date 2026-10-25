@@ -5,8 +5,9 @@
 -- when a teacher cancels it (revoke_enrollment_code), 'replaced' when issuing
 -- a new code switches it off (create_enrollment_code). The caller comes from
 -- the session, never from a parameter. The row names the code by its id; the
--- code itself is stored nowhere, as before. Input, access rule, locking and
--- return of both functions are unchanged.
+-- code itself is stored nowhere, as before. Input, access rule and return of
+-- both functions are unchanged; revoke_enrollment_code now also locks the
+-- course first, as create_enrollment_code always did.
 -- migrate:up
 
 SET LOCAL ROLE ductus_migrator;
@@ -77,7 +78,7 @@ END
 $$;
 
 -- As 20261010180000, and the cancelled code is written as 'revoked'. False,
--- and nothing written, when none was active.
+-- and nothing written, when none was active. It now locks the course first.
 CREATE OR REPLACE FUNCTION institution.revoke_enrollment_code(p_course_id uuid) RETURNS boolean
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = ''
 AS $$
@@ -89,6 +90,10 @@ BEGIN
   IF institution.actor_course_role(p_course_id) IS DISTINCT FROM 'teacher' THEN
     RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
   END IF;
+  -- The same lock, taken first, as create_enrollment_code: the audit row's
+  -- foreign key needs a share lock on the course, so without it a revocation
+  -- holding the code and an issue holding the course would wait on each other.
+  PERFORM 1 FROM institution.course c WHERE c.id = p_course_id FOR UPDATE;
   WITH ended AS (
     UPDATE institution.course_enrollment_code e SET active = false
      WHERE e.course_id = p_course_id AND e.active

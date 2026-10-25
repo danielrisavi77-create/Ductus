@@ -190,4 +190,40 @@ describe("enrollment code revocation real POST, session and database", () => {
     expect(rows[0].kind).toBe("revoked");
     expect([people.teacher.id, people.second.id]).toContain(rows[0].actor_id);
   });
+
+  it("a revocation locks the course as an issue does, so the two at once both finish with one row per ended code", async () => {
+    const earlier = (await admin.query<{ id: string }>(
+      "SELECT id FROM institution.course_enrollment_code WHERE course_id = $1", [course],
+    )).rows.map((row) => row.id);
+    await issue("teacher", course);
+    // While a revocation is open, no other writer gets the course row: the
+    // lock is taken before the code, in the same order as an issue takes it.
+    const lock = await withActor(people.second.token, async (tx) => {
+      await tx.query("SELECT institution.revoke_enrollment_code($1)", [course]);
+      try {
+        await admin.query("SELECT 1 FROM institution.course WHERE id = $1 FOR NO KEY UPDATE NOWAIT", [course]);
+        return "free";
+      } catch (error) {
+        return (error as { code?: string }).code;
+      }
+    });
+    expect(lock).toBe("55P03");
+    for (let round = 0; round < 5; round += 1) {
+      await issue("teacher", course);
+      const [revocation] = await Promise.all([post(people.second.token), issue("teacher", course)]);
+      expect(revocation.status).toBe(200);
+      // Either order leaves an active code to revoke: the old one, or the new one.
+      expect(await revocation.json()).toEqual({ revoked: true });
+    }
+    const codes = (await admin.query<{ active: boolean; kinds: string[]; actors: string[] }>(
+      `SELECT c.active, array_remove(array_agg(e.kind), NULL) AS kinds, array_remove(array_agg(e.actor_id::text), NULL) AS actors
+         FROM institution.course_enrollment_code c LEFT JOIN audit.enrollment_code_event e ON e.code_id = c.id
+        WHERE c.course_id = $1 AND NOT c.id = ANY ($2::uuid[]) GROUP BY c.id, c.active`, [course, earlier],
+    )).rows;
+    expect(codes).toHaveLength(11);
+    for (const code of codes) {
+      expect(code.kinds).toHaveLength(code.active ? 0 : 1);
+      if (!code.active) expect(code.actors[0]).toBe(code.kinds[0] === "revoked" ? people.second.id : people.teacher.id);
+    }
+  });
 });
