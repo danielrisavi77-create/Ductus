@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import CommentPanel from "@/components/editor/CommentPanel";
+import EarlierDraft from "@/components/editor/EarlierDraft";
 import EditorToolbar from "@/components/editor/EditorToolbar";
 import HeadingOutline from "@/components/editor/HeadingOutline";
 import { OfflineBanner, OfflineChip } from "@/components/editor/OfflineNotice";
@@ -139,7 +140,7 @@ export default async function WorkspacePage({
     <a className="btn" href={`/api/auth/login?returnTo=${encodeURIComponent(radPath(assignmentId))}`}>{t.auth.signIn}</a>
   ) : undefined;
   const workspace = (
-    <AppShell session={{ tag, at }} role={signedIn ? role : null} current="/rad" crumbs={[t.workspace.title]} account={account} ownMain>
+    <AppShell session={{ tag, at }} role={signedIn ? role : null} scope={signedIn ? scope : null} current="/rad" crumbs={[t.workspace.title]} account={account} ownMain>
       <WorkspaceShell
         writingHref={radPath(assignmentId)}
         context={work ? `${work.course} / ${work.notice.title}` : null}
@@ -203,6 +204,8 @@ export default async function WorkspacePage({
         {journal ? <EditorToolbar /> : null}
         <div className="sheet-area">
           {late ? <p className="sheet-notice" role="note">{t.workspace.lateNote}</p> : null}
+          {/* F1b (§4): the free draft of this device, offered only to read and copy. */}
+          {plan.kind === "assignment" ? <EarlierDraft scope={plan.journal.scope} /> : null}
           <SheetFrame>
             <h1 className="manuscript manuscript__title">{sheetTitle(work ?? NO_CONTEXT, t.workspace.documentUntitled)}</h1>
             {plan.kind === "free" ? <p className="sheet-note">{t.workspace.freeNote}</p> : null}

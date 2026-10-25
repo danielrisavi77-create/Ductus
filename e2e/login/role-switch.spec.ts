@@ -5,7 +5,7 @@ import type { NodeId } from "../../src/domain/document";
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import { closeWork, openWorkOf, seedWork } from "./work-seed";
 import { post } from "./comment-seed";
-import { clickSignOut, signIn, type DemoAccount } from "./support";
+import { clickSignOut, signIn, signOutWithoutDialog, type DemoAccount } from "./support";
 
 // F-086 and F-088 (#476 contract 6383859615): one browser, one person after
 // another. Nothing the previous sign-in held in the page, its text, its undo
@@ -101,8 +101,8 @@ test("student, teacher, student in one browser: no text, undo, comment or reply 
   await expect(phaseOf(page)).toHaveAttribute("data-phase", "ready");
   await expect(editorOf(page)).toHaveText("");
   await snapshot(page, "2-nastavnik-prazan-list");
-  await clickSignOut(page);
-  await page.waitForURL("http://localhost:3000/");
+  // An empty sheet holds nothing of the teacher: no dialog (O1, #476 c.6396707923).
+  await signOutWithoutDialog(page);
 
   // Her own journal comes back (D-118); nothing else of either sign-in does.
   await signInAgain(page, "Demo studentica", `/rad?zadatak=${assignment}`);
