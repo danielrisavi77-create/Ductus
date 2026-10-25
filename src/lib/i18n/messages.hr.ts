@@ -459,6 +459,9 @@ export const hr = {
   },
   editor: {
     placeholder: "Počni pisati…",
+    // 3d-2c2b, za potvrdu: the package was closed by the submission (DAN-289 A1).
+    submittedReadOnly:
+      "Rad je predan, pa se ovdje više ne može pisati. Izmjene napravljene nakon predaje nisu u predanom radu i ostaju samo na ovom uređaju.",
     blockedHint: "Ova kartica ništa ne sprema dok je druga otvorena. Kad je zatvoriš, tekst se ovdje ponovno učitava.",
     failureQuota: "Na uređaju nema dovoljno prostora, pa se promjene više ne spremaju. Izvezi tekst da ga ne izgubiš.",
     failureUnavailable: "Spremanje na ovom uređaju nije dostupno. Izvezi tekst da ga ne izgubiš.",
@@ -782,6 +785,12 @@ export const hr = {
       one: "{n} izmjena postoji samo na ovom uređaju. Odjava zatvara sesiju.",
       few: "{n} izmjene postoje samo na ovom uređaju. Odjava zatvara sesiju.",
       many: "{n} izmjena postoji samo na ovom uređaju. Odjava zatvara sesiju.",
+    },
+    // 3d-2c2b O3, za potvrdu: steps held after the submission are never sent.
+    logoutAfterSubmission: {
+      one: "{n} izmjena nakon predaje postoji samo na ovom uređaju i ne šalje se. Odjava zatvara sesiju.",
+      few: "{n} izmjene nakon predaje postoje samo na ovom uređaju i ne šalju se. Odjava zatvara sesiju.",
+      many: "{n} izmjena nakon predaje postoji samo na ovom uređaju i ne šalje se. Odjava zatvara sesiju.",
     },
     logoutKept:
       "Zapis ostaje vezan uz tebe na ovom uređaju i nastavljaš ga kad se ponovno prijaviš. Osoba koja se nakon tebe prijavi na ovom uređaju ne vidi tvoj rad.",

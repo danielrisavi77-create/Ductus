@@ -9,7 +9,12 @@ const t = messagesHr.auth;
  * steps of this document the journal still owes, or null when this tab holds
  * no journal (blocked, unavailable, recovery) and the number is not known.
  */
-export type LogoutPlan = { unsaved: boolean; pending: number | null };
+export type LogoutPlan = {
+  unsaved: boolean;
+  pending: number | null;
+  /** The work was submitted (3d-2c2a §4): the steps still held are never sent. */
+  submitted?: boolean;
+};
 
 export type LogoutText = {
   /** The main sentence of the dialog. */
@@ -32,6 +37,11 @@ export function logoutText(plan: LogoutPlan): LogoutText {
     return { text: t.logoutUnsaved, note: n !== null && n > 0 ? t.logoutKept : null, offerExport: true };
   }
   if (n === null || n <= 0) return { text: t.logoutPlain, note: null, offerExport: false };
+  if (plan.submitted) {
+    // 3d-2c2 O3: kept on this device for this person, but no sign-in sends it.
+    const after = pluralHr(n, t.logoutAfterSubmission.one, t.logoutAfterSubmission.few, t.logoutAfterSubmission.many);
+    return { text: after.replace("{n}", String(n)), note: null, offerExport: false };
+  }
   const form = pluralHr(n, t.logoutPending.one, t.logoutPending.few, t.logoutPending.many);
   return { text: form.replace("{n}", String(n)), note: t.logoutKept, offerExport: false };
 }
