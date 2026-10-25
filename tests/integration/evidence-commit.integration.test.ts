@@ -448,6 +448,8 @@ describe("evidence routes (B-8 step 5)", () => {
       headSegmentHash: chain.head,
       lastSequenceTo: chain.sequence,
       receiptKeys: [expect.objectContaining({ keyId: key.keyId, purpose: "receipt" })],
+      // The real app.work_submitted answers through the route: nothing is submitted here (DAN-289 O2).
+      submitted: false,
     });
     expect(sha256(Buffer.from(body.document, "base64").toString("utf8"))).toBe(chain.documentHash);
   });

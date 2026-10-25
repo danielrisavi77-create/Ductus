@@ -34,7 +34,7 @@ Protokol: OIDC Authorization Code s PKCE-om prema AAI@EduHr (D-09, `docs/PRODUCT
 | `hrEduPersonAffiliation` | Traži se; `djelatnik` znači samo da osoba može dobiti ulogu | **Ne čita se** | Predviđeno za potvrdu uloge nastavnika | Uloge potvrđuje administrator; je li atribut potreban `[ODLUKA]` |
 | `email` | "Po potrebi" | Ne čita se, ne sprema | Moguće obavijesti | Prijava radi i bez njega; potreba nije utvrđena `[ODLUKA]` |
 | `profile` (opseg) | Nije na popisu | **Zatražen:** `scope: "openid profile"` (`src/server/auth/oidc.ts`) | Nije naveden | Razlika od PRODUCT §4; što AAI pod tim opsegom pušta, nije provjereno; kod ne sprema ništa osim gornjeg `[IZVEDBA]` |
-| Ime za prikaz | Nije na popisu | Ne sprema se | Nastavnik bi vidio ime studenata (ARCHITECTURE §3) | Izvor imena nije određen `[ODLUKA]` |
+| Ime i prezime (zasebni atributi) | Nije na popisu | Na `main` se ne čita i ne sprema. **U izradi (B-11a):** čita se iz zasebnih atributa za ime i za prezime i sprema u `identity.person_name` pri svakoj prijavi | Nastavnik zajedničkog kolegija vidi ime i prezime studenta u brzom putu, kroz RPC, uz zapis u `audit.access_log` | Odlučeno D-170 O1 (ugovor #757); tok podataka u `01` odjeljak A. Točni nazivi atributa i njihovo odobrenje idu kroz registraciju usluge (BACKEND §4.3) |
 | OIB | Ne traži se | Ne traži se | | Ostaje pravilo `[PRAVILO]` |
 
-Prijedlog najmanjeg skupa za razgovor sa Srcem i ustanovom (nije odluka): `openid`, `hrEduPersonUniqueID`, `hrEduPersonHomeOrg`, i `hrEduPersonAffiliation` samo ako se potvrda uloga ne rješava drukčije; bez `profile`, bez `email`, bez imena dok se ne utvrdi potreba.
+Prijedlog najmanjeg skupa za razgovor sa Srcem i ustanovom (nije odluka): `openid`, `hrEduPersonUniqueID`, `hrEduPersonHomeOrg`, i `hrEduPersonAffiliation` samo ako se potvrda uloga ne rješava drukčije; bez `profile` i bez `email`; uz atribute za ime i prezime, koje traži D-170 O1.
