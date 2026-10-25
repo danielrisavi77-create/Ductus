@@ -139,6 +139,8 @@ export type EvidenceOpening = {
   headSegmentHash: string | null;
   lastSequenceTo: number;
   document: Uint8Array;
+  /** The evidence profile of the work's package; segments name it (BE-2). */
+  evidenceProfileId: string;
 };
 
 /**
@@ -162,6 +164,14 @@ export type SyncMeta = {
   awaitingReceipt?: AwaitingReceipt;
   /** Set on a document with evidence; moves only on a verified receipt. */
   evidenceHead?: EvidenceHead;
+  /**
+   * BE-2 (#476 c.6392622568): on a document with evidence, the profile the
+   * open route named, so a segment can be built while the route is out of
+   * reach. Written only from an open answer (`startEvidence`,
+   * `adoptServerEvidence`) and kept by every other write; absent in a record
+   * made before BE-2, which builds no segment until the route answers.
+   */
+  evidenceProfileId?: string;
   /** Set once the recorder stopped; cleared only by `adoptServerEvidence`. */
   evidenceStopped?: EvidenceStop;
   /**

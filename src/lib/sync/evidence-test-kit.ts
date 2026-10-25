@@ -36,6 +36,8 @@ export const DOC = BASE.documentId;
 export const DOMAIN = BASE.evidenceDomainId;
 export const UTC = "2026-10-24T12:00:00.000Z";
 export const R0 = 4;
+/** The invented evidence profile of the work's package, in every segment and opening. */
+export const PROFILE = "profil-izmisljeni";
 export const deps = { indexedDB, IDBKeyRange };
 export const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 const T0 = Date.parse("2026-10-24T09:00:00.000Z");
@@ -75,7 +77,7 @@ export async function capture(
       documentId: DOC,
       sessionId: "11111111-1111-4111-8111-111111111111",
       segmentId: `22222222-2222-4222-8222-${(sequenceFrom + i).toString().padStart(12, "0")}`,
-      evidenceProfileId: "profil-izmisljeni",
+      evidenceProfileId: PROFILE,
       sequenceFrom: sequenceFrom + i,
       predecessorSegmentHash: predecessor,
     });
@@ -87,7 +89,7 @@ export async function capture(
   return {
     opened: {
       documentId: DOC, currentRevision: revision, documentHash: sha256(document),
-      headSegmentHash: head, lastSequenceTo: sequenceFrom - 1, document,
+      headSegmentHash: head, lastSequenceTo: sequenceFrom - 1, document, evidenceProfileId: PROFILE,
     },
     segments,
   };
@@ -98,6 +100,7 @@ export function openedAfter(segment: BuiltSegment, revision: number): EvidenceOp
   return {
     documentId: DOC, currentRevision: revision, documentHash: sha256(segment.document),
     headSegmentHash: segment.sha256, lastSequenceTo: segment.segment.sequenceTo, document: segment.document,
+    evidenceProfileId: PROFILE,
   };
 }
 
