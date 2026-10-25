@@ -224,6 +224,13 @@ test("F1: the submission page uses the editor's document", async ({ page }) => {
   expect(await workDocument(assignment)).toBe(liveId);
 });
 
+const journalNames = (page: Page) => page.evaluate(async () =>
+  (await indexedDB.databases()).map((d) => d.name ?? "").filter((name) => name.startsWith("ductus-journal-v1-")).sort());
+
+// A13 and D-118: the session always ends, and work the device has not synced
+// stays in the person's own journal (the sign-out dialog says so, logoutKept).
+// So the next person gets a journal of their own, never this one, and the
+// student gets both documents back when she signs in again.
 test("F1: sign-out after two assignments leaves neither to the next person", async ({ page }) => {
   await signIn(page, "/rad", "Demo student 2");
   await clickSignOut(page);
@@ -239,6 +246,8 @@ test("F1: sign-out after two assignments leaves neither to the next person", asy
     await page.keyboard.type(text);
     await expect(page.locator(".workspace__status .sync-chip")).toHaveAttribute("data-state", "LOCAL_DURABLE");
   }
+  const hers = await journalNames(page);
+  expect(hers).toHaveLength(1);
   await clickSignOut(page);
   await page.waitForURL("http://localhost:3000/");
   await page.context().clearCookies({ name: /^_session/ });
@@ -250,6 +259,17 @@ test("F1: sign-out after two assignments leaves neither to the next person", asy
     await expect(writableEditors(page)).toHaveCount(0);
     await expect(page.locator("body")).not.toContainText("prije odjave.");
   }
-  const names = await page.evaluate(async () => (await indexedDB.databases()).map((d) => d.name ?? ""));
-  expect(names.filter((name) => name.startsWith("ductus-journal-v1-"))).toHaveLength(1);
+  // Her journal is kept (nothing was synced) and is not the one this person writes in.
+  const now = await journalNames(page);
+  expect(now).toHaveLength(2);
+  expect(now).toContain(hers[0]);
+  await clickSignOut(page);
+  await page.waitForURL("http://localhost:3000/");
+  await page.context().clearCookies({ name: /^_session/ });
+  await signIn(page, `/rad?zadatak=${x}`);
+  await writable(page);
+  await expect(editorOf(page)).toHaveText("Tekst X prije odjave.");
+  await page.goto(`/rad?zadatak=${y}`);
+  await writable(page);
+  await expect(editorOf(page)).toHaveText("Tekst Y prije odjave.");
 });

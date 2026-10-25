@@ -361,6 +361,8 @@ export const hr = {
   workspace: {
     title: "Radni prostor",
     viewModes: "Prikaz",
+    // #711 F1, za potvrdu: the name of the top bar region (course, assignment, view, submission).
+    barLabel: "Zadatak i prikaz",
     modeWriting: "Pisanje",
     modeTeacherView: "Kako vidi nastavnik",
     // F-10: a link to the submission screen, not the act of submitting (#653 contract 6385776645).
