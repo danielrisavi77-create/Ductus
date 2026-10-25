@@ -9,9 +9,11 @@ import {
   DISCARD_LIMIT_MS,
   logoutText,
   nextDiscardStep,
+  nothingHeld,
   settleDiscard,
   type DiscardEvent,
   type DiscardStep,
+  type LogoutPlan,
 } from "./logout-plan";
 
 const t = messagesHr.auth;
@@ -189,5 +191,50 @@ describe("a close the dialog did not ask for", () => {
 
   it("opens again after Escape took the question back (second Escape)", () => {
     expect(closeReply({ ...off, withdrawn: true })).toBe("reopen");
+  });
+});
+
+// D-118 sign-out dialog (#476 c.6396619831 §3, U4; amendment c.6396707923, U6).
+describe("work kept without an owed row", () => {
+  it("names the kept work under the plain sentence when kept is set and the count is 0", () => {
+    expect(logoutText({ unsaved: false, pending: 0, kept: true })).toEqual({
+      text: t.logoutPlain, note: t.logoutKept, offerExport: false,
+    });
+    expect(logoutText({ unsaved: true, pending: 0, kept: true }).note).toBe(t.logoutKept);
+  });
+
+  it("claims nothing kept when the count is unknown, or kept is false or absent", () => {
+    for (const plan of [
+      { unsaved: false, pending: null, kept: true },
+      { unsaved: false, pending: 0, kept: false },
+      { unsaved: false, pending: 0 },
+    ]) expect(logoutText(plan)).toEqual({ text: t.logoutPlain, note: null, offerExport: false });
+  });
+
+  it("uses no forbidden term in any text the shell dialog can show", () => {
+    const shown = [t.logout, t.loggingOut, t.logoutTitle, t.logoutConfirm, t.logoutStay, t.logoutPlain, t.logoutKept,
+      t.logoutCopyKept, ...Object.values(t.logoutPending), ...Object.values(t.logoutCopy), messagesHr.shell.signOut];
+    for (const text of shown) expect(findForbiddenTerms(text)).toEqual([]);
+  });
+});
+
+describe("nothingHeld (O1, U6)", () => {
+  const none = { unsaved: false, pending: 0, copies: 0, kept: false };
+
+  it("is true only when every part was read and empty", () => {
+    expect(nothingHeld(none)).toBe(true);
+  });
+
+  it.each([
+    ["an unknown count", { ...none, pending: null }],
+    ["unsaved text", { ...none, unsaved: true }],
+    ["kept work", { ...none, kept: true }],
+    ["a copy", { ...none, copies: 1 }],
+    ["owed rows", { ...none, pending: 2 }],
+    ["copies not read", { unsaved: false, pending: 0, kept: false }],
+    ["kept not read", { unsaved: false, pending: 0, copies: 0 }],
+    ["a failed read", { unsaved: false, pending: null }],
+  ])("is false for %s", (_name, plan: LogoutPlan) => {
+    expect(nothingHeld(plan)).toBe(false);
   });
 });

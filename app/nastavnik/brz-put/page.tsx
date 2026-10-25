@@ -6,6 +6,7 @@ import { FastPath } from "@/components/teacher/FastPath";
 import { teacherAccess } from "@/components/teacher/teacher-access";
 import { DEMO_FAST_PATH } from "@/lib/i18n/demo-fast-path.hr";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
+import { sessionPrincipal } from "@/server/auth/principal";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
 
@@ -21,9 +22,10 @@ export const metadata = { title: `${t.fastPath.title} · ${t.app.name}` };
 // data and says so; it reads nothing of a real student.
 export default async function FastPathPage() {
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
-  const access = await teacherAccess(token, withActor);
+  const [access, principal] = await Promise.all([teacherAccess(token, withActor), sessionPrincipal(token, withActor)]);
+  const scope = principal.kind === "signed-in" ? principal.scope : null;
   return (
-    <AppShell session={shellSession(token)} role={access === "allowed" ? "teacher" : null} current="/nastavnik/brz-put" crumbs={[t.fastPath.title]}>
+    <AppShell session={shellSession(token)} role={access === "allowed" ? "teacher" : null} scope={scope} current="/nastavnik/brz-put" crumbs={[t.fastPath.title]}>
       <div className={`page ${styles.page}`}>
         <h1>{t.fastPath.title}</h1>
         {access === "allowed" ? (
