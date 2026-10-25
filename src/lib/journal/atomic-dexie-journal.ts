@@ -276,22 +276,34 @@ async function verifySegment(
  * The open route's answer for `documentId`, its snapshot verified as exact JCS
  * of a valid document with `documentHash`, before any transaction.
  */
-async function verifyOpening(documentId: string, opened: EvidenceOpening): Promise<CanonicalDocument> {
-  const head = opened?.headSegmentHash;
-  const profile = opened?.evidenceProfileId;
-  if (opened?.documentId !== documentId || !validSeq(opened.currentRevision) ||
-      !validSeq(opened.lastSequenceTo) ||
-      !(head === null || (typeof head === "string" && SHA256_HEX.test(head))) ||
-      // Only a profile a segment can carry (not blank, at most 120 UTF-16
-      // units), so a work opened now can still build segments offline later.
-      // `evidence.package` counts characters, so it is never looser than this.
-      !isEvidenceProfileIdV2(profile) ||
-      !(opened.document instanceof Uint8Array)) {
+/** The checked fields of an open answer, the only source the journal writes from. */
+type VerifiedOpening = {
+  currentRevision: number;
+  lastSequenceTo: number;
+  headSegmentHash: string | null;
+  evidenceProfileId: string;
+  document: CanonicalDocument;
+};
+
+async function verifyOpening(documentId: string, opened: EvidenceOpening): Promise<VerifiedOpening> {
+  if (opened === null || typeof opened !== "object") throw new JournalError("invalid_input");
+  // Every field is read once, here: what is checked is what the writes use (#733).
+  const {
+    documentId: openedId, currentRevision, lastSequenceTo, headSegmentHash, evidenceProfileId, documentHash, document,
+  } = opened;
+  if (openedId !== documentId || !validSeq(currentRevision) || !validSeq(lastSequenceTo) ||
+      !(headSegmentHash === null || (typeof headSegmentHash === "string" && SHA256_HEX.test(headSegmentHash))) ||
+      // Only a profile a segment can carry (not blank, well-formed, at most
+      // 120 UTF-16 units), so a work opened now can still build segments
+      // offline later. `evidence.package` counts characters, so it is never
+      // looser than this.
+      !isEvidenceProfileIdV2(evidenceProfileId) ||
+      !(document instanceof Uint8Array)) {
     throw new JournalError("invalid_input");
   }
-  const verified = await verifyDocumentSnapshot(new Uint8Array(opened.document));
-  if (!verified.ok || verified.sha256 !== opened.documentHash) throw new JournalError("invalid_input");
-  return verified.document;
+  const verified = await verifyDocumentSnapshot(new Uint8Array(document));
+  if (!verified.ok || verified.sha256 !== documentHash) throw new JournalError("invalid_input");
+  return { currentRevision, lastSequenceTo, headSegmentHash, evidenceProfileId, document: verified.document };
 }
 
 /** Nothing on this document is owed to, or missing from, the server. */
@@ -301,6 +313,22 @@ function settledForLogout(meta: SyncMeta): boolean {
   // server's own text (`startEvidence`), so nothing local would be lost.
   return meta.state === "SYNCED" || (meta.localSeq === 0 && meta.evidenceHead !== undefined);
 }
+
+/** Work a sign-out must not delete; shared by `fenceAndDelete` and `peekLogoutHold` (D-118). */
+function holdsUnsynced(
+  pending: number, copies: number, snapshots: readonly { documentId: string }[], metas: readonly SyncMeta[],
+): boolean {
+  const settled = new Set(metas.filter(settledForLogout).map((meta) => meta.documentId));
+  const snapshotIds = new Set(snapshots.map((snapshot) => snapshot.documentId));
+  // A kept copy is the author's text, gone only when the author lets it go.
+  return pending !== 0 || copies !== 0 ||
+    snapshots.some((snapshot) => !settled.has(snapshot.documentId)) ||
+    metas.some((meta) => !settled.has(meta.documentId) || !snapshotIds.has(meta.documentId));
+}
+
+export type LogoutHold = { pending: number; copies: number; kept: boolean };
+
+const NOTHING_HELD: LogoutHold = { pending: 0, copies: 0, kept: false };
 
 export type JournalOptions = {
   /** How long a blocked deletion may stay blocked before `logout_blocked`. */
@@ -316,6 +344,36 @@ export class AtomicDexieJournal {
   private deletion: Promise<void> | null = null;
   private deletionBlocked = false;
   private readonly blockedListeners = new Set<() => void>();
+
+  /**
+   * What this journal holds back from a sign-out. Dexie without a schema
+   * aborts creation, so no database is made; no lock, no write, no fence.
+   * A fenced journal holds nothing by the fence's own rule.
+   */
+  static async peekLogoutHold(scopeHash: string, options?: DexieOptions): Promise<LogoutHold> {
+    if (!/^[a-f0-9]{64}$/.test(scopeHash)) throw new JournalError("invalid_input");
+    const db = new Dexie(`ductus-journal-v1-${scopeHash}`, { ...options, addons: [] });
+    try {
+      await db.open();
+      const names = new Set(db.tables.map((table) => table.name));
+      if (names.size === 0) return NOTHING_HELD;
+      const all = <T,>(name: string): Promise<T[]> => (names.has(name) ? db.table<T>(name).toArray() : Promise.resolve([]));
+      const count = (name: string): Promise<number> => (names.has(name) ? db.table(name).count() : Promise.resolve(0));
+      return await db.transaction("r", [...names], async () => {
+        const [fence, pending, copies, snapshots, metas] = await Promise.all([
+          all<JournalControl>("control"), count("pending"), count("salvage"),
+          all<{ documentId: string }>("snapshots"), all<SyncMeta>("meta"),
+        ]);
+        if (fence.some((row) => row.key === "logout")) return NOTHING_HELD;
+        return { pending, copies, kept: holdsUnsynced(pending, copies, snapshots, metas) };
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === "NoSuchDatabaseError") return NOTHING_HELD;
+      throw error;
+    } finally {
+      db.close();
+    }
+  }
 
   /** Requires an opaque 64-character lower-case SHA-256 hex principal scope. */
   constructor(scopeHash: string, options?: DexieOptions, journalOptions?: JournalOptions) {
@@ -494,8 +552,7 @@ export class AtomicDexieJournal {
    */
   async startEvidence(documentId: string, opened: EvidenceOpening, openedAt: string): Promise<SyncMeta> {
     if (!validDocumentId(documentId) || !canonicalUtc(openedAt)) throw new JournalError("invalid_input");
-    const document = await verifyOpening(documentId, opened);
-    const head = opened.headSegmentHash;
+    const opening = await verifyOpening(documentId, opened);
     return this.whileUsable(() => this.db.transaction(
       "rw", this.db.snapshots, this.db.pending, this.db.meta, this.db.control,
       async () => {
@@ -512,16 +569,18 @@ export class AtomicDexieJournal {
         if (rows.length > 0) throw new JournalError("queue_not_empty");
         // An answer the server gave before this device's last receipt, read
         // late (a stale tab), never moves the revision or the head back.
-        if (opened.currentRevision < (snapshotBefore?.revision ?? 0) ||
-            opened.lastSequenceTo < (prior?.evidenceHead?.lastSequenceTo ?? 0)) {
+        if (opening.currentRevision < (snapshotBefore?.revision ?? 0) ||
+            opening.lastSequenceTo < (prior?.evidenceHead?.lastSequenceTo ?? 0)) {
           throw new JournalError("invalid_input");
         }
         const meta: SyncMeta = {
           ...(prior ?? { documentId, localSeq: 0, state: "LOCAL_DURABLE" }),
-          evidenceHead: { segmentHash: head, lastSequenceTo: opened.lastSequenceTo },
-          evidenceProfileId: opened.evidenceProfileId,
+          evidenceHead: { segmentHash: opening.headSegmentHash, lastSequenceTo: opening.lastSequenceTo },
+          evidenceProfileId: opening.evidenceProfileId,
         };
-        await this.db.snapshots.put({ documentId, revision: opened.currentRevision, document, savedAt: openedAt });
+        await this.db.snapshots.put({
+          documentId, revision: opening.currentRevision, document: opening.document, savedAt: openedAt,
+        });
         await this.db.meta.put(meta);
         return meta;
       },
@@ -744,7 +803,7 @@ export class AtomicDexieJournal {
     if (!validDocumentId(documentId) || !canonicalUtc(decidedAt) || !validSeq(expectedLocalSeq)) {
       throw new JournalError("invalid_input");
     }
-    const server = await verifyOpening(documentId, opened);
+    const opening = await verifyOpening(documentId, opened);
     return this.whileUsable(() => this.db.transaction(
       "rw", [this.db.snapshots, this.db.pending, this.db.meta, this.db.control, this.db.salvage],
       async () => {
@@ -760,8 +819,8 @@ export class AtomicDexieJournal {
         if (!sticky(prior.state) && !stopped) throw new JournalError("not_in_recovery");
         if (expectedLocalSeq !== prior.localSeq) throw new JournalError("stale_local_sequence");
         if (prior.localSeq === Number.MAX_SAFE_INTEGER) throw new JournalError("sequence_exhausted");
-        if (opened.currentRevision < Math.max(snapshot.revision, prior.conflictRevision ?? 0) ||
-            opened.lastSequenceTo < prior.evidenceHead.lastSequenceTo) {
+        if (opening.currentRevision < Math.max(snapshot.revision, prior.conflictRevision ?? 0) ||
+            opening.lastSequenceTo < prior.evidenceHead.lastSequenceTo) {
           throw new JournalError("invalid_input");
         }
         const held = prior.awaitingReceipt ?? null;
@@ -784,12 +843,12 @@ export class AtomicDexieJournal {
         });
         await this.db.pending.bulkDelete(rows.map((row): [string, number] => [documentId, row.localSeq]));
         await this.db.snapshots.put({
-          documentId, revision: opened.currentRevision, document: server, savedAt: decidedAt,
+          documentId, revision: opening.currentRevision, document: opening.document, savedAt: decidedAt,
         });
         const meta: SyncMeta = {
           documentId, localSeq: prior.localSeq + 1, state: reached,
-          evidenceHead: { segmentHash: opened.headSegmentHash, lastSequenceTo: opened.lastSequenceTo },
-          evidenceProfileId: opened.evidenceProfileId,
+          evidenceHead: { segmentHash: opening.headSegmentHash, lastSequenceTo: opening.lastSequenceTo },
+          evidenceProfileId: opening.evidenceProfileId,
         };
         await this.db.meta.put(meta);
         return meta;
@@ -865,14 +924,7 @@ export class AtomicDexieJournal {
         const [pending, snapshots, metas, copies] = await Promise.all([
           this.db.pending.count(), this.db.snapshots.toArray(), this.db.meta.toArray(), this.db.salvage.count(),
         ]);
-        const settled = new Set(metas.filter(settledForLogout).map((meta) => meta.documentId));
-        const snapshotIds = new Set(snapshots.map((snapshot) => snapshot.documentId));
-        // A kept copy is the author's text, gone only when the author lets it go.
-        if (pending !== 0 || copies !== 0 ||
-            snapshots.some((snapshot) => !settled.has(snapshot.documentId)) ||
-            metas.some((meta) => !settled.has(meta.documentId) || !snapshotIds.has(meta.documentId))) {
-          throw new JournalError("unsynced_work");
-        }
+        if (holdsUnsynced(pending, copies, snapshots, metas)) throw new JournalError("unsynced_work");
         await this.db.control.put({ key: "logout", state: "closing" });
       },
     );

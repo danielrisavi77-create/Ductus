@@ -58,7 +58,7 @@ export default async function SubmissionPage({ params }: { params: Promise<{ ass
   const work = read.kind === "ready" ? read : null;
   // The shell marks this session for the other tabs (D-118, F-113 t.1).
   return (
-    <AppShell session={{ tag, at }} role={role} crumbs={[t.submission.title]}>
+    <AppShell session={{ tag, at }} role={role} scope={principal.kind === "signed-in" ? principal.scope : null} crumbs={[t.submission.title]}>
       <div className="page">
         <h1>{t.submission.title}</h1>
         {work ? <p className="muted">{`${work.course} / ${work.notice.title}`}</p> : null}

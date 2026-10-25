@@ -47,7 +47,7 @@ export default async function LiveWorkPage({ params }: { params: Promise<{ id: s
   }
 
   return (
-    <AppShell session={{ tag, at }} role={role} crumbs={[t.liveView.context]}>
+    <AppShell session={{ tag, at }} role={role} scope={principal.kind === "signed-in" ? principal.scope : null} crumbs={[t.liveView.context]}>
       <div className="page">
         <h1 className="visually-hidden">{t.liveView.context}</h1>
         {body}

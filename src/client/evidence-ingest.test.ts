@@ -76,7 +76,7 @@ function openBody(over: Record<string, unknown> = {}) {
   return {
     status: "opened", documentId: DOC, evidenceProfileId: "profil-izmisljeni", currentRevision: 0,
     documentHash: "a".repeat(64), headSegmentHash: null, lastSequenceTo: 0,
-    document: encodeBase64(SNAPSHOT), receiptKeys: [trusted.key], ...over,
+    document: encodeBase64(SNAPSHOT), receiptKeys: [trusted.key], submitted: false, ...over,
   };
 }
 
@@ -187,8 +187,38 @@ describe("F-8 3c: the open route", () => {
     ["a snapshot in a second spelling", openBody({ document: "QR==" })],
     ["a fractional revision", openBody({ currentRevision: 1.5 })],
     ["a short hash", openBody({ documentHash: "a" })],
+    // #733: the profile rule of the journal and segment v2.
+    ["a profile of only spaces", openBody({ evidenceProfileId: "   " })],
+    ["a profile of 121 UTF-16 units", openBody({ evidenceProfileId: "p".repeat(121) })],
+    ["a profile with a lone surrogate", openBody({ evidenceProfileId: "profil-\uD83D" })],
+    // DAN-289 O2: never submitted: false by assumption.
+    ["no submitted", Object.fromEntries(Object.entries(openBody()).filter(([key]) => key !== "submitted"))],
+    ["submitted as a string", openBody({ submitted: "false" })],
+    ["submitted as a number", openBody({ submitted: 0 })],
+    ["submitted as null", openBody({ submitted: null })],
+    ["submitted with an extra key", openBody({ submittedAt: "2026-10-25T10:00:00.000Z" })],
   ])("refuses %s", (_name, body) => {
     expect(openedWorkFrom(body)).toBeNull();
+  });
+
+  it.each([true, false])("reads submitted as the server says it (%s)", (submitted) => {
+    expect(openedWorkFrom(openBody({ submitted }))?.submitted).toBe(submitted);
+  });
+
+  it("an answer of a server without submitted is unavailable at open (DAN-289 O2)", async () => {
+    const old = Object.fromEntries(Object.entries(openBody()).filter(([key]) => key !== "submitted"));
+    expect(await openWork("11111111-1111-4111-8111-111111111111", scripted(json(200, old)).fetchImpl))
+      .toEqual({ status: "unavailable" });
+  });
+
+  it("a profile of 60 characters outside the BMP (120 units) is read (#733)", () => {
+    expect(openedWorkFrom(openBody({ evidenceProfileId: "\u{1F4D6}".repeat(60) }))?.evidenceProfileId)
+      .toBe("\u{1F4D6}".repeat(60));
+  });
+
+  it("an answer with a refused profile is unavailable at open (#733)", async () => {
+    const { fetchImpl } = scripted(json(200, openBody({ evidenceProfileId: "   " })));
+    expect(await openWork("11111111-1111-4111-8111-111111111111", fetchImpl)).toEqual({ status: "unavailable" });
   });
 
   it.each([

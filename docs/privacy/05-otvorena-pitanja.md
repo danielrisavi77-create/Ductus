@@ -27,7 +27,7 @@
 16. `[Pravnik]` Primjenjuje li se Prilog III. točka 3(d) Akta o UI na kontrolnu točku uživo bez AI-ja i je li ta obrada razmjerna (D-55)? `[ODLUKA]` (do mišljenja isključeno)
 17. `[Vlasnik]` Riješeno 18. 10. 2026.: D-142 zamjenjuje D-06 i D-39 (prikaz uživo od prvog dana), a D-144 zamjenjuje D-37. Tekst obavijesti prati to; preostaje samo pitanje 15 o reprodukciji. `[RIJEŠENO]`
 18. `[Vlasnik]` Kako se tekst obavijesti o privatnosti verzionira i veže uz potvrdu studenta (otisak teksta), kad potvrda sada veže samo verziju zadatka? `[IZVEDBA]`
-19. `[Vlasnik, Ustanova]` Treba li Ductus uopće ime i e-poštu studenta, i ako treba, iz kojeg izvora, kad kod danas traži opseg `profile` a ne sprema ništa osim identifikatora? `[ODLUKA]`
+19. `[Vlasnik, Ustanova]` Treba li Ductus uopće ime i e-poštu studenta, i ako treba, iz kojeg izvora, kad kod danas traži opseg `profile` a ne sprema ništa osim identifikatora? `[ODLUKA]` **Ime i prezime: odlučeno D-170 O1** (zasebni AAI@EduHr atributi, `identity.person_name`, vidi `01` odjeljak A); e-pošta ostaje otvorena.
 20. `[Pravnik]` Jesu li hashevi lanca, potvrde i javno objavljeni ukupan broj potvrda osobni podaci nakon brisanja sadržaja (D-93, ARCHITECTURE §3)? `[ODLUKA]`
 21. `[Ustanova]` Je li evaluacija pilota (ankete, razgovori) zasebna obrada i tko je provodi na kojoj osnovi? `[ODLUKA]`
 22. `[Vlasnik]` Koji su konačni dobavljači nakon B0.1 i B0.2 (D-08) i koju državu i grupu svaki ima? `[ODLUKA]`
@@ -37,7 +37,7 @@
 | Rupa | Dokaz u repou | Vrsta |
 | --- | --- | --- |
 | Potvrda obavijesti veže (zadatak, verzija zadatka), ne tekst ni otisak obavijesti o privatnosti | `db/migrations/20261010200000_institution_assignment.sql`, tablica `notice_acknowledgment` | `[IZVEDBA]` |
-| Nema izvoza, brisanja, ispravka, `access_log`, `data_class` ni posla za retention | Nijedna od tih tablica ni funkcija u `db/migrations/`; uloga `ductus_retention` postoji | `[IZVEDBA]` |
+| Nema izvoza, brisanja, ispravka, `data_class` ni posla za retention; `audit.access_log` postoji, ali student ga ne može čitati | Nijedna od tih tablica ni funkcija (osim `audit.access_log` i njegova upisa) u `db/migrations/`; uloga `ductus_retention` postoji | `[IZVEDBA]` |
 | Pogrešni pokušaji upisa brišu se tek pri sljedećem pokušaju istog korisnika | Komentar uz `enrollment_attempt` u `20261010180000_institution_model.sql` | `[IZVEDBA]` |
 | Sesije nemaju posao čišćenja nakon isteka | `identity.session` | `[IZVEDBA]` |
 | Opseg `openid profile` odstupa od popisa u PRODUCT §4 | `src/server/auth/oidc.ts` | `[IZVEDBA]` |
