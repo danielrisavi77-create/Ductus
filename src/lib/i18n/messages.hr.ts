@@ -202,10 +202,8 @@ export const hr = {
       pending: "Stvaranje kolegija…",
       // create_course returns the existing id for an identical repeat.
       created: "Kolegij je spreman.",
-      // FE-D10: the code is not shown until the app can create one (#476
-      // 6273758034); an invented code would be refused at /upis.
+      // FE-D10: only a code the route returned is shown (#576); never an invented one.
       code: "Kod za upis",
-      codeSoon: "Kod se ovdje prikazuje čim ga aplikacija može stvoriti. Studenti upisuju kolegij tim kodom.",
       nameMissing: "Upiši naziv kolegija.",
       errors: {
         invalid: "Provjeri naziv, akademsku godinu i pravila kolegija.",
@@ -213,6 +211,24 @@ export const hr = {
         forbidden: "Za ovaj račun nije dopušteno stvaranje kolegija.",
         conflict: "Kolegij s tim nazivom već postoji uz druga pravila.",
         unavailable: "Stvaranje kolegija nije potvrđeno. Pokušaj ponovno.",
+      },
+    },
+    // DAN-36 (#576 6362017778): the teacher picks the deadline; there is no default.
+    enrollmentCode: {
+      validUntil: "Kod vrijedi do",
+      expiryHelp: "Obavezno. Odaberi datum i vrijeme do kojih studenti mogu upisati kolegij ovim kodom, najviše godinu dana unaprijed.",
+      selected: "Odabrano:",
+      pending: "Izdavanje koda…",
+      retry: "Ponovno izdaj kod",
+      replace: "Izdaj novi kod",
+      shownOnce: "Kod se prikazuje samo sada. Zapiši ga i daj studentima. Novi kod zamjenjuje ovaj.",
+      courseKept: "Kolegij postoji. Ponovni pokušaj izdaje samo kod, ne stvara novi kolegij.",
+      errors: {
+        missing: "Odaberi do kada kod vrijedi.",
+        invalid: "Odaberi datum i vrijeme koji postoje, u budućnosti i najviše godinu dana unaprijed.",
+        unauthorized: "Kod nije izdan. Prijava nije valjana. Prijavi se ponovno.",
+        forbidden: "Za ovaj račun nije dopušteno izdavanje koda za ovaj kolegij.",
+        unavailable: "Nije potvrđeno je li kod izdan. Ponovni pokušaj izdaje novi kod koji zamjenjuje svaki prethodni.",
       },
     },
     assignment: {
