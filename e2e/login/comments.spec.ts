@@ -5,7 +5,7 @@ import type { NodeId } from "../../src/domain/document";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
 import { cleanUp, ORIGIN, post, seed } from "./comment-seed";
-import { clickSignOut, signIn } from "./support";
+import { clickSignOut, signIn, signOutWithoutDialog } from "./support";
 
 // F-9 step 1 (DAN-86): a teacher's comment next to a paragraph reaches the
 // student on /rad, through the B-10 route and RPCs. Until the teacher view
@@ -145,10 +145,13 @@ test("without IndexedDB the panel still drops the threads when the session ends 
   }));
   await expect(student.getByText(messagesHr.editor.failureUnavailable)).toBeVisible();
 
+  // The tab without IndexedDB holds no lock, so the second tab opens the
+  // person's journal, which holds nothing: under O1 (#476 c.6396707923)
+  // Odjava then signs out without a dialog.
   const second = await student.context().newPage();
   await second.goto("/rad");
-  await clickSignOut(second);
-  await second.waitForURL(`${ORIGIN}/`);
+  await expect(second.getByRole("textbox", { name: messagesHr.workspace.documentLabel })).toHaveAttribute("contenteditable", "true");
+  await signOutWithoutDialog(second);
   await expect(student.getByText(t.signedOut)).toBeVisible();
   await expect(commentCards(student)).toHaveCount(0);
   await expect(student.getByText(QUOTE)).toHaveCount(0);

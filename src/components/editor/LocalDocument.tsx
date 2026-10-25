@@ -56,6 +56,7 @@ import { StorableInput } from "@/editor/storable-input";
 import { storableDocument } from "@/editor/storable-text";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { createLivePublisher, type LivePublisher } from "@/client/live-publisher";
+import { editorPlan, readLogoutHold } from "@/client/logout-hold";
 import { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
 import {
   LocalDocumentSaver, type SaverFailure, type SaverSnapshot,
@@ -63,7 +64,7 @@ import {
 
 import LogoutDialog from "./LogoutDialog";
 import { endRun } from "./run-refs";
-import type { LogoutPlan } from "./logout-plan";
+import { nothingHeld, type LogoutPlan } from "./logout-plan";
 
 /** Quiet time after the last change before a candidate is proposed. */
 const DEBOUNCE_MS = 400;
@@ -80,8 +81,6 @@ const NOT_STORED: readonly SyncState[] = ["EDITING", "SAVING_LOCAL", "ERROR", "R
 type LockedLogout = {
   /** Stops writing, lets the typed text reach the journal; true if some of it did not. */
   quiesce: () => Promise<boolean>;
-  /** Saved steps of this document the journal still holds, or null if unreadable. */
-  pending: () => Promise<number | null>;
   resume: () => void;
   /** Deletes the journal unless it holds unconfirmed work (D-118). */
   clear: () => Promise<void>;
@@ -384,13 +383,6 @@ export function LocalDocumentProvider({
             const saved = saver.snapshot();
             return !editor.isEmpty && (saved.failure !== null || NOT_STORED.includes(saved.state));
           },
-          pending: async () => {
-            try {
-              return (await journal.read(documentId)).pending.length;
-            } catch {
-              return null;
-            }
-          },
           resume: () => {
             if (disposed) return;
             readyRef.current = true;
@@ -460,7 +452,8 @@ export function LocalDocumentProvider({
     const locked = logoutRef.current;
     if (!locked) return { unsaved: false, pending: null };
     const unsaved = await locked.quiesce();
-    return { unsaved, pending: await locked.pending() };
+    // The whole scope, as the shell counts it (O2): every document of this person.
+    return editorPlan(unsaved, await readLogoutHold(scope));
   };
 
   const staySignedIn = () => logoutRef.current?.resume();
@@ -666,8 +659,10 @@ export function LocalLogout() {
       // Writing has stopped either way; an unknown count shows no number.
       .catch((): LogoutPlan => ({ unsaved: false, pending: null }))
       .then((next) => {
-        setPlan(next);
         setPreparing(false);
+        // Nothing at all stays on this device: no dialog (O1, #476 c.6396707923).
+        if (nothingHeld(next)) confirm();
+        else setPlan(next);
       });
   };
   const confirm = () => {
@@ -675,6 +670,8 @@ export function LocalLogout() {
     setWorking(true);
     setFailed(false);
     const failure = () => {
+      // Without a dialog yet, a failed sign-out opens one that says so.
+      setPlan((open) => open ?? { unsaved: false, pending: 0 });
       setFailed(true);
       setWorking(false);
     };
@@ -712,6 +709,7 @@ export function LocalLogout() {
           failed={failed}
           onConfirm={confirm}
           onStay={stay}
+          copies={plan.copies}
           onExport={() => {
             if (editor && !editor.isDestroyed) exportText(editor);
           }}
