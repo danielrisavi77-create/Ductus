@@ -263,7 +263,9 @@ test("F1: sign-out after two assignments leaves neither to the next person", asy
   const now = await journalNames(page);
   expect(now).toHaveLength(2);
   expect(now).toContain(hers[0]);
-  await clickSignOut(page);
+  // The unavailable sheet opens no journal, so the account place is the
+  // shell's plain sign-out form, not LocalLogout and its dialog (page.tsx).
+  await page.getByRole("button", { name: t.auth.logout, exact: true }).click();
   await page.waitForURL("http://localhost:3000/");
   await page.context().clearCookies({ name: /^_session/ });
   await signIn(page, `/rad?zadatak=${x}`);
