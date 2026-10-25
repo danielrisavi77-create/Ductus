@@ -62,11 +62,7 @@ export type AppShellProps = {
    * in the shell ends the earlier session's tabs (D-118, F-113 t.1).
    */
   session: ShellSession;
-  /**
-   * The signed-in person's journal scope (`readShellAccount`, or the session
-   * principal's), which the sign-out reads before it posts (D-118). Every
-   * page passes it; null makes the sign-out ask without a number.
-   */
+  /** Journal scope the sign-out reads before posting (D-118); null: dialog without a number. */
   scope: string | null;
   /** The href of the navigation item this page belongs to, if any. */
   current?: string;

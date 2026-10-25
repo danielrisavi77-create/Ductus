@@ -302,12 +302,7 @@ function settledForLogout(meta: SyncMeta): boolean {
   return meta.state === "SYNCED" || (meta.localSeq === 0 && meta.evidenceHead !== undefined);
 }
 
-/**
- * Whether the journal holds work a sign-out must not delete: an owed row, a
- * kept copy, or a document not settled for logout. `fenceAndDelete` refuses
- * deletion on exactly this and `peekLogoutHold` reports it, so the sign-out
- * dialog and the deletion cannot disagree (D-118).
- */
+/** Work a sign-out must not delete; shared by `fenceAndDelete` and `peekLogoutHold` (D-118). */
 function holdsUnsynced(
   pending: number, copies: number, snapshots: readonly { documentId: string }[], metas: readonly SyncMeta[],
 ): boolean {
@@ -319,7 +314,6 @@ function holdsUnsynced(
     metas.some((meta) => !settled.has(meta.documentId) || !snapshotIds.has(meta.documentId));
 }
 
-/** What a principal's journal holds back from a sign-out (`peekLogoutHold`). */
 export type LogoutHold = { pending: number; copies: number; kept: boolean };
 
 const NOTHING_HELD: LogoutHold = { pending: 0, copies: 0, kept: false };
@@ -340,12 +334,9 @@ export class AtomicDexieJournal {
   private readonly blockedListeners = new Set<() => void>();
 
   /**
-   * Reads what this principal's journal holds back from a sign-out, for a
-   * page without the editor. It never creates the database: Dexie opened
-   * without a schema aborts the creation and reports it missing. It takes no
-   * Web Lock, writes nothing and sets no fence, and closes its connection as
-   * soon as the read is done. A fenced journal holds nothing by the fence's
-   * own rule.
+   * What this journal holds back from a sign-out. Dexie without a schema
+   * aborts creation, so no database is made; no lock, no write, no fence.
+   * A fenced journal holds nothing by the fence's own rule.
    */
   static async peekLogoutHold(scopeHash: string, options?: DexieOptions): Promise<LogoutHold> {
     if (!/^[a-f0-9]{64}$/.test(scopeHash)) throw new JournalError("invalid_input");

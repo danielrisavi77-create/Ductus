@@ -8,22 +8,19 @@ import type { LogoutPlan } from "@/components/editor/logout-plan";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 
 export type ShellLogoutProps = {
-  /** This person's journal scope from the server; null asks the dialog without a number. */
+  /** This person's journal scope; null opens the dialog without a number. */
   scope: string | null;
   className?: string;
   buttonClassName?: string;
-  /** Shown in the form before the button (who is signed in). */
+  /** Before the button (who is signed in); `children` go before its label. */
   lead?: ReactNode;
-  /** Shown in the button before its label (the icon). */
   children?: ReactNode;
 };
 
 /**
- * Signing out from a page in the shell without the editor (D-118). Before the
- * POST it reads, once per click, what this person's journal on this device
- * still holds; with nothing it signs out at once, otherwise the dialog names
- * it. Either way the same POST ends the session and nothing is deleted here.
- * Without JavaScript the form posts directly (I5).
+ * Sign-out from a shell page without the editor (D-118): reads per click what
+ * this person's journal holds; nothing posts at once, else the dialog names
+ * it. The same POST either way; nothing is deleted here; without JS it posts (I5).
  */
 export default function ShellLogout({ scope, className, buttonClassName, lead, children }: ShellLogoutProps) {
   const formRef = useRef<HTMLFormElement>(null);

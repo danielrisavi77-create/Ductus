@@ -5,11 +5,7 @@ import type { ShellRole } from "./nav";
 
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 
-/**
- * The role the shell shows and the journal scope its sign-out reads (D-118).
- * The scope is the digest `/rad` already hands the browser (`principalScope`):
- * no secret, and it names only this person's journal on this device.
- */
+/** The scope is the digest `/rad` already hands the browser; no secret (D-118). */
 export type ShellAccount = { role: ShellRole | null; scope: string | null };
 
 const NO_ONE: ShellAccount = { role: null, scope: null };

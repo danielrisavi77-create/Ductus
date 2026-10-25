@@ -1,14 +1,9 @@
 import type { LogoutPlan } from "@/components/editor/logout-plan";
 import { AtomicDexieJournal, type LogoutHold } from "@/lib/journal/atomic-dexie-journal";
 
-/**
- * How long a sign-out waits for the journal read. An open that another tab's
- * deletion blocks must not hold the sign-out (D-118): past this the outcome
- * is unknown, and the dialog says so without a number.
- */
+/** A read blocked by another tab's deletion must not hold the sign-out (D-118). */
 export const LOGOUT_HOLD_LIMIT_MS = 2_000;
 
-/** What the read found: a hold, a browser that keeps no journal, or nothing known. */
 export type HoldRead = LogoutHold | "noStorage" | "unknown";
 
 export type HoldReadOptions = {
@@ -17,10 +12,8 @@ export type HoldReadOptions = {
 };
 
 /**
- * Reads, once per click and remembering nothing, what this person's journal
- * on this device holds back from a sign-out (D-118). Only the scope the
- * server gave the page is read, never another person's journal. Without a
- * scope, on a failure or past the limit the outcome is unknown, never "none".
+ * What this person's journal holds back from a sign-out (D-118), read per
+ * click under the page's own scope. No scope, a failure or the limit: unknown.
  */
 export async function readLogoutHold(scope: string | null, options: HoldReadOptions = {}): Promise<HoldRead> {
   if (typeof indexedDB === "undefined" || !indexedDB) return "noStorage";
@@ -41,11 +34,7 @@ export type ShellLogoutStep =
   | { kind: "dialog"; plan: LogoutPlan }
   | { kind: "dialogUnknown"; plan: LogoutPlan };
 
-/**
- * The step of a sign-out from a page without the editor: straight to the
- * logout route when nothing stays, else the dialog, with a number only when
- * the read gave one. A page without the editor holds no unstored text.
- */
+/** Without the editor: no dialog when nothing stays; a number only when read. */
 export function shellLogoutStep(read: HoldRead): ShellLogoutStep {
   if (read === "noStorage") return { kind: "plain" };
   if (read === "unknown") return { kind: "dialogUnknown", plan: { unsaved: false, pending: null } };
