@@ -135,9 +135,15 @@ function hasOnlyKeys(
   return Object.keys(value).every((key) => allowed.has(key));
 }
 
-/** A profile id a segment v2 takes: not blank, at most 120 UTF-16 units. */
+// A high surrogate not followed by a low one, or a low one not after a high one.
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+
+/**
+ * A profile id a segment v2 takes: not blank, at most 120 UTF-16 units, and
+ * well-formed UTF-16, which canonical JSON needs (jcs.ts) (#733).
+ */
 export function isEvidenceProfileIdV2(value: unknown): value is string {
-  return nonEmptyBounded(value, MAX_EVIDENCE_PROFILE_ID_LENGTH);
+  return nonEmptyBounded(value, MAX_EVIDENCE_PROFILE_ID_LENGTH) && !LONE_SURROGATE.test(value);
 }
 
 function nonEmptyBounded(
