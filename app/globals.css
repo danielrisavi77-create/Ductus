@@ -1082,6 +1082,25 @@ main:focus {
   color: var(--ink);
 }
 
+/* #711 F1: the free draft's line under the title, and the note past the due date above the sheet. */
+.sheet-note {
+  margin: 0 0 12px;
+  color: var(--ink-2);
+  font-family: var(--ff-ui);
+  font-size: 14px;
+}
+
+.sheet-notice {
+  max-width: 720px;
+  margin: 0 auto 12px;
+  padding: 8px 16px;
+  border: 1px solid var(--rule);
+  background: var(--cmt-bg);
+  color: var(--ink);
+  font-family: var(--ff-ui);
+  font-size: 14px;
+}
+
 /* No network (F-8, DAN-211): text and icon, never colour alone. */
 .offline-banner p {
   margin: 0;
