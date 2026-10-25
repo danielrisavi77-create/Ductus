@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { decodeBase64, type OpenedWork, type OpenOutcome } from "@/client/evidence-ingest";
 import { createBrowserEditStepsV1Replayer } from "@/adapters/evidence/edit-steps-v1-browser-replayer";
 import type { CanonicalDocument } from "@/domain/document";
+import { MAX_DOCUMENT_SNAPSHOT_BYTES } from "@/domain/document/snapshot";
 import { canonicalizeJcs, jcsUtf8Bytes } from "@/domain/forensics/jcs";
 import { watchClosedBySubmission } from "@/client/evidence-session-deps";
 import { CaptureError, EvidenceRecorder } from "@/editor/capture";
@@ -944,5 +945,86 @@ describe("3d-2c2a Codex #803: a failed write keeps its segment, and a closed ses
     expect(saveUncovered).not.toHaveBeenCalled();
     expect((await journal.readEvidence(DOC)).meta?.evidenceStopped).toBeUndefined();
     expect(session.snapshot()).toMatchObject({ closedBy: "submission", state: "LOCAL_DURABLE" });
+  });
+});
+
+describe("3d-2c2a Codex #803 (2): close() during a save, and a snapshot over the limit", () => {
+  it("C4: close() during the replay leaves no new row and saves nothing uncovered", async () => {
+    let armed = false;
+    let closeNow: () => void = () => {};
+    const { session, journal } = setup({
+      online: network(false),
+      over: {
+        replayer: () => {
+          const base = createBrowserEditStepsV1Replayer();
+          return {
+            ...base,
+            apply: (...args: Parameters<typeof base.apply>) => {
+              if (armed) {
+                armed = false;
+                closeNow();
+              }
+              return base.apply(...args);
+            },
+          };
+        },
+      },
+    });
+    closeNow = () => session.close();
+    await ready(session);
+    const sheet = editorFor(session);
+    sheet.type("a");
+    await sheet.save();
+    const before = await journal.readEvidence(DOC);
+    const saveSegment = vi.spyOn(journal, "saveSegment");
+    const saveUncovered = vi.spyOn(journal, "saveUncovered");
+    armed = true;
+    sheet.type("b");
+    const candidate = tiptapToCanonical(sheet.editor.getJSON());
+    if (!candidate.ok) throw new Error("not canonical");
+    session.edit();
+    await session.propose(candidate.doc);
+    await session.settled();
+    expect(saveSegment).not.toHaveBeenCalled();
+    expect(saveUncovered).not.toHaveBeenCalled();
+    const after = await journal.readEvidence(DOC);
+    expect(after.meta?.localSeq).toBe(before.meta?.localSeq);
+    expect(after.pending).toHaveLength(before.pending.length);
+  });
+
+  it("C5: a segment whose snapshot passes the limit stops evidence and keeps the text, and later saves still land", async () => {
+    const big: CanonicalDocument = (() => {
+      const filler = "x".repeat(MAX_DOCUMENT_SNAPSHOT_BYTES - jcsUtf8Bytes(ASSIGNED).byteLength - 64);
+      const editor = new Editor({
+        element: null,
+        extensions: createEditorExtensions(),
+        content: { type: "doc", content: [{ type: "paragraph", attrs: { nodeId: "aaaaaaaa-0000-4000-8000-00000000000b" }, content: [{ type: "text", text: filler }] }] },
+      });
+      const canonical = tiptapToCanonical(editor.getJSON());
+      editor.destroy();
+      if (!canonical.ok) throw new Error("test document is not canonical");
+      return canonical.doc;
+    })();
+    expect(jcsUtf8Bytes(big).byteLength).toBeLessThanOrEqual(MAX_DOCUMENT_SNAPSHOT_BYTES);
+    const { session, journal } = setup({
+      online: network(false),
+      open: async () => ({ status: "opened", work: workFor(big) }),
+    });
+    await ready(session);
+    const sheet = editorFor(session, big);
+    sheet.type("y".repeat(200));
+    const over = await sheet.save();
+    expect(jcsUtf8Bytes(over).byteLength).toBeGreaterThan(MAX_DOCUMENT_SNAPSHOT_BYTES);
+    let contents = await journal.readEvidence(DOC);
+    expect(contents.meta?.evidenceStopped).toBe("too_large");
+    expect(contents.pending).toEqual([]);
+    expect(canonicalizeJcs(contents.snapshot!.document)).toBe(canonicalizeJcs(over));
+
+    // Text removed below the limit: the save still lands instead of retrying the refused segment.
+    sheet.editor.commands.setContent(canonicalToTiptap(ASSIGNED));
+    const after = await sheet.save();
+    contents = await journal.readEvidence(DOC);
+    expect(canonicalizeJcs(contents.snapshot!.document)).toBe(canonicalizeJcs(after));
+    expect(session.snapshot().failure).toBeNull();
   });
 });
