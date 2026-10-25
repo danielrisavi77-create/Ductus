@@ -113,7 +113,7 @@ describe("FastPath states", () => {
     const students = works.map((work, i) => ({ ...student("Ana", `Prezime${i}`), work }));
     const html = render({ state: "ready", students });
     for (const work of works) {
-      expect(html).toMatch(new RegExp(`<span[^>]*data-work="${work}"[^>]*aria-hidden="true"[^>]*></span>${t.work[work]}`));
+      expect(html).toContain(`data-work="${work}" aria-hidden="true"></span>${t.work[work]}`);
     }
     const order = students.map((s) => html.indexOf(`Ana ${s.surname}`));
     expect(order).toEqual([...order].sort((a, b) => a - b));
