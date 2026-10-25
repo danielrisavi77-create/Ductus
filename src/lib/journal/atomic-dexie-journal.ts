@@ -346,30 +346,49 @@ export class AtomicDexieJournal {
   private readonly blockedListeners = new Set<() => void>();
 
   /**
-   * What this journal holds back from a sign-out. Dexie without a schema
-   * aborts creation, so no database is made; no lock, no write, no fence.
-   * A fenced journal holds nothing by the fence's own rule.
+   * What this journal holds back from a sign-out. A plain IndexedDB open
+   * whose creation is aborted: it never creates or deletes the database and
+   * never changes its version; no lock, no write, no fence. A fenced journal
+   * holds nothing by the fence's own rule; unexpected stores hold nothing.
    */
   static async peekLogoutHold(scopeHash: string, options?: DexieOptions): Promise<LogoutHold> {
     if (!/^[a-f0-9]{64}$/.test(scopeHash)) throw new JournalError("invalid_input");
-    const db = new Dexie(`ductus-journal-v1-${scopeHash}`, { ...options, addons: [] });
+    const factory = (options?.indexedDB ?? Dexie.dependencies.indexedDB) as Pick<IDBFactory, "open"> | undefined;
+    if (!factory) throw new JournalError("incomplete_store");
+    const db = await new Promise<IDBDatabase | null>((resolve, reject) => {
+      const request = factory.open(`ductus-journal-v1-${scopeHash}`);
+      let missing = false;
+      request.onupgradeneeded = () => {
+        missing = true;
+        request.transaction?.abort();
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = (event) => {
+        event.preventDefault();
+        if (missing) resolve(null);
+        else reject(request.error ?? new JournalError("incomplete_store"));
+      };
+      request.onblocked = () => reject(new JournalError("logout_blocked"));
+    });
+    if (!db) return NOTHING_HELD;
     try {
-      await db.open();
-      const names = new Set(db.tables.map((table) => table.name));
-      if (names.size === 0) return NOTHING_HELD;
-      const all = <T,>(name: string): Promise<T[]> => (names.has(name) ? db.table<T>(name).toArray() : Promise.resolve([]));
-      const count = (name: string): Promise<number> => (names.has(name) ? db.table(name).count() : Promise.resolve(0));
-      return await db.transaction("r", [...names], async () => {
-        const [fence, pending, copies, snapshots, metas] = await Promise.all([
-          all<JournalControl>("control"), count("pending"), count("salvage"),
-          all<{ documentId: string }>("snapshots"), all<SyncMeta>("meta"),
-        ]);
-        if (fence.some((row) => row.key === "logout")) return NOTHING_HELD;
-        return { pending, copies, kept: holdsUnsynced(pending, copies, snapshots, metas) };
-      });
-    } catch (error) {
-      if (error instanceof Error && error.name === "NoSuchDatabaseError") return NOTHING_HELD;
-      throw error;
+      const names = new Set(Array.from(db.objectStoreNames));
+      if (!["snapshots", "pending", "meta"].every((name) => names.has(name))) return NOTHING_HELD;
+      const tx = db.transaction([...names], "readonly");
+      const ask = <T,>(name: string, read: (store: IDBObjectStore) => IDBRequest<T>, none: T): Promise<T> =>
+        !names.has(name) ? Promise.resolve(none) : new Promise<T>((resolve, reject) => {
+          const request = read(tx.objectStore(name));
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+      const all = <T,>(name: string) => ask<T[]>(name, (store) => store.getAll() as IDBRequest<T[]>, []);
+      const count = (name: string) => ask(name, (store) => store.count(), 0);
+      const [fence, pending, copies, snapshots, metas] = await Promise.all([
+        all<JournalControl>("control"), count("pending"), count("salvage"),
+        all<{ documentId: string }>("snapshots"), all<SyncMeta>("meta"),
+      ]);
+      if (fence.some((row) => row.key === "logout")) return NOTHING_HELD;
+      return { pending, copies, kept: holdsUnsynced(pending, copies, snapshots, metas) };
     } finally {
       db.close();
     }
