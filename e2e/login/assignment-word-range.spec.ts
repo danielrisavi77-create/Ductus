@@ -6,7 +6,7 @@ import { expect, test } from "@playwright/test";
 import pg from "pg";
 
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
-import { signIn } from "./support";
+import { fillCodeDeadline, signIn } from "./support";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const DATABASE_URL = process.env.E2E_ADMIN_DATABASE_URL ??
@@ -35,6 +35,7 @@ test("teacher form keeps the committed request key for an equivalent range", asy
     const courseName = `Sintetički kolegij raspona ${randomUUID()}`;
     const title = `Sintetički zadatak raspona ${randomUUID()}`;
     await page.getByLabel(t.teacher.course.name).fill(courseName);
+    await fillCodeDeadline(page);
     await page.getByRole("button", { name: t.teacher.course.submit }).click();
     await expect(page.getByRole("status").filter({ hasText: t.teacher.course.created })).toBeVisible();
 
