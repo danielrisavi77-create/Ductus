@@ -178,10 +178,13 @@ describe("student return permission real POST, session and database", () => {
       "SELECT course_id, user_id, member_to, return_allowed_at FROM institution.course_member WHERE institution_id = ANY($1) AND user_id <> $2 ORDER BY 1, 2",
       [faculties, people.student.id],
     )).rows;
-    const first = await post(people.second.token);
-    expect(first.status).toBe(200);
-    expect(first.headers.get("cache-control")).toBe("no-store");
-    expect(await first.json()).toEqual({ allowed: true });
+    // Both teachers at once: the row lock makes exactly one of them the one who allowed it.
+    const answers = await Promise.all([post(people.second.token), post(people.teacher.token)]);
+    for (const answer of answers) {
+      expect(answer.status).toBe(200);
+      expect(answer.headers.get("cache-control")).toBe("no-store");
+    }
+    expect((await Promise.all(answers.map((answer) => answer.json()))).map((body) => body.allowed).sort()).toEqual([false, true]);
     // Allowed, still not a member: the student needs the code.
     expect(await rows(course, people.student.id)).toEqual([{ open: false, removed_by: people.teacher.id, allowed: true }]);
     const again = await post(people.teacher.token);
