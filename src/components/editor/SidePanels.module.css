@@ -21,7 +21,7 @@
 
 .label {
   margin: 0;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--ink-3);
 }
@@ -45,7 +45,7 @@
 }
 
 .meta {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ink-3);
 }
 
@@ -87,7 +87,7 @@
 
 /* The state is always written out; the colour only repeats it. */
 .stageState {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ink-3);
 }
 
@@ -112,4 +112,17 @@
 .error {
   font-size: 12px;
   color: var(--ink);
+}
+
+/* #732 item 8: 12 px is the floor for interface text, 13 px on a phone (app/globals.css). */
+@media (max-width: 640px) {
+  .panel,
+  .label,
+  .meta,
+  .actions li,
+  .stageName,
+  .stageState,
+  .error {
+    font-size: 13px;
+  }
 }
