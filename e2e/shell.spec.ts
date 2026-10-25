@@ -77,17 +77,17 @@ test.describe("workspace shell", () => {
       const outline = await focused.evaluate((element) => getComputedStyle(element).outlineStyle);
       expect(outline).not.toBe("none");
     }
-    // The teacher view has no address yet (F-8): it is a stop, but says it is not ready.
+    // Without an assignment the teacher view has no address: it is a stop, but says so.
     // The shell's brand and theme switch come first (no session: no navigation).
     expect(stops).toEqual([
-      "Preskoči na sadržaj", "Ductura, početna", "Promijeni svijetlu ili tamnu temu", "Pisanje", "Kako vidi nastavnik uskoro",
+      "Preskoči na sadržaj", "Ductura, početna", "Promijeni svijetlu ili tamnu temu", "Pisanje", "Kako vidi nastavnik samo uz zadatak",
     ]);
   });
 
-  test("teacher view is visibly disabled until F-8; the sheet is the local editor", async ({ page }) => {
+  test("teacher view is visibly disabled without an assignment; the sheet is the local editor", async ({ page }) => {
     await page.goto("/rad");
     const teacher = page.getByRole("navigation", { name: "Prikaz" }).getByRole("button", {
-      name: "Kako vidi nastavnik uskoro",
+      name: "Kako vidi nastavnik samo uz zadatak",
     });
     await expect(teacher).toHaveAttribute("aria-disabled", "true");
     await expect(teacher).not.toHaveAttribute("href");
