@@ -16,6 +16,7 @@ import PanelTabs from "@/components/shell/PanelTabs";
 import SheetFrame from "@/components/shell/SheetFrame";
 import { readShellRole } from "@/components/shell/shell-role";
 import WorkspaceShell, { RailSection } from "@/components/shell/WorkspaceShell";
+import { sheetTitle } from "@/components/student/sheet-title";
 import { assignmentParam, readWorkContext } from "@/components/student/work-context-read";
 import { DEMO_WORK } from "@/lib/i18n/demo-work.hr";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
@@ -186,7 +187,7 @@ export default async function WorkspacePage({
         {scope ? <EditorToolbar /> : null}
         <div className="sheet-area">
           <SheetFrame>
-            <h1 className="manuscript manuscript__title">{t.workspace.documentUntitled}</h1>
+            <h1 className="manuscript manuscript__title">{sheetTitle(read, t.workspace.documentUntitled)}</h1>
             {scope ? (
               <LocalEditor />
             ) : (
