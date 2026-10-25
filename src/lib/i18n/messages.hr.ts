@@ -450,7 +450,8 @@ export const hr = {
     lateNote: "Rok zadatka je prošao. Pisati možeš i dalje, a predaja će biti označena kao predaja nakon roka.",
     // #711 F1b (contract §4): the earlier draft of this device, offered only to read and copy.
     earlierDraftSummary: "Na ovom uređaju čuva se tvoj raniji tekst koji nije u ovom radu.",
-    earlierDraftExplain: "Tekst ostaje gdje je i ne briše se. Ako ga želiš u ovom radu, kopiraj ga i zalijepi; zapis rada tada to bilježi kao lijepljenje.",
+    // Owner (#711, O3 and amendment c): until 3d-2c2 a paste is not an evidence step, so the text does not say it is recorded; the sentence returns in 3d-2c2b.
+    earlierDraftExplain: "Tekst ostaje gdje je i ne briše se. Ako ga želiš u ovom radu, kopiraj ga i zalijepi.",
     earlierDraftCopy: "Kopiraj tekst",
     // Za potvrdu: the contract text "Kopirano u međuspremnik." fails the stem list of messages.test.ts (kopiran).
     earlierDraftCopied: "Tekst je u međuspremniku.",

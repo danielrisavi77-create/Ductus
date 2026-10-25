@@ -77,6 +77,9 @@ describe("F1b interface text", () => {
 
   it("is the accepted text of the contract", () => {
     expect(t.earlierDraftSummary).toBe("Na ovom uređaju čuva se tvoj raniji tekst koji nije u ovom radu.");
+    // Until 3d-2c2 a paste is not recorded, so the explanation must not claim it is (owner, #711 amendment c).
+    expect(t.earlierDraftExplain).toBe("Tekst ostaje gdje je i ne briše se. Ako ga želiš u ovom radu, kopiraj ga i zalijepi.");
+    expect(t.earlierDraftExplain).not.toMatch(/zapis|bilje/);
     expect(t.earlierDraftCopy).toBe("Kopiraj tekst");
     // The contract wrote "Kopirano u međuspremnik." here; messages.test.ts refuses the stem "kopiran", so this text awaits confirmation.
     expect(t.earlierDraftCopied).toBe("Tekst je u međuspremniku.");
