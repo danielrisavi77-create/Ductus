@@ -62,7 +62,18 @@ describe("Upute", () => {
 
   it("shows no invented finding of the form check", () => {
     const html = instructions({ kind: "ready", value: DEMO_ASSIGNMENT });
-    expect(html).toContain(t.upute.checksSoon);
+    expect(html).toContain(t.upute.checks);
+    expect(html).toContain(`<span class="soon">${t.soon}</span>`);
+    expect(html).not.toContain("prikazuje se ovdje");
+  });
+
+  it("marks every placeholder with the same soon capsule and no extra sentence (#732 item 11)", () => {
+    const capsule = `<span class="soon">${t.soon}</span>`;
+    const upute = instructions({ kind: "ready", value: DEMO_ASSIGNMENT });
+    const rad = work({ kind: "ready", value: DEMO_WORK });
+    expect(upute.split(capsule).length - 1).toBe(1);
+    expect(rad.split(capsule).length - 1).toBe(2);
+    expect(upute).not.toContain("rail-empty");
   });
 });
 

@@ -26,7 +26,7 @@ const provider = new Provider(ISSUER, {
   interactions: { url: (_ctx, interaction) => `/interaction/${interaction.uid}` },
   claims: {
     openid: ["sub"],
-    profile: ["name", "hrEduPersonUniqueID", "hrEduPersonHomeOrg", "hrEduPersonAffiliation"],
+    profile: ["name", "given_name", "family_name", "hrEduPersonUniqueID", "hrEduPersonHomeOrg", "hrEduPersonAffiliation"],
   },
   // First-party demo client: grant the requested scopes without a consent step.
   async loadExistingGrant(ctx) {
