@@ -3,6 +3,7 @@ import { expect, test, type Page, type Request } from "@playwright/test";
 
 import { createTextAnchor } from "../../src/domain/collaboration";
 import type { NodeId } from "../../src/domain/document";
+import { DUCTUS_PROTOCOL_VERSION } from "../../src/domain/evidence/commit-envelope";
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import { post } from "./comment-seed";
 import { closeWork, seedWork, workDocument } from "./work-seed";
@@ -41,7 +42,19 @@ async function writeWork(student: Page): Promise<{ assignment: string; documentI
   await editorOf(student).click();
   await student.keyboard.type(TEXT);
   const nodeId = (await editorOf(student).locator("p[data-node-id]").first().getAttribute("data-node-id")) as NodeId;
-  return { assignment, documentId: await workDocument(assignment), nodeId };
+  const documentId = await workDocument(assignment);
+  // The teacher view shows the last state the student published (PUT
+  // /api/live), not unsent local input; a test that leaves the editor at
+  // once waits until the whole TEXT is published.
+  await expect
+    .poll(async () => {
+      const response = await student.request.get(`/api/live/${documentId}`, {
+        headers: { "ductus-protocol": DUCTUS_PROTOCOL_VERSION },
+      });
+      return response.ok() ? await response.text() : "";
+    }, { timeout: OPEN })
+    .toContain(TEXT);
+  return { assignment, documentId, nodeId };
 }
 
 async function axeClean(page: Page): Promise<void> {
