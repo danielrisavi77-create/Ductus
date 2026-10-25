@@ -21,7 +21,7 @@ const ids = Object.values(people).map((person) => person.id);
 const foreignPeople: readonly Name[] = ["outsider", "foreignStudent"];
 const students: readonly Name[] = ["student", "classmate", "siblingStudent", "foreignStudent"];
 const expired = token(), closed = token();
-let course: string, foreign: string, sibling: string, code: string;
+let course: string, otherCourse: string, foreign: string, sibling: string, code: string;
 
 const post = (session: string, target = course, student = people.student.id, body = "{}") => POST(new NextRequest(
   `${ORIGIN}/api/institution/courses/${target}/students/${student}/removal`, {
@@ -44,7 +44,7 @@ async function snapshot(skip: string[] = []) {
     const qualified = `"${schemaname.replaceAll('"', '""')}"."${tablename.replaceAll('"', '""')}"`;
     result[`${schemaname}.${tablename}`] = (await admin.query(
       `SELECT r::text AS row FROM ${qualified} r WHERE EXISTS (SELECT 1 FROM unnest($1::text[]) n WHERE strpos(r::text, n) > 0) ORDER BY 1`,
-      [[...faculties, ...ids, course, foreign, sibling]],
+      [[...faculties, ...ids, course, otherCourse, foreign, sibling]],
     )).rows;
   }
   return result;
@@ -79,16 +79,19 @@ beforeAll(async () => {
        CASE WHEN $4 THEN now() ELSE NULL END, CASE WHEN $4 THEN 'logout' ELSE NULL END)`,
     [session, people.teacher.id, faculties[0], isClosed],
   );
-  const create = (name: "teacher" | "outsider" | "nonmember") => withActor(people[name].token, async (tx) =>
-    (await tx.query<{ id: string }>("SELECT institution.create_course($1, '2026/2027', 'prohibited') AS id", [`Izmisljeni kolegij ${name}`])).rows[0].id,
+  const create = (name: "teacher" | "outsider" | "nonmember", label: string = name) => withActor(people[name].token, async (tx) =>
+    (await tx.query<{ id: string }>("SELECT institution.create_course($1, '2026/2027', 'prohibited') AS id", [`Izmisljeni kolegij ${label}`])).rows[0].id,
   );
-  course = await create("teacher"); foreign = await create("outsider"); sibling = await create("nonmember");
+  course = await create("teacher"); otherCourse = await create("teacher", "teacher drugi");
+  foreign = await create("outsider"); sibling = await create("nonmember");
   const member = (target: string, name: Name, role: "student" | "teacher") => admin.query(
     "INSERT INTO institution.course_member (course_id, user_id, institution_id, role) VALUES ($1,$2,$3,$4)",
     [target, people[name].id, faculties[foreignPeople.includes(name) ? 1 : 0], role],
   );
   for (const name of ["second", "unconfirmed", "revoked"] as const) await member(course, name, "teacher");
   for (const name of ["student", "classmate"] as const) await member(course, name, "student");
+  // The same student also takes the teacher's second course.
+  await member(otherCourse, "student", "student");
   await member(sibling, "siblingStudent", "student");
   await member(foreign, "foreignStudent", "student");
   code = await withActor(people.teacher.token, async (tx) => (await tx.query<{ code: string }>(
@@ -163,6 +166,8 @@ describe("student removal real POST, session and database", () => {
     expect(first.headers.get("cache-control")).toBe("no-store");
     expect(await first.json()).toEqual({ removed: true });
     expect(await membership(course, people.student.id)).toEqual({ open: false, removed_by: people.second.id });
+    // Only the named course: the same student's membership in the teacher's other course stays open.
+    expect(await membership(otherCourse, people.student.id)).toEqual({ open: true, removed_by: null });
     const again = await post(people.teacher.token);
     expect(again.status).toBe(200);
     expect(await again.json()).toEqual({ removed: false });

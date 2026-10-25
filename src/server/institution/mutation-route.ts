@@ -21,7 +21,18 @@ export type MutationInput =
   | { ok: true; sessionToken: string; value: unknown }
   | { ok: false; response: Response };
 
-export function respond(status: number, body: object): Response {
+/**
+ * Every body these routes may send, closed: a refusal names only its code,
+ * and each route adds its one success shape here, so a wrong field or type
+ * fails the type check.
+ */
+export type InstitutionReply =
+  | { error: string }
+  | { code: string }
+  | { revoked: boolean }
+  | { removed: boolean };
+
+export function respond(status: number, body: InstitutionReply): Response {
   return Response.json(body, { status, headers: { "cache-control": "no-store" } });
 }
 

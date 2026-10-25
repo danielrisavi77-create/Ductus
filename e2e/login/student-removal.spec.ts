@@ -42,4 +42,6 @@ test("a signed-in student cannot remove anyone, and the body carries nothing", a
 
   const malformed = await page.request.post(path(course, "not-a-student"), { headers: { origin: ORIGIN }, data: {} });
   expect(malformed.status()).toBe(422);
+  expect(malformed.headers()["cache-control"]).toBe("no-store");
+  expect(await malformed.json()).toEqual({ error: "invalid_input" });
 });

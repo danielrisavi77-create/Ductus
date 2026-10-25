@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ActorTransaction, WithActor } from "@/server/db/with-actor";
 import { handleEnrollmentCodeRequest } from "./enrollment-code-route";
-import { applicationOrigin, readEmptyMutation, readJsonMutation, rpcErrorResponse } from "./mutation-route";
+import { applicationOrigin, readEmptyMutation, readJsonMutation, respond, rpcErrorResponse } from "./mutation-route";
 
 const ORIGIN = "https://ductus.example";
 const COURSE = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -60,6 +60,16 @@ describe("shared institution mutation guards", () => {
       expect(response.status).toBe(status);
       expect(response.headers.get("cache-control")).toBe("no-store");
     }
+  });
+
+  it("closes the reply shapes at the type level (#800 review finding)", async () => {
+    // @ts-expect-error a success field of the wrong type
+    respond(200, { removed: "yes" });
+    // @ts-expect-error a field no route sends
+    respond(200, { studentId: COURSE });
+    const response = respond(200, { removed: true });
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toEqual({ removed: true });
   });
 
   it("takes the application origin only from a usable OIDC callback", () => {
