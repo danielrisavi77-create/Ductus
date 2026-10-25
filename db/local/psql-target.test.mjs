@@ -132,20 +132,20 @@ test("a native target runs without the PG* variables that could choose a host", 
   assert.equal(loadInvocation({ command: "psql", args: ["-h", "/tmp/s"] }, env).env.pghostaddr, undefined);
 });
 
-test("with a native target the connection comes first and the script's options follow", () => {
+test("with a native target the connection comes first, then -X so no psqlrc is read, then the script's options", () => {
   const psql = { command: "C:\\pg\\bin\\psql.exe", args: ["-h", "C:\\Ductus\\socket", ...CONNECTION] };
   const env = { DUCTUS_PSQL_CONTAINER: "ignored-for-native" };
   assert.deepEqual(registrationInvocation(env, "demo-fakultet", KEY, psql), {
     command: psql.command,
     args: [
-      ...psql.args, "-q", "-t", "-A", "-v", "ON_ERROR_STOP=1",
+      ...psql.args, "-X", "-q", "-t", "-A", "-v", "ON_ERROR_STOP=1",
       "-v", "institution_slug=demo-fakultet", "-v", "key_id=local-dev", "-v", "key_version=1", "-v", "key_base64url=AAAA",
     ],
     env,
   });
   assert.deepEqual(institutionInvocation(env, "demo-fakultet", psql), {
     command: psql.command,
-    args: [...psql.args, "-q", "-t", "-A", "-v", "ON_ERROR_STOP=1", "-v", "slug=demo-fakultet"],
+    args: [...psql.args, "-X", "-q", "-t", "-A", "-v", "ON_ERROR_STOP=1", "-v", "slug=demo-fakultet"],
     env,
   });
   assert.deepEqual(loadInvocation(psql, env), {
@@ -175,7 +175,7 @@ test("the storage script reads the institution through the native target", async
     const { argv, stdin, pg } = await read();
     assert.deepEqual(pg, ["PGPASSWORD"]);
     assert.match(stdin, /inet_server_addr\(\) IS NULL/);
-    assert.deepEqual(argv, ["-h", dir, ...CONNECTION, "-q", "-t", "-A", "-v", "ON_ERROR_STOP=1", "-v", "slug=demo-fakultet"]);
+    assert.deepEqual(argv, ["-h", dir, ...CONNECTION, "-X", "-q", "-t", "-A", "-v", "ON_ERROR_STOP=1", "-v", "slug=demo-fakultet"]);
     assert.match(stdin, /FROM identity\.institution WHERE slug = :'slug'/);
   });
 });

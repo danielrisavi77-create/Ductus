@@ -42,7 +42,7 @@ export function registrationInvocation(env, slug, key, psql) {
   ];
   if (psql !== undefined) {
     const native = nativePsqlTarget(psql, env);
-    return { command: native.command, args: [...native.args, ...options], env: native.env };
+    return { command: native.command, args: [...native.args, "-X", ...options], env: native.env };
   }
   return { command: "docker", args: [...dockerExecArgs(env), "psql", "-U", "ductus", "-d", "ductus", ...options] };
 }

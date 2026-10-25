@@ -41,7 +41,7 @@ export function institutionInvocation(env, slug, psql) {
   const options = ["-q", "-t", "-A", "-v", "ON_ERROR_STOP=1", "-v", `slug=${slug}`];
   if (psql !== undefined) {
     const native = nativePsqlTarget(psql, env);
-    return { command: native.command, args: [...native.args, ...options], env: native.env };
+    return { command: native.command, args: [...native.args, "-X", ...options], env: native.env };
   }
   return { command: "docker", args: [...dockerExecArgs(env), "psql", "-U", "ductus", "-d", "ductus", ...options] };
 }
