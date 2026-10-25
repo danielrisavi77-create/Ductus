@@ -280,7 +280,8 @@ test("an acknowledged assignment on /rad links to its submission and sends nothi
   const bodies = recordSubmissions(page);
   await page.goto(`/rad?zadatak=${assignment}`);
   const link = submitLinkOf(page);
-  await expect(link).toBeVisible();
+  // #711 F1: the link comes with the student's own work, opened by the page's one POST.
+  await expect(link).toBeVisible({ timeout: 30_000 });
   await expect(link).toHaveAttribute("href", pathOf(assignment));
   await page.waitForTimeout(1000);
   expect(bodies).toEqual([]);
