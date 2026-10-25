@@ -62,7 +62,7 @@
 .assignment {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: "title count" "meta count";
+  grid-template-areas: "title count" "meta count" "works works";
   gap: 2px 14px;
   align-items: center;
   padding: 12px 18px;
@@ -93,6 +93,18 @@
   white-space: nowrap;
 }
 
+.works {
+  grid-area: works;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
 .note {
   font-size: 12px;
   color: var(--ink-3);
@@ -101,7 +113,7 @@
 @media (max-width: 700px) {
   .assignment {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "title" "meta" "count";
+    grid-template-areas: "title" "meta" "count" "works";
   }
 }
 
