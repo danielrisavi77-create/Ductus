@@ -234,7 +234,8 @@ export default async function WorkspacePage({
   // A new document id mounts a new editor: nothing of X (text, undo) reaches Y (A8).
   return journal ? (
     <LocalDocumentProvider key={journal.documentId} scope={journal.scope} documentId={journal.documentId}
-      session={session} livePublish={plan.live}>
+      session={session} livePublish={plan.live}
+      assignmentId={plan.kind === "assignment" ? plan.assignmentId : null}>
       {workspace}
     </LocalDocumentProvider>
   ) : workspace;
