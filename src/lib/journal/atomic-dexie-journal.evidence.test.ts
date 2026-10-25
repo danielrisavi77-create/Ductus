@@ -150,7 +150,7 @@ describe("F-8 3d-2a: journal v3", () => {
     expect(inside).not.toContain(true);
   });
 
-  it("8: a version 2 database opens as version 3 with its rows, snapshot, meta and fence", async () => {
+  it("8: a version 2 database opens as the current version with its rows, snapshot, meta and fence", async () => {
     const scope = nextScope();
     const old = new Dexie(`ductus-journal-v1-${scope}`, deps);
     old.version(1).stores({ snapshots: "documentId", pending: "[documentId+localSeq],documentId", meta: "documentId" });
@@ -169,8 +169,10 @@ describe("F-8 3d-2a: journal v3", () => {
       meta: { documentId: "stari-dokument", localSeq: 1, state: "LOCAL_DURABLE" },
     });
     expect(await journal.hasPendingLogout()).toBe(true);
-    expect(raw(journal).verno).toBe(3);
+    // Version 4 (3d-2b) added the store of kept copies.
+    expect(raw(journal).verno).toBe(4);
     expect(await raw(journal).table("timings").count()).toBe(0);
+    expect(await raw(journal).table("salvage").count()).toBe(0);
   });
 
   it("9: an owed segment blocks logout; the timing record does not, and goes with the database", async () => {
