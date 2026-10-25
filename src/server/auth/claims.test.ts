@@ -92,6 +92,24 @@ describe("identityFromClaims", () => {
     expect(fromUserinfo.ok && fromUserinfo.identity.familyName).toBe("Primjer");
   });
 
+  it("takes given_name and family_name first, and never mixes the two pairs", () => {
+    const both = identityFromClaims({ ...ANA, given_name: "Ana", family_name: "Oidcić", givenName: "Ana", sn: "Ldapić" });
+    expect(both.ok && both.identity.familyName).toBe("Oidcić");
+    const oidc = identityFromClaims({ ...ANA, given_name: "Ana", family_name: "Oidcić" });
+    expect(oidc).toStrictEqual({ ok: true, identity: { ...ANA_IDENTITY, givenName: "Ana", familyName: "Oidcić" } });
+    // A broken OIDC pair falls back to the whole LDAP pair, never half of each.
+    const fallback = identityFromClaims({ ...ANA, given_name: "Ana", family_name: "", givenName: "Ana", sn: "Ldapić" });
+    expect(fallback.ok && fallback.identity.familyName).toBe("Ldapić");
+    expect(identityFromClaims({ ...ANA, given_name: "Ana", sn: "Ldapić" })).toStrictEqual({ ok: true, identity: ANA_IDENTITY });
+  });
+
+  it("logs in without a name when the provider sends a name as an array", () => {
+    expect(identityFromClaims({ ...ANA, given_name: ["Ana"], family_name: ["Testić"] })).toStrictEqual({
+      ok: true,
+      identity: ANA_IDENTITY,
+    });
+  });
+
   it.each([
     ["no given name", { sn: "Testić" }],
     ["no family name", { givenName: "Ana" }],
