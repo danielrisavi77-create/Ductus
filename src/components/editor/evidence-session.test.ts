@@ -861,3 +861,91 @@ describe("3d-2c2a §4 (DAN-289 A1): a submission closes the session", () => {
     expect(net.calls).toHaveLength(0);
   });
 });
+
+describe("O2 (DAN-289, #756 c.6399602745): a submitted work opens read-only", () => {
+  /** The open answer of a work whose submission is recorded, or not; counts each open. */
+  function opener(submitted: boolean) {
+    const opens = { count: 0 };
+    const open = async (): Promise<OpenOutcome> => {
+      opens.count += 1;
+      return { status: "opened", work: workFor(ASSIGNED, { submitted }) };
+    };
+    return { open, opens };
+  }
+
+  it("O2-1: submitted: true loads closed by submission at LOCAL_DURABLE with the work's text, never ERROR or SYNCED", async () => {
+    const { open } = opener(true);
+    const { session } = setup({ open });
+    const result = await ready(session);
+    expect((result as { document: CanonicalDocument }).document).toEqual(ASSIGNED);
+    expect(session.snapshot()).toEqual({ state: "LOCAL_DURABLE", failure: null, capacity: "ok", closedBy: "submission", refused: false });
+  });
+
+  it("O2-2: submitted: true never opens again, never commits, records or saves, and starts no runner or watch", async () => {
+    const net = server();
+    const online = network();
+    const { open, opens } = opener(true);
+    const createRunner = vi.fn();
+    const watchSubmission = vi.fn(() => () => {});
+    const { session, journal, advance } = setup({ net, open, online, over: { createRunner, watchSubmission } });
+    await ready(session);
+    const take = vi.spyOn(EvidenceRecorder.prototype, "takeSegment");
+    const record = vi.spyOn(EvidenceRecorder.prototype, "record");
+    const saveSegment = vi.spyOn(journal, "saveSegment");
+    const saveUncovered = vi.spyOn(journal, "saveUncovered");
+    const sheet = editorFor(session);
+    sheet.type("x");
+    await sheet.save();
+    session.pause();
+    session.resume();
+    for (let minute = 0; minute < 10; minute++) {
+      advance(60_000);
+      online.set(true);
+      await session.settled();
+    }
+    for (const spy of [take, record, saveSegment, saveUncovered, createRunner, watchSubmission]) {
+      expect(spy).not.toHaveBeenCalled();
+    }
+    expect(opens.count).toBe(1);
+    expect(net.calls).toHaveLength(0);
+    expect(session.snapshot().closedBy).toBe("submission");
+  });
+
+  it("O2-3: rows the journal holds stay there, neither sent nor deleted", async () => {
+    const net = server();
+    const journal = openJournal();
+    const first = setup({ journal, net, online: network(false) });
+    await ready(first.session);
+    const sheet = editorFor(first.session);
+    sheet.type(" nakon");
+    const typed = await sheet.save();
+    first.session.close();
+    const before = await journal.readEvidence(DOC);
+    expect(before.pending.length).toBeGreaterThan(0);
+
+    const { open } = opener(true);
+    const again = setup({ journal, net, open });
+    const result = await ready(again.session);
+    expect(canonicalizeJcs((result as { document: CanonicalDocument }).document)).toBe(canonicalizeJcs(typed));
+    expect(again.session.snapshot().closedBy).toBe("submission");
+    const after = await journal.readEvidence(DOC);
+    expect(after.pending.map((row) => row.tx.clientTransactionId))
+      .toEqual(before.pending.map((row) => row.tx.clientTransactionId));
+    expect(after.meta?.localSeq).toBe(before.meta?.localSeq);
+    expect(net.calls).toHaveLength(0);
+  });
+
+  it("O2-4: submitted: false opens, saves and commits as before", async () => {
+    const net = server();
+    const { open, opens } = opener(false);
+    const { session } = setup({ net, open });
+    await ready(session);
+    expect(session.snapshot().closedBy).toBeNull();
+    const sheet = editorFor(session);
+    sheet.type("x");
+    await sheet.save();
+    expect(opens.count).toBe(1);
+    expect(net.calls.length).toBeGreaterThan(0);
+    expect(session.snapshot().state).toBe("SYNCED");
+  });
+});

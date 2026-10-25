@@ -113,6 +113,35 @@ export async function closeWork(): Promise<void> {
   });
 }
 
+/**
+ * Records the submission of the document's current revision as the admin
+ * login, the rows `app.work_submitted` reads (DAN-289 O2), for a test whose
+ * subject is what the sheet does with a submitted work, not the submission.
+ */
+export async function seedSubmission(documentId: string): Promise<void> {
+  await admin(async (client) => {
+    await client.query("BEGIN");
+    const { rows: [request] } = await client.query<{ id: string }>(
+      `INSERT INTO evidence.submission_request (institution_id, assignment_id, assignment_version, project_id,
+         document_id, principal_id, revision, content_hash, requested_at)
+       SELECT d.institution_id, p.assignment_id, 1, p.id, d.id, d.principal_id, d.current_revision,
+         d.current_content_hash, now()
+         FROM evidence.document d JOIN evidence.project p ON p.id = d.project_id
+        WHERE d.id = $1 AND d.current_revision >= 1
+       RETURNING id`, [documentId]);
+    if (!request) throw new Error("the document needs a committed revision");
+    await client.query(
+      `INSERT INTO evidence.submission (submission_request_id, institution_id, principal_id, assignment_id,
+         assignment_version, revision, artifact_hash, requested_at, due_at, recorded_at)
+       SELECT r.id, r.institution_id, r.principal_id, r.assignment_id, r.assignment_version, r.revision,
+         r.content_hash, r.requested_at, v.due_at, now()
+         FROM evidence.submission_request r
+         JOIN institution.assignment_version v ON v.assignment_id = r.assignment_id AND v.version_no = r.assignment_version
+        WHERE r.id = $1`, [request.id]);
+    await client.query("COMMIT");
+  });
+}
+
 /** The document ids of (person, assignment), by the admin login, oldest first. */
 export async function documentsOf(person: string, assignment: string): Promise<{ projects: number; documents: string[] }> {
   return admin(async (client) => {
