@@ -65,9 +65,15 @@ SELECT is(pg_temp.summary('marko'), 'not_found', 'the teacher of another course 
 SELECT is(pg_temp.summary('dora'), 'not_found', 'a classmate gets no answer');
 SELECT is(pg_temp.summary('tomo'), 'not_found', 'a student of another institution gets no answer');
 SELECT is(pg_temp.summary('tomo', 'doc-b'), 'found 0', 'another document without a submission is not cut');
-CREATE TEMP TABLE before_read AS SELECT pg_temp.opened() AS n;
-SELECT is(pg_temp.summary('vesna'), 'found 1 b', 'fixture: the teacher reads again');
-SELECT is(pg_temp.opened(), (SELECT n + 1 FROM before_read), 'the teacher''s read of a submitted work is logged');
+-- One row per reader, work, surface and 5-minute interval (081): the reads
+-- above already wrote it, and a log that refuses the row fails the read.
+SELECT is(pg_temp.opened(), 1::bigint, 'the teacher''s reads of the work are logged once per interval');
+CREATE TRIGGER access_log_refuse_insert BEFORE INSERT ON audit.access_log
+  FOR EACH ROW EXECUTE FUNCTION audit.reject_change();
+SELECT is(pg_temp.summary('vesna'), 'ZD403: append-only row',
+  'the teacher''s read of a submitted work writes its row before it is answered');
+SELECT is(pg_temp.summary('ana'), 'found 1 b', 'the student''s read writes no row');
+DROP TRIGGER access_log_refuse_insert ON audit.access_log;
 
 -- No receipt names the submitted revision (B3): unavailable, never the head.
 ALTER TABLE evidence.receipt DISABLE TRIGGER evidence_receipt_immutable;
