@@ -196,14 +196,19 @@ SELECT is(
     FROM app.process_summary_record('doc-a') $q$),
   'a fresh window carries the package, head and listing of app.process_summary_record');
 
--- Ana commits revision 2 and submits it: Vesna's window still shows revision
--- 1, not submitted, with the listing cut at it.
+-- Ana commits revision 2, requests it, commits revision 3 and then submits
+-- revision 2: Vesna's window still shows revision 1, not submitted, with the
+-- listing cut at it.
 SELECT is(pg_temp.call('ana','pkg-a','request-2',
     pg_temp.descriptor(p_segment=>'segment-a-2',p_sequence_from=>2,p_sequence_to=>2,p_hash=>repeat('c',64),
       p_predecessor=>repeat('b',64)),1,repeat('d',64),repeat('e',64),repeat('c',64)),
   'reserved', 'fixture: Ana commits revision 2');
 SELECT is(pg_temp.ask('ana', $$ SELECT outcome FROM app.request_submission('doc-a', 2) $$), 'requested',
   'fixture: Ana requests revision 2');
+SELECT is(pg_temp.call('ana','pkg-a','request-3',
+    pg_temp.descriptor(p_segment=>'segment-a-3',p_sequence_from=>3,p_sequence_to=>3,p_hash=>repeat('9',64),
+      p_predecessor=>repeat('c',64)),2,repeat('e',64),repeat('7',64),repeat('9',64)),
+  'reserved', 'fixture: Ana commits revision 3 after the request');
 SELECT is(pg_temp.ask('ana', format($$ SELECT outcome FROM app.record_submission(%L, %L) $$,
     (SELECT id FROM evidence.submission_request WHERE principal_id = pg_temp.id('ana')), pg_temp.h('e'))),
   'recorded', 'fixture: Ana submits revision 2');
@@ -216,14 +221,14 @@ INSERT INTO institution.course_member (course_id, institution_id, user_id, role)
 VALUES (pg_temp.id('k1'), pg_temp.id('fak_a'), pg_temp.id('marko'), 'teacher');
 SELECT is(pg_temp.fp('marko', quote_literal(pg_temp.id('z1')) || '::uuid'),
   'ana|Ana|Testić|doc-a|true|2|pkg-a|c|{bc}|e64; dora|-|-|doc-d|false|0|pkg-d|-|{}|f64',
-  'Marko''s first read opens his own window at the submitted revision 2');
+  'Marko''s first read opens his own window at the submitted revision 2, not at the head revision 3');
 SELECT is(pg_temp.fp('vesna', quote_literal(pg_temp.id('z1')) || '::uuid'),
   'ana|Ana|Testić|doc-a|false|1|pkg-a|b|{b}|d64; dora|-|-|doc-d|false|0|pkg-d|-|{}|f64',
   'and Vesna''s window is not moved by his');
 SELECT pg_temp.expire('vesna');
 SELECT is(pg_temp.fp('vesna', quote_literal(pg_temp.id('z1')) || '::uuid'),
   'ana|Ana|Testić|doc-a|true|2|pkg-a|c|{bc}|e64; dora|-|-|doc-d|false|0|pkg-d|-|{}|f64',
-  'after P-03 Vesna reads the submitted revision 2');
+  'after P-03 Vesna reads the submitted revision 2, not the head');
 SELECT is(
   pg_temp.ask('vesna', format($q$ SELECT row(evidence_package_id, head_segment_hash, segment_hashes)::text
     FROM app.fast_path_works(%L) WHERE document_id = 'doc-a' $q$, pg_temp.id('z1'))),
