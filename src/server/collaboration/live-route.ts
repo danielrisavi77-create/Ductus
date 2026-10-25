@@ -25,6 +25,13 @@ const HASH = /^[0-9a-f]{64}$/;
 const SQLSTATE = /^[0-9A-Z]{5}$/;
 const BODY_TIMEOUT_MS = 30_000;
 const NO_STORE = { "cache-control": "no-store" };
+/**
+ * DAN-289 A3 (BACKEND 4.12 t. 3): the mark of a read whose bytes are the
+ * submitted revision, not the live state. It carries nothing else: no
+ * revision, time or id of the submission.
+ */
+export const LIVE_STATE_HEADER = "ductus-live-state";
+const SUBMITTED = { [LIVE_STATE_HEADER]: "submitted" };
 
 export interface LiveRouteDeps {
   withActor: WithActor;
@@ -169,15 +176,27 @@ export async function handleLiveReadRequest(
   if (row?.outcome === "unchanged" && hash !== undefined && hash === known) {
     return new Response(null, { status: 304, headers: { ...NO_STORE, etag: `"${hash}"` } });
   }
-  if (row?.outcome === "state" && hash !== undefined && typeof row.body === "string") {
+  // After the submission the bytes are the submitted revision, never the live state (option (a), #756).
+  const submitted = row?.outcome === "submitted";
+  if (submitted && row.body === null && hash !== undefined && hash === known) {
+    return new Response(null, { status: 304, headers: { ...NO_STORE, ...SUBMITTED, etag: `"${hash}"` } });
+  }
+  if ((row?.outcome === "state" || submitted) && hash !== undefined && typeof row?.body === "string") {
     const bytes = Buffer.from(row.body, "utf8");
     // The database keeps the hash of these bytes; a row that disagrees is not served.
     if (createHash("sha256").update(bytes).digest("hex") === hash) {
       return new Response(bytes, {
         status: 200,
-        headers: { ...NO_STORE, "content-type": "application/json; charset=utf-8", etag: `"${hash}"` },
+        headers: {
+          ...NO_STORE, ...(submitted ? SUBMITTED : {}), "content-type": "application/json; charset=utf-8", etag: `"${hash}"`,
+        },
       });
     }
+  }
+  if (row?.outcome === "unavailable") {
+    // The submitted text cannot be shown; the live state is never served in its place.
+    console.error("live state read failed", "submitted_unavailable");
+    return refuse(503, "unavailable");
   }
   console.error("live state read failed", "row_malformed");
   return refuse(503, "unavailable");

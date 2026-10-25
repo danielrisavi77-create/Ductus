@@ -270,6 +270,48 @@ describe("GET /api/live/[documentId]: one reading for the owner and the teacher 
     expect(JSON.stringify(log.mock.calls)).not.toMatch(new RegExp(`${CANARY}|${DOC}`));
   });
 
+  it("answers a submitted work with its submitted revision and the mark, the same for owner and teacher (DAN-289 A3)", async () => {
+    const db = database({ rows: [{ outcome: "submitted", content_hash: HASH, body: TEXT }] });
+    const [owner, teacher] = [await read(db, get(), { token: "S".repeat(43) }), await read(db, get(), { token: "N".repeat(43) })];
+    for (const response of [owner, teacher]) {
+      expect(response.status).toBe(200);
+      expect(response.headers.get("ductus-live-state")).toBe("submitted");
+      expect(response.headers.get("etag")).toBe(`"${HASH}"`);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(response.headers.get("content-type")).toBe("application/json; charset=utf-8");
+    }
+    expect(Buffer.from(await owner.arrayBuffer()).equals(BYTES)).toBe(true);
+    expect(Buffer.from(await teacher.arrayBuffer()).equals(BYTES)).toBe(true);
+
+    const known = database({ rows: [{ outcome: "submitted", content_hash: HASH, body: null }] });
+    const same = await read(known, get({ "if-none-match": `"${HASH}"` }));
+    expect([same.status, same.headers.get("etag"), same.headers.get("ductus-live-state"), await same.text()])
+      .toStrictEqual([304, `"${HASH}"`, "submitted", ""]);
+    expect(known.calls[0].values).toStrictEqual([DOC, HASH]);
+
+    // A live state carries no mark.
+    const live = await read(database({ rows: [{ outcome: "state", content_hash: HASH, body: TEXT }] }));
+    expect(live.headers.get("ductus-live-state")).toBeNull();
+  });
+
+  it("never serves a submitted answer it cannot vouch for, and maps unavailable to 503 (DAN-289 A3)", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const cases: Answer[] = [
+      { rows: [{ outcome: "unavailable", content_hash: null, body: null }] },
+      { rows: [{ outcome: "submitted", content_hash: HASH, body: `${TEXT} ${CANARY}` }] },
+      { rows: [{ outcome: "submitted", content_hash: "x", body: TEXT }] },
+      // No bytes for a reader that does not hold the hash.
+      { rows: [{ outcome: "submitted", content_hash: HASH, body: null }] },
+    ];
+    for (const answer of cases) {
+      const response = await read(database(answer));
+      expect([response.status, response.headers.get("ductus-live-state"), await response.json()])
+        .toStrictEqual([503, null, { error: "unavailable" }]);
+    }
+    expect(log.mock.calls[0]).toStrictEqual(["live state read failed", "submitted_unavailable"]);
+    expect(JSON.stringify(log.mock.calls)).not.toMatch(new RegExp(`${CANARY}|${DOC}`));
+  });
+
   it("refuses another site, a missing session and an id that cannot exist before the database", async () => {
     const cases: [Request, number, string, Options?][] = [
       [get({ "sec-fetch-site": "cross-site" }), 403, "forbidden"],
