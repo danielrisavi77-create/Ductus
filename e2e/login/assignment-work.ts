@@ -41,8 +41,8 @@ async function admin<T>(work: (client: pg.Client) => Promise<T>): Promise<T> {
 }
 
 /** What openAssignmentWork() opened that a later spec must not inherit. */
-const opened: { course: string | null; role: string | null; document: string | null } =
-  { course: null, role: null, document: null };
+const opened: { course: string | null; role: string | null; documents: string[] } =
+  { course: null, role: null, documents: [] };
 
 /**
  * The demo teacher teaches a new invented course, the demo student is its
@@ -84,7 +84,31 @@ export async function openAssignmentWork(student: Page): Promise<AssignmentWork>
     return { assignmentId: assignment!.id, studentId: ids.student };
   });
 
-  // The student confirms the notice under her own session, as the notice screen does.
+  return { assignmentId, documentId: await confirmAndOpen(student, assignmentId, studentId) };
+}
+
+/**
+ * Another demo student (`uniqueId`, signed in on `student`) joins the course
+ * of `assignmentId` opened by openAssignmentWork() and gets her own work on it
+ * the same way. Returns her document, never the first student's.
+ */
+export async function joinAssignmentWork(student: Page, uniqueId: string, assignmentId: string): Promise<string> {
+  const studentId = await admin(async (client) => {
+    const { rows: [me] } = await client.query<{ id: string; institution: string }>(
+      "SELECT id, institution_id AS institution FROM identity.user_account WHERE hr_edu_person_unique_id = $1", [uniqueId]);
+    if (!me) throw new Error("the student must have signed in");
+    await client.query(
+      `INSERT INTO institution.course_member (course_id, institution_id, user_id, role)
+       SELECT a.course_id, a.institution_id, $2, 'student' FROM institution.assignment a WHERE a.id = $1`,
+      [assignmentId, me.id]);
+    return me.id;
+  });
+  return confirmAndOpen(student, assignmentId, studentId);
+}
+
+/** The student confirms the notice under her own session and the real open route makes her work. */
+async function confirmAndOpen(student: Page, assignmentId: string, studentId: string): Promise<string> {
+  // As the notice screen does.
   const token = (await appCookie(student.context(), SESSION_COOKIE))?.value;
   if (!token) throw new Error("the student page must be signed in");
   const pool = new pg.Pool({ connectionString: APP_DATABASE_URL, max: 1 });
@@ -95,7 +119,7 @@ export async function openAssignmentWork(student: Page): Promise<AssignmentWork>
     await pool.end();
   }
 
-  // The real open route makes the work, as Predaja and /rad?zadatak= do.
+  // As Predaja and /rad?zadatak= do.
   const response = await student.request.post("/api/evidence/open", {
     headers: { origin: ORIGIN, "ductus-protocol": DUCTUS_PROTOCOL_VERSION }, data: { assignmentId },
   });
@@ -104,7 +128,7 @@ export async function openAssignmentWork(student: Page): Promise<AssignmentWork>
   expect(body.status).toBe("opened");
   const documentId = body.documentId;
   if (typeof documentId !== "string") throw new Error("the open route named no document");
-  opened.document = documentId;
+  opened.documents.push(documentId);
   expect(documentId).not.toBe(LOCAL_DEMO_DOCUMENT_ID);
 
   // Exactly one work and one document for (student, assignment), and it is this one.
@@ -112,16 +136,16 @@ export async function openAssignmentWork(student: Page): Promise<AssignmentWork>
     `SELECT d.id FROM evidence.project p JOIN evidence.document d ON d.project_id = p.id
       WHERE p.assignment_id = $1 AND p.principal_id = $2`, [assignmentId, studentId])).rows.map((row) => row.id));
   expect(documents).toEqual([documentId]);
-  return { assignmentId, documentId };
+  return documentId;
 }
-
 /** Leaves no comment, live text, membership or teacher role behind for the other specs. */
 export async function cleanUpAssignmentWork(): Promise<void> {
-  const { course, role, document } = opened;
-  opened.course = opened.role = opened.document = null;
-  if (course === null && document === null) return;
+  const { course, role, documents } = opened;
+  opened.course = opened.role = null;
+  opened.documents = [];
+  if (course === null && documents.length === 0) return;
   await admin(async (client) => {
-    if (document !== null) {
+    for (const document of documents) {
       await client.query(
         "DELETE FROM collaboration.comment WHERE thread_id IN (SELECT id FROM collaboration.comment_thread WHERE document_id = $1)",
         [document]);
