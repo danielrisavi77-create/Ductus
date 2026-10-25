@@ -79,7 +79,11 @@ export type EvidenceSessionDeps = {
 };
 
 /** The session's snapshot; `closedBy` tells the editor to turn read-only (3d-2c2b). */
-export type EvidenceSnapshot = SaverSnapshot & { closedBy: "submission" | null };
+export type EvidenceSnapshot = SaverSnapshot & {
+  closedBy: "submission" | null;
+  /** The server refused the last row for good (`meta.refusedLocalSeq`); only a reload sends it again. */
+  refused: boolean;
+};
 
 type Candidate = { doc: CanonicalDocument; gen: number; marks: number };
 type Contents = JournalContents<EvidenceSegmentTransaction>;
@@ -107,6 +111,7 @@ export class EvidenceSession {
   private stopped: EvidenceStop | null = null;
   /** §4: a submission closed the package; nothing is written or sent from here. */
   private closedBy: "submission" | null = null;
+  private refused = false;
   private profile: string | null = null;
   private work: OpenedWork | null = null;
   private runner: DrainRunner | null = null;
@@ -137,7 +142,8 @@ export class EvidenceSession {
   snapshot(): EvidenceSnapshot {
     // §4: the refused row stays on the device; that is no failure of this device.
     const failure = this.closedBy ? null : this.failure;
-    return { state: this.state(), failure, capacity: "ok", closedBy: this.closedBy };
+    const refused = !this.closedBy && this.state() === "ERROR" && this.refused;
+    return { state: this.state(), failure, capacity: "ok", closedBy: this.closedBy, refused };
   }
 
   subscribe(listener: (snapshot: EvidenceSnapshot) => void): () => void {
@@ -427,6 +433,7 @@ export class EvidenceSession {
       const contents = await this.deps.journal.readEvidence(this.id);
       if (contents.meta) {
         this.stored = contents.meta.state;
+        this.refused = contents.meta.refusedLocalSeq !== undefined;
         this.owed = contents.pending.length;
         if (STICKY.has(contents.meta.state)) this.halted = true;
       }
