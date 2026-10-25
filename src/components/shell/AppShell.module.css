@@ -186,6 +186,24 @@
   color: var(--ink-2);
 }
 
+/* "Početna", the first crumb: a link with a 44 px target (#802 part B). */
+.homeCrumb {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+
+.homeCrumb:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+.homeCrumb[aria-current="page"] {
+  color: var(--ink);
+}
+
 .actions {
   display: flex;
   align-items: center;
