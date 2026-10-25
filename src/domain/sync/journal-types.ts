@@ -113,6 +113,24 @@ export type EvidenceHead = { segmentHash: string | null; lastSequenceTo: number 
 /** Why the recorder stopped; the text after it is not covered by evidence. */
 export type EvidenceStop = "gap" | "unsupported_step" | "block_identity" | "too_large";
 
+/**
+ * F-8 3d-2b: the local text a document with evidence held when the author
+ * took the server's version (`adoptServerEvidence`). Kept on the device
+ * until the author lets it go; it blocks logout until then (owner decision
+ * #476 c.6385940910).
+ */
+export type SalvageCopy = {
+  id: number;
+  documentId: string;
+  document: CanonicalDocument;
+  /** The state the author left, or the stop of the recorder once nothing was owed. */
+  cause: "CONFLICT" | "RECOVERY_REQUIRED" | "EVIDENCE_STOPPED";
+  /** Set when the text was saved after the recorder had stopped. */
+  evidenceStopped?: EvidenceStop;
+  localSeq: number;
+  decidedAt: string;
+};
+
 /** The work as the open route reported it (`OpenedWork` of 3c is assignable). */
 export type EvidenceOpening = {
   documentId: string;
@@ -144,8 +162,18 @@ export type SyncMeta = {
   awaitingReceipt?: AwaitingReceipt;
   /** Set on a document with evidence; moves only on a verified receipt. */
   evidenceHead?: EvidenceHead;
-  /** Set once the recorder stopped; never cleared before logout. */
+  /** Set once the recorder stopped; cleared only by `adoptServerEvidence`. */
   evidenceStopped?: EvidenceStop;
+  /**
+   * On a document with evidence in CONFLICT: the highest revision a refusal
+   * named. The server's version that is taken must reach it.
+   */
+  conflictRevision?: number;
+  /**
+   * On a document with evidence in ERROR: the `localSeq` of the row the
+   * server last refused for good, with no hold left. Any other answer clears it.
+   */
+  refusedLocalSeq?: number;
 };
 
 /**
