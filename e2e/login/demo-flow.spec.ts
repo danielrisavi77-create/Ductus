@@ -1,11 +1,15 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { expect, test, type BrowserContext, type Page, type Request } from "@playwright/test";
 import pg from "pg";
 
+import { formatBibliographyEntry, formatInText } from "../../src/domain/citation/format";
+import { parseCitationStyle } from "../../src/domain/citation/style";
+import type { BookSource } from "../../src/domain/citation/types";
 import { DUCTUS_PROTOCOL_VERSION } from "../../src/domain/evidence/commit-envelope";
 import { canonicalizeJcs } from "../../src/domain/forensics/jcs";
 import type { JournalContents } from "../../src/domain/sync/journal-types";
@@ -28,6 +32,18 @@ import { appCookie, clickSignOut, SESSION_COOKIE, sessionRow, signIn } from "./s
 //
 // Accounts, course and text are invented (K-3, infra/fake-oidc).
 
+// Chromium draws a native date field in the language of the browser, not of the
+// context `locale` (hr-HR in the config): on the Linux CI runner the teacher's
+// form showed "mm/dd/yyyy" and "11/02/2026, 09:00 AM". The browser of this file
+// starts in Croatian, as a Croatian teacher's browser would, so the demo
+// screenshots show the dates as the teacher sees them.
+const BROWSER_ENV = Object.fromEntries(
+  Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
+);
+test.use({
+  launchOptions: { args: ["--lang=hr-HR"], env: { ...BROWSER_ENV, LANG: "hr_HR.UTF-8", LANGUAGE: "hr" } },
+});
+
 const run = promisify(execFile);
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 // A fixed invented name: an identical repeat returns the same course (create_course).
@@ -41,8 +57,38 @@ const COMMENT = "Dodaj izvor za ovu tvrdnju.";
 const LIVE_PATH = `/api/live/${LOCAL_DEMO_DOCUMENT_ID}`;
 const LIVE_READ_HEADERS = { "ductus-protocol": DUCTUS_PROTOCOL_VERSION };
 
+// F-8 (K-4c-1): an invented source; the citation and the entry are the FPZG
+// style's output for it (src/domain/citation), never copied strings.
+const FPZG = parseCitationStyle(JSON.parse(readFileSync(new URL("../../config/faculties/fpzg/citation.json", import.meta.url), "utf8")));
+const SOURCE: BookSource = {
+  type: "book", authors: [{ kind: "person", family: "Primjerić", given: "Iva" }], year: 2019,
+  title: "Izmišljene gradske knjižnice", place: "Zagreb", publisher: "Naklada Primjer",
+};
+const PAGES = "12-14";
+type Block = { type: "paragraph" } | { type: "heading"; level: number };
+const BLOCKS: readonly (Block & { text: string })[] = [
+  { type: "paragraph", text: DRAFT },
+  { type: "heading", level: 1, text: "Knjižnice kao javni prostor" },
+  { type: "paragraph", text: `Knjižnice su izmišljenog grada otvorene svima ${formatInText(SOURCE, FPZG, PAGES)}.` },
+  { type: "heading", level: 1, text: "Literatura" },
+  { type: "paragraph", text: formatBibliographyEntry(SOURCE, FPZG) },
+];
+const EXPECTED_TEXT = BLOCKS.map((block) => block.text).join("");
+const SYNC_PATH = /^\/api\/(evidence|live|submission)(\/|$)/;
+const isSyncUrl = (url: URL) => SYNC_PATH.test(url.pathname);
+
+/** Type, level and exact text of each block in the journal's snapshot. */
+const blocksOf = (contents: JournalContents) => contents.snapshot!.document.nodes.map((node) => ({
+  type: node.type, ...(node.type === "heading" ? { level: node.level } : {}),
+  text: node.children.map((child) => child.text).join(""),
+}));
+
 const editorOf = (page: Page) => page.getByRole("textbox", { name: t.workspace.documentLabel });
 const chipOf = (page: Page) => page.locator(".workspace__status .sync-chip");
+
+/** "Naslov 1" from the toolbar; the button keeps the selection in the sheet (EditorToolbar). */
+const heading1Of = (page: Page) =>
+  page.getByRole("toolbar", { name: t.toolbar.label }).getByRole("button", { name: t.toolbar.heading1, exact: true });
 
 /** Read-only evidence of the one journal, before a second account is opened. */
 async function localCheckpoint(page: Page): Promise<JournalContents> {
@@ -150,6 +196,7 @@ const STUDENT_ID = "demo-student@demo.ductus.test";
 const ASSIGNMENT_TITLE = "Izmišljeni zadatak o gradskim knjižnicama";
 let enrollmentCode: string | null = null;
 let enrolledCourse: string | null = null;
+let k4Assignment: string | null = null;
 
 /** The F-6 course of the demo teacher and its assignments, read as the local admin. */
 const k4Course = () => withAdmin(async (client) => {
@@ -173,6 +220,7 @@ test.afterEach(async () => {
   }
   enrolledCourse = null;
   enrollmentCode = null;
+  k4Assignment = null;
 });
 
 test("demo walk-through", async ({ browser, page, context }) => {
@@ -224,7 +272,14 @@ test("demo walk-through", async ({ browser, page, context }) => {
     await snapshot(page, "1-kolegij-stvoren");
 
     await page.getByLabel(t.teacher.assignment.title).fill("Izmišljeni zadatak o gradskim knjižnicama");
-    await page.getByLabel(t.teacher.assignment.opensAt).fill("2026-11-02T09:00");
+    // K-4e (#655): opened an hour ago, so the student can confirm this very
+    // assignment in step 2; the form reads the value in the browser's time zone.
+    const opened = await page.evaluate(() => {
+      const at = new Date(Date.now() - 3_600_000);
+      const two = (n: number) => String(n).padStart(2, "0");
+      return `${at.getFullYear()}-${two(at.getMonth() + 1)}-${two(at.getDate())}T${two(at.getHours())}:${two(at.getMinutes())}`;
+    });
+    await page.getByLabel(t.teacher.assignment.opensAt).fill(opened);
     await page.getByLabel(t.teacher.assignment.dueAt).fill("2026-12-15T09:00");
     await page.getByLabel(t.teacher.assignment.instructions).fill("Napiši kratak izmišljeni rad o gradskim knjižnicama.");
     // Art. 8 lists and their source stay on the screen before anything is published.
@@ -301,7 +356,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
       await expect(page.getByRole("heading", { level: 1, name: ASSIGNMENT_TITLE })).toBeVisible();
       await expect(page.getByRole("heading", { name: t.student.teacherHeading })).toBeVisible();
       await expect(editorOf(page)).toHaveCount(0);
-      // F-6 opens the assignment on 2 Nov 2026; before then the notice has no confirmation (FE-D8).
+      // F-6 opened the assignment an hour ago, so its notice can be confirmed (FE-D8).
       const { rows: [state] } = await withAdmin((client) => client.query<{ members: string; open: boolean }>(
         `SELECT (SELECT count(*) FROM institution.course_member m JOIN identity.user_account u ON u.id = m.user_id
                   WHERE m.course_id = $1 AND u.hr_edu_person_unique_id = $2 AND m.role = 'student'
@@ -310,19 +365,46 @@ test("demo walk-through", async ({ browser, page, context }) => {
                   ON v.assignment_id = a.id AND v.version_no = a.current_version WHERE a.id = $3) AS open`,
         [course, STUDENT_ID, assignmentId]));
       expect(Number(state!.members)).toBe(1);
-      await expect(page.getByRole("checkbox", { name: t.student.checkbox })).toHaveCount(state!.open ? 1 : 0);
+      expect(state!.open).toBe(true);
+      await expect(page.getByRole("checkbox", { name: t.student.checkbox })).toHaveCount(1);
       expect(evidenceRequests).toEqual([]);
+      k4Assignment = assignmentId;
       await snapshot(page, "2-upis-kodom-obavijest-zadatka");
     } finally {
       page.off("request", observe);
     }
   });
 
-  // The rest of F-7 on the F-6 assignment: confirming its notice (possible from
-  // its opening on 2 Nov) and writing in its own document, which waits for the
-  // editor to follow the assignment (F-113). The step below confirms the notice
-  // of the synthetic fixture instead.
-  await test.step.skip("2. F-7: potvrda obavijesti zadatka iz koraka 1 i pisanje u njegovom dokumentu", async () => {});
+  // K-4e (#655): the student confirms the notice of the very assignment the
+  // teacher published in step 1 and opens it in the workspace, which names its
+  // course and title. Known limit: the editor still writes the one local demo
+  // document, which belongs to the synthetic fixture course (comment-seed.ts),
+  // so the fixture step below stays for comments and the live view.
+  await test.step("2. F-7: studentica potvrđuje obavijest zadatka iz koraka 1 i otvara ga u radu", async () => {
+    expect(k4Assignment).not.toBeNull();
+    const id = k4Assignment!;
+    await expect(page).toHaveURL(`http://localhost:3000/zadatak/${id}`);
+    const { rows: [current] } = await withAdmin((client) => client.query<{ version: number }>(
+      "SELECT current_version AS version FROM institution.assignment WHERE id = $1", [id]));
+    const confirm = page.getByRole("button", { name: t.student.confirm });
+    await expect(confirm).toBeDisabled();
+    await page.getByRole("checkbox", { name: t.student.checkbox }).check();
+    const acknowledged = page.waitForResponse((response) =>
+      new URL(response.url()).pathname === `/api/institution/assignments/${id}/acknowledgment`);
+    await confirm.click();
+    const response = await acknowledged;
+    expect(response.status()).toBe(200);
+    expect(response.request().postDataJSON()).toEqual({ versionNo: current!.version });
+    const { rows } = await withAdmin((client) => client.query<{ version_no: number }>(
+      `SELECT n.version_no FROM institution.notice_acknowledgment n JOIN identity.user_account u ON u.id = n.student_id
+        WHERE n.assignment_id = $1 AND u.hr_edu_person_unique_id = $2`, [id, STUDENT_ID]));
+    expect(rows).toEqual([{ version_no: current!.version }]);
+    await page.getByRole("link", { name: t.student.openEditor }).click();
+    await page.waitForURL(`http://localhost:3000/rad?zadatak=${id}`);
+    await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+    await expect(page.locator(".brand-line__context")).toHaveText(`${COURSE_NAME} / ${ASSIGNMENT_TITLE}`);
+    await snapshot(page, "2-rad-na-zadatku-iz-koraka-1");
+  });
 
   await test.step("2. F-7 djelomično: studentica potvrđuje obavijest kroz stvarno sučelje", async () => {
     await seed();
@@ -495,12 +577,102 @@ test("demo walk-through", async ({ browser, page, context }) => {
     }
   });
 
-  // F-8 (demo point 2): proves headings, a citation and a bibliography in the
-  // FPZG style (plain text in the demo, D-98 addition), the real "spremljeno
-  // na uređaju" and "spremljeno na poslužitelju" states, and work without the
-  // network: the connection drops, writing goes on, nothing is lost, and the
-  // offline mark stays after the return (PRODUCT §5 rule 10).
-  await test.step.skip("2. F-8: naslovi, citat i bibliografija; rad bez mreže i povratak s oznakom", async () => {});
+  // F-8 text part (K-4c-1, #655): a heading from the toolbar, a citation and a
+  // bibliography in the FPZG style as plain text (D-98 addition), all written
+  // without the network. It claims only "spremljeno na uređaju": nothing in it
+  // reaches the server, and no server state is asserted.
+  await test.step("2. F-8: naslovi, citat i bibliografija bez mreže, spremljeni na uređaju", async () => {
+    const before = await localCheckpoint(page);
+    expect(blocksOf(before)).toEqual(BLOCKS.slice(0, 1));
+    const viewport = page.viewportSize();
+    // (b) Any request to the sync routes in this step fails it.
+    const syncRequests: string[] = [];
+    const observe = (request: Request) => {
+      const url = new URL(request.url());
+      if (isSyncUrl(url)) syncRequests.push(url.pathname);
+    };
+    page.on("request", observe);
+    await context.setOffline(true);
+    try {
+      await expect(page.locator(".offline-chip")).toHaveText(t.network.offline);
+      // The observer sees a request that the outage stops: an empty list below is not vacuous.
+      expect(await page.evaluate(() => fetch("/api/evidence/commit", { method: "POST" }).then(() => "sent", () => "failed"))).toBe("failed");
+      expect(syncRequests).toEqual(["/api/evidence/commit"]);
+      syncRequests.length = 0;
+
+      // At 1440 px every tool fits in the toolbar (toolbar-menus.spec.ts), none in "Više".
+      // The default viewport comes back in `finally`, so later steps keep their layout.
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await expect(heading1Of(page)).toBeVisible();
+      await editorOf(page).click();
+      await editorOf(page).press("Control+End");
+      for (const block of BLOCKS.slice(1)) {
+        await page.keyboard.press("Enter");
+        if (block.type === "heading") await heading1Of(page).click();
+        await page.keyboard.type(block.text);
+      }
+      await expect(editorOf(page)).toHaveText(EXPECTED_TEXT);
+      await expect(chipOf(page)).toHaveAttribute("data-state", "LOCAL_DURABLE");
+      const saved = await localCheckpoint(page);
+      expect(blocksOf(saved)).toEqual(BLOCKS);
+      expect(saved.meta!.localSeq).toBeGreaterThan(before.meta!.localSeq);
+      expect(saved.snapshot?.revision).toBe(before.snapshot?.revision);
+      // (a) The editor holds the function's output; a source one character off is not in it.
+      const [citationBlock, , entryBlock] = blocksOf(saved).slice(2);
+      expect(citationBlock!.text).not.toContain(formatInText({ ...SOURCE, year: SOURCE.year + 1 }, FPZG, PAGES));
+      expect(entryBlock!.text).not.toBe(formatBibliographyEntry({ ...SOURCE, year: SOURCE.year + 1 }, FPZG));
+      // The chapter heading uses the sheet type, not the browser's h1 (~33 px,
+      // synthetic bold): below 20 px, no larger than the sheet title, weight 500.
+      const typeOf = (locator: ReturnType<Page["locator"]>) =>
+        locator.evaluate((el) => {
+          const style = getComputedStyle(el);
+          return { size: parseFloat(style.fontSize), weight: Number(style.fontWeight) };
+        });
+      const chapter = await typeOf(editorOf(page).locator("h1").first());
+      const title = await typeOf(page.locator(".manuscript__title"));
+      expect(chapter.size).toBeLessThan(20);
+      expect(chapter.size).toBeLessThanOrEqual(title.size);
+      expect(chapter.weight).toBeLessThanOrEqual(500);
+      await attachCheckpoint("2-f8-tekst-bez-mreze.json", saved);
+      await snapshot(page, "2-f8-naslovi-citat-literatura-bez-mreze");
+
+      // (b) Nothing went to the server during the outage.
+      expect(syncRequests).toEqual([]);
+
+      // (c) A reload while the server is still out of reach. The page itself
+      // needs the network to load (no service worker), so only it gets the
+      // network back; every sync route stays cut off. With the network back the
+      // live publisher (#522, BACKEND 4.12 t. 8) may send the last state: it is
+      // not evidence, and it must be exactly the saved text. Nothing else goes.
+      const livePuts: (string | null)[] = [];
+      await page.route(isSyncUrl, (route) => {
+        if (route.request().method() === "PUT" && route.request().url().endsWith(LIVE_PATH)) livePuts.push(route.request().postData());
+        return route.abort("internetdisconnected");
+      });
+      await context.setOffline(false);
+      await page.reload();
+      await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+      await expect(editorOf(page)).toHaveText(EXPECTED_TEXT);
+      await expect(chipOf(page)).toHaveAttribute("data-state", "LOCAL_DURABLE");
+      const restored = await localCheckpoint(page);
+      expect(restored).toEqual(saved);
+      expect(syncRequests.filter((path) => path !== LIVE_PATH)).toEqual([]);
+      const savedBody = canonicalizeJcs(saved.snapshot!.document);
+      for (const body of livePuts) expect(body).toBe(savedBody);
+      await attachCheckpoint("2-f8-oporavljeno-nakon-reloada.json", restored);
+      await snapshot(page, "2-f8-oporavljeno-nakon-reloada");
+    } finally {
+      page.off("request", observe);
+      await page.unroute(isSyncUrl);
+      await context.setOffline(false);
+      if (viewport) await page.setViewportSize(viewport);
+    }
+  });
+
+  // The server part of F-8 waits for 3d-2b (#693; K-4c-2 in #655): "spremljeno
+  // na poslužitelju" only after a verified signed receipt, the offline text on
+  // the server after the return, and the offline mark after the return (PRODUCT §5 rule 10).
+  await test.step.skip("2. F-8 na poslužitelju: potpisana potvrda i oznaka rada bez mreže (3d-2b)", async () => {});
 
   await test.step("2. Studentica se odjavljuje", async () => {
     await signOut(page, token);
@@ -527,7 +699,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
     await signIn(page, "/rad", "Demo studentica");
     token = (await appCookie(context, SESSION_COOKIE))!.value;
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
-    await expect(editorOf(page)).toHaveText(DRAFT);
+    await expect(editorOf(page)).toHaveText(EXPECTED_TEXT);
     await expect(chipOf(page)).toHaveAttribute("data-state", "LOCAL_DURABLE");
     await expect(page.getByText(COMMENT, { exact: true })).toBeVisible();
     await snapshot(page, "2-vlasnica-nastavlja-nacrt");
