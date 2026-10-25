@@ -40,7 +40,11 @@ function post(body: unknown, headers: Record<string, string | undefined> = {}) {
   });
 }
 
-function setup(openRow: Record<string, unknown> | Error = OPENED, keys = [KEY("receipt", "k-r"), KEY("checkpoint", "k-c")]) {
+function setup(
+  openRow: Record<string, unknown> | Error = OPENED,
+  keys = [KEY("receipt", "k-r"), KEY("checkpoint", "k-c")],
+  submittedRows: unknown[] = [{ submitted: false }],
+) {
   const queries: { text: string; values: readonly unknown[] }[] = [];
   const withActor = vi.fn(async (_token: string | null, fn: (tx: ActorTransaction) => Promise<unknown>) => {
     const tx: ActorTransaction = {
@@ -50,6 +54,7 @@ function setup(openRow: Record<string, unknown> | Error = OPENED, keys = [KEY("r
           if (openRow instanceof Error) throw openRow;
           return { rows: [openRow] as never[], rowCount: 1 };
         }
+        if (text.includes("work_submitted")) return { rows: submittedRows as never[], rowCount: submittedRows.length };
         if (text.includes("evidence.package")) return { rows: [{ evidence_domain_id: DOMAIN }] as never[], rowCount: 1 };
         return { rows: keys as never[], rowCount: keys.length };
       },
@@ -78,10 +83,33 @@ describe("POST /api/evidence/open", () => {
       lastSequenceTo: 7,
       document: Buffer.from(SNAPSHOT, "utf8").toString("base64"),
       receiptKeys: [expect.objectContaining({ keyId: "k-r", purpose: "receipt", evidenceDomainId: DOMAIN })],
+      submitted: false,
     });
     // Neither package nor institution goes on the wire.
     expect(JSON.stringify(body)).not.toMatch(/package|institution/i);
-    expect(queries.map((q) => q.values)).toEqual([[ASSIGNMENT], ["dokument-1"], [DOMAIN]]);
+    expect(queries.map((q) => q.values)).toEqual([[ASSIGNMENT], [ASSIGNMENT], ["dokument-1"], [DOMAIN]]);
+    expect(queries[1]?.text).toMatch(/app\.work_submitted\(\$1::uuid\)/);
+  });
+
+  it.each([true, false])("carries submitted exactly as the database answers it (%s)", async (submitted) => {
+    const { deps } = setup(OPENED, undefined, [{ submitted }]);
+    const response = await handleEvidenceOpenRequest(post({ assignmentId: ASSIGNMENT }), deps);
+    expect(response.status).toBe(200);
+    expect((await response.json()).submitted).toBe(submitted);
+  });
+
+  it.each([
+    ["a string", [{ submitted: "true" }]],
+    ["a number", [{ submitted: 0 }]],
+    ["null", [{ submitted: null }]],
+    ["no column", [{}]],
+    ["no row", []],
+    ["two rows", [{ submitted: true }, { submitted: true }]],
+  ] as const)("is unavailable when submitted is %s, never false by assumption", async (_, rows) => {
+    const { deps, log } = setup(OPENED, undefined, [...rows]);
+    const response = await handleEvidenceOpenRequest(post({ assignmentId: ASSIGNMENT }), deps);
+    expect([response.status, await response.json()]).toEqual([503, { status: "unavailable", stage: "context" }]);
+    expect(log).toHaveBeenCalledWith("evidence open", "unavailable", "context", "work_malformed");
   });
 
   it.each([
