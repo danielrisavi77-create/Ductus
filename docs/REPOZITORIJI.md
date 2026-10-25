@@ -227,3 +227,7 @@ Mjerenje iz `docs/SESSIONS.md` §4a određuje redoslijed: najviše troše velič
 | [headroomlabs-ai/headroom](https://github.com/headroomlabs-ai/headroom) | Apache-2.0 | Proxy koji sažima povijest prije poziva. | Ne: sav promet ide kroz njega, telemetrija uključena po zadanom. |
 
 Odbijeno kao dodatni trošak ili dupliciranje postojećeg governancea: `github/spec-kit`, `bmad-code-org/BMAD-METHOD`, `ruvnet/ruflo`, `obra/superpowers` (SessionStart dodaje oko 3 KB u svaku sesiju), `Fission-AI/OpenSpec`, `buildermethods/agent-os`, `wshobson/agents` (preuzeta samo ideja modela po agentu).
+
+## 10. Istraživanje razvojnih alata — 25. 10. 2026.
+
+Pregled 55 kandidata u jedanaest kategorija (skillovi, hookovi, MCP, evali, testiranje, supply chain, baza, dokumenti, observability, orkestracija, granice otkaza) nalazi se u `docs/ISTRAZIVANJE-ALATA-2026-10-25.md`. Ne mijenja ovaj inventar i ne dodaje nijednu ovisnost: preporuke PROBATI i PRAĆENJE nisu odluka o instalaciji. Pet koraka plana uvođenja (Squawk, Jazzer.js, Toxiproxy, Syft, skillgrade) čeka nakon 2. 11. 2026. (D-107, D-108), svaki kao zaseban PR uz pravilo iz §1.
