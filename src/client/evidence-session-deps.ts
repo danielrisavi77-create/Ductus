@@ -71,6 +71,7 @@ export function browserEvidenceSessionDeps(input: BrowserEvidenceInput): Evidenc
       verifyFor: evidenceVerifierFor(work),
     }),
     watchSubmission: closed.watch,
+    storedProfile: (meta) => meta?.evidenceProfileId ?? null,
     network: {
       online: () => readOnline(source),
       onOnline: (listener) => {
