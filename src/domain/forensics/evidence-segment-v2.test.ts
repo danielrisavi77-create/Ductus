@@ -11,6 +11,7 @@ import {
   EVIDENCE_SEGMENT_SCHEMA_V2,
   EVIDENCE_SOURCES_V2,
   isEvidenceMinuteV2,
+  isEvidenceProfileIdV2,
   isEvidenceSegmentV2,
   type EvidenceSegmentV2,
 } from "./evidence-segment-v2";
@@ -60,6 +61,19 @@ function fixture(): EvidenceSegmentV2 {
     evidenceProfileId: "standard-v1",
   };
 }
+
+describe("EvidenceSegmentV2 profile id (#733)", () => {
+  it.each([
+    ["one character", "p", true], ["120 units", "p".repeat(120), true], ["a pair at the end", `${"p".repeat(118)}\u{1F4D6}`, true],
+    ["60 pairs (120 units)", "\u{1F4D6}".repeat(60), true], ["spaces around a character", " p ", true],
+    ["empty", "", false], ["only spaces", "   ", false], ["121 units", "p".repeat(121), false],
+    ["61 pairs (122 units)", "\u{1F4D6}".repeat(61), false], ["a lone high surrogate", "profil-\uD83D", false],
+    ["a lone low surrogate", "a\uDC00", false], ["a reversed pair", "\uDC00\uD83D", false], ["a number", 7, false],
+  ])("%s", (_name, value, taken) => {
+    expect(isEvidenceProfileIdV2(value)).toBe(taken);
+    expect(isEvidenceSegmentV2({ ...fixture(), evidenceProfileId: value })).toBe(taken);
+  });
+});
 
 describe("EvidenceSegmentV2", () => {
   it("has a stable independent canonical/hash vector", async () => {

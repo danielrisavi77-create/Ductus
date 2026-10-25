@@ -9,7 +9,7 @@ import { jcsUtf8Bytes } from "@/domain/forensics/jcs";
 import type { EvidenceOpening } from "@/domain/sync/journal-types";
 import type { BuiltSegment } from "@/editor/capture";
 import {
-  answer, capture, committed, DOC, deps, journalKit, openedAfter, PROFILE, R0, raw, receiptKey, save, UTC, type Chain,
+  answer, capture, committed, DOC, deps, journalKit, openedAfter, PROFILE, R0, raw, receiptKey, save, shifting, UTC, type Chain,
 } from "@/lib/sync/evidence-test-kit";
 
 import type { AtomicDexieJournal } from "./atomic-dexie-journal";
@@ -248,6 +248,8 @@ describe("BE-2: the evidence profile of the work (#476 c.6392622568)", () => {
     ["no profile", undefined], ["an empty profile", ""], ["a profile over 120 characters", "p".repeat(121)], ["a number", 7],
     // The segment validator refuses both later (evidence-segment-v2.ts), so the opening is refused now.
     ["a profile of only spaces", "   "], ["61 characters outside the BMP (122 UTF-16 units)", "\u{1F4D6}".repeat(61)],
+    // #733: well-formed UTF-16 only, as canonical JSON needs.
+    ["a lone high surrogate", "profil-\uD83D"], ["a lone low surrogate", "a\uDC00"], ["a reversed pair", "\uDC00\uD83D"],
   ])("an opening with %s is refused without a write", async (_name, evidenceProfileId) => {
     const opening = { ...chain.opened, evidenceProfileId } as unknown as EvidenceOpening;
     const fresh = open();
@@ -266,6 +268,22 @@ describe("BE-2: the evidence profile of the work (#476 c.6392622568)", () => {
     // 60 characters outside the BMP are 120 UTF-16 units: the segment takes them, so the journal does.
     await journal.startEvidence(DOC, { ...chain.opened, evidenceProfileId: "\u{1F4D6}".repeat(60) }, UTC);
     expect(await profileOf(journal)).toBe("\u{1F4D6}".repeat(60));
+  });
+
+  it("startEvidence reads each field of the answer once and writes what it checked (#733)", async () => {
+    const { opening, reads } = shifting(chain.opened);
+    const journal = open();
+    await journal.startEvidence(DOC, opening, UTC);
+    const { meta, snapshot } = await journal.readEvidence(DOC);
+    expect(meta).toMatchObject({
+      evidenceProfileId: PROFILE,
+      evidenceHead: { segmentHash: chain.opened.headSegmentHash, lastSequenceTo: chain.opened.lastSequenceTo },
+    });
+    expect(snapshot?.revision).toBe(chain.opened.currentRevision);
+    expect(jcsUtf8Bytes(snapshot!.document)).toEqual(chain.opened.document);
+    for (const field of ["documentId", "currentRevision", "lastSequenceTo", "headSegmentHash", "evidenceProfileId", "documentHash", "document"]) {
+      expect(reads[field], field).toBe(1);
+    }
   });
 
   it("a record from before BE-2 reads without a profile, still takes segments, and the journal never makes one up", async () => {

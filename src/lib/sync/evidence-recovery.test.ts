@@ -9,7 +9,8 @@ import type { BuiltSegment } from "@/editor/capture";
 import type { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
 
 import {
-  capture, DOC, journalKit, json, openedAfter, PROFILE, R0, raw, receiptKey, runnerFor, save, server, trusted, UTC, type Chain,
+  capture, DOC, journalKit, json, openedAfter, PROFILE, R0, raw, receiptKey, runnerFor, save, server, shifting, trusted, UTC,
+  type Chain,
 } from "./evidence-test-kit";
 
 /**
@@ -65,6 +66,21 @@ async function refuses(journal: AtomicDexieJournal, code: string, write: () => P
 }
 
 describe("F-8 3d-2b1: leaving CONFLICT and RECOVERY_REQUIRED", () => {
+  it("#733: a confirmed take reads each field of the answer once and writes what it checked", async () => {
+    const journal = await refused(2, chainConflict());
+    const { opening, reads } = shifting(SERVER);
+    const meta = await journal.adoptServerEvidence(DOC, opening, true, DECIDED, await seqOf(journal));
+    expect(meta).toMatchObject({
+      evidenceHead: { segmentHash: OTHER[1]!.sha256, lastSequenceTo: 2 }, evidenceProfileId: PROFILE,
+    });
+    const after = await journal.readEvidence(DOC);
+    expect(after.meta).toEqual(meta);
+    expect(after.snapshot?.revision).toBe(R0 + 2);
+    expect(jcsUtf8Bytes(after.snapshot!.document)).toEqual(SERVER.document);
+    for (const field of ["documentId", "currentRevision", "lastSequenceTo", "headSegmentHash", "evidenceProfileId", "documentHash", "document"]) {
+      expect(reads[field], field).toBe(1);
+    }
+  });
   it.each(["stale_base", "chain_conflict", "not_continuous"])("1: after %s nothing is taken without a confirmation", async (status) => {
     const journal = await refused(2, json(409, { status, currentRevision: R0 + 2 }));
     expect((await journal.readEvidence(DOC)).meta?.state).toBe("CONFLICT");
