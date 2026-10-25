@@ -14,6 +14,7 @@ import {
   type FastPathLoad,
   type FastPathRecord,
   type FastPathStudent,
+  type WorkState,
 } from "./fast-path";
 
 const t = messagesHr.fastPath;
@@ -73,7 +74,7 @@ function Roster({ students }: { readonly students: readonly FastPathStudent[] })
                 onClick: () => pick(s.id),
               },
               h("span", { className: styles.name }, fullName(s)),
-              h("span", { className: styles.meta }, t.work[s.work]),
+              workState(s.work),
               h("span", { className: styles.meta }, whenText(s.lastChangeAt)),
             ),
           ),
@@ -87,7 +88,7 @@ function Roster({ students }: { readonly students: readonly FastPathStudent[] })
         "div",
         { className: styles.head },
         h("h2", { id: "brz-put-student", className: styles.studentName }, fullName(current)),
-        h("span", { className: styles.meta }, t.work[current.work]),
+        workState(current.work),
         current.record
           ? h(
               "div",
@@ -116,6 +117,20 @@ function Roster({ students }: { readonly students: readonly FastPathStudent[] })
         : h("p", { className: styles.state }, t.noRecordYet),
       h("p", { className: styles.open }, t.openWork, " ", h("span", { className: "soon" }, t.soon)),
     ),
+  );
+}
+
+/**
+ * #732 item 17: the state of a work, with a dot in its token colour before the
+ * word. The word carries the meaning; the dot only helps the eye find it and is
+ * hidden from assistive technology. The list stays in surname order (D-80).
+ */
+function workState(work: WorkState) {
+  return h(
+    "span",
+    { className: styles.meta },
+    h("span", { className: styles.dot, "data-work": work, "aria-hidden": "true" }),
+    t.work[work],
   );
 }
 

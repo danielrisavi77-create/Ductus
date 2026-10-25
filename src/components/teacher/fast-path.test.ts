@@ -107,6 +107,17 @@ describe("FastPath states", () => {
     const html = render({ state: "ready", students: DEMO_FAST_PATH });
     expect(html).not.toMatch(/<select|<textarea|<input|<form/);
   });
+
+  it("puts a hidden dot before each state word and keeps the surname order (#732 item 17)", () => {
+    const works = ["submitted", "notice_pending", "revision_requested", "writing"] as const;
+    const students = works.map((work, i) => ({ ...student("Ana", `Prezime${i}`), work }));
+    const html = render({ state: "ready", students });
+    for (const work of works) {
+      expect(html).toMatch(new RegExp(`<span[^>]*data-work="${work}"[^>]*aria-hidden="true"[^>]*></span>${t.work[work]}`));
+    }
+    const order = students.map((s) => html.indexOf(`Ana ${s.surname}`));
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
 });
 
 describe("text coverage", () => {
