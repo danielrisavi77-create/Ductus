@@ -124,9 +124,12 @@ function canonical(json: object): CanonicalDocument {
   return result.doc;
 }
 
+// The invented profile of the work, as the open route would name it (BE-2).
+const PROFILE = "profil-izmisljeni";
+
 async function openingOf(document: CanonicalDocument, revision: number, head: string | null, lastSequenceTo: number): Promise<EvidenceOpening> {
   const bytes = jcsUtf8Bytes(document);
-  return { documentId: DOC, currentRevision: revision, documentHash: await sha256Hex(bytes), headSegmentHash: head, lastSequenceTo, document: bytes };
+  return { documentId: DOC, currentRevision: revision, documentHash: await sha256Hex(bytes), headSegmentHash: head, lastSequenceTo, document: bytes, evidenceProfileId: PROFILE };
 }
 
 const journal = new AtomicDexieJournal(config.scope);
@@ -190,7 +193,7 @@ const harness: EvidenceHarness = {
       documentId: DOC,
       sessionId,
       segmentId: crypto.randomUUID(),
-      evidenceProfileId: "profil-izmisljeni",
+      evidenceProfileId: PROFILE,
       sequenceFrom: (tail ? tail.sequenceTo : meta!.evidenceHead!.lastSequenceTo) + 1,
       predecessorSegmentHash: tail ? tail.segmentHash : meta!.evidenceHead!.segmentHash,
     });
