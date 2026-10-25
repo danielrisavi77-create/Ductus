@@ -12,6 +12,8 @@ const PAGES = [
   { name: "prijava", path: "/prijava" },
   // Signed out here; the teacher view is attached by e2e/login/fast-path.spec.ts.
   { name: "brz-put", path: "/nastavnik/brz-put" },
+  // The Croatian not-found page (#732 item 3).
+  { name: "not-found", path: "/ova-adresa-ne-postoji" },
 ];
 const LOCALES = ["hr"] as const;
 // The shell is always dark (D-115); the sheet is dark by default, white with the switch on /rad (D-123).

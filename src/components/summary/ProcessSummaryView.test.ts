@@ -206,6 +206,12 @@ describe("ProcessSummaryView: thresholds, pastes, gaps and evidence kind", () =>
     expect(smaller).toContain(`${t.pastes.smallerThreshold} 200 znakova`);
   });
 
+  it("names a threshold without its internal label (#732 item 12)", () => {
+    const text = textOf(tree(summaryWith()));
+    expect(text).toContain("prag: nova sesija počinje nakon stanke dulje od 30 minuta");
+    expect(text).not.toMatch(/P-0\d/);
+  });
+
   it("follows the configured thresholds, not fixed values", () => {
     const view = tree(EMPTY);
     expect(numbered(view, "sessions")[0]).toContain(`${t.sessions.threshold} 45 minuta`);
