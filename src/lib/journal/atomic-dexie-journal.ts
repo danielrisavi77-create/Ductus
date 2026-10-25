@@ -31,6 +31,7 @@ import Dexie, { type DexieOptions, type Table } from "dexie";
 import { validateDocument, type CanonicalDocument, type DocumentTransaction } from "../../domain/document";
 import { verifyDocumentSnapshot } from "../../domain/document/snapshot";
 import { verifyCanonicalEvidencePayloadV2 } from "../../domain/forensics/evidence-chain-v2";
+import { isEvidenceProfileIdV2 } from "../../domain/forensics/evidence-segment-v2";
 import { commitRequestFromTransaction } from "../../domain/serverSync/contract";
 import type {
   EvidenceOpening, EvidenceSegmentInput, EvidenceSegmentTransaction, EvidenceStop, EvidenceTiming,
@@ -281,8 +282,10 @@ async function verifyOpening(documentId: string, opened: EvidenceOpening): Promi
   if (opened?.documentId !== documentId || !validSeq(opened.currentRevision) ||
       !validSeq(opened.lastSequenceTo) ||
       !(head === null || (typeof head === "string" && SHA256_HEX.test(head))) ||
-      // As `evidence.package` allows it: 1 to 120 characters.
-      typeof profile !== "string" || profile.length < 1 || profile.length > 120 ||
+      // Only a profile a segment can carry (not blank, at most 120 UTF-16
+      // units), so a work opened now can still build segments offline later.
+      // `evidence.package` counts characters, so it is never looser than this.
+      !isEvidenceProfileIdV2(profile) ||
       !(opened.document instanceof Uint8Array)) {
     throw new JournalError("invalid_input");
   }

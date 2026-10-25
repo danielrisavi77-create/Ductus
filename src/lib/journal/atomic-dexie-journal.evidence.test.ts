@@ -246,6 +246,8 @@ describe("BE-2: the evidence profile of the work (#476 c.6392622568)", () => {
 
   it.each([
     ["no profile", undefined], ["an empty profile", ""], ["a profile over 120 characters", "p".repeat(121)], ["a number", 7],
+    // The segment validator refuses both later (evidence-segment-v2.ts), so the opening is refused now.
+    ["a profile of only spaces", "   "], ["61 characters outside the BMP (122 UTF-16 units)", "\u{1F4D6}".repeat(61)],
   ])("an opening with %s is refused without a write", async (_name, evidenceProfileId) => {
     const opening = { ...chain.opened, evidenceProfileId } as unknown as EvidenceOpening;
     const fresh = open();
@@ -261,6 +263,9 @@ describe("BE-2: the evidence profile of the work (#476 c.6392622568)", () => {
     expect(await profileOf(journal)).toBe("p".repeat(120));
     await journal.startEvidence(DOC, { ...chain.opened, evidenceProfileId: "profil-drugi" }, UTC);
     expect(await profileOf(journal)).toBe("profil-drugi");
+    // 60 characters outside the BMP are 120 UTF-16 units: the segment takes them, so the journal does.
+    await journal.startEvidence(DOC, { ...chain.opened, evidenceProfileId: "\u{1F4D6}".repeat(60) }, UTC);
+    expect(await profileOf(journal)).toBe("\u{1F4D6}".repeat(60));
   });
 
   it("a record from before BE-2 reads without a profile, still takes segments, and the journal never makes one up", async () => {
