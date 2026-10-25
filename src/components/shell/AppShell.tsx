@@ -6,7 +6,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 
 import styles from "./AppShell.module.css";
-import { navFor, type ShellRole } from "./nav";
+import { accountPlace, homeHref, navFor, type ShellRole } from "./nav";
 import SessionObserver from "./SessionObserver";
 import ShellLogout from "./ShellLogout";
 import type { ShellSession } from "./shell-session";
@@ -54,7 +54,7 @@ function ThemeToggle() {
 }
 
 export type AppShellProps = {
-  /** The role the server read for this page; null shows no navigation and no account. */
+  /** The role the server read for this page; null shows no navigation and no role label. */
   role: ShellRole | null;
   /**
    * The session cookie this page was rendered under (`shellSession`). The
@@ -62,7 +62,11 @@ export type AppShellProps = {
    * in the shell ends the earlier session's tabs (D-118, F-113 t.1).
    */
   session: ShellSession;
-  /** Journal scope the sign-out reads before posting (D-118); null: dialog without a number. */
+  /**
+   * Journal scope the sign-out reads before posting (D-118). A scope means a
+   * signed-in person, so the sign-out shows with it, with or without a role;
+   * null: no sign-out unless the page brings its own `account`.
+   */
   scope: string | null;
   /** The href of the navigation item this page belongs to, if any. */
   current?: string;
@@ -91,6 +95,8 @@ export default function AppShell({ role, session, scope, current, crumbs, accoun
   const sidebar = useRef<HTMLElement>(null);
   const menuButton = useRef<HTMLButtonElement>(null);
   const items = navFor(role);
+  const home = homeHref(role);
+  const place = accountPlace(scope, account !== undefined);
 
   // The inline script runs only when the server's HTML is parsed; after a
   // client-side navigation the new shell reads the saved theme here, before
@@ -147,7 +153,7 @@ export default function AppShell({ role, session, scope, current, crumbs, accoun
       </noscript>
       {open ? <div className={styles.shade} onClick={close} aria-hidden="true" /> : null}
       <aside ref={sidebar} className={styles.sidebar} data-open={open} aria-label={t.shell.sideNav} id="bocna-navigacija">
-        <Link className={styles.brand} href={role === "teacher" ? "/nastavnik" : "/"} aria-label={t.shell.home}>
+        <Link className={styles.brand} href={home} aria-label={t.shell.home}>
           <Logo />
           <span>{t.app.name}</span>
         </Link>
@@ -177,17 +183,19 @@ export default function AppShell({ role, session, scope, current, crumbs, accoun
             <strong>{t.shell.demoBadge}</strong>
             {t.shell.demoNote}
           </p>
-          {account !== undefined ? (
+          {place === "own" ? (
             <div className={styles.account}>
               {role !== null ? <span className={styles.who}>{t.shell.role[role]}</span> : null}
               {account}
             </div>
-          ) : role !== null ? (
+          ) : place === "signOut" ? (
+            // A signed-in person always has a way out, also without a role
+            // read for this page (#802 part B); the role label only with one.
             <ShellLogout
               scope={scope}
               className={styles.account}
               buttonClassName={styles.signOut}
-              lead={<span className={styles.who}>{t.shell.role[role]}</span>}
+              lead={role !== null ? <span className={styles.who}>{t.shell.role[role]}</span> : null}
             >
               <Icon name="logout" />
             </ShellLogout>
@@ -207,10 +215,19 @@ export default function AppShell({ role, session, scope, current, crumbs, accoun
           >
             <Icon name="menu" />
           </button>
+          {/* "Početna" stays in the top bar at every width, also while the
+              side bar is a closed drawer (#802 part B). */}
           <nav aria-label={t.shell.breadcrumb} className={styles.crumbs}>
+            <Link
+              className={styles.homeCrumb}
+              href={home}
+              aria-current={crumbs.length === 0 ? "page" : undefined}
+            >
+              {t.shell.homeCrumb}
+            </Link>
             {crumbs.map((crumb, i) => (
               <span key={i} className={styles.crumb} aria-current={i === crumbs.length - 1 ? "page" : undefined}>
-                {i > 0 ? <Icon name="chevron" /> : null}
+                <Icon name="chevron" />
                 {crumb}
               </span>
             ))}
