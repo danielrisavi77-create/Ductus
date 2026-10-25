@@ -34,6 +34,7 @@ export const hr = {
     home: `${APP_NAME}, početna`,
     space: { teacher: "Nastavnički prostor", student: "Studentski prostor" },
     nav: {
+      assignments: "Moji zadaci",
       courses: "Moji kolegiji",
       newCourse: "Novi kolegij i zadatak",
       fastPath: "Brz put",
@@ -647,6 +648,18 @@ export const hr = {
   // in this assignment; D-63 for the skipped long pauses of the replay.
   student: {
     title: "Zadatak",
+    // #711 contract 6404612273: the student's own courses and assignments.
+    assignments: {
+      title: "Moji zadaci",
+      heading: "Moji zadaci",
+      signedOut: "Prijavi se da vidiš svoje zadatke.",
+      unavailable: "Popis trenutačno nije dostupan.",
+      empty: "Zasad nisi upisan/a ni u jedan kolegij.",
+      enroll: "Upiši kolegij kodom",
+      noAssignments: "U ovom kolegiju zasad nema zadatka.",
+      due: "Rok {time}",
+      noticeFirst: "Prvo pročitaj obavijest",
+    },
     signedOut: "Prijavi se da vidiš zadatak.",
     signIn: "Prijavi se",
     enroll: {

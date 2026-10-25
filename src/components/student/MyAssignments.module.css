@@ -1,0 +1,83 @@
+/* #711 "Moji zadaci", design S2 (docs/design/ductura), on the D-123 tokens (app/globals.css). */
+.course {
+  border: 1px solid var(--rule-2);
+  border-radius: 10px;
+  background: var(--chrome);
+}
+
+.courseHead {
+  margin: 0;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--rule-2);
+  font-family: var(--ff-display);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.none {
+  padding: 14px 18px;
+  color: var(--ink-3);
+}
+
+.assignments {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.assignment {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "title notice" "meta notice";
+  gap: 2px 14px;
+  align-items: center;
+  padding: 12px 18px;
+  border-top: 1px solid var(--hover);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+li:first-child > .assignment {
+  border-top: 0;
+}
+
+.assignment:hover {
+  background: var(--hover);
+}
+
+.assignment:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.title {
+  grid-area: title;
+  font-size: 13.5px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  grid-area: meta;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.notice {
+  grid-area: notice;
+  font-size: 12px;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .assignment {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "title" "meta" "notice";
+  }
+
+  .meta,
+  .notice {
+    font-size: 13px;
+  }
+}
