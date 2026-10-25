@@ -63,6 +63,6 @@ pnpm demo:up:native
 - Podaci su u `%LOCALAPPDATA%\Ductus\native-data\` (baza, objekti, zapisi). Za potpuno nov početak zaustavi runner i obriši tu mapu.
 - Svi portovi (PostgreSQL 54329, rustfs 9100, OIDC 8090, aplikacija 3000) slušaju samo na `127.0.0.1`. `psql` se spaja samo kroz lokalni socket, nikad kroz TCP.
 - Ctrl+C zaustavlja aplikaciju, OIDC, rustfs i PostgreSQL. `pnpm demo:up:native --stop` zaustavlja procese prethodnog pokretanja koje je prekid ostavio.
-- `pnpm demo:up:native --prepare-only` samo priprema bazu (kao `demo:prepare`), a `--no-demo-data` preskače izmišljeni kolegij i zadatak (K-3b2), kao CI.
+- `pnpm demo:up:native --prepare-only` samo priprema bazu (kao `demo:prepare`), a `--no-demo-data` preskače izmišljeni kolegij i zadatak (K-3b2). Windows CI posao prijavni E2E pokreće s demo podacima, jer K-3 potvrđuje ulogu "Demo nastavnik".
 
 Granice: Mailpit se ne pokreće, pa lokalna pošta ne postoji. `pnpm test:db` (pgTAP), `pnpm demo:bootstrap-accounts` i E2E testovi koji traže Docker i dalje trebaju Compose. Baza koristi ugrađeni locale `C.UTF-8` (PG17), a ne `en_US.utf8` iz Composea, pa redoslijed po zadanoj kolaciji može biti drukčiji; migracije koriste izričit `COLLATE "C"`. rustfs pri startu provjerava ima li novije verzije (`version.rustfs.com`) i to se ne može isključiti. Pokretanje na Windowsima dokazuje posao `Demo native` u CI-ju.

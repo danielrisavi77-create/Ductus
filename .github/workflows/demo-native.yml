@@ -59,20 +59,25 @@ jobs:
       - name: Install login browser
         shell: bash
         run: bash scripts/engineering/playwright-install.sh chromium
+      # With the K-3 demo data, as the demo is run: "Demo nastavnik" is a
+      # confirmed teacher (T6), which on Compose an earlier spec provisions
+      # through docker. The specs that call docker stay on Compose CI.
       - name: Login E2E against the native runner
         env:
           E2E_REUSE_SERVER: "1"
         run: |
           $logs = Join-Path $env:RUNNER_TEMP "native-runner"
           New-Item -ItemType Directory -Force -Path $logs | Out-Null
-          $runner = Start-Process -FilePath node -ArgumentList "scripts/demo/native/up.mjs","--no-demo-data" -NoNewWindow -PassThru `
+          $runner = Start-Process -FilePath node -ArgumentList "scripts/demo/native/up.mjs" -NoNewWindow -PassThru `
             -RedirectStandardOutput (Join-Path $logs "stdout.log") -RedirectStandardError (Join-Path $logs "stderr.log")
           $ready = $false
           for ($i = 0; $i -lt 120 -and -not $runner.HasExited; $i++) {
             try { Invoke-WebRequest -Uri http://localhost:3000/ -UseBasicParsing -TimeoutSec 10 | Out-Null; $ready = $true; break } catch { Start-Sleep -Seconds 5 }
           }
           if (-not $ready) { pnpm demo:up:native --stop; throw "the native app did not answer on port 3000" }
-          pnpm exec playwright test --config playwright.login.config.ts login sign-out shell-sign-out prijava session-and-panels submission
+          pnpm exec playwright test --config playwright.login.config.ts `
+            e2e/login/login.spec.ts e2e/login/sign-out.spec.ts e2e/login/shell-sign-out.spec.ts `
+            e2e/login/prijava.spec.ts e2e/login/session-and-panels.spec.ts e2e/login/submission.spec.ts
           $code = $LASTEXITCODE
           pnpm demo:up:native --stop
           exit $code
@@ -99,12 +104,18 @@ jobs:
           name: playwright-report-login-native
           path: playwright-report-login/
           retention-days: 14
+      # upload-artifact takes paths under one root, so the logs are copied in.
+      - name: Collect native logs
+        if: ${{ failure() }}
+        run: |
+          New-Item -ItemType Directory -Force -Path native-logs/runner, native-logs/data | Out-Null
+          Copy-Item -Recurse -ErrorAction SilentlyContinue (Join-Path $env:RUNNER_TEMP "native-runner/*") native-logs/runner
+          Copy-Item -Recurse -ErrorAction SilentlyContinue (Join-Path $env:LOCALAPPDATA "Ductus/native-data/logs/*") native-logs/data
+          exit 0
       - name: Upload native logs
         if: ${{ failure() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: native-logs
-          path: |
-            ${{ runner.temp }}/native-runner/
-            ~/AppData/Local/Ductus/native-data/logs/
+          path: native-logs/
           retention-days: 7
