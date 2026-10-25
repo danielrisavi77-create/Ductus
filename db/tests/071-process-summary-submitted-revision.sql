@@ -94,5 +94,17 @@ INSERT INTO evidence.package (
 RESET ROLE;
 SELECT is(pg_temp.summary('vesna'), 'unavailable', 'two packages of a submitted document give unavailable');
 
+-- The submitted revision is the last accepted one (B8): the cut changes nothing.
+SELECT is(pg_temp.call('tomo', 'pkg-b', 'request-b1',
+    pg_temp.descriptor(p_package => 'pkg-b', p_document => 'doc-b', p_segment => 'segment-b-1'),
+    0, repeat('c', 64), repeat('d', 64), repeat('b', 64)), 'reserved', 'fixture: Tomo commits revision 1');
+SELECT is(pg_temp.summary('tomo', 'doc-b'), 'found 1 b', 'fixture: before the submission Tomo reads up to the head');
+SELECT is(pg_temp.ask('tomo', $$ SELECT outcome FROM app.request_submission('doc-b', 1) $$), 'requested',
+  'fixture: Tomo requests revision 1');
+SELECT is(pg_temp.ask('tomo', format('SELECT outcome FROM app.record_submission(%L::uuid, %L)',
+    (SELECT id::text FROM evidence.submission_request WHERE document_id = 'doc-b'), pg_temp.h('d'))),
+  'recorded', 'fixture: the submission of Tomo''s last revision is recorded');
+SELECT is(pg_temp.summary('tomo', 'doc-b'), 'found 1 b', 'a submission of the head revision reads as before');
+
 SELECT * FROM finish();
 ROLLBACK;
