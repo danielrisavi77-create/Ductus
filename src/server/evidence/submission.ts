@@ -1,17 +1,11 @@
-import {
-  decideSubmission,
-  issueSubmissionReceipt,
-  type SubmissionBlockReason,
-} from "@/application/evidence/submission-decision";
+import { decideSubmission, type SubmissionBlockReason } from "@/application/evidence/submission-decision";
 import type { InstitutionEvidencePayloadReader } from "@/application/ports/evidence-reconstruction";
 import type { SigningKeyProvider } from "@/application/ports/signing-key-provider";
-import {
-  isSubmissionInstant,
-  SUBMISSION_RECEIPT_SCHEMA_V1,
-  type SignedSubmissionReceiptV1,
-} from "@/domain/forensics/submission-receipt";
+import { isSubmissionInstant } from "@/domain/forensics/submission-receipt";
+import type { SignedSubmissionReceiptV2 } from "@/domain/forensics/submission-receipt-v2";
 import type { WithActor } from "@/server/db/with-actor";
 
+import { issueSubmissionReceiptV2 } from "./submission-receipt";
 import { reconstructSubmissionRecord } from "./submission-record";
 
 /**
@@ -20,13 +14,13 @@ import { reconstructSubmissionRecord } from "./submission-record";
  * click, in its own transaction; the record of its revision is then
  * reconstructed and only a `submit` decision lets `record_submission` run,
  * with the hash of the reconstructed document, never a value of the request.
- * The receipt is signed from the stored submission on every answer (P4).
+ * The receipt v2 is signed and bound once and then returned unchanged (DAN-291).
  */
 
 export type SubmissionStage = "request" | "record" | "chain" | "storage" | "verification" | "submission" | "signing";
 
 export type SubmissionOutcome =
-  | { status: "submitted"; receipt: SignedSubmissionReceiptV1 }
+  | { status: "submitted"; receipt: SignedSubmissionReceiptV2 }
   | { status: "blocked"; reason: SubmissionBlockReason }
   | { status: "stale_revision"; currentRevision: number }
   | { status: "already_requested"; revision: number }
@@ -157,8 +151,7 @@ export async function submitWork(
   ) {
     return unavailable("submission", "submission_malformed");
   }
-  const issued = await issueSubmissionReceipt(deps.signer, {
-    receiptSchema: SUBMISSION_RECEIPT_SCHEMA_V1,
+  const issued = await issueSubmissionReceiptV2(deps, token, {
     submissionId: stored.id,
     evidenceDomainId: record.evidenceDomainId,
     principalId: record.principalId,
@@ -176,5 +169,5 @@ export async function submitWork(
   });
   return issued.status === "signed"
     ? { status: "submitted", receipt: issued.receipt }
-    : unavailable("signing", issued.reason);
+    : unavailable("signing", issued.code);
 }

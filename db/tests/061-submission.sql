@@ -269,7 +269,7 @@ SELECT matches(pg_temp.ask_as('ductus_evidence', 'anon',
   '^428C9:', 'the lateness flag cannot be written at all');
 SELECT matches(pg_temp.ask_as('ductus_evidence', 'anon', $$ DELETE FROM evidence.submission RETURNING 1 $$),
   '^ZD403:', 'the owner cannot delete a submission');
-SELECT matches(pg_temp.ask_as('ductus_evidence', 'anon', $$ TRUNCATE evidence.submission, evidence.submission_receipt_issuance $$),
+SELECT matches(pg_temp.ask_as('ductus_evidence', 'anon', $$ TRUNCATE evidence.submission, evidence.submission_receipt_issuance, evidence.submission_receipt $$),
   '^ZD403:', 'the owner cannot truncate submissions');
 
 -- Composite keys (F6, D-103): no field can drift from the request it completes.

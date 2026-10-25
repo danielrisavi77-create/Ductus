@@ -17,7 +17,7 @@ import type { EvidenceOpening, QueuedTransaction, SyncMeta } from "../../src/dom
 import { CaptureError, changeOf, EvidenceRecorder } from "../../src/editor/capture";
 import { canonicalToTiptap, tiptapToCanonical } from "../../src/editor/interop";
 import { createEditorExtensions } from "../../src/editor/schema";
-import { AtomicDexieJournal, JournalError } from "../../src/lib/journal/atomic-dexie-journal";
+import { AtomicDexieJournal, JournalError, type LogoutHold } from "../../src/lib/journal/atomic-dexie-journal";
 import { createDrainRunner, type DrainStepResult } from "../../src/lib/sync/drain-runner";
 import { createEvidenceTransport, evidenceVerifierFor } from "../../src/lib/sync/evidence-transport";
 
@@ -74,6 +74,8 @@ export type EvidenceHarness = {
   salvage(): Promise<{ id: number; cause: string; text: string; localSeq: number }[] | Failure>;
   release(id: number): Promise<null | Failure>;
   logout(): Promise<null | Failure>;
+  /** What the sign-out of a page without the editor reads (D-118). */
+  peek(scope: string): Promise<LogoutHold | Failure>;
   databases(): Promise<string[] | null>;
   /** Whether this engine's Web Crypto verifies Ed25519 at all. */
   ed25519(): Promise<boolean>;
@@ -252,6 +254,7 @@ const harness: EvidenceHarness = {
     await journal.destroyForLogout();
     return null;
   }),
+  peek: (scope) => attempt(() => AtomicDexieJournal.peekLogoutHold(scope)),
   async databases() {
     if (typeof indexedDB.databases !== "function") return null;
     return (await indexedDB.databases()).map((database) => database.name ?? "");
