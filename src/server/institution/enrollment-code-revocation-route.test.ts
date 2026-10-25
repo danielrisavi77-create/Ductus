@@ -10,9 +10,9 @@ vi.mock("@/server/db", () => ({ withActor: vi.fn() }));
 const ORIGIN = "https://ductus.example";
 const COURSE = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const TOKEN = "A".repeat(43);
-const URL = `${ORIGIN}/api/institution/courses/${COURSE}/enrollment-code/revocation`;
+const ROUTE_URL = `${ORIGIN}/api/institution/courses/${COURSE}/enrollment-code/revocation`;
 const request = (body: BodyInit = "{}", headers: Record<string, string> = {}) =>
-  new Request(URL, { method: "POST", headers: { origin: ORIGIN, "content-type": "application/json", ...headers }, body });
+  new Request(ROUTE_URL, { method: "POST", headers: { origin: ORIGIN, "content-type": "application/json", ...headers }, body });
 function port(revoked: unknown = true) {
   const query = vi.fn().mockResolvedValue({ rows: [{ revoked }], rowCount: 1 });
   const withActor = vi.fn(async (_token: unknown, fn: (tx: ActorTransaction) => Promise<unknown>) =>
@@ -55,7 +55,7 @@ describe("teacher enrollment code revocation HTTP boundary", () => {
     }
     const { run, deps, withActor } = port();
     for (const method of ["GET", "DELETE", "PUT"]) {
-      const response = await run(new Request(URL, { method, headers: { origin: ORIGIN } }));
+      const response = await run(new Request(ROUTE_URL, { method, headers: { origin: ORIGIN } }));
       expect(response.status).toBe(405);
       expect(await response.json()).toEqual({ error: "method_not_allowed" });
     }
@@ -105,6 +105,20 @@ describe("teacher enrollment code revocation HTTP boundary", () => {
     } as unknown as ReadableStreamDefaultReader<Uint8Array<ArrayBuffer>>);
     expect((await run(broken)).status).toBe(400);
     expect(withActor).not.toHaveBeenCalled();
+  });
+
+  it("holds the body limit at exactly 64 bytes and refuses a byte order mark", async () => {
+    expect(MAX_REVOCATION_BODY_BYTES).toBe(64);
+    const { run, withActor } = port();
+    const at = await run(request("{}" + " ".repeat(62)));
+    expect(at.status).toBe(200);
+    const over = await run(request("{}" + " ".repeat(63)));
+    expect(over.status).toBe(413);
+    expect(await over.json()).toEqual({ error: "body_too_large" });
+    const marked = await run(request(new Uint8Array([0xef, 0xbb, 0xbf, 0x7b, 0x7d])));
+    expect(marked.status).toBe(400);
+    expect(await marked.json()).toEqual({ error: "invalid_json" });
+    expect(withActor).toHaveBeenCalledTimes(1);
   });
 
   it("ends stalled body reading within five seconds", async () => {
