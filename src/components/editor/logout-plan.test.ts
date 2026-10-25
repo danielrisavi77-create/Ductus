@@ -1,9 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
 import { findForbiddenTerms } from "../../../scripts/forbidden-terms/terms";
-import { logoutText } from "./logout-plan";
+import {
+  closeReply,
+  copyText,
+  DISCARD_LIMIT_MS,
+  logoutText,
+  nextDiscardStep,
+  settleDiscard,
+  type DiscardEvent,
+  type DiscardStep,
+} from "./logout-plan";
 
 const t = messagesHr.auth;
 
@@ -41,5 +50,144 @@ describe("sign-out dialog text (FE-D7, D-118)", () => {
       expect(text).not.toMatch(/poslužitelj|šalje|poslan|sinkron/i);
       expect(findForbiddenTerms(text), text).toEqual([]);
     }
+  });
+});
+
+describe("copy kept outside the work (3d-2c, P3 and P4 a)", () => {
+  it.each([
+    [1, "Na ovom uređaju čuva se 1 kopija teksta koja nije u radu."],
+    [2, "Na ovom uređaju čuvaju se 2 kopije teksta koje nisu u radu."],
+    [4, "Na ovom uređaju čuvaju se 4 kopije teksta koje nisu u radu."],
+    [5, "Na ovom uređaju čuva se 5 kopija teksta koje nisu u radu."],
+    [11, "Na ovom uređaju čuva se 11 kopija teksta koje nisu u radu."],
+    [21, "Na ovom uređaju čuva se 21 kopija teksta koja nije u radu."],
+  ])("names %i copies in agreeing Croatian", (copies, sentence) => {
+    const shown = copyText(copies);
+    expect(shown?.text).toBe(sentence);
+    expect(shown?.note).toBe(t.logoutCopyKept);
+    expect(shown?.newestOnly).toBe(copies > 1 ? t.copyNewestOnly : null);
+  });
+
+  it("shows no copy part without a copy or with a count that is not a count", () => {
+    for (const copies of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(copyText(copies)).toBeNull();
+    }
+  });
+
+  // P4 (a), D-118: sign-out closes the session and never deletes the copy.
+  it("says that sign-out keeps the copy, tied to the student on this device", () => {
+    expect(t.logoutCopyKept).toMatch(/ne briše/);
+    expect(t.logoutCopyKept).toMatch(/vezana uz tebe na ovom uređaju/);
+  });
+
+  it("never claims anything about the server and uses no forbidden term", () => {
+    const texts = [
+      ...Object.values(t.logoutCopy),
+      t.logoutCopyKept,
+      t.copyTitle,
+      t.copyNewestOnly,
+      t.copyRestore,
+      t.copyDiscard,
+      t.copyDiscardAsk,
+      t.copyDiscardConfirm,
+      t.copyKeep,
+      t.copyDiscardFailed,
+    ];
+    for (const text of texts) {
+      expect(text).not.toMatch(/poslužitelj|šalje|poslan|sinkron/i);
+      expect(findForbiddenTerms(text), text).toEqual([]);
+    }
+  });
+});
+
+describe("discarding a copy takes two clicks (P3)", () => {
+  const steps: DiscardStep[] = ["idle", "confirm", "working", "failed"];
+  const events: DiscardEvent[] = ["ask", "keep", "confirm", "done", "error"];
+  const run = (...sequence: DiscardEvent[]) => sequence.reduce<DiscardStep>(nextDiscardStep, "idle");
+
+  it("discards only after asking and then confirming", () => {
+    expect(run("ask")).toBe("confirm");
+    expect(run("ask", "confirm")).toBe("working");
+    expect(run("ask", "confirm", "done")).toBe("idle");
+  });
+
+  it("never starts a discard from one click", () => {
+    expect(run("confirm")).toBe("idle");
+    expect(run("confirm", "confirm")).toBe("idle");
+    expect(run("ask", "keep", "confirm")).toBe("idle");
+  });
+
+  it("keeps the copy on Escape or Zadrži, and after a failure asks again", () => {
+    expect(run("ask", "keep")).toBe("idle");
+    expect(run("ask", "confirm", "error")).toBe("failed");
+    expect(run("ask", "confirm", "error", "confirm")).toBe("failed");
+    expect(run("ask", "confirm", "error", "ask")).toBe("confirm");
+  });
+
+  it("reaches working only from confirm, for every step and event", () => {
+    for (const from of steps) {
+      for (const event of events) {
+        const to = nextDiscardStep(from, event);
+        expect(steps).toContain(to);
+        if (to === "working" && from !== "working") {
+          expect([from, event]).toEqual(["confirm", "confirm"]);
+        }
+      }
+    }
+  });
+
+  it("ignores a second confirm or ask while the discard runs", () => {
+    for (const event of ["ask", "keep", "confirm"] as const) {
+      expect(nextDiscardStep("working", event)).toBe("working");
+    }
+  });
+});
+
+describe("a discard never holds the dialog (D-118)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("settles when the discard settles", async () => {
+    await expect(settleDiscard(async () => undefined)).resolves.toBeUndefined();
+    await expect(settleDiscard(() => Promise.reject(new Error("no")))).rejects.toThrow("no");
+  });
+
+  it("fails a discard that throws before it returns a promise", async () => {
+    const run = (() => {
+      throw new Error("sync");
+    }) as () => Promise<void>;
+    await expect(settleDiscard(run)).rejects.toThrow("sync");
+  });
+
+  it("fails a discard that never settles once the limit passes", async () => {
+    vi.useFakeTimers();
+    const settled = settleDiscard(() => new Promise<void>(() => undefined));
+    const outcome = expect(settled).rejects.toThrow("discard_timeout");
+    await vi.advanceTimersByTimeAsync(DISCARD_LIMIT_MS);
+    await outcome;
+  });
+
+  it("keeps a discard that settles before the limit", async () => {
+    vi.useFakeTimers();
+    let done!: () => void;
+    const settled = settleDiscard(() => new Promise<void>((resolve) => (done = resolve)));
+    await vi.advanceTimersByTimeAsync(DISCARD_LIMIT_MS - 1);
+    done();
+    await expect(settled).resolves.toBeUndefined();
+  });
+});
+
+describe("a close the dialog did not ask for", () => {
+  const off = { busy: false, asking: false, withdrawn: false };
+
+  it("counts as Ostani only when nothing runs, asks or was just taken back", () => {
+    expect(closeReply(off)).toBe("stay");
+    expect(closeReply({ ...off, busy: true })).toBe("reopen");
+    expect(closeReply({ ...off, asking: true })).toBe("reopen");
+  });
+
+  it("opens again after Escape took the question back (second Escape)", () => {
+    expect(closeReply({ ...off, withdrawn: true })).toBe("reopen");
   });
 });

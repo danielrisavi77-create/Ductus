@@ -754,6 +754,22 @@ export const hr = {
     },
     logoutKept:
       "Zapis ostaje vezan uz tebe na ovom uređaju i nastavljaš ga kad se ponovno prijaviš. Osoba koja se nakon tebe prijavi na ovom uređaju ne vidi tvoj rad.",
+    // 3d-2c, P3 and P4 (a): a copy kept outside the work stays on sign-out.
+    logoutCopy: {
+      one: "Na ovom uređaju čuva se {n} kopija teksta koja nije u radu.",
+      few: "Na ovom uređaju čuvaju se {n} kopije teksta koje nisu u radu.",
+      many: "Na ovom uređaju čuva se {n} kopija teksta koje nisu u radu.",
+    },
+    logoutCopyKept:
+      "Odjava kopiju ne briše. Ostaje vezana uz tebe na ovom uređaju i ponovno je vidiš kad se prijaviš.",
+    copyTitle: "Kopija teksta",
+    copyNewestOnly: "Radnje se odnose na najnoviju kopiju.",
+    copyRestore: "Vrati tekst u rad",
+    copyDiscard: "Odbaci kopiju",
+    copyDiscardAsk: "Odbačena kopija ne može se vratiti. Odbaciti je?",
+    copyDiscardConfirm: "Da, odbaci kopiju",
+    copyKeep: "Zadrži kopiju",
+    copyDiscardFailed: "Kopija nije odbačena i ostaje na ovom uređaju. Pokušaj ponovno.",
     logoutFailed: "Odjava nije dovršena jer poslužitelj nije odgovorio. Ništa nije izbrisano. Provjeri vezu i pokušaj ponovno.",
     signedOutElsewhere:
       "Prijava s kojom je ova kartica otvorena više ne vrijedi: u drugoj kartici provedena je odjava ili nova prijava. Ova kartica više ništa ne prikazuje ni ne sprema. Ponovno učitaj stranicu.",

@@ -96,3 +96,13 @@
   opacity: 0.6;
   cursor: default;
 }
+
+/* The copy kept outside the work (3d-2c, P3), set apart from the sign-out text. */
+.copy {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+}
