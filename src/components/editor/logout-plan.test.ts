@@ -45,6 +45,38 @@ describe("sign-out dialog text (FE-D7, D-118)", () => {
     expect(logoutText({ unsaved: true, pending: 3 })).toMatchObject({ note: t.logoutKept, offerExport: true });
   });
 
+  // 3d-2c2b O3: after a submission the held steps are never sent.
+  it.each([
+    [1, "1 izmjena nakon predaje postoji samo na ovom uređaju i ne šalje se."],
+    [3, "3 izmjene nakon predaje postoje samo na ovom uređaju i ne šalju se."],
+    [5, "5 izmjena nakon predaje postoji samo na ovom uređaju i ne šalje se."],
+  ])("after a submission names %i held steps as never sent, with no promise to continue", (pending, sentence) => {
+    const shown = logoutText({ unsaved: false, pending, submitted: true });
+    expect(shown).toEqual({ text: `${sentence} Odjava zatvara sesiju.`, note: null, offerExport: false });
+  });
+
+  it("after a submission, nothing held and unstored text read as before", () => {
+    expect(logoutText({ unsaved: false, pending: 0, submitted: true }).text).toBe(t.logoutPlain);
+    expect(logoutText({ unsaved: true, pending: 2, submitted: true }).text).toBe(t.logoutUnsaved);
+  });
+
+  it("the submission texts use no forbidden term and never say the work is saved on the server", () => {
+    const texts = [messagesHr.editor.submittedReadOnly, ...Object.values(t.logoutAfterSubmission)];
+    for (const text of texts) {
+      expect(findForbiddenTerms(text)).toEqual([]);
+      expect(text).not.toMatch(/spremljeno|poslužitelj|sinkron/i);
+    }
+  });
+
+  // 3d-2c2 §3: no notice of the evidence session says the work is on the server.
+  it("the conflict and refusal notices use no forbidden term and never claim the server holds the text", () => {
+    for (const text of [messagesHr.editor.evidenceConflict, messagesHr.editor.sendRefused]) {
+      expect(findForbiddenTerms(text)).toEqual([]);
+      expect(text).not.toMatch(/spremljeno na poslužitelju|sinkronizirano/i);
+      if (/spremljen/i.test(text)) expect(text).toMatch(/spremljen na uređaju/i);
+    }
+  });
+
   // I4: the app sends nothing yet, so the dialog speaks only of this device.
   it("never claims anything reached or will reach the server", () => {
     const texts = [t.logoutPlain, t.logoutKept, t.logoutUnsaved, ...Object.values(t.logoutPending)];

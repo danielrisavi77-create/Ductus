@@ -11,6 +11,23 @@ import { messagesHr } from "../../src/lib/i18n/messages.hr";
 export const SESSION_COOKIE = "__Host-ductus_session";
 export const LOGIN_COOKIE = "__Host-ductus_login";
 
+/**
+ * The chip once typed text is in the journal (3d-2c2, G2 c.6393716541): on
+ * `/rad?zadatak=` the evidence session sends it on while the browser is
+ * online, so the chip may already have moved on to sending or to the signed
+ * receipt. Offline and on `/rad` without an assignment it stays LOCAL_DURABLE.
+ */
+export const SAVED_HERE = /^(LOCAL_DURABLE|SYNCING|SYNCED)$/;
+
+/**
+ * The first opening of an assignment's work POSTs the open and refreshes the
+ * render, which mounts the editor and its panel afresh (#731). A test acts on
+ * the sheet only once the refreshed editor shows its toolbar.
+ */
+export async function editorMounted(page: Page): Promise<void> {
+  await expect(page.getByRole("toolbar", { name: messagesHr.toolbar.label })).toBeVisible({ timeout: 30_000 });
+}
+
 // The admin login of the compose database reads identity.session to check
 // what the browser cannot see: the session row behind the cookie.
 const ADMIN_DATABASE_URL =

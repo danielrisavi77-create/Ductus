@@ -37,6 +37,7 @@
  *   cookie, stops for good and clears the sheet (src/client/session-marks.ts).
  */
 
+import type { Transaction } from "@tiptap/pm/state";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import {
   createContext, useContext, useEffect, useRef, useState, type FormEvent, type ReactNode,
@@ -57,11 +58,14 @@ import { storableDocument } from "@/editor/storable-text";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { createLivePublisher, type LivePublisher } from "@/client/live-publisher";
 import { editorPlan, readLogoutHold } from "@/client/logout-hold";
+import { SourceObserver } from "@/editor/source";
 import { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
-import {
-  LocalDocumentSaver, type SaverFailure, type SaverSnapshot,
-} from "@/lib/journal/local-document-saver";
+import type { SaverFailure } from "@/lib/journal/local-document-saver";
 
+import {
+  createDocumentSaver, evidenceNotice, writingClosed, type DocumentSaver, type DocumentSnapshot,
+} from "./document-saver";
+import type { EvidenceSession } from "./evidence-session";
 import LogoutDialog from "./LogoutDialog";
 import { endRun } from "./run-refs";
 import { nothingHeld, type LogoutPlan } from "./logout-plan";
@@ -89,7 +93,7 @@ type LockedLogout = {
 type LocalDocumentValue = {
   editor: Editor | null;
   phase: Phase;
-  snapshot: SaverSnapshot | null;
+  snapshot: DocumentSnapshot | null;
   words: number;
   invalid: boolean;
   /** Stops writing and says what a sign-out would leave behind (FE-D7). */
@@ -144,10 +148,16 @@ function sameIds(editor: Editor, doc: CanonicalDocument): boolean {
 }
 
 export function LocalDocumentProvider({
-  scope, documentId, session = null, livePublish = false, children,
+  scope, documentId, assignmentId = null, session = null, livePublish = false, children,
 }: {
   scope: string;
   documentId: string;
+  /**
+   * The assignment whose work `documentId` is (F1 plan `assignment`). With it
+   * the sheet records, chains and sends the evidence (3d-2c2); without it no
+   * request goes to `/api/evidence/*` (W6).
+   */
+  assignmentId?: string | null;
   session?: SessionMark | null;
   /**
    * True only when the page read that this student acknowledged the current
@@ -158,7 +168,7 @@ export function LocalDocumentProvider({
   children: ReactNode;
 }) {
   const [phase, setPhase] = useState<Phase>("loading");
-  const [snapshot, setSnapshot] = useState<SaverSnapshot | null>(null);
+  const [snapshot, setSnapshot] = useState<DocumentSnapshot | null>(null);
   const [words, setWords] = useState(0);
   const [invalid, setInvalid] = useState(false);
   // Set while this tab holds the lock with an editable document.
@@ -168,7 +178,11 @@ export function LocalDocumentProvider({
   const sheetOwnerRef = useRef<string | null>(null);
   const markTag = session?.tag ?? null;
   const markAt = session?.at ?? 0;
-  const saverRef = useRef<LocalDocumentSaver | null>(null);
+  const saverRef = useRef<DocumentSaver | null>(null);
+  // Set while an evidence session writes the sheet; it alone records changes.
+  const evidenceRef = useRef<EvidenceSession | null>(null);
+  // Only watches the editor's events (3d-1c, I6); one per provider.
+  const [observer] = useState(() => new SourceObserver());
   const editorRef = useRef<Editor | null>(null);
   const readyRef = useRef(false);
   const dirtyRef = useRef(false);
@@ -200,7 +214,7 @@ export function LocalDocumentProvider({
   });
 
   const editor = useEditor({
-    extensions: [...createEditorExtensions(t.editor.placeholder), StorableInput],
+    extensions: [...createEditorExtensions(t.editor.placeholder), StorableInput, observer.extension],
     editable: false,
     immediatelyRender: false,
     editorProps: {
@@ -221,6 +235,23 @@ export function LocalDocumentProvider({
     },
   });
   editorRef.current = editor;
+
+  // Every change the author makes while the sheet is writable, with its
+  // source; loading the stored document happens while it is not (3d-2c2 §2).
+  useEffect(() => {
+    if (!editor) return;
+    const onTransaction = ({ transaction, appendedTransactions }: {
+      transaction: Transaction; appendedTransactions: Transaction[];
+    }) => {
+      const evidence = evidenceRef.current;
+      if (!evidence) return;
+      const all = [transaction, ...appendedTransactions];
+      const seen = observer.take(all);
+      if (readyRef.current) evidence.record(all, seen, Date.now());
+    };
+    editor.on("transaction", onTransaction);
+    return () => { editor.off("transaction", onTransaction); };
+  }, [editor, observer]);
 
   useEffect(() => {
     const flush = () => flushRef.current();
@@ -265,6 +296,13 @@ export function LocalDocumentProvider({
       // Nothing more is published for a session that has ended.
       publisherRef.current?.stop();
       flush();
+      // The typed text still reaches the journal; then no timer, step or
+      // listener of the evidence session outlives the session (3d-2c2 §4).
+      const evidence = evidenceRef.current;
+      if (evidence) {
+        evidence.pause();
+        void evidence.settled().then(() => evidence.close());
+      }
       disposed = true;
       readyRef.current = false;
       abort.abort();
@@ -325,11 +363,19 @@ export function LocalDocumentProvider({
         journal.close();
         return;
       }
-      const saver = new LocalDocumentSaver(journal, documentId);
+      // Only the tab holding the lock opens the work (3d-2c2 §4, one writer).
+      const { saver, evidence } = createDocumentSaver({ journal, documentId, assignmentId });
       // The cleanup's flush may still emit after `setSnapshot(null)`; what the
       // old saver reports then must not come back as the next lock's notice.
       const unsubscribe = saver.subscribe((next) => {
-        if (!disposed) setSnapshot(next);
+        if (disposed) return;
+        setSnapshot(next);
+        // A submission closed the package, or the server's work differs: the
+        // sheet takes no more text, as nothing more would be kept or sent.
+        if (writingClosed(next) && readyRef.current) {
+          readyRef.current = false;
+          if (!editor.isDestroyed) editor.setEditable(false, false);
+        }
       });
       // This run's own values: the refs are shared with the next run (F-125 t. 2).
       let publisher: LivePublisher | null = null;
@@ -341,6 +387,7 @@ export function LocalDocumentProvider({
         // or document's sheet, nor into the one emptied when a session ended.
         startFreshHistory(editor.view, "keep");
         saverRef.current = saver;
+        evidenceRef.current = evidence;
         setSnapshot(saver.snapshot());
         if (result.kind !== "unavailable" && result.document) {
           // The only way stored ids enter the editor (#226): validated, never
@@ -358,8 +405,10 @@ export function LocalDocumentProvider({
           setPhase(result.kind);
           return;
         }
-        readyRef.current = true;
-        editor.setEditable(true, false);
+        if (!writingClosed(saver.snapshot())) {
+          readyRef.current = true;
+          editor.setEditable(true, false);
+        }
         setPhase("ready");
         // Only a signed-in person who acknowledged the notice publishes; the
         // local demo journal never does.
@@ -377,6 +426,8 @@ export function LocalDocumentProvider({
             own?.stop();
             readyRef.current = false;
             editor.setEditable(false, false);
+            // No new send starts behind the dialog; the one in flight ends (W4).
+            evidence?.pause();
             await saver.settled();
             // A first save that failed leaves the journal empty while the
             // sheet holds text; only the saver's state tells.
@@ -385,8 +436,11 @@ export function LocalDocumentProvider({
           },
           resume: () => {
             if (disposed) return;
-            readyRef.current = true;
-            editor.setEditable(true, false);
+            evidence?.resume();
+            if (!writingClosed(saver.snapshot())) {
+              readyRef.current = true;
+              editor.setEditable(true, false);
+            }
             own?.start();
           },
           clear: async () => {
@@ -406,7 +460,10 @@ export function LocalDocumentProvider({
         });
       } finally {
         endRun({ publisher: publisherRef, logout: logoutRef }, { publisher, logout: locked });
+        if (evidenceRef.current === evidence) evidenceRef.current = null;
+        evidence?.pause();
         await saver.settled();
+        evidence?.close();
         unsubscribe();
         journal.close();
       }
@@ -444,7 +501,7 @@ export function LocalDocumentProvider({
       window.removeEventListener("storage", recheck);
       window.removeEventListener("pageshow", recheck);
     };
-  }, [editor, scope, documentId, markTag, markAt, livePublish]);
+  }, [editor, scope, documentId, assignmentId, markTag, markAt, livePublish]);
 
   // Writing stays stopped from here until "Ostani" or the end of the
   // session, so the count the dialog shows cannot grow behind it (I2).
@@ -452,8 +509,11 @@ export function LocalDocumentProvider({
     const locked = logoutRef.current;
     if (!locked) return { unsaved: false, pending: null };
     const unsaved = await locked.quiesce();
+    // After a submission the steps still held are never sent (3d-2c2 O3).
+    const submitted = saverRef.current?.snapshot().closedBy === "submission";
     // The whole scope, as the shell counts it (O2): every document of this person.
-    return editorPlan(unsaved, await readLogoutHold(scope));
+    const plan = editorPlan(unsaved, await readLogoutHold(scope));
+    return submitted ? { ...plan, submitted } : plan;
   };
 
   const staySignedIn = () => logoutRef.current?.resume();
@@ -534,6 +594,11 @@ const FAILURE_TEXT: Record<Failure, string> = {
   corrupt: t.editor.recovery,
 };
 
+const EVIDENCE_TEXT = {
+  conflict: t.editor.evidenceConflict,
+  refused: t.editor.sendRefused,
+} as const;
+
 function exportText(editor: Editor): void {
   const text = editor.getText({ blockSeparator: "\n\n" });
   const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
@@ -549,7 +614,9 @@ export function LocalEditor() {
   const value = useLocalDocument();
   const { editor, phase } = value;
   const failure = failureOf(value);
+  const notice = phase === "ready" || phase === "recovery" ? evidenceNotice(value.snapshot) : null;
   const alert = phase === "signed-out" ? t.auth.signedOutElsewhere
+    : notice ? EVIDENCE_TEXT[notice]
     : phase === "recovery" ? t.editor.recovery : failure ? FAILURE_TEXT[failure] : null;
   const canExport = editor !== null && (alert !== null) && !editor.isEmpty;
   return (
@@ -559,7 +626,9 @@ export function LocalEditor() {
         {alert ? <p>{alert}</p> : null}
       </div>
       <div className="editor-notice" role="status">
-        {phase === "blocked" ? <p>{t.editor.blockedHint}</p> : null}
+        {phase === "blocked" ? <p>{t.editor.blockedHint}</p>
+          : phase === "ready" && value.snapshot?.closedBy === "submission" ? <p>{t.editor.submittedReadOnly}</p>
+          : null}
       </div>
       {canExport ? (
         <button type="button" className="btn editor-export" onClick={() => exportText(editor)}>

@@ -540,6 +540,21 @@ describe("3d-2c2 evidence session: the drain", () => {
     }
   });
 
+  it("3d-2c2b: a final refusal (413) is refused; a 503 and a 426 are not", async () => {
+    const cases = [[json(413, { status: "too_large" }), true], [json(503, {}), false], [json(426, { status: "upgrade_required" }), false]] as const;
+    for (const [answer, refused] of cases) {
+      const { session } = setup({ net: server(R0, () => answer.clone()) });
+      await ready(session);
+      const sheet = editorFor(session);
+      sheet.type("x");
+      await sheet.save();
+      expect(session.snapshot().state).toBe("ERROR");
+      expect(session.snapshot().refused).toBe(refused);
+      session.close();
+      await cleanup();
+    }
+  });
+
   it("transport errors are retried on schedule with the same key and bytes", async () => {
     const net = server(R0, () => new TypeError("offline"), () => json(503, {}));
     const { session, advance } = setup({ net });
@@ -767,7 +782,7 @@ describe("3d-2c2a §4 (DAN-289 A1): a submission closes the session", () => {
     const sheet = editorFor(session);
     sheet.type("x");
     await sheet.save();
-    expect(session.snapshot()).toEqual({ state: "LOCAL_DURABLE", failure: null, capacity: "ok", closedBy: "submission" });
+    expect(session.snapshot()).toEqual({ state: "LOCAL_DURABLE", failure: null, capacity: "ok", closedBy: "submission", refused: false });
   });
 
   it("S2-S4: after it nothing is recorded, saved, started or sent, and the refused row stays", async () => {
