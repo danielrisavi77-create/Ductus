@@ -1,0 +1,450 @@
+/**
+ * F-8 3d-2c2 (DAN-37, contract #476 c.6391714810): the saving of a document
+ * with evidence in `/rad?zadatak=`, with the surface `LocalDocument` already
+ * uses from `LocalDocumentSaver` (`load`, `edit`, `propose`, `settled`,
+ * `snapshot`, `subscribe`) and `record`, `pause`, `resume`, `close`.
+ *
+ * - Every change the editor applies is recorded with its source; each local
+ *   save turns the closed events into segments, replays each over the
+ *   journal's snapshot (W2) and saves it (`saveSegment`). A stop of the
+ *   recorder or a failed replay saves the text without evidence
+ *   (`saveUncovered`), and nothing is recorded or chained after it (W3).
+ * - The head of the chain and the sequence always come from the journal,
+ *   never from this object (D4); the `localSeq` it expects is its own, so a
+ *   write of another instance is `stale`.
+ * - The drain runs only while the browser reports a network (G2,
+ *   c.6393716541) and at most one step at a time. SYNCED is shown only from
+ *   the journal's meta after a receipt verified in this page session (W1,
+ *   G3): a reload starts at LOCAL_DURABLE.
+ *
+ * React-free; the adapters come in through `EvidenceSessionDeps`
+ * (`src/client/evidence-session-deps.ts` in the browser).
+ */
+
+import type { Node as PmNode } from "@tiptap/pm/model";
+import type { Transaction } from "@tiptap/pm/state";
+
+import type { OpenedWork, OpenOutcome } from "@/client/evidence-ingest";
+import { validateDocument, type CanonicalDocument } from "@/domain/document";
+import type { AsyncEvidenceStepReplayerV2 } from "@/domain/forensics/evidence-replay-v2";
+import { replayEvidenceSegmentsV2 } from "@/domain/forensics/evidence-replay-v2";
+import { canonicalizeJcs, type JcsJsonValue } from "@/domain/forensics/jcs";
+import type {
+  EvidenceSegmentTransaction, EvidenceStop, JournalContents, SyncMeta,
+} from "@/domain/sync/journal-types";
+import { restoreSyncState } from "@/domain/sync/restore";
+import type { SyncState } from "@/domain/sync/states";
+import { CaptureError, EvidenceRecorder } from "@/editor/capture";
+import { NO_OBSERVATION, recordWithSource, type SourceObservation } from "@/editor/source";
+import type { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
+import {
+  failureOf, type LoadResult, type SaverFailure, type SaverSnapshot,
+} from "@/lib/journal/local-document-saver";
+import type { DrainRunner } from "@/lib/sync/drain-runner";
+
+export type EvidenceJournal = Pick<AtomicDexieJournal, "readEvidence" | "startEvidence" | "saveSegment" | "saveUncovered">;
+
+/** Whether the browser reports a network, and a call on each `online` event. */
+export type NetworkSignal = { online(): boolean; onOnline(listener: () => void): () => void };
+
+export type EvidenceSessionDeps = {
+  journal: EvidenceJournal;
+  documentId: string;
+  /** `openWork(assignmentId)`; a throw counts as `unavailable`. */
+  open: () => Promise<OpenOutcome>;
+  replayer: () => AsyncEvidenceStepReplayerV2<PmNode>;
+  /** The drain runner over this journal, verifying receipts with `work`'s keys only. */
+  createRunner: (work: OpenedWork) => DrainRunner;
+  network: NetworkSignal;
+  /**
+   * The evidence profile the journal keeps for the document, for building
+   * segments while the open route cannot be reached (O3 b, c.6392622568).
+   * TODO(BE-2): pass `(meta) => meta?.evidenceProfileId ?? null` once BE-2
+   * stores it with `startEvidence`; until then no profile is stored, and
+   * segments wait for a successful `open` (O3 a, a known limit).
+   */
+  storedProfile?: (meta: SyncMeta | null) => string | null;
+  now?: () => Date;
+  /** The drain runner's clock, for its `notBefore`. */
+  clock?: () => number;
+  newId?: () => string;
+  setTimer?: (run: () => void, ms: number) => unknown;
+  clearTimer?: (handle: unknown) => void;
+};
+
+type Candidate = { doc: CanonicalDocument; gen: number; marks: number };
+type Contents = JournalContents<EvidenceSegmentTransaction>;
+
+const STICKY: ReadonlySet<SyncState> = new Set(["CONFLICT", "RECOVERY_REQUIRED"]);
+const HALTING: ReadonlySet<SaverFailure> = new Set(["corrupt", "stale", "unavailable"]);
+const decoder = new TextDecoder();
+
+export class EvidenceSession {
+  private loaded = false;
+  private halted = false;
+  private closed = false;
+  private paused = false;
+  private failure: SaverFailure | null = null;
+  /** The journal's meta state as last read or written; SYNCED is shown only with `syncedHere`. */
+  private stored: SyncState | null = null;
+  private syncedHere = false;
+  private seq = 0;
+  private gen = 0;
+  private cleanGen = 0;
+  private recorded = 0;
+  private stopped: EvidenceStop | null = null;
+  private profile: string | null = null;
+  private work: OpenedWork | null = null;
+  private runner: DrainRunner | null = null;
+  private recorder: EvidenceRecorder | null = null;
+  private sessionId = "";
+  private next: Candidate | null = null;
+  private saving = false;
+  private flight: Promise<void> | null = null;
+  private stepping: Promise<void> | null = null;
+  private stepAgain = false;
+  private opening: Promise<void> | null = null;
+  private timer: unknown = null;
+  private unlisten: () => void = () => {};
+  private readonly listeners = new Set<(snapshot: SaverSnapshot) => void>();
+  private readonly id: string;
+  private readonly now: () => Date;
+  private readonly clock: () => number;
+  private readonly newId: () => string;
+
+  constructor(private readonly deps: EvidenceSessionDeps) {
+    this.id = deps.documentId;
+    this.now = deps.now ?? (() => new Date());
+    this.clock = deps.clock ?? Date.now;
+    this.newId = deps.newId ?? (() => crypto.randomUUID());
+  }
+
+  snapshot(): SaverSnapshot {
+    return { state: this.state(), failure: this.failure, capacity: "ok" };
+  }
+
+  subscribe(listener: (snapshot: SaverSnapshot) => void): () => void {
+    this.listeners.add(listener);
+    return () => { this.listeners.delete(listener); };
+  }
+
+  /**
+   * Reads the journal and opens the work at once (§2 Otvaranje). Writes only
+   * `startEvidence`, and only for the provider's own document with nothing
+   * owed, not stopped and not sticky; otherwise the journal's chain goes on.
+   */
+  async load(): Promise<LoadResult> {
+    if (this.loaded || this.halted) throw new Error("EvidenceSession.load() runs once");
+    const { journal } = this.deps;
+    let contents: Contents;
+    let opened: OpenOutcome;
+    try {
+      [contents, opened] = await Promise.all([journal.readEvidence(this.id), this.openSafely()]);
+    } catch (error) {
+      return this.haltLoad(failureOf(error));
+    }
+    if (opened.status === "opened") {
+      if (opened.work.documentId !== this.id) return this.haltLoad("unavailable");
+      this.work = opened.work;
+      const meta = contents.meta;
+      if (contents.pending.length === 0 && meta?.evidenceStopped === undefined && !STICKY.has(meta?.state as SyncState)) {
+        try {
+          await journal.startEvidence(this.id, opened.work, this.now().toISOString());
+          contents = await journal.readEvidence(this.id);
+        } catch (error) {
+          // A journal ahead of a late answer keeps its own chain.
+          if (!contents.meta?.evidenceHead) return this.haltLoad(failureOf(error));
+        }
+      }
+    }
+    const { meta, snapshot } = contents;
+    if (!meta?.evidenceHead || !snapshot) return this.haltLoad("unavailable");
+    const document = validateDocument(snapshot.document);
+    if (!document.ok) return this.haltLoad("corrupt", { kind: "recovery", reason: "corrupt", document: null });
+    const restored = restoreSyncState(contents as unknown as JournalContents);
+    if (STICKY.has(restored)) {
+      this.halted = true;
+      this.stored = restored;
+      this.emit();
+      return { kind: "recovery", reason: "sticky", document: document.doc };
+    }
+    this.seq = meta.localSeq;
+    this.stored = restored;
+    this.stopped = meta.evidenceStopped ?? null;
+    this.profile = this.work?.evidenceProfileId ?? this.deps.storedProfile?.(meta) ?? null;
+    if (this.work) this.runner = this.deps.createRunner(this.work);
+    this.recorder = new EvidenceRecorder();
+    this.sessionId = this.newId();
+    this.loaded = true;
+    this.unlisten = this.deps.network.onOnline(() => {
+      this.retryOpen();
+      this.kick();
+    });
+    this.emit();
+    this.kick();
+    return { kind: "ready", document: document.doc };
+  }
+
+  /** One editor change (`transaction` event); the caller gates it on its ready flag. */
+  record(transactions: readonly Transaction[], observation: SourceObservation = NO_OBSERVATION, at = Date.now()): void {
+    if (!this.recorder || this.stopped || this.halted) return;
+    if (!transactions.some((tr) => tr.docChanged)) return;
+    this.recorded += 1;
+    try {
+      recordWithSource(this.recorder, transactions, observation, at);
+    } catch (error) {
+      if (!(error instanceof CaptureError)) throw error;
+      this.stopped = error.code;
+    }
+  }
+
+  edit(): void {
+    this.gen += 1;
+    this.emit();
+  }
+
+  propose(doc: CanonicalDocument): Promise<void> {
+    if (!this.loaded) {
+      if (this.halted) return Promise.resolve();
+      throw new Error("EvidenceSession.propose() before a ready load()");
+    }
+    this.next = { doc, gen: this.gen, marks: this.recorded };
+    this.startWrites();
+    return this.flight ?? Promise.resolve();
+  }
+
+  /** No save, open or drain step in flight; a paused drain starts none. */
+  async settled(): Promise<void> {
+    while (this.flight || this.stepping || this.opening) {
+      await (this.flight ?? this.stepping ?? this.opening);
+    }
+  }
+
+  /** Stops starting drain steps (sign-out dialog); saves still run. */
+  pause(): void {
+    this.paused = true;
+    this.clearTimer();
+  }
+
+  resume(): void {
+    this.paused = false;
+    this.startWrites();
+    this.kick();
+  }
+
+  /** The session ended: no timer, listener, recording, save or step from here. */
+  close(): void {
+    this.closed = true;
+    this.halted = true;
+    this.clearTimer();
+    this.unlisten();
+  }
+
+  private state(): SyncState {
+    if (this.stored && STICKY.has(this.stored)) return this.stored;
+    if (this.failure) return "ERROR";
+    if (this.gen !== this.cleanGen || this.next) return this.saving ? "SAVING_LOCAL" : "EDITING";
+    if (this.stored === null) return "EDITING";
+    // G3: SYNCED only from a receipt verified in this page session.
+    return this.stored === "SYNCED" && !this.syncedHere ? "LOCAL_DURABLE" : this.stored;
+  }
+
+  private startWrites(): void {
+    if (this.flight || this.halted || !this.next) return;
+    if (!this.stopped && this.profile === null) return; // O3 a: wait for a successful open
+    let settle!: (written: Promise<void>) => void;
+    this.flight = new Promise<void>((resolve) => { settle = resolve; });
+    settle(this.writeQueued());
+  }
+
+  private async writeQueued(): Promise<void> {
+    try {
+      while (this.next && !this.halted && (this.stopped || this.profile !== null)) {
+        const candidate = this.next;
+        this.next = null;
+        await this.save(candidate);
+      }
+    } finally {
+      this.flight = null;
+      this.emit();
+    }
+  }
+
+  private async save(candidate: Candidate): Promise<void> {
+    this.saving = true;
+    this.emit();
+    try {
+      const covers = this.stopped
+        ? await this.saveUncovered(candidate.doc, this.stopped)
+        : await this.saveCovered(candidate);
+      if (covers && candidate.gen === this.gen && !this.next) this.cleanGen = candidate.gen;
+      this.failure = null;
+    } catch (error) {
+      this.failure = failureOf(error);
+      if (HALTING.has(this.failure)) this.halted = true;
+      await this.refresh();
+    } finally {
+      this.saving = false;
+      this.emit();
+    }
+  }
+
+  /** True when the journal now holds exactly `candidate`'s text. */
+  private async saveCovered(candidate: Candidate): Promise<boolean> {
+    const { journal } = this.deps;
+    const recorder = this.recorder!;
+    recorder.close();
+    let lastDocument: string | null = null;
+    for (;;) {
+      const contents = await journal.readEvidence(this.id);
+      const { meta, snapshot } = contents;
+      if (!meta?.evidenceHead || !snapshot || meta.localSeq !== this.seq) {
+        throw Object.assign(new Error("journal moved"), { code: "stale_local_sequence" });
+      }
+      const tail = contents.pending.at(-1)?.tx;
+      const head = tail ? { segmentHash: tail.segmentHash, lastSequenceTo: tail.sequenceTo } : meta.evidenceHead;
+      let built;
+      try {
+        built = await recorder.takeSegment({
+          documentId: this.id, sessionId: this.sessionId, segmentId: this.newId(),
+          evidenceProfileId: this.profile!, sequenceFrom: head.lastSequenceTo + 1,
+          predecessorSegmentHash: head.segmentHash,
+        });
+      } catch (error) {
+        if (!(error instanceof CaptureError)) throw error;
+        return this.saveUncovered(candidate.doc, error.code);
+      }
+      if (built === null) {
+        lastDocument ??= canonicalizeJcs(snapshot.document);
+        break;
+      }
+      const replay = await replayEvidenceSegmentsV2(
+        snapshot.document as unknown as JcsJsonValue, [built.segment], this.deps.replayer());
+      if (!replay.ok || replay.documentSha256 !== built.segment.finalDocumentHash) {
+        return this.saveUncovered(candidate.doc, "unsupported_step");
+      }
+      const result = await journal.saveSegment(this.id, built, this.now().toISOString(), this.seq);
+      this.seq = result.localSeq;
+      this.stored = result.meta.state;
+      this.syncedHere = false;
+      lastDocument = decoder.decode(built.document);
+      this.retryOpen();
+      this.kick();
+    }
+    // Nothing recorded since the proposal: the journal must now hold its exact
+    // bytes, else a change escaped the recorder and the chain cannot cover it.
+    if (candidate.marks !== this.recorded) return false;
+    if (lastDocument !== canonicalizeJcs(candidate.doc)) return this.saveUncovered(candidate.doc, "gap");
+    return true;
+  }
+
+  private async saveUncovered(doc: CanonicalDocument, reason: EvidenceStop): Promise<boolean> {
+    this.stopped = reason;
+    const meta = await this.deps.journal.saveUncovered(this.id, doc, reason, this.now().toISOString(), this.seq);
+    this.seq = meta.localSeq;
+    this.stored = meta.state;
+    this.syncedHere = false;
+    return true;
+  }
+
+  private kick(): void {
+    if (this.stepping) {
+      this.stepAgain = true;
+      return;
+    }
+    if (!this.runner || this.halted || this.paused || !this.deps.network.online()) return;
+    this.clearTimer();
+    this.stepAgain = false;
+    this.stepping = this.stepLoop().finally(() => {
+      this.stepping = null;
+      if (this.stepAgain) this.kick();
+    });
+  }
+
+  private async stepLoop(): Promise<void> {
+    while (this.runner && !this.halted && !this.paused && this.deps.network.online()) {
+      let result;
+      try {
+        result = await this.runner.step(this.id);
+      } catch {
+        await this.refresh();
+        return;
+      }
+      if (result.kind === "sent" && result.state === "SYNCED") this.syncedHere = true;
+      const contents = await this.refresh();
+      if (result.kind === "sent" && contents && contents.pending.length > 0) continue;
+      if (result.kind === "waiting" && !this.closed) {
+        const set = this.deps.setTimer ?? ((run, ms) => setTimeout(run, ms));
+        this.timer = set(() => { this.timer = null; this.kick(); }, Math.max(0, result.notBefore - this.clock()));
+      }
+      return;
+    }
+  }
+
+  private async refresh(): Promise<Contents | null> {
+    try {
+      const contents = await this.deps.journal.readEvidence(this.id);
+      if (contents.meta) {
+        this.stored = contents.meta.state;
+        if (STICKY.has(contents.meta.state)) this.halted = true;
+      }
+      this.emit();
+      return contents;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Opens again while the work is unknown (§2 t. 4): on `online` and after each saved segment. */
+  private retryOpen(): void {
+    if (this.work || this.opening || this.closed || !this.deps.network.online()) return;
+    this.opening = this.openSafely().then((opened) => {
+      if (opened.status !== "opened" || this.closed) return;
+      if (opened.work.documentId !== this.id) {
+        this.failure = "unavailable";
+        this.halted = true;
+        return;
+      }
+      this.work = opened.work;
+      this.profile = opened.work.evidenceProfileId;
+      this.runner = this.deps.createRunner(opened.work);
+      this.startWrites();
+      this.kick();
+    }).finally(() => {
+      this.opening = null;
+      this.emit();
+    });
+  }
+
+  private async openSafely(): Promise<OpenOutcome> {
+    try {
+      return await this.deps.open();
+    } catch {
+      return { status: "unavailable" };
+    }
+  }
+
+  private haltLoad(failure: SaverFailure, result: LoadResult = { kind: "unavailable" }): LoadResult {
+    this.halted = true;
+    this.failure = failure;
+    this.emit();
+    return result;
+  }
+
+  private clearTimer(): void {
+    if (this.timer === null) return;
+    (this.deps.clearTimer ?? ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>)))(this.timer);
+    this.timer = null;
+  }
+
+  private emit(): void {
+    const snapshot = this.snapshot();
+    for (const listener of this.listeners) {
+      try {
+        listener(snapshot);
+      } catch (error) {
+        queueMicrotask(() => { throw error; });
+      }
+    }
+  }
+}
