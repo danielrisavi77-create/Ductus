@@ -46,6 +46,7 @@ test("the fake OIDC interaction offers both synthetic students", { timeout: 10_0
 
   try {
     const metadata = await waitForProvider(child, `${issuer}/.well-known/openid-configuration`, output);
+    for (const claim of ["given_name", "family_name"]) assert.ok(metadata.claims_supported.includes(claim), claim);
     const authorize = new URL(metadata.authorization_endpoint);
     authorize.search = new URLSearchParams({
       client_id: "ductus-local",
