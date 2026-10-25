@@ -60,7 +60,9 @@ export default function WorkspaceShell({
 }: WorkspaceShellProps) {
   return (
     <div className="workspace">
-      <div className="workspace__bar">
+      {/* A named region: the course and assignment and the bar's links are
+          inside a landmark like the rest of the page (axe "region", #711 F1). */}
+      <section className="workspace__bar" aria-label={t.workspace.barLabel}>
         {context ? <p className="brand-line brand-line__context">{context}</p> : null}
         <nav className="modes" aria-label={t.workspace.viewModes}>
           <ModeLink href={writingHref} current={mode === "writing"}>
@@ -71,7 +73,7 @@ export default function WorkspaceShell({
           </ModeLink>
         </nav>
         {barExtra}
-      </div>
+      </section>
       {banner}
       <div className="workspace__body">
         <main id="sadrzaj" tabIndex={-1} className="workspace__main">
