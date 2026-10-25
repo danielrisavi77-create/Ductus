@@ -122,7 +122,7 @@ export default async function WorkspacePage({
     <a className="btn" href={`/api/auth/login?returnTo=${encodeURIComponent(radPath(assignmentId))}`}>{t.auth.signIn}</a>
   ) : undefined;
   const workspace = (
-    <AppShell session={{ tag, at }} role={signedIn ? role : null} current="/rad" crumbs={[t.workspace.title]} account={account} ownMain>
+    <AppShell session={{ tag, at }} role={signedIn ? role : null} scope={signedIn ? scope : null} current="/rad" crumbs={[t.workspace.title]} account={account} ownMain>
       <WorkspaceShell
         writingHref={radPath(assignmentId)}
         context={work ? `${work.course} / ${work.notice.title}` : null}

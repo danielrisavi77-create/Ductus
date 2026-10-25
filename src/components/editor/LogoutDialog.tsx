@@ -21,7 +21,7 @@ import { messagesHr } from "@/lib/i18n/messages.hr";
 import styles from "./LogoutDialog.module.css";
 import {
   closeReply,
-  copyText,
+  copyPart,
   logoutText,
   nextDiscardStep,
   settleDiscard,
@@ -67,7 +67,7 @@ export default function LogoutDialog({
   const titleId = useId();
   const textId = useId();
   const { text, note, offerExport } = logoutText(plan);
-  const copy = onRestoreCopy && onDiscardCopy ? copyText(copies) : null;
+  const copy = copyPart(copies, Boolean(onRestoreCopy && onDiscardCopy));
   const [discard, setDiscard] = useState<DiscardStep>("idle");
   const step = (event: DiscardEvent) => setDiscard((now) => nextDiscardStep(now, event));
   const keepRef = useRef<HTMLButtonElement>(null);
@@ -176,7 +176,7 @@ export default function LogoutDialog({
             <p className={styles.text}>{copy.text}</p>
             <p className={styles.note}>{copy.note}</p>
             {copy.newestOnly ? <p className={styles.note}>{copy.newestOnly}</p> : null}
-            {asking ? (
+            {!copy.actions ? null : asking ? (
               <>
                 <p className={styles.text}>{t.copyDiscardAsk}</p>
                 <div className={styles.actions}>
