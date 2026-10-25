@@ -57,6 +57,8 @@ export default function TeacherCourses({ courses }: { courses: readonly TeacherC
                   workTypes[assignment.workType] ? `${workTypes[assignment.workType]} · ` : null,
                   `${t.due} ${dueHr(assignment.dueAt)}`),
                 h("span", { className: styles.count },
-                  countHr(assignment.enrolledStudents, t.students.one, t.students.few, t.students.many))))))),
+                  countHr(assignment.enrolledStudents, t.students.one, t.students.few, t.students.many)),
+                h(Link, { className: styles.open, href: `/nastavnik/brz-put?zadatak=${encodeURIComponent(assignment.id)}`, prefetch: false },
+                  messagesHr.shell.nav.fastPath)))))),
     h("p", { className: styles.note }, t.countNote));
 }

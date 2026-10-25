@@ -2,10 +2,10 @@ import type { FastPathStudent, TextBlock } from "@/components/teacher/fast-path"
 import type { ProcessSummaryV1 } from "@/domain/projection/process-summary";
 
 /**
- * Invented students and texts for the fast path (F-11) until Backend gives
- * the teacher the works of an assignment and the four lines (B-11). Every
- * name and sentence here is made up; none belongs to a real person. It lives
- * in `src/lib/i18n/` so the forbidden-terms scan reads it. The order here is
+ * Invented students and texts for the fast path (F-11) in the unit and e2e
+ * tests only; the page reads the route (B-11c, #757). Every name and
+ * sentence here is made up; none belongs to a real person. It lives in
+ * `src/lib/i18n/` so the forbidden-terms scan reads it. The order here is
  * deliberately not by surname: the screen sorts.
  */
 
@@ -63,15 +63,15 @@ export const DEMO_FAST_PATH: readonly FastPathStudent[] = [
     surname: "Ćiriličić",
     work: "writing",
     lastChangeAt: "2026-10-16T19:05:00.000Z",
-    record: { openRevisionRequests: 0, pastesWithoutSource: [], declaration: "not_submitted", blocks: TEXT_B, summary: summary("complete", 1) },
+    record: { pastesWithoutSource: 0, blocks: TEXT_B, summary: summary("complete", 1) },
   },
   {
     id: "demo-student-1",
     givenName: "Ivan",
     surname: "Čitalić",
-    work: "revision_requested",
+    work: "writing",
     lastChangeAt: "2026-10-17T08:42:00.000Z",
-    record: { openRevisionRequests: 1, pastesWithoutSource: [5], declaration: "not_submitted", blocks: TEXT_A, summary: summary("has_gaps", 2) },
+    record: { pastesWithoutSource: 3, blocks: TEXT_A, summary: summary("has_gaps", 2) },
   },
   {
     id: "demo-student-4",
@@ -87,6 +87,6 @@ export const DEMO_FAST_PATH: readonly FastPathStudent[] = [
     surname: "Bilježnić",
     work: "submitted",
     lastChangeAt: "2026-10-15T16:30:00.000Z",
-    record: { openRevisionRequests: 0, pastesWithoutSource: [], declaration: "submitted", blocks: TEXT_A, summary: summary("complete", 2) },
+    record: { pastesWithoutSource: 0, blocks: TEXT_A, summary: summary("complete", 2) },
   },
 ];
