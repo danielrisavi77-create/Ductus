@@ -25,7 +25,8 @@ FROM (VALUES
   ('key-late','00000000-0000-4000-8000-0000000000d1','fak_a','22',interval '-1 day',NULL::interval),
   ('key-other','00000000-0000-4000-8000-0000000000d2','fak_b','33',interval '-1 day',NULL::interval),
   ('key-retired','00000000-0000-4000-8000-0000000000d1','fak_a','44',interval '-1 day',interval '0 minutes'),
-  ('key-future','00000000-0000-4000-8000-0000000000d1','fak_a','55',interval '1 day',NULL::interval)
+  ('key-future','00000000-0000-4000-8000-0000000000d1','fak_a','55',interval '1 day',NULL::interval),
+  ('key-ending','00000000-0000-4000-8000-0000000000d1','fak_a','66',interval '-1 day',interval '1 day')
 ) AS k(name,domain,faculty,byte,start_at,end_at);
 RESET ROLE;
 
@@ -95,10 +96,11 @@ RESET ROLE;
 WITH i AS (INSERT INTO evidence.submission_receipt_issuance
     (submission_id,institution_id,principal_id,key_id,key_version,signed_at,receipt_payload,payload_digest_sha256)
   SELECT f.submission_id,f.institution_id,f.principal_id,s.key_id,'1',
-    CASE WHEN s.valid_to IS NULL THEN clock_timestamp() ELSE s.valid_to-interval '1 hour' END,f.receipt_payload,f.payload_digest_sha256
+    CASE s.key_id WHEN 'key-future' THEN clock_timestamp() WHEN 'key-ending' THEN s.valid_to ELSE s.valid_to-interval '1 hour' END,
+    f.receipt_payload,f.payload_digest_sha256
   FROM evidence.submission_receipt_issuance f, evidence.signing_key s
-  WHERE f.id=pg_temp.id('i1') AND s.key_id IN ('key-retired','key-future') RETURNING id,key_id)
-INSERT INTO ref SELECT CASE key_id WHEN 'key-retired' THEN 'i_retired' ELSE 'i_future' END, id::text FROM i;
+  WHERE f.id=pg_temp.id('i1') AND s.key_id IN ('key-retired','key-future','key-ending') RETURNING id,key_id)
+INSERT INTO ref SELECT CASE key_id WHEN 'key-retired' THEN 'i_retired' WHEN 'key-ending' THEN 'i_ending' ELSE 'i_future' END, id::text FROM i;
 
 SELECT is(pg_temp.read('ana'),'none','own submission without a bound receipt');
 SELECT is(pg_temp.attach('anon','i1',pg_temp.sig('key-a')),'unauthorized','no session binds nothing');
@@ -121,6 +123,8 @@ SELECT is(pg_temp.attach('ana','i_late',pg_temp.sig('key-a')),'key_mismatch','a 
 SELECT is(pg_temp.attach('ana','i_late',pg_temp.sig('key-late')),'key_revoked','key revoked after the freeze');
 SELECT is(pg_temp.attach('ana','i_retired',pg_temp.sig('key-retired')),'key_not_valid','validity ended before the bind');
 SELECT is(pg_temp.attach('ana','i_future',pg_temp.sig('key-future')),'key_not_valid','signedAt before validity');
+-- #787 review minor 1: only the signedAt check refuses; the key is valid now.
+SELECT is(pg_temp.attach('ana','i_ending',pg_temp.sig('key-ending')),'key_not_valid','signedAt at the end of a validity still running');
 SELECT is((SELECT count(*) FROM evidence.submission_receipt),0::bigint,'refusals write nothing');
 
 -- The bind, then every later bind of the same submission: the stored row.
@@ -171,6 +175,23 @@ DROP POLICY submission_receipt_owner ON evidence.submission_receipt;
 SELECT is(pg_temp.ask_as('ductus_evidence','anon','SELECT count(*)::text FROM evidence.submission_receipt'),'0',
   'FORCE subjects the owner to RLS when its policy is absent');
 CREATE POLICY submission_receipt_owner ON evidence.submission_receipt TO ductus_evidence USING (true) WITH CHECK (true);
+
+-- #787 QA minor 1: an attempt of the caller's person id in another institution
+-- is not the caller's. The rows are forged with constraints off; without the
+-- institution filter the bind would reach this submission and attach.
+INSERT INTO ref VALUES ('cross_sub', gen_random_uuid()::text), ('cross_iss', gen_random_uuid()::text);
+SET LOCAL session_replication_role = replica;
+INSERT INTO evidence.submission (id,submission_request_id,institution_id,principal_id,assignment_id,assignment_version,
+  revision,artifact_hash,requested_at,due_at,recorded_at)
+SELECT pg_temp.id('cross_sub'),gen_random_uuid(),pg_temp.id('fak_b'),principal_id,assignment_id,assignment_version,
+  revision,artifact_hash,requested_at,due_at,recorded_at FROM evidence.submission WHERE id=pg_temp.id('submission');
+INSERT INTO evidence.submission_receipt_issuance
+  (id,submission_id,institution_id,principal_id,key_id,key_version,signed_at,receipt_payload,payload_digest_sha256)
+SELECT pg_temp.id('cross_iss'),pg_temp.id('cross_sub'),pg_temp.id('fak_b'),principal_id,key_id,key_version,signed_at,
+  receipt_payload,payload_digest_sha256 FROM evidence.submission_receipt_issuance WHERE id=pg_temp.id('i2');
+SET LOCAL session_replication_role = origin;
+SELECT is(pg_temp.attach('ana','cross_iss',pg_temp.sig('key-a')),'not_found','an attempt of another institution is not the caller''s');
+SELECT is((SELECT count(*) FROM evidence.submission_receipt),1::bigint,'and nothing is bound for it');
 
 -- A removed student binds nothing more but still reads the stored receipt.
 UPDATE institution.course_member SET member_to=greatest(now(),member_from)
