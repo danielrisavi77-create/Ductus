@@ -35,3 +35,84 @@ export function logoutText(plan: LogoutPlan): LogoutText {
   const form = pluralHr(n, t.logoutPending.one, t.logoutPending.few, t.logoutPending.many);
   return { text: form.replace("{n}", String(n)), note: t.logoutKept, offerExport: false };
 }
+
+/**
+ * The copy part of the dialog (3d-2c, P3 and P4 a, #476 c.6388266201): text
+ * the device keeps outside the work after a conflict or a stopped record.
+ * Sign-out never deletes it (D-118): it stays tied to this student on this
+ * device. Restoring and discarding act on the newest copy only.
+ */
+export type CopyText = {
+  /** How many copies this device keeps outside the work. */
+  text: string;
+  /** What sign-out does with them. */
+  note: string;
+  /** Said only when there is more than one copy. */
+  newestOnly: string | null;
+};
+
+export function copyText(copies: number): CopyText | null {
+  if (!Number.isSafeInteger(copies) || copies <= 0) return null;
+  const form = pluralHr(copies, t.logoutCopy.one, t.logoutCopy.few, t.logoutCopy.many);
+  return { text: form.replace("{n}", String(copies)), note: t.logoutCopyKept, newestOnly: copies > 1 ? t.copyNewestOnly : null };
+}
+
+/**
+ * Discarding a copy takes two explicit clicks in the dialog (P3): "Odbaci
+ * kopiju" asks, and only the second click discards. Anything that is not
+ * that second click, Escape included, leaves the copy as it is.
+ */
+export type DiscardStep = "idle" | "confirm" | "working" | "failed";
+export type DiscardEvent = "ask" | "keep" | "confirm" | "done" | "error";
+
+export function nextDiscardStep(step: DiscardStep, event: DiscardEvent): DiscardStep {
+  switch (event) {
+    case "ask":
+      return step === "idle" || step === "failed" ? "confirm" : step;
+    case "keep":
+      return step === "confirm" ? "idle" : step;
+    case "confirm":
+      return step === "confirm" ? "working" : step;
+    case "done":
+      return step === "working" ? "idle" : step;
+    case "error":
+      return step === "working" ? "failed" : step;
+  }
+}
+
+/**
+ * How long a discard may run before the dialog takes it as failed. Sign-out
+ * waits for nothing a caller does (D-118), so a discard that throws or never
+ * settles must not hold the dialog: past this limit the copy counts as kept
+ * and every action is back.
+ */
+export const DISCARD_LIMIT_MS = 10_000;
+
+/** Runs a discard; rejects when it throws, rejects or outlasts the limit. */
+export function settleDiscard(run: () => Promise<void>, limitMs = DISCARD_LIMIT_MS): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("discard_timeout")), limitMs);
+    const finish = (settle: () => void) => {
+      clearTimeout(timer);
+      settle();
+    };
+    try {
+      Promise.resolve(run()).then(
+        () => finish(resolve),
+        (error: unknown) => finish(() => reject(error)),
+      );
+    } catch (error) {
+      finish(() => reject(error));
+    }
+  });
+}
+
+/**
+ * What the dialog does when the browser closes it without being asked
+ * (Chromium may skip `preventDefault` on a repeated Escape). It opens again
+ * while a sign-out or discard runs, while it asks, and right after Escape
+ * took the question back; only otherwise the close counts as "Ostani".
+ */
+export function closeReply(state: { busy: boolean; asking: boolean; withdrawn: boolean }): "reopen" | "stay" {
+  return state.busy || state.asking || state.withdrawn ? "reopen" : "stay";
+}

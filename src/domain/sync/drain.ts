@@ -462,7 +462,10 @@ export function planDrain<R extends QueuedRow>(
     return NOTHING_TO_SEND;
   }
   if (inOrder) {
-    return { send: newest, supersededUpTo: null };
+    // A chain goes oldest first: a hold on a newer row than one still owed
+    // would send it ahead of that row, so nothing goes.
+    const chosen = newest;
+    return pending.some((row) => row.localSeq < chosen.localSeq) ? NOTHING_TO_SEND : { send: newest, supersededUpTo: null };
   }
 
   // Every row through the send is now a unique, sendable replacement.

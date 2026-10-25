@@ -61,6 +61,16 @@ describe("F-8 3d-2a: planDrain over evidence segments", () => {
     expect(planDrain(rows.slice(1), LOCAL, awaitingReceiptFor(rows[0]!))).toEqual({ send: null, supersededUpTo: null });
   });
 
+  it("a hold on a row that is not the oldest owed one sends nothing, so no row overtakes an older one", () => {
+    const rows = [segment(1), segment(2), segment(3)];
+    for (const held of [rows[1]!, rows[2]!]) {
+      expect(planDrain(rows, LOCAL, awaitingReceiptFor(held))).toEqual({ send: null, supersededUpTo: null });
+    }
+    // A damaged oldest row is still the oldest owed one: a hold behind it sends nothing either.
+    const damaged = [segment(1, { clientTransactionId: "" }), segment(2)];
+    expect(planDrain(damaged, LOCAL, awaitingReceiptFor(damaged[1]!))).toEqual({ send: null, supersededUpTo: null });
+  });
+
   it.each([
     ["an unsendable key", { clientTransactionId: "" }],
     ["a segment over the limit", { segment: new Uint8Array(MAX_EVIDENCE_SEGMENT_BYTES + 1) }],
