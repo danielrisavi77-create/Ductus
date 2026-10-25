@@ -196,10 +196,19 @@ export class EvidenceSession {
     this.owed = contents.pending.length;
     this.stopped = meta.evidenceStopped ?? null;
     this.profile = this.work?.evidenceProfileId ?? this.deps.storedProfile?.(meta) ?? null;
+    this.loaded = true;
+    if (this.work?.submitted) {
+      // O2 (DAN-289, #756 c.6399602745): a submitted work opens closed, the
+      // same as after a 409 `not_accepting`. No recorder, runner, watch or
+      // `online` listener starts, so nothing more goes to `/api/evidence/*`;
+      // the rows the journal holds stay there, neither sent nor deleted.
+      this.closedBy = "submission";
+      this.emit();
+      return { kind: "ready", document: document.doc };
+    }
     if (this.work) this.runner = this.deps.createRunner(this.work);
     this.recorder = new EvidenceRecorder();
     this.sessionId = this.newId();
-    this.loaded = true;
     this.unwatch = this.deps.watchSubmission?.(() => this.closeBySubmission()) ?? (() => {});
     this.unlisten = this.deps.network.onOnline(() => {
       this.retryOpen();
