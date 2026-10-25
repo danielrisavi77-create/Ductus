@@ -34,7 +34,7 @@ import type {
 } from "@/domain/sync/journal-types";
 import { restoreSyncState } from "@/domain/sync/restore";
 import type { SyncState } from "@/domain/sync/states";
-import { CaptureError, EvidenceRecorder } from "@/editor/capture";
+import { CaptureError, EvidenceRecorder, type BuiltSegment } from "@/editor/capture";
 import { NO_OBSERVATION, recordWithSource, type SourceObservation } from "@/editor/source";
 import type { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
 import {
@@ -113,6 +113,13 @@ export class EvidenceSession {
   private recorder: EvidenceRecorder | null = null;
   private sessionId = "";
   private next: Candidate | null = null;
+  /**
+   * A segment taken from the recorder whose journal write has not succeeded.
+   * Its events are no longer in the recorder, so the next save writes this
+   * segment first instead of losing them; a failed write leaves the journal
+   * as it was, so the segment still fits its head.
+   */
+  private unsaved: BuiltSegment | null = null;
   private saving = false;
   private flight: Promise<void> | null = null;
   private stepping: Promise<void> | null = null;
@@ -339,16 +346,22 @@ export class EvidenceSession {
       }
       const tail = contents.pending.at(-1)?.tx;
       const head = tail ? { segmentHash: tail.segmentHash, lastSequenceTo: tail.sequenceTo } : meta.evidenceHead;
-      let built;
-      try {
-        built = await recorder.takeSegment({
-          documentId: this.id, sessionId: this.sessionId, segmentId: this.newId(),
-          evidenceProfileId: this.profile!, sequenceFrom: head.lastSequenceTo + 1,
-          predecessorSegmentHash: head.segmentHash,
-        });
-      } catch (error) {
-        if (!(error instanceof CaptureError)) throw error;
-        return this.saveUncovered(candidate.doc, error.code);
+      let built = this.unsaved;
+      if (built !== null && (built.segment.sequenceFrom !== head.lastSequenceTo + 1
+        || built.segment.predecessorSegmentHash !== head.segmentHash)) {
+        throw Object.assign(new Error("journal moved"), { code: "stale_local_sequence" });
+      }
+      if (built === null) {
+        try {
+          built = await recorder.takeSegment({
+            documentId: this.id, sessionId: this.sessionId, segmentId: this.newId(),
+            evidenceProfileId: this.profile!, sequenceFrom: head.lastSequenceTo + 1,
+            predecessorSegmentHash: head.segmentHash,
+          });
+        } catch (error) {
+          if (!(error instanceof CaptureError)) throw error;
+          return this.saveUncovered(candidate.doc, error.code);
+        }
       }
       if (built === null) {
         lastDocument ??= canonicalizeJcs(snapshot.document);
@@ -357,9 +370,14 @@ export class EvidenceSession {
       const replay = await replayEvidenceSegmentsV2(
         snapshot.document as unknown as JcsJsonValue, [built.segment], this.deps.replayer());
       if (!replay.ok || replay.documentSha256 !== built.segment.finalDocumentHash) {
+        this.unsaved = null;
         return this.saveUncovered(candidate.doc, "unsupported_step");
       }
+      // §4: a submission may have closed the session during the build or replay.
+      if (this.closedBy) return false;
+      this.unsaved = built;
       const result = await journal.saveSegment(this.id, built, this.now().toISOString(), this.seq);
+      this.unsaved = null;
       this.seq = result.localSeq;
       this.stored = result.meta.state;
       this.syncedHere = false;
@@ -376,6 +394,8 @@ export class EvidenceSession {
   }
 
   private async saveUncovered(doc: CanonicalDocument, reason: EvidenceStop): Promise<boolean> {
+    // §4: nothing is written once a submission closed the session.
+    if (this.closedBy) return false;
     this.stopped = reason;
     const meta = await this.deps.journal.saveUncovered(this.id, doc, reason, this.now().toISOString(), this.seq);
     this.seq = meta.localSeq;

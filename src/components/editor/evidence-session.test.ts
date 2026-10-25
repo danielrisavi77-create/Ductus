@@ -846,3 +846,88 @@ describe("3d-2c2a §4 (DAN-289 A1): a submission closes the session", () => {
     expect(net.calls).toHaveLength(0);
   });
 });
+
+describe("3d-2c2a Codex #803: a failed write keeps its segment, and a closed session writes nothing", () => {
+  it("C1: a quota failure of saveSegment keeps the segment; the next save writes it first and the chain stays covered", async () => {
+    const net = server();
+    const online = network(false);
+    const { session, journal } = setup({ net, online });
+    await ready(session);
+    const sheet = editorFor(session);
+    sheet.type("a");
+    vi.spyOn(journal, "saveSegment").mockRejectedValueOnce(new DOMException("invented", "QuotaExceededError"));
+    await sheet.save();
+    expect(session.snapshot().state).toBe("ERROR");
+    expect((await journal.readEvidence(DOC)).pending).toEqual([]);
+
+    // Space is back: the kept segment goes first, then the new change.
+    sheet.type("b");
+    const doc = await sheet.save();
+    const { meta, pending, snapshot } = await journal.readEvidence(DOC);
+    expect(meta?.evidenceStopped).toBeUndefined();
+    expect(pending.length).toBeGreaterThanOrEqual(2);
+    expect(pending[0]!.tx.sequenceFrom).toBe(1);
+    expect(canonicalizeJcs(snapshot!.document)).toBe(canonicalizeJcs(doc));
+    online.set(true);
+    await session.settled();
+    expect(session.snapshot().state).toBe("SYNCED");
+  });
+
+  /** A session whose replay of the next segment closes it by submission first. */
+  function closingDuringReplay(replayFails: boolean) {
+    let fire: () => void = () => {};
+    let armed = false;
+    const made = setup({
+      online: network(false),
+      over: {
+        watchSubmission: (onClosed) => { fire = onClosed; return () => {}; },
+        replayer: () => {
+          const base = createBrowserEditStepsV1Replayer();
+          return {
+            ...base,
+            apply: (...args: Parameters<typeof base.apply>) => {
+              if (armed) {
+                armed = false;
+                fire();
+                if (replayFails) throw new Error("step_failed");
+              }
+              return base.apply(...args);
+            },
+          };
+        },
+      },
+    });
+    return { ...made, arm: () => { armed = true; } };
+  }
+
+  it("C2: a submission closing the session during the replay leaves no new row", async () => {
+    const { session, journal, arm } = closingDuringReplay(false);
+    await ready(session);
+    const sheet = editorFor(session);
+    sheet.type("a");
+    await sheet.save();
+    const before = await journal.readEvidence(DOC);
+    const saveSegment = vi.spyOn(journal, "saveSegment");
+    arm();
+    sheet.type("b");
+    await sheet.save();
+    expect(saveSegment).not.toHaveBeenCalled();
+    const after = await journal.readEvidence(DOC);
+    expect(after.meta?.localSeq).toBe(before.meta?.localSeq);
+    expect(after.pending).toHaveLength(before.pending.length);
+    expect(session.snapshot().closedBy).toBe("submission");
+  });
+
+  it("C3: a replay that fails after the session closed saves nothing uncovered", async () => {
+    const { session, journal, arm } = closingDuringReplay(true);
+    await ready(session);
+    const sheet = editorFor(session);
+    const saveUncovered = vi.spyOn(journal, "saveUncovered");
+    arm();
+    sheet.type("a");
+    await sheet.save();
+    expect(saveUncovered).not.toHaveBeenCalled();
+    expect((await journal.readEvidence(DOC)).meta?.evidenceStopped).toBeUndefined();
+    expect(session.snapshot()).toMatchObject({ closedBy: "submission", state: "LOCAL_DURABLE" });
+  });
+});
