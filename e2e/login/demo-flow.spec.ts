@@ -60,6 +60,7 @@ const OFFLINE_TEXT = " Dopuna napisana bez mreže.";
 const DRAFT = TEXT + OFFLINE_TEXT;
 const QUOTE = "gradskim knjižnicama";
 const COMMENT = "Dodaj izvor za ovu tvrdnju.";
+const LIVE_TEXT = "Rečenica dopisana dok nastavnik gleda.";
 // #711 F1: the student writes into her own work of the K-4 assignment, made
 // by the real open route when she first opens it (step 2, K-4e); its id is
 // read from the database, never the fixed local id.
@@ -957,13 +958,57 @@ test("demo walk-through", async ({ browser, page, context }) => {
     await signOut(page, token);
   });
 
-  // D-142: the teacher UI reads the published live state above; automatic
-  // publication from the connected editor still waits for #522 and F-8.
-  await test.step.skip("3. F-9: nastavnik prima promjene iz povezanog editora uživo", async () => {});
+  // D-142 (K-4d, #655): the test sends nothing to the live route here. The
+  // student's own tab publishes from the editor (LocalDocument, BACKEND 4.12
+  // t. 7 and 8) and the teacher's open view takes the new state by itself,
+  // without a reload. The live state is not the evidence and claims no receipt.
+  await test.step("3. F-9: nastavnik uživo vidi stanje studentova rada", async () => {
+    await signIn(page, `/rad?zadatak=${k4Assignment!}`, "Demo studentica");
+    token = (await appCookie(context, SESSION_COOKIE))!.value;
+    await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: 30_000 });
+    await expect(editorOf(page)).toHaveText(EXPECTED_TEXT);
+    const puts: (string | null)[] = [];
+    const onPut = (request: Request) => {
+      if (request.method() === "PUT" && new URL(request.url()).pathname === livePath()) puts.push(request.postData());
+    };
+    page.on("request", onPut);
+    const teacher = await (await browser.newContext()).newPage();
+    try {
+      await signIn(teacher, "/", "Demo nastavnik");
+      await teacher.goto(`/nastavnik/rad/${k4Document!}`);
+      const text = teacher.getByRole("document", { name: t.liveView.documentLabel });
+      await expect(text).toContainText(QUOTE);
+      await expect(text).not.toContainText(LIVE_TEXT);
+      let navigations = 0;
+      teacher.on("framenavigated", (frame) => { if (frame === teacher.mainFrame()) navigations += 1; });
+      await snapshot(teacher, "3-nastavnik-otvara-rad-uzivo");
+
+      await editorOf(page).click();
+      await editorOf(page).press("Control+End");
+      await page.keyboard.press("Enter");
+      await page.keyboard.type(LIVE_TEXT);
+      await expect(text).toContainText(LIVE_TEXT, { timeout: 15_000 });
+      expect(navigations).toBe(0);
+      // What the teacher reads is the editor's own last PUT, the journal's exact state.
+      const body = canonicalizeJcs((await localCheckpoint(page)).snapshot!.document);
+      await expect.poll(() => puts.at(-1)).toBe(body);
+      const read = await teacher.request.get(livePath(), { headers: LIVE_READ_HEADERS });
+      expect(read.status()).toBe(200);
+      expect(await read.text()).toBe(body);
+      await snapshot(teacher, "3-nastavnik-vidi-promjenu-uzivo");
+      await snapshot(page, "3-studentica-pise-dok-nastavnik-gleda");
+    } finally {
+      page.off("request", onPut);
+      await teacher.context().close();
+    }
+    await signOut(page, token);
+  });
   // F-10 (demo points 4 and 5): proves that the student submits, the server
   // reconstructs the work and the comparison matches, the student gets the
   // signed receipt, and student and teacher see the same process summary,
   // made by the same function, with no forbidden words and no percentages
-  // (PRODUCT §5 rules 2, 5 and 11).
+  // (PRODUCT §5 rules 2, 5 and 11). It waits for 3d-2c2: until the editor
+  // sends its evidence (POST /api/evidence/commit) the server holds revision 0
+  // and the submission can only answer no_evidence (K-4d on #655).
   await test.step.skip("4. i 5. F-10: predaja, potpisana potvrda i isti sažetak procesa za oba", async () => {});
 });
