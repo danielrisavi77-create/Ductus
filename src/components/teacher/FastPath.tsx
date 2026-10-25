@@ -122,16 +122,12 @@ function Roster({ students }: { readonly students: readonly FastPathStudent[] })
 
 /**
  * #732 item 17: the state of a work, with a dot in its token colour before the
- * word. The word carries the meaning; the dot only helps the eye find it and is
- * hidden from assistive technology. The list stays in surname order (D-80).
+ * word. The word carries the meaning; the dot only helps the eye find it. It is
+ * drawn by CSS (`::before`, empty content), so it adds no element and no text for
+ * assistive technology. The list stays in surname order (D-80).
  */
 function workState(work: WorkState) {
-  return h(
-    "span",
-    { className: styles.meta },
-    h("span", { className: styles.dot, "data-work": work, "aria-hidden": "true" }),
-    t.work[work],
-  );
+  return h("span", { className: `${styles.meta} ${styles.dot}`, "data-work": work }, t.work[work]);
 }
 
 type RecordProps = {

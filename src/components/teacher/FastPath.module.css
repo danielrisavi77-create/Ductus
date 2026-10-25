@@ -80,7 +80,8 @@
 }
 
 /* #732 item 17: the dot before the state word; the word carries the meaning. */
-.dot {
+.dot::before {
+  content: "";
   display: inline-block;
   width: 8px;
   height: 8px;
@@ -90,15 +91,15 @@
   vertical-align: 0.05em;
 }
 
-.dot[data-work="writing"] {
+.dot[data-work="writing"]::before {
   background: var(--accent);
 }
 
-.dot[data-work="revision_requested"] {
+.dot[data-work="revision_requested"]::before {
   background: var(--cmt);
 }
 
-.dot[data-work="submitted"] {
+.dot[data-work="submitted"]::before {
   background: var(--synced);
 }
 
