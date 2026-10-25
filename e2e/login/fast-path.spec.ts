@@ -60,12 +60,12 @@ async function answerRoute(page: Page): Promise<unknown[]> {
   return bodies;
 }
 
-async function asTeacher(page: Page, path = `/nastavnik/brz-put?zadatak=${ASSIGNMENT}`): Promise<void> {
+async function asTeacher(page: Page, path = `/nastavnik/brz-put?zadatak=${ASSIGNMENT}`, title: string = t.title): Promise<void> {
   await signIn(page, "/", "Demo nastavnik");
   roleGrantedByThisTest = !(await teacherRoleActive());
   await run("node", ["scripts/demo/provision-teacher.mjs"], { cwd: ROOT });
   await page.goto(path);
-  await expect(page.getByRole("heading", { level: 1, name: t.title })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
 }
 
 async function snapshot(page: Page, name: string): Promise<void> {
@@ -145,7 +145,7 @@ test("without an assignment the page asks for one and sends nothing", async ({ p
 });
 
 test("the course screen opens the fast path of each assignment", async ({ page }) => {
-  await asTeacher(page, "/nastavnik");
+  await asTeacher(page, "/nastavnik", messagesHr.teacherCourses.title);
   const links = page.getByRole("main").getByRole("link", { name: messagesHr.shell.nav.fastPath });
   for (const href of await links.evaluateAll((all) => all.map((a) => a.getAttribute("href")))) {
     expect(href).toMatch(/^\/nastavnik\/brz-put\?zadatak=[0-9a-f-]{36}$/);
