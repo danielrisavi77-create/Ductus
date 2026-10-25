@@ -46,6 +46,14 @@ describe("submission client (F-10)", () => {
     expect(submitOutcomeFrom(200, { status: "submitted", receipt: otherDoc }, SENT).kind).toBe("unavailable");
     expect(submitOutcomeFrom(200, { status: "submitted", receipt: { ...RECEIPT, extra: 1 } }, SENT).kind).toBe("unavailable");
     expect(submitOutcomeFrom(200, { status: "submitted" }, SENT).kind).toBe("unavailable");
+    // DAN-291: only v2. A v1 receipt, with or without signedAt, and a payload with a foreign key are refused.
+    const { signedAt, ...v1Payload } = RECEIPT.payload;
+    const v1 = { ...RECEIPT, payload: { ...v1Payload, receiptSchema: "ductus-submission-receipt-v1" } };
+    expect(submitOutcomeFrom(200, { status: "submitted", receipt: v1 }, SENT).kind).toBe("unavailable");
+    const v1Dated = { ...v1, payload: { ...v1.payload, signedAt } };
+    expect(submitOutcomeFrom(200, { status: "submitted", receipt: v1Dated }, SENT).kind).toBe("unavailable");
+    const foreignKey = { ...RECEIPT, payload: { ...RECEIPT.payload, keyId: "test-key" } };
+    expect(submitOutcomeFrom(200, { status: "submitted", receipt: foreignKey }, SENT).kind).toBe("unavailable");
     expect(submitOutcomeFrom(200, { status: "blocked", receipt: RECEIPT }, SENT).kind).toBe("unavailable");
     expect(submitOutcomeFrom(201, { status: "submitted", receipt: RECEIPT }, SENT).kind).toBe("unavailable");
     expect(submitOutcomeFrom(409, { status: "submitted", receipt: RECEIPT }, SENT).kind).toBe("unavailable");
