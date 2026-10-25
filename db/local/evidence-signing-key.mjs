@@ -41,15 +41,15 @@ export function registrationInvocation(env, slug, key, psql) {
     ...Object.entries(vars).flatMap(([name, value]) => ["-v", `${name}=${value}`]),
   ];
   if (psql !== undefined) {
-    const native = nativePsqlTarget(psql);
-    return { command: native.command, args: [...native.args, ...options] };
+    const native = nativePsqlTarget(psql, env);
+    return { command: native.command, args: [...native.args, ...options], env: native.env };
   }
   return { command: "docker", args: [...dockerExecArgs(env), "psql", "-U", "ductus", "-d", "ductus", ...options] };
 }
 
-function runPsql({ command, args }) {
+function runPsql({ command, args, env }) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd: ROOT, stdio: ["pipe", "pipe", "inherit"], windowsHide: true });
+    const child = spawn(command, args, { cwd: ROOT, env, stdio: ["pipe", "pipe", "inherit"], windowsHide: true });
     let out = "";
     child.stdout.on("data", (chunk) => (out += chunk));
     child.once("error", () => reject(new Error("could not start psql")));
@@ -66,6 +66,8 @@ export async function main(env = process.env, argv = process.argv.slice(2), psql
   }
   const slug = argv.length === 0 ? "demo-fakultet" : argv[1];
   if (typeof slug !== "string" || slug.length > 64 || !SLUG.test(slug)) throw new Error("--institution needs a slug");
+  // A native target is judged before the seed is made, so a refused one writes nothing.
+  if (psql !== undefined) nativePsqlTarget(psql, env);
 
   // The signer judges the path (set, absolute, outside the repository) before
   // anything is written, so a bad path makes no file.
