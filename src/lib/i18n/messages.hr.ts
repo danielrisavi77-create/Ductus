@@ -806,6 +806,13 @@ export const hr = {
     codeNote: "Kod zadatka od nastavnika upisuješ nakon prijave.",
     help: "Ako prijava ne uspije, javi se koordinatoru na svojoj ustanovi.",
   },
+  // #732 item 3: Next.js error and not-found pages in Croatian (D-84).
+  errorPage: {
+    notFoundTitle: "Stranica ne postoji",
+    notFoundBody: "Na ovoj adresi nema stranice. Provjeri adresu ili se vrati na početnu.",
+    errorTitle: "Stranicu nije bilo moguće prikazati",
+    errorBody: "Dogodila se neočekivana greška. Pokušaj ponovno; ako se ponovi, vrati se na početnu.",
+  },
 } as const;
 
 type Widen<T> = { readonly [K in keyof T]: T[K] extends string ? string : Widen<T[K]> };
