@@ -174,6 +174,8 @@ export class EvidenceSession {
     } catch (error) {
       return this.haltLoad(failureOf(error));
     }
+    // close() during the read or the open: nothing is written and nothing listens.
+    if (this.closed) return { kind: "unavailable" };
     if (opened.status === "opened") {
       if (opened.work.documentId !== this.id) return this.haltLoad("unavailable");
       this.work = opened.work;
@@ -188,6 +190,7 @@ export class EvidenceSession {
         }
       }
     }
+    if (this.closed) return { kind: "unavailable" };
     const { meta, snapshot } = contents;
     if (!meta?.evidenceHead || !snapshot) return this.haltLoad("unavailable");
     const document = validateDocument(snapshot.document);
@@ -365,6 +368,11 @@ export class EvidenceSession {
       if (!meta?.evidenceHead || !snapshot || meta.localSeq !== this.seq) {
         throw Object.assign(new Error("journal moved"), { code: "stale_local_sequence" });
       }
+      // P1 (#476 c.6395903987): a capture failure during this save takes nothing more.
+      if (this.stopped) {
+        this.unsaved = null;
+        return this.saveUncovered(candidate.doc, this.stopped);
+      }
       const tail = contents.pending.at(-1)?.tx;
       const head = tail ? { segmentHash: tail.segmentHash, lastSequenceTo: tail.sequenceTo } : meta.evidenceHead;
       let built = this.unsaved;
@@ -396,6 +404,11 @@ export class EvidenceSession {
       }
       // §4: the session may have closed (submission or close()) during the build or replay.
       if (this.ended) return false;
+      // P1: a capture failure during the build or replay keeps the segment out of the chain.
+      if (this.stopped) {
+        this.unsaved = null;
+        return this.saveUncovered(candidate.doc, this.stopped);
+      }
       // The journal never takes a snapshot over the limit: stop evidence here
       // instead of keeping a segment that no retry can write.
       if (built.document.byteLength > MAX_DOCUMENT_SNAPSHOT_BYTES) {

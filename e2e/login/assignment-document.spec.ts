@@ -4,7 +4,7 @@ import { expect, test, type Page, type Request } from "@playwright/test";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
 import { closeWork, documentsOf, seedWork, STUDENT, TEACHER, workDocument } from "./work-seed";
-import { clickSignOut, editorMounted, SAVED_HERE, signIn, signOutWithoutDialog, type DemoAccount } from "./support";
+import { editorMounted, SAVED_HERE, signIn, signOutWithoutDialog, type DemoAccount } from "./support";
 
 // #711 F1 (contract 6391402093 §8 tests 1-10 and 13, amendment 6391779486):
 // `/rad?zadatak=` writes into the student's own document of the assignment,
@@ -255,7 +255,8 @@ test("F1: sign-out after two assignments leaves neither to the next person", asy
   }
   const hers = await journalNames(page);
   expect(hers).toHaveLength(1);
-  await clickSignOut(page);
+  // Both confirmed, nothing of hers stays: no dialog (O1, #476 c.6396707923).
+  await signOutWithoutDialog(page);
   await page.waitForURL("http://localhost:3000/");
   await page.context().clearCookies({ name: /^_session/ });
   await signIn(page, "/rad", "Demo student 2");

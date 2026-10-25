@@ -756,6 +756,87 @@ describe("3d-2c2a P1 (#476 c.6395903987): a capture failure in record() stays cl
   });
 });
 
+describe("3d-2c2a QA #803: a capture failure during a save in flight takes and sends nothing more (P1)", () => {
+  /** Throws a CaptureError from the next record() and dispatches one change, as a paste over the limit would. */
+  const failCapture = (sheet: ReturnType<typeof editorFor>) => {
+    vi.spyOn(EvidenceRecorder.prototype, "record").mockImplementationOnce(() => { throw new CaptureError("too_large"); });
+    sheet.type("b");
+  };
+
+  it("Q1: a CaptureError while the save reads the journal saves uncovered; no segment is taken, saved or sent", async () => {
+    const net = server();
+    const { session, journal } = setup({ net });
+    await ready(session);
+    const sheet = editorFor(session);
+    const read = journal.readEvidence.bind(journal);
+    let armed = false;
+    vi.spyOn(journal, "readEvidence").mockImplementation(async (id) => {
+      if (armed) {
+        armed = false;
+        failCapture(sheet);
+      }
+      return read(id);
+    });
+    const take = vi.spyOn(EvidenceRecorder.prototype, "takeSegment");
+    const saveSegment = vi.spyOn(journal, "saveSegment");
+    const saveUncovered = vi.spyOn(journal, "saveUncovered");
+    sheet.type("a");
+    armed = true;
+    await sheet.save();
+    expect(take).not.toHaveBeenCalled();
+    expect(saveSegment).not.toHaveBeenCalled();
+    expect(saveUncovered.mock.calls[0]?.[2]).toBe("too_large");
+    expect(net.calls).toHaveLength(0);
+    expect((await read(DOC)).meta?.evidenceStopped).toBe("too_large");
+    sheet.type("c");
+    const doc = await sheet.save();
+    expect(take).not.toHaveBeenCalled();
+    expect(saveSegment).not.toHaveBeenCalled();
+    expect(net.calls).toHaveLength(0);
+    const contents = await read(DOC);
+    expect(contents.pending).toHaveLength(0);
+    expect(canonicalizeJcs(contents.snapshot!.document)).toBe(canonicalizeJcs(doc));
+  });
+
+  it("Q2: a CaptureError during the replay keeps the built segment out of the journal and the network", async () => {
+    const net = server();
+    let armed = false;
+    let fail: () => void = () => {};
+    const { session, journal } = setup({
+      net,
+      over: {
+        replayer: () => {
+          const base = createBrowserEditStepsV1Replayer();
+          return {
+            ...base,
+            apply: (...args: Parameters<typeof base.apply>) => {
+              if (armed) {
+                armed = false;
+                fail();
+              }
+              return base.apply(...args);
+            },
+          };
+        },
+      },
+    });
+    await ready(session);
+    const sheet = editorFor(session);
+    fail = () => failCapture(sheet);
+    const saveSegment = vi.spyOn(journal, "saveSegment");
+    const saveUncovered = vi.spyOn(journal, "saveUncovered");
+    sheet.type("a");
+    armed = true;
+    await sheet.save();
+    expect(saveSegment).not.toHaveBeenCalled();
+    expect(saveUncovered.mock.calls[0]?.[2]).toBe("too_large");
+    expect(net.calls).toHaveLength(0);
+    const contents = await journal.readEvidence(DOC);
+    expect(contents.meta?.evidenceStopped).toBe("too_large");
+    expect(contents.pending).toHaveLength(0);
+  });
+});
+
 describe("3d-2c2a §4 (DAN-289 A1): a submission closes the session", () => {
   const notAccepting = () => json(409, { status: "not_accepting" });
 
@@ -1114,5 +1195,26 @@ describe("O2 (DAN-289, #756 c.6399602745): a submitted work opens read-only", ()
     expect(opens.count).toBe(1);
     expect(net.calls.length).toBeGreaterThan(0);
     expect(session.snapshot().state).toBe("SYNCED");
+  });
+});
+
+describe("3d-2c2a Codex #803 (3): close() while load() waits for open", () => {
+  it("C6: a session closed before open answers writes nothing, listens to nothing and is not ready", async () => {
+    let answer: (outcome: OpenOutcome) => void = () => {};
+    const watchSubmission = vi.fn(() => () => {});
+    const { session, journal, online } = setup({
+      open: () => new Promise<OpenOutcome>((resolve) => { answer = resolve; }),
+      over: { watchSubmission },
+    });
+    const startEvidence = vi.spyOn(journal, "startEvidence");
+    const onOnline = vi.spyOn(online, "onOnline");
+    const loading = session.load();
+    session.close();
+    answer({ status: "opened", work: workFor(ASSIGNED) });
+    const result = await loading;
+    expect(result.kind).not.toBe("ready");
+    expect(startEvidence).not.toHaveBeenCalled();
+    expect(onOnline).not.toHaveBeenCalled();
+    expect(watchSubmission).not.toHaveBeenCalled();
   });
 });

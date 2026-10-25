@@ -24,7 +24,9 @@ export type DocumentSnapshot = SaverSnapshot & Partial<Pick<EvidenceSnapshot, "c
  * differs, or it refused the last step for good.
  */
 export function evidenceNotice(snapshot: DocumentSnapshot | null): "conflict" | "refused" | null {
-  if (!snapshot) return null;
+  // Only the evidence session sets `closedBy`: the local saver's own
+  // RECOVERY_REQUIRED is the unreadable local record, not the server's work.
+  if (!snapshot || snapshot.closedBy === undefined) return null;
   if (READ_ONLY_STATES.includes(snapshot.state) && snapshot.closedBy !== "submission") return "conflict";
   return snapshot.refused ? "refused" : null;
 }

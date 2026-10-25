@@ -114,3 +114,21 @@ export async function signOutWithoutDialog(page: Page): Promise<void> {
   await page.getByRole("button", { name: messagesHr.auth.logout, exact: true }).click();
   await page.waitForURL("http://localhost:3000/");
 }
+
+/**
+ * Signs out where the evidence session may or may not have had the work
+ * confirmed yet (3d-2c2b): still on its way, the dialog opens and is
+ * confirmed; confirmed, nothing stays and "Odjava" leads straight home (O1).
+ * For tests about what the next person sees, not about the dialog itself.
+ */
+export async function signOutHoweverHeld(page: Page): Promise<void> {
+  await page.getByRole("button", { name: messagesHr.auth.logout, exact: true }).click();
+  const confirm = logoutDialogOf(page).getByRole("button", { name: messagesHr.auth.logoutConfirm });
+  const home = page.waitForURL("http://localhost:3000/");
+  const first = await Promise.race([
+    home.then(() => "home" as const),
+    confirm.waitFor({ state: "visible" }).then(() => "dialog" as const, () => "home" as const),
+  ]);
+  if (first === "dialog") await confirm.click();
+  await home;
+}
