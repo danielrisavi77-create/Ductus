@@ -98,7 +98,7 @@ Izvedeno iz Ustava; svako pravilo ima test ili provjeru u PR-u.
 9. Integritet zapisa nije dokaz autorstva. Hash i potpis govore samo da zapis nije mijenjan od primitka. (C-13)
 10. Offline zapis ostaje označen kao offline i nakon sinkronizacije. (C-15)
 11. Predaja je moguća samo ako se predani dokument može točno rekonstruirati iz zapisa. Zadatak smije dodatno tražiti samo potpunost koju student sam može ispuniti u aplikaciji: popunjena mjesta za izvor i potvrdu izjave koju propisuje fakultet; uvjet je naveden u obavijesti, ne odnosi se na podrijetlo teksta, AI, lijepljenja ni praznine u zapisu, a tehnička greška ne smije spriječiti predaju (D-129, uvjetno: čeka pisanu potvrdu FPZG-a i upis C-42). (C-42)
-12. Pravila FPZG-a su konfiguracija, ne kod. To uključuje pravila oblika (iz Lekte), dopuštene AI pružatelje i pragove u sažetku procesa. (C-55, C-7)
+12. Pravila FPZG-a su konfiguracija, ne kod. To uključuje pravila oblika (iz Lekte), dopuštene AI pružatelje i pragove u sažetku procesa. Administrator fakulteta dio te konfiguracije (pravilo AI-ja i dopušteni oblici pomoći, dopušteni pružatelji, pragovi, rokovi čuvanja) uređuje u sučelju, verzionirano; pravila akademskog pisanja (oblik, citiranje, bibliografija, naslovna stranica, opseg) dolaze iz paketa pravila Lekte i u Ductusu se samo čitaju (D-117). (C-55, C-7)
 13. Nema AI analize procesa pisanja. AI postoji samo kao pomoćnik studentu, ako ga zadatak dopušta. (Akt o UI, Prilog III.)
 14. Pravila zadatka koja je student potvrdio ne smiju se naknadno proširiti. Profil evidencije može se samo suziti. (C-3, C-18)
 15. Student nikad ne mora platiti da bi izvršio obvezu. U pilotu zadatak ne smije zahtijevati AI. (C-2)

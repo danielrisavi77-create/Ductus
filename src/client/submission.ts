@@ -5,7 +5,7 @@
  * time, a hash or text (QA criterion 1).
  *
  * Every answer maps onto one closed table. A receipt is shown only for a 200
- * `submitted` whose receipt has exactly the signed shape and names the
+ * `submitted` whose receipt has exactly the signed v2 shape (DAN-291) and names the
  * document and revision that were sent (criterion 3); anything else is never
  * a submission. The browser does not check the signature (no verifier before
  * the demo, contract §2), so nothing here says it is verified.
@@ -13,12 +13,12 @@
 
 import { DUCTUS_PROTOCOL_VERSION } from "@/domain/evidence/commit-envelope";
 import {
-  isSignedSubmissionReceiptV1,
-  type SignedSubmissionReceiptV1,
-} from "@/domain/forensics/submission-receipt";
+  isSignedSubmissionReceiptV2,
+  type SignedSubmissionReceiptV2,
+} from "@/domain/forensics/submission-receipt-v2";
 
 export type SubmitOutcome =
-  | { kind: "submitted"; receipt: SignedSubmissionReceiptV1 }
+  | { kind: "submitted"; receipt: SignedSubmissionReceiptV2 }
   | { kind: "noEvidence" | "recordMismatch" | "blocked" }
   | { kind: "staleRevision" | "alreadyRequested" | "notOpen" | "notAcknowledged" }
   | { kind: "signedOut" | "notFound" | "unavailable" };
@@ -34,7 +34,7 @@ export function submitOutcomeFrom(httpStatus: number, body: unknown, sent: Submi
   if (httpStatus === 200) {
     if (status !== "submitted") return { kind: "unavailable" };
     const receipt = (body as Record<string, unknown>).receipt;
-    if (!isSignedSubmissionReceiptV1(receipt)) return { kind: "unavailable" };
+    if (!isSignedSubmissionReceiptV2(receipt)) return { kind: "unavailable" };
     // The receipt must be for what this page sent.
     if (receipt.payload.documentId !== sent.documentId || receipt.payload.revision !== sent.revision) {
       return { kind: "unavailable" };

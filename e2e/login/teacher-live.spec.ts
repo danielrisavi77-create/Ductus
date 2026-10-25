@@ -12,7 +12,7 @@ import { canonicalizeJcs } from "../../src/domain/forensics/jcs";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { cleanUpAssignmentWork, openAssignmentWork } from "./assignment-work";
 import { post } from "./comment-seed";
-import { appCookie, clickSignOut, type DemoAccount, SESSION_COOKIE, sessionRow, signIn } from "./support";
+import { appCookie, type DemoAccount, SESSION_COOKIE, sessionRow, signIn, signOutWithoutDialog } from "./support";
 
 // DAN-86 step 2b: the teacher's live view of a work. The live route (GET
 // /api/live/<id>, PR #496, BACKEND 4.12) is not on main yet, so the browser's
@@ -166,8 +166,8 @@ test("a session ended in another tab before hydration sends no initial summary P
 
     // Real logout closes this session in the database and persists its end
     // in the shared browser storage while the other tab is still unhydrated.
-    await clickSignOut(logoutTab);
-    await logoutTab.waitForURL("http://localhost:3000/");
+    // The teacher's sheet holds nothing: no dialog (O1, #476 c.6396707923).
+    await signOutWithoutDialog(logoutTab);
     expect(await appCookie(context, SESSION_COOKIE)).toBeUndefined();
     expect(await sessionRow(token)).toMatchObject({ close_reason: "logout", closed_at: expect.any(Date) });
     expect(await page.evaluate(({ key, tag }) => {
