@@ -168,6 +168,8 @@ export class EvidenceSession {
     } catch (error) {
       return this.haltLoad(failureOf(error));
     }
+    // close() during the read or the open: nothing is written and nothing listens.
+    if (this.closed) return { kind: "unavailable" };
     if (opened.status === "opened") {
       if (opened.work.documentId !== this.id) return this.haltLoad("unavailable");
       this.work = opened.work;
@@ -182,6 +184,7 @@ export class EvidenceSession {
         }
       }
     }
+    if (this.closed) return { kind: "unavailable" };
     const { meta, snapshot } = contents;
     if (!meta?.evidenceHead || !snapshot) return this.haltLoad("unavailable");
     const document = validateDocument(snapshot.document);

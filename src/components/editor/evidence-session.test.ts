@@ -1094,3 +1094,24 @@ describe("3d-2c2a Codex #803 (2): close() during a save, and a snapshot over the
     expect(session.snapshot().failure).toBeNull();
   });
 });
+
+describe("3d-2c2a Codex #803 (3): close() while load() waits for open", () => {
+  it("C6: a session closed before open answers writes nothing, listens to nothing and is not ready", async () => {
+    let answer: (outcome: OpenOutcome) => void = () => {};
+    const watchSubmission = vi.fn(() => () => {});
+    const { session, journal, online } = setup({
+      open: () => new Promise<OpenOutcome>((resolve) => { answer = resolve; }),
+      over: { watchSubmission },
+    });
+    const startEvidence = vi.spyOn(journal, "startEvidence");
+    const onOnline = vi.spyOn(online, "onOnline");
+    const loading = session.load();
+    session.close();
+    answer({ status: "opened", work: workFor(ASSIGNED) });
+    const result = await loading;
+    expect(result.kind).not.toBe("ready");
+    expect(startEvidence).not.toHaveBeenCalled();
+    expect(onOnline).not.toHaveBeenCalled();
+    expect(watchSubmission).not.toHaveBeenCalled();
+  });
+});
