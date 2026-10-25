@@ -46,12 +46,12 @@ Kanonski dokument: `docs/ENGINEERING_SYSTEM.md`.
 
 ## Otvoreni razvojni stog
 
-Stanje 25. 10. 2026. oko 22:30 UTC prema `gh pr list --state open` (nositelj statusa je Linear; review i QA stanje je na PR-u). STATE.md i dalje prati PR-ove i redovito se osvježava (vlasnik, 25. 10. 2026., prenosi orkestrator na #271 `issuecomment-6398469344`; povod je pregled Trijaže `issuecomment-6398435565`).
+Stanje 25. 10. 2026. oko 22:45 UTC prema `gh pr list --state open` (nositelj statusa je Linear; review i QA stanje je na PR-u). STATE.md i dalje prati PR-ove i redovito se osvježava (vlasnik, 25. 10. 2026., prenosi orkestrator na #271 `issuecomment-6398469344`; povod je pregled Trijaže `issuecomment-6398435565`).
 
 Otvoreno:
 
 - DAN-89 demo lanac: #806 rad studenta s popisa kolegija nastavnika (F2); #726 (K-4c-2, nacrt) i #810 (K-4d korak 3, nacrt) koraci demo prolaza.
-- DAN-37 dokazi: #803 dokazna sesija rada studenta (3d-2c2a).
+- DAN-37 dokazi: #803 dokazna sesija rada studenta (3d-2c2a); #811 spajanje sesije s listom u `/rad` (3d-2c2b, nacrt).
 - DAN-308 brzi put nastavnika: #769 (B-11a), #774 (B-11b), #780 (B-11c), sve nacrti.
 - Nastavnik i početni zaslon: #800 uklanjanje studenta (DAN-292); #805 predaje zadatka (DAN-290); #807 (nacrt) i #808 preusmjeravanje i početni zaslon (DAN-325); #809 dizajn #732, skupina 3.
 - Platforma, orkestrator i CI: #804 izvorni `psql` za demo skripte (DAN-324); #684 `orch:shadow` (DAN-269); #643 (nacrt), #642, #641 Mergify i akcije; #628 Playwright ponavljanja (DAN-262, nacrt).
