@@ -365,6 +365,11 @@ export const hr = {
     barLabel: "Zadatak i prikaz",
     modeWriting: "Pisanje",
     modeTeacherView: "Kako vidi nastavnik",
+    // #732 item 7, za potvrdu: the line above the student's view of the work as the teacher sees it.
+    teacherViewLead:
+      "Ovako nastavnik vidi tvoj rad: zadnji tekst koji je tvoj preglednik poslao, komentare i sažetak procesa. Ovdje se ne piše.",
+    // #732 item 7, za potvrdu: why the switch is disabled outside the student's own work of an assignment.
+    teacherViewOff: "samo uz zadatak",
     // F-10: a link to the submission screen, not the act of submitting (#653 contract 6385776645).
     submitLink: "Predaja",
     soon: "uskoro",

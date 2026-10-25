@@ -18,6 +18,8 @@ import SheetFrame from "@/components/shell/SheetFrame";
 import { readShellRole } from "@/components/shell/shell-role";
 import WorkspaceShell, { RailSection } from "@/components/shell/WorkspaceShell";
 import { sheetTitle } from "@/components/student/sheet-title";
+import { radPath, teacherViewMode } from "@/components/student/teacher-view";
+import TeacherViewSheet from "@/components/student/TeacherViewSheet";
 import { assignmentParam, readWorkContext, type WorkContextRead } from "@/components/student/work-context-read";
 import { pastDue, workDocumentPlan } from "@/components/student/work-document-plan";
 import { DEMO_WORK } from "@/lib/i18n/demo-work.hr";
@@ -41,11 +43,6 @@ export const dynamic = "force-dynamic";
 
 /** The sheet heading of every plan without the student's own assignment. */
 const NO_CONTEXT: WorkContextRead = { kind: "none" };
-
-/** `/rad`, or `/rad?zadatak=<id>` for a well-formed assignment id. */
-function radPath(assignmentId: string | null): string {
-  return assignmentId ? `/rad?zadatak=${assignmentId}` : "/rad";
-}
 
 /**
  * The local journal scope, or null. A refused configuration fails closed: the
@@ -105,14 +102,18 @@ async function journalFor(token: string | undefined): Promise<{
  * stays writable and a note says the submission will be marked late (P3).
  * Only the local demo journal without a session shows invented Rad stages
  * (FE-D9, F-110 t.1). The shell marks the session for the other tabs (F-113
- * t.1). Signing out always ends the session (D-118, `LocalLogout`).
+ * t.1). Signing out always ends the session (D-118, `LocalLogout`). With
+ * `prikaz=nastavnik` the student's own work of the assignment shows as the
+ * teacher sees it (#732 item 7, `TeacherViewSheet`); the provider stays
+ * mounted, so the journal and the live publishing go on. Any other plan
+ * ignores `prikaz` and renders as without it.
  */
 export default async function WorkspacePage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const rawParam = (await searchParams).zadatak;
+  const { zadatak: rawParam, prikaz: rawPrikaz } = await searchParams;
   const assignmentId = assignmentParam(rawParam);
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
   const [{ scope, signedIn, signInAgain, tag, at }, read, role, doc] = await Promise.all([
@@ -132,6 +133,10 @@ export default async function WorkspacePage({
   const session = signedIn && tag !== null ? { tag, at } : null;
   const invented = showsInventedPanels({ scope: journal?.scope ?? null, signedIn });
   const late = plan.kind === "assignment" && pastDue(plan.dueAt, at);
+  // #732 item 7: the teacher's view only of the student's own work; any other plan ignores `prikaz`.
+  const view = teacherViewMode(plan, rawPrikaz);
+  const teacherView = plan.kind === "assignment" && view.mode === "teacher-view" ? plan.journal.documentId : null;
+  const heading = <h1 className="manuscript manuscript__title">{sheetTitle(work ?? NO_CONTEXT, t.workspace.documentUntitled)}</h1>;
   // In the shell's account place: signing out goes through LocalLogout where
   // a journal is open, which knows what the device still holds (D-118, I5).
   const account = journal && signedIn ? <LocalLogout /> : signInAgain ? (
@@ -141,7 +146,9 @@ export default async function WorkspacePage({
   const workspace = (
     <AppShell session={{ tag, at }} role={signedIn ? role : null} current="/rad" crumbs={[t.workspace.title]} account={account} ownMain>
       <WorkspaceShell
+        mode={view.mode}
         writingHref={radPath(assignmentId)}
+        teacherViewHref={view.teacherViewHref}
         context={work ? `${work.course} / ${work.notice.title}` : null}
         barExtra={plan.submission ? (
           // F-10 (#653 contract 6385776645): a plain link; the submission page
@@ -200,33 +207,38 @@ export default async function WorkspacePage({
           <span>{t.workspace.statusNoJournal}</span>
         )}
       >
-        {journal ? <EditorToolbar /> : null}
+        {journal && teacherView === null ? <EditorToolbar /> : null}
         <div className="sheet-area">
           {late ? <p className="sheet-notice" role="note">{t.workspace.lateNote}</p> : null}
-          <SheetFrame>
-            <h1 className="manuscript manuscript__title">{sheetTitle(work ?? NO_CONTEXT, t.workspace.documentUntitled)}</h1>
-            {plan.kind === "free" ? <p className="sheet-note">{t.workspace.freeNote}</p> : null}
-            {journal ? (
-              <LocalEditor />
-            ) : plan.kind === "opening" ? (
-              <OpenWork assignmentId={plan.assignmentId} />
-            ) : (
-              // Not editable: the text says so, matching aria-disabled.
-              <div
-                className="manuscript"
-                role="textbox"
-                aria-multiline="true"
-                aria-disabled="true"
-                aria-label={t.workspace.documentLabel}
-              >
-                <p className="manuscript__placeholder">
-                  {plan.kind === "unavailable" ? t.workspace.unavailable
-                    : plan.kind === "notYetOpen" ? t.workspace.openNotYet.replace("{time}", formatDateTimeHr(plan.opensAt))
-                    : <>{t.workspace.documentNotEditable} <span className="soon">{t.workspace.soon}</span></>}
-                </p>
-              </div>
-            )}
-          </SheetFrame>
+          {teacherView !== null ? (
+            // Read-only: the editor stays in the provider, so going back to Pisanje keeps the text.
+            <TeacherViewSheet documentId={teacherView} session={session} heading={heading} />
+          ) : (
+            <SheetFrame>
+              {heading}
+              {plan.kind === "free" ? <p className="sheet-note">{t.workspace.freeNote}</p> : null}
+              {journal ? (
+                <LocalEditor />
+              ) : plan.kind === "opening" ? (
+                <OpenWork assignmentId={plan.assignmentId} />
+              ) : (
+                // Not editable: the text says so, matching aria-disabled.
+                <div
+                  className="manuscript"
+                  role="textbox"
+                  aria-multiline="true"
+                  aria-disabled="true"
+                  aria-label={t.workspace.documentLabel}
+                >
+                  <p className="manuscript__placeholder">
+                    {plan.kind === "unavailable" ? t.workspace.unavailable
+                      : plan.kind === "notYetOpen" ? t.workspace.openNotYet.replace("{time}", formatDateTimeHr(plan.opensAt))
+                      : <>{t.workspace.documentNotEditable} <span className="soon">{t.workspace.soon}</span></>}
+                  </p>
+                </div>
+              )}
+            </SheetFrame>
+          )}
         </div>
       </WorkspaceShell>
     </AppShell>

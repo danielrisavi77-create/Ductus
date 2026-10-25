@@ -14,8 +14,9 @@ export type WorkspaceShellProps = {
   mode?: WorkspaceMode;
   /**
    * Where each view lives. A view without an address is a visibly disabled
-   * button marked "uskoro", never a link that leads nowhere: the teacher's
-   * view arrives with F-8.
+   * button that says why, never a link that leads nowhere: the teacher's
+   * view exists only beside the student's own work of an assignment (#732
+   * item 7).
    */
   writingHref?: string;
   teacherViewHref?: string;
@@ -65,10 +66,10 @@ export default function WorkspaceShell({
       <section className="workspace__bar" aria-label={t.workspace.barLabel}>
         {context ? <p className="brand-line brand-line__context">{context}</p> : null}
         <nav className="modes" aria-label={t.workspace.viewModes}>
-          <ModeLink href={writingHref} current={mode === "writing"}>
+          <ModeLink href={writingHref} current={mode === "writing"} offLabel={t.workspace.soon}>
             {t.workspace.modeWriting}
           </ModeLink>
-          <ModeLink href={teacherViewHref} current={mode === "teacher-view"}>
+          <ModeLink href={teacherViewHref} current={mode === "teacher-view"} offLabel={t.workspace.teacherViewOff}>
             {t.workspace.modeTeacherView}
           </ModeLink>
         </nav>
@@ -93,18 +94,19 @@ export default function WorkspaceShell({
   );
 }
 
-type ModeLinkProps = { href?: string; current: boolean; children: ReactNode };
+type ModeLinkProps = { href?: string; current: boolean; offLabel: string; children: ReactNode };
 
 /**
  * One entry of the view switch. Without an address it is a button that stays
  * in the Tab order and says it is unavailable (`aria-disabled`), so a keyboard
- * or screen reader user learns the view exists and is not ready yet.
+ * or screen reader user learns the view exists and why it cannot open here
+ * (`offLabel`).
  */
-function ModeLink({ href, current, children }: ModeLinkProps) {
+function ModeLink({ href, current, offLabel, children }: ModeLinkProps) {
   if (href === undefined) {
     return (
       <button type="button" className="modes__item" aria-disabled="true">
-        {children} <span className="soon">{t.workspace.soon}</span>
+        {children} <span className="soon">{offLabel}</span>
       </button>
     );
   }

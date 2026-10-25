@@ -1101,6 +1101,22 @@ main:focus {
   font-size: 14px;
 }
 
+/* #732 item 7: "Kako vidi nastavnik" on /rad; the teacher's cards stand under the sheet. */
+.teacher-view__lead {
+  max-width: 720px;
+  margin: 0 auto 12px;
+  color: var(--ink-2);
+  font-family: var(--ff-ui);
+  font-size: 14px;
+}
+
+.teacher-view__cards {
+  display: grid;
+  gap: 16px;
+  max-width: 720px;
+  margin: 24px auto 0;
+}
+
 /* No network (F-8, DAN-211): text and icon, never colour alone. */
 .offline-banner p {
   margin: 0;
