@@ -61,6 +61,15 @@ describe("loadAuthConfig", () => {
     },
   );
 
+  // F-123: a discovery document URL is not an issuer, in any environment.
+  it.each([
+    [PRODUCTION, "https://idp.aai.example.hr/.well-known/openid-configuration"],
+    [PRODUCTION, "https://idp.aai.example.hr/oidc/.WELL-KNOWN/openid-configuration"],
+    [LOCAL, "http://localhost:8090/.well-known/openid-configuration"],
+  ])("refuses the discovery URL %# as the issuer", (base, issuer) => {
+    expect(refusal({ ...base, OIDC_ISSUER: issuer }).message).toMatch(/not its discovery document/);
+  });
+
   it("allows the fake provider under NODE_ENV=test", () => {
     expect(loadAuthConfig({ ...LOCAL, NODE_ENV: "test" }).provider).toBe("fake-oidc");
   });

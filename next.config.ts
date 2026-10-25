@@ -10,6 +10,10 @@ const SECURITY_HEADERS = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // The demo runs on `next dev` (the fake provider needs it, D-09), where the
+  // dev tools button sat over the account name in the sidebar on every demo
+  // screenshot. Build and runtime errors still open the overlay.
+  devIndicators: false,
   async headers() {
     return [{ source: "/:path*", headers: [...SECURITY_HEADERS] }];
   },

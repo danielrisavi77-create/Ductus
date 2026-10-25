@@ -2,9 +2,11 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 
 import AppShell from "@/components/shell/AppShell";
+import { shellSession } from "@/components/shell/shell-session";
 import TeacherSetup from "@/components/teacher/TeacherSetup";
 import { teacherAccess } from "@/components/teacher/teacher-access";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
+import { sessionPrincipal } from "@/server/auth/principal";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
 
@@ -19,9 +21,11 @@ export const metadata = { title: `${t.teacher.title} · ${t.app.name}` };
 // the authenticated principal.
 export default async function TeacherNewAssignmentPage() {
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
-  const access = await teacherAccess(token, withActor);
+  const [access, principal] = await Promise.all([teacherAccess(token, withActor), sessionPrincipal(token, withActor)]);
   return (
     <AppShell
+      session={shellSession(token)}
+      scope={principal.kind === "signed-in" ? principal.scope : null}
       role={access === "allowed" ? "teacher" : null}
       current="/nastavnik/zadatak/novi"
       crumbs={[t.teacherCourses.title, t.teacher.title]}

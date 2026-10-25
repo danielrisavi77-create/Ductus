@@ -78,6 +78,12 @@ describe("S3 notice text (D-142, D-143)", () => {
     }
   });
 
+  it("describes the chain as a digital fingerprint linked to the previous one, without hash or chain", () => {
+    expect(s.recorded.chain).toBe("Svaki korak spremanja dobiva digitalni otisak povezan s prethodnim, pa se svaka kasnija izmjena zapisa vidi.");
+    expect(s.recorded.chain).not.toMatch(/hash|lanac/i);
+    expect(findForbiddenTerms(s.recorded.chain)).toEqual([]);
+  });
+
   it("passes the forbidden-terms check in every student string", () => {
     for (const text of strings(s)) expect({ text, found: findForbiddenTerms(text) }).toEqual({ text, found: [] });
   });

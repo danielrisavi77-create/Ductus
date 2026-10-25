@@ -6,6 +6,9 @@ export const ACCOUNTS = Object.freeze({
   "demo-student": Object.freeze({ name: "Demo studentica", affiliation: "student" }),
   "demo-student-2": Object.freeze({ name: "Demo student 2", affiliation: "student" }),
   "demo-teacher": Object.freeze({ name: "Demo nastavnik", affiliation: "employee" }),
+  // K-4d (#655): a second teacher of the same institution who teaches none of
+  // the first teacher's courses. The name never contains "Demo nastavnik".
+  "demo-teacher-2": Object.freeze({ name: "Demo nastavnica", affiliation: "employee" }),
 });
 
 export const DEMO_ACCOUNTS = ACCOUNTS;

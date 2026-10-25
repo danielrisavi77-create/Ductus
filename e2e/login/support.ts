@@ -46,7 +46,7 @@ export async function appCookie(context: BrowserContext, name: string) {
 }
 
 /** A button on the provider's "Demo prijava" page (infra/fake-oidc). */
-export type DemoAccount = "Demo studentica" | "Demo student 2" | "Demo nastavnik";
+export type DemoAccount = "Demo studentica" | "Demo student 2" | "Demo nastavnik" | "Demo nastavnica";
 
 /** Signs in as a demo account (the student unless named) and returns the callback URL the provider sent. */
 export async function signIn(page: Page, returnTo: string, account: DemoAccount = "Demo studentica"): Promise<string> {
@@ -64,6 +64,20 @@ export async function signIn(page: Page, returnTo: string, account: DemoAccount 
 }
 
 /** The sign-out dialog of the writing page (FE-D7, D-118). */
+/** A `datetime-local` value `ms` from now, in the browser's own zone (the form reads it there). */
+export function localInputAt(page: Page, ms: number): Promise<string> {
+  return page.evaluate((offset) => {
+    const at = new Date(Date.now() + offset);
+    const two = (n: number) => String(n).padStart(2, "0");
+    return `${at.getFullYear()}-${two(at.getMonth() + 1)}-${two(at.getDate())}T${two(at.getHours())}:${two(at.getMinutes())}`;
+  }, ms);
+}
+
+/** DAN-36 (#576): "Stvori kolegij" also issues the code, so the form asks for its deadline first. */
+export async function fillCodeDeadline(page: Page): Promise<void> {
+  await page.getByLabel(messagesHr.teacher.enrollmentCode.validUntil).fill(await localInputAt(page, 7 * 24 * 3_600_000));
+}
+
 export function logoutDialogOf(page: Page) {
   return page.getByRole("dialog", { name: messagesHr.auth.logoutTitle });
 }
@@ -72,4 +86,14 @@ export function logoutDialogOf(page: Page) {
 export async function clickSignOut(page: Page): Promise<void> {
   await page.getByRole("button", { name: messagesHr.auth.logout, exact: true }).click();
   await logoutDialogOf(page).getByRole("button", { name: messagesHr.auth.logoutConfirm }).click();
+}
+
+/**
+ * Signs out where nothing of this person stays on the device (D-118, O1 of
+ * #476 c.6396707923): "Odjava" leads straight to the home page. A dialog
+ * would hold the page, so the wait for "/" fails if one opens.
+ */
+export async function signOutWithoutDialog(page: Page): Promise<void> {
+  await page.getByRole("button", { name: messagesHr.auth.logout, exact: true }).click();
+  await page.waitForURL("http://localhost:3000/");
 }

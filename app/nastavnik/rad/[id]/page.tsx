@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 
 import AppShell from "@/components/shell/AppShell";
-import SessionObserver from "@/components/shell/SessionObserver";
 import LiveWorkView from "@/components/teacher/LiveWorkView";
 import { teacherAccess } from "@/components/teacher/teacher-access";
 import { isDocumentId } from "@/domain/collaboration";
@@ -48,14 +47,11 @@ export default async function LiveWorkPage({ params }: { params: Promise<{ id: s
   }
 
   return (
-    <>
-      <SessionObserver tag={tag} at={at} />
-      <AppShell role={role} crumbs={[t.liveView.context]}>
-        <div className="page">
-          <h1 className="visually-hidden">{t.liveView.context}</h1>
-          {body}
-        </div>
-      </AppShell>
-    </>
+    <AppShell session={{ tag, at }} role={role} scope={principal.kind === "signed-in" ? principal.scope : null} crumbs={[t.liveView.context]}>
+      <div className="page">
+        <h1 className="visually-hidden">{t.liveView.context}</h1>
+        {body}
+      </div>
+    </AppShell>
   );
 }

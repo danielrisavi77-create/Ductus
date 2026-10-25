@@ -32,7 +32,7 @@
 | Smanjenje podataka | Vrijeme na minutu, odsječci do 30 s (D-24); uz to zasebna klasa s vremenom svake promjene (D-143), vezana uz odsječak hashom; bez tipki, bez drugih aplikacija, bez kamere (§9); OIB se ne traži | Opseg `profile` pri prijavi i mogući izvor imena (`04`); rok zasebne klase vremena po promjeni nije predložen `[ODLUKA]`; je li "razlog produljenja" potreban kao slobodan tekst `[ODLUKA]` |
 | Točnost | Praznina se prikazuje kao praznina (pr. 3); oznake opaženo, uvezeno, izjavljeno (D-44) | Postupak ispravka studentovih podataka nije opisan `[IZVEDBA]` |
 | Ograničenje čuvanja | Klase podataka (ARCHITECTURE §3); retention uloga u bazi postoji (`20261003210000_roles.sql`) | Rokovi D-30; posao brisanja i brisanje kopija nisu izgrađeni `[IZVEDBA]` |
-| Transparentnost | Obavijest je prvi ekran svakog zadatka (pr. 6); student vidi tko je otvorio rad (pr. 17) i isto što vidi nastavnik (pr. 5) | Obavijest o privatnosti nije napisana (nacrt `03`); `access_log` nije izgrađen |
+| Transparentnost | Obavijest je prvi ekran svakog zadatka (pr. 6); student vidi tko je otvorio rad (pr. 17) i isto što vidi nastavnik (pr. 5) | Obavijest o privatnosti nije napisana (nacrt `03`); `audit.access_log` je izgrađen, ali studentsko čitanje nije |
 | Prava ispitanika | Izvoz rada i evidencije u svakom trenutku (PRODUCT §6); povlačenje D-12 | Pristup, ispravak, brisanje, prigovor: nema postupka ni izgradnje `[IZVEDBA]`; tko prima zahtjeve `[ODLUKA]` |
 
 ## 3. Rizici za studente

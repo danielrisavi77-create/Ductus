@@ -2,7 +2,8 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 
 import AppShell from "@/components/shell/AppShell";
-import { readShellRole } from "@/components/shell/shell-role";
+import { shellSession } from "@/components/shell/shell-session";
+import { readShellAccount } from "@/components/shell/shell-role";
 import EnrollForm from "@/components/student/EnrollForm";
 import { SIGN_IN_HREF } from "@/components/student/enroll-code";
 import styles from "@/components/student/Enroll.module.css";
@@ -23,9 +24,9 @@ const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 export default async function EnrollPage() {
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
   const signedIn = Boolean(token && TOKEN.test(token));
-  const role = await readShellRole(token, withActor);
+  const { role, scope } = await readShellAccount(token, withActor);
   return (
-    <AppShell role={role} current="/upis" crumbs={[t.student.enroll.title]}>
+    <AppShell session={shellSession(token)} role={role} scope={scope} current="/upis" crumbs={[t.student.enroll.title]}>
       <div className={`page ${styles.screen}`}>
         <section className={styles.card}>
           <h1>{t.student.enroll.heading}</h1>

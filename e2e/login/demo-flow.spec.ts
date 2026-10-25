@@ -1,18 +1,25 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { expect, test, type BrowserContext, type Page, type Request } from "@playwright/test";
 import pg from "pg";
 
+import { formatBibliographyEntry, formatInText } from "../../src/domain/citation/format";
+import { parseCitationStyle } from "../../src/domain/citation/style";
+import type { BookSource } from "../../src/domain/citation/types";
 import { DUCTUS_PROTOCOL_VERSION } from "../../src/domain/evidence/commit-envelope";
 import { canonicalizeJcs } from "../../src/domain/forensics/jcs";
 import type { JournalContents } from "../../src/domain/sync/journal-types";
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
+import { workDocument } from "./work-seed";
 import { cleanUp, post, seed } from "./comment-seed";
-import { appCookie, clickSignOut, SESSION_COOKIE, sessionRow, signIn } from "./support";
+import {
+  appCookie, clickSignOut, fillCodeDeadline, SESSION_COOKIE, sessionRow, signIn, signOutWithoutDialog,
+} from "./support";
 
 // K-4 (DAN-89; docs/PLAN-DEMO.md §1 points 1 to 5 and §7 t. 2, D-98): the demo
 // walk-through as one test. The login config records its video in CI and the
@@ -28,6 +35,18 @@ import { appCookie, clickSignOut, SESSION_COOKIE, sessionRow, signIn } from "./s
 //
 // Accounts, course and text are invented (K-3, infra/fake-oidc).
 
+// Chromium draws a native date field in the language of the browser, not of the
+// context `locale` (hr-HR in the config): on the Linux CI runner the teacher's
+// form showed "mm/dd/yyyy" and "11/02/2026, 09:00 AM". The browser of this file
+// starts in Croatian, as a Croatian teacher's browser would, so the demo
+// screenshots show the dates as the teacher sees them.
+const BROWSER_ENV = Object.fromEntries(
+  Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
+);
+test.use({
+  launchOptions: { args: ["--lang=hr-HR"], env: { ...BROWSER_ENV, LANG: "hr_HR.UTF-8", LANGUAGE: "hr" } },
+});
+
 const run = promisify(execFile);
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 // A fixed invented name: an identical repeat returns the same course (create_course).
@@ -38,11 +57,45 @@ const OFFLINE_TEXT = " Dopuna napisana bez mreže.";
 const DRAFT = TEXT + OFFLINE_TEXT;
 const QUOTE = "gradskim knjižnicama";
 const COMMENT = "Dodaj izvor za ovu tvrdnju.";
-const LIVE_PATH = `/api/live/${LOCAL_DEMO_DOCUMENT_ID}`;
+// #711 F1: the student writes into her own work of the K-4 assignment, made
+// by the real open route when she first opens it (step 2, K-4e); its id is
+// read from the database, never the fixed local id.
+let k4Document: string | null = null;
+const livePath = () => `/api/live/${k4Document!}`;
 const LIVE_READ_HEADERS = { "ductus-protocol": DUCTUS_PROTOCOL_VERSION };
+
+// F-8 (K-4c-1): an invented source; the citation and the entry are the FPZG
+// style's output for it (src/domain/citation), never copied strings.
+const FPZG = parseCitationStyle(JSON.parse(readFileSync(new URL("../../config/faculties/fpzg/citation.json", import.meta.url), "utf8")));
+const SOURCE: BookSource = {
+  type: "book", authors: [{ kind: "person", family: "Primjerić", given: "Iva" }], year: 2019,
+  title: "Izmišljene gradske knjižnice", place: "Zagreb", publisher: "Naklada Primjer",
+};
+const PAGES = "12-14";
+type Block = { type: "paragraph" } | { type: "heading"; level: number };
+const BLOCKS: readonly (Block & { text: string })[] = [
+  { type: "paragraph", text: DRAFT },
+  { type: "heading", level: 1, text: "Knjižnice kao javni prostor" },
+  { type: "paragraph", text: `Knjižnice su izmišljenog grada otvorene svima ${formatInText(SOURCE, FPZG, PAGES)}.` },
+  { type: "heading", level: 1, text: "Literatura" },
+  { type: "paragraph", text: formatBibliographyEntry(SOURCE, FPZG) },
+];
+const EXPECTED_TEXT = BLOCKS.map((block) => block.text).join("");
+const SYNC_PATH = /^\/api\/(evidence|live|submission)(\/|$)/;
+const isSyncUrl = (url: URL) => SYNC_PATH.test(url.pathname);
+
+/** Type, level and exact text of each block in the journal's snapshot. */
+const blocksOf = (contents: JournalContents) => contents.snapshot!.document.nodes.map((node) => ({
+  type: node.type, ...(node.type === "heading" ? { level: node.level } : {}),
+  text: node.children.map((child) => child.text).join(""),
+}));
 
 const editorOf = (page: Page) => page.getByRole("textbox", { name: t.workspace.documentLabel });
 const chipOf = (page: Page) => page.locator(".workspace__status .sync-chip");
+
+/** "Naslov 1" from the toolbar; the button keeps the selection in the sheet (EditorToolbar). */
+const heading1Of = (page: Page) =>
+  page.getByRole("toolbar", { name: t.toolbar.label }).getByRole("button", { name: t.toolbar.heading1, exact: true });
 
 /** Read-only evidence of the one journal, before a second account is opened. */
 async function localCheckpoint(page: Page): Promise<JournalContents> {
@@ -65,7 +118,7 @@ async function localCheckpoint(page: Page): Promise<JournalContents> {
     } finally {
       db.close();
     }
-  }, LOCAL_DEMO_DOCUMENT_ID);
+  }, k4Document!);
 }
 
 async function attachCheckpoint(name: string, value: JournalContents): Promise<void> {
@@ -82,10 +135,15 @@ async function forgetProviderLogin(context: BrowserContext): Promise<void> {
   await context.clearCookies({ name: /^_session/ });
 }
 
-/** Signs out through the button on the writing page and checks that the session is closed. */
-async function signOut(page: Page, token: string): Promise<void> {
+/**
+ * Signs out through the button on the writing page and checks that the
+ * session is closed. With nothing of this person on the device there is no
+ * dialog (O1, #476 c.6396707923); `held` says which is expected.
+ */
+async function signOut(page: Page, token: string, held = true): Promise<void> {
   if (!page.url().endsWith("/rad")) await page.goto("/rad");
-  await clickSignOut(page);
+  if (held) await clickSignOut(page);
+  else await signOutWithoutDialog(page);
   await page.waitForURL("http://localhost:3000/");
   expect(await appCookie(page.context(), SESSION_COOKIE)).toBeUndefined();
   expect(await sessionRow(token)).toMatchObject({ close_reason: "logout", closed_at: expect.any(Date) });
@@ -130,9 +188,10 @@ test.afterEach(async () => {
 // Removes the comments, memberships and role the F-9 step opened (comment-seed.ts).
 test.afterEach(cleanUp);
 
-// The live state is an invented fixture, separate from the evidence journal.
+// The live state is separate from the evidence journal: the fixture's and the K-4 work's.
 const clearLiveFixture = () => withAdmin((client) => client.query(
-  "DELETE FROM collaboration.live_state WHERE document_id = $1", [LOCAL_DEMO_DOCUMENT_ID]));
+  "DELETE FROM collaboration.live_state WHERE document_id = ANY($1::text[])",
+  [[LOCAL_DEMO_DOCUMENT_ID, ...(k4Document ? [k4Document] : [])]]));
 test.afterEach(clearLiveFixture);
 
 // Only the reserved synthetic document's owner acknowledgment, so every run
@@ -142,6 +201,40 @@ const clearNoticeFixture = () => withAdmin((client) => client.query(
    WHERE d.id = $1 AND p.id = d.project_id AND n.assignment_id = p.assignment_id AND n.student_id = d.principal_id`,
   [LOCAL_DEMO_DOCUMENT_ID]));
 test.afterEach(clearNoticeFixture);
+
+// K-4b (#655): F-7 enrollment by code into the F-6 course. Since DAN-36 (#576)
+// the code is the one the teacher's screen shows after "Stvori kolegij".
+const STUDENT_ID = "demo-student@demo.ductus.test";
+const ASSIGNMENT_TITLE = "Izmišljeni zadatak o gradskim knjižnicama";
+let enrollmentCode: string | null = null;
+let enrolledCourse: string | null = null;
+let k4Assignment: string | null = null;
+
+/** The F-6 course of the demo teacher and its assignments, read as the local admin. */
+const k4Course = () => withAdmin(async (client) => {
+  const { rows } = await client.query<{ course: string; assignment: string | null }>(
+    `SELECT c.id AS course, a.id AS assignment FROM institution.course c
+       JOIN identity.user_account u ON u.id = c.created_by
+       LEFT JOIN institution.assignment a ON a.course_id = c.id
+      WHERE c.name = $1 AND u.hr_edu_person_unique_id = $2`, [COURSE_NAME, TEACHER_ID]);
+  const courses = new Set(rows.map((row) => row.course));
+  if (courses.size !== 1) throw new Error("expected exactly one K-4 course of the demo teacher");
+  return { course: rows[0]!.course, assignments: rows.flatMap((row) => (row.assignment ? [row.assignment] : [])) };
+});
+
+// Closes only the demo student's membership in the K-4 course, so the next run enrolls again.
+test.afterEach(async () => {
+  if (enrolledCourse) {
+    await withAdmin((client) => client.query(
+      `UPDATE institution.course_member m SET member_to = now() FROM identity.user_account u
+        WHERE m.course_id = $1 AND m.user_id = u.id AND u.hr_edu_person_unique_id = $2
+          AND m.role = 'student' AND m.member_to IS NULL`, [enrolledCourse, STUDENT_ID]));
+  }
+  enrolledCourse = null;
+  enrollmentCode = null;
+  k4Assignment = null;
+  k4Document = null;
+});
 
 test("demo walk-through", async ({ browser, page, context }) => {
   let token = "";
@@ -183,16 +276,34 @@ test("demo walk-through", async ({ browser, page, context }) => {
     await expect(page.getByRole("heading", { name: t.teacher.title })).toBeVisible();
 
     await page.getByLabel(t.teacher.course.name).fill(COURSE_NAME);
+    await fillCodeDeadline(page);
+    // DAN-36 (#576): one click creates the course, then asks the real route (#575) for its code.
+    const reply = page.waitForResponse((response) =>
+      /\/api\/institution\/courses\/[^/]+\/enrollment-code$/.test(new URL(response.url()).pathname)
+      && response.request().method() === "POST");
     await page.getByRole("button", { name: t.teacher.course.submit }).click();
+    const issued = await reply;
+    expect(issued.status()).toBe(200);
+    expect(issued.headers()["cache-control"]).toBe("no-store");
+    const { code } = await issued.json() as { code: string };
+    expect(code).toMatch(/^[0-9A-F]{4}(-[0-9A-F]{4}){3}$/);
     await expect(page.getByRole("status").filter({ hasText: t.teacher.course.created })).toBeVisible();
-    // FE-D10: no enrolment code is invented while its route is missing.
-    const code = page.getByText(t.teacher.course.code, { exact: false }).first();
-    await expect(code).toContainText(t.workspace.soon);
-    await expect(page.getByText(t.teacher.course.codeSoon)).toBeVisible();
+    // FE-D10: the screen shows exactly the code the route returned, never an invented one.
+    await expect(page.locator("form[aria-labelledby=kolegij] code")).toHaveText(code);
+    const { course } = await k4Course();
+    expect(new URL(issued.url()).pathname).toBe(`/api/institution/courses/${course}/enrollment-code`);
+    enrollmentCode = code;
     await snapshot(page, "1-kolegij-stvoren");
 
     await page.getByLabel(t.teacher.assignment.title).fill("Izmišljeni zadatak o gradskim knjižnicama");
-    await page.getByLabel(t.teacher.assignment.opensAt).fill("2026-11-02T09:00");
+    // K-4e (#655): opened an hour ago, so the student can confirm this very
+    // assignment in step 2; the form reads the value in the browser's time zone.
+    const opened = await page.evaluate(() => {
+      const at = new Date(Date.now() - 3_600_000);
+      const two = (n: number) => String(n).padStart(2, "0");
+      return `${at.getFullYear()}-${two(at.getMonth() + 1)}-${two(at.getDate())}T${two(at.getHours())}:${two(at.getMinutes())}`;
+    });
+    await page.getByLabel(t.teacher.assignment.opensAt).fill(opened);
     await page.getByLabel(t.teacher.assignment.dueAt).fill("2026-12-15T09:00");
     await page.getByLabel(t.teacher.assignment.instructions).fill("Napiši kratak izmišljeni rad o gradskim knjižnicama.");
     // Art. 8 lists and their source stay on the screen before anything is published.
@@ -204,7 +315,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
   });
 
   await test.step("1. Nastavnik se odjavljuje", async () => {
-    await signOut(page, token);
+    await signOut(page, token, false);
     await snapshot(page, "1-nastavnik-odjavljen");
   });
 
@@ -224,17 +335,94 @@ test("demo walk-through", async ({ browser, page, context }) => {
     await snapshot(page, "2-studentica-prijavljena");
   });
 
-  // The complete F-7 still needs the teacher's code and the actual enrollment
-  // flow (#575/#542). The notice UI below uses the existing synthetic fixture;
-  // it does not join the F-6 assignment to the connected editor/evidence flow.
-  await test.step.skip("2. F-7: studentica se upisuje kodom i potvrđuje obavijest", async () => {});
+  // F-7 (demo point 2): the student enrolls with the teacher's code through the
+  // real form and route (#542) and lands on the notice of the F-6 assignment.
+  // Nothing goes to the evidence, live or submission routes on the way.
+  await test.step("2. F-7: studentica se upisuje kodom i stiže na obavijest zadatka iz koraka 1", async () => {
+    expect(enrollmentCode).not.toBeNull();
+    const { course, assignments } = await k4Course();
+    const evidenceRequests: string[] = [];
+    const observe = (request: Request) => {
+      const path = new URL(request.url()).pathname;
+      if (/^\/api\/(evidence|live|submission)(\/|$)/.test(path)) evidenceRequests.push(path);
+    };
+    await page.goto("/upis");
+    page.on("request", observe);
+    try {
+      await page.getByLabel(t.student.enroll.label).fill(enrollmentCode!.toLowerCase());
+      const response = page.waitForResponse((r) =>
+        new URL(r.url()).pathname === "/api/institution/enrollments" && r.request().method() === "POST");
+      await page.getByRole("button", { name: t.student.enroll.submit }).click();
+      const enrolled = await response;
+      enrolledCourse = course;
+      expect(enrolled.status()).toBe(200);
+      expect(enrolled.request().postDataJSON()).toEqual({ code: enrollmentCode!.replaceAll("-", "") });
+      expect(await enrolled.json()).toEqual({ courseId: course });
+
+      await page.waitForURL(/\/zadatak\/[0-9a-f-]{36}$/);
+      const assignmentId = new URL(page.url()).pathname.split("/").pop()!;
+      expect(assignments).toContain(assignmentId);
+      await expect(page.getByRole("heading", { level: 1, name: ASSIGNMENT_TITLE })).toBeVisible();
+      await expect(page.getByRole("heading", { name: t.student.teacherHeading })).toBeVisible();
+      await expect(editorOf(page)).toHaveCount(0);
+      // F-6 opened the assignment an hour ago, so its notice can be confirmed (FE-D8).
+      const { rows: [state] } = await withAdmin((client) => client.query<{ members: string; open: boolean }>(
+        `SELECT (SELECT count(*) FROM institution.course_member m JOIN identity.user_account u ON u.id = m.user_id
+                  WHERE m.course_id = $1 AND u.hr_edu_person_unique_id = $2 AND m.role = 'student'
+                    AND m.member_to IS NULL) AS members,
+                (SELECT v.opens_at <= now() FROM institution.assignment a JOIN institution.assignment_version v
+                  ON v.assignment_id = a.id AND v.version_no = a.current_version WHERE a.id = $3) AS open`,
+        [course, STUDENT_ID, assignmentId]));
+      expect(Number(state!.members)).toBe(1);
+      expect(state!.open).toBe(true);
+      await expect(page.getByRole("checkbox", { name: t.student.checkbox })).toHaveCount(1);
+      expect(evidenceRequests).toEqual([]);
+      k4Assignment = assignmentId;
+      await snapshot(page, "2-upis-kodom-obavijest-zadatka");
+    } finally {
+      page.off("request", observe);
+    }
+  });
+
+  // K-4e (#655): the student confirms the notice of the very assignment the
+  // teacher published in step 1 and opens it in the workspace, which names its
+  // course and title. The page opens her own work of it with one POST (#711
+  // F1); every later step writes, publishes and is commented in that document.
+  await test.step("2. F-7: studentica potvrđuje obavijest zadatka iz koraka 1 i otvara ga u radu", async () => {
+    expect(k4Assignment).not.toBeNull();
+    const id = k4Assignment!;
+    await expect(page).toHaveURL(`http://localhost:3000/zadatak/${id}`);
+    const { rows: [current] } = await withAdmin((client) => client.query<{ version: number }>(
+      "SELECT current_version AS version FROM institution.assignment WHERE id = $1", [id]));
+    const confirm = page.getByRole("button", { name: t.student.confirm });
+    await expect(confirm).toBeDisabled();
+    await page.getByRole("checkbox", { name: t.student.checkbox }).check();
+    const acknowledged = page.waitForResponse((response) =>
+      new URL(response.url()).pathname === `/api/institution/assignments/${id}/acknowledgment`);
+    await confirm.click();
+    const response = await acknowledged;
+    expect(response.status()).toBe(200);
+    expect(response.request().postDataJSON()).toEqual({ versionNo: current!.version });
+    const { rows } = await withAdmin((client) => client.query<{ version_no: number }>(
+      `SELECT n.version_no FROM institution.notice_acknowledgment n JOIN identity.user_account u ON u.id = n.student_id
+        WHERE n.assignment_id = $1 AND u.hr_edu_person_unique_id = $2`, [id, STUDENT_ID]));
+    expect(rows).toEqual([{ version_no: current!.version }]);
+    await page.getByRole("link", { name: t.student.openEditor }).click();
+    await page.waitForURL(`http://localhost:3000/rad?zadatak=${id}`);
+    await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: 30_000 });
+    await expect(page.locator(".brand-line__context")).toHaveText(`${COURSE_NAME} / ${ASSIGNMENT_TITLE}`);
+    k4Document = await workDocument(id);
+    expect(k4Document).not.toBe(LOCAL_DEMO_DOCUMENT_ID);
+    await snapshot(page, "2-rad-na-zadatku-iz-koraka-1");
+  });
 
   await test.step("2. F-7 djelomično: studentica potvrđuje obavijest kroz stvarno sučelje", async () => {
     await seed();
     await clearNoticeFixture();
-    const { rows: [assignment] } = await withAdmin((client) => client.query<{ id: string; version: number }>(
-      `SELECT a.id, a.current_version AS version FROM evidence.document d
+    const { rows: [assignment] } = await withAdmin((client) => client.query<{ id: string; version: number; title: string }>(
+      `SELECT a.id, a.current_version AS version, v.title FROM evidence.document d
        JOIN evidence.project p ON p.id = d.project_id JOIN institution.assignment a ON a.id = p.assignment_id
+       JOIN institution.assignment_version v ON v.assignment_id = a.id AND v.version_no = a.current_version
        WHERE d.id = $1`, [LOCAL_DEMO_DOCUMENT_ID]));
     expect(assignment).toBeDefined();
     const noticePath = `/zadatak/${assignment!.id}`;
@@ -284,7 +472,15 @@ test("demo walk-through", async ({ browser, page, context }) => {
     }
     await page.getByRole("link", { name: t.student.openEditor }).click();
     await page.waitForURL(`http://localhost:3000/rad?zadatak=${assignment!.id}`);
-    await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+    // #711 F1: the fixture's document has the fixed local id, which a signed-in
+    // student never writes into: the same neutral sheet as any other refusal.
+    await expect(page.locator(".sheet-area")).toContainText(t.workspace.unavailable);
+    await expect(page.locator('[contenteditable="true"]')).toHaveCount(0);
+    expect(await page.content()).not.toContain(LOCAL_DEMO_DOCUMENT_ID);
+    // Back to her own work of the K-4 assignment; F-8 point 5: the sheet heading names it.
+    await page.goto(`/rad?zadatak=${k4Assignment!}`);
+    await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: 30_000 });
+    await expect(page.locator("h1.manuscript__title")).toHaveText(ASSIGNMENT_TITLE);
     await snapshot(page, "2-editor-nakon-potvrde");
   });
 
@@ -345,18 +541,18 @@ test("demo walk-through", async ({ browser, page, context }) => {
       // The notice was acknowledged by the actual student UI before writing.
       const body = canonicalizeJcs((await localCheckpoint(page)).snapshot!.document);
       const etag = `"${createHash("sha256").update(body, "utf8").digest("hex")}"`;
-      const published = await page.request.put(LIVE_PATH, {
+      const published = await page.request.put(livePath(), {
         headers: { origin: "http://localhost:3000", "content-type": "application/json", "if-none-match": "*" }, data: body,
       });
       expect(published.status()).toBe(200);
       expect(await published.json()).toMatchObject({ outcome: "accepted" });
-      const ownerRead = await page.request.get(LIVE_PATH, { headers: LIVE_READ_HEADERS });
+      const ownerRead = await page.request.get(livePath(), { headers: LIVE_READ_HEADERS });
       expect(ownerRead.status()).toBe(200);
       expect(await ownerRead.text()).toBe(body);
       expect(ownerRead.headers().etag).toBe(etag);
 
-      const liveRead = teacher.waitForResponse((response) => new URL(response.url()).pathname === LIVE_PATH && response.status() === 200);
-      await teacher.goto(`/nastavnik/rad/${LOCAL_DEMO_DOCUMENT_ID}`);
+      const liveRead = teacher.waitForResponse((response) => new URL(response.url()).pathname === livePath() && response.status() === 200);
+      await teacher.goto(`/nastavnik/rad/${k4Document!}`);
       const shown = await liveRead;
       expect(await shown.text()).toBe(body);
       expect(shown.headers().etag).toBe(etag);
@@ -400,12 +596,104 @@ test("demo walk-through", async ({ browser, page, context }) => {
     }
   });
 
-  // F-8 (demo point 2): proves headings, a citation and a bibliography in the
-  // FPZG style (plain text in the demo, D-98 addition), the real "spremljeno
-  // na uređaju" and "spremljeno na poslužitelju" states, and work without the
-  // network: the connection drops, writing goes on, nothing is lost, and the
-  // offline mark stays after the return (PRODUCT §5 rule 10).
-  await test.step.skip("2. F-8: naslovi, citat i bibliografija; rad bez mreže i povratak s oznakom", async () => {});
+  // F-8 text part (K-4c-1, #655): a heading from the toolbar, a citation and a
+  // bibliography in the FPZG style as plain text (D-98 addition), all written
+  // without the network. It claims only "spremljeno na uređaju": nothing in it
+  // reaches the server, and no server state is asserted.
+  await test.step("2. F-8: naslovi, citat i bibliografija bez mreže, spremljeni na uređaju", async () => {
+    const before = await localCheckpoint(page);
+    expect(blocksOf(before)).toEqual(BLOCKS.slice(0, 1));
+    const viewport = page.viewportSize();
+    // (b) Any request to the sync routes in this step fails it.
+    const syncRequests: string[] = [];
+    const observe = (request: Request) => {
+      const url = new URL(request.url());
+      if (isSyncUrl(url)) syncRequests.push(url.pathname);
+    };
+    page.on("request", observe);
+    await context.setOffline(true);
+    try {
+      await expect(page.locator(".offline-chip")).toHaveText(t.network.offline);
+      // The observer sees a request that the outage stops: an empty list below is not vacuous.
+      expect(await page.evaluate(() => fetch("/api/evidence/commit", { method: "POST" }).then(() => "sent", () => "failed"))).toBe("failed");
+      expect(syncRequests).toEqual(["/api/evidence/commit"]);
+      syncRequests.length = 0;
+
+      // At 1440 px every tool fits in the toolbar (toolbar-menus.spec.ts), none in "Više".
+      // The default viewport comes back in `finally`, so later steps keep their layout.
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await expect(heading1Of(page)).toBeVisible();
+      await editorOf(page).click();
+      await editorOf(page).press("Control+End");
+      for (const block of BLOCKS.slice(1)) {
+        await page.keyboard.press("Enter");
+        if (block.type === "heading") await heading1Of(page).click();
+        await page.keyboard.type(block.text);
+      }
+      await expect(editorOf(page)).toHaveText(EXPECTED_TEXT);
+      await expect(chipOf(page)).toHaveAttribute("data-state", "LOCAL_DURABLE");
+      const saved = await localCheckpoint(page);
+      expect(blocksOf(saved)).toEqual(BLOCKS);
+      expect(saved.meta!.localSeq).toBeGreaterThan(before.meta!.localSeq);
+      expect(saved.snapshot?.revision).toBe(before.snapshot?.revision);
+      // (a) The editor holds the function's output; a source one character off is not in it.
+      const [citationBlock, , entryBlock] = blocksOf(saved).slice(2);
+      expect(citationBlock!.text).not.toContain(formatInText({ ...SOURCE, year: SOURCE.year + 1 }, FPZG, PAGES));
+      expect(entryBlock!.text).not.toBe(formatBibliographyEntry({ ...SOURCE, year: SOURCE.year + 1 }, FPZG));
+      // The chapter heading uses the sheet type, not the browser's h1 (~33 px,
+      // synthetic bold): below 20 px, no larger than the sheet title, weight 500.
+      const typeOf = (locator: ReturnType<Page["locator"]>) =>
+        locator.evaluate((el) => {
+          const style = getComputedStyle(el);
+          return { size: parseFloat(style.fontSize), weight: Number(style.fontWeight) };
+        });
+      const chapter = await typeOf(editorOf(page).locator("h1").first());
+      const title = await typeOf(page.locator(".manuscript__title"));
+      expect(chapter.size).toBeLessThan(20);
+      expect(chapter.size).toBeLessThanOrEqual(title.size);
+      expect(chapter.weight).toBeLessThanOrEqual(500);
+      await attachCheckpoint("2-f8-tekst-bez-mreze.json", saved);
+      await snapshot(page, "2-f8-naslovi-citat-literatura-bez-mreze");
+
+      // (b) Nothing went to the server during the outage.
+      expect(syncRequests).toEqual([]);
+
+      // (c) A reload while the server is still out of reach. The page itself
+      // needs the network to load (no service worker), so only it gets the
+      // network back; every sync route stays cut off. With the network back the
+      // live publisher (#522, BACKEND 4.12 t. 8) may send the last state: it is
+      // not evidence, and it must be exactly the saved text. Nothing else goes.
+      const livePuts: (string | null)[] = [];
+      await page.route(isSyncUrl, (route) => {
+        if (route.request().method() === "PUT" && route.request().url().endsWith(livePath())) livePuts.push(route.request().postData());
+        return route.abort("internetdisconnected");
+      });
+      await context.setOffline(false);
+      await page.reload();
+      await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+      await expect(editorOf(page)).toHaveText(EXPECTED_TEXT);
+      await expect(chipOf(page)).toHaveAttribute("data-state", "LOCAL_DURABLE");
+      const restored = await localCheckpoint(page);
+      expect(restored).toEqual(saved);
+      expect(syncRequests.filter((path) => path !== livePath())).toEqual([]);
+      const savedBody = canonicalizeJcs(saved.snapshot!.document);
+      for (const body of livePuts) expect(body).toBe(savedBody);
+      await attachCheckpoint("2-f8-oporavljeno-nakon-reloada.json", restored);
+      await snapshot(page, "2-f8-oporavljeno-nakon-reloada");
+    } finally {
+      page.off("request", observe);
+      await page.unroute(isSyncUrl);
+      await context.setOffline(false);
+      if (viewport) await page.setViewportSize(viewport);
+    }
+  });
+
+  // The server part of F-8 waits for 3d-2c2 (LocalDocument sends the evidence;
+  // K-4c-2 in #655): "spremljeno na poslužitelju" only after a signed receipt
+  // that verifies under the stack's key for the database's checkpoint, the
+  // offline text on the server after the return, and the offline mark after the
+  // return (PRODUCT §5 rule 10). The Node checks are in evidence-receipt.ts.
+  await test.step.skip("2. F-8 na poslužitelju: potpisana potvrda i oznaka rada bez mreže (3d-2c2)", async () => {});
 
   await test.step("2. Studentica se odjavljuje", async () => {
     await signOut(page, token);
@@ -418,21 +706,21 @@ test("demo walk-through", async ({ browser, page, context }) => {
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
     await expect(editorOf(page)).toHaveText("");
     await expect(page.getByText(COMMENT, { exact: true })).toHaveCount(0);
-    const listed = await post(page, "list", { documentId: LOCAL_DEMO_DOCUMENT_ID });
+    const listed = await post(page, "list", { documentId: k4Document! });
     expect(listed.status()).toBe(403);
     expect(await listed.json()).toEqual({ error: "forbidden" });
-    const live = await page.request.get(LIVE_PATH, { headers: LIVE_READ_HEADERS });
+    const live = await page.request.get(livePath(), { headers: LIVE_READ_HEADERS });
     expect(live.status()).toBe(404);
     expect(await live.json()).toEqual({ error: "not_found" });
     await snapshot(page, "2-drugi-student-izoliran");
-    await signOut(page, token);
+    await signOut(page, token, false);
   });
 
   await test.step("2. Ponovna prijava studentice vraća njezin lokalni nacrt i komentar", async () => {
-    await signIn(page, "/rad", "Demo studentica");
+    await signIn(page, `/rad?zadatak=${k4Assignment!}`, "Demo studentica");
     token = (await appCookie(context, SESSION_COOKIE))!.value;
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
-    await expect(editorOf(page)).toHaveText(DRAFT);
+    await expect(editorOf(page)).toHaveText(EXPECTED_TEXT);
     await expect(chipOf(page)).toHaveAttribute("data-state", "LOCAL_DURABLE");
     await expect(page.getByText(COMMENT, { exact: true })).toBeVisible();
     await snapshot(page, "2-vlasnica-nastavlja-nacrt");
