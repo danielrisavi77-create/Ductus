@@ -64,8 +64,8 @@ SELECT is(
   'ductus_evidence t v t', 'the fast path is a VOLATILE SECURITY DEFINER function of the evidence role, empty search_path');
 SELECT is(pg_get_function_result('app.fast_path_works(uuid)'::regprocedure),
   'TABLE(student_id uuid, given_name text, family_name text, document_id text, submitted boolean, revision bigint, '
-  'evidence_package_id text, head_segment_hash text, segment_hashes text[], body text)',
-  'it returns the student, the name pair and the work, nothing else about the person');
+  'evidence_package_id text, head_segment_hash text, segment_hashes text[], body text, institution_id uuid)',
+  'it returns the student, the name pair, the work and the reader''s institution, nothing else about the person');
 SELECT bag_eq(
   $$ SELECT r FROM unnest(ARRAY['ductus_app', 'ductus_worker', 'ductus_retention', 'ductus_auth', 'ductus_identity',
                                 'ductus_evidence', 'ductus_test_stranger']) AS r
@@ -140,6 +140,9 @@ FROM (VALUES ('anon'), ('expired'), ('closed'), ('unknown')) AS a (name);
 SELECT is(pg_temp.fp('vesna', quote_literal(pg_temp.id('z1')) || '::uuid'),
   'ana|Ana|Testić|doc-a|false|0|pkg-a|-|{}|a64; dora|-|-|-|-|-|-|-|-|-',
   'Vesna reads Ana''s work at revision 0 and Dora with no name and no work');
+SELECT is(pg_temp.ask('vesna', format($q$
+    SELECT string_agg(DISTINCT institution_id::text, ',') FROM app.fast_path_works(%L) $q$, pg_temp.id('z1'))),
+  pg_temp.id('fak_a')::text, 'every row names the reader''s institution, to bind the payloads');
 SELECT is((SELECT works FROM evidence.fast_path_window WHERE reader_id = pg_temp.id('vesna')),
   '{"doc-a": {"revision": 0, "submitted": false}}'::jsonb,
   'the window holds only the revision and the submission flag per work');

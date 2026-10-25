@@ -97,7 +97,7 @@ CREATE POLICY fast_path_window_owner ON evidence.fast_path_window TO ductus_evid
 CREATE FUNCTION app.fast_path_works(p_assignment_id uuid)
 RETURNS TABLE (
   student_id uuid, given_name text, family_name text, document_id text, submitted boolean, revision bigint,
-  evidence_package_id text, head_segment_hash text, segment_hashes text[], body text
+  evidence_package_id text, head_segment_hash text, segment_hashes text[], body text, institution_id uuid
 )
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = ''
 AS $$
@@ -195,6 +195,8 @@ BEGIN
      ORDER BY n.student_id
   LOOP
     student_id := v_student.student_id;
+    -- The caller binds evidence payloads to it; the web role cannot read the actor.
+    institution_id := v_actor.institution_id;
     given_name := v_student.given_name;
     family_name := v_student.family_name;
     document_id := NULL; submitted := NULL; revision := NULL;
