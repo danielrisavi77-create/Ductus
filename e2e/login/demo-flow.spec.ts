@@ -17,7 +17,9 @@ import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
 import { workDocument } from "./work-seed";
 import { cleanUp, post, seed } from "./comment-seed";
-import { appCookie, clickSignOut, fillCodeDeadline, SESSION_COOKIE, sessionRow, signIn } from "./support";
+import {
+  appCookie, clickSignOut, fillCodeDeadline, SESSION_COOKIE, sessionRow, signIn, signOutWithoutDialog,
+} from "./support";
 
 // K-4 (DAN-89; docs/PLAN-DEMO.md §1 points 1 to 5 and §7 t. 2, D-98): the demo
 // walk-through as one test. The login config records its video in CI and the
@@ -133,10 +135,15 @@ async function forgetProviderLogin(context: BrowserContext): Promise<void> {
   await context.clearCookies({ name: /^_session/ });
 }
 
-/** Signs out through the button on the writing page and checks that the session is closed. */
-async function signOut(page: Page, token: string): Promise<void> {
+/**
+ * Signs out through the button on the writing page and checks that the
+ * session is closed. With nothing of this person on the device there is no
+ * dialog (O1, #476 c.6396707923); `held` says which is expected.
+ */
+async function signOut(page: Page, token: string, held = true): Promise<void> {
   if (!page.url().endsWith("/rad")) await page.goto("/rad");
-  await clickSignOut(page);
+  if (held) await clickSignOut(page);
+  else await signOutWithoutDialog(page);
   await page.waitForURL("http://localhost:3000/");
   expect(await appCookie(page.context(), SESSION_COOKIE)).toBeUndefined();
   expect(await sessionRow(token)).toMatchObject({ close_reason: "logout", closed_at: expect.any(Date) });
@@ -308,7 +315,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
   });
 
   await test.step("1. Nastavnik se odjavljuje", async () => {
-    await signOut(page, token);
+    await signOut(page, token, false);
     await snapshot(page, "1-nastavnik-odjavljen");
   });
 
@@ -706,7 +713,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
     expect(live.status()).toBe(404);
     expect(await live.json()).toEqual({ error: "not_found" });
     await snapshot(page, "2-drugi-student-izoliran");
-    await signOut(page, token);
+    await signOut(page, token, false);
   });
 
   await test.step("2. Ponovna prijava studentice vraća njezin lokalni nacrt i komentar", async () => {
