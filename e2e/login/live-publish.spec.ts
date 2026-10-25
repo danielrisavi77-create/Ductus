@@ -2,7 +2,7 @@ import { expect, test, type Page, type Request } from "@playwright/test";
 
 import { DUCTUS_PROTOCOL_VERSION } from "../../src/domain/evidence/commit-envelope";
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
-import { closeWork, seedWork, workDocument } from "./assignment-work";
+import { closeWork, seedWork, workDocument } from "./work-seed";
 import { logoutDialogOf, signIn } from "./support";
 
 // B-LIVE step 4 (DAN-216, contract #476 6275905316): the signed-in student's

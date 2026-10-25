@@ -15,7 +15,7 @@ import { canonicalizeJcs } from "../../src/domain/forensics/jcs";
 import type { JournalContents } from "../../src/domain/sync/journal-types";
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
-import { workDocument } from "./assignment-work";
+import { workDocument } from "./work-seed";
 import { cleanUp, post, seed } from "./comment-seed";
 import { appCookie, clickSignOut, SESSION_COOKIE, sessionRow, signIn } from "./support";
 

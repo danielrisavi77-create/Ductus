@@ -3,7 +3,7 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
 import { createTextAnchor } from "../../src/domain/collaboration";
 import type { NodeId } from "../../src/domain/document";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
-import { closeWork, openWorkOf, seedWork, workDocument } from "./assignment-work";
+import { closeWork, openWorkOf, seedWork, workDocument } from "./work-seed";
 import { ORIGIN, post } from "./comment-seed";
 import { clickSignOut, signIn } from "./support";
 

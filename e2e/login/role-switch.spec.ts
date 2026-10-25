@@ -3,7 +3,7 @@ import { expect, test, type Browser, type BrowserContext, type Page } from "@pla
 import { createTextAnchor } from "../../src/domain/collaboration";
 import type { NodeId } from "../../src/domain/document";
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
-import { closeWork, openWorkOf, seedWork } from "./assignment-work";
+import { closeWork, openWorkOf, seedWork } from "./work-seed";
 import { post } from "./comment-seed";
 import { clickSignOut, signIn, type DemoAccount } from "./support";
 

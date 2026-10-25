@@ -3,7 +3,7 @@ import { expect, test, type Page, type Request } from "@playwright/test";
 
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
-import { closeWork, documentsOf, seedWork, STUDENT, TEACHER, workDocument } from "./assignment-work";
+import { closeWork, documentsOf, seedWork, STUDENT, TEACHER, workDocument } from "./work-seed";
 import { clickSignOut, signIn, type DemoAccount } from "./support";
 
 // #711 F1 (contract 6391402093 §8 tests 1-10 and 13, amendment 6391779486):
