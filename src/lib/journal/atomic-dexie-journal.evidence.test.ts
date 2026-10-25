@@ -9,7 +9,7 @@ import { jcsUtf8Bytes } from "@/domain/forensics/jcs";
 import type { EvidenceOpening } from "@/domain/sync/journal-types";
 import type { BuiltSegment } from "@/editor/capture";
 import {
-  answer, capture, committed, DOC, deps, journalKit, openedAfter, R0, raw, receiptKey, save, UTC, type Chain,
+  answer, capture, committed, DOC, deps, journalKit, openedAfter, PROFILE, R0, raw, receiptKey, save, UTC, type Chain,
 } from "@/lib/sync/evidence-test-kit";
 
 import type { AtomicDexieJournal } from "./atomic-dexie-journal";
@@ -224,5 +224,53 @@ describe("F-8 3d-2a: journal v3", () => {
     expect(last.meta.evidenceHead).toEqual({ segmentHash: SEG[1]!.sha256, lastSequenceTo: 2 });
     await expect(journal.startEvidence(DOC, chain.opened, UTC)).rejects.toMatchObject({ code: "evidence_stopped" });
     await expect(journal.destroyForLogout()).rejects.toMatchObject({ code: "unsynced_work" });
+  });
+});
+
+describe("BE-2: the evidence profile of the work (#476 c.6392622568)", () => {
+  const profileOf = async (journal: AtomicDexieJournal) => (await journal.readEvidence(DOC)).meta?.evidenceProfileId;
+
+  it("startEvidence keeps the open route's profile, a new instance reads it, and every other write keeps it", async () => {
+    const journal = await started();
+    expect(await profileOf(journal)).toBe(PROFILE);
+    const scope = raw(journal).name.slice("ductus-journal-v1-".length);
+    expect(await profileOf(open(scope))).toBe(PROFILE);
+    await save(journal, SEG[0]!);
+    expect(await profileOf(journal)).toBe(PROFILE);
+    await answer(journal, committed(R0 + 1));
+    expect(await profileOf(journal)).toBe(PROFILE);
+    const later = (await journal.readEvidence(DOC)).snapshot!.document;
+    await journal.saveUncovered(DOC, later, "gap", UTC, 1);
+    expect(await profileOf(journal)).toBe(PROFILE);
+  });
+
+  it.each([
+    ["no profile", undefined], ["an empty profile", ""], ["a profile over 120 characters", "p".repeat(121)], ["a number", 7],
+  ])("an opening with %s is refused without a write", async (_name, evidenceProfileId) => {
+    const opening = { ...chain.opened, evidenceProfileId } as unknown as EvidenceOpening;
+    const fresh = open();
+    await refuses(fresh, "invalid_input", () => fresh.startEvidence(DOC, opening, UTC));
+    // The answer is judged before the journal's state: no recovery takes it either.
+    const ready = await started();
+    await refuses(ready, "invalid_input", () => ready.adoptServerEvidence(DOC, opening, true, UTC, 0));
+  });
+
+  it("a profile of 120 characters is taken, and a later open answer's profile is the one kept", async () => {
+    const journal = open();
+    await journal.startEvidence(DOC, { ...chain.opened, evidenceProfileId: "p".repeat(120) }, UTC);
+    expect(await profileOf(journal)).toBe("p".repeat(120));
+    await journal.startEvidence(DOC, { ...chain.opened, evidenceProfileId: "profil-drugi" }, UTC);
+    expect(await profileOf(journal)).toBe("profil-drugi");
+  });
+
+  it("a record from before BE-2 reads without a profile, still takes segments, and the journal never makes one up", async () => {
+    const journal = await started();
+    const meta = await raw(journal).table("meta").get(DOC);
+    delete meta.evidenceProfileId;
+    await raw(journal).table("meta").put(meta);
+    expect((await journal.readEvidence(DOC)).meta).not.toHaveProperty("evidenceProfileId");
+    await save(journal, SEG[0]!);
+    await answer(journal, committed(R0 + 1));
+    expect((await journal.readEvidence(DOC)).meta).not.toHaveProperty("evidenceProfileId");
   });
 });

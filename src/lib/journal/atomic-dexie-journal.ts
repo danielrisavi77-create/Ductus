@@ -277,9 +277,12 @@ async function verifySegment(
  */
 async function verifyOpening(documentId: string, opened: EvidenceOpening): Promise<CanonicalDocument> {
   const head = opened?.headSegmentHash;
+  const profile = opened?.evidenceProfileId;
   if (opened?.documentId !== documentId || !validSeq(opened.currentRevision) ||
       !validSeq(opened.lastSequenceTo) ||
       !(head === null || (typeof head === "string" && SHA256_HEX.test(head))) ||
+      // As `evidence.package` allows it: 1 to 120 characters.
+      typeof profile !== "string" || profile.length < 1 || profile.length > 120 ||
       !(opened.document instanceof Uint8Array)) {
     throw new JournalError("invalid_input");
   }
@@ -513,6 +516,7 @@ export class AtomicDexieJournal {
         const meta: SyncMeta = {
           ...(prior ?? { documentId, localSeq: 0, state: "LOCAL_DURABLE" }),
           evidenceHead: { segmentHash: head, lastSequenceTo: opened.lastSequenceTo },
+          evidenceProfileId: opened.evidenceProfileId,
         };
         await this.db.snapshots.put({ documentId, revision: opened.currentRevision, document, savedAt: openedAt });
         await this.db.meta.put(meta);
@@ -782,6 +786,7 @@ export class AtomicDexieJournal {
         const meta: SyncMeta = {
           documentId, localSeq: prior.localSeq + 1, state: reached,
           evidenceHead: { segmentHash: opened.headSegmentHash, lastSequenceTo: opened.lastSequenceTo },
+          evidenceProfileId: opened.evidenceProfileId,
         };
         await this.db.meta.put(meta);
         return meta;

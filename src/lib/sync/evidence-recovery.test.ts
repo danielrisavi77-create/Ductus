@@ -9,7 +9,7 @@ import type { BuiltSegment } from "@/editor/capture";
 import type { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
 
 import {
-  capture, DOC, journalKit, json, openedAfter, R0, raw, receiptKey, runnerFor, save, server, trusted, UTC, type Chain,
+  capture, DOC, journalKit, json, openedAfter, PROFILE, R0, raw, receiptKey, runnerFor, save, server, trusted, UTC, type Chain,
 } from "./evidence-test-kit";
 
 /**
@@ -78,7 +78,7 @@ describe("F-8 3d-2b1: leaving CONFLICT and RECOVERY_REQUIRED", () => {
     const meta = await journal.adoptServerEvidence(DOC, SERVER, true, DECIDED, before.meta!.localSeq);
     expect(meta).toEqual({
       documentId: DOC, localSeq: before.meta!.localSeq + 1, state: "SYNCED",
-      evidenceHead: { segmentHash: OTHER[1]!.sha256, lastSequenceTo: 2 },
+      evidenceHead: { segmentHash: OTHER[1]!.sha256, lastSequenceTo: 2 }, evidenceProfileId: PROFILE,
     });
     const after = await journal.readEvidence(DOC);
     expect(after.pending).toEqual([]);
@@ -192,6 +192,7 @@ describe("F-8 3d-2b1: leaving CONFLICT and RECOVERY_REQUIRED", () => {
     await refuses(journal, "confirmation_required", () => journal.adoptServerEvidence(DOC, server1, false, DECIDED, 2));
     expect(await journal.adoptServerEvidence(DOC, server1, true, DECIDED, 2)).toEqual({
       documentId: DOC, localSeq: 3, state: "SYNCED", evidenceHead: { segmentHash: SEG[0]!.sha256, lastSequenceTo: 1 },
+      evidenceProfileId: PROFILE,
     });
     const [copy] = await journal.readSalvage(DOC);
     expect(copy).toMatchObject({ cause: "EVIDENCE_STOPPED", evidenceStopped: "unsupported_step", document: text });
