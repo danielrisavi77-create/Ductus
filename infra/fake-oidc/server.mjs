@@ -26,7 +26,7 @@ const provider = new Provider(ISSUER, {
   interactions: { url: (_ctx, interaction) => `/interaction/${interaction.uid}` },
   claims: {
     openid: ["sub"],
-    profile: ["name", "hrEduPersonUniqueID", "hrEduPersonHomeOrg", "hrEduPersonAffiliation"],
+    profile: ["name", "given_name", "family_name", "hrEduPersonUniqueID", "hrEduPersonHomeOrg", "hrEduPersonAffiliation"],
   },
   // First-party demo client: grant the requested scopes without a consent step.
   async loadExistingGrant(ctx) {
@@ -53,6 +53,28 @@ const provider = new Provider(ISSUER, {
 const escapeHtml = (text) =>
   text.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
 
+// The v3 tokens of app/globals.css as values (#732 item 2): this server is a
+// separate process and cannot load the app's stylesheet, so the page repeats
+// the few it needs to look like the sign-in screen it is reached from.
+const PAGE_STYLE = `
+:root { color-scheme: dark; }
+body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px;
+  box-sizing: border-box; background: #091310; color: #eef3e9;
+  font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { width: min(430px, 100%); box-sizing: border-box; padding: 30px 30px 24px;
+  background: #12211c; border: 1px solid #24372e; border-radius: 14px;
+  box-shadow: 0 1px 1px #0007, 0 12px 34px -10px #000a; text-align: center; }
+.tag { display: inline-block; padding: 2px 10px; border-radius: 8px; background: #173c2d;
+  color: #8ee3be; font-size: 12px; font-weight: 600; }
+h1 { margin: 12px 0 8px; font-size: 24px; font-weight: 400; }
+p { margin: 0 0 20px; font-size: 13px; color: #a3b5aa; }
+form { display: grid; gap: 10px; }
+button { min-height: 48px; padding: 12px 18px; border: 0; border-radius: 8px;
+  background: #8ee3be; color: #091310; font: inherit; font-weight: 600; cursor: pointer; }
+button:hover { background: #99f5cd; }
+button:focus-visible { outline: 2px solid #eef3e9; outline-offset: 2px; }
+`;
+
 function loginPage(uid) {
   const buttons = Object.entries(ACCOUNTS)
     .map(
@@ -62,13 +84,17 @@ function loginPage(uid) {
     .join("\n");
   return `<!doctype html>
 <html lang="hr">
-<head><meta charset="utf-8"><title>Demo prijava</title></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo prijava</title><style>${PAGE_STYLE}</style></head>
 <body>
+<main>
+<span class="tag">Samo lokalno i CI</span>
 <h1>Demo prijava</h1>
 <p>Ovo nije AAI@EduHr. Lažni pružatelj prijave za lokalni rad i CI; računi su izmišljeni.</p>
 <form method="post" action="/interaction/${escapeHtml(uid)}/login">
 ${buttons}
 </form>
+</main>
 </body>
 </html>`;
 }

@@ -676,6 +676,44 @@ describe("3d-1c QA t. 8: the rest of the table", () => {
     });
   });
 
+  describe("F-131 regression", () => {
+    it("F-131 regression: replacement", () => {
+      const t = setup();
+      t.select(1, 8);
+      t.replace("Odlomka izmisljenoga");
+      t.view.dispatch(t.editor.state.tr.insertText("mis", 30));
+      expect(t.sources).toEqual(["unattributed"]);
+    });
+
+    it("F-131 regression: composition", () => {
+      const t = setup();
+      t.select(9);
+      t.composition("compositionstart");
+      t.beforeinput("insertCompositionText", "izmisljeno");
+      t.view.dispatch(t.editor.state.tr.insertText("mis", 30));
+      expect(t.sources).toEqual(["unattributed"]);
+    });
+
+    it("F-131 regression: composition end", () => {
+      const t = setup();
+      t.select(9);
+      t.composition("compositionend", true, "izmisljeno");
+      t.view.dispatch(t.editor.state.tr.insertText("mis"));
+      expect(t.sources).toEqual(["unattributed"]);
+    });
+
+    it("F-131 regression: whole text still counts", () => {
+      const t = setup();
+      t.select(1, 8);
+      t.replace("Odlomka izmisljenoga");
+      t.view.dispatch(t.editor.state.tr.insertText("Odlomka izmisljenoga"));
+      t.select(9);
+      t.composition("compositionend", true, "ab");
+      t.view.dispatch(t.editor.state.tr.insertText("ab"));
+      expect(t.sources).toEqual(["system-replacement", "keyless-input"]);
+    });
+  });
+
   it.each([
     ["a typed key", (t: Setup) => { t.key("a"); t.beforeinput("insertText", "a"); }],
     ["Enter", (t: Setup) => { t.key("Enter", false, false); }],
@@ -827,5 +865,32 @@ describe("3d-1c QA t. 10: privacy", () => {
     expect(t.sources).toEqual(["editor", "paste", "keyless-input", "unattributed"]);
     expect(manual.map((b) => new TextDecoder().decode(b.bytes))).toEqual(observed.map((b) => new TextDecoder().decode(b.bytes)));
     expect(manual.map((b) => b.timing)).toEqual(observed.map((b) => b.timing));
+  });
+});
+
+describe("F-132 regression", () => {
+  it("F-132 regression: same range", () => {
+    const t = setup();
+    t.select(1, 8);
+    t.composition("compositionstart", true, "Odlomak");
+    t.view.dispatch(t.editor.state.tr.insertText("Odlomak", 1, 8));
+    expect(t.sources).toEqual(["unattributed"]);
+  });
+
+  it("F-132 regression: other position", () => {
+    const t = setup();
+    t.select(1, 8);
+    t.composition("compositionstart", true, "Odlomak");
+    t.view.dispatch(t.editor.state.tr.insertText("Odlomak", 26));
+    expect(t.sources).toEqual(["unattributed"]);
+  });
+
+  it("F-132 regression: composition end still counts", () => {
+    const t = setup();
+    t.select(1, 8);
+    t.composition("compositionstart", true, "Odlomak");
+    t.composition("compositionend", true, "é");
+    t.view.dispatch(t.editor.state.tr.insertText("é", 1, 8));
+    expect(t.sources).toEqual(["keyless-input"]);
   });
 });

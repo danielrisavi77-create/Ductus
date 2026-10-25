@@ -18,7 +18,7 @@ import type { SummaryOutcome } from "@/client/process-summary";
 import { zagrebParts } from "@/components/summary/zagreb-time";
 import { SummaryCardBody } from "@/components/teacher/SummaryCard";
 import type { CanonicalDocument, DocumentNode } from "@/domain/document";
-import type { SignedSubmissionReceiptV1 } from "@/domain/forensics/submission-receipt";
+import type { SignedSubmissionReceiptV2 } from "@/domain/forensics/submission-receipt-v2";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
 import styles from "./Submission.module.css";
@@ -66,7 +66,7 @@ function when(iso: string): string {
   return parts ? `${parts.date} ${parts.time}` : iso;
 }
 
-function Receipt(receipt: SignedSubmissionReceiptV1): ReactNode {
+function Receipt(receipt: SignedSubmissionReceiptV2): ReactNode {
   const p = receipt.payload;
   const fact = (label: string, value: ReactNode, className?: string) => [
     h("dt", { key: `${label}-t` }, label),

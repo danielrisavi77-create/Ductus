@@ -9,7 +9,23 @@ const t = messagesHr.auth;
  * steps of this document the journal still owes, or null when this tab holds
  * no journal (blocked, unavailable, recovery) and the number is not known.
  */
-export type LogoutPlan = { unsaved: boolean; pending: number | null };
+export type LogoutPlan = {
+  unsaved: boolean;
+  pending: number | null;
+  /** Copies the journal keeps outside the work, when read. */
+  copies?: number;
+  /** The journal holds work a sign-out leaves on this device, when read. */
+  kept?: boolean;
+};
+
+/**
+ * True only when the read found nothing at all that a sign-out would leave
+ * (O1, #476 c.6396707923): every field read and empty. Anything unread or
+ * unknown keeps the dialog.
+ */
+export function nothingHeld(plan: LogoutPlan): boolean {
+  return !plan.unsaved && plan.pending === 0 && plan.copies === 0 && plan.kept === false;
+}
 
 export type LogoutText = {
   /** The main sentence of the dialog. */
@@ -27,11 +43,13 @@ export type LogoutText = {
  */
 export function logoutText(plan: LogoutPlan): LogoutText {
   const n = plan.pending;
+  // Work can stay without an owed row (a stopped record): `kept` says so.
+  const kept = n !== null && (n > 0 || plan.kept === true);
   if (plan.unsaved) {
     // What the journal does hold stays; only the unstored part is at stake.
-    return { text: t.logoutUnsaved, note: n !== null && n > 0 ? t.logoutKept : null, offerExport: true };
+    return { text: t.logoutUnsaved, note: kept ? t.logoutKept : null, offerExport: true };
   }
-  if (n === null || n <= 0) return { text: t.logoutPlain, note: null, offerExport: false };
+  if (n === null || n <= 0) return { text: t.logoutPlain, note: kept ? t.logoutKept : null, offerExport: false };
   const form = pluralHr(n, t.logoutPending.one, t.logoutPending.few, t.logoutPending.many);
   return { text: form.replace("{n}", String(n)), note: t.logoutKept, offerExport: false };
 }
@@ -55,6 +73,16 @@ export function copyText(copies: number): CopyText | null {
   if (!Number.isSafeInteger(copies) || copies <= 0) return null;
   const form = pluralHr(copies, t.logoutCopy.one, t.logoutCopy.few, t.logoutCopy.many);
   return { text: form.replace("{n}", String(copies)), note: t.logoutCopyKept, newestOnly: copies > 1 ? t.copyNewestOnly : null };
+}
+
+/**
+ * The copy part as the dialog shows it. Without both actions (a page with
+ * no editor, D-118) the copies are only named: no buttons, and no note
+ * about what the buttons act on.
+ */
+export function copyPart(copies: number, actions: boolean): (CopyText & { actions: boolean }) | null {
+  const copy = copyText(copies);
+  return copy && { ...copy, newestOnly: actions ? copy.newestOnly : null, actions };
 }
 
 /**

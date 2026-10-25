@@ -94,7 +94,7 @@
 }
 
 .note {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--ink-3);
 }
 
@@ -102,5 +102,15 @@
   .assignment {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: "title" "meta" "count";
+  }
+}
+
+/* #732 item 8: 12 px is the floor for interface text, 13 px on a phone (app/globals.css). */
+@media (max-width: 640px) {
+  .year,
+  .meta,
+  .count,
+  .note {
+    font-size: 13px;
   }
 }
