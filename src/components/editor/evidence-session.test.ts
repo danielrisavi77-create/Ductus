@@ -6,7 +6,8 @@ import { decodeBase64, type OpenedWork, type OpenOutcome } from "@/client/eviden
 import { createBrowserEditStepsV1Replayer } from "@/adapters/evidence/edit-steps-v1-browser-replayer";
 import type { CanonicalDocument } from "@/domain/document";
 import { canonicalizeJcs, jcsUtf8Bytes } from "@/domain/forensics/jcs";
-import { EvidenceRecorder } from "@/editor/capture";
+import { watchClosedBySubmission } from "@/client/evidence-session-deps";
+import { CaptureError, EvidenceRecorder } from "@/editor/capture";
 import { canonicalToTiptap, tiptapToCanonical } from "@/editor/interop";
 import { createEditorExtensions } from "@/editor/schema";
 import type { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
@@ -708,5 +709,140 @@ describe("3d-2c2 evidence session: SYNCING while a step runs (P2, #476 c.6395903
     await ready(second.session);
     expect(states).not.toContain("SYNCING");
     expect(states).not.toContain("SYNCED");
+  });
+});
+
+describe("3d-2c2a P1 (#476 c.6395903987): a capture failure in record() stays closed", () => {
+  it("P1: a CaptureError thrown while recording saves uncovered once; no segment is taken, chained, started or sent", async () => {
+    const net = server();
+    const { session, journal } = setup({ net });
+    await ready(session);
+    const sheet = editorFor(session);
+    sheet.type("a");
+    vi.spyOn(EvidenceRecorder.prototype, "record").mockImplementationOnce(() => { throw new CaptureError("too_large"); });
+    sheet.type("b");
+    const take = vi.spyOn(EvidenceRecorder.prototype, "takeSegment");
+    const saveSegment = vi.spyOn(journal, "saveSegment");
+    const saveUncovered = vi.spyOn(journal, "saveUncovered");
+    const start = vi.spyOn(journal, "startEvidence");
+    await sheet.save();
+    sheet.type("c");
+    const doc = await sheet.save();
+    expect(take).not.toHaveBeenCalled();
+    expect(saveSegment).not.toHaveBeenCalled();
+    expect(start).not.toHaveBeenCalled();
+    expect(saveUncovered.mock.calls[0]?.[2]).toBe("too_large");
+    expect(net.calls).toHaveLength(0);
+    const contents = await journal.readEvidence(DOC);
+    expect(contents.meta?.evidenceStopped).toBe("too_large");
+    expect(contents.pending).toHaveLength(0);
+    expect(canonicalizeJcs(contents.snapshot!.document)).toBe(canonicalizeJcs(doc));
+  });
+});
+
+describe("3d-2c2a §4 (DAN-289 A1): a submission closes the session", () => {
+  const notAccepting = () => json(409, { status: "not_accepting" });
+
+  /** A session whose commits go through the O1 (a) wrapper of the browser deps. */
+  function closedSetup(net: ReturnType<typeof server>, journal: AtomicDexieJournal = openJournal(), online = network()) {
+    const closed = watchClosedBySubmission(net.fetchImpl);
+    let clock = 0;
+    const made = setup({
+      net, online, journal,
+      over: {
+        watchSubmission: closed.watch,
+        createRunner: (work) => createDrainRunner<QueuedTransaction>({
+          journal, transport: createEvidenceTransport(closed.fetchImpl), verifyFor: evidenceVerifierFor(work),
+          now: () => clock, jitter: () => 0.5,
+        }),
+      },
+    });
+    const advance = (ms: number) => { clock += ms; made.advance(ms); };
+    return { ...made, advance };
+  }
+
+  it("S1: a 409 not_accepting closes by submission at LOCAL_DURABLE, neither ERROR nor SYNCED", async () => {
+    const { session } = closedSetup(server(R0, notAccepting));
+    await ready(session);
+    const sheet = editorFor(session);
+    sheet.type("x");
+    await sheet.save();
+    expect(session.snapshot()).toEqual({ state: "LOCAL_DURABLE", failure: null, capacity: "ok", closedBy: "submission" });
+  });
+
+  it("S2-S4: after it nothing is recorded, saved, started or sent, and the refused row stays", async () => {
+    const net = server(R0, notAccepting);
+    const online = network();
+    const { session, journal, advance } = closedSetup(net, undefined, online);
+    await ready(session);
+    const sheet = editorFor(session);
+    sheet.type("x");
+    await sheet.save();
+    const before = await journal.readEvidence(DOC);
+    const take = vi.spyOn(EvidenceRecorder.prototype, "takeSegment");
+    const record = vi.spyOn(EvidenceRecorder.prototype, "record");
+    const saveSegment = vi.spyOn(journal, "saveSegment");
+    const saveUncovered = vi.spyOn(journal, "saveUncovered");
+    const start = vi.spyOn(journal, "startEvidence");
+    sheet.type("y");
+    await sheet.save();
+    session.pause();
+    session.resume();
+    for (let minute = 0; minute < 10; minute++) {
+      advance(60_000);
+      online.set(true);
+      await session.settled();
+    }
+    for (const spy of [take, record, saveSegment, saveUncovered, start]) expect(spy).not.toHaveBeenCalled();
+    expect(net.calls).toHaveLength(1);
+    const after = await journal.readEvidence(DOC);
+    expect(after.meta?.localSeq).toBe(before.meta?.localSeq);
+    expect(after.pending).toHaveLength(1);
+    expect(after.pending[0]?.tx.clientTransactionId).toBe(net.calls[0]?.body.clientTransactionId);
+    expect(session.snapshot().closedBy).toBe("submission");
+  });
+
+  it("S5: a reload sends the refused row exactly once and closes by submission again", async () => {
+    const net = server(R0, notAccepting, notAccepting);
+    const first = closedSetup(net);
+    await ready(first.session);
+    const sheet = editorFor(first.session);
+    sheet.type("x");
+    await sheet.save();
+    first.session.close();
+    const online = network();
+    const again = closedSetup(net, first.journal, online);
+    await ready(again.session);
+    expect(again.session.snapshot().closedBy).toBe("submission");
+    for (let minute = 0; minute < 10; minute++) {
+      again.advance(60_000);
+      online.set(true);
+      await again.session.settled();
+    }
+    expect(net.calls).toHaveLength(2);
+    expect(net.calls[1]?.text).toBe(net.calls[0]?.text);
+    expect((await first.journal.readEvidence(DOC)).pending).toHaveLength(1);
+  });
+
+  it("S6: a 404 not_found stays ERROR and never closes by submission", async () => {
+    const { session } = closedSetup(server(R0, () => json(404, { status: "not_found" })));
+    await ready(session);
+    const sheet = editorFor(session);
+    sheet.type("x");
+    await sheet.save();
+    expect(session.snapshot().state).toBe("ERROR");
+    expect(session.snapshot().closedBy).toBeNull();
+  });
+
+  it("S7: an open answering 409 not_accepting loads unavailable, not closed by submission", async () => {
+    const net = server();
+    const closed = watchClosedBySubmission(net.fetchImpl);
+    const { session, journal } = setup({
+      net, open: async () => ({ status: "not_accepting" }), over: { watchSubmission: closed.watch },
+    });
+    expect((await session.load()).kind).toBe("unavailable");
+    expect(session.snapshot().closedBy).toBeNull();
+    expect((await journal.readEvidence(DOC)).meta).toBeNull();
+    expect(net.calls).toHaveLength(0);
   });
 });
