@@ -6,7 +6,7 @@ Ažurira se skupno nakon spojenih PR-ova i kontrolnih točaka. Ovaj presjek čuv
 
 M0 Temelj. Prvi cilj ostaje radni demo za FPZG 2. 11. 2026. (`docs/PLAN-DEMO.md`). Ductus Engineering System v1 uvodi risk-based review, QA/Bug Hunter/Product uloge, GitHub za izvršenje i dokaze te Linear za zadatke, prioritete, nositelje i statuse.
 
-Session adresa orkestratora: ranije upisana adresa `session_01JCvXpAX1i9hax8K5FFRcTy` je arhivirana i više ne vrijedi za `send_message` (`docs/ORKESTRATOR.md` §5). Nova adresa se ne upisuje u javni repo; vidi Owner queue.
+Session adresa orkestratora: ranije upisana adresa `session_01JCvXpAX1i9hax8K5FFRcTy` je arhivirana i više ne vrijedi za `send_message` (`docs/ORKESTRATOR.md` §5). Nova adresa zasad nije upisana; vidi Owner queue.
 
 ## Owner queue (samo Daniel)
 
@@ -28,7 +28,7 @@ Agent nikad ne uzima ove stavke i nikad ne čeka na njima ako drugi posao može 
 - [ ] Dobavljači: UpCloud, Scaleway i AWS KMS računi + 2FA i uski ključevi. B0.1 je pomaknut naprijed (rok 16. 11. 2026., tri dodatne provjere) i čeka ove račune.
 - [ ] Računovođa: PDV; FINA tek uz obrt ili FPZG kao ugovornu stranu.
 - [ ] Vidljivost repoa: prije stvarnih podataka ponovno odlučiti ostaje li javni.
-- [ ] Session adresa orkestratora: adresa upisana u `STATE.md` je arhivirana (stanje 25. 10. 2026.), a nova nije upisana u javni repo. Odluka gdje se adresa vodi izvan repoa ostaje vlasniku.
+- [ ] Session adresa orkestratora: adresa upisana u `STATE.md` je arhivirana (stanje 25. 10. 2026.), a nova zasad nije upisana. Vlasnik odlučuje hoće li se nova adresa upisati u javni `STATE.md` ili voditi izvan repoa.
 - [ ] Konačno ime proizvoda.
 
 ## Engineering System v1
@@ -45,7 +45,7 @@ Kanonski dokument: `docs/ENGINEERING_SYSTEM.md`.
 
 ## Otvoreni razvojni stog
 
-Stanje 25. 10. 2026. prema `gh pr list --state open` (nositelj statusa je Linear; review i QA stanje je na PR-u). STATE.md i dalje prati PR-ove i redovito se osvježava (vlasnik, 25. 10. 2026., #271 `issuecomment-6398435565`).
+Stanje 25. 10. 2026. prema `gh pr list --state open` (nositelj statusa je Linear; review i QA stanje je na PR-u). STATE.md i dalje prati PR-ove i redovito se osvježava (vlasnik, 25. 10. 2026., prenosi orkestrator na #271 `issuecomment-6398469344`; povod je pregled Trijaže `issuecomment-6398435565`).
 
 Otvoreno:
 
@@ -55,7 +55,7 @@ Otvoreno:
 - Orkestrator i CI: #684 `orch:shadow` (DAN-269); #661, #668, #669 probni PR-ovi (DAN-263); #643 (nacrt), #642, #641 Mergify i akcije; #628 Playwright ponavljanja (DAN-262, nacrt).
 - Stariji nacrti: #629, #571, #553, #552, #551, #550, #438, #372, #370, #354, #347, #344; #346 PRODUCT pravilo 12 (D-117); #94 drugi pružatelj reviewa (DAN-41, nakon demoa).
 
-Spojeno od 12. do 25. 10. 2026.: 275 PR-ova (#287 do #776, s preskocima). Potpun popis: `gh pr list --state merged`.
+Spojeno od 12. do 25. 10. 2026.: 275 PR-ova (#180 do #776, s preskocima). Potpun popis: `gh pr list --state merged`.
 
 ## Ne smije se izgubiti
 
