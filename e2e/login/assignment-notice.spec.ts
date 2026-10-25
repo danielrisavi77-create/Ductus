@@ -312,9 +312,15 @@ test("the notice leads to /rad of its assignment, whose top bar names it", async
     await page.waitForURL(`**/rad?zadatak=${seeded.assignment}`);
     await expect(context).toHaveText(`${seeded.courseName} / Izmišljeni zadatak S3`);
     await expect(page.locator(".workspace__bar")).not.toContainText("Kolegij A");
+    // The first opening refreshes the render into the editor of the new work,
+    // which mounts the shell and its panel afresh: Upute is opened after that.
+    await expect(page.getByRole("toolbar", { name: t.toolbar.label })).toBeVisible();
+    await expect(context).toHaveText(`${seeded.courseName} / Izmišljeni zadatak S3`);
     // Upute shows the same read: the task, its due date, no allowed uses.
     const panel = page.getByRole("complementary", { name: t.workspace.sidePanel });
-    await panel.getByRole("tab", { name: t.workspace.tabInstructions }).click();
+    const instructions = panel.getByRole("tab", { name: t.workspace.tabInstructions });
+    await instructions.click();
+    await expect(instructions).toHaveAttribute("aria-selected", "true");
     const upute = panel.getByRole("tabpanel");
     await expect(upute.getByRole("heading", { name: t.workspace.upute.task })).toBeVisible();
     await expect(upute).toContainText("Izmišljeni zadatak S3");
