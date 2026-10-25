@@ -867,3 +867,30 @@ describe("3d-1c QA t. 10: privacy", () => {
     expect(manual.map((b) => b.timing)).toEqual(observed.map((b) => b.timing));
   });
 });
+
+describe("F-132 regression", () => {
+  it("F-132 regression: same range", () => {
+    const t = setup();
+    t.select(1, 8);
+    t.composition("compositionstart", true, "Odlomak");
+    t.view.dispatch(t.editor.state.tr.insertText("Odlomak", 1, 8));
+    expect(t.sources).toEqual(["unattributed"]);
+  });
+
+  it("F-132 regression: other position", () => {
+    const t = setup();
+    t.select(1, 8);
+    t.composition("compositionstart", true, "Odlomak");
+    t.view.dispatch(t.editor.state.tr.insertText("Odlomak", 26));
+    expect(t.sources).toEqual(["unattributed"]);
+  });
+
+  it("F-132 regression: composition end still counts", () => {
+    const t = setup();
+    t.select(1, 8);
+    t.composition("compositionstart", true, "Odlomak");
+    t.composition("compositionend", true, "é");
+    t.view.dispatch(t.editor.state.tr.insertText("é", 1, 8));
+    expect(t.sources).toEqual(["keyless-input"]);
+  });
+});

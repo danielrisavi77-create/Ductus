@@ -735,17 +735,17 @@ export const hr = {
     sessions: {
       heading: "Sesije pisanja",
       count: "Broj sesija",
-      threshold: "prag P-01: nova sesija počinje nakon stanke dulje od",
+      threshold: "prag: nova sesija počinje nakon stanke dulje od",
       none: "Nema zabilježenih sesija.",
     },
     pastes: {
       heading: "Lijepljenja",
-      listedThreshold: "prag P-02: zasebno se navodi lijepljenje veće od",
+      listedThreshold: "prag: zasebno se navodi lijepljenje veće od",
       size: "Veličina",
       origins: { not_observed: "izvor nije opažen" },
       noneListed: "Nema lijepljenja većih od praga.",
       smaller: "Manja lijepljenja, samo broj",
-      smallerThreshold: "prag P-02: najviše",
+      smallerThreshold: "prag: najviše",
     },
     gaps: {
       heading: "Praznine u zapisu",
@@ -820,6 +820,13 @@ export const hr = {
     passwordNote: "Lozinku upisuješ samo kod AAI@EduHr.",
     codeNote: "Kod zadatka od nastavnika upisuješ nakon prijave.",
     help: "Ako prijava ne uspije, javi se koordinatoru na svojoj ustanovi.",
+  },
+  // #732 item 3: Next.js error and not-found pages in Croatian (D-84).
+  errorPage: {
+    notFoundTitle: "Stranica ne postoji",
+    notFoundBody: "Na ovoj adresi nema stranice. Provjeri adresu ili se vrati na početnu.",
+    errorTitle: "Stranicu nije bilo moguće prikazati",
+    errorBody: "Dogodila se neočekivana greška. Pokušaj ponovno; ako se ponovi, vrati se na početnu.",
   },
 } as const;
 

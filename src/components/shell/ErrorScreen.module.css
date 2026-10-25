@@ -1,0 +1,18 @@
+/* #732 item 3: actions of the error and not-found pages, on the shared tokens. */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+/* Second action next to the primary one: outlined, same 44 px target. */
+.quiet {
+  background: transparent;
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--rule);
+}
+
+.quiet:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
