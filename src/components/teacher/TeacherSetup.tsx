@@ -1,8 +1,8 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
-import { formatDateHr } from "@/lib/i18n/hr";
+import { formatDateHr, formatDateTimeHr } from "@/lib/i18n/hr";
 import { wordRangeHr } from "@/lib/i18n/length-line";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 
@@ -17,6 +17,7 @@ import {
   type WorkType,
 } from "./assignment-create";
 import { createCourse, type CourseCreation, type CoursePolicy } from "./course-create";
+import { createCourseThenCode, enrollmentCodeExpiry, type EnrollmentCodeCreation } from "./enrollment-code-create";
 import styles from "./TeacherSetup.module.css";
 
 const YEARS = Object.keys(t.teacher.course.years) as (keyof typeof t.teacher.course.years)[];
@@ -26,18 +27,41 @@ function PreviewRange({ text }: { text: string | null }) {
   return text ? <span> · {text}</span> : null;
 }
 
+// Only a code the route returned is shown; the server keeps just its hash, so
+// this is the one time it can be read (#576).
+function CourseCode({ issued, pending }: { issued: { code: string; validUntil: string } | null; pending: boolean }) {
+  const ec = t.teacher.enrollmentCode;
+  return (
+    <div className={styles.code} role="status">
+      {issued ? (
+        <>
+          <p className={styles.listHead}>{t.teacher.course.code}: <code>{issued.code}</code></p>
+          <p className={styles.hint}>{ec.validUntil} {formatDateTimeHr(issued.validUntil)}</p>
+          <p className={styles.hint}>{ec.shownOnce}</p>
+        </>
+      ) : pending ? null : <p className={styles.hint}>{ec.courseKept}</p>}
+    </div>
+  );
+}
+
 // Screen 2 of the design handoff. No identity fields: the verified B-7 role on
 // the server decides who may create a course or an assignment.
 export default function TeacherSetup() {
   const c = t.teacher.course;
   const a = t.teacher.assignment;
   const tools = t.teacher.tools;
+  const ec = t.teacher.enrollmentCode;
 
   const [name, setName] = useState("");
   const [academicYear, setAcademicYear] = useState<string>(YEARS[0]!);
   const [aiPolicy, setAiPolicy] = useState<CoursePolicy>("partially_allowed");
   const [course, setCourse] = useState<{ id: string; policy: CoursePolicy } | null>(null);
   const [courseResult, setCourseResult] = useState<CourseCreation | "nameMissing" | null>(null);
+  const savedCourse = useRef<string | null>(null);
+  const [validUntilLocal, setValidUntilLocal] = useState("");
+  const [codeResult, setCodeResult] = useState<EnrollmentCodeCreation | "missing" | null>(null);
+  const expiry = enrollmentCodeExpiry(validUntilLocal);
+  const expiryInput = useRef<HTMLInputElement>(null);
 
   const [title, setTitle] = useState("");
   const [workType, setWorkType] = useState<WorkType>("seminar_paper");
@@ -52,6 +76,12 @@ export default function TeacherSetup() {
   const [pending, setPending] = useState(false);
   const inFlight = useRef(false);
   const request = useRef<{ body: string; id: string } | null>(null);
+  // A response that arrives after the screen is gone sends nothing further.
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => { alive.current = false; };
+  }, []);
 
   async function guarded(work: () => Promise<void>) {
     if (inFlight.current) return;
@@ -67,11 +97,34 @@ export default function TeacherSetup() {
 
   function submitCourse(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!name.trim()) return setCourseResult("nameMissing");
+    if (inFlight.current) return;
+    if (!savedCourse.current && !name.trim()) return setCourseResult("nameMissing");
+    // A deadline already past on this device is refused before any request; the server still decides the rest.
+    if (!expiry || Date.parse(expiry.validUntil) <= Date.now()) {
+      setCodeResult(validUntilLocal ? { kind: "invalid" } : "missing");
+      expiryInput.current?.focus();
+      return;
+    }
+    const draft = { name: name.trim(), academicYear, aiPolicy };
+    const validUntil = expiry.validUntil;
     void guarded(async () => {
-      const result = await createCourse({ name: name.trim(), academicYear, aiPolicy });
-      setCourseResult(result);
-      if (result.kind === "available") setCourse({ id: result.id, policy: aiPolicy });
+      // An earlier code is not shown while a new one is asked for: its fate is unknown until the reply.
+      setCodeResult(null);
+      const code = await createCourseThenCode({
+        courseId: savedCourse.current,
+        createCourse: () => createCourse(draft),
+        onCourse: (result) => {
+          setCourseResult(result);
+          if (result.kind !== "available") return;
+          savedCourse.current = result.id;
+          setCourse({ id: result.id, policy: draft.aiPolicy });
+        },
+        validUntil,
+        active: () => alive.current,
+      });
+      if (!code) return;
+      setCodeResult(code);
+      if (code.kind === "invalid") expiryInput.current?.focus();
     });
   }
 
@@ -106,11 +159,18 @@ export default function TeacherSetup() {
   const assignmentError =
     assignmentResult && assignmentResult.kind !== "available" ? a.errors[assignmentResult.kind] : null;
   const date = (local: string) => (local ? formatDateHr(local) : "…");
+  const issued = codeResult !== null && codeResult !== "missing" && codeResult.kind === "available" ? codeResult : null;
+  const codeError = codeResult === "missing" ? ec.errors.missing
+    : codeResult && codeResult.kind !== "available" ? ec.errors[codeResult.kind] : null;
+  // The instant and offset the request will carry, so a repeated autumn hour is never ambiguous.
+  const selectedExpiry = expiry ? `${ec.selected} ${formatDateTimeHr(expiry.validUntil)} (UTC${expiry.offset})` : "";
+  const courseLabel = pending ? (course ? ec.pending : c.pending) : !course ? c.submit : issued ? ec.replace : ec.retry;
 
   return (
     <div className={styles.layout}>
       <div className={styles.forms}>
-        <form className={styles.card} onSubmit={submitCourse} aria-labelledby="kolegij">
+        {/* noValidate: the Croatian messages below answer a missing or impossible deadline, not the browser. */}
+        <form className={styles.card} onSubmit={submitCourse} aria-labelledby="kolegij" noValidate>
           <h2 id="kolegij">{c.heading}</h2>
           <fieldset className={styles.fields} disabled={pending || course !== null}>
             <label className={styles.field}>
@@ -131,18 +191,28 @@ export default function TeacherSetup() {
                 {POLICIES.map((p) => <option key={p} value={p}>{c.policies[p]}</option>)}
               </select>
             </label>
-            <button className="btn" type="submit">{pending && !course ? c.pending : c.submit}</button>
+          </fieldset>
+          <fieldset className={styles.fields} disabled={pending}>
+            <label className={styles.field}>
+              <span>{ec.validUntil}</span>
+              <input ref={expiryInput} className={styles.control} type="datetime-local" required
+                value={validUntilLocal} aria-describedby="kod-rok-pomoc kod-rok-odabrano kod-greska"
+                aria-invalid={codeResult === "missing" || codeResult?.kind === "invalid" || undefined}
+                onChange={(event) => { setValidUntilLocal(event.target.value); if (!issued) setCodeResult(null); }} />
+            </label>
+            <p id="kod-rok-pomoc" className={styles.hint}>{ec.expiryHelp}</p>
+            <p id="kod-rok-odabrano" className={styles.hint}>
+              {selectedExpiry}
+            </p>
+            <button className="btn" type="submit">{courseLabel}</button>
           </fieldset>
           {courseNotice ? <p className={styles.notice} role="alert">{courseNotice}</p> : null}
-          {course ? <p className={styles.notice} role="status">{c.created}</p> : null}
+          {codeError ? <p id="kod-greska" className={styles.notice} role="alert">{codeError}</p> : null}
           {course ? (
-            // No invented code: the route for create_enrollment_code does not exist yet.
-            <div className={styles.code}>
-              <p className={styles.listHead}>
-                {c.code} <span className="soon">{t.workspace.soon}</span>
-              </p>
-              <p className={styles.hint}>{c.codeSoon}</p>
-            </div>
+            <>
+              <p className={styles.notice} role="status">{c.created}</p>
+              <CourseCode issued={issued} pending={pending} />
+            </>
           ) : null}
         </form>
 

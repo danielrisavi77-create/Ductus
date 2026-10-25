@@ -7,7 +7,7 @@ import { expect, test, type Page } from "@playwright/test";
 import pg from "pg";
 
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
-import { signIn } from "./support";
+import { fillCodeDeadline, signIn } from "./support";
 
 // Z3 (A), "Moji kolegiji" at /nastavnik (#476 6289158306). The list comes from
 // the same read as GET /api/teacher/courses; the teacher role comes from the
@@ -72,8 +72,21 @@ test("a teacher sees their course with its assignment, in the route's order, and
   const courseName = `Izmišljeni kolegij ${Date.now().toString(36)}`;
   await page.goto("/nastavnik/zadatak/novi");
   await page.getByLabel(messagesHr.teacher.course.name).fill(courseName);
+  // DAN-36 (#576 6362017778): the deadline starts empty and has no default; without it nothing is sent.
+  const deadline = page.getByLabel(messagesHr.teacher.enrollmentCode.validUntil);
+  await expect(deadline).toHaveValue("");
+  await page.getByRole("button", { name: messagesHr.teacher.course.submit }).click();
+  await expect(page.getByRole("alert").filter({ hasText: messagesHr.teacher.enrollmentCode.errors.missing })).toBeVisible();
+  await expect(deadline).toBeFocused();
+  await expect(page.getByRole("status").filter({ hasText: messagesHr.teacher.course.created })).toHaveCount(0);
+  await fillCodeDeadline(page);
   await page.getByRole("button", { name: messagesHr.teacher.course.submit }).click();
   await expect(page.getByRole("status").filter({ hasText: messagesHr.teacher.course.created })).toBeVisible();
+  // DAN-36: the issued code and its deadline sit inside the page's landmarks.
+  await expect(page.getByText(messagesHr.teacher.enrollmentCode.shownOnce)).toBeVisible();
+  const setupAxe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+  expect(setupAxe.violations).toEqual([]);
+  await snapshot(page, "nastavnik-kod-za-upis");
 
   // The way back from the form is the list, not the public home page.
   await page.getByRole("main").getByRole("link", { name: messagesHr.teacher.backCourses }).click();
