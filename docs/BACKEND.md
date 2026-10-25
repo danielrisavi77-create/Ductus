@@ -537,7 +537,7 @@ Ugovor prije koda za poslužiteljski ulaz evidencije. Značenje (jedno slanje no
 - Prijava praznine (`gap`) nije u verziji 1, pa demo kroz rutu ne može proizvesti zabilježenu prazninu (scenarij C4 iz #385) dok kodovi uzroka nisu potvrđeni (ADR odluka 7).
 - Potpis u transakciji drži brave paketa, zadatka, članstva i dokumenta dok traje potpis razvojnim ključem (ADR §9). To vrijedi samo za demo (D-98); izvan demoa potpisuje worker.
 - Poslužiteljsko ograničenje broja zahtjeva ne postoji.
-- Predaja još ne zatvara paket (`accepts_evidence`); to veže B-12.
+- Upisana predaja u istoj transakciji zatvara pakete svog dokumenta (`accepts_evidence`). Nakon toga nov commit dobiva `not_accepting`, a paket predanog dokumenta ne može se ponovno otvoriti (DAN-289 A1, ugovor #756). Ponovno slanje ključa prihvaćenog prije predaje i potpis njegove potvrde rade kao prije.
 
 **Odluke vlasnika 19. 10. 2026.** (issue #87, komentar 6256655038; upis u `docs/DECISIONS.md` ide zasebnim docs PR-om orkestratora):
 
