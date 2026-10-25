@@ -1,19 +1,13 @@
 import type { WithActor } from "@/server/db/with-actor";
-import { checkMutationRequest, readBodyWithLimit } from "@/server/http/mutation-request";
+import { readJsonMutation, respond, rpcErrorResponse } from "./mutation-route";
 
 export const MAX_ENROLLMENT_CODE_BODY_BYTES = 1024;
-const TOKEN = /^[A-Za-z0-9_-]{43}$/;
-const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const CODE = /^[0-9A-F]{4}(-[0-9A-F]{4}){3}$/;
 
 export interface EnrollmentCodeDeps {
   withActor: WithActor;
   expectedOrigin: string;
   sessionToken?: string;
-}
-
-function respond(status: number, body: { error: string } | { code: string }): Response {
-  return Response.json(body, { status, headers: { "cache-control": "no-store" } });
 }
 
 // Keep the caller's timestamp intact (including microseconds). Date.parse alone
@@ -36,35 +30,18 @@ function validTimestamp(value: unknown): value is string {
 export async function handleEnrollmentCodeRequest(
   request: Request, courseId: unknown, deps: EnrollmentCodeDeps,
 ): Promise<Response> {
-  let allowed;
-  try {
-    allowed = checkMutationRequest(request, deps.expectedOrigin);
-  } catch {
-    return respond(503, { error: "unavailable" });
-  }
-  if (!allowed.ok) return respond(allowed.status, { error: allowed.reason });
-  if (!deps.sessionToken || !TOKEN.test(deps.sessionToken)) return respond(401, { error: "unauthorized" });
-  if (typeof courseId !== "string" || !UUID.test(courseId)) return respond(422, { error: "invalid_input" });
-  if (request.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() !== "application/json") {
-    return respond(415, { error: "unsupported_media_type" });
-  }
-  const body = await readBodyWithLimit(request, MAX_ENROLLMENT_CODE_BODY_BYTES, 5000);
-  if (!body.ok) return respond(body.status, { error: body.reason });
-  let value: unknown;
-  try {
-    value = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(body.bytes));
-  } catch {
-    return respond(400, { error: "invalid_json" });
-  }
+  const input = await readJsonMutation(request, [courseId], deps, MAX_ENROLLMENT_CODE_BODY_BYTES);
+  if (!input.ok) return input.response;
+  const { value, sessionToken } = input;
   if (!value || typeof value !== "object" || Array.isArray(value)) return respond(422, { error: "invalid_input" });
-  const input = value as Record<string, unknown>;
-  if (Object.keys(input).length !== 1 || !Object.hasOwn(input, "validUntil") || !validTimestamp(input.validUntil)) {
+  const body = value as Record<string, unknown>;
+  if (Object.keys(body).length !== 1 || !Object.hasOwn(body, "validUntil") || !validTimestamp(body.validUntil)) {
     return respond(422, { error: "invalid_input" });
   }
   try {
-    const code = await deps.withActor(deps.sessionToken, async (tx) => {
+    const code = await deps.withActor(sessionToken, async (tx) => {
       const result = await tx.query<{ code: unknown }>(
-        "SELECT institution.create_enrollment_code($1, $2::timestamptz) AS code", [courseId, input.validUntil],
+        "SELECT institution.create_enrollment_code($1, $2::timestamptz) AS code", [courseId, body.validUntil],
       );
       const issued = result.rows[0]?.code;
       if (result.rows.length !== 1 || typeof issued !== "string" || !CODE.test(issued)) {
@@ -74,10 +51,6 @@ export async function handleEnrollmentCodeRequest(
     });
     return respond(200, { code });
   } catch (error) {
-    const code = error && typeof error === "object" && "code" in error ? error.code : undefined;
-    if (code === "ZD401") return respond(401, { error: "unauthorized" });
-    if (code === "ZD403") return respond(403, { error: "forbidden" });
-    if (code === "ZD422") return respond(422, { error: "invalid_input" });
-    return respond(503, { error: "unavailable" });
+    return rpcErrorResponse(error, true);
   }
 }
