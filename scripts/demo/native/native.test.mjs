@@ -40,7 +40,7 @@ test("the psql target is the local socket alone, as the db/local scripts accept 
   const target = psqlTarget("C:\\Users\\demo\\AppData\\Local\\Ductus\\native\\postgres-17.11-1\\bin", "C:\\Users\\demo\\AppData\\Local\\Ductus\\native-data\\s");
   assert.match(target.command, /psql\.exe$/);
   assert.deepEqual(target.args, ["-h", "C:\\Users\\demo\\AppData\\Local\\Ductus\\native-data\\s", "-p", "54329", "-U", "ductus", "-d", "ductus"]);
-  assert.deepEqual(nativePsqlTarget(target), target);
+  assert.deepEqual(nativePsqlTarget(target), { ...target, env: {} });
 });
 
 test("PostgreSQL listens on loopback and its socket path is quoted for postgresql.conf", () => {
