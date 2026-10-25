@@ -21,6 +21,15 @@ const editorOf = (page: Page) => page.getByRole("textbox", { name: t.documentLab
 const offerOf = (page: Page) => page.locator("details.earlier-draft");
 const chipOf = (page: Page) => page.locator(".workspace__status .sync-chip");
 
+// The first opening POSTs the open and refreshes the render, which mounts the
+// shell afresh (#731): the offer is touched only once the editor toolbar of the
+// refreshed render is there.
+async function openAssignment(page: Page, assignment: string): Promise<void> {
+  await page.goto(`/rad?zadatak=${assignment}`);
+  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: OPEN });
+  await expect(page.getByRole("toolbar", { name: messagesHr.toolbar.label })).toBeVisible();
+}
+
 async function writeFree(page: Page, text: string): Promise<void> {
   await page.goto("/rad");
   await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: OPEN });
@@ -38,8 +47,7 @@ test("F1b: an earlier draft is offered as text to copy and stays on the device",
   await writeFree(page, EARLIER);
   const assignment = await seedWork();
 
-  await page.goto(`/rad?zadatak=${assignment}`);
-  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: OPEN });
+  await openAssignment(page, assignment);
   // Nothing was written into the work by the program.
   await expect(editorOf(page)).toHaveText("");
   const offer = offerOf(page);
@@ -77,8 +85,7 @@ test("F1b: without a clipboard the offer says so and offers the export", async (
   await signIn(page, "/rad");
   await writeFree(page, "Raniji izmišljeni tekst bez međuspremnika.");
   const assignment = await seedWork();
-  await page.goto(`/rad?zadatak=${assignment}`);
-  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: OPEN });
+  await openAssignment(page, assignment);
   await offerOf(page).getByText(t.earlierDraftSummary).click();
   await offerOf(page).getByRole("button", { name: t.earlierDraftCopy }).click();
   await expect(offerOf(page).getByRole("status")).toHaveText(t.earlierDraftCopyFailed);
@@ -100,15 +107,13 @@ test("F1b: another person on the same browser never sees the earlier draft", asy
   await signIn(page, "/rad", "Demo student 2");
   // With no draft of their own there is nothing to offer.
   const assignment = await seedWork({ student: STUDENT_2 });
-  await page.goto(`/rad?zadatak=${assignment}`);
-  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: OPEN });
+  await openAssignment(page, assignment);
   await expect(offerOf(page)).toHaveCount(0);
   await expect(page.locator("body")).not.toContainText(HERS);
 
   // With a draft of their own, only that one is offered.
   await writeFree(page, "Vlastiti raniji tekst drugog studenta.");
-  await page.goto(`/rad?zadatak=${assignment}`);
-  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: OPEN });
+  await openAssignment(page, assignment);
   await offerOf(page).getByText(t.earlierDraftSummary).click();
   await expect(offerOf(page)).toContainText("Vlastiti raniji tekst drugog studenta.");
   await expect(page.locator("body")).not.toContainText(HERS);
@@ -118,8 +123,7 @@ test("F1b: the offer leaves the page when the session ends in another tab", asyn
   await signIn(page, "/rad");
   await writeFree(page, "Raniji tekst koji odlazi s odjavom.");
   const assignment = await seedWork();
-  await page.goto(`/rad?zadatak=${assignment}`);
-  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: OPEN });
+  await openAssignment(page, assignment);
   await offerOf(page).getByText(t.earlierDraftSummary).click();
   await expect(offerOf(page)).toContainText("Raniji tekst koji odlazi s odjavom.");
   const second = await context.newPage();

@@ -81,9 +81,9 @@ describe("F1b interface text", () => {
     expect(t.earlierDraftExplain).toBe("Tekst ostaje gdje je i ne briše se. Ako ga želiš u ovom radu, kopiraj ga i zalijepi.");
     expect(t.earlierDraftExplain).not.toMatch(/zapis|bilje/);
     expect(t.earlierDraftCopy).toBe("Kopiraj tekst");
-    // The contract wrote "Kopirano u međuspremnik." here; messages.test.ts refuses the stem "kopiran", so this text awaits confirmation.
+    // The contract wrote "Kopirano u međuspremnik." here; messages.test.ts refuses the stem "kopiran" (owner accepted, #711 c.6396392080 b).
     expect(t.earlierDraftCopied).toBe("Tekst je u međuspremniku.");
-    // The contract wrote "kopirati" here, a forbidden term; this text awaits confirmation.
+    // The contract wrote "kopirati" here, a forbidden term (owner accepted, #711 c.6396392080 a).
     expect(t.earlierDraftCopyFailed).toBe("Tekst nije moguće staviti u međuspremnik. Izvezi ga kao datoteku.");
     expect(t.earlierDraftOpen).toBe("Otvori raniji tekst");
   });
