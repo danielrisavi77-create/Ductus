@@ -76,7 +76,7 @@ test.prop([fc.array(op, { minLength: 1, maxLength: 12 }), fc.array(fault, { maxL
       documentId: DOC,
       open: async () => ({ status: "opened", work: {
         documentId: DOC, evidenceProfileId: "profil-izmisljeni", currentRevision: R0, documentHash: sha256(document),
-        headSegmentHash: null, lastSequenceTo: 0, document, evidenceDomainId: DOMAIN, receiptKeys: [trusted.key],
+        headSegmentHash: null, lastSequenceTo: 0, document, evidenceDomainId: DOMAIN, receiptKeys: [trusted.key], submitted: false,
       } }),
       replayer: createBrowserEditStepsV1Replayer,
       createRunner: (work) => createDrainRunner<QueuedTransaction>({

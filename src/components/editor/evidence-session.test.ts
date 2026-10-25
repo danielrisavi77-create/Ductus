@@ -53,7 +53,7 @@ function workFor(doc: CanonicalDocument, over: Partial<OpenedWork> = {}): Opened
   const document = jcsUtf8Bytes(doc);
   return {
     documentId: DOC, evidenceProfileId: PROFILE, currentRevision: R0, documentHash: sha256(document),
-    headSegmentHash: null, lastSequenceTo: 0, document, evidenceDomainId: DOMAIN, receiptKeys: [trusted.key], ...over,
+    headSegmentHash: null, lastSequenceTo: 0, document, evidenceDomainId: DOMAIN, receiptKeys: [trusted.key], submitted: false, ...over,
   };
 }
 
