@@ -459,7 +459,14 @@ export const hr = {
   },
   editor: {
     placeholder: "Počni pisati…",
-    // 3d-2c2b, za potvrdu: the package was closed by the submission (DAN-289 A1).
+    // 3d-2c2b, owner approved 25 Oct (contract #476 c.6391714810 §3): the
+    // server's work differs (CONFLICT, RECOVERY_REQUIRED).
+    evidenceConflict:
+      "Rad na poslužitelju razlikuje se od teksta na ovom uređaju. Tekst ostaje na uređaju i ništa se ne šalje dok ne odlučiš kako dalje.",
+    // 3d-2c2b, za potvrdu: a send refused for good. The contract's "spremljen na
+    // ovom uređaju" fails the PRODUCT §5 scan, so "ovom" is dropped.
+    sendRefused: "Tekst je spremljen na uređaju, ali ga poslužitelj nije primio. Ponovno učitaj stranicu.",
+    // 3d-2c2b, owner approved 25 Oct: the package was closed by the submission (DAN-289 A1).
     submittedReadOnly:
       "Rad je predan, pa se ovdje više ne može pisati. Izmjene napravljene nakon predaje nisu u predanom radu i ostaju samo na ovom uređaju.",
     blockedHint: "Ova kartica ništa ne sprema dok je druga otvorena. Kad je zatvoriš, tekst se ovdje ponovno učitava.",
@@ -786,7 +793,7 @@ export const hr = {
       few: "{n} izmjene postoje samo na ovom uređaju. Odjava zatvara sesiju.",
       many: "{n} izmjena postoji samo na ovom uređaju. Odjava zatvara sesiju.",
     },
-    // 3d-2c2b O3, za potvrdu: steps held after the submission are never sent.
+    // 3d-2c2b O3, owner approved 25 Oct: steps held after the submission are never sent.
     logoutAfterSubmission: {
       one: "{n} izmjena nakon predaje postoji samo na ovom uređaju i ne šalje se. Odjava zatvara sesiju.",
       few: "{n} izmjene nakon predaje postoje samo na ovom uređaju i ne šalju se. Odjava zatvara sesiju.",

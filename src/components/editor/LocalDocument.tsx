@@ -62,7 +62,7 @@ import { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
 import type { SaverFailure } from "@/lib/journal/local-document-saver";
 
 import {
-  createDocumentSaver, writingClosed, type DocumentSaver, type DocumentSnapshot,
+  createDocumentSaver, evidenceNotice, writingClosed, type DocumentSaver, type DocumentSnapshot,
 } from "./document-saver";
 import type { EvidenceSession } from "./evidence-session";
 import LogoutDialog from "./LogoutDialog";
@@ -600,6 +600,11 @@ const FAILURE_TEXT: Record<Failure, string> = {
   corrupt: t.editor.recovery,
 };
 
+const EVIDENCE_TEXT = {
+  conflict: t.editor.evidenceConflict,
+  refused: t.editor.sendRefused,
+} as const;
+
 function exportText(editor: Editor): void {
   const text = editor.getText({ blockSeparator: "\n\n" });
   const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
@@ -615,7 +620,9 @@ export function LocalEditor() {
   const value = useLocalDocument();
   const { editor, phase } = value;
   const failure = failureOf(value);
+  const notice = phase === "ready" || phase === "recovery" ? evidenceNotice(value.snapshot) : null;
   const alert = phase === "signed-out" ? t.auth.signedOutElsewhere
+    : notice ? EVIDENCE_TEXT[notice]
     : phase === "recovery" ? t.editor.recovery : failure ? FAILURE_TEXT[failure] : null;
   const canExport = editor !== null && (alert !== null) && !editor.isEmpty;
   return (

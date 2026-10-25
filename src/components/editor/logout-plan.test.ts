@@ -66,6 +66,15 @@ describe("sign-out dialog text (FE-D7, D-118)", () => {
     }
   });
 
+  // 3d-2c2 §3: no notice of the evidence session says the work is on the server.
+  it("the conflict and refusal notices use no forbidden term and never claim the server holds the text", () => {
+    for (const text of [messagesHr.editor.evidenceConflict, messagesHr.editor.sendRefused]) {
+      expect(findForbiddenTerms(text)).toEqual([]);
+      expect(text).not.toMatch(/spremljeno na poslužitelju|sinkronizirano/i);
+      if (/spremljen/i.test(text)) expect(text).toMatch(/spremljen na uređaju/i);
+    }
+  });
+
   // I4: the app sends nothing yet, so the dialog speaks only of this device.
   it("never claims anything reached or will reach the server", () => {
     const texts = [t.logoutPlain, t.logoutKept, t.logoutUnsaved, ...Object.values(t.logoutPending)];

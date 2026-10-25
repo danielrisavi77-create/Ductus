@@ -17,7 +17,17 @@ import {
 import { EvidenceSession, type EvidenceSnapshot } from "./evidence-session";
 
 /** A snapshot of either saver; only the evidence session ever sets `closedBy`. */
-export type DocumentSnapshot = SaverSnapshot & Partial<Pick<EvidenceSnapshot, "closedBy">>;
+export type DocumentSnapshot = SaverSnapshot & Partial<Pick<EvidenceSnapshot, "closedBy" | "refused">>;
+
+/**
+ * The notice of the evidence session, if any (3d-2c2 §3): the server's work
+ * differs, or it refused the last step for good.
+ */
+export function evidenceNotice(snapshot: DocumentSnapshot | null): "conflict" | "refused" | null {
+  if (!snapshot) return null;
+  if (READ_ONLY_STATES.includes(snapshot.state) && snapshot.closedBy !== "submission") return "conflict";
+  return snapshot.refused ? "refused" : null;
+}
 
 /** What the provider asks of its saver (3d-2c2 §2, the shared surface). */
 export type DocumentSaver = {
