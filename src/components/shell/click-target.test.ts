@@ -15,10 +15,9 @@ const TARGETS = [
 
 /** The min-height in px of the top-level rule whose selector is exactly `selector`. */
 function minHeight(css: string, selector: string): number | null {
-  const plain = css.replace(/\/\*[\s\S]*?\*\//g, "");
-  const escaped = selector.replace(/\./g, "\\.");
-  const rule = new RegExp(`(?:^|\\})\\s*${escaped}\\s*\\{([^}]*)\\}`).exec(plain);
-  const height = rule && /min-height:\s*([\d.]+)px;/.exec(rule[1]);
+  const rules = css.replace(/\/\*[\s\S]*?\*\//g, "").split("}");
+  const rule = rules.find((r) => r.slice(0, r.indexOf("{")).trim() === selector);
+  const height = rule && /min-height:\s*([\d.]+)px;/.exec(rule);
   return height ? Number(height[1]) : null;
 }
 
