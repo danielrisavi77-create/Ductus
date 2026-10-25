@@ -89,6 +89,48 @@ function insertedText(transactions: readonly Transaction[]): string {
   return text;
 }
 
+/**
+ * Whether the change inserts one run of text that, with the text around it in
+ * its block, reads as `whole` (F-131). Anything else is false.
+ */
+function completes(transactions: readonly Transaction[], whole: string): boolean {
+  let found: { tr: number; step: number; from: number; to: number; text: string } | null = null;
+  for (const [i, tr] of transactions.entries()) {
+    for (const [j, step] of tr.steps.entries()) {
+      if (!(step instanceof ReplaceStep || step instanceof ReplaceAroundStep)) continue;
+      const { content } = step.slice;
+      const text = content.textBetween(0, content.size, "", "");
+      if (text === "") continue;
+      if (found !== null || !(step instanceof ReplaceStep)) return false;
+      found = { tr: i, step: j, from: step.from, to: step.from + step.slice.size, text };
+    }
+  }
+  if (found === null) return false;
+  const at = found;
+  let { from, to } = at;
+  for (const [i, tr] of transactions.entries()) {
+    tr.mapping.maps.forEach((map, j) => {
+      if (i < at.tr || (i === at.tr && j <= at.step)) return;
+      from = map.map(from, 1);
+      to = map.map(to, -1);
+    });
+  }
+  const doc = transactions[transactions.length - 1]!.doc;
+  if (from < 0 || to > doc.content.size || from > to) return false;
+  const $from = doc.resolve(from);
+  const $to = doc.resolve(to);
+  if (!$from.parent.isTextblock || !$from.sameParent($to)) return false;
+  const block = $from.parent;
+  if (block.textBetween($from.parentOffset, $to.parentOffset, "", "") !== found.text) return false;
+  const before = block.textBetween(0, $from.parentOffset, "", "");
+  const after = block.textBetween($to.parentOffset, block.content.size, "", "");
+  const { text } = found;
+  for (let k = whole.indexOf(text); k !== -1; k = whole.indexOf(text, k + 1)) {
+    if (before.endsWith(whole.slice(0, k)) && after.startsWith(whole.slice(k + text.length))) return true;
+  }
+  return false;
+}
+
 /** One character (one code point) a key would type, or null for any other key. */
 function typedKey(event: KeyboardEvent): string | null {
   return [...event.key].length === 1 ? event.key : null;
@@ -110,7 +152,7 @@ export class SourceObserver {
   private compositionText = false;
   /** The text of a trusted `insertReplacementText`, kept like `inputData` (F-130). */
   private replacementText: string | null = null;
-  /** The text of a trusted composition event or `insertCompositionText`, kept like `inputData` (F-130). */
+  /** The text of a trusted compositionend or `insertCompositionText`, kept like `inputData` (F-130, F-132). */
   private composedText: string | null = null;
   private clearing = false;
 
@@ -172,8 +214,8 @@ export class SourceObserver {
    * `unattributed`. A typed key counts only when the change inserts exactly the
    * text of its `beforeinput`; a keymap key only when it inserts no text; input
    * without a key only when it inserts exactly its data. A replacement or a
-   * composition counts only when the change inserts text that is part of the
-   * suggested or composed text: the editor inserts only what changed (F-130).
+   * composition counts only when the change inserts the part of the suggested
+   * or composed text that changed, where it reads as that text (F-130, F-131).
    * A change that does not edit the document takes nothing.
    */
   take(transactions: readonly Transaction[]): SourceObservation {
@@ -181,7 +223,7 @@ export class SourceObserver {
     const seen = this.seen;
     const text = insertedText(transactions);
     const sameText = this.inputData !== null && text === this.inputData;
-    const partOf = (whole: string | null) => whole !== null && text !== "" && whole.includes(text);
+    const partOf = (whole: string | null) => whole !== null && text !== "" && completes(transactions, whole);
     const replaced = partOf(this.replacementText);
     const composed = this.compositionText && partOf(this.composedText);
     const composing = partOf(this.composedText);
@@ -225,7 +267,7 @@ export class SourceObserver {
     this.touch();
     if (!event.isTrusted) return false;
     this.seen.composing = true;
-    if (event.data) this.composedText = event.data;
+    if (event.type === "compositionend" && event.data) this.composedText = event.data;
     return false;
   }
 }
