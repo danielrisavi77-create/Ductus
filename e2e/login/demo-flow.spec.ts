@@ -669,10 +669,12 @@ test("demo walk-through", async ({ browser, page, context }) => {
     }
   });
 
-  // The server part of F-8 waits for 3d-2b (#693; K-4c-2 in #655): "spremljeno
-  // na poslužitelju" only after a verified signed receipt, the offline text on
-  // the server after the return, and the offline mark after the return (PRODUCT §5 rule 10).
-  await test.step.skip("2. F-8 na poslužitelju: potpisana potvrda i oznaka rada bez mreže (3d-2b)", async () => {});
+  // The server part of F-8 waits for 3d-2c2 (LocalDocument sends the evidence;
+  // K-4c-2 in #655): "spremljeno na poslužitelju" only after a signed receipt
+  // that verifies under the stack's key for the database's checkpoint, the
+  // offline text on the server after the return, and the offline mark after the
+  // return (PRODUCT §5 rule 10). The Node checks are in evidence-receipt.ts.
+  await test.step.skip("2. F-8 na poslužitelju: potpisana potvrda i oznaka rada bez mreže (3d-2c2)", async () => {});
 
   await test.step("2. Studentica se odjavljuje", async () => {
     await signOut(page, token);
