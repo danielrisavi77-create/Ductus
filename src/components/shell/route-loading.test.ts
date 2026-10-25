@@ -9,7 +9,11 @@ import { messagesHr as t } from "@/lib/i18n/messages.hr";
 
 import RouteLoading from "./RouteLoading";
 
-const ROUTES = ["rad", "rad/[assignmentId]/predaja", "nastavnik", "nastavnik/brz-put", "upis"];
+const ROUTES = ["rad", "rad/[assignmentId]/predaja", "nastavnik/brz-put", "upis"];
+
+// Streaming swaps the page in with a script, so without JavaScript a loading
+// boundary would hide the teacher's shell and its sign-out (I5).
+const NO_SCRIPT_ROUTES = ["nastavnik"];
 
 describe("route loading (#732 item 4)", () => {
   it("announces the wait in the page's main, without a session mark", () => {
@@ -18,7 +22,7 @@ describe("route loading (#732 item 4)", () => {
     );
     expect(html).toContain('id="sadrzaj"');
     expect(html).toContain('aria-busy="true"');
-    expect(html).toMatch(new RegExp(`<p role="status">${t.fastPath.loading}</p>`));
+    expect(html).toContain(`<p role="status">${t.fastPath.loading}</p>`);
     expect(html).not.toContain("<h1");
   });
 
@@ -29,5 +33,9 @@ describe("route loading (#732 item 4)", () => {
     expect(source).toMatch(/<AppHeader\s/);
     expect(source).toMatch(/<RouteLoading\s/);
     expect(source).not.toMatch(/AppShell|SessionObserver/);
+  });
+
+  it.each(NO_SCRIPT_ROUTES)("app/%s has no loading.tsx, so it renders without JavaScript", (route) => {
+    expect(existsSync(join(process.cwd(), "app", route, "loading.tsx"))).toBe(false);
   });
 });
