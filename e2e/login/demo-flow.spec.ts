@@ -787,6 +787,13 @@ test("demo walk-through", async ({ browser, page, context }) => {
       await page.goto(workPath);
       await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
       const documentId = await workDocumentOf(k4Assignment!);
+      // The seeded document of the earlier steps opens like any work (#727):
+      // one package, in the one evidence domain whose receipt key the stack registered.
+      await withAdmin(async (client) => {
+        const { rows } = await client.query("SELECT 1 FROM evidence.package WHERE document_id = $1", [LOCAL_DEMO_DOCUMENT_ID]);
+        expect(rows).toHaveLength(1);
+        await stackReceiptKeys(client, LOCAL_DEMO_DOCUMENT_ID);
+      });
 
       // 1. Typing reaches the server state only with a receipt that verifies
       // under the stack's key for the checkpoint, whose text is the journal's.
