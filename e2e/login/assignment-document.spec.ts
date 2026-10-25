@@ -4,7 +4,7 @@ import { expect, test, type Page, type Request } from "@playwright/test";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
 import { closeWork, documentsOf, seedWork, STUDENT, TEACHER, workDocument } from "./work-seed";
-import { clickSignOut, signIn, type DemoAccount } from "./support";
+import { clickSignOut, SAVED_HERE, signIn, type DemoAccount } from "./support";
 
 // #711 F1 (contract 6391402093 §8 tests 1-10 and 13, amendment 6391779486):
 // `/rad?zadatak=` writes into the student's own document of the assignment,
@@ -73,7 +73,9 @@ test("F1: /rad?zadatak= writes into the student's own document of the assignment
   const comments = requests.filter((r) => /^\/api\/comments/.test(pathOf(r)));
   expect(comments.length).toBeGreaterThan(0);
   for (const request of comments) expect(request.postData() ?? "").toContain(documents[0]!);
-  expect(touching(requests, /^\/api\/evidence\/open$/)).toEqual(["/api/evidence/open"]);
+  // The first opening makes the work; the sheet's evidence session then opens
+  // it once more for the receipt keys (3d-2c2 §2). Nothing else opens it.
+  expect(touching(requests, /^\/api\/evidence\/open$/)).toEqual(["/api/evidence/open", "/api/evidence/open"]);
   expect(carryingFixedId(requests)).toEqual([]);
   expect(await page.content()).not.toContain(LOCAL_DEMO_DOCUMENT_ID);
 });
@@ -86,7 +88,7 @@ test("F1: two assignments keep two documents", async ({ page }) => {
   await writable(page);
   await editorOf(page).click();
   await page.keyboard.type("Tekst samo za zadatak X.");
-  await expect(page.locator(".workspace__status .sync-chip")).toHaveAttribute("data-state", "LOCAL_DURABLE");
+  await expect(page.locator(".workspace__status .sync-chip")).toHaveAttribute("data-state", SAVED_HERE);
   await page.goto(`/rad?zadatak=${y}`);
   await writable(page);
   await expect(editorOf(page)).not.toContainText("Tekst samo za zadatak X.");
@@ -244,7 +246,9 @@ test("F1: sign-out after two assignments leaves neither to the next person", asy
     await writable(page);
     await editorOf(page).click();
     await page.keyboard.type(text);
-    await expect(page.locator(".workspace__status .sync-chip")).toHaveAttribute("data-state", "LOCAL_DURABLE");
+    // 3d-2c2: the assignment's text reaches the server under a signed receipt
+    // before the next one is opened, so the sign-out below owes nothing.
+    await expect(page.locator(".workspace__status .sync-chip")).toHaveAttribute("data-state", "SYNCED", { timeout: OPEN });
   }
   const hers = await journalNames(page);
   expect(hers).toHaveLength(1);
@@ -259,10 +263,11 @@ test("F1: sign-out after two assignments leaves neither to the next person", asy
     await expect(writableEditors(page)).toHaveCount(0);
     await expect(page.locator("body")).not.toContainText("prije odjave.");
   }
-  // Her journal is kept (nothing was synced) and is not the one this person writes in.
+  // Everything of hers was confirmed, so her sign-out deleted her journal
+  // (D-118); the one left is this person's own, never hers.
   const now = await journalNames(page);
-  expect(now).toHaveLength(2);
-  expect(now).toContain(hers[0]);
+  expect(now).toHaveLength(1);
+  expect(now).not.toContain(hers[0]);
   // The unavailable sheet opens no journal, so the account place is the
   // shell's plain sign-out form, not LocalLogout and its dialog (page.tsx).
   await page.getByRole("button", { name: t.auth.logout, exact: true }).click();

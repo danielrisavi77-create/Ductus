@@ -17,7 +17,7 @@ import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
 import { workDocument } from "./work-seed";
 import { cleanUp, post, seed } from "./comment-seed";
-import { appCookie, clickSignOut, fillCodeDeadline, SESSION_COOKIE, sessionRow, signIn } from "./support";
+import { appCookie, clickSignOut, fillCodeDeadline, SAVED_HERE, SESSION_COOKIE, sessionRow, signIn } from "./support";
 
 // K-4 (DAN-89; docs/PLAN-DEMO.md §1 points 1 to 5 and §7 t. 2, D-98): the demo
 // walk-through as one test. The login config records its video in CI and the
@@ -481,7 +481,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
     await editorOf(page).click();
     await page.keyboard.type(TEXT);
-    await expect(chipOf(page)).toHaveAttribute("data-state", "LOCAL_DURABLE");
+    await expect(chipOf(page)).toHaveAttribute("data-state", SAVED_HERE);
     await snapshot(page, "2-spremljeno-na-uredaju");
   });
 
@@ -512,9 +512,11 @@ test("demo walk-through", async ({ browser, page, context }) => {
       await page.reload();
       await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
       await expect(editorOf(page)).toHaveText(DRAFT);
-      await expect(chipOf(page)).toHaveAttribute("data-state", "LOCAL_DURABLE");
+      // Online again, the evidence session sends what waited (3d-2c2), so the
+      // rows and the meta move on; the text on the device does not (G2).
+      await expect(chipOf(page)).toHaveAttribute("data-state", SAVED_HERE);
       const restored = await localCheckpoint(page);
-      expect(restored).toEqual(saved);
+      expect(restored.snapshot?.document).toEqual(saved.snapshot?.document);
       await attachCheckpoint("2-oporavljeno-nakon-reloada.json", restored);
       await snapshot(page, "2-nacrt-oporavljen");
     } finally {
@@ -668,7 +670,9 @@ test("demo walk-through", async ({ browser, page, context }) => {
       await expect(chipOf(page)).toHaveAttribute("data-state", "LOCAL_DURABLE");
       const restored = await localCheckpoint(page);
       expect(restored).toEqual(saved);
-      expect(syncRequests.filter((path) => path !== livePath())).toEqual([]);
+      // The evidence session asks for the work once on load; the route is cut
+      // off, so it stays on the journal's chain and sends nothing (3d-2c2 §2 t. 4).
+      expect(syncRequests.filter((path) => path !== livePath() && path !== "/api/evidence/open")).toEqual([]);
       const savedBody = canonicalizeJcs(saved.snapshot!.document);
       for (const body of livePuts) expect(body).toBe(savedBody);
       await attachCheckpoint("2-f8-oporavljeno-nakon-reloada.json", restored);
@@ -714,7 +718,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
     token = (await appCookie(context, SESSION_COOKIE))!.value;
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
     await expect(editorOf(page)).toHaveText(EXPECTED_TEXT);
-    await expect(chipOf(page)).toHaveAttribute("data-state", "LOCAL_DURABLE");
+    await expect(chipOf(page)).toHaveAttribute("data-state", SAVED_HERE);
     await expect(page.getByText(COMMENT, { exact: true })).toBeVisible();
     await snapshot(page, "2-vlasnica-nastavlja-nacrt");
     await signOut(page, token);

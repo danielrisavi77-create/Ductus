@@ -5,7 +5,7 @@ import type { NodeId } from "../../src/domain/document";
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import { closeWork, openWorkOf, seedWork } from "./work-seed";
 import { post } from "./comment-seed";
-import { clickSignOut, signIn, type DemoAccount } from "./support";
+import { clickSignOut, SAVED_HERE, signIn, type DemoAccount } from "./support";
 
 // F-086 and F-088 (#476 contract 6383859615): one browser, one person after
 // another. Nothing the previous sign-in held in the page, its text, its undo
@@ -45,7 +45,7 @@ async function writeAndWait(page: Page, text: string): Promise<void> {
   await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: 30_000 });
   await editorOf(page).click();
   await page.keyboard.type(text);
-  await expect(chipOf(page)).toHaveAttribute("data-state", "LOCAL_DURABLE");
+  await expect(chipOf(page)).toHaveAttribute("data-state", SAVED_HERE);
 }
 
 /**
