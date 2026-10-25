@@ -9,7 +9,7 @@ CREATE ROLE ductus_test_stranger NOLOGIN;
 GRANT USAGE ON SCHEMA public TO ductus_app, ductus_worker, ductus_retention, ductus_auth, ductus_test_stranger;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO ductus_app, ductus_worker, ductus_retention, ductus_auth, ductus_test_stranger;
 
-SELECT plan(43);
+SELECT plan(55);
 
 INSERT INTO identity.institution (id, slug, aai_home_org) VALUES
   ('00000000-0000-4000-8000-00000000000a', 'test-a', 'a.example'),
@@ -137,6 +137,32 @@ SET LOCAL ROLE ductus_auth;
 SELECT is(pg_temp.login('ivo', 'a.example', 'i3', repeat('I', 256), 'Primjerić'), 'ok', 'a 256-character name still logs in');
 RESET ROLE;
 SELECT is(pg_temp.name_of('ivo@a.example'), NULL, 'a 256-character name is not stored');
+-- Every space separator is blank and every character claims.ts refuses is
+-- refused here too; each removal starts from a stored name.
+SET LOCAL ROLE ductus_auth;
+SELECT is(pg_temp.login('ivo', 'a.example', 'i4', 'Ivo' || chr(160) || 'Ante', 'Primjerić'), 'ok', 'a name with an inner no-break space logs in');
+RESET ROLE;
+SELECT is(pg_temp.name_of('ivo@a.example'), 'Ivo' || chr(160) || 'Ante / Primjerić', 'an inner no-break space is kept');
+SET LOCAL ROLE ductus_auth;
+SELECT is(pg_temp.login('ivo', 'a.example', 'i5', 'Ivo', chr(160) || chr(12288)), 'ok', 'a family name of no-break spaces still logs in');
+RESET ROLE;
+SELECT is(pg_temp.name_of('ivo@a.example'), NULL, 'a name of no-break spaces is blank and removes the name');
+SET LOCAL ROLE ductus_auth;
+SELECT is(pg_temp.login('ivo', 'a.example', 'i6', 'Ivo', 'Primjerić'), 'ok', 'Ivo logs in with his name again');
+RESET ROLE;
+SELECT is(pg_temp.name_of('ivo@a.example'), 'Ivo / Primjerić', 'the name is stored again');
+SET LOCAL ROLE ductus_auth;
+SELECT is(pg_temp.login('ivo', 'a.example', 'i7', 'Ivo' || chr(8203), 'Primjerić'), 'ok', 'a zero-width space still logs in');
+RESET ROLE;
+SELECT is(pg_temp.name_of('ivo@a.example'), NULL, 'a name with a zero-width space (Cf) is not stored');
+SET LOCAL ROLE ductus_auth;
+SELECT is(pg_temp.login('ivo', 'a.example', 'i8', 'Ivo', 'Primjerić'), 'ok', 'Ivo logs in with his name once more');
+RESET ROLE;
+SELECT is(pg_temp.name_of('ivo@a.example'), 'Ivo / Primjerić', 'the name is stored once more');
+SET LOCAL ROLE ductus_auth;
+SELECT is(pg_temp.login('ivo', 'a.example', 'i9', 'Ivo', 'Primje' || chr(8232) || 'rić'), 'ok', 'a line separator still logs in');
+RESET ROLE;
+SELECT is(pg_temp.name_of('ivo@a.example'), NULL, 'a name with a line separator (Zl) is not stored');
 
 -- 5. A refused login writes no name, under the same refusal as before.
 SET LOCAL ROLE ductus_auth;

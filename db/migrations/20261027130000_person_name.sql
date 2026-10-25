@@ -45,8 +45,18 @@ DECLARE
   v_expires timestamptz;
   v_user uuid;
   v_institution uuid;
-  v_given text := pg_catalog.btrim(p_given_name, E' \t\r\n');
-  v_family text := pg_catalog.btrim(p_family_name, E' \t\r\n');
+  -- Every space separator (Zs) is trimmed, so a name of non-breaking spaces
+  -- is as blank as one of ASCII spaces.
+  v_trim constant text := E' \t\r\n\u00A0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u202F\u205F\u3000';
+  -- The characters src/server/auth/claims.ts refuses in a name (Cc, Cf, Zl,
+  -- Zp; NUL and surrogates cannot occur in text), so a direct call stores
+  -- nothing the login path would have dropped.
+  v_unsafe constant text := '[\u0001-\u001F\u007F-\u009F\u00AD\u0600-\u0605\u061C\u06DD\u070F\u0890\u0891\u08E2'
+    '\u180E\u200B-\u200F\u2028-\u202E\u2060-\u2064\u2066-\u206F\uFEFF\uFFF9-\uFFFB'
+    '\U000110BD\U000110CD\U00013430-\U0001343F\U0001BCA0-\U0001BCA3\U0001D173-\U0001D17A'
+    '\U000E0001\U000E0020-\U000E007F]';
+  v_given text := pg_catalog.btrim(p_given_name, v_trim);
+  v_family text := pg_catalog.btrim(p_family_name, v_trim);
 BEGIN
   v_expires := identity.open_session(p_issuer, p_subject, p_unique_id, p_home_org, p_token_hash);
 
@@ -54,10 +64,11 @@ BEGIN
   FROM identity.user_account u
   WHERE u.oidc_issuer = p_issuer AND u.hr_edu_person_unique_id = p_unique_id;
 
-  -- A name with a control character is not a name; it is dropped, never
-  -- refused, so a bad attribute costs the name and not the login.
-  IF pg_catalog.length(v_given) BETWEEN 1 AND 255 AND v_given !~ '[[:cntrl:]]'
-     AND pg_catalog.length(v_family) BETWEEN 1 AND 255 AND v_family !~ '[[:cntrl:]]' THEN
+  -- A name with a control or invisible format character is not a name; it
+  -- is dropped, never refused, so a bad attribute costs the name and not the
+  -- login.
+  IF pg_catalog.length(v_given) BETWEEN 1 AND 255 AND v_given !~ (v_unsafe COLLATE "C")
+     AND pg_catalog.length(v_family) BETWEEN 1 AND 255 AND v_family !~ (v_unsafe COLLATE "C") THEN
     INSERT INTO identity.person_name (user_id, institution_id, given_name, family_name)
     VALUES (v_user, v_institution, v_given, v_family)
     ON CONFLICT (user_id) DO UPDATE
