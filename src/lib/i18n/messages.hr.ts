@@ -704,17 +704,17 @@ export const hr = {
     sessions: {
       heading: "Sesije pisanja",
       count: "Broj sesija",
-      threshold: "prag P-01: nova sesija počinje nakon stanke dulje od",
+      threshold: "prag: nova sesija počinje nakon stanke dulje od",
       none: "Nema zabilježenih sesija.",
     },
     pastes: {
       heading: "Lijepljenja",
-      listedThreshold: "prag P-02: zasebno se navodi lijepljenje veće od",
+      listedThreshold: "prag: zasebno se navodi lijepljenje veće od",
       size: "Veličina",
       origins: { not_observed: "izvor nije opažen" },
       noneListed: "Nema lijepljenja većih od praga.",
       smaller: "Manja lijepljenja, samo broj",
-      smallerThreshold: "prag P-02: najviše",
+      smallerThreshold: "prag: najviše",
     },
     gaps: {
       heading: "Praznine u zapisu",
