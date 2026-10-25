@@ -88,6 +88,9 @@ export class EvidenceSession {
   /** The journal's meta state as last read or written; SYNCED is shown only with `syncedHere`. */
   private stored: SyncState | null = null;
   private syncedHere = false;
+  /** Rows owed as last read or written; SYNCING is shown only while a step runs for them (P2). */
+  private owed = 0;
+  private syncing = false;
   private seq = 0;
   private gen = 0;
   private cleanGen = 0;
@@ -170,6 +173,7 @@ export class EvidenceSession {
     }
     this.seq = meta.localSeq;
     this.stored = restored;
+    this.owed = contents.pending.length;
     this.stopped = meta.evidenceStopped ?? null;
     this.profile = this.work?.evidenceProfileId ?? this.deps.storedProfile?.(meta) ?? null;
     if (this.work) this.runner = this.deps.createRunner(this.work);
@@ -245,7 +249,11 @@ export class EvidenceSession {
     if (this.failure) return "ERROR";
     if (this.gen !== this.cleanGen || this.next) return this.saving ? "SAVING_LOCAL" : "EDITING";
     if (this.stored === null) return "EDITING";
-    // G3: SYNCED only from a receipt verified in this page session.
+    // P2 (#476 c.6395903987): shown in memory only, never written to the journal.
+    if (this.syncing) return "SYNCING";
+    // G3: SYNCED only from a receipt verified in this page session; a SYNCING
+    // left in meta outside a step of this session is a send that never ended.
+    if (this.stored === "SYNCING") return "LOCAL_DURABLE";
     return this.stored === "SYNCED" && !this.syncedHere ? "LOCAL_DURABLE" : this.stored;
   }
 
@@ -327,6 +335,7 @@ export class EvidenceSession {
       this.seq = result.localSeq;
       this.stored = result.meta.state;
       this.syncedHere = false;
+      this.owed += 1;
       lastDocument = decoder.decode(built.document);
       this.retryOpen();
       this.kick();
@@ -364,12 +373,16 @@ export class EvidenceSession {
   private async stepLoop(): Promise<void> {
     while (this.runner && !this.halted && !this.paused && this.deps.network.online()) {
       let result;
+      this.syncing = this.owed > 0;
+      if (this.syncing) this.emit();
       try {
         result = await this.runner.step(this.id);
       } catch {
+        this.syncing = false;
         await this.refresh();
         return;
       }
+      this.syncing = false;
       if (result.kind === "sent" && result.state === "SYNCED") this.syncedHere = true;
       const contents = await this.refresh();
       if (result.kind === "sent" && contents && contents.pending.length > 0) continue;
@@ -386,6 +399,7 @@ export class EvidenceSession {
       const contents = await this.deps.journal.readEvidence(this.id);
       if (contents.meta) {
         this.stored = contents.meta.state;
+        this.owed = contents.pending.length;
         if (STICKY.has(contents.meta.state)) this.halted = true;
       }
       this.emit();

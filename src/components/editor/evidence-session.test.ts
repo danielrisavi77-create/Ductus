@@ -589,3 +589,97 @@ describe("3d-2c2 evidence session: the drain", () => {
     expect(net.calls).toHaveLength(0);
   });
 });
+
+describe("3d-2c2 evidence session: SYNCING while a step runs (P2, #476 c.6395903987)", () => {
+  it("SYNCING shows while the request is in flight and SYNCED follows the receipt", async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const net = server(R0, async (body, accept) => { await held; return accept(body); });
+    const { session } = setup({ net });
+    await ready(session);
+    const sheet = editorFor(session);
+    sheet.type("a");
+    session.edit();
+    await session.propose(sheet.current());
+    await vi.waitFor(() => expect(net.calls).toHaveLength(1));
+    expect(session.snapshot().state).toBe("SYNCING");
+    release();
+    await session.settled();
+    expect(session.snapshot().state).toBe("SYNCED");
+  });
+
+  it("SYNCING lives in memory only: a step cut off after its hold loads as LOCAL_DURABLE", async () => {
+    const journal = openJournal();
+    const first = setup({ journal, online: network(false) });
+    await ready(first.session);
+    const sheet = editorFor(first.session);
+    sheet.type("a");
+    await sheet.save();
+    // The drain's own hold (beginSend) writes SYNCING; the page dies before the answer.
+    const row = (await journal.readEvidence(DOC)).pending[0]!;
+    await journal.beginSend(DOC, row as never);
+    expect((await journal.readEvidence(DOC)).meta?.state).toBe("SYNCING");
+    const second = setup({ journal, online: network(false), open: async () => ({ status: "unavailable" }) });
+    await ready(second.session);
+    expect(second.session.snapshot().state).toBe("LOCAL_DURABLE");
+  });
+
+  it("after a lost answer or a 503 the state comes from meta, never SYNCING", async () => {
+    for (const lost of [() => new TypeError("offline"), () => json(503, {})] as Answer[]) {
+      const net = server(R0, lost);
+      const { session } = setup({ net });
+      await ready(session);
+      const sheet = editorFor(session);
+      sheet.type("x");
+      await sheet.save();
+      expect(net.calls).toHaveLength(1);
+      expect(session.snapshot().state).toBe("ERROR");
+      await cleanup();
+    }
+  });
+
+  it("offline, no step runs and SYNCING never shows", async () => {
+    const { session } = setup({ online: network(false) });
+    const states: string[] = [];
+    session.subscribe((s) => states.push(s.state));
+    await ready(session);
+    const sheet = editorFor(session);
+    sheet.type("x");
+    await sheet.save();
+    expect(states).not.toContain("SYNCING");
+    expect(session.snapshot().state).toBe("LOCAL_DURABLE");
+  });
+
+  it("SYNCING with a forged receipt never turns into SYNCED", async () => {
+    const stranger = receiptKey("kljuc-lazni");
+    const net = server(R0, (body) => json(200, { status: "committed", revision: R0 + 1, receipt: { status: "signed", signedReceipt: stranger.sign({
+      documentId: DOC, clientTransactionId: body.clientTransactionId, revision: R0 + 1, segmentHash: sha256(decodeBase64(body.segments[0])!),
+    }) } }));
+    const { session } = setup({ net });
+    const states: string[] = [];
+    session.subscribe((s) => states.push(s.state));
+    await ready(session);
+    const sheet = editorFor(session);
+    sheet.type("x");
+    await sheet.save();
+    expect(states).toContain("SYNCING");
+    expect(states).not.toContain("SYNCED");
+    expect(session.snapshot().state).not.toBe("SYNCING");
+  });
+
+  it("a reload with nothing owed shows neither SYNCING nor SYNCED (G3)", async () => {
+    const journal = openJournal();
+    const first = setup({ journal });
+    await ready(first.session);
+    const sheet = editorFor(first.session);
+    sheet.type("x");
+    await sheet.save();
+    expect(first.session.snapshot().state).toBe("SYNCED");
+    const second = setup({ journal, open: async () => ({ status: "unavailable" }) });
+    const states: string[] = [];
+    second.session.subscribe((s) => states.push(s.state));
+    await ready(second.session);
+    expect(states).not.toContain("SYNCING");
+    expect(states).not.toContain("SYNCED");
+  });
+});
