@@ -17,6 +17,8 @@ async function secondAssignment(first: string): Promise<{ course: string; second
       `SELECT c.id AS course, c.name, a.institution_id AS institution, a.created_by AS owner
          FROM institution.assignment a JOIN institution.course c ON c.id = a.course_id WHERE a.id = $1`, [first]);
     const title = `Izmišljeni drugi zadatak ${Date.now().toString(36)}`;
+    // current_version's key to assignment_version is deferred: both rows in one transaction, as seedWork.
+    await client.query("BEGIN");
     const { rows: [second] } = await client.query<{ id: string }>(
       `INSERT INTO institution.assignment (course_id, institution_id, current_version, created_by)
        VALUES ($1, $2, 1, $3) RETURNING id`, [a!.course, a!.institution, a!.owner]);
@@ -25,6 +27,7 @@ async function secondAssignment(first: string): Promise<{ course: string; second
          due_at, ai_policy, ai_purposes, evidence_profile, import_allowed, created_by)
        VALUES ($1, 1, $2, 'Upute za izmišljeni zadatak.', 'essay', now() - interval '1 hour',
          now() + interval '40 days', 'prohibited', '{}', 'basic', false, $3)`, [second!.id, title, a!.owner]);
+    await client.query("COMMIT");
     return { course: a!.name, second: second!.id, title };
   });
 }
