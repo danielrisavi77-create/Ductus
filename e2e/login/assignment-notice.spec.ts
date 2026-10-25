@@ -278,13 +278,20 @@ test("the notice leads to /rad of its assignment, whose top bar names it", async
   await signIn(page, PATH, "Demo studentica");
   const context = page.locator(".workspace__bar .brand-line__context");
   // Not a student of this assignment, or no id at all: no course, no assignment.
+  // Without an id the free draft has the length; any other id is the one
+  // neutral read-only sheet, which has none (#711 F1).
   for (const path of [`/rad?zadatak=${PATH.slice("/zadatak/".length)}`, "/rad", "/rad?zadatak=nije-id"]) {
     await page.goto(path);
     await expect(page.locator(".workspace__bar")).toBeVisible();
     await expect(context).toHaveCount(0);
     const length = page.locator(".workspace__status .status-length");
-    await expect(length.locator("b")).toBeVisible();
-    await expect(length).not.toContainText(/najmanje|najviše|–/u);
+    if (path === "/rad") {
+      await expect(length.locator("b")).toBeVisible();
+      await expect(length).not.toContainText(/najmanje|najviše|–/u);
+    } else {
+      await expect(page.locator(".sheet-area")).toContainText(t.workspace.unavailable);
+      await expect(length).toHaveCount(0);
+    }
   }
   // PRODUCT §5 rule 6: before the current notice is acknowledged, /rad of the
   // assignment opens its notice instead of the workspace.
@@ -305,9 +312,15 @@ test("the notice leads to /rad of its assignment, whose top bar names it", async
     await page.waitForURL(`**/rad?zadatak=${seeded.assignment}`);
     await expect(context).toHaveText(`${seeded.courseName} / Izmišljeni zadatak S3`);
     await expect(page.locator(".workspace__bar")).not.toContainText("Kolegij A");
+    // The first opening refreshes the render into the editor of the new work,
+    // which mounts the shell and its panel afresh: Upute is opened after that.
+    await expect(page.getByRole("toolbar", { name: t.toolbar.label })).toBeVisible();
+    await expect(context).toHaveText(`${seeded.courseName} / Izmišljeni zadatak S3`);
     // Upute shows the same read: the task, its due date, no allowed uses.
     const panel = page.getByRole("complementary", { name: t.workspace.sidePanel });
-    await panel.getByRole("tab", { name: t.workspace.tabInstructions }).click();
+    const instructions = panel.getByRole("tab", { name: t.workspace.tabInstructions });
+    await instructions.click();
+    await expect(instructions).toHaveAttribute("aria-selected", "true");
     const upute = panel.getByRole("tabpanel");
     await expect(upute.getByRole("heading", { name: t.workspace.upute.task })).toBeVisible();
     await expect(upute).toContainText("Izmišljeni zadatak S3");
@@ -336,7 +349,8 @@ test("/rad shows each legal word-limit shape from the student's acknowledged ass
     const seeded = await seedAssignment({ ...limits, acknowledged: true });
     try {
       await page.goto(`/rad?zadatak=${seeded.assignment}`);
-      await expect(length).toHaveText(limits.shown);
+      // #711 F1: the length comes with the student's own work, opened by the page's one POST.
+      await expect(length).toHaveText(limits.shown, { timeout: 30_000 });
       if (limits.wordMin === 2000) {
         await test.info().attach("rad-raspon-rijeci", { body: await page.screenshot(), contentType: "image/png" });
       }
@@ -399,7 +413,7 @@ test("/rad redirects for a stale acknowledgment, then shows only the acknowledge
       `INSERT INTO institution.notice_acknowledgment (assignment_id, version_no, student_id, institution_id)
        VALUES ($1, 2, $2, $3)`, [seeded.assignment, me.id, me.institution_id]));
     await page.goto(`/rad?zadatak=${seeded.assignment}`);
-    await expect(page.locator(".workspace__status .status-length")).toHaveText(/^0 \/ 2\s000–2\s500 riječi$/u);
+    await expect(page.locator(".workspace__status .status-length")).toHaveText(/^0 \/ 2\s000–2\s500 riječi$/u, { timeout: 30_000 });
   } finally {
     await admin((client) => client.query(
       "UPDATE institution.course_member SET member_to = now() WHERE course_id = $1 AND member_to IS NULL", [seeded.course]));

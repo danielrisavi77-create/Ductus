@@ -1,0 +1,71 @@
+/**
+ * The read-only sheet of the plan `opening` on `/rad?zadatak=` (#711 F1,
+ * contract 6391402093 §2 and §6). Pure: everything comes from the phase, so
+ * each one renders with `renderToStaticMarkup` in the unit tests; written with
+ * `createElement` for the same reason as `SubmissionView`. No phase is an
+ * editor: the sheet is `aria-disabled`, `aria-busy` while the answer is
+ * awaited, and the text is in `role="status"`. All text is in `messages.hr.ts`.
+ */
+
+import { createElement as h, Fragment } from "react";
+
+import type { OpenWorkStep } from "@/components/student/work-document-plan";
+import { messagesHr } from "@/lib/i18n/messages.hr";
+
+const t = messagesHr.workspace;
+
+/** What the opening sheet shows: waiting, or the step of the last answer. */
+export type OpenWorkPhase = { kind: "loading" } | Exclude<OpenWorkStep, { kind: "refresh" }>;
+
+export const OPEN_WORK_STATUS_ID = "open-work-status";
+
+/** The text of one phase, in the sheet's `role="status"`. */
+export function openWorkText(phase: OpenWorkPhase): string {
+  switch (phase.kind) {
+    case "loading": return t.openLoading;
+    case "notAccepting": return t.openNotAccepting;
+    case "unavailable": return t.unavailable;
+    case "reload": return t.openReload;
+    case "offline": return t.openOffline;
+    case "error": return t.openError;
+  }
+}
+
+function action(phase: OpenWorkPhase, assignmentId: string, onRetry: () => void, onReload: () => void) {
+  switch (phase.kind) {
+    case "error":
+      return h("button", { type: "button", className: "btn", onClick: onRetry }, t.openRetry);
+    case "notAccepting":
+      return h("a", { className: "btn", href: `/zadatak/${encodeURIComponent(assignmentId)}` }, t.openNoticeLink);
+    case "unavailable": {
+      if (!phase.signIn) return null;
+      const back = `/rad?zadatak=${encodeURIComponent(assignmentId)}`;
+      return h("a", { className: "btn", href: `/api/auth/login?returnTo=${encodeURIComponent(back)}` }, messagesHr.auth.signIn);
+    }
+    case "reload":
+      return h("button", { type: "button", className: "btn", onClick: onReload }, t.openReloadButton);
+    default:
+      return null;
+  }
+}
+
+export function OpenWorkView({ phase, assignmentId, onRetry, onReload }: {
+  phase: OpenWorkPhase;
+  assignmentId: string;
+  onRetry: () => void;
+  onReload: () => void;
+}) {
+  return h(Fragment, null,
+    h("div", {
+      className: "manuscript",
+      role: "textbox",
+      "aria-multiline": "true",
+      "aria-disabled": "true",
+      "aria-busy": phase.kind === "loading" ? "true" : "false",
+      "aria-label": t.documentLabel,
+      "aria-describedby": OPEN_WORK_STATUS_ID,
+    }, h("p", { className: "manuscript__placeholder" }, t.documentNotEditable)),
+    h("p", { id: OPEN_WORK_STATUS_ID, role: "status" }, openWorkText(phase)),
+    action(phase, assignmentId, onRetry, onReload),
+  );
+}
