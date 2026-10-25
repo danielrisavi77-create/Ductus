@@ -614,7 +614,8 @@ export function LocalEditor() {
   const value = useLocalDocument();
   const { editor, phase } = value;
   const failure = failureOf(value);
-  const notice = phase === "ready" || phase === "recovery" ? evidenceNotice(value.snapshot) : null;
+  // A sheet in recovery could not read its local record: that notice comes first.
+  const notice = phase === "ready" ? evidenceNotice(value.snapshot) : null;
   const alert = phase === "signed-out" ? t.auth.signedOutElsewhere
     : notice ? EVIDENCE_TEXT[notice]
     : phase === "recovery" ? t.editor.recovery : failure ? FAILURE_TEXT[failure] : null;

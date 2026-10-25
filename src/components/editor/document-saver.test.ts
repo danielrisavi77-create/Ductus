@@ -69,13 +69,22 @@ describe("3d-2c2 unit 8: which saver writes the sheet", () => {
   });
 
   it("the evidence notice: conflict for the sticky states, refused only for a final refusal", () => {
-    const base = { failure: null, capacity: "ok" as const };
+    const base = { failure: null, capacity: "ok" as const, closedBy: null };
     expect(evidenceNotice(null)).toBeNull();
     expect(evidenceNotice({ ...base, state: "CONFLICT" })).toBe("conflict");
     expect(evidenceNotice({ ...base, state: "RECOVERY_REQUIRED" })).toBe("conflict");
     expect(evidenceNotice({ ...base, state: "ERROR", refused: true })).toBe("refused");
     expect(evidenceNotice({ ...base, state: "ERROR", refused: false })).toBeNull();
     expect(evidenceNotice({ ...base, state: "LOCAL_DURABLE", closedBy: "submission" })).toBeNull();
+  });
+
+  it("the local saver's own snapshot never gives an evidence notice (e2e local-editor stored ids)", () => {
+    // Its RECOVERY_REQUIRED is an unreadable local record; the recovery text stays.
+    const local = { failure: "corrupt" as const, capacity: "ok" as const };
+    expect(evidenceNotice({ ...local, state: "RECOVERY_REQUIRED" })).toBeNull();
+    expect(evidenceNotice({ ...local, state: "CONFLICT" })).toBeNull();
+    const { saver } = createDocumentSaver({ journal: openJournal(), documentId: DOC, assignmentId: null, source: online });
+    expect(evidenceNotice({ ...saver.snapshot(), state: "RECOVERY_REQUIRED" })).toBeNull();
   });
 
   it("writing closes on a submission and on the sticky states only", () => {
