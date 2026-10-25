@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { messagesHr } from "@/lib/i18n/messages.hr";
+import type { AssignmentWork } from "@/server/evidence/assignment-works";
 import type { TeacherCourse } from "@/server/institution/teacher-courses";
 import { findForbiddenTerms } from "../../../scripts/forbidden-terms/terms";
 
@@ -24,7 +25,8 @@ const COURSES: TeacherCourse[] = [
   { id: "00000000-0000-4000-8000-0000000000c2", name: "Kolegij B", academicYear: "2025/2026", assignments: [] },
 ];
 
-const render = (courses: TeacherCourse[]) => renderToStaticMarkup(h(TeacherCourses, { courses }));
+const render = (courses: TeacherCourse[], works?: Record<string, AssignmentWork[] | null>) =>
+  renderToStaticMarkup(h(TeacherCourses, { courses, works }));
 const text = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 
 describe("TeacherCourses (Z3 A)", () => {
@@ -53,7 +55,40 @@ describe("TeacherCourses (Z3 A)", () => {
     expect(text(html)).not.toContain(t.countNote);
   });
 
+  it("links every work of an assignment to its live view, numbered in the order read, with no student id", () => {
+    const STUDENT = "00000000-0000-4000-8000-0000000000e1";
+    const html = render(COURSES, {
+      "00000000-0000-4000-8000-0000000000a2": [
+        { studentId: STUDENT, documentId: "izmisljeni-rad-b" },
+        { studentId: "00000000-0000-4000-8000-0000000000e2", documentId: "izmisljeni rad/a" },
+      ],
+      "00000000-0000-4000-8000-0000000000a1": [],
+    });
+    expect(html).toContain('href="/nastavnik/rad/izmisljeni-rad-b"');
+    expect(html).toContain('href="/nastavnik/rad/izmisljeni%20rad%2Fa"');
+    expect(html.indexOf("izmisljeni-rad-b")).toBeLessThan(html.indexOf("izmisljeni%20rad"));
+    expect(text(html)).toContain(`${t.work} 1 ${t.work} 2`);
+    expect(text(html)).toContain(t.noWorks);
+    expect(html).not.toContain(STUDENT);
+  });
+
+  it("says that works could not be read, and links none", () => {
+    const html = render(COURSES, { "00000000-0000-4000-8000-0000000000a1": null });
+    expect(text(html)).toContain(t.worksUnavailable);
+    expect(text(html)).not.toContain(t.noWorks);
+    expect(html).not.toContain("/nastavnik/rad/");
+  });
+
+  it("draws no works line for an assignment whose works were not asked for", () => {
+    const shown = text(render(COURSES));
+    expect(shown).not.toContain(t.noWorks);
+    expect(shown).not.toContain(t.worksUnavailable);
+  });
+
   it("uses no forbidden term", () => {
-    expect(findForbiddenTerms(text(render(COURSES)) + text(render([])))).toEqual([]);
+    const works = { "00000000-0000-4000-8000-0000000000a2": [{ studentId: "00000000-0000-4000-8000-0000000000e1", documentId: "d" }],
+      "00000000-0000-4000-8000-0000000000a1": null };
+    expect(findForbiddenTerms(text(render(COURSES)) + text(render([])) + text(render(COURSES, works))
+      + text(render(COURSES, { "00000000-0000-4000-8000-0000000000a1": [] })))).toEqual([]);
   });
 });
