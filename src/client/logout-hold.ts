@@ -39,12 +39,17 @@ export async function readLogoutHold(scope: string | null, options: HoldReadOpti
 
 export type ShellLogoutStep =
   | { kind: "plain" }
+  | { kind: "leave" }
   | { kind: "dialog"; plan: LogoutPlan }
   | { kind: "dialogUnknown"; plan: LogoutPlan };
 
-/** Without the editor: no dialog when nothing stays; a number only when read. */
+/**
+ * Without the editor: no dialog when nothing stays; a number only when read.
+ * A page whose session has ended posts nothing and goes to `/` (leave).
+ */
 export function shellLogoutStep(read: HoldRead): ShellLogoutStep {
-  if (read === "noStorage" || read === "ended") return { kind: "plain" };
+  if (read === "ended") return { kind: "leave" };
+  if (read === "noStorage") return { kind: "plain" };
   if (read === "unknown") return { kind: "dialogUnknown", plan: { unsaved: false, pending: null } };
   if (read.pending === 0 && read.copies === 0 && !read.kept) return { kind: "plain" };
   return { kind: "dialog", plan: { unsaved: false, pending: read.pending, copies: read.copies, kept: true } };
@@ -54,4 +59,22 @@ export function shellLogoutStep(read: HoldRead): ShellLogoutStep {
 export function editorPlan(unsaved: boolean, read: HoldRead): LogoutPlan {
   if (typeof read === "string") return { unsaved, pending: null };
   return { unsaved, pending: read.pending, copies: read.copies, kept: read.kept };
+}
+
+/**
+ * The editor's sign-out plan: writing stops first, then the whole scope is
+ * read (O2). A page whose session has ended stops nothing, reads nothing and
+ * posts nothing: it goes to `/` (leave).
+ */
+export async function editorSignOutPlan(
+  quiesce: (() => Promise<boolean>) | null,
+  scope: string | null,
+  options: HoldReadOptions = {},
+): Promise<LogoutPlan | "leave"> {
+  const { session = null, store = browserMarkStore() } = options;
+  if (session !== null && hasEnded(store, session)) return "leave";
+  if (!quiesce) return { unsaved: false, pending: null };
+  const unsaved = await quiesce();
+  const read = await readLogoutHold(scope, { ...options, session, store });
+  return read === "ended" ? "leave" : editorPlan(unsaved, read);
 }
