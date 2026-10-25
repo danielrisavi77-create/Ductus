@@ -62,6 +62,8 @@ SELECT is(
   (SELECT format('%s %s %s %s', proowner::regrole, prosecdef, provolatile, 'search_path=""' = ANY (proconfig))
      FROM pg_proc WHERE oid = 'app.fast_path_works(uuid)'::regprocedure),
   'ductus_evidence t v t', 'the fast path is a VOLATILE SECURITY DEFINER function of the evidence role, empty search_path');
+SELECT is((SELECT provolatile FROM pg_proc WHERE oid = 'app.process_summary_record(text)'::regprocedure), 's',
+  'the summary record stays STABLE, so the window reads it and the submission flag in one snapshot');
 SELECT is(pg_get_function_result('app.fast_path_works(uuid)'::regprocedure),
   'TABLE(student_id uuid, given_name text, family_name text, document_id text, submitted boolean, revision bigint, '
   'evidence_package_id text, head_segment_hash text, segment_hashes text[], body text, institution_id uuid)',

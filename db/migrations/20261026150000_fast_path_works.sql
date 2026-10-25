@@ -119,6 +119,7 @@ DECLARE
   v_package_id text;
   v_head_hash text;
   v_hashes text[];
+  v_submitted boolean;
 BEGIN
   SELECT * INTO v_actor FROM app.current_actor();
   IF v_actor.user_id IS NULL OR v_actor.institution_id IS NULL THEN
@@ -144,13 +145,21 @@ BEGIN
         JOIN evidence.document d
           ON d.project_id = p.id AND d.institution_id = p.institution_id AND d.principal_id = p.principal_id
     LOOP
+      -- The submission flag and the cut revision come from one statement, so one
+      -- snapshot: process_summary_record is STABLE and sees the caller's snapshot.
+      -- Two statements could pair a pre-submission head with submitted = true.
       v_count := 0;
       FOR v_record IN
-        SELECT r.head_segment_hash, r.segment_hashes FROM app.process_summary_record(v_doc.id) r
+        SELECT r.head_segment_hash, r.segment_hashes, EXISTS (
+                 SELECT 1 FROM evidence.submission b
+                  WHERE b.assignment_id = p_assignment_id AND b.institution_id = v_doc.institution_id
+                    AND b.principal_id = v_doc.principal_id) AS submitted
+          FROM app.process_summary_record(v_doc.id) r
       LOOP
         v_count := v_count + 1;
         v_head_hash := v_record.head_segment_hash;
         v_hashes := v_record.segment_hashes;
+        v_submitted := v_record.submitted;
       END LOOP;
       IF v_count <> 1 OR v_head_hash IS DISTINCT FROM v_hashes[pg_catalog.cardinality(v_hashes)] THEN
         RAISE EXCEPTION 'work unavailable' USING ERRCODE = 'ZD503';
@@ -174,10 +183,7 @@ BEGIN
         v_entry := pg_catalog.jsonb_build_object('revision', v_revision);
       END IF;
       v_works := v_works || pg_catalog.jsonb_build_object(v_doc.id, v_entry || pg_catalog.jsonb_build_object(
-        'submitted', EXISTS (
-          SELECT 1 FROM evidence.submission b
-           WHERE b.assignment_id = p_assignment_id AND b.institution_id = v_doc.institution_id
-             AND b.principal_id = v_doc.principal_id)));
+        'submitted', v_submitted));
     END LOOP;
     -- A concurrent first read of the same teacher may have opened it already.
     INSERT INTO evidence.fast_path_window AS w (reader_id, institution_id, assignment_id, opened_at, works)
