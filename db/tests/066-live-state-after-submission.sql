@@ -29,9 +29,9 @@ $$;
 CREATE FUNCTION pg_temp.req() RETURNS text LANGUAGE sql STABLE AS $$
   SELECT id::text FROM evidence.submission_request WHERE document_id = 'doc-a'
 $$;
-CREATE FUNCTION pg_temp.submitted_as_owner(p_document text, p_institution text) RETURNS text LANGUAGE sql AS $$
-  SELECT pg_temp.ask_as('ductus_identity', 'anon',
-    format('SELECT app.document_submitted(%L, {%s})::text', p_document, p_institution))
+-- The check as the live functions call it: as their owner, in the caller's session.
+CREATE FUNCTION pg_temp.submitted_as_owner(p_document text, p_actor text) RETURNS text LANGUAGE sql AS $$
+  SELECT pg_temp.ask_as('ductus_identity', p_actor, format('SELECT app.document_submitted(%L)::text', p_document))
 $$;
 CREATE FUNCTION pg_temp.submitted_text() RETURNS text LANGUAGE sql STABLE AS $$
   SELECT format('submitted|%s|%s', pg_temp.h('d'), repeat('d', 64))
@@ -41,21 +41,21 @@ $$;
 -- and that owner still has no access to schema evidence (BACKEND 4.12 t. 1).
 SELECT is_empty(
   $$ SELECT p.oid::regprocedure::text FROM pg_proc p
-      WHERE p.oid IN ('app.document_submitted(text,uuid)'::regprocedure, 'app.submitted_document_text(text,uuid)'::regprocedure)
+      WHERE p.oid IN ('app.document_submitted(text)'::regprocedure, 'app.submitted_document_text(text)'::regprocedure)
         AND (NOT p.prosecdef OR p.proowner <> 'ductus_evidence'::regrole OR NOT 'search_path=""' = ANY (p.proconfig)) $$,
   'both functions are SECURITY DEFINER functions of the evidence role with an empty search_path');
 SELECT is_empty(
   $$ SELECT r || ' ' || p.oid::regprocedure::text FROM pg_proc p
       CROSS JOIN unnest(ARRAY['ductus_app', 'ductus_worker', 'ductus_retention', 'ductus_auth', 'ductus_test_stranger']) AS r
-      WHERE p.oid IN ('app.document_submitted(text,uuid)'::regprocedure, 'app.submitted_document_text(text,uuid)'::regprocedure)
+      WHERE p.oid IN ('app.document_submitted(text)'::regprocedure, 'app.submitted_document_text(text)'::regprocedure)
         AND has_function_privilege(r, p.oid, 'EXECUTE') $$,
   'no runtime role and not PUBLIC executes them');
-SELECT ok(has_function_privilege('ductus_identity', 'app.document_submitted(text,uuid)', 'EXECUTE')
-          AND has_function_privilege('ductus_identity', 'app.submitted_document_text(text,uuid)', 'EXECUTE'),
+SELECT ok(has_function_privilege('ductus_identity', 'app.document_submitted(text)', 'EXECUTE')
+          AND has_function_privilege('ductus_identity', 'app.submitted_document_text(text)', 'EXECUTE'),
   'the owner of the live functions executes both');
 SELECT ok(NOT has_schema_privilege('ductus_identity', 'evidence', 'USAGE'),
   'the owner of the live functions still has no evidence-schema access');
-SELECT is(pg_get_function_result('app.document_submitted(text,uuid)'::regprocedure), 'boolean',
+SELECT is(pg_get_function_result('app.document_submitted(text)'::regprocedure), 'boolean',
   'the check answers only yes or no');
 SELECT is(pg_get_function_result('collaboration.read_live_state(text,text)'::regprocedure),
   'TABLE(outcome text, content_hash text, body text)', 'reading still returns no revision, time or id');
@@ -72,13 +72,16 @@ SELECT is(pg_temp.ask('ana', format('SELECT outcome FROM app.record_submission(%
   repeat('f', 64))), 'artifact_mismatch', 'fixture: a mismatching reconstruction records nothing');
 SELECT matches(pg_temp.publish_as('ana', pg_temp.token(), 'nacrt-3'), '^accepted\|', 'nor does a refused submission');
 SELECT is(pg_temp.read_as('ana'), format('state|%s|nacrt-3', pg_temp.sha('nacrt-3')), 'Ana still reads the live state');
-SELECT is(pg_temp.submitted_as_owner('doc-a', 'fak_a'), 'false', 'the check says no before the submission');
+SELECT is(pg_temp.submitted_as_owner('doc-a', 'vesna'), 'false', 'the check says no before the submission');
 
 -- The submission.
 SELECT is(pg_temp.ask('ana', format('SELECT outcome FROM app.record_submission(%L::uuid, %L)', pg_temp.req(),
   pg_temp.h('d'))), 'recorded', 'fixture: the submission of revision 1 is recorded');
-SELECT is(pg_temp.submitted_as_owner('doc-a', 'fak_a'), 'true', 'the check says yes for the institution of the document');
-SELECT is(pg_temp.submitted_as_owner('doc-a', 'fak_b'), 'false', 'and no for another institution');
+SELECT is(pg_temp.submitted_as_owner('doc-a', 'vesna'), 'true', 'the check says yes in a session of the institution of the document');
+SELECT is(pg_temp.submitted_as_owner('doc-a', 'tomo'), 'false', 'and no in a session of another institution');
+SELECT is(pg_temp.submitted_as_owner('doc-a', 'anon'), 'false', 'and no without a session');
+SELECT is(pg_get_function_arguments('app.document_submitted(text)'::regprocedure), 'p_document_id text',
+  'the check takes no institution: it comes from the session (033, U1)');
 
 -- Publishing writes nothing (I6), with a token and without.
 CREATE TEMP TABLE before_publish AS SELECT pg_temp.stored() AS v;

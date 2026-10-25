@@ -19,39 +19,44 @@ GRANT CREATE ON SCHEMA app TO ductus_evidence;
 GRANT CREATE ON SCHEMA collaboration TO ductus_identity;
 
 SET LOCAL ROLE ductus_evidence;
--- Yes or no: is a submission of this document recorded. Nothing else.
-CREATE FUNCTION app.document_submitted(p_document_id text, p_institution_id uuid)
+-- Yes or no: is a submission of this document recorded in the caller's
+-- institution. Nothing else. The institution comes from the session, never
+-- from a parameter (033, U1); the live functions have already checked that
+-- the caller may act on the document in that institution.
+CREATE FUNCTION app.document_submitted(p_document_id text)
 RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = ''
 AS $$
   SELECT EXISTS (
     SELECT 1
-      FROM evidence.submission s
-      JOIN evidence.submission_request r ON r.id = s.submission_request_id AND r.institution_id = s.institution_id
-     WHERE r.document_id = p_document_id AND r.institution_id = p_institution_id
+      FROM app.current_actor() a
+      JOIN evidence.submission_request r ON r.institution_id = a.institution_id
+      JOIN evidence.submission s ON s.submission_request_id = r.id AND s.institution_id = r.institution_id
+     WHERE r.document_id = p_document_id
   )
 $$;
-REVOKE ALL ON FUNCTION app.document_submitted(text, uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION app.document_submitted(text, uuid) TO ductus_identity;
+REVOKE ALL ON FUNCTION app.document_submitted(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.document_submitted(text) TO ductus_identity;
 
 -- No row: not submitted. One row: the submitted artifact hash and the text of
 -- the submitted revision, or NULL text when no checkpoint of that revision
 -- holds exactly those bytes.
-CREATE FUNCTION app.submitted_document_text(p_document_id text, p_institution_id uuid)
+CREATE FUNCTION app.submitted_document_text(p_document_id text)
 RETURNS TABLE (content_hash text, body text)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = ''
 AS $$
   SELECT s.artifact_hash, c.body
-    FROM evidence.submission s
-    JOIN evidence.submission_request r ON r.id = s.submission_request_id AND r.institution_id = s.institution_id
+    FROM app.current_actor() a
+    JOIN evidence.submission_request r ON r.institution_id = a.institution_id
+    JOIN evidence.submission s ON s.submission_request_id = r.id AND s.institution_id = r.institution_id
     LEFT JOIN evidence.document_checkpoint c
       ON c.document_id = r.document_id AND c.institution_id = r.institution_id AND c.revision = s.revision
      AND c.content_hash = s.artifact_hash
      AND pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(c.body, 'UTF8')), 'hex') = s.artifact_hash
-   WHERE r.document_id = p_document_id AND r.institution_id = p_institution_id
+   WHERE r.document_id = p_document_id
 $$;
-REVOKE ALL ON FUNCTION app.submitted_document_text(text, uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION app.submitted_document_text(text, uuid) TO ductus_identity;
+REVOKE ALL ON FUNCTION app.submitted_document_text(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app.submitted_document_text(text) TO ductus_identity;
 
 RESET ROLE;
 SET LOCAL ROLE ductus_migrator;
@@ -73,7 +78,7 @@ BEGIN
   SELECT * INTO scope FROM collaboration.document_scope(p_document_id);
   IF collaboration.actor_role(scope.institution_id, scope.assignment_id, scope.principal_id) IS DISTINCT FROM 'student'
      OR NOT institution.has_acknowledged_current(scope.assignment_id)
-     OR app.document_submitted(p_document_id, scope.institution_id) THEN
+     OR app.document_submitted(p_document_id) THEN
     RAISE EXCEPTION 'forbidden' USING ERRCODE = 'ZD403';
   END IF;
   -- Checked before the table constraints, whose errors would quote the row.
@@ -141,7 +146,7 @@ BEGIN
   IF v_role = 'teacher' THEN
     PERFORM audit.record_work_opening(scope.institution_id, p_document_id, scope.assignment_id, scope.principal_id, 'live_view');
   END IF;
-  SELECT t.content_hash, t.body INTO v_submitted FROM app.submitted_document_text(p_document_id, scope.institution_id) t;
+  SELECT t.content_hash, t.body INTO v_submitted FROM app.submitted_document_text(p_document_id) t;
   IF FOUND THEN
     IF v_submitted.body IS NULL THEN
       RETURN QUERY SELECT 'unavailable'::text, NULL::text, NULL::text;
@@ -265,6 +270,6 @@ RESET ROLE;
 SET LOCAL ROLE ductus_migrator;
 REVOKE CREATE ON SCHEMA collaboration FROM ductus_identity;
 SET LOCAL ROLE ductus_evidence;
-DROP FUNCTION app.submitted_document_text(text, uuid);
-DROP FUNCTION app.document_submitted(text, uuid);
+DROP FUNCTION app.submitted_document_text(text);
+DROP FUNCTION app.document_submitted(text);
 RESET ROLE;
