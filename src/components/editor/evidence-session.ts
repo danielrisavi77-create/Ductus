@@ -57,6 +57,12 @@ export type EvidenceSessionDeps = {
   createRunner: (work: OpenedWork) => DrainRunner;
   network: NetworkSignal;
   /**
+   * Calls back when the commit route answers 409 `not_accepting`: a
+   * submission closed the package (3d-2c2a §4, DAN-289 A1). Without it the
+   * session never closes by submission.
+   */
+  watchSubmission?: (onClosed: () => void) => () => void;
+  /**
    * The evidence profile the journal keeps for the document, for building
    * segments while the open route cannot be reached (O3 b, c.6392622568).
    * TODO(BE-2): pass `(meta) => meta?.evidenceProfileId ?? null` once BE-2
@@ -71,6 +77,9 @@ export type EvidenceSessionDeps = {
   setTimer?: (run: () => void, ms: number) => unknown;
   clearTimer?: (handle: unknown) => void;
 };
+
+/** The session's snapshot; `closedBy` tells the editor to turn read-only (3d-2c2b). */
+export type EvidenceSnapshot = SaverSnapshot & { closedBy: "submission" | null };
 
 type Candidate = { doc: CanonicalDocument; gen: number; marks: number };
 type Contents = JournalContents<EvidenceSegmentTransaction>;
@@ -96,6 +105,8 @@ export class EvidenceSession {
   private cleanGen = 0;
   private recorded = 0;
   private stopped: EvidenceStop | null = null;
+  /** §4: a submission closed the package; nothing is written or sent from here. */
+  private closedBy: "submission" | null = null;
   private profile: string | null = null;
   private work: OpenedWork | null = null;
   private runner: DrainRunner | null = null;
@@ -109,7 +120,8 @@ export class EvidenceSession {
   private opening: Promise<void> | null = null;
   private timer: unknown = null;
   private unlisten: () => void = () => {};
-  private readonly listeners = new Set<(snapshot: SaverSnapshot) => void>();
+  private unwatch: () => void = () => {};
+  private readonly listeners = new Set<(snapshot: EvidenceSnapshot) => void>();
   private readonly id: string;
   private readonly now: () => Date;
   private readonly clock: () => number;
@@ -122,11 +134,13 @@ export class EvidenceSession {
     this.newId = deps.newId ?? (() => crypto.randomUUID());
   }
 
-  snapshot(): SaverSnapshot {
-    return { state: this.state(), failure: this.failure, capacity: "ok" };
+  snapshot(): EvidenceSnapshot {
+    // §4: the refused row stays on the device; that is no failure of this device.
+    const failure = this.closedBy ? null : this.failure;
+    return { state: this.state(), failure, capacity: "ok", closedBy: this.closedBy };
   }
 
-  subscribe(listener: (snapshot: SaverSnapshot) => void): () => void {
+  subscribe(listener: (snapshot: EvidenceSnapshot) => void): () => void {
     this.listeners.add(listener);
     return () => { this.listeners.delete(listener); };
   }
@@ -180,6 +194,7 @@ export class EvidenceSession {
     this.recorder = new EvidenceRecorder();
     this.sessionId = this.newId();
     this.loaded = true;
+    this.unwatch = this.deps.watchSubmission?.(() => this.closeBySubmission()) ?? (() => {});
     this.unlisten = this.deps.network.onOnline(() => {
       this.retryOpen();
       this.kick();
@@ -191,7 +206,7 @@ export class EvidenceSession {
 
   /** One editor change (`transaction` event); the caller gates it on its ready flag. */
   record(transactions: readonly Transaction[], observation: SourceObservation = NO_OBSERVATION, at = Date.now()): void {
-    if (!this.recorder || this.stopped || this.halted) return;
+    if (!this.recorder || this.stopped || this.halted || this.closedBy) return;
     if (!transactions.some((tr) => tr.docChanged)) return;
     this.recorded += 1;
     try {
@@ -212,6 +227,7 @@ export class EvidenceSession {
       if (this.halted) return Promise.resolve();
       throw new Error("EvidenceSession.propose() before a ready load()");
     }
+    if (this.closedBy) return Promise.resolve();
     this.next = { doc, gen: this.gen, marks: this.recorded };
     this.startWrites();
     return this.flight ?? Promise.resolve();
@@ -242,10 +258,21 @@ export class EvidenceSession {
     this.halted = true;
     this.clearTimer();
     this.unlisten();
+    this.unwatch();
+  }
+
+  /** §4: terminal and not an error; the refused row stays in the journal untouched. */
+  private closeBySubmission(): void {
+    if (this.closedBy || this.closed) return;
+    this.closedBy = "submission";
+    this.next = null;
+    this.clearTimer();
+    this.emit();
   }
 
   private state(): SyncState {
     if (this.stored && STICKY.has(this.stored)) return this.stored;
+    if (this.closedBy) return "LOCAL_DURABLE";
     if (this.failure) return "ERROR";
     if (this.gen !== this.cleanGen || this.next) return this.saving ? "SAVING_LOCAL" : "EDITING";
     if (this.stored === null) return "EDITING";
@@ -258,7 +285,7 @@ export class EvidenceSession {
   }
 
   private startWrites(): void {
-    if (this.flight || this.halted || !this.next) return;
+    if (this.flight || this.halted || this.closedBy || !this.next) return;
     if (!this.stopped && this.profile === null) return; // O3 a: wait for a successful open
     let settle!: (written: Promise<void>) => void;
     this.flight = new Promise<void>((resolve) => { settle = resolve; });
@@ -267,7 +294,7 @@ export class EvidenceSession {
 
   private async writeQueued(): Promise<void> {
     try {
-      while (this.next && !this.halted && (this.stopped || this.profile !== null)) {
+      while (this.next && !this.halted && !this.closedBy && (this.stopped || this.profile !== null)) {
         const candidate = this.next;
         this.next = null;
         await this.save(candidate);
@@ -304,6 +331,7 @@ export class EvidenceSession {
     recorder.close();
     let lastDocument: string | null = null;
     for (;;) {
+      if (this.closedBy) return false;
       const contents = await journal.readEvidence(this.id);
       const { meta, snapshot } = contents;
       if (!meta?.evidenceHead || !snapshot || meta.localSeq !== this.seq) {
@@ -361,7 +389,7 @@ export class EvidenceSession {
       this.stepAgain = true;
       return;
     }
-    if (!this.runner || this.halted || this.paused || !this.deps.network.online()) return;
+    if (!this.runner || this.halted || this.closedBy || this.paused || !this.deps.network.online()) return;
     this.clearTimer();
     this.stepAgain = false;
     this.stepping = this.stepLoop().finally(() => {
@@ -371,7 +399,7 @@ export class EvidenceSession {
   }
 
   private async stepLoop(): Promise<void> {
-    while (this.runner && !this.halted && !this.paused && this.deps.network.online()) {
+    while (this.runner && !this.halted && !this.closedBy && !this.paused && this.deps.network.online()) {
       let result;
       this.syncing = this.owed > 0;
       if (this.syncing) this.emit();
@@ -386,7 +414,7 @@ export class EvidenceSession {
       if (result.kind === "sent" && result.state === "SYNCED") this.syncedHere = true;
       const contents = await this.refresh();
       if (result.kind === "sent" && contents && contents.pending.length > 0) continue;
-      if (result.kind === "waiting" && !this.closed) {
+      if (result.kind === "waiting" && !this.closed && !this.closedBy) {
         const set = this.deps.setTimer ?? ((run, ms) => setTimeout(run, ms));
         this.timer = set(() => { this.timer = null; this.kick(); }, Math.max(0, result.notBefore - this.clock()));
       }
