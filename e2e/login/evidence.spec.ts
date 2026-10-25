@@ -5,7 +5,7 @@ import { canonicalizeJcs } from "../../src/domain/forensics/jcs";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { flipSignatureByte, stackCheckpoint } from "./evidence-receipt";
 import { clickSignOut, editorMounted, signIn } from "./support";
-import { admin, closeWork, seedWork, workDocument } from "./work-seed";
+import { admin, closeWork, seedSubmission, seedWork, workDocument } from "./work-seed";
 
 // F-8 3d-2c2 (contract #476 c.6391714810 §6 e2e 1-12, G2 and G3
 // c.6393716541, 3d-2c2a §4): the sheet of `/rad?zadatak=` records, chains and
@@ -304,4 +304,37 @@ test("3d-2c2a §4: a submission's 409 not_accepting makes the sheet read-only wi
   // The refused row stays on the device; nothing is deleted (3d-2c2a §4).
   expect((await localOf(page, documentId)).pending.length).toBeGreaterThan(0);
   await shoot(page, "3d-2c2-predano");
+});
+
+test("O2 (DAN-289): a submitted work opens read-only and sends nothing after the opening", async ({ page }) => {
+  const { assignment, documentId } = await openSheet(page);
+  const TEXT = "Izmišljeni predani tekst.";
+  await type(page, TEXT);
+  await expect(chipOf(page)).toHaveAttribute("data-state", "SYNCED", { timeout: OPEN });
+  await seedSubmission(documentId);
+
+  const requests = recordRequests(page);
+  // A submitted work publishes nothing to the live view, not even its opened text.
+  const live = recordRequests(page, /^\/api\/live\//);
+  await page.goto(`/rad?zadatak=${assignment}`);
+  await expect(page.getByRole("status").filter({ hasText: t.editor.submittedReadOnly })).toBeVisible({ timeout: OPEN });
+  await expect(editorOf(page)).toContainText(TEXT);
+  // The opening alone tells the sheet the work is submitted; nothing follows it for 5 s.
+  const opened = requests.length;
+  for (let waited = 0; waited < 5000; waited += 250) {
+    expect(await editorOf(page).getAttribute("contenteditable")).toBe("false");
+    await page.waitForTimeout(250);
+  }
+  expect(requests.slice(opened).map(pathOf)).toEqual([]);
+  expect(requests.map(pathOf)).toEqual(["/api/evidence/open"]);
+  await expect(chipOf(page)).toHaveAttribute("data-state", "LOCAL_DURABLE");
+  // Typing changes nothing on the sheet or in the journal.
+  const before = await localOf(page, documentId);
+  await editorOf(page).click();
+  await page.keyboard.type("Nakon predaje.");
+  await expect(editorOf(page)).not.toContainText("Nakon predaje.");
+  expect((await localOf(page, documentId)).meta?.localSeq).toBe(before.meta?.localSeq);
+  expect(requests.map(pathOf)).toEqual(["/api/evidence/open"]);
+  expect(live.map(pathOf)).toEqual([]);
+  await shoot(page, "o2-predani-rad");
 });
