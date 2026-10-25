@@ -5,6 +5,7 @@ import AppShell from "@/components/shell/AppShell";
 import { shellSession } from "@/components/shell/shell-session";
 import TeacherCourses from "@/components/teacher/TeacherCourses";
 import { messagesHr } from "@/lib/i18n/messages.hr";
+import { sessionPrincipal } from "@/server/auth/principal";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
 import { readTeacherCourses } from "@/server/institution/teacher-courses";
@@ -23,7 +24,10 @@ export const metadata = { title: `${t.title} · ${messagesHr.app.name}` };
 // both read "no courses", without saying which.
 export default async function TeacherHomePage() {
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
-  const read = token === undefined ? null : await readTeacherCourses(token, withActor);
+  const [read, principal] = await Promise.all([
+    token === undefined ? null : readTeacherCourses(token, withActor),
+    sessionPrincipal(token, withActor),
+  ]);
   const listed = read?.kind === "ok" && read.courses.length > 0;
 
   let body;
@@ -49,7 +53,7 @@ export default async function TeacherHomePage() {
   }
 
   return (
-    <AppShell session={shellSession(token)} role={read?.kind === "ok" ? "teacher" : null} current="/nastavnik" crumbs={[t.title]}>
+    <AppShell session={shellSession(token)} role={read?.kind === "ok" ? "teacher" : null} scope={principal.kind === "signed-in" ? principal.scope : null} current="/nastavnik" crumbs={[t.title]}>
       <div className={`page ${styles.page}`}>
         <div className={styles.head}>
           <div className={styles.heading}>

@@ -249,6 +249,28 @@ test.describe("evidence journal in the browser", () => {
     expect(tampered.meta?.state).not.toBe("SYNCED");
     expect(tampered.rows).toHaveLength(native ? 1 : 2);
   });
+
+  // D-118 sign-out dialog (#476 c.6396619831 §6 U1, U2; criterion 4): the read
+  // of a page without the editor, in this engine and not in fake-indexeddb.
+  test("21: the sign-out read creates no journal, counts owed rows and agrees with the deletion", async ({ page }) => {
+    await expectEd25519(page);
+    const peek = (scope: string) => page.evaluate((s) => window.__evidence!.peek(s), scope);
+    const missing = "c".repeat(64);
+    expect(await peek(missing)).toEqual({ pending: 0, copies: 0, kept: false });
+    expect(await databases(page)).not.toContain(`ductus-journal-v1-${missing}`);
+
+    await type(page, " neposlano");
+    await save(page);
+    expect(await peek(config.scope)).toEqual({ pending: 1, copies: 0, kept: true });
+    expect(await page.evaluate(() => window.__evidence!.logout())).toEqual({ error: "unsynced_work" });
+
+    await drain(page);
+    expect((await state(page)).meta?.state).toBe("SYNCED");
+    expect(await peek(config.scope)).toEqual({ pending: 0, copies: 0, kept: false });
+    expect(await page.evaluate(() => window.__evidence!.logout())).toBeNull();
+    expect(await peek(config.scope)).toEqual({ pending: 0, copies: 0, kept: false });
+    expect(await databases(page)).not.toContain(JOURNAL(config));
+  });
 });
 
 test.describe("evidence journal without Ed25519 in Web Crypto", () => {

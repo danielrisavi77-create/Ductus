@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 
 import AppShell from "@/components/shell/AppShell";
 import { shellSession } from "@/components/shell/shell-session";
-import { readShellRole } from "@/components/shell/shell-role";
+import { readShellAccount } from "@/components/shell/shell-role";
 import { SIGN_IN_HREF } from "@/components/student/enroll-code";
 import styles from "@/components/student/Enroll.module.css";
 import { courseHref, readOpenAssignment } from "@/components/student/open-assignment";
@@ -28,9 +28,9 @@ export default async function EnrolledCoursePage({ params }: { params: Promise<{
   const read = await readOpenAssignment(token, courseId, withActor);
   // redirect() throws, so it stays outside any try block.
   if (read.kind === "assignment") redirect(`/zadatak/${encodeURIComponent(read.assignmentId)}`);
-  const role = await readShellRole(token, withActor);
+  const { role, scope } = await readShellAccount(token, withActor);
   return (
-    <AppShell session={shellSession(token)} role={role} current="/upis" crumbs={[t.student.enroll.title]}>
+    <AppShell session={shellSession(token)} role={role} scope={scope} current="/upis" crumbs={[t.student.enroll.title]}>
       <div className={`page ${styles.screen}`}>
         <section className={styles.card}>
           <h1>{t.student.enroll.title}</h1>
