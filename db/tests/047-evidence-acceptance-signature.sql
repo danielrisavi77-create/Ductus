@@ -202,7 +202,7 @@ SELECT matches(pg_temp.ask_as('ductus_evidence', 'anon', $$ UPDATE evidence.sign
     WHERE key_id = 'key-control' RETURNING 1 $$), '^ZD403:', 'a revocation is never taken back');
 SELECT matches(pg_temp.ask_as('ductus_evidence', 'anon', $$ DELETE FROM evidence.signing_key WHERE key_id = 'key-control' RETURNING 1 $$),
   '^ZD403:', 'a key is never deleted');
-SELECT matches(pg_temp.ask_as('ductus_evidence', 'anon', 'TRUNCATE evidence.signing_key, evidence.submission_receipt_issuance'), '^ZD403:', 'the registry is never truncated');
+SELECT matches(pg_temp.ask_as('ductus_evidence', 'anon', 'TRUNCATE evidence.signing_key, evidence.submission_receipt_issuance, evidence.submission_receipt'), '^ZD403:', 'the registry is never truncated');
 
 -- The acceptance writes the snapshot with the revision (4.13 t. 5, 4.10 t. 2).
 SELECT is(pg_temp.accept('request-1', pg_temp.descriptor(), 0, repeat('a', 64), repeat('d', 64), repeat('b', 64)),
