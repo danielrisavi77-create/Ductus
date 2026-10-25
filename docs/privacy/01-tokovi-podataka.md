@@ -38,7 +38,7 @@ OIB se ne traži (PRODUCT §4). Kod trenutno čita samo `sub`, `hrEduPersonUniqu
 | Komentari, prijedlozi, zahtjevi za doradu, konzultacije mentora, napomene studenta | Nastavnik, mentor, student | Odgovarajuće tablice | Kako propisuje ARCHITECTURE §3 | Kao predaja |
 | Produljenje roka s razlogom; oznaka odobrene prilagodbe (D-50, bez razloga) | Nastavnik; student | `deadline_extension`; `project` | Razlog: nastavnik i student; oznaka: nastavnik i mentor | Otvoreno. Razlog i oznaka mogu otkriti zdravstveno stanje `[ODLUKA]` |
 | Predaja: dokument, hash, `requested_at`, potvrda i potpis | Student, poslužitelj | `submission`, `evidence.receipt` | Student; nastavnik zadatka | Prema pravilniku fakulteta (prijedlog) |
-| Revizijski trag: tko je kada pristupio kojem radu (PRAVILO 17: student vidi tko je otvorio rad) | Poslužitelj | `access_log` | Administrator ustanove; student svoje | Dulje od predaje (prijedlog); tablica nije izgrađena `[IZVEDBA]` |
+| Revizijski trag: tko je kada pristupio kojem radu (PRAVILO 17: student vidi tko je otvorio rad) | Poslužitelj | `access_log` | Administrator ustanove; student svoje | Dulje od predaje (prijedlog); tablica `audit.access_log` je izgrađena, upis ide kroz `audit.record_work_opening` (`db/migrations/20261021120000_audit_access_log.sql`, `20261021130000_audit_access_log_write.sql`), ali čitanje za studenta nije izgrađeno, pa obećanje "student svoje" još nije izvedeno `[IZVEDBA]` |
 
 Hashevi lanca i čvorovi Merkle stabla ne brišu se (ne sadrže sadržaj; ARCHITECTURE §3, BACKEND §4.7). Javno se objavljuje dnevni potpisani korijen i točan ukupni broj potvrda (D-93, val 2).
 
@@ -46,7 +46,7 @@ Hashevi lanca i čvorovi Merkle stabla ne brišu se (ne sadrže sadržaj; ARCHIT
 
 | Podatak | Gdje | Rok čuvanja |
 | --- | --- | --- |
-| Lokalni dnevnik promjena (Dexie) | Preglednik studenta. Izgrađena je samo klasa (`src/lib/journal/atomic-dexie-journal.ts`) s ugovorom: briše se pri odjavi, odjava se blokira dok ima nesinkroniziranih promjena. Ugovor **nije spojen u tok odjave**: ruta `app/api/auth/logout/route.ts` zatvara poslužiteljsku sesiju, a nijedan produkcijski kod ne poziva `destroyForLogout()` `[IZVEDBA]`. Istek sesije nije odjava: dnevnik ostaje do ponovne prijave istog korisnika (planirano) | Do odjave ili sinkronizacije |
+| Lokalni dnevnik promjena (Dexie) | Preglednik studenta. Klasa `src/lib/journal/atomic-dexie-journal.ts` ima ugovor: briše se pri odjavi, odjava se blokira dok ima nesinkroniziranih promjena. Ugovor je spojen u uređivač: `destroyForLogout()` poziva `src/components/editor/LocalDocument.tsx`; ruta `app/api/auth/logout/route.ts` sama zatvara samo poslužiteljsku sesiju, pa brisanje vrijedi samo kad odjava prolazi kroz uređivač `[IZVEDBA]`. Istek sesije nije odjava: dnevnik ostaje do ponovne prijave istog korisnika (planirano) | Do odjave ili sinkronizacije |
 | Sigurnosni zapisi poslužitelja (IP, podaci o uređaju) | Smiju postojati samo odvojeno od evidencije (PRODUCT §9); planirano | Rok nije predložen `[ODLUKA]` |
 | Praćenje grešaka bez tijela zahtjeva; gumb "Prijavi problem" (stanje spremanja i verzija, bez sadržaja; D-69) | Planirano; GlitchTip ili Sentry EU nije odabran | Rok nije predložen |
 | E-pošta obavijesti (nastavniku o novoj reviziji) | Planirano (Scaleway TEM); nije jasno odakle adresa | Rok nije predložen `[ODLUKA]` |

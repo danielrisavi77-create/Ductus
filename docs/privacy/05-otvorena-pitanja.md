@@ -37,7 +37,7 @@
 | Rupa | Dokaz u repou | Vrsta |
 | --- | --- | --- |
 | Potvrda obavijesti veže (zadatak, verzija zadatka), ne tekst ni otisak obavijesti o privatnosti | `db/migrations/20261010200000_institution_assignment.sql`, tablica `notice_acknowledgment` | `[IZVEDBA]` |
-| Nema izvoza, brisanja, ispravka, `access_log`, `data_class` ni posla za retention | Nijedna od tih tablica ni funkcija u `db/migrations/`; uloga `ductus_retention` postoji | `[IZVEDBA]` |
+| Nema izvoza, brisanja, ispravka, `data_class` ni posla za retention; `audit.access_log` postoji, ali student ga ne može čitati | Nijedna od tih tablica ni funkcija (osim `audit.access_log` i njegova upisa) u `db/migrations/`; uloga `ductus_retention` postoji | `[IZVEDBA]` |
 | Pogrešni pokušaji upisa brišu se tek pri sljedećem pokušaju istog korisnika | Komentar uz `enrollment_attempt` u `20261010180000_institution_model.sql` | `[IZVEDBA]` |
 | Sesije nemaju posao čišćenja nakon isteka | `identity.session` | `[IZVEDBA]` |
 | Opseg `openid profile` odstupa od popisa u PRODUCT §4 | `src/server/auth/oidc.ts` | `[IZVEDBA]` |
