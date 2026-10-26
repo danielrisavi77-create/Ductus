@@ -241,8 +241,9 @@ test("demo walk-through", async ({ browser, page, context }) => {
 
   await test.step("1. Nastavnik se prijavljuje demo računom", async () => {
     await signIn(page, "/", "Demo nastavnik");
-    await expect(page.getByRole("heading", { level: 1, name: t.app.name })).toBeVisible();
-    await expect(page.locator(".demo-badge")).toHaveText(t.shell.demoBadge);
+    // The signed-in home is inside the shell since #802 part B.
+    await expect(page.getByRole("heading", { level: 1, name: t.home.welcome })).toBeVisible();
+    await expect(page.getByText(t.shell.demoBadge, { exact: true }).first()).toBeVisible();
 
     const session = await appCookie(context, SESSION_COOKIE);
     expect(session).toBeDefined();
