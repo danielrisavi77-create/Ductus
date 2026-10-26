@@ -59,6 +59,16 @@ describe("CODEOWNERS covers the D-97 paths", () => {
     expect(missing).toEqual([]);
   });
 
+  it("gives every owned path outside D-97 the critical floor, so the allowlist cannot drift from it (F-144)", async () => {
+    const url = pathToFileURL(`${root}scripts/engineering/pr-metadata-core.mjs`).href;
+    const { minimumRisk } = (await import(/* @vite-ignore */ url)) as { minimumRisk: (files: string[]) => { risk: string } };
+    for (const pattern of ownedOutsideD97) {
+      expect(patterns.has(pattern), `${pattern} is in CODEOWNERS`).toBe(true);
+      const path = pattern.slice(1).replace(/\*\*$/, "any/file.txt");
+      expect(minimumRisk([path]).risk, pattern).toBe("critical");
+    }
+  });
+
   it("covers the governance paths named by DAN-138 and the whole agent plugin", () => {
     for (const expected of [
       "/.claude/settings.json",
