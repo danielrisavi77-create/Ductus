@@ -30,7 +30,8 @@ export type InstitutionReply =
   | { error: string }
   | { code: string }
   | { revoked: boolean }
-  | { removed: boolean };
+  | { removed: boolean }
+  | { allowed: boolean };
 
 export function respond(status: number, body: InstitutionReply): Response {
   return Response.json(body, { status, headers: { "cache-control": "no-store" } });

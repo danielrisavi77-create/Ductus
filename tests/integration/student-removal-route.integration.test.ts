@@ -184,4 +184,16 @@ describe("student removal real POST, session and database", () => {
     expect(outcome).toBe("refused");
     expect((await membership(course, people.classmate.id))?.open).toBe(true);
   });
+
+  it("ends the membership exactly once when two teachers remove the same student at once (#800 QA finding)", async () => {
+    const answers = await Promise.all([post(people.second.token, course, people.classmate.id), post(people.teacher.token, course, people.classmate.id)]);
+    for (const answer of answers) expect(answer.status).toBe(200);
+    const removed = (await Promise.all(answers.map((answer) => answer.json()))).map((body) => body.removed);
+    expect([...removed].sort()).toEqual([false, true]);
+    const winner = removed[0] ? people.second.id : people.teacher.id;
+    expect(await membership(course, people.classmate.id)).toEqual({ open: false, removed_by: winner });
+    expect(Number((await admin.query(
+      "SELECT count(*) FROM institution.course_member WHERE course_id = $1 AND user_id = $2", [course, people.classmate.id],
+    )).rows[0].count)).toBe(1);
+  });
 });
