@@ -6,7 +6,7 @@
 // shared budget (CARRY_BUDGET_MS). Running out of either means nothing carries;
 // the gate itself is still computed from verdicts on the current head.
 
-import { MAX_MERGE_STEPS, carriedByCompare, carriedHeadCandidates } from "./review-gate-core.mjs";
+import { MAX_MERGE_STEPS, carriedByCompare, carriedHeadCandidates, namedCarryHeads } from "./review-gate-core.mjs";
 
 export const API_CALL_TIMEOUT_MS = 15_000;
 export const CARRY_BUDGET_MS = 60_000;
@@ -81,10 +81,14 @@ async function inBase(api, owner, repo, baseRef, sha, signal) {
 // whichever comes first. A two-parent merge is marked `mergesBase` when its
 // second parent is in the base branch (#231, question 1); an octopus merge is
 // never checked and never carries.
-export async function firstParentPath(api, owner, repo, head, signal, baseRef) {
+// With `stopAt` (lower-case SHAs), the walk also ends once it has passed every
+// one of them (F-148): nothing named lies further back.
+export async function firstParentPath(api, owner, repo, head, signal, baseRef, stopAt) {
   const path = [];
+  const pending = stopAt ? new Set(stopAt) : null;
   let sha = head;
   for (let step = 0; step <= MAX_MERGE_STEPS && sha; step += 1) {
+    if (pending && pending.size === 0) break;
     const commit = await api(`/repos/${owner}/${repo}/commits/${sha}`, { signal });
     const parents = commit.parents;
     const mergesBase =
@@ -92,6 +96,7 @@ export async function firstParentPath(api, owner, repo, head, signal, baseRef) {
         ? await inBase(api, owner, repo, baseRef, parents[1].sha, signal)
         : false;
     path.push({ sha: commit.sha, parents, mergesBase });
+    pending?.delete(String(commit.sha).toLowerCase());
     if (parents.length < 2) break;
     sha = parents[0]?.sha;
   }
@@ -107,7 +112,11 @@ export async function carriedHeads(api, owner, repo, pr, comments, { budgetMs = 
   let candidates;
   let current;
   try {
-    const path = await firstParentPath(api, owner, repo, pr.head.sha, signal, pr.base?.ref);
+    // No trusted verdict, override or command names an earlier head: nothing
+    // could carry, so the walk and its API calls are skipped (F-148).
+    const named = namedCarryHeads(comments, pr.head.sha);
+    if (named.size === 0) return new Set();
+    const path = await firstParentPath(api, owner, repo, pr.head.sha, signal, pr.base?.ref, named);
     const { heads, reason } = carriedHeadCandidates(comments, pr.head.sha, path);
     if (reason) log(`Carry-over refused: ${reason}.`);
     candidates = heads;
