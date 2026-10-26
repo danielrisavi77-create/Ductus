@@ -63,6 +63,21 @@ describe("heading marker", () => {
     await replays(t);
   });
 
+  it.each([[1, "#"], [2, "##"], [3, "###"]] as const)(
+    "level %i: the marker at the start of a heading of that level is removed, as before, and replays",
+    async (level, marker) => {
+      const t = recordedEditor("Uvod");
+      t.editor.commands.setHeading({ level });
+      t.editor.commands.setTextSelection(1);
+      for (const char of marker) typeThroughRules(t.editor, char);
+      t.as("editor");
+      typeThroughRules(t.editor, " ");
+      expect(blocks(t.editor)).toEqual([["heading", "Uvod", ID_A]]);
+      expect(t.editor.state.doc.firstChild!.attrs.level).toBe(level);
+      await replays(t);
+    },
+  );
+
   it("one undo in front of text gives the paragraph with the marker back, with its id", async () => {
     const t = recordedEditor("Uvod");
     t.editor.commands.setTextSelection(1);

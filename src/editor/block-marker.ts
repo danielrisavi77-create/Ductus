@@ -40,7 +40,9 @@ export function markerRemoval(key: PluginKey<null>): Plugin<null> {
 /**
  * Makes the block of the marker `from..to` a block of `type` with `attrs`,
  * keeping its id, and leaves the marker to the `markerRemoval` plugin of
- * `key`. False when the block cannot take that type or has it already.
+ * `key`. When the block has that type already, only removes the marker, as
+ * Tiptap's rule did; the type stays, so the id does. False when the block
+ * cannot take that type.
  */
 export function markerToBlock(
   tr: Transaction, from: number, to: number, type: NodeType, attrs: Attrs, key: PluginKey<null>,
@@ -48,7 +50,11 @@ export function markerToBlock(
   const $start = tr.doc.resolve(from);
   const block = $start.parent;
   const same = block.type === type && Object.entries(attrs).every(([name, value]) => block.attrs[name] === value);
-  if (same || !$start.node(-1).canReplaceWith($start.index(-1), $start.indexAfter(-1), type)) return false;
+  if (same) {
+    tr.delete(from, to);
+    return true;
+  }
+  if (!$start.node(-1).canReplaceWith($start.index(-1), $start.indexAfter(-1), type)) return false;
   const marker: Marker = { from, to, text: tr.doc.textBetween(from, to) };
   tr.setBlockType(from, from, type, { ...attrs, [NODE_ID_ATTRIBUTE]: block.attrs[NODE_ID_ATTRIBUTE] }).setMeta(key, marker);
   return true;
