@@ -156,10 +156,19 @@ async function studentOf(row: Row, deps: FastPathDeps): Promise<FastPathStudent 
   };
 }
 
-async function attempt(tx: ActorTransaction, assignmentId: string, deps: FastPathDeps): Promise<Attempt> {
-  const result = await tx.query<Row>(SQL, [assignmentId]);
+async function rowsOf(tx: ActorTransaction, assignmentId: string): Promise<Row[]> {
+  return (await tx.query<Row>(SQL, [assignmentId])).rows;
+}
+
+/**
+ * Checks the rows after their transaction has closed: the reads from storage
+ * can take longer than the pool's idle-in-transaction limit (#780, Codex P2).
+ * Each row carries its own head and listing, so nothing here needs the
+ * transaction; a row that moved on is caught as `retry` as before.
+ */
+async function attempt(rows: readonly Row[], deps: FastPathDeps): Promise<Attempt> {
   const students: FastPathStudent[] = [];
-  for (const row of result.rows) {
+  for (const row of rows) {
     const student = await studentOf(row, deps);
     if ("status" in student) return student;
     students.push(student);
@@ -180,7 +189,8 @@ export async function readFastPath(
   for (let tries = 0; tries < 2; tries += 1) {
     let outcome: Attempt;
     try {
-      outcome = await withActor(sessionToken, (tx) => attempt(tx, assignmentId, deps));
+      const rows = await withActor(sessionToken, (tx) => rowsOf(tx, assignmentId));
+      outcome = await attempt(rows, deps);
     } catch (error) {
       const code = codeOf(error);
       if (code === "ZD401") return { kind: "unauthorized" };
