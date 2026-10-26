@@ -5,13 +5,13 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
 
 import { nativePsqlTarget } from "../../../db/local/psql-target.mjs";
 import { TOOLS, download, ductusHome, ensureTool, toolDir, treeHash } from "./tools.mjs";
-import { createNativeRun, layout, nativeConf, parseArgs, psqlTarget, refusal, stripSteering } from "./up.mjs";
+import { createNativeRun, layout, nativeConf, parseArgs, parseStarts, psqlTarget, refusal, stopRecorded, stripSteering } from "./up.mjs";
 
-const LOOPBACK = fileURLToPath(new URL("./loopback.mjs", import.meta.url));
+// A URL, not a path: --import takes D:\... on Windows for a URL scheme and refuses it.
+const LOOPBACK = new URL("./loopback.mjs", import.meta.url).href;
 const scratch = () => mkdtemp(join(tmpdir(), "ductus-native-"));
 const bytesResponse = (bytes) => new Response(new Blob([bytes]).stream(), { status: 200 });
 
@@ -146,17 +146,70 @@ test("Ctrl+C during preparation starts nothing more and stops only after the sta
     toolsCalled = true;
     return new Promise((resolve) => (release = () => resolve({ pgBin: join(home, "missing"), rustfs: join(home, "missing") })));
   };
-  const run = createNativeRun({ env: {}, home, platform: "linux", tools });
+  const run = createNativeRun({ env: {}, home, platform: "linux", tools, checks: async () => {} });
   const step = run.runScript("stack:up", {});
   await new Promise((resolve) => setTimeout(resolve, 50));
   let stopped = false;
   const stopping = run.interrupt().then(() => (stopped = true));
   await new Promise((resolve) => setTimeout(resolve, 20));
-  if (toolsCalled) {
-    assert.equal(stopped, false);
-    release();
-  }
+  assert.equal(toolsCalled, true);
+  assert.equal(stopped, false);
+  release();
   assert.equal(await step, 1);
   await stopping;
   assert.equal(existsSync(layout(home).data), false);
+});
+
+test("a start that fails leaves the run.json of the run already up as it was", async () => {
+  const home = await scratch();
+  const { data, run: runFile } = layout(home);
+  await mkdir(data, { recursive: true });
+  const other = JSON.stringify({ runner: { name: "runner", pid: 4242, image: "node.exe", start: "1" }, services: [] });
+  await writeFile(runFile, other);
+  const run = createNativeRun({ env: {}, home, platform: "linux", tools: async () => ({}), checks: async () => {
+    throw new Error("port 3000 (app) is already in use");
+  } });
+  assert.equal(await run.runScript("stack:up", {}), 1);
+  await run.stop();
+  assert.equal(await readFile(runFile, "utf8"), other);
+});
+
+test("the process list gives each pid its image and start time, or no start when Windows withholds it", () => {
+  const starts = parseStarts("4242|node|134060000000000000\r\n77|rustfs|\r\nnot a row\r\n");
+  assert.deepEqual([...starts], [[4242, { image: "node.exe", start: "134060000000000000" }], [77, { image: "rustfs.exe", start: undefined }]]);
+});
+
+test("--stop kills a recorded pid only while its image and start time are the recorded ones", async () => {
+  const home = await scratch();
+  const { data, run: runFile } = layout(home);
+  await mkdir(data, { recursive: true });
+  await writeFile(runFile, JSON.stringify({
+    runner: { name: "runner", pid: 101, image: "node.exe", start: "500" },
+    services: [
+      { name: "rustfs", pid: 102, image: "rustfs.exe", start: "501" },
+      { name: "oidc", pid: 103, image: "node.exe", start: "502" },
+      { name: "old", pid: 104, image: "node.exe" },
+    ],
+  }));
+  const now = new Map([
+    [101, { image: "node.exe", start: "999" }], // the pid reused after a restart, by another node.exe
+    [102, { image: "rustfs.exe", start: "501" }], // the store this demo started
+    [103, { image: "code.exe", start: "502" }],
+    [104, { image: "node.exe", start: "600" }], // a record without a start time
+  ]);
+  const killed = [];
+  const errors = [];
+  const error = console.error;
+  const log = console.log;
+  console.error = (line) => errors.push(line);
+  console.log = () => {};
+  try {
+    await stopRecorded({}, home, { probe: async (_env, pids) => new Map(pids.filter((pid) => now.has(pid)).map((pid) => [pid, now.get(pid)])), kill: async (pid) => killed.push(pid) });
+  } finally {
+    console.error = error;
+    console.log = log;
+  }
+  assert.deepEqual(killed, [102]);
+  assert.equal(errors.length, 3);
+  assert.equal(existsSync(runFile), false);
 });

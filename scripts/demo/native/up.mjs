@@ -127,18 +127,37 @@ function killTree(platform, env, pid) {
   return Promise.resolve(0);
 }
 
-/** The image name of a running pid, by tasklist; undefined when no such process runs. */
-function imageOf(env, pid) {
+/** "pid|name|start" lines into pid â†’ { image, start }; start is the UTC file time, or undefined when Windows withheld it. */
+export function parseStarts(text) {
+  const starts = new Map();
+  for (const line of text.split(/\r?\n/)) {
+    const row = /^(\d+)\|([^|]+)\|(\d*)$/.exec(line.trim());
+    if (row) starts.set(Number(row[1]), { image: `${row[2].toLowerCase()}.exe`, start: row[3] || undefined });
+  }
+  return starts;
+}
+
+/** The image name and start time of each running pid; a pid that does not run is absent. */
+function processStarts(env, pids) {
+  const script = `Get-Process -Id ${pids.join(",")} -ErrorAction SilentlyContinue | ForEach-Object { $t = try { $_.StartTime.ToFileTimeUtc() } catch { '' }; '{0}|{1}|{2}' -f $_.Id, $_.ProcessName, $t }`;
+  const shell = join(env.SystemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
   return new Promise((resolve) => {
-    const child = spawn(join(env.SystemRoot, "System32", "tasklist.exe"), ["/FI", `PID eq ${pid}`, "/FO", "CSV", "/NH"], { stdio: ["ignore", "pipe", "ignore"], windowsHide: true });
+    const child = spawn(shell, ["-NoProfile", "-NonInteractive", "-Command", script], { stdio: ["ignore", "pipe", "ignore"], windowsHide: true });
     let out = "";
     child.stdout.on("data", (chunk) => (out += chunk));
-    child.once("error", () => resolve(undefined));
-    child.once("exit", () => {
-      const row = /^"([^"]+)","(\d+)"/.exec(out.trim());
-      resolve(row && row[2] === String(pid) ? row[1] : undefined);
-    });
+    child.once("error", () => resolve(new Map()));
+    child.once("exit", () => resolve(parseStarts(out)));
   });
+}
+
+/** Before tools() is asked: the ports are free and the provider has its dependencies. */
+async function startChecks() {
+  for (const [name, port] of Object.entries(PORTS)) {
+    if (await portInUse(port)) throw new Error(`port ${port} (${name}) is already in use; stop the other stack first (pnpm demo:up:native --stop or pnpm stack:down)`);
+  }
+  if (!existsSync(join(ROOT, "infra", "fake-oidc", "node_modules"))) {
+    throw new Error("the fake OIDC provider has no dependencies; run pnpm --dir infra/fake-oidc install --frozen-lockfile");
+  }
 }
 
 /**
@@ -146,7 +165,10 @@ function imageOf(env, pid) {
  * with its platform and tools injectable, so a test can exercise it with
  * other binaries; the command line refuses anything but Windows.
  */
-export function createNativeRun({ env, home, platform = process.platform, tools, localeArgs = ["--locale=C", "--locale-provider=builtin", "--builtin-locale=C.UTF-8"], demoData = true }) {
+export function createNativeRun({
+  env, home, platform = process.platform, tools, localeArgs = ["--locale=C", "--locale-provider=builtin", "--builtin-locale=C.UTF-8"], demoData = true,
+  checks = startChecks, probe = platform === "win32" ? processStarts : async () => new Map(),
+}) {
   const paths = layout(home);
   const suffix = platform === "win32" ? ".exe" : "";
   const services = [];
@@ -154,6 +176,8 @@ export function createNativeRun({ env, home, platform = process.platform, tools,
   let stopping;
   let startup;
   let interrupted = false;
+  // run.json is this run's only when this run wrote it; a start refused on a busy port leaves the other run's.
+  let wroteRun = false;
 
   /** After Ctrl+C nothing more is started; stop() waits for this step to give up. */
   const checkpoint = () => {
@@ -192,12 +216,7 @@ export function createNativeRun({ env, home, platform = process.platform, tools,
   }
 
   async function stackUp() {
-    for (const [name, port] of Object.entries(PORTS)) {
-      if (await portInUse(port)) throw new Error(`port ${port} (${name}) is already in use; stop the other stack first (pnpm demo:up:native --stop or pnpm stack:down)`);
-    }
-    if (!existsSync(join(ROOT, "infra", "fake-oidc", "node_modules"))) {
-      throw new Error("the fake OIDC provider has no dependencies; run pnpm --dir infra/fake-oidc install --frozen-lockfile");
-    }
+    await checks();
     bin = await tools();
     checkpoint();
     for (const dir of [paths.data, paths.objects, paths.socket, paths.logs]) await mkdir(dir, { recursive: true });
@@ -235,8 +254,12 @@ export function createNativeRun({ env, home, platform = process.platform, tools,
     }, "node.exe");
     await waitFor(async () => (await httpStatus(`http://127.0.0.1:${PORTS.oidc}/.well-known/openid-configuration`)) === 200, "the fake OIDC provider");
 
-    const pids = services.filter((service) => service.child).map(({ name, child, image }) => ({ name, pid: child.pid, image }));
-    await writeFile(paths.run, JSON.stringify({ runner: process.pid, services: pids }));
+    // With each start time: --stop kills a pid only while it is still the process recorded here.
+    const recorded = [{ name: "runner", pid: process.pid, image: "node.exe" }, ...services.filter((service) => service.child).map(({ name, child, image }) => ({ name, pid: child.pid, image }))];
+    const starts = await probe(env, recorded.map(({ pid }) => pid));
+    const [runner, ...rest] = recorded.map((entry) => ({ ...entry, start: starts.get(entry.pid)?.start }));
+    await writeFile(paths.run, JSON.stringify({ runner, services: rest }));
+    wroteRun = true;
   }
 
   async function migrate() {
@@ -299,7 +322,7 @@ export function createNativeRun({ env, home, platform = process.platform, tools,
           await killTree(platform, env, service.child.pid);
         }
       }
-      await rm(paths.run, { force: true });
+      if (wroteRun) await rm(paths.run, { force: true });
     })();
     return stopping;
   }
@@ -312,8 +335,12 @@ export function createNativeRun({ env, home, platform = process.platform, tools,
   return { env, paths, runScript, runNode, stop, interrupt };
 }
 
-/** --stop: PostgreSQL first, then what run.json names, each after its image name is checked. */
-async function stopRecorded(env, home) {
+/**
+ * --stop: PostgreSQL first, then what run.json names. A pid is killed only while
+ * its image name and start time are the recorded ones: after a restart Windows
+ * reuses pids, and a record without a start time is never trusted.
+ */
+export async function stopRecorded(env, home, { probe = processStarts, kill = (pid) => killTree("win32", env, pid) } = {}) {
   const paths = layout(home);
   const pgCtl = join(toolDir(home, "postgres"), "bin", "pg_ctl.exe");
   if (existsSync(join(paths.pgdata, "postmaster.pid")) && existsSync(pgCtl)) {
@@ -325,16 +352,17 @@ async function stopRecorded(env, home) {
   } catch {
     recorded = { services: [] };
   }
-  const entries = [{ name: "runner", pid: recorded.runner, image: "node.exe" }, ...(recorded.services ?? []).reverse()];
-  for (const { name, pid, image } of entries) {
-    if (!Number.isInteger(pid) || pid === process.pid) continue;
-    const running = await imageOf(env, pid);
-    if (running === undefined) continue;
-    if (running.toLowerCase() !== image) {
-      console.error(`pid ${pid} (${name}) is now ${running}; it is left alone`);
+  const entries = [recorded.runner, ...(recorded.services ?? []).reverse()]
+    .filter((entry) => entry && Number.isInteger(entry.pid) && entry.pid !== process.pid);
+  const running = entries.length > 0 ? await probe(env, entries.map(({ pid }) => pid)) : new Map();
+  for (const { name, pid, image, start } of entries) {
+    const now = running.get(pid);
+    if (now === undefined) continue;
+    if (now.image !== image || typeof start !== "string" || now.start !== start) {
+      console.error(`pid ${pid} (${name}) is not the process this demo started; it is left alone`);
       continue;
     }
-    await killTree("win32", env, pid);
+    await kill(pid);
   }
   await rm(paths.run, { force: true });
   console.log("The native demo services are stopped.");

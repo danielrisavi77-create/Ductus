@@ -11,6 +11,10 @@ on:
       - "db/migrations/**"
       - "infra/fake-oidc/**"
       - ".github/workflows/demo-native.yml"
+      # The runner calls dbmate's and next's dist files and the Node of .nvmrc.
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".nvmrc"
   workflow_dispatch:
 
 permissions:
