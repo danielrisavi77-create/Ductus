@@ -1188,6 +1188,25 @@ main:focus {
   margin: 12pt 0 6pt;
 }
 
+/* A bullet item (E1) is a flat block, so the list marker sits on the item
+   itself; consecutive items read as one list (editor-v11 `.ed ul`). */
+.editor-surface .ProseMirror p[data-block="bullet-item"] {
+  display: list-item;
+  list-style: disc outside;
+  margin: 0 0 0 26px;
+  text-align: left;
+}
+
+.editor-surface .ProseMirror p[data-block="bullet-item"]:not(:has(+ p[data-block="bullet-item"])) {
+  margin-bottom: 6pt;
+}
+
+.manuscript ul {
+  margin: 0 0 6pt;
+  padding-left: 26px;
+  text-align: left;
+}
+
 .editor-surface .ProseMirror > :first-child {
   margin-top: 0;
 }
