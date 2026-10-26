@@ -9,6 +9,8 @@ import {
   type EditStepBlock,
   type EditStepV1,
 } from "@/domain/document/edit-step";
+import { isMark, isPlainBlockType } from "@/domain/document/schema";
+import { EvidenceContentNotSupportedV2 } from "@/domain/forensics/evidence-replay-v2";
 import type { EvidenceEventV2 } from "@/domain/forensics/evidence-segment-v2";
 import { canonicalizeJcs, type JcsJsonValue } from "@/domain/forensics/jcs";
 import { canonicalToTiptap, tiptapToCanonical } from "@/editor/interop";
@@ -235,10 +237,41 @@ function* applyStep(document: PmNode, step: EditStepV1): Generator<RemovedRangeC
   return result.doc;
 }
 
+/** Every node and mark type this replayer knows, in any position. */
+function isKnownType(value: string): boolean {
+  return value === "heading" || value === "text" || isPlainBlockType(value) || isMark(value);
+}
+
+/**
+ * True when the parser refused a node or mark at its `type` and that type is
+ * a string this replayer knows nowhere: content of a later version of the
+ * format (F-150), not a malformed step. A known type in the wrong place, or a
+ * type that is not a string, stays a refused step. `path` is the parser's,
+ * such as `$[0].slice.content[1].type`.
+ */
+function namesUnknownType(steps: unknown, code: string, path: string): boolean {
+  if ((code !== "invalid_node" && code !== "invalid_mark") || !path.startsWith("$") || !path.endsWith(".type")) {
+    return false;
+  }
+  const tokens = [...path.slice(1).matchAll(/\.([A-Za-z]+)|\[(\d+)\]/g)];
+  if (tokens.map(([token]) => token).join("") !== path.slice(1)) return false;
+  let value: unknown = steps;
+  for (const [, key, index] of tokens) {
+    if (typeof value !== "object" || value === null) return false;
+    const name = key ?? index;
+    if (!Object.prototype.hasOwnProperty.call(value, name)) return false;
+    value = (value as Record<string, unknown>)[name];
+  }
+  return typeof value === "string" && !isKnownType(value);
+}
+
 /** The steps of `event` applied to `document` in order, one claim per removed range. */
 export function* runEditStepsV1(document: PmNode, event: EvidenceEventV2): EditStepsV1Run {
   const parsed = parseEditSteps(EDIT_STEP_FORMAT_V1, event.steps);
   if (!parsed.ok) {
+    if (namesUnknownType(event.steps, parsed.code, parsed.path)) {
+      throw new EvidenceContentNotSupportedV2(parsed.code);
+    }
     refuse(parsed.code);
   }
   let current = document;
