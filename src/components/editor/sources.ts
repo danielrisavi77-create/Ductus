@@ -1,0 +1,149 @@
+import type { Editor } from "@tiptap/core";
+import type { Node as PMNode } from "@tiptap/pm/model";
+
+import {
+  formatBibliographyEntry, formatInText, fpzgCitationStyle,
+  type ArticleSource, type BookSource, type Person,
+} from "@/domain/citation";
+
+/**
+ * DAN-343: citations and the bibliography from the "Literatura" tab. The
+ * text is plain text in the document (no new node or mark, D-98 addition),
+ * and only `formatInText` / `formatBibliographyEntry` with the FPZG style
+ * write it. Inserting goes through editor commands, like a toolbar button,
+ * and nothing is written while the editor may not be written in.
+ */
+
+export type SourceKind = "book" | "article";
+
+export type SourceFields = {
+  kind: SourceKind;
+  family: string;
+  given: string;
+  family2: string;
+  given2: string;
+  year: string;
+  title: string;
+  place: string;
+  publisher: string;
+  journal: string;
+  volume: string;
+  issue: string;
+  pages: string;
+};
+
+export type SourceField = Exclude<keyof SourceFields, "kind">;
+
+export const EMPTY_FIELDS: SourceFields = {
+  kind: "book", family: "", given: "", family2: "", given2: "", year: "", title: "",
+  place: "", publisher: "", journal: "", volume: "", issue: "", pages: "",
+};
+
+export type SourceCheck =
+  | { ok: true; source: BookSource | ArticleSource }
+  | { ok: false; missing: SourceField[]; yearInvalid: boolean };
+
+/** The heading the bibliography stands under; only this exact text is recognised. */
+export const BIBLIOGRAPHY_HEADING = "Literatura";
+
+/** The source the form describes, or which fields still need to be filled. */
+export function sourceFromFields(fields: SourceFields): SourceCheck {
+  const value = (field: SourceField) => fields[field].trim();
+  const needed: SourceField[] = ["family", "given", "year", "title"];
+  needed.push(...(fields.kind === "book" ? (["place", "publisher"] as const) : (["journal"] as const)));
+  // A second author is optional, but half of one is not.
+  if (value("family2") !== "" || value("given2") !== "") needed.push("family2", "given2");
+  const missing = needed.filter((field) => value(field) === "");
+  const yearInvalid = value("year") !== "" && !/^[1-9]\d{3}$/.test(value("year"));
+  if (missing.length > 0 || yearInvalid) return { ok: false, missing, yearInvalid };
+
+  const authors: Person[] = [{ kind: "person", family: value("family"), given: value("given") }];
+  if (value("family2") !== "") authors.push({ kind: "person", family: value("family2"), given: value("given2") });
+  const base = { authors, year: Number(value("year")), title: value("title") };
+  const optional = (field: SourceField) => (value(field) === "" ? {} : { [field]: value(field) });
+  const source: BookSource | ArticleSource = fields.kind === "book"
+    ? { ...base, type: "book", place: value("place"), publisher: value("publisher") }
+    : { ...base, type: "article", journal: value("journal"), ...optional("volume"), ...optional("issue"), ...optional("pages") };
+  return { ok: true, source };
+}
+
+/** The in-text citation, with the page only when one is given. */
+export function citationText(source: BookSource | ArticleSource, page: string): string {
+  const trimmed = page.trim();
+  return formatInText(source, fpzgCitationStyle, trimmed === "" ? undefined : trimmed);
+}
+
+export function entryText(source: BookSource | ArticleSource): string {
+  return formatBibliographyEntry(source, fpzgCitationStyle);
+}
+
+export type Block = { type: string; text: string };
+
+export type BibliographyPlan =
+  | { kind: "duplicate" }
+  | { kind: "insert"; index: number; heading: boolean };
+
+// The domain's collator (sortBibliography): Croatian order, case ignored.
+const collator = new Intl.Collator("hr", { sensitivity: "base" });
+
+/** The order entries stand in, in the document and in the panel's list. */
+export function compareEntries(a: string, b: string): number {
+  return collator.compare(a, b);
+}
+
+/**
+ * Where an entry goes among the top-level blocks: in the section under the
+ * first heading "Literatura" (up to the next heading), before the first
+ * entry it sorts ahead of, or after the last one. Without the heading, a new
+ * heading and the entry go to the end. The same text twice is not added.
+ */
+export function bibliographyPlan(blocks: readonly Block[], entry: string): BibliographyPlan {
+  const start = blocks.findIndex((b) => b.type === "heading" && b.text.trim() === BIBLIOGRAPHY_HEADING);
+  if (start === -1) return { kind: "insert", index: blocks.length, heading: true };
+  let end = start + 1;
+  while (end < blocks.length && blocks[end]!.type !== "heading") end++;
+  let index = start + 1;
+  for (let i = start + 1; i < end; i++) {
+    const text = blocks[i]!.text.trim();
+    if (text === entry) return { kind: "duplicate" };
+    if (text === "") continue;
+    if (compareEntries(entry, text) < 0) return { kind: "insert", index: i, heading: false };
+    index = i + 1;
+  }
+  return { kind: "insert", index, heading: false };
+}
+
+function blocksOf(doc: PMNode): Block[] {
+  const blocks: Block[] = [];
+  doc.forEach((node) => blocks.push({ type: node.type.name, text: node.textContent }));
+  return blocks;
+}
+
+// The panel also checks `isDestroyed` at the click, as the toolbar does; a
+// headless editor in the unit tests reports itself destroyed.
+function writable(editor: Editor | null): editor is Editor {
+  return editor !== null && editor.isEditable;
+}
+
+/**
+ * Writes the citation after the selection (never over selected text) and, when
+ * `entry` is given, the entry into the bibliography, in one transaction. Returns
+ * false and changes nothing while the editor may not be written in.
+ */
+export function writeSource(editor: Editor | null, citation: string | null, entry: string | null): boolean {
+  if (!writable(editor)) return false;
+  // No focus(): a keyboard user stays in the panel they clicked in.
+  return editor.chain().command(({ tr, state }) => {
+    if (citation !== null) tr.insertText(citation, tr.selection.to);
+    if (entry === null) return true;
+    const plan = bibliographyPlan(blocksOf(tr.doc), entry);
+    if (plan.kind === "duplicate") return true;
+    const { schema } = state;
+    const nodes = [schema.nodes.paragraph!.create(null, schema.text(entry))];
+    if (plan.heading) nodes.unshift(schema.nodes.heading!.create({ level: 1 }, schema.text(BIBLIOGRAPHY_HEADING)));
+    let pos = 0;
+    for (let i = 0; i < plan.index; i++) pos += tr.doc.child(i).nodeSize;
+    tr.insert(pos, nodes);
+    return true;
+  }).run();
+}

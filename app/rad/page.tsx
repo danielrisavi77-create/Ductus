@@ -12,6 +12,7 @@ import {
 } from "@/components/editor/LocalDocument";
 import { showsInventedPanels } from "@/components/editor/demo-panels";
 import { InstructionsPanel, WorkPanel } from "@/components/editor/SidePanels";
+import SourcesPanel from "@/components/editor/SourcesPanel";
 import { LocalStatusLength } from "@/components/editor/StatusLength";
 import AppShell from "@/components/shell/AppShell";
 import PanelTabs from "@/components/shell/PanelTabs";
@@ -168,7 +169,7 @@ export default async function WorkspacePage({
             label={t.workspace.panelTabs}
             initial="comments"
             tabs={[
-              { id: "sources", label: t.workspace.tabSources, content: <p className="rail-empty">{t.workspace.sourcesEmpty}</p> },
+              { id: "sources", label: t.workspace.tabSources, content: journal ? <SourcesPanel /> : <p className="rail-empty">{t.workspace.sourcesEmpty}</p> },
               {
                 id: "instructions",
                 label: t.workspace.tabInstructions,
