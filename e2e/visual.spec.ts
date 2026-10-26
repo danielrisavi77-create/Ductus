@@ -26,9 +26,10 @@ test("V1: /prijava matches its baseline and its sign-in structure", async ({ pag
   await settle(page);
   const main = page.getByRole("main");
   await expect(main).toMatchAriaSnapshot(`
-    - heading "Prijava u radni prostor" [level=1]
-    - region:
-      - heading "Za studente i nastavnike" [level=2]
+    - region "Dobro došli u svoj prostor.":
+      - heading "Dobro došli u svoj prostor." [level=1]
+    - region "Tvoj akademski identitet.":
+      - heading "Tvoj akademski identitet." [level=2]
       - link "Prijava sustavom AAI@EduHr":
         - /url: /api/auth/login?returnTo=%2F
   `);
