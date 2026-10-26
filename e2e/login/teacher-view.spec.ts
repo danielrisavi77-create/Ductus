@@ -18,6 +18,7 @@ import { clickSignOut, signIn } from "./support";
 const TEXT = "Gradske knjižnice su mjesto susreta i učenja.";
 const QUOTE = "mjesto susreta";
 const LATER = "učenja";
+const HEADING = "Izmišljeni zaključak";
 const OPEN = 30_000;
 
 const editorOf = (page: Page) => page.getByRole("textbox", { name: t.workspace.documentLabel });
@@ -132,6 +133,39 @@ test("the student switches to the teacher view, reads the text as the teacher do
     await student.setViewportSize({ width, height: 900 });
     await test.info().attach(`pisanje-${width}`, { body: await student.screenshot({ fullPage: true }), contentType: "image/png" });
   }
+});
+
+test("a heading of the structure brings that heading of the teacher view's text into view", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 600 });
+  await signIn(page, "/rad");
+  const { assignment, documentId } = await writeWork(page);
+  // Enough invented paragraphs to put the heading below the first screen.
+  for (let i = 1; i <= 20; i += 1) {
+    await page.keyboard.press("Enter");
+    await page.keyboard.type(`Izmišljeni odlomak ${i}.`);
+  }
+  await page.keyboard.press("Enter");
+  await page.keyboard.type(HEADING);
+  const toolbar = page.getByRole("toolbar", { name: t.toolbar.label });
+  const heading1 = toolbar.getByRole("button", { name: t.toolbar.heading1, exact: true });
+  if (await heading1.isVisible()) await heading1.click();
+  else {
+    await toolbar.getByRole("button", { name: t.toolbar.more }).click();
+    await page.getByRole("menuitemcheckbox", { name: t.toolbar.heading1, exact: true }).click();
+  }
+  await expect
+    .poll(async () => {
+      const response = await page.request.get(`/api/live/${documentId}`, { headers: { "ductus-protocol": DUCTUS_PROTOCOL_VERSION } });
+      return response.ok() ? await response.text() : "";
+    }, { timeout: OPEN })
+    .toContain(HEADING);
+
+  await page.goto(`/rad?zadatak=${assignment}&prikaz=nastavnik`);
+  const shown = liveTextOf(page).getByRole("heading", { name: HEADING });
+  await expect(shown).toBeAttached({ timeout: OPEN });
+  await expect(shown).not.toBeInViewport();
+  await page.getByRole("navigation", { name: t.outline.label }).getByRole("button", { name: HEADING }).click();
+  await expect(shown).toBeInViewport();
 });
 
 test("no teacher view without the student's own assignment, and nothing read for it", async ({ browser }) => {

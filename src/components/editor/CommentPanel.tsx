@@ -52,7 +52,7 @@ function ThreadCard({ documentId, placed, editor, current, onReplied }: {
 
   const show = () => {
     // The teacher view on /rad replaced the editor: the passage is shown there (#732 item 7).
-    if (showInText(documentId, thread.id)) return;
+    if (showInText(documentId, { threadId: thread.id })) return;
     if (!editor || editor.isDestroyed || !range) return;
     editor.chain().setTextSelection(range).scrollIntoView().run();
     editor.view.focus();

@@ -43,13 +43,21 @@ export default function TeacherViewSheet({ documentId, session, heading }: {
   const placed = placeThreads(view.document, threads);
   const marks = openMarks(placed);
   // "Prikaži u tekstu" in the panel shows the passage in this text, placed
-  // against what is on screen, as the teacher's own button does.
+  // against what is on screen, as the teacher's own button does; a heading
+  // of the outline brings that heading of this text into view.
   const textRef = useRef<HTMLDivElement>(null);
   const placedRef = useRef(placed);
   placedRef.current = placed;
-  useEffect(() => handleShowInText(documentId, (threadId) => {
-    const range = placedRef.current.find((p) => p.thread.id === threadId)?.range;
-    if (range && textRef.current) selectInBlock(textRef.current, range.nodeId, range.start, range.end);
+  useEffect(() => handleShowInText(documentId, (target) => {
+    const root = textRef.current;
+    if (!root) return;
+    if ("threadId" in target) {
+      const range = placedRef.current.find((p) => p.thread.id === target.threadId)?.range;
+      if (range) selectInBlock(root, range.nodeId, range.start, range.end);
+      return;
+    }
+    [...root.querySelectorAll<HTMLElement>("[data-node-id]")]
+      .find((el) => el.dataset.nodeId === target.nodeId)?.scrollIntoView({ block: "start" });
   }), [documentId]);
 
   return (

@@ -159,7 +159,7 @@ export default async function WorkspacePage({
         rail={
           <>
             <RailSection title={t.workspace.structure}>
-              {journal ? <HeadingOutline /> : <p className="rail-empty">{t.workspace.structureEmpty}</p>}
+              {journal ? <HeadingOutline documentId={journal.documentId} /> : <p className="rail-empty">{t.workspace.structureEmpty}</p>}
             </RailSection>
             <RailSection title={t.workspace.tables}>
               <p className="rail-empty">{t.workspace.tablesEmpty}</p>
