@@ -16,7 +16,7 @@
  * tables, horizontal rules), none of which exist in the F1 schema.
  */
 
-import { Extension, type Extensions } from "@tiptap/core";
+import { Extension, type Editor, type Extensions } from "@tiptap/core";
 import Bold from "@tiptap/extension-bold";
 import Document from "@tiptap/extension-document";
 import Heading from "@tiptap/extension-heading";
@@ -25,7 +25,9 @@ import Italic from "@tiptap/extension-italic";
 import Paragraph from "@tiptap/extension-paragraph";
 import Placeholder from "@tiptap/extension-placeholder";
 import Text from "@tiptap/extension-text";
+import { PluginKey } from "@tiptap/pm/state";
 
+import { blockMarkerRule, markerRemoval } from "./block-marker";
 import { createNodeIdentityPlugin, mintMissingIds, repeatedNodeIds, type NodeIdMinter } from "./identity";
 import { NODE_ID_ATTRIBUTE } from "./interop";
 
@@ -128,6 +130,44 @@ export const NodeIdentity = Extension.create<NodeIdentityOptions>({
   },
 });
 
+const headingMarkerKey = new PluginKey<null>("headingMarker");
+
+/**
+ * Tiptap's heading with "# ", "## " and "### " in two transactions
+ * (`block-marker.ts`): Tiptap's own rule removes the marker and changes the
+ * type at once, so a heading typed on an empty line got a new id. Keys,
+ * commands and the schema are Tiptap's.
+ */
+const MarkedHeading = Heading.extend({
+  addInputRules() {
+    const deepest = Math.max(...this.options.levels);
+    return [
+      blockMarkerRule(new RegExp(`^(#{1,${deepest}})\\s$`), this.type, headingMarkerKey, (match) => ({ level: match[1]!.length })),
+    ];
+  },
+
+  addProseMirrorPlugins() {
+    return [markerRemoval(headingMarkerKey)];
+  },
+
+  addKeyboardShortcuts() {
+    return {
+      ...this.parent?.(),
+      // Tiptap's undoInputRule cannot take back a marker removed in a
+      // transaction of its own, so an empty heading becomes a paragraph
+      // first (same id); only the next Backspace joins.
+      Backspace: () => emptyHeadingBackspace(this.editor),
+    };
+  },
+});
+
+/** Backspace in an empty heading: a paragraph with the same id, or false. */
+export function emptyHeadingBackspace(editor: Editor): boolean {
+  const { $from, empty } = editor.state.selection;
+  if (!empty || $from.parent.type.name !== "heading" || $from.parent.content.size !== 0) return false;
+  return editor.commands.setNode("paragraph");
+}
+
 /** Every extension name registered by `createEditorExtensions`. */
 export const F1_EXTENSION_NAMES = [
   "doc",
@@ -151,7 +191,7 @@ export function createEditorExtensions(
   return [
     Document,
     Paragraph,
-    Heading.configure({ levels: [...F1_HEADING_LEVELS] }),
+    MarkedHeading.configure({ levels: [...F1_HEADING_LEVELS] }),
     Text,
     Bold,
     Italic,
