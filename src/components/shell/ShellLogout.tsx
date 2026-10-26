@@ -42,6 +42,11 @@ export default function ShellLogout({ scope, session, className, buttonClassName
     setBusy(true);
     void readLogoutHold(scope, { session }).then((read) => {
       const step = shellLogoutStep(read);
+      // The page's session has ended: `/` renders under the browser's cookie.
+      if (step.kind === "leave") {
+        window.location.assign("/");
+        return;
+      }
       if (step.kind === "plain") {
         post();
         return;
