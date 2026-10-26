@@ -65,14 +65,32 @@ export function ciTestCommands(ci, scripts) {
   return commands;
 }
 
-/** A shell glob word as a regular expression; `*` stays inside one path segment. */
-const globRegExp = (word) =>
-  new RegExp(`^${word.split("*").map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join("[^/]*")}$`);
+/** One path segment against a pattern whose `*` matches any run of characters. */
+function segmentMatches(pattern, segment) {
+  const [first, ...rest] = pattern.split("*");
+  if (rest.length === 0) return pattern === segment;
+  const last = rest.pop();
+  if (!segment.startsWith(first) || !segment.endsWith(last) || segment.length < first.length + last.length) return false;
+  let at = first.length;
+  for (const part of rest) {
+    const found = segment.indexOf(part, at);
+    if (found < 0 || found + part.length > segment.length - last.length) return false;
+    at = found + part.length;
+  }
+  return true;
+}
+
+/** A shell glob word against a repo path; `*` stays inside one path segment. */
+function globMatches(word, file) {
+  const patterns = word.split("/");
+  const segments = file.split("/");
+  return patterns.length === segments.length && patterns.every((pattern, i) => segmentMatches(pattern, segments[i]));
+}
 
 /** Whether a repo path is named by one of the commands, literally or by a glob. */
 export function runBy(commands, file) {
   return commands.some((command) =>
-    command.split(/[\s;&|]+/).some((word) => word === file || (word.includes("*") && globRegExp(word).test(file))));
+    command.split(/[\s;&|]+/).some((word) => word === file || (word.includes("*") && globMatches(word, file))));
 }
 
 test("every node:test file on a critical path runs in CI", () => {
@@ -108,7 +126,8 @@ test("the matcher follows test:* scripts and globs, and refuses what no command 
   assert.ok(!runBy(commands, "scripts/engineering/deeper/z.test.mjs"));
   assert.ok(!runBy(commands, "a/other.test.mjs"));
   assert.ok(!runBy(commands, "a/x.test.mjs.bak"));
-  // Comments and step names are not commands.
+  assert.ok(!runBy(commands, "scripts/engineering/z.test.mjs.bak"));
+  assert.ok(!runBy(commands, "scripts/engineering/z.spec.mjs"));  // Comments and step names are not commands.
   assert.ok(!runBy(commands, "commented/x.test.mjs"));
   assert.ok(!runBy(commands, "commented/z.test.mjs"));
   assert.ok(!runBy(commands, "named/n.test.mjs"));
