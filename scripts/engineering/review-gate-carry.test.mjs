@@ -141,9 +141,15 @@ test("a non-merge commit among twenty heads breaks the carry for every head behi
 
 test("an unfinished first-parent walk carries nothing", () => {
   const path = Array.from({ length: MAX_MERGE_STEPS + 1 }, (_, i) => merge(i === 1 ? earlier : String(i % 10).repeat(40)));
-  const { heads, reason } = carriedHeadCandidates([review(earlier)], head, [merge(head), ...path.slice(1)]);
+  // A named head the walk never saw (an older FAIL beyond the step limit)
+  // stops every carry, also of the head it did see.
+  const unseen = "d".repeat(40);
+  const { heads, reason } = carriedHeadCandidates([review(earlier), review(unseen, "FAIL")], head, [merge(head), ...path.slice(1)]);
   assert.deepEqual(heads, []);
   assert.match(reason, /non-merge/);
+  // F-148: a walk that stopped after it saw every named head is finished for
+  // the carry; nothing named lies beyond it.
+  assert.deepEqual(carriedHeadCandidates([review(earlier)], head, [merge(head), merge(earlier)]), { heads: [earlier], reason: null });
   assert.deepEqual(carriedHeadCandidates([], head, []), { heads: [], reason: null });
 });
 
