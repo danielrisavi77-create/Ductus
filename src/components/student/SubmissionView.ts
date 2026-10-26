@@ -56,7 +56,7 @@ function Block(node: DocumentNode, index: number): ReactNode {
     if (child.marks.includes("bold")) content = h("strong", null, content);
     return h("span", { key: i }, content);
   });
-  if (node.type === "paragraph") return h("p", { key: index }, ...children);
+  if (node.type === "paragraph" || node.type === "quote") return h("p", { key: index }, ...children);
   if (node.type === "bulletItem") return h("li", { key: index }, ...children);
   // The page has its own h1, so the work's levels 1 to 3 are h2 to h4.
   const tag = node.level === 1 ? "h2" : node.level === 2 ? "h3" : "h4";
@@ -182,9 +182,10 @@ export function SubmissionView({ state, handlers, offline = false }: {
         h(
           "div",
           { className: "manuscript", role: "document", "aria-label": t.textLabel },
-          // Consecutive bullet items are one list (E1).
+          // Consecutive bullet items are one list, quote paragraphs one block quote (E1).
           ...blockRuns(state.document.nodes).map((run, i) =>
-            run.kind === "list" ? h("ul", { key: i }, ...run.items.map(Block)) : Block(run.node, i)),
+            run.kind === "block" ? Block(run.node, i)
+              : h(run.kind === "list" ? "ul" : "blockquote", { key: i }, ...run.items.map(Block))),
         ),
       ),
       refusal ? h("p", { id: OUTCOME_ID, tabIndex: -1, role: "alert" }, refusal) : null,
