@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import childProcess from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -16,10 +18,10 @@ const CONNECTION = ["-p", "54329", "-U", "ductus", "-d", "ductus"];
 const K3_SQL = fileURLToPath(new URL("./demo-k3.sql", import.meta.url));
 const KEY_SQL = fileURLToPath(new URL("./evidence-signing-key.sql", import.meta.url));
 
-// Stands in for psql: an executable that records its argv, stdin and the PG*
+// Stands in for psql: a node script that records its argv, stdin and the PG*
 // variables it was given, and prints the given line. Record path and line come
 // through the environment, so the target's args stay what a real psql gets.
-const FAKE_PSQL = `#!${process.execPath}
+const FAKE_PSQL = `
   import { writeFileSync } from "node:fs";
   const argv = process.argv.slice(2);
   const pg = Object.keys(process.env).filter((name) => name.toUpperCase().startsWith("PG")).sort();
@@ -33,17 +35,36 @@ const FAKE_PSQL = `#!${process.execPath}
 // libpq variables that could choose a host, in the caller's environment.
 const HOSTILE_PG = { PGHOST: "127.0.0.1", PGHOSTADDR: "127.0.0.1", pghostaddr: "127.0.0.1", PGSERVICE: "x", PGSERVICEFILE: "/tmp/x" };
 
+// Windows starts only a real executable, not a script with a #! line (DAN-336).
+// So the scripts' own spawn runs the fake through node: a call whose command is
+// exactly the target's command becomes `node <fake> <args>` with the same args,
+// stdin and environment; any other command is spawned unchanged and, not being
+// psql, fails the test with "could not start psql".
+const FAKES = new Set();
+const realSpawn = childProcess.spawn;
+test.before(() => {
+  childProcess.spawn = (command, args, options) =>
+    FAKES.has(command) ? realSpawn(process.execPath, [command, ...args], options) : realSpawn(command, args, options);
+  syncBuiltinESMExports();
+});
+test.after(() => {
+  childProcess.spawn = realSpawn;
+  syncBuiltinESMExports();
+});
+
 async function withFakePsql(line, run) {
   const dir = await mkdtemp(join(tmpdir(), "ductus-psql-target-"));
+  const fake = join(dir, "fake-psql.mjs");
   try {
-    const fake = join(dir, "fake-psql");
     const record = join(dir, "record.json");
-    await writeFile(fake, FAKE_PSQL, { mode: 0o755 });
+    await writeFile(fake, FAKE_PSQL);
+    FAKES.add(fake);
     const target = { command: fake, args: ["-h", dir, ...CONNECTION] };
     const fakeEnv = { FAKE_PSQL_RECORD: record, FAKE_PSQL_LINE: line, PGPASSWORD: "invented", ...HOSTILE_PG };
     const read = async () => JSON.parse(await readFile(record, "utf8"));
     await run({ dir, target, record, read, fakeEnv });
   } finally {
+    FAKES.delete(fake);
     await rm(dir, { recursive: true, force: true });
   }
 }
