@@ -13,7 +13,12 @@
 # that checks the declared risk, so an edited description cannot change what
 # Mergify sees.
 # DAN-263: serial speculative checks test A, A+B, A+B+C on Mergify-owned
-# draft PRs; original heads keep their review/QA/owner approvals. All six
+# draft PRs; original heads keep their review/QA/owner approvals.
+# D-177: each check is a batch of up to three PRs (one CI run for the batch),
+# formed after at most three minutes of waiting. A failed batch is split until
+# the failing PR is isolated (no batch_max_failure_resolution_attempts), so the
+# others still merge, each as its own squash commit. Every PR in a batch must
+# meet all six queue conditions on its own head, Merge authorization included. All six
 # conditions remain mandatory on originals AND CI carriers. The gate recognizes
 # carriers from authenticated GitHub metadata (mergify-queue-pr.mjs), never from
 # a branch prefix alone. Mergify revalidates admission and rejects external edits
@@ -32,7 +37,8 @@
 
 queue_rules:
   - name: main
-    batch_size: 1
+    batch_size: 3
+    batch_max_wait_time: 3 min
     max_checks_retries: 0
     allow_queue_branch_edit: false
     branch_protection_injection_mode: queue
