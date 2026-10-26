@@ -269,6 +269,16 @@ describe("readFastPath (B-11c, #757 D1 and D5)", () => {
     expect(lines).toStrictEqual([["fast path read failed", "row_malformed"]]);
   });
 
+  it("counts a name in code points, as login and the database do (F-149)", async () => {
+    // 255 characters outside the BMP are 510 UTF-16 units; login and length() accept them.
+    const long = "\u{1D400}".repeat(255);
+    const read = (givenName: string) => readFastPath(VESNA, ASSIGNMENT, database([pending(1, { given_name: givenName, family_name: "Testić" })]).withActor, {
+      payloads: STORAGE_NOT_CONFIGURED, thresholds: THRESHOLDS, log: () => {},
+    });
+    expect(await read(long)).toMatchObject({ kind: "ok", students: [{ givenName: long, surname: "Testić" }] });
+    expect(await read(`${long}\u{1D400}`)).toStrictEqual({ kind: "unavailable" });
+  });
+
   it("gives unavailable for a text that is not the exact JCS of a document", async () => {
     const { lines, log } = logger();
     const body = JSON.stringify(JSON.parse(BODY), null, 1);
@@ -316,6 +326,34 @@ describe("readFastPath (B-11c, #757 D1 and D5)", () => {
     expect(read).toStrictEqual({ kind: "unavailable" });
     expect(lines).toStrictEqual([["fast path read failed", code === "ZD503" ? "ZD503" : "unknown"]]);
     expect(JSON.stringify(lines)).not.toMatch(/Ana|Testić|doc-1|VVVV|3333/);
+  });
+
+  it("reads the records from storage only after the transaction has closed (#780, Codex P2)", async () => {
+    const { store, hashes } = await record("doc-1");
+    const db = database([work(1, hashes, { document_id: "doc-1" })]);
+    let open = false;
+    const withActor = (async (token, fn) => {
+      open = true;
+      try {
+        return await db.withActor(token, fn);
+      } finally {
+        open = false;
+      }
+    }) as WithActor;
+    // Storage can outlast the pool's idle-in-transaction limit, so no read may
+    // run while the transaction holds its connection.
+    const payloads = new Proxy(store, {
+      get(target, key, receiver) {
+        const value: unknown = Reflect.get(target, key, receiver);
+        if (typeof value !== "function") return value;
+        return (...args: unknown[]) => {
+          if (open) throw new Error("storage read inside the transaction");
+          return (value as (...a: unknown[]) => unknown).apply(target, args);
+        };
+      },
+    });
+    const read = await readFastPath(VESNA, ASSIGNMENT, withActor, { payloads, thresholds: THRESHOLDS });
+    expect(read).toMatchObject({ kind: "ok", students: [{ id: STUDENT(1), work: "writing" }] });
   });
 
   it("refuses a malformed session token without reaching the database", async () => {
