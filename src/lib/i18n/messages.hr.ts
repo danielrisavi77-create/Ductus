@@ -802,6 +802,8 @@ export const hr = {
   // in this assignment; D-63 for the skipped long pauses of the replay.
   student: {
     title: "Zadatak",
+    // DAN-344 (Archivum S03): the way back from the notice to /zadaci, verbatim from the package.
+    backToAssignments: "Moji kolegiji i zadaci",
     // #711 contract 6404612273: the student's own courses and assignments.
     assignments: {
       title: "Moji zadaci",
