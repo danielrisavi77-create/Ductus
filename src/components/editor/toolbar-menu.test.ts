@@ -72,6 +72,14 @@ describe("tools that do not fit", () => {
     expect(keys(splitTools(TOOLS, 3).shown)).toEqual(["paragraph", "bold", "italic", "undo", "redo"]);
   });
 
+  it("then the list (E1), after every heading, in toolbar order", () => {
+    const withList = ["paragraph", "heading1", "heading2", "heading3", "bold", "italic", "bulletItem", "undo", "redo"]
+      .map((key) => ({ key }));
+    expect(keys(splitTools(withList, 3).shown)).toContain("bulletItem");
+    expect(keys(splitTools(withList, 4).more)).toEqual(["heading1", "heading2", "heading3", "bulletItem"]);
+    expect(keys(splitTools(withList, 4).shown)).toEqual(["paragraph", "bold", "italic", "undo", "redo"]);
+  });
+
   it("never moves paragraph, bold, italic, undo or redo, whatever the count", () => {
     expect(MAX_COLLAPSED).toBe(COLLAPSE_ORDER.length);
     for (const collapsed of [-1, 3, 4, 99]) {
