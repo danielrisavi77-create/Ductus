@@ -34,6 +34,11 @@ const post = (session = people.teacher.token, target = course, until = validUnti
 const codes = async () => (await admin.query(
   "SELECT encode(code_hash, 'hex') AS hash, active, created_by FROM institution.course_enrollment_code WHERE course_id = $1 ORDER BY id", [course],
 )).rows;
+// DAN-292: every code that a new one switched off has its 'replaced' row.
+const events = async () => (await admin.query(
+  `SELECT encode(c.code_hash, 'hex') AS hash, e.kind, e.actor_id FROM audit.enrollment_code_event e
+     JOIN institution.course_enrollment_code c ON c.id = e.code_id WHERE e.course_id = $1 ORDER BY 1`, [course],
+)).rows;
 
 // Scoped snapshots also detect an accidental write to any future table in these
 // schemas. No other integration file's random fixtures enter this comparison.
@@ -43,7 +48,7 @@ async function snapshot(includeCodes = false) {
   )).rows;
   const result: Record<string, unknown> = {};
   for (const { schemaname, tablename } of tables) {
-    if (!includeCodes && tablename === "course_enrollment_code") continue;
+    if (!includeCodes && (tablename === "course_enrollment_code" || tablename === "enrollment_code_event")) continue;
     const qualified = `"${schemaname.replaceAll('"', '""')}"."${tablename.replaceAll('"', '""')}"`;
     result[`${schemaname}.${tablename}`] = (await admin.query(
       `SELECT r::text AS row FROM ${qualified} r WHERE EXISTS (SELECT 1 FROM unnest($1::text[]) n WHERE strpos(r::text, n) > 0) ORDER BY 1`,
@@ -98,6 +103,16 @@ beforeAll(async () => {
 afterAll(async () => {
   vi.unstubAllEnvs();
   await app.end();
+  // The audit trail is append-only; only this clean-up steps around it, on its own connection and for its own rows.
+  const cleaner = await admin.connect();
+  try {
+    await cleaner.query("BEGIN");
+    await cleaner.query("SET LOCAL session_replication_role = replica");
+    await cleaner.query("DELETE FROM audit.enrollment_code_event WHERE institution_id = ANY($1)", [faculties]);
+    await cleaner.query("COMMIT");
+  } finally {
+    cleaner.release();
+  }
   await admin.query("DELETE FROM institution.course_member WHERE institution_id = ANY($1)", [faculties]);
   await admin.query("DELETE FROM institution.course_enrollment_code WHERE course_id IN (SELECT id FROM institution.course WHERE institution_id = ANY($1))", [faculties]);
   await admin.query("DELETE FROM institution.course WHERE institution_id = ANY($1)", [faculties]);
@@ -120,6 +135,7 @@ describe("enrollment code real POST, session and database", () => {
     expect(Object.keys(body)).toEqual(["code"]);
     expect(body.code).toMatch(/^[0-9A-F]{4}(-[0-9A-F]{4}){3}$/);
     expect(await codes()).toEqual([{ hash: hash(body.code), active: true, created_by: people.teacher.id }]);
+    expect(await events()).toEqual([]);
     expect((await admin.query("SELECT valid_until = $2::timestamptz AS exact FROM institution.course_enrollment_code WHERE course_id=$1 AND active", [course, validUntil])).rows[0].exact).toBe(true);
     expect(await snapshot()).toEqual(before);
     const stored = JSON.stringify(await snapshot(true));
@@ -130,6 +146,7 @@ describe("enrollment code real POST, session and database", () => {
     expect(next).not.toBe(body.code);
     expect((await codes()).filter((row) => row.active)).toEqual([{ hash: hash(next), active: true, created_by: people.teacher.id }]);
     expect((await codes()).find((row) => row.hash === hash(body.code))?.active).toBe(false);
+    expect(await events()).toEqual([{ hash: hash(body.code), kind: "replaced", actor_id: people.teacher.id }]);
     expect(await snapshot()).toEqual(before);
   });
 
@@ -204,6 +221,13 @@ describe("enrollment code real POST, session and database", () => {
       created_by: [people.teacher.id, people.second.id][index],
     });
     expect(issued.map(hash)).toContain(rows.find((row) => row.active)!.hash);
+    // Each code that stopped being active has exactly one 'replaced' row, by one of the two teachers.
+    const ended = await events();
+    expect(ended.map((row) => row.hash).sort()).toEqual(rows.filter((row) => !row.active).map((row) => row.hash).sort());
+    for (const row of ended) {
+      expect(row.kind).toBe("replaced");
+      expect([people.teacher.id, people.second.id]).toContain(row.actor_id);
+    }
     expect(await snapshot()).toEqual(before);
   });
 });
