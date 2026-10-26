@@ -157,7 +157,9 @@ export class EvidenceSession {
   snapshot(): EvidenceSnapshot {
     // §4: the refused row stays on the device; that is no failure of this device.
     const failure = this.closedBy ? null : this.failure;
-    const refused = !this.closedBy && this.state() === "ERROR" && (this.refused || this.manualOnly);
+    // Tied to the held row, not to ERROR: a later local save writes
+    // LOCAL_DURABLE while the same row is still refused (review #811 c.6419592134).
+    const refused = !this.closedBy && this.owed > 0 && (this.refused || this.manualOnly);
     return { state: this.state(), failure, capacity: "ok", closedBy: this.closedBy, refused };
   }
 
@@ -212,6 +214,8 @@ export class EvidenceSession {
     this.seq = meta.localSeq;
     this.stored = restored;
     this.owed = contents.pending.length;
+    // A reload before the work opens still says the stored refusal.
+    this.refused = meta.refusedLocalSeq !== undefined;
     this.stopped = meta.evidenceStopped ?? null;
     this.profile = this.work?.evidenceProfileId ?? this.deps.storedProfile?.(meta) ?? null;
     if (this.work) this.runner = this.deps.createRunner(this.work);

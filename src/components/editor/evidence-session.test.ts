@@ -566,11 +566,38 @@ describe("3d-2c2 evidence session: the drain", () => {
         await session.settled();
         expect(session.snapshot().state).toBe("ERROR");
         expect(net.calls).toHaveLength(1);
+        expect(session.snapshot().refused).toBe(true);
+        // Review #811 (c.6419592134, 1): typing on saves LOCAL_DURABLE, the
+        // same row stays held, and the notice stays with it.
+        sheet.type("y");
+        await sheet.save();
+        advance(60_000);
+        await session.settled();
+        expect(session.snapshot().state).not.toBe("SYNCED");
+        expect(net.calls).toHaveLength(1);
       }
       expect(session.snapshot().refused).toBe(refused);
       session.close();
       await cleanup();
     }
+  });
+
+  // Review #811 (c.6419592134, 2): a reload before the work opens still says
+  // the stored refusal for good.
+  it("3d-2c2b: a reload without the open still says a stored refusal", async () => {
+    const net = server(R0, () => json(413, { status: "too_large" }));
+    const first = setup({ net });
+    await ready(first.session);
+    const sheet = editorFor(first.session);
+    sheet.type("x");
+    await sheet.save();
+    expect(first.session.snapshot().refused).toBe(true);
+    first.session.close();
+    const again = setup({ journal: first.journal, net, open: async () => ({ status: "unavailable" }) });
+    await ready(again.session);
+    expect(again.session.snapshot().refused).toBe(true);
+    expect(net.calls).toHaveLength(1);
+    again.session.close();
   });
 
   it("transport errors are retried on schedule with the same key and bytes", async () => {
