@@ -54,7 +54,7 @@ function Block({ node, ranges }: { node: DocumentNode; ranges: readonly TextRang
     if (segment.marks.includes("bold")) content = h("strong", null, content);
     return segment.marked ? h("mark", { key: i, className: styles.mark }, content) : h("span", { key: i }, content);
   });
-  if (node.type === "paragraph") return h("p", { "data-node-id": node.id }, ...children);
+  if (node.type === "paragraph" || node.type === "quote") return h("p", { "data-node-id": node.id }, ...children);
   if (node.type === "bulletItem") return h("li", { "data-node-id": node.id }, ...children);
   // The page has its own h1, so the work's levels 1 to 3 are h2 to h4.
   const heading = node.level === 1 ? "h2" : node.level === 2 ? "h3" : "h4";
@@ -107,9 +107,11 @@ export default function LiveText({ view, marks, heading, textRef, onSelect }: Li
   else if (view.document) {
     const block = (node: DocumentNode) =>
       h(Block, { key: node.id, node, ranges: marks.filter((r) => r.nodeId === node.id) });
-    // Consecutive bullet items are one list (E1).
+    // Consecutive bullet items are one list, quote paragraphs one block quote (E1).
     text = blockRuns(view.document.nodes).map((run) =>
-      run.kind === "list" ? h("ul", { key: run.items[0]!.id }, ...run.items.map(block)) : block(run.node));
+      run.kind === "list" ? h("ul", { key: run.items[0]!.id }, ...run.items.map(block))
+        : run.kind === "quote" ? h("blockquote", { key: run.items[0]!.id }, ...run.items.map(block))
+        : block(run.node));
   } else text = placeholder(view.empty ? t.empty : t.loading);
 
   return h(

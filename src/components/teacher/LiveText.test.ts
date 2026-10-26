@@ -87,6 +87,17 @@ describe("LiveText", () => {
     expect(html).toContain(`<li data-node-id="${B2}"><mark`);
   });
 
+  it("draws consecutive quote paragraphs as one block quote (E1)", () => {
+    const Q1 = "4d5e6f70-8192-4cad-9e2f-3a4b5c6d7e8f" as NodeId;
+    const Q2 = "5e6f7081-92a3-4dbe-8f30-4b5c6d7e8f90" as NodeId;
+    const quote = (id: NodeId, text: string) => ({ type: "quote", id, children: [{ type: "text", text, marks: [] }] });
+    const document = { ...DOC, nodes: [DOC.nodes[0], quote(Q1, "Prvi izmišljeni citat"), quote(Q2, "Drugi izmišljeni citat"), DOC.nodes[1]] } as CanonicalDocument;
+    const html = render({ view: { ...SHOWN, document }, marks: [] });
+    expect(html).toContain(`<blockquote><p data-node-id="${Q1}"><span>Prvi izmišljeni citat</span></p><p data-node-id="${Q2}">`);
+    expect(html.match(/<blockquote>/g)).toHaveLength(1);
+    expect(html.indexOf("</blockquote>")).toBeLessThan(html.indexOf(`<p data-node-id="${P1}">`));
+  });
+
   it.each<[string, LiveView, string]>([
     ["loading", { document: null, hash: null, empty: false, connection: "loading" }, t.loading],
     ["empty", { document: null, hash: null, empty: true, connection: "live" }, t.empty],

@@ -69,12 +69,12 @@ describe("createEditorExtensions", () => {
 });
 
 describe("NodeIdentity", () => {
-  it("adds the node id attribute to paragraph, heading and bullet item only", () => {
+  it("adds the node id attribute to paragraph, heading, bullet item and quote only", () => {
     const globals = NodeIdentity.config.addGlobalAttributes?.call(
       NodeIdentity as never,
     );
     expect(globals).toHaveLength(1);
-    expect(globals?.[0].types).toEqual(["paragraph", "heading", "bulletItem"]);
+    expect(globals?.[0].types).toEqual(["paragraph", "heading", "bulletItem", "quote"]);
     expect(Object.keys(globals?.[0].attributes ?? {})).toEqual([NODE_ID_ATTRIBUTE]);
   });
 
