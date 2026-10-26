@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { signInHref, signInTarget } from "./sign-in-link";
+import { signedInRedirect, signInHref, signInTarget } from "./sign-in-link";
 
 describe("signInTarget", () => {
   // DAN-325: "/" sends the signed-in person on by role, never to /rad for all.
@@ -39,5 +39,20 @@ describe("signInHref", () => {
     expect(signInHref("/")).toBe("/api/auth/login?returnTo=%2F");
     expect(signInHref("/rad")).toBe("/api/auth/login?returnTo=%2Frad");
     expect(signInHref("/upis?kod=AB12")).toBe("/api/auth/login?returnTo=%2Fupis%3Fkod%3DAB12");
+  });
+});
+
+// F-151 part 1 (DAN-342): /prijava decides by the cookie's shape alone.
+describe("signedInRedirect", () => {
+  it("sends a session-shaped cookie on to the home page, which makes the one read", () => {
+    for (const token of ["A".repeat(43), "z_-9".repeat(10) + "abc"]) {
+      expect(signedInRedirect(token)).toBe("/");
+    }
+  });
+
+  it("keeps the sign-in screen without a cookie or with a malformed one", () => {
+    for (const token of [undefined, "", "kratko", `${"A".repeat(43)}!`, "A".repeat(44)]) {
+      expect(signedInRedirect(token)).toBeNull();
+    }
   });
 });
