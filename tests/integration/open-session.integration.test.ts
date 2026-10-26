@@ -58,6 +58,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await Promise.all(pools.map((pool) => pool.end()));
+  await admin.query("DELETE FROM identity.person_name WHERE institution_id = $1", [institution]);
   await admin.query(
     "DELETE FROM identity.session WHERE user_id IN (SELECT id FROM identity.user_account WHERE institution_id = $1)",
     [institution],
@@ -106,6 +107,26 @@ describe("openSession over a ductus_auth login", () => {
     const hash = tokenHash();
     expect((await openSession(input({ tokenHash: hash }))).ok).toBe(true);
     expect(await openSession(input({ tokenHash: hash }))).toEqual({ ok: false, reason: "conflict" });
+  });
+
+  it("stores both names at login, replaces them at the next and removes them without both (#757)", async () => {
+    const openSession = createOpenSession(loginPool(AUTH_LOGIN));
+    const who = { subject: "sub-it-3", uniqueId: `mia@${homeOrg}` };
+    const nameOf = async () =>
+      (
+        await admin.query(
+          `SELECT n.given_name, n.family_name FROM identity.person_name n
+             JOIN identity.user_account u ON u.id = n.user_id AND u.institution_id = n.institution_id
+            WHERE u.hr_edu_person_unique_id = $1`,
+          [who.uniqueId],
+        )
+      ).rows;
+    expect((await openSession(input({ ...who, givenName: "Mia", familyName: "Primjerić" }))).ok).toBe(true);
+    expect(await nameOf()).toEqual([{ given_name: "Mia", family_name: "Primjerić" }]);
+    expect((await openSession(input({ ...who, givenName: "Mia", familyName: "Novak-Test" }))).ok).toBe(true);
+    expect(await nameOf()).toEqual([{ given_name: "Mia", family_name: "Novak-Test" }]);
+    expect((await openSession(input(who))).ok).toBe(true);
+    expect(await nameOf()).toEqual([]);
   });
 
   it("does not run over a ductus_app login or the admin login", async () => {

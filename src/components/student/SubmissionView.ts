@@ -15,6 +15,7 @@ import { createElement as h, type ReactNode } from "react";
 
 import type { SubmitOutcome } from "@/client/submission";
 import type { SummaryOutcome } from "@/client/process-summary";
+import { blockRuns } from "@/components/shell/manuscript-blocks";
 import { zagrebParts } from "@/components/summary/zagreb-time";
 import { SummaryCardBody } from "@/components/teacher/SummaryCard";
 import type { CanonicalDocument, DocumentNode } from "@/domain/document";
@@ -55,7 +56,8 @@ function Block(node: DocumentNode, index: number): ReactNode {
     if (child.marks.includes("bold")) content = h("strong", null, content);
     return h("span", { key: i }, content);
   });
-  if (node.type === "paragraph") return h("p", { key: index }, ...children);
+  if (node.type === "paragraph" || node.type === "quote") return h("p", { key: index }, ...children);
+  if (node.type === "bulletItem") return h("li", { key: index }, ...children);
   // The page has its own h1, so the work's levels 1 to 3 are h2 to h4.
   const tag = node.level === 1 ? "h2" : node.level === 2 ? "h3" : "h4";
   return h(tag, { key: index }, ...children);
@@ -180,7 +182,10 @@ export function SubmissionView({ state, handlers, offline = false }: {
         h(
           "div",
           { className: "manuscript", role: "document", "aria-label": t.textLabel },
-          ...state.document.nodes.map(Block),
+          // Consecutive bullet items are one list, quote paragraphs one block quote (E1).
+          ...blockRuns(state.document.nodes).map((run, i) =>
+            run.kind === "block" ? Block(run.node, i)
+              : h(run.kind === "list" ? "ul" : "blockquote", { key: i }, ...run.items.map(Block))),
         ),
       ),
       refusal ? h("p", { id: OUTCOME_ID, tabIndex: -1, role: "alert" }, refusal) : null,

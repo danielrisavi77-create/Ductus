@@ -8,6 +8,7 @@ import pg from "pg";
 
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { fillCodeDeadline, signIn } from "./support";
+import { localAdminUrl } from "./local-db-url";
 
 // Z3 (A), "Moji kolegiji" at /nastavnik (#476 6289158306). The list comes from
 // the same read as GET /api/teacher/courses; the teacher role comes from the
@@ -18,14 +19,12 @@ const t = messagesHr.teacherCourses;
 const run = promisify(execFile);
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const TEACHER_ID = "demo-teacher@demo.ductus.test";
-const ADMIN_DATABASE_URL =
-  process.env.E2E_ADMIN_DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
 const ACTIVE_ROLE = `FROM institution.institution_role r JOIN identity.user_account u ON u.id = r.user_id
   WHERE u.hr_edu_person_unique_id = $1 AND r.role = 'teacher' AND r.revoked_at IS NULL`;
 let roleGrantedByThisTest = false;
 
 async function withAdmin<T>(work: (client: pg.Client) => Promise<T>): Promise<T> {
-  const client = new pg.Client({ connectionString: ADMIN_DATABASE_URL });
+  const client = new pg.Client({ connectionString: localAdminUrl() });
   await client.connect();
   try {
     return await work(client);
