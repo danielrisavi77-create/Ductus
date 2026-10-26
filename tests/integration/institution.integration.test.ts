@@ -175,6 +175,8 @@ afterAll(async () => {
     );
     // DAN-292: the audit rows of replaced and revoked codes are append-only too.
     await cleaner.query("DELETE FROM audit.enrollment_code_event WHERE institution_id = ANY ($1)", [institutions]);
+    // DAN-338: so are the rows of removals and allowed returns.
+    await cleaner.query("DELETE FROM audit.course_member_event WHERE institution_id = ANY ($1)", [institutions]);
     await cleaner.query("COMMIT");
   } finally {
     await cleaner.end();
