@@ -26,8 +26,11 @@ const ACCEPTANCE = "FUNCTION app.commit_evidence_segment(";
 
 /** The one definition of `name` in `text`, from CREATE to the closing `$$;`. */
 function definitionOf(text: string, name: string): string {
-  const pattern = new RegExp(`CREATE (OR REPLACE )?${name.replace(/[.()]/g, "\\$&")}`, "g");
-  const starts = [...text.matchAll(pattern)].map((match) => match.index ?? -1);
+  const starts = [`CREATE ${name}`, `CREATE OR REPLACE ${name}`].flatMap((header) => {
+    const found: number[] = [];
+    for (let at = text.indexOf(header); at >= 0; at = text.indexOf(header, at + 1)) found.push(at);
+    return found;
+  });
   expect(starts).toHaveLength(1);
   const end = text.indexOf("\n$$;", starts[0]);
   expect(end).toBeGreaterThan(starts[0]);
