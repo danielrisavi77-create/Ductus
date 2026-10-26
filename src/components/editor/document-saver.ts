@@ -64,13 +64,15 @@ export function createDocumentSaver(input: {
   journal: AtomicDexieJournal;
   documentId: string;
   assignmentId: string | null;
+  /** Whether this tab's sign-in is still the browser's (F-154); asked before each evidence request. */
+  current: () => boolean;
   fetchImpl?: FetchLike;
   source?: OnlineSource;
 }): { saver: DocumentSaver; evidence: EvidenceSession | null } {
-  const { journal, documentId, assignmentId } = input;
+  const { journal, documentId, assignmentId, current } = input;
   if (!assignmentId) return { saver: new LocalDocumentSaver(journal, documentId), evidence: null };
   const evidence = new EvidenceSession(browserEvidenceSessionDeps({
-    journal, documentId, assignmentId,
+    journal, documentId, assignmentId, current,
     ...(input.fetchImpl ? { fetchImpl: input.fetchImpl } : {}),
     ...(input.source ? { source: input.source } : {}),
   }));
