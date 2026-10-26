@@ -269,18 +269,32 @@ function watchCommits(page: Page) {
   return { all: () => Promise.all(commits), stop: () => page.off("request", onRequest) };
 }
 
-/** In the page: every state the sync chip takes, so that a flash between two checks is not missed. */
+type ChipRecord = { chipStates: string[]; chipBefore?: string | null };
+const CHIP = ".workspace__status .sync-chip";
+
+/**
+ * In the page: every state the sync chip changes to, so that a flash between
+ * two checks is not missed. A state is noted only when it differs from the
+ * one before it, so the state the chip already had at the last reset is not
+ * noted again by the next unrelated DOM change.
+ */
 function recordChipStates() {
-  const states: string[] = [];
-  (window as unknown as { chipStates: string[] }).chipStates = states;
+  const record = window as unknown as ChipRecord;
+  record.chipStates = [];
   const note = () => {
     const state = document.querySelector(".workspace__status .sync-chip")?.getAttribute("data-state");
-    if (state && states.at(-1) !== state) states.push(state);
+    const before = record.chipStates.at(-1) ?? record.chipBefore;
+    if (state && before !== state) record.chipStates.push(state);
   };
   new MutationObserver(note).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-state"] });
 }
-/** The chip's states since the last call (or the page load), then forgets them. */
-const chipStates = (page: Page) => page.evaluate(() => (window as unknown as { chipStates: string[] }).chipStates.splice(0));
+/** The chip's states since the last call (or the page load), then forgets them and keeps the current one as the baseline. */
+const chipStates = (page: Page) => page.evaluate((chip) => {
+  const record = window as unknown as ChipRecord;
+  const seen = record.chipStates.splice(0);
+  record.chipBefore = document.querySelector(chip)?.getAttribute("data-state");
+  return seen;
+}, CHIP);
 
 /**
  * The server holds exactly the journal's text: the last answered commit's
