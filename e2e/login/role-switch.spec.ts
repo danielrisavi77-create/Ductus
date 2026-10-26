@@ -5,7 +5,7 @@ import type { NodeId } from "../../src/domain/document";
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import { closeWork, openWorkOf, seedWork } from "./work-seed";
 import { post } from "./comment-seed";
-import { clickSignOut, signIn, signOutWithoutDialog, type DemoAccount } from "./support";
+import { editorMounted, SAVED_HERE, signIn, signOutHoweverHeld, signOutWithoutDialog, type DemoAccount } from "./support";
 
 // F-086 and F-088 (#476 contract 6383859615): one browser, one person after
 // another. Nothing the previous sign-in held in the page, its text, its undo
@@ -43,9 +43,11 @@ async function signInAgain(page: Page, account: DemoAccount, path = "/rad"): Pro
 
 async function writeAndWait(page: Page, text: string): Promise<void> {
   await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: 30_000 });
+  // The first opening refreshes the render into a freshly mounted editor (#731).
+  await editorMounted(page);
   await editorOf(page).click();
   await page.keyboard.type(text);
-  await expect(chipOf(page)).toHaveAttribute("data-state", "LOCAL_DURABLE");
+  await expect(chipOf(page)).toHaveAttribute("data-state", SAVED_HERE);
 }
 
 /**
@@ -89,7 +91,8 @@ test("student, teacher, student in one browser: no text, undo, comment or reply 
   await page.reload();
   await firstCard(page).getByRole("textbox", { name: t.comments.replyLabel }).fill(DRAFT_REPLY, { timeout: 30_000 });
   await snapshot(page, "1-studentica-pise");
-  await clickSignOut(page);
+  // The dialog opens only while the evidence still waits for its receipt (3d-2c2b).
+  await signOutHoweverHeld(page);
   await page.waitForURL("http://localhost:3000/");
 
   await signInAgain(page, "Demo nastavnik");
