@@ -599,6 +599,33 @@ test.describe("local editor (#197)", () => {
     expect(await storedIds(page, null)).toEqual(grown);
   });
 
+  // Found in E1 (#823): "# " on an empty line gave the block a new id, which
+  // the evidence recorder cannot carry (src/editor/block-marker.ts).
+  test("'## ' on an empty line makes a heading that keeps the line's id; Backspace gives the paragraph back", async ({ page }) => {
+    await openEditor(page);
+    await typeInto(page, "Uvod");
+    await page.keyboard.press("Enter");
+    const [, line] = await blockIds(page);
+    expect(line).toMatch(NODE_ID);
+    await page.keyboard.type("## ");
+    await expect(editorOf(page).locator(":scope > h2")).toHaveAttribute("data-node-id", line!);
+    await expect(editorOf(page).locator(":scope > h2")).toHaveText("");
+    await page.keyboard.press("Backspace");
+    await expect(editorOf(page).locator(":scope > h2")).toHaveCount(0);
+    await expect(editorOf(page).locator(":scope > p").nth(1)).toHaveAttribute("data-node-id", line!);
+    await page.keyboard.type("# Okvir");
+    await expect(editorOf(page).locator(":scope > h1")).toHaveText("Okvir");
+    await expect(editorOf(page).locator(":scope > h1")).toHaveAttribute("data-node-id", line!);
+    // Tiptap's own heading keys stay.
+    await page.keyboard.press("ControlOrMeta+Alt+3");
+    await expect(editorOf(page).locator(":scope > h3")).toHaveAttribute("data-node-id", line!);
+    await page.keyboard.press("ControlOrMeta+Alt+1");
+    await journalled(page);
+    await page.reload();
+    await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+    await expect(editorOf(page).locator(":scope > h1")).toHaveAttribute("data-node-id", line!);
+  });
+
   test("stored text the editor would change on entry is refused, never shown as loaded", async ({ page }) => {
     await openEditor(page);
     await typeInto(page, "Izmišljeni odlomak");
