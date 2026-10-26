@@ -19,6 +19,7 @@ import {
   isHeadingLevel,
   isMark,
   isNodeId,
+  isPlainBlockType,
   newNodeId,
   normalizeDocument,
   validateDocument,
@@ -283,7 +284,8 @@ function projectBlock(
     return null;
   }
 
-  if (raw.type !== "paragraph" && raw.type !== "heading") {
+  const type = raw.type;
+  if (type !== "heading" && !isPlainBlockType(type)) {
     errors.push({ path: `${path}.type`, code: "TIPTAP_UNKNOWN_NODE_TYPE" });
     return null;
   }
@@ -301,7 +303,7 @@ function projectBlock(
 
   let level: HeadingLevel = 1;
   let levelOk = true;
-  if (raw.type === "heading") {
+  if (type === "heading") {
     if (!isHeadingLevel(attrs.level)) {
       errors.push({ path: `${path}.attrs.level`, code: "TIPTAP_HEADING_LEVEL_INVALID" });
       levelOk = false;
@@ -328,9 +330,9 @@ function projectBlock(
     return null;
   }
 
-  return raw.type === "heading"
+  return type === "heading"
     ? { type: "heading", id, level, children }
-    : { type: "paragraph", id, children };
+    : { type, id, children };
 }
 
 function project(json: unknown, idFor: IdFactory): Projection | InteropError[] {
