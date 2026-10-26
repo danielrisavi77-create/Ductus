@@ -79,6 +79,8 @@ export default function TeacherCourses({ courses, works = {} }: {
                   `${t.due} ${dueHr(assignment.dueAt)}`),
                 h("span", { className: styles.count },
                   countHr(assignment.enrolledStudents, t.students.one, t.students.few, t.students.many)),
+                h(Link, { className: styles.open, href: `/nastavnik/brz-put?zadatak=${encodeURIComponent(assignment.id)}`, prefetch: false },
+                  messagesHr.shell.nav.fastPath),
                 h(Works, { works: works[assignment.id] })))))),
     h("p", { className: styles.note }, t.countNote));
 }
