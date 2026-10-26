@@ -30,7 +30,7 @@ async function openEditor(page: Page, width: number): Promise<void> {
 test.describe("toolbar menus, wide (1440 px)", () => {
   test("every tool fits, so there is no Više; Prikaz is a menu button", async ({ page }) => {
     await openEditor(page, 1440);
-    for (const name of ["Odlomak", "Naslov 1", "Naslov 2", "Naslov 3", "Podebljano", "Kurziv", "Popis", "Poništi", "Ponovi"]) {
+    for (const name of ["Odlomak", "Naslov 1", "Naslov 2", "Naslov 3", "Podebljano", "Kurziv", "Popis", "Blok-citat", "Poništi", "Ponovi"]) {
       await expect(tool(page, name)).toBeVisible();
     }
     await expect(moreButton(page)).toHaveCount(0);
@@ -106,9 +106,9 @@ test.describe("toolbar menus, wide (1440 px)", () => {
 });
 
 test.describe("toolbar menus, phone (390 px)", () => {
-  test("the headings, then the list (E1), move into Više, in toolbar order; the other tools stay", async ({ page }) => {
+  test("the headings, then the block quote and the list (E1), move into Više, in toolbar order; the other tools stay", async ({ page }) => {
     await openEditor(page, 390);
-    for (const name of ["Naslov 1", "Naslov 2", "Naslov 3", "Popis"]) await expect(tool(page, name)).toHaveCount(0);
+    for (const name of ["Naslov 1", "Naslov 2", "Naslov 3", "Popis", "Blok-citat"]) await expect(tool(page, name)).toHaveCount(0);
     for (const name of ["Odlomak", "Podebljano", "Kurziv", "Poništi", "Ponovi"]) await expect(tool(page, name)).toBeVisible();
     // One row: the toolbar no longer wraps.
     const tops = await toolbarOf(page).locator("[data-roving]").evaluateAll(
@@ -118,7 +118,7 @@ test.describe("toolbar menus, phone (390 px)", () => {
 
     await expect(moreButton(page)).toHaveAttribute("aria-haspopup", "menu");
     await moreButton(page).click();
-    await expect(moreMenu(page).getByRole("menuitemcheckbox")).toHaveText([/Naslov 1/, /Naslov 2/, /Naslov 3/, /Popis/]);
+    await expect(moreMenu(page).getByRole("menuitemcheckbox")).toHaveText([/Naslov 1/, /Naslov 2/, /Naslov 3/, /Popis/, /Blok-citat/]);
   });
 
   test("Više by mouse runs the same command as the button: a heading, listed and checked", async ({ page }) => {
@@ -144,8 +144,8 @@ test.describe("toolbar menus, phone (390 px)", () => {
     await page.keyboard.press("ArrowDown");
     await expect(heading(page, "Naslov 1")).toBeFocused();
     await page.keyboard.press("ArrowUp");
-    // The last item: the list, after the headings (E1).
-    await expect(heading(page, "Popis")).toBeFocused();
+    // The last item: the block quote, after the headings and the list (E1).
+    await expect(heading(page, "Blok-citat")).toBeFocused();
     await page.keyboard.press("Escape");
     await expect(moreMenu(page)).toHaveCount(0);
     await expect(moreButton(page)).toBeFocused();

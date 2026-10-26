@@ -157,7 +157,7 @@ test("scope bootstrap and non-PR events select full without running PR code", (t
 test("required stack accepts only both full successes or both trusted docs skips", () => {
   const stack = job("stack");
   assert.match(stack, /^ {4}name: Local stack \(compose.yaml\)$/m);
-  assert.match(stack, /^ {4}needs: \[scope, stack-e2e, stack-login, stack-e2e-results\]$/m);
+  assert.match(stack, /^ {4}needs: \[scope, stack-e2e, stack-login, stack-e2e-results, stack-login-results\]$/m);
   assert.match(stack, /^ {4}if: always\(\)$/m);
   assert.doesNotMatch(stack, /continue-on-error|uses:|pnpm |git /);
   const guard = step(stack, "Validate stack results");
@@ -167,6 +167,7 @@ test("required stack accepts only both full successes or both trusted docs skips
   assert.match(guard, /E2E_RESULT: \$\{\{ needs.stack-e2e.result \}\}/);
   assert.match(guard, /LOGIN_RESULT: \$\{\{ needs.stack-login.result \}\}/);
   assert.match(guard, /EVIDENCE_RESULT: \$\{\{ needs.stack-e2e-results.result \}\}/);
+  assert.match(guard, /LOGIN_EVIDENCE_RESULT: \$\{\{ needs.stack-login-results.result \}\}/);
   const script = shell(guard);
   const cases = [
     [true, "success", "full", "success", "success"],
@@ -191,13 +192,19 @@ test("required stack accepts only both full successes or both trusted docs skips
   for (const result of ["failure", "cancelled", "success", ""]) {
     cases.push([false, "success", "docs", "skipped", "skipped", result]);
   }
-  for (const [ok, result, profile, e2e, login, evidence = profile === "docs" ? "skipped" : "success"] of cases) {
+  for (const result of ["failure", "cancelled", "skipped", ""]) {
+    cases.push([false, "success", "full", "success", "success", "success", result]);
+  }
+  for (const result of ["failure", "cancelled", "success", ""]) {
+    cases.push([false, "success", "docs", "skipped", "skipped", "skipped", result]);
+  }
+  for (const [ok, result, profile, e2e, login, evidence = profile === "docs" ? "skipped" : "success", loginEvidence = profile === "docs" ? "skipped" : "success"] of cases) {
     const run = spawnSync("bash", ["-e", "-c", script], { encoding: "utf8", env: {
       ...process.env, SCOPE_RESULT: result, PROFILE: profile, E2E_RESULT: e2e,
-      LOGIN_RESULT: login, EVIDENCE_RESULT: evidence,
+      LOGIN_RESULT: login, EVIDENCE_RESULT: evidence, LOGIN_EVIDENCE_RESULT: loginEvidence,
       GITHUB_STEP_SUMMARY: process.platform === "win32" ? "NUL" : "/dev/null",
     } });
-    assert.equal(run.status === 0, ok, `${result}/${profile}/${e2e}/${login}: ${run.stderr}`);
+    assert.equal(run.status === 0, ok, `${result}/${profile}/${e2e}/${login}/${evidence}/${loginEvidence}: ${run.stderr}`);
   }
   const reject = step(stack, "Reject cancelled stack");
   assert.match(reject, /^ {8}if: cancelled\(\)$/m);
