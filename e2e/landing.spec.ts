@@ -16,6 +16,30 @@ test.describe("public home page", () => {
     await expect(page.getByText(t.landing.aaiOnly)).toBeVisible();
   });
 
+  test("the try-out block mirrors what the visitor types into the mentor's read-only view", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { level: 2, name: t.landing.wow.sidesTitle })).toBeVisible();
+    const student = page.getByRole("textbox", { name: t.landing.wow.editorLabel });
+    const mentor = page.getByRole("textbox", { name: t.landing.wow.mentorLabel });
+    await expect(mentor).toHaveAttribute("aria-readonly", "true");
+    await student.click();
+    await page.keyboard.press("End");
+    await page.keyboard.type(" Dodana rečenica.");
+    await expect(mentor).toContainText("Dodana rečenica.");
+  });
+
+  test("the replay block scrubs an invented paragraph step by step", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { level: 2, name: t.landing.replay.title })).toBeVisible();
+    const slider = page.getByRole("slider", { name: t.landing.replay.sliderLabel });
+    await slider.fill("0");
+    await expect(page.getByText(t.landing.replay.empty)).toBeVisible();
+    await slider.fill("1");
+    await expect(page.getByText("Gradovi", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: t.landing.replay.play }).click();
+    await expect(page.getByRole("button", { name: t.landing.replay.pause })).toBeVisible();
+  });
+
   test("every way in is a plain link to /prijava", async ({ page }) => {
     await page.goto("/");
     const entries = page.getByRole("link", { name: new RegExp(`^(${t.auth.signIn}|${t.landing.enter})$`) });
@@ -64,7 +88,7 @@ test.describe("public home page", () => {
       await page.goto("/");
       if (sheet === "light") {
         await page.getByRole("button", { name: t.workspace.sheetThemeLight }).click();
-        await expect(page.locator("article.sheet")).toHaveAttribute("data-sheet-theme", "light");
+        await expect(page.locator("article.sheet").first()).toHaveAttribute("data-sheet-theme", "light");
       }
       const results = await new AxeBuilder({ page })
         .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
