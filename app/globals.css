@@ -58,8 +58,8 @@
   --cmt-bg: #e9c58b26;
   --warn-soft: #3a2f22;
   --synced-soft: #24303a;
-  --radius: 14px;
-  --radius-sm: 8px;
+  --radius: 6px;
+  --radius-sm: 4px;
   --shadow: 0 22px 80px #0003;
   --lift: 0 1px 1px #0007, 0 12px 34px -10px #000a;
   --ff-ui: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
