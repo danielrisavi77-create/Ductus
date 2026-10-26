@@ -11,13 +11,17 @@
 // the signer adapter itself, so the registry holds what the signer signs
 // with. psql runs as the compose superuser inside the postgres container, as
 // for the other db/local scripts; DUCTUS_PSQL_CONTAINER names another local
-// container instead (a private test database). Prints only public values.
+// container instead (a private test database), and an importing caller may
+// pass a native psql target on the local socket (psql-target.mjs). Prints
+// only public values.
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+
+import { dockerExecArgs, nativePsqlTarget } from "./psql-target.mjs";
 
 import {
   DEV_SIGNING_KEY_FILE,
@@ -28,33 +32,33 @@ import {
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const SQL_FILE = fileURLToPath(new URL("./evidence-signing-key.sql", import.meta.url));
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const CONTAINER = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/;
 
-/** The docker invocation; every value travels as one argv element, never through a shell. */
-export function registrationInvocation(env, slug, key) {
-  const container = env.DUCTUS_PSQL_CONTAINER;
-  if (container !== undefined && !CONTAINER.test(container)) throw new Error("DUCTUS_PSQL_CONTAINER is not a container name");
-  const target = container ? ["exec", "-i", container] : ["compose", "exec", "-T", "postgres"];
+/** The psql invocation (docker, or the native target); every value travels as one argv element, never through a shell. */
+export function registrationInvocation(env, slug, key, psql) {
   const vars = { institution_slug: slug, key_id: key.keyId, key_version: key.keyVersion, key_base64url: key.keyBase64Url };
-  return [
-    ...target,
-    "psql", "-U", "ductus", "-d", "ductus", "-q", "-t", "-A", "-v", "ON_ERROR_STOP=1",
+  const options = [
+    "-q", "-t", "-A", "-v", "ON_ERROR_STOP=1",
     ...Object.entries(vars).flatMap(([name, value]) => ["-v", `${name}=${value}`]),
   ];
+  if (psql !== undefined) {
+    const native = nativePsqlTarget(psql, env);
+    return { command: native.command, args: [...native.args, "-X", ...options], env: native.env };
+  }
+  return { command: "docker", args: [...dockerExecArgs(env), "psql", "-U", "ductus", "-d", "ductus", ...options] };
 }
 
-function runPsql(args) {
+function runPsql({ command, args, env }) {
   return new Promise((resolve, reject) => {
-    const child = spawn("docker", args, { cwd: ROOT, stdio: ["pipe", "pipe", "inherit"], windowsHide: true });
+    const child = spawn(command, args, { cwd: ROOT, env, stdio: ["pipe", "pipe", "inherit"], windowsHide: true });
     let out = "";
     child.stdout.on("data", (chunk) => (out += chunk));
-    child.once("error", () => reject(new Error("could not start docker")));
+    child.once("error", () => reject(new Error("could not start psql")));
     child.once("exit", (code) => (code === 0 ? resolve(out.trim()) : reject(new Error("registration failed"))));
     createReadStream(SQL_FILE).pipe(child.stdin);
   });
 }
 
-export async function main(env = process.env, argv = process.argv.slice(2)) {
+export async function main(env = process.env, argv = process.argv.slice(2), psql = undefined) {
   if (env.NODE_ENV === "production") throw new Error("the development signing key is refused in production");
   // Nothing, or exactly `--institution <slug>`: any other argument is refused, never ignored.
   if (!(argv.length === 0 || (argv.length === 2 && argv[0] === "--institution"))) {
@@ -62,6 +66,8 @@ export async function main(env = process.env, argv = process.argv.slice(2)) {
   }
   const slug = argv.length === 0 ? "demo-fakultet" : argv[1];
   if (typeof slug !== "string" || slug.length > 64 || !SLUG.test(slug)) throw new Error("--institution needs a slug");
+  // A native target is judged before the seed is made, so a refused one writes nothing.
+  if (psql !== undefined) nativePsqlTarget(psql, env);
 
   // The signer judges the path (set, absolute, outside the repository) before
   // anything is written, so a bad path makes no file.
@@ -80,7 +86,7 @@ export async function main(env = process.env, argv = process.argv.slice(2)) {
     });
   }
   const key = await signer.publicVerificationKey();
-  const evidenceDomainId = await runPsql(registrationInvocation(env, slug, key));
+  const evidenceDomainId = await runPsql(registrationInvocation(env, slug, key, psql));
   return { evidenceDomainId, keyId: key.keyId, keyVersion: key.keyVersion };
 }
 
