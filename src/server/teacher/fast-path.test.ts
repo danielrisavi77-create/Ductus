@@ -269,6 +269,16 @@ describe("readFastPath (B-11c, #757 D1 and D5)", () => {
     expect(lines).toStrictEqual([["fast path read failed", "row_malformed"]]);
   });
 
+  it("counts a name in code points, as login and the database do (F-149)", async () => {
+    // 255 characters outside the BMP are 510 UTF-16 units; login and length() accept them.
+    const long = "\u{1D400}".repeat(255);
+    const read = (givenName: string) => readFastPath(VESNA, ASSIGNMENT, database([pending(1, { given_name: givenName, family_name: "Testić" })]).withActor, {
+      payloads: STORAGE_NOT_CONFIGURED, thresholds: THRESHOLDS, log: () => {},
+    });
+    expect(await read(long)).toMatchObject({ kind: "ok", students: [{ givenName: long, surname: "Testić" }] });
+    expect(await read(`${long}\u{1D400}`)).toStrictEqual({ kind: "unavailable" });
+  });
+
   it("gives unavailable for a text that is not the exact JCS of a document", async () => {
     const { lines, log } = logger();
     const body = JSON.stringify(JSON.parse(BODY), null, 1);
