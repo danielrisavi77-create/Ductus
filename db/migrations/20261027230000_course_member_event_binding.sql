@@ -8,6 +8,9 @@
 -- migrate:up
 
 SET LOCAL ROLE ductus_migrator;
+-- The unique key below creates an index in the schema; only while this
+-- migration runs, revoked at the end.
+GRANT CREATE ON SCHEMA institution TO ductus_identity;
 SET LOCAL ROLE ductus_identity;
 
 -- The target of the composite key. id alone is already unique; this adds no
@@ -23,6 +26,8 @@ ALTER TABLE audit.course_member_event
     REFERENCES institution.course_member (id, course_id, user_id, institution_id);
 
 RESET ROLE;
+SET LOCAL ROLE ductus_migrator;
+REVOKE CREATE ON SCHEMA institution FROM ductus_identity;
 
 -- migrate:down
 SET LOCAL ROLE ductus_migrator;
