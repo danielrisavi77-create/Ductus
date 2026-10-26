@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import homeStyles from "@/components/home/Home.module.css";
 import { homeDate } from "@/components/home/home-date";
@@ -12,13 +13,16 @@ import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { sessionTag } from "@/server/auth/principal";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
+import { homeTarget } from "@/server/institution/home-target";
 
 export const runtime = "nodejs";
 
 export default async function HomePage() {
-  // Convenience only, not a safeguard: a person with a session is pointed at
-  // the workspace. The login route stays reachable, and a sign-in that
-  // replaces the cookie ends the earlier session's tabs (SessionObserver).
+  // Convenience only, not a safeguard: a person with an open session goes to
+  // their own page by the role the database knows (DAN-325), which is also
+  // where the sign-in returns by default. The login route stays reachable,
+  // and a sign-in that replaces the cookie ends the earlier session's tabs
+  // (SessionObserver).
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
   // Without a session cookie the public home page (FE-H1, #476).
   if (token === undefined) {
@@ -29,7 +33,10 @@ export default async function HomePage() {
       </>
     );
   }
-  // With one, the signed-in home inside the shell (#802 part B). The shell
+  const home = await homeTarget(token, withActor);
+  if (home.kind === "page") redirect(home.path);
+  // A closed session, or one the database cannot answer for, guesses no
+  // role and stays on the signed-in home inside the shell (#802 part B). The shell
   // shows no role here; its sign-out reads the journal under the scope. A
   // cookie whose session is closed or could not be read has no scope, so
   // it gets the plain sign-out that only ends the cookie.

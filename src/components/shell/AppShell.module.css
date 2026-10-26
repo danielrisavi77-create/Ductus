@@ -55,6 +55,7 @@
 .space {
   margin: 6px 0 10px;
   padding: 0 12px;
+  font-family: var(--ff-mono);
   font-size: 12px;
   letter-spacing: 0.13em;
   text-transform: uppercase;
@@ -85,9 +86,11 @@
   color: var(--ink);
 }
 
+/* Archivum: the open item also carries a copper bar, so colour is not the only mark. */
 .navItem[aria-current="page"] {
   background: var(--accent-soft);
   color: var(--accent);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .bottom {

@@ -86,6 +86,9 @@ test("publishing stops at Odjava, starts again on Ostani, and nothing goes out a
   await page.route((url) => LIVE.test(url.pathname), (route) => route.request().method() === "PUT"
     ? route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ outcome: "accepted", token: TOKEN }) })
     : route.fallback());
+  // The evidence never gets its receipt here (3d-2c2b), so the text stays owed
+  // and "Odjava" opens the dialog; a confirmed work would sign out at once (O1).
+  await page.route("**/api/evidence/commit", (route) => route.abort());
   const puts = recordPuts(page);
   await signIn(page, "/rad");
   const assignment = await seedWork();

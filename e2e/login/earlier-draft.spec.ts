@@ -5,7 +5,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { closeWork, seedWork } from "./work-seed";
-import { clickSignOut, signIn } from "./support";
+import { clickSignOut, SAVED_HERE, signIn } from "./support";
 
 // #711 F1b (contract 6391402093 §4 and §8 tests 11 and 12; owner decisions O2
 // and O3): the free draft of this device is offered on the student's own work
@@ -71,7 +71,8 @@ test("F1b: an earlier draft is offered as text to copy and stays on the device",
   await editorOf(page).click();
   await page.keyboard.press("ControlOrMeta+v");
   await expect(editorOf(page)).toHaveText(EARLIER);
-  await expect(chipOf(page)).toHaveAttribute("data-state", "LOCAL_DURABLE");
+  // Saved on the device, and with the evidence session also sent (3d-2c2b).
+  await expect(chipOf(page)).toHaveAttribute("data-state", SAVED_HERE);
 
   // The earlier draft is where it was, whole.
   await offer.getByRole("link", { name: t.earlierDraftOpen }).click();

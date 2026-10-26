@@ -6,7 +6,47 @@ import { browserMarkStore, hasEnded, type MarkStore, type SessionMark } from "./
 /** A read blocked by another tab's deletion must not hold the sign-out (D-118). */
 export const LOGOUT_HOLD_LIMIT_MS = 2_000;
 
-export type HoldRead = LogoutHold | "noStorage" | "unknown" | "ended";
+/**
+ * How long "Odjava" waits for this tab to finish loading its journal (#874).
+ * Past it the count stays unknown and the dialog still offers "Odjavi se",
+ * so a load that never ends cannot hold the sign-out (D-118, I1).
+ */
+export const LOGOUT_LOAD_LIMIT_MS = 10_000;
+
+/**
+ * Resolves once `loading()` is false, checked again on every `wake` the
+ * subscription gives, or once the limit has passed. A click made while the
+ * journal is still being read is decided on what the journal holds, not on
+ * an unread journal (#874).
+ */
+export function untilLoaded(
+  loading: () => boolean,
+  subscribe: (wake: () => void) => () => void,
+  limitMs = LOGOUT_LOAD_LIMIT_MS,
+): Promise<void> {
+  if (!loading()) return Promise.resolve();
+  return new Promise<void>((resolve) => {
+    let unsubscribe: (() => void) | null = null;
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      unsubscribe?.();
+      resolve();
+    };
+    const timer = setTimeout(done, limitMs);
+    const stop = subscribe(() => {
+      if (!loading()) done();
+    });
+    if (settled) stop();
+    else unsubscribe = stop;
+    // Loading may have ended between the first check and the subscription.
+    if (!loading()) done();
+  });
+}
+
+export type HoldRead =LogoutHold | "noStorage" | "unknown" | "ended";
 
 export type HoldReadOptions = {
   timeoutMs?: number;

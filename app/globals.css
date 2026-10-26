@@ -1,52 +1,53 @@
 /*
- * Ductus design tokens. Values from the visual system of design v3
- * (docs/design/ductura/DIZAJN-V3.md, owner decision of 21 Oct 2026 on #476,
- * replacing D-123 in look); the names are D-123's and the structure D-115's.
+ * Ductus design tokens. Values from Archivum V3 (burgundy and copper, owner
+ * decision of 26 Oct 2026, replacing the mint of design v3 of 21 Oct 2026 on
+ * #476 in look); the names are D-123's and the structure D-115's.
  *
  * The shell is dark and does not follow the system setting. The writing sheet
  * carries its own token scope (`.sheet`): dark by default, white when the
  * writer switches it (`data-sheet-theme="light"`, SheetFrame); the choice is
- * kept only in the browser. Primary is #8EE3BE with #091310 text on it; on
- * the white sheet the handoff's darker green #2F7A63 carries text and focus.
+ * kept only in the browser. Primary is copper #CF9D72 with #231720 text on it
+ * (7.2:1); in the light shell and on the white sheet the darker copper #8F4F33
+ * carries text and focus (5.5:1 or more).
  * The server save state (SYNCED) has its own colour, --synced, so it never
  * reads as the primary or as the pulsing "saving" state. Origin colours show
- * where text came from, never a judgement; no --breach colour (D-62).
- * Targets are at least 32 px in dense bars, 44 px elsewhere.
+ * where text came from, never a judgement (D-57, unchanged by the palette);
+ * no --breach colour (D-62). Targets are at least 32 px in dense bars, 44 px
+ * elsewhere.
  *
- * Semantic names from the same table (FE-D2): --raised for dialogs and other
- * raised surfaces, --selected for the selected item or segment, --ink-muted
- * for the quietest marks, --warn and --error for warning and error marks.
- * --ink-muted is #6c8376 (derived; the showcase has none), under 4.5:1 on
- * --chrome, --sheet and --raised (4.33, 4.08, 4.08): large text (24 px, or
- * 18.66 px bold) and non-text marks only (at least 3:1); small quiet text
- * uses --ink-3 (5.43:1 on --raised). --warn-soft and --synced-soft are the
- * showcase's amber and blue backgrounds; --radius is for panels and
- * --radius-sm for buttons and fields. --raised and --selected are shell surfaces; the white sheet
- * has no values for them, so they are not used inside the sheet.
+ * Semantic names (FE-D2): --raised for dialogs and other raised surfaces,
+ * --selected for the selected item or segment, --ink-muted for the quietest
+ * marks, --warn and --error for warning and error marks. --ink-muted is
+ * #85766f, under 4.5:1 on --chrome, --sheet and --raised (3.87, 3.53, 3.29):
+ * large text (24 px, or 18.66 px bold) and non-text marks only (at least
+ * 3:1); small quiet text uses --ink-3 (5.1:1 or more on the same surfaces).
+ * --radius is for panels and --radius-sm for buttons and fields. --raised and
+ * --selected are shell surfaces; the white sheet has no values for them, so
+ * they are not used inside the sheet.
  * The save-state chip keeps its own colours (PR #386); these names are for
  * new callers. The manuscript is Newsreader 16.5 px with leading 1.7
  * (README §5.1), served from app/fonts like every other face (DAN-121).
  */
 
 :root {
-  --ground: #091310;
-  --sheet: #12211c;
-  --chrome: #0e1b17;
-  --ink: #eef3e9;
-  --ink-2: #a3b5aa;
-  --ink-3: #80998a;
-  --rule: #24372e;
-  --rule-2: #1b2d24;
-  --hover: #192a23;
-  --raised: #12211c;
-  --selected: #192a23;
-  --ink-muted: #6c8376;
+  --ground: #19161a;
+  --sheet: #292329;
+  --chrome: #211b22;
+  --ink: #f1e5d6;
+  --ink-2: #c2b2a3;
+  --ink-3: #a8978a;
+  --rule: #41333c;
+  --rule-2: #31272f;
+  --hover: #2e2530;
+  --raised: #34262e;
+  --selected: #3a2b34;
+  --ink-muted: #85766f;
   --warn: #e9c58b;
-  --error: #e9917f;
-  --accent: #8ee3be;
-  --accent-hover: #99f5cd;
-  --accent-ink: #091310;
-  --accent-soft: #173c2d;
+  --error: #f0a08f;
+  --accent: #cf9d72;
+  --accent-hover: #dcae86;
+  --accent-ink: #231720;
+  --accent-soft: #3b2a2c;
   --synced: #a2c6e5;
   --p-internal: #8fb0e0;
   --p-unknown: #9e9a90;
@@ -55,10 +56,10 @@
   --cmt: #e9c58b;
   --cmt-ink: #e9c58b;
   --cmt-bg: #e9c58b26;
-  --warn-soft: #342d20;
-  --synced-soft: #1e303d;
-  --radius: 14px;
-  --radius-sm: 8px;
+  --warn-soft: #3a2f22;
+  --synced-soft: #24303a;
+  --radius: 6px;
+  --radius-sm: 4px;
   --shadow: 0 22px 80px #0003;
   --lift: 0 1px 1px #0007, 0 12px 34px -10px #000a;
   --ff-ui: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
@@ -69,54 +70,54 @@
 }
 
 /*
- * Light shell (design v3, owner decision of 21 Oct 2026). It applies to the
- * subtree of the shell element that carries `data-theme="light"` (AppShell),
- * never to pages outside the shell. --ink-3 is #5e7366, not the showcase's
- * #657a6d (4.17:1 on --ground, below AA); --ink-muted is the same, text-safe.
+ * Light shell. It applies to the subtree of the shell element that carries
+ * `data-theme="light"` (AppShell), never to pages outside the shell. Paper
+ * and ivory from Archivum V3; every text token is 4.5:1 or more on --ground
+ * and --chrome (tokens.test.ts).
  */
 [data-theme="light"] {
-  --ground: #f3f4ee;
-  --chrome: #ffffff;
-  --raised: #f8f9f5;
-  --hover: #e9efe6;
-  --selected: #e9efe6;
-  --rule: #d4ded2;
-  --rule-2: #e3e9df;
-  --ink: #1a3026;
-  --ink-2: #52685b;
-  --ink-3: #5e7366;
-  --accent: #216344;
-  --accent-ink: #f3f4ee;
-  --accent-soft: #e2f0e5;
-  --warn: #84602d;
+  --ground: #f6efdf;
+  --chrome: #fcf7ec;
+  --raised: #f9f3e6;
+  --hover: #efe5d2;
+  --selected: #efe3cf;
+  --rule: #d9cbb5;
+  --rule-2: #e8dcc8;
+  --ink: #332a27;
+  --ink-2: #5f544d;
+  --ink-3: #6b5f56;
+  --accent: #8f4f33;
+  --accent-ink: #fcf7ec;
+  --accent-soft: #efe0cb;
+  --warn: #7a5420;
   --synced: #355b81;
   --sheet: #ffffff;
-  --ink-muted: #5e7366;
-  --accent-hover: #1b5439;
-  --error: #a8432f;
-  --warn-soft: #f5ecdc;
+  --ink-muted: #6b5f56;
+  --accent-hover: #7a4129;
+  --error: #9c3f33;
+  --warn-soft: #f3e6cf;
   --synced-soft: #e3edf6;
-  --cmt: #84602d;
-  --cmt-ink: #84602d;
+  --cmt: #7a5420;
+  --cmt-ink: #7a5420;
   --cmt-bg: #e9c58b40;
   --lift: 0 1px 1px #0001, 0 12px 34px -10px #0002;
   color-scheme: light;
 }
 
-/* Dark sheet (default): the shell's own tokens on the handoff's sheet colour. */
+/* Dark sheet (default): the shell's own tokens on the Archivum sheet colour. */
 .sheet {
-  --sheet: #12211c;
-  /* The dark sheet keeps dark ink inside a light shell too. */
-  --ink: #eef3e9;
-  --ink-2: #a3b5aa;
-  --ink-3: #80998a;
-  --ink-muted: #6c8376;
-  --rule: #24372e;
-  --rule-2: #1b2d24;
-  --accent: #8ee3be;
-  --accent-hover: #99f5cd;
-  --accent-ink: #091310;
-  --accent-soft: #173c2d;
+  --sheet: #292329;
+  /* The dark sheet keeps dark-theme ink inside a light shell too. */
+  --ink: #f1e5d6;
+  --ink-2: #c2b2a3;
+  --ink-3: #a8978a;
+  --ink-muted: #85766f;
+  --rule: #41333c;
+  --rule-2: #31272f;
+  --accent: #cf9d72;
+  --accent-hover: #dcae86;
+  --accent-ink: #231720;
+  --accent-soft: #3b2a2c;
   --warn: #e9c58b;
   --cmt: #e9c58b;
   --cmt-ink: #e9c58b;
@@ -125,21 +126,21 @@
 }
 
 /*
- * White sheet. --ink-3 is #6a706a, not the prototype's #8a908a (3.3:1 on
- * white, below WCAG AA for the placeholder text); both are handoff values.
+ * White sheet. --ink-3 is #6b5f56 (5.9:1 on white, text-safe for the
+ * placeholder text); --ink-muted is the same.
  */
 .sheet[data-sheet-theme="light"] {
   --sheet: #ffffff;
-  --ink: #191c19;
-  --ink-2: #5a605a;
-  --ink-3: #6a706a;
-  --ink-muted: #6a706a;
-  --rule: #dce0d8;
-  --rule-2: #f7f8f5;
-  --accent: #2f7a63;
-  --accent-hover: #2f6f5e;
+  --ink: #2a2321;
+  --ink-2: #5f544d;
+  --ink-3: #6b5f56;
+  --ink-muted: #6b5f56;
+  --rule: #e3dccf;
+  --rule-2: #f6f1e7;
+  --accent: #8f4f33;
+  --accent-hover: #7a4129;
   --accent-ink: #ffffff;
-  --accent-soft: #2f7a631a;
+  --accent-soft: #8f4f331a;
   --p-internal: #4a6fa5;
   --p-unknown: #6e6a62;
   --p-template: #9a9488;
@@ -184,7 +185,7 @@ button {
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
 .skip-link {
@@ -194,7 +195,7 @@ button {
   padding: 8px 12px;
   background: var(--sheet);
   border: 1px solid var(--rule);
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   /* Above the shell's side bar (40) and its shade (35). */
   z-index: 50;
 }
@@ -250,7 +251,7 @@ main:focus {
   font-size: 12px;
   padding: 1px 7px;
   border: 1px dashed var(--ink-3);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   color: var(--ink-3);
   white-space: nowrap;
 }
@@ -338,7 +339,7 @@ main:focus {
   min-height: 44px;
   padding: 0 22px;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   background: var(--accent);
   color: var(--accent-ink);
   font-weight: 600;
@@ -407,7 +408,7 @@ main:focus {
   gap: 2px;
   margin-left: auto;
   padding: 2px;
-  border-radius: 7px;
+  border-radius: var(--radius);
   background: var(--rule-2);
 }
 
@@ -417,7 +418,7 @@ main:focus {
   min-height: 32px;
   padding: 0 12px;
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   background: transparent;
   font-size: 12.5px;
   font-weight: 500;
@@ -680,7 +681,7 @@ main:focus {
   padding: 56px 76px 48px;
   background: var(--sheet);
   color: var(--ink);
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   /* The lift is invisible on the dark ground; a 1 px rule keeps the sheet's edge (review #156, c). */
   box-shadow: 0 0 0 1px var(--rule), var(--lift);
 }
@@ -698,7 +699,7 @@ main:focus {
 .sheet-theme__options {
   display: inline-flex;
   border: 1px solid var(--rule);
-  border-radius: 7px;
+  border-radius: var(--radius);
   overflow: hidden;
 }
 
@@ -786,7 +787,7 @@ main:focus {
 .editor-toolbar .btn {
   min-height: 32px;
   padding: 0 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--ink);
   font-size: 12.5px;
@@ -804,7 +805,7 @@ main:focus {
   margin: 12px auto 0;
   padding: 4px 6px;
   border: 1px solid var(--rule);
-  border-radius: 7px;
+  border-radius: var(--radius);
   background: var(--chrome);
 }
 
@@ -861,7 +862,7 @@ main:focus {
   padding: 5px;
   background: var(--raised);
   border: 1px solid var(--rule);
-  border-radius: 9px;
+  border-radius: var(--radius);
   box-shadow: var(--lift);
 }
 
@@ -885,7 +886,7 @@ main:focus {
   min-height: 32px;
   padding: 0 9px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--ink);
   font: inherit;
@@ -932,7 +933,7 @@ main:focus {
   min-height: 32px;
   padding: 3px 7px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--ink-2);
   font-size: 12.5px;
@@ -1001,7 +1002,7 @@ main:focus {
 .editor-surface .ProseMirror:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 4px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
 /* Read by assistive technology only. */

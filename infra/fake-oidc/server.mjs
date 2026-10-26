@@ -53,26 +53,32 @@ const provider = new Provider(ISSUER, {
 const escapeHtml = (text) =>
   text.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
 
+// The app's "D" mark on --ground and --accent (DAN-345 follow-up): without
+// it the browser's request for /favicon.ico ended in the provider's 404.
+const FAVICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">\
+<rect width="64" height="64" rx="10" fill="#19161a"/>\
+<text x="32" y="50" text-anchor="middle" fill="#cf9d72" font-family="Georgia,serif" font-size="52">D</text></svg>`;
+
 // The v3 tokens of app/globals.css as values (#732 item 2): this server is a
 // separate process and cannot load the app's stylesheet, so the page repeats
 // the few it needs to look like the sign-in screen it is reached from.
 const PAGE_STYLE = `
 :root { color-scheme: dark; }
 body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px;
-  box-sizing: border-box; background: #091310; color: #eef3e9;
+  box-sizing: border-box; background: #19161a; color: #f1e5d6;
   font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
 main { width: min(430px, 100%); box-sizing: border-box; padding: 30px 30px 24px;
-  background: #12211c; border: 1px solid #24372e; border-radius: 14px;
+  background: #292329; border: 1px solid #41333c; border-radius: 6px;
   box-shadow: 0 1px 1px #0007, 0 12px 34px -10px #000a; text-align: center; }
-.tag { display: inline-block; padding: 2px 10px; border-radius: 8px; background: #173c2d;
-  color: #8ee3be; font-size: 12px; font-weight: 600; }
+.tag { display: inline-block; padding: 2px 10px; border-radius: 4px; background: #3b2a2c;
+  color: #cf9d72; font-size: 12px; font-weight: 600; }
 h1 { margin: 12px 0 8px; font-size: 24px; font-weight: 400; }
-p { margin: 0 0 20px; font-size: 13px; color: #a3b5aa; }
+p { margin: 0 0 20px; font-size: 13px; color: #c2b2a3; }
 form { display: grid; gap: 10px; }
-button { min-height: 48px; padding: 12px 18px; border: 0; border-radius: 8px;
-  background: #8ee3be; color: #091310; font: inherit; font-weight: 600; cursor: pointer; }
-button:hover { background: #99f5cd; }
-button:focus-visible { outline: 2px solid #eef3e9; outline-offset: 2px; }
+button { min-height: 48px; padding: 12px 18px; border: 0; border-radius: 4px;
+  background: #cf9d72; color: #231720; font: inherit; font-weight: 600; cursor: pointer; }
+button:hover { background: #dcae86; }
+button:focus-visible { outline: 2px solid #f1e5d6; outline-offset: 2px; }
 `;
 
 function loginPage(uid) {
@@ -85,7 +91,7 @@ function loginPage(uid) {
   return `<!doctype html>
 <html lang="hr">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Demo prijava</title><style>${PAGE_STYLE}</style></head>
+<title>Demo prijava</title><link rel="icon" href="/favicon.ico" type="image/svg+xml"><style>${PAGE_STYLE}</style></head>
 <body>
 <main>
 <span class="tag">Samo lokalno i CI</span>
@@ -124,6 +130,11 @@ async function handleInteraction(req, res) {
 const providerCallback = provider.callback();
 
 createServer((req, res) => {
+  if (req.method === "GET" && req.url === "/favicon.ico") {
+    res.writeHead(200, { "content-type": "image/svg+xml", "cache-control": "max-age=3600" });
+    res.end(FAVICON_SVG);
+    return;
+  }
   if (req.url?.startsWith("/interaction/")) {
     handleInteraction(req, res).catch((error) => {
       res.writeHead(400, { "content-type": "text/plain; charset=utf-8" });
