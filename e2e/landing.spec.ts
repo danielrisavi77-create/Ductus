@@ -16,6 +16,18 @@ test.describe("public home page", () => {
     await expect(page.getByText(t.landing.aaiOnly)).toBeVisible();
   });
 
+  test("the try-out block mirrors what the visitor types into the mentor's read-only view", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { level: 2, name: t.landing.wow.sidesTitle })).toBeVisible();
+    const student = page.getByRole("textbox", { name: t.landing.wow.editorLabel });
+    const mentor = page.getByRole("textbox", { name: t.landing.wow.mentorLabel });
+    await expect(mentor).toHaveAttribute("aria-readonly", "true");
+    await student.click();
+    await page.keyboard.press("End");
+    await page.keyboard.type(" Dodana rečenica.");
+    await expect(mentor).toContainText("Dodana rečenica.");
+  });
+
   test("every way in is a plain link to /prijava", async ({ page }) => {
     await page.goto("/");
     const entries = page.getByRole("link", { name: new RegExp(`^(${t.auth.signIn}|${t.landing.enter})$`) });

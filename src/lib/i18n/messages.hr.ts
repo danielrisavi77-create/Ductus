@@ -190,6 +190,21 @@ export const hr = {
     closingTitle: `${APP_NAME} pokazuje kako je rad nastao.`,
     closingAccent: "Zaključak donosi čovjek.",
     footerNote: "Prostor za akademsko pisanje.",
+    wow: {
+      sidesEyebrow: "Isprobaj",
+      sidesTitle: "Piši lijevo. Mentor vidi isto desno.",
+      sidesLead:
+        "Probni prostor: tekst ostaje u ovom pregledniku i nikamo se ne šalje. U stvarnom radu mentor vidi tvoj rad uživo, uz odlomak s komentarom.",
+      studentPane: "Student piše",
+      mentorPane: "Mentor vidi",
+      editorLabel: "Probni tekst studenta",
+      mentorLabel: "Isti tekst u prikazu mentora, samo za čitanje",
+      placeholder: "Počni pisati prvu rečenicu…",
+      sampleText: "Gradovi sve češće mijenjaju pravila prometa.",
+      sampleComment: "Suzi na jedan grad i navedi razdoblje.",
+      sampleCommentPlace: "uz odlomak 1 · mentor (izmišljen)",
+      loading: "Učitavam probni prostor…",
+    },
   },
   // F-6 (DAN-35): text of screen 2 of the design handoff (docs/design/ductura).
   teacher: {
