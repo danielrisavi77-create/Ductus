@@ -632,6 +632,31 @@ function evaluateGateCore({
  * named like a verdict head and judged by the same walk and diff checks.
  */
 export function carriedHeadCandidates(comments, headSha, path) {
+  const named = namedCarryHeads(comments, headSha);
+  if (named.size === 0) return { heads: [], reason: null };
+  const steps = path ?? [];
+  // The walk may stop once it has seen every named head (F-148): no verdict
+  // head is then beyond it, so none can be dropped silently.
+  const seen = new Set(steps.map((commit) => commit?.sha?.toLowerCase()));
+  const allSeen = [...named].every((sha) => seen.has(sha));
+  if (!allSeen && !steps.some((commit) => (commit?.parents?.length ?? 0) < 2)) {
+    return { heads: [], reason: "first-parent walk did not reach a non-merge commit" };
+  }
+  const heads = steps
+    .map((commit) => commit?.sha?.toLowerCase())
+    .filter((sha) => named.has(sha) && onlyBaseMerges(steps, sha));
+  if (heads.length > MAX_CARRIED_HEADS) {
+    return { heads: [], reason: `more than ${MAX_CARRIED_HEADS} verdict heads behind base merges` };
+  }
+  return { heads, reason: null };
+}
+
+/**
+ * Earlier heads named by trusted canonical review, QA, Owner Override or
+ * Owner-Command blocks, lower case, without the current head. The runner reads
+ * them before it walks, so a PR without such a head costs no walk (F-148).
+ */
+export function namedCarryHeads(comments, headSha) {
   const named = new Set();
   for (const entry of trustedComments(comments)) {
     for (const [block, headField] of [["Agent-Review", "Review-Head"], ["QA-Agent", "QA-Head"], ["Owner-Override", "Override-Head"], ["Owner-Command", "Command-Head"]]) {
@@ -643,18 +668,7 @@ export function carriedHeadCandidates(comments, headSha, path) {
       if (head && SHA_RE.test(head) && head !== headSha.toLowerCase()) named.add(head);
     }
   }
-  if (named.size === 0) return { heads: [], reason: null };
-  const steps = path ?? [];
-  if (!steps.some((commit) => (commit?.parents?.length ?? 0) < 2)) {
-    return { heads: [], reason: "first-parent walk did not reach a non-merge commit" };
-  }
-  const heads = steps
-    .map((commit) => commit?.sha?.toLowerCase())
-    .filter((sha) => named.has(sha) && onlyBaseMerges(steps, sha));
-  if (heads.length > MAX_CARRIED_HEADS) {
-    return { heads: [], reason: `more than ${MAX_CARRIED_HEADS} verdict heads behind base merges` };
-  }
-  return { heads, reason: null };
+  return named;
 }
 
 /**

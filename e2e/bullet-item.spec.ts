@@ -24,7 +24,10 @@ async function openEditor(page: Page, width = 1440): Promise<void> {
 /** Type and text of every block, as the editor shows them. */
 async function blocksOf(page: Page): Promise<[string, string][]> {
   return editorOf(page).locator(":scope > *").evaluateAll((nodes) =>
-    nodes.map((node) => [node.getAttribute("data-block") === "bullet-item" ? "item" : node.tagName.toLowerCase(), node.textContent ?? ""]));
+    nodes.map((node) => {
+      const block = node.getAttribute("data-block");
+      return [block === "bullet-item" ? "item" : block === "quote" ? "quote" : node.tagName.toLowerCase(), node.textContent ?? ""];
+    }));
 }
 
 /**
@@ -116,7 +119,7 @@ test.describe("bullet item (E1)", () => {
 
   // As every paste in ProseMirror, the first pasted block flows into the
   // block the caret is in and takes its type; the rest keep their own.
-  test("pasted HTML: ul items become items, nested ones follow, ol, blockquote and Word lists stay paragraphs", async ({ page }) => {
+  test("pasted HTML: ul items become items, nested ones follow, ol and Word lists stay paragraphs, blockquote is a quote (E1 part 2)", async ({ page }) => {
     await openEditor(page);
     await editorOf(page).click();
     await page.keyboard.type("Uvod");
@@ -131,7 +134,7 @@ test.describe("bullet item (E1)", () => {
     const blocks = await blocksOf(page);
     expect(blocks.slice(0, 1)).toEqual([["p", "Uvod"]]);
     expect(blocks.slice(1)).toEqual([
-      ["p", "jedan"], ["item", "dva"], ["item", "tri"], ["item", "četiri"], ["p", "pet"], ["p", "šest"], ["p", "sedam"],
+      ["p", "jedan"], ["item", "dva"], ["item", "tri"], ["item", "četiri"], ["p", "pet"], ["quote", "šest"], ["p", "sedam"],
     ]);
     const ids = await editorOf(page).locator(":scope > [data-node-id]").evaluateAll((nodes) => nodes.map((n) => n.getAttribute("data-node-id")));
     expect(new Set(ids).size).toBe(ids.length);
@@ -165,7 +168,7 @@ test.describe("bullet item on a phone (390 px)", () => {
     await page.keyboard.type("Stavka s telefona");
     await expect(listButton(page)).toHaveCount(0);
     await moreButton(page).click();
-    await expect(moreMenu(page).getByRole("menuitemcheckbox")).toHaveText([/Naslov 1/, /Naslov 2/, /Naslov 3/, /Popis/]);
+    await expect(moreMenu(page).getByRole("menuitemcheckbox")).toHaveText([/Naslov 1/, /Naslov 2/, /Naslov 3/, /Popis/, /Blok-citat/]);
     const item = moreMenu(page).getByRole("menuitemcheckbox", { name: "Popis", exact: true });
     await expect(item).toHaveAttribute("aria-checked", "false");
     await item.click();
