@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 
-import { buildFrames, clampStep, parseEdit } from "./rewind";
+import { buildFrames, clampStep, parseEdit } from "./rewind-frames";
 import styles from "./Wow.module.css";
 
 const l = t.landing.replay;
