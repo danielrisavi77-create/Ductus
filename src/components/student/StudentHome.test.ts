@@ -108,6 +108,31 @@ describe("StudentHome, Archivum S01 on /zadaci (DAN-344)", () => {
     expect(html).not.toContain("/rad?zadatak=");
   });
 
+  it("S02 shows the same cards under its own heading, without the enrol action", () => {
+    const html = renderToStaticMarkup(createElement(StudentHome, { read: { kind: "ready", courses }, enroll: ENROLL, view: "courses" }));
+    expect(html.match(/<h1/g)).toHaveLength(1);
+    expect(html).toMatch(new RegExp(`<h1[^>]*>${home.courses}</h1>`));
+    expect(html).toContain(home.coursesLede);
+    expect(html).not.toContain(home.heading);
+    expect(html).not.toContain('href="/upis"');
+    expect(html).toContain(`aria-labelledby="kolegij-${COURSE_A}"`);
+    expect(html).toContain('href="/rad?zadatak=10000000-0000-4000-8000-000000000002"');
+    expect(html).toContain(home.readNotice);
+  });
+
+  it("S02 keeps its own address for sign-in and retry, and its states apart", () => {
+    const view = "courses" as const;
+    const out = (read: MyAssignmentsRead) => renderToStaticMarkup(createElement(StudentHome, { read, enroll: ENROLL, view }));
+    expect(out({ kind: "signedOut" })).toContain('href="/api/auth/login?returnTo=%2Fzadaci%2Fkolegiji"');
+    const unavailable = out({ kind: "unavailable" });
+    expect(unavailable).toContain('href="/zadaci/kolegiji"');
+    expect(unavailable).not.toContain(empty.heading);
+    expect(unavailable).not.toContain(home.coursesLede);
+    const first = out({ kind: "ready", courses: [] });
+    expect(first).toContain(empty.heading);
+    expect(first).not.toContain('role="alert"');
+  });
+
   it("gives each course a motif fixed by its id", () => {
     const html = render({ kind: "ready", courses });
     expect(html).toContain('data-motif="city"');

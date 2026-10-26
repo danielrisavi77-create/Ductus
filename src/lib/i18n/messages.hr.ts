@@ -745,6 +745,9 @@ export const hr = {
       heading: "Vaš studentski prostor",
       lede: "Zadaci na kolegijima.",
       courses: "Moji kolegiji",
+      // S02 subtitle: chosen by the orchestrator (Daniel left it to them, 26. 10. 2026.),
+      // not the PNG's, because the student has no course page to open.
+      coursesLede: "Kolegiji na koje ste upisani i njihovi zadaci.",
       courseLabel: "Kolegij",
       due: "Rok: {time}",
       open: "Otvori zadatak",
