@@ -8,12 +8,11 @@ import Landing from "@/components/landing/Landing";
 import AppShell from "@/components/shell/AppShell";
 import SessionObserver from "@/components/shell/SessionObserver";
 import { shellSession } from "@/components/shell/shell-session";
-import { readShellAccount } from "@/components/shell/shell-role";
+import { readHome } from "@/components/shell/shell-role";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { sessionTag } from "@/server/auth/principal";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
-import { homeTarget } from "@/server/institution/home-target";
 
 export const runtime = "nodejs";
 
@@ -33,14 +32,14 @@ export default async function HomePage() {
       </>
     );
   }
-  const home = await homeTarget(token, withActor);
-  if (home.kind === "page") redirect(home.path);
+  // One read gives both the way on and the shell's scope (F-151).
+  const { path, scope } = await readHome(token, withActor);
+  if (path !== null) redirect(path);
   // A closed session, or one the database cannot answer for, guesses no
   // role and stays on the signed-in home inside the shell (#802 part B). The shell
   // shows no role here; its sign-out reads the journal under the scope. A
   // cookie whose session is closed or could not be read has no scope, so
   // it gets the plain sign-out that only ends the cookie.
-  const { scope } = await readShellAccount(token, withActor);
   const plainSignOut = scope === null ? (
     <form method="post" action="/api/auth/logout">
       <button type="submit" className="btn">{t.shell.signOut}</button>
