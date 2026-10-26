@@ -9,10 +9,11 @@
  * back without losing the author's text.
  *
  * Exactly the F1 set is registered here:
- *   doc, paragraph, heading (levels 1-3), bullet item, text, bold, italic,
- *   history.
- * The bullet item (E1, #823) is a flat text block of its own
- * (`bullet-item.ts`), not StarterKit's list, which wraps paragraphs.
+ *   doc, paragraph, heading (levels 1-3), bullet item, quote, text, bold,
+ *   italic, history.
+ * The bullet item and the quote (E1, #823) are flat text blocks of their own
+ * (`bullet-item.ts`, `quote.ts`), not StarterKit's list and blockquote,
+ * which wrap paragraphs.
  * Placeholder is a decoration only: it adds no node or mark to the schema.
  *
  * Gapcursor is not registered: it exists for non-textblock leaf nodes (images,
@@ -30,6 +31,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import Text from "@tiptap/extension-text";
 
 import { BulletItem } from "./bullet-item";
+import { Quote } from "./quote";
 import { createNodeIdentityPlugin, mintMissingIds, repeatedNodeIds, type NodeIdMinter } from "./identity";
 import { NODE_ID_ATTRIBUTE } from "./interop";
 
@@ -39,7 +41,7 @@ export { NODE_ID_ATTRIBUTE };
 export const NODE_ID_HTML_ATTRIBUTE = "data-node-id";
 
 /** Block node types that carry a canonical id. */
-export const ID_CARRYING_TYPES = ["paragraph", "heading", "bulletItem"] as const;
+export const ID_CARRYING_TYPES = ["paragraph", "heading", "bulletItem", "quote"] as const;
 
 /** Heading levels allowed in F1. Mirrors `HeadingLevel` in the domain. */
 export const F1_HEADING_LEVELS = [1, 2, 3] as const;
@@ -141,6 +143,7 @@ export const F1_EXTENSION_NAMES = [
   "text",
   "bold",
   "italic",
+  "quote",
   "undoRedo",
   "placeholder",
   "nodeIdentity",
@@ -161,6 +164,11 @@ export function createEditorExtensions(
     Text,
     Bold,
     Italic,
+    // After Bold: Tiptap runs keymaps of equal priority last-first, and with
+    // Shift held Bold's "Mod-B" (for caps lock) would take Mod-Shift-b. Not
+    // by priority: that would also run the quote's marker plugin before
+    // NodeIdentity, which then sees the marker gone and gives a new id.
+    Quote,
     History,
     Placeholder.configure({ placeholder }),
     NodeIdentity,

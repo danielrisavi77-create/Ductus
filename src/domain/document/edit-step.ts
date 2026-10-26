@@ -7,7 +7,7 @@
  *
  * The shape is the JSON that ProseMirror's own steps serialise to, narrowed
  * to what the F1 schema can produce (paragraph, heading 1-3, bullet item,
- * text, bold, italic), plus `removedSha256` on a step that removes content. Everything
+ * quote, text, bold, italic), plus `removedSha256` on a step that removes content. Everything
  * else is refused, never guessed:
  *   - every object has a closed set of keys, so an unknown field, a
  *     `__proto__` or `constructor` key and any time field (owner decision 6:
