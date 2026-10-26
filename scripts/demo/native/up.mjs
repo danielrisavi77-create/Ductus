@@ -152,7 +152,13 @@ export function createNativeRun({ env, home, platform = process.platform, tools,
   const services = [];
   let bin;
   let stopping;
+  let startup;
   let interrupted = false;
+
+  /** After Ctrl+C nothing more is started; stop() waits for this step to give up. */
+  const checkpoint = () => {
+    if (interrupted) throw new Error("interrupted; nothing more is started");
+  };
 
   const pg = (name) => join(bin.pgBin, `${name}${suffix}`);
   const target = () => psqlTarget(bin.pgBin, paths.socket, suffix);
@@ -193,9 +199,11 @@ export function createNativeRun({ env, home, platform = process.platform, tools,
       throw new Error("the fake OIDC provider has no dependencies; run pnpm --dir infra/fake-oidc install --frozen-lockfile");
     }
     bin = await tools();
+    checkpoint();
     for (const dir of [paths.data, paths.objects, paths.socket, paths.logs]) await mkdir(dir, { recursive: true });
     await writeFile(paths.psqlrc, "");
     await initPostgres();
+    checkpoint();
     await writeFile(join(paths.pgdata, "ductus-native.conf"), nativeConf(paths.socket));
     if ((await run(pg("pg_ctl"), ["start", "-D", paths.pgdata, "-l", join(paths.logs, "postgres.log"), "-w", "-t", "120"], { env, stdout: "ignore" })) !== 0) {
       throw new Error(`PostgreSQL did not start; see ${join(paths.logs, "postgres.log")}`);
@@ -209,6 +217,7 @@ export function createNativeRun({ env, home, platform = process.platform, tools,
       input: "SELECT 'CREATE DATABASE ductus' WHERE NOT EXISTS (SELECT 1 FROM pg_catalog.pg_database WHERE datname = 'ductus') \\gexec\n",
     });
     if (made !== 0) throw new Error("the ductus database could not be made");
+    checkpoint();
 
     startService("rustfs", bin.rustfs, ["server", "--address", `127.0.0.1:${PORTS.rustfs}`, paths.objects], {
       RUSTFS_ACCESS_KEY: env.S3_ACCESS_KEY_ID,
@@ -217,6 +226,7 @@ export function createNativeRun({ env, home, platform = process.platform, tools,
     }, "rustfs.exe");
     // An anonymous request is refused: the store answers, and it is not open.
     await waitFor(async () => (await httpStatus(`http://127.0.0.1:${PORTS.rustfs}/`)) === 403, "rustfs");
+    checkpoint();
 
     startService("oidc", process.execPath, ["--import", LOOPBACK_PRELOAD, join(ROOT, "infra", "fake-oidc", "server.mjs")], {
       PORT: String(PORTS.oidc),
@@ -253,7 +263,7 @@ export function createNativeRun({ env, home, platform = process.platform, tools,
   async function runScript(script, scriptEnv) {
     if (interrupted) return INTERRUPTED;
     try {
-      if (script === "stack:up") return await stackUp(), 0;
+      if (script === "stack:up") return await (startup = stackUp()), 0;
       if (script === "db:migrate") return await migrate();
       if (script === "db:seed") return await psql("db/local/seed.sql");
       if (script === "dev") return await dev(scriptEnv);
@@ -280,6 +290,8 @@ export function createNativeRun({ env, home, platform = process.platform, tools,
   /** Stops the app, the provider, the store and PostgreSQL; once, whoever asks first. */
   function stop() {
     stopping ??= (async () => {
+      // A start under way finishes or gives up first, so every service it began is in the list.
+      await startup?.catch(() => {});
       for (const service of [...services].reverse()) {
         if (service.name === "postgres") {
           await run(pg("pg_ctl"), ["stop", "-D", paths.pgdata, "-m", "fast", "-w"], { env, stdout: "ignore" });

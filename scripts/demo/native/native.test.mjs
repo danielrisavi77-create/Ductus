@@ -137,3 +137,26 @@ test("without demo data the K-3 step is skipped and nothing else is", async () =
   assert.equal(await run.runScript("db:seed", {}), 130);
   assert.deepEqual(await run.runNode("db/local/evidence-signing-key.mjs", {}), { code: 130, stdout: "" });
 });
+
+test("Ctrl+C during preparation starts nothing more and stops only after the start gives up", async () => {
+  const home = await scratch();
+  let release;
+  let toolsCalled = false;
+  const tools = () => {
+    toolsCalled = true;
+    return new Promise((resolve) => (release = () => resolve({ pgBin: join(home, "missing"), rustfs: join(home, "missing") })));
+  };
+  const run = createNativeRun({ env: {}, home, platform: "linux", tools });
+  const step = run.runScript("stack:up", {});
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  let stopped = false;
+  const stopping = run.interrupt().then(() => (stopped = true));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  if (toolsCalled) {
+    assert.equal(stopped, false);
+    release();
+  }
+  assert.equal(await step, 1);
+  await stopping;
+  assert.equal(existsSync(layout(home).data), false);
+});
