@@ -3,6 +3,8 @@ import Link from "next/link";
 import SheetFrame from "@/components/shell/SheetFrame";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 
+import AccessExplorer from "./AccessExplorer";
+import FaqSection from "./FaqSection";
 import { FLOW_STEPS } from "./flowSteps";
 import styles from "./Landing.module.css";
 import Rewind from "./Rewind";
@@ -95,6 +97,7 @@ export default function Landing() {
 
         <TwoSides />
         <Rewind />
+        <AccessExplorer />
 
         <section id="za-koga" className={styles.section} aria-labelledby="za-koga-naslov">
           <p className={styles.eyebrow}>{l.forWhomLink}</p>
@@ -177,6 +180,8 @@ export default function Landing() {
             })}
           </ol>
         </section>
+
+        <FaqSection />
 
         <section className={styles.closing} aria-labelledby="zakljucak-naslov">
           <h2 id="zakljucak-naslov" className={styles.sectionTitle}>
