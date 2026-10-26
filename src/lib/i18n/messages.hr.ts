@@ -288,6 +288,7 @@ export const hr = {
       narrowOnly: "Popis možeš samo suziti.",
       allowed: "Dopušteno u ovom zadatku",
       banned: "Nije dopušteno",
+      bannedNone: "Sve uporabe s popisa iznad dopuštene su u ovom zadatku.",
       courseProhibits: "Pravila kolegija ne dopuštaju AI pomoć, pa ni ovaj zadatak.",
       source:
         "Izvor: Smjernice za uporabu generativne umjetne inteligencije u nastavi i izradi studentskih radova, Fakultetsko vijeće FPZG-a, 21. 5. 2026., članak 8. Treća natuknica stavka 1 skraćena je, a stavak 3 nije prikazan; puni tekst je u Smjernicama.",
