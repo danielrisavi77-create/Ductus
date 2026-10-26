@@ -177,3 +177,62 @@ test("an error on the base check carries nothing", async () => {
   const api = createApi({ fetchImpl, baseUrl: "https://api.test", token: "t" });
   assert.equal((await carriedHeads(api, "o", "r", pr, comments, { log: quiet })).size, 0);
 });
+
+// F-148: the walk starts only when a trusted block names an earlier head, and
+// it stops once it has passed every named head.
+const chainSha = (i) => (i === 0 ? head : `${i}`.padStart(40, "c"));
+function chainFetch(depth) {
+  const calls = [];
+  const fetchImpl = async (url) => {
+    const path = url.replace("https://api.test", "");
+    calls.push(path);
+    const at = [...Array(depth + 1).keys()].find((i) => path.endsWith(`/commits/${chainSha(i)}`));
+    if (at !== undefined) {
+      // A chain of base merges ending in the PR's own commit at `depth`.
+      return json(at < depth
+        ? { sha: chainSha(at), parents: [{ sha: chainSha(at + 1) }, { sha: mainParent }] }
+        : { sha: chainSha(at), parents: [{ sha: "0".repeat(40) }] });
+    }
+    if (path.includes(`/compare/main...${mainParent}`)) return json({ status: "behind", files: [] });
+    if (path.includes("/compare/")) return json(files);
+    throw new Error(`unexpected ${path}`);
+  };
+  return { fetchImpl, calls };
+}
+const commitCalls = (calls) => calls.filter((path) => path.includes("/commits/")).length;
+
+test("no trusted block naming an earlier head means no walk and no API call (F-148)", async () => {
+  const outsider = { ...review(chainSha(2)), user: { login: "someone" }, author_association: "NONE", performed_via_github_app: null };
+  for (const list of [[], [review(head)], [outsider]]) {
+    const { fetchImpl, calls } = chainFetch(12);
+    const api = createApi({ fetchImpl, baseUrl: "https://api.test", token: "t" });
+    assert.equal((await carriedHeads(api, "o", "r", pr, list, { log: quiet })).size, 0);
+    assert.deepEqual(calls, []);
+  }
+});
+
+test("the walk stops once it has passed every named head and still carries (F-148)", async () => {
+  const { fetchImpl, calls } = chainFetch(12);
+  const api = createApi({ fetchImpl, baseUrl: "https://api.test", token: "t" });
+  const carried = await carriedHeads(api, "o", "r", pr, [review(chainSha(2))], { log: quiet });
+  assert.deepEqual([...carried], [chainSha(2)]);
+  // head, chain 1 and chain 2: three commits instead of thirteen.
+  assert.equal(commitCalls(calls), 3);
+});
+
+test("an older named head with a FAIL is still reached and carried with the newer one (F-148)", async () => {
+  const { fetchImpl, calls } = chainFetch(12);
+  const api = createApi({ fetchImpl, baseUrl: "https://api.test", token: "t" });
+  const fail = { ...review(chainSha(5)), body: review(chainSha(5)).body.replace("PASS", "FAIL") };
+  const carried = await carriedHeads(api, "o", "r", pr, [review(chainSha(2)), fail], { log: quiet });
+  assert.deepEqual([...carried].sort(), [chainSha(2), chainSha(5)].sort());
+  assert.equal(commitCalls(calls), 6);
+});
+
+test("a named head that is not on the path still walks to the PR's own commit (F-148)", async () => {
+  const { fetchImpl, calls } = chainFetch(4);
+  const api = createApi({ fetchImpl, baseUrl: "https://api.test", token: "t" });
+  const carried = await carriedHeads(api, "o", "r", pr, [review("d".repeat(40)), review(chainSha(1))], { log: quiet });
+  assert.deepEqual([...carried], [chainSha(1)]);
+  assert.equal(commitCalls(calls), 5);
+});
