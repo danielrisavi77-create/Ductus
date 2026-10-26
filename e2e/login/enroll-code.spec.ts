@@ -9,6 +9,7 @@ import pg from "pg";
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import { createWithActor } from "../../src/server/db/with-actor";
 import { appCookie, SESSION_COOKIE, sessionRow, signIn } from "./support";
+import { localAdminUrl, localAppUrl } from "./local-db-url";
 
 // F-7 and FE-D4 (#476 row 4): enrollment by code, then straight to the notice
 // of the open assignment (PRODUCT §5 rule 6). The real path uses fake OIDC,
@@ -16,18 +17,12 @@ import { appCookie, SESSION_COOKIE, sessionRow, signIn } from "./support";
 // Next.js keeps an empty route announcer with role="alert" outside the form.
 const e = t.student.enroll;
 const CODE = "ab12-cd34-ef56-7890";
-const ADMIN_DATABASE_URL =
-  process.env.E2E_ADMIN_DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
-const APP_DATABASE_URL =
-  process.env.APP_DATABASE_URL ?? "postgres://ductus_app_local:ductus-app-local-only@127.0.0.1:54329/ductus";
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const PROVISION_TEACHER = fileURLToPath(new URL("../../scripts/demo/provision-teacher.mjs", import.meta.url));
 const STUDENT = "demo-student@demo.ductus.test";
 
 async function admin<T>(work: (client: pg.Client) => Promise<T>): Promise<T> {
-  const host = new URL(ADMIN_DATABASE_URL).hostname;
-  if (host !== "127.0.0.1" && host !== "localhost") throw new Error("the e2e seed runs only against a local database");
-  const client = new pg.Client({ connectionString: ADMIN_DATABASE_URL });
+  const client = new pg.Client({ connectionString: localAdminUrl() });
   await client.connect();
   try {
     return await work(client);
@@ -38,11 +33,8 @@ async function admin<T>(work: (client: pg.Client) => Promise<T>): Promise<T> {
 
 /** Only the local operator confirms the invented teacher; product RPCs create the fixture. */
 async function seedCourse(browser: Browser, withAssignment: boolean): Promise<{ course: string; code: string; assignment: string | null }> {
-  if (![ADMIN_DATABASE_URL, APP_DATABASE_URL].every((url) => ["127.0.0.1", "localhost"].includes(new URL(url).hostname))) {
-    throw new Error("the enrollment e2e fixture requires a local database");
-  }
   const teacherPage = await browser.newPage({ baseURL: "http://localhost:3000" });
-  const pool = new pg.Pool({ connectionString: APP_DATABASE_URL });
+  const pool = new pg.Pool({ connectionString: localAppUrl() });
   try {
     await signIn(teacherPage, "/", "Demo nastavnik");
     const teacherToken = (await appCookie(teacherPage.context(), SESSION_COOKIE))?.value;
@@ -112,7 +104,7 @@ test("anonymous visitor sees no enrollment form", async ({ page }) => {
 test("a signed-in student gets the shell with the student items only (I3)", async ({ page }) => {
   await signIn(page, "/upis", "Demo studentica");
   const nav = page.getByRole("navigation", { name: t.shell.workNav });
-  await expect(nav.getByRole("link")).toHaveText([t.shell.nav.workspace, t.shell.nav.enroll]);
+  await expect(nav.getByRole("link")).toHaveText([t.shell.nav.assignments, t.shell.nav.workspace, t.shell.nav.enroll]);
   await expect(nav.getByRole("link", { name: t.shell.nav.enroll })).toHaveAttribute("aria-current", "page");
   await expect(page.getByText(t.shell.space.student)).toBeAttached();
   await expect(page.getByRole("button", { name: t.shell.signOut, includeHidden: true })).toBeAttached();

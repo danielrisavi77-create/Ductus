@@ -34,6 +34,7 @@ export const hr = {
     home: `${APP_NAME}, početna`,
     space: { teacher: "Nastavnički prostor", student: "Studentski prostor" },
     nav: {
+      assignments: "Moji zadaci",
       courses: "Moji kolegiji",
       newCourse: "Novi kolegij i zadatak",
       fastPath: "Brz put",
@@ -47,11 +48,23 @@ export const hr = {
     closeNav: "Zatvori navigaciju",
     theme: "Promijeni svijetlu ili tamnu temu",
     breadcrumb: "Put",
+    homeCrumb: "Početna",
   },
   home: {
     lead: `${APP_NAME} ne procjenjuje autorstvo ni korištenje AI-ja. Prije početka vidiš što nastavnik vidi i od kada.`,
     openWorkspace: "Otvori radni prostor",
-    openTeacher: "Moji kolegiji",
+    openTeacher: "Otvori kolegije",
+    // #802 part B: the signed-in home (pocetna.dc.html: greeting, cards).
+    title: "Početna",
+    // Locative of the app name ("u Ducturu").
+    welcome: "Dobro došli u Ducturu",
+    spaces: "Prostori",
+    workTitle: "Moj rad",
+    workBody: "Pisanje i predaja seminarskih i završnih radova.",
+    coursesTitle: "Moji kolegiji",
+    coursesBody: "Za nastavnike: kolegiji, zadaci i radovi studenata.",
+    enrollQuestion: "Imaš kod novog kolegija?",
+    enroll: "Upiši",
   },
   // FE-H1 (#476): public home page for a visitor without a session. Every
   // entry leads to /prijava; sign-in is AAI@EduHr only (D-09). Live view and
@@ -337,6 +350,11 @@ export const hr = {
     at: "u",
     students: { one: "student", few: "studenta", many: "studenata" },
     countNote: "Broj studenata služi samo za pregled; po njemu se ništa ne poreda.",
+    // F2 (#711): links to the students' works; numbered, since names arrive with B-11.
+    worksLabel: "Radovi studenata",
+    work: "Rad",
+    noWorks: "Nijedan student još nije otvorio rad.",
+    worksUnavailable: "Radovi trenutačno nisu dostupni. Pokušaj ponovno.",
   },
   fastPath: {
     title: "Brz put",
@@ -348,6 +366,8 @@ export const hr = {
     noStudents: "U kolegij još nije upisan nijedan student.",
     studentsLabel: "Studenti",
     studentsTitle: "Studenti · po prezimenu",
+    // #732 item 18, design pregled-radova-v2 (D-80): the list has no order by numbers.
+    orderNote: "Popis se ne može poredati po brojevima.",
     work: {
       notice_pending: "Obavijest još nije potvrđena",
       writing: "U pisanju",
@@ -414,7 +434,6 @@ export const hr = {
       toolsAllowed: "Dopuštena uporaba alata (FPZG Smjernice, čl. 8)",
       toolsNone: "U ovom zadatku uporaba alata generativne umjetne inteligencije nije dopuštena.",
       checks: "Provjera oblika · FPZG",
-      checksSoon: "Provjera oblika prema Uputama FPZG-a prikazuje se ovdje.",
       checksNote: "Provjera pomaže; ništa ne blokira predaju.",
     },
     rad: {
@@ -489,6 +508,7 @@ export const hr = {
   toolbar: {
     label: "Oblikovanje teksta",
     paragraph: "Odlomak",
+    bulletItem: "Popis",
     heading1: "Naslov 1",
     heading2: "Naslov 2",
     heading3: "Naslov 3",
@@ -595,7 +615,7 @@ export const hr = {
     afterDeadline: "Predano nakon roka.",
     record: "Stanje zapisa",
     records: { continuous: "Zapis je cjelovit", with_gaps: "Zapis ima praznine; vidi sažetak procesa" },
-    textHash: "SHA-256 predanog teksta",
+    textHash: "Otisak predanog teksta (SHA-256)",
     revision: "Verzija teksta na poslužitelju",
     outcome: {
       recordMismatch: "Predaja nije moguća: tekst sastavljen iz zapisa ne podudara se s tekstom na poslužitelju.",
@@ -635,7 +655,7 @@ export const hr = {
     exampleTitle: "Dvije izmišljene povijesti",
     exampleA: "Student A napisao je svoj tekst izvan Ducture i uvezao ga odjednom. Zapis pokazuje jedan uvoz.",
     exampleB: "Student B postupno je utipkao tekst koji je napisala druga osoba. Zapis pokazuje postupno pisanje u Ducturi.",
-    conclusion: "Iz zapisa se ne vidi koji je od ta dva teksta student sam napisao. Ductus zato ne procjenjuje autorstvo: zapis olakšava razgovor o radu, a zaključak donosi čovjek.",
+    conclusion: "Iz zapisa se ne vidi koji je od ta dva teksta student sam napisao. Ductura zato ne procjenjuje autorstvo: zapis olakšava razgovor o radu, a zaključak donosi čovjek.",
   },
   // F-7 (#336): the S3 notice before the first sentence. What is recorded
   // follows D-142, D-143 and D-154 (live view, per-change time, replay for the
@@ -646,6 +666,18 @@ export const hr = {
   // in this assignment; D-63 for the skipped long pauses of the replay.
   student: {
     title: "Zadatak",
+    // #711 contract 6404612273: the student's own courses and assignments.
+    assignments: {
+      title: "Moji zadaci",
+      heading: "Moji zadaci",
+      signedOut: "Prijavi se da vidiš svoje zadatke.",
+      unavailable: "Popis trenutačno nije dostupan.",
+      empty: "Zasad nisi upisan/a ni u jedan kolegij.",
+      enroll: "Upiši kolegij kodom",
+      noAssignments: "U ovom kolegiju zasad nema zadatka.",
+      due: "Rok {time}",
+      noticeFirst: "Prvo pročitaj obavijest",
+    },
     signedOut: "Prijavi se da vidiš zadatak.",
     signIn: "Prijavi se",
     enroll: {

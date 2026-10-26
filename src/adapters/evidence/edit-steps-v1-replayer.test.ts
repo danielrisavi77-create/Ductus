@@ -241,6 +241,58 @@ describe("edit steps v1 replayer: positions, identity and fail-closed", () => {
   });
 });
 
+// E1 part 1 (#823, DAN-326, contract issuecomment-6412639687): the bullet
+// item is a flat block, so the replayer's rules hold for it unchanged. Tests
+// only: no production code of this adapter changes (orchestrator, #823).
+describe("edit steps v1 replayer: bullet item (E1)", () => {
+  const doc = replayer.load(start);
+  const D = "aaaaaaaa-0000-4000-8000-000000000004";
+  const asItem = capture(doc, (tr) => tr.setBlockType(1, 1, schema.nodes.bulletItem!, { nodeId: A }));
+  const itemDoc = replayer.apply(doc, event(asItem.steps));
+
+  it("a change of type to an item and back keeps the id, and only that", () => {
+    expect(itemDoc.toJSON()).toEqual(asItem.after.toJSON());
+    expect(replayer.toCanonical(itemDoc)).toMatchObject({
+      nodes: [{ type: "bulletItem", id: A }, { type: "heading", id: B }, { type: "paragraph", id: C }],
+    });
+    const back = capture(itemDoc, (tr) => tr.setBlockType(1, 1, schema.nodes.paragraph!, { nodeId: A }));
+    expect(replayer.toCanonical(replayer.apply(itemDoc, event(back.steps)))).toEqual(replayer.toCanonical(doc));
+    const stolen = structuredClone(asItem.steps[0]) as { slice: { content: { attrs: Record<string, unknown> }[] } };
+    stolen.slice.content[0]!.attrs.nodeId = C;
+    refused(doc, [stolen]).toThrow("replace_around_identity");
+    refused(itemDoc, asItem.steps).toThrow("replace_around_unchanged");
+  });
+
+  it("refuses an item with a level, and an item wrapper with content, before touching the document", () => {
+    const withLevel = structuredClone(asItem.steps[0]) as { slice: { content: { attrs: Record<string, unknown> }[] } };
+    withLevel.slice.content[0]!.attrs.level = 1;
+    refused(doc, [withLevel]).toThrow("unknown_field");
+    const withContent = structuredClone(asItem.steps[0]) as { slice: { content: Record<string, unknown>[] } };
+    withContent.slice.content[0]!.content = [{ type: "text", text: "x" }];
+    refused(doc, [withContent]).toThrow("invalid_slice");
+  });
+
+  it("Enter at the end of an item: a new item without an id, then its id through attr", () => {
+    const { steps, after } = capture(itemDoc, (tr) =>
+      tr.split(17, 1, [{ type: schema.nodes.bulletItem! }]).setNodeAttribute(18, "nodeId", D),
+    );
+    const replayed = replayer.apply(itemDoc, event(steps));
+    expect(replayed.toJSON()).toEqual(after.toJSON());
+    expect(replayer.toCanonical(replayed)).toMatchObject({
+      nodes: [{ type: "bulletItem", id: A }, { type: "bulletItem", id: D }, { id: B }, { id: C }],
+    });
+  });
+
+  it("the removed hash across an item's boundary covers the item's type", () => {
+    const { steps, after } = capture(itemDoc, (tr) => tr.delete(10, 22));
+    expect(replayer.apply(itemDoc, event(steps)).toJSON()).toEqual(after.toJSON());
+    // The same range with a paragraph in place of the item has another hash.
+    const asParagraph = { ...(steps[0] as object), removedSha256: removedRangeSha256(doc, 10, 22) };
+    expect(asParagraph.removedSha256).not.toBe((steps[0] as { removedSha256: string }).removedSha256);
+    refused(itemDoc, [asParagraph]).toThrow("removed_range_hash");
+  });
+});
+
 describe("edit steps v1 replayer inside replayEvidenceSegmentsV2", () => {
   async function segment(events: { steps: unknown[] }[], initial: JcsJsonValue): Promise<EvidenceSegmentV2> {
     let document = replayer.load(initial);
