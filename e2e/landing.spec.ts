@@ -28,6 +28,18 @@ test.describe("public home page", () => {
     await expect(mentor).toContainText("Dodana rečenica.");
   });
 
+  test("the replay block scrubs an invented paragraph step by step", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { level: 2, name: t.landing.replay.title })).toBeVisible();
+    const slider = page.getByRole("slider", { name: t.landing.replay.sliderLabel });
+    await slider.fill("0");
+    await expect(page.getByText(t.landing.replay.empty)).toBeVisible();
+    await slider.fill("1");
+    await expect(page.getByText("Gradovi", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: t.landing.replay.play }).click();
+    await expect(page.getByRole("button", { name: t.landing.replay.pause })).toBeVisible();
+  });
+
   test("every way in is a plain link to /prijava", async ({ page }) => {
     await page.goto("/");
     const entries = page.getByRole("link", { name: new RegExp(`^(${t.auth.signIn}|${t.landing.enter})$`) });

@@ -205,6 +205,20 @@ export const hr = {
       sampleCommentPlace: "uz odlomak 1 · mentor (izmišljen)",
       loading: "Učitavam probni prostor…",
     },
+    replay: {
+      eyebrow: "Premotavanje",
+      title: "Vrati se kroz nastanak odlomka.",
+      lead: "Mentor zadatka i student mogu premotati kako je tekst nastajao, korak po korak. Ovo je izmišljen primjer, nitko ga nije napisao.",
+      empty: "Odlomak je na početku prazan.",
+      start: "Početak",
+      during: "Tijekom pisanja",
+      end: "Završni tekst",
+      play: "Reproduciraj",
+      pause: "Pauza",
+      sliderLabel: "Korak premotavanja",
+      stepOf: "korak {step} od {last}",
+      note: "Premotavanje prikazuje redoslijed promjena, ne ocjenu ni procjenu. Ritam pisanja ne govori ništa o trudu.",
+    },
   },
   // F-6 (DAN-35): text of screen 2 of the design handoff (docs/design/ductura).
   teacher: {
