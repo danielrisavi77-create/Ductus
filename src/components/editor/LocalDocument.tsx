@@ -69,7 +69,7 @@ import {
 import type { EvidenceSession } from "./evidence-session";
 import LogoutDialog from "./LogoutDialog";
 import { endRun } from "./run-refs";
-import { nothingHeld, type LogoutPlan } from "./logout-plan";
+import { nothingHeld, withoutAfterSubmission, type LogoutPlan } from "./logout-plan";
 
 /** Quiet time after the last change before a candidate is proposed. */
 const DEBOUNCE_MS = 400;
@@ -89,6 +89,10 @@ type LockedLogout = {
   resume: () => void;
   /** Deletes the journal unless it holds unconfirmed work (D-118). */
   clear: () => Promise<void>;
+  /** Rows this document holds; null when they cannot be read. */
+  held: () => Promise<number | null>;
+  /** F-154: deletes what this device holds of this document, on the author's second click only. */
+  discard: () => Promise<void>;
 };
 
 type LocalDocumentValue = {
@@ -112,6 +116,12 @@ type LocalDocumentValue = {
   staySignedIn: () => void;
   /** Ends the session; resolves true once the logout route has answered. */
   signOut: () => Promise<boolean>;
+  /**
+   * F-154 (owner decision 1.3): deletes what this device holds of the work
+   * after its submission. Rejects unless this tab holds the lock and the
+   * server confirmed the submission in this page session.
+   */
+  discardAfterSubmission: () => Promise<void>;
 };
 
 const LocalDocumentContext = createContext<LocalDocumentValue | null>(null);
@@ -477,6 +487,19 @@ export function LocalDocumentProvider({
               // a fenced deletion (above).
             }
           },
+          held: async () => {
+            try {
+              return (await journal.read(documentId)).pending.length;
+            } catch {
+              return null;
+            }
+          },
+          // Only a submission the server confirmed in this page session: the
+          // session sets `closedBy` from a 409 or an open, never from the journal.
+          discard: async () => {
+            if (saver.snapshot().closedBy !== "submission") throw new Error("not_submitted");
+            await journal.discardAfterSubmission(documentId);
+          },
         };
         logoutRef.current = locked;
         await new Promise<void>((resolve) => {
@@ -541,9 +564,20 @@ export function LocalDocumentProvider({
     });
     const locked = logoutRef.current;
     const plan = await editorSignOutPlan(locked && (() => locked.quiesce()), scope, { session });
-    // After a submission the steps still held are never sent (3d-2c2 O3).
+    // After a submission the steps still held are never sent (3d-2c2 O3);
+    // only this document's are counted as such (F-154).
     const submitted = saverRef.current?.snapshot().closedBy === "submission";
-    return plan !== "leave" && submitted ? { ...plan, submitted } : plan;
+    if (plan === "leave" || !submitted) return plan;
+    const own = locked ? await locked.held() : null;
+    return own === null ? { ...plan, submitted } : { ...plan, submitted, afterSubmission: own };
+  };
+
+  // Rejects, deleting nothing, unless this tab holds the lock (the plan has
+  // a count after the submission only then).
+  const discardAfterSubmission = async (): Promise<void> => {
+    const locked = logoutRef.current;
+    if (!locked) throw new Error("not_locked");
+    await locked.discard();
   };
 
   const staySignedIn = () => logoutRef.current?.resume();
@@ -566,7 +600,7 @@ export function LocalDocumentProvider({
   };
 
   const value: LocalDocumentValue = {
-    editor, phase, snapshot, words, invalid, stickyLoad, prepareSignOut, staySignedIn, signOut,
+    editor, phase, snapshot, words, invalid, stickyLoad, prepareSignOut, staySignedIn, signOut, discardAfterSubmission,
   };
   return <LocalDocumentContext.Provider value={value}>{children}</LocalDocumentContext.Provider>;
 }
@@ -752,7 +786,7 @@ export function useLocalStatus(): { loading: boolean; words: number } {
  * logout route directly, which ends it as well.
  */
 export function LocalLogout() {
-  const { editor, prepareSignOut, staySignedIn, signOut } = useLocalDocument();
+  const { editor, prepareSignOut, staySignedIn, signOut, discardAfterSubmission } = useLocalDocument();
   const [preparing, setPreparing] = useState(false);
   const [plan, setPlan] = useState<LogoutPlan | null>(null);
   const [working, setWorking] = useState(false);
@@ -826,6 +860,11 @@ export function LocalLogout() {
           copies={plan.copies}
           onExport={() => {
             if (editor && !editor.isDestroyed) exportText(editor);
+          }}
+          onDiscardAfterSubmission={async () => {
+            await discardAfterSubmission();
+            // Gone from this device: the dialog counts what is left.
+            setPlan((open) => open && withoutAfterSubmission(open));
           }}
         />
       ) : null}

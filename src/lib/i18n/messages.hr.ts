@@ -900,6 +900,14 @@ export const hr = {
     logoutCopyKept:
       "Odjava kopiju ne briše. Ostaje vezana uz tebe na ovom uređaju i ponovno je vidiš kad se prijaviš.",
     copyTitle: "Kopija teksta",
+    // F-154 (owner decision 1.3): text written after the submission stays on
+    // sign-out (D-118) and goes only on the author's second click.
+    afterSubmissionTitle: "Izmjene nakon predaje",
+    afterSubmissionDiscard: "Obriši izmjene s ovog uređaja",
+    afterSubmissionDiscardAsk: "Obrisane izmjene ne mogu se vratiti. Predani rad ostaje kakav jest. Obrisati ih?",
+    afterSubmissionDiscardConfirm: "Da, obriši izmjene",
+    afterSubmissionKeep: "Zadrži izmjene",
+    afterSubmissionDiscardFailed: "Izmjene nisu obrisane i ostaju na ovom uređaju. Pokušaj ponovno.",
     copyNewestOnly: "Radnje se odnose na najnoviju kopiju.",
     copyRestore: "Vrati tekst u rad",
     copyDiscard: "Odbaci kopiju",

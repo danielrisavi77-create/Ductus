@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page, type Request, type Route } from "@playwright/test";
 
 import { canonicalizeJcs } from "../../src/domain/forensics/jcs";
+import { pluralHr } from "../../src/lib/i18n/hr";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { flipSignatureByte, stackCheckpoint } from "./evidence-receipt";
 import { clickSignOut, editorMounted, signIn } from "./support";
@@ -336,4 +337,53 @@ test("3d-2c2a §4: a submission's 409 not_accepting makes the sheet read-only wi
   // The refused row stays on the device; nothing is deleted (3d-2c2a §4).
   expect((await localOf(page, documentId)).pending.length).toBeGreaterThan(0);
   await shoot(page, "3d-2c2-predano");
+});
+
+/** The submitted sheet with rows after the submission, and the open sign-out dialog. */
+async function submittedWithRows(page: Page): Promise<{ documentId: string; held: number }> {
+  const { documentId } = await openSheet(page);
+  await page.route(COMMIT, (route) => route.fulfill({ status: 409, json: { status: "not_accepting" } }));
+  await type(page, "Tekst nakon predaje.");
+  await expect(page.getByRole("status").filter({ hasText: t.editor.submittedReadOnly })).toBeVisible({ timeout: OPEN });
+  const held = (await localOf(page, documentId)).pending.length;
+  expect(held).toBeGreaterThan(0);
+  await page.getByRole("button", { name: t.auth.logout, exact: true }).click();
+  return { documentId, held };
+}
+
+// F-154 (owner decision 1.3): what was written after the submission stays on
+// sign-out (D-118) and goes only on the second click of its own button.
+test("F-154: after a submission the dialog names its own rows, offers the export, and deletes only on the second click", async ({ page }) => {
+  const { documentId, held } = await submittedWithRows(page);
+  const dialog = page.getByRole("dialog");
+  const forms = t.auth.logoutAfterSubmission;
+  const after = pluralHr(held, forms.one, forms.few, forms.many);
+  await expect(dialog).toContainText(after.replace("{n}", String(held)));
+  await expect(dialog.getByRole("button", { name: t.editor.exportText })).toBeVisible();
+  await shoot(page, "f154-odjava-nakon-predaje");
+
+  // The first click only asks; Escape and "Zadrži izmjene" take it back.
+  await dialog.getByRole("button", { name: t.auth.afterSubmissionDiscard }).click();
+  await expect(dialog).toContainText(t.auth.afterSubmissionDiscardAsk);
+  await expect(dialog.getByRole("button", { name: t.auth.afterSubmissionKeep })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("button", { name: t.auth.afterSubmissionDiscard })).toBeVisible();
+  await dialog.getByRole("button", { name: t.auth.afterSubmissionDiscard }).click();
+  await dialog.getByRole("button", { name: t.auth.afterSubmissionKeep }).click();
+  expect((await localOf(page, documentId)).pending).toHaveLength(held);
+
+  // The second click deletes this document's rows and nothing else.
+  await dialog.getByRole("button", { name: t.auth.afterSubmissionDiscard }).click();
+  await dialog.getByRole("button", { name: t.auth.afterSubmissionDiscardConfirm }).click();
+  await expect(dialog.getByRole("button", { name: t.auth.afterSubmissionDiscard })).toHaveCount(0);
+  expect(await localOf(page, documentId)).toEqual({ pending: [] });
+  await shoot(page, "f154-odjava-nakon-brisanja");
+});
+
+test("F-154: without the second click sign-out keeps the rows after the submission (D-118)", async ({ page }) => {
+  const { documentId, held } = await submittedWithRows(page);
+  await page.getByRole("dialog").getByRole("button", { name: t.auth.logoutConfirm }).click();
+  await page.waitForURL("http://localhost:3000/");
+  expect((await localOf(page, documentId)).pending).toHaveLength(held);
 });

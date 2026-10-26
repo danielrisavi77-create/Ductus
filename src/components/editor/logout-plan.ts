@@ -18,6 +18,11 @@ export type LogoutPlan = {
   kept?: boolean;
   /** The work was submitted (3d-2c2a §4): the steps still held are never sent. */
   submitted?: boolean;
+  /**
+   * Rows of the submitted document alone (F-154), when read: only these are
+   * "after the submission"; the rest of `pending` belongs to other works.
+   */
+  afterSubmission?: number;
 };
 
 /**
@@ -52,13 +57,42 @@ export function logoutText(plan: LogoutPlan): LogoutText {
     return { text: t.logoutUnsaved, note: kept ? t.logoutKept : null, offerExport: true };
   }
   if (n === null || n <= 0) return { text: t.logoutPlain, note: kept ? t.logoutKept : null, offerExport: false };
-  if (plan.submitted) {
+  const after = plan.submitted ? heldAfterSubmission(plan) : 0;
+  if (after > 0) {
     // 3d-2c2 O3: kept on this device for this person, but no sign-in sends it.
-    const after = pluralHr(n, t.logoutAfterSubmission.one, t.logoutAfterSubmission.few, t.logoutAfterSubmission.many);
-    return { text: after.replace("{n}", String(n)), note: null, offerExport: false };
+    // Counted for the submitted document alone (F-154); other works' rows are
+    // only kept, and the text can still be exported before it is discarded.
+    const form = pluralHr(after, t.logoutAfterSubmission.one, t.logoutAfterSubmission.few, t.logoutAfterSubmission.many);
+    return { text: form.replace("{n}", String(after)), note: n > after ? t.logoutKept : null, offerExport: true };
   }
   const form = pluralHr(n, t.logoutPending.one, t.logoutPending.few, t.logoutPending.many);
   return { text: form.replace("{n}", String(n)), note: t.logoutKept, offerExport: false };
+}
+
+/** Rows held after the submission: the submitted document's own count, never more than all rows. */
+export function heldAfterSubmission(plan: LogoutPlan): number {
+  const own = plan.afterSubmission;
+  if (!plan.submitted || own === undefined || !Number.isSafeInteger(own) || own <= 0) return 0;
+  return plan.pending === null ? own : Math.min(own, plan.pending);
+}
+
+/** The plan once the rows after the submission are gone: the rest stays counted. */
+export function withoutAfterSubmission(plan: LogoutPlan): LogoutPlan {
+  const gone = heldAfterSubmission(plan);
+  return {
+    ...plan,
+    pending: plan.pending === null ? null : plan.pending - gone,
+    afterSubmission: 0,
+  };
+}
+
+/**
+ * The part of the dialog that discards what was written after the submission
+ * (F-154, owner decision 1.3): offered only with the action and rows to
+ * discard. Sign-out itself keeps them (D-118); only the second click deletes.
+ */
+export function afterSubmissionPart(plan: LogoutPlan, action: boolean): { title: string } | null {
+  return action && heldAfterSubmission(plan) > 0 ? { title: t.afterSubmissionTitle } : null;
 }
 
 /**
