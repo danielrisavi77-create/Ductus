@@ -37,7 +37,7 @@
 
 .alert {
   padding: 10px 12px;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--error);
 }
 
