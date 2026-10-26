@@ -17,6 +17,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNo
 import { startLiveReader, type LiveView } from "@/client/live-reader";
 import { watchSessionEnd, type SessionWatch } from "@/client/session-end";
 import type { SessionMark } from "@/client/session-marks";
+import { blockRuns } from "@/components/shell/manuscript-blocks";
 import SheetFrame from "@/components/shell/SheetFrame";
 import type { TextAnchor } from "@/domain/collaboration";
 import type { DocumentNode } from "@/domain/document";
@@ -44,7 +45,8 @@ function Block({ node, ranges }: { node: DocumentNode; ranges: readonly TextRang
     if (segment.marks.includes("bold")) content = <strong>{content}</strong>;
     return segment.marked ? <mark key={i} className={styles.mark}>{content}</mark> : <span key={i}>{content}</span>;
   });
-  if (node.type === "paragraph") return <p data-node-id={node.id}>{children}</p>;
+  if (node.type === "paragraph" || node.type === "quote") return <p data-node-id={node.id}>{children}</p>;
+  if (node.type === "bulletItem") return <li data-node-id={node.id}>{children}</li>;
   // The page has its own h1, so the work's levels 1 to 3 are h2 to h4.
   const Heading = node.level === 1 ? "h2" : node.level === 2 ? "h3" : "h4";
   return <Heading data-node-id={node.id}>{children}</Heading>;
@@ -105,9 +107,14 @@ export default function LiveWorkView({ documentId, session }: {
   let text: ReactNode;
   if (stopped) text = <p className="manuscript__placeholder">{t.connection[view.connection]}</p>;
   else if (view.document) {
-    text = view.document.nodes.map((node) => (
+    const block = (node: DocumentNode) => (
       <Block key={node.id} node={node} ranges={marks.filter((r) => r.nodeId === node.id)} />
-    ));
+    );
+    // Consecutive bullet items are one list, quote paragraphs one block quote (E1).
+    text = blockRuns(view.document.nodes).map((run) =>
+      run.kind === "list" ? <ul key={run.items[0]!.id}>{run.items.map(block)}</ul>
+        : run.kind === "quote" ? <blockquote key={run.items[0]!.id}>{run.items.map(block)}</blockquote>
+        : block(run.node));
   } else text = <p className="manuscript__placeholder">{view.empty ? t.empty : t.loading}</p>;
 
   return (

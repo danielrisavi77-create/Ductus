@@ -57,6 +57,38 @@ describe("SubmissionView (F-10)", () => {
     expect(html).not.toContain(t.receiptTitle);
   });
 
+  it("shows consecutive bullet items as one list, never as a heading (E1, #823)", () => {
+    const item = (n: number, text: string) =>
+      ({ id: `3333333${n}-3333-4333-8333-333333333333`, type: "bulletItem", children: [{ type: "text", text, marks: [] }] });
+    const result = validateDocument({
+      schemaVersion: 1,
+      nodes: [
+        item(1, "Prva stavka"), item(2, "Druga stavka"),
+        { id: "44444444-4444-4444-8444-444444444444", type: "paragraph", children: [{ type: "text", text: "Odlomak", marks: [] }] },
+        item(3, "Treća stavka"),
+      ],
+    });
+    if (!result.ok) throw new Error("invalid synthetic document");
+    const html = render(ready({ document: result.doc }));
+    expect(html).toContain("<ul><li><span>Prva stavka</span></li><li><span>Druga stavka</span></li></ul><p><span>Odlomak</span></p>" +
+      "<ul><li><span>Treća stavka</span></li></ul>");
+    expect(html).not.toMatch(/<h[2-4]>/);
+  });
+
+  it("shows consecutive quote paragraphs as one block quote, never as a heading (E1, #823)", () => {
+    const block = (n: number, type: string, text: string) =>
+      ({ id: `6666666${n}-6666-4666-8666-666666666666`, type, children: [{ type: "text", text, marks: [] }] });
+    const result = validateDocument({
+      schemaVersion: 1,
+      nodes: [block(1, "quote", "Navod"), block(2, "quote", "Nastavak"), block(3, "paragraph", "Odlomak"), block(4, "bulletItem", "Stavka")],
+    });
+    if (!result.ok) throw new Error("invalid synthetic document");
+    const html = render(ready({ document: result.doc }));
+    expect(html).toContain("<blockquote><p><span>Navod</span></p><p><span>Nastavak</span></p></blockquote><p><span>Odlomak</span></p>" +
+      "<ul><li><span>Stavka</span></li></ul>");
+    expect(html).not.toMatch(/<h[2-4]>/);
+  });
+
   it("with revision 0 says there is no text on the server and offers no button (criterion 4)", () => {
     const html = render(ready({ revision: 0 }));
     expect(html).toContain(t.noEvidence);

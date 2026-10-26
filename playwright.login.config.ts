@@ -1,4 +1,4 @@
-import { defineConfig, devices } from "@playwright/test";
+import { defineConfig, devices, type ReporterDescription } from "@playwright/test";
 
 import { evidenceServerEnvironment } from "./scripts/demo/login-e2e-evidence.mjs";
 import { playwrightConsoleReporter } from "./test-output";
@@ -25,7 +25,12 @@ export default defineConfig({
   // request; one worker keeps the sessions of one test out of another.
   workers: 1,
   timeout: 90_000,
-  reporter: [[playwrightConsoleReporter(process.env)], ["html", { open: "never", outputFolder: "playwright-report-login" }]],
+  reporter: [
+    [playwrightConsoleReporter(process.env)],
+    ["html", { open: "never", outputFolder: "playwright-report-login" }],
+    // CI shards: the results each runner reconciles against the full list.
+    ...(process.env.LOGIN_E2E_JSON ? [["json", { outputFile: process.env.LOGIN_E2E_JSON }] as ReporterDescription] : []),
+  ],
   outputDir: "test-results-login",
   use: {
     baseURL: BASE_URL,

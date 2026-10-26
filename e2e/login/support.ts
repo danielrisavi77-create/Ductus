@@ -4,6 +4,7 @@ import { expect, type BrowserContext, type Page } from "@playwright/test";
 import pg from "pg";
 
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
+import { localAdminUrl } from "./local-db-url";
 
 // Shared by the specs that log in through the fake provider against
 // `next dev` (playwright.login.config.ts). The demo accounts are invented
@@ -11,10 +12,25 @@ import { messagesHr } from "../../src/lib/i18n/messages.hr";
 export const SESSION_COOKIE = "__Host-ductus_session";
 export const LOGIN_COOKIE = "__Host-ductus_login";
 
+/**
+ * The chip once typed text is in the journal (3d-2c2, G2 c.6393716541): on
+ * `/rad?zadatak=` the evidence session sends it on while the browser is
+ * online, so the chip may already have moved on to sending or to the signed
+ * receipt. Offline and on `/rad` without an assignment it stays LOCAL_DURABLE.
+ */
+export const SAVED_HERE = /^(LOCAL_DURABLE|SYNCING|SYNCED)$/;
+
+/**
+ * The first opening of an assignment's work POSTs the open and refreshes the
+ * render, which mounts the editor and its panel afresh (#731). A test acts on
+ * the sheet only once the refreshed editor shows its toolbar.
+ */
+export async function editorMounted(page: Page): Promise<void> {
+  await expect(page.getByRole("toolbar", { name: messagesHr.toolbar.label })).toBeVisible({ timeout: 30_000 });
+}
+
 // The admin login of the compose database reads identity.session to check
 // what the browser cannot see: the session row behind the cookie.
-const ADMIN_DATABASE_URL =
-  process.env.E2E_ADMIN_DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
 
 export interface SessionRow {
   institution: string;
@@ -24,7 +40,7 @@ export interface SessionRow {
 }
 
 export async function sessionRow(token: string): Promise<SessionRow | undefined> {
-  const client = new pg.Client({ connectionString: ADMIN_DATABASE_URL });
+  const client = new pg.Client({ connectionString: localAdminUrl() });
   await client.connect();
   try {
     const { rows } = await client.query<SessionRow>(
@@ -45,10 +61,17 @@ export async function appCookie(context: BrowserContext, name: string) {
   return (await context.cookies("http://localhost:3000")).find((c) => c.name === name);
 }
 
+/** Where "/" sends a signed-in person: the teacher's page or the workspace (DAN-325). */
+export const ROLE_HOME = /^http:\/\/localhost:3000\/(rad|nastavnik)$/;
+
 /** A button on the provider's "Demo prijava" page (infra/fake-oidc). */
 export type DemoAccount = "Demo studentica" | "Demo student 2" | "Demo nastavnik" | "Demo nastavnica";
 
-/** Signs in as a demo account (the student unless named) and returns the callback URL the provider sent. */
+/**
+ * Signs in as a demo account (the student unless named) and returns the callback URL the provider sent.
+ * "/" sends a signed-in person on to their own page (DAN-325), which depends on the roles the test
+ * set up, so it waits for either.
+ */
 export async function signIn(page: Page, returnTo: string, account: DemoAccount = "Demo studentica"): Promise<string> {
   const callbacks: string[] = [];
   page.on("request", (request) => {
@@ -58,7 +81,7 @@ export async function signIn(page: Page, returnTo: string, account: DemoAccount 
   await expect(page).toHaveURL(/^http:\/\/localhost:8090\/interaction\//);
   await expect(page.getByRole("heading", { level: 1, name: "Demo prijava" })).toBeVisible();
   await page.getByRole("button", { name: account }).click();
-  await page.waitForURL(`http://localhost:3000${returnTo}`);
+  await page.waitForURL(returnTo === "/" ? ROLE_HOME : `http://localhost:3000${returnTo}`);
   expect(callbacks).toHaveLength(1);
   return callbacks[0]!;
 }
@@ -96,4 +119,22 @@ export async function clickSignOut(page: Page): Promise<void> {
 export async function signOutWithoutDialog(page: Page): Promise<void> {
   await page.getByRole("button", { name: messagesHr.auth.logout, exact: true }).click();
   await page.waitForURL("http://localhost:3000/");
+}
+
+/**
+ * Signs out where the evidence session may or may not have had the work
+ * confirmed yet (3d-2c2b): still on its way, the dialog opens and is
+ * confirmed; confirmed, nothing stays and "Odjava" leads straight home (O1).
+ * For tests about what the next person sees, not about the dialog itself.
+ */
+export async function signOutHoweverHeld(page: Page): Promise<void> {
+  await page.getByRole("button", { name: messagesHr.auth.logout, exact: true }).click();
+  const confirm = logoutDialogOf(page).getByRole("button", { name: messagesHr.auth.logoutConfirm });
+  const home = page.waitForURL("http://localhost:3000/");
+  const first = await Promise.race([
+    home.then(() => "home" as const),
+    confirm.waitFor({ state: "visible" }).then(() => "dialog" as const, () => "home" as const),
+  ]);
+  if (first === "dialog") await confirm.click();
+  await home;
 }

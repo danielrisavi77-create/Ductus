@@ -3,8 +3,8 @@
 /**
  * The toolbar above the sheet (F-8 step 1, design editor-v11 §5.1 point 2).
  *
- * Only what the F1 schema holds: paragraph, headings 1-3, bold, italic, undo
- * and redo. Every button runs an editor command, so a change reaches the
+ * Only what the F1 schema holds: paragraph, bullet item and quote (E1), headings 1-3,
+ * bold, italic, undo and redo. Every button runs an editor command, so a change reaches the
  * journal exactly as typing does; the toolbar itself stores nothing.
  *
  * One Tab stop (WAI-ARIA toolbar): arrows, Home and End move between buttons.
@@ -34,6 +34,8 @@ import { MAX_COLLAPSED, rovingIndex, splitTools } from "./toolbar-menu";
 type ToolbarState = {
   editable: boolean;
   paragraph: boolean;
+  bulletItem: boolean;
+  quote: boolean;
   heading1: boolean;
   heading2: boolean;
   heading3: boolean;
@@ -44,7 +46,7 @@ type ToolbarState = {
 };
 
 const IDLE: ToolbarState = {
-  editable: false, paragraph: false, heading1: false, heading2: false, heading3: false,
+  editable: false, paragraph: false, bulletItem: false, quote: false, heading1: false, heading2: false, heading3: false,
   bold: false, italic: false, canUndo: false, canRedo: false,
 };
 
@@ -54,6 +56,8 @@ function stateOf(editor: Editor | null): ToolbarState {
   return {
     editable,
     paragraph: editor.isActive("paragraph"),
+    bulletItem: editor.isActive("bulletItem"),
+    quote: editor.isActive("quote"),
     heading1: editor.isActive("heading", { level: 1 }),
     heading2: editor.isActive("heading", { level: 2 }),
     heading3: editor.isActive("heading", { level: 3 }),
@@ -92,6 +96,15 @@ const TOOLS: readonly Tool[] = [
   {
     key: "italic", label: t.toolbar.italic, glyph: <i>I</i>,
     pressed: (s) => s.italic, run: (e) => e.chain().focus().toggleItalic().run(),
+  },
+  // E1: after B and I, as in editor-v11 ("¶ Naslov Podnaslov | B I • „ ”").
+  {
+    key: "bulletItem", label: t.toolbar.bulletItem, glyph: "•",
+    pressed: (s) => s.bulletItem, run: (e) => e.chain().focus().toggleNode("bulletItem", "paragraph").run(),
+  },
+  {
+    key: "quote", label: t.toolbar.quote, glyph: "„ ”",
+    pressed: (s) => s.quote, run: (e) => e.chain().focus().toggleNode("quote", "paragraph").run(),
   },
   {
     key: "undo", label: t.toolbar.undo, glyph: "↶",
