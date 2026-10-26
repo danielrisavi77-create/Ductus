@@ -127,7 +127,7 @@ SELECT is(substr(pg_temp.ask_as('ductus_evidence','ana',$$UPDATE evidence.submis
   'ZD403','owner cannot change a frozen attempt');
 SELECT is(substr(pg_temp.ask_as('ductus_evidence','ana',$$DELETE FROM evidence.submission_receipt_issuance RETURNING id::text$$),1,5),
   'ZD403','owner cannot delete a frozen attempt');
-SELECT is(substr(pg_temp.ask_as('ductus_evidence','ana',$$TRUNCATE evidence.submission_receipt_issuance$$),1,5),
+SELECT is(substr(pg_temp.ask_as('ductus_evidence','ana',$$TRUNCATE evidence.submission_receipt_issuance,evidence.submission_receipt$$),1,5),
   'ZD403','owner cannot truncate frozen attempts');
 DROP POLICY submission_receipt_issuance_owner ON evidence.submission_receipt_issuance;
 SELECT is(pg_temp.ask_as('ductus_evidence','ana',$$SELECT count(*)::text FROM evidence.submission_receipt_issuance$$),

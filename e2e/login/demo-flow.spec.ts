@@ -19,7 +19,9 @@ import { cleanUp, post, seed } from "./comment-seed";
 import {
   loseNextCommitAnswer, replayFirstReceipt, stackCheckpoint, stackReceiptKeys, tamperNextReceipt, verifyWithStackKeys,
 } from "./evidence-receipt";
-import { appCookie, clickSignOut, SESSION_COOKIE, sessionRow, signIn } from "./support";
+import {
+  appCookie, clickSignOut, fillCodeDeadline, SESSION_COOKIE, sessionRow, signIn, signOutWithoutDialog,
+} from "./support";
 
 // K-4 (DAN-89; docs/PLAN-DEMO.md §1 points 1 to 5 and §7 t. 2, D-98): the demo
 // walk-through as one test. The login config records its video in CI and the
@@ -131,10 +133,15 @@ async function forgetProviderLogin(context: BrowserContext): Promise<void> {
   await context.clearCookies({ name: /^_session/ });
 }
 
-/** Signs out through the button on the writing page and checks that the session is closed. */
-async function signOut(page: Page, token: string): Promise<void> {
+/**
+ * Signs out through the button on the writing page and checks that the
+ * session is closed. With nothing of this person on the device there is no
+ * dialog (O1, #476 c.6396707923); `held` says which is expected.
+ */
+async function signOut(page: Page, token: string, held = true): Promise<void> {
   if (!page.url().endsWith("/rad")) await page.goto("/rad");
-  await clickSignOut(page);
+  if (held) await clickSignOut(page);
+  else await signOutWithoutDialog(page);
   await page.waitForURL("http://localhost:3000/");
   expect(await appCookie(page.context(), SESSION_COOKIE)).toBeUndefined();
   expect(await sessionRow(token)).toMatchObject({ close_reason: "logout", closed_at: expect.any(Date) });
@@ -192,9 +199,8 @@ const clearNoticeFixture = () => withAdmin((client) => client.query(
   [LOCAL_DEMO_DOCUMENT_ID]));
 test.afterEach(clearNoticeFixture);
 
-// K-4b (#655): F-7 enrollment by code into the F-6 course. Until the teacher
-// screen shows the code (#576), the test takes it from the real teacher HTTP
-// route; that request is test input, not a step of the teacher's screen.
+// K-4b (#655): F-7 enrollment by code into the F-6 course. Since DAN-36 (#576)
+// the code is the one the teacher's screen shows after "Stvori kolegij".
 const STUDENT_ID = "demo-student@demo.ductus.test";
 const ASSIGNMENT_TITLE = "Izmišljeni zadatak o gradskim knjižnicama";
 let enrollmentCode: string | null = null;
@@ -355,12 +361,23 @@ test("demo walk-through", async ({ browser, page, context }) => {
     await expect(page.getByRole("heading", { name: t.teacher.title })).toBeVisible();
 
     await page.getByLabel(t.teacher.course.name).fill(COURSE_NAME);
+    await fillCodeDeadline(page);
+    // DAN-36 (#576): one click creates the course, then asks the real route (#575) for its code.
+    const reply = page.waitForResponse((response) =>
+      /\/api\/institution\/courses\/[^/]+\/enrollment-code$/.test(new URL(response.url()).pathname)
+      && response.request().method() === "POST");
     await page.getByRole("button", { name: t.teacher.course.submit }).click();
+    const issued = await reply;
+    expect(issued.status()).toBe(200);
+    expect(issued.headers()["cache-control"]).toBe("no-store");
+    const { code } = await issued.json() as { code: string };
+    expect(code).toMatch(/^[0-9A-F]{4}(-[0-9A-F]{4}){3}$/);
     await expect(page.getByRole("status").filter({ hasText: t.teacher.course.created })).toBeVisible();
-    // FE-D10: no enrolment code is invented while its route is missing.
-    const code = page.getByText(t.teacher.course.code, { exact: false }).first();
-    await expect(code).toContainText(t.workspace.soon);
-    await expect(page.getByText(t.teacher.course.codeSoon)).toBeVisible();
+    // FE-D10: the screen shows exactly the code the route returned, never an invented one.
+    await expect(page.locator("form[aria-labelledby=kolegij] code")).toHaveText(code);
+    const { course } = await k4Course();
+    expect(new URL(issued.url()).pathname).toBe(`/api/institution/courses/${course}/enrollment-code`);
+    enrollmentCode = code;
     await snapshot(page, "1-kolegij-stvoren");
 
     await page.getByLabel(t.teacher.assignment.title).fill("Izmišljeni zadatak o gradskim knjižnicama");
@@ -382,23 +399,8 @@ test("demo walk-through", async ({ browser, page, context }) => {
     await snapshot(page, "1-zadatak-objavljen");
   });
 
-  // Test input until #576: the teacher screen does not show the code yet, so the
-  // signed-in teacher's own session asks the real route for it (#575).
-  await test.step("1. Testni ulaz do #576: nastavnik izdaje šifru za upis kroz stvarnu rutu", async () => {
-    const { course } = await k4Course();
-    const validUntil = new Date(Date.now() + 10 * 60_000).toISOString();
-    const issued = await page.request.post(`/api/institution/courses/${course}/enrollment-code`, {
-      headers: { origin: "http://localhost:3000", "content-type": "application/json" }, data: { validUntil },
-    });
-    expect(issued.status()).toBe(200);
-    expect(issued.headers()["cache-control"]).toBe("no-store");
-    const { code } = await issued.json() as { code: string };
-    expect(code).toMatch(/^[0-9A-F]{4}(-[0-9A-F]{4}){3}$/);
-    enrollmentCode = code;
-  });
-
   await test.step("1. Nastavnik se odjavljuje", async () => {
-    await signOut(page, token);
+    await signOut(page, token, false);
     await snapshot(page, "1-nastavnik-odjavljen");
   });
 
@@ -928,7 +930,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
     expect(live.status()).toBe(404);
     expect(await live.json()).toEqual({ error: "not_found" });
     await snapshot(page, "2-drugi-student-izoliran");
-    await signOut(page, token);
+    await signOut(page, token, false);
   });
 
   await test.step("2. Ponovna prijava studentice vraća njezin lokalni nacrt i komentar", async () => {

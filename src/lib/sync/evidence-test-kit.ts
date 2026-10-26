@@ -36,6 +36,8 @@ export const DOC = BASE.documentId;
 export const DOMAIN = BASE.evidenceDomainId;
 export const UTC = "2026-10-24T12:00:00.000Z";
 export const R0 = 4;
+/** The invented evidence profile of the work's package, in every segment and opening. */
+export const PROFILE = "profil-izmisljeni";
 export const deps = { indexedDB, IDBKeyRange };
 export const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 const T0 = Date.parse("2026-10-24T09:00:00.000Z");
@@ -75,7 +77,7 @@ export async function capture(
       documentId: DOC,
       sessionId: "11111111-1111-4111-8111-111111111111",
       segmentId: `22222222-2222-4222-8222-${(sequenceFrom + i).toString().padStart(12, "0")}`,
-      evidenceProfileId: "profil-izmisljeni",
+      evidenceProfileId: PROFILE,
       sequenceFrom: sequenceFrom + i,
       predecessorSegmentHash: predecessor,
     });
@@ -87,7 +89,7 @@ export async function capture(
   return {
     opened: {
       documentId: DOC, currentRevision: revision, documentHash: sha256(document),
-      headSegmentHash: head, lastSequenceTo: sequenceFrom - 1, document,
+      headSegmentHash: head, lastSequenceTo: sequenceFrom - 1, document, evidenceProfileId: PROFILE,
     },
     segments,
   };
@@ -98,7 +100,29 @@ export function openedAfter(segment: BuiltSegment, revision: number): EvidenceOp
   return {
     documentId: DOC, currentRevision: revision, documentHash: sha256(segment.document),
     headSegmentHash: segment.sha256, lastSequenceTo: segment.segment.sequenceTo, document: segment.document,
+    evidenceProfileId: PROFILE,
   };
+}
+
+/**
+ * An open answer whose fields answer their first read with the real value and
+ * every later read with another one (#733), and the count of reads per field.
+ */
+export function shifting(opened: EvidenceOpening) {
+  const reads: Record<string, number> = {};
+  const later: Record<string, unknown> = {
+    evidenceProfileId: 7, headSegmentHash: "b".repeat(64), documentHash: "c".repeat(64),
+    currentRevision: opened.currentRevision + 5, lastSequenceTo: opened.lastSequenceTo + 5,
+    document: new Uint8Array([123, 125]),
+  };
+  const proxy = new Proxy(opened, {
+    get(target, key, receiver) {
+      const name = String(key);
+      reads[name] = (reads[name] ?? 0) + 1;
+      return reads[name]! > 1 && name in later ? later[name] : Reflect.get(target, key, receiver);
+    },
+  });
+  return { opening: proxy, reads };
 }
 
 /** Journals on fake-indexeddb under scopes starting with `prefix`, deleted by `cleanup`. */

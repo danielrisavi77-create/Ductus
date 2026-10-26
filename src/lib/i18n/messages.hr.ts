@@ -202,10 +202,8 @@ export const hr = {
       pending: "Stvaranje kolegija…",
       // create_course returns the existing id for an identical repeat.
       created: "Kolegij je spreman.",
-      // FE-D10: the code is not shown until the app can create one (#476
-      // 6273758034); an invented code would be refused at /upis.
+      // FE-D10: only a code the route returned is shown (#576); never an invented one.
       code: "Kod za upis",
-      codeSoon: "Kod se ovdje prikazuje čim ga aplikacija može stvoriti. Studenti upisuju kolegij tim kodom.",
       nameMissing: "Upiši naziv kolegija.",
       errors: {
         invalid: "Provjeri naziv, akademsku godinu i pravila kolegija.",
@@ -213,6 +211,24 @@ export const hr = {
         forbidden: "Za ovaj račun nije dopušteno stvaranje kolegija.",
         conflict: "Kolegij s tim nazivom već postoji uz druga pravila.",
         unavailable: "Stvaranje kolegija nije potvrđeno. Pokušaj ponovno.",
+      },
+    },
+    // DAN-36 (#576 6362017778): the teacher picks the deadline; there is no default.
+    enrollmentCode: {
+      validUntil: "Kod vrijedi do",
+      expiryHelp: "Obavezno. Odaberi datum i vrijeme do kojih studenti mogu upisati kolegij ovim kodom, najviše godinu dana unaprijed.",
+      selected: "Odabrano:",
+      pending: "Izdavanje koda…",
+      retry: "Ponovno izdaj kod",
+      replace: "Izdaj novi kod",
+      shownOnce: "Kod se prikazuje samo sada. Zapiši ga i daj studentima. Novi kod zamjenjuje ovaj.",
+      courseKept: "Kolegij postoji. Ponovni pokušaj izdaje samo kod, ne stvara novi kolegij.",
+      errors: {
+        missing: "Odaberi do kada kod vrijedi.",
+        invalid: "Odaberi datum i vrijeme koji postoje, u budućnosti i najviše godinu dana unaprijed.",
+        unauthorized: "Kod nije izdan. Prijava nije valjana. Prijavi se ponovno.",
+        forbidden: "Za ovaj račun nije dopušteno izdavanje koda za ovaj kolegij.",
+        unavailable: "Nije potvrđeno je li kod izdan. Ponovni pokušaj izdaje novi kod koji zamjenjuje svaki prethodni.",
       },
     },
     assignment: {
@@ -704,17 +720,17 @@ export const hr = {
     sessions: {
       heading: "Sesije pisanja",
       count: "Broj sesija",
-      threshold: "prag P-01: nova sesija počinje nakon stanke dulje od",
+      threshold: "prag: nova sesija počinje nakon stanke dulje od",
       none: "Nema zabilježenih sesija.",
     },
     pastes: {
       heading: "Lijepljenja",
-      listedThreshold: "prag P-02: zasebno se navodi lijepljenje veće od",
+      listedThreshold: "prag: zasebno se navodi lijepljenje veće od",
       size: "Veličina",
       origins: { not_observed: "izvor nije opažen" },
       noneListed: "Nema lijepljenja većih od praga.",
       smaller: "Manja lijepljenja, samo broj",
-      smallerThreshold: "prag P-02: najviše",
+      smallerThreshold: "prag: najviše",
     },
     gaps: {
       heading: "Praznine u zapisu",
@@ -789,6 +805,13 @@ export const hr = {
     passwordNote: "Lozinku upisuješ samo kod AAI@EduHr.",
     codeNote: "Kod zadatka od nastavnika upisuješ nakon prijave.",
     help: "Ako prijava ne uspije, javi se koordinatoru na svojoj ustanovi.",
+  },
+  // #732 item 3: Next.js error and not-found pages in Croatian (D-84).
+  errorPage: {
+    notFoundTitle: "Stranica ne postoji",
+    notFoundBody: "Na ovoj adresi nema stranice. Provjeri adresu ili se vrati na početnu.",
+    errorTitle: "Stranicu nije bilo moguće prikazati",
+    errorBody: "Dogodila se neočekivana greška. Pokušaj ponovno; ako se ponovi, vrati se na početnu.",
   },
 } as const;
 

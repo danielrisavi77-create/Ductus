@@ -107,6 +107,21 @@ describe("FastPath states", () => {
     const html = render({ state: "ready", students: DEMO_FAST_PATH });
     expect(html).not.toMatch(/<select|<textarea|<input|<form/);
   });
+
+  it("marks each state word for its dot without adding an element, and keeps the surname order (#732 item 17)", () => {
+    const works = ["submitted", "notice_pending", "revision_requested", "writing"] as const;
+    const students = works.map((work, i) => ({ ...student("Ana", `Prezime${i}`), work }));
+    const html = render({ state: "ready", students });
+    for (const work of works) {
+      expect(html).toContain(`data-work="${work}">${t.work[work]}</span>`);
+    }
+    // The e2e reads names as each button's first span; the dot must not add one.
+    expect(html).not.toMatch(/<span[^>]*><\/span>/);
+    // One per list row and one in the head of the chosen work.
+    expect(html.split("data-work=").length - 1).toBe(works.length + 1);
+    const order = students.map((s) => html.indexOf(`Ana ${s.surname}`));
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
 });
 
 describe("text coverage", () => {
