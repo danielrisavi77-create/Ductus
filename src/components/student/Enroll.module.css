@@ -12,7 +12,7 @@
   gap: 12px;
   padding: 30px;
   border: 1px solid var(--rule);
-  border-radius: 16px;
+  border-radius: var(--radius);
   background: var(--sheet);
   box-shadow: var(--lift);
 }
@@ -54,7 +54,7 @@
   min-height: 44px;
   padding: 10px 12px;
   border: 1px solid var(--rule);
-  border-radius: 9px;
+  border-radius: var(--radius-sm);
   background: var(--ground);
   color: var(--ink);
   font-family: var(--ff-mono);
@@ -75,7 +75,7 @@
   min-height: 44px;
   padding: 0 18px;
   border: 0;
-  border-radius: 9px;
+  border-radius: var(--radius-sm);
   background: var(--accent);
   color: var(--accent-ink);
   font-size: 14px;

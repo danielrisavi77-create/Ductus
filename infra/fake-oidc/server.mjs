@@ -59,20 +59,20 @@ const escapeHtml = (text) =>
 const PAGE_STYLE = `
 :root { color-scheme: dark; }
 body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px;
-  box-sizing: border-box; background: #091310; color: #eef3e9;
+  box-sizing: border-box; background: #19161a; color: #f1e5d6;
   font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
 main { width: min(430px, 100%); box-sizing: border-box; padding: 30px 30px 24px;
-  background: #12211c; border: 1px solid #24372e; border-radius: 14px;
+  background: #292329; border: 1px solid #41333c; border-radius: 6px;
   box-shadow: 0 1px 1px #0007, 0 12px 34px -10px #000a; text-align: center; }
-.tag { display: inline-block; padding: 2px 10px; border-radius: 8px; background: #173c2d;
-  color: #8ee3be; font-size: 12px; font-weight: 600; }
+.tag { display: inline-block; padding: 2px 10px; border-radius: 4px; background: #3b2a2c;
+  color: #cf9d72; font-size: 12px; font-weight: 600; }
 h1 { margin: 12px 0 8px; font-size: 24px; font-weight: 400; }
-p { margin: 0 0 20px; font-size: 13px; color: #a3b5aa; }
+p { margin: 0 0 20px; font-size: 13px; color: #c2b2a3; }
 form { display: grid; gap: 10px; }
-button { min-height: 48px; padding: 12px 18px; border: 0; border-radius: 8px;
-  background: #8ee3be; color: #091310; font: inherit; font-weight: 600; cursor: pointer; }
-button:hover { background: #99f5cd; }
-button:focus-visible { outline: 2px solid #eef3e9; outline-offset: 2px; }
+button { min-height: 48px; padding: 12px 18px; border: 0; border-radius: 4px;
+  background: #cf9d72; color: #231720; font: inherit; font-weight: 600; cursor: pointer; }
+button:hover { background: #dcae86; }
+button:focus-visible { outline: 2px solid #f1e5d6; outline-offset: 2px; }
 `;
 
 function loginPage(uid) {
