@@ -54,20 +54,21 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
-      # Every folder holding a docker executable leaves PATH for the later steps,
-      # and the engine service stops; the next step proves Docker is out of reach.
+      # The engine service stops; a docker executable in System32 (where the
+      # runner image puts it) is deleted from this throwaway runner, and every
+      # other folder holding one leaves PATH. The next step proves Docker is gone.
       - name: Take Docker out of reach
         shell: pwsh
         run: |
+          if (Get-Service docker -ErrorAction SilentlyContinue) { Stop-Service docker -Force }
           $remove = @()
-          foreach ($command in @(Get-Command docker, docker-compose -All -ErrorAction SilentlyContinue)) {
+          foreach ($command in @(Get-Command docker, dockerd, docker-compose -All -ErrorAction SilentlyContinue)) {
             $dir = Split-Path -Parent $command.Source
-            if ($dir -match '\\System32$') { throw "docker sits in $dir; it cannot leave PATH" }
+            if ($dir -match '\\System32$') { Remove-Item -LiteralPath $command.Source -Force; continue }
             $remove += $dir
           }
           $path = ($env:PATH -split ';' | Where-Object { $_ -and ($remove -notcontains $_.TrimEnd('\')) }) -join ';'
           "PATH=$path" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          if (Get-Service docker -ErrorAction SilentlyContinue) { Stop-Service docker -Force }
       - name: Prove Docker is absent
         shell: pwsh
         run: |
