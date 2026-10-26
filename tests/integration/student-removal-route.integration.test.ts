@@ -31,6 +31,13 @@ const post = (session: string, target = course, student = people.student.id, bod
 const membership = async (target: string, user: string) => (await admin.query(
   "SELECT member_to IS NULL AS open, removed_by FROM institution.course_member WHERE course_id = $1 AND user_id = $2", [target, user],
 )).rows[0] as { open: boolean; removed_by: string | null } | undefined;
+// DAN-338: the audit rows of this file's fixtures, each named by the membership it changed.
+const events = async () => (await admin.query(
+  `SELECT e.kind, e.actor_id, e.institution_id, e.course_id, e.student_id,
+          (m.course_id, m.user_id, m.removed_by, m.member_to IS NOT NULL) = (e.course_id, e.student_id, e.actor_id, true) AS ended_that_membership
+     FROM audit.course_member_event e JOIN institution.course_member m ON m.id = e.membership_id
+    WHERE e.institution_id = ANY($1) ORDER BY e.occurred_at, e.student_id`, [faculties],
+)).rows;
 
 // Scoped snapshots of every table in these schemas detect an accidental write
 // anywhere; only this file's random fixtures enter the comparison.
@@ -103,6 +110,16 @@ afterAll(async () => {
   vi.unstubAllEnvs();
   await app.end();
   await admin.query("DELETE FROM institution.enrollment_attempt WHERE user_id = ANY($1)", [ids]);
+  // The audit rows are append-only; only this clean-up steps around the trigger.
+  const cleaner = await admin.connect();
+  try {
+    await cleaner.query("BEGIN");
+    await cleaner.query("SET LOCAL session_replication_role = replica");
+    await cleaner.query("DELETE FROM audit.course_member_event WHERE institution_id = ANY($1)", [faculties]);
+    await cleaner.query("COMMIT");
+  } finally {
+    cleaner.release();
+  }
   await admin.query("DELETE FROM institution.course_member WHERE institution_id = ANY($1)", [faculties]);
   await admin.query("DELETE FROM institution.course_enrollment_code WHERE course_id IN (SELECT id FROM institution.course WHERE institution_id = ANY($1))", [faculties]);
   await admin.query("DELETE FROM institution.course WHERE institution_id = ANY($1)", [faculties]);
@@ -156,7 +173,7 @@ describe("student removal real POST, session and database", () => {
   });
 
   it("lets a teacher of the course remove exactly one student, once, and keeps that student out of the code", async () => {
-    const before = await snapshot(["course_member"]);
+    const before = await snapshot(["course_member", "course_member_event"]);
     const members = (await admin.query(
       "SELECT course_id, user_id, member_to FROM institution.course_member WHERE institution_id = ANY($1) AND user_id <> $2 ORDER BY 1, 2",
       [faculties, people.student.id],
@@ -176,12 +193,34 @@ describe("student removal real POST, session and database", () => {
       "SELECT course_id, user_id, member_to FROM institution.course_member WHERE institution_id = ANY($1) AND user_id <> $2 ORDER BY 1, 2",
       [faculties, people.student.id],
     )).rows).toEqual(members);
-    expect(await snapshot(["course_member"])).toEqual(before);
+    expect(await snapshot(["course_member", "course_member_event"])).toEqual(before);
+    // DAN-338: one audit row, by the teacher who removed, for the membership that ended; none for the second call.
+    expect(await events()).toEqual([{
+      kind: "removed", actor_id: people.second.id, institution_id: faculties[0], course_id: course, student_id: people.student.id,
+      ended_that_membership: true,
+    }]);
     // The code still works for others; the removed student is refused.
     const outcome = await withActor(people.student.token, async (tx) => (await tx.query<{ outcome: string }>(
       "SELECT outcome FROM institution.enroll_with_code($1::text)", [code],
     )).rows[0].outcome);
     expect(outcome).toBe("refused");
     expect((await membership(course, people.classmate.id))?.open).toBe(true);
+  });
+
+  it("ends the membership exactly once when two teachers remove the same student at once (#800 QA finding)", async () => {
+    const answers = await Promise.all([post(people.second.token, course, people.classmate.id), post(people.teacher.token, course, people.classmate.id)]);
+    for (const answer of answers) expect(answer.status).toBe(200);
+    const removed = (await Promise.all(answers.map((answer) => answer.json()))).map((body) => body.removed);
+    expect([...removed].sort()).toEqual([false, true]);
+    const winner = removed[0] ? people.second.id : people.teacher.id;
+    expect(await membership(course, people.classmate.id)).toEqual({ open: false, removed_by: winner });
+    expect(Number((await admin.query(
+      "SELECT count(*) FROM institution.course_member WHERE course_id = $1 AND user_id = $2", [course, people.classmate.id],
+    )).rows[0].count)).toBe(1);
+    // DAN-338: exactly one audit row for the classmate, by the teacher whose call returned true.
+    expect((await events()).filter((event) => event.student_id === people.classmate.id)).toEqual([{
+      kind: "removed", actor_id: winner, institution_id: faculties[0], course_id: course, student_id: people.classmate.id,
+      ended_that_membership: true,
+    }]);
   });
 });

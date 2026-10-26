@@ -3,6 +3,7 @@ import pg from "pg";
 
 import { EVIDENCE_PROFILE_ID } from "../../src/domain/forensics/evidence-profile";
 import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
+import { localAdminUrl } from "./local-db-url";
 
 type Owner = { institution: string; student: string };
 
@@ -65,14 +66,12 @@ export async function ensureDemoPackage(client: pg.Client): Promise<void> {
 // Revisions and assignment versions are immutable, so the document and its
 // course stay; cleanUp() removes the comments and closes the memberships and the
 // teacher role seed() opened, so no other spec can read it.
-export const ADMIN_DATABASE_URL =
-  process.env.E2E_ADMIN_DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
 export const ORIGIN = "http://localhost:3000";
 export const TEACHER = "demo-teacher@demo.ductus.test";
 export const STUDENT = "demo-student@demo.ductus.test";
 
 export async function admin<T>(work: (client: pg.Client) => Promise<T>): Promise<T> {
-  const client = new pg.Client({ connectionString: ADMIN_DATABASE_URL });
+  const client = new pg.Client({ connectionString: localAdminUrl() });
   await client.connect();
   try {
     return await work(client);
