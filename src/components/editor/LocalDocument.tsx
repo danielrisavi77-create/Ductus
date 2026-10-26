@@ -436,8 +436,9 @@ export function LocalDocumentProvider({
         }
         setPhase("ready");
         // Only a signed-in person who acknowledged the notice publishes; the
-        // local demo journal never does.
-        publisher = markTag === null || !livePublish
+        // local demo journal never does, nor a submitted work (O2, #756).
+        const submitted = saver.snapshot().closedBy === "submission";
+        publisher = markTag === null || !livePublish || submitted
           ? null : createLivePublisher({ documentId, current: () => !ended() });
         publisherRef.current = publisher;
         const own = publisher;
