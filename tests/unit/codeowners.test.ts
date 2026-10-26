@@ -25,9 +25,10 @@ async function d97Paths(): Promise<string[]> {
   return (await core()).D97_PATHS;
 }
 
-// Owned for the record, but outside D-97: product rules, not rules about who
-// may write, review, merge or bypass a check.
-const ownedOutsideD97 = new Set(["/docs/PRODUCT.md"]);
+// Owned for the record, but outside D-97: product rules and the native demo
+// tooling (critical floor, F-140), not rules about who may write, review,
+// merge or bypass a check.
+const ownedOutsideD97 = new Set(["/docs/PRODUCT.md", "/scripts/demo/native/**"]);
 
 describe("CODEOWNERS covers the D-97 paths", () => {
   it("gives every rule the owner account and no rule clears an owner", () => {
@@ -56,6 +57,16 @@ describe("CODEOWNERS covers the D-97 paths", () => {
         return d97Matches([path]).length === 0;
       });
     expect(missing).toEqual([]);
+  });
+
+  it("gives every owned path outside D-97 the critical floor, so the allowlist cannot drift from it (F-144)", async () => {
+    const url = pathToFileURL(`${root}scripts/engineering/pr-metadata-core.mjs`).href;
+    const { minimumRisk } = (await import(/* @vite-ignore */ url)) as { minimumRisk: (files: string[]) => { risk: string } };
+    for (const pattern of ownedOutsideD97) {
+      expect(patterns.has(pattern), `${pattern} is in CODEOWNERS`).toBe(true);
+      const path = pattern.slice(1).replace(/\*\*$/, "any/file.txt");
+      expect(minimumRisk([path]).risk, pattern).toBe("critical");
+    }
   });
 
   it("covers the governance paths named by DAN-138 and the whole agent plugin", () => {
