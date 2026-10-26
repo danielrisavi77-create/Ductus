@@ -508,6 +508,7 @@ export const hr = {
   toolbar: {
     label: "Oblikovanje teksta",
     paragraph: "Odlomak",
+    bulletItem: "Popis",
     heading1: "Naslov 1",
     heading2: "Naslov 2",
     heading3: "Naslov 3",
