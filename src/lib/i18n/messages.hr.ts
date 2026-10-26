@@ -218,7 +218,7 @@ export const hr = {
       sliderLabel: "Korak premotavanja",
       stepOf: "korak {step} od {last}",
       note: "Premotavanje prikazuje redoslijed promjena, ne ocjenu ni procjenu. Ritam pisanja ne govori ništa o autorstvu ni o trudu.",
-      // Invented edits, one per step: "+text" appends, "from>>to" replaces (see rewind.ts).
+      // Invented edits, one per step: "+text" appends, "from>>to" replaces (see rewind-frames.ts).
       edits: [
         "+Gradovi",
         "+ sve",
