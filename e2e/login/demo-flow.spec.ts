@@ -18,7 +18,8 @@ import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
 import { workDocument } from "./work-seed";
 import { cleanUp, post, seed } from "./comment-seed";
 import {
-  appCookie, editorMounted, fillCodeDeadline, SAVED_HERE, SESSION_COOKIE, sessionRow, signIn, signOutHoweverHeld, signOutWithoutDialog,
+  appCookie, editorMounted, fillCodeDeadline, ROLE_HOME, SAVED_HERE, SESSION_COOKIE, sessionRow, signIn,
+  signOutHoweverHeld, signOutWithoutDialog,
 } from "./support";
 import { localAdminUrl } from "./local-db-url";
 
@@ -237,10 +238,10 @@ test("demo walk-through", async ({ browser, page, context }) => {
   let token = "";
 
   await test.step("1. Nastavnik se prijavljuje demo računom", async () => {
+    // "/" sends the signed-in person on to their own page (DAN-325); its shell still says demo.
     await signIn(page, "/", "Demo nastavnik");
-    // The signed-in home is inside the shell since #802 part B.
-    await expect(page.getByRole("heading", { level: 1, name: t.home.welcome })).toBeVisible();
-    await expect(page.getByText(t.shell.demoBadge, { exact: true }).first()).toBeVisible();
+    await expect(page).toHaveURL(ROLE_HOME);
+    await expect(page.getByText(t.shell.demoBadge, { exact: true }).filter({ visible: true }).first()).toBeVisible();
 
     const session = await appCookie(context, SESSION_COOKIE);
     expect(session).toBeDefined();
