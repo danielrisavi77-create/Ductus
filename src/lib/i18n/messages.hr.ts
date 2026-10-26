@@ -217,7 +217,7 @@ export const hr = {
       pause: "Pauza",
       sliderLabel: "Korak premotavanja",
       stepOf: "korak {step} od {last}",
-      note: "Premotavanje prikazuje redoslijed promjena, ne ocjenu ni procjenu. Ritam pisanja ne govori ništa o trudu.",
+      note: "Premotavanje prikazuje redoslijed promjena, ne ocjenu ni procjenu. Ritam pisanja ne govori ništa o autorstvu ni o trudu.",
       // Invented edits, one per step: "+text" appends, "from>>to" replaces (see rewind.ts).
       edits: [
         "+Gradovi",
@@ -410,6 +410,7 @@ export const hr = {
       narrowOnly: "Popis možeš samo suziti.",
       allowed: "Dopušteno u ovom zadatku",
       banned: "Nije dopušteno",
+      bannedNone: "Sve uporabe s popisa iznad dopuštene su u ovom zadatku.",
       courseProhibits: "Pravila kolegija ne dopuštaju AI pomoć, pa ni ovaj zadatak.",
       source:
         "Izvor: Smjernice za uporabu generativne umjetne inteligencije u nastavi i izradi studentskih radova, Fakultetsko vijeće FPZG-a, 21. 5. 2026., članak 8. Treća natuknica stavka 1 skraćena je, a stavak 3 nije prikazan; puni tekst je u Smjernicama.",
@@ -591,8 +592,8 @@ export const hr = {
     lateNote: "Rok zadatka je prošao. Pisati možeš i dalje, a predaja će biti označena kao predaja nakon roka.",
     // #711 F1b (contract §4): the earlier draft of this device, offered only to read and copy.
     earlierDraftSummary: "Na ovom uređaju čuva se tvoj raniji tekst koji nije u ovom radu.",
-    // Owner (#711, O3 and amendment c): until 3d-2c2 a paste is not an evidence step, so the text does not say it is recorded; the sentence returns in 3d-2c2b.
-    earlierDraftExplain: "Tekst ostaje gdje je i ne briše se. Ako ga želiš u ovom radu, kopiraj ga i zalijepi.",
+    // Owner (#711, O3 and amendment c): since 3d-2c2b a paste is an evidence step of the work, so the sentence that says so is back.
+    earlierDraftExplain: "Tekst ostaje gdje je i ne briše se. Ako ga želiš u ovom radu, kopiraj ga i zalijepi; zapis rada tada to bilježi kao lijepljenje.",
     earlierDraftCopy: "Kopiraj tekst",
     // Owner accepted (#711 c.6396392080, b): the contract text "Kopirano u međuspremnik." fails the stem list of messages.test.ts (kopiran).
     earlierDraftCopied: "Tekst je u međuspremniku.",
@@ -610,6 +611,17 @@ export const hr = {
   },
   editor: {
     placeholder: "Počni pisati…",
+    // 3d-2c2b, owner approved 25 Oct (contract #476 c.6391714810 §3): the
+    // server's work differs (CONFLICT, RECOVERY_REQUIRED).
+    evidenceConflict:
+      "Rad na poslužitelju razlikuje se od teksta na ovom uređaju. Tekst ostaje na uređaju i ništa se ne šalje dok ne odlučiš kako dalje.",
+    // 3d-2c2b, owner approved 25 Oct (#87 c.6397773534): a send refused for
+    // good. The contract's "spremljen na ovom uređaju" fails the PRODUCT §5
+    // scan, so "ovom" is dropped.
+    sendRefused: "Tekst je spremljen na uređaju, ali ga poslužitelj nije primio. Ponovno učitaj stranicu.",
+    // 3d-2c2b, owner approved 25 Oct: the package was closed by the submission (DAN-289 A1).
+    submittedReadOnly:
+      "Rad je predan, pa se ovdje više ne može pisati. Izmjene napravljene nakon predaje nisu u predanom radu i ostaju samo na ovom uređaju.",
     blockedHint: "Ova kartica ništa ne sprema dok je druga otvorena. Kad je zatvoriš, tekst se ovdje ponovno učitava.",
     failureQuota: "Na uređaju nema dovoljno prostora, pa se promjene više ne spremaju. Izvezi tekst da ga ne izgubiš.",
     failureUnavailable: "Spremanje na ovom uređaju nije dostupno. Izvezi tekst da ga ne izgubiš.",
@@ -947,6 +959,12 @@ export const hr = {
       one: "{n} izmjena postoji samo na ovom uređaju. Odjava zatvara sesiju.",
       few: "{n} izmjene postoje samo na ovom uređaju. Odjava zatvara sesiju.",
       many: "{n} izmjena postoji samo na ovom uređaju. Odjava zatvara sesiju.",
+    },
+    // 3d-2c2b O3, owner approved 25 Oct: steps held after the submission are never sent.
+    logoutAfterSubmission: {
+      one: "{n} izmjena nakon predaje postoji samo na ovom uređaju i ne šalje se. Odjava zatvara sesiju.",
+      few: "{n} izmjene nakon predaje postoje samo na ovom uređaju i ne šalju se. Odjava zatvara sesiju.",
+      many: "{n} izmjena nakon predaje postoji samo na ovom uređaju i ne šalje se. Odjava zatvara sesiju.",
     },
     logoutKept:
       "Zapis ostaje vezan uz tebe na ovom uređaju i nastavljaš ga kad se ponovno prijaviš. Osoba koja se nakon tebe prijavi na ovom uređaju ne vidi tvoj rad.",
