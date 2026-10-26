@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page, type Request, type Route } from "@playwright/test";
 
+import { CURRENT_KEY, SESSION_END_CHANNEL } from "../../src/client/session-marks";
 import { canonicalizeJcs } from "../../src/domain/forensics/jcs";
 import { pluralHr } from "../../src/lib/i18n/hr";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
@@ -379,6 +380,22 @@ test("F-154: after a submission the dialog names its own rows, offers the export
   await expect(dialog.getByRole("button", { name: t.auth.afterSubmissionDiscard })).toHaveCount(0);
   expect(await localOf(page, documentId)).toEqual({ pending: [] });
   await shoot(page, "f154-odjava-nakon-brisanja");
+});
+
+// Codex r4383074618: a session ended in another tab leaves no deletion behind.
+test("F-154: once the session ends in another tab the open dialog offers no deletion and the rows stay", async ({ page }) => {
+  const { documentId, held } = await submittedWithRows(page);
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("button", { name: t.auth.afterSubmissionDiscard })).toBeVisible();
+  await page.evaluate(({ key, channelName }) => {
+    const mark = JSON.parse(localStorage.getItem(key) ?? "null") as { tag: string } | null;
+    if (!mark) throw new Error("The signed-in page must record its session mark");
+    const channel = new BroadcastChannel(channelName);
+    channel.postMessage(mark.tag);
+    channel.close();
+  }, { key: CURRENT_KEY, channelName: SESSION_END_CHANNEL });
+  await expect(dialog.getByRole("button", { name: t.auth.afterSubmissionDiscard })).toHaveCount(0);
+  expect((await localOf(page, documentId)).pending).toHaveLength(held);
 });
 
 test("F-154: without the second click sign-out keeps the rows after the submission (D-118)", async ({ page }) => {

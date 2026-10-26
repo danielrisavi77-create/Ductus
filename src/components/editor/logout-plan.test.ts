@@ -2,13 +2,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
+import { planAfterDiscard } from "@/client/logout-hold";
+
 import { findForbiddenTerms } from "../../../scripts/forbidden-terms/terms";
 import {
   afterSubmissionPart,
   closeReply,
   copyText,
   heldAfterSubmission,
-  withoutAfterSubmission,
   DISCARD_LIMIT_MS,
   logoutText,
   nextDiscardStep,
@@ -77,10 +78,25 @@ describe("sign-out dialog text (FE-D7, D-118)", () => {
   });
 
   it("after the discard the other works' rows stay counted and nothing is after the submission", () => {
-    const left = withoutAfterSubmission({ unsaved: false, pending: 5, submitted: true, afterSubmission: 2, kept: true });
-    expect(left).toEqual({ unsaved: false, pending: 3, submitted: true, afterSubmission: 0, kept: true });
-    expect(logoutText(left)).toEqual(logoutText({ unsaved: false, pending: 3, kept: true }));
+    const left = planAfterDiscard(
+      { unsaved: false, pending: 5, submitted: true, afterSubmission: 2, kept: true },
+      { pending: 3, copies: 0, kept: true },
+    );
+    expect(left).toEqual({ unsaved: false, pending: 3, copies: 0, submitted: true, afterSubmission: 0, kept: true });
+    expect(logoutText(left)).toEqual(logoutText({ unsaved: false, pending: 3, copies: 0, kept: true }));
     expect(afterSubmissionPart(left, true)).toBeNull();
+  });
+
+  // Codex r4383074624: `kept` comes from the journal read after the deletion.
+  it("after the discard of all that was held the dialog no longer says the record stays", () => {
+    const plan = { unsaved: false, pending: 2, submitted: true, afterSubmission: 2, kept: true };
+    const left = planAfterDiscard(plan, { pending: 0, copies: 0, kept: false });
+    expect(logoutText(left)).toEqual({ text: t.logoutPlain, note: null, offerExport: false });
+    // A read that fails promises nothing about what stays.
+    for (const read of ["unknown", "ended", "noStorage"] as const) {
+      expect(logoutText(planAfterDiscard(plan, read))).toEqual({ text: t.logoutPlain, note: null, offerExport: false });
+      expect(afterSubmissionPart(planAfterDiscard(plan, read), true)).toBeNull();
+    }
   });
 
   it("the discard part is offered only with the action and rows after the submission", () => {

@@ -76,16 +76,6 @@ export function heldAfterSubmission(plan: LogoutPlan): number {
   return plan.pending === null ? own : Math.min(own, plan.pending);
 }
 
-/** The plan once the rows after the submission are gone: the rest stays counted. */
-export function withoutAfterSubmission(plan: LogoutPlan): LogoutPlan {
-  const gone = heldAfterSubmission(plan);
-  return {
-    ...plan,
-    pending: plan.pending === null ? null : plan.pending - gone,
-    afterSubmission: 0,
-  };
-}
-
 /**
  * The part of the dialog that discards what was written after the submission
  * (F-154, owner decision 1.3): offered only with the action and rows to
