@@ -258,6 +258,13 @@ for (const [name, status, body] of [
     await expect(chipOf(page)).toHaveAttribute("data-state", "ERROR");
     await expect(page.getByRole("alert").filter({ hasText: t.editor.sendRefused })).toHaveCount(1);
     if (status === 413) await shoot(page, "3d-2c2-posluzitelj-nije-primio");
+    // Review #811 (c.6419592134, 1): typing on keeps the notice while the
+    // same row is held, and still sends nothing.
+    await type(page, " Nastavak nakon odbijanja.");
+    await expect(chipOf(page)).toHaveAttribute("data-state", /^(LOCAL_DURABLE|ERROR)$/, { timeout: OPEN });
+    await page.waitForTimeout(5000);
+    await expect(page.getByRole("alert").filter({ hasText: t.editor.sendRefused })).toHaveCount(1);
+    expect(commitsOf(requests)).toHaveLength(1);
   });
 }
 
