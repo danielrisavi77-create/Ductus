@@ -1207,6 +1207,32 @@ main:focus {
   text-align: left;
 }
 
+/* A quote paragraph (E1) is a flat block too; consecutive ones read as one
+   block quote: one rule on the left, the space between them inside it
+   (editor-v11 `.ed blockquote`; --rule and --ink-2 on both sheets). */
+.editor-surface .ProseMirror p[data-block="quote"] {
+  margin: 0;
+  padding: 0 0 6pt 16px;
+  border-left: 2px solid var(--rule);
+  color: var(--ink-2);
+}
+
+.editor-surface .ProseMirror p[data-block="quote"]:not(:has(+ p[data-block="quote"])) {
+  margin-bottom: 6pt;
+  padding-bottom: 0;
+}
+
+.manuscript blockquote {
+  margin: 0 0 6pt;
+  padding-left: 16px;
+  border-left: 2px solid var(--rule);
+  color: var(--ink-2);
+}
+
+.manuscript blockquote > p:last-child {
+  margin-bottom: 0;
+}
+
 .editor-surface .ProseMirror > :first-child {
   margin-top: 0;
 }

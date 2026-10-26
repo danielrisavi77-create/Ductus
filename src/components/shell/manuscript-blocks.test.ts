@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { bulletItemNode, headingNode, paragraphNode, type NodeId } from "@/domain/document";
+import { bulletItemNode, headingNode, paragraphNode, quoteNode, type NodeId } from "@/domain/document";
 
 import { blockRuns } from "./manuscript-blocks";
 
@@ -18,6 +18,19 @@ describe("blockRuns", () => {
       { kind: "list", items: [nodes[1], nodes[2]] },
       { kind: "block", node: nodes[3] },
       { kind: "list", items: [nodes[4]] },
+    ]);
+  });
+
+  it("makes one block quote of consecutive quote paragraphs, apart from a list next to it", () => {
+    const nodes = [
+      quoteNode(id(1)), quoteNode(id(2)), bulletItemNode(id(3)), quoteNode(id(4)), paragraphNode(id(5)), quoteNode(id(6)),
+    ];
+    expect(blockRuns(nodes)).toEqual([
+      { kind: "quote", items: [nodes[0], nodes[1]] },
+      { kind: "list", items: [nodes[2]] },
+      { kind: "quote", items: [nodes[3]] },
+      { kind: "block", node: nodes[4] },
+      { kind: "quote", items: [nodes[5]] },
     ]);
   });
 
