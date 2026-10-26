@@ -1,8 +1,10 @@
+import { readFileSync } from "node:fs";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ActorTransaction, WithActor } from "@/server/db/with-actor";
 
-import { readAssignmentWorks, worksOf } from "./assignment-works";
+import { readAssignmentWorks, readAssignmentWorksMany, worksOf } from "./assignment-works";
 
 // Invented ids only.
 const TOKEN = "T".repeat(43);
@@ -91,5 +93,58 @@ describe("B2: the works of an assignment for its teacher", () => {
 
   it("a document id of 256 characters is accepted", () => {
     expect(worksOf([{ student_id: ANA, document_id: "d".repeat(256) }])).toEqual([{ studentId: ANA, documentId: "d".repeat(256) }]);
+  });
+});
+
+describe("F-142: the works of many assignments in one read", () => {
+  const Z2 = "00000000-0000-4000-8000-0000000000a2";
+  const Z3 = "00000000-0000-4000-8000-0000000000a3";
+
+  it("asks once, in one transaction, with every well-formed id once, and groups the rows by assignment", async () => {
+    const db = database({ rows: [
+      { assignment_id: Z1, student_id: ANA, document_id: "doc-a" },
+      { assignment_id: Z1, student_id: DORA, document_id: "doc-d" },
+      { assignment_id: Z3, student_id: ANA, document_id: "doc-a3" },
+    ] });
+    const answer = await readAssignmentWorksMany(TOKEN, [Z1, Z2, Z1.toUpperCase(), "z-1", Z3], db.withActor);
+    expect(answer.kind).toBe("ok");
+    expect(answer.kind === "ok" ? Object.fromEntries(answer.works) : null).toEqual({
+      [Z1]: [{ studentId: ANA, documentId: "doc-a" }, { studentId: DORA, documentId: "doc-d" }],
+      [Z2]: [],
+      [Z3]: [{ studentId: ANA, documentId: "doc-a3" }],
+    });
+    expect(db.withActor).toHaveBeenCalledTimes(1);
+    expect(db.calls).toHaveLength(1);
+    expect(db.calls[0]).toMatchObject({ values: [[Z1, Z2, Z3]], token: TOKEN });
+    expect(db.calls[0]!.text).toMatch(/CROSS JOIN LATERAL app\.assignment_works\(a\.id\)/);
+  });
+
+  it("does not touch the database without a session or without an assignment", async () => {
+    const db = database({ rows: [] });
+    expect(await readAssignmentWorksMany(undefined, [Z1], db.withActor)).toEqual({ kind: "unauthorized" });
+    expect(await readAssignmentWorksMany("kratko", [Z1], db.withActor)).toEqual({ kind: "unauthorized" });
+    const none = await readAssignmentWorksMany(TOKEN, ["z-1"], db.withActor);
+    expect(none.kind === "ok" ? none.works.size : -1).toBe(0);
+    expect(db.calls).toEqual([]);
+  });
+
+  it("answers for the whole page on a refusal, a failure or a row it cannot vouch for, and logs no detail", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(await readAssignmentWorksMany(TOKEN, [Z1], database({ code: "ZD401" }).withActor)).toEqual({ kind: "unauthorized" });
+    expect(await readAssignmentWorksMany(TOKEN, [Z1], database({ code: `x ${CANARY}` }).withActor)).toEqual({ kind: "unavailable" });
+    for (const row of [
+      { assignment_id: Z2, student_id: ANA, document_id: "doc-a" },
+      { assignment_id: Z1, student_id: "ana", document_id: "doc-a" },
+      { assignment_id: Z1, student_id: ANA, document_id: " doc" },
+    ]) {
+      expect(await readAssignmentWorksMany(TOKEN, [Z1], database({ rows: [row] }).withActor)).toEqual({ kind: "unavailable" });
+    }
+    expect(JSON.stringify(error.mock.calls)).not.toMatch(new RegExp(`${CANARY}|doc-a|${ANA}`));
+  });
+
+  it("the teacher's home page reads the works once, never once per assignment", () => {
+    const page = readFileSync(new URL("../../../app/nastavnik/page.tsx", import.meta.url), "utf8");
+    expect(page.match(/readAssignmentWorksMany\(/g)).toHaveLength(1);
+    expect(page).not.toMatch(/readAssignmentWorks\(/);
   });
 });

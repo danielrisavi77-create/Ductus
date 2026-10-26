@@ -6,8 +6,8 @@
  * can accept a shape the other does not know.
  *
  * The shape is the JSON that ProseMirror's own steps serialise to, narrowed
- * to what the F1 schema can produce (paragraph, heading 1-3, text, bold,
- * italic), plus `removedSha256` on a step that removes content. Everything
+ * to what the F1 schema can produce (paragraph, heading 1-3, bullet item,
+ * text, bold, italic), plus `removedSha256` on a step that removes content. Everything
  * else is refused, never guessed:
  *   - every object has a closed set of keys, so an unknown field, a
  *     `__proto__` or `constructor` key and any time field (owner decision 6:
@@ -41,10 +41,12 @@ import { isPlainObject } from "../json";
 import {
   isHeadingLevel,
   isMark,
+  isPlainBlockType,
   MARK_ORDER,
   type HeadingLevel,
   type Mark,
   type NodeId,
+  type PlainBlockType,
 } from "./schema";
 
 /** Value of `captureContext.transactionFormat` for this step format. */
@@ -76,7 +78,7 @@ export type EditStepText = { marks?: EditStepMark[]; text: string; type: "text" 
  * `replaceAround`.
  */
 export type EditStepBlock =
-  | { attrs: { nodeId: NodeId | null }; content?: EditStepText[]; type: "paragraph" }
+  | { attrs: { nodeId: NodeId | null }; content?: EditStepText[]; type: PlainBlockType }
   | {
       attrs: { level: HeadingLevel; nodeId: NodeId | null };
       content?: EditStepText[];
@@ -347,18 +349,19 @@ function nodeId(value: unknown, path: string): NodeId | null {
 
 function block(value: unknown, path: string, budget: Budget): EditStepBlock {
   const own = fields(value, path, ["type", "attrs"], ["content"]);
-  if (own.type !== "paragraph" && own.type !== "heading") {
-    reject("invalid_node", `${path}.type`);
+  const type = own.type;
+  if (type !== "heading" && !isPlainBlockType(type)) {
+    return reject("invalid_node", `${path}.type`);
   }
   spend(budget, MIN_OBJECT_BYTES, path);
   const content =
     "content" in own
       ? texts(items(own.content, `${path}.content`, "invalid_node"), `${path}.content`, budget)
       : null;
-  if (own.type === "paragraph") {
+  if (type !== "heading") {
     const attrs = fields(own.attrs, `${path}.attrs`, ["nodeId"]);
     const node = { attrs: { nodeId: nodeId(attrs.nodeId, `${path}.attrs.nodeId`) } };
-    return content ? { ...node, content, type: "paragraph" } : { ...node, type: "paragraph" };
+    return content ? { ...node, content, type } : { ...node, type };
   }
   const attrs = fields(own.attrs, `${path}.attrs`, ["level", "nodeId"]);
   if (!isHeadingLevel(attrs.level)) {

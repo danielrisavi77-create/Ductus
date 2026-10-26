@@ -14,7 +14,15 @@ import { newSessionToken, SESSION_COOKIE_NAME } from "./session-token";
  * error code, never a value from the request or the provider.
  */
 export interface OpenSessionPort {
-  (input: { issuer: string; subject: string; uniqueId: string; homeOrg: string; tokenHash: Buffer }): Promise<
+  (input: {
+    issuer: string;
+    subject: string;
+    uniqueId: string;
+    homeOrg: string;
+    givenName?: string;
+    familyName?: string;
+    tokenHash: Buffer;
+  }): Promise<
     { ok: true; expires: Date } | { ok: false; reason: "refused" | "conflict" }
   >;
 }
