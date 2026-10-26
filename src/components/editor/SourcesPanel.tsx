@@ -18,12 +18,13 @@ import { messagesHr } from "@/lib/i18n/messages.hr";
 
 import { useLocalEditor } from "./LocalDocument";
 import {
-  citationText, compareEntries, EMPTY_FIELDS, entryText, sourceFromFields, writeSource,
+  citationText, compareEntries, EMPTY_FIELDS, entryText, FIELD_MAX, PAGE_MAX, pageFits, sourceFromFields, writeSource,
   type SourceField, type SourceFields, type SourceKind,
 } from "./sources";
 import styles from "./SourcesPanel.module.css";
 
 const t = messagesHr.workspace.sources;
+const pageTooLong = t.pageTooLong.replace("{n}", String(PAGE_MAX));
 
 type Added = { entry: string; source: Extract<ReturnType<typeof sourceFromFields>, { ok: true }>["source"] };
 
@@ -42,7 +43,7 @@ export default function SourcesPanel() {
   const [listPage, setListPage] = useState("");
 
   const check = sourceFromFields(fields);
-  const invalid = new Set<SourceField>(tried && !check.ok ? [...check.missing, ...(check.yearInvalid ? ["year" as const] : [])] : []);
+  const invalid = new Set<SourceField>(tried && !check.ok ? [...check.missing, ...(check.yearInvalid ? ["year" as const] : []), ...check.tooLong] : []);
 
   // Checked again at the click: a sign-out stops writing without a render.
   const canWrite = () => editable && editor !== null && !editor.isDestroyed && editor.isEditable;
@@ -57,7 +58,7 @@ export default function SourcesPanel() {
 
   const commit = (cite: boolean) => {
     setTried(true);
-    if (!check.ok || !canWrite()) return;
+    if (!check.ok || !pageFits(page) || !canWrite()) return;
     const entry = entryText(check.source);
     if (!writeSource(editor, cite ? citationText(check.source, page) : null, entry)) return;
     const source = check.source;
@@ -66,7 +67,7 @@ export default function SourcesPanel() {
   };
 
   const cite = (item: Added) => {
-    if (canWrite()) writeSource(editor, citationText(item.source, listPage), null);
+    if (pageFits(listPage) && canWrite()) writeSource(editor, citationText(item.source, listPage), null);
   };
 
   const set = (field: keyof SourceFields) => (value: string) => setFields((f) => ({ ...f, [field]: value }));
@@ -75,6 +76,7 @@ export default function SourcesPanel() {
       <span>{label}</span>
       <input
         value={fields[field]}
+        maxLength={FIELD_MAX[field]}
         inputMode={numeric ? "numeric" : undefined}
         aria-invalid={invalid.has(field) ? "true" : undefined}
         onChange={(event) => set(field)(event.target.value)}
@@ -95,7 +97,9 @@ export default function SourcesPanel() {
   const errors = tried && !check.ok ? [
     ...check.missing.map((field) => t.required.replace("{field}", t[field])),
     ...(check.yearInvalid ? [t.yearInvalid] : []),
+    ...check.tooLong.map((field) => t.tooLong.replace("{field}", t[field]).replace("{n}", String(FIELD_MAX[field]))),
   ] : [];
+  if (tried && !pageFits(page)) errors.push(pageTooLong);
 
   return (
     <div className={styles.panel}>
@@ -131,7 +135,7 @@ export default function SourcesPanel() {
           )}
           <label className={styles.field}>
             <span>{t.citePage}</span>
-            <input value={page} onChange={(event) => setPage(event.target.value)} />
+            <input value={page} maxLength={PAGE_MAX} aria-invalid={tried && !pageFits(page) ? "true" : undefined} onChange={(event) => setPage(event.target.value)} />
           </label>
           {errors.length > 0 ? (
             <ul className={styles.errors} role="alert">{errors.map((text) => <li key={text}>{text}</li>)}</ul>
@@ -158,7 +162,7 @@ export default function SourcesPanel() {
           <>
             <label className={styles.field}>
               <span>{t.citePage}</span>
-              <input value={listPage} onChange={(event) => setListPage(event.target.value)} />
+              <input value={listPage} maxLength={PAGE_MAX} onChange={(event) => setListPage(event.target.value)} />
             </label>
             <ul className={styles.list}>
               {added.map((item) => (

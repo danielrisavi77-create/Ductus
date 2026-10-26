@@ -10,8 +10,8 @@ import { isUiTextModule } from "../../../scripts/forbidden-terms/scan";
 import { findForbiddenTerms } from "../../../scripts/forbidden-terms/terms";
 
 import {
-  bibliographyPlan, citationText, EMPTY_FIELDS, entryText, sourceFromFields, writeSource,
-  type SourceFields,
+  bibliographyPlan, citationText, EMPTY_FIELDS, entryText, FIELD_MAX, PAGE_MAX, pageFits, sourceFromFields, writeSource,
+  type SourceField, type SourceFields,
 } from "./sources";
 
 // DAN-343: invented authors and titles only.
@@ -65,13 +65,39 @@ describe("sourceFromFields", () => {
 
   it("names the fields still missing and refuses a year that is not four digits", () => {
     expect(sourceFromFields(EMPTY_FIELDS)).toEqual({
-      ok: false, missing: ["family", "given", "year", "title", "place", "publisher"], yearInvalid: false,
+      ok: false, missing: ["family", "given", "year", "title", "place", "publisher"], yearInvalid: false, tooLong: [],
     });
     expect(sourceFromFields({ ...EMPTY_FIELDS, kind: "article" })).toMatchObject({ missing: ["family", "given", "year", "title", "journal"] });
     expect(sourceFromFields({ ...BOOK, family2: "Kovač" })).toMatchObject({ ok: false, missing: ["given2"] });
     for (const year of ["21", "20211", "0999", "dvije"]) {
       expect(sourceFromFields({ ...BOOK, year })).toMatchObject({ ok: false, missing: [], yearInvalid: true });
     }
+  });
+
+  // F-154 point 2: every field has a limit in code points; one more is refused, never cut.
+  it("accepts each field at its limit and refuses one character more", () => {
+    const limits: Record<SourceField, number> = {
+      family: 80, given: 80, family2: 80, given2: 80, year: 4, title: 300,
+      place: 150, publisher: 150, journal: 150, volume: 10, issue: 10, pages: 20,
+    };
+    expect(FIELD_MAX).toEqual(limits);
+    const kindOf = (field: SourceField) => (["journal", "volume", "issue", "pages"].includes(field) ? ARTICLE : BOOK);
+    for (const field of Object.keys(limits) as SourceField[]) {
+      if (field === "year") continue;
+      const base = { ...kindOf(field), family2: "Kovač", given2: "Luka" };
+      // "č" is one code point and two UTF-8 bytes: the limit counts code points.
+      const at = "č".repeat(limits[field]);
+      expect(sourceFromFields({ ...base, [field]: at }).ok, field).toBe(true);
+      expect(sourceFromFields({ ...base, [field]: `${at}a` }), field).toMatchObject({ ok: false, tooLong: [field] });
+    }
+    expect(sourceFromFields({ ...BOOK, year: "20215" })).toMatchObject({ ok: false, yearInvalid: true, tooLong: [] });
+  });
+
+  it("bounds the page of a citation", () => {
+    expect(PAGE_MAX).toBe(20);
+    expect(pageFits("1".repeat(20))).toBe(true);
+    expect(pageFits(` ${"1".repeat(20)} `)).toBe(true);
+    expect(pageFits("1".repeat(21))).toBe(false);
   });
 });
 

@@ -451,6 +451,8 @@ export const hr = {
       empty: "Dodaj izvor; navod i unos u popisu literature upisuju se u stilu FPZG-a.",
       required: "Upiši: {field}.",
       yearInvalid: "Godina ima četiri znamenke.",
+      tooLong: "{field} ima najviše {n} znakova.",
+      pageTooLong: "Stranica navoda ima najviše {n} znakova.",
       readOnly: "List je samo za čitanje; izvori se ne mogu dodati.",
     },
     instructionsEmpty: "Upute zadatka prikazuju se ovdje.",

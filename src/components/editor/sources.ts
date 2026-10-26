@@ -41,7 +41,28 @@ export const EMPTY_FIELDS: SourceFields = {
 
 export type SourceCheck =
   | { ok: true; source: BookSource | ArticleSource }
-  | { ok: false; missing: SourceField[]; yearInvalid: boolean };
+  | { ok: false; missing: SourceField[]; yearInvalid: boolean; tooLong: SourceField[] };
+
+/**
+ * Longest value of each field, in code points (F-154 point 2, owner decision
+ * #87 `issuecomment-6423014866`). A guard of the form, not a threshold of
+ * assessment. The input's `maxLength` counts UTF-16 units, so it never lets
+ * through a value this check refuses; a longer value is refused, never cut.
+ */
+export const FIELD_MAX: Readonly<Record<SourceField, number>> = {
+  family: 80, given: 80, family2: 80, given2: 80, year: 4, title: 300,
+  place: 150, publisher: 150, journal: 150, volume: 10, issue: 10, pages: 20,
+};
+
+/** Longest page of a citation, in code points. */
+export const PAGE_MAX = 20;
+
+const codePoints = (text: string) => [...text].length;
+
+/** Whether the page of a citation fits its limit. */
+export function pageFits(page: string): boolean {
+  return codePoints(page.trim()) <= PAGE_MAX;
+}
 
 /** The heading the bibliography stands under; only this exact text is recognised. */
 export const BIBLIOGRAPHY_HEADING = "Literatura";
@@ -55,7 +76,10 @@ export function sourceFromFields(fields: SourceFields): SourceCheck {
   if (value("family2") !== "" || value("given2") !== "") needed.push("family2", "given2");
   const missing = needed.filter((field) => value(field) === "");
   const yearInvalid = value("year") !== "" && !/^[1-9]\d{3}$/.test(value("year"));
-  if (missing.length > 0 || yearInvalid) return { ok: false, missing, yearInvalid };
+  // The year has its own message: its form already bounds it to four digits.
+  const tooLong = (Object.keys(FIELD_MAX) as SourceField[])
+    .filter((field) => field !== "year" && codePoints(value(field)) > FIELD_MAX[field]);
+  if (missing.length > 0 || yearInvalid || tooLong.length > 0) return { ok: false, missing, yearInvalid, tooLong };
 
   const authors: Person[] = [{ kind: "person", family: value("family"), given: value("given") }];
   if (value("family2") !== "") authors.push({ kind: "person", family: value("family2"), given: value("given2") });
