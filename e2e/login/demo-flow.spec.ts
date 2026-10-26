@@ -1026,8 +1026,17 @@ test("demo walk-through", async ({ browser, page, context }) => {
       teacher.on("framenavigated", (frame) => { if (frame === teacher.mainFrame()) navigations += 1; });
       await snapshot(teacher, "3-nastavnik-otvara-rad-uzivo");
 
-      await editorOf(page).click();
-      await editorOf(page).press("Control+End");
+      // The caret goes to the end of the last block before typing: in CI a
+      // click and Control+End once left it at the end of the citation paragraph.
+      await editorOf(page).locator("p").last().click();
+      await editorOf(page).evaluate((editor) => {
+        const range = document.createRange();
+        range.selectNodeContents(editor.lastElementChild!);
+        range.collapse(false);
+        window.getSelection()!.removeAllRanges();
+        window.getSelection()!.addRange(range);
+      });
+      await page.keyboard.press("End");
       await page.keyboard.press("Enter");
       await page.keyboard.type(LIVE_TEXT);
       // A new paragraph: the editor's text joins the blocks without a separator.
