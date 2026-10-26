@@ -37,6 +37,20 @@ export interface AsyncEvidenceStepReplayerV2<TDocument>
   apply(document: TDocument, event: EvidenceEventV3): TDocument | Promise<TDocument>;
 }
 
+/**
+ * Thrown by a replayer's `apply` when an event uses content this replayer
+ * does not know, such as a block type added to the format after it was built
+ * (F-150; BACKEND 4.1, node set of `ductus-edit-steps-v1`). The replay then
+ * reports `unsupported_format` instead of `step_failed`: the record is not
+ * shown to be wrong, only unreadable here. It still fails closed.
+ */
+export class EvidenceContentNotSupportedV2 extends Error {
+  constructor(readonly kind: string) {
+    super(`evidence content not supported: ${kind}`);
+    this.name = "EvidenceContentNotSupportedV2";
+  }
+}
+
 export type EvidenceReplayFailureV2 =
   | "unsupported_format"
   | "invalid_document"
@@ -137,8 +151,9 @@ export async function replayEvidenceSegmentsV2<TDocument>(
       try {
         document = await replayer.apply(document, event);
         current = await digestCanonicalDocumentV2(replayer.toCanonical(document));
-      } catch {
-        return { ok: false, reason: "step_failed", segmentIndex, sequence: event.sequence };
+      } catch (error) {
+        const reason = error instanceof EvidenceContentNotSupportedV2 ? "unsupported_format" : "step_failed";
+        return { ok: false, reason, segmentIndex, sequence: event.sequence };
       }
       if (current.sha256 !== event.afterDocumentHash) {
         return {

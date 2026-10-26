@@ -53,6 +53,12 @@ const provider = new Provider(ISSUER, {
 const escapeHtml = (text) =>
   text.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
 
+// The app's "D" mark on --ground and --accent (DAN-345 follow-up): without
+// it the browser's request for /favicon.ico ended in the provider's 404.
+const FAVICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">\
+<rect width="64" height="64" rx="10" fill="#19161a"/>\
+<text x="32" y="50" text-anchor="middle" fill="#cf9d72" font-family="Georgia,serif" font-size="52">D</text></svg>`;
+
 // The v3 tokens of app/globals.css as values (#732 item 2): this server is a
 // separate process and cannot load the app's stylesheet, so the page repeats
 // the few it needs to look like the sign-in screen it is reached from.
@@ -85,7 +91,7 @@ function loginPage(uid) {
   return `<!doctype html>
 <html lang="hr">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Demo prijava</title><style>${PAGE_STYLE}</style></head>
+<title>Demo prijava</title><link rel="icon" href="/favicon.ico" type="image/svg+xml"><style>${PAGE_STYLE}</style></head>
 <body>
 <main>
 <span class="tag">Samo lokalno i CI</span>
@@ -124,6 +130,11 @@ async function handleInteraction(req, res) {
 const providerCallback = provider.callback();
 
 createServer((req, res) => {
+  if (req.method === "GET" && req.url === "/favicon.ico") {
+    res.writeHead(200, { "content-type": "image/svg+xml", "cache-control": "max-age=3600" });
+    res.end(FAVICON_SVG);
+    return;
+  }
   if (req.url?.startsWith("/interaction/")) {
     handleInteraction(req, res).catch((error) => {
       res.writeHead(400, { "content-type": "text/plain; charset=utf-8" });
