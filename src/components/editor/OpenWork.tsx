@@ -40,7 +40,8 @@ export default function OpenWork({ assignmentId }: { assignmentId: string }) {
     if (inFlight.current) return;
     inFlight.current = true;
     setPhase({ kind: "loading" });
-    const outcome = await openWork(assignmentId);
+    // DAN-331: the only caller that may make the work (F-137); DAN-330 moves it to the click.
+    const outcome = await openWork(assignmentId, fetch, { start: true });
     inFlight.current = false;
     lastOutcome.current = outcome;
     const step = openWorkStep(outcome, refreshed.current, navigator.onLine);

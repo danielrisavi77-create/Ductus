@@ -143,7 +143,7 @@ export async function workDocument(assignment: string, person = STUDENT): Promis
 export async function openWorkOf(page: Page, assignment: string): Promise<string> {
   const response = await page.request.post("/api/evidence/open", {
     headers: { origin: ORIGIN, "content-type": "application/json", "ductus-protocol": DUCTUS_PROTOCOL_VERSION },
-    data: { assignmentId: assignment },
+    data: { assignmentId: assignment, start: true },
   });
   expect(response.status()).toBe(200);
   const body = await response.json() as { status: string; documentId: string };

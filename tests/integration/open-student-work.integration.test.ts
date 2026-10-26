@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { REVISION_ZERO_SHA256 } from "@/domain/document/revision-zero";
 import { createWithActor, type WithActor } from "@/server/db/with-actor";
+import { handleEvidenceOpenRequest } from "@/server/evidence/open-route";
 
 // B-8 step 2 / DAN-83 (docs/BACKEND.md 4.13, pgTAP rows): pgTAP runs in one
 // transaction and cannot race two first calls. Here two app connections open
@@ -29,7 +30,11 @@ const teacherId = randomUUID();
 const studentId = randomUUID();
 const courseId = randomUUID();
 const assignmentId = randomUUID();
+// DAN-331 (F-137): a second assignment whose work only the start request makes.
+const startAssignmentId = randomUUID();
+const raceAssignmentId = randomUUID();
 const domainId = randomUUID();
+const ORIGIN = "http://localhost:3000";
 
 const admin = new pg.Pool({ connectionString: SAFE_ADMIN_URL, max: 1 });
 let appPool: pg.Pool;
@@ -93,25 +98,27 @@ async function insertFixture() {
        VALUES ($1, $2, $3, 'student')`,
       [courseId, institutionId, studentId],
     );
-    await client.query(
-      `INSERT INTO institution.assignment (id, course_id, institution_id, current_version, created_by)
-       VALUES ($1, $2, $3, 1, $4)`,
-      [assignmentId, courseId, institutionId, teacherId],
-    );
-    await client.query(
-      `INSERT INTO institution.assignment_version
-         (assignment_id, version_no, title, instructions, work_type, opens_at, due_at, ai_policy,
-          ai_purposes, evidence_profile, import_allowed, created_by)
-       VALUES ($1, 1, 'Synthetic race', 'Synthetic concurrency fixture.', 'essay',
-               now() - interval '1 day', now() + interval '1 day', 'partially_allowed',
-               ARRAY[]::text[], 'extended', false, $2)`,
-      [assignmentId, teacherId],
-    );
-    await client.query(
-      `INSERT INTO institution.notice_acknowledgment (assignment_id, version_no, student_id, institution_id)
-       VALUES ($1, 1, $2, $3)`,
-      [assignmentId, studentId, institutionId],
-    );
+    for (const id of [assignmentId, startAssignmentId, raceAssignmentId]) {
+      await client.query(
+        `INSERT INTO institution.assignment (id, course_id, institution_id, current_version, created_by)
+         VALUES ($1, $2, $3, 1, $4)`,
+        [id, courseId, institutionId, teacherId],
+      );
+      await client.query(
+        `INSERT INTO institution.assignment_version
+           (assignment_id, version_no, title, instructions, work_type, opens_at, due_at, ai_policy,
+            ai_purposes, evidence_profile, import_allowed, created_by)
+         VALUES ($1, 1, 'Synthetic race', 'Synthetic concurrency fixture.', 'essay',
+                 now() - interval '1 day', now() + interval '1 day', 'partially_allowed',
+                 ARRAY[]::text[], 'extended', false, $2)`,
+        [id, teacherId],
+      );
+      await client.query(
+        `INSERT INTO institution.notice_acknowledgment (assignment_id, version_no, student_id, institution_id)
+         VALUES ($1, 1, $2, $3)`,
+        [id, studentId, institutionId],
+      );
+    }
     await client.query("INSERT INTO evidence.domain (id, institution_id, region) VALUES ($1, $2, 'eu-central-1')", [
       domainId,
       institutionId,
@@ -139,9 +146,10 @@ async function removeFixture() {
     await admin.query("DELETE FROM evidence.document WHERE institution_id = $1", [institutionId]);
     await admin.query("DELETE FROM evidence.project WHERE institution_id = $1", [institutionId]);
     await admin.query("DELETE FROM evidence.domain WHERE institution_id = $1", [institutionId]);
-    await admin.query("DELETE FROM institution.notice_acknowledgment WHERE assignment_id = $1", [assignmentId]);
-    await admin.query("DELETE FROM institution.assignment_version WHERE assignment_id = $1", [assignmentId]);
-    await admin.query("DELETE FROM institution.assignment WHERE id = $1", [assignmentId]);
+    const assignments = [assignmentId, startAssignmentId, raceAssignmentId];
+    await admin.query("DELETE FROM institution.notice_acknowledgment WHERE assignment_id = ANY ($1)", [assignments]);
+    await admin.query("DELETE FROM institution.assignment_version WHERE assignment_id = ANY ($1)", [assignments]);
+    await admin.query("DELETE FROM institution.assignment WHERE id = ANY ($1)", [assignments]);
     await admin.query("DELETE FROM institution.course_member WHERE course_id = $1", [courseId]);
     await admin.query("DELETE FROM institution.course WHERE id = $1", [courseId]);
     await admin.query("DELETE FROM identity.session WHERE user_id = $1", [studentId]);
@@ -227,5 +235,65 @@ describe("opening a student's work concurrently", () => {
       [institutionId],
     );
     expect(counts.rows[0]).toEqual({ projects: 1, documents: 1, checkpoints: 1, packages: 1 });
+  });
+});
+
+describe("the open route makes a work only when asked to start it (DAN-331, F-137)", () => {
+  const open = (body: unknown) => handleEvidenceOpenRequest(new Request(`${ORIGIN}/api/evidence/open`, {
+    method: "POST",
+    headers: { origin: ORIGIN, "sec-fetch-site": "same-origin", "ductus-protocol": "1", "content-type": "application/json" },
+    body: JSON.stringify(body),
+  }), { withActor, expectedOrigin: ORIGIN, sessionToken: token, log: () => {} });
+  // Every evidence and institution row of this file's institution, as text.
+  const print = async () => (await admin.query<{ rows: string }>(
+    `SELECT string_agg(r, '|' ORDER BY r) AS rows FROM (
+       SELECT 'j' || row_to_json(x)::text FROM evidence.project x WHERE institution_id = $1 UNION ALL
+       SELECT 'd' || row_to_json(x)::text FROM evidence.document x WHERE institution_id = $1 UNION ALL
+       SELECT 'r' || row_to_json(x)::text FROM evidence.document_revision x WHERE institution_id = $1 UNION ALL
+       SELECT 'k' || row_to_json(x)::text FROM evidence.document_checkpoint x WHERE institution_id = $1 UNION ALL
+       SELECT 'p' || row_to_json(x)::text FROM evidence.package x WHERE institution_id = $1 UNION ALL
+       SELECT 'm' || row_to_json(x)::text FROM institution.course_member x WHERE institution_id = $1 UNION ALL
+       SELECT 'n' || row_to_json(x)::text FROM institution.notice_acknowledgment x WHERE institution_id = $1
+     ) AS t (r)`, [institutionId],
+  )).rows[0]?.rows;
+  const works = async (assignment = startAssignmentId) => Number((await admin.query(
+    "SELECT count(*) FROM evidence.project WHERE institution_id = $1 AND assignment_id = $2", [institutionId, assignment],
+  )).rows[0].count);
+
+  it("answers 409 not_started and writes nothing without start, then makes one work with it", async () => {
+    const before = await print();
+    for (const body of [{ assignmentId: startAssignmentId }, { assignmentId: startAssignmentId, start: false }]) {
+      const response = await open(body);
+      expect([response.status, await response.json()]).toEqual([409, { status: "not_started" }]);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+    }
+    for (const start of [null, "true", 1]) {
+      expect((await open({ assignmentId: startAssignmentId, start })).status).toBe(422);
+    }
+    expect(await print()).toEqual(before);
+    expect(await works()).toBe(0);
+
+    const started = await open({ assignmentId: startAssignmentId, start: true });
+    expect(started.status).toBe(200);
+    const body = await started.json() as { status: string; documentId: string; currentRevision: number };
+    expect(body).toMatchObject({ status: "opened", currentRevision: 0 });
+    // Once the work exists, the same answer with or without start.
+    for (const again of [{ assignmentId: startAssignmentId }, { assignmentId: startAssignmentId, start: true }]) {
+      const response = await open(again);
+      expect(response.status).toBe(200);
+      expect((await response.json() as { documentId: string }).documentId).toBe(body.documentId);
+    }
+    expect(await works()).toBe(1);
+  });
+
+  it("two start requests at once make one work", async () => {
+    expect(await works(raceAssignmentId)).toBe(0);
+    const answers = await Promise.all([1, 2].map(() => open({ assignmentId: raceAssignmentId, start: true })));
+    const ids = await Promise.all(answers.map(async (answer) => {
+      expect(answer.status).toBe(200);
+      return (await answer.json() as { documentId: string }).documentId;
+    }));
+    expect(new Set(ids).size).toBe(1);
+    expect(await works(raceAssignmentId)).toBe(1);
   });
 });
