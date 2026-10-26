@@ -8,7 +8,7 @@ import HeadingOutline from "@/components/editor/HeadingOutline";
 import { OfflineBanner, OfflineChip } from "@/components/editor/OfflineNotice";
 import OpenWork from "@/components/editor/OpenWork";
 import {
-  LocalDocumentProvider, LocalEditor, LocalLogout, LocalSaveChip,
+  LocalEditor, LocalLogout, LocalSaveChip,
 } from "@/components/editor/LocalDocument";
 import { showsInventedPanels } from "@/components/editor/demo-panels";
 import { InstructionsPanel, WorkPanel } from "@/components/editor/SidePanels";
@@ -21,6 +21,7 @@ import WorkspaceShell, { RailSection } from "@/components/shell/WorkspaceShell";
 import { sheetTitle } from "@/components/student/sheet-title";
 import { teacherViewMode } from "@/components/student/teacher-view";
 import TeacherViewSheet from "@/components/student/TeacherViewSheet";
+import WorkDocumentProvider from "@/components/student/WorkDocumentProvider";
 import { assignmentParam, readWorkContext, type WorkContextRead } from "@/components/student/work-context-read";
 import { pastDue, workDocumentPlan } from "@/components/student/work-document-plan";
 import { DEMO_WORK } from "@/lib/i18n/demo-work.hr";
@@ -244,11 +245,12 @@ export default async function WorkspacePage({
     </AppShell>
   );
   // A new document id mounts a new editor: nothing of X (text, undo) reaches Y (A8).
+  // The session mark survives the switch of views, so it never reopens the work (#732 item 7).
   return journal ? (
-    <LocalDocumentProvider key={journal.documentId} scope={journal.scope} documentId={journal.documentId}
+    <WorkDocumentProvider key={journal.documentId} scope={journal.scope} documentId={journal.documentId}
       session={session} livePublish={plan.live}
       assignmentId={plan.kind === "assignment" ? plan.assignmentId : null}>
       {workspace}
-    </LocalDocumentProvider>
+    </WorkDocumentProvider>
   ) : workspace;
 }
