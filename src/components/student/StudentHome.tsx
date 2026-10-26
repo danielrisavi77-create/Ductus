@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { createElement as h } from "react";
+import { createElement as h, type ReactNode } from "react";
 
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
+import EmptyHome from "./EmptyHome";
 import MyAssignments from "./MyAssignments";
 import type { MyAssignmentsRead } from "./my-assignments-read";
 import styles from "./StudentHome.module.css";
@@ -14,10 +15,11 @@ const home = messagesHr.student.home;
  * DAN-344, Archivum S01 on /zadaci: the page heading and one of the read's
  * states. Unavailable is its own panel, never the empty list and never an
  * older list: the read keeps nothing. Signed out keeps the AAI@EduHr sign-in
- * of #711 (D-09). Written with `createElement`, like MyAssignments, so unit
+ * of #711 (D-09). `enroll` is the existing EnrollForm, shown only in the empty
+ * state (S01_prazna). Written with `createElement`, like MyAssignments, so unit
  * tests need no JSX compiler.
  */
-export default function StudentHome({ read }: { read: MyAssignmentsRead }) {
+export default function StudentHome({ read, enroll }: { read: MyAssignmentsRead; enroll: ReactNode }) {
   // Subtitle and enrol action only beside a list that loaded: the
   // unavailable state shows the title alone, as in the package, and the
   // empty list brings its own way to enrol.
@@ -29,10 +31,10 @@ export default function StudentHome({ read }: { read: MyAssignmentsRead }) {
         ready ? h("p", { className: styles.lede }, home.lede) : null),
       ready && read.courses.length > 0 ? h(Link, { className: styles.enroll, href: "/upis" },
         h("span", { "aria-hidden": "true", className: styles.plus }, "+"), t.enroll) : null),
-    body(read));
+    body(read, enroll));
 }
 
-function body(read: MyAssignmentsRead) {
+function body(read: MyAssignmentsRead, enroll: ReactNode) {
   if (read.kind === "signedOut") {
     return h("div", { className: styles.state },
       h("p", { role: "status" }, t.signedOut),
@@ -47,9 +49,7 @@ function body(read: MyAssignmentsRead) {
       h("p", null, h("a", { className: styles.enroll, href: "/zadaci" }, messagesHr.auth.retry)));
   }
   if (read.courses.length === 0) {
-    return h("div", { className: styles.state },
-      h("p", null, t.empty),
-      h("p", null, h(Link, { className: "btn", href: "/upis" }, t.enroll)));
+    return h(EmptyHome, { enroll });
   }
   return h("section", { "aria-labelledby": "moji-kolegiji" },
     h("h2", { id: "moji-kolegiji", className: styles.sectionTitle }, home.courses),
