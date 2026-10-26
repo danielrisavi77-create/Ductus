@@ -32,7 +32,7 @@ import TeacherComments, { useComments, type PlacedThread } from "./TeacherCommen
 
 const t = messagesHr.liveView;
 
-const INITIAL: LiveView = { document: null, hash: null, empty: false, connection: "loading" };
+const INITIAL: LiveView = { document: null, hash: null, empty: false, connection: "loading", submitted: false };
 
 const TONE: Record<LiveView["connection"], string> = {
   loading: "progress", live: "ok", retrying: "warn", paused: "warn", signedOut: "error", notFound: "error",
