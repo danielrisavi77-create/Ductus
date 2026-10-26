@@ -171,7 +171,7 @@
 }
 
 .ack button:disabled {
-  background: var(--rule-2);
+  background: var(--well);
   color: var(--ink-3);
   cursor: not-allowed;
 }

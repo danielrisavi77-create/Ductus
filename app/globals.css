@@ -27,7 +27,8 @@
  * dense controls, --radius-control for buttons and fields and --radius-lg
  * for dialogs. --card, --raised-rule, --link-rule, --field*, --error-soft and
  * the heading scale (--fs-h1 to --fs-h4) come from the package and wait for
- * the screens that use them. --raised and
+ * the screens that use them. --rule-2 is a line colour (the package's
+ * --soft); a quiet surface under text (a track, a chip, a hover) is --well. --raised and
  * --selected are shell surfaces; the white sheet has no values for them, so
  * they are not used inside the sheet.
  * The save-state chip keeps its own colours (PR #386); these names are for
@@ -49,6 +50,7 @@
   --raised-rule: #bc92d0;
   --card: #33253d;
   --selected: #3e294a;
+  --well: #3e294a;
   --ink-muted: #94729f;
   --warn: #e9c58b;
   --error: #f0a08f;
@@ -104,6 +106,7 @@
   --selected: #efe3cf;
   --rule: #d9cbb5;
   --rule-2: #e8dcc8;
+  --well: #e8dcc8;
   --ink: #332a27;
   --ink-2: #5f544d;
   --ink-3: #6b5f56;
@@ -283,7 +286,7 @@ main:focus {
   margin-left: 6px;
   padding: 0 6px;
   border-radius: 999px;
-  background: var(--rule-2);
+  background: var(--well);
   color: var(--ink-2);
   font-family: var(--ff-ui);
   font-size: 12px;
@@ -430,7 +433,7 @@ main:focus {
   margin-left: auto;
   padding: 2px;
   border-radius: var(--radius);
-  background: var(--rule-2);
+  background: var(--well);
 }
 
 .modes__item {
@@ -831,7 +834,7 @@ main:focus {
 }
 
 .editor-toolbar .btn:hover {
-  background: var(--rule-2);
+  background: var(--well);
   color: var(--ink);
 }
 
@@ -970,7 +973,7 @@ main:focus {
 }
 
 .outline__link:hover {
-  background: var(--rule-2);
+  background: var(--well);
   color: var(--ink);
 }
 

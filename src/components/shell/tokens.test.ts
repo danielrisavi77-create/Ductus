@@ -28,7 +28,7 @@ describe("design tokens (Archivum package, owner decision of 26 Oct 2026, DAN-34
     "--ink": "#f7f0fa", "--ink-2": "#cdb3df", "--ink-3": "#bca4cb", "--ink-muted": "#94729f",
     "--rule": "#765588", "--rule-2": "#664774",
     "--accent": "#f0b573", "--accent-hover": "#ffd09a", "--accent-ink": "#201526", "--accent-soft": "#3e294a",
-    "--selected": "#3e294a", "--hover": "#483250", "--raised": "#291e33", "--raised-rule": "#bc92d0",
+    "--selected": "#3e294a", "--well": "#3e294a", "--hover": "#483250", "--raised": "#291e33", "--raised-rule": "#bc92d0",
     "--card": "#33253d", "--link-rule": "#a681b9",
     "--field": "#2b2035", "--field-rule": "#9c76b0", "--field-placeholder": "#bca4cb", "--error-soft": "#402b46",
   };
@@ -163,6 +163,17 @@ describe("contrast of the semantic tokens (FE-D2)", () => {
         expect([ink, surface, contrast(dark(ink), dark(surface)) >= 4.5]).toEqual([ink, surface, true]);
       }
     }
+  });
+
+  // DAN-344: --rule-2 became a line colour; quiet surfaces under text are --well
+  // (the mode switch, the "uskoro" chip, hover and disabled backgrounds).
+  it("keeps quiet text readable on --well, dark and light, and uses no line colour as a surface", () => {
+    const shell = rule('[data-theme="light"]');
+    for (const ink of ["--ink", "--ink-2", "--ink-3"]) {
+      expect(contrast(dark(ink), dark("--well"))).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(token(shell, ink)!, token(shell, "--well")!)).toBeGreaterThanOrEqual(4.5);
+    }
+    expect(CSS).not.toMatch(/background(-color)?: var\(--rule(-2)?\)/);
   });
 
   it("keeps the field text and its placeholder readable on the field", () => {
