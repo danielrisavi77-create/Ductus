@@ -342,7 +342,7 @@ export const hr = {
       nameMissing: "Upišite naziv kolegija.",
       errors: {
         invalid: "Provjerite naziv, akademsku godinu i pravila kolegija.",
-        unauthorized: "Prijava nije valjana. Prijavi se ponovno.",
+        unauthorized: "Prijava nije valjana. Prijavite se ponovno.",
         forbidden: "Za ovaj račun nije dopušteno stvaranje kolegija.",
         conflict: "Kolegij s tim nazivom već postoji uz druga pravila.",
         unavailable: "Stvaranje kolegija nije potvrđeno. Pokušajte ponovno.",
@@ -361,7 +361,7 @@ export const hr = {
       errors: {
         missing: "Odaberite do kada kod vrijedi.",
         invalid: "Odaberite datum i vrijeme koji postoje, u budućnosti i najviše godinu dana unaprijed.",
-        unauthorized: "Kod nije izdan. Prijava nije valjana. Prijavi se ponovno.",
+        unauthorized: "Kod nije izdan. Prijava nije valjana. Prijavite se ponovno.",
         forbidden: "Za ovaj račun nije dopušteno izdavanje koda za ovaj kolegij.",
         unavailable: "Nije potvrđeno je li kod izdan. Ponovni pokušaj izdaje novi kod koji zamjenjuje svaki prethodni.",
       },
@@ -395,7 +395,7 @@ export const hr = {
       newVersion: "Izmjena zadatka nakon objave stvara novu verziju; studenti je ponovno potvrđuju.",
       errors: {
         invalid: "Provjerite naslov, vrstu rada, otvaranje, rok i raspon riječi. Rok mora biti nakon otvaranja.",
-        unauthorized: "Prijava nije valjana. Prijavi se ponovno.",
+        unauthorized: "Prijava nije valjana. Prijavite se ponovno.",
         forbidden: "Za ovaj račun nije dopušteno objavljivanje zadatka u ovom kolegiju.",
         conflict: "Zadatak s istim ključem već postoji uz druge podatke. Provjerite zadatak i objavite ponovno.",
         unavailable: "Objava zadatka nije potvrđena. Pokušajte ponovno.",
@@ -686,7 +686,7 @@ export const hr = {
     replying: "Slanje…",
     resolvedNote: "Nastavnik je označio komentar riješenim.",
     replyErrors: {
-      signedOut: "Prijava je istekla. Prijavi se ponovno.",
+      signedOut: "Prijava je istekla. Prijavite se ponovno.",
       forbidden: "Ovaj račun ne može odgovoriti na ovaj komentar.",
       conflict: "Komentar je u međuvremenu označen riješenim.",
       invalid: "Odgovor nije prihvaćen. Napišite od 1 do 2000 znakova.",
@@ -760,7 +760,7 @@ export const hr = {
       alreadyRequested: "Predaja je već zatražena za drugu verziju teksta.",
       notOpen: "Predaja za ovaj zadatak trenutačno nije otvorena.",
       notFound: "Rad nije dostupan ovom računu.",
-      signedOut: "Prijava je istekla. Prijavi se ponovno.",
+      signedOut: "Prijava je istekla. Prijavite se ponovno.",
       // No receipt came back: the server may have recorded the submission or not (Codex 4367324506).
       unavailable: "Potvrda nije stigla, pa ishod predaje nije poznat. Pokušajte ponovno.",
     },
@@ -777,7 +777,7 @@ export const hr = {
     resolve: "Označi riješenim",
     reopen: "Ponovno otvori",
     errors: {
-      signedOut: "Prijava je istekla. Prijavi se ponovno.",
+      signedOut: "Prijava je istekla. Prijavite se ponovno.",
       forbidden: "Ovaj račun ne može komentirati ovaj rad.",
       invalid: "Komentar nije prihvaćen. Napišite od 1 do 2000 znakova.",
       unavailable: "Komentar nije objavljen. Pokušajte ponovno.",
@@ -844,7 +844,7 @@ export const hr = {
         malformed: "Kod ima od 8 do 32 slova i brojke. Provjerite ga i upišite ponovno.",
         refused: "Kod ne postoji ili je istekao. Provjerite ga s nastavnikom.",
         tooManyAttempts: "Previše pokušaja. Pokušajte ponovno kasnije.",
-        unauthorized: "Prijava nije valjana. Prijavi se ponovno.",
+        unauthorized: "Prijava nije valjana. Prijavite se ponovno.",
         forbidden: "Ovaj račun ne može upisati kolegij.",
         invalid: "Upis nije prihvaćen. Ponovno učitajte stranicu.",
         unavailable: "Upis trenutačno nije moguć. Pokušajte ponovno.",
@@ -903,7 +903,7 @@ export const hr = {
     openEditor: "Otvori editor",
     errors: {
       stale: "Nastavnik je u međuvremenu objavio novu verziju zadatka. Ponovno učitajte stranicu i pročitajte je.",
-      unauthorized: "Prijava nije valjana. Prijavi se ponovno.",
+      unauthorized: "Prijava nije valjana. Prijavite se ponovno.",
       forbidden: "Ovaj račun ne može potvrditi obavijest za ovaj zadatak.",
       invalid: "Potvrda nije prihvaćena. Ponovno učitajte stranicu.",
       unavailable: "Potvrda nije zabilježena. Pokušajte ponovno.",
