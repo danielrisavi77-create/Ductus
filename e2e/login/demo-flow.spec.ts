@@ -1081,6 +1081,11 @@ test("demo walk-through", async ({ browser, page, context }) => {
     const teacher = await (await browser.newContext()).newPage();
     try {
       await signIn(teacher, "/", "Demo nastavnik");
+      // DAN-332 PR 4 (#826): the teacher's list says the work was submitted, before the deadline (15. 12.).
+      await teacher.goto("/nastavnik");
+      const k4Link = teacher.locator(`a[href="/nastavnik/rad/${encodeURIComponent(k4Document!)}"]`);
+      await expect(teacher.getByRole("list", { name: t.teacherCourses.worksLabel }).getByRole("listitem").filter({ has: k4Link }))
+        .toHaveText(new RegExp(`^${t.teacherCourses.work} \\d+ · ${t.teacherCourses.submission.onTime}$`));
       await teacher.goto(`/nastavnik/rad/${k4Document!}`);
       await expect(summaryOf(teacher).getByText(t.summary.sameForEveryone)).toBeVisible({ timeout: 30_000 });
       expect(await summaryOf(teacher).textContent()).toBe(studentSummary);
