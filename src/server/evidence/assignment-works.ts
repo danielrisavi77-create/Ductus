@@ -73,3 +73,49 @@ export async function readAssignmentWorks(
   }
   return { kind: "ok", works };
 }
+
+export type AssignmentWorksByAssignment =
+  | { kind: "ok"; works: ReadonlyMap<string, AssignmentWork[]> }
+  | { kind: "unauthorized" | "unavailable" };
+
+const MANY_SQL = `SELECT a.id::text AS assignment_id, w.student_id::text AS student_id, w.document_id
+  FROM unnest($1::uuid[]) WITH ORDINALITY AS a (id, n)
+  CROSS JOIN LATERAL app.assignment_works(a.id) AS w
+ ORDER BY a.n`;
+
+/**
+ * F-142: the works of many assignments for the teacher's home page, in one
+ * transaction and one statement, so that a page load holds one pooled
+ * connection however many assignments the teacher has. Each assignment is
+ * read by the same app.assignment_works as readAssignmentWorks; malformed
+ * ids are left out and map to no entry. A failure answers for the whole page.
+ */
+export async function readAssignmentWorksMany(
+  sessionToken: string | undefined,
+  assignmentIds: readonly string[],
+  withActor: WithActor,
+): Promise<AssignmentWorksByAssignment> {
+  if (sessionToken === undefined || !TOKEN.test(sessionToken)) return { kind: "unauthorized" };
+  const ids = [...new Set(assignmentIds.map((id) => id.toLowerCase()).filter((id) => UUID.test(id)))];
+  const works = new Map<string, AssignmentWork[]>(ids.map((id) => [id, []]));
+  if (ids.length === 0) return { kind: "ok", works };
+  let rows: Row[];
+  try {
+    rows = (await withActor(sessionToken, (tx) => tx.query<Row>(MANY_SQL, [ids]))).rows;
+  } catch (error) {
+    const code = codeOf(error);
+    if (code === "ZD401") return { kind: "unauthorized" };
+    console.error("assignment works read failed", code !== undefined && SQLSTATE.test(code) ? code : "unknown");
+    return { kind: "unavailable" };
+  }
+  for (const row of rows) {
+    const list = typeof row.assignment_id === "string" ? works.get(row.assignment_id) : undefined;
+    const [work] = worksOf([row]) ?? [];
+    if (list === undefined || work === undefined) {
+      console.error("assignment works read failed", "row_malformed");
+      return { kind: "unavailable" };
+    }
+    list.push(work);
+  }
+  return { kind: "ok", works };
+}

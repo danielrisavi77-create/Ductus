@@ -2,6 +2,7 @@ import { expect, type Page } from "@playwright/test";
 import pg from "pg";
 
 import { DUCTUS_PROTOCOL_VERSION } from "../../src/domain/evidence/commit-envelope";
+import { localAdminUrl } from "./local-db-url";
 
 // #711 F1: `/rad?zadatak=` writes into the student's own work of the
 // assignment, made by the real open route (`open_student_work`), never into a
@@ -9,21 +10,12 @@ import { DUCTUS_PROTOCOL_VERSION } from "../../src/domain/evidence/commit-envelo
 // through the admin login of the compose database (as assignment-notice.spec.ts
 // does), open the work as the student, and read its document id back.
 
-export const ADMIN_DATABASE_URL =
-  process.env.E2E_ADMIN_DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
 export const ORIGIN = "http://localhost:3000";
 export const STUDENT = "demo-student@demo.ductus.test";
 export const TEACHER = "demo-teacher@demo.ductus.test";
 
-/** The seed writes as the database owner, so it never runs against a database off this machine. */
-function localAdminUrl(url: string): string {
-  const host = new URL(url).hostname;
-  if (host !== "127.0.0.1" && host !== "localhost") throw new Error("the e2e seed runs only against a local database");
-  return url;
-}
-
 export async function admin<T>(work: (client: pg.Client) => Promise<T>): Promise<T> {
-  const client = new pg.Client({ connectionString: localAdminUrl(ADMIN_DATABASE_URL) });
+  const client = new pg.Client({ connectionString: localAdminUrl() });
   await client.connect();
   try {
     return await work(client);

@@ -346,6 +346,10 @@ export class LocalDocumentSaver {
    * did not see (#206 r6 finding 1). A candidate proposed while it reads is
    * newer than `doc`, so it is kept and written instead (#206 r6 finding 2);
    * if the read is stale, it waits like `doc` and the next `resume()` drops it.
+   * If the read itself fails (`unavailable`), `doc` stays queued like a
+   * candidate proposed while halted: the next ready load writes it, so a
+   * reload that lifts the halt never leaves the chosen text unwritten without
+   * a failure (DAN-318).
    */
   async resume(doc: CanonicalDocument): Promise<LoadResult> {
     if (this.recovery !== "unsaved" && this.recovery !== "stale") {
@@ -367,6 +371,10 @@ export class LocalDocumentSaver {
       if (result.kind === "ready") {
         if (this.queuedGen < gen) await this.queue({ doc, gen });
         else await this.flightSettled();
+      } else if (result.kind === "unavailable" && this.queuedGen < gen) {
+        // The read failed, not the choice: the text waits like one proposed
+        // while halted, and the next ready load writes it (DAN-318).
+        await this.queue({ doc, gen });
       }
       return result;
     } finally {

@@ -4,6 +4,7 @@ import { expect, type BrowserContext, type Page } from "@playwright/test";
 import pg from "pg";
 
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
+import { localAdminUrl } from "./local-db-url";
 
 // Shared by the specs that log in through the fake provider against
 // `next dev` (playwright.login.config.ts). The demo accounts are invented
@@ -30,8 +31,6 @@ export async function editorMounted(page: Page): Promise<void> {
 
 // The admin login of the compose database reads identity.session to check
 // what the browser cannot see: the session row behind the cookie.
-const ADMIN_DATABASE_URL =
-  process.env.E2E_ADMIN_DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
 
 export interface SessionRow {
   institution: string;
@@ -41,7 +40,7 @@ export interface SessionRow {
 }
 
 export async function sessionRow(token: string): Promise<SessionRow | undefined> {
-  const client = new pg.Client({ connectionString: ADMIN_DATABASE_URL });
+  const client = new pg.Client({ connectionString: localAdminUrl() });
   await client.connect();
   try {
     const { rows } = await client.query<SessionRow>(
