@@ -1,4 +1,9 @@
-export type DemoAccount = { readonly name: string; readonly affiliation: string };
+export type DemoAccount = {
+  readonly name: string;
+  readonly givenName: string;
+  readonly familyName: string;
+  readonly affiliation: string;
+};
 
 export const DEMO_HOME_ORG: string;
 

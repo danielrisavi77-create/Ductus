@@ -57,7 +57,7 @@ import { StorableInput } from "@/editor/storable-input";
 import { storableDocument } from "@/editor/storable-text";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { createLivePublisher, type LivePublisher } from "@/client/live-publisher";
-import { editorPlan, readLogoutHold } from "@/client/logout-hold";
+import { editorSignOutPlan } from "@/client/logout-hold";
 import { SourceObserver } from "@/editor/source";
 import { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
 import type { SaverFailure } from "@/lib/journal/local-document-saver";
@@ -96,8 +96,11 @@ type LocalDocumentValue = {
   snapshot: DocumentSnapshot | null;
   words: number;
   invalid: boolean;
-  /** Stops writing and says what a sign-out would leave behind (FE-D7). */
-  prepareSignOut: () => Promise<LogoutPlan>;
+  /**
+   * Stops writing and says what a sign-out would leave behind (FE-D7), or
+   * "leave" when the page's session has ended.
+   */
+  prepareSignOut: () => Promise<LogoutPlan | "leave">;
   /** Writing goes on after the dialog was left with "Ostani". */
   staySignedIn: () => void;
   /** Ends the session; resolves true once the logout route has answered. */
@@ -505,15 +508,14 @@ export function LocalDocumentProvider({
 
   // Writing stays stopped from here until "Ostani" or the end of the
   // session, so the count the dialog shows cannot grow behind it (I2).
-  const prepareSignOut = async (): Promise<LogoutPlan> => {
+  // The whole scope, as the shell counts it (O2): every document of this person.
+  // A page whose session has ended stops and reads nothing (leave).
+  const prepareSignOut = async (): Promise<LogoutPlan | "leave"> => {
     const locked = logoutRef.current;
-    if (!locked) return { unsaved: false, pending: null };
-    const unsaved = await locked.quiesce();
+    const plan = await editorSignOutPlan(locked && (() => locked.quiesce()), scope, { session });
     // After a submission the steps still held are never sent (3d-2c2 O3).
     const submitted = saverRef.current?.snapshot().closedBy === "submission";
-    // The whole scope, as the shell counts it (O2): every document of this person.
-    const plan = editorPlan(unsaved, await readLogoutHold(scope));
-    return submitted ? { ...plan, submitted } : plan;
+    return plan !== "leave" && submitted ? { ...plan, submitted } : plan;
   };
 
   const staySignedIn = () => logoutRef.current?.resume();
@@ -729,6 +731,11 @@ export function LocalLogout() {
       // Writing has stopped either way; an unknown count shows no number.
       .catch((): LogoutPlan => ({ unsaved: false, pending: null }))
       .then((next) => {
+        // The page's session has ended: `/` renders under the browser's cookie.
+        if (next === "leave") {
+          window.location.assign("/");
+          return;
+        }
         setPreparing(false);
         // Nothing at all stays on this device: no dialog (O1, #476 c.6396707923).
         if (nothingHeld(next)) confirm();

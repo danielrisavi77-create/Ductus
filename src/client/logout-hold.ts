@@ -1,21 +1,29 @@
 import type { LogoutPlan } from "@/components/editor/logout-plan";
 import { AtomicDexieJournal, type LogoutHold } from "@/lib/journal/atomic-dexie-journal";
 
+import { browserMarkStore, hasEnded, type MarkStore, type SessionMark } from "./session-marks";
+
 /** A read blocked by another tab's deletion must not hold the sign-out (D-118). */
 export const LOGOUT_HOLD_LIMIT_MS = 2_000;
 
-export type HoldRead = LogoutHold | "noStorage" | "unknown";
+export type HoldRead = LogoutHold | "noStorage" | "unknown" | "ended";
 
 export type HoldReadOptions = {
   timeoutMs?: number;
   peek?: (scope: string) => Promise<LogoutHold>;
+  /** The session the page was rendered under; once it has ended nothing is read. */
+  session?: SessionMark | null;
+  store?: MarkStore | null;
 };
 
 /**
  * What this person's journal holds back from a sign-out (D-118), read per
  * click under the page's own scope. No scope, a failure or the limit: unknown.
+ * A page whose session is no longer the browser's reads nothing: ended.
  */
 export async function readLogoutHold(scope: string | null, options: HoldReadOptions = {}): Promise<HoldRead> {
+  const { session = null, store = browserMarkStore() } = options;
+  if (session !== null && hasEnded(store, session)) return "ended";
   if (typeof indexedDB === "undefined" || !indexedDB) return "noStorage";
   if (!scope) return "unknown";
   const { timeoutMs = LOGOUT_HOLD_LIMIT_MS, peek = (s: string) => AtomicDexieJournal.peekLogoutHold(s) } = options;
@@ -31,11 +39,16 @@ export async function readLogoutHold(scope: string | null, options: HoldReadOpti
 
 export type ShellLogoutStep =
   | { kind: "plain" }
+  | { kind: "leave" }
   | { kind: "dialog"; plan: LogoutPlan }
   | { kind: "dialogUnknown"; plan: LogoutPlan };
 
-/** Without the editor: no dialog when nothing stays; a number only when read. */
+/**
+ * Without the editor: no dialog when nothing stays; a number only when read.
+ * A page whose session has ended posts nothing and goes to `/` (leave).
+ */
 export function shellLogoutStep(read: HoldRead): ShellLogoutStep {
+  if (read === "ended") return { kind: "leave" };
   if (read === "noStorage") return { kind: "plain" };
   if (read === "unknown") return { kind: "dialogUnknown", plan: { unsaved: false, pending: null } };
   if (read.pending === 0 && read.copies === 0 && !read.kept) return { kind: "plain" };
@@ -46,4 +59,22 @@ export function shellLogoutStep(read: HoldRead): ShellLogoutStep {
 export function editorPlan(unsaved: boolean, read: HoldRead): LogoutPlan {
   if (typeof read === "string") return { unsaved, pending: null };
   return { unsaved, pending: read.pending, copies: read.copies, kept: read.kept };
+}
+
+/**
+ * The editor's sign-out plan: writing stops first, then the whole scope is
+ * read (O2). A page whose session has ended stops nothing, reads nothing and
+ * posts nothing: it goes to `/` (leave).
+ */
+export async function editorSignOutPlan(
+  quiesce: (() => Promise<boolean>) | null,
+  scope: string | null,
+  options: HoldReadOptions = {},
+): Promise<LogoutPlan | "leave"> {
+  const { session = null, store = browserMarkStore() } = options;
+  if (session !== null && hasEnded(store, session)) return "leave";
+  if (!quiesce) return { unsaved: false, pending: null };
+  const unsaved = await quiesce();
+  const read = await readLogoutHold(scope, { ...options, session, store });
+  return read === "ended" ? "leave" : editorPlan(unsaved, read);
 }

@@ -133,6 +133,20 @@ describe("peekLogoutHold (U1)", () => {
     expect(await exists(scope)).toBe(false);
   });
 
+  it("a journal opened while the read runs on a missing database stays usable", async () => {
+    const scope = newScope();
+    const read = peek(scope);
+    const journal = open(scope);
+    const saved = journal.saveLocal(DOC, tx("first"), UTC, 0);
+    expect(await read).toEqual({ pending: 0, copies: 0, kept: false });
+    await saved;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect((raw(journal) as unknown as { deletedElsewhere: boolean }).deletedElsewhere).toBe(false);
+    await journal.saveLocal(DOC, tx("second"), UTC, 1);
+    expect(await exists(scope)).toBe(true);
+    expect(await peek(scope)).toEqual({ pending: 2, copies: 0, kept: true });
+  });
+
   it("refuses a scope that is not a digest", async () => {
     await expect(AtomicDexieJournal.peekLogoutHold("ductus", idb)).rejects.toBeInstanceOf(JournalError);
   });
