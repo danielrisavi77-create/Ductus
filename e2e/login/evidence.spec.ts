@@ -36,6 +36,8 @@ async function openSheet(page: Page): Promise<{ assignment: string; documentId: 
   await signIn(page, "/rad");
   const assignment = await seedWork();
   await page.goto(`/rad?zadatak=${assignment}`);
+  // DAN-330: the work starts on the student's click.
+  await page.getByRole("button", { name: t.workspace.startWork }).click();
   await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: OPEN });
   // The first opening refreshes the render into a freshly mounted editor (#731).
   await editorMounted(page);

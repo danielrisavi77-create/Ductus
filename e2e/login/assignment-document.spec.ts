@@ -104,14 +104,16 @@ test("DAN-330: loading /rad?zadatak= starts nothing until \"Započni rad\"", asy
   const comments = requests.filter((r) => /^\/api\/comments/.test(pathOf(r)));
   expect(comments.length).toBeGreaterThan(0);
   for (const request of comments) expect(request.postData() ?? "").toContain(documents[0]!);
-  expect(opens(requests)).toEqual(["/api/evidence/open"]);
+  // The click made the work; the sheet's evidence session (3d-2c2b, #811)
+  // then opens that same work again, which makes nothing new.
+  expect(opens(requests).length).toBeGreaterThan(0);
 
   // The work exists: the same address opens the editor directly.
   await page.reload();
   await writable(page);
   await expect(startOf(page)).toHaveCount(0);
   await expect(page.getByText(t.workspace.notStarted)).toHaveCount(0);
-  expect(opens(requests)).toEqual(["/api/evidence/open"]);
+  expect(await documentsOf(STUDENT, assignment)).toEqual({ projects: 1, documents });
   expect(carryingFixedId(requests)).toEqual([]);
   expect(await page.content()).not.toContain(LOCAL_DEMO_DOCUMENT_ID);
 });
@@ -135,9 +137,10 @@ test("DAN-330: a double click starts one work", async ({ page }) => {
   await expect(startOf(page)).toBeFocused();
   await expect(editorOf(page)).toHaveAttribute("aria-busy", "true");
   await shootThemes(page, "dan330-otvaram-rad");
+  // Three clicks while the answer waits sent one open.
+  expect(opens(requests)).toEqual(["/api/evidence/open"]);
   release();
   await writable(page);
-  expect(opens(requests)).toEqual(["/api/evidence/open"]);
   const { projects, documents } = await documentsOf(STUDENT, assignment);
   expect(projects).toBe(1);
   expect(documents).toHaveLength(1);
@@ -175,7 +178,10 @@ test("DAN-330: past the due date the work can still be started", async ({ page }
   await page.keyboard.type("Rad započet nakon roka.");
   await expect(editorOf(page)).toContainText("Rad započet nakon roka.");
   await expect(page.getByRole("note")).toHaveText(t.workspace.lateNote);
-  expect(opens(requests)).toEqual(["/api/evidence/open"]);
+  expect(opens(requests).length).toBeGreaterThan(0);
+  const { projects, documents } = await documentsOf(STUDENT, assignment);
+  expect(projects).toBe(1);
+  expect(documents).toHaveLength(1);
 });
 
 test("DAN-330: offline, nothing is sent before the click and the click continues when the network returns", async ({ page, context }) => {
