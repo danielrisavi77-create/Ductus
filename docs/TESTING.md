@@ -78,6 +78,35 @@ obvezni. Snapshot specovi prilažu snimke bez usporedbe s referentnim slikama.
 Jedan zeleni prolaz ne opravdava stvarno preskakanje: širenje traži pregled
 uvoza/potrošača CSS-a, dokaze iz kandidatnih PR-ova i zaseban zadatak.
 
+### Vizualni baselineovi i ARIA snimke (DAN-249)
+
+Tri demo ekrana uspoređuju se piksel po piksel s referentnom slikom:
+
+| Ekran | Spec | Projekt |
+|---|---|---|
+| `/prijava` | `e2e/visual.spec.ts` (V1) | `desktop` |
+| prazan editor na `/rad` | `e2e/visual.spec.ts` (V2) | `desktop` |
+| nastavnik, "Novi kolegij i zadatak" prije unosa | `e2e/login/teacher-home.spec.ts` (V3) | `login-chromium` |
+
+Uz njih su tri ciljane ARIA snimke (`toMatchAriaSnapshot`), zapisane u samom spec-u:
+
+- alatna traka editora (A1, svi projekti);
+- nastavnička navigacija (A2, u `teacher-home.spec.ts`);
+- dijalog odjave s izmjenama na uređaju (A3, u `shell-sign-out.spec.ts`).
+
+U projektima `mobile`, `firefox` i `webkit` V1 i V2 provjeravaju samo ARIA strukturu istog ekrana; ništa se ne preskače. Snima se element `main`, a ne cijela stranica, pa se Next dev oznaka u login suiteu ne vidi. Tolerancije su Playwrightove zadane, bez maske.
+
+- **Gdje su slike:** zadani Playwright put, `e2e/visual.spec.ts-snapshots/*-desktop-linux.png` i `e2e/login/teacher-home.spec.ts-snapshots/*-login-chromium-linux.png`.
+- **Usporedba:** rade je postojeći poslovi "Standard E2E and database" i "Login E2E". Kad usporedba padne, expected, actual i diff su u artefaktima `playwright-report` i `playwright-report-login` (otvori `index.html`, test, privitke).
+- **Nova referenca:** slika nastaje samo na CI runneru.
+  1. Prolaz bez reference padne, a Playwright priloži actual.
+  2. Taj actual se preuzme iz artefakta, pregleda i commita s datotečnim imenom koje test traži.
+  3. Dva prolaza istog heada moraju biti zelena.
+  
+  Pragovi se ne šire i maske se ne dodaju. Promjena palete ili rasporeda (npr. #867) mijenja referencu u istom PR-u, s pregledanim slikama u opisu.
+- **Lokalno (Windows):** reference su `-linux`, pa V1 do V3 lokalno nemaju svoju referencu. Slike `-win32.png` koje lokalni prolaz pritom zapiše ne commitaju se. `--ignore-snapshots` preskače i piksele i ARIA snimke (`toMatchAriaSnapshot` u Playwrightu 1.63 poštuje istu zastavicu). Za ARIA strukturu i piksele mjerodavan je CI.
+- Tri reference ne dokazuju puni FPZG demo; za to su DAN-232 i `e2e/login/demo-flow.spec.ts`.
+
 ## 3. Obvezni adversarial scenariji prije pilota
 
 Svaki scenarij dobiva test ili zapis ručne probe.
