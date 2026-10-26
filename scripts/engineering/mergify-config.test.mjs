@@ -33,13 +33,29 @@ test("queue and merge conditions require every required status of main", () => {
 test("serial speculation preserves every intermediate result and rejects edited carriers", () => {
   assert.match(body, /mode: serial\n/);
   assert.match(body, /max_parallel_checks: 3\n/);
-  assert.match(body, /batch_size: 1\n/);
+  // D-177: batches of up to three PRs, one CI run per batch.
+  assert.match(body, /\n    batch_size: 3\n/);
+  assert.match(body, /\n    batch_max_wait_time: 3 min\n/);
   assert.match(body, /max_checks_retries: 0\n/);
   assert.match(body, /allow_queue_branch_edit: false\n/);
   assert.match(body, /branch_protection_injection_mode: queue\n/);
   assert.match(body, /reset_on_external_merge: always\n/);
   assert.match(body, /skip_intermediate_results: false\n/);
-  assert.doesNotMatch(body, /draft_bot_account:|queue_branch_prefix:|merge_bot_account:|batch_max_wait_time:/);
+  assert.doesNotMatch(body, /draft_bot_account:|queue_branch_prefix:|merge_bot_account:/);
+});
+
+// D-177: a failed batch is split until the failing PR is isolated, and each
+// source PR still merges as its own squash commit behind its own approvals.
+test("a batch merges its PRs one by one and a failed batch is split, never dropped whole", () => {
+  // Unset means Mergify keeps splitting; 0 would drop every PR of the batch.
+  assert.doesNotMatch(body, /batch_max_failure_resolution_attempts:/);
+  assert.equal(body.match(/^\s*merge_method: (.+)$/m)?.[1], "squash");
+  assert.doesNotMatch(body, /merge-batch|fast-forward/);
+  // A batch is never larger than three and never a range that could grow.
+  assert.equal(body.match(/batch_size:/g)?.length, 1);
+  assert.doesNotMatch(body, /batch_size:\s*\n\s+(min|max):/);
+  // Each source PR is admitted only on its own green Merge authorization.
+  assert.match(body, /queue_conditions: &required\n(?: {6}- .+\n)*? {6}- check-success=Merge authorization\n/);
 });
 
 test("only the owner can queue or requeue by command", () => {
