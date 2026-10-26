@@ -405,7 +405,17 @@ const C1: Op[] = [
   { kind: "mode", tab: 0, mode: "gate" }, { kind: "propose", tab: 0 }, { kind: "resume", tab: 0 },
   { kind: "release", tab: 0 }, { kind: "tick", tab: 0 },
 ];
-test.prop([fc.array(step, { minLength: 5, maxLength: 40 })], { numRuns, examples: [[C1]] })(
+/** CI seed -1435806551 (DAN-318, #770): invariant 5 after a failed read and late reads; always run first. */
+const D318: Op[] = [
+  { kind: "mode", tab: 0, mode: "quota", wait: 0 }, { kind: "propose", tab: 0, wait: 0 },
+  { kind: "mode", tab: 0, mode: "ok", wait: 0 }, { kind: "load", tab: 0, wait: 0 },
+  { kind: "propose", tab: 0, wait: 0 }, { kind: "readFail", tab: 0, wait: 0 },
+  { kind: "edit", tab: 0, wait: 0 }, { kind: "resume", tab: 0, wait: 0 },
+  { kind: "slowRead", tab: 0, wait: 0 }, { kind: "load", tab: 0, wait: 0 },
+  { kind: "mode", tab: 0, mode: "ok", wait: 0 }, { kind: "lateRead", tab: 0, wait: 0 },
+  { kind: "lateRead", tab: 0, wait: 0 },
+];
+test.prop([fc.array(step, { minLength: 5, maxLength: 40 })], { numRuns, examples: [[C1], [D318]] })(
   "1 tab: the only writer never sees stale",
   (ops) => run(1, ops),
 );
