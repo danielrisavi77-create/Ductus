@@ -295,6 +295,38 @@ describe("edit steps v1 replayer: bullet item (E1)", () => {
   });
 });
 
+// E1 part 2 (#823): the quote paragraph is a flat block like the item; tests
+// only, no production code of this adapter changes.
+describe("edit steps v1 replayer: quote paragraph (E1)", () => {
+  const doc = replayer.load(start);
+  const asItem = capture(doc, (tr) => tr.setBlockType(1, 1, schema.nodes.bulletItem!, { nodeId: A }));
+  const itemDoc = replayer.apply(doc, event(asItem.steps));
+  const asQuote = capture(itemDoc, (tr) => tr.setBlockType(1, 1, schema.nodes.quote!, { nodeId: A }));
+  const quoteDoc = replayer.apply(itemDoc, event(asQuote.steps));
+
+  it("an item becomes a quote and the quote a paragraph, with the same id", () => {
+    expect(quoteDoc.toJSON()).toEqual(asQuote.after.toJSON());
+    expect(replayer.toCanonical(quoteDoc)).toMatchObject({ nodes: [{ type: "quote", id: A }, { id: B }, { id: C }] });
+    const back = capture(quoteDoc, (tr) => tr.setBlockType(1, 1, schema.nodes.paragraph!, { nodeId: A }));
+    expect(replayer.toCanonical(replayer.apply(quoteDoc, event(back.steps)))).toEqual(replayer.toCanonical(doc));
+    const stolen = structuredClone(asQuote.steps[0]) as { slice: { content: { attrs: Record<string, unknown> }[] } };
+    stolen.slice.content[0]!.attrs.nodeId = B;
+    refused(itemDoc, [stolen]).toThrow("replace_around_identity");
+    refused(quoteDoc, asQuote.steps).toThrow("replace_around_unchanged");
+    const withLevel = structuredClone(asQuote.steps[0]) as { slice: { content: { attrs: Record<string, unknown> }[] } };
+    withLevel.slice.content[0]!.attrs.level = 1;
+    refused(itemDoc, [withLevel]).toThrow("unknown_field");
+  });
+
+  it("the removed hash across a quote's boundary tells a quote from an item", () => {
+    const { steps, after } = capture(quoteDoc, (tr) => tr.delete(10, 22));
+    expect(replayer.apply(quoteDoc, event(steps)).toJSON()).toEqual(after.toJSON());
+    const asItemRange = { ...(steps[0] as object), removedSha256: removedRangeSha256(itemDoc, 10, 22) };
+    expect(asItemRange.removedSha256).not.toBe((steps[0] as { removedSha256: string }).removedSha256);
+    refused(quoteDoc, [asItemRange]).toThrow("removed_range_hash");
+  });
+});
+
 describe("edit steps v1 replayer inside replayEvidenceSegmentsV2", () => {
   async function segment(events: { steps: unknown[] }[], initial: JcsJsonValue): Promise<EvidenceSegmentV2> {
     let document = replayer.load(initial);
@@ -358,13 +390,13 @@ describe("edit steps v1 replayer: content of a later format (F-150, BACKEND 4.1)
   }
 
   it("pins the dated v1 node set of BACKEND 4.1: a new type is added there in the same change", () => {
-    expect([...PLAIN_BLOCK_TYPES]).toEqual(["paragraph", "bulletItem"]);
+    expect([...PLAIN_BLOCK_TYPES]).toEqual(["paragraph", "bulletItem", "quote"]);
     expect([...MARK_ORDER]).toEqual(["bold", "italic"]);
   });
 
   it("reports a block type it does not know as unsupported_format, not as step_failed", async () => {
-    expect(() => replayer.apply(doc, event(typed("quote")))).toThrow(EvidenceContentNotSupportedV2);
-    expect(await replayed(typed("quote"))).toEqual({ ok: false, reason: "unsupported_format", segmentIndex: 0, sequence: 1 });
+    expect(() => replayer.apply(doc, event(typed("orderedItem")))).toThrow(EvidenceContentNotSupportedV2);
+    expect(await replayed(typed("orderedItem"))).toEqual({ ok: false, reason: "unsupported_format", segmentIndex: 0, sequence: 1 });
     // A name the prototype of a plain object has is still a name it does not know.
     expect(await replayed(typed("constructor"))).toMatchObject({ ok: false, reason: "unsupported_format" });
   });
