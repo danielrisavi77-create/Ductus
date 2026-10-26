@@ -2,7 +2,7 @@
 .course,
 .empty {
   border: 1px solid var(--rule-2);
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: var(--chrome);
 }
 
