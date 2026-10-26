@@ -88,7 +88,7 @@ test.describe("public home page", () => {
       await page.goto("/");
       if (sheet === "light") {
         await page.getByRole("button", { name: t.workspace.sheetThemeLight }).click();
-        await expect(page.locator("article.sheet")).toHaveAttribute("data-sheet-theme", "light");
+        await expect(page.locator("article.sheet").first()).toHaveAttribute("data-sheet-theme", "light");
       }
       const results = await new AxeBuilder({ page })
         .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
