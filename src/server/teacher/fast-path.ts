@@ -76,7 +76,8 @@ function codeOf(error: unknown): string | undefined {
 }
 
 function isName(value: unknown): value is string {
-  return typeof value === "string" && value.length >= 1 && value.length <= NAME_MAX;
+  // Code points, as the login claims and length() in the database count (F-149).
+  return typeof value === "string" && value.length >= 1 && [...value].length <= NAME_MAX;
 }
 
 /** Named students by surname, given name and id; then the unnamed by id (#757 D1). */
