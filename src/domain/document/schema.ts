@@ -5,8 +5,9 @@
  * document is the academic source of truth; editor state is only a projection
  * of it, never the other way around.
  *
- * F1 node model (dossier §5): two block types (paragraph, heading 1-3) and a
- * single inline type (text with bold/italic marks). Ids are opaque UUIDs and
+ * F1 node model (dossier §5): text blocks of one level (paragraph, heading 1-3
+ * and, from E1, the bullet list item) and a single inline type (text with
+ * bold/italic marks). Blocks never nest: a list is consecutive list items. Ids are opaque UUIDs and
  * are part of the canonical identity of a node, not a rendering detail.
  */
 
@@ -117,7 +118,26 @@ export type HeadingNode = {
   children: InlineNode[];
 };
 
-export type DocumentNode = ParagraphNode | HeadingNode;
+/**
+ * One item of a bullet list (E1, #823). A flat text block like a paragraph:
+ * consecutive items are shown as one list, and there is no nesting.
+ */
+export type BulletItemNode = {
+  type: "bulletItem";
+  id: NodeId;
+  children: InlineNode[];
+};
+
+export type DocumentNode = ParagraphNode | HeadingNode | BulletItemNode;
+
+/** Block types whose only fields are `type`, `id` and `children`. */
+export const PLAIN_BLOCK_TYPES = ["paragraph", "bulletItem"] as const;
+
+export type PlainBlockType = (typeof PLAIN_BLOCK_TYPES)[number];
+
+export function isPlainBlockType(value: unknown): value is PlainBlockType {
+  return (PLAIN_BLOCK_TYPES as readonly unknown[]).includes(value);
+}
 
 /**
  * A whole document. Always at least one block node: an "empty document" is one
@@ -150,4 +170,11 @@ export function headingNode(
   children: readonly InlineNode[] = [],
 ): HeadingNode {
   return { type: "heading", id, level, children: [...children] };
+}
+
+export function bulletItemNode(
+  id: NodeId,
+  children: readonly InlineNode[] = [],
+): BulletItemNode {
+  return { type: "bulletItem", id, children: [...children] };
 }

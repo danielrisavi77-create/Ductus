@@ -9,7 +9,10 @@
  * back without losing the author's text.
  *
  * Exactly the F1 set is registered here:
- *   doc, paragraph, heading (levels 1-3), text, bold, italic, history.
+ *   doc, paragraph, heading (levels 1-3), bullet item, text, bold, italic,
+ *   history.
+ * The bullet item (E1, #823) is a flat text block of its own
+ * (`bullet-item.ts`), not StarterKit's list, which wraps paragraphs.
  * Placeholder is a decoration only: it adds no node or mark to the schema.
  *
  * Gapcursor is not registered: it exists for non-textblock leaf nodes (images,
@@ -26,6 +29,7 @@ import Paragraph from "@tiptap/extension-paragraph";
 import Placeholder from "@tiptap/extension-placeholder";
 import Text from "@tiptap/extension-text";
 
+import { BulletItem } from "./bullet-item";
 import { createNodeIdentityPlugin, mintMissingIds, repeatedNodeIds, type NodeIdMinter } from "./identity";
 import { NODE_ID_ATTRIBUTE } from "./interop";
 
@@ -35,7 +39,7 @@ export { NODE_ID_ATTRIBUTE };
 export const NODE_ID_HTML_ATTRIBUTE = "data-node-id";
 
 /** Block node types that carry a canonical id. */
-export const ID_CARRYING_TYPES = ["paragraph", "heading"] as const;
+export const ID_CARRYING_TYPES = ["paragraph", "heading", "bulletItem"] as const;
 
 /** Heading levels allowed in F1. Mirrors `HeadingLevel` in the domain. */
 export const F1_HEADING_LEVELS = [1, 2, 3] as const;
@@ -133,6 +137,7 @@ export const F1_EXTENSION_NAMES = [
   "doc",
   "paragraph",
   "heading",
+  "bulletItem",
   "text",
   "bold",
   "italic",
@@ -152,6 +157,7 @@ export function createEditorExtensions(
     Document,
     Paragraph,
     Heading.configure({ levels: [...F1_HEADING_LEVELS] }),
+    BulletItem,
     Text,
     Bold,
     Italic,

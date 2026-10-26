@@ -20,6 +20,7 @@ import { cleanUp, post, seed } from "./comment-seed";
 import {
   appCookie, editorMounted, fillCodeDeadline, SAVED_HERE, SESSION_COOKIE, sessionRow, signIn, signOutHoweverHeld, signOutWithoutDialog,
 } from "./support";
+import { localAdminUrl } from "./local-db-url";
 
 // K-4 (DAN-89; docs/PLAN-DEMO.md §1 points 1 to 5 and §7 t. 2, D-98): the demo
 // walk-through as one test. The login config records its video in CI and the
@@ -152,15 +153,10 @@ async function signOut(page: Page, token: string, held = true): Promise<void> {
 }
 
 const TEACHER_ID = "demo-teacher@demo.ductus.test";
-const ADMIN_DATABASE_URL =
-  process.env.E2E_ADMIN_DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
 let roleGrantedByThisTest = false;
 
 async function withAdmin<T>(work: (client: pg.Client) => Promise<T>): Promise<T> {
-  if (!["127.0.0.1", "localhost"].includes(new URL(ADMIN_DATABASE_URL).hostname)) {
-    throw new Error("the K-4 fixture runs only against a local database");
-  }
-  const client = new pg.Client({ connectionString: ADMIN_DATABASE_URL });
+  const client = new pg.Client({ connectionString: localAdminUrl() });
   await client.connect();
   try {
     return await work(client);
