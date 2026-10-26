@@ -45,7 +45,50 @@ test("privileged workflow documents the dangerous-trigger exception", async () =
   assert.match(workflow, /PR code is never fetched or executed/);
 });
 
-const relayPath = new URL("../../.github/workflows/engineering-gate-review-signal.yml", import.meta.url);
+// The top-level keys of a workflow's `on:` block (block form only).
+function triggers(text) {
+  const lines = text.split(/\r?\n/);
+  const start = lines.findIndex((line) => /^on:(\s*#.*)?$/.test(line));
+  assert.ok(start >= 0, "workflow has a block-form `on:`");
+  const names = [];
+  for (const line of lines.slice(start + 1)) {
+    // A blank line or a comment, even at column 0, does not end a YAML block.
+    if (/^\s*(#.*)?$/.test(line)) continue;
+    if (/^\S/.test(line)) break;
+    const key = /^ {2}([A-Za-z_]+):/.exec(line);
+    if (key) names.push(key[1]);
+    else assert.ok(/^ {3,}/.test(line), `unexpected line under on: ${line}`);
+  }
+  return names;
+}
+
+test("every trigger of the files under Actions policy 6529 is on the recorded allowed list (DAN-337)", async () => {
+  const workflow = await readFile(workflowPath, "utf8");
+  const listed = /^# actions-policy-6529-allowed-events: (.+)$/m.exec(workflow);
+  assert.ok(listed, "engineering-gate.yml records the policy's allowed events");
+  const allowed = new Set(listed[1].split(",").map((name) => name.trim()));
+  assert.deepEqual([...allowed].sort(), ["issue_comment", "pull_request_target", "workflow_run"]);
+  const review = await readFile(new URL("../../.github/workflows/free-ai-pr-review.yml", import.meta.url), "utf8");
+  for (const [file, text] of [["engineering-gate.yml", workflow], ["free-ai-pr-review.yml", review]]) {
+    const names = triggers(text);
+    assert.ok(names.length > 0, `${file} has triggers`);
+    for (const name of names) assert.ok(allowed.has(name), `${file}: ${name} is not allowed by policy 6529`);
+  }
+  assert.deepEqual(triggers(workflow), ["pull_request_target", "issue_comment", "workflow_run"]);
+});
+
+test("the trigger reader sees every key under on:", () => {
+  const text = "name: x\non: # note\n  push:\n    branches: [main]\n  # a comment\n  workflow_dispatch:\n\npermissions: {}\n";
+  assert.deepEqual(triggers(text), ["push", "workflow_dispatch"]);
+  assert.throws(() => triggers("on:\n push:\n"), /unexpected line/);
+});
+
+test("a column-0 comment inside on: does not hide the triggers after it (DAN-337, Codex P2)", () => {
+  const text = "on:\n  pull_request_target:\n    types: [opened]\n# Allow manual execution\n  workflow_dispatch:\n\npermissions: {}\n";
+  assert.deepEqual(triggers(text), ["pull_request_target", "workflow_dispatch"]);
+});
+
+const relayPath =new URL("../../.github/workflows/engineering-gate-review-signal.yml", import.meta.url);
 
 test("a PR review reaches the gate only through the unprivileged relay (#128)", async () => {
   const workflow = await readFile(workflowPath, "utf8");
