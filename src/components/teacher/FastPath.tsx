@@ -125,6 +125,7 @@ function Roster({ students }: { readonly students: readonly FastPathStudent[] })
           ),
         ),
       ),
+      h("p", { className: styles.orderNote }, t.orderNote),
     ),
     h(
       "section",

@@ -8,6 +8,7 @@ import { messagesHr } from "@/lib/i18n/messages.hr";
 import { sessionPrincipal } from "@/server/auth/principal";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
+import { readAssignmentWorksMany } from "@/server/evidence/assignment-works";
 import { readTeacherCourses } from "@/server/institution/teacher-courses";
 
 import styles from "./page.module.css";
@@ -29,6 +30,11 @@ export default async function TeacherHomePage() {
     sessionPrincipal(token, withActor),
   ]);
   const listed = read?.kind === "ok" && read.courses.length > 0;
+  // F2 (#711): the works of each assignment, under the same cookie; the database decides whose.
+  // F-142: all of them in one read, so a page load holds one connection however many assignments there are.
+  const ids = read?.kind === "ok" ? read.courses.flatMap((course) => course.assignments).map(({ id }) => id) : [];
+  const answer = ids.length > 0 && token !== undefined ? await readAssignmentWorksMany(token, ids, withActor) : null;
+  const works = Object.fromEntries(ids.map((id) => [id, answer?.kind === "ok" ? answer.works.get(id.toLowerCase()) ?? [] : null]));
 
   let body;
   if (read === null) {
@@ -49,7 +55,7 @@ export default async function TeacherHomePage() {
       </>
     );
   } else {
-    body = <TeacherCourses courses={read.kind === "ok" ? read.courses : []} />;
+    body = <TeacherCourses courses={read.kind === "ok" ? read.courses : []} works={works} />;
   }
 
   return (

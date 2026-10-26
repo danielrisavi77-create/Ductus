@@ -4,6 +4,7 @@ import { createElement as h, Fragment } from "react";
 import { zagrebParts } from "@/components/summary/zagreb-time";
 import { countHr } from "@/lib/i18n/hr";
 import { messagesHr } from "@/lib/i18n/messages.hr";
+import type { AssignmentWork } from "@/server/evidence/assignment-works";
 import type { TeacherCourse } from "@/server/institution/teacher-courses";
 
 import styles from "./TeacherCourses.module.css";
@@ -27,6 +28,22 @@ function dueHr(iso: string): string {
 }
 
 /**
+ * F2 (#711): the works of one assignment as links to the live view, numbered
+ * in the order the database returns them. No name and no id is shown: the
+ * read names neither (names arrive with B-11). `null` is a failed read, said
+ * as such, never as "no works".
+ */
+function Works({ works }: { works: readonly AssignmentWork[] | null | undefined }) {
+  if (works === undefined) return null;
+  if (works === null) return h("p", { className: styles.works, role: "status" }, t.worksUnavailable);
+  if (works.length === 0) return h("p", { className: styles.works }, t.noWorks);
+  return h("ul", { className: styles.works, "aria-label": t.worksLabel },
+    works.map((work, i) =>
+      h("li", { key: work.documentId },
+        h(Link, { href: `/nastavnik/rad/${encodeURIComponent(work.documentId)}`, prefetch: false }, `${t.work} ${i + 1}`))));
+}
+
+/**
  * Z3 (A), design dopuna-faza-a screen 1. The list arrives ordered from the
  * route (year, name; assignments by due time) and is drawn as it comes: the
  * number of students is shown, never used to order or mark anything.
@@ -34,7 +51,11 @@ function dueHr(iso: string): string {
  * Written with `createElement`, not JSX, like ProcessSummaryView: the unit
  * tests render it without the Next.js compiler (`jsx: preserve`).
  */
-export default function TeacherCourses({ courses }: { courses: readonly TeacherCourse[] }) {
+export default function TeacherCourses({ courses, works = {} }: {
+  courses: readonly TeacherCourse[];
+  /** Per assignment id: its works, or null when they could not be read. */
+  works?: Readonly<Record<string, readonly AssignmentWork[] | null>>;
+}) {
   if (courses.length === 0) {
     return h("section", { className: styles.empty, "aria-labelledby": "bez-kolegija" },
       h("h2", { id: "bez-kolegija" }, t.empty),
@@ -59,6 +80,7 @@ export default function TeacherCourses({ courses }: { courses: readonly TeacherC
                 h("span", { className: styles.count },
                   countHr(assignment.enrolledStudents, t.students.one, t.students.few, t.students.many)),
                 h(Link, { className: styles.open, href: `/nastavnik/brz-put?zadatak=${encodeURIComponent(assignment.id)}`, prefetch: false },
-                  messagesHr.shell.nav.fastPath)))))),
+                  messagesHr.shell.nav.fastPath),
+                h(Works, { works: works[assignment.id] })))))),
     h("p", { className: styles.note }, t.countNote));
 }

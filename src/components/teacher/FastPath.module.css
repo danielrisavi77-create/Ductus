@@ -36,6 +36,20 @@
   color: var(--ink-2);
 }
 
+/* #732 item 18: the sentence under the list (D-80). */
+.orderNote {
+  margin: 10px 8px 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+
+@media (max-width: 640px) {
+  .orderNote {
+    font-size: 13px;
+  }
+}
+
 .list {
   display: grid;
   gap: 2px;

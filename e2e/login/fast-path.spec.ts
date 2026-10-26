@@ -10,6 +10,7 @@ import { bySurname, fullName } from "../../src/components/teacher/fast-path";
 import { DEMO_FAST_PATH } from "../../src/lib/i18n/demo-fast-path.hr";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { signIn } from "./support";
+import { localAdminUrl } from "./local-db-url";
 
 // Screen 11, brz put (F-11, D-80 point 2; contracts #476 6274359158 and
 // #757 6397637802). The route (B-11c) is answered here with invented data
@@ -23,14 +24,12 @@ const ASSIGNMENT = "6f1c2a4e-1111-4b2c-9d3e-000000000001";
 const ROUTE = "**/api/teacher/fast-path";
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const TEACHER_ID = "demo-teacher@demo.ductus.test";
-const ADMIN_DATABASE_URL =
-  process.env.E2E_ADMIN_DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
 const ACTIVE_ROLE = `FROM institution.institution_role r JOIN identity.user_account u ON u.id = r.user_id
   WHERE u.hr_edu_person_unique_id = $1 AND r.role = 'teacher' AND r.revoked_at IS NULL`;
 let roleGrantedByThisTest = false;
 
 async function withAdmin<T>(work: (client: pg.Client) => Promise<T>): Promise<T> {
-  const client = new pg.Client({ connectionString: ADMIN_DATABASE_URL });
+  const client = new pg.Client({ connectionString: localAdminUrl() });
   await client.connect();
   try {
     return await work(client);

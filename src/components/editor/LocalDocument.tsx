@@ -52,11 +52,12 @@ import { countWords, NODE_ID_ATTRIBUTE, tiptapToCanonical } from "@/editor/inter
 import { startFreshHistory } from "@/editor/history";
 import { replaceWithStoredDocument } from "@/editor/identity";
 import { createEditorExtensions } from "@/editor/schema";
+import { ArrowCollapse } from "@/editor/arrow-collapse";
 import { StorableInput } from "@/editor/storable-input";
 import { storableDocument } from "@/editor/storable-text";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { createLivePublisher, type LivePublisher } from "@/client/live-publisher";
-import { editorPlan, readLogoutHold } from "@/client/logout-hold";
+import { editorSignOutPlan } from "@/client/logout-hold";
 import { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
 import {
   LocalDocumentSaver, type SaverFailure, type SaverSnapshot,
@@ -92,8 +93,11 @@ type LocalDocumentValue = {
   snapshot: SaverSnapshot | null;
   words: number;
   invalid: boolean;
-  /** Stops writing and says what a sign-out would leave behind (FE-D7). */
-  prepareSignOut: () => Promise<LogoutPlan>;
+  /**
+   * Stops writing and says what a sign-out would leave behind (FE-D7), or
+   * "leave" when the page's session has ended.
+   */
+  prepareSignOut: () => Promise<LogoutPlan | "leave">;
   /** Writing goes on after the dialog was left with "Ostani". */
   staySignedIn: () => void;
   /** Ends the session; resolves true once the logout route has answered. */
@@ -200,7 +204,9 @@ export function LocalDocumentProvider({
   });
 
   const editor = useEditor({
-    extensions: [...createEditorExtensions(t.editor.placeholder), StorableInput],
+    // ArrowCollapse: a plain arrow on a selection across blocks moves the
+    // caret in the editor state at once, never after the next letter (DAN-247).
+    extensions: [...createEditorExtensions(t.editor.placeholder), StorableInput, ArrowCollapse],
     editable: false,
     immediatelyRender: false,
     editorProps: {
@@ -448,12 +454,11 @@ export function LocalDocumentProvider({
 
   // Writing stays stopped from here until "Ostani" or the end of the
   // session, so the count the dialog shows cannot grow behind it (I2).
-  const prepareSignOut = async (): Promise<LogoutPlan> => {
+  // The whole scope, as the shell counts it (O2): every document of this person.
+  // A page whose session has ended stops and reads nothing (leave).
+  const prepareSignOut = (): Promise<LogoutPlan | "leave"> => {
     const locked = logoutRef.current;
-    if (!locked) return { unsaved: false, pending: null };
-    const unsaved = await locked.quiesce();
-    // The whole scope, as the shell counts it (O2): every document of this person.
-    return editorPlan(unsaved, await readLogoutHold(scope));
+    return editorSignOutPlan(locked && (() => locked.quiesce()), scope, { session });
   };
 
   const staySignedIn = () => logoutRef.current?.resume();
@@ -659,6 +664,11 @@ export function LocalLogout() {
       // Writing has stopped either way; an unknown count shows no number.
       .catch((): LogoutPlan => ({ unsaved: false, pending: null }))
       .then((next) => {
+        // The page's session has ended: `/` renders under the browser's cookie.
+        if (next === "leave") {
+          window.location.assign("/");
+          return;
+        }
         setPreparing(false);
         // Nothing at all stays on this device: no dialog (O1, #476 c.6396707923).
         if (nothingHeld(next)) confirm();
