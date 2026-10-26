@@ -4,6 +4,7 @@ import pg from "pg";
 
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import { signIn } from "./support";
+import { localAdminUrl } from "./local-db-url";
 
 // F-7: the screens without a notice, and (DAN-227, #476 row 1) the notice a
 // student of the course reads before the first sentence, with the text of
@@ -12,19 +13,10 @@ import { signIn } from "./support";
 // login of the compose database, as in comments.spec.ts. Assignment versions
 // are immutable, so they stay; the membership is closed afterwards.
 const PATH = "/zadatak/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-const ADMIN_DATABASE_URL =
-  process.env.E2E_ADMIN_DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
 const STUDENT = "demo-student@demo.ductus.test";
 
-/** The seed writes as the database owner, so it never runs against a database off this machine. */
-function localAdminUrl(url: string): string {
-  const host = new URL(url).hostname;
-  if (host !== "127.0.0.1" && host !== "localhost") throw new Error("the e2e seed runs only against a local database");
-  return url;
-}
-
 async function admin<T>(work: (client: pg.Client) => Promise<T>): Promise<T> {
-  const client = new pg.Client({ connectionString: localAdminUrl(ADMIN_DATABASE_URL) });
+  const client = new pg.Client({ connectionString: localAdminUrl() });
   await client.connect();
   try {
     return await work(client);
@@ -78,15 +70,6 @@ async function seedAssignment(seed: Seed = {}): Promise<{ assignment: string; co
     return { assignment: assignment!.id, course: course!.id, courseName };
   });
 }
-
-test("the seed refuses a database that is not local", () => {
-  expect(localAdminUrl("postgres://u:p@127.0.0.1:54329/ductus")).toContain("127.0.0.1");
-  expect(localAdminUrl("postgres://u:p@localhost:5432/ductus")).toContain("localhost");
-  for (const url of ["postgres://u:p@db.example.test:5432/ductus", "postgres://u:p@127.0.0.1.example.test/ductus",
-    "postgres://u:p@10.0.0.5/ductus"]) {
-    expect(() => localAdminUrl(url)).toThrow("only against a local database");
-  }
-});
 
 test("anonymous visitor sees no notice and no confirmation", async ({ page }) => {
   const posts: string[] = [];
@@ -245,7 +228,7 @@ test("FE-D8: past the due date the notice says so and keeps the confirmation", a
 test("FE-D8: the notice shows a loading state while the server reads it", async ({ page }) => {
   await withSeed({}, page, async (path) => {
     // Holds the read of the version until the loading state has been seen.
-    const client = new pg.Client({ connectionString: localAdminUrl(ADMIN_DATABASE_URL) });
+    const client = new pg.Client({ connectionString: localAdminUrl() });
     await client.connect();
     try {
       await client.query("BEGIN");

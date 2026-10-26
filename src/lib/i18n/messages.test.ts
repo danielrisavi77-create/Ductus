@@ -99,3 +99,11 @@ describe("messages.hr prijava", () => {
     }
   });
 });
+
+// D-124: the interface name is Ductura; the repo and code stay Ductus (#838).
+describe("product name in the interface catalogue", () => {
+  it("uses Ductura, never Ductus", () => {
+    const named = leaves(messagesHr).filter(([, text]) => /\bDuctus\b/.test(text));
+    expect(named).toEqual([]);
+  });
+});

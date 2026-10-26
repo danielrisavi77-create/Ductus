@@ -511,6 +511,7 @@ export const hr = {
   toolbar: {
     label: "Oblikovanje teksta",
     paragraph: "Odlomak",
+    bulletItem: "Popis",
     heading1: "Naslov 1",
     heading2: "Naslov 2",
     heading3: "Naslov 3",
@@ -657,7 +658,7 @@ export const hr = {
     exampleTitle: "Dvije izmišljene povijesti",
     exampleA: "Student A napisao je svoj tekst izvan Ducture i uvezao ga odjednom. Zapis pokazuje jedan uvoz.",
     exampleB: "Student B postupno je utipkao tekst koji je napisala druga osoba. Zapis pokazuje postupno pisanje u Ducturi.",
-    conclusion: "Iz zapisa se ne vidi koji je od ta dva teksta student sam napisao. Ductus zato ne procjenjuje autorstvo: zapis olakšava razgovor o radu, a zaključak donosi čovjek.",
+    conclusion: "Iz zapisa se ne vidi koji je od ta dva teksta student sam napisao. Ductura zato ne procjenjuje autorstvo: zapis olakšava razgovor o radu, a zaključak donosi čovjek.",
   },
   // F-7 (#336): the S3 notice before the first sentence. What is recorded
   // follows D-142, D-143 and D-154 (live view, per-change time, replay for the

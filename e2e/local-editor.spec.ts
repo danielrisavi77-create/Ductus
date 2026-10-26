@@ -412,6 +412,20 @@ test.describe("local editor (#197)", () => {
     await expect(editorOf(page)).toHaveText("prije a\uFFFD Xposlije");
   });
 
+  test("DAN-247: a letter typed right after select-all and ArrowRight lands at the end, never over the text", async ({ page }) => {
+    const text = "Izmisljen redak za provjeru strelice.";
+    await openEditor(page);
+    await typeInto(page, text);
+    await expect(editorOf(page)).toHaveText(text);
+    await page.keyboard.press("ControlOrMeta+A");
+    // The race made certain: the caret the browser moves is never reported,
+    // as when the letter arrives before `selectionchange` does.
+    await page.evaluate(() => window.addEventListener("selectionchange", (event) => event.stopImmediatePropagation(), true));
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.type("!");
+    await expect(editorOf(page)).toHaveText(`${text}!`);
+  });
+
   test("5: a full device is an error that stays while typing on, with an export", async ({ page }) => {
     const device = await deviceSpace(page);
     const history = await chipHistory(page);
