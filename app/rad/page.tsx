@@ -212,7 +212,7 @@ export default async function WorkspacePage({
             {journal ? (
               <LocalEditor />
             ) : plan.kind === "notStarted" ? (
-              <OpenWork assignmentId={plan.assignmentId} />
+              <OpenWork assignmentId={plan.assignmentId} session={session} />
             ) : (
               // Not editable: the text says so, matching aria-disabled.
               <div

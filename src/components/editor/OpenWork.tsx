@@ -17,20 +17,36 @@
  * with no second POST and no second refresh. Without a network the click waits
  * for the `online` event and then goes on by itself; only "Pokušaj ponovno"
  * starts another attempt by hand. The sheet stays read-only throughout, and
- * nothing is written locally.
+ * nothing is written locally. Like the other parts of the page (D-118), it
+ * follows the session it was rendered under: once that session has ended the
+ * click sends nothing and the sheet offers to sign in again.
  */
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { openWork, type OpenOutcome } from "@/client/evidence-ingest";
+import { watchSessionEnd, type SessionWatch } from "@/client/session-end";
+import type { SessionMark } from "@/client/session-marks";
 import { openWorkStep } from "@/components/student/work-document-plan";
 
+import { startWorkAttempt } from "./open-work-start";
 import { OpenWorkView, type OpenWorkPhase } from "./OpenWorkView";
 
-export default function OpenWork({ assignmentId }: { assignmentId: string }) {
+/** The existing sign-in-again phase: the page's session has ended. */
+const SESSION_ENDED: OpenWorkPhase = { kind: "unavailable", signIn: true };
+
+export default function OpenWork({ assignmentId, session }: { assignmentId: string; session: SessionMark | null }) {
   const router = useRouter();
   const [phase, setPhase] = useState<OpenWorkPhase>({ kind: "idle" });
+  const watch = useRef<SessionWatch | null>(null);
+  const tag = session?.tag ?? null;
+  const at = session?.at ?? 0;
+  useEffect(() => {
+    const w = watchSessionEnd(tag === null ? null : { tag, at }, () => setPhase(SESSION_ENDED));
+    watch.current = w;
+    return () => { w.close(); if (watch.current === w) watch.current = null; };
+  }, [tag, at]);
   const [refreshing, startRefresh] = useTransition();
   const inFlight = useRef(false);
   // Kept across renders: router.refresh() does not remount this component.
@@ -42,8 +58,20 @@ export default function OpenWork({ assignmentId }: { assignmentId: string }) {
     if (inFlight.current) return;
     inFlight.current = true;
     setPhase({ kind: "loading" });
-    const outcome = await openWork(assignmentId);
+    const result = await startWorkAttempt(assignmentId, {
+      sessionEnded: () => watch.current?.ended() ?? false,
+      open: openWork,
+    });
     inFlight.current = false;
+    if (result.status === "sessionEnded") {
+      setPhase(SESSION_ENDED);
+      return;
+    }
+    const outcome: OpenOutcome = result;
+    if (watch.current?.ended()) {
+      setPhase(SESSION_ENDED);
+      return;
+    }
     lastOutcome.current = outcome;
     const step = openWorkStep(outcome, refreshed.current, navigator.onLine);
     if (step.kind === "refresh") {

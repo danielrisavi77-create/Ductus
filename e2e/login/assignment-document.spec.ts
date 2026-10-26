@@ -200,6 +200,22 @@ test("DAN-330: offline, nothing is sent before the click and the click continues
   await workDocument(assignment);
 });
 
+test("DAN-330: after another sign-in in this browser the earlier tab starts nothing", async ({ page, context }) => {
+  await signedIn(page);
+  const assignment = await seedWork();
+  const requests = recordRequests(page);
+  await page.goto(`/rad?zadatak=${assignment}`);
+  await expect(startOf(page)).toBeVisible();
+  const other = await context.newPage();
+  await context.clearCookies({ name: /^_session/ });
+  await signIn(other, "/rad", "Demo student 2");
+  await expect(startOf(page)).toHaveCount(0);
+  await expect(sheetOf(page).getByRole("link", { name: t.auth.signIn })).toBeVisible();
+  await page.waitForTimeout(1000);
+  expect(opens(requests)).toEqual([]);
+  expect((await documentsOf(STUDENT, assignment)).projects).toBe(0);
+});
+
 test("F1: /rad?zadatak= writes into the student's own document of the assignment", async ({ page }) => {
   await signedIn(page);
   const assignment = await seedWork();
