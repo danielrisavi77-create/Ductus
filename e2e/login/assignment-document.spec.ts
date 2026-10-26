@@ -124,7 +124,9 @@ test("DAN-330: a double click starts one work", async ({ page }) => {
   await page.goto(`/rad?zadatak=${assignment}`);
   await startOf(page).dblclick();
   await page.keyboard.press("Enter");
-  await startOf(page).click();
+  // The waiting button is aria-disabled, which Playwright's actionability
+  // check refuses; a person can still click it, so the click is forced.
+  await startOf(page).click({ force: true });
   // Waiting: the button stays focusable, aria-disabled, and the sheet is busy.
   await expect(page.getByRole("status").filter({ hasText: t.workspace.openLoading })).toBeVisible();
   await expect(startOf(page)).toHaveAttribute("aria-disabled", "true");
