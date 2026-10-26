@@ -50,6 +50,9 @@ test.use({
 
 const run = promisify(execFile);
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
+// E2E_DEMO_NATIVE=1 runs this walk-through against the native demo runner
+// (docs/DEMO-UP.md, "Bez Dockera"); the provision script reads no variable itself.
+const NATIVE_PROVISION = process.env.E2E_DEMO_NATIVE === "1" ? ["--native"] : [];
 // A fixed invented name: an identical repeat returns the same course (create_course).
 const COURSE_NAME = "Izmišljeni kolegij K-4";
 
@@ -268,7 +271,9 @@ test("demo walk-through", async ({ browser, page, context }) => {
       await expect(page.getByText(t.teacher.denied)).toBeVisible();
       await expect(page.getByRole("button", { name: t.teacher.course.submit })).toHaveCount(0);
     }
-    await run("node", ["scripts/demo/provision-teacher.mjs"], { cwd: ROOT });
+    // DAN-346: against `pnpm demo:up:native` the same command uses the native
+    // runner's socket instead of the Compose container.
+    await run("node", ["scripts/demo/provision-teacher.mjs", ...NATIVE_PROVISION], { cwd: ROOT });
     await page.goto("/nastavnik/zadatak/novi");
     await expect(page.getByRole("heading", { name: t.teacher.title })).toBeVisible();
 
