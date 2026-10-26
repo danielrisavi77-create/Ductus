@@ -111,6 +111,16 @@ afterAll(async () => {
   else process.env.OIDC_REDIRECT_URI = oldRedirectUri;
   const institutions = [institution, otherInstitution];
   await admin.query("DELETE FROM institution.enrollment_attempt WHERE user_id = ANY($1)", [peopleIds]);
+  // DAN-338: the removal's audit row is append-only; only this clean-up steps around the trigger.
+  const cleaner = await admin.connect();
+  try {
+    await cleaner.query("BEGIN");
+    await cleaner.query("SET LOCAL session_replication_role = replica");
+    await cleaner.query("DELETE FROM audit.course_member_event WHERE institution_id = ANY($1)", [institutions]);
+    await cleaner.query("COMMIT");
+  } finally {
+    cleaner.release();
+  }
   await admin.query("DELETE FROM institution.course_member WHERE institution_id = ANY($1)", [institutions]);
   await admin.query("DELETE FROM institution.course_enrollment_code WHERE course_id = ANY($1)", [[course, expiredCourse]]);
   await admin.query("DELETE FROM institution.course WHERE institution_id = ANY($1)", [institutions]);

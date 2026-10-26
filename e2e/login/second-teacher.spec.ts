@@ -7,6 +7,7 @@ import pg from "pg";
 
 import { createWithActor } from "../../src/server/db/with-actor";
 import { appCookie, SESSION_COOKIE, sessionRow, signIn } from "./support";
+import { localAdminUrl, localAppUrl } from "./local-db-url";
 
 // K-4d prerequisite (#655): "Demo nastavnica" is a second invented teacher of
 // the same institution, for the step where a teacher who is not the course's
@@ -16,17 +17,10 @@ import { appCookie, SESSION_COOKIE, sessionRow, signIn } from "./support";
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const PROVISION_SCRIPT = fileURLToPath(new URL("../../scripts/demo/provision-teacher.mjs", import.meta.url));
 const PROVISION_SQL = fileURLToPath(new URL("../../db/local/provision-demo-teacher.sql", import.meta.url));
-const APP_DATABASE_URL =
-  process.env.APP_DATABASE_URL ?? "postgres://ductus_app_local:ductus-app-local-only@127.0.0.1:54329/ductus";
-const ADMIN_DATABASE_URL =
-  process.env.E2E_ADMIN_DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
 const SECOND_TEACHER = "demo-teacher-2@demo.ductus.test";
 
 async function withAdmin<T>(work: (client: pg.Client) => Promise<T>): Promise<T> {
-  if (!["127.0.0.1", "localhost"].includes(new URL(ADMIN_DATABASE_URL).hostname)) {
-    throw new Error("the second-teacher check runs only against a local database");
-  }
-  const client = new pg.Client({ connectionString: ADMIN_DATABASE_URL });
+  const client = new pg.Client({ connectionString: localAdminUrl() });
   await client.connect();
   try {
     return await work(client);
@@ -57,7 +51,7 @@ test.afterEach(async () => {
 });
 
 test("the second synthetic teacher signs in and gets a role only from the local operator", async ({ page, context }) => {
-  const pool = new pg.Pool({ connectionString: APP_DATABASE_URL, max: 2 });
+  const pool = new pg.Pool({ connectionString: localAppUrl(), max: 2 });
   const withActor = createWithActor(pool);
   try {
     await signIn(page, "/", "Demo nastavnica");
