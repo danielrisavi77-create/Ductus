@@ -8,7 +8,8 @@ import { expect, test } from "@playwright/test";
 // the colours of the first :root block of app/globals.css.
 const GLOBALS = readFileSync(fileURLToPath(new URL("../../app/globals.css", import.meta.url)), "utf8");
 const ROOT = /:root\s*\{([\s\S]*?)\n\}/.exec(GLOBALS)?.[1] ?? "";
-const token = (name: string) => new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{3,8})\\s*;`).exec(ROOT)?.[1]?.toLowerCase();
+const TOKENS = new Map([...ROOT.matchAll(/--([\w-]+):\s*(#[0-9a-fA-F]{3,8})\s*;/g)].map((m) => [m[1], m[2]!.toLowerCase()]));
+const token = (name: string) => TOKENS.get(name);
 
 test("the demo login page has the app's icon in the token colours", async ({ page, request }) => {
   const response = await request.get("http://localhost:8090/favicon.ico");
