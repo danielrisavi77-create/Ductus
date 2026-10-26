@@ -318,6 +318,34 @@ describe("readFastPath (B-11c, #757 D1 and D5)", () => {
     expect(JSON.stringify(lines)).not.toMatch(/Ana|Testić|doc-1|VVVV|3333/);
   });
 
+  it("reads the records from storage only after the transaction has closed (#780, Codex P2)", async () => {
+    const { store, hashes } = await record("doc-1");
+    const db = database([work(1, hashes, { document_id: "doc-1" })]);
+    let open = false;
+    const withActor = (async (token, fn) => {
+      open = true;
+      try {
+        return await db.withActor(token, fn);
+      } finally {
+        open = false;
+      }
+    }) as WithActor;
+    // Storage can outlast the pool's idle-in-transaction limit, so no read may
+    // run while the transaction holds its connection.
+    const payloads = new Proxy(store, {
+      get(target, key, receiver) {
+        const value: unknown = Reflect.get(target, key, receiver);
+        if (typeof value !== "function") return value;
+        return (...args: unknown[]) => {
+          if (open) throw new Error("storage read inside the transaction");
+          return (value as (...a: unknown[]) => unknown).apply(target, args);
+        };
+      },
+    });
+    const read = await readFastPath(VESNA, ASSIGNMENT, withActor, { payloads, thresholds: THRESHOLDS });
+    expect(read).toMatchObject({ kind: "ok", students: [{ id: STUDENT(1), work: "writing" }] });
+  });
+
   it("refuses a malformed session token without reaching the database", async () => {
     const db = database([]);
     expect(await readFastPath("short", ASSIGNMENT, db.withActor, { payloads: STORAGE_NOT_CONFIGURED, thresholds: THRESHOLDS }))
