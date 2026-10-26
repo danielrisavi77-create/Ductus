@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { createEditStepsV1Replayer } from "@/adapters/evidence/edit-steps-v1-replayer";
 import { verifyCanonicalEvidencePayloadV2 } from "@/domain/forensics/evidence-chain-v2";
 import { replayEvidenceSegmentsV2 } from "@/domain/forensics/evidence-replay-v2";
-import type { EvidenceSegmentV2, EvidenceSourceV2 } from "@/domain/forensics/evidence-segment-v2";
+import type { EvidenceSegment, EvidenceSourceV2 } from "@/domain/forensics/evidence-segment-v2";
 import type { JcsJsonValue } from "@/domain/forensics/jcs";
 
 import { CaptureError, changeOf, EvidenceRecorder, type SegmentContext } from "./capture";
@@ -63,7 +63,7 @@ function canonical(editor: Editor): JcsJsonValue {
   return candidate.doc as unknown as JcsJsonValue;
 }
 
-type Outcome = { segments: EvidenceSegmentV2[]; initial: JcsJsonValue; stop: string | null; final: JcsJsonValue };
+type Outcome = { segments: EvidenceSegment[]; initial: JcsJsonValue; stop: string | null; final: JcsJsonValue };
 
 async function run(seed: number): Promise<Outcome> {
   const r = random(seed);
@@ -80,7 +80,7 @@ async function run(seed: number): Promise<Outcome> {
   editor.view.updateState(editor.state.reconfigure({ plugins: editor.extensionManager.plugins }));
   const recorder = new EvidenceRecorder();
   const initial = canonical(editor);
-  const segments: EvidenceSegmentV2[] = [];
+  const segments: EvidenceSegment[] = [];
   let context = BASE;
   let at = T0;
   let source: EvidenceSourceV2 = "editor";

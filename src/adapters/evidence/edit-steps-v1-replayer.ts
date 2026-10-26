@@ -4,7 +4,7 @@ import type { Node as PmNode } from "@tiptap/pm/model";
 
 import { EDIT_STEP_FORMAT_V1 } from "@/domain/document/edit-step";
 import type { EvidenceStepReplayerV2 } from "@/domain/forensics/evidence-replay-v2";
-import type { EvidenceEventV2 } from "@/domain/forensics/evidence-segment-v2";
+import type { EvidenceEventV3 } from "@/domain/forensics/evidence-segment-v2";
 
 import {
   editStepsV1Canonical,
@@ -39,7 +39,7 @@ export function createEditStepsV1Replayer(): EvidenceStepReplayerV2<PmNode> {
   return {
     transactionFormat: EDIT_STEP_FORMAT_V1,
     load: loadEditStepsV1Document,
-    apply(document: PmNode, event: EvidenceEventV2): PmNode {
+    apply(document: PmNode, event: EvidenceEventV3): PmNode {
       const run = runEditStepsV1(document, event);
       for (let next = run.next(); ; next = run.next()) {
         if (next.done) {

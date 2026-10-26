@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { createEditStepsV1Replayer, removedRangeSha256 } from "@/adapters/evidence/edit-steps-v1-replayer";
 import { verifyCanonicalEvidencePayloadV2 } from "@/domain/forensics/evidence-chain-v2";
 import { replayEvidenceSegmentsV2 } from "@/domain/forensics/evidence-replay-v2";
-import type { EvidenceSegmentV2, EvidenceSourceV2 } from "@/domain/forensics/evidence-segment-v2";
+import type { EvidenceSegment, EvidenceSourceV2 } from "@/domain/forensics/evidence-segment-v2";
 import type { JcsJsonValue } from "@/domain/forensics/jcs";
 
 import { changeOf, EvidenceRecorder, type BuiltSegment, type SegmentContext } from "./capture";
@@ -69,7 +69,7 @@ function setup(kinds: Kind[]) {
   editor.view.updateState(editor.state.reconfigure({ plugins: editor.extensionManager.plugins }));
   const recorder = new EvidenceRecorder();
   const initial = canonical(editor);
-  const segments: EvidenceSegmentV2[] = [];
+  const segments: EvidenceSegment[] = [];
   const built: BuiltSegment[] = [];
   let context = BASE;
   let source: EvidenceSourceV2 = "editor";

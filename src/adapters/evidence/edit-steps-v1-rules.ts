@@ -9,7 +9,7 @@ import {
   type EditStepBlock,
   type EditStepV1,
 } from "@/domain/document/edit-step";
-import type { EvidenceEventV2 } from "@/domain/forensics/evidence-segment-v2";
+import type { EvidenceEventV3 } from "@/domain/forensics/evidence-segment-v2";
 import { canonicalizeJcs, type JcsJsonValue } from "@/domain/forensics/jcs";
 import { canonicalToTiptap, tiptapToCanonical } from "@/editor/interop";
 import { createEditorExtensions } from "@/editor/schema";
@@ -236,7 +236,7 @@ function* applyStep(document: PmNode, step: EditStepV1): Generator<RemovedRangeC
 }
 
 /** The steps of `event` applied to `document` in order, one claim per removed range. */
-export function* runEditStepsV1(document: PmNode, event: EvidenceEventV2): EditStepsV1Run {
+export function* runEditStepsV1(document: PmNode, event: EvidenceEventV3): EditStepsV1Run {
   const parsed = parseEditSteps(EDIT_STEP_FORMAT_V1, event.steps);
   if (!parsed.ok) {
     refuse(parsed.code);
