@@ -5,6 +5,7 @@ import { messagesHr as t } from "@/lib/i18n/messages.hr";
 
 import { FLOW_STEPS } from "./flowSteps";
 import styles from "./Landing.module.css";
+import PreviewComment from "./PreviewComment";
 
 /** Every way in leads to the sign-in screen (owner, #476); it offers AAI@EduHr only (D-09). */
 export const SIGN_IN_PATH = "/prijava";
@@ -48,24 +49,19 @@ export default function Landing() {
               {l.title} <em>{l.titleAccent}</em>
             </h1>
             <p className={styles.intro}>{l.intro}</p>
-            <p className={styles.intro}>{t.home.lead}</p>
             <div className={styles.actions}>
               <a className="btn" href={SIGN_IN_PATH}>
                 {l.enter}
               </a>
+              <p className={styles.small}>{l.aaiOnly}</p>
               <a className={styles.ghost} href="#kako-radi">
                 {l.howItWorksLink}
               </a>
             </div>
-            <p className={styles.small}>{l.aaiOnly}</p>
           </div>
 
           <figure className={styles.preview} aria-label={l.previewLabel}>
             <div className={styles.window}>
-            <div className={styles.previewBar}>
-              <span className={styles.previewBrand}>{t.app.name}</span>
-              <span className={styles.previewCourse}>{l.previewCourse}</span>
-            </div>
             <div className={styles.previewBody}>
               <div className={styles.previewSheet}>
                 <SheetFrame>
@@ -77,14 +73,15 @@ export default function Landing() {
                     <span className="comment-mark">{l.previewParagraph2Marked}</span>
                     {l.previewParagraph2End}
                   </p>
+                  <p className={styles.signature}>{l.previewSignature}</p>
                 </SheetFrame>
               </div>
-              <div className={styles.comment}>
+              <PreviewComment>
                 <p className={styles.commentHead}>
                   <strong>{l.previewCommentAuthor}</strong> <span>{l.previewCommentPlace}</span>
                 </p>
                 <p>{l.previewComment}</p>
-              </div>
+              </PreviewComment>
             </div>
             </div>
             <figcaption className={styles.small}>{l.previewNote}</figcaption>

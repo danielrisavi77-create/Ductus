@@ -454,7 +454,7 @@ test.describe("workspace shell", () => {
     await page.goto("/");
     await expect(
       page.getByText(
-        "Ductura ne procjenjuje autorstvo ni korištenje AI-ja. Prije početka vidiš što nastavnik vidi i od kada.",
+        "Student piše, a nastavnik prati kako rad nastaje i komentira uz odlomke. Ductura ne procjenjuje autorstvo ni korištenje AI-ja, a prije početka vidiš što nastavnik vidi i od kada.",
         { exact: true },
       ),
     ).toBeVisible();

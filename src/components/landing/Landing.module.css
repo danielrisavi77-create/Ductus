@@ -90,8 +90,10 @@
 }
 
 .title {
-  font-size: clamp(40px, 5vw, 64px);
-  line-height: 1.06;
+  font-size: clamp(48px, 7vw, 88px);
+  font-weight: 300;
+  line-height: 0.96;
+  letter-spacing: -0.04em;
 }
 
 .sectionTitle {
@@ -126,25 +128,35 @@
 .actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  align-items: center;
+  gap: 10px 16px;
   margin-top: 8px;
 }
 
 .ghost {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   min-height: 44px;
-  padding: 0 20px;
-  border: 1px solid var(--rule);
-  border-radius: 7px;
+  padding: 0 6px;
   color: var(--ink);
   font-weight: 600;
   text-decoration: none;
 }
 
+.ghost::after {
+  content: "→";
+  transition: transform 120ms ease;
+}
+
 .ghost:hover {
-  background: var(--hover);
-  color: var(--ink);
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.ghost:hover::after {
+  transform: translateX(3px);
 }
 
 .small {
@@ -167,37 +179,11 @@
   gap: 10px;
 }
 
-.previewBar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 14px;
-  padding: 10px 16px;
-  background: var(--chrome);
-  border: 1px solid var(--rule);
-  border-bottom: 0;
-  border-radius: 10px 10px 0 0;
-}
-
-.previewBrand {
-  font-weight: 600;
-}
-
-.previewCourse {
-  font-size: 13px;
-  color: var(--ink-3);
-}
-
 .previewBody {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 190px;
   gap: 14px;
   align-items: start;
-  padding: 16px;
-  background: var(--ground);
-  border: 1px solid var(--rule);
-  border-radius: 0 0 10px 10px;
-  box-shadow: var(--lift);
 }
 
 .previewSheet {
@@ -206,7 +192,39 @@
 
 .previewSheet :global(.sheet) {
   max-width: none;
-  padding: 24px 26px;
+  padding: 24px 26px 18px 56px;
+  counter-reset: row;
+}
+
+/* Row numbers in the margin of the sheet: one per section heading and paragraph. */
+.sheetSection,
+.sheetText {
+  position: relative;
+  counter-increment: row;
+}
+
+.sheetSection::before,
+.sheetText::before {
+  content: counter(row);
+  position: absolute;
+  left: -30px;
+  width: 20px;
+  text-align: right;
+  font-family: var(--ff-ui);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 2.1;
+  color: var(--ink-3);
+}
+
+.signature {
+  margin: 14px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--rule);
+  font-family: var(--ff-ui);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
 }
 
 .previewSheet :global(.sheet-theme) {
@@ -234,14 +252,34 @@
   line-height: 1.65;
 }
 
+/* Margin note: sits level with the marked sentence, joined to it by a rule. */
 .comment {
+  position: relative;
+  align-self: end;
   padding: 12px 14px;
-  margin-top: 210px;
+  margin-bottom: 24px;
   background: var(--raised);
   border: 1px solid var(--rule);
-  border-left: 3px solid var(--cmt);
   border-radius: 6px;
   font-size: 13px;
+}
+
+.comment[data-sheet-theme="light"] {
+  --raised: #ffffff;
+  --ink: #191c19;
+  --ink-3: #6a706a;
+  --rule: #dce0d8;
+  color: var(--ink);
+}
+
+.comment::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 100%;
+  width: 14px;
+  height: 1px;
+  background: var(--cmt);
 }
 
 .comment p {
@@ -279,18 +317,22 @@
 .roles {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 20px;
+  gap: 0;
   margin-top: 16px;
+  border-top: 1px solid var(--rule);
 }
 
+/* Two columns split by a hairline, no card. */
 .role {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 28px;
-  background: var(--chrome);
-  border: 1px solid var(--rule);
-  border-radius: 10px;
+  padding: 28px 32px 0 0;
+}
+
+.role + .role {
+  padding: 28px 0 0 32px;
+  border-left: 1px solid var(--rule);
 }
 
 .role h3 {
@@ -324,6 +366,11 @@
   gap: 32px;
 }
 
+.step {
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+}
+
 .step h3 {
   margin: 10px 0 8px;
   font-size: 16px;
@@ -352,7 +399,7 @@
   padding: 0;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 16px;
+  gap: 24px;
 }
 
 .flowCard {
@@ -360,15 +407,12 @@
   flex-direction: column;
   gap: 8px;
   min-width: 0;
-  padding: 20px;
-  background: var(--chrome);
-  border: 1px solid var(--rule);
-  border-radius: 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
 }
 
 .flowCard[data-soon] {
-  background: transparent;
-  border-style: dashed;
+  border-top-style: dashed;
 }
 
 .flowHead {
@@ -425,13 +469,17 @@
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  padding: 40px 0;
+  padding: 72px 0;
   border-top: 1px solid var(--rule);
   border-bottom: 1px solid var(--rule);
 }
 
 .closing h2 {
-  max-width: 680px;
+  max-width: 720px;
+  font-size: clamp(36px, 5vw, 60px);
+  font-weight: 300;
+  line-height: 1;
+  letter-spacing: -0.035em;
 }
 
 .footer {
@@ -441,7 +489,8 @@
   gap: 8px 24px;
   padding-top: 24px;
   padding-bottom: 40px;
-  font-size: 13px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
   color: var(--ink-3);
 }
 
@@ -489,15 +538,19 @@
 
   .previewBody {
     grid-template-columns: minmax(0, 1fr);
-    padding: 10px;
   }
 
   .previewSheet :global(.sheet) {
-    padding: 20px 16px;
+    padding: 20px 16px 16px 46px;
   }
 
   .comment {
-    margin-top: 0;
+    align-self: auto;
+    margin-bottom: 0;
+  }
+
+  .comment::before {
+    display: none;
   }
 
   .roles,
@@ -506,8 +559,15 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .role {
-    padding: 20px;
+  .role,
+  .role + .role {
+    padding: 20px 0 0;
+    border-left: 0;
+  }
+
+  .role + .role {
+    margin-top: 20px;
+    border-top: 1px solid var(--rule);
   }
 
   .section {
