@@ -115,6 +115,12 @@ const itemStart: JcsJsonValue = {
   nodes: [{ type: "bulletItem", id: A, children: [text("Odlomak A lorem.")] }, ...(start.nodes as JcsJsonValue[]).slice(1)],
 };
 const toItem = edit("making a bullet item", (tr) => tr.setBlockType(1, 1, schema.nodes.bulletItem, { nodeId: A }));
+// E1 part 2: so is a quote paragraph.
+const quoteStart: JcsJsonValue = {
+  schemaVersion: 1,
+  nodes: [{ type: "quote", id: A, children: [text("Odlomak A lorem.")] }, ...(start.nodes as JcsJsonValue[]).slice(1)],
+};
+const toQuote = edit("an item to a quote paragraph", (tr) => tr.setBlockType(1, 1, schema.nodes.quote, { nodeId: A }), itemStart);
 const same = { stepType: "replaceAround", from: 18, to: 29, gapFrom: 19, gapTo: 28, insert: 1, structure: true,
   slice: { content: [{ type: "heading", attrs: { level: 2, nodeId: B } }] } };
 
@@ -136,6 +142,11 @@ const accepted: Case[] = [
   edit("Enter at the end of an item, and the new item's id", (tr) =>
     tr.split(17, 1, [{ type: schema.nodes.bulletItem }]).setNodeAttribute(18, "nodeId", D), itemStart),
   edit("cutting across an item", (tr) => tr.delete(10, 22), itemStart),
+  toQuote,
+  edit("a quote paragraph back to a paragraph", (tr) => tr.setBlockType(1, 1, schema.nodes.paragraph, { nodeId: A }), quoteStart),
+  edit("Enter at the end of a quote paragraph, and the new one's id", (tr) =>
+    tr.split(17, 1, [{ type: schema.nodes.quote }]).setNodeAttribute(18, "nodeId", D), quoteStart),
+  edit("cutting across a quote paragraph", (tr) => tr.delete(10, 22), quoteStart),
 ];
 const refused: [Case, string][] = [
   [forge(del, "a forged removed hash", (s) => (s.removedSha256 = OTHER_HASH)), "removed_range_hash"],
@@ -164,6 +175,10 @@ const refused: [Case, string][] = [
     (s.slice as { content: { attrs: Record<string, unknown> }[] }).content[0].attrs.level = 1;
   }), "unknown_field"],
   [raw("an item made again", toItem.steps, itemStart), "replace_around_unchanged"],
+  [forge(toQuote, "a quote wrapper that takes another id", (s) => {
+    (s.slice as { content: { attrs: Record<string, unknown> }[] }).content[0].attrs.nodeId = C;
+  }), "replace_around_identity"],
+  [raw("a quote paragraph made again", toQuote.steps, quoteStart), "replace_around_unchanged"],
   [raw("replaceAround over a wrong range", [{ ...same, from: 0, gapFrom: 1 }]), "replace_around_range"],
   [edit("a pasted tail with an existing id", (tr) => tr.replace(5, 5, new Slice(doc.content.cut(0, 29), 1, 1))),
     "open_end_block"],
