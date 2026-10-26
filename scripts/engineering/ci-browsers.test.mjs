@@ -53,7 +53,13 @@ test("outside a pull request all three engines are installed and every project r
 test("the isolated login job runs the full Chromium suite and preserves both reports", () => {
   assert.match(step("Install login browser", "stack-login"), /^ {8}run: bash scripts\/engineering\/playwright-install\.sh chromium$/m);
   const login = step("Full login E2E", "stack-login");
-  assert.match(login, /^ {8}run: pnpm test:e2e:login$/m);
+  // The whole suite, split over the two shards of the matrix; the inventory
+  // job (login-shards.mjs) proves the shards together ran every listed test.
+  assert.match(login, /^ {8}run: pnpm test:e2e:login --shard="\$LOGIN_SHARD\/2"$/m);
+  assert.match(login, /^ {10}LOGIN_SHARD: \$\{\{ matrix\.shard \}\}$/m);
+  assert.match(ci, /^ {2}stack-login:\n(?: {4}.*\n)*? {6}matrix:\n {8}shard: \[1, 2\]$/m);
+  assert.match(step("Login E2E inventory", "stack-login"), /^ {8}run: pnpm exec playwright test --config playwright\.login\.config\.ts --list --reporter=json$/m);
+  assert.match(step("Verify complete login E2E inventory", "stack-login-results"), /^ {8}run: node scripts\/engineering\/login-shards\.mjs$/m);
   assert.match(login, /^ {8}if: success\(\) && !cancelled\(\) && needs\.scope\.outputs\.profile == 'full'$/m);
   assert.doesNotMatch(login, /continue-on-error/);
   for (const [job, label, report] of [
@@ -61,7 +67,7 @@ test("the isolated login job runs the full Chromium suite and preserves both rep
     ["stack-login", "Upload login Playwright report", "playwright-report-login"],
   ]) {
     const upload = step(label, job);
-    assert.ok(upload.includes(`          name: ${report}${job === "stack-e2e" ? "-\${{ matrix.shard }}" : ""}\n`));
+    assert.ok(upload.includes(`          name: ${report}-\${{ matrix.shard }}\n`));
     assert.ok(upload.includes(`          path: ${report}/\n`));
     assert.match(upload, /^ {10}retention-days: 14$/m);
   }
