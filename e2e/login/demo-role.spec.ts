@@ -6,19 +6,17 @@ import pg from "pg";
 
 import { createWithActor } from "../../src/server/db/with-actor";
 import { appCookie, SESSION_COOKIE, signIn } from "./support";
+import { localAppUrl } from "./local-db-url";
 
 // K-3 / DAN-88. This is deliberately NOT the K-4 walk-through: it proves
 // the local operator bootstrap prerequisite without pretending F-6 UI exists.
 // The CLI reaches only the local compose database; no HTTP or production
 // API may turn an OIDC affiliation into a confirmed teacher role.
-const APP_DATABASE_URL =
-  process.env.APP_DATABASE_URL ??
-  "postgres://ductus_app_local:ductus-app-local-only@127.0.0.1:54329/ductus";
 const PROVISION_SCRIPT = fileURLToPath(new URL("../../scripts/demo/provision-teacher.mjs", import.meta.url));
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 test("synthetic teacher needs explicit local operator provisioning", async ({ page, context, browser }) => {
-  const pool = new pg.Pool({ connectionString: APP_DATABASE_URL, max: 2 });
+  const pool = new pg.Pool({ connectionString: localAppUrl(), max: 2 });
   const withActor = createWithActor(pool);
   const studentPage = await browser.newPage();
   try {
