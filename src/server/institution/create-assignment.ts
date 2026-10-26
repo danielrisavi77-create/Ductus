@@ -27,7 +27,7 @@ const AI_PURPOSES = new Set([
   "translation",
 ]);
 
-interface AssignmentInput {
+export interface AssignmentInput {
   title: string;
   instructions: string;
   workType: string;
@@ -81,7 +81,12 @@ function isWordCount(value: unknown): value is number | null {
   return value === null || (Number.isSafeInteger(value) && (value as number) >= 1 && (value as number) <= MAX_WORDS);
 }
 
-function parseInput(value: unknown): AssignmentInput | null {
+/**
+ * The closed content of an assignment version. `wordRangeRequired` is for a
+ * new version (DAN-292): there `null` drops a bound, so an absent key must
+ * not drop it silently.
+ */
+export function parseAssignmentInput(value: unknown, wordRangeRequired = false): AssignmentInput | null {
   if (!isObject(value)) return null;
   const keys = [
     "title",
@@ -96,6 +101,7 @@ function parseInput(value: unknown): AssignmentInput | null {
   ];
   // The word range (DAN-229) is optional: an absent key is null, so an older client still creates.
   const range = ["wordMin", "wordMax"].filter((key) => Object.hasOwn(value, key)).length;
+  if (wordRangeRequired && range !== 2) return null;
   if (Object.keys(value).length !== keys.length + range || keys.some((key) => !(key in value))) return null;
   const wordMin = value.wordMin ?? null;
   const wordMax = value.wordMax ?? null;
@@ -178,7 +184,7 @@ export async function createAssignmentResponse(
   let input: AssignmentInput | null;
   try {
     decoded = new TextDecoder("utf-8", { fatal: true }).decode(body.bytes);
-    input = parseInput(JSON.parse(decoded));
+    input = parseAssignmentInput(JSON.parse(decoded));
   } catch {
     return refusal(400, "invalid_json");
   }
