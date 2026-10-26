@@ -95,6 +95,12 @@ test("the student switches to the teacher view, reads the text as the teacher do
   expect((await post(teacher, "create", { documentId, body: "Pojasni.", anchor: second })).status()).toBe(200);
   await student.getByRole("button", { name: t.comments.refresh }).click();
   await expect(liveTextOf(student).locator("mark")).toHaveText([QUOTE, LATER]);
+  // "Prikaži u tekstu" in the panel selects the passage in the text on screen, not in the hidden editor.
+  await student.getByRole("article").filter({ hasText: "Pojasni." })
+    .getByRole("button", { name: t.comments.showInText }).click();
+  expect(await student.evaluate(() => window.getSelection()?.toString())).toBe(LATER);
+  expect(await liveTextOf(student).evaluate((element) =>
+    element.contains(window.getSelection()?.anchorNode ?? null))).toBe(true);
 
   // 2. Rule 5: the region holds the same markup on the teacher's page.
   await teacher.goto(`/nastavnik/rad/${documentId}`);

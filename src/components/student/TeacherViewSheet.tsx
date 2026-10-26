@@ -11,13 +11,14 @@
  * under it, because the student's right panel stays as in writing.
  */
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
-import { onCommentsLoaded } from "@/client/comments-loaded";
+import { handleShowInText, onCommentsLoaded } from "@/client/comments-bridge";
 import type { SessionMark } from "@/client/session-marks";
 import { placeThreads } from "@/components/teacher/comment-place";
 import LiveText, { liveStopped, openMarks, useLiveView } from "@/components/teacher/LiveText";
 import RecordLimits from "@/components/teacher/RecordLimits";
+import { selectInBlock } from "@/components/teacher/selection";
 import SummaryCard from "@/components/teacher/SummaryCard";
 import { useComments } from "@/components/teacher/TeacherComments";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
@@ -39,12 +40,22 @@ export default function TeacherViewSheet({ documentId, session, heading }: {
   const reload = comments.load;
   useEffect(() => onCommentsLoaded(documentId, () => void reload()), [documentId, reload]);
   const threads = !stopped && comments.outcome?.kind === "ok" ? comments.outcome.threads : [];
-  const marks = openMarks(placeThreads(view.document, threads));
+  const placed = placeThreads(view.document, threads);
+  const marks = openMarks(placed);
+  // "Prikaži u tekstu" in the panel shows the passage in this text, placed
+  // against what is on screen, as the teacher's own button does.
+  const textRef = useRef<HTMLDivElement>(null);
+  const placedRef = useRef(placed);
+  placedRef.current = placed;
+  useEffect(() => handleShowInText(documentId, (threadId) => {
+    const range = placedRef.current.find((p) => p.thread.id === threadId)?.range;
+    if (range && textRef.current) selectInBlock(textRef.current, range.nodeId, range.start, range.end);
+  }), [documentId]);
 
   return (
     <div className="sheet-area">
       <p className={`sheet-note ${styles.lead}`}>{t.workspace.teacherViewLead}</p>
-      <LiveText view={view} marks={marks} heading={heading} />
+      <LiveText view={view} marks={marks} heading={heading} textRef={textRef} />
       <div className={styles.after}>
         {stopped ? null : <SummaryCard documentId={documentId} current={current} />}
         <RecordLimits />
