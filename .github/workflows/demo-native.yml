@@ -1,0 +1,205 @@
+name: Native demo (Windows)
+
+# DAN-324 (#799): `pnpm demo:up:native` on a Windows runner with Docker out of
+# reach, from an empty %LOCALAPPDATA%\Ductus (no tool cache), through the login
+# E2E specs, the idempotence of a second run and the stop. Not a required status.
+on:
+  pull_request:
+    paths:
+      - "scripts/demo/**"
+      - "db/local/**"
+      - "db/migrations/**"
+      - "infra/fake-oidc/**"
+      - "e2e/login/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/demo-native.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/demo/**"
+      - "db/local/**"
+      - "db/migrations/**"
+      - "infra/fake-oidc/**"
+      - "e2e/login/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/demo-native.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: demo-native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-demo:
+    name: Native demo without Docker
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      LOGIN_SPECS: e2e/login/login.spec.ts e2e/login/sign-out.spec.ts e2e/login/shell-sign-out.spec.ts e2e/login/prijava.spec.ts e2e/login/session-and-panels.spec.ts e2e/login/submission.spec.ts
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      # Every folder holding a docker executable leaves PATH for the later steps,
+      # and the engine service stops; the next step proves Docker is out of reach.
+      - name: Take Docker out of reach
+        shell: pwsh
+        run: |
+          $remove = @()
+          foreach ($command in @(Get-Command docker, docker-compose -All -ErrorAction SilentlyContinue)) {
+            $dir = Split-Path -Parent $command.Source
+            if ($dir -match '\\System32$') { throw "docker sits in $dir; it cannot leave PATH" }
+            $remove += $dir
+          }
+          $path = ($env:PATH -split ';' | Where-Object { $_ -and ($remove -notcontains $_.TrimEnd('\')) }) -join ';'
+          "PATH=$path" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          if (Get-Service docker -ErrorAction SilentlyContinue) { Stop-Service docker -Force }
+      - name: Prove Docker is absent
+        shell: pwsh
+        run: |
+          if (Get-Command docker -ErrorAction SilentlyContinue) { throw "docker is still on PATH" }
+          $service = Get-Service docker -ErrorAction SilentlyContinue
+          if ($service -and $service.Status -ne 'Stopped') { throw "the docker service still runs" }
+          if (Test-Path '\\.\pipe\docker_engine') { throw "the docker engine pipe is still open" }
+          bash -c '! command -v docker'
+          if ($LASTEXITCODE -ne 0) { throw "docker is still on the bash PATH" }
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --dir infra/fake-oidc install --frozen-lockfile
+      - name: Native runner tests
+        run: node --test scripts/demo/native/tools.test.mjs scripts/demo/native/up.test.mjs
+
+      # The login-callback login (db/local/auth-login.sql) gets a random
+      # password per run; none lives in the repo.
+      - name: Local auth login password
+        run: |
+          password="$(openssl rand -hex 24)"
+          echo "::add-mask::${password}"
+          echo "DUCTUS_AUTH_LOCAL_PASSWORD=${password}" >> "$GITHUB_ENV"
+          echo "AUTH_DATABASE_URL=postgres://ductus_auth_local:${password}@127.0.0.1:54329/ductus" >> "$GITHUB_ENV"
+
+      # The evidence key and domain, the bucket label object and the K-3 row
+      # counts, read by psql on the local socket only (-h is the socket folder).
+      - name: Snapshot helper
+        run: |
+          data="$(cygpath -u "$LOCALAPPDATA")/Ductus"
+          cat > "$RUNNER_TEMP/snapshot.sh" <<EOF
+          set -euo pipefail
+          q() { "$data/native/postgres-17.11-1/pgsql/bin/psql.exe" -h "$(cygpath -m "$data/native-data/run")" -p 54329 -U ductus -d ductus -X -A -t -v ON_ERROR_STOP=1 -c "\$1"; }
+          q "SELECT key_id, key_version, evidence_domain_id, institution_id FROM evidence.signing_key ORDER BY 1, 2"
+          q "SELECT id, institution_id, region FROM evidence.domain ORDER BY 1"
+          sha256sum "$data/native-data/rustfs/ductus-evidence-"*/ductus-storage-identity.json/xl.meta | cut -d' ' -f1
+          if [ "\${1:-}" = k3 ]; then
+            q "SELECT (SELECT count(*) FROM institution.course), (SELECT count(*) FROM institution.assignment), (SELECT count(*) FROM institution.assignment_version), (SELECT count(*) FROM institution.course_member), (SELECT count(*) FROM institution.notice_acknowledgment)"
+          fi
+          EOF
+
+      - name: Prepare from an empty folder
+        run: |
+          test ! -e "$(cygpath -u "$LOCALAPPDATA")/Ductus"
+          pnpm demo:up:native --prepare-only
+          bash "$RUNNER_TEMP/snapshot.sh" > "$RUNNER_TEMP/prepare-1.txt"
+      - name: Prepare again keeps the key, domain and bucket label
+        run: |
+          pnpm demo:up:native --prepare-only
+          bash "$RUNNER_TEMP/snapshot.sh" > "$RUNNER_TEMP/prepare-2.txt"
+          diff "$RUNNER_TEMP/prepare-1.txt" "$RUNNER_TEMP/prepare-2.txt"
+          test "$(head -n 1 "$RUNNER_TEMP/prepare-1.txt")" != ""
+          pnpm demo:up:native --stop
+
+      - name: Install login browser
+        run: pnpm exec playwright install chromium
+
+      # Ctrl+C cannot reach a background process here; taskkill ends the tree
+      # and --stop then ends what the kill left (PostgreSQL runs on its own).
+      - name: Full demo, loopback ports and login E2E
+        run: |
+          set -euo pipefail
+          pnpm demo:up:native > "$RUNNER_TEMP/demo-up-1.log" 2>&1 &
+          winpid="$(cat "/proc/$!/winpid")"
+          trap 'taskkill //T //F //PID "$winpid" > /dev/null 2>&1 || true' EXIT
+          for _ in $(seq 1 180); do
+            [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/ || true)" = 200 ] && break
+            kill -0 "$!" 2> /dev/null || { cat "$RUNNER_TEMP/demo-up-1.log"; exit 1; }
+            sleep 2
+          done
+          [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/)" = 200 ]
+          for port in 54329 9100 8090 3000; do
+            listening="$(netstat -ano | tr -d '\r' | awk -v p=":$port" '$1 == "TCP" && $4 == "LISTENING" && substr($2, length($2) - length(p) + 1) == p { print $2 }')"
+            echo "$port: $(echo $listening)"
+            [ -n "$listening" ]
+            if echo "$listening" | grep -v "^127\.0\.0\.1:$port\$"; then echo "::error::port $port listens beyond 127.0.0.1"; exit 1; fi
+          done
+          bash "$RUNNER_TEMP/snapshot.sh" k3 > "$RUNNER_TEMP/k3-1.txt"
+          E2E_REUSE_SERVER=1 pnpm exec playwright test --config playwright.login.config.ts $LOGIN_SPECS
+      - name: Stop after the first run
+        run: pnpm demo:up:native --stop
+
+      # A second full run loads K-3 again: no new rows, the same key and label.
+      - name: Second full run adds no K-3 rows
+        run: |
+          set -euo pipefail
+          pnpm demo:up:native --prepare-only
+          bash "$RUNNER_TEMP/snapshot.sh" k3 > "$RUNNER_TEMP/before-k3-2.txt"
+          pnpm demo:up:native > "$RUNNER_TEMP/demo-up-2.log" 2>&1 &
+          winpid="$(cat "/proc/$!/winpid")"
+          trap 'taskkill //T //F //PID "$winpid" > /dev/null 2>&1 || true' EXIT
+          for _ in $(seq 1 180); do
+            [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/ || true)" = 200 ] && break
+            kill -0 "$!" 2> /dev/null || { cat "$RUNNER_TEMP/demo-up-2.log"; exit 1; }
+            sleep 2
+          done
+          [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/)" = 200 ]
+          bash "$RUNNER_TEMP/snapshot.sh" k3 > "$RUNNER_TEMP/after-k3-2.txt"
+          diff "$RUNNER_TEMP/before-k3-2.txt" "$RUNNER_TEMP/after-k3-2.txt"
+          head -n -1 "$RUNNER_TEMP/after-k3-2.txt" | diff "$RUNNER_TEMP/prepare-1.txt" -
+          tail -n 1 "$RUNNER_TEMP/after-k3-2.txt"
+
+      - name: Stop leaves no service and no port
+        run: |
+          pnpm demo:up:native --stop
+          if tasklist //FO CSV //NH | grep -iE '^"(postgres|pg_ctl|rustfs)\.exe"'; then echo "::error::a service process remains"; exit 1; fi
+          if netstat -ano | grep LISTENING | grep -E ':(54329|9100|8090|3000)\s'; then echo "::error::a demo port still listens"; exit 1; fi
+      - name: No fake OIDC process remains
+        shell: pwsh
+        run: |
+          $left = Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" | Where-Object { $_.CommandLine -match 'loopback-listen' }
+          if ($left) { throw "the fake OIDC process still runs" }
+      - name: No secret in the logs and a clean tree
+        run: |
+          if grep -rlF "$DUCTUS_AUTH_LOCAL_PASSWORD" "$RUNNER_TEMP"/demo-up-*.log "$(cygpath -u "$LOCALAPPDATA")/Ductus/native-data/logs"; then echo "::error::the auth password is in a log"; exit 1; fi
+          git status --porcelain
+          test -z "$(git status --porcelain)"
+
+      # Logs go to the console, which masks the auth password; an artifact is not masked.
+      - name: Service logs
+        if: failure()
+        run: |
+          for log in "$RUNNER_TEMP"/demo-up-*.log "$(cygpath -u "$LOCALAPPDATA")/Ductus/native-data/logs"/*.log; do
+            [ -f "$log" ] && { echo "::group::$log"; cat "$log"; echo "::endgroup::"; }
+          done
+          true
+      - name: Stop on failure
+        if: always()
+        run: pnpm demo:up:native --stop || true
+      - name: Upload login Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report-login-native
+          path: playwright-report-login/
+          retention-days: 14
