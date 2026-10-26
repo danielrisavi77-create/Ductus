@@ -20,6 +20,7 @@ import {
 import { startLiveReader, type LiveView } from "@/client/live-reader";
 import { watchSessionEnd, type SessionWatch } from "@/client/session-end";
 import type { SessionMark } from "@/client/session-marks";
+import { blockRuns } from "@/components/shell/manuscript-blocks";
 import SheetFrame from "@/components/shell/SheetFrame";
 import type { DocumentNode } from "@/domain/document";
 import { messagesHr } from "@/lib/i18n/messages.hr";
@@ -54,6 +55,7 @@ function Block({ node, ranges }: { node: DocumentNode; ranges: readonly TextRang
     return segment.marked ? h("mark", { key: i, className: styles.mark }, content) : h("span", { key: i }, content);
   });
   if (node.type === "paragraph") return h("p", { "data-node-id": node.id }, ...children);
+  if (node.type === "bulletItem") return h("li", { "data-node-id": node.id }, ...children);
   // The page has its own h1, so the work's levels 1 to 3 are h2 to h4.
   const heading = node.level === 1 ? "h2" : node.level === 2 ? "h3" : "h4";
   return h(heading, { "data-node-id": node.id }, ...children);
@@ -103,8 +105,11 @@ export default function LiveText({ view, marks, heading, textRef, onSelect }: Li
   let text: ReactNode;
   if (stopped) text = placeholder(t.connection[view.connection]);
   else if (view.document) {
-    text = view.document.nodes.map((node) =>
-      h(Block, { key: node.id, node, ranges: marks.filter((r) => r.nodeId === node.id) }));
+    const block = (node: DocumentNode) =>
+      h(Block, { key: node.id, node, ranges: marks.filter((r) => r.nodeId === node.id) });
+    // Consecutive bullet items are one list (E1).
+    text = blockRuns(view.document.nodes).map((run) =>
+      run.kind === "list" ? h("ul", { key: run.items[0]!.id }, ...run.items.map(block)) : block(run.node));
   } else text = placeholder(view.empty ? t.empty : t.loading);
 
   return h(

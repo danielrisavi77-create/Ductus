@@ -54,7 +54,7 @@ function normalizeNode(node: DocumentNode): DocumentNode {
   const children = normalizeChildren(node.children);
   return node.type === "heading"
     ? { type: "heading", id: node.id, level: node.level, children }
-    : { type: "paragraph", id: node.id, children };
+    : { type: node.type, id: node.id, children };
 }
 
 /**

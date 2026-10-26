@@ -59,6 +59,23 @@ describe("LiveText", () => {
     expect(without).toContain(`<h2 data-node-id="${H1}">`);
   });
 
+  it("draws consecutive bullet items as one list (E1) and keeps marks inside an item", () => {
+    const B1 = "2b3c4d5e-6f70-4a8b-9c0d-1e2f3a4b5c6d" as NodeId;
+    const B2 = "3c4d5e6f-7081-4b9c-8d1e-2f3a4b5c6d7e" as NodeId;
+    const doc = {
+      schemaVersion: 1,
+      nodes: [
+        ...DOC.nodes,
+        { type: "bulletItem", id: B1, children: [{ type: "text", text: "Prva izmišljena stavka", marks: [] }] },
+        { type: "bulletItem", id: B2, children: [{ type: "text", text: "Druga izmišljena stavka", marks: [] }] },
+      ],
+    } as CanonicalDocument;
+    const html = render({ view: { ...SHOWN, document: doc }, marks: [{ nodeId: B2, start: 0, end: 5 }] });
+    expect(html.match(/<ul>/g)).toHaveLength(1);
+    expect(html).toContain(`<ul><li data-node-id="${B1}">`);
+    expect(html).toContain(`<li data-node-id="${B2}"><mark`);
+  });
+
   it.each<[string, LiveView, string]>([
     ["loading", { document: null, hash: null, empty: false, connection: "loading" }, t.loading],
     ["empty", { document: null, hash: null, empty: true, connection: "live" }, t.empty],
