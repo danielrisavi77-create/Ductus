@@ -19,12 +19,12 @@ function token(block: string, name: string): string | undefined {
   return line?.slice(line.indexOf(":") + 1).replace(";", "").trim().toLowerCase();
 }
 
-describe("design tokens (v3, owner decision of 21 Oct 2026)", () => {
+describe("design tokens (Archivum V3, owner decision of 26 Oct 2026)", () => {
   const root = rule(":root");
 
-  it("takes the primary and its text from the design v3 table", () => {
-    expect(token(root, "--accent")).toBe("#8ee3be");
-    expect(token(root, "--accent-ink")).toBe("#091310");
+  it("takes the primary and its text from the Archivum V3 palette", () => {
+    expect(token(root, "--accent")).toBe("#cf9d72");
+    expect(token(root, "--accent-ink")).toBe("#231720");
   });
 
   // The server save state must not read as the primary or as "saving"
@@ -38,16 +38,16 @@ describe("design tokens (v3, owner decision of 21 Oct 2026)", () => {
     expect(dot).not.toContain("--accent");
   });
 
-  it("names the raised, selected, muted, warning and error colours of design v3", () => {
-    expect(token(root, "--raised")).toBe("#12211c");
-    expect(token(root, "--hover")).toBe("#192a23");
-    expect(token(root, "--selected")).toBe("#192a23");
-    expect(token(root, "--ink-muted")).toBe("#6c8376");
+  it("names the raised, selected, muted, warning and error colours of Archivum V3", () => {
+    expect(token(root, "--raised")).toBe("#34262e");
+    expect(token(root, "--hover")).toBe("#2e2530");
+    expect(token(root, "--selected")).toBe("#3a2b34");
+    expect(token(root, "--ink-muted")).toBe("#85766f");
     expect(token(root, "--warn")).toBe("#e9c58b");
-    expect(token(root, "--error")).toBe("#e9917f");
+    expect(token(root, "--error")).toBe("#f0a08f");
   });
 
-  // D-57: the origin colours keep their meaning; design v3 has none of its own.
+  // D-57: the origin colours keep their meaning; Archivum V3 has none of its own.
   it("keeps the origin colours", () => {
     expect(token(root, "--p-internal")).toBe("#8fb0e0");
     expect(token(root, "--p-unknown")).toBe("#9e9a90");
@@ -55,9 +55,9 @@ describe("design tokens (v3, owner decision of 21 Oct 2026)", () => {
     expect(token(root, "--p-ai")).toBe("#d3ac63");
   });
 
-  it("gives the dark sheet the design v3 surface", () => {
-    expect(token(rule(".sheet"), "--sheet")).toBe("#12211c");
-    expect(token(root, "--sheet")).toBe("#12211c");
+  it("gives the dark sheet the Archivum V3 surface", () => {
+    expect(token(rule(".sheet"), "--sheet")).toBe("#292329");
+    expect(token(root, "--sheet")).toBe("#292329");
   });
 });
 
@@ -114,6 +114,13 @@ describe("contrast of the semantic tokens (FE-D2)", () => {
     const sheet = rule(".sheet");
     for (const ink of ["--ink", "--ink-2", "--ink-3"]) {
       expect(contrast(token(sheet, ink)!, token(sheet, "--sheet")!)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("keeps small quiet text readable on the selected and hover surfaces too", () => {
+    for (const surface of ["--selected", "--hover"]) {
+      expect(contrast(dark("--ink-3"), dark(surface))).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(dark("--accent"), dark(surface))).toBeGreaterThanOrEqual(4.5);
     }
   });
 

@@ -5,10 +5,10 @@
   margin: 80px auto auto;
   padding: 0;
   border: 1px solid var(--rule);
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: var(--raised);
   color: var(--ink);
-  box-shadow: 0 20px 44px -14px #000d;
+  box-shadow: var(--lift);
 }
 
 .dialog::backdrop {
@@ -60,7 +60,7 @@
 .stay {
   min-height: 44px;
   padding: 6px 12px;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   font: inherit;
   font-size: 12.5px;
   cursor: pointer;
@@ -104,5 +104,5 @@
   gap: 8px;
   padding: 10px 12px;
   border: 1px solid var(--rule);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
 }

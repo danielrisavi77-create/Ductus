@@ -72,12 +72,14 @@ describe("tools that do not fit", () => {
     expect(keys(splitTools(TOOLS, 3).shown)).toEqual(["paragraph", "bold", "italic", "undo", "redo"]);
   });
 
-  it("then the list (E1), after every heading, in toolbar order", () => {
-    const withList = ["paragraph", "heading1", "heading2", "heading3", "bold", "italic", "bulletItem", "undo", "redo"]
+  it("then the block quote and the list (E1), after every heading, in toolbar order", () => {
+    const withList = ["paragraph", "heading1", "heading2", "heading3", "bold", "italic", "bulletItem", "quote", "undo", "redo"]
       .map((key) => ({ key }));
-    expect(keys(splitTools(withList, 3).shown)).toContain("bulletItem");
-    expect(keys(splitTools(withList, 4).more)).toEqual(["heading1", "heading2", "heading3", "bulletItem"]);
-    expect(keys(splitTools(withList, 4).shown)).toEqual(["paragraph", "bold", "italic", "undo", "redo"]);
+    expect(keys(splitTools(withList, 3).shown)).toEqual(expect.arrayContaining(["bulletItem", "quote"]));
+    expect(keys(splitTools(withList, 4).more)).toEqual(["heading1", "heading2", "heading3", "quote"]);
+    expect(keys(splitTools(withList, 4).shown)).toContain("bulletItem");
+    expect(keys(splitTools(withList, 5).more)).toEqual(["heading1", "heading2", "heading3", "bulletItem", "quote"]);
+    expect(keys(splitTools(withList, 5).shown)).toEqual(["paragraph", "bold", "italic", "undo", "redo"]);
   });
 
   it("never moves paragraph, bold, italic, undo or redo, whatever the count", () => {

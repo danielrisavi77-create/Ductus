@@ -138,6 +138,7 @@ export default function TeacherSetup() {
 
   const coursePolicy = course?.policy ?? aiPolicy;
   const allowed = coursePolicy === "prohibited" ? [] : AI_PURPOSES.filter((p) => purposes.includes(p));
+  const bannedPurposes = AI_PURPOSES.filter((p) => !allowed.includes(p));
   const published = assignmentResult?.kind === "available";
   const previewRange = parseWordRange(wordMin, wordMax);
   const previewRangeText = previewRange ? wordRangeHr({ min: previewRange.wordMin, max: previewRange.wordMax }) : null;
@@ -276,11 +277,16 @@ export default function TeacherSetup() {
               ))}
               {Object.values(tools.conditions).map((text) => <p key={text} className={styles.hint}>{text}</p>)}
               <p className={styles.listHead}>{tools.banned}</p>
-              <ul className={styles.banned}>
-                {AI_PURPOSES.filter((p) => !allowed.includes(p)).map((p) => (
-                  <li key={p}><s>{tools.purposes[p]}</s></li>
-                ))}
-              </ul>
+              {/* DAN-345: with every purpose allowed there is no empty list, only the sentence. */}
+              {bannedPurposes.length ? (
+                <ul className={styles.banned}>
+                  {bannedPurposes.map((p) => (
+                    <li key={p}><s>{tools.purposes[p]}</s></li>
+                  ))}
+                </ul>
+              ) : (
+                <p className={styles.hint}>{tools.bannedNone}</p>
+              )}
               <p className={styles.hint}>{tools.alwaysBannedHead}</p>
               <ul className={styles.banned}>
                 {Object.values(tools.alwaysBanned).map((text) => <li key={text}>{text}</li>)}
@@ -309,12 +315,17 @@ export default function TeacherSetup() {
         </p>
         {instructions.trim() ? <p className={styles.brief}>{instructions}</p> : null}
         <p className={styles.listHead}>{tools.allowed}</p>
-        <ul className={styles.summary}>
-          {allowed.map((p) => <li key={p}><span aria-hidden="true">✓ </span>{tools.purposes[p]}</li>)}
-        </ul>
+        {/* DAN-345: nothing allowed reads as the student's notice does, not as an empty list. */}
+        {allowed.length ? (
+          <ul className={styles.summary}>
+            {allowed.map((p) => <li key={p}><span aria-hidden="true">✓ </span>{tools.purposes[p]}</li>)}
+          </ul>
+        ) : (
+          <p className={styles.hint}>{t.student.noTools}</p>
+        )}
         <p className={styles.listHead}>{tools.banned}</p>
         <ul className={styles.summary}>
-          {[...AI_PURPOSES.filter((p) => !allowed.includes(p)).map((p) => tools.purposes[p]),
+          {[...bannedPurposes.map((p) => tools.purposes[p]),
             ...Object.values(tools.alwaysBanned)].map((text) => (
             <li key={text}><span aria-hidden="true">× </span>{text}</li>
           ))}
