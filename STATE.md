@@ -46,18 +46,21 @@ Kanonski dokument: `docs/ENGINEERING_SYSTEM.md`.
 
 ## Otvoreni razvojni stog
 
-Stanje 25. 10. 2026. oko 22:45 UTC prema `gh pr list --state open` (nositelj statusa je Linear; review i QA stanje je na PR-u). STATE.md i dalje prati PR-ove i redovito se osvježava (vlasnik, 25. 10. 2026., prenosi orkestrator na #271 `issuecomment-6398469344`; povod je pregled Trijaže `issuecomment-6398435565`).
+Stanje 26. 10. 2026. oko 00:00 UTC prema `gh pr list --state open` (nositelj statusa je Linear; review i QA stanje je na PR-u). STATE.md i dalje prati PR-ove i redovito se osvježava (vlasnik, 25. 10. 2026., prenosi orkestrator na #271 `issuecomment-6398469344`; povod je pregled Trijaže `issuecomment-6398435565`). Popis uključuje #806, #820 te #815 do #825 (vlasnik, 26. 10. 2026., #87 `issuecomment-6405191778`).
 
 Otvoreno:
 
-- DAN-89 demo lanac: #806 rad studenta s popisa kolegija nastavnika (F2); #726 (K-4c-2, nacrt) i #810 (K-4d korak 3, nacrt) koraci demo prolaza.
-- DAN-37 dokazi: #803 dokazna sesija rada studenta (3d-2c2a); #811 spajanje sesije s listom u `/rad` (3d-2c2b, nacrt).
-- DAN-308 brzi put nastavnika: #769 (B-11a); #774 (B-11b) i #780 (B-11c), nacrti.
-- Nastavnik i početni zaslon: #814 povratak uklonjenog studenta (DAN-292); #805 predaje zadatka (DAN-290); #807 i #808 preusmjeravanje i početni zaslon (DAN-325); #809 dizajn #732, skupina 3.
-- Platforma, orkestrator i CI: #804 izvorni `psql` za demo skripte (DAN-324); #684 `orch:shadow` (DAN-269); #643 (nacrt), #642, #641 Mergify i akcije; #628 Playwright ponavljanja (DAN-262, nacrt).
+- DAN-89 demo lanac: #822 stranica "Moji zadaci" (DAN-333); #815 prikaz "Kako vidi nastavnik" na `/rad` (#732 t. 7, nacrt); #726 (K-4c-2, nacrt) i #810 (K-4d korak 3, nacrt) koraci demo prolaza.
+- DAN-37 dokazi: #803 dokazna sesija rada studenta (3d-2c2a); #811 spajanje sesije s listom u `/rad` (3d-2c2b, nacrt); #818 predani rad samo za čitanje (DAN-328, nacrt).
+- DAN-308 brzi put nastavnika: #769 (B-11a); #774 (B-11b) i #780 (B-11c), nacrti; #825 F-11 čita radove iz B-11c (DAN-334, nacrt).
+- Nastavnik i početni zaslon: #814 povratak uklonjenog studenta (DAN-292); #819 opozvani i zamijenjeni kodovi u revizijskom tragu (DAN-329); #805 predaje zadatka (DAN-290); #807 i #808 preusmjeravanje i početni zaslon (DAN-325).
+- Spremanje rada: #816 F-137 (DAN-330); #821 odabrani tekst ostaje u redu kad čitanje pri nastavku ne uspije (DAN-318).
+- Platforma, orkestrator i CI: #804 izvorni `psql` za demo skripte i #817 izvorni pokretač demoa za Windows bez Dockera (DAN-324, #817 nacrt); #684 `orch:shadow` (DAN-269); #643 (nacrt), #642, #641 Mergify i akcije; #628 Playwright ponavljanja (DAN-262, nacrt).
 - Stariji nacrti: #629, #571, #553, #552, #551, #550, #438, #372, #370, #354, #347, #344; #94 drugi pružatelj reviewa (DAN-41, nakon demoa).
 
-Spojeno od 12. do 25. 10. 2026.: 295 PR-ova (#180 do #801, s preskocima). Potpun popis: `gh pr list --state merged`.
+Od prethodnog presjeka (25. 10. oko 22:45 UTC) spojeni su #809 (dizajn #732, skupina 3), #806 rad studenta s popisa kolegija nastavnika (F2, DAN-89) i #820 uloga nastavnika u PLAN-DEMO D-3. #823 je issue (Editor E1, DAN-326), ne PR; Mergifyjevi privremeni PR-ovi (#824, #827 do #829) nisu navedeni.
+
+Spojeno od 12. do 26. 10. 2026.: 298 PR-ova (#180 do #820, s preskocima). Potpun popis: `gh pr list --state merged`.
 
 ## Ne smije se izgubiti
 
