@@ -1,33 +1,57 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { CRITICAL_PATHS } from "./pr-metadata-core.mjs";
 import { matchesPath } from "./protected-paths.mjs";
 
 // F-152 (F-148 residual): a node:test file on a critical path is a guard only
-// when CI runs it. Every such file must appear in a command that ci.yml runs:
-// a `pnpm test:*` script (followed through scripts that call other test:*
-// scripts) or a `node --test` line of the workflow, literally or by its glob.
+// when CI runs it. Every such file in the repository must appear in a command
+// that ci.yml runs: a step's `run:` value with a `pnpm test:*` script
+// (followed through scripts that call other test:* scripts) or a `node --test`
+// line, naming the file literally or by a glob.
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const read = (path) => readFileSync(`${root}${path}`, "utf8");
 
-/** Every *.test.mjs under the repository's scripts/ and db/ trees, as repo paths. */
-function nodeTestFiles(dir) {
-  const found = [];
-  for (const entry of readdirSync(`${root}${dir}`, { withFileTypes: true })) {
-    const path = `${dir}/${entry.name}`;
-    if (entry.isDirectory()) found.push(...nodeTestFiles(path));
-    else if (entry.name.endsWith(".test.mjs")) found.push(path);
-  }
-  return found;
+/** Every tracked *.test.mjs in the repository, as repo paths. */
+function trackedNodeTests() {
+  return execFileSync("git", ["ls-files", "-z", "--", "*.test.mjs"], { cwd: root, encoding: "utf8" })
+    .split("\0").filter(Boolean);
 }
 
-/** The text of every command CI runs: the node --test lines and the test:* scripts behind `pnpm test:*`. */
+/**
+ * The `run:` values of the workflow's steps, one string each. A block value
+ * (`run: |`) takes the lines indented below its key; comment lines and text
+ * outside `run:` (comments, names, `if:`) are not commands.
+ */
+export function runValues(ci) {
+  const values = [];
+  const lines = ci.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i += 1) {
+    const key = /^(\s*(?:-\s+)?)run:\s*(.*)$/.exec(lines[i]);
+    if (!key) continue;
+    // The column of `run` itself; a block's lines are indented deeper.
+    const indent = key[1].length;
+    if (!/^[|>][+-]?$/.test(key[2])) {
+      values.push(key[2]);
+      continue;
+    }
+    const block = [];
+    while (i + 1 < lines.length && (lines[i + 1].trim() === "" || /^\s*/.exec(lines[i + 1])[0].length > indent)) {
+      i += 1;
+      if (!lines[i].trim().startsWith("#")) block.push(lines[i].trim());
+    }
+    values.push(block.join("\n"));
+  }
+  return values;
+}
+
+/** The text of every command CI runs: the steps' `run:` values and the test:* scripts behind `pnpm test:*`. */
 export function ciTestCommands(ci, scripts) {
-  const commands = [...ci.matchAll(/node --test [^\n]*/g)].map((match) => match[0]);
-  const pending = [...ci.matchAll(/pnpm (?:run )?(test:[\w:-]+)/g)].map((match) => match[1]);
+  const commands = runValues(ci);
+  const pending = commands.flatMap((command) => [...command.matchAll(/pnpm (?:run )?(test:[\w:-]+)/g)].map((match) => match[1]));
   const seen = new Set();
   while (pending.length > 0) {
     const name = pending.pop();
@@ -41,31 +65,51 @@ export function ciTestCommands(ci, scripts) {
   return commands;
 }
 
-/** Whether a repo path is named by one of the commands, literally or by a dir/*.test.mjs glob. */
+/** A shell glob word as a regular expression; `*` stays inside one path segment. */
+const globRegExp = (word) =>
+  new RegExp(`^${word.split("*").map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join("[^/]*")}$`);
+
+/** Whether a repo path is named by one of the commands, literally or by a glob. */
 export function runBy(commands, file) {
   return commands.some((command) =>
-    command.split(/\s+/).some((word) => {
-      if (word === file) return true;
-      const glob = /^([\w./-]+)\/\*\.test\.mjs$/.exec(word);
-      return glob !== null && file.startsWith(`${glob[1]}/`) && !file.slice(glob[1].length + 1).includes("/");
-    }));
+    command.split(/[\s;&|]+/).some((word) => word === file || (word.includes("*") && globRegExp(word).test(file))));
 }
 
 test("every node:test file on a critical path runs in CI", () => {
   const commands = ciTestCommands(read(".github/workflows/ci.yml"), JSON.parse(read("package.json")).scripts);
-  const critical = ["scripts", "db"].flatMap(nodeTestFiles).filter((file) => matchesPath(file, CRITICAL_PATHS));
+  const critical = trackedNodeTests().filter((file) => matchesPath(file, CRITICAL_PATHS));
   assert.ok(critical.includes("scripts/demo/bootstrap-accounts.test.mjs"), "the critical list is read");
+  assert.ok(critical.includes(".claude/skills/run-ductus/process-command.test.mjs"), "the whole tree is read");
   assert.deepEqual(critical.filter((file) => !runBy(commands, file)), []);
 });
 
 test("the matcher follows test:* scripts and globs, and refuses what no command names", () => {
-  const ci = "run: pnpm test:demo && pnpm test:fake-oidc\nrun: node --test scripts/engineering/*.test.mjs\n";
-  const scripts = { "test:demo": "node --test a/x.test.mjs && pnpm test:inner", "test:inner": "node --test b/y.test.mjs" };
+  const ci = [
+    "      - run: pnpm test:demo && pnpm test:fake-oidc",
+    "      - name: Engineering",
+    "        run: shopt -s failglob; node --test scripts/engineering/*.test.mjs skills/*/*.test.mjs",
+    "      - run: |",
+    "          # node --test commented/x.test.mjs",
+    "          node --test block/y.test.mjs",
+    "      # - run: node --test commented/z.test.mjs",
+    "      - name: Not run, pnpm test:named",
+    "",
+  ].join("\n");
+  const scripts = {
+    "test:demo": "node --test a/x.test.mjs && pnpm test:inner", "test:inner": "node --test b/y.test.mjs",
+    "test:named": "node --test named/n.test.mjs",
+  };
   const commands = ciTestCommands(ci, scripts);
   assert.ok(runBy(commands, "a/x.test.mjs"));
   assert.ok(runBy(commands, "b/y.test.mjs"));
+  assert.ok(runBy(commands, "block/y.test.mjs"));
   assert.ok(runBy(commands, "scripts/engineering/z.test.mjs"));
+  assert.ok(runBy(commands, "skills/run/z.test.mjs"));
   assert.ok(!runBy(commands, "scripts/engineering/deeper/z.test.mjs"));
   assert.ok(!runBy(commands, "a/other.test.mjs"));
   assert.ok(!runBy(commands, "a/x.test.mjs.bak"));
+  // Comments and step names are not commands.
+  assert.ok(!runBy(commands, "commented/x.test.mjs"));
+  assert.ok(!runBy(commands, "commented/z.test.mjs"));
+  assert.ok(!runBy(commands, "named/n.test.mjs"));
 });

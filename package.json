@@ -19,6 +19,7 @@
     "test:e2e": "playwright test",
     "test:e2e:login": "playwright test --config playwright.login.config.ts",
     "test:demo:browser": "node --test scripts/demo/bootstrap-accounts.test.mjs",
+    "test:skills": "node --test .claude/skills/run-ductus/process-command.test.mjs .agents/skills/run-ductus/process-command.test.mjs",
     "test:demo": "node --test db/local/psql-target.test.mjs scripts/demo/up.test.mjs scripts/demo/login-e2e-evidence.test.mjs scripts/db/provision-auth.test.mjs scripts/demo/native/native.test.mjs",
     "prepare": "lefthook install",
     "test:integration": "vitest run --project integration",

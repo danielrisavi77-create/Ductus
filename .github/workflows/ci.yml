@@ -93,6 +93,9 @@ jobs:
       - run: pnpm test:property
       - name: Demo launcher and fake OIDC account tests
         run: pnpm test:demo && pnpm test:fake-oidc
+      # F-152: the node tests of skill scripts (both skill copies).
+      - name: Skill script tests
+        run: pnpm test:skills
       - run: pnpm build
 
   # Keep the required context stable; skipped/failed dependencies must never
