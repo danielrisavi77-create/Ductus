@@ -46,3 +46,23 @@ pnpm demo:bootstrap-accounts
 ```
 
 Naredba kroz stvarnu prijavu i callback otvara četiri postojeća izmišljena računa, provjerava njihovu sesiju i ustanovu u lokalnoj bazi, potvrđuje oba nastavnička računa postojećim lokalnim operatorom (`provision-teacher.mjs`, za drugi s argumentom `demo-teacher-2`) i odjavljuje sva četiri računa. Ponovno pokretanje čuva njihove identitete i po jednu aktivnu nastavničku ulogu. Odbija udaljene HTTP ciljeve i Docker kontekst koji nije lokalni. Ne ispisuje ni sprema kolačiće ili tokene. Zahtijeva već pokrenut lokalni stog i aplikaciju; ne pokreće ih sama. Ovaj korak još ne stvara kolegije, zadatke ni kontrolne povijesti, a `demo:prepare` zadržava početno nepotvrđeno stanje nastavnika.
+
+## Bez Dockera (Windows)
+
+Za prijenosno računalo bez Dockera (DAN-324, #799). Pokreće isti demo kao `pnpm demo:up`, s istim izmišljenim podacima i istim lažnim OIDC pružateljem, ali PostgreSQL 17, rustfs i lažni OIDC rade kao obični procesi.
+
+Preduvjeti: Windows 10 1803+ ili Windows 11 (zbog `tar.exe` i Unix socketa), Node 24 i pnpm. PostgreSQL treba Microsoft Visual C++ Redistributable; ako nedostaje, instaliraj ga s Microsoftove stranice (to može tražiti administratora, runner to ne zaobilazi). Windows Defender ili SmartScreen mogu pri prvom pokretanju tražiti potvrdu za `postgres.exe` ili `rustfs.exe`.
+
+```powershell
+pnpm install --frozen-lockfile
+pnpm --dir infra/fake-oidc install --frozen-lockfile
+pnpm demo:up:native
+```
+
+- Prvo pokretanje preuzima PostgreSQL 17.11-1 (get.enterprisedb.com, oko 340 MB) i rustfs 1.0.0 (GitHub izdanje) u `%LOCALAPPDATA%\Ductus\native\`. Prije raspakiranja provjeravaju se veličina i SHA-256 arhive, a prije svakog pokretanja hash raspakiranih datoteka. Ako se razlikuje i jedan bajt, runner odbija start i traži da obrišeš tu mapu. Ništa se ne preuzima u repozitorij.
+- Podaci su u `%LOCALAPPDATA%\Ductus\native-data\` (baza, objekti, zapisi). Za potpuno nov početak zaustavi runner i obriši tu mapu.
+- Svi portovi (PostgreSQL 54329, rustfs 9100, OIDC 8090, aplikacija 3000) slušaju samo na `127.0.0.1`. `psql` se spaja samo kroz lokalni socket, nikad kroz TCP.
+- Ctrl+C zaustavlja aplikaciju, OIDC, rustfs i PostgreSQL. `pnpm demo:up:native --stop` zaustavlja procese prethodnog pokretanja koje je prekid ostavio. Proces gasi samo ako su mu ime i vrijeme nastanka jednaki zapisanima; proces koji je nakon restarta dobio isti PID ostavlja i to javlja.
+- `pnpm demo:up:native --prepare-only` samo priprema bazu (kao `demo:prepare`), a `--no-demo-data` preskače izmišljeni kolegij i zadatak (K-3b2). Windows CI posao prijavni E2E pokreće s demo podacima, jer K-3 potvrđuje ulogu "Demo nastavnik".
+
+Granice: Mailpit se ne pokreće, pa lokalna pošta ne postoji. `pnpm test:db` (pgTAP), `pnpm demo:bootstrap-accounts` i E2E testovi koji traže Docker i dalje trebaju Compose. Baza koristi ugrađeni locale `C.UTF-8` (PG17), a ne `en_US.utf8` iz Composea, pa redoslijed po zadanoj kolaciji može biti drukčiji; migracije koriste izričit `COLLATE "C"`. rustfs pri startu provjerava ima li novije verzije (`version.rustfs.com`) i to se ne može isključiti. Pokretanje na Windowsima dokazuje posao `Demo native` u CI-ju.
