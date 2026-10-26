@@ -41,8 +41,10 @@ export const QUOTA_FALLBACK_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 // D-101: a verdict on an earlier head carries to the current head only when
 // every later commit merges the base in and the PR's own diff is unchanged.
-export const MAX_CARRIED_HEADS = 5;
-export const MAX_MERGE_STEPS = 10;
+// D-176 (owner, 26 Oct 2026): 20, up from 5 heads and 10 merge
+// steps, because main moves faster than a critical PR reaches its merge.
+export const MAX_CARRIED_HEADS = 20;
+export const MAX_MERGE_STEPS = 20;
 const COMPARE_FILE_CAP = 300;
 
 function isAgent(value, role) {
