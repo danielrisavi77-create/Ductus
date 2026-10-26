@@ -758,7 +758,7 @@ main:focus {
 }
 
 .manuscript__title {
-  margin: 0 0 27px;
+  margin: 0 0 26px;
   text-align: center;
   font-size: 19px;
   /* Newsreader is served at 400-500 (app/fonts); 700 would be a synthetic bold. */

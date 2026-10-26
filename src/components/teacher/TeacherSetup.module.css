@@ -5,7 +5,7 @@
  */
 .layout {
   display: grid;
-  gap: 25px;
+  gap: 24px;
   align-items: start;
 }
 
