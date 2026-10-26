@@ -238,7 +238,7 @@ export const hr = {
     access: {
       eyebrow: "Tko što vidi",
       title: "Isti rad, jasne uloge.",
-      lead: "Pogledaj što koja uloga vidi, a što ne vidi. Pravila su ista za sve zadatke.",
+      lead: "Pogledajte što koja uloga vidi, a što ne vidi. Pravila su ista za sve zadatke.",
       tablistLabel: "Uloga",
       sees: "Vidi",
       doesNot: "Ne vidi",
@@ -308,7 +308,7 @@ export const hr = {
         },
         tryOut: {
           q: "Šalje li se išta iz probnog prostora?",
-          a: "Ne. Tekst koji upišeš ostaje u ovom pregledniku i nikamo se ne šalje.",
+          a: "Ne. Tekst koji upišete ostaje u ovom pregledniku i nikamo se ne šalje.",
         },
       },
     },
