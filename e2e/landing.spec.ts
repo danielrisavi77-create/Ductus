@@ -40,6 +40,21 @@ test.describe("public home page", () => {
     await expect(page.getByRole("button", { name: t.landing.replay.pause })).toBeVisible();
   });
 
+  test("the access block switches roles with the keyboard and the questions open", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { level: 2, name: t.landing.access.title })).toBeVisible();
+    const student = page.getByRole("tab", { name: t.landing.access.roles.student.name });
+    await expect(student).toHaveAttribute("aria-selected", "true");
+    await student.focus();
+    await page.keyboard.press("ArrowRight");
+    const mentor = page.getByRole("tab", { name: t.landing.access.roles.mentor.name });
+    await expect(mentor).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("tabpanel")).toContainText(t.landing.access.roles.mentor.sees[0]);
+    const first = Object.values(t.landing.faq.items)[0];
+    await page.getByText(first.q).click();
+    await expect(page.getByText(first.a)).toBeVisible();
+  });
+
   test("every way in is a plain link to /prijava", async ({ page }) => {
     await page.goto("/");
     const entries = page.getByRole("link", { name: new RegExp(`^(${t.auth.signIn}|${t.landing.enter})$`) });
