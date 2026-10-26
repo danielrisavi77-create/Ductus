@@ -6,8 +6,9 @@
  * of it, never the other way around.
  *
  * F1 node model (dossier §5): text blocks of one level (paragraph, heading 1-3
- * and, from E1, the bullet list item) and a single inline type (text with
- * bold/italic marks). Blocks never nest: a list is consecutive list items. Ids are opaque UUIDs and
+ * and, from E1, the bullet list item and the quote paragraph) and a single
+ * inline type (text with bold/italic marks). Blocks never nest: a list is
+ * consecutive list items, a block quote consecutive quote paragraphs. Ids are opaque UUIDs and
  * are part of the canonical identity of a node, not a rendering detail.
  */
 
@@ -128,10 +129,20 @@ export type BulletItemNode = {
   children: InlineNode[];
 };
 
-export type DocumentNode = ParagraphNode | HeadingNode | BulletItemNode;
+/**
+ * One paragraph of a block quote (E1, #823). A flat text block like a
+ * paragraph: consecutive quote paragraphs are shown as one block quote.
+ */
+export type QuoteNode = {
+  type: "quote";
+  id: NodeId;
+  children: InlineNode[];
+};
+
+export type DocumentNode = ParagraphNode | HeadingNode | BulletItemNode | QuoteNode;
 
 /** Block types whose only fields are `type`, `id` and `children`. */
-export const PLAIN_BLOCK_TYPES = ["paragraph", "bulletItem"] as const;
+export const PLAIN_BLOCK_TYPES = ["paragraph", "bulletItem", "quote"] as const;
 
 export type PlainBlockType = (typeof PLAIN_BLOCK_TYPES)[number];
 
@@ -177,4 +188,11 @@ export function bulletItemNode(
   children: readonly InlineNode[] = [],
 ): BulletItemNode {
   return { type: "bulletItem", id, children: [...children] };
+}
+
+export function quoteNode(
+  id: NodeId,
+  children: readonly InlineNode[] = [],
+): QuoteNode {
+  return { type: "quote", id, children: [...children] };
 }
