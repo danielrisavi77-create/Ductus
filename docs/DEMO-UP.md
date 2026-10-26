@@ -46,3 +46,31 @@ pnpm demo:bootstrap-accounts
 ```
 
 Naredba kroz stvarnu prijavu i callback otvara četiri postojeća izmišljena računa, provjerava njihovu sesiju i ustanovu u lokalnoj bazi, potvrđuje oba nastavnička računa postojećim lokalnim operatorom (`provision-teacher.mjs`, za drugi s argumentom `demo-teacher-2`) i odjavljuje sva četiri računa. Ponovno pokretanje čuva njihove identitete i po jednu aktivnu nastavničku ulogu. Odbija udaljene HTTP ciljeve i Docker kontekst koji nije lokalni. Ne ispisuje ni sprema kolačiće ili tokene. Zahtijeva već pokrenut lokalni stog i aplikaciju; ne pokreće ih sama. Ovaj korak još ne stvara kolegije, zadatke ni kontrolne povijesti, a `demo:prepare` zadržava početno nepotvrđeno stanje nastavnika.
+
+## Bez Dockera (Windows)
+
+`pnpm demo:up:native` podiže isti demo na Windowsu bez Dockera (DAN-324, #799): PostgreSQL 17 i rustfs iz zaključanih Windows paketa te lokalni OIDC pružatelj pod Node.js-om. Migracije, sintetičke ustanove, ključ i spremnik evidencije te izmišljeni kolegij K-3 prolaze isti redoslijed kao u `pnpm demo:up`.
+
+Jednokratno, s administratorskim pravima: instaliraj Microsoft Visual C++ Redistributable (x64) za Visual Studio 2015–2022 s `https://aka.ms/vs/17/release/vc_redist.x64.exe`. Bez njega se PostgreSQL ne pokreće. Ostalo ne traži administratora: Node.js 24 (npr. ZIP ili instalacija samo za korisnika) i pnpm 10.33.0.
+
+Jednom iz korijena repozitorija:
+
+```powershell
+pnpm install --frozen-lockfile
+pnpm --dir infra/fake-oidc install --frozen-lockfile
+```
+
+Svako pokretanje:
+
+```powershell
+pnpm demo:up:native
+```
+
+- Prvo pokretanje preuzima PostgreSQL 17.11-1 (oko 340 MB, EDB) i rustfs 1.0.0 (oko 105 MB, GitHub). Svaki paket i svaka raspakirana datoteka provjeravaju se prema manifestu u `scripts/demo/native/tools.mjs` (veličina, SHA-256 i sažetak stabla). Ako se ijedan bajt ne slaže, ništa se ne pokreće i poruka kaže koju mapu treba obrisati; obriši je i pokreni ponovno.
+- Alati i podaci su u `%LOCALAPPDATA%\Ductus` (`native` za alate, `native-data` za bazu, spremnik i dnevnike u `native-data\logs`), nikad u repozitoriju. Cijeli demo brišeš brisanjem te mape.
+- Sve usluge slušaju samo na `127.0.0.1`: baza na 54329, rustfs na 9100, OIDC na 8090, aplikacija na 3000. Ako je neki od tih portova zauzet, runner odbija start. `psql` se s bazom spaja samo preko lokalnog socketa, nikad preko TCP-a.
+- Windows SmartScreen ili Defender mogu pri prvom pokretanju pitati smije li `postgres.exe` ili `rustfs.exe` raditi; dopusti samo lokalnu (privatnu) mrežu.
+- `Ctrl+C` zaustavlja aplikaciju i sve tri usluge. `pnpm demo:up:native --prepare-only` priprema sve osim K-3 i aplikacije i usluge ostavlja podignute; zaustavi ih s `pnpm demo:up:native --stop`, koji pomaže i nakon zatvorenog prozora.
+- Drugo pokretanje koristi isti ključ evidencije, istu oznaku spremnika i ne dodaje retke K-3.
+
+Poznate granice: nema lokalne pošte (Mailpit), pa se pošta u ovom načinu ne šalje ni ne prikazuje. Način radi samo na Windowsu i odbija se uz `NODE_ENV=production`. Prijava je ista kao uz Docker, preko lažnog OIDC pružatelja koji radi samo lokalno (D-09).
