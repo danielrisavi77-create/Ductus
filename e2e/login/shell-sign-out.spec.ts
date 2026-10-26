@@ -187,6 +187,14 @@ test("T4: Ostani and Escape keep the session and give the focus back to Odjava; 
     if (path === "/upis") {
       const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
       expect(axe.violations.filter((v) => v.impact === "critical" || v.impact === "serious")).toEqual([]);
+      // DAN-249 (#876), A3: the dialog's structure with work on the device.
+      await expect(dialog).toMatchAriaSnapshot(`
+        - dialog "Odjava":
+          - heading "Odjava" [level=2]
+          - paragraph: /^\\d+ izmjen/
+          - button "Odjavi se"
+          - button "Ostani"
+      `);
     }
     const name = path === "/upis" ? "upis" : "zadatak";
     await snapshot(page, `odjava-dijalog-${name}-1440-tamna`);
