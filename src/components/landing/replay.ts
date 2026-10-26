@@ -29,19 +29,13 @@ export function clampStep(step: number, frameCount: number): number {
   return Math.max(0, Math.min(frameCount - 1, Math.trunc(step)));
 }
 
-/** Invented text only (synthetic data rule); no real work is involved. */
-export const SAMPLE_EDITS: readonly ReplayEdit[] = [
-  { kind: "append", text: "Gradovi" },
-  { kind: "append", text: " sve" },
-  { kind: "append", text: " češće" },
-  { kind: "append", text: " mijenjaju" },
-  { kind: "append", text: " pravila" },
-  { kind: "append", text: " prometa." },
-  { kind: "replace", from: "sve češće", to: "sve češće, ali neujednačeno," },
-  { kind: "append", text: " Najviše" },
-  { kind: "append", text: " se" },
-  { kind: "append", text: " mijenja" },
-  { kind: "append", text: " parkiranje." },
-  { kind: "replace", from: "Najviše se mijenja parkiranje.", to: "Najčešće se mijenja parkiranje u središtu." },
-  { kind: "replace", from: "Gradovi", to: "Europski gradovi" },
-];
+/**
+ * Reads the catalogue notation: "+text" appends, "from>>to" replaces. The
+ * Croatian sample text lives in the i18n catalogue, not here.
+ */
+export function parseEdit(raw: string): ReplayEdit {
+  if (raw.startsWith("+")) return { kind: "append", text: raw.slice(1) };
+  const at = raw.indexOf(">>");
+  if (at < 0) throw new Error(`Replay edit is neither append nor replace: "${raw}"`);
+  return { kind: "replace", from: raw.slice(0, at), to: raw.slice(at + 2) };
+}

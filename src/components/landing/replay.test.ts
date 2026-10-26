@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { SAMPLE_EDITS, applyEdit, buildFrames, clampStep } from "./replay";
+import { messagesHr as t } from "@/lib/i18n/messages.hr";
+
+import { applyEdit, buildFrames, clampStep, parseEdit } from "./replay";
+
+const SAMPLE_EDITS = t.landing.replay.edits.map(parseEdit);
 
 describe("landing replay model", () => {
   it("starts from the empty paragraph and adds one frame per edit", () => {
@@ -14,6 +18,12 @@ describe("landing replay model", () => {
     expect(frames.at(-1)).toBe(
       "Europski gradovi sve češće, ali neujednačeno, mijenjaju pravila prometa. Najčešće se mijenja parkiranje u središtu.",
     );
+  });
+
+  it("parses the catalogue notation", () => {
+    expect(parseEdit("+abc")).toEqual({ kind: "append", text: "abc" });
+    expect(parseEdit("a>>b")).toEqual({ kind: "replace", from: "a", to: "b" });
+    expect(() => parseEdit("abc")).toThrow();
   });
 
   it("shows a removal as a frame that is shorter than the one before", () => {

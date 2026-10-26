@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 
-import { SAMPLE_EDITS, buildFrames, clampStep } from "./replay";
+import { buildFrames, clampStep, parseEdit } from "./replay";
 import styles from "./Wow.module.css";
 
 const l = t.landing.replay;
@@ -22,7 +22,7 @@ const PLAY_STEP_MS = 650;
  * the visitor and nothing is sent; there is no timing of any kind in the data.
  */
 export default function Replay() {
-  const frames = useMemo(() => buildFrames(SAMPLE_EDITS), []);
+  const frames = useMemo(() => buildFrames(l.edits.map(parseEdit)), []);
   const last = frames.length - 1;
   const [step, setStep] = useState(last);
   const [playing, setPlaying] = useState(false);

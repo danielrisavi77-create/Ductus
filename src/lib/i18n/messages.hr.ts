@@ -218,6 +218,22 @@ export const hr = {
       sliderLabel: "Korak premotavanja",
       stepOf: "korak {step} od {last}",
       note: "Premotavanje prikazuje redoslijed promjena, ne ocjenu ni procjenu. Ritam pisanja ne govori ništa o trudu.",
+      // Invented edits, one per step: "+text" appends, "from>>to" replaces (see replay.ts).
+      edits: [
+        "+Gradovi",
+        "+ sve",
+        "+ češće",
+        "+ mijenjaju",
+        "+ pravila",
+        "+ prometa.",
+        "sve češće>>sve češće, ali neujednačeno,",
+        "+ Najviše",
+        "+ se",
+        "+ mijenja",
+        "+ parkiranje.",
+        "Najviše se mijenja parkiranje.>>Najčešće se mijenja parkiranje u središtu.",
+        "Gradovi>>Europski gradovi",
+      ],
     },
   },
   // F-6 (DAN-35): text of screen 2 of the design handoff (docs/design/ductura).
