@@ -56,14 +56,25 @@ describe("design tokens (Archivum package, owner decision of 26 Oct 2026, DAN-34
     expect(token(root, "--heading-tracking")).toBe("-0.025em");
   });
 
-  // The package is dark only; the light shell and the white sheet keep Archivum V3.
-  it("leaves the light shell and the white sheet as they were", () => {
+  // The package is dark only. Owner decision of 27 Oct 2026, option (a): the
+  // light shell and the white sheet keep the paper and copper of Archivum V3.
+  it("keeps paper and copper in the light shell and on the white sheet", () => {
     const shell = rule('[data-theme="light"]');
     expect(token(shell, "--ground")).toBe("#f6efdf");
     expect(token(shell, "--accent")).toBe("#8f4f33");
     const white = rule('.sheet[data-sheet-theme="light"]');
     expect(token(white, "--sheet")).toBe("#ffffff");
     expect(token(white, "--accent")).toBe("#8f4f33");
+  });
+
+  // Same decision: the light theme supports the new palette, so no colour token
+  // falls back to its dark value in the light shell.
+  it("gives every colour token of the dark root a light value", () => {
+    const shell = rule('[data-theme="light"]');
+    const colours = root.split("\n").map((l) => l.trim().match(/^(--[a-z0-9-]+):\s*#[0-9a-f]{6,8};$/i)?.[1])
+      .filter((name): name is string => name !== undefined);
+    expect(colours.length).toBeGreaterThan(30);
+    expect(colours.filter((name) => token(shell, name) === undefined)).toEqual([]);
   });
 
   // The server save state must not read as the primary or as "saving"
@@ -180,6 +191,66 @@ describe("contrast of the semantic tokens (FE-D2)", () => {
     expect(contrast(dark("--ink"), dark("--field"))).toBeGreaterThanOrEqual(4.5);
     expect(contrast(dark("--field-placeholder"), dark("--field"))).toBeGreaterThanOrEqual(4.5);
     expect(contrast(dark("--ink"), dark("--error-soft"))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  // Owner decision of 27 Oct 2026: the light theme has the same AA demands as the
+  // dark one. Each scope is the cascade a page can produce: shell, then sheet.
+  describe("every theme and sheet scope (AA, owner decision of 27 Oct 2026)", () => {
+    const shell = rule('[data-theme="light"]');
+    const darkSheet = rule(".sheet");
+    const whiteSheet = rule('.sheet[data-sheet-theme="light"]');
+    const scope = (...blocks: string[]) => (name: string) => {
+      for (const block of [...blocks].reverse()) {
+        const value = token(block, name);
+        if (value !== undefined) return value;
+      }
+      return undefined;
+    };
+    const SHELLS = { "dark shell": scope(root), "light shell": scope(root, shell) };
+    const SHEETS = {
+      "dark sheet in the dark shell": scope(root, darkSheet),
+      "dark sheet in the light shell": scope(root, shell, darkSheet),
+      "white sheet in the dark shell": scope(root, whiteSheet),
+      "white sheet in the light shell": scope(root, shell, whiteSheet),
+    };
+    const pass = (where: string, fg: string, bg: string, min: number, v: (n: string) => string | undefined) =>
+      [where, fg, bg, contrast(v(fg)!, v(bg)!) >= min];
+
+    for (const [where, v] of Object.entries(SHELLS)) {
+      it(`${where}: text 4.5:1, focus ring and lines 3:1 on its surfaces`, () => {
+        for (const bg of ["--ground", "--chrome", "--raised", "--card", "--hover", "--selected", "--well", "--field"]) {
+          for (const fg of ["--ink", "--ink-2", "--ink-3", "--accent", "--error"]) {
+            expect(pass(where, fg, bg, 4.5, v)).toEqual([where, fg, bg, true]);
+          }
+          for (const fg of ["--accent", "--field-rule", "--link-rule"]) {
+            expect(pass(where, fg, bg, 3, v)).toEqual([where, fg, bg, true]);
+          }
+        }
+        expect(pass(where, "--field-placeholder", "--field", 4.5, v)).toEqual([where, "--field-placeholder", "--field", true]);
+        expect(pass(where, "--ink", "--error-soft", 4.5, v)).toEqual([where, "--ink", "--error-soft", true]);
+        expect(pass(where, "--raised-rule", "--raised", 3, v)).toEqual([where, "--raised-rule", "--raised", true]);
+        expect(pass(where, "--accent-ink", "--accent", 4.5, v)).toEqual([where, "--accent-ink", "--accent", true]);
+      });
+    }
+
+    for (const [where, v] of Object.entries(SHEETS)) {
+      it(`${where}: its ink 4.5:1 and its focus ring and lines 3:1 on its own surfaces`, () => {
+        for (const bg of ["--sheet", "--well", "--card", "--field"]) {
+          for (const fg of ["--ink", "--ink-2", "--ink-3", "--accent"]) {
+            expect(pass(where, fg, bg, 4.5, v)).toEqual([where, fg, bg, true]);
+          }
+          for (const fg of ["--field-rule", "--link-rule"]) {
+            expect(pass(where, fg, bg, 3, v)).toEqual([where, fg, bg, true]);
+          }
+        }
+        expect(pass(where, "--field-placeholder", "--field", 4.5, v)).toEqual([where, "--field-placeholder", "--field", true]);
+        expect(pass(where, "--ink", "--error-soft", 4.5, v)).toEqual([where, "--ink", "--error-soft", true]);
+      });
+    }
+
+    it("draws the focus ring in the theme's primary", () => {
+      expect(CSS).toMatch(/outline: 2px solid var\(--accent\);/);
+    });
   });
 
   it("gives the white sheet no raised or selected surface", () => {

@@ -2,8 +2,11 @@
  * Ductus design tokens. The dark values are the purple and copper of the
  * approved Archivum package (Ductura_Archivum_Povezani_Prototip, prototype.css;
  * owner decision of 26 Oct 2026, DAN-344), replacing the burgundy of Archivum
- * V3 (#867); the light shell and the white sheet keep the V3 values, as the
- * package has none. The names are D-123's and the structure D-115's.
+ * V3 (#867). The light shell and the white sheet keep the paper and copper of
+ * V3, completed with light values for every token the package adds (owner
+ * decision of 27 Oct 2026, option (a)); every text, field and focus pair is
+ * WCAG AA in both themes (tokens.test.ts). The names are D-123's (values
+ * replaced by D-179) and the structure D-115's.
  *
  * The shell is dark and does not follow the system setting. The writing sheet
  * carries its own token scope (`.sheet`): dark by default, white when the
@@ -27,7 +30,7 @@
  * dense controls, --radius-control for buttons and fields and --radius-lg
  * for dialogs. --card, --raised-rule, --link-rule, --field*, --error-soft and
  * the heading scale (--fs-h1 to --fs-h4) come from the package and wait for
- * the screens that use them. --rule-2 is a line colour (the package's
+ * the screens that use them; both sheets set their own surfaces under ink. --rule-2 is a line colour (the package's
  * --soft); a quiet surface under text (a track, a chip, a hover) is --well. --raised and
  * --selected are shell surfaces; the white sheet has no values for them, so
  * they are not used inside the sheet.
@@ -124,6 +127,18 @@
   --cmt: #7a5420;
   --cmt-ink: #7a5420;
   --cmt-bg: #e9c58b40;
+  /* Light values of the package's tokens (owner decision 27 Oct 2026, option (a)). */
+  --card: #fffaf1;
+  --raised-rule: #857363;
+  --link-rule: #946446;
+  --field: #fffdf8;
+  --field-rule: #857363;
+  --field-placeholder: #6b5f56;
+  --error-soft: #f7e4dd;
+  --p-internal: #4a6fa5;
+  --p-unknown: #6e6a62;
+  --p-template: #9a9488;
+  --p-ai: #8a6a2f;
   --lift: 0 1px 1px #0001, 0 12px 34px -10px #0002;
   color-scheme: light;
 }
@@ -146,6 +161,14 @@
   --cmt: #e9c58b;
   --cmt-ink: #e9c58b;
   --cmt-bg: #e9c58b26;
+  /* Surfaces under its ink, so a light shell never puts a light surface under light ink. */
+  --well: #3e294a;
+  --card: #33253d;
+  --link-rule: #a681b9;
+  --field: #2b2035;
+  --field-rule: #9c76b0;
+  --field-placeholder: #bca4cb;
+  --error-soft: #402b46;
   color-scheme: dark;
 }
 
@@ -174,6 +197,13 @@
   --cmt: #b8862a;
   --cmt-ink: #8a6420;
   --cmt-bg: #b8862a26;
+  --well: #f1eadd;
+  --card: #fffaf1;
+  --link-rule: #946446;
+  --field: #fffdf8;
+  --field-rule: #857363;
+  --field-placeholder: #6b5f56;
+  --error-soft: #f7e4dd;
   color-scheme: light;
 }
 
