@@ -56,29 +56,29 @@ const escapeHtml = (text) =>
 // The app's "D" mark on --ground and --accent (DAN-345 follow-up): without
 // it the browser's request for /favicon.ico ended in the provider's 404.
 const FAVICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">\
-<rect width="64" height="64" rx="10" fill="#19161a"/>\
-<text x="32" y="50" text-anchor="middle" fill="#cf9d72" font-family="Georgia,serif" font-size="52">D</text></svg>`;
+<rect width="64" height="64" rx="10" fill="#2b1f38"/>\
+<text x="32" y="50" text-anchor="middle" fill="#f0b573" font-family="Georgia,serif" font-size="52">D</text></svg>`;
 
-// The v3 tokens of app/globals.css as values (#732 item 2): this server is a
+// The tokens of app/globals.css as values (#732 item 2, palette DAN-344): this server is a
 // separate process and cannot load the app's stylesheet, so the page repeats
 // the few it needs to look like the sign-in screen it is reached from.
 const PAGE_STYLE = `
 :root { color-scheme: dark; }
 body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px;
-  box-sizing: border-box; background: #19161a; color: #f1e5d6;
+  box-sizing: border-box; background: #2b1f38; color: #f7f0fa;
   font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
 main { width: min(430px, 100%); box-sizing: border-box; padding: 30px 30px 24px;
-  background: #292329; border: 1px solid #41333c; border-radius: 6px;
+  background: #392a44; border: 1px solid #765588; border-radius: 6px;
   box-shadow: 0 1px 1px #0007, 0 12px 34px -10px #000a; text-align: center; }
-.tag { display: inline-block; padding: 2px 10px; border-radius: 4px; background: #3b2a2c;
-  color: #cf9d72; font-size: 12px; font-weight: 600; }
+.tag { display: inline-block; padding: 2px 10px; border-radius: 4px; background: #3e294a;
+  color: #f0b573; font-size: 12px; font-weight: 600; }
 h1 { margin: 12px 0 8px; font-size: 24px; font-weight: 400; }
-p { margin: 0 0 20px; font-size: 13px; color: #c2b2a3; }
+p { margin: 0 0 20px; font-size: 13px; color: #cdb3df; }
 form { display: grid; gap: 10px; }
 button { min-height: 48px; padding: 12px 18px; border: 0; border-radius: 4px;
-  background: #cf9d72; color: #231720; font: inherit; font-weight: 600; cursor: pointer; }
-button:hover { background: #dcae86; }
-button:focus-visible { outline: 2px solid #f1e5d6; outline-offset: 2px; }
+  background: #f0b573; color: #201526; font: inherit; font-weight: 600; cursor: pointer; }
+button:hover { background: #ffd09a; }
+button:focus-visible { outline: 2px solid #f7f0fa; outline-offset: 2px; }
 `;
 
 function loginPage(uid) {

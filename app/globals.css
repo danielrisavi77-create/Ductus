@@ -1,13 +1,15 @@
 /*
- * Ductus design tokens. Values from Archivum V3 (burgundy and copper, owner
- * decision of 26 Oct 2026, replacing the mint of design v3 of 21 Oct 2026 on
- * #476 in look); the names are D-123's and the structure D-115's.
+ * Ductus design tokens. The dark values are the purple and copper of the
+ * approved Archivum package (Ductura_Archivum_Povezani_Prototip, prototype.css;
+ * owner decision of 26 Oct 2026, DAN-344), replacing the burgundy of Archivum
+ * V3 (#867); the light shell and the white sheet keep the V3 values, as the
+ * package has none. The names are D-123's and the structure D-115's.
  *
  * The shell is dark and does not follow the system setting. The writing sheet
  * carries its own token scope (`.sheet`): dark by default, white when the
  * writer switches it (`data-sheet-theme="light"`, SheetFrame); the choice is
- * kept only in the browser. Primary is copper #CF9D72 with #231720 text on it
- * (7.2:1); in the light shell and on the white sheet the darker copper #8F4F33
+ * kept only in the browser. Primary is copper #F0B573 with #201526 text on it
+ * (9.7:1); in the light shell and on the white sheet the darker copper #8F4F33
  * carries text and focus (5.5:1 or more).
  * The server save state (SYNCED) has its own colour, --synced, so it never
  * reads as the primary or as the pulsing "saving" state. Origin colours show
@@ -18,10 +20,14 @@
  * Semantic names (FE-D2): --raised for dialogs and other raised surfaces,
  * --selected for the selected item or segment, --ink-muted for the quietest
  * marks, --warn and --error for warning and error marks. --ink-muted is
- * #85766f, under 4.5:1 on --chrome, --sheet and --raised (3.87, 3.53, 3.29):
+ * #94729f, under 4.5:1 on --chrome, --sheet and --raised (4.18, 3.25, 3.89):
  * large text (24 px, or 18.66 px bold) and non-text marks only (at least
- * 3:1); small quiet text uses --ink-3 (5.1:1 or more on the same surfaces).
- * --radius is for panels and --radius-sm for buttons and fields. --raised and
+ * 3:1); small quiet text uses --ink-3 (5.0:1 or more on every dark surface).
+ * --radius is for panels and cards, --radius-sm for the selected item and
+ * dense controls, --radius-control for buttons and fields and --radius-lg
+ * for dialogs. --card, --raised-rule, --link-rule, --field*, --error-soft and
+ * the heading scale (--fs-h1 to --fs-h4) come from the package and wait for
+ * the screens that use them. --raised and
  * --selected are shell surfaces; the white sheet has no values for them, so
  * they are not used inside the sheet.
  * The save-state chip keeps its own colours (PR #386); these names are for
@@ -30,24 +36,31 @@
  */
 
 :root {
-  --ground: #19161a;
-  --sheet: #292329;
-  --chrome: #211b22;
-  --ink: #f1e5d6;
-  --ink-2: #c2b2a3;
-  --ink-3: #a8978a;
-  --rule: #41333c;
-  --rule-2: #31272f;
-  --hover: #2e2530;
-  --raised: #34262e;
-  --selected: #3a2b34;
-  --ink-muted: #85766f;
+  --ground: #2b1f38;
+  --sheet: #392a44;
+  --chrome: #21192a;
+  --ink: #f7f0fa;
+  --ink-2: #cdb3df;
+  --ink-3: #bca4cb;
+  --rule: #765588;
+  --rule-2: #664774;
+  --hover: #483250;
+  --raised: #291e33;
+  --raised-rule: #bc92d0;
+  --card: #33253d;
+  --selected: #3e294a;
+  --ink-muted: #94729f;
   --warn: #e9c58b;
   --error: #f0a08f;
-  --accent: #cf9d72;
-  --accent-hover: #dcae86;
-  --accent-ink: #231720;
-  --accent-soft: #3b2a2c;
+  --accent: #f0b573;
+  --accent-hover: #ffd09a;
+  --accent-ink: #201526;
+  --accent-soft: #3e294a;
+  --link-rule: #a681b9;
+  --field: #2b2035;
+  --field-rule: #9c76b0;
+  --field-placeholder: #bca4cb;
+  --error-soft: #402b46;
   --synced: #a2c6e5;
   --p-internal: #8fb0e0;
   --p-unknown: #9e9a90;
@@ -60,6 +73,14 @@
   --synced-soft: #24303a;
   --radius: 6px;
   --radius-sm: 4px;
+  --radius-control: 5px;
+  --radius-lg: 10px;
+  --fs-h1: 64px;
+  --fs-h2: 42px;
+  --fs-h3: 29px;
+  --fs-h4: 25px;
+  --heading-leading: 1.08;
+  --heading-tracking: -0.025em;
   --shadow: 0 22px 80px #0003;
   --lift: 0 1px 1px #0007, 0 12px 34px -10px #000a;
   --ff-ui: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
@@ -106,18 +127,18 @@
 
 /* Dark sheet (default): the shell's own tokens on the Archivum sheet colour. */
 .sheet {
-  --sheet: #292329;
+  --sheet: #392a44;
   /* The dark sheet keeps dark-theme ink inside a light shell too. */
-  --ink: #f1e5d6;
-  --ink-2: #c2b2a3;
-  --ink-3: #a8978a;
-  --ink-muted: #85766f;
-  --rule: #41333c;
-  --rule-2: #31272f;
-  --accent: #cf9d72;
-  --accent-hover: #dcae86;
-  --accent-ink: #231720;
-  --accent-soft: #3b2a2c;
+  --ink: #f7f0fa;
+  --ink-2: #cdb3df;
+  --ink-3: #bca4cb;
+  --ink-muted: #94729f;
+  --rule: #765588;
+  --rule-2: #664774;
+  --accent: #f0b573;
+  --accent-hover: #ffd09a;
+  --accent-ink: #201526;
+  --accent-soft: #3e294a;
   --warn: #e9c58b;
   --cmt: #e9c58b;
   --cmt-ink: #e9c58b;

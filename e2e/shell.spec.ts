@@ -397,10 +397,10 @@ test.describe("workspace shell", () => {
       await page.emulateMedia({ colorScheme });
       await page.goto("/rad");
       const body = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-      expect(body).toBe("rgb(25, 22, 26)");
+      expect(body).toBe("rgb(43, 31, 56)");
       const sheet = page.locator("article.sheet");
       await expect(sheet).toHaveAttribute("data-sheet-theme", "dark");
-      expect(await sheet.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(41, 35, 41)");
+      expect(await sheet.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(57, 42, 68)");
     }
   });
 
