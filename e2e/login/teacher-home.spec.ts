@@ -66,6 +66,16 @@ test("anonymous visitor is asked to sign in; a student reads only that there are
   await expect(page.getByText(t.noAssignments)).toHaveCount(0);
 });
 
+// DAN-325: a confirmed teacher, with or without courses, lands on the list from "/" and from /prijava.
+test("a signed-in teacher's home page and sign-in page lead to the course list", async ({ page }) => {
+  await asTeacher(page);
+  for (const path of ["/", "/prijava"]) {
+    await page.goto(path);
+    await expect(page).toHaveURL("http://localhost:3000/nastavnik");
+    await expect(page.getByRole("heading", { level: 1, name: t.title })).toBeVisible();
+  }
+});
+
 test("a teacher sees their course with its assignment, in the route's order, and a way to a new one", async ({ page }) => {
   await asTeacher(page);
   const courseName = `Izmišljeni kolegij ${Date.now().toString(36)}`;

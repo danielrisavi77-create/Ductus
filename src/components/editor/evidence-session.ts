@@ -80,7 +80,16 @@ export type EvidenceSessionDeps = {
 };
 
 /** The session's snapshot; `closedBy` tells the editor to turn read-only (3d-2c2b). */
-export type EvidenceSnapshot = SaverSnapshot & { closedBy: "submission" | null };
+export type EvidenceSnapshot = SaverSnapshot & {
+  closedBy: "submission" | null;
+  /**
+   * The server refused the last row and nothing sends it again by itself
+   * (3d-2c2 §3): a refusal for good (`meta.refusedLocalSeq`), or a 426 or an
+   * unreadable answer the drain holds for a manual retry. Only a reload sends
+   * it again.
+   */
+  refused: boolean;
+};
 
 type Candidate = { doc: CanonicalDocument; gen: number; marks: number };
 type Contents = JournalContents<EvidenceSegmentTransaction>;
@@ -108,6 +117,9 @@ export class EvidenceSession {
   private stopped: EvidenceStop | null = null;
   /** §4: a submission closed the package; nothing is written or sent from here. */
   private closedBy: "submission" | null = null;
+  private refused = false;
+  /** The drain's last step held the front row for a manual retry (426, unreadable answer). */
+  private manualOnly = false;
   private profile: string | null = null;
   private work: OpenedWork | null = null;
   private runner: DrainRunner | null = null;
@@ -145,7 +157,10 @@ export class EvidenceSession {
   snapshot(): EvidenceSnapshot {
     // §4: the refused row stays on the device; that is no failure of this device.
     const failure = this.closedBy ? null : this.failure;
-    return { state: this.state(), failure, capacity: "ok", closedBy: this.closedBy };
+    // Tied to the held row, not to ERROR: a later local save writes
+    // LOCAL_DURABLE while the same row is still refused (review #811 c.6419592134).
+    const refused = !this.closedBy && this.owed > 0 && (this.refused || this.manualOnly);
+    return { state: this.state(), failure, capacity: "ok", closedBy: this.closedBy, refused };
   }
 
   subscribe(listener: (snapshot: EvidenceSnapshot) => void): () => void {
@@ -199,6 +214,8 @@ export class EvidenceSession {
     this.seq = meta.localSeq;
     this.stored = restored;
     this.owed = contents.pending.length;
+    // A reload before the work opens still says the stored refusal.
+    this.refused = meta.refusedLocalSeq !== undefined;
     this.stopped = meta.evidenceStopped ?? null;
     this.profile = this.work?.evidenceProfileId ?? this.deps.storedProfile?.(meta) ?? null;
     if (this.work) this.runner = this.deps.createRunner(this.work);
@@ -456,6 +473,7 @@ export class EvidenceSession {
         return;
       }
       this.syncing = false;
+      this.manualOnly = result.kind === "needs_retry";
       if (result.kind === "sent" && result.state === "SYNCED") this.syncedHere = true;
       const contents = await this.refresh();
       if (result.kind === "sent" && contents && contents.pending.length > 0) continue;
@@ -472,6 +490,7 @@ export class EvidenceSession {
       const contents = await this.deps.journal.readEvidence(this.id);
       if (contents.meta) {
         this.stored = contents.meta.state;
+        this.refused = contents.meta.refusedLocalSeq !== undefined;
         this.owed = contents.pending.length;
         if (STICKY.has(contents.meta.state)) this.halted = true;
       }

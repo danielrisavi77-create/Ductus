@@ -5,7 +5,7 @@ import type { NodeId } from "../../src/domain/document";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { closeWork, openWorkOf, seedWork, workDocument } from "./work-seed";
 import { ORIGIN, post } from "./comment-seed";
-import { clickSignOut, signIn, signOutWithoutDialog } from "./support";
+import { editorMounted, SAVED_HERE, signIn, signOutHoweverHeld, signOutWithoutDialog } from "./support";
 
 // F-9 step 1 (DAN-86): a teacher's comment next to a paragraph reaches the
 // student on /rad?zadatak=, through the B-10 route and RPCs. Until the teacher
@@ -41,9 +41,11 @@ test("a teacher's comment next to a paragraph reaches the student, who answers",
   // The first visit of /rad in a run compiles the page and the editor on
   // `next dev`; the journal opens after that, which can exceed 5 s (#431).
   await expect(editor).toHaveAttribute("contenteditable", "true", { timeout: 30_000 });
+  // The first opening refreshes the render into a freshly mounted editor (#731).
+  await editorMounted(student);
   await editor.click();
   await student.keyboard.type(TEXT);
-  await expect(student.locator(".workspace__status .sync-chip")).toHaveAttribute("data-state", "LOCAL_DURABLE");
+  await expect(student.locator(".workspace__status .sync-chip")).toHaveAttribute("data-state", SAVED_HERE);
   const nodeId = (await editor.locator("p[data-node-id]").first().getAttribute("data-node-id")) as NodeId;
   const documentId = await workDocument(assignment);
   // The student may not open a comment: an anchor would carry text the teacher has not seen.
@@ -99,7 +101,8 @@ test("a teacher's comment next to a paragraph reaches the student, who answers",
   await student.getByRole("button", { name: t.refresh }).click();
   const second = await student.context().newPage();
   await second.goto("/rad");
-  await clickSignOut(second);
+  // The dialog opens only while the evidence still waits for its receipt (3d-2c2b).
+  await signOutHoweverHeld(second);
   await second.waitForURL(`${ORIGIN}/`);
   await expect(editor).toHaveText("");
   // Wait for the held answer itself, never for "networkidle": `next dev`
