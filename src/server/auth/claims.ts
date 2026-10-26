@@ -10,6 +10,12 @@ export interface LoginIdentity {
   subject: string;
   uniqueId: string;
   homeOrg: string;
+  /**
+   * Two separate attributes (#757, O1), never split from a display name. Present only when both are valid: a missing or invalid name
+   * costs the name, never the login.
+   */
+  givenName?: string;
+  familyName?: string;
 }
 
 export type ClaimsResult =
@@ -35,6 +41,25 @@ function check(value: unknown): Checked {
   return { value };
 }
 
+// Which claim names AAI@EduHr OIDC uses for the two names is not yet
+// confirmed (#757): the OIDC profile names or the LDAP attribute names. Each
+// pair is taken whole, the OIDC one first, so a name never mixes the two.
+const NAME_PAIRS = [
+  ["given_name", "family_name"],
+  ["givenName", "sn"],
+] as const;
+
+function nameFromClaims(claims: Claims): { givenName: string; familyName: string } | undefined {
+  for (const [given, family] of NAME_PAIRS) {
+    const givenName = check(claims[given]);
+    const familyName = check(claims[family]);
+    if ("value" in givenName && "value" in familyName) {
+      return { givenName: givenName.value, familyName: familyName.value };
+    }
+  }
+  return undefined;
+}
+
 /**
  * `idToken` holds the verified ID token claims. `userinfo`, when the provider
  * released attributes there, must name the same subject (OIDC Core 5.3.2);
@@ -52,5 +77,8 @@ export function identityFromClaims(idToken: Claims, userinfo?: Claims): ClaimsRe
   if (!("value" in subject) || !("value" in uniqueId) || !("value" in homeOrg)) {
     return { ok: false, reason: "invalid_claim" };
   }
-  return { ok: true, identity: { subject: subject.value, uniqueId: uniqueId.value, homeOrg: homeOrg.value } };
+  const identity: LoginIdentity = { subject: subject.value, uniqueId: uniqueId.value, homeOrg: homeOrg.value };
+  const names = nameFromClaims(merged);
+  if (names) Object.assign(identity, names);
+  return { ok: true, identity };
 }
