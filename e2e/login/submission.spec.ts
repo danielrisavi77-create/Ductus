@@ -8,6 +8,7 @@ import { RECEIPT } from "../../src/client/submission.fixture";
 import { canonicalizeJcs } from "../../src/domain/forensics/jcs";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
 import { signIn, signOutWithoutDialog } from "./support";
+import { localAdminUrl } from "./local-db-url";
 
 // F-10 (#476 contract 6384297464): the student's submission page. The course,
 // assignment, membership and acknowledgment are invented and written through
@@ -17,19 +18,10 @@ import { signIn, signOutWithoutDialog } from "./support";
 // the other answers of the submission route are the test's (page.route).
 
 const t = messagesHr.submission;
-const ADMIN_DATABASE_URL =
-  process.env.E2E_ADMIN_DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
 const STUDENT = "demo-student@demo.ductus.test";
 
-/** The seed writes as the database owner, so it never runs against a database off this machine. */
-function localAdminUrl(url: string): string {
-  const host = new URL(url).hostname;
-  if (host !== "127.0.0.1" && host !== "localhost") throw new Error("the e2e seed runs only against a local database");
-  return url;
-}
-
 async function admin<T>(work: (client: pg.Client) => Promise<T>): Promise<T> {
-  const client = new pg.Client({ connectionString: localAdminUrl(ADMIN_DATABASE_URL) });
+  const client = new pg.Client({ connectionString: localAdminUrl() });
   await client.connect();
   try {
     return await work(client);
@@ -280,7 +272,8 @@ test("an acknowledged assignment on /rad links to its submission and sends nothi
   const bodies = recordSubmissions(page);
   await page.goto(`/rad?zadatak=${assignment}`);
   const link = submitLinkOf(page);
-  await expect(link).toBeVisible();
+  // #711 F1: the link comes with the student's own work, opened by the page's one POST.
+  await expect(link).toBeVisible({ timeout: 30_000 });
   await expect(link).toHaveAttribute("href", pathOf(assignment));
   await page.waitForTimeout(1000);
   expect(bodies).toEqual([]);

@@ -15,6 +15,7 @@ import { canonicalizeJcs } from "../../src/domain/forensics/jcs";
 import type { JournalContents } from "../../src/domain/sync/journal-types";
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
+import { workDocument } from "./work-seed";
 import { cleanUp, post, seed } from "./comment-seed";
 import {
   loseNextCommitAnswer, replayFirstReceipt, stackCheckpoint, stackReceiptKeys, tamperNextReceipt, verifyWithStackKeys,
@@ -22,6 +23,7 @@ import {
 import {
   appCookie, clickSignOut, fillCodeDeadline, SESSION_COOKIE, sessionRow, signIn, signOutWithoutDialog,
 } from "./support";
+import { localAdminUrl } from "./local-db-url";
 
 // K-4 (DAN-89; docs/PLAN-DEMO.md §1 points 1 to 5 and §7 t. 2, D-98): the demo
 // walk-through as one test. The login config records its video in CI and the
@@ -59,7 +61,11 @@ const OFFLINE_TEXT = " Dopuna napisana bez mreže.";
 const DRAFT = TEXT + OFFLINE_TEXT;
 const QUOTE = "gradskim knjižnicama";
 const COMMENT = "Dodaj izvor za ovu tvrdnju.";
-const LIVE_PATH = `/api/live/${LOCAL_DEMO_DOCUMENT_ID}`;
+// #711 F1: the student writes into her own work of the K-4 assignment, made
+// by the real open route when she first opens it (step 2, K-4e); its id is
+// read from the database, never the fixed local id.
+let k4Document: string | null = null;
+const livePath = () => `/api/live/${k4Document!}`;
 const LIVE_READ_HEADERS = { "ductus-protocol": DUCTUS_PROTOCOL_VERSION };
 
 // F-8 (K-4c-1): an invented source; the citation and the entry are the FPZG
@@ -96,7 +102,7 @@ const heading1Of = (page: Page) =>
   page.getByRole("toolbar", { name: t.toolbar.label }).getByRole("button", { name: t.toolbar.heading1, exact: true });
 
 /** Read-only evidence of the one journal, before a second account is opened. */
-async function localCheckpoint(page: Page, documentId = LOCAL_DEMO_DOCUMENT_ID): Promise<JournalContents> {
+async function localCheckpoint(page: Page, documentId: string = k4Document!): Promise<JournalContents> {
   return page.evaluate(async (documentId) => {
     const names = (await indexedDB.databases()).filter(({ name }) => name?.startsWith("ductus-journal-v1-"));
     if (names.length !== 1) throw new Error("expected only the demo student's journal");
@@ -149,15 +155,10 @@ async function signOut(page: Page, token: string, held = true): Promise<void> {
 }
 
 const TEACHER_ID = "demo-teacher@demo.ductus.test";
-const ADMIN_DATABASE_URL =
-  process.env.E2E_ADMIN_DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
 let roleGrantedByThisTest = false;
 
 async function withAdmin<T>(work: (client: pg.Client) => Promise<T>): Promise<T> {
-  if (!["127.0.0.1", "localhost"].includes(new URL(ADMIN_DATABASE_URL).hostname)) {
-    throw new Error("the K-4 fixture runs only against a local database");
-  }
-  const client = new pg.Client({ connectionString: ADMIN_DATABASE_URL });
+  const client = new pg.Client({ connectionString: localAdminUrl() });
   await client.connect();
   try {
     return await work(client);
@@ -186,9 +187,10 @@ test.afterEach(async () => {
 // Removes the comments, memberships and role the F-9 step opened (comment-seed.ts).
 test.afterEach(cleanUp);
 
-// The live state is an invented fixture, separate from the evidence journal.
+// The live state is separate from the evidence journal: the fixture's and the K-4 work's.
 const clearLiveFixture = () => withAdmin((client) => client.query(
-  "DELETE FROM collaboration.live_state WHERE document_id = $1", [LOCAL_DEMO_DOCUMENT_ID]));
+  "DELETE FROM collaboration.live_state WHERE document_id = ANY($1::text[])",
+  [[LOCAL_DEMO_DOCUMENT_ID, ...(k4Document ? [k4Document] : [])]]));
 test.afterEach(clearLiveFixture);
 
 // Only the reserved synthetic document's owner acknowledgment, so every run
@@ -319,6 +321,7 @@ test.afterEach(async () => {
   enrolledCourse = null;
   enrollmentCode = null;
   k4Assignment = null;
+  k4Document = null;
 });
 
 test("demo walk-through", async ({ browser, page, context }) => {
@@ -326,8 +329,9 @@ test("demo walk-through", async ({ browser, page, context }) => {
 
   await test.step("1. Nastavnik se prijavljuje demo računom", async () => {
     await signIn(page, "/", "Demo nastavnik");
-    await expect(page.getByRole("heading", { level: 1, name: t.app.name })).toBeVisible();
-    await expect(page.locator(".demo-badge")).toHaveText(t.shell.demoBadge);
+    // The signed-in home is inside the shell since #802 part B.
+    await expect(page.getByRole("heading", { level: 1, name: t.home.welcome })).toBeVisible();
+    await expect(page.getByText(t.shell.demoBadge, { exact: true }).first()).toBeVisible();
 
     const session = await appCookie(context, SESSION_COOKIE);
     expect(session).toBeDefined();
@@ -471,9 +475,8 @@ test("demo walk-through", async ({ browser, page, context }) => {
 
   // K-4e (#655): the student confirms the notice of the very assignment the
   // teacher published in step 1 and opens it in the workspace, which names its
-  // course and title. Known limit: the editor still writes the one local demo
-  // document, which belongs to the synthetic fixture course (comment-seed.ts),
-  // so the fixture step below stays for comments and the live view.
+  // course and title. The page opens her own work of it with one POST (#711
+  // F1); every later step writes, publishes and is commented in that document.
   await test.step("2. F-7: studentica potvrđuje obavijest zadatka iz koraka 1 i otvara ga u radu", async () => {
     expect(k4Assignment).not.toBeNull();
     const id = k4Assignment!;
@@ -495,8 +498,10 @@ test("demo walk-through", async ({ browser, page, context }) => {
     expect(rows).toEqual([{ version_no: current!.version }]);
     await page.getByRole("link", { name: t.student.openEditor }).click();
     await page.waitForURL(`http://localhost:3000/rad?zadatak=${id}`);
-    await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+    await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: 30_000 });
     await expect(page.locator(".brand-line__context")).toHaveText(`${COURSE_NAME} / ${ASSIGNMENT_TITLE}`);
+    k4Document = await workDocument(id);
+    expect(k4Document).not.toBe(LOCAL_DEMO_DOCUMENT_ID);
     await snapshot(page, "2-rad-na-zadatku-iz-koraka-1");
   });
 
@@ -556,10 +561,15 @@ test("demo walk-through", async ({ browser, page, context }) => {
     }
     await page.getByRole("link", { name: t.student.openEditor }).click();
     await page.waitForURL(`http://localhost:3000/rad?zadatak=${assignment!.id}`);
-    await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
-    // F-8 point 5: the sheet heading names the acknowledged assignment (the
-    // seeded one of the demo document, not the teacher's from step 1).
-    await expect(page.locator("h1.manuscript__title")).toHaveText(assignment!.title);
+    // #711 F1: the fixture's document has the fixed local id, which a signed-in
+    // student never writes into: the same neutral sheet as any other refusal.
+    await expect(page.locator(".sheet-area")).toContainText(t.workspace.unavailable);
+    await expect(page.locator('[contenteditable="true"]')).toHaveCount(0);
+    expect(await page.content()).not.toContain(LOCAL_DEMO_DOCUMENT_ID);
+    // Back to her own work of the K-4 assignment; F-8 point 5: the sheet heading names it.
+    await page.goto(`/rad?zadatak=${k4Assignment!}`);
+    await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: 30_000 });
+    await expect(page.locator("h1.manuscript__title")).toHaveText(ASSIGNMENT_TITLE);
     await snapshot(page, "2-editor-nakon-potvrde");
   });
 
@@ -620,18 +630,18 @@ test("demo walk-through", async ({ browser, page, context }) => {
       // The notice was acknowledged by the actual student UI before writing.
       const body = canonicalizeJcs((await localCheckpoint(page)).snapshot!.document);
       const etag = `"${createHash("sha256").update(body, "utf8").digest("hex")}"`;
-      const published = await page.request.put(LIVE_PATH, {
+      const published = await page.request.put(livePath(), {
         headers: { origin: "http://localhost:3000", "content-type": "application/json", "if-none-match": "*" }, data: body,
       });
       expect(published.status()).toBe(200);
       expect(await published.json()).toMatchObject({ outcome: "accepted" });
-      const ownerRead = await page.request.get(LIVE_PATH, { headers: LIVE_READ_HEADERS });
+      const ownerRead = await page.request.get(livePath(), { headers: LIVE_READ_HEADERS });
       expect(ownerRead.status()).toBe(200);
       expect(await ownerRead.text()).toBe(body);
       expect(ownerRead.headers().etag).toBe(etag);
 
-      const liveRead = teacher.waitForResponse((response) => new URL(response.url()).pathname === LIVE_PATH && response.status() === 200);
-      await teacher.goto(`/nastavnik/rad/${LOCAL_DEMO_DOCUMENT_ID}`);
+      const liveRead = teacher.waitForResponse((response) => new URL(response.url()).pathname === livePath() && response.status() === 200);
+      await teacher.goto(`/nastavnik/rad/${k4Document!}`);
       const shown = await liveRead;
       expect(await shown.text()).toBe(body);
       expect(shown.headers().etag).toBe(etag);
@@ -744,7 +754,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
       // not evidence, and it must be exactly the saved text. Nothing else goes.
       const livePuts: (string | null)[] = [];
       await page.route(isSyncUrl, (route) => {
-        if (route.request().method() === "PUT" && route.request().url().endsWith(LIVE_PATH)) livePuts.push(route.request().postData());
+        if (route.request().method() === "PUT" && route.request().url().endsWith(livePath())) livePuts.push(route.request().postData());
         return route.abort("internetdisconnected");
       });
       await context.setOffline(false);
@@ -754,7 +764,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
       await expect(chipOf(page)).toHaveAttribute("data-state", "LOCAL_DURABLE");
       const restored = await localCheckpoint(page);
       expect(restored).toEqual(saved);
-      expect(syncRequests.filter((path) => path !== LIVE_PATH)).toEqual([]);
+      expect(syncRequests.filter((path) => path !== livePath())).toEqual([]);
       const savedBody = canonicalizeJcs(saved.snapshot!.document);
       for (const body of livePuts) expect(body).toBe(savedBody);
       await attachCheckpoint("2-f8-oporavljeno-nakon-reloada.json", restored);
@@ -923,10 +933,10 @@ test("demo walk-through", async ({ browser, page, context }) => {
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
     await expect(editorOf(page)).toHaveText("");
     await expect(page.getByText(COMMENT, { exact: true })).toHaveCount(0);
-    const listed = await post(page, "list", { documentId: LOCAL_DEMO_DOCUMENT_ID });
+    const listed = await post(page, "list", { documentId: k4Document! });
     expect(listed.status()).toBe(403);
     expect(await listed.json()).toEqual({ error: "forbidden" });
-    const live = await page.request.get(LIVE_PATH, { headers: LIVE_READ_HEADERS });
+    const live = await page.request.get(livePath(), { headers: LIVE_READ_HEADERS });
     expect(live.status()).toBe(404);
     expect(await live.json()).toEqual({ error: "not_found" });
     await snapshot(page, "2-drugi-student-izoliran");
@@ -934,7 +944,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
   });
 
   await test.step("2. Ponovna prijava studentice vraća njezin lokalni nacrt i komentar", async () => {
-    await signIn(page, "/rad", "Demo studentica");
+    await signIn(page, `/rad?zadatak=${k4Assignment!}`, "Demo studentica");
     token = (await appCookie(context, SESSION_COOKIE))!.value;
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
     await expect(editorOf(page)).toHaveText(EXPECTED_TEXT);

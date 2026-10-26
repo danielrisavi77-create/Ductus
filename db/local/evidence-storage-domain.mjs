@@ -15,12 +15,12 @@ import { spawn } from "node:child_process";
 import { pathToFileURL, fileURLToPath } from "node:url";
 
 import { signS3Request } from "../../src/adapters/evidence/s3-signature.ts";
+import { dockerExecArgs, nativePsqlTarget } from "./psql-target.mjs";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]"]);
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const CONTAINER = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/;
 const REGION = "us-east-1";
 const KEY_ID_VAR = "EVIDENCE_S3_LOCAL_KEY_ID";
 const SECRET_VAR = "EVIDENCE_S3_LOCAL_SECRET";
@@ -36,24 +36,35 @@ const capabilityFor = (endpoint) => ({
   contractTest: "local-stack/s3-evidence-payload-store.integration",
 });
 
-/** The institution's id, read by psql in the local postgres container (as in 4a). */
-function institutionId(env, slug) {
-  const container = env.DUCTUS_PSQL_CONTAINER;
-  if (container !== undefined && !CONTAINER.test(container)) throw new Error("DUCTUS_PSQL_CONTAINER is not a container name");
-  const target = container ? ["exec", "-i", container] : ["compose", "exec", "-T", "postgres"];
-  const args = [...target, "psql", "-U", "ductus", "-d", "ductus", "-q", "-t", "-A", "-v", "ON_ERROR_STOP=1", "-v", `slug=${slug}`];
+/** The psql invocation (docker, or the native target); every value is one argv element. */
+export function institutionInvocation(env, slug, psql) {
+  const options = ["-q", "-t", "-A", "-v", "ON_ERROR_STOP=1", "-v", `slug=${slug}`];
+  if (psql !== undefined) {
+    const native = nativePsqlTarget(psql, env);
+    return { command: native.command, args: [...native.args, "-X", ...options], env: native.env };
+  }
+  return { command: "docker", args: [...dockerExecArgs(env), "psql", "-U", "ductus", "-d", "ductus", ...options] };
+}
+
+/** The institution's id, read by psql in the local postgres container (as in 4a) or on its local socket. */
+function institutionId(env, slug, psql) {
+  const invocation = institutionInvocation(env, slug, psql);
   return new Promise((resolve, reject) => {
-    const child = spawn("docker", args, { cwd: ROOT, stdio: ["pipe", "pipe", "inherit"], windowsHide: true });
+    const child = spawn(invocation.command, invocation.args, { cwd: ROOT, env: invocation.env, stdio: ["pipe", "pipe", "inherit"], windowsHide: true });
     let out = "";
     child.stdout.on("data", (chunk) => (out += chunk));
-    child.once("error", () => reject(new Error("could not start docker")));
+    child.once("error", () => reject(new Error("could not start psql")));
     child.once("exit", (code) => {
       const id = out.trim();
       if (code !== 0) reject(new Error("the institution could not be read"));
+      else if (id === "tcp") reject(new Error("psql reached the database over TCP; only the local socket is accepted"));
       else if (!UUID.test(id)) reject(new Error(`no institution with slug ${slug}; run pnpm db:seed first`));
       else resolve(id);
     });
-    child.stdin.end("SELECT id FROM identity.institution WHERE slug = :'slug';\n");
+    // Like the other db/local SQL, an answer is given only on the local socket.
+    child.stdin.end(
+      "SELECT CASE WHEN pg_catalog.inet_server_addr() IS NULL THEN id::text ELSE 'tcp' END FROM identity.institution WHERE slug = :'slug';\n",
+    );
   });
 }
 
@@ -70,7 +81,7 @@ async function s3(method, endpoint, path, credentials, body = new Uint8Array()) 
   return { status: response.status, text };
 }
 
-export async function main(env = process.env, argv = process.argv.slice(2)) {
+export async function main(env = process.env, argv = process.argv.slice(2), psql = undefined) {
   if (env.NODE_ENV === "production") throw new Error("the local storage domain is refused in production");
   // Nothing, or exactly `--institution <slug>`: any other argument is refused, never ignored.
   if (!(argv.length === 0 || (argv.length === 2 && argv[0] === "--institution"))) {
@@ -94,7 +105,7 @@ export async function main(env = process.env, argv = process.argv.slice(2)) {
   if (!accessKeyId || !secretAccessKey) throw new Error(`${KEY_ID_VAR} and ${SECRET_VAR} must be set`);
   const credentials = { accessKeyId, secretAccessKey };
 
-  const id = await institutionId(env, slug);
+  const id = await institutionId(env, slug, psql);
   const made = await s3("PUT", endpoint, [bucket], credentials);
   if (made.status !== 200 && !(made.status === 409 && made.text.includes("BucketAlreadyOwnedByYou"))) {
     throw new Error(`the bucket could not be made (${made.status})`);

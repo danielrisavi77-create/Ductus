@@ -109,6 +109,12 @@ const del = edit("deleting a range", (tr) => tr.delete(19, 28));
 const setType = edit("changing a block type", (tr) => tr.setBlockType(1, 1, schema.nodes.heading, { level: 1, nodeId: A }));
 const open = { content: [{ type: "heading", attrs: { level: 2, nodeId: B } }, { type: "paragraph", attrs: { nodeId: null } }],
   openStart: 1, openEnd: 1 };
+// E1 (#823): a bullet item is a flat block; both sides replay it the same way.
+const itemStart: JcsJsonValue = {
+  schemaVersion: 1,
+  nodes: [{ type: "bulletItem", id: A, children: [text("Odlomak A lorem.")] }, ...(start.nodes as JcsJsonValue[]).slice(1)],
+};
+const toItem = edit("making a bullet item", (tr) => tr.setBlockType(1, 1, schema.nodes.bulletItem, { nodeId: A }));
 const same = { stepType: "replaceAround", from: 18, to: 29, gapFrom: 19, gapTo: 28, insert: 1, structure: true,
   slice: { content: [{ type: "heading", attrs: { level: 2, nodeId: B } }] } };
 
@@ -125,6 +131,11 @@ const accepted: Case[] = [
   edit("a mark across a block boundary", (tr) => tr.addMark(16, 22, schema.marks.bold.create())),
   edit("typing", (tr) => tr.insert(19, schema.text("Novo "))),
   edit("deleting an empty block", (tr) => tr.delete(3, 5), empty),
+  toItem,
+  edit("an item back to a paragraph", (tr) => tr.setBlockType(1, 1, schema.nodes.paragraph, { nodeId: A }), itemStart),
+  edit("Enter at the end of an item, and the new item's id", (tr) =>
+    tr.split(17, 1, [{ type: schema.nodes.bulletItem }]).setNodeAttribute(18, "nodeId", D), itemStart),
+  edit("cutting across an item", (tr) => tr.delete(10, 22), itemStart),
 ];
 const refused: [Case, string][] = [
   [forge(del, "a forged removed hash", (s) => (s.removedSha256 = OTHER_HASH)), "removed_range_hash"],
@@ -146,6 +157,13 @@ const refused: [Case, string][] = [
     (s.slice as { content: { attrs: Record<string, unknown> }[] }).content[0].attrs.nodeId = C;
   }), "replace_around_identity"],
   [raw("replaceAround that changes nothing", [same]), "replace_around_unchanged"],
+  [forge(toItem, "an item wrapper that takes another id", (s) => {
+    (s.slice as { content: { attrs: Record<string, unknown> }[] }).content[0].attrs.nodeId = C;
+  }), "replace_around_identity"],
+  [forge(toItem, "an item with a level", (s) => {
+    (s.slice as { content: { attrs: Record<string, unknown> }[] }).content[0].attrs.level = 1;
+  }), "unknown_field"],
+  [raw("an item made again", toItem.steps, itemStart), "replace_around_unchanged"],
   [raw("replaceAround over a wrong range", [{ ...same, from: 0, gapFrom: 1 }]), "replace_around_range"],
   [edit("a pasted tail with an existing id", (tr) => tr.replace(5, 5, new Slice(doc.content.cut(0, 29), 1, 1))),
     "open_end_block"],
