@@ -33,6 +33,16 @@ const rows = async (target: string, user: string) => (await admin.query(
   `SELECT member_to IS NULL AS open, removed_by, return_allowed_at IS NOT NULL AS allowed
      FROM institution.course_member WHERE course_id = $1 AND user_id = $2 ORDER BY member_from, member_to NULLS LAST`, [target, user],
 )).rows as { open: boolean; removed_by: string | null; allowed: boolean }[];
+// DAN-338: the audit rows of one student in one course, each with the membership it names.
+const events = async (target: string, user: string) => (await admin.query(
+  `SELECT e.kind, e.actor_id, e.institution_id, m.course_id = e.course_id AND m.user_id = e.student_id AS same_student,
+          CASE e.kind WHEN 'removed' THEN m.removed_by = e.actor_id ELSE m.return_allowed_at IS NOT NULL END AS changed_that_membership
+     FROM audit.course_member_event e JOIN institution.course_member m ON m.id = e.membership_id
+    WHERE e.course_id = $1 AND e.student_id = $2 ORDER BY e.occurred_at, e.kind`, [target, user],
+)).rows;
+const allEvents = async () => Number((await admin.query(
+  "SELECT count(*) FROM audit.course_member_event WHERE institution_id = ANY($1)", [faculties],
+)).rows[0].count);
 const enroll = (name: Name) => withActor(people[name].token, async (tx) => (await tx.query<{ outcome: string }>(
   "SELECT outcome FROM institution.enroll_with_code($1::text)", [code],
 )).rows[0].outcome);
@@ -117,6 +127,16 @@ afterAll(async () => {
   vi.unstubAllEnvs();
   await app.end();
   await admin.query("DELETE FROM institution.enrollment_attempt WHERE user_id = ANY($1)", [ids]);
+  // The audit rows are append-only; only this clean-up steps around the trigger.
+  const cleaner = await admin.connect();
+  try {
+    await cleaner.query("BEGIN");
+    await cleaner.query("SET LOCAL session_replication_role = replica");
+    await cleaner.query("DELETE FROM audit.course_member_event WHERE institution_id = ANY($1)", [faculties]);
+    await cleaner.query("COMMIT");
+  } finally {
+    cleaner.release();
+  }
   await admin.query("DELETE FROM institution.course_member WHERE institution_id = ANY($1)", [faculties]);
   await admin.query("DELETE FROM institution.course_enrollment_code WHERE course_id IN (SELECT id FROM institution.course WHERE institution_id = ANY($1))", [faculties]);
   await admin.query("DELETE FROM institution.course WHERE institution_id = ANY($1)", [faculties]);
@@ -173,7 +193,9 @@ describe("student return permission real POST, session and database", () => {
 
   it("lets a teacher of the course allow one removed student back, once, without enrolling them", async () => {
     expect(await enroll("student")).toBe("refused");
-    const before = await snapshot(["course_member"]);
+    const before = await snapshot(["course_member", "course_member_event"]);
+    // The four removals of the set-up left one row each; the leaver, ended directly, none.
+    expect(await allEvents()).toBe(4);
     const others = (await admin.query(
       "SELECT course_id, user_id, member_to, return_allowed_at FROM institution.course_member WHERE institution_id = ANY($1) AND user_id <> $2 ORDER BY 1, 2",
       [faculties, people.student.id],
@@ -184,7 +206,9 @@ describe("student return permission real POST, session and database", () => {
       expect(answer.status).toBe(200);
       expect(answer.headers.get("cache-control")).toBe("no-store");
     }
-    expect((await Promise.all(answers.map((answer) => answer.json()))).map((body) => body.allowed).sort()).toEqual([false, true]);
+    const allowed = (await Promise.all(answers.map((answer) => answer.json()))).map((body) => body.allowed);
+    expect([...allowed].sort()).toEqual([false, true]);
+    const winner = allowed[0] ? people.second.id : people.teacher.id;
     // Allowed, still not a member: the student needs the code.
     expect(await rows(course, people.student.id)).toEqual([{ open: false, removed_by: people.teacher.id, allowed: true }]);
     const again = await post(people.teacher.token);
@@ -194,9 +218,19 @@ describe("student return permission real POST, session and database", () => {
       "SELECT course_id, user_id, member_to, return_allowed_at FROM institution.course_member WHERE institution_id = ANY($1) AND user_id <> $2 ORDER BY 1, 2",
       [faculties, people.student.id],
     )).rows).toEqual(others);
-    expect(await snapshot(["course_member"])).toEqual(before);
+    expect(await snapshot(["course_member", "course_member_event"])).toEqual(before);
+    // DAN-338: the removal and exactly one allowed return, by the teacher whose call returned true.
+    const trail = [
+      { kind: "removed", actor_id: people.teacher.id, institution_id: faculties[0], same_student: true, changed_that_membership: true },
+      { kind: "return_allowed", actor_id: winner, institution_id: faculties[0], same_student: true, changed_that_membership: true },
+    ];
+    expect(await events(course, people.student.id)).toEqual(trail);
+    expect(await allEvents()).toBe(5);
     // With the code the student is back; the wanderer stays blocked in the other course.
     expect(await enroll("student")).toBe("enrolled");
+    // Enrolling again writes no audit row.
+    expect(await events(course, people.student.id)).toEqual(trail);
+    expect(await allEvents()).toBe(5);
     expect((await rows(course, people.student.id)).map((row) => row.open)).toEqual([false, true]);
     expect(await rows(otherCourse, people.wanderer.id)).toEqual([{ open: false, removed_by: people.teacher.id, allowed: false }]);
   });
