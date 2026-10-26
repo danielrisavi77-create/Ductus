@@ -42,8 +42,8 @@ test("V2 and A1: the editor on /rad matches its baseline; the toolbar keeps its 
   await expect(page.getByRole("toolbar", { name: "Oblikovanje teksta" })).toMatchAriaSnapshot(`
     - toolbar "Oblikovanje teksta":
       - button "Odlomak" [pressed]
-      - button "Naslov 1"
       - button "Naslov 2"
+      - button "Naslov 1"
       - button "Naslov 3"
       - button "Podebljano"
       - button "Kurziv"
