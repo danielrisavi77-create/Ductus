@@ -21,11 +21,13 @@ const editorOf = (page: Page) => page.getByRole("textbox", { name: t.documentLab
 const offerOf = (page: Page) => page.locator("details.earlier-draft");
 const chipOf = (page: Page) => page.locator(".workspace__status .sync-chip");
 
-// The first opening POSTs the open and refreshes the render, which mounts the
+// The first opening (DAN-330: the click on "Započni rad" while the work does
+// not exist yet) POSTs the open and refreshes the render, which mounts the
 // shell afresh (#731): the offer is touched only once the editor toolbar of the
 // refreshed render is there.
-async function openAssignment(page: Page, assignment: string): Promise<void> {
+async function openAssignment(page: Page, assignment: string, start = true): Promise<void> {
   await page.goto(`/rad?zadatak=${assignment}`);
+  if (start) await page.getByRole("button", { name: t.startWork }).click();
   await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: OPEN });
   await expect(page.getByRole("toolbar", { name: messagesHr.toolbar.label })).toBeVisible();
 }
@@ -113,7 +115,8 @@ test("F1b: another person on the same browser never sees the earlier draft", asy
 
   // With a draft of their own, only that one is offered.
   await writeFree(page, "Vlastiti raniji tekst drugog studenta.");
-  await openAssignment(page, assignment);
+  // The work exists since the first opening above: no click.
+  await openAssignment(page, assignment, false);
   await offerOf(page).getByText(t.earlierDraftSummary).click();
   await expect(offerOf(page)).toContainText("Vlastiti raniji tekst drugog studenta.");
   await expect(page.locator("body")).not.toContainText(HERS);
