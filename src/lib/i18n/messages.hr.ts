@@ -814,6 +814,21 @@ export const hr = {
       due: "Rok {time}",
       noticeFirst: "Prvo pročitaj obavijest",
     },
+    // DAN-344: the Archivum S01 texts of /zadaci, verbatim from the owner's
+    // package (26. 10. 2026.), in "Vi"; the subtitle without its mentoring
+    // half, which this page does not have. Only what the own-assignments read
+    // returns: courses, assignment titles, due times and the notice state.
+    home: {
+      heading: "Vaš studentski prostor",
+      lede: "Zadaci na kolegijima.",
+      courses: "Moji kolegiji",
+      courseLabel: "Kolegij",
+      due: "Rok: {time}",
+      open: "Otvori zadatak",
+      readNotice: "Pročitaj upute",
+      unavailableHeading: "Prikaz trenutačno nije dostupan.",
+      unavailableBody: "Podatke nije bilo moguće učitati. To ne znači da nema kolegija ili radova.",
+    },
     signedOut: "Prijavi se da vidiš zadatak.",
     signIn: "Prijavi se",
     enroll: {
