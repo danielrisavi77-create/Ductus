@@ -195,7 +195,7 @@ button {
   padding: 8px 12px;
   background: var(--sheet);
   border: 1px solid var(--rule);
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   /* Above the shell's side bar (40) and its shade (35). */
   z-index: 50;
 }
@@ -339,7 +339,7 @@ main:focus {
   min-height: 44px;
   padding: 0 22px;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   background: var(--accent);
   color: var(--accent-ink);
   font-weight: 600;
@@ -408,7 +408,7 @@ main:focus {
   gap: 2px;
   margin-left: auto;
   padding: 2px;
-  border-radius: 7px;
+  border-radius: var(--radius);
   background: var(--rule-2);
 }
 
@@ -418,7 +418,7 @@ main:focus {
   min-height: 32px;
   padding: 0 12px;
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   background: transparent;
   font-size: 12.5px;
   font-weight: 500;
@@ -699,7 +699,7 @@ main:focus {
 .sheet-theme__options {
   display: inline-flex;
   border: 1px solid var(--rule);
-  border-radius: 7px;
+  border-radius: var(--radius);
   overflow: hidden;
 }
 
@@ -805,7 +805,7 @@ main:focus {
   margin: 12px auto 0;
   padding: 4px 6px;
   border: 1px solid var(--rule);
-  border-radius: 7px;
+  border-radius: var(--radius);
   background: var(--chrome);
 }
 
@@ -862,7 +862,7 @@ main:focus {
   padding: 5px;
   background: var(--raised);
   border: 1px solid var(--rule);
-  border-radius: 9px;
+  border-radius: var(--radius);
   box-shadow: var(--lift);
 }
 
