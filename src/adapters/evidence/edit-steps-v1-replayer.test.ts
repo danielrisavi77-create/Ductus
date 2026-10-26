@@ -8,10 +8,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   digestCanonicalDocumentV2,
+  EvidenceContentNotSupportedV2,
   replayEvidenceSegmentsV2,
 } from "@/domain/forensics/evidence-replay-v2";
 import type { EvidenceEventV2, EvidenceSegmentV2, EvidenceStepV2 } from "@/domain/forensics/evidence-segment-v2";
 import type { JcsJsonValue } from "@/domain/forensics/jcs";
+import { MARK_ORDER, PLAIN_BLOCK_TYPES } from "@/domain/document/schema";
 import { createEditorExtensions } from "@/editor/schema";
 
 import { createEditStepsV1Replayer, removedRangeSha256 } from "./edit-steps-v1-replayer";
@@ -365,5 +367,88 @@ describe("edit steps v1 replayer inside replayEvidenceSegmentsV2", () => {
     const attrOnText = { ...good, events: [{ ...event([{ stepType: "attr", pos: 3, attr: "nodeId", value: B }]),
       beforeDocumentHash: good.initialDocumentHash }] };
     expect(await replayEvidenceSegmentsV2(start, [attrOnText], replayer)).toMatchObject({ ok: false, reason: "step_failed" });
+  });
+});
+
+describe("edit steps v1 replayer: content of a later format (F-150, BACKEND 4.1)", () => {
+  const doc = replayer.load(start);
+  // The first block becomes a bullet item (E1); its type is then renamed.
+  const asItem = capture(doc, (tr) => tr.setBlockType(1, 1, schema.nodes.bulletItem!, { nodeId: A }));
+  const typed = (type: unknown) => {
+    const steps = structuredClone(asItem.steps) as { slice: { content: Record<string, unknown>[] } }[];
+    steps[0]!.slice.content[0]!.type = type;
+    return steps;
+  };
+  async function replayed(steps: unknown[]) {
+    const segment = {
+      initialDocumentHash: (await digestCanonicalDocumentV2(replayer.toCanonical(doc))).sha256,
+      finalDocumentHash: OTHER_HASH,
+      events: [{ ...event(steps), beforeDocumentHash: OTHER_HASH }],
+      captureContext: { editorModel: "prosemirror", transactionFormat: "ductus-edit-steps-v1" },
+    } as EvidenceSegmentV2;
+    return replayEvidenceSegmentsV2(start, [segment], replayer);
+  }
+
+  it("pins the dated v1 node set of BACKEND 4.1: a new type is added there in the same change", () => {
+    expect([...PLAIN_BLOCK_TYPES]).toEqual(["paragraph", "bulletItem", "quote"]);
+    expect([...MARK_ORDER]).toEqual(["bold", "italic"]);
+  });
+
+  it("reports a block type it does not know as unsupported_format, not as step_failed", async () => {
+    expect(() => replayer.apply(doc, event(typed("orderedItem")))).toThrow(EvidenceContentNotSupportedV2);
+    expect(await replayed(typed("orderedItem"))).toEqual({ ok: false, reason: "unsupported_format", segmentIndex: 0, sequence: 1 });
+    // A name the prototype of a plain object has is still a name it does not know.
+    expect(await replayed(typed("constructor"))).toMatchObject({ ok: false, reason: "unsupported_format" });
+  });
+
+  it("reports a mark type it does not know as unsupported_format", async () => {
+    const bold = capture(doc, (tr) => tr.insert(3, schema.text("x", [schema.marks.bold!.create()])));
+    const steps = JSON.parse(JSON.stringify(bold.steps).replaceAll('"bold"', '"underline"')) as unknown[];
+    expect(await replayed(steps)).toMatchObject({ ok: false, reason: "unsupported_format" });
+  });
+
+  it.each([
+    ["a known type in the wrong place", "text"],
+    ["a type that is not a string", 7],
+    // #863 QA Q3: no later version names a type like these.
+    ["an empty type name", ""],
+    ["a type name that is not an identifier", " paragraph"],
+  ])("keeps %s a refused step", async (_name, type) => {
+    expect(await replayed(typed(type))).toMatchObject({ ok: false, reason: "step_failed" });
+  });
+
+  // #863 QA Q1: a later inline node fails on its keys before its type.
+  const inserted = capture(doc, (tr) => tr.insert(3, schema.text("xy")));
+  const withSlice = (content: unknown[]) => {
+    const steps = structuredClone(inserted.steps) as { slice: { content: unknown[] } }[];
+    steps[0]!.slice.content = content;
+    return steps;
+  };
+
+  it.each([
+    ["after text, with attrs", [{ type: "text", text: "xy" }, { type: "footnoteRef", attrs: { id: "x" } }]],
+    ["alone, without text", [{ type: "hardBreak" }]],
+  ])("reports an inline node of a later format %s as unsupported_format", async (_name, content) => {
+    expect(await replayed(withSlice(content))).toMatchObject({ ok: false, reason: "unsupported_format" });
+  });
+
+  it("reports a later mark with attributes as unsupported_format", async () => {
+    const marked = capture(doc, (tr) => tr.addMark(1, 3, schema.marks.bold!.create()));
+    const steps = structuredClone(marked.steps) as { mark: unknown }[];
+    steps[0]!.mark = { type: "link", attrs: { href: "https://example.org" } };
+    expect(await replayed(steps)).toMatchObject({ ok: false, reason: "unsupported_format" });
+  });
+
+  it("gives the same reason whichever step the parser refuses first (#863 QA Q2)", async () => {
+    const later = typed("orderedItem")[0]!;
+    const broken = { stepType: "replace", from: -1 };
+    expect(await replayed([later, broken])).toMatchObject({ ok: false, reason: "unsupported_format" });
+    expect(await replayed([broken, later])).toMatchObject({ ok: false, reason: "unsupported_format" });
+  });
+
+  it("keeps an unknown attribute of a known block a refused step, whatever it holds", async () => {
+    const steps = typed("bulletItem") as unknown as { slice: { content: { attrs: Record<string, unknown> }[] } }[];
+    steps[0]!.slice.content[0]!.attrs.type = "footnote";
+    expect(await replayed(steps)).toMatchObject({ ok: false, reason: "step_failed" });
   });
 });

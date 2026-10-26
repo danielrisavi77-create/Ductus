@@ -9,14 +9,20 @@ import pg from "pg";
 
 import { formatBibliographyEntry, formatInText } from "../../src/domain/citation/format";
 import { parseCitationStyle } from "../../src/domain/citation/style";
+import { findForbiddenTerms } from "../../scripts/forbidden-terms/terms";
 import type { BookSource } from "../../src/domain/citation/types";
+import type { CanonicalDocument } from "../../src/domain/document";
 import { DUCTUS_PROTOCOL_VERSION } from "../../src/domain/evidence/commit-envelope";
 import { canonicalizeJcs } from "../../src/domain/forensics/jcs";
+import { verifySignedSubmissionReceiptV2 } from "../../src/domain/forensics/submission-receipt-verifier-v2";
 import type { JournalContents } from "../../src/domain/sync/journal-types";
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
 import { workDocument } from "./work-seed";
 import { cleanUp, post, seed } from "./comment-seed";
+import {
+  loseNextCommitAnswer, replayFirstReceipt, stackCheckpoint, stackKeysOfDomain, stackReceiptKeys, tamperNextReceipt, verifyWithStackKeys,
+} from "./evidence-receipt";
 import {
   appCookie, editorMounted, fillCodeDeadline, ROLE_HOME, SAVED_HERE, SESSION_COOKIE, sessionRow, signIn,
   signOutHoweverHeld, signOutWithoutDialog,
@@ -100,7 +106,7 @@ const heading1Of = (page: Page) =>
   page.getByRole("toolbar", { name: t.toolbar.label }).getByRole("button", { name: t.toolbar.heading1, exact: true });
 
 /** Read-only evidence of the one journal, before a second account is opened. */
-async function localCheckpoint(page: Page): Promise<JournalContents> {
+async function localCheckpoint(page: Page, documentId: string = k4Document!): Promise<JournalContents> {
   return page.evaluate(async (documentId) => {
     const names = (await indexedDB.databases()).filter(({ name }) => name?.startsWith("ductus-journal-v1-"));
     if (names.length !== 1) throw new Error("expected only the demo student's journal");
@@ -120,7 +126,7 @@ async function localCheckpoint(page: Page): Promise<JournalContents> {
     } finally {
       db.close();
     }
-  }, k4Document!);
+  }, documentId);
 }
 
 async function attachCheckpoint(name: string, value: JournalContents): Promise<void> {
@@ -220,6 +226,109 @@ const k4Course = () => withAdmin(async (client) => {
   return { course: rows[0]!.course, assignments: rows.flatMap((row) => (row.assignment ? [row.assignment] : [])) };
 });
 
+// K-4c-2 (#655, contract c.6386610626): the server part of F-8.
+const SERVER_TEXT = "Izmišljeni rad o gradskim čitaonicama.";
+const SERVER_OFFLINE_TEXT = " Dopuna bez mreže.";
+const COMMIT_PATH = "/api/evidence/commit";
+const COMMIT_ROUTE = `**${COMMIT_PATH}`;
+const SYNCED_WAIT = { timeout: 30_000 };
+
+/** The one evidence document of the demo student's work on the assignment (open_student_work). */
+const workDocumentOf = (assignmentId: string) => withAdmin(async (client) => {
+  const { rows } = await client.query<{ id: string }>(
+    `SELECT d.id FROM evidence.document d JOIN evidence.project p ON p.id = d.project_id
+       JOIN identity.user_account u ON u.id = p.principal_id
+      WHERE p.assignment_id = $1 AND u.hr_edu_person_unique_id = $2`, [assignmentId, STUDENT_ID]);
+  if (rows.length !== 1) throw new Error(`expected one document of the student's work, found ${rows.length}`);
+  return rows[0]!.id;
+});
+
+const textOf = (contents: JournalContents) => blocksOf(contents).map((block) => block.text).join("");
+const pendingOf = (contents: JournalContents, documentId: string) =>
+  contents.pending.filter((row) => row.documentId === documentId);
+const isCommit = (request: Request) => request.method() === "POST" && new URL(request.url()).pathname === COMMIT_PATH;
+
+/** One commit as the page sent it, with the answer the page got (null when none came). */
+type Commit = { clientTransactionId: string; segmentHash: string; body: string; document: string; status: number | null; answer: unknown };
+
+/** Every commit the page sends from now on, read from the request itself, never from the app. */
+function watchCommits(page: Page) {
+  const commits: Promise<Commit>[] = [];
+  const onRequest = (request: Request) => {
+    if (!isCommit(request)) return;
+    commits.push((async () => {
+      const body = request.postData() ?? "";
+      const sent = JSON.parse(body) as { clientTransactionId: string; segments: string[]; document: string };
+      const response = await request.response().catch(() => null);
+      return {
+        clientTransactionId: sent.clientTransactionId,
+        segmentHash: createHash("sha256").update(Buffer.from(sent.segments[0]!, "base64")).digest("hex"),
+        body, document: Buffer.from(sent.document, "base64").toString("utf8"),
+        status: response?.status() ?? null, answer: response ? await response.json().catch(() => undefined) : undefined,
+      };
+    })());
+  };
+  page.on("request", onRequest);
+  return { all: () => Promise.all(commits), stop: () => page.off("request", onRequest) };
+}
+
+type ChipRecord = { chipStates: string[]; chipBefore?: string | null };
+const CHIP = ".workspace__status .sync-chip";
+
+/**
+ * In the page: every state the sync chip changes to, so that a flash between
+ * two checks is not missed. A state is noted only when it differs from the
+ * one before it, so the state the chip already had at the last reset is not
+ * noted again by the next unrelated DOM change.
+ */
+function recordChipStates() {
+  const record = window as unknown as ChipRecord;
+  record.chipStates = [];
+  const note = () => {
+    const state = document.querySelector(".workspace__status .sync-chip")?.getAttribute("data-state");
+    const before = record.chipStates.at(-1) ?? record.chipBefore;
+    if (state && before !== state) record.chipStates.push(state);
+  };
+  new MutationObserver(note).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-state"] });
+}
+/** The chip's states since the last call (or the page load), then forgets them and keeps the current one as the baseline. */
+const chipStates = (page: Page) => page.evaluate((chip) => {
+  const record = window as unknown as ChipRecord;
+  const seen = record.chipStates.splice(0);
+  record.chipBefore = document.querySelector(chip)?.getAttribute("data-state");
+  return seen;
+}, CHIP);
+
+/**
+ * The server holds exactly the journal's text: the last answered commit's
+ * receipt verifies under the stack's registered key for the database's
+ * checkpoint, whose text is the journal snapshot's, and nothing is pending.
+ */
+async function expectServerHolds(page: Page, documentId: string, commits: Commit[], text: string) {
+  const local = await localCheckpoint(page, documentId);
+  expect(textOf(local)).toBe(text);
+  expect(pendingOf(local, documentId)).toEqual([]);
+  const { checkpoint, stack } = await withAdmin(async (client) => ({
+    checkpoint: await stackCheckpoint(client, documentId), stack: await stackReceiptKeys(client, documentId),
+  }));
+  expect(checkpoint).not.toBeNull();
+  expect(checkpoint!.body).toBe(canonicalizeJcs(local.snapshot!.document));
+  const last = commits.filter((commit) => commit.status === 200).at(-1);
+  expect(last?.document).toBe(checkpoint!.body);
+  const signed = (last!.answer as { receipt?: { signedReceipt?: unknown } } | undefined)?.receipt?.signedReceipt;
+  const check = await verifyWithStackKeys(signed, { documentId, ...last! }, checkpoint!, stack);
+  expect(check).toMatchObject({ ok: true });
+  return checkpoint!;
+}
+
+/** For the whole window the chip never shows the server state and the row stays in the journal. */
+async function expectHeldLocally(page: Page, documentId: string, ms = 5_000) {
+  await page.waitForTimeout(ms);
+  expect(await chipStates(page)).not.toContain("SYNCED");
+  await expect(chipOf(page)).not.toHaveAttribute("data-state", "SYNCED");
+  expect(pendingOf(await localCheckpoint(page, documentId), documentId).length).toBeGreaterThan(0);
+}
+
 // Closes only the demo student's membership in the K-4 course, so the next run enrolls again.
 test.afterEach(async () => {
   if (enrolledCourse) {
@@ -236,6 +345,9 @@ test.afterEach(async () => {
 
 test("demo walk-through", async ({ browser, page, context }) => {
   let token = "";
+  // The whole text of the K-4 work as the steps leave it: EXPECTED_TEXT until
+  // the server step of F-8 writes on.
+  let workText = EXPECTED_TEXT;
 
   await test.step("1. Nastavnik se prijavljuje demo računom", async () => {
     // "/" sends the signed-in person on to their own page (DAN-325); its shell still says demo.
@@ -703,12 +815,156 @@ test("demo walk-through", async ({ browser, page, context }) => {
     }
   });
 
-  // The server part of F-8 waits for 3d-2c2 (LocalDocument sends the evidence;
-  // K-4c-2 in #655): "spremljeno na poslužitelju" only after a signed receipt
-  // that verifies under the stack's key for the database's checkpoint, the
-  // offline text on the server after the return, and the offline mark after the
-  // return (PRODUCT §5 rule 10). The Node checks are in evidence-receipt.ts.
-  await test.step.skip("2. F-8 na poslužitelju: potpisana potvrda i oznaka rada bez mreže (3d-2c2)", async () => {});
+  // The server part of F-8 (K-4c-2 in #655), on the evidence session of
+  // 3d-2c2b (#811): "Spremljeno na poslužitelju" only after a signed receipt
+  // that verifies under the stack's key for the database's checkpoint, and the
+  // offline text on the server after the return. The step goes on writing at
+  // the end of the K-4 work from the steps above (open_student_work made it
+  // with its package), so the later steps expect `workText`, the whole text.
+  // The Node checks are in evidence-receipt.ts.
+  // Criterion 5 of #655 (the offline mark after sync, PRODUCT §5 rule 10) has
+  // no carrier yet: neither segment v2, receipt v2 nor the chip keeps it
+  // (c.6386046693). It stays a named gap of the GO record; nothing here stands in for it.
+  await test.step("2. F-8 na poslužitelju: potpisana potvrda i tekst bez mreže na poslužitelju (3d-2c2)", async () => {
+    test.info().setTimeout(test.info().timeout + 120_000);
+    expect(k4Assignment).not.toBeNull();
+    const workPath = `/rad?zadatak=${k4Assignment}`;
+    // Only records; it stays in the page for the later steps and changes nothing there.
+    await page.addInitScript(recordChipStates);
+    const commits = watchCommits(page);
+    try {
+      await page.goto(workPath);
+      await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+      await expect(editorOf(page)).toHaveText(EXPECTED_TEXT);
+      const documentId = await workDocumentOf(k4Assignment!);
+      expect(documentId).toBe(k4Document);
+      // The seeded document of the earlier steps opens like any work (#727):
+      // one package, in the one evidence domain whose receipt key the stack registered.
+      await withAdmin(async (client) => {
+        const { rows } = await client.query("SELECT 1 FROM evidence.package WHERE document_id = $1", [LOCAL_DEMO_DOCUMENT_ID]);
+        expect(rows).toHaveLength(1);
+        await stackReceiptKeys(client, LOCAL_DEMO_DOCUMENT_ID);
+      });
+
+      // 1. Typing reaches the server state only with a receipt that verifies
+      // under the stack's key for the checkpoint, whose text is the journal's.
+      // The rows the cut routes above held go first (the drain), then this text.
+      await editorOf(page).click();
+      await editorOf(page).press("Control+End");
+      await page.keyboard.type(SERVER_TEXT);
+      let text = EXPECTED_TEXT + SERVER_TEXT;
+      await expect(editorOf(page)).toHaveText(text);
+      await expect(chipOf(page)).toHaveAttribute("data-state", "SYNCED", SYNCED_WAIT);
+      const online = await expectServerHolds(page, documentId, await commits.all(), text);
+      await attachCheckpoint("2-f8-poruka-potvrdena-na-posluzitelju.json", await localCheckpoint(page, documentId));
+      await snapshot(page, "2-f8-spremljeno-na-posluzitelju");
+
+      // 2. Without a network: the text stays on the device, no commit reaches
+      // the server and the database keeps the checkpoint from before the outage.
+      const reached: string[] = [];
+      const onFinished = (request: Request) => { if (isCommit(request)) reached.push(request.url()); };
+      await chipStates(page);
+      await context.setOffline(true);
+      page.on("requestfinished", onFinished);
+      try {
+        await expect(page.locator(".offline-chip")).toHaveText(t.network.offline);
+        await editorOf(page).press("Control+End");
+        await page.keyboard.type(SERVER_OFFLINE_TEXT);
+        text += SERVER_OFFLINE_TEXT;
+        await expect(editorOf(page)).toHaveText(text);
+        await expect.poll(async () => textOf(await localCheckpoint(page, documentId))).toBe(text);
+        await expectHeldLocally(page, documentId, 3_000);
+        expect(reached).toEqual([]);
+        expect(await withAdmin((client) => stackCheckpoint(client, documentId))).toEqual(online);
+        await snapshot(page, "2-f8-bez-mreze-na-uredaju");
+      } finally {
+        page.off("requestfinished", onFinished);
+        await context.setOffline(false);
+      }
+      // After the return the offline text is on the server under a new revision.
+      await expect(page.locator(".offline-chip")).toHaveCount(0);
+      await expect(chipOf(page)).toHaveAttribute("data-state", "SYNCED", SYNCED_WAIT);
+      const returned = await expectServerHolds(page, documentId, await commits.all(), text);
+      expect(returned.revision).toBeGreaterThan(online.revision);
+      await snapshot(page, "2-f8-tekst-bez-mreze-na-posluzitelju");
+
+      // (a) The answer is lost on the way back: the text stays local, and the
+      // retry sends the same key with the same bytes and gets the receipt.
+      await loseNextCommitAnswer(page);
+      const beforeLost = (await commits.all()).length;
+      const lost = page.waitForEvent("requestfailed", isCommit);
+      await page.keyboard.type(" Prvi dio.");
+      text += " Prvi dio.";
+      await lost;
+      expect(pendingOf(await localCheckpoint(page, documentId), documentId).length).toBeGreaterThan(0);
+      await expect(chipOf(page)).toHaveAttribute("data-state", "SYNCED", SYNCED_WAIT);
+      const tries = (await commits.all()).slice(beforeLost);
+      expect(tries[0]!.status).toBeNull();
+      const retry = tries.find((commit) => commit.status === 200 && commit.clientTransactionId === tries[0]!.clientTransactionId);
+      expect(retry?.body).toBe(tries[0]!.body);
+      await expectServerHolds(page, documentId, tries, text);
+
+      // (b) A receipt with one changed signature byte is never the server
+      // state; the row stays until a reload sends the same key again.
+      await tamperNextReceipt(page);
+      const forged = page.waitForResponse((response) => isCommit(response.request()));
+      await chipStates(page);
+      await page.keyboard.type(" Drugi dio.");
+      text += " Drugi dio.";
+      await forged;
+      await expectHeldLocally(page, documentId);
+      await snapshot(page, "2-f8-krivotvorena-potvrda-nije-na-posluzitelju");
+      await page.unroute(COMMIT_ROUTE);
+      await page.reload();
+      await expect(chipOf(page)).toHaveAttribute("data-state", "SYNCED", SYNCED_WAIT);
+      await expectServerHolds(page, documentId, await commits.all(), text);
+
+      // (c) The stack's own receipt for an earlier segment is not an ACK.
+      await replayFirstReceipt(page);
+      await editorOf(page).click();
+      await editorOf(page).press("Control+End");
+      await page.keyboard.type(" Treći.");
+      text += " Treći.";
+      await expect(chipOf(page)).toHaveAttribute("data-state", "SYNCED", SYNCED_WAIT);
+      const replayed = page.waitForResponse((response) => isCommit(response.request()));
+      await chipStates(page);
+      await page.keyboard.type(" Četvrti.");
+      text += " Četvrti.";
+      await replayed;
+      await expectHeldLocally(page, documentId);
+      await page.unroute(COMMIT_ROUTE);
+      await page.reload();
+      await expect(chipOf(page)).toHaveAttribute("data-state", "SYNCED", SYNCED_WAIT);
+      await expectServerHolds(page, documentId, await commits.all(), text);
+
+      // (d) After sign-out and a new sign-in nothing is the server state
+      // until this session gets a receipt of its own. Whether the dialog
+      // opens depends on the receipt's timing (3d-2c2b), so either way is fine.
+      await signOutHoweverHeld(page);
+      expect(await sessionRow(token)).toMatchObject({ close_reason: "logout", closed_at: expect.any(Date) });
+      await forgetProviderLogin(context);
+      const beforeSignIn = (await commits.all()).length;
+      await signIn(page, workPath, "Demo studentica");
+      token = (await appCookie(context, SESSION_COOKIE))!.value;
+      await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+      await expect(editorOf(page)).toHaveText(text);
+      await page.waitForTimeout(3_000);
+      expect(await chipStates(page)).not.toContain("SYNCED");
+      expect((await commits.all()).slice(beforeSignIn)).toEqual([]);
+      await editorOf(page).click();
+      await editorOf(page).press("Control+End");
+      await page.keyboard.type(" Nakon prijave.");
+      text += " Nakon prijave.";
+      await expect(chipOf(page)).toHaveAttribute("data-state", "SYNCED", SYNCED_WAIT);
+      await expectServerHolds(page, documentId, (await commits.all()).slice(beforeSignIn), text);
+      await snapshot(page, "2-f8-nova-potvrda-nakon-prijave");
+      workText = text;
+    } finally {
+      commits.stop();
+      await page.unroute(COMMIT_ROUTE);
+      await context.setOffline(false);
+    }
+  });
 
   await test.step("2. Studentica se odjavljuje", async () => {
     await signOut(page, token);
@@ -735,7 +991,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
     await signIn(page, `/rad?zadatak=${k4Assignment!}`, "Demo studentica");
     token = (await appCookie(context, SESSION_COOKIE))!.value;
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
-    await expect(editorOf(page)).toHaveText(EXPECTED_TEXT);
+    await expect(editorOf(page)).toHaveText(workText);
     // A send cut off in the step above may have left "Greška"; the drain sends
     // the owed rows again now that the routes are back (3d-2c2b).
     await expect(chipOf(page)).toHaveAttribute("data-state", SAVED_HERE, { timeout: 30_000 });
@@ -752,5 +1008,88 @@ test("demo walk-through", async ({ browser, page, context }) => {
   // signed receipt, and student and teacher see the same process summary,
   // made by the same function, with no forbidden words and no percentages
   // (PRODUCT §5 rules 2, 5 and 11).
-  await test.step.skip("4. i 5. F-10: predaja, potpisana potvrda i isti sažetak procesa za oba", async () => {});
+  //
+  // Runs only once 3d-2c2b (#811, DAN-37) is in main: before it the server
+  // holds revision 0 of the work, so the page shows `noEvidence` and no button.
+  // Every locator here is a role, label or visible text (the layout is being
+  // redesigned). The oracle for the server is the database's checkpoint.
+  await test.step("4. i 5. F-10: predaja, potpisana potvrda i isti sažetak procesa za oba", async () => {
+    const s = t.submission;
+    await signIn(page, `/rad?zadatak=${k4Assignment!}`, "Demo studentica");
+    await expect(editorOf(page)).toHaveText(workText, { timeout: 30_000 });
+    // The drain has sent every owed row: the server's text is the whole draft.
+    const checkpoint = () => withAdmin((client) => stackCheckpoint(client, k4Document!));
+    await expect.poll(async () => {
+      const held = await checkpoint();
+      return held && (JSON.parse(held.body) as CanonicalDocument).nodes
+        .flatMap((node) => node.children.map((child) => child.text)).join("");
+    }, { timeout: 30_000 }).toBe(workText);
+    const server = (await checkpoint())!;
+
+    // Demo point 4: the way in is the workspace's own link.
+    await page.getByRole("link", { name: t.workspace.submitLink, exact: true }).click();
+    await page.waitForURL(`http://localhost:3000/rad/${k4Assignment!}/predaja`);
+    await expect(page.getByRole("heading", { level: 1, name: s.title })).toBeVisible();
+    const steps = page.getByRole("list", { name: s.title });
+    await expect(steps.getByRole("listitem").filter({ hasText: s.steps.submit })).toHaveAttribute("aria-current", "step");
+    await expect(page.getByRole("document", { name: s.textLabel })).toHaveText(workText);
+    await expect(page.getByText(s.serverNote)).toBeVisible();
+    await snapshot(page, "4-predaja-provjera");
+
+    const sent: string[] = [];
+    const observe = (request: Request) => {
+      if (request.method() === "POST" && new URL(request.url()).pathname === "/api/submission") sent.push(request.postData() ?? "");
+    };
+    page.on("request", observe);
+    let receipt!: { payload: Record<string, unknown> & { evidenceDomainId: string } };
+    try {
+      const answered = page.waitForResponse((response) =>
+        new URL(response.url()).pathname === "/api/submission" && response.request().method() === "POST");
+      await page.getByRole("button", { name: s.submit }).click();
+      const response = await answered;
+      expect(response.status()).toBe(200);
+      const body = await response.json() as { status: string; receipt: typeof receipt };
+      expect(body.status).toBe("submitted");
+      receipt = body.receipt;
+      // Exactly the revision the server holds, of this work, once (QA criteria 1 and 2).
+      await expect(page.getByRole("heading", { name: s.receiptTitle })).toBeVisible();
+      expect(sent.map((data) => JSON.parse(data))).toEqual([{ documentId: k4Document!, revision: server.revision }]);
+    } finally {
+      page.off("request", observe);
+    }
+    expect(receipt.payload).toMatchObject({
+      documentId: k4Document!, assignmentId: k4Assignment!, revision: server.revision, artifactSha256: server.contentHash,
+    });
+    // Signed under the stack's registered keys, never a key the answer names (as evidence-receipt.ts).
+    const expected = Object.fromEntries(Object.entries({
+      ...receipt.payload, documentId: k4Document!, assignmentId: k4Assignment!, revision: server.revision, artifactSha256: server.contentHash,
+    }).filter(([name]) => name !== "receiptSchema" && name !== "signedAt"));
+    const stack = await withAdmin((client) => stackKeysOfDomain(client, receipt.payload.evidenceDomainId));
+    expect(await verifySignedSubmissionReceiptV2(receipt, expected, stack.keys)).toMatchObject({ ok: true });
+    await expect(page.getByText(server.contentHash, { exact: true })).toBeVisible();
+    await expect(page.getByText(s.receiptNote)).toBeVisible();
+    await expect(steps.getByRole("listitem").filter({ hasText: s.steps.receipt })).toHaveAttribute("aria-current", "step");
+    await expect(page.getByRole("button", { name: s.submit })).toHaveCount(0);
+    await snapshot(page, "4-potvrda-o-predaji");
+
+    // Demo point 5: the same summary, drawn by the same view, for both roles
+    // (PRODUCT §5 rules 2, 5 and 11): no forbidden words and no percentages.
+    const summaryOf = (where: Page) => where.getByRole("region", { name: t.summary.title });
+    await page.getByRole("button", { name: t.summaryCard.refresh }).click();
+    await expect(summaryOf(page).getByText(t.summary.sameForEveryone)).toBeVisible();
+    const studentSummary = await summaryOf(page).textContent();
+    const teacher = await (await browser.newContext()).newPage();
+    try {
+      await signIn(teacher, "/", "Demo nastavnik");
+      await teacher.goto(`/nastavnik/rad/${k4Document!}`);
+      await expect(summaryOf(teacher).getByText(t.summary.sameForEveryone)).toBeVisible({ timeout: 30_000 });
+      expect(await summaryOf(teacher).textContent()).toBe(studentSummary);
+      await snapshot(teacher, "5-sazetak-kod-nastavnika");
+    } finally {
+      await teacher.context().close();
+    }
+    expect(studentSummary).not.toContain("%");
+    expect(findForbiddenTerms(studentSummary!)).toEqual([]);
+    await snapshot(page, "5-sazetak-kod-studentice");
+  });
 });
