@@ -238,7 +238,7 @@ export const hr = {
     access: {
       eyebrow: "Tko što vidi",
       title: "Isti rad, jasne uloge.",
-      lead: "Odaberi ulogu i pogledaj što vidi, a što ne vidi. Pravila su ista za sve zadatke.",
+      lead: "Pogledaj što koja uloga vidi, a što ne vidi. Pravila su ista za sve zadatke.",
       tablistLabel: "Uloga",
       sees: "Vidi",
       doesNot: "Ne vidi",
