@@ -18,11 +18,10 @@ import { verifySignedSubmissionReceiptV2 } from "../../src/domain/forensics/subm
 import type { JournalContents } from "../../src/domain/sync/journal-types";
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
-import { stackCheckpoint, stackKeysOfDomain } from "./evidence-receipt";
 import { workDocument } from "./work-seed";
 import { cleanUp, post, seed } from "./comment-seed";
 import {
-  loseNextCommitAnswer, replayFirstReceipt, stackCheckpoint, stackReceiptKeys, tamperNextReceipt, verifyWithStackKeys,
+  loseNextCommitAnswer, replayFirstReceipt, stackCheckpoint, stackKeysOfDomain, stackReceiptKeys, tamperNextReceipt, verifyWithStackKeys,
 } from "./evidence-receipt";
 import {
   appCookie, editorMounted, fillCodeDeadline, ROLE_HOME, SAVED_HERE, SESSION_COOKIE, sessionRow, signIn,
@@ -1017,14 +1016,14 @@ test("demo walk-through", async ({ browser, page, context }) => {
   await test.step("4. i 5. F-10: predaja, potpisana potvrda i isti sažetak procesa za oba", async () => {
     const s = t.submission;
     await signIn(page, `/rad?zadatak=${k4Assignment!}`, "Demo studentica");
-    await expect(editorOf(page)).toHaveText(EXPECTED_TEXT, { timeout: 30_000 });
+    await expect(editorOf(page)).toHaveText(workText, { timeout: 30_000 });
     // The drain has sent every owed row: the server's text is the whole draft.
     const checkpoint = () => withAdmin((client) => stackCheckpoint(client, k4Document!));
     await expect.poll(async () => {
       const held = await checkpoint();
       return held && (JSON.parse(held.body) as CanonicalDocument).nodes
         .flatMap((node) => node.children.map((child) => child.text)).join("");
-    }, { timeout: 30_000 }).toBe(EXPECTED_TEXT);
+    }, { timeout: 30_000 }).toBe(workText);
     const server = (await checkpoint())!;
 
     // Demo point 4: the way in is the workspace's own link.
@@ -1033,7 +1032,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
     await expect(page.getByRole("heading", { level: 1, name: s.title })).toBeVisible();
     const steps = page.getByRole("list", { name: s.title });
     await expect(steps.getByRole("listitem").filter({ hasText: s.steps.submit })).toHaveAttribute("aria-current", "step");
-    await expect(page.getByRole("document", { name: s.textLabel })).toHaveText(EXPECTED_TEXT);
+    await expect(page.getByRole("document", { name: s.textLabel })).toHaveText(workText);
     await expect(page.getByText(s.serverNote)).toBeVisible();
     await snapshot(page, "4-predaja-provjera");
 
