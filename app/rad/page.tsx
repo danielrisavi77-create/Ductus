@@ -8,7 +8,7 @@ import HeadingOutline from "@/components/editor/HeadingOutline";
 import { OfflineBanner, OfflineChip } from "@/components/editor/OfflineNotice";
 import OpenWork from "@/components/editor/OpenWork";
 import {
-  LocalDocumentProvider, LocalEditor, LocalLogout, LocalSaveChip,
+  LocalEditor, LocalLogout, LocalSaveChip,
 } from "@/components/editor/LocalDocument";
 import { showsInventedPanels } from "@/components/editor/demo-panels";
 import { InstructionsPanel, WorkPanel } from "@/components/editor/SidePanels";
@@ -19,6 +19,9 @@ import SheetFrame from "@/components/shell/SheetFrame";
 import { readShellRole } from "@/components/shell/shell-role";
 import WorkspaceShell, { RailSection } from "@/components/shell/WorkspaceShell";
 import { sheetTitle } from "@/components/student/sheet-title";
+import { teacherViewMode } from "@/components/student/teacher-view";
+import TeacherViewSheet from "@/components/student/TeacherViewSheet";
+import WorkDocumentProvider from "@/components/student/WorkDocumentProvider";
 import { assignmentParam, readWorkContext, type WorkContextRead } from "@/components/student/work-context-read";
 import { pastDue, workDocumentPlan } from "@/components/student/work-document-plan";
 import { DEMO_WORK } from "@/lib/i18n/demo-work.hr";
@@ -113,7 +116,7 @@ export default async function WorkspacePage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const rawParam = (await searchParams).zadatak;
+  const { zadatak: rawParam, prikaz } = await searchParams;
   const assignmentId = assignmentParam(rawParam);
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
   const [{ scope, signedIn, signInAgain, tag, at }, read, role, doc] = await Promise.all([
@@ -127,6 +130,7 @@ export default async function WorkspacePage({
   if (read.kind === "noticeFirst" && assignmentId) redirect(`/zadatak/${assignmentId}`);
   const plan = workDocumentPlan({ rawParam, assignmentId, signedIn, signInAgain, scope, context: read, doc });
   const journal = plan.journal;
+  const view = teacherViewMode(plan, prikaz);
   // Course, title and Upute only for the student's own acknowledged assignment.
   const ownsAssignment = plan.kind === "assignment" || plan.kind === "opening" || plan.kind === "notYetOpen";
   const work = ownsAssignment && read.kind === "ready" ? read : null;
@@ -139,10 +143,13 @@ export default async function WorkspacePage({
     // A plain link: the login route answers with a redirect, not a page.
     <a className="btn" href={`/api/auth/login?returnTo=${encodeURIComponent(radPath(assignmentId))}`}>{t.auth.signIn}</a>
   ) : undefined;
+  const heading = <h1 className="manuscript manuscript__title">{sheetTitle(work ?? NO_CONTEXT, t.workspace.documentUntitled)}</h1>;
   const workspace = (
     <AppShell session={{ tag, at }} role={signedIn ? role : null} scope={signedIn ? scope : null} current="/rad" crumbs={[t.workspace.title]} account={account} ownMain>
       <WorkspaceShell
+        mode={view.mode}
         writingHref={radPath(assignmentId)}
+        teacherViewHref={view.teacherViewHref}
         context={work ? `${work.course} / ${work.notice.title}` : null}
         barExtra={plan.submission ? (
           // F-10 (#653 contract 6385776645): a plain link; the submission page
@@ -153,7 +160,7 @@ export default async function WorkspacePage({
         rail={
           <>
             <RailSection title={t.workspace.structure}>
-              {journal ? <HeadingOutline /> : <p className="rail-empty">{t.workspace.structureEmpty}</p>}
+              {journal ? <HeadingOutline documentId={journal.documentId} /> : <p className="rail-empty">{t.workspace.structureEmpty}</p>}
             </RailSection>
             <RailSection title={t.workspace.tables}>
               <p className="rail-empty">{t.workspace.tablesEmpty}</p>
@@ -200,6 +207,9 @@ export default async function WorkspacePage({
         ) : (
           <span>{t.workspace.statusNoJournal}</span>
         )}
+        teacherView={plan.kind === "assignment" ? (
+          <TeacherViewSheet documentId={plan.journal.documentId} session={session} heading={heading} />
+        ) : null}
       >
         {journal ? <EditorToolbar /> : null}
         <div className="sheet-area">
@@ -207,7 +217,7 @@ export default async function WorkspacePage({
           {/* F1b (§4): the free draft of this device, offered only to read and copy. */}
           {plan.kind === "assignment" ? <EarlierDraft scope={plan.journal.scope} /> : null}
           <SheetFrame>
-            <h1 className="manuscript manuscript__title">{sheetTitle(work ?? NO_CONTEXT, t.workspace.documentUntitled)}</h1>
+            {heading}
             {plan.kind === "free" ? <p className="sheet-note">{t.workspace.freeNote}</p> : null}
             {journal ? (
               <LocalEditor />
@@ -235,11 +245,12 @@ export default async function WorkspacePage({
     </AppShell>
   );
   // A new document id mounts a new editor: nothing of X (text, undo) reaches Y (A8).
+  // The session mark survives the switch of views, so it never reopens the work (#732 item 7).
   return journal ? (
-    <LocalDocumentProvider key={journal.documentId} scope={journal.scope} documentId={journal.documentId}
+    <WorkDocumentProvider key={journal.documentId} scope={journal.scope} documentId={journal.documentId}
       session={session} livePublish={plan.live}
       assignmentId={plan.kind === "assignment" ? plan.assignmentId : null}>
       {workspace}
-    </LocalDocumentProvider>
+    </WorkDocumentProvider>
   ) : workspace;
 }
