@@ -8,6 +8,7 @@ import { messagesHr } from "@/lib/i18n/messages.hr";
 import { sessionPrincipal } from "@/server/auth/principal";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
+import { readAssignmentWorks } from "@/server/evidence/assignment-works";
 import { readTeacherCourses } from "@/server/institution/teacher-courses";
 
 import styles from "./page.module.css";
@@ -29,6 +30,13 @@ export default async function TeacherHomePage() {
     sessionPrincipal(token, withActor),
   ]);
   const listed = read?.kind === "ok" && read.courses.length > 0;
+  // F2 (#711): the works of each assignment, under the same cookie; the database decides whose.
+  const works = read?.kind === "ok" && token !== undefined
+    ? Object.fromEntries(await Promise.all(read.courses.flatMap((course) => course.assignments).map(async ({ id }) => {
+      const answer = await readAssignmentWorks(token, id, withActor);
+      return [id, answer.kind === "ok" ? answer.works : null] as const;
+    })))
+    : {};
 
   let body;
   if (read === null) {
@@ -49,7 +57,7 @@ export default async function TeacherHomePage() {
       </>
     );
   } else {
-    body = <TeacherCourses courses={read.kind === "ok" ? read.courses : []} />;
+    body = <TeacherCourses courses={read.kind === "ok" ? read.courses : []} works={works} />;
   }
 
   return (
