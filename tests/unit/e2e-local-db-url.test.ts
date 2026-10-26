@@ -35,6 +35,11 @@ describe("localDbUrl", () => {
     "postgres://u:p@127.0.0.2/ductus",
     "postgres://u:p@postgres:5432/ductus",
     "postgres://127.0.0.1:p@db.example.test/ductus",
+    "postgres://u:p@127.0.0.1:54329/ductus?host=db.example.test",
+    "postgres://u:p@127.0.0.1:54329/ductus?host=/var/run/postgresql",
+    "postgres://u:p@localhost/ductus?sslmode=disable",
+    "postgres://u:p@127.0.0.1:54329/ductus#x",
+    "http://u:p@127.0.0.1:54329/ductus",
   ])("refuses %s", (url) => {
     expect(() => localDbUrl(url)).toThrow(MESSAGE);
   });

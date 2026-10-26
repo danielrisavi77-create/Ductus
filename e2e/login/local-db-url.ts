@@ -4,12 +4,19 @@
 const ADMIN_FALLBACK = "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
 const APP_FALLBACK = "postgres://ductus_app_local:ductus-app-local-only@127.0.0.1:54329/ductus";
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
+const PROTOCOLS = new Set(["postgres:", "postgresql:"]);
 
 type Env = Readonly<Record<string, string | undefined>>;
 
-/** Returns the URL unchanged when its host is this machine, and throws otherwise. */
+/** Returns a plain local database URL unchanged, as scripts/demo/up.mjs accepts it, and throws otherwise. */
 export function localDbUrl(url: string): string {
-  if (!LOCAL_HOSTS.has(new URL(url).hostname)) {
+  const parsed = new URL(url);
+  if (
+    !PROTOCOLS.has(parsed.protocol) ||
+    !LOCAL_HOSTS.has(parsed.hostname) ||
+    parsed.search !== "" ||
+    parsed.hash !== ""
+  ) {
     throw new Error("the e2e seed runs only against a local database");
   }
   return url;
