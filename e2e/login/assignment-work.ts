@@ -5,6 +5,7 @@ import { DUCTUS_PROTOCOL_VERSION } from "../../src/domain/evidence/commit-envelo
 import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
 import { createWithActor } from "../../src/server/db/with-actor";
 import { appCookie, SESSION_COOKIE } from "./support";
+import { localAdminUrl, localAppUrl } from "./local-db-url";
 
 // #711 step E (decision B): the specs that reach a work through the API use
 // the student's own document of an assignment, the one the open route makes
@@ -13,10 +14,6 @@ import { appCookie, SESSION_COOKIE } from "./support";
 // through the admin login of the compose database; the student confirms the
 // notice under her own session and the real route opens the work.
 
-const ADMIN_DATABASE_URL =
-  process.env.E2E_ADMIN_DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
-const APP_DATABASE_URL =
-  process.env.APP_DATABASE_URL ?? "postgres://ductus_app_local:ductus-app-local-only@127.0.0.1:54329/ductus";
 const ORIGIN = "http://localhost:3000";
 const TEACHER = "demo-teacher@demo.ductus.test";
 const STUDENT = "demo-student@demo.ductus.test";
@@ -28,10 +25,7 @@ export interface AssignmentWork {
 
 /** The seed writes as the database owner, so it never runs against a database off this machine. */
 async function admin<T>(work: (client: pg.Client) => Promise<T>): Promise<T> {
-  if (!["127.0.0.1", "localhost"].includes(new URL(ADMIN_DATABASE_URL).hostname)) {
-    throw new Error("the e2e seed runs only against a local database");
-  }
-  const client = new pg.Client({ connectionString: ADMIN_DATABASE_URL });
+  const client = new pg.Client({ connectionString: localAdminUrl() });
   await client.connect();
   try {
     return await work(client);
@@ -87,7 +81,7 @@ export async function openAssignmentWork(student: Page): Promise<AssignmentWork>
   // The student confirms the notice under her own session, as the notice screen does.
   const token = (await appCookie(student.context(), SESSION_COOKIE))?.value;
   if (!token) throw new Error("the student page must be signed in");
-  const pool = new pg.Pool({ connectionString: APP_DATABASE_URL, max: 1 });
+  const pool = new pg.Pool({ connectionString: localAppUrl(), max: 1 });
   try {
     await createWithActor(pool)(token, (tx) =>
       tx.query("SELECT institution.acknowledge_notice($1, $2)", [assignmentId, 1]));
