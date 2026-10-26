@@ -21,7 +21,7 @@ import {
   loseNextCommitAnswer, replayFirstReceipt, stackCheckpoint, stackReceiptKeys, tamperNextReceipt, verifyWithStackKeys,
 } from "./evidence-receipt";
 import {
-  appCookie, clickSignOut, editorMounted, fillCodeDeadline, ROLE_HOME, SAVED_HERE, SESSION_COOKIE, sessionRow, signIn,
+  appCookie, editorMounted, fillCodeDeadline, ROLE_HOME, SAVED_HERE, SESSION_COOKIE, sessionRow, signIn,
   signOutHoweverHeld, signOutWithoutDialog,
 } from "./support";
 import { localAdminUrl } from "./local-db-url";
@@ -328,6 +328,9 @@ test.afterEach(async () => {
 
 test("demo walk-through", async ({ browser, page, context }) => {
   let token = "";
+  // The whole text of the K-4 work as the steps leave it: EXPECTED_TEXT until
+  // the server step of F-8 writes on.
+  let workText = EXPECTED_TEXT;
 
   await test.step("1. Nastavnik se prijavljuje demo računom", async () => {
     // "/" sends the signed-in person on to their own page (DAN-325); its shell still says demo.
@@ -795,18 +798,17 @@ test("demo walk-through", async ({ browser, page, context }) => {
     }
   });
 
-  // The server part of F-8 (K-4c-2 in #655) waits for 3d-2c2 (LocalDocument
-  // sends the evidence, contract #476 c.6391714810); the skip goes when it is
-  // merged. "Spremljeno na poslužitelju" only after a signed receipt that
-  // verifies under the stack's key for the database's checkpoint, and the
-  // offline text on the server after the return. The step writes into the
-  // teacher's assignment from step 1, whose work open_student_work makes with
-  // its package; the seeded fixture document has none. The Node checks are in
-  // evidence-receipt.ts.
+  // The server part of F-8 (K-4c-2 in #655), on the evidence session of
+  // 3d-2c2b (#811): "Spremljeno na poslužitelju" only after a signed receipt
+  // that verifies under the stack's key for the database's checkpoint, and the
+  // offline text on the server after the return. The step goes on writing at
+  // the end of the K-4 work from the steps above (open_student_work made it
+  // with its package), so the later steps expect `workText`, the whole text.
+  // The Node checks are in evidence-receipt.ts.
   // Criterion 5 of #655 (the offline mark after sync, PRODUCT §5 rule 10) has
   // no carrier yet: neither segment v2, receipt v2 nor the chip keeps it
   // (c.6386046693). It stays a named gap of the GO record; nothing here stands in for it.
-  await test.step.skip("2. F-8 na poslužitelju: potpisana potvrda i tekst bez mreže na poslužitelju (3d-2c2)", async () => {
+  await test.step("2. F-8 na poslužitelju: potpisana potvrda i tekst bez mreže na poslužitelju (3d-2c2)", async () => {
     test.info().setTimeout(test.info().timeout + 120_000);
     expect(k4Assignment).not.toBeNull();
     const workPath = `/rad?zadatak=${k4Assignment}`;
@@ -816,7 +818,9 @@ test("demo walk-through", async ({ browser, page, context }) => {
     try {
       await page.goto(workPath);
       await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+      await expect(editorOf(page)).toHaveText(EXPECTED_TEXT);
       const documentId = await workDocumentOf(k4Assignment!);
+      expect(documentId).toBe(k4Document);
       // The seeded document of the earlier steps opens like any work (#727):
       // one package, in the one evidence domain whose receipt key the stack registered.
       await withAdmin(async (client) => {
@@ -827,10 +831,14 @@ test("demo walk-through", async ({ browser, page, context }) => {
 
       // 1. Typing reaches the server state only with a receipt that verifies
       // under the stack's key for the checkpoint, whose text is the journal's.
+      // The rows the cut routes above held go first (the drain), then this text.
       await editorOf(page).click();
+      await editorOf(page).press("Control+End");
       await page.keyboard.type(SERVER_TEXT);
+      let text = EXPECTED_TEXT + SERVER_TEXT;
+      await expect(editorOf(page)).toHaveText(text);
       await expect(chipOf(page)).toHaveAttribute("data-state", "SYNCED", SYNCED_WAIT);
-      const online = await expectServerHolds(page, documentId, await commits.all(), SERVER_TEXT);
+      const online = await expectServerHolds(page, documentId, await commits.all(), text);
       await attachCheckpoint("2-f8-poruka-potvrdena-na-posluzitelju.json", await localCheckpoint(page, documentId));
       await snapshot(page, "2-f8-spremljeno-na-posluzitelju");
 
@@ -845,8 +853,9 @@ test("demo walk-through", async ({ browser, page, context }) => {
         await expect(page.locator(".offline-chip")).toHaveText(t.network.offline);
         await editorOf(page).press("Control+End");
         await page.keyboard.type(SERVER_OFFLINE_TEXT);
-        await expect(editorOf(page)).toHaveText(SERVER_TEXT + SERVER_OFFLINE_TEXT);
-        await expect.poll(async () => textOf(await localCheckpoint(page, documentId))).toBe(SERVER_TEXT + SERVER_OFFLINE_TEXT);
+        text += SERVER_OFFLINE_TEXT;
+        await expect(editorOf(page)).toHaveText(text);
+        await expect.poll(async () => textOf(await localCheckpoint(page, documentId))).toBe(text);
         await expectHeldLocally(page, documentId, 3_000);
         expect(reached).toEqual([]);
         expect(await withAdmin((client) => stackCheckpoint(client, documentId))).toEqual(online);
@@ -858,10 +867,9 @@ test("demo walk-through", async ({ browser, page, context }) => {
       // After the return the offline text is on the server under a new revision.
       await expect(page.locator(".offline-chip")).toHaveCount(0);
       await expect(chipOf(page)).toHaveAttribute("data-state", "SYNCED", SYNCED_WAIT);
-      const returned = await expectServerHolds(page, documentId, await commits.all(), SERVER_TEXT + SERVER_OFFLINE_TEXT);
+      const returned = await expectServerHolds(page, documentId, await commits.all(), text);
       expect(returned.revision).toBeGreaterThan(online.revision);
       await snapshot(page, "2-f8-tekst-bez-mreze-na-posluzitelju");
-      let text = SERVER_TEXT + SERVER_OFFLINE_TEXT;
 
       // (a) The answer is lost on the way back: the text stays local, and the
       // retry sends the same key with the same bytes and gets the receipt.
@@ -913,9 +921,9 @@ test("demo walk-through", async ({ browser, page, context }) => {
       await expectServerHolds(page, documentId, await commits.all(), text);
 
       // (d) After sign-out and a new sign-in nothing is the server state
-      // until this session gets a receipt of its own.
-      await clickSignOut(page);
-      await page.waitForURL("http://localhost:3000/");
+      // until this session gets a receipt of its own. Whether the dialog
+      // opens depends on the receipt's timing (3d-2c2b), so either way is fine.
+      await signOutHoweverHeld(page);
       expect(await sessionRow(token)).toMatchObject({ close_reason: "logout", closed_at: expect.any(Date) });
       await forgetProviderLogin(context);
       const beforeSignIn = (await commits.all()).length;
@@ -933,6 +941,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
       await expect(chipOf(page)).toHaveAttribute("data-state", "SYNCED", SYNCED_WAIT);
       await expectServerHolds(page, documentId, (await commits.all()).slice(beforeSignIn), text);
       await snapshot(page, "2-f8-nova-potvrda-nakon-prijave");
+      workText = text;
     } finally {
       commits.stop();
       await page.unroute(COMMIT_ROUTE);
@@ -965,7 +974,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
     await signIn(page, `/rad?zadatak=${k4Assignment!}`, "Demo studentica");
     token = (await appCookie(context, SESSION_COOKIE))!.value;
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
-    await expect(editorOf(page)).toHaveText(EXPECTED_TEXT);
+    await expect(editorOf(page)).toHaveText(workText);
     // A send cut off in the step above may have left "Greška"; the drain sends
     // the owed rows again now that the routes are back (3d-2c2b).
     await expect(chipOf(page)).toHaveAttribute("data-state", SAVED_HERE, { timeout: 30_000 });
