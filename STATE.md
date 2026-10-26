@@ -46,21 +46,21 @@ Kanonski dokument: `docs/ENGINEERING_SYSTEM.md`.
 
 ## Otvoreni razvojni stog
 
-Stanje 26. 10. 2026. oko 14:30 UTC prema `gh pr list --state open` (nositelj statusa je Linear; review i QA stanje je na PR-u). STATE.md i dalje prati PR-ove i redovito se osvježava (vlasnik, 25. 10. 2026., prenosi orkestrator na #271 `issuecomment-6398469344`; povod je pregled Trijaže `issuecomment-6398435565`).
+Stanje 26. 10. 2026. oko 15:30 UTC prema `gh pr list --state open` (nositelj statusa je Linear; review i QA stanje je na PR-u). STATE.md i dalje prati PR-ove i redovito se osvježava (vlasnik, 25. 10. 2026., prenosi orkestrator na #271 `issuecomment-6398469344`; povod je pregled Trijaže `issuecomment-6398435565`). Ovaj presjek uključuje redak "Spojeno" i otvorene PR-ove #807 do #867 iz pregleda Trijaže na #271 (vlasnik, #87, 26. 10. 2026.).
 
 Otvoreno:
 
-- DAN-89 demo lanac: #815 prikaz "Kako vidi nastavnik" na `/rad` (#732 t. 7, nacrt); #726 (K-4c-2) i #810 (K-4d korak 3), nacrti koraka demo prolaza; #807 preusmjeravanje prijavljene osobe (DAN-325).
-- DAN-37 dokazi: #811 spajanje sesije s listom u `/rad` (3d-2c2b, nacrt); #818 predani rad samo za čitanje (DAN-328, nacrt).
-- DAN-308 brzi put nastavnika: #780 ruta (B-11c); #825 F-11 čita radove iz B-11c (DAN-334, nacrt).
-- Nastavnik, rad i editor: #805 predaje zadatka (DAN-290); #830 rad nastaje na klik "Započni rad" (DAN-330) i #831 korak na poslužitelju (F-137, DAN-331, nacrt); #847 blok-citat (DAN-326 E1, dio 2); #851 naslov upisan kao "# " zadržava id retka (#849).
-- Početna stranica (Refs #823): #848 i #850, nacrti.
-- Platforma, orkestrator i CI: #837 pravila Actions za engineering gate (DAN-337, u redu za spajanje); #817 i #833 izvorni demo za Windows bez Dockera (DAN-335, DAN-324, #833 nacrt); #855 Login E2E na dva runnera; #857 Mergify red u skupinama do tri PR-a (D-177); #860 prenošenje presuda i donji prag za testove demo zaštite (F-148); #812 ovo osvježavanje; #684 `orch:shadow` (DAN-269); #643 (nacrt), #642, #641 Mergify i akcije; #628 Playwright ponavljanja (DAN-262, nacrt).
+- DAN-89 demo lanac: #807 preusmjeravanje prijavljene osobe (DAN-325); #815 prikaz "Kako vidi nastavnik" na `/rad` (#732 t. 7); #726 (K-4c-2) i #810 (K-4d korak 3), nacrti koraka demo prolaza.
+- DAN-37 dokazi: #811 spajanje sesije s listom u `/rad` (3d-2c2b); #818 predani rad samo za čitanje (DAN-328).
+- DAN-308 brzi put nastavnika: #780 ruta (B-11c); #825 F-11 čita radove iz B-11c (DAN-334).
+- Rad i editor: #830 rad nastaje na klik "Započni rad" (DAN-330) i #831 korak na poslužitelju (F-137, DAN-331, nacrt); #866 citati i popis literature iz kartice Literatura (DAN-343, nacrt); #867 paleta Archivum V3 (nacrt).
+- Sigurnosni nalazi, samo ID: #861 (F-151, dio 1), #862 (F-149) i #863 (F-150), nacrti.
+- Platforma, orkestrator i CI: #837 pravila Actions za engineering gate (DAN-337); #812 ovo osvježavanje; #684 `orch:shadow` (DAN-269, nacrt); #643 (nacrt), #642, #641 Mergify i akcije; #628 Playwright ponavljanja (DAN-262, nacrt).
 - Stariji nacrti: #629, #571, #553, #552, #551, #550, #438, #372, #370, #354, #347, #344; #94 drugi pružatelj reviewa (DAN-41, nakon demoa).
 
-Od prethodnog presjeka (26. 10. oko 00:00 UTC) spojeni su #808, #816, #804, #822, #832, #814, #819, #821, #836, #839, #843, #840, #844, #769 (B-11a), #846 (E1, dio 1), #774 (B-11b), #856 (D-176), #834 (F-140, F-144) i #803 (3d-2c2a, DAN-37).
+Spojeno od 25. 10. oko 14:00 UTC do 26. 10. oko 15:30 UTC, 48 PR-ova: #346, #731, #751, #768, #769 (B-11a), #772, #773, #774 (B-11b), #782, #786 do #788, #791, #793 do #798, #800, #801, #803 (3d-2c2a), #804, #805 (DAN-290), #806, #808, #809, #814, #816, #817 (DAN-335), #819 do #822, #832, #834, #836, #839, #840, #843, #844, #846 i #847 (DAN-326 E1), #851, #855, #856 (D-176), #857 (D-177) i #860 (F-148). Zatvoreni bez spajanja: #833, #848, #850.
 
-Spojeno od 12. do 26. 10. 2026.: 317 PR-ova (#180 do #856, s preskocima). Potpun popis: `gh pr list --state merged`.
+Spojeno od 12. do 26. 10. 2026.: 324 PR-a (#180 do #860, s preskocima). Potpun popis: `gh pr list --state merged`.
 
 ## Ne smije se izgubiti
 
