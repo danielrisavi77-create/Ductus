@@ -399,10 +399,10 @@ test.describe("workspace shell", () => {
       await page.emulateMedia({ colorScheme });
       await page.goto("/rad");
       const body = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-      expect(body).toBe("rgb(9, 19, 16)");
+      expect(body).toBe("rgb(25, 22, 26)");
       const sheet = page.locator("article.sheet");
       await expect(sheet).toHaveAttribute("data-sheet-theme", "dark");
-      expect(await sheet.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(18, 33, 28)");
+      expect(await sheet.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(41, 35, 41)");
     }
   });
 

@@ -50,7 +50,7 @@
   height: 100%;
   padding: 24px 26px;
   border: 1px solid var(--rule);
-  border-radius: 16px;
+  border-radius: var(--radius);
   background: var(--sheet);
   box-shadow: var(--lift);
 }
