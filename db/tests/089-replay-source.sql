@@ -149,13 +149,13 @@ SELECT is(pg_temp.texts(a.name, pg_temp.def()), 'd,f', a.name || ' does not get 
 FROM (VALUES ('ana'), ('vesna')) AS a (name);
 
 -- The teacher's reads are logged, one row per interval; the owner's and refused ones are not.
-SELECT is(pg_temp.replay_log(), ARRAY['doc-a|ana|vesna|teacher'],
-  'Vesna''s reads of the replay of doc-a are one row; Ana''s, Tomo''s and every refused read none');
+SELECT is(pg_temp.replay_log(), ARRAY['doc-a|ana|vesna|teacher', 'doc-b|tomo|petra|teacher'],
+  'each teacher''s reads of a work are one row (Vesna on doc-a, Petra on doc-b); the owners'' and every refused read none');
 -- Marko becomes a second teacher of K1 and reads only texts, without the source.
 INSERT INTO institution.course_member (course_id, institution_id, user_id, role)
 VALUES (pg_temp.id('k1'), pg_temp.id('fak_a'), pg_temp.id('marko'), 'teacher');
 SELECT is(pg_temp.texts('marko', pg_temp.def()), 'd,f', 'Marko, now a teacher of K1, reads the texts');
-SELECT is(pg_temp.replay_log(), ARRAY['doc-a|ana|marko|teacher', 'doc-a|ana|vesna|teacher'],
+SELECT is(pg_temp.replay_log(), ARRAY['doc-a|ana|marko|teacher', 'doc-a|ana|vesna|teacher', 'doc-b|tomo|petra|teacher'],
   'and a read of texts alone is logged too');
 CREATE TRIGGER access_log_refuse_insert BEFORE INSERT ON audit.access_log
   FOR EACH ROW EXECUTE FUNCTION audit.reject_change();
