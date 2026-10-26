@@ -17,6 +17,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type Keyboard
 import {
   listComments, replyComment, type CommentThread, type ListOutcome, type ReplyOutcome, type ThreadComment,
 } from "@/client/comments";
+import { announceCommentsLoaded } from "@/client/comments-loaded";
 import { watchSessionEnd, type SessionWatch } from "@/client/session-end";
 import type { SessionMark } from "@/client/session-marks";
 import {
@@ -158,7 +159,10 @@ function SessionCommentPanel({ documentId, session }: {
     if (!current()) return;
     const mine = ++generation.current;
     const result = await listComments(documentId, current);
-    if (mine === generation.current && !stoppedRef.current) setOutcome(result);
+    if (mine !== generation.current || stoppedRef.current) return;
+    setOutcome(result);
+    // The marks of the teacher view on the same page read them again too (#732 item 7).
+    announceCommentsLoaded(documentId);
   }, [documentId, current]);
   useEffect(() => { void load(); }, [load]);
 

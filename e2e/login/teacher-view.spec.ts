@@ -17,6 +17,7 @@ import { clickSignOut, signIn } from "./support";
 
 const TEXT = "Gradske knjižnice su mjesto susreta i učenja.";
 const QUOTE = "mjesto susreta";
+const LATER = "učenja";
 const OPEN = 30_000;
 
 const editorOf = (page: Page) => page.getByRole("textbox", { name: t.workspace.documentLabel });
@@ -88,9 +89,16 @@ test("the student switches to the teacher view, reads the text as the teacher do
   await expect(student.locator('[contenteditable="true"]')).toHaveCount(0);
   await expect(student.getByRole("toolbar", { name: t.toolbar.label })).toHaveCount(0);
 
+  // A comment the teacher adds now is marked once the student refreshes the panel beside the text.
+  const later = TEXT.indexOf(LATER);
+  const second = createTextAnchor({ nodeId, nodeText: TEXT, start: later, end: later + LATER.length });
+  expect((await post(teacher, "create", { documentId, body: "Pojasni.", anchor: second })).status()).toBe(200);
+  await student.getByRole("button", { name: t.comments.refresh }).click();
+  await expect(liveTextOf(student).locator("mark")).toHaveText([QUOTE, LATER]);
+
   // 2. Rule 5: the region holds the same markup on the teacher's page.
   await teacher.goto(`/nastavnik/rad/${documentId}`);
-  await expect(liveTextOf(teacher).locator("mark")).toHaveText(QUOTE, { timeout: OPEN });
+  await expect(liveTextOf(teacher).locator("mark")).toHaveText([QUOTE, LATER], { timeout: OPEN });
   const html = (page: Page) => liveTextOf(page).evaluate((element) => element.innerHTML);
   expect(await html(student)).toBe(await html(teacher));
 

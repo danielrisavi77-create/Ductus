@@ -11,8 +11,9 @@
  * under it, because the student's right panel stays as in writing.
  */
 
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
+import { onCommentsLoaded } from "@/client/comments-loaded";
 import type { SessionMark } from "@/client/session-marks";
 import { placeThreads } from "@/components/teacher/comment-place";
 import LiveText, { liveStopped, openMarks, useLiveView } from "@/components/teacher/LiveText";
@@ -33,6 +34,10 @@ export default function TeacherViewSheet({ documentId, session, heading }: {
   const { view, current } = useLiveView(documentId, session);
   const stopped = liveStopped(view);
   const comments = useComments(documentId, current, !stopped);
+  // The marks follow the comment panel beside them: when the panel reads the
+  // comments again, so do the marks, so the list and the text agree.
+  const reload = comments.load;
+  useEffect(() => onCommentsLoaded(documentId, () => void reload()), [documentId, reload]);
   const threads = !stopped && comments.outcome?.kind === "ok" ? comments.outcome.threads : [];
   const marks = openMarks(placeThreads(view.document, threads));
 
