@@ -7,7 +7,7 @@ import { tiptapToCanonical } from "@/editor/interop";
 import { LocalDocumentSaver } from "@/lib/journal/local-document-saver";
 import { DOC, journalKit, json } from "@/lib/sync/evidence-test-kit";
 
-import { createDocumentSaver, evidenceNotice, writingClosed } from "./document-saver";
+import { createDocumentSaver, evidenceNotice, snapshotSpeaks, writingClosed } from "./document-saver";
 import { EvidenceSession } from "./evidence-session";
 
 /**
@@ -85,6 +85,17 @@ describe("3d-2c2 unit 8: which saver writes the sheet", () => {
     expect(evidenceNotice({ ...local, state: "CONFLICT" })).toBeNull();
     const { saver } = createDocumentSaver({ journal: openJournal(), documentId: DOC, assignmentId: null, source: online });
     expect(evidenceNotice({ ...saver.snapshot(), state: "RECOVERY_REQUIRED" })).toBeNull();
+  });
+
+  // Review #811 (c.6418056374, 1): after a reload in CONFLICT the sheet says
+  // the server's work differs, not that the local record is unreadable.
+  it("a sticky evidence load speaks for the sheet; any other recovery does not", () => {
+    expect(snapshotSpeaks("ready", false)).toBe(true);
+    expect(snapshotSpeaks("recovery", true)).toBe(true);
+    expect(snapshotSpeaks("recovery", false)).toBe(false);
+    for (const phase of ["loading", "blocked", "unavailable", "signed-out"]) {
+      expect(snapshotSpeaks(phase, true)).toBe(false);
+    }
   });
 
   it("writing closes on a submission and on the sticky states only", () => {

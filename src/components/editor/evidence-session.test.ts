@@ -541,15 +541,32 @@ describe("3d-2c2 evidence session: the drain", () => {
     }
   });
 
-  it("3d-2c2b: a final refusal (413) is refused; a 503 and a 426 are not", async () => {
-    const cases = [[json(413, { status: "too_large" }), true], [json(503, {}), false], [json(426, { status: "upgrade_required" }), false]] as const;
+  // 3d-2c2 §3: a 426 and an unreadable answer are held for a manual retry, so
+  // like a refusal for good they say a reload sends the text again; a 503 is
+  // retried by itself.
+  it("3d-2c2b: a 413, a 426 and an unreadable answer are refused; a 503 is not", async () => {
+    const cases = [
+      [json(413, { status: "too_large" }), true],
+      [json(503, {}), false],
+      [json(426, { status: "upgrade_required" }), true],
+      [json(200, { status: "nepoznato" }), true],
+    ] as const;
     for (const [answer, refused] of cases) {
-      const { session } = setup({ net: server(R0, () => answer.clone()) });
+      const net = server(R0, () => answer.clone());
+      const { session, advance } = setup({ net });
       await ready(session);
       const sheet = editorFor(session);
       sheet.type("x");
       await sheet.save();
       expect(session.snapshot().state).toBe("ERROR");
+      if (refused) {
+        // A held row waits out its retry schedule before the drain says it
+        // needs a manual retry; it is never sent again by itself.
+        advance(60_000);
+        await session.settled();
+        expect(session.snapshot().state).toBe("ERROR");
+        expect(net.calls).toHaveLength(1);
+      }
       expect(session.snapshot().refused).toBe(refused);
       session.close();
       await cleanup();
