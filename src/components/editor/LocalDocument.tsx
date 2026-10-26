@@ -58,7 +58,7 @@ import { StorableInput } from "@/editor/storable-input";
 import { storableDocument } from "@/editor/storable-text";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { createLivePublisher, type LivePublisher } from "@/client/live-publisher";
-import { editorSignOutPlan } from "@/client/logout-hold";
+import { editorSignOutPlan, untilLoaded } from "@/client/logout-hold";
 import { SourceObserver } from "@/editor/source";
 import { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
 import type { SaverFailure } from "@/lib/journal/local-document-saver";
@@ -178,6 +178,13 @@ export function LocalDocumentProvider({
   children: ReactNode;
 }) {
   const [phase, setPhase] = useState<Phase>("loading");
+  // The phase as last rendered, for a sign-out that waits out the load (#874).
+  const phaseRef = useRef<Phase>(phase);
+  const wakeRef = useRef(new Set<() => void>());
+  useEffect(() => {
+    phaseRef.current = phase;
+    for (const wake of [...wakeRef.current]) wake();
+  }, [phase]);
   const [snapshot, setSnapshot] = useState<DocumentSnapshot | null>(null);
   const [words, setWords] = useState(0);
   const [invalid, setInvalid] = useState(false);
@@ -526,7 +533,13 @@ export function LocalDocumentProvider({
   // session, so the count the dialog shows cannot grow behind it (I2).
   // The whole scope, as the shell counts it (O2): every document of this person.
   // A page whose session has ended stops and reads nothing (leave).
+  // A click while this tab still reads its journal waits for the read, so the
+  // plan comes from what the journal holds, never from an unread one (#874).
   const prepareSignOut = async (): Promise<LogoutPlan | "leave"> => {
+    await untilLoaded(() => phaseRef.current === "loading", (wake) => {
+      wakeRef.current.add(wake);
+      return () => wakeRef.current.delete(wake);
+    });
     const locked = logoutRef.current;
     const plan = await editorSignOutPlan(locked && (() => locked.quiesce()), scope, { session });
     // After a submission the steps still held are never sent (3d-2c2 O3).
@@ -732,7 +745,9 @@ export function useLocalStatus(): { loading: boolean; words: number } {
 
 /**
  * The sign-out button of the workspace bar (F-5, D-118) and its dialog
- * (FE-D7). Disabled only while writing stops or a sign-out runs: whatever the
+ * (FE-D7). Disabled only while writing stops or a sign-out runs, which
+ * includes waiting, at most `LOGOUT_LOAD_LIMIT_MS`, for a journal this tab
+ * is still reading (#874): whatever the
  * journal or the tab holds, the dialog always offers "Odjavi se", so the
  * session can always be ended (I1). Without script the form posts to the
  * logout route directly, which ends it as well.
