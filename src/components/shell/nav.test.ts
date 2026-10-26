@@ -3,7 +3,23 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { navFor } from "./nav";
+import { homeHref, navFor } from "./nav";
+
+// #802 part B, QA (4): "Početna" leads to each role's own space.
+describe("homeHref", () => {
+  it("leads a teacher to /nastavnik, a student to /rad and no role to /", () => {
+    expect(homeHref("teacher")).toBe("/nastavnik");
+    expect(homeHref("student")).toBe("/rad");
+    expect(homeHref(null)).toBe("/");
+  });
+
+  it("leads only to routes that exist", () => {
+    for (const role of ["teacher", "student", null] as const) {
+      const href = homeHref(role);
+      expect(existsSync(join(process.cwd(), "app", href, "page.tsx")), href).toBe(true);
+    }
+  });
+});
 
 // I3 and QA criterion (e) of the shell contract (#476 6314969336).
 describe("navFor", () => {
