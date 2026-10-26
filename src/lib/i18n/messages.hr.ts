@@ -235,6 +235,83 @@ export const hr = {
         "Gradovi>>Europski gradovi",
       ],
     },
+    access: {
+      eyebrow: "Tko što vidi",
+      title: "Isti rad, jasne uloge.",
+      lead: "Pogledaj što koja uloga vidi, a što ne vidi. Pravila su ista za sve zadatke.",
+      tablistLabel: "Uloga",
+      sees: "Vidi",
+      doesNot: "Ne vidi",
+      note: "Mentor i nastavnik zadatka jedna su uloga. Nitko drugi ne može premotati nastanak rada.",
+      roles: {
+        student: {
+          name: "Student",
+          sees: [
+            "Obavijest o praćenju kao prvi ekran zadatka, prije prve rečenice.",
+            "Točno ono što o njegovu radu vidi mentor, istim prikazom.",
+            "Premotavanje nastanka vlastitog rada, isto kakvo ima mentor.",
+            "Tko je i kada otvorio njegov rad.",
+          ],
+          not: [
+            "Mentorove privatne radne zapise. Može ih zatražiti pravom pristupa.",
+            "Ocjenu i obrazloženje prije nego ih mentor objavi.",
+          ],
+        },
+        mentor: {
+          name: "Mentor i nastavnik zadatka",
+          sees: [
+            "Rad uživo, dok nastaje.",
+            "Premotavanje nastanka rada, znak po znak.",
+            "Komentare uz odlomak i studentove odgovore.",
+          ],
+          not: [
+            "Ocjenu ni procjenu studenta: prikaz služi praćenju i komentarima.",
+            "Povijest međustanja u sažetku, usporedbi ili izvozu. Postoji samo u prikazu uživo i premotavanju.",
+          ],
+        },
+        institution: {
+          name: "Ustanova",
+          sees: [
+            "Pravila i uloge za svoje kolegije, koje sama postavlja.",
+            "Tko je kada pristupio kojem radu.",
+          ],
+          not: [
+            "Sadržaj radova.",
+            "Premotavanje nastanka rada: nije dostupno ostalim ulogama.",
+          ],
+        },
+      },
+    },
+    faq: {
+      eyebrow: "Pitanja",
+      title: "Kratki odgovori.",
+      items: {
+        authorship: {
+          q: `Tvrdi li ${APP_NAME} tko je napisao rad?`,
+          a: `Ne. ${APP_NAME} prikazuje što je opaženo u uređivaču i ne računa nikakve mjere o studentu. Zaključak donosi čovjek.`,
+        },
+        beforeWriting: {
+          q: "Što student zna prije pisanja?",
+          a: "Prvi ekran svakog zadatka kaže što nastavnik vidi i od kada. Student to pročita prije prve rečenice.",
+        },
+        ai: {
+          q: "Mora li student koristiti AI?",
+          a: "Ne. Ništa u zadatku ne traži AI od studenta, a pomoćnik je moguć samo ako ga zadatak dopušta.",
+        },
+        signIn: {
+          q: "Kako se student prijavljuje?",
+          a: "Isključivo svojim računom AAI@EduHr. Drugog načina prijave nema.",
+        },
+        offline: {
+          q: "Što ako veza pukne tijekom pisanja?",
+          a: "Tekst se sprema na uređaju, a oznaka kaže je li stigao na poslužitelj. Rad napisan bez veze ostaje označen kao takav i nakon usklađivanja.",
+        },
+        tryOut: {
+          q: "Šalje li se išta iz probnog prostora?",
+          a: "Ne. Tekst koji upišeš ostaje u ovom pregledniku i nikamo se ne šalje.",
+        },
+      },
+    },
   },
   // F-6 (DAN-35): text of screen 2 of the design handoff (docs/design/ductura).
   teacher: {
