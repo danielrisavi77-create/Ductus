@@ -42,7 +42,7 @@ beforeAll(async () => {
   vi.stubEnv("OIDC_REDIRECT_URI", `${ORIGIN}/api/auth/callback`);
   const suffix = randomBytes(6).toString("hex");
   for (const [index, faculty] of faculties.entries()) {
-    await admin.query("INSERT INTO identity.institution (id, slug) VALUES ($1, $2)", [faculty, `assignment-version-${index}-${suffix}`]);
+    await admin.query("INSERT INTO identity.institution (id, slug) VALUES ($1, $2)", [faculty, `asgn-version-${index}-${suffix}`]);
     await admin.query("INSERT INTO institution.institution_settings (institution_id, display_name) VALUES ($1, 'Izmisljeni fakultet test')", [faculty]);
   }
   for (const name of names) {
