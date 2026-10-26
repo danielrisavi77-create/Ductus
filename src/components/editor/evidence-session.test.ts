@@ -541,6 +541,65 @@ describe("3d-2c2 evidence session: the drain", () => {
     }
   });
 
+  // 3d-2c2 §3: a 426 and an unreadable answer are held for a manual retry, so
+  // like a refusal for good they say a reload sends the text again; a 503 is
+  // retried by itself.
+  it("3d-2c2b: a 413, a 426 and an unreadable answer are refused; a 503 is not", async () => {
+    const cases = [
+      [json(413, { status: "too_large" }), true],
+      [json(503, {}), false],
+      [json(426, { status: "upgrade_required" }), true],
+      [json(200, { status: "nepoznato" }), true],
+    ] as const;
+    for (const [answer, refused] of cases) {
+      const net = server(R0, () => answer.clone());
+      const { session, advance } = setup({ net });
+      await ready(session);
+      const sheet = editorFor(session);
+      sheet.type("x");
+      await sheet.save();
+      expect(session.snapshot().state).toBe("ERROR");
+      if (refused) {
+        // A held row waits out its retry schedule before the drain says it
+        // needs a manual retry; it is never sent again by itself.
+        advance(60_000);
+        await session.settled();
+        expect(session.snapshot().state).toBe("ERROR");
+        expect(net.calls).toHaveLength(1);
+        expect(session.snapshot().refused).toBe(true);
+        // Review #811 (c.6419592134, 1): typing on saves LOCAL_DURABLE, the
+        // same row stays held, and the notice stays with it.
+        sheet.type("y");
+        await sheet.save();
+        advance(60_000);
+        await session.settled();
+        expect(session.snapshot().state).not.toBe("SYNCED");
+        expect(net.calls).toHaveLength(1);
+      }
+      expect(session.snapshot().refused).toBe(refused);
+      session.close();
+      await cleanup();
+    }
+  });
+
+  // Review #811 (c.6419592134, 2): a reload before the work opens still says
+  // the stored refusal for good.
+  it("3d-2c2b: a reload without the open still says a stored refusal", async () => {
+    const net = server(R0, () => json(413, { status: "too_large" }));
+    const first = setup({ net });
+    await ready(first.session);
+    const sheet = editorFor(first.session);
+    sheet.type("x");
+    await sheet.save();
+    expect(first.session.snapshot().refused).toBe(true);
+    first.session.close();
+    const again = setup({ journal: first.journal, net, open: async () => ({ status: "unavailable" }) });
+    await ready(again.session);
+    expect(again.session.snapshot().refused).toBe(true);
+    expect(net.calls).toHaveLength(1);
+    again.session.close();
+  });
+
   it("transport errors are retried on schedule with the same key and bytes", async () => {
     const net = server(R0, () => new TypeError("offline"), () => json(503, {}));
     const { session, advance } = setup({ net });
@@ -849,7 +908,7 @@ describe("3d-2c2a §4 (DAN-289 A1): a submission closes the session", () => {
     const sheet = editorFor(session);
     sheet.type("x");
     await sheet.save();
-    expect(session.snapshot()).toEqual({ state: "LOCAL_DURABLE", failure: null, capacity: "ok", closedBy: "submission" });
+    expect(session.snapshot()).toEqual({ state: "LOCAL_DURABLE", failure: null, capacity: "ok", closedBy: "submission", refused: false });
   });
 
   it("S2-S4: after it nothing is recorded, saved, started or sent, and the refused row stays", async () => {
