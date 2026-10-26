@@ -52,10 +52,12 @@ function triggers(text) {
   assert.ok(start >= 0, "workflow has a block-form `on:`");
   const names = [];
   for (const line of lines.slice(start + 1)) {
+    // A blank line or a comment, even at column 0, does not end a YAML block.
+    if (/^\s*(#.*)?$/.test(line)) continue;
     if (/^\S/.test(line)) break;
     const key = /^ {2}([A-Za-z_]+):/.exec(line);
     if (key) names.push(key[1]);
-    else assert.ok(/^\s*(#.*)?$/.test(line) || /^ {3,}/.test(line), `unexpected line under on: ${line}`);
+    else assert.ok(/^ {3,}/.test(line), `unexpected line under on: ${line}`);
   }
   return names;
 }
@@ -79,6 +81,11 @@ test("the trigger reader sees every key under on:", () => {
   const text = "name: x\non: # note\n  push:\n    branches: [main]\n  # a comment\n  workflow_dispatch:\n\npermissions: {}\n";
   assert.deepEqual(triggers(text), ["push", "workflow_dispatch"]);
   assert.throws(() => triggers("on:\n push:\n"), /unexpected line/);
+});
+
+test("a column-0 comment inside on: does not hide the triggers after it (DAN-337, Codex P2)", () => {
+  const text = "on:\n  pull_request_target:\n    types: [opened]\n# Allow manual execution\n  workflow_dispatch:\n\npermissions: {}\n";
+  assert.deepEqual(triggers(text), ["pull_request_target", "workflow_dispatch"]);
 });
 
 const relayPath =new URL("../../.github/workflows/engineering-gate-review-signal.yml", import.meta.url);
