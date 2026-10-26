@@ -48,6 +48,17 @@ describe("LiveText", () => {
     expect(student).toContain(t.note);
   });
 
+  it("draws consecutive bullet items as one list between the other blocks (E1)", () => {
+    const B1 = "2b3c4d5e-6f70-4a8b-9cad-1e2f3a4b5c6d" as NodeId;
+    const B2 = "3c4d5e6f-7081-4b9c-8dbe-2f3a4b5c6d7e" as NodeId;
+    const item = (id: NodeId, text: string) => ({ type: "bulletItem", id, children: [{ type: "text", text, marks: [] }] });
+    const document = { ...DOC, nodes: [DOC.nodes[0], item(B1, "Prva izmišljena stavka"), item(B2, "Druga izmišljena stavka"), DOC.nodes[1]] } as CanonicalDocument;
+    const html = render({ view: { ...SHOWN, document }, marks: [] });
+    expect(html).toContain(`<ul><li data-node-id="${B1}"><span>Prva izmišljena stavka</span></li><li data-node-id="${B2}">`);
+    expect(html.match(/<ul>/g)).toHaveLength(1);
+    expect(html.indexOf("<ul>")).toBeLessThan(html.indexOf(`<p data-node-id="${P1}">`));
+  });
+
   it("draws a heading above the text region and leaves the region itself unchanged", () => {
     const heading = h("h1", { className: "manuscript manuscript__title" }, "Izmišljeni rad");
     const withHeading = render({ view: SHOWN, marks: [MARK], heading });
