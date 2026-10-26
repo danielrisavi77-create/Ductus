@@ -18,7 +18,8 @@ import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
 import { workDocument } from "./work-seed";
 import { cleanUp, post, seed } from "./comment-seed";
 import {
-  appCookie, clickSignOut, fillCodeDeadline, ROLE_HOME, SESSION_COOKIE, sessionRow, signIn, signOutWithoutDialog,
+  appCookie, editorMounted, fillCodeDeadline, ROLE_HOME, SAVED_HERE, SESSION_COOKIE, sessionRow, signIn,
+  signOutHoweverHeld, signOutWithoutDialog,
 } from "./support";
 import { localAdminUrl } from "./local-db-url";
 
@@ -142,11 +143,12 @@ async function forgetProviderLogin(context: BrowserContext): Promise<void> {
 /**
  * Signs out through the button on the writing page and checks that the
  * session is closed. With nothing of this person on the device there is no
- * dialog (O1, #476 c.6396707923); `held` says which is expected.
+ * dialog (O1, #476 c.6396707923); `held` false says none may open. With the
+ * student's work, whether its receipt came before the click decides (3d-2c2b).
  */
 async function signOut(page: Page, token: string, held = true): Promise<void> {
   if (!page.url().endsWith("/rad")) await page.goto("/rad");
-  if (held) await clickSignOut(page);
+  if (held) await signOutHoweverHeld(page);
   else await signOutWithoutDialog(page);
   await page.waitForURL("http://localhost:3000/");
   expect(await appCookie(page.context(), SESSION_COOKIE)).toBeUndefined();
@@ -482,6 +484,8 @@ test("demo walk-through", async ({ browser, page, context }) => {
     // Back to her own work of the K-4 assignment; F-8 point 5: the sheet heading names it.
     await page.goto(`/rad?zadatak=${k4Assignment!}`);
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: 30_000 });
+    // The first opening refreshes the render into a freshly mounted editor (#731).
+    await editorMounted(page);
     await expect(page.locator("h1.manuscript__title")).toHaveText(ASSIGNMENT_TITLE);
     await snapshot(page, "2-editor-nakon-potvrde");
   });
@@ -490,13 +494,16 @@ test("demo walk-through", async ({ browser, page, context }) => {
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
     await editorOf(page).click();
     await page.keyboard.type(TEXT);
-    await expect(chipOf(page)).toHaveAttribute("data-state", "LOCAL_DURABLE");
+    await expect(chipOf(page)).toHaveAttribute("data-state", SAVED_HERE);
     await snapshot(page, "2-spremljeno-na-uredaju");
   });
 
   // This is the local part of F-8 only. The signed server receipt below is
   // still a missing acceptance criterion, not inferred from a network return.
   await test.step("2. F-8 lokalno: prekid mreže, dopuna i oporavak nakon povratka", async () => {
+    // The receipt for the text above moves the revision (3d-2c2b): the
+    // checkpoint is read after it, so going offline is all that changes.
+    await expect(chipOf(page)).toHaveAttribute("data-state", "SYNCED", { timeout: 30_000 });
     const before = await localCheckpoint(page);
     expect(before.snapshot?.document.nodes[0]?.children.map((child) => child.text).join("")).toBe(TEXT);
     await attachCheckpoint("2-prije-prekida.json", before);
@@ -521,9 +528,11 @@ test("demo walk-through", async ({ browser, page, context }) => {
       await page.reload();
       await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
       await expect(editorOf(page)).toHaveText(DRAFT);
-      await expect(chipOf(page)).toHaveAttribute("data-state", "LOCAL_DURABLE");
+      // Online again, the evidence session sends what waited (3d-2c2), so the
+      // rows and the meta move on; the text on the device does not (G2).
+      await expect(chipOf(page)).toHaveAttribute("data-state", SAVED_HERE);
       const restored = await localCheckpoint(page);
-      expect(restored).toEqual(saved);
+      expect(restored.snapshot?.document).toEqual(saved.snapshot?.document);
       await attachCheckpoint("2-oporavljeno-nakon-reloada.json", restored);
       await snapshot(page, "2-nacrt-oporavljen");
     } finally {
@@ -674,10 +683,19 @@ test("demo walk-through", async ({ browser, page, context }) => {
       await page.reload();
       await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
       await expect(editorOf(page)).toHaveText(EXPECTED_TEXT);
-      await expect(chipOf(page)).toHaveAttribute("data-state", "LOCAL_DURABLE");
+      // The network's return may let the session try the owed rows before the
+      // reload (3d-2c2b); the cut route fails that try, and a failed send shows
+      // "Greška" (3d-2c2 O2). Either way the text is on the device, never SYNCED.
+      await expect(chipOf(page)).toHaveAttribute("data-state", /^(LOCAL_DURABLE|ERROR)$/);
       const restored = await localCheckpoint(page);
-      expect(restored).toEqual(saved);
-      expect(syncRequests.filter((path) => path !== livePath())).toEqual([]);
+      expect(restored.snapshot).toEqual(saved.snapshot);
+      expect(restored.pending).toEqual(saved.pending);
+      expect(restored.meta!.localSeq).toBe(saved.meta!.localSeq);
+      expect(restored.meta!.evidenceHead).toEqual(saved.meta!.evidenceHead);
+      // The evidence session asks for the work once on load, and may try a
+      // commit; the route cuts both off, so nothing reaches the server (3d-2c2 §2 t. 4).
+      expect(syncRequests.filter((path) =>
+        path !== livePath() && path !== "/api/evidence/open" && path !== "/api/evidence/commit")).toEqual([]);
       const savedBody = canonicalizeJcs(saved.snapshot!.document);
       for (const body of livePuts) expect(body).toBe(savedBody);
       await attachCheckpoint("2-f8-oporavljeno-nakon-reloada.json", restored);
@@ -723,7 +741,9 @@ test("demo walk-through", async ({ browser, page, context }) => {
     token = (await appCookie(context, SESSION_COOKIE))!.value;
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
     await expect(editorOf(page)).toHaveText(EXPECTED_TEXT);
-    await expect(chipOf(page)).toHaveAttribute("data-state", "LOCAL_DURABLE");
+    // A send cut off in the step above may have left "Greška"; the drain sends
+    // the owed rows again now that the routes are back (3d-2c2b).
+    await expect(chipOf(page)).toHaveAttribute("data-state", SAVED_HERE, { timeout: 30_000 });
     await expect(page.getByText(COMMENT, { exact: true })).toBeVisible();
     await snapshot(page, "2-vlasnica-nastavlja-nacrt");
     await signOut(page, token);

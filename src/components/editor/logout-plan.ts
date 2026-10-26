@@ -16,6 +16,8 @@ export type LogoutPlan = {
   copies?: number;
   /** The journal holds work a sign-out leaves on this device, when read. */
   kept?: boolean;
+  /** The work was submitted (3d-2c2a §4): the steps still held are never sent. */
+  submitted?: boolean;
 };
 
 /**
@@ -50,6 +52,11 @@ export function logoutText(plan: LogoutPlan): LogoutText {
     return { text: t.logoutUnsaved, note: kept ? t.logoutKept : null, offerExport: true };
   }
   if (n === null || n <= 0) return { text: t.logoutPlain, note: kept ? t.logoutKept : null, offerExport: false };
+  if (plan.submitted) {
+    // 3d-2c2 O3: kept on this device for this person, but no sign-in sends it.
+    const after = pluralHr(n, t.logoutAfterSubmission.one, t.logoutAfterSubmission.few, t.logoutAfterSubmission.many);
+    return { text: after.replace("{n}", String(n)), note: null, offerExport: false };
+  }
   const form = pluralHr(n, t.logoutPending.one, t.logoutPending.few, t.logoutPending.many);
   return { text: form.replace("{n}", String(n)), note: t.logoutKept, offerExport: false };
 }
