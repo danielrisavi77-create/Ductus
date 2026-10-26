@@ -48,6 +48,9 @@ const CRITICAL_SAMPLES = [
   "playwright.config.ts",
   "playwright.login.config.ts",
   "test-output.ts",
+  "scripts/demo/native/tools.mjs",
+  "scripts/demo/native/up.mjs",
+  "scripts/demo/native/lib/any.mjs",
   ...D97_PATHS.map(sample),
 ];
 
@@ -88,6 +91,8 @@ test("spelling of a path does not change its floor", () => {
     "scripts//orchestrator//gh.mjs",
     "SRC/Server/DB/with-actor.ts",
     "Tests/Unit/codeowners.test.ts",
+    "scripts\\demo\\native\\tools.mjs",
+    "./Scripts/Demo/Native/up.mjs",
   ]) {
     assert.equal(minimumRisk([file]).risk, "critical", file);
     assert.equal(declared("standard", [file]).ok, false, file);
@@ -132,7 +137,7 @@ test("ordinary documentation stays low and ordinary code stays standard", () => 
     assert.equal(declared("low", [file]).ok, true, file);
     assert.deepEqual(ownerCommandPaths([file]), []);
   }
-  for (const file of ["src/domain/document/index.ts", "e2e/editor.spec.ts", "package.json", "scripts/usage-report.ps1"]) {
+  for (const file of ["src/domain/document/index.ts", "e2e/editor.spec.ts", "package.json", "scripts/usage-report.ps1", "scripts/demo/up.mjs", "scripts/demo/nativex/up.mjs"]) {
     assert.equal(minimumRisk([file]).risk, "standard", file);
   }
 });

@@ -23,6 +23,8 @@ export const CRITICAL_PATHS = [
   ".cc-safety-net/",
   "plugins/",
   "scripts/forbidden-terms/",
+  // Native demo tooling (F-140).
+  "scripts/demo/native/",
   "db/migrations/",
   "db/local/",
   "db/tests/",
