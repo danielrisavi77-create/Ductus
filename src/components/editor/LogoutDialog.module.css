@@ -8,7 +8,7 @@
   border-radius: 10px;
   background: var(--raised);
   color: var(--ink);
-  box-shadow: 0 20px 44px -14px #000d;
+  box-shadow: var(--lift);
 }
 
 .dialog::backdrop {
