@@ -1,7 +1,7 @@
 /* #711 "Moji zadaci", design S2 (docs/design/ductura), on the D-123 tokens (app/globals.css). */
 .course {
   border: 1px solid var(--rule-2);
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: var(--chrome);
 }
 
