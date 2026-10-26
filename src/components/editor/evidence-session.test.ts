@@ -1240,6 +1240,52 @@ describe("O2 (DAN-289, #756 c.6399602745): a submitted work opens read-only", ()
     expect(net.calls.length).toBeGreaterThan(0);
     expect(session.snapshot().state).toBe("SYNCED");
   });
+
+  // Codex #818 r4380722769: the first open was unavailable and a later one says submitted.
+  it("O2-5: submitted: true from a later open closes by submission and sends nothing", async () => {
+    const net = server();
+    const journal = openJournal();
+    const first = setup({ journal, net, online: network(false) });
+    await ready(first.session);
+    first.session.close();
+    let reachable = false;
+    const online = network(false);
+    const createRunner = vi.fn();
+    const second = setup({
+      journal, net, online,
+      open: async () => (reachable ? { status: "opened", work: workFor(ASSIGNED, { submitted: true }) } : { status: "unavailable" }),
+      over: { storedProfile: () => PROFILE, createRunner },
+    });
+    const loaded = await ready(second.session);
+    const sheet = editorFor(second.session, (loaded as { document: CanonicalDocument }).document);
+    sheet.type("offline");
+    await sheet.save();
+    const before = await journal.readEvidence(DOC);
+    expect(before.pending).toHaveLength(1);
+    expect(second.session.snapshot().closedBy).toBeNull();
+
+    reachable = true;
+    online.set(true);
+    await second.session.settled();
+    expect(second.session.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null, closedBy: "submission" });
+    expect(createRunner).not.toHaveBeenCalled();
+    expect(net.calls).toHaveLength(0);
+
+    // Typing after the close records and saves nothing; the held row stays as it was.
+    const saveSegment = vi.spyOn(journal, "saveSegment");
+    const saveUncovered = vi.spyOn(journal, "saveUncovered");
+    sheet.type(" nakon");
+    await sheet.save();
+    for (let minute = 0; minute < 3; minute++) {
+      online.set(true);
+      await second.session.settled();
+    }
+    expect(saveSegment).not.toHaveBeenCalled();
+    expect(saveUncovered).not.toHaveBeenCalled();
+    expect(net.calls).toHaveLength(0);
+    expect((await journal.readEvidence(DOC)).pending.map((row) => row.tx.clientTransactionId))
+      .toEqual(before.pending.map((row) => row.tx.clientTransactionId));
+  });
 });
 
 describe("3d-2c2a Codex #803 (3): close() while load() waits for open", () => {

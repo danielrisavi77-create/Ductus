@@ -521,6 +521,12 @@ export class EvidenceSession {
         return;
       }
       this.work = opened.work;
+      if (opened.work.submitted) {
+        // O2 also when the first open could not be reached (Codex #818
+        // r4380722769): close as `load()` does, before any runner exists.
+        this.closeBySubmission();
+        return;
+      }
       this.profile = opened.work.evidenceProfileId;
       this.runner = this.deps.createRunner(opened.work);
       this.startWrites();
