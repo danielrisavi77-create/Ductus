@@ -46,7 +46,7 @@ Kanonski dokument: `docs/ENGINEERING_SYSTEM.md`.
 
 ## Otvoreni razvojni stog
 
-Stanje 26. 10. 2026. oko 13:30 UTC prema `gh pr list --state open` (nositelj statusa je Linear; review i QA stanje je na PR-u). STATE.md i dalje prati PR-ove i redovito se osvježava (vlasnik, 25. 10. 2026., prenosi orkestrator na #271 `issuecomment-6398469344`; povod je pregled Trijaže `issuecomment-6398435565`). Mergifyjevi privremeni PR-ovi (#858, #859) nisu navedeni.
+Stanje 26. 10. 2026. oko 13:30 UTC prema `gh pr list --state open` (nositelj statusa je Linear; review i QA stanje je na PR-u). STATE.md i dalje prati PR-ove i redovito se osvježava (vlasnik, 25. 10. 2026., prenosi orkestrator na #271 `issuecomment-6398469344`; povod je pregled Trijaže `issuecomment-6398435565`). Mergifyjev privremeni PR #859 nije naveden.
 
 Otvoreno:
 
@@ -55,12 +55,12 @@ Otvoreno:
 - DAN-308 brzi put nastavnika: #780 ruta (B-11c); #825 F-11 čita radove iz B-11c (DAN-334, nacrt).
 - Nastavnik, rad i editor: #805 predaje zadatka (DAN-290); #830 rad nastaje na klik "Započni rad" (DAN-330) i #831 korak na poslužitelju (F-137, DAN-331, nacrt); #847 blok-citat (DAN-326 E1, dio 2); #851 naslov upisan kao "# " zadržava id retka (#849).
 - Početna stranica (Refs #823): #848 i #850, nacrti.
-- Platforma, orkestrator i CI: #834 donji prag rizika za izvorni demo (F-140, F-144) i #837 pravila Actions za engineering gate (DAN-337), oba u redu za spajanje; #817 i #833 izvorni demo za Windows bez Dockera (DAN-335, DAN-324, #833 nacrt); #855 Login E2E na dva runnera; #857 Mergify red u skupinama do tri PR-a (D-177); #812 ovo osvježavanje; #684 `orch:shadow` (DAN-269); #643 (nacrt), #642, #641 Mergify i akcije; #628 Playwright ponavljanja (DAN-262, nacrt).
+- Platforma, orkestrator i CI: #837 pravila Actions za engineering gate (DAN-337, u redu za spajanje); #817 i #833 izvorni demo za Windows bez Dockera (DAN-335, DAN-324, #833 nacrt); #855 Login E2E na dva runnera; #857 Mergify red u skupinama do tri PR-a (D-177); #812 ovo osvježavanje; #684 `orch:shadow` (DAN-269); #643 (nacrt), #642, #641 Mergify i akcije; #628 Playwright ponavljanja (DAN-262, nacrt).
 - Stariji nacrti: #629, #571, #553, #552, #551, #550, #438, #372, #370, #354, #347, #344; #94 drugi pružatelj reviewa (DAN-41, nakon demoa).
 
-Od prethodnog presjeka (26. 10. oko 00:00 UTC) spojeni su #808, #816, #804, #822, #832, #814, #819, #821, #836, #839, #843, #840, #844, #769 (B-11a), #846 (E1, dio 1), #774 (B-11b) i #856 (D-176).
+Od prethodnog presjeka (26. 10. oko 00:00 UTC) spojeni su #808, #816, #804, #822, #832, #814, #819, #821, #836, #839, #843, #840, #844, #769 (B-11a), #846 (E1, dio 1), #774 (B-11b), #856 (D-176) i #834 (F-140, F-144).
 
-Spojeno od 12. do 26. 10. 2026.: 315 PR-ova (#180 do #856, s preskocima). Potpun popis: `gh pr list --state merged`.
+Spojeno od 12. do 26. 10. 2026.: 316 PR-ova (#180 do #856, s preskocima). Potpun popis: `gh pr list --state merged`.
 
 ## Ne smije se izgubiti
 
