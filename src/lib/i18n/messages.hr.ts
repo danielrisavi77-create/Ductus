@@ -411,11 +411,16 @@ export const hr = {
   fastPath: {
     title: "Brz put",
     intro: "Radovi jednog zadatka, jedan za drugim. Prikaz samo čita; ništa ne mijenja.",
-    sample: "Izmišljeni primjer: popis radova zadatka još nije povezan, pa su studenti i tekstovi izmišljeni.",
     denied: "Ovaj prikaz vidi samo nastavnik.",
     loading: "Učitavanje radova…",
     unavailable: "Radovi trenutačno nisu dostupni. Pokušaj ponovno.",
-    noStudents: "U kolegij još nije upisan nijedan student.",
+    // F-11 (#757, contract c.6397637802 §3; owner c.6397679688).
+    pickAssignment: "Odaberi zadatak u svojim kolegijima.",
+    empty: "Za ovaj zadatak nema radova za prikaz.",
+    refresh: "Stanje spremljeno na poslužitelju. Osvježava se najviše svakih 5 minuta.",
+    stale: "Stanje nije osvježeno. Prikazano je zadnje učitano stanje; sljedeći pokušaj za najviše 5 minuta.",
+    // #757 D1, za potvrdu: a student whose account has no name; never a number or an address.
+    unnamed: "Ime nije dostupno",
     studentsLabel: "Studenti",
     studentsTitle: "Studenti · po prezimenu",
     // #732 item 18, design pregled-radova-v2 (D-80): the list has no order by numbers.
@@ -423,7 +428,6 @@ export const hr = {
     work: {
       notice_pending: "Obavijest još nije potvrđena",
       writing: "U pisanju",
-      revision_requested: "Čeka doradu",
       submitted: "Predano",
     },
     noRecord: "nema zapisa",
@@ -434,15 +438,9 @@ export const hr = {
     textLabel: "Tekst rada, samo za čitanje",
     lines: {
       lastChange: "Zadnja promjena",
-      revisions: "Otvoreni zahtjevi za doradu",
       pastes: "Lijepljenja bez izvora",
-      declaration: "Izjava",
     },
     none: "nema",
-    revisionForms: { one: "zahtjev za doradu", few: "zahtjeva za doradu", many: "zahtjeva za doradu" },
-    declaration: { not_submitted: "još nije predana", submitted: "predana s radom" },
-    paragraph: "odlomak",
-    pastedTag: "zalijepljeno · izvor nije naveden",
     openWork: "Otvori rad",
     soon: "uskoro",
   },
@@ -453,6 +451,9 @@ export const hr = {
     barLabel: "Zadatak i prikaz",
     modeWriting: "Pisanje",
     modeTeacherView: "Kako vidi nastavnik",
+    // #732 item 7 (owner 6397193676): the line above the teacher's view, and why the switch is off.
+    teacherViewLead: "Ovako nastavnik vidi tvoj rad: zadnji tekst koji je tvoj preglednik poslao, komentare i sažetak procesa. Ovdje se ne piše.",
+    teacherViewOff: "samo uz zadatak",
     // F-10: a link to the submission screen, not the act of submitting (#653 contract 6385776645).
     submitLink: "Predaja",
     soon: "uskoro",

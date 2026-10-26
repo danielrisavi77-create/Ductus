@@ -9,6 +9,7 @@
 
 import { useEditorState, type Editor } from "@tiptap/react";
 
+import { showInText } from "@/client/comments-bridge";
 import { currentHeading, headingOutline, type OutlineEntry } from "@/editor/outline";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 
@@ -24,13 +25,15 @@ function outlineOf(editor: Editor | null): OutlineState {
   return { entries, current: currentHeading(entries, editor.state.selection.from) };
 }
 
-export default function HeadingOutline() {
+export default function HeadingOutline({ documentId }: { documentId?: string } = {}) {
   const editor = useLocalEditor();
   const { entries, current } = useEditorState({ editor, selector: ({ editor: e }) => outlineOf(e) }) ?? EMPTY;
 
   if (entries.length === 0) return <p className="rail-empty">{t.workspace.structureEmpty}</p>;
 
   const go = (entry: OutlineEntry) => {
+    // The teacher view on /rad replaced the editor: the heading is shown there (#732 item 7).
+    if (documentId && entry.id && showInText(documentId, { nodeId: entry.id })) return;
     if (!editor || editor.isDestroyed) return;
     // Inside the heading, before its first letter; read-only text still takes a cursor.
     editor.chain().setTextSelection(entry.pos + 1).scrollIntoView().run();
