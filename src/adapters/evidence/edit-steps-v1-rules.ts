@@ -258,9 +258,10 @@ function namesUnknownType(steps: unknown, code: string, path: string): boolean {
   let value: unknown = steps;
   for (const [, key, index] of tokens) {
     if (typeof value !== "object" || value === null) return false;
-    const name = key ?? index;
-    if (!Object.prototype.hasOwnProperty.call(value, name)) return false;
-    value = (value as Record<string, unknown>)[name];
+    // Own properties only, read without indexing: nothing here is written.
+    const own = Object.getOwnPropertyDescriptor(value, key ?? index);
+    if (own === undefined || !("value" in own)) return false;
+    value = own.value as unknown;
   }
   return typeof value === "string" && !isKnownType(value);
 }
