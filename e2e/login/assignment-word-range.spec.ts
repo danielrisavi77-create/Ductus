@@ -7,14 +7,13 @@ import pg from "pg";
 
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
 import { fillCodeDeadline, signIn } from "./support";
+import { localAdminUrl } from "./local-db-url";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
-const DATABASE_URL = process.env.E2E_ADMIN_DATABASE_URL ??
-  "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
 const TEACHER = "demo-teacher@demo.ductus.test";
 
 test("teacher form keeps the committed request key for an equivalent range", async ({ page }) => {
-  const db = new pg.Client({ connectionString: DATABASE_URL });
+  const db = new pg.Client({ connectionString: localAdminUrl() });
   await db.connect();
   let grantedHere = false;
   try {
