@@ -20,6 +20,7 @@ const NAV: Record<ShellRole, readonly NavItem[]> = {
     { href: "/nastavnik/brz-put", label: t.shell.nav.fastPath },
   ],
   student: [
+    { href: "/zadaci", label: t.shell.nav.assignments },
     { href: "/rad", label: t.shell.nav.workspace },
     { href: "/upis", label: t.shell.nav.enroll },
   ],
