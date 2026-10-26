@@ -82,7 +82,12 @@ export type EvidenceSessionDeps = {
 /** The session's snapshot; `closedBy` tells the editor to turn read-only (3d-2c2b). */
 export type EvidenceSnapshot = SaverSnapshot & {
   closedBy: "submission" | null;
-  /** The server refused the last row for good (`meta.refusedLocalSeq`); only a reload sends it again. */
+  /**
+   * The server refused the last row and nothing sends it again by itself
+   * (3d-2c2 §3): a refusal for good (`meta.refusedLocalSeq`), or a 426 or an
+   * unreadable answer the drain holds for a manual retry. Only a reload sends
+   * it again.
+   */
   refused: boolean;
 };
 
@@ -113,6 +118,8 @@ export class EvidenceSession {
   /** §4: a submission closed the package; nothing is written or sent from here. */
   private closedBy: "submission" | null = null;
   private refused = false;
+  /** The drain's last step held the front row for a manual retry (426, unreadable answer). */
+  private manualOnly = false;
   private profile: string | null = null;
   private work: OpenedWork | null = null;
   private runner: DrainRunner | null = null;
@@ -150,7 +157,7 @@ export class EvidenceSession {
   snapshot(): EvidenceSnapshot {
     // §4: the refused row stays on the device; that is no failure of this device.
     const failure = this.closedBy ? null : this.failure;
-    const refused = !this.closedBy && this.state() === "ERROR" && this.refused;
+    const refused = !this.closedBy && this.state() === "ERROR" && (this.refused || this.manualOnly);
     return { state: this.state(), failure, capacity: "ok", closedBy: this.closedBy, refused };
   }
 
@@ -462,6 +469,7 @@ export class EvidenceSession {
         return;
       }
       this.syncing = false;
+      this.manualOnly = result.kind === "needs_retry";
       if (result.kind === "sent" && result.state === "SYNCED") this.syncedHere = true;
       const contents = await this.refresh();
       if (result.kind === "sent" && contents && contents.pending.length > 0) continue;

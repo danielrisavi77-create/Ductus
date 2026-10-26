@@ -31,6 +31,16 @@ export function evidenceNotice(snapshot: DocumentSnapshot | null): "conflict" | 
   return snapshot.refused ? "refused" : null;
 }
 
+/**
+ * Whether the saver's snapshot speaks for the sheet (chip and notice): a
+ * ready sheet, or one the evidence session loaded in a sticky state, whose
+ * local record was read and whose server work differs (3d-2c2 §3). Any other
+ * recovery could not read the local record and says so instead.
+ */
+export function snapshotSpeaks(phase: string, stickyLoad: boolean): boolean {
+  return phase === "ready" || (phase === "recovery" && stickyLoad);
+}
+
 /** What the provider asks of its saver (3d-2c2 §2, the shared surface). */
 export type DocumentSaver = {
   load(): Promise<LoadResult>;

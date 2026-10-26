@@ -216,23 +216,48 @@ test("3d-2c2: a 409 conflict stops sending and makes the sheet read-only", async
   await shoot(page, "3d-2c2-sukob");
 });
 
-for (const [status, body, notice] of [
-  [413, { status: "too_large" }, true],
-  [426, { status: "upgrade_required" }, false],
+// Review #811 (c.6418056374, 1): a reload keeps the conflict's notice and
+// chip; the local record was read, so the recovery text is not shown.
+test("3d-2c2: after a 409 conflict a reload stays read-only with the conflict notice", async ({ page }) => {
+  await openSheet(page);
+  const requests = recordRequests(page);
+  await page.route(COMMIT, (route) => route.fulfill({ status: 409, json: { status: "stale_base", currentRevision: 7 } }));
+  const TEXT = "Tekst prije sukoba i osvježavanja.";
+  await type(page, TEXT);
+  await expect(chipOf(page)).toHaveAttribute("data-state", "CONFLICT", { timeout: OPEN });
+  const sent = commitsOf(requests).length;
+  await page.reload();
+  await expect(editorOf(page)).toContainText(TEXT, { timeout: OPEN });
+  await expect(page.getByRole("alert").filter({ hasText: t.editor.evidenceConflict })).toBeVisible({ timeout: OPEN });
+  await expect(page.getByRole("alert").filter({ hasText: t.editor.recovery })).toHaveCount(0);
+  await expect(chipOf(page)).toHaveAttribute("data-state", "CONFLICT");
+  await expect(editorOf(page)).toHaveAttribute("contenteditable", "false");
+  await networkBack(page);
+  await page.waitForTimeout(3000);
+  expect(commitsOf(requests)).toHaveLength(sent);
+  await shoot(page, "3d-2c2-sukob-nakon-osvjezavanja");
+});
+
+// 3d-2c2 §3 and e2e t. 7: a refusal for good (413), a 426 and an unreadable
+// answer are never sent again by themselves; the chip says "Greška" and the
+// notice `sendRefused` says a reload sends the text again.
+for (const [name, status, body] of [
+  ["413", 413, { status: "too_large" }],
+  ["426", 426, { status: "upgrade_required" }],
+  ["an unreadable answer", 200, { status: "nepoznato" }],
 ] as const) {
-  test(`3d-2c2: ${status} is not retried in a loop`, async ({ page }) => {
+  test(`3d-2c2: ${name} is not retried in a loop`, async ({ page }) => {
     await openSheet(page);
     const requests = recordRequests(page);
     await page.route(COMMIT, (route) => route.fulfill({ status, json: body }));
-    await type(page, `Tekst koji poslužitelj odbija (${status}).`);
+    await type(page, `Tekst koji poslužitelj odbija (${name}).`);
     await expect(chipOf(page)).toHaveAttribute("data-state", "ERROR", { timeout: OPEN });
     await networkBack(page);
     await page.waitForTimeout(10_000);
     expect(commitsOf(requests)).toHaveLength(1);
-    // The notice names a refusal for good (`refusedLocalSeq`); a 426 is not
-    // one the journal records as final, so it shows only the chip.
-    await expect(page.getByRole("alert").filter({ hasText: t.editor.sendRefused })).toHaveCount(notice ? 1 : 0);
-    if (notice) await shoot(page, "3d-2c2-posluzitelj-nije-primio");
+    await expect(chipOf(page)).toHaveAttribute("data-state", "ERROR");
+    await expect(page.getByRole("alert").filter({ hasText: t.editor.sendRefused })).toHaveCount(1);
+    if (status === 413) await shoot(page, "3d-2c2-posluzitelj-nije-primio");
   });
 }
 

@@ -64,7 +64,7 @@ import { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
 import type { SaverFailure } from "@/lib/journal/local-document-saver";
 
 import {
-  createDocumentSaver, evidenceNotice, writingClosed, type DocumentSaver, type DocumentSnapshot,
+  createDocumentSaver, evidenceNotice, snapshotSpeaks, writingClosed, type DocumentSaver, type DocumentSnapshot,
 } from "./document-saver";
 import type { EvidenceSession } from "./evidence-session";
 import LogoutDialog from "./LogoutDialog";
@@ -97,6 +97,12 @@ type LocalDocumentValue = {
   snapshot: DocumentSnapshot | null;
   words: number;
   invalid: boolean;
+  /**
+   * The evidence session loaded the text in a sticky state (CONFLICT or
+   * RECOVERY_REQUIRED): the local record was read, and the server's work
+   * differs (3d-2c2 §3).
+   */
+  stickyLoad: boolean;
   /**
    * Stops writing and says what a sign-out would leave behind (FE-D7), or
    * "leave" when the page's session has ended.
@@ -175,6 +181,7 @@ export function LocalDocumentProvider({
   const [snapshot, setSnapshot] = useState<DocumentSnapshot | null>(null);
   const [words, setWords] = useState(0);
   const [invalid, setInvalid] = useState(false);
+  const [stickyLoad, setStickyLoad] = useState(false);
   // Set while this tab holds the lock with an editable document.
   const logoutRef = useRef<LockedLogout | null>(null);
   const channelRef = useRef<BroadcastChannel | null>(null);
@@ -352,6 +359,7 @@ export function LocalDocumentProvider({
         return;
       }
       setPhase("loading");
+      setStickyLoad(false);
       let journal = new AtomicDexieJournal(scope);
       // An earlier sign-out was cut off after its fence: finish it before
       // anything is read. The fence exists only when nothing was unsynced,
@@ -409,6 +417,9 @@ export function LocalDocumentProvider({
         }
         sheetOwnerRef.current = owner;
         if (result.kind !== "ready") {
+          // Only the evidence session's own sticky state; the local saver's
+          // keeps its recovery notice as before (D8).
+          setStickyLoad(evidence !== null && result.kind === "recovery" && result.reason === "sticky");
           setPhase(result.kind);
           return;
         }
@@ -542,7 +553,7 @@ export function LocalDocumentProvider({
   };
 
   const value: LocalDocumentValue = {
-    editor, phase, snapshot, words, invalid, prepareSignOut, staySignedIn, signOut,
+    editor, phase, snapshot, words, invalid, stickyLoad, prepareSignOut, staySignedIn, signOut,
   };
   return <LocalDocumentContext.Provider value={value}>{children}</LocalDocumentContext.Provider>;
 }
@@ -600,6 +611,10 @@ const FAILURE_TEXT: Record<Failure, string> = {
   corrupt: t.editor.recovery,
 };
 
+function showsSaverState({ phase, stickyLoad }: LocalDocumentValue): boolean {
+  return snapshotSpeaks(phase, stickyLoad);
+}
+
 const EVIDENCE_TEXT = {
   conflict: t.editor.evidenceConflict,
   refused: t.editor.sendRefused,
@@ -620,8 +635,10 @@ export function LocalEditor() {
   const value = useLocalDocument();
   const { editor, phase } = value;
   const failure = failureOf(value);
-  // A sheet in recovery could not read its local record: that notice comes first.
-  const notice = phase === "ready" ? evidenceNotice(value.snapshot) : null;
+  // A sheet in recovery could not read its local record: that notice comes
+  // first, unless the evidence session read it and the server's work differs
+  // (a sticky load after a reload, 3d-2c2 §3).
+  const notice = showsSaverState(value) ? evidenceNotice(value.snapshot) : null;
   const alert = phase === "signed-out" ? t.auth.signedOutElsewhere
     : notice ? EVIDENCE_TEXT[notice]
     : phase === "recovery" ? t.editor.recovery : failure ? FAILURE_TEXT[failure] : null;
@@ -653,9 +670,10 @@ function chipOf(value: LocalDocumentValue): LocalChip | null {
   const failure = failureOf(value);
   return localChip({
     blocked: value.phase === "blocked",
-    recoveryRequired: value.phase === "recovery" || failure === "corrupt",
+    // A sticky load says its own state: CONFLICT stays "Sukob" after a reload.
+    recoveryRequired: (value.phase === "recovery" && !value.stickyLoad) || failure === "corrupt",
     failed: failure !== null,
-    saverState: value.phase === "ready" ? value.snapshot?.state ?? null : null,
+    saverState: showsSaverState(value) ? value.snapshot?.state ?? null : null,
   });
 }
 
