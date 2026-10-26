@@ -145,7 +145,8 @@ test("a tab that never heard the session end starts empty when the next person's
   // The old tab never reloads: the shell's link renders /rad under the new
   // cookie (the assignment is not the next person's, #711 F1). While it waits
   // for the journal, the sheet already shows nothing of before.
-  await page.locator('nav a[href="/rad"]').click();
+  // The side bar's item, not the top bar's Početna, which also leads to /rad (#802).
+  await page.getByRole("navigation", { name: t.shell.workNav }).locator('a[href="/rad"]').click();
   await expect(phaseOf(page)).toHaveAttribute("data-phase", "blocked");
   await expect(editorOf(page)).toHaveText("");
   await expect(page.getByText(DRAFT_REPLY)).toHaveCount(0);
