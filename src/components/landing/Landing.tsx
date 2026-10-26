@@ -5,7 +5,7 @@ import { messagesHr as t } from "@/lib/i18n/messages.hr";
 
 import { FLOW_STEPS } from "./flowSteps";
 import styles from "./Landing.module.css";
-import Replay from "./Replay";
+import Rewind from "./Rewind";
 import TwoSides from "./TwoSidesLazy";
 
 /** Every way in leads to the sign-in screen (owner, #476); it offers AAI@EduHr only (D-09). */
@@ -94,7 +94,7 @@ export default function Landing() {
         </section>
 
         <TwoSides />
-        <Replay />
+        <Rewind />
 
         <section id="za-koga" className={styles.section} aria-labelledby="za-koga-naslov">
           <p className={styles.eyebrow}>{l.forWhomLink}</p>

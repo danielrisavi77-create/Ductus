@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 
-import { buildFrames, clampStep, parseEdit } from "./replay";
+import { buildFrames, clampStep, parseEdit } from "./rewind";
 import styles from "./Wow.module.css";
 
 const l = t.landing.replay;
@@ -21,7 +21,7 @@ const PLAY_STEP_MS = 650;
  * visitor scrubs a step slider or plays through the steps. Nothing is read from
  * the visitor and nothing is sent; there is no timing of any kind in the data.
  */
-export default function Replay() {
+export default function Rewind() {
   const frames = useMemo(() => buildFrames(l.edits.map(parseEdit)), []);
   const last = frames.length - 1;
   const [step, setStep] = useState(last);

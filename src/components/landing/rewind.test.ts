@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 
-import { applyEdit, buildFrames, clampStep, parseEdit } from "./replay";
+import { applyEdit, buildFrames, clampStep, parseEdit } from "./rewind";
 
 const SAMPLE_EDITS = t.landing.replay.edits.map(parseEdit);
 
