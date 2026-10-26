@@ -92,7 +92,6 @@ export function InstructionsPanel({ load }: { load: PanelLoad<NoticeView> }): Re
     part(
       "upute-checks",
       [t.upute.checks, " ", h("span", { key: "soon", className: "soon" }, t.soon)],
-      h("p", { className: "rail-empty" }, t.upute.checksSoon),
       h("p", { className: styles.meta }, t.upute.checksNote),
     ),
   );

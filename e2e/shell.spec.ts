@@ -69,7 +69,7 @@ test.describe("workspace shell", () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/rad");
     const stops: string[] = [];
-    for (let i = 0; i < 5; i += 1) {
+    for (let i = 0; i < 6; i += 1) {
       await page.keyboard.press("Tab");
       const focused = page.locator(":focus");
       stops.push((await focused.getAttribute("aria-label")) ?? ((await focused.textContent()) ?? "").trim());
@@ -78,9 +78,11 @@ test.describe("workspace shell", () => {
       expect(outline).not.toBe("none");
     }
     // Without an assignment the teacher view has no address: it is a stop, but says so.
-    // The shell's brand and theme switch come first (no session: no navigation).
+    // The shell's brand, the top bar's Početna (#802) and the theme switch come
+    // first (no session: no navigation).
     expect(stops).toEqual([
-      "Preskoči na sadržaj", "Ductura, početna", "Promijeni svijetlu ili tamnu temu", "Pisanje", "Kako vidi nastavnik samo uz zadatak",
+      "Preskoči na sadržaj", "Ductura, početna", "Početna", "Promijeni svijetlu ili tamnu temu", "Pisanje",
+      "Kako vidi nastavnik samo uz zadatak",
     ]);
   });
 
@@ -198,8 +200,9 @@ test.describe("workspace shell", () => {
       if (tabVisitsLinks(browserName)) {
         await expect(page.getByRole("textbox", { name: "Tekst rada" })).toHaveAttribute("contenteditable", "true");
         // The sheet theme is in the toolbar's "Prikaz" menu (FE-D5): two stops
-        // fewer; the shell's theme switch is one more.
-        for (let i = 0; i < 8; i += 1) await page.keyboard.press("Tab");
+        // fewer; the shell's theme switch is one more, and so is the top bar's
+        // Početna (#802).
+        for (let i = 0; i < 9; i += 1) await page.keyboard.press("Tab");
         await expect(panel.getByRole("tab", { name: "Komentari" })).toBeFocused();
         await page.keyboard.press("Tab");
         await expect(railToggle).toBeFocused();
@@ -244,11 +247,11 @@ test.describe("workspace shell", () => {
       // sheet's editor, then the structure toggle; Enter opens.
       if (tabVisitsLinks(browserName)) {
         await expect(page.getByRole("textbox", { name: "Tekst rada" })).toHaveAttribute("contenteditable", "true");
-        // Skip link, the shell (Ductura and the theme switch; below 800 px ☰
-        // and the theme switch, the side bar being a closed drawer), Pisanje,
-        // Kako vidi nastavnik, the toolbar (one stop, the sheet theme is in
-        // its "Prikaz" menu, FE-D5), the editor, then the panel.
-        for (let i = 0; i < 8; i += 1) await page.keyboard.press("Tab");
+        // Skip link, the shell (Ductura, Početna and the theme switch; below
+        // 800 px ☰, Početna and the theme switch, the side bar being a closed
+        // drawer), Pisanje, Kako vidi nastavnik, the toolbar (one stop, the
+        // sheet theme is in its "Prikaz" menu, FE-D5), the editor, then the panel.
+        for (let i = 0; i < 9; i += 1) await page.keyboard.press("Tab");
         await expect(panelToggle).toBeFocused();
         await page.keyboard.press("Enter");
         await expect(panelToggle).toHaveAttribute("aria-expanded", "true");
