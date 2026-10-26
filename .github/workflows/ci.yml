@@ -370,6 +370,11 @@ jobs:
         env:
           PLAYWRIGHT_TRY_WITHOUT_DEPS: ${{ github.event_name == 'pull_request' && '1' || '' }}
         run: bash scripts/engineering/playwright-install.sh chromium
+      # F-152: the demo account bootstrap's guards drive a real Chromium, which
+      # only this job installs; each shard runs them (a few seconds).
+      - name: Demo account bootstrap tests
+        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
+        run: pnpm test:demo:browser
       # The full login through "Demo prijava" needs `next dev` (D-09 refuses
       # the fake provider in production); Chromium only (owner decision).
       # The full suite as this runner sees it, before sharding; the inventory
