@@ -6,6 +6,7 @@ import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { FLOW_STEPS } from "./flowSteps";
 import styles from "./Landing.module.css";
 import PreviewComment from "./PreviewComment";
+import TwoSides from "./TwoSidesLazy";
 
 /** Every way in leads to the sign-in screen (owner, #476); it offers AAI@EduHr only (D-09). */
 export const SIGN_IN_PATH = "/prijava";
@@ -87,6 +88,8 @@ export default function Landing() {
             <figcaption className={styles.small}>{l.previewNote}</figcaption>
           </figure>
         </section>
+
+        <TwoSides />
 
         <section id="za-koga" className={styles.section} aria-labelledby="za-koga-naslov">
           <p className={styles.eyebrow}>{l.forWhomLink}</p>
