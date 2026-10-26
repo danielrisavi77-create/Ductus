@@ -445,6 +445,9 @@ export const hr = {
     barLabel: "Zadatak i prikaz",
     modeWriting: "Pisanje",
     modeTeacherView: "Kako vidi nastavnik",
+    // #732 item 7 (owner 6397193676): the line above the teacher's view, and why the switch is off.
+    teacherViewLead: "Ovako nastavnik vidi tvoj rad: zadnji tekst koji je tvoj preglednik poslao, komentare i sažetak procesa. Ovdje se ne piše.",
+    teacherViewOff: "samo uz zadatak",
     // F-10: a link to the submission screen, not the act of submitting (#653 contract 6385776645).
     submitLink: "Predaja",
     soon: "uskoro",

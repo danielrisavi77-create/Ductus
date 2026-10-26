@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { ActorTransaction, WithActor } from "@/server/db/with-actor";
 
-import { readShellRole } from "./shell-role";
+import { readHome, readShellRole } from "./shell-role";
 
 const TOKEN = "A".repeat(43);
 
@@ -41,6 +41,41 @@ describe("shell role (I3)", () => {
     const outage = vi.fn(async () => { throw new Error("raw SQL must not leak"); }) as unknown as WithActor;
     expect(await readShellRole(TOKEN, outage)).toBeNull();
     expect(JSON.stringify(error.mock.calls)).not.toContain("raw SQL");
+    error.mockRestore();
+  });
+});
+
+// DAN-325 and F-151: "/" decides where a signed-in person goes, and the
+// shell's scope, from one read (the cases of home-target.test.ts).
+describe("readHome", () => {
+  const USER = "00000000-0000-4000-8000-0000000000a1";
+  const INSTITUTION = "00000000-0000-4000-8000-0000000000b1";
+
+  it("sends a confirmed teacher to /nastavnik and any other open session to /rad, with one read", async () => {
+    const teacher = actor({ signed_in: true, teacher: true, user_id: USER, institution_id: INSTITUTION } as never);
+    const home = await readHome(TOKEN, teacher.withActor);
+    expect(home.path).toBe("/nastavnik");
+    expect(home.scope).not.toBeNull();
+    expect(teacher.withActor).toHaveBeenCalledTimes(1);
+    const student = actor({ signed_in: true, teacher: false, user_id: USER, institution_id: INSTITUTION } as never);
+    expect((await readHome(TOKEN, student.withActor)).path).toBe("/rad");
+    expect(student.withActor).toHaveBeenCalledTimes(1);
+  });
+
+  it("guesses nothing without an open session, and asks nothing without a well-formed cookie", async () => {
+    const { withActor } = actor({ signed_in: true, teacher: true });
+    for (const token of [undefined, "", "kratko", `${TOKEN}!`]) {
+      expect(await readHome(token, withActor)).toEqual({ path: null, scope: null });
+    }
+    expect(withActor).not.toHaveBeenCalled();
+    expect(await readHome(TOKEN, actor({ signed_in: false, teacher: false }).withActor)).toEqual({ path: null, scope: null });
+  });
+
+  it("guesses nothing when the database does not answer as expected", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const outage = vi.fn(async () => { throw new Error("connection refused"); }) as unknown as WithActor;
+    expect(await readHome(TOKEN, outage)).toEqual({ path: null, scope: null });
+    expect(await readHome(TOKEN, actor(undefined).withActor)).toEqual({ path: null, scope: null });
     error.mockRestore();
   });
 });
