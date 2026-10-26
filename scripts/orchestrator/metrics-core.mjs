@@ -158,12 +158,20 @@ export async function mapLimit(items, limit, fn) {
   return out;
 }
 
-/** `--since YYYY-MM-DD` (required, strict) and `--json`. */
+/** Existing PR metrics or one local Playwright report; never implicitly call GitHub. */
 export function parseMetricsArgs(args) {
-  const i = args.indexOf("--since");
-  const since = i >= 0 ? args[i + 1] : undefined;
-  if (!since || !/^\d{4}-\d{2}-\d{2}$/.test(since) || Number.isNaN(Date.parse(since))) {
-    throw new Error("usage: orch:metrics --since YYYY-MM-DD [--json]");
+  const usage = "usage: orch:metrics (--since YYYY-MM-DD | --playwright-report <results.json>) [--json]";
+  const values = new Map();
+  for (let i = 0; i < args.length; i++) {
+    const flag = args[i];
+    if (!["--since", "--playwright-report", "--json"].includes(flag) || values.has(flag)) throw new Error(usage);
+    const value = flag === "--json" ? true : args[++i];
+    if (!value || (typeof value === "string" && value.startsWith("--"))) throw new Error(usage);
+    values.set(flag, value);
   }
-  return { since, json: args.includes("--json") };
+  const since = values.get("--since"), playwrightReport = values.get("--playwright-report");
+  const json = values.has("--json");
+  if (playwrightReport && !since) return { playwrightReport, json };
+  if (playwrightReport || !since || !/^\d{4}-\d{2}-\d{2}$/.test(since) || Number.isNaN(Date.parse(since))) throw new Error(usage);
+  return { since, json };
 }
