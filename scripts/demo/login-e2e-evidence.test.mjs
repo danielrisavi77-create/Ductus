@@ -31,6 +31,28 @@ test("the login E2E server gets the signer, the store credentials and the storag
   assert.equal(seen.length, 1);
 });
 
+// F-156: whatever the source environment holds, only the evidence variables leave. A
+// database login or an auth password in the result would reach the E2E reports.
+test("no database login, password or other source value reaches the E2E server environment", () => {
+  const CANARY = "canary-f156-not-for-the-report";
+  // The demo environment accepts these forms (scripts/demo/up.mjs), so the canary reaches
+  // the merged environment the allowlist filters; the app login there is the fixed local one.
+  const source = {
+    DUCTUS_DEV_SIGNING_KEY_FILE: "/seed/demo.seed",
+    AUTH_DATABASE_URL: `postgres://ductus_auth_local:${CANARY}@127.0.0.1:54329/ductus`,
+    DUCTUS_AUTH_LOCAL_PASSWORD: CANARY,
+    DATABASE_URL: `postgres://admin:${CANARY}@127.0.0.1:54329/ductus`,
+    OIDC_CLIENT_SECRET: CANARY,
+    UNRELATED_TOKEN: CANARY,
+  };
+  const env = evidenceServerEnvironment(source, () => ({ status: 0, stdout: `${DOMAINS}\n` }));
+  assert.ok(Object.keys(env).length > 0, "the stubbed stack must give the evidence variables");
+  for (const [key, value] of Object.entries(env)) {
+    assert.doesNotMatch(key, /DATABASE_URL|PASSWORD/, key);
+    assert.ok(!String(value).includes(CANARY), key);
+  }
+});
+
 test("without a usable local stack the E2E server gets no evidence variables", () => {
   const down = () => ({ status: 1, stdout: "" });
   const junk = () => ({ status: 0, stdout: "EVIDENCE_STORAGE_DOMAINS={}\n" });
