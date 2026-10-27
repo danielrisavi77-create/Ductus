@@ -7,6 +7,10 @@ import { playwrightConsoleReporter } from "./test-output";
 // alone (infra/fake-oidc), so the port and the host name are fixed.
 const PORT = 3000;
 const BASE_URL = `http://localhost:${PORT}`;
+// With E2E_REUSE_SERVER=1 the server is the one already running (the native
+// demo runner starts it with its own evidence environment), so the local
+// stack is not asked for one (DAN-348 N3).
+const REUSE_SERVER = process.env.E2E_REUSE_SERVER === "1";
 
 /**
  * The full login through "Demo prijava" (B-6). It needs `next dev`: a
@@ -56,9 +60,9 @@ export default defineConfig({
       OIDC_CLIENT_ID: "ductus-local",
       OIDC_CLIENT_SECRET: "ductus-local-only",
       // The evidence signer and the storage domain `pnpm demo:up` gives the app (Z5).
-      ...evidenceServerEnvironment(),
+      ...(REUSE_SERVER ? {} : evidenceServerEnvironment()),
     },
-    reuseExistingServer: process.env.E2E_REUSE_SERVER === "1",
+    reuseExistingServer: REUSE_SERVER,
     timeout: 240_000,
   },
 });
