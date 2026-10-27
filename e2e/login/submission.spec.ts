@@ -164,11 +164,14 @@ test("one click submits exactly the shown revision once and shows the receipt (c
   await expect(page.getByRole("heading", { name: t.receiptTitle })).toBeVisible();
   expect(bodies).toHaveLength(1);
   expect(JSON.parse(bodies[0]!)).toEqual({ documentId: open.documentId(), revision: 3 });
+  // #385 H8: the outcome has the focus (before any click moves it), and the page passes axe.
+  await expect(page.locator("#submission-outcome")).toBeFocused();
+  // DAN-344 S06: "Rad je predan." with the receipt; the hash is folded under "Prikaži otisak".
+  await expect(page.getByRole("heading", { level: 1, name: t.doneHeading })).toBeVisible();
+  await page.getByText(t.hashShow, { exact: true }).click();
   await expect(page.getByText(RECEIPT.payload.artifactSha256)).toBeVisible();
   await expect(page.getByText(t.receiptNote)).toBeVisible();
   await expect(page.getByRole("button", { name: t.submit })).toHaveCount(0);
-  // #385 H8: the outcome has the focus, and the page passes axe.
-  await expect(page.locator("#submission-outcome")).toBeFocused();
   const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
   expect(axe.violations).toEqual([]);
   await shoot(page, "potvrda");
@@ -233,6 +236,8 @@ test("a summary read answering after a newer one is dropped", async ({ page }) =
   await page.goto(pathOf(assignment));
   await expect(page.getByRole("button", { name: t.submit })).toBeVisible();
   await expect.poll(() => reads).toBe(1);
+  // DAN-344 S05: the summary is folded under "Prikaži sažetak procesa".
+  await page.getByText(t.summaryShow, { exact: true }).click();
   await page.getByRole("button", { name: card.refresh }).click();
   const region = page.getByRole("region", { name: messagesHr.summary.title });
   await expect(region.getByText(messagesHr.summary.sameForEveryone)).toBeVisible();
@@ -258,6 +263,7 @@ for (const [name, status, body, text] of [
     await expect(page.getByText(text)).toBeVisible();
     await expect(page.getByRole("heading", { name: t.receiptTitle })).toHaveCount(0);
     await expect(page.getByText(/predano/i)).toHaveCount(0);
+    await expect(page.getByRole("heading", { level: 1, name: t.doneHeading })).toHaveCount(0);
     if (name === "neslaganje") await shoot(page, name);
   });
 }
@@ -280,7 +286,7 @@ test("an acknowledged assignment on /rad links to its submission and sends nothi
   await shoot(page, "poveznica");
   await link.click();
   await page.waitForURL(`**${pathOf(assignment)}`);
-  await expect(page.getByRole("heading", { level: 1, name: t.title })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: t.reviewHeading })).toBeVisible();
 });
 
 test("/rad without an assignment, or with one this account cannot see, has no link to a submission (P3, P4)", async ({ page }) => {

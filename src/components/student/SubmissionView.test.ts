@@ -10,7 +10,7 @@ import { validateDocument, type CanonicalDocument } from "@/domain/document";
 import type { ProcessSummaryV1 } from "@/domain/projection/process-summary";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
-import { OUTCOME_ID, SubmissionView, type SubmissionState } from "./SubmissionView";
+import { NO_CONTEXT, OUTCOME_ID, SubmissionFrame, SubmissionView, type SubmissionContext, type SubmissionState } from "./SubmissionView";
 
 // F-10 (#476 contract 6384297464, QA criteria 3, 4, 5 and 8). Invented text only.
 const t = messagesHr.submission;
@@ -44,7 +44,8 @@ function ready(overrides: Partial<Extract<SubmissionState, { phase: "ready" }>> 
 }
 
 const render = (state: SubmissionState) => renderToStaticMarkup(h(SubmissionView, { state, handlers: noop }));
-const submitButton = new RegExp(`<button[^>]*>${t.submit}</button>`);
+const ARROW = `(<span aria-hidden="true" class="[^"]*">→</span>)?`;
+const submitButton = new RegExp(`<button[^>]*>${t.submit}${ARROW}</button>`);
 
 describe("SubmissionView (F-10)", () => {
   it("shows the server's text, read-only, and the submit button", () => {
@@ -54,7 +55,7 @@ describe("SubmissionView (F-10)", () => {
     expect(html).toContain(t.serverNote);
     expect(html).toMatch(submitButton);
     expect(html).not.toContain("contenteditable");
-    expect(html).not.toContain(t.receiptTitle);
+    expect(html).not.toContain(`>${t.receiptTitle}</h2>`);
   });
 
   it("shows consecutive bullet items as one list, never as a heading (E1, #823)", () => {
@@ -128,13 +129,17 @@ describe("SubmissionView (F-10)", () => {
   it.each(refusals)("shows %j with its own text and no receipt (criteria 3 and 8)", (outcome, text) => {
     const html = render(ready({ outcome }));
     expect(html).toContain(text);
-    expect(html).not.toContain(t.receiptTitle);
+    expect(html).not.toContain(`>${t.receiptTitle}</h2>`);
     expect(html.toLowerCase()).not.toContain("predano");
+    // DAN-344 S06: no "Rad je predan." and no step 3 without a receipt (QA (a)).
+    expect(html).not.toContain(t.doneHeading);
+    expect(html).not.toContain(t.submittedNote);
+    expect(html).toMatch(new RegExp(`<li aria-current="step">[^]*?${t.steps.check}</span></li>`));
   });
 
   it("without a network the button waits and says a connection is needed (#385 H7)", () => {
     const html = renderToStaticMarkup(h(SubmissionView, { state: ready(), handlers: noop, offline: true }));
-    expect(html).toMatch(new RegExp(`<button[^>]*disabled=""[^>]*>${t.submit}</button>`));
+    expect(html).toMatch(new RegExp(`<button[^>]*disabled=""[^>]*>${t.submit}${ARROW}</button>`));
     expect(html).toContain(t.offline);
     expect(render(ready())).not.toContain(t.offline);
   });
@@ -153,7 +158,7 @@ describe("SubmissionView (F-10)", () => {
     const html = render({ phase: "closed", reason });
     expect(html).toContain(reason === "unreadable" ? t.unreadable : reason === "unavailable" ? t.openUnavailable : t.outcome[reason]);
     expect(html).not.toContain(t.submit);
-    expect(html).not.toContain(t.receiptTitle);
+    expect(html).not.toContain(`>${t.receiptTitle}</h2>`);
   });
 
   // Codex 4367324506: without a receipt the server may have recorded the
@@ -171,5 +176,96 @@ describe("SubmissionView (F-10)", () => {
     const teacher = renderToStaticMarkup(h(SummaryCardBody, { outcome: { kind: "ok", summary: SUMMARY }, onReload: () => {} }));
     expect(html).toContain(teacher);
     expect(html).toContain(renderToStaticMarkup(h(ProcessSummaryView, { summary: SUMMARY })));
+  });
+});
+
+// DAN-344 Archivum S05 and S06 (#923 contract 6430008106 §3 and §7). Invented
+// course and assignment; the facts come only from the page's own read.
+describe("SubmissionView: Archivum S05 and S06 (DAN-344)", () => {
+  const CONTEXT: SubmissionContext = {
+    course: "Izmišljeni kolegij o gradovima",
+    title: "Izmišljeni zadatak o knjižnicama",
+    dueAt: "2026-11-30T22:59:00.000Z",
+    motif: "research",
+    workHref: "/rad?zadatak=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  };
+  const draw = (state: SubmissionState, context: SubmissionContext = CONTEXT) =>
+    renderToStaticMarkup(h(SubmissionView, { state, handlers: noop, context }));
+  const current = (html: string) => html.match(/<li aria-current="step">[^]*?<span>([^<]*)<\/span><\/li>/)?.[1];
+  const h1s = (html: string) => html.match(/<h1[ >]/g)?.length ?? 0;
+  const submitted = ready({ outcome: { kind: "submitted", receipt: RECEIPT } });
+
+  it("S05 names the course, the assignment, the revision and the deadline from the read", () => {
+    const html = draw(ready());
+    expect(html).toMatch(new RegExp(`<h1[^>]*>${t.reviewHeading}</h1>`));
+    expect(html).toContain(CONTEXT.course);
+    expect(html).toContain(CONTEXT.title);
+    expect(html).toContain('data-motif="research"');
+    expect(html).toContain("<dt>Verzija teksta na poslužitelju</dt><dd>7</dd>");
+    expect(html).toContain("30. studenoga 2026. u 23:59");
+    expect(html).toContain(t.unsentNote);
+    expect(html).toContain(t.readOnly);
+    expect(html).toContain(t.receiptPending);
+    expect(html).toContain(`href="${CONTEXT.workHref!.replace(/&/g, "&amp;")}"`);
+    expect(html).toContain(t.backToEditor);
+    expect(current(html)).toBe(t.steps.check);
+    expect(h1s(html)).toBe(1);
+  });
+
+  it("S05 without a read shows no course, title, deadline, motif or way back", () => {
+    const html = draw(ready(), NO_CONTEXT);
+    expect(html).not.toContain(t.courseLabel);
+    expect(html).not.toContain("data-motif");
+    expect(html).not.toContain(t.dueAt);
+    expect(html).not.toContain(t.backToWork);
+    expect(html).not.toContain(t.backToEditor);
+    expect(html).not.toContain("sheet-runhead");
+    expect(html).toMatch(submitButton);
+  });
+
+  it("step 2 is current only while the submission is in flight", () => {
+    expect(current(draw(ready({ sending: true })))).toBe(t.steps.submit);
+    expect(current(draw(ready({ revision: 0 })))).toBe(t.steps.check);
+  });
+
+  it("S06 comes only with the receipt: its heading, step 3, the folded hash and text, and the way to /zadaci", () => {
+    const html = draw(submitted);
+    expect(html).toMatch(new RegExp(`<h1[^>]*>${t.doneHeading}</h1>`));
+    expect(html).toContain(t.receiptLead);
+    expect(current(html)).toBe(t.steps.receipt);
+    expect(html).toMatch(new RegExp(`<summary>${t.hashShow}</summary><code[^>]*>${RECEIPT.payload.artifactSha256}</code>`));
+    expect(html).toContain(`<dt>${t.receiptRevision}</dt><dd>${RECEIPT.payload.revision}</dd>`);
+    expect(html).toContain(t.receiptDueAt);
+    expect(html).toContain(t.submittedTextShow);
+    expect(html).toContain("Izmišljena rečenica o gradskim knjižnicama.");
+    expect(html).toContain('href="/zadaci"');
+    expect(html).toContain(t.submittedNote);
+    expect(html).not.toContain(t.reviewHeading);
+    expect(html).not.toMatch(submitButton);
+    expect(h1s(html)).toBe(1);
+  });
+
+  it.each([
+    ["loading", { phase: "loading" } as SubmissionState],
+    ["closed", { phase: "closed", reason: "unavailable" } as SubmissionState],
+  ])("%s has the review heading and no steps", (_, state) => {
+    const html = draw(state);
+    expect(html).toMatch(new RegExp(`<h1[^>]*>${t.reviewHeading}</h1>`));
+    expect(html).not.toContain(t.steps.receipt);
+    expect(html).not.toContain(t.doneHeading);
+    expect(h1s(html)).toBe(1);
+  });
+
+  it("the page's own frame never claims a submission", () => {
+    const html = renderToStaticMarkup(h(SubmissionFrame, { context: CONTEXT }, h("p", null, "x")));
+    expect(html).toMatch(new RegExp(`<h1[^>]*>${t.reviewHeading}</h1>`));
+    expect(html).not.toContain(t.doneHeading);
+    expect(html).not.toContain(t.receiptLead);
+  });
+
+  it("carries no text of the prototype", () => {
+    for (const html of [draw(ready()), draw(submitted)]) {
+      expect(html).not.toMatch(/Vizualni prijedlog|ogledni/i);
+    }
   });
 });

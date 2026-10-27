@@ -21,6 +21,7 @@ function ready(assignmentId = ID): WorkContextRead {
   return {
     kind: "ready",
     course: "Izmišljeni kolegij",
+    courseId: null,
     wordRange: null,
     notice: {
       assignmentId,

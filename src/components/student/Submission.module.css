@@ -1,17 +1,179 @@
 /*
- * F-10 (#476 contract 6384297464): Ductura demo-tok-v2 screen 4 "Predaja" on
- * the D-123 tokens of app/globals.css. Text column on the left, the process
- * summary on the right; one column below 900 px. No text below 13 px.
+ * Archivum S05 "Pregled prije predaje" and S06 "Rad je predan." (DAN-344,
+ * #923 contract 6430008106 §3) on the tokens of app/globals.css (#915): text
+ * column on the left, the facts and the summary on the right; one column
+ * below 900 px. No colour is written here. The course motif is the
+ * package's image (public/motivi, course-motif.ts), a decorative CSS
+ * background with no text alternative of its own. No text below 13 px.
  */
 /* `.page > *` caps a child at 640 px; this screen has two columns. */
-:global(.page) > .layout {
+:global(.page) > .frame {
   max-width: none;
+}
+
+.frame {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.arrow {
+  display: inline-block;
+  margin: 0 6px;
+}
+
+.back {
+  align-self: flex-start;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+
+.back:hover {
+  color: var(--ink);
+}
+
+.back .arrow {
+  margin-left: 0;
+}
+
+/* The course over an accent rule, the motif to its right. */
+.course {
+  position: relative;
+  isolation: isolate;
+  min-height: 72px;
+  padding: 4px 0 8px;
+  border-bottom: 1px solid var(--accent);
+}
+
+.course::before {
+  content: "";
+  position: absolute;
+  top: -12px;
+  right: 0;
+  bottom: 0;
+  width: min(56%, 620px);
+  z-index: -1;
+  background: no-repeat right bottom / contain;
+  opacity: 0.88;
+  pointer-events: none;
+}
+
+.course[data-motif="city"]::before {
+  background-image: url("/motivi/city.webp");
+}
+
+.course[data-motif="research"]::before {
+  background-image: url("/motivi/research.webp");
+}
+
+.eyebrow {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.courseName {
+  margin: 0;
+  max-width: 44%;
+  font-family: var(--ff-display);
+  font-size: var(--fs-h4);
+  line-height: var(--heading-leading);
+  overflow-wrap: anywhere;
+}
+
+.heading {
+  margin: 8px 0 0;
+  font-family: var(--ff-display);
+  font-size: clamp(36px, 5vw, var(--fs-h1));
+  font-weight: 600;
+  line-height: var(--heading-leading);
+  letter-spacing: var(--heading-tracking);
+  overflow-wrap: anywhere;
+}
+
+.lead,
+.subtitle {
+  margin: 0;
+  font-family: var(--ff-display);
+  font-size: clamp(20px, 2.4vw, var(--fs-h4));
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+/* The three steps, joined by a rule; the current one filled. */
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin: 4px 0 0;
+  padding: 0 0 16px;
+  border-bottom: 1px solid var(--rule);
+  list-style: none;
+  font-size: 15px;
+  color: var(--ink-2);
+}
+
+.steps li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.steps li + li::before {
+  content: "";
+  width: clamp(24px, 10vw, 180px);
+  height: 1px;
+  margin-right: 6px;
+  background: var(--rule);
+}
+
+.stepNo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--raised-rule);
+  border-radius: 50%;
+}
+
+.steps [aria-current="step"] {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.steps [aria-current="step"] .stepNo {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.intro {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.introLead {
+  margin: 0;
+  font-family: var(--ff-display);
+  font-size: clamp(19px, 2vw, 25px);
+}
+
+.introNote {
+  margin: 0;
+  color: var(--ink-2);
 }
 
 .layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 380px);
-  gap: 20px;
+  gap: 24px;
   align-items: start;
 }
 
@@ -22,27 +184,119 @@
 }
 
 .main,
-.aside {
+.aside,
+.done {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   min-width: 0;
 }
 
-.steps {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 16px;
+.main h2,
+.aside h2,
+.card h2 {
   margin: 0;
-  padding: 0;
-  list-style: none;
-  font-size: 13px;
-  color: var(--ink-3);
+  font-family: var(--ff-display);
+  font-size: 22px;
+  font-weight: 500;
 }
 
-.steps [aria-current="step"] {
-  color: var(--ink);
-  font-weight: 600;
+.textHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.text {
+  padding: 24px clamp(16px, 4vw, 48px);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+
+.scroll {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.text:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.aside {
+  padding-left: 24px;
+  border-left: 1px solid var(--rule);
+}
+
+.aside h2 {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--rule);
+}
+
+@media (max-width: 900px) {
+  .aside {
+    padding-left: 0;
+    border-left: 0;
+  }
+}
+
+/* Label above value: a long label never squeezes a value to nothing. */
+.facts {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+}
+
+.facts dt {
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
+.facts dd {
+  margin: 2px 0 0;
+  font-family: var(--ff-display);
+  font-size: 20px;
+  overflow-wrap: anywhere;
+}
+
+.fold {
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+
+.fold > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 18px;
+  min-height: 44px;
+  padding: 12px 0;
+  cursor: pointer;
+  font-family: var(--ff-display);
+  font-size: 19px;
+}
+
+.fold > summary:focus-visible,
+.reveal > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.fold[open] > summary {
+  border-bottom: 1px solid var(--rule-2);
+}
+
+.fold > :not(summary) {
+  margin: 12px 0;
+}
+
+.foldTitle {
+  flex: 1 1 200px;
+  font-size: 22px;
 }
 
 .card {
@@ -51,49 +305,88 @@
   gap: 10px;
   padding: 20px 22px;
   border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  background: var(--raised);
+  border-radius: var(--radius-lg);
+  background: var(--card);
 }
 
-.card h2 {
-  margin: 0;
-  font-family: var(--ff-display);
-  font-size: 19px;
+.receipt h2 {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--raised-rule);
+  font-size: clamp(24px, 3vw, var(--fs-h3));
   font-weight: 600;
 }
 
-.receipt {
-  border-style: dashed;
+/* The receipt as a table of two columns; one column on a phone. */
+.table {
+  margin: 0;
 }
 
-.note,
-.muted {
-  margin: 0;
-  font-size: 13px;
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 4px 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.row dt {
   color: var(--ink-2);
 }
 
-/* Label above value: a long label never squeezes the hash to nothing. */
-.facts {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 2px;
+.row dd {
   margin: 0;
-  font-size: 14px;
-}
-
-.facts dt {
-  color: var(--ink-3);
-}
-
-.facts dd {
-  margin: 0 0 8px;
   overflow-wrap: anywhere;
 }
 
+@media (max-width: 600px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.reveal > summary {
+  cursor: pointer;
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--link-rule);
+  text-underline-offset: 4px;
+}
+
 .hash {
+  display: block;
+  margin-top: 6px;
   font-family: var(--ff-mono);
   font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.refusal {
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: var(--error-soft);
+  color: var(--ink);
+}
+
+/* The bottom bar: the action, the way back, and what happens next. */
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+}
+
+.bar > .note:last-child {
+  flex: 1 1 260px;
+  text-align: end;
+}
+
+@media (max-width: 600px) {
+  .bar > .note:last-child {
+    text-align: start;
+  }
 }
 
 .actions {
@@ -101,4 +394,16 @@
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
+}
+
+.editorLink {
+  color: var(--ink);
+  text-decoration-color: var(--link-rule);
+  text-underline-offset: 4px;
+}
+
+.note {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink-2);
 }

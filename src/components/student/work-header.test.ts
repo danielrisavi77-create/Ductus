@@ -8,6 +8,7 @@ function ready(course: string, dueAt: string): WorkContextRead {
   return {
     kind: "ready",
     course,
+    courseId: null,
     notice: { title: "Izmišljeni zadatak", dueAt } as never,
     wordRange: null,
   };

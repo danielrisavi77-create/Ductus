@@ -14,6 +14,7 @@ const notice = {
   user_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
   role: "student",
   course_name: "Izmišljeni kolegij",
+  course_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
   version_no: 1,
   title: "Izmišljeni zadatak o knjižnicama",
   instructions: "Upute za izmišljeni zadatak.",
@@ -89,7 +90,7 @@ describe("/rad work context read", () => {
       expect(expected.kind).toBe("available");
       if (expected.kind !== "available") throw new Error("invalid invented notice");
       expect(await readWorkContext(TOKEN, ID, actor([row]).withActor)).toEqual({
-        kind: "ready", course: row.course_name, notice: expected.view, wordRange: null,
+        kind: "ready", course: row.course_name, courseId: row.course_id, notice: expected.view, wordRange: null,
       });
     }
   });

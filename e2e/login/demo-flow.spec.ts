@@ -1089,9 +1089,10 @@ test("demo walk-through", async ({ browser, page, context }) => {
     // Demo point 4: the way in is the workspace's own link.
     await page.getByRole("link", { name: t.workspace.submitLink, exact: true }).click();
     await page.waitForURL(`http://localhost:3000/rad/${k4Assignment!}/predaja`);
-    await expect(page.getByRole("heading", { level: 1, name: s.title })).toBeVisible();
+    // DAN-344 S05: the review is step 1 until the button is pressed.
+    await expect(page.getByRole("heading", { level: 1, name: s.reviewHeading })).toBeVisible();
     const steps = page.getByRole("list", { name: s.title });
-    await expect(steps.getByRole("listitem").filter({ hasText: s.steps.submit })).toHaveAttribute("aria-current", "step");
+    await expect(steps.getByRole("listitem").filter({ hasText: s.steps.check })).toHaveAttribute("aria-current", "step");
     await expect(page.getByRole("document", { name: s.textLabel })).toHaveText(workText);
     await expect(page.getByText(s.serverNote)).toBeVisible();
     await snapshot(page, "4-predaja-provjera");
@@ -1126,6 +1127,9 @@ test("demo walk-through", async ({ browser, page, context }) => {
     }).filter(([name]) => name !== "receiptSchema" && name !== "signedAt"));
     const stack = await withAdmin((client) => stackKeysOfDomain(client, receipt.payload.evidenceDomainId));
     expect(await verifySignedSubmissionReceiptV2(receipt, expected, stack.keys)).toMatchObject({ ok: true });
+    // DAN-344 S06: the hash is folded under "Prikaži otisak".
+    await expect(page.getByRole("heading", { level: 1, name: s.doneHeading })).toBeVisible();
+    await page.getByText(s.hashShow, { exact: true }).click();
     await expect(page.getByText(server.contentHash, { exact: true })).toBeVisible();
     await expect(page.getByText(s.receiptNote)).toBeVisible();
     await expect(steps.getByRole("listitem").filter({ hasText: s.steps.receipt })).toHaveAttribute("aria-current", "step");
@@ -1135,6 +1139,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
     // Demo point 5: the same summary, drawn by the same view, for both roles
     // (PRODUCT §5 rules 2, 5 and 11): no forbidden words and no percentages.
     const summaryOf = (where: Page) => where.getByRole("region", { name: t.summary.title });
+    await page.getByText(s.summaryShow, { exact: true }).click();
     await page.getByRole("button", { name: t.summaryCard.refresh }).click();
     await expect(summaryOf(page).getByText(t.summary.sameForEveryone)).toBeVisible();
     const studentSummary = await summaryOf(page).textContent();

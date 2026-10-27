@@ -1,10 +1,11 @@
-import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import AppShell from "@/components/shell/AppShell";
 import { readShellRole } from "@/components/shell/shell-role";
+import { courseMotif } from "@/components/student/course-motif";
 import Submission from "@/components/student/Submission";
+import { SubmissionFrame, type SubmissionContext } from "@/components/student/SubmissionView";
 import { assignmentParam, readWorkContext } from "@/components/student/work-context-read";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { sessionPrincipal, sessionTag } from "@/server/auth/principal";
@@ -38,34 +39,38 @@ export default async function SubmissionPage({ params }: { params: Promise<{ ass
   const session = principal.kind === "signed-in" && tag !== null ? { tag, at } : null;
   const here = `/rad/${encodeURIComponent(raw)}/predaja`;
 
+  // Archivum S05/S06 (DAN-344): the course, title and deadline only from the
+  // student's own acknowledged read; the motif from its course id, else none.
+  const work = read.kind === "ready" ? read : null;
+  const context: SubmissionContext = {
+    course: work ? work.course : null,
+    title: work ? work.notice.title : null,
+    dueAt: work ? work.notice.dueAt : null,
+    motif: work?.courseId ? courseMotif(work.courseId) : null,
+    workHref: assignmentId ? `/rad?zadatak=${assignmentId}` : null,
+  };
+
   let body;
   if (assignmentId === null) {
-    body = <p role="status">{t.submission.invalid}</p>;
+    body = <SubmissionFrame context={context}><p role="status">{t.submission.invalid}</p></SubmissionFrame>;
   } else if (session === null) {
     body = (
-      <>
+      <SubmissionFrame context={context}>
         <p role="status">{t.submission.signedOut}</p>
         {/* The login route answers with a redirect: a plain link, never a prefetched one. */}
         <p><a className="btn" href={`/api/auth/login?returnTo=${encodeURIComponent(here)}`}>{t.submission.signIn}</a></p>
-      </>
+      </SubmissionFrame>
     );
-  } else if (read.kind !== "ready") {
-    body = <p role="status">{t.submission.outcome.notFound}</p>;
+  } else if (work === null) {
+    body = <SubmissionFrame context={context}><p role="status">{t.submission.outcome.notFound}</p></SubmissionFrame>;
   } else {
-    body = <Submission assignmentId={assignmentId} session={session} />;
+    body = <Submission assignmentId={assignmentId} session={session} context={context} />;
   }
-
-  const work = read.kind === "ready" ? read : null;
   // The shell marks this session for the other tabs (D-118, F-113 t.1).
   return (
     <AppShell session={{ tag, at }} role={role} scope={principal.kind === "signed-in" ? principal.scope : null} crumbs={[t.submission.title]}>
       <div className="page">
-        <h1>{t.submission.title}</h1>
-        {work ? <p className="muted">{`${work.course} / ${work.notice.title}`}</p> : null}
         {body}
-        {assignmentId ? (
-          <p><Link href={`/rad?zadatak=${assignmentId}`}>{t.submission.backToWork}</Link></p>
-        ) : null}
       </div>
     </AppShell>
   );

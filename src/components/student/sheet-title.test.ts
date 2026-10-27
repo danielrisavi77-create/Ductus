@@ -9,6 +9,7 @@ function ready(title: string): WorkContextRead {
   return {
     kind: "ready",
     course: "Izmišljeni kolegij",
+    courseId: null,
     wordRange: null,
     notice: {
       assignmentId: "00000000-0000-4000-8000-000000000001",

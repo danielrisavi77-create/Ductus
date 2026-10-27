@@ -25,6 +25,7 @@ interface Row {
   user_id: string | null;
   role: string | null;
   course_name: string | null;
+  course_id: string | null;
   version_no: number | null;
   title: string;
   instructions: string;
@@ -42,7 +43,7 @@ interface Row {
 // Keep the own-student and current-version predicates of readNotice. The
 // existing actor/role functions are STABLE and RLS applies to every join.
 const QUERY = `WITH me AS (SELECT app.current_user_id() AS user_id)
-SELECT me.user_id, institution.actor_assignment_role(a.id) AS role, c.name AS course_name,
+SELECT me.user_id, institution.actor_assignment_role(a.id) AS role, c.name AS course_name, c.id AS course_id,
   v.version_no, v.title, v.instructions, v.work_type, v.evidence_profile,
   v.opens_at, v.due_at, v.ai_policy, v.ai_purposes, v.word_min, v.word_max,
   (SELECT n.acknowledged_at FROM institution.notice_acknowledgment n
@@ -57,6 +58,8 @@ export type WorkContextRead =
       kind: "ready";
       /** institution.course.name */
       course: string;
+      /** institution.course.id, read with the name; only picks the decorative motif (DAN-344). */
+      courseId: string | null;
       /** The current version of the assignment, as on its notice, acknowledged. */
       notice: NoticeView;
       /** Limits of that same acknowledged current version, if set. */
@@ -87,6 +90,7 @@ export async function readWorkContext(
     return {
       kind: "ready",
       course: row.course_name,
+      courseId: typeof row.course_id === "string" ? row.course_id : null,
       wordRange: row.word_min === null && row.word_max === null
         ? null : { min: row.word_min, max: row.word_max },
       notice: {

@@ -20,7 +20,7 @@ import type { SessionMark } from "@/client/session-marks";
 import { submitWork } from "@/client/submission";
 import { verifyDocumentSnapshot } from "@/domain/document/snapshot";
 
-import { OUTCOME_ID, SubmissionView, type SubmissionState } from "./SubmissionView";
+import { OUTCOME_ID, SubmissionView, type SubmissionContext, type SubmissionState } from "./SubmissionView";
 
 /**
  * The submission of one session: when the page is rendered under another
@@ -28,11 +28,13 @@ import { OUTCOME_ID, SubmissionView, type SubmissionState } from "./SubmissionVi
  * or summary of the session before stays on it, even when the end of that
  * session never reached this tab (review 6386405994 on #653; as CommentPanel, F-088).
  */
-export default function Submission({ assignmentId, session }: { assignmentId: string; session: SessionMark }) {
-  return <SessionSubmission key={session.tag} assignmentId={assignmentId} session={session} />;
+type Props = { assignmentId: string; session: SessionMark; context: SubmissionContext };
+
+export default function Submission({ assignmentId, session, context }: Props) {
+  return <SessionSubmission key={session.tag} assignmentId={assignmentId} session={session} context={context} />;
 }
 
-function SessionSubmission({ assignmentId, session }: { assignmentId: string; session: SessionMark }) {
+function SessionSubmission({ assignmentId, session, context }: Props) {
   const [state, setState] = useState<SubmissionState>({ phase: "loading" });
   const [ended, setEnded] = useState(false);
   const [focusOutcome, setFocusOutcome] = useState(0);
@@ -144,6 +146,7 @@ function SessionSubmission({ assignmentId, session }: { assignmentId: string; se
   return (
     <SubmissionView
       state={shown}
+      context={context}
       offline={!online}
       handlers={{ onSubmit: () => void submit(), onReload: () => void load(), onReloadSummary: reloadSummary }}
     />
