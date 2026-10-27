@@ -86,6 +86,8 @@ test("the teacher sees the work as the student writes, with the limits of the re
   await expect(page.getByRole("status").filter({ hasText: t.connection.live })).toBeVisible();
   await expect(page.getByText(t.note)).toBeVisible();
   await expect(page.getByRole("heading", { name: messagesHr.recordLimits.title })).toBeVisible();
+  // DAN-344 T05: the whole text is folded under its title at the foot.
+  await page.getByRole("heading", { name: messagesHr.recordLimits.title }).click();
   await expect(page.getByText(messagesHr.recordLimits.exampleB)).toBeVisible();
   await expect.poll(() => calls.length).toBeGreaterThan(1);
   expect(calls[0]).toBeNull();
@@ -159,7 +161,8 @@ test("a session ended in another tab before hydration sends no initial summary P
   try {
     const response = await page.goto(PATH, { waitUntil: "commit" });
     expect(response?.status()).toBe(200);
-    await expect(page.getByRole("button", { name: messagesHr.summaryCard.refresh })).toBeVisible();
+    // DAN-344 T05: the summary is the second tab, so the server-rendered card is there but not shown.
+    await expect(page.getByRole("button", { name: messagesHr.summaryCard.refresh, includeHidden: true })).toBeAttached();
     await expect.poll(() => heldScripts.length).toBeGreaterThan(0);
     lifecycle.push("authenticated-card-arrived-with-scripts-held");
     expect(requests).toEqual([]);
@@ -179,7 +182,7 @@ test("a session ended in another tab before hydration sends no initial summary P
     lifecycle.push("release-hydration");
     releaseScripts();
     await expect(page.getByRole("status").filter({ hasText: t.connection.signedOut })).toBeVisible();
-    await expect(page.getByRole("button", { name: messagesHr.summaryCard.refresh })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: messagesHr.summaryCard.refresh, includeHidden: true })).toHaveCount(0);
     lifecycle.push("hydrated-view-observed-session-end");
     await page.waitForTimeout(250);
     expect(requests).toEqual([]);
@@ -219,10 +222,12 @@ test("the teacher reads the process summary once, as the same view the student g
   });
 
   await signIn(page, PATH, "Demo nastavnik");
+  await expect(page.getByRole("document", { name: t.documentLabel }).getByText("Gradske knjižnice su mjesto susreta.")).toBeVisible();
+  // DAN-344 T05: the summary is the second tab beside the text.
+  await page.getByRole("tab", { name: t.tabSummary }).click();
   const region = page.getByRole("region", { name: s.title });
   await expect(region).toBeVisible();
   await expect(region.getByText(s.sameForEveryone)).toBeVisible();
-  await expect(page.getByRole("document", { name: t.documentLabel }).getByText("Gradske knjižnice su mjesto susreta.")).toBeVisible();
   // The live text keeps asking every second; the summary is read once.
   await page.waitForTimeout(2500);
   expect(bodies).toEqual([JSON.stringify({ documentId: DOC })]);

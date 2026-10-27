@@ -67,7 +67,8 @@ describe("LiveText", () => {
     expect(withHeading.indexOf("<h1")).toBeLessThan(withHeading.indexOf('role="document"'));
     expect(withHeading.indexOf("<h1")).toBeGreaterThan(withHeading.indexOf("<article"));
     // The work's own level 1 heading stays an h2 under the page's h1.
-    expect(without).toContain(`<h2 data-node-id="${H1}">`);
+    // T05: with the id the outline links to.
+    expect(without).toContain(`<h2 data-node-id="${H1}" id="naslov-${H1}">`);
   });
 
   it("draws consecutive bullet items as one list (E1) and keeps marks inside an item", () => {

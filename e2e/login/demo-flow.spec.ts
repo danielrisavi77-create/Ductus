@@ -1147,6 +1147,9 @@ test("demo walk-through", async ({ browser, page, context }) => {
     try {
       await signIn(teacher, "/", "Demo nastavnik");
       await teacher.goto(`/nastavnik/rad/${k4Document!}`);
+      // DAN-344 T05: the summary is the second tab, once the page runs in the browser.
+      await expect(teacher.getByRole("status").filter({ hasText: t.liveView.connection.live })).toBeVisible({ timeout: 30_000 });
+      await teacher.getByRole("tab", { name: t.liveView.tabSummary }).click();
       await expect(summaryOf(teacher).getByText(t.summary.sameForEveryone)).toBeVisible({ timeout: 30_000 });
       expect(await summaryOf(teacher).textContent()).toBe(studentSummary);
       await snapshot(teacher, "5-sazetak-kod-nastavnika");

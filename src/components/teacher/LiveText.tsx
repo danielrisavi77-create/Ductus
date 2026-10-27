@@ -26,6 +26,7 @@ import type { DocumentNode } from "@/domain/document";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
 import { blockSegments, type TextRange } from "./comment-place";
+import { headingAnchor } from "./live-context";
 import styles from "./LiveWorkView.module.css";
 import type { PlacedThread } from "./TeacherComments";
 
@@ -58,7 +59,8 @@ function Block({ node, ranges }: { node: DocumentNode; ranges: readonly TextRang
   if (node.type === "bulletItem") return h("li", { "data-node-id": node.id }, ...children);
   // The page has its own h1, so the work's levels 1 to 3 are h2 to h4.
   const heading = node.level === 1 ? "h2" : node.level === 2 ? "h3" : "h4";
-  return h(heading, { "data-node-id": node.id }, ...children);
+  // T05: the teacher's outline links to a heading by its id; both readers get the same markup (rule 5).
+  return h(heading, { "data-node-id": node.id, id: headingAnchor(node.id) }, ...children);
 }
 
 /** The live state of `documentId` while mounted; stops for good once the session ends here. */
@@ -96,10 +98,26 @@ export type LiveTextProps = {
   textRef?: Ref<HTMLDivElement>;
   /** The teacher's selection, to comment on it (B-10). Handlers never enter the markup. */
   onSelect?: () => void;
+  /**
+   * Archivum T05: the teacher's view draws the connection line beside its
+   * tabs and the note at its foot (`LiveStatus`, `t.note`). The student's
+   * view keeps both here; the text itself is the same for both.
+   */
+  bare?: boolean;
 };
 
+/** The connection line: about this page's own requests, never about the student (4.12 t. 8). */
+export function LiveStatus({ view, label }: { view: LiveView; label?: string }) {
+  return h(
+    "span",
+    { className: "sync-chip", "data-tone": TONE[view.connection], role: "status" },
+    h("span", { className: "sync-chip__dot", "aria-hidden": "true" }),
+    label ? `${label} · ${t.connection[view.connection]}` : t.connection[view.connection],
+  );
+}
+
 /** The connection line, the sheet with the text, and the note beside a shown text. */
-export default function LiveText({ view, marks, heading, textRef, onSelect }: LiveTextProps) {
+export default function LiveText({ view, marks, heading, textRef, onSelect, bare = false }: LiveTextProps) {
   const stopped = liveStopped(view);
   const placeholder = (line: string) => h("p", { className: "manuscript__placeholder" }, line);
   let text: ReactNode;
@@ -117,16 +135,7 @@ export default function LiveText({ view, marks, heading, textRef, onSelect }: Li
   return h(
     Fragment,
     null,
-    h(
-      "p",
-      { className: styles.status },
-      h(
-        "span",
-        { className: "sync-chip", "data-tone": TONE[view.connection], role: "status" },
-        h("span", { className: "sync-chip__dot", "aria-hidden": "true" }),
-        t.connection[view.connection],
-      ),
-    ),
+    bare ? null : h("p", { className: styles.status }, h(LiveStatus, { view })),
     h(
       SheetFrame,
       null,
@@ -142,6 +151,6 @@ export default function LiveText({ view, marks, heading, textRef, onSelect }: Li
       }, text),
     ),
     // The note speaks about a shown text, so it stands only beside one.
-    !stopped && view.document ? h("p", { className: styles.note }, t.note) : null,
+    !bare && !stopped && view.document ? h("p", { className: styles.note }, t.note) : null,
   );
 }

@@ -46,7 +46,7 @@ test.describe("teacher reaches a work by navigation", () => {
   test("the course's teacher opens the work from /nastavnik; others and an unknown id get one refusal", async ({ browser }) => {
     const student = await pageOf(browser, "Demo studentica");
     const teacher = await pageOf(browser, "Demo nastavnik");
-    const { documentId } = await openAssignmentWork(student);
+    const { assignmentId, documentId } = await openAssignmentWork(student);
     const live = work(SENTENCE);
     const put = await student.request.put(`/api/live/${documentId}`, {
       headers: { origin: "http://localhost:3000", "content-type": "application/json", "if-none-match": "*" }, data: live.body,
@@ -63,11 +63,27 @@ test.describe("teacher reaches a work by navigation", () => {
     await expect(teacher).toHaveURL(href);
     await expect(teacher.getByRole("document", { name: t.documentLabel }).getByText(SENTENCE)).toBeVisible();
 
+    // DAN-344 T05: with ?zadatak= the header names the course and the assignment from the
+    // teacher's own reads; an assignment that is not the teacher's is only an address.
+    await teacher.goto(`${href}?zadatak=${assignmentId}`);
+    await expect(teacher.getByRole("heading", { level: 1, name: "Izmišljeni zadatak E" })).toBeVisible();
+    await expect(teacher.getByText(/^Izmišljeni kolegij E /)).toBeVisible();
+    await expect(teacher.getByText(t.writing)).toBeVisible();
+    await expect(teacher.getByRole("link", { name: t.backToWorks })).toBeVisible();
+    await expect(teacher.getByRole("document", { name: t.documentLabel }).getByText(SENTENCE)).toBeVisible();
+    await teacher.goto(`${href}?zadatak=3c2b1a09-8f7e-4d6c-9b5a-4e3d2c1b0a9f`);
+    await expect(teacher.getByRole("heading", { level: 1, name: t.context })).toBeAttached();
+    await expect(teacher.getByText(t.writing)).toHaveCount(0);
+    await expect(teacher.getByText("Izmišljeni zadatak E")).toHaveCount(0);
+
     // Another course's teacher has no such link and, like another student, is refused
     // exactly as for an id that does not exist.
     const other = await pageOf(browser, "Demo nastavnica");
     await other.goto("/nastavnik");
     await expect(other.locator(`a[href="${href}"]`)).toHaveCount(0);
+    await other.goto(`${href}?zadatak=${assignmentId}`);
+    await expect(other.getByText("Izmišljeni zadatak E")).toHaveCount(0);
+    await expect(other.getByText(t.writing)).toHaveCount(0);
     const unknown = `e2e-nepostojeci-rad-${Date.now().toString(36)}`;
     const refusals = [
       await refusalOn(other, documentId),

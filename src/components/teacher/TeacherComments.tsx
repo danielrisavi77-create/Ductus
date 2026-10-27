@@ -94,8 +94,8 @@ function ThreadCard({ placed, current, onChanged, onShow }: {
 }
 
 /** The new comment on a marked passage; `anchor` comes from the text on screen. */
-function NewComment({ documentId, anchor, current, onDone }: {
-  documentId: string; anchor: TextAnchor; current: () => boolean; onDone: (created: boolean) => void;
+function NewComment({ documentId, anchor, section, current, onDone }: {
+  documentId: string; anchor: TextAnchor; section: string | null; current: () => boolean; onDone: (created: boolean) => void;
 }) {
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
@@ -112,6 +112,8 @@ function NewComment({ documentId, anchor, current, onDone }: {
   return (
     <form className={styles.newComment} onSubmit={(event) => void publish(event)} aria-labelledby="new-comment-title">
       <h3 id="new-comment-title">{tt.newTitle}</h3>
+      {/* T05: the heading the passage stands under, from the text on screen. */}
+      {section ? <p className={styles.section}>{section}</p> : null}
       <p className={styles.quote}>„{anchor.quote}”</p>
       <textarea rows={3} aria-label={tt.bodyLabel} maxLength={2000} value={body}
         onChange={(event) => setBody(event.target.value)} />
@@ -120,6 +122,7 @@ function NewComment({ documentId, anchor, current, onDone }: {
         <button type="button" className={styles.link} onClick={() => onDone(false)}>{tt.cancel}</button>
       </div>
       {error ? <p role="alert" className={styles.error}>{tt.errors[error]}</p> : null}
+      <p className={styles.muted}>{tt.afterPublish}</p>
     </form>
   );
 }
@@ -140,11 +143,13 @@ export function useComments(documentId: string, current: () => boolean, active: 
   return { outcome, load };
 }
 
-export default function TeacherComments({ documentId, outcome, placed, draft, current, onReload, onDraftDone, onShow }: {
+export default function TeacherComments({ documentId, outcome, placed, draft, draftSection = null, current, onReload, onDraftDone, onShow }: {
   documentId: string;
   outcome: ListOutcome | null;
   placed: PlacedThread[];
   draft: TextAnchor | null;
+  /** The heading the draft's passage stands under, if any. */
+  draftSection?: string | null;
   current: () => boolean;
   onReload: () => void;
   onDraftDone: () => void;
@@ -161,7 +166,7 @@ export default function TeacherComments({ documentId, outcome, placed, draft, cu
     <section className={styles.comments} aria-labelledby="teacher-comments-title">
       <h2 id="teacher-comments-title">{t.title}</h2>
       {draft ? (
-        <NewComment key={`${draft.nodeId}:${draft.startHint}:${draft.endHint}`} documentId={documentId} anchor={draft} current={current}
+        <NewComment key={`${draft.nodeId}:${draft.startHint}:${draft.endHint}`} documentId={documentId} anchor={draft} section={draftSection} current={current}
           onDone={(created) => { onDraftDone(); if (created) onReload(); }} />
       ) : <p className={styles.muted}>{tt.hint}</p>}
       {list}
