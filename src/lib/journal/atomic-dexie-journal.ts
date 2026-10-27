@@ -898,6 +898,28 @@ export class AtomicDexieJournal {
     }));
   }
 
+  /**
+   * Deletes what this device holds of `documentId` after its submission
+   * (F-154, owner decision 1.3): the owed rows, the local text, its meta and
+   * step times, in one transaction. Only on the author's explicit second click,
+   * and only for a document whose submission the server confirmed in this page
+   * session (the caller's rule); sign-out itself never calls it (D-118).
+   * Copies kept outside the work and every other document stay as they are.
+   */
+  async discardAfterSubmission(documentId: string): Promise<void> {
+    if (!validDocumentId(documentId)) throw new JournalError("invalid_input");
+    return this.whileUsable(() => this.db.transaction(
+      "rw", [this.db.pending, this.db.snapshots, this.db.meta, this.db.timings, this.db.control],
+      async () => {
+        if (await this.db.control.get("logout")) throw new JournalError("logout_in_progress");
+        await this.db.pending.where("documentId").equals(documentId).delete();
+        await this.db.timings.where("documentId").equals(documentId).delete();
+        await this.db.snapshots.delete(documentId);
+        await this.db.meta.delete(documentId);
+      },
+    ));
+  }
+
   close(): void {
     this.db.close();
   }
