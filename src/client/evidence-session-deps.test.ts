@@ -50,6 +50,28 @@ describe("watchClosedBySubmission (F-155)", () => {
     expect((await heard("/api/evidence/commit", async () => { throw new Error("invented outage"); })).fired).toBe(0);
   });
 
+  // Codex r4384309111: an open route that never answers must not hold the
+  // commit's answer, or the drain and sign-out waiting on it would hang.
+  it("lets the commit answer go on after the time limit when the open route does not answer", async () => {
+    let fired = 0;
+    const closed = watchClosedBySubmission(notAccepting, () => new Promise<boolean>(() => {}), 20);
+    closed.watch(() => { fired += 1; });
+    const response = await closed.fetchImpl("/api/evidence/commit", { method: "POST" });
+    expect(response.status).toBe(409);
+    expect(fired).toBe(0);
+  });
+
+  it("closes nothing for a late yes that comes after the time limit", async () => {
+    let fired = 0;
+    let answer: (yes: boolean) => void = () => {};
+    const closed = watchClosedBySubmission(notAccepting, () => new Promise<boolean>((resolve) => { answer = resolve; }), 20);
+    closed.watch(() => { fired += 1; });
+    await closed.fetchImpl("/api/evidence/commit", { method: "POST" });
+    answer(true);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(fired).toBe(0);
+  });
+
   it("asks nothing for a not_accepting of another route", async () => {
     expect(await heard("/api/evidence/open", async () => true))
       .toEqual({ asked: 0, fired: 0, status: 409, body: { status: "not_accepting" } });
