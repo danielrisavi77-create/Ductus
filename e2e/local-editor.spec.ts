@@ -10,8 +10,8 @@ import { expect, test, type Page } from "@playwright/test";
 const NODE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const BLOCKED = "Ova kartica ništa ne sprema dok je druga otvorena.";
-const QUOTA = "Na uređaju nema dovoljno prostora, pa se promjene više ne spremaju. Izvezi tekst da ga ne izgubiš.";
-const STALE = "Dokument je u međuvremenu promijenjen na drugom mjestu, pa ova kartica više ne sprema. Izvezi tekst, zatim ponovno učitaj stranicu.";
+const QUOTA = "Na uređaju nema dovoljno prostora, pa se promjene više ne spremaju. Izvezite tekst da ga ne izgubite.";
+const STALE = "Dokument je u međuvremenu promijenjen na drugom mjestu, pa ova kartica više ne sprema. Izvezite tekst, zatim ponovno učitajte stranicu.";
 const DURABLE = "Spremljeno na uređaju";
 const editorOf = (page: Page) => page.getByRole("textbox", { name: "Tekst rada" });
 /** The provider's phase, for states whose notice is not the point of the test. */
@@ -312,7 +312,7 @@ test.describe("local editor (#197)", () => {
     await page.goto("/rad");
     await expect(phaseOf(page)).toHaveAttribute("data-phase", "unavailable");
     await expect(noticeOf(page)).toHaveText(
-      "Spremanje na ovom uređaju nije dostupno. Izvezi tekst da ga ne izgubiš.",
+      "Spremanje na ovom uređaju nije dostupno. Izvezite tekst da ga ne izgubite.",
     );
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "false");
     await expect(chipOf(page)).toHaveText("Greška");
@@ -527,7 +527,7 @@ test.describe("local editor (#197)", () => {
     await page.goto("/rad");
     await expect(phaseOf(page)).toHaveAttribute("data-phase", "unavailable");
     await expect(noticeOf(page)).toHaveText(
-      "Spremanje na ovom uređaju nije dostupno. Izvezi tekst da ga ne izgubiš.",
+      "Spremanje na ovom uređaju nije dostupno. Izvezite tekst da ga ne izgubite.",
     );
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "false");
   });
