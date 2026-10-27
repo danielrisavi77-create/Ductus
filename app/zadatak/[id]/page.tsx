@@ -27,6 +27,12 @@ export default async function AssignmentNoticePage({ params }: { params: Promise
   return (
     <AppShell session={shellSession(token)} role={role} scope={scope} crumbs={[t.student.title]}>
       <div className={`page ${styles.screen}`}>
+        {/* DAN-344 (Archivum S03): a student's way back to her courses and assignments. */}
+        {role === "student" ? (
+          <p className={styles.back}>
+            <Link href="/zadaci"><span aria-hidden="true">← </span>{t.student.backToAssignments}</Link>
+          </p>
+        ) : null}
         {read.kind === "available" ? (
           <AssignmentNotice view={read.view} timing={noticeWindow(read.view.opensAt, read.view.dueAt, Date.now())} />
         ) : (

@@ -1,0 +1,157 @@
+/*
+ * DAN-344, Archivum S01_prazna (owner's package of 26. 10. 2026.) on the
+ * existing tokens of app/globals.css only. The folio picture is the
+ * package's folio.png as WebP (public/motivi/folio.webp), decorative.
+ */
+.empty {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 44px;
+  align-items: center;
+}
+
+.first {
+  min-width: 0;
+}
+
+.folio {
+  width: 100%;
+  max-width: 340px;
+  height: 280px;
+  margin: 0 auto 16px;
+  background: url("/motivi/folio.webp") no-repeat center / contain;
+}
+
+.heading {
+  margin: 0 0 8px;
+  font-family: var(--ff-display);
+  font-size: 45px;
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+}
+
+.body {
+  margin: 0;
+  font-size: 19px;
+  color: var(--ink-2);
+}
+
+.code {
+  min-width: 0;
+  padding-left: 44px;
+  border-left: 1px solid var(--rule);
+}
+
+.codeHeading {
+  margin: 0 0 16px;
+  font-family: var(--ff-display);
+  font-size: 36px;
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+}
+
+.next {
+  padding-top: 24px;
+  border-top: 1px solid var(--rule);
+}
+
+.nextHeading {
+  margin: 0 0 18px;
+  font-family: var(--ff-display);
+  font-size: 29px;
+  font-weight: 500;
+  line-height: 1.1;
+}
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  display: flex;
+  gap: 16px;
+  padding: 4px 24px;
+  border-left: 1px solid var(--rule);
+}
+
+.step:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.number {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  color: var(--accent);
+  font-family: var(--ff-display);
+  font-size: 20px;
+}
+
+.stepTitle {
+  display: block;
+  margin-bottom: 4px;
+  font-family: var(--ff-display);
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.stepBody {
+  display: block;
+  font-size: 15px;
+  color: var(--ink-2);
+}
+
+@media (max-width: 900px) {
+  .top,
+  .steps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .code {
+    padding: 24px 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  .step,
+  .step:first-child {
+    padding: 12px 0;
+    border-left: 0;
+  }
+
+  .step + .step {
+    border-top: 1px solid var(--rule-2);
+  }
+}
+
+@media (max-width: 700px) {
+  .folio {
+    height: 220px;
+  }
+
+  .heading {
+    font-size: 37px;
+  }
+
+  .codeHeading {
+    font-size: 30px;
+  }
+}
