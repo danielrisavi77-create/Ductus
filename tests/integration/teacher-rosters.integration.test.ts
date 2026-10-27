@@ -74,19 +74,30 @@ beforeAll(async () => {
      VALUES ($1, $2, $3, 'teacher'), ($1, $2, $4, 'student'), ($1, $2, $5, 'student')`,
     [course, faculty, people.teacher.id, people.named.id, people.unnamed.id],
   );
-  await admin.query(
-    `INSERT INTO institution.assignment (id, course_id, institution_id, current_version, created_by)
-     VALUES ($1, $2, $3, 1, $4)`,
-    [assignment, course, faculty, people.teacher.id],
-  );
-  await admin.query(
-    `INSERT INTO institution.assignment_version (
-       assignment_id, version_no, title, instructions, work_type, opens_at, due_at, ai_policy, ai_purposes,
-       evidence_profile, import_allowed, created_by)
-     VALUES ($1, 1, 'Esej', 'Upute za izmišljeni zadatak.', 'essay', now(), now() + interval '30 days',
-             'partially_allowed', '{proofreading}', 'basic', false, $2)`,
-    [assignment, people.teacher.id],
-  );
+  // The assignment's current version is a deferred key: both rows go in one transaction.
+  const tx = await admin.connect();
+  try {
+    await tx.query("BEGIN");
+    await tx.query(
+      `INSERT INTO institution.assignment (id, course_id, institution_id, current_version, created_by)
+       VALUES ($1, $2, $3, 1, $4)`,
+      [assignment, course, faculty, people.teacher.id],
+    );
+    await tx.query(
+      `INSERT INTO institution.assignment_version (
+         assignment_id, version_no, title, instructions, work_type, opens_at, due_at, ai_policy, ai_purposes,
+         evidence_profile, import_allowed, created_by)
+       VALUES ($1, 1, 'Esej', 'Upute za izmišljeni zadatak.', 'essay', now(), now() + interval '30 days',
+               'partially_allowed', '{proofreading}', 'basic', false, $2)`,
+      [assignment, people.teacher.id],
+    );
+    await tx.query("COMMIT");
+  } catch (error) {
+    await tx.query("ROLLBACK");
+    throw error;
+  } finally {
+    tx.release();
+  }
   await admin.query(
     "INSERT INTO identity.person_name (user_id, institution_id, given_name, family_name) VALUES ($1, $2, 'Iskra', 'Izmišljenić')",
     [people.named.id, faculty],

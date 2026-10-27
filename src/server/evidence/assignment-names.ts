@@ -19,5 +19,5 @@ export function readAssignmentStudentNames(
   withActor: WithActor,
   assignmentId: string,
 ): Promise<NamedStudentsRead> {
-  return readNamedStudents(sessionToken, withActor, assignmentId, SQL, "assignment names");
+  return readNamedStudents(sessionToken, withActor, assignmentId, SQL, "assignment names read failed");
 }

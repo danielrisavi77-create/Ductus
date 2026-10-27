@@ -58,7 +58,7 @@ export async function readNamedStudents(
   withActor: WithActor,
   id: string,
   sql: string,
-  label: string,
+  failure: "course students read failed" | "assignment names read failed",
 ): Promise<NamedStudentsRead> {
   if (sessionToken === undefined || !TOKEN.test(sessionToken)) return { kind: "unauthorized" };
   const key = id.toLowerCase();
@@ -69,7 +69,7 @@ export async function readNamedStudents(
   } catch (error) {
     const code = codeOf(error);
     if (code === "ZD401") return { kind: "unauthorized" };
-    console.error(`${label} read failed`, code !== undefined && SQLSTATE.test(code) ? code : "unknown");
+    console.error(failure, code !== undefined && SQLSTATE.test(code) ? code : "unknown");
     return { kind: "unavailable" };
   }
   const students: NamedStudent[] = [];
@@ -77,7 +77,7 @@ export async function readNamedStudents(
     const student = namedStudentOf(row);
     // A second row for a student would mean a second membership: no answer rather than a guess.
     if (student === null || students.some((s) => s.studentId === student.studentId)) {
-      console.error(`${label} read failed`, "row_malformed");
+      console.error(failure, "row_malformed");
       return { kind: "unavailable" };
     }
     students.push(student);
@@ -94,5 +94,5 @@ export function readCourseStudents(
   withActor: WithActor,
   courseId: string,
 ): Promise<NamedStudentsRead> {
-  return readNamedStudents(sessionToken, withActor, courseId, SQL, "course students");
+  return readNamedStudents(sessionToken, withActor, courseId, SQL, "course students read failed");
 }
