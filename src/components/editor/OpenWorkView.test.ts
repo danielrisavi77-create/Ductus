@@ -43,10 +43,10 @@ describe("F1 interface text", () => {
   });
 
   it("the texts are the contract's", () => {
-    expect(t.freeNote).toBe("Ovaj tekst nije vezan uz zadatak i ne predaje se. Zadatak otvaraš s njegove obavijesti.");
+    expect(t.freeNote).toBe("Ovaj tekst nije vezan uz zadatak i ne predaje se. Zadatak otvarate s njegove obavijesti.");
     expect(t.openOffline).toBe("Za prvo otvaranje rada potrebna je veza.");
     expect(t.openRetry).toBe("Pokušaj ponovno");
-    expect(t.lateNote).toBe("Rok zadatka je prošao. Pisati možeš i dalje, a predaja će biti označena kao predaja nakon roka.");
+    expect(t.lateNote).toBe("Rok zadatka je prošao. Pisati možete i dalje, a predaja će biti označena kao predaja nakon roka.");
     expect(t.openNotYet).toContain("{time}");
   });
 });

@@ -51,7 +51,7 @@ export const hr = {
     homeCrumb: "Početna",
   },
   home: {
-    lead: `${APP_NAME} ne procjenjuje autorstvo ni korištenje AI-ja. Prije početka vidiš što nastavnik vidi i od kada.`,
+    lead: `${APP_NAME} ne procjenjuje autorstvo ni korištenje AI-ja. Prije početka vidite što nastavnik vidi i od kada.`,
     openWorkspace: "Otvori radni prostor",
     openTeacher: "Otvori kolegije",
     // #802 part B: the signed-in home (pocetna.dc.html: greeting, cards).
@@ -63,7 +63,7 @@ export const hr = {
     workBody: "Pisanje i predaja seminarskih i završnih radova.",
     coursesTitle: "Moji kolegiji",
     coursesBody: "Za nastavnike: kolegiji, zadaci i radovi studenata.",
-    enrollQuestion: "Imaš kod novog kolegija?",
+    enrollQuestion: "Imate kod novog kolegija?",
     enroll: "Upiši",
   },
   // FE-H1 (#476): public home page for a visitor without a session. Every
@@ -90,12 +90,12 @@ export const hr = {
     previewParagraph2End: " u gradu srednje veličine?",
     previewCommentAuthor: "Komentar nastavnice",
     previewCommentPlace: "uz odlomak 2",
-    previewComment: "Dobar smjer. Pitanje suzi na jedan grad i navedi razdoblje koje promatraš.",
+    previewComment: "Dobar smjer. Pitanje suzite na jedan grad i navedite razdoblje koje promatrate.",
     previewNote: "Izmišljeni primjer",
     forWhomTitle: "Dvije uloge, isti prikaz rada.",
     forWhomLead: `Sažetak nastanka rada isti je za studenta i nastavnika. ${APP_NAME} ne ocjenjuje proces pisanja.`,
     studentEyebrow: "Za studente",
-    studentTitle: "Piši u miru i znaj što se vidi.",
+    studentTitle: "Pišite u miru i znajte što se vidi.",
     studentBody:
       "Zadatak, rok i pravila su na jednom mjestu. Prije prve rečenice piše što nastavnik vidi i od kada, a komentari stižu uz odlomak na koji se odnose.",
     studentPoints: {
@@ -106,7 +106,7 @@ export const hr = {
     teacherEyebrow: "Za nastavnike i mentore",
     teacherTitle: "Prati rad dok nastaje.",
     teacherBody:
-      "Rad vidiš uživo dok student piše i komentiraš ga dok se još može doraditi. Nastanak rada možeš reproducirati znak po znak, za razgovor sa studentom, ne za ocjenu.",
+      "Rad vidite uživo dok student piše i komentirate ga dok se još može doraditi. Nastanak rada možete reproducirati znak po znak, za razgovor sa studentom, ne za ocjenu.",
     teacherPoints: {
       assignment: "Zadatak s rokom i pravilima kolegija",
       live: "Prikaz rada uživo i komentari uz odlomak",
@@ -192,22 +192,22 @@ export const hr = {
     footerNote: "Prostor za akademsko pisanje.",
     wow: {
       sidesEyebrow: "Isprobaj",
-      sidesTitle: "Piši lijevo. Mentor vidi isto desno.",
+      sidesTitle: "Pišite lijevo. Mentor vidi isto desno.",
       sidesLead:
-        "Probni prostor: tekst ostaje u ovom pregledniku i nikamo se ne šalje. U stvarnom radu mentor vidi tvoj rad uživo, uz odlomak s komentarom.",
+        "Probni prostor: tekst ostaje u ovom pregledniku i nikamo se ne šalje. U stvarnom radu mentor vidi Vaš rad uživo, uz odlomak s komentarom.",
       studentPane: "Student piše",
       mentorPane: "Mentor vidi",
       editorLabel: "Probni tekst studenta",
       mentorLabel: "Isti tekst u prikazu mentora, samo za čitanje",
-      placeholder: "Počni pisati prvu rečenicu…",
+      placeholder: "Počnite pisati prvu rečenicu…",
       sampleText: "Gradovi sve češće mijenjaju pravila prometa.",
-      sampleComment: "Suzi na jedan grad i navedi razdoblje.",
+      sampleComment: "Suzite na jedan grad i navedite razdoblje.",
       sampleCommentPlace: "uz odlomak 1 · mentor (izmišljen)",
       loading: "Učitavam probni prostor…",
     },
     replay: {
       eyebrow: "Premotavanje",
-      title: "Vrati se kroz nastanak odlomka.",
+      title: "Vratite se kroz nastanak odlomka.",
       lead: "Mentor zadatka i student mogu premotati kako je tekst nastajao, korak po korak. Ovo je izmišljen primjer, nitko ga nije napisao.",
       empty: "Odlomak je na početku prazan.",
       start: "Početak",
@@ -238,7 +238,7 @@ export const hr = {
     access: {
       eyebrow: "Tko što vidi",
       title: "Isti rad, jasne uloge.",
-      lead: "Pogledaj što koja uloga vidi, a što ne vidi. Pravila su ista za sve zadatke.",
+      lead: "Pogledajte što koja uloga vidi, a što ne vidi. Pravila su ista za sve zadatke.",
       tablistLabel: "Uloga",
       sees: "Vidi",
       doesNot: "Ne vidi",
@@ -308,7 +308,7 @@ export const hr = {
         },
         tryOut: {
           q: "Šalje li se išta iz probnog prostora?",
-          a: "Ne. Tekst koji upišeš ostaje u ovom pregledniku i nikamo se ne šalje.",
+          a: "Ne. Tekst koji upišete ostaje u ovom pregledniku i nikamo se ne šalje.",
         },
       },
     },
@@ -316,9 +316,9 @@ export const hr = {
   // F-6 (DAN-35): text of screen 2 of the design handoff (docs/design/ductura).
   teacher: {
     title: "Novi kolegij i zadatak",
-    signedOut: "Prijavi se nastavničkim računom.",
+    signedOut: "Prijavite se nastavničkim računom.",
     denied: "Za ovaj račun nije dopušteno stvaranje kolegija.",
-    unavailable: "Provjera nastavničke uloge trenutačno nije dostupna. Pokušaj ponovno.",
+    unavailable: "Provjera nastavničke uloge trenutačno nije dostupna. Pokušajte ponovno.",
     signIn: "Prijavi se",
     backHome: "Na početnu",
     backCourses: "Moji kolegiji",
@@ -339,29 +339,29 @@ export const hr = {
       created: "Kolegij je spreman.",
       // FE-D10: only a code the route returned is shown (#576); never an invented one.
       code: "Kod za upis",
-      nameMissing: "Upiši naziv kolegija.",
+      nameMissing: "Upišite naziv kolegija.",
       errors: {
-        invalid: "Provjeri naziv, akademsku godinu i pravila kolegija.",
-        unauthorized: "Prijava nije valjana. Prijavi se ponovno.",
+        invalid: "Provjerite naziv, akademsku godinu i pravila kolegija.",
+        unauthorized: "Prijava nije valjana. Prijavite se ponovno.",
         forbidden: "Za ovaj račun nije dopušteno stvaranje kolegija.",
         conflict: "Kolegij s tim nazivom već postoji uz druga pravila.",
-        unavailable: "Stvaranje kolegija nije potvrđeno. Pokušaj ponovno.",
+        unavailable: "Stvaranje kolegija nije potvrđeno. Pokušajte ponovno.",
       },
     },
     // DAN-36 (#576 6362017778): the teacher picks the deadline; there is no default.
     enrollmentCode: {
       validUntil: "Kod vrijedi do",
-      expiryHelp: "Obavezno. Odaberi datum i vrijeme do kojih studenti mogu upisati kolegij ovim kodom, najviše godinu dana unaprijed.",
+      expiryHelp: "Obavezno. Odaberite datum i vrijeme do kojih studenti mogu upisati kolegij ovim kodom, najviše godinu dana unaprijed.",
       selected: "Odabrano:",
       pending: "Izdavanje koda…",
       retry: "Ponovno izdaj kod",
       replace: "Izdaj novi kod",
-      shownOnce: "Kod se prikazuje samo sada. Zapiši ga i daj studentima. Novi kod zamjenjuje ovaj.",
+      shownOnce: "Kod se prikazuje samo sada. Zapišite ga i dajte studentima. Novi kod zamjenjuje ovaj.",
       courseKept: "Kolegij postoji. Ponovni pokušaj izdaje samo kod, ne stvara novi kolegij.",
       errors: {
-        missing: "Odaberi do kada kod vrijedi.",
-        invalid: "Odaberi datum i vrijeme koji postoje, u budućnosti i najviše godinu dana unaprijed.",
-        unauthorized: "Kod nije izdan. Prijava nije valjana. Prijavi se ponovno.",
+        missing: "Odaberite do kada kod vrijedi.",
+        invalid: "Odaberite datum i vrijeme koji postoje, u budućnosti i najviše godinu dana unaprijed.",
+        unauthorized: "Kod nije izdan. Prijava nije valjana. Prijavite se ponovno.",
         forbidden: "Za ovaj račun nije dopušteno izdavanje koda za ovaj kolegij.",
         unavailable: "Nije potvrđeno je li kod izdan. Ponovni pokušaj izdaje novi kod koji zamjenjuje svaki prethodni.",
       },
@@ -385,20 +385,20 @@ export const hr = {
       instructions: "Upute studentima",
       wordMin: "Najmanji broj riječi (neobvezno)",
       wordMax: "Najveći broj riječi (neobvezno)",
-      wordRangeHint: "Upiši cijeli broj od 1 do 1 000 000. Najmanji broj ne smije biti veći od najvećeg.",
+      wordRangeHint: "Upišite cijeli broj od 1 do 1 000 000. Najmanji broj ne smije biti veći od najvećeg.",
       publish: "Objavi zadatak",
       pending: "Objavljivanje…",
       published: "Objavljeno",
       publishedNotice: "Zadatak je objavljen. Studenti s kodom vide obavijest prije prve rečenice.",
-      needCourse: "Prvo stvori kolegij.",
+      needCourse: "Prvo stvorite kolegij.",
       studentsNotified: "Studenti dobivaju obavijest kad upišu kolegij.",
       newVersion: "Izmjena zadatka nakon objave stvara novu verziju; studenti je ponovno potvrđuju.",
       errors: {
-        invalid: "Provjeri naslov, vrstu rada, otvaranje, rok i raspon riječi. Rok mora biti nakon otvaranja.",
-        unauthorized: "Prijava nije valjana. Prijavi se ponovno.",
+        invalid: "Provjerite naslov, vrstu rada, otvaranje, rok i raspon riječi. Rok mora biti nakon otvaranja.",
+        unauthorized: "Prijava nije valjana. Prijavite se ponovno.",
         forbidden: "Za ovaj račun nije dopušteno objavljivanje zadatka u ovom kolegiju.",
-        conflict: "Zadatak s istim ključem već postoji uz druge podatke. Provjeri zadatak i objavi ponovno.",
-        unavailable: "Objava zadatka nije potvrđena. Pokušaj ponovno.",
+        conflict: "Zadatak s istim ključem već postoji uz druge podatke. Provjerite zadatak i objavite ponovno.",
+        unavailable: "Objava zadatka nije potvrđena. Pokušajte ponovno.",
       },
     },
     // Verbatim text of the FPZG Smjernice, čl. 8 (owner decision on #87,
@@ -407,7 +407,7 @@ export const hr = {
     // the database list (D-80).
     tools: {
       heading: "Uporaba alata (FPZG Smjernice, čl. 8)",
-      narrowOnly: "Popis možeš samo suziti.",
+      narrowOnly: "Popis možete samo suziti.",
       allowed: "Dopušteno u ovom zadatku",
       banned: "Nije dopušteno",
       bannedNone: "Sve uporabe s popisa iznad dopuštene su u ovom zadatku.",
@@ -462,12 +462,12 @@ export const hr = {
   // the route's (year, name; assignments by due time) and nothing reorders it.
   teacherCourses: {
     title: "Moji kolegiji",
-    lead: "Kolegiji u kojima predaješ i njihovi zadaci. Poredak: akademska godina, pa naziv; zadaci po roku.",
+    lead: "Kolegiji u kojima predajete i njihovi zadaci. Poredak: akademska godina, pa naziv; zadaci po roku.",
     newCourse: "Novi kolegij i zadatak",
-    empty: "Nemaš kolegija u kojima predaješ.",
-    emptyLead: "Stvori kolegij i objavi prvi zadatak.",
+    empty: "Nemate kolegija u kojima predajete.",
+    emptyLead: "Stvorite kolegij i objavite prvi zadatak.",
     noAssignments: "Još nema zadataka.",
-    unavailable: "Kolegiji trenutačno nisu dostupni. Pokušaj ponovno.",
+    unavailable: "Kolegiji trenutačno nisu dostupni. Pokušajte ponovno.",
     retry: "Pokušaj ponovno",
     due: "rok",
     at: "u",
@@ -477,16 +477,16 @@ export const hr = {
     worksLabel: "Radovi studenata",
     work: "Rad",
     noWorks: "Nijedan student još nije otvorio rad.",
-    worksUnavailable: "Radovi trenutačno nisu dostupni. Pokušaj ponovno.",
+    worksUnavailable: "Radovi trenutačno nisu dostupni. Pokušajte ponovno.",
   },
   fastPath: {
     title: "Brz put",
     intro: "Radovi jednog zadatka, jedan za drugim. Prikaz samo čita; ništa ne mijenja.",
     denied: "Ovaj prikaz vidi samo nastavnik.",
     loading: "Učitavanje radova…",
-    unavailable: "Radovi trenutačno nisu dostupni. Pokušaj ponovno.",
+    unavailable: "Radovi trenutačno nisu dostupni. Pokušajte ponovno.",
     // F-11 (#757, contract c.6397637802 §3; owner c.6397679688).
-    pickAssignment: "Odaberi zadatak u svojim kolegijima.",
+    pickAssignment: "Odaberite zadatak u svojim kolegijima.",
     empty: "Za ovaj zadatak nema radova za prikaz.",
     refresh: "Stanje spremljeno na poslužitelju. Osvježava se najviše svakih 5 minuta.",
     stale: "Stanje nije osvježeno. Prikazano je zadnje učitano stanje; sljedeći pokušaj za najviše 5 minuta.",
@@ -523,7 +523,7 @@ export const hr = {
     modeWriting: "Pisanje",
     modeTeacherView: "Kako vidi nastavnik",
     // #732 item 7 (owner 6397193676): the line above the teacher's view, and why the switch is off.
-    teacherViewLead: "Ovako nastavnik vidi tvoj rad: zadnji tekst koji je tvoj preglednik poslao, komentare i sažetak procesa. Ovdje se ne piše.",
+    teacherViewLead: "Ovako nastavnik vidi Vaš rad: zadnji tekst koji je Vaš preglednik poslao, komentare i sažetak procesa. Ovdje se ne piše.",
     teacherViewOff: "samo uz zadatak",
     // F-10: a link to the submission screen, not the act of submitting (#653 contract 6385776645).
     submitLink: "Predaja",
@@ -551,7 +551,7 @@ export const hr = {
     tabWork: "Rad",
     workEmpty: "Etape i prilozi rada prikazuju se ovdje.",
     panelLoading: "Učitavanje…",
-    panelUnavailable: "Sadržaj trenutačno nije moguće učitati. Osvježi stranicu.",
+    panelUnavailable: "Sadržaj trenutačno nije moguće učitati. Osvježite stranicu.",
     upute: {
       task: "Zadatak",
       due: "Rok: {date} u {time}",
@@ -579,7 +579,7 @@ export const hr = {
     documentLabel: "Tekst rada",
     documentNotEditable: "Pisanje ovdje još nije moguće.",
     // #711 F1 (contract 6391402093 §3, §5, §6): /rad with and without an assignment.
-    freeNote: "Ovaj tekst nije vezan uz zadatak i ne predaje se. Zadatak otvaraš s njegove obavijesti.",
+    freeNote: "Ovaj tekst nije vezan uz zadatak i ne predaje se. Zadatak otvarate s njegove obavijesti.",
     unavailable: "Ovaj zadatak nije dostupan ovom računu.",
     openLoading: "Otvaram rad…",
     openNotYet: "Zadatak se otvara {time}.",
@@ -588,18 +588,18 @@ export const hr = {
     openRetry: "Pokušaj ponovno",
     openNotAccepting: "Obavijest zadatka se promijenila ili zadatak trenutačno ne prima rad.",
     openNoticeLink: "Otvori obavijest zadatka",
-    openReload: "Ova verzija stranice više ne može otvoriti rad. Učitaj je ponovno.",
+    openReload: "Ova verzija stranice više ne može otvoriti rad. Učitajte je ponovno.",
     openReloadButton: "Učitaj ponovno",
-    lateNote: "Rok zadatka je prošao. Pisati možeš i dalje, a predaja će biti označena kao predaja nakon roka.",
+    lateNote: "Rok zadatka je prošao. Pisati možete i dalje, a predaja će biti označena kao predaja nakon roka.",
     // #711 F1b (contract §4): the earlier draft of this device, offered only to read and copy.
-    earlierDraftSummary: "Na ovom uređaju čuva se tvoj raniji tekst koji nije u ovom radu.",
+    earlierDraftSummary: "Na ovom uređaju čuva se Vaš raniji tekst koji nije u ovom radu.",
     // Owner (#711, O3 and amendment c): since 3d-2c2b a paste is an evidence step of the work, so the sentence that says so is back.
-    earlierDraftExplain: "Tekst ostaje gdje je i ne briše se. Ako ga želiš u ovom radu, kopiraj ga i zalijepi; zapis rada tada to bilježi kao lijepljenje.",
+    earlierDraftExplain: "Tekst ostaje gdje je i ne briše se. Ako ga želite u ovom radu, kopirajte ga i zalijepite; zapis rada tada to bilježi kao lijepljenje.",
     earlierDraftCopy: "Kopiraj tekst",
     // Owner accepted (#711 c.6396392080, b): the contract text "Kopirano u međuspremnik." fails the stem list of messages.test.ts (kopiran).
     earlierDraftCopied: "Tekst je u međuspremniku.",
     // Owner accepted (#711 c.6396392080, a): the contract text "Tekst nije moguće kopirati." is a forbidden term (kopir-, PRODUCT §5).
-    earlierDraftCopyFailed: "Tekst nije moguće staviti u međuspremnik. Izvezi ga kao datoteku.",
+    earlierDraftCopyFailed: "Tekst nije moguće staviti u međuspremnik. Izvezite ga kao datoteku.",
     earlierDraftOpen: "Otvori raniji tekst",
     status: "Stanje rada",
     // FE-D6 (design editor-v11): the status bar.
@@ -611,25 +611,25 @@ export const hr = {
     pagesApprox: "≈ {pages} str.",
   },
   editor: {
-    placeholder: "Počni pisati…",
+    placeholder: "Počnite pisati…",
     // 3d-2c2b, owner approved 25 Oct (contract #476 c.6391714810 §3): the
     // server's work differs (CONFLICT, RECOVERY_REQUIRED).
     evidenceConflict:
-      "Rad na poslužitelju razlikuje se od teksta na ovom uređaju. Tekst ostaje na uređaju i ništa se ne šalje dok ne odlučiš kako dalje.",
+      "Rad na poslužitelju razlikuje se od teksta na ovom uređaju. Tekst ostaje na uređaju i ništa se ne šalje dok ne odlučite kako dalje.",
     // 3d-2c2b, owner approved 25 Oct (#87 c.6397773534): a send refused for
     // good. The contract's "spremljen na ovom uređaju" fails the PRODUCT §5
     // scan, so "ovom" is dropped.
-    sendRefused: "Tekst je spremljen na uređaju, ali ga poslužitelj nije primio. Ponovno učitaj stranicu.",
+    sendRefused: "Tekst je spremljen na uređaju, ali ga poslužitelj nije primio. Ponovno učitajte stranicu.",
     // 3d-2c2b, owner approved 25 Oct: the package was closed by the submission (DAN-289 A1).
     submittedReadOnly:
       "Rad je predan, pa se ovdje više ne može pisati. Izmjene napravljene nakon predaje nisu u predanom radu i ostaju samo na ovom uređaju.",
-    blockedHint: "Ova kartica ništa ne sprema dok je druga otvorena. Kad je zatvoriš, tekst se ovdje ponovno učitava.",
-    failureQuota: "Na uređaju nema dovoljno prostora, pa se promjene više ne spremaju. Izvezi tekst da ga ne izgubiš.",
-    failureUnavailable: "Spremanje na ovom uređaju nije dostupno. Izvezi tekst da ga ne izgubiš.",
-    failureLimit: "Lokalni zapis je dosegao granicu, pa se promjene više ne spremaju. Izvezi tekst da ga ne izgubiš.",
-    failureStale: "Dokument je u međuvremenu promijenjen na drugom mjestu, pa ova kartica više ne sprema. Izvezi tekst, zatim ponovno učitaj stranicu.",
-    failureUnknown: "Spremanje nije uspjelo. Izvezi tekst da ga ne izgubiš.",
-    failureInvalid: "Ovaj tekst nije moguće spremiti. Izvezi ga da ga ne izgubiš.",
+    blockedHint: "Ova kartica ništa ne sprema dok je druga otvorena. Kad je zatvorite, tekst se ovdje ponovno učitava.",
+    failureQuota: "Na uređaju nema dovoljno prostora, pa se promjene više ne spremaju. Izvezite tekst da ga ne izgubite.",
+    failureUnavailable: "Spremanje na ovom uređaju nije dostupno. Izvezite tekst da ga ne izgubite.",
+    failureLimit: "Lokalni zapis je dosegao granicu, pa se promjene više ne spremaju. Izvezite tekst da ga ne izgubite.",
+    failureStale: "Dokument je u međuvremenu promijenjen na drugom mjestu, pa ova kartica više ne sprema. Izvezite tekst, zatim ponovno učitajte stranicu.",
+    failureUnknown: "Spremanje nije uspjelo. Izvezite tekst da ga ne izgubite.",
+    failureInvalid: "Ovaj tekst nije moguće spremiti. Izvezite ga da ga ne izgubite.",
     recovery: "Lokalni zapis nije moguće pouzdano pročitati. Ostaje netaknut, a ova kartica ništa ne sprema.",
     exportText: "Izvezi tekst",
   },
@@ -671,12 +671,12 @@ export const hr = {
     note: "Komentari su odvojeni od teksta rada i ne ulaze u broj riječi.",
     notAvailable: "Komentari za ovaj rad nisu dostupni.",
     unavailable: "Komentare trenutačno nije moguće učitati.",
-    signedOut: "Prijava je istekla. Prijavi se ponovno da vidiš komentare.",
+    signedOut: "Prijava je istekla. Prijavite se ponovno da vidite komentare.",
     refresh: "Osvježi komentare",
     number: "Komentar {n}",
     teacher: "Nastavnik",
     student: "Student",
-    own: "Ti",
+    own: "Vi",
     state: { open: "otvoreno", answered: "odgovoreno", resolved: "riješeno" },
     showInText: "Pokaži u tekstu",
     notPlaced: "Mjesto u tekstu nije moguće pouzdano pronaći. Komentar ostaje ovdje.",
@@ -686,11 +686,11 @@ export const hr = {
     replying: "Slanje…",
     resolvedNote: "Nastavnik je označio komentar riješenim.",
     replyErrors: {
-      signedOut: "Prijava je istekla. Prijavi se ponovno.",
+      signedOut: "Prijava je istekla. Prijavite se ponovno.",
       forbidden: "Ovaj račun ne može odgovoriti na ovaj komentar.",
       conflict: "Komentar je u međuvremenu označen riješenim.",
-      invalid: "Odgovor nije prihvaćen. Napiši od 1 do 2000 znakova.",
-      unavailable: "Odgovor nije poslan. Pokušaj ponovno.",
+      invalid: "Odgovor nije prihvaćen. Napišite od 1 do 2000 znakova.",
+      unavailable: "Odgovor nije poslan. Pokušajte ponovno.",
     },
   },
   // DAN-86 step 2b: the teacher's live view of a work (D-142, BACKEND 4.12).
@@ -703,7 +703,7 @@ export const hr = {
     empty: "Student još nije poslao tekst.",
     note: "Prikazan je zadnji tekst koji je studentov preglednik poslao. To nije zapis rada i može kasniti ili zastati.",
     signIn: "Prijavi se",
-    signInFirst: "Prijavi se da vidiš rad.",
+    signInFirst: "Prijavite se da vidite rad.",
     invalid: "Ova poveznica ne vodi do rada.",
     connection: {
       loading: "Povezivanje…",
@@ -720,21 +720,21 @@ export const hr = {
   // work. The summary's own text is `summary`, the same for every reader.
   summaryCard: {
     loading: "Učitavanje sažetka…",
-    signedOut: "Prijava je istekla. Prijavi se ponovno da vidiš sažetak.",
+    signedOut: "Prijava je istekla. Prijavite se ponovno da vidite sažetak.",
     notFound: "Sažetak ovog rada nije dostupan ovom računu.",
-    unavailable: "Sažetak trenutačno nije dostupan. Pokušaj ponovno.",
+    unavailable: "Sažetak trenutačno nije dostupan. Pokušajte ponovno.",
     refresh: "Osvježi sažetak",
   },
   // F-10 (#476 contract 6384297464): the student's submission, Ductura screen 4.
   submission: {
     title: "Predaja rada",
     invalid: "Ova poveznica ne vodi do zadatka.",
-    signedOut: "Prijavi se da predaš rad.",
+    signedOut: "Prijavite se da predate rad.",
     signIn: "Prijavi se",
     backToWork: "Natrag na rad",
     steps: { check: "1 Provjera zapisa", submit: "2 Predaja", receipt: "3 Potvrda" },
     loading: "Učitavanje teksta s poslužitelja…",
-    textTitle: "Ovo je tekst koji predaješ.",
+    textTitle: "Ovo je tekst koji predajete.",
     textLabel: "Tekst koji se predaje",
     serverNote: "Predaje se tekst spremljen na poslužitelju. Izmjene koje još nisu stigle na poslužitelj nisu u predaji.",
     noEvidence: "Na poslužitelju još nema teksta ovog rada. Predaja nije moguća dok tekst ne stigne na poslužitelj.",
@@ -756,19 +756,19 @@ export const hr = {
     outcome: {
       recordMismatch: "Predaja nije moguća: tekst sastavljen iz zapisa ne podudara se s tekstom na poslužitelju.",
       blocked: "Predaja nije moguća dok poslužitelj ne potvrdi cijeli zapis ove verzije teksta.",
-      staleRevision: "Na poslužitelju je novija verzija teksta. Učitaj je ponovno prije predaje.",
+      staleRevision: "Na poslužitelju je novija verzija teksta. Učitajte je ponovno prije predaje.",
       alreadyRequested: "Predaja je već zatražena za drugu verziju teksta.",
       notOpen: "Predaja za ovaj zadatak trenutačno nije otvorena.",
       notFound: "Rad nije dostupan ovom računu.",
-      signedOut: "Prijava je istekla. Prijavi se ponovno.",
+      signedOut: "Prijava je istekla. Prijavite se ponovno.",
       // No receipt came back: the server may have recorded the submission or not (Codex 4367324506).
-      unavailable: "Potvrda nije stigla, pa ishod predaje nije poznat. Pokušaj ponovno.",
+      unavailable: "Potvrda nije stigla, pa ishod predaje nije poznat. Pokušajte ponovno.",
     },
-    openUnavailable: "Rad trenutačno nije moguće učitati s poslužitelja. Pokušaj ponovno.",
+    openUnavailable: "Rad trenutačno nije moguće učitati s poslužitelja. Pokušajte ponovno.",
   },
   teacherComments: {
-    hint: "Označi tekst u radu za komentar.",
-    empty: "Nema komentara. Označi tekst u radu.",
+    hint: "Označite tekst u radu za komentar.",
+    empty: "Nema komentara. Označite tekst u radu.",
     newTitle: "Novi komentar",
     bodyLabel: "Tekst komentara",
     publish: "Objavi",
@@ -777,10 +777,10 @@ export const hr = {
     resolve: "Označi riješenim",
     reopen: "Ponovno otvori",
     errors: {
-      signedOut: "Prijava je istekla. Prijavi se ponovno.",
+      signedOut: "Prijava je istekla. Prijavite se ponovno.",
       forbidden: "Ovaj račun ne može komentirati ovaj rad.",
-      invalid: "Komentar nije prihvaćen. Napiši od 1 do 2000 znakova.",
-      unavailable: "Komentar nije objavljen. Pokušaj ponovno.",
+      invalid: "Komentar nije prihvaćen. Napišite od 1 do 2000 znakova.",
+      unavailable: "Komentar nije objavljen. Pokušajte ponovno.",
     },
   },
   // K-3 text (PLAN-DEMO point 8, D-80 point 3; owner on #87, 6266445027 point 3):
@@ -802,52 +802,81 @@ export const hr = {
   // in this assignment; D-63 for the skipped long pauses of the replay.
   student: {
     title: "Zadatak",
+    // DAN-344 (Archivum S03): the way back from the notice to /zadaci, verbatim from the package.
+    backToAssignments: "Moji kolegiji i zadaci",
     // #711 contract 6404612273: the student's own courses and assignments.
     assignments: {
       title: "Moji zadaci",
       heading: "Moji zadaci",
-      signedOut: "Prijavi se da vidiš svoje zadatke.",
+      signedOut: "Prijavite se da vidite svoje zadatke.",
       unavailable: "Popis trenutačno nije dostupan.",
-      empty: "Zasad nisi upisan/a ni u jedan kolegij.",
+      empty: "Zasad niste upisani ni u jedan kolegij.",
       enroll: "Upiši kolegij kodom",
       noAssignments: "U ovom kolegiju zasad nema zadatka.",
       due: "Rok {time}",
-      noticeFirst: "Prvo pročitaj obavijest",
+      noticeFirst: "Prvo pročitajte obavijest",
     },
-    signedOut: "Prijavi se da vidiš zadatak.",
+    // DAN-344: the Archivum S01 texts of /zadaci, verbatim from the owner's
+    // package (26. 10. 2026.), in "Vi"; the subtitle without its mentoring
+    // half, which this page does not have. Only what the own-assignments read
+    // returns: courses, assignment titles, due times and the notice state.
+    home: {
+      heading: "Vaš studentski prostor",
+      lede: "Zadaci na kolegijima.",
+      courses: "Moji kolegiji",
+      courseLabel: "Kolegij",
+      due: "Rok: {time}",
+      open: "Otvori zadatak",
+      readNotice: "Pročitaj upute",
+      unavailableHeading: "Prikaz trenutačno nije dostupan.",
+      unavailableBody: "Podatke nije bilo moguće učitati. To ne znači da nema kolegija ili radova.",
+      // S01_prazna: the first arrival, verbatim from the package's PNG.
+      empty: {
+        heading: "Još nemate kolegija.",
+        body: "Ovdje će se prikazati vaši kolegiji i njihovi zadaci.",
+        codeHeading: "Imate kod kolegija?",
+        nextHeading: "Što slijedi nakon upisa?",
+        steps: [
+          { title: "Odaberite zadatak", body: "U svakom kolegiju nastavnik vam dodjeljuje zadatke." },
+          { title: "Pročitajte upute", body: "Svaki zadatak dolazi s jasnim uputama i očekivanjima." },
+          { title: "Otvorite rad", body: "Nakon što ste spremni, započinjete pisanje u uređivaču." },
+        ],
+      },
+    },
+    signedOut: "Prijavite se da vidite zadatak.",
     signIn: "Prijavi se",
     enroll: {
       title: "Upis u kolegij",
       heading: "Upiši kolegij",
-      signedOut: "Prijavi se da upišeš kolegij.",
+      signedOut: "Prijavite se da upišete kolegij.",
       label: "Kod kolegija",
-      hint: "Kod ti daje nastavnik. Razmaci, crtice i velika ili mala slova nisu bitni.",
+      hint: "Kod Vam daje nastavnik. Razmaci, crtice i velika ili mala slova nisu bitni.",
       submit: "Upiši",
       sending: "Upisivanje…",
-      opening: "Upisan/a si u kolegij. Otvaram obavijest zadatka…",
+      opening: "Upisani ste u kolegij. Otvaram obavijest zadatka…",
       errors: {
-        malformed: "Kod ima od 8 do 32 slova i brojke. Provjeri ga i upiši ponovno.",
-        refused: "Kod ne postoji ili je istekao. Provjeri ga s nastavnikom.",
-        tooManyAttempts: "Previše pokušaja. Pokušaj ponovno kasnije.",
-        unauthorized: "Prijava nije valjana. Prijavi se ponovno.",
+        malformed: "Kod ima od 8 do 32 slova i brojke. Provjerite ga i upišite ponovno.",
+        refused: "Kod ne postoji ili je istekao. Provjerite ga s nastavnikom.",
+        tooManyAttempts: "Previše pokušaja. Pokušajte ponovno kasnije.",
+        unauthorized: "Prijava nije valjana. Prijavite se ponovno.",
         forbidden: "Ovaj račun ne može upisati kolegij.",
-        invalid: "Upis nije prihvaćen. Ponovno učitaj stranicu.",
-        unavailable: "Upis trenutačno nije moguć. Pokušaj ponovno.",
-        offline: "Nema veze s poslužiteljem. Provjeri mrežu i pokušaj ponovno.",
+        invalid: "Upis nije prihvaćen. Ponovno učitajte stranicu.",
+        unavailable: "Upis trenutačno nije moguć. Pokušajte ponovno.",
+        offline: "Nema veze s poslužiteljem. Provjerite mrežu i pokušajte ponovno.",
       },
       course: {
-        none: "Upisan/a si u kolegij, ali u njemu zasad nema otvorenog zadatka. Kad ga nastavnik objavi, vrati se na ovu stranicu.",
-        notFound: "Ovaj kolegij nije dostupan ovom računu. Upiši ga kodom koji ti daje nastavnik.",
-        unavailable: "Zadatke kolegija trenutačno nije moguće učitati. Pokušaj ponovno.",
+        none: "Upisani ste u kolegij, ali u njemu zasad nema otvorenog zadatka. Kad ga nastavnik objavi, vratite se na ovu stranicu.",
+        notFound: "Ovaj kolegij nije dostupan ovom računu. Upišite ga kodom koji Vam daje nastavnik.",
+        unavailable: "Zadatke kolegija trenutačno nije moguće učitati. Pokušajte ponovno.",
         retry: "Pokušaj ponovno",
         another: "Upiši drugi kolegij",
       },
     },
-    notFound: "Ovaj zadatak nije dostupan ovom računu. Upiši kolegij kodom koji ti daje nastavnik.",
-    unavailable: "Zadatak trenutačno nije moguće učitati. Pokušaj ponovno.",
+    notFound: "Ovaj zadatak nije dostupan ovom računu. Upišite kolegij kodom koji Vam daje nastavnik.",
+    unavailable: "Zadatak trenutačno nije moguće učitati. Pokušajte ponovno.",
     // FE-D8 (#476 row 05): the states around the notice; the notice text itself is unchanged.
     loading: "Učitavanje zadatka…",
-    notOpen: "Zadatak se otvara {time}. Obavijest potvrđuješ kad se zadatak otvori.",
+    notOpen: "Zadatak se otvara {time}. Obavijest potvrđujete kad se zadatak otvori.",
     pastDue: "Rok zadatka je prošao {time}.",
     step: `Obavijest prije prve rečenice · korak ${NOTICE_STEP_COUNT}`,
     opensFrom: "otvoreno od",
@@ -859,7 +888,7 @@ export const hr = {
       steps: "Promjene teksta, sažete u odsječke od najviše 30 sekundi. Odsječak nosi jedno vrijeme, zaokruženo na minutu.",
       live: "U ovom zadatku bilježit će se svaka promjena teksta, znak po znak, s redoslijedom i vremenom: unos i brisanje, lijepljenje, uvoz, prijenos iz AI pomoćnika i izmjene nastavnika. To će služiti samo prikazu uživo i reprodukciji.",
       chain: "Svaki korak spremanja dobiva digitalni otisak povezan s prethodnim, pa se svaka kasnija izmjena zapisa vidi.",
-      versions: "Verzije, predaja i napomene koje dodaš.",
+      versions: "Verzije, predaja i napomene koje dodate.",
     },
     notRecordedHeading: "Što se ne bilježi",
     notRecorded: {
@@ -869,17 +898,17 @@ export const hr = {
     },
     teacherHeading: "Što vidi nastavnik (mentor)",
     teacher: {
-      state: "Od prvog dana pratit će tvoj rad uživo, dok nastaje, pa i tekst koji ćeš kasnije možda obrisati. Ono što napišeš bez mreže vidjet će tek kad se veza vrati.",
+      state: "Od prvog dana pratit će Vaš rad uživo, dok nastaje, pa i tekst koji ćete kasnije možda obrisati. Ono što napišete bez mreže vidjet će tek kad se veza vrati.",
       // D-154, PRODUCT §5 rules 5 and 7: the student sees the same replay of their own work.
-      replay: "Nastavnik (mentor) zadatka moći će reproducirati nastanak rada znak po znak, pa i obrisani tekst. Istu reprodukciju svog rada vidjet ćeš i ti.",
+      replay: "Nastavnik (mentor) zadatka moći će reproducirati nastanak rada znak po znak, pa i obrisani tekst. Istu reprodukciju svog rada vidjet ćete i Vi.",
       purpose: "Prikaz uživo i reprodukcija služit će praćenju nastanka rada i komentarima, nikad ocjeni ni rangiranju.",
-      history: "Povijest verzija i sažetak procesa, isti kao što ga vidiš ti.",
+      history: "Povijest verzija i sažetak procesa, isti kao što ga vidite Vi.",
       noVerdict: `${APP_NAME} ne procjenjuje autorstvo ni korištenje AI-ja.`,
     },
     // D-05, PRODUCT §6 "Profili evidencije": only for the extended profile.
     teacherExtended: "Usporedbu verzija na kraju sesija i poslanih verzija.",
     retention: "Zapis se čuva uz rad do isteka roka koji propisuje fakultet.",
-    note: "Prije konačne predaje uz rad možeš dodati napomenu. Napomene se samo dodaju.",
+    note: "Prije konačne predaje uz rad možete dodati napomenu. Napomene se samo dodaju.",
     checkbox: "Pročitao/la sam obavijest. Znam što se bilježi i što vidi nastavnik (mentor).",
     confirm: "Potvrdi i otvori editor",
     confirming: "Potvrđivanje…",
@@ -887,11 +916,11 @@ export const hr = {
     confirmed: "Potvrđeno {time}. Zapis počinje s prvom izmjenom.",
     openEditor: "Otvori editor",
     errors: {
-      stale: "Nastavnik je u međuvremenu objavio novu verziju zadatka. Ponovno učitaj stranicu i pročitaj je.",
-      unauthorized: "Prijava nije valjana. Prijavi se ponovno.",
+      stale: "Nastavnik je u međuvremenu objavio novu verziju zadatka. Ponovno učitajte stranicu i pročitajte je.",
+      unauthorized: "Prijava nije valjana. Prijavite se ponovno.",
       forbidden: "Ovaj račun ne može potvrditi obavijest za ovaj zadatak.",
-      invalid: "Potvrda nije prihvaćena. Ponovno učitaj stranicu.",
-      unavailable: "Potvrda nije zabilježena. Pokušaj ponovno.",
+      invalid: "Potvrda nije prihvaćena. Ponovno učitajte stranicu.",
+      unavailable: "Potvrda nije zabilježena. Pokušajte ponovno.",
     },
   },
   // F-10 (DAN-87): process summary, one text for every reader (PRODUCT §5
@@ -941,15 +970,15 @@ export const hr = {
   },
   auth: {
     failedTitle: "Prijava nije dovršena",
-    failedBody: "Prijavu nije bilo moguće dovršiti. Pokušaj ponovno; ako se ponovi, javi se koordinatoru na svojoj ustanovi.",
-    unavailableBody: "Prijava preko AAI@EduHr trenutačno ne odgovara. Pokušaj ponovno za nekoliko minuta.",
+    failedBody: "Prijavu nije bilo moguće dovršiti. Pokušajte ponovno; ako se ponovi, javite se koordinatoru na svojoj ustanovi.",
+    unavailableBody: "Prijava preko AAI@EduHr trenutačno ne odgovara. Pokušajte ponovno za nekoliko minuta.",
     retry: "Pokušaj ponovno",
     home: "Na početnu",
     signIn: "Prijava",
     logout: "Odjava",
     loggingOut: "Odjava…",
     logoutUnsaved:
-      "Ovaj uređaj nije mogao pohraniti dio teksta, pa bi se odjavom izgubio. Izvezi tekst prije odjave.",
+      "Ovaj uređaj nije mogao pohraniti dio teksta, pa bi se odjavom izgubio. Izvezite tekst prije odjave.",
     // FE-D7 (D-118): the sign-out dialog. It speaks only of this device: the
     // app sends nothing to the server yet, so it promises no sending (#476).
     logoutTitle: "Odjava",
@@ -968,7 +997,7 @@ export const hr = {
       many: "{n} izmjena nakon predaje postoji samo na ovom uređaju i ne šalje se. Odjava zatvara sesiju.",
     },
     logoutKept:
-      "Zapis ostaje vezan uz tebe na ovom uređaju i nastavljaš ga kad se ponovno prijaviš. Osoba koja se nakon tebe prijavi na ovom uređaju ne vidi tvoj rad.",
+      "Zapis ostaje vezan uz Vas na ovom uređaju i nastavljate ga kad se ponovno prijavite. Osoba koja se nakon Vas prijavi na ovom uređaju ne vidi Vaš rad.",
     // 3d-2c, P3 and P4 (a): a copy kept outside the work stays on sign-out.
     logoutCopy: {
       one: "Na ovom uređaju čuva se {n} kopija teksta koja nije u radu.",
@@ -976,7 +1005,7 @@ export const hr = {
       many: "Na ovom uređaju čuva se {n} kopija teksta koje nisu u radu.",
     },
     logoutCopyKept:
-      "Odjava kopiju ne briše. Ostaje vezana uz tebe na ovom uređaju i ponovno je vidiš kad se prijaviš.",
+      "Odjava kopiju ne briše. Ostaje vezana uz Vas na ovom uređaju i ponovno je vidite kad se prijavite.",
     copyTitle: "Kopija teksta",
     copyNewestOnly: "Radnje se odnose na najnoviju kopiju.",
     copyRestore: "Vrati tekst u rad",
@@ -984,10 +1013,10 @@ export const hr = {
     copyDiscardAsk: "Odbačena kopija ne može se vratiti. Odbaciti je?",
     copyDiscardConfirm: "Da, odbaci kopiju",
     copyKeep: "Zadrži kopiju",
-    copyDiscardFailed: "Kopija nije odbačena i ostaje na ovom uređaju. Pokušaj ponovno.",
-    logoutFailed: "Odjava nije dovršena jer poslužitelj nije odgovorio. Ništa nije izbrisano. Provjeri vezu i pokušaj ponovno.",
+    copyDiscardFailed: "Kopija nije odbačena i ostaje na ovom uređaju. Pokušajte ponovno.",
+    logoutFailed: "Odjava nije dovršena jer poslužitelj nije odgovorio. Ništa nije izbrisano. Provjerite vezu i pokušajte ponovno.",
     signedOutElsewhere:
-      "Prijava s kojom je ova kartica otvorena više ne vrijedi: u drugoj kartici provedena je odjava ili nova prijava. Ova kartica više ništa ne prikazuje ni ne sprema. Ponovno učitaj stranicu.",
+      "Prijava s kojom je ova kartica otvorena više ne vrijedi: u drugoj kartici provedena je odjava ili nova prijava. Ova kartica više ništa ne prikazuje ni ne sprema. Ponovno učitajte stranicu.",
   },
   // FE-D3 (DAN-222): /prijava, Prijava v5 of the design handoff without the
   // e-mail sign-in and the "Što Ductura čuva" panel (D-09, #476). AAI@EduHr is
@@ -1008,9 +1037,9 @@ export const hr = {
   // #732 item 3: Next.js error and not-found pages in Croatian (D-84).
   errorPage: {
     notFoundTitle: "Stranica ne postoji",
-    notFoundBody: "Na ovoj adresi nema stranice. Provjeri adresu ili se vrati na početnu.",
+    notFoundBody: "Na ovoj adresi nema stranice. Provjerite adresu ili se vratite na početnu.",
     errorTitle: "Stranicu nije bilo moguće prikazati",
-    errorBody: "Dogodila se neočekivana greška. Pokušaj ponovno; ako se ponovi, vrati se na početnu.",
+    errorBody: "Dogodila se neočekivana greška. Pokušajte ponovno; ako se ponovi, vratite se na početnu.",
   },
 } as const;
 

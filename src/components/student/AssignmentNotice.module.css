@@ -201,3 +201,20 @@
     font-size: 32px;
   }
 }
+
+/* DAN-344 (Archivum S03): the way back to /zadaci, above the notice. */
+.back {
+  margin: 0;
+  font-size: 15px;
+}
+
+.back a {
+  color: var(--ink-2);
+  text-decoration: none;
+  border-bottom: 1px solid var(--rule);
+}
+
+.back a:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
