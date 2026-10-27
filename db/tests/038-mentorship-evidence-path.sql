@@ -79,8 +79,25 @@ LANGUAGE sql AS $$
                                                                        requested_minute, after_deadline, n) $q$,
     pg_temp.id(p_assignment)))
 $$;
-CREATE FUNCTION pg_temp.ms_xmax() RETURNS text
-LANGUAGE sql STABLE AS $$ SELECT xmax::text FROM institution.mentorship WHERE id = pg_temp.id('ms1') $$;
+-- The row lock this transaction holds on ms1, from the infomask of its live
+-- tuple: HEAP_XMAX_SHR_LOCK is 0x50, HEAP_XMAX_KEYSHR_LOCK 0x10. A lock taken
+-- in a subtransaction makes xmax a MultiXact (0x1000), whose members carry the
+-- modes instead.
+CREATE EXTENSION IF NOT EXISTS pageinspect;
+CREATE FUNCTION pg_temp.ms_lock() RETURNS text
+LANGUAGE sql VOLATILE AS $$
+  SELECT CASE WHEN i.t_infomask & 4096 <> 0 THEN (
+                SELECT CASE WHEN bool_or(x.mode = 'sh') THEN 'share'
+                            WHEN bool_or(x.mode = 'keysh') THEN 'key share'
+                            ELSE 'none' END
+                  FROM pg_get_multixact_members(i.t_xmax) x)
+              WHEN i.t_infomask & 80 = 80 THEN 'share'
+              WHEN i.t_infomask & 80 = 16 THEN 'key share'
+              ELSE 'none' END
+    FROM institution.mentorship m
+    CROSS JOIN LATERAL heap_page_items(get_raw_page('institution.mentorship', (m.ctid::text::point)[0]::integer)) i
+   WHERE m.id = pg_temp.id('ms1') AND i.lp = (m.ctid::text::point)[1]::integer
+$$;
 
 -- Catalogue: the same two functions, owners, definer rights and grants.
 SELECT is(
@@ -115,12 +132,12 @@ SET CONSTRAINTS ALL IMMEDIATE;
 SET CONSTRAINTS evidence.evidence_document_current_revision_fkey DEFERRED;
 RESET ROLE;
 
--- 9: nothing holds the mentorship before the student's first call. The
--- fixture's assignment insert already took the foreign key's KEY SHARE lock on
--- ms1 in this transaction, so the owner rewrites the row first: the new
--- version starts with xmax 0, and only a lock taken after this can set it.
-UPDATE institution.mentorship SET started_at = started_at WHERE id = pg_temp.id('ms1');
-SELECT is(pg_temp.ms_xmax(), '0', 'before any call nothing holds Ana''s mentorship');
+-- 9: before the student's first call ms1 holds only the KEY SHARE lock that
+-- the fixture's assignment insert took through its foreign key in this same
+-- transaction, so xmax is already this transaction's and cannot tell a FOR
+-- SHARE apart (a non-key UPDATE keeps it too). The lock mode is in the
+-- tuple's infomask, read with pageinspect inside this rolled-back test.
+SELECT is(pg_temp.ms_lock(), 'key share', 'before any call only the fixture''s foreign key holds Ana''s mentorship');
 
 -- 1: Ana opens her mentorship's work.
 SELECT is(pg_temp.open('ana', 'zm1'), 'opened', 'the student of an open mentorship opens its work');
@@ -128,7 +145,7 @@ SELECT is(pg_temp.open('ana', 'zm1'), 'opened', 'a second call returns the same 
 SELECT is((SELECT count(*)::integer FROM evidence.project WHERE assignment_id = pg_temp.id('zm1')), 1,
   'one project for the mentorship''s assignment, under its own assignment_id');
 -- 9: the authority row stays locked until the caller commits (as 047 shows for the key).
-SELECT isnt(pg_temp.ms_xmax(), '0', 'the mentorship row is held FOR SHARE by the call, so ending it waits');
+SELECT is(pg_temp.ms_lock(), 'share', 'the mentorship row is held FOR SHARE by the call, so ending it waits');
 INSERT INTO ref SELECT 'doc_m1', pg_temp.doc('ana', 'zm1');
 INSERT INTO ref SELECT 'pkg_m1', id FROM evidence.package WHERE document_id = pg_temp.doc('ana', 'zm1');
 
