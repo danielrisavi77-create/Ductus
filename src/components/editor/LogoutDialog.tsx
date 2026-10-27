@@ -12,15 +12,20 @@
  * "Odjavi se" stays available and leaves every copy on this device (D-118).
  * Discarding asks again in the dialog; Escape then only takes the question
  * back. Restoring is the caller's: the text goes back through the editor.
+ *
+ * After a submission the server confirmed, what this device holds of the
+ * work is offered for deletion the same way, with two clicks (F-154, owner
+ * decision 1.3). "Odjavi se" still leaves it on this device (D-118).
  */
 
-import { useEffect, useId, useRef, useState, type MouseEvent, type SyntheticEvent } from "react";
+import { useEffect, useId, useRef, useState, type MouseEvent, type RefObject, type SyntheticEvent } from "react";
 
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
 import styles from "./LogoutDialog.module.css";
 import {
   closeReply,
+  afterSubmissionPart,
   copyPart,
   logoutText,
   nextDiscardStep,
@@ -47,6 +52,12 @@ export type LogoutDialogProps = {
   onRestoreCopy?: () => void;
   /** Discards the newest copy; settles once it is gone or has failed. */
   onDiscardCopy?: () => Promise<void>;
+  /**
+   * Deletes what this device holds of the submitted work (F-154, owner
+   * decision 1.3); settles once it is gone or has failed. Given only for a
+   * submission the server confirmed in this page session.
+   */
+  onDiscardAfterSubmission?: () => Promise<void>;
 };
 
 export default function LogoutDialog({
@@ -59,6 +70,7 @@ export default function LogoutDialog({
   copies = 0,
   onRestoreCopy,
   onDiscardCopy,
+  onDiscardAfterSubmission,
 }: LogoutDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const stayRef = useRef<HTMLButtonElement>(null);
@@ -72,14 +84,26 @@ export default function LogoutDialog({
   const step = (event: DiscardEvent) => setDiscard((now) => nextDiscardStep(now, event));
   const keepRef = useRef<HTMLButtonElement>(null);
   const discardRef = useRef<HTMLButtonElement>(null);
+  // F-154: the same two clicks for what was written after the submission.
+  const after = afterSubmissionPart(plan, Boolean(onDiscardAfterSubmission));
+  const [afterDiscard, setAfterDiscard] = useState<DiscardStep>("idle");
+  const afterStep = (event: DiscardEvent) => setAfterDiscard((now) => nextDiscardStep(now, event));
+  const afterKeepRef = useRef<HTMLButtonElement>(null);
+  const afterDiscardRef = useRef<HTMLButtonElement>(null);
   // While a discard runs or is asked, nothing else in the dialog runs beside it.
-  const busy = working || discard === "working";
+  const busy = working || discard === "working" || afterDiscard === "working";
   // The question needs the copy: when the copies are gone it goes too.
-  const asking = copy !== null && discard === "confirm";
+  const askingCopy = copy !== null && discard === "confirm";
+  const askingAfter = after !== null && afterDiscard === "confirm";
+  const asking = askingCopy || askingAfter;
   const copyShown = copy !== null;
   useEffect(() => {
     if (!copyShown && discard === "confirm") step("keep");
   }, [copyShown, discard]);
+  const afterShown = after !== null;
+  useEffect(() => {
+    if (!afterShown && afterDiscard === "confirm") afterStep("keep");
+  }, [afterShown, afterDiscard]);
   // Set when Escape took the question back, so the close the browser may
   // send after it opens the dialog again instead of counting as "Ostani".
   const withdrawn = useRef(false);
@@ -98,6 +122,17 @@ export default function LogoutDialog({
       (discardRef.current ?? stayRef.current)?.focus();
     }
   }, [discard]);
+  const afterRefocus = useRef(false);
+  useEffect(() => {
+    if (afterDiscard === "confirm") {
+      afterRefocus.current = true;
+      afterKeepRef.current?.focus();
+    } else if (afterDiscard === "working") afterRefocus.current = true;
+    else if (afterRefocus.current) {
+      afterRefocus.current = false;
+      (afterDiscardRef.current ?? stayRef.current)?.focus();
+    }
+  }, [afterDiscard]);
 
   const askDiscard = () => {
     withdrawn.current = false;
@@ -112,6 +147,20 @@ export default function LogoutDialog({
     settleDiscard(onDiscardCopy).then(
       () => step("done"),
       () => step("error"),
+    );
+  };
+  const askAfter = () => {
+    withdrawn.current = false;
+    afterStep("ask");
+  };
+  const keepAfter = () => afterStep("keep");
+  const confirmAfter = () => {
+    if (!onDiscardAfterSubmission || afterDiscard !== "confirm") return;
+    withdrawn.current = false;
+    afterStep("confirm");
+    settleDiscard(onDiscardAfterSubmission).then(
+      () => afterStep("done"),
+      () => afterStep("error"),
     );
   };
 
@@ -131,7 +180,8 @@ export default function LogoutDialog({
   const onCancel = (event: SyntheticEvent<HTMLDialogElement>) => {
     event.preventDefault();
     withdrawn.current = asking;
-    if (asking) keepCopy();
+    if (askingCopy) keepCopy();
+    else if (askingAfter) keepAfter();
     else if (!busy) onStay();
   };
   // The browser may close the dialog on its own: Chromium stops honouring
@@ -149,7 +199,7 @@ export default function LogoutDialog({
     }
     withdrawn.current = false;
     dialog.showModal();
-    (keepRef.current ?? discardRef.current ?? stayRef.current)?.focus();
+    (keepRef.current ?? afterKeepRef.current ?? discardRef.current ?? afterDiscardRef.current ?? stayRef.current)?.focus();
   };
   // Only the backdrop: the content fills the dialog, so a click inside it
   // never has the dialog itself as its target.
@@ -190,15 +240,28 @@ export default function LogoutDialog({
               </>
             ) : (
               <div className={styles.actions}>
-                <button type="button" className={styles.secondary} onClick={onRestoreCopy} disabled={busy}>
+                <button type="button" className={styles.secondary} onClick={onRestoreCopy} disabled={busy || asking}>
                   {t.copyRestore}
                 </button>
-                <button ref={discardRef} type="button" className={styles.secondary} onClick={askDiscard} disabled={busy}>
+                <button ref={discardRef} type="button" className={styles.secondary} onClick={askDiscard} disabled={busy || asking}>
                   {t.copyDiscard}
                 </button>
               </div>
             )}
           </section>
+        ) : null}
+        {after ? (
+          <AfterSubmissionPart
+            title={after.title}
+            asking={askingAfter}
+            failed={afterDiscard === "failed"}
+            disabled={busy || asking}
+            keepRef={afterKeepRef}
+            discardRef={afterDiscardRef}
+            onAsk={askAfter}
+            onKeep={keepAfter}
+            onConfirm={confirmAfter}
+          />
         ) : null}
         {/* The live region exists before its text, so the failure is announced. */}
         <div role="alert">
@@ -220,5 +283,51 @@ export default function LogoutDialog({
         </div>
       </div>
     </dialog>
+  );
+}
+
+/**
+ * The part for what was written after the submission (F-154): one button,
+ * then the question with "Da, obriši izmjene" and "Zadrži izmjene". Its own
+ * element, so the dialog's text keeps few readings for the term scan.
+ */
+function AfterSubmissionPart({
+  title, asking, failed, disabled, keepRef, discardRef, onAsk, onKeep, onConfirm,
+}: {
+  title: string;
+  asking: boolean;
+  /** The last discard failed; the rows stay on this device. */
+  failed: boolean;
+  disabled: boolean;
+  keepRef: RefObject<HTMLButtonElement | null>;
+  discardRef: RefObject<HTMLButtonElement | null>;
+  onAsk: () => void;
+  onKeep: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <section className={styles.copy} aria-label={title}>
+      {asking ? (
+        <>
+          <p className={styles.text}>{t.afterSubmissionDiscardAsk}</p>
+          <div className={styles.actions}>
+            <button type="button" className={styles.secondary} onClick={onConfirm}>
+              {t.afterSubmissionDiscardConfirm}
+            </button>
+            <button ref={keepRef} type="button" className={styles.stay} onClick={onKeep}>
+              {t.afterSubmissionKeep}
+            </button>
+          </div>
+        </>
+      ) : (
+        <div className={styles.actions}>
+          <button ref={discardRef} type="button" className={styles.secondary} onClick={onAsk} disabled={disabled}>
+            {t.afterSubmissionDiscard}
+          </button>
+        </div>
+      )}
+      {/* The live region exists before its text, so the failure is announced. */}
+      <div role="alert">{failed ? <p className={styles.error}>{t.afterSubmissionDiscardFailed}</p> : null}</div>
+    </section>
   );
 }

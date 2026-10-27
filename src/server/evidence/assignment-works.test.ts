@@ -142,9 +142,11 @@ describe("F-142: the works of many assignments in one read", () => {
     expect(JSON.stringify(error.mock.calls)).not.toMatch(new RegExp(`${CANARY}|doc-a|${ANA}`));
   });
 
+  // DAN-332 PR 4: the page now takes its works from the submissions read (R1), which
+  // carries each work with the state of its submission; F-142 still holds there.
   it("the teacher's home page reads the works once, never once per assignment", () => {
     const page = readFileSync(new URL("../../../app/nastavnik/page.tsx", import.meta.url), "utf8");
-    expect(page.match(/readAssignmentWorksMany\(/g)).toHaveLength(1);
-    expect(page).not.toMatch(/readAssignmentWorks\(/);
+    expect(page.match(/readAssignmentSubmissionsMany\(/g)).toHaveLength(1);
+    expect(page).not.toMatch(/readAssignmentWorks(Many)?\(|readAssignmentSubmissions\(/);
   });
 });
