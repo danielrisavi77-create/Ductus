@@ -16,8 +16,29 @@ const t = messagesHr.fastPath;
 
 export type WorkState = "notice_pending" | "writing" | "submitted";
 
+/** The block kinds of #757: the document's own type names (F-150 point 1, E1). */
+export const TEXT_BLOCK_KINDS = ["heading", "paragraph", "bulletItem", "quote"] as const;
+
 /** One block of the work's text, in the order of the document. */
-export type TextBlock = { readonly kind: "heading" | "paragraph"; readonly text: string };
+export type TextBlock = { readonly kind: (typeof TEXT_BLOCK_KINDS)[number]; readonly text: string };
+
+/** Blocks as the read-only views draw them: a run of items is one list, a run of quotes one quote. */
+export type TextRun = { readonly kind: TextBlock["kind"]; readonly texts: readonly string[] };
+
+/**
+ * Consecutive bullet items are one list and consecutive quotes one block
+ * quote, as `manuscript-blocks.ts` groups them for the submission views (E1),
+ * so the fast path shows the same shape; every other block stands alone.
+ */
+export function textRuns(blocks: readonly TextBlock[]): TextRun[] {
+  const runs: { kind: TextBlock["kind"]; texts: string[] }[] = [];
+  for (const block of blocks) {
+    const last = runs.at(-1);
+    if (last?.kind === block.kind && (block.kind === "bulletItem" || block.kind === "quote")) last.texts.push(block.text);
+    else runs.push({ kind: block.kind, texts: [block.text] });
+  }
+  return runs;
+}
 
 export type FastPathRecord = {
   /** How many pastes have no source; their place in the text is not known (#757). */

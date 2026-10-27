@@ -8,7 +8,7 @@ import { messagesHr } from "@/lib/i18n/messages.hr";
 import { isUiTextModule } from "../../../scripts/forbidden-terms/scan";
 import { findForbiddenTerms } from "../../../scripts/forbidden-terms/terms";
 import { FastPath } from "./FastPath";
-import { bySurname, compareHr, fastPathLines, fullName, type FastPathStudent } from "./fast-path";
+import { bySurname, compareHr, fastPathLines, fullName, textRuns, type FastPathStudent } from "./fast-path";
 
 const t = messagesHr.fastPath;
 
@@ -161,6 +161,43 @@ describe("FastPath states", () => {
     // One per list row and one in the head of the chosen work.
     expect(html.split("data-work=").length - 1).toBe(works.length + 1);
     const order = students.map((s) => html.indexOf(`Ana ${s.surname}`));
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
+});
+
+describe("block kinds (F-150 point 1, E1)", () => {
+  const blocks = [
+    { kind: "heading", text: "Uvod" },
+    { kind: "bulletItem", text: "prva stavka" },
+    { kind: "bulletItem", text: "druga stavka" },
+    { kind: "paragraph", text: "Odlomak između." },
+    { kind: "quote", text: "prvi red navoda" },
+    { kind: "quote", text: "drugi red navoda" },
+    { kind: "bulletItem", text: "nova lista" },
+  ] as const;
+
+  it("groups consecutive items into one list and consecutive quotes into one quote", () => {
+    expect(textRuns(blocks)).toEqual([
+      { kind: "heading", texts: ["Uvod"] },
+      { kind: "bulletItem", texts: ["prva stavka", "druga stavka"] },
+      { kind: "paragraph", texts: ["Odlomak između."] },
+      { kind: "quote", texts: ["prvi red navoda", "drugi red navoda"] },
+      { kind: "bulletItem", texts: ["nova lista"] },
+    ]);
+    // Headings and paragraphs never merge.
+    expect(textRuns([{ kind: "paragraph", text: "a" }, { kind: "paragraph", text: "b" }])).toHaveLength(2);
+    expect(textRuns([])).toEqual([]);
+  });
+
+  it("draws every block in order: items as list entries, quotes as a block quote", () => {
+    const base = SAMPLE.find((s) => s.record !== null)!;
+    const html = render({ state: "ready", students: [{ ...base, record: { ...base.record!, blocks } }], stale: false });
+    expect(html.match(/<ul>/g)).toHaveLength(2);
+    expect(html).toContain("<ul><li>prva stavka</li><li>druga stavka</li></ul>");
+    expect(html).toContain("<blockquote><p>prvi red navoda</p><p>drugi red navoda</p></blockquote>");
+    expect(html).toContain("<ul><li>nova lista</li></ul>");
+    const order = blocks.map((b) => html.indexOf(b.text));
+    expect(order.every((i) => i >= 0)).toBe(true);
     expect(order).toEqual([...order].sort((a, b) => a - b));
   });
 });
