@@ -885,8 +885,12 @@ describe("3d-2c2a §4 (DAN-289 A1): a submission closes the session", () => {
   const notAccepting = () => json(409, { status: "not_accepting" });
 
   /** A session whose commits go through the O1 (a) wrapper of the browser deps. */
-  function closedSetup(net: ReturnType<typeof server>, journal: AtomicDexieJournal = openJournal(), online = network()) {
-    const closed = watchClosedBySubmission(net.fetchImpl);
+  function closedSetup(
+    net: ReturnType<typeof server>, journal: AtomicDexieJournal = openJournal(), online = network(),
+    // F-155: what the open route says when asked again after the 409.
+    isSubmitted: () => Promise<boolean> = async () => true,
+  ) {
+    const closed = watchClosedBySubmission(net.fetchImpl, isSubmitted);
     let clock = 0;
     const made = setup({
       net, online, journal,
@@ -975,9 +979,28 @@ describe("3d-2c2a §4 (DAN-289 A1): a submission closes the session", () => {
     expect(session.snapshot().closedBy).toBeNull();
   });
 
+  // F-155: the commit route says not_accepting for a submission, a current
+  // version not acknowledged and one not open yet; only the server's own
+  // "submitted" closes by submission, and an unknown answer closes nothing.
+  for (const [name, isSubmitted] of [
+    ["the open route says not submitted (a new version waits for its notice)", async () => false],
+    ["the open route cannot be asked", async () => { throw new Error("invented outage"); }],
+  ] as const) {
+    it(`S8: a 409 not_accepting is not closed by submission when ${name}`, async () => {
+      const { session, journal } = closedSetup(server(R0, notAccepting), undefined, undefined, isSubmitted);
+      await ready(session);
+      const sheet = editorFor(session);
+      sheet.type("x");
+      await sheet.save();
+      expect(session.snapshot().closedBy).toBeNull();
+      // The row the server refused stays on the device, unsent.
+      expect((await journal.readEvidence(DOC)).pending).toHaveLength(1);
+    });
+  }
+
   it("S7: an open answering 409 not_accepting loads unavailable, not closed by submission", async () => {
     const net = server();
-    const closed = watchClosedBySubmission(net.fetchImpl);
+    const closed = watchClosedBySubmission(net.fetchImpl, async () => true);
     const { session, journal } = setup({
       net, open: async () => ({ status: "not_accepting" }), over: { watchSubmission: closed.watch },
     });
