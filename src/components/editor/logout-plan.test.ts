@@ -175,7 +175,7 @@ describe("copy kept outside the work (3d-2c, P3 and P4 a)", () => {
   // P4 (a), D-118: sign-out closes the session and never deletes the copy.
   it("says that sign-out keeps the copy, tied to the student on this device", () => {
     expect(t.logoutCopyKept).toMatch(/ne briše/);
-    expect(t.logoutCopyKept).toMatch(/vezana uz tebe na ovom uređaju/);
+    expect(t.logoutCopyKept).toMatch(/vezana uz Vas na ovom uređaju/);
   });
 
   it("never claims anything about the server and uses no forbidden term", () => {
