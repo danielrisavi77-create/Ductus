@@ -27,7 +27,9 @@ SET LOCAL ROLE ductus_evidence;
 -- The text of the caller's institution's checkpoints of this document whose
 -- hash is asked for, one row per hash found, and only bytes that hash to it.
 -- The institution comes from the session, never from a parameter; the caller
--- has already checked that the actor may read the document.
+-- has already checked that the actor may read the document. A recorded
+-- submission cuts the texts where app.process_summary_record cuts the record:
+-- no revision after the submitted one, whatever hash is asked for.
 CREATE FUNCTION app.replay_document_checkpoints(p_document_id text, p_content_hashes text[])
 RETURNS TABLE (content_hash text, body text)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = ''
@@ -38,6 +40,12 @@ AS $$
    WHERE c.document_id = p_document_id
      AND c.content_hash = ANY (p_content_hashes)
      AND pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(c.body, 'UTF8')), 'hex') = c.content_hash
+     AND NOT EXISTS (
+       SELECT 1
+         FROM evidence.submission s
+         JOIN evidence.submission_request r ON r.id = s.submission_request_id AND r.institution_id = s.institution_id
+        WHERE r.document_id = c.document_id AND r.institution_id = c.institution_id
+          AND c.revision > s.revision)
    ORDER BY c.content_hash, c.revision
 $$;
 REVOKE ALL ON FUNCTION app.replay_document_checkpoints(text, text[]) FROM PUBLIC;

@@ -245,8 +245,9 @@ async function insertFixture() {
       [documentId, institutionId, projectId, people.ana, "a".repeat(64)],
     );
     await client.query(
-      `INSERT INTO evidence.document_revision (document_id, institution_id, revision, principal_id, content_hash)
-       VALUES ($1, $2, 0, $3, $4), ($1, $2, 1, $3, $5)`,
+      `INSERT INTO evidence.document_revision
+         (document_id, institution_id, revision, base_revision, principal_id, content_hash)
+       VALUES ($1, $2, 0, NULL, $3, $4), ($1, $2, 1, 0, $3, $5)`,
       [documentId, institutionId, people.ana, "a".repeat(64), resumeHash],
     );
     // The seal trigger computes the hash from the text; the key ties it to revision 1.

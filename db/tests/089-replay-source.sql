@@ -173,6 +173,12 @@ SELECT is(pg_temp.row_of('vesna', 'read_replay_source'), pg_temp.row_of('ana', '
   'student and teacher get the same row');
 SELECT is(pg_temp.row_of('vesna', 'read_replay_source'), pg_temp.row_of('vesna', 'read_process_summary_source'),
   'the same row as the summary of the submitted work');
+-- The texts are cut there too: revision 3 (f) was committed after the
+-- submission, and its hash gives no text even to someone who knows it.
+SELECT is(pg_temp.texts(a.name, pg_temp.def()), 'd', a.name || ' gets only the text up to the submitted revision')
+FROM (VALUES ('ana'), ('vesna')) AS a (name);
+SELECT is(pg_temp.texts(a.name, ARRAY[pg_temp.h('f')]), '-', a.name || ' gets no text of a revision after the submission')
+FROM (VALUES ('ana'), ('vesna')) AS a (name);
 
 -- Revocation is immediate: a teacher who left the course reads nothing.
 UPDATE institution.course_member SET member_to = now()
