@@ -36,9 +36,14 @@ function strictBase64(value: unknown): Uint8Array | null {
   return decoded.toString("base64") === value ? new Uint8Array(decoded) : null;
 }
 
-/** The envelope of 4.13 t. 2, or null for anything else (`gap` included). */
+/**
+ * The envelope of 4.13 t. 2, or null for anything else (`gap` included). The
+ * one optional key, `timing` (DAN-344 P1-b), never makes the envelope
+ * invalid: a value that is not strict base64 reaches the commit as null and
+ * the segment is accepted without timing.
+ */
 export function parseCommitEnvelope(bytes: Uint8Array): EvidenceCommitRequest | null {
-  const body = parseClosedObject(bytes, KEYS);
+  const body = parseClosedObject(bytes, KEYS, ["timing"]);
   if (body === null) return null;
   const { documentId, clientTransactionId, baseRevision, segments, document } = body;
   if (
@@ -53,7 +58,9 @@ export function parseCommitEnvelope(bytes: Uint8Array): EvidenceCommitRequest | 
   const segment = strictBase64(segments[0]);
   const snapshot = strictBase64(document);
   if (segment === null || snapshot === null) return null;
-  return { documentId, clientTransactionId, baseRevision, segment, document: snapshot };
+  const request: EvidenceCommitRequest = { documentId, clientTransactionId, baseRevision, segment, document: snapshot };
+  if (Object.hasOwn(body, "timing")) request.timing = strictBase64(body.timing);
+  return request;
 }
 
 /** The closed mapping of 4.13 t. 4. */
@@ -101,7 +108,7 @@ export async function handleEvidenceCommitRequest(request: Request, deps: Eviden
   const envelope = parseCommitEnvelope(read.bytes);
   if (envelope === null) return reply(422, { status: "invalid" });
 
-  const outcome = await commitEvidenceRequest(deps, read.token, envelope);
+  const outcome = await commitEvidenceRequest({ ...deps, log }, read.token, envelope);
   if (outcome.status === "unavailable") log("evidence commit", outcome.status, outcome.stage, outcome.code);
   else if (outcome.status !== "committed" && outcome.status !== "duplicate") log("evidence commit", outcome.status);
   return commitResponse(outcome);

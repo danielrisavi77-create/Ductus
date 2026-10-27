@@ -134,6 +134,8 @@ export type EvidenceCommitInput = {
   storageRef: string;
   /** Exact JCS bytes of the document after the segment (4.10 t. 2). */
   snapshot: string;
+  /** SHA-256 of the segment's stored timing, or null for none (DAN-344 P1-b). */
+  timingSha256?: string | null;
 };
 
 export type EvidenceCommitState = {
@@ -167,7 +169,7 @@ export type EvidenceCommitDependencies = { withActor: WithActor; signer: Signing
 
 const COMMIT_SQL = `SELECT outcome, committed_revision, receipt_payload, receipt_id, signature,
        current_revision, document_hash, head_segment_hash, last_sequence_to
-  FROM app.commit_evidence_segment($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9)`;
+  FROM app.commit_evidence_segment($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10)`;
 const ATTACH_SQL = "SELECT outcome FROM app.attach_receipt_signature($1::uuid, $2, $3::jsonb)";
 
 type CommitRow = Record<
@@ -328,6 +330,7 @@ async function runCommit(
     input.descriptor.segmentHash,
     input.storageRef,
     input.snapshot,
+    input.timingSha256 ?? null,
   ]);
   if (rows.length !== 1) fault("repository", "commit_rows");
   const row = rows[0];

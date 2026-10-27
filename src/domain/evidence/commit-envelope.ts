@@ -1,5 +1,6 @@
 import { MAX_DOCUMENT_SNAPSHOT_BYTES } from "../document/snapshot";
 import { MAX_EVIDENCE_SEGMENT_BYTES } from "../forensics/evidence-chain-v2";
+import { MAX_EVIDENCE_TIMING_BYTES } from "../forensics/evidence-timing-v1";
 
 /**
  * The envelope of `POST /api/evidence/commit` (docs/BACKEND.md 4.13 t. 1 and
@@ -17,8 +18,12 @@ export function base64Length(bytes: number): number {
   return 4 * Math.ceil(bytes / 3);
 }
 
-/** One segment at D-96 and one snapshot at its limit, both in base64, plus the envelope. */
+/**
+ * One segment at D-96, one snapshot and one timing (DAN-344 P1) at their
+ * limits, all in base64, plus the envelope.
+ */
 export const MAX_COMMIT_REQUEST_BYTES =
   base64Length(MAX_EVIDENCE_SEGMENT_BYTES) +
   base64Length(MAX_DOCUMENT_SNAPSHOT_BYTES) +
+  base64Length(MAX_EVIDENCE_TIMING_BYTES) +
   COMMIT_ENVELOPE_OVERHEAD_BYTES;

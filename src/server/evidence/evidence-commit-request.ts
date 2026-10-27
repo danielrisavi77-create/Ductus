@@ -7,8 +7,10 @@ import { MAX_DOCUMENT_SNAPSHOT_BYTES, verifyDocumentSnapshot } from "@/domain/do
 import {
   exceedsEvidenceSegmentLimit,
   verifyCanonicalEvidencePayloadV2,
+  type VerifiedEvidencePayloadV2,
 } from "@/domain/forensics/evidence-chain-v2";
 import { isReceiptClientTransactionId } from "@/domain/forensics/evidence-receipt";
+import { verifyEvidenceTimingV1 } from "@/domain/forensics/evidence-timing-v1";
 
 import {
   commitEvidenceSegment,
@@ -16,6 +18,7 @@ import {
   type EvidenceCommitDependencies,
   type EvidenceCommitOutcome,
 } from "./evidence-commit";
+import type { Log } from "./ingest-http";
 
 /**
  * B-8 step 4d (docs/BACKEND.md 4.13 t. 3.1 to 3.5): one commit request as the
@@ -35,6 +38,11 @@ export type EvidenceCommitRequest = {
   segment: Uint8Array;
   /** Exact JCS bytes of the document after the segment's last event, as received. */
   document: Uint8Array;
+  /**
+   * Exact JCS bytes of the segment's timing (`ductus-evidence-timing-v1`):
+   * absent when not sent, null when sent in a form that does not decode.
+   */
+  timing?: Uint8Array | null;
 };
 
 export type EvidenceCommitRequestOutcome =
@@ -54,9 +62,51 @@ export type EvidenceCommitRequestOutcome =
 
 export type EvidenceCommitRequestDependencies = EvidenceCommitDependencies & {
   payloads: EvidencePayloadStore & EvidencePayloadLocator;
+  /** Closed codes only: why a timing was left out. */
+  log?: Log;
 };
 
 const MAX_BASE_REVISION = Number.MAX_SAFE_INTEGER - 1;
+
+/**
+ * DAN-344 P1-b (addendum c.6435323774 on #923): the timing of a new segment,
+ * checked against the verified segment of the same request and stored under
+ * its own hash. Answers the hash to keep in the segment row, or null. Never
+ * refuses the segment: a timing that is malformed, does not fit or cannot be
+ * stored is left out, and the log gets a closed code only, never bytes or ids.
+ */
+async function storeTiming(
+  deps: EvidenceCommitRequestDependencies,
+  key: { institutionId: string; evidencePackageId: string },
+  timing: Uint8Array | null | undefined,
+  segment: VerifiedEvidencePayloadV2,
+): Promise<string | null> {
+  if (timing === undefined) return null;
+  const leaveOut = (code: string) => {
+    try {
+      deps.log?.("evidence timing", code);
+    } catch {
+      // A failing logger never reaches the segment.
+    }
+    return null;
+  };
+  if (!(timing instanceof Uint8Array)) return leaveOut("timing_malformed");
+  try {
+    const checked = await verifyEvidenceTimingV1(timing, segment);
+    if (!checked.ok) return leaveOut(`timing_${checked.reason}`);
+    // Verified JCS bytes are valid UTF-8; the route hands over a buffer it alone holds.
+    const canonicalPayload = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(timing);
+    const stored = await deps.payloads.putImmutable({
+      ...key,
+      segmentHash: checked.sha256,
+      kind: "timing-v1",
+      canonicalPayload,
+    });
+    return stored.status === "stored" || stored.status === "existing" ? checked.sha256 : leaveOut("timing_storage");
+  } catch {
+    return leaveOut("timing_failed");
+  }
+}
 
 async function prepareAndCommit(
   deps: EvidenceCommitRequestDependencies,
@@ -140,6 +190,7 @@ async function prepareAndCommit(
     segmentHash: verified.sha256,
   };
   let storageRef: string;
+  let timingSha256: string | null = null;
   if (context.transactionKnown) {
     const located = await deps.payloads.storageRefFor(key);
     if (located.status !== "ok") return { status: "unavailable", stage: "storage", code: "storage_unavailable" };
@@ -157,6 +208,8 @@ async function prepareAndCommit(
       return { status: "unavailable", stage: "storage", code: "storage_refused" };
     }
     storageRef = stored.storageRef;
+    // Only with a new key: a retry stores no timing and its row stays as it is.
+    timingSha256 = await storeTiming(deps, key, request.timing, verified);
   }
 
   // t. 3.6: one transaction, signed in it (step 4c).
@@ -170,6 +223,7 @@ async function prepareAndCommit(
     descriptor,
     storageRef,
     snapshot: snapshot.text,
+    timingSha256,
   });
 }
 

@@ -1,5 +1,6 @@
 import { canonicalizeJcs } from "@/domain/forensics/jcs";
 import {
+  type EvidenceObjectKind,
   evidenceObjectKey,
   evidenceStorageRef,
 } from "@/application/ports/evidence-object-key";
@@ -33,6 +34,7 @@ export class InMemoryEvidencePayloadStore
     institutionId: string;
     evidencePackageId: string;
     segmentHash: string;
+    kind?: EvidenceObjectKind;
     canonicalPayload: string;
   }): Promise<EvidencePayloadPutResult> {
     if (this.unavailableReason) {
@@ -84,6 +86,7 @@ export class InMemoryEvidencePayloadStore
     institutionId?: string;
     evidencePackageId: string;
     segmentHash: string;
+    kind?: EvidenceObjectKind;
   }): Promise<EvidencePayloadReadResult> {
     if (this.unavailableReason) {
       return { status: "unavailable", reason: this.unavailableReason };
@@ -94,7 +97,7 @@ export class InMemoryEvidencePayloadStore
     ) {
       return { status: "not_found" };
     }
-    const stored = this.find(input.evidencePackageId, input.segmentHash);
+    const stored = this.find(input.evidencePackageId, input.segmentHash, input.kind);
     return stored
       ? {
           status: "found",
@@ -114,11 +117,13 @@ export class InMemoryEvidencePayloadStore
   private find(
     evidencePackageId: string,
     segmentHash: string,
+    kind?: EvidenceObjectKind,
   ): StoredPayload | undefined {
     const path = evidenceObjectKey({
       institutionId: this.packageInstitutions.get(evidencePackageId),
       evidencePackageId,
       segmentHash,
+      kind,
     });
     return path ? this.payloads.get(canonicalizeJcs([...path])) : undefined;
   }

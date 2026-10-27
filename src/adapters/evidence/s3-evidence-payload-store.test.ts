@@ -181,6 +181,29 @@ describe("S3EvidencePayloadStore", () => {
     expect(s3.objects.size).toBe(1);
   });
 
+  it("writes and reads a timing under <hash>.timing-v1.json, held to its own hash (DAN-344 P1-b)", async () => {
+    const s3 = fakeS3();
+    const { store } = storeWith(s3.fetch);
+    const timing = payload("timing");
+    const hash = hashOf(timing);
+    const key = { institutionId: INSTITUTION, evidencePackageId: PACKAGE, segmentHash: hash, kind: "timing-v1" as const };
+    await expect(store.putImmutable({ ...key, canonicalPayload: timing })).resolves.toEqual({
+      status: "stored",
+      storageRef: `fak-a-eu-1:v2/${INSTITUTION}/${PACKAGE}/${hash}.timing-v1.json`,
+    });
+    expect(s3.calls[0].path).toBe(`/ductus-evidence/v2/${INSTITUTION}/${PACKAGE}/${hash}.timing-v1.json`);
+    await expect(store.readImmutable(key)).resolves.toEqual({ status: "found", bytes: new TextEncoder().encode(timing) });
+    // The segment key of the same hash holds nothing.
+    await expect(store.readImmutable({ ...key, kind: undefined })).resolves.toEqual({ status: "unavailable", reason: "storage_get_status_404" });
+    // Bytes of another hash, or a kind that is no kind, never leave the process.
+    const before = s3.calls.length;
+    await expect(store.putImmutable({ ...key, canonicalPayload: payload("other") })).resolves.toEqual({ status: "invalid" });
+    await expect(
+      store.putImmutable({ ...key, kind: "timing" as never, canonicalPayload: timing }),
+    ).resolves.toEqual({ status: "invalid" });
+    expect(s3.calls.length).toBe(before);
+  });
+
   it("answers conflict for other bytes at the key, keeps them and logs ids only", async () => {
     const s3 = fakeS3();
     const { store, warn } = storeWith(s3.fetch);

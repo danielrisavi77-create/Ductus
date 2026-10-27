@@ -59,16 +59,16 @@ $$;
 
 SELECT ok(
   (SELECT prosecdef AND 'search_path=""' = ANY(proconfig)
-     FROM pg_proc WHERE oid = 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text)'::regprocedure),
+     FROM pg_proc WHERE oid = 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text,text)'::regprocedure),
   'the acceptance entrypoint is SECURITY DEFINER with an empty search_path'
 );
 SELECT ok(
-  has_function_privilege('ductus_app', 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text)', 'EXECUTE')
-  AND NOT has_function_privilege('ductus_test_stranger', 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text)', 'EXECUTE')
+  has_function_privilege('ductus_app', 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text,text)', 'EXECUTE')
+  AND NOT has_function_privilege('ductus_test_stranger', 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text,text)', 'EXECUTE')
   AND NOT EXISTS (
     SELECT 1 FROM pg_proc p
     CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) acl
-    WHERE p.oid = 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text)'::regprocedure
+    WHERE p.oid = 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text,text)'::regprocedure
       AND acl.grantee = 0 AND acl.privilege_type = 'EXECUTE'
   ), 'only the app role can execute the acceptance entrypoint'
 );

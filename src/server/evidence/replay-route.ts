@@ -15,6 +15,7 @@ import { sourceResult, type SourceRow } from "@/server/projection/process-summar
 
 const MAX_BODY_BYTES = 1024;
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
+const SHA256_HEX = /^[0-9a-f]{64}$/;
 const NO_STORE = { "cache-control": "no-store" };
 
 function isUnauthenticated(error: unknown): boolean {
@@ -35,8 +36,8 @@ export function sessionReplaySource(withActor: WithActor, sessionToken: string):
       let result;
       try {
         result = await withActor(sessionToken, (tx) =>
-          tx.query<SourceRow>(
-            "SELECT outcome, institution_id, evidence_package_id, segment_hashes FROM app.read_replay_source($1)",
+          tx.query<SourceRow & { timing_hashes?: unknown }>(
+            "SELECT outcome, institution_id, evidence_package_id, segment_hashes, timing_hashes FROM app.read_replay_source($1)",
             [documentId],
           ),
         );
@@ -44,7 +45,18 @@ export function sessionReplaySource(withActor: WithActor, sessionToken: string):
         if (isUnauthenticated(error)) return { status: "unauthenticated" };
         throw error;
       }
-      return sourceResult(result.rows);
+      const source = sourceResult(result.rows);
+      if (source.status !== "found") return source;
+      // One timing hash or null per listed segment, in its order; anything else is no record.
+      const timings = result.rows[0].timing_hashes;
+      if (
+        !Array.isArray(timings) ||
+        timings.length !== source.segmentHashes.length ||
+        !timings.every((hash) => hash === null || (typeof hash === "string" && SHA256_HEX.test(hash)))
+      ) {
+        return { status: "unavailable", reason: "source_malformed" };
+      }
+      return { ...source, timingHashes: [...(timings as (string | null)[])] };
     },
     async readCheckpoints(documentId, contentHashes): Promise<ReplayCheckpointsResult> {
       let result;

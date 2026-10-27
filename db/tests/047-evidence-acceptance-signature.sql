@@ -119,7 +119,7 @@ SELECT is(
 SELECT is_empty(
   $$ SELECT p.oid::regprocedure::text FROM pg_proc p
       WHERE p.oid IN ('app.attach_receipt_signature(uuid,text,jsonb)'::regprocedure,
-                      'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text)'::regprocedure)
+                      'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text,text)'::regprocedure)
         AND (NOT p.prosecdef OR p.proowner <> 'ductus_evidence'::regrole OR NOT 'search_path=""' = ANY (p.proconfig)) $$,
   'both RPCs are SECURITY DEFINER functions of the evidence role with an empty search_path');
 SELECT is_empty(
@@ -129,7 +129,7 @@ SELECT is_empty(
       WHERE (p.oid IN ('evidence.inserted_by_current_transaction(xid)'::regprocedure,
                        'evidence.guard_signing_key_change()'::regprocedure)
              OR (r <> 'ductus_app' AND p.oid IN ('app.attach_receipt_signature(uuid,text,jsonb)'::regprocedure,
-                 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text)'::regprocedure)))
+                 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text,text)'::regprocedure)))
         AND has_function_privilege(r, p.oid, 'EXECUTE') $$,
   'only the web role executes the two RPCs, and nobody the private helpers');
 SELECT is(to_regprocedure('app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text)')::text, NULL,
@@ -137,7 +137,7 @@ SELECT is(to_regprocedure('app.commit_evidence_segment(text,text,bigint,text,tex
 SELECT is(pg_get_function_arguments('app.attach_receipt_signature(uuid,text,jsonb)'::regprocedure),
   'p_receipt_id uuid, p_payload_digest_sha256 text, p_signature jsonb',
   'the signature RPC takes no person, institution or key domain: they come from the session and the receipt');
-SELECT is(pg_get_function_result('app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text)'::regprocedure),
+SELECT is(pg_get_function_result('app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text,text)'::regprocedure),
   'TABLE(outcome text, committed_revision bigint, receipt_payload text, receipt_id uuid, signature jsonb, current_revision bigint, document_hash text, head_segment_hash text, last_sequence_to bigint)',
   'the acceptance returns the receipt, the stored signature and the conflict state');
 

@@ -18,22 +18,40 @@ export function isStorageDomainLabel(value: unknown): value is string {
 }
 
 /**
+ * What an evidence object holds: a segment, or the timing of a segment
+ * (`ductus-evidence-timing-v1`, DAN-344 P1). Both are content-addressed: the
+ * hash in the key is the SHA-256 of the object's own bytes.
+ */
+export type EvidenceObjectKind = "segment" | "timing-v1";
+
+const OBJECT_SUFFIX: Readonly<Record<EvidenceObjectKind, string>> = {
+  segment: ".json",
+  "timing-v1": ".timing-v1.json",
+};
+
+/**
  * The one object key of an evidence payload, as path segments:
- * `v2/<institution>/<package>/<hash>.json` (BACKEND 4.1). The institution is
- * the one the server resolved for the package, never a value from the
- * request. The prefix keeps two institutions apart even if both were mapped
- * to one bucket by mistake, so the same hash never reads as `existing` across
- * them. Returns `null` for any input outside the allowed forms.
+ * `v2/<institution>/<package>/<hash>.json` (BACKEND 4.1), or
+ * `<hash>.timing-v1.json` for a timing (addendum c.6435323774 on #923). The
+ * institution is the one the server resolved for the package, never a value
+ * from the request. The prefix keeps two institutions apart even if both were
+ * mapped to one bucket by mistake, so the same hash never reads as `existing`
+ * across them. `segmentHash` is the hash of the object's bytes, whatever its
+ * kind; no kind is a segment. Returns `null` for any input outside the
+ * allowed forms.
  */
 export function evidenceObjectKey(input: {
   institutionId: unknown;
   evidencePackageId: unknown;
   segmentHash: unknown;
+  kind?: unknown;
 }): readonly string[] | null {
+  const kind = input.kind === undefined ? "segment" : input.kind;
   if (
     !isInstitutionId(input.institutionId) ||
     !isEvidencePackageId(input.evidencePackageId) ||
-    !isSha256Hex(input.segmentHash)
+    !isSha256Hex(input.segmentHash) ||
+    (kind !== "segment" && kind !== "timing-v1")
   ) {
     return null;
   }
@@ -41,7 +59,7 @@ export function evidenceObjectKey(input: {
     "v2",
     input.institutionId,
     input.evidencePackageId,
-    `${input.segmentHash}.json`,
+    `${input.segmentHash}${OBJECT_SUFFIX[kind]}`,
   ];
 }
 

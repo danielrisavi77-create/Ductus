@@ -1,4 +1,5 @@
 import type { EvidenceSegmentDescriptorV2 } from "./evidence-ingest";
+import type { EvidenceObjectKind } from "./evidence-object-key";
 import type {
   EvidenceReceiptPayloadV1,
   SignedEvidenceReceipt,
@@ -47,6 +48,8 @@ export interface EvidencePayloadStore {
     institutionId: string;
     evidencePackageId: string;
     segmentHash: string;
+    /** No kind is a segment; segmentHash is the hash of these bytes either way. */
+    kind?: EvidenceObjectKind;
     canonicalPayload: string;
   }): Promise<EvidencePayloadPutResult>;
 }

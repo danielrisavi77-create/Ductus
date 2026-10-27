@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import {
+  type EvidenceObjectKind,
   evidenceObjectKey,
   evidenceStorageRef,
   isStorageDomainLabel,
@@ -281,6 +282,7 @@ export class S3EvidencePayloadStore
     institutionId: string;
     evidencePackageId: string;
     segmentHash: string;
+    kind?: EvidenceObjectKind;
     canonicalPayload: string;
   }): Promise<EvidencePayloadPutResult> {
     // One deadline for the whole call, so checking the input and a slow PUT
@@ -308,6 +310,7 @@ export class S3EvidencePayloadStore
       institutionId: given.institutionId,
       evidencePackageId: given.evidencePackageId,
       segmentHash: given.segmentHash,
+      kind: given.kind,
       canonicalPayload: given.canonicalPayload,
     };
     const abort = new AbortController();
@@ -338,6 +341,7 @@ export class S3EvidencePayloadStore
       institutionId: string;
       evidencePackageId: string;
       segmentHash: string;
+      kind?: EvidenceObjectKind;
       canonicalPayload: string;
     },
     phase: WritePhase,
@@ -561,6 +565,7 @@ export class S3EvidencePayloadStore
     institutionId: string;
     evidencePackageId: string;
     segmentHash: string;
+    kind?: EvidenceObjectKind;
   }): Promise<EvidencePayloadReadResult> {
     const phase: WritePhase = {
       deadline: Number.NEGATIVE_INFINITY,
@@ -575,6 +580,7 @@ export class S3EvidencePayloadStore
       institutionId: given.institutionId,
       evidencePackageId: given.evidencePackageId,
       segmentHash: given.segmentHash,
+      kind: given.kind,
     };
     const abort = new AbortController();
     // Synchronous up to its fetch; the timer gets only what is left from there.
@@ -599,7 +605,7 @@ export class S3EvidencePayloadStore
   }
 
   private async readPayload(
-    input: { institutionId: string; evidencePackageId: string; segmentHash: string },
+    input: { institutionId: string; evidencePackageId: string; segmentHash: string; kind?: EvidenceObjectKind },
     phase: WritePhase,
     signal: AbortSignal,
   ): Promise<EvidencePayloadReadResult> {

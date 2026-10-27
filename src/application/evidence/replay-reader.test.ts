@@ -15,9 +15,11 @@ import {
   EVIDENCE_HASH_ALGORITHM_V2,
   EVIDENCE_SEGMENT_SCHEMA_V2,
 } from "@/domain/forensics/evidence-segment-v2";
+import { canonicalEvidenceTimingV1, EVIDENCE_TIMING_FORMAT_V1 } from "@/domain/forensics/evidence-timing-v1";
 
 import {
   MAX_REPLAY_CHECKPOINT_BYTES,
+  MAX_REPLAY_PAGE_BYTES,
   MAX_REPLAY_PAGE_SEGMENTS,
   readReplayPage,
   type ReplayPage,
@@ -94,13 +96,14 @@ async function storeOf(record: Stored): Promise<InMemoryEvidencePayloadStore> {
   return store;
 }
 
-function found(hashes: string[]): ReplaySourceResult {
+function found(hashes: string[], timingHashes: (string | null)[] = hashes.map(() => null)): ReplaySourceResult {
   return {
     status: "found",
     institutionId: INSTITUTION,
     evidencePackageId: PACKAGE,
     head: hashes.length === 0 ? null : { segmentHash: hashes[hashes.length - 1], segmentCount: hashes.length },
     segmentHashes: [...hashes],
+    timingHashes: [...timingHashes],
   };
 }
 
@@ -134,6 +137,7 @@ describe("readReplayPage (DAN-344 R3)", () => {
       startDocument: REVISION_ZERO_JCS,
       segments: record.payloads,
       resumeDocuments: {},
+      timings: {},
     });
     expect(source.readCheckpoints).not.toHaveBeenCalled();
     // No institution, package, receipt or reader in the page.
@@ -313,5 +317,113 @@ describe("readReplayPage (DAN-344 R3)", () => {
     });
     const throwing = { ...sourceOf(found(record.hashes)), readSource: async () => { throw new Error("db detail"); } };
     expect(await page(throwing, store)).toStrictEqual({ status: "unavailable", reason: "source_unavailable" });
+  });
+});
+
+/** The timing of the segment at `index` of a buildRecord record: one step at `offset` ms. */
+function timingOf(record: Stored, index: number, offset = 100): string {
+  return canonicalEvidenceTimingV1({
+    timingFormat: EVIDENCE_TIMING_FORMAT_V1,
+    segmentHash: record.hashes[index],
+    events: [{ sequence: index + 1, stepOffsetsMs: [offset] }],
+  });
+}
+
+/** Stores each timing under its own hash, as the commit does; null stays null. */
+async function storeTimings(store: InMemoryEvidencePayloadStore, timings: (string | null)[]): Promise<(string | null)[]> {
+  const hashes: (string | null)[] = [];
+  for (const canonicalPayload of timings) {
+    if (canonicalPayload === null) {
+      hashes.push(null);
+      continue;
+    }
+    const segmentHash = await sha256WebCrypto(canonicalPayload);
+    await store.putImmutable({ institutionId: INSTITUTION, evidencePackageId: PACKAGE, segmentHash, kind: "timing-v1", canonicalPayload });
+    hashes.push(segmentHash);
+  }
+  return hashes;
+}
+
+describe("readReplayPage timings (DAN-344 P1-b)", () => {
+  it("gives the verified timing of each segment that has one, under the segment's hash, the same on every read", async () => {
+    const record = await buildRecord([{}, {}, {}]);
+    const store = await storeOf(record);
+    const timings = [timingOf(record, 0), null, timingOf(record, 2, 300)];
+    const timingHashes = await storeTimings(store, timings);
+    const first = await page(sourceOf(found(record.hashes, timingHashes)), store);
+    expect(first.status === "ok" && first.page.timings).toStrictEqual({
+      [record.hashes[0]]: timings[0],
+      [record.hashes[2]]: timings[2],
+    });
+    // Attack 13: the page is the same bytes whoever reads it.
+    const second = await readReplayPage({ source: sourceOf(found(record.hashes, timingHashes)), payloads: store }, DOCUMENT, 0);
+    expect(first.status === "ok" && first.body).toBe(second.status === "ok" && second.body);
+    // Only the timing format: no duration, speed or second anywhere on the page beside the segments.
+    expect(first.status === "ok" && Object.keys(first.page).sort()).toStrictEqual(
+      ["from", "head", "next", "replayFormat", "resumeDocuments", "segmentCount", "segments", "startDocument", "timings"],
+    );
+  });
+
+  it("gives an old record without timing with an empty timings object (attack 14)", async () => {
+    const record = await buildRecord([{}, {}]);
+    const result = await page(sourceOf(found(record.hashes)), await storeOf(record));
+    expect(result.status === "ok" && result.page.timings).toStrictEqual({});
+  });
+
+  it("is unavailable, never a page without it, when a named timing is missing, changed or of another segment (attack 12)", async () => {
+    const record = await buildRecord([{}, {}]);
+    const store = await storeOf(record);
+    const own = timingOf(record, 1);
+    const [ownHash] = await storeTimings(store, [own]);
+    expect(await page(sourceOf(found(record.hashes, [null, await sha256WebCrypto(`${own} `)])), store)).toStrictEqual({
+      status: "unavailable",
+      reason: "timing_missing",
+    });
+    // The timing of segment 0, stored and named for segment 1.
+    const [otherHash] = await storeTimings(store, [timingOf(record, 0)]);
+    expect(await page(sourceOf(found(record.hashes, [null, otherHash])), store)).toStrictEqual({
+      status: "unavailable",
+      reason: "timing_invalid",
+    });
+    // A store that answers other bytes under the timing's key.
+    const changed: InstitutionEvidencePayloadReader = {
+      readImmutable: async (input) =>
+        input.kind === "timing-v1"
+          ? { status: "found", bytes: new TextEncoder().encode(timingOf(record, 1, 200)) }
+          : store.readImmutable(input),
+    };
+    expect(await page(sourceOf(found(record.hashes, [null, ownHash])), changed)).toStrictEqual({
+      status: "unavailable",
+      reason: "timing_invalid",
+    });
+    const failing: InstitutionEvidencePayloadReader = {
+      readImmutable: async (input) => {
+        if (input.kind === "timing-v1") throw new Error("storage detail");
+        return store.readImmutable(input);
+      },
+    };
+    expect(await page(sourceOf(found(record.hashes, [null, ownHash])), failing)).toStrictEqual({
+      status: "unavailable",
+      reason: "timing_unavailable",
+    });
+  });
+
+  it("counts timing bytes into the 8 MiB of a page", async () => {
+    // Four segments that together sit just under 8 MiB: one page without timing, two with it.
+    const bytes = (texts: string[]) => texts.reduce((sum, text) => sum + new TextEncoder().encode(text).byteLength, 0);
+    const probe = await buildRecord(Array.from({ length: 4 }, () => ({ text: "x" })));
+    const overhead = bytes(probe.payloads) - 4;
+    const record = await buildRecord(
+      Array.from({ length: 4 }, () => ({ text: "x".repeat(Math.floor((MAX_REPLAY_PAGE_BYTES - 100 - overhead) / 4)) })),
+    );
+    const timings = record.hashes.map((_, i) => timingOf(record, i));
+    expect(bytes(record.payloads)).toBeLessThanOrEqual(MAX_REPLAY_PAGE_BYTES);
+    expect(bytes(record.payloads) + bytes(timings)).toBeGreaterThan(MAX_REPLAY_PAGE_BYTES);
+    const store = await storeOf(record);
+    const without = await page(sourceOf(found(record.hashes)), store);
+    expect(without.status === "ok" && without.page.next).toBeNull();
+    const timingHashes = await storeTimings(store, timings);
+    const withTimings = await page(sourceOf(found(record.hashes, timingHashes)), store);
+    expect(withTimings.status === "ok" && withTimings.page).toMatchObject({ next: 3, segments: record.payloads.slice(0, 3) });
   });
 });

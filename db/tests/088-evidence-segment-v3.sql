@@ -55,18 +55,18 @@ SELECT is((SELECT format('%s|%s|%s', proowner::regrole, prosecdef, 'search_path=
     FROM pg_proc WHERE oid = 'evidence.validate_segment_descriptor_v2(jsonb,text)'::regprocedure),
   'ductus_evidence|f|t', 'the validator keeps its owner, mode and empty search_path');
 SELECT is((SELECT format('%s|%s|%s', proowner::regrole, prosecdef, 'search_path=""' = ANY (proconfig))
-    FROM pg_proc WHERE oid = 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text)'::regprocedure),
+    FROM pg_proc WHERE oid = 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text,text)'::regprocedure),
   'ductus_evidence|t|t', 'the acceptance keeps its owner, SECURITY DEFINER and empty search_path');
 SELECT ok(
-  has_function_privilege('ductus_app', 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text)', 'EXECUTE')
-  AND NOT has_function_privilege('ductus_identity', 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text)', 'EXECUTE')
+  has_function_privilege('ductus_app', 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text,text)', 'EXECUTE')
+  AND NOT has_function_privilege('ductus_identity', 'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text,text)', 'EXECUTE')
   AND NOT has_function_privilege('ductus_app', 'evidence.validate_segment_descriptor_v2(jsonb,text)', 'EXECUTE')
   AND NOT has_function_privilege('ductus_identity', 'evidence.validate_segment_descriptor_v2(jsonb,text)', 'EXECUTE')
   AND NOT EXISTS (
     SELECT 1 FROM pg_proc p
     CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) acl
     WHERE p.oid IN ('evidence.validate_segment_descriptor_v2(jsonb,text)'::regprocedure,
-                    'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text)'::regprocedure)
+                    'app.commit_evidence_segment(text,text,bigint,text,text,jsonb,text,text,text,text)'::regprocedure)
       AND acl.grantee = 0 AND acl.privilege_type = 'EXECUTE'
   ), 'the web role runs the acceptance, nobody else gains EXECUTE');
 

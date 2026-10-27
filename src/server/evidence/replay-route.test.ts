@@ -9,6 +9,7 @@ import {
   EVIDENCE_HASH_ALGORITHM_V2,
   EVIDENCE_SEGMENT_SCHEMA_V2,
 } from "@/domain/forensics/evidence-segment-v2";
+import { canonicalEvidenceTimingV1, EVIDENCE_TIMING_FORMAT_V1 } from "@/domain/forensics/evidence-timing-v1";
 import type { ActorTransaction, WithActor } from "@/server/db/with-actor";
 import { STORAGE_NOT_CONFIGURED } from "@/server/evidence/payload-reader";
 
@@ -91,7 +92,9 @@ function deps(over: Partial<ReplayRouteDeps>): ReplayRouteDeps {
   return { withActor: database([]).withActor, payloads: STORAGE_NOT_CONFIGURED, expectedOrigin: ORIGIN, sessionToken: ANA, ...over };
 }
 
-const found = (hash: string) => [{ outcome: "found", institution_id: FAK_A, evidence_package_id: PACKAGE, segment_hashes: [hash] }];
+const found = (hash: string, timingHashes: unknown = [null]) => [
+  { outcome: "found", institution_id: FAK_A, evidence_package_id: PACKAGE, segment_hashes: [hash], timing_hashes: timingHashes },
+];
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -118,9 +121,32 @@ describe("replay route R3: one page for the owner and the teacher (DAN-344)", ()
     expect(db.queries.slice(0, 2)).toStrictEqual([["source", [DOCUMENT]], ["checkpoints", [DOCUMENT, [start]]]]);
   });
 
+  it("gives the segment's verified timing to Ana and Vesna alike (DAN-344 P1-b, attack 13)", async () => {
+    const { store, hash, start } = await record();
+    const timing = canonicalEvidenceTimingV1({
+      timingFormat: EVIDENCE_TIMING_FORMAT_V1,
+      segmentHash: hash,
+      events: [{ sequence: 1, stepOffsetsMs: [400] }],
+    });
+    const timingHash = await sha256WebCrypto(timing);
+    await store.putImmutable({ institutionId: FAK_A, evidencePackageId: PACKAGE, segmentHash: timingHash, kind: "timing-v1", canonicalPayload: timing });
+    const db = database(found(hash, [timingHash]), [{ content_hash: start, body: START_TEXT }]);
+    const bodies = [];
+    for (const sessionToken of [ANA, VESNA]) {
+      const response = await handleReplayRequest(post({ documentId: DOCUMENT, from: 0 }),
+        deps({ withActor: db.withActor, payloads: store, sessionToken }));
+      expect(response.status).toBe(200);
+      bodies.push(await response.text());
+    }
+    expect(bodies[1]).toBe(bodies[0]);
+    expect(JSON.parse(bodies[0]).timings).toStrictEqual({ [hash]: timing });
+    expect(db.queries[0][0]).toBe("source");
+  });
+
   it("maps every outcome to one closed answer without a detail in the log", async () => {
     const { store, hash, start } = await record();
     const zd = (code: string) => Object.assign(new Error("Lorem detail"), { code });
+    const startText = [{ content_hash: start, body: START_TEXT }];
     const cases: [Rows, Rows, number, string][] = [
       [[{ outcome: "not_found" }], [], 404, "not_found"],
       [[{ outcome: "unavailable" }], [], 503, "unavailable"],
@@ -132,13 +158,23 @@ describe("replay route R3: one page for the owner and the teacher (DAN-344)", ()
       [found(hash), [], 503, "unavailable"],
       [found(hash), [{ content_hash: start, body: 7 }], 503, "unavailable"],
       [found(hash), [{ content_hash: start, body: START_TEXT }, { content_hash: start, body: START_TEXT }], 503, "unavailable"],
+      // P1-b: one timing hash or null per segment, nothing else.
+      // With the start text present, so only the timing can fail the page.
+      [found(hash, [null]), startText, 200, ""],
+      [[{ ...found(hash)[0], timing_hashes: undefined }], startText, 503, "unavailable"],
+      [found(hash, []), startText, 503, "unavailable"],
+      [found(hash, [null, null]), startText, 503, "unavailable"],
+      [found(hash, ["A".repeat(64)]), startText, 503, "unavailable"],
+      [found(hash, [7]), startText, 503, "unavailable"],
+      // A named timing the store does not hold (attack 12).
+      [found(hash, ["7".repeat(64)]), startText, 503, "unavailable"],
     ];
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
     for (const [source, checkpoints, status, error] of cases) {
       const response = await handleReplayRequest(post({ documentId: DOCUMENT, from: 0 }),
         deps({ withActor: database(source, checkpoints).withActor, payloads: store }));
       expect(response.status).toBe(status);
-      expect(await response.json()).toStrictEqual({ error });
+      if (status !== 200) expect(await response.json()).toStrictEqual({ error });
     }
     expect(JSON.stringify(log.mock.calls)).not.toMatch(/Lorem|doc-ana/);
   });

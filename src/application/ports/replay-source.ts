@@ -11,8 +11,14 @@ import type { ProcessSummarySourceResult } from "@/application/ports/process-sum
  * whose content hashes are asked for, in the caller's institution and only
  * when the caller may read the document; a hash with no such text is absent
  * from the map, never an error.
+ *
+ * A found record also names, per listed segment and in the same order, the
+ * SHA-256 of its stored timing, or null where it has none (DAN-344 P1-b): the
+ * same for every viewer, as the listing is.
  */
-export type ReplaySourceResult = ProcessSummarySourceResult;
+export type ReplaySourceResult =
+  | (Extract<ProcessSummarySourceResult, { status: "found" }> & { timingHashes: (string | null)[] })
+  | Exclude<ProcessSummarySourceResult, { status: "found" }>;
 
 export type ReplayCheckpointsResult =
   | { status: "found"; texts: ReadonlyMap<string, string> }

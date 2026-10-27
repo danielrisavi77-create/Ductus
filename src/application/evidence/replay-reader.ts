@@ -11,6 +11,7 @@ import {
   type EvidenceChainHeadV2,
   type VerifiedEvidencePayloadV2,
 } from "@/domain/forensics/evidence-chain-v2";
+import { verifyEvidenceTimingV1 } from "@/domain/forensics/evidence-timing-v1";
 import { canonicalizeJcs } from "@/domain/forensics/jcs";
 
 /**
@@ -31,7 +32,7 @@ import { canonicalizeJcs } from "@/domain/forensics/jcs";
 
 export const REPLAY_FORMAT = "ductus-evidence-replay-v1";
 /**
- * Bytes per page: the segments, plus MAX_REPLAY_CHECKPOINT_BYTES for every
+ * Bytes per page: the segments and their timings, plus MAX_REPLAY_CHECKPOINT_BYTES for every
  * checkpoint text the page asks for (its start and each break's resume), so
  * the texts are counted before they are read. A page always holds at least
  * one segment.
@@ -60,6 +61,12 @@ export type ReplayPage = {
   segments: string[];
   /** Per chain break on this page: the checkpoint the replay resumes from, when one has that hash. */
   resumeDocuments: Record<string, string>;
+  /**
+   * Per segment on this page that has a timing (DAN-344 P1-b): its exact
+   * `ductus-evidence-timing-v1` text, under the segment's hash. Only to
+   * schedule the replay (D-143); a segment without one has no key.
+   */
+  timings: Record<string, string>;
 };
 
 export type ReplayUnavailableReason =
@@ -69,7 +76,10 @@ export type ReplayUnavailableReason =
   | "invalid_segment"
   | "segment_mismatch"
   | "checkpoints_unavailable"
-  | "start_missing";
+  | "start_missing"
+  | "timing_missing"
+  | "timing_unavailable"
+  | "timing_invalid";
 
 export type ReplayReadResult =
   | { status: "ok"; body: string }
@@ -107,6 +117,7 @@ export async function readReplayPage(
     startDocument: null,
     segments: [],
     resumeDocuments: {},
+    timings: {},
   };
   if (hashes.length === 0) {
     return from === 0 ? { status: "ok", body: canonicalizeJcs(page) } : { status: "not_found" };
@@ -139,6 +150,28 @@ export async function readReplayPage(
     }
     return { verified, bytes };
   }
+  // The timing the record names for the segment at `index`, held to its hash
+  // and to that segment; null when the record names none. A named timing that
+  // is missing or does not verify fails the page, never drops the timing.
+  const timingHashes = source.timingHashes;
+  async function readTiming(index: number, segment: VerifiedEvidencePayloadV2): Promise<{ text: string } | null | ReplayUnavailableReason> {
+    const timingHash = timingHashes[index];
+    if (timingHash === null) return null;
+    let stored;
+    try {
+      stored = await storage.readImmutable({ evidencePackageId, segmentHash: timingHash, kind: "timing-v1" });
+    } catch {
+      return "timing_unavailable";
+    }
+    if (stored.status === "not_found") return "timing_missing";
+    if (stored.status !== "found") return "timing_unavailable";
+    // Own copy: the bytes checked are the bytes sent.
+    const bytes = new Uint8Array(stored.bytes);
+    const checked = await verifyEvidenceTimingV1(bytes, segment);
+    if (!checked.ok || checked.sha256 !== timingHash) return "timing_invalid";
+    // Verified canonical JCS, so valid UTF-8 that encodes back to these bytes.
+    return { text: decoder.decode(bytes) };
+  }
 
   let previous: VerifiedEvidencePayloadV2 | null = null;
   if (from > 0) {
@@ -158,14 +191,18 @@ export async function readReplayPage(
     const current = await read(index);
     if (typeof current === "string") return unavailable(current);
     const { verified } = current;
+    const timing = await readTiming(index, verified);
+    if (typeof timing === "string") return unavailable(timing);
     const initial = verified.segment.initialDocumentHash;
     const resumes = previous !== null && initial !== previous.segment.finalDocumentHash;
     // A checkpoint text this segment adds to the page; revision 0 is a fixed short text.
     const asks = initial !== REVISION_ZERO_SHA256 && (index === 0 || (resumes && !resumeHashes.has(initial)));
-    const cost = verified.byteLength + (asks ? MAX_REPLAY_CHECKPOINT_BYTES : 0);
+    const cost =
+      verified.byteLength + (timing === null ? 0 : encoder.encode(timing.text).byteLength) + (asks ? MAX_REPLAY_CHECKPOINT_BYTES : 0);
     if (page.segments.length > 0 && pageBytes + cost > MAX_REPLAY_PAGE_BYTES) break;
     // Verified canonical, so the bytes are valid UTF-8 and this text encodes back to them.
     page.segments.push(decoder.decode(current.bytes));
+    if (timing !== null) page.timings[verified.sha256] = timing.text;
     pageBytes += cost;
     if (resumes) resumeHashes.add(initial);
     if (index === 0) start = initial;

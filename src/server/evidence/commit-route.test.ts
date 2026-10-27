@@ -4,6 +4,7 @@ import type { SigningKeyProvider } from "@/application/ports/signing-key-provide
 import { MAX_DOCUMENT_SNAPSHOT_BYTES } from "@/domain/document/snapshot";
 import { MAX_COMMIT_REQUEST_BYTES } from "@/domain/evidence/commit-envelope";
 import { MAX_EVIDENCE_SEGMENT_BYTES } from "@/domain/forensics/evidence-chain-v2";
+import { MAX_EVIDENCE_TIMING_BYTES } from "@/domain/forensics/evidence-timing-v1";
 import { loadGoldenVectors } from "@/domain/forensics/golden-vectors/load";
 import { canonicalizeJcs } from "@/domain/forensics/jcs";
 import type { ActorTransaction, WithActor } from "@/server/db/with-actor";
@@ -164,9 +165,11 @@ describe("POST /api/evidence/commit: before the body", () => {
     expect(state.read).toBe(false);
   });
 
-  it("derives the body limit from D-96 and the snapshot limit, base64 and 4 KiB of envelope", () => {
+  it("derives the body limit from D-96, the snapshot and timing limits, base64 and 4 KiB of envelope", () => {
     const base64 = (n: number) => 4 * Math.ceil(n / 3);
-    expect(MAX_COMMIT_REQUEST_BYTES).toBe(base64(MAX_EVIDENCE_SEGMENT_BYTES) + base64(MAX_DOCUMENT_SNAPSHOT_BYTES) + 4096);
+    expect(MAX_COMMIT_REQUEST_BYTES).toBe(
+      base64(MAX_EVIDENCE_SEGMENT_BYTES) + base64(MAX_DOCUMENT_SNAPSHOT_BYTES) + base64(MAX_EVIDENCE_TIMING_BYTES) + 4096,
+    );
   });
 });
 
@@ -186,6 +189,7 @@ describe("POST /api/evidence/commit: the envelope", () => {
     ["base64 that does not encode back", { ...ENVELOPE, document: "QR==" }],
     ["url-safe base64", { ...ENVELOPE, segments: [segment.replace(/\+/g, "-").replace(/\//g, "_") + "-_"] }],
     ["a revision as text", { ...ENVELOPE, baseRevision: "3" }],
+    ["a key beside timing", { ...ENVELOPE, timing: "", timings: "" }],
   ])("refuses %s as invalid before any state, after the session only", async (_, body) => {
     const { deps, events } = setup();
     const response = await handleEvidenceCommitRequest(post(body), deps);
@@ -209,6 +213,26 @@ describe("POST /api/evidence/commit: the envelope", () => {
     );
     // The session before the body, and the context transaction ended before the object is written.
     expect(events).toEqual(["session:query", "session:end", "context:query", "context:end", "put", "commit:query", "commit:end"]);
+  });
+
+  // DAN-344 P1-b: the optional timing never makes the envelope invalid (attacks 11 and 16).
+  const timing = canonicalizeJcs({
+    events: golden.segment.events.map((event) => ({ sequence: event.sequence, stepOffsetsMs: event.steps.map(() => 0) })),
+    segmentHash: golden.segmentHash,
+    timingFormat: "ductus-evidence-timing-v1",
+  });
+  it.each<[string, unknown, number, string[]]>([
+    ["a timing that fits", Buffer.from(timing).toString("base64"), 2, []],
+    ["a timing that is no base64", "not base64!", 1, ["timing_malformed"]],
+    ["a timing that is no text", 7, 1, ["timing_malformed"]],
+    ["a timing of null", null, 1, ["timing_malformed"]],
+    ["a timing that does not fit", Buffer.from(timing.replace(golden.segmentHash, "0".repeat(64))).toString("base64"), 1, ["timing_other_segment"]],
+  ])("takes the segment with %s", async (_, value, puts, codes) => {
+    const { deps, payloads, log } = setup();
+    const response = await handleEvidenceCommitRequest(post({ ...ENVELOPE, timing: value }), deps);
+    expect(response.status).toBe(409);
+    expect(payloads.putImmutable).toHaveBeenCalledTimes(puts);
+    expect(log.mock.calls.filter(([message]) => message === "evidence timing").map(([, code]) => code)).toEqual(codes);
   });
 });
 

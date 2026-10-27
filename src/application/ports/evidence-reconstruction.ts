@@ -1,6 +1,8 @@
 import type { EvidenceChainHeadV2 } from "@/domain/forensics/evidence-chain-v2";
 import type { SignedEvidenceReceipt } from "@/domain/forensics/evidence-receipt";
 
+import type { EvidenceObjectKind } from "./evidence-object-key";
+
 /**
  * Read side of the evidence store, used to reconstruct a document from what
  * was accepted. It is a server-side capability (the worker in production):
@@ -55,6 +57,8 @@ export interface EvidencePayloadReader {
   readImmutable(input: {
     evidencePackageId: string;
     segmentHash: string;
+    /** No kind is a segment; `segmentHash` is the hash of the stored bytes either way. */
+    kind?: EvidenceObjectKind;
   }): Promise<EvidencePayloadReadResult>;
 }
 
@@ -79,6 +83,7 @@ export interface InstitutionEvidencePayloadReader {
     institutionId: string;
     evidencePackageId: string;
     segmentHash: string;
+    kind?: EvidenceObjectKind;
   }): Promise<EvidencePayloadReadResult>;
 }
 
@@ -92,7 +97,11 @@ export function bindPayloadReader(
   institutionId: string,
 ): EvidencePayloadReader {
   return {
-    readImmutable: ({ evidencePackageId, segmentHash }) =>
-      reader.readImmutable({ institutionId, evidencePackageId, segmentHash }),
+    readImmutable: ({ evidencePackageId, segmentHash, kind }) =>
+      reader.readImmutable(
+        kind === undefined
+          ? { institutionId, evidencePackageId, segmentHash }
+          : { institutionId, evidencePackageId, segmentHash, kind },
+      ),
   };
 }

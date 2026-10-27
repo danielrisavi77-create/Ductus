@@ -4,6 +4,8 @@ import type { SigningKeyProvider } from "@/application/ports/signing-key-provide
 import { MAX_DOCUMENT_SNAPSHOT_BYTES } from "@/domain/document/snapshot";
 import { MAX_EVIDENCE_SEGMENT_BYTES } from "@/domain/forensics/evidence-chain-v2";
 import { loadGoldenVectors } from "@/domain/forensics/golden-vectors/load";
+import { sha256WebCrypto } from "@/domain/forensics/crypto";
+import { MAX_EVIDENCE_TIMING_BYTES } from "@/domain/forensics/evidence-timing-v1";
 import { canonicalizeJcs } from "@/domain/forensics/jcs";
 import type { ActorTransaction, WithActor } from "@/server/db/with-actor";
 
@@ -62,9 +64,10 @@ function setup(contextRow: Record<string, unknown> = CONTEXT_ROW) {
     putImmutable: vi.fn(async () => ({ status: "stored" as const, storageRef: "memory:put-ref" })),
     storageRefFor: vi.fn(async () => ({ status: "ok" as const, storageRef: "memory:known-ref" })),
   };
+  const log = vi.fn();
   const run = (request: Partial<EvidenceCommitRequest> = {}) =>
-    commitEvidenceRequest({ withActor, signer: refusingSigner, payloads }, "t", { ...REQUEST, ...request });
-  return { run, queries, payloads };
+    commitEvidenceRequest({ withActor, signer: refusingSigner, payloads, log }, "t", { ...REQUEST, ...request });
+  return { run, queries, payloads, log };
 }
 
 const segmentWith = (change: Record<string, unknown>) =>
@@ -95,6 +98,8 @@ describe("commitEvidenceRequest", () => {
       golden.segmentHash,
       "memory:put-ref",
       new TextDecoder().decode(DOCUMENT),
+      // Attack 16: a commit without timing names none.
+      null,
     ]);
   });
 
@@ -229,5 +234,81 @@ describe("commitEvidenceRequest", () => {
     const { run, payloads } = setup();
     payloads.putImmutable.mockRejectedValueOnce(new Error("bucket ductus-evidence-x secret detail"));
     expect(await run()).toEqual({ status: "unavailable", stage: "repository", code: "prepare_failed" });
+  });
+});
+
+// DAN-344 P1-b: the timing of the golden segment, every step at 0 ms unless changed.
+const goldenTiming = (change: (events: { sequence: number; stepOffsetsMs: number[] }[]) => unknown = (e) => e) =>
+  canonicalizeJcs({
+    events: change(golden.segment.events.map((event) => ({ sequence: event.sequence, stepOffsetsMs: event.steps.map(() => 0) }))),
+    segmentHash: golden.segmentHash,
+    timingFormat: "ductus-evidence-timing-v1",
+  });
+const bytesOf = (text: string) => new TextEncoder().encode(text);
+
+describe("commitEvidenceRequest timing (DAN-344 P1-b)", () => {
+  it("stores a timing that fits the segment under its own hash and names it in the commit", async () => {
+    const { run, queries, payloads, log } = setup();
+    const timing = goldenTiming();
+    await run({ timing: bytesOf(timing) });
+    expect(payloads.putImmutable).toHaveBeenCalledTimes(2);
+    expect(payloads.putImmutable).toHaveBeenLastCalledWith({
+      institutionId: INSTITUTION,
+      evidencePackageId: "paket-iz-baze-1",
+      segmentHash: await sha256WebCrypto(timing),
+      kind: "timing-v1",
+      canonicalPayload: timing,
+    });
+    expect(queries.find((q) => q.kind === "commit")?.values[9]).toBe(await sha256WebCrypto(timing));
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  // Attack 11: the segment goes on to the commit, and no timing is stored or named.
+  it.each<[string, Uint8Array | null, string]>([
+    ["timing that did not decode", null, "timing_malformed"],
+    ["timing of another segment", bytesOf(goldenTiming().replace(golden.segmentHash, "0".repeat(64))), "timing_other_segment"],
+    ["a missing offset", bytesOf(goldenTiming((e) => e.map((x, i) => (i === 0 ? { ...x, stepOffsetsMs: x.stepOffsetsMs.slice(1) } : x)))), "timing_wrong_shape"],
+    ["a falling offset", bytesOf(goldenTiming((e) => [{ ...e[0], stepOffsetsMs: [100, ...e[0].stepOffsetsMs.slice(1).map(() => 0)] }, ...e.slice(1)])), "timing_wrong_offset"],
+    ["an offset past the segment's minutes", bytesOf(goldenTiming((e) => e.map((x) => ({ ...x, stepOffsetsMs: x.stepOffsetsMs.map(() => 3_600_000) })))), "timing_wrong_offset"],
+    ["an offset that is no multiple of 100", bytesOf(goldenTiming((e) => e.map((x) => ({ ...x, stepOffsetsMs: x.stepOffsetsMs.map(() => 150) })))), "timing_wrong_offset"],
+    ["a negative offset", bytesOf(goldenTiming((e) => e.map((x) => ({ ...x, stepOffsetsMs: x.stepOffsetsMs.map(() => -100) })))), "timing_wrong_offset"],
+    ["a fractional offset", bytesOf(goldenTiming((e) => e.map((x) => ({ ...x, stepOffsetsMs: x.stepOffsetsMs.map(() => 0.5) })))), "timing_wrong_shape"],
+    ["an unknown field", bytesOf(canonicalizeJcs({ ...JSON.parse(goldenTiming()), durationMs: 0 })), "timing_wrong_shape"],
+    ["bytes that are not JCS", bytesOf(` ${goldenTiming()}`), "timing_not_canonical"],
+    ["more than 1 MiB", new Uint8Array(MAX_EVIDENCE_TIMING_BYTES + 1), "timing_too_large"],
+  ])("accepts the segment without %s", async (_, timing, code) => {
+    const { run, queries, payloads, log } = setup();
+    expect(await run({ timing })).toEqual(expect.objectContaining({ status: "stale_base" }));
+    expect(payloads.putImmutable).toHaveBeenCalledOnce();
+    expect(queries.find((q) => q.kind === "commit")?.values[9]).toBeNull();
+    expect(log).toHaveBeenCalledExactlyOnceWith("evidence timing", code);
+  });
+
+  it.each<[string, () => unknown, string]>([
+    ["a conflict", () => ({ status: "conflict" }), "timing_storage"],
+    ["an outage", () => ({ status: "unavailable", reason: "x" }), "timing_storage"],
+    ["a throw", () => { throw new Error("bucket detail"); }, "timing_failed"],
+  ])("accepts the segment without its timing when storing the timing ends in %s", async (_, answer, code) => {
+    const { run, queries, payloads, log } = setup();
+    payloads.putImmutable
+      .mockResolvedValueOnce({ status: "stored", storageRef: "memory:put-ref" })
+      .mockImplementationOnce(async () => answer() as never);
+    await run({ timing: bytesOf(goldenTiming()) });
+    expect(queries.find((q) => q.kind === "commit")?.values[9]).toBeNull();
+    expect(log).toHaveBeenCalledExactlyOnceWith("evidence timing", code);
+  });
+
+  it("stores no timing for a known key: the retry gets the first row", async () => {
+    const { run, queries, payloads } = setup({ ...CONTEXT_ROW, transaction_known: true });
+    await run({ timing: bytesOf(goldenTiming()) });
+    expect(payloads.putImmutable).not.toHaveBeenCalled();
+    expect(queries.find((q) => q.kind === "commit")?.values[9]).toBeNull();
+  });
+
+  it("keeps the segment when the logger throws", async () => {
+    const { run, queries, log } = setup();
+    log.mockImplementation(() => { throw new Error("logger down"); });
+    await run({ timing: null });
+    expect(queries.map((q) => q.kind)).toEqual(["context", "commit"]);
   });
 });

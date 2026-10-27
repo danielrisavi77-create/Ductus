@@ -301,7 +301,7 @@ describe("evidence commit transaction", () => {
     expect(await stored()).toEqual(before);
   });
 
-  it("commits a request from its received bytes, and a retry of it writes no object and gets the same receipt (4d)", async () => {
+  it("commits a request from its received bytes and its timing, and a retry of it writes no object and gets the same receipt (4d, P1-b)", async () => {
     // A segment v2 of this document, made from the invented golden segment.
     const golden = loadGoldenVectors().chain;
     const template = golden.segments[0].segment;
@@ -320,6 +320,13 @@ describe("evidence commit transaction", () => {
       evidenceProfileId: context.evidenceProfileId,
       events: [{ ...template.events[0], sequence: n, beforeDocumentHash: chain.documentHash, afterDocumentHash: sha256(document) }],
     });
+    // DAN-344 P1-b: the timing of that segment, every step at 0 ms or, in the retry, at 100 ms.
+    const timingAt = (offset: number) =>
+      canonicalizeJcs({
+        events: [{ sequence: n, stepOffsetsMs: template.events[0].steps.map(() => offset) }],
+        segmentHash: sha256(segment),
+        timingFormat: "ductus-evidence-timing-v1",
+      });
     const payloads = new InMemoryEvidencePayloadStore();
     const deps = { withActor, signer: signerFor(join(dir, "seed")), payloads };
     const request = {
@@ -328,28 +335,41 @@ describe("evidence commit transaction", () => {
       baseRevision: chain.revision,
       segment: new TextEncoder().encode(segment),
       document: new TextEncoder().encode(document),
+      timing: new TextEncoder().encode(timingAt(0)),
     };
     const first = await commitEvidenceRequest(deps, token, request);
     expect(first).toMatchObject({ status: "committed", revision: chain.revision + 1, signedReceipt: { payload: { segmentHash: sha256(segment) } } });
-    expect(payloads.size).toBe(1);
-    const row = await admin.query<{ storage_ref: string; body: string }>(
-      `SELECT s.storage_ref, c.body FROM evidence.segment s
+    expect(payloads.size).toBe(2);
+    const row = await admin.query<{ storage_ref: string; body: string; timing_sha256: string | null }>(
+      `SELECT s.storage_ref, c.body, s.timing_sha256 FROM evidence.segment s
          JOIN evidence.document_checkpoint c ON c.document_id = s.document_id AND c.revision = $2
         WHERE s.id = $1`,
       [`segment-${suffix}-${n}`, chain.revision + 1],
     );
     expect(row.rows).toEqual([
-      { storage_ref: `memory:v2/${institutionId}/${context.evidencePackageId}/${sha256(segment)}.json`, body: document },
+      {
+        storage_ref: `memory:v2/${institutionId}/${context.evidencePackageId}/${sha256(segment)}.json`,
+        body: document,
+        timing_sha256: sha256(timingAt(0)),
+      },
     ]);
+    expect(payloads.get(context.evidencePackageId, sha256(segment))?.canonicalPayload).toBe(segment);
     const after = await stored();
 
-    const again = await commitEvidenceRequest({ ...deps, signer: signerFor(join(dir, "seed")) }, token, request);
+    // The retry carries another timing: it is neither stored nor compared, and the row keeps the first.
+    const again = await commitEvidenceRequest({ ...deps, signer: signerFor(join(dir, "seed")) }, token, {
+      ...request,
+      timing: new TextEncoder().encode(timingAt(100)),
+    });
     expect(again.status).toBe("duplicate");
     expect(JSON.stringify(again.status === "duplicate" && again.signedReceipt)).toBe(
       JSON.stringify(first.status === "committed" && first.signedReceipt),
     );
-    expect(payloads.size).toBe(1);
+    expect(payloads.size).toBe(2);
     expect(await stored()).toEqual(after);
+    expect((await admin.query("SELECT timing_sha256 FROM evidence.segment WHERE id = $1", [`segment-${suffix}-${n}`])).rows).toEqual([
+      { timing_sha256: sha256(timingAt(0)) },
+    ]);
     Object.assign(chain, { revision: chain.revision + 1, documentHash: sha256(document), head: sha256(segment), sequence: n });
   });
 });

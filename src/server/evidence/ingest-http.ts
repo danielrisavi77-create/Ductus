@@ -72,10 +72,15 @@ export async function readGuardedBody(
 }
 
 /**
- * A JSON object with exactly the given keys, from strict UTF-8: a byte order
- * mark stays a character and fails the parse. Anything else is null.
+ * A JSON object with exactly the given keys, plus any of `optional`, from
+ * strict UTF-8: a byte order mark stays a character and fails the parse.
+ * Anything else is null.
  */
-export function parseClosedObject(bytes: Uint8Array, keys: readonly string[]): Record<string, unknown> | null {
+export function parseClosedObject(
+  bytes: Uint8Array,
+  keys: readonly string[],
+  optional: readonly string[] = [],
+): Record<string, unknown> | null {
   let value: unknown;
   try {
     value = JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes));
@@ -84,6 +89,7 @@ export function parseClosedObject(bytes: Uint8Array, keys: readonly string[]): R
   }
   if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
   const own = Object.keys(value);
-  if (own.length !== keys.length || !keys.every((key) => own.includes(key))) return null;
+  if (!keys.every((key) => own.includes(key))) return null;
+  if (!own.every((key) => keys.includes(key) || optional.includes(key))) return null;
   return value as Record<string, unknown>;
 }

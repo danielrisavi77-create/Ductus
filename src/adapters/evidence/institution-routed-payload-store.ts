@@ -1,4 +1,5 @@
 import {
+  type EvidenceObjectKind,
   evidenceObjectKey,
   evidenceStorageRef,
   isInstitutionId,
@@ -143,6 +144,7 @@ export class InstitutionRoutedPayloadStore
     institutionId: string;
     evidencePackageId: string;
     segmentHash: string;
+    kind?: EvidenceObjectKind;
     canonicalPayload: string;
   }): Promise<EvidencePayloadPutResult> {
     // Each field is read exactly once, here, like the adapter reads its
@@ -153,6 +155,7 @@ export class InstitutionRoutedPayloadStore
       institutionId: string;
       evidencePackageId: string;
       segmentHash: string;
+      kind?: EvidenceObjectKind;
       canonicalPayload: string;
     };
     try {
@@ -160,6 +163,7 @@ export class InstitutionRoutedPayloadStore
         institutionId: given.institutionId,
         evidencePackageId: given.evidencePackageId,
         segmentHash: given.segmentHash,
+        kind: given.kind,
         canonicalPayload: given.canonicalPayload,
       };
     } catch {
@@ -201,13 +205,15 @@ export class InstitutionRoutedPayloadStore
     institutionId: string;
     evidencePackageId: string;
     segmentHash: string;
+    kind?: EvidenceObjectKind;
   }): Promise<EvidencePayloadReadResult> {
-    let input: { institutionId: string; evidencePackageId: string; segmentHash: string };
+    let input: { institutionId: string; evidencePackageId: string; segmentHash: string; kind?: EvidenceObjectKind };
     try {
       input = {
         institutionId: given.institutionId,
         evidencePackageId: given.evidencePackageId,
         segmentHash: given.segmentHash,
+        kind: given.kind,
       };
     } catch {
       this.log("evidence storage request could not be read", {

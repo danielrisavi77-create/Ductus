@@ -9,6 +9,7 @@ import { signS3Request } from "@/adapters/evidence/s3-signature";
 import { EDIT_STEP_FORMAT_V1 } from "@/domain/document/edit-step";
 import { REVISION_ZERO_JCS, REVISION_ZERO_SHA256 } from "@/domain/document/revision-zero";
 import { sha256WebCrypto } from "@/domain/forensics/crypto";
+import { canonicalEvidenceTimingV1, EVIDENCE_TIMING_FORMAT_V1 } from "@/domain/forensics/evidence-timing-v1";
 import {
   canonicalEvidenceSegmentV2,
   EVIDENCE_CANONICALIZATION_V2,
@@ -136,6 +137,9 @@ let fixtureReady = false;
 const RESUME_TEXT = '{"nodes":[{"children":[],"id":"00000000-0000-4000-8000-0000000000aa","type":"paragraph"}],"schemaVersion":1}';
 let resumeHash = "";
 let record: { id: string; payload: string; hash: string }[] = [];
+// DAN-344 P1-b: segment 2 has a timing; segments 1 and 3, like every record before P1, have none.
+let timing = "";
+let timingHash = "";
 
 // Segment 1 starts from revision 0, segment 2 continues it, segment 3 starts
 // after a break, from a document a checkpoint holds.
@@ -179,6 +183,12 @@ async function segments() {
 
 async function insertFixture() {
   record = await segments();
+  timing = canonicalEvidenceTimingV1({
+    timingFormat: EVIDENCE_TIMING_FORMAT_V1,
+    segmentHash: record[1].hash,
+    events: [{ sequence: 2, stepOffsetsMs: [1200] }],
+  });
+  timingHash = await sha256WebCrypto(timing);
   const client = await admin.connect();
   try {
     await client.query("BEGIN");
@@ -265,11 +275,12 @@ async function insertFixture() {
       const bytes = Buffer.byteLength(segment.payload, "utf8");
       await client.query(
         `INSERT INTO evidence.segment (id, evidence_package_id, institution_id, document_id, principal_id, session_id,
-           sequence_from, sequence_to, event_count, descriptor, segment_hash, payload_bytes, storage_ref, accepted_at)
-         VALUES ($1, $2, $3, $4, $5, 'session-ana', $6, $6, 1, $7::jsonb, $8, $9, $10, now() - interval '1 hour')`,
+           sequence_from, sequence_to, event_count, descriptor, segment_hash, payload_bytes, storage_ref, accepted_at,
+           timing_sha256)
+         VALUES ($1, $2, $3, $4, $5, 'session-ana', $6, $6, 1, $7::jsonb, $8, $9, $10, now() - interval '1 hour', $11)`,
         [segment.id, packageId, institutionId, documentId, people.ana, i + 1,
           JSON.stringify({ segmentHash: segment.hash, payloadBytes: bytes }), segment.hash, bytes,
-          `synthetic://${packageId}/${segment.id}`],
+          `synthetic://${packageId}/${segment.id}`, i === 1 ? timingHash : null],
       );
       const stored = await writer().putImmutable({
         institutionId,
@@ -279,6 +290,14 @@ async function insertFixture() {
       });
       expect(stored.status).toBe("stored");
     }
+    const storedTiming = await writer().putImmutable({
+      institutionId,
+      evidencePackageId: packageId,
+      segmentHash: timingHash,
+      kind: "timing-v1",
+      canonicalPayload: timing,
+    });
+    expect(storedTiming.status).toBe("stored");
     // The head reserve writes: a receipt for the last segment, named by the package.
     const last = record[record.length - 1];
     await client.query(
@@ -405,6 +424,7 @@ describe("replay over the API and the read RPCs (DAN-344 R3, PRODUCT 5 rule 5)",
       startDocument: REVISION_ZERO_JCS,
       segments: record.map((segment) => segment.payload),
       resumeDocuments: { [resumeHash]: RESUME_TEXT },
+      timings: { [record[1].hash]: timing },
     });
 
     const dora = await ask("dora");
@@ -424,6 +444,7 @@ describe("replay over the API and the read RPCs (DAN-344 R3, PRODUCT 5 rule 5)",
       startDocument: null,
       segments: [record[2].payload],
       resumeDocuments: { [resumeHash]: RESUME_TEXT },
+      timings: {},
     });
     expect((await ask("vesna", { documentId, from: 3 })).status).toBe(404);
     expect((await ask("vesna", { documentId, from: -1 })).status).toBe(422);

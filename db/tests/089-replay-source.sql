@@ -92,9 +92,11 @@ SELECT is(pg_get_function_arguments('app.read_replay_source(text)'::regprocedure
   'the source takes only the document: no role, institution, page or time');
 SELECT is(pg_get_function_arguments('app.read_replay_checkpoints(text,text[])'::regprocedure),
   'p_document_id text, p_content_hashes text[]', 'the checkpoint read takes the document and hashes only');
+-- P1-b (20261028140000) adds the timing hashes beside the segment hashes.
 SELECT is(pg_get_function_result('app.read_replay_source(text)'::regprocedure),
-  pg_get_function_result('app.read_process_summary_source(text)'::regprocedure),
-  'the source returns what the summary source returns');
+  replace(pg_get_function_result('app.read_process_summary_source(text)'::regprocedure), ')',
+          ', timing_hashes text[])'),
+  'the source returns what the summary source returns, and the timing hash of each segment');
 SELECT is(pg_get_function_result('app.read_replay_checkpoints(text,text[])'::regprocedure),
   'TABLE(content_hash text, body text)', 'a checkpoint comes back as its hash and text, no revision, time or id');
 SELECT ok(NOT has_schema_privilege('ductus_identity', 'evidence', 'USAGE')

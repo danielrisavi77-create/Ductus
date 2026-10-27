@@ -65,6 +65,15 @@ describe("evidence object key", () => {
     }
   });
 
+  it("builds <hash>.timing-v1.json for a timing, and refuses any other kind (DAN-344 P1-b)", () => {
+    const key = { institutionId: A, evidencePackageId: "paket-1", segmentHash: HASH };
+    expect(evidenceObjectKey({ ...key, kind: "timing-v1" })).toEqual(["v2", A, "paket-1", `${HASH}.timing-v1.json`]);
+    expect(evidenceObjectKey({ ...key, kind: "segment" })).toEqual(["v2", A, "paket-1", `${HASH}.json`]);
+    for (const kind of ["timing", "TIMING-V1", "timing-v1/..", "", null, 1, {}]) {
+      expect(evidenceObjectKey({ ...key, kind })).toBeNull();
+    }
+  });
+
   it("keeps the storage domain label and the key in storageRef, never an endpoint", () => {
     const key = ["v2", A, "paket-1", `${HASH}.json`];
     expect(evidenceStorageRef("hr-zg-fpzg", key)).toBe(`hr-zg-fpzg:v2/${A}/paket-1/${HASH}.json`);
@@ -135,5 +144,32 @@ describe("in-memory payload store keyed by institution", () => {
     });
     await expect(bindPayloadReader(store, B).readImmutable(read)).resolves.toEqual({ status: "not_found" });
     await expect(store.readImmutable({ ...read, institutionId: B })).resolves.toEqual({ status: "not_found" });
+  });
+});
+
+describe("in-memory payload store with a timing beside its segment (DAN-344 P1-b)", () => {
+  it("keeps the timing under its own key, read only as a timing, through a bound reader too", async () => {
+    const store = new InMemoryEvidencePayloadStore();
+    await store.putImmutable({ institutionId: A, evidencePackageId: "paket-a", segmentHash: HASH, canonicalPayload: '{"x":1}' });
+    const timing = await store.putImmutable({
+      institutionId: A,
+      evidencePackageId: "paket-a",
+      segmentHash: HASH,
+      kind: "timing-v1",
+      canonicalPayload: '{"t":1}',
+    });
+    expect(timing).toEqual({ status: "stored", storageRef: `memory:v2/${A}/paket-a/${HASH}.timing-v1.json` });
+    const reader = bindPayloadReader(store, A);
+    await expect(reader.readImmutable({ evidencePackageId: "paket-a", segmentHash: HASH, kind: "timing-v1" })).resolves.toEqual({
+      status: "found",
+      bytes: new TextEncoder().encode('{"t":1}'),
+    });
+    await expect(reader.readImmutable({ evidencePackageId: "paket-a", segmentHash: HASH })).resolves.toEqual({
+      status: "found",
+      bytes: new TextEncoder().encode('{"x":1}'),
+    });
+    await expect(
+      bindPayloadReader(store, B).readImmutable({ evidencePackageId: "paket-a", segmentHash: HASH, kind: "timing-v1" }),
+    ).resolves.toEqual({ status: "not_found" });
   });
 });
