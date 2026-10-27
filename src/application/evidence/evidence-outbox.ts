@@ -9,8 +9,8 @@ import {
   type SignedEvidenceReceipt,
 } from "@/domain/forensics/evidence-receipt";
 import {
-  digestEvidenceSegmentV2,
-  type EvidenceSegmentV2,
+  digestEvidenceSegment,
+  type EvidenceSegment,
 } from "@/domain/forensics/evidence-segment-v2";
 
 function canonicalInstant(value: string): boolean {
@@ -21,13 +21,13 @@ function canonicalInstant(value: string): boolean {
 export async function buildEvidenceIngestCommandV2(input: {
   evidencePackageId: string;
   clientRequestId: string;
-  segment: EvidenceSegmentV2;
+  segment: EvidenceSegment;
 }): Promise<EvidenceIngestCommandV2> {
   // Snapshot before await so payload and descriptor come from the same state.
   const segment = structuredClone(input.segment);
   const evidencePackageId = input.evidencePackageId;
   const clientRequestId = input.clientRequestId;
-  const digest = await digestEvidenceSegmentV2(segment);
+  const digest = await digestEvidenceSegment(segment);
   const descriptor: EvidenceSegmentDescriptorV2 = {
     evidencePackageId,
     documentId: segment.documentId,
@@ -58,7 +58,7 @@ export async function createEvidenceOutboxItem(input: {
   id: string;
   evidencePackageId: string;
   clientRequestId: string;
-  segment: EvidenceSegmentV2;
+  segment: EvidenceSegment;
   createdAt: string;
 }): Promise<EvidenceOutboxItem> {
   if (!input.id.trim() || !canonicalInstant(input.createdAt)) {

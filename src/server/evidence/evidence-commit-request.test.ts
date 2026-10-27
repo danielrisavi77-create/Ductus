@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { describe, expect, it, vi } from "vitest";
 
 import type { SigningKeyProvider } from "@/application/ports/signing-key-provider";
@@ -230,4 +232,38 @@ describe("commitEvidenceRequest", () => {
     payloads.putImmutable.mockRejectedValueOnce(new Error("bucket ductus-evidence-x secret detail"));
     expect(await run()).toEqual({ status: "unavailable", stage: "repository", code: "prepare_failed" });
   });
+});
+
+// DAN-343 (contract on #896): the server takes a v3 segment and names v3 in
+// the descriptor it commits; citation-form in a v2 segment is refused before
+// anything is stored.
+describe("commitEvidenceRequest with format v3", () => {
+  const withCitation = (evidenceSchema: string) =>
+    segmentWith({
+      evidenceSchema,
+      events: golden.segment.events.map((event, index) => (index === 0 ? { ...event, source: "citation-form" } : event)),
+    });
+
+  it("commits a v3 segment under a v3 descriptor", async () => {
+    const { run, queries, payloads } = setup();
+    const segment = withCitation("ductus-evidence-segment-v3");
+    await run({ segment });
+    expect(payloads.putImmutable).toHaveBeenCalledOnce();
+    const descriptor = JSON.parse(String(queries.find((q) => q.kind === "commit")?.values[5]));
+    expect(descriptor).toMatchObject({
+      evidenceSchema: "ductus-evidence-segment-v3",
+      segmentHash: createHash("sha256").update(segment).digest("hex"),
+      payloadBytes: segment.byteLength,
+    });
+  });
+
+  it.each(["ductus-evidence-segment-v2", "ductus-evidence-segment-v4"])(
+    "refuses citation-form under %s without storing or committing",
+    async (evidenceSchema) => {
+      const { run, queries, payloads } = setup();
+      expect(await run({ segment: withCitation(evidenceSchema) })).toEqual({ status: "invalid" });
+      expect(payloads.putImmutable).not.toHaveBeenCalled();
+      expect(queries.map((q) => q.kind)).not.toContain("commit");
+    },
+  );
 });
