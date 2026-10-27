@@ -64,6 +64,19 @@ test("anonymous visitor is asked to sign in; a student reads only that there are
   await signIn(page, "/nastavnik", "Demo studentica");
   await expect(page.getByRole("heading", { level: 2, name: t.empty })).toBeVisible();
   await expect(page.getByText(t.noAssignments)).toHaveCount(0);
+
+  // DAN-344 T01_prazna: one h1, axe in both themes, no sideways scroll at 390 px.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+  for (const theme of ["dark", "light"]) {
+    if (theme === "light") await page.getByRole("button", { name: messagesHr.shell.theme }).click();
+    const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+    expect(axe.violations).toEqual([]);
+    await snapshot(page, `nastavnik-prazno-${theme}`);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await snapshot(page, "nastavnik-prazno-390");
 });
 
 // DAN-325: a confirmed teacher, with or without courses, lands on the list from "/" and from /prijava.
@@ -72,7 +85,8 @@ test("a signed-in teacher's home page and sign-in page lead to the course list",
   for (const path of ["/", "/prijava"]) {
     await page.goto(path);
     await expect(page).toHaveURL("http://localhost:3000/nastavnik");
-    await expect(page.getByRole("heading", { level: 1, name: t.title })).toBeVisible();
+    // DAN-344 T01: "Vaš nastavni prostor" with courses, "Moji kolegiji" without.
+    await expect(page.getByRole("heading", { level: 1, name: new RegExp(`^(${t.heading}|${t.title})$`) })).toBeVisible();
   }
 });
 
@@ -103,7 +117,8 @@ test("a teacher sees their course with its assignment, in the route's order, and
   const course = page.getByRole("region", { name: courseName });
   await expect(course).toBeVisible();
   await expect(course.getByText(t.noAssignments)).toBeVisible();
-  await expect(page.getByRole("main").getByRole("link", { name: t.newCourse })).toHaveAttribute("href", "/nastavnik/zadatak/novi");
+  // Owner, #923 c.6435071376 point 2: a small "Novi kolegij" link under the cards.
+  await expect(page.getByRole("main").getByRole("link", { name: t.newCourseLink, exact: true })).toHaveAttribute("href", "/nastavnik/zadatak/novi");
   // The shell (design v3) lists the teacher's items only, and marks this page.
   const nav = page.getByRole("navigation", { name: messagesHr.shell.workNav });
   await expect(nav.getByRole("link")).toHaveText([
@@ -133,6 +148,11 @@ test("a teacher sees their course with its assignment, in the route's order, and
   await expect(page.locator("[data-theme]").first()).toHaveAttribute("data-theme", "light");
   const lightAxe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
   expect(lightAxe.violations).toEqual([]);
+  // DAN-344 T01: one h1, the course card with its label, and a light-theme reference.
+  await expect(page.getByRole("heading", { level: 1, name: t.heading })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+  await expect(course.getByText(t.courseLabel, { exact: true })).toBeVisible();
+  await snapshot(page, "nastavnik-moji-kolegiji-light");
 });
 
 // DAN-249 (#876): V3 and A2. The form before any input has no dates and no

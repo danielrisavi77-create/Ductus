@@ -59,7 +59,7 @@ async function answerRoute(page: Page): Promise<unknown[]> {
   return bodies;
 }
 
-async function asTeacher(page: Page, path = `/nastavnik/brz-put?zadatak=${ASSIGNMENT}`, title: string = t.title): Promise<void> {
+async function asTeacher(page: Page, path = `/nastavnik/brz-put?zadatak=${ASSIGNMENT}`, title: string | RegExp = t.title): Promise<void> {
   await signIn(page, "/", "Demo nastavnik");
   roleGrantedByThisTest = !(await teacherRoleActive());
   await run("node", ["scripts/demo/provision-teacher.mjs"], { cwd: ROOT });
@@ -144,7 +144,9 @@ test("without an assignment the page asks for one and sends nothing", async ({ p
 });
 
 test("the course screen opens the fast path of each assignment", async ({ page }) => {
-  await asTeacher(page, "/nastavnik", messagesHr.teacherCourses.title);
+  // DAN-344 T01: "Vaš nastavni prostor" with courses, "Moji kolegiji" without.
+  const tc = messagesHr.teacherCourses;
+  await asTeacher(page, "/nastavnik", new RegExp(`^(${tc.heading}|${tc.title})$`));
   const links = page.getByRole("main").getByRole("link", { name: messagesHr.shell.nav.fastPath });
   for (const href of await links.evaluateAll((all) => all.map((a) => a.getAttribute("href")))) {
     expect(href).toMatch(/^\/nastavnik\/brz-put\?zadatak=[0-9a-f-]{36}$/);

@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { createElement as h, Fragment } from "react";
+import { createElement as h } from "react";
 
+import { courseMotif } from "@/components/student/course-motif";
 import { zagrebParts } from "@/components/summary/zagreb-time";
 import { countHr } from "@/lib/i18n/hr";
 import { messagesHr } from "@/lib/i18n/messages.hr";
@@ -44,9 +45,13 @@ function Works({ works }: { works: readonly AssignmentWork[] | null | undefined 
 }
 
 /**
- * Z3 (A), design dopuna-faza-a screen 1. The list arrives ordered from the
- * route (year, name; assignments by due time) and is drawn as it comes: the
- * number of students is shown, never used to order or mark anything.
+ * DAN-344, Archivum T01 (#923 c.6433823712 §2, sequencing c.6433852901):
+ * "Moji kolegiji" as course cards with the decorative motif of the course id.
+ * Until T02 exists the assignment rows of #476/#711 stay inside their card,
+ * with the same data and links. The list is drawn in the order the route
+ * gives (year, name; assignments by due time): the number of students is
+ * shown, never used to order or mark anything. The year sits by the section
+ * heading when every course shares it, and on each card otherwise.
  *
  * Written with `createElement`, not JSX, like ProcessSummaryView: the unit
  * tests render it without the Next.js compiler (`jsx: preserve`).
@@ -56,31 +61,34 @@ export default function TeacherCourses({ courses, works = {} }: {
   /** Per assignment id: its works, or null when they could not be read. */
   works?: Readonly<Record<string, readonly AssignmentWork[] | null>>;
 }) {
-  if (courses.length === 0) {
-    return h("section", { className: styles.empty, "aria-labelledby": "bez-kolegija" },
-      h("h2", { id: "bez-kolegija" }, t.empty),
-      h("p", null, t.emptyLead),
-      h(Link, { className: "btn", href: "/nastavnik/zadatak/novi" }, t.newCourse));
-  }
-  return h(Fragment, null,
-    courses.map((course) =>
-      h("section", { key: course.id, className: styles.course, "aria-labelledby": `kolegij-${course.id}` },
-        h("header", { className: styles.courseHead },
-          h("h2", { id: `kolegij-${course.id}` }, course.name),
-          h("span", { className: styles.year }, yearHr(course.academicYear))),
-        course.assignments.length === 0
-          ? h("p", { className: styles.none }, t.noAssignments)
-          : h("ul", { className: styles.assignments },
-            course.assignments.map((assignment) =>
-              h("li", { key: assignment.id, className: styles.assignment },
-                h("span", { className: styles.title }, assignment.title),
-                h("span", { className: styles.meta },
-                  workTypes[assignment.workType] ? `${workTypes[assignment.workType]} · ` : null,
-                  `${t.due} ${dueHr(assignment.dueAt)}`),
-                h("span", { className: styles.count },
-                  countHr(assignment.enrolledStudents, t.students.one, t.students.few, t.students.many)),
-                h(Link, { className: styles.open, href: `/nastavnik/brz-put?zadatak=${encodeURIComponent(assignment.id)}`, prefetch: false },
-                  messagesHr.shell.nav.fastPath),
-                h(Works, { works: works[assignment.id] })))))),
+  const shared = courses.every((course) => course.academicYear === courses[0]?.academicYear) ? courses[0]?.academicYear : undefined;
+  return h("section", { className: styles.section, "aria-labelledby": "moji-kolegiji" },
+    h("div", { className: styles.sectionHead },
+      h("h2", { id: "moji-kolegiji", className: styles.sectionTitle }, t.title),
+      shared === undefined ? null : h("span", { className: styles.year }, yearHr(shared))),
+    h("div", { className: styles.grid },
+      courses.map((course) =>
+        h("section", { key: course.id, className: styles.course, "aria-labelledby": `kolegij-${course.id}` },
+          h("header", { className: styles.head, "data-motif": courseMotif(course.id) },
+            h("p", { className: styles.eyebrow }, t.courseLabel),
+            h("h3", { id: `kolegij-${course.id}`, className: styles.courseName }, course.name),
+            shared === undefined ? h("span", { className: styles.year }, yearHr(course.academicYear)) : null),
+          course.assignments.length === 0
+            ? h("p", { className: styles.none }, t.noAssignments)
+            : h("ul", { className: styles.assignments },
+              course.assignments.map((assignment) =>
+                h("li", { key: assignment.id, className: styles.assignment },
+                  h("span", { className: styles.title }, assignment.title),
+                  h("span", { className: styles.meta },
+                    workTypes[assignment.workType] ? `${workTypes[assignment.workType]} · ` : null,
+                    `${t.due} ${dueHr(assignment.dueAt)}`),
+                  h("span", { className: styles.count },
+                    countHr(assignment.enrolledStudents, t.students.one, t.students.few, t.students.many)),
+                  h(Link, { className: styles.open, href: `/nastavnik/brz-put?zadatak=${encodeURIComponent(assignment.id)}`, prefetch: false },
+                    messagesHr.shell.nav.fastPath),
+                  h(Works, { works: works[assignment.id] }))))))),
+    h("p", { className: styles.inside }, t.inside),
+    // Owner, #923 c.6435071376 point 2: the way to a new course, small, under the cards.
+    h("p", { className: styles.more }, h(Link, { href: "/nastavnik/zadatak/novi" }, t.newCourseLink)),
     h("p", { className: styles.note }, t.countNote));
 }

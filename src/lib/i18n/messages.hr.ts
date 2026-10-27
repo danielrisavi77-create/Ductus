@@ -462,10 +462,27 @@ export const hr = {
   // the route's (year, name; assignments by due time) and nothing reorders it.
   teacherCourses: {
     title: "Moji kolegiji",
-    lead: "Kolegiji u kojima predajete i njihovi zadaci. Poredak: akademska godina, pa naziv; zadaci po roku.",
     newCourse: "Novi kolegij i zadatak",
-    empty: "Nemate kolegija u kojima predajete.",
-    emptyLead: "Stvorite kolegij i objavite prvi zadatak.",
+    // DAN-344, Archivum T01 (#923 c.6433823712 §2). No mentorships yet, so the
+    // lede does not name them (§8 point 1).
+    heading: "Vaš nastavni prostor",
+    lede: "Kolegiji i zadaci na jednom mjestu.",
+    courseLabel: "Kolegij",
+    inside: "Eseji, seminarski radovi i drugi zadaci nalaze se unutar kolegija.",
+    // Owner, #923 c.6435071376 point 2: a small link under the cards keeps the way to a new course.
+    newCourseLink: "Novi kolegij",
+    // T01_prazna, from the package's PNG. "način predaje" is left out of step 02: the form sets none.
+    emptyLede: "Zadaci i radovi vaših studenata na jednom mjestu.",
+    firstStep: "Vaš prvi korak",
+    empty: "Pripremite prvi kolegij.",
+    emptyLead: "Stvorite kolegij, zadajte prvi rad i podijelite kod za upis sa studentima.",
+    emptyNext: "U sljedećim koracima unosite naziv kolegija, upute i rok zadatka.",
+    emptySteps: [
+      { title: "Stvorite kolegij", body: "Unesite naziv kolegija i osnovne informacije o kolegiju." },
+      { title: "Zadajte rad", body: "Napišite upute i odredite rok." },
+      { title: "Pozovite studente kodom", body: "Podijelite kod za upis sa svojim studentima." },
+    ],
+    emptyNote: "Student prije pisanja čita upute i obavijest zadatka.",
     noAssignments: "Još nema zadataka.",
     unavailable: "Kolegiji trenutačno nisu dostupni. Pokušajte ponovno.",
     retry: "Pokušaj ponovno",

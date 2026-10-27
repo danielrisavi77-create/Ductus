@@ -48,11 +48,27 @@ describe("TeacherCourses (Z3 A)", () => {
     expect(shown).toContain("Seminarski rad ·");
   });
 
-  it("offers a new course when there is none, and nothing else", () => {
-    const html = render([]);
-    expect(text(html)).toContain(t.empty);
-    expect(html).toContain('href="/nastavnik/zadatak/novi"');
-    expect(text(html)).not.toContain(t.countNote);
+  // The empty state moved to TeacherHome (Archivum T01_prazna), tested there.
+
+  it("draws each course as a card with its name, the course label and the motif fixed by its id", () => {
+    const html = render(COURSES);
+    expect(html).toMatch(/<h2[^>]*>Moji kolegiji<\/h2>/);
+    expect(html).toMatch(/<h3 id="kolegij-00000000-0000-4000-8000-0000000000c1"[^>]*>Kolegij A<\/h3>/);
+    expect(html).toContain('aria-labelledby="kolegij-00000000-0000-4000-8000-0000000000c2"');
+    expect(html).toContain('data-motif="research"');
+    expect(html).toContain('data-motif="city"');
+    expect(html.match(new RegExp(`<p[^>]*>${t.courseLabel}</p>`, "g"))).toHaveLength(2);
+    expect(text(html)).toContain(t.inside);
+  });
+
+  it("puts a year shared by every course once beside the heading, and a mixed year on each card", () => {
+    const same = COURSES.map((course) => ({ ...course, academicYear: "2026/2027" }));
+    const once = text(render(same));
+    expect(once.split("2026./2027.").length - 1).toBe(1);
+    expect(once.indexOf("2026./2027.")).toBeLessThan(once.indexOf("Kolegij A"));
+    const mixed = text(render(COURSES));
+    expect(mixed.indexOf("2026./2027.")).toBeGreaterThan(mixed.indexOf("Kolegij A"));
+    expect(mixed.indexOf("2025./2026.")).toBeGreaterThan(mixed.indexOf("Kolegij B"));
   });
 
   it("links every work of an assignment to its live view, numbered in the order read, with no student id", () => {
@@ -88,7 +104,7 @@ describe("TeacherCourses (Z3 A)", () => {
   it("uses no forbidden term", () => {
     const works = { "00000000-0000-4000-8000-0000000000a2": [{ studentId: "00000000-0000-4000-8000-0000000000e1", documentId: "d" }],
       "00000000-0000-4000-8000-0000000000a1": null };
-    expect(findForbiddenTerms(text(render(COURSES)) + text(render([])) + text(render(COURSES, works))
+    expect(findForbiddenTerms(text(render(COURSES)) + text(render(COURSES, works))
       + text(render(COURSES, { "00000000-0000-4000-8000-0000000000a1": [] })))).toEqual([]);
   });
 });

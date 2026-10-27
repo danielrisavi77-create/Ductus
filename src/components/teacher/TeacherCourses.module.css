@@ -1,96 +1,157 @@
-/* Z3 (A), design dopuna-faza-a screen 1, on the shared tokens (app/globals.css). */
-.course,
-.empty {
-  border: 1px solid var(--rule-2);
-  border-radius: var(--radius);
-  background: var(--chrome);
+/*
+ * DAN-344, Archivum T01 (#923): the teacher's course cards, on the existing
+ * tokens of app/globals.css only. The card head follows the student's S01
+ * cards (MyAssignments.module.css): the motif is a decorative background with
+ * no text alternative. The assignment rows of #476/#711 stay inside the card
+ * until T02 takes them (#923 c.6433852901).
+ */
+.section {
+  min-width: 0;
 }
 
-.empty {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 28px;
-}
-
-.empty h2 {
-  margin: 0;
-  font-family: var(--ff-display);
-  font-size: 19px;
-  font-weight: 600;
-}
-
-.empty p {
-  margin: 0;
-  color: var(--ink-2);
-}
-
-.courseHead {
+.sectionHead {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 4px 10px;
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--rule-2);
+  gap: 4px 18px;
+  margin: 20px 0 16px;
 }
 
-.courseHead h2 {
+.sectionTitle {
   margin: 0;
   font-family: var(--ff-display);
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 42px;
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
 }
 
 .year {
-  font-size: 12.5px;
-  color: var(--ink-3);
+  font-size: 18px;
+  color: var(--ink-2);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.course {
+  min-width: 0;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--chrome);
+  overflow: hidden;
+}
+
+.head {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  min-height: 150px;
+  padding: 22px 24px 14px;
+}
+
+.head::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: no-repeat right bottom / contain;
+  opacity: 0.88;
+  pointer-events: none;
+}
+
+.head[data-motif="city"]::before {
+  background-image: url("/motivi/city.webp");
+}
+
+.head[data-motif="research"]::before {
+  background-image: url("/motivi/research.webp");
+}
+
+/* The accent rule under the course name. */
+.head::after {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent);
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.courseName {
+  max-width: 72%;
+  margin: 0;
+  font-family: var(--ff-display);
+  font-size: 39px;
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+}
+
+.head .year {
+  margin-top: 6px;
+  font-size: 15px;
 }
 
 .none {
   margin: 0;
-  padding: 14px 18px;
-  color: var(--ink-3);
+  padding: 18px 24px;
+  color: var(--ink-2);
 }
 
 .assignments {
   margin: 0;
-  padding: 0;
+  padding: 0 24px;
   list-style: none;
 }
 
 .assignment {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  grid-template-areas: "title count open" "meta count open" "works works works";
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "title open" "meta open" "count count" "works works";
   gap: 2px 14px;
   align-items: center;
-  padding: 12px 18px;
-  border-top: 1px solid var(--hover);
+  padding: 16px 0;
 }
 
-.assignment:first-child {
-  border-top: 0;
+.assignment + .assignment {
+  border-top: 1px solid var(--rule-2);
 }
 
 .title {
   grid-area: title;
-  font-size: 13.5px;
-  font-weight: 600;
+  font-family: var(--ff-display);
+  font-size: 22px;
+  font-weight: 450;
+  line-height: 1.2;
   overflow-wrap: anywhere;
 }
 
 .meta {
   grid-area: meta;
-  font-size: 12px;
-  color: var(--ink-3);
+  font-size: 15px;
+  color: var(--ink-2);
 }
 
 .count {
   grid-area: count;
-  font-size: 12px;
-  color: var(--ink-3);
-  white-space: nowrap;
+  font-size: 14px;
+  color: var(--ink-2);
 }
 
 /* The way into screen 11 for this assignment (F-11). */
@@ -98,8 +159,8 @@
   grid-area: open;
   display: inline-flex;
   align-items: center;
-  min-height: 32px;
-  font-size: 13px;
+  min-height: 44px;
+  font-size: 15px;
   white-space: nowrap;
 }
 
@@ -111,16 +172,71 @@
   margin: 6px 0 0;
   padding: 0;
   list-style: none;
-  font-size: 13px;
-  color: var(--ink-3);
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
+.works a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+}
+
+.inside {
+  margin: 18px 0 0;
+  font-size: 17px;
+  color: var(--ink-2);
+}
+
+.more {
+  margin: 8px 0 0;
+  font-size: 16px;
+}
+
+.more a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
 }
 
 .note {
-  font-size: 12px;
-  color: var(--ink-3);
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
+@media (max-width: 1250px) {
+  .head {
+    padding: 24px 19px 14px;
+  }
+
+  .courseName {
+    font-size: 33px;
+  }
+
+  .assignments {
+    padding: 0 19px;
+  }
 }
 
 @media (max-width: 700px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 22px;
+  }
+
+  .sectionTitle {
+    font-size: 33px;
+  }
+
+  .head {
+    min-height: 175px;
+  }
+
+  .courseName {
+    font-size: 36px;
+  }
+
   .assignment {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: "title" "meta" "count" "open" "works";
@@ -129,10 +245,7 @@
 
 /* #732 item 8: 12 px is the floor for interface text, 13 px on a phone (app/globals.css). */
 @media (max-width: 640px) {
-  .year,
-  .meta,
-  .count,
-  .note {
+  .eyebrow {
     font-size: 13px;
   }
 }

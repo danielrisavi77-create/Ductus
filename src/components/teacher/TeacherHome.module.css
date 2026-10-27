@@ -1,0 +1,242 @@
+/*
+ * DAN-344, Archivum T01 and T01_prazna on /nastavnik (#923), laid out on the
+ * existing tokens of app/globals.css only, like the student's S01
+ * (StudentHome.module.css). Its own container, not `.page`, whose 640 px
+ * child limit would keep the two-column course grid from forming. The folio
+ * picture is the package's folio.png as WebP (public/motivi/folio.webp), the
+ * same file S01_prazna uses, decorative.
+ */
+.home {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 48px clamp(16px, 4vw, 44px) 64px;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 28px;
+  padding-bottom: 24px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--ff-display);
+  font-size: 64px;
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+.lede {
+  margin: 8px 0 0;
+  font-size: 26px;
+  line-height: 1.25;
+  color: var(--ink-2);
+}
+
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  max-width: 800px;
+  padding: 24px 0;
+}
+
+.state p {
+  margin: 0;
+}
+
+.alert {
+  padding: 10px 12px;
+  border: 1px solid var(--error);
+  border-radius: var(--radius-sm);
+}
+
+.retry {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+/* T01_prazna */
+.first {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.intro {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 44px;
+  align-items: center;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  min-width: 0;
+}
+
+.kicker {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.firstTitle {
+  margin: 0;
+  font-family: var(--ff-display);
+  font-size: 48px;
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+}
+
+.firstBody {
+  margin: 0;
+  max-width: 34ch;
+  font-size: 22px;
+  line-height: 1.4;
+}
+
+.arrow {
+  margin-left: 12px;
+}
+
+.next {
+  margin: 0;
+  max-width: 44ch;
+  font-size: 17px;
+  color: var(--ink-2);
+}
+
+.folio {
+  width: 100%;
+  max-width: 420px;
+  height: 320px;
+  margin: 0 auto;
+  background: url("/motivi/folio.webp") no-repeat center / contain;
+}
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  padding: 24px 0;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  list-style: none;
+}
+
+.step {
+  display: flex;
+  gap: 16px;
+  padding: 4px 24px;
+  border-left: 1px solid var(--rule);
+}
+
+.step:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.number {
+  flex: none;
+  font-family: var(--ff-display);
+  font-size: 44px;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.stepTitle {
+  display: block;
+  margin-bottom: 4px;
+  font-family: var(--ff-display);
+  font-size: 22px;
+  font-weight: 500;
+}
+
+.stepBody {
+  display: block;
+  font-size: 15px;
+  color: var(--ink-2);
+}
+
+.note {
+  margin: 0;
+  font-size: 17px;
+  color: var(--ink-2);
+}
+
+@media (max-width: 1250px) {
+  .title {
+    font-size: 54px;
+  }
+}
+
+@media (max-width: 900px) {
+  .intro,
+  .steps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .folio {
+    height: 240px;
+  }
+
+  .step,
+  .step:first-child {
+    padding: 12px 0;
+    border-left: 0;
+  }
+
+  .step + .step {
+    border-top: 1px solid var(--rule-2);
+  }
+}
+
+@media (max-width: 700px) {
+  .home {
+    padding-top: 32px;
+  }
+
+  .heading {
+    display: block;
+  }
+
+  .title {
+    font-size: 44px;
+    line-height: 1.1;
+  }
+
+  .lede {
+    font-size: 21px;
+    line-height: 1.45;
+  }
+
+  .firstTitle {
+    font-size: 37px;
+  }
+
+  .firstBody {
+    font-size: 19px;
+  }
+
+  .folio {
+    height: 200px;
+  }
+}
