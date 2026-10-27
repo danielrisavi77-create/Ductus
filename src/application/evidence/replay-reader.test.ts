@@ -18,6 +18,7 @@ import {
 
 import {
   MAX_REPLAY_CHECKPOINT_BYTES,
+  MAX_REPLAY_PAGE_BYTES,
   MAX_REPLAY_PAGE_SEGMENTS,
   readReplayPage,
   type ReplayPage,
@@ -176,7 +177,10 @@ describe("readReplayPage (DAN-344 R3)", () => {
     const store = await storeOf(record);
     const result = await page(sourceOf(found(record.hashes), { [resume]: CHECKPOINT_TEXT }), store);
     expect(result.status === "ok" && result.page.resumeDocuments).toStrictEqual({ [resume]: CHECKPOINT_TEXT });
-    expect(result.status === "ok" && result.page.segments).toStrictEqual(record.payloads);
+    // Two resumes reserve more than 8 MiB as sent (F-161), so the second break starts the next page.
+    expect(result.status === "ok" && result.page.segments).toStrictEqual(record.payloads.slice(0, 2));
+    const second = await page(sourceOf(found(record.hashes), { [resume]: CHECKPOINT_TEXT }), store, 2);
+    expect(second.status === "ok" && second.page).toMatchObject({ segments: record.payloads.slice(2), resumeDocuments: {} });
 
     // A break back to revision 0 needs no checkpoint.
     const toZero = await buildRecord([{}, { initial: REVISION_ZERO_SHA256 }]);
@@ -238,18 +242,18 @@ describe("readReplayPage (DAN-344 R3)", () => {
     expect(last.status === "ok" && last.page).toMatchObject({ next: null, segments: [record.payloads[4]] });
   });
 
-  it("counts 2 MiB for every checkpoint text a page asks for, and takes no longer text", async () => {
+  it("counts 4 MiB + 2 for every checkpoint text a page asks for, and takes no longer text (F-161)", async () => {
     const breaks = Array.from({ length: 6 }, (_, i) => ({ initial: docHash(100 + i) }));
     const record = await buildRecord([{}, ...breaks]);
     const store = await storeOf(record);
     const source = sourceOf(found(record.hashes));
     const first = await page(source, store, 0);
-    // Three resumes are 6 MiB; a fourth would pass 8 MiB, so the page ends before it.
-    expect(first.status === "ok" && first.page.next).toBe(4);
-    expect(source.readCheckpoints.mock.calls[0][1]).toHaveLength(3);
+    // One resume is 4 MiB + 2 as sent; a second would pass 8 MiB, so the page ends before it.
+    expect(first.status === "ok" && first.page.next).toBe(2);
+    expect(source.readCheckpoints.mock.calls[0][1]).toHaveLength(1);
     // A later page that starts at a break counts its resume too, and still holds a segment.
-    const later = await page(sourceOf(found(record.hashes)), store, 4);
-    expect(later.status === "ok" && later.page).toMatchObject({ from: 4, next: null, segments: record.payloads.slice(4) });
+    const later = await page(sourceOf(found(record.hashes)), store, 6);
+    expect(later.status === "ok" && later.page).toMatchObject({ from: 6, next: null, segments: record.payloads.slice(6) });
 
     const long = "x".repeat(MAX_REPLAY_CHECKPOINT_BYTES + 1);
     const resume = await sha256WebCrypto(long);
@@ -313,5 +317,41 @@ describe("readReplayPage (DAN-344 R3)", () => {
     });
     const throwing = { ...sourceOf(found(record.hashes)), readSource: async () => { throw new Error("db detail"); } };
     expect(await page(throwing, store)).toStrictEqual({ status: "unavailable", reason: "source_unavailable" });
+  });
+});
+
+describe("readReplayPage counts the page as sent (F-161)", () => {
+  const sent = (body: string) => new TextEncoder().encode(body).byteLength;
+
+  it("keeps every page within 8 MiB and 32 KiB as sent when its texts escape to twice their size", async () => {
+    // Every '"' is two bytes in the segment and four inside the page.
+    const startText = '"'.repeat(1_000_000);
+    const start = await sha256WebCrypto(startText);
+    const quotes = '"'.repeat(900_000);
+    const record = await buildRecord([{ initial: start, text: quotes }, ...Array.from({ length: 4 }, () => ({ text: quotes }))]);
+    const store = await storeOf(record);
+    const joined: string[] = [];
+    let from: number | null = 0;
+    while (from !== null) {
+      const result = await readReplayPage({ source: sourceOf(found(record.hashes), { [start]: startText }), payloads: store }, DOCUMENT, from);
+      if (result.status !== "ok") throw new Error(result.status);
+      expect(sent(result.body)).toBeLessThanOrEqual(MAX_REPLAY_PAGE_BYTES + 32 * 1024);
+      const body = JSON.parse(result.body) as ReplayPage;
+      if (from === 0) expect(body.startDocument).toBe(startText);
+      joined.push(...body.segments);
+      from = body.next;
+    }
+    expect(joined).toStrictEqual(record.payloads);
+  });
+
+  it("takes no checkpoint text that escapes to more than its reservation", async () => {
+    // Hashes to its key and is under 2 MiB raw, but six bytes per character as sent.
+    const controlText = "\u0001".repeat(1_000_000);
+    const start = await sha256WebCrypto(controlText);
+    const record = await buildRecord([{ initial: start }]);
+    expect(await page(sourceOf(found(record.hashes), { [start]: controlText }), await storeOf(record))).toStrictEqual({
+      status: "unavailable",
+      reason: "start_missing",
+    });
   });
 });

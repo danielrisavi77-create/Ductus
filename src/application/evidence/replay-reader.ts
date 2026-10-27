@@ -31,14 +31,24 @@ import { canonicalizeJcs } from "@/domain/forensics/jcs";
 
 export const REPLAY_FORMAT = "ductus-evidence-replay-v1";
 /**
- * Bytes per page: the segments, plus MAX_REPLAY_CHECKPOINT_BYTES for every
- * checkpoint text the page asks for (its start and each break's resume), so
- * the texts are counted before they are read. A page always holds at least
- * one segment.
+ * Bytes per page as sent (F-161): every text counts as the JSON string it is
+ * inside the JCS page, quotes and escapes included, not as its raw bytes. The
+ * segments count exactly; every checkpoint text the page asks for (its start
+ * and each break's resume) counts MAX_REPLAY_CHECKPOINT_SENT_BYTES, so the
+ * texts are counted before they are read. A page always holds at least one
+ * segment. The body is at most this plus 32 KiB of field names, hashes and
+ * separators, a page of one segment included: a segment is at most 2 MiB
+ * (D-96), so at most 4 MiB + 2 as sent, and so is its start text.
  */
 export const MAX_REPLAY_PAGE_BYTES = 8 * 1024 * 1024;
 /** The largest checkpoint text (evidence.document_checkpoint); a longer one is no checkpoint. */
 export const MAX_REPLAY_CHECKPOINT_BYTES = 2 * 1024 * 1024;
+/**
+ * The most a checkpoint text takes as sent: JCS text holds no raw control
+ * character, so escaping at most doubles it, plus its two quotes. A text that
+ * takes more is no checkpoint.
+ */
+export const MAX_REPLAY_CHECKPOINT_SENT_BYTES = 2 * MAX_REPLAY_CHECKPOINT_BYTES + 2;
 /** Segments per page, which also bounds the checkpoint hashes one page asks for. */
 export const MAX_REPLAY_PAGE_SEGMENTS = 256;
 
@@ -78,6 +88,12 @@ export type ReplayReadResult =
   | { status: "unavailable"; reason: ReplayUnavailableReason };
 
 const unavailable = (reason: ReplayUnavailableReason): ReplayReadResult => ({ status: "unavailable", reason });
+
+const ENCODER = new TextEncoder();
+/** The bytes `text` takes inside the JCS page: its JSON string, quotes and escapes included (F-161). */
+function sentBytes(text: string): number {
+  return ENCODER.encode(JSON.stringify(text)).byteLength;
+}
 
 export async function readReplayPage(
   deps: ReplayReaderDeps,
@@ -151,7 +167,6 @@ export async function readReplayPage(
   let pageBytes = 0;
   let index = from;
   const decoder = new TextDecoder("utf-8", { fatal: true });
-  const encoder = new TextEncoder();
   // The document the first change applies to, asked for only on the first page.
   let start: string | null = null;
   while (index < hashes.length && page.segments.length < MAX_REPLAY_PAGE_SEGMENTS) {
@@ -162,10 +177,11 @@ export async function readReplayPage(
     const resumes = previous !== null && initial !== previous.segment.finalDocumentHash;
     // A checkpoint text this segment adds to the page; revision 0 is a fixed short text.
     const asks = initial !== REVISION_ZERO_SHA256 && (index === 0 || (resumes && !resumeHashes.has(initial)));
-    const cost = verified.byteLength + (asks ? MAX_REPLAY_CHECKPOINT_BYTES : 0);
-    if (page.segments.length > 0 && pageBytes + cost > MAX_REPLAY_PAGE_BYTES) break;
     // Verified canonical, so the bytes are valid UTF-8 and this text encodes back to them.
-    page.segments.push(decoder.decode(current.bytes));
+    const text = decoder.decode(current.bytes);
+    const cost = sentBytes(text) + (asks ? MAX_REPLAY_CHECKPOINT_SENT_BYTES : 0);
+    if (page.segments.length > 0 && pageBytes + cost > MAX_REPLAY_PAGE_BYTES) break;
+    page.segments.push(text);
     pageBytes += cost;
     if (resumes) resumeHashes.add(initial);
     if (index === 0) start = initial;
@@ -190,8 +206,15 @@ export async function readReplayPage(
     if (checkpoints.status !== "found") return unavailable("checkpoints_unavailable");
     for (const hash of wanted) {
       const text = checkpoints.texts.get(hash);
-      // Only text within the reserved size that hashes to the hash it was asked for; anything else is no checkpoint.
-      if (text === undefined || encoder.encode(text).byteLength > MAX_REPLAY_CHECKPOINT_BYTES) continue;
+      // Only text within the reserved size, raw and as sent, that hashes to the hash it was asked for;
+      // anything else is no checkpoint.
+      if (
+        text === undefined ||
+        ENCODER.encode(text).byteLength > MAX_REPLAY_CHECKPOINT_BYTES ||
+        sentBytes(text) > MAX_REPLAY_CHECKPOINT_SENT_BYTES
+      ) {
+        continue;
+      }
       if ((await sha256WebCrypto(text)) !== hash) continue;
       if (resumeHashes.has(hash)) page.resumeDocuments[hash] = text;
       if (hash === start && page.startDocument === null) page.startDocument = text;
