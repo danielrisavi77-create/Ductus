@@ -5,7 +5,7 @@ import {
   type EvidenceChainFailureV2,
   type EvidenceChainHeadV2,
 } from "../forensics/evidence-chain-v2";
-import type { EvidenceSegmentV2, EvidenceSourceV2 } from "../forensics/evidence-segment-v2";
+import type { EvidenceSegment, EvidenceSource } from "../forensics/evidence-segment-v2";
 
 /**
  * Process summary, core of B-13 (PRODUCT §7, rule 5 of §5, D-80 point 6).
@@ -35,7 +35,7 @@ export type EvidenceKind = (typeof EVIDENCE_KINDS)[number];
  * the writer's own text inside the document, and `unattributed` is never a
  * paste (#384, owner question 3 is open; changing this list is the only edit).
  */
-export const PASTE_SOURCES: readonly EvidenceSourceV2[] = ["paste"];
+export const PASTE_SOURCES: readonly EvidenceSource[] = ["paste"];
 
 /** Faculty thresholds (P-01, P-02); configuration, never literals (PRODUCT §5 rule 12). */
 export type ProcessSummaryThresholds = {
@@ -137,7 +137,7 @@ function insertedCharacters(steps: readonly unknown[]): number {
   return count;
 }
 
-function span(segment: EvidenceSegmentV2): MinuteSpan {
+function span(segment: EvidenceSegment): MinuteSpan {
   return { from: segment.observedStartedAt, to: segment.observedEndedAt };
 }
 
@@ -149,7 +149,7 @@ function span(segment: EvidenceSegmentV2): MinuteSpan {
  * widened, so a clock that moves back cannot make a negative duration, and
  * overlapping segments of two tabs are one session, not two.
  */
-function sessionsOf(segments: readonly EvidenceSegmentV2[], breakAboveMinutes: number): MinuteSpan[] {
+function sessionsOf(segments: readonly EvidenceSegment[], breakAboveMinutes: number): MinuteSpan[] {
   const breakMs = breakAboveMinutes * MINUTE_MS;
   const sessions: { start: number; end: number }[] = [];
   for (const segment of segments) {
@@ -185,7 +185,7 @@ export async function projectProcessSummary(input: ProcessSummaryInput): Promise
   const chain = await verifyEvidenceChainV2(payloads, input.head);
   if (!chain.ok) return { ok: false, reason: chain.reason };
 
-  const segments: EvidenceSegmentV2[] = [];
+  const segments: EvidenceSegment[] = [];
   for (const payload of payloads) {
     const verified = await verifyCanonicalEvidencePayloadV2(payload);
     if (!verified.ok) throw new Error("process-summary: verified payload no longer verifies");
