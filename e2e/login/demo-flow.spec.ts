@@ -142,6 +142,21 @@ async function snapshot(page: Page, name: string): Promise<void> {
   await test.info().attach(name, { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
 }
 
+/**
+ * Takes the context offline and waits until the browser's network layer refuses a request.
+ * `setOffline` can resolve before the outage reaches that layer: on the native Windows runner
+ * a request sent at once still reached the server (DAN-348 N2). The wait uses a HEAD of the
+ * home page, not a sync route, so the sync observers of the steps see none of it.
+ */
+async function goOffline(context: BrowserContext, page: Page): Promise<void> {
+  await context.setOffline(true);
+  await expect
+    .poll(() => page.evaluate(() => fetch("/", { method: "HEAD", cache: "no-store" }).then(() => "sent", () => "failed")), {
+      timeout: 5_000,
+    })
+    .toBe("failed");
+}
+
 /** The fake provider remembers who signed in; forgetting it shows the account choice again. */
 async function forgetProviderLogin(context: BrowserContext): Promise<void> {
   await context.clearCookies({ name: /^_session/ });
@@ -621,7 +636,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
     expect(before.snapshot?.document.nodes[0]?.children.map((child) => child.text).join("")).toBe(TEXT);
     await attachCheckpoint("2-prije-prekida.json", before);
 
-    await context.setOffline(true);
+    await goOffline(context, page);
     try {
       await expect(page.locator(".offline-chip")).toHaveText(t.network.offline);
       await editorOf(page).press("End");
@@ -735,7 +750,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
       if (isSyncUrl(url)) syncRequests.push(url.pathname);
     };
     page.on("request", observe);
-    await context.setOffline(true);
+    await goOffline(context, page);
     try {
       await expect(page.locator(".offline-chip")).toHaveText(t.network.offline);
       // The observer sees a request that the outage stops: an empty list below is not vacuous.
@@ -870,7 +885,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
       const reached: string[] = [];
       const onFinished = (request: Request) => { if (isCommit(request)) reached.push(request.url()); };
       await chipStates(page);
-      await context.setOffline(true);
+      await goOffline(context, page);
       page.on("requestfinished", onFinished);
       try {
         await expect(page.locator(".offline-chip")).toHaveText(t.network.offline);
