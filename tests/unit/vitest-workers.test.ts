@@ -250,6 +250,22 @@ describe("the test files of a run", () => {
     STARTS_VITEST,
   );
 
+  // The scoped pre-push run (`vitest --changed`, scripts/engineering/pre-push-tests.mjs)
+  // follows imports through the module graph, the modules a test mocks included.
+  // Without a JSX transform in the configuration a .tsx module on that path stops the
+  // run before any test ("Failed to parse source for import analysis").
+  it("follow imports through a .tsx module and run the tests that reach it", () => {
+    const run = vitest(
+      ["related", "src/components/shell/SheetFrame.tsx", "--run", "--project", "unit", "--reporter=json", "--outputFile"],
+      {},
+    );
+    expect(run.output).not.toContain("Failed to parse source");
+    expect(run.status).toBe(0);
+    const report = JSON.parse(readFileSync(run.report, "utf8")) as { numTotalTests: number; numPassedTests: number };
+    expect(report.numTotalTests).toBeGreaterThan(0);
+    expect(report.numPassedTests).toBe(report.numTotalTests);
+  }, STARTS_VITEST);
+
   it("are run when the variable is right, and a failing run is not what the refusals above look like", () => {
     const run = vitest(["run", "--project", "unit", "src/domain/json.test.ts", "--reporter=json", "--outputFile"], {
       [WORKERS_VARIABLE]: "1",
