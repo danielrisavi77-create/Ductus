@@ -2,7 +2,6 @@ import Link from "next/link";
 import { createElement as h } from "react";
 
 import { messagesHr } from "@/lib/i18n/messages.hr";
-import type { AssignmentWork } from "@/server/evidence/assignment-works";
 import type { TeacherCourse, TeacherCoursesRead } from "@/server/institution/teacher-courses";
 
 import TeacherCourses from "./TeacherCourses";
@@ -18,10 +17,9 @@ const t = messagesHr.teacherCourses;
  * links without a target are left out until something stands behind them.
  * Written with `createElement`, so unit tests need no JSX compiler.
  */
-export default function TeacherHome({ read, works }: {
+export default function TeacherHome({ read }: {
   /** null: no session cookie. */
   read: TeacherCoursesRead | null;
-  works: Readonly<Record<string, readonly AssignmentWork[] | null>>;
 }) {
   const courses = read?.kind === "ok" ? read.courses : read === null || read.kind === "unavailable" ? null : [];
   const listed = courses !== null && courses.length > 0;
@@ -31,14 +29,10 @@ export default function TeacherHome({ read, works }: {
       h("div", null,
         h("h1", { className: styles.title }, listed ? t.heading : t.title),
         listed ? h("p", { className: styles.lede }, t.lede) : empty ? h("p", { className: styles.lede }, t.emptyLede) : null)),
-    body(read, courses, works));
+    body(read, courses));
 }
 
-function body(
-  read: TeacherCoursesRead | null,
-  courses: readonly TeacherCourse[] | null,
-  works: Readonly<Record<string, readonly AssignmentWork[] | null>>,
-) {
+function body(read: TeacherCoursesRead | null, courses: readonly TeacherCourse[] | null) {
   if (read === null) {
     return h("div", { className: styles.state },
       h("p", { role: "status" }, messagesHr.teacher.signedOut),
@@ -52,7 +46,7 @@ function body(
       h("p", null, h("a", { className: styles.retry, href: "/nastavnik" }, t.retry)));
   }
   if (courses.length === 0) return firstCourse();
-  return h(TeacherCourses, { courses, works });
+  return h(TeacherCourses, { courses });
 }
 
 /** T01_prazna: the first arrival. The way on is the existing course and assignment form. */

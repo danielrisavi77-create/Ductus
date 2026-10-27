@@ -14,7 +14,7 @@ const COURSE: TeacherCourse = {
   id: "00000000-0000-4000-8000-0000000000c1", name: "Izmišljeni kolegij", academicYear: "2026/2027", assignments: [],
 };
 
-const render = (read: TeacherCoursesRead | null) => renderToStaticMarkup(h(TeacherHome, { read, works: {} }));
+const render = (read: TeacherCoursesRead | null) => renderToStaticMarkup(h(TeacherHome, { read }));
 const text = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 const h1s = (html: string) => [...html.matchAll(/<h1[^>]*>(.*?)<\/h1>/g)].map((m) => m[1]);
 
@@ -55,7 +55,7 @@ describe("TeacherHome (Archivum T01)", () => {
     }
     expect(html).toMatch(/<h2[^>]*>Pripremite prvi kolegij\.<\/h2>/);
     expect([...html.matchAll(/href="([^"]+)"/g)].map((m) => m[1])).toEqual(["/nastavnik/zadatak/novi"]);
-    expect(shown).not.toContain(t.countNote);
+    expect(shown).not.toContain(t.inside);
   });
 
   it("gives a refused session and a person who is not a teacher the same state as no course, without saying which", () => {

@@ -2,65 +2,25 @@ import Link from "next/link";
 import { createElement as h } from "react";
 
 import { courseMotif } from "@/components/student/course-motif";
-import { zagrebParts } from "@/components/summary/zagreb-time";
-import { countHr } from "@/lib/i18n/hr";
 import { messagesHr } from "@/lib/i18n/messages.hr";
-import type { AssignmentWork } from "@/server/evidence/assignment-works";
 import type { TeacherCourse } from "@/server/institution/teacher-courses";
 
+import { yearHr } from "./course-format";
 import styles from "./TeacherCourses.module.css";
 
 const t = messagesHr.teacherCourses;
-const workTypes: Record<string, string> = messagesHr.teacher.assignment.workTypes;
-const years: Record<string, string> = messagesHr.teacher.course.years;
-
-/** `2026/2027` as `2026./2027.`, the form the course form shows. */
-function yearHr(year: string): string {
-  return years[year] ?? year.replace(/^(\d{4})\/(\d{4})$/, "$1./$2.");
-}
 
 /**
- * `31. listopada 2026. u 23:59`, always in Europe/Zagreb: the page renders on
- * the server, so the clock of neither host nor browser may decide it.
- */
-function dueHr(iso: string): string {
-  const parts = zagrebParts(iso);
-  return parts === null ? iso : `${parts.date} ${t.at} ${parts.time}`;
-}
-
-/**
- * F2 (#711): the works of one assignment as links to the live view, numbered
- * in the order the database returns them. No name and no id is shown: the
- * read names neither (names arrive with B-11). `null` is a failed read, said
- * as such, never as "no works".
- */
-function Works({ works }: { works: readonly AssignmentWork[] | null | undefined }) {
-  if (works === undefined) return null;
-  if (works === null) return h("p", { className: styles.works, role: "status" }, t.worksUnavailable);
-  if (works.length === 0) return h("p", { className: styles.works }, t.noWorks);
-  return h("ul", { className: styles.works, "aria-label": t.worksLabel },
-    works.map((work, i) =>
-      h("li", { key: work.documentId },
-        h(Link, { href: `/nastavnik/rad/${encodeURIComponent(work.documentId)}`, prefetch: false }, `${t.work} ${i + 1}`))));
-}
-
-/**
- * DAN-344, Archivum T01 (#923 c.6433823712 §2, sequencing c.6433852901):
- * "Moji kolegiji" as course cards with the decorative motif of the course id.
- * Until T02 exists the assignment rows of #476/#711 stay inside their card,
- * with the same data and links. The list is drawn in the order the route
- * gives (year, name; assignments by due time): the number of students is
- * shown, never used to order or mark anything. The year sits by the section
+ * DAN-344, Archivum T01 (#923 c.6433823712 §2): "Moji kolegiji" as course
+ * cards with the decorative motif of the course id, each leading to its T02
+ * page, where the assignments and works now are (T-b, c.6433852901). Drawn
+ * in the order the route gives (year, name). The year sits by the section
  * heading when every course shares it, and on each card otherwise.
  *
  * Written with `createElement`, not JSX, like ProcessSummaryView: the unit
  * tests render it without the Next.js compiler (`jsx: preserve`).
  */
-export default function TeacherCourses({ courses, works = {} }: {
-  courses: readonly TeacherCourse[];
-  /** Per assignment id: its works, or null when they could not be read. */
-  works?: Readonly<Record<string, readonly AssignmentWork[] | null>>;
-}) {
+export default function TeacherCourses({ courses }: { courses: readonly TeacherCourse[] }) {
   const shared = courses.every((course) => course.academicYear === courses[0]?.academicYear) ? courses[0]?.academicYear : undefined;
   return h("section", { className: styles.section, "aria-labelledby": "moji-kolegiji" },
     h("div", { className: styles.sectionHead },
@@ -73,22 +33,9 @@ export default function TeacherCourses({ courses, works = {} }: {
             h("p", { className: styles.eyebrow }, t.courseLabel),
             h("h3", { id: `kolegij-${course.id}`, className: styles.courseName }, course.name),
             shared === undefined ? h("span", { className: styles.year }, yearHr(course.academicYear)) : null),
-          course.assignments.length === 0
-            ? h("p", { className: styles.none }, t.noAssignments)
-            : h("ul", { className: styles.assignments },
-              course.assignments.map((assignment) =>
-                h("li", { key: assignment.id, className: styles.assignment },
-                  h("span", { className: styles.title }, assignment.title),
-                  h("span", { className: styles.meta },
-                    workTypes[assignment.workType] ? `${workTypes[assignment.workType]} · ` : null,
-                    `${t.due} ${dueHr(assignment.dueAt)}`),
-                  h("span", { className: styles.count },
-                    countHr(assignment.enrolledStudents, t.students.one, t.students.few, t.students.many)),
-                  h(Link, { className: styles.open, href: `/nastavnik/brz-put?zadatak=${encodeURIComponent(assignment.id)}`, prefetch: false },
-                    messagesHr.shell.nav.fastPath),
-                  h(Works, { works: works[assignment.id] }))))))),
+          h(Link, { className: styles.open, href: `/nastavnik/kolegij/${encodeURIComponent(course.id)}`, "aria-describedby": `kolegij-${course.id}` },
+            t.openCourse, h("span", { "aria-hidden": "true", className: styles.arrow }, "→"))))),
     h("p", { className: styles.inside }, t.inside),
     // Owner, #923 c.6435071376 point 2: the way to a new course, small, under the cards.
-    h("p", { className: styles.more }, h(Link, { href: "/nastavnik/zadatak/novi" }, t.newCourseLink)),
-    h("p", { className: styles.note }, t.countNote));
+    h("p", { className: styles.more }, h(Link, { href: "/nastavnik/zadatak/novi" }, t.newCourseLink)));
 }

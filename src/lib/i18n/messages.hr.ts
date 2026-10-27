@@ -468,6 +468,7 @@ export const hr = {
     heading: "Vaš nastavni prostor",
     lede: "Kolegiji i zadaci na jednom mjestu.",
     courseLabel: "Kolegij",
+    openCourse: "Otvori kolegij",
     inside: "Eseji, seminarski radovi i drugi zadaci nalaze se unutar kolegija.",
     // Owner, #923 c.6435071376 point 2: a small link under the cards keeps the way to a new course.
     newCourseLink: "Novi kolegij",
@@ -486,15 +487,22 @@ export const hr = {
     noAssignments: "Još nema zadataka.",
     unavailable: "Kolegiji trenutačno nisu dostupni. Pokušajte ponovno.",
     retry: "Pokušaj ponovno",
-    due: "rok",
     at: "u",
-    students: { one: "student", few: "studenta", many: "studenata" },
-    countNote: "Broj studenata služi samo za pregled; po njemu se ništa ne poreda.",
     // F2 (#711): links to the students' works; numbered, since names arrive with B-11.
     worksLabel: "Radovi studenata",
     work: "Rad",
-    noWorks: "Nijedan student još nije otvorio rad.",
     worksUnavailable: "Radovi trenutačno nisu dostupni. Pokušajte ponovno.",
+  },
+  // DAN-344, Archivum T02 on /nastavnik/kolegij/[id] (#923 c.6433823712 §3).
+  // No students tab and no number of students until Backend offers the read (§7 point 2).
+  teacherCourse: {
+    year: "Akademska godina {year}",
+    assignments: "Zadaci",
+    columns: { assignment: "Zadatak", typeDue: "Vrsta i rok", works: "Radovi" },
+    works: { one: "dostupan rad", few: "dostupna rada", many: "dostupnih radova" },
+    noWorks: "Još nema radova",
+    worksNote: "Broj dostupnih radova nije broj predanih radova.",
+    notFound: "Kolegij nije pronađen.",
   },
   fastPath: {
     title: "Brz put",

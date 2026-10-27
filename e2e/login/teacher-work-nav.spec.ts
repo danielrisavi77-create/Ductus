@@ -46,15 +46,18 @@ test.describe("teacher reaches a work by navigation", () => {
   test("the course's teacher opens the work from /nastavnik; others and an unknown id get one refusal", async ({ browser }) => {
     const student = await pageOf(browser, "Demo studentica");
     const teacher = await pageOf(browser, "Demo nastavnik");
-    const { documentId } = await openAssignmentWork(student);
+    const { courseId, documentId } = await openAssignmentWork(student);
     const live = work(SENTENCE);
     const put = await student.request.put(`/api/live/${documentId}`, {
       headers: { origin: "http://localhost:3000", "content-type": "application/json", "if-none-match": "*" }, data: live.body,
     });
     expect(put.status()).toBe(200);
 
-    // The teacher types no id: the link on /nastavnik leads to the work.
+    // The teacher types no id: /nastavnik leads to the course (DAN-344 T02), whose link leads to the work.
     await teacher.goto("/nastavnik");
+    const coursePage = `/nastavnik/kolegij/${courseId}`;
+    await teacher.locator(`a[href="${coursePage}"]`).click();
+    await expect(teacher).toHaveURL(coursePage);
     const href = `/nastavnik/rad/${encodeURIComponent(documentId)}`;
     const link = teacher.getByRole("list", { name: messagesHr.teacherCourses.worksLabel }).locator(`a[href="${href}"]`);
     await expect(link).toHaveCount(1);
@@ -67,6 +70,9 @@ test.describe("teacher reaches a work by navigation", () => {
     // exactly as for an id that does not exist.
     const other = await pageOf(browser, "Demo nastavnica");
     await other.goto("/nastavnik");
+    await expect(other.locator(`a[href="${coursePage}"]`)).toHaveCount(0);
+    await other.goto(coursePage);
+    await expect(other.getByText(messagesHr.teacherCourse.notFound)).toBeVisible();
     await expect(other.locator(`a[href="${href}"]`)).toHaveCount(0);
     const unknown = `e2e-nepostojeci-rad-${Date.now().toString(36)}`;
     const refusals = [

@@ -142,8 +142,9 @@ describe("F-142: the works of many assignments in one read", () => {
     expect(JSON.stringify(error.mock.calls)).not.toMatch(new RegExp(`${CANARY}|doc-a|${ANA}`));
   });
 
-  it("the teacher's home page reads the works once, never once per assignment", () => {
-    const page = readFileSync(new URL("../../../app/nastavnik/page.tsx", import.meta.url), "utf8");
+  // DAN-344 T02: the works moved from /nastavnik to the course page.
+  it("the teacher's course page reads the works once, never once per assignment", () => {
+    const page = readFileSync(new URL("../../../app/nastavnik/kolegij/[id]/page.tsx", import.meta.url), "utf8");
     expect(page.match(/readAssignmentWorksMany\(/g)).toHaveLength(1);
     expect(page).not.toMatch(/readAssignmentWorks\(/);
   });

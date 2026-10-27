@@ -1,0 +1,242 @@
+/*
+ * DAN-344, Archivum T02 on /nastavnik/kolegij/[id] (#923), on the existing
+ * tokens of app/globals.css only. The motif is the course card's decorative
+ * background (course-motif.ts) with no text alternative of its own.
+ */
+.page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 40px clamp(16px, 4vw, 44px) 64px;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.heading {
+  position: relative;
+  isolation: isolate;
+  min-height: 190px;
+  padding: 12px 0 28px;
+}
+
+.heading::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 0 38%;
+  z-index: -1;
+  background: no-repeat right bottom / contain;
+  opacity: 0.88;
+  pointer-events: none;
+}
+
+.heading[data-motif="city"]::before {
+  background-image: url("/motivi/city.webp");
+}
+
+.heading[data-motif="research"]::before {
+  background-image: url("/motivi/research.webp");
+}
+
+.title {
+  max-width: 62%;
+  margin: 0;
+  font-family: var(--ff-display);
+  font-size: 64px;
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+}
+
+.lede {
+  margin: 10px 0 0;
+  font-size: 24px;
+  line-height: 1.3;
+  color: var(--ink-2);
+}
+
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  max-width: 800px;
+  padding: 24px 0;
+}
+
+.state p {
+  margin: 0;
+}
+
+.alert {
+  padding: 10px 12px;
+  border: 1px solid var(--error);
+  border-radius: var(--radius-sm);
+}
+
+.retry {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.list {
+  border-top: 1px solid var(--rule);
+}
+
+/* The package's tab: one tab only, so a heading drawn as the current tab. */
+.tab {
+  display: inline-block;
+  margin: 0 0 8px;
+  padding: 14px 12px 10px;
+  border-bottom: 3px solid var(--accent);
+  font-family: var(--ff-display);
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.none {
+  margin: 0;
+  padding: 18px 0;
+  color: var(--ink-2);
+}
+
+.columns,
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.1fr) minmax(0, 1fr) auto;
+  gap: 8px 24px;
+}
+
+.columns {
+  padding: 18px 0 10px;
+  border-bottom: 1px solid var(--rule);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  align-items: center;
+  padding: 22px 0;
+  border-bottom: 1px solid var(--rule-2);
+}
+
+.assignment {
+  margin: 0;
+  font-family: var(--ff-display);
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.typeDue {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+}
+
+.type {
+  font-size: 18px;
+}
+
+.due {
+  font-size: 16px;
+  color: var(--ink-2);
+}
+
+.works {
+  min-width: 0;
+}
+
+.count {
+  margin: 0;
+  font-size: 18px;
+}
+
+.workLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 14px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 15px;
+}
+
+.workLinks a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+}
+
+/* The way into screen 11 for this assignment (F-11). */
+.fastPath {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 17px;
+  white-space: nowrap;
+}
+
+.note {
+  margin: 18px 0 0;
+  font-size: 16px;
+  color: var(--ink-2);
+}
+
+@media (max-width: 1250px) {
+  .title {
+    font-size: 54px;
+  }
+}
+
+@media (max-width: 900px) {
+  .columns {
+    display: none;
+  }
+
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+}
+
+@media (max-width: 700px) {
+  .page {
+    padding-top: 28px;
+  }
+
+  .heading {
+    min-height: 0;
+    padding-bottom: 150px;
+  }
+
+  .heading::before {
+    inset: auto 0 0 0;
+    height: 140px;
+  }
+
+  .title {
+    max-width: none;
+    font-size: 44px;
+    line-height: 1.1;
+  }
+
+  .lede {
+    font-size: 20px;
+  }
+
+  .assignment {
+    font-size: 24px;
+  }
+}

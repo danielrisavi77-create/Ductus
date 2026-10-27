@@ -144,12 +144,19 @@ test("without an assignment the page asks for one and sends nothing", async ({ p
 });
 
 test("the course screen opens the fast path of each assignment", async ({ page }) => {
-  // DAN-344 T01: "Vaš nastavni prostor" with courses, "Moji kolegiji" without.
+  // DAN-344 T01/T02: the home page is "Vaš nastavni prostor" with courses and
+  // "Moji kolegiji" without; the assignments and their fast path are on each course's page.
   const tc = messagesHr.teacherCourses;
   await asTeacher(page, "/nastavnik", new RegExp(`^(${tc.heading}|${tc.title})$`));
-  const links = page.getByRole("main").getByRole("link", { name: messagesHr.shell.nav.fastPath });
-  for (const href of await links.evaluateAll((all) => all.map((a) => a.getAttribute("href")))) {
-    expect(href).toMatch(/^\/nastavnik\/brz-put\?zadatak=[0-9a-f-]{36}$/);
+  const courses = await page.getByRole("main").getByRole("link", { name: tc.openCourse })
+    .evaluateAll((all) => all.map((a) => a.getAttribute("href")));
+  for (const course of courses) {
+    expect(course).toMatch(/^\/nastavnik\/kolegij\/[0-9a-f-]{36}$/);
+    await page.goto(course!);
+    const links = page.getByRole("main").getByRole("link", { name: messagesHr.shell.nav.fastPath });
+    for (const href of await links.evaluateAll((all) => all.map((a) => a.getAttribute("href")))) {
+      expect(href).toMatch(/^\/nastavnik\/brz-put\?zadatak=[0-9a-f-]{36}$/);
+    }
   }
 });
 

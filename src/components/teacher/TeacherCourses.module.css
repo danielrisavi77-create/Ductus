@@ -2,8 +2,7 @@
  * DAN-344, Archivum T01 (#923): the teacher's course cards, on the existing
  * tokens of app/globals.css only. The card head follows the student's S01
  * cards (MyAssignments.module.css): the motif is a decorative background with
- * no text alternative. The assignment rows of #476/#711 stay inside the card
- * until T02 takes them (#923 c.6433852901).
+ * no text alternative. Each card leads to its course page (T02).
  */
 .section {
   min-width: 0;
@@ -108,78 +107,22 @@
   font-size: 15px;
 }
 
-.none {
-  margin: 0;
-  padding: 18px 24px;
-  color: var(--ink-2);
-}
-
-.assignments {
-  margin: 0;
-  padding: 0 24px;
-  list-style: none;
-}
-
-.assignment {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: "title open" "meta open" "count count" "works works";
-  gap: 2px 14px;
-  align-items: center;
-  padding: 16px 0;
-}
-
-.assignment + .assignment {
-  border-top: 1px solid var(--rule-2);
-}
-
-.title {
-  grid-area: title;
-  font-family: var(--ff-display);
-  font-size: 22px;
-  font-weight: 450;
-  line-height: 1.2;
-  overflow-wrap: anywhere;
-}
-
-.meta {
-  grid-area: meta;
-  font-size: 15px;
-  color: var(--ink-2);
-}
-
-.count {
-  grid-area: count;
-  font-size: 14px;
-  color: var(--ink-2);
-}
-
-/* The way into screen 11 for this assignment (F-11). */
 .open {
-  grid-area: open;
   display: inline-flex;
   align-items: center;
+  gap: 12px;
   min-height: 44px;
-  font-size: 15px;
-  white-space: nowrap;
+  margin: 10px 24px 14px;
+  font-size: 18px;
 }
 
-.works {
-  grid-area: works;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 14px;
-  margin: 6px 0 0;
-  padding: 0;
-  list-style: none;
-  font-size: 14px;
-  color: var(--ink-2);
+.open:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
 }
 
-.works a {
-  display: inline-flex;
-  align-items: center;
-  min-height: 32px;
+.arrow {
+  font-size: 20px;
 }
 
 .inside {
@@ -199,12 +142,6 @@
   min-height: 44px;
 }
 
-.note {
-  margin: 8px 0 0;
-  font-size: 14px;
-  color: var(--ink-2);
-}
-
 @media (max-width: 1250px) {
   .head {
     padding: 24px 19px 14px;
@@ -214,8 +151,8 @@
     font-size: 33px;
   }
 
-  .assignments {
-    padding: 0 19px;
+  .open {
+    margin-inline: 19px;
   }
 }
 
@@ -235,11 +172,6 @@
 
   .courseName {
     font-size: 36px;
-  }
-
-  .assignment {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "title" "meta" "count" "open" "works";
   }
 }
 

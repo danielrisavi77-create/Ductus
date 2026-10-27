@@ -19,6 +19,8 @@ const TEACHER = "demo-teacher@demo.ductus.test";
 const STUDENT = "demo-student@demo.ductus.test";
 
 export interface AssignmentWork {
+  /** The invented course of the assignment (DAN-344 T02: its page lists the works). */
+  courseId: string;
   assignmentId: string;
   documentId: string;
 }
@@ -45,7 +47,7 @@ const opened: { course: string | null; role: string | null; document: string | n
  * accounts must have signed in; `student` is the student's signed-in page.
  */
 export async function openAssignmentWork(student: Page): Promise<AssignmentWork> {
-  const { assignmentId, studentId } = await admin(async (client) => {
+  const { courseId, assignmentId, studentId } = await admin(async (client) => {
     await client.query("BEGIN");
     const { rows: [ids] } = await client.query<{ teacher: string; student: string; institution: string }>(
       `SELECT t.id AS teacher, s.id AS student, t.institution_id AS institution
@@ -75,7 +77,7 @@ export async function openAssignmentWork(student: Page): Promise<AssignmentWork>
     await client.query("COMMIT");
     opened.course = course!.id;
     opened.role = role?.id ?? null;
-    return { assignmentId: assignment!.id, studentId: ids.student };
+    return { courseId: course!.id, assignmentId: assignment!.id, studentId: ids.student };
   });
 
   // The student confirms the notice under her own session, as the notice screen does.
@@ -106,7 +108,7 @@ export async function openAssignmentWork(student: Page): Promise<AssignmentWork>
     `SELECT d.id FROM evidence.project p JOIN evidence.document d ON d.project_id = p.id
       WHERE p.assignment_id = $1 AND p.principal_id = $2`, [assignmentId, studentId])).rows.map((row) => row.id));
   expect(documents).toEqual([documentId]);
-  return { assignmentId, documentId };
+  return { courseId, assignmentId, documentId };
 }
 
 /** Leaves no comment, live text, membership or teacher role behind for the other specs. */

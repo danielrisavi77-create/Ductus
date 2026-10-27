@@ -3,13 +3,14 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { messagesHr } from "@/lib/i18n/messages.hr";
-import type { AssignmentWork } from "@/server/evidence/assignment-works";
 import type { TeacherCourse } from "@/server/institution/teacher-courses";
 import { findForbiddenTerms } from "../../../scripts/forbidden-terms/terms";
 
 import TeacherCourses from "./TeacherCourses";
 
-// Invented courses and assignments only.
+// Invented courses and assignments only. The assignments, works and fast path
+// moved to the course page (T02, CourseView.test.ts); the empty state is in
+// TeacherHome.test.ts.
 const t = messagesHr.teacherCourses;
 const assignment = (id: string, title: string, dueAt: string, enrolledStudents: number) => ({
   id, title, workType: "seminar_paper", opensAt: "2026-10-01T07:00:00.000Z", dueAt, currentVersion: 1, enrolledStudents,
@@ -17,38 +18,19 @@ const assignment = (id: string, title: string, dueAt: string, enrolledStudents: 
 const COURSES: TeacherCourse[] = [
   {
     id: "00000000-0000-4000-8000-0000000000c1", name: "Kolegij A", academicYear: "2026/2027",
-    assignments: [
-      assignment("00000000-0000-4000-8000-0000000000a2", "Zadatak 2", "2026-10-31T22:59:00.000Z", 12),
-      assignment("00000000-0000-4000-8000-0000000000a1", "Zadatak 1", "2026-11-14T22:59:00.000Z", 1),
-    ],
+    assignments: [assignment("00000000-0000-4000-8000-0000000000a2", "Zadatak 2", "2026-10-31T22:59:00.000Z", 12)],
   },
   { id: "00000000-0000-4000-8000-0000000000c2", name: "Kolegij B", academicYear: "2025/2026", assignments: [] },
 ];
 
-const render = (courses: TeacherCourse[], works?: Record<string, AssignmentWork[] | null>) =>
-  renderToStaticMarkup(h(TeacherCourses, { courses, works }));
+const render = (courses: TeacherCourse[]) => renderToStaticMarkup(h(TeacherCourses, { courses }));
 const text = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
 
-describe("TeacherCourses (Z3 A)", () => {
-  it("draws courses and assignments in the order they arrive, never by the number of students", () => {
+describe("TeacherCourses (Archivum T01)", () => {
+  it("draws the courses in the order they arrive", () => {
     const html = render(COURSES);
-    const order = ["Kolegij A", "Zadatak 2", "Zadatak 1", "Kolegij B"].map((s) => html.indexOf(s));
-    expect(order.every((at, i) => at >= 0 && (i === 0 || at > order[i - 1]!))).toBe(true);
-    expect(text(html)).toContain("12 studenata");
-    expect(text(html)).toContain("1 student ");
-    expect(text(html)).toContain(t.noAssignments);
-    expect(text(html)).toContain(t.countNote);
+    expect(html.indexOf("Kolegij A")).toBeLessThan(html.indexOf("Kolegij B"));
   });
-
-  it("shows the due time in Europe/Zagreb and the academic year as the form writes it", () => {
-    const shown = text(render(COURSES));
-    expect(shown).toContain("rok 31. listopada 2026. u 23:59");
-    expect(shown).toContain("rok 14. studenoga 2026. u 23:59");
-    expect(shown).toContain("2026./2027.");
-    expect(shown).toContain("Seminarski rad ·");
-  });
-
-  // The empty state moved to TeacherHome (Archivum T01_prazna), tested there.
 
   it("draws each course as a card with its name, the course label and the motif fixed by its id", () => {
     const html = render(COURSES);
@@ -61,6 +43,16 @@ describe("TeacherCourses (Z3 A)", () => {
     expect(text(html)).toContain(t.inside);
   });
 
+  it("leads each card to its own course page, then offers only the small way to a new course", () => {
+    const hrefs = [...render(COURSES).matchAll(/href="([^"]+)"/g)].map((m) => m[1]);
+    expect(hrefs).toEqual([
+      "/nastavnik/kolegij/00000000-0000-4000-8000-0000000000c1",
+      "/nastavnik/kolegij/00000000-0000-4000-8000-0000000000c2",
+      "/nastavnik/zadatak/novi",
+    ]);
+    expect(text(render(COURSES))).toContain(t.openCourse);
+  });
+
   it("puts a year shared by every course once beside the heading, and a mixed year on each card", () => {
     const same = COURSES.map((course) => ({ ...course, academicYear: "2026/2027" }));
     const once = text(render(same));
@@ -71,40 +63,12 @@ describe("TeacherCourses (Z3 A)", () => {
     expect(mixed.indexOf("2025./2026.")).toBeGreaterThan(mixed.indexOf("Kolegij B"));
   });
 
-  it("links every work of an assignment to its live view, numbered in the order read, with no student id", () => {
-    const STUDENT = "00000000-0000-4000-8000-0000000000e1";
-    const html = render(COURSES, {
-      "00000000-0000-4000-8000-0000000000a2": [
-        { studentId: STUDENT, documentId: "izmisljeni-rad-b" },
-        { studentId: "00000000-0000-4000-8000-0000000000e2", documentId: "izmisljeni rad/a" },
-      ],
-      "00000000-0000-4000-8000-0000000000a1": [],
-    });
-    expect(html).toContain('href="/nastavnik/rad/izmisljeni-rad-b"');
-    expect(html).toContain('href="/nastavnik/rad/izmisljeni%20rad%2Fa"');
-    expect(html.indexOf("izmisljeni-rad-b")).toBeLessThan(html.indexOf("izmisljeni%20rad"));
-    expect(text(html)).toContain(`${t.work} 1 ${t.work} 2`);
-    expect(text(html)).toContain(t.noWorks);
-    expect(html).not.toContain(STUDENT);
-  });
-
-  it("says that works could not be read, and links none", () => {
-    const html = render(COURSES, { "00000000-0000-4000-8000-0000000000a1": null });
-    expect(text(html)).toContain(t.worksUnavailable);
-    expect(text(html)).not.toContain(t.noWorks);
-    expect(html).not.toContain("/nastavnik/rad/");
-  });
-
-  it("draws no works line for an assignment whose works were not asked for", () => {
+  it("shows no assignment, number of students or work on the home page", () => {
     const shown = text(render(COURSES));
-    expect(shown).not.toContain(t.noWorks);
-    expect(shown).not.toContain(t.worksUnavailable);
+    expect(shown).not.toMatch(/Zadatak 2|studen|Rad 1/);
   });
 
   it("uses no forbidden term", () => {
-    const works = { "00000000-0000-4000-8000-0000000000a2": [{ studentId: "00000000-0000-4000-8000-0000000000e1", documentId: "d" }],
-      "00000000-0000-4000-8000-0000000000a1": null };
-    expect(findForbiddenTerms(text(render(COURSES)) + text(render(COURSES, works))
-      + text(render(COURSES, { "00000000-0000-4000-8000-0000000000a1": [] })))).toEqual([]);
+    expect(findForbiddenTerms(text(render(COURSES)))).toEqual([]);
   });
 });

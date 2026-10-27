@@ -116,7 +116,8 @@ test("a teacher sees their course with its assignment, in the route's order, and
   await expect(page).toHaveURL("http://localhost:3000/nastavnik");
   const course = page.getByRole("region", { name: courseName });
   await expect(course).toBeVisible();
-  await expect(course.getByText(t.noAssignments)).toBeVisible();
+  // DAN-344 T01/T02: the card leads to its course page, where the assignments are.
+  await expect(course.getByRole("link", { name: t.openCourse })).toHaveAttribute("href", /^\/nastavnik\/kolegij\/[0-9a-f-]{36}$/);
   // Owner, #923 c.6435071376 point 2: a small "Novi kolegij" link under the cards.
   await expect(page.getByRole("main").getByRole("link", { name: t.newCourseLink, exact: true })).toHaveAttribute("href", "/nastavnik/zadatak/novi");
   // The shell (design v3) lists the teacher's items only, and marks this page.
@@ -128,7 +129,7 @@ test("a teacher sees their course with its assignment, in the route's order, and
   await expect(page.getByRole("button", { name: messagesHr.shell.signOut })).toBeVisible();
   // Nothing on the screen offers another order.
   await expect(page.getByRole("combobox")).toHaveCount(0);
-  await expect(page.getByText(t.countNote)).toBeVisible();
+  await expect(page.getByText(t.inside)).toBeVisible();
 
   const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
   expect(axe.violations).toEqual([]);
@@ -153,6 +154,28 @@ test("a teacher sees their course with its assignment, in the route's order, and
   await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
   await expect(course.getByText(t.courseLabel, { exact: true })).toBeVisible();
   await snapshot(page, "nastavnik-moji-kolegiji-light");
+
+  // DAN-344 T02: the course page, in both themes, at 1440 and 390 px.
+  await course.getByRole("link", { name: messagesHr.teacherCourses.openCourse }).click();
+  await expect(page).toHaveURL(/\/nastavnik\/kolegij\/[0-9a-f-]{36}$/);
+  await expect(page.getByRole("heading", { level: 1, name: courseName })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+  await expect(page.getByText(t.noAssignments)).toBeVisible();
+  await expect(page.getByText(messagesHr.teacherCourse.worksNote)).toBeVisible();
+  for (const theme of ["light", "dark"]) {
+    if (theme === "dark") await page.getByRole("button", { name: messagesHr.shell.theme }).click();
+    const courseAxe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+    expect(courseAxe.violations).toEqual([]);
+    await snapshot(page, `nastavnik-kolegij-${theme}`);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await snapshot(page, "nastavnik-kolegij-390");
+
+  // A course the read does not return, existing or not, is "not found".
+  await page.goto("/nastavnik/kolegij/00000000-0000-4000-8000-000000000000");
+  await expect(page.getByText(messagesHr.teacherCourse.notFound)).toBeVisible();
+  await expect(page.getByText(courseName)).toHaveCount(0);
 });
 
 // DAN-249 (#876): V3 and A2. The form before any input has no dates and no
