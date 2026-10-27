@@ -122,9 +122,14 @@ Točke 6 do 8 nisu u `demo-flow.spec.ts` i nisu u izlaznom kriteriju (PLAN-DEMO 
 
 ## 5. Poznate granice
 
-- Na Windowsima s nativnim runnerom `demo-flow.spec.ts` staje u koraku "2. F-8: naslovi, citat i bibliografija bez mreže". `context.setOffline(true)` tamo ne zaustavi kontrolni zahtjev na `/api/evidence/commit`, pa on stigne do poslužitelja (N2). Raniji prekid mreže u istom prolazu zahtjev zaustavlja, a na Linuxu u CI-ju korak prolazi. Dok se uzrok ne nađe, točke 4 i 5 za testirani SHA dokazuje video posla Login E2E iz CI-ja (§3). Zapis tada nosi ishod najviše PARTIAL. Točke 4 i 5 vlasnik na probi prolazi ručno.
 - Spec nativno ispisuje "Login E2E: no evidence environment": pomoćnik čita domenu evidencije iz Docker stoga. Uz `E2E_REUSE_SERVER=1` aplikacija koristi okolinu runnera.
 
 ## 6. Probni prolaz 26. 10. 2026.
 
 `main` 37de702e, nativni runner na Windowsima 10, prazni podaci. Ishod **PARTIAL**: točke 1 i 3 rade, spec nativno staje u koraku "2. F-8: naslovi, citat i bibliografija bez mreže" jer prekid mreže iz testa ne zaustavi kontrolni zahtjev (na Linuxu u CI-ju isti korak prolazi). Točke 4 i 5 za isti SHA dokazuje posao Login E2E u CI-ju. Puni zapis s imenovanim nedostacima je na Linear DAN-348; odatle je u ovaj postupak ušao `--timeout 300000` i pravilo da prolaz kreće od praznih podataka.
+
+Nakon probnog prolaza riješena su dva nedostatka u specu:
+- N2 (#933): `setOffline` se vratio prije nego što je prekid stigao do mrežnog sloja preglednika, pa je kontrolni zahtjev na Windowsima još stigao do poslužitelja. Spec sada čeka da prekid zaista djeluje.
+- N5 (#937): kursor nakon ponovnog učitavanja ponekad je ostao na kraju odlomka s citatom.
+
+S oba popravka nativni prolaz na praznim podacima prolazi cijeli `demo walk-through` (27. 10., `main` 056a50ab). Nativni ishod više nije ograničen na PARTIAL.
