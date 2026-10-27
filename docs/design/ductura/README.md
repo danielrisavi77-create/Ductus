@@ -1,6 +1,6 @@
 # Predaja dizajna: Ductura
 
-> **Boje: vidi D-178 (26. 10. 2026.).** Vrijednosti boja i naglaska u ovom dokumentu (npr. `#6FBFA5`) zamijenjene su izgledom Archivum V3; mjerodavne su `app/globals.css`. Raspored, ekrani i ponašanje vrijede dalje.
+> **Boje: vidi D-179 (26. 10. 2026.).** Vrijednosti boja i naglaska u ovom dokumentu (npr. `#6FBFA5`) su povijest; mjerodavne su `app/globals.css` i `docs/DECISIONS.md`. Raspored, ekrani i ponašanje vrijede dalje.
 
 ## Korisnikov izvorni paket — 22. 10. 2026.
 

@@ -3,7 +3,7 @@
 Verzija 0.3 · 13. 10. 2026.  
 Izvor: vizualni koncept (13 slajdova, issue #323) — Product UI & Design System. Usvojeno odlukom **D-115** (zamjenjuje dizajn v6, D-89); komponente prema **D-116**.
 
-> **Vrijednosti boja su zamijenjene još jednom (D-178, 26. 10. 2026.): Archivum V3, bordo i bakar.** Naglasak je bakar `#CF9D72` (u svijetloj ljusci `#8F4F33`), a mjerodavne vrijednosti su u `app/globals.css`. Svi `#6FBFA5` i teal u ovom dokumentu i u `docs/design/ductura/` su povijest za boje; raspored ekrana i načela vrijede dalje.
+> **Vrijednosti boja su zamijenjene još jednom (D-179, 26. 10. 2026.).** Mjerodavne su vrijednosti u `app/globals.css`, a odluka u `docs/DECISIONS.md`. Svi `#6FBFA5` i teal u ovom dokumentu i u `docs/design/ductura/` su povijest za boje; raspored ekrana i načela vrijede dalje.
 
 > **Vrijednosti boja su zamijenjene (D-123, 17. 10. 2026.).** Za izgled ekrana i vrijednosti tokena mjerodavan je dizajn Ductura u `docs/design/ductura/` (`README.md` za tokene, `INTEGRACIJA.md` za ekrane i rute) i odluke D-123 do D-126: naglasak `#6FBFA5`, tamna ljuska, tamni list zadano, prekidač za bijeli list. Kod to već provodi (`src/components/shell/tokens.test.ts`). Boje u ovom dokumentu (npr. primarna `#14B8A6`) su povijest i ne koriste se za novi rad. Struktura tokena, prekidač lista i načela ispod i dalje vrijede (D-123).
 
