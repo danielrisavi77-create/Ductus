@@ -478,6 +478,12 @@ export const hr = {
     work: "Rad",
     noWorks: "Nijedan student još nije otvorio rad.",
     worksUnavailable: "Radovi trenutačno nisu dostupni. Pokušajte ponovno.",
+    // DAN-332 PR 4 (#826 c.6427128741): the state of each work's submission, as text only, never a colour (D-128).
+    submission: {
+      onTime: "Predano",
+      afterDeadline: "Predano nakon roka",
+      none: "Nije predano",
+    },
   },
   fastPath: {
     title: "Brz put",
