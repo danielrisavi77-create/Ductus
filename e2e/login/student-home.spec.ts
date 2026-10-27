@@ -56,6 +56,8 @@ test("S02: assignments sit under their own course, and the notice comes first, t
   await expect(onward).toHaveAttribute("href", `/rad?zadatak=${unread}`);
   await onward.click();
   await expect(page).toHaveURL(new RegExp(`/rad\\?zadatak=${unread}$`));
+  // DAN-330: the work starts on the student's click.
+  await page.getByRole("button", { name: t.workspace.startWork }).click();
   await writable(page);
   const document = await workDocument(unread);
 
