@@ -8,8 +8,12 @@ import ShellRail from "./ShellRail";
 export type WorkspaceMode = "writing" | "teacher-view";
 
 export type WorkspaceShellProps = {
-  /** Course and kind of work, shown next to the brand. */
-  context?: ReactNode;
+  /** The page's `h1`, at the start of the work header (Archivum S04). */
+  title: ReactNode;
+  /** The course above the title; absent without the student's own assignment. */
+  eyebrow?: string;
+  /** One line under the title, e.g. the deadline. */
+  meta?: string;
   /** Which of the two views is open; the other is a link. */
   mode?: WorkspaceMode;
   /**
@@ -49,7 +53,9 @@ export type WorkspaceShellProps = {
  * rails are sections under the sheet that open with a button, in DOM order.
  */
 export default function WorkspaceShell({
-  context,
+  title,
+  eyebrow,
+  meta,
   mode = "writing",
   writingHref,
   teacherViewHref,
@@ -66,7 +72,11 @@ export default function WorkspaceShell({
       {/* A named region: the course and assignment and the bar's links are
           inside a landmark like the rest of the page (axe "region", #711 F1). */}
       <section className="workspace__bar" aria-label={t.workspace.barLabel}>
-        {context ? <p className="brand-line brand-line__context">{context}</p> : null}
+        <div className="workspace__heading">
+          {eyebrow ? <p className="workspace__eyebrow">{eyebrow}</p> : null}
+          {title}
+          {meta ? <p className="workspace__meta">{meta}</p> : null}
+        </div>
         <nav className="modes" aria-label={t.workspace.viewModes}>
           <ModeLink href={writingHref} current={mode === "writing"} off={t.workspace.soon}>
             {t.workspace.modeWriting}

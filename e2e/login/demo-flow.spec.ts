@@ -527,7 +527,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
     await page.getByRole("link", { name: t.student.openEditor }).click();
     await page.waitForURL(`http://localhost:3000/rad?zadatak=${id}`);
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: 30_000 });
-    await expect(page.locator(".brand-line__context")).toHaveText(`${COURSE_NAME} / ${ASSIGNMENT_TITLE}`);
+    await expect(page.locator(".workspace__eyebrow")).toHaveText(COURSE_NAME);
     k4Document = await workDocument(id);
     expect(k4Document).not.toBe(LOCAL_DEMO_DOCUMENT_ID);
     await snapshot(page, "2-rad-na-zadatku-iz-koraka-1");
@@ -599,7 +599,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: 30_000 });
     // The first opening refreshes the render into a freshly mounted editor (#731).
     await editorMounted(page);
-    await expect(page.locator("h1.manuscript__title")).toHaveText(ASSIGNMENT_TITLE);
+    await expect(page.locator("h1.workspace__title")).toHaveText(ASSIGNMENT_TITLE);
     await snapshot(page, "2-editor-nakon-potvrde");
   });
 
@@ -772,7 +772,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
           return { size: parseFloat(style.fontSize), weight: Number(style.fontWeight) };
         });
       const chapter = await typeOf(editorOf(page).locator("h1").first());
-      const title = await typeOf(page.locator(".manuscript__title"));
+      const title = await typeOf(page.locator(".workspace__title"));
       expect(chapter.size).toBeLessThan(20);
       expect(chapter.size).toBeLessThanOrEqual(title.size);
       expect(chapter.weight).toBeLessThanOrEqual(500);

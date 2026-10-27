@@ -259,7 +259,7 @@ test("FE-D8: without a session the error offers sign-in and passes axe", async (
 // student has acknowledged the notice.
 test("the notice leads to /rad of its assignment, whose top bar names it", async ({ page }) => {
   await signIn(page, PATH, "Demo studentica");
-  const context = page.locator(".workspace__bar .brand-line__context");
+  const context = page.locator(".workspace__bar").locator(".workspace__eyebrow, .workspace__meta");
   // Not a student of this assignment, or no id at all: no course, no assignment.
   // Without an id the free draft has the length; any other id is the one
   // neutral read-only sheet, which has none (#711 F1).
@@ -293,12 +293,12 @@ test("the notice leads to /rad of its assignment, whose top bar names it", async
     await page.goto(`/zadatak/${seeded.assignment}`);
     await page.getByRole("link", { name: t.student.openEditor }).click();
     await page.waitForURL(`**/rad?zadatak=${seeded.assignment}`);
-    await expect(context).toHaveText(`${seeded.courseName} / Izmišljeni zadatak S3`);
+    await expect(context).toHaveText([seeded.courseName, /^Rok: /]);
     await expect(page.locator(".workspace__bar")).not.toContainText("Kolegij A");
     // The first opening refreshes the render into the editor of the new work,
     // which mounts the shell and its panel afresh: Upute is opened after that.
     await expect(page.getByRole("toolbar", { name: t.toolbar.label })).toBeVisible();
-    await expect(context).toHaveText(`${seeded.courseName} / Izmišljeni zadatak S3`);
+    await expect(context).toHaveText([seeded.courseName, /^Rok: /]);
     // Upute shows the same read: the task, its due date, no allowed uses.
     const panel = page.getByRole("complementary", { name: t.workspace.sidePanel });
     const instructions = panel.getByRole("tab", { name: t.workspace.tabInstructions });

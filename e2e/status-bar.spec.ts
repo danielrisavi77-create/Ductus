@@ -36,7 +36,7 @@ test.describe("editor top bar and status bar (FE-D6)", () => {
     for (const path of ["/rad", "/rad?zadatak=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "/rad?zadatak=1%3B%20DROP"]) {
       await page.goto(path);
       await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
-      await expect(bar.locator(".brand-line__context")).toHaveCount(0);
+      await expect(bar.locator(".workspace__eyebrow, .workspace__meta")).toHaveCount(0);
       await expect(bar).not.toContainText("Kolegij A");
       await expect(bar).not.toContainText("Zadatak 1");
     }
@@ -115,7 +115,7 @@ test.describe("editor top bar and status bar (FE-D6)", () => {
     await page.goto("http://localhost:3003/rad");
     await expect(statusOf(page)).toHaveText("Ovdje se ništa ne sprema.");
     await expect(chipOf(page)).toHaveCount(0);
-    await expect(page.locator(".workspace__bar .brand-line__context")).toHaveCount(0);
+    await expect(page.locator(".workspace__bar").locator(".workspace__eyebrow, .workspace__meta")).toHaveCount(0);
     await axe(page);
   });
 });

@@ -61,8 +61,8 @@ for (const locale of LOCALES) {
     }
   }
 
-  // FE-D9: the Upute and Rad tabs of the right panel, wide and on a phone.
-  for (const tab of ["Upute", "Rad"] as const) {
+  // The Komentari and Upute tabs of the right panel (Archivum S04), wide and on a phone.
+  for (const tab of ["Komentari", "Upute"] as const) {
     for (const width of [1440, 390] as const) {
       test(`screenshot: workspace panel ${tab} at ${width} px (${locale})`, async ({ page }, testInfo) => {
         await page.setViewportSize({ width, height: 900 });

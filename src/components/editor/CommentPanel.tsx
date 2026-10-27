@@ -26,6 +26,7 @@ import {
 import { formatDateTimeHr } from "@/lib/i18n/hr";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
+import { publishCommentCount } from "./comment-count";
 import styles from "./CommentPanel.module.css";
 import { useLocalEditor, useLocalSignedOut } from "./LocalDocument";
 
@@ -185,6 +186,10 @@ function SessionCommentPanel({ documentId, session }: {
   }, [editor]);
 
   const threads = !stopped && outcome?.kind === "ok" ? outcome.threads : NO_THREADS;
+  // The tab label "Komentari (n)" (Archivum S04): a number only for a loaded list.
+  const open = !stopped && outcome?.kind === "ok" ? threads.filter((thread) => thread.state !== "resolved").length : null;
+  useEffect(() => { publishCommentCount(documentId, open); }, [documentId, open]);
+  useEffect(() => () => publishCommentCount(documentId, null), [documentId]);
   // Placed again on every change of the text, so an edited paragraph never
   // keeps a stale place; a transaction that leaves the text as it was (a
   // cursor move) reuses the last places (F-093).

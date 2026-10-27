@@ -31,15 +31,17 @@ test("a sign-in that returns to a plain screen ends the earlier person's writing
   await expect(editor).toHaveAttribute("contenteditable", "false");
 });
 
-test("a signed-in person sees the empty Upute and Rad, never the invented ones (F-110 t.1)", async ({ page }) => {
+// Archivum S04 (owner, #923 c.6430103437 t. 2): the panel has Komentari and
+// Upute only, so the invented Rad is not on the page at all (F-110 t.1).
+test("a signed-in person sees the empty Upute and no invented panel (F-110 t.1)", async ({ page }) => {
   await signIn(page, "/rad");
   await expect(editorOf(page)).toHaveAttribute("contenteditable", "true", { timeout: 30_000 });
-  const panel = page.getByRole("complementary", { name: "Upute, literatura i komentari" });
+  const panel = page.getByRole("complementary", { name: t.workspace.sidePanel });
   const list = panel.getByRole("tablist", { name: "Bočni panel" });
 
-  await list.getByRole("tab", { name: t.workspace.tabWork }).click();
-  await expect(panel.getByRole("tabpanel")).toHaveText(t.workspace.workEmpty);
-  await expect(panel).not.toContainText(DEMO_WORK.stages[0]!.name);
+  await expect(list.getByRole("tab")).toHaveText([t.workspace.tabComments, t.workspace.tabInstructions]);
+  await expect(page.getByRole("tab", { name: t.workspace.tabWork, exact: true })).toHaveCount(0);
+  await expect(page.locator("body")).not.toContainText(DEMO_WORK.stages[0]!.name);
 
   await list.getByRole("tab", { name: t.workspace.tabInstructions }).click();
   await expect(panel.getByRole("tabpanel")).toHaveText(t.workspace.instructionsEmpty);

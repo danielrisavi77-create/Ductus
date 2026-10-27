@@ -5,7 +5,8 @@ import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from "rea
 export type PanelTab = {
   /** Stable key, also part of the element ids. */
   id: string;
-  label: string;
+  /** Text, or a client element that renders text (the comment count). */
+  label: ReactNode;
   content: ReactNode;
 };
 

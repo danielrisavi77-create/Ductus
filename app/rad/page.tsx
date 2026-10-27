@@ -10,8 +10,8 @@ import OpenWork from "@/components/editor/OpenWork";
 import {
   LocalEditor, LocalLogout, LocalSaveChip,
 } from "@/components/editor/LocalDocument";
-import { showsInventedPanels } from "@/components/editor/demo-panels";
-import { InstructionsPanel, WorkPanel } from "@/components/editor/SidePanels";
+import { CommentsTabLabel } from "@/components/editor/comment-count";
+import { InstructionsPanel } from "@/components/editor/SidePanels";
 import { LocalStatusLength } from "@/components/editor/StatusLength";
 import AppShell from "@/components/shell/AppShell";
 import PanelTabs from "@/components/shell/PanelTabs";
@@ -24,7 +24,7 @@ import TeacherViewSheet from "@/components/student/TeacherViewSheet";
 import WorkDocumentProvider from "@/components/student/WorkDocumentProvider";
 import { assignmentParam, readWorkContext, type WorkContextRead } from "@/components/student/work-context-read";
 import { pastDue, workDocumentPlan } from "@/components/student/work-document-plan";
-import { DEMO_WORK } from "@/lib/i18n/demo-work.hr";
+import { workHeader } from "@/components/student/work-header";
 import { formatDateTimeHr } from "@/lib/i18n/hr";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import {
@@ -135,7 +135,6 @@ export default async function WorkspacePage({
   const ownsAssignment = plan.kind === "assignment" || plan.kind === "opening" || plan.kind === "notYetOpen";
   const work = ownsAssignment && read.kind === "ready" ? read : null;
   const session = signedIn && tag !== null ? { tag, at } : null;
-  const invented = showsInventedPanels({ scope: journal?.scope ?? null, signedIn });
   const late = plan.kind === "assignment" && pastDue(plan.dueAt, at);
   // In the shell's account place: signing out goes through LocalLogout where
   // a journal is open, which knows what the device still holds (D-118, I5).
@@ -143,14 +142,20 @@ export default async function WorkspacePage({
     // A plain link: the login route answers with a redirect, not a page.
     <a className="btn" href={`/api/auth/login?returnTo=${encodeURIComponent(radPath(assignmentId))}`}>{t.auth.signIn}</a>
   ) : undefined;
-  const heading = <h1 className="manuscript manuscript__title">{sheetTitle(work ?? NO_CONTEXT, t.workspace.documentUntitled)}</h1>;
+  const title = sheetTitle(work ?? NO_CONTEXT, t.workspace.documentUntitled);
+  const header = workHeader(work);
+  // Archivum S04: the page's one h1 is in the work header; the sheet repeats
+  // the title only as its running head, hidden from assistive technology.
+  const runningHead = <p className="sheet-runhead" aria-hidden="true">{title}</p>;
   const workspace = (
     <AppShell session={{ tag, at }} role={signedIn ? role : null} scope={signedIn ? scope : null} current="/rad" crumbs={[t.workspace.title]} account={account} ownMain>
       <WorkspaceShell
         mode={view.mode}
         writingHref={radPath(assignmentId)}
         teacherViewHref={view.teacherViewHref}
-        context={work ? `${work.course} / ${work.notice.title}` : null}
+        title={<h1 className="workspace__title">{title}</h1>}
+        eyebrow={header.eyebrow ?? undefined}
+        meta={header.meta ?? undefined}
         barExtra={plan.submission ? (
           // F-10 (#653 contract 6385776645): a plain link; the submission page
           // reads the server's text and sends nothing itself.
@@ -159,31 +164,21 @@ export default async function WorkspacePage({
         banner={journal ? <OfflineBanner /> : null}
         rail={
           <>
-            <RailSection title={t.workspace.structure}>
+            {/* Archivum S04: the structure only; tables and footnotes are not on the approved screen. */}
+            <RailSection title={t.workspace.structureLabel}>
               {journal ? <HeadingOutline documentId={journal.documentId} /> : <p className="rail-empty">{t.workspace.structureEmpty}</p>}
-            </RailSection>
-            <RailSection title={t.workspace.tables}>
-              <p className="rail-empty">{t.workspace.tablesEmpty}</p>
-            </RailSection>
-            <RailSection title={t.workspace.footnotes}>
-              <p className="rail-empty">{t.workspace.footnotesEmpty}</p>
             </RailSection>
           </>
         }
         panel={
+          // Archivum S04: Komentari and Upute only (owner, #923 c.6430103437 t. 2).
           <PanelTabs
             label={t.workspace.panelTabs}
             initial="comments"
             tabs={[
-              { id: "sources", label: t.workspace.tabSources, content: <p className="rail-empty">{t.workspace.sourcesEmpty}</p> },
-              {
-                id: "instructions",
-                label: t.workspace.tabInstructions,
-                content: <InstructionsPanel load={work ? { kind: "ready", value: work.notice } : { kind: "empty" }} />,
-              },
               {
                 id: "comments",
-                label: t.workspace.tabComments,
+                label: plan.comments ? <CommentsTabLabel documentId={plan.journal.documentId} /> : t.workspace.tabComments,
                 content: plan.comments ? (
                   <CommentPanel documentId={plan.journal.documentId} session={session} />
                 ) : (
@@ -191,9 +186,9 @@ export default async function WorkspacePage({
                 ),
               },
               {
-                id: "work",
-                label: t.workspace.tabWork,
-                content: <WorkPanel load={invented ? { kind: "ready", value: DEMO_WORK } : { kind: "empty" }} />,
+                id: "instructions",
+                label: t.workspace.tabInstructions,
+                content: <InstructionsPanel load={work ? { kind: "ready", value: work.notice } : { kind: "empty" }} />,
               },
             ]}
           />
@@ -208,7 +203,7 @@ export default async function WorkspacePage({
           <span>{t.workspace.statusNoJournal}</span>
         )}
         teacherView={plan.kind === "assignment" ? (
-          <TeacherViewSheet documentId={plan.journal.documentId} session={session} heading={heading} />
+          <TeacherViewSheet documentId={plan.journal.documentId} session={session} heading={runningHead} />
         ) : null}
       >
         {journal ? <EditorToolbar /> : null}
@@ -217,7 +212,7 @@ export default async function WorkspacePage({
           {/* F1b (§4): the free draft of this device, offered only to read and copy. */}
           {plan.kind === "assignment" ? <EarlierDraft scope={plan.journal.scope} /> : null}
           <SheetFrame>
-            {heading}
+            {runningHead}
             {plan.kind === "free" ? <p className="sheet-note">{t.workspace.freeNote}</p> : null}
             {journal ? (
               <LocalEditor />

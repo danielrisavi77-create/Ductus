@@ -367,16 +367,58 @@ main:focus {
 .workspace__bar {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  /* Archivum S04: course, the page's h1 and the deadline; the view switch
+     and "Predaja" at the end of the same bar. */
+  align-items: end;
   gap: 8px 14px;
   min-height: 48px;
-  padding: 6px 14px;
+  padding: 16px 24px;
   background: var(--chrome);
   border-bottom: 1px solid var(--rule);
 }
 
-.workspace__bar .brand-line__context {
+.workspace__heading {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.workspace__eyebrow {
+  margin: 0 0 6px;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+  overflow-wrap: anywhere;
+}
+
+.workspace__title {
   margin: 0;
+  font-family: var(--ff-display);
+  font-size: clamp(26px, 3.2vw, 40px);
+  font-weight: 500;
+  line-height: 1.1;
+  /* An assignment title wraps whole, even a long unbroken word (F-8 point 5). */
+  overflow-wrap: anywhere;
+}
+
+.workspace__meta {
+  margin: 6px 0 0;
+  font-size: 15px;
+  color: var(--ink-2);
+}
+
+/* The title again at the top of the sheet, small capitals over a rule; the
+   h1 is the header's, so this one is hidden from assistive technology. */
+.sheet-runhead {
+  margin: 0 0 26px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--ff-ui);
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  overflow-wrap: anywhere;
 }
 
 /* Below 800 px the shell's side bar is a drawer: the workspace runs edge to edge. */
@@ -394,13 +436,6 @@ main:focus {
   align-items: baseline;
   gap: 8px;
   min-width: 0;
-}
-
-/* Course and assignment beside the brand (editor-v11: 12 px, quiet, as written). */
-.brand-line__context {
-  font-size: 12px;
-  color: var(--ink-3);
-  overflow-wrap: anywhere;
 }
 
 .modes {
@@ -738,7 +773,8 @@ main:focus {
   .lbl,
   .demo-badge,
   .soon,
-  .brand-line__context,
+  .workspace__eyebrow,
+  .sheet-runhead,
   .modes__item,
   .workspace__status,
   .rail-section__title,
