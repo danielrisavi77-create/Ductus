@@ -77,6 +77,32 @@ export async function readLogoutHold(scope: string | null, options: HoldReadOpti
   }
 }
 
+/**
+ * One more read before the dialog, under the same limit as `readLogoutHold`:
+ * a read another tab blocks gives `fallback` instead of holding the sign-out
+ * (D-118, F-154).
+ */
+export async function withinHoldLimit<T>(read: () => Promise<T>, fallback: T, timeoutMs = LOGOUT_HOLD_LIMIT_MS): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<T>((resolve) => { timer = setTimeout(() => resolve(fallback), timeoutMs); });
+  try {
+    return await Promise.race([Promise.resolve().then(read).catch(() => fallback), late]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * The open dialog once the rows after the submission are gone (F-154): the
+ * counts and `kept` come from the journal read again, never from the plan
+ * read before the deletion. A read that fails says nothing it cannot know.
+ */
+export function planAfterDiscard(plan: LogoutPlan, read: HoldRead): LogoutPlan {
+  const rest = { unsaved: plan.unsaved, submitted: plan.submitted, afterSubmission: 0 };
+  if (typeof read === "string") return { ...rest, pending: null };
+  return { ...rest, pending: read.pending, copies: read.copies, kept: read.kept };
+}
+
 export type ShellLogoutStep =
   | { kind: "plain" }
   | { kind: "leave" }
