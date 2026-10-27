@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import { validateDocument, type CanonicalDocument } from "@/domain/document";
 import type { TeacherCourse } from "@/server/institution/teacher-courses";
 
-import { assignmentWorksHref, headingAnchor, liveContext, liveOutline, sectionHeading, studentName } from "./live-context";
+import {
+  assignmentWorksHref, headingAnchor, liveContext, liveOutline, sectionHeading, studentName, submittedParts,
+} from "./live-context";
 
 // Archivum T05 (DAN-344, #923 contract 6430008106 §4). Invented ids, names and text.
 const COURSE = "cccccccc-cccc-4ccc-8ccc-ccccccccccc1";
@@ -29,6 +31,7 @@ describe("liveContext (T05)", () => {
       title: "Izmišljeni zadatak o prometu",
       workType: "Seminarski rad",
       studentId: STUDENT,
+      submission: null,
     });
   });
 
@@ -96,5 +99,33 @@ describe("studentName (T05)", () => {
     expect(studentName(students, "s-1")).toBe("Ana Izmišljena");
     expect(studentName(students, "s-2")).toBeNull();
     expect(studentName(students, "s-3")).toBeNull();
+  });
+});
+
+// T06 (#923 contract 6430008106 §5): version and time only from a recorded submission of this work.
+describe("the recorded submission (T06)", () => {
+  const row = (changes: object = {}) => ({
+    studentId: STUDENT, documentId: "izmisljeni-rad-1", submitted: true, revision: 12,
+    requestedMinute: "2026-10-26T15:10:00.000Z", afterDeadline: false, ...changes,
+  });
+
+  it("carries the revision and the minute of the work's own submission", () => {
+    const context = liveContext(courses, works, ASSIGNMENT, "izmisljeni-rad-1", [row()]);
+    expect(context?.submission).toEqual({ revision: 12, requestedMinute: "2026-10-26T15:10:00.000Z" });
+    expect(submittedParts(context)).toEqual({
+      version: "Verzija 12",
+      at: "26. listopada 2026. u 16:10",
+      note: "Prikazan je tekst verzije 12 predane 26. listopada 2026. u 16:10.",
+    });
+  });
+
+  it("has none for another work, another student or no submission", () => {
+    const none = (rows: object[]) => liveContext(courses, works, ASSIGNMENT, "izmisljeni-rad-1", rows as never)?.submission;
+    expect(none([row({ documentId: "drugi-rad" })])).toBeNull();
+    expect(none([row({ studentId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb0" })])).toBeNull();
+    expect(none([row({ submitted: false, revision: null, requestedMinute: null, afterDeadline: null })])).toBeNull();
+    expect(none([])).toBeNull();
+    expect(submittedParts(null)).toBeNull();
+    expect(submittedParts(liveContext(courses, works, ASSIGNMENT, "izmisljeni-rad-1"))).toBeNull();
   });
 });

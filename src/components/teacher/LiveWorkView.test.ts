@@ -17,6 +17,7 @@ const CONTEXT: LiveContext = {
   title: "Izmišljeni zadatak o prometu",
   workType: "Seminarski rad",
   studentId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+  submission: null,
 };
 const render = (node: ReactNode) => renderToStaticMarkup(h("div", null, node));
 const header = (context: LiveContext | null, name: string | null) => render(LiveHeader({ context, name }));
@@ -64,5 +65,29 @@ describe("LiveRail (T05)", () => {
     expect(html).not.toContain(t.backToWorks);
     expect(html).not.toContain("<ol");
     expect(html).not.toContain(`>${t.outline}</h2>`);
+  });
+});
+
+// T06 (#923 contract 6430008106 §5): "Predano" only with the live route's submitted text,
+// the version and the minute only with a recorded submission.
+describe("LiveHeader: the submitted revision (T06)", () => {
+  const recorded = { ...CONTEXT, submission: { revision: 12, requestedMinute: "2026-10-26T15:10:00.000Z" } };
+  const parts = (html: string) => [...html.matchAll(/<\/span>([^<]+)<\/span>|<span>([^<]+)<\/span>/g)].map((m) => m[1] ?? m[2]);
+
+  it("says Predano with the recorded version and minute", () => {
+    const html = render(LiveHeader({ context: recorded, name: "Ana Izmišljena", submitted: true }));
+    expect(parts(html)).toEqual(["Ana Izmišljena", "Seminarski rad", t.submittedLabel, "Verzija 12", "26. listopada 2026. u 16:10"]);
+    expect(html).not.toContain(t.writing);
+  });
+
+  it("says only Predano without a recorded submission", () => {
+    const html = render(LiveHeader({ context: CONTEXT, name: null, submitted: true }));
+    expect(parts(html)).toEqual(["Seminarski rad", t.submittedLabel]);
+  });
+
+  it("never names a version or Predano while the text is the live one", () => {
+    const html = render(LiveHeader({ context: recorded, name: null, submitted: false }));
+    expect(parts(html)).toEqual(["Seminarski rad", t.writing]);
+    expect(html).not.toContain("Verzija");
   });
 });

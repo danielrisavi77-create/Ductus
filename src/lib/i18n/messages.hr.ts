@@ -719,6 +719,13 @@ export const hr = {
     tabSummary: "Sažetak procesa",
     liveLabel: "Prikaz uživo",
     limitsShort: "Zapis ne pokazuje tko je tekst smislio.",
+    // DAN-344 Archivum T06 (#923 contract 6430008106 §5): the submitted revision.
+    submittedLabel: "Predano",
+    submittedStatus: "Predana verzija · samo čitanje",
+    submittedVersion: "Verzija {n}",
+    submittedAt: "{date} u {time}",
+    submittedTextAt: "Prikazan je tekst verzije {n} predane {date} u {time}.",
+    submittedText: "Prikazan je predani tekst.",
     connection: {
       loading: "Povezivanje…",
       live: "Veza radi",

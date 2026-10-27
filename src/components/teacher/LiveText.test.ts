@@ -10,7 +10,7 @@ import type { CanonicalDocument, NodeId } from "@/domain/document";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
 import type { TextRange } from "./comment-place";
-import LiveText, { liveStopped, openMarks } from "./LiveText";
+import LiveText, { LiveStatus, liveStopped, openMarks } from "./LiveText";
 import type { PlacedThread } from "./TeacherComments";
 
 // #732 item 7: the teacher and the student draw the live text through this one
@@ -178,5 +178,27 @@ describe("one place draws the live text", () => {
     expect(code).not.toContain('role="document"');
     expect(code).not.toContain("blockSegments(");
     expect(code).not.toContain("startLiveReader(");
+  });
+});
+
+// DAN-344 T05/T06 (#923 contract 6430008106 §4, §5): the teacher's frame draws the line beside its tabs.
+describe("LiveStatus beside the teacher's tabs", () => {
+  const line = (view: LiveView) => renderToStaticMarkup(h(LiveStatus, { view, label: t.liveLabel }));
+
+  it("says the live view and its connection while the text is live", () => {
+    expect(line(SHOWN)).toContain(`${t.liveLabel} · ${t.connection.live}`);
+    expect(line({ ...SHOWN, connection: "retrying" })).toContain(`${t.liveLabel} · ${t.connection.retrying}`);
+  });
+
+  it("says Predana verzija · samo čitanje only for the submitted revision, through failed requests", () => {
+    for (const connection of ["live", "retrying", "paused"] as const) {
+      expect(line({ ...SHOWN, submitted: true, connection })).toContain(t.submittedStatus);
+      expect(line({ ...SHOWN, submitted: false, connection })).not.toContain(t.submittedStatus);
+    }
+    expect(line({ ...SHOWN, submitted: true, connection: "notFound" })).not.toContain(t.submittedStatus);
+  });
+
+  it("keeps the student's own wording without the label", () => {
+    expect(renderToStaticMarkup(h(LiveStatus, { view: { ...SHOWN, submitted: true } }))).toContain(`</span>${t.submitted}</span>`);
   });
 });

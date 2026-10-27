@@ -11,15 +11,24 @@ import { createElement as h, type ReactNode } from "react";
 
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
-import { assignmentWorksHref, headingAnchor, type LiveContext, type OutlineEntry } from "./live-context";
+import { assignmentWorksHref, headingAnchor, submittedParts, type LiveContext, type OutlineEntry } from "./live-context";
 import styles from "./LiveWorkView.module.css";
 
 const t = messagesHr.liveView;
 
-/** The course, the assignment as the page's one h1, and "name · type · Rad u nastajanju"; without a context only the hidden "Rad uživo". */
-export function LiveHeader({ context, name }: { context: LiveContext | null; name: string | null }): ReactNode {
+/**
+ * The course, the assignment as the page's one h1, and "name · type · Rad u
+ * nastajanju"; without a context only the hidden "Rad uživo". T06: once the
+ * live route sends the submitted revision (`submitted`), "Predano", and the
+ * version and minute only when the submissions read recorded them.
+ */
+export function LiveHeader({ context, name, submitted = false }: {
+  context: LiveContext | null; name: string | null; submitted?: boolean;
+}): ReactNode {
   if (!context) return h("h1", { className: "visually-hidden" }, t.context);
-  const meta = [name, context.workType, t.writing].filter((part): part is string => part !== null);
+  const recorded = submitted ? submittedParts(context) : null;
+  const meta = [name, context.workType, submitted ? t.submittedLabel : t.writing, recorded?.version ?? null, recorded?.at ?? null]
+    .filter((part): part is string => part !== null);
   return h(
     "header",
     { className: styles.head, "data-motif": context.motif },

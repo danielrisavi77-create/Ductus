@@ -123,9 +123,11 @@ test("the submitted work is labelled Predani rad and keeps its text and label", 
   await expect(page.getByText(t.submitted, { exact: true })).toHaveCount(0);
 
   // A3: the submitted revision is the text already shown; a 304 names it so.
+  // DAN-344 T06: beside the tabs it reads "Predana verzija · samo čitanje", and the
+  // foot "Prikazan je predani tekst." (no ?zadatak=, so no recorded version or time).
   phase = "submitted";
-  await expect(page.getByRole("status").filter({ hasText: t.submitted })).toBeVisible();
-  await expect(page.getByText(t.submittedNote)).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: t.submittedStatus })).toBeVisible();
+  await expect(page.getByText(t.submittedText)).toBeVisible();
   await expect(page.getByText(t.note)).toHaveCount(0);
   await expect(page.getByRole("status").filter({ hasText: t.connection.live })).toHaveCount(0);
 
@@ -139,8 +141,8 @@ test("the submitted work is labelled Predani rad and keeps its text and label", 
     await page.waitForTimeout(2500);
     await expect(text.getByText("Gradske knjižnice su mjesto susreta.")).toBeVisible();
     await expect(page.getByText("Ova rečenica nije predana.")).toHaveCount(0);
-    await expect(page.getByRole("status").filter({ hasText: t.submitted })).toBeVisible();
-    await expect(page.getByText(t.submittedNote)).toBeVisible();
+    await expect(page.getByRole("status").filter({ hasText: t.submittedStatus })).toBeVisible();
+    await expect(page.getByText(t.submittedText)).toBeVisible();
     await expect(page.getByText(t.note)).toHaveCount(0);
   }
   await page.setViewportSize({ width: 390, height: 844 });

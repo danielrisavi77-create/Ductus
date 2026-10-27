@@ -117,7 +117,8 @@ export function liveSubmitted(view: LiveView): boolean {
  */
 export function LiveStatus({ view, label }: { view: LiveView; label?: string }) {
   const submitted = liveSubmitted(view);
-  const line = submitted ? t.submitted : t.connection[view.connection];
+  // T06: beside the teacher's tabs (`label`) the submitted revision reads "Predana verzija · samo čitanje".
+  const line = submitted ? (label ? t.submittedStatus : t.submitted) : t.connection[view.connection];
   return h(
     "span",
     { className: "sync-chip", "data-tone": submitted ? "ok" : TONE[view.connection], role: "status" },

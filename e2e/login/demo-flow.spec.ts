@@ -1146,9 +1146,14 @@ test("demo walk-through", async ({ browser, page, context }) => {
     const teacher = await (await browser.newContext()).newPage();
     try {
       await signIn(teacher, "/", "Demo nastavnik");
-      await teacher.goto(`/nastavnik/rad/${k4Document!}`);
-      // DAN-344 T05: the summary is the second tab, once the page runs in the browser.
-      await expect(teacher.getByRole("status").filter({ hasText: t.liveView.connection.live })).toBeVisible({ timeout: 30_000 });
+      // DAN-344 T06: from the works list (?zadatak=), the submitted revision with its recorded version.
+      await teacher.goto(`/nastavnik/rad/${k4Document!}?zadatak=${k4Assignment!}`);
+      await expect(teacher.getByRole("status").filter({ hasText: t.liveView.submittedStatus })).toBeVisible({ timeout: 30_000 });
+      await expect(teacher.getByText(t.liveView.submittedLabel, { exact: true })).toBeVisible();
+      await expect(teacher.getByText(t.liveView.submittedVersion.replace("{n}", String(server.revision)), { exact: true })).toBeVisible();
+      await expect(teacher.getByRole("document", { name: t.liveView.documentLabel })).toHaveText(workText);
+      await snapshot(teacher, "5-predana-verzija-kod-nastavnika");
+      // The summary is the second tab.
       await teacher.getByRole("tab", { name: t.liveView.tabSummary }).click();
       await expect(summaryOf(teacher).getByText(t.summary.sameForEveryone)).toBeVisible({ timeout: 30_000 });
       expect(await summaryOf(teacher).textContent()).toBe(studentSummary);

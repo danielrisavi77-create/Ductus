@@ -10,6 +10,7 @@ import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { sessionPrincipal, sessionTag } from "@/server/auth/principal";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
+import { readAssignmentSubmissions } from "@/server/evidence/assignment-submissions";
 import { readAssignmentWorks } from "@/server/evidence/assignment-works";
 import { readTeacherCourses } from "@/server/institution/teacher-courses";
 
@@ -75,10 +76,13 @@ export default async function LiveWorkPage({ params, searchParams }: {
 
 async function readContext(token: string | undefined, assignmentId: string, documentId: string): Promise<LiveContext | null> {
   if (token === undefined) return null;
-  const [courses, works] = await Promise.all([
+  // T06: the recorded submission comes from the same read as the teacher's list (#826 R1);
+  // without it the header says only "Predano", never a guessed version or time.
+  const [courses, works, submissions] = await Promise.all([
     readTeacherCourses(token, withActor),
     readAssignmentWorks(token, assignmentId, withActor),
+    readAssignmentSubmissions(token, assignmentId, withActor),
   ]);
   if (courses.kind !== "ok" || works.kind !== "ok") return null;
-  return liveContext(courses.courses, works.works, assignmentId, documentId);
+  return liveContext(courses.courses, works.works, assignmentId, documentId, submissions.kind === "ok" ? submissions.submissions : []);
 }

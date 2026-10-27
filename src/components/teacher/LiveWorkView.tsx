@@ -26,9 +26,9 @@ import type { TextAnchor } from "@/domain/collaboration";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
 import { anchorForSelection, placeThreads, type TextRange } from "./comment-place";
-import { liveOutline, sectionHeading, studentName, type LiveContext } from "./live-context";
+import { liveOutline, sectionHeading, studentName, submittedParts, type LiveContext } from "./live-context";
 import { LiveHeader, LiveRail } from "./LiveHeader";
-import LiveText, { LiveStatus, liveStopped, openMarks, useLiveView } from "./LiveText";
+import LiveText, { LiveStatus, liveStopped, liveSubmitted, openMarks, useLiveView } from "./LiveText";
 import styles from "./LiveWorkView.module.css";
 import RecordLimits from "./RecordLimits";
 import { selectedRange, selectInBlock } from "./selection";
@@ -76,6 +76,9 @@ export default function LiveWorkView({ documentId, session, context = null }: {
   const placed: PlacedThread[] = placeThreads(view.document, threads);
   const marks = openMarks(placed);
   const outline = stopped ? [] : liveOutline(view.document);
+  // T06: only the live route's own "submitted" makes this the submitted revision (D-169 t. 2).
+  const submitted = liveSubmitted(view);
+  const recorded = submitted ? submittedParts(context) : null;
 
   // The anchor is made from the text on screen, so it never carries text the teacher has not seen (attack 8).
   const takeSelection = () => {
@@ -101,7 +104,7 @@ export default function LiveWorkView({ documentId, session, context = null }: {
 
   return (
     <div className={styles.frame}>
-      <LiveHeader context={context} name={name} />
+      <LiveHeader context={context} name={name} submitted={submitted} />
       <div className={styles.layout}>
         <LiveRail context={context} outline={outline} onPick={() => setTab("text")} />
         <div className={styles.main}>
@@ -142,7 +145,9 @@ export default function LiveWorkView({ documentId, session, context = null }: {
       </div>
       <footer className={styles.foot}>
         {/* The note speaks about a shown text, so it stands only beside one. */}
-        {!stopped && view.document ? <p className={styles.note}>{t.note}</p> : <span />}
+        {!stopped && view.document
+          ? <p className={styles.note}>{submitted ? recorded?.note ?? t.submittedText : t.note}</p>
+          : <span />}
         <RecordLimits folded />
       </footer>
     </div>
