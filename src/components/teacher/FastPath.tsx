@@ -14,6 +14,7 @@ import {
   bySurname,
   fastPathLines,
   fullName,
+  textRuns,
   whenText,
   type FastPathLoad,
   type FastPathRecord,
@@ -191,9 +192,11 @@ function Record({ student, record, view }: RecordProps) {
       : h(
           "article",
           { className: styles.text, "aria-label": t.textLabel },
-          record.blocks.map((block, i): ReactNode => {
-            if (block.kind === "heading") return h("h3", { key: i, className: styles.blockHeading }, block.text);
-            return h("div", { key: i, className: styles.block }, h("p", null, block.text));
+          textRuns(record.blocks).map((run, i): ReactNode => {
+            if (run.kind === "heading") return h("h3", { key: i, className: styles.blockHeading }, run.texts[0]);
+            const lines = run.texts.map((text, j) => h(run.kind === "bulletItem" ? "li" : "p", { key: j }, text));
+            const body = run.kind === "bulletItem" ? h("ul", null, lines) : run.kind === "quote" ? h("blockquote", null, lines) : lines;
+            return h("div", { key: i, className: styles.block }, body);
           }),
         ),
   );

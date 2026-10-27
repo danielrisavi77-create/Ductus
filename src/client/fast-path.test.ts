@@ -235,7 +235,9 @@ describe("parseFastPath", () => {
     ["pastes as a list", (b) => { b.students[0]!.record!.pastesWithoutSource = [1]; }],
     ["negative pastes", (b) => { b.students[0]!.record!.pastesWithoutSource = -1; }],
     ["fractional pastes", (b) => { b.students[0]!.record!.pastesWithoutSource = 1.5; }],
-    ["another block kind", (b) => { (b.students[0]!.record!.blocks as Record<string, unknown>[])[0]!.kind = "quote"; }],
+    ["another block kind", (b) => { (b.students[0]!.record!.blocks as Record<string, unknown>[])[0]!.kind = "orderedItem"; }],
+    ["a block kind from the prototype", (b) => { (b.students[0]!.record!.blocks as Record<string, unknown>[])[0]!.kind = "__proto__"; }],
+    ["a block kind that is not a string", (b) => { (b.students[0]!.record!.blocks as Record<string, unknown>[])[0]!.kind = ["quote"]; }],
     ["a broken summary", (b) => { (b.students[0]!.record!.summary as Record<string, unknown>).summaryFormat = "v2"; }],
   ];
 
@@ -243,6 +245,13 @@ describe("parseFastPath", () => {
     const body = answer() as unknown as { kind: unknown; students: Student[] };
     change(body);
     expect(parseFastPath(body)).toBeNull();
+  });
+
+  it("accepts bullet items and quotes as blocks (F-150 point 1)", () => {
+    const body = answer() as unknown as { kind: unknown; students: Student[] };
+    const blocks = [{ kind: "bulletItem", text: "stavka" }, { kind: "quote", text: "navod" }];
+    body.students[0]!.record!.blocks = blocks;
+    expect(parseFastPath(body)?.[0]?.record?.blocks).toEqual(blocks);
   });
 
   it("rejects what is not an object", () => {
