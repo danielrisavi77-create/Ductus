@@ -11,7 +11,7 @@ import {
 } from "@/domain/document/edit-step";
 import { isMark, isPlainBlockType } from "@/domain/document/schema";
 import { EvidenceContentNotSupportedV2 } from "@/domain/forensics/evidence-replay-v2";
-import type { EvidenceEventV2 } from "@/domain/forensics/evidence-segment-v2";
+import type { EvidenceEventV3 } from "@/domain/forensics/evidence-segment-v2";
 import { canonicalizeJcs, type JcsJsonValue } from "@/domain/forensics/jcs";
 import { canonicalToTiptap, tiptapToCanonical } from "@/editor/interop";
 import { createEditorExtensions } from "@/editor/schema";
@@ -273,7 +273,7 @@ function namesUnknownType(steps: unknown): boolean {
 }
 
 /** The steps of `event` applied to `document` in order, one claim per removed range. */
-export function* runEditStepsV1(document: PmNode, event: EvidenceEventV2): EditStepsV1Run {
+export function* runEditStepsV1(document: PmNode, event: EvidenceEventV3): EditStepsV1Run {
   const parsed = parseEditSteps(EDIT_STEP_FORMAT_V1, event.steps);
   if (!parsed.ok) {
     if (namesUnknownType(event.steps)) {

@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { createEditStepsV1Replayer } from "@/adapters/evidence/edit-steps-v1-replayer";
 import { verifyCanonicalEvidencePayloadV2 } from "@/domain/forensics/evidence-chain-v2";
 import { replayEvidenceSegmentsV2 } from "@/domain/forensics/evidence-replay-v2";
-import type { EvidenceSegmentV2 } from "@/domain/forensics/evidence-segment-v2";
+import type { EvidenceSegment } from "@/domain/forensics/evidence-segment-v2";
 import type { JcsJsonValue } from "@/domain/forensics/jcs";
 
 import { CaptureError, EvidenceRecorder, type SegmentContext } from "./capture";
@@ -73,7 +73,7 @@ function canonical(editor: Editor): JcsJsonValue {
 }
 
 type Outcome = {
-  segments: EvidenceSegmentV2[];
+  segments: EvidenceSegment[];
   initial: JcsJsonValue;
   stop: string | null;
   final: JcsJsonValue;
@@ -97,7 +97,7 @@ async function run(seed: number): Promise<Outcome> {
   const view = editor.view;
   const recorder = new EvidenceRecorder();
   const initial = canonical(editor);
-  const segments: EvidenceSegmentV2[] = [];
+  const segments: EvidenceSegment[] = [];
   let context = BASE;
   let at = T0;
   let stop: string | null = null;

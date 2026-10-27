@@ -5,9 +5,10 @@ import type { SignedEvidenceReceipt } from "@/domain/forensics/evidence-receipt"
 import {
   EVIDENCE_CANONICALIZATION_V2,
   EVIDENCE_HASH_ALGORITHM_V2,
-  EVIDENCE_SEGMENT_SCHEMA_V2,
   isEvidenceMinuteV2,
+  isEvidenceSegmentSchema,
   MAX_EVIDENCE_PROFILE_ID_LENGTH,
+  type EvidenceSegmentSchema,
 } from "@/domain/forensics/evidence-segment-v2";
 
 export type EvidenceSegmentDescriptorV2 = {
@@ -15,7 +16,8 @@ export type EvidenceSegmentDescriptorV2 = {
   documentId: string;
   sessionId: string;
   segmentId: string;
-  evidenceSchema: typeof EVIDENCE_SEGMENT_SCHEMA_V2;
+  /** The schema of the segment, v2 or v3 (contract #896). */
+  evidenceSchema: EvidenceSegmentSchema;
   canonicalization: typeof EVIDENCE_CANONICALIZATION_V2;
   hashAlgorithm: typeof EVIDENCE_HASH_ALGORITHM_V2;
   evidenceProfileId: string;
@@ -125,7 +127,7 @@ export function isEvidenceSegmentDescriptorV2(
     !nonEmptyBounded(descriptor.documentId) ||
     !nonEmptyBounded(descriptor.sessionId) ||
     !nonEmptyBounded(descriptor.segmentId) ||
-    descriptor.evidenceSchema !== EVIDENCE_SEGMENT_SCHEMA_V2 ||
+    !isEvidenceSegmentSchema(descriptor.evidenceSchema) ||
     descriptor.canonicalization !== EVIDENCE_CANONICALIZATION_V2 ||
     descriptor.hashAlgorithm !== EVIDENCE_HASH_ALGORITHM_V2 ||
     !nonEmptyBounded(
