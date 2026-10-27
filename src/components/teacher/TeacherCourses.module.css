@@ -61,8 +61,8 @@
 
 .assignment {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: "title count" "meta count" "works works";
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas: "title count open" "meta count open" "works works works";
   gap: 2px 14px;
   align-items: center;
   padding: 12px 18px;
@@ -93,6 +93,16 @@
   white-space: nowrap;
 }
 
+/* The way into screen 11 for this assignment (F-11). */
+.open {
+  grid-area: open;
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
 .works {
   grid-area: works;
   display: flex;
@@ -113,7 +123,7 @@
 @media (max-width: 700px) {
   .assignment {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "title" "meta" "count" "works";
+    grid-template-areas: "title" "meta" "count" "open" "works";
   }
 }
 

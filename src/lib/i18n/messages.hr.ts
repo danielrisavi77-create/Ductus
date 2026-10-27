@@ -235,6 +235,83 @@ export const hr = {
         "Gradovi>>Europski gradovi",
       ],
     },
+    access: {
+      eyebrow: "Tko što vidi",
+      title: "Isti rad, jasne uloge.",
+      lead: "Pogledaj što koja uloga vidi, a što ne vidi. Pravila su ista za sve zadatke.",
+      tablistLabel: "Uloga",
+      sees: "Vidi",
+      doesNot: "Ne vidi",
+      note: "Mentor i nastavnik zadatka jedna su uloga. Nitko drugi ne može premotati nastanak rada.",
+      roles: {
+        student: {
+          name: "Student",
+          sees: [
+            "Obavijest o praćenju kao prvi ekran zadatka, prije prve rečenice.",
+            "Točno ono što o njegovu radu vidi mentor, istim prikazom.",
+            "Premotavanje nastanka vlastitog rada, isto kakvo ima mentor.",
+            "Tko je i kada otvorio njegov rad.",
+          ],
+          not: [
+            "Mentorove privatne radne zapise. Može ih zatražiti pravom pristupa.",
+            "Ocjenu i obrazloženje prije nego ih mentor objavi.",
+          ],
+        },
+        mentor: {
+          name: "Mentor i nastavnik zadatka",
+          sees: [
+            "Rad uživo, dok nastaje.",
+            "Premotavanje nastanka rada, znak po znak.",
+            "Komentare uz odlomak i studentove odgovore.",
+          ],
+          not: [
+            "Ocjenu ni procjenu studenta: prikaz služi praćenju i komentarima.",
+            "Povijest međustanja u sažetku, usporedbi ili izvozu. Postoji samo u prikazu uživo i premotavanju.",
+          ],
+        },
+        institution: {
+          name: "Ustanova",
+          sees: [
+            "Pravila i uloge za svoje kolegije, koje sama postavlja.",
+            "Tko je kada pristupio kojem radu.",
+          ],
+          not: [
+            "Sadržaj radova.",
+            "Premotavanje nastanka rada: nije dostupno ostalim ulogama.",
+          ],
+        },
+      },
+    },
+    faq: {
+      eyebrow: "Pitanja",
+      title: "Kratki odgovori.",
+      items: {
+        authorship: {
+          q: `Tvrdi li ${APP_NAME} tko je napisao rad?`,
+          a: `Ne. ${APP_NAME} prikazuje što je opaženo u uređivaču i ne računa nikakve mjere o studentu. Zaključak donosi čovjek.`,
+        },
+        beforeWriting: {
+          q: "Što student zna prije pisanja?",
+          a: "Prvi ekran svakog zadatka kaže što nastavnik vidi i od kada. Student to pročita prije prve rečenice.",
+        },
+        ai: {
+          q: "Mora li student koristiti AI?",
+          a: "Ne. Ništa u zadatku ne traži AI od studenta, a pomoćnik je moguć samo ako ga zadatak dopušta.",
+        },
+        signIn: {
+          q: "Kako se student prijavljuje?",
+          a: "Isključivo svojim računom AAI@EduHr. Drugog načina prijave nema.",
+        },
+        offline: {
+          q: "Što ako veza pukne tijekom pisanja?",
+          a: "Tekst se sprema na uređaju, a oznaka kaže je li stigao na poslužitelj. Rad napisan bez veze ostaje označen kao takav i nakon usklađivanja.",
+        },
+        tryOut: {
+          q: "Šalje li se išta iz probnog prostora?",
+          a: "Ne. Tekst koji upišeš ostaje u ovom pregledniku i nikamo se ne šalje.",
+        },
+      },
+    },
   },
   // F-6 (DAN-35): text of screen 2 of the design handoff (docs/design/ductura).
   teacher: {
@@ -405,11 +482,16 @@ export const hr = {
   fastPath: {
     title: "Brz put",
     intro: "Radovi jednog zadatka, jedan za drugim. Prikaz samo čita; ništa ne mijenja.",
-    sample: "Izmišljeni primjer: popis radova zadatka još nije povezan, pa su studenti i tekstovi izmišljeni.",
     denied: "Ovaj prikaz vidi samo nastavnik.",
     loading: "Učitavanje radova…",
     unavailable: "Radovi trenutačno nisu dostupni. Pokušaj ponovno.",
-    noStudents: "U kolegij još nije upisan nijedan student.",
+    // F-11 (#757, contract c.6397637802 §3; owner c.6397679688).
+    pickAssignment: "Odaberi zadatak u svojim kolegijima.",
+    empty: "Za ovaj zadatak nema radova za prikaz.",
+    refresh: "Stanje spremljeno na poslužitelju. Osvježava se najviše svakih 5 minuta.",
+    stale: "Stanje nije osvježeno. Prikazano je zadnje učitano stanje; sljedeći pokušaj za najviše 5 minuta.",
+    // #757 D1, za potvrdu: a student whose account has no name; never a number or an address.
+    unnamed: "Ime nije dostupno",
     studentsLabel: "Studenti",
     studentsTitle: "Studenti · po prezimenu",
     // #732 item 18, design pregled-radova-v2 (D-80): the list has no order by numbers.
@@ -417,7 +499,6 @@ export const hr = {
     work: {
       notice_pending: "Obavijest još nije potvrđena",
       writing: "U pisanju",
-      revision_requested: "Čeka doradu",
       submitted: "Predano",
     },
     noRecord: "nema zapisa",
@@ -428,15 +509,9 @@ export const hr = {
     textLabel: "Tekst rada, samo za čitanje",
     lines: {
       lastChange: "Zadnja promjena",
-      revisions: "Otvoreni zahtjevi za doradu",
       pastes: "Lijepljenja bez izvora",
-      declaration: "Izjava",
     },
     none: "nema",
-    revisionForms: { one: "zahtjev za doradu", few: "zahtjeva za doradu", many: "zahtjeva za doradu" },
-    declaration: { not_submitted: "još nije predana", submitted: "predana s radom" },
-    paragraph: "odlomak",
-    pastedTag: "zalijepljeno · izvor nije naveden",
     openWork: "Otvori rad",
     soon: "uskoro",
   },
@@ -447,6 +522,9 @@ export const hr = {
     barLabel: "Zadatak i prikaz",
     modeWriting: "Pisanje",
     modeTeacherView: "Kako vidi nastavnik",
+    // #732 item 7 (owner 6397193676): the line above the teacher's view, and why the switch is off.
+    teacherViewLead: "Ovako nastavnik vidi tvoj rad: zadnji tekst koji je tvoj preglednik poslao, komentare i sažetak procesa. Ovdje se ne piše.",
+    teacherViewOff: "samo uz zadatak",
     // F-10: a link to the submission screen, not the act of submitting (#653 contract 6385776645).
     submitLink: "Predaja",
     soon: "uskoro",
@@ -739,6 +817,21 @@ export const hr = {
       noAssignments: "U ovom kolegiju zasad nema zadatka.",
       due: "Rok {time}",
       noticeFirst: "Prvo pročitaj obavijest",
+    },
+    // DAN-344: the Archivum S01 texts of /zadaci, verbatim from the owner's
+    // package (26. 10. 2026.), in "Vi"; the subtitle without its mentoring
+    // half, which this page does not have. Only what the own-assignments read
+    // returns: courses, assignment titles, due times and the notice state.
+    home: {
+      heading: "Vaš studentski prostor",
+      lede: "Zadaci na kolegijima.",
+      courses: "Moji kolegiji",
+      courseLabel: "Kolegij",
+      due: "Rok: {time}",
+      open: "Otvori zadatak",
+      readNotice: "Pročitaj upute",
+      unavailableHeading: "Prikaz trenutačno nije dostupan.",
+      unavailableBody: "Podatke nije bilo moguće učitati. To ne znači da nema kolegija ili radova.",
     },
     signedOut: "Prijavi se da vidiš zadatak.",
     signIn: "Prijavi se",

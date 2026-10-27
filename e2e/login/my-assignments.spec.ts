@@ -43,8 +43,8 @@ test("the student sees both assignments of the course, and each goes through /ra
   await expect(section.getByRole("link").first()).toHaveAttribute("href", `/rad?zadatak=${first}`);
   const unread = section.getByRole("link", { name: new RegExp(title) });
   await expect(unread).toHaveAttribute("href", `/rad?zadatak=${second}`);
-  await expect(unread).toContainText(t.student.assignments.noticeFirst);
-  await expect(section.getByRole("link").first()).not.toContainText(t.student.assignments.noticeFirst);
+  await expect(unread).toContainText(t.student.home.readNotice);
+  await expect(section.getByRole("link").first()).not.toContainText(t.student.home.readNotice);
 
   // The list decides nothing: /rad sends the unacknowledged notice to /zadatak/<id>.
   await unread.click();
@@ -60,13 +60,13 @@ test("another student does not see the course, and a closed membership removes i
 
   const other = await browser.newPage();
   await signIn(other, "/zadaci", "Demo student 2");
-  await expect(other.getByRole("heading", { level: 1, name: t.student.assignments.heading })).toBeVisible();
+  await expect(other.getByRole("heading", { level: 1, name: t.student.home.heading })).toBeVisible();
   await expect(other.getByText(course)).toHaveCount(0);
   await other.close();
 
   await closeWork();
   await page.reload();
-  await expect(page.getByRole("heading", { level: 1, name: t.student.assignments.heading })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: t.student.home.heading })).toBeVisible();
   await expect(page.getByText(course)).toHaveCount(0);
 });
 

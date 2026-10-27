@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 const TARGETS = [
   ["src/components/editor/CommentPanel.module.css", ".link"],
   ["src/components/editor/CommentPanel.module.css", ".send"],
-  ["src/components/teacher/FastPath.module.css", ".linkButton"],
+  ["src/components/teacher/TeacherCourses.module.css", ".open"],
   ["src/components/teacher/LiveWorkView.module.css", ".link"],
 ] as const;
 
