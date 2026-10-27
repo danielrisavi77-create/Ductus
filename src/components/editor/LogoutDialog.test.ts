@@ -39,3 +39,36 @@ describe("copies in the sign-out dialog", () => {
     expect(source).not.toMatch(/copyText\(/);
   });
 });
+
+// F-154 (owner decision 1.3): the dialog is JSX, so its wiring is read from
+// the source; the two clicks are `nextDiscardStep`, tested in logout-plan.
+describe("what was written after the submission, in the sign-out dialog", () => {
+  const source = readFileSync(join(process.cwd(), "src/components/editor/LogoutDialog.tsx"), "utf8");
+  const local = readFileSync(join(process.cwd(), "src/components/editor/LocalDocument.tsx"), "utf8");
+
+  it("is offered only through afterSubmissionPart with the action", () => {
+    expect(source).toContain("afterSubmissionPart(plan, Boolean(onDiscardAfterSubmission))");
+  });
+
+  it("deletes only from the second click, after the question, through settleDiscard", () => {
+    expect(source).toContain('if (!onDiscardAfterSubmission || afterDiscard !== "confirm") return;');
+    expect(source).toContain("settleDiscard(onDiscardAfterSubmission)");
+    expect(source.match(/onDiscardAfterSubmission\(/g) ?? []).toHaveLength(0);
+    // The first click only asks; the confirm button exists only while asking.
+    expect(source).toContain("onAsk={askAfter}");
+    expect(source).toContain("onConfirm={confirmAfter}");
+    expect(source).toContain("asking={askingAfter}");
+  });
+
+  it("Escape takes the question back, never deletes", () => {
+    expect(source).toContain("else if (askingAfter) keepAfter();");
+  });
+
+  it("sign-out itself never deletes it: only clear() runs on sign-out, and discard checks the submission", () => {
+    expect(local).toContain('if (saver.snapshot().closedBy !== "submission") throw new Error("not_submitted");');
+    const start = local.indexOf("const signOut = async");
+    const signOut = local.slice(start, local.indexOf("const value: LocalDocumentValue", start));
+    expect(signOut.length).toBeGreaterThan(0);
+    expect(signOut).not.toMatch(/discard/i);
+  });
+});
