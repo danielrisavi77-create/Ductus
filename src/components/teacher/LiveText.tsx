@@ -32,7 +32,7 @@ import type { PlacedThread } from "./TeacherComments";
 
 const t = messagesHr.liveView;
 
-const INITIAL: LiveView = { document: null, hash: null, empty: false, connection: "loading" };
+const INITIAL: LiveView = { document: null, hash: null, empty: false, connection: "loading", submitted: false };
 
 const TONE: Record<LiveView["connection"], string> = {
   loading: "progress", live: "ok", retrying: "warn", paused: "warn", signedOut: "error", notFound: "error",
@@ -106,19 +106,30 @@ export type LiveTextProps = {
   bare?: boolean;
 };
 
-/** The connection line: about this page's own requests, never about the student (4.12 t. 8). */
+/** True once a submitted revision is shown; it keeps its label through this page's own failed requests (#826 A5). */
+export function liveSubmitted(view: LiveView): boolean {
+  return !liveStopped(view) && view.document !== null && view.submitted;
+}
+
+/**
+ * The connection line: about this page's own requests, never about the
+ * student (4.12 t. 8). DAN-332: the submitted revision is never labelled live.
+ */
 export function LiveStatus({ view, label }: { view: LiveView; label?: string }) {
+  const submitted = liveSubmitted(view);
+  const line = submitted ? t.submitted : t.connection[view.connection];
   return h(
     "span",
-    { className: "sync-chip", "data-tone": TONE[view.connection], role: "status" },
+    { className: "sync-chip", "data-tone": submitted ? "ok" : TONE[view.connection], role: "status" },
     h("span", { className: "sync-chip__dot", "aria-hidden": "true" }),
-    label ? `${label} · ${t.connection[view.connection]}` : t.connection[view.connection],
+    label && !submitted ? `${label} · ${line}` : line,
   );
 }
 
 /** The connection line, the sheet with the text, and the note beside a shown text. */
 export default function LiveText({ view, marks, heading, textRef, onSelect, bare = false }: LiveTextProps) {
   const stopped = liveStopped(view);
+  const submitted = liveSubmitted(view);
   const placeholder = (line: string) => h("p", { className: "manuscript__placeholder" }, line);
   let text: ReactNode;
   if (stopped) text = placeholder(t.connection[view.connection]);
@@ -151,6 +162,6 @@ export default function LiveText({ view, marks, heading, textRef, onSelect, bare
       }, text),
     ),
     // The note speaks about a shown text, so it stands only beside one.
-    !bare && !stopped && view.document ? h("p", { className: styles.note }, t.note) : null,
+    !bare && !stopped && view.document ? h("p", { className: styles.note }, submitted ? t.submittedNote : t.note) : null,
   );
 }
