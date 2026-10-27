@@ -103,6 +103,25 @@ const blocksOf = (contents: JournalContents) => contents.snapshot!.document.node
 }));
 
 const editorOf = (page: Page) => page.getByRole("textbox", { name: t.workspace.documentLabel });
+
+/**
+ * Puts the caret at the end of the last block, where a writer continues the text. A click
+ * and Control+End right after a load left it at the end of the citation paragraph, in CI and
+ * on the native runner (DAN-348 N5); the DOM selection set here is followed by the editor
+ * as a mouse selection is, as in the F-9 step.
+ */
+async function caretAtEnd(page: Page): Promise<void> {
+  await editorOf(page).click();
+  await editorOf(page).evaluate((editor) => {
+    const range = document.createRange();
+    range.selectNodeContents(editor.lastElementChild!);
+    range.collapse(false);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(range);
+  });
+  await page.keyboard.press("End");
+}
+
 const chipOf = (page: Page) => page.locator(".workspace__status .sync-chip");
 
 /** "Naslov 1" from the toolbar; the button keeps the selection in the sheet (EditorToolbar). */
@@ -762,8 +781,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
       // The default viewport comes back in `finally`, so later steps keep their layout.
       await page.setViewportSize({ width: 1440, height: 900 });
       await expect(heading1Of(page)).toBeVisible();
-      await editorOf(page).click();
-      await editorOf(page).press("Control+End");
+      await caretAtEnd(page);
       for (const block of BLOCKS.slice(1)) {
         await page.keyboard.press("Enter");
         if (block.type === "heading") await heading1Of(page).click();
@@ -870,8 +888,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
       // 1. Typing reaches the server state only with a receipt that verifies
       // under the stack's key for the checkpoint, whose text is the journal's.
       // The rows the cut routes above held go first (the drain), then this text.
-      await editorOf(page).click();
-      await editorOf(page).press("Control+End");
+      await caretAtEnd(page);
       await page.keyboard.type(SERVER_TEXT);
       let text = EXPECTED_TEXT + SERVER_TEXT;
       await expect(editorOf(page)).toHaveText(text);
@@ -889,7 +906,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
       page.on("requestfinished", onFinished);
       try {
         await expect(page.locator(".offline-chip")).toHaveText(t.network.offline);
-        await editorOf(page).press("Control+End");
+        await caretAtEnd(page);
         await page.keyboard.type(SERVER_OFFLINE_TEXT);
         text += SERVER_OFFLINE_TEXT;
         await expect(editorOf(page)).toHaveText(text);
@@ -942,8 +959,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
 
       // (c) The stack's own receipt for an earlier segment is not an ACK.
       await replayFirstReceipt(page);
-      await editorOf(page).click();
-      await editorOf(page).press("Control+End");
+      await caretAtEnd(page);
       await page.keyboard.type(" Treći.");
       text += " Treći.";
       await expect(chipOf(page)).toHaveAttribute("data-state", "SYNCED", SYNCED_WAIT);
@@ -972,8 +988,7 @@ test("demo walk-through", async ({ browser, page, context }) => {
       await page.waitForTimeout(3_000);
       expect(await chipStates(page)).not.toContain("SYNCED");
       expect((await commits.all()).slice(beforeSignIn)).toEqual([]);
-      await editorOf(page).click();
-      await editorOf(page).press("Control+End");
+      await caretAtEnd(page);
       await page.keyboard.type(" Nakon prijave.");
       text += " Nakon prijave.";
       await expect(chipOf(page)).toHaveAttribute("data-state", "SYNCED", SYNCED_WAIT);
