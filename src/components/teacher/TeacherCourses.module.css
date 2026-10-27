@@ -115,6 +115,11 @@
   color: var(--ink-3);
 }
 
+/* DAN-332 PR 4: the state of a submission is text in the colour of the list, never a colour of its own (D-128). */
+.submission {
+  white-space: nowrap;
+}
+
 .note {
   font-size: 12px;
   color: var(--ink-3);
