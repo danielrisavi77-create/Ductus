@@ -62,8 +62,9 @@ function body(read: MyAssignmentsRead, enroll: ReactNode, view: StudentView) {
   if (read.courses.length === 0) {
     return h(EmptyHome, { enroll });
   }
-  // On S02 the page heading already says "Moji kolegiji".
-  if (view === "courses") return h(MyAssignments, { courses: read.courses });
+  // On S02 the page heading already says "Moji kolegiji", so the course names
+  // are the h2 right under it.
+  if (view === "courses") return h(MyAssignments, { courses: read.courses, level: 2 });
   return h("section", { "aria-labelledby": "moji-kolegiji" },
     h("h2", { id: "moji-kolegiji", className: styles.sectionTitle }, home.courses),
     h(MyAssignments, { courses: read.courses }));

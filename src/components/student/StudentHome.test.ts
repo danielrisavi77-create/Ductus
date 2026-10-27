@@ -116,6 +116,9 @@ describe("StudentHome, Archivum S01 on /zadaci (DAN-344)", () => {
     expect(html).not.toContain(home.heading);
     expect(html).not.toContain('href="/upis"');
     expect(html).toContain(`aria-labelledby="kolegij-${COURSE_A}"`);
+    // axe heading-order: no level is skipped under the page h1.
+    expect(html).toMatch(new RegExp(`<h2 id="kolegij-${COURSE_A}"`));
+    expect(html).not.toContain("<h3");
     expect(html).toContain('href="/rad?zadatak=10000000-0000-4000-8000-000000000002"');
     expect(html).toContain(home.readNotice);
   });
