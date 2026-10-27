@@ -1,4 +1,7 @@
 // @vitest-environment node
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Dexie from "dexie";
 import { indexedDB, IDBKeyRange } from "fake-indexeddb";
@@ -7,6 +10,7 @@ import { nothingHeld, type LogoutPlan } from "@/components/editor/logout-plan";
 
 import {
   editorPlan, editorSignOutPlan, LOGOUT_HOLD_LIMIT_MS, LOGOUT_LOAD_LIMIT_MS, readLogoutHold, shellLogoutStep, untilLoaded,
+  withinHoldLimit,
 } from "./logout-hold";
 import { CURRENT_KEY, ENDED_KEY } from "./session-marks";
 
@@ -103,6 +107,39 @@ describe("readLogoutHold (U3)", () => {
     } finally {
       Object.assign(Dexie.dependencies, saved);
     }
+  });
+});
+
+// F-154, Codex r4383074611: the count of the submitted document is read under
+// the same limit, so a journal another tab blocks never holds the dialog back.
+describe("withinHoldLimit", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("gives the read when it ends, and the fallback for a failure", async () => {
+    expect(await withinHoldLimit(async () => 4, null)).toBe(4);
+    expect(await withinHoldLimit<number | null>(() => Promise.reject(new Error("made-up")), null)).toBeNull();
+    expect(await withinHoldLimit<number | null>(() => { throw new Error("made-up"); }, null)).toBeNull();
+  });
+
+  it("a read that never ends gives the fallback after the limit, not before", async () => {
+    vi.useFakeTimers();
+    let settled: unknown = "open";
+    void withinHoldLimit<number | null>(() => new Promise(() => {}), null).then((value) => { settled = value; });
+    await vi.advanceTimersByTimeAsync(LOGOUT_HOLD_LIMIT_MS - 1);
+    expect(settled).toBe("open");
+    await vi.advanceTimersByTimeAsync(1);
+    expect(settled).toBeNull();
+  });
+
+  // The editor's sign-out reads its own document through it and deletes
+  // nothing for a session that has ended here (Codex r4383074618).
+  it("is what the editor's sign-out uses, and its discard refuses an ended session", () => {
+    const code = readFileSync(join(process.cwd(), "src/components/editor/LocalDocument.tsx"), "utf8");
+    const held = /held: \(\) => withinHoldLimit<number \| null>\(\s*async \(\) => \(await journal\.read\(documentId\)\)\.pending\.length, null,\s*\)/;
+    expect(code).toMatch(held);
+    const discard = code.slice(code.indexOf("discard: async () => {"), code.indexOf("journal.discardAfterSubmission(documentId)"));
+    expect(discard).toContain("if (disposed || ended()) throw");
+    expect(code).toContain('onDiscardAfterSubmission={phase === "signed-out" ? undefined : ');
   });
 });
 

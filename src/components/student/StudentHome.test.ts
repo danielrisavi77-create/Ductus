@@ -27,7 +27,10 @@ const courses: MyCourse[] = [
   { id: COURSE_B, name: "Izmišljeni kolegij B", assignments: [] },
 ];
 
-const render = (read: MyAssignmentsRead) => renderToStaticMarkup(createElement(StudentHome, { read }));
+// Stands in for EnrollForm, a client component the page passes in.
+const ENROLL = createElement("form", { "data-upis": "inline" });
+const render = (read: MyAssignmentsRead) => renderToStaticMarkup(createElement(StudentHome, { read, enroll: ENROLL }));
+const empty = home.empty;
 
 describe("StudentHome, Archivum S01 on /zadaci (DAN-344)", () => {
   it("draws every own course as a card with its assignments, each through /rad", () => {
@@ -68,17 +71,30 @@ describe("StudentHome, Archivum S01 on /zadaci (DAN-344)", () => {
     expect(html).toContain(home.unavailableBody);
     expect(html).toContain(`href="/zadaci"`);
     expect(html).toContain(messagesHr.auth.retry);
-    expect(html).not.toContain(t.empty);
+    expect(html).not.toContain(empty.heading);
+    expect(html).not.toContain("data-upis");
     expect(html).not.toContain(home.courses);
     expect(html).not.toContain(home.lede);
     expect(html).not.toContain("/rad?zadatak=");
     expect(html).not.toContain('href="/upis"');
   });
 
-  it("the empty list is the first arrival with a way to enrol, not the unavailable state", () => {
+  it("the empty list is S01_prazna with the enrolment form inline, not the unavailable state", () => {
     const html = render({ kind: "ready", courses: [] });
-    expect(html).toContain(t.empty);
-    expect(html.match(/href="\/upis"/g)).toHaveLength(1);
+    expect(html).toContain(empty.heading);
+    expect(html).toContain(empty.body);
+    expect(html).toContain(empty.codeHeading);
+    expect(html).toContain('<form data-upis="inline">');
+    expect(html).toContain(empty.nextHeading);
+    for (const step of empty.steps) {
+      expect(html).toContain(step.title);
+      expect(html).toContain(step.body);
+    }
+    expect(html.match(/<li/g)).toHaveLength(3);
+    // The PNG's two links have no target in the product and are left out.
+    expect(html).not.toMatch(/nije prikazan|nastavnik vidi/);
+    expect(html).not.toContain('href="/upis"');
+    expect(html).not.toContain(home.courses);
     expect(html).not.toContain('role="alert"');
     expect(html).not.toContain(home.unavailableHeading);
     expect(html).not.toContain("/rad?zadatak=");
@@ -103,6 +119,6 @@ describe("StudentHome, Archivum S01 on /zadaci (DAN-344)", () => {
   });
 
   it("the new texts pass the forbidden terms scanner", () => {
-    expect(findForbiddenTerms(Object.values(home).join("\n"))).toEqual([]);
+    expect(findForbiddenTerms(JSON.stringify(home))).toEqual([]);
   });
 });
