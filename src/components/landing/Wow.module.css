@@ -81,7 +81,7 @@
   margin: 0;
   min-height: 0;
   padding: 26px 28px;
-  border-radius: 10px;
+  border-radius: var(--radius);
 }
 
 .pane :global(.sheet):focus-within {
@@ -116,7 +116,7 @@
   padding: 12px 16px 14px;
   background: var(--raised);
   border: 1px solid var(--rule);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   font-size: 14px;
   line-height: 1.5;
   color: var(--ink);
