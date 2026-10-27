@@ -16,7 +16,12 @@ import {
   EVIDENCE_SEGMENT_SCHEMA_V2,
 } from "@/domain/forensics/evidence-segment-v2";
 
-import { MAX_REPLAY_PAGE_SEGMENTS, readReplayPage, type ReplayPage } from "./replay-reader";
+import {
+  MAX_REPLAY_CHECKPOINT_BYTES,
+  MAX_REPLAY_PAGE_SEGMENTS,
+  readReplayPage,
+  type ReplayPage,
+} from "./replay-reader";
 
 // Synthetic only: invented ids, people (Ana, Vesna) and Lorem ipsum.
 const INSTITUTION = "11111111-1111-4111-8111-111111111111";
@@ -231,6 +236,26 @@ describe("readReplayPage (DAN-344 R3)", () => {
     expect(first.status === "ok" && first.page.next).toBe(4);
     const last = await page(sourceOf(found(record.hashes)), store, 4);
     expect(last.status === "ok" && last.page).toMatchObject({ next: null, segments: [record.payloads[4]] });
+  });
+
+  it("counts 2 MiB for every checkpoint text a page asks for, and takes no longer text", async () => {
+    const breaks = Array.from({ length: 6 }, (_, i) => ({ initial: docHash(100 + i) }));
+    const record = await buildRecord([{}, ...breaks]);
+    const store = await storeOf(record);
+    const source = sourceOf(found(record.hashes));
+    const first = await page(source, store, 0);
+    // Three resumes are 6 MiB; a fourth would pass 8 MiB, so the page ends before it.
+    expect(first.status === "ok" && first.page.next).toBe(4);
+    expect(source.readCheckpoints.mock.calls[0][1]).toHaveLength(3);
+    // A later page that starts at a break counts its resume too, and still holds a segment.
+    const later = await page(sourceOf(found(record.hashes)), store, 4);
+    expect(later.status === "ok" && later.page).toMatchObject({ from: 4, next: null, segments: record.payloads.slice(4) });
+
+    const long = "x".repeat(MAX_REPLAY_CHECKPOINT_BYTES + 1);
+    const resume = await sha256WebCrypto(long);
+    const withLong = await buildRecord([{}, { initial: resume }]);
+    const result = await page(sourceOf(found(withLong.hashes), { [resume]: long }), await storeOf(withLong));
+    expect(result.status === "ok" && result.page.resumeDocuments).toStrictEqual({});
   });
 
   it("is unavailable, never a partial page, when stored bytes are not the listed record", async () => {

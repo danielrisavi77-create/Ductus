@@ -30,8 +30,15 @@ import { canonicalizeJcs } from "@/domain/forensics/jcs";
  */
 
 export const REPLAY_FORMAT = "ductus-evidence-replay-v1";
-/** Segment bytes per page; a page always holds at least one segment. */
+/**
+ * Bytes per page: the segments, plus MAX_REPLAY_CHECKPOINT_BYTES for every
+ * checkpoint text the page asks for (its start and each break's resume), so
+ * the texts are counted before they are read. A page always holds at least
+ * one segment.
+ */
 export const MAX_REPLAY_PAGE_BYTES = 8 * 1024 * 1024;
+/** The largest checkpoint text (evidence.document_checkpoint); a longer one is no checkpoint. */
+export const MAX_REPLAY_CHECKPOINT_BYTES = 2 * 1024 * 1024;
 /** Segments per page, which also bounds the checkpoint hashes one page asks for. */
 export const MAX_REPLAY_PAGE_SEGMENTS = 256;
 
@@ -144,20 +151,24 @@ export async function readReplayPage(
   let pageBytes = 0;
   let index = from;
   const decoder = new TextDecoder("utf-8", { fatal: true });
+  const encoder = new TextEncoder();
   // The document the first change applies to, asked for only on the first page.
   let start: string | null = null;
   while (index < hashes.length && page.segments.length < MAX_REPLAY_PAGE_SEGMENTS) {
     const current = await read(index);
     if (typeof current === "string") return unavailable(current);
     const { verified } = current;
-    if (page.segments.length > 0 && pageBytes + verified.byteLength > MAX_REPLAY_PAGE_BYTES) break;
+    const initial = verified.segment.initialDocumentHash;
+    const resumes = previous !== null && initial !== previous.segment.finalDocumentHash;
+    // A checkpoint text this segment adds to the page; revision 0 is a fixed short text.
+    const asks = initial !== REVISION_ZERO_SHA256 && (index === 0 || (resumes && !resumeHashes.has(initial)));
+    const cost = verified.byteLength + (asks ? MAX_REPLAY_CHECKPOINT_BYTES : 0);
+    if (page.segments.length > 0 && pageBytes + cost > MAX_REPLAY_PAGE_BYTES) break;
     // Verified canonical, so the bytes are valid UTF-8 and this text encodes back to them.
     page.segments.push(decoder.decode(current.bytes));
-    pageBytes += verified.byteLength;
-    if (previous !== null && verified.segment.initialDocumentHash !== previous.segment.finalDocumentHash) {
-      resumeHashes.add(verified.segment.initialDocumentHash);
-    }
-    if (index === 0) start = verified.segment.initialDocumentHash;
+    pageBytes += cost;
+    if (resumes) resumeHashes.add(initial);
+    if (index === 0) start = initial;
     previous = verified;
     index++;
   }
@@ -179,8 +190,9 @@ export async function readReplayPage(
     if (checkpoints.status !== "found") return unavailable("checkpoints_unavailable");
     for (const hash of wanted) {
       const text = checkpoints.texts.get(hash);
-      // Only text that hashes to the hash it was asked for; anything else is no checkpoint.
-      if (text === undefined || (await sha256WebCrypto(text)) !== hash) continue;
+      // Only text within the reserved size that hashes to the hash it was asked for; anything else is no checkpoint.
+      if (text === undefined || encoder.encode(text).byteLength > MAX_REPLAY_CHECKPOINT_BYTES) continue;
+      if ((await sha256WebCrypto(text)) !== hash) continue;
       if (resumeHashes.has(hash)) page.resumeDocuments[hash] = text;
       if (hash === start && page.startDocument === null) page.startDocument = text;
     }
