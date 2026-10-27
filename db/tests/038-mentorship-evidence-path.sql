@@ -84,8 +84,8 @@ LANGUAGE sql STABLE AS $$ SELECT xmax::text FROM institution.mentorship WHERE id
 
 -- Catalogue: the same two functions, owners, definer rights and grants.
 SELECT is(
-  (SELECT string_agg(format('%s %s %s %s', p.oid::regprocedure, pg_get_userbyid(p.proowner), p.prosecdef,
-                            'search_path=""' = ANY (p.proconfig)), '; ' ORDER BY p.oid::regprocedure::text)
+  (SELECT string_agg(format('%s %s %s %s', p.oid::regprocedure, pg_get_userbyid(p.proowner), p.prosecdef::text,
+                            ('search_path=""' = ANY (p.proconfig))::text), '; ' ORDER BY p.oid::regprocedure::text)
      FROM pg_proc p
     WHERE p.oid IN ('app.lock_student_assignment(uuid)'::regprocedure, 'app.teacher_assignment_students(uuid)'::regprocedure)),
   'app.lock_student_assignment(uuid) ductus_identity true true; app.teacher_assignment_students(uuid) ductus_identity true true',
@@ -115,7 +115,11 @@ SET CONSTRAINTS ALL IMMEDIATE;
 SET CONSTRAINTS evidence.evidence_document_current_revision_fkey DEFERRED;
 RESET ROLE;
 
--- 9: nothing holds the mentorship before the student's first call.
+-- 9: nothing holds the mentorship before the student's first call. The
+-- fixture's assignment insert already took the foreign key's KEY SHARE lock on
+-- ms1 in this transaction, so the owner rewrites the row first: the new
+-- version starts with xmax 0, and only a lock taken after this can set it.
+UPDATE institution.mentorship SET started_at = started_at WHERE id = pg_temp.id('ms1');
 SELECT is(pg_temp.ms_xmax(), '0', 'before any call nothing holds Ana''s mentorship');
 
 -- 1: Ana opens her mentorship's work.
