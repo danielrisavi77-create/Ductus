@@ -34,6 +34,9 @@ export const CRITICAL_PATHS = [
   // The allowlist that keeps the demo auth setup out of the login E2E web server, and its test (F-156).
   "scripts/demo/login-e2e-evidence.mjs",
   "scripts/demo/login-e2e-evidence.test.mjs",
+  // The local auth login provisioning and the test that guards its password check (F-159).
+  "scripts/db/provision-auth.mjs",
+  "scripts/db/provision-auth.test.mjs",
   "db/migrations/",
   "db/local/",
   "db/tests/",
