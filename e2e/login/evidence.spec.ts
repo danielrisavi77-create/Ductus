@@ -328,8 +328,20 @@ test("3d-2c2: /rad without an assignment sends no evidence", async ({ page }) =>
   expect(requests.map(pathOf)).toEqual([]);
 });
 
+/**
+ * F-155: the work is really submitted on the server, so the open route asked
+ * again after the 409 says so; the 409 itself is faked only to make its
+ * moment certain.
+ */
+async function submitOnServer(page: Page, documentId: string): Promise<void> {
+  await type(page, "Tekst prije predaje.");
+  await expect(chipOf(page)).toHaveAttribute("data-state", "SYNCED", { timeout: OPEN });
+  await seedSubmission(documentId);
+}
+
 test("3d-2c2a §4: a submission's 409 not_accepting makes the sheet read-only with its notice", async ({ page }) => {
   const { documentId } = await openSheet(page);
+  await submitOnServer(page, documentId);
   await page.route(COMMIT, (route) => route.fulfill({ status: 409, json: { status: "not_accepting" } }));
   await type(page, "Tekst nakon predaje.");
   await expect(page.getByRole("status").filter({ hasText: t.editor.submittedReadOnly })).toBeVisible({ timeout: OPEN });
@@ -343,6 +355,7 @@ test("3d-2c2a §4: a submission's 409 not_accepting makes the sheet read-only wi
 /** The submitted sheet with rows after the submission, and the open sign-out dialog. */
 async function submittedWithRows(page: Page): Promise<{ documentId: string; held: number }> {
   const { documentId } = await openSheet(page);
+  await submitOnServer(page, documentId);
   await page.route(COMMIT, (route) => route.fulfill({ status: 409, json: { status: "not_accepting" } }));
   await type(page, "Tekst nakon predaje.");
   await expect(page.getByRole("status").filter({ hasText: t.editor.submittedReadOnly })).toBeVisible({ timeout: OPEN });
@@ -352,6 +365,26 @@ async function submittedWithRows(page: Page): Promise<{ documentId: string; held
   return { documentId, held };
 }
 
+// F-155: the commit route says not_accepting also for a current version not
+// acknowledged or not open yet. Without a submission on the server the sheet
+// is not closed as submitted, and sign-out offers no deletion of the rows.
+test("F-155: a 409 not_accepting without a submission neither closes the sheet nor offers deletion", async ({ page }) => {
+  const { documentId } = await openSheet(page);
+  await page.route(COMMIT, (route) => route.fulfill({ status: 409, json: { status: "not_accepting" } }));
+  const opens = page.waitForResponse((r) => pathOf(r.request()) === "/api/evidence/open" && r.request().method() === "POST", { timeout: OPEN });
+  await type(page, "Tekst uz novu verziju zadatka.");
+  // The 409 makes the client ask the open route again, which says not submitted.
+  expect((await (await opens).json()).submitted).toBe(false);
+  await expect(page.getByRole("status").filter({ hasText: t.editor.submittedReadOnly })).toHaveCount(0);
+  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+  const held = (await localOf(page, documentId)).pending.length;
+  expect(held).toBeGreaterThan(0);
+  await page.getByRole("button", { name: t.auth.logout, exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("button", { name: t.auth.afterSubmissionDiscard })).toHaveCount(0);
+  expect((await localOf(page, documentId)).pending).toHaveLength(held);
+});
 // F-154 (owner decision 1.3): what was written after the submission stays on
 // sign-out (D-118) and goes only on the second click of its own button.
 test("F-154: after a submission the dialog names its own rows, offers the export, and deletes only on the second click", async ({ page }) => {
