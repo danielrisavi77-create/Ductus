@@ -49,7 +49,7 @@ async function segmentOf(stepCounts: number[], minutes: number) {
 }
 
 const plan = fc
-  .record({ stepCounts: fc.array(fc.integer({ min: 1, max: 4 }), { minLength: 1, maxLength: 5 }), minutes: fc.integer({ min: 0, max: 3 }) })
+  .record({ stepCounts: fc.array(fc.integer({ min: 1, max: 4 }), { minLength: 1, maxLength: 5 }), minutes: fc.integer({ min: 0, max: 1 }) })
   .chain(({ stepCounts, minutes }) => {
     const total = stepCounts.reduce((a, b) => a + b, 0);
     const slots = (minutes + 1) * (MINUTE_MS / 100);

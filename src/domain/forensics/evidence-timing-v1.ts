@@ -20,7 +20,8 @@ import { canonicalizeJcs } from "./jcs";
  *   (the start of its minute, D-24), a multiple of 100 (D-56);
  * - offsets never fall across the whole segment, and each is below
  *   `observedEndedAt − observedStartedAt + 60 000`, so within the minutes the
- *   segment already carries;
+ *   segment already carries; a segment whose minutes are more than one
+ *   apart gets no timing (D-24: a segment lasts at most 30 s);
  * - no document, person, session, device or absolute time; any other field
  *   is refused.
  */
@@ -32,6 +33,13 @@ export const MAX_EVIDENCE_TIMING_BYTES = 1024 * 1024;
 export const EVIDENCE_TIMING_STEP_MS = 100;
 
 const MINUTE_MS = 60_000;
+/**
+ * A segment closes within 30 s (D-24; `MAX_SEGMENT_SPAN_MS` in
+ * src/editor/capture.ts), so its two minutes are the same or adjacent. A
+ * segment that declares a longer span gets no timing: its steps are never
+ * spread over more than two minutes, and it replays at a uniform rhythm.
+ */
+const MAX_TIMED_SEGMENT_SPAN_MS = MINUTE_MS;
 const SHA256_HEX = /^[0-9a-f]{64}$/;
 
 export type EvidenceTimingEventV1 = { sequence: number; stepOffsetsMs: number[] };
@@ -42,7 +50,14 @@ export type EvidenceTimingV1 = {
   events: EvidenceTimingEventV1[];
 };
 
-export type EvidenceTimingFailureV1 = "too_large" | "invalid" | "not_canonical" | "other_segment" | "wrong_shape" | "wrong_offset";
+export type EvidenceTimingFailureV1 =
+  | "too_large"
+  | "invalid"
+  | "not_canonical"
+  | "other_segment"
+  | "long_segment"
+  | "wrong_shape"
+  | "wrong_offset";
 
 export type EvidenceTimingVerificationV1 =
   | { ok: true; timing: EvidenceTimingV1; sha256: string; byteLength: number }
@@ -107,8 +122,9 @@ export async function verifyEvidenceTimingV1(
 
   const events = segment.segment.events;
   if (parsed.events.length !== events.length) return { ok: false, reason: "wrong_shape" };
-  const span = Date.parse(segment.segment.observedEndedAt) - Date.parse(segment.segment.observedStartedAt) + MINUTE_MS;
-  if (!Number.isSafeInteger(span) || span <= 0) return { ok: false, reason: "wrong_offset" };
+  const declared = Date.parse(segment.segment.observedEndedAt) - Date.parse(segment.segment.observedStartedAt);
+  if (!(declared >= 0 && declared <= MAX_TIMED_SEGMENT_SPAN_MS)) return { ok: false, reason: "long_segment" };
+  const span = declared + MINUTE_MS;
   let last = 0;
   for (const [index, event] of parsed.events.entries()) {
     if (event.sequence !== events[index].sequence || event.stepOffsetsMs.length !== events[index].steps.length) {

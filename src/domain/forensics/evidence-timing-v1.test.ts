@@ -76,10 +76,20 @@ describe("ductus-evidence-timing-v1 (DAN-344 P1)", () => {
   });
 
   it("accepts equal offsets and the last 100 ms of the segment's minutes", async () => {
-    const seg = await segment(17, "10:02");
-    // 10:00 to 10:02 carries three minutes: offsets below 180 000.
-    expect((await verifyValue(timingOf(seg, [[0, 0], [179_900]]), seg)).ok).toBe(true);
-    expect(await verifyValue(timingOf(seg, [[0, 0], [180_000]]), seg)).toStrictEqual({ ok: false, reason: "wrong_offset" });
+    const seg = await segment(17, "10:01");
+    // 10:00 to 10:01 carries two minutes: offsets below 120 000.
+    expect((await verifyValue(timingOf(seg, [[0, 0], [119_900]]), seg)).ok).toBe(true);
+    expect(await verifyValue(timingOf(seg, [[0, 0], [120_000]]), seg)).toStrictEqual({ ok: false, reason: "wrong_offset" });
+    const oneMinute = await segment(17, "10:00");
+    expect((await verifyValue(timingOf(oneMinute, [[0, 0], [59_900]]), oneMinute)).ok).toBe(true);
+    expect(await verifyValue(timingOf(oneMinute, [[0, 0], [60_000]]), oneMinute)).toStrictEqual({ ok: false, reason: "wrong_offset" });
+  });
+
+  it("gives no timing to a segment whose minutes are more than one apart (D-24: at most 30 s)", async () => {
+    for (const ended of ["10:02", "23:59"]) {
+      const seg = await segment(17, ended);
+      expect(await verifyValue(timingOf(seg, [[0, 0], [300]]), seg)).toStrictEqual({ ok: false, reason: "long_segment" });
+    }
   });
 
   it("refuses the timing of another segment, or one that does not follow its events and steps", async () => {
