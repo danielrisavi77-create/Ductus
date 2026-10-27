@@ -13,7 +13,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 const DURABLE = "Spremljeno na uređaju";
 const OFFLINE_SAVING = "Bez mreže. Tekst se i dalje sprema na ovom uređaju.";
-const QUOTA = "Na uređaju nema dovoljno prostora, pa se promjene više ne spremaju. Izvezi tekst da ga ne izgubiš.";
+const QUOTA = "Na uređaju nema dovoljno prostora, pa se promjene više ne spremaju. Izvezite tekst da ga ne izgubite.";
 const FIRST = "Prvi odlomak izmišljenog rada, napisan s mrežom.";
 const SECOND = "Drugi odlomak, napisan bez mreže.";
 
