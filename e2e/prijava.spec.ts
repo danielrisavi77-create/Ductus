@@ -28,13 +28,13 @@ test.describe("without JavaScript", () => {
       "href",
       "/api/auth/login?returnTo=%2F",
     );
-    await page.getByText("Trebaš pomoć?").click();
+    await page.getByText("Trebate pomoć?").click();
     await expect(page.getByRole("link", { name: "Službena pomoć AAI@EduHr" })).toHaveAttribute(
       "href",
       "https://www.aaiedu.hr/kontakt",
     );
-    await page.getByText("Prvi dolazak ili imaš kod zadatka?").click();
-    await expect(page.getByText("Kod zadatka od nastavnika upisuješ nakon prijave.", { exact: false })).toBeVisible();
+    await page.getByText("Prvi dolazak ili imate kod zadatka?").click();
+    await expect(page.getByText("Kod zadatka od nastavnika upisujete nakon prijave.", { exact: false })).toBeVisible();
     await page.getByRole("banner").getByRole("link", { name: "Na naslovnicu" }).click();
     await expect(page).toHaveURL(/\/$/);
     await page.getByRole("banner").getByRole("link", { name: "Prijava", exact: true }).click();

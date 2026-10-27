@@ -28,8 +28,8 @@ test("V1: /prijava matches its baseline and its sign-in structure", async ({ pag
   await expect(main).toMatchAriaSnapshot(`
     - region "Dobro došli u svoj prostor.":
       - heading "Dobro došli u svoj prostor." [level=1]
-    - region "Tvoj akademski identitet.":
-      - heading "Tvoj akademski identitet." [level=2]
+    - region "Vaš akademski identitet.":
+      - heading "Vaš akademski identitet." [level=2]
       - link "Prijava sustavom AAI@EduHr":
         - /url: /api/auth/login?returnTo=%2F
   `);
