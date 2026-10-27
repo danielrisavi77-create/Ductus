@@ -1,0 +1,256 @@
+.view {
+  width: 100%;
+  min-width: 0;
+  color: var(--ink);
+}
+
+.heading {
+  padding-bottom: 27px;
+  margin-bottom: 14px;
+}
+
+.heading h1 {
+  margin: 0 0 3px;
+  font-family: var(--ff-display);
+  font-size: clamp(3.25rem, 6vw, 5.125rem);
+  font-weight: 400;
+  line-height: 1.05;
+}
+
+.heading p {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 1.1rem;
+}
+
+.filters {
+  display: flex;
+  gap: 26px;
+  min-height: 56px;
+  margin-bottom: 25px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.filters button {
+  position: relative;
+  border: 0;
+  padding: 12px 4px;
+  background: none;
+  color: var(--ink-2);
+  font-size: 1.25rem;
+}
+
+.filters button[aria-pressed="true"] {
+  color: var(--ink);
+}
+
+.filters button[aria-pressed="true"]::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 3px;
+  background: var(--accent);
+  content: "";
+}
+
+.list {
+  display: grid;
+  gap: 18px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.card {
+  display: grid;
+  grid-template-columns: 68px 84px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 21px;
+  min-height: 148px;
+  padding: 23px 20px 23px 14px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.new {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--accent);
+  font-size: 13px;
+}
+
+.new span {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.iconBox {
+  display: grid;
+  width: 84px;
+  height: 84px;
+  place-items: center;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  color: var(--ink-2);
+}
+
+.iconBox svg {
+  width: 38px;
+  height: 38px;
+}
+
+.copy {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.copy h2,
+.state h2 {
+  margin: 0 0 5px;
+  font-family: var(--ff-display);
+  font-size: 30px;
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+.copy p {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 17px;
+}
+
+.copy small {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink-2);
+  font-size: 15px;
+}
+
+.open,
+.textButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 20px;
+  min-height: 44px;
+  color: var(--accent);
+  font-size: 16px;
+  text-decoration: underline;
+  text-underline-offset: 5px;
+}
+
+.open svg {
+  flex: none;
+  width: 21px;
+  height: 21px;
+}
+
+.textButton {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.state {
+  display: flex;
+  min-height: 300px;
+  padding: 45px 24px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  text-align: center;
+}
+
+.state > svg {
+  width: 48px;
+  height: 48px;
+  color: var(--ink-2);
+}
+
+.state h2 {
+  margin: 20px 0 8px;
+}
+
+.state p {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 18px;
+}
+
+.partial {
+  margin: 16px 0 0;
+  color: var(--ink-2);
+}
+
+@media (max-width: 900px) {
+  .card {
+    grid-template-columns: 50px 66px minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .iconBox {
+    width: 66px;
+    height: 66px;
+  }
+
+  .card .open {
+    grid-column: 3;
+    justify-self: start;
+  }
+
+  .copy h2 {
+    font-size: 25px;
+  }
+}
+
+@media (max-width: 560px) {
+  .filters {
+    gap: 18px;
+  }
+
+  .filters button {
+    font-size: 17px;
+  }
+
+  .card {
+    grid-template-columns: 42px 54px minmax(0, 1fr);
+    gap: 10px;
+    padding: 16px 12px;
+  }
+
+  .new {
+    gap: 4px;
+    font-size: 11px;
+  }
+
+  .new span {
+    width: 8px;
+    height: 8px;
+  }
+
+  .iconBox {
+    width: 54px;
+    height: 54px;
+  }
+
+  .iconBox svg {
+    width: 29px;
+    height: 29px;
+  }
+
+  .copy h2 {
+    font-size: 23px;
+  }
+
+  .copy p {
+    font-size: 14px;
+  }
+}
