@@ -38,6 +38,14 @@ export interface ReplayStepReplayer<TDocument> {
    * after it. Throws or rejects on any step it refuses.
    */
   steps(document: TDocument, event: EvidenceEventV2): AsyncIterable<{ document: TDocument; blockIds: readonly string[] }>;
+  /**
+   * The editor's JSON of any document the steps produce, for display only:
+   * never hashed or compared. Inside an event a document need not be a
+   * canonical one (a split block has no id until the event's next step, a
+   * cleared document is empty until text is typed), so `toCanonical` would
+   * refuse it.
+   */
+  toView(document: TDocument): JcsJsonValue;
   /** Plain text of the top-level block with that id, or `null` when there is none. */
   blockText(document: TDocument, blockId: string): string | null;
 }
@@ -84,8 +92,12 @@ export type ReplayTimeline =
       markers: readonly ReplayMarker[];
       /** `stopped` when a break had no document to continue from. */
       end: "complete" | "stopped";
-      /** JCS text of the document after change `index`; 0 is the start. */
-      documentAt(index: number): string;
+      /**
+       * The editor's JSON of the document after change `index`; 0 is the
+       * start. Every one is the result of verified steps; the one after the
+       * last step of each event is the document of that event's verified hash.
+       */
+      documentAt(index: number): JcsJsonValue;
       blockHistory(blockId: string): ReplayBlockChange[];
     }
   | { ok: false; reason: ReplayTimelineFailure };
@@ -238,7 +250,7 @@ export async function buildReplayTimeline<TDocument>(
     changes,
     markers,
     end,
-    documentAt: (index) => canonicalizeJcs(replayer.toCanonical(at(index))),
+    documentAt: (index) => replayer.toView(at(index)),
     blockHistory: (blockId) =>
       changes
         .filter((change) => change.blockIds.includes(blockId))

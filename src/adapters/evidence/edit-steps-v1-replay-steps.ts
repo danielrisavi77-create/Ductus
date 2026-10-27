@@ -1,6 +1,7 @@
 import type { Node as PmNode } from "@tiptap/pm/model";
 
 import type { EvidenceEventV2 } from "@/domain/forensics/evidence-segment-v2";
+import type { JcsJsonValue } from "@/domain/forensics/jcs";
 import type { ReplayStepReplayer } from "@/domain/projection/replay-timeline";
 
 import { createBrowserEditStepsV1Replayer } from "./edit-steps-v1-browser-replayer";
@@ -42,6 +43,7 @@ export function createBrowserReplayStepsV1(): ReplayStepReplayer<PmNode> {
     transactionFormat: replayer.transactionFormat,
     load: replayer.load,
     toCanonical: replayer.toCanonical,
+    toView: (document: PmNode) => document.toJSON() as JcsJsonValue,
     async *steps(document: PmNode, event: EvidenceEventV2) {
       let current = document;
       for (const step of event.steps) {

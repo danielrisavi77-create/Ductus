@@ -40,6 +40,9 @@ const steps = createBrowserReplayStepsV1();
 const schema = server.load(START).type.schema;
 const sha = (value: string) => createHash("sha256").update(value, "utf8").digest("hex");
 const jcs = (document: PmNode) => canonicalizeJcs(server.toCanonical(document));
+type ViewNode = { text?: string; attrs?: { nodeId?: unknown }; content?: ViewNode[] };
+const blocksOf = (view: JcsJsonValue) => (view as ViewNode).content ?? [];
+const firstText = (view: JcsJsonValue) => blocksOf(view)[0]?.content?.[0]?.text;
 
 type Edit = { source?: EvidenceSourceV2; edit: (tr: Transform) => void };
 type SegmentPlan = { at: string; until?: string; events: Edit[]; from?: PmNode };
@@ -135,10 +138,10 @@ describe("buildReplayTimeline (DAN-344 §4, D-143)", () => {
     expect(timeline.changes.every((c) => c.evidenceKind === "observed")).toBe(true);
     expect(timeline.changes[0].minute).toStrictEqual({ from: "2026-10-20T10:00:00.000Z", to: "2026-10-20T10:02:00.000Z" });
     // Character by character: the document after each step.
-    expect(JSON.parse(timeline.documentAt(1)).nodes[0].children[0].text).toBe("Odlomak A lorem.X");
-    expect(JSON.parse(timeline.documentAt(2)).nodes[0].children[0].text).toBe("Odlomak A lorem.XY");
-    expect(timeline.documentAt(0)).toBe(jcs(start));
-    expect(timeline.documentAt(6)).toBe(jcs(r.ends[0]));
+    expect(firstText(timeline.documentAt(1))).toBe("Odlomak A lorem.X");
+    expect(firstText(timeline.documentAt(2))).toBe("Odlomak A lorem.XY");
+    expect(timeline.documentAt(0)).toStrictEqual(start.toJSON());
+    expect(timeline.documentAt(6)).toStrictEqual(r.ends[0].toJSON());
     expect(() => timeline.documentAt(7)).toThrow(RangeError);
     expect(timeline.end).toBe("complete");
   });
@@ -177,7 +180,7 @@ describe("buildReplayTimeline (DAN-344 §4, D-143)", () => {
     expect(resumed.markers).toContainEqual({ kind: "gap", beforeIndex: 2, resumed: true });
     expect(resumed.changes).toHaveLength(2);
     expect(resumed.end).toBe("complete");
-    expect(resumed.documentAt(2)).toBe(jcs(r.ends[1]));
+    expect(resumed.documentAt(2)).toStrictEqual(r.ends[1].toJSON());
 
     const stopped = await build(r);
     if (!stopped.ok) throw new Error(stopped.reason);
@@ -272,6 +275,10 @@ describe("buildReplayTimeline (DAN-344 §4, D-143)", () => {
       { index: 2, before: null, after: "A lorem.", removed: "", inserted: "A lorem." },
     ]);
     expect(timeline.blockHistory(B)).toStrictEqual([]);
+    // Between the two steps the new block has no id yet: still shown, never refused.
+    expect(blocksOf(timeline.documentAt(1)).map((b) => b.attrs?.nodeId ?? null)).toStrictEqual([A, null, B, C]);
+    expect(blocksOf(timeline.documentAt(1))[1].content?.[0]?.text).toBe("A lorem.");
+    expect(timeline.documentAt(2)).toStrictEqual(r.ends[0].toJSON());
   });
 
   it("carries no field that measures time, speed or a person", async () => {
