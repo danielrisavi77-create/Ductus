@@ -830,6 +830,18 @@ export const hr = {
       readNotice: "Pročitaj upute",
       unavailableHeading: "Prikaz trenutačno nije dostupan.",
       unavailableBody: "Podatke nije bilo moguće učitati. To ne znači da nema kolegija ili radova.",
+      // S01_prazna: the first arrival, verbatim from the package's PNG.
+      empty: {
+        heading: "Još nemate kolegija.",
+        body: "Ovdje će se prikazati vaši kolegiji i njihovi zadaci.",
+        codeHeading: "Imate kod kolegija?",
+        nextHeading: "Što slijedi nakon upisa?",
+        steps: [
+          { title: "Odaberite zadatak", body: "U svakom kolegiju nastavnik vam dodjeljuje zadatke." },
+          { title: "Pročitajte upute", body: "Svaki zadatak dolazi s jasnim uputama i očekivanjima." },
+          { title: "Otvorite rad", body: "Nakon što ste spremni, započinjete pisanje u uređivaču." },
+        ],
+      },
     },
     signedOut: "Prijavite se da vidite zadatak.",
     signIn: "Prijavi se",

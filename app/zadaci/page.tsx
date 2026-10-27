@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import AppShell from "@/components/shell/AppShell";
 import { shellSession } from "@/components/shell/shell-session";
 import { readShellAccount } from "@/components/shell/shell-role";
+import EnrollForm from "@/components/student/EnrollForm";
 import { readMyAssignments } from "@/components/student/my-assignments-read";
 import StudentHome from "@/components/student/StudentHome";
 import { messagesHr } from "@/lib/i18n/messages.hr";
@@ -18,7 +19,8 @@ export const metadata = { title: `${t.title} · ${messagesHr.app.name}` };
 // #711 contract 6404612273: the student's courses and assignments, from one
 // RLS read under the session cookie. The page adds and filters nothing; /rad
 // decides each assignment. Without a session there is no read at all.
-// DAN-344: drawn as Archivum S01 by StudentHome.
+// DAN-344: drawn as Archivum S01 by StudentHome; the first arrival
+// (S01_prazna) holds the same EnrollForm as /upis.
 export default async function MyAssignmentsPage() {
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
   const [read, { role, scope }] = await Promise.all([
@@ -27,7 +29,7 @@ export default async function MyAssignmentsPage() {
   ]);
   return (
     <AppShell session={shellSession(token)} role={role} scope={scope} current="/zadaci" crumbs={[t.title]}>
-      <StudentHome read={read} />
+      <StudentHome read={read} enroll={<EnrollForm />} />
     </AppShell>
   );
 }
