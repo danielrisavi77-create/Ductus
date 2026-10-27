@@ -16,13 +16,13 @@ const assignment = (id: string, title: string, dueAt: string, enrolledStudents: 
 });
 const COURSES: TeacherCourse[] = [
   {
-    id: "00000000-0000-4000-8000-0000000000c1", name: "Kolegij A", academicYear: "2026/2027",
+    id: "00000000-0000-4000-8000-0000000000c1", name: "Kolegij A", academicYear: "2026/2027", aiPolicy: "partially_allowed",
     assignments: [
       assignment("00000000-0000-4000-8000-0000000000a2", "Zadatak 2", "2026-10-31T22:59:00.000Z", 12),
       assignment("00000000-0000-4000-8000-0000000000a1", "Zadatak 1", "2026-11-14T22:59:00.000Z", 1),
     ],
   },
-  { id: "00000000-0000-4000-8000-0000000000c2", name: "Kolegij B", academicYear: "2025/2026", assignments: [] },
+  { id: "00000000-0000-4000-8000-0000000000c2", name: "Kolegij B", academicYear: "2025/2026", aiPolicy: "prohibited", assignments: [] },
 ];
 
 const render = (courses: TeacherCourse[], works?: Record<string, AssignmentWork[] | null>) =>
