@@ -9,7 +9,13 @@
 BEGIN;
 SET LOCAL lc_messages TO 'C';
 \ir fixtures/evidence-acceptance.inc
+-- evidence-acceptance.inc leaves every constraint IMMEDIATE; mentorship.inc
+-- writes an assignment before its first version, as institution.inc does
+-- under the key's INITIALLY DEFERRED, so defer it for the fixture and check it
+-- at once after.
+SET CONSTRAINTS institution.assignment_current_version_fkey DEFERRED;
 \ir fixtures/mentorship.inc
+SET CONSTRAINTS institution.assignment_current_version_fkey IMMEDIATE;
 SELECT no_plan();
 
 CREATE FUNCTION pg_temp.val(p_name text) RETURNS text
