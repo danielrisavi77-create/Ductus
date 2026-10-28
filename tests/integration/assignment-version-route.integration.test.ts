@@ -94,6 +94,7 @@ afterAll(async () => {
   await admin.query("DELETE FROM institution.course WHERE institution_id = ANY ($1)", [faculties]);
   await admin.query("DELETE FROM institution.institution_role WHERE institution_id = ANY ($1)", [faculties]);
   await admin.query("DELETE FROM institution.institution_settings WHERE institution_id = ANY ($1)", [faculties]);
+  await admin.query("DELETE FROM institution.notification WHERE institution_id = ANY ($1)", [faculties]);
   await admin.query("DELETE FROM identity.session WHERE user_id = ANY ($1)", [ids]);
   await admin.query("DELETE FROM identity.user_account WHERE id = ANY ($1)", [ids]);
   await admin.query("DELETE FROM identity.institution WHERE id = ANY ($1)", [faculties]);
@@ -126,6 +127,16 @@ describe("new assignment version: real POST, session and database (DAN-292)", ()
       expect(await response.json()).toEqual({ error: "invalid_input" });
     }
     expect(await versions()).toEqual({ current_version: 2, rows: 2, title: "Izmišljeni esej, druga verzija" });
+    const events = await admin.query(
+      "SELECT recipient_id, kind, target_id, event_key FROM institution.notification WHERE target_id = $1",
+      [assignment],
+    );
+    expect(events.rows).toEqual([{
+      recipient_id: people.student.id,
+      kind: "assignment_version",
+      target_id: assignment,
+      event_key: `assignment_version:${assignment}:2`,
+    }]);
   });
 
   it("lets exactly one of two requests with the same expectedVersion write", async () => {
@@ -133,5 +144,12 @@ describe("new assignment version: real POST, session and database (DAN-292)", ()
     expect(answers.map((answer) => answer.status).sort()).toEqual([201, 409]);
     const winner = answers[0].status === 201 ? "Treća A" : "Treća B";
     expect(await versions()).toEqual({ current_version: 3, rows: 3, title: winner });
+    const events = await admin.query(
+      "SELECT event_key FROM institution.notification WHERE target_id = $1 ORDER BY event_key", [assignment],
+    );
+    expect(events.rows).toEqual([
+      { event_key: `assignment_version:${assignment}:2` },
+      { event_key: `assignment_version:${assignment}:3` },
+    ]);
   });
 });
