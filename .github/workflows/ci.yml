@@ -87,7 +87,17 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/engineering/pr-metadata-check.mjs
-      - run: pnpm test:unit
+      - name: Unit tests (changed or full)
+        env:
+          # When set, run only tests reachable from the diff (vitest --changed).
+          # Unset or empty runs the full unit suite.
+          DUCTUS_UNIT_CHANGED: ${{ github.event_name == 'pull_request' && '1' || '' }}
+        run: |
+          if [ -n "$DUCTUS_UNIT_CHANGED" ]; then
+            pnpm exec vitest run --changed origin/${{ github.base_ref }} --reporter=dot || pnpm test:unit
+          else
+            pnpm test:unit
+          fi
       - name: Engineering system unit tests
         run: shopt -s failglob; node --test scripts/engineering/*.test.mjs scripts/orchestrator/*.test.mjs
       - run: pnpm test:property
@@ -125,11 +135,11 @@ jobs:
   # Separate hosted runners give both E2E suites their own ports and database.
   # The standard suite also retains pgTAP and integration checks.
   stack-e2e:
-    name: Standard E2E and database (${{ matrix.shard }}/2)
+    name: Standard E2E and database (${{ matrix.shard }}/3)
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3]
     needs: scope
     if: ${{ !cancelled() && needs.scope.result == 'success' && needs.scope.outputs.profile == 'full' }}
     runs-on: ubuntu-latest
@@ -164,7 +174,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .next/cache
-          key: stack-next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          key: stack-next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             stack-next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
       # Browser binaries only; "Install browsers" below still runs and installs
@@ -233,9 +243,9 @@ jobs:
           ALL_ENGINES: ${{ github.event_name != 'pull_request' }}
         run: |
           if [ "$ALL_ENGINES" = "true" ]; then
-            pnpm test:e2e --shard="$E2E_SHARD/2"
+            pnpm test:e2e --shard="$E2E_SHARD/3"
           else
-            pnpm test:e2e --project=desktop --project=mobile --shard="$E2E_SHARD/2"
+            pnpm test:e2e --project=desktop --project=mobile --shard="$E2E_SHARD/3"
           fi
       - name: Collect shard evidence
         if: ${{ needs.scope.outputs.profile == 'full' && !cancelled() }}
@@ -311,11 +321,11 @@ jobs:
   # Each shard is its own runner with its own stack and database, so the
   # shared demo account stays one worker per database (playwright.login.config.ts).
   stack-login:
-    name: Login E2E (${{ matrix.shard }}/2)
+    name: Login E2E (${{ matrix.shard }}/3)
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3]
     needs: scope
     if: ${{ !cancelled() && needs.scope.result == 'success' && needs.scope.outputs.profile == 'full' }}
     runs-on: ubuntu-latest
@@ -384,7 +394,7 @@ jobs:
         env:
           LOGIN_E2E_JSON: .ci-reports/results.json
           LOGIN_SHARD: ${{ matrix.shard }}
-        run: pnpm test:e2e:login --shard="$LOGIN_SHARD/2"
+        run: pnpm test:e2e:login --shard="$LOGIN_SHARD/3"
       - name: Upload login shard evidence
         if: ${{ needs.scope.outputs.profile == 'full' && !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
