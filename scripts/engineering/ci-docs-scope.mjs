@@ -15,12 +15,15 @@ const ORDINARY_DOCS = new Set([
   "docs/privacy/05-otvorena-pitanja.md",
 ]);
 
-const TEST_DIRS = ["tests/", "e2e/", "db/tests/"];
-const TEST_NAME_RE = /\.(?:test|spec)\.[cm]?[jt]sx?$/i;
+// The tests profile skips the stack, DB, browser and property jobs (#971), so it
+// may only hold plain unit tests that the always-on unit job still runs.
+const SKIPPED_TEST_DIRS = ["e2e/", "db/tests/", "tests/integration/", "tests/property/"];
+const UNIT_TEST_RE = /\.(?:test|spec)\.[cm]?[jt]sx?$/i;
+const PROPERTY_TEST_RE = /\.property\.test\.[cm]?[jt]sx?$/i;
 
-function isTestPath(path) {
+function isUnitTestPath(path) {
   const p = path.toLowerCase();
-  return TEST_DIRS.some((d) => p.startsWith(d)) || TEST_NAME_RE.test(p);
+  return UNIT_TEST_RE.test(p) && !PROPERTY_TEST_RE.test(p) && !SKIPPED_TEST_DIRS.some((d) => p.startsWith(d));
 }
 
 export function classifyDiff(raw) {
@@ -36,7 +39,7 @@ export function classifyDiff(raw) {
     const expected = { A: "000000 100644", D: "100644 000000", M: "100644 100644" }[status];
     const path = fields[i + 1];
     if (`${before} ${after}` !== expected || !ORDINARY_DOCS.has(path)) ordinary = false;
-    if (!isTestPath(path)) testOnly = false;
+    if (`${before} ${after}` !== expected || !isUnitTestPath(path)) testOnly = false;
   }
   if (ordinary) return "docs";
   if (testOnly && fields.length > 0) return "tests";
