@@ -500,8 +500,19 @@ function evaluateGateCore({
       review.verdict === "PASS",
   );
 
-  if (passingReviews.length === 0) {
+  // D-XXX: Risk low (no D-97) and test-only critical do not require independent review.
+  // Negative verdicts above still hold. D-97 paths are excluded by the caller / floor.
+  const lowNoReview = risk === "low";
+  const testOnlyNoReview = risk === "critical" && qaExempt === "tests";
+  if (passingReviews.length === 0 && !lowNoReview && !testOnlyNoReview) {
     return { state: "pending", description: "Waiting for independently authenticated review." };
+  }
+  if (passingReviews.length === 0 && (lowNoReview || testOnlyNoReview)) {
+    const kind = lowNoReview ? "low" : "critical, tests only";
+    return {
+      state: "success",
+      description: `No independent review required (${kind}).`,
+    };
   }
 
   const passingReviewerApps = new Set(
