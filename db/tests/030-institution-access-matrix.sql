@@ -137,7 +137,9 @@ SELECT bag_eq(
     'check_mentorship_version() definer',
     'notify_assignment_version() definer',
     'read_notification(p_notification_id uuid) definer app',
-    'mark_notification_read(p_notification_id uuid) definer app'
+    'mark_notification_read(p_notification_id uuid) definer app',
+    'read_comment_notification(p_notification_id uuid) definer app',
+    'read_submission_notification(p_notification_id uuid) definer app'
   ],
   'functions: exact signatures, which are SECURITY DEFINER and which ductus_app may call'
 );
