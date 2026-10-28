@@ -22,15 +22,60 @@ import {
   type EvidenceReplayFailureV2,
   type EvidenceStepReplayerV2,
 } from "@/domain/forensics/evidence-replay-v2";
-import type { EvidenceSegmentV2 } from "@/domain/forensics/evidence-segment-v2";
+import type { EvidenceSegment } from "@/domain/forensics/evidence-segment-v2";
 import { canonicalizeJcs, type JcsJsonValue } from "@/domain/forensics/jcs";
 
+/**
+ * What a receipt check says about the stored receipt of one segment (not
+ * `null`: a missing receipt is `receipt_missing` before any check).
+ * `unavailable` means the check could not be made, which is no word on the
+ * record; `mismatch` and `signature_invalid` block (D-11).
+ */
+export type EvidenceReceiptCheckResult =
+  | { status: "verified"; receiptId: string }
+  | { status: "mismatch" | "signature_invalid" }
+  | { status: "unavailable"; reason: string };
+
+export type EvidenceReceiptCheck = (input: {
+  receipt: unknown;
+  index: number;
+  evidencePackageId: string;
+  /** SHA-256 of the segment's verified bytes. */
+  segmentSha256: string;
+  /** Receipt id of the segment before, `null` for the first. */
+  previousReceiptId: string | null;
+}) => Promise<EvidenceReceiptCheckResult>;
+
+/** Receipts v1 under one signer: the check of the thin path (B-14). */
+export function signerReceiptCheck(signer: Pick<SigningKeyProvider, "verify">): EvidenceReceiptCheck {
+  return async ({ receipt, evidencePackageId, segmentSha256, previousReceiptId }) => {
+    // The signature covers the payload only; a field next to it, or a payload
+    // of another shape, is not what was issued.
+    if (!isSignedEvidenceReceipt(receipt)) return { status: "mismatch" };
+    // A payload with no canonical form has no digest, so it is not the signed one.
+    const digest = await digestEvidenceReceiptPayload(receipt.payload).catch(() => null);
+    if (
+      digest === null ||
+      receipt.payload.evidencePackageId !== evidencePackageId ||
+      receipt.payload.segmentHash !== segmentSha256 ||
+      receipt.payload.previousReceiptId !== previousReceiptId ||
+      receipt.payloadDigestSha256 !== digest.sha256
+    ) {
+      return { status: "mismatch" };
+    }
+    const valid = await signer.verify(digest.bytes, receipt.signature);
+    return valid ? { status: "verified", receiptId: receipt.payload.receiptId } : { status: "signature_invalid" };
+  };
+}
+
 type ReconstructionDependencies<TDocument> = {
-  chain: EvidenceChainReader;
+  chain: EvidenceChainReader<unknown>;
   payloads: EvidencePayloadReader;
-  signer: Pick<SigningKeyProvider, "verify">;
   replayer: EvidenceStepReplayerV2<TDocument>;
-};
+} & (
+  | { signer: Pick<SigningKeyProvider, "verify">; receipts?: undefined }
+  | { receipts: EvidenceReceiptCheck; signer?: undefined }
+);
 
 export type EvidenceReconstructionFailure =
   | EvidenceChainFailureV2
@@ -90,6 +135,8 @@ export type EvidenceReconstructionOutcome =
       reason: string;
     };
 
+const SHA256_HEX = /^[0-9a-f]{64}$/;
+
 function mismatch(
   reason: EvidenceReconstructionFailure,
   index: number | null,
@@ -132,10 +179,11 @@ function unavailable(
  * 3. Chain against the head: per segment `too_large` or `invalid_segment`,
  *    `predecessor_mismatch`, `document_mismatch`; then `head_mismatch`.
  * 4. `no_evidence`: the head is `null` and no segment is listed.
- * 5. Receipts, per segment: `receipt_missing`, `receipt_mismatch` (also a
- *    receipt with an unknown or malformed field, or with no canonical form),
- *    `unavailable` (verification),
- *    `receipt_signature_invalid`.
+ * 5. Receipts, per segment: `receipt_missing`, then the receipt check
+ *    (`signerReceiptCheck` for v1 unless another is given):
+ *    `receipt_mismatch` (also a receipt with an unknown or malformed field,
+ *    or with no canonical form), `unavailable` (verification, also when the
+ *    check throws), `receipt_signature_invalid`.
  * 6. `invalid_document`: the starting document cannot be loaded or hashed.
  * 7. The first break is located: at the start (index 0) when the first
  *    segment does not continue the starting document, otherwise the first
@@ -144,7 +192,8 @@ function unavailable(
  *    for a break at the start): `unsupported_format`,
  *    `document_hash_mismatch`, `step_failed`.
  * 9. `discontinuity`, for the break of step 7.
- * 10. `invalid_target`, then `target_mismatch`.
+ * 10. `invalid_target`, then `target_mismatch`; a target given by its hash
+ *    is compared with the hash of the replayed document.
  * 11. `match`.
  *
  * So the three outcomes that are not a fault (`no_evidence`, `discontinuity`,
@@ -162,10 +211,14 @@ export async function reconstructAndCompareEvidence<TDocument>(
   input: {
     evidencePackageId: string;
     initialDocument: JcsJsonValue;
-    expectedDocument: JcsJsonValue;
-  },
+  } & (
+    | { expectedDocument: JcsJsonValue; expectedDocumentSha256?: undefined }
+    /** The target by its hash (a stored revision's `content_hash`, BACKEND 4.10 t. 1). */
+    | { expectedDocumentSha256: string; expectedDocument?: undefined }
+  ),
 ): Promise<EvidenceReconstructionOutcome> {
-  let chain: EvidenceChainReadResult;
+  const checkReceipt = dependencies.receipts ?? signerReceiptCheck(dependencies.signer);
+  let chain: EvidenceChainReadResult<unknown>;
   try {
     chain = await dependencies.chain.readChain(input.evidencePackageId);
   } catch (error) {
@@ -202,7 +255,7 @@ export async function reconstructAndCompareEvidence<TDocument>(
 
   // Receipts come before any word about a break in the sequence: a record
   // with a missing receipt or a bad signature is broken, not discontinuous.
-  const segments: EvidenceSegmentV2[] = [];
+  const segments: EvidenceSegment[] = [];
   let previousReceiptId: string | null = null;
   for (const [index, entry] of chain.segments.entries()) {
     const verified = await verifyCanonicalEvidencePayloadV2(payloads[index]);
@@ -210,29 +263,26 @@ export async function reconstructAndCompareEvidence<TDocument>(
 
     const receipt = entry.receipt;
     if (receipt === null) return mismatch("receipt_missing", index);
-    // The signature covers the payload only; a field next to it, or a payload
-    // of another shape, is not what was issued.
-    if (!isSignedEvidenceReceipt(receipt)) return mismatch("receipt_mismatch", index);
-    // A payload with no canonical form has no digest, so it is not the signed one.
-    const digest = await digestEvidenceReceiptPayload(receipt.payload).catch(() => null);
-    if (
-      digest === null ||
-      receipt.payload.evidencePackageId !== input.evidencePackageId ||
-      receipt.payload.segmentHash !== verified.sha256 ||
-      receipt.payload.previousReceiptId !== previousReceiptId ||
-      receipt.payloadDigestSha256 !== digest.sha256
-    ) {
-      return mismatch("receipt_mismatch", index);
-    }
-    let signatureValid: boolean;
+    let checked: EvidenceReceiptCheckResult;
     try {
-      signatureValid = await dependencies.signer.verify(digest.bytes, receipt.signature);
+      checked = await checkReceipt({
+        receipt,
+        index,
+        evidencePackageId: input.evidencePackageId,
+        segmentSha256: verified.sha256,
+        previousReceiptId,
+      });
     } catch (error) {
       return unavailable("verification", error);
     }
-    if (!signatureValid) return mismatch("receipt_signature_invalid", index);
+    if (checked.status === "unavailable") {
+      return { status: "unavailable", stage: "verification", reason: checked.reason };
+    }
+    if (checked.status !== "verified") {
+      return mismatch(checked.status === "mismatch" ? "receipt_mismatch" : "receipt_signature_invalid", index);
+    }
 
-    previousReceiptId = receipt.payload.receiptId;
+    previousReceiptId = checked.receiptId;
     segments.push(verified.segment);
   }
 
@@ -256,13 +306,18 @@ export async function reconstructAndCompareEvidence<TDocument>(
   if (!replayed.ok) return mismatch(replayed.reason, replayed.segmentIndex);
   if (firstBreak) return { status: "discontinuity", discontinuity: firstBreak };
 
-  let expected: string;
-  try {
-    expected = canonicalizeJcs(input.expectedDocument);
-  } catch {
-    return mismatch("invalid_target", null);
+  if (input.expectedDocumentSha256 !== undefined) {
+    if (!SHA256_HEX.test(input.expectedDocumentSha256)) return mismatch("invalid_target", null);
+    if (replayed.documentSha256 !== input.expectedDocumentSha256) return mismatch("target_mismatch", null);
+  } else {
+    let expected: string;
+    try {
+      expected = canonicalizeJcs(input.expectedDocument);
+    } catch {
+      return mismatch("invalid_target", null);
+    }
+    if (replayed.canonicalDocument !== expected) return mismatch("target_mismatch", null);
   }
-  if (replayed.canonicalDocument !== expected) return mismatch("target_mismatch", null);
 
   return {
     status: "match",

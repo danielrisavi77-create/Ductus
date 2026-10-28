@@ -10,8 +10,8 @@ import { expect, test, type Page } from "@playwright/test";
 const NODE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const BLOCKED = "Ova kartica ništa ne sprema dok je druga otvorena.";
-const QUOTA = "Na uređaju nema dovoljno prostora, pa se promjene više ne spremaju. Izvezi tekst da ga ne izgubiš.";
-const STALE = "Dokument je u međuvremenu promijenjen na drugom mjestu, pa ova kartica više ne sprema. Izvezi tekst, zatim ponovno učitaj stranicu.";
+const QUOTA = "Na uređaju nema dovoljno prostora, pa se promjene više ne spremaju. Izvezite tekst da ga ne izgubite.";
+const STALE = "Dokument je u međuvremenu promijenjen na drugom mjestu, pa ova kartica više ne sprema. Izvezite tekst, zatim ponovno učitajte stranicu.";
 const DURABLE = "Spremljeno na uređaju";
 const editorOf = (page: Page) => page.getByRole("textbox", { name: "Tekst rada" });
 /** The provider's phase, for states whose notice is not the point of the test. */
@@ -197,15 +197,36 @@ test.describe("local editor (#197)", () => {
     await page.keyboard.press("Enter");
     await page.keyboard.type("Drugi odlomak.");
     await journalled(page);
-    await expect(page.getByText("6 riječi")).toBeVisible();
+    // FE-D6: the count stands alone in bold, the range and the noun follow it.
+    await expect(page.locator(".workspace__status .status-length__count")).toHaveText("6");
 
     await page.reload();
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
     await expect(editorOf(page).locator("p")).toHaveText(["Prva rečenica izmišljenog rada.", "Drugi odlomak."]);
     await journalled(page);
-    await expect(page.getByText("6 riječi")).toBeVisible();
+    // FE-D6: the count stands alone in bold, the range and the noun follow it.
+    await expect(page.locator(".workspace__status .status-length__count")).toHaveText("6");
     // 16: the reload resumes where the journal is, not in an endless "Spremam lokalno".
     await expect(chipOf(page)).toHaveText(DURABLE);
+    // Opening a stored document is not announced; the next save in this tab is.
+    await expect(announcedOf(page)).toBeEmpty();
+    await typeInto(page, " Dodatak.");
+    await journalled(page);
+    await expect(announcedOf(page)).toHaveText(DURABLE);
+  });
+
+  // B-LIVE step 4 (DAN-216): only a signed-in person publishes the live view;
+  // the local demo journal, with no session, sends nothing to the route.
+  test("without a sign-in nothing is published to the live view", async ({ page }) => {
+    const live: string[] = [];
+    page.on("request", (request) => {
+      if (new URL(request.url()).pathname.startsWith("/api/live/")) live.push(request.method());
+    });
+    await openEditor(page);
+    await typeInto(page, "Izmišljena rečenica bez prijave.");
+    await journalled(page);
+    await page.waitForTimeout(2500);
+    expect(live).toEqual([]);
   });
 
   test("9 and line 53: the chip says Spremljeno na uređaju only once the write is stored", async ({ page }) => {
@@ -291,7 +312,7 @@ test.describe("local editor (#197)", () => {
     await page.goto("/rad");
     await expect(phaseOf(page)).toHaveAttribute("data-phase", "unavailable");
     await expect(noticeOf(page)).toHaveText(
-      "Spremanje na ovom uređaju nije dostupno. Izvezi tekst da ga ne izgubiš.",
+      "Spremanje na ovom uređaju nije dostupno. Izvezite tekst da ga ne izgubite.",
     );
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "false");
     await expect(chipOf(page)).toHaveText("Greška");
@@ -389,6 +410,20 @@ test.describe("local editor (#197)", () => {
     });
     await page.keyboard.type("X");
     await expect(editorOf(page)).toHaveText("prije a\uFFFD Xposlije");
+  });
+
+  test("DAN-247: a letter typed right after select-all and ArrowRight lands at the end, never over the text", async ({ page }) => {
+    const text = "Izmisljen redak za provjeru strelice.";
+    await openEditor(page);
+    await typeInto(page, text);
+    await expect(editorOf(page)).toHaveText(text);
+    await page.keyboard.press("ControlOrMeta+A");
+    // The race made certain: the caret the browser moves is never reported,
+    // as when the letter arrives before `selectionchange` does.
+    await page.evaluate(() => window.addEventListener("selectionchange", (event) => event.stopImmediatePropagation(), true));
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.type("!");
+    await expect(editorOf(page)).toHaveText(`${text}!`);
   });
 
   test("5: a full device is an error that stays while typing on, with an export", async ({ page }) => {
@@ -492,7 +527,7 @@ test.describe("local editor (#197)", () => {
     await page.goto("/rad");
     await expect(phaseOf(page)).toHaveAttribute("data-phase", "unavailable");
     await expect(noticeOf(page)).toHaveText(
-      "Spremanje na ovom uređaju nije dostupno. Izvezi tekst da ga ne izgubiš.",
+      "Spremanje na ovom uređaju nije dostupno. Izvezite tekst da ga ne izgubite.",
     );
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "false");
   });
@@ -562,6 +597,33 @@ test.describe("local editor (#197)", () => {
     await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
     expect(await blockIds(page)).toEqual(grown);
     expect(await storedIds(page, null)).toEqual(grown);
+  });
+
+  // Found in E1 (#823): "# " on an empty line gave the block a new id, which
+  // the evidence recorder cannot carry (src/editor/block-marker.ts).
+  test("'## ' on an empty line makes a heading that keeps the line's id; Backspace gives the paragraph back", async ({ page }) => {
+    await openEditor(page);
+    await typeInto(page, "Uvod");
+    await page.keyboard.press("Enter");
+    const [, line] = await blockIds(page);
+    expect(line).toMatch(NODE_ID);
+    await page.keyboard.type("## ");
+    await expect(editorOf(page).locator(":scope > h2")).toHaveAttribute("data-node-id", line!);
+    await expect(editorOf(page).locator(":scope > h2")).toHaveText("");
+    await page.keyboard.press("Backspace");
+    await expect(editorOf(page).locator(":scope > h2")).toHaveCount(0);
+    await expect(editorOf(page).locator(":scope > p").nth(1)).toHaveAttribute("data-node-id", line!);
+    await page.keyboard.type("# Okvir");
+    await expect(editorOf(page).locator(":scope > h1")).toHaveText("Okvir");
+    await expect(editorOf(page).locator(":scope > h1")).toHaveAttribute("data-node-id", line!);
+    // Tiptap's own heading keys stay.
+    await page.keyboard.press("ControlOrMeta+Alt+3");
+    await expect(editorOf(page).locator(":scope > h3")).toHaveAttribute("data-node-id", line!);
+    await page.keyboard.press("ControlOrMeta+Alt+1");
+    await journalled(page);
+    await page.reload();
+    await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+    await expect(editorOf(page).locator(":scope > h1")).toHaveAttribute("data-node-id", line!);
   });
 
   test("stored text the editor would change on entry is refused, never shown as loaded", async ({ page }) => {

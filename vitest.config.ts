@@ -40,7 +40,29 @@ export function testWorkers(
   return Math.max(1, Math.floor(available / 4));
 }
 
+/**
+ * Quieter output in Claude Code sessions (DAN-213, #420): Claude Code sets
+ * CLAUDECODE=1 in the shell of its tools; there the run prints a dot per test
+ * and console output only from failing tests, while failures are still printed
+ * in full. Humans and CI keep the default output: any CI value except empty or
+ * "false" counts as CI (the pre-push hook sets CI=true). Same rule as
+ * `isAgentRun` in test-output.ts, which the Playwright configs use; it is
+ * repeated here because the vitest config loader warns on an extensionless
+ * local import, and a test keeps the two in step.
+ */
+export function vitestAgentOutput(
+  env: Readonly<Record<string, string | undefined>>,
+): { reporters?: string[]; silent?: "passed-only" } {
+  const ci = env.CI;
+  const agent = env.CLAUDECODE === "1" && (ci === undefined || ci === "" || ci === "false");
+  return agent ? { reporters: ["dot"], silent: "passed-only" } : {};
+}
+
 export default defineConfig({
+  // tsconfig.json keeps JSX as written ("preserve") for Next. The scoped pre-push
+  // run (`vitest --changed`) walks imports into .tsx modules, mocked ones included,
+  // and Vite cannot read them untransformed; the tests themselves do not change.
+  oxc: { jsx: { runtime: "automatic" } },
   resolve: {
     // Mirrors the `@/*` path mapping in tsconfig.json. The regex with a
     // forward-slash replacement keeps `@/` imports working on Windows.
@@ -55,6 +77,8 @@ export default defineConfig({
     environment: "node",
     // Set here and in no project: the projects inherit it (`extends: true`).
     maxWorkers: testWorkers(availableParallelism(), process.env),
+    // Agent sessions: dot reporter, console output of failing tests only (test-output.ts).
+    ...vitestAgentOutput(process.env),
     // Two projects so that property tests run exactly once and can be scaled
     // separately (FC_NUM_RUNS) without slowing the unit suite.
     projects: [
@@ -62,6 +86,8 @@ export default defineConfig({
         extends: true,
         test: {
           name: "unit",
+          // Tests that spawn node processes pass 5 s on a loaded machine.
+          testTimeout: 30_000,
           include: ["src/**/*.test.ts", "tests/unit/**/*.test.ts"],
           exclude: ["**/*.property.test.ts", "**/*.integration.test.ts", "**/node_modules/**"],
         },

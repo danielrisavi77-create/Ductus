@@ -1,0 +1,91 @@
+/* Signed-in home (#802 part B): greeting and cards of docs/design/ductura/pocetna.dc.html, on the D-123 tokens. */
+.screen {
+  width: 100%;
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 48px 24px 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 36px;
+}
+
+.greeting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.date {
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.greeting h1 {
+  margin: 0;
+  font-family: var(--ff-display);
+  font-size: clamp(34px, 5.4vw, 52px);
+  font-weight: 300;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+.cards {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  height: 100%;
+  padding: 24px 26px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--sheet);
+  box-shadow: var(--lift);
+}
+
+.card h2 {
+  margin: 0;
+  font-family: var(--ff-display);
+  font-size: 22px;
+  font-weight: 400;
+}
+
+.card p {
+  margin: 0 0 6px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+
+.card a {
+  margin-top: auto;
+}
+
+.enroll {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 12px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+@media (max-width: 640px) {
+  .screen {
+    padding: 32px 16px 56px;
+    gap: 28px;
+  }
+}

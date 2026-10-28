@@ -29,15 +29,22 @@
  *     until the server gives a verified answer for that idempotency key.
  */
 
-import type { DocumentTransaction } from "../document";
+import { MAX_DOCUMENT_SNAPSHOT_BYTES } from "../document/snapshot";
+import { exceedsEvidenceSegmentLimit } from "../forensics/evidence-chain-v2";
+import { isReceiptClientTransactionId } from "../forensics/evidence-receipt";
 import { commitRequestFromTransaction } from "../serverSync/contract";
 import type {
   CommitOutcome,
   InvalidCommitOutcome,
   ServerSyncErrorCode,
 } from "../serverSync/contract";
-import type { PendingTransaction, SyncMeta } from "./journal-types";
+import type {
+  EvidenceSegmentTransaction, PendingTransaction, QueuedTransaction, SyncMeta,
+} from "./journal-types";
 import type { SyncEvent } from "./states";
+
+/** A queued row of either kind (F-8 3d-2a): a replacement or an evidence segment. */
+export type QueuedRow = PendingTransaction<QueuedTransaction>;
 
 /**
  * The round trip failed before any server answer could be read: offline, DNS,
@@ -99,12 +106,12 @@ export type DrainOutcome =
  * (every row strictly older than it). It is reported rather than acted on
  * here: dropping rows is a write, and writes do not belong in this file.
  */
-export type DrainPlan = {
-  send: PendingTransaction | null;
+export type DrainPlan<R extends QueuedRow = PendingTransaction> = {
+  send: R | null;
   supersededUpTo: number | null;
 };
 
-const NOTHING_TO_SEND: DrainPlan = { send: null, supersededUpTo: null };
+const NOTHING_TO_SEND: DrainPlan<never> = { send: null, supersededUpTo: null };
 
 /**
  * True when the queue holds a row that is not provably OLDER than `sent` — a
@@ -120,8 +127,8 @@ const NOTHING_TO_SEND: DrainPlan = { send: null, supersededUpTo: null };
  * row with the same identity is a duplicate and is not provably older.
  */
 export function newerRowsQueued(
-  pending: readonly PendingTransaction[],
-  sent: PendingTransaction | null,
+  pending: readonly QueuedRow[],
+  sent: QueuedRow | null,
 ): boolean {
   if (sent === null || sent === undefined) {
     return false;
@@ -147,7 +154,7 @@ export function newerRowsQueued(
 
 type RowIdentity = { documentId: string; localSeq: number; clientTransactionId: string };
 
-function identityOf(row: PendingTransaction | null | undefined): Partial<RowIdentity> {
+function identityOf(row: QueuedRow | null | undefined): Partial<RowIdentity> {
   return {
     documentId: row?.documentId,
     localSeq: row?.localSeq,
@@ -156,7 +163,7 @@ function identityOf(row: PendingTransaction | null | undefined): Partial<RowIden
 }
 
 /** A row can be told apart from every other only by a non-empty document, sequence and key. */
-function isIdentifiable(row: PendingTransaction | null | undefined): boolean {
+function isIdentifiable(row: QueuedRow | null | undefined): boolean {
   const { documentId, localSeq, clientTransactionId } = identityOf(row);
   return (
     typeof documentId === "string" &&
@@ -246,7 +253,7 @@ export function isDiverged(marker: AwaitingReceipt | null | undefined): boolean 
  * marker that `planDrain` rejects as malformed, so the queue stalls visibly
  * instead of sending a newer row on a base that may already be gone.
  */
-export function awaitingReceiptFor(sent: PendingTransaction): AwaitingReceipt {
+export function awaitingReceiptFor(sent: QueuedRow): AwaitingReceipt {
   const documentId = sent?.documentId;
   const localSeq = sent?.localSeq;
   const clientTransactionId = sent?.tx?.clientTransactionId;
@@ -282,11 +289,14 @@ function isLocalSeq(value: unknown): value is number {
  * queue rather than guessed at. `REPLACE_DOCUMENT` carries the whole document,
  * which is what makes the supersession rule below sound.
  */
-function isSendable(row: PendingTransaction): boolean {
+function isSendable(row: QueuedRow): boolean {
   if (!isLocalSeq(row?.localSeq)) {
     return false;
   }
   try {
+    if (row.tx?.kind === "EVIDENCE_SEGMENT") {
+      return isSendableSegment(row.documentId, row.tx);
+    }
     // The existing wire builder owns the kind, ids, revision and byte limit
     // rules. A rejected row must also bound every removable queue prefix.
     return commitRequestFromTransaction(row.documentId, row.tx) !== null;
@@ -295,6 +305,32 @@ function isSendable(row: PendingTransaction): boolean {
     // or omit the transaction. Retain it as an unsendable recovery boundary.
     return false;
   }
+}
+
+/**
+ * A segment row the commit route can take (BACKEND 4.13 t. 3.1): the bytes the
+ * journal verified when it queued the row, within the size limits, with a key
+ * a receipt can carry. The bytes themselves are not checked again here.
+ */
+function isSendableSegment(documentId: string, tx: EvidenceSegmentTransaction): boolean {
+  return (
+    typeof documentId === "string" &&
+    documentId.trim() !== "" &&
+    isReceiptClientTransactionId(tx.clientTransactionId) &&
+    Number.isSafeInteger(tx.baseRevision) &&
+    tx.baseRevision >= 0 &&
+    tx.segment instanceof Uint8Array &&
+    tx.segment.byteLength > 0 &&
+    !exceedsEvidenceSegmentLimit(tx.segment.byteLength) &&
+    tx.document instanceof Uint8Array &&
+    tx.document.byteLength > 0 &&
+    tx.document.byteLength <= MAX_DOCUMENT_SNAPSHOT_BYTES &&
+    typeof tx.segmentHash === "string" &&
+    /^[0-9a-f]{64}$/.test(tx.segmentHash) &&
+    isLocalSeq(tx.sequenceFrom) &&
+    isLocalSeq(tx.sequenceTo) &&
+    tx.sequenceTo >= tx.sequenceFrom
+  );
 }
 
 /**
@@ -344,12 +380,18 @@ function isSendable(row: PendingTransaction): boolean {
  * would only earn the same answer, and a newer row would go out on a base
  * that commit may have moved. The document leaves this through an explicit
  * recovery decision (`isDiverged`, `SYNC_KEY_DIVERGED`), never by itself.
+ *
+ * Evidence segments (F-8 3d-2a) are a chain, not replacements: each row
+ * continues the one before it, so the OLDEST owed row is sent, nothing is
+ * superseded, and the next row goes only after this one's receipt released
+ * the hold. Every rule above still applies. A queue holding both kinds has no
+ * order that is right for both and sends nothing (a visible stall).
  */
-export function planDrain(
-  pending: readonly PendingTransaction[],
+export function planDrain<R extends QueuedRow>(
+  pending: readonly R[],
   meta: SyncMeta | null,
   awaitingReceipt: AwaitingReceipt | null = null,
-): DrainPlan {
+): DrainPlan<R> {
   if (!Array.isArray(pending) || pending.length === 0) {
     return NOTHING_TO_SEND;
   }
@@ -389,7 +431,13 @@ export function planDrain(
     return NOTHING_TO_SEND;
   }
 
-  let newest: PendingTransaction | null = null;
+  const kinds = new Set(pending.map((row) => row?.tx?.kind));
+  if (kinds.has("EVIDENCE_SEGMENT") && kinds.has("REPLACE_DOCUMENT")) {
+    return NOTHING_TO_SEND;
+  }
+  const inOrder = kinds.has("EVIDENCE_SEGMENT");
+
+  let newest: R | null = null;
   for (const row of pending) {
     if (!isSendable(row) || row.localSeq >= barrier) {
       continue;
@@ -405,13 +453,19 @@ export function planDrain(
       }
       continue;
     }
-    if (newest === null || row.localSeq > newest.localSeq) {
+    if (newest === null || (inOrder ? row.localSeq < newest.localSeq : row.localSeq > newest.localSeq)) {
       newest = row;
     }
   }
 
   if (newest === null) {
     return NOTHING_TO_SEND;
+  }
+  if (inOrder) {
+    // A chain goes oldest first: a hold on a newer row than one still owed
+    // would send it ahead of that row, so nothing goes.
+    const chosen = newest;
+    return pending.some((row) => row.localSeq < chosen.localSeq) ? NOTHING_TO_SEND : { send: newest, supersededUpTo: null };
   }
 
   // Every row through the send is now a unique, sendable replacement.
@@ -558,8 +612,8 @@ const NOT_OWED = new WeakSet<object>();
  * newer row is in flight; only the queue of now can tell.
  */
 export type AnswerFlight = {
-  sent: PendingTransaction;
-  pending: readonly PendingTransaction[];
+  sent: QueuedRow;
+  pending: readonly QueuedRow[];
 };
 
 /**
@@ -826,7 +880,7 @@ const KEY_REFUSED: ReadonlySet<string> = new Set([
  *                               hold (#181). Call `outcomeToEvents` first.
  */
 export function nextAwaitingReceipt(
-  sent: PendingTransaction,
+  sent: QueuedRow,
   outcome: DrainOutcome,
   previous: AwaitingReceipt | null,
 ): AwaitingReceipt | null {
@@ -883,7 +937,7 @@ export function nextAwaitingReceipt(
   return previous ?? awaitingReceiptFor(sent);
 }
 
-function isSameRow(marker: AwaitingReceipt, sent: PendingTransaction): boolean {
+function isSameRow(marker: AwaitingReceipt, sent: QueuedRow): boolean {
   return isSameIdentity(
     {
       documentId: marker.documentId,
@@ -945,7 +999,7 @@ export function mayAttempt(schedules: RetrySchedules, documentId: string, nowMs:
  * author's explicit confirmation.
  */
 export function adoptDiscardsNewerRows(
-  queue: readonly PendingTransaction[],
+  queue: readonly QueuedRow[],
   documentId: string,
   held: AwaitingReceipt | null,
 ): boolean {
@@ -963,7 +1017,7 @@ export function adoptDiscardsNewerRows(
  * read as consent.
  */
 export function adoptServerEvents(
-  queue: readonly PendingTransaction[],
+  queue: readonly QueuedRow[],
   documentId: string,
   held: AwaitingReceipt | null,
   confirmed: boolean,
@@ -995,10 +1049,10 @@ export function adoptServerEvents(
  * so the idempotency key of a replayed row survives (the server's digest is
  * taken over the document alone, not the base).
  */
-export function fastForwardBase(
-  tx: DocumentTransaction,
+export function fastForwardBase<T extends { baseRevision: number }>(
+  tx: T,
   acked: number | null,
-): DocumentTransaction {
+): T {
   if (acked === null || !Number.isSafeInteger(acked)) {
     return tx;
   }

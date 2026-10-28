@@ -17,7 +17,13 @@ export interface LoginChecks {
 }
 
 export interface VerifiedLogin {
-  /** `iss` of the verified ID token. */
+  /**
+   * The issuer of the account key (F-042): the configured one in
+   * `accountIssuer` form, never the provider's spelling of it. The library
+   * has already required the token `iss` to equal the discovered issuer, and
+   * discovery is refused unless that one names OIDC_ISSUER in the same form
+   * (F-123), so both name the same issuer.
+   */
   issuer: string;
   idToken: Readonly<Record<string, unknown>>;
   userinfo: Readonly<Record<string, unknown>>;
@@ -91,6 +97,17 @@ export function limitedFetch(limit: number, fetchImpl: typeof fetch = fetch): cl
   };
 }
 
+/**
+ * One spelling of an issuer for the account key: the normalised URL, with
+ * the single slash of an empty path dropped. Host case, a default port or a
+ * trailing slash after the host give the same string; a path keeps its own
+ * spelling, which discovery already holds to the configured one.
+ */
+export function accountIssuer(issuer: URL): string {
+  const href = issuer.href;
+  return issuer.pathname === "/" && !issuer.search && !issuer.hash && href.endsWith("/") ? href.slice(0, -1) : href;
+}
+
 export function isProviderUnavailable(error: unknown): boolean {
   for (let e = error, depth = 0; e instanceof Error && depth < 5; e = e.cause, depth++) {
     if (e instanceof ProviderUnavailableError || e.name === "TimeoutError" || e.name === "AbortError") return true;
@@ -122,6 +139,14 @@ export function createOidcClient(config: AuthConfig, fetchImpl: typeof fetch = f
           ],
         },
       )
+      .then((discoveredConfiguration) => {
+        // F-123: the library skips its own issuer check for some URLs, so the
+        // account key's issuer is held to the discovered one here, fail closed.
+        if (accountIssuer(new URL(discoveredConfiguration.serverMetadata().issuer)) !== accountIssuer(config.issuer)) {
+          throw new Error("discovered issuer does not match OIDC_ISSUER");
+        }
+        return discoveredConfiguration;
+      })
       .catch((error: unknown) => {
         // A failed discovery is retried on the next login, not cached.
         discovered = undefined;
@@ -157,7 +182,7 @@ export function createOidcClient(config: AuthConfig, fetchImpl: typeof fetch = f
       const idToken = tokens.claims();
       if (!idToken) throw new Error("token response has no ID token");
       const userinfo = await client.fetchUserInfo(oidc, tokens.access_token, idToken.sub);
-      return { issuer: idToken.iss, idToken, userinfo };
+      return { issuer: accountIssuer(config.issuer), idToken, userinfo };
     },
   };
 }

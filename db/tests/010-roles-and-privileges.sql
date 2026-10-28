@@ -4,7 +4,7 @@
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(37);
+SELECT plan(44);
 
 -- Group roles: none can log in or step around RLS.
 SELECT bag_eq(
@@ -95,7 +95,7 @@ CREATE TEMP VIEW allowed_membership AS
 SELECT bag_eq(
   'SELECT membership FROM ductus_membership',
   'SELECT membership FROM allowed_membership',
-  'the only memberships: the migrator as creator and with SET on the two owner roles, the local logins in ductus_app and ductus_auth'
+  'the only memberships: the migrator as creator and with SET on the owner roles, plus the local logins in ductus_app and ductus_auth'
 );
 -- Negative controls: the comparison above must notice a membership that is
 -- not on the list. Each one is added, seen and taken back.
@@ -316,6 +316,85 @@ SELECT is_empty(
        AND n.nspname NOT LIKE 'pg\_%' AND n.nspname NOT IN ('information_schema', 'public')
        AND c.relowner NOT IN ('ductus_identity'::regrole, 'ductus_evidence'::regrole) $$,
   'application tables belong to a NOLOGIN owner role'
+);
+
+-- The web process writes nothing directly (CLAUDE.md: the client writes only
+-- through RPC). The access matrices (040 and later) check named tables, so a
+-- table added later with a wrong grant would pass them; this guard reads the
+-- catalog instead. It covers every relation outside the system schemas, both
+-- ductus_app and the local login that inherits it, table-level and column-level
+-- rights, and rights reached through PUBLIC (has_table_privilege and
+-- has_any_column_privilege resolve inheritance).
+-- An exception needs a row here with its reason and a decision behind it
+-- (docs/DECISIONS.md); the list is empty because RPC is the only write path.
+CREATE TEMP TABLE app_write_allowlist (
+  rolname text NOT NULL,
+  relation text NOT NULL,
+  privilege text NOT NULL,
+  reason text NOT NULL
+);
+CREATE TEMP VIEW app_write_grant AS
+  SELECT r.rolname, n.nspname || '.' || c.relname AS relation, p.privilege
+  FROM pg_class c
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  CROSS JOIN (VALUES ('ductus_app'), ('ductus_app_local')) AS r(rolname)
+  CROSS JOIN (VALUES ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE')) AS p(privilege)
+  WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f')
+    AND n.nspname NOT LIKE 'pg\_%' AND n.nspname <> 'information_schema'
+    AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = c.oid AND d.deptype = 'e')
+    AND (has_table_privilege(r.rolname, c.oid, p.privilege)
+         OR (p.privilege IN ('INSERT', 'UPDATE') AND has_any_column_privilege(r.rolname, c.oid, p.privilege)))
+    AND NOT EXISTS (
+      SELECT 1 FROM app_write_allowlist a
+      WHERE a.rolname = r.rolname AND a.relation = n.nspname || '.' || c.relname AND a.privilege = p.privilege
+    );
+
+SELECT is_empty(
+  'SELECT * FROM app_write_grant',
+  'ductus_app and its local login have no INSERT, UPDATE, DELETE or TRUNCATE on any table outside the allowlist'
+);
+-- Negative controls: each kind of write right must be noticed. Each one is
+-- granted, seen and taken back.
+GRANT INSERT ON evidence.segment TO ductus_app;
+SELECT set_eq(
+  $$ SELECT (rolname || ' ' || relation || ' ' || privilege)::text FROM app_write_grant $$,
+  $$ VALUES ('ductus_app evidence.segment INSERT'::text), ('ductus_app_local evidence.segment INSERT'::text) $$,
+  'INSERT granted to ductus_app is noticed, also on the login that inherits it'
+);
+REVOKE INSERT ON evidence.segment FROM ductus_app;
+GRANT UPDATE (surface) ON audit.access_log TO ductus_app_local;
+SELECT set_eq(
+  $$ SELECT (rolname || ' ' || relation || ' ' || privilege)::text FROM app_write_grant $$,
+  $$ VALUES ('ductus_app_local audit.access_log UPDATE'::text) $$,
+  'a column-level UPDATE on the local login is noticed'
+);
+REVOKE UPDATE (surface) ON audit.access_log FROM ductus_app_local;
+GRANT DELETE ON identity.session TO PUBLIC;
+SELECT set_eq(
+  $$ SELECT (rolname || ' ' || relation || ' ' || privilege)::text FROM app_write_grant $$,
+  $$ VALUES ('ductus_app identity.session DELETE'::text), ('ductus_app_local identity.session DELETE'::text) $$,
+  'DELETE granted to PUBLIC is noticed'
+);
+REVOKE DELETE ON identity.session FROM PUBLIC;
+GRANT TRUNCATE ON institution.course TO ductus_app;
+SELECT set_eq(
+  $$ SELECT (rolname || ' ' || relation || ' ' || privilege)::text FROM app_write_grant $$,
+  $$ VALUES ('ductus_app institution.course TRUNCATE'::text), ('ductus_app_local institution.course TRUNCATE'::text) $$,
+  'TRUNCATE granted to ductus_app is noticed'
+);
+-- An allowlist row silences exactly the role, relation and privilege it names.
+INSERT INTO app_write_allowlist VALUES
+  ('ductus_app', 'institution.course', 'TRUNCATE', 'negative control'),
+  ('ductus_app_local', 'institution.course', 'TRUNCATE', 'negative control');
+SELECT is_empty(
+  'SELECT * FROM app_write_grant',
+  'an allowlist row covers exactly the grant it names'
+);
+DELETE FROM app_write_allowlist;
+REVOKE TRUNCATE ON institution.course FROM ductus_app;
+SELECT is_empty(
+  'SELECT * FROM app_write_grant',
+  'the guard is clean again once the negative controls are taken back'
 );
 
 -- Functions: application schemas, extension members excluded.

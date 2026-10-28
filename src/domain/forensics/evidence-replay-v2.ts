@@ -1,6 +1,6 @@
 import { sha256WebCrypto } from "./crypto";
 import type { EvidenceChainDiscontinuityV2 } from "./evidence-chain-v2";
-import type { EvidenceEventV2, EvidenceSegmentV2 } from "./evidence-segment-v2";
+import type { EvidenceEventV3, EvidenceSegment } from "./evidence-segment-v2";
 import { canonicalizeJcs, type JcsJsonValue } from "./jcs";
 
 /**
@@ -21,9 +21,34 @@ export interface EvidenceStepReplayerV2<TDocument> {
   /** Reads a canonical document; throws if it is not a valid one. */
   load(canonical: JcsJsonValue): TDocument;
   /** Applies every step of the event exactly, or throws. Never guesses. */
-  apply(document: TDocument, event: EvidenceEventV2): TDocument;
+  apply(document: TDocument, event: EvidenceEventV3): TDocument;
   /** JSON form whose JCS string is hashed and compared. */
   toCanonical(document: TDocument): JcsJsonValue;
+}
+
+/**
+ * A replayer whose `apply` may finish later, such as one that hashes with Web
+ * Crypto in the browser (granica 8, #638). The replay awaits it; a rejected
+ * promise is a refused event, like a throw. Every synchronous replayer is one.
+ */
+export interface AsyncEvidenceStepReplayerV2<TDocument>
+  extends Omit<EvidenceStepReplayerV2<TDocument>, "apply"> {
+  /** Applies every step of the event exactly, or throws or rejects. */
+  apply(document: TDocument, event: EvidenceEventV3): TDocument | Promise<TDocument>;
+}
+
+/**
+ * Thrown by a replayer's `apply` when an event uses content this replayer
+ * does not know, such as a block type added to the format after it was built
+ * (F-150; BACKEND 4.1, node set of `ductus-edit-steps-v1`). The replay then
+ * reports `unsupported_format` instead of `step_failed`: the record is not
+ * shown to be wrong, only unreadable here. It still fails closed.
+ */
+export class EvidenceContentNotSupportedV2 extends Error {
+  constructor(readonly kind: string) {
+    super(`evidence content not supported: ${kind}`);
+    this.name = "EvidenceContentNotSupportedV2";
+  }
 }
 
 export type EvidenceReplayFailureV2 =
@@ -62,8 +87,8 @@ export async function digestCanonicalDocumentV2(
  */
 export async function findEvidenceStartBreakV2<TDocument>(
   initialDocument: JcsJsonValue,
-  first: EvidenceSegmentV2,
-  replayer: EvidenceStepReplayerV2<TDocument>,
+  first: EvidenceSegment,
+  replayer: AsyncEvidenceStepReplayerV2<TDocument>,
 ): Promise<
   | { ok: true; discontinuity: EvidenceChainDiscontinuityV2 | null }
   | { ok: false; reason: "invalid_document" }
@@ -102,8 +127,8 @@ export async function findEvidenceStartBreakV2<TDocument>(
  */
 export async function replayEvidenceSegmentsV2<TDocument>(
   initialDocument: JcsJsonValue,
-  segments: readonly EvidenceSegmentV2[],
-  replayer: EvidenceStepReplayerV2<TDocument>,
+  segments: readonly EvidenceSegment[],
+  replayer: AsyncEvidenceStepReplayerV2<TDocument>,
 ): Promise<EvidenceReplayResultV2> {
   let document: TDocument;
   let current: { canonical: string; sha256: string };
@@ -124,10 +149,11 @@ export async function replayEvidenceSegmentsV2<TDocument>(
     }
     for (const event of segment.events) {
       try {
-        document = replayer.apply(document, event);
+        document = await replayer.apply(document, event);
         current = await digestCanonicalDocumentV2(replayer.toCanonical(document));
-      } catch {
-        return { ok: false, reason: "step_failed", segmentIndex, sequence: event.sequence };
+      } catch (error) {
+        const reason = error instanceof EvidenceContentNotSupportedV2 ? "unsupported_format" : "step_failed";
+        return { ok: false, reason, segmentIndex, sequence: event.sequence };
       }
       if (current.sha256 !== event.afterDocumentHash) {
         return {

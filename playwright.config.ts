@@ -1,4 +1,6 @@
-import { defineConfig, devices } from "@playwright/test";
+import { defineConfig, devices, type ReporterDescription } from "@playwright/test";
+
+import { playwrightConsoleReporter } from "./test-output";
 
 const PORT = 3000;
 const BASE_URL = `http://localhost:${PORT}`;
@@ -64,6 +66,7 @@ function server(
 
 export default defineConfig({
   testDir: "e2e",
+  metadata: { testedSha: process.env.GITHUB_SHA ?? null },
   // The full login needs `next dev` and runs on its own config
   // (playwright.login.config.ts, `pnpm test:e2e:login`).
   testIgnore: "login/**",
@@ -71,7 +74,12 @@ export default defineConfig({
   retries: 0,
   // The HTML report carries screenshots, videos and traces; CI uploads it as
   // the `playwright-report` artifact of the run (docs/SESSIONS.md 6).
-  reporter: [["list"], ["html", { open: "never" }]],
+  // "line" instead of "list" in Claude Code sessions (test-output.ts).
+  reporter: [
+    [playwrightConsoleReporter(process.env)], ["html", { open: "never" }],
+    ...(process.env.UI_TEST_PILOT === "1"
+      ? [["json", { outputFile: "test-results/ui-pilot-full.json" }] as ReporterDescription] : []),
+  ],
   use: {
     baseURL: BASE_URL,
     locale: "hr-HR",
@@ -80,10 +88,9 @@ export default defineConfig({
     video: process.env.CI ? "on" : "retain-on-failure",
     trace: "retain-on-failure",
   },
-  // Browser policy (docs/TESTING.md 2). Chromium is required on every PR;
-  // Firefox and WebKit are required for editor, sync, offline, clipboard, auth
-  // and submission changes. CI runs all three engines on every PR, which
-  // covers each of those classes without a path filter that could miss one.
+  // Browser policy (docs/TESTING.md 2, owner decision D-108 d). CI runs the
+  // Chromium projects (`desktop`, `mobile`) on every PR and all four on every
+  // push to main and nightly (.github/workflows/ci.yml).
   // `mobile` is a Chromium viewport: an addition, never a stand-in for WebKit.
   // Every spec runs in every project; locally, `--project desktop` runs one.
   projects: [

@@ -1,0 +1,97 @@
+/*
+ * Process summary aside of the design handoff (docs/design/ductura,
+ * demo-tok-v2), on the shared tokens (app/globals.css, D-123). Neutral ink
+ * only: no colour that could read as a judgement of the student (PRODUCT §7).
+ */
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 18px;
+  border: 1px solid var(--rule-2);
+  border-radius: var(--radius);
+  background: var(--chrome);
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  padding-bottom: 6px;
+}
+
+.title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.head .note {
+  margin-left: auto;
+}
+
+.note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.state,
+.part {
+  margin: 0;
+  padding: 7px 0;
+  border-top: 1px solid var(--hover);
+}
+
+.part {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.partTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.label {
+  color: var(--ink-2);
+}
+
+.fact,
+.empty,
+.explain {
+  margin: 0;
+}
+
+.explain,
+.threshold,
+.kind {
+  color: var(--ink-2);
+}
+
+.kind {
+  font-size: 12px;
+}
+
+.list {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* #732 item 8: 12 px is the floor for interface text, 13 px on a phone (app/globals.css). */
+@media (max-width: 640px) {
+  .note,
+  .kind {
+    font-size: 13px;
+  }
+}

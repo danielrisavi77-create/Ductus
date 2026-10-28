@@ -14,12 +14,12 @@ export type WorkspaceShellProps = {
   mode?: WorkspaceMode;
   /**
    * Where each view lives. A view without an address is a visibly disabled
-   * button marked "uskoro", never a link that leads nowhere: the teacher's
-   * view arrives with F-8.
+   * button that says why, never a link that leads nowhere: the teacher's view
+   * exists only for the student's own assignment work (#732 item 7).
    */
   writingHref?: string;
   teacherViewHref?: string;
-  /** Extra controls in the top bar, before the view switch. */
+  /** Extra controls at the end of the top bar, after the view switch. */
   barExtra?: ReactNode;
   /** Shown under the top bar, e.g. the offline notice (F-8). */
   banner?: ReactNode;
@@ -31,11 +31,17 @@ export type WorkspaceShellProps = {
   status: ReactNode;
   /** The sheet and its toolbar. */
   children: ReactNode;
+  /** Drawn instead of `children` when `mode` is "teacher-view": a read-only sheet, no toolbar. */
+  teacherView?: ReactNode;
 };
 
 /**
- * The writing workspace from design v6 (D-89): 46 px top bar, 236 px left
- * rail, sheet of at most 756 px, 322 px right rail, 34 px status bar.
+ * The writing workspace of design editor-v11 (docs/design/ductura/README.md
+ * §5.1, FE-D1), inside the design v3 shell (#476 6314969336, "Pisanje"): a
+ * work header with the course and assignment on the left and the view switch
+ * on the right (brand, demo label and account live in the shell), a 174 px
+ * structure rail, a sheet of at most 720 px, a 284 px right panel with tabs,
+ * and the status bar, framed with `--radius`.
  *
  * The DOM order is the same at every width: sheet (`main`), instructions,
  * structure. On a wide screen `grid-template-areas` puts the structure rail
@@ -53,31 +59,28 @@ export default function WorkspaceShell({
   panel,
   status,
   children,
+  teacherView,
 }: WorkspaceShellProps) {
   return (
     <div className="workspace">
-      <header className="workspace__bar">
-        <div className="brand-line">
-          <Link className="brand brand--small" href="/">
-            {t.app.name}
-          </Link>
-          {context ? <span className="brand-line__context">{context}</span> : null}
-        </div>
-        {barExtra}
+      {/* A named region: the course and assignment and the bar's links are
+          inside a landmark like the rest of the page (axe "region", #711 F1). */}
+      <section className="workspace__bar" aria-label={t.workspace.barLabel}>
+        {context ? <p className="brand-line brand-line__context">{context}</p> : null}
         <nav className="modes" aria-label={t.workspace.viewModes}>
-          <ModeLink href={writingHref} current={mode === "writing"}>
+          <ModeLink href={writingHref} current={mode === "writing"} off={t.workspace.soon}>
             {t.workspace.modeWriting}
           </ModeLink>
-          <ModeLink href={teacherViewHref} current={mode === "teacher-view"}>
+          <ModeLink href={teacherViewHref} current={mode === "teacher-view"} off={t.workspace.teacherViewOff}>
             {t.workspace.modeTeacherView}
           </ModeLink>
         </nav>
-        <span className="demo-badge">{t.shell.demoBadge}</span>
-      </header>
+        {barExtra}
+      </section>
       {banner}
       <div className="workspace__body">
         <main id="sadrzaj" tabIndex={-1} className="workspace__main">
-          {children}
+          {mode === "teacher-view" ? teacherView : children}
         </main>
         <ShellRail className="workspace__panel" label={t.workspace.sidePanel}>
           {panel}
@@ -93,18 +96,18 @@ export default function WorkspaceShell({
   );
 }
 
-type ModeLinkProps = { href?: string; current: boolean; children: ReactNode };
+type ModeLinkProps = { href?: string; current: boolean; off: string; children: ReactNode };
 
 /**
  * One entry of the view switch. Without an address it is a button that stays
- * in the Tab order and says it is unavailable (`aria-disabled`), so a keyboard
- * or screen reader user learns the view exists and is not ready yet.
+ * in the Tab order and says it is unavailable (`aria-disabled`) and why
+ * (`off`), so a keyboard or screen reader user learns the view exists.
  */
-function ModeLink({ href, current, children }: ModeLinkProps) {
+function ModeLink({ href, current, off, children }: ModeLinkProps) {
   if (href === undefined) {
     return (
       <button type="button" className="modes__item" aria-disabled="true">
-        {children} <span className="soon">{t.workspace.soon}</span>
+        {children} <span className="soon">{off}</span>
       </button>
     );
   }

@@ -342,8 +342,11 @@ describe("S3EvidencePayloadStore", () => {
         }),
       );
     });
+    // A store that waited on the cancel would end at the deadline instead, so
+    // the deadline only has to be far beyond the real work: under CPU load a
+    // 50 ms deadline answered storage_timeout here (#651).
     await expect(
-      put(storeWith(stored.fetch, { requestTimeoutMs: 50 }).store, "a"),
+      put(storeWith(stored.fetch, { requestTimeoutMs: 5_000 }).store, "a"),
     ).resolves.toEqual({ status: "stored", storageRef: expect.any(String) });
 
     const tooLarge = fakeS3((call) =>
@@ -354,7 +357,7 @@ describe("S3EvidencePayloadStore", () => {
       ),
     );
     await expect(
-      put(storeWith(tooLarge.fetch, { requestTimeoutMs: 50 }).store, "a"),
+      put(storeWith(tooLarge.fetch, { requestTimeoutMs: 5_000 }).store, "a"),
     ).resolves.toEqual({
       status: "unavailable",
       reason: "storage_object_too_large",
@@ -362,31 +365,43 @@ describe("S3EvidencePayloadStore", () => {
   });
 
   it("lets the client retry after a timeout, written or not", async () => {
-    let mode: "write-then-hang" | "hang" | "normal" = "write-then-hang";
-    const s3 = fakeS3((call, signal) => {
-      if (mode === "normal") return null;
-      if (mode === "write-then-hang") {
-        s3.objects.set(call.path, new TextEncoder().encode(payload("a")));
-      }
-      return hang(signal);
-    });
-    const { store } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+    // The timer ends the hanging calls; the retries must not race a real
+    // 20 ms deadline, which under CPU load they lost (#651).
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      let mode: "write-then-hang" | "hang" | "normal" = "write-then-hang";
+      const s3 = fakeS3((call, signal) => {
+        if (mode === "normal") return null;
+        if (mode === "write-then-hang") {
+          s3.objects.set(call.path, new TextEncoder().encode(payload("a")));
+        }
+        return hang(signal);
+      });
+      const { store } = storeWith(s3.fetch, { requestTimeoutMs: 20_000 });
+      const timedOut = async (text: string) => {
+        const pending = put(store, text);
+        await vi.advanceTimersByTimeAsync(20_000);
+        return pending;
+      };
 
-    await expect(put(store, "a")).resolves.toMatchObject({
-      status: "unavailable",
-    });
-    mode = "normal";
-    await expect(put(store, "a")).resolves.toMatchObject({
-      status: "existing",
-    });
+      await expect(timedOut("a")).resolves.toMatchObject({
+        status: "unavailable",
+      });
+      mode = "normal";
+      await expect(put(store, "a")).resolves.toMatchObject({
+        status: "existing",
+      });
 
-    mode = "hang";
-    await expect(put(store, "b")).resolves.toMatchObject({
-      status: "unavailable",
-    });
-    mode = "normal";
-    await expect(put(store, "b")).resolves.toMatchObject({ status: "stored" });
-    expect(s3.objects.size).toBe(2);
+      mode = "hang";
+      await expect(timedOut("b")).resolves.toMatchObject({
+        status: "unavailable",
+      });
+      mode = "normal";
+      await expect(put(store, "b")).resolves.toMatchObject({ status: "stored" });
+      expect(s3.objects.size).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("answers unavailable, once, when storage refuses or fails", async () => {
@@ -1045,6 +1060,13 @@ describe("write proof (#155, S1 to S6)", () => {
       const { port } = server.address() as AddressInfo;
       const { store } = storeWith(globalThis.fetch, {
         endpoint: `http://127.0.0.1:${port}`,
+        // A real socket runs on the real clock: under load this round trip
+        // took up to 360 ms (40-60 ms idle) and once passed the shared 1 s
+        // deadline, which rightly answers storage_timeout instead (#645).
+        // Deadlines are tested with fake timers above; here the deadline only
+        // has to be out of the way. 20 s still fails a hung server before the
+        // 30 s test timeout and stays under MAX_S3_REQUEST_TIMEOUT_MS.
+        requestTimeoutMs: 20_000,
       });
       await expect(put(store, "a")).resolves.toEqual(unverified);
       expect(methods).toEqual(["PUT"]);
@@ -1211,30 +1233,39 @@ describe("write proof (#155, S1 to S6)", () => {
   ])(
     "S6: a deadline after a confirmed echo is an unverified write, logged once (read-back %s)",
     async (_, readBack) => {
-      const s3: ReturnType<typeof fakeS3> = fakeS3((call, signal) =>
-        call.method === "PUT"
-          ? writtenWith(s3, call, { "x-amz-checksum-sha256": checksumOf("a") })
-          : readBack(signal),
-      );
-      const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 30 });
+      // The confirmed echo must not race a real 30 ms deadline, which under
+      // CPU load it lost to storage_timeout (#651); the timer ends the read-back.
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      try {
+        const s3: ReturnType<typeof fakeS3> = fakeS3((call, signal) =>
+          call.method === "PUT"
+            ? writtenWith(s3, call, { "x-amz-checksum-sha256": checksumOf("a") })
+            : readBack(signal),
+        );
+        const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 20_000 });
 
-      await expect(put(store, "a")).resolves.toEqual({
-        status: "unavailable",
-        reason: "storage_write_unverified",
-      });
-      // Let a read-back that rejects on abort finish behind the answer.
-      await new Promise((resolve) => setTimeout(resolve, 10));
-      expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
-      expect(warn.mock.calls).toEqual([
-        [
-          "evidence payload write unverified",
-          {
-            institutionId: INSTITUTION,
-            evidencePackageId: PACKAGE,
-            segmentHash: hashOf(payload("a")),
-          },
-        ],
-      ]);
+        const pending = put(store, "a");
+        await vi.advanceTimersByTimeAsync(20_000);
+        await expect(pending).resolves.toEqual({
+          status: "unavailable",
+          reason: "storage_write_unverified",
+        });
+        // Let a read-back that rejects on abort finish behind the answer.
+        await vi.advanceTimersByTimeAsync(10);
+        expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
+        expect(warn.mock.calls).toEqual([
+          [
+            "evidence payload write unverified",
+            {
+              institutionId: INSTITUTION,
+              evidencePackageId: PACKAGE,
+              segmentHash: hashOf(payload("a")),
+            },
+          ],
+        ]);
+      } finally {
+        vi.useRealTimers();
+      }
     },
   );
 
@@ -1554,14 +1585,21 @@ describe("one monotonic deadline (QA qa233d)", () => {
   );
 
   it("a stored write leaves no timer that later logs it as unverified", async () => {
-    const s3 = fakeS3();
-    const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+    // The write must not race a real 20 ms deadline (#651); the fake clock
+    // then runs well past the deadline instead of waiting for it.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const s3 = fakeS3();
+      const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 20_000 });
 
-    await expect(put(store, "a")).resolves.toMatchObject({ status: "stored" });
-    // Past the deadline: a timer still armed would now log the write.
-    await new Promise((resolve) => setTimeout(resolve, 40));
-    await logged();
-    expect(warn).not.toHaveBeenCalled();
+      await expect(put(store, "a")).resolves.toMatchObject({ status: "stored" });
+      // Past the deadline: a timer still armed would now log the write.
+      await vi.advanceTimersByTimeAsync(40_000);
+      await logged();
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("a reading exactly at the deadline is past it: no request is sent", async () => {
@@ -1784,7 +1822,9 @@ describe("no request and no content outcome past the deadline (QA qa233e)", () =
       if (keyHeld) {
         s3.objects.set(keyOf(PACKAGE, hashOf(payload("a"))), new TextEncoder().encode(payload("a")));
       }
-      const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+      // The controlled clock decides; the real timer stays far away, or under
+      // CPU load it could fire first and answer storage_timeout (#651).
+      const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 60_000 });
       try {
         await expect(put(store, "a")).resolves.toEqual(expected);
       } finally {
@@ -2029,21 +2069,24 @@ describe("the log line waits until the caller resumes (QA qa233e, macrotask)", (
     },
   );
 
-  it("a logger that blocks for 60 ms leaves a 20 ms deadline to the caller, then logs once", async () => {
+  it("a logger that blocks for 600 ms leaves a 200 ms deadline to the caller, then logs once", async () => {
     // Warm the path up on another store so the measured call is the store's own.
     const warm = new S3EvidencePayloadStore({ ...configWith(otherBytesAfter(412)().fetch), warn: vi.fn() });
     await warm.putImmutable(inputOf("a"));
     await logged();
 
+    // The logger still blocks three times longer than the deadline, so a
+    // logger on the caller's path still fails this test; the deadline is ten
+    // times the former 20 ms, which the call itself exceeded under CPU load (#651).
     const s3 = otherBytesAfter(412)();
     const warn = vi.fn(() => {
-      const until = Date.now() + 60;
+      const until = Date.now() + 600;
       while (Date.now() < until) {
         // Blocks the thread, as a synchronous sink on a stalled disk would.
       }
     });
     const store = new S3EvidencePayloadStore({
-      ...configWith(s3.fetch, { requestTimeoutMs: 20 }),
+      ...configWith(s3.fetch, { requestTimeoutMs: 200 }),
       warn,
     });
 
@@ -2052,7 +2095,7 @@ describe("the log line waits until the caller resumes (QA qa233e, macrotask)", (
     const took = performance.now() - started;
 
     expect(outcome).toEqual({ status: "conflict" });
-    expect(took).toBeLessThan(20);
+    expect(took).toBeLessThan(200);
     expect(warn).not.toHaveBeenCalled();
     await logged();
     expect(warn.mock.calls).toEqual([["evidence payload conflict", idsOfA]]);
@@ -2165,22 +2208,29 @@ describe("the input is read once (QA qa233f)", () => {
   });
 
   it("logs the identifiers it checked when the deadline ends the read-back", async () => {
-    const s3 = fakeS3((call, signal) => (call.method === "GET" ? hang(signal) : null));
-    const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
-    const input = {
-      institutionId: INSTITUTION,
-      evidencePackageId: PACKAGE,
-      segmentHash: hashOf(payload("a")),
-      canonicalPayload: payload("a"),
-    };
+    // The PUT must not race a real 20 ms deadline (#651); the timer ends the read-back.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const s3 = fakeS3((call, signal) => (call.method === "GET" ? hang(signal) : null));
+      const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 20_000 });
+      const input = {
+        institutionId: INSTITUTION,
+        evidencePackageId: PACKAGE,
+        segmentHash: hashOf(payload("a")),
+        canonicalPayload: payload("a"),
+      };
 
-    const pending = store.putImmutable(input);
-    input.evidencePackageId = "paket-izmisljeni-2";
-    input.segmentHash = hashOf(payload("b"));
+      const pending = store.putImmutable(input);
+      input.evidencePackageId = "paket-izmisljeni-2";
+      input.segmentHash = hashOf(payload("b"));
 
-    expect(await pending).toEqual({ status: "unavailable", reason: "storage_write_unverified" });
-    await logged();
-    expect(warn.mock.calls).toEqual([["evidence payload write unverified", idsOf("a")]]);
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(await pending).toEqual({ status: "unavailable", reason: "storage_write_unverified" });
+      await logged();
+      expect(warn.mock.calls).toEqual([["evidence payload write unverified", idsOf("a")]]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("spends the call's deadline on a slow getter and sends nothing after it", async () => {
@@ -2387,8 +2437,9 @@ describe("S3EvidencePayloadStore.verifyIdentity (P3)", () => {
       },
     });
     const s3 = fakeS3(() => Promise.resolve(new Response(endless, { status: 200 })));
-    // Reading on would wait for the rest and end in a timeout instead.
-    const { store } = storeWith(s3.fetch, { requestTimeoutMs: 200 });
+    // Reading on would wait for the rest and end in a timeout instead. The
+    // deadline only has to be far beyond the real work (#651).
+    const { store } = storeWith(s3.fetch, { requestTimeoutMs: 5_000 });
 
     await expect(store.verifyIdentity({ institutionId: INSTITUTION })).resolves.toEqual({
       status: "mismatch",
@@ -2453,5 +2504,177 @@ describe("S3EvidencePayloadStore.verifyIdentity (P3)", () => {
       spy.mockRestore();
       vi.useRealTimers();
     }
+  });
+});
+
+describe("readImmutable: the read side (B-8i, read for reconstruction and B-13)", () => {
+  const A = payload("a");
+  const HASH_A = hashOf(A);
+  const ids = { institutionId: INSTITUTION, evidencePackageId: PACKAGE, segmentHash: HASH_A };
+  const read = async (store: S3EvidencePayloadStore, input = ids) => {
+    const outcome = await store.readImmutable(input);
+    await logged();
+    return outcome;
+  };
+  /** The fake answers a missing key as S3 does: 404 with `NoSuchKey`. */
+  const withNoSuchKey = (hook?: (call: Call, signal: AbortSignal) => Promise<Response> | null) => {
+    const s3: ReturnType<typeof fakeS3> = fakeS3((call, signal) => {
+      const own = hook?.(call, signal);
+      if (own) return own;
+      return call.method === "GET" && !s3.objects.has(call.path) ? s3Error(404, "NoSuchKey") : null;
+    });
+    return s3;
+  };
+  const unavailable = (reason: string) => ({ status: "unavailable", reason });
+
+  it("reads back the exact bytes putImmutable stored, with one signed GET under the same key", async () => {
+    const s3 = withNoSuchKey();
+    const { store, warn } = storeWith(s3.fetch);
+    await put(store, "a");
+    s3.calls.length = 0;
+
+    const outcome = await read(store);
+    expect(outcome).toEqual({ status: "found", bytes: new TextEncoder().encode(A) });
+    expect(s3.calls.map((c) => [c.method, c.path])).toEqual([["GET", keyOf(PACKAGE, HASH_A)]]);
+    expect(signedHeadersOf(s3.calls[0])).not.toMatch(/if-none-match|checksum/);
+    expect(s3.fetch.mock.calls[0][1]?.redirect).toBe("error");
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("answers not_found only on NoSuchKey, and never finds another institution's object (B2)", async () => {
+    const s3 = withNoSuchKey();
+    const { store } = storeWith(s3.fetch);
+    await put(store, "a");
+    s3.calls.length = 0;
+
+    await expect(read(store, { ...ids, institutionId: OTHER_INSTITUTION })).resolves.toEqual({
+      status: "not_found",
+    });
+    await expect(read(store, { ...ids, segmentHash: hashOf(payload("b")) })).resolves.toEqual({
+      status: "not_found",
+    });
+    expect(s3.calls.map((c) => c.path)).toEqual([
+      keyOf(PACKAGE, HASH_A, OTHER_INSTITUTION),
+      keyOf(PACKAGE, hashOf(payload("b"))),
+    ]);
+  });
+
+  it.each<[string, () => Promise<Response>]>([
+    ["a 404 without a code", () => Promise.resolve(new Response(null, { status: 404 }))],
+    ["a 404 for a missing bucket", () => s3Error(404, "NoSuchBucket")],
+    ["a 404 whose body is not S3's", () => Promise.resolve(new Response("<html>not found</html>", { status: 404 }))],
+  ])("treats %s as unavailable, never as a missing object", async (_, answer) => {
+    const s3 = fakeS3(() => answer());
+    await expect(read(storeWith(s3.fetch).store)).resolves.toEqual(unavailable("storage_get_status_404"));
+  });
+
+  it.each<[string, Uint8Array]>([
+    ["other bytes", new TextEncoder().encode(payload("b"))],
+    ["the stored bytes cut short", new TextEncoder().encode(A).slice(0, -1)],
+    ["an empty body", new Uint8Array()],
+  ])("never passes on %s under the key: unavailable and an incident with ids only", async (_, bytes) => {
+    const s3 = withNoSuchKey();
+    s3.objects.set(keyOf(PACKAGE, HASH_A), bytes);
+    const { store, warn } = storeWith(s3.fetch);
+
+    await expect(read(store)).resolves.toEqual(unavailable("storage_object_corrupt"));
+    expect(warn.mock.calls).toEqual([["evidence payload corrupt", ids]]);
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("text");
+  });
+
+  it("treats an object larger than any segment as corrupt, reading no more than the limit", async () => {
+    const s3 = fakeS3(() => Promise.resolve(new Response(new Uint8Array(MAX_EVIDENCE_SEGMENT_BYTES + 1), { status: 200 })));
+    const { store, warn } = storeWith(s3.fetch);
+    await expect(read(store)).resolves.toEqual(unavailable("storage_object_corrupt"));
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it.each<[string, () => Promise<Response>, string]>([
+    ["a server error", () => Promise.resolve(new Response(null, { status: 500 })), "storage_get_status_500"],
+    ["a busy store", () => Promise.resolve(new Response(null, { status: 503 })), "storage_get_status_503"],
+    ["a refused signature", () => s3Error(403, "SignatureDoesNotMatch"), "storage_signature_rejected"],
+    ["a skewed clock", () => s3Error(403, "RequestTimeTooSkewed"), "storage_clock_skew"],
+    ["an encoded body", () => Promise.resolve(new Response(A, { status: 200, headers: { "content-encoding": "gzip" } })), "storage_get_encoded"],
+    ["a failed request", () => Promise.reject(new TypeError("fetch failed")), "storage_request_failed"],
+  ])("answers %s as unavailable after one request, with no retry", async (_, answer, reason) => {
+    const s3 = fakeS3(() => answer());
+    await expect(read(storeWith(s3.fetch).store)).resolves.toEqual(unavailable(reason));
+    expect(s3.calls).toHaveLength(1);
+  });
+
+  it("ends a read that never answers at the deadline, and a retry then finds the object", async () => {
+    // The timer ends the hanging read; the retry must not race a real 20 ms
+    // deadline (#651).
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      let hanging = true;
+      const s3: ReturnType<typeof fakeS3> = fakeS3((_, signal) => (hanging ? hang(signal) : null));
+      s3.objects.set(keyOf(PACKAGE, HASH_A), new TextEncoder().encode(A));
+      const { store } = storeWith(s3.fetch, { requestTimeoutMs: 20_000 });
+
+      const pending = read(store);
+      await vi.advanceTimersByTimeAsync(20_000);
+      await expect(pending).resolves.toEqual(unavailable("storage_timeout"));
+      expect(s3.fetch.mock.calls[0][1]?.signal?.aborted).toBe(true);
+      hanging = false;
+      await expect(read(store)).resolves.toMatchObject({ status: "found" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("answers storage_timeout when fetch ignores the abort signal", async () => {
+    const s3 = fakeS3(() => new Promise<Response>(() => {}));
+    const { store } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+    await expect(read(store)).resolves.toEqual(unavailable("storage_timeout"));
+  });
+
+  it("does not count intact bytes that arrive past the deadline as found", async () => {
+    const block = (ms: number) => {
+      const end = performance.now() + ms;
+      while (performance.now() < end) {
+        // busy on purpose
+      }
+    };
+    const s3: ReturnType<typeof fakeS3> = fakeS3(() => (block(60), null));
+    s3.objects.set(keyOf(PACKAGE, HASH_A), new TextEncoder().encode(A));
+    const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+
+    await expect(read(store)).resolves.toEqual(unavailable("storage_timeout"));
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it.each<[string, Partial<typeof ids>]>([
+    ["an institution id in capitals", { institutionId: INSTITUTION.toUpperCase() }],
+    ["an institution id that is not a UUID", { institutionId: "fak-a" }],
+    ["a package id with a slash", { evidencePackageId: "paket/../drugi" }],
+    ["a hash in capitals", { segmentHash: HASH_A.toUpperCase() }],
+    ["a hash that is too short", { segmentHash: HASH_A.slice(1) }],
+  ])("answers %s as unavailable before any request", async (_, change) => {
+    const s3 = fakeS3();
+    await expect(read(storeWith(s3.fetch).store, { ...ids, ...change })).resolves.toEqual(
+      unavailable("storage_request_invalid"),
+    );
+    expect(s3.calls).toHaveLength(0);
+  });
+
+  it("reads each input field once, so a getter cannot move the read to another key", async () => {
+    const s3 = withNoSuchKey();
+    const { store } = storeWith(s3.fetch);
+    await put(store, "a");
+    s3.calls.length = 0;
+    let reads = 0;
+    const shifting = {
+      get institutionId() {
+        reads += 1;
+        return reads === 1 ? INSTITUTION : OTHER_INSTITUTION;
+      },
+      evidencePackageId: PACKAGE,
+      segmentHash: HASH_A,
+    };
+
+    await expect(read(store, shifting)).resolves.toMatchObject({ status: "found" });
+    expect(reads).toBe(1);
+    expect(s3.calls.map((c) => c.path)).toEqual([keyOf(PACKAGE, HASH_A)]);
   });
 });

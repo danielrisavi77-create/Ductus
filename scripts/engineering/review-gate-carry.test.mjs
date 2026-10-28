@@ -62,18 +62,20 @@ test("a carried FAIL holds the gate like a current one", () => {
   assert.match(result.description, /fail/);
 });
 
-test("Owner Override never carries to a later head", () => {
+test("Owner Override on an earlier head does not count unless that head is carried", () => {
   const result = evaluateGate({
     body: body(),
     headSha: head,
     ownerLogin,
     comments: [override(earlier)],
-    carriedHeads: new Set([earlier]),
+    carriedHeads: new Set(),
   });
   assert.equal(result.state, "pending");
 });
 
-const merge = (sha) => ({ sha, parents: [{}, {}] });
+// A merge of the base branch: two parents, the second confirmed in the base
+// branch by the runner (`mergesBase`, #231 question 1).
+const merge = (sha) => ({ sha, parents: [{}, {}], mergesBase: true });
 const plain = (sha) => ({ sha, parents: [{}] });
 
 test("candidates are trusted canonical heads behind base merges, in walk order, without the current head", () => {
@@ -98,24 +100,56 @@ test("a head behind a non-merge commit is not a candidate", () => {
   assert.deepEqual(carriedHeadCandidates([review(earlier)], head, [plain(head)]).heads, []);
 });
 
+// Distinct full SHAs that are neither `head` nor `earlier`.
+const sha = (i) => (i + 1).toString(16).padStart(40, "0");
+
 test("more verdict heads than the cap carry nothing, so an older FAIL is never dropped", () => {
-  const shas = Array.from({ length: MAX_CARRIED_HEADS + 1 }, (_, i) => String(i + 1).repeat(40));
-  const path = [merge(head), ...shas.slice(0, -1).map(merge), plain(shas.at(-1))];
+  // Owner, 26 Oct 2026 (#87 6415952844): 20 heads behind 20 base merges.
+  assert.equal(MAX_CARRIED_HEADS, 20);
+  const shas = Array.from({ length: MAX_CARRIED_HEADS + 1 }, (_, i) => sha(i));
   // The oldest head holds a FAIL; the newer ones hold PASS verdicts.
-  const comments = [review(shas.at(-1), "FAIL"), ...shas.slice(0, -1).map((sha) => qa(sha))];
-  const { heads, reason } = carriedHeadCandidates(comments, head, path);
-  assert.deepEqual(heads, []);
-  assert.match(reason, /more than 5/);
+  const comments = [review(shas.at(-1), "FAIL"), ...shas.slice(0, -1).map((s) => qa(s))];
+  // The walk the runner makes (MAX_MERGE_STEPS + 1 commits) cannot see past
+  // the twentieth head, so a twenty-first never carries and its FAIL is not
+  // dropped silently: nothing carries at all.
+  const walked = [merge(head), ...shas.slice(0, -1).map(merge)];
+  assert.equal(walked.length, MAX_MERGE_STEPS + 1);
+  const unseen = carriedHeadCandidates(comments, head, walked);
+  assert.deepEqual(unseen.heads, []);
+  assert.match(unseen.reason, /non-merge/);
+  // The cap equals the walk: at most MAX_MERGE_STEPS heads lie behind base
+  // merges, so the cap is a second guard that the walk keeps out of reach.
+  assert.ok(MAX_CARRIED_HEADS >= MAX_MERGE_STEPS);
+  // Twenty verdict heads behind base merges all carry.
   const fewer = shas.slice(0, -1);
   const within = carriedHeadCandidates(comments.slice(1), head, [merge(head), ...fewer.slice(0, -1).map(merge), plain(fewer.at(-1))]);
+  assert.equal(within.reason, null);
   assert.equal(within.heads.length, MAX_CARRIED_HEADS);
+});
+
+test("a non-merge commit among twenty heads breaks the carry for every head behind it", () => {
+  const shas = Array.from({ length: MAX_CARRIED_HEADS }, (_, i) => sha(i));
+  const comments = shas.map((s) => review(s));
+  // Head 10 is the PR's own new commit, not a base merge.
+  const path = [merge(head), ...shas.slice(0, 9).map(merge), plain(shas[9]), ...shas.slice(10, -1).map(merge), plain(shas.at(-1))];
+  const { heads, reason } = carriedHeadCandidates(comments, head, path);
+  assert.equal(reason, null);
+  assert.deepEqual(heads, shas.slice(0, 10));
+  assert.equal(onlyBaseMerges(path, shas.at(-1)), false);
+  assert.equal(onlyBaseMerges(path, shas[10]), false);
 });
 
 test("an unfinished first-parent walk carries nothing", () => {
   const path = Array.from({ length: MAX_MERGE_STEPS + 1 }, (_, i) => merge(i === 1 ? earlier : String(i % 10).repeat(40)));
-  const { heads, reason } = carriedHeadCandidates([review(earlier)], head, [merge(head), ...path.slice(1)]);
+  // A named head the walk never saw (an older FAIL beyond the step limit)
+  // stops every carry, also of the head it did see.
+  const unseen = "d".repeat(40);
+  const { heads, reason } = carriedHeadCandidates([review(earlier), review(unseen, "FAIL")], head, [merge(head), ...path.slice(1)]);
   assert.deepEqual(heads, []);
   assert.match(reason, /non-merge/);
+  // F-148: a walk that stopped after it saw every named head is finished for
+  // the carry; nothing named lies beyond it.
+  assert.deepEqual(carriedHeadCandidates([review(earlier)], head, [merge(head), merge(earlier)]), { heads: [earlier], reason: null });
   assert.deepEqual(carriedHeadCandidates([], head, []), { heads: [], reason: null });
 });
 
@@ -188,4 +222,104 @@ test("evaluatePullRequest passes carried heads to the gate", () => {
   assert.equal(carried.result.state, "success");
   const strict = evaluatePullRequest({ pr, files, comments, ownerLogin });
   assert.equal(strict.result.state, "pending");
+});
+
+// #231, question 1 (owner delegated, 12 Oct 2026): only merges of the base
+// branch carry, never an octopus and never a merge of another branch, even
+// with an identical PR diff (plan 3.2, 3.3, 3.1, 10.1).
+test("only a two-parent merge whose second parent is in the base branch allows a carry", () => {
+  const other = (sha) => ({ sha, parents: [{}, {}], mergesBase: false });
+  const unchecked = (sha) => ({ sha, parents: [{}, {}] });
+  const octopus = (sha) => ({ sha, parents: [{}, {}, {}], mergesBase: true });
+  assert.equal(onlyBaseMerges([merge(head), plain(earlier)], earlier), true);
+  for (const step of [other, unchecked, octopus]) {
+    assert.equal(onlyBaseMerges([step(head), plain(earlier)], earlier), false, JSON.stringify(step(head)));
+    assert.equal(onlyBaseMerges([merge(head), step("c".repeat(40)), plain(earlier)], earlier), false);
+  }
+  assert.deepEqual(carriedHeadCandidates([review(earlier)], head, [other(head), plain(earlier)]).heads, []);
+  assert.deepEqual(carriedHeadCandidates([review(earlier)], head, [merge(head), plain(earlier)]).heads, [earlier]);
+});
+
+// Plan 3.9: the exact boundary of MAX_MERGE_STEPS.
+// Owner, 26 Oct 2026 (#87 6415952844): twenty, up from ten.
+test("twenty base merges still carry, twenty-one do not", () => {
+  const merges = (n) => Array.from({ length: n }, (_, i) => merge(i === 0 ? head : sha(i)));
+  assert.equal(MAX_MERGE_STEPS, 20);
+  assert.equal(onlyBaseMerges([...merges(20), plain(earlier)], earlier), true);
+  assert.equal(onlyBaseMerges([...merges(21), plain(earlier)], earlier), false);
+  assert.deepEqual(carriedHeadCandidates([review(earlier)], head, [...merges(20), plain(earlier)]).heads, [earlier]);
+  // The runner's walk stops after MAX_MERGE_STEPS + 1 commits: behind 21
+  // merges it never reaches a non-merge commit, so nothing carries.
+  const { heads, reason } = carriedHeadCandidates([review(earlier)], head, merges(21));
+  assert.deepEqual(heads, []);
+  assert.match(reason, /non-merge/);
+});
+
+// #231, question 4 (owner delegated, 12 Oct 2026), plan 5.4: a FAIL or BLOCK
+// on the current head is never lifted by a later PASS of the same principal on
+// a carried head.
+test("a verdict on the current head beats a later carried verdict of the same principal", () => {
+  for (const verdict of ["FAIL", "BLOCK"]) {
+    const comments = [review(head, verdict), review(earlier, "PASS"), qa(head)];
+    const result = evaluateGate({ body: body("critical"), headSha: head, comments, ownerLogin, carriedHeads: new Set([earlier]) });
+    assert.equal(result.state, "pending", verdict);
+    assert.match(result.description, new RegExp(verdict.toLowerCase()), verdict);
+  }
+  // A later PASS on the current head still replaces an older current FAIL.
+  const fixed = evaluateGate({
+    body: body("critical"),
+    headSha: head,
+    comments: [review(head, "FAIL"), review(head, "PASS"), qa(head)],
+    ownerLogin,
+    carriedHeads: new Set([earlier]),
+  });
+  assert.equal(fixed.state, "success");
+  // Owner decision 16 Oct 2026 (review 6217017710): a later FAIL or BLOCK of
+  // the same principal on a carried head still blocks an older current PASS.
+  for (const verdict of ["FAIL", "BLOCK"]) {
+    const later = evaluateGate({
+      body: body("critical"),
+      headSha: head,
+      comments: [review(head, "PASS"), review(earlier, verdict), qa(head)],
+      ownerLogin,
+      carriedHeads: new Set([earlier]),
+    });
+    assert.equal(later.state, "pending", `PASS(current) then ${verdict}(carried)`);
+    assert.match(later.description, new RegExp(verdict.toLowerCase()), verdict);
+    // An older carried FAIL or BLOCK is replaced by a later current PASS.
+    const replaced = evaluateGate({
+      body: body("critical"),
+      headSha: head,
+      comments: [review(earlier, verdict), review(head, "PASS"), qa(head)],
+      ownerLogin,
+      carriedHeads: new Set([earlier]),
+    });
+    assert.equal(replaced.state, "success", `${verdict}(carried) then PASS(current)`);
+  }
+  // Review 6217178508 (eaaa2ab): an intermediate carried FAIL or BLOCK must
+  // not make the current FAIL or BLOCK disappear before a later carried PASS.
+  for (const currentVerdict of ["FAIL", "BLOCK"]) {
+    for (const middle of ["FAIL", "BLOCK"]) {
+      const result = evaluateGate({
+        body: body("critical"),
+        headSha: head,
+        comments: [review(head, currentVerdict), review(earlier, middle), review(earlier, "PASS"), qa(head)],
+        ownerLogin,
+        carriedHeads: new Set([earlier]),
+      });
+      assert.equal(result.state, "pending", `${currentVerdict}(current), ${middle}(carried), PASS(carried)`);
+    }
+    // Control: the normal fix on the current head still clears it.
+    const fixedAfter = evaluateGate({
+      body: body("critical"),
+      headSha: head,
+      comments: [review(head, currentVerdict), review(earlier, currentVerdict), review(head, "PASS"), qa(head)],
+      ownerLogin,
+      carriedHeads: new Set([earlier]),
+    });
+    assert.equal(fixedAfter.state, "success", `${currentVerdict} then PASS on the current head`);
+  }
+  // A carried PASS still counts when the principal has nothing on the current head.
+  const carried = evaluateGate({ body: body("critical"), headSha: head, comments: [review(earlier), qa(head)], ownerLogin, carriedHeads: new Set([earlier]) });
+  assert.equal(carried.state, "success");
 });

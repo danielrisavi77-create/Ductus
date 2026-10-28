@@ -140,11 +140,18 @@ pre-commit:
 
 pre-push:
   commands:
+    lint:
+      env:
+        CI: "true"
+      run: pnpm lint
     typecheck:
       env:
         CI: "true"
       run: pnpm typecheck
+    # A push that changes only src/ and unit or property tests runs the tests
+    # those changes reach; anything else runs `pnpm test` (DAN-239, D-161).
+    # DUCTUS_PREPUSH_FULL=1 forces the whole suite. CI always runs everything.
     test:
       env:
         CI: "true"
-      run: pnpm test
+      run: node scripts/engineering/pre-push-tests.mjs

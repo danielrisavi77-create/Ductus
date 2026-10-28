@@ -128,8 +128,9 @@ Sesiju otvara samo `identity.open_session`, koju izvršava jedino `ductus_auth` 
 | `course_enrollment_code` | kolegij, hash koda, vrijedi do, aktivan | Nastavnik kolegija |
 | `course_member` | kolegij, korisnik, uloga u kolegiju (`teacher`, `student`), od, do; za studenta kojeg je uklonio nastavnik: tko ga je uklonio i kada mu je povratak dopušten | Nastavnik kolegija sve članove; student nastavnike kolegija i vlastito članstvo |
 | `enrollment_attempt` | korisnik, vrijeme pogrešnog koda. Pogreške jednog korisnika unutar prozora iz `institution_settings`; svaki pokušaj upisa najprije briše retke starije od prozora | Nitko izravno; piše samo `enroll_with_code` |
-| `mentorship` | mentor, student, vrsta rada, od, do, potvrdio | Mentor i student |
-| `assignment` | id, kolegij, trenutna verzija | Članovi kolegija |
+| `mentorship` | mentor, student, vrsta rada, od, do, potvrdio. Planirano kao `institution.mentorship` (DAN-349, D-182); do demoa samo ogledni retci iz lokalne provisioning skripte | Mentor i student |
+| `faculty_work_rule` | ustanova, vrsta rada, pravilo fakulteta za mentorski rad; mentor ga smije samo pooštriti (D-182). Planirano kao `institution.faculty_work_rule` (DAN-349) | Određuje ugovor DAN-349 |
+| `assignment` | id, kolegij, trenutna verzija. Planirano (D-182): mentorski rad je zadatak bez kolegija s `mentorship_id`; postavljeno je točno jedno od ta dva | Članovi kolegija; za mentorski rad mentor i student |
 | `assignment_version` | zadatak, broj verzije, naslov, upute, vrsta rada, Lekta profil i verzija paketa, otvaranje, rok, pravila pomoći i dopuštene svrhe (D-80), profil evidencije, uvoz dopušten, ciklusi verzija, vrijeme. **Nepromjenjiva**; profil nove verzije smije biti samo uži | Članovi kolegija |
 | `notice_acknowledgment` | student, verzija zadatka, vrijeme | Student; nastavnik zadatka |
 | `deadline_extension` | zadatak, student, novi rok, razlog, odobrio | Student; nastavnik zadatka |
@@ -179,7 +180,7 @@ Sadržaj odsječaka živi u privatnom bucketu, adresiran svojim hashom, odvojeno
 
 | Klasa | Primjeri | Prijedlog roka (potvrđuje FPZG, D-30) |
 | --- | --- | --- |
-| Lokalni zapis na uređaju | Dexie journal | Do sinkronizacije; briše se pri odjavi ili prijavi drugog korisnika |
+| Lokalni zapis na uređaju | Dexie journal | Do sinkronizacije; nakon odjave nepredani zapis ostaje vezan uz studenta i nedostupan drugoj osobi (D-118); rok trajanja prije pilota (D-122) |
 | Sesije | `session` | Do isteka ili odjave, zatim kratko radi revizije |
 | Radne verzije | Revizije i kontrolne točke projekta | Do kraja akademske godine zadatka |
 | Evidencija | Odsječci, potvrde, praznine, uvozi | Kao predaja |
@@ -302,7 +303,7 @@ Rokovi se unose i prikazuju u zoni Europe/Zagreb; promjena na zimsko računanje 
 Pravila koja vrijede neovisno o dobavljaču (BACKEND §3, §4.7, §4.8):
 
 - Migracije pokreće `ductus_migrator` s VM-a pri deployu, ne iz CI-ja; nikad ručno na produkciju bez prolaska kroz staging, nikad iz agenta. Expand/migrate/contract; provjera zanošenja sheme između staginga i produkcije.
-- Staging koristi iste vrste resursa kao produkcija (upravljana baza, KMS, S3), jer sintetički prolaz na njemu je uvjet za svaku komponentu koja dira povjerenje (BACKEND §6 točka 12).
+- Staging koristi iste vrste resursa kao produkcija (upravljana baza, KMS, S3). Za svaku novu komponentu i svaku naknadnu promjenu koja dira povjerenje sintetički prolaz na tom stagingu s povratom obvezan je prije udaljenog deploya ili pilota te komponente ili promjene; za lokalni sintetički FPZG demo vrijedi uska granica iz D-159 i BACKEND §6 točka 12.
 - Kopije: PITR, dnevni šifrirani `pg_dump` kod drugog dobavljača, dnevna replika bucketa na drugi račun, mjesečna proba povrata baze i bucketa. Rezervni put na drugom računu u istom kodu infrastrukture.
 - Test u CI-ju provjerava da produkcijska konfiguracija nema lažnog OIDC pružatelja ni razvojnog potpisnika.
 
@@ -313,7 +314,7 @@ Pravila koja vrijede neovisno o dobavljaču (BACKEND §3, §4.7, §4.8):
 - Tajne: GitHub Environments sa zaštitom za CI, na VM-u `sops` + `age`; `age` ključ i pričuvne kopije tajni drži vlasnik izvan VM-a. Tajne nikad u repou.
 - Bez sadržaja radova u logovima, predmemoriji i analitici (BACKEND §4.9): `log_statement=none`, Caddy log bez query stringova, praćenje grešaka bez tijela zahtjeva, canary test u CI-ju i na stagingu.
 - Bez server-side renderiranja sadržaja: rute sa sadržajem su API rute s `dynamic = 'force-dynamic'` i `revalidate = 0`, uz ESLint pravilo i E2E test s dva korisnika.
-- Lokalni journal se briše pri odjavi ili prije prijave drugog korisnika; odjava s nesinkroniziranim promjenama je blokirana uz poruku.
+- Odjava uvijek zatvara sesiju i kolačić (D-118). Lokalni journal vezan je uz studenta: druga osoba ga ne vidi, a nepredani zapis nastavlja se pri ponovnoj prijavi istog studenta.
 - Akcije u CI-ju pinane na SHA; Gitleaks, zizmor, Semgrep i OSV; Dependabot s odgodom.
 - Deploy na produkciju samo iz zelenog `main`-a.
 - Kontrolna lista za svaku backend komponentu (BACKEND §6) je uvjet za spajanje.

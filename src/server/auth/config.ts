@@ -45,6 +45,15 @@ const RESERVED_SUFFIXES = [
 // The only environments where the fake provider and plain http may run.
 const NON_PRODUCTION = new Set(["development", "test"]);
 
+/**
+ * The deployment gate of everything that exists only locally and in CI: the
+ * fake provider here, the development receipt signer of evidence ingest.
+ * An allowlist, so an unset, empty or misspelt NODE_ENV is production.
+ */
+export function isNonProductionBuild(nodeEnv: string | undefined): boolean {
+  return NON_PRODUCTION.has(nodeEnv ?? "");
+}
+
 export class AuthConfigError extends Error {
   override name = "AuthConfigError";
 }
@@ -106,7 +115,7 @@ function isPlainHttpsUrl(value: URL, raw: string): boolean {
 export function loadAuthConfig(env: Env = process.env): AuthConfig {
   // An allowlist, not a match on "production": an unset, empty or misspelt
   // NODE_ENV fails closed (QA of #191).
-  const production = !NON_PRODUCTION.has(env.NODE_ENV ?? "");
+  const production = !isNonProductionBuild(env.NODE_ENV);
   const provider = required(env, "DUCTUS_AUTH_PROVIDER");
   if (provider !== "aai-eduhr" && provider !== "fake-oidc") {
     throw new AuthConfigError("DUCTUS_AUTH_PROVIDER must be aai-eduhr or fake-oidc");
@@ -116,6 +125,12 @@ export function loadAuthConfig(env: Env = process.env): AuthConfig {
   }
 
   const issuer = url(env, "OIDC_ISSUER");
+  // F-123: the issuer itself, never its discovery document. openid-client
+  // fetches a "/.well-known/" URL as given and then skips the check that the
+  // discovered issuer equals it, so the account key would follow this value.
+  if (issuer.href.toLowerCase().includes("/.well-known/")) {
+    throw new AuthConfigError("OIDC_ISSUER must name the issuer, not its discovery document");
+  }
   const redirectUri = url(env, "OIDC_REDIRECT_URI");
   const insecure = issuer.protocol === "http:";
   if (production) {

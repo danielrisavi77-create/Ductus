@@ -2,7 +2,11 @@
 
 > **Ovo je radni nacrt, nije pravni savjet.** Kostur nije procjena: ne sadrži zaključak o prihvatljivosti obrade i ne zamjenjuje procjenu koju provodi voditelj obrade uz službenika za zaštitu podataka.
 
-**Samo pravnik ili ustanova odlučuje:** treba li DPIA po čl. 35. GDPR-a i popisu nadzornog tijela; tko je voditelj i tko je potpisnik; je li potrebno prethodno savjetovanje (čl. 36.); smatra li se obrada praćenjem u smislu čl. 35. st. 3.; je li ritam tipkanja biometrijski podatak (čl. 4. t. 14., D-55); je li oznaka prilagodbe (D-50) podatak o zdravlju; je li obrada razmjerna ako je korištenje obvezno (D-04, D-79). D-29 (ČEKA FPZG) predlaže: FPZG voditelj, Ductus izvršitelj, DPIA prije stvarnih podataka, privola nije osnova.
+**Samo pravnik ili ustanova odlučuje:** po kojoj se osnovi DPIA provodi (da se provodi, odlučeno je u D-143; vidi napomenu niže); tko je voditelj i tko je potpisnik; je li potrebno prethodno savjetovanje (čl. 36.); smatra li se obrada praćenjem u smislu čl. 35. st. 3.; je li vrijeme po promjeni (D-143) biometrijski podatak (čl. 4. t. 14., D-55) i vrijedi li za obradu Prilog III. točka 3(d) Akta o UI; je li oznaka prilagodbe (D-50) podatak o zdravlju; je li obrada razmjerna ako je korištenje obvezno (D-04, D-79). D-29 (ČEKA FPZG) predlaže: FPZG voditelj, Ductus izvršitelj, DPIA prije stvarnih podataka, privola nije osnova.
+
+**DPIA je potrebna prije pilota sa stvarnim studentima (D-143), uz pravno mišljenje (D-55).** Mišljenje mora pokriti biometrijsku kvalifikaciju vremena po promjeni (čl. 4. t. 14. GDPR-a), razmjernost te Prilog III. točku 3(d) Akta o UI, na koji su D-03 i D-55 vezali isključenje ispitnih zadataka. Do pilota se vrijeme po promjeni bilježi samo u demou i testovima s izmišljenim podacima. Ovo ne blokira demo.
+
+**Neprovjereno:** tvrdnja da obrada ispunjava kriterije Agencije za zaštitu osobnih podataka (AZOP) za obveznu DPIA nije provjerena na AZOP-ovu popisu vrsta obrada. Dok se ne provjeri, ne smije se navoditi kao činjenica; DPIA se provodi na temelju D-143 i čl. 35. GDPR-a, a pravnik i DPO potvrđuju osnovu `[ODLUKA]`.
 
 ## 1. Opis obrade
 
@@ -11,7 +15,7 @@
 | Svrha | Bilježiti kako rad nastaje i olakšati razgovor o radu; zaključak donosi čovjek (D-01, D-02). Ductus ne tvrdi tko je napisao rad (PRODUCT §5 pr. 1) |
 | Ispitanici | Studenti; nastavnici, mentori i administratori ustanove. Maloljetnici i studenti s teškoćama nisu obrađeni u dokumentima `[ODLUKA]` |
 | Voditelj / izvršitelj | Predloženo D-29: FPZG / Ductus. Ugovorna strana na strani Ductusa nije određena: vlasnik je fizička osoba (STATE, Owner queue: obrt, FINA) `[ODLUKA]` |
-| Kategorije podataka | `01-tokovi-podataka.md`: identitet iz AAI, članstvo, potvrde obavijesti, tekst rada i njegove promjene, lijepljenja i uvozi, izjave, napomene, razlozi produljenja, revizijski trag; ritam samo uz D-56 |
+| Kategorije podataka | `01-tokovi-podataka.md`: identitet iz AAI, članstvo, potvrde obavijesti, tekst rada i njegove promjene, lijepljenja i uvozi, izjave, napomene, razlozi produljenja, revizijski trag; vrijeme po promjeni (D-143) |
 | Primatelji | Nastavnik i mentor (prema odnosu, C-23), administrator bez sadržaja, podizvršitelji (`04`) |
 | Prijenosi izvan EU | Nisu isključeni (AWS KMS, objava korijena, vremenski žig); `04` |
 | Rokovi | Prijedlozi u ARCHITECTURE §3; ništa nije potvrđeno (D-30) |
@@ -25,10 +29,10 @@
 | Pravna osnova | D-29: privola nije osnova; obavijest nije privola i ne smije se tako prikazivati (PRODUCT §6, student 3) | Koju osnovu navodi ustanova `[ODLUKA]` |
 | Obveznost | FPZG odlučuje je li korištenje obvezno; D-79: rad se piše u Ductusu kao obveza fakulteta. Ako je dobrovoljno, ravnopravna alternativa (PRODUCT §12) | Odluka D-04 i zamjenski postupak za studenta koji odbije ili kad Ductus ne radi `[ODLUKA]` |
 | Ograničenje svrhe | Nema AI analize procesa (pr. 13), nema ocjena, postotaka, rangiranja (pr. 2, §7 "Zabranjeno u sažetku") | Pravilo ustanove da se podaci ne koriste za stegovne postupke ili ocjenjivanje bez razgovora `[ODLUKA]` |
-| Smanjenje podataka | Vrijeme na minutu, odsječci do 30 s (D-24); bez tipki, bez drugih aplikacija, bez kamere (§9); OIB se ne traži | Opseg `profile` pri prijavi i mogući izvor imena (`04`); je li "razlog produljenja" potreban kao slobodan tekst `[ODLUKA]` |
+| Smanjenje podataka | Vrijeme na minutu, odsječci do 30 s (D-24); uz to zasebna klasa s vremenom svake promjene (D-143), vezana uz odsječak hashom; bez tipki, bez drugih aplikacija, bez kamere (§9); OIB se ne traži | Opseg `profile` pri prijavi i mogući izvor imena (`04`); rok zasebne klase vremena po promjeni nije predložen `[ODLUKA]`; je li "razlog produljenja" potreban kao slobodan tekst `[ODLUKA]` |
 | Točnost | Praznina se prikazuje kao praznina (pr. 3); oznake opaženo, uvezeno, izjavljeno (D-44) | Postupak ispravka studentovih podataka nije opisan `[IZVEDBA]` |
 | Ograničenje čuvanja | Klase podataka (ARCHITECTURE §3); retention uloga u bazi postoji (`20261003210000_roles.sql`) | Rokovi D-30; posao brisanja i brisanje kopija nisu izgrađeni `[IZVEDBA]` |
-| Transparentnost | Obavijest je prvi ekran svakog zadatka (pr. 6); student vidi tko je otvorio rad (pr. 17) i isto što vidi nastavnik (pr. 5) | Obavijest o privatnosti nije napisana (nacrt `03`); `access_log` nije izgrađen |
+| Transparentnost | Obavijest je prvi ekran svakog zadatka (pr. 6); student vidi tko je otvorio rad (pr. 17) i isto što vidi nastavnik (pr. 5) | Obavijest o privatnosti nije napisana (nacrt `03`); `audit.access_log` je izgrađen, ali studentsko čitanje nije |
 | Prava ispitanika | Izvoz rada i evidencije u svakom trenutku (PRODUCT §6); povlačenje D-12 | Pristup, ispravak, brisanje, prigovor: nema postupka ni izgradnje `[IZVEDBA]`; tko prima zahtjeve `[ODLUKA]` |
 
 ## 3. Rizici za studente
@@ -37,9 +41,9 @@ Stupci: izgrađeno / planirano / što nedostaje. Težina i vjerojatnost ocjenjuj
 
 | # | Rizik za studenta | Izgrađeno | Planirano | Nedostaje |
 | --- | --- | --- | --- | --- |
-| R1 | Osjećaj nadzora zbog uvida nastavnika u stanje rada, uključujući tekst koji će možda obrisati | Nijedan prikaz nastavniku još ne postoji | Pr. 7, D-06 (svakih najviše 5 min), obavijest o tome | Odluka D-06 ili D-39 (STATE, Owner queue) `[ODLUKA]` |
+| R1 | Osjećaj nadzora zbog prikaza uživo mentoru i nastavniku zadatka, uključujući tekst koji će možda obrisati | Nijedan prikaz nastavniku još ne postoji | Pr. 7, D-142 (prikaz uživo od prvog dana, i za kratke zadatke, D-144), obavijest o tome prije prve rečenice | Ocjena razmjernosti u DPIA-i i pravnom mišljenju (D-55) `[ODLUKA]` |
 | R2 | Podaci se tumače kao dokaz krivnje ili autorstva, izvan konteksta | Rječnik zabranjenih izraza i provjera (`scripts/forbidden-terms/`, testovi u `tests/`) | Pr. 1 do 3, stalni tekst uz brojke | Postupak ustanove za uporabu zapisa pri prigovoru studenta `[ODLUKA]` |
-| R3 | Ritam tipkanja kao mogući biometrijski podatak | Ne bilježi se; nije izgrađeno | D-56 uz uvjete (zasebna klasa, kraći rok, bez izvedenih mjera) | Pravno mišljenje i izmjena Ustava C-14, C-19 prije bilo kakvog bilježenja `[ODLUKA]` |
+| R3 | Vrijeme po promjeni (znak po znak) kao mogući biometrijski podatak | Bilježi se samo u demou i testovima s izmišljenim podacima | D-143 i D-56 uvjeti (3) do (6): zasebna klasa, kraći rok, vezano uz odsječak hashom, bez izvedenih mjera (brzina, pauze, ritam) | Pravno mišljenje (D-55) i DPIA prije pilota sa stvarnim studentima `[ODLUKA]` |
 | R4 | Prisila: korištenje obvezno, student nema stvarnog izbora | Ništa | D-04, D-79, PRODUCT §12 | Odluka FPZG-a i zamjenski postupak `[ODLUKA]` |
 | R5 | Neovlašten pristup tuđem radu (drugi kolegij, druga ustanova) | RLS i pgTAP matrica za identitet i nastavu (`db/tests/030..032`), pristup samo iz odnosa (C-23) | Isto za evidenciju; "RLS je obrana u dubinu" (BACKEND §4.3) | Dokaz za tablice rada i evidencije `[DOKAZ]` |
 | R6 | Pristup operatera (fizička osoba) sadržaju | Web proces bez ključeva; `withActor` | Zabilježen pristup podrške uz pristanak fakulteta; revizijski trag operatera (plan 2.5 u #239) | `access_log`, razdvajanje ovlasti, ugovor o obradi `[IZVEDBA]` |
@@ -55,4 +59,4 @@ Stupci: izgrađeno / planirano / što nedostaje. Težina i vjerojatnost ocjenjuj
 
 ## 4. Savjetovanje i potpisi (prazno)
 
-Mišljenje službenika za zaštitu podataka: `[ ]`. Prikupljeni stavovi studenata (čl. 35. st. 9.), ako ih ustanova traži: `[ ]`. Odluka voditelja o preostalim rizicima: `[ ]`. Datum sljedećeg pregleda: `[ ]`. Pregled mora uslijediti i prije svake promjene obuhvata, osobito prije D-56.
+Mišljenje službenika za zaštitu podataka: `[ ]`. Prikupljeni stavovi studenata (čl. 35. st. 9.), ako ih ustanova traži: `[ ]`. Odluka voditelja o preostalim rizicima: `[ ]`. Datum sljedećeg pregleda: `[ ]`. Pregled mora uslijediti i prije svake promjene obuhvata, osobito prije bilježenja vremena po promjeni sa stvarnim studentima (D-143).

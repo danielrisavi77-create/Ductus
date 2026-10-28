@@ -1,65 +1,156 @@
 /*
- * Ductus design tokens and shell layout, design v6 (D-89).
+ * Ductus design tokens. Values from Archivum V3 (burgundy and copper, owner
+ * decision of 26 Oct 2026, replacing the mint of design v3 of 21 Oct 2026 on
+ * #476 in look); the names are D-123's and the structure D-115's.
  *
- * Tokens come from the Pisač prototype (pisac-editor/public/legacy) with the
- * approved deviations: secondary text #5A605A instead of #8A908A for
- * contrast, targets of at least 32 px in dense bars and 44 px elsewhere, and
- * no --breach colour (D-62). Origin colours show where text came from, never
- * a judgement.
+ * The shell is dark and does not follow the system setting. The writing sheet
+ * carries its own token scope (`.sheet`): dark by default, white when the
+ * writer switches it (`data-sheet-theme="light"`, SheetFrame); the choice is
+ * kept only in the browser. Primary is copper #CF9D72 with #231720 text on it
+ * (7.2:1); in the light shell and on the white sheet the darker copper #8F4F33
+ * carries text and focus (5.5:1 or more).
+ * The server save state (SYNCED) has its own colour, --synced, so it never
+ * reads as the primary or as the pulsing "saving" state. Origin colours show
+ * where text came from, never a judgement (D-57, unchanged by the palette);
+ * no --breach colour (D-62). Targets are at least 32 px in dense bars, 44 px
+ * elsewhere.
+ *
+ * Semantic names (FE-D2): --raised for dialogs and other raised surfaces,
+ * --selected for the selected item or segment, --ink-muted for the quietest
+ * marks, --warn and --error for warning and error marks. --ink-muted is
+ * #85766f, under 4.5:1 on --chrome, --sheet and --raised (3.87, 3.53, 3.29):
+ * large text (24 px, or 18.66 px bold) and non-text marks only (at least
+ * 3:1); small quiet text uses --ink-3 (5.1:1 or more on the same surfaces).
+ * --radius is for panels and --radius-sm for buttons and fields. --raised and
+ * --selected are shell surfaces; the white sheet has no values for them, so
+ * they are not used inside the sheet.
+ * The save-state chip keeps its own colours (PR #386); these names are for
+ * new callers. The manuscript is Newsreader 16.5 px with leading 1.7
+ * (README §5.1), served from app/fonts like every other face (DAN-121).
  */
 
 :root {
-  --ground: #edefea;
+  --ground: #19161a;
+  --sheet: #292329;
+  --chrome: #211b22;
+  --ink: #f1e5d6;
+  --ink-2: #c2b2a3;
+  --ink-3: #a8978a;
+  --rule: #41333c;
+  --rule-2: #31272f;
+  --hover: #2e2530;
+  --raised: #34262e;
+  --selected: #3a2b34;
+  --ink-muted: #85766f;
+  --warn: #e9c58b;
+  --error: #f0a08f;
+  --accent: #cf9d72;
+  --accent-hover: #dcae86;
+  --accent-ink: #231720;
+  --accent-soft: #3b2a2c;
+  --synced: #a2c6e5;
+  --p-internal: #8fb0e0;
+  --p-unknown: #9e9a90;
+  --p-template: #7e7a70;
+  --p-ai: #d3ac63;
+  --cmt: #e9c58b;
+  --cmt-ink: #e9c58b;
+  --cmt-bg: #e9c58b26;
+  --warn-soft: #3a2f22;
+  --synced-soft: #24303a;
+  --radius: 6px;
+  --radius-sm: 4px;
+  --shadow: 0 22px 80px #0003;
+  --lift: 0 1px 1px #0007, 0 12px 34px -10px #000a;
+  --ff-ui: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
+  --ff-display: var(--font-display), Georgia, serif;
+  --ff-mono: var(--font-mono), ui-monospace, Menlo, monospace;
+  --ff-manuscript: var(--font-display), Georgia, serif;
+  color-scheme: dark;
+}
+
+/*
+ * Light shell. It applies to the subtree of the shell element that carries
+ * `data-theme="light"` (AppShell), never to pages outside the shell. Paper
+ * and ivory from Archivum V3; every text token is 4.5:1 or more on --ground
+ * and --chrome (tokens.test.ts).
+ */
+[data-theme="light"] {
+  --ground: #f6efdf;
+  --chrome: #fcf7ec;
+  --raised: #f9f3e6;
+  --hover: #efe5d2;
+  --selected: #efe3cf;
+  --rule: #d9cbb5;
+  --rule-2: #e8dcc8;
+  --ink: #332a27;
+  --ink-2: #5f544d;
+  --ink-3: #6b5f56;
+  --accent: #8f4f33;
+  --accent-ink: #fcf7ec;
+  --accent-soft: #efe0cb;
+  --warn: #7a5420;
+  --synced: #355b81;
   --sheet: #ffffff;
-  --chrome: #f7f8f5;
-  --ink: #191c19;
-  --ink-2: #4a504a;
-  --ink-3: #5a605a;
-  --rule: #dce0d8;
-  --rule-2: #e9ece6;
-  --accent: #2f6f5e;
-  --accent-hover: #245849;
+  --ink-muted: #6b5f56;
+  --accent-hover: #7a4129;
+  --error: #9c3f33;
+  --warn-soft: #f3e6cf;
+  --synced-soft: #e3edf6;
+  --cmt: #7a5420;
+  --cmt-ink: #7a5420;
+  --cmt-bg: #e9c58b40;
+  --lift: 0 1px 1px #0001, 0 12px 34px -10px #0002;
+  color-scheme: light;
+}
+
+/* Dark sheet (default): the shell's own tokens on the Archivum sheet colour. */
+.sheet {
+  --sheet: #292329;
+  /* The dark sheet keeps dark-theme ink inside a light shell too. */
+  --ink: #f1e5d6;
+  --ink-2: #c2b2a3;
+  --ink-3: #a8978a;
+  --ink-muted: #85766f;
+  --rule: #41333c;
+  --rule-2: #31272f;
+  --accent: #cf9d72;
+  --accent-hover: #dcae86;
+  --accent-ink: #231720;
+  --accent-soft: #3b2a2c;
+  --warn: #e9c58b;
+  --cmt: #e9c58b;
+  --cmt-ink: #e9c58b;
+  --cmt-bg: #e9c58b26;
+  color-scheme: dark;
+}
+
+/*
+ * White sheet. --ink-3 is #6b5f56 (5.9:1 on white, text-safe for the
+ * placeholder text); --ink-muted is the same.
+ */
+.sheet[data-sheet-theme="light"] {
+  --sheet: #ffffff;
+  --ink: #2a2321;
+  --ink-2: #5f544d;
+  --ink-3: #6b5f56;
+  --ink-muted: #6b5f56;
+  --rule: #e3dccf;
+  --rule-2: #f6f1e7;
+  --accent: #8f4f33;
+  --accent-hover: #7a4129;
   --accent-ink: #ffffff;
-  --accent-soft: #2f6f5e14;
+  --accent-soft: #8f4f331a;
   --p-internal: #4a6fa5;
   --p-unknown: #6e6a62;
   --p-template: #9a9488;
   --p-ai: #8a6a2f;
+  /* 4.05:1 on white: marks and icons only (3:1), never warning text. */
+  --warn: #a87420;
   --cmt: #b8862a;
   --cmt-ink: #8a6420;
   --cmt-bg: #b8862a26;
-  --lift: 0 1px 1px #1a1d1b08, 0 10px 34px -8px #1a1d1b1f;
-  --ff-ui: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
-  --ff-display: var(--font-display), Georgia, serif;
-  --ff-mono: var(--font-mono), ui-monospace, Menlo, monospace;
-  --ff-manuscript: "Times New Roman", Times, Tinos, "Liberation Serif", serif;
   color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --ground: #0f110e;
-    --sheet: #191c18;
-    --chrome: #141712;
-    --ink: #e9ebe6;
-    --ink-2: #c3c9c2;
-    --ink-3: #a6ada5;
-    --rule: #2c312b;
-    --rule-2: #232722;
-    --accent: #6fbfa5;
-    --accent-hover: #8ccdb7;
-    --accent-ink: #0e1c17;
-    --accent-soft: #6fbfa51f;
-    --p-internal: #8fb0e0;
-    --p-unknown: #9e9a90;
-    --p-template: #7e7a70;
-    --p-ai: #d3ac63;
-    --cmt: #d9ae5b;
-    --cmt-ink: #d9ae5b;
-    --cmt-bg: #d9ae5b2b;
-    --lift: 0 1px 1px #0007, 0 12px 34px -10px #000a;
-    color-scheme: dark;
-  }
 }
 
 * {
@@ -94,7 +185,7 @@ button {
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
 .skip-link {
@@ -104,8 +195,9 @@ button {
   padding: 8px 12px;
   background: var(--sheet);
   border: 1px solid var(--rule);
-  border-radius: 7px;
-  z-index: 10;
+  border-radius: var(--radius-sm);
+  /* Above the shell's side bar (40) and its shade (35). */
+  z-index: 50;
 }
 
 .skip-link:focus {
@@ -159,7 +251,7 @@ main:focus {
   font-size: 12px;
   padding: 1px 7px;
   border: 1px dashed var(--ink-3);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   color: var(--ink-3);
   white-space: nowrap;
 }
@@ -247,7 +339,7 @@ main:focus {
   min-height: 44px;
   padding: 0 22px;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   background: var(--accent);
   color: var(--accent-ink);
   font-weight: 600;
@@ -261,10 +353,15 @@ main:focus {
 
 /* Writing workspace */
 
+/* Inside the design v3 shell ("Pisanje"): a framed block under the shell's top bar. */
 .workspace {
-  min-height: 100vh;
+  min-height: calc(100vh - 76px);
   display: flex;
   flex-direction: column;
+  margin: 0 24px 24px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  overflow: clip;
 }
 
 .workspace__bar {
@@ -272,10 +369,24 @@ main:focus {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 14px;
-  min-height: 46px;
+  min-height: 48px;
   padding: 6px 14px;
   background: var(--chrome);
   border-bottom: 1px solid var(--rule);
+}
+
+.workspace__bar .brand-line__context {
+  margin: 0;
+}
+
+/* Below 800 px the shell's side bar is a drawer: the workspace runs edge to edge. */
+@media (max-width: 799.98px) {
+  .workspace {
+    min-height: calc(100vh - 64px);
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+  }
 }
 
 .brand-line {
@@ -285,11 +396,11 @@ main:focus {
   min-width: 0;
 }
 
+/* Course and assignment beside the brand (editor-v11: 12 px, quiet, as written). */
 .brand-line__context {
   font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--ink-3);
+  overflow-wrap: anywhere;
 }
 
 .modes {
@@ -297,7 +408,7 @@ main:focus {
   gap: 2px;
   margin-left: auto;
   padding: 2px;
-  border-radius: 7px;
+  border-radius: var(--radius);
   background: var(--rule-2);
 }
 
@@ -307,20 +418,26 @@ main:focus {
   min-height: 32px;
   padding: 0 12px;
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   background: transparent;
   font-size: 12.5px;
   font-weight: 500;
-  color: var(--ink-3);
+  color: var(--ink-2);
   text-decoration: none;
+}
+
+.modes__item:not([aria-disabled="true"]):hover {
+  color: var(--ink);
 }
 
 .modes__item[aria-disabled="true"] {
   cursor: not-allowed;
 }
 
+/* The open view: raised segment, full ink and weight, not colour alone. */
 .modes__item[aria-current="page"] {
-  background: var(--sheet);
+  background: var(--hover);
+  font-weight: 600;
   color: var(--ink);
   box-shadow: 0 1px 2px #0000000f;
 }
@@ -328,7 +445,7 @@ main:focus {
 .workspace__body {
   flex: 1;
   display: grid;
-  grid-template-columns: 236px minmax(0, 1fr) 322px;
+  grid-template-columns: 174px minmax(0, 1fr) 284px;
   grid-template-areas: "rail main panel";
   min-height: 0;
 }
@@ -357,6 +474,52 @@ main:focus {
 
 .workspace__panel {
   border-left: 1px solid var(--rule);
+  /* The tab strip runs edge to edge; each tab panel pads itself. */
+  padding: 0;
+}
+
+/* Right panel tabs (design editor-v11 §5.1). */
+.panel-tabs__list {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  gap: 14px;
+  padding: 0 16px;
+  overflow-x: auto;
+  background: var(--chrome);
+  border-bottom: 1px solid var(--rule-2);
+}
+
+.panel-tabs__tab {
+  flex: none;
+  min-height: 36px;
+  padding: 10px 0 9px;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.panel-tabs__tab:hover {
+  color: var(--ink);
+}
+
+/* The open tab: underline and weight as well as colour. */
+.panel-tabs__tab[aria-selected="true"] {
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.panel-tabs__panel {
+  padding: 14px 16px 24px;
+}
+
+/* In the top bar the demo label is quiet text (editor-v11), not a badge. */
+.workspace__bar .demo-badge {
+  padding: 0;
+  border: 0;
 }
 
 .workspace__main {
@@ -369,7 +532,7 @@ main:focus {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 16px;
+  gap: 6px 18px;
   min-height: 34px;
   padding: 6px 14px;
   background: var(--chrome);
@@ -379,14 +542,78 @@ main:focus {
   font-variant-numeric: tabular-nums;
 }
 
-/* The rail toggles exist only where the rails are sections under the sheet. */
+/*
+ * Breakpoints of README §5.1 (FE-D2): below 1240 px the structure rail folds
+ * under the sheet, below 1000 px the right panel does too. The DOM order
+ * (sheet, panel, structure) is the same at every width; only grid areas move
+ * the rails, never `order`, so Tab and the reader keep one order (FE-D1).
+ * A folded rail opens with its own button (ShellRail); the toggle exists in
+ * the DOM at every width and is shown only while its rail is folded.
+ */
 .rail-toggle {
   display: none;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  background: transparent;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-align: left;
 }
 
-@media (max-width: 1100px) {
+.rail-toggle::after {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-left: auto;
+  border-right: 1.5px solid var(--ink-2);
+  border-bottom: 1.5px solid var(--ink-2);
+  transform: translateY(-2px) rotate(45deg);
+}
+
+.rail-toggle[aria-expanded="true"]::after {
+  transform: translateY(2px) rotate(-135deg);
+}
+
+/* Design v3 breakpoints, with the shell's side bar taking 236 px: up to
+   1250 px sheet and panel side by side, structure folded under the sheet. */
+@media (max-width: 1250px) {
+  .workspace__body {
+    grid-template-columns: minmax(0, 1fr) 284px;
+    grid-template-rows: 1fr auto;
+    grid-template-areas:
+      "main panel"
+      "rail panel";
+  }
+
+  .workspace__rail {
+    padding: 0;
+    border: 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  .workspace__rail > .rail-toggle {
+    display: flex;
+  }
+
+  .workspace__rail > .rail-body {
+    padding: 4px 12px 20px;
+  }
+
+  .workspace__rail > .rail-body[data-open="false"] {
+    display: none;
+  }
+}
+
+/* Up to 1050 px: one column, both rails folded under the sheet in DOM order. */
+@media (max-width: 1050px) {
   .workspace__body {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
     grid-template-areas:
       "main"
       "panel"
@@ -394,47 +621,20 @@ main:focus {
     align-content: start;
   }
 
-  .workspace__rail,
   .workspace__panel {
-    padding: 0;
     border: 0;
     border-top: 1px solid var(--rule);
   }
 
-  .rail-toggle {
+  .workspace__panel > .rail-toggle {
     display: flex;
-    align-items: center;
-    gap: 12px;
-    width: 100%;
-    min-height: 44px;
-    padding: 0 16px;
-    border: 0;
-    background: transparent;
-    font-size: 13.5px;
-    font-weight: 600;
-    text-align: left;
   }
 
-  .rail-toggle::after {
-    content: "";
-    flex: none;
-    width: 7px;
-    height: 7px;
-    margin-left: auto;
-    border-right: 1.5px solid var(--ink-2);
-    border-bottom: 1.5px solid var(--ink-2);
-    transform: translateY(-2px) rotate(45deg);
-  }
-
-  .rail-toggle[aria-expanded="true"]::after {
-    transform: translateY(2px) rotate(-135deg);
-  }
-
-  .rail-body {
+  .workspace__panel > .rail-body {
     padding: 4px 12px 20px;
   }
 
-  .rail-body[data-open="false"] {
+  .workspace__panel > .rail-body[data-open="false"] {
     display: none;
   }
 }
@@ -449,10 +649,9 @@ main:focus {
   gap: 8px;
   margin: 0 0 7px;
   padding: 0 4px;
+  /* editor-v11 sets 11.5 px; 12 px is the floor for interface text. */
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: var(--ink-3);
 }
 
@@ -477,19 +676,53 @@ main:focus {
 }
 
 .sheet {
-  max-width: 756px;
+  max-width: 720px;
   margin: 0 auto;
   padding: 56px 76px 48px;
   background: var(--sheet);
-  border-radius: 3px;
-  box-shadow: var(--lift);
+  color: var(--ink);
+  border-radius: var(--radius-sm);
+  /* The lift is invisible on the dark ground; a 1 px rule keeps the sheet's edge (review #156, c). */
+  box-shadow: 0 0 0 1px var(--rule), var(--lift);
 }
 
-/* The lift is invisible on the dark ground; a 1 px rule keeps the sheet's edge (review #156, c). */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .sheet {
-    box-shadow: 0 0 0 1px var(--rule), var(--lift);
-  }
+/* Sheet theme switch, above the sheet in the dark shell. */
+.sheet-theme {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: 720px;
+  margin: 0 auto 10px;
+}
+
+.sheet-theme__options {
+  display: inline-flex;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.sheet-theme__option {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* Pressed is shown by a check mark and weight as well as by colour. */
+.sheet-theme__option[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.sheet-theme__option[aria-pressed="true"]::before {
+  content: "\2713\00a0";
 }
 
 @media (max-width: 640px) {
@@ -510,6 +743,7 @@ main:focus {
   .workspace__status,
   .rail-section__title,
   .rail-empty,
+  .panel-tabs__tab,
   .editor-toolbar .btn {
     font-size: 13px;
   }
@@ -517,8 +751,8 @@ main:focus {
 
 .manuscript {
   font-family: var(--ff-manuscript);
-  font-size: 16px;
-  line-height: 1.5;
+  font-size: 16.5px;
+  line-height: 1.7;
   text-align: justify;
   hyphens: auto;
 }
@@ -527,8 +761,11 @@ main:focus {
   margin: 0 0 26px;
   text-align: center;
   font-size: 19px;
-  font-weight: 700;
+  /* Newsreader is served at 400-500 (app/fonts); 700 would be a synthetic bold. */
+  font-weight: 500;
   line-height: 1.35;
+  /* An assignment title (F-8 point 5) wraps whole, even a long unbroken word. */
+  overflow-wrap: anywhere;
 }
 
 .manuscript__placeholder {
@@ -550,7 +787,7 @@ main:focus {
 .editor-toolbar .btn {
   min-height: 32px;
   padding: 0 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--ink);
   font-size: 12.5px;
@@ -562,11 +799,201 @@ main:focus {
   color: var(--accent);
 }
 
+/* F-8 step 1: the toolbar sits above the sheet, as wide as the sheet (720 px, editor-v11). */
+.workspace__main > .editor-toolbar {
+  max-width: 720px;
+  margin: 12px auto 0;
+  padding: 4px 6px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--chrome);
+}
+
+.editor-toolbar .btn:hover {
+  background: var(--rule-2);
+  color: var(--ink);
+}
+
+/* Unavailable is said by aria-disabled; the faded look only repeats it. */
+.editor-toolbar .btn[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* FE-D5: "Više ▾" and "Prikaz ▾" (editor-v11). With the toolbar on the page
+   the sheet theme is in "Prikaz", so the switch above the sheet steps aside. */
+.workspace__main:has(> .editor-toolbar) .sheet-theme {
+  display: none;
+}
+
+.editor-menu {
+  position: relative;
+}
+
+.editor-menu--end {
+  margin-left: auto;
+}
+
+.editor-toolbar .editor-menu__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-2);
+}
+
+.editor-toolbar .editor-menu__button[aria-expanded="true"] {
+  background: var(--selected);
+  color: var(--ink);
+}
+
+/* The caret keeps the button's size: no interface text under 12/13 px. */
+.editor-menu__caret {
+  color: var(--ink-3);
+}
+
+.editor-menu__list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 76;
+  display: flex;
+  flex-direction: column;
+  min-width: 190px;
+  padding: 5px;
+  background: var(--raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  box-shadow: var(--lift);
+}
+
+.editor-menu--end .editor-menu__list {
+  left: auto;
+  right: 0;
+}
+
+.editor-menu__heading {
+  padding: 6px 9px 2px;
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.editor-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.editor-menu__item:hover,
+.editor-menu__item:focus-visible {
+  background: var(--selected);
+}
+
+.editor-menu__glyph {
+  min-width: 20px;
+  color: var(--ink-2);
+}
+
+/* Checked is said by a check mark and weight as well as by colour. */
+.editor-menu__item[aria-checked="true"] {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.editor-menu__check {
+  margin-left: auto;
+}
+
+.editor-menu__item[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Heading list in the structure rail (F-8 step 1). */
+.outline {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.outline__link {
+  display: block;
+  width: 100%;
+  min-height: 32px;
+  padding: 3px 7px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  text-align: left;
+}
+
+.outline__item[data-level="2"] .outline__link {
+  padding-left: 19px;
+}
+
+.outline__item[data-level="3"] .outline__link {
+  padding-left: 31px;
+}
+
+.outline__link:hover {
+  background: var(--rule-2);
+  color: var(--ink);
+}
+
+/* The current section: weight and a rule as well as colour. */
+.outline__link[aria-current="location"] {
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.outline__untitled {
+  font-style: italic;
+  color: var(--ink-3);
+}
+
+/* Phone: no interface text under 13 px (review #156, 5). Repeated here because
+   the rules above come after the phone block and would win over it. */
+@media (max-width: 640px) {
+  .editor-toolbar .btn,
+  .editor-menu__item,
+  .editor-menu__heading,
+  .outline__link {
+    font-size: 13px;
+  }
+
+  /* A phone: both menus open towards the left, inside the page. */
+  .editor-menu__list {
+    left: auto;
+    right: 0;
+  }
+
+  /* Touch targets of at least 44 px on a phone (FE-D5). */
+  .editor-toolbar .btn,
+  .editor-menu__item {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
 .editor-surface .ProseMirror {
   outline: none;
   font-family: var(--ff-manuscript);
-  font-size: 16px;
-  line-height: 1.5;
+  font-size: 16.5px;
+  line-height: 1.7;
 }
 
 /* The rule above drops the browser outline; keyboard focus must stay visible.
@@ -575,7 +1002,7 @@ main:focus {
 .editor-surface .ProseMirror:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 4px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
 /* Read by assistive technology only. */
@@ -609,9 +1036,14 @@ main:focus {
   animation: sync-pulse 1.2s ease-in-out infinite;
 }
 
+/* SYNCED: own colour and a filled dot, never the primary's (D-123). */
+.sync-chip[data-tone="ok"] {
+  font-weight: 600;
+}
+
 .sync-chip[data-tone="ok"] .sync-chip__dot {
-  border-color: var(--accent);
-  background: var(--accent);
+  border-color: var(--synced);
+  background: var(--synced);
 }
 
 .sync-chip[data-tone="warn"] .sync-chip__dot {
@@ -641,10 +1073,169 @@ main:focus {
   }
 }
 
+/* Length in the status bar (FE-D6, editor-v11): the count stands out. */
+.status-length__count {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.status-length__selected {
+  color: var(--ink);
+}
+
+/* #711 F1: the free draft's line under the title, and the note past the due date above the sheet. */
+.sheet-note {
+  margin: 0 0 12px;
+  color: var(--ink-2);
+  font-family: var(--ff-ui);
+  font-size: 14px;
+}
+
+.sheet-notice {
+  max-width: 720px;
+  margin: 0 auto 12px;
+  padding: 8px 16px;
+  border: 1px solid var(--rule);
+  background: var(--cmt-bg);
+  color: var(--ink);
+  font-family: var(--ff-ui);
+  font-size: 14px;
+}
+
+/* #711 F1b: the earlier draft of this device, closed above the sheet. */
+.earlier-draft {
+  max-width: 720px;
+  margin: 0 auto 12px;
+  padding: 8px 16px;
+  border: 1px solid var(--rule);
+  color: var(--ink);
+  font-family: var(--ff-ui);
+  font-size: 14px;
+}
+
+.earlier-draft summary {
+  cursor: pointer;
+}
+
+.earlier-draft__text {
+  max-height: 240px;
+  overflow: auto;
+  padding: 8px 12px;
+  border-left: 2px solid var(--rule);
+  white-space: pre-wrap;
+}
+
+.earlier-draft__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* No network (F-8, DAN-211): text and icon, never colour alone. */
+.offline-banner p {
+  margin: 0;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--cmt-bg);
+  color: var(--ink);
+  font-family: var(--ff-ui);
+  font-size: 14px;
+}
+
+.offline-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.offline-chip__icon {
+  color: var(--cmt);
+  flex: none;
+}
+
 /* Local editor on /rad (F-3 step 1b). */
 
 .editor-surface .ProseMirror {
   min-height: 12em;
+}
+
+/* Sheet type from the Ductura editor (docs/design/ductura/editor-v11.dc.html,
+   `.ed p/h2/h3`). The design has two levels, chapter (h2) and subchapter (h3);
+   the editor's h1 is the chapter, h2 and h3 take the subchapter size. Headings
+   stay below the sheet title (.manuscript__title, 19 px). Newsreader is served
+   at 400-500 (app/fonts), so 500 instead of the design's 700. Colour inherits
+   from the sheet, so the dark and white sheet both apply. */
+.editor-surface .ProseMirror p {
+  margin: 0 0 6pt;
+}
+
+.editor-surface .ProseMirror h1,
+.editor-surface .ProseMirror h2,
+.editor-surface .ProseMirror h3 {
+  font-weight: 500;
+  line-height: 1.3;
+  text-align: left;
+}
+
+.editor-surface .ProseMirror h1 {
+  font-size: 18.7px;
+  margin: 18pt 0 12pt;
+}
+
+.editor-surface .ProseMirror h2,
+.editor-surface .ProseMirror h3 {
+  font-size: 16px;
+  margin: 12pt 0 6pt;
+}
+
+/* A bullet item (E1) is a flat block, so the list marker sits on the item
+   itself; consecutive items read as one list (editor-v11 `.ed ul`). */
+.editor-surface .ProseMirror p[data-block="bullet-item"] {
+  display: list-item;
+  list-style: disc outside;
+  margin: 0 0 0 26px;
+  text-align: left;
+}
+
+.editor-surface .ProseMirror p[data-block="bullet-item"]:not(:has(+ p[data-block="bullet-item"])) {
+  margin-bottom: 6pt;
+}
+
+.manuscript ul {
+  margin: 0 0 6pt;
+  padding-left: 26px;
+  text-align: left;
+}
+
+/* A quote paragraph (E1) is a flat block too; consecutive ones read as one
+   block quote: one rule on the left, the space between them inside it
+   (editor-v11 `.ed blockquote`; --rule and --ink-2 on both sheets). */
+.editor-surface .ProseMirror p[data-block="quote"] {
+  margin: 0;
+  padding: 0 0 6pt 16px;
+  border-left: 2px solid var(--rule);
+  color: var(--ink-2);
+}
+
+.editor-surface .ProseMirror p[data-block="quote"]:not(:has(+ p[data-block="quote"])) {
+  margin-bottom: 6pt;
+  padding-bottom: 0;
+}
+
+.manuscript blockquote {
+  margin: 0 0 6pt;
+  padding-left: 16px;
+  border-left: 2px solid var(--rule);
+  color: var(--ink-2);
+}
+
+.manuscript blockquote > p:last-child {
+  margin-bottom: 0;
+}
+
+.editor-surface .ProseMirror > :first-child {
+  margin-top: 0;
 }
 
 .editor-surface .ProseMirror p.is-editor-empty:first-child::before {
@@ -664,4 +1255,10 @@ main:focus {
 
 .editor-export {
   margin: 0 0 16px;
+}
+
+/* A teacher's comment next to a paragraph (F-9): a decoration, never a mark in the document. */
+.comment-mark {
+  background: var(--cmt-bg);
+  border-bottom: 1px solid var(--cmt);
 }

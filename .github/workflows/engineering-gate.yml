@@ -3,11 +3,28 @@ name: Engineering review gate
 # This workflow is intentionally privileged but metadata-only. It always loads
 # and executes code from the default branch, never fetches or executes PR code,
 # uses no repository secrets, and can write only commit statuses.
+#
+# Repository Actions policy "engineering-gate-policy" (id 6529, set by the owner
+# in Settings > Actions > Policies, not in this repo) covers this file and
+# free-ai-pr-review.yml with a restrict_action_events rule. An event missing
+# from it never runs: the run ends as startup_failure ("Event '<name>' is not
+# allowed to trigger Actions workflows"). Every trigger under `on:` in both
+# files must be on the list below, and a new one needs the owner to add it to
+# the policy first (DAN-337). engineering-workflow.test.mjs holds this list to
+# the triggers. Check the live policy with
+# `gh api repos/danielrisavi77-create/Ductus/actions/policies/6529`.
+# actions-policy-6529-allowed-events: pull_request_target, issue_comment, workflow_run
 on: # zizmor: ignore[dangerous-triggers] trusted default-branch metadata gate; PR code is never fetched or executed
   pull_request_target:
     types: [opened, synchronize, reopened, edited, ready_for_review, auto_merge_enabled, auto_merge_disabled]
   issue_comment:
     types: [created, edited, deleted]
+  # A PR review voids quota evidence (#128). pull_request_review would run the
+  # PR's copy of this file, so an unprivileged relay forwards it instead and
+  # this default-branch definition runs on its completion.
+  workflow_run:
+    workflows: [Engineering gate review signal]
+    types: [completed]
 
 permissions:
   contents: read
@@ -16,7 +33,7 @@ permissions:
   statuses: write
 
 concurrency:
-  group: engineering-gate-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
+  group: engineering-gate-${{ github.event.pull_request.number || github.event.issue.number || github.event.workflow_run.pull_requests[0].number || github.run_id }}
   # Queue instead of cancel: bot comments arrive seconds after a PR opens and
   # would otherwise leave a cancelled (red) evaluator on the PR head.
   cancel-in-progress: false

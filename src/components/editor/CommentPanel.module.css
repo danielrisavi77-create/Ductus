@@ -1,0 +1,153 @@
+/* "Komentari" of design editor-v11 §5.1, on the shared tokens (app/globals.css, D-123). */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.thread {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px 10px;
+  border: 1px solid var(--rule);
+  border-left: 2px solid var(--cmt);
+  border-radius: var(--radius);
+  font-size: 12.5px;
+}
+
+.thread[data-state="resolved"] {
+  border-left-color: var(--rule);
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 12px;
+}
+
+.number {
+  font-weight: 700;
+  color: var(--cmt-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.who {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.meta {
+  margin-left: auto;
+  color: var(--ink-3);
+}
+
+.quote {
+  margin: 0;
+  font-family: var(--ff-display);
+  font-style: italic;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.body {
+  margin: 0;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.when,
+.note,
+.notPlaced {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+
+.notPlaced {
+  color: var(--ink-2);
+}
+
+.reply {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 10px;
+  border-left: 1px solid var(--rule);
+}
+
+.link {
+  align-self: flex-start;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 12px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.link:hover {
+  color: var(--ink);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.form textarea {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--ground);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+  resize: vertical;
+}
+
+.send {
+  align-self: flex-start;
+  min-height: 32px;
+  padding: 3px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.send:disabled {
+  opacity: 0.6;
+}
+
+.error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink);
+}
+
+/* #732 item 8: 12 px is the floor for interface text, 13 px on a phone (app/globals.css). */
+@media (max-width: 640px) {
+  .thread,
+  .head,
+  .who,
+  .quote,
+  .when,
+  .note,
+  .notPlaced,
+  .link,
+  .form textarea,
+  .send,
+  .error {
+    font-size: 13px;
+  }
+}

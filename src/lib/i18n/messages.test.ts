@@ -70,3 +70,40 @@ describe("messages.hr", () => {
     }
   });
 });
+
+// FE-D3 (DAN-222): the sign-in screen offers AAI@EduHr alone (D-09) and says
+// nothing about what is or is not recorded, so it cannot contradict the live
+// view and replay (D-142..D-144) or the notice of each assignment.
+describe("messages.hr prijava", () => {
+  const prijava = leaves(messagesHr.prijava, "prijava");
+
+  it("names AAI@EduHr on the sign-in button", () => {
+    expect(messagesHr.prijava.button).toContain("AAI@EduHr");
+  });
+
+  it("offers no other way to sign in", () => {
+    for (const [path, text] of prijava) {
+      const lower = text.toLocaleLowerCase("hr");
+      for (const word of ["e-pošt", "email", "e-mail", "putovnic", "google", "microsoft"]) {
+        expect(lower.includes(word), `${path}: "${text}" contains "${word}"`).toBe(false);
+      }
+    }
+  });
+
+  it("makes no claim about recording, live view or replay", () => {
+    for (const [path, text] of prijava) {
+      const lower = text.toLocaleLowerCase("hr");
+      for (const word of ["bilje", "uživo", "reproduc", "čuva", "ne vidi"]) {
+        expect(lower.includes(word), `${path}: "${text}" contains "${word}"`).toBe(false);
+      }
+    }
+  });
+});
+
+// D-124: the interface name is Ductura; the repo and code stay Ductus (#838).
+describe("product name in the interface catalogue", () => {
+  it("uses Ductura, never Ductus", () => {
+    const named = leaves(messagesHr).filter(([, text]) => /\bDuctus\b/.test(text));
+    expect(named).toEqual([]);
+  });
+});

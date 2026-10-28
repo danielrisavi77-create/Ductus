@@ -43,7 +43,7 @@
 
 import { Fragment, Slice, type Node as PmNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey, type EditorState, type Transaction } from "@tiptap/pm/state";
-import { Mapping, Step, StepResult, type Mappable } from "@tiptap/pm/transform";
+import { Mapping, Step, StepResult, type Mappable, type MapResult, type StepMap } from "@tiptap/pm/transform";
 
 import {
   isNodeId,
@@ -141,11 +141,43 @@ function signature(node: PmNode): string {
  * content token that the transaction did not delete, or null when the block
  * was empty or all of its content was deleted.
  */
-function survivingContent(old: Block, mapping: Mapping): number | null {
+type IdentityMapResult = Pick<MapResult, "pos" | "deleted" | "deletedAfter">;
+type IdentityPositionMapper = (pos: number, assoc: number) => IdentityMapResult;
+type OrderedStepMap = StepMap & {
+  mapIdentityPosition?: (pos: number, assoc: number) => IdentityMapResult;
+};
+
+/** Use the repair step's ordered mapper for the final map when it is safe. */
+function identityPositionMapper(mapping: Mapping): IdentityPositionMapper {
+  const last = mapping.to - 1;
+  const candidate = mapping.maps[last] as OrderedStepMap | undefined;
+  if (
+    mapping.from !== 0
+    || mapping.to !== mapping.maps.length
+    || last < 0
+    || mapping.getMirror(last) !== undefined
+    || typeof candidate?.mapIdentityPosition !== "function"
+  ) {
+    return (pos, assoc) => mapping.mapResult(pos, assoc);
+  }
+
+  const before = mapping.slice(0, last);
+  return (pos, assoc) => {
+    const earlier = before.mapResult(pos, assoc);
+    const repaired = candidate.mapIdentityPosition!(earlier.pos, assoc);
+    return {
+      pos: repaired.pos,
+      deleted: earlier.deleted || repaired.deleted,
+      deletedAfter: earlier.deletedAfter || repaired.deletedAfter,
+    };
+  };
+}
+
+function survivingContent(old: Block, mapPosition: IdentityPositionMapper): number | null {
   const start = old.pos + 1;
   const end = start + old.node.content.size;
   for (let pos = start; pos < end; pos += 1) {
-    const mapped = mapping.mapResult(pos, 1);
+    const mapped = mapPosition(pos, 1);
     if (!mapped.deletedAfter) {
       return mapped.pos;
     }
@@ -188,6 +220,7 @@ function holderOf(blocks: readonly Block[], pos: number): Block | undefined {
  * earlier text, so the outcome does not depend on the order of evaluation.
  */
 function trace(oldDoc: PmNode, newDoc: PmNode, mapping: Mapping): Trace {
+  const mapPosition = identityPositionMapper(mapping);
   const next = blocksOf(newDoc);
   const byPos = new Map(next.map((block) => [block.pos, block]));
   const claims = new Map<number, Block>();
@@ -196,7 +229,7 @@ function trace(oldDoc: PmNode, newDoc: PmNode, mapping: Mapping): Trace {
   const gone: Block[] = [];
 
   for (const old of blocksOf(oldDoc)) {
-    const at = survivingContent(old, mapping);
+    const at = survivingContent(old, mapPosition);
     const heir = at === null ? undefined : holderOf(next, at);
     if (at === null || !heir) {
       (at === null ? empty : removed).push(old);
@@ -211,8 +244,8 @@ function trace(oldDoc: PmNode, newDoc: PmNode, mapping: Mapping): Trace {
     claims.set(heir.pos, old);
   }
   for (const old of empty) {
-    const opening = mapping.mapResult(old.pos, 1);
-    const content = mapping.mapResult(old.pos + 1, 1);
+    const opening = mapPosition(old.pos, 1);
+    const content = mapPosition(old.pos + 1, 1);
     const pos = !opening.deletedAfter ? opening.pos : !content.deleted ? content.pos - 1 : -1;
     if (byPos.has(pos) && !claims.has(pos)) {
       claims.set(pos, old);
@@ -414,6 +447,16 @@ class SetNodeIds extends Step {
   toJSON(): never {
     throw new Error("SetNodeIds cannot be serialised: block ids are derived by the identity plugin, not replayed from JSON");
   }
+}
+
+/**
+ * The ids a step of this plugin sets, by block position, or null for any
+ * other step. Evidence capture (F-8 3d-1) writes each as an `attr` step of
+ * `ductus-edit-steps-v1`, whose parser and replayer check every id; this
+ * plugin still never reads one back.
+ */
+export function nodeIdFixesOf(step: Step): readonly { pos: number; id: unknown }[] | null {
+  return step instanceof SetNodeIds ? step.fixes : null;
 }
 
 /**
