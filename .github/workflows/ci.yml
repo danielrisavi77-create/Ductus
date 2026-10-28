@@ -54,6 +54,7 @@ jobs:
 
   build:
     name: Lint, typecheck, test and build
+    needs: scope
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -90,10 +91,15 @@ jobs:
       - run: pnpm test:unit
       - name: Engineering system unit tests
         run: shopt -s failglob; node --test scripts/engineering/*.test.mjs scripts/orchestrator/*.test.mjs
-      - run: pnpm test:property
+      - name: Property tests
+        if: needs.scope.outputs.profile == 'full'
+        run: pnpm test:property
       - name: Demo launcher and fake OIDC account tests
+        if: needs.scope.outputs.profile == 'full'
         run: pnpm test:demo && pnpm test:fake-oidc
-      - run: pnpm build
+      - name: Build
+        if: needs.scope.outputs.profile == 'full'
+        run: pnpm build
 
   # Keep the required context stable; skipped/failed dependencies must never
   # silently turn it green. This job does not check out or execute PR code.
