@@ -74,7 +74,7 @@ const capability = {
   contractTest: "local-stack/s3-evidence-payload-store.integration",
 };
 
-async function rawGetStatus(path: string[]) {
+async function rawGet(path: string[]) {
   const signed = signS3Request({
     method: "GET",
     endpoint: new URL(S3_ENDPOINT),
@@ -86,15 +86,27 @@ async function rawGetStatus(path: string[]) {
     now: new Date(),
   });
   const response = await fetch(signed.url, { headers: signed.headers, redirect: "error" });
-  await response.arrayBuffer();
-  return response.status;
+  return { status: response.status, body: new Uint8Array(await response.arrayBuffer()) };
 }
+
+const rawGetStatus = async (path: string[]) => (await rawGet(path)).status;
 
 /** Lets the macrotask the router writes its log line in run. */
 const logged = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 const label = (institutionId: string) =>
   new TextEncoder().encode(JSON.stringify({ institutionId, region }));
+
+async function ensureIdentityLabel(bucket: string, institutionId: string) {
+  const expected = label(institutionId);
+  const status = await rawPut([bucket, STORAGE_IDENTITY_KEY], expected);
+  if (status === 200) return;
+
+  expect(status).toBe(412); // The create-only identity marker already exists.
+  const existing = await rawGet([bucket, STORAGE_IDENTITY_KEY]);
+  expect(existing.status).toBe(200);
+  expect(existing.body).toEqual(expected);
+}
 
 function routerFromEnv(warn: (message: string, fields: Record<string, string>) => void = () => undefined) {
   const domains = Object.entries(buckets).map(([institutionId, bucket]) => ({
@@ -149,9 +161,9 @@ beforeAll(async () => {
     }
     expect([200, 409]).toContain(status);
   }
-  expect(await rawPut([buckets[FAK_A], STORAGE_IDENTITY_KEY], label(FAK_A))).toBe(200);
-  expect(await rawPut([buckets[FAK_B], STORAGE_IDENTITY_KEY], label(FAK_B))).toBe(200);
-  expect(await rawPut([buckets[FAK_C], STORAGE_IDENTITY_KEY], label(FAK_A))).toBe(200);
+  await ensureIdentityLabel(buckets[FAK_A], FAK_A);
+  await ensureIdentityLabel(buckets[FAK_B], FAK_B);
+  await ensureIdentityLabel(buckets[FAK_C], FAK_A);
 }, 60_000);
 
 describe("InstitutionRoutedPayloadStore against the local object store", () => {
