@@ -135,7 +135,9 @@ SELECT bag_eq(
     'list_teacher_courses() app',
     'actor_mentorship_role(p_mentorship_id uuid) definer app',
     'check_mentorship_version() definer',
-    'notify_assignment_version() definer'
+    'notify_assignment_version() definer',
+    'read_notification(p_notification_id uuid) definer app',
+    'mark_notification_read(p_notification_id uuid) definer app'
   ],
   'functions: exact signatures, which are SECURITY DEFINER and which ductus_app may call'
 );
