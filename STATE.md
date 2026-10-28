@@ -30,7 +30,7 @@ Agent nikad ne uzima ove stavke i nikad ne čeka na njima ako drugi posao može 
 - [ ] Računovođa: PDV; FINA tek uz obrt ili FPZG kao ugovornu stranu.
 - [ ] Vidljivost repoa: prije stvarnih podataka ponovno odlučiti ostaje li javni.
 - [ ] Session adresa orkestratora: adresa upisana u `STATE.md` je arhivirana (stanje 25. 10. 2026.), a nova zasad nije upisana. Vlasnik odlučuje hoće li se nova adresa upisati u javni `STATE.md` ili voditi izvan repoa.
-- [ ] Konačno ime proizvoda.
+- [x] 28. 10. 2026.: konačno ime proizvoda je **Ductura**; repozitorij, paket i identifikatori u kodu ostaju `ductus` (D-186; trag: #960 `issuecomment-6469934229`, t. 4).
 
 ## Engineering System v1
 
