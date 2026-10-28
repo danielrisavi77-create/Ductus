@@ -28,6 +28,8 @@ import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import type { SheetTheme } from "@/lib/ui/sheet-theme";
 
 import { useLocalEditor } from "./LocalDocument";
+import styles from "./EditorToolbar.module.css";
+import ToolbarIcon from "./ToolbarIcon";
 import ToolbarMenu from "./ToolbarMenu";
 import { MAX_COLLAPSED, rovingIndex, splitTools } from "./toolbar-menu";
 
@@ -81,37 +83,37 @@ type Tool = {
 
 const TOOLS: readonly Tool[] = [
   {
-    key: "paragraph", label: t.toolbar.paragraph, glyph: "¶",
+    key: "paragraph", label: t.toolbar.paragraph, glyph: <ToolbarIcon name="paragraph" />,
     pressed: (s) => s.paragraph, run: (e) => e.chain().focus().setParagraph().run(),
   },
   ...([1, 2, 3] as const).map((level): Tool => ({
-    key: `heading${level}`, label: t.toolbar[`heading${level}`], glyph: `N${level}`,
+    key: `heading${level}`, label: t.toolbar[`heading${level}`], glyph: <ToolbarIcon name={`heading${level}`} />,
     pressed: (s) => s[`heading${level}`],
     run: (e) => e.chain().focus().setHeading({ level }).run(),
   })),
   {
-    key: "bold", label: t.toolbar.bold, glyph: <b>B</b>,
+    key: "bold", label: t.toolbar.bold, glyph: <ToolbarIcon name="bold" />,
     pressed: (s) => s.bold, run: (e) => e.chain().focus().toggleBold().run(),
   },
   {
-    key: "italic", label: t.toolbar.italic, glyph: <i>I</i>,
+    key: "italic", label: t.toolbar.italic, glyph: <ToolbarIcon name="italic" />,
     pressed: (s) => s.italic, run: (e) => e.chain().focus().toggleItalic().run(),
   },
   // E1: after B and I, as in editor-v11 ("¶ Naslov Podnaslov | B I • „ ”").
   {
-    key: "bulletItem", label: t.toolbar.bulletItem, glyph: "•",
+    key: "bulletItem", label: t.toolbar.bulletItem, glyph: <ToolbarIcon name="bulletItem" />,
     pressed: (s) => s.bulletItem, run: (e) => e.chain().focus().toggleNode("bulletItem", "paragraph").run(),
   },
   {
-    key: "quote", label: t.toolbar.quote, glyph: "„ ”",
+    key: "quote", label: t.toolbar.quote, glyph: <ToolbarIcon name="quote" />,
     pressed: (s) => s.quote, run: (e) => e.chain().focus().toggleNode("quote", "paragraph").run(),
   },
   {
-    key: "undo", label: t.toolbar.undo, glyph: "↶",
+    key: "undo", label: t.toolbar.undo, glyph: <ToolbarIcon name="undo" />,
     enabled: (s) => s.canUndo, run: (e) => e.chain().focus().undo().run(),
   },
   {
-    key: "redo", label: t.toolbar.redo, glyph: "↷",
+    key: "redo", label: t.toolbar.redo, glyph: <ToolbarIcon name="redo" />,
     enabled: (s) => s.canRedo, run: (e) => e.chain().focus().redo().run(),
   },
 ];
@@ -208,7 +210,7 @@ export default function EditorToolbar() {
   return (
     <div
       ref={listRef}
-      className="editor-toolbar"
+      className={`editor-toolbar ${styles.toolbar}`}
       role="toolbar"
       aria-label={t.toolbar.label}
       onKeyDown={onKeyDown}
