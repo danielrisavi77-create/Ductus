@@ -78,7 +78,7 @@ jobs:
             node_modules/.cache/eslint
             tsconfig.tsbuildinfo
             .next/cache
-          key: build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.mjs') }}-${{ github.sha }}
+          key: build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.mjs') }}
           restore-keys: |
             build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.mjs') }}-
       - run: pnpm lint
