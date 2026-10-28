@@ -9,6 +9,7 @@ const COURSE = {
   course_id: "00000000-0000-4000-8000-0000000000c1",
   course_name: "Izmišljeni kolegij",
   academic_year: "2026/2027",
+  ai_policy: "partially_allowed",
   assignment_id: null,
 };
 
