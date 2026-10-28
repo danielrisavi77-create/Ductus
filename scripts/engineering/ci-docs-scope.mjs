@@ -15,19 +15,32 @@ const ORDINARY_DOCS = new Set([
   "docs/privacy/05-otvorena-pitanja.md",
 ]);
 
+const TEST_DIRS = ["tests/", "e2e/", "db/tests/"];
+const TEST_NAME_RE = /\.(?:test|spec)\.[cm]?[jt]sx?$/i;
+
+function isTestPath(path) {
+  const p = path.toLowerCase();
+  return TEST_DIRS.some((d) => p.startsWith(d)) || TEST_NAME_RE.test(p);
+}
+
 export function classifyDiff(raw) {
   if (!raw) return "full";
   const fields = raw.split("\0");
   if (fields.pop() !== "" || fields.length % 2 !== 0) throw new Error("Incomplete git diff");
   let ordinary = true;
+  let testOnly = true;
   for (let i = 0; i < fields.length; i += 2) {
     const header = /^:(\d{6}) (\d{6}) ([a-f0-9]{40}) ([a-f0-9]{40}) ([A-Z]\d*)$/.exec(fields[i]);
     if (!header || !fields[i + 1]) throw new Error("Invalid git diff record");
     const [, before, after, , , status] = header;
     const expected = { A: "000000 100644", D: "100644 000000", M: "100644 100644" }[status];
-    if (`${before} ${after}` !== expected || !ORDINARY_DOCS.has(fields[i + 1])) ordinary = false;
+    const path = fields[i + 1];
+    if (`${before} ${after}` !== expected || !ORDINARY_DOCS.has(path)) ordinary = false;
+    if (!isTestPath(path)) testOnly = false;
   }
-  return ordinary ? "docs" : "full";
+  if (ordinary) return "docs";
+  if (testOnly && fields.length > 0) return "tests";
+  return "full";
 }
 
 export function ciProfile({ eventName, baseRef, baseSha, headSha, cwd } = {}) {
