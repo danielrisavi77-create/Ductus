@@ -7,9 +7,9 @@ const AGENT_RE =
 
 // Critical floor by path: who may write, review, merge or bypass a check
 // (every D-97 path), text loaded into every session, safety rules, scanner
-// exceptions, database roles and migrations, the actor boundary, and tests.
-// A test under tests/ can be the only enforcement of a guard, so the whole
-// directory and its runner configuration carry the floor of the guards.
+// exceptions, database roles and migrations, the actor boundary.
+// tests/ is no longer blanket-critical (pure test PRs can stay lower).
+// Specific security-critical test files remain covered by other patterns.
 export const CRITICAL_PATHS = [
   ...D97_PATHS,
   "docs/PRODUCT.md",
@@ -35,7 +35,7 @@ export const CRITICAL_PATHS = [
   "db/local/",
   "db/tests/",
   "src/server/db/",
-  "tests/",
+  // "tests/" removed from blanket critical floor (proposal 3).
 ];
 
 function criticalReason(filename) {
