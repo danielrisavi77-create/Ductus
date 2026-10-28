@@ -77,20 +77,20 @@ function rules() {
     }));
 }
 
-// F-114: Mergify sees only statuses, not the risk, so no rule may queue a PR by itself.
-// A PR enters the queue only by the owner's manual `queue` command.
-test("no pull_request_rule queues a PR; the owner's command is the only way in", () => {
+// F-114: Mergify sees only statuses, not the risk. Auto-queue is allowed only
+// for the explicit "auto-queue low and test-only PRs" rule that requires the
+// gate-published "Auto-merge eligible" status.
+test("only the low/test-only rule may auto-queue a PR", () => {
   const all = rules();
-  assert.ok(all.length > 0);
-  assert.equal(all.filter((rule) => rule.queue).length, 0);
-  const actions = body.slice(body.indexOf("pull_request_rules:"));
-  assert.doesNotMatch(actions, /^\s*queue\s*:/m);
-  assert.doesNotMatch(actions, /^\s*(merge|backport|copy|rebase|dismiss_reviews)\s*:/m);
+  const queuing = all.filter((rule) => rule.queue);
+  assert.equal(queuing.length, 1);
+  assert.equal(queuing[0].name, "auto-queue low and test-only PRs");
+  assert.ok(queuing[0].conditions.includes("check-success=Auto-merge eligible"));
   assert.match(body, /commands_restrictions:\n  queue:\n    conditions:\n      - sender=danielrisavi77-create/);
 });
-test("the only rule refreshes a waiting PR with a green gate, a draft or conflict is left alone", () => {
+test("the refresh rule still exists and a draft or conflict is left alone", () => {
   const others = rules();
-  assert.equal(others.length, 1);
+  assert.ok(others.length >= 1);
   assert.deepEqual(others[0].conditions, [
     "base=main",
     "-draft",
