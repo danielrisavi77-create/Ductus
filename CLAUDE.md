@@ -4,6 +4,8 @@ Prije svakog rada pročitaj `STATE.md`; SessionStart hook ga učitava ako nije p
 
 ## Mjerodavni izvori
 
+Za zadavanje, izvedbu ili pregled vidljive promjene obvezno pročitaj `docs/SESSIONS.md` §6. Ondje su vizualni ugovor, usporedba s odobrenom slikom i dokaz za predaju drugoj sesiji; vrijede za sve runtimee i uloge.
+
 - **Linear Ductus projekt i issue:** identitet zadatka, razlog, prioritet, nositelj, rok i trenutačni status.
 - **Repo:** prihvaćene produktne i tehničke odluke, arhitektura, opseg, kriteriji i razvojne upute. Za proizvod čitaj `docs/PRODUCT.md`, za tehniku `docs/ARCHITECTURE.md` i `docs/BACKEND.md` (BACKEND ima prednost u pojedinostima), za odluke `docs/DECISIONS.md`, za funkcije `docs/FEATURES.md`, a za faze i GO uvjete `docs/PROGRAM.md` i `docs/PLAN-DEMO.md`.
 - **GitHub:** verzije koda i dokumenata, grane, PR-ovi, reviewi, CI i izvršni dokazi. To je zajednički cross-account control plane, ali nije samostalni registar prioriteta i statusa zadataka.

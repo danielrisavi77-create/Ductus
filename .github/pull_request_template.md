@@ -32,6 +32,7 @@ Poznate granice: <granica jamstva i izvor odobrenja ako je ugovor sužen>
 - [ ] branch je provjeren prema aktualnom `main`
 - [ ] nema tajni ni stvarnih osobnih podataka
 - [ ] promjena ima acceptance criterion
+- [ ] za vidljivu promjenu priložen je `Vizualni dokaz` prema `docs/SESSIONS.md` §6; inače je naveden konkretan razlog za n/a
 
 ## Review
 
@@ -60,6 +61,13 @@ Napravljeno:
 Testovi:
 - <puni testirani SHA; naredba/scenarij; rezultat; poveznica/putanja primarnog zapisa; lokalno, CI ili neovisna QA>
 - Neizvedeno ili nedostaje: <navesti izričito; zeleni CI nije dokaz zasebne lokalne probe>
+
+Vizualni dokaz (`docs/SESSIONS.md` §6.5; bez vidljive promjene n/a uz razlog):
+- Ugovor i odobrena referenca: <poveznica, verzija, ekran/stanje>
+- Izvedba: <puni testirani SHA, checkout/build, ruta/uloga/stanje, tema, hr/en, viewport/DPR i browser/OS>
+- Slike: <original i actual jedan uz drugi; diff/overlay ako postoji>
+- Usporedba i odstupanja: <regija, očekivano, opaženo, ispravak ili odobrenje>
+- Interakcije i pristupačnost: <stvarni rezultat>; Neizvedeno: <nedostajući dokaz i sljedeći korak>
 
 Otvoreno ili blokira: ništa
 

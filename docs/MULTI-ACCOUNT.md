@@ -166,6 +166,7 @@ Cilj: <jedna rečenica>
 Ulaz: <točni dokumenti/odjeljci>
 Mape: <dopuštene putanje>
 Gotovo kad: <provjerljiv kriterij>
+Vizualni ugovor: <za vidljivu promjenu SESSIONS.md §6.2; inače n/a uz razlog>
 Ovisi o: <PR/issue ili ništa>
 Risk: <low | standard | critical>
 Review effort: <light | standard | critical>
@@ -186,6 +187,7 @@ Risk: <low | standard | critical>
 Task: <id>
 Napravljeno: <3-5 stavki>
 Testovi: <naredbe i rezultat>
+Vizualni dokaz: <za vidljivu promjenu SESSIONS.md §6.5; inače n/a uz razlog>
 Review: <status>
 Otvoreno ili blokira: <stavke ili ništa>
 Treba Daniel: <odluka ili ništa>
@@ -204,6 +206,8 @@ Novi račun ne dobiva "predaju u chatu". Dobiva samo:
 3. `STATE.md`;
 4. Linear issue zadatka i povezani GitHub PR/issue;
 5. odjeljke dokumenata navedene u zadatku.
+
+Za vidljivu promjenu zadatak i PR moraju sadržavati prenosivu referencu, vizualni ugovor, snimke testirane revizije i otvorena odstupanja prema `docs/SESSIONS.md` §6. Nova sesija ih otvara; privatni chat, lokalna putanja drugog računala ili istekli privitak ne zamjenjuju taj ulaz. To vrijedi i za runtime koji ne učitava `.claude/rules/`.
 
 Ako to nije dovoljno za nastavak rada, dokumentacija ili izvještaj su nepotpuni i treba popraviti njih, a ne oslanjati se na memoriju prethodnog računa.
 
