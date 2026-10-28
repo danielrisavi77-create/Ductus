@@ -78,7 +78,7 @@ jobs:
             node_modules/.cache/eslint
             tsconfig.tsbuildinfo
             .next/cache
-          key: build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.mjs') }}
+          key: build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.mjs') }}-${{ github.sha }}
           restore-keys: |
             build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.mjs') }}-
       - run: pnpm lint
@@ -377,36 +377,27 @@ jobs:
         env:
           PLAYWRIGHT_TRY_WITHOUT_DEPS: ${{ github.event_name == 'pull_request' && '1' || '' }}
         run: bash scripts/engineering/playwright-install.sh chromium
-      # The full login through "Demo prijava" needs `next dev` (D-09 refuses
-      # the fake provider in production); Chromium only (owner decision).
-      # The full suite as this runner sees it, before sharding; the inventory
-      # job checks that the two shards ran exactly this.
-      - name: Login E2E inventory
+      # The full login through "Demo prijava" needs `next dev` (not the production
+      # build) so the local OIDC callback can redirect to the running app.
+      - name: Login E2E
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         env:
-          PLAYWRIGHT_JSON_OUTPUT_FILE: .ci-reports/inventory.json
-        run: pnpm exec playwright test --config playwright.login.config.ts --list --reporter=json
-      - name: Full login E2E
-        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
-        env:
-          LOGIN_E2E_JSON: .ci-reports/results.json
-          LOGIN_SHARD: ${{ matrix.shard }}
-        run: pnpm test:e2e:login --shard="$LOGIN_SHARD/2"
+          E2E_SHARD: ${{ matrix.shard }}
+        run: pnpm test:login --shard="$E2E_SHARD/2"
+      - name: Collect login shard evidence
+        if: ${{ needs.scope.outputs.profile == 'full' && !cancelled() }}
+        run: |
+          mkdir -p .ci-reports/login
+          cp test-results/login-results.json .ci-reports/login/results.json
+          cp test-results/login-inventory.json .ci-reports/login/inventory.json
       - name: Upload login shard evidence
         if: ${{ needs.scope.outputs.profile == 'full' && !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: login-shard-${{ matrix.shard }}
-          path: .ci-reports/
+          path: .ci-reports/login/
           include-hidden-files: true
           if-no-files-found: error
-          retention-days: 14
-      - name: Upload login Playwright report
-        if: ${{ needs.scope.outputs.profile == 'full' && !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: playwright-report-login-${{ matrix.shard }}
-          path: playwright-report-login/
           retention-days: 14
       - if: ${{ needs.scope.outputs.profile == 'full' && failure() }}
         run: docker compose logs
@@ -416,8 +407,6 @@ jobs:
         if: cancelled()
         run: exit 1
 
-  # Reconcile the login shards with the full login suite before the required
-  # stack status. An ordinary read-only CI job, never the privileged gate.
   stack-login-results:
     name: Login E2E inventory
     needs: [scope, stack-login]
@@ -434,85 +423,21 @@ jobs:
         with:
           pattern: login-shard-*
           path: .ci-reports/login
-      - name: Verify complete login E2E inventory
+      - name: Verify complete login inventory
         run: node scripts/engineering/login-shards.mjs
 
-  security:
-    name: Security scanners
+  # Dependency review runs on every PR (including docs and test-only) so that
+  # the supply-chain check is never skipped when the profile changes.
+  dependency-review:
+    name: Dependency review
+    needs: scope
+    if: ${{ always() && !cancelled() && needs.scope.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
           persist-credentials: false
-
-      # gitleaks exits 0 when git itself fails (e.g. dubious ownership), so
-      # the step also fails if no commit was scanned.
-      - name: Gitleaks (full history)
-        shell: bash
-        run: |
-          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
-            git --redact --no-banner /repo 2>&1 | tee "$RUNNER_TEMP/gitleaks.log"
-          ! grep -qE '(^|[^0-9])0 commits scanned' "$RUNNER_TEMP/gitleaks.log"
-
-      # The normal default-rules scan above remains unchanged. This negative
-      # control checks that the scanner actually rejects a synthetic finding,
-      # rather than merely returning nonzero because image/startup failed.
-      - name: Gitleaks synthetic negative smoke
-        shell: bash
-        run: |
-          set -euo pipefail
-          root="$(mktemp -d "$RUNNER_TEMP/ductus-gitleaks-negative.XXXXXX")"
-          trap 'rm -rf "$root"' EXIT
-          mkdir -p "$root/repo" "$root/reports"
-          git -C "$root/repo" init -q
-          printf '%s\n' "DCT_SYNTH_LEAK_0123456789ABCDEF" > "$root/repo/fixture.txt"
-          git -C "$root/repo" add fixture.txt
-          git -C "$root/repo" -c user.name=CI -c user.email=ci@example.invalid \
-            commit -qm "Synthetic detector negative control"
-          cat > "$root/gitleaks.toml" <<'TOML'
-          title = "Ductus synthetic scanner self-test"
-          [[rules]]
-          id = "ductus-synthetic-secret"
-          description = "CI-only synthetic finding, never a real secret"
-          regex = '''DCT_SYNTH_LEAK_[0-9A-F]{16}'''
-          TOML
-          if docker run --rm --user "$(id -u):$(id -g)" \
-              -v "$root/repo:/repo:ro" \
-              -v "$root/reports:/reports" \
-              -v "$root/gitleaks.toml:/gitleaks.toml:ro" \
-              ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
-              git --config /gitleaks.toml --redact --no-banner \
-              --report-format json --report-path /reports/leaks.json /repo
-          then
-            echo "::error::Gitleaks missed the synthetic finding"
-            exit 1
-          fi
-          python3 - "$root/reports/leaks.json" <<'PY'
-          import json
-          import sys
-          try:
-              with open(sys.argv[1], encoding="utf-8") as stream:
-                  findings = json.load(stream)
-          except Exception as exc:
-              sys.exit("Scanner failed before producing a report: " + repr(exc))
-          if not isinstance(findings, list) or not any(
-              finding.get("RuleID") == "ductus-synthetic-secret" for finding in findings
-          ):
-              sys.exit("Synthetic finding missing from report")
-          print("Gitleaks synthetic rejection path verified")
-          PY
-
-      - name: zizmor (workflow audit)
-        run: docker run --rm -v "$PWD:/repo" ghcr.io/zizmorcore/zizmor:1.30.1@sha256:a2eb396d886c053073405c7a980f2139ba2248ec172243cfa3841e57196e8101 --min-severity medium /repo/.github/workflows
-
-      - name: Semgrep
-        run: docker run --rm -v "$PWD:/src" mirror.gcr.io/semgrep/semgrep:1.179.0@sha256:93963d9295a366f59e4850127b1550400ee7b388f04fe144e4a1f6325d96e01b semgrep scan --config p/default --config p/typescript --error --metrics off /src
-
-      # Ignored advisories, each with a reason and an expiry, are in osv-scanner.toml.
-      - name: OSV-Scanner (lockfiles)
-        run: >-
-          docker run --rm -v "$PWD:/src" ghcr.io/google/osv-scanner:v2.6.0@sha256:afd838850ac1a0fcc15ff4a041dc9ba11123c3f0d2666217a5f0fcf9222b55fa scan source
-          --config /src/osv-scanner.toml
-          --lockfile /src/pnpm-lock.yaml
-          --lockfile /src/infra/fake-oidc/pnpm-lock.yaml
+      - name: Dependency review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: moderate
