@@ -102,6 +102,18 @@ Izuzeće od QA-e (vlasnik, 11. 10. 2026., #87, `issuecomment-6112538306` i `6112
 
 Za posebno osjetljiv auth/RLS/crypto PR Orkestrator može tražiti drugog reviewera iz drugog providera.
 
+### Sažetak razina strogosti
+
+| Razina | Review | QA | Primjer |
+| --- | --- | --- | --- |
+| **critical** | Da (osim test-only) | Da (osim test-only / docs-only) | Auth, evidencija, gate, D-97 |
+| **standard** | Da | Po potrebi | Editor, API bez novih ovlasti, refaktor |
+| **low** | Ne | Ne | Dokumentacija, copy, jednostavna konfiguracija |
+| **test-only** | Ne | Ne | Samo datoteke pod `tests/`, `e2e/`, `db/tests/` ili `*.test.*` / `*.spec.*` |
+
+Negativni verdikt (FAIL / BLOCK) i dalje blokira bez obzira na razinu. D-97 putanje i `docs/DECISIONS.md` ostaju pod owner command pravilom.
+
+
 ### Automatski risk floor
 
 CI i Engineering review gate ponovno računaju minimalnu razinu prema promijenjenim putanjama:
