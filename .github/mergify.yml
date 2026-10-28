@@ -80,3 +80,18 @@ pull_request_rules:
       - -check-success=Merge authorization
     actions:
       update: {}
+
+  - name: auto-queue low, standard and test-only PRs
+    conditions:
+      - base=main
+      - -draft
+      - -conflict
+      - check-success=Engineering review gate
+      - check-success=Merge authorization
+      - check-success=Auto-merge eligible
+      - check-success=Lint, typecheck, test and build
+      - check-success=Security scanners
+      - check-success=Dependency review
+    actions:
+      queue:
+        name: main
