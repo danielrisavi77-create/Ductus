@@ -38,7 +38,21 @@ describe("one notification read", () => {
     } });
     expect(withActor).toHaveBeenCalledWith(TOKEN, expect.any(Function));
     expect(query).toHaveBeenCalledExactlyOnceWith(expect.stringContaining("FROM institution.read_notification($1::uuid)"), [NOTICE]);
+    expect(query.mock.calls[0][0]).toContain("FROM institution.read_comment_notification($1::uuid)");
+    expect(query.mock.calls[0][0]).toContain("FROM institution.read_submission_notification($1::uuid)");
   });
+
+  it.each(["comment_posted", "submission_recorded"] as const)(
+    "returns validated %s metadata through the same actor-bound reader", async (eventKind) => {
+      const { query, withActor } = port([{ ...validRow(), kind: eventKind }]);
+      expect(await readNotification(TOKEN, NOTICE, withActor)).toEqual({ kind: "ok", item: {
+        id: NOTICE, eventKind, targetId: TARGET, createdWindow: "2026-10-28T09:15:00.000Z", isRead: false,
+      } });
+      expect(withActor).toHaveBeenCalledWith(TOKEN, expect.any(Function));
+      expect(query).toHaveBeenCalledOnce();
+      expect(query.mock.calls[0][1]).toEqual([NOTICE]);
+    },
+  );
 
   it("gives missing and inaccessible items one answer and avoids DB access for invalid input", async () => {
     const empty = port([]);
@@ -53,7 +67,7 @@ describe("one notification read", () => {
   it("fails closed on any malformed or duplicate database row", async () => {
     for (const rows of [
       [validRow(), validRow()], [{ ...validRow(), notification_id: TARGET }], [{ ...validRow(), target_id: "invalid" }],
-      [{ ...validRow(), kind: "comment_posted" }], [{ ...validRow(), is_read: "false" }],
+      [{ ...validRow(), kind: "unknown_kind" }], [{ ...validRow(), is_read: "false" }],
       [{ ...validRow(), unexpected: CANARY }],
       [{ ...validRow(), created_window: "2026-10-28T09:15:00Z" }],
       [{ ...validRow(), created_window: new Date("2026-10-28T09:15:01Z") }],

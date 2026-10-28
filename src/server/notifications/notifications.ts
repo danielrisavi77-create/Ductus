@@ -1,16 +1,18 @@
 import type { WithActor } from "@/server/db/with-actor";
 import { readJsonMutation } from "@/server/institution/mutation-route";
 
-// One assignment-version event only. A future inbox is a separate caller and
-// must not treat this as a complete list or infer a count from it.
+// Individual metadata only. A future inbox is a separate caller and must not
+// treat this as a complete list or infer a count from it. The existing marker
+// still supports assignment-version notifications only.
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_BODY_BYTES = 256;
 const NO_STORE = { "cache-control": "no-store" };
 
 type ResultKind = "not_found" | "unauthorized" | "unavailable";
+type NotificationEventKind = "assignment_version" | "comment_posted" | "submission_recorded";
 export type NotificationItemRead =
-  | { kind: "ok"; item: { id: string; eventKind: "assignment_version"; targetId: string; createdWindow: string; isRead: boolean } }
+  | { kind: "ok"; item: { id: string; eventKind: NotificationEventKind; targetId: string; createdWindow: string; isRead: boolean } }
   | { kind: ResultKind };
 export type NotificationMark = { kind: "ok" | ResultKind };
 
@@ -36,7 +38,13 @@ export async function readNotification(
   try {
     const { rows } = await withActor(sessionToken, (tx) => tx.query<Record<string, unknown>>(
       `SELECT notification_id::text, kind, target_id::text, created_window, is_read
-       FROM institution.read_notification($1::uuid)`, [notificationId],
+       FROM institution.read_notification($1::uuid)
+       UNION ALL
+       SELECT notification_id::text, kind, target_id::text, created_window, is_read
+       FROM institution.read_comment_notification($1::uuid)
+       UNION ALL
+       SELECT notification_id::text, kind, target_id::text, created_window, is_read
+       FROM institution.read_submission_notification($1::uuid)`, [notificationId],
     ));
     if (!Array.isArray(rows)) return { kind: "unavailable" };
     if (rows.length === 0) return { kind: "not_found" };
@@ -45,12 +53,13 @@ export async function readNotification(
     const time = row.created_window instanceof Date ? row.created_window.getTime() : NaN;
     if (Object.keys(row).sort().join(",") !== "created_window,is_read,kind,notification_id,target_id"
       || !validId(row.notification_id) || row.notification_id.toLowerCase() !== notificationId.toLowerCase()
-      || row.kind !== "assignment_version" || !validId(row.target_id)
+      || (row.kind !== "assignment_version" && row.kind !== "comment_posted" && row.kind !== "submission_recorded")
+      || !validId(row.target_id)
       || !Number.isFinite(time) || time % 300_000 !== 0 || typeof row.is_read !== "boolean") {
       return { kind: "unavailable" };
     }
     return { kind: "ok", item: {
-      id: row.notification_id, eventKind: "assignment_version", targetId: row.target_id,
+      id: row.notification_id, eventKind: row.kind, targetId: row.target_id,
       createdWindow: row.created_window instanceof Date ? row.created_window.toISOString() : "", isRead: row.is_read,
     } };
   } catch (error) {
