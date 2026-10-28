@@ -228,6 +228,8 @@ Za `critical` review i QA kreću istodobno na istom headu, uz izuzeća iz §5 i 
 
 Product/UX i Bug Hunter nikad ne preskaču issue fazu i ne prelaze ravno u implementaciju.
 
+PR koji mijenja ono što korisnik vidi provjerava se i na izgled (D-183): zadatak imenuje referentni ekran iz odobrenog paketa, opis PR-a sadrži snimke uz referencu (računalo i mobitel), a review i QA uspoređuju paletu, slova, razmake, raspored i stanja. Neobrazloženo odstupanje blokira. Orkestrator vlasniku pokazuje snimke prije naredbe za spajanje. To je governance dokaz, ne strojna provjera gatea.
+
 ## 9. Stale branch politika
 
 - Svaki writer počinje od svježeg `origin/main`.

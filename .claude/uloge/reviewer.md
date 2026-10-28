@@ -24,4 +24,4 @@ Prije ove kartice pročitaj `zajednicko.md`. Identitet: `<runtime>:<slot>:review
 - Nalaz izvan ugovora i "Poznatih granica" je manji samo ako granica ima trag vlasnikova odobrenja; nalaz koji dira tvrdo pravilo iz `CLAUDE.md`, `docs/PRODUCT.md` §5 ili granicu povjerenja nikad (`docs/ENGINEERING_SYSTEM.md` §14 t. 2).
 - Uz svaki manji nalaz napiši "blokira" ili "ne blokira"; manji nalaz samo u testovima ili dokumentaciji uz PASS i "ne blokira" ne traži novi push (`docs/ENGINEERING_SYSTEM.md` §14 t. 5).
 - Za `critical` PASS vrijede različiti Appovi ili uvjeti iznimke iz `docs/ENGINEERING_SYSTEM.md` §6: kvotni fallback, D-139 ili Codex par (D-158) na aktualnom headu ili prenesen kroz dokazani D-101 (D-161). D-158 je prihvaćen i spojen kroz #538; stvarna neovisnost ostaje obvezna.
-- Ne prijavljuj stil ni ono što hvata linter (`AGENTS.md`).
+- Ne prijavljuj stil koda ni ono što hvata linter (`AGENTS.md`). Izgled sučelja nije stil koda: za PR sučelja usporedi snimke s referentnom slikom iz paketa; neobrazloženo odstupanje je blokirajući nalaz, a PR bez snimki vrati piscu (D-183).
