@@ -98,7 +98,7 @@ Gate:
 - sintetički staging prolaz kad BACKEND §6 točka 12 vrijedi;
 - pravila rada za `critical` PR iz §14.
 
-Izuzeće od QA-e (vlasnik, 11. 10. 2026., #87, `issuecomment-6112538306` i `6112555187`): `critical` PR koji mijenja samo testove ili samo dokumente, uključivo dokumente koji određuju gate i pravila rada te testove gatea u `scripts/engineering/`, ne traži zaseban QA PASS. **Izuzeće od reviewa (28. 10. 2026.):** test-only `critical` PR (samo datoteke pod `tests/`, `e2e/`, `db/tests/` ili `*.test.*` / `*.spec.*`) također ne traži neovisni review. Docs-only ostaje pod `low` pravilom. Izuzeće ne mijenja put spajanja: PR koji dira putanju iz D-97 spaja se po `docs/ORKESTRATOR.md` §4 (vlasnikova naredba s brojem PR-a, a noću i noćni prozor kad je uključen), ostali kao i dosad. Gate provodi pravilo od #275 (`qaExemption` u `scripts/engineering/protected-paths.mjs`) i gleda samo popis datoteka, nikad tijelo PR-a. "Testovi" su sve datoteke pod `tests/`, `e2e/` ili `db/tests/` (i pomoćne datoteke, fixturei i postavke u tim mapama, bez obzira na nastavak) te `*.test.*` i `*.spec.*` u js/ts varijantama; "dokumenti" su sve `*.md` datoteke, uključivo `.claude/agents/*.md` i `SKILL.md`. Datoteka `*.md` pod `tests/`, `e2e/` ili `db/tests/` broji se i kao test i kao dokument, pa ne kvari izuzeće ni PR-u sa samo testovima ni PR-u sa samo dokumentima. PR koji mijenja i testove i dokumente nije izuzet, kao ni PR koji uz njih mijenja bilo koju drugu datoteku (Python testovi i konfiguracije testova izvan tih mapa nisu "testovi" u ovom smislu). Preimenovanje se broji pod starim i novim imenom.
+Izuzeće od QA-e (vlasnik, 11. 10. 2026., #87, `issuecomment-6112538306` i `6112555187`): `critical` PR koji mijenja samo testove ili samo dokumente, uključivo dokumente koji određuju gate i pravila rada te testove gatea u `scripts/engineering/`, ne traži zaseban QA PASS. **Izuzeće od reviewa (D-189, 28. 10. 2026.):** test-only `critical` PR koji samo **dodaje** nove testne datoteke (svaka datoteka `status: added`, bez preimenovanja) također ne traži neovisni review. PR koji mijenja, briše ili preimenuje postojeći test i dalje traži review, jer test može biti jedina provedba čuvara. Docs-only ostaje pod `low` pravilom. Izuzeće ne mijenja put spajanja: PR koji dira putanju iz D-97 spaja se po `docs/ORKESTRATOR.md` §4 (vlasnikova naredba s brojem PR-a, a noću i noćni prozor kad je uključen), ostali kao i dosad. Gate provodi pravilo od #275 (`qaExemption` u `scripts/engineering/protected-paths.mjs`) i gleda samo popis datoteka, nikad tijelo PR-a. "Testovi" su sve datoteke pod `tests/`, `e2e/` ili `db/tests/` (i pomoćne datoteke, fixturei i postavke u tim mapama, bez obzira na nastavak) te `*.test.*` i `*.spec.*` u js/ts varijantama; "dokumenti" su sve `*.md` datoteke, uključivo `.claude/agents/*.md` i `SKILL.md`. Datoteka `*.md` pod `tests/`, `e2e/` ili `db/tests/` broji se i kao test i kao dokument, pa ne kvari izuzeće ni PR-u sa samo testovima ni PR-u sa samo dokumentima. PR koji mijenja i testove i dokumente nije izuzet, kao ni PR koji uz njih mijenja bilo koju drugu datoteku (Python testovi i konfiguracije testova izvan tih mapa nisu "testovi" u ovom smislu). Preimenovanje se broji pod starim i novim imenom.
 
 Za posebno osjetljiv auth/RLS/crypto PR Orkestrator može tražiti drugog reviewera iz drugog providera.
 
@@ -106,16 +106,19 @@ Za posebno osjetljiv auth/RLS/crypto PR Orkestrator može tražiti drugog review
 
 | Razina | Review | QA | Primjer |
 | --- | --- | --- | --- |
-| **critical** | Da (osim test-only) | Da (osim test-only / docs-only) | Auth, evidencija, gate, D-97 |
+| **critical** | Da (osim samo novih testova) | Da (osim test-only / docs-only) | Auth, evidencija, gate, D-97 |
 | **standard** | Da | Po potrebi | Editor, API bez novih ovlasti, refaktor |
 | **low** | Ne | Ne | Dokumentacija, copy, jednostavna konfiguracija |
-| **test-only** | Ne | Ne | Samo datoteke pod `tests/`, `e2e/`, `db/tests/` ili `*.test.*` / `*.spec.*` |
+| **samo novi testovi** | Ne | Ne | Samo nove datoteke pod `tests/`, `e2e/`, `db/tests/` ili `*.test.*` / `*.spec.*` |
+| **izmjena postojećih testova** | Da | Ne | Izmijenjen, obrisan ili preimenovan test |
 
 Negativni verdikt (FAIL / BLOCK) i dalje blokira bez obzira na razinu. D-97 putanje i `docs/DECISIONS.md` ostaju pod owner command pravilom.
 
 ### Auto-merge za low i test-only
 
-Kad je PR `Risk: low` ili test-only, nema D-97 putanja, nije draft i CI + gate su zeleni, gate objavljuje status **Auto-merge eligible**. Mergify pravilo tada automatski stavlja PR u queue (`main`) bez owner naredbe. Critical i standard PR-ovi i dalje traže ručnu naredbu ili Owner-Command.
+Kad je PR `Risk: low` ili samo dodaje nove testove, nema D-97 putanja, nije draft i CI + gate su zeleni, gate objavljuje status **Auto-merge eligible**. Mergify pravilo tada automatski stavlja PR u queue (`main`) bez owner naredbe. Critical i standard PR-ovi i dalje traže ručnu naredbu ili Owner-Command.
+
+CI profil `tests` (preskače stack, bazu, preglednik i property testove) vrijedi samo za obične unit testove; promjena pod `e2e/`, `db/tests/`, `tests/integration/`, `tests/property/` ili `*.property.test.*` pokreće puni CI (`scripts/engineering/ci-docs-scope.mjs`).
 
 
 
