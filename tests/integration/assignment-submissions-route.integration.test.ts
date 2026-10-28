@@ -166,7 +166,7 @@ afterAll(async () => {
     // Disposable synthetic rows only; the append-only triggers stay active in normal operation.
     await client.query("SET LOCAL session_replication_role = replica");
     for (const table of ["evidence.submission", "evidence.submission_request", "evidence.document_revision", "evidence.document",
-      "evidence.project", "institution.notice_acknowledgment"]) {
+      "evidence.project", "institution.notice_acknowledgment", "institution.notification"]) {
       await client.query(`DELETE FROM ${table} WHERE institution_id = ANY($1)`, [faculties]);
     }
     await client.query("DELETE FROM institution.assignment_version WHERE assignment_id = ANY($1)", [[z1, z2, z3]]);

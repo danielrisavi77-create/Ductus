@@ -241,7 +241,7 @@ async function removeFixture() {
     for (const table of [
       "evidence.submission", "evidence.submission_request", "evidence.receipt", "evidence.segment",
       "evidence.document_checkpoint", "evidence.package", "evidence.document_revision", "evidence.document",
-      "evidence.project", "evidence.domain", "institution.notice_acknowledgment",
+      "evidence.project", "evidence.domain", "institution.notice_acknowledgment", "institution.notification",
     ]) {
       await admin.query(`DELETE FROM ${table} WHERE institution_id = $1`, [institutionId]);
     }

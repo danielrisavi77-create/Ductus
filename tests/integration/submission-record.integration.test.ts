@@ -210,6 +210,7 @@ afterAll(async () => {
   await appPool?.end();
   await admin.query("BEGIN");
   await admin.query("SET LOCAL session_replication_role = replica");
+  await admin.query("DELETE FROM institution.notification WHERE institution_id = $1", [institutionId]);
   for (const table of ["submission_receipt", "submission_receipt_issuance", "submission", "submission_request", "receipt", "segment", "package", "document_checkpoint", "document_revision", "signing_key"]) {
     await admin.query(`DELETE FROM evidence.${table} WHERE institution_id = $1`, [institutionId]);
   }

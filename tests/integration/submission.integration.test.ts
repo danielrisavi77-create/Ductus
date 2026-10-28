@@ -147,6 +147,7 @@ async function removeFixture() {
     // Disposable synthetic rows only; the append-only triggers stay active in
     // normal operation (same teardown as the evidence race test).
     await admin.query("SET LOCAL session_replication_role = replica");
+    await admin.query("DELETE FROM institution.notification WHERE institution_id = $1", [institutionId]);
     await admin.query("DELETE FROM evidence.submission WHERE assignment_id = $1", [assignmentId]);
     await admin.query("DELETE FROM evidence.submission_request WHERE assignment_id = $1", [assignmentId]);
     await admin.query("DELETE FROM evidence.document_revision WHERE document_id = $1", [documentId]);
