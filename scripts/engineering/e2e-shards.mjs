@@ -8,14 +8,14 @@ import { compareReport } from "./ui-test-pilot.mjs";
 // The existing pilot parser validates identities, paths, attempts and stats.
 export function mergeShardReports(shards, testedSha) {
   assert.match(testedSha, /^[a-f0-9]{40}$/);
-  assert.equal(shards.length, 2, "Both shards are required");
+  assert.equal(shards.length, 3, "All three shards are required");
   for (const [index, { report, inventory }] of shards.entries()) {
     for (const input of [report, inventory]) {
       assert.equal(input.config.metadata.testedSha, testedSha, "Wrong tested SHA");
       assert.ok(Array.isArray(input.suites), "Missing suites");
       assert.ok(Array.isArray(input.errors), "Missing errors");
     }
-    assert.deepEqual(report.config.shard, { current: index + 1, total: 2 }, "Wrong shard");
+    assert.deepEqual(report.config.shard, { current: index + 1, total: 3 }, "Wrong shard");
     assert.equal(inventory.config.shard, null, "Inventory must enumerate the full suite");
     assert.equal(report.config.rootDir, inventory.config.rootDir, "Wrong inventory root");
     assert.equal(report.config.rootDir, shards[0].report.config.rootDir, "Different roots");
