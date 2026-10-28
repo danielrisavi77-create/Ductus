@@ -3,15 +3,28 @@ import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import pg from "pg";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 
 // This test creates and removes only a randomly named database on the local
 // stack. It runs the migration sections as the non-superuser migrator, like
 // dbmate, over invented rows that existed before notification storage.
-const ADMIN_URL = process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
-if (!["127.0.0.1", "localhost", "[::1]"].includes(new URL(ADMIN_URL).hostname)) {
-  throw new Error("The notification migration test runs only against a loopback database (DATABASE_URL).");
+const LOCAL_ADMIN_URL = "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
+function localAdminUrl(configured: string | undefined): string {
+  // pg accepts query parameters such as ?host= and ?port= that override the
+  // authority parsed by WHATWG URL. Accept only exact project-local URLs and
+  // always connect to the fixed numeric loopback address.
+  const allowed = new Set([
+    LOCAL_ADMIN_URL,
+    "postgres://ductus:ductus-local-only@localhost:54329/ductus",
+    "postgresql://ductus:ductus-local-only@127.0.0.1:54329/ductus",
+    "postgresql://ductus:ductus-local-only@localhost:54329/ductus",
+  ]);
+  if (configured !== undefined && !allowed.has(configured)) {
+    throw new Error("The notification migration test runs only against the local Compose database.");
+  }
+  return LOCAL_ADMIN_URL;
 }
+const ADMIN_URL = localAdminUrl(process.env.DATABASE_URL);
 const MIGRATIONS = fileURLToPath(new URL("../../db/migrations/", import.meta.url));
 const TARGET = "20261028150000_notification_store.sql";
 const name = `ductus_notifications_${randomBytes(6).toString("hex")}`;
@@ -46,6 +59,36 @@ afterAll(async () => {
 });
 
 describe("notification storage migration on an isolated database", () => {
+  it("refuses connection strings that can redirect the migration test", () => {
+    expect(localAdminUrl(undefined)).toBe(LOCAL_ADMIN_URL);
+    for (const value of [
+      `${LOCAL_ADMIN_URL}?host=remote.invalid&port=5432`,
+      `${LOCAL_ADMIN_URL}?host=127.0.0.2&port=5432`,
+      `${LOCAL_ADMIN_URL}?host=%2Ftmp%2Fother`,
+      `${LOCAL_ADMIN_URL}?dbname=other`,
+      `${LOCAL_ADMIN_URL}#fragment`,
+      "postgres://ductus:ductus-local-only@127.0.0.1:5432/ductus",
+      "postgres://other:ductus-local-only@127.0.0.1:54329/ductus",
+      "postgres://ductus:ductus-local-only@127.0.0.1:54329/other",
+    ]) {
+      expect(() => localAdminUrl(value)).toThrow("local Compose database");
+    }
+    expect(localAdminUrl("postgres://ductus:ductus-local-only@localhost:54329/ductus")).toBe(LOCAL_ADMIN_URL);
+    vi.stubEnv("PGHOST", "127.0.0.2");
+    vi.stubEnv("PGPORT", "5432");
+    vi.stubEnv("PGDATABASE", "other");
+    vi.stubEnv("PGUSER", "other");
+    try {
+      const parsed = new pg.Client({ connectionString: localAdminUrl(undefined) });
+      expect(parsed.host).toBe("127.0.0.1");
+      expect(parsed.port).toBe(54329);
+      expect(parsed.database).toBe("ductus");
+      expect(parsed.user).toBe("ductus");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("restores the trigger on up/down/up without changing existing assignments", async () => {
     await admin.query(`CREATE DATABASE ${name} OWNER ductus_migrator`);
     created = true;
