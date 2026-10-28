@@ -164,7 +164,7 @@ Lokalna stanja sučelja (otvoreni dijalozi, kartica, sklopljena poglavlja, tema 
 
 ## 8. Tokeni
 
-> **Napomena u repou (23. 10. 2026.):** vrijednosti u aplikaciji sada slijede dizajn v3 (vlasnikova odluka od 21. 10. na #476, `issuecomment-6314381921`; mapiranje u ugovoru `issuecomment-6314723241`). Mjerodavne su vrijednosti u `app/globals.css`; tablica ispod ostaje zapis izvornog paketa.
+> **Povijest, ne koristi se (28. 10. 2026., #960).** Boje i tipografiju određuje `docs/design/DESIGN-SYSTEM.md` v1.0 prema D-179 (ljubičasta i bakar); vrijednosti su u `app/globals.css`. Tablica ispod ostaje samo zapis izvornog paketa od 22. 10. 2026. (mint), zamijenjenog dizajnom v3 (#476), zatim #867 i D-179.
 
 **Boje (tamna tema)**
 
@@ -196,7 +196,7 @@ Bijeli list: tekst i oznake u `<helmet><style>` editora, selektori `.ed[data-she
 
 ## 9. Otvorena pitanja prije gradnje
 
-1. **Boje**: prototip koristi boje odobrenih demo ekrana; PR #386 (D-115) uvodi svoje tokene. F-4 traži podudaranje s odobrenim dizajnom: odluči koje vrijede i mapiraj tablicu iz §8.
+1. **Boje**: prototip koristi boje odobrenih demo ekrana; PR #386 (D-115) uvodi svoje tokene. F-4 traži podudaranje s odobrenim dizajnom: odluči koje vrijede i mapiraj tablicu iz §8. *(Riješeno: D-179 i `docs/design/DESIGN-SYSTEM.md` v1.0, #960.)*
 2. **Ime**: Ductura ili Ductus u sučelju.
 3. **Zapis unosa i istraga**: pravno mišljenje i procjena učinka (GDPR čl. 35) prije gradnje; tekst obavijesti S3 i „Što Ductura čuva” mora ostati usklađen s §6e.
 4. **Profil FPZG**: granice (opseg, Sažetak 150–300 riječi, 3–5 ključnih riječi, kontrolni popisi) treba potvrditi prema službenim Uputama prije nego uđu u `fpzg.json`.
