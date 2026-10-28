@@ -113,6 +113,11 @@ Za posebno osjetljiv auth/RLS/crypto PR Orkestrator može tražiti drugog review
 
 Negativni verdikt (FAIL / BLOCK) i dalje blokira bez obzira na razinu. D-97 putanje i `docs/DECISIONS.md` ostaju pod owner command pravilom.
 
+### Auto-merge za low i test-only
+
+Kad je PR `Risk: low` ili test-only, nema D-97 putanja, nije draft i CI + gate su zeleni, gate objavljuje status **Auto-merge eligible**. Mergify pravilo tada automatski stavlja PR u queue (`main`) bez owner naredbe. Critical i standard PR-ovi i dalje traže ručnu naredbu ili Owner-Command.
+
+
 
 ### Automatski risk floor
 
