@@ -406,6 +406,7 @@ function evaluateGateCore({
   carriedHeads = new Set(),
   trustedLogins = TRUSTED_VERDICT_LOGINS,
   qaExempt = null,
+  testsAddedOnly = false,
 }) {
   const authorAgent = field(body, "Agent");
   const authorRuntime = declaredRuntime(authorAgent);
@@ -503,7 +504,8 @@ function evaluateGateCore({
   // D-XXX: Risk low (no D-97) and test-only critical do not require independent review.
   // Negative verdicts above still hold. D-97 paths are excluded by the caller / floor.
   const lowNoReview = risk === "low";
-  const testOnlyNoReview = risk === "critical" && qaExempt === "tests";
+  // Only new test files (#971): a changed or removed test can weaken a guard.
+  const testOnlyNoReview = risk === "critical" && qaExempt === "tests" && testsAddedOnly === true;
   if (passingReviews.length === 0 && !lowNoReview && !testOnlyNoReview) {
     return { state: "pending", description: "Waiting for independently authenticated review." };
   }
@@ -783,9 +785,15 @@ export function evaluateGate(input) {
  * carries to it through a clean base merge, D-101), or the PR declares Risk
  * low or standard and touches no D-97 path. Every description is fixed text.
  */
-export function evaluateAutoMergeEligible({ metadata, paths, qaExempt }) {
+// True only when every listed file is a newly added test file.
+export function onlyAddedTests(files) {
+  const listed = files ?? [];
+  return listed.length > 0 && listed.every((f) => f?.status === "added" && !f.previous_filename && qaExemption([f.filename]) === "tests");
+}
+
+export function evaluateAutoMergeEligible({ metadata, paths, qaExempt, testsAddedOnly = false }) {
   const isLow = metadata?.ok === true && metadata.risk === "low" && metadata.minimumRisk !== "critical";
-  const isTestOnly = qaExempt === "tests";
+  const isTestOnly = metadata?.ok === true && qaExempt === "tests" && testsAddedOnly === true;
   const noD97 = ownerCommandPaths(paths).length === 0;
   if ((isLow || isTestOnly) && noD97) {
     return { state: "success", description: "Auto-merge eligible (low or test-only, no D-97)." };
@@ -841,6 +849,7 @@ export function evaluatePullRequest({ pr, files, comments, prReviews, reviewComm
     authorLogin: pr.user?.login ?? null,
     carriedHeads,
     qaExempt: qaExemption(paths),
+    testsAddedOnly: onlyAddedTests(listed),
   });
   return {
     metadata,
@@ -858,6 +867,7 @@ export function evaluatePullRequest({ pr, files, comments, prReviews, reviewComm
       metadata,
       paths,
       qaExempt: qaExemption(paths),
+      testsAddedOnly: onlyAddedTests(listed),
     }),
   };
 }
