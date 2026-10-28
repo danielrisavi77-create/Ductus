@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -65,5 +65,19 @@ describe("DESIGN-SYSTEM.md matches app/globals.css (#960)", () => {
     for (const old of ["#14b8a6", "#6fbfa5", "#cf9d72", "#19161a", "#0a0f0e", "#0f110e"]) {
       expect(current.toLowerCase()).not.toContain(old);
     }
+  });
+});
+
+describe("shared focus ring and curtain (#960)", () => {
+  const files = (readdirSync(join(process.cwd(), "src", "components"), { recursive: true }) as string[])
+    .filter((f) => f.endsWith(".module.css") && !f.startsWith("landing"))
+    .map((f) => [f, readFileSync(join(process.cwd(), "src", "components", f), "utf8")] as const);
+
+  it("draws every focus ring from --focus-width and --focus-offset", () => {
+    expect(files.filter(([, css]) => /outline:\s*\d+px solid|outline-offset:\s*\d+px/.test(css)).map(([f]) => f)).toEqual([]);
+  });
+
+  it("takes every dialog curtain from --scrim", () => {
+    expect(files.filter(([, css]) => /background:\s*#0008/.test(css)).map(([f]) => f)).toEqual([]);
   });
 });

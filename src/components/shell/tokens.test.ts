@@ -19,25 +19,27 @@ function token(block: string, name: string): string | undefined {
   return line?.slice(line.indexOf(":") + 1).replace(";", "").trim().toLowerCase();
 }
 
-describe("design tokens (Archivum package, owner decision of 26 Oct 2026, DAN-344)", () => {
+describe("design tokens (landing palette, owner decision of 28 Oct 2026, #960)", () => {
   const root = rule(":root");
 
-  // Every dark value is the package's own (prototype.css, :root or its named fixed values).
+  // Dark values: the public landing's palette (#952, PrototypeLanding.css:
+  // --plum, --night, --plum2, --copper and its named text and line colours);
+  // tokens the landing has no colour for keep the Archivum package's value (D-179).
   const PACKAGE: Record<string, string> = {
-    "--ground": "#2b1f38", "--chrome": "#21192a", "--sheet": "#392a44",
-    "--ink": "#f7f0fa", "--ink-2": "#cdb3df", "--ink-3": "#bca4cb", "--ink-muted": "#94729f",
-    "--rule": "#765588", "--rule-2": "#664774",
-    "--accent": "#f0b573", "--accent-hover": "#ffd09a", "--accent-ink": "#201526", "--accent-soft": "#3e294a",
-    "--selected": "#3e294a", "--well": "#3e294a", "--hover": "#483250", "--raised": "#291e33", "--raised-rule": "#bc92d0",
-    "--card": "#33253d", "--link-rule": "#a681b9",
-    "--field": "#2b2035", "--field-rule": "#9c76b0", "--field-placeholder": "#bca4cb", "--error-soft": "#402b46",
+    "--ground": "#2b1f38", "--chrome": "#21172c", "--sheet": "#392a44",
+    "--ink": "#f8f1f4", "--ink-2": "#e1d5e2", "--ink-3": "#d2bfcf", "--ink-muted": "#86738c",
+    "--rule": "#86738c", "--rule-2": "#75667c",
+    "--accent": "#f0b573", "--accent-hover": "#ffd19c", "--accent-ink": "#21172c", "--accent-soft": "#3c2a4a",
+    "--selected": "#3c2a4a", "--well": "#3c2a4a", "--hover": "#3c2a4a", "--raised": "#291e33", "--raised-rule": "#c5afc8",
+    "--card": "#33253d", "--link-rule": "#c5afc8",
+    "--field": "#2b2035", "--field-rule": "#b09ab6", "--field-placeholder": "#bca4cb", "--error-soft": "#402b46",
   };
 
-  it("takes every dark shell colour from the approved package", () => {
+  it("takes every dark shell colour from the landing palette", () => {
     for (const [name, value] of Object.entries(PACKAGE)) expect([name, token(root, name)]).toEqual([name, value]);
   });
 
-  it("gives the dark sheet the package's sheet and ink", () => {
+  it("gives the dark sheet the shell's sheet and ink", () => {
     const sheet = rule(".sheet");
     for (const name of ["--sheet", "--ink", "--ink-2", "--ink-3", "--ink-muted", "--rule", "--rule-2",
       "--accent", "--accent-hover", "--accent-ink", "--accent-soft"]) {
@@ -56,14 +58,18 @@ describe("design tokens (Archivum package, owner decision of 26 Oct 2026, DAN-34
     expect(token(root, "--heading-tracking")).toBe("-0.025em");
   });
 
-  // The package is dark only. Owner decision of 27 Oct 2026, option (a): the
-  // light shell and the white sheet keep the paper and copper of Archivum V3.
-  it("keeps paper and copper in the light shell and on the white sheet", () => {
+  // Light shell and white sheet: the landing's --paper, --page and --ink.
+  // The landing's light copper (#8f5d49) is under 4.5:1 on the light hover
+  // surfaces, so the darker copper #8f4f33 (27 Oct 2026, option (a)) stays.
+  it("takes paper and ink from the landing and keeps the AA copper", () => {
     const shell = rule('[data-theme="light"]');
-    expect(token(shell, "--ground")).toBe("#f6efdf");
+    expect(token(shell, "--ground")).toBe("#f3ede2");
+    expect(token(shell, "--chrome")).toBe("#fffcf5");
+    expect(token(shell, "--ink")).toBe("#2c2130");
     expect(token(shell, "--accent")).toBe("#8f4f33");
     const white = rule('.sheet[data-sheet-theme="light"]');
-    expect(token(white, "--sheet")).toBe("#ffffff");
+    expect(token(white, "--sheet")).toBe("#fffcf5");
+    expect(token(white, "--ink")).toBe("#2c2130");
     expect(token(white, "--accent")).toBe("#8f4f33");
   });
 
@@ -249,7 +255,10 @@ describe("contrast of the semantic tokens (FE-D2)", () => {
     }
 
     it("draws the focus ring in the theme's primary", () => {
-      expect(CSS).toMatch(/outline: 2px solid var\(--accent\);/);
+      expect(CSS).toMatch(/outline: var\(--focus-width\) solid var\(--accent\);/);
+      // The landing's ring (#960): 3 px, 4 px away; never thinner than 2 px.
+      expect(token(rule(":root"), "--focus-width")).toBe("3px");
+      expect(token(rule(":root"), "--focus-offset")).toBe("4px");
     });
   });
 

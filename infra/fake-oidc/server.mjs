@@ -65,20 +65,20 @@ const FAVICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"
 const PAGE_STYLE = `
 :root { color-scheme: dark; }
 body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px;
-  box-sizing: border-box; background: #2b1f38; color: #f7f0fa;
+  box-sizing: border-box; background: #2b1f38; color: #f8f1f4;
   font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
 main { width: min(430px, 100%); box-sizing: border-box; padding: 30px 30px 24px;
-  background: #392a44; border: 1px solid #765588; border-radius: 6px;
+  background: #392a44; border: 1px solid #86738c; border-radius: 6px;
   box-shadow: 0 1px 1px #0007, 0 12px 34px -10px #000a; text-align: center; }
-.tag { display: inline-block; padding: 2px 10px; border-radius: 4px; background: #3e294a;
+.tag { display: inline-block; padding: 2px 10px; border-radius: 4px; background: #3c2a4a;
   color: #f0b573; font-size: 12px; font-weight: 600; }
 h1 { margin: 12px 0 8px; font-size: 24px; font-weight: 400; }
-p { margin: 0 0 20px; font-size: 13px; color: #cdb3df; }
+p { margin: 0 0 20px; font-size: 13px; color: #e1d5e2; }
 form { display: grid; gap: 10px; }
 button { min-height: 48px; padding: 12px 18px; border: 0; border-radius: 4px;
-  background: #f0b573; color: #201526; font: inherit; font-weight: 600; cursor: pointer; }
-button:hover { background: #ffd09a; }
-button:focus-visible { outline: 2px solid #f7f0fa; outline-offset: 2px; }
+  background: #f0b573; color: #21172c; font: inherit; font-weight: 600; cursor: pointer; }
+button:hover { background: #ffd19c; }
+button:focus-visible { outline: 3px solid #f8f1f4; outline-offset: 4px; }
 `;
 
 function loginPage(uid) {

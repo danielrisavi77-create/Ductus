@@ -1,18 +1,16 @@
 /*
- * Ductus design tokens. The dark values are the purple and copper of the
- * approved Archivum package (Ductura_Archivum_Povezani_Prototip, prototype.css;
- * owner decision of 26 Oct 2026, DAN-344), replacing the burgundy of Archivum
- * V3 (#867). The light shell and the white sheet keep the paper and copper of
- * V3, completed with light values for every token the package adds (owner
- * decision of 27 Oct 2026, option (a)); every text, field and focus pair is
- * WCAG AA in both themes (tokens.test.ts). The names are D-123's (values
- * replaced by D-179) and the structure D-115's.
+ * Ductus design tokens. Written source: docs/design/DESIGN-SYSTEM.md, kept
+ * equal to this file by src/components/shell/design-doc.test.ts. The values
+ * are the public landing's palette (owner decision of 28 Oct 2026, #960,
+ * D-184): plum ground, night bars, plum2 for selected and hover, copper
+ * primary, paper and ink in the light theme. Roles the landing has no colour
+ * for keep the Archivum package's value (D-179). Every text, field and focus
+ * pair is WCAG AA in both themes (tokens.test.ts).
  *
  * The shell is dark and does not follow the system setting. The writing sheet
  * carries its own token scope (`.sheet`): dark by default, white when the
  * writer switches it (`data-sheet-theme="light"`, SheetFrame); the choice is
- * kept only in the browser. Primary is copper #F0B573 with #201526 text on it
- * (9.7:1); in the light shell and on the white sheet the darker copper #8F4F33
+ * kept only in the browser. Primary is copper #F0B573 with #21172c text on it; in the light shell and on the white sheet the darker copper #8F4F33
  * carries text and focus (5.5:1 or more).
  * The server save state (SYNCED) has its own colour, --synced, so it never
  * reads as the primary or as the pulsing "saving" state. Origin colours show
@@ -23,9 +21,9 @@
  * Semantic names (FE-D2): --raised for dialogs and other raised surfaces,
  * --selected for the selected item or segment, --ink-muted for the quietest
  * marks, --warn and --error for warning and error marks. --ink-muted is
- * #94729f, under 4.5:1 on --chrome, --sheet and --raised (4.18, 3.25, 3.89):
+ * #86738c, under 4.5:1 on --chrome, --sheet and --raised (3.96, 3.05, 3.65):
  * large text (24 px, or 18.66 px bold) and non-text marks only (at least
- * 3:1); small quiet text uses --ink-3 (5.0:1 or more on every dark surface).
+ * 3:1); small quiet text uses --ink-3.
  * --radius is for panels and cards, --radius-sm for the selected item and
  * dense controls, --radius-control for buttons and fields and --radius-lg
  * for dialogs. --card, --raised-rule, --link-rule, --field*, --error-soft and
@@ -42,28 +40,28 @@
 :root {
   --ground: #2b1f38;
   --sheet: #392a44;
-  --chrome: #21192a;
-  --ink: #f7f0fa;
-  --ink-2: #cdb3df;
-  --ink-3: #bca4cb;
-  --rule: #765588;
-  --rule-2: #664774;
-  --hover: #483250;
+  --chrome: #21172c;
+  --ink: #f8f1f4;
+  --ink-2: #e1d5e2;
+  --ink-3: #d2bfcf;
+  --rule: #86738c;
+  --rule-2: #75667c;
+  --hover: #3c2a4a;
   --raised: #291e33;
-  --raised-rule: #bc92d0;
+  --raised-rule: #c5afc8;
   --card: #33253d;
-  --selected: #3e294a;
-  --well: #3e294a;
-  --ink-muted: #94729f;
+  --selected: #3c2a4a;
+  --well: #3c2a4a;
+  --ink-muted: #86738c;
   --warn: #e9c58b;
   --error: #f0a08f;
   --accent: #f0b573;
-  --accent-hover: #ffd09a;
-  --accent-ink: #201526;
-  --accent-soft: #3e294a;
-  --link-rule: #a681b9;
+  --accent-hover: #ffd19c;
+  --accent-ink: #21172c;
+  --accent-soft: #3c2a4a;
+  --link-rule: #c5afc8;
   --field: #2b2035;
-  --field-rule: #9c76b0;
+  --field-rule: #b09ab6;
   --field-placeholder: #bca4cb;
   --error-soft: #402b46;
   --synced: #a2c6e5;
@@ -87,6 +85,11 @@
   --heading-leading: 1.08;
   --heading-tracking: -0.025em;
   --shadow: 0 22px 80px #0003;
+  /* Curtain behind a dialog or drawer. */
+  --scrim: #0008;
+  /* Focus ring of the landing: 3 px copper, 4 px away (#960). */
+  --focus-width: 3px;
+  --focus-offset: 4px;
   --lift: 0 1px 1px #0007, 0 12px 34px -10px #000a;
   --ff-ui: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
   --ff-display: var(--font-display), Georgia, serif;
@@ -102,24 +105,24 @@
  * and --chrome (tokens.test.ts).
  */
 [data-theme="light"] {
-  --ground: #f6efdf;
-  --chrome: #fcf7ec;
+  --ground: #f3ede2;
+  --chrome: #fffcf5;
   --raised: #f9f3e6;
   --hover: #efe5d2;
   --selected: #efe3cf;
-  --rule: #d9cbb5;
+  --rule: #d1c3b7;
   --rule-2: #e8dcc8;
   --well: #e8dcc8;
-  --ink: #332a27;
-  --ink-2: #5f544d;
-  --ink-3: #6b5f56;
+  --ink: #2c2130;
+  --ink-2: #6b5b66;
+  --ink-3: #68575e;
   --accent: #8f4f33;
-  --accent-ink: #fcf7ec;
+  --accent-ink: #fffcf5;
   --accent-soft: #efe0cb;
   --warn: #7a5420;
   --synced: #355b81;
   --sheet: #ffffff;
-  --ink-muted: #6b5f56;
+  --ink-muted: #68575e;
   --accent-hover: #7a4129;
   --error: #9c3f33;
   --warn-soft: #f3e6cf;
@@ -128,10 +131,10 @@
   --cmt-ink: #7a5420;
   --cmt-bg: #e9c58b40;
   /* Light values of the package's tokens (owner decision 27 Oct 2026, option (a)). */
-  --card: #fffaf1;
+  --card: #fffcf5;
   --raised-rule: #857363;
   --link-rule: #946446;
-  --field: #fffdf8;
+  --field: #fffaf2;
   --field-rule: #857363;
   --field-placeholder: #6b5f56;
   --error-soft: #f7e4dd;
@@ -147,26 +150,26 @@
 .sheet {
   --sheet: #392a44;
   /* The dark sheet keeps dark-theme ink inside a light shell too. */
-  --ink: #f7f0fa;
-  --ink-2: #cdb3df;
-  --ink-3: #bca4cb;
-  --ink-muted: #94729f;
-  --rule: #765588;
-  --rule-2: #664774;
+  --ink: #f8f1f4;
+  --ink-2: #e1d5e2;
+  --ink-3: #d2bfcf;
+  --ink-muted: #86738c;
+  --rule: #86738c;
+  --rule-2: #75667c;
   --accent: #f0b573;
-  --accent-hover: #ffd09a;
-  --accent-ink: #201526;
-  --accent-soft: #3e294a;
+  --accent-hover: #ffd19c;
+  --accent-ink: #21172c;
+  --accent-soft: #3c2a4a;
   --warn: #e9c58b;
   --cmt: #e9c58b;
   --cmt-ink: #e9c58b;
   --cmt-bg: #e9c58b26;
   /* Surfaces under its ink, so a light shell never puts a light surface under light ink. */
-  --well: #3e294a;
+  --well: #3c2a4a;
   --card: #33253d;
-  --link-rule: #a681b9;
+  --link-rule: #c5afc8;
   --field: #2b2035;
-  --field-rule: #9c76b0;
+  --field-rule: #b09ab6;
   --field-placeholder: #bca4cb;
   --error-soft: #402b46;
   color-scheme: dark;
@@ -177,16 +180,16 @@
  * placeholder text); --ink-muted is the same.
  */
 .sheet[data-sheet-theme="light"] {
-  --sheet: #ffffff;
-  --ink: #2a2321;
-  --ink-2: #5f544d;
-  --ink-3: #6b5f56;
-  --ink-muted: #6b5f56;
-  --rule: #e3dccf;
+  --sheet: #fffcf5;
+  --ink: #2c2130;
+  --ink-2: #6b5b66;
+  --ink-3: #68575e;
+  --ink-muted: #68575e;
+  --rule: #d1c3b7;
   --rule-2: #f6f1e7;
   --accent: #8f4f33;
   --accent-hover: #7a4129;
-  --accent-ink: #ffffff;
+  --accent-ink: #fffcf5;
   --accent-soft: #8f4f331a;
   --p-internal: #4a6fa5;
   --p-unknown: #6e6a62;
@@ -198,9 +201,9 @@
   --cmt-ink: #8a6420;
   --cmt-bg: #b8862a26;
   --well: #f1eadd;
-  --card: #fffaf1;
+  --card: #fffcf5;
   --link-rule: #946446;
-  --field: #fffdf8;
+  --field: #fffaf2;
   --field-rule: #857363;
   --field-placeholder: #6b5f56;
   --error-soft: #f7e4dd;
@@ -237,8 +240,8 @@ button {
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline: var(--focus-width) solid var(--accent);
+  outline-offset: var(--focus-offset);
   border-radius: var(--radius-sm);
 }
 
@@ -1054,8 +1057,8 @@ main:focus {
    Browsers match :focus-visible on a text field after a mouse click too, so the
    writer always sees where typing goes; that is intended, not a leak. */
 .editor-surface .ProseMirror:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 4px;
+  outline: var(--focus-width) solid var(--accent);
+  outline-offset: var(--focus-offset);
   border-radius: var(--radius-sm);
 }
 
