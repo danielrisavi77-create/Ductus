@@ -783,6 +783,16 @@ export function evaluateGate(input) {
  * carries to it through a clean base merge, D-101), or the PR declares Risk
  * low or standard and touches no D-97 path. Every description is fixed text.
  */
+export function evaluateAutoMergeEligible({ metadata, paths, qaExempt }) {
+  const isLow = metadata?.ok === true && metadata.risk === "low" && metadata.minimumRisk !== "critical";
+  const isTestOnly = qaExempt === "tests";
+  const noD97 = ownerCommandPaths(paths).length === 0;
+  if ((isLow || isTestOnly) && noD97) {
+    return { state: "success", description: "Auto-merge eligible (low or test-only, no D-97)." };
+  }
+  return { state: "pending", description: "Not eligible for auto-merge." };
+}
+
 export function evaluateMergeAuthorization({ gate, metadata, paths, comments, headSha, ownerLogin, carriedHeads }) {
   if (gate?.state !== "success") return { state: "pending", description: "Waiting for the Engineering review gate." };
   const heads = carriedHeads ?? new Set();
@@ -843,6 +853,11 @@ export function evaluatePullRequest({ pr, files, comments, prReviews, reviewComm
       headSha: pr.head.sha,
       ownerLogin,
       carriedHeads,
+    }),
+    autoMergeEligible: evaluateAutoMergeEligible({
+      metadata,
+      paths,
+      qaExempt: qaExemption(paths),
     }),
   };
 }
