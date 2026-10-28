@@ -2,6 +2,10 @@
 BEGIN;
 \ir fixtures/institution.inc
 SET LOCAL lc_messages TO 'C';
+-- The fixture's existing version 2 now emits real synthetic notifications.
+SET LOCAL ROLE ductus_identity;
+DELETE FROM institution.notification;
+RESET ROLE;
 SELECT plan(43);
 
 SELECT bag_eq(

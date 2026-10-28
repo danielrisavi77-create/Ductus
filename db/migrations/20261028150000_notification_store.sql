@@ -1,6 +1,5 @@
--- D1 / DAN-305: internal storage only. No producer or application-facing
--- function exists in this step. The event owner must validate the recipient,
--- target and transaction before later code writes here.
+-- D1 / DAN-305: internal storage and the course assignment-version event.
+-- No application-facing inbox exists in this step.
 -- migrate:up
 SET LOCAL ROLE ductus_migrator;
 GRANT CREATE ON SCHEMA institution TO ductus_identity;
@@ -30,10 +29,35 @@ ALTER TABLE institution.notification ENABLE ROW LEVEL SECURITY;
 ALTER TABLE institution.notification FORCE ROW LEVEL SECURITY;
 CREATE POLICY notification_owner ON institution.notification TO ductus_identity USING (true) WITH CHECK (true);
 
+-- A new course-assignment version and its notifications commit or roll back
+-- together. Recipients are current student members; the browser supplies none.
+-- Version 1 is initial creation, and mentorship version publishing is not yet
+-- supported by the existing domain RPC.
+CREATE FUNCTION institution.notify_assignment_version() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
+AS $$
+BEGIN
+  INSERT INTO institution.notification (institution_id, recipient_id, kind, event_key, target_id)
+  SELECT a.institution_id, m.user_id, 'assignment_version',
+         'assignment_version:' || a.id::text || ':' || NEW.version_no::text, a.id
+  FROM institution.assignment a
+  JOIN institution.course_member m ON m.course_id = a.course_id AND m.institution_id = a.institution_id
+  WHERE a.id = NEW.assignment_id AND a.course_id IS NOT NULL
+    AND m.role = 'student' AND m.member_to IS NULL
+  ON CONFLICT (recipient_id, event_key) DO NOTHING;
+  RETURN NEW;
+END
+$$;
+REVOKE ALL ON FUNCTION institution.notify_assignment_version() FROM PUBLIC;
+CREATE TRIGGER assignment_version_notify AFTER INSERT ON institution.assignment_version
+  FOR EACH ROW WHEN (NEW.version_no > 1) EXECUTE FUNCTION institution.notify_assignment_version();
+
 SET LOCAL ROLE ductus_migrator;
 REVOKE CREATE ON SCHEMA institution FROM ductus_identity;
 
 -- migrate:down
 SET LOCAL ROLE ductus_identity;
+DROP TRIGGER assignment_version_notify ON institution.assignment_version;
+DROP FUNCTION institution.notify_assignment_version();
 DROP TABLE institution.notification;
 SET LOCAL ROLE ductus_migrator;
