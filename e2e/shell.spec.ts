@@ -445,19 +445,15 @@ test.describe("workspace shell", () => {
       await page.goto("/");
       const brand = await page.getByRole("banner").getByRole("link", { name: "Ductura" }).boundingBox();
       const heading = await page.getByRole("heading", { level: 1 }).boundingBox();
-      // The brand link pads 6 px each side for its target and pulls back by 6 px.
-      expect(Math.abs(brand!.x + 6 - heading!.x)).toBeLessThanOrEqual(1);
+      // The public landing aligns the brand itself with its heading.
+      expect(Math.abs(brand!.x - heading!.x)).toBeLessThanOrEqual(1);
     });
   }
 
   test("home states what Ductura does not judge", async ({ page }) => {
     await page.goto("/");
-    await expect(
-      page.getByText(
-        "Ductura ne procjenjuje autorstvo ni korištenje AI-ja. Prije početka vidite što nastavnik vidi i od kada.",
-        { exact: true },
-      ),
-    ).toBeVisible();
+    await expect(page.locator("#povjerenje")).toContainText("Ne donosi zaključak o autorstvu ni o dopuštenosti uporabe umjetne inteligencije.");
+    await expect(page.locator("#fakulteti")).toContainText("Student prije pisanja vidi upute, rokove i obavijest o tome što se bilježi i tko vidi rad.");
   });
 
   // Without a session "/" is the public home page and its way in is /prijava
@@ -465,6 +461,7 @@ test.describe("workspace shell", () => {
   // e2e/login/sign-out.spec.ts.
   test("home without a session leads to the sign-in screen", async ({ page }) => {
     await page.goto("/");
+    if (await page.locator(".menu").isVisible()) await page.locator(".menu").click();
     await expect(page.getByRole("banner").getByRole("link", { name: "Prijava" })).toHaveAttribute("href", "/prijava");
   });
 });
