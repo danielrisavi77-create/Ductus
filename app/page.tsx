@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -15,6 +16,16 @@ import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
 
 export const runtime = "nodejs";
+
+export const metadata: Metadata = {
+  title: "Ductura — jedan rad, dva pogleda",
+  description: "Ductura povezuje akademsko pisanje, upute i razgovor o radu za studente i fakultete u Hrvatskoj.",
+  openGraph: {
+    type: "website",
+    title: "Ductura — jedan rad, dva pogleda",
+    description: "Prostor za akademsko pisanje, upute i razgovor o radu.",
+  },
+};
 
 export default async function HomePage() {
   // Convenience only, not a safeguard: a person with an open session goes to

@@ -27,8 +27,8 @@ for (const path of PAGES) {
   for (const colorScheme of SCHEMES) {
     test(`axe: no WCAG 2.1 AA violations on ${path} (sheet: ${colorScheme})`, async ({ page }) => {
       await page.goto(path);
-      // The home page's preview carries the same sheet switch (FE-H1).
-      if (path === "/rad" || path === "/") await chooseSheetTheme(page, colorScheme);
+      // The editor keeps its sheet switch; the public landing has one paper style.
+      if (path === "/rad") await chooseSheetTheme(page, colorScheme);
       const results = await new AxeBuilder({ page })
         .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
         .analyze();

@@ -1,0 +1,1882 @@
+[
+  {
+    "id": "unizg",
+    "name": "Sveučilište u Zagrebu",
+    "units": [
+      {
+        "id": "adu",
+        "name": "Akademija dramske umjetnosti",
+        "programs": [
+          "Gluma",
+          "Dramaturgija",
+          "Snimanje",
+          "Montaža",
+          "Produkcija",
+          "Filmska i TV režija",
+          "Kazališna režija i radiofonija",
+          "Opći profil akademije"
+        ]
+      },
+      {
+        "id": "agr",
+        "name": "Agronomski fakultet",
+        "programs": [
+          "Diplomski studiji Agronomskog fakulteta",
+          "Prijediplomski studiji Agronomskog fakulteta (zavrsni rad)",
+          "Doktorski studij Agronomskog fakulteta",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "alu",
+        "name": "Akademija likovnih umjetnosti",
+        "programs": [
+          "Slikarstvo",
+          "Kiparstvo",
+          "Grafika",
+          "Nastavnički odsjek",
+          "Konzerviranje i restauriranje",
+          "Animirani film i novi mediji",
+          "Diplomski studiji Akademije likovnih umjetnosti",
+          "Doktorski studij Akademije likovnih umjetnosti",
+          "Opći profil akademije"
+        ]
+      },
+      {
+        "id": "arh",
+        "name": "Arhitektonski fakultet",
+        "programs": [
+          "Arhitektura i urbanizam",
+          "Dizajn",
+          "Diplomski studiji Arhitektonskog fakulteta",
+          "Doktorski studij Arhitektonskog fakulteta",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "efzg",
+        "name": "Ekonomski fakultet",
+        "programs": [
+          "Ekonomija",
+          "Poslovna ekonomija",
+          "Stručni studiji",
+          "Sveučilišni specijalistički studiji",
+          "Prijediplomski studiji Ekonomskog fakulteta (zavrsni rad)",
+          "Diplomski studiji Ekonomskog fakulteta",
+          "Doktorski studij Ekonomskog fakulteta",
+          "Stručni diplomski studij Računovodstvo, financijsko izvještavanje i revizija",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "erf",
+        "name": "Edukacijsko-rehabilitacijski fakultet",
+        "programs": [
+          "Edukacijska rehabilitacija",
+          "Logopedija",
+          "Socijalna pedagogija",
+          "Diplomski studiji Edukacijsko-rehabilitacijskog fakulteta",
+          "Doktorski studij Edukacijsko-rehabilitacijskog fakulteta",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "fbf",
+        "name": "Farmaceutsko-biokemijski fakultet",
+        "programs": [
+          "Farmacija",
+          "Medicinska biokemija",
+          "Poslijediplomski specijalisticki studiji Farmaceutsko-biokemijskog fakulteta",
+          "Doktorski studij Farmaceutsko-biokemijskog fakulteta",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "fer",
+        "name": "Fakultet elektrotehnike i računarstva",
+        "programs": [
+          "Elektrotehnika i informacijska tehnologija",
+          "Računarstvo",
+          "Diplomski studiji Fakulteta elektrotehnike i racunarstva",
+          "Prijediplomski studiji Fakulteta elektrotehnike i racunarstva (zavrsni rad)",
+          "Doktorski studij Fakulteta elektrotehnike i racunarstva",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "ffrz",
+        "name": "Fakultet filozofije i religijskih znanosti",
+        "programs": [
+          "Filozofija",
+          "Religijske znanosti",
+          "Prijediplomski studiji Fakulteta filozofije i religijskih znanosti (zavrsni rad)",
+          "Diplomski studiji Fakulteta filozofije i religijskih znanosti",
+          "Doktorski studij Fakulteta filozofije i religijskih znanosti",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "ffzg",
+        "name": "Filozofski fakultet",
+        "programs": [
+          "Prijediplomski studiji Filozofskog fakulteta (zavrsni rad)",
+          "Diplomski studiji Filozofskog fakulteta",
+          "Opći profil fakulteta",
+          "Arheologija",
+          "Etnologija i kulturna antropologija",
+          "Filozofija",
+          "Informacijske i komunikacijske znanosti",
+          "Komparativna književnost",
+          "Kroatistika",
+          "Lingvistika",
+          "Pedagogija",
+          "Povijest",
+          "Povijest umjetnosti",
+          "Psihologija",
+          "Sociologija",
+          "Jezici i književnosti",
+          "Švedski jezik i kultura (dvopredmetni)"
+        ]
+      },
+      {
+        "id": "fhs",
+        "name": "Fakultet hrvatskih studija",
+        "programs": [
+          "Povijest",
+          "Sociologija",
+          "Psihologija",
+          "Komunikologija",
+          "Kroatologija",
+          "Prijediplomski studiji Fakulteta hrvatskih studija (zavrsni rad)",
+          "Diplomski studiji Fakulteta hrvatskih studija",
+          "Doktorski studij Fakulteta hrvatskih studija",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "fkit",
+        "name": "Fakultet kemijskog inženjerstva i tehnologije",
+        "programs": [
+          "Kemijsko inženjerstvo",
+          "Primijenjena kemija",
+          "Ekoinženjerstvo",
+          "Diplomski studiji Fakulteta kemijskog inženjerstva i tehnologije",
+          "Prijediplomski studiji Fakulteta kemijskog inženjerstva i tehnologije (zavrsni rad)",
+          "Doktorski studij Fakulteta kemijskog inženjerstva i tehnologije",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "foi",
+        "name": "Fakultet organizacije i informatike",
+        "programs": [
+          "Prijediplomski studiji Fakulteta organizacije i informatike (zavrsni rad)",
+          "Diplomski studiji Fakulteta organizacije i informatike",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "fpz",
+        "name": "Fakultet prometnih znanosti",
+        "programs": [
+          "Promet",
+          "Aeronautika",
+          "Inteligentni transportni sustavi i logistika",
+          "Prijediplomski studiji Fakulteta prometnih znanosti (zavrsni rad)",
+          "Diplomski studiji Fakulteta prometnih znanosti",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "fpzg",
+        "name": "Fakultet političkih znanosti",
+        "programs": [
+          "Prijediplomski studij Politologija",
+          "Prijediplomski studij Novinarstvo",
+          "Sveučilišni prijediplomski studij Vojno vođenje i upravljanje",
+          "Diplomski studij Politologija",
+          "Diplomski studij Politologija – Nacionalna sigurnost",
+          "Diplomski studij Novinarstvo",
+          "Master of European Studies",
+          "Sveučilišni specijalistički studij Odnosi s javnošću",
+          "Sveučilišni specijalistički studij Prilagodba Europskoj uniji: upravljanje projektima i korištenje fondova i programa EU",
+          "Sveučilišni specijalistički studij Sigurnosna politika Republike Hrvatske",
+          "Sveučilišni specijalistički studij Vanjska politika i diplomacija",
+          "Doktorski studij Politologija",
+          "Združeni interdisciplinarni diplomski studij o jugoistočnoj Europi",
+          "Opći FPZG profil"
+        ]
+      },
+      {
+        "id": "fsb",
+        "name": "Fakultet strojarstva i brodogradnje",
+        "programs": [
+          "Strojarstvo",
+          "Brodogradnja",
+          "Zrakoplovno inženjerstvo i svemirska tehnika",
+          "Diplomski studiji Fakulteta strojarstva i brodogradnje",
+          "Prijediplomski studiji Fakulteta strojarstva i brodogradnje (zavrsni rad)",
+          "Doktorski studij Fakulteta strojarstva i brodogradnje",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "geof",
+        "name": "Geodetski fakultet",
+        "programs": [
+          "Geodezija i geoinformatika",
+          "Diplomski studiji Geodetskog fakulteta",
+          "Doktorski studij Geodetskog fakulteta",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "grad",
+        "name": "Građevinski fakultet",
+        "programs": [
+          "Građevinarstvo",
+          "Diplomski studiji Građevinskog fakulteta",
+          "Prijediplomski studiji Građevinskog fakulteta (zavrsni rad)",
+          "Doktorski studij Građevinskog fakulteta",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "grf",
+        "name": "Grafički fakultet",
+        "programs": [
+          "Grafička tehnologija",
+          "Dizajn grafičkih proizvoda",
+          "Prijediplomski studiji Grafičkog fakulteta (zavrsni rad)",
+          "Diplomski studiji Grafičkog fakulteta",
+          "Doktorski studij Grafičkog fakulteta",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "kbf",
+        "name": "Katolički bogoslovni fakultet",
+        "programs": [
+          "Filozofsko-teološki studij",
+          "Religijska pedagogija i katehetika",
+          "Prijediplomski studiji Katolickog bogoslovnog fakulteta (zavrsni rad)",
+          "Diplomski studiji Katolickog bogoslovnog fakulteta",
+          "Doktorski studij Katolickog bogoslovnog fakulteta",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "kif",
+        "name": "Kineziološki fakultet",
+        "programs": [
+          "Kineziologija",
+          "Izobrazba trenera",
+          "Diplomski studiji Kineziološkog fakulteta",
+          "Doktorski studij Kineziološkog fakulteta",
+          "Specijalistički diplomski studij Kineziološkog fakulteta",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "mef",
+        "name": "Medicinski fakultet",
+        "programs": [
+          "Medicina",
+          "Sestrinstvo",
+          "Sveučilišni specijalistički studiji",
+          "Diplomski studiji Medicinskog fakulteta",
+          "Doktorski studij Medicinskog fakulteta",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "muza",
+        "name": "Muzička akademija",
+        "programs": [
+          "Kompozicija",
+          "Dirigiranje",
+          "Instrumentalni studiji",
+          "Pjevanje",
+          "Muzikologija",
+          "Glazbena pedagogija",
+          "Diplomski studiji Muzičke akademije",
+          "Doktorski studij Muzičke akademije",
+          "Opći profil akademije"
+        ]
+      },
+      {
+        "id": "pbf",
+        "name": "Prehrambeno-biotehnološki fakultet",
+        "programs": [
+          "Prehrambena tehnologija",
+          "Biotehnologija",
+          "Nutricionizam",
+          "Diplomski studiji Prehrambeno-biotehnološkog fakulteta",
+          "Doktorski studij Prehrambeno-biotehnološkog fakulteta",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "pmf",
+        "name": "Prirodoslovno-matematički fakultet",
+        "programs": [
+          "Biologija",
+          "Fizika",
+          "Geofizika",
+          "Geografija",
+          "Geologija",
+          "Kemija",
+          "Matematika",
+          "Diplomski studiji Prirodoslovno-matematičkog fakulteta",
+          "Opći profil fakulteta",
+          "Molekularna biologija"
+        ]
+      },
+      {
+        "id": "pravo",
+        "name": "Pravni fakultet",
+        "programs": [
+          "Sveučilišni integrirani prijediplomski i diplomski studij Pravo",
+          "Sveučilišni prijediplomski studij Socijalni rad",
+          "Stručni prijediplomski studij Javna uprava",
+          "Stručni prijediplomski Porezni studij",
+          "Sveučilišni diplomski studij Socijalni rad",
+          "Sveučilišni diplomski studij Socijalna politika",
+          "Stručni diplomski studij Javna uprava",
+          "Sveučilišni specijalistički studij Europsko pravo",
+          "Sveučilišni specijalistički studij Građanskopravne i obiteljskopravne znanosti",
+          "Sveučilišni specijalistički studij Kaznenopravne znanosti",
+          "Sveučilišni specijalistički studij Fiskalni sustav i fiskalna politika",
+          "Sveučilišni specijalistički studij Javno pravo i javna uprava",
+          "Sveučilišni specijalistički studij Međunarodno javno i međunarodno privatno pravo",
+          "Sveučilišni specijalistički studij Pravo društava i trgovačko pravo",
+          "Sveučilišni specijalistički studij Obiteljska medijacija",
+          "Sveučilišni specijalistički studij Psihosocijalni pristup u socijalnom radu",
+          "Sveučilišni specijalistički studij Socijalna politika",
+          "Sveučilišni specijalistički studij Supervizija psihosocijalnog rada",
+          "Sveučilišni interdisciplinarni specijalistički studij Prava djece",
+          "Doktorski studij Pravne znanosti",
+          "Doktorski studij Socijalni rad i socijalna politika",
+          "Erasmus Mundus Joint Master – Redesigning the Post-Industrial City (MSc RePIC)",
+          "Opći profil Pravnog fakulteta"
+        ]
+      },
+      {
+        "id": "rgnf",
+        "name": "Rudarsko-geološko-naftni fakultet",
+        "programs": [
+          "Rudarstvo",
+          "Geološko inženjerstvo",
+          "Naftno rudarstvo",
+          "Prijediplomski studiji Rudarsko-geolosko-naftnog fakulteta (zavrsni rad)",
+          "Diplomski studiji Rudarsko-geolosko-naftnog fakulteta",
+          "Opci profil fakulteta",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "sfzg",
+        "name": "Stomatološki fakultet",
+        "programs": [
+          "Dentalna medicina",
+          "Diplomski studiji Stomatološkog fakulteta",
+          "Doktorski studij Stomatološkog fakulteta",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "simet",
+        "name": "Metalurski fakultet",
+        "programs": [
+          "Prijediplomski studiji Metalurskog fakulteta (zavrsni rad)",
+          "Diplomski studij Metalurgija",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "sumfak",
+        "name": "Fakultet šumarstva i drvne tehnologije",
+        "programs": [
+          "Šumarstvo",
+          "Drvna tehnologija",
+          "Diplomski studiji Fakulteta šumarstva i drvne tehnologije",
+          "Prijediplomski studiji Fakulteta šumarstva i drvne tehnologije (zavrsni rad)",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "ttf",
+        "name": "Tekstilno-tehnološki fakultet",
+        "programs": [
+          "Tekstilna tehnologija i inženjerstvo",
+          "Tekstilni i modni dizajn",
+          "Diplomski studiji Tekstilno-tehnološkog fakulteta",
+          "Prijediplomski studiji Tekstilno-tehnološkog fakulteta (zavrsni rad)",
+          "Doktorski studij Tekstilno-tehnološkog fakulteta",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "ufzg",
+        "name": "Učiteljski fakultet",
+        "programs": [
+          "Učiteljski studij",
+          "Rani i predškolski odgoj i obrazovanje",
+          "Prijediplomski studiji Učiteljskog fakulteta (zavrsni rad)",
+          "Diplomski studiji Učiteljskog fakulteta",
+          "Doktorski studij Učiteljskog fakulteta",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "vef",
+        "name": "Veterinarski fakultet",
+        "programs": [
+          "Veterinarska medicina",
+          "Diplomski studiji Veterinarskog fakulteta Sveucilista u Zagrebu",
+          "Doktorski studij Veterinarskog fakulteta",
+          "Opći profil fakulteta",
+          "Veterinary Medicine",
+          "Agri Food Chain Microbiology",
+          "Dobrobit životinja",
+          "Farm Animal Welfare",
+          "Farm Biosecurity",
+          "Forensic Veterinary Medicine",
+          "Health Protection in Breeding and Production of Small Ruminants",
+          "Higijena i tehnologija hrane životinjskog podrijetla",
+          "Honeybee Health Protection",
+          "Kirurgija, anesteziologija i oftalmologija s veterinarskom stomatologijom",
+          "Laboratory Animal Medicine",
+          "Menadžment reprodukcijskog zdravlja mliječnih krava",
+          "Mikrobiologija i epizootiologija",
+          "Patologija i uzgoj domaćih mesoždera",
+          "Pig Production and Health Management",
+          "Proizvodnja i zaštita zdravlja svinja",
+          "Provedba veterinarskih postupaka sigurnosti hrane u klaoničkom objektu",
+          "Reproduction in Farm Animals, Equines and Small Animals",
+          "Sanitacija",
+          "Sudsko veterinarstvo",
+          "Teriogenologija domaćih sisavaca",
+          "Uzgoj i patologija divljači",
+          "Uzgoj i patologija egzotičnih kućnih ljubimaca",
+          "Uzgoj i patologija laboratorijskih životinja",
+          "Veterinarska patologija",
+          "Veterinary Epidemiology",
+          "Veterinary Pathology",
+          "Veterinary Physical Therapy and Rehabilitation – CCRP",
+          "Wildlife Health and Managment"
+        ]
+      },
+      {
+        "id": "cps",
+        "name": "Centar za poslijediplomske studije",
+        "programs": [
+          "Konferencijsko prevođenje",
+          "Upravljanje krizama"
+        ]
+      },
+      {
+        "id": "mvi",
+        "name": "Teološki fakultet Matija Vlačić Ilirik",
+        "programs": [
+          "Protestantska teologija"
+        ]
+      },
+      {
+        "id": "geoteh",
+        "name": "Geotehnički fakultet",
+        "programs": [
+          "Inženjerstvo okoliša"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "hks",
+    "name": "Hrvatsko katoličko sveučilište",
+    "units": [
+      {
+        "id": "hks",
+        "name": "Hrvatsko katoličko sveučilište",
+        "programs": [
+          "Povijest",
+          "Sociologija",
+          "Psihologija",
+          "Komunikologija",
+          "Sestrinstvo",
+          "Medicina",
+          "Diplomski sveucilisni studiji HKS",
+          "Opći profil ustanove"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "algebra",
+    "name": "Sveučilište Algebra Bernays",
+    "units": [
+      {
+        "id": "algebra",
+        "name": "Sveučilište Algebra Bernays",
+        "programs": [
+          "Stručni prijediplomski studij 3D oblikovanje tržišnih komunikacija",
+          "Stručni prijediplomski studij Digitalni marketing",
+          "Stručni prijediplomski studij Dizajn interijera",
+          "Stručni prijediplomski studij Dizajn",
+          "Stručni prijediplomski studij Kibernetička sigurnost",
+          "Stručni prijediplomski studij Komunikacijski menadžment",
+          "Stručni prijediplomski studij Multimedijska produkcija",
+          "Stručni prijediplomski studij Razvoj računalnih igara",
+          "Sveučilišni prijediplomski studij Ekonomija digitalnog poslovanja",
+          "Sveučilišni prijediplomski studij Podatkovna znanost i umjetna inteligencija",
+          "Sveučilišni prijediplomski studij Programsko inženjerstvo",
+          "Sveučilišni prijediplomski studij Psihologija",
+          "Stručni diplomski studij Digitalni marketing",
+          "Stručni diplomski studij Kibernetička sigurnost",
+          "Stručni diplomski studij Kreativno upravljanje u dizajnu",
+          "Stručni diplomski studij Podatkovna znanost i umjetna inteligencija",
+          "Stručni diplomski studij Programsko inženjerstvo",
+          "Sveučilišni diplomski studij Ekonomija digitalnog poslovanja",
+          "Sveučilišni diplomski studij Računarstvo",
+          "Sveučilišni diplomski studij Odnosi s javnošću",
+          "Poslijediplomski specijalistički studij Strateško komuniciranje",
+          "Poslijediplomski specijalistički studij Vodstvo i menadžment u obrazovanju"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "libertas",
+    "name": "Sveučilište Libertas",
+    "units": [
+      {
+        "id": "libertas",
+        "name": "Sveučilište Libertas",
+        "programs": [
+          "Međunarodni odnosi i diplomacija",
+          "Poslovna ekonomija",
+          "Turizam i hotelijerstvo",
+          "Prijediplomski studiji Libertas (zavrsni rad)",
+          "Diplomski studiji Libertas",
+          "Opći profil ustanove",
+          "Prijediplomski sveučilišni studij Međunarodni odnosi (Dubrovnik, engleski)",
+          "Diplomski sveučilišni studij Međunarodni odnosi i diplomacija (Dubrovnik, engleski)"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "vern",
+    "name": "Sveučilište VERN'",
+    "units": [
+      {
+        "id": "vern",
+        "name": "Sveučilište VERN'",
+        "programs": [
+          "Ekonomija i poduzetništvo",
+          "Mediji i komunikacije",
+          "Turizam",
+          "IT i tehnologija",
+          "Opći profil ustanove"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "zsem",
+    "name": "Zagrebačka škola ekonomije i managementa",
+    "units": [
+      {
+        "id": "zsem",
+        "name": "Zagrebačka škola ekonomije i managementa",
+        "programs": [
+          "Prijediplomski studij Ekonomija i management",
+          "Prijediplomski studij Poslovna matematika i ekonomija",
+          "Diplomski studij MBA"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "tvz",
+    "name": "Tehničko veleučilište u Zagrebu",
+    "units": [
+      {
+        "id": "tvz",
+        "name": "Tehničko veleučilište u Zagrebu",
+        "programs": [
+          "Elektrotehnika",
+          "Graditeljstvo",
+          "Informatika",
+          "Mehatronika",
+          "Računarstvo",
+          "Strojarstvo",
+          "Opći profil ustanove"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "zvu",
+    "name": "Zdravstveno veleučilište",
+    "units": [
+      {
+        "id": "zvu",
+        "name": "Zdravstveno veleučilište",
+        "programs": [
+          "Sestrinstvo",
+          "Fizioterapija",
+          "Radiološka tehnologija",
+          "Sanitarno inženjerstvo",
+          "Radna terapija",
+          "Medicinsko-laboratorijska dijagnostika",
+          "Prijediplomski strucni studiji ZVU (zavrsni rad)",
+          "Specijalisticki diplomski strucni studiji ZVU",
+          "Opći profil ustanove"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "effectus",
+    "name": "EFFECTUS veleučilište",
+    "units": [
+      {
+        "id": "effectus",
+        "name": "EFFECTUS veleučilište",
+        "programs": [
+          "Financije i poslovno pravo",
+          "Poslovno upravljanje",
+          "Poslovno upravljanje - Financijski menadžment",
+          "Poslovno upravljanje - Menadžment ljudskih potencijala i znanja",
+          "Poslovno upravljanje - Porezi i poslovno pravo",
+          "Poslovno upravljanje - Analitički menadžment",
+          "Poslovno upravljanje - Bihevioralna ekonomija",
+          "Opći profil ustanove"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "pvzg",
+    "name": "Poslovno veleučilište Zagreb",
+    "units": [
+      {
+        "id": "pvzg",
+        "name": "Poslovno veleučilište Zagreb",
+        "programs": [
+          "Marketing i komunikacije",
+          "Upravljanje i poslovanje",
+          "Prijediplomski strucni studiji PVZG (zavrsni rad)",
+          "Specijalisticki diplomski strucni studiji PVZG",
+          "Opći profil ustanove"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "rrif",
+    "name": "Veleučilište RRiF",
+    "units": [
+      {
+        "id": "rrif",
+        "name": "Veleučilište RRiF",
+        "programs": [
+          "Računovodstvo i financije",
+          "Poduzetništvo",
+          "Prijediplomski strucni studij RRiF (zavrsni rad)",
+          "Opći profil ustanove"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "vsite",
+    "name": "Veleučilište suvremenih informacijskih tehnologija",
+    "units": [
+      {
+        "id": "vsite",
+        "name": "Veleučilište suvremenih informacijskih tehnologija",
+        "programs": [
+          "Informacijske tehnologije",
+          "Prijediplomski strucni studiji VSITE (zavrsni rad)",
+          "Diplomski strucni studiji VSITE",
+          "Opći profil ustanove"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "rit",
+    "name": "RIT Croatia — Zagreb",
+    "units": [
+      {
+        "id": "rit",
+        "name": "RIT Croatia — Zagreb",
+        "programs": [
+          "Global Business Management",
+          "Web and Mobile Computing",
+          "Service Leadership and Innovation",
+          "Opći profil ustanove"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "vkjs",
+    "name": "Veleučilište kriminalistike i javne sigurnosti",
+    "units": [
+      {
+        "id": "vkjs",
+        "name": "Veleučilište kriminalistike i javne sigurnosti",
+        "programs": [
+          "Kriminalistika",
+          "Javna sigurnost",
+          "Prijediplomski strucni studij VKJS (zavrsni rad)",
+          "Specijalisticki diplomski strucni studij VKJS (diplomski rad)",
+          "Opći profil ustanove"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "uniri",
+    "name": "Sveučilište u Rijeci",
+    "units": [
+      {
+        "id": "apuri",
+        "name": "Akademija primijenjenih umjetnosti u Rijeci",
+        "programs": [
+          "Prijediplomski sveučilišni studij Primijenjena umjetnost",
+          "Prijediplomski sveučilišni studij Likovna pedagogija",
+          "Prijediplomski sveučilišni studij Grafički dizajn i vizualne komunikacije",
+          "Prijediplomski sveučilišni studij Gluma i mediji",
+          "Diplomski sveučilišni studij Primijenjena umjetnost",
+          "Diplomski sveučilišni studij Vizualne komunikacije i grafički dizajn"
+        ]
+      },
+      {
+        "id": "biotech",
+        "name": "Fakultet biotehnologije i razvoja lijekova, Rijeka",
+        "programs": [
+          "Prijediplomski sveučilišni studij Biotehnologija i istraživanje lijekova",
+          "Diplomski sveučilišni studij Istraživanje i razvoj lijekova",
+          "Diplomski sveučilišni studij Biotehnologija u medicini",
+          "Diplomski sveučilišni studij Medicinska kemija",
+          "Diplomski sveučilišni studij Biotehnološka istraživanja znanosti o životu"
+        ]
+      },
+      {
+        "id": "efri",
+        "name": "Ekonomski fakultet u Rijeci",
+        "programs": [
+          "Sveučilišni prijediplomski studij Poslovna ekonomija",
+          "Sveučilišni diplomski studij Poslovna ekonomija",
+          "Sveučilišni prijediplomski studij Poslovna ekonomija (smjer Poduzetništvo)",
+          "Sveučilišni prijediplomski studij Poslovna ekonomija (smjer Menadžment)",
+          "Sveučilišni prijediplomski studij Poslovna ekonomija (smjer Financije)",
+          "Sveučilišni prijediplomski studij Poslovna ekonomija (smjer Marketing)",
+          "Sveučilišni prijediplomski studij Poslovna ekonomija (smjer Međunarodno poslovanje)",
+          "Sveučilišni diplomski studij Poslovna ekonomija (smjer Poduzetništvo)",
+          "Sveučilišni diplomski studij Poslovna ekonomija (smjer Menadžment)",
+          "Sveučilišni diplomski studij Poslovna ekonomija (smjer Financije)",
+          "Sveučilišni diplomski studij Poslovna ekonomija (smjer Marketing)",
+          "Sveučilišni diplomski studij Poslovna ekonomija (smjer Međunarodno poslovanje)",
+          "Ekonomija energetskog sektora-MBA",
+          "Financije",
+          "Inteligentno elektroničko poslovanje",
+          "Kontroling",
+          "Marketing menadžment",
+          "Menadžment sigurnosti u EU",
+          "Menadžment u javnom sektoru",
+          "Poslovanje s Europskom unijom",
+          "Računovodstvo",
+          "Upravljanje poslovnim uspjehom"
+        ]
+      },
+      {
+        "id": "fdmri",
+        "name": "Fakultet dentalne medicine Rijeka",
+        "programs": [
+          "Prijediplomski/integrirani studij (zavrsni rad), Fakultet dentalne medicine Rijeka",
+          "Diplomski/integrirani studij (diplomski rad), Fakultet dentalne medicine Rijeka",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "ffri",
+        "name": "Filozofski fakultet u Rijeci",
+        "programs": [
+          "Prijediplomski studij Hrvatski jezik i književnost",
+          "Prijediplomski studij Engleski jezik i književnost",
+          "Prijediplomski studij Njemački jezik i književnost",
+          "Prijediplomski studij Talijanski jezik i književnost",
+          "Prijediplomski studij Filozofija",
+          "Prijediplomski studij Povijest",
+          "Prijediplomski studij Povijest umjetnosti",
+          "Prijediplomski studij Pedagogija",
+          "Prijediplomski studij Psihologija",
+          "Prijediplomski studij Kulturalni studiji",
+          "Diplomski studij Hrvatski jezik i književnost",
+          "Diplomski studij Engleski jezik i književnost",
+          "Diplomski studij Njemački jezik i književnost",
+          "Diplomski studij Talijanski jezik i književnost",
+          "Diplomski studij Filozofija",
+          "Diplomski studij Povijest",
+          "Diplomski studij Povijest umjetnosti",
+          "Diplomski studij Povijest i interpretacija baštine",
+          "Diplomski studij Pedagogija",
+          "Diplomski studij Psihologija",
+          "Diplomski studij Kulturalni studiji",
+          "Diplomski studij Prevoditeljski studij"
+        ]
+      },
+      {
+        "id": "fizri",
+        "name": "Fakultet za fiziku u Rijeci",
+        "programs": [
+          "Prijediplomski studij Fizika",
+          "Diplomski studij Fizika",
+          "Diplomski studij Fizika i matematika",
+          "Diplomski studij Fizika i informatika",
+          "Diplomski studij Fizika i filozofija",
+          "Diplomski studij Inženjerstvo i fizika materijala"
+        ]
+      },
+      {
+        "id": "fmtu",
+        "name": "Fakultet za menadžment u turizmu i ugostiteljstvu, Opatija",
+        "programs": [
+          "Prijediplomski studij Poslovna ekonomija u turizmu i ugostiteljstvu",
+          "Prijediplomski studij Menadžment održivog razvoja",
+          "Diplomski studij Marketing u turizmu",
+          "Diplomski studij Menadžment u turizmu",
+          "Diplomski studij Menadžment u hotelijerstvu",
+          "Diplomski studij Održivi razvoj turizma"
+        ]
+      },
+      {
+        "id": "fzsri",
+        "name": "Fakultet zdravstvenih studija u Rijeci",
+        "programs": [
+          "Prijediplomski studij Sestrinstvo",
+          "Prijediplomski studij Fizioterapija",
+          "Prijediplomski studij Primaljstvo",
+          "Prijediplomski stručni studij Radiološka tehnologija",
+          "Diplomski studij Sestrinstvo",
+          "Diplomski studij Fizioterapija",
+          "Diplomski studij Primaljstvo",
+          "Diplomski studij Klinički nutricionizam",
+          "Diplomski studij Sestrinstvo (izborni smjer Promicanje i zaštita mentalnog zdravlja)",
+          "Diplomski studij Sestrinstvo (izborni smjer Menadžment u sestrinstvu)",
+          "Diplomski studij Sestrinstvo (izborni smjer Javno zdravstvo)",
+          "Diplomski studij Sestrinstvo (izborni smjer Gerontologija i palijativna skrb starijih)"
+        ]
+      },
+      {
+        "id": "gradri",
+        "name": "Građevinski fakultet u Rijeci",
+        "programs": [
+          "Sveučilišni prijediplomski studij Građevinarstvo",
+          "Stručni prijediplomski studij Građevinarstvo",
+          "Sveučilišni diplomski studij Građevinarstvo",
+          "Stručni diplomski studij Građevinarstvo",
+          "Sveučilišni diplomski studij Građevinarstvo (smjer Konstrukcije)",
+          "Sveučilišni diplomski studij Građevinarstvo (smjer Hidrotehnika)",
+          "Sveučilišni diplomski studij Građevinarstvo (smjer Geotehnika)",
+          "Sveučilišni diplomski studij Građevinarstvo (smjer Urbano inženjerstvo)"
+        ]
+      },
+      {
+        "id": "inf",
+        "name": "Fakultet informatike i digitalnih tehnologija, Rijeka",
+        "programs": [
+          "Sveučilišni prijediplomski studij Informatika",
+          "Sveučilišni diplomski studij Informatika",
+          "Sveučilišni diplomski studij Informatika (nastavnički smjer)",
+          "Sveučilišni prijediplomski studij Informatika (modul Razvoj programske potpore)",
+          "Sveučilišni prijediplomski studij Informatika (modul Multimedijski sustavi)",
+          "Sveučilišni prijediplomski studij Informatika (modul Informacijski sustavi)"
+        ]
+      },
+      {
+        "id": "logri",
+        "name": "Fakultet za logopediju Rijeka",
+        "programs": [
+          "Diplomski studij Logopedija (Fakultet za logopediju Rijeka)",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "matematika",
+        "name": "Fakultet za matematiku u Rijeci",
+        "programs": [
+          "Sveučilišni prijediplomski studij Matematika",
+          "Sveučilišni diplomski studij Diskretna matematika i primjene",
+          "Sveučilišni diplomski studij Matematika",
+          "Sveučilišni diplomski studij Matematika i informatika",
+          "Sveučilišni diplomski studij Discrete Mathematics and Its Applications (na engleskom jeziku)"
+        ]
+      },
+      {
+        "id": "medri",
+        "name": "Medicinski fakultet u Rijeci",
+        "programs": [
+          "Sveučilišni integrirani prijediplomski i diplomski studij Medicina",
+          "Sveučilišni integrirani prijediplomski i diplomski studij Farmacija",
+          "Sanitarno inženjerstvo",
+          "Biomedicina",
+          "Dentalna medicina",
+          "Javno zdravstvo",
+          "Klinička medicina",
+          "Zdravstveno i ekološko inženjerstvo"
+        ]
+      },
+      {
+        "id": "pfri",
+        "name": "Pomorski fakultet u Rijeci",
+        "programs": [
+          "Prijediplomski studij Nautika i tehnologija pomorskog prometa",
+          "Prijediplomski studij Brodostrojarstvo",
+          "Prijediplomski studij Elektroničke i informatičke tehnologije u pomorstvu",
+          "Prijediplomski studij Logistika i menadžment u pomorstvu i prometu",
+          "Prijediplomski studij Promet i mobilnost",
+          "Diplomski studij Nautika i tehnologija pomorskog prometa",
+          "Diplomski studij Brodostrojarstvo i tehnologija pomorskog prometa",
+          "Diplomski studij Elektroničke i informatičke tehnologije u pomorstvu",
+          "Diplomski studij Logistika i menadžment u pomorstvu i prometu",
+          "Diplomski studij Promet i mobilnost"
+        ]
+      },
+      {
+        "id": "pravri",
+        "name": "Pravni fakultet u Rijeci",
+        "programs": [
+          "Stručni prijediplomski studij Upravni studij",
+          "Integrirani prijediplomski i diplomski sveučilišni studij Pravo",
+          "Stručni diplomski studij Javna uprava",
+          "Sveučilišni specijalistički studij Financijsko pravo trgovačkih društava",
+          "Sveučilišni specijalistički studij Pravo europskih integracija",
+          "Sveučilišni specijalistički studij Kriminalističko istraživanje"
+        ]
+      },
+      {
+        "id": "riteh",
+        "name": "Tehnički fakultet u Rijeci",
+        "programs": [
+          "Sveučilišni prijediplomski studij Strojarstvo",
+          "Sveučilišni prijediplomski studij Brodogradnja",
+          "Sveučilišni prijediplomski studij Elektrotehnika",
+          "Sveučilišni prijediplomski studij Računarstvo",
+          "Sveučilišni prijediplomski studij Mehatronika i robotika",
+          "Stručni prijediplomski studij Strojarstvo",
+          "Stručni prijediplomski studij Brodogradnja",
+          "Stručni prijediplomski studij Elektrotehnika",
+          "Sveučilišni diplomski studij Strojarstvo (smjer Konstruiranje i mehatronika)",
+          "Sveučilišni diplomski studij Strojarstvo (smjer Računarska mehanika i inženjerstvo)",
+          "Sveučilišni diplomski studij Strojarstvo (smjer Industrijsko i proizvodno inženjerstvo)",
+          "Sveučilišni diplomski studij Strojarstvo (smjer Termotehnika)",
+          "Sveučilišni diplomski studij Strojarstvo (smjer Procesno i energetsko strojarstvo)",
+          "Sveučilišni diplomski studij Strojarstvo (smjer Brodostrojarstvo)",
+          "Sveučilišni diplomski studij Strojarstvo (smjer Inženjerstvo materijala)",
+          "Sveučilišni diplomski studij Elektrotehnika (smjer Automatika)",
+          "Sveučilišni diplomski studij Elektrotehnika (smjer Elektroenergetika)",
+          "Sveučilišni diplomski studij Računarstvo (smjer Programsko inženjerstvo)",
+          "Sveučilišni diplomski studij Računarstvo (smjer Računalni sustavi)",
+          "Sveučilišni diplomski studij Brodogradnja (smjer Projektiranje i konstrukcija plovnih objekata)",
+          "Sveučilišni diplomski studij Brodogradnja (smjer Tehnologija i organizacija brodogradnje)"
+        ]
+      },
+      {
+        "id": "ufri",
+        "name": "Učiteljski fakultet u Rijeci",
+        "programs": [
+          "Sveučilišni integrirani prijediplomski i diplomski Učiteljski studij",
+          "Sveučilišni prijediplomski studij Rani i predškolski odgoj i obrazovanje",
+          "Sveučilišni diplomski studij Rani i predškolski odgoj i obrazovanje"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unist",
+    "name": "Sveučilište u Splitu",
+    "units": [
+      {
+        "id": "efst",
+        "name": "Ekonomski fakultet u Splitu",
+        "programs": [
+          "Prijediplomski studiji EFST (zavrsni rad)",
+          "Diplomski studiji EFST"
+        ]
+      },
+      {
+        "id": "fesb",
+        "name": "Fakultet elektrotehnike, strojarstva i brodogradnje (FESB)",
+        "programs": [
+          "Prijediplomski studiji FESB (zavrsni rad)",
+          "Diplomski studiji FESB"
+        ]
+      },
+      {
+        "id": "ffst",
+        "name": "Filozofski fakultet u Splitu",
+        "programs": [
+          "Prijediplomski studiji FFST (zavrsni rad)",
+          "Diplomski studiji FFST"
+        ]
+      },
+      {
+        "id": "fgag",
+        "name": "Fakultet gradevinarstva, arhitekture i geodezije u Splitu",
+        "programs": [
+          "Prijediplomski studiji FGAG (zavrsni rad)",
+          "Diplomski studiji FGAG"
+        ]
+      },
+      {
+        "id": "forenzika",
+        "name": "Fakultet za forenzicke znanosti",
+        "programs": [
+          "Diplomski sveučilišni studij Forenzika",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "kbfst",
+        "name": "Katolički bogoslovni fakultet u Splitu",
+        "programs": [
+          "Diplomski studij (Katolički bogoslovni fakultet, Split)"
+        ]
+      },
+      {
+        "id": "kifst",
+        "name": "Kineziološki fakultet u Splitu",
+        "programs": [
+          "Diplomski studiji Kineziološkog fakulteta (Split)"
+        ]
+      },
+      {
+        "id": "ktfst",
+        "name": "Kemijsko-tehnološki fakultet u Splitu",
+        "programs": [
+          "Prijediplomski studiji KTF Split (zavrsni rad)",
+          "Diplomski studiji KTF Split"
+        ]
+      },
+      {
+        "id": "mefst",
+        "name": "Medicinski fakultet u Splitu",
+        "programs": [
+          "Integrirani studij medicine (MEFST, diplomski rad)",
+          "Biologija novotvorina",
+          "Klinička medicina utemeljena na dokazima",
+          "Translacijska istraživanja u biomedicini"
+        ]
+      },
+      {
+        "id": "more",
+        "name": "Fakultet znanosti o moru",
+        "programs": [
+          "Sveučilišni prijediplomski studij (Fakultet znanosti o moru, Split)",
+          "Sveučilišni diplomski studij (Fakultet znanosti o moru, Split)",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "oss",
+        "name": "Sveucilisni odjel za strucne studije (Split)",
+        "programs": [
+          "Preddiplomski stručni studij (Sveučilišni odjel za stručne studije, Sveučilište u Splitu)",
+          "Specijalistički diplomski stručni studij (Sveučilišni odjel za stručne studije, Sveučilište u Splitu)",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "ozs",
+        "name": "Fakultet zdravstvenih znanosti (Split)",
+        "programs": [
+          "Sveučilišni prijediplomski studij (npr. Sestrinstvo) - završni rad",
+          "Sveučilišni diplomski studij (npr. Sestrinstvo) - diplomski rad",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "pfst",
+        "name": "Pomorski fakultet u Splitu",
+        "programs": [
+          "Prijediplomski/ocjenski radovi PFST (zavrsni rad)",
+          "Diplomski studiji PFST"
+        ]
+      },
+      {
+        "id": "pmfst",
+        "name": "Prirodoslovno-matematicki fakultet u Splitu",
+        "programs": [
+          "Prijediplomski studiji PMFST bio/kem (zavrsni rad)",
+          "Diplomski studiji PMFST bio/kem"
+        ]
+      },
+      {
+        "id": "pravst",
+        "name": "Pravni fakultet u Splitu",
+        "programs": [
+          "Prijediplomski/integrirani studij (zavrsni rad), Pravni fakultet u Splitu",
+          "Diplomski/integrirani studij, Pravni fakultet u Splitu"
+        ]
+      },
+      {
+        "id": "umas",
+        "name": "Umjetnicka akademija u Splitu",
+        "programs": [
+          "Umjetnička akademija u Splitu, završni rad (preddiplomski studij)",
+          "Umjetnička akademija u Splitu, diplomski/magistarski rad (diplomski studij)",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "agromed",
+        "name": "Agromediteranski fakultet",
+        "programs": [
+          "Mediteranska poljoprivreda"
+        ]
+      },
+      {
+        "id": "hig",
+        "name": "Samostalni sveučilišni studij Hotelijerstvo i gastronomija",
+        "programs": [
+          "Hotelijerstvo i gastronomija"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unios",
+    "name": "Sveučilište Josipa Jurja Strossmayera u Osijeku",
+    "units": [
+      {
+        "id": "biolos",
+        "name": "Odjel za biologiju, Sveučilište u Osijeku",
+        "programs": [
+          "Prijediplomski studij Biologija (zavrsni rad, Osijek)",
+          "Diplomski studiji Odjela za biologiju (Osijek)"
+        ]
+      },
+      {
+        "id": "efos",
+        "name": "Ekonomski fakultet u Osijeku",
+        "programs": [
+          "Prijediplomski/strucni studiji EFOS (zavrsni rad)",
+          "Diplomski studiji EFOS",
+          "Doktorski studij EFOS",
+          "Specijalistički diplomski studij EFOS"
+        ]
+      },
+      {
+        "id": "fazos",
+        "name": "Fakultet agrobiotehničkih znanosti Osijek",
+        "programs": [
+          "Prijediplomski studiji FAZOS (zavrsni rad)",
+          "Diplomski studiji FAZOS"
+        ]
+      },
+      {
+        "id": "fdmz",
+        "name": "Fakultet za dentalnu medicinu i zdravstvo Osijek",
+        "programs": [
+          "Diplomski/integrirani studiji FDMZ"
+        ]
+      },
+      {
+        "id": "ferit",
+        "name": "Fakultet elektrotehnike, računarstva i informacijskih tehnologija Osijek",
+        "programs": [
+          "Prijediplomski studiji FERIT (zavrsni rad)",
+          "Diplomski studiji FERIT"
+        ]
+      },
+      {
+        "id": "ffos",
+        "name": "Filozofski fakultet Osijek",
+        "programs": [
+          "Prijediplomski studiji FFOS (zavrsni rad)",
+          "Diplomski studiji FFOS",
+          "Prijediplomski studij Povijest",
+          "Diplomski studij Povijest",
+          "Prijediplomski studij Psihologija",
+          "Diplomski studij Psihologija",
+          "Prijediplomski studij Informatologija",
+          "Diplomski studij Informatologija",
+          "Prijediplomski studij Njemački jezik i književnost",
+          "Diplomski studij Njemački jezik i književnost"
+        ]
+      },
+      {
+        "id": "fizos",
+        "name": "Odjel za fiziku, Sveučilište u Osijeku",
+        "programs": [
+          "Diplomski studij Fizika i informatika (Osijek)"
+        ]
+      },
+      {
+        "id": "foozos",
+        "name": "Fakultet za odgojne i obrazovne znanosti Osijek",
+        "programs": [
+          "Diplomski/integrirani studiji FOOZOS"
+        ]
+      },
+      {
+        "id": "ftrr",
+        "name": "Fakultet turizma i ruralnog razvoja u Pozegi",
+        "programs": [
+          "Prijediplomski studiji FTRR (zavrsni rad, Pozega)",
+          "Diplomski studiji FTRR (diplomski rad, Pozega)"
+        ]
+      },
+      {
+        "id": "grafos",
+        "name": "Gradevinski i arhitektonski fakultet Osijek",
+        "programs": [
+          "Prijediplomski/strucni studiji GFOS (zavrsni rad)",
+          "Diplomski studiji GFOS"
+        ]
+      },
+      {
+        "id": "kbfdj",
+        "name": "Katolicki bogoslovni fakultet u Djakovu",
+        "programs": [
+          "Integrirani filozofsko-teoloski studij (KBF Djakovo)"
+        ]
+      },
+      {
+        "id": "kemos",
+        "name": "Odjel za kemiju, Sveučilište u Osijeku",
+        "programs": [
+          "Prijediplomski studij Kemija (zavrsni rad, Osijek)",
+          "Diplomski studij Kemija (Osijek)"
+        ]
+      },
+      {
+        "id": "kifos",
+        "name": "Kinezioloski fakultet Osijek",
+        "programs": [
+          "Sveučilišni prijediplomski studij Kineziologija",
+          "Sveučilišni diplomski studij Kineziološka edukacija",
+          "Opći profil fakulteta"
+        ]
+      },
+      {
+        "id": "mathos",
+        "name": "Fakultet primijenjene matematike i informatike (Osijek)",
+        "programs": [
+          "Sveučilišni prijediplomski studij Matematika",
+          "Sveučilišni prijediplomski studij Matematika i računarstvo",
+          "Sveučilišni diplomski studij Matematika i računarstvo",
+          "Sveučilišni diplomski studij Financijska matematika i statistika",
+          "Sveučilišni diplomski nastavnički studij matematike i informatike"
+        ]
+      },
+      {
+        "id": "mefos",
+        "name": "Medicinski fakultet Osijek",
+        "programs": [
+          "Prijediplomski/strucni studiji MEFOS (zavrsni rad)",
+          "Diplomski/integrirani studiji MEFOS"
+        ]
+      },
+      {
+        "id": "pravos",
+        "name": "Pravni fakultet Osijek",
+        "programs": [
+          "Prijediplomski studij Pravo/Socijalni rad (zavrsni rad, Osijek)",
+          "Diplomski/integrirani studij Pravo (Osijek)"
+        ]
+      },
+      {
+        "id": "ptfos",
+        "name": "Prehrambeno-tehnološki fakultet Osijek",
+        "programs": [
+          "Diplomski studiji PTFOS"
+        ]
+      },
+      {
+        "id": "uaos",
+        "name": "Akademija za umjetnost i kulturu u Osijeku",
+        "programs": [
+          "Prijediplomski studiji AUK Osijek (zavrsni rad)",
+          "Diplomski studiji AUK Osijek"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unizd",
+    "name": "Sveučilište u Zadru",
+    "units": [
+      {
+        "id": "unizd",
+        "name": "Sveučilište u Zadru",
+        "programs": [
+          "Odjel za turizam i komunikacijske znanosti (zavrsni rad, Zadar)",
+          "Odjel za turizam i komunikacijske znanosti (diplomski rad, Zadar)",
+          "Odjel za psihologiju (zavrsni rad, Zadar)",
+          "Odjel za pedagogiju (diplomski rad, Zadar)",
+          "Odjel za povijest umjetnosti (zavrsni rad, Zadar)",
+          "Odjel za kroatistiku (zavrsni rad, Zadar)",
+          "Odjel za kroatistiku (diplomski rad, Zadar)",
+          "Odjel za ekonomiju (zavrsni rad, Zadar)",
+          "Odjel za ekonomiju (diplomski rad, Zadar)",
+          "Odjel za ekologiju, agronomiju i akvakulturu (diplomski rad, Zadar)",
+          "Odjel za ekologiju, agronomiju i akvakulturu (zavrsni rad, Zadar)",
+          "Odjel za etnologiju i antropologiju (diplomski rad, Zadar)",
+          "Odjel za geografiju (diplomski rad, Zadar)",
+          "Odjel za zdravstvene studije (zavrsni rad, Zadar)",
+          "Odjel za zdravstvene studije (diplomski rad, Zadar)",
+          "Odjel za informacijske znanosti (zavrsni rad, Zadar)",
+          "Odjel za informacijske znanosti (diplomski rad, Zadar)",
+          "Odjel za arheologiju (zavrsni rad, Zadar)",
+          "Odjel za arheologiju (diplomski rad, Zadar)",
+          "Odjel za klasicnu filologiju (zavrsni rad, Zadar)",
+          "Odjel za klasicnu filologiju (diplomski rad, Zadar)",
+          "Odjel za filozofiju (zavrsni rad, Zadar)",
+          "Odjel za filozofiju (diplomski rad, Zadar)",
+          "Odjel za anglistiku (zavrsni rad, Zadar)",
+          "Odjel za anglistiku (diplomski rad, Zadar)",
+          "Odjel za germanistiku (zavrsni rad, Zadar)",
+          "Odjel za germanistiku (diplomski rad, Zadar)",
+          "Odjel za hispanistiku i iberske studije (diplomski rad, Zadar)",
+          "Odjel za francuske i frankofonske studije (diplomski rad, Zadar)",
+          "Odjel za povijest (zavrsni rad, Zadar)",
+          "Odjel za povijest (diplomski rad, Zadar)",
+          "Odjel za talijanistiku (diplomski rad, Zadar)",
+          "Odjel za sociologiju (zavrsni rad, Zadar)",
+          "Odjel za sociologiju (diplomski rad, Zadar)",
+          "Odjel za lingvistiku (zavrsni rad, Zadar)",
+          "Odjel za lingvistiku (diplomski rad, Zadar)",
+          "Odjel za rusistiku (diplomski rad, Zadar)",
+          "Pomorski odjel (zavrsni rad, Zadar)",
+          "Pomorski odjel (diplomski rad, Zadar)",
+          "Odjel za izobrazbu ucitelja i odgojitelja (diplomski rad, Zadar)",
+          "Odjel za psihologiju (diplomski rad, Zadar)",
+          "Odjel za povijest umjetnosti (diplomski rad, Zadar)",
+          "Teolosko-katehetski odjel (diplomski rad, Zadar)"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unipu",
+    "name": "Sveučilište Jurja Dobrile u Puli",
+    "units": [
+      {
+        "id": "fetpu",
+        "name": "Fakultet ekonomije i turizma Dr. Mijo Mirković, Pula",
+        "programs": [
+          "Sveučilišni prijediplomski studij Primijenjena ekonomija",
+          "Sveučilišni prijediplomski studij Kultura i turizam",
+          "Sveučilišni prijediplomski studij Poslovna ekonomija (smjer Financije i računovodstvo)",
+          "Sveučilišni prijediplomski studij Poslovna ekonomija (smjer Financijski management)",
+          "Sveučilišni prijediplomski studij Poslovna ekonomija (smjer Management i poduzetništvo)",
+          "Sveučilišni prijediplomski studij Poslovna ekonomija (smjer Marketinško upravljanje)",
+          "Sveučilišni prijediplomski studij Poslovna ekonomija (smjer Informatički menadžment)",
+          "Sveučilišni prijediplomski studij Poslovna ekonomija (smjer Turizam)",
+          "Sveučilišni diplomski studij Primijenjena ekonomija",
+          "Sveučilišni diplomski studij Kultura i turizam",
+          "Sveučilišni diplomski studij Poslovna ekonomija (smjer Financije i računovodstvo)",
+          "Sveučilišni diplomski studij Poslovna ekonomija (smjer Financijski management)",
+          "Sveučilišni diplomski studij Poslovna ekonomija (smjer Management i poduzetništvo)",
+          "Sveučilišni diplomski studij Poslovna ekonomija (smjer Marketinško upravljanje)",
+          "Sveučilišni diplomski studij Poslovna ekonomija (smjer Informatički menadžment)",
+          "Sveučilišni diplomski studij Poslovna ekonomija (smjer Turizam i razvoj)"
+        ]
+      },
+      {
+        "id": "foozpu",
+        "name": "Fakultet za odgojne i obrazovne znanosti, Pula",
+        "programs": [
+          "Sveučilišni prijediplomski studij Rani i predškolski odgoj i obrazovanje (na hrvatskom jeziku)",
+          "Sveučilišni prijediplomski studij Rani i predškolski odgoj i obrazovanje (na talijanskom jeziku)",
+          "Sveučilišni integrirani prijediplomski i diplomski Učiteljski studij (na hrvatskom jeziku)",
+          "Sveučilišni integrirani prijediplomski i diplomski Učiteljski studij (na talijanskom jeziku)",
+          "Sveučilišni diplomski studij Rani i predškolski odgoj i obrazovanje (na hrvatskom jeziku)",
+          "Sveučilišni diplomski studij Rani i predškolski odgoj i obrazovanje (na talijanskom jeziku)"
+        ]
+      },
+      {
+        "id": "tfpu",
+        "name": "Tehnicki fakultet u Puli",
+        "programs": [
+          "Prijediplomski sveučilišni studij Računarstvo",
+          "Prijediplomski stručni studij Proizvodno strojarstvo",
+          "Diplomski sveučilišni studij Računarstvo",
+          "Diplomski sveučilišni studij Strojarstvo"
+        ]
+      },
+      {
+        "id": "fpzpu",
+        "name": "Fakultet prirodnih znanosti u Puli",
+        "programs": [
+          "Sveučilišni prijediplomski studij Znanost o moru",
+          "Sveučilišni diplomski studij Znanost o moru"
+        ]
+      },
+      {
+        "id": "ffpu",
+        "name": "Filozofski fakultet u Puli",
+        "programs": [
+          "Sveučilišni prijediplomski studij Hrvatski jezik i književnost",
+          "Sveučilišni prijediplomski studij Engleski jezik i književnost",
+          "Sveučilišni prijediplomski studij Talijanski jezik i književnost",
+          "Sveučilišni prijediplomski studij Japanski jezik i kultura",
+          "Sveučilišni prijediplomski studij Povijest",
+          "Sveučilišni prijediplomski studij Arheologija",
+          "Sveučilišni prijediplomski studij Latinski jezik i rimska književnost",
+          "Sveučilišni prijediplomski studij Jezična i interkulturalna medijacija",
+          "Sveučilišni diplomski studij Hrvatski jezik i književnost",
+          "Sveučilišni diplomski studij Talijanski jezik i književnost",
+          "Sveučilišni diplomski studij Povijest",
+          "Sveučilišni diplomski studij Japanologija"
+        ]
+      },
+      {
+        "id": "mapu",
+        "name": "Muzička akademija u Puli",
+        "programs": [
+          "Sveučilišni diplomski studij Glazbena pedagogija",
+          "Sveučilišni diplomski studij Klavir",
+          "Sveučilišni diplomski studij Klasična harmonika",
+          "Sveučilišni diplomski studij Solo pjevanje",
+          "Sveučilišni prijediplomski studij Glazbena pedagogija"
+        ]
+      },
+      {
+        "id": "fipu",
+        "name": "Fakultet informatike u Puli",
+        "programs": [
+          "Sveučilišni prijediplomski studij Informatika",
+          "Diplomski sveučilišni studij Informatika",
+          "Diplomski sveučilišni studij Informatika - nastavni smjer"
+        ]
+      },
+      {
+        "id": "mfpu",
+        "name": "Medicinski fakultet u Puli",
+        "programs": [
+          "Prijediplomski stručni studij Sestrinstvo",
+          "Diplomski sveučilišni studij Sestrinstvo"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unidu",
+    "name": "Sveučilište u Dubrovniku",
+    "units": [
+      {
+        "id": "unidu",
+        "name": "Sveučilište u Dubrovniku",
+        "programs": [
+          "Povijest Jadrana i Mediterana (zavrsni rad, Dubrovnik)",
+          "Odjel za komunikologiju (diplomski rad, Dubrovnik)",
+          "Odjel za ekonomiju i poslovnu ekonomiju (zavrsni rad, Dubrovnik)",
+          "Odjel za ekonomiju i poslovnu ekonomiju (diplomski rad, Dubrovnik)",
+          "Odjel za umjetnost i restauraciju (diplomski rad, Dubrovnik)",
+          "Diplomski studij Marikultura (Dubrovnik)",
+          "Strucni prijediplomski studij Sestrinstvo (zavrsni rad, Dubrovnik)",
+          "Odjel za komunikologiju (zavrsni rad, Dubrovnik)",
+          "Odjel za umjetnost i restauraciju (zavrsni rad, Dubrovnik)",
+          "Fakultet elektrotehnike i primijenjenog racunarstva (zavrsni rad, Dubrovnik)",
+          "Fakultet elektrotehnike i primijenjenog racunarstva (diplomski rad, Dubrovnik)",
+          "Nautika (zavrsni rad, Dubrovnik)",
+          "Brodostrojarstvo (zavrsni rad, Dubrovnik)",
+          "Pomorske tehnologije jahta i marina (zavrsni rad, Dubrovnik)",
+          "Diplomski studij Pomorstvo (Dubrovnik)",
+          "Prijediplomski studij Primijenjena ekologija mora (zavrsni rad, Dubrovnik)",
+          "Strucni diplomski studij Klinicko sestrinstvo (Dubrovnik)"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unin",
+    "name": "Sveučilište Sjever",
+    "units": [
+      {
+        "id": "unin",
+        "name": "Sveučilište Sjever",
+        "programs": [
+          "Odjel za tehničke i gospodarske studije (završni rad, Sveučilište Sjever)",
+          "Odjel za tehničke i gospodarske studije (diplomski rad, Sveučilište Sjever)",
+          "Odjel za biomedicinske znanosti (završni rad, Sveučilište Sjever)",
+          "Odjel za biomedicinske znanosti (diplomski rad, Sveučilište Sjever)",
+          "Odjeli društvenih znanosti - ekonomija, novinarstvo, komunikologija (završni rad, Sveučilište Sjever)",
+          "Odjeli društvenih znanosti - ekonomija, novinarstvo, komunikologija (diplomski rad, Sveučilište Sjever)"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "veleri",
+    "name": "Veleučilište u Rijeci",
+    "units": [
+      {
+        "id": "veleri",
+        "name": "Veleučilište u Rijeci",
+        "programs": [
+          "Prijediplomski stručni studiji (završni rad, Veleučilište u Rijeci)",
+          "Specijalistički diplomski stručni studiji (Veleučilište u Rijeci)"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "vub",
+    "name": "Veleučilište u Bjelovaru",
+    "units": [
+      {
+        "id": "vub",
+        "name": "Veleučilište u Bjelovaru",
+        "programs": [
+          "Specijalistički diplomski stručni studiji (Veleučilište u Bjelovaru)",
+          "Stručni prijediplomski studiji Mehatronika i Računarstvo (završni rad, Veleučilište u Bjelovaru)",
+          "Stručni prijediplomski studij Sestrinstvo (završni rad, Veleučilište u Bjelovaru)"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "mev",
+    "name": "Međimursko veleučilište u Čakovcu",
+    "units": [
+      {
+        "id": "mev",
+        "name": "Međimursko veleučilište u Čakovcu",
+        "programs": [
+          "Stručni prijediplomski studiji Računarstvo i Održivi razvoj (završni rad, Međimursko veleučilište)",
+          "Stručni prijediplomski studij Menadžment turizma i sporta (završni rad, Međimursko veleučilište)",
+          "Specijalistički diplomski stručni studij Menadžment turizma i sporta (Međimursko veleučilište)"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "vvg",
+    "name": "Veleučilište Velika Gorica",
+    "units": [
+      {
+        "id": "vvg",
+        "name": "Veleučilište Velika Gorica",
+        "programs": [
+          "Stručni prijediplomski studiji (završni rad, Veleučilište Velika Gorica)",
+          "Stručni diplomski studiji (Veleučilište Velika Gorica)"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "vevu",
+    "name": "Veleučilište Lavoslav Ružička u Vukovaru",
+    "units": [
+      {
+        "id": "vevu",
+        "name": "Veleučilište Lavoslav Ružička u Vukovaru",
+        "programs": [
+          "Stručni prijediplomski studiji (završni rad, Veleučilište u Vukovaru)",
+          "Stručni diplomski studiji (Veleučilište u Vukovaru)"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "vuv",
+    "name": "Veleučilište u Virovitici",
+    "units": [
+      {
+        "id": "vuv",
+        "name": "Veleučilište u Virovitici",
+        "programs": [
+          "Prijediplomski stručni studiji (završni rad, Veleučilište u Virovitici)",
+          "Diplomski stručni studiji (Veleučilište u Virovitici)"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "veleknin",
+    "name": "Veleučilište Marko Marulić u Kninu",
+    "units": [
+      {
+        "id": "veleknin",
+        "name": "Veleučilište Marko Marulić u Kninu",
+        "programs": [
+          "Stručni prijediplomski studiji (završni rad, Veleučilište u Kninu)",
+          "Stručni diplomski studiji (Veleučilište u Kninu)"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "vhzk",
+    "name": "Veleučilište Hrvatsko zagorje Krapina",
+    "units": [
+      {
+        "id": "vhzk",
+        "name": "Veleučilište Hrvatsko zagorje Krapina",
+        "programs": [
+          "Stručni prijediplomski studiji (završni rad, Veleučilište Hrvatsko zagorje Krapina)"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "vus",
+    "name": "Veleučilište u Šibeniku",
+    "units": [
+      {
+        "id": "vus",
+        "name": "Veleučilište u Šibeniku",
+        "programs": [
+          "Strucni prijediplomski studiji (Veleuciliste u Sibeniku)",
+          "Strucni diplomski studiji (Veleuciliste u Sibeniku)"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "vuka",
+    "name": "Veleučilište u Karlovcu",
+    "units": [
+      {
+        "id": "vuka",
+        "name": "Veleučilište u Karlovcu",
+        "programs": [
+          "Poslovni odjel (zavrsni rad, Karlovac)",
+          "Poslovni odjel (diplomski rad, Karlovac)",
+          "Strojarski odjel (zavrsni rad, Karlovac)",
+          "Strojarski odjel (diplomski rad, Karlovac)",
+          "Odjel sigurnosti i zastite (zavrsni rad, Karlovac)",
+          "Odjel sigurnosti i zastite (diplomski rad, Karlovac)",
+          "Odjel prehrambene tehnologije (zavrsni rad, Karlovac)",
+          "Odjel lovstva i zastite prirode (zavrsni rad, Karlovac)"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "bak",
+    "name": "Veleučilište Baltazar Zaprešić",
+    "units": [
+      {
+        "id": "bak",
+        "name": "Veleučilište Baltazar Zaprešić",
+        "programs": [
+          "Strucni prijediplomski studiji (Veleuciliste Baltazar Zapresic)",
+          "Strucni diplomski studiji (Veleuciliste Baltazar Zapresic)"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "vguk",
+    "name": "Veleučilište u Križevcima",
+    "units": [
+      {
+        "id": "vguk",
+        "name": "Veleučilište u Križevcima",
+        "programs": [
+          "Strucni prijediplomski studij Poljoprivreda (Veleuciliste u Krizevcima)",
+          "Strucni diplomski studiji (Veleuciliste u Krizevcima)"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "aspira",
+    "name": "Veleučilište Aspira",
+    "units": [
+      {
+        "id": "aspira",
+        "name": "Veleučilište Aspira",
+        "programs": [
+          "Strucni prijediplomski studiji (Veleuciliste Aspira)",
+          "Strucni diplomski studiji (Veleuciliste Aspira)",
+          "Management in Hospitality and Tourism (engleski)",
+          "Sports Management (engleski)",
+          "Computer Engineering (engleski)"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "par",
+    "name": "Veleučilište PAR",
+    "units": [
+      {
+        "id": "par",
+        "name": "Veleučilište PAR",
+        "programs": [
+          "Strucni prijediplomski studiji (Veleuciliste PAR)",
+          "Strucni diplomski studij Poslovno upravljanje (Veleuciliste PAR)"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "vss",
+    "name": "Veleučilište studija sigurnosti",
+    "units": [
+      {
+        "id": "vss",
+        "name": "Veleučilište studija sigurnosti",
+        "programs": [
+          "Strucni prijediplomski studij sigurnosti (Veleuciliste studija sigurnosti)",
+          "Strucni diplomski studij sigurnosti (Veleuciliste studija sigurnosti)"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unisb",
+    "name": "Sveučilište u Slavonskom Brodu",
+    "units": [
+      {
+        "id": "sfsb",
+        "name": "Strojarski fakultet u Slavonskom Brodu",
+        "programs": [
+          "Strojarski fakultet u Slavonskom Brodu (zavrsni rad, Slavonski Brod)",
+          "Strojarski fakultet u Slavonskom Brodu (diplomski rad, Slavonski Brod)"
+        ]
+      },
+      {
+        "id": "teho",
+        "name": "Tehnicki odjel (UNISB)",
+        "programs": [
+          "Tehnicki odjel (zavrsni rad, Slavonski Brod)",
+          "Tehnicki odjel (diplomski rad, Slavonski Brod)"
+        ]
+      },
+      {
+        "id": "btho",
+        "name": "Biotehnicki odjel (UNISB)",
+        "programs": [
+          "Biotehnicki odjel (zavrsni rad, Slavonski Brod)",
+          "Biotehnicki odjel (diplomski rad, Slavonski Brod)"
+        ]
+      },
+      {
+        "id": "odhz",
+        "name": "Odjel društveno-humanističkih znanosti (UNISB)",
+        "programs": [
+          "Odjel drustveno-humanistickih znanosti (zavrsni rad, Slavonski Brod)",
+          "Odjel drustveno-humanistickih znanosti (diplomski rad, Slavonski Brod)"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "vnt",
+    "name": "Veleučilište Nikola Tesla u Gospiću",
+    "units": [
+      {
+        "id": "vnt",
+        "name": "Veleučilište Nikola Tesla u Gospiću",
+        "programs": [
+          "Stručni prijediplomski studij (Veleučilište „Nikola Tesla” u Gospiću)",
+          "Stručni diplomski studij (Veleučilište „Nikola Tesla” u Gospiću)",
+          "Opći profil fakulteta"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "iv",
+    "name": "Istarsko veleučilište (Universita Istriana), Pula",
+    "units": [
+      {
+        "id": "iv",
+        "name": "Istarsko veleučilište (Universita Istriana), Pula",
+        "programs": [
+          "Istarsko veleučilište – prijediplomski / stručni studiji (završni rad)",
+          "Istarsko veleučilište – diplomski studiji (diplomski rad)",
+          "Opći profil fakulteta"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "vsig",
+    "name": "Veleučilište Ivanić-Grad",
+    "units": [
+      {
+        "id": "vsig",
+        "name": "Veleučilište Ivanić-Grad",
+        "programs": [
+          "Stručni prijediplomski studij (završni rad)",
+          "Stručni diplomski studij (diplomski rad)",
+          "Opći profil fakulteta"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "arca",
+    "name": "Veleučilište Arca (Split)",
+    "units": [
+      {
+        "id": "arca",
+        "name": "Veleučilište Arca (Split)",
+        "programs": [
+          "Prijediplomski stručni studij (završni rad)",
+          "Opći profil fakulteta"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "securus",
+    "name": "Veleučilište menadžmenta i sigurnosti Securus (Pula)",
+    "units": [
+      {
+        "id": "securus",
+        "name": "Veleučilište menadžmenta i sigurnosti Securus (Pula)",
+        "programs": [
+          "Stručni studij (završni rad) - Veleučilište menadžmenta i sigurnosti Securus",
+          "Opći profil fakulteta"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "evtos",
+    "name": "Evanđeosko teološko veleučilište (Osijek)",
+    "units": [
+      {
+        "id": "evtos",
+        "name": "Evanđeosko teološko veleučilište (Osijek)",
+        "programs": [
+          "Stručni studij teologije (stručni završni rad)",
+          "Specijalistički diplomski stručni studij teologije (specijalistički diplomski rad)",
+          "Opći profil fakulteta"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "sois-ft",
+    "name": "Sveuciliste obrane i sigurnosti \"Dr. Franjo Tudjman\"",
+    "units": [
+      {
+        "id": "sois-ft",
+        "name": "Sveuciliste obrane i sigurnosti \"Dr. Franjo Tudjman\"",
+        "programs": [
+          "Vojno inzenjerstvo (prijediplomski)",
+          "Vojno inzenjerstvo (diplomski)",
+          "Vojno vodjenje i upravljanje (prijediplomski)",
+          "Vojno vodjenje i upravljanje (diplomski)",
+          "Vojno pomorstvo (integrirani prijediplomski i diplomski)",
+          "Domovinska sigurnost (poslijediplomski specijalisticki, zajednicki sa Sveucilistem u Zagrebu)"
+        ]
+      }
+    ]
+  }
+]
