@@ -280,6 +280,18 @@ Posebna "token saver" sesija ne postoji. Orkestrator štedi kontekst.
 - Predaja mora stati u GitHub issue/PR i repo; chat povijest nije obvezan kontekst.
 - Puni logovi testova čitaju se samo za pad; zeleni testovi koriste sažetak.
 
+### Razmjerne provjere (PRIJEDLOG, #977)
+
+Vlasnik je 28. 10. 2026. zatražio da se ne rade provjere koje ne smanjuju rizik. Ovo pravilo mijenja samo oblik rada i izvještaja. Gate iz §5, risk floor, §14 i D-97 ostaju isti; za `critical` se ništa ne mijenja.
+
+Za `low` i za `standard` koji ne dira putanje iz D-97:
+- **Kratki izvještaj.** `IZVJEŠTAJ` u obliku iz `docs/MULTI-ACCOUNT.md` §9, najviše oko 10 redaka. Bez tablice plana napada (kad ga zadatak nema), bez dokaza da su lokalno i objavljeno stablo identični i bez prepisivanja issuea ili ugovora; poveznica je dovoljna.
+- **Ugovorna polja.** Polja koja preflight traži za svaki risk (`Stvarni pozivatelj`, `Poznate granice`, `Što bi ovaj PR moglo oboriti na QA-i?`) za `low` mogu biti jedan redak ili `n/a (<razlog>)`.
+- **Testovi bez dupliranja.** Tijekom rada pokreću se ciljani testovi (`pnpm exec vitest related <datoteke> --run` ili putanja testa). Puni skup pokreće se jednom: kroz pre-push hook ili CI. Ne pokreće se ručno kad ga hook pokreće pri istom pushu. U izvještaju je dovoljno „pre-push prošao” uz SHA.
+- **Trag rada** (`docs/SESSIONS.md` §3) samo kad push mijenja nešto što opis PR-a još ne kaže, ili kad pisac nema drugi kanal prema orkestratoru.
+
+Ne mijenja se: neovisni review gdje ga §5 traži, zabrana brisanja ili slabljenja testova, CI i provjera tajni.
+
 ## 12. Post-merge
 
 Nakon mergea Orkestrator:
