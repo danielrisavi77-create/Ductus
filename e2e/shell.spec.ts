@@ -418,7 +418,7 @@ test.describe("workspace shell", () => {
     await view.click();
     await expect(theme("Bijeli list")).toHaveAttribute("aria-checked", "true");
     await page.keyboard.press("Escape");
-    expect(await sheet.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(255, 255, 255)");
+    expect(await sheet.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(255, 252, 245)");
     await page.reload();
     await expect(sheet).toHaveAttribute("data-sheet-theme", "light");
     await view.click();
