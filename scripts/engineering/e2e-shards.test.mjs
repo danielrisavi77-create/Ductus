@@ -42,8 +42,8 @@ before(() => {
     return read(output);
   }
   const inventory = run("inventory", ["--list"]);
-  shards = [1, 2].map((index) => ({ inventory: structuredClone(inventory),
-    report: run(`shard-${index}`, [`--shard=${index}/2`]) }));
+  shards = [1, 2, 3].map((index) => ({ inventory: structuredClone(inventory),
+    report: run(`shard-${index}`, [`--shard=${index}/3`]) }));
 });
 after(() => { if (cwd) rmSync(cwd, { recursive: true, force: true }); });
 
@@ -73,8 +73,8 @@ test("missing, duplicate or wrong-SHA shard evidence cannot merge", () => {
     (s) => { s[1] = structuredClone(s[0]); },
     (s) => { s[1].report.config.metadata.testedSha = "b".repeat(40); },
     (s) => { s[1].inventory.config.metadata.testedSha = "b".repeat(40); },
-    (s) => { s[1].report.config.shard.total = 3; },
-    (s) => { s[1].inventory.config.shard = { current: 2, total: 2 }; },
+    (s) => { s[1].report.config.shard.total = 2; },
+    (s) => { s[1].inventory.config.shard = { current: 2, total: 3 }; },
     (s) => { s[1].inventory.config.rootDir = "/wrong/e2e"; },
   ]) {
     const input = structuredClone(shards); mutate(input);
@@ -134,10 +134,10 @@ test("CLI preserves failures for the pilot and rejects missing or corrupt artifa
   rmSync(file); assert.equal(cli().status, 1);
 });
 
-test("workflow requires both shards and reconciliation without changing Mergify or login", () => {
+test("workflow requires three shards and reconciliation without changing Mergify or login", () => {
   const ci = readFileSync(resolve(root, ".github/workflows/ci.yml"), "utf8");
   const job = (name) => ci.split(`\n  ${name}:\n`)[1].split(/^ {2}[\w-]+:\n/m)[0];
-  assert.match(job("stack-e2e"), /strategy:\n {6}fail-fast: false\n {6}matrix:\n {8}shard: \[1, 2\]/);
+  assert.match(job("stack-e2e"), /strategy:\n {6}fail-fast: false\n {6}matrix:\n {8}shard: \[1, 2, 3\]/);
   assert.match(job("stack-e2e"), /E2E_SHARD: \$\{\{ matrix.shard \}\}/);
   assert.doesNotMatch(job("stack-e2e"), /continue-on-error|UI test selection pilot|--grep|--only-changed/);
   assert.match(job("stack-e2e"), /name: e2e-shard-\$\{\{ matrix.shard \}\}/);
