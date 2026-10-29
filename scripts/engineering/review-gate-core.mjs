@@ -395,6 +395,31 @@ function currentNegative(verdicts) {
   return null;
 }
 
+/**
+ * Whether the head branch lives in this repository (#971 review). Only an
+ * account with write access can push there; a fork, or a head whose repository
+ * was deleted (`head.repo` null), never gets a D-189 exemption.
+ */
+export function sameRepositoryHead(pr) {
+  const head = pr?.head?.repo?.full_name;
+  return typeof head === "string" && head !== "" && head === pr?.base?.repo?.full_name;
+}
+
+/**
+ * D-189: which PR skips independent review, for the gate and for "Auto-merge
+ * eligible" alike, so the two cannot disagree. "low": Risk low with documents
+ * only (lowReviewExempt). "tests": Risk standard or critical that only adds new
+ * test files (onlyAddedTests); a low PR with new tests keeps its review, as
+ * D-189 (2) names only standard and critical. Never for a head outside this
+ * repository. The callers exclude D-97 paths from both.
+ */
+function reviewExemption({ risk, sameRepository, lowDocsOnly, qaExempt, testsAddedOnly }) {
+  if (sameRepository !== true) return null;
+  if (risk === "low" && lowDocsOnly === true) return "low";
+  if ((risk === "standard" || risk === "critical") && qaExempt === "tests" && testsAddedOnly === true) return "tests";
+  return null;
+}
+
 function evaluateGateCore({
   body,
   headSha,
@@ -408,6 +433,7 @@ function evaluateGateCore({
   qaExempt = null,
   testsAddedOnly = false,
   lowDocsOnly = false,
+  sameRepository = false,
 }) {
   const authorAgent = field(body, "Agent");
   const authorRuntime = declaredRuntime(authorAgent);
@@ -502,17 +528,13 @@ function evaluateGateCore({
       review.verdict === "PASS",
   );
 
-  // D-189: Risk low with documents only (lowReviewExempt) and PRs that only add
-  // new test files (isNewTestExempt) need no independent review. Negative
-  // verdicts above still hold; the caller excludes D-97 paths from both.
-  const lowNoReview = risk === "low" && lowDocsOnly === true;
-  // Only new test files (#971): a changed or removed test can weaken a guard.
-  const testOnlyNoReview = (risk === "critical" || risk === "standard") && qaExempt === "tests" && testsAddedOnly === true;
-  if (passingReviews.length === 0 && !lowNoReview && !testOnlyNoReview) {
+  // D-189: negative verdicts above still hold; see reviewExemption.
+  const exemption = reviewExemption({ risk, sameRepository, lowDocsOnly, qaExempt, testsAddedOnly });
+  if (passingReviews.length === 0 && !exemption) {
     return { state: "pending", description: "Waiting for independently authenticated review." };
   }
-  if (passingReviews.length === 0 && (lowNoReview || testOnlyNoReview)) {
-    const kind = lowNoReview ? "low" : `${risk}, tests only`;
+  if (passingReviews.length === 0) {
+    const kind = exemption === "low" ? "low" : `${risk}, tests only`;
     return {
       state: "success",
       description: `No independent review required (${kind}).`,
@@ -785,11 +807,22 @@ export function onlyAddedTests(files) {
   return listed.length > 0 && listed.every((f) => f?.status === "added" && !f.previous_filename && isNewTestExempt(f.filename));
 }
 
-export function evaluateAutoMergeEligible({ metadata, paths, qaExempt, testsAddedOnly = false }) {
-  const isLow = metadata?.ok === true && metadata.risk === "low" && metadata.minimumRisk !== "critical" && lowReviewExempt(paths);
-  const isTestOnly = metadata?.ok === true && qaExempt === "tests" && testsAddedOnly === true;
-  const noD97 = ownerCommandPaths(paths).length === 0;
-  if ((isLow || isTestOnly) && noD97) {
+// The same reviewExemption as the gate, so a PR that waits for review is never
+// eligible (#971: a low PR with only new tests was).
+export function evaluateAutoMergeEligible({ metadata, paths, qaExempt, testsAddedOnly = false, sameRepository = false }) {
+  if (sameRepository !== true) {
+    return { state: "pending", description: "Not eligible for auto-merge: the head branch is not in this repository." };
+  }
+  const exemption =
+    metadata?.ok === true &&
+    reviewExemption({
+      risk: metadata.risk,
+      sameRepository,
+      lowDocsOnly: metadata.minimumRisk !== "critical" && lowReviewExempt(paths),
+      qaExempt,
+      testsAddedOnly,
+    });
+  if (exemption && ownerCommandPaths(paths).length === 0) {
     return { state: "success", description: "Auto-merge eligible (low or test-only, no D-97)." };
   }
   return { state: "pending", description: "Not eligible for auto-merge." };
@@ -803,7 +836,17 @@ export function evaluateAutoMergeEligible({ metadata, paths, qaExempt, testsAdde
  * carries to it through a clean base merge, D-101), or the PR declares Risk
  * low or standard and touches no D-97 path. Every description is fixed text.
  */
-export function evaluateMergeAuthorization({ gate, metadata, paths, comments, headSha, ownerLogin, carriedHeads, testsAddedOnly = false }) {
+export function evaluateMergeAuthorization({
+  gate,
+  metadata,
+  paths,
+  comments,
+  headSha,
+  ownerLogin,
+  carriedHeads,
+  testsAddedOnly = false,
+  sameRepository = false,
+}) {
   if (gate?.state !== "success") return { state: "pending", description: "Waiting for the Engineering review gate." };
   const heads = carriedHeads ?? new Set();
   const commanded = trustedComments(comments).some(
@@ -820,9 +863,14 @@ export function evaluateMergeAuthorization({ gate, metadata, paths, comments, he
     metadata.minimumRisk !== "critical" &&
     ownerCommandPaths(paths).length === 0;
   if (automatic) return { state: "success", description: "Risk low or standard, no D-97 path: no owner command needed." };
-  // D-189: a PR that only adds new test files is auto-merge eligible, so it needs no owner command either.
+  // D-189: a PR that only adds new test files is auto-merge eligible, so it needs
+  // no owner command either; a head outside this repository still does.
   const addedTestsOnly =
-    metadata?.ok === true && testsAddedOnly === true && qaExemption(paths) === "tests" && ownerCommandPaths(paths).length === 0;
+    metadata?.ok === true &&
+    sameRepository === true &&
+    testsAddedOnly === true &&
+    qaExemption(paths) === "tests" &&
+    ownerCommandPaths(paths).length === 0;
   if (addedTestsOnly) return { state: "success", description: "Only new test files, no D-97 path: no owner command needed." };
   return { state: "pending", description: "Needs the owner's merge command for this head (D-97 or critical)." };
 }
@@ -845,6 +893,8 @@ export function evaluatePullRequest({ pr, files, comments, prReviews, reviewComm
       },
     };
   }
+  const sameRepository = sameRepositoryHead(pr);
+  const testsAddedOnly = onlyAddedTests(listed);
   const result = evaluateGate({
     body: pr.body ?? "",
     headSha: pr.head.sha,
@@ -855,8 +905,9 @@ export function evaluatePullRequest({ pr, files, comments, prReviews, reviewComm
     authorLogin: pr.user?.login ?? null,
     carriedHeads,
     qaExempt: qaExemption(paths),
-    testsAddedOnly: onlyAddedTests(listed),
+    testsAddedOnly,
     lowDocsOnly: lowReviewExempt(paths),
+    sameRepository,
   });
   return {
     metadata,
@@ -869,13 +920,15 @@ export function evaluatePullRequest({ pr, files, comments, prReviews, reviewComm
       headSha: pr.head.sha,
       ownerLogin,
       carriedHeads,
-      testsAddedOnly: onlyAddedTests(listed),
+      testsAddedOnly,
+      sameRepository,
     }),
     autoMergeEligible: evaluateAutoMergeEligible({
       metadata,
       paths,
       qaExempt: qaExemption(paths),
-      testsAddedOnly: onlyAddedTests(listed),
+      testsAddedOnly,
+      sameRepository,
     }),
   };
 }

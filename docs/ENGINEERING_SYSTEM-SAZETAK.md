@@ -17,8 +17,8 @@ Sažetak nije izvor pravila. U sukobu vrijedi `docs/ENGINEERING_SYSTEM.md`; uz s
 
 ## Gate po razini
 
-- `low`: CI, dependency review ako vrijedi, jedan neovisni review ili Owner Override; bez reviewa za samo `.md` izvan `app/`, `src/`, `public/`, D-97 (D-189, §5).
-- Samo novi `*.test.*`/`*.spec.*` izvan `db/tests/`, D-97: bez reviewa i QA-a (§5).
+- `low`: CI, dependency review ako vrijedi, jedan neovisni review ili Owner Override; bez reviewa za samo `.md` izvan `app/`, `src/`, `public/`, D-97, bez `CLAUDE.md`/`AGENTS.md` u bilo kojoj mapi, grana u ovom repou (D-189, §5).
+- `standard` ili `critical` sa samo novim `*.test.*`/`*.spec.*` pod `src/` (bez `src/app/`, `src/pages/`), `tests/` ili `e2e/`, izvan D-97, grana u ovom repou: bez reviewa i QA-a (§5).
 - `standard`: CI, dependency review, jedan neovisni reviewer na aktualnom headu; QA kad Orkestrator procijeni (§5).
 - `critical`: svi standard gateovi, zaseban QA PASS na aktualnom headu, sintetički staging prolaz kad vrijedi `BACKEND.md` §6 t. 12 i pravila rada iz §14 (§5).
 - `critical` PR koji mijenja samo testove ili samo dokumente ne traži QA; review ostaje. Mješoviti nije izuzet; `*.md` u testnim mapama je oboje (§5).

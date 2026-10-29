@@ -86,6 +86,8 @@ test("only the low/test-only rule may auto-queue a PR", () => {
   assert.equal(queuing.length, 1);
   assert.equal(queuing[0].name, "auto-queue low and test-only PRs");
   assert.ok(queuing[0].conditions.includes("check-success=Auto-merge eligible"));
+  // #971: a fork never auto-queues, even if the status were green.
+  assert.ok(queuing[0].conditions.includes("head-repo-full-name=danielrisavi77-create/Ductus"));
   assert.match(body, /commands_restrictions:\n  queue:\n    conditions:\n      - sender=danielrisavi77-create/);
 });
 test("the refresh rule still exists and a draft or conflict is left alone", () => {

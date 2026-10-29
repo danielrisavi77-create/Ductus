@@ -72,6 +72,11 @@ export function qaExemption(files) {
   return null;
 }
 
+// Instructions an agent loads from any directory (Claude Code reads CLAUDE.md and
+// CLAUDE.local.md, Codex AGENTS.md and AGENTS.override.md), the same kind of file
+// as the root CLAUDE.md and AGENTS.md in D-97 (#971 review).
+const AGENT_INSTRUCTIONS_RE = /(?:^|\/)(?:claude|agents)(?:\.[^/]*)?\.md$/i;
+
 // D-189, #971: what a PR may change and still skip independent review.
 // Risk low: only documents that nothing serves, builds or executes. The risk
 // floor lists what is dangerous, so anything it does not know (next.config.js,
@@ -83,19 +88,26 @@ export function lowReviewExempt(files) {
     paths.every(
       (p) =>
         isDocPath(p) &&
+        !AGENT_INSTRUCTIONS_RE.test(p) &&
         !matchesPath(p, ["public/", "app/", "src/"]) &&
         ownerCommandPaths([p]).length === 0,
     )
   );
 }
 
-// Tests only: a new file with a test name. A helper next to an existing one
-// (tests/unit/auth/test-idp.mjs beside test-idp.ts) is resolved first by an
-// import without an extension, and pgTAP files share one database in name
-// order, so neither may skip review; nor may a test under a D-97 path.
+// Tests only: a new file with a test name, and only where a test runner looks
+// for it. Next.js builds a page or route from a test name too (pages/api/x.test.ts
+// answers at /api/x.test, #971 QA), so app/, pages/, src/app/, src/pages/,
+// public/ and every other directory stay under review. A helper next to an
+// existing one (tests/unit/auth/test-idp.mjs beside test-idp.ts) is resolved
+// first by an import without an extension, and pgTAP files share one database in
+// name order, so neither may skip review; nor may a test under a D-97 path.
+const NEW_TEST_DIRS = ["src/", "tests/", "e2e/"];
+const ROUTE_DIRS = ["src/app/", "src/pages/"];
 export const isNewTestExempt = (file) =>
   TEST_NAME_RE.test(normalizePath(file)) &&
-  !matchesPath(file, ["db/tests/"]) &&
+  matchesPath(file, NEW_TEST_DIRS) &&
+  !matchesPath(file, ROUTE_DIRS) &&
   ownerCommandPaths([file]).length === 0;
 
 /** Files that put a PR under the owner's merge command, by path or by content. */

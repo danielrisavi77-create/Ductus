@@ -2,7 +2,9 @@
 # developer machine. Mergify sees only statuses, not the risk (F-114), so it
 # puts a PR into the queue by itself only through the rule "auto-queue low and
 # test-only PRs", which requires the gate's "Auto-merge eligible" status (D-189:
-# Risk low with documents only, or only new test files, no D-97 path). Any
+# Risk low with documents only, or Risk standard or critical with only new test
+# files, no D-97 path) and a head branch in this repository: the gate grants a
+# fork no exemption, and the rule repeats that condition (#971). Any
 # other PR enters the queue only by the owner's `@Mergifyio queue` command
 # (restricted to the owner below), and only when both statuses the gate
 # publishes are green (D-161 (h)):
@@ -86,6 +88,7 @@ pull_request_rules:
   - name: auto-queue low and test-only PRs
     conditions:
       - base=main
+      - head-repo-full-name=danielrisavi77-create/Ductus
       - -draft
       - -conflict
       - check-success=Engineering review gate
