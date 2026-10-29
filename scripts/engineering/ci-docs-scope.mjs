@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isNewTestExempt } from "./protected-paths.mjs";
 
 // An exact allowlist, not every Markdown file: governance, fixtures and docs
 // consumed by tools must retain the full stack. Risk/review policy is separate.
@@ -15,14 +16,15 @@ const ORDINARY_DOCS = new Set([
   "docs/privacy/05-otvorena-pitanja.md",
 ]);
 
-// The tests profile skips the stack, DB, browser and property jobs (#971), so it
-// may only hold files the always-on unit job runs: the include globs of the
-// vitest `unit` project (src/**/*.test.ts, tests/unit/**/*.test.ts) minus its excludes.
-const UNIT_TEST_RE = /^(?:src|tests\/unit)\/.+\.test\.ts$/;
+// The tests profile skips the stack, DB, browser, property, demo and build steps
+// (#971), so it takes only paths on the review exemption's allowlist
+// (isNewTestExempt: src/ without src/app/ and src/pages/, or tests/unit/) that
+// the always-on vitest `unit` project runs: *.test.ts, not property or
+// integration tests. One source, so the gate and CI cannot disagree.
 const NOT_UNIT_RE = /\.(?:property|integration)\.test\.ts$/;
 
 function isUnitTestPath(path) {
-  return UNIT_TEST_RE.test(path) && !NOT_UNIT_RE.test(path) && !path.split("/").includes("node_modules");
+  return isNewTestExempt(path) && path.endsWith(".test.ts") && !NOT_UNIT_RE.test(path);
 }
 
 export function classifyDiff(raw) {

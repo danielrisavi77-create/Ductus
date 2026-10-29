@@ -72,43 +72,53 @@ export function qaExemption(files) {
   return null;
 }
 
-// Instructions an agent loads from any directory (Claude Code reads CLAUDE.md and
-// CLAUDE.local.md, Codex AGENTS.md and AGENTS.override.md), the same kind of file
-// as the root CLAUDE.md and AGENTS.md in D-97 (#971 review).
-const AGENT_INSTRUCTIONS_RE = /(?:^|\/)(?:claude|agents)(?:\.[^/]*)?\.md$/i;
+// D-189 as narrowed for #971 (owner option A, contract issuecomment-6506868494):
+// both review exemptions are allowlists, and the gate, "Merge authorization",
+// "Auto-merge eligible" and the CI profile "tests" read them from here, so the
+// lists cannot drift apart. A path with a segment that starts with a dot
+// (.claude/, .agents/, .github/ at any depth) is never exempt, and neither is a
+// D-97 path.
+const hasDotSegment = (p) => p.split("/").some((segment) => segment.startsWith("."));
+// Files an agent loads as instructions: Claude Code CLAUDE.md and CLAUDE.local.md,
+// Codex AGENTS.md and AGENTS.override.md, Gemini CLI GEMINI.md, and GitHub
+// Copilot's copilot-instructions.md and *.instructions.md.
+const AGENT_INSTRUCTIONS_RE =
+  /(?:^|\/)(?:(?:claude|agents|gemini)[^/]*|copilot-instructions|[^/]*\.instructions)\.md$/i;
+const LOW_DOC_RE = /^(?:docs\/[^/]+\.md|README\.md)$/;
 
-// D-189, #971: what a PR may change and still skip independent review.
-// Risk low: only documents that nothing serves, builds or executes. The risk
-// floor lists what is dangerous, so anything it does not know (next.config.js,
-// instrumentation.ts, .npmrc, public/) would otherwise pass as low.
-export function lowReviewExempt(files) {
-  const paths = (files ?? []).map(normalizePath);
+/** Risk low without review: a Markdown file directly in docs/, or the root README.md. */
+export function isLowDocExemptPath(file) {
+  const p = normalizePath(file);
   return (
-    paths.length > 0 &&
-    paths.every(
-      (p) =>
-        isDocPath(p) &&
-        !AGENT_INSTRUCTIONS_RE.test(p) &&
-        !matchesPath(p, ["public/", "app/", "src/"]) &&
-        ownerCommandPaths([p]).length === 0,
-    )
+    LOW_DOC_RE.test(p) &&
+    !hasDotSegment(p) &&
+    !AGENT_INSTRUCTIONS_RE.test(p) &&
+    ownerCommandPaths([p]).length === 0
   );
 }
 
-// Tests only: a new file with a test name, and only where a test runner looks
-// for it. Next.js builds a page or route from a test name too (pages/api/x.test.ts
-// answers at /api/x.test, #971 QA), so app/, pages/, src/app/, src/pages/,
-// public/ and every other directory stay under review. A helper next to an
-// existing one (tests/unit/auth/test-idp.mjs beside test-idp.ts) is resolved
-// first by an import without an extension, and pgTAP files share one database in
-// name order, so neither may skip review; nor may a test under a D-97 path.
-const NEW_TEST_DIRS = ["src/", "tests/", "e2e/"];
+export function lowReviewExempt(files) {
+  const paths = files ?? [];
+  return paths.length > 0 && paths.every(isLowDocExemptPath);
+}
+
+// Tests only: a *.test.ts or *.spec.ts file under src/ or tests/unit/, where only
+// the test runner reads it. Next.js builds a page or route from a test name too
+// (src/pages/api/x.test.ts answers at /api/x.test, #971 QA), so src/app/ and
+// src/pages/ stay under review, as do e2e/, tests/e2e/, tests/integration/,
+// db/tests/, helpers, fixtures and every other directory.
+const NEW_TEST_RE = /^(?:src|tests\/unit)\/.+\.(?:test|spec)\.ts$/;
 const ROUTE_DIRS = ["src/app/", "src/pages/"];
-export const isNewTestExempt = (file) =>
-  TEST_NAME_RE.test(normalizePath(file)) &&
-  matchesPath(file, NEW_TEST_DIRS) &&
-  !matchesPath(file, ROUTE_DIRS) &&
-  ownerCommandPaths([file]).length === 0;
+export const isNewTestExempt = (file) => {
+  const p = normalizePath(file);
+  return (
+    NEW_TEST_RE.test(p) &&
+    !matchesPath(p, ROUTE_DIRS) &&
+    !hasDotSegment(p) &&
+    !p.split("/").includes("node_modules") &&
+    ownerCommandPaths([p]).length === 0
+  );
+};
 
 /** Files that put a PR under the owner's merge command, by path or by content. */
 export function ownerCommandPaths(files) {

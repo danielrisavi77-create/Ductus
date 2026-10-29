@@ -121,8 +121,8 @@ jobs:
         run: |
           case "$SCOPE_RESULT/$PROFILE/$E2E_RESULT/$LOGIN_RESULT/$EVIDENCE_RESULT/$LOGIN_EVIDENCE_RESULT" in
             success/full/success/success/success/success) echo 'Both isolated application stack and browser checks passed.' >> "$GITHUB_STEP_SUMMARY" ;;
-            success/docs/skipped/skipped/skipped/skipped) echo 'Approved documentation-only diff: stack, DB and browser tests were not executed. Build, engineering tests and security checks remain required.' >> "$GITHUB_STEP_SUMMARY" ;;
-            success/tests/skipped/skipped/skipped/skipped) echo 'Approved test-only diff: stack, DB and browser tests were not executed. Build, engineering tests and security checks remain required.' >> "$GITHUB_STEP_SUMMARY" ;;
+            success/docs/skipped/skipped/skipped/skipped) echo 'Approved documentation-only diff: stack, DB, browser, property, demo and fake-OIDC tests and the build were skipped. Lint, typecheck, unit tests, engineering tests and security checks remain required.' >> "$GITHUB_STEP_SUMMARY" ;;
+            success/tests/skipped/skipped/skipped/skipped) echo 'Approved test-only diff: stack, DB, browser, property, demo and fake-OIDC tests and the build were skipped. Lint, typecheck, unit tests, engineering tests and security checks remain required.' >> "$GITHUB_STEP_SUMMARY" ;;
             *) echo 'Missing, unsuccessful or unexpected CI scope/stack result.' >&2; exit 1 ;;
           esac
       - name: Reject cancelled stack

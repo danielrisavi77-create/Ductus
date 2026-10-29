@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { evaluateAutoMergeEligible, evaluatePullRequest, sameRepositoryHead } from "./review-gate-core.mjs";
+import { classifyDiff } from "./ci-docs-scope.mjs";
 
 const head = "a".repeat(40);
 const ownerLogin = "danielrisavi77-create";
@@ -59,7 +60,7 @@ test("a critical PR that only adds test files is merge-authorized without an own
 // src/, tests/ and e2e/ above low, and "Auto-merge eligible" no longer ignores
 // the risk, so the gate and the status agree even without the floor.
 test("a low PR that only adds tests is neither exempt nor auto-merge eligible", () => {
-  for (const filename of ["src/a.test.ts", "tests/unit/x.test.ts", "e2e/x.spec.ts"]) {
+  for (const filename of ["src/a.test.ts", "tests/unit/x.test.ts", "src/x.spec.ts"]) {
     const out = evaluate("low", [{ filename, status: "added" }]);
     assert.equal(out.result.state, "failure", filename);
     assert.notEqual(out.autoMergeEligible?.state, "success", filename);
@@ -195,10 +196,10 @@ test("a new test file on a path Next.js serves, or outside the test directories,
   }
 });
 
-test("new unit and e2e specs remain exempt", () => {
+test("new unit tests and specs under src/ and tests/unit/ remain exempt", () => {
   const out = run([
     { filename: "tests/unit/auth/new-guard.test.ts", status: "added" },
-    { filename: "e2e/login/new.spec.ts", status: "added" },
+    { filename: "src/domain/sync/new.spec.ts", status: "added" },
   ]);
   assert.equal(out.result.state, "success");
   assert.equal(out.autoMergeEligible.state, "success");
@@ -249,5 +250,88 @@ test("only a head in the base repository counts as the same repository", () => {
     {},
   ]) {
     assert.equal(sameRepositoryHead(pr), false, JSON.stringify(pr));
+  }
+});
+
+test("a low PR that changes only the root README.md needs no review", () => {
+  const out = runLow([{ filename: "README.md", status: "modified" }]);
+  assert.equal(out.result.state, "success");
+  assert.equal(out.mergeAuthorization.state, "success");
+  assert.equal(out.autoMergeEligible.state, "success");
+});
+
+// #971 contract t. 1 and 2 (owner option A): the exemptions are allowlists, so
+// anything not on them waits for review whatever its risk, and the CI profile
+// "tests" reads the same list (t. 3 and 4).
+const record = (path) => `:000000 100644 ${"0".repeat(40)} ${"b".repeat(40)} A\0${path}\0`;
+
+test("contract t. 5: no status is green without review and classifyDiff gives full", () => {
+  for (const filename of [
+    "docs/.claude/skills/x/SKILL.md",
+    "docs/.claude/agents/x.md",
+    "docs/.agents/skills/x/SKILL.md",
+    "docs/GEMINI.md",
+    "docs/sub/x.md",
+    "src/pages/api/x.test.ts",
+    "src/app/x.test.ts",
+    "tests/e2e/x.spec.ts",
+    "e2e/x.spec.ts",
+  ]) {
+    for (const risk of ["low", "standard", "critical"]) {
+      const label = `${risk} ${filename}`;
+      const out = evaluate(risk, [{ filename, status: "added" }]);
+      assert.notEqual(out.result.state, "success", label);
+      assert.notEqual(out.mergeAuthorization?.state, "success", label);
+      assert.notEqual(out.autoMergeEligible?.state, "success", label);
+    }
+    assert.equal(classifyDiff(record(filename)), "full", filename);
+  }
+});
+
+test("other agent instruction files, dot directories, DECISIONS and paths outside the allowlist wait for review", () => {
+  for (const filename of [
+    "docs/DECISIONS.md",
+    "docs/ENGINEERING_SYSTEM.md",
+    "docs/AGENTS.override.md",
+    "docs/gemini-notes.md",
+    "docs/copilot-instructions.md",
+    "docs/review.instructions.md",
+    "docs/.notes.md",
+    "README.MD",
+    "readme.md",
+    "Docs/FEATURES.md",
+    "src/README.md",
+    "notes.md",
+    ".claude/rules/x.md",
+  ]) {
+    const out = runLow([{ filename, status: "modified" }]);
+    assert.notEqual(out.result.state, "success", filename);
+    assert.notEqual(out.autoMergeEligible?.state, "success", filename);
+  }
+  for (const filename of [
+    "src/.hidden/x.test.ts",
+    "src/node_modules/x.test.ts",
+    "src/App/x.test.ts",
+    "src/Pages/x.test.ts",
+    "tests/integration/x.test.ts",
+    "tests/property/x.test.ts",
+    "tests/x.test.ts",
+    "src/ui/Card.test.tsx",
+    "src/x.test.js",
+  ]) {
+    const out = run([{ filename, status: "added" }]);
+    assert.equal(out.result.state, "pending", filename);
+    assert.equal(out.mergeAuthorization.state, "pending", filename);
+    assert.equal(out.autoMergeEligible.state, "pending", filename);
+    assert.equal(classifyDiff(record(filename)), "full", filename);
+  }
+});
+
+test("the CI profile tests takes only exempt paths that the unit project runs", () => {
+  assert.equal(classifyDiff(record("src/domain/x.test.ts")), "tests");
+  assert.equal(classifyDiff(record("tests/unit/x.test.ts")), "tests");
+  // Exempt from review, but outside the vitest unit project: full CI.
+  for (const path of ["src/x.spec.ts", "src/x.property.test.ts", "src/x.integration.test.ts"]) {
+    assert.equal(classifyDiff(record(path)), "full", path);
   }
 });
