@@ -191,7 +191,7 @@ Orkestrator prati samo sesije koje rade na repou Ductus (Ductura). Ostale sesije
 - sesija koja je napisala plan ne daje review ni QA verdikt na PR-u tog zadatka (`ENGINEERING_SYSTEM.md` §6); orkestrator to poštuje pri dodjeli reviewa i QA-a;
 - autor svaku stavku pretvara u test ili u opisu PR-a obrazlaže zašto se ne odnosi na taj PR, daje tablicu "stavka plana → test" i prije pusha sam napada svoje rješenje (`SESSIONS.md` §3).
 
-**Manji PR-ovi na gateovima (Daniel, 10. 10. 2026.).** Zadatak koji gradi ili mijenja gate (skener, hook, evaluator) orkestrator prije dodjele dijeli na PR-ove koji se mogu zasebno pregledati, svaki s vlastitim planom napada.
+**Manji PR-ovi na gateovima (Daniel, 10. 10. 2026.).** Zadatak koji gradi ili mijenja gate (skener, hook, evaluator) orkestrator prije dodjele dijeli na PR-ove koji se mogu zasebno pregledati, svaki s vlastitim planom napada. Za PR koji uvodi ili širi izuzeće od gatea ili CI provjere orkestrator prije dodjele provjerava polja iz `ENGINEERING_SYSTEM.md` §14 t. 8, a već drugi FAIL iste klase nalaza zaustavlja ispravke i traži novi ugovor (§14 t. 6; D-190, nastalo nakon triju krugova na #971).
 
 Jednokratnu rutinu orkestrator ne briše, nego je pušta da se sama ugasi nakon pokretanja; pogrešno zakazanu rutinu onemogućuje prije pokretanja. Trošak ostaje unutar postojećih pretplata; novi trošak ide Danielu po §4.
 

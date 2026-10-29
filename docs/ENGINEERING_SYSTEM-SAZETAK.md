@@ -13,7 +13,7 @@ Sažetak nije izvor pravila. U sukobu vrijedi `docs/ENGINEERING_SYSTEM.md`; uz s
 - `low`: dokumentacija, copy bez promjene značenja, jednostavna konfiguracija. PR koji dira putanje ili zapise iz D-97 nije `low` (§5).
 - `standard`: frontend ponašanje, editor, adapteri, CI promjene, refaktori (§5).
 - `critical`, među ostalim: identity, authz, RLS, pgTAP matrica, evidence, potpisi, KMS, session, submission, retention, backup/restore, migracije koje mijenjaju ovlasti, `PRODUCT.md` §5 ili druga trust granica (§5).
-- Automatski risk floor računa najmanju razinu po putanjama. Među ostalim, `CLAUDE.md`, `AGENTS.md`, `ENGINEERING_SYSTEM.md`, svaki workflow i svaka putanja iz D-97 su najmanje `critical`. Agent ne smije spustiti risk (§5).
+- Automatski risk floor računa najmanju razinu po putanjama: `CLAUDE.md`, `AGENTS.md`, `ENGINEERING_SYSTEM.md`, svaki workflow i svaka putanja iz D-97 su najmanje `critical`. Agent ne smije spustiti risk (§5).
 
 ## Gate po razini
 
@@ -44,10 +44,10 @@ Sažetak nije izvor pravila. U sukobu vrijedi `docs/ENGINEERING_SYSTEM.md`; uz s
 ## Critical PR (D-106)
 
 - Ugovor prije koda: Invarijanta, Mjesta, Stvarni pozivatelj, Poznate granice i "Što bi ovaj PR moglo oboriti na QA-i?:" (§14).
-- Najviše oko 400 promijenjenih redaka koda, veći uz obrazloženje u opisu; `critical` i oko 300 redaka produkcijskog koda, veći se dijeli, iznimku odobrava vlasnik (§14).
-- QA FAIL samo za kvar koda. Nalaz ima "Dohvatljivo kroz"; manji nosi "blokira" ili "ne blokira"; u produkcijskom kodu zatvara se novim headom prije spajanja (§14).
-- Najviše dva kruga: drugi FAIL na istom korijenu zaustavlja ispravke (§14).
-- U gateu najviše tri PR-a bez preklapanja (D-161); review i QA kreću odmah, za `critical` istodobno na istom headu, i kad QA daje Codex ili Grok (D-155). QA ne čita review prije vlastitog verdikta (§13, §15).
+- Do oko 400 promijenjenih redaka koda, više uz obrazloženje; `critical` i do oko 300 redaka produkcijskog koda, veći se dijeli ili ga vlasnik izuzme (§14).
+- QA FAIL samo za kvar koda. Nalaz ima "Dohvatljivo kroz"; manji nosi "blokira" ili "ne blokira"; u produkcijskom kodu zatvara se prije spajanja (§14).
+- Najviše dva kruga; drugi FAIL iste klase zaustavlja ispravke. Izuzeće od gatea: popis dozvoljenog, jedan izvor (§14, D-190).
+- U gateu najviše tri PR-a bez preklapanja (D-161); review i QA kreću odmah, za `critical` istodobno na istom headu, i kad QA daje Codex ili Grok (D-155). QA ne čita review prije svog verdikta (§13, §15).
 
 ## Kad stati i pitati vlasnika
 
