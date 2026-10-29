@@ -8,6 +8,7 @@ import { isMergifyQueuePr, QUEUE_CARRIER_STATUS } from "./mergify-queue-pr.mjs";
 const context = "Engineering review gate";
 // What the merge queue reads (D-161 (h)); see evaluateMergeAuthorization.
 const authorizationContext = "Merge authorization";
+const autoMergeContext = "Auto-merge eligible";
 
 // Every call is time-limited (plan napada #231, 7.4); see review-gate-api.mjs.
 const api = createApi({
@@ -82,7 +83,7 @@ async function main() {
     apiAll(`/repos/${owner}/${repo}/pulls/${number}/comments`),
   ]);
 
-  const { metadata, result, mergeAuthorization } = evaluatePullRequest({
+  const { metadata, result, mergeAuthorization, autoMergeEligible } = evaluatePullRequest({
     pr,
     files: changedFiles,
     comments,
@@ -94,6 +95,7 @@ async function main() {
 
   // Authorization first: a stale green one must never sit beside a new green gate.
   await setStatus(repository, pr.head.sha, mergeAuthorization ?? WAITING, pr.html_url, authorizationContext);
+  await setStatus(repository, pr.head.sha, autoMergeEligible ?? { state: "pending", description: "Not eligible for auto-merge." }, pr.html_url, autoMergeContext);
   await setStatus(repository, pr.head.sha, result, pr.html_url);
   console.log(`${context}: ${result.state} — ${result.description}`);
   if (metadata?.ok) {
