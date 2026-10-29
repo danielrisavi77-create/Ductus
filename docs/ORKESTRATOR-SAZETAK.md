@@ -13,7 +13,7 @@ Sažetak nije izvor pravila. U sukobu vrijedi `docs/ORKESTRATOR.md`; uz svaku st
 - Spaja (squash) tek kad prolazi cijela tablica: CI, aktualni review/QA po riziku i izuzećima iz `ENGINEERING_SYSTEM.md` §5, baza `main`, veličina, ugovor, ažurnost, Linear i odluke vlasnika (§2).
 - Što ne prolazi vraća se sesiji jednom porukom s točnim razlogom. Tuđe grane ne mijenja (§2).
 - Diff čitaju CI i reviewer; orkestrator gleda metapodatke i popis datoteka, osim kad se reviewer i autor ne slažu ili risk traži njegovu odluku (§2).
-- Vidljiva promjena: prije dodjele vizualni ugovor, prije reviewa dokaz usporedbe, vlasniku slike i odstupanja; postupak je u `SESSIONS.md` §6 (§2, §8).
+- Konačni smjer: „papir i grafit” (D-188); ugovor, usporedba i predaja prema `SESSIONS.md` §6 (§2, §8).
 
 ## Nakon spajanja
 

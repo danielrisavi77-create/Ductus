@@ -1,5 +1,7 @@
 # Ductus: upute za AI coding agente
 
+**Konačni vizualni smjer Ducture je „papir i grafit”** (D-188; potvrda vlasnika 29. 10. 2026.). Zadano: tamna grafitna ljuska, gotovo bijeli list i prigušeno zlato. Specifikacija je u `docs/design/DESIGN-SYSTEM.md`, postupak u `docs/SESSIONS.md` §6. Drugi smjer traži novu izričitu Danielovu odluku; starije palete su povijest.
+
 Ovaj je dokument ulazna točka za Codex i druge agente koji automatski čitaju `AGENTS.md`. Ductus podržava eksplicitne načine rada: **worker**, **review**, **qa**, **bug-hunter**, **product-ux** i **orchestrator**. Provider ili račun ne određuju ulogu.
 
 Prije rada pročitaj `CLAUDE.md`, `STATE.md` i `docs/ENGINEERING_SYSTEM-SAZETAK.md`; puni `docs/ENGINEERING_SYSTEM.md` čitaj samo u odjeljcima koje zadatak traži, a `docs/MULTI-ACCOUNT.md` kod predaje posla ili rotacije sesije. Za detalje o paralelnom radu čitaj `docs/SESSIONS.md`; orkestrator dodatno čita `docs/ORKESTRATOR-SAZETAK.md`, a `docs/ORKESTRATOR.md` po odjeljcima. Sesija s dodijeljenom ulogom (pisac Backend, Frontend ili Platforma, reviewer, QA) čita i svoju karticu u `.claude/uloge/` (počni od `README.md`); kartice vrijede za svaki runtime, a pravila u `.claude/rules/` učitava samo Claude Code.

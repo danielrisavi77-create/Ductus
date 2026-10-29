@@ -1,5 +1,7 @@
 # Ductura: integracija u aplikaciju
 
+Za izgled vrijedi konačni „papir i grafit” (D-188), prema [zajedničkoj specifikaciji](../DESIGN-SYSTEM.md) i `docs/SESSIONS.md` §6. Stare boje prototipa ne prenose se; odobrena kompozicija i važeći funkcionalni ugovori ostaju. Ovaj izvorni paket nije dokaz aktualne implementacije ili statusa zadataka.
+
 Uz README.md (ekrani, tokeni, ponašanje) i PROVJERE.md (pravila i zapisi). Ovaj dokument kaže **što graditi, kojim redom, što nije riješeno i kako spojiti**.
 
 ## 1. Što je u paketu

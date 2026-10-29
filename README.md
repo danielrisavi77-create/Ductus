@@ -1,5 +1,7 @@
 # Ductus
 
+**Konačni vizualni smjer:** papir i grafit, prema [dizajnerskom sustavu](docs/design/DESIGN-SYSTEM.md) (D-188; potvrda vlasnika 29. 10. 2026.). Zadano: tamna grafitna ljuska, gotovo bijeli list i prigušeno zlato. Sve sesije slijede `docs/SESSIONS.md` §6; ranije palete su povijest.
+
 Radno ime platforme koja fakultetima pokazuje kako je studentski rad nastao, bez presude o autorstvu.
 Prvi pilot: Fakultet političkih znanosti Sveučilišta u Zagrebu (FPZG).
 

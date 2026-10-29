@@ -1,4 +1,6 @@
-# Snimke: Archivum V3 (bordo i bakar), DAN-344
+# Povijesne snimke Archivum V3
+
+Ove snimke čuvaju tadašnji izgled PR-a #867. Bordo/bakar je povijest, a konačni smjer je „papir i grafit” (D-188; potvrda vlasnika 29. 10. 2026.), prema [zajedničkoj specifikaciji](../../DESIGN-SYSTEM.md). Nisu aktualna referenca palete ni dokaz današnje implementacije. Za novi vizualni dokaz primijenite `docs/SESSIONS.md` §6.
 
 Snimke za PR #867 (`docs/SESSIONS.md` §6). Snimljene Playwright Chromiumom na produkcijskoj gradnji (`pnpm build`, `next start`) glave `a3606d2`, s lokalnim demo dnevnikom. Sav tekst je izmišljen.
 

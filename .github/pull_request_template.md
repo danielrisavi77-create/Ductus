@@ -62,6 +62,7 @@ Testovi:
 - <puni testirani SHA; naredba/scenarij; rezultat; poveznica/putanja primarnog zapisa; lokalno, CI ili neovisna QA>
 - Neizvedeno ili nedostaje: <navesti izričito; zeleni CI nije dokaz zasebne lokalne probe>
 
+Vizualni smjer: papir i grafit (D-188; `docs/design/DESIGN-SYSTEM.md`), osim nove izričite vlasnikove odluke.
 Vizualni dokaz (`docs/SESSIONS.md` §6.5; bez vidljive promjene n/a uz razlog):
 - Ugovor i odobrena referenca: <poveznica, verzija, ekran/stanje>
 - Izvedba: <puni testirani SHA, checkout/build, ruta/uloga/stanje, tema, hr/en, viewport/DPR i browser/OS>

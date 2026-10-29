@@ -143,7 +143,7 @@ Svaki petak (`PLAN-DEMO.md` §3): usporedba spojenog s tablicom tjedna, kratak s
 
 ## 8. Sesije: pregled, pokretanje i gašenje
 
-**Dodjela vidljive promjene.** Prije dodjele popuni vizualni ugovor iz `docs/SESSIONS.md` §6.2: dostupna odobrena slika, ruta/stanja, prikazi i put do stvarnog rendera. Za zajedničke tokene i ljusku odredi jednog nositelja i ovisnosti; neovisne ekrane rasporedi unutar postojećeg WIP-a. Za prihvat i predaju koristi §6.5–§6.6 istog dokumenta, bez zasebnog projektnog workflowa po računu.
+**Dodjela vidljive promjene.** Konačni smjer je „papir i grafit” (D-188; DAN-344; `docs/design/DESIGN-SYSTEM.md`). Drugi smjer traži novu izričitu Danielovu odluku.  Prije dodjele popuni vizualni ugovor iz `docs/SESSIONS.md` §6.2: dostupna odobrena slika, ruta/stanja, prikazi i put do stvarnog rendera. Za zajedničke tokene i ljusku odredi jednog nositelja i ovisnosti; neovisne ekrane rasporedi unutar postojećeg WIP-a. Za prihvat i predaju koristi §6.5–§6.6 istog dokumenta, bez zasebnog projektnog workflowa po računu.
 
 Orkestrator prati samo sesije koje rade na repou Ductus (Ductura). Ostale sesije na računu zanemaruje i ne šalje im poruke (Daniel, 10. 10. 2026.). Sesija se računa kao Ductus sesija samo ako ju je orkestrator sam pokrenuo, ako ju je Daniel imenovao ili najavio orkestratoru kao Ductus sesiju (tada je orkestrator smije odmah uvrstiti u red, i prije njezina prvog izvještaja) ili ako se identificirala izvještajem na Ductus PR-u ili issueu; za rutinu u oblaku mjerodavan je repo u njezinoj konfiguraciji (`session_context.sources`). Samo ime sesije nije dovoljno. Kad nije sigurno, orkestrator ne šalje poruku nego pita Daniela. Drugi stroj (laptop) nije dio kapaciteta.
 

@@ -2,7 +2,7 @@
 
 Vrijedi uz karticu uloge. Pravila su u dokumentima na koje se upućuje.
 
-Za zadavanje, izvedbu ili pregled vidljive promjene pročitaj `docs/SESSIONS.md` §6 (referenca, vizualni ugovor, stvarni prikaz i predaja). Vrijedi za sve uloge i runtimee; neizvedena usporedba nije potvrđena podudarnost.
+Konačni smjer je „papir i grafit” (D-188); specifikacija je `docs/design/DESIGN-SYSTEM.md`. Za zadavanje, izvedbu ili pregled vidljive promjene pročitaj `docs/SESSIONS.md` §6 (referenca, vizualni ugovor, stvarni prikaz i predaja). Vrijedi za sve uloge i runtimee; neizvedena usporedba nije potvrđena podudarnost.
 
 ## Javljanje
 - Stanje živi na GitHubu: opis PR-a, `Trag rada` i kanonski komentari. Poruka je samo obavijest (`docs/SESSIONS.md` §2a).

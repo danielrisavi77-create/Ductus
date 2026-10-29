@@ -1,5 +1,7 @@
 # Predaja dizajna: Ductura
 
+**Aktualni smjer od 29. 10. 2026.:** konačni „papir i grafit” (D-188), prema [zajedničkoj specifikaciji](../DESIGN-SYSTEM.md). Zadana je tamna grafitna ljuska i gotovo bijeli list; svijetla ljuska i tamni list su izbor. Boje i zadana tema iz starog HTML/ZIP paketa i tablice ispod su povijest. Kompozicija ostaje primjenjiva uz novu paletu i aktualni funkcionalni ugovor; prototip nije dokaz implementacije. Postupak je `docs/SESSIONS.md` §6.
+
 ## Korisnikov izvorni paket — 22. 10. 2026.
 
 Daniel je dostavio `Frontend za Ductus aplikaciju (2).zip` uz uputu da se taj dizajn koristi za aplikaciju. Pripremljena mapa `design_handoff_ductura/` u ZIP-u potvrđuje postojeći vizualni smjer: svih **11 glavnih HTML referenci već je u ovoj mapi i bajt-po-bajt su jednake dostavljenima**. Nema nove konkurentske kopije dizajna.
@@ -162,7 +164,7 @@ Popis zapisa uz rad, tko piše i tko vidi: **`PROVJERE.md` §6c, §6d i §6e** (
 
 Lokalna stanja sučelja (otvoreni dijalozi, kartica, sklopljena poglavlja, tema lista) vidi `state = { … }` u klasi editora.
 
-## 8. Tokeni
+## 8. Povijest tokena izvornog paketa
 
 > **Napomena u repou (23. 10. 2026.):** vrijednosti u aplikaciji sada slijede dizajn v3 (vlasnikova odluka od 21. 10. na #476, `issuecomment-6314381921`; mapiranje u ugovoru `issuecomment-6314723241`). Mjerodavne su vrijednosti u `app/globals.css`; tablica ispod ostaje zapis izvornog paketa.
 
@@ -196,8 +198,8 @@ Bijeli list: tekst i oznake u `<helmet><style>` editora, selektori `.ed[data-she
 
 ## 9. Otvorena pitanja prije gradnje
 
-1. **Boje**: prototip koristi boje odobrenih demo ekrana; PR #386 (D-115) uvodi svoje tokene. F-4 traži podudaranje s odobrenim dizajnom: odluči koje vrijede i mapiraj tablicu iz §8.
-2. **Ime**: Ductura ili Ductus u sučelju.
+1. **Boje — riješeno:** konačni smjer je D-188, papir i grafit; vrijednosti iz §8 su povijest. Aktivni izvor je [zajednička specifikacija](../DESIGN-SYSTEM.md), a stanje izvedbe provjerava se odvojeno.
+2. **Ime — riješeno D-186:** proizvod je Ductura; repo, paket i identifikatori ostaju ductus.
 3. **Zapis unosa i istraga**: pravno mišljenje i procjena učinka (GDPR čl. 35) prije gradnje; tekst obavijesti S3 i „Što Ductura čuva” mora ostati usklađen s §6e.
 4. **Profil FPZG**: granice (opseg, Sažetak 150–300 riječi, 3–5 ključnih riječi, kontrolni popisi) treba potvrditi prema službenim Uputama prije nego uđu u `fpzg.json`.
 

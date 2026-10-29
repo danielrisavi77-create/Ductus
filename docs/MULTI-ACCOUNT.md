@@ -1,5 +1,7 @@
 # Ductus: multi-account i multi-agent rad
 
+Sve sesije i računi koriste konačni smjer „papir i grafit” (D-188), specifikaciju `docs/design/DESIGN-SYSTEM.md` i postupak `docs/SESSIONS.md` §6. Pri nastavku najprije osvježite `STATE.md` i postojeći zadatak; stariji chat i paleta prototipa nisu aktualna uputa.
+
 Verzija 0.2 · 7. 10. 2026. · Odgovorna osoba: Daniel Rišavi
 
 Ovaj dokument definira runtime sloj za rad više AI računa nad istim Ductus repozitorijem. Vrijedi uz `CLAUDE.md`, `AGENTS.md`, `STATE.md`, `docs/SESSIONS.md` i `docs/ORKESTRATOR.md`. Ne mijenja proizvodna, sigurnosna ni arhitekturna pravila.

@@ -2,6 +2,10 @@
 
 Ažurira se skupno nakon spojenih PR-ova i kontrolnih točaka. Ovaj presjek čuva gateove, ciljeve i vlasničke obveze; za živi prioritet, nositelja i status zadatka mjerodavan je Linear. Cilj: najviše 80 redaka.
 
+## Konačni vizualni smjer
+
+**Konačni vizualni smjer Ducture je „papir i grafit”** (D-188; potvrda vlasnika 29. 10. 2026.). Zadano: tamna grafitna ljuska, gotovo bijeli list i prigušeno zlato. Specifikacija je u `docs/design/DESIGN-SYSTEM.md`, postupak u `docs/SESSIONS.md` §6. Drugi smjer traži novu izričitu Danielovu odluku; starije palete su povijest. Izvor: [potvrda vlasnika](https://github.com/danielrisavi77-create/Ductus/issues/960#issuecomment-6497819007).
+
 ## Trenutna faza
 
 M0 Temelj. Prvi cilj ostaje radni demo za FPZG 2. 11. 2026. (`docs/PLAN-DEMO.md`). Ductus Engineering System v1 uvodi risk-based review, QA/Bug Hunter/Product uloge, GitHub za izvršenje i dokaze te Linear za zadatke, prioritete, nositelje i statuse.
@@ -30,7 +34,7 @@ Agent nikad ne uzima ove stavke i nikad ne čeka na njima ako drugi posao može 
 - [ ] Računovođa: PDV; FINA tek uz obrt ili FPZG kao ugovornu stranu.
 - [ ] Vidljivost repoa: prije stvarnih podataka ponovno odlučiti ostaje li javni.
 - [ ] Session adresa orkestratora: adresa upisana u `STATE.md` je arhivirana (stanje 25. 10. 2026.), a nova zasad nije upisana. Vlasnik odlučuje hoće li se nova adresa upisati u javni `STATE.md` ili voditi izvan repoa.
-- [ ] Konačno ime proizvoda.
+- [x] 28. 10. 2026.: konačno ime proizvoda je **Ductura**; repozitorij, paket i identifikatori u kodu ostaju `ductus` (D-186; trag: #960 `issuecomment-6469934229`, t. 4).
 
 ## Engineering System v1
 
