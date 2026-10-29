@@ -1,6 +1,6 @@
 import { canonicalBlock, field, metadataLines } from "./metadata-parser.mjs";
 import { evaluateMetadata } from "./pr-metadata-core.mjs";
-import { changedPaths, ownerCommandPaths, qaExemption } from "./protected-paths.mjs";
+import { changedPaths, isNewTestExempt, lowReviewExempt, ownerCommandPaths, qaExemption } from "./protected-paths.mjs";
 
 const RISK_VALUES = new Set(["low", "standard", "critical"]);
 const AGENT_RE =
@@ -407,6 +407,7 @@ function evaluateGateCore({
   trustedLogins = TRUSTED_VERDICT_LOGINS,
   qaExempt = null,
   testsAddedOnly = false,
+  lowDocsOnly = false,
 }) {
   const authorAgent = field(body, "Agent");
   const authorRuntime = declaredRuntime(authorAgent);
@@ -501,9 +502,10 @@ function evaluateGateCore({
       review.verdict === "PASS",
   );
 
-  // D-XXX: Risk low (no D-97) and test-only critical do not require independent review.
-  // Negative verdicts above still hold. D-97 paths are excluded by the caller / floor.
-  const lowNoReview = risk === "low";
+  // D-189: Risk low with documents only (lowReviewExempt) and PRs that only add
+  // new test files (isNewTestExempt) need no independent review. Negative
+  // verdicts above still hold; the caller excludes D-97 paths from both.
+  const lowNoReview = risk === "low" && lowDocsOnly === true;
   // Only new test files (#971): a changed or removed test can weaken a guard.
   const testOnlyNoReview = (risk === "critical" || risk === "standard") && qaExempt === "tests" && testsAddedOnly === true;
   if (passingReviews.length === 0 && !lowNoReview && !testOnlyNoReview) {
@@ -777,22 +779,14 @@ export function evaluateGate(input) {
   return used ? { ...result, description: `${result.description} Grok CLI review (D-162, owner account).` } : result;
 }
 
-/**
- * Whether the merge queue may take the PR (D-161 (h)). Mergify reads only this
- * status, never the description or a label: the same parser that decides the
- * risk for the gate decides it here. Green when the gate is green and either
- * the owner's `Owner-Command: merge` comment names this head (or a head that
- * carries to it through a clean base merge, D-101), or the PR declares Risk
- * low or standard and touches no D-97 path. Every description is fixed text.
- */
-// True only when every listed file is a newly added test file.
+// True only when every listed file is a newly added test file (isNewTestExempt).
 export function onlyAddedTests(files) {
   const listed = files ?? [];
-  return listed.length > 0 && listed.every((f) => f?.status === "added" && !f.previous_filename && qaExemption([f.filename]) === "tests");
+  return listed.length > 0 && listed.every((f) => f?.status === "added" && !f.previous_filename && isNewTestExempt(f.filename));
 }
 
 export function evaluateAutoMergeEligible({ metadata, paths, qaExempt, testsAddedOnly = false }) {
-  const isLow = metadata?.ok === true && metadata.risk === "low" && metadata.minimumRisk !== "critical";
+  const isLow = metadata?.ok === true && metadata.risk === "low" && metadata.minimumRisk !== "critical" && lowReviewExempt(paths);
   const isTestOnly = metadata?.ok === true && qaExempt === "tests" && testsAddedOnly === true;
   const noD97 = ownerCommandPaths(paths).length === 0;
   if ((isLow || isTestOnly) && noD97) {
@@ -801,6 +795,14 @@ export function evaluateAutoMergeEligible({ metadata, paths, qaExempt, testsAdde
   return { state: "pending", description: "Not eligible for auto-merge." };
 }
 
+/**
+ * Whether the merge queue may take the PR (D-161 (h)). Mergify reads only this
+ * status, never the description or a label: the same parser that decides the
+ * risk for the gate decides it here. Green when the gate is green and either
+ * the owner's `Owner-Command: merge` comment names this head (or a head that
+ * carries to it through a clean base merge, D-101), or the PR declares Risk
+ * low or standard and touches no D-97 path. Every description is fixed text.
+ */
 export function evaluateMergeAuthorization({ gate, metadata, paths, comments, headSha, ownerLogin, carriedHeads, testsAddedOnly = false }) {
   if (gate?.state !== "success") return { state: "pending", description: "Waiting for the Engineering review gate." };
   const heads = carriedHeads ?? new Set();
@@ -854,6 +856,7 @@ export function evaluatePullRequest({ pr, files, comments, prReviews, reviewComm
     carriedHeads,
     qaExempt: qaExemption(paths),
     testsAddedOnly: onlyAddedTests(listed),
+    lowDocsOnly: lowReviewExempt(paths),
   });
   return {
     metadata,

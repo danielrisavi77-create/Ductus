@@ -1,14 +1,16 @@
 # Mergify merge queue (D-161). Mergify is a GitHub App; nothing runs on a
-# developer machine. Mergify does NOT put a PR into the queue by itself
-# (F-114: it sees only statuses, not the risk, so an automatic queue rule could
-# merge a critical or D-97 PR). A PR enters the queue only by the owner's
-# `@Mergifyio queue` command (restricted to the owner below), and only when
-# both statuses the gate publishes are green (D-161 (h)):
+# developer machine. Mergify sees only statuses, not the risk (F-114), so it
+# puts a PR into the queue by itself only through the rule "auto-queue low and
+# test-only PRs", which requires the gate's "Auto-merge eligible" status (D-189:
+# Risk low with documents only, or only new test files, no D-97 path). Any
+# other PR enters the queue only by the owner's `@Mergifyio queue` command
+# (restricted to the owner below), and only when both statuses the gate
+# publishes are green (D-161 (h)):
 #   - "Engineering review gate": independent review and QA for the head;
 #   - "Merge authorization": the owner's `Owner-Command: merge` comment names
 #     this head (D-97, docs/ORKESTRATOR.md section 2), or the PR declares Risk
 #     low or standard and touches no D-97 path.
-# Merging is manual, through `pr-ready`. Mergify reads neither the PR
+# Other merges are manual, through `pr-ready`. Mergify reads neither the PR
 # description nor labels nor file names: the gate decides with the same parser
 # that checks the declared risk, so an edited description cannot change what
 # Mergify sees.

@@ -72,6 +72,32 @@ export function qaExemption(files) {
   return null;
 }
 
+// D-189, #971: what a PR may change and still skip independent review.
+// Risk low: only documents that nothing serves, builds or executes. The risk
+// floor lists what is dangerous, so anything it does not know (next.config.js,
+// instrumentation.ts, .npmrc, public/) would otherwise pass as low.
+export function lowReviewExempt(files) {
+  const paths = (files ?? []).map(normalizePath);
+  return (
+    paths.length > 0 &&
+    paths.every(
+      (p) =>
+        isDocPath(p) &&
+        !matchesPath(p, ["public/", "app/", "src/"]) &&
+        ownerCommandPaths([p]).length === 0,
+    )
+  );
+}
+
+// Tests only: a new file with a test name. A helper next to an existing one
+// (tests/unit/auth/test-idp.mjs beside test-idp.ts) is resolved first by an
+// import without an extension, and pgTAP files share one database in name
+// order, so neither may skip review; nor may a test under a D-97 path.
+export const isNewTestExempt = (file) =>
+  TEST_NAME_RE.test(normalizePath(file)) &&
+  !matchesPath(file, ["db/tests/"]) &&
+  ownerCommandPaths([file]).length === 0;
+
 /** Files that put a PR under the owner's merge command, by path or by content. */
 export function ownerCommandPaths(files) {
   return (files ?? []).map(normalizePath).filter((f) => matchesPath(f, [...D97_PATHS, ...D97_MANUAL_PATHS]));
