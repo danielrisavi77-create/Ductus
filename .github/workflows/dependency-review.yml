@@ -4,7 +4,9 @@ name: Dependency review
 # outside the allow list. OSV in ci.yml scans the whole lockfile; this job
 # looks only at what the PR changes. Results are in the job summary; no PR
 # comment, so the job keeps read-only permissions.
-# Skipped for docs-only and test-only PRs (no lockfile change).
+# The required job always runs: it fails when classification failed and
+# skips only the scanner step for a confirmed docs or tests profile, because
+# Mergify's check-success does not count a skipped job (#971).
 on:
   pull_request:
 
@@ -46,13 +48,28 @@ jobs:
   review:
     name: Dependency review
     needs: scope
-    if: needs.scope.outputs.profile == 'full'
+    if: ${{ always() && !cancelled() }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Require a successful classification
+        env:
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          PROFILE: ${{ needs.scope.outputs.profile }}
+        run: |
+          if [ "$SCOPE_RESULT" != success ]; then
+            echo "::error::Classification failed ($SCOPE_RESULT)"
+            exit 1
+          fi
+          case "$PROFILE" in
+            full|docs|tests) echo "Profile: $PROFILE" ;;
+            *) echo "::error::Unknown profile '$PROFILE'"; exit 1 ;;
+          esac
+      - if: needs.scope.outputs.profile == 'full'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+      - if: needs.scope.outputs.profile == 'full'
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: moderate
           # The list covers every licence in the lockfile on 3. 10. 2026.
