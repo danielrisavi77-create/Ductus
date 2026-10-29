@@ -116,7 +116,7 @@ Negativni verdikt (FAIL / BLOCK) i dalje blokira bez obzira na razinu. D-97 puta
 
 ### Auto-merge za low i test-only
 
-Kad je PR `Risk: low` ili samo dodaje nove testove, nema D-97 putanja, nije draft i CI + gate su zeleni, gate objavljuje status **Auto-merge eligible**. Mergify pravilo tada automatski stavlja PR u queue (`main`) bez owner naredbe. Critical i standard PR-ovi i dalje traže ručnu naredbu ili Owner-Command.
+Kad je PR `Risk: low` ili samo dodaje nove testove, nema D-97 putanja, nije draft i CI + gate su zeleni, gate objavljuje status **Auto-merge eligible**. Mergify pravilo tada automatski stavlja PR u queue (`main`) bez owner naredbe. Ostali critical i standard PR-ovi (osim onih koji samo dodaju nove testove) i dalje traže ručnu naredbu ili Owner-Command.
 
 CI profil `tests` (preskače stack, bazu, preglednik i property testove) vrijedi samo za obične unit testove; promjena pod `e2e/`, `db/tests/`, `tests/integration/`, `tests/property/` ili `*.property.test.*` pokreće puni CI (`scripts/engineering/ci-docs-scope.mjs`).
 

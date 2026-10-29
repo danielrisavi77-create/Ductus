@@ -505,12 +505,12 @@ function evaluateGateCore({
   // Negative verdicts above still hold. D-97 paths are excluded by the caller / floor.
   const lowNoReview = risk === "low";
   // Only new test files (#971): a changed or removed test can weaken a guard.
-  const testOnlyNoReview = risk === "critical" && qaExempt === "tests" && testsAddedOnly === true;
+  const testOnlyNoReview = (risk === "critical" || risk === "standard") && qaExempt === "tests" && testsAddedOnly === true;
   if (passingReviews.length === 0 && !lowNoReview && !testOnlyNoReview) {
     return { state: "pending", description: "Waiting for independently authenticated review." };
   }
   if (passingReviews.length === 0 && (lowNoReview || testOnlyNoReview)) {
-    const kind = lowNoReview ? "low" : "critical, tests only";
+    const kind = lowNoReview ? "low" : `${risk}, tests only`;
     return {
       state: "success",
       description: `No independent review required (${kind}).`,
@@ -801,7 +801,7 @@ export function evaluateAutoMergeEligible({ metadata, paths, qaExempt, testsAdde
   return { state: "pending", description: "Not eligible for auto-merge." };
 }
 
-export function evaluateMergeAuthorization({ gate, metadata, paths, comments, headSha, ownerLogin, carriedHeads }) {
+export function evaluateMergeAuthorization({ gate, metadata, paths, comments, headSha, ownerLogin, carriedHeads, testsAddedOnly = false }) {
   if (gate?.state !== "success") return { state: "pending", description: "Waiting for the Engineering review gate." };
   const heads = carriedHeads ?? new Set();
   const commanded = trustedComments(comments).some(
@@ -818,6 +818,10 @@ export function evaluateMergeAuthorization({ gate, metadata, paths, comments, he
     metadata.minimumRisk !== "critical" &&
     ownerCommandPaths(paths).length === 0;
   if (automatic) return { state: "success", description: "Risk low or standard, no D-97 path: no owner command needed." };
+  // D-189: a PR that only adds new test files is auto-merge eligible, so it needs no owner command either.
+  const addedTestsOnly =
+    metadata?.ok === true && testsAddedOnly === true && qaExemption(paths) === "tests" && ownerCommandPaths(paths).length === 0;
+  if (addedTestsOnly) return { state: "success", description: "Only new test files, no D-97 path: no owner command needed." };
   return { state: "pending", description: "Needs the owner's merge command for this head (D-97 or critical)." };
 }
 
@@ -862,6 +866,7 @@ export function evaluatePullRequest({ pr, files, comments, prReviews, reviewComm
       headSha: pr.head.sha,
       ownerLogin,
       carriedHeads,
+      testsAddedOnly: onlyAddedTests(listed),
     }),
     autoMergeEligible: evaluateAutoMergeEligible({
       metadata,

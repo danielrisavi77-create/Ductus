@@ -33,3 +33,18 @@ test("a PR that modifies, removes or renames a test still waits for review and i
 test("auto-merge eligibility without file statuses fails closed for tests", () => {
   assert.equal(evaluateAutoMergeEligible({ metadata: { ok: false }, paths: ["src/a.test.ts"], qaExempt: "tests" }).state, "pending");
 });
+
+test("a standard PR that only adds test files gets the same exemption and needs no owner command", () => {
+  const std = "Agent: claude:a:platforma\nRisk: standard\nTask: B-1\n";
+  const files = [{ filename: "src/domain/sync/queue.test.ts", status: "added" }];
+  const pr = { body: std, head: { sha: head }, changed_files: 1, auto_merge: null };
+  const out = evaluatePullRequest({ pr, files, comments: [], ownerLogin });
+  assert.equal(out.result.state, "success");
+  assert.equal(out.autoMergeEligible.state, "success");
+  assert.equal(out.mergeAuthorization.state, "success");
+});
+
+test("a critical PR that only adds test files is merge-authorized without an owner command, but modified tests are not", () => {
+  assert.equal(run([{ filename: "src/a.test.ts", status: "added" }]).mergeAuthorization.state, "success");
+  assert.equal(run([{ filename: "src/a.test.ts", status: "modified" }]).mergeAuthorization.state, "pending");
+});
