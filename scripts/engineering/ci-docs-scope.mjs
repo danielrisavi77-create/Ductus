@@ -16,14 +16,13 @@ const ORDINARY_DOCS = new Set([
 ]);
 
 // The tests profile skips the stack, DB, browser and property jobs (#971), so it
-// may only hold plain unit tests that the always-on unit job still runs.
-const SKIPPED_TEST_DIRS = ["e2e/", "db/tests/", "tests/integration/", "tests/property/"];
-const UNIT_TEST_RE = /\.(?:test|spec)\.[cm]?[jt]sx?$/i;
-const PROPERTY_TEST_RE = /\.property\.test\.[cm]?[jt]sx?$/i;
+// may only hold files the always-on unit job runs: the include globs of the
+// vitest `unit` project (src/**/*.test.ts, tests/unit/**/*.test.ts) minus its excludes.
+const UNIT_TEST_RE = /^(?:src|tests\/unit)\/.+\.test\.ts$/;
+const NOT_UNIT_RE = /\.(?:property|integration)\.test\.ts$/;
 
 function isUnitTestPath(path) {
-  const p = path.toLowerCase();
-  return UNIT_TEST_RE.test(p) && !PROPERTY_TEST_RE.test(p) && !SKIPPED_TEST_DIRS.some((d) => p.startsWith(d));
+  return UNIT_TEST_RE.test(path) && !NOT_UNIT_RE.test(path) && !path.split("/").includes("node_modules");
 }
 
 export function classifyDiff(raw) {

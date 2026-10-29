@@ -16,6 +16,11 @@ test("tests profile only for plain unit tests that the unit job runs", () => {
     "tests/integration/replay-route.integration.test.ts",
     "src/domain/x.property.test.ts",
     "tests/property/setup.ts",
+    "infra/fake-oidc/accounts.test.mjs",
+    "scripts/demo/up.test.mjs",
+    "db/local/psql-target.test.mjs",
+    "src/ui/Card.test.tsx",
+    "src/a.spec.ts",
   ]) assert.equal(classifyDiff(record(path)), "full", path);
   assert.equal(classifyDiff(record("src/a.test.ts") + record("e2e/b.spec.ts")), "full");
   assert.equal(classifyDiff(record("src/a.test.ts", "100644 100755")), "full");
