@@ -6,6 +6,10 @@ Svaka odluka ima broj, status, sadržaj i razlog. Status je jedan od: **ODLUČEN
 
 Napomena: ova numeracija vrijedi od verzije 0.2 i ne odgovara brojevima iz ranijeg dokumenta "Pisač: smjer, arhitektura i timske prezentacije".
 
+## Aktualni vizualni smjer
+
+Za nove vizualne zahvate vrijedi **konačni „papir i grafit”**, D-188 ([odluka 28. 10.](https://github.com/danielrisavi77-create/Ductus/issues/960#issuecomment-6481475052), [potvrda konačnosti 29. 10.](https://github.com/danielrisavi77-create/Ductus/issues/960#issuecomment-6497819007)). Aktivna specifikacija je `docs/design/DESIGN-SYSTEM.md`. Starije vrijednosti boja D-123/D-179/D-184 i zadani tamni list ne određuju novi rad; zamijenjene vrijednosti ostaju u izvornim unosima radi traga, a ostali dijelovi tih odluka i sve ostale odluke vrijede prema svojem statusu. Zasebni postojeći #972 zapisuje puni unos D-188; ova napomena ga ne zamjenjuje niti tvrdi da je spojen. Drugi smjer traži novu izričitu Danielovu odluku.
+
 ## Odlučeno (3. 10. 2026.)
 
 | Broj | Odluka | Razlog |

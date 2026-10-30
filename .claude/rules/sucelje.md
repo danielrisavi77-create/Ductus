@@ -17,4 +17,5 @@ Podsjetnik, ne pravilo. Pravila su u `docs/PRODUCT.md` §5 ("Rječnik sučelja")
 - Tekst sučelja na hrvatskom; nijedan izraz iz lijevog stupca rječnika, ni engleski ekvivalent.
 - Dokaži da `scripts/forbidden-terms/scan.ts` čita datoteku s novim tekstom prije nego tvrdiš pokrivenost.
 - Promjena koja dira pravilo iz `docs/PRODUCT.md` §5 je `Risk: critical`.
-- Frontend PR prilaže snimke zaslona iz Playwrighta (`docs/SESSIONS.md` §6).
+- Konačni smjer je „papir i grafit” (D-188), prema `docs/design/DESIGN-SYSTEM.md`; stare palete ne prenosi iz prototipa.
+- Za vidljivu promjenu primijeni `docs/SESSIONS.md` §6: odobrena referenca i vizualni ugovor, stvarne Playwright snimke, usporedba i ispravci, dokaz za predaju.

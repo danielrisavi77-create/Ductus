@@ -71,6 +71,7 @@ Ulaz: <dokumenti i odjeljci koje treba pročitati, ništa više>
 Opseg: <što ulazi>; Izvan opsega: <što ne ulazi>
 Mape: <smije dirati>
 Gotovo kad: <provjerljiv kriterij, npr. naredba i očekivani ishod>
+Vizualni ugovor: <za vidljivu promjenu popuni §6.2; inače n/a uz razlog>
 Lokalne provjere prije pusha: <npr. actionlint i zizmor kad PR dira workflowe, osv-scanner kad dira lockfile; inače "standardne">
 Plan napada: <poveznica na GitHub issue "Plan napada: <zadatak>"; obvezno za Risk: critical i za zadatak koji gradi ili mijenja gate (ORKESTRATOR.md §8), inače n/a>
 Privremene datoteke: <vlastita podmapa dijeljene privremene mape, ime po zadatku, npr. DAN-122; zapis odluke: https://github.com/danielrisavi77-create/Ductus/pull/165#issuecomment-6100851850>
@@ -85,6 +86,7 @@ PR: <poveznica>
 Agent: <runtime>:<slot>:<uloga>
 Napravljeno: <3 do 5 stavki>
 Testovi: <puni testirani SHA; naredba/scenarij, rezultat i poveznica/putanja primarnog zapisa; razlikuj lokalno, CI i neovisnu QA; neizvedeno navedi izričito>
+Vizualni dokaz: <za vidljivu promjenu priloži §6.5; inače n/a uz razlog>
 Review: <reviewer, head, nalaz/PASS; odbijeni nalazi uz razlog>
 QA: <za critical: QA head + scope + PASS; inače n/a>
 Plan napada: <tablica "stavka plana → test" u opisu PR-a, s razlogom za svaku neprimjenjivu stavku; inače n/a>
@@ -224,9 +226,89 @@ Treba PowerShell 7.4 ili noviji (`pwsh`), ne Windows PowerShell 5.1. Jednokratno
 
 ## 6. Dizajn
 
-1. Prije koda: dizajnerski sustav i ključni ekrani demoa kao Design artifact; Daniel ih komentira i odobrava. Frontend gradi samo po odobrenom.
-2. Svaki frontend PR prilaže snimke zaslona iz Playwrighta (širok i mobilni prikaz, hr i en).
-3. Na zahtjev: lokalno pokretanje i pregled u pregledniku unutar aplikacije. Javni preview tek nakon potvrde dijela D-08 o dobavljačima i trošku (B0.1).
+Ovo je jedini izvedbeni postupak za zadavanje, implementaciju i provjeru vidljive promjene, neovisno o ulozi ili runtimeu. Proširuje postojeću obvezu rada po odobrenom dizajnu i snimaka iz Playwrighta. Provedba je zatražena u DAN-357; produktne odluke ostaju u `docs/DECISIONS.md`, a risk, neovisnost, QA izuzeća i spajanje u `docs/ENGINEERING_SYSTEM.md` i `docs/ORKESTRATOR.md`. Ovo je obveza rada i dokaz u postojećem zadatku/PR-u, **nije nova automatska CI provjera**.
+
+1. Prije koda: dizajnerski sustav i ključni ekrani demoa kao Design artifact; Daniel ih komentira i odobrava. Frontend gradi samo po odobrenom (§6.1).
+2. Svaki frontend PR prilaže snimke zaslona iz Playwrighta (širok i mobilni prikaz, hr i en), uz usporedbu s odobrenom referencom (§6.4–§6.5).
+3. Izvedba se provjerava lokalnim pokretanjem stvarne aplikacije ili postojećim dopuštenim testnim okruženjem (§6.4). Javni preview tek nakon potvrde dijela D-08 o dobavljačima i trošku (B0.1).
+
+### 6.1. Cilj i mjerodavna referenca
+
+**Konačni zajednički smjer je „papir i grafit”** za naslovnicu, prijavu, studentski i nastavnički prostor, editor, obavijesti i povezane ekrane. D-188 i [Danielova potvrda od 29. 10. 2026.](https://github.com/danielrisavi77-create/Ductus/issues/960#issuecomment-6497819007) određuju paletu; pisana specifikacija je u `docs/design/DESIGN-SYSTEM.md`. Zadano: tamna grafitna ljuska, gotovo bijeli list i prigušeno zlato. Svijetla ljuska i tamni list ostaju odvojeni korisnički izbori. Drugi vizualni smjer zahtijeva novu izričitu Danielovu odluku s datumom, izvorom i navodom što zamjenjuje.
+
+Orkestrator u svakoj vizualnoj dodjeli navodi ovaj smjer i verziju reference. Sve nove i aktivne sesije prije nastavka čitaju aktualni `STATE.md`, ovaj odjeljak i postojeći Linear zadatak. Nova sesija ne zaključuje o stilu iz privatnog chata ili stare palete u prototipu. Isporučeni lokalni demo DAN-360 zadano ima svijetlu ljusku; to ne mijenja zadanu tamnu ljusku stvarne aplikacije. Konačan je smjer, a svaki ekran i dalje treba izvedbu i provjeru po ovom postupku.
+
+- Prije koda Daniel odobrava dizajnerski sustav i ključne ekrane. Kad uz sliku izričito traži njezinu implementaciju, to je cilj za navedeni ekran; ne traži ponovno isto odobrenje. Slika poslana kao inspiracija nije automatski zamjena stila cijele aplikacije.
+- Za svaki ekran i stanje imenuj jednu odobrenu referencu, njezinu verziju i trag odobrenja. Razlikuj javni probni editor od autentificiranog `/rad`, ulogu korisnika, temu, otvorene panele i sadržaj. Ne spajaj različite verzije u vlastiti dizajn.
+- Za odobreni Archivum paket vrijedi PNG kad se razlikuje od `App.jsx` (D-178); kompozicija ostaje referenca, a stare boje zamjenjuje konačna paleta D-188. D-179 i D-184 čitaju se kao povijest vrijednosti boja. Trenutačni `app/globals.css` pokazuje implementaciju; sam po sebi ne dokazuje da je posljednja odluka provedena. Povijesni HTML i stare tablice boja nisu novo odobrenje.
+- Slika određuje izgled, ne mijenja sama funkcionalni ugovor, prijavu, prava, evidenciju ni pravila `docs/PRODUCT.md` §5. Sukob s prihvaćenom odlukom ili pristupačnošću konkretno opiši i riješi kroz postojeći zadatak; ne prešuti odstupanje.
+- Referencu stvarno otvori i pregledaj. Odobreni materijal bez tajni i osobnih podataka mora biti dostupan drugoj sesiji: verzionirana repo putanja ili trajni privitak povezan sa zadatkom. Lokalna putanja drugog računala, privatni chat i privremeni URL nisu dovoljna predaja. Ako original nije dostupan, ne izmišljaj ga: zapiši što nedostaje i nastavi samo odvojiv, već određen dio posla.
+
+### 6.2. Vizualni ugovor u zadatku
+
+Orkestrator uz predložak iz §3 popunjava ovaj blok; worker ga prije koda provjerava. Koristi podatke koje je vlasnik već dao i postojeće odluke. Pita samo za nepoznanicu koja bitno mijenja rezultat, ne za svaku mjeru.
+
+```text
+Vizualni cilj: <vjerna izvedba odobrene slike; ili izričito zatražena prilagodba>
+Referenca: <putanja/privitak, ekran i stanje, verzija/commit ili SHA-256>
+Odobrenje i opseg: <vlasnikova uputa/odluka; na koje ekrane vrijedi>
+Ruta i stanje: <ruta, uloga, podaci/fixture, paneli/dijalog, tema, jezik>
+Prikazi: <široki i mobilni viewport u CSS px, DPR; hr i en>
+Mobilna referenca: <točan izvor; ili nema, postojeća responsive pravila i pretpostavke>
+Zajednički temelji: <tokeni, fontovi, komponente; nositelj/PR potrebne zajedničke izmjene>
+Granice: <vizualna promjena; funkcionalni kriteriji ostaju iz osnovnog zadatka>
+Dopuštena odstupanja: <konkretno, razlog i trag odobrenja; ili nema>
+Put do provjere: <pokretanje stvarne rute/fixturea i snimanje Playwrightom>
+```
+
+Širina bitmapa nije automatski širina viewporta u CSS pikselima. Kad izvor ne navodi viewport ili DPR, zapiši pretpostavku i uvjete usporedbe; ne tvrdi da je nepoznato izmjereno. Sam desktop PNG ne određuje mobilni dizajn: mobile izvedi iz postojećih prihvaćenih responsive pravila, označi je kao izvedenu i provjeri. Materijalno novo ponašanje ide vlasniku; ne izmišljaj mobilnu referencu ili novu funkciju.
+
+### 6.3. Kratka priprema i jedan vizualni stil
+
+Prije izmjene worker u istom zadatku ili PR-u ostavlja kratak plan: glavne regije i odnose širina/razmaka, tipografiju, ponovljene komponente, zahvaćena stanja i postojeće putanje koje će koristiti. Odvoji opaženo na slici od pretpostavljenog. Ne započinji velikim CSS patchom bez pregleda reference.
+
+- Koristi postojeće semantičke tokene i komponente za gumbe, polja, kartice, dijaloge i navigaciju. Fontovi, težine, prored, razmaci, radijusi, obrubi, ikone i stanja pripadaju istom sustavu; ne uvodi lokalnu paletu ni duplikat komponente radi jednog ekrana.
+- Ako zajednički token ili komponenta nedostaje, navedi najmanju potrebnu dopunu i utjecaj na ostale pozivatelje. Orkestrator određuje jednog nositelja zajedničke izmjene i redoslijed ovisnih ekrana prema §1; worker ne mijenja tuđe mape ili ugovor. Neovisni ekrani i dalje se mogu raditi paralelno (D-178 i postojeći WIP).
+- Marketing stranica, radna ljuska i list mogu imati različitu gustoću i odobrene površine. To nije dopuštenje za drugi skup tokena. Za globalnu izmjenu provjeri i druge zahvaćene površine, teme i uloge, ne samo ekran na kojem je izmjena nastala.
+- Referentni HTML/JSX služi za razumijevanje izgleda. Zadrži postojeći aplikacijski stack, tokove i funkcionalne kriterije; nedostajuću funkciju navedi kao ovisnost umjesto da je izmisliš u dizajnerskom PR-u.
+
+### 6.4. Izvedba, snimanje i ispravci
+
+1. **Izvedi po planu.** Prvo raspored i dimenzije regija, zatim tipografiju i komponente, pa boje i detalje. Svaku promjenu veži uz referencu ili postojeće prihvaćeno pravilo.
+2. **Pokreni stvarnu aplikaciju.** Otvori ugovorenu rutu i stanje sa sintetičkim podacima. Pričekaj fontove i stabilan prikaz; zabilježi preglednik/verziju, OS, viewport, DPR, temu i jezik. Ne zamjenjuj dokaz samostalnim mockupom, Storybookom ili screenshotom prototipa.
+3. **Dokaži reviziju.** Pokretanje/build i snimke veži uz puni testirani commit i čistu radnu kopiju. Provjeri iz kojeg checkouta i builda radi posluženi proces; sam `git rev-parse HEAD` nije dokaz da stari server već poslužuje novi kod. Kod lokalnih nezapisanih izmjena označi snimku kao radnu, a završni dokaz ponovi na završnoj reviziji.
+4. **Snimi cijeli promijenjeni kontekst Playwrightom.** Svaki frontend PR prilaže širok i mobilni prikaz, hr i en; isto vrijedi za vidljivu promjenu druge uloge. Snimka samog `main` nije dokaz za topbar, sidebar, panele ili statusnu traku izvan njega. Koristi kadar usporediv s referencom i dodatni cijeli prikaz gdje treba. Obuhvati promijenjena empty/loading/error/success i interaktivna stanja. Nedostupno stanje ili jezik navedi kao neprovedeno; ne proglašavaj ga proizvoljno neprimjenjivim.
+5. **Usporedi original i actual jedan uz drugi.** Provjeri raspored i omjere, širine/visine, razmake, font i prijelom teksta, boje/površine, radijuse/obrube, ikone/assets te stanja. Overlay ili diff mogu pomoći; postotak sličnosti nije zamjena za pregled. Ne prilagođavaj original izvedbi i ne skrivaj relevantne razlike cropom ili maskom.
+6. **Ispravi konkretne razlike i ponovi snimanje.** U istom PR-u vodi kratku tablicu: regija/stanje → očekivano → opaženo → ispravak ili obrazloženo odstupanje. Neobrazložena odstupanja nisu završena implementacija. Nakon promjene koja utječe na prikaz ponovi zahvaćene snimke i usporedbu. Za formalni review/QA i prijenos dokaza kroz čisti merge vrijede postojeća pravila heada i D-101; ova petlja ih ne mijenja.
+7. **Provjeri i uporabu.** Izvedi relevantne interakcije, fokus/tipkovnicu, responsive prelome, overflow i pristupačnost po postojećim testnim zahtjevima. Vizualna podudarnost ne dokazuje funkcionalnu ispravnost, a funkcionalni PASS ne dokazuje podudarnost sa slikom.
+
+Ako preglednik, aplikacija ili snimanje nisu dostupni, napiši točan neizvedeni korak i razlog. Čitanje CSS-a/DOM-a i zeleni CI nisu zamjena. Koristan rad može se predati kao nedovršena provjera; orkestrator u istom zadatku osigurava sesiju koja može pribaviti dokaz. Ne piši „izgleda isto” bez pregleda obiju slika. Javni preview ostaje pod postojećim uvjetima D-08/B0.1; ovaj postupak ne daje ovlast za deploy.
+
+### 6.5. Vizualni dokaz i predaja
+
+Dokaz dodaj u postojeći `IZVJEŠTAJ` u PR-u, bez novog registra ili kanonskog verdict formata:
+
+```text
+Vizualni ugovor: <poveznica na popunjeni §6.2 u zadatku/PR-u>
+Testirani SHA i posluživanje: <puni SHA, checkout/build, naredba/poveznica na zapis>
+Matrica snimki: <ruta + uloga/stanje + tema + hr/en + viewport/DPR + browser/OS>
+Referenca / actual / usporedba: <dostupne slike jedna uz drugu; diff/overlay ako postoji>
+Odstupanja: <regija, očekivano, opaženo, ispravljeno ili razlog i odobrenje>
+Interakcije i pristupačnost: <scenarij/naredba i stvarni rezultat>
+Neizvedeno ili blokira: <što nedostaje; sljedeći korak i nositelj>
+```
+
+Orkestrator provjerava potpunost prije slanja na review/QA; poznato nedostajući dokaz vraća u isti zadatak. Neovisni reviewer i QA kad je primjenjiva pregledavaju referencu i actual u svojem postojećem izvještaju. Autorova tablica i vlastita vizualna samoprovjera nisu njihov PASS. Nedostajući dokaz je neprovedena provjera; vidljivo odstupanje je nalaz s konkretnom regijom i scenarijem. Materijalno obrazloženo odstupanje ide vlasniku na odluku. Snimke i preostale razlike orkestrator pokazuje vlasniku prije traženja naredbe za spajanje.
+
+Nova sesija iz repoa, Linear zadatka i PR-a mora moći otvoriti istu referencu i dokaze te nastaviti od zadnje provjerene revizije. Ako privitak više nije dostupan, obnovi pristup ili zabilježi blokadu; session URL i tvrdnja „prethodna sesija je provjerila” nisu dokaz.
+
+### 6.6. Prihvat i regresijske snimke
+
+Vidljiva promjena je dovršena kad odgovara imenovanoj referenci, zahvaćena stanja i interakcije su provjerena, odstupanja su riješena ili izričito prihvaćena te postoje prenosivi dokazi i svi postojeći review/QA/merge uvjeti. Zeleni CI ili sam merge ne dokazuju da korisnik već vidi tu reviziju.
+
+**Dizajnerska referenca i Playwright baseline imaju različitu svrhu.** Prva određuje željeni izgled; drugi čuva prethodno pregledan rezultat od regresije. Nova actual slika ne odobrava samu sebe. Prije prihvaćanja promijenjenog baselinea usporedi actual s odobrenim dizajnom. Zatim primijeni postojeći `docs/TESTING.md` §2: baseline samo iz CI-ja, pregled slike i objašnjenje u PR-u, dva zelena prolaza istog heada, bez širenja tolerancija i dodavanja maski. Ne ažuriraj baseline samo da bi test postao zelen.
+
+Za zadatak bez vidljive promjene dovoljno je `Vizualni ugovor/dokaz: n/a — <konkretan razlog>`. To ne oslobađa frontend PR od postojeće obveze snimaka niti prikriva promjenu fonta, globalnih stilova ili zajedničke komponente.
 
 ## 7. Okruženje i održavanje
 

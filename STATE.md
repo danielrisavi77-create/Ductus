@@ -2,6 +2,10 @@
 
 Ažurira se skupno nakon spojenih PR-ova i kontrolnih točaka. Ovaj presjek čuva gateove, ciljeve i vlasničke obveze; za živi prioritet, nositelja i status zadatka mjerodavan je Linear. Cilj: najviše 80 redaka.
 
+## Konačni vizualni smjer
+
+**Konačni vizualni smjer Ducture je „papir i grafit”** (D-188; potvrda vlasnika 29. 10. 2026.). Zadano: tamna grafitna ljuska, gotovo bijeli list i prigušeno zlato. Specifikacija je u `docs/design/DESIGN-SYSTEM.md`, postupak u `docs/SESSIONS.md` §6. Drugi smjer traži novu izričitu Danielovu odluku; starije palete su povijest. Izvor: [potvrda vlasnika](https://github.com/danielrisavi77-create/Ductus/issues/960#issuecomment-6497819007).
+
 ## Trenutna faza
 
 M0 Temelj. Prvi cilj ostaje radni demo za FPZG 2. 11. 2026. (`docs/PLAN-DEMO.md`). Ductus Engineering System v1 uvodi risk-based review, QA/Bug Hunter/Product uloge, GitHub za izvršenje i dokaze te Linear za zadatke, prioritete, nositelje i statuse.
