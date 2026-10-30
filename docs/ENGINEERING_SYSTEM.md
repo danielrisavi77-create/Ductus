@@ -302,6 +302,18 @@ Posebna "token saver" sesija ne postoji. Orkestrator štedi kontekst.
 - Predaja mora stati u GitHub issue/PR i repo; chat povijest nije obvezan kontekst.
 - Puni logovi testova čitaju se samo za pad; zeleni testovi koriste sažetak.
 
+### Razmjerne provjere (PRIJEDLOG, #977)
+
+Vlasnik je 28. 10. 2026. zatražio da se ne rade provjere koje ne smanjuju rizik. Ovo pravilo mijenja samo oblik rada i izvještaja. Gate iz §5, risk floor, §14 i D-97 ostaju isti; za `critical` se ništa ne mijenja.
+
+Za `low` i za `standard` koji ne dira putanje iz D-97:
+- **Kratki izvještaj.** `IZVJEŠTAJ` u obliku iz `docs/MULTI-ACCOUNT.md` §9, najviše oko 10 redaka. Bez tablice plana napada (kad ga zadatak nema), bez dokaza da su lokalno i objavljeno stablo identični i bez prepisivanja issuea ili ugovora; poveznica je dovoljna.
+- **Ugovorna polja.** Polja koja preflight traži za svaki risk (`Stvarni pozivatelj`, `Poznate granice`, `Što bi ovaj PR moglo oboriti na QA-i?`) za `low` mogu biti jedan redak ili `n/a (<razlog>)`.
+- **Testovi bez dupliranja.** Tijekom rada pokreću se ciljani testovi (`pnpm exec vitest related <datoteke> --run` ili putanja testa). Puni skup pokreće se jednom: kroz pre-push hook ili CI. Ne pokreće se ručno kad ga hook pokreće pri istom pushu. U izvještaju je dovoljno „pre-push prošao” uz SHA.
+- **Trag rada** (`docs/SESSIONS.md` §3) samo kad push mijenja nešto što opis PR-a još ne kaže, ili kad pisac nema drugi kanal prema orkestratoru.
+
+Ne mijenja se: neovisni review gdje ga §5 traži, zabrana brisanja ili slabljenja testova, CI i provjera tajni.
+
 ## 12. Post-merge
 
 Nakon mergea Orkestrator:
@@ -341,8 +353,15 @@ Vrijede za svaki `critical` PR uz gate iz §5; gate se njima ne mijenja. Izvor j
 3. **Veličina.** Vrijede oba ograničenja: svaki PR najviše oko 400 promijenjenih redaka koda, veći uz obrazloženje u opisu (`CLAUDE.md`); `critical` PR uz to najviše oko 300 redaka produkcijskog koda, veći se dijeli prije reviewa, a iznimku odobrava vlasnik.
 4. **Stalan QA kriterij.** QA zadatak koristi isti tekst za sve PR-ove: FAIL samo za kvar koda (pogrešan ishod, gubitak podatka, prolaz kroz zaštitu, kršenje `docs/PRODUCT.md` §5). Jaz u testovima, preživjeli mutant bez dokazanog kvara i nepotpun opis su manji nalazi: bilježe se i idu u naknadni korak. Orkestrator u zadatak ne dopisuje strože kriterije.
 5. **Oblik nalaza.** Svaki nalaz reviewa i QA-e ima redak **"Dohvatljivo kroz"**: pozivatelj i ulaz koji on stvarno može proizvesti, ili "nije pokazano". To je oblik izvještaja, ne kriterij; presuda ostaje reviewerova odnosno QA-ina. Uz svaki manji nalaz stoji "blokira" ili "ne blokira". Manji nalaz koji dira samo testove ili dokumentaciju, uz PASS i "ne blokira", ne traži novi push ni novi krug; prati se u zasebnom zadatku. Manji nalaz u produkcijskom kodu zatvara se novim headom prije spajanja.
-6. **Najviše dva kruga.** Drugi FAIL reviewa ili QA-e na istom korijenu zaustavlja ispravke: pisac ne pusha treći ispravak, nego se piše novi ugovor (točka 1) ili se PR dijeli (točka 3). Krugovi se broje i po PR-u: treći krug na istom PR-u ide vlasniku s popisom krugova. Dva ispravka zaredom koja uvedu novi nalaz u istom kodu također idu vlasniku.
+6. **Najviše dva kruga.** Drugi FAIL reviewa ili QA-e na istom korijenu zaustavlja ispravke: pisac ne pusha treći ispravak, nego se piše novi ugovor (točka 1) ili se PR dijeli (točka 3). Krugovi se broje i po PR-u: treći krug na istom PR-u ide vlasniku s popisom krugova. Dva ispravka zaredom koja uvedu novi nalaz u istom kodu također idu vlasniku. Isti korijen određuje se po klasi nalaza, ne po putanji ni retku: nova putanja koja prolazi kroz isto preširoko izuzeće ili isto pravilo propušteno na još jednom mjestu je isti korijen (D-190).
 7. **Nedokazana dostižnost.** Nalaz čiji je redak "Dohvatljivo kroz" "nije pokazano", ili koji traži pozivatelja koji ne postoji, ne ide piscu na ispravak nego vlasniku, s izborom: ispraviti, ili suziti ugovor i zapisati poznatu granicu s uvjetom koji je ponovno otvara (točka 2).
+8. **Izuzeće od gatea ili CI provjere (D-190).** PR koji uvodi ili širi izuzeće od reviewa, QA-e, builda ili druge provjere (po putanji, grani, autoru ili riziku) prije prvog commita u ugovoru (točka 1) ima i ova polja:
+   - **Popis dozvoljenog:** izuzeto je samo ono što je izričito navedeno, kao točne putanje ili uski obrasci; sve ostalo ide kroz puni gate. Ugovor oblika „sve osim …” nije dopušten.
+   - **Jedan izvor:** sva mjesta koja odlučuju o istom izuzeću (gate, Merge authorization, Auto-merge eligible, CI profil) čitaju putanje iz istog modula. Mergify nema vlastitih uvjeta na putanje (npr. `files~=`); odlučuje samo po statusu koji računa taj modul. Zaseban popis ili regex na drugom mjestu je nalaz.
+   - **Negativni testovi:** popis slučajeva koje izuzeće ne smije pokriti, svaki kao test prije reviewa. Popis barem razmatra ugniježđene upute agenata (`.claude/`, `.agents/`, `CLAUDE*.md`, `AGENTS*.md`, `GEMINI*.md` u bilo kojoj mapi), putanje sa segmentom koji počinje točkom, putanje iz D-97, granu iz forka i datoteke koje preskočeni korak inače obrađuje (na primjer test pod rutom koji vidi `next build`).
+   - **Preskočeni koraci:** za svaki korak koji izuzeće preskače, što taj korak inače hvata i zašto to za izuzete putanje ne treba.
+
+   Bez tih polja orkestrator PR ne dodjeljuje ni ne stavlja u red za review. Reviewer i QA napadaju klasu, ne samo primjer iz ugovora: traže putanju koja nije na popisu dozvoljenog, a izuzeće je ipak pokriva.
 
 ## 15. Gate i spajanje (D-106)
 
