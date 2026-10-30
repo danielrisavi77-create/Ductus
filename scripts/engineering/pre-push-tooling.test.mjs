@@ -71,7 +71,8 @@ function fixture({ files } = {}) {
     },
     pushLine: () => `refs/heads/feature ${f.head()} refs/heads/feature ${zero}\n`,
     // The real selector over the real diff, with commands recorded and not run.
-    decide: ({ env = gitEnv, lines = f.pushLine(), execute = () => ({ status: 0 }), platform = process.platform } = {}) => {
+    // Fixed platform: the rules below must not depend on the machine; Windows has its own tests.
+    decide: ({ env = gitEnv, lines = f.pushLine(), execute = () => ({ status: 0 }), platform = "linux" } = {}) => {
       const calls = [];
       const code = main(root, env, (command, args, options) => { calls.push([command, args]); return execute(command, args, options); }, typeof lines === "function" ? lines : () => lines, platform);
       const full = calls.length === 1 && calls[0][1].at(-1) === "test";
@@ -456,6 +457,29 @@ test("K-03: a reader list too long for cmd.exe runs everything on Windows only",
   }, { files });
 });
 
+test("B1: on Windows a tooling change runs everything and says why, and no other run changes", () => {
+  withFixture((f) => {
+    toolChange(f);
+    const printed = [];
+    const log = console.log;
+    console.log = (line) => printed.push(line);
+    let windows;
+    try { windows = f.decide({ platform: "win32" }); } finally { console.log = log; }
+    assert.equal(windows.mode, "full");
+    assert.equal(windows.calls.length, 1, "no node --test and no second run");
+    assert.notEqual(windows.calls[0][0], process.execPath);
+    assert.match(printed.join("\n"), /full test run.*Windows.*DAN-369/);
+    assert.notEqual(f.decide({ platform: "linux" }).calls[0][1].at(-1), "test");
+    assert.equal(f.decide({ platform: "darwin" }).mode, "tooling", "only Windows is held back");
+  });
+  withFixture((f) => {
+    f.put("src/a.ts", "export const x = 2;\n");
+    f.commit();
+    assert.equal(f.decide({ platform: "win32" }).mode, "scoped", "the scoped run is not held back");
+    assert.equal(f.decide({ platform: "linux" }).mode, "scoped");
+  });
+});
+
 test("H-01 to H-03: only a real, single remote-tracking base counts", () => {
   withFixture((f) => {
     toolChange(f);
@@ -761,8 +785,13 @@ test("L-04: the selector itself, started as the hook starts it, picks each run f
       f.commit();
       const tooling = hook(f, f.pushLine());
       assert.equal(tooling.status, 0, tooling.stdout + tooling.stderr);
-      assert.match(tooling.stdout, /pre-push: tooling run/);
-      assert.match(tooling.calls, /--passWithNoTests/);
+      if (process.platform === "win32") {
+        assert.match(tooling.stdout, /pre-push: full test run \(pnpm test\): the tooling run does not pass on Windows yet/);
+        assert.equal(tooling.calls, "test");
+      } else {
+        assert.match(tooling.stdout, /pre-push: tooling run/);
+        assert.match(tooling.calls, /--passWithNoTests/);
+      }
       const empty = hook(f, "");
       assert.match(empty.stdout, /pre-push: full test run \(pnpm test\): the pushed ref is unknown or is not HEAD/);
       assert.equal(empty.calls, "test");

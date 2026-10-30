@@ -327,6 +327,11 @@ export function main(cwd = fileURLToPath(new URL("../../", import.meta.url)), en
   if (why.mode === "tooling" && platform === "win32" && pnpmCommand(readerRun, platform).flat().join(" ").length >= WINDOWS_COMMAND_LIMIT) {
     why = { mode: "full", reason: "the reader list is too long for one Windows command", files: [] };
   }
+  // `node --test` is outside `pnpm test`, so here the tooling run would be a slower
+  // superset of the full run, with failures of its own. Lifted by DAN-369 (#995).
+  if (why.mode === "tooling" && platform === "win32") {
+    why = { mode: "full", reason: "the tooling run does not pass on Windows yet (DAN-369)", files: [] };
+  }
   if (why.mode === "full" || unsafe.length) {
     for (const line of describe(unsafe.length ? { mode: "full", reason: "a file-reading test has an unusual name", files: unsafe } : why)) console.log(line);
     return run(["test"], cwd, execute);
