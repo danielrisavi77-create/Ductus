@@ -1,6 +1,8 @@
 # Ductus: program rada
 
-Verzija 0.2 · 3. 10. 2026. · Odgovorna osoba: Daniel Rišavi
+Verzija 0.3 · 30. 10. 2026. · Odgovorna osoba: Daniel Rišavi
+
+**D-191 (30. 10. 2026.):** cilj rada su sve faze M0 do M11. Demo je odgođen bez datuma, a datumi pilota i rasporeda po valovima u ovom dokumentu nisu obvezujući dok vlasnik ne odluči novi raspored.
 
 Faze idu redom po ovisnostima. Faza je gotova tek kad je njezin izlazni kriterij dokazan testom ili zapisom, ne kad je kod napisan. Procjene su u večerima rada (oko 3 sata) jedne osobe uz AI agente i služe samo za planiranje.
 
@@ -35,6 +37,8 @@ Backend (hosting, prijava, evidencija, korijen i žig, operacije) razrađen je u
 **Zbroj prema tablici: 99 do 134 večeri** (69 do 93 prije dodataka D-40 do D-64). Procjene ovakvih projekata u pravilu se prekorače, pa je realan raspon **145 do 195 večeri**. Cijeli opseg ne stane u jedan semestar pripreme; zato vrijede valovi i kontrolna točka niže.
 
 ## Demo za fakultet [PRIJEDLOG D-76]
+
+**Odgođeno bez datuma (D-191).** Odjeljak ostaje kao zapis opsega prvog prolaza.
 
 Sastanak s FPZG-om održava se kad je demo gotov. Demo je prvi dio pravog sustava, ne zaseban prototip.
 
