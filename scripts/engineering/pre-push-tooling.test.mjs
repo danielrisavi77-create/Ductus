@@ -648,12 +648,15 @@ test("J-04, L-02: no node test outside the two tool directories touches a listed
   const named = `${packageScripts["test:demo"]} ${packageScripts["test:fake-oidc"]}`.match(/\S+\.test\.mjs/g);
   assert.ok(named.length >= 7, "test:demo and test:fake-oidc are still the skipped steps");
   const outside = [...new Set([...named, ...testFilesUnder("scripts").filter((file) => !/^scripts\/(?:engineering|orchestrator)\/[^/]+$/.test(file)), ...testFilesUnder("db"), ...testFilesUnder("infra")])];
-  const listed = [/scripts\/(?:engineering|orchestrator)\//, /\.\.\/(?:engineering|orchestrator)\//, ...[...TOOLING_DOCS].map((doc) => new RegExp(`["'\`/]${doc.replaceAll(".", "\\.")}["'\`]`))];
+  const toolPaths = [/scripts\/(?:engineering|orchestrator)\//, /\.\.\/(?:engineering|orchestrator)\//];
+  // A listed document as a whole path: a quote or a slash before it, a quote after it.
+  const docMentions = [...TOOLING_DOCS].flatMap((doc) => [..."\"'`/"].flatMap((before) => [..."\"'`"].map((after) => `${before}${doc}${after}`)));
   for (const test of outside) {
     for (const file of closure(test)) {
       assert.ok(!/^scripts\/(?:engineering|orchestrator)\//.test(file), `${test} imports ${file}`);
       const source = readFileSync(join(repository, file), "utf8");
-      for (const pattern of listed) assert.doesNotMatch(source, pattern, `${file} (${test})`);
+      for (const pattern of toolPaths) assert.doesNotMatch(source, pattern, `${file} (${test})`);
+      for (const mention of docMentions) assert.ok(!source.includes(mention), `${file} (${test}) names ${mention}`);
     }
   }
 });
