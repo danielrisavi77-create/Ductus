@@ -7,7 +7,7 @@ import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, re
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { TOOLING_DOCS, changedAgainstMain, describe, explain, fileReadingTests, localImports, main, parseRawDiff, plan, pushesOnlyHead } from "./pre-push-tests.mjs";
+import { TOOLING_DOCS, changedAgainstMain, describe, explain, fileReadingTests, localImports, main, parseRawDiff, plan, pushesOnlyHead, toolingInventory } from "./pre-push-tests.mjs";
 
 const change = (file, ...record) => {
   const [status, oldMode, mode] = record.length ? record : ["M", "100644", "100644"];
@@ -108,8 +108,12 @@ test("unrecognized paths, metadata, statuses and mixed changes never get the exc
     // A-06: neighbours
     "scripts/engineering-staro/a.mjs", "scripts/orchestrator2/a.mjs", "scripts/hooks/a.mjs", "scripts/demo/a.mjs", "scripts/db/a.mjs",
     // A-10, I-06, I-07: other documents
-    "docs/DECISIONS.md", "docs/ENGINEERING_SYSTEM.md", "docs/ENGINEERING_SYSTEM-SAZETAK.md", "docs/SESSIONS.md", "docs/MULTI-ACCOUNT.md", "docs/new-unknown.md",
-    "STATE.md", ".github/pull_request_template.md", "e2e/README.md", "db/tests/README.md", "tests/unit/fixtures/a.md", "src/README.md", "app/README.md", "public/README.md",
+    "docs/AGENT_SYSTEM_V2.md", "docs/FREE-AI-PR-REVIEW.md", "docs/ISTRAZIVANJE-ALATA-2026-10-25.md", "docs/engineering/PLAN-TOKOVI-2026-10-25.md", "docs/new-unknown.md",
+    "plugins/ductura-engineering/references/source-map.md", ".github/ISSUE_TEMPLATE/agent-task.md",
+    // listed rule documents only under their exact name
+    "state.md", "State.md", "STATE.MD", "docs/STATE.md", "scripts/engineering/STATE.md", "docs/decisions.md", "docs/DECISIONS.MD", "docs/sub/DECISIONS.md", "docs/DECISIONS.md.orig",
+    "docs/sessions.md", "docs/orkestrator.md", "docs/Orkestrator-Sazetak.md", "docs/engineering_system.md", "docs/ENGINEERING_SYSTEM-sazetak.md", "docs/multi-account.md",
+    ".github/pull_request_template.md", "e2e/README.md", "db/tests/README.md", "tests/unit/fixtures/a.md", "src/README.md", "app/README.md", "public/README.md",
     ".claude/rules/pravila-i-alati.md", ".claude/uloge/README.md",
     // A-11: path tricks
     "scripts/engineering/../a.mjs", "./scripts/engineering/a.mjs", "scripts/engineering//a.mjs", "/scripts/engineering/a.mjs", "scripts\\engineering\\a.mjs",
@@ -136,6 +140,36 @@ test("unrecognized paths, metadata, statuses and mixed changes never get the exc
   }
   for (const unknown of [null, [], [null], [{}], Array(1)]) assert.equal(plan(unknown), "full");
   assert.match(explain([change("docs/new-unknown.md")]).reason, /reach/);
+});
+
+const RULE_DOCS = ["STATE.md", "docs/DECISIONS.md", "docs/SESSIONS.md", "docs/ORKESTRATOR.md", "docs/ORKESTRATOR-SAZETAK.md",
+  "docs/ENGINEERING_SYSTEM.md", "docs/ENGINEERING_SYSTEM-SAZETAK.md", "docs/MULTI-ACCOUNT.md"];
+
+test("A-10, I-07: a change of rule documents, as D-191 made it, runs tooling and anything else beside it runs everything", () => {
+  for (const doc of RULE_DOCS) {
+    assert.equal(plan([change(doc)]), "tooling", doc);
+    assert.equal(plan([added(doc)]), "tooling", doc);
+  }
+  const d191 = ["docs/DECISIONS.md", "STATE.md", "docs/PROGRAM.md", "docs/PLAN-DEMO.md"];
+  withFixture((f) => {
+    for (const doc of d191) f.put(doc, "synthetic\n");
+    f.commit();
+    f.git("update-ref", "refs/remotes/origin/main", "HEAD");
+    for (const doc of d191) f.put(doc, "changed synthetic\n");
+    f.commit();
+    const { mode, calls } = f.decide();
+    assert.equal(mode, "tooling");
+    assert.equal(calls.length, 3, "script tests, vitest --changed and the readers all run");
+    for (const instructions of ["CLAUDE.md", "AGENTS.md", ".claude/rules/a.md", ".github/pull_request_template.md"]) {
+      f.put(instructions, "synthetic\n");
+      f.commit();
+      assert.equal(f.decide().mode, "full", instructions);
+      f.git("update-ref", "refs/remotes/origin/main", "HEAD");
+      f.put("STATE.md", `changed for ${instructions}\n`);
+      f.commit();
+      assert.equal(f.decide().mode, "tooling", "the guard above caught the file, not a stale state");
+    }
+  });
 });
 
 test("A-08, H-04, H-05: a tool beside src/ runs everything, also through a merge or a stacked branch", () => {
@@ -564,29 +598,50 @@ test("I-01: every script test, which is what reads the governance documents, is 
   assert.ok(readdirSync(new URL("../orchestrator/", import.meta.url)).includes("orchestrator-core.test.mjs"));
 });
 
+const importsOf = new Map();
 function closure(start) {
   const seen = new Set([start]);
   const queue = [start];
   const isPlainFile = (rel) => { try { return statSync(join(repository, rel)).isFile(); } catch { return false; } };
   while (queue.length) {
     const file = queue.shift();
-    for (const dep of localImports(file, readFileSync(join(repository, file), "utf8"), isPlainFile)) {
+    if (!importsOf.has(file)) importsOf.set(file, localImports(file, readFileSync(join(repository, file), "utf8"), isPlainFile));
+    for (const dep of importsOf.get(file)) {
       if (!seen.has(dep)) { seen.add(dep); queue.push(dep); }
     }
   }
   return seen;
 }
 
-function testFilesUnder(dir) {
+function testFilesUnder(dir, name = /\.test\.mjs$/) {
   const out = [];
   for (const entry of readdirSync(join(repository, dir), { withFileTypes: true })) {
     if (entry.name === "node_modules") continue;
     const rel = `${dir}/${entry.name}`;
-    if (entry.isDirectory()) out.push(...testFilesUnder(rel));
-    else if (rel.endsWith(".test.mjs")) out.push(rel);
+    if (entry.isDirectory()) out.push(...testFilesUnder(rel, name));
+    else if (name.test(rel)) out.push(rel);
   }
   return out;
 }
+
+test("A-10, I-07: every test that reaches a rule document is in the set those documents select", () => {
+  const { readers, scriptTests } = toolingInventory(repository.replace(/[/\\]$/, ""));
+  const selected = new Set([...readers, ...scriptTests]);
+  for (const file of ["doc-summaries", "role-cards", "risk-floor", "review-gate-qa-exemption", "ci-docs-scope", "safety-rules", "agent-hooks"]) {
+    assert.ok(selected.has(`scripts/engineering/${file}.test.mjs`), file);
+  }
+  for (const file of ["preflight", "orchestrator-core"]) assert.ok(selected.has(`scripts/orchestrator/${file}.test.mjs`), file);
+  for (const file of ["tests/unit/codeowners.test.ts", "tests/unit/pr-metadata-precheck.test.ts", "tests/unit/skill-copies.test.ts"]) assert.ok(selected.has(file), file);
+  // Whatever names a rule document in code, in the test or in what it imports,
+  // is selected; three sync tests cite STATE.md in comments only, and stay out.
+  const names = RULE_DOCS.map((doc) => doc.split("/").pop());
+  const namesInCode = (file) => readFileSync(join(repository, file), "utf8").split("\n")
+    .some((line) => !/^\s*(?:\/\/|\/?\*)/.test(line) && names.some((name) => line.includes(name)));
+  const vitest = ["src", "tests/unit", "tests/property"].flatMap((dir) => testFilesUnder(dir, /\.test\.tsx?$/));
+  assert.ok(vitest.length > 100, "the walk found the vitest tests");
+  const missed = vitest.filter((file) => !selected.has(file) && [...closure(file)].some(namesInCode));
+  assert.deepEqual(missed, []);
+});
 
 test("J-04, L-02: no node test outside the two tool directories touches a listed path", () => {
   const packageScripts = JSON.parse(readFileSync(join(repository, "package.json"), "utf8")).scripts;
@@ -607,7 +662,7 @@ test("J-04, L-02: no node test outside the two tool directories touches a listed
 // readers run here; CI runs everything regardless (orchestrator, #87 c.6523882827).
 const LOCAL_ONLY_DOCS = new Set([
   "docs/ARCHITECTURE.md", "docs/BACKEND.md", "docs/DEMO-SUHI-PROLAZ.md", "docs/DEMO-TEACHER-BOOTSTRAP.md", "docs/DEMO-UP.md", "docs/FEATURES.md", "docs/FUNCTIONAL_ARCHITECTURE_V1.md",
-  "docs/PLAN-DEMO.md", "docs/PRODUCT.md", "docs/PRODUCT_SPEC_V1.md", "docs/PROGRAM.md", "docs/REPOZITORIJI.md", "docs/SECURITY.md", "docs/TESTING.md",
+  "docs/PLAN-DEMO.md", "docs/PRODUCT.md", "docs/PRODUCT_SPEC_V1.md", "docs/PROGRAM.md", "docs/REPOZITORIJI.md", "docs/SECURITY.md", "docs/TESTING.md", ...RULE_DOCS,
 ]);
 
 test("L-01: a document CI runs in full is on the local list only by a written decision", async () => {

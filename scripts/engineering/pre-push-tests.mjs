@@ -21,14 +21,19 @@ const TEST_FILE_RE = /^tests\/(?:unit|property)\/.+\.test\.tsx?$/;
 // The only list of what the tooling run accepts: a positive, flat, case-sensitive
 // allowlist. It is a local pre-push exception and deliberately not ORDINARY_DOCS
 // in ci-docs-scope.mjs, which decides what CI may skip. Nested files, data and
-// config, agent instructions and any other document get the full run.
+// config, agent instructions and any other document get the full run. Rule
+// documents leave only the full local set, not review, QA or the owner's
+// command: their readers are script tests and file-reading tests, and all of
+// those run here (orchestrator, #87 c.6523882827, answer 3).
 const TOOLING_SCRIPT_RE = /^scripts\/(?:engineering|orchestrator)\/[a-z0-9][a-z0-9-]*(?:\.test)?\.mjs$/;
 export const TOOLING_DOCS = new Set([
-  "README.md", "docs/ARCHITECTURE.md", "docs/BACKEND.md", "docs/DEMO-SUHI-PROLAZ.md",
-  "docs/DEMO-TEACHER-BOOTSTRAP.md", "docs/DEMO-UP.md", "docs/FEATURES.md",
-  "docs/FUNCTIONAL_ARCHITECTURE_V1.md", "docs/PLAN-DEMO.md", "docs/PRODUCT.md",
-  "docs/PRODUCT_SPEC_V1.md", "docs/PROGRAM.md", "docs/REPOZITORIJI.md",
-  "docs/SECURITY.md", "docs/TESTING.md", "docs/UX-EVAL.md",
+  "README.md", "STATE.md", "docs/ARCHITECTURE.md", "docs/BACKEND.md", "docs/DECISIONS.md",
+  "docs/DEMO-SUHI-PROLAZ.md", "docs/DEMO-TEACHER-BOOTSTRAP.md", "docs/DEMO-UP.md",
+  "docs/ENGINEERING_SYSTEM-SAZETAK.md", "docs/ENGINEERING_SYSTEM.md", "docs/FEATURES.md",
+  "docs/FUNCTIONAL_ARCHITECTURE_V1.md", "docs/MULTI-ACCOUNT.md", "docs/ORKESTRATOR-SAZETAK.md",
+  "docs/ORKESTRATOR.md", "docs/PLAN-DEMO.md", "docs/PRODUCT.md", "docs/PRODUCT_SPEC_V1.md",
+  "docs/PROGRAM.md", "docs/REPOZITORIJI.md", "docs/SECURITY.md", "docs/SESSIONS.md",
+  "docs/TESTING.md", "docs/UX-EVAL.md",
 ]);
 // Vitest tests that always join a tooling run: the first guards docs/PRODUCT.md
 // section 5 from code, without reading the file; the next two load the scripts;
@@ -285,7 +290,7 @@ function toolingDoubt(cwd, env, readLines) {
 }
 
 /** The tests of a tooling run; throws when any part of the inventory is missing. */
-function toolingInventory(cwd) {
+export function toolingInventory(cwd) {
   const readers = new Set([...fileReadingTests(cwd, undefined, undefined, true), ...TOOLING_CONSUMERS]);
   for (const file of TOOLING_CONSUMERS) {
     if (!isFile(join(cwd, file))) throw new Error("missing script consumer");
