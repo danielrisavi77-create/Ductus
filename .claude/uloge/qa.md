@@ -12,7 +12,6 @@ Prije ove kartice pročitaj `zajednicko.md`. Identitet: `<runtime>:<slot>:qa`, r
 - Jaz u testovima, preživjeli mutant bez dokazanog kvara i nepotpun opis su manji nalazi: bilježe se i idu u naknadni korak.
 - Svaki nalaz ima redak "Dohvatljivo kroz" (pozivatelj i ulaz, ili "nije pokazano") (`docs/ENGINEERING_SYSTEM.md` §14 t. 5).
 - Nalaz izvan ugovora je manji samo ako "Poznata granica" ima trag vlasnikova odobrenja; nalaz koji dira tvrdo pravilo iz `CLAUDE.md`, `docs/PRODUCT.md` §5 ili granicu povjerenja nikad (`docs/ENGINEERING_SYSTEM.md` §14 t. 2).
-
 - Za PR sučelja vrijedi i vizualni kriterij (D-183): ekran na računalu i mobitelu, u stanjima koje PR mijenja, odgovara referentnoj slici iz paketa; neobrazloženo odstupanje je FAIL.
 
 ## Tijek
