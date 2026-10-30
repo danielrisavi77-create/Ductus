@@ -1,5 +1,7 @@
 # Predaja dizajna: Ductura
 
+> **Boje: vidi D-179 (26. 10. 2026.).** Vrijednosti boja i naglaska u ovom dokumentu (npr. `#6FBFA5`) su povijest; mjerodavne su `app/globals.css` i `docs/DECISIONS.md`. Raspored, ekrani i ponašanje vrijede dalje.
+
 ## Korisnikov izvorni paket — 22. 10. 2026.
 
 Daniel je dostavio `Frontend za Ductus aplikaciju (2).zip` uz uputu da se taj dizajn koristi za aplikaciju. Pripremljena mapa `design_handoff_ductura/` u ZIP-u potvrđuje postojeći vizualni smjer: svih **11 glavnih HTML referenci već je u ovoj mapi i bajt-po-bajt su jednake dostavljenima**. Nema nove konkurentske kopije dizajna.
