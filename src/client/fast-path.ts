@@ -15,7 +15,7 @@
  * slow answer, a failure, a hidden tab. There is no faster retry.
  */
 
-import type { FastPathLoad, FastPathRecord, FastPathStudent, WorkState } from "@/components/teacher/fast-path";
+import { TEXT_BLOCK_KINDS, type FastPathLoad, type FastPathRecord, type FastPathStudent, type WorkState } from "@/components/teacher/fast-path";
 import { isEvidenceMinuteV2 } from "@/domain/forensics/evidence-segment-v2";
 
 import { parseProcessSummaryV1 } from "./process-summary";
@@ -42,7 +42,7 @@ function record(value: unknown): FastPathRecord | null {
   const { pastesWithoutSource: pastes, blocks } = value;
   if (typeof pastes !== "number" || !Number.isSafeInteger(pastes) || pastes < 0 || !Array.isArray(blocks)) return null;
   const checked = blocks.every((b) => exactly(b, ["kind", "text"])
-    && (b.kind === "heading" || b.kind === "paragraph") && typeof b.text === "string");
+    && (TEXT_BLOCK_KINDS as readonly unknown[]).includes(b.kind) && typeof b.text === "string");
   const summary = parseProcessSummaryV1(value.summary);
   if (!checked || summary === null) return null;
   return { pastesWithoutSource: pastes, blocks: blocks as FastPathRecord["blocks"], summary };

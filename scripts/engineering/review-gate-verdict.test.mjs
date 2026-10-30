@@ -196,7 +196,7 @@ test("negative verdict from the declared author's own principal holds the gate",
 });
 
 test("PASS from the declared author's own principal still does not count", () => {
-  const ownReview = gate(prBody(), [review("claude:w1", "PASS")]);
+  const ownReview = gate(prBody("claude:w1:backend", "standard"), [review("claude:w1", "PASS")]);
   assert.equal(ownReview.state, "pending");
   assert.match(ownReview.description, /Waiting for independently authenticated review/);
 
@@ -246,7 +246,7 @@ test("negative verdict on an older head does not hold the current head", () => {
     "success",
   );
   assert.equal(
-    gate(prBody(), [review("claude:r1", "BLOCK", { sha: olderHead })]).state,
+    gate(prBody("claude:w1:backend", "standard"), [review("claude:r1", "BLOCK", { sha: olderHead })]).state,
     "pending",
   );
   assert.equal(

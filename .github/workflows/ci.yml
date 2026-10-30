@@ -54,6 +54,7 @@ jobs:
 
   build:
     name: Lint, typecheck, test and build
+    needs: scope
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -90,13 +91,18 @@ jobs:
       - run: pnpm test:unit
       - name: Engineering system unit tests
         run: shopt -s failglob; node --test scripts/engineering/*.test.mjs scripts/orchestrator/*.test.mjs
-      - run: pnpm test:property
+      - name: Property tests
+        if: needs.scope.outputs.profile == 'full'
+        run: pnpm test:property
       - name: Demo launcher and fake OIDC account tests
+        if: needs.scope.outputs.profile == 'full'
         run: pnpm test:demo && pnpm test:fake-oidc
       # F-152: the node tests of skill scripts (both skill copies).
       - name: Skill script tests
         run: pnpm test:skills
-      - run: pnpm build
+      - name: Build
+        if: needs.scope.outputs.profile == 'full'
+        run: pnpm build
 
   # Keep the required context stable; skipped/failed dependencies must never
   # silently turn it green. This job does not check out or execute PR code.
@@ -118,7 +124,8 @@ jobs:
         run: |
           case "$SCOPE_RESULT/$PROFILE/$E2E_RESULT/$LOGIN_RESULT/$EVIDENCE_RESULT/$LOGIN_EVIDENCE_RESULT" in
             success/full/success/success/success/success) echo 'Both isolated application stack and browser checks passed.' >> "$GITHUB_STEP_SUMMARY" ;;
-            success/docs/skipped/skipped/skipped/skipped) echo 'Approved documentation-only diff: stack, DB and browser tests were not executed. Build, engineering tests and security checks remain required.' >> "$GITHUB_STEP_SUMMARY" ;;
+            success/docs/skipped/skipped/skipped/skipped) echo 'Approved documentation-only diff: stack, DB, browser, property, demo and fake-OIDC tests and the build were skipped. Lint, typecheck, unit tests, engineering tests and security checks remain required.' >> "$GITHUB_STEP_SUMMARY" ;;
+            success/tests/skipped/skipped/skipped/skipped) echo 'Approved test-only diff: stack, DB, browser, property, demo and fake-OIDC tests and the build were skipped. Lint, typecheck, unit tests, engineering tests and security checks remain required.' >> "$GITHUB_STEP_SUMMARY" ;;
             *) echo 'Missing, unsuccessful or unexpected CI scope/stack result.' >&2; exit 1 ;;
           esac
       - name: Reject cancelled stack

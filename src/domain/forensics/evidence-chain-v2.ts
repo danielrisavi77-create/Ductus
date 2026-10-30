@@ -1,7 +1,7 @@
 import {
-  canonicalEvidenceSegmentV2,
-  isEvidenceSegmentV2,
-  type EvidenceSegmentV2,
+  canonicalEvidenceSegment,
+  isEvidenceSegment,
+  type EvidenceSegment,
 } from "./evidence-segment-v2";
 
 /**
@@ -56,7 +56,8 @@ function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
 }
 
 export type VerifiedEvidencePayloadV2 = {
-  segment: EvidenceSegmentV2;
+  /** v2 or v3: the payload and chain rules of v2 hold for both. */
+  segment: EvidenceSegment;
   sha256: string;
   byteLength: number;
 };
@@ -113,10 +114,10 @@ export async function verifyCanonicalEvidencePayloadV2(
   } catch {
     return { ok: false, reason: "invalid" };
   }
-  if (!isEvidenceSegmentV2(parsed)) {
+  if (!isEvidenceSegment(parsed)) {
     return { ok: false, reason: "invalid" };
   }
-  const canonical = new TextEncoder().encode(canonicalEvidenceSegmentV2(parsed));
+  const canonical = new TextEncoder().encode(canonicalEvidenceSegment(parsed));
   if (!sameBytes(canonical, received)) {
     return { ok: false, reason: "invalid" };
   }
@@ -216,7 +217,7 @@ export async function verifyEvidenceChainV2(
 ): Promise<EvidenceChainVerificationV2> {
   assertChainHead(expectedHead);
   let previousHash: string | null = null;
-  let previous: EvidenceSegmentV2 | null = null;
+  let previous: EvidenceSegment | null = null;
   const discontinuities: EvidenceChainDiscontinuityV2[] = [];
 
   for (let index = 0; index < payloads.length; index++) {
