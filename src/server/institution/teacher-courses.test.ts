@@ -31,9 +31,9 @@ function assignmentRow(course: Row, id: string, title: string, due: string, extr
   };
 }
 
-const COURSE_K1 = { course_id: K1, course_name: "Čitanje izvora", academic_year: "2026/2027" };
-const COURSE_K2 = { course_id: K2, course_name: "Akademsko pisanje", academic_year: "2026/2027" };
-const COURSE_K3 = { course_id: K3, course_name: "Zadnji kolegij", academic_year: "2025/2026" };
+const COURSE_K1 = { course_id: K1, course_name: "Čitanje izvora", academic_year: "2026/2027", ai_policy: "partially_allowed" };
+const COURSE_K2 = { course_id: K2, course_name: "Akademsko pisanje", academic_year: "2026/2027", ai_policy: "prohibited" };
+const COURSE_K3 = { course_id: K3, course_name: "Zadnji kolegij", academic_year: "2025/2026", ai_policy: "encouraged" };
 const EMPTY = { assignment_id: null, title: null, work_type: null, opens_at: null, due_at: null, current_version: null, enrolled_students: null };
 
 function database(answer: { rows?: Row[]; code?: string }) {
@@ -75,29 +75,30 @@ describe("GET /api/teacher/courses (DAN-230)", () => {
     expect(await response.json()).toStrictEqual({
       courses: [
         {
-          id: K2, name: "Akademsko pisanje", academicYear: "2026/2027",
+          id: K2, name: "Akademsko pisanje", academicYear: "2026/2027", aiPolicy: "prohibited",
           assignments: [{
             id: Z3, title: "Ćirilica", workType: "seminar_paper", opensAt: "2026-11-02T07:00:00.000Z",
             dueAt: "2026-11-20T12:00:00.000Z", currentVersion: 1, enrolledStudents: 0,
           }],
         },
         {
-          id: K1, name: "Čitanje izvora", academicYear: "2026/2027",
+          id: K1, name: "Čitanje izvora", academicYear: "2026/2027", aiPolicy: "partially_allowed",
           assignments: [
             { id: Z1, title: "Esej A", workType: "essay", opensAt: "2026-11-02T07:00:00.000Z", dueAt: "2026-12-01T22:59:00.000Z", currentVersion: 3, enrolledStudents: 2 },
             { id: Z2, title: "Esej B", workType: "essay", opensAt: "2026-11-02T07:00:00.000Z", dueAt: "2026-12-01T22:59:00.000Z", currentVersion: 1, enrolledStudents: 2 },
           ],
         },
-        { id: K3, name: "Zadnji kolegij", academicYear: "2025/2026", assignments: [] },
+        { id: K3, name: "Zadnji kolegij", academicYear: "2025/2026", aiPolicy: "encouraged", assignments: [] },
       ],
     });
     expect(db.calls).toHaveLength(1);
     expect(db.calls[0]).toContain("FROM institution.list_teacher_courses()");
+    expect(db.calls[0]).toContain("ai_policy");
   });
 
   it("orders names by the Croatian alphabet (č after c, before ć)", () => {
     const names = ["Ćakavski", "Cvijeće", "Čakavski", "Dž kolegij", "D kolegij"];
-    const rows = names.map((name, i) => ({ course_id: `00000000-0000-4000-8000-00000000000${i}`, course_name: name, academic_year: "2026/2027", ...EMPTY }));
+    const rows = names.map((name, i) => ({ course_id: `00000000-0000-4000-8000-00000000000${i}`, course_name: name, academic_year: "2026/2027", ai_policy: "prohibited", ...EMPTY }));
     expect(coursesOf(rows)?.map((course) => course.name)).toStrictEqual(["Cvijeće", "Čakavski", "Ćakavski", "D kolegij", "Dž kolegij"]);
   });
 
@@ -159,6 +160,11 @@ describe("GET /api/teacher/courses (DAN-230)", () => {
       [{ ...good, enrolled_students: -1 }],
       [{ ...good, enrolled_students: 1.5 }],
       [good, { ...good, assignment_id: Z2, course_name: "Drugo ime" }],
+      // The course's rule (DAN-344 T03): only the three rules a course can have, the same on every row of the course.
+      [{ ...good, ai_policy: "allowed" }],
+      [{ ...good, ai_policy: null }],
+      [{ ...COURSE_K3, ...EMPTY, ai_policy: undefined }],
+      [good, { ...good, assignment_id: Z2, ai_policy: "encouraged" }],
     ];
     for (const rows of bad) {
       const response = await read(database({ rows }));

@@ -226,11 +226,24 @@
   border-radius: var(--radius);
 }
 
-.block p {
+.block p,
+.block ul {
   margin: 0;
   font-family: var(--ff-manuscript);
   font-size: 16px;
   line-height: 1.7;
+}
+
+/* A run of bullet items and a run of quotes, as the manuscript draws them (E1). */
+.block ul {
+  padding-left: 26px;
+}
+
+.block blockquote {
+  margin: 0;
+  padding-left: 16px;
+  border-left: 2px solid var(--rule);
+  color: var(--ink-2);
 }
 
 .state {

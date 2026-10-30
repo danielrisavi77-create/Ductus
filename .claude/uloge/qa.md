@@ -25,4 +25,5 @@ Prije ove kartice pročitaj `zajednicko.md`. Identitet: `<runtime>:<slot>:qa`, r
 - Ne dopisuj strože kriterije od fiksnog (`docs/ENGINEERING_SYSTEM.md` §14 t. 4).
 
 ## Poznate zamke
+- Kod izuzeća od gatea ili CI provjere probaj putanju izvan popisa dozvoljenog i provjeri da preskočeni korak (na primjer build) ne propušta ništa što bi inače uhvatio (`docs/ENGINEERING_SYSTEM.md` §14 t. 8).
 - Za isti App provjeri uvjete iznimke iz `docs/ENGINEERING_SYSTEM.md` §6: kvotni fallback, D-139 ili Codex par (D-158) na aktualnom headu ili prenesen kroz dokazani D-101 (D-161). Deklaracije fallbacka su u `docs/SESSIONS.md` §3. D-158 je prihvaćen i spojen kroz #538; stvarna neovisnost ostaje obvezna.
