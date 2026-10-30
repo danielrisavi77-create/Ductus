@@ -121,9 +121,11 @@ test("CLI preserves failures for the pilot and rejects missing or corrupt artifa
   put(shards);
   assert.equal(cli().status, 0);
   const input = structuredClone(shards);
-  const failing = specs(input[1].report).find((s) => s.file === "other.spec.ts").tests[0];
+  // Native sharding decides where other.spec.ts lands; fail it in that shard.
+  const owner = input.find(({ report }) => specs(report).some((s) => s.file === "other.spec.ts")).report;
+  const failing = specs(owner).find((s) => s.file === "other.spec.ts").tests[0];
   failing.status = "unexpected"; failing.results[0].status = "failed";
-  input[1].report.stats.expected--; input[1].report.stats.unexpected++;
+  owner.stats.expected--; owner.stats.unexpected++;
   put(input);
   assert.equal(cli().status, 1);
   assert.equal(compareReport({ selection: "candidate", specs: UI_SPECS },

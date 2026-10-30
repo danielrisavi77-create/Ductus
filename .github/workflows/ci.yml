@@ -88,17 +88,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/engineering/pr-metadata-check.mjs
-      - name: Unit tests (changed or full)
-        env:
-          # When set, run only tests reachable from the diff (vitest --changed).
-          # Unset or empty runs the full unit suite.
-          DUCTUS_UNIT_CHANGED: ${{ github.event_name == 'pull_request' && '1' || '' }}
-        run: |
-          if [ -n "$DUCTUS_UNIT_CHANGED" ]; then
-            pnpm exec vitest run --changed origin/${{ github.base_ref }} --reporter=dot || pnpm test:unit
-          else
-            pnpm test:unit
-          fi
+      - run: pnpm test:unit
       - name: Engineering system unit tests
         run: shopt -s failglob; node --test scripts/engineering/*.test.mjs scripts/orchestrator/*.test.mjs
       - name: Property tests
@@ -181,7 +171,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .next/cache
-          key: stack-next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          key: stack-next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
           restore-keys: |
             stack-next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
       # Browser binaries only; "Install browsers" below still runs and installs
@@ -390,7 +380,7 @@ jobs:
       # The full login through "Demo prijava" needs `next dev` (D-09 refuses
       # the fake provider in production); Chromium only (owner decision).
       # The full suite as this runner sees it, before sharding; the inventory
-      # job checks that the two shards ran exactly this.
+      # job checks that the three shards ran exactly this.
       - name: Login E2E inventory
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         env:

@@ -22,7 +22,7 @@ export function testsOf(report) {
   return out;
 }
 
-// Both shards ran their part, the parts are disjoint, and together they are
+// Every shard ran its part, the parts are disjoint, and together they are
 // exactly the suite each runner listed in full before sharding.
 export function verifyLoginShards(shards) {
   assert.equal(shards.length, LOGIN_SHARDS, "Every login shard is required");
