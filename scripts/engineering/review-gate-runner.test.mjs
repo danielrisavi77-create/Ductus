@@ -69,6 +69,7 @@ const pullRequest = { pull_request: { number: 7, head: { sha: HEAD }, html_url: 
 test("a failed comment read after the head is known marks the head pending", () => {
   const { code, posts } = run(comment, { fail: ["/issues/7/comments"] });
   assert.equal(code, 1);
+  // Failure path does not compute Auto-merge eligible.
   assert.deepEqual(posts.map((p) => p.body.context), ["Merge authorization", "Engineering review gate"]);
   for (const post of posts) {
     assert.equal(post.path, `/repos/o/r/statuses/${HEAD}`);
@@ -100,7 +101,7 @@ test("a failing status post still ends the run with exit 1 and no crash", () => 
 test("control: a run that reads everything posts the authorization and the gate status and exits 0", () => {
   const { code, posts } = run(comment);
   assert.equal(code, 0);
-  assert.deepEqual(posts.map((p) => p.body.context), ["Merge authorization", "Engineering review gate"]);
+  assert.deepEqual(posts.map((p) => p.body.context), ["Merge authorization", "Auto-merge eligible", "Engineering review gate"]);
   for (const post of posts) assert.doesNotMatch(post.body.description, /failed before a verdict/);
 });
 
