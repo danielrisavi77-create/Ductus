@@ -21,6 +21,8 @@ const NAV: Record<ShellRole, readonly NavItem[]> = {
   ],
   student: [
     { href: "/zadaci", label: t.shell.nav.assignments },
+    // DAN-344 (Archivum S02): the student's own courses, from the same read as /zadaci.
+    { href: "/zadaci/kolegiji", label: t.shell.nav.courses },
     { href: "/rad", label: t.shell.nav.workspace },
     { href: "/upis", label: t.shell.nav.enroll },
   ],
