@@ -707,6 +707,10 @@ export const hr = {
     loading: "Učitavanje rada…",
     empty: "Student još nije poslao tekst.",
     note: "Prikazan je zadnji tekst koji je studentov preglednik poslao. To nije zapis rada i može kasniti ili zastati.",
+    // DAN-332 (#826 PR 3): the route sent the bytes of the submitted revision.
+    // These two replace the connection line and the note beside that text.
+    submitted: "Predani rad",
+    submittedNote: "Prikazana je verzija rada koju je student predao. Ova se verzija više ne mijenja.",
     signIn: "Prijavi se",
     signInFirst: "Prijavite se da vidite rad.",
     invalid: "Ova poveznica ne vodi do rada.",
