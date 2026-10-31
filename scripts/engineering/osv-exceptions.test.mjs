@@ -32,9 +32,13 @@ test("the repository's own files pass every guard", () => {
   });
 });
 
-test("the existing braces entry keeps its ID and date", () => {
-  const braces = parseIgnoredVulns(read("osv-scanner.toml")).find((item) => item.id === '"GHSA-vfj7-8cjw-p6xm"');
-  assert.equal(braces?.ignoreUntil, "2027-01-03");
+test("the minimatch entry keeps its ID and date; the removed braces and glob entries stay out", () => {
+  const entries = parseIgnoredVulns(read("osv-scanner.toml"));
+  assert.equal(entries.find((item) => item.id === '"GHSA-g3hv-75wg-m249"')?.ignoreUntil, "2027-01-03");
+  // osv-scanner reported both as unused ignores; neither may come back silently.
+  for (const id of ["GHSA-vfj7-8cjw-p6xm", "GHSA-3g3m-2fjr-6pw4"]) {
+    assert.throws(() => checkIgnoredVulns(`${validToml}\n${entry(id)}`), /not an allowed ID/, id);
+  }
 });
 
 test("A7 fixture is itself valid, so the negative cases below fail on their own change", () => {
