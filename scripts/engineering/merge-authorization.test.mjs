@@ -23,7 +23,7 @@ const comment = (text, { login = ownerLogin, association = "OWNER", appSlug = nu
 });
 const command = (sha, opts) => comment(`Owner-Command: merge\nCommand-Head: ${sha}\nDatum: 2026-10-22\n`, opts);
 
-function authorize({ body, filenames = ["src/a.ts"], comments = [], gate = GREEN, carriedHeads = new Set() }) {
+function authorize({ body, filenames = ["src/a.ts"], comments = [], gate = GREEN, carriedHeads = new Set(), sameRepository = true }) {
   const paths = changedPaths(filenames.map((filename) => ({ filename })));
   return evaluateMergeAuthorization({
     gate,
@@ -33,6 +33,7 @@ function authorize({ body, filenames = ["src/a.ts"], comments = [], gate = GREEN
     headSha: head,
     ownerLogin,
     carriedHeads,
+    sameRepository,
   });
 }
 const bodyWith = (risk) => `Agent: claude:a:platforma\nRisk: ${risk}\nTask: B-1\n`;
@@ -43,7 +44,9 @@ test("Risk low or standard without a D-97 path is authorized without a command",
 });
 
 // D-196: the owner's command is kept for D-97 paths and for a critical PR whose
-// gate passed without QA; a critical PR with QA and no D-97 path needs none.
+// gate passed by an Owner Override; a critical PR without D-97 paths whose gate
+// counted review and QA, or review alone on a QA-exempt list (#87 c.6549357009
+// t. 2), needs none.
 const D97 = ["scripts/engineering/x.mjs"];
 // Only tests, so QA-exempt; its risk floor is below critical, so the parsed
 // risk decides the result.
@@ -62,10 +65,31 @@ test("Risk critical on a D-97 path still needs the owner's command (D-196)", () 
   }
 });
 
-test("a QA-exempt critical PR (only tests or only documents) still needs the owner's command (D-196)", () => {
+test("a QA-exempt critical PR (only tests or only documents) without D-97 paths needs no command (D-196, c.6549357009 t. 2)", () => {
+  const exemptGate = { state: "success", description: "ok", qaExemptPass: true };
   for (const filenames of [QA_EXEMPT, ["tests/unit/a.test.ts"], ["db/tests/a.sql"], ["docs/x.md"]]) {
+    assert.equal(authorize({ body: bodyWith("critical"), filenames, gate: exemptGate }).state, "success", filenames.join(","));
+    // A gate whose shape does not match the file list (qaPass on an exempt list, or
+    // no flag at all) is not a verdict pass for it.
     assert.equal(authorize({ body: bodyWith("critical"), filenames }).state, "pending", filenames.join(","));
-    assert.equal(authorize({ body: bodyWith("critical"), filenames, comments: [command(head)] }).state, "success");
+    assert.equal(authorize({ body: bodyWith("critical"), filenames, gate: { state: "success", description: "x" } }).state, "pending");
+  }
+  // qaExemptPass on a list that needs QA is not enough.
+  assert.equal(authorize({ body: bodyWith("critical"), filenames: ["src/a.ts"], gate: exemptGate }).state, "pending");
+});
+
+test("a critical PR from a fork keeps the owner's command, with QA or QA-exempt (D-196, ENGINEERING_SYSTEM §5, #971)", () => {
+  for (const [filenames, gate] of [[["src/a.ts"], GREEN], [QA_EXEMPT, { state: "success", description: "ok", qaExemptPass: true }]]) {
+    assert.equal(authorize({ body: bodyWith("critical"), filenames, gate, sameRepository: false }).state, "pending", filenames.join(","));
+    assert.equal(authorize({ body: bodyWith("critical"), filenames, gate, sameRepository: false, comments: [command(head)] }).state, "success");
+  }
+});
+
+test("a QA-exempt critical PR on a D-97 path still needs the owner's command (D-196)", () => {
+  const exemptGate = { state: "success", description: "ok", qaExemptPass: true };
+  for (const filenames of [["scripts/engineering/x.test.mjs"], ["docs/ORKESTRATOR.md"], ["docs/DECISIONS.md"], [".claude/skills/x/SKILL.md"]]) {
+    assert.equal(authorize({ body: bodyWith("critical"), filenames, gate: exemptGate }).state, "pending", filenames.join(","));
+    assert.equal(authorize({ body: bodyWith("critical"), filenames, gate: exemptGate, comments: [command(head)] }).state, "success");
   }
 });
 
@@ -79,7 +103,8 @@ test("a critical gate green without a counted QA PASS keeps the owner's command 
 
 test("end to end: an Owner Override alone does not authorize a critical PR, review and QA PASS do (D-196)", () => {
   const files = [{ filename: "db/migrations/1.sql" }];
-  const pr = { body: bodyWith("critical"), head: { sha: head }, changed_files: 1, user: { login: "writer" } };
+  const repo = { full_name: "danielrisavi77-create/Ductus" };
+  const pr = { body: bodyWith("critical"), head: { sha: head, repo }, base: { repo }, changed_files: 1, user: { login: "writer" } };
   const run = (comments) =>
     evaluatePullRequest({ pr, files, comments, prReviews: [], reviewComments: [], ownerLogin, carriedHeads: new Set() });
   const override = comment(`Owner-Override: PASS\nOverride-Head: ${head}\nOverride-Reason: test\n`);
@@ -93,14 +118,29 @@ test("end to end: an Owner Override alone does not authorize a critical PR, revi
   assert.equal(verdicts.mergeAuthorization.state, "success");
 });
 
+test("end to end: a QA-exempt critical PR merges on review alone, but not on an Owner Override (D-196, c.6549357009)", () => {
+  const files = [{ filename: "db/tests/a.sql" }];
+  const repo = { full_name: "danielrisavi77-create/Ductus" };
+  const pr = { body: bodyWith("critical"), head: { sha: head, repo }, base: { repo }, changed_files: 1, user: { login: "writer" } };
+  const run = (comments) =>
+    evaluatePullRequest({ pr, files, comments, prReviews: [], reviewComments: [], ownerLogin, carriedHeads: new Set() });
+  const overridden = run([comment(`Owner-Override: PASS\nOverride-Head: ${head}\nOverride-Reason: test\n`)]);
+  assert.equal(overridden.result.state, "success");
+  assert.equal(overridden.mergeAuthorization.state, "pending");
+  const reviewed = run([comment(`Agent-Review: claude:r1:reviewer\nReview-Head: ${head}\nReview-Verdict: PASS\n`, { appSlug: "claude" })]);
+  assert.equal(reviewed.result.state, "success", reviewed.result.description);
+  assert.equal(reviewed.mergeAuthorization.state, "success");
+  assert.equal(run([]).mergeAuthorization.state, "pending");
+});
+
 test("an undeclared or failing metadata never authorizes a critical PR without a command", () => {
   assert.equal(authorize({ body: "Agent: claude:a:platforma\nTask: B-1\n" }).state, "pending");
 });
 
 test("a description that fools a regex does not fool the parser (review of #565, finding 1)", () => {
   const body = "Agent: claude:a:platforma\nrisk: critical\nTask: B-1\n\n```\nRisk: standard\n```\n";
-  // A QA-exempt path keeps the command for critical but not for standard, so the
-  // result shows which risk the parser read.
+  // With a gate that counted QA, a QA-exempt path keeps the command for critical
+  // but not for standard, so the result shows which risk the parser read.
   assert.equal(authorize({ body, filenames: QA_EXEMPT }).state, "pending");
   assert.equal(authorize({ body: `${bodyWith("critical")}\nRisk: standard\n`, filenames: QA_EXEMPT }).state, "pending");
   assert.equal(authorize({ body: bodyWith("standard"), filenames: QA_EXEMPT }).state, "success");

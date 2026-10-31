@@ -570,6 +570,9 @@ function evaluateGateCore({
   if (risk === "critical" && qaExempt) {
     return {
       state: "success",
+      // D-196 (c.6549357009 t. 2): a review PASS without QA, because QA is not
+      // required for this file list; Merge authorization reads it like qaPass.
+      qaExemptPass: true,
       description: `Independently authenticated review is valid for current head (critical, ${qaExempt} only: QA not required).${carriedNote(passingReviews, headSha)}`,
     };
   }
@@ -878,8 +881,9 @@ export function sharesHeadWithOpenPr(pr, openPulls) {
  * risk for the gate decides it here. Green when the gate is green and either
  * the owner's `Owner-Command: merge` comment names this head (or a head that
  * carries to it through a clean base merge, D-101), or the PR touches no D-97
- * path and declares Risk low or standard, or Risk critical with QA required
- * (D-196), or only adds new tests (D-189). Every description is fixed text.
+ * path and declares Risk low or standard, or Risk critical with a gate passed
+ * by verdicts rather than an Owner Override (D-196), or only adds new tests
+ * (D-189). Every description is fixed text.
  */
 export function evaluateMergeAuthorization({
   gate,
@@ -909,18 +913,22 @@ export function evaluateMergeAuthorization({
     ownerCommandPaths(paths).length === 0;
   if (automatic) return { state: "success", description: "Risk low or standard, no D-97 path: no owner command needed." };
   // D-196 (trial to 14 Nov 2026): a critical PR with no D-97 path needs no owner
-  // command when the gate passed by counting a separate QA PASS (`qaPass`). A gate
-  // that passed by an Owner Override or a QA exemption (only tests or only
-  // documents) keeps the command, except the new-tests case below; any D-97 path
-  // keeps it always.
-  const criticalWithQa =
-    gate.qaPass === true &&
+  // command when the gate passed by counting verdicts: a separate QA PASS
+  // (`qaPass`), or a review PASS on a PR that is QA-exempt by its file list (only
+  // tests or only documents, `qaExemptPass`; owner, #87 c.6549357009 t. 2). A gate
+  // that passed by an Owner Override keeps the command; any D-97 path keeps it always.
+  const verdictPass =
+    (gate.qaPass === true && qaExemption(paths) === null) ||
+    (gate.qaExemptPass === true && qaExemption(paths) !== null);
+  // A head outside this repository keeps the command (ENGINEERING_SYSTEM §5, #971).
+  const criticalByVerdicts =
+    verdictPass &&
+    sameRepository === true &&
     metadata?.ok === true &&
     metadata.risk === "critical" &&
-    qaExemption(paths) === null &&
     ownerCommandPaths(paths).length === 0;
-  if (criticalWithQa) {
-    return { state: "success", description: "Risk critical with review and QA, no D-97 path: no owner command needed (D-196)." };
+  if (criticalByVerdicts) {
+    return { state: "success", description: "Risk critical with review and QA (or QA-exempt), no D-97 path: no owner command needed (D-196)." };
   }
   // D-189: a PR that only adds new test files is auto-merge eligible, so it needs
   // no owner command either; a head outside this repository still does.
