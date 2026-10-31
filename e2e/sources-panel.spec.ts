@@ -173,7 +173,10 @@ test.describe("sources panel (DAN-343)", () => {
       for (const width of [1440, 400]) {
         const tab = await openSources(page, width);
         await tab.getByRole("button", { name: t.add }).click();
-        await fill(tab, { [t.family]: "Horvat", [t.given]: "Ana", [t.year]: "2021", [t.title]: "Izmišljena knjiga" });
+        await fill(tab, {
+          [t.family]: "Horvat", [t.given]: "Ana", [t.year]: "2021", [t.title]: "Izmišljena knjiga",
+          [t.place]: "Zagreb", [t.publisher]: "Primjer", [t.citePage]: "15",
+        });
         await expect(tab.locator('[data-preview="citation"]')).toBeVisible();
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
         await testInfo.attach(`sources-form-${theme}-${width}.png`, { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
