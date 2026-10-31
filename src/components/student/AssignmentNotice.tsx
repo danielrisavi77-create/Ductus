@@ -3,7 +3,7 @@
 import { useReducer, useRef, useSyncExternalStore, type FormEvent } from "react";
 
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
-import { formatDateHr, formatDateTimeHr } from "@/lib/i18n/hr";
+import { formatDateTimeHr } from "@/lib/i18n/hr";
 import { wordRangeHr } from "@/lib/i18n/length-line";
 import { AI_PURPOSES } from "@/components/teacher/assignment-create";
 
@@ -36,6 +36,28 @@ function Confirmed({ text, editor, assignmentId }: { text: string; editor: boole
 
 function TimingNote({ text }: { text: string }) {
   return <p className={styles.window} role="status">{text}</p>;
+}
+
+// The decorative line icons of S03_upute.png, in the text colour.
+const ICON = { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.6,
+  strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true, focusable: false } as const;
+
+/** S03-a: "{work type} · {range}" | "Rok: {date} u {time}" under the title. */
+export function NoticeMeta({ kind, due }: { kind: string; due: string }) {
+  return (
+    <p className={styles.meta}>
+      {kind ? (
+        <span className={styles.metaItem}>
+          <svg {...ICON}><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5M9 13h6M9 17h6" /></svg>
+          {kind}
+        </span>
+      ) : null}
+      <span className={styles.metaItem}>
+        <svg {...ICON}><rect x="4" y="5" width="16" height="16" rx="2" /><path d="M16 3v4M8 3v4M4 11h16" /></svg>
+        {due}
+      </span>
+    </p>
+  );
 }
 
 function ToolsCard({ view }: { view: NoticeView }) {
@@ -98,7 +120,6 @@ export default function AssignmentNotice({ view, timing }: { view: NoticeView; t
   // Dates are shown in the reader's time zone, so only in the browser: the
   // server renders "…" and hydration never disagrees with it.
   const inBrowser = useSyncExternalStore(never, () => true, () => false);
-  const day = (iso: string) => (inBrowser ? formatDateHr(iso) : "…");
   const time = (iso: string) => (inBrowser ? formatDateTimeHr(iso) : "…");
 
   async function confirm(event: FormEvent) {
@@ -118,18 +139,16 @@ export default function AssignmentNotice({ view, timing }: { view: NoticeView; t
     : null;
   const note = timing === "notOpen" ? s.notOpen.replace("{time}", time(view.opensAt))
     : timing === "pastDue" ? s.pastDue.replace("{time}", time(view.dueAt)) : null;
-  const rangeText = wordRangeHr({ min: view.wordMin, max: view.wordMax });
+  // Only what readNotice returned: a known work type, a range wordRangeHr can say.
+  const kindLine = [workTypes[view.workType], wordRangeHr({ min: view.wordMin, max: view.wordMax })]
+    .filter(Boolean).join(" · ");
 
   return (
     <article className={styles.notice} aria-labelledby="zadatak">
       <header className={styles.head}>
         <p className={styles.kicker}>{s.step}</p>
         <h1 id="zadatak">{view.title}</h1>
-        <p className={styles.meta}>
-          {workTypes[view.workType] ? `${workTypes[view.workType]} · ` : null}
-          {s.opensFrom} {day(view.opensAt)} · {s.due} {time(view.dueAt)}
-          {rangeText ? ` · ${rangeText}` : null}
-        </p>
+        <NoticeMeta kind={kindLine} due={s.dueAt.replace("{time}", time(view.dueAt))} />
       </header>
       {note ? <TimingNote text={note} /> : null}
       {returning ? done : null}

@@ -224,6 +224,8 @@ pwsh -File scripts/grok-review.ps1 [-Pr <broj>] [-Post -Verdict <PASS|FAIL|BLOCK
 
 Treba PowerShell 7.4 ili noviji (`pwsh`), ne Windows PowerShell 5.1. Jednokratno: instaliraj Grok Build CLI (`npm install -g @xai-official/grok` ili `irm https://x.ai/cli/install.ps1 | iex`) i prijavi se naredbom `grok login`. Skripta odbija rad ako je postavljen `XAI_API_KEY` (istekla prijava bi tiho naplatila API). Pokreće se samo nad vlastitom ili provjerenom granom, nikad u `ductus-security`, jer diff ide xAI-ju; diff veći od jedne naredbene linije ne prima (podijeli PR). Razine nema: dubinu određuje zadani model CLI-ja. Bez `-Post` pregled se samo ispisuje; s `-Post -Verdict ...` objavljuje se kanonski review komentar s tvog GitHub računa, s verdiktom koji ti daješ nakon čitanja i s retkom `Review-Channel: grok-cli`. Gate ga broji kao Grok provider (D-162, `docs/ENGINEERING_SYSTEM.md` §6).
 
+Isti put ima Codex CLI (D-193): review ili QA pokrenut iz `codex exec` postaje kanonski verdikt kad se objavi s vlasnikova računa s kanonskim blokom (`Agent-Review`/`Review-Head`/`Review-Verdict` ili `QA-Agent`/`QA-Head`/`QA-Verdict`) i retkom `Review-Channel: codex-cli` izvan code blocka; gate ga broji kao Codex App. Komentar `scripts/codex-review.ps1` bez tih redaka i dalje nije PASS ni FAIL.
+
 ## 6. Dizajn
 
 1. Prije koda: dizajnerski sustav i ključni ekrani demoa kao Design artifact; Daniel ih komentira i odobrava. Frontend gradi samo po odobrenom.
