@@ -345,7 +345,9 @@ test.describe("workspace shell", () => {
     const sources = list.getByRole("tab", { name: "Literatura" });
     await expect(sources).toBeFocused();
     await expect(sources).toHaveAttribute("aria-selected", "true");
-    await expect(panel.getByRole("tabpanel")).toHaveText("Literatura rada prikazuje se ovdje.");
+    // DAN-343: with a journal the open Literatura panel is the sources panel.
+    await expect(panel.getByRole("tabpanel").getByRole("button", { name: "+ Izvor" })).toBeVisible();
+    await expect(panel.getByRole("tabpanel")).toContainText("Izvori dodani u ovom radu");
     await page.keyboard.press("End");
     await expect(work).toBeFocused();
     await page.keyboard.press("ArrowLeft");
