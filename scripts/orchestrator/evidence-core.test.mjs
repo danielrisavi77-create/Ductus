@@ -101,7 +101,7 @@ test("output carries no review text and no control characters", () => {
 
 test("names outside the allowed shape are not printed", () => {
   const e = buildEvidence({ pr: pr({ body: BODY.replace("claude:x:platforma", "evil$(id)") }) });
-  assert.equal(e.agent, "<not printed>");
+  assert.equal(e.agent, null); // F-015: an Agent the gate rejects is not read at all
 });
 
 test("a job named __proto__ is kept", () => {
@@ -113,7 +113,7 @@ test("a verdict head that is not a SHA is not printed", () => {
   const evil = `${String.fromCharCode(27)}[2J${String.fromCharCode(0x202e)}evil`;
   const stale = { ...verdict("qa", H1, "PASS"), body: `QA-Agent: claude:q:qa\nQA-Head: ${evil}\nQA-Verdict: PASS\n` };
   const e = buildEvidence({ pr: pr(), comments: [stale] });
-  assert.equal(e.qa.head, "<not printed>");
+  assert.deepEqual(e.qa, { verdict: "none" }); // F-015: the gate does not count it, so neither does the pack
   for (const out of [JSON.stringify(e), renderEvidence(e).join("\n")]) {
     assert.ok(!out.includes("evil"));
     assert.ok(!/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u202a-\u202e]/.test(out));

@@ -1,6 +1,7 @@
 // Pure logic for the orchestrator helper scripts. No gh/git calls here.
 import { canonicalBlock, field } from "../engineering/metadata-parser.mjs";
-import { commentTime, trustedAuthor } from "../engineering/review-gate-core.mjs";
+import { evaluateMetadata } from "../engineering/pr-metadata-core.mjs";
+import { commentTime, trustedAuthor, verifiedCommentIdentity } from "../engineering/review-gate-core.mjs";
 import {
   changedPaths, D97_MANUAL_PATHS, D97_PATHS, isD97Path, matchesPath, normalizePath,
 } from "../engineering/protected-paths.mjs";
@@ -9,8 +10,8 @@ export const GATE_CONTEXT = "Engineering review gate";
 const SHA_RE = /^[0-9a-f]{40}$/i;
 
 const KINDS = {
-  review: { agent: "Agent-Review", head: "Review-Head", verdict: "Review-Verdict" },
-  qa: { agent: "QA-Agent", head: "QA-Head", verdict: "QA-Verdict" },
+  review: { agent: "Agent-Review", head: "Review-Head", verdict: "Review-Verdict", role: "reviewer" },
+  qa: { agent: "QA-Agent", head: "QA-Head", verdict: "QA-Verdict", role: "qa" },
 };
 
 // The D-97 lists live with the gate (scripts/engineering/protected-paths.mjs)
@@ -86,12 +87,21 @@ export function formatOverlaps(list) {
   return list.length ? list.map((n) => `#${n}`).join(", ") : "-";
 }
 
+// F-015: a verdict counts here only as the gate reads it: trusted author, canonical
+// first line, an App that may carry the declared runtime, the kind's role and a full head.
+function gateReadable(c, k) {
+  if (!trustedAuthor(c) || !canonicalBlock(c?.body, k.agent)) return false;
+  const agent = field(c.body, k.agent);
+  if (!verifiedCommentIdentity({ appSlug: c?.performed_via_github_app?.slug ?? null }, agent)) return false;
+  return agent.endsWith(`:${k.role}`) && SHA_RE.test(field(c.body, k.head) ?? "");
+}
+
 /** Canonical verdict comments of one kind ("review" | "qa"), oldest first. */
 export function parseVerdicts(comments, kind) {
   const k = KINDS[kind];
   return (comments ?? [])
     .map((c, index) => ({ c, index }))
-    .filter(({ c }) => trustedAuthor(c) && canonicalBlock(c?.body, k.agent))
+    .filter(({ c }) => gateReadable(c, k))
     .map(({ c, index }) => ({
       agent: field(c.body, k.agent),
       head: field(c.body, k.head),
@@ -240,7 +250,7 @@ export function evaluateReady(d) {
   const manual = d97ManualMatches(d.files);
   if (manual.length) add("INFO", "d97-manual", `check D-97 by content: ${manual.join(", ")}`);
   const agent = d.agent ?? null;
-  add("INFO", "agent", `Agent ${agent ?? "missing"}${agent?.startsWith("claude:a:") ? " (slot claude:a: orchestrator or subagent PR)" : ""}`);
+  add("INFO", "agent", `Agent ${agent ?? "missing or invalid"}${agent?.startsWith("claude:a:") ? " (slot claude:a: orchestrator or subagent PR)" : ""}`);
   add("INFO", "draft", d.draft ? "draft" : "not draft");
   return out;
 }
@@ -323,8 +333,21 @@ export function pushVerdict(pushOk, localSha, remoteSha) {
   return { ok: true, reason: "remote head equals local head" };
 }
 
+// F-015: Agent and Risk reach a report only as values the Risk check accepts, so
+// PR body text cannot put instructions or control characters into the table.
+// Each value is checked alone through the gate's own evaluateMetadata.
+const isControl = (ch) => { const c = ch.codePointAt(0); return c < 0x20 || (c >= 0x7f && c <= 0x9f) || c === 0x2028 || c === 0x2029; };
+const metadataOk = (agent, risk) =>
+  evaluateMetadata({ body: `Agent: ${agent}\nRisk: ${risk}\nTask: -\n`, files: [] }).ok;
+
 export function parseAgentRisk(body) {
-  return { agent: field(body, "Agent"), risk: field(body, "Risk") };
+  const agent = field(body, "Agent");
+  const risk = field(body, "Risk");
+  const clean = (v) => typeof v === "string" && ![...v].some(isControl);
+  return {
+    agent: clean(agent) && metadataOk(agent, "low") ? agent : null,
+    risk: clean(risk) && metadataOk("claude:a:orchestrator", risk) ? risk.toLowerCase() : null,
+  };
 }
 
 /**
