@@ -17,28 +17,103 @@
   gap: 20px;
 }
 
+/* S03-a (DAN-344): the header of S03_upute.png, left-aligned, with a rule under it. */
 .head {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  text-align: center;
+  align-items: flex-start;
+  gap: 10px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--rule-2);
 }
 
 .notice h1 {
-  font-weight: 400;
-  letter-spacing: -0.01em;
+  font-family: var(--ff-display);
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
   overflow-wrap: anywhere;
 }
 
+/* 13 px, the smallest text the notice allows (assignment-notice.spec.ts, smallText). */
 .kicker,
-.meta {
+.eyebrow {
+  margin: 0;
   font-size: 13px;
-  color: var(--ink-3);
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
 }
 
 .meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 0;
+  margin: 0;
+  font-size: 15px;
   color: var(--ink-2);
+}
+
+.metaItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.metaItem svg {
+  flex: none;
+  color: var(--accent);
+}
+
+/* The divider between the two parts of the line, as on the PNG. */
+.metaItem + .metaItem {
+  margin-left: 20px;
+  padding-left: 20px;
+  border-left: 1px solid var(--rule);
+}
+
+/* The course eyebrow: "Kolegij", the course name and the motif on the right,
+   an accent rule under it. The motif is a decorative CSS background
+   (public/motivi, course-motif.ts) with no text alternative of its own. */
+.course {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 96px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--accent);
+}
+
+.course::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 4px 40%;
+  z-index: -1;
+  background: no-repeat right bottom / contain;
+  opacity: 0.88;
+  pointer-events: none;
+}
+
+.course[data-motif="city"]::before {
+  background-image: url("/motivi/city.webp");
+}
+
+.course[data-motif="research"]::before {
+  background-image: url("/motivi/research.webp");
+}
+
+.courseName {
+  max-width: 60%;
+  margin: 0;
+  font-family: var(--ff-display);
+  font-size: 32px;
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
 }
 
 .card {
@@ -199,6 +274,26 @@
 
   .notice h1 {
     font-size: 32px;
+  }
+
+  /* 390 px: the motif goes, the name takes the width, the line breaks in two. */
+  .course::before {
+    display: none;
+  }
+
+  .courseName {
+    max-width: none;
+    font-size: 26px;
+  }
+
+  .metaItem + .metaItem {
+    margin-left: 0;
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .meta {
+    flex-direction: column;
   }
 }
 
