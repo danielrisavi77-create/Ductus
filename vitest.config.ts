@@ -59,6 +59,10 @@ export function vitestAgentOutput(
 }
 
 export default defineConfig({
+  // tsconfig.json keeps JSX as written ("preserve") for Next. The scoped pre-push
+  // run (`vitest --changed`) walks imports into .tsx modules, mocked ones included,
+  // and Vite cannot read them untransformed; the tests themselves do not change.
+  oxc: { jsx: { runtime: "automatic" } },
   resolve: {
     // Mirrors the `@/*` path mapping in tsconfig.json. The regex with a
     // forward-slash replacement keeps `@/` imports working on Windows.

@@ -3,8 +3,12 @@ import Link from "next/link";
 import SheetFrame from "@/components/shell/SheetFrame";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 
+import AccessExplorer from "./AccessExplorer";
+import FaqSection from "./FaqSection";
 import { FLOW_STEPS } from "./flowSteps";
 import styles from "./Landing.module.css";
+import Rewind from "./Rewind";
+import TwoSides from "./TwoSidesLazy";
 
 /** Every way in leads to the sign-in screen (owner, #476); it offers AAI@EduHr only (D-09). */
 export const SIGN_IN_PATH = "/prijava";
@@ -91,6 +95,10 @@ export default function Landing() {
           </figure>
         </section>
 
+        <TwoSides />
+        <Rewind />
+        <AccessExplorer />
+
         <section id="za-koga" className={styles.section} aria-labelledby="za-koga-naslov">
           <p className={styles.eyebrow}>{l.forWhomLink}</p>
           <h2 id="za-koga-naslov" className={styles.sectionTitle}>
@@ -172,6 +180,8 @@ export default function Landing() {
             })}
           </ol>
         </section>
+
+        <FaqSection />
 
         <section className={styles.closing} aria-labelledby="zakljucak-naslov">
           <h2 id="zakljucak-naslov" className={styles.sectionTitle}>

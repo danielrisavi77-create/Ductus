@@ -1,9 +1,17 @@
 // @vitest-environment node
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Dexie from "dexie";
 import { indexedDB, IDBKeyRange } from "fake-indexeddb";
 
-import { editorPlan, editorSignOutPlan, LOGOUT_HOLD_LIMIT_MS, readLogoutHold, shellLogoutStep } from "./logout-hold";
+import { nothingHeld, type LogoutPlan } from "@/components/editor/logout-plan";
+
+import {
+  editorPlan, editorSignOutPlan, LOGOUT_HOLD_LIMIT_MS, LOGOUT_LOAD_LIMIT_MS, readLogoutHold, shellLogoutStep, untilLoaded,
+  withinHoldLimit,
+} from "./logout-hold";
 import { CURRENT_KEY, ENDED_KEY } from "./session-marks";
 
 // D-118 sign-out dialog (#476 c.6396619831 §6 U3, amendment c.6396707923).
@@ -102,6 +110,39 @@ describe("readLogoutHold (U3)", () => {
   });
 });
 
+// F-154, Codex r4383074611: the count of the submitted document is read under
+// the same limit, so a journal another tab blocks never holds the dialog back.
+describe("withinHoldLimit", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("gives the read when it ends, and the fallback for a failure", async () => {
+    expect(await withinHoldLimit(async () => 4, null)).toBe(4);
+    expect(await withinHoldLimit<number | null>(() => Promise.reject(new Error("made-up")), null)).toBeNull();
+    expect(await withinHoldLimit<number | null>(() => { throw new Error("made-up"); }, null)).toBeNull();
+  });
+
+  it("a read that never ends gives the fallback after the limit, not before", async () => {
+    vi.useFakeTimers();
+    let settled: unknown = "open";
+    void withinHoldLimit<number | null>(() => new Promise(() => {}), null).then((value) => { settled = value; });
+    await vi.advanceTimersByTimeAsync(LOGOUT_HOLD_LIMIT_MS - 1);
+    expect(settled).toBe("open");
+    await vi.advanceTimersByTimeAsync(1);
+    expect(settled).toBeNull();
+  });
+
+  // The editor's sign-out reads its own document through it and deletes
+  // nothing for a session that has ended here (Codex r4383074618).
+  it("is what the editor's sign-out uses, and its discard refuses an ended session", () => {
+    const code = readFileSync(join(process.cwd(), "src/components/editor/LocalDocument.tsx"), "utf8");
+    const held = /held: \(\) => withinHoldLimit<number \| null>\(\s*async \(\) => \(await journal\.read\(documentId\)\)\.pending\.length, null,\s*\)/;
+    expect(code).toMatch(held);
+    const discard = code.slice(code.indexOf("discard: async () => {"), code.indexOf("journal.discardAfterSubmission(documentId)"));
+    expect(discard).toContain("if (disposed || ended()) throw");
+    expect(code).toContain('onDiscardAfterSubmission={phase === "signed-out" ? undefined : ');
+  });
+});
+
 describe("editorSignOutPlan", () => {
   const PAGE = { tag: "made-up-tag-a", at: 100 };
   const HELD = { pending: 3, copies: 1, kept: true };
@@ -166,5 +207,89 @@ describe("editorPlan (O2)", () => {
 
   it.each(["unknown", "noStorage"] as const)("%s gives no number", (read) => {
     expect(editorPlan(false, read)).toEqual({ unsaved: false, pending: null });
+  });
+});
+
+describe("untilLoaded (#874)", () => {
+  const NONE_HELD = { pending: 0, copies: 0, kept: false };
+  /** A tab like the provider's: a phase, the journal it holds once loaded, and wakes on change. */
+  function tab() {
+    const wakes = new Set<() => void>();
+    const state = { loading: true, quiesce: null as (() => Promise<boolean>) | null };
+    return {
+      state,
+      subscribe: (wake: () => void) => { wakes.add(wake); return () => { wakes.delete(wake); }; },
+      wakes,
+      load(quiesce: () => Promise<boolean>) {
+        state.loading = false;
+        state.quiesce = quiesce;
+        for (const wake of [...wakes]) wake();
+      },
+      /** The provider's `prepareSignOut`, with the plan read only after the load. */
+      prepare(peek: (s: string) => Promise<typeof NONE_HELD>, limitMs?: number) {
+        return untilLoaded(() => state.loading, this.subscribe, limitMs)
+          .then(() => editorSignOutPlan(state.quiesce, SCOPE, { peek, session: null, store: null }));
+      },
+    };
+  }
+  beforeEach(() => vi.stubGlobal("indexedDB", indexedDB));
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("while the journal is still read, no plan is decided: neither a dialog nor a sign-out", async () => {
+    const t = tab();
+    const peek = vi.fn(async () => NONE_HELD);
+    let decided = false;
+    void t.prepare(peek).then(() => { decided = true; });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(decided).toBe(false);
+    expect(peek).not.toHaveBeenCalled();
+    t.load(async () => false);
+  });
+
+  it("once loaded, the plan is read from the journal: nothing held means no dialog (O1)", async () => {
+    const t = tab();
+    const peek = vi.fn(async () => NONE_HELD);
+    const quiesce = vi.fn(async () => false);
+    const plan = t.prepare(peek);
+    t.load(quiesce);
+    const next = await plan;
+    expect(quiesce).toHaveBeenCalledTimes(1);
+    expect(peek).toHaveBeenCalledWith(SCOPE);
+    expect(next).not.toBe("leave");
+    expect(nothingHeld(next as LogoutPlan)).toBe(true);
+    expect(t.wakes.size).toBe(0);
+  });
+
+  it("a load that never ends stops holding at the limit: the count is unknown and the dialog offers sign-out (D-118 I1)", async () => {
+    vi.useFakeTimers();
+    const t = tab();
+    const peek = vi.fn(async () => NONE_HELD);
+    const plan = t.prepare(peek);
+    await vi.advanceTimersByTimeAsync(LOGOUT_LOAD_LIMIT_MS - 1);
+    expect(peek).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await plan).toEqual({ unsaved: false, pending: null });
+    expect(t.wakes.size).toBe(0);
+  });
+
+  it("a wake while still loading keeps waiting", async () => {
+    const t = tab();
+    let decided = false;
+    const wait = untilLoaded(() => t.state.loading, t.subscribe).then(() => { decided = true; });
+    for (const wake of [...t.wakes]) wake();
+    await Promise.resolve();
+    expect(decided).toBe(false);
+    t.load(async () => false);
+    await wait;
+    expect(decided).toBe(true);
+  });
+
+  it("not loading: no wait and no subscription", async () => {
+    const subscribe = vi.fn(() => () => undefined);
+    await untilLoaded(() => false, subscribe);
+    expect(subscribe).not.toHaveBeenCalled();
   });
 });

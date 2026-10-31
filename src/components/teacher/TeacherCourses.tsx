@@ -4,7 +4,7 @@ import { createElement as h, Fragment } from "react";
 import { zagrebParts } from "@/components/summary/zagreb-time";
 import { countHr } from "@/lib/i18n/hr";
 import { messagesHr } from "@/lib/i18n/messages.hr";
-import type { AssignmentWork } from "@/server/evidence/assignment-works";
+import type { AssignmentSubmission } from "@/server/evidence/assignment-submissions";
 import type { TeacherCourse } from "@/server/institution/teacher-courses";
 
 import styles from "./TeacherCourses.module.css";
@@ -28,19 +28,32 @@ function dueHr(iso: string): string {
 }
 
 /**
- * F2 (#711): the works of one assignment as links to the live view, numbered
- * in the order the database returns them. No name and no id is shown: the
- * read names neither (names arrive with B-11). `null` is a failed read, said
- * as such, never as "no works".
+ * DAN-332 PR 4 (#826 c.6427128741): the state of one submission as text.
+ * "After the deadline" only for a submitted work; colour never carries it (D-128).
  */
-function Works({ works }: { works: readonly AssignmentWork[] | null | undefined }) {
+function submissionHr(row: AssignmentSubmission): string {
+  if (row.submitted !== true) return t.submission.none;
+  return row.afterDeadline === true ? t.submission.afterDeadline : t.submission.onTime;
+}
+
+/**
+ * F2 (#711): the works of one assignment as links to the live view, numbered
+ * in the order the database returns them, each with the state of its
+ * submission from the same read (DAN-332 PR 4). A student without a work has
+ * no link and is not listed. No name, id, revision or time is shown: the
+ * read names no name (names arrive with B-11). `null` is a failed read, said
+ * as such, never as "no works" or "not submitted".
+ */
+function Works({ works }: { works: readonly AssignmentSubmission[] | null | undefined }) {
   if (works === undefined) return null;
   if (works === null) return h("p", { className: styles.works, role: "status" }, t.worksUnavailable);
-  if (works.length === 0) return h("p", { className: styles.works }, t.noWorks);
+  const listed = works.flatMap((row) => (row.documentId === null ? [] : [{ row, documentId: row.documentId }]));
+  if (listed.length === 0) return h("p", { className: styles.works }, t.noWorks);
   return h("ul", { className: styles.works, "aria-label": t.worksLabel },
-    works.map((work, i) =>
-      h("li", { key: work.documentId },
-        h(Link, { href: `/nastavnik/rad/${encodeURIComponent(work.documentId)}`, prefetch: false }, `${t.work} ${i + 1}`))));
+    listed.map(({ row, documentId }, i) =>
+      h("li", { key: documentId },
+        h(Link, { href: `/nastavnik/rad/${encodeURIComponent(documentId)}`, prefetch: false }, `${t.work} ${i + 1}`),
+        h("span", { className: styles.submission }, ` · ${submissionHr(row)}`))));
 }
 
 /**
@@ -53,8 +66,8 @@ function Works({ works }: { works: readonly AssignmentWork[] | null | undefined 
  */
 export default function TeacherCourses({ courses, works = {} }: {
   courses: readonly TeacherCourse[];
-  /** Per assignment id: its works, or null when they could not be read. */
-  works?: Readonly<Record<string, readonly AssignmentWork[] | null>>;
+  /** Per assignment id: one row per student with the work and its submission, or null when they could not be read. */
+  works?: Readonly<Record<string, readonly AssignmentSubmission[] | null>>;
 }) {
   if (courses.length === 0) {
     return h("section", { className: styles.empty, "aria-labelledby": "bez-kolegija" },
@@ -79,6 +92,8 @@ export default function TeacherCourses({ courses, works = {} }: {
                   `${t.due} ${dueHr(assignment.dueAt)}`),
                 h("span", { className: styles.count },
                   countHr(assignment.enrolledStudents, t.students.one, t.students.few, t.students.many)),
+                h(Link, { className: styles.open, href: `/nastavnik/brz-put?zadatak=${encodeURIComponent(assignment.id)}`, prefetch: false },
+                  messagesHr.shell.nav.fastPath),
                 h(Works, { works: works[assignment.id] })))))),
     h("p", { className: styles.note }, t.countNote));
 }

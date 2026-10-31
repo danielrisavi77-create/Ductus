@@ -128,8 +128,9 @@ Sesiju otvara samo `identity.open_session`, koju izvršava jedino `ductus_auth` 
 | `course_enrollment_code` | kolegij, hash koda, vrijedi do, aktivan | Nastavnik kolegija |
 | `course_member` | kolegij, korisnik, uloga u kolegiju (`teacher`, `student`), od, do; za studenta kojeg je uklonio nastavnik: tko ga je uklonio i kada mu je povratak dopušten | Nastavnik kolegija sve članove; student nastavnike kolegija i vlastito članstvo |
 | `enrollment_attempt` | korisnik, vrijeme pogrešnog koda. Pogreške jednog korisnika unutar prozora iz `institution_settings`; svaki pokušaj upisa najprije briše retke starije od prozora | Nitko izravno; piše samo `enroll_with_code` |
-| `mentorship` | mentor, student, vrsta rada, od, do, potvrdio | Mentor i student |
-| `assignment` | id, kolegij, trenutna verzija | Članovi kolegija |
+| `mentorship` | mentor, student, vrsta rada, od, do, potvrdio. Planirano kao `institution.mentorship` (DAN-349, D-182); do demoa samo ogledni retci iz lokalne provisioning skripte | Mentor i student |
+| `faculty_work_rule` | ustanova, vrsta rada, pravilo fakulteta za mentorski rad; mentor ga smije samo pooštriti (D-182). Planirano kao `institution.faculty_work_rule` (DAN-349) | Određuje ugovor DAN-349 |
+| `assignment` | id, kolegij, trenutna verzija. Planirano (D-182): mentorski rad je zadatak bez kolegija s `mentorship_id`; postavljeno je točno jedno od ta dva | Članovi kolegija; za mentorski rad mentor i student |
 | `assignment_version` | zadatak, broj verzije, naslov, upute, vrsta rada, Lekta profil i verzija paketa, otvaranje, rok, pravila pomoći i dopuštene svrhe (D-80), profil evidencije, uvoz dopušten, ciklusi verzija, vrijeme. **Nepromjenjiva**; profil nove verzije smije biti samo uži | Članovi kolegija |
 | `notice_acknowledgment` | student, verzija zadatka, vrijeme | Student; nastavnik zadatka |
 | `deadline_extension` | zadatak, student, novi rok, razlog, odobrio | Student; nastavnik zadatka |

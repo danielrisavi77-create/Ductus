@@ -19,7 +19,8 @@ async function chooseSheetTheme(page: Page, theme: (typeof SCHEMES)[number]) {
   } else {
     await page.getByRole("button", { name: "Bijeli list" }).click();
   }
-  await expect(page.locator("article.sheet")).toHaveAttribute("data-sheet-theme", "light");
+  // On / the try-out editors carry a sheet too; the first one is the preview.
+  await expect(page.locator("article.sheet").first()).toHaveAttribute("data-sheet-theme", "light");
 }
 
 for (const path of PAGES) {

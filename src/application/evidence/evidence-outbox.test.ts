@@ -7,6 +7,7 @@ import {
   EVIDENCE_CANONICALIZATION_V2,
   EVIDENCE_HASH_ALGORITHM_V2,
   EVIDENCE_SEGMENT_SCHEMA_V2,
+  type EvidenceSegment,
   type EvidenceSegmentV2,
 } from "@/domain/forensics/evidence-segment-v2";
 import {
@@ -300,5 +301,46 @@ describe("Evidence Outbox state machine", () => {
     const command = await pending;
     expect(command.descriptor.segmentId).toBe("segment-1");
     expect(JSON.parse(command.canonicalPayload).segmentId).toBe("segment-1");
+  });
+});
+
+// DAN-343 (contract on #896): a receipt settles a v3 segment only when it
+// names v3, the schema of the segment the item sent.
+describe("Evidence Outbox with format v3", () => {
+  async function v3Item() {
+    const v3 = {
+      ...segment(),
+      evidenceSchema: "ductus-evidence-segment-v3",
+      events: segment().events.map((event) => ({ ...event, source: "citation-form" })),
+    } as EvidenceSegment;
+    return beginEvidenceOutboxAttempt(
+      await createEvidenceOutboxItem({
+        id: "outbox-v3",
+        evidencePackageId: "evidence-1",
+        clientRequestId: "request-v3",
+        segment: v3,
+        createdAt: "2026-10-03T06:01:00.000Z",
+      }),
+      "2026-10-03T06:02:00.000Z",
+    );
+  }
+
+  it("sends a v3 segment under a v3 descriptor and settles on a receipt naming v3", async () => {
+    const item = await v3Item();
+    expect(item.command.descriptor.evidenceSchema).toBe("ductus-evidence-segment-v3");
+    expect(item.command.canonicalPayload).toContain('"source":"citation-form"');
+    const named = receiptFor(item);
+    named.payload.evidenceSchema = "ductus-evidence-segment-v3";
+    expect(applyEvidenceOutboxOutcome(item, { status: "accepted", receipt: named }, "2026-10-03T06:02:01.000Z").status)
+      .toBe("accepted");
+  });
+
+  it("does not settle a v3 segment on a receipt naming v2", async () => {
+    const item = await v3Item();
+    const wrong = receiptFor(item);
+    expect(wrong.payload.evidenceSchema).toBe(EVIDENCE_SEGMENT_SCHEMA_V2);
+    const final = applyEvidenceOutboxOutcome(item, { status: "accepted", receipt: wrong }, "2026-10-03T06:02:01.000Z");
+    expect(final.status).toBe("blocked");
+    expect(final.receipt).toBeUndefined();
   });
 });

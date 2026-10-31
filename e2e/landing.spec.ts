@@ -16,6 +16,45 @@ test.describe("public home page", () => {
     await expect(page.getByText(t.landing.aaiOnly)).toBeVisible();
   });
 
+  test("the try-out block mirrors what the visitor types into the mentor's read-only view", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { level: 2, name: t.landing.wow.sidesTitle })).toBeVisible();
+    const student = page.getByRole("textbox", { name: t.landing.wow.editorLabel });
+    const mentor = page.getByRole("textbox", { name: t.landing.wow.mentorLabel });
+    await expect(mentor).toHaveAttribute("aria-readonly", "true");
+    await student.click();
+    await page.keyboard.press("End");
+    await page.keyboard.type(" Dodana rečenica.");
+    await expect(mentor).toContainText("Dodana rečenica.");
+  });
+
+  test("the replay block scrubs an invented paragraph step by step", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { level: 2, name: t.landing.replay.title })).toBeVisible();
+    const slider = page.getByRole("slider", { name: t.landing.replay.sliderLabel });
+    await slider.fill("0");
+    await expect(page.getByText(t.landing.replay.empty)).toBeVisible();
+    await slider.fill("1");
+    await expect(page.getByText("Gradovi", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: t.landing.replay.play }).click();
+    await expect(page.getByRole("button", { name: t.landing.replay.pause })).toBeVisible();
+  });
+
+  test("the access block switches roles with the keyboard and the questions open", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByRole("heading", { level: 2, name: t.landing.access.title })).toBeVisible();
+    const student = page.getByRole("tab", { name: t.landing.access.roles.student.name });
+    await expect(student).toHaveAttribute("aria-selected", "true");
+    await student.focus();
+    await page.keyboard.press("ArrowRight");
+    const mentor = page.getByRole("tab", { name: t.landing.access.roles.mentor.name });
+    await expect(mentor).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("tabpanel")).toContainText(t.landing.access.roles.mentor.sees[0]);
+    const first = Object.values(t.landing.faq.items)[0];
+    await page.getByText(first.q).click();
+    await expect(page.getByText(first.a)).toBeVisible();
+  });
+
   test("every way in is a plain link to /prijava", async ({ page }) => {
     await page.goto("/");
     const entries = page.getByRole("link", { name: new RegExp(`^(${t.auth.signIn}|${t.landing.enter})$`) });
@@ -64,7 +103,7 @@ test.describe("public home page", () => {
       await page.goto("/");
       if (sheet === "light") {
         await page.getByRole("button", { name: t.workspace.sheetThemeLight }).click();
-        await expect(page.locator("article.sheet")).toHaveAttribute("data-sheet-theme", "light");
+        await expect(page.locator("article.sheet").first()).toHaveAttribute("data-sheet-theme", "light");
       }
       const results = await new AxeBuilder({ page })
         .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])

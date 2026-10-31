@@ -58,7 +58,9 @@ import { StorableInput } from "@/editor/storable-input";
 import { storableDocument } from "@/editor/storable-text";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { createLivePublisher, type LivePublisher } from "@/client/live-publisher";
-import { editorSignOutPlan } from "@/client/logout-hold";
+import {
+  editorSignOutPlan, planAfterDiscard, readLogoutHold, untilLoaded, withinHoldLimit, type HoldRead,
+} from "@/client/logout-hold";
 import { SourceObserver } from "@/editor/source";
 import { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
 import type { SaverFailure } from "@/lib/journal/local-document-saver";
@@ -89,6 +91,10 @@ type LockedLogout = {
   resume: () => void;
   /** Deletes the journal unless it holds unconfirmed work (D-118). */
   clear: () => Promise<void>;
+  /** Rows this document holds; null when they cannot be read. */
+  held: () => Promise<number | null>;
+  /** F-154: deletes what this device holds of this document, on the author's second click only. */
+  discard: () => Promise<void>;
 };
 
 type LocalDocumentValue = {
@@ -112,6 +118,13 @@ type LocalDocumentValue = {
   staySignedIn: () => void;
   /** Ends the session; resolves true once the logout route has answered. */
   signOut: () => Promise<boolean>;
+  /**
+   * F-154 (owner decision 1.3): deletes what this device holds of the work
+   * after its submission. Rejects unless this tab holds the lock and the
+   * server confirmed the submission in this page session. Resolves with
+   * what the journal holds afterwards, read again for the open dialog.
+   */
+  discardAfterSubmission: () => Promise<HoldRead>;
 };
 
 const LocalDocumentContext = createContext<LocalDocumentValue | null>(null);
@@ -178,6 +191,13 @@ export function LocalDocumentProvider({
   children: ReactNode;
 }) {
   const [phase, setPhase] = useState<Phase>("loading");
+  // The phase as last rendered, for a sign-out that waits out the load (#874).
+  const phaseRef = useRef<Phase>(phase);
+  const wakeRef = useRef(new Set<() => void>());
+  useEffect(() => {
+    phaseRef.current = phase;
+    for (const wake of [...wakeRef.current]) wake();
+  }, [phase]);
   const [snapshot, setSnapshot] = useState<DocumentSnapshot | null>(null);
   const [words, setWords] = useState(0);
   const [invalid, setInvalid] = useState(false);
@@ -429,8 +449,9 @@ export function LocalDocumentProvider({
         }
         setPhase("ready");
         // Only a signed-in person who acknowledged the notice publishes; the
-        // local demo journal never does.
-        publisher = markTag === null || !livePublish
+        // local demo journal never does, nor a submitted work (O2, #756).
+        const submitted = saver.snapshot().closedBy === "submission";
+        publisher = markTag === null || !livePublish || submitted
           ? null : createLivePublisher({ documentId, current: () => !ended() });
         publisherRef.current = publisher;
         const own = publisher;
@@ -469,6 +490,19 @@ export function LocalDocumentProvider({
               // journal stays this person's, and their next sign-in finishes
               // a fenced deletion (above).
             }
+          },
+          // Under the same limit as the read of the whole scope: a journal
+          // another tab blocks never holds the dialog back (D-118).
+          held: () => withinHoldLimit<number | null>(
+            async () => (await journal.read(documentId)).pending.length, null,
+          ),
+          // Only a submission the server confirmed in this page session: the
+          // session sets `closedBy` from a 409 or an open, never from the journal.
+          // Once this session has ended here, nothing more is deleted for it.
+          discard: async () => {
+            if (disposed || ended()) throw new Error("session_ended");
+            if (saver.snapshot().closedBy !== "submission") throw new Error("not_submitted");
+            await journal.discardAfterSubmission(documentId);
           },
         };
         logoutRef.current = locked;
@@ -525,12 +559,30 @@ export function LocalDocumentProvider({
   // session, so the count the dialog shows cannot grow behind it (I2).
   // The whole scope, as the shell counts it (O2): every document of this person.
   // A page whose session has ended stops and reads nothing (leave).
+  // A click while this tab still reads its journal waits for the read, so the
+  // plan comes from what the journal holds, never from an unread one (#874).
   const prepareSignOut = async (): Promise<LogoutPlan | "leave"> => {
+    await untilLoaded(() => phaseRef.current === "loading", (wake) => {
+      wakeRef.current.add(wake);
+      return () => wakeRef.current.delete(wake);
+    });
     const locked = logoutRef.current;
     const plan = await editorSignOutPlan(locked && (() => locked.quiesce()), scope, { session });
-    // After a submission the steps still held are never sent (3d-2c2 O3).
+    // After a submission the steps still held are never sent (3d-2c2 O3);
+    // only this document's are counted as such (F-154).
     const submitted = saverRef.current?.snapshot().closedBy === "submission";
-    return plan !== "leave" && submitted ? { ...plan, submitted } : plan;
+    if (plan === "leave" || !submitted) return plan;
+    const own = locked ? await locked.held() : null;
+    return own === null ? { ...plan, submitted } : { ...plan, submitted, afterSubmission: own };
+  };
+
+  // Rejects, deleting nothing, unless this tab holds the lock (the plan has
+  // a count after the submission only then).
+  const discardAfterSubmission = async (): Promise<HoldRead> => {
+    const locked = logoutRef.current;
+    if (!locked) throw new Error("not_locked");
+    await locked.discard();
+    return readLogoutHold(scope, { session });
   };
 
   const staySignedIn = () => logoutRef.current?.resume();
@@ -553,7 +605,7 @@ export function LocalDocumentProvider({
   };
 
   const value: LocalDocumentValue = {
-    editor, phase, snapshot, words, invalid, stickyLoad, prepareSignOut, staySignedIn, signOut,
+    editor, phase, snapshot, words, invalid, stickyLoad, prepareSignOut, staySignedIn, signOut, discardAfterSubmission,
   };
   return <LocalDocumentContext.Provider value={value}>{children}</LocalDocumentContext.Provider>;
 }
@@ -731,13 +783,15 @@ export function useLocalStatus(): { loading: boolean; words: number } {
 
 /**
  * The sign-out button of the workspace bar (F-5, D-118) and its dialog
- * (FE-D7). Disabled only while writing stops or a sign-out runs: whatever the
+ * (FE-D7). Disabled only while writing stops or a sign-out runs, which
+ * includes waiting, at most `LOGOUT_LOAD_LIMIT_MS`, for a journal this tab
+ * is still reading (#874): whatever the
  * journal or the tab holds, the dialog always offers "Odjavi se", so the
  * session can always be ended (I1). Without script the form posts to the
  * logout route directly, which ends it as well.
  */
 export function LocalLogout() {
-  const { editor, prepareSignOut, staySignedIn, signOut } = useLocalDocument();
+  const { editor, phase, prepareSignOut, staySignedIn, signOut, discardAfterSubmission } = useLocalDocument();
   const [preparing, setPreparing] = useState(false);
   const [plan, setPlan] = useState<LogoutPlan | null>(null);
   const [working, setWorking] = useState(false);
@@ -811,6 +865,12 @@ export function LocalLogout() {
           copies={plan.copies}
           onExport={() => {
             if (editor && !editor.isDestroyed) exportText(editor);
+          }}
+          // A session ended in another tab leaves no deletion in this dialog.
+          onDiscardAfterSubmission={phase === "signed-out" ? undefined : async () => {
+            // Gone from this device: the dialog counts what the journal still holds.
+            const read = await discardAfterSubmission();
+            setPlan((open) => open && planAfterDiscard(open, read));
           }}
         />
       ) : null}
