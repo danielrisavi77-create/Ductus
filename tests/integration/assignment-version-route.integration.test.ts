@@ -179,15 +179,33 @@ describe("new assignment version: real POST, session and database (DAN-292)", ()
     const remove = (student: string) => withActor(people.teacher.token, async (tx) =>
       (await tx.query<{ removed: boolean }>("SELECT institution.remove_student($1, $2) AS removed", [course, student])).rows[0].removed);
 
-    await withActor(people.teacher.token, async (tx) => {
+    // withActor refuses a nested call, so the removals run from the test,
+    // between barriers the open publishing transaction waits on.
+    const barrier = () => {
+      let open!: () => void;
+      const reached = new Promise<void>((resolve) => (open = resolve));
+      return { open, reached };
+    };
+    const begun = barrier(), earlyGone = barrier(), published = barrier(), lateGone = barrier();
+    const publishing = withActor(people.teacher.token, async (tx) => {
       await tx.query("SELECT 1");
-      expect(await remove(early)).toBe(true);
+      begun.open();
+      await earlyGone.reached;
       await tx.query(
         "SELECT institution.publish_assignment_version($1, 1, $2, $3, $4, $5, $6, $7, $8::text[], $9, $10, $11, $12)",
         [target, "Izmišljeni esej A10, druga verzija", ...rest],
       );
-      expect(await remove(late)).toBe(true);
+      published.open();
+      await lateGone.reached;
     });
+    // A failing transaction ends the wait at once instead of a test timeout.
+    await Promise.race([begun.reached, publishing]);
+    expect(await remove(early)).toBe(true);
+    earlyGone.open();
+    await Promise.race([published.reached, publishing]);
+    expect(await remove(late)).toBe(true);
+    lateGone.open();
+    await publishing;
 
     // Read committed: the statement sees the earlier removal, not the later one.
     const events = await admin.query(
