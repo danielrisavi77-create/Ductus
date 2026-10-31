@@ -51,14 +51,21 @@ export function serverImage(run = (cmd, args) => execFileSync(cmd, args, { encod
   return image;
 }
 
+// dbmate ends its dump with this block; the same text elsewhere (a comment, a
+// function body) is not the list, so only the block at the very end counts.
+const MIGRATIONS_BLOCK = "\n--\n-- Dbmate schema migrations\n--\n\n";
+const MIGRATIONS_LIST = /^INSERT INTO public\.schema_migrations \(version\) VALUES\n((?: {4}\('\d+'\),\n)* {4}\('\d+'\));\n*$/;
+
 /**
- * Migration versions in the order dbmate's dump lists them in its trailing
- * INSERT INTO public.schema_migrations; null when the dump has none.
+ * Migration versions in the order dbmate's dump lists them in the block that
+ * ends the file; null when the file does not end with that block.
  */
 export function dumpedVersions(text) {
-  const insert = /INSERT INTO public\.schema_migrations \(version\) VALUES\s*([\s\S]*?);/.exec(text);
-  if (!insert) return null;
-  return [...insert[1].matchAll(/\('(\d+)'\)/g)].map((m) => m[1]);
+  const start = text.lastIndexOf(MIGRATIONS_BLOCK);
+  if (start < 0) return null;
+  const list = MIGRATIONS_LIST.exec(text.slice(start + MIGRATIONS_BLOCK.length));
+  if (!list) return null;
+  return [...list[1].matchAll(/\('(\d+)'\)/g)].map((m) => m[1]);
 }
 
 /** Versions of the migration files, sorted as dbmate applies them. */

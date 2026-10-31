@@ -9,7 +9,8 @@ import { compare, dumpedVersions, migrationVersions, parseArgs, SCHEMA, serverIm
 const root = new URL("../../", import.meta.url);
 const read = (file) => readFileSync(new URL(file, root), "utf8");
 const IMAGE = `sha256:${"a".repeat(64)}`;
-const DUMP = "CREATE TABLE x ();\n\nINSERT INTO public.schema_migrations (version) VALUES\n    ('20261003200000'),\n    ('20261003210000');\n";
+const BLOCK = "\n--\n-- Dbmate schema migrations\n--\n\nINSERT INTO public.schema_migrations (version) VALUES\n    ('20261003200000'),\n    ('20261003210000');\n";
+const DUMP = `CREATE TABLE x ();\n${BLOCK}`;
 
 test("arguments: none, --out FILE or --write, nothing else", () => {
   assert.deepEqual(parseArgs([]), { write: false, out: null });
@@ -42,6 +43,21 @@ test("the server image is the image ID of the one running postgres container", (
 test("dbmate's trailing schema_migrations insert gives the dumped versions", () => {
   assert.deepEqual(dumpedVersions(DUMP), ["20261003200000", "20261003210000"]);
   assert.equal(dumpedVersions("CREATE TABLE x ();\n"), null);
+});
+
+// #1073 QA: the same INSERT text earlier in the dump (a comment on an object,
+// a function body) is not the list; only the block that ends the file counts.
+test("only the migrations block at the end of the dump counts", () => {
+  const earlier = "INSERT INTO public.schema_migrations (version) VALUES ('1');";
+  const commented = `COMMENT ON TABLE x IS 'e.g. ${earlier}';\n${BLOCK}`;
+  assert.deepEqual(dumpedVersions(commented), ["20261003200000", "20261003210000"]);
+  const body = `CREATE FUNCTION f() RETURNS void LANGUAGE sql AS $$ ${earlier} $$;\n${BLOCK}`;
+  assert.deepEqual(dumpedVersions(body), ["20261003200000", "20261003210000"]);
+  const twice = `${BLOCK.replace("'20261003210000'", "'1'")}COMMENT ON TABLE x IS 'y';\n${BLOCK}`;
+  assert.deepEqual(dumpedVersions(twice), ["20261003200000", "20261003210000"]);
+  assert.equal(dumpedVersions(`COMMENT ON TABLE x IS '${earlier}';\n`), null, "no final block");
+  assert.equal(dumpedVersions(`${DUMP}CREATE TABLE y ();\n`), null, "text after the block");
+  assert.equal(dumpedVersions(DUMP.replace("'),\n", "'), ('9'),\n")), null, "list not in dbmate's form");
 });
 
 test("the comparison fails without the file in HEAD, on an empty or foreign dump and on any byte of difference", () => {
