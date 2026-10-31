@@ -38,8 +38,8 @@ BEGIN
   END IF;
 
   -- The migrator administers each group role directly, as when it creates
-  -- them; that is what the roles migration's GRANT ... SET TRUE and its
-  -- migrate:down DROP ROLE need.
+  -- them; that is what the roles migration's GRANT ... SET TRUE and the
+  -- DROP ROLE of its down section need.
   SELECT r.rolname INTO role_name FROM pg_catalog.pg_roles r
   WHERE r.rolname = ANY (group_roles)
     AND NOT EXISTS (

@@ -28,7 +28,9 @@ function section(direction: "up" | "down"): string {
   const sql = readFileSync(FILE, "utf8");
   const up = sql.indexOf("-- migrate:up");
   const down = sql.indexOf("-- migrate:down");
-  if (up < 0 || down <= up) throw new Error("the roles check is not a dbmate migration");
+  if (up < 0 || down <= up || sql.match(/migrate:(up|down)/g)?.length !== 2) {
+    throw new Error("the roles check is not a dbmate migration with one up and one down section");
+  }
   return direction === "up" ? sql.slice(up, down) : sql.slice(down);
 }
 

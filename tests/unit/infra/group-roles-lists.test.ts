@@ -58,6 +58,8 @@ describe("the group role lists", () => {
 
   it("the check migration only reads: its up section has no statement that changes anything", () => {
     const sql = read(FILES.checkMigration);
+    // One marker each, or the up section is cut where a comment names one.
+    expect(sql.match(/migrate:(up|down)/g)).toEqual(["migrate:up", "migrate:down"]);
     const up = sql.slice(sql.indexOf("-- migrate:up"), sql.indexOf("-- migrate:down")).replace(/--[^\n]*/g, "")
       .replace(/'[^']*'/g, "''");
     expect(up).toMatch(/RAISE EXCEPTION/);
