@@ -397,10 +397,10 @@ test.describe("workspace shell", () => {
       await page.emulateMedia({ colorScheme });
       await page.goto("/rad");
       const body = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-      expect(body).toBe("rgb(25, 22, 26)");
+      expect(body).toBe("rgb(36, 36, 34)");
       const sheet = page.locator("article.sheet");
       await expect(sheet).toHaveAttribute("data-sheet-theme", "dark");
-      expect(await sheet.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(41, 35, 41)");
+      expect(await sheet.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(46, 46, 43)");
     }
   });
 
@@ -418,7 +418,7 @@ test.describe("workspace shell", () => {
     await view.click();
     await expect(theme("Bijeli list")).toHaveAttribute("aria-checked", "true");
     await page.keyboard.press("Escape");
-    expect(await sheet.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(255, 255, 255)");
+    expect(await sheet.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(252, 251, 248)");
     await page.reload();
     await expect(sheet).toHaveAttribute("data-sheet-theme", "light");
     await view.click();
@@ -454,7 +454,7 @@ test.describe("workspace shell", () => {
     await page.goto("/");
     await expect(
       page.getByText(
-        "Ductura ne procjenjuje autorstvo ni korištenje AI-ja. Prije početka vidite što nastavnik vidi i od kada.",
+        "Student piše, a nastavnik prati kako rad nastaje i komentira uz odlomke. Ductura ne procjenjuje autorstvo ni korištenje AI-ja, a prije početka vidite što nastavnik vidi i od kada.",
         { exact: true },
       ),
     ).toBeVisible();
