@@ -28,7 +28,7 @@ import {
   isSignedEvidenceReceipt,
   type SignedEvidenceReceipt,
 } from "@/domain/forensics/evidence-receipt";
-import type { EvidenceSegmentV2 } from "@/domain/forensics/evidence-segment-v2";
+import type { EvidenceSegment } from "@/domain/forensics/evidence-segment-v2";
 import { isSignatureEnvelope } from "@/domain/forensics/signature";
 import { isPlainObject } from "@/domain/json";
 
@@ -42,7 +42,7 @@ type GatewayDependencies = {
 
 function descriptorMatchesSegment(
   command: EvidenceIngestCommandV2,
-  segment: EvidenceSegmentV2,
+  segment: EvidenceSegment,
 ): boolean {
   const d = command.descriptor;
   return (

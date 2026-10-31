@@ -773,6 +773,13 @@ describe("GET /api/teacher/courses over the real function (DAN-230)", () => {
     );
     expect(main?.assignments.map((a) => [a.id, a.currentVersion, a.enrolledStudents]).sort())
       .toEqual(current.rows.map((r) => [r.id, r.current_version, students]).sort());
+    // Each course carries its own rule on AI help (DAN-344 R-1), as stored.
+    const rules = await admin.query<{ id: string; ai_policy: string }>(
+      "SELECT id, ai_policy FROM institution.course WHERE id = ANY($1::uuid[])",
+      [body.courses.map((c) => c.id)],
+    );
+    expect(body.courses.map((c) => [c.id, (c as { aiPolicy?: string }).aiPolicy]).sort())
+      .toEqual(rules.rows.map((r) => [r.id, r.ai_policy]).sort());
     expect(JSON.stringify(body)).not.toContain(people.student.id);
 
     for (const person of [people.student, people.outsider, people.admin, people.stranger]) {

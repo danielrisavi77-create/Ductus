@@ -56,6 +56,7 @@ const CRITICAL_SAMPLES = [
   "scripts/demo/provision-teacher.mjs",
   "scripts/demo/up.test.mjs",
   "scripts/demo/bootstrap-accounts.test.mjs",
+  "scripts/demo/provision-teacher.test.mjs",
   ...D97_PATHS.map(sample),
 ];
 

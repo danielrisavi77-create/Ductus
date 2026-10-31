@@ -3,7 +3,7 @@ import { appendFileSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const LOGIN_SHARDS = 2;
+export const LOGIN_SHARDS = 3;
 
 // Every test of a Playwright JSON report as "file › suite titles › test › project".
 export function testsOf(report) {
@@ -22,7 +22,7 @@ export function testsOf(report) {
   return out;
 }
 
-// Both shards ran their part, the parts are disjoint, and together they are
+// Every shard ran its part, the parts are disjoint, and together they are
 // exactly the suite each runner listed in full before sharding.
 export function verifyLoginShards(shards) {
   assert.equal(shards.length, LOGIN_SHARDS, "Every login shard is required");
