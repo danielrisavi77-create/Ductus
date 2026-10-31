@@ -790,7 +790,7 @@ Točna verzija pravila koja je vrijedila u trenutku relevantnog događaja / pred
 
 **OWNER ODLUKA 5. 10. 2026.:** ugrađeni AI Assistant ostaje dio product visiona i dizajna upravo kako je prikazan u mockupovima. Ovaj Product Spec ga ne uklanja niti zamjenjuje.
 
-**Status rollouta:** postojeći D-77 ga i dalje može odgoditi iz prvog FPZG pilota dok se ne promijeni odluka. To je rollout odluka, ne brisanje funkcije iz proizvoda.
+**Status rollouta:** D-77 ga je odgađao iz prvog FPZG pilota; D-194 (31. 10. 2026.) ga uvodi u pilot. To je rollout odluka, ne brisanje funkcije iz proizvoda.
 
 ---
 
@@ -868,7 +868,7 @@ Mogući sukobi s trenutačnim:
 - D-61;
 - D-62;
 - D-01 / C-9 / C-10 za copy o autorstvu;
-- D-77 za timing AI Assistanta;
+- D-77 i D-194 za timing AI Assistanta;
 - D-56 / Constitution Gate za Replay.
 
 ## 18.3 Pravilo za razvoj
