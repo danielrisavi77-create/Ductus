@@ -18,6 +18,8 @@ Paralelno s fazama teče tvoj red (`STATE.md`, Owner queue): Srce, FPZG, pravni 
 
 Backend (hosting, prijava, evidencija, korijen i žig, operacije) razrađen je u `docs/BACKEND.md` §8 kao okomiti rez kroz ove faze; dodatak realno 18 do 25 večeri (zaseban red u valu 1) uz spikeove B0.1 i B0.2 prije M2.
 
+**Razgraničenje vizuala (D-115):** funkcionalni elementi M5 navedeni u ovoj tablici i podjeli valova ne znače da je dizajn prototipa v6 (D-89) još kanonski. Za izgled, tokene i komponente vrijedi `docs/design/DESIGN-SYSTEM.md` (D-115); D-115 zamjenjuje vizualni dio D-85, ali ne mijenja funkcionalne izlazne kriterije M5.
+
 | Faza | Sadržaj | Izlazni kriterij | Procjena |
 | --- | --- | --- | --- |
 | **M0 Temelj** | Prijenos jezgre iz `pisac-editor` s testovima; CI (lint, typecheck, unit, property, E2E, axe, Gitleaks, zizmor, Semgrep, OSV); lefthook; `docker compose` okruženje (Postgres, S3-kompatibilna pohrana, Mailpit, lažni OIDC; MinIO više nema sliku, lokalno RustFS) u CI-ju; kod iza sučelja dok dio D-08 o dobavljačima i trošku nije potvrđen | Svi preneseni testovi zeleni, isti broj kao u izvoru; CI zelen na `main` | 2 do 3 |
@@ -25,7 +27,7 @@ Backend (hosting, prijava, evidencija, korijen i žig, operacije) razrađen je u
 | **M2 Model fakulteta** | Fakultet, kolegij, članstvo, zadatak i verzije zadatka, potvrda obavijesti, mentorstvo, uloge, pravilo AI-ja kolegija (D-52), oznaka prilagodbe (D-50); upis kodom; pgTAP matrica pristupa | Matrica pristupa zelena za sve kombinacije uloga, uključujući mentora | 4 do 5 |
 | **M3 Evidencija** | Sažimanje transakcija u odsječke s autorom, ruta `ingest`, hash lanac, kontrolne točke, praznine, offline oznaka, oznaka lijepljenja (D-43), vrsta dokaza (D-44), spike programskog unosa (D-54); journal vezan uz korisnika i brisanje sinkroniziranog zapisa pri odjavi (D-118) | Property testovi: izmjena, brisanje ili preslagivanje odsječka ruši provjeru; idempotentno ponovno slanje; oporavak prekida između Storagea, RPC-a i potpisa; izmjereno CPU vrijeme rekonstrukcije doktorskog rada | 7 do 9 |
 | **M4 Lekta paket** | U Lekti: generirani paket pravila po uzoru na `katedra-pack` (FPZG profili, pravila oblika, citatni stilovi, predlošci naslovne stranice). U Ductusu: učitavanje profila i provjera oblika nad dokumentom editora | FPZG profili učitani iz paketa s verzijom; test zanošenja (drift) u Lekti; provjera oblika javlja odstupanja na testnim radovima | 8 do 12 |
-| **M5 Akademski editor** | Numerirani naslovi, sadržaj, naslovna stranica i izjava, fusnote, tablice, slike s opisima, popisi tablica i slika, citiranje u tekstu, bibliografija u stilu fakulteta; provjera postojanja DOI-ja i URL-a (D-48, val 2); opseg po poglavlju (D-60), bilježnica izvora (D-59, uvoz iz Zotera u valu 2), poziv na prikaze, hrvatski navodnici, traži i zamijeni, fokus | Testni rad od 15.000 riječi sa svim elementima uređuje se bez gubitka; citati i bibliografija usklađeni; napredak studenta iz verzija (D-63) | 19 do 26 |
+| **M5 Akademski editor** | Numerirani naslovi, sadržaj, naslovna stranica i izjava, fusnote, tablice, slike s opisima, grafikoni, popisi tablica, slika i grafikona, blok-citat, citiranje u tekstu, bibliografija u stilu fakulteta; provjera postojanja DOI-ja i URL-a (D-48, val 2); opseg po poglavlju (D-60), bilježnica izvora (D-59, uvoz iz Zotera u valu 2), poziv na prikaze, hrvatski navodnici, traži i zamijeni, fokus, undo/redo, približan broj stranica i riječi ove sesije u statusu; lijevi panel strukture s ciljevima riječi po poglavlju i ikonama događaja (D-61) | Testni rad od 15.000 riječi sa svim elementima uređuje se bez gubitka; citati i bibliografija usklađeni; napredak studenta iz verzija (D-63) | 19 do 26 |
 | **M6 Suradnja** | Nastavnički pogled na spremljeno stanje (polling, D-74), komentari vezani uz odlomak, prijedlozi izmjena, izravne izmjene s pripisivanjem, pravilo D-34; val 2: zahtjev za doradu (D-45), odgođeno objavljivanje (D-51), konzultacije (D-47) | Komentar i prijedlog stižu studentu bez osvježavanja; svaka izmjena nastavnika pripisana u evidenciji; nema izgubljenih promjena kad oboje rade; izmjena prihvaćenog odlomka ponovno otvara pregled | 17 do 24 |
 | **M7 Predaja i sažetak** | Obavijest (S3), ciklusi verzija, pregled prije predaje, zamrzavanje, rekonstrukcija, potvrda, sažetak procesa, usporedba verzija, produljenje roka, izjava po FPZG čl. 9 i 15 (D-40); val 2: prenosiv zapis s QR provjerom (D-49) | Rekonstrukcija podudarna na svim scenarijima, uključujući prazninu; nepodudarnost blokira predaju; student i nastavnik vide isti sažetak; nema zabranjenih riječi; rok testiran preko promjene sata; izjava sadrži sve zabilježene stavke; karta podrijetla bez zbroja (D-57); otvorena mjesta (D-61) i pravila zadatka s kontrolnim popisom (D-62) bez oznaka prolaza | 15 do 20 |
 | **M8 Uvoz i izvoz** | Uvoz DOCX-a i PDF-a kao označen događaj; izvoz DOCX-a i PDF-a u obliku fakulteta | Uvoz označen u evidenciji; izvezeni DOCX prolazi Lektinu provjeru za FPZG profil | 6 do 8 |
@@ -102,7 +104,7 @@ Radovi: podnesci i eseji. Bez AI pomoćnika (FPZG ga ionako ne smije tražiti, D
 | M2 | Model fakulteta s rupama: komentor, povjerenstvo, pravno zadržavanje, jezik rada, pravilo AI-ja kolegija, prilagodba | 5 do 6 |
 | M3 | Evidencija, oznaka lijepljenja (D-43), vrsta dokaza (D-44), spike programskog unosa (D-54), bilježenje ritma za mentorske radove ako je D-56 odobren | 8 do 10 |
 | M4 osnovno | Lekta paket: FPZG citatni stil, opseg, naslovna stranica | 4 do 6 |
-| M5 osnovno | Naslovi, citiranje, bibliografija, DOI i ISBN (S-08), opseg po poglavlju (D-60), pravopis po jeziku rada (S-07), navodnici, traži i zamijeni, osnovna bilježnica izvora (D-59) | 9 do 12 |
+| M5 osnovno | Naslovi, citiranje, bibliografija, DOI i ISBN (S-08), opseg po poglavlju (D-60), pravopis po jeziku rada (S-07), navodnici, traži i zamijeni, osnovna bilježnica izvora (D-59), undo/redo, lijevi panel strukture s ciljevima riječi | 9 do 12 |
 | M6 osnovno | Pogled na rad u nastajanju, komentari, prijedlozi | 6 do 8 |
 | M7 osnovno | Obavijest S3, predaja, rekonstrukcija, sažetak procesa, izjava D-40 bez AI dijela, produljenje roka | 8 do 10 |
 | M10 osnovno | Klase podataka, brisanje po roku, pravno zadržavanje (F-02) | 2 do 3 |
@@ -115,7 +117,7 @@ Radovi: podnesci i eseji. Bez AI pomoćnika (FPZG ga ionako ne smije tražiti, D
 
 | Dio | Sadržaj | Procjena |
 | --- | --- | --- |
-| M5 ostatak | Fusnote, tablice, slike, pozivi na prikaze | 5 do 7 |
+| M5 ostatak | Fusnote, tablice, slike, grafikoni, blok-citat, pozivi na prikaze, popisi tablica/slika/grafikona, ikone događaja uz poglavlja u strukturi (D-61), približan broj stranica i riječi ove sesije | 5 do 7 |
 | M6 ostatak | Izravne izmjene (D-21), zahtjev za doradu (D-45), odgođeno objavljivanje (D-51), banka komentara (N-03), promjene od zadnjeg pregleda (N-05) | 8 do 11 |
 | M7 ostatak | Karta podrijetla (D-57), otvorena mjesta (D-61), pravila zadatka i kontrolni popis (D-62) | 5 do 7 |
 | M8 | Uvoz i izvoz DOCX-a | 4 do 5 |
