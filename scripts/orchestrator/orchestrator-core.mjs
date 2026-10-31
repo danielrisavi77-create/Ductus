@@ -1,5 +1,5 @@
 // Pure logic for the orchestrator helper scripts. No gh/git calls here.
-import { canonicalBlock, field } from "../engineering/metadata-parser.mjs";
+import { canonicalBlock, field, metadataLines } from "../engineering/metadata-parser.mjs";
 import { evaluateMetadata } from "../engineering/pr-metadata-core.mjs";
 import { commentTime, trustedAuthor, verifiedCommentIdentity } from "../engineering/review-gate-core.mjs";
 import {
@@ -89,10 +89,24 @@ export function formatOverlaps(list) {
 
 // F-015: a verdict counts here only as the gate reads it: trusted author, canonical
 // first line, an App that may carry the declared runtime, the kind's role and a full head.
+// The owner's Grok or Codex CLI posts from the owner's own account with one
+// `Review-Channel:` line, and the gate counts it as that App (D-162, D-193;
+// review-gate-core cliChannel). OWNER association stands in for the gate's
+// owner-login check: on this user-owned repository only the owner has it.
+const CLI_APPS = new Map([["grok-cli", "grok-by-xai"], ["codex-cli", "chatgpt-codex-connector"]]);
+const CLI_LINE_RE = /^Review-Channel:[ \t]*(grok-cli|codex-cli)$/i;
+function reportAppSlug(c) {
+  const slug = c?.performed_via_github_app?.slug ?? null;
+  if (slug) return slug;
+  if (c?.author_association !== "OWNER") return null;
+  const named = new Set(metadataLines(c?.body ?? "").map((l) => CLI_LINE_RE.exec(l)?.[1]?.toLowerCase()).filter(Boolean));
+  return named.size === 1 ? CLI_APPS.get([...named][0]) : null;
+}
+
 function gateReadable(c, k) {
   if (!trustedAuthor(c) || !canonicalBlock(c?.body, k.agent)) return false;
   const agent = field(c.body, k.agent);
-  if (!verifiedCommentIdentity({ appSlug: c?.performed_via_github_app?.slug ?? null }, agent)) return false;
+  if (!verifiedCommentIdentity({ appSlug: reportAppSlug(c) }, agent)) return false;
   return agent.endsWith(`:${k.role}`) && SHA_RE.test(field(c.body, k.head) ?? "");
 }
 
@@ -107,7 +121,7 @@ export function parseVerdicts(comments, kind) {
       head: field(c.body, k.head),
       verdict: field(c.body, k.verdict)?.toUpperCase() ?? null,
       author: c.user?.login ?? null,
-      appSlug: c.performed_via_github_app?.slug ?? null,
+      appSlug: reportAppSlug(c),
       createdAt: commentTime(c) || index,
       index,
     }))

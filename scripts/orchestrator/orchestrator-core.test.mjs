@@ -315,3 +315,19 @@ test("a two-part agent, the wrong role or a short head is not a verdict", () => 
   assert.equal(countCanonical([rv("claude:r1:reviewer"), qv("claude:q1:qa")]), 2);
   assert.equal(parseVerdicts([qv("claude:q1:qa")], "qa")[0].agent, "claude:q1:qa");
 });
+
+test("an owner CLI verdict counts as its App, as the gate counts it (D-162, D-193)", () => {
+  const cli = (agent, lines, over = {}) =>
+    c(`QA-Agent: ${agent}\nQA-Head: ${H1}\nQA-Verdict: PASS\n${lines}`, { performed_via_github_app: null, ...over });
+  assert.equal(countCanonical([cli("codex:cxq1:qa", "Review-Channel: codex-cli")]), 1);
+  assert.equal(countCanonical([cli("grok:g1:qa", "Review-Channel: grok-cli")]), 1);
+  assert.equal(latestVerdict([cli("codex:cxq1:qa", "Review-Channel: codex-cli")], "qa", H1).verdict, "PASS");
+  // Wrong runtime for the channel, both channels, a channel in a code block, or not the owner: not counted.
+  assert.equal(countCanonical([cli("claude:q1:qa", "Review-Channel: codex-cli")]), 0);
+  assert.equal(countCanonical([cli("codex:cxq1:qa", "Review-Channel: codex-cli\nReview-Channel: grok-cli")]), 0);
+  assert.equal(countCanonical([cli("codex:cxq1:qa", "```\nReview-Channel: codex-cli\n```")]), 0);
+  assert.equal(countCanonical([cli("codex:cxq1:qa", "Review-Channel: codex-cli", { author_association: "COLLABORATOR" })]), 0);
+  assert.equal(countCanonical([cli("codex:cxq1:qa", "")]), 0);
+  // A real App slug wins over a channel line.
+  assert.equal(countCanonical([cli("codex:cxq1:qa", "Review-Channel: codex-cli", { performed_via_github_app: { slug: "claude" } })]), 0);
+});
