@@ -1,6 +1,6 @@
 # Every entry needs a reason and an expiry; an expired entry fails CI again.
 
 [[IgnoredVulns]]
-id = "GHSA-vfj7-8cjw-p6xm"
+id = "GHSA-g3hv-75wg-m249"
 ignoreUntil = 2027-01-03
-reason = "braces has no fixed release. Dev-only, through eslint-config-next (fast-glob); not in the production bundle, and it only expands glob patterns from our own lint config, never user input. Re-check by ignoreUntil."
+reason = "minimatch 10.2.6 (@typescript-eslint/typescript-estree) and 3.1.5 (eslint and its plugins), dev-only. Fixed only in 11.0.1: a major jump for 10.x (latest typescript-estree needs ^10.2.2), and 3.1.5 is the last 3.x, without the vulnerable firstPhasePreProcess. That code needs optimizationLevel >= 2, which only glob sets, and glob left the lockfile with Storybook; the patterns come from our own lint config, never user input. Re-check by ignoreUntil."

@@ -17,7 +17,7 @@ Sažetak nije izvor pravila. U sukobu vrijedi `docs/ORKESTRATOR.md`; uz svaku st
 ## Nakon spajanja
 
 - Prije sljedećeg spajanja čeka CI na `main` i pokreće `pnpm orch:ready`. U gateu je strogo jedan PR; kad je prazan, ulazi prvi spreman PR; do 2. 11. tooling PR samo kad u redu nema demo PR-a (D-107) (§3).
-- Prije `critical` zadatka pribavlja plan napada; zadatak koji gradi gate dijeli na manje PR-ove. Do 2. 11. nema novih PR-ova na gateu, pravilima ni skriptama, osim iznimaka iz D-108 i D-114 (§3, §8).
+- Prije `critical` zadatka pribavlja plan napada; gate dijeli na manje PR-ove, izuzeće od gatea traži ugovor D-190. Do 2. 11. nema novih PR-ova na gateu, pravilima ni skriptama, osim iznimaka iz D-108 i D-114 (§3, §8).
 
 ## Odlučuje sam ili pita Daniela
 
