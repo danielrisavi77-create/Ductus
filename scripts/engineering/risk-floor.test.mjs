@@ -259,39 +259,90 @@ test("the gate workflow re-evaluates when auto-merge is switched on or off", () 
 });
 
 // F-033: every file a Claude Code hook in a committed settings file runs is an
-// owner-command path, so a hook cannot be swapped under a lower gate.
-/** Repository paths a hooks object runs, from `command` text and `args`. */
-function hookPaths(hooks) {
+// owner-command path, so a hook cannot be swapped under a lower gate. The
+// reader fails closed: a hook whose script it cannot name exactly (a ".."
+// segment, a shell or environment variable, inline code, a script given
+// without the project directory) is a problem, not a pass.
+const PROJECT_PATH = /\$\{?CLAUDE_PROJECT_DIR\}?\/([^\s"'$;|&)`]*)/g;
+// The only shell variables the committed hooks use: the exit status and its copy.
+const ALLOWED_VARIABLES = /\$\?|\$\{?rc\}?(?![\w])/g;
+const INLINE_CODE = /(?:^|\s)(?:-e|-p|--eval|--print|--import|--require|-r|--loader|--experimental-loader)(?=[\s=]|$)/;
+const SCRIPT_NAME = /[\w./\\-]*\.(?:m?js|cjs|ts|mts|cts|sh|py|ps1|bat|cmd)\b/gi;
+
+/** Repository paths the hooks run, and every hook the reader cannot account for. */
+function hookCheck(hooks) {
   const paths = new Set();
+  const problems = [];
   const walk = (node) => {
     if (Array.isArray(node)) return node.forEach(walk);
     if (!node || typeof node !== "object") return;
-    for (const text of [node.command, ...(Array.isArray(node.args) ? node.args : [])]) {
-      if (typeof text !== "string") continue;
-      for (const m of text.matchAll(/\$\{?CLAUDE_PROJECT_DIR\}?\/([^\s"'$;|&)]+)/g)) paths.add(m[1]);
+    if (typeof node.command === "string") {
+      const texts = [node.command, ...(Array.isArray(node.args) ? node.args : [])];
+      if (!texts.every((text) => typeof text === "string")) problems.push(`non-text argument: ${JSON.stringify(node)}`);
+      let found = 0;
+      for (const text of texts.filter((x) => typeof x === "string")) {
+        for (const m of text.matchAll(PROJECT_PATH)) {
+          found += 1;
+          if (m[1].split("/").some((s) => s === ".." || s === ".") || m[1] === "") problems.push(`unresolved path: ${m[0]}`);
+          else paths.add(m[1]);
+        }
+        const rest = text.replace(PROJECT_PATH, "").replace(ALLOWED_VARIABLES, "");
+        if (/[$`%]/.test(rest)) problems.push(`variable or substitution: ${text}`);
+        if (INLINE_CODE.test(rest)) problems.push(`inline code: ${text}`);
+        for (const name of rest.match(SCRIPT_NAME) ?? []) {
+          if (ownerCommandPaths([name]).length === 0) problems.push(`script outside the project directory form: ${name}`);
+        }
+      }
+      if (found === 0) problems.push(`no project script: ${JSON.stringify(node)}`);
     }
     Object.values(node).forEach(walk);
   };
   walk(hooks);
-  return [...paths].sort();
+  return { paths: [...paths].sort(), problems };
 }
 
-test("the hook path reader sees command text and args, and a hook outside D-97 would fail", () => {
-  const found = hookPaths({
+const hook = (entry) => ({ Stop: [{ hooks: [{ type: "command", ...entry }] }] });
+
+test("the hook reader sees command text and args, and a hook outside D-97 would fail", () => {
+  const { paths, problems } = hookCheck({
     Stop: [{ hooks: [{ command: "node", args: ["${CLAUDE_PROJECT_DIR}/scripts/x.mjs", "start"] }] }],
     PreToolUse: [{ hooks: [{ command: 'node "$CLAUDE_PROJECT_DIR/tools/y.mjs" || exit 0' }] }],
   });
-  assert.deepEqual(found, ["scripts/x.mjs", "tools/y.mjs"]);
-  for (const file of found) assert.deepEqual(ownerCommandPaths([file]), [], file);
+  assert.deepEqual(problems, []);
+  assert.deepEqual(paths, ["scripts/x.mjs", "tools/y.mjs"]);
+  for (const file of paths) assert.deepEqual(ownerCommandPaths([file]), [], file);
 });
+
+// #1082 QA (F033-QA-01, F033-QA-02) and the neighbouring forms.
+test("a hook whose script the reader cannot name exactly is a problem, not a pass", () => {
+  for (const entry of [
+    { command: "node", args: ["${CLAUDE_PROJECT_DIR}/scripts/hooks/../../tools/p.mjs"] },
+    { command: 'node "$CLAUDE_PROJECT_DIR/scripts/hooks/./../x.mjs"' },
+    { command: 'H=tools/p.mjs; node "$CLAUDE_PROJECT_DIR/$H"' },
+    { command: 'node "$CLAUDE_PROJECT_DIR/scripts/hooks/$NAME"' },
+    { command: 'node "${CLAUDE_PROJECT_DIR}/scripts/hooks/`echo x`.mjs"' },
+    { command: "node", args: ["%CLAUDE_PROJECT_DIR%/tools/p.mjs"] },
+    { command: 'node -e "require(1)" "$CLAUDE_PROJECT_DIR/scripts/hooks/a.mjs"' },
+    { command: "node", args: ["--import", "./tools/p.mjs", "${CLAUDE_PROJECT_DIR}/scripts/hooks/a.mjs"] },
+    { command: 'node tools/p.mjs "$CLAUDE_PROJECT_DIR/scripts/hooks/a.mjs"' },
+    { command: "node tools/p.mjs" },
+    { command: "node", args: ["${CLAUDE_PROJECT_DIR}/"] },
+    { command: "node", args: [["${CLAUDE_PROJECT_DIR}/scripts/hooks/a.mjs"]] },
+  ]) {
+    assert.notDeepEqual(hookCheck(hook(entry)).problems, [], JSON.stringify(entry));
+  }
+});
+
 test("every script a committed settings hook runs is critical and owner-command", () => {
   const settings = execFileSync("git", ["ls-files", "--", "*settings*.json"], { cwd: root, encoding: "utf8" })
     .split("\n")
-    .filter((file) => /(?:^|\/)\.claude\/settings(?:\.[^/]+)?\.json$/.test(file));
+    .filter((file) => /(?:^|\/)\.claude\/settings(?:\.[^/]+)?\.json$/i.test(file));
   assert.ok(settings.includes(".claude/settings.json"), "the project settings file is tracked");
   const paths = new Set();
   for (const file of settings) {
-    for (const p of hookPaths(JSON.parse(readFileSync(new URL(file, root), "utf8")).hooks)) paths.add(p);
+    const check = hookCheck(JSON.parse(readFileSync(new URL(file, root), "utf8")).hooks);
+    assert.deepEqual(check.problems, [], file);
+    for (const p of check.paths) paths.add(p);
   }
   assert.ok(paths.size >= 5, `hook scripts found: ${[...paths].join(", ")}`);
   for (const file of paths) {
