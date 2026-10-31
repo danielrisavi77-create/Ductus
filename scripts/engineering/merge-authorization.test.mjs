@@ -2,8 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { carriedHeadCandidates, evaluateMergeAuthorization, evaluatePullRequest } from "./review-gate-core.mjs";
-import { evaluateMetadata } from "./pr-metadata-core.mjs";
-import { changedPaths, qaExemption } from "./protected-paths.mjs";
+import { CRITICAL_PATHS, evaluateMetadata } from "./pr-metadata-core.mjs";
+import { changedPaths, isOwnerFreePath, qaExemption } from "./protected-paths.mjs";
 
 // D-161 (h): the merge queue reads one status, "Merge authorization", computed
 // by the gate with the same parser that checks the declared risk.
@@ -257,4 +257,21 @@ test("evaluatePullRequest returns the authorization beside the gate result", () 
   });
   assert.notEqual(out.result.state, "success");
   assert.equal(out.mergeAuthorization.state, "pending");
+});
+
+// F-173 (review c.6550166650): a file on the critical floor stays under the
+// owner's command unless the floor is the app code itself (migrations, the
+// actor boundary and tests are what D-196 lets merge without it).
+const APP_FLOOR = new Set(["db/migrations/", "db/tests/", "src/server/db/", "tests/"]);
+test("no critical-floor control file is owner-free, only the app floor is (F-173)", () => {
+  for (const entry of CRITICAL_PATHS) {
+    const sample = entry.endsWith("/") ? `${entry}x.ts` : entry;
+    assert.equal(isOwnerFreePath(sample), APP_FLOOR.has(entry), entry);
+  }
+  assert.equal(isOwnerFreePath("docs/PRODUCT.md"), false);
+  assert.equal(isOwnerFreePath("docs/FEATURES.md"), true);
+  const control = authorize({ body: bodyWith("critical"), filenames: ["src/server/auth/session.ts", "docs/FEATURES.md"] });
+  assert.equal(control.state, "success");
+  const product = authorize({ body: bodyWith("critical"), filenames: ["src/server/auth/session.ts", "docs/PRODUCT.md"] });
+  assert.equal(product.state, "pending");
 });

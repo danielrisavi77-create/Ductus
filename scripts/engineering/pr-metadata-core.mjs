@@ -1,5 +1,12 @@
 import { field } from "./metadata-parser.mjs";
-import { D97_MANUAL_PATHS, D97_PATHS, isAgentControlPath, matchesPath, normalizePath } from "./protected-paths.mjs";
+import {
+  CRITICAL_DOC_PATHS,
+  D97_MANUAL_PATHS,
+  D97_PATHS,
+  isAgentControlPath,
+  matchesPath,
+  normalizePath,
+} from "./protected-paths.mjs";
 
 const RISK_RANK = { low: 0, standard: 1, critical: 2 };
 const AGENT_RE =
@@ -12,7 +19,7 @@ const AGENT_RE =
 // directory and its runner configuration carry the floor of the guards.
 export const CRITICAL_PATHS = [
   ...D97_PATHS,
-  "docs/PRODUCT.md",
+  ...CRITICAL_DOC_PATHS,
   "STATE.md",
   ".worktreeinclude",
   "osv-scanner.toml",

@@ -147,12 +147,17 @@ export const isNewTestExempt = (file) => {
 // documents of the low-doc allowlist above. Every other file, D-97 or not,
 // keeps the command. An allowlist, never "everything but D-97" (D-190).
 export const OWNER_FREE_DIRS = ["src/", "app/", "db/migrations/", "db/tests/", "tests/", "e2e/"];
+// Documents on the critical floor (CRITICAL_PATHS in pr-metadata-core.mjs takes
+// them from here): the product rules and the forbidden-terms dictionary the
+// scanner checks against. They are never owner-free, though a low doc otherwise.
+export const CRITICAL_DOC_PATHS = ["docs/PRODUCT.md"];
 export function isOwnerFreePath(file) {
   const p = normalizePath(file);
   if (
     hasDotSegment(p) ||
     AGENT_INSTRUCTIONS_RE.test(p) ||
     p.split("/").includes("node_modules") ||
+    matchesPath(p, CRITICAL_DOC_PATHS) ||
     ownerCommandPaths([p]).length > 0
   ) {
     return false;
