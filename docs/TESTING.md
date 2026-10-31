@@ -28,7 +28,7 @@ Ductus ne testira samo radi li funkcija, nego može li se vjerovati zapisu, ovla
 
 CI profil (D-160): `scripts/engineering/ci-docs-scope.mjs`, izvršen iz točnog SHA-a zaštićenog `main`, dopušta izostavljanje samo runtime koraka Local stack za PR prema `main` čiji potpuni diff točnih SHA-ova sadrži isključivo obične neizvršne datoteke s njegovog uskog popisa (`README.md`, `docs/UX-EVAL.md` i šest postojećih Markdown dokumenata `docs/privacy/`). Required posao se izvršava i izričito javlja da DB/browser testovi nisu izvedeni. Build, lint, typecheck, unit/property, engineering/orchestrator testovi i skeneri ostaju. Nepoznata putanja, pravila, fixture, promjena tipa/moda ili prazan diff traže puni profil; greška klasifikacije blokira. Preimenovanje se provjerava pod oba imena. PR prema drugoj grani, `push` na main i noćni run uvijek su puni. Novi push i dalje otkazuje stare skupe korake; otkazivanje ne daje zeleni Local stack. To nije QA izuzeće niti promjena risk floora.
 
-Standardni E2E (`stack-e2e`) i login E2E (`stack-login`) izvršavaju se paralelno, svaki na zasebnom runneru s vlastitim Compose stogom, migracijama, demo podacima i čišćenjem. PgTAP, integration i produkcijski build ostaju u standardnom poslu; login koristi `next dev` i zasebnu Next predmemoriju. Obvezni status `Local stack (compose.yaml)` čeka oba posla: puni profil prolazi samo uz oba uspješna rezultata, a docs profil samo uz oba očekivano preskočena posla. Neuspješan klasifikator, nepoznat profil, kvar, neočekivano preskakanje ili otkazivanje ne daju prolaz.
+Standardni E2E (`stack-e2e`) i login E2E (`stack-login`) izvršavaju se paralelno, svaki na zasebnom runneru s vlastitim Compose stogom, migracijama, probnim podacima i čišćenjem. PgTAP, integration i produkcijski build ostaju u standardnom poslu; login koristi `next dev` i zasebnu Next predmemoriju. Obvezni status `Local stack (compose.yaml)` čeka oba posla: puni profil prolazi samo uz oba uspješna rezultata, a docs profil samo uz oba očekivano preskočena posla. Neuspješan klasifikator, nepoznat profil, kvar, neočekivano preskakanje ili otkazivanje ne daju prolaz.
 
 - CI (P1-3, 12. 10. 2026.): na PR-u se E2E vrti samo na Chromiumu (desktop i mobilni viewport); na `main` i u noćnom pokretanju vrte se sva tri enginea (Chromium, Firefox, WebKit). Crveni Firefox ili WebKit na `main` ili noću je nalaz za sljedeći dan, ne tiha regresija.
 - Chromium: svaki frontend/E2E PR, u CI-ju PR-a.
@@ -80,7 +80,7 @@ uvoza/potrošača CSS-a, dokaze iz kandidatnih PR-ova i zaseban zadatak.
 
 ### Vizualni baselineovi i ARIA snimke (DAN-249)
 
-Tri demo ekrana uspoređuju se piksel po piksel s referentnom slikom:
+Tri ekrana uspoređuju se piksel po piksel s referentnom slikom:
 
 | Ekran | Spec | Projekt |
 |---|---|---|
@@ -105,7 +105,7 @@ U projektima `mobile`, `firefox` i `webkit` V1 i V2 provjeravaju samo ARIA struk
   
   Pragovi se ne šire i maske se ne dodaju. Promjena palete ili rasporeda (npr. #867) mijenja referencu u istom PR-u, s pregledanim slikama u opisu.
 - **Lokalno (Windows):** reference su `-linux`, pa V1 do V3 lokalno nemaju svoju referencu. Slike `-win32.png` koje lokalni prolaz pritom zapiše ne commitaju se. `--ignore-snapshots` preskače i piksele i ARIA snimke (`toMatchAriaSnapshot` u Playwrightu 1.63 poštuje istu zastavicu). Za ARIA strukturu i piksele mjerodavan je CI.
-- Tri reference ne dokazuju puni FPZG demo; za to su DAN-232 i `e2e/login/demo-flow.spec.ts`.
+- Tri reference ne dokazuju puni FPZG probni prolaz; za to su DAN-232 i `e2e/login/demo-flow.spec.ts`.
 
 ## 3. Obvezni adversarial scenariji prije pilota
 
