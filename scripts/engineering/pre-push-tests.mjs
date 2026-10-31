@@ -6,7 +6,7 @@
 // a push.
 import { spawnSync } from "node:child_process";
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, posix } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 export const FULL_VARIABLE = "DUCTUS_PREPUSH_FULL";
@@ -111,8 +111,10 @@ export function localImports(file, source, exists, pattern = IMPORT_RE) {
   const out = [];
   for (const [, spec] of source.matchAll(pattern)) {
     let base;
-    if (spec.startsWith("@/")) base = join("src", spec.slice(2));
-    else if (spec.startsWith("./") || spec.startsWith("../")) base = join(dirname(file), spec);
+    // Repository paths are POSIX on every platform: the native join would give
+    // `src\a.ts` on Windows, which no repository path equals.
+    if (spec.startsWith("@/")) base = posix.join("src", spec.slice(2));
+    else if (spec.startsWith("./") || spec.startsWith("../")) base = posix.join(posix.dirname(file), spec);
     else continue;
     const bare = base.replace(/\.[cm]?js$/, "");
     const found = [...EXTENSIONS.map((e) => base + e), ...EXTENSIONS.slice(1).map((e) => bare + e)].find(exists);

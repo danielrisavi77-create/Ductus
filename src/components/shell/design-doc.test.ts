@@ -87,7 +87,8 @@ describe("DESIGN-SYSTEM.md matches app/globals.css (#960)", () => {
 
 describe("shared focus ring and curtain (#960)", () => {
   const files = (readdirSync(join(process.cwd(), "src", "components"), { recursive: true }) as string[])
-    .filter((f) => f.endsWith(".module.css") && !f.startsWith("landing"))
+    // The public landing page included (review of #973): one focus ring everywhere.
+    .filter((f) => f.endsWith(".module.css"))
     .map((f) => [f, readFileSync(join(process.cwd(), "src", "components", f), "utf8")] as const);
 
   it("draws every focus ring from --focus-width and --focus-offset", () => {
