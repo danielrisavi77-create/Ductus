@@ -828,6 +828,27 @@ export function evaluateAutoMergeEligible({ metadata, paths, qaExempt, testsAdde
   return { state: "pending", description: "Not eligible for auto-merge." };
 }
 
+// F-165: a commit status belongs to the head, not to the PR. The gate grants a
+// green status only for a PR whose base is the repository's default branch
+// (from the GitHub API PR, never the event); missing fields fail closed.
+export const NOT_DEFAULT_BASE = {
+  state: "pending",
+  description: "The gate grants success only for PRs that target the default branch.",
+};
+export function targetsDefaultBranch(pr) {
+  const ref = pr?.base?.ref;
+  return typeof ref === "string" && ref.length > 0 && ref === pr?.base?.repo?.default_branch;
+}
+
+// F-165: Auto-merge eligible is refused while another open PR shares the head;
+// a list that was not read counts as shared.
+export const SHARED_HEAD = { state: "pending", description: "Not eligible for auto-merge: another open PR shares this head." };
+export function sharesHeadWithOpenPr(pr, openPulls) {
+  if (!Array.isArray(openPulls)) return true;
+  const head = String(pr?.head?.sha ?? "").toLowerCase();
+  return openPulls.some((other) => other?.number !== pr?.number && String(other?.head?.sha ?? "").toLowerCase() === head);
+}
+
 /**
  * Whether the merge queue may take the PR (D-161 (h)). Mergify reads only this
  * status, never the description or a label: the same parser that decides the

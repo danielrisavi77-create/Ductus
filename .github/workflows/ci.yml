@@ -83,6 +83,24 @@ jobs:
             build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.mjs') }}-
       - run: pnpm lint
       - run: pnpm typecheck
+      # D-91 (1): db/migrations.sum matches the files, and no migration of the
+      # base (PR base, or main before this push) changed or disappeared. On a
+      # PR the checkout is the merge commit, so main's newer migrations count.
+      - name: Migration ledger (D-91)
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          base=""
+          if [ "$EVENT_NAME" = pull_request ]; then base="$PR_BASE"; elif [ "$EVENT_NAME" = push ]; then base="$PUSH_BEFORE"; fi
+          if [ -n "$base" ]; then
+            [[ "$base" =~ ^[a-f0-9]{40}$ ]]
+            git fetch --no-tags --depth=1 origin "$base"
+            node scripts/engineering/migrations-ledger.mjs --base "$base"
+          else
+            node scripts/engineering/migrations-ledger.mjs
+          fi
       - name: Engineering PR metadata
         if: github.event_name == 'pull_request'
         env:
@@ -320,12 +338,14 @@ jobs:
 
   # Each shard is its own runner with its own stack and database, so the
   # shared demo account stays one worker per database (playwright.login.config.ts).
+  # The shards split the spec files by measured duration (DAN-375,
+  # scripts/engineering/login-shard-plan.mjs); the matrix size is LOGIN_SHARDS.
   stack-login:
-    name: Login E2E (${{ matrix.shard }}/3)
+    name: Login E2E (${{ matrix.shard }}/6)
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4, 5, 6]
     needs: scope
     if: ${{ !cancelled() && needs.scope.result == 'success' && needs.scope.outputs.profile == 'full' }}
     runs-on: ubuntu-latest
@@ -388,18 +408,24 @@ jobs:
       # The full login through "Demo prijava" needs `next dev` (D-09 refuses
       # the fake provider in production); Chromium only (owner decision).
       # The full suite as this runner sees it, before sharding; the inventory
-      # job checks that the three shards ran exactly this.
+      # job checks that the shards together ran exactly this.
       - name: Login E2E inventory
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: .ci-reports/inventory.json
         run: pnpm exec playwright test --config playwright.login.config.ts --list --reporter=json
+      # This shard's spec files from the inventory above and the committed
+      # weights; plan.json goes up with the evidence and is recomputed there.
+      - name: Plan login shard
+        if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
+        env:
+          LOGIN_SHARD: ${{ matrix.shard }}
+        run: node scripts/engineering/login-shard-plan.mjs "$LOGIN_SHARD"
       - name: Full login E2E
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         env:
           LOGIN_E2E_JSON: .ci-reports/results.json
-          LOGIN_SHARD: ${{ matrix.shard }}
-        run: pnpm test:e2e:login --shard="$LOGIN_SHARD/3"
+        run: pnpm test:e2e:login --test-list .ci-reports/test-list.txt
       - name: Upload login shard evidence
         if: ${{ needs.scope.outputs.profile == 'full' && !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
