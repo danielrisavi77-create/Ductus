@@ -290,16 +290,25 @@ describe("S3EvidencePayloadStore", () => {
   });
 
   it("aborts a request that never answers and does not retry it", async () => {
-    let signal: AbortSignal | undefined;
-    const s3 = fakeS3((_, s) => ((signal = s), hang(s)));
-    const { store } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+    // A real 20 ms deadline could pass while the PUT was still being signed,
+    // and then nothing is sent (#523); the fake timer ends the hanging PUT.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      let signal: AbortSignal | undefined;
+      const s3 = fakeS3((_, s) => ((signal = s), hang(s)));
+      const { store } = storeWith(s3.fetch, { requestTimeoutMs: 20_000 });
 
-    await expect(put(store, "a")).resolves.toEqual({
-      status: "unavailable",
-      reason: "storage_timeout",
-    });
-    expect(signal?.aborted).toBe(true);
-    expect(s3.calls).toHaveLength(1);
+      const pending = put(store, "a");
+      await vi.advanceTimersByTimeAsync(20_000);
+      await expect(pending).resolves.toEqual({
+        status: "unavailable",
+        reason: "storage_timeout",
+      });
+      expect(signal?.aborted).toBe(true);
+      expect(s3.calls).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("aborts a GET whose body never ends", async () => {
@@ -879,20 +888,24 @@ describe("S3EvidencePayloadStore", () => {
   });
 
   it("bounds the whole call, read-back included, by one deadline", async () => {
+    // Fake seconds, not 100 ms of real time: the deadline check before the
+    // GET reads the real clock, which a loaded machine could take past 100 ms
+    // (#523). The PUT still answers before the deadline, and the boundary
+    // stays one millisecond before it.
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     try {
       const s3 = fakeS3((call, signal) =>
         call.method === "PUT"
           ? new Promise((resolve) =>
-              setTimeout(() => resolve(new Response(null, { status: 412 })), 60),
+              setTimeout(() => resolve(new Response(null, { status: 412 })), 30_000),
             )
           : hang(signal),
       );
-      const { store } = storeWith(s3.fetch, { requestTimeoutMs: 100 });
+      const { store } = storeWith(s3.fetch, { requestTimeoutMs: 50_000 });
       let result: unknown;
       void put(store, "a").then((r) => (result = r));
 
-      await vi.advanceTimersByTimeAsync(99);
+      await vi.advanceTimersByTimeAsync(49_999);
       expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
       expect(result).toBeUndefined();
       await vi.advanceTimersByTimeAsync(1);
@@ -924,14 +937,16 @@ describe("S3EvidencePayloadStore", () => {
   });
 
   it("answers storage_timeout when fetch ignores the abort signal", async () => {
+    // Fake timers with a deadline of seconds, not 20 ms of real time, so the
+    // PUT is always sent before the deadline (#523).
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     try {
       const s3 = fakeS3(() => new Promise<Response>(() => undefined));
-      const { store } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+      const { store } = storeWith(s3.fetch, { requestTimeoutMs: 20_000 });
       let result: unknown;
       void put(store, "a").then((r) => (result = r));
 
-      await vi.advanceTimersByTimeAsync(20);
+      await vi.advanceTimersByTimeAsync(20_000);
       await logged();
       expect(result).toEqual({ status: "unavailable", reason: "storage_timeout" });
       expect(s3.fetch.mock.calls[0][1]?.signal?.aborted).toBe(true);
@@ -946,14 +961,17 @@ describe("S3EvidencePayloadStore", () => {
       const s3 = fakeS3(
         () =>
           new Promise((resolve) =>
-            setTimeout(() => resolve(new Response(null, { status: 200 })), 80),
+            setTimeout(() => resolve(new Response(null, { status: 200 })), 80_000),
           ),
       );
-      const { store } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+      // Seconds on the fake clock, so the PUT is always sent (#523).
+      const { store } = storeWith(s3.fetch, { requestTimeoutMs: 20_000 });
       let result: unknown;
       void put(store, "a").then((r) => (result = r));
 
-      await vi.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(100_000);
+      await logged();
+      expect(s3.calls).toHaveLength(1);
       expect(result).toEqual({ status: "unavailable", reason: "storage_timeout" });
     } finally {
       vi.useRealTimers();
@@ -1270,26 +1288,37 @@ describe("write proof (#155, S1 to S6)", () => {
   );
 
   it("S6: a deadline before the echo is confirmed stays storage_timeout", async () => {
-    // The PUT ignores the abort and echoes correctly only after the deadline.
-    const s3: ReturnType<typeof fakeS3> = fakeS3((call) =>
-      call.method === "PUT"
-        ? new Promise<Response>((resolve) =>
-            setTimeout(
-              () => resolve(writtenWith(s3, call, { "x-amz-checksum-sha256": checksumOf("a") })),
-              60,
-            ),
-          )
-        : null,
-    );
-    const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 30 });
+    // A real 30 ms deadline could pass before the PUT was sent (#523); on the
+    // fake clock the PUT is always sent and its late echo still arrives.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      // The PUT ignores the abort and echoes correctly only after the deadline.
+      const s3: ReturnType<typeof fakeS3> = fakeS3((call) =>
+        call.method === "PUT"
+          ? new Promise<Response>((resolve) =>
+              setTimeout(
+                () => resolve(writtenWith(s3, call, { "x-amz-checksum-sha256": checksumOf("a") })),
+                60_000,
+              ),
+            )
+          : null,
+      );
+      const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 30_000 });
 
-    await expect(put(store, "a")).resolves.toEqual({
-      status: "unavailable",
-      reason: "storage_timeout",
-    });
-    await new Promise((resolve) => setTimeout(resolve, 80));
-    expect(s3.calls.map((c) => c.method)).toEqual(["PUT"]);
-    expect(warn).not.toHaveBeenCalled();
+      const pending = put(store, "a");
+      await vi.advanceTimersByTimeAsync(30_000);
+      await expect(pending).resolves.toEqual({
+        status: "unavailable",
+        reason: "storage_timeout",
+      });
+      // The echo arrives after the deadline answered.
+      await vi.advanceTimersByTimeAsync(50_000);
+      await logged();
+      expect(s3.calls.map((c) => c.method)).toEqual(["PUT"]);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("verifies every write: a stored answer always follows a read-back", async () => {
@@ -1304,15 +1333,31 @@ describe("write proof (#155, S1 to S6)", () => {
 describe("one monotonic deadline (QA qa233d)", () => {
   const timeout = { status: "unavailable", reason: "storage_timeout" };
   const unverified = { status: "unavailable", reason: "storage_write_unverified" };
-  /** Holds the event loop, so a timer set before it can only fire late. */
-  const block = (ms: number) => {
-    const end = performance.now() + ms;
-    while (performance.now() < end) {
-      // busy on purpose
-    }
+  /**
+   * A monotonic clock only the test moves, with fake timers (#523). Work the
+   * test does not mark late stays within the deadline however long a loaded
+   * machine takes for it; a real 20 ms deadline let a slow PUT answer
+   * storage_timeout before the read under test was sent. `pass()` puts every
+   * later reading past the deadline before its timer can fire, as an answer
+   * held back by a busy event loop arrives. The timer fires only when the
+   * test runs the fake clock.
+   */
+  const heldClock = () => {
+    const at = { now: 100 };
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const spy = vi.spyOn(performance, "now").mockImplementation(() => at.now);
+    return {
+      pass: () => {
+        at.now += 1_000_000;
+      },
+      restore: () => {
+        spy.mockRestore();
+        vi.useRealTimers();
+      },
+    };
   };
-  /** A 200 whose body hands over `bytes`, then blocks before it closes. */
-  const closingLate = (bytes: Uint8Array) => {
+  /** A 200 whose body hands over `bytes`, then passes the deadline before it closes. */
+  const closingLate = (bytes: Uint8Array, pass: () => void) => {
     let pulls = 0;
     return new Response(
       new ReadableStream<Uint8Array>({
@@ -1321,7 +1366,7 @@ describe("one monotonic deadline (QA qa233d)", () => {
             controller.enqueue(bytes.slice());
             return;
           }
-          block(60);
+          pass();
           controller.close();
         },
       }),
@@ -1334,47 +1379,70 @@ describe("one monotonic deadline (QA qa233d)", () => {
     segmentHash: hashOf(payload("a")),
   };
 
-  it.each<[string, (s3: ReturnType<typeof fakeS3>, call: Call) => Promise<Response> | null]>([
-    ["answers late", () => (block(60), null)],
+  it.each<
+    [
+      string,
+      (s3: ReturnType<typeof fakeS3>, call: Call, pass: () => void) => Promise<Response> | null,
+    ]
+  >([
+    ["answers late", (_s3, _call, pass) => (pass(), null)],
     [
       "closes its body late",
-      (s3, call) => Promise.resolve(closingLate(s3.objects.get(call.path)!)),
+      (s3, call, pass) => Promise.resolve(closingLate(s3.objects.get(call.path)!, pass)),
     ],
   ])(
     "a read-back that %s past the deadline is unverified, logged once, never stored",
     async (_, readBack) => {
-      const s3: ReturnType<typeof fakeS3> = fakeS3((call) =>
-        call.method === "GET" ? readBack(s3, call) : null,
-      );
-      const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+      const clock = heldClock();
+      try {
+        const s3: ReturnType<typeof fakeS3> = fakeS3((call) =>
+          call.method === "GET" ? readBack(s3, call, clock.pass) : null,
+        );
+        const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 20_000 });
 
-      await expect(put(store, "a")).resolves.toEqual(unverified);
-      await new Promise((resolve) => setTimeout(resolve, 30));
-      expect(warn.mock.calls).toEqual([["evidence payload write unverified", idsOfA]]);
+        await expect(put(store, "a")).resolves.toEqual(unverified);
+        // Past the deadline's timer: it must not log the write a second time.
+        await vi.advanceTimersByTimeAsync(30_000);
+        await logged();
+        expect(warn.mock.calls).toEqual([["evidence payload write unverified", idsOfA]]);
+      } finally {
+        clock.restore();
+      }
     },
   );
 
   it("a PUT echo that arrives past the deadline confirms nothing and starts no read-back", async () => {
-    const s3: ReturnType<typeof fakeS3> = fakeS3((call) =>
-      call.method === "PUT" ? (block(60), null) : null,
-    );
-    const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+    const clock = heldClock();
+    try {
+      const s3: ReturnType<typeof fakeS3> = fakeS3((call) =>
+        call.method === "PUT" ? (clock.pass(), null) : null,
+      );
+      const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 20_000 });
 
-    await expect(put(store, "a")).resolves.toEqual(timeout);
-    await new Promise((resolve) => setTimeout(resolve, 30));
-    expect(s3.calls.map((c) => c.method)).toEqual(["PUT"]);
-    expect(warn).not.toHaveBeenCalled();
+      await expect(put(store, "a")).resolves.toEqual(timeout);
+      await vi.advanceTimersByTimeAsync(30_000);
+      await logged();
+      expect(s3.calls.map((c) => c.method)).toEqual(["PUT"]);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      clock.restore();
+    }
   });
 
   it("a comparison read that answers past the deadline is not existing", async () => {
-    const s3: ReturnType<typeof fakeS3> = fakeS3((call) =>
-      call.method === "GET" ? (block(60), null) : null,
-    );
-    s3.objects.set(keyOf(PACKAGE, hashOf(payload("a"))), new TextEncoder().encode(payload("a")));
-    const { store } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+    const clock = heldClock();
+    try {
+      const s3: ReturnType<typeof fakeS3> = fakeS3((call) =>
+        call.method === "GET" ? (clock.pass(), null) : null,
+      );
+      s3.objects.set(keyOf(PACKAGE, hashOf(payload("a"))), new TextEncoder().encode(payload("a")));
+      const { store } = storeWith(s3.fetch, { requestTimeoutMs: 20_000 });
 
-    await expect(put(store, "a")).resolves.toEqual(timeout);
-    expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
+      await expect(put(store, "a")).resolves.toEqual(timeout);
+      expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
+    } finally {
+      clock.restore();
+    }
   });
 
   /**
@@ -1414,47 +1482,70 @@ describe("one monotonic deadline (QA qa233d)", () => {
   });
 
   it("a comparison read of other bytes past the deadline is a timeout, not a conflict", async () => {
-    const s3: ReturnType<typeof fakeS3> = fakeS3((call) =>
-      call.method === "GET" ? (block(60), null) : null,
-    );
-    s3.objects.set(keyOf(PACKAGE, hashOf(payload("a"))), new TextEncoder().encode(payload("b")));
-    const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+    const clock = heldClock();
+    try {
+      const s3: ReturnType<typeof fakeS3> = fakeS3((call) =>
+        call.method === "GET" ? (clock.pass(), null) : null,
+      );
+      s3.objects.set(keyOf(PACKAGE, hashOf(payload("a"))), new TextEncoder().encode(payload("b")));
+      const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 20_000 });
 
-    await expect(put(store, "a")).resolves.toEqual(timeout);
-    expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
-    expect(warn).not.toHaveBeenCalled();
+      await expect(put(store, "a")).resolves.toEqual(timeout);
+      expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      clock.restore();
+    }
   });
 
   it("logs no conflict for other bytes that arrive after the deadline answered", async () => {
-    const other = new TextEncoder().encode(payload("b"));
-    const s3: ReturnType<typeof fakeS3> = fakeS3((call) =>
-      call.method === "GET"
-        ? new Promise((resolve) =>
-            setTimeout(() => resolve(new Response(other.slice(), { status: 200 })), 40),
-          )
-        : null,
-    );
-    s3.objects.set(keyOf(PACKAGE, hashOf(payload("a"))), other);
-    const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+    // The held clock never passes the deadline here: only the timer answers,
+    // so only the expired phase keeps the late bytes from being compared.
+    const clock = heldClock();
+    try {
+      const other = new TextEncoder().encode(payload("b"));
+      const s3: ReturnType<typeof fakeS3> = fakeS3((call) =>
+        call.method === "GET"
+          ? new Promise((resolve) =>
+              setTimeout(() => resolve(new Response(other.slice(), { status: 200 })), 40_000),
+            )
+          : null,
+      );
+      s3.objects.set(keyOf(PACKAGE, hashOf(payload("a"))), other);
+      const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 20_000 });
 
-    await expect(put(store, "a")).resolves.toEqual(timeout);
-    await new Promise((resolve) => setTimeout(resolve, 60));
-    expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
-    expect(warn).not.toHaveBeenCalled();
+      const pending = put(store, "a");
+      await vi.advanceTimersByTimeAsync(20_000);
+      await expect(pending).resolves.toEqual(timeout);
+      // The other bytes arrive after the deadline answered.
+      await vi.advanceTimersByTimeAsync(40_000);
+      await logged();
+      expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      clock.restore();
+    }
   });
 
   it.each([404, 500])(
     "a comparison read that fails with %i past the deadline is a timeout",
     async (status) => {
-      const s3: ReturnType<typeof fakeS3> = fakeS3((call) =>
-        call.method === "GET" ? (block(60), Promise.resolve(new Response(null, { status }))) : null,
-      );
-      s3.objects.set(keyOf(PACKAGE, hashOf(payload("a"))), new TextEncoder().encode(payload("a")));
-      const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+      const clock = heldClock();
+      try {
+        const s3: ReturnType<typeof fakeS3> = fakeS3((call) =>
+          call.method === "GET"
+            ? (clock.pass(), Promise.resolve(new Response(null, { status })))
+            : null,
+        );
+        s3.objects.set(keyOf(PACKAGE, hashOf(payload("a"))), new TextEncoder().encode(payload("a")));
+        const { store, warn } = storeWith(s3.fetch, { requestTimeoutMs: 20_000 });
 
-      await expect(put(store, "a")).resolves.toEqual(timeout);
-      expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
-      expect(warn).not.toHaveBeenCalled();
+        await expect(put(store, "a")).resolves.toEqual(timeout);
+        expect(s3.calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
+        expect(warn).not.toHaveBeenCalled();
+      } finally {
+        clock.restore();
+      }
     },
   );
 
@@ -2371,11 +2462,20 @@ describe("S3EvidencePayloadStore.verifyIdentity (P3)", () => {
   const timeout = { status: "unavailable", reason: "storage_timeout" };
 
   it("answers a timeout when the fetch ignores the abort signal", async () => {
-    const s3 = fakeS3(() => new Promise<Response>(() => undefined));
-    const { store } = storeWith(s3.fetch, { requestTimeoutMs: 20 });
+    // A real 20 ms deadline could pass before the GET was sent (#523); the
+    // fake timer ends the GET that never answers.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const s3 = fakeS3(() => new Promise<Response>(() => undefined));
+      const { store } = storeWith(s3.fetch, { requestTimeoutMs: 20_000 });
 
-    await expect(store.verifyIdentity({ institutionId: INSTITUTION })).resolves.toEqual(timeout);
-    expect(s3.calls.map((c) => c.method)).toEqual(["GET"]);
+      const pending = store.verifyIdentity({ institutionId: INSTITUTION });
+      await vi.advanceTimersByTimeAsync(20_000);
+      await expect(pending).resolves.toEqual(timeout);
+      expect(s3.calls.map((c) => c.method)).toEqual(["GET"]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("a deadline that passes while signing the read sends no request", async () => {
