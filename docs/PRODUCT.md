@@ -226,10 +226,10 @@ Ovo je srž onoga što fakultet kupuje. Svaka brojka ima jedinicu, nazivnik i me
 
 ## 8. AI pomoćnik
 
-> **Izvan pilota (D-77, 3. 10. 2026.).** U pilotu student koristi vanjske alate i prilaže ispis razgovora uz izjavu. Ovaj odjeljak opisuje ciljno stanje nakon pilota.
+> **U pilotu (D-194, 31. 10. 2026.; mijenja D-77).** AI pomoćnik ulazi u pilot (početak 1. 3. 2027.) sa svim namjenama iz kataloga D-64, uključujući transkripciju i alate pružatelja. Student i dalje smije koristiti vanjski alat i uz izjavu priložiti ispis razgovora (izjavljeno). Prije stvarnih studenata moraju postojati ugovor o obradi, popis podizvršitelja, DPIA i pravno mišljenje koji pokrivaju asistenta (D-194 t. 4 i 5; GO uvjeti u `docs/PROGRAM.md`).
 
-- **Prijava studenta svojim računom.** Prvi put: OpenRouter (OAuth s PKCE-om), koji jednom prijavom daje pristup većini modela (Claude, GPT, Gemini, Grok, kineski modeli i drugi); student plaća iz vlastitog računa. Kasnije, ako Ductus postane partner, i "Sign in with ChatGPT". Pretplate na Claude ne mogu se koristiti u aplikacijama trećih strana. [PRIJEDLOG D-20]
-- **Fakultet određuje dopuštene pružatelje i modele**, a nastavnik unutar toga dopuštenu uporabu po zadatku. [ODLUČENO D-23]
+- **Račun kod pružatelja i trošak.** Tko drži račune kod pružatelja i plaća je **OTVORENO**. [PRIJEDLOG D-194 t. 6: račune drži pravna osoba operatera, pružatelji su podizvršitelji s odobrenim popisom, trošak je u cijeni usluge i student ne plaća ništa; čeka pravno mišljenje.] Raniji prijedlog (OpenRouter, student plaća svoj račun, D-20) više nije polazište. Pretplate na Claude ne mogu se koristiti u aplikacijama trećih strana.
+- **Fakultet određuje dopuštene pružatelje i modele**, a nastavnik unutar toga dopuštenu uporabu po zadatku. [ODLUČENO D-23] Nikad nisu dopušteni: pružatelj s kineskim sjedištem, model koji je razvila kineska tvrtka (ni kad ga poslužuje europski pružatelj) i obrada na kineskim serverima; fakultet to ne može uključiti. [ODLUČENO D-194 t. 2]
 - **AI je uvijek dobrovoljan za studenta.** U pilotu zadatak ne smije zahtijevati AI. Obvezni AI kasnije je moguć samo uz ključ koji osigurava fakultet. (C-2)
 - **Tekst studenta šalje se pružatelju samo kad student sam pokrene AI.** Studenti u obavijesti vide da tekst tada odlazi izabranom pružatelju i u koju zemlju.
 - **Zaštita od podmetnutih uputa (C-37):** upute AI-ju sastavlja poslužitelj iz pravila zadatka; tekst rada i uvezenih datoteka šalje se kao omeđeni nepouzdani podaci, a skriveni tekst (npr. bijeli ili skriveni font u DOCX-u, nevidljivi sloj PDF-a) uklanja se pri uvozu.
@@ -327,7 +327,7 @@ Demo prolazi cijeli put na sintetičkom radu s unaprijed poznatim ishodom. Za va
 1. Student se prijavi (AAI@EduHr Lab), uđe u kolegij kodom i otvori zadatak s FPZG profilom.
 2. Napiše tekst s naslovima i citatom; bibliografija se složi u FPZG stilu; provjera oblika javlja odstupanje od pravila. Fusnota i tablica [val 2].
 3. Izbriše dio, zalijepi odlomak, uveze DOCX. Uvoz PDF-a [val 2].
-4. [nakon pilota, D-77] Koristi AI pomoćnik i prenese dio teksta u rad; podmetnuta uputa u uvezenoj datoteci ne mijenja ponašanje pomoćnika. U pilotu: uz izjavu priloži ispis razgovora iz vanjskog alata.
+4. [u pilotu, D-194] Koristi AI pomoćnik i prenese dio teksta u rad; podmetnuta uputa u uvezenoj datoteci ne mijenja ponašanje pomoćnika. Uz izjavu priloži razgovore iz pomoćnika i, kao izjavljeno, ispis razgovora iz vanjskog alata.
 5. Nastavnik u međuvremenu vidi spremljeno stanje, ostavi komentar i prijedlog; student prihvati prijedlog. Nastavnik napravi jednu izravnu izmjenu.
 6. Student radi bez veze, zatim se veza vrati; ništa se ne izgubi i offline rad ostaje označen.
 7. Student pošalje verziju na pregled, dobije komentar, napravi novu verziju i konačno preda rad uz izjavu o pomoći.
