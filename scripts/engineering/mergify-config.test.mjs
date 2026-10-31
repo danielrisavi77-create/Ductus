@@ -37,7 +37,9 @@ test("serial speculation preserves every intermediate result and rejects edited 
   assert.match(body, /\n    batch_size: 3\n/);
   assert.match(body, /\n    batch_max_wait_time: 3 min\n/);
   assert.match(body, /max_checks_retries: 0\n/);
-  assert.match(body, /allow_queue_branch_edit: false\n/);
+  // Edited queue branches are rejected by Mergify's default. The option that
+  // could allow them is deprecated, so it must not appear with any value.
+  assert.doesNotMatch(body, /allow_queue_branch_edit/);
   assert.match(body, /branch_protection_injection_mode: queue\n/);
   assert.match(body, /reset_on_external_merge: always\n/);
   assert.match(body, /skip_intermediate_results: false\n/);
