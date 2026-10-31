@@ -23,6 +23,8 @@ import { commitEvidenceRequest } from "@/server/evidence/evidence-commit-request
 import { handleEvidenceCommitRequest } from "@/server/evidence/commit-route";
 import { handleEvidenceOpenRequest } from "@/server/evidence/open-route";
 
+import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
+
 // B-8 step 4c / DAN-83 (docs/BACKEND.md 4.13 t. 3.2, 3.6, 4 and 7): the commit
 // transaction against the real database, with the persistent development key
 // read from a seed outside the repository and registered for the domain. A
@@ -31,9 +33,7 @@ import { handleEvidenceOpenRequest } from "@/server/evidence/open-route";
 // only; random synthetic rows and a random seed, all removed afterwards.
 const SAFE_ADMIN_URL: string =
   process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
-if (!["127.0.0.1", "localhost", "[::1]"].includes(new URL(SAFE_ADMIN_URL).hostname)) {
-  throw new Error("The evidence commit test runs only against a loopback database (DATABASE_URL).");
-}
+requireLoopbackDatabaseUrl(SAFE_ADMIN_URL, "The evidence commit test runs only against a loopback database (DATABASE_URL).");
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const suffix = randomBytes(5).toString("hex");
 const login = `it_commit_${suffix}`;
