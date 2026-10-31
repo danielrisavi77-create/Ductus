@@ -104,6 +104,11 @@ export default function OpenWork({ assignmentId, session }: { assignmentId: stri
 
   const start = useCallback(() => { void attempt(); }, [attempt]);
 
+  // The server render offers "Započni rad" disabled; it turns on once the
+  // click can reach `start` (a click before hydration was lost, DAN-330).
+  const [ready, setReady] = useState(false);
+  useEffect(() => { setReady(true); }, []);
+
   const retry = useCallback(() => {
     // A new attempt by hand may refresh once again; nothing repeats by itself.
     refreshed.current = false;
@@ -117,6 +122,7 @@ export default function OpenWork({ assignmentId, session }: { assignmentId: stri
       onStart={start}
       onRetry={retry}
       onReload={() => window.location.reload()}
+      ready={ready}
     />
   );
 }

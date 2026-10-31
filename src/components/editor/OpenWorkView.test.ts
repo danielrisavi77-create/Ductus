@@ -46,6 +46,14 @@ describe("DAN-330 Započni rad", () => {
     expect(html).toContain('aria-busy="false"');
   });
 
+  it("before hydration the idle button is disabled, so a click cannot be lost", () => {
+    const html = renderToStaticMarkup(h(OpenWorkView, {
+      phase: { kind: "idle" }, assignmentId: ID, onStart: noop, onRetry: noop, onReload: noop, ready: false,
+    }));
+    expect(html).toContain(`<button type="button" class="btn" disabled="">${t.startWork}</button>`);
+    expect(html).toContain(`role="status">${t.notStarted}</p>`);
+  });
+
   it("the click on the idle button is the start handler, and only it", () => {
     const onStart = () => {};
     const tree = OpenWorkView({ phase: { kind: "idle" }, assignmentId: ID, onStart, onRetry: noop, onReload: noop });

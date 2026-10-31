@@ -37,10 +37,13 @@ export function openWorkText(phase: OpenWorkPhase): string {
 
 function action(
   phase: OpenWorkPhase, assignmentId: string, onStart: () => void, onRetry: () => void, onReload: () => void,
+  ready: boolean,
 ) {
   switch (phase.kind) {
     case "idle":
-      return h("button", { type: "button", className: "btn", onClick: onStart }, t.startWork);
+      // Disabled until the page is live in the browser: a click on the server
+      // render before hydration would send nothing and look accepted.
+      return h("button", { type: "button", className: "btn", onClick: onStart, disabled: !ready }, t.startWork);
     case "loading":
       // Stays in the DOM so the focus is not lost; aria-disabled, not disabled.
       return h("button", { type: "button", className: "btn", "aria-disabled": "true" }, t.startWork);
@@ -60,12 +63,14 @@ function action(
   }
 }
 
-export function OpenWorkView({ phase, assignmentId, onStart, onRetry, onReload }: {
+export function OpenWorkView({ phase, assignmentId, onStart, onRetry, onReload, ready = true }: {
   phase: OpenWorkPhase;
   assignmentId: string;
   onStart: () => void;
   onRetry: () => void;
   onReload: () => void;
+  /** False only in the server render, before the page is hydrated. */
+  ready?: boolean;
 }) {
   return h(Fragment, null,
     h("div", {
@@ -78,6 +83,6 @@ export function OpenWorkView({ phase, assignmentId, onStart, onRetry, onReload }
       "aria-describedby": OPEN_WORK_STATUS_ID,
     }, h("p", { className: "manuscript__placeholder" }, t.documentNotEditable)),
     h("p", { id: OPEN_WORK_STATUS_ID, role: "status" }, openWorkText(phase)),
-    action(phase, assignmentId, onStart, onRetry, onReload),
+    action(phase, assignmentId, onStart, onRetry, onReload, ready),
   );
 }
