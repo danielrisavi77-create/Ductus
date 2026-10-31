@@ -17,10 +17,16 @@ const t = messagesHr.auth;
 
 /** The declarations of the rule whose selector list is exactly `selector`. */
 function rule(css: string, selector: string): string {
-  const at = new RegExp(`(?:^|[^,]\\n)${selector.replace(/[.*+?^${}()|[\]\\:]/g, "\\$&")} \\{`).exec(css);
-  if (!at) throw new Error(`no rule for ${selector}`);
-  const start = at.index + at[0].length;
-  return css.slice(start, css.indexOf("}", start));
+  // A plain string search: the selector must start a line, and the line
+  // before must not end in a comma (else it is the tail of a longer list).
+  const head = `${selector} {`;
+  for (let at = css.indexOf(head); at !== -1; at = css.indexOf(head, at + 1)) {
+    if (at === 0 || (css[at - 1] === "\n" && css[at - 2] !== ",")) {
+      const start = at + head.length;
+      return css.slice(start, css.indexOf("}", start));
+    }
+  }
+  throw new Error(`no rule for ${selector}`);
 }
 
 const noop = () => {};
@@ -106,6 +112,8 @@ describe("the sign-out dialog on the base (Z-08)", () => {
 
   it("shows a failed sign-out with its full text inside the live region", () => {
     const html = render(true);
-    expect(html).toMatch(new RegExp(`<div role="alert"><p class="_error_[^"]*">${t.logoutFailed}</p></div>`));
+    const alert = html.slice(html.indexOf('<div role="alert">'));
+    expect(alert).toMatch(/^<div role="alert"><p class="_error_[^"]*">/);
+    expect(alert).toContain(`">${t.logoutFailed}</p></div>`);
   });
 });
