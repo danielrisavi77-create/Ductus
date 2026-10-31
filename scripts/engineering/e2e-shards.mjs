@@ -4,18 +4,18 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { compareReport } from "./ui-test-pilot.mjs";
 
-// Two reports from this workflow run, never a count-only coverage check.
+// Three reports from this workflow run, never a count-only coverage check.
 // The existing pilot parser validates identities, paths, attempts and stats.
 export function mergeShardReports(shards, testedSha) {
   assert.match(testedSha, /^[a-f0-9]{40}$/);
-  assert.equal(shards.length, 2, "Both shards are required");
+  assert.equal(shards.length, 3, "All three shards are required");
   for (const [index, { report, inventory }] of shards.entries()) {
     for (const input of [report, inventory]) {
       assert.equal(input.config.metadata.testedSha, testedSha, "Wrong tested SHA");
       assert.ok(Array.isArray(input.suites), "Missing suites");
       assert.ok(Array.isArray(input.errors), "Missing errors");
     }
-    assert.deepEqual(report.config.shard, { current: index + 1, total: 2 }, "Wrong shard");
+    assert.deepEqual(report.config.shard, { current: index + 1, total: 3 }, "Wrong shard");
     assert.equal(inventory.config.shard, null, "Inventory must enumerate the full suite");
     assert.equal(report.config.rootDir, inventory.config.rootDir, "Wrong inventory root");
     assert.equal(report.config.rootDir, shards[0].report.config.rootDir, "Different roots");
@@ -39,7 +39,7 @@ export function mergeShardReports(shards, testedSha) {
 
 export function verifyShardReports(shards, merged, options) {
   // Each runner independently discovers the entire suite before sharding.
-  // Both inventories must match the union, including test/browser identities.
+  // All inventories must match the union, including test/browser identities.
   const comparisons = shards.map(({ inventory }) => compareReport(
     { selection: "full" }, merged, { ...options, inventory, requirePilotSpecs: false },
   ));
@@ -52,7 +52,7 @@ export function verifyShardReports(shards, merged, options) {
 
 export function runShards(env = process.env, cwd = process.cwd()) {
   const read = (path) => JSON.parse(readFileSync(resolve(cwd, path), "utf8"));
-  const shards = [1, 2].map((index) => ({
+  const shards = [1, 2, 3].map((index) => ({
     report: read(`.ci-reports/shards/e2e-shard-${index}/results.json`),
     inventory: read(`.ci-reports/shards/e2e-shard-${index}/ui-pilot-inventory.json`),
   }));
@@ -63,7 +63,7 @@ export function runShards(env = process.env, cwd = process.cwd()) {
   writeFileSync(resolve(cwd, ".ci-reports/ui-pilot-inventory.json"), JSON.stringify(shards[0].inventory));
   const result = verifyShardReports(shards, merged, { cwd, projects: env.EVENT_NAME === "pull_request"
     ? ["desktop", "mobile"] : ["desktop", "mobile", "firefox", "webkit"] });
-  const summary = `E2E: ${result.full.count} test instances, both shards, SHA ${env.GITHUB_SHA}.\n` +
+  const summary = `E2E: ${result.full.count} test instances, three shards, SHA ${env.GITHUB_SHA}.\n` +
     `Shard elapsed ms: ${shards.map(({ report }) => report.stats.duration).join(", ")}. ` +
     `Combined elapsed span: ${merged.stats.duration} ms; test work: ${result.full.testWorkMs} ms.\n`;
   console.log(summary);

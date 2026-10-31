@@ -1,175 +1,164 @@
-# Ductus: Product UI & Design System
+# Ductus: dizajn sustav (mjerodavno)
 
-Verzija 0.3 · 13. 10. 2026.  
-Izvor: vizualni koncept (13 slajdova, issue #323) — Product UI & Design System. Usvojeno odlukom **D-115** (zamjenjuje dizajn v6, D-89); komponente prema **D-116**.
+Verzija 1.2 · 28. 10. 2026. · issue #960
 
-> **Vrijednosti boja su zamijenjene (D-123, 17. 10. 2026.).** Za izgled ekrana i vrijednosti tokena mjerodavan je dizajn Ductura u `docs/design/ductura/` (`README.md` za tokene, `INTEGRACIJA.md` za ekrane i rute) i odluke D-123 do D-126: naglasak `#6FBFA5`, tamna ljuska, tamni list zadano, prekidač za bijeli list. Kod to već provodi (`src/components/shell/tokens.test.ts`). Boje u ovom dokumentu (npr. primarna `#14B8A6`) su povijest i ne koriste se za novi rad. Struktura tokena, prekidač lista i načela ispod i dalje vrijede (D-123).
+Ovo je **jedini pisani izvor** za izgled aplikacije: boje, tipografiju, oblike, razmake i pravila. Vrijednosti tokena žive u `app/globals.css`; test `src/components/shell/design-doc.test.ts` pada čim se tablica u §3 i `globals.css` raziđu. Sve druge tablice boja u repou (`docs/design/ductura/README.md` §8, slajdovi #323, stari PR-ovi) su povijest.
 
-Ovaj dokument sažima vizualni jezik, principe i ekrane koje treba usvojiti.  
-Funkcionalni tokovi ostaju u `docs/PRODUCT.md`. Ovaj dokument definira **kako to izgleda i kako se osjeća**.
+## 1. Redoslijed mjerodavnosti
 
----
+1. Vlasničke odluke u `docs/DECISIONS.md`: **D-188** (paleta „papir i grafit”; zamjenjuje D-184 u vrijednostima), **D-184** (jedna paleta za naslovnicu i aplikaciju), **D-185** (CSS moduli nad tokenima, mijenja D-116), **D-186** (ime Ductura), **D-187** (svijetla tema), **D-179** (struktura palete), **D-178** (Archivum paket, 21 ekran; kad se slika i prototip razlikuju, vrijedi slika), vlasnička odluka od 27. 10. 2026. o svijetloj temi (opcija (a), #923 c.6430103437, #87 c.6430104038), D-180 (S01 kao početna), D-181 (oslovljavanje s „Vi”).
+2. Ovaj dokument i `app/globals.css` (moraju biti isti; to provjerava test).
+3. Odobrene slike (PNG) iz Archivum paketa za raspored pojedinog ekrana.
+4. Ostalo (`docs/design/ductura/*.dc.html`, slajdovi #323) samo za ponašanje i tekst gdje 1. do 3. šute; njihove boje se ne koriste.
 
-## 1. Vizualni principi (Slide 13)
+Nepromjenjiva pravila koja paleta ne dira: WCAG 2.1 AA (D-115), boje podrijetla pokazuju odakle je tekst, nikad ocjenu (D-57), nema boje za „prekršaj” (D-62), Rječnik iz `docs/PRODUCT.md` §5.
 
-| # | Princip | Objašnjenje |
-|---|---------|-------------|
-| 01 | Akademski, ne "AI-tech" | Naglasak na sadržaj i institucionalnu ozbiljnost. UI ostaje čist i suzdržan. |
-| 02 | Evidence, ne sumnja | Broj / status komuniciraju stanje procesa, nikad ne stvaraju ocjenu studenta. |
-| 03 | Dark-first, ali pristupačno | Visok kontrast, jasne površine i semantičke boje; bez pretjeranog neon-a. List u editoru može biti svijetao (izbor korisnika, `data-theme`). |
-| 04 | Isti jezik kroz sve uloge | Student, mentor i admin koriste isti grid, iste kartice, iste statuse. |
-| 05 | Teal = povjerenje i akcija | Primarna akcijska boja. Koristi se samo kada semantika to traži. |
-| 06 | Institucionalno spremno | UI treba izgledati kao proizvod kojem bi fakultet povjerio akademske procese i podatke. |
+## 2. Načela
 
-**Ključna rečenica:** Dark academic SaaS — teal/mint sustav — institucionalna ozbiljnost — neutralan evidence.
+| # | Načelo | Značenje |
+|---|---|---|
+| 01 | Akademski, ne „AI-tech” | Sadržaj i institucionalna ozbiljnost; suzdržan UI. |
+| 02 | Evidencija, ne sumnja | Stanja opisuju proces, nikad ne ocjenjuju studenta. |
+| 03 | Tamna ljuska, tekst na papiru | Ljuska je uvijek tamni grafit; list je papir (D-188). Svijetla ljuska je izbor korisnika. |
+| 04 | Isti jezik za sve uloge | Student, nastavnik i administrator dijele tokene, kartice i stanja. |
+| 05 | Zlato = akcija | Primarna boja (`--accent`) samo za glavni gumb, aktivnu karticu, oznaku odabira, poveznicu i fokus; obrubi, ikone, pomoćni tekst i brojke ostaju sivi. |
+| 06 | Institucionalno spremno | Izgleda kao proizvod kojem fakultet povjerava podatke. |
 
----
+## 3. Boje
 
-## 2. Paleta boja (Slide 12)
+Četiri opsega u `app/globals.css`:
 
-Sve kombinacije ispod provjerene su prema WCAG 2.1 AA (D-115, F-03): tekst barem 4,5:1, granice kontrola i ikone barem 3:1. Omjeri su izračunati formulom relativne svjetline iz WCAG-a.
+- **Tamna ljuska** (`:root`, zadano i uvijek; ne prati postavku sustava): topli grafit (D-188): `#242422` tlo, `#292a28` trake i bočna navigacija, `#2e2e2b` paneli i dijalozi, tekst `#faf9f5`, zlato `#c8aa6e` s grafitnim tekstom na njemu.
+- **Svijetla ljuska** (`data-theme="light"` na `<html>`, pa vrijedi i za 404, grešku i učitavanje izvan ljuske; izbor korisnika, D-187; Z-13a. Prijava i javna naslovnica zasad ostaju tamne, do #1024 i J-01): `#f3f2ee` podloga, `#faf9f6` trake i paneli, tekst `#242422`, tamno zlato `#806529`.
+- **Tamni list** (`.sheet`): grafitni panel `#2e2e2b` sa svijetlom tintom; drži je i u svijetloj ljusci.
+- **Bijeli list** (`.sheet[data-sheet-theme="light"]`): gotovo bijeli papir `#fcfbf8`, tinta `#242422`, tamno zlato `#806529`; prekidač u editoru, izbor se čuva samo u pregledniku.
 
-### Primarne
-- **Primarna** `#14B8A6` (teal): akcija, povjerenje. **Tekst na primarnoj boji je tamni `#0A0F0E` (7,76:1), nikad bijeli** (bijeli daje 2,49:1 i ne prolazi).
-- **Primarna tamna** `#0D9488`: hover i pritisnuto stanje ispune.
-- **Primarna svijetla** `#5EEAD4`: tekst poveznica i aktivni elementi na tamnoj podlozi (≥ 9,9:1 na svim površinama).
+Vlasnik je zadao osnovne boje (#960, 28. 10. 2026.). Ostale stupnjeve iste sive skale (prigušeni tekst, crte, polja, hover, odabrano, kartica) izveo je agent i provjerio testom kontrasta; vlasnik je to prihvatio. Upozorenje, greška, stanje spremanja i boje podrijetla ostaju nepromijenjeni (D-57). Vlasnikovo svijetlo zlato `#b49a63` na papiru je 2,4 do 2,6:1, pa ne smije nositi tekst, oznaku ni fokus; na svijetlim površinama to radi `#806529` (4,6:1 i više). `--ink-muted` `#8c887f` je ispod 4,5:1 na tamnim površinama: samo veliki tekst i oznake.
 
-### Semantičke
-| Uloga | Ispuna (badge, traka) | Tekst na ispuni | Tekst na tamnoj površini |
+„·” znači da opseg vrijednost nasljeđuje iz ljuske oko sebe.
+
+<!-- tokens:start -->
+| Token | Tamna ljuska | Svijetla ljuska | Tamni list | Bijeli list | Namjena |
+|---|---|---|---|---|---|
+| `--ground` | `#242422` | `#f3f2ee` | · | · | tlo aplikacije |
+| `--sheet` | `#2e2e2b` | `#fcfbf8` | `#2e2e2b` | `#fcfbf8` | list za pisanje |
+| `--chrome` | `#292a28` | `#faf9f6` | · | · | trake, bočni paneli |
+| `--ink` | `#faf9f5` | `#242422` | `#faf9f5` | `#242422` | glavni tekst |
+| `--ink-2` | `#dedbd3` | `#55534d` | `#dedbd3` | `#55534d` | sekundarni tekst |
+| `--ink-3` | `#c9c5bb` | `#5c5a54` | `#c9c5bb` | `#5c5a54` | tihi mali tekst (najtiši dopušteni za tekst ispod 24 px) |
+| `--rule` | `#8c887f` | `#cfccc4` | `#8c887f` | `#cfccc4` | crta, obrub |
+| `--rule-2` | `#5a5853` | `#e2e0d9` | `#5a5853` | `#f1efea` | tiša crta (samo linija, nikad pozadina) |
+| `--hover` | `#3a3a36` | `#ecebe5` | · | · | hover sekundarnog gumba i stavke |
+| `--raised` | `#2e2e2b` | `#faf9f6` | · | · | dijalog, podignuta površina |
+| `--raised-rule` | `#b3aea3` | `#85827a` | · | · | obrub dijaloga |
+| `--card` | `#33332f` | `#fcfbf8` | `#33332f` | `#fcfbf8` | kartica |
+| `--selected` | `#3a3a36` | `#ecebe5` | · | · | odabrana stavka, segment |
+| `--well` | `#3a3a36` | `#ecebe5` | `#3a3a36` | `#efede7` | tiha površina ispod teksta (čip, staza, hover) |
+| `--ink-muted` | `#8c887f` | `#5c5a54` | `#8c887f` | `#5c5a54` | samo veliki tekst (24 px+) i netekstne oznake |
+| `--warn` | `#e9c58b` | `#7a5420` | `#e9c58b` | `#a87420` | oznaka upozorenja |
+| `--error` | `#f0a08f` | `#9c3f33` | · | · | oznaka greške |
+| `--accent` | `#c8aa6e` | `#806529` | `#c8aa6e` | `#806529` | primarna boja: gumb, poveznica, fokus |
+| `--accent-hover` | `#dcc28a` | `#6b5420` | `#dcc28a` | `#6b5420` | hover primarne |
+| `--accent-ink` | `#242422` | `#fcfbf8` | `#242422` | `#fcfbf8` | tekst na primarnoj |
+| `--accent-soft` | `#3a3a36` | `#efe9dc` | `#3a3a36` | `#8065291a` | meka pozadina primarne (pritisnuto) |
+| `--link-rule` | `#b3aea3` | `#8a7550` | `#b3aea3` | `#8a7550` | podcrta poveznice |
+| `--field` | `#2a2a27` | `#fcfbf8` | `#2a2a27` | `#fcfbf8` | pozadina polja |
+| `--field-rule` | `#a6a196` | `#85827a` | `#a6a196` | `#85827a` | obrub polja |
+| `--field-placeholder` | `#bcb7ac` | `#5c5a54` | `#bcb7ac` | `#5c5a54` | placeholder polja |
+| `--error-soft` | `#3e302b` | `#f7e4dd` | `#3e302b` | `#f7e4dd` | pozadina greške obrasca |
+| `--synced` | `#a2c6e5` | `#355b81` | · | · | stanje „spremljeno na poslužitelju” (nikad primarna) |
+| `--p-internal` | `#8fb0e0` | `#4a6fa5` | · | `#4a6fa5` | podrijetlo: napisano u aplikaciji |
+| `--p-unknown` | `#9e9a90` | `#6e6a62` | · | `#6e6a62` | podrijetlo: izvor nije opažen |
+| `--p-template` | `#7e7a70` | `#9a9488` | · | `#9a9488` | podrijetlo: predložak |
+| `--p-ai` | `#d3ac63` | `#8a6a2f` | · | `#8a6a2f` | podrijetlo: AI pomoćnik |
+| `--cmt` | `#e9c58b` | `#7a5420` | `#e9c58b` | `#b8862a` | oznaka komentara |
+| `--cmt-ink` | `#e9c58b` | `#7a5420` | `#e9c58b` | `#8a6420` | tekst oznake komentara |
+| `--cmt-bg` | `#e9c58b26` | `#e9c58b40` | `#e9c58b26` | `#b8862a26` | pozadina komentara i obavijesti |
+| `--warn-soft` | `#3a2f22` | `#f3e6cf` | · | · | meka pozadina upozorenja |
+| `--synced-soft` | `#24303a` | `#e3edf6` | · | · | meka pozadina stanja spremanja |
+
+| `--scrim` | `#0008` | · | · | · | zavjesa iza dijaloga i ladice |
+<!-- tokens:end -->
+
+**Pravila boja**
+
+- Boja se uzima **samo preko tokena** (`var(--…)`); tvrdo upisana boja u `*.module.css` nije dopuštena, ni na javnoj naslovnici (D-184). Zavjesa iza dijaloga je `--scrim`.
+- Tekst na primarnoj je uvijek `--accent-ink` (tamno: grafit na zlatu 7,0:1).
+- `--ink-muted` je ispod 4,5:1: samo veliki tekst i netekstne oznake; mali tihi tekst je `--ink-3`.
+- `--rule` i `--rule-2` su linije; tiha površina ispod teksta je `--well`.
+- `--raised` i `--selected` su površine ljuske; ne koriste se unutar lista.
+- `--synced` se nikad ne izjednačava s `--accent`; „sprema se” pulsira u primarnoj, „spremljeno na poslužitelju” je puna točka u `--synced`.
+- Boje stanja na mentorskom popisu (D-128): samo stanje tijeka, uvijek uz tekst, nijedna crvena.
+- Boja nikad nije jedini nositelj značenja.
+
+## 4. Tipografija
+
+Fontovi aplikacije su u `app/fonts` (DAN-121), s licencama OFL. Javna naslovnica smije nositi vlastite kopije istih datoteka (D-184); one moraju biti bajt-za-bajt iste kao u `app/fonts` (provjereno za #952: SHA-256 jednak), tako da je slovo svugdje isto.
+
+| Uloga | Font | Težine | Token |
 |---|---|---|---|
-| Uspjeh | `#22C55E` | `#0A0F0E` (8,47:1) | `#22C55E` (≥ 6,4:1) |
-| Informacija | `#3B82F6` | `#0A0F0E` (5,25:1) | `#60A5FA` (≥ 5,7:1) |
-| Upozorenje sustava | `#F59E0B` | `#0A0F0E` (8,99:1) | `#F59E0B` (≥ 6,8:1) |
-| Greška sustava | `#EF4444` | `#0A0F0E` (5,13:1) | `#F87171` (≥ 5,3:1) |
+| Sučelje | Instrument Sans | 400 do 600 | `--ff-ui` |
+| Naslovi ekrana, tekst rada | Newsreader | 400 do 500 u aplikaciji; naslovi naslovnice težina 400 | `--ff-display`, `--ff-manuscript` |
+| Kod, putovnica | JetBrains Mono | 400 do 500 | `--ff-mono` |
 
-Bijeli tekst na semantičkim ispunama ne prolazi AA (2,15 do 3,76:1) i ne koristi se.
+- Tekst sučelja: osnova 13,5 px, prored 1,5; najmanje 12 px, na mobitelu (≤ 640 px) najmanje 13 px.
+- Tekst rada: Newsreader 16,5 px, prored 1,7, poravnato obostrano s rastavljanjem.
+- Naslovi iz paketa: `--fs-h1` 64 px, `--fs-h2` 42 px, `--fs-h3` 29 px, `--fs-h4` 25 px; prored `--heading-leading` 1,08, razmak `--heading-tracking` −0,025em. Zasad ih koriste samo novi Archivum ekrani; postojeći `.page h1` (40 px) prelazi na ljestvicu s ekranom koji ga mijenja.
 
-### Neutralne (dark)
-- Pozadina `#0A0F0E`
-- Površina 1 `#111827`
-- Površina 2 `#1F2937`
-- Granica kontrole (polja, odabir, fokus bez boje) `#64748B` (≥ 3,08:1 na svim površinama)
-- Razdjelnik (samo ukrasna linija, ne granica kontrole) `#334155`
-- Tekst primarni `#F8FAFC`
-- Tekst sekundarni `#94A3B8` (≥ 5,72:1)
+## 5. Oblici, razmaci, sjene
 
-### Boje podrijetla (preuzete iz v6)
-Pokazuju odakle je tekst (karta podrijetla D-57, replay), nikad ocjenu: unutar Ductusa `#8FB0E0`, izvor nije opažen `#9E9A90`, iz AI pomoćnika `#D3AC63`, komentar `#D9AE5B`. Sve ≥ 5,2:1 na tamnim površinama.
+| Token | Vrijednost | Za |
+|---|---|---|
+| `--radius-sm` | 4 px | odabrana stavka, gusti gumbi u trakama |
+| `--radius-control` | 5 px | gumbi i polja |
+| `--radius` | 6 px | paneli i kartice |
+| `--radius-lg` | 10 px | dijalozi |
+| `--lift` | dvostruka sjena | plutajući izbornik, list |
+| `--shadow` | `0 22px 80px #0003` | velike podignute površine |
+| `--focus-width` / `--focus-offset` | 3 px / 4 px | prsten fokusa |
 
-**Pravila:**
-- Semantičke boje se koriste samo za status sustava (spremanje, greška veze, potvrda), nikad za studenta, "sumnju" ili rangiranje. Nema boje za "prekršaj" (D-62). Poštivati Rječnik iz `PRODUCT.md` §5.
-- Boja nikad nije jedini nositelj značenja; uz nju uvijek stoji tekst ili ikona.
+- Tvrdo upisan radijus nije dopušten osim pilule (`999px`, `50%`).
+- Ciljevi dodira: najmanje 32 px u gustim trakama, 44 px drugdje i na mobitelu.
+- Fokus: `var(--focus-width) solid var(--accent)` = 3 px, odmak `--focus-offset` 4 px; nijedan modul ne upisuje debljinu ni odmak izravno (test).
+- Mreža stranice: najveća širina 1200 px, bočni razmak 24 px; list do 720 px.
+- Prijelomne točke: 1250 px (struktura ispod lista), 1050 px (jedan stupac), 800 px (bočna traka postaje ladica), 640 px (mobitel).
 
----
+## 6. Komponente
 
-## 3. Design system komponente (Slide 11)
+Izvedba je **CSS moduli nad tokenima iz `globals.css`**, bez Tailwinda i shadcn/ui (D-185, mijenja D-116). Tekst dolazi samo iz i18n kataloga (D-70) i oslovljava korisnika s „Vi” (D-181). Pristupačnost dijaloga i izbornika provjerava se axe testovima u e2e.
 
-Izvedba: Tailwind CSS v4 (tokeni iz §2 kao CSS varijable u `@theme`) i shadcn/ui na Radix primitivima, kopirani u repo (D-116). Tekst komponenti dolazi iz i18n kataloga (HR/EN, D-70).
+## 7. Ime i ikona
 
-- Sidebar navigacija (ikone + label)
-- Kartice rada / zadatka
-- Status badgevi (stanja rada iz `PRODUCT.md` §6: nije započeto, u tijeku, poslano na pregled, predano)
-- Stepper / wizard koraci (1–4)
-- Accordion sekcije
-- Gumbovi (primarni teal s tamnim tekstom, sekundarni outline)
-- Input polja, dropdownovi, date picker
-- Dialog / modal (fokus se vraća na okidač, Escape zatvara)
-- Progress indikatori (postotak napretka je dopušten, D-63)
-- Empty states i onboarding kartice
+Ime proizvoda je **Ductura** (D-186; `APP_NAME` u `src/lib/i18n/messages.hr.ts`). Repozitorij, paket i identifikatori u kodu ostaju `ductus`. Znak: „Ductura” u Newsreaderu, završetak u zlatu. Ikona (`app/favicon.ico`) prelazi na grafit i zlato zasebnim PR-om (§8, P-7).
 
-Sve komponente moraju poštivati Rječnik iz `PRODUCT.md` §5.
+## 8. Stanje usklađivanja
 
----
+Vlasnik je 28. 10. 2026. odlučio sva proturječja iz v1.0 (#960 c.6469934229):
 
-## 4. Detaljno mapiranje ekrana → funkcije → implementacija
+| # | Bilo | Sada |
+|---|---|---|
+| P-1 | D-116 (Tailwind, shadcn) nije proveden | D-185: CSS moduli nad tokenima |
+| P-2 | naslovnica s vlastitom paletom | D-184: jedna paleta za naslovnicu i aplikaciju; vrijednosti od D-188 (papir i grafit); naslovnica (#952) boje uzima preko tokena |
+| P-3 | #945 radijusi 10 → 6 px | #945 zatvoren |
+| P-4 | ime nije odabrano | D-186: Ductura (README) |
+| P-5 | zavjesa `#0008` u modulima | token `--scrim` |
+| P-6 | fokus 2 px | fokus naslovnice 3 px / 4 px |
+| P-7 | bordo favicon | **otvoreno**: ikona u grafitu i zlatu (D-188), zasebni PR (#967) |
+| P-8 | svijetla tema samo u komentarima | D-187 |
 
-### 4.1 Javni website (Landing)
-**Funkcije:** Hero, CTA (Zatraži demo), kartice vrijednosti, sekcije Za studente / Za mentore, GDPR, testimonial.  
-**Implementacija:** Statična Next.js stranica ili zasebni marketing site. Komponente iz design systema.  
-**Prioritet:** P2.  
-**Issue:** Marketing website.
+## 9. Veza s drugim dokumentima
 
-### 4.2 Studentski editor
-**Funkcije:** Lijeva struktura (poglavlja + progress + riječi), toolbar, Tiptap editor, desni panel (Asistent / Literatura / Upute / Komentari), status bar (spremljeno na uređaju / na poslužitelju, riječi, napredak).  
-**Implementacija:** Postojeći Tiptap + kanonski model. Asistent iza flaga (D-77). Status bar vezan na M3 + D-63. Fusnote i tablice su val 2.  
-**Prioritet:** P0 (val 1, M5).  
-**Issue:** #325.
+- Ekrani i rute: `docs/design/ductura/INTEGRACIJA.md`; Archivum ekrani: #923.
+- Funkcionalni tokovi i Rječnik: `docs/PRODUCT.md`.
+- Vizualna provjera PR-ova: D-183 (#949) i `docs/SESSIONS.md` §6 (#959).
 
-### 4.3 Reprodukcija / Replay
-**Funkcije:** Vremenska crta sjednica, highlight promjena, detalji sjednice, diff odabranog događaja, legenda podrijetla, kontrole reprodukcije.  
-**Implementacija:** Na M3 evidenciji + D-56 (samo mentorski radovi). Preduvjet: pravno mišljenje (D-55) i izmjena Ustava C-14 i C-19 prije prvog bilježenja.  
-**Prioritet:** P2 (val 3).  
-**Issue:** #330.
+## Povijest
 
-### 4.4 Predaja i deklaracija
-**Funkcije:** Provjera spremnosti (rekonstrukcija; status rekonstrukcije odvojen od potpunosti povijesti, D-80), izjava studenta (alati + način AI-ja), detalji rada, gumb Predaj.  
-**Implementacija:** M7 + D-40 + D-77. Predaju blokira samo nepodudarna rekonstrukcija (C-42). Kontrolni popis D-62 i otvorena mjesta D-61 su val 2.  
-**Prioritet:** P0 (val 1, M7).  
-**Issue:** #326.
+Ništa iz ovog odjeljka se ne koristi za novi rad.
 
-### 4.5 Pravila fakulteta (Faculty Policy Engine)
-**Funkcije:** Tri stupca (Dopušteno / Mora se deklarirati / Nije dopušteno), toggleovi, dodatne postavke, preview izjave, povijest verzija, primjena na fakultet/kolegij.  
-**Implementacija:** D-52 + D-117: administrator uređuje pravilo AI-ja, pružatelje, pragove i rokove čuvanja u sučelju, verzionirano; pravila akademskog pisanja dolaze iz paketa Lekte i samo se prikazuju. Veza na S3 i izjavu.  
-**Prioritet:** P1 (val 2); osnovno pravilo kolegija (D-52) je val 1.  
-**Issue:** #328.
-
-### 4.6 Course / Teacher Dashboard
-**Funkcije:** Lista predmeta, pregled zadatka (agregati), tablica studenata (stanje rada, zadnja izmjena), bez stupaca po kojima se može rangirati.  
-**Implementacija:** M2 + M6 + M7. Sortiranje samo po prezimenu (D-80 t.2). Praznine u zapisu (C-8) i otvorena mjesta (D-61) su različiti pojmovi i ne spajaju se u jedan stupac.  
-**Prioritet:** P0/P1.  
-**Issue:** #327.
-
-### 4.7 Institutional Admin
-**Funkcije:** Metrike, graf predaja, AAI status, revizijski trag pristupa, pravila zadržavanja i GDPR, dopušteni AI pružatelji (D-23).  
-**Implementacija:** M2 + M10 + M11. Projekcije + revizijski trag; bez pristupa sadržaju radova.  
-**Prioritet:** P1/P2.  
-**Issue:** #331, #333.
-
-### 4.8 Prenosivi zapis i osporavanje (D-49, D-80 t.7)
-**Funkcije:** Finalni dokument, procesna crta, rezultat rekonstrukcije, verzije, izjava, politika, kriptografska potvrda, provjera cjelovitosti zapisa u pregledniku bez računa (QR), izvoz.  
-**Implementacija:** D-49 + M3 + M7. Prenosivi paket s opsegom.  
-**Napomena:** Tekst "Nema indikacija neautentičnog autorstva" je zabranjen (D-01 + Rječnik). Zamjena: "zapis je cjelovit i neizmijenjen od primitka". U sučelju se ne koristi engleski naziv "Audit & Appeals" (D-90 t.3).  
-**Prioritet:** P1 (val 2).  
-**Issue:** #329.
-
----
-
-## 5. Preporučeni redoslijed
-
-| Prioritet | Ekran | Val | Ovisnosti |
-|-----------|-------|-----|-----------|
-| P0 | Design system tokeni + komponente | 1 | D-116 (#334) |
-| P0 | Studentski editor | 1 | M5 (#325) |
-| P0 | Prije početka rada (S3) | 1 | M2, M7 (#336) |
-| P0 | Moji radovi (S2) | 1 | M2 (#335) |
-| P0/P1 | Čarobnjak za zadatak (T3) | 1–2 | M2 (#337) |
-| P0 | Mentorski pregled (osnovni) | 1 | M6 (#338) |
-| P0 | Predaja + izjava | 1 | M7 (#326) |
-| P0/P1 | Nastavnički dashboard | 1–2 | M2, M6 (#327) |
-| P1 | Pravila fakulteta | 2 | D-52, D-117 (#328) |
-| P1 | Prenosivi zapis | 2 | M3, M7 (#329) |
-| P2 | Replay | 3 | M3, D-56, D-55 (#330) |
-| P1/P2 | Institutional admin | 2–3 | M10, M11 (#331) |
-| P2 | Javni website | — | — |
-
----
-
-## 6. Veza s postojećim dokumentima
-
-- Funkcionalni tokovi: `docs/PRODUCT.md`
-- Rječnik: `PRODUCT.md` §5
-- Odluke: `docs/DECISIONS.md` (D-115, D-116, D-117)
-- UX evaluacija: `docs/UX-EVAL.md`
-- Arhitektura: `docs/ARCHITECTURE.md`
-
----
-
-## 7. Sljedeći koraci
-
-- [x] Potvrditi paletu i principe (D-115; paleta usklađena s AA u v0.3)
-- [x] Kreirati implementacijske issuee po prioritetu (#325–#342)
-- [x] Odlučiti o komponentnoj biblioteci (D-116: Tailwind v4 + shadcn/ui)
-- [ ] Uskladiti s Tiptap editorom
-- [ ] Priložiti 13 slajdova (#323)
-
-**Status:** usvojeno (D-115).
+- **v0.3, 13. 10. 2026. (D-115, slajdovi #323):** teal `#14B8A6` na `#0A0F0E`, semantičke boje iz Tailwinda. Zamijenjeno D-123.
+- **D-123, 17. 10. 2026. (paket Ductura):** mint `#6FBFA5` na `#0F110E` (`ductura/README.md` §8). Zamijenjeno dizajnom v3 (21. 10., #476), pa #867.
+- **D-179, 26. 10. 2026. (Archivum paket, #915):** ljubičasta `#2b1f38`, trake `#21192a`, tekst `#f7f0fa`, bakar `#f0b573`. Vrijednosti koje naslovnica ima za istu ulogu zamijenjene D-184, a sve boje D-188; nijedna vrijednost se ne koristi.
+- **D-184, 28. 10. 2026. (paleta naslovnice, #964):** šljiva `#2b1f38`, trake `#21172c`, bakar `#f0b573`, papir `#fffcf5`, svijetli bakar `#8f4f33`. Vrijednosti zamijenjene D-188 (papir i grafit); pravilo jedne palete za naslovnicu i aplikaciju vrijedi.
+- **#867, 26. 10. 2026. (Archivum V3):** bordo, tlo `#19161a`, bakar `#cf9d72`. Zamijenjeno D-179 (#915), zatim D-188; vrijednosti svijetle ljuske i bijelog lista iz V3 također su zamijenjene D-188.
+- Mapiranje ekrana v0.3 (landing, editor, replay, predaja, pravila fakulteta, nadzorne ploče, admin, prenosivi zapis) i prioriteti premješteni su u `ductura/INTEGRACIJA.md` i issuee #325 do #342; sadržajna pravila iz toga mapiranja (npr. zabrana teksta „Nema indikacija neautentičnog autorstva”, sortiranje samo po prezimenu) i dalje vrijede preko `PRODUCT.md` i odluka.

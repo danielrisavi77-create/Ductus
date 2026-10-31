@@ -5,6 +5,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createWithActor, type WithActor } from "@/server/db/with-actor";
 
+import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
+
 // DAN-189 / attack plan #356 item 5: pgTAP can establish CAS semantics but
 // cannot prove a real lock race inside one transaction. This uses two app
 // connections and synthetic rows to race separate requests against one doc.
@@ -15,9 +17,7 @@ import { createWithActor, type WithActor } from "@/server/db/with-actor";
 // fixture never reaches a shared or remote database.
 const SAFE_ADMIN_URL: string =
   process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
-if (!["127.0.0.1", "localhost", "[::1]"].includes(new URL(SAFE_ADMIN_URL).hostname)) {
-  throw new Error("The evidence race test runs only against a loopback database (DATABASE_URL).");
-}
+requireLoopbackDatabaseUrl(SAFE_ADMIN_URL, "The evidence race test runs only against a loopback database (DATABASE_URL).");
 const suffix = randomBytes(5).toString("hex");
 const login = `it_evidence_${suffix}`;
 const applicationName = `it_evidence_${suffix}`;

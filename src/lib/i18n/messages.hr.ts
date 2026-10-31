@@ -51,7 +51,6 @@ export const hr = {
     homeCrumb: "Početna",
   },
   home: {
-    lead: `${APP_NAME} ne procjenjuje autorstvo ni korištenje AI-ja. Prije početka vidite što nastavnik vidi i od kada.`,
     openWorkspace: "Otvori radni prostor",
     openTeacher: "Otvori kolegije",
     // #802 part B: the signed-in home (pocetna.dc.html: greeting, cards).
@@ -73,14 +72,14 @@ export const hr = {
     sectionsNav: "Odjeljci početne stranice",
     howItWorksLink: "Kako radi",
     forWhomLink: "Za koga",
-    eyebrow: "Prostor za akademsko pisanje",
-    title: "Od prve rečenice do predaje,",
-    titleAccent: "uz svog nastavnika.",
-    intro: `${APP_NAME} je mjesto na kojem student piše seminarski ili završni rad, a nastavnik prati kako rad nastaje i komentira ga uz odlomke.`,
+    eyebrow: "Dnevnik pisanja · seminarski i završni radovi",
+    title: "Rad se vidi",
+    titleAccent: "dok nastaje.",
+    intro: `Student piše, a nastavnik prati kako rad nastaje i komentira uz odlomke. ${APP_NAME} ne procjenjuje autorstvo ni korištenje AI-ja, a prije početka vidite što nastavnik vidi i od kada.`,
     enter: "Prijavi se i počni",
     aaiOnly: "Prijava isključivo preko AAI@EduHr.",
     previewLabel: "Primjer radnog prostora: list rada i komentar nastavnika, izmišljeni podaci",
-    previewCourse: "Javne politike · seminarski rad",
+    previewSignature: "DUC · 371.3 · rad 07",
     previewTitle: "Gradski promet i održiva mobilnost",
     previewSection: "1. Uvod",
     previewParagraph1:
@@ -587,6 +586,9 @@ export const hr = {
     // #711 F1 (contract 6391402093 §3, §5, §6): /rad with and without an assignment.
     freeNote: "Ovaj tekst nije vezan uz zadatak i ne predaje se. Zadatak otvarate s njegove obavijesti.",
     unavailable: "Ovaj zadatak nije dostupan ovom računu.",
+    // DAN-330: the work starts only on the student's click.
+    startWork: "Započni rad",
+    notStarted: "Rad još nije započet.",
     openLoading: "Otvaram rad…",
     openNotYet: "Zadatak se otvara {time}.",
     openOffline: "Za prvo otvaranje rada potrebna je veza.",
@@ -708,6 +710,10 @@ export const hr = {
     loading: "Učitavanje rada…",
     empty: "Student još nije poslao tekst.",
     note: "Prikazan je zadnji tekst koji je studentov preglednik poslao. To nije zapis rada i može kasniti ili zastati.",
+    // DAN-332 (#826 PR 3): the route sent the bytes of the submitted revision.
+    // These two replace the connection line and the note beside that text.
+    submitted: "Predani rad",
+    submittedNote: "Prikazana je verzija rada koju je student predao. Ova se verzija više ne mijenja.",
     signIn: "Prijavi se",
     signInFirst: "Prijavite se da vidite rad.",
     invalid: "Ova poveznica ne vodi do rada.",
@@ -738,6 +744,7 @@ export const hr = {
     signedOut: "Prijavite se da predate rad.",
     signIn: "Prijavi se",
     backToWork: "Natrag na rad",
+    notStarted: "Rad još nije započet. Započni ga u radnom prostoru.",
     steps: { check: "1 Provjera zapisa", submit: "2 Predaja", receipt: "3 Potvrda" },
     loading: "Učitavanje teksta s poslužitelja…",
     textTitle: "Ovo je tekst koji predajete.",
@@ -830,6 +837,9 @@ export const hr = {
       heading: "Vaš studentski prostor",
       lede: "Zadaci na kolegijima.",
       courses: "Moji kolegiji",
+      // S02 subtitle: chosen by the orchestrator (Daniel left it to them, 26. 10. 2026.),
+      // not the PNG's, because the student has no course page to open.
+      coursesLede: "Kolegiji na koje ste upisani i njihovi zadaci.",
       courseLabel: "Kolegij",
       due: "Rok: {time}",
       open: "Otvori zadatak",
@@ -884,9 +894,11 @@ export const hr = {
     loading: "Učitavanje zadatka…",
     notOpen: "Zadatak se otvara {time}. Obavijest potvrđujete kad se zadatak otvori.",
     pastDue: "Rok zadatka je prošao {time}.",
-    step: `Obavijest prije prve rečenice · korak ${NOTICE_STEP_COUNT}`,
-    opensFrom: "otvoreno od",
-    due: "rok",
+    // DAN-344 (Archivum S03-a, #923 c.6545848868): the header verbatim from
+    // S03_upute.png; "otvoreno od" is gone (owner, c.6435071376 point 2).
+    step: "Prije pisanja",
+    courseEyebrow: "Kolegij",
+    dueAt: "Rok: {time}",
     toolsHeading: "Uporaba alata u ovom zadatku (FPZG čl. 8)",
     noTools: "U ovom zadatku uporaba alata generativne umjetne inteligencije nije dopuštena.",
     recordedHeading: "Što se bilježi",

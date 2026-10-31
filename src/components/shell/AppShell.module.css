@@ -244,11 +244,11 @@
   display: none;
 }
 
-.shell[data-theme="light"] .toLight {
+:global(:root[data-theme="light"]) .toLight {
   display: none;
 }
 
-.shell[data-theme="light"] .toDark {
+:global(:root[data-theme="light"]) .toDark {
   display: inline-flex;
 }
 
@@ -264,7 +264,7 @@
   position: fixed;
   inset: 0;
   z-index: 35;
-  background: #0008;
+  background: var(--scrim);
 }
 
 .content {
