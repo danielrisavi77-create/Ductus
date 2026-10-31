@@ -55,6 +55,19 @@ export function reportedTests(report) {
   return out;
 }
 
+/**
+ * Errors of a Playwright JSON report outside any single test (worker
+ * teardown, global setup, a file that does not load). None is in
+ * KNOWN_FAILURES, so each one is a new failure.
+ */
+export function reportErrors(report) {
+  return (report?.errors ?? []).map((error) => {
+    const text = String(error?.message ?? error?.value ?? "").split("\n")[0].trim() || "unknown error";
+    const where = error?.location?.file ? ` (${String(error.location.file).replaceAll("\\", "/")})` : "";
+    return `${text}${where}`;
+  });
+}
+
 const key = ({ file, title }) => `${file} › ${title}`;
 
 /** Splits the failures into known (#1046) and new, and names listed tests that passed or did not run. */
@@ -71,11 +84,12 @@ export function classify(tests, list = KNOWN_FAILURES) {
 }
 
 /** Markdown for the job summary. */
-export function summary({ known, fresh, fixed, missing }) {
+export function summary({ known, fresh, fixed, missing }, errors = []) {
   const lines = ["## WebKit E2E (macOS)", ""];
   const block = (head, items) => {
     if (items.length) lines.push(head, ...items.map((k) => `- ${k}`), "");
   };
+  block(`**New failures outside a test** (${errors.length}), not tracked in #${KNOWN_ISSUE}:`, errors);
   block(`**New failures** (${fresh.length}), not tracked in #${KNOWN_ISSUE}:`, fresh);
   block(`Known failures (${known.length}), tracked in #${KNOWN_ISSUE}:`, known);
   block(`Listed for #${KNOWN_ISSUE} but passed; take them off KNOWN_FAILURES:`, fixed);
@@ -96,7 +110,8 @@ function main() {
     env: { ...process.env, PLAYWRIGHT_JSON_OUTPUT_FILE: REPORT, PLAYWRIGHT_HTML_OPEN: "never" },
   });
   try {
-    const text = summary(classify(reportedTests(JSON.parse(readFileSync(REPORT, "utf8")))));
+    const report = JSON.parse(readFileSync(REPORT, "utf8"));
+    const text = summary(classify(reportedTests(report)), reportErrors(report));
     console.log(text);
     if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${text}\n`);
   } catch (error) {

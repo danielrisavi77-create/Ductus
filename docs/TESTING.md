@@ -39,7 +39,7 @@ Standardni E2E (`stack-e2e`) i login E2E (`stack-login`) izvršavaju se paraleln
   - Dok #1046 ima poznate padove, ne vrti se na PR-u ni na pushu na `main`: poznato crven posao bi oborio preflight svakog takvog PR-a i uvjet zelenog `main` iz M0, bez novog nalaza. Ti okidači se vraćaju s popravkom #1046; test u `webkit-macos.test.mjs` to traži čim popis poznatih padova bude prazan.
   - Pokreće cijeli projekt `webkit` nad produkcijskim buildom, bez compose stoga, jer ga ti specovi ne trebaju (prvo pokretanje: 245 prošlo, 7 palo, 1 preskočen).
   - Ne izostavlja nijedan test. Sedam testova iz `KNOWN_FAILURES` u `scripts/engineering/webkit-macos.mjs` pada samo na macOS WebKitu i prati se u #1046, pa je posao crven dok se ne poprave. Izlazni kod je uvijek Playwrightov.
-  - Sažetak posla odvaja padove iz #1046 od novih padova. Navodi i test s popisa koji je prošao, pa izlazi s popisa, te test s popisa koji se nije vrtio (preimenovan ili obrisan).
+  - Sažetak posla odvaja padove iz #1046 od novih padova. Navodi i test s popisa koji je prošao, pa izlazi s popisa, te test s popisa koji se nije vrtio (preimenovan ili obrisan). Greška izvan pojedinog testa (npr. istek pri gašenju workera ili pad globalnog postavljanja) uvijek je novi pad.
   - Ne pokriva pravi Safari (`safaridriver`, druga razina), iOS (treća razina), brisanje pohrane nakon nekorištenja (ITP), `e2e/login/` ni stog.
 - QA obveza: PR koji dira `src/lib/journal/`, sync, prijavu ili odjavu ne dobiva QA PASS bez dokaza o prolazu na sva tri enginea na aktualnom headu.
 - Prije pilota cijeli acceptance path mora proći na Chromiumu, Firefoxu i WebKitu.

@@ -1,8 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 
-import { classify, exitCode, KNOWN_FAILURES, KNOWN_ISSUE, playwrightArgs, reportedTests, summary } from "./webkit-macos.mjs";
+import {
+  classify,
+  exitCode,
+  KNOWN_FAILURES,
+  KNOWN_ISSUE,
+  playwrightArgs,
+  reportErrors,
+  reportedTests,
+  summary,
+} from "./webkit-macos.mjs";
 
 // DAN-114 (#1040): the advisory WebKit job on a macOS runner.
 const root = new URL("../../", import.meta.url);
@@ -91,4 +101,27 @@ test("the summary splits failures into tracked and new and names listed tests th
   assert.ok(text.includes("take them off KNOWN_FAILURES:\n- e2e/a.spec.ts › fixed\n"));
   assert.ok(text.includes("did not run (renamed or removed?):\n- e2e/a.spec.ts › gone\n"));
   assert.match(summary(classify(reportedTests(report([spec("ok", "expected")])), [])), /No failures\.$/);
+});
+
+test("an error outside any test is a new failure, even next to only known ones", () => {
+  const list = [{ file: "e2e/a.spec.ts", title: "known" }];
+  const withError = {
+    ...report([spec("known", "unexpected")]),
+    errors: [{ message: "Error: worker teardown timeout of 30000ms exceeded\n    at stack", location: { file: "e2e\\a.spec.ts" } }, {}],
+  };
+  const result = classify(reportedTests(withError), list);
+  assert.deepEqual(result.fresh, [], "no test outside the list failed");
+  const errors = reportErrors(withError);
+  assert.deepEqual(errors, ["Error: worker teardown timeout of 30000ms exceeded (e2e/a.spec.ts)", "unknown error"]);
+  const text = summary(result, errors);
+  assert.ok(
+    text.includes(
+      "**New failures outside a test** (2), not tracked in #1046:\n- Error: worker teardown timeout of 30000ms exceeded (e2e/a.spec.ts)\n- unknown error\n",
+    ),
+  );
+  assert.notEqual(text, summary(result), "the global error changes the summary");
+  assert.deepEqual(reportErrors(report([])), [], "a report without errors adds nothing");
+  assert.doesNotMatch(summary(classify([], []), ["boom"]), /No failures/, "an error alone is not a clean run");
+  const source = readFileSync(new URL("scripts/engineering/webkit-macos.mjs", root), "utf8");
+  assert.match(source, /summary\(classify\(reportedTests\(report\)\), reportErrors\(report\)\)/, "the job passes the errors on");
 });
