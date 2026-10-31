@@ -142,6 +142,16 @@ test("login dev and production build use separate Next cache keys", () => {
   }
 });
 
+test("every stack Next cache saves per commit and restores by a prefix of its key", () => {
+  // A GitHub cache entry is immutable: a key without the SHA freezes .next/cache
+  // at its first save, and a restore prefix the key does not start with never hits.
+  for (const { name, text } of stackJobs) {
+    const prefix = text.match(/^ {12}(stack-(?:login-)?next-\S.*-)$/m)?.[1];
+    assert.ok(prefix, `${name}: restore prefix`);
+    assert.ok(text.includes(`key: ${prefix}\${{ github.sha }}\n`), `${name}: key is the prefix plus the SHA`);
+  }
+});
+
 test("the build cache key changes with the ESLint config and the lockfile", () => {
   const prefix = "build-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'eslint.config.mjs') }}-";
   assert.ok(ci.includes(`key: ${prefix}\${{ github.sha }}`), "build cache key");
