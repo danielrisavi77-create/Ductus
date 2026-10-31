@@ -41,27 +41,27 @@ test("Risk low or standard without a D-97 path is authorized without a command",
   assert.equal(authorize({ body: bodyWith("Standard") }).state, "success");
 });
 
-// D-195: the owner's command is kept for D-97 paths and for a critical PR whose
+// D-196: the owner's command is kept for D-97 paths and for a critical PR whose
 // gate passed without QA; a critical PR with QA and no D-97 path needs none.
 const D97 = ["scripts/engineering/x.mjs"];
 // Only tests, so QA-exempt; its risk floor is below critical, so the parsed
 // risk decides the result.
 const QA_EXEMPT = ["e2e/a.spec.ts"];
 
-test("Risk critical with QA required and no D-97 path is authorized without a command (D-195)", () => {
+test("Risk critical with QA required and no D-97 path is authorized without a command (D-196)", () => {
   const out = authorize({ body: bodyWith("critical"), filenames: ["src/a.ts", "db/migrations/1.sql"] });
   assert.equal(out.state, "success");
-  assert.match(out.description, /D-195/);
+  assert.match(out.description, /D-196/);
 });
 
-test("Risk critical on a D-97 path still needs the owner's command (D-195)", () => {
+test("Risk critical on a D-97 path still needs the owner's command (D-196)", () => {
   for (const filenames of [D97, ["src/a.ts", ...D97], ["src/a.ts", "docs/DECISIONS.md"], ["src/a.ts", ".github/workflows/ci.yml"]]) {
     assert.equal(authorize({ body: bodyWith("critical"), filenames }).state, "pending", filenames.join(","));
     assert.equal(authorize({ body: bodyWith("critical"), filenames, comments: [command(head)] }).state, "success");
   }
 });
 
-test("a QA-exempt critical PR (only tests or only documents) still needs the owner's command (D-195)", () => {
+test("a QA-exempt critical PR (only tests or only documents) still needs the owner's command (D-196)", () => {
   for (const filenames of [QA_EXEMPT, ["tests/unit/a.test.ts"], ["db/tests/a.sql"], ["docs/x.md"]]) {
     assert.equal(authorize({ body: bodyWith("critical"), filenames }).state, "pending", filenames.join(","));
     assert.equal(authorize({ body: bodyWith("critical"), filenames, comments: [command(head)] }).state, "success");

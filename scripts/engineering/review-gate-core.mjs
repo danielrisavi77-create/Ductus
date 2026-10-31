@@ -873,7 +873,7 @@ export function sharesHeadWithOpenPr(pr, openPulls) {
  * the owner's `Owner-Command: merge` comment names this head (or a head that
  * carries to it through a clean base merge, D-101), or the PR touches no D-97
  * path and declares Risk low or standard, or Risk critical with QA required
- * (D-195), or only adds new tests (D-189). Every description is fixed text.
+ * (D-196), or only adds new tests (D-189). Every description is fixed text.
  */
 export function evaluateMergeAuthorization({
   gate,
@@ -902,7 +902,7 @@ export function evaluateMergeAuthorization({
     metadata.minimumRisk !== "critical" &&
     ownerCommandPaths(paths).length === 0;
   if (automatic) return { state: "success", description: "Risk low or standard, no D-97 path: no owner command needed." };
-  // D-195 (trial to 14 Nov 2026): a critical PR with no D-97 path needs no owner
+  // D-196 (trial to 14 Nov 2026): a critical PR with no D-97 path needs no owner
   // command once the gate is green, because for it that green includes a separate
   // QA PASS. A critical PR that is QA-exempt (only tests or only documents) keeps
   // the command, except the new-tests case below; any D-97 path keeps it always.
@@ -912,7 +912,7 @@ export function evaluateMergeAuthorization({
     qaExemption(paths) === null &&
     ownerCommandPaths(paths).length === 0;
   if (criticalWithQa) {
-    return { state: "success", description: "Risk critical with review and QA, no D-97 path: no owner command needed (D-195)." };
+    return { state: "success", description: "Risk critical with review and QA, no D-97 path: no owner command needed (D-196)." };
   }
   // D-189: a PR that only adds new test files is auto-merge eligible, so it needs
   // no owner command either; a head outside this repository still does.
