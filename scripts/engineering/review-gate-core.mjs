@@ -342,6 +342,26 @@ function prevailing({ current, carried }) {
   return carriedLater && NEGATIVE.has(carried.verdict) ? carried : current;
 }
 
+// F-027: a verdict counts as written only when every field reads exactly; a
+// negative one the parser cannot read still blocks. A verdict line that names
+// FAIL or BLOCK in other words ("BLOCK - see below", "**BLOCK**"), or a valid
+// FAIL or BLOCK without its extra field, is that negative verdict. Its head is
+// the current head when the head field is missing, not a hex SHA, or a short
+// prefix of the current head; a full or short SHA of another head keeps it
+// there, as for any verdict.
+const NEGATIVE_WORD_RE = /\b(FAIL|BLOCK)\b/;
+function readVerdict({ verdict, head, extra, headSha, carriedHeads }) {
+  const exact = verdict && VERDICTS.has(verdict) ? verdict : null;
+  const onHead = sameHead(head, headSha) || carriedHeads.has(head?.toLowerCase());
+  if (exact && onHead && extra) return { verdict: exact, head: head.toLowerCase(), current: sameHead(head, headSha) };
+  const negative = exact && NEGATIVE.has(exact) ? exact : (NEGATIVE_WORD_RE.exec(verdict ?? "")?.[1] ?? null);
+  if (!negative) return null;
+  if (onHead) return { verdict: negative, head: head.toLowerCase(), current: sameHead(head, headSha) };
+  const value = (head ?? "").trim().toLowerCase();
+  const unreadable = !/^[0-9a-f]+$/.test(value) || (value.length < 40 && headSha.toLowerCase().startsWith(value));
+  return unreadable ? { verdict: negative, head: headSha.toLowerCase(), current: true } : null;
+}
+
 function latestVerdicts(entries, {
   agentField,
   headField,
@@ -364,21 +384,13 @@ function latestVerdicts(entries, {
     const fallback = fallbackSlug(fallbackLine);
     const identity = verifiedCommentIdentity(entry, agent);
 
-    if (
-      !isAgent(agent, role) ||
-      !identity ||
-      !identity.principal ||
-      !(sameHead(head, headSha) || carriedHeads.has(head?.toLowerCase())) ||
-      !verdict ||
-      !VERDICTS.has(verdict) ||
-      (extraField && !extra)
-    ) {
-      continue;
-    }
+    if (!isAgent(agent, role) || !identity || !identity.principal) continue;
+    const read = readVerdict({ verdict, head, extra: extraField ? extra : true, headSha, carriedHeads });
+    if (!read) continue;
 
     const key = `${identity.appSlug}|${identity.principal}`;
-    const candidate = { agent, head: head.toLowerCase(), verdict, extra, fallback, fallbackLine, identity,
-      order: [entry.createdAt, entry.index], current: sameHead(head, headSha) };
+    const candidate = { agent, head: read.head, verdict: read.verdict, extra, fallback, fallbackLine, identity,
+      order: [entry.createdAt, entry.index], current: read.current };
     // Keep the latest current and the latest carried verdict apart, so a
     // later carried verdict never makes the current one disappear.
     const slots = latest.get(key) ?? { current: null, carried: null };
