@@ -295,6 +295,8 @@ test("the notice leads to /rad of its assignment, whose top bar names it", async
     await page.waitForURL(`**/rad?zadatak=${seeded.assignment}`);
     await expect(context).toHaveText(`${seeded.courseName} / Izmišljeni zadatak S3`);
     await expect(page.locator(".workspace__bar")).not.toContainText("Kolegij A");
+    // DAN-330: the work starts on the student's click.
+    await page.getByRole("button", { name: t.workspace.startWork }).click();
     // The first opening refreshes the render into the editor of the new work,
     // which mounts the shell and its panel afresh: Upute is opened after that.
     await expect(page.getByRole("toolbar", { name: t.toolbar.label })).toBeVisible();
@@ -332,6 +334,8 @@ test("/rad shows each legal word-limit shape from the student's acknowledged ass
     const seeded = await seedAssignment({ ...limits, acknowledged: true });
     try {
       await page.goto(`/rad?zadatak=${seeded.assignment}`);
+      // DAN-330: the work starts on the student's click.
+      await page.getByRole("button", { name: t.workspace.startWork }).click();
       // #711 F1: the length comes with the student's own work, opened by the page's one POST.
       await expect(length).toHaveText(limits.shown, { timeout: 30_000 });
       if (limits.wordMin === 2000) {
@@ -396,6 +400,8 @@ test("/rad redirects for a stale acknowledgment, then shows only the acknowledge
       `INSERT INTO institution.notice_acknowledgment (assignment_id, version_no, student_id, institution_id)
        VALUES ($1, 2, $2, $3)`, [seeded.assignment, me.id, me.institution_id]));
     await page.goto(`/rad?zadatak=${seeded.assignment}`);
+    // DAN-330: the work starts on the student's click.
+    await page.getByRole("button", { name: t.workspace.startWork }).click();
     await expect(page.locator(".workspace__status .status-length")).toHaveText(/^0 \/ 2\s000–2\s500 riječi$/u, { timeout: 30_000 });
   } finally {
     await admin((client) => client.query(

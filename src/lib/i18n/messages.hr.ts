@@ -586,6 +586,9 @@ export const hr = {
     // #711 F1 (contract 6391402093 §3, §5, §6): /rad with and without an assignment.
     freeNote: "Ovaj tekst nije vezan uz zadatak i ne predaje se. Zadatak otvarate s njegove obavijesti.",
     unavailable: "Ovaj zadatak nije dostupan ovom računu.",
+    // DAN-330: the work starts only on the student's click.
+    startWork: "Započni rad",
+    notStarted: "Rad još nije započet.",
     openLoading: "Otvaram rad…",
     openNotYet: "Zadatak se otvara {time}.",
     openOffline: "Za prvo otvaranje rada potrebna je veza.",
@@ -737,6 +740,7 @@ export const hr = {
     signedOut: "Prijavite se da predate rad.",
     signIn: "Prijavi se",
     backToWork: "Natrag na rad",
+    notStarted: "Rad još nije započet. Započni ga u radnom prostoru.",
     steps: { check: "1 Provjera zapisa", submit: "2 Predaja", receipt: "3 Potvrda" },
     loading: "Učitavanje teksta s poslužitelja…",
     textTitle: "Ovo je tekst koji predajete.",
