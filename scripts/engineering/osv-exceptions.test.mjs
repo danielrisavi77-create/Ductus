@@ -32,9 +32,13 @@ test("the repository's own files pass every guard", () => {
   });
 });
 
-test("the existing braces entry keeps its ID and date", () => {
-  const braces = parseIgnoredVulns(read("osv-scanner.toml")).find((item) => item.id === '"GHSA-vfj7-8cjw-p6xm"');
-  assert.equal(braces?.ignoreUntil, "2027-01-03");
+test("the minimatch entry keeps its ID and date; the removed braces and glob entries stay out", () => {
+  const entries = parseIgnoredVulns(read("osv-scanner.toml"));
+  assert.equal(entries.find((item) => item.id === '"GHSA-g3hv-75wg-m249"')?.ignoreUntil, "2027-01-03");
+  // osv-scanner reported both as unused ignores; neither may come back silently.
+  for (const id of ["GHSA-vfj7-8cjw-p6xm", "GHSA-3g3m-2fjr-6pw4"]) {
+    assert.throws(() => checkIgnoredVulns(`${validToml}\n${entry(id)}`), /not an allowed ID/, id);
+  }
 });
 
 test("A7 fixture is itself valid, so the negative cases below fail on their own change", () => {
@@ -45,7 +49,9 @@ test("A7 (a): an ID outside the allowed list fails", () => {
   for (const id of ["GHSA-aaaa-bbbb-cccc", "CVE-2026-118764", "CVE-2026-118773", "GHSA-*", "*", ""]) {
     assert.throws(() => checkIgnoredVulns(`${validToml}\n${entry(id)}`), /not an allowed ID/, id);
   }
-  assert.throws(() => checkIgnoredVulns(withFirst(entry("GHSA-3G3M-2FJR-6PW4"))), /not an allowed ID/);
+  assert.throws(() => checkIgnoredVulns(withFirst(entry("GHSA-G3HV-75WG-M249"))), /not an allowed ID/);
+  // The glob exception went with Storybook; it cannot come back without changing the list.
+  assert.throws(() => checkIgnoredVulns(`${validToml}\n${entry("GHSA-3g3m-2fjr-6pw4")}`), /not an allowed ID/);
 });
 
 test("A7 (a): an unquoted or unnamed ID fails", () => {
@@ -236,7 +242,7 @@ test("A3: the walk on the real lockfile is not vacuous", () => {
   const production = productionPackages(rootLock);
   assert.ok(production.has("next") && production.has("@tiptap/core"), "production roots");
   assert.ok(production.has("react-dom"), "peer of a production package");
-  assert.ok(allPackages(rootLock).has("glob") && allPackages(rootLock).has("minimatch"), "dev tree");
+  assert.ok(allPackages(rootLock).has("minimatch"), "dev tree");
   assert.ok(!production.has("eslint"), "dev tool outside production");
   assert.ok(productionPackages(read("infra/fake-oidc/pnpm-lock.yaml")).has("koa"));
 });
@@ -246,7 +252,7 @@ test("A3: a waived package in the production tree fails, directly or transitivel
   assert.throws(() => checkDevOnlyPackages({ rootLock: direct, fakeOidcLock: cleanOidc }), /minimatch reached the production/);
 
   const transitive = lock().replace("      delta: 4.0.0\n", "      delta: 4.0.0\n      glob: 13.0.6\n");
-  assert.throws(() => checkDevOnlyPackages({ rootLock: transitive, fakeOidcLock: cleanOidc }), /glob reached the production/);
+  assert.throws(() => checkDevOnlyPackages({ rootLock: transitive, fakeOidcLock: cleanOidc }), /minimatch reached the production/);
 
   const deep = lock().replace("  delta@4.0.0: {}\n", "  delta@4.0.0:\n    dependencies:\n      minimatch: 3.1.5\n");
   assert.throws(() => checkDevOnlyPackages({ rootLock: deep, fakeOidcLock: cleanOidc }), /minimatch reached the production/);
@@ -256,8 +262,8 @@ test("A3: a waived package in the production tree fails, directly or transitivel
 });
 
 test("A3: any waived package in the fake-oidc lockfile fails, even a dev one", () => {
-  const fakeOidcLock = `${cleanOidc}\n  glob@13.0.6: {}\n`;
-  assert.throws(() => checkDevOnlyPackages({ rootLock: lock(), fakeOidcLock }), /glob appeared in infra/);
+  const fakeOidcLock = `${cleanOidc}\n  minimatch@3.1.5: {}\n`;
+  assert.throws(() => checkDevOnlyPackages({ rootLock: lock(), fakeOidcLock }), /minimatch appeared in infra/);
 });
 
 test("A3: an unreadable lockfile never counts as clean", () => {
