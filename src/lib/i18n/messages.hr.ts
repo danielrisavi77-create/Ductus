@@ -890,9 +890,11 @@ export const hr = {
     loading: "Učitavanje zadatka…",
     notOpen: "Zadatak se otvara {time}. Obavijest potvrđujete kad se zadatak otvori.",
     pastDue: "Rok zadatka je prošao {time}.",
-    step: `Obavijest prije prve rečenice · korak ${NOTICE_STEP_COUNT}`,
-    opensFrom: "otvoreno od",
-    due: "rok",
+    // DAN-344 (Archivum S03-a, #923 c.6545848868): the header verbatim from
+    // S03_upute.png; "otvoreno od" is gone (owner, c.6435071376 point 2).
+    step: "Prije pisanja",
+    courseEyebrow: "Kolegij",
+    dueAt: "Rok: {time}",
     toolsHeading: "Uporaba alata u ovom zadatku (FPZG čl. 8)",
     noTools: "U ovom zadatku uporaba alata generativne umjetne inteligencije nije dopuštena.",
     recordedHeading: "Što se bilježi",
