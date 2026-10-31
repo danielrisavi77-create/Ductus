@@ -31,6 +31,11 @@ describe("navFor", () => {
     expect(teacher.filter((href) => student.includes(href))).toEqual([]);
   });
 
+  it("gives a student her assignments and, from DAN-344 (S02), her courses", () => {
+    const student = navFor("student").map((item) => item.href);
+    expect(student.slice(0, 2)).toEqual(["/zadaci", "/zadaci/kolegiji"]);
+  });
+
   it("gives no item without a role", () => {
     expect(navFor(null)).toEqual([]);
   });
