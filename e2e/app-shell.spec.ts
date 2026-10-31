@@ -43,9 +43,17 @@ test("the theme switch turns the shell light and the browser remembers it", asyn
     const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
     expect(axe.violations, path).toEqual([]);
   }
-  // Pages outside the shell keep their own look.
-  await page.goto("/prijava");
-  await expect(page.locator("[data-theme]")).toHaveCount(0);
+  // Z-13a: the choice is on <html>, so a page outside the shell is light too.
+  const ground = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--ground").trim());
+  await page.goto("/ne-postoji-z13a");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  expect(await ground()).toBe("#f3f2ee");
+  // The sign-in screen (until #1024) and the public home page (J-01) keep their dark look.
+  for (const path of ["/prijava", "/"]) {
+    await page.goto(path);
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    expect(await ground(), path).toBe("#242422");
+  }
 });
 
 test("the focused skip link is drawn above the side bar", async ({ page }) => {
