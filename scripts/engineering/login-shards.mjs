@@ -3,7 +3,9 @@ import { appendFileSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const LOGIN_SHARDS = 3;
+import { LOGIN_SHARDS, WEIGHTS_PATH, planLoginShards, specFilesOf } from "./login-shard-plan.mjs";
+
+export { LOGIN_SHARDS };
 
 // Every test of a Playwright JSON report as "file › suite titles › test › project".
 export function testsOf(report) {
@@ -12,7 +14,7 @@ export function testsOf(report) {
     const path = suite.title ? [...titles, suite.title] : titles;
     for (const spec of suite.specs ?? []) {
       for (const test of spec.tests ?? []) {
-        out.push({ id: [spec.file, ...path, spec.title, test.projectName].join(" › "), test });
+        out.push({ id: [spec.file, ...path, spec.title, test.projectName].join(" › "), test, file: spec.file });
       }
     }
     for (const child of suite.suites ?? []) walk(child, path);
@@ -23,8 +25,10 @@ export function testsOf(report) {
 }
 
 // Every shard ran its part, the parts are disjoint, and together they are
-// exactly the suite each runner listed in full before sharding.
-export function verifyLoginShards(shards) {
+// exactly the suite each runner listed in full before sharding. Each shard ran
+// only the spec files of its plan, recomputed here from the same inventory and
+// weights (DAN-375), and its own plan.json matches that recomputation.
+export function verifyLoginShards(shards, weights) {
   assert.equal(shards.length, LOGIN_SHARDS, "Every login shard is required");
   const listed = shards.map(({ inventory }, index) => {
     assert.equal(inventory.config?.shard ?? null, null, `Shard ${index + 1}: the inventory must list the full suite`);
@@ -34,13 +38,16 @@ export function verifyLoginShards(shards) {
   assert.ok(listed[0].length > 0, "The login inventory is empty");
   assert.equal(new Set(listed[0]).size, listed[0].length, "The login inventory repeats a test");
   for (const other of listed.slice(1)) assert.deepEqual(other, listed[0], "The shards listed different suites");
+  const plan = planLoginShards(specFilesOf(shards[0].inventory), weights);
 
   const ran = new Map();
   let skipped = 0;
-  for (const [index, { report }] of shards.entries()) {
-    assert.deepEqual(report.config?.shard, { current: index + 1, total: LOGIN_SHARDS }, `Shard ${index + 1}: wrong shard`);
+  for (const [index, { report, shardPlan }] of shards.entries()) {
+    assert.deepEqual(shardPlan, { shard: index + 1, total: LOGIN_SHARDS, files: plan[index] }, `Shard ${index + 1}: wrong plan`);
+    assert.equal(report.config?.shard ?? null, null, `Shard ${index + 1}: the run must follow the plan, not --shard`);
     assert.deepEqual(report.errors ?? [], [], `Shard ${index + 1}: the run has errors`);
-    for (const { id, test } of testsOf(report)) {
+    for (const { id, test, file } of testsOf(report)) {
+      assert.ok(plan[index].includes(file), `Shard ${index + 1} ran a file outside its plan: ${id}`);
       assert.ok(!ran.has(id), `Ran in two shards: ${id}`);
       ran.set(id, index + 1);
       if (test.status === "skipped") { skipped += 1; continue; }
@@ -60,8 +67,9 @@ export function runLoginShards(env = process.env, cwd = process.cwd()) {
   const shards = Array.from({ length: LOGIN_SHARDS }, (_, i) => ({
     inventory: read(`.ci-reports/login/login-shard-${i + 1}/inventory.json`),
     report: read(`.ci-reports/login/login-shard-${i + 1}/results.json`),
+    shardPlan: read(`.ci-reports/login/login-shard-${i + 1}/plan.json`),
   }));
-  const result = verifyLoginShards(shards);
+  const result = verifyLoginShards(shards, JSON.parse(readFileSync(WEIGHTS_PATH, "utf8")));
   const summary = `Login E2E: ${result.count} tests, per shard ${result.perShard.join(" + ")}, skipped ${result.skipped}. ` +
     `Shard elapsed ms: ${shards.map(({ report }) => report.stats?.duration).join(", ")}.\n`;
   console.log(summary);
