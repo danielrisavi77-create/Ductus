@@ -83,10 +83,11 @@ M0 → M1 (čeka AAI@EduHr Lab) i M2 → M3 → M5 i M6 → M7 → M4 (čeka lic
 | M2.13 | Potvrda obavijesti veže otisak teksta obavijesti | B | | DAN-306 |
 | M2.14 | Mentorovi radni zapisi navedeni u obavijesti studentu (D-130) | F | | DAN-235 (#553) |
 | M2.15 | Nalazi granice baze (samo ID): F-018, F-019; RLS uz `current_actor()` kao initplan | B | | DAN-156, DAN-157, DAN-51 |
+| M2.16 | Uloga koordinatora u modelu ustanove (PRODUCT §3): potvrda od administratora, RLS bez ikakvog čitanja sadržaja, red u pgTAP matrici | B | M2.11 | novo |
 
 **Ekrani:** S-02 studentska početna, S-03 moji kolegiji, S-04 upis kodom, S-05 obavijest (dio o zadatku), N-01 moji kolegiji, N-02 novi kolegij i zadatak, N-03 čarobnjak zadatka, N-04 popis studenata, N-16 radovi uz mentora (podaci), A-01 pregled ustanove, A-02 korisnici i uloge, A-03 kolegiji i akademske godine, A-04 pravila fakulteta.
 
-**Uvjet završetka:** pgTAP matrica zelena za studenta, nastavnika, mentora, komentora, člana povjerenstva, administratora i osobu druge ustanove; E2E: administrator potvrdi nastavnika, nastavnik napravi kolegij i zadatak, student se upiše i potvrdi obavijest; svaki RPC koji mijenja stanje ima HTTP rutu ili zapisan razlog zašto je nema.
+**Uvjet završetka:** pgTAP matrica zelena za studenta, nastavnika, mentora, komentora, člana povjerenstva, koordinatora (nula pristupa sadržaju), administratora i osobu druge ustanove; E2E: administrator potvrdi nastavnika, nastavnik napravi kolegij i zadatak, student se upiše i potvrdi obavijest; svaki RPC koji mijenja stanje ima HTTP rutu ili zapisan razlog zašto je nema.
 
 ## M3 Evidencija
 
@@ -276,8 +277,9 @@ Koraci M5.14a do M5.14c: odluka vlasnika 31. 10. 2026. da panel Nacrt ulazi u pr
 | M10.9 | (uvjetno) Paket za zaštitu studenta: proširenje prenosivog zapisa (D-49, S-01 iz `docs/FEATURES.md`; ekran S-46 paket zaštite) | B, F | M7.10, M10.5, uvjet U-5 | novo |
 | M10.10 | (uvjetno) Izvješće za evaluaciju smjernica (F-01, FPZG čl. 13), samo agregati | B, F | M6.10, M10.7, uvjet U-6 | novo |
 | M10.11 | Portfelj nakon studija: izvoz predanog rada za portfelj (S-10) | B, F | M8.6, M10.5 | novo |
+| M10.12 | Koordinator: zbrojevi po kolegiju bez imena (K-01 koordinator, ruta `/koordinator`). Prag od najmanje 5 studenata kao kod N-11, bez mjera truda, odgovor ne sadrži imena ni ID-eve studenata | B, F | M2.16, M2.3, M6.10, M7.3 | novo |
 
-**Ekrani:** S-18 vlastita povijest rada, S-42 dnevnik pristupa, S-44 izvoz vlastitih podataka, A-05 čuvanje i pravno zadržavanje, A-06 revizijski trag pristupa, A-08 izlaz iz usluge.
+**Ekrani:** S-18 vlastita povijest rada, S-42 dnevnik pristupa, S-44 izvoz vlastitih podataka, A-05 čuvanje i pravno zadržavanje, A-06 revizijski trag pristupa, A-08 izlaz iz usluge, K-01 koordinator.
 
 **Uvjet završetka:** izlazni kriterij M10 iz `docs/PROGRAM.md` (brisanje po roku testirano; lanac provjerljiv nakon brisanja sadržaja); pravno zadržavanje zaustavlja brisanje (test). Koraci M10.9 i M10.10 (uvjetno) nisu dio uvjeta završetka.
 
@@ -301,8 +303,9 @@ Koraci M5.14a do M5.14c: odluka vlasnika 31. 10. 2026. da panel Nacrt ulazi u pr
 | M11.10 | „Prijavi problem”, mobilni prikaz svih ekrana, stranica „Kako Ductura radi” | F | | novo |
 | M11.11 | Licenca, uvjeti korištenja i odluka o vidljivosti repoa | V | | DAN-188 |
 | M11.12 | Brze bilješke s mobitela u bilježnicu projekta (S-03). Bilješka koja ulazi u rad je promjena dokumenta s vrstom izvora „mobilna bilješka” (pravilo 8) | F, B | M5.9, M11.10 | novo |
+| M11.13 | Stranice za fakultete i nabavu (J-04 stranice za fakultete i nabavu): statična javna stranica koja objavljuje dokumente paketa za nabavu (F-09) i vodi na J-02 i J-05; sadržaj dolazi iz M11.8, cjenik ostaje vlasnikov (D-13) | F | M11.8, M11.11, M11.6 | novo |
 
-**Ekrani:** A-07 integracije i status AAI@EduHr, A-09 zdravlje sustava i kopije, J-01 naslovnica, J-02 kako Ductura radi, J-05 statusna stranica i izjava o pristupačnosti, Z-09 postavke, Z-10 prijavi problem, Z-12 mobilni prikaz.
+**Ekrani:** A-07 integracije i status AAI@EduHr, A-09 zdravlje sustava i kopije, J-01 naslovnica, J-02 kako Ductura radi, J-05 statusna stranica i izjava o pristupačnosti, Z-09 postavke, Z-10 prijavi problem, Z-12 mobilni prikaz, J-04 stranice za fakultete i nabavu.
 
 **Uvjet završetka:** svaki redak tablice „GO uvjeti za stvarne studente” u `docs/PROGRAM.md` zelen i zapisan s dokazom.
 
@@ -323,14 +326,19 @@ Sadržaj vala 3 raspoređen je po fazama prema odluci orkestratora T3 (#87 c.654
 
 ## Ekrani izvan faza
 
-Ovi ekrani iz mape nemaju mjesto u tablici faza i ne grade se dok vlasnik ne odluči: K-01 koordinator (zbrojevi po kolegiju), K-02 odobrenje istrage (mapa bilježi sukob s D-143 i D-154), A-10 slučajevi i paket dokaza, J-04 stranice za fakultete i nabavu.
+Odluka orkestratora T4, opcija B (#87 c.6544316168; vlasnik potvrdio ulogu koordinatora, c.6544334432). Ekrani iz mape koji nisu imali fazu:
+
+- **K-01 koordinator** (zbrojevi po kolegiju, bez imena): ulazi u M10 kao M10.12, uz ulogu M2.16 i PRODUCT §3. Nije uvjetan.
+- **J-04 stranice za fakultete i nabavu**: ulazi u M11 kao M11.13, statična stranica s dokumentima iz F-09; cjenik je vlasnikov (D-13).
+- **K-02 odobrenje istrage**: **ne gradi se.** D-143 je reprodukciju već otvorio mentoru; odobravatelj izvan odnosa kosi se s PRODUCT §5 pravilom 7, C-23 i D-154; tok „sumnje” i ishoda postupka kosi se s pravilima 1 do 3, rječnikom i D-02. Korisnu jezgru pokrivaju M6.2, M7.11 i M10.4. Izgradnja toka tražila bi izmjenu Ustava i PRODUCT §5, što je samo vlasnikova odluka. Dizajnerske datoteke istrage (`istraga.dc.html`, README §5.5, zahtjev za istragu u `pregled-radova-v2.dc.html`) ostaju kao PRIJEDLOG koji se ne gradi i ne smije ih preuzeti nijedan pisac.
+- **A-10 slučajevi i paket dokaza** (ekran; ne miješati s FEATURES A-10 „Moj rad u brojkama”, M7.13): **ne gradi se kao zaseban ekran.** Pokrivaju ga M10.3 (pravno zadržavanje), M10.7 i M8.6 (izvoz); PRODUCT §3 administratoru ne daje čitanje sadržaja. Opis ekrana nije u repou; prije konačnog zatvaranja traži se od autora mape ekrana.
 
 ## Otvorena pitanja za vlasnika
 
 1. Novi raspored i datum pilota (D-191 t. 2; već u Owner queueu).
 2. M9: D-191 stavlja AI pomoćnika u cilj, a D-77 ga drži izvan pilota zbog obrade u EU-u. Ostaje li izvan pilota i koji pružatelj ispunjava uvjet (M9.1)?
 3. ~~Raspored sadržaja vala 3 po fazama.~~ Riješeno 31. 10. 2026. odlukom orkestratora T3 (#87 c.6544288967): koraci u fazama M5 do M11, uvjetni koraci u odjeljku „Uvjetni koraci”. Preostaju pitanja U-1 do U-6 vlasniku, uz faze kojih se tiču.
-4. Ekrani bez faze: K-01, K-02, A-10, J-04. Grade li se, i u kojoj fazi?
+4. ~~Ekrani bez faze: K-01, K-02, A-10, J-04.~~ Riješeno 31. 10. 2026. odlukom orkestratora T4 (#87 c.6544316168): K-01 u M10.12, J-04 u M11.13, K-02 i A-10 se ne grade; vidi „Ekrani izvan faza”.
 5. ~~Panel Nacrt (S-14: obrnuti nacrt, nit argumenta, pojmovnik).~~ Riješeno 31. 10. 2026.: ulazi u program (#87 c.6543799262, t. 5); koraci M5.14a do M5.14c prema `docs/design/PANEL-NACRT-SPEC.md`. Pitanja 1, 2 i 3 iz te specifikacije ostaju vlasniku.
 6. D-63 (napredak i „preskočena stanka”) prema D-56 i pravilu 4 (DAN-104).
 7. Kriteriji popisa „tko treba pomoć” (N-12, DAN-102).

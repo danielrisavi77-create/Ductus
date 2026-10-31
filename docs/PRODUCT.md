@@ -66,6 +66,7 @@ Pravilo za sve uloge: uloga sama ne daje pristup sadržaju. Pristup nastaje iskl
 | Nastavnik zadatka, odnosno mentor (jedna uloga, D-154) | Nastavnik kolegija kojem zadatak pripada ili mentor završnog, diplomskog, specijalističkog ili doktorskog rada | Stvoriti kolegij i zadatak; od prvog dana vidjeti spremljeno stanje radova svog zadatka ili radova kojima je mentor i evidenciju u opsegu profila; komentirati; predlagati izmjene ili uređivati izravno (§6) | Vidjeti radove koji nisu iz njegova zadatka i kojima nije mentor |
 | Administrator fakulteta | Imenovan od fakulteta | Potvrditi ulogu nastavnika i mentora; postavke fakulteta (polazno pravilo AI-ja, dopušteni AI pružatelji, pragovi, rokovi čuvanja; D-117, D-175); revizijski trag pristupa | Čitati sadržaj radova (nema pristupa po defaultu) |
 | Operater Ductusa | Pružatelj usluge | Održavanje sustava | Čitati sadržaj, osim zabilježenog pristupa podrške uz pristanak fakulteta, kako je opisano u ugovoru o obradi |
+| Koordinator (potvrđeno 31. 10. 2026., `#87` c.6544334432) | Imenovan od fakulteta; na FPZG-u rješava netehnička pitanja (D-69). Ulogu potvrđuje administrator fakulteta kao i ulogu nastavnika | Vidjeti samo zbrojeve po kolegiju (npr. upisano, piše se, u doradi, predano, rok prošao) i rokove, tek uz najmanje 5 studenata u skupini, kao kod zbirnog pregleda kolegija | Vidjeti imena studenata, radove, evidenciju, prikaz uživo ili reprodukciju; mjere truda ili brzine; odobravati ili pokretati istragu (K-02 se ne gradi). Nema pristupa sadržaju ni po defaultu |
 
 ---
 
