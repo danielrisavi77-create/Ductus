@@ -8,6 +8,8 @@ import { canonicalizeJcs } from "@/domain/forensics/jcs";
 import { handleLivePublishRequest, handleLiveReadRequest } from "@/server/collaboration/live-route";
 import { createWithActor, type WithActor } from "@/server/db/with-actor";
 
+import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
+
 // B-LIVE step 3 (DAN-216, BACKEND 4.12 point 6): the live view route over the
 // real RPCs under withActor. The owner and the teacher read the same bytes
 // through the API (rule 5); only the owner who acknowledged the notice
@@ -16,9 +18,7 @@ import { createWithActor, type WithActor } from "@/server/db/with-actor";
 // Vesna and Dora are invented.
 const SAFE_ADMIN_URL: string =
   process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
-if (!["127.0.0.1", "localhost", "[::1]"].includes(new URL(SAFE_ADMIN_URL).hostname)) {
-  throw new Error("The live view test runs only against a loopback database (DATABASE_URL).");
-}
+requireLoopbackDatabaseUrl(SAFE_ADMIN_URL, "The live view test runs only against a loopback database (DATABASE_URL).");
 const ORIGIN = "http://localhost:3000";
 const suffix = randomBytes(5).toString("hex");
 const login = `it_live_${suffix}`;

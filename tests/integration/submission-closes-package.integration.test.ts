@@ -5,6 +5,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createWithActor, type ActorTransaction, type WithActor } from "@/server/db/with-actor";
 
+import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
+
 // DAN-289 A1 (contract #756 I3, plan of attack #755 A9 and A10): pgTAP runs in
 // one transaction and cannot race two calls. The submission closes the
 // package from a trigger, after record_submission's own locks (assignment and
@@ -17,9 +19,7 @@ import { createWithActor, type ActorTransaction, type WithActor } from "@/server
 // rows of one random institution, removed afterwards.
 const SAFE_ADMIN_URL: string =
   process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
-if (!["127.0.0.1", "localhost", "[::1]"].includes(new URL(SAFE_ADMIN_URL).hostname)) {
-  throw new Error("The submission closing race test runs only against a loopback database (DATABASE_URL).");
-}
+requireLoopbackDatabaseUrl(SAFE_ADMIN_URL, "The submission closing race test runs only against a loopback database (DATABASE_URL).");
 const suffix = randomBytes(5).toString("hex");
 const login = `it_close_${suffix}`;
 const applicationName = `it_close_${suffix}`;
