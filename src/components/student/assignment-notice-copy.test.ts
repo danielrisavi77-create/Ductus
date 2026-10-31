@@ -55,7 +55,7 @@ describe("S3 notice text (D-142, D-143)", () => {
   it("gives the replay to the mentor and the same replay to the student (D-154)", () => {
     expect(s.teacher.replay.startsWith("Nastavnik (mentor) zadatka moći će")).toBe(true);
     expect(s.teacher.replay).toContain("znak po znak");
-    expect(s.teacher.replay).toContain("Istu reprodukciju svog rada vidjet ćeš i ti.");
+    expect(s.teacher.replay).toContain("Istu reprodukciju svog rada vidjet ćete i Vi.");
     for (const text of notice()) expect(text).not.toMatch(/reprodukciju ne vidiš|Samo nastavnik/);
   });
 
@@ -76,6 +76,12 @@ describe("S3 notice text (D-142, D-143)", () => {
       expect(text).not.toMatch(/nitko drugi|odmah|svakih \d|minuta\b/i);
       expect(text).not.toMatch(/\d+\s*%/);
     }
+  });
+
+  it("describes the chain as a digital fingerprint linked to the previous one, without hash or chain", () => {
+    expect(s.recorded.chain).toBe("Svaki korak spremanja dobiva digitalni otisak povezan s prethodnim, pa se svaka kasnija izmjena zapisa vidi.");
+    expect(s.recorded.chain).not.toMatch(/hash|lanac/i);
+    expect(findForbiddenTerms(s.recorded.chain)).toEqual([]);
   });
 
   it("passes the forbidden-terms check in every student string", () => {

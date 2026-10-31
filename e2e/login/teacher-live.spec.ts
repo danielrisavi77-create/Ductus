@@ -1,17 +1,18 @@
 import { createHash } from "node:crypto";
 
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect, test, type APIResponse, type Page, type Route } from "@playwright/test";
 
 import { CURRENT_KEY, ENDED_KEY, SESSION_END_CHANNEL } from "../../src/client/session-marks";
 import { createTextAnchor } from "../../src/domain/collaboration";
 import type { NodeId } from "../../src/domain/document";
 import { REVISION_ZERO_JCS } from "../../src/domain/document/revision-zero";
+import { DUCTUS_PROTOCOL_VERSION } from "../../src/domain/evidence/commit-envelope";
 import { canonicalizeJcs } from "../../src/domain/forensics/jcs";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
-import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
-import { cleanUp, post, seed } from "./comment-seed";
-import { appCookie, clickSignOut, SESSION_COOKIE, sessionRow, signIn } from "./support";
+import { cleanUpAssignmentWork, openAssignmentWork } from "./assignment-work";
+import { post } from "./comment-seed";
+import { appCookie, type DemoAccount, SESSION_COOKIE, sessionRow, signIn, signOutWithoutDialog } from "./support";
 
 // DAN-86 step 2b: the teacher's live view of a work. The live route (GET
 // /api/live/<id>, PR #496, BACKEND 4.12) is not on main yet, so the browser's
@@ -36,7 +37,7 @@ function work(sentence: string): { body: string; hash: string } {
 }
 
 /** Serves the live route from `next()`, which sees the If-None-Match the page sent. */
-async function serveLive(page: Page, next: (ifNoneMatch: string | null) => { status: number; body?: string; etag?: string }) {
+async function serveLive(page: Page, next: (ifNoneMatch: string | null) => { status: number; body?: string; etag?: string; state?: string }) {
   const calls: (string | null)[] = [];
   await page.route(`**/api/live/${DOC}`, async (route: Route) => {
     const ifNoneMatch = route.request().headers()["if-none-match"] ?? null;
@@ -49,6 +50,7 @@ async function serveLive(page: Page, next: (ifNoneMatch: string | null) => { sta
         "cache-control": "no-store",
         ...(reply.body === undefined ? {} : { "content-type": "application/json; charset=utf-8" }),
         ...(reply.etag === undefined ? {} : { etag: `"${reply.etag}"` }),
+        ...(reply.state === undefined ? {} : { "ductus-live-state": reply.state }),
       },
     });
   });
@@ -98,6 +100,49 @@ test("the teacher sees the work as the student writes, with the limits of the re
   await test.info().attach("dan86-uzivo-sirok", { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
   await page.setViewportSize({ width: 390, height: 844 });
   await test.info().attach("dan86-uzivo-mobitel", { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
+});
+
+// DAN-332 (#826 PR 3): after the submission the route sends the bytes of the
+// submitted revision with `Ductus-Live-State: submitted` (#883).
+test("the submitted work is labelled Predani rad and keeps its text and label", async ({ page }) => {
+  const live = work("Gradske knjižnice su mjesto susreta.");
+  const later = work("Ova rečenica nije predana.");
+  let phase: "live" | "submitted" | "later" | "down" = "live";
+  await serveLive(page, (ifNoneMatch) => {
+    if (phase === "down") return { status: 503, body: '{"error":"unavailable"}' };
+    if (phase === "later") return { status: 200, body: later.body, etag: later.hash };
+    const state = phase === "submitted" ? "submitted" : undefined;
+    return ifNoneMatch === `"${live.hash}"` ? { status: 304, etag: live.hash, state } : { status: 200, body: live.body, etag: live.hash, state };
+  });
+  await signIn(page, PATH, "Demo nastavnik");
+  const text = page.getByRole("document", { name: t.documentLabel });
+  await expect(text.getByText("Gradske knjižnice su mjesto susreta.")).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: t.connection.live })).toBeVisible();
+  await expect(page.getByText(t.submitted, { exact: true })).toHaveCount(0);
+
+  // A3: the submitted revision is the text already shown; a 304 names it so.
+  phase = "submitted";
+  await expect(page.getByRole("status").filter({ hasText: t.submitted })).toBeVisible();
+  await expect(page.getByText(t.submittedNote)).toBeVisible();
+  await expect(page.getByText(t.note)).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: t.connection.live })).toHaveCount(0);
+
+  const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+  expect(results.violations).toEqual([]);
+  await test.info().attach("dan332-predani-rad-sirok", { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
+
+  // A5: neither another text without the header nor a failure replaces it.
+  for (const next of ["later", "down"] as const) {
+    phase = next;
+    await page.waitForTimeout(2500);
+    await expect(text.getByText("Gradske knjižnice su mjesto susreta.")).toBeVisible();
+    await expect(page.getByText("Ova rečenica nije predana.")).toHaveCount(0);
+    await expect(page.getByRole("status").filter({ hasText: t.submitted })).toBeVisible();
+    await expect(page.getByText(t.submittedNote)).toBeVisible();
+    await expect(page.getByText(t.note)).toHaveCount(0);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await test.info().attach("dan332-predani-rad-mobitel", { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
 });
 
 test("a body that is not the document its ETag names is never shown", async ({ page }) => {
@@ -165,8 +210,8 @@ test("a session ended in another tab before hydration sends no initial summary P
 
     // Real logout closes this session in the database and persists its end
     // in the shared browser storage while the other tab is still unhydrated.
-    await clickSignOut(logoutTab);
-    await logoutTab.waitForURL("http://localhost:3000/");
+    // The teacher's sheet holds nothing: no dialog (O1, #476 c.6396707923).
+    await signOutWithoutDialog(logoutTab);
     expect(await appCookie(context, SESSION_COOKIE)).toBeUndefined();
     expect(await sessionRow(token)).toMatchObject({ close_reason: "logout", closed_at: expect.any(Date) });
     expect(await page.evaluate(({ key, tag }) => {
@@ -260,8 +305,10 @@ test("the teacher reads the process summary once, as the same view the student g
   expect(bodies).toHaveLength(endedAt);
 });
 
+// #711 step E: the comments are on the student's own document of an
+// assignment, opened by the real open route (assignment-work.ts).
 test.describe("comments from the live view", () => {
-  test.afterEach(cleanUp);
+  test.afterEach(cleanUpAssignmentWork);
 
   test("a comment listed before any text arrives is not called lost", async ({ page, browser }) => {
     const c = messagesHr.comments;
@@ -272,17 +319,19 @@ test.describe("comments from the live view", () => {
     });
     // A clean local stack has no student identity until the first real sign-in.
     const student = await browser.newContext();
+    await signIn(page, "/", "Demo nastavnik");
+    let documentId: string;
     try {
-      await signIn(await student.newPage(), "/", "Demo studentica");
+      const studentPage = await student.newPage();
+      await signIn(studentPage, "/", "Demo studentica");
+      ({ documentId } = await openAssignmentWork(studentPage));
     } finally {
       await student.close();
     }
-    await signIn(page, "/", "Demo nastavnik");
-    await seed();
-    expect((await post(page, "create", { documentId: LOCAL_DEMO_DOCUMENT_ID, body: "Dodaj izvor.", anchor })).status()).toBe(200);
+    expect((await post(page, "create", { documentId, body: "Dodaj izvor.", anchor })).status()).toBe(200);
     // The text never arrives: the connection keeps retrying while the list is already here.
-    await page.route(`**/api/live/${LOCAL_DEMO_DOCUMENT_ID}`, (route) => route.fulfill({ status: 503 }));
-    await page.goto(`/nastavnik/rad/${LOCAL_DEMO_DOCUMENT_ID}`);
+    await page.route(`**/api/live/${documentId}`, (route) => route.fulfill({ status: 503 }));
+    await page.goto(`/nastavnik/rad/${documentId}`);
     const card = page.getByRole("article", { name: c.number.replace("{n}", "1") });
     await expect(card).toContainText("„mjesto”");
     await expect(page.getByRole("status").filter({ hasText: t.connection.retrying })).toBeVisible();
@@ -306,16 +355,16 @@ test.describe("comments from the live view", () => {
     const student = await (await browser.newContext()).newPage();
     await signIn(student, "/");
     await signIn(teacher, "/", "Demo nastavnik");
-    await seed();
+    const { documentId } = await openAssignmentWork(student);
 
     let current = at(TEXT);
-    await teacher.route(`**/api/live/${LOCAL_DEMO_DOCUMENT_ID}`, (route) => {
+    await teacher.route(`**/api/live/${documentId}`, (route) => {
       const known = route.request().headers()["if-none-match"];
       return known === `"${current.hash}"`
         ? route.fulfill({ status: 304, headers: { etag: `"${current.hash}"` } })
         : route.fulfill({ status: 200, body: current.body, headers: { etag: `"${current.hash}"`, "content-type": "application/json" } });
     });
-    await teacher.goto(`/nastavnik/rad/${LOCAL_DEMO_DOCUMENT_ID}`);
+    await teacher.goto(`/nastavnik/rad/${documentId}`);
     const text = teacher.getByRole("document", { name: t.documentLabel });
     await expect(text.getByText(TEXT)).toBeVisible();
     await expect(teacher.getByText(tc.hint)).toBeVisible();
@@ -346,7 +395,7 @@ test.describe("comments from the live view", () => {
 
     // The student reads the same thread through the same function (PRODUCT §5 rule 5).
     const listed = await (await student.request.post("/api/comments/list", {
-      headers: { origin: "http://localhost:3000" }, data: { documentId: LOCAL_DEMO_DOCUMENT_ID },
+      headers: { origin: "http://localhost:3000" }, data: { documentId },
     })).json();
     expect(listed.comments.map((row: { authorRole: string; isOwn: boolean; body: string }) => [row.authorRole, row.isOwn, row.body]))
       .toEqual([["teacher", false, BODY]]);
@@ -366,5 +415,55 @@ test.describe("comments from the live view", () => {
     await expect(card).toContainText(c.state.resolved);
     await card.getByRole("button", { name: tc.reopen }).click();
     await expect(card).toContainText(c.state.open);
+  });
+});
+
+test.describe("the live route on the work's own document (#711 A11, A14)", () => {
+  test.afterEach(cleanUpAssignmentWork);
+
+  const readLive = (page: Page, documentId: string) =>
+    page.request.get(`/api/live/${documentId}`, { headers: { "ductus-protocol": DUCTUS_PROTOCOL_VERSION } });
+  const answerOf = async (response: APIResponse) => [response.status(), await response.text()];
+
+  test("its teacher and its student read the same text; another student and another teacher get what an unknown id gets", async ({ browser }) => {
+    const pageOf = async (account: DemoAccount) => {
+      const page = await (await browser.newContext()).newPage();
+      await signIn(page, "/", account);
+      return page;
+    };
+    const student = await pageOf("Demo studentica");
+    const teacher = await pageOf("Demo nastavnik");
+    const { documentId } = await openAssignmentWork(student);
+    const unknown = `e2e-nepostojeci-rad-${Date.now().toString(36)}`;
+
+    const live = work("Gradske knjižnice su mjesto susreta.");
+    const put = await student.request.put(`/api/live/${documentId}`, {
+      headers: { origin: "http://localhost:3000", "content-type": "application/json", "if-none-match": "*" }, data: live.body,
+    });
+    expect(put.status()).toBe(200);
+    expect(await put.json()).toMatchObject({ outcome: "accepted" });
+
+    // The course's teacher and the student read the same bytes and ETag (PRODUCT §5 rule 5).
+    for (const reader of [teacher, student]) {
+      const read = await readLive(reader, documentId);
+      expect(read.status()).toBe(200);
+      expect(read.headers().etag).toBe(`"${live.hash}"`);
+      expect(await read.text()).toBe(live.body);
+    }
+
+    // Anyone else gets for this work exactly the answer of an id that does not exist.
+    for (const stranger of [await pageOf("Demo student 2"), await pageOf("Demo nastavnica")]) {
+      expect(await answerOf(await readLive(stranger, documentId))).toEqual([404, '{"error":"not_found"}']);
+      expect(await answerOf(await readLive(stranger, unknown))).toEqual([404, '{"error":"not_found"}']);
+      const listed = await answerOf(await post(stranger, "list", { documentId }));
+      expect(listed[0]).toBe(403);
+      expect(listed).toEqual(await answerOf(await post(stranger, "list", { documentId: unknown })));
+      const published = await stranger.request.put(`/api/live/${documentId}`, {
+        headers: { origin: "http://localhost:3000", "content-type": "application/json", "if-none-match": "*" }, data: live.body,
+      });
+      expect(await answerOf(published)).toEqual([404, '{"error":"not_found"}']);
+    }
+    // Nothing a stranger sent changed the work's live text.
+    expect(await (await readLive(teacher, documentId)).text()).toBe(live.body);
   });
 });

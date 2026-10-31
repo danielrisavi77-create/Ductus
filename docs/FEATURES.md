@@ -33,13 +33,14 @@ Oznake ID-a odgovaraju tom dokumentu. Procjena je u večerima rada (oko 3 sata) 
 | F-04 | Izlaz iz usluge: izvoz svih podataka fakulteta | 2 | prije ugovora |
 | F-06 | Jezik rada odvojen od jezika sučelja (model u M2) | 2 | 1 |
 | F-09 | Paket za nabavu (DPIA, ugovor o obradi, sigurnosni opis, SLA, izjava o pristupačnosti) | dokumenti | prije pilota |
-| F-10 | Statusna stranica i postupak incidenta | 1 | 1 |
-| A-01 | Svrha "Objasni mi komentar" | 1 | 2 | Izvan pilota (D-77).
+| F-10 | Statusna stranica i postupak incidenta (oznaka iz brainstorminga; ne miješati s F-10 Predaja iz `PLAN-DEMO.md` §4) | 1 | 1 |
+| A-01 | Svrha "Objasni mi komentar" | 1 | 2 | Bila izvan pilota (D-77); M9 je u pilotu (D-194), ulazak ove stavke nije odlučen.
 | A-03 | Provjera doslovnog citata u učitanom PDF izvoru | 2 | uz S-09 |
 | A-04 | Priprema za obranu (samo student) | 2 | 3 |
-| A-05 | EU modeli istaknuti u katalogu, zemlja obrade uz model | 1 | 2 | Izvan pilota (D-77).
+| A-05 | EU modeli istaknuti u katalogu, zemlja obrade uz model | 1 | 2 | Bila izvan pilota (D-77); M9 je u pilotu (D-194), ulazak ove stavke nije odlučen.
 | A-07 | Otvoreni verifikator zapisa | 3 | 3 |
 | A-10 | "Moj rad u brojkama" za studenta, bez ritma i usporedbe | 1 | 3 |
+| S-14 | Panel Nacrt u editoru (obrnuti nacrt, nit argumenta, pojmovnik). **Ulazi u program (vlasnik, 31. 10. 2026., #87 c.6543799262).** Oznaka je iz mape ekrana, ne iz ove serije S-01 do S-12. Specifikacija: `docs/design/PANEL-NACRT-SPEC.md`; smještaj M5.14 i pohrana plana su PRIJEDLOG | 3 do 5 (hipoteza) | M5 |
 
 Zbroj prihvaćenog: oko **55 do 70 večeri** uz grupne radove s izmjenom pisača. Uz 99 do 134 večeri iz `PROGRAM.md` to je više nego što stane u pilot; raspored po valovima i rezovi su sljedeći korak.
 

@@ -1,7 +1,9 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
-import { appCookie, clickSignOut, logoutDialogOf, SESSION_COOKIE, sessionRow, signIn } from "./support";
+import {
+  appCookie, clickSignOut, logoutDialogOf, SESSION_COOKIE, sessionRow, signIn, signOutWithoutDialog,
+} from "./support";
 
 // F-5 (DAN-34, plan #376): the writing page of a signed-in person and the
 // sign-out that always ends the session (D-118). Every test runs in a
@@ -62,8 +64,8 @@ test("row 1: sign-in leads to an editable sheet; sign-out of an unchanged docume
   await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
   const token = (await appCookie(context, SESSION_COOKIE))!.value;
 
-  await clickSignOut(page);
-  await page.waitForURL("http://localhost:3000/");
+  // Nothing of this person stays on the device, so no dialog (O1, #476 c.6396707923).
+  await signOutWithoutDialog(page);
   expect(await appCookie(context, SESSION_COOKIE)).toBeUndefined();
   expect(await sessionRow(token)).toMatchObject({ close_reason: "logout", closed_at: expect.any(Date) });
   // Nothing was written, so nothing of that person stays on the device.
@@ -91,8 +93,8 @@ test("rows 2, 3 and 5: a local change does not hold the session open; the text w
   await signIn(page, "/rad", "Demo nastavnik");
   await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
   await expect(editorOf(page)).toHaveText("");
-  await clickSignOut(page);
-  await page.waitForURL("http://localhost:3000/");
+  // The other account's journal holds nothing, and the first one is not counted (O1, O2).
+  await signOutWithoutDialog(page);
 
   await forgetProviderLogin(context);
   await signIn(page, "/rad");
@@ -107,10 +109,12 @@ test("row 3: a sign-out the server never got deletes nothing and says so", async
   await page.route("**/api/auth/logout", (route) => route.abort("internetdisconnected"));
 
   // Even an unchanged document keeps its journal while the session is open.
-  // The failure is said in the dialog, which stays open for another try.
+  // Nothing is held, so "Odjava" posts at once (O1); the failure opens the
+  // dialog, which says so and stays open for another try.
   const dialog = logoutDialogOf(page);
-  await clickSignOut(page);
+  await logoutOf(page).click();
   await expect(dialog.getByRole("alert")).toHaveText(t.auth.logoutFailed);
+  await expect(dialog).toContainText(t.auth.logoutPlain);
   await expectStillSignedIn(page, token);
   expect(await journalNames(page)).toHaveLength(1);
   await dialog.getByRole("button", { name: t.auth.logoutStay }).click();
@@ -222,18 +226,16 @@ test("FE-D7: the dialog names what stays on this device; Ostani and Escape keep 
   const token = (await appCookie(context, SESSION_COOKIE))!.value;
   const dialog = logoutDialogOf(page);
 
-  // Nothing written: no number at all.
-  await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+  // Nothing written opens no dialog at all (O1): see "row 1" and T8 in
+  // shell-sign-out.spec.ts. With work held, Escape is "Ostani".
+  await writeAndWait(page, "Nacrt A: plava bilježnica");
   await logoutOf(page).click();
-  await expect(dialog).toContainText(t.auth.logoutPlain);
-  await expect(dialog).not.toContainText(/\d/);
   await expect(dialog.getByRole("button", { name: t.auth.logoutStay })).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
   await expect(logoutOf(page)).toBeFocused();
   await expectStillSignedIn(page, token);
 
-  await writeAndWait(page, "Nacrt A: plava bilježnica");
   await writeAndWait(page, ", dopuna");
   await logoutOf(page).click();
   await expect(dialog).toContainText(t.auth.logoutKept);
@@ -348,18 +350,20 @@ test("a stopped tab that opens the next person's sheet starts with nothing to un
 });
 
 test("a tab opened before a sign-out works again after the next sign-in", async ({ page, context }) => {
-  await signIn(page, "/");
+  // A page without the sheet: "/" now goes on to /rad (DAN-325), whose open
+  // journal would keep the second tab waiting.
+  await signIn(page, "/upis");
   const second = await context.newPage();
   await second.goto("/rad");
   await expect(editorOf(second)).toHaveAttribute("contenteditable", "true");
-  await clickSignOut(second);
-  await second.waitForURL("http://localhost:3000/");
+  await signOutWithoutDialog(second);
   await forgetProviderLogin(context);
   await signIn(second, "/rad");
   await second.close();
 
-  // The first tab never reloaded; its link renders /rad under the new cookie.
-  await page.getByRole("link", { name: t.home.openWorkspace }).click();
+  // The first tab never reloaded; its link to "/" renders under the new
+  // cookie and goes on to /rad (DAN-325).
+  await page.getByRole("link", { name: t.teacher.backHome, exact: true }).click();
   await page.waitForURL("http://localhost:3000/rad");
   await expect(phaseOf(page)).toHaveAttribute("data-phase", "ready");
   await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
@@ -372,8 +376,7 @@ test("a tab waiting for the document stops for good when another tab signs out",
   await second.goto("/rad");
   await expect(phaseOf(second)).toHaveAttribute("data-phase", "blocked");
 
-  await clickSignOut(page);
-  await page.waitForURL("http://localhost:3000/");
+  await signOutWithoutDialog(page);
   await expect(phaseOf(second)).toHaveAttribute("data-phase", "signed-out");
   await expect(noticeOf(second)).toHaveText(t.auth.signedOutElsewhere);
   // The first tab has left and freed the lock; the second never takes it,
@@ -398,8 +401,7 @@ test("a tab that missed the sign-out news still never reopens the journal", asyn
   await second.goto("/rad");
   await expect(phaseOf(second)).toHaveAttribute("data-phase", "blocked");
 
-  await clickSignOut(page);
-  await page.waitForURL("http://localhost:3000/");
+  await signOutWithoutDialog(page);
   await page.close();
   await expect(phaseOf(second)).toHaveAttribute("data-phase", "signed-out");
   await expect(noticeOf(second)).toHaveText(t.auth.signedOutElsewhere);
@@ -408,8 +410,27 @@ test("a tab that missed the sign-out news still never reopens the journal", asyn
   expect(names.filter((name) => name?.startsWith("ductus-journal-v1-"))).toEqual([]);
 });
 
-test("with a session the home page offers no second sign-in", async ({ page }) => {
+// DAN-325: with a session neither the home page nor the sign-in page offers a
+// second sign-in; both send the student on to the workspace.
+test("with a session the home page and the sign-in page lead to the student's own page", async ({ page }) => {
   await signIn(page, "/");
-  await expect(page.getByRole("link", { name: t.home.openWorkspace })).toBeVisible();
-  await expect(page.getByRole("link", { name: t.auth.signIn })).toHaveCount(0);
+  await expect(page).toHaveURL("http://localhost:3000/rad");
+  for (const path of ["/", "/prijava", "/prijava?returnTo=%2Frad"]) {
+    await page.goto(path);
+    await expect(page).toHaveURL("http://localhost:3000/rad");
+    await expect(page.getByRole("link", { name: t.auth.signIn })).toHaveCount(0);
+  }
+});
+
+// Design v3 shell around the workspace (#476 6314969336, cut (b)): the student
+// items, and in the account place the workspace's own sign-out with its dialog
+// (I5, D-118), never a second, plain one.
+test("in the shell /rad keeps one sign-out, the one that knows the device", async ({ page }) => {
+  await signIn(page, "/rad");
+  const side = page.getByRole("complementary", { name: t.shell.sideNav });
+  const nav = side.getByRole("navigation", { name: t.shell.workNav });
+  await expect(nav.getByRole("link")).toHaveText([t.shell.nav.assignments, t.shell.nav.courses, t.shell.nav.workspace, t.shell.nav.enroll]);
+  await expect(nav.getByRole("link", { name: t.shell.nav.workspace })).toHaveAttribute("aria-current", "page");
+  await expect(logoutOf(page)).toHaveCount(1);
+  await expect(side.getByRole("button", { name: t.auth.logout, exact: true })).toBeVisible();
 });

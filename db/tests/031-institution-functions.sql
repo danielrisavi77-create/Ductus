@@ -321,9 +321,15 @@ SELECT isnt(
   (SELECT code FROM issued), 'a second request gives a different code'
 );
 -- Back to the first code for the rest of the file: the tests need a code
--- whose text they know.
+-- whose text they know. Issuing the second code wrote the first one into the
+-- audit trail as replaced (DAN-292); a code that is active again must not keep
+-- that row, so this fixture step alone steps around the append-only trigger.
 UPDATE institution.course_enrollment_code SET active = false WHERE course_id = pg_temp.id('k1') AND active;
 UPDATE institution.course_enrollment_code SET active = true WHERE code_hash = (SELECT pg_temp.code_hash(code) FROM issued);
+SET LOCAL session_replication_role = replica;
+DELETE FROM audit.enrollment_code_event
+ WHERE code_id = (SELECT id FROM institution.course_enrollment_code WHERE code_hash = (SELECT pg_temp.code_hash(code) FROM issued));
+SET LOCAL session_replication_role = origin;
 
 -- 6. enroll_with_code. The caller is the session and nothing else (plan 9
 -- and 10): there is one parameter, the code.

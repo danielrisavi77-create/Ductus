@@ -9,6 +9,7 @@ const ANA = {
   hrEduPersonHomeOrg: "demo-fakultet.test",
   mail: "ana.demo@demo-fakultet.test",
 };
+const ANA_IDENTITY = { subject: "sub-ana-001", uniqueId: "ana.demo@demo-fakultet.test", homeOrg: "demo-fakultet.test" };
 
 describe("identityFromClaims", () => {
   it("takes the subject, hrEduPersonUniqueID and home organisation, never e-mail", () => {
@@ -79,5 +80,46 @@ describe("identityFromClaims", () => {
 
   it("refuses a 10 kB subject", () => {
     expect(identityFromClaims({ ...ANA, sub: "s".repeat(10_240) })).toStrictEqual({ ok: false, reason: "invalid_claim" });
+  });
+  it("takes givenName and sn as two separate names (#757, O1)", () => {
+    const result = identityFromClaims({ ...ANA, givenName: "Ana", sn: "Testić" });
+    expect(result).toStrictEqual({
+      ok: true,
+      identity: { ...ANA_IDENTITY, givenName: "Ana", familyName: "Testić" },
+    });
+    // Userinfo takes precedence, as for every other attribute.
+    const fromUserinfo = identityFromClaims({ ...ANA, givenName: "Ana", sn: "Testić" }, { sub: ANA.sub, sn: "Primjer" });
+    expect(fromUserinfo.ok && fromUserinfo.identity.familyName).toBe("Primjer");
+  });
+
+  it("takes given_name and family_name first, and never mixes the two pairs", () => {
+    const both = identityFromClaims({ ...ANA, given_name: "Ana", family_name: "Oidcić", givenName: "Ana", sn: "Ldapić" });
+    expect(both.ok && both.identity.familyName).toBe("Oidcić");
+    const oidc = identityFromClaims({ ...ANA, given_name: "Ana", family_name: "Oidcić" });
+    expect(oidc).toStrictEqual({ ok: true, identity: { ...ANA_IDENTITY, givenName: "Ana", familyName: "Oidcić" } });
+    // A broken OIDC pair falls back to the whole LDAP pair, never half of each.
+    const fallback = identityFromClaims({ ...ANA, given_name: "Ana", family_name: "", givenName: "Ana", sn: "Ldapić" });
+    expect(fallback.ok && fallback.identity.familyName).toBe("Ldapić");
+    expect(identityFromClaims({ ...ANA, given_name: "Ana", sn: "Ldapić" })).toStrictEqual({ ok: true, identity: ANA_IDENTITY });
+  });
+
+  it("logs in without a name when the provider sends a name as an array", () => {
+    expect(identityFromClaims({ ...ANA, given_name: ["Ana"], family_name: ["Testić"] })).toStrictEqual({
+      ok: true,
+      identity: ANA_IDENTITY,
+    });
+  });
+
+  it.each([
+    ["no given name", { sn: "Testić" }],
+    ["no family name", { givenName: "Ana" }],
+    ["an empty given name", { givenName: "", sn: "Testić" }],
+    ["a family name with a line break", { givenName: "Ana", sn: "Tes\ntić" }],
+    ["a given name with a zero-width space", { givenName: "A\u200bna", sn: "Testić" }],
+    ["a 256-character family name", { givenName: "Ana", sn: "t".repeat(256) }],
+    ["a number for a name", { givenName: 7, sn: "Testić" }],
+    ["one display name only", { name: "Ana Testić" }],
+  ])("logs in without a name when there is %s, never refusing", (_label, names) => {
+    expect(identityFromClaims({ ...ANA, ...names })).toStrictEqual({ ok: true, identity: ANA_IDENTITY });
   });
 });

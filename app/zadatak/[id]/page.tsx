@@ -1,10 +1,15 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { cookies } from "next/headers";
 
-import AppHeader from "@/components/shell/AppHeader";
+import AppShell from "@/components/shell/AppShell";
+import { shellSession } from "@/components/shell/shell-session";
+import { readShellAccount } from "@/components/shell/shell-role";
 import AssignmentNotice from "@/components/student/AssignmentNotice";
 import styles from "@/components/student/AssignmentNotice.module.css";
 import { readNotice } from "@/components/student/assignment-notice-read";
+import { readMyAssignments } from "@/components/student/my-assignments-read";
+import NoticeCourse from "@/components/student/NoticeCourse";
 import { noticeWindow } from "@/components/student/notice-window";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
@@ -20,12 +25,24 @@ export const metadata = { title: `${t.student.title} · ${t.app.name}` };
 export default async function AssignmentNoticePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
-  const read = await readNotice(token, id, withActor);
+  const [read, { role, scope }] = await Promise.all([readNotice(token, id, withActor), readShellAccount(token, withActor)]);
   const here = `/zadatak/${encodeURIComponent(id)}`;
   return (
-    <>
-      <AppHeader context={t.student.title} />
-      <main id="sadrzaj" tabIndex={-1} className={`page ${styles.screen}`}>
+    <AppShell session={shellSession(token)} role={role} scope={scope} crumbs={[t.student.title]}>
+      <div className={`page ${styles.screen}`}>
+        {/* DAN-344 (Archivum S03): a student's way back to her courses and assignments. */}
+        {role === "student" ? (
+          <p className={styles.back}>
+            <Link href="/zadaci"><span aria-hidden="true">← </span>{t.student.backToAssignments}</Link>
+          </p>
+        ) : null}
+        {/* S03-a (#923 c.6545848868): the course from the student's own list,
+            started here and not awaited, so the notice never waits for it. */}
+        {role === "student" && read.kind === "available" ? (
+          <Suspense fallback={null}>
+            <NoticeCourse read={readMyAssignments(token, withActor)} assignmentId={read.view.assignmentId} />
+          </Suspense>
+        ) : null}
         {read.kind === "available" ? (
           <AssignmentNotice view={read.view} timing={noticeWindow(read.view.opensAt, read.view.dueAt, Date.now())} />
         ) : (
@@ -43,7 +60,7 @@ export default async function AssignmentNoticePage({ params }: { params: Promise
           </section>
         )}
         <p className={styles.status}><Link href="/">{t.teacher.backHome}</Link></p>
-      </main>
-    </>
+      </div>
+    </AppShell>
   );
 }

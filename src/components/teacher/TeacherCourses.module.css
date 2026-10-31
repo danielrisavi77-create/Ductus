@@ -1,0 +1,143 @@
+/* Z3 (A), design dopuna-faza-a screen 1, on the shared tokens (app/globals.css). */
+.course,
+.empty {
+  border: 1px solid var(--rule-2);
+  border-radius: var(--radius);
+  background: var(--chrome);
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 28px;
+}
+
+.empty h2 {
+  margin: 0;
+  font-family: var(--ff-display);
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.empty p {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+.courseHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--rule-2);
+}
+
+.courseHead h2 {
+  margin: 0;
+  font-family: var(--ff-display);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.year {
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.none {
+  margin: 0;
+  padding: 14px 18px;
+  color: var(--ink-3);
+}
+
+.assignments {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.assignment {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas: "title count open" "meta count open" "works works works";
+  gap: 2px 14px;
+  align-items: center;
+  padding: 12px 18px;
+  border-top: 1px solid var(--hover);
+}
+
+.assignment:first-child {
+  border-top: 0;
+}
+
+.title {
+  grid-area: title;
+  font-size: 13.5px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  grid-area: meta;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.count {
+  grid-area: count;
+  font-size: 12px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+/* The way into screen 11 for this assignment (F-11). */
+.open {
+  grid-area: open;
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.works {
+  grid-area: works;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+/* DAN-332 PR 4: the state of a submission is text in the colour of the list, never a colour of its own (D-128). */
+.submission {
+  white-space: nowrap;
+}
+
+.note {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+@media (max-width: 700px) {
+  .assignment {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "title" "meta" "count" "open" "works";
+  }
+}
+
+/* #732 item 8: 12 px is the floor for interface text, 13 px on a phone (app/globals.css). */
+@media (max-width: 640px) {
+  .year,
+  .meta,
+  .count,
+  .note {
+    font-size: 13px;
+  }
+}

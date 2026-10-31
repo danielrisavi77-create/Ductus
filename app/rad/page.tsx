@@ -2,27 +2,38 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import CommentPanel from "@/components/editor/CommentPanel";
+import EarlierDraft from "@/components/editor/EarlierDraft";
 import EditorToolbar from "@/components/editor/EditorToolbar";
 import HeadingOutline from "@/components/editor/HeadingOutline";
 import { OfflineBanner, OfflineChip } from "@/components/editor/OfflineNotice";
+import OpenWork from "@/components/editor/OpenWork";
 import {
-  LocalDocumentProvider, LocalEditor, LocalLogout, LocalSaveChip,
+  LocalEditor, LocalLogout, LocalSaveChip,
 } from "@/components/editor/LocalDocument";
+import { showsInventedPanels } from "@/components/editor/demo-panels";
 import { InstructionsPanel, WorkPanel } from "@/components/editor/SidePanels";
 import { LocalStatusLength } from "@/components/editor/StatusLength";
+import AppShell from "@/components/shell/AppShell";
 import PanelTabs from "@/components/shell/PanelTabs";
-import SessionObserver from "@/components/shell/SessionObserver";
 import SheetFrame from "@/components/shell/SheetFrame";
+import { readShellRole } from "@/components/shell/shell-role";
 import WorkspaceShell, { RailSection } from "@/components/shell/WorkspaceShell";
-import { assignmentParam, readWorkContext } from "@/components/student/work-context-read";
+import { sheetTitle } from "@/components/student/sheet-title";
+import { teacherViewMode } from "@/components/student/teacher-view";
+import TeacherViewSheet from "@/components/student/TeacherViewSheet";
+import WorkDocumentProvider from "@/components/student/WorkDocumentProvider";
+import { assignmentParam, readWorkContext, type WorkContextRead } from "@/components/student/work-context-read";
+import { pastDue, workDocumentPlan } from "@/components/student/work-document-plan";
 import { DEMO_WORK } from "@/lib/i18n/demo-work.hr";
+import { formatDateTimeHr } from "@/lib/i18n/hr";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import {
-  LOCAL_DEMO_DOCUMENT_ID, LocalScopeConfigError, localScopeConfigFromEnv, resolveLocalScope,
+  LocalScopeConfigError, localScopeConfigFromEnv, resolveLocalScope,
 } from "@/lib/journal/local-scope";
 import { sessionPrincipal, sessionTag } from "@/server/auth/principal";
 import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 import { withActor } from "@/server/db";
+import { readWorkDocument } from "@/server/evidence/work-document-read";
 
 export const metadata = {
   title: `${t.workspace.title} · ${t.app.name}`,
@@ -31,6 +42,9 @@ export const metadata = {
 // The demo journal flag is read when the request arrives, never baked into
 // the build: one build serves CI, the demo and a deployment without it.
 export const dynamic = "force-dynamic";
+
+/** The sheet heading of every plan without the student's own assignment. */
+const NO_CONTEXT: WorkContextRead = { kind: "none" };
 
 /** `/rad`, or `/rad?zadatak=<id>` for a well-formed assignment id. */
 function radPath(assignmentId: string | null): string {
@@ -73,131 +87,170 @@ async function journalFor(token: string | undefined): Promise<{
 }
 
 /**
- * The writing workspace. With a journal, the sheet is the editor and the
- * status bar shows the save state (F-3 step 1b); without one the shell shows
- * its empty states and a sheet that says it cannot be written in. With a
- * journal, the toolbar sits above the sheet and the structure rail lists the
- * headings of the text (F-8 step 1). Without a network the banner and the
- * status bar say so (F-8, DAN-211). A signed-in student sees the teacher's
- * comments in the side panel (F-9 step 1). The top bar names the course and
- * the assignment, and Upute shows its notice, only from an RLS read of the
- * assignment in `?zadatak=` that the student may see and whose current
- * notice they acknowledged (#476 contract 6280487079); without the
- * acknowledgment the page sends them to the notice (PRODUCT §5 rule 6);
- * otherwise neither is shown, never an invented value. The
- * status bar shows the length and any limits of the acknowledged current
- * assignment version (DAN-225/229). With a journal, Rad shows invented stages of the real shape
- * until its read exists (FE-D9, #476). Signing out
- * always ends the session (D-118, `LocalLogout`).
+ * The writing workspace. Which document the sheet writes into is one plan of
+ * `workDocumentPlan` (#711 F1, contract 6391402093 §2, §3, §5, §6 with the
+ * amendment 6391779486): a signed-in student on `?zadatak=` writes into their
+ * own work of that assignment, whose id comes only from the B1 read
+ * (`readWorkDocument`); editor, comments and live view get that same id. A
+ * work that does not exist yet is started by `OpenWork` with one POST on the
+ * student's click on "Započni rad" (DAN-330), never by this GET or a mount. Without `?zadatak=` a signed-in person gets the free draft of
+ * this device: no comments, no live view, no submission, nothing sent (P1).
+ * Any other `?zadatak=` (foreign, unknown, malformed, a teacher, reads that
+ * disagree) is one neutral read-only sheet with no id at all. Without a
+ * session cookie the local demo journal stays as before (A18).
+ *
+ * With a journal the sheet is the editor, the toolbar and the structure rail
+ * follow it (F-8), and the status bar shows the save state of the device
+ * (F-3); without a network the banner and the status bar say so (F-8,
+ * DAN-211). The top bar names the course and the assignment, and Upute shows
+ * its notice, only from the RLS read of an acknowledged assignment of this
+ * student (#476 contract 6280487079); without the acknowledgment the page
+ * sends them to the notice (PRODUCT §5 rule 6). Past the due date the editor
+ * stays writable and a note says the submission will be marked late (P3).
+ * Only the local demo journal without a session shows invented Rad stages
+ * (FE-D9, F-110 t.1). The shell marks the session for the other tabs (F-113
+ * t.1). Signing out always ends the session (D-118, `LocalLogout`).
  */
 export default async function WorkspacePage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const assignmentId = assignmentParam((await searchParams).zadatak);
+  const { zadatak: rawParam, prikaz } = await searchParams;
+  const assignmentId = assignmentParam(rawParam);
   const token = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
-  const [{ scope, signedIn, signInAgain, tag, at }, read] = await Promise.all([
+  const [{ scope, signedIn, signInAgain, tag, at }, read, role, doc] = await Promise.all([
     journalFor(token),
     readWorkContext(token, assignmentId, withActor),
+    readShellRole(token, withActor),
+    readWorkDocument(token, assignmentId, withActor),
   ]);
   // PRODUCT §5 rule 6: an assignment whose current notice is not acknowledged
   // opens on its notice, never on the workspace.
   if (read.kind === "noticeFirst" && assignmentId) redirect(`/zadatak/${assignmentId}`);
-  const work = read.kind === "ready" ? read : null;
+  const plan = workDocumentPlan({ rawParam, assignmentId, signedIn, signInAgain, scope, context: read, doc });
+  const journal = plan.journal;
+  const view = teacherViewMode(plan, prikaz);
+  // Course, title and Upute only for the student's own acknowledged assignment.
+  const ownsAssignment = plan.kind === "assignment" || plan.kind === "notStarted" || plan.kind === "notYetOpen";
+  const work = ownsAssignment && read.kind === "ready" ? read : null;
   const session = signedIn && tag !== null ? { tag, at } : null;
+  const invented = showsInventedPanels({ scope: journal?.scope ?? null, signedIn });
+  const late = (plan.kind === "assignment" || plan.kind === "notStarted") && pastDue(plan.dueAt, at);
+  // In the shell's account place: signing out goes through LocalLogout where
+  // a journal is open, which knows what the device still holds (D-118, I5).
+  const account = journal && signedIn ? <LocalLogout /> : signInAgain ? (
+    // A plain link: the login route answers with a redirect, not a page.
+    <a className="btn" href={`/api/auth/login?returnTo=${encodeURIComponent(radPath(assignmentId))}`}>{t.auth.signIn}</a>
+  ) : undefined;
+  const heading = <h1 className="manuscript manuscript__title">{sheetTitle(work ?? NO_CONTEXT, t.workspace.documentUntitled)}</h1>;
   const workspace = (
-    <WorkspaceShell
-      writingHref={radPath(assignmentId)}
-      context={work ? `${work.course} / ${work.notice.title}` : null}
-      barExtra={scope && signedIn ? <LocalLogout /> : signInAgain ? (
-        // A plain link: the login route answers with a redirect, not a page.
-        <a className="btn" href={`/api/auth/login?returnTo=${encodeURIComponent(radPath(assignmentId))}`}>{t.auth.signIn}</a>
-      ) : null}
-      banner={scope ? <OfflineBanner /> : null}
-      rail={
-        <>
-          <RailSection title={t.workspace.structure}>
-            {scope ? <HeadingOutline /> : <p className="rail-empty">{t.workspace.structureEmpty}</p>}
-          </RailSection>
-          <RailSection title={t.workspace.tables}>
-            <p className="rail-empty">{t.workspace.tablesEmpty}</p>
-          </RailSection>
-          <RailSection title={t.workspace.footnotes}>
-            <p className="rail-empty">{t.workspace.footnotesEmpty}</p>
-          </RailSection>
-        </>
-      }
-      panel={
-        <PanelTabs
-          label={t.workspace.panelTabs}
-          initial="comments"
-          tabs={[
-            { id: "sources", label: t.workspace.tabSources, content: <p className="rail-empty">{t.workspace.sourcesEmpty}</p> },
-            {
-              id: "instructions",
-              label: t.workspace.tabInstructions,
-              content: <InstructionsPanel load={work ? { kind: "ready", value: work.notice } : { kind: "empty" }} />,
-            },
-            {
-              id: "comments",
-              label: t.workspace.tabComments,
-              content: scope && signedIn ? (
-                <CommentPanel documentId={LOCAL_DEMO_DOCUMENT_ID} session={session} />
-              ) : (
-                <p className="rail-empty">{t.workspace.commentsEmpty}</p>
-              ),
-            },
-            {
-              id: "work",
-              label: t.workspace.tabWork,
-              content: <WorkPanel load={scope ? { kind: "ready", value: DEMO_WORK } : { kind: "empty" }} />,
-            },
-          ]}
-        />
-      }
-      status={scope ? (
-        <>
-          <LocalSaveChip />
-          <OfflineChip />
-          <LocalStatusLength range={work?.wordRange ?? null} />
-        </>
-      ) : (
-        <span>{t.workspace.statusNoJournal}</span>
-      )}
-    >
-      {scope ? <EditorToolbar /> : null}
-      <div className="sheet-area">
-        <SheetFrame>
-          <h1 className="manuscript manuscript__title">{t.workspace.documentUntitled}</h1>
-          {scope ? (
-            <LocalEditor />
-          ) : (
-            // Not editable: the text says so, matching aria-disabled.
-            <div
-              className="manuscript"
-              role="textbox"
-              aria-multiline="true"
-              aria-disabled="true"
-              aria-label={t.workspace.documentLabel}
-            >
-              <p className="manuscript__placeholder">
-                {t.workspace.documentNotEditable} <span className="soon">{t.workspace.soon}</span>
-              </p>
-            </div>
-          )}
-        </SheetFrame>
-      </div>
-    </WorkspaceShell>
+    <AppShell session={{ tag, at }} role={signedIn ? role : null} scope={signedIn ? scope : null} current="/rad" crumbs={[t.workspace.title]} account={account} ownMain>
+      <WorkspaceShell
+        mode={view.mode}
+        writingHref={radPath(assignmentId)}
+        teacherViewHref={view.teacherViewHref}
+        context={work ? `${work.course} / ${work.notice.title}` : null}
+        barExtra={plan.submission ? (
+          // F-10 (#653 contract 6385776645): a plain link; the submission page
+          // reads the server's text and sends nothing itself.
+          <a className="btn" href={`/rad/${encodeURIComponent(plan.assignmentId)}/predaja`}>{t.workspace.submitLink}</a>
+        ) : null}
+        banner={journal ? <OfflineBanner /> : null}
+        rail={
+          <>
+            <RailSection title={t.workspace.structure}>
+              {journal ? <HeadingOutline documentId={journal.documentId} /> : <p className="rail-empty">{t.workspace.structureEmpty}</p>}
+            </RailSection>
+            <RailSection title={t.workspace.tables}>
+              <p className="rail-empty">{t.workspace.tablesEmpty}</p>
+            </RailSection>
+            <RailSection title={t.workspace.footnotes}>
+              <p className="rail-empty">{t.workspace.footnotesEmpty}</p>
+            </RailSection>
+          </>
+        }
+        panel={
+          <PanelTabs
+            label={t.workspace.panelTabs}
+            initial="comments"
+            tabs={[
+              { id: "sources", label: t.workspace.tabSources, content: <p className="rail-empty">{t.workspace.sourcesEmpty}</p> },
+              {
+                id: "instructions",
+                label: t.workspace.tabInstructions,
+                content: <InstructionsPanel load={work ? { kind: "ready", value: work.notice } : { kind: "empty" }} />,
+              },
+              {
+                id: "comments",
+                label: t.workspace.tabComments,
+                content: plan.comments ? (
+                  <CommentPanel documentId={plan.journal.documentId} session={session} />
+                ) : (
+                  <p className="rail-empty">{t.workspace.commentsEmpty}</p>
+                ),
+              },
+              {
+                id: "work",
+                label: t.workspace.tabWork,
+                content: <WorkPanel load={invented ? { kind: "ready", value: DEMO_WORK } : { kind: "empty" }} />,
+              },
+            ]}
+          />
+        }
+        status={journal ? (
+          <>
+            <LocalSaveChip />
+            <OfflineChip />
+            <LocalStatusLength range={plan.kind === "assignment" ? work?.wordRange ?? null : null} />
+          </>
+        ) : (
+          <span>{t.workspace.statusNoJournal}</span>
+        )}
+        teacherView={plan.kind === "assignment" ? (
+          <TeacherViewSheet documentId={plan.journal.documentId} session={session} heading={heading} />
+        ) : null}
+      >
+        {journal ? <EditorToolbar /> : null}
+        <div className="sheet-area">
+          {late ? <p className="sheet-notice" role="note">{t.workspace.lateNote}</p> : null}
+          {/* F1b (§4): the free draft of this device, offered only to read and copy. */}
+          {plan.kind === "assignment" ? <EarlierDraft scope={plan.journal.scope} /> : null}
+          <SheetFrame>
+            {heading}
+            {plan.kind === "free" ? <p className="sheet-note">{t.workspace.freeNote}</p> : null}
+            {journal ? (
+              <LocalEditor />
+            ) : plan.kind === "notStarted" ? (
+              <OpenWork assignmentId={plan.assignmentId} session={session} />
+            ) : (
+              // Not editable: the text says so, matching aria-disabled.
+              <div
+                className="manuscript"
+                role="textbox"
+                aria-multiline="true"
+                aria-disabled="true"
+                aria-label={t.workspace.documentLabel}
+              >
+                <p className="manuscript__placeholder">
+                  {plan.kind === "unavailable" ? t.workspace.unavailable
+                    : plan.kind === "notYetOpen" ? t.workspace.openNotYet.replace("{time}", formatDateTimeHr(plan.opensAt))
+                    : <>{t.workspace.documentNotEditable} <span className="soon">{t.workspace.soon}</span></>}
+                </p>
+              </div>
+            )}
+          </SheetFrame>
+        </div>
+      </WorkspaceShell>
+    </AppShell>
   );
-  return (
-    <>
-      <SessionObserver tag={tag} at={at} />
-      {scope ? (
-        <LocalDocumentProvider scope={scope} documentId={LOCAL_DEMO_DOCUMENT_ID} session={session}>
-          {workspace}
-        </LocalDocumentProvider>
-      ) : workspace}
-    </>
-  );
+  // A new document id mounts a new editor: nothing of X (text, undo) reaches Y (A8).
+  // The session mark survives the switch of views, so it never reopens the work (#732 item 7).
+  return journal ? (
+    <WorkDocumentProvider key={journal.documentId} scope={journal.scope} documentId={journal.documentId}
+      session={session} livePublish={plan.live}
+      assignmentId={plan.kind === "assignment" ? plan.assignmentId : null}>
+      {workspace}
+    </WorkDocumentProvider>
+  ) : workspace;
 }

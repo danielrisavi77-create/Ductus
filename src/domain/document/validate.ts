@@ -16,6 +16,7 @@ import {
   DOCUMENT_SCHEMA_VERSION,
   isHeadingLevel,
   isMark,
+  isPlainBlockType,
   isNodeId,
   marksAreCanonical,
   type CanonicalDocument,
@@ -61,6 +62,7 @@ export type ValidationOutcome =
   | { ok: false; errors: ValidationError[] };
 
 const DOCUMENT_FIELDS = new Set(["schemaVersion", "nodes"]);
+/** Paragraph and every other plain block type (`PLAIN_BLOCK_TYPES`). */
 const PARAGRAPH_FIELDS = new Set(["type", "id", "children"]);
 const HEADING_FIELDS = new Set(["type", "id", "level", "children"]);
 const INLINE_FIELDS = new Set(["type", "text", "marks"]);
@@ -135,7 +137,7 @@ function validateNode(
   }
 
   const type = raw.type;
-  if (type !== "paragraph" && type !== "heading") {
+  if (type !== "heading" && !isPlainBlockType(type)) {
     errors.push({ path: `${path}.type`, code: "NODE_TYPE_INVALID" });
     return null;
   }
@@ -197,7 +199,7 @@ function validateNode(
 
   return type === "heading"
     ? { type: "heading", id, level, children }
-    : { type: "paragraph", id, children };
+    : { type, id, children };
 }
 
 function sameMarks(a: readonly Mark[], b: readonly Mark[]): boolean {

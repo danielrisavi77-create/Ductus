@@ -12,6 +12,7 @@ import {
   EVIDENCE_HASH_ALGORITHM_V2,
   EVIDENCE_SEGMENT_SCHEMA_V2,
   type EvidenceSourceV2,
+  type EvidenceStepV2,
 } from "../forensics/evidence-segment-v2";
 import { canonicalizeJcs } from "../forensics/jcs";
 import {
@@ -22,7 +23,7 @@ import {
 } from "./process-summary";
 
 // Synthetic only: invented documents, sessions and Lorem ipsum text.
-type EventSpec = { source: EvidenceSourceV2; text: string };
+type EventSpec = { source: EvidenceSourceV2; text: string; steps?: EvidenceStepV2[] };
 type SegmentSpec = {
   from: string;
   to: string;
@@ -54,7 +55,7 @@ async function buildPackage(
     const events = spec.events.map((event, offset) => ({
       sequence: sequenceFrom + offset,
       source: event.source,
-      steps: [{ stepType: "replace", from: 1, to: 1, slice: { content: [{ type: "text", text: event.text }] } }],
+      steps: event.steps ?? [{ stepType: "replace", from: 1, to: 1, slice: { content: [{ type: "text", text: event.text }] } }],
       beforeDocumentHash: hash(documentHash),
       afterDocumentHash: hash(++documentHash),
     }));
@@ -297,6 +298,19 @@ describe("pastes by P-02 (#384 E)", () => {
     ]);
     expect(summary.pastes.listed.map((paste) => paste.characters)).toEqual([201]);
     expect(summary.pastes.smallerCount).toBe(2);
+  });
+
+  // E1 (#823): the kind of block a paste brings changes no number.
+  it("counts a pasted list as the same text pasted as paragraphs", async () => {
+    const blocks = (type: string) => ({
+      source: "paste" as const, text: "",
+      steps: [{ stepType: "replace", from: 0, to: 0, slice: { content: ["L".repeat(120), "L".repeat(90)].map((text) =>
+        ({ type, attrs: { nodeId: null }, content: [{ type: "text", text }] })) } }],
+    });
+    const asList = await summarize([minuteSegment("10:00", [blocks("bulletItem")])]);
+    const asParagraphs = await summarize([minuteSegment("10:00", [blocks("paragraph")])]);
+    expect(asList.pastes.listed.map((paste) => paste.characters)).toEqual([210]);
+    expect(asList).toEqual(asParagraphs);
   });
 
   it("counts code points, not bytes or UTF-16 units", async () => {

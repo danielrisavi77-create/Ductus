@@ -4,31 +4,34 @@ Ažurira se skupno nakon spojenih PR-ova i kontrolnih točaka. Ovaj presjek čuv
 
 ## Trenutna faza
 
-M0 Temelj. Prvi cilj ostaje radni demo za FPZG 2. 11. 2026. (`docs/PLAN-DEMO.md`). Ductus Engineering System v1 uvodi risk-based review, QA/Bug Hunter/Product uloge, GitHub za izvršenje i dokaze te Linear za zadatke, prioritete, nositelje i statuse.
+M0 Temelj. Cilj je dovršena aplikacija, sve faze M0 do M11 (D-191); demo za FPZG odgođen je bez datuma. Ductus Engineering System v1 uvodi risk-based review, QA/Bug Hunter/Product uloge, GitHub za izvršenje i dokaze te Linear za zadatke, prioritete, nositelje i statuse.
 
-Session adresa orkestratora: `session_01JCvXpAX1i9hax8K5FFRcTy` (pomoćni podatak za `send_message`, `docs/ORKESTRATOR.md` §5; nije izvor istine).
+Session adresa orkestratora: ranije upisana adresa `session_01JCvXpAX1i9hax8K5FFRcTy` je arhivirana i više ne vrijedi za `send_message` (`docs/ORKESTRATOR.md` §5). Nova adresa zasad nije upisana; vidi Owner queue.
 
 ## Owner queue (samo Daniel)
 
 Agent nikad ne uzima ove stavke i nikad ne čeka na njima ako drugi posao može naprijed.
 
 - [x] 10. 10. 2026.: `main` zaštićen (PR obvezan; obvezni statusi CI, Local stack, Security scanners, Dependency review, Engineering review gate; neriješeni razgovori blokiraju; force push i delete zabranjeni; squash only; auto-merge i brisanje grane nakon spajanja uključeni). Administrator smije zaobići zaštitu; obvezni Code Owner review nije uključen (ENGINEERING_SYSTEM §10).
-- [ ] Proba demoa 31. 10. 2026. i snimka prolaza (PLAN-DEMO D-3, D-4).
+- [ ] Novi raspored rada (D-191). Datum pilota je 1. 3. 2027. (vlasnik, #87 `issuecomment-6543799262`); raspored faza prema tom datumu nije odlučen.
 - [x] 10. 10. 2026.: vlasnik je potvrdio D-37, D-39, D-71 i D-74 (trag: komentar na issueu #87, `issuecomment-6101424008`; zapisano u `docs/DECISIONS.md`).
 - [x] 18. 10. 2026.: odnos D-06 i D-39 riješen; obje zamjenjuje D-142 (prikaz uživo), uz D-143 (reprodukcija znak po znak) i D-144 (kratki zadaci). Ustav v1.4 izmijenjen (trag: #87 `issuecomment-6254642740`, `6254721033`).
 - [x] 11. 10. 2026.: vlasnik je odlučio (trag: komentari na issueu #87, `issuecomment-6105246182`, `6105084144`, `6105021669`, `6105034219`, `6105201573`; zapisano u `docs/DECISIONS.md`): D-08 razdvojen (dio o aplikaciji ODLUČEN, dobavljači i trošak PRIJEDLOG do B0.1, rok 16. 11. 2026.), D-34 potvrđen uz dopunu o autoru, domena evidencije (D-102), ključ ustanove (D-103), model računa za drugog izdavatelja uz nepromijenjen D-09 (D-104), nastavnički prikaz samo opisni i bez novih rezova demoa (D-105), jezik tek uz engleski (D-70). Potvrđeno i tumačenje točke 3 (komentar `6105263690`): migracije na kritičnom putu demoa (#240 i sljedeći korak B-8) se ne zaustavljaju, B0.1 kreće čim postoje računi dobavljača, rizik prepisa migracija do tada ostaje zapisan.
-- [ ] Potvrditi ili promijeniti D-16, D-20, D-38 te pragove P-01 do P-04 (D-08, dio o dobavljačima: B0.1).
+- [x] 25. 10. 2026.: vlasnik je potvrdio D-16, svi se prijavljuju isključivo preko AAI@EduHr (trag: #87, `issuecomment-6399982880`; zapisano u `docs/DECISIONS.md`).
+- [ ] Potvrditi ili promijeniti D-38 te pragove P-01 do P-04 (D-08, dio o dobavljačima: B0.1). D-20 je pod preispitivanjem D-194 t. 6 (model računa za AI).
 - [ ] Odnos D-08 (dio o dobavljačima, B0.1) prema B0.2: D-08 u `docs/DECISIONS.md` i `docs/PLAN-DEMO.md` traže i B0.2, nova odluka 11. 10. spominje samo B0.1. Odluka nije donesena.
 - [ ] Odnos D-105 ("zasad se ništa ne reže") prema već primijenjenom rezu iz D-98 dopune (a): D-105 ga ne poništava; vraćanje reza bila bi nova odluka.
-- [ ] Izvršitelj obrade i ugovorna strana prema ustanovi (kontroler/procesor): vlasnik rješava s ustanovom; blokira pilot, ne demo.
+- [ ] Izvršitelj obrade i ugovorna strana prema ustanovi (kontroler/procesor): vlasnik rješava s ustanovom; blokira pilot, ne demo. Odlučeno 31. 10. 2026. (D-194 t. 3, #87 `issuecomment-6544045938`): vlasnik osniva pravnu osobu operatera kad prvi fakultet odobri pilot; ugovor o usluzi i obradi nakon toga, prije stvarnih podataka; raspodjela uloga ide u isti pravni angažman kao mišljenje i DPIA. PRIJEDLOG ugovornog modela (fakultet voditelj, operater izvršitelj, pružatelji podizvršitelji, okvirni ugovor, student ne plaća): `docs/privacy/05` A.1. Otvoreno: oblik pravne osobe i rok.
+- [ ] AI pomoćnik u pilotu (D-194): model računa (tko drži račune i plaća; obuhvaća li to cijelo visoko obrazovanje i D-15), izbor pružatelja nakon testa hrvatskog i pisanih odgovora pružatelja (PRIJEDLOG t. 6 i 7), proračun za trošak AI-ja (D-66, D-69), razina 2 i „objašnjenje pojma” (D-64 prema D-80), pitanja pravniku u `docs/privacy/05` točke 23 do 28.
 - [ ] D-142/D-143 (prikaz uživo, reprodukcija znak po znak; Ustav v1.4 izmijenjen): pravno mišljenje (D-55; biometrija po čl. 4. t. 14. GDPR-a, razmjernost, Prilog III. Akta o UI, uključujući t. 3(d) prema D-151) i DPIA prije pilota sa stvarnim studentima; ne blokira demo. Od ostalih uloga reprodukciju vidi samo mentor, odnosno nastavnik zadatka, jer je to ista uloga (D-154); student vidi istu reprodukciju svog rada (pravilo 5).
 - [ ] FPZG: koordinator pilota, kolegiji/mentori, akademski kalendar, AAI administrator, DPO, D-04, D-29, D-30, D-31, D-35, zamjenski postupak i zahtjev za ispis razgovora.
 - [ ] FPZG AAI: ovlast za AAI@EduHr Lab i kasnije registracija Ductusa kao usluge. Blokira M1, ne demo.
 - [ ] Lekta: licenca/pravo redistribucije prije punog M4 paketa.
 - [ ] Dobavljači: UpCloud, Scaleway i AWS KMS računi + 2FA i uski ključevi. B0.1 je pomaknut naprijed (rok 16. 11. 2026., tri dodatne provjere) i čeka ove račune.
 - [ ] Računovođa: PDV; FINA tek uz obrt ili FPZG kao ugovornu stranu.
-- [ ] Vidljivost repoa: prije stvarnih podataka ponovno odlučiti ostaje li javni. Uz to: session adresa orkestratora stoji u javnom `STATE.md`; prihvatiti ili premjestiti izvan repoa.
-- [ ] Konačno ime proizvoda.
+- [ ] Vidljivost repoa: prije stvarnih podataka ponovno odlučiti ostaje li javni.
+- [ ] Session adresa orkestratora: adresa upisana u `STATE.md` je arhivirana (stanje 25. 10. 2026.), a nova zasad nije upisana. Vlasnik odlučuje hoće li se nova adresa upisati u javni `STATE.md` ili voditi izvan repoa.
+- [x] 28. 10. 2026.: konačno ime proizvoda je **Ductura**; repozitorij, paket i identifikatori u kodu ostaju `ductus` (D-186; trag: #960 `issuecomment-6469934229`, t. 4).
 
 ## Engineering System v1
 
@@ -44,17 +47,21 @@ Kanonski dokument: `docs/ENGINEERING_SYSTEM.md`.
 
 ## Otvoreni razvojni stog
 
-Stanje 11. 10. 2026. prema `gh pr list` (nositelj statusa je Linear; review i QA stanje je na PR-u).
+Stanje 26. 10. 2026. oko 16:00 UTC prema `gh pr list --state open` (nositelj statusa je Linear; review i QA stanje je na PR-u). STATE.md i dalje prati PR-ove i redovito se osvježava (vlasnik, 25. 10. 2026., prenosi orkestrator na #271 `issuecomment-6398469344`; povod je pregled Trijaže `issuecomment-6398435565`). Ovaj presjek uključuje redak "Spojeno" i otvorene PR-ove #807 do #867 (#807 je u međuvremenu spojen; dodani i noviji #868 i #870) iz pregleda Trijaže na #271 (vlasnik, #87, 26. 10. 2026.).
 
 Otvoreno:
 
-- #240 DAN-83 ključ ustanove na zadacima i potvrdama obavijesti; #233 B-8i S3 adapter pohrane; #245 B-8i B2 domene pohrane po ustanovi (draft); #247 DAN-54 potvrda v2; #248 DAN-183a fixtureovi na format koraka v1 (draft); #234 docs REPOZITORIJI (draft).
-- #206 i #214 F-3 spremanje dokumenta i Tiptap editor (#214 draft).
-- #219, #220, #221, #230 orchestrator skripte, Owner-Override, verdikti (D-101; #221 i #230 draft); #223 čitanje teksta sučelja; #228 hook u cloud sesijama (draft).
-- #243 ovaj docs PR.
-- #180 DAN-138 test kopija skillova (draft); #94 DAN-41 drugi pružatelj reviewa (draft, nakon demoa).
+- DAN-89 demo lanac: #815 prikaz "Kako vidi nastavnik" na `/rad` (#732 t. 7); #726 (K-4c-2) i #810 (K-4d korak 3), nacrti koraka demo prolaza.
+- DAN-37 dokazi: #811 spajanje sesije s listom u `/rad` (3d-2c2b); #818 predani rad samo za čitanje (DAN-328).
+- DAN-308 brzi put nastavnika: #780 ruta (B-11c); #825 F-11 čita radove iz B-11c (DAN-334).
+- Rad, zadatak, editor i početna stranica: #830 rad nastaje na klik "Započni rad" (DAN-330) i #831 korak na poslužitelju (F-137, DAN-331, nacrt); #866 citati i popis literature iz kartice Literatura (DAN-343, nacrt); #867 paleta Archivum V3 (nacrt); #870 ruta za novu verziju zadatka (DAN-292, nacrt s ugovorom); #868 početna stranica (Refs #823, nacrt).
+- Sigurnosni nalazi, samo ID: #861 (F-151, dio 1), #862 (F-149) i #863 (F-150), nacrti.
+- Platforma, orkestrator i CI: #837 pravila Actions za engineering gate (DAN-337); #812 ovo osvježavanje; #684 `orch:shadow` (DAN-269, nacrt); #643 (nacrt), #642, #641 Mergify i akcije; #628 Playwright ponavljanja (DAN-262, nacrt).
+- Stariji nacrti: #629, #571, #553, #552, #551, #550, #438, #372, #370, #354, #347, #344; #94 drugi pružatelj reviewa (DAN-41, nakon demoa).
 
-Spojeno 10. i 11. 10.: #160, #173, #175, #185, #186, #189, #191, #194, #196, #198, #199, #205, #207 do #210, #212, #213, #215 do #218, #224, #226, #227, #229, #232, #237, #238, #244, #246 i ranije #188, #174, #45, #164, #151, #170, #169, #163, #162, #159, #150, #148, #133, #165, #147, #105.
+Spojeno od 25. 10. oko 14:00 UTC do 26. 10. oko 16:00 UTC, 49 PR-ova: #346, #731, #751, #768, #769 (B-11a), #772, #773, #774 (B-11b), #782, #786 do #788, #791, #793 do #798, #800, #801, #803 (3d-2c2a), #804, #805 (DAN-290), #806 do #809, #814, #816, #817 (DAN-335), #819 do #822, #832, #834, #836, #839, #840, #843, #844, #846 i #847 (DAN-326 E1), #851, #855, #856 (D-176), #857 (D-177) i #860 (F-148). Zatvoreni bez spajanja: #833, #848, #850.
+
+Spojeno od 12. do 26. 10. 2026.: 325 PR-ova (#180 do #860, s preskocima). Potpun popis: `gh pr list --state merged`.
 
 ## Ne smije se izgubiti
 

@@ -444,6 +444,41 @@ describe("LocalDocumentSaver: failures (#197 attacks 5, 6, 7, 4, 17, 13)", () =>
     expect(await target.load()).toEqual({ kind: "ready", document: text("iz editora") });
   });
 
+  it("6: the chosen text stays queued when resume()'s read fails, and the next ready load writes it (DAN-318)", async () => {
+    const at = scope();
+    const real = journal(at);
+    let full = false;
+    let readFails = false;
+    const target = saver(patched(real, {
+      read: async (...args: Parameters<AtomicDexieJournal["read"]>) => {
+        if (readFails) {
+          readFails = false;
+          throw Object.assign(new Error("closed"), { name: "DatabaseClosedError" });
+        }
+        return real.read(...args);
+      },
+      saveLocal: async (...args: Parameters<AtomicDexieJournal["saveLocal"]>) => {
+        if (full) throw Object.assign(new Error("full"), { name: "QuotaExceededError" });
+        return real.saveLocal(...args);
+      },
+    }));
+    await target.load();
+    await type(target, "staro");
+    full = true;
+    await type(target, "nespremljeno");
+    full = false;
+    expect(await target.load()).toEqual({ kind: "recovery", reason: "unsaved", document: text("staro") });
+    // A retry succeeds while the recovery is still on screen.
+    await type(target, "drugo");
+    readFails = true;
+    expect(await target.resume(text("odabrano"))).toEqual({ kind: "unavailable" });
+    expect(target.snapshot()).toMatchObject({ state: "ERROR", failure: "unavailable" });
+    expect(await target.load()).toEqual({ kind: "ready", document: text("drugo") });
+    await target.settled();
+    expect(target.snapshot()).toMatchObject({ state: "LOCAL_DURABLE", failure: null });
+    expect((await journal(at).read(DOC)).snapshot?.document).toEqual(text("odabrano"));
+  });
+
   it("4, 6: resume() in a stale tab saves the chosen text and keeps the other writer's in the rows", async () => {
     const at = scope();
     const first = saver(journal(at));

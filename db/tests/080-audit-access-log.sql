@@ -30,7 +30,8 @@ LANGUAGE sql STABLE AS $$ SELECT count(*) FROM audit.access_log $$;
 SELECT has_schema('audit');
 SELECT bag_eq(
   $$ SELECT relname::text FROM pg_class WHERE relnamespace = 'audit'::regnamespace AND relkind IN ('r', 'p') $$,
-  $$ VALUES ('access_log') $$, 'access_log is the only table of the audit schema');
+  $$ VALUES ('access_log'), ('enrollment_code_event'), ('course_member_event') $$,
+  'the audit schema holds the access log, the enrollment code events (082) and, since DAN-338 (083), the membership events');
 SELECT row_eq(
   $$ SELECT relowner::regrole::text, relrowsecurity, relforcerowsecurity FROM pg_class WHERE oid = 'audit.access_log'::regclass $$,
   ROW('ductus_identity'::text, true, true), 'the identity role owns access_log and RLS is enabled and forced');
@@ -117,7 +118,7 @@ SELECT is(left(pg_temp.as_owner(pg_temp.row_sql('{fak_a}', '{nobody}', '{ana}', 
   '23503:', 'an assignment that does not exist cannot be written');
 SELECT is(left(pg_temp.as_owner(pg_temp.row_sql('{fak_a}', '{z1}', '{ana}', '{vesna}', p_role => 'student')), 6),
   '23514:', 'a reader role outside the list is refused');
-SELECT is(left(pg_temp.as_owner(pg_temp.row_sql('{fak_a}', '{z1}', '{ana}', '{vesna}', p_surface => 'replay')), 6),
+SELECT is(left(pg_temp.as_owner(pg_temp.row_sql('{fak_a}', '{z1}', '{ana}', '{vesna}', p_surface => 'export')), 6),
   '23514:', 'a surface outside the list is refused until a migration adds it');
 SELECT is(left(pg_temp.as_owner(pg_temp.row_sql('{fak_a}', '{z1}', '{ana}', '{vesna}', p_at => quote_literal('2026-10-19 12:05:01+00'))), 6),
   '23514:', 'a time finer than the minute is refused');

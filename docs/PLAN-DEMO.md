@@ -2,6 +2,8 @@
 
 Verzija 0.1 · 3. 10. 2026. · Odgovorna osoba: Daniel Rišavi · Cilj: **ponedjeljak 2. 11. 2026.** (D-82)
 
+**Povijesni zapis (D-191, 30. 10. 2026.):** demo je odgođen bez datuma i ovaj dokument više nije radni plan. Nositelj plana je `docs/PROGRAM.md`.
+
 Razrada odjeljka "Demo za fakultet" iz `PROGRAM.md` (D-76) na zadatke za sesije iz `docs/SESSIONS.md`. Svaki zadatak orkestrator šalje u obliku predloška iz `SESSIONS.md` §3; ova tablica je izvor za te poruke. Kad se plan i `PROGRAM.md` razlikuju u opsegu, vrijedi `PROGRAM.md`, a razlika se prijavljuje orkestratoru.
 
 ## 1. Što demo mora pokazati
@@ -99,7 +101,7 @@ Oznaka uloge: P Platforma, B Backend, F Frontend, K kratkotrajna sesija, D Danie
 | K-2 | Citatni stil (D-83): FPZG stil kopiran iz Lekte (`katedra-lite/references/fakulteti/fpzg.json`, `fpzg-diplomski/references/stranice-i-izvori.md`) u konfiguracijsku datoteku Ductusa; čista funkcija za citat u tekstu i bibliografiju | P-1 | Testovi s primjerima iz Lekte zeleni | T2 |
 | K-3 | Izmišljeni podaci demoa: fakultet, kolegij, zadatak, nastavnik, dva studenta, i dvije povijesti koje Ductus ne može razlikovati (samostalan uvezeni tekst i postupno pretipkan tuđi tekst) s objašnjenjem granica zapisa (D-80 točka 3) | B-7, B-8 | Skripta puni bazu; nijedan stvarni osobni podatak | T3 |
 | K-4 | E2E prolaz demoa 1 do 5 kao jedan Playwright test s videom. Nastaje u T2 s prvim korakom i raste postupno (§7 t. 2); završni rok ostaje T4. Do 1. 11. obvezan je samo na Chromiumu; Firefox i WebKit su informativni (D-98 dopuna) | F-10, P-5, K-3 | Zelen u CI-ju; video priložen | T4 |
-| D-3 | Proba demoa u subotu 31. 10.: Daniel prolazi demo sam, zapisuje primjedbe | K-4, P-7 | Primjedbe poslane orkestratoru | T4 |
+| D-3 | Proba demoa u subotu 31. 10.: Daniel prolazi demo sam, zapisuje primjedbe. Prijava ne stvara ulogu nastavnika: `pnpm demo:up` prije pokretanja aplikacije daje je samo računu `Demo nastavnik` (`db/local/demo-k3.sql`, ista dodjela kao `db/local/provision-demo-teacher.sql`). Nakon `pnpm demo:prepare` i prve prijave računa ulogu daje `node scripts/demo/provision-teacher.mjs` (za `Demo nastavnica` s argumentom `demo-teacher-2`) ili `pnpm demo:bootstrap-accounts` za oba računa | K-4, P-7 | Primjedbe poslane orkestratoru | T4 |
 | D-4 | Snimka prolaza 1 do 5 za sastanak | D-3 | Snimka postoji | T4 |
 
 ## 5. Rezovi ako se kasni

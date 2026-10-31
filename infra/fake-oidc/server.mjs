@@ -26,7 +26,7 @@ const provider = new Provider(ISSUER, {
   interactions: { url: (_ctx, interaction) => `/interaction/${interaction.uid}` },
   claims: {
     openid: ["sub"],
-    profile: ["name", "hrEduPersonUniqueID", "hrEduPersonHomeOrg", "hrEduPersonAffiliation"],
+    profile: ["name", "given_name", "family_name", "hrEduPersonUniqueID", "hrEduPersonHomeOrg", "hrEduPersonAffiliation"],
   },
   // First-party demo client: grant the requested scopes without a consent step.
   async loadExistingGrant(ctx) {
@@ -53,6 +53,34 @@ const provider = new Provider(ISSUER, {
 const escapeHtml = (text) =>
   text.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
 
+// The app's "D" mark on --ground and --accent (DAN-345 follow-up): without
+// it the browser's request for /favicon.ico ended in the provider's 404.
+const FAVICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">\
+<rect width="64" height="64" rx="10" fill="#242422"/>\
+<text x="32" y="50" text-anchor="middle" fill="#c8aa6e" font-family="Georgia,serif" font-size="52">D</text></svg>`;
+
+// The tokens of app/globals.css as values (#732 item 2, palette D-188): this server is a
+// separate process and cannot load the app's stylesheet, so the page repeats
+// the few it needs to look like the sign-in screen it is reached from.
+const PAGE_STYLE = `
+:root { color-scheme: dark; }
+body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px;
+  box-sizing: border-box; background: #242422; color: #faf9f5;
+  font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { width: min(430px, 100%); box-sizing: border-box; padding: 30px 30px 24px;
+  background: #2e2e2b; border: 1px solid #8c887f; border-radius: 6px;
+  box-shadow: 0 1px 1px #0007, 0 12px 34px -10px #000a; text-align: center; }
+.tag { display: inline-block; padding: 2px 10px; border-radius: 4px; background: #3a3a36;
+  color: #c8aa6e; font-size: 12px; font-weight: 600; }
+h1 { margin: 12px 0 8px; font-size: 24px; font-weight: 400; }
+p { margin: 0 0 20px; font-size: 13px; color: #dedbd3; }
+form { display: grid; gap: 10px; }
+button { min-height: 48px; padding: 12px 18px; border: 0; border-radius: 4px;
+  background: #c8aa6e; color: #242422; font: inherit; font-weight: 600; cursor: pointer; }
+button:hover { background: #dcc28a; }
+button:focus-visible { outline: 3px solid #faf9f5; outline-offset: 4px; }
+`;
+
 function loginPage(uid) {
   const buttons = Object.entries(ACCOUNTS)
     .map(
@@ -62,13 +90,17 @@ function loginPage(uid) {
     .join("\n");
   return `<!doctype html>
 <html lang="hr">
-<head><meta charset="utf-8"><title>Demo prijava</title></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo prijava</title><link rel="icon" href="/favicon.ico" type="image/svg+xml"><style>${PAGE_STYLE}</style></head>
 <body>
+<main>
+<span class="tag">Samo lokalno i CI</span>
 <h1>Demo prijava</h1>
 <p>Ovo nije AAI@EduHr. Lažni pružatelj prijave za lokalni rad i CI; računi su izmišljeni.</p>
 <form method="post" action="/interaction/${escapeHtml(uid)}/login">
 ${buttons}
 </form>
+</main>
 </body>
 </html>`;
 }
@@ -98,6 +130,11 @@ async function handleInteraction(req, res) {
 const providerCallback = provider.callback();
 
 createServer((req, res) => {
+  if (req.method === "GET" && req.url === "/favicon.ico") {
+    res.writeHead(200, { "content-type": "image/svg+xml", "cache-control": "max-age=3600" });
+    res.end(FAVICON_SVG);
+    return;
+  }
   if (req.url?.startsWith("/interaction/")) {
     handleInteraction(req, res).catch((error) => {
       res.writeHead(400, { "content-type": "text/plain; charset=utf-8" });

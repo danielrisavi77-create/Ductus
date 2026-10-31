@@ -7,24 +7,28 @@ import { test, type Page } from "@playwright/test";
 const PAGES = [
   { name: "home", path: "/" },
   { name: "workspace", path: "/rad" },
+  { name: "teacher-courses", path: "/nastavnik" },
   { name: "teacher-new", path: "/nastavnik/zadatak/novi" },
   { name: "prijava", path: "/prijava" },
   // Signed out here; the teacher view is attached by e2e/login/fast-path.spec.ts.
   { name: "brz-put", path: "/nastavnik/brz-put" },
+  // The Croatian not-found page (#732 item 3).
+  { name: "not-found", path: "/ova-adresa-ne-postoji" },
 ];
 const LOCALES = ["hr"] as const;
-// The shell is always dark (D-115); the sheet is dark by default, white with the switch on /rad (D-123).
+// The shell is always dark (D-115); the sheet is the paper by default, dark with the switch (D-188, D-123).
 const SCHEMES = ["light", "dark"] as const;
 
 async function chooseSheetTheme(page: Page, path: string, theme: (typeof SCHEMES)[number]) {
-  if ((path !== "/rad" && path !== "/") || theme === "dark") return;
+  if (path !== "/rad" && path !== "/") return;
+  const name = theme === "dark" ? "Tamni list" : "Bijeli list";
   if (path === "/rad") {
     // On /rad the theme is in the toolbar's "Prikaz" menu (FE-D5).
     await page.getByRole("toolbar", { name: "Oblikovanje teksta" }).getByRole("button", { name: "Prikaz" }).click();
-    await page.getByRole("menuitemradio", { name: "Bijeli list" }).click();
+    await page.getByRole("menuitemradio", { name }).click();
     return;
   }
-  await page.getByRole("button", { name: "Bijeli list" }).click();
+  await page.getByRole("button", { name }).click();
 }
 // Wide (three columns), below 1240 px (structure under the sheet), below
 // 1000 px (both rails under the sheet) and a phone (README §5.1, FE-D2).

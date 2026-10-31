@@ -2,7 +2,7 @@
 import { canonicalBlock, field } from "../engineering/metadata-parser.mjs";
 import { commentTime, trustedAuthor } from "../engineering/review-gate-core.mjs";
 import {
-  changedPaths, D97_MANUAL_PATHS, D97_PATHS, matchesPath, normalizePath,
+  changedPaths, D97_MANUAL_PATHS, D97_PATHS, isD97Path, matchesPath, normalizePath,
 } from "../engineering/protected-paths.mjs";
 
 export const GATE_CONTEXT = "Engineering review gate";
@@ -20,7 +20,7 @@ export { changedPaths, D97_MANUAL_PATHS, D97_PATHS };
 const norm = normalizePath;
 
 export function d97Matches(files) {
-  return (files ?? []).map(norm).filter((f) => matchesPath(f, D97_PATHS));
+  return (files ?? []).map(norm).filter((f) => isD97Path(f));
 }
 
 export function d97ManualMatches(files) {

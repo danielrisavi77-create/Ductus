@@ -23,6 +23,8 @@ import { commitEvidenceRequest } from "@/server/evidence/evidence-commit-request
 import { handleEvidenceCommitRequest } from "@/server/evidence/commit-route";
 import { handleEvidenceOpenRequest } from "@/server/evidence/open-route";
 
+import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
+
 // B-8 step 4c / DAN-83 (docs/BACKEND.md 4.13 t. 3.2, 3.6, 4 and 7): the commit
 // transaction against the real database, with the persistent development key
 // read from a seed outside the repository and registered for the domain. A
@@ -31,9 +33,7 @@ import { handleEvidenceOpenRequest } from "@/server/evidence/open-route";
 // only; random synthetic rows and a random seed, all removed afterwards.
 const SAFE_ADMIN_URL: string =
   process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
-if (!["127.0.0.1", "localhost", "[::1]"].includes(new URL(SAFE_ADMIN_URL).hostname)) {
-  throw new Error("The evidence commit test runs only against a loopback database (DATABASE_URL).");
-}
+requireLoopbackDatabaseUrl(SAFE_ADMIN_URL, "The evidence commit test runs only against a loopback database (DATABASE_URL).");
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const suffix = randomBytes(5).toString("hex");
 const login = `it_commit_${suffix}`;
@@ -352,6 +352,70 @@ describe("evidence commit transaction", () => {
     expect(await stored()).toEqual(after);
     Object.assign(chain, { revision: chain.revision + 1, documentHash: sha256(document), head: sha256(segment), sequence: n });
   });
+
+  // DAN-343 (contract on #896): a v3 segment goes through the real route and
+  // database, and its signed receipt names v3; a v2 segment after it continues
+  // the same chain; citation-form in v2 is refused before anything is stored.
+  it("commits a v3 segment with a receipt naming v3, then a v2 one in the same package", async () => {
+    const golden = loadGoldenVectors().chain;
+    const template = golden.segments[0].segment;
+    const states = golden.documentStates.map((state) => canonicalizeJcs(state.value));
+    const payloads = new InMemoryEvidencePayloadStore();
+    const deps = { withActor, signer: signerFor(join(dir, "seed")), payloads };
+    const request = (evidenceSchema: string, source: string, tx: string) => {
+      const n = chain.sequence + 1;
+      const document = states.find((text) => sha256(text) !== chain.documentHash)!;
+      const segment = canonicalizeJcs({
+        ...template,
+        evidenceSchema,
+        documentId,
+        sessionId: `capture-${suffix}`,
+        segmentId: `segment-${suffix}-${n}`,
+        sequenceFrom: n,
+        sequenceTo: n,
+        initialDocumentHash: chain.documentHash,
+        finalDocumentHash: sha256(document),
+        predecessorSegmentHash: chain.head,
+        evidenceProfileId: context.evidenceProfileId,
+        events: [{ ...template.events[0], source, sequence: n, beforeDocumentHash: chain.documentHash, afterDocumentHash: sha256(document) }],
+      });
+      const body = {
+        documentId,
+        clientTransactionId: `tx-${suffix}-${tx}`,
+        baseRevision: chain.revision,
+        segment: new TextEncoder().encode(segment),
+        document: new TextEncoder().encode(document),
+      };
+      const advance = () =>
+        Object.assign(chain, { revision: chain.revision + 1, documentHash: sha256(document), head: sha256(segment), sequence: n });
+      return { body, segment, advance };
+    };
+
+    const before = await stored();
+    const refused = request("ductus-evidence-segment-v2", "citation-form", "v2-citation");
+    expect(await commitEvidenceRequest(deps, token, refused.body)).toEqual({ status: "invalid" });
+    expect(payloads.size).toBe(0);
+    expect(await stored()).toEqual(before);
+
+    const v3 = request("ductus-evidence-segment-v3", "citation-form", "v3");
+    const third = await commitEvidenceRequest(deps, token, v3.body);
+    expect(third).toMatchObject({
+      status: "committed",
+      signedReceipt: { payload: { evidenceSchema: "ductus-evidence-segment-v3", segmentHash: sha256(v3.segment) } },
+    });
+    v3.advance();
+
+    const v2 = request("ductus-evidence-segment-v2", "editor", "v2-after-v3");
+    const fourth = await commitEvidenceRequest(deps, token, v2.body);
+    expect(fourth).toMatchObject({
+      status: "committed",
+      signedReceipt: {
+        payload: { evidenceSchema: "ductus-evidence-segment-v2", predecessorSegmentHash: sha256(v3.segment) },
+      },
+    });
+    v2.advance();
+    expect(payloads.size).toBe(2);
+  });
 });
 
 /** The next segment of the chain and the document it ends in, as the client sends them. */
@@ -448,6 +512,8 @@ describe("evidence routes (B-8 step 5)", () => {
       headSegmentHash: chain.head,
       lastSequenceTo: chain.sequence,
       receiptKeys: [expect.objectContaining({ keyId: key.keyId, purpose: "receipt" })],
+      // The real app.work_submitted answers through the route: nothing is submitted here (DAN-289 O2).
+      submitted: false,
     });
     expect(sha256(Buffer.from(body.document, "base64").toString("utf8"))).toBe(chain.documentHash);
   });

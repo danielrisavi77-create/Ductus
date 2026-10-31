@@ -19,7 +19,10 @@ import { commitEvidenceRequest } from "@/server/evidence/evidence-commit-request
 import { createEvidenceReceiptSigner } from "@/server/evidence/receipt-signer";
 import { reconstructSubmissionRecord } from "@/server/evidence/submission-record";
 import { handleSubmissionRequest } from "@/server/evidence/submission-route";
-import { digestSubmissionReceiptPayloadV1 } from "@/domain/forensics/submission-receipt";
+import type { SigningKeyProvider } from "@/application/ports/signing-key-provider";
+import { digestSubmissionReceiptPayloadV2 } from "@/domain/forensics/submission-receipt-v2";
+
+import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
 
 // B-12 step 4b1 / DAN-87: the reconstruction of a submission request over the
 // real database, with segments of real ductus-edit-steps-v1 steps committed
@@ -28,9 +31,7 @@ import { digestSubmissionReceiptPayloadV1 } from "@/domain/forensics/submission-
 // synthetic rows ("Odlomak A", "Odlomak B") and a random seed, all removed.
 const SAFE_ADMIN_URL: string =
   process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
-if (!["127.0.0.1", "localhost", "[::1]"].includes(new URL(SAFE_ADMIN_URL).hostname)) {
-  throw new Error("The submission record test runs only against a loopback database (DATABASE_URL).");
-}
+requireLoopbackDatabaseUrl(SAFE_ADMIN_URL, "The submission record test runs only against a loopback database (DATABASE_URL).");
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const suffix = randomBytes(5).toString("hex");
 const login = `it_subrec_${suffix}`;
@@ -209,7 +210,7 @@ afterAll(async () => {
   await appPool?.end();
   await admin.query("BEGIN");
   await admin.query("SET LOCAL session_replication_role = replica");
-  for (const table of ["submission", "submission_request", "receipt", "segment", "package", "document_checkpoint", "document_revision", "signing_key"]) {
+  for (const table of ["submission_receipt", "submission_receipt_issuance", "submission", "submission_request", "receipt", "segment", "package", "document_checkpoint", "document_revision", "signing_key"]) {
     await admin.query(`DELETE FROM evidence.${table} WHERE institution_id = $1`, [institutionId]);
   }
   for (const table of ["evidence.document", "evidence.project", "evidence.domain"]) {
@@ -284,14 +285,19 @@ describe("reconstruction of a submission request over the stored record (B-12 st
 });
 
 const ORIGIN = "http://localhost:3000";
-const submit = (payloads: InstitutionEvidencePayloadReader = store, as: string = token, body: unknown = { documentId, revision: 2 }) =>
+const submit = (
+  payloads: InstitutionEvidencePayloadReader = store,
+  as: string = token,
+  body: unknown = { documentId, revision: 2 },
+  receiptSigner: SigningKeyProvider = signer(),
+) =>
   handleSubmissionRequest(
     new Request(`${ORIGIN}/api/submission`, {
       method: "POST",
       headers: { origin: ORIGIN, "sec-fetch-site": "same-origin", "ductus-protocol": "1", "content-type": "application/json" },
       body: JSON.stringify(body),
     }),
-    { withActor, payloads, signer: signer(), expectedOrigin: ORIGIN, sessionToken: as, log: () => {} },
+    { withActor, payloads, signer: receiptSigner, expectedOrigin: ORIGIN, sessionToken: as, log: () => {} },
   );
 
 async function submissions() {
@@ -346,11 +352,34 @@ describe("POST /api/submission (B-12 step 4b2)", () => {
     expect(await submissions()).toBe("0");
   });
 
-  it("submits the matching revision with a signed receipt of the request's time, and a repeat gets the same bytes (C1, A6, A7, E1)", async () => {
-    const first = await submit();
-    expect(first.status).toBe(200);
+  it("submits the matching revision with one bound v2 receipt: two tabs at once and a repeat get the same bytes (C1, A6, A7, E1, DAN-291)", async () => {
+    // Both tabs sign before either binds, so one bind waits on the other's lock
+    // of the submission row (291a) and answers `existing` with the stored row.
+    const base = signer();
+    let signs = 0;
+    let release = () => {};
+    const bothSigned = new Promise<void>((resolve) => (release = resolve));
+    const counting: SigningKeyProvider = {
+      publicVerificationKey: () => base.publicVerificationKey(),
+      verify: (message, signature) => base.verify(message, signature),
+      sign: async (message) => {
+        const signature = await base.sign(message);
+        if (++signs === 2) release();
+        await Promise.race([bothSigned, new Promise((resolve) => setTimeout(resolve, 5_000))]);
+        return signature;
+      },
+    };
+    const [first, second] = await Promise.all([1, 2].map(() => submit(store, token, undefined, counting)));
+    expect([first.status, second.status, signs]).toEqual([200, 200, 2]);
     const text = await first.text();
+    expect(await second.text()).toBe(text);
     const body = JSON.parse(text);
+    const bound = await admin.query<{ receipts: string; attempts: string }>(
+      `SELECT (SELECT count(*) FROM evidence.submission_receipt WHERE institution_id = $1)::text AS receipts,
+              (SELECT count(*) FROM evidence.submission_receipt_issuance WHERE institution_id = $1)::text AS attempts`,
+      [institutionId],
+    );
+    expect(bound.rows).toEqual([{ receipts: "1", attempts: "2" }]);
     const { rows } = await admin.query<{ requested_at: string; artifact_hash: string; revision: string }>(
       `SELECT to_char(requested_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS requested_at, artifact_hash,
               revision::text FROM evidence.submission WHERE institution_id = $1`,
@@ -366,12 +395,14 @@ describe("POST /api/submission (B-12 step 4b2)", () => {
       principalId: studentId,
       assignmentId,
     });
-    const digest = await digestSubmissionReceiptPayloadV1(body.receipt.payload);
+    expect(body.receipt.payload.receiptSchema).toBe("ductus-submission-receipt-v2");
+    const digest = await digestSubmissionReceiptPayloadV2(body.receipt.payload);
     expect(body.receipt.payloadDigestSha256).toBe(digest.sha256);
-    expect(await signer().verify(digest.signingInput, body.receipt.signature)).toBe(true);
+    expect(await base.verify(digest.signingInput, body.receipt.signature)).toBe(true);
 
-    const again = await submit();
-    expect([again.status, await again.text()]).toEqual([200, text]);
+    // A later request reads the bound receipt and never asks the signer.
+    const again = await submit(store, token, undefined, counting);
+    expect([again.status, await again.text(), signs]).toEqual([200, text, 2]);
     // One submission per work (P8) and the first click binds (P5): a click that
     // names a later revision is told the requested one (owner, #87 6264259216).
     const later = await submit(store, token, { documentId, revision: 3 });

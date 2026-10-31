@@ -1,5 +1,17 @@
 # Predaja dizajna: Ductura
 
+> **Boje: vidi D-188 (28. 10. 2026., papir i grafit).** Vrijednosti boja i naglaska u ovom dokumentu (npr. `#6FBFA5`) su povijest; mjerodavni su `docs/design/DESIGN-SYSTEM.md` i `app/globals.css`. Raspored, ekrani i ponašanje vrijede dalje.
+
+## Korisnikov izvorni paket — 22. 10. 2026.
+
+Daniel je dostavio `Frontend za Ductus aplikaciju (2).zip` uz uputu da se taj dizajn koristi za aplikaciju. Pripremljena mapa `design_handoff_ductura/` u ZIP-u potvrđuje postojeći vizualni smjer: svih **11 glavnih HTML referenci već je u ovoj mapi i bajt-po-bajt su jednake dostavljenima**. Nema nove konkurentske kopije dizajna.
+
+Glavne reference: [Editor v11](editor-v11.dc.html), [Prijava v5](prijava-v5.dc.html), [Pregled radova v2](pregled-radova-v2.dc.html) i [Demo tok v2](demo-tok-v2.dc.html). Potpuno preslikavanje izvornih naziva, veličina i SHA-256 otisaka nalazi se u [zapisu podrijetla](SOURCE-2026-10-22.json). SHA-256 cijelog izvornog ZIP-a: `c539ee96875f77c9361135d05640827dd7c4b018a5b1db8e6422f62e3f6124a7`.
+
+Ovo potvrđuje vizualni dizajn. Upute unutar dostavljenih dokumenata jesu izvorni materijal; same po sebi ne mijenjaju aktualne produktne odluke, arhitekturu, prava pristupa, prijavu, evidenciju ili opseg FPZG demoa. Implementacija koristi postojeći Next.js/React/Tiptap stog i aktualne `PRODUCT.md`, `BACKEND.md`, `PLAN-DEMO.md` i `DECISIONS.md`. Napomene dodane u repo inačice `README.md`, `INTEGRACIJA.md` i `PROVJERE.md` ostaju sačuvane; stariji tekst iz ZIP-a ih ne prepisuje.
+
+Ostaju postojeće granice predaje: `support.js` se ne vraća u repo (vlasnička odluka od 17. 10. 2026., Semgrep nalazi; vidi §2 i §10), a Vodič je prezentacijski prototip, ne funkcija aplikacije. Izvorni ZIP ostaje sačuvan kod korisnika. Ovaj zapis ne predstavlja provedbu ekrana niti prihvatni test aplikacije.
+
 ## Status u repou
 
 - Ovo je dizajnerska referenca, ne produkcijski kod.
@@ -154,6 +166,8 @@ Lokalna stanja sučelja (otvoreni dijalozi, kartica, sklopljena poglavlja, tema 
 
 ## 8. Tokeni
 
+> **Povijest, ne koristi se (28. 10. 2026., #960).** Boje i tipografiju određuje `docs/design/DESIGN-SYSTEM.md` v1.2 prema D-188 (papir i grafit); vrijednosti su u `app/globals.css`. Tablica ispod ostaje samo zapis izvornog paketa od 22. 10. 2026. (mint), zamijenjenog dizajnom v3 (#476), zatim #867, D-179, D-184 i D-188.
+
 **Boje (tamna tema)**
 
 | Uloga | Hex |
@@ -184,7 +198,7 @@ Bijeli list: tekst i oznake u `<helmet><style>` editora, selektori `.ed[data-she
 
 ## 9. Otvorena pitanja prije gradnje
 
-1. **Boje**: prototip koristi boje odobrenih demo ekrana; PR #386 (D-115) uvodi svoje tokene. F-4 traži podudaranje s odobrenim dizajnom: odluči koje vrijede i mapiraj tablicu iz §8.
+1. **Boje**: prototip koristi boje odobrenih demo ekrana; PR #386 (D-115) uvodi svoje tokene. F-4 traži podudaranje s odobrenim dizajnom: odluči koje vrijede i mapiraj tablicu iz §8. *(Riješeno: D-188 i `docs/design/DESIGN-SYSTEM.md` v1.2, #960.)*
 2. **Ime**: Ductura ili Ductus u sučelju.
 3. **Zapis unosa i istraga**: pravno mišljenje i procjena učinka (GDPR čl. 35) prije gradnje; tekst obavijesti S3 i „Što Ductura čuva” mora ostati usklađen s §6e.
 4. **Profil FPZG**: granice (opseg, Sažetak 150–300 riječi, 3–5 ključnih riječi, kontrolni popisi) treba potvrditi prema službenim Uputama prije nego uđu u `fpzg.json`.

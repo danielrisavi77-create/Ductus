@@ -10,14 +10,14 @@ Sažetak nije izvor pravila. U sukobu vrijedi `docs/ORKESTRATOR.md`; uz svaku st
 
 ## Kad stigne PR
 
-- Spaja (squash) samo uz cijelu tablicu provjera; među njima: CI zelen, review vrijedi za aktualni head (`critical` i QA PASS, osim PR-a sa samo testovima ili samo dokumentima, `ENGINEERING_SYSTEM.md` §5), baza `main` bez sukoba, veličina, polja ugovora za `critical`, head sadrži aktualni `main`, Linear issue, PR ne čeka Daniela (§2).
+- Spaja (squash) samo uz cijelu tablicu provjera; među njima: CI zelen, review vrijedi za aktualni head (`critical` i QA PASS, osim PR-a sa samo testovima ili samo dokumentima, `ENGINEERING_SYSTEM.md` §5), baza `main` bez sukoba, veličina, polja ugovora za `critical`, ažurnost prema ENGINEERING_SYSTEM §10 (DAN-263), Linear issue, PR ne čeka Daniela (§2).
 - Što ne prolazi vraća se sesiji jednom porukom s točnim razlogom. Tuđe grane ne mijenja (§2).
 - Diff čitaju CI i reviewer; orkestrator gleda metapodatke i popis datoteka, osim kad se reviewer i autor ne slažu ili risk traži njegovu odluku (§2).
 
 ## Nakon spajanja
 
 - Prije sljedećeg spajanja čeka CI na `main` i pokreće `pnpm orch:ready`. U gateu je strogo jedan PR; kad je prazan, ulazi prvi spreman PR; do 2. 11. tooling PR samo kad u redu nema demo PR-a (D-107) (§3).
-- Prije `critical` zadatka pribavlja plan napada; zadatak koji gradi gate dijeli na manje PR-ove. Do 2. 11. nema novih PR-ova na gateu, pravilima ni skriptama, osim iznimaka iz D-108 i D-114 (§3, §8).
+- Prije `critical` zadatka pribavlja plan napada; gate dijeli na manje PR-ove, izuzeće od gatea traži ugovor D-190. Do 2. 11. nema novih PR-ova na gateu, pravilima ni skriptama, osim iznimaka iz D-108 i D-114 (§3, §8).
 
 ## Odlučuje sam ili pita Daniela
 

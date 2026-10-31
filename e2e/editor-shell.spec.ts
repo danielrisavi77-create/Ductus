@@ -179,3 +179,13 @@ test.describe("editor shell", () => {
     expect(results.violations).toEqual([]);
   });
 });
+
+// F-10 (#653 contract 6385776645, P5): without a session the local demo
+// journal offers no link to the submission, with or without an assignment id.
+test("without a session /rad has no link to the submission", async ({ page }) => {
+  for (const path of ["/rad", "/rad?zadatak=0f9e8d7c-6b5a-4f3e-8d2c-1b0a9f8e7d6c"]) {
+    await page.goto(path);
+    await expect(editorOf(page)).toHaveAttribute("contenteditable", "true");
+    await expect(page.getByRole("link", { name: "Predaja" })).toHaveCount(0);
+  }
+});

@@ -1,7 +1,62 @@
 import type { Page } from "@playwright/test";
 import pg from "pg";
 
+import { EVIDENCE_PROFILE_ID } from "../../src/domain/forensics/evidence-profile";
 import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
+import { localAdminUrl } from "./local-db-url";
+
+type Owner = { institution: string; student: string };
+
+/**
+ * The demo document of a seeded project in the shape open_student_work gives
+ * a new work (db/migrations/20261019150000_evidence_open_work.sql): revision 0
+ * is the editor's empty document with its hash and checkpoint, and the work
+ * has a package in the institution's one evidence domain, so the evidence
+ * routes open and commit it like any other work (3d-2c2, #476 c.6393716541).
+ * Call it inside the caller's transaction: the document and its revision 0
+ * refer to each other, and the check waits for the commit.
+ */
+export async function insertDemoDocument(client: pg.Client, owner: Owner, projectId: string): Promise<void> {
+  await client.query(
+    `INSERT INTO evidence.document (id, institution_id, project_id, principal_id, current_revision, current_content_hash)
+     VALUES ($1, $2, $3, $4, 0,
+             encode(sha256(convert_to(evidence.revision_zero_document(), 'UTF8')), 'hex'))`,
+    [LOCAL_DEMO_DOCUMENT_ID, owner.institution, projectId, owner.student]);
+  await client.query(
+    `INSERT INTO evidence.document_revision (document_id, institution_id, revision, principal_id, content_hash)
+     SELECT id, institution_id, 0, principal_id, current_content_hash FROM evidence.document WHERE id = $1`,
+    [LOCAL_DEMO_DOCUMENT_ID]);
+  await client.query(
+    `INSERT INTO evidence.document_checkpoint (document_id, institution_id, revision, body)
+     VALUES ($1, $2, 0, evidence.revision_zero_document())`, [LOCAL_DEMO_DOCUMENT_ID, owner.institution]);
+  await ensureDemoPackage(client);
+}
+
+/**
+ * The package of the demo document, made once, when the institution has
+ * exactly one evidence domain (`pnpm demo:prepare` registers it; CI does it
+ * before the login E2E). Without one the work stays not configured, as
+ * open_student_work answers then. A document from before revision 0 had its
+ * shape (hash 0…0, no checkpoint) can take no commit, and its revisions never
+ * change, so the run stops and says how to get a fresh one.
+ */
+export async function ensureDemoPackage(client: pg.Client): Promise<void> {
+  const { rows: [document] } = await client.query<{ zero: boolean }>(
+    `SELECT d.current_content_hash = repeat('0', 64) AS zero FROM evidence.document d WHERE d.id = $1`,
+    [LOCAL_DEMO_DOCUMENT_ID]);
+  if (document?.zero) {
+    throw new Error("the local database holds the demo document from before revision 0; start the local stack from an empty volume (docker compose down -v, then pnpm demo:up)");
+  }
+  // Same profile and payload limit (D-96) as open_student_work.
+  await client.query(
+    `INSERT INTO evidence.package (id, institution_id, evidence_domain_id, document_id, project_id, principal_id,
+                                   evidence_profile_id, max_payload_bytes)
+     SELECT gen_random_uuid()::text, d.institution_id, (array_agg(m.id))[1], d.id, d.project_id, d.principal_id, $2, 2097152
+       FROM evidence.document d JOIN evidence.domain m ON m.institution_id = d.institution_id
+      WHERE d.id = $1 AND NOT EXISTS (SELECT 1 FROM evidence.package k WHERE k.document_id = d.id)
+      GROUP BY d.institution_id, d.id, d.project_id, d.principal_id
+     HAVING count(*) = 1`, [LOCAL_DEMO_DOCUMENT_ID, EVIDENCE_PROFILE_ID]);
+}
 
 // Shared by comments.spec.ts, demo-flow.spec.ts (F-9) and teacher-live.spec.ts
 // (DAN-86 step 2c): the invented course, assignment and evidence document behind
@@ -11,14 +66,12 @@ import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
 // Revisions and assignment versions are immutable, so the document and its
 // course stay; cleanUp() removes the comments and closes the memberships and the
 // teacher role seed() opened, so no other spec can read it.
-export const ADMIN_DATABASE_URL =
-  process.env.E2E_ADMIN_DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
 export const ORIGIN = "http://localhost:3000";
 export const TEACHER = "demo-teacher@demo.ductus.test";
 export const STUDENT = "demo-student@demo.ductus.test";
 
 export async function admin<T>(work: (client: pg.Client) => Promise<T>): Promise<T> {
-  const client = new pg.Client({ connectionString: ADMIN_DATABASE_URL });
+  const client = new pg.Client({ connectionString: localAdminUrl() });
   await client.connect();
   try {
     return await work(client);
@@ -78,13 +131,9 @@ export async function seed(): Promise<void> {
       await client.query(
         "INSERT INTO evidence.project (id, institution_id, assignment_id, principal_id) VALUES ($1, $2, $3, $4)",
         [`e2e-f9-${suffix}`, ids.institution, assignment!.id, ids.student]);
-      // The document and its revision 0 refer to each other; the check waits for the commit.
-      await client.query(
-        `INSERT INTO evidence.document (id, institution_id, project_id, principal_id, current_content_hash)
-         VALUES ($1, $2, $3, $4, repeat('0', 64))`, [LOCAL_DEMO_DOCUMENT_ID, ids.institution, `e2e-f9-${suffix}`, ids.student]);
-      await client.query(
-        `INSERT INTO evidence.document_revision (document_id, institution_id, revision, principal_id, content_hash)
-         VALUES ($1, $2, 0, $3, repeat('0', 64))`, [LOCAL_DEMO_DOCUMENT_ID, ids.institution, ids.student]);
+      await insertDemoDocument(client, ids, `e2e-f9-${suffix}`);
+    } else {
+      await ensureDemoPackage(client);
     }
     await client.query(
       `INSERT INTO institution.course_member (course_id, institution_id, user_id, role)

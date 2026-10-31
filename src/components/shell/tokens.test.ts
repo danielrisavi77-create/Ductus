@@ -19,12 +19,68 @@ function token(block: string, name: string): string | undefined {
   return line?.slice(line.indexOf(":") + 1).replace(";", "").trim().toLowerCase();
 }
 
-describe("design tokens (D-123)", () => {
+describe("design tokens (paper and graphite palette, owner decision of 28 Oct 2026, #960, D-188)", () => {
   const root = rule(":root");
 
-  it("takes the primary and its text from the handoff table", () => {
-    expect(token(root, "--accent")).toBe("#6fbfa5");
-    expect(token(root, "--accent-ink")).toBe("#0e1c17");
+  // Dark values: the warm graphite of D-188 (ground #242422, panels #2e2e2b,
+  // navigation #292a28, gold #c8aa6e, paper #faf9f5 as ink); the quieter
+  // steps of the same grey scale are the agent's derivation, checked below.
+  const PACKAGE: Record<string, string> = {
+    "--ground": "#242422", "--chrome": "#292a28", "--sheet": "#2e2e2b", "--ink": "#faf9f5",
+    "--ink-2": "#dedbd3", "--ink-3": "#c9c5bb", "--ink-muted": "#8c887f", "--rule": "#8c887f",
+    "--rule-2": "#5a5853", "--accent": "#c8aa6e", "--accent-hover": "#dcc28a", "--accent-ink": "#242422",
+    "--accent-soft": "#3a3a36", "--selected": "#3a3a36", "--well": "#3a3a36", "--hover": "#3a3a36",
+    "--raised": "#2e2e2b", "--raised-rule": "#b3aea3", "--card": "#33332f", "--link-rule": "#b3aea3",
+    "--field": "#2a2a27", "--field-rule": "#a6a196", "--field-placeholder": "#bcb7ac", "--error-soft": "#3e302b",
+  };
+
+
+  it("takes every dark shell colour from the graphite palette", () => {
+    for (const [name, value] of Object.entries(PACKAGE)) expect([name, token(root, name)]).toEqual([name, value]);
+  });
+
+  it("gives the dark sheet the shell's sheet and ink", () => {
+    const sheet = rule(".sheet");
+    for (const name of ["--sheet", "--ink", "--ink-2", "--ink-3", "--ink-muted", "--rule", "--rule-2",
+      "--accent", "--accent-hover", "--accent-ink", "--accent-soft"]) {
+      expect([name, token(sheet, name)]).toEqual([name, PACKAGE[name]]);
+    }
+  });
+
+  it("takes the radii and the heading scale from the package", () => {
+    expect(token(root, "--radius-sm")).toBe("4px");
+    expect(token(root, "--radius-control")).toBe("5px");
+    expect(token(root, "--radius")).toBe("6px");
+    expect(token(root, "--radius-lg")).toBe("10px");
+    expect(["--fs-h1", "--fs-h2", "--fs-h3", "--fs-h4"].map((name) => token(root, name)))
+      .toEqual(["64px", "42px", "29px", "25px"]);
+    expect(token(root, "--heading-leading")).toBe("1.08");
+    expect(token(root, "--heading-tracking")).toBe("-0.025em");
+  });
+
+  // Light shell and white sheet: paper and graphite of D-188. Gold #b49a63 is
+  // under 3:1 on paper (2.4 to 2.6), so on light surfaces gold text, marks and
+  // focus are the darker gold #806529 (4.6:1 or more).
+  it("takes paper, graphite and the dark gold for the light scopes", () => {
+    const shell = rule('[data-theme="light"]');
+    expect(token(shell, "--ground")).toBe("#f3f2ee");
+    expect(token(shell, "--chrome")).toBe("#faf9f6");
+    expect(token(shell, "--ink")).toBe("#242422");
+    expect(token(shell, "--accent")).toBe("#806529");
+    const white = rule('.sheet[data-sheet-theme="light"]');
+    expect(token(white, "--sheet")).toBe("#fcfbf8");
+    expect(token(white, "--ink")).toBe("#242422");
+    expect(token(white, "--accent")).toBe("#806529");
+  });
+
+  // Same decision: the light theme supports the new palette, so no colour token
+  // falls back to its dark value in the light shell.
+  it("gives every colour token of the dark root a light value", () => {
+    const shell = rule('[data-theme="light"]');
+    const colours = root.split("\n").map((l) => l.trim().match(/^(--[a-z0-9-]+):\s*#[0-9a-f]{6,8};$/i)?.[1])
+      .filter((name): name is string => name !== undefined);
+    expect(colours.length).toBeGreaterThan(30);
+    expect(colours.filter((name) => token(shell, name) === undefined)).toEqual([]);
   });
 
   // The server save state must not read as the primary or as "saving"
@@ -38,14 +94,20 @@ describe("design tokens (D-123)", () => {
     expect(dot).not.toContain("--accent");
   });
 
-  it("names the handoff's raised, selected, muted, warning and error colours (README §8)", () => {
-    expect(token(root, "--raised")).toBe("#1a1e19");
-    expect(token(root, "--hover")).toBe("#1e221d");
-    expect(token(root, "--selected")).toBe("#232722");
-    expect(token(root, "--ink-muted")).toBe("#767d75");
-    expect(token(root, "--warn")).toBe("#d3ac63");
-    expect(token(root, "--error")).toBe("#e07a6a");
+  // The package has no warning, error or save-state colours; these stay.
+  it("keeps the warning and error colours", () => {
+    expect(token(root, "--warn")).toBe("#e9c58b");
+    expect(token(root, "--error")).toBe("#f0a08f");
   });
+
+  // D-57: the origin colours keep their meaning; the package has none of its own.
+  it("keeps the origin colours", () => {
+    expect(token(root, "--p-internal")).toBe("#8fb0e0");
+    expect(token(root, "--p-unknown")).toBe("#9e9a90");
+    expect(token(root, "--p-template")).toBe("#7e7a70");
+    expect(token(root, "--p-ai")).toBe("#d3ac63");
+  });
+
 });
 
 /** WCAG 2.1 contrast ratio of two #rrggbb colours. */
@@ -77,8 +139,128 @@ describe("contrast of the semantic tokens (FE-D2)", () => {
   });
 
   it("on the white sheet --ink-muted is text-safe and --warn is a mark colour (3:1)", () => {
-    expect(contrast(token(light, "--ink-muted")!, "#ffffff")).toBeGreaterThanOrEqual(4.5);
-    expect(contrast(token(light, "--warn")!, "#ffffff")).toBeGreaterThanOrEqual(3);
+    const paper = token(light, "--sheet")!;
+    expect(contrast(token(light, "--ink-muted")!, paper)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(token(light, "--warn")!, paper)).toBeGreaterThanOrEqual(3);
+  });
+
+  it("keeps the primary readable: its text on it and it on its soft background are 4.5:1 or more", () => {
+    expect(contrast(dark("--accent-ink"), dark("--accent"))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(dark("--accent"), dark("--accent-soft"))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("light shell text is 4.5:1 or more on its ground and chrome, and on the primary", () => {
+    const shell = rule('[data-theme="light"]');
+    const value = (name: string) => token(shell, name)!;
+    for (const surface of ["--ground", "--chrome"]) {
+      for (const ink of ["--ink", "--ink-2", "--ink-3", "--ink-muted", "--error", "--warn", "--accent"]) {
+        expect(contrast(value(ink), value(surface))).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+    expect(contrast(value("--accent-ink"), value("--accent"))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("the dark sheet carries its own ink, so a light shell never puts light ink on it", () => {
+    const sheet = rule(".sheet");
+    for (const ink of ["--ink", "--ink-2", "--ink-3"]) {
+      expect(contrast(token(sheet, ink)!, token(sheet, "--sheet")!)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("keeps small quiet text readable on the selected, hover and card surfaces too", () => {
+    for (const surface of ["--selected", "--hover", "--card"]) {
+      expect(contrast(dark("--ink-3"), dark(surface))).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(dark("--accent"), dark(surface))).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  // DAN-344: the colours the package does not replace stay readable on its surfaces.
+  it("keeps the warning, error and save-state colours readable on every dark surface", () => {
+    for (const surface of ["--ground", "--chrome", "--sheet", "--raised", "--card", "--selected", "--hover"]) {
+      for (const ink of ["--ink", "--ink-2", "--warn", "--error", "--synced"]) {
+        expect([ink, surface, contrast(dark(ink), dark(surface)) >= 4.5]).toEqual([ink, surface, true]);
+      }
+    }
+  });
+
+  // DAN-344: --rule-2 became a line colour; quiet surfaces under text are --well
+  // (the mode switch, the "uskoro" chip, hover and disabled backgrounds).
+  it("keeps quiet text readable on --well, dark and light, and uses no line colour as a surface", () => {
+    const shell = rule('[data-theme="light"]');
+    for (const ink of ["--ink", "--ink-2", "--ink-3"]) {
+      expect(contrast(dark(ink), dark("--well"))).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(token(shell, ink)!, token(shell, "--well")!)).toBeGreaterThanOrEqual(4.5);
+    }
+    expect(CSS).not.toMatch(/background(-color)?: var\(--rule(-2)?\)/);
+  });
+
+  it("keeps the field text and its placeholder readable on the field", () => {
+    expect(contrast(dark("--ink"), dark("--field"))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(dark("--field-placeholder"), dark("--field"))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(dark("--ink"), dark("--error-soft"))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  // Owner decision of 27 Oct 2026: the light theme has the same AA demands as the
+  // dark one. Each scope is the cascade a page can produce: shell, then sheet.
+  describe("every theme and sheet scope (AA, owner decision of 27 Oct 2026)", () => {
+    const shell = rule('[data-theme="light"]');
+    const darkSheet = rule(".sheet");
+    const whiteSheet = rule('.sheet[data-sheet-theme="light"]');
+    const scope = (...blocks: string[]) => (name: string) => {
+      for (const block of [...blocks].reverse()) {
+        const value = token(block, name);
+        if (value !== undefined) return value;
+      }
+      return undefined;
+    };
+    const SHELLS = { "dark shell": scope(root), "light shell": scope(root, shell) };
+    const SHEETS = {
+      "dark sheet in the dark shell": scope(root, darkSheet),
+      "dark sheet in the light shell": scope(root, shell, darkSheet),
+      "white sheet in the dark shell": scope(root, whiteSheet),
+      "white sheet in the light shell": scope(root, shell, whiteSheet),
+    };
+    const pass = (where: string, fg: string, bg: string, min: number, v: (n: string) => string | undefined) =>
+      [where, fg, bg, contrast(v(fg)!, v(bg)!) >= min];
+
+    for (const [where, v] of Object.entries(SHELLS)) {
+      it(`${where}: text 4.5:1, focus ring and lines 3:1 on its surfaces`, () => {
+        for (const bg of ["--ground", "--chrome", "--raised", "--card", "--hover", "--selected", "--well", "--field"]) {
+          for (const fg of ["--ink", "--ink-2", "--ink-3", "--accent", "--error"]) {
+            expect(pass(where, fg, bg, 4.5, v)).toEqual([where, fg, bg, true]);
+          }
+          for (const fg of ["--accent", "--field-rule", "--link-rule"]) {
+            expect(pass(where, fg, bg, 3, v)).toEqual([where, fg, bg, true]);
+          }
+        }
+        expect(pass(where, "--field-placeholder", "--field", 4.5, v)).toEqual([where, "--field-placeholder", "--field", true]);
+        expect(pass(where, "--ink", "--error-soft", 4.5, v)).toEqual([where, "--ink", "--error-soft", true]);
+        expect(pass(where, "--raised-rule", "--raised", 3, v)).toEqual([where, "--raised-rule", "--raised", true]);
+        expect(pass(where, "--accent-ink", "--accent", 4.5, v)).toEqual([where, "--accent-ink", "--accent", true]);
+      });
+    }
+
+    for (const [where, v] of Object.entries(SHEETS)) {
+      it(`${where}: its ink 4.5:1 and its focus ring and lines 3:1 on its own surfaces`, () => {
+        for (const bg of ["--sheet", "--well", "--card", "--field"]) {
+          for (const fg of ["--ink", "--ink-2", "--ink-3", "--accent"]) {
+            expect(pass(where, fg, bg, 4.5, v)).toEqual([where, fg, bg, true]);
+          }
+          for (const fg of ["--field-rule", "--link-rule"]) {
+            expect(pass(where, fg, bg, 3, v)).toEqual([where, fg, bg, true]);
+          }
+        }
+        expect(pass(where, "--field-placeholder", "--field", 4.5, v)).toEqual([where, "--field-placeholder", "--field", true]);
+        expect(pass(where, "--ink", "--error-soft", 4.5, v)).toEqual([where, "--ink", "--error-soft", true]);
+      });
+    }
+
+    it("draws the focus ring in the theme's primary", () => {
+      expect(CSS).toMatch(/outline: var\(--focus-width\) solid var\(--accent\);/);
+      // The landing's ring (#960): 3 px, 4 px away; never thinner than 2 px.
+      expect(token(rule(":root"), "--focus-width")).toBe("3px");
+      expect(token(rule(":root"), "--focus-offset")).toBe("4px");
+    });
   });
 
   it("gives the white sheet no raised or selected surface", () => {
@@ -106,10 +288,10 @@ describe("manuscript type (README §5.1, FE-D2)", () => {
   }
 });
 
-describe("workspace breakpoints (README §5.1, FE-D2)", () => {
-  it("folds the structure below 1240 px and the panel below 1000 px, nothing at 1100 px", () => {
-    expect(CSS).toContain("@media (max-width: 1239.98px) {");
-    expect(CSS).toContain("@media (max-width: 999.98px) {");
+describe("workspace breakpoints (design v3 inside the shell, was README §5.1, FE-D2)", () => {
+  it("folds the structure up to 1250 px and the panel up to 1050 px, nothing at 1100 px", () => {
+    expect(CSS).toContain("@media (max-width: 1250px) {");
+    expect(CSS).toContain("@media (max-width: 1050px) {");
     expect(CSS).not.toMatch(/max-width: 1100px/);
   });
 });

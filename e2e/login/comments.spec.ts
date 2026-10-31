@@ -3,21 +3,20 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
 import { createTextAnchor } from "../../src/domain/collaboration";
 import type { NodeId } from "../../src/domain/document";
 import { messagesHr } from "../../src/lib/i18n/messages.hr";
-import { LOCAL_DEMO_DOCUMENT_ID } from "../../src/lib/journal/local-scope";
-import { cleanUp, ORIGIN, post, seed } from "./comment-seed";
-import { clickSignOut, signIn } from "./support";
+import { closeWork, openWorkOf, seedWork, workDocument } from "./work-seed";
+import { ORIGIN, post } from "./comment-seed";
+import { editorMounted, SAVED_HERE, signIn, signOutHoweverHeld, signOutWithoutDialog } from "./support";
 
 // F-9 step 1 (DAN-86): a teacher's comment next to a paragraph reaches the
-// student on /rad, through the B-10 route and RPCs. Until the teacher view
-// of the saved work (B-11) exists, nothing on screen lets the teacher pick a
-// paragraph, so the teacher's step is the same POST the page will send, made
+// student on /rad?zadatak=, through the B-10 route and RPCs. Until the teacher
+// view of the saved work (B-11) exists, nothing on screen lets the teacher pick
+// a paragraph, so the teacher's step is the same POST the page will send, made
 // with the teacher's own session cookie; everything the student sees and
-// does runs in the interface. The course, assignment and evidence document
-// are invented and written through the admin login of the compose database,
-// as no route creates them yet (K-3a #313, F-3 drain). Revisions and
-// assignment versions are immutable, so the document and its course stay;
-// afterwards the test removes the comments and closes the memberships and the
-// teacher role it opened, so no other spec can read the document.
+// does runs in the interface. The course and assignment are invented and
+// written through the admin login of the compose database; the document is
+// the student's own work, made by the real open route (#711 F1). Afterwards
+// the test closes the memberships and the teacher role it opened, so no other
+// spec can read the document.
 
 const t = messagesHr.comments;
 const TEXT = "Gradske knjižnice su mjesto susreta i učenja.";
@@ -28,29 +27,34 @@ const BODY = "Dodaj izvor za ovu tvrdnju. <img src=x onerror=alert(1)>";
 const commentCards = (page: Page) =>
   page.getByRole("article", { name: new RegExp(`^${t.number.replace("{n}", "\\d+")}$`) });
 
-test.afterEach(cleanUp);
+test.afterEach(closeWork);
 
 test("a teacher's comment next to a paragraph reaches the student, who answers", async ({ browser }) => {
   const teacher = await (await browser.newContext()).newPage();
   const student = await (await browser.newContext()).newPage();
   await signIn(teacher, "/", "Demo nastavnik");
   await signIn(student, "/rad");
+  const assignment = await seedWork({ teacher: true });
+  await student.goto(`/rad?zadatak=${assignment}`);
+  // DAN-330: the work starts on the student's click.
+  await student.getByRole("button", { name: messagesHr.workspace.startWork }).click();
 
   const editor = student.getByRole("textbox", { name: messagesHr.workspace.documentLabel });
   // The first visit of /rad in a run compiles the page and the editor on
   // `next dev`; the journal opens after that, which can exceed 5 s (#431).
   await expect(editor).toHaveAttribute("contenteditable", "true", { timeout: 30_000 });
+  // The first opening refreshes the render into a freshly mounted editor (#731).
+  await editorMounted(student);
   await editor.click();
   await student.keyboard.type(TEXT);
-  await expect(student.locator(".workspace__status .sync-chip")).toHaveAttribute("data-state", "LOCAL_DURABLE");
+  await expect(student.locator(".workspace__status .sync-chip")).toHaveAttribute("data-state", SAVED_HERE);
   const nodeId = (await editor.locator("p[data-node-id]").first().getAttribute("data-node-id")) as NodeId;
-
-  await seed();
+  const documentId = await workDocument(assignment);
   // The student may not open a comment: an anchor would carry text the teacher has not seen.
   const start = TEXT.indexOf(QUOTE);
   const anchor = createTextAnchor({ nodeId, nodeText: TEXT, start, end: start + QUOTE.length });
-  expect((await post(student, "create", { documentId: LOCAL_DEMO_DOCUMENT_ID, body: "Ne.", anchor })).status()).toBe(403);
-  const created = await post(teacher, "create", { documentId: LOCAL_DEMO_DOCUMENT_ID, body: BODY, anchor });
+  expect((await post(student, "create", { documentId, body: "Ne.", anchor })).status()).toBe(403);
+  const created = await post(teacher, "create", { documentId, body: BODY, anchor });
   expect(created.status()).toBe(200);
 
   await student.getByRole("button", { name: t.refresh }).click();
@@ -82,7 +86,7 @@ test("a teacher's comment next to a paragraph reaches the student, who answers",
   await test.info().attach("f9-odgovor-studenta", { body: await student.screenshot({ fullPage: true }), contentType: "image/png" });
 
   // The teacher reads the same list through the same function (PRODUCT §5 rule 5).
-  const listed = await (await post(teacher, "list", { documentId: LOCAL_DEMO_DOCUMENT_ID })).json();
+  const listed = await (await post(teacher, "list", { documentId })).json();
   expect(listed.comments.map((c: { authorRole: string; isOwn: boolean; state: string }) => [c.authorRole, c.isOwn, c.state]))
     .toEqual([["teacher", true, "answered"], ["student", false, "answered"]]);
 
@@ -99,7 +103,8 @@ test("a teacher's comment next to a paragraph reaches the student, who answers",
   await student.getByRole("button", { name: t.refresh }).click();
   const second = await student.context().newPage();
   await second.goto("/rad");
-  await clickSignOut(second);
+  // The dialog opens only while the evidence still waits for its receipt (3d-2c2b).
+  await signOutHoweverHeld(second);
   await second.waitForURL(`${ORIGIN}/`);
   await expect(editor).toHaveText("");
   // Wait for the held answer itself, never for "networkidle": `next dev`
@@ -122,21 +127,22 @@ const UNPLACED = createTextAnchor({
   start: TEXT.indexOf(QUOTE), end: TEXT.indexOf(QUOTE) + QUOTE.length,
 });
 
-/** The teacher and the student signed in, and one comment of the teacher's, listed on the student's /rad. */
+/** The teacher and the student signed in, and one comment of the teacher's, listed on the student's /rad?zadatak=. */
 async function commentShown(browser: Browser, prepare: (student: Page) => Promise<unknown>) {
   const teacher = await (await browser.newContext()).newPage();
   const student = await (await browser.newContext()).newPage();
   await signIn(teacher, "/", "Demo nastavnik");
   await signIn(student, "/");
-  await seed();
-  const created = await post(teacher, "create", { documentId: LOCAL_DEMO_DOCUMENT_ID, body: "Dodaj izvor.", anchor: UNPLACED });
+  const assignment = await seedWork({ teacher: true });
+  const documentId = await openWorkOf(student, assignment);
+  const created = await post(teacher, "create", { documentId, body: "Dodaj izvor.", anchor: UNPLACED });
   expect(created.status()).toBe(200);
   await prepare(student);
-  await student.goto("/rad");
+  await student.goto(`/rad?zadatak=${assignment}`);
   const card = student.getByRole("article", { name: t.number.replace("{n}", "1") });
   await expect(card).toContainText(t.notPlaced, { timeout: 30_000 });
   await card.getByRole("textbox", { name: t.replyLabel }).fill("Nacrt odgovora koji ne smije ostati.");
-  return { teacher, student, card };
+  return { teacher, student, card, documentId };
 }
 
 test("without IndexedDB the panel still drops the threads when the session ends in another tab (F-093)", async ({ browser }) => {
@@ -145,10 +151,13 @@ test("without IndexedDB the panel still drops the threads when the session ends 
   }));
   await expect(student.getByText(messagesHr.editor.failureUnavailable)).toBeVisible();
 
+  // The tab without IndexedDB holds no lock, so the second tab opens the
+  // person's journal, which holds nothing: under O1 (#476 c.6396707923)
+  // Odjava then signs out without a dialog.
   const second = await student.context().newPage();
   await second.goto("/rad");
-  await clickSignOut(second);
-  await second.waitForURL(`${ORIGIN}/`);
+  await expect(second.getByRole("textbox", { name: messagesHr.workspace.documentLabel })).toHaveAttribute("contenteditable", "true");
+  await signOutWithoutDialog(second);
   await expect(student.getByText(t.signedOut)).toBeVisible();
   await expect(commentCards(student)).toHaveCount(0);
   await expect(student.getByText(QUOTE)).toHaveCount(0);
@@ -158,7 +167,7 @@ test("without IndexedDB the panel still drops the threads when the session ends 
 test("a reply typed before another person signed in at this browser is never sent (F-093)", async ({ browser }) => {
   // The tab hears no news of the new sign-in, as if it came a moment before
   // the teacher's page recorded it; only the check right before sending is left.
-  const { teacher, student, card } = await commentShown(browser, (page) => page.addInitScript(() => {
+  const { teacher, student, card, documentId } = await commentShown(browser, (page) => page.addInitScript(() => {
     Reflect.deleteProperty(window, "BroadcastChannel");
     const add = window.addEventListener.bind(window);
     window.addEventListener = ((type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions) => {
@@ -181,6 +190,6 @@ test("a reply typed before another person signed in at this browser is never sen
   await expect(student.getByText(t.signedOut)).toBeVisible();
   await expect(commentCards(student)).toHaveCount(0);
   expect(replies).toEqual([]);
-  const listed = await (await post(teacher, "list", { documentId: LOCAL_DEMO_DOCUMENT_ID })).json();
+  const listed = await (await post(teacher, "list", { documentId })).json();
   expect(listed.comments).toHaveLength(1);
 });

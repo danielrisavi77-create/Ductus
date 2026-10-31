@@ -6,7 +6,9 @@ import type { WithActor } from "@/server/db/with-actor";
  * 3a). Who asks comes only from the session cookie, bound into withActor; the
  * database decides which courses (institution.list_teacher_courses, under the
  * existing RLS). The answer names no student, no text and no time of the
- * live view: per assignment only the number of students of the course.
+ * live view: per assignment only the number of students of the course. Each
+ * course carries its rule on AI help (DAN-344 R-1), which the new assignment
+ * form must send unchanged or narrower.
  */
 
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
@@ -14,6 +16,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const ACADEMIC_YEAR = /^[0-9]{4}\/[0-9]{4}$/;
 const SQLSTATE = /^[0-9A-Z]{5}$/;
 const NO_STORE = { "cache-control": "no-store" };
+/** The three rules a course can have (institution.course.ai_policy). */
+const AI_POLICIES = new Set(["prohibited", "partially_allowed", "encouraged"]);
+export type CourseAiPolicy = "prohibited" | "partially_allowed" | "encouraged";
 const WORK_TYPES = new Set([
   "short_paper",
   "essay",
@@ -43,6 +48,7 @@ export interface TeacherCourse {
   id: string;
   name: string;
   academicYear: string;
+  aiPolicy: CourseAiPolicy;
   assignments: TeacherAssignment[];
 }
 
@@ -68,14 +74,16 @@ function instant(value: unknown): string | null {
 export function coursesOf(rows: readonly Row[]): TeacherCourse[] | null {
   const courses = new Map<string, TeacherCourse>();
   for (const row of rows) {
-    const { course_id: id, course_name: name, academic_year: year } = row;
+    const { course_id: id, course_name: name, academic_year: year, ai_policy: policy } = row;
     if (typeof id !== "string" || !UUID.test(id) || typeof name !== "string" || name === ""
-      || typeof year !== "string" || !ACADEMIC_YEAR.test(year)) return null;
+      || typeof year !== "string" || !ACADEMIC_YEAR.test(year)
+      || typeof policy !== "string" || !AI_POLICIES.has(policy)) return null;
+    const aiPolicy = policy as CourseAiPolicy;
     let course = courses.get(id);
     if (course === undefined) {
-      course = { id, name, academicYear: year, assignments: [] };
+      course = { id, name, academicYear: year, aiPolicy, assignments: [] };
       courses.set(id, course);
-    } else if (course.name !== name || course.academicYear !== year) {
+    } else if (course.name !== name || course.academicYear !== year || course.aiPolicy !== aiPolicy) {
       return null;
     }
     if (row.assignment_id === null) continue;
@@ -108,34 +116,48 @@ export function coursesOf(rows: readonly Row[]): TeacherCourse[] | null {
     b.academicYear.localeCompare(a.academicYear) || collator.compare(a.name, b.name) || (a.id < b.id ? -1 : 1));
 }
 
-export async function handleTeacherCoursesRequest(request: Request, deps: TeacherCoursesDeps): Promise<Response> {
-  if (request.method !== "GET" && request.method !== "HEAD") return refuse(405, "method_not_allowed");
-  const site = request.headers.get("sec-fetch-site");
-  if (site !== null && site !== "same-origin") return refuse(403, "forbidden");
-  const token = deps.sessionToken;
-  if (token === undefined || !TOKEN.test(token)) return refuse(401, "unauthorized");
+export type TeacherCoursesRead =
+  | { kind: "ok"; courses: TeacherCourse[] }
+  | { kind: "unauthorized" | "not_found" | "unavailable" };
 
+/**
+ * The one read behind both the route and the server-rendered `/nastavnik`
+ * (Z3 A): the same function, the same session, the same answer.
+ */
+export async function readTeacherCourses(sessionToken: string | undefined, withActor: WithActor): Promise<TeacherCoursesRead> {
+  if (sessionToken === undefined || !TOKEN.test(sessionToken)) return { kind: "unauthorized" };
   let rows: Row[];
   try {
-    const result = await deps.withActor(token, (tx) =>
+    const result = await withActor(sessionToken, (tx) =>
       tx.query<Row>(
         `SELECT course_id::text, course_name, academic_year, assignment_id::text, title, work_type,
-                opens_at, due_at, current_version, enrolled_students
+                opens_at, due_at, current_version, enrolled_students, ai_policy
            FROM institution.list_teacher_courses()`,
       ),
     );
     rows = result.rows;
   } catch (error) {
     const code = codeOf(error);
-    if (code === "ZD401") return refuse(401, "unauthorized");
-    if (code === "ZD403") return refuse(404, "not_found");
+    if (code === "ZD401") return { kind: "unauthorized" };
+    if (code === "ZD403") return { kind: "not_found" };
     console.error("teacher courses read failed", code !== undefined && SQLSTATE.test(code) ? code : "unknown");
-    return refuse(503, "unavailable");
+    return { kind: "unavailable" };
   }
   const courses = coursesOf(rows);
   if (courses === null) {
     console.error("teacher courses read failed", "row_malformed");
-    return refuse(503, "unavailable");
+    return { kind: "unavailable" };
   }
-  return Response.json({ courses }, { status: 200, headers: NO_STORE });
+  return { kind: "ok", courses };
+}
+
+const STATUS = { unauthorized: 401, not_found: 404, unavailable: 503 } as const;
+
+export async function handleTeacherCoursesRequest(request: Request, deps: TeacherCoursesDeps): Promise<Response> {
+  if (request.method !== "GET" && request.method !== "HEAD") return refuse(405, "method_not_allowed");
+  const site = request.headers.get("sec-fetch-site");
+  if (site !== null && site !== "same-origin") return refuse(403, "forbidden");
+  const read = await readTeacherCourses(deps.sessionToken, deps.withActor);
+  if (read.kind !== "ok") return refuse(STATUS[read.kind], read.kind);
+  return Response.json({ courses: read.courses }, { status: 200, headers: NO_STORE });
 }

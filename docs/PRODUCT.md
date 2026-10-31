@@ -64,7 +64,7 @@ Pravilo za sve uloge: uloga sama ne daje pristup sadržaju. Pristup nastaje iskl
 | --- | --- | --- | --- |
 | Student | Upisan u kolegij ili dodijeljen mentoru | Pisati u svojim radovima; koristiti AI ako ga zadatak dopušta; vidjeti sve što nastavnik ili mentor vidi; prihvatiti ili odbiti prijedloge; izvesti svoj rad i evidenciju; dodati napomenu | Vidjeti tuđe radove ili tuđu evidenciju |
 | Nastavnik zadatka, odnosno mentor (jedna uloga, D-154) | Nastavnik kolegija kojem zadatak pripada ili mentor završnog, diplomskog, specijalističkog ili doktorskog rada | Stvoriti kolegij i zadatak; od prvog dana vidjeti spremljeno stanje radova svog zadatka ili radova kojima je mentor i evidenciju u opsegu profila; komentirati; predlagati izmjene ili uređivati izravno (§6) | Vidjeti radove koji nisu iz njegova zadatka i kojima nije mentor |
-| Administrator fakulteta | Imenovan od fakulteta | Potvrditi ulogu nastavnika i mentora; postavke fakulteta (dopušteni AI pružatelji, pragovi, rokovi čuvanja); revizijski trag pristupa | Čitati sadržaj radova (nema pristupa po defaultu) |
+| Administrator fakulteta | Imenovan od fakulteta | Potvrditi ulogu nastavnika i mentora; postavke fakulteta (polazno pravilo AI-ja, dopušteni AI pružatelji, pragovi, rokovi čuvanja; D-117, D-175); revizijski trag pristupa | Čitati sadržaj radova (nema pristupa po defaultu) |
 | Operater Ductusa | Pružatelj usluge | Održavanje sustava | Čitati sadržaj, osim zabilježenog pristupa podrške uz pristanak fakulteta, kako je opisano u ugovoru o obradi |
 
 ---
@@ -98,7 +98,7 @@ Izvedeno iz Ustava; svako pravilo ima test ili provjeru u PR-u.
 9. Integritet zapisa nije dokaz autorstva. Hash i potpis govore samo da zapis nije mijenjan od primitka. (C-13)
 10. Offline zapis ostaje označen kao offline i nakon sinkronizacije. (C-15)
 11. Predaja je moguća samo ako se predani dokument može točno rekonstruirati iz zapisa. Zadatak smije dodatno tražiti samo potpunost koju student sam može ispuniti u aplikaciji: popunjena mjesta za izvor i potvrdu izjave koju propisuje fakultet; uvjet je naveden u obavijesti, ne odnosi se na podrijetlo teksta, AI, lijepljenja ni praznine u zapisu, a tehnička greška ne smije spriječiti predaju (D-129, uvjetno: čeka pisanu potvrdu FPZG-a i upis C-42). (C-42)
-12. Pravila FPZG-a su konfiguracija, ne kod. To uključuje pravila oblika (iz Lekte), dopuštene AI pružatelje i pragove u sažetku procesa. (C-55, C-7)
+12. Pravila FPZG-a su konfiguracija, ne kod. To uključuje pravila oblika (iz Lekte), dopuštene AI pružatelje i pragove u sažetku procesa. Administrator fakulteta dio te konfiguracije (pravilo AI-ja i dopušteni oblici pomoći, dopušteni pružatelji, pragovi, rokovi čuvanja) uređuje u sučelju, verzionirano; pravilo AI-ja fakulteta je polazno pravilo koje nastavnik na kolegiju smije pooštriti ili ublažiti (D-175); pravila akademskog pisanja (oblik, citiranje, bibliografija, naslovna stranica, opseg) dolaze iz paketa pravila Lekte i u Ductusu se samo čitaju (D-117). (C-55, C-7)
 13. Nema AI analize procesa pisanja. AI postoji samo kao pomoćnik studentu, ako ga zadatak dopušta. (Akt o UI, Prilog III.)
 14. Pravila zadatka koja je student potvrdio ne smiju se naknadno proširiti. Profil evidencije može se samo suziti. (C-3, C-18)
 15. Student nikad ne mora platiti da bi izvršio obvezu. U pilotu zadatak ne smije zahtijevati AI. (C-2)
@@ -163,7 +163,7 @@ Tekst iz `config/faculties/**` provjerava se kao i ostali tekst sučelja; doslov
 ### Nastavnik i mentor
 
 1. **Prijava** AAI@EduHr računom.
-2. **Kolegij:** naziv, akademska godina, kod za upis, pravilo AI-ja iz izvedbenog plana (D-52). Mentor dobiva studente dodjelom.
+2. **Kolegij:** naziv, akademska godina, kod za upis, pravilo AI-ja iz izvedbenog plana (D-52). Polazno je pravilo fakulteta; nastavnik ga smije pooštriti ili ublažiti, a student u obavijesti vidi pravilo koje vrijedi, tko ga je postavio i, kad se razlikuje, pravilo fakulteta (D-175). Mentor dobiva studente dodjelom.
 3. **Novi zadatak:** naslov, upute, vrsta rada (§2), profil fakulteta iz Lekte, otvaranje i rok, dopušteni oblici pomoći, dopušteni AI (unutar popisa koji dopušta fakultet), dopušten uvoz, ciklusi verzija, profil evidencije. Kad prvi student potvrdi obavijest, verzija zadatka se zaključava: izmjene stvaraju novu verziju koju studenti ponovno potvrđuju, a profil se može samo suziti.
 4. **Pregled radova:** popis studenata sa stanjem rada (nije započeto, u tijeku, poslano na pregled, predano) i vremenom zadnje izmjene. Bez oznaka sumnje, boja upozorenja ili sortiranja po "sumnjivosti". Popis je abecedan; stanje rada u prvoj rečenici i stanje runde koje boja kodira (D-128) su dva različita prikaza. Boja smije kodirati samo stanje tijeka koje su postavili mentor i student zahtjevima i rundama (čeka doradu, dorada stigla, prihvaćeno, nije započeto), nikad kašnjenje, aktivnost, količinu rada ni stanje zapisa; stanje je uvijek i tekst, nijedna boja nije crvena (D-128). Oznaka „Napisano u Ducturi” je izbor prikaza uz uvjete iz D-127. Filtar "nakon roka" uzima u obzir odobrena produljenja.
 5. **Rad u nastajanju:** prikaz uživo od prvog dana, i za kratke zadatke. [ODLUČENO D-142, D-144]
@@ -187,7 +187,7 @@ Tekst iz `config/faculties/**` provjerava se kao i ostali tekst sučelja; doslov
 ### Administrator fakulteta
 
 1. Potvrđuje ulogu nastavnika i mentora osobama s AAI pripadnošću "djelatnik". Prvog administratora postavlja operater Ductusa na pisani zahtjev fakulteta, uz zapis u revizijski trag.
-2. Odabire dopuštene AI pružatelje i modele za fakultet. [ODLUČENO D-23]
+2. Odabire dopuštene AI pružatelje i modele za fakultet. [ODLUČENO D-23] Postavlja polazno pravilo AI-ja fakulteta, koje nastavnik na kolegiju smije pooštriti ili ublažiti. [ODLUČENO D-117, D-175]
 3. Postavlja pragove i rokove čuvanja po klasi podataka (prijedlog dolazi od Ductusa, potvrda od fakulteta).
 4. Odlučuje je li Ductus obvezan za pojedine vrste radova. U pilotu to odlučuje FPZG. [ODLUČENO D-04]
 5. Vidi revizijski trag: tko je kada pristupio kojem radu. Bez pristupa sadržaju.
@@ -226,10 +226,10 @@ Ovo je srž onoga što fakultet kupuje. Svaka brojka ima jedinicu, nazivnik i me
 
 ## 8. AI pomoćnik
 
-> **Izvan pilota (D-77, 3. 10. 2026.).** U pilotu student koristi vanjske alate i prilaže ispis razgovora uz izjavu. Ovaj odjeljak opisuje ciljno stanje nakon pilota.
+> **U pilotu (D-194, 31. 10. 2026.; mijenja D-77).** AI pomoćnik ulazi u pilot (početak 1. 3. 2027.) sa svim namjenama iz kataloga D-64, uključujući transkripciju i alate pružatelja. Student i dalje smije koristiti vanjski alat i uz izjavu priložiti ispis razgovora (izjavljeno). Prije stvarnih studenata moraju postojati ugovor o obradi, popis podizvršitelja, DPIA i pravno mišljenje koji pokrivaju asistenta (D-194 t. 4 i 5; GO uvjeti u `docs/PROGRAM.md`).
 
-- **Prijava studenta svojim računom.** Prvi put: OpenRouter (OAuth s PKCE-om), koji jednom prijavom daje pristup većini modela (Claude, GPT, Gemini, Grok, kineski modeli i drugi); student plaća iz vlastitog računa. Kasnije, ako Ductus postane partner, i "Sign in with ChatGPT". Pretplate na Claude ne mogu se koristiti u aplikacijama trećih strana. [PRIJEDLOG D-20]
-- **Fakultet određuje dopuštene pružatelje i modele**, a nastavnik unutar toga dopuštenu uporabu po zadatku. [ODLUČENO D-23]
+- **Račun kod pružatelja i trošak.** Tko drži račune kod pružatelja i plaća je **OTVORENO**. [PRIJEDLOG D-194 t. 6: račune drži pravna osoba operatera, pružatelji su podizvršitelji s odobrenim popisom, trošak je u cijeni usluge i student ne plaća ništa; čeka pravno mišljenje.] Raniji prijedlog (OpenRouter, student plaća svoj račun, D-20) više nije polazište. Pretplate na Claude ne mogu se koristiti u aplikacijama trećih strana.
+- **Fakultet određuje dopuštene pružatelje i modele**, a nastavnik unutar toga dopuštenu uporabu po zadatku. [ODLUČENO D-23] Nikad nisu dopušteni: pružatelj s kineskim sjedištem, model koji je razvila kineska tvrtka (ni kad ga poslužuje europski pružatelj) i obrada na kineskim serverima; fakultet to ne može uključiti. [ODLUČENO D-194 t. 2]
 - **AI je uvijek dobrovoljan za studenta.** U pilotu zadatak ne smije zahtijevati AI. Obvezni AI kasnije je moguć samo uz ključ koji osigurava fakultet. (C-2)
 - **Tekst studenta šalje se pružatelju samo kad student sam pokrene AI.** Studenti u obavijesti vide da tekst tada odlazi izabranom pružatelju i u koju zemlju.
 - **Zaštita od podmetnutih uputa (C-37):** upute AI-ju sastavlja poslužitelj iz pravila zadatka; tekst rada i uvezenih datoteka šalje se kao omeđeni nepouzdani podaci, a skriveni tekst (npr. bijeli ili skriveni font u DOCX-u, nevidljivi sloj PDF-a) uklanja se pri uvozu.
@@ -327,7 +327,7 @@ Demo prolazi cijeli put na sintetičkom radu s unaprijed poznatim ishodom. Za va
 1. Student se prijavi (AAI@EduHr Lab), uđe u kolegij kodom i otvori zadatak s FPZG profilom.
 2. Napiše tekst s naslovima i citatom; bibliografija se složi u FPZG stilu; provjera oblika javlja odstupanje od pravila. Fusnota i tablica [val 2].
 3. Izbriše dio, zalijepi odlomak, uveze DOCX. Uvoz PDF-a [val 2].
-4. [nakon pilota, D-77] Koristi AI pomoćnik i prenese dio teksta u rad; podmetnuta uputa u uvezenoj datoteci ne mijenja ponašanje pomoćnika. U pilotu: uz izjavu priloži ispis razgovora iz vanjskog alata.
+4. [u pilotu, D-194] Koristi AI pomoćnik i prenese dio teksta u rad; podmetnuta uputa u uvezenoj datoteci ne mijenja ponašanje pomoćnika. Uz izjavu priloži razgovore iz pomoćnika i, kao izjavljeno, ispis razgovora iz vanjskog alata.
 5. Nastavnik u međuvremenu vidi spremljeno stanje, ostavi komentar i prijedlog; student prihvati prijedlog. Nastavnik napravi jednu izravnu izmjenu.
 6. Student radi bez veze, zatim se veza vrati; ništa se ne izgubi i offline rad ostaje označen.
 7. Student pošalje verziju na pregled, dobije komentar, napravi novu verziju i konačno preda rad uz izjavu o pomoći.

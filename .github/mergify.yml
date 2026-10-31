@@ -1,0 +1,86 @@
+# Mergify merge queue (D-161). Mergify is a GitHub App; nothing runs on a
+# developer machine. Mergify sees only statuses, not the risk (F-114), so it
+# never puts a PR into the queue by itself: the rule "auto-queue low and
+# test-only PRs" (D-189, #971) is off since F-165 until the owner decides
+# D-189 (5). A PR enters the queue only by the owner's `@Mergifyio queue` command
+# (restricted to the owner below), and only when both statuses the gate
+# publishes are green (D-161 (h)):
+#   - "Engineering review gate": independent review and QA for the head;
+#   - "Merge authorization": green in one of three cases: the PR declares Risk
+#     low or standard and touches no D-97 path; or it only adds new test files
+#     from the allowlist in ENGINEERING_SYSTEM section 5, from a head branch in
+#     this repository and with no D-97 path (D-189, critical included); or the
+#     owner's `Owner-Command: merge` comment names this head (D-97,
+#     docs/ORKESTRATOR.md section 2).
+# Other merges are manual, through `pr-ready`. Mergify reads neither the PR
+# description nor labels nor file names: the gate decides with the same parser
+# that checks the declared risk, so an edited description cannot change what
+# Mergify sees.
+# DAN-263: serial speculative checks test A, A+B, A+B+C on Mergify-owned
+# draft PRs; original heads keep their review/QA/owner approvals.
+# D-177: each check is a batch of up to three PRs (one CI run for the batch),
+# formed after at most three minutes of waiting. A failed batch is split until
+# the failing PR is isolated (no batch_max_failure_resolution_attempts), so the
+# others still merge, each as its own squash commit. Every PR in a batch must
+# meet all six queue conditions on its own head, Merge authorization included. All six
+# conditions remain mandatory on originals AND CI carriers. The gate recognizes
+# carriers from authenticated GitHub metadata (mergify-queue-pr.mjs), never from
+# a branch prefix alone. Mergify revalidates admission and rejects external edits
+# of queue branches. See docs/engineering/mergify-rollout.md before activation.
+# A PR whose gate is green but which waits for the owner's command (Risk
+# critical or a D-97 path) is kept current by Mergify (`update`, a clean merge of
+# `main`, D-101): review, QA and the command carry through it, and the owner's
+# command is not lost when `main` moves while the PR waits. A PR that is not in
+# the gate, is a draft or has a conflict is left alone.
+# Mergify reads `.mergify.yml` and `.mergify/config.yml` before this file;
+# neither may exist (mergify-config.test.mjs), and Mergify applies the
+# configuration of the default branch only, so a PR cannot change the queue
+# before it is merged.
+# scripts/engineering/mergify-config.test.mjs keeps the contexts below equal to
+# the required statuses of `main` plus "Merge authorization".
+
+queue_rules:
+  - name: main
+    batch_size: 3
+    batch_max_wait_time: 3 min
+    max_checks_retries: 0
+    allow_queue_branch_edit: false
+    branch_protection_injection_mode: queue
+    queue_conditions: &required
+      - base=main
+      - -draft
+      - check-success=Lint, typecheck, test and build
+      - check-success=Local stack (compose.yaml)
+      - check-success=Security scanners
+      - check-success=Dependency review
+      - check-success=Engineering review gate
+      - check-success=Merge authorization
+    merge_conditions: *required
+    merge_method: squash
+    update_method: merge
+
+merge_queue:
+  mode: serial
+  max_parallel_checks: 3
+  reset_on_external_merge: always
+  skip_intermediate_results: false
+
+commands_restrictions:
+  queue:
+    conditions:
+      - sender=danielrisavi77-create
+  requeue:
+    conditions:
+      - sender=danielrisavi77-create
+
+pull_request_rules:
+  - name: keep a PR that waits for the owner current with main
+    conditions:
+      - base=main
+      - -draft
+      - -conflict
+      - "#commits-behind>0"
+      - check-success=Engineering review gate
+      - -check-success=Merge authorization
+    actions:
+      update: {}

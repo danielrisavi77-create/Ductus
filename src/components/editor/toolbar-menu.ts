@@ -47,10 +47,11 @@ export function menuKey(key: string, at: number, count: number): MenuKeyAction {
 
 /**
  * The order in which tools leave the toolbar for "Više" when it is too narrow
- * (prototype `c` values: the smaller heading first). Paragraph, bold, italic,
- * undo and redo always stay on the toolbar.
+ * (prototype `c` values: the smaller heading first; then, E1, the block
+ * quote and the list, which the prototype never collapses).
+ * Paragraph, bold, italic, undo and redo always stay on the toolbar.
  */
-export const COLLAPSE_ORDER = ["heading3", "heading2", "heading1"] as const;
+export const COLLAPSE_ORDER = ["heading3", "heading2", "heading1", "quote", "bulletItem"] as const;
 
 export const MAX_COLLAPSED = COLLAPSE_ORDER.length;
 

@@ -1,0 +1,974 @@
+{
+  "vectorSchema": "ductus-golden-vectors-v1",
+  "about": [
+    "Golden vectors for evidence segment format v3 (DAN-343, contract on #896). All data is invented.",
+    "v3 is v2 with one more source, citation-form; every other rule of v2 holds. These vectors add to evidence-v2.json and change none of it.",
+    "Derived outside the repository code: Python json.dumps with sorted keys and compact separators (JCS for this ASCII data) and hashlib.sha256. Never regenerate them from the code under test."
+  ],
+  "accepted": [
+    {
+      "name": "v3-citation-form",
+      "note": "A citation inserted by the Literatura form between two typed events: v3.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v3",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v3",
+        "sessionId": "sesija-izmisljena-v3",
+        "segmentId": "odsjecak-v3-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 3,
+        "observedStartedAt": "2026-10-27T09:00:00.000Z",
+        "observedEndedAt": "2026-10-27T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "editor",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Kako navodi "
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          {
+            "sequence": 2,
+            "source": "citation-form",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 13,
+                "to": 13,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "(Primjer, 2026, str. 7)"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "afterDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          },
+          {
+            "sequence": 3,
+            "source": "editor",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 36,
+                "to": 36,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "."
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "afterDocumentHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v3\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"sequence\":1,\"source\":\"editor\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Kako navodi \",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]},{\"afterDocumentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"beforeDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"sequence\":2,\"source\":\"citation-form\",\"steps\":[{\"from\":13,\"slice\":{\"content\":[{\"text\":\"(Primjer, 2026, str. 7)\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":13}]},{\"afterDocumentHash\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"beforeDocumentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"sequence\":3,\"source\":\"editor\",\"steps\":[{\"from\":36,\"slice\":{\"content\":[{\"text\":\".\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":36}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v3\",\"finalDocumentHash\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-10-27T09:01:00.000Z\",\"observedStartedAt\":\"2026-10-27T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v3-1\",\"sequenceFrom\":1,\"sequenceTo\":3,\"sessionId\":\"sesija-izmisljena-v3\"}",
+      "byteLength": 1633,
+      "segmentHash": "cef99e316045b7a2becf442303456aa23e8bf61363d7ec9a075145a42239ff4e"
+    },
+    {
+      "name": "v3-v2-sources-only",
+      "note": "v3 does not have to carry citation-form.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v3",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v3",
+        "sessionId": "sesija-izmisljena-v3",
+        "segmentId": "odsjecak-v3-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 1,
+        "observedStartedAt": "2026-10-27T09:00:00.000Z",
+        "observedEndedAt": "2026-10-27T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "editor",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Uvod"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v3\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"sequence\":1,\"source\":\"editor\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Uvod\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v3\",\"finalDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-10-27T09:01:00.000Z\",\"observedStartedAt\":\"2026-10-27T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v3-1\",\"sequenceFrom\":1,\"sequenceTo\":1,\"sessionId\":\"sesija-izmisljena-v3\"}",
+      "byteLength": 980,
+      "segmentHash": "056cd3979a75cface533c293a2f88bd0a74c5f28cab06f2be3b2e0363d60aec4"
+    },
+    {
+      "name": "v2-same-events",
+      "note": "The same events as v3-v2-sources-only in v2: only the schema differs.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v2",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v3",
+        "sessionId": "sesija-izmisljena-v3",
+        "segmentId": "odsjecak-v3-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 1,
+        "observedStartedAt": "2026-10-27T09:00:00.000Z",
+        "observedEndedAt": "2026-10-27T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "editor",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Uvod"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v3\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"sequence\":1,\"source\":\"editor\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Uvod\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v2\",\"finalDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-10-27T09:01:00.000Z\",\"observedStartedAt\":\"2026-10-27T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v3-1\",\"sequenceFrom\":1,\"sequenceTo\":1,\"sessionId\":\"sesija-izmisljena-v3\"}",
+      "byteLength": 980,
+      "segmentHash": "02332e6384003c2e42003e36e2686a73e954a3b979d925cc3308ff4da2eb9888"
+    }
+  ],
+  "rejected": [
+    {
+      "name": "v2-with-citation-form",
+      "note": "citation-form exists only in v3.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v2",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v3",
+        "sessionId": "sesija-izmisljena-v3",
+        "segmentId": "odsjecak-v3-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 3,
+        "observedStartedAt": "2026-10-27T09:00:00.000Z",
+        "observedEndedAt": "2026-10-27T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "editor",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Kako navodi "
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          {
+            "sequence": 2,
+            "source": "citation-form",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 13,
+                "to": 13,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "(Primjer, 2026, str. 7)"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "afterDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          },
+          {
+            "sequence": 3,
+            "source": "editor",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 36,
+                "to": 36,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "."
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "afterDocumentHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v3\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"sequence\":1,\"source\":\"editor\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Kako navodi \",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]},{\"afterDocumentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"beforeDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"sequence\":2,\"source\":\"citation-form\",\"steps\":[{\"from\":13,\"slice\":{\"content\":[{\"text\":\"(Primjer, 2026, str. 7)\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":13}]},{\"afterDocumentHash\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"beforeDocumentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"sequence\":3,\"source\":\"editor\",\"steps\":[{\"from\":36,\"slice\":{\"content\":[{\"text\":\".\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":36}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v2\",\"finalDocumentHash\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-10-27T09:01:00.000Z\",\"observedStartedAt\":\"2026-10-27T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v3-1\",\"sequenceFrom\":1,\"sequenceTo\":3,\"sessionId\":\"sesija-izmisljena-v3\"}",
+      "byteLength": 1633,
+      "segmentHash": "b516e48ad8c5bbd65d6072355fbc6018997ba819328f881c67422c67e4b1d12f"
+    },
+    {
+      "name": "v3-source-citation",
+      "note": "A near value is not citation-form.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v3",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v3",
+        "sessionId": "sesija-izmisljena-v3",
+        "segmentId": "odsjecak-v3-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 3,
+        "observedStartedAt": "2026-10-27T09:00:00.000Z",
+        "observedEndedAt": "2026-10-27T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "editor",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Kako navodi "
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          {
+            "sequence": 2,
+            "source": "citation",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 13,
+                "to": 13,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "(Primjer, 2026, str. 7)"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "afterDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          },
+          {
+            "sequence": 3,
+            "source": "editor",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 36,
+                "to": 36,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "."
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "afterDocumentHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v3\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"sequence\":1,\"source\":\"editor\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Kako navodi \",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]},{\"afterDocumentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"beforeDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"sequence\":2,\"source\":\"citation\",\"steps\":[{\"from\":13,\"slice\":{\"content\":[{\"text\":\"(Primjer, 2026, str. 7)\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":13}]},{\"afterDocumentHash\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"beforeDocumentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"sequence\":3,\"source\":\"editor\",\"steps\":[{\"from\":36,\"slice\":{\"content\":[{\"text\":\".\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":36}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v3\",\"finalDocumentHash\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-10-27T09:01:00.000Z\",\"observedStartedAt\":\"2026-10-27T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v3-1\",\"sequenceFrom\":1,\"sequenceTo\":3,\"sessionId\":\"sesija-izmisljena-v3\"}",
+      "byteLength": 1628,
+      "segmentHash": "fccf9e5709dc6274442634ed48e6aedf658a984e2d66fff09a8ba833b77c5571"
+    },
+    {
+      "name": "v3-source-capitalized",
+      "note": "Sources are case sensitive.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v3",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v3",
+        "sessionId": "sesija-izmisljena-v3",
+        "segmentId": "odsjecak-v3-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 3,
+        "observedStartedAt": "2026-10-27T09:00:00.000Z",
+        "observedEndedAt": "2026-10-27T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "editor",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Kako navodi "
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          {
+            "sequence": 2,
+            "source": "Citation-form",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 13,
+                "to": 13,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "(Primjer, 2026, str. 7)"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "afterDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          },
+          {
+            "sequence": 3,
+            "source": "editor",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 36,
+                "to": 36,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "."
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "afterDocumentHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v3\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"sequence\":1,\"source\":\"editor\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Kako navodi \",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]},{\"afterDocumentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"beforeDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"sequence\":2,\"source\":\"Citation-form\",\"steps\":[{\"from\":13,\"slice\":{\"content\":[{\"text\":\"(Primjer, 2026, str. 7)\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":13}]},{\"afterDocumentHash\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"beforeDocumentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"sequence\":3,\"source\":\"editor\",\"steps\":[{\"from\":36,\"slice\":{\"content\":[{\"text\":\".\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":36}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v3\",\"finalDocumentHash\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-10-27T09:01:00.000Z\",\"observedStartedAt\":\"2026-10-27T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v3-1\",\"sequenceFrom\":1,\"sequenceTo\":3,\"sessionId\":\"sesija-izmisljena-v3\"}",
+      "byteLength": 1633,
+      "segmentHash": "adb6e40757a988abd46b3c198a93e6932327ac9b259aac6dd744a86384cb8bbc"
+    },
+    {
+      "name": "v3-source-trailing-space",
+      "note": "Never trimmed.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v3",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v3",
+        "sessionId": "sesija-izmisljena-v3",
+        "segmentId": "odsjecak-v3-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 3,
+        "observedStartedAt": "2026-10-27T09:00:00.000Z",
+        "observedEndedAt": "2026-10-27T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "editor",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Kako navodi "
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          {
+            "sequence": 2,
+            "source": "citation-form ",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 13,
+                "to": 13,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "(Primjer, 2026, str. 7)"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "afterDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          },
+          {
+            "sequence": 3,
+            "source": "editor",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 36,
+                "to": 36,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "."
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "afterDocumentHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v3\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"sequence\":1,\"source\":\"editor\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Kako navodi \",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]},{\"afterDocumentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"beforeDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"sequence\":2,\"source\":\"citation-form \",\"steps\":[{\"from\":13,\"slice\":{\"content\":[{\"text\":\"(Primjer, 2026, str. 7)\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":13}]},{\"afterDocumentHash\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"beforeDocumentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"sequence\":3,\"source\":\"editor\",\"steps\":[{\"from\":36,\"slice\":{\"content\":[{\"text\":\".\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":36}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v3\",\"finalDocumentHash\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-10-27T09:01:00.000Z\",\"observedStartedAt\":\"2026-10-27T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v3-1\",\"sequenceFrom\":1,\"sequenceTo\":3,\"sessionId\":\"sesija-izmisljena-v3\"}",
+      "byteLength": 1634,
+      "segmentHash": "bccadd045b1b2b9fbef5ba54953c37b6cc5471c891290cd5ffe1b2d27ba3a788"
+    },
+    {
+      "name": "schema-v4",
+      "note": "No later version is accepted.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v4",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v3",
+        "sessionId": "sesija-izmisljena-v3",
+        "segmentId": "odsjecak-v3-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 3,
+        "observedStartedAt": "2026-10-27T09:00:00.000Z",
+        "observedEndedAt": "2026-10-27T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "editor",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Kako navodi "
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          {
+            "sequence": 2,
+            "source": "citation-form",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 13,
+                "to": 13,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "(Primjer, 2026, str. 7)"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "afterDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          },
+          {
+            "sequence": 3,
+            "source": "editor",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 36,
+                "to": 36,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "."
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "afterDocumentHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v3\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"sequence\":1,\"source\":\"editor\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Kako navodi \",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]},{\"afterDocumentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"beforeDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"sequence\":2,\"source\":\"citation-form\",\"steps\":[{\"from\":13,\"slice\":{\"content\":[{\"text\":\"(Primjer, 2026, str. 7)\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":13}]},{\"afterDocumentHash\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"beforeDocumentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"sequence\":3,\"source\":\"editor\",\"steps\":[{\"from\":36,\"slice\":{\"content\":[{\"text\":\".\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":36}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v4\",\"finalDocumentHash\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-10-27T09:01:00.000Z\",\"observedStartedAt\":\"2026-10-27T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v3-1\",\"sequenceFrom\":1,\"sequenceTo\":3,\"sessionId\":\"sesija-izmisljena-v3\"}",
+      "byteLength": 1633,
+      "segmentHash": "2a4226b4676278ec50ebc41d7114d426caded257a53854752ef9212f4defdf5f"
+    },
+    {
+      "name": "schema-v3-uppercase",
+      "note": "Schemas are case sensitive.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-V3",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v3",
+        "sessionId": "sesija-izmisljena-v3",
+        "segmentId": "odsjecak-v3-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 3,
+        "observedStartedAt": "2026-10-27T09:00:00.000Z",
+        "observedEndedAt": "2026-10-27T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "editor",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Kako navodi "
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          {
+            "sequence": 2,
+            "source": "citation-form",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 13,
+                "to": 13,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "(Primjer, 2026, str. 7)"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "afterDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          },
+          {
+            "sequence": 3,
+            "source": "editor",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 36,
+                "to": 36,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "."
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "afterDocumentHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v3\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"sequence\":1,\"source\":\"editor\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Kako navodi \",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]},{\"afterDocumentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"beforeDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"sequence\":2,\"source\":\"citation-form\",\"steps\":[{\"from\":13,\"slice\":{\"content\":[{\"text\":\"(Primjer, 2026, str. 7)\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":13}]},{\"afterDocumentHash\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"beforeDocumentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"sequence\":3,\"source\":\"editor\",\"steps\":[{\"from\":36,\"slice\":{\"content\":[{\"text\":\".\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":36}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-V3\",\"finalDocumentHash\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-10-27T09:01:00.000Z\",\"observedStartedAt\":\"2026-10-27T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v3-1\",\"sequenceFrom\":1,\"sequenceTo\":3,\"sessionId\":\"sesija-izmisljena-v3\"}",
+      "byteLength": 1633,
+      "segmentHash": "95a87bbbaa0692965c2f1324aa8c47826c87eaf2cd89f0e2d593346711f446fb"
+    },
+    {
+      "name": "v3-unknown-field",
+      "note": "The closed key set of v2 holds for v3.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v3",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v3",
+        "sessionId": "sesija-izmisljena-v3",
+        "segmentId": "odsjecak-v3-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 3,
+        "observedStartedAt": "2026-10-27T09:00:00.000Z",
+        "observedEndedAt": "2026-10-27T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "editor",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Kako navodi "
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          {
+            "sequence": 2,
+            "source": "citation-form",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 13,
+                "to": 13,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "(Primjer, 2026, str. 7)"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "afterDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          },
+          {
+            "sequence": 3,
+            "source": "editor",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 36,
+                "to": 36,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "."
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "afterDocumentHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1",
+        "citationFormVersion": 1
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"citationFormVersion\":1,\"documentId\":\"dokument-izmisljeni-v3\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"sequence\":1,\"source\":\"editor\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Kako navodi \",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]},{\"afterDocumentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"beforeDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"sequence\":2,\"source\":\"citation-form\",\"steps\":[{\"from\":13,\"slice\":{\"content\":[{\"text\":\"(Primjer, 2026, str. 7)\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":13}]},{\"afterDocumentHash\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"beforeDocumentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"sequence\":3,\"source\":\"editor\",\"steps\":[{\"from\":36,\"slice\":{\"content\":[{\"text\":\".\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":36}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v3\",\"finalDocumentHash\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-10-27T09:01:00.000Z\",\"observedStartedAt\":\"2026-10-27T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v3-1\",\"sequenceFrom\":1,\"sequenceTo\":3,\"sessionId\":\"sesija-izmisljena-v3\"}",
+      "byteLength": 1657,
+      "segmentHash": "212b2798b10bd290b19c8b738ec9f488faebd50a35a6238b174e53e39332062d"
+    },
+    {
+      "name": "v3-broken-document-chain",
+      "note": "Event hashes chain in v3 as in v2.",
+      "segment": {
+        "evidenceSchema": "ductus-evidence-segment-v3",
+        "canonicalization": "RFC8785-JCS",
+        "hashAlgorithm": "sha256",
+        "documentId": "dokument-izmisljeni-v3",
+        "sessionId": "sesija-izmisljena-v3",
+        "segmentId": "odsjecak-v3-1",
+        "sequenceFrom": 1,
+        "sequenceTo": 3,
+        "observedStartedAt": "2026-10-27T09:00:00.000Z",
+        "observedEndedAt": "2026-10-27T09:01:00.000Z",
+        "initialDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "finalDocumentHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "predecessorSegmentHash": null,
+        "events": [
+          {
+            "sequence": 1,
+            "source": "editor",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 1,
+                "to": 1,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Kako navodi "
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "afterDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          {
+            "sequence": 2,
+            "source": "citation-form",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 13,
+                "to": 13,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "(Primjer, 2026, str. 7)"
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "afterDocumentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          },
+          {
+            "sequence": 3,
+            "source": "editor",
+            "steps": [
+              {
+                "stepType": "replace",
+                "from": 36,
+                "to": 36,
+                "slice": {
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "."
+                    }
+                  ]
+                }
+              }
+            ],
+            "beforeDocumentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "afterDocumentHash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+          }
+        ],
+        "captureContext": {
+          "editorModel": "prosemirror",
+          "transactionFormat": "ductus-edit-steps-v1"
+        },
+        "evidenceProfileId": "standard-v1"
+      },
+      "canonical": "{\"canonicalization\":\"RFC8785-JCS\",\"captureContext\":{\"editorModel\":\"prosemirror\",\"transactionFormat\":\"ductus-edit-steps-v1\"},\"documentId\":\"dokument-izmisljeni-v3\",\"events\":[{\"afterDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"beforeDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"sequence\":1,\"source\":\"editor\",\"steps\":[{\"from\":1,\"slice\":{\"content\":[{\"text\":\"Kako navodi \",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":1}]},{\"afterDocumentHash\":\"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"beforeDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"sequence\":2,\"source\":\"citation-form\",\"steps\":[{\"from\":13,\"slice\":{\"content\":[{\"text\":\"(Primjer, 2026, str. 7)\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":13}]},{\"afterDocumentHash\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"beforeDocumentHash\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"sequence\":3,\"source\":\"editor\",\"steps\":[{\"from\":36,\"slice\":{\"content\":[{\"text\":\".\",\"type\":\"text\"}]},\"stepType\":\"replace\",\"to\":36}]}],\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v3\",\"finalDocumentHash\":\"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\",\"hashAlgorithm\":\"sha256\",\"initialDocumentHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"observedEndedAt\":\"2026-10-27T09:01:00.000Z\",\"observedStartedAt\":\"2026-10-27T09:00:00.000Z\",\"predecessorSegmentHash\":null,\"segmentId\":\"odsjecak-v3-1\",\"sequenceFrom\":1,\"sequenceTo\":3,\"sessionId\":\"sesija-izmisljena-v3\"}",
+      "byteLength": 1633,
+      "segmentHash": "0956337fc3b8b6bd641d936f5f10868d49f9a32079c2ca977af0fdd4a08bdd35"
+    }
+  ],
+  "receiptV2": {
+    "note": "A receipt v2 payload naming schema v3: the digest D-92 signs is over these bytes, unchanged in form.",
+    "payload": {
+      "receiptSchema": "ductus-evidence-receipt-v2",
+      "receiptId": "potvrda-izmisljena-v3",
+      "evidencePackageId": "paket-izmisljeni-v3",
+      "documentId": "dokument-izmisljeni-v3",
+      "sessionId": "sesija-izmisljena-v3",
+      "segmentId": "odsjecak-v3-1",
+      "segmentHash": "cef99e316045b7a2becf442303456aa23e8bf61363d7ec9a075145a42239ff4e",
+      "predecessorSegmentHash": null,
+      "previousReceiptId": null,
+      "evidenceSchema": "ductus-evidence-segment-v3",
+      "evidenceProfileId": "standard-v1",
+      "sequenceFrom": 1,
+      "sequenceTo": 3,
+      "eventCount": 3,
+      "payloadBytes": 1633,
+      "acceptedAt": "2026-10-27T09:02:00.000Z",
+      "revision": 3,
+      "clientTransactionId": "zahtjev-izmisljeni-v3",
+      "evidenceDomainId": "6f1c2a7e-3b4d-4e5f-9a1b-2c3d4e5f6a7b",
+      "principalId": "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d"
+    },
+    "canonical": "{\"acceptedAt\":\"2026-10-27T09:02:00.000Z\",\"clientTransactionId\":\"zahtjev-izmisljeni-v3\",\"documentId\":\"dokument-izmisljeni-v3\",\"eventCount\":3,\"evidenceDomainId\":\"6f1c2a7e-3b4d-4e5f-9a1b-2c3d4e5f6a7b\",\"evidencePackageId\":\"paket-izmisljeni-v3\",\"evidenceProfileId\":\"standard-v1\",\"evidenceSchema\":\"ductus-evidence-segment-v3\",\"payloadBytes\":1633,\"predecessorSegmentHash\":null,\"previousReceiptId\":null,\"principalId\":\"0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d\",\"receiptId\":\"potvrda-izmisljena-v3\",\"receiptSchema\":\"ductus-evidence-receipt-v2\",\"revision\":3,\"segmentHash\":\"cef99e316045b7a2becf442303456aa23e8bf61363d7ec9a075145a42239ff4e\",\"segmentId\":\"odsjecak-v3-1\",\"sequenceFrom\":1,\"sequenceTo\":3,\"sessionId\":\"sesija-izmisljena-v3\"}",
+    "payloadDigestSha256": "1d8984fd1e4435d1bdb284ea990698c4b86b185bbdfe6a942f03a2e57b5a9bea",
+    "rejectedSchemas": [
+      "ductus-evidence-segment-v1",
+      "ductus-evidence-segment-v4",
+      "",
+      "ductus-evidence-segment-V3"
+    ]
+  }
+}

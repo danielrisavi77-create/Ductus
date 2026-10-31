@@ -6,15 +6,14 @@ import { expect, test } from "@playwright/test";
 import pg from "pg";
 
 import { messagesHr as t } from "../../src/lib/i18n/messages.hr";
-import { signIn } from "./support";
+import { fillCodeDeadline, signIn } from "./support";
+import { localAdminUrl } from "./local-db-url";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
-const DATABASE_URL = process.env.E2E_ADMIN_DATABASE_URL ??
-  "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
 const TEACHER = "demo-teacher@demo.ductus.test";
 
 test("teacher form keeps the committed request key for an equivalent range", async ({ page }) => {
-  const db = new pg.Client({ connectionString: DATABASE_URL });
+  const db = new pg.Client({ connectionString: localAdminUrl() });
   await db.connect();
   let grantedHere = false;
   try {
@@ -35,6 +34,7 @@ test("teacher form keeps the committed request key for an equivalent range", asy
     const courseName = `Sintetički kolegij raspona ${randomUUID()}`;
     const title = `Sintetički zadatak raspona ${randomUUID()}`;
     await page.getByLabel(t.teacher.course.name).fill(courseName);
+    await fillCodeDeadline(page);
     await page.getByRole("button", { name: t.teacher.course.submit }).click();
     await expect(page.getByRole("status").filter({ hasText: t.teacher.course.created })).toBeVisible();
 
@@ -43,7 +43,7 @@ test("teacher form keeps the committed request key for an equivalent range", asy
     await page.getByLabel(t.teacher.assignment.dueAt).fill("2026-12-15T09:00");
     await page.getByLabel(t.teacher.assignment.wordMin).fill("1200");
     await page.getByLabel(t.teacher.assignment.wordMax).fill("2500");
-    const preview = page.getByRole("complementary");
+    const preview = page.getByRole("main").getByRole("complementary");
     await expect(preview).toContainText(/1\s200–2\s500 riječi/u);
     await page.getByLabel(t.teacher.assignment.wordMin).fill("2501");
     await expect(preview).not.toContainText(/2\s501–2\s500 riječi/u);

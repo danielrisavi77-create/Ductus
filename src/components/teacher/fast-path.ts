@@ -1,30 +1,48 @@
 import type { ProcessSummaryV1 } from "@/domain/projection/process-summary";
-import { countHr } from "@/lib/i18n/hr";
+import { compareHr } from "@/domain/text/compare-hr";
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
 import { zagrebParts } from "../summary/zagreb-time";
+
+export { compareHr };
 
 const t = messagesHr.fastPath;
 
 /**
  * The fast path of a teacher through the works of one assignment (F-11, D-80
- * point 2): the data shape and the pure parts of the screen.
- *
- * Until Backend gives the teacher the works of an assignment and the four
- * lines (B-11), the screen reads invented data of this shape
- * (`demo-fast-path.hr.ts`); only the source changes later.
+ * point 2): the data shape and the pure parts of the screen. The shape is the
+ * answer of B-11c (#757 "Oblik odgovora"), read by `src/client/fast-path.ts`.
  */
 
-export type WorkState = "notice_pending" | "writing" | "revision_requested" | "submitted";
+export type WorkState = "notice_pending" | "writing" | "submitted";
+
+/** The block kinds of #757: the document's own type names (F-150 point 1, E1). */
+export const TEXT_BLOCK_KINDS = ["heading", "paragraph", "bulletItem", "quote"] as const;
 
 /** One block of the work's text, in the order of the document. */
-export type TextBlock = { readonly kind: "heading" | "paragraph"; readonly text: string };
+export type TextBlock = { readonly kind: (typeof TEXT_BLOCK_KINDS)[number]; readonly text: string };
+
+/** Blocks as the read-only views draw them: a run of items is one list, a run of quotes one quote. */
+export type TextRun = { readonly kind: TextBlock["kind"]; readonly texts: readonly string[] };
+
+/**
+ * Consecutive bullet items are one list and consecutive quotes one block
+ * quote, as `manuscript-blocks.ts` groups them for the submission views (E1),
+ * so the fast path shows the same shape; every other block stands alone.
+ */
+export function textRuns(blocks: readonly TextBlock[]): TextRun[] {
+  const runs: { kind: TextBlock["kind"]; texts: string[] }[] = [];
+  for (const block of blocks) {
+    const last = runs.at(-1);
+    if (last?.kind === block.kind && (block.kind === "bulletItem" || block.kind === "quote")) last.texts.push(block.text);
+    else runs.push({ kind: block.kind, texts: [block.text] });
+  }
+  return runs;
+}
 
 export type FastPathRecord = {
-  readonly openRevisionRequests: number;
-  /** Indexes into `blocks` of pasted paragraphs whose source was not given. */
-  readonly pastesWithoutSource: readonly number[];
-  readonly declaration: "not_submitted" | "submitted";
+  /** How many pastes have no source; their place in the text is not known (#757). */
+  readonly pastesWithoutSource: number;
   readonly blocks: readonly TextBlock[];
   /** The same summary the student is shown (PRODUCT §5 rule 5). */
   readonly summary: ProcessSummaryV1;
@@ -32,10 +50,11 @@ export type FastPathRecord = {
 
 export type FastPathStudent = {
   readonly id: string;
-  readonly givenName: string;
-  readonly surname: string;
+  /** Both null when the account has no name (#757 D1); never a stand-in. */
+  readonly givenName: string | null;
+  readonly surname: string | null;
   readonly work: WorkState;
-  /** ISO instant, or null when there is no record yet. */
+  /** ISO instant on a whole minute, or null when there is no record yet. */
   readonly lastChangeAt: string | null;
   /** Null until the student has confirmed the notice: there is no record. */
   readonly record: FastPathRecord | null;
@@ -44,59 +63,28 @@ export type FastPathStudent = {
 export type FastPathLoad =
   | { readonly state: "loading" }
   | { readonly state: "unavailable" }
-  | { readonly state: "ready"; readonly students: readonly FastPathStudent[] };
+  | { readonly state: "signedOut" }
+  | { readonly state: "pickAssignment" }
+  | { readonly state: "ready"; readonly students: readonly FastPathStudent[]; readonly stale: boolean };
 
-/*
- * The Croatian alphabet, written out (as `hr.ts` writes out the months), so
- * the order does not depend on the ICU data of the host. dž, lj and nj are
- * one letter each. Letters outside it (q, w, x, y) take the place they have
- * in the Latin alphabet; anything else sorts after, by code point.
- */
-const ALPHABET = [
-  "a", "b", "c", "č", "ć", "d", "dž", "đ", "e", "f", "g", "h", "i", "j", "k", "l", "lj", "m",
-  "n", "nj", "o", "p", "q", "r", "s", "š", "t", "u", "v", "w", "x", "y", "z", "ž",
-];
-const RANK = new Map(ALPHABET.map((letter, index) => [letter, index]));
-const DIGRAPHS = new Set(["dž", "lj", "nj"]);
-
-function letters(word: string): number[] {
-  const lower = word.normalize("NFC").toLocaleLowerCase("hr");
-  const out: number[] = [];
-  for (let i = 0; i < lower.length; i += 1) {
-    const pair = lower.slice(i, i + 2);
-    if (DIGRAPHS.has(pair)) {
-      out.push(RANK.get(pair)!);
-      i += 1;
-      continue;
-    }
-    const ch = lower[i]!;
-    out.push(RANK.get(ch) ?? ALPHABET.length + ch.codePointAt(0)!);
-  }
-  return out;
-}
-
-/** Compares two words by the Croatian alphabet; case does not count. */
-export function compareHr(a: string, b: string): number {
-  const x = letters(a);
-  const y = letters(b);
-  for (let i = 0; i < Math.min(x.length, y.length); i += 1) {
-    if (x[i] !== y[i]) return x[i]! - y[i]!;
-  }
-  return x.length - y.length;
-}
+const byId = (a: FastPathStudent, b: FastPathStudent) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
 /**
- * The students by surname, then given name (D-80). There is no other order:
- * not by a number, a state or a time.
+ * The students by surname, then given name, then id; those without a name
+ * last, by id (D-80, #757 D1). There is no other order: not by a number, a
+ * state or a time, and not the order the server sent.
  */
 export function bySurname(students: readonly FastPathStudent[]): FastPathStudent[] {
-  return [...students].sort(
-    (a, b) => compareHr(a.surname, b.surname) || compareHr(a.givenName, b.givenName) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
-  );
+  return [...students].sort((a, b) => {
+    if (a.surname === null || b.surname === null) {
+      return a.surname === b.surname ? byId(a, b) : a.surname === null ? 1 : -1;
+    }
+    return compareHr(a.surname, b.surname) || compareHr(a.givenName ?? "", b.givenName ?? "") || byId(a, b);
+  });
 }
 
 export function fullName(student: FastPathStudent): string {
-  return `${student.givenName} ${student.surname}`;
+  return student.surname === null ? t.unnamed : `${student.givenName} ${student.surname}`;
 }
 
 export function whenText(iso: string | null): string {
@@ -105,44 +93,18 @@ export function whenText(iso: string | null): string {
   return parts ? `${parts.date} ${t.at} ${parts.time}` : iso;
 }
 
-/** "Uvod, 2. odlomak": the heading above a block and its place under it. */
-export function placeOf(blocks: readonly TextBlock[], index: number): string {
-  let heading = "";
-  let n = 0;
-  for (let i = 0; i <= index && i < blocks.length; i += 1) {
-    if (blocks[i]!.kind === "heading") {
-      heading = blocks[i]!.text;
-      n = 0;
-    } else {
-      n += 1;
-    }
-  }
-  const place = `${n}. ${t.paragraph}`;
-  return heading ? `${heading}, ${place}` : place;
-}
-
 export type FastPathLine = {
-  readonly key: "lastChange" | "revisions" | "pastes" | "declaration" | "record";
+  readonly key: "lastChange" | "pastes" | "record";
   readonly label: string;
   readonly value: string;
 };
 
-/** The four lines of D-80 point 2 and the state of the record, as text. */
+/** The lines of D-80 point 2 the demo has (#757 O2, O3) and the state of the record, as text. */
 export function fastPathLines(student: FastPathStudent, record: FastPathRecord): FastPathLine[] {
-  const { openRevisionRequests: open, pastesWithoutSource: pastes } = record;
+  const pastes = record.pastesWithoutSource;
   return [
     { key: "lastChange", label: t.lines.lastChange, value: whenText(student.lastChangeAt) },
-    {
-      key: "revisions",
-      label: t.lines.revisions,
-      value: open === 0 ? t.none : countHr(open, t.revisionForms.one, t.revisionForms.few, t.revisionForms.many),
-    },
-    {
-      key: "pastes",
-      label: t.lines.pastes,
-      value: pastes.length === 0 ? t.none : `${pastes.length} · ${pastes.map((i) => placeOf(record.blocks, i)).join("; ")}`,
-    },
-    { key: "declaration", label: t.lines.declaration, value: t.declaration[record.declaration] },
+    { key: "pastes", label: t.lines.pastes, value: pastes === 0 ? t.none : String(pastes) },
     {
       key: "record",
       label: messagesHr.summary.recordState.label,

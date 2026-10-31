@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 
 import { CRITICAL_PATHS, evaluateMetadata, minimumRisk } from "./pr-metadata-core.mjs";
-import { changedPaths, D97_MANUAL_PATHS, D97_PATHS, ownerCommandPaths } from "./protected-paths.mjs";
+import { changedPaths, D97_MANUAL_PATHS, D97_PATHS, lowReviewExempt, ownerCommandPaths } from "./protected-paths.mjs";
 import { evaluatePullRequest } from "./review-gate-core.mjs";
 
 const root = new URL("../../", import.meta.url);
@@ -48,6 +48,15 @@ const CRITICAL_SAMPLES = [
   "playwright.config.ts",
   "playwright.login.config.ts",
   "test-output.ts",
+  "scripts/demo/native/tools.mjs",
+  "scripts/demo/native/up.mjs",
+  "scripts/demo/native/lib/any.mjs",
+  "scripts/demo/up.mjs",
+  "scripts/demo/bootstrap-accounts.mjs",
+  "scripts/demo/provision-teacher.mjs",
+  "scripts/demo/up.test.mjs",
+  "scripts/demo/bootstrap-accounts.test.mjs",
+  "scripts/demo/provision-teacher.test.mjs",
   ...D97_PATHS.map(sample),
 ];
 
@@ -88,6 +97,8 @@ test("spelling of a path does not change its floor", () => {
     "scripts//orchestrator//gh.mjs",
     "SRC/Server/DB/with-actor.ts",
     "Tests/Unit/codeowners.test.ts",
+    "scripts\\demo\\native\\tools.mjs",
+    "./Scripts/Demo/Native/up.mjs",
   ]) {
     assert.equal(minimumRisk([file]).risk, "critical", file);
     assert.equal(declared("standard", [file]).ok, false, file);
@@ -126,13 +137,66 @@ test("the files that hold the protected lists are themselves protected", () => {
   }
 });
 
+// F-039: agent instruction and configuration files count at any depth.
+const AGENT_CONTROL_SAMPLES = [
+  "CLAUDE.local.md",
+  "docs/CLAUDE.md",
+  "src/feature/CLAUDE.local.md",
+  "docs/AGENTS.md",
+  "app/AGENTS.override.md",
+  "docs/notes/GEMINI.md",
+  "infra/copilot-instructions.md",
+  "docs/review.instructions.md",
+  ".mcp.json",
+  "tools/.mcp.json",
+  "docs/.claude/notes.md",
+  "src/lib/.agents/skills/x/SKILL.md",
+  ".codex/config.toml",
+  "tools/.codex/prompts/p.md",
+  "Docs\\Claude.MD",
+  "./docs//Agents.md",
+  "Tools/.MCP.json",
+  "src/.Codex/x",
+];
+
+test("agent instruction and configuration files are critical and owner-command at any depth", async () => {
+  const { d97Matches } = await import("../orchestrator/orchestrator-core.mjs");
+  for (const file of AGENT_CONTROL_SAMPLES) {
+    assert.equal(minimumRisk([file]).risk, "critical", file);
+    assert.equal(declared("low", [file]).ok, false, file);
+    assert.equal(declared("standard", [file]).ok, false, file);
+    assert.equal(ownerCommandPaths([file]).length, 1, file);
+    assert.equal(d97Matches([file]).length, 1, file);
+    assert.equal(lowReviewExempt([file]), false, file);
+  }
+  const renamed = changedPaths([{ filename: "docs/notes.md", previous_filename: "docs/CLAUDE.md", status: "renamed" }]);
+  assert.equal(minimumRisk(renamed).risk, "critical");
+  const held = decide({ risk: "low", names: ["docs/README.md", "docs/CLAUDE.md"] });
+  assert.equal(held.state, "failure");
+  assert.match(held.description, /below minimum critical/);
+  assert.equal(decide({ risk: "critical", names: ["docs/AGENTS.md"], autoMerge: true }).state, "pending");
+});
+
+test("names that only resemble agent files keep their floor", async () => {
+  const { d97Matches } = await import("../orchestrator/orchestrator-core.mjs");
+  for (const file of ["docs/PLAN-DEMO.md", "docs/mcp.md", "docs/codex-notes.txt", "docs/claude.txt", "docs/.mcp.json.md"]) {
+    assert.equal(minimumRisk([file]).risk, "low", file);
+    assert.deepEqual(ownerCommandPaths([file]), [], file);
+    assert.deepEqual(d97Matches([file]), [], file);
+  }
+  for (const file of ["src/agent.ts", "src/claude/client.ts", "scripts/.codexrc.mjs"]) {
+    assert.equal(minimumRisk([file]).risk, "standard", file);
+    assert.deepEqual(ownerCommandPaths([file]), [], file);
+  }
+});
+
 test("ordinary documentation stays low and ordinary code stays standard", () => {
   for (const file of ["README.md", "docs/README.md", "docs/PLAN-DEMO.md", "docs/UX-EVAL.md"]) {
     assert.equal(minimumRisk([file]).risk, "low", file);
     assert.equal(declared("low", [file]).ok, true, file);
     assert.deepEqual(ownerCommandPaths([file]), []);
   }
-  for (const file of ["src/domain/document/index.ts", "e2e/editor.spec.ts", "package.json", "scripts/usage-report.ps1"]) {
+  for (const file of ["src/domain/document/index.ts", "e2e/editor.spec.ts", "package.json", "scripts/usage-report.ps1", "scripts/demo/nativex/up.mjs", "scripts/demo/up.test.mjsx", "scripts/demo/login-e2e-evidence.mjs", "scripts/demo/login-e2e-evidence.test.mjs"]) {
     assert.equal(minimumRisk([file]).risk, "standard", file);
   }
 });

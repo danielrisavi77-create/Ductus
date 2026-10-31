@@ -148,7 +148,14 @@ pre-push:
       env:
         CI: "true"
       run: pnpm typecheck
+    # A push that changes only src/ and unit or property tests runs the tests
+    # those changes reach; one that changes only listed scripts and documents
+    # runs the script tests and every test that reads files, and needs the
+    # pushed refs on stdin to prove what it checks; anything else runs
+    # `pnpm test` (DAN-239, DAN-361, D-161). DUCTUS_PREPUSH_FULL=1 forces the
+    # whole suite. CI always runs everything.
     test:
+      use_stdin: true
       env:
         CI: "true"
-      run: pnpm test
+      run: node scripts/engineering/pre-push-tests.mjs

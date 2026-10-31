@@ -24,7 +24,7 @@
   min-width: 0;
   padding: 12px 8px;
   border: 1px solid var(--rule);
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: var(--chrome);
 }
 
@@ -34,6 +34,20 @@
   font-size: 12px;
   font-weight: 600;
   color: var(--ink-2);
+}
+
+/* #732 item 18: the sentence under the list (D-80). */
+.orderNote {
+  margin: 10px 8px 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+
+@media (max-width: 640px) {
+  .orderNote {
+    font-size: 13px;
+  }
 }
 
 .list {
@@ -53,7 +67,7 @@
   min-height: 44px;
   padding: 8px 10px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--ink);
   text-align: left;
@@ -77,6 +91,26 @@
 .meta {
   font-size: 12px;
   color: var(--ink-2);
+}
+
+/* #732 item 17: the dot before the state word; the word carries the meaning. */
+.dot::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--ink-3);
+  vertical-align: 0.05em;
+}
+
+.dot[data-work="writing"]::before {
+  background: var(--accent);
+}
+
+.dot[data-work="submitted"]::before {
+  background: var(--synced);
 }
 
 .work {
@@ -106,7 +140,7 @@
   gap: 2px;
   margin-left: auto;
   padding: 2px;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   background: var(--raised);
 }
 
@@ -114,7 +148,7 @@
   min-height: 44px;
   padding: 4px 12px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: transparent;
   color: var(--ink-2);
   font: inherit;
@@ -142,7 +176,7 @@
   margin: 0;
   padding: 12px 14px;
   border: 1px solid var(--rule);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--chrome);
   font-size: 13px;
 }
@@ -166,25 +200,13 @@
   }
 }
 
-.linkButton {
-  min-height: 24px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--accent);
-  font: inherit;
-  text-align: left;
-  text-decoration: underline;
-  cursor: pointer;
-}
-
 .text {
   display: flex;
   flex-direction: column;
   gap: 6px;
   padding: clamp(16px, 4vw, 30px) clamp(16px, 4vw, 36px);
   border: 1px solid var(--rule);
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: var(--sheet);
 }
 
@@ -201,28 +223,37 @@
   gap: 4px;
   margin: 0 -8px;
   padding: 6px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius);
 }
 
-.block p {
+.block p,
+.block ul {
   margin: 0;
   font-family: var(--ff-manuscript);
   font-size: 16px;
   line-height: 1.7;
 }
 
-.block[data-marked="true"] {
-  background: var(--raised);
-  outline: 1px solid var(--ink-3);
+/* A run of bullet items and a run of quotes, as the manuscript draws them (E1). */
+.block ul {
+  padding-left: 26px;
 }
 
-.tag {
-  font-size: 12px;
+.block blockquote {
+  margin: 0;
+  padding-left: 16px;
+  border-left: 2px solid var(--rule);
   color: var(--ink-2);
 }
 
 .state {
   margin: 24px 0;
+  color: var(--ink-2);
+}
+
+.note {
+  margin: 0 0 12px;
+  font-size: 13px;
   color: var(--ink-2);
 }
 
