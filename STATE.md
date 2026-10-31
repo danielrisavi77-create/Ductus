@@ -4,7 +4,7 @@ Ažurira se skupno nakon spojenih PR-ova i kontrolnih točaka. Ovaj presjek čuv
 
 ## Trenutna faza
 
-M0 Temelj. Prvi cilj ostaje radni demo za FPZG 2. 11. 2026. (`docs/PLAN-DEMO.md`). Ductus Engineering System v1 uvodi risk-based review, QA/Bug Hunter/Product uloge, GitHub za izvršenje i dokaze te Linear za zadatke, prioritete, nositelje i statuse.
+M0 Temelj. Cilj je dovršena aplikacija, sve faze M0 do M11 (D-191); demo za FPZG odgođen je bez datuma. Ductus Engineering System v1 uvodi risk-based review, QA/Bug Hunter/Product uloge, GitHub za izvršenje i dokaze te Linear za zadatke, prioritete, nositelje i statuse.
 
 Session adresa orkestratora: ranije upisana adresa `session_01JCvXpAX1i9hax8K5FFRcTy` je arhivirana i više ne vrijedi za `send_message` (`docs/ORKESTRATOR.md` §5). Nova adresa zasad nije upisana; vidi Owner queue.
 
@@ -13,7 +13,7 @@ Session adresa orkestratora: ranije upisana adresa `session_01JCvXpAX1i9hax8K5FF
 Agent nikad ne uzima ove stavke i nikad ne čeka na njima ako drugi posao može naprijed.
 
 - [x] 10. 10. 2026.: `main` zaštićen (PR obvezan; obvezni statusi CI, Local stack, Security scanners, Dependency review, Engineering review gate; neriješeni razgovori blokiraju; force push i delete zabranjeni; squash only; auto-merge i brisanje grane nakon spajanja uključeni). Administrator smije zaobići zaštitu; obvezni Code Owner review nije uključen (ENGINEERING_SYSTEM §10).
-- [ ] Proba demoa 31. 10. 2026. i snimka prolaza (PLAN-DEMO D-3, D-4).
+- [ ] Novi raspored rada i datum pilota (D-191).
 - [x] 10. 10. 2026.: vlasnik je potvrdio D-37, D-39, D-71 i D-74 (trag: komentar na issueu #87, `issuecomment-6101424008`; zapisano u `docs/DECISIONS.md`).
 - [x] 18. 10. 2026.: odnos D-06 i D-39 riješen; obje zamjenjuje D-142 (prikaz uživo), uz D-143 (reprodukcija znak po znak) i D-144 (kratki zadaci). Ustav v1.4 izmijenjen (trag: #87 `issuecomment-6254642740`, `6254721033`).
 - [x] 11. 10. 2026.: vlasnik je odlučio (trag: komentari na issueu #87, `issuecomment-6105246182`, `6105084144`, `6105021669`, `6105034219`, `6105201573`; zapisano u `docs/DECISIONS.md`): D-08 razdvojen (dio o aplikaciji ODLUČEN, dobavljači i trošak PRIJEDLOG do B0.1, rok 16. 11. 2026.), D-34 potvrđen uz dopunu o autoru, domena evidencije (D-102), ključ ustanove (D-103), model računa za drugog izdavatelja uz nepromijenjen D-09 (D-104), nastavnički prikaz samo opisni i bez novih rezova demoa (D-105), jezik tek uz engleski (D-70). Potvrđeno i tumačenje točke 3 (komentar `6105263690`): migracije na kritičnom putu demoa (#240 i sljedeći korak B-8) se ne zaustavljaju, B0.1 kreće čim postoje računi dobavljača, rizik prepisa migracija do tada ostaje zapisan.
@@ -30,7 +30,7 @@ Agent nikad ne uzima ove stavke i nikad ne čeka na njima ako drugi posao može 
 - [ ] Računovođa: PDV; FINA tek uz obrt ili FPZG kao ugovornu stranu.
 - [ ] Vidljivost repoa: prije stvarnih podataka ponovno odlučiti ostaje li javni.
 - [ ] Session adresa orkestratora: adresa upisana u `STATE.md` je arhivirana (stanje 25. 10. 2026.), a nova zasad nije upisana. Vlasnik odlučuje hoće li se nova adresa upisati u javni `STATE.md` ili voditi izvan repoa.
-- [ ] Konačno ime proizvoda.
+- [x] 28. 10. 2026.: konačno ime proizvoda je **Ductura**; repozitorij, paket i identifikatori u kodu ostaju `ductus` (D-186; trag: #960 `issuecomment-6469934229`, t. 4).
 
 ## Engineering System v1
 
