@@ -544,7 +544,7 @@ test.describe("local editor (#197)", () => {
       const s = getComputedStyle(el);
       return { visible: el.matches(":focus-visible"), outline: s.outlineStyle, width: s.outlineWidth };
     });
-    expect(style).toEqual({ visible: true, outline: "solid", width: "2px" });
+    expect(style).toEqual({ visible: true, outline: "solid", width: "3px" });
   });
 
   // Browsers match :focus-visible on a text field after a click as well; the
