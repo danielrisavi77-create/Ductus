@@ -6,6 +6,7 @@ import {
   evaluatePullRequest,
   NOT_DEFAULT_BASE,
   prNumberFromEvent,
+  sameRepositoryHead,
   SHARED_HEAD,
   sharesHeadWithOpenPr,
   targetsDefaultBranch,
@@ -55,6 +56,13 @@ const RUN_FAILED = { state: "pending", description: "Gate run failed before a ve
 const WAITING = { state: "pending", description: "Waiting for the Engineering review gate." };
 let knownHead = null;
 
+// F-014: statuses belong to a commit, not to a PR. A closed PR, or one whose
+// head lives in another repository, can carry the same SHA as an open PR of
+// this repository, so the gate writes nothing for it, not even pending.
+function ownsHead(pr, repository) {
+  return pr?.state === "open" && sameRepositoryHead(pr) && pr?.base?.repo?.full_name === repository;
+}
+
 async function main() {
   const event = JSON.parse(await readFile(process.env.GITHUB_EVENT_PATH, "utf8"));
   const repository = process.env.GITHUB_REPOSITORY;
@@ -66,10 +74,15 @@ async function main() {
   }
 
   const [owner, repo] = repository.split("/");
-  if (event.pull_request?.head?.sha) {
+  if (event.pull_request?.head?.sha && ownsHead(event.pull_request, repository)) {
     knownHead = { repository, sha: event.pull_request.head.sha, url: event.pull_request.html_url };
   }
   const pr = await api(`/repos/${owner}/${repo}/pulls/${number}`);
+  if (!ownsHead(pr, repository)) {
+    knownHead = null;
+    console.log(`${context}: no status; the PR is not open or its head is outside ${repository}.`);
+    return;
+  }
   knownHead = { repository, sha: pr.head.sha, url: pr.html_url };
   // Only an authenticated, open draft owned by Mergify is a CI carrier.
   // It cannot enqueue itself (-draft). No review/owner verdict is fabricated:
@@ -92,6 +105,13 @@ async function main() {
     apiAll(`/repos/${owner}/${repo}/pulls?state=open`),
   ]);
   if (!targetsDefaultBranch(pr)) {
+    // F-014: another open PR on this head owns its statuses; a pending marker
+    // here would overwrite them. An unread list counts as shared.
+    if (sharesHeadWithOpenPr(pr, openPulls)) {
+      knownHead = null;
+      console.log(`${context}: no status; another open PR shares this head. ${NOT_DEFAULT_BASE.description}`);
+      return;
+    }
     for (const statusContext of [authorizationContext, autoMergeContext, context]) {
       await setStatus(repository, pr.head.sha, NOT_DEFAULT_BASE, pr.html_url, statusContext);
     }

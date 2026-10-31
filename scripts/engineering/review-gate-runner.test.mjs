@@ -31,7 +31,8 @@ globalThis.fetch = async (url, options = {}) => {
   }
   if (plan.fail.some((p) => path.endsWith(p))) throw new TypeError("fetch failed");
   if (/\\/pulls\\/\\d+$/.test(path)) {
-    return reply(200, { number: 7, head: { sha: "${HEAD}" }, base: { sha: "${BASE}" },
+    return reply(200, { number: 7, state: "open", head: { sha: "${HEAD}", repo: { full_name: "o/r" } },
+      base: { sha: "${BASE}", repo: { full_name: "o/r" } },
       html_url: "https://github.com/o/r/pull/7", body: "", ...plan.pr });
   }
   if (path.endsWith("/pulls/7/files")) return reply(200, plan.files ?? []);
@@ -66,7 +67,12 @@ function run(event, { fail = [], statusFails = false, failPostNumber = 0, pr = {
 }
 
 const comment = { issue: { number: 7, pull_request: {} } };
-const pullRequest = { pull_request: { number: 7, head: { sha: HEAD }, html_url: "https://github.com/o/r/pull/7" } };
+const pullRequest = {
+  pull_request: {
+    number: 7, state: "open", html_url: "https://github.com/o/r/pull/7",
+    head: { sha: HEAD, repo: { full_name: "o/r" } }, base: { repo: { full_name: "o/r" } },
+  },
+};
 
 test("a failed comment read after the head is known marks the head pending", () => {
   const { code, posts } = run(comment, { fail: ["/issues/7/comments"] });
@@ -202,4 +208,57 @@ test("a renamed human branch, fork, non-draft or different bot is still subject 
     assert.equal(code, 0);
     assert.ok(posts.every((p) => p.body.state !== "success"), JSON.stringify(changed));
   }
+});
+
+// F-014: statuses are per commit. A closed PR, or a PR whose head lives in
+// another repository, may share its head SHA with an open PR of this
+// repository, so the gate writes nothing for it, on any path.
+const external = [
+  { state: "closed" },
+  { head: { ...eligible.head, repo: { id: 2, full_name: "fork/r" } } },
+  { head: { ...eligible.head, repo: null } },
+  { head: { sha: HEAD, ref: "feat/x" } },
+  { base: { ...eligible.base, repo: { ...repoMeta, full_name: "other/r" } } },
+];
+
+test("a closed PR or a head outside this repository gets no status at all (F-014)", () => {
+  for (const changed of external) {
+    const label = JSON.stringify(changed);
+    const ok = run(comment, { pr: { ...eligible, ...changed }, files: addedTest, openPulls: [eligible] });
+    assert.equal(ok.code, 0, label);
+    assert.deepEqual(ok.posts, [], label);
+    // A later read failure does not fall back to the head either.
+    const failed = run(comment, { pr: { ...eligible, ...changed }, fail: ["/issues/7/comments"] });
+    assert.equal(failed.code, 0, label);
+    assert.deepEqual(failed.posts, [], label);
+  }
+});
+
+test("a failed PR read marks the event head only for an open PR of this repository (F-014)", () => {
+  for (const changed of [
+    { state: "closed" },
+    { head: { sha: HEAD, repo: { full_name: "fork/r" } } },
+    { head: { sha: HEAD, repo: null } },
+    { head: { sha: HEAD } },
+  ]) {
+    const event = { pull_request: { ...pullRequest.pull_request, ...changed } };
+    const { code, posts } = run(event, { fail: ["/pulls/7"] });
+    assert.equal(code, 1, JSON.stringify(changed));
+    assert.deepEqual(posts, [], JSON.stringify(changed));
+  }
+});
+
+test("a PR off the default branch writes nothing on a head another open PR shares (F-014)", () => {
+  const side = { ...eligible, number: 9, base: { ...eligible.base, ref: "feature" } };
+  const main = { ...eligible, number: 8 };
+  const shared = run(comment, { pr: side, files: addedTest, openPulls: [side, main] });
+  assert.equal(shared.code, 0);
+  assert.deepEqual(shared.posts, []);
+  // An unread list counts as shared: nothing is written, and the run fails.
+  const unread = run(comment, { pr: side, files: addedTest, fail: ["/pulls"] });
+  assert.equal(unread.code, 1);
+  assert.ok(unread.posts.every((p) => p.body.state !== "success"));
+  // Control: alone on its head it still gets the pending marker.
+  const alone = run(comment, { pr: side, files: addedTest, openPulls: [side] });
+  assert.deepEqual(states(alone.posts), ALL.map((c) => [c, "pending"]));
 });
