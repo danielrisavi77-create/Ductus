@@ -2,10 +2,10 @@ import { isSignatureEnvelope, type SignatureEnvelope } from "./signature";
 import { sha256WebCrypto } from "./crypto";
 import { canonicalizeJcs } from "./jcs";
 import {
-  EVIDENCE_SEGMENT_SCHEMA_V2,
   isEvidenceMinuteV2,
+  isEvidenceSegmentSchema,
   MAX_EVIDENCE_PROFILE_ID_LENGTH,
-  type EvidenceSegmentV2,
+  type EvidenceSegmentSchema,
 } from "./evidence-segment-v2";
 import { hasOnlyKeys, isPlainObject } from "../json";
 
@@ -21,7 +21,8 @@ export type EvidenceReceiptPayloadV1 = {
   segmentHash: string;
   predecessorSegmentHash: string | null;
   previousReceiptId: string | null;
-  evidenceSchema: EvidenceSegmentV2["evidenceSchema"];
+  /** The schema of the accepted segment, v2 or v3. */
+  evidenceSchema: EvidenceSegmentSchema;
   evidenceProfileId: string;
   sequenceFrom: number;
   sequenceTo: number;
@@ -142,7 +143,7 @@ function hasValidAcceptanceFields(v: Record<string, unknown>): boolean {
     (v.predecessorSegmentHash === null ||
       isSha256Hex(v.predecessorSegmentHash)) &&
     (v.previousReceiptId === null || nonEmpty(v.previousReceiptId)) &&
-    v.evidenceSchema === EVIDENCE_SEGMENT_SCHEMA_V2 &&
+    isEvidenceSegmentSchema(v.evidenceSchema) &&
     nonEmpty(v.evidenceProfileId, MAX_EVIDENCE_PROFILE_ID_LENGTH) &&
     Number.isSafeInteger(v.sequenceFrom) &&
     Number(v.sequenceFrom) >= 1 &&

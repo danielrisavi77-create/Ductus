@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createEditStepsV1Replayer } from "@/adapters/evidence/edit-steps-v1-replayer";
 import { verifyCanonicalEvidencePayloadV2 } from "@/domain/forensics/evidence-chain-v2";
 import { replayEvidenceSegmentsV2 } from "@/domain/forensics/evidence-replay-v2";
-import type { EvidenceSegmentV2, EvidenceSourceV2 } from "@/domain/forensics/evidence-segment-v2";
+import type { EvidenceSegment, EvidenceSourceV2 } from "@/domain/forensics/evidence-segment-v2";
 import type { JcsJsonValue } from "@/domain/forensics/jcs";
 import { projectProcessSummary } from "@/domain/projection/process-summary";
 
@@ -190,7 +190,7 @@ async function takeAll(recorder: EvidenceRecorder): Promise<BuiltSegment[]> {
 async function check(t: Setup) {
   const built = await takeAll(t.recorder);
   expect(t.recorder.intact).toBe(true);
-  const segments: EvidenceSegmentV2[] = [];
+  const segments: EvidenceSegment[] = [];
   for (const one of built) {
     const payload = await verifyCanonicalEvidencePayloadV2(one.bytes);
     expect(payload.ok).toBe(true);
