@@ -25,7 +25,7 @@ M0 → M1 (čeka AAI@EduHr Lab) i M2 → M3 → M5 i M6 → M7 → M4 (čeka lic
 
 | Korak | Naziv | Uloga | Ovisi o | Tiket |
 | --- | --- | --- | --- | --- |
-| M0.1 | Zapis prijenosa jezgre: broj testova u izvoru i na mainu | P | | DAN-376 |
+| M0.1 | Zapis prijenosa jezgre: broj testova u izvoru i na mainu (`docs/engineering/prijenos-jezgre-M0.1.md`) | P | | DAN-376 |
 | M0.2 | Sedam zaštitnih mjera za dbmate (D-91) | P | | DAN-71 |
 | M0.3 | E2E na Firefoxu i WebKitu kao obvezna provjera | P | | DAN-114, DAN-232 |
 | M0.4 | Skener zabranjenih izraza i za tekst izvan JSX-a | P | | DAN-133 (#552) |
