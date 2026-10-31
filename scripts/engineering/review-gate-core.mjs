@@ -859,13 +859,13 @@ export function targetsDefaultBranch(pr) {
 
 // F-013: a verdict judged the diff against the base of its time. After the base
 // changes, the same head carries another diff, so nothing written before the
-// last base change counts. Time of the last `base_ref_changed` timeline event;
+// last base change counts. Time of the last `base_ref_changed` issue event;
 // -Infinity when the base never changed, Infinity (drop everything) when the
-// timeline was not read or an event has no readable time.
-export function lastBaseChange(timeline) {
-  if (!Array.isArray(timeline)) return Infinity;
+// events were not read or an event has no readable time.
+export function lastBaseChange(events) {
+  if (!Array.isArray(events)) return Infinity;
   let last = -Infinity;
-  for (const event of timeline) {
+  for (const event of events) {
     if (event?.event !== "base_ref_changed") continue;
     const at = Date.parse(event?.created_at ?? "");
     last = Math.max(last, Number.isNaN(at) ? Infinity : at);

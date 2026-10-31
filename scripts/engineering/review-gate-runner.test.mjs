@@ -36,7 +36,7 @@ globalThis.fetch = async (url, options = {}) => {
   }
   if (path.endsWith("/pulls/7/files")) return reply(200, plan.files ?? []);
   if (path.endsWith("/issues/7/comments")) return reply(200, plan.comments ?? []);
-  if (path.endsWith("/issues/7/timeline")) return reply(200, plan.timeline ?? []);
+  if (path.endsWith("/issues/7/events")) return reply(200, plan.timeline ?? []);
   if (path.endsWith("/pulls")) return reply(200, plan.openPulls ?? []);
   if (path.includes("/commits/")) return reply(200, { sha: "${HEAD}", parents: [{ sha: "${BASE}" }] });
   if (path.includes("/compare/")) return reply(200, { files: [], commits: [] });
@@ -258,7 +258,7 @@ test("a PASS from before the last base change does not count, one after it does 
 });
 
 test("an unreadable timeline or change time fails closed (F-013)", () => {
-  const failed = run(comment, { pr: standard, files: srcFile, openPulls: [standard], comments: [passAt("2026-10-31T10:00:00Z")], fail: ["/issues/7/timeline"] });
+  const failed = run(comment, { pr: standard, files: srcFile, openPulls: [standard], comments: [passAt("2026-10-31T10:00:00Z")], fail: ["/issues/7/events"] });
   assert.equal(failed.code, 1);
   assert.ok(failed.posts.every((p) => p.body.state !== "success"));
   const noTime = run(comment, {

@@ -83,7 +83,7 @@ async function main() {
     console.log(QUEUE_CARRIER_STATUS.description);
     return;
   }
-  const [allComments, changedFiles, allReviews, reviewComments, openPulls, timeline] = await Promise.all([
+  const [allComments, changedFiles, allReviews, reviewComments, openPulls, issueEvents] = await Promise.all([
     apiAll(`/repos/${owner}/${repo}/issues/${number}/comments`),
     apiAll(`/repos/${owner}/${repo}/pulls/${number}/files`),
     // Only for quota evidence (#128): a PR review of the exhausted App voids it.
@@ -93,9 +93,10 @@ async function main() {
     // F-165: statuses are per head, so the gate reads which open PRs share it.
     apiAll(`/repos/${owner}/${repo}/pulls?state=open`),
     // F-013: verdicts and commands from before the last base change do not count.
-    apiAll(`/repos/${owner}/${repo}/issues/${number}/timeline`),
+    // base_ref_changed is listed by the issue events endpoint, not the timeline.
+    apiAll(`/repos/${owner}/${repo}/issues/${number}/events`),
   ]);
-  const cutoff = lastBaseChange(timeline);
+  const cutoff = lastBaseChange(issueEvents);
   const comments = sinceBaseChange(allComments, cutoff);
   const reviews = sinceBaseChange(allReviews, cutoff, "submitted_at");
   if (!targetsDefaultBranch(pr)) {
