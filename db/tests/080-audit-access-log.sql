@@ -118,7 +118,7 @@ SELECT is(left(pg_temp.as_owner(pg_temp.row_sql('{fak_a}', '{nobody}', '{ana}', 
   '23503:', 'an assignment that does not exist cannot be written');
 SELECT is(left(pg_temp.as_owner(pg_temp.row_sql('{fak_a}', '{z1}', '{ana}', '{vesna}', p_role => 'student')), 6),
   '23514:', 'a reader role outside the list is refused');
-SELECT is(left(pg_temp.as_owner(pg_temp.row_sql('{fak_a}', '{z1}', '{ana}', '{vesna}', p_surface => 'replay')), 6),
+SELECT is(left(pg_temp.as_owner(pg_temp.row_sql('{fak_a}', '{z1}', '{ana}', '{vesna}', p_surface => 'export')), 6),
   '23514:', 'a surface outside the list is refused until a migration adds it');
 SELECT is(left(pg_temp.as_owner(pg_temp.row_sql('{fak_a}', '{z1}', '{ana}', '{vesna}', p_at => quote_literal('2026-10-19 12:05:01+00'))), 6),
   '23514:', 'a time finer than the minute is refused');

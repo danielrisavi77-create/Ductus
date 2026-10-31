@@ -1,9 +1,9 @@
-# Ductus
+# Ductura
 
-Radno ime platforme koja fakultetima pokazuje kako je studentski rad nastao, bez presude o autorstvu.
+Platforma koja fakultetima pokazuje kako je studentski rad nastao, bez presude o autorstvu.
 Prvi pilot: Fakultet političkih znanosti Sveučilišta u Zagrebu (FPZG).
 
-Plan proizvoda i stanje rada su u `docs/`. Konačno ime proizvoda još nije odabrano.
+Plan proizvoda i stanje rada su u `docs/`. Ime proizvoda je **Ductura** (D-186); repozitorij, paket i kod zadržavaju naziv `ductus`.
 
 ## Lokalni rad
 

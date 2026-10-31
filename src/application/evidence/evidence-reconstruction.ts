@@ -22,7 +22,7 @@ import {
   type EvidenceReplayFailureV2,
   type EvidenceStepReplayerV2,
 } from "@/domain/forensics/evidence-replay-v2";
-import type { EvidenceSegmentV2 } from "@/domain/forensics/evidence-segment-v2";
+import type { EvidenceSegment } from "@/domain/forensics/evidence-segment-v2";
 import { canonicalizeJcs, type JcsJsonValue } from "@/domain/forensics/jcs";
 
 /**
@@ -255,7 +255,7 @@ export async function reconstructAndCompareEvidence<TDocument>(
 
   // Receipts come before any word about a break in the sequence: a record
   // with a missing receipt or a bad signature is broken, not discontinuous.
-  const segments: EvidenceSegmentV2[] = [];
+  const segments: EvidenceSegment[] = [];
   let previousReceiptId: string | null = null;
   for (const [index, entry] of chain.segments.entries()) {
     const verified = await verifyCanonicalEvidencePayloadV2(payloads[index]);

@@ -58,7 +58,9 @@ import { StorableInput } from "@/editor/storable-input";
 import { storableDocument } from "@/editor/storable-text";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 import { createLivePublisher, type LivePublisher } from "@/client/live-publisher";
-import { editorSignOutPlan, untilLoaded } from "@/client/logout-hold";
+import {
+  editorSignOutPlan, planAfterDiscard, readLogoutHold, untilLoaded, withinHoldLimit, type HoldRead,
+} from "@/client/logout-hold";
 import { SourceObserver } from "@/editor/source";
 import { AtomicDexieJournal } from "@/lib/journal/atomic-dexie-journal";
 import type { SaverFailure } from "@/lib/journal/local-document-saver";
@@ -89,6 +91,10 @@ type LockedLogout = {
   resume: () => void;
   /** Deletes the journal unless it holds unconfirmed work (D-118). */
   clear: () => Promise<void>;
+  /** Rows this document holds; null when they cannot be read. */
+  held: () => Promise<number | null>;
+  /** F-154: deletes what this device holds of this document, on the author's second click only. */
+  discard: () => Promise<void>;
 };
 
 type LocalDocumentValue = {
@@ -112,6 +118,13 @@ type LocalDocumentValue = {
   staySignedIn: () => void;
   /** Ends the session; resolves true once the logout route has answered. */
   signOut: () => Promise<boolean>;
+  /**
+   * F-154 (owner decision 1.3): deletes what this device holds of the work
+   * after its submission. Rejects unless this tab holds the lock and the
+   * server confirmed the submission in this page session. Resolves with
+   * what the journal holds afterwards, read again for the open dialog.
+   */
+  discardAfterSubmission: () => Promise<HoldRead>;
 };
 
 const LocalDocumentContext = createContext<LocalDocumentValue | null>(null);
@@ -386,7 +399,8 @@ export function LocalDocumentProvider({
         return;
       }
       // Only the tab holding the lock opens the work (3d-2c2 §4, one writer).
-      const { saver, evidence } = createDocumentSaver({ journal, documentId, assignmentId });
+      // No evidence request leaves a tab whose sign-in has ended (F-154).
+      const { saver, evidence } = createDocumentSaver({ journal, documentId, assignmentId, current: () => !ended() });
       // The cleanup's flush may still emit after `setSnapshot(null)`; what the
       // old saver reports then must not come back as the next lock's notice.
       const unsubscribe = saver.subscribe((next) => {
@@ -478,6 +492,19 @@ export function LocalDocumentProvider({
               // a fenced deletion (above).
             }
           },
+          // Under the same limit as the read of the whole scope: a journal
+          // another tab blocks never holds the dialog back (D-118).
+          held: () => withinHoldLimit<number | null>(
+            async () => (await journal.read(documentId)).pending.length, null,
+          ),
+          // Only a submission the server confirmed in this page session: the
+          // session sets `closedBy` from a 409 or an open, never from the journal.
+          // Once this session has ended here, nothing more is deleted for it.
+          discard: async () => {
+            if (disposed || ended()) throw new Error("session_ended");
+            if (saver.snapshot().closedBy !== "submission") throw new Error("not_submitted");
+            await journal.discardAfterSubmission(documentId);
+          },
         };
         logoutRef.current = locked;
         await new Promise<void>((resolve) => {
@@ -542,9 +569,21 @@ export function LocalDocumentProvider({
     });
     const locked = logoutRef.current;
     const plan = await editorSignOutPlan(locked && (() => locked.quiesce()), scope, { session });
-    // After a submission the steps still held are never sent (3d-2c2 O3).
+    // After a submission the steps still held are never sent (3d-2c2 O3);
+    // only this document's are counted as such (F-154).
     const submitted = saverRef.current?.snapshot().closedBy === "submission";
-    return plan !== "leave" && submitted ? { ...plan, submitted } : plan;
+    if (plan === "leave" || !submitted) return plan;
+    const own = locked ? await locked.held() : null;
+    return own === null ? { ...plan, submitted } : { ...plan, submitted, afterSubmission: own };
+  };
+
+  // Rejects, deleting nothing, unless this tab holds the lock (the plan has
+  // a count after the submission only then).
+  const discardAfterSubmission = async (): Promise<HoldRead> => {
+    const locked = logoutRef.current;
+    if (!locked) throw new Error("not_locked");
+    await locked.discard();
+    return readLogoutHold(scope, { session });
   };
 
   const staySignedIn = () => logoutRef.current?.resume();
@@ -567,7 +606,7 @@ export function LocalDocumentProvider({
   };
 
   const value: LocalDocumentValue = {
-    editor, phase, snapshot, words, invalid, stickyLoad, prepareSignOut, staySignedIn, signOut,
+    editor, phase, snapshot, words, invalid, stickyLoad, prepareSignOut, staySignedIn, signOut, discardAfterSubmission,
   };
   return <LocalDocumentContext.Provider value={value}>{children}</LocalDocumentContext.Provider>;
 }
@@ -753,7 +792,7 @@ export function useLocalStatus(): { loading: boolean; words: number } {
  * logout route directly, which ends it as well.
  */
 export function LocalLogout() {
-  const { editor, prepareSignOut, staySignedIn, signOut } = useLocalDocument();
+  const { editor, phase, prepareSignOut, staySignedIn, signOut, discardAfterSubmission } = useLocalDocument();
   const [preparing, setPreparing] = useState(false);
   const [plan, setPlan] = useState<LogoutPlan | null>(null);
   const [working, setWorking] = useState(false);
@@ -827,6 +866,12 @@ export function LocalLogout() {
           copies={plan.copies}
           onExport={() => {
             if (editor && !editor.isDestroyed) exportText(editor);
+          }}
+          // A session ended in another tab leaves no deletion in this dialog.
+          onDiscardAfterSubmission={phase === "signed-out" ? undefined : async () => {
+            // Gone from this device: the dialog counts what the journal still holds.
+            const read = await discardAfterSubmission();
+            setPlan((open) => open && planAfterDiscard(open, read));
           }}
         />
       ) : null}

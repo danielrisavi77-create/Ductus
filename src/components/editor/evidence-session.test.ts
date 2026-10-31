@@ -7,7 +7,7 @@ import { createBrowserEditStepsV1Replayer } from "@/adapters/evidence/edit-steps
 import type { CanonicalDocument } from "@/domain/document";
 import { MAX_DOCUMENT_SNAPSHOT_BYTES } from "@/domain/document/snapshot";
 import { canonicalizeJcs, jcsUtf8Bytes } from "@/domain/forensics/jcs";
-import { watchClosedBySubmission } from "@/client/evidence-session-deps";
+import { guardedFetch, watchClosedBySubmission } from "@/client/evidence-session-deps";
 import { CaptureError, EvidenceRecorder } from "@/editor/capture";
 import { canonicalToTiptap, tiptapToCanonical } from "@/editor/interop";
 import { createEditorExtensions } from "@/editor/schema";
@@ -885,8 +885,12 @@ describe("3d-2c2a §4 (DAN-289 A1): a submission closes the session", () => {
   const notAccepting = () => json(409, { status: "not_accepting" });
 
   /** A session whose commits go through the O1 (a) wrapper of the browser deps. */
-  function closedSetup(net: ReturnType<typeof server>, journal: AtomicDexieJournal = openJournal(), online = network()) {
-    const closed = watchClosedBySubmission(net.fetchImpl);
+  function closedSetup(
+    net: ReturnType<typeof server>, journal: AtomicDexieJournal = openJournal(), online = network(),
+    // F-155: what the open route says when asked again after the 409.
+    isSubmitted: () => Promise<boolean> = async () => true,
+  ) {
+    const closed = watchClosedBySubmission(net.fetchImpl, isSubmitted);
     let clock = 0;
     const made = setup({
       net, online, journal,
@@ -975,9 +979,28 @@ describe("3d-2c2a §4 (DAN-289 A1): a submission closes the session", () => {
     expect(session.snapshot().closedBy).toBeNull();
   });
 
+  // F-155: the commit route says not_accepting for a submission, a current
+  // version not acknowledged and one not open yet; only the server's own
+  // "submitted" closes by submission, and an unknown answer closes nothing.
+  for (const [name, isSubmitted] of [
+    ["the open route says not submitted (a new version waits for its notice)", async () => false],
+    ["the open route cannot be asked", async () => { throw new Error("invented outage"); }],
+  ] as const) {
+    it(`S8: a 409 not_accepting is not closed by submission when ${name}`, async () => {
+      const { session, journal } = closedSetup(server(R0, notAccepting), undefined, undefined, isSubmitted);
+      await ready(session);
+      const sheet = editorFor(session);
+      sheet.type("x");
+      await sheet.save();
+      expect(session.snapshot().closedBy).toBeNull();
+      // The row the server refused stays on the device, unsent.
+      expect((await journal.readEvidence(DOC)).pending).toHaveLength(1);
+    });
+  }
+
   it("S7: an open answering 409 not_accepting loads unavailable, not closed by submission", async () => {
     const net = server();
-    const closed = watchClosedBySubmission(net.fetchImpl);
+    const closed = watchClosedBySubmission(net.fetchImpl, async () => true);
     const { session, journal } = setup({
       net, open: async () => ({ status: "not_accepting" }), over: { watchSubmission: closed.watch },
     });
@@ -1285,6 +1308,68 @@ describe("O2 (DAN-289, #756 c.6399602745): a submitted work opens read-only", ()
     expect(net.calls).toHaveLength(0);
     expect((await journal.readEvidence(DOC)).pending.map((row) => row.tx.clientTransactionId))
       .toEqual(before.pending.map((row) => row.tx.clientTransactionId));
+  });
+});
+
+describe("F-154: no evidence request without the tab's sign-in", () => {
+  it("no open again while paused; after resume the next online opens", async () => {
+    const journal = openJournal();
+    const first = setup({ journal, online: network(false) });
+    await ready(first.session);
+    first.session.close();
+    let opens = 0;
+    const online = network(false);
+    const second = setup({
+      journal, online,
+      open: async () => { opens += 1; return { status: "unavailable" }; },
+      over: { storedProfile: () => PROFILE },
+    });
+    const loaded = await ready(second.session);
+    expect(opens).toBe(1);
+    const sheet = editorFor(second.session, (loaded as { document: CanonicalDocument }).document);
+    second.session.pause();
+    online.set(true);
+    sheet.type("x");
+    await sheet.save();
+    await second.session.settled();
+    expect(opens).toBe(1);
+    second.session.resume();
+    await second.session.settled();
+    expect(opens).toBe(1);
+    online.set(true);
+    await second.session.settled();
+    expect(opens).toBe(2);
+  });
+
+  it("a drain step refused by the guard is a lost answer: the row stays and is never marked refused", async () => {
+    const journal = openJournal();
+    const net = server();
+    const signedIn = { value: true };
+    const online = network(false);
+    const { session } = setup({
+      journal, net, online,
+      over: {
+        createRunner: (work) => createDrainRunner<QueuedTransaction>({
+          journal, transport: createEvidenceTransport(guardedFetch(net.fetchImpl, () => signedIn.value)),
+          verifyFor: evidenceVerifierFor(work), now: () => 0, jitter: () => 0.5,
+        }),
+      },
+    });
+    await ready(session);
+    const sheet = editorFor(session);
+    sheet.type("x");
+    await sheet.save();
+    const before = await journal.readEvidence(DOC);
+    expect(before.pending).toHaveLength(1);
+    signedIn.value = false;
+    online.set(true);
+    await session.settled();
+    expect(net.calls).toHaveLength(0);
+    const after = await journal.readEvidence(DOC);
+    expect(after.pending.map((row) => row.tx.clientTransactionId))
+      .toEqual(before.pending.map((row) => row.tx.clientTransactionId));
+    expect(after.meta?.refusedLocalSeq).toBeUndefined();
+    expect(session.snapshot().refused).toBe(false);
   });
 });
 

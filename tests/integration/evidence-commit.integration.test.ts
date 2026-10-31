@@ -352,6 +352,70 @@ describe("evidence commit transaction", () => {
     expect(await stored()).toEqual(after);
     Object.assign(chain, { revision: chain.revision + 1, documentHash: sha256(document), head: sha256(segment), sequence: n });
   });
+
+  // DAN-343 (contract on #896): a v3 segment goes through the real route and
+  // database, and its signed receipt names v3; a v2 segment after it continues
+  // the same chain; citation-form in v2 is refused before anything is stored.
+  it("commits a v3 segment with a receipt naming v3, then a v2 one in the same package", async () => {
+    const golden = loadGoldenVectors().chain;
+    const template = golden.segments[0].segment;
+    const states = golden.documentStates.map((state) => canonicalizeJcs(state.value));
+    const payloads = new InMemoryEvidencePayloadStore();
+    const deps = { withActor, signer: signerFor(join(dir, "seed")), payloads };
+    const request = (evidenceSchema: string, source: string, tx: string) => {
+      const n = chain.sequence + 1;
+      const document = states.find((text) => sha256(text) !== chain.documentHash)!;
+      const segment = canonicalizeJcs({
+        ...template,
+        evidenceSchema,
+        documentId,
+        sessionId: `capture-${suffix}`,
+        segmentId: `segment-${suffix}-${n}`,
+        sequenceFrom: n,
+        sequenceTo: n,
+        initialDocumentHash: chain.documentHash,
+        finalDocumentHash: sha256(document),
+        predecessorSegmentHash: chain.head,
+        evidenceProfileId: context.evidenceProfileId,
+        events: [{ ...template.events[0], source, sequence: n, beforeDocumentHash: chain.documentHash, afterDocumentHash: sha256(document) }],
+      });
+      const body = {
+        documentId,
+        clientTransactionId: `tx-${suffix}-${tx}`,
+        baseRevision: chain.revision,
+        segment: new TextEncoder().encode(segment),
+        document: new TextEncoder().encode(document),
+      };
+      const advance = () =>
+        Object.assign(chain, { revision: chain.revision + 1, documentHash: sha256(document), head: sha256(segment), sequence: n });
+      return { body, segment, advance };
+    };
+
+    const before = await stored();
+    const refused = request("ductus-evidence-segment-v2", "citation-form", "v2-citation");
+    expect(await commitEvidenceRequest(deps, token, refused.body)).toEqual({ status: "invalid" });
+    expect(payloads.size).toBe(0);
+    expect(await stored()).toEqual(before);
+
+    const v3 = request("ductus-evidence-segment-v3", "citation-form", "v3");
+    const third = await commitEvidenceRequest(deps, token, v3.body);
+    expect(third).toMatchObject({
+      status: "committed",
+      signedReceipt: { payload: { evidenceSchema: "ductus-evidence-segment-v3", segmentHash: sha256(v3.segment) } },
+    });
+    v3.advance();
+
+    const v2 = request("ductus-evidence-segment-v2", "editor", "v2-after-v3");
+    const fourth = await commitEvidenceRequest(deps, token, v2.body);
+    expect(fourth).toMatchObject({
+      status: "committed",
+      signedReceipt: {
+        payload: { evidenceSchema: "ductus-evidence-segment-v2", predecessorSegmentHash: sha256(v3.segment) },
+      },
+    });
+    v2.advance();
+    expect(payloads.size).toBe(2);
+  });
 });
 
 /** The next segment of the chain and the document it ends in, as the client sends them. */

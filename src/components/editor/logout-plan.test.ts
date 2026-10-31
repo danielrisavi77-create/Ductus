@@ -2,10 +2,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { messagesHr } from "@/lib/i18n/messages.hr";
 
+import { planAfterDiscard } from "@/client/logout-hold";
+
 import { findForbiddenTerms } from "../../../scripts/forbidden-terms/terms";
 import {
+  afterSubmissionPart,
   closeReply,
   copyText,
+  heldAfterSubmission,
   DISCARD_LIMIT_MS,
   logoutText,
   nextDiscardStep,
@@ -51,8 +55,68 @@ describe("sign-out dialog text (FE-D7, D-118)", () => {
     [3, "3 izmjene nakon predaje postoje samo na ovom uređaju i ne šalju se."],
     [5, "5 izmjena nakon predaje postoji samo na ovom uređaju i ne šalje se."],
   ])("after a submission names %i held steps as never sent, with no promise to continue", (pending, sentence) => {
-    const shown = logoutText({ unsaved: false, pending, submitted: true });
-    expect(shown).toEqual({ text: `${sentence} Odjava zatvara sesiju.`, note: null, offerExport: false });
+    // F-154 (owner decision 1.3): counted for the submitted document, and the
+    // text can be exported before it is discarded.
+    const shown = logoutText({ unsaved: false, pending, submitted: true, afterSubmission: pending });
+    expect(shown).toEqual({ text: `${sentence} Odjava zatvara sesiju.`, note: null, offerExport: true });
+  });
+
+  // F-154: rows of other works are never called "after the submission".
+  it("counts only the submitted document's rows; other works' rows are only kept", () => {
+    const mixed = logoutText({ unsaved: false, pending: 5, submitted: true, afterSubmission: 2 });
+    expect(mixed).toEqual({
+      text: t.logoutAfterSubmission.few.replace("{n}", "2"), note: t.logoutKept, offerExport: true,
+    });
+    // The submitted document holds nothing: the other works read as before.
+    expect(logoutText({ unsaved: false, pending: 3, submitted: true, afterSubmission: 0 }))
+      .toEqual(logoutText({ unsaved: false, pending: 3 }));
+    // Unknown own count: never "after the submission" by assumption.
+    expect(logoutText({ unsaved: false, pending: 3, submitted: true }))
+      .toEqual(logoutText({ unsaved: false, pending: 3 }));
+    // Never more than all rows.
+    expect(heldAfterSubmission({ unsaved: false, pending: 2, submitted: true, afterSubmission: 9 })).toBe(2);
+  });
+
+  it("after the discard the other works' rows stay counted and nothing is after the submission", () => {
+    const left = planAfterDiscard(
+      { unsaved: false, pending: 5, submitted: true, afterSubmission: 2, kept: true },
+      { pending: 3, copies: 0, kept: true },
+    );
+    expect(left).toEqual({ unsaved: false, pending: 3, copies: 0, submitted: true, afterSubmission: 0, kept: true });
+    expect(logoutText(left)).toEqual(logoutText({ unsaved: false, pending: 3, copies: 0, kept: true }));
+    expect(afterSubmissionPart(left, true)).toBeNull();
+  });
+
+  // Codex r4383074624: `kept` comes from the journal read after the deletion.
+  it("after the discard of all that was held the dialog no longer says the record stays", () => {
+    const plan = { unsaved: false, pending: 2, submitted: true, afterSubmission: 2, kept: true };
+    const left = planAfterDiscard(plan, { pending: 0, copies: 0, kept: false });
+    expect(logoutText(left)).toEqual({ text: t.logoutPlain, note: null, offerExport: false });
+    // A read that fails promises nothing about what stays.
+    for (const read of ["unknown", "ended", "noStorage"] as const) {
+      expect(logoutText(planAfterDiscard(plan, read))).toEqual({ text: t.logoutPlain, note: null, offerExport: false });
+      expect(afterSubmissionPart(planAfterDiscard(plan, read), true)).toBeNull();
+    }
+  });
+
+  it("the discard part is offered only with the action and rows after the submission", () => {
+    const plan = { unsaved: false, pending: 2, submitted: true, afterSubmission: 2 };
+    expect(afterSubmissionPart(plan, true)).toEqual({ title: t.afterSubmissionTitle });
+    expect(afterSubmissionPart(plan, false)).toBeNull();
+    expect(afterSubmissionPart({ ...plan, afterSubmission: 0 }, true)).toBeNull();
+    expect(afterSubmissionPart({ ...plan, submitted: false }, true)).toBeNull();
+  });
+
+  it("the discard texts are in the catalogue, with no forbidden term and no promise about the server", () => {
+    const texts = [
+      t.afterSubmissionTitle, t.afterSubmissionDiscard, t.afterSubmissionDiscardAsk,
+      t.afterSubmissionDiscardConfirm, t.afterSubmissionKeep, t.afterSubmissionDiscardFailed,
+    ];
+    for (const text of texts) {
+      expect(text.length).toBeGreaterThan(0);
+      expect(findForbiddenTerms(text)).toEqual([]);
+      expect(text).not.toMatch(/spremljeno|poslužitelj|sinkron/i);
+    }
   });
 
   it("after a submission, nothing held and unstored text read as before", () => {
