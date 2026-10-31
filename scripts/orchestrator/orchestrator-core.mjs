@@ -9,9 +9,11 @@ import {
 export const GATE_CONTEXT = "Engineering review gate";
 const SHA_RE = /^[0-9a-f]{40}$/i;
 
+const GATE_VERDICTS = new Set(["PASS", "FAIL", "BLOCK"]);
+
 const KINDS = {
   review: { agent: "Agent-Review", head: "Review-Head", verdict: "Review-Verdict", role: "reviewer" },
-  qa: { agent: "QA-Agent", head: "QA-Head", verdict: "QA-Verdict", role: "qa" },
+  qa: { agent: "QA-Agent", head: "QA-Head", verdict: "QA-Verdict", role: "qa", extra: "QA-Scope" },
 };
 
 // The D-97 lists live with the gate (scripts/engineering/protected-paths.mjs)
@@ -107,6 +109,10 @@ function gateReadable(c, k) {
   if (!trustedAuthor(c) || !canonicalBlock(c?.body, k.agent)) return false;
   const agent = field(c.body, k.agent);
   if (!verifiedCommentIdentity({ appSlug: reportAppSlug(c) }, agent)) return false;
+  // As latestVerdicts in review-gate-core: one of the three verdicts, and a QA
+  // verdict also names its scope.
+  if (!GATE_VERDICTS.has(field(c.body, k.verdict)?.toUpperCase())) return false;
+  if (k.extra && !field(c.body, k.extra)) return false;
   return agent.endsWith(`:${k.role}`) && SHA_RE.test(field(c.body, k.head) ?? "");
 }
 
@@ -133,7 +139,6 @@ export function countCanonical(comments) {
 }
 
 /** Latest verdict of a kind; `current` = bound to headSha. null if none. */
-const GATE_VERDICTS = new Set(["PASS", "FAIL", "BLOCK"]);
 
 // Identity as the gate keys it (ENGINEERING_SYSTEM §6): App slug + runtime:slot,
 // with codex and chatgpt normalised to openai and the slot without letter case (#130).
@@ -351,6 +356,7 @@ export function pushVerdict(pushOk, localSha, remoteSha) {
 // PR body text cannot put instructions or control characters into the table.
 // Each value is checked alone through the gate's own evaluateMetadata.
 const isControl = (ch) => { const c = ch.codePointAt(0); return c < 0x20 || (c >= 0x7f && c <= 0x9f) || c === 0x2028 || c === 0x2029; };
+const RISKS = new Set(["low", "standard", "critical"]);
 const metadataOk = (agent, risk) =>
   evaluateMetadata({ body: `Agent: ${agent}\nRisk: ${risk}\nTask: -\n`, files: [] }).ok;
 
@@ -360,7 +366,8 @@ export function parseAgentRisk(body) {
   const clean = (v) => typeof v === "string" && ![...v].some(isControl);
   return {
     agent: clean(agent) && metadataOk(agent, "low") ? agent : null,
-    risk: clean(risk) && metadataOk("claude:a:orchestrator", risk) ? risk.toLowerCase() : null,
+    // An own list, not `in`: an inherited name such as "constructor" is no risk.
+    risk: clean(risk) && RISKS.has(risk.toLowerCase()) ? risk.toLowerCase() : null,
   };
 }
 

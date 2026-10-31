@@ -51,7 +51,7 @@ test("verdicts count only from authors the gate trusts", () => {
 });
 
 test("qa verdicts parse separately", () => {
-  const qa = c(`QA-Agent: claude:c:qa\nQA-Head: ${H1}\nQA-Verdict: block`);
+  const qa = c(`QA-Agent: claude:c:qa\nQA-Head: ${H1}\nQA-Verdict: block\nQA-Scope: synthetic`);
   assert.equal(latestVerdict([qa], "qa", H1).verdict, "BLOCK");
   assert.equal(countCanonical([qa]), 1);
 });
@@ -307,7 +307,7 @@ test("a verdict counts in the reports only with the App the gate accepts", () =>
 
 test("a two-part agent, the wrong role or a short head is not a verdict", () => {
   const rv = (agent, head = H1) => c(`Agent-Review: ${agent}\nReview-Head: ${head}\nReview-Verdict: PASS`);
-  const qv = (agent) => c(`QA-Agent: ${agent}\nQA-Head: ${H1}\nQA-Verdict: PASS`);
+  const qv = (agent) => c(`QA-Agent: ${agent}\nQA-Head: ${H1}\nQA-Verdict: PASS\nQA-Scope: synthetic`);
   assert.equal(countCanonical([rv("claude:reviewX")]), 0);
   assert.equal(countCanonical([rv("claude:r1:qa")]), 0);
   assert.equal(countCanonical([qv("claude:q1:reviewer")]), 0);
@@ -318,7 +318,7 @@ test("a two-part agent, the wrong role or a short head is not a verdict", () => 
 
 test("an owner CLI verdict counts as its App, as the gate counts it (D-162, D-193)", () => {
   const cli = (agent, lines, over = {}) =>
-    c(`QA-Agent: ${agent}\nQA-Head: ${H1}\nQA-Verdict: PASS\n${lines}`, { performed_via_github_app: null, ...over });
+    c(`QA-Agent: ${agent}\nQA-Head: ${H1}\nQA-Verdict: PASS\nQA-Scope: synthetic\n${lines}`, { performed_via_github_app: null, ...over });
   assert.equal(countCanonical([cli("codex:cxq1:qa", "Review-Channel: codex-cli")]), 1);
   assert.equal(countCanonical([cli("grok:g1:qa", "Review-Channel: grok-cli")]), 1);
   assert.equal(latestVerdict([cli("codex:cxq1:qa", "Review-Channel: codex-cli")], "qa", H1).verdict, "PASS");
@@ -330,4 +330,30 @@ test("an owner CLI verdict counts as its App, as the gate counts it (D-162, D-19
   assert.equal(countCanonical([cli("codex:cxq1:qa", "")]), 0);
   // A real App slug wins over a channel line.
   assert.equal(countCanonical([cli("codex:cxq1:qa", "Review-Channel: codex-cli", { performed_via_github_app: { slug: "claude" } })]), 0);
+});
+
+// #1116 review/QA round 1: the report must not count what the gate skips.
+test("a QA verdict without a scope, or a verdict word the gate does not know, is not counted", async () => {
+  const { evaluateGate } = await import("../engineering/review-gate-core.mjs");
+  const app = { performed_via_github_app: { slug: "chatgpt-codex-connector" }, user: { login: "o", type: "User" } };
+  const rv = c(`Agent-Review: codex:r1:reviewer\nReview-Head: ${H1}\nReview-Verdict: PASS`, app);
+  const qaNoScope = c(`QA-Agent: codex:q1:qa\nQA-Head: ${H1}\nQA-Verdict: PASS`, app);
+  const qaScoped = c(`QA-Agent: codex:q1:qa\nQA-Head: ${H1}\nQA-Verdict: PASS\nQA-Scope: synthetic`, app);
+  const body = "Agent: claude:w1:platforma\nRisk: critical\nTask: DAN-1\n";
+  const gate = (qa) => evaluateGate({ body, headSha: H1, ownerLogin: "o", comments: [rv, qa] }).state;
+  assert.equal(gate(qaNoScope), "pending");
+  assert.equal(latestVerdict([qaNoScope], "qa", H1), null);
+  assert.equal(countCanonical([qaNoScope]), 0);
+  assert.equal(gate(qaScoped), "success");
+  assert.equal(latestVerdict([qaScoped], "qa", H1).verdict, "PASS");
+  for (const word of ["UNKNOWN", "APPROVED", "", "PASS FAIL"]) {
+    const v = c(`Agent-Review: codex:r1:reviewer\nReview-Head: ${H1}\nReview-Verdict: ${word}`, app);
+    assert.equal(countCanonical([v]), 0, word);
+  }
+});
+
+test("an inherited object name is no risk", () => {
+  for (const risk of ["constructor", "__proto__", "toString", "hasOwnProperty", "valueOf"]) {
+    assert.equal(parseAgentRisk(`Agent: claude:pl1:platforma\nRisk: ${risk}\nTask: DAN-1\n`).risk, null, risk);
+  }
 });

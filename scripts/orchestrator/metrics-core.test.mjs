@@ -20,7 +20,7 @@ const qa = (head, verdict, at, agent = "claude:qaX:qa") => ({
   performed_via_github_app: { slug: "claude" },
   user: { login: "u" },
   created_at: at,
-  body: `QA-Agent: ${agent}\nQA-Head: ${head}\nQA-Verdict: ${verdict}\n`,
+  body: `QA-Agent: ${agent}\nQA-Head: ${head}\nQA-Verdict: ${verdict}\nQA-Scope: synthetic\n`,
 });
 const plan = "| ID | Zadatak |\n| --- | --- |\n| B-5 | uloge |\n| B-7 | model |\n| B-8 | evidencija |\n| P-6 | rječnik |\n| D-3 | proba |\nB-99 nije redak\n";
 const merged = (over = {}) => ({

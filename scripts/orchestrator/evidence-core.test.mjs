@@ -29,7 +29,7 @@ const verdict = (kind, head, v, text = "") => ({
   created_at: "2026-10-24T10:00:00Z",
   body: kind === "review"
     ? `Agent-Review: claude:r:reviewer\nReview-Head: ${head}\nReview-Verdict: ${v}\n\n${text}`
-    : `QA-Agent: claude:q:qa\nQA-Head: ${head}\nQA-Verdict: ${v}\n\n${text}`,
+    : `QA-Agent: claude:q:qa\nQA-Head: ${head}\nQA-Verdict: ${v}\nQA-Scope: synthetic\n\n${text}`,
 });
 const ROLLUP = [{ name: "Lint", status: "COMPLETED", conclusion: "SUCCESS", workflowName: "1" }];
 
