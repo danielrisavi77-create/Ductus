@@ -30,13 +30,17 @@ describe("S3 notice text (D-142, D-143)", () => {
   it("names the key and how long it is held as not recorded, and no measure from time", () => {
     expect(s.notRecorded.inputs).toContain("tipka");
     expect(s.notRecorded.inputs).toContain("držana");
-    // PRODUCT §5 rule 4 lists pauses among what is never computed from time.
-    expect(s.notRecorded.inputs).toContain("nikad se ne računaju brzina, pauze, ritam ni bilo kakva mjera");
+    expect(s.notRecorded.inputs).toContain("ne računaju se brzina, ritam ni bilo kakva mjera, osim sesija");
   });
 
-  it("says the replay neither skips nor marks pauses and only jumps by sessions (D-63, 31. 10. 2026.)", () => {
-    expect(s.notRecorded.inputs).toContain("Reprodukcija neće preskakati ni isticati stanke");
-    expect(s.notRecorded.inputs).toContain("skočiti na početak sesije iz sažetka procesa");
+  it("names the P-01 sessions as the one measure from time (F-171)", () => {
+    expect(s.notRecorded.inputs).toContain("sesije se određuju prekidom dužim od praga P-01");
+    for (const text of notice()) expect(text).not.toMatch(/brzina, pauze|nikad se ne računaju/);
+  });
+
+  it("says the replay neither skips nor marks pauses (D-63, 31. 10. 2026., F-171)", () => {
+    expect(s.notRecorded.inputs).toContain("Reprodukcija neće preskakati ni isticati stanke.");
+    for (const text of notice()) expect(text).not.toMatch(/skočiti|skok/);
     // The removed D-63 (a): no skipped pauses and no mention of their length.
     for (const text of notice()) {
       expect(text).not.toMatch(/preskače duge stanke|preskočena stanka|koliko su trajale/);
@@ -48,6 +52,11 @@ describe("S3 notice text (D-142, D-143)", () => {
     expect(s.recorded.live).toContain("znak po znak");
     expect(s.recorded.live).toContain("prikazu uživo");
     expect(s.recorded.live).toContain("reprodukciji");
+  });
+
+  it("names the input mark the mentor sees (D-54, D-127, F-171)", () => {
+    expect(s.recorded.live).toContain("bilježit će se i način unosa");
+    expect(s.recorded.live).toContain("nastavnik (mentor) vidjeti oznaku kad tekst nije unesen tipkovnicom ni lijepljenjem");
   });
 
   it("tells the student the mentor sees the work live, deleted text included", () => {

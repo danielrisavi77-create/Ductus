@@ -813,8 +813,10 @@ export const hr = {
   // AssignmentNotice renders recorded, notRecorded and teacher in key order.
   // Live view and replay are not built yet, so the notice says what will happen
   // in this assignment. D-63 as corrected on 31. 10. 2026. (#87 c.6544361788,
-  // PRODUCT §5 rule 4 exception): the replay neither skips nor marks pauses and
-  // only offers a jump by the P-01 sessions of the process summary.
+  // PRODUCT §5 rule 4 exception): the replay neither skips nor marks pauses.
+  // The notice names the P-01 sessions as the one measure taken from time.
+  // recorded.live also names the input mark the mentor sees (D-54, D-127,
+  // src/editor/source.ts).
   student: {
     title: "Zadatak",
     // DAN-344 (Archivum S03): the way back from the notice to /zadaci, verbatim from the package.
@@ -906,13 +908,13 @@ export const hr = {
     recordedHeading: "Što se bilježi",
     recorded: {
       steps: "Promjene teksta, sažete u odsječke od najviše 30 sekundi. Odsječak nosi jedno vrijeme, zaokruženo na minutu.",
-      live: "U ovom zadatku bilježit će se svaka promjena teksta, znak po znak, s redoslijedom i vremenom: unos i brisanje, lijepljenje, uvoz, prijenos iz AI pomoćnika i izmjene nastavnika. To će služiti samo prikazu uživo i reprodukciji.",
+      live: "U ovom zadatku bilježit će se svaka promjena teksta, znak po znak, s redoslijedom i vremenom: unos i brisanje, lijepljenje, uvoz, prijenos iz AI pomoćnika i izmjene nastavnika. Uz svaku promjenu bilježit će se i način unosa, pa će nastavnik (mentor) vidjeti oznaku kad tekst nije unesen tipkovnicom ni lijepljenjem, na primjer diktiranjem. To će služiti samo prikazu uživo i reprodukciji.",
       chain: "Svaki korak spremanja dobiva digitalni otisak povezan s prethodnim, pa se svaka kasnija izmjena zapisa vidi.",
       versions: "Verzije, predaja i napomene koje dodate.",
     },
     notRecordedHeading: "Što se ne bilježi",
     notRecorded: {
-      inputs: "Koja je tipka pritisnuta i koliko je držana. Iz vremena promjena nikad se ne računaju brzina, pauze, ritam ni bilo kakva mjera. Reprodukcija neće preskakati ni isticati stanke; moći će samo skočiti na početak sesije iz sažetka procesa.",
+      inputs: "Koja je tipka pritisnuta i koliko je držana. Iz vremena promjena ne računaju se brzina, ritam ni bilo kakva mjera, osim sesija: sesije se određuju prekidom dužim od praga P-01. Reprodukcija neće preskakati ni isticati stanke.",
       outside: "Druge aplikacije i kartice preglednika, kamera, mikrofon i zaslon.",
       device: "IP adresa i podaci o uređaju.",
     },
