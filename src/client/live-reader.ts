@@ -20,12 +20,20 @@ import { verifyDocumentSnapshot } from "@/domain/document/snapshot";
 import { DUCTUS_PROTOCOL_VERSION } from "@/domain/evidence/commit-envelope";
 
 export type LiveRead =
-  | { kind: "state"; hash: string; document: CanonicalDocument }
-  | { kind: "unchanged" }
+  | { kind: "state"; hash: string; document: CanonicalDocument; submitted: boolean }
+  | { kind: "unchanged"; submitted: boolean }
   | { kind: "empty" }
   | { kind: "signedOut" | "notFound" | "unavailable" };
 
 const ETAG = /^"([0-9a-f]{64})"$/;
+
+/**
+ * The header the route sets on the bytes of the submitted revision (DAN-332,
+ * #826 PR 2, `LIVE_STATE_HEADER` of the route). Only the exact value
+ * `submitted` counts; any other value, or none, is the live state.
+ */
+export const LIVE_STATE_HEADER = "ductus-live-state";
+const submittedOf = (response: Response) => response.headers.get(LIVE_STATE_HEADER) === "submitted";
 
 export const LIVE_READ_INTERVAL_MS = 1000;
 export const LIVE_RETRY_FIRST_MS = 2000;
@@ -64,10 +72,12 @@ export async function readLiveState(
       }
       const snapshot = await verifyDocumentSnapshot(bytes);
       if (!snapshot.ok || snapshot.sha256 !== etag) return { kind: "unavailable" };
-      return { kind: "state", hash: snapshot.sha256, document: snapshot.document };
+      return { kind: "state", hash: snapshot.sha256, document: snapshot.document, submitted: submittedOf(response) };
     }
     // A 304 means "the document you hold": only true when one was named and it is that one.
-    case 304: return knownHash !== null && etag === knownHash ? { kind: "unchanged" } : { kind: "unavailable" };
+    case 304: return knownHash !== null && etag === knownHash
+      ? { kind: "unchanged", submitted: submittedOf(response) }
+      : { kind: "unavailable" };
     case 204: return { kind: "empty" };
     case 401: return { kind: "signedOut" };
     case 404: return { kind: "notFound" };
@@ -85,6 +95,12 @@ export type LiveView = {
   readonly empty: boolean;
   /** The state of this reader's own requests, never a statement about the student. */
   readonly connection: LiveConnection;
+  /**
+   * The shown document is the submitted revision (DAN-332, #826 PR 3): the
+   * route sent exactly these bytes, or named them in a 304, as `submitted`.
+   * Once true it stays: no later answer replaces the text or makes it live.
+   */
+  readonly submitted: boolean;
 };
 
 /** Page visibility as the reader needs it; a test passes its own. */
@@ -130,7 +146,7 @@ export function startLiveReader(options: LiveReaderOptions): () => void {
   const visibility = options.visibility ?? documentVisibility;
   const timers = options.timers ?? windowTimers;
 
-  let view: LiveView = { document: null, hash: null, empty: false, connection: "loading" };
+  let view: LiveView = { document: null, hash: null, empty: false, connection: "loading", submitted: false };
   let stopped = false;
   let inFlight = false;
   let timer: unknown = null;
@@ -166,16 +182,28 @@ export function startLiveReader(options: LiveReaderOptions): () => void {
     inFlight = false;
     if (stopped) return;
     switch (read.kind) {
+      // Once the submitted revision is shown, no answer replaces it (#826 A5);
+      // only the connection is kept, so 401, 404 and the session end still clear it.
       case "state":
         retryMs = 0;
-        publish({ document: read.document, hash: read.hash, empty: false, connection: "live" });
+        if (view.submitted) {
+          if (view.connection !== "live") publish({ connection: "live" });
+          break;
+        }
+        publish({ document: read.document, hash: read.hash, empty: false, connection: "live", submitted: read.submitted });
         break;
       case "unchanged":
         retryMs = 0;
-        if (view.connection !== "live") publish({ connection: "live" });
+        // A3: the submitted revision is the document already shown.
+        if (read.submitted && !view.submitted) publish({ connection: "live", submitted: true });
+        else if (view.connection !== "live") publish({ connection: "live" });
         break;
       case "empty":
         retryMs = 0;
+        if (view.submitted) {
+          if (view.connection !== "live") publish({ connection: "live" });
+          break;
+        }
         publish({ document: null, hash: null, empty: true, connection: "live" });
         break;
       case "signedOut":
