@@ -2,7 +2,10 @@
 // The script needs Codex and a network, so these checks read its source; the
 // order checks keep each guard before the Codex call or before the post.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import { D97_PATHS, ownerCommandPaths } from "./protected-paths.mjs";
@@ -48,6 +51,30 @@ test("only main's copy runs, and a branch that changes agent instructions is ref
     assert.ok(codexDir.test(p), p);
   }
   for (const p of ["src/agents/list.ts", "docs/PRODUCT.md", "README.md", "src/claude.ts", "docs/x.mcp.json.md"]) assert.ok(!agentRe.test(p) && !codexDir.test(p), p);
+});
+
+test("changed names are read unquoted and NUL-separated, so a non-ASCII control path is still refused (F-176-QA-01)", () => {
+  const line = src.split("\n").find((l) => l.includes("diff --name-only"));
+  assert.match(line, /git -c core\.quotePath=false diff --name-only -z origin\/main\.\.\.HEAD/);
+  assert.ok(src.includes(`$_.StartsWith('"')`), "a quoted name is refused");
+  const re = /\$_ -match '([^']+)' -or \$_ -match '([^']+)'/.exec(src);
+  const patterns = [re[1], re[2]].map((p) => new RegExp(p.replace("(?i)", ""), "i"));
+  const dir = mkdtempSync(path.join(tmpdir(), "codex-review-names-"));
+  try {
+    const git = (...args) => execFileSync("git", ["-C", dir, ...args], { encoding: "utf8" });
+    git("init", "-q");
+    const file = path.join(dir, ".agents", "skills", "qa-é", "SKILL.md");
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, "synthetic\n");
+    git("add", "--", ".agents");
+    const quoted = git("diff", "--cached", "--name-only").trim();
+    assert.ok(quoted.startsWith('"'), "control: git quotes the name by default");
+    const names = git("-c", "core.quotePath=false", "diff", "--cached", "--name-only", "-z").split("\0").filter(Boolean);
+    assert.equal(names.length, 1);
+    assert.ok(patterns.some((p) => p.test(names[0])), names[0]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("a review that looks like it carries a credential is never posted", () => {

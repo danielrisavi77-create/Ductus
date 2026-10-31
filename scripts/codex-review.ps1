@@ -49,10 +49,14 @@ if ($selfCopy.TrimEnd() -ne $mainCopy.TrimEnd()) {
 #    PR and needs another reviewer). Same classes as isAgentControlPath in
 #    scripts/engineering/protected-paths.mjs: an instruction file name,
 #    .mcp.json, or a .claude, .agents or .codex segment at any depth.
-$changed = git diff --name-only origin/main...HEAD
+#    Names come NUL-separated and unquoted (-z, core.quotePath=false): git
+#    otherwise quotes a path with special or non-ASCII characters, and the
+#    quote would hide the segment from the patterns. A name that still starts
+#    with a quote is refused.
+$changed = @(((git -c core.quotePath=false diff --name-only -z origin/main...HEAD) -join "`0") -split "`0" | Where-Object { $_ })
 if ($LASTEXITCODE -ne 0) { throw "git diff against origin/main failed; refusing to run" }
 $instructions = @($changed | Where-Object {
-    $_ -match '(?i)(^|/)((claude|agents|gemini)[^/]*|copilot-instructions|[^/]*\.instructions)\.md$' -or $_ -match '(?i)(^|/)(\.claude|\.agents|\.codex)(/|$)|(^|/)\.mcp\.json$'
+    $_ -match '(?i)(^|/)((claude|agents|gemini)[^/]*|copilot-instructions|[^/]*\.instructions)\.md$' -or $_ -match '(?i)(^|/)(\.claude|\.agents|\.codex)(/|$)|(^|/)\.mcp\.json$' -or $_.StartsWith('"')
 })
 if ($instructions.Count -gt 0) {
     throw "the branch changes agent instructions ($($instructions -join ', ')); Codex would follow them, review it another way"
