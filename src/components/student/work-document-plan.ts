@@ -37,7 +37,11 @@ export type WorkDocumentPlan =
       dueAt: string;
       comments: true; live: true; submission: true;
     }
-  | { kind: "opening"; journal: null; assignmentId: string; comments: false; live: false; submission: false }
+  /**
+   * DAN-330: the work does not exist yet. The sheet only reads; the work is
+   * started by the student's click on "Započni rad", never by this render.
+   */
+  | { kind: "notStarted"; journal: null; assignmentId: string; dueAt: string; comments: false; live: false; submission: false }
   | { kind: "notYetOpen"; journal: null; opensAt: string; comments: false; live: false; submission: false }
   /** Carries nothing about the assignment: one answer for every case (A2). */
   | { kind: "unavailable"; journal: null; comments: false; live: false; submission: false }
@@ -91,7 +95,7 @@ export function workDocumentPlan(input: WorkDocumentPlanInput): WorkDocumentPlan
         comments: true, live: true, submission: true,
       };
     case "notOpened":
-      return { kind: "opening", journal: null, assignmentId, ...OFF };
+      return { kind: "notStarted", journal: null, assignmentId, dueAt: context.notice.dueAt, ...OFF };
     case "notAccepting":
       return { kind: "notYetOpen", journal: null, opensAt: context.notice.opensAt, ...OFF };
     default:
