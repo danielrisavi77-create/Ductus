@@ -30,7 +30,7 @@ import { watchSessionEnd, type SessionWatch } from "@/client/session-end";
 import type { SessionMark } from "@/client/session-marks";
 import { openWorkStep } from "@/components/student/work-document-plan";
 
-import { startWorkAttempt } from "./open-work-start";
+import { startWorkAttempt, whenOnline } from "./open-work-start";
 import { OpenWorkView, type OpenWorkPhase } from "./OpenWorkView";
 
 /** The existing sign-in-again phase: the page's session has ended. */
@@ -97,9 +97,7 @@ export default function OpenWork({ assignmentId, session }: { assignmentId: stri
   // goes on by itself. The phase `offline` comes only from an attempt.
   useEffect(() => {
     if (phase.kind !== "offline") return;
-    const online = () => { void attempt(); };
-    window.addEventListener("online", online);
-    return () => window.removeEventListener("online", online);
+    return whenOnline(window, () => navigator.onLine, () => { void attempt(); });
   }, [phase.kind, attempt]);
 
   const start = useCallback(() => { void attempt(); }, [attempt]);
