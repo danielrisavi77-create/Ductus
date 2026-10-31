@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 
 import { CRITICAL_PATHS, evaluateMetadata, minimumRisk } from "./pr-metadata-core.mjs";
-import { changedPaths, D97_MANUAL_PATHS, D97_PATHS, ownerCommandPaths } from "./protected-paths.mjs";
+import { changedPaths, D97_MANUAL_PATHS, D97_PATHS, lowReviewExempt, ownerCommandPaths } from "./protected-paths.mjs";
 import { evaluatePullRequest } from "./review-gate-core.mjs";
 
 const root = new URL("../../", import.meta.url);
@@ -143,6 +143,59 @@ test("the files that hold the protected lists are themselves protected", () => {
   ]) {
     assert.deepEqual(ownerCommandPaths([file]), [file]);
     assert.equal(minimumRisk([file]).risk, "critical", file);
+  }
+});
+
+// F-039: agent instruction and configuration files count at any depth.
+const AGENT_CONTROL_SAMPLES = [
+  "CLAUDE.local.md",
+  "docs/CLAUDE.md",
+  "src/feature/CLAUDE.local.md",
+  "docs/AGENTS.md",
+  "app/AGENTS.override.md",
+  "docs/notes/GEMINI.md",
+  "infra/copilot-instructions.md",
+  "docs/review.instructions.md",
+  ".mcp.json",
+  "tools/.mcp.json",
+  "docs/.claude/notes.md",
+  "src/lib/.agents/skills/x/SKILL.md",
+  ".codex/config.toml",
+  "tools/.codex/prompts/p.md",
+  "Docs\\Claude.MD",
+  "./docs//Agents.md",
+  "Tools/.MCP.json",
+  "src/.Codex/x",
+];
+
+test("agent instruction and configuration files are critical and owner-command at any depth", async () => {
+  const { d97Matches } = await import("../orchestrator/orchestrator-core.mjs");
+  for (const file of AGENT_CONTROL_SAMPLES) {
+    assert.equal(minimumRisk([file]).risk, "critical", file);
+    assert.equal(declared("low", [file]).ok, false, file);
+    assert.equal(declared("standard", [file]).ok, false, file);
+    assert.equal(ownerCommandPaths([file]).length, 1, file);
+    assert.equal(d97Matches([file]).length, 1, file);
+    assert.equal(lowReviewExempt([file]), false, file);
+  }
+  const renamed = changedPaths([{ filename: "docs/notes.md", previous_filename: "docs/CLAUDE.md", status: "renamed" }]);
+  assert.equal(minimumRisk(renamed).risk, "critical");
+  const held = decide({ risk: "low", names: ["docs/README.md", "docs/CLAUDE.md"] });
+  assert.equal(held.state, "failure");
+  assert.match(held.description, /below minimum critical/);
+  assert.equal(decide({ risk: "critical", names: ["docs/AGENTS.md"], autoMerge: true }).state, "pending");
+});
+
+test("names that only resemble agent files keep their floor", async () => {
+  const { d97Matches } = await import("../orchestrator/orchestrator-core.mjs");
+  for (const file of ["docs/PLAN-DEMO.md", "docs/mcp.md", "docs/codex-notes.txt", "docs/claude.txt", "docs/.mcp.json.md"]) {
+    assert.equal(minimumRisk([file]).risk, "low", file);
+    assert.deepEqual(ownerCommandPaths([file]), [], file);
+    assert.deepEqual(d97Matches([file]), [], file);
+  }
+  for (const file of ["src/agent.ts", "src/claude/client.ts", "scripts/.codexrc.mjs"]) {
+    assert.equal(minimumRisk([file]).risk, "standard", file);
+    assert.deepEqual(ownerCommandPaths([file]), [], file);
   }
 });
 
