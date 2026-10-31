@@ -165,4 +165,19 @@ test.describe("sources panel (DAN-343)", () => {
     await noAxeFindings(page);
     await testInfo.attach("sources-form-375.png", { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
   });
+
+  // D-183: the filled form, full page, in both themes at 1440 and 400 px.
+  for (const theme of ["dark", "light"] as const) {
+    test(`the filled form in the ${theme} theme at 1440 and 400 px`, async ({ page }, testInfo) => {
+      await page.addInitScript((value) => localStorage.setItem("ductura.theme", value), theme);
+      for (const width of [1440, 400]) {
+        const tab = await openSources(page, width);
+        await tab.getByRole("button", { name: t.add }).click();
+        await fill(tab, { [t.family]: "Horvat", [t.given]: "Ana", [t.year]: "2021", [t.title]: "Izmišljena knjiga" });
+        await expect(tab.locator('[data-preview="citation"]')).toBeVisible();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+        await testInfo.attach(`sources-form-${theme}-${width}.png`, { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
+      }
+    });
+  }
 });
