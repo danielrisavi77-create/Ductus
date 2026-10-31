@@ -200,9 +200,12 @@ export function fileReadingTests(root, read = (file) => readFileSync(file, "utf8
 // A hook can inherit GIT_DIR and friends, which would point git elsewhere than
 // the worktree being pushed from. Stdout that outgrows the spawn buffer ends with
 // status null, so a shortened answer is never read as a complete one.
+export function withoutGit(env) {
+  return Object.fromEntries(Object.entries(env).filter(([name]) => !/^GIT_/i.test(name)));
+}
+
 function gitOutput(args, cwd, env) {
-  const clean = Object.fromEntries(Object.entries(env).filter(([name]) => !/^GIT_/i.test(name)));
-  const result = spawnSync("git", args, { cwd, encoding: "utf8", env: clean });
+  const result = spawnSync("git", args, { cwd, encoding: "utf8", env: withoutGit(env) });
   return result.status === 0 ? result.stdout : null;
 }
 
@@ -266,10 +269,23 @@ export function pnpmCommand(args, platform = process.platform) {
 
 const WINDOWS_COMMAND_LIMIT = 8191;
 
-function run(args, cwd, execute) {
+// Every test process gets the environment without GIT_*: a hook in a linked
+// worktree inherits GIT_DIR, and a test fixture that runs git in its own
+// directory would otherwise commit into the branch being pushed.
+function run(args, cwd, execute, env) {
   const [command, commandArgs] = pnpmCommand(args);
-  const result = execute(command, commandArgs, { cwd, stdio: "inherit" });
+  const result = execute(command, commandArgs, { cwd, stdio: "inherit", env: withoutGit(env) });
   return result.status ?? 1;
+}
+
+/**
+ * Whether GNU `timeout` (with --kill-after) runs here: the script tests of a
+ * tooling run need it (scripts/engineering/playwright-install.sh). Without it,
+ * as on macOS without coreutils, the tooling run would fail a correct push.
+ */
+export function gnuTimeoutAvailable(env = process.env) {
+  const probe = spawnSync("timeout", ["--kill-after=1", "10", process.execPath, "-e", ""], { stdio: "ignore", env: withoutGit(env) });
+  return probe.status === 0;
 }
 
 function readPushLines() {
@@ -305,7 +321,7 @@ export function toolingInventory(cwd) {
   return { readers: [...readers].sort(), scriptTests };
 }
 
-export function main(cwd = fileURLToPath(new URL("../../", import.meta.url)), env = process.env, execute = spawnSync, readLines = readPushLines, platform = process.platform) {
+export function main(cwd = fileURLToPath(new URL("../../", import.meta.url)), env = process.env, execute = spawnSync, readLines = readPushLines, platform = process.platform, hasTimeout = gnuTimeoutAvailable) {
   const changed = changedAgainstMain(cwd, env);
   let why = explain(changed?.files, env);
   let readers = why.mode === "scoped" ? fileReadingTests(cwd) : [];
@@ -332,22 +348,25 @@ export function main(cwd = fileURLToPath(new URL("../../", import.meta.url)), en
   if (why.mode === "tooling" && platform === "win32") {
     why = { mode: "full", reason: "the tooling run does not pass on Windows yet (DAN-369)", files: [] };
   }
+  if (why.mode === "tooling" && !hasTimeout(env)) {
+    why = { mode: "full", reason: "GNU timeout, which the script tests need, is not available", files: [] };
+  }
   if (why.mode === "full" || unsafe.length) {
     for (const line of describe(unsafe.length ? { mode: "full", reason: "a file-reading test has an unusual name", files: unsafe } : why)) console.log(line);
-    return run(["test"], cwd, execute);
+    return run(["test"], cwd, execute, env);
   }
   for (const line of describe(why)) console.log(line);
   console.log(`pre-push: ${changed.files.length} changed file(s), plus ${readers.length} file-reading test(s). CI runs everything.`);
   if (why.mode === "tooling") {
-    const scripts = execute(process.execPath, ["--test", ...scriptTests], { cwd, stdio: "inherit" });
+    const scripts = execute(process.execPath, ["--test", ...scriptTests], { cwd, stdio: "inherit", env: withoutGit(env) });
     if (scripts.status !== 0) return scripts.status ?? 1;
   }
   // A script may have no static Vitest importer, so only here may the selection
   // be empty; the reader run below never passes on nothing.
   const emptySelection = why.mode === "tooling" ? ["--passWithNoTests"] : [];
-  const reached = run(["exec", "vitest", "run", ...projects, "--changed", changed.base, ...emptySelection], cwd, execute);
+  const reached = run(["exec", "vitest", "run", ...projects, "--changed", changed.base, ...emptySelection], cwd, execute, env);
   if (reached !== 0) return reached;
-  return readers.length === 0 ? 0 : run(readerRun, cwd, execute);
+  return readers.length === 0 ? 0 : run(readerRun, cwd, execute, env);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) process.exit(main());

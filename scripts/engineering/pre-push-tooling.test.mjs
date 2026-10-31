@@ -7,7 +7,7 @@ import { chmodSync, copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, re
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { TOOLING_DOCS, changedAgainstMain, describe, explain, fileReadingTests, localImports, main, parseRawDiff, plan, pushesOnlyHead, toolingInventory } from "./pre-push-tests.mjs";
+import { TOOLING_DOCS, changedAgainstMain, describe, explain, fileReadingTests, gnuTimeoutAvailable, localImports, main, parseRawDiff, plan, pushesOnlyHead, toolingInventory } from "./pre-push-tests.mjs";
 
 const change = (file, ...record) => {
   const [status, oldMode, mode] = record.length ? record : ["M", "100644", "100644"];
@@ -72,9 +72,10 @@ function fixture({ files } = {}) {
     pushLine: () => `refs/heads/feature ${f.head()} refs/heads/feature ${zero}\n`,
     // The real selector over the real diff, with commands recorded and not run.
     // Fixed platform: the rules below must not depend on the machine; Windows has its own tests.
-    decide: ({ env = gitEnv, lines = f.pushLine(), execute = () => ({ status: 0 }), platform = "linux" } = {}) => {
+    // GNU timeout is assumed present; its absence has its own test.
+    decide: ({ env = gitEnv, lines = f.pushLine(), execute = () => ({ status: 0 }), platform = "linux", hasTimeout = () => true } = {}) => {
       const calls = [];
-      const code = main(root, env, (command, args, options) => { calls.push([command, args]); return execute(command, args, options); }, typeof lines === "function" ? lines : () => lines, platform);
+      const code = main(root, env, (command, args, options) => { calls.push([command, args, options]); return execute(command, args, options); }, typeof lines === "function" ? lines : () => lines, platform, hasTimeout);
       const full = calls.length === 1 && calls[0][1].at(-1) === "test";
       const scoped = !full && calls[0]?.[0] !== process.execPath;
       return { code, calls, mode: full ? "full" : scoped ? "scoped" : "tooling" };
@@ -788,6 +789,9 @@ test("L-04: the selector itself, started as the hook starts it, picks each run f
       if (process.platform === "win32") {
         assert.match(tooling.stdout, /pre-push: full test run \(pnpm test\): the tooling run does not pass on Windows yet/);
         assert.equal(tooling.calls, "test");
+      } else if (!gnuTimeoutAvailable(env)) {
+        assert.match(tooling.stdout, /pre-push: full test run \(pnpm test\): GNU timeout, which the script tests need, is not available/);
+        assert.equal(tooling.calls, "test");
       } else {
         assert.match(tooling.stdout, /pre-push: tooling run/);
         assert.match(tooling.calls, /--passWithNoTests/);
@@ -807,3 +811,44 @@ test("L-04: the selector itself, started as the hook starts it, picks each run f
     rmSync(shim, { recursive: true, force: true });
   }
 });
+
+// Codex P1 on d39fb44f: a hook in a linked worktree inherits GIT_DIR, and a test
+// fixture that runs git in its own directory would commit into the pushed branch.
+test("every test process the selector starts runs without GIT_* variables, in each run", () => withFixture((f) => {
+  const env = { ...gitEnv, GIT_DIR: join(f.root, "elsewhere"), GIT_WORK_TREE: f.root, GIT_INDEX_FILE: join(f.root, "index") };
+  const check = (calls, label) => {
+    assert.ok(calls.length > 0, label);
+    for (const [command, , options] of calls) {
+      assert.ok(options?.env, `${label}: ${command} gets an explicit environment`);
+      assert.deepEqual(Object.keys(options.env).filter((name) => /^GIT_/i.test(name)), [], `${label}: ${command}`);
+      assert.equal(options.env.PATH ?? options.env.Path, env.PATH ?? env.Path, `${label}: the rest of the environment is kept`);
+    }
+  };
+  toolChange(f);
+  const tooling = f.decide({ env });
+  assert.equal(tooling.mode, "tooling");
+  assert.equal(tooling.calls.length, 3);
+  check(tooling.calls, "tooling");
+  check(f.decide({ env, lines: "" }).calls, "full");
+  f.put("src/a.ts", "export const x = 2;\n");
+  f.commit();
+  f.git("update-ref", "refs/remotes/origin/main", "HEAD~1");
+  const scoped = f.decide({ env });
+  assert.equal(scoped.mode, "scoped");
+  check(scoped.calls, "scoped");
+}));
+
+// Codex P2 on d39fb44f: the script tests need GNU timeout (playwright-install.sh);
+// without it the tooling run would fail a correct push, so it runs everything.
+test("without GNU timeout a tooling push runs everything", () => withFixture((f) => {
+  toolChange(f);
+  assert.equal(f.decide().mode, "tooling");
+  const printed = [];
+  const log = console.log;
+  console.log = (line) => printed.push(line);
+  let missing;
+  try { missing = f.decide({ hasTimeout: () => false }); } finally { console.log = log; }
+  assert.equal(missing.mode, "full");
+  assert.match(printed.join("\n"), /GNU timeout, which the script tests need, is not available/);
+  assert.equal(gnuTimeoutAvailable({ PATH: "" }), false, "no timeout on PATH");
+}));
