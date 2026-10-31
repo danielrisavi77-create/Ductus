@@ -39,6 +39,33 @@ export function matchesPath(file, list) {
   });
 }
 
+// Files an agent loads as instructions: Claude Code CLAUDE.md and CLAUDE.local.md,
+// Codex AGENTS.md and AGENTS.override.md, Gemini CLI GEMINI.md, and GitHub
+// Copilot's copilot-instructions.md and *.instructions.md.
+const AGENT_INSTRUCTIONS_RE =
+  /(?:^|\/)(?:(?:claude|agents|gemini)[^/]*|copilot-instructions|[^/]*\.instructions)\.md$/i;
+// F-039: agent runtime configuration directories and the MCP server list.
+const AGENT_CONTROL_SEGMENTS = new Set([".claude", ".agents", ".codex"]);
+
+/**
+ * True for a file an agent runtime loads as instructions or configuration, at
+ * any depth: an instruction file name, .mcp.json, or a path with a .claude,
+ * .agents or .codex segment. Such a file decides how agents work, so it carries
+ * the critical floor and the owner's merge command like the D-97 paths.
+ */
+export function isAgentControlPath(file) {
+  const segments = normalizePath(file).toLowerCase().split("/");
+  const name = segments.at(-1) ?? "";
+  return (
+    segments.some((segment) => AGENT_CONTROL_SEGMENTS.has(segment)) ||
+    name === ".mcp.json" ||
+    AGENT_INSTRUCTIONS_RE.test(name)
+  );
+}
+
+/** A D-97 path by path: one of D97_PATHS or an agent control path. */
+export const isD97Path = (file) => matchesPath(file, D97_PATHS) || isAgentControlPath(file);
+
 /** Paths of a REST pull-request files list; a rename counts under both names. */
 export function changedPaths(files) {
   const out = new Set();
@@ -79,11 +106,6 @@ export function qaExemption(files) {
 // (.claude/, .agents/, .github/ at any depth) is never exempt, and neither is a
 // D-97 path.
 const hasDotSegment = (p) => p.split("/").some((segment) => segment.startsWith("."));
-// Files an agent loads as instructions: Claude Code CLAUDE.md and CLAUDE.local.md,
-// Codex AGENTS.md and AGENTS.override.md, Gemini CLI GEMINI.md, and GitHub
-// Copilot's copilot-instructions.md and *.instructions.md.
-const AGENT_INSTRUCTIONS_RE =
-  /(?:^|\/)(?:(?:claude|agents|gemini)[^/]*|copilot-instructions|[^/]*\.instructions)\.md$/i;
 const LOW_DOC_RE = /^(?:docs\/[^/]+\.md|README\.md)$/;
 
 /** Risk low without review: a Markdown file directly in docs/, or the root README.md. */
@@ -122,5 +144,5 @@ export const isNewTestExempt = (file) => {
 
 /** Files that put a PR under the owner's merge command, by path or by content. */
 export function ownerCommandPaths(files) {
-  return (files ?? []).map(normalizePath).filter((f) => matchesPath(f, [...D97_PATHS, ...D97_MANUAL_PATHS]));
+  return (files ?? []).map(normalizePath).filter((f) => isD97Path(f) || matchesPath(f, D97_MANUAL_PATHS));
 }
