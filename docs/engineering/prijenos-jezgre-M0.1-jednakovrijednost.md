@@ -38,8 +38,8 @@ Ishodi:
 | `src/domain/forensics/verified-object-activity.test.ts` | 2 | 0 | 0 | 2 |
 | `src/domain/forensics/verified-object-binding.test.ts` | 6 | 0 | 0 | 6 |
 | `src/domain/forensics/verified-process-history.test.ts` | 4 | 2 | 0 | 2 |
-| `src/lib/document/queries.test.ts` | 8 | 4 | 0 | 4 |
-| **Ukupno** | **273** | **97** | **23** | **153** |
+| `src/lib/document/queries.test.ts` | 8 | 7 | 1 | 0 |
+| **Ukupno** | **273** | **100** | **24** | **149** |
 
 ## Karta po datotekama
 
@@ -288,7 +288,7 @@ Ishodi:
 | --- | --- | --- | --- | --- |
 | 1 | rejects continuation while the latest parent is still active | pokriveno | `src/components/editor/evidence-session.test.ts`: 15: a write of another instance makes the next save stale and stops the session | Ductus nema stanje aktivan; dvije istodobne sesije ne mogu račvati lanac (stale_local_sequence). |
 | 2 | rejects a continuation whose claimed terminal parent head does not exist | pokriveno | `src/lib/journal/atomic-dexie-journal.evidence.test.ts`: 6: saveSegment refuses a broken chain, foreign or forged bytes and limits without a write; `db/tests/045-evidence-acceptance-atomicity.sql`: a new segment must name the current predecessor | Krivi prethodnik daje chain_broken lokalno i chain_conflict na poslužitelju. |
-| 3 | uses parent-head lineage rather than timestamp or session id to find the chain tail | pokriveno | `src/application/evidence/evidence-thin-slice.test.ts`, `src/components/editor/evidence-session.test.ts`: fails verification for %s (reordered segments); 1: typing, Enter and two changes in one save chain from the journal; a new instance continues it | Lanac ide po predecessorSegmentHash; zamijenjen redoslijed daje predecessor_mismatch. |
+| 3 | uses parent-head lineage rather than timestamp or session id to find the chain tail | pokriveno | `src/application/evidence/evidence-thin-slice.test.ts`: fails verification for %s (reordered segments); `src/components/editor/evidence-session.test.ts`: 1: typing, Enter and two changes in one save chain from the journal; a new instance continues it | Lanac ide po predecessorSegmentHash; zamijenjen redoslijed daje predecessor_mismatch. |
 | 4 | does not allow an active session to rewrite its parent link | pokriveno | `src/lib/journal/atomic-dexie-journal.evidence.test.ts`: 6: saveSegment refuses a broken chain, foreign or forged bytes and limits without a write; `db/tests/041-evidence-immutability.sql`: an evidence segment cannot be updated | Spremljen segment se ne piše ponovno (duplicate_transaction), a na poslužitelju se ne mijenja. |
 | 5 | rejects a continuation whose start overlaps the terminal parent | nema koda | – | Preklapanje se mjeri vremenom; Ductus lanac ne provjerava vrijeme (D-24). |
 
@@ -402,20 +402,18 @@ Ishodi:
 
 | # | Izvorni test | Ishod | Ductus test | Napomena |
 | --- | --- | --- | --- | --- |
-| 1 | returns the canonical document and its revision | nema koda | – | Poslužitelj ne vraća sadržaj ni reviziju; readWorkDocument vraća samo id. parseEnsureOutcome nema pozivatelja ni SQL funkcije. |
-| 2 | refuses an empty or non-string project id without a round trip | pokriveno | `src/server/evidence/work-document-read.test.ts`: does not reach the database without a well-formed token and assignment id | Drugi API: id zadatka umjesto projekta, odgovor "none" umjesto koda rad-nepoznat. |
-| 3 | reports a transport error as a read failure | nema koda | – | Ductus namjerno daje isti "none" i za grešku čitanja; zasebnog odgovora nema. Test "answers none on a failed read" to potvrđuje. |
-| 4 | reports an unparseable answer rather than guessing | pokriveno | `src/domain/serverSync/contract.test.ts`: rejects a missing document id, revision or document | Pokriven je samo parser parseEnsureOutcome; on u aplikaciji nema pozivatelja. |
-| 5 | maps not_found to the same answer for a foreign and a missing project | pokriveno | `tests/integration/work-document-read.integration.test.ts`: answers the same none for another course, another institution and no assignment (A2), and to the teacher (A7) | Drugi API (readWorkDocument), ista tvrdnja: tuđe i nepostojeće daju isti odgovor. |
-| 6 | redirects to /prijava when the RPC reports no session | nema koda | – | /rad bez sesije ne preusmjerava; prikazuje poveznicu za prijavu (app/rad/page.tsx, signInAgain). |
-| 7 | reports a stored document the canonical model cannot read | nema koda | – | Poslužitelj ne šalje spremljeni dokument pri otvaranju; provjera validateDocument nad njim zato ne postoji. |
-| 8 | accepts revision 0, the revision of a document with no commit yet | pokriveno | `src/domain/serverSync/contract.test.ts`: parses a document that exists but holds no commit yet | Pokriven je samo parser parseEnsureOutcome; on u aplikaciji nema pozivatelja. |
+| 1 | returns the canonical document and its revision | pokriveno | `src/server/evidence/open-route.test.ts`: opens the work with its state, its snapshot as base64 and only the domain's receipt keys; `src/client/evidence-ingest.test.ts`: reads the work, its snapshot bytes and the domain of its receipt keys | Tok otvaranja rada: POST /api/evidence/open vraća document i currentRevision, a openWork ih čita. |
+| 2 | refuses an empty or non-string project id without a round trip | pokriveno | `src/server/evidence/open-route.test.ts`: refuses %s as invalid before any state | Id zadatka umjesto projekta: krivi ili prazan id daje 422 invalid, a baza se ne poziva. |
+| 3 | reports a transport error as a read failure | pokriveno | `src/server/evidence/open-route.test.ts`: maps %s; `src/client/evidence-ingest.test.ts`: no network is unavailable | Greška baze (slučaj "a fault") daje 503 unavailable, odvojeno od not_found; klijent bez mreže daje unavailable. |
+| 4 | reports an unparseable answer rather than guessing | pokriveno | `src/server/evidence/open-route.test.ts`: maps %s; `src/client/evidence-ingest.test.ts`: refuses %s | Nepoznat ishod, kriva revizija ili snimka bez teksta daju unavailable; klijent odbija odgovor koji nije zatvorenog oblika (openedWorkFrom). |
+| 5 | maps not_found to the same answer for a foreign and a missing project | pokriveno | `src/server/evidence/open-route.test.ts`: maps %s; `tests/integration/work-document-read.integration.test.ts`: answers the same none for another course, another institution and no assignment (A2), and to the teacher (A7) | Slučaj "not a student of it, or no such assignment" daje isti 404 not_found. |
+| 6 | redirects to /prijava when the RPC reports no session | pokriveno | `src/server/evidence/open-route.test.ts`: maps %s; `src/client/evidence-ingest.test.ts`: HTTP %i → %s | Odgovor bez sesije prepoznat je (401 unauthenticated). Umjesto preusmjeravanja /rad prikazuje poveznicu za prijavu (app/rad/page.tsx). |
+| 7 | reports a stored document the canonical model cannot read | nedostaje test | – | startEvidence provjerava snimku iz odgovora otvaranja (verifyDocumentSnapshot); snapshot.test.ts odbija nevaljan dokument, ali nijedan test ne šalje takvu snimku s ispravnim hashom kroz startEvidence. |
+| 8 | accepts revision 0, the revision of a document with no commit yet | pokriveno | `src/client/evidence-ingest.test.ts`: reads the work, its snapshot bytes and the domain of its receipt keys; `tests/integration/open-student-work.integration.test.ts`: creates one work when two tabs open it at once; the second gets the same | Odgovor otvaranja s currentRevision 0 se čita; prvo otvaranje u bazi vraća reviziju 0. |
 
 ## Poznate granice
 
 - Dio redaka „pokriveno” pokriva isto ponašanje kroz drukčiji dizajn ili posredno (npr. lokalni slijed provjeren kroz uvjet usporedbe pri sljedećem spremanju, ili odluka koju tvrdi samo domenska funkcija). Napomena u retku to kaže. Strožim čitanjem neki od njih postaju „nedostaje test”.
-- Dva retka za `queries` pokrivaju samo `parseEnsureOutcome`, koji u aplikaciji nema pozivatelja. Ako se kod bez pozivatelja ne broji kao pokriće, ti retci postaju „nema koda”.
-- `docs/ARCHITECTURE.md` §12 navodi `src/lib/document/queries` pod „Prenosi se bez izmjene”, a izvorni kod koristi Supabase klijent, koji se po istom odjeljku prepisuje. Nesklad ostaje otvoren.
+- Slučajevi `queries` mapirani su na tok otvaranja rada (`POST /api/evidence/open`, `openWork`, `startEvidence`), koji zamjenjuje izvorni `ensureDocumentRow`. Izvorni kod koristi Supabase klijent; `docs/ARCHITECTURE.md` §12 ga ipak navodi pod „Prenosi se bez izmjene”. Nesklad u §12 ostaje otvoren.
 - Klasifikacija grešaka IndexedDB-a razlikuje se od izvora: `DataError`, `NotFoundError`, `VersionError` i `UpgradeError` u Ductusu daju `unknown`, a ne `corrupt`. Zapisano je kao „nedostaje test”; je li to namjera, odlučuje vlasnik koda (Frontend).
 - Dijeljenje segmenta na 5.000 događaja (`MAX_SEGMENT_EVENTS`) nema test; to nije zaseban izvorni slučaj, nego napomena uz redak o proračunu događaja.
-
