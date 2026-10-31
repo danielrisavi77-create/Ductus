@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 import { parseSheetTheme, readSheetTheme, SHEET_THEME_KEY, writeSheetTheme } from "./sheet-theme";
 
 describe("sheet theme", () => {
-  it("is dark unless light is stored (D-123)", () => {
-    expect(parseSheetTheme(undefined)).toBe("dark");
-    expect(parseSheetTheme(null)).toBe("dark");
-    expect(parseSheetTheme("sepia")).toBe("dark");
+  it("is the near-white paper unless dark is stored (D-188, was dark by D-123)", () => {
+    expect(parseSheetTheme(undefined)).toBe("light");
+    expect(parseSheetTheme(null)).toBe("light");
+    expect(parseSheetTheme("sepia")).toBe("light");
     expect(parseSheetTheme("dark")).toBe("dark");
     expect(parseSheetTheme("light")).toBe("light");
   });
@@ -22,7 +22,7 @@ describe("sheet theme", () => {
     expect(readSheetTheme(storage)).toBe("light");
   });
 
-  it("falls back to dark and does not throw when storage is blocked", () => {
+  it("falls back to the paper and does not throw when storage is blocked", () => {
     const blocked = {
       getItem: () => {
         throw new Error("blocked");
@@ -31,8 +31,8 @@ describe("sheet theme", () => {
         throw new Error("blocked");
       },
     };
-    expect(readSheetTheme(blocked)).toBe("dark");
+    expect(readSheetTheme(blocked)).toBe("light");
     expect(() => writeSheetTheme(blocked, "light")).not.toThrow();
-    expect(readSheetTheme(undefined)).toBe("dark");
+    expect(readSheetTheme(undefined)).toBe("light");
   });
 });
