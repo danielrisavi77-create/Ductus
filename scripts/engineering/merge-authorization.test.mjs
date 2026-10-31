@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { carriedHeadCandidates, evaluateMergeAuthorization, evaluatePullRequest } from "./review-gate-core.mjs";
 import { evaluateMetadata } from "./pr-metadata-core.mjs";
-import { changedPaths } from "./protected-paths.mjs";
+import { changedPaths, qaExemption } from "./protected-paths.mjs";
 
 // D-161 (h): the merge queue reads one status, "Merge authorization", computed
 // by the gate with the same parser that checks the declared risk.
@@ -51,6 +51,7 @@ const D97 = ["scripts/engineering/x.mjs"];
 // Only tests, so QA-exempt; its risk floor is below critical, so the parsed
 // risk decides the result.
 const QA_EXEMPT = ["e2e/a.spec.ts"];
+const qaExemptOf = (file) => qaExemption([file]) !== null;
 
 test("Risk critical with QA required and no D-97 path is authorized without a command (D-196)", () => {
   const out = authorize({ body: bodyWith("critical"), filenames: ["src/a.ts", "db/migrations/1.sql"] });
@@ -133,6 +134,52 @@ test("end to end: a QA-exempt critical PR merges on review alone, but not on an 
   assert.equal(run([]).mergeAuthorization.state, "pending");
 });
 
+// F-173: the D-196 path takes only an allowlist of files and only verdicts
+// posted through Apps from two different Apps.
+test("D-196 allowlist: a critical PR touching any file outside application code keeps the command (F-173)", () => {
+  for (const extra of [
+    ".tooling/x.json", "x.config.ts", "db/x/seed.sql", "scripts/x/run.mjs", "package.json", "infra/x.yaml",
+    "src/.env.example", "src/node_modules/x/index.js", "src/CLAUDE.md", "config/x.json", "public/x.js", "docs/engineering/x.md",
+  ]) {
+    assert.equal(authorize({ body: bodyWith("critical"), filenames: ["src/a.ts", extra] }).state, "pending", extra);
+    assert.equal(authorize({ body: bodyWith("critical"), filenames: ["src/a.ts", extra], comments: [command(head)] }).state, "success", extra);
+  }
+  for (const ok of ["src/server/auth/x.ts", "app/rad/page.tsx", "db/migrations/1.sql", "db/tests/a.sql", "tests/unit/a.test.ts", "e2e/a.spec.ts"]) {
+    assert.equal(authorize({ body: bodyWith("critical"), filenames: [ok] }).state, qaExemptOf(ok) ? "pending" : "success", ok);
+  }
+});
+
+const cli = (text, channel) => comment(`${text}Review-Channel: ${channel}\n`);
+const prRun = (filename, comments) => {
+  const repo = { full_name: "danielrisavi77-create/Ductus" };
+  const pr = { body: bodyWith("critical"), head: { sha: head, repo }, base: { repo }, changed_files: 1, user: { login: "writer" } };
+  return evaluatePullRequest({ pr, files: [{ filename }], comments, prReviews: [], reviewComments: [], ownerLogin, carriedHeads: new Set() });
+};
+
+test("D-196: owner-account CLI verdicts never open the path, as a pair or with one App (F-173)", () => {
+  const cliReview = cli(`Agent-Review: codex:cxr1:reviewer\nReview-Head: ${head}\nReview-Verdict: PASS\n`, "codex-cli");
+  const cliQa = cli(`QA-Agent: codex:cxq1:qa\nQA-Head: ${head}\nQA-Verdict: PASS\nQA-Scope: x\n`, "codex-cli");
+  const grokQa = cli(`QA-Agent: grok:gq1:qa\nQA-Head: ${head}\nQA-Verdict: PASS\nQA-Scope: x\n`, "grok-cli");
+  const appReview = comment(`Agent-Review: claude:r1:reviewer\nReview-Head: ${head}\nReview-Verdict: PASS\n`, { appSlug: "claude" });
+  const appQa = comment(`QA-Agent: codex:q1:qa\nQA-Head: ${head}\nQA-Verdict: PASS\nQA-Scope: x\n`, { appSlug: "chatgpt-codex-connector" });
+  for (const [label, comments] of [["CLI pair", [cliReview, cliQa]], ["App review, CLI QA", [appReview, grokQa]], ["CLI review, App QA", [cliReview, appQa]]]) {
+    const out = prRun("db/migrations/1.sql", comments);
+    assert.equal(out.result.state, "success", `${label}: ${out.result.description}`);
+    assert.equal(out.mergeAuthorization.state, "pending", label);
+  }
+  // A QA-exempt critical PR reviewed only through a CLI comment keeps the command.
+  assert.equal(prRun("db/tests/a.sql", [cli(`Agent-Review: codex:cxr1:reviewer\nReview-Head: ${head}\nReview-Verdict: PASS\n`, "codex-cli")]).mergeAuthorization.state, "pending");
+  // Control: App review and QA from two Apps open it.
+  assert.equal(prRun("db/migrations/1.sql", [appReview, appQa]).mergeAuthorization.state, "success");
+});
+
+test("D-196: a QA PASS from the reviewer's own App never opens the path (Codex pair, quota fallback, D-139) (F-173)", () => {
+  const review = comment(`Agent-Review: codex:r1:reviewer\nReview-Head: ${head}\nReview-Verdict: PASS\n`, { appSlug: "chatgpt-codex-connector" });
+  const qa = comment(`QA-Agent: codex:q1:qa\nQA-Head: ${head}\nQA-Verdict: PASS\nQA-Scope: x\n`, { appSlug: "chatgpt-codex-connector" });
+  const out = prRun("db/migrations/1.sql", [review, qa]);
+  assert.equal(out.result.state, "success", out.result.description);
+  assert.equal(out.mergeAuthorization.state, "pending");
+});
 test("an undeclared or failing metadata never authorizes a critical PR without a command", () => {
   assert.equal(authorize({ body: "Agent: claude:a:platforma\nTask: B-1\n" }).state, "pending");
 });

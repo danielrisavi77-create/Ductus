@@ -120,6 +120,29 @@ export const isNewTestExempt = (file) => {
   );
 };
 
+// D-196, F-173: the only files a critical PR may change and still merge without
+// the owner's command: application code, its migrations and tests, and the
+// documents of the low-doc allowlist above. Every other file, D-97 or not,
+// keeps the command. An allowlist, never "everything but D-97" (D-190).
+export const OWNER_FREE_DIRS = ["src/", "app/", "db/migrations/", "db/tests/", "tests/", "e2e/"];
+export function isOwnerFreePath(file) {
+  const p = normalizePath(file);
+  if (
+    hasDotSegment(p) ||
+    AGENT_INSTRUCTIONS_RE.test(p) ||
+    p.split("/").includes("node_modules") ||
+    ownerCommandPaths([p]).length > 0
+  ) {
+    return false;
+  }
+  return matchesPath(p, OWNER_FREE_DIRS) || isLowDocExemptPath(p);
+}
+/** True when the list is not empty and every file is on the D-196 allowlist. */
+export const ownerFreeCritical = (files) => {
+  const paths = files ?? [];
+  return paths.length > 0 && paths.every(isOwnerFreePath);
+};
+
 /** Files that put a PR under the owner's merge command, by path or by content. */
 export function ownerCommandPaths(files) {
   return (files ?? []).map(normalizePath).filter((f) => matchesPath(f, [...D97_PATHS, ...D97_MANUAL_PATHS]));

@@ -1,6 +1,6 @@
 import { canonicalBlock, field, metadataLines } from "./metadata-parser.mjs";
 import { evaluateMetadata } from "./pr-metadata-core.mjs";
-import { changedPaths, isNewTestExempt, lowReviewExempt, ownerCommandPaths, qaExemption } from "./protected-paths.mjs";
+import { changedPaths, isNewTestExempt, lowReviewExempt, ownerCommandPaths, ownerFreeCritical, qaExemption } from "./protected-paths.mjs";
 
 const RISK_VALUES = new Set(["low", "standard", "critical"]);
 const AGENT_RE =
@@ -378,7 +378,7 @@ function latestVerdicts(entries, {
 
     const key = `${identity.appSlug}|${identity.principal}`;
     const candidate = { agent, head: head.toLowerCase(), verdict, extra, fallback, fallbackLine, identity,
-      order: [entry.createdAt, entry.index], current: sameHead(head, headSha) };
+      cli: entry.cliChannel != null, order: [entry.createdAt, entry.index], current: sameHead(head, headSha) };
     // Keep the latest current and the latest carried verdict apart, so a
     // later carried verdict never makes the current one disappear.
     const slots = latest.get(key) ?? { current: null, carried: null };
@@ -572,7 +572,9 @@ function evaluateGateCore({
       state: "success",
       // D-196 (c.6549357009 t. 2): a review PASS without QA, because QA is not
       // required for this file list; Merge authorization reads it like qaPass.
-      qaExemptPass: true,
+      // F-173: only a review posted through an App counts, never an
+      // owner-account CLI comment (D-162, D-193).
+      ...(passingReviews.some((review) => !review.cli) ? { qaExemptPass: true } : {}),
       description: `Independently authenticated review is valid for current head (critical, ${qaExempt} only: QA not required).${carriedNote(passingReviews, headSha)}`,
     };
   }
@@ -607,7 +609,6 @@ function evaluateGateCore({
     if (fallbackPass) {
       return {
         state: "success",
-        qaPass: true,
         description: `Independent review and same-App QA valid for current head (quota fallback: ${fallbackPass.fallback}).${carriedNote([...passingReviews, fallbackPass], headSha)}`,
       };
     }
@@ -633,7 +634,6 @@ function evaluateGateCore({
     if (secondSession && codexThreadsAnswered(reviewComments, authorLogin)) {
       return {
         state: "success",
-        qaPass: true,
         description: `Independent review and second Claude session QA valid for current head (D-139: Codex review on head, threads answered).${carriedNote([...passingReviews, secondSession], headSha)}`,
       };
     }
@@ -656,7 +656,6 @@ function evaluateGateCore({
         const note = carriedNote([codexReview, codexQa], headSha);
         return {
           state: "success",
-          qaPass: true,
           description: note
             ? `Independent Codex review and QA pair valid for current head through D-101 carry.${note}`
             : "Independent Codex review and QA pair valid on exact current head.",
@@ -672,9 +671,16 @@ function evaluateGateCore({
   const counted = risk === "critical" ? [...passingReviews, ...qaPasses] : passingReviews;
   return {
     state: "success",
-    // D-196: Merge authorization reads this flag; only a success that counted a
-    // separate QA PASS sets it (never an override or an exemption).
-    ...(risk === "critical" ? { qaPass: true } : {}),
+    // D-196, F-173: Merge authorization reads this flag. Only a QA PASS from
+    // another App than every passing review sets it, with those reviews and that
+    // QA posted through an App, never an owner-account CLI comment. The same-App
+    // fallback, the D-139 second session, the Codex pair, an override and an
+    // exemption never set it.
+    ...(risk === "critical" &&
+    passingReviews.every((review) => !review.cli) &&
+    qaPasses.some((result) => !result.cli && !passingReviewerApps.has(result.identity.appSlug))
+      ? { qaPass: true }
+      : {}),
     description: (risk === "critical"
       ? "Independently authenticated review and QA are valid for current head."
       : "Independently authenticated review is valid for current head.") + carriedNote(counted, headSha),
@@ -916,7 +922,9 @@ export function evaluateMergeAuthorization({
   // command when the gate passed by counting verdicts: a separate QA PASS
   // (`qaPass`), or a review PASS on a PR that is QA-exempt by its file list (only
   // tests or only documents, `qaExemptPass`; owner, #87 c.6549357009 t. 2). A gate
-  // that passed by an Owner Override keeps the command; any D-97 path keeps it always.
+  // that passed by an Owner Override keeps the command. F-173: every file must be
+  // on the D-196 allowlist (ownerFreeCritical: application code, migrations,
+  // tests, low-doc documents); any other file keeps the command, D-97 or not.
   const verdictPass =
     (gate.qaPass === true && qaExemption(paths) === null) ||
     (gate.qaExemptPass === true && qaExemption(paths) !== null);
@@ -926,9 +934,9 @@ export function evaluateMergeAuthorization({
     sameRepository === true &&
     metadata?.ok === true &&
     metadata.risk === "critical" &&
-    ownerCommandPaths(paths).length === 0;
+    ownerFreeCritical(paths);
   if (criticalByVerdicts) {
-    return { state: "success", description: "Risk critical with review and QA (or QA-exempt), no D-97 path: no owner command needed (D-196)." };
+    return { state: "success", description: "Risk critical, app code only, review and QA through Apps (or QA-exempt): no owner command needed (D-196)." };
   }
   // D-189: a PR that only adds new test files is auto-merge eligible, so it needs
   // no owner command either; a head outside this repository still does.
