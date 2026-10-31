@@ -213,6 +213,14 @@ SELECT is(pg_temp.attach('request-1', pg_temp.sig('key-a', '1', 'C')), 'signed|'
 SELECT is((SELECT receipt_payload FROM evidence.receipt WHERE client_request_id = 'request-1'), (SELECT val FROM ref WHERE name = 'payload_1'),
   'signing changes no byte of the receipt text');
 
+-- A retired key never signs again, also not a receipt accepted before its
+-- validity ended (Codex finding on 9e0c2ed: the verifier cannot tell this
+-- case apart, so the server refuses it).
+SELECT is(pg_temp.attach('late-v2', pg_temp.sig('key-retired')), 'key_not_valid|',
+  'a retired key does not sign a receipt with acceptedAt before its valid_to');
+SELECT is((SELECT status FROM evidence.receipt WHERE client_request_id = 'late-v2'), 'pending_signature',
+  'the receipt stays pending for the active key');
+
 -- A receipt accepted before key-a became valid is signed by it (N-7).
 SELECT is(pg_temp.attach('late-v2', pg_temp.sig('key-a')), 'signed|' || pg_temp.sig('key-a')::text,
   'valid_from is compared with the time of signing, not with acceptedAt');

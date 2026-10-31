@@ -128,9 +128,14 @@ BEGIN
   END IF;
   -- valid_from is compared with the time of signing, never with acceptedAt:
   -- a receipt reserved before a rotation is signed by the new key (N-7).
+  -- valid_to binds both: the verifier refuses acceptedAt >= valid_to, and a
+  -- retired key never signs again, whatever acceptedAt says, since the
+  -- verifier cannot tell that case apart (evidence-receipt-verifier.ts, "a
+  -- retired key used after its retirement"; the server rule closes it).
   v_accepted_at := (v_receipt.receipt_payload::jsonb->>'acceptedAt')::timestamptz;
   IF pg_catalog.clock_timestamp() < v_key.valid_from
-     OR (v_key.valid_to IS NOT NULL AND v_accepted_at >= v_key.valid_to) THEN
+     OR (v_key.valid_to IS NOT NULL
+         AND (v_accepted_at >= v_key.valid_to OR pg_catalog.clock_timestamp() >= v_key.valid_to)) THEN
     RETURN QUERY SELECT 'key_not_valid'::text, NULL::jsonb; RETURN;
   END IF;
 
