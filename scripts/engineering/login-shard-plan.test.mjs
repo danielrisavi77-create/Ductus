@@ -36,7 +36,7 @@ test("the plan is deterministic: same input in any order gives the same plan", (
   const b = planLoginShards([...known].reverse(), Object.fromEntries(Object.entries(repoWeights).reverse()));
   assert.deepEqual(a, b);
   // equal weights break ties by name and by shard index
-  assert.deepEqual(planLoginShards(files(6), { "x.spec.ts": 1 }), [["f00.spec.ts", "f05.spec.ts"], ["f01.spec.ts"], ["f02.spec.ts"], ["f03.spec.ts"], ["f04.spec.ts"]]);
+  assert.deepEqual(planLoginShards(files(8), { "x.spec.ts": 1 }), [["f00.spec.ts", "f06.spec.ts"], ["f01.spec.ts", "f07.spec.ts"], ["f02.spec.ts"], ["f03.spec.ts"], ["f04.spec.ts"], ["f05.spec.ts"]]);
 });
 
 test("the measured weights balance the real suite within 5% of an even split", () => {

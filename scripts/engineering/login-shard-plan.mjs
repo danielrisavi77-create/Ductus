@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 // duration of each spec file, not by test count (Playwright's --shard). The
 // weights only balance the shards; the inventory decides what runs, and
 // login-shards.mjs proves every listed test ran exactly once in its planned shard.
-export const LOGIN_SHARDS = 5;
+export const LOGIN_SHARDS = 6;
 export const WEIGHTS_PATH = fileURLToPath(new URL("./login-shard-weights.json", import.meta.url));
 
 // A flat spec file name under e2e/login. Anything else (a subfolder, a space,

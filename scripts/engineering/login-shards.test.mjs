@@ -7,7 +7,7 @@ import { LOGIN_SHARDS, planLoginShards } from "./login-shard-plan.mjs";
 import { runLoginShards, testsOf, verifyLoginShards } from "./login-shards.mjs";
 
 // Synthetic Playwright JSON: a.spec.ts has two tests (one in a describe), the
-// other files one each. Weights put a and b alone and pair the light files.
+// other files one each. Weights give six files a shard each and pair g with e.
 const NAMES = ["a", "b", "c", "d", "e", "f", "g"];
 const WEIGHTS = { "a.spec.ts": 50, "b.spec.ts": 40, "c.spec.ts": 30, "d.spec.ts": 20, "e.spec.ts": 10, "f.spec.ts": 10, "g.spec.ts": 5 };
 const spec = (file, title, status) => ({
@@ -40,8 +40,8 @@ test("the ids carry file, describe titles, test title and project", () => {
 });
 
 test("shards that together ran the listed suite, each its own plan, pass", () => {
-  assert.deepEqual(plan(), [["a.spec.ts"], ["b.spec.ts"], ["c.spec.ts"], ["d.spec.ts", "g.spec.ts"], ["e.spec.ts", "f.spec.ts"]]);
-  assert.deepEqual(verifyLoginShards(good(), WEIGHTS), { count: 8, skipped: 0, perShard: [2, 1, 1, 2, 2] });
+  assert.deepEqual(plan(), [["a.spec.ts"], ["b.spec.ts"], ["c.spec.ts"], ["d.spec.ts"], ["e.spec.ts", "g.spec.ts"], ["f.spec.ts"]]);
+  assert.deepEqual(verifyLoginShards(good(), WEIGHTS), { count: 8, skipped: 0, perShard: [2, 1, 1, 1, 2, 1] });
 });
 
 test("a test listed but run in no shard fails", () => {
