@@ -857,6 +857,32 @@ export function targetsDefaultBranch(pr) {
   return typeof ref === "string" && ref.length > 0 && ref === pr?.base?.repo?.default_branch;
 }
 
+// F-013: a verdict judged the diff against the base of its time. After the base
+// changes, the same head carries another diff, so nothing written before the
+// last base change counts. Time of the last `base_ref_changed` timeline event;
+// -Infinity when the base never changed, Infinity (drop everything) when the
+// timeline was not read or an event has no readable time.
+export function lastBaseChange(timeline) {
+  if (!Array.isArray(timeline)) return Infinity;
+  let last = -Infinity;
+  for (const event of timeline) {
+    if (event?.event !== "base_ref_changed") continue;
+    const at = Date.parse(event?.created_at ?? "");
+    last = Math.max(last, Number.isNaN(at) ? Infinity : at);
+  }
+  return last;
+}
+
+/** Items stamped strictly after the cutoff; an unreadable stamp drops the item once a cutoff exists. */
+export function sinceBaseChange(items, cutoff, stamp = "created_at") {
+  const list = Array.isArray(items) ? items : [];
+  if (cutoff === -Infinity) return list;
+  return list.filter((item) => {
+    const at = Date.parse(item?.[stamp] ?? "");
+    return Number.isFinite(at) && at > cutoff;
+  });
+}
+
 // F-165: Auto-merge eligible is refused while another open PR shares the head;
 // a list that was not read counts as shared.
 export const SHARED_HEAD = { state: "pending", description: "Not eligible for auto-merge: another open PR shares this head." };

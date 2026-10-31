@@ -4,10 +4,12 @@ import process from "node:process";
 import { carriedHeads, createApi } from "./review-gate-api.mjs";
 import {
   evaluatePullRequest,
+  lastBaseChange,
   NOT_DEFAULT_BASE,
   prNumberFromEvent,
   SHARED_HEAD,
   sharesHeadWithOpenPr,
+  sinceBaseChange,
   targetsDefaultBranch,
 } from "./review-gate-core.mjs";
 import { isMergifyQueuePr, QUEUE_CARRIER_STATUS } from "./mergify-queue-pr.mjs";
@@ -81,7 +83,7 @@ async function main() {
     console.log(QUEUE_CARRIER_STATUS.description);
     return;
   }
-  const [comments, changedFiles, reviews, reviewComments, openPulls] = await Promise.all([
+  const [allComments, changedFiles, allReviews, reviewComments, openPulls, timeline] = await Promise.all([
     apiAll(`/repos/${owner}/${repo}/issues/${number}/comments`),
     apiAll(`/repos/${owner}/${repo}/pulls/${number}/files`),
     // Only for quota evidence (#128): a PR review of the exhausted App voids it.
@@ -90,7 +92,12 @@ async function main() {
     apiAll(`/repos/${owner}/${repo}/pulls/${number}/comments`),
     // F-165: statuses are per head, so the gate reads which open PRs share it.
     apiAll(`/repos/${owner}/${repo}/pulls?state=open`),
+    // F-013: verdicts and commands from before the last base change do not count.
+    apiAll(`/repos/${owner}/${repo}/issues/${number}/timeline`),
   ]);
+  const cutoff = lastBaseChange(timeline);
+  const comments = sinceBaseChange(allComments, cutoff);
+  const reviews = sinceBaseChange(allReviews, cutoff, "submitted_at");
   if (!targetsDefaultBranch(pr)) {
     for (const statusContext of [authorizationContext, autoMergeContext, context]) {
       await setStatus(repository, pr.head.sha, NOT_DEFAULT_BASE, pr.html_url, statusContext);

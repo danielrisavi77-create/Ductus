@@ -35,6 +35,8 @@ globalThis.fetch = async (url, options = {}) => {
       html_url: "https://github.com/o/r/pull/7", body: "", ...plan.pr });
   }
   if (path.endsWith("/pulls/7/files")) return reply(200, plan.files ?? []);
+  if (path.endsWith("/issues/7/comments")) return reply(200, plan.comments ?? []);
+  if (path.endsWith("/issues/7/timeline")) return reply(200, plan.timeline ?? []);
   if (path.endsWith("/pulls")) return reply(200, plan.openPulls ?? []);
   if (path.includes("/commits/")) return reply(200, { sha: "${HEAD}", parents: [{ sha: "${BASE}" }] });
   if (path.includes("/compare/")) return reply(200, { files: [], commits: [] });
@@ -42,7 +44,7 @@ globalThis.fetch = async (url, options = {}) => {
 };
 `;
 
-function run(event, { fail = [], statusFails = false, failPostNumber = 0, pr = {}, files, openPulls } = {}) {
+function run(event, { fail = [], statusFails = false, failPostNumber = 0, pr = {}, files, openPulls, comments, timeline } = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), "gate-runner-"));
   const fake = path.join(dir, "fake-fetch.mjs");
   const eventPath = path.join(dir, "event.json");
@@ -57,7 +59,7 @@ function run(event, { fail = [], statusFails = false, failPostNumber = 0, pr = {
       GITHUB_REPOSITORY: "o/r",
       GITHUB_API_URL: "https://api.example.test",
       GITHUB_TOKEN: "t",
-      FAKE_GH: JSON.stringify({ fail, statusFails, failPostNumber, pr, files, openPulls }),
+      FAKE_GH: JSON.stringify({ fail, statusFails, failPostNumber, pr, files, openPulls, comments, timeline }),
       FAKE_LOG: log,
     },
   });
@@ -202,4 +204,66 @@ test("a renamed human branch, fork, non-draft or different bot is still subject 
     assert.equal(code, 0);
     assert.ok(posts.every((p) => p.body.state !== "success"), JSON.stringify(changed));
   }
+});
+
+// F-013: a PASS written while the base was another branch judged another diff.
+const standard = {
+  ...eligible,
+  body: "Agent: claude:a:platforma\nRisk: standard\nTask: B-1\n",
+};
+const srcFile = [{ filename: "src/a.ts", status: "modified" }];
+const passAt = (at) => ({
+  body: `Agent-Review: claude:b:reviewer\nReview-Head: ${HEAD}\nReview-Verdict: PASS\n`,
+  user: { login: "o" },
+  author_association: "OWNER",
+  performed_via_github_app: { slug: "claude" },
+  created_at: at,
+  updated_at: at,
+});
+const baseChange = (at) => ({ event: "base_ref_changed", created_at: at });
+const gateState = (out) => out.posts.find((p) => p.body.context === "Engineering review gate")?.body.state;
+
+test("control: a review PASS on the head turns the gate green when the base never changed (F-013)", () => {
+  const out = run(comment, { pr: standard, files: srcFile, openPulls: [standard], comments: [passAt("2026-10-31T10:00:00Z")] });
+  assert.equal(out.code, 0);
+  assert.equal(gateState(out), "success");
+});
+
+test("a PASS from before the last base change does not count, one after it does (F-013)", () => {
+  const before = run(comment, {
+    pr: standard, files: srcFile, openPulls: [standard],
+    comments: [passAt("2026-10-31T10:00:00Z")],
+    timeline: [{ event: "commented", created_at: "2026-10-31T09:00:00Z" }, baseChange("2026-10-31T11:00:00Z")],
+  });
+  assert.equal(before.code, 0);
+  assert.ok(before.posts.every((p) => p.body.state !== "success"), JSON.stringify(states(before.posts)));
+  // The same second as the change is not after it.
+  const same = run(comment, {
+    pr: standard, files: srcFile, openPulls: [standard],
+    comments: [passAt("2026-10-31T11:00:00Z")], timeline: [baseChange("2026-10-31T11:00:00Z")],
+  });
+  assert.notEqual(gateState(same), "success");
+  // Only the last change counts: a review between two changes is dropped too.
+  const between = run(comment, {
+    pr: standard, files: srcFile, openPulls: [standard],
+    comments: [passAt("2026-10-31T10:30:00Z")],
+    timeline: [baseChange("2026-10-31T10:00:00Z"), baseChange("2026-10-31T11:00:00Z")],
+  });
+  assert.notEqual(gateState(between), "success");
+  const after = run(comment, {
+    pr: standard, files: srcFile, openPulls: [standard],
+    comments: [passAt("2026-10-31T12:00:00Z")], timeline: [baseChange("2026-10-31T11:00:00Z")],
+  });
+  assert.equal(gateState(after), "success");
+});
+
+test("an unreadable timeline or change time fails closed (F-013)", () => {
+  const failed = run(comment, { pr: standard, files: srcFile, openPulls: [standard], comments: [passAt("2026-10-31T10:00:00Z")], fail: ["/issues/7/timeline"] });
+  assert.equal(failed.code, 1);
+  assert.ok(failed.posts.every((p) => p.body.state !== "success"));
+  const noTime = run(comment, {
+    pr: standard, files: srcFile, openPulls: [standard],
+    comments: [passAt("2026-10-31T12:00:00Z")], timeline: [{ event: "base_ref_changed" }],
+  });
+  assert.notEqual(gateState(noTime), "success");
 });
