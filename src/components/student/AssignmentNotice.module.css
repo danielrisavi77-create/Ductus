@@ -35,10 +35,11 @@
   overflow-wrap: anywhere;
 }
 
+/* 13 px, the smallest text the notice allows (assignment-notice.spec.ts, smallText). */
 .kicker,
 .eyebrow {
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.2em;
   text-transform: uppercase;
