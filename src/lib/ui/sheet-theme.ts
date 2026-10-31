@@ -1,13 +1,13 @@
 /**
- * The writing sheet's theme (D-115, D-123). The shell is always dark; the
- * sheet is dark unless the writer chose the white sheet. The choice is a display preference
+ * The writing sheet's theme (D-115, D-123, D-188). The shell is always dark;
+ * the sheet is the near-white paper unless the writer chose the dark sheet. The choice is a display preference
  * kept only in this browser; it never reaches the server and holds no
  * personal data.
  */
 
 export type SheetTheme = "light" | "dark";
 
-export const SHEET_THEME_DEFAULT: SheetTheme = "dark";
+export const SHEET_THEME_DEFAULT: SheetTheme = "light";
 export const SHEET_THEME_KEY = "ductus.sheetTheme";
 
 /** Anything but the two known values is the default; a stale value never breaks the page. */
