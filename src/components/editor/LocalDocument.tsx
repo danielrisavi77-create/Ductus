@@ -399,7 +399,8 @@ export function LocalDocumentProvider({
         return;
       }
       // Only the tab holding the lock opens the work (3d-2c2 §4, one writer).
-      const { saver, evidence } = createDocumentSaver({ journal, documentId, assignmentId });
+      // No evidence request leaves a tab whose sign-in has ended (F-154).
+      const { saver, evidence } = createDocumentSaver({ journal, documentId, assignmentId, current: () => !ended() });
       // The cleanup's flush may still emit after `setSnapshot(null)`; what the
       // old saver reports then must not come back as the next lock's notice.
       const unsubscribe = saver.subscribe((next) => {
