@@ -36,6 +36,8 @@ test("a teacher's comment next to a paragraph reaches the student, who answers",
   await signIn(student, "/rad");
   const assignment = await seedWork({ teacher: true });
   await student.goto(`/rad?zadatak=${assignment}`);
+  // DAN-330: the work starts on the student's click.
+  await student.getByRole("button", { name: messagesHr.workspace.startWork }).click();
 
   const editor = student.getByRole("textbox", { name: messagesHr.workspace.documentLabel });
   // The first visit of /rad in a run compiles the page and the editor on
