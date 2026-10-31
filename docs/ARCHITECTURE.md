@@ -55,7 +55,7 @@ Smjer ovisnosti je prema unutra: `app` i features pozivaju application; applicat
 | Obavijesti | Polling svakih 30 do 60 s, obavijest o reviziji najviše jednom po P-03 prozoru | [ODLUČENO D-74] |
 | Testovi | Vitest (unit, property i ugovorni), Playwright (E2E i axe), pgTAP (RLS, uloge, matrica pristupa) | Preneseno i prošireno |
 | Pravila fakulteta | Zajednički paket s Lektom (generirani podaci pravila, citatni stilovi, predlošci naslovne stranice) | [ODLUČENO D-25] |
-| AI pomoćnik | Nije u pilotu; student koristi vlastiti alat izvan Ductusa i prilaže ispis razgovora uz izjavu | [ODLUČENO D-77] |
+| AI pomoćnik | U pilotu (1. 3. 2027.) sa svim namjenama iz D-64; izbor pružatelja i model računa su otvoreni; vanjski alat uz izjavu ostaje kao izjavljeno | [ODLUČENO D-194 t. 1, 4; PRIJEDLOG t. 6 i 7] |
 
 Kod se piše iza sučelja (§2a) dok dio D-08 o dobavljačima i trošku nije potvrđen (B0.1, rok 16. 11. 2026.). Nema OpenFGA servisa, transparency loga, Redisa, zasebnog reda poruka ni zasebnog API servera osim workera.
 
@@ -160,7 +160,7 @@ Sesiju otvara samo `identity.open_session`, koju izvršava jedino `ductus_auth` 
 | `suggestion` | dokument, bazna revizija, autor, koraci izmjene, stanje (otvoren, prihvaćen, odbijen), vrijeme | Kao komentar |
 | `notification` | primatelj, vrsta, objekt, prozor P-03, poslano (aplikacija, e-pošta) | Primatelj |
 
-Tablice za ugrađeni AI pomoćnik (`ai_transfer`, `ai_conversation`, šifrirani ključ pružatelja) nisu u pilotu (D-77, §11). Ako se vrate, ključ se šifrira aplikacijski (AES-256-GCM s AAD-om, BACKEND §4.5), ne u bazi.
+Tablice za ugrađeni AI pomoćnik (`ai_transfer`, `ai_conversation`, i, ovisno o modelu računa koji je otvoren, šifrirani ključ pružatelja) još ne postoje; AI pomoćnik je u pilotu (D-194, §5b, §11). Ako se čuva ključ pružatelja, šifrira se aplikacijski (AES-256-GCM s AAD-om, BACKEND §4.5), ne u bazi. Nova tablica ima RLS i redak u pgTAP matrici pristupa (`CLAUDE.md`).
 
 **Ključ ustanove i domena evidencije (D-103, D-102; odluke vlasnika 11. 10. 2026.).** Tablice rada, dokumenta, evidencije i predaje nose ključ ustanove izravno, uvodi se u B-8 prije nego što te tablice nastanu. Svaka takva tablica ima složeni strani ključ koji sprječava miješanje ustanova (kao u modelu ustanove), RLS vezan uz ustanovu i retke u pgTAP matrici s personama druge ustanove. `evidence.signing_key` od prvog dana nosi doseg (domena evidencije), a potpisani sadržaj potvrde v2 nosi neproziran, nepromjenjiv identifikator domene evidencije. Migracija preduvjeta za postojeće tablice zadataka i potvrda obavijesti ide kao zaseban `critical` PR prije prve tablice rada.
 
@@ -237,9 +237,9 @@ Lokalna osnovica B0.2 (`docs/spikes/B0.2.md`) pokazala je da CPU i memorija nisu
 
 ## 5b. Pomoć AI-ja u pilotu
 
-Ugrađeni AI pomoćnik nije u pilotu (D-77). Student koristi vlastiti alat izvan Ductusa, a uz izjavu (D-40, čl. 15 Smjernica) prilaže ispis razgovora kao poveznicu za dijeljenje, izvezenu datoteku ili zalijepljen tekst. Ductus ga sprema uz izjavu kao **izjavljeno**, ne provjerava ga i ne tvrdi ništa o njegovoj potpunosti. Lijepljenje iz vanjskog alata ostaje vidljivo kao lijepljenje, uz neobaveznu oznaku "vanjski AI" (D-43). Prvi ekran zadatka citira dopuštene i zabranjene uporabe iz FPZG čl. 8 (D-80).
+Ugrađeni AI pomoćnik je u pilotu (D-194, mijenja D-77). Student i dalje smije koristiti vlastiti alat izvan Ductusa, a uz izjavu (D-40, čl. 15 Smjernica) prilaže ispis razgovora kao poveznicu za dijeljenje, izvezenu datoteku ili zalijepljen tekst. Ductus ga sprema uz izjavu kao **izjavljeno**, ne provjerava ga i ne tvrdi ništa o njegovoj potpunosti. Lijepljenje iz vanjskog alata ostaje vidljivo kao lijepljenje, uz neobaveznu oznaku "vanjski AI" (D-43). Prvi ekran zadatka citira dopuštene i zabranjene uporabe iz FPZG čl. 8 (D-80).
 
-Ništa u sustavu ne poziva AI pružatelja, pa nijedan AI pružatelj nije podizvršitelj obrade u pilotu.
+Tok podataka ugrađenog pomoćnika: tekst koji student sam pošalje izlazi s poslužitelja Ductusa prema AI pružatelju, koji je zato podizvršitelj obrade i mora biti na popisu podizvršitelja koji ustanova odobri (čl. 28. st. 2. GDPR-a; `docs/privacy/04`). Pružatelju se šalje samo odabrani odlomak i poslužiteljske upute, bez identiteta studenta i bez podataka o procesu pisanja (pravilo 13). Zabranjeni su kineski pružatelji, modeli koje je razvila kineska tvrtka i obrada na kineskim serverima (D-194 t. 2). Tko drži račune kod pružatelja i ugovor o obradi je otvoreno: PRIJEDLOG je pravna osoba operatera (D-194 t. 6). Do izbora pružatelja nijedan nije podizvršitelj, jer sustav još nikoga ne poziva.
 
 ## 5c. Lekta paket i uvoz
 
@@ -325,7 +325,7 @@ Dopunjeno tablicom iz BACKEND §2.
 
 | Element | Usvojiti kad |
 | --- | --- |
-| Ugrađeni AI pomoćnik (prijava kod pružatelja, proxy s popisom dopuštenih pružatelja, `ai_transfer`, razgovori, D-42, D-46, D-64) | Nakon pilota (D-77), kad postoji pružatelj s jamstvom obrade u EU-u ili partnerstvo koje dopušta korištenje pretplate |
+| Ugrađeni AI pomoćnik (prijava kod pružatelja, proxy s popisom dopuštenih pružatelja, `ai_transfer`, razgovori, D-42, D-46, D-64) | U pilotu (D-194): kad su odlučeni pružatelj i model računa (D-194 t. 6 i 7, PRIJEDLOG) i kad postoje ugovor o obradi, DPIA i pravno mišljenje koji pokrivaju asistenta |
 | Reprodukcija s ritmom (D-56) | Izmjena Ustava C-14 i C-19 i pravno mišljenje (D-55); val 3. Izvedba: uz odsječak mentorskog rada zaseban blob s pomacima vremena po transakciji (100 ms), adresiran hashom u odsječku; brisanje bloba po roku ne ruši lanac. Reprodukciju gradi isti kod koji rekonstruira predaju; projekcija nema funkciju koja iz pomaka računa mjere (test) |
 | Web verifikator dnevnog korijena | Val 2, ako ne stane u prvi rez; CLI verifikator ostaje |
 | FINA kao TSA | Postoji poslovni subjekt (obrt) ili FPZG kao ugovorna strana (D-72) |
