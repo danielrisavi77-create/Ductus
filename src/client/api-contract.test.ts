@@ -9,11 +9,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadGoldenVectors } from "@/domain/forensics/golden-vectors/load";
 import { canonicalizeJcs } from "@/domain/forensics/jcs";
 import { handleCommentRequest } from "@/server/collaboration/comments";
-import { handleLiveReadRequest } from "@/server/collaboration/live-route";
+import { handleLiveReadRequest, LIVE_STATE_HEADER as ROUTE_LIVE_STATE_HEADER } from "@/server/collaboration/live-route";
 import type { ActorTransaction, WithActor } from "@/server/db/with-actor";
 
 import { listComments } from "./comments";
-import { readLiveState } from "./live-reader";
+import { LIVE_STATE_HEADER, readLiveState } from "./live-reader";
 
 const ORIGIN = "http://localhost:3000";
 const TOKEN = "A".repeat(43);
@@ -72,9 +72,19 @@ describe("contract: GET /api/live/[documentId] and readLiveState", () => {
 
   it("the route's unchanged answer is the reader's unchanged, and its empty answer the reader's empty", async () => {
     expect(await readLiveState(DOC, HASH, fetcherFor([{ outcome: "unchanged", content_hash: HASH, body: null }])))
-      .toStrictEqual({ kind: "unchanged" });
+      .toStrictEqual({ kind: "unchanged", submitted: false });
     expect(await readLiveState(DOC, null, fetcherFor([{ outcome: "empty", content_hash: null, body: null }])))
       .toStrictEqual({ kind: "empty" });
+  });
+
+  it("the submitted revision the route serves is the reader's submitted state, never the live one (#826)", async () => {
+    expect(LIVE_STATE_HEADER).toBe(ROUTE_LIVE_STATE_HEADER);
+    const read = await readLiveState(DOC, null, fetcherFor([{ outcome: "submitted", content_hash: HASH, body: BODY }]));
+    expect(read).toMatchObject({ kind: "state", hash: HASH, submitted: true });
+    expect(await readLiveState(DOC, HASH, fetcherFor([{ outcome: "submitted", content_hash: HASH, body: null }])))
+      .toStrictEqual({ kind: "unchanged", submitted: true });
+    const live = await readLiveState(DOC, null, fetcherFor([{ outcome: "state", content_hash: HASH, body: BODY }]));
+    expect(live).toMatchObject({ kind: "state", submitted: false });
   });
 
   it("an answer the route refuses is never shown in part", async () => {

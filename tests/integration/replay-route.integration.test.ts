@@ -19,6 +19,8 @@ import { createWithActor, type WithActor } from "@/server/db/with-actor";
 import { createEvidencePayloadReader } from "@/server/evidence/payload-reader";
 import { handleReplayRequest } from "@/server/evidence/replay-route";
 
+import { requireLoopbackDatabaseUrl } from "./loopback-database-url";
+
 // DAN-344 PR A (contract on #923): the owner and the teacher get the same
 // replay bytes through the API (PRODUCT 5 rule 5), over the real read RPCs
 // under withActor and the payloads stored in the local S3 store of
@@ -27,9 +29,7 @@ import { handleReplayRequest } from "@/server/evidence/replay-route";
 // Dora are invented.
 const SAFE_ADMIN_URL: string =
   process.env.DATABASE_URL ?? "postgres://ductus:ductus-local-only@127.0.0.1:54329/ductus";
-if (!["127.0.0.1", "localhost", "[::1]"].includes(new URL(SAFE_ADMIN_URL).hostname)) {
-  throw new Error("The replay test runs only against a loopback database (DATABASE_URL).");
-}
+requireLoopbackDatabaseUrl(SAFE_ADMIN_URL, "The replay test runs only against a loopback database (DATABASE_URL).");
 const ORIGIN = "http://localhost:3000";
 const suffix = randomBytes(5).toString("hex");
 const login = `it_replay_${suffix}`;
