@@ -53,7 +53,6 @@ test("force push is blocked in every spelling the tool can match", () => {
 const DOCUMENTED_GAPS = {
   Bash: [
     "git push --force-with-lease=platforma/x origin platforma/x",
-    "git push --prune origin",
     "git -c core.hooksPath=/dev/null commit -m x",
     "git --config-env=core.hooksPath=HP commit -m x",
     "LEFTHOOK=0 git commit -m x",
@@ -98,9 +97,6 @@ const DOCUMENTED_GAPS = {
     // A git or lefthook hook that calls git itself runs from a routine commit.
     "git commit -m x",
     // Programs git runs on its own.
-    "git rebase -x 'git commit -n -m x' HEAD~1",
-    "git rebase --exec 'git add -A' HEAD~1",
-    "git submodule foreach 'git add -A'",
     "git bisect run ./x.sh",
     "git filter-branch --tree-filter ./x.sh HEAD",
     "git difftool -x ./x.sh",
@@ -146,8 +142,6 @@ const DOCUMENTED_GAPS = {
     "node x.mjs",
     "git config alias.ci 'commit -n'",
     "git ci -m x",
-    "git rebase -x 'git commit -n -m x' HEAD~1",
-    "git submodule foreach 'git add -A'",
     "git -c core.editor=./x.ps1 commit",
     "git config core.sshCommand ./x.ps1",
   ],
@@ -155,8 +149,12 @@ const DOCUMENTED_GAPS = {
 
 // docs/SESSIONS.md 4a also names forms next to those gaps that built-in rules block.
 const DOCUMENTED_BUILT_IN_BLOCKS = {
-  Bash: ["GIT_SSH_COMMAND=./x.sh git push", "GIT_SSH=./x.sh git push", "git -c core.sshCommand=./x.sh push", "pnpm exec git add -A"],
-  PowerShell: ["source x.sh", ". x.sh", ". ./x.ps1", "GIT_SSH_COMMAND=./x.sh git push", "git -c core.sshCommand=./x.sh push", "pnpm exec git add -A"],
+  Bash: [
+    "git push --prune origin",
+    "git rebase -x 'git commit -n -m x' HEAD~1",
+    "git rebase --exec 'git add -A' HEAD~1",
+    "git submodule foreach 'git add -A'","GIT_SSH_COMMAND=./x.sh git push", "GIT_SSH=./x.sh git push", "git -c core.sshCommand=./x.sh push", "pnpm exec git add -A"],
+  PowerShell: ["git rebase -x 'git commit -n -m x' HEAD~1", "git submodule foreach 'git add -A'", "source x.sh", ". x.sh", ". ./x.ps1", "GIT_SSH_COMMAND=./x.sh git push", "git -c core.sshCommand=./x.sh push", "pnpm exec git add -A"],
 };
 
 const DOCUMENTED_FALSE_BLOCKS = {
