@@ -49,6 +49,7 @@
     "orch:twin": "node scripts/orchestrator/ci-twin.mjs",
     "orch:capsule": "node scripts/orchestrator/failure-capsule.mjs",
     "orch:evidence": "node scripts/orchestrator/evidence.mjs",
+    "orch:shadow": "node scripts/orchestrator/shadow.mjs",
     "orch:override": "node scripts/orchestrator/override-block.mjs",
     "orch:preflight": "node scripts/orchestrator/preflight.mjs",
     "test:db": "docker compose exec -T postgres pg_prove -U ductus -d ductus --recurse --ext .sql /db/tests",
