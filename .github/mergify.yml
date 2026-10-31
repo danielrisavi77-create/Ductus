@@ -8,8 +8,8 @@
 #   - "Engineering review gate": independent review and QA for the head;
 #   - "Merge authorization": green in one of four cases: the PR declares Risk
 #     low or standard and touches no D-97 path; or it declares Risk critical,
-#     touches no D-97 path and is not QA-exempt, so the green gate includes a
-#     QA PASS (D-196, trial to 14 Nov 2026); or it only adds new test files
+#     touches no D-97 path and the gate counted a separate QA PASS (not an
+#     override or exemption; D-196, trial to 14 Nov 2026); or it only adds new test files
 #     from the allowlist in ENGINEERING_SYSTEM section 5, from a head branch in
 #     this repository and with no D-97 path (D-189, critical included); or the
 #     owner's `Owner-Command: merge` comment names this head (D-97,

@@ -10,7 +10,8 @@ import { changedPaths } from "./protected-paths.mjs";
 const head = "a".repeat(40);
 const earlier = "b".repeat(40);
 const ownerLogin = "danielrisavi77-create";
-const GREEN = { state: "success", description: "ok" };
+// The strongest green: the gate counted a separate QA PASS (D-196 reads `qaPass`).
+const GREEN = { state: "success", description: "ok", qaPass: true };
 
 let counter = 0;
 const comment = (text, { login = ownerLogin, association = "OWNER", appSlug = null, type = "User" } = {}) => ({
@@ -66,6 +67,30 @@ test("a QA-exempt critical PR (only tests or only documents) still needs the own
     assert.equal(authorize({ body: bodyWith("critical"), filenames }).state, "pending", filenames.join(","));
     assert.equal(authorize({ body: bodyWith("critical"), filenames, comments: [command(head)] }).state, "success");
   }
+});
+
+test("a critical gate green without a counted QA PASS keeps the owner's command (D-196, Codex P2 on #1079)", () => {
+  const filenames = ["src/a.ts", "db/migrations/1.sql"];
+  for (const gate of [{ state: "success", description: "Owner override recorded for critical risk." }, { state: "success", description: "x", qaPass: false }]) {
+    assert.equal(authorize({ body: bodyWith("critical"), filenames, gate }).state, "pending");
+    assert.equal(authorize({ body: bodyWith("critical"), filenames, gate, comments: [command(head)] }).state, "success");
+  }
+});
+
+test("end to end: an Owner Override alone does not authorize a critical PR, review and QA PASS do (D-196)", () => {
+  const files = [{ filename: "db/migrations/1.sql" }];
+  const pr = { body: bodyWith("critical"), head: { sha: head }, changed_files: 1, user: { login: "writer" } };
+  const run = (comments) =>
+    evaluatePullRequest({ pr, files, comments, prReviews: [], reviewComments: [], ownerLogin, carriedHeads: new Set() });
+  const override = comment(`Owner-Override: PASS\nOverride-Head: ${head}\nOverride-Reason: test\n`);
+  const overridden = run([override]);
+  assert.equal(overridden.result.state, "success");
+  assert.equal(overridden.mergeAuthorization.state, "pending");
+  const review = comment(`Agent-Review: claude:r1:reviewer\nReview-Head: ${head}\nReview-Verdict: PASS\n`, { appSlug: "claude" });
+  const qa = comment(`QA-Agent: codex:q1:qa\nQA-Head: ${head}\nQA-Verdict: PASS\nQA-Scope: x\n`, { appSlug: "chatgpt-codex-connector" });
+  const verdicts = run([review, qa]);
+  assert.equal(verdicts.result.state, "success", verdicts.result.description);
+  assert.equal(verdicts.mergeAuthorization.state, "success");
 });
 
 test("an undeclared or failing metadata never authorizes a critical PR without a command", () => {

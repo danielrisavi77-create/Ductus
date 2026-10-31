@@ -604,6 +604,7 @@ function evaluateGateCore({
     if (fallbackPass) {
       return {
         state: "success",
+        qaPass: true,
         description: `Independent review and same-App QA valid for current head (quota fallback: ${fallbackPass.fallback}).${carriedNote([...passingReviews, fallbackPass], headSha)}`,
       };
     }
@@ -629,6 +630,7 @@ function evaluateGateCore({
     if (secondSession && codexThreadsAnswered(reviewComments, authorLogin)) {
       return {
         state: "success",
+        qaPass: true,
         description: `Independent review and second Claude session QA valid for current head (D-139: Codex review on head, threads answered).${carriedNote([...passingReviews, secondSession], headSha)}`,
       };
     }
@@ -651,6 +653,7 @@ function evaluateGateCore({
         const note = carriedNote([codexReview, codexQa], headSha);
         return {
           state: "success",
+          qaPass: true,
           description: note
             ? `Independent Codex review and QA pair valid for current head through D-101 carry.${note}`
             : "Independent Codex review and QA pair valid on exact current head.",
@@ -666,6 +669,9 @@ function evaluateGateCore({
   const counted = risk === "critical" ? [...passingReviews, ...qaPasses] : passingReviews;
   return {
     state: "success",
+    // D-196: Merge authorization reads this flag; only a success that counted a
+    // separate QA PASS sets it (never an override or an exemption).
+    ...(risk === "critical" ? { qaPass: true } : {}),
     description: (risk === "critical"
       ? "Independently authenticated review and QA are valid for current head."
       : "Independently authenticated review is valid for current head.") + carriedNote(counted, headSha),
@@ -903,10 +909,12 @@ export function evaluateMergeAuthorization({
     ownerCommandPaths(paths).length === 0;
   if (automatic) return { state: "success", description: "Risk low or standard, no D-97 path: no owner command needed." };
   // D-196 (trial to 14 Nov 2026): a critical PR with no D-97 path needs no owner
-  // command once the gate is green, because for it that green includes a separate
-  // QA PASS. A critical PR that is QA-exempt (only tests or only documents) keeps
-  // the command, except the new-tests case below; any D-97 path keeps it always.
+  // command when the gate passed by counting a separate QA PASS (`qaPass`). A gate
+  // that passed by an Owner Override or a QA exemption (only tests or only
+  // documents) keeps the command, except the new-tests case below; any D-97 path
+  // keeps it always.
   const criticalWithQa =
+    gate.qaPass === true &&
     metadata?.ok === true &&
     metadata.risk === "critical" &&
     qaExemption(paths) === null &&
