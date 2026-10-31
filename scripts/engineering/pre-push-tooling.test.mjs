@@ -670,8 +670,9 @@ test("A-10, I-07: every test that reaches a rule document is in the set those do
 
 test("J-04, L-02: no node test outside the two tool directories touches a listed path", () => {
   const packageScripts = JSON.parse(readFileSync(join(repository, "package.json"), "utf8")).scripts;
-  const named = `${packageScripts["test:demo"]} ${packageScripts["test:fake-oidc"]}`.match(/\S+\.test\.mjs/g);
-  assert.ok(named.length >= 7, "test:demo and test:fake-oidc are still the skipped steps");
+  // DAN-434 renamed test:demo to test:local; the skipped steps are the same files.
+  const named = `${packageScripts["test:local"]} ${packageScripts["test:fake-oidc"]}`.match(/\S+\.test\.mjs/g);
+  assert.ok(named.length >= 7, "test:local and test:fake-oidc are still the skipped steps");
   const outside = [...new Set([...named, ...testFilesUnder("scripts").filter((file) => !/^scripts\/(?:engineering|orchestrator)\/[^/]+$/.test(file)), ...testFilesUnder("db"), ...testFilesUnder("infra")])];
   const toolPaths = [/scripts\/(?:engineering|orchestrator)\//, /\.\.\/(?:engineering|orchestrator)\//];
   // A listed document as a whole path: a quote or a slash before it, a quote after it.
