@@ -2,14 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { LOGIN_SHARDS } from "./login-shard-plan.mjs";
+import { E2E_PROJECTS } from "./ui-test-pilot.mjs";
 
-// Guards owner decision D-108 d in .github/workflows/ci.yml: runs on main are
-// never cancelled, pull requests run Chromium, main and the nightly run all
-// three engines.
+// Guards .github/workflows/ci.yml: runs on main are never cancelled (D-108 d),
+// and every run, pull requests included, runs all three engines (M0.3).
 const ci = await readFile(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8");
 const playwright = await readFile(new URL("../../playwright.config.ts", import.meta.url), "utf8");
-
-const ALL = `\${{ github.event_name != 'pull_request' }}`;
+const shardsScript = await readFile(new URL("./e2e-shards.mjs", import.meta.url), "utf8");
+const pilotScript = await readFile(new URL("./ui-test-pilot.mjs", import.meta.url), "utf8");
 
 function step(name, job = "stack-e2e") {
   const block = ci.split(`\n  ${job}:\n`)[1]?.split(/^ {2}[\w-]+:\n/m)[0] ?? "";
@@ -36,19 +36,24 @@ test("CI runs on push to main, on pull requests and nightly", () => {
   assert.match(on, /^ {2}schedule:\n {4}- cron: "\d+ \d+ \* \* \*"$/m);
 });
 
-test("outside a pull request all three engines are installed and every project runs", () => {
+test("every run, pull requests included, installs all three engines and runs every project (M0.3)", () => {
   const install = step("Install browsers");
+  const inventory = step("UI pilot expected test inventory");
   const e2e = step("E2E tests");
-  for (const s of [install, e2e]) {
-    assert.ok(s.includes(`          ALL_ENGINES: ${ALL}\n`), "ALL_ENGINES is true for every event but pull_request");
+  for (const s of [install, inventory, e2e]) {
     // Only the trusted docs classification can exempt a PR; main/nightly
     // always produce full (ci-docs-scope.test.mjs also attacks the job guard).
     assert.match(s, /^ {8}if: success\(\) && !cancelled\(\) && needs\.scope\.outputs\.profile == 'full'$/m);
-    assert.doesNotMatch(s, /continue-on-error/);
+    // No branch by event, no project filter, no softened failure.
+    assert.doesNotMatch(s, /event_name|ALL_ENGINES|--project|--grep|--retries|--last-failed|continue-on-error|\|\| true/);
   }
-  assert.match(install, /if \[ "\$ALL_ENGINES" = "true" \]; then\n {12}bash scripts\/engineering\/playwright-install\.sh chromium firefox webkit\n {10}else\n {12}bash scripts\/engineering\/playwright-install\.sh chromium\n {10}fi/);
-  // all engines: the plain suite with no --project filter, so every project runs
-  assert.match(e2e, /if \[ "\$ALL_ENGINES" = "true" \]; then\n {12}pnpm test:e2e --shard="\$E2E_SHARD\/3"\n {10}else\n {12}pnpm test:e2e --project=desktop --project=mobile --shard="\$E2E_SHARD\/3"\n {10}fi/);
+  assert.match(install, /^ {8}run: bash scripts\/engineering\/playwright-install\.sh chromium firefox webkit$/m);
+  assert.match(inventory, /^ {10}pnpm exec playwright test --list --reporter=json$/m);
+  assert.match(e2e, /^ {8}run: pnpm test:e2e --shard="\$E2E_SHARD\/3"$/m);
+  // The browser cache key no longer depends on the event either.
+  assert.match(step("Restore Playwright browsers"), /^ {10}key: pw-\$\{\{ runner\.os \}\}-\$\{\{ hashFiles\('pnpm-lock\.yaml'\) \}\}-all$/m);
+  // Flaky passes are not passes (docs/TESTING.md 2).
+  assert.match(playwright, /^ {2}retries: 0,$/m);
 });
 
 test("the isolated login job runs the full Chromium suite and preserves both reports", () => {
@@ -83,7 +88,7 @@ test("the isolated login job runs the full Chromium suite and preserves both rep
   }
 });
 
-test("the pull request projects are Chromium and the full run includes Firefox and WebKit", () => {
+test("the projects are Chromium desktop and mobile, Firefox and WebKit, and the shard checks expect all four", () => {
   const projects = Object.fromEntries(
     [...playwright.matchAll(/\{ name: "(\w+)", use: \{ \.\.\.devices\["([^"]+)"\] \} \}/g)].map((m) => [m[1], m[2]]),
   );
@@ -91,4 +96,10 @@ test("the pull request projects are Chromium and the full run includes Firefox a
   assert.equal(projects.mobile, "Pixel 7");
   assert.equal(projects.firefox, "Desktop Firefox");
   assert.equal(projects.webkit, "Desktop Safari");
+  assert.deepEqual(Object.keys(projects), [...E2E_PROJECTS]);
+  // Neither shard check may pick the projects by event again.
+  for (const script of [shardsScript, pilotScript]) {
+    assert.match(script, /projects: E2E_PROJECTS/);
+    assert.doesNotMatch(script, /projects: env\.EVENT_NAME/);
+  }
 });

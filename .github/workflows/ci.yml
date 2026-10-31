@@ -202,7 +202,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
-          key: pw-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.event_name == 'pull_request' && 'chromium' || 'all' }}
+          key: pw-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-all
       - run: pnpm stack:up
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
       # The login-callback login (db/local/auth-login.sql) gets a random
@@ -242,44 +242,28 @@ jobs:
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
       - run: pnpm build
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
-      # Owner decision D-108 d: Chromium (desktop and mobile viewport) on a
-      # pull request; Chromium, Firefox and WebKit on main and nightly.
+      # M0.3 (DAN-114): Chromium (desktop and mobile viewport), Firefox and
+      # WebKit on every run, pull requests included, so all three engines are
+      # part of the required Local stack status. No retries, no filter.
+      # Firefox and WebKit need the system packages, so this is always the
+      # --with-deps path (the Chromium-only shortcut does not apply).
       - name: Install browsers
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
-        env:
-          ALL_ENGINES: ${{ github.event_name != 'pull_request' }}
-          PLAYWRIGHT_TRY_WITHOUT_DEPS: ${{ github.event_name == 'pull_request' && '1' || '' }}
-        run: |
-          if [ "$ALL_ENGINES" = "true" ]; then
-            bash scripts/engineering/playwright-install.sh chromium firefox webkit
-          else
-            bash scripts/engineering/playwright-install.sh chromium
-          fi
+        run: bash scripts/engineering/playwright-install.sh chromium firefox webkit
       - name: UI pilot expected test inventory
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         env:
-          ALL_ENGINES: ${{ github.event_name != 'pull_request' }}
           PLAYWRIGHT_JSON_OUTPUT_FILE: .ci-reports/ui-pilot-inventory.json
         run: |
           mkdir -p .ci-reports
-          if [ "$ALL_ENGINES" = "true" ]; then
-            pnpm exec playwright test --list --reporter=json
-          else
-            pnpm exec playwright test --list --reporter=json --project=desktop --project=mobile
-          fi
+          pnpm exec playwright test --list --reporter=json
       - name: E2E tests
         if: success() && !cancelled() && needs.scope.outputs.profile == 'full'
         env:
           E2E_NO_BUILD: "1"
           UI_TEST_PILOT: "1"
           E2E_SHARD: ${{ matrix.shard }}
-          ALL_ENGINES: ${{ github.event_name != 'pull_request' }}
-        run: |
-          if [ "$ALL_ENGINES" = "true" ]; then
-            pnpm test:e2e --shard="$E2E_SHARD/3"
-          else
-            pnpm test:e2e --project=desktop --project=mobile --shard="$E2E_SHARD/3"
-          fi
+        run: pnpm test:e2e --shard="$E2E_SHARD/3"
       - name: Collect shard evidence
         if: ${{ needs.scope.outputs.profile == 'full' && !cancelled() }}
         run: cp test-results/ui-pilot-full.json .ci-reports/results.json
