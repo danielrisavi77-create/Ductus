@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { messagesHr as t } from "@/lib/i18n/messages.hr";
 
 import ShellRail from "./ShellRail";
+import styles from "./WorkspaceShell.module.css";
 
 export type WorkspaceMode = "writing" | "teacher-view";
 
@@ -62,7 +63,7 @@ export default function WorkspaceShell({
   teacherView,
 }: WorkspaceShellProps) {
   return (
-    <div className="workspace">
+    <div className={`workspace ${styles.workspace}`}>
       {/* A named region: the course and assignment and the bar's links are
           inside a landmark like the rest of the page (axe "region", #711 F1). */}
       <section className="workspace__bar" aria-label={t.workspace.barLabel}>

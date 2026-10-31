@@ -1,0 +1,216 @@
+/* Approved V3 workspace, fitted to the real app's 236 px navigation.
+ * Keep the existing column widths, folding points and DOM order. Colour
+ * comes from the app and sheet tokens, including the separate palette work. */
+.workspace {
+  border-radius: calc(var(--radius) + 4px);
+  background: var(--ground);
+}
+
+.workspace :global(.workspace__bar) {
+  min-height: 58px;
+  padding: 10px 18px;
+  gap: 10px 18px;
+}
+
+.workspace :global(.brand-line__context) {
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+.workspace :global(.modes) {
+  padding: 3px;
+  border: 1px solid var(--rule-2);
+  border-radius: calc(var(--radius-sm) + 3px);
+  background: var(--ground);
+}
+
+.workspace :global(.modes__item) {
+  min-height: 34px;
+  line-height: 1.5;
+  gap: 6px;
+}
+
+.workspace :global(.modes__item[aria-current="page"]) {
+  background: var(--chrome);
+  box-shadow: 0 0 0 1px var(--rule);
+}
+
+.workspace :global(.sheet-area) {
+  padding: 30px 20px 70px;
+}
+
+.workspace :global(.sheet) {
+  min-height: 680px;
+  padding: 49px clamp(28px, 3.8vw, 54px) 72px;
+  border-radius: 2px;
+}
+
+.workspace :global(.manuscript__title) {
+  margin-bottom: 24px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.workspace :global(.workspace__rail) {
+  padding: 24px 10px;
+}
+
+.workspace :global(.rail-section) {
+  margin-bottom: 26px;
+}
+
+.workspace :global(.rail-section + .rail-section) {
+  padding-top: 20px;
+  border-top: 1px solid var(--rule-2);
+}
+
+.workspace :global(.rail-section__title) {
+  padding: 0 8px;
+  margin-bottom: 12px;
+  line-height: 1.5;
+  letter-spacing: 0.04em;
+}
+
+.workspace :global(.rail-empty) {
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+
+.workspace :global(.outline) {
+  display: grid;
+  gap: 3px;
+}
+
+.workspace :global(.outline__link) {
+  min-height: 36px;
+  padding: 8px;
+  border: 1px solid transparent;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.workspace :global(.outline__item[data-level="2"] .outline__link) {
+  padding-left: 20px;
+}
+
+.workspace :global(.outline__item[data-level="3"] .outline__link) {
+  padding-left: 32px;
+}
+
+.workspace :global(.outline__link[aria-current="location"]) {
+  border-color: var(--rule);
+  background: var(--accent-soft);
+}
+
+.workspace :global(.panel-tabs__list) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 10px;
+  overflow: visible;
+}
+
+.workspace :global(.panel-tabs__tab) {
+  min-width: 0;
+  min-height: 38px;
+  padding: 8px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.workspace :global(.panel-tabs__tab:hover) {
+  background: var(--hover);
+}
+
+.workspace :global(.panel-tabs__tab[aria-selected="true"]) {
+  border-color: var(--rule);
+  background: var(--accent-soft);
+  /* Keep the existing underline and weight as non-colour selection marks. */
+}
+
+.workspace :global(.panel-tabs__panel) {
+  padding: 24px 18px 30px;
+  overflow-wrap: anywhere;
+}
+
+.workspace :global(.panel-tabs__panel > .rail-empty) {
+  padding: 20px 14px;
+  border: 1px dashed var(--rule);
+  border-radius: calc(var(--radius-sm) + 3px);
+  text-align: center;
+}
+
+.workspace :global(.workspace__status) {
+  min-height: 40px;
+  padding: 10px 18px;
+  line-height: 1.6;
+}
+
+/* The production shell already folds the structure and panel at these
+ * widths; keep its buttons and hidden states, with comfortable spacing. */
+@media (max-width: 1250px) {
+  .workspace :global(.workspace__rail) {
+    padding: 0;
+  }
+
+  .workspace :global(.workspace__rail > .rail-body) {
+    padding: 16px 12px 20px;
+  }
+}
+
+@media (max-width: 1050px) {
+  .workspace :global(.workspace__panel > .rail-body) {
+    padding: 0;
+  }
+
+  .workspace :global(.rail-toggle) {
+    min-height: 48px;
+    padding: 10px 18px;
+    line-height: 1.5;
+  }
+}
+
+@media (max-width: 799.98px) {
+  .workspace {
+    border-radius: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .workspace :global(.workspace__bar) {
+    padding: 10px 12px;
+  }
+
+  .workspace :global(.modes) {
+    max-width: 100%;
+  }
+
+  .workspace :global(.modes__item) {
+    min-height: 44px;
+    padding: 6px 8px;
+    flex-wrap: wrap;
+    font-size: 13px;
+  }
+
+  .workspace :global(.sheet-area) {
+    padding: 18px 10px 32px;
+  }
+
+  .workspace :global(.sheet) {
+    min-height: 540px;
+    padding: 32px 20px 48px;
+  }
+
+  .workspace :global(.outline__link),
+  .workspace :global(.panel-tabs__tab) {
+    min-height: 44px;
+    font-size: 13px;
+  }
+
+  .workspace :global(.workspace__status) {
+    padding: 10px 12px;
+    gap: 8px 14px;
+  }
+}
