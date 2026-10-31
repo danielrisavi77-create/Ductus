@@ -5,6 +5,7 @@
  * Ovo je minimalni model za dokazivanje koncepta.
  * Ne zamjenjuje D-45; proširuje ga.
  */
+import { snapshotHash } from "./snapshot-hash";
 
 export type ValidityConditionKind = "text_range" | "protected_element";
 
@@ -53,14 +54,9 @@ export function normalizeForComparison(text: string): string {
     .trim();
 }
 
-/** Jednostavan hash za spike (ne kriptografski). U produkciji zamijeniti. */
-export function simpleHash(text: string): string {
-  let h = 0;
-  for (let i = 0; i < text.length; i++) {
-    h = (Math.imul(31, h) + text.charCodeAt(i)) | 0;
-  }
-  return (h >>> 0).toString(16);
-}
+// SHA-256 of the normalised text (F-168). A condition stored with an older,
+// shorter hash never matches and so asks for re-review.
+export { snapshotHash };
 
 export function needsReReview(
   condition: ValidityCondition,
@@ -71,7 +67,7 @@ export function needsReReview(
   const normalized = normalizeForComparison(currentTextInRange);
 
   if (condition.text_snapshot_hash) {
-    return simpleHash(normalized) !== condition.text_snapshot_hash;
+    return snapshotHash(normalized) !== condition.text_snapshot_hash;
   }
 
   if (condition.protected_value && condition.protected_kind === "number") {
