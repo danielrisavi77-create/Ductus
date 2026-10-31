@@ -44,8 +44,10 @@ test("only main's copy runs, and a branch that changes agent instructions is ref
   for (const p of ["AGENTS.md", "src/AGENTS.override.md", "CLAUDE.md", "docs/CLAUDE.local.md", "GEMINI.md", ".github/copilot-instructions.md", "x/y.instructions.md"]) {
     assert.ok(agentRe.test(p), p);
   }
-  assert.ok(codexDir.test(".codex/config.toml") && codexDir.test("a/.codex/x"));
-  for (const p of ["src/agents/list.ts", "docs/PRODUCT.md", "README.md"]) assert.ok(!agentRe.test(p) && !codexDir.test(p), p);
+  for (const p of [".codex/config.toml", "a/.codex/x", ".claude/uloge/reviewer.md", ".agents/skills/ductus-review/SKILL.md", "x/.claude/settings.json", ".mcp.json", "a/.mcp.json"]) {
+    assert.ok(codexDir.test(p), p);
+  }
+  for (const p of ["src/agents/list.ts", "docs/PRODUCT.md", "README.md", "src/claude.ts", "docs/x.mcp.json.md"]) assert.ok(!agentRe.test(p) && !codexDir.test(p), p);
 });
 
 test("a review that looks like it carries a credential is never posted", () => {

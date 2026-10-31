@@ -1,6 +1,10 @@
 # Independent Codex review of the current branch against origin/main.
 # Codex reads the review instructions from AGENTS.md automatically.
-# Usage: powershell -File scripts/codex-review.ps1 -Level <light|standard|critical> [-Pr <number>] [-NoComment] [-Escalate]
+# Usage (F-176, docs/SESSIONS.md 5): always main's copy, saved outside the
+# checkout of the branch under review, run from that checkout:
+#   git fetch origin main
+#   git show origin/main:scripts/codex-review.ps1 | Out-File -Encoding utf8 "$env:TEMP\codex-review.ps1"
+#   powershell -File "$env:TEMP\codex-review.ps1" -Level <light|standard|critical> [-Pr <number>] [-NoComment] [-Escalate]
 # Levels (docs/SESSIONS.md 5) follow the PR risk: light = Risk low (docs, config,
 # packages); standard = Risk standard (ports and features); critical = Risk
 # critical (evidence, crypto, auth, RLS, submission).
@@ -30,20 +34,25 @@ if ($LASTEXITCODE -ne 0) { throw "git fetch failed; refusing to review against a
 
 # F-176: the branch under review is untrusted input (docs/SESSIONS.md 5).
 # 1. Only main's copy of this script runs: a branch could edit the copy in its
-#    own checkout. Run it as `git show origin/main:scripts/codex-review.ps1`
-#    saved outside the checkout when the branch changes this file.
+#    own checkout. The trusted step is the usage above (main's copy saved
+#    outside the checkout); this check only catches a wrong invocation, since
+#    a branch's copy can drop it.
 $mainCopy = (git show origin/main:scripts/codex-review.ps1 2>$null) -join "`n"
 if ($LASTEXITCODE -ne 0 -or -not $mainCopy) { throw "origin/main:scripts/codex-review.ps1 could not be read; refusing to run" }
 $selfCopy = (Get-Content -LiteralPath $PSCommandPath -Encoding utf8) -join "`n"
 if ($selfCopy.TrimEnd() -ne $mainCopy.TrimEnd()) {
     throw "this copy of codex-review.ps1 differs from origin/main; run main's copy (docs/SESSIONS.md 5)"
 }
-# 2. Codex reads agent instructions from the checkout, so a branch that changes
-#    them is not reviewed this way (it is a D-97 PR and needs another reviewer).
+# 2. Codex reads agent instructions from the checkout, and AGENTS.md sends it
+#    on to role cards and skills, so a branch that changes any agent
+#    instruction or configuration file is not reviewed this way (it is a D-97
+#    PR and needs another reviewer). Same classes as isAgentControlPath in
+#    scripts/engineering/protected-paths.mjs: an instruction file name,
+#    .mcp.json, or a .claude, .agents or .codex segment at any depth.
 $changed = git diff --name-only origin/main...HEAD
 if ($LASTEXITCODE -ne 0) { throw "git diff against origin/main failed; refusing to run" }
 $instructions = @($changed | Where-Object {
-    $_ -match '(?i)(^|/)((claude|agents|gemini)[^/]*|copilot-instructions|[^/]*\.instructions)\.md$' -or $_ -match '(?i)(^|/)\.codex/'
+    $_ -match '(?i)(^|/)((claude|agents|gemini)[^/]*|copilot-instructions|[^/]*\.instructions)\.md$' -or $_ -match '(?i)(^|/)(\.claude|\.agents|\.codex)(/|$)|(^|/)\.mcp\.json$'
 })
 if ($instructions.Count -gt 0) {
     throw "the branch changes agent instructions ($($instructions -join ', ')); Codex would follow them, review it another way"
