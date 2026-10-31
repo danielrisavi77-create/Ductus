@@ -1,6 +1,6 @@
 # Snimke: Archivum V3 (bordo i bakar), DAN-344
 
-Snimke za PR #867 (`docs/SESSIONS.md` §6). Snimljene Playwright Chromiumom na produkcijskoj gradnji (`pnpm build`, `next start`) glave `a3606d2`, s lokalnim demo dnevnikom. Sav tekst je izmišljen.
+Snimke za PR #867 (`docs/SESSIONS.md` §6). Snimljene Playwright Chromiumom na produkcijskoj gradnji (`pnpm build`, `next start`) glave `a3606d2`, s lokalnim probnim dnevnikom. Sav tekst je izmišljen.
 
 | Datoteka | Ekran | Širina | Tema |
 | --- | --- | --- | --- |
