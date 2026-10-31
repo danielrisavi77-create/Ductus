@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadAuthConfig } from "@/server/auth/config";
 import { failurePage, finishLogin, isSameOrigin, LOGIN_COOKIE_NAME, logout, startLogin, type AuthDeps } from "@/server/auth/flow";
 import { createOidcClient } from "@/server/auth/oidc";
-import { SESSION_COOKIE_NAME } from "@/server/auth/session-token";
+import { hashSessionToken, SESSION_COOKIE_NAME } from "@/server/auth/session-token";
 
 import { CLIENT_ID, CLIENT_SECRET, createTestIdp, ISSUER } from "./test-idp";
 
@@ -97,20 +97,38 @@ describe("startLogin", () => {
 });
 
 describe("finishLogin with an attempt cookie it cannot trust", () => {
-  async function refusedWith(attempt: string) {
-    const { authorize } = await begin();
-    const response = await callback(idp.approve(authorize, CALLBACK), `${LOGIN_COOKIE_NAME}=${attempt}`);
+  /**
+   * One attempt: `cookieOf` turns its own cookie value into the one sent, so
+   * the callback, the code and the cookie all belong to the same attempt and
+   * only the edit can make it fail. The refusal must come from the cookie,
+   * before the client is asked to verify anything.
+   */
+  async function refusedWith(cookieOf: (value: string) => string) {
+    const verify = vi.spyOn(deps.oidc, "verify");
+    const { authorize, value } = await begin();
+    const response = await callback(idp.approve(authorize, CALLBACK), `${LOGIN_COOKIE_NAME}=${cookieOf(value)}`);
     await expectRefused(response);
+    expect(verify).not.toHaveBeenCalled();
     expect(idp.tokenRequests).toHaveLength(0);
   }
 
-  it("refuses a cookie longer than 1024 characters, even one that would decode", async () => {
+  it("signs in through the same helper path when the cookie is left as it was", async () => {
+    const verify = vi.spyOn(deps.oidc, "verify");
     const { authorize, value } = await begin();
-    const padded = encode({ ...decode(value), pad: "x".repeat(1024) });
-    expect(padded.length).toBeGreaterThan(1024);
-    const response = await callback(idp.approve(authorize, CALLBACK), `${LOGIN_COOKIE_NAME}=${padded}`);
-    await expectRefused(response);
-    expect(idp.tokenRequests).toHaveLength(0);
+    const same = encode(decode(value));
+    expect(same).toBe(value);
+    const response = await callback(idp.approve(authorize, CALLBACK), `${LOGIN_COOKIE_NAME}=${same}`);
+    expect(response.status).toBe(303);
+    expect(verify).toHaveBeenCalledTimes(1);
+    expect(deps.openSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a cookie longer than 1024 characters, even one that would decode", async () => {
+    await refusedWith((value) => {
+      const padded = encode({ ...decode(value), pad: "x".repeat(1024) });
+      expect(padded.length).toBeGreaterThan(1024);
+      return padded;
+    });
   });
 
   it.each([
@@ -122,8 +140,7 @@ describe("finishLogin with an attempt cookie it cannot trust", () => {
     ["a numeric state", (a: Record<string, unknown>) => ({ ...a, state: 42 })],
     ["no verifier", (a: Record<string, unknown>) => ({ ...a, codeVerifier: undefined })],
   ])("refuses an attempt with %s", async (_name, edit) => {
-    const { value } = await begin();
-    await refusedWith(encode(edit(decode(value))));
+    await refusedWith((value) => encode(edit(decode(value))));
   });
 
   it.each([
@@ -132,14 +149,16 @@ describe("finishLogin with an attempt cookie it cannot trust", () => {
     ["a number", encode(1)],
     ["text that is not JSON", Buffer.from("{v:1").toString("base64url")],
   ])("refuses an attempt that decodes to %s", async (_name, attempt) => {
-    await refusedWith(attempt);
+    await refusedWith(() => attempt);
   });
 
   it("reads the attempt cookie by its exact name only", async () => {
-    const { authorize, value } = await begin();
-    const url = idp.approve(authorize, CALLBACK);
-    for (const cookie of [`x${LOGIN_COOKIE_NAME}=${value}`, `${LOGIN_COOKIE_NAME.toLowerCase()}=${value}`]) {
-      await expectRefused(await callback(url, cookie));
+    for (const rename of [(name: string) => `x${name}`, (name: string) => name.toLowerCase()]) {
+      const verify = vi.spyOn(deps.oidc, "verify");
+      const { authorize, value } = await begin();
+      await expectRefused(await callback(idp.approve(authorize, CALLBACK), `${rename(LOGIN_COOKIE_NAME)}=${value}`));
+      expect(verify).not.toHaveBeenCalled();
+      verify.mockRestore();
     }
     expect(idp.tokenRequests).toHaveLength(0);
   });
@@ -231,6 +250,7 @@ describe("finishLogin when the session ports fail", () => {
     const token = cookieValue(setCookies(response).get(SESSION_COOKIE_NAME)!);
     const input = deps.openSession.mock.calls[0][0] as { tokenHash: Buffer };
     expect(Buffer.isBuffer(input.tokenHash)).toBe(true);
+    expect(input.tokenHash.equals(hashSessionToken(token))).toBe(true);
     expect(JSON.stringify(deps.openSession.mock.calls)).not.toContain(token);
   });
 });
