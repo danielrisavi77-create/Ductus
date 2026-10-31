@@ -80,6 +80,7 @@ M0 → M1 (čeka AAI@EduHr Lab) i M2 → M3 → M5 i M6 → M7 → M4 (čeka lic
 | M2.12 | Pravila fakulteta i njihove verzije (D-117, D-175) | B, F | M2.11 | DAN-315 |
 | M2.13 | Potvrda obavijesti veže otisak teksta obavijesti | B | | DAN-306 |
 | M2.14 | Mentorovi radni zapisi navedeni u obavijesti studentu (D-130) | F | | DAN-235 (#553) |
+| M2.15 | Nalazi granice baze (samo ID): F-018, F-019; RLS uz `current_actor()` kao initplan | B | | DAN-156, DAN-157, DAN-51 |
 
 **Ekrani:** S-02 studentska početna, S-03 moji kolegiji, S-04 upis kodom, S-05 obavijest (dio o zadatku), N-01 moji kolegiji, N-02 novi kolegij i zadatak, N-03 čarobnjak zadatka, N-04 popis studenata, N-16 radovi uz mentora (podaci), A-01 pregled ustanove, A-02 korisnici i uloge, A-03 kolegiji i akademske godine, A-04 pravila fakulteta.
 
@@ -99,7 +100,7 @@ M0 → M1 (čeka AAI@EduHr Lab) i M2 → M3 → M5 i M6 → M7 → M4 (čeka lic
 | M3.4 | Spike B0.2: rekonstrukcija 15.000 i 80.000 riječi na stvarnom stroju | P | stroj | novo |
 | M3.5 | Spike programskog unosa (D-54) | B | | novo |
 | M3.6 | Ostaci evidencije i značenje odgovora na ponovljeni `ingest` | B | | DAN-301, DAN-46 |
-| M3.7 | Nalazi evidencije, lokalnog zapisa i rekonstrukcije (samo ID): F-001, F-003 do F-008, F-028, F-029, F-030, F-034, F-038, F-043, F-048, F-049, F-154 | B, F | | DAN-140, DAN-145, DAN-147 do DAN-152, DAN-164, DAN-165, DAN-167, DAN-170, DAN-175, DAN-180, DAN-181, #913 |
+| M3.7 | Nalazi evidencije, lokalnog zapisa i rekonstrukcije (samo ID): F-001, F-003 do F-008, F-028, F-029, F-030, F-034, F-037, F-038, F-043, F-048, F-049, F-154 | B, F | | DAN-140, DAN-145, DAN-146, DAN-147 do DAN-152, DAN-164, DAN-165, DAN-167, DAN-170, DAN-175, DAN-180, DAN-181, #913 |
 | M3.8 | Produkcijski potpisnik preko KMS-a | B | B0.1 (M11.1) | DAN-295 |
 | M3.9 | Specifikacija i izvedba dnevnog korijena i žiga s CLI verifikatorom (B5, D-72, D-93) | B | M3.2 | DAN-55; izvedba novo |
 | M3.10 | Fuzz parsera B-8 i B-12 te proba izgubljenog odgovora nakon prihvata | P, B | | DAN-320, DAN-321 |
@@ -146,6 +147,7 @@ M0 → M1 (čeka AAI@EduHr Lab) i M2 → M3 → M5 i M6 → M7 → M4 (čeka lic
 | M5.10 | Hrvatski navodnici, traži i zamijeni, način fokusa | F | | novo |
 | M5.11 | Pravopis prema jeziku rada bez slanja teksta van (S-07) | F | M2.10 | novo |
 | M5.12 | Uvodni vodič od dvije minute (S-11 iz `docs/FEATURES.md`) | F | | novo |
+| M5.13 | Nalaz identiteta blokova u editoru (samo ID): F-044 | F | | DAN-176 |
 
 Svaki novi čvor sheme traži pravilo u formatu koraka uređivanja i test reprodukcije prije spajanja (B-12).
 
