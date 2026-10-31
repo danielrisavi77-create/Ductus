@@ -157,7 +157,7 @@ describe("identityFromClaims with AAI@EduHr arrays", () => {
     ["a hole", Array(1)],
     ["a NUL byte", ["ana\u0000@demo-fakultet.test"]],
     ["a zero-width space", ["ana​@demo-fakultet.test"]],
-    ["a bidi override", ["ana‮@demo-fakultet.test"]],
+    ["a bidi override", ["ana\u202e@demo-fakultet.test"]],
     ["a line break", ["ana\n@demo-fakultet.test"]],
     ["a lone surrogate", ["\ud800"]],
     ["256 code points", ["😀".repeat(256)]],
