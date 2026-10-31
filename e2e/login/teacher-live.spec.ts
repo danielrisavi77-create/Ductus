@@ -37,7 +37,7 @@ function work(sentence: string): { body: string; hash: string } {
 }
 
 /** Serves the live route from `next()`, which sees the If-None-Match the page sent. */
-async function serveLive(page: Page, next: (ifNoneMatch: string | null) => { status: number; body?: string; etag?: string }) {
+async function serveLive(page: Page, next: (ifNoneMatch: string | null) => { status: number; body?: string; etag?: string; state?: string }) {
   const calls: (string | null)[] = [];
   await page.route(`**/api/live/${DOC}`, async (route: Route) => {
     const ifNoneMatch = route.request().headers()["if-none-match"] ?? null;
@@ -50,6 +50,7 @@ async function serveLive(page: Page, next: (ifNoneMatch: string | null) => { sta
         "cache-control": "no-store",
         ...(reply.body === undefined ? {} : { "content-type": "application/json; charset=utf-8" }),
         ...(reply.etag === undefined ? {} : { etag: `"${reply.etag}"` }),
+        ...(reply.state === undefined ? {} : { "ductus-live-state": reply.state }),
       },
     });
   });
@@ -99,6 +100,49 @@ test("the teacher sees the work as the student writes, with the limits of the re
   await test.info().attach("dan86-uzivo-sirok", { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
   await page.setViewportSize({ width: 390, height: 844 });
   await test.info().attach("dan86-uzivo-mobitel", { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
+});
+
+// DAN-332 (#826 PR 3): after the submission the route sends the bytes of the
+// submitted revision with `Ductus-Live-State: submitted` (#883).
+test("the submitted work is labelled Predani rad and keeps its text and label", async ({ page }) => {
+  const live = work("Gradske knjižnice su mjesto susreta.");
+  const later = work("Ova rečenica nije predana.");
+  let phase: "live" | "submitted" | "later" | "down" = "live";
+  await serveLive(page, (ifNoneMatch) => {
+    if (phase === "down") return { status: 503, body: '{"error":"unavailable"}' };
+    if (phase === "later") return { status: 200, body: later.body, etag: later.hash };
+    const state = phase === "submitted" ? "submitted" : undefined;
+    return ifNoneMatch === `"${live.hash}"` ? { status: 304, etag: live.hash, state } : { status: 200, body: live.body, etag: live.hash, state };
+  });
+  await signIn(page, PATH, "Demo nastavnik");
+  const text = page.getByRole("document", { name: t.documentLabel });
+  await expect(text.getByText("Gradske knjižnice su mjesto susreta.")).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: t.connection.live })).toBeVisible();
+  await expect(page.getByText(t.submitted, { exact: true })).toHaveCount(0);
+
+  // A3: the submitted revision is the text already shown; a 304 names it so.
+  phase = "submitted";
+  await expect(page.getByRole("status").filter({ hasText: t.submitted })).toBeVisible();
+  await expect(page.getByText(t.submittedNote)).toBeVisible();
+  await expect(page.getByText(t.note)).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: t.connection.live })).toHaveCount(0);
+
+  const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+  expect(results.violations).toEqual([]);
+  await test.info().attach("dan332-predani-rad-sirok", { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
+
+  // A5: neither another text without the header nor a failure replaces it.
+  for (const next of ["later", "down"] as const) {
+    phase = next;
+    await page.waitForTimeout(2500);
+    await expect(text.getByText("Gradske knjižnice su mjesto susreta.")).toBeVisible();
+    await expect(page.getByText("Ova rečenica nije predana.")).toHaveCount(0);
+    await expect(page.getByRole("status").filter({ hasText: t.submitted })).toBeVisible();
+    await expect(page.getByText(t.submittedNote)).toBeVisible();
+    await expect(page.getByText(t.note)).toHaveCount(0);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await test.info().attach("dan332-predani-rad-mobitel", { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
 });
 
 test("a body that is not the document its ETag names is never shown", async ({ page }) => {
