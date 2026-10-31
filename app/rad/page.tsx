@@ -92,8 +92,8 @@ async function journalFor(token: string | undefined): Promise<{
  * amendment 6391779486): a signed-in student on `?zadatak=` writes into their
  * own work of that assignment, whose id comes only from the B1 read
  * (`readWorkDocument`); editor, comments and live view get that same id. A
- * work that does not exist yet is opened by `OpenWork` with one POST, never by
- * this GET. Without `?zadatak=` a signed-in person gets the free draft of
+ * work that does not exist yet is started by `OpenWork` with one POST on the
+ * student's click on "Započni rad" (DAN-330), never by this GET or a mount. Without `?zadatak=` a signed-in person gets the free draft of
  * this device: no comments, no live view, no submission, nothing sent (P1).
  * Any other `?zadatak=` (foreign, unknown, malformed, a teacher, reads that
  * disagree) is one neutral read-only sheet with no id at all. Without a
@@ -132,11 +132,11 @@ export default async function WorkspacePage({
   const journal = plan.journal;
   const view = teacherViewMode(plan, prikaz);
   // Course, title and Upute only for the student's own acknowledged assignment.
-  const ownsAssignment = plan.kind === "assignment" || plan.kind === "opening" || plan.kind === "notYetOpen";
+  const ownsAssignment = plan.kind === "assignment" || plan.kind === "notStarted" || plan.kind === "notYetOpen";
   const work = ownsAssignment && read.kind === "ready" ? read : null;
   const session = signedIn && tag !== null ? { tag, at } : null;
   const invented = showsInventedPanels({ scope: journal?.scope ?? null, signedIn });
-  const late = plan.kind === "assignment" && pastDue(plan.dueAt, at);
+  const late = (plan.kind === "assignment" || plan.kind === "notStarted") && pastDue(plan.dueAt, at);
   // In the shell's account place: signing out goes through LocalLogout where
   // a journal is open, which knows what the device still holds (D-118, I5).
   const account = journal && signedIn ? <LocalLogout /> : signInAgain ? (
@@ -221,8 +221,8 @@ export default async function WorkspacePage({
             {plan.kind === "free" ? <p className="sheet-note">{t.workspace.freeNote}</p> : null}
             {journal ? (
               <LocalEditor />
-            ) : plan.kind === "opening" ? (
-              <OpenWork assignmentId={plan.assignmentId} />
+            ) : plan.kind === "notStarted" ? (
+              <OpenWork assignmentId={plan.assignmentId} session={session} />
             ) : (
               // Not editable: the text says so, matching aria-disabled.
               <div
