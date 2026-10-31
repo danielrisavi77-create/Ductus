@@ -145,7 +145,8 @@ function cliChannel(item, ownerLogin) {
   return named.size === 1 ? [...named][0] : null;
 }
 
-function commentAppSlug(item, ownerLogin) {
+// Exported so the orchestrator scripts read a verdict's App as the gate does.
+export function commentAppSlug(item, ownerLogin) {
   const slug = item?.performed_via_github_app?.slug ?? null;
   if (slug) return slug;
   return CLI_CHANNELS.get(cliChannel(item, ownerLogin))?.app ?? null;

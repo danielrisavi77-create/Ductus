@@ -1,11 +1,14 @@
 // Pure logic for the orchestrator helper scripts. No gh/git calls here.
 import { canonicalBlock, field } from "../engineering/metadata-parser.mjs";
-import { commentTime, trustedAuthor } from "../engineering/review-gate-core.mjs";
+import { commentAppSlug, commentTime, trustedAuthor } from "../engineering/review-gate-core.mjs";
+import { EXPECTED_REPO } from "./verdict-core.mjs";
 import {
   changedPaths, D97_MANUAL_PATHS, D97_PATHS, matchesPath, normalizePath,
 } from "../engineering/protected-paths.mjs";
 
 export const GATE_CONTEXT = "Engineering review gate";
+// The repository owner, whose CLI comments the gate counts as an App (D-162, D-193).
+export const REPO_OWNER = EXPECTED_REPO.split("/")[0];
 const SHA_RE = /^[0-9a-f]{40}$/i;
 
 const KINDS = {
@@ -97,7 +100,7 @@ export function parseVerdicts(comments, kind) {
       head: field(c.body, k.head),
       verdict: field(c.body, k.verdict)?.toUpperCase() ?? null,
       author: c.user?.login ?? null,
-      appSlug: c.performed_via_github_app?.slug ?? null,
+      appSlug: commentAppSlug(c, REPO_OWNER),
       createdAt: commentTime(c) || index,
       index,
     }))

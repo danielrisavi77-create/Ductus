@@ -1,7 +1,8 @@
 // Pure logic of `pnpm orch:health` (DAN-139): no gh, git or fs calls here.
 // Inputs are already-read data; outputs are findings {level, check, text}.
 import { canonicalBlock, field, metadataLines } from "../engineering/metadata-parser.mjs";
-import { commentTime, trustedAuthor, verifiedCommentIdentity } from "../engineering/review-gate-core.mjs";
+import { commentAppSlug, commentTime, trustedAuthor, verifiedCommentIdentity } from "../engineering/review-gate-core.mjs";
+import { REPO_OWNER } from "./orchestrator-core.mjs";
 
 /** One heartbeat of the orchestrator loop, in minutes (docs/ORKESTRATOR.md §10). */
 export const HEARTBEAT_MIN = 30;
@@ -42,7 +43,7 @@ export function canonicalVerdicts(comments) {
       const agent = field(body, k.agent);
       const head = field(body, k.head);
       const verdict = field(body, k.verdict)?.toUpperCase();
-      const identity = verifiedCommentIdentity({ appSlug: c?.performed_via_github_app?.slug ?? null }, agent);
+      const identity = verifiedCommentIdentity({ appSlug: commentAppSlug(c, REPO_OWNER) }, agent);
       if (!identity || !agent.endsWith(`:${k.role}`) || !SHA_RE.test(head ?? "")) continue;
       if (!["PASS", "FAIL", "BLOCK"].includes(verdict)) continue;
       out.push({ kind: k.kind, agent, principal: identity.principal, head: head.toLowerCase(), verdict, index,
