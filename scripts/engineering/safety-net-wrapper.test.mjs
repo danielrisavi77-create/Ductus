@@ -320,6 +320,19 @@ test("review: the verdict follows the event cwd; a cwd without the project ruleb
         assert.equal(ok.code, 0);
         assert.match(ok.stdout, /deny/);
       }
+      // F-035 a: outside the checkout only the project's own config counts. A
+      // changed rulebook there, even one that still denies the probes, is refused.
+      const rulebook = path.join(withRules, ".cc-safety-net", "rules", "ductus-rules", "rulebook.json");
+      fs.writeFileSync(rulebook, fs.readFileSync(rulebook, "utf8").replace(/\s*$/, "\n "));
+      for (const tool of TOOLS) {
+        const reduced = run(tree, tool, "git status", withRules);
+        assert.equal(reduced.code, 2, "changed rulebook outside the checkout");
+        assert.match(reduced.stderr, /differs from the project root/);
+      }
+      // An extra file in the copied config is a difference too.
+      fs.writeFileSync(rulebook, fs.readFileSync(path.join(tree.root, ".cc-safety-net", "rules", "ductus-rules", "rulebook.json")));
+      fs.writeFileSync(path.join(withRules, ".cc-safety-net", "extra.json"), "{}");
+      assert.equal(run(tree, "Bash", "git status", withRules).code, 2, "extra config file outside the checkout");
     } finally {
       fs.rmSync(bare, { recursive: true, force: true });
       fs.rmSync(withRules, { recursive: true, force: true });

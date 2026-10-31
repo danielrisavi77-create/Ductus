@@ -116,6 +116,54 @@ test("the required job itself cannot be skipped or made non-blocking (#195 item 
   assert.doesNotThrow(() => assertJobNotSkippable(otherJob));
 });
 
+// F-035 c: the gate's own tests (scripts/engineering) and the hook tests
+// (scripts/hooks) get the same scan. The only marker allowed there is a
+// runtime one for a platform that cannot run the case, guarded within three
+// lines by a check that the platform is not Linux (`!== "linux"`), that it is
+// Windows (`!== "win32"` then throw), or by an assertion that CI is not the
+// caller. The CI runner is Linux, so such a marker never fires there.
+const MARKERS = ["skip", "todo", "only"].join("|");
+const MARKED = new RegExp(`\\b(?:test|describe|it|t)\\.(?:${MARKERS})\\b|[{,]\\s*(?:${MARKERS})\\s*:`);
+const PLATFORM_ONLY = new RegExp(`^\\s*(?:if \\(.*\\) )?(?:return )?t\\.${"skip"}\\("[^"]*"\\);?\\s*$`);
+const NOT_ON_CI = /process\.platform !== "linux"|process\.platform !== "win32"[^\n]*throw|assert\.ok\(!IN_CI/;
+export function unguardedMarkers(src) {
+  const lines = src.split("\n");
+  const out = [];
+  lines.forEach((line, i) => {
+    if (!MARKED.test(line)) return;
+    const guard = lines.slice(Math.max(0, i - 3), i + 1).join("\n");
+    if (!(PLATFORM_ONLY.test(line) && NOT_ON_CI.test(guard))) out.push(`${i + 1}: ${line.trim()}`);
+  });
+  return out;
+}
+
+test("engineering and hook tests carry no marker that turns a case off, except a guarded platform one", async () => {
+  let scanned = 0;
+  for (const dir of [new URL("./", import.meta.url), new URL("../hooks/", import.meta.url)]) {
+    for (const name of (await readdir(dir)).filter((n) => n.endsWith(".test.mjs"))) {
+      scanned += 1;
+      assert.deepEqual(unguardedMarkers(await readFile(new URL(name, dir), "utf8")), [], name);
+    }
+  }
+  assert.ok(scanned > 20, "the scan reads the directories");
+  // The scanner itself: each of these must be caught (built from parts, so
+  // this file holds no marker of its own).
+  const call = (who, kind, rest) => `${who}.${kind}(${rest});`;
+  for (const bad of [
+    call("test", "skip", '"x", () => {}'),
+    call("describe", "only", '"x", () => {}'),
+    call("it", "todo", '"x"'),
+    `test("x", { ${"skip"}: true }, () => {});`,
+    `test("x", { ${"todo"}: "later" }, () => {});`,
+    call("t", "skip", '"not now"'),
+    // A guard that fires on Linux, i.e. on CI.
+    `if (process.platform === "linux") ${call("t", "skip", '"slow"')}`,
+    // No guard in the three lines above.
+    `if (process.platform !== "linux") {}\n\n\n\n${call("t", "skip", '"runs on Linux CI"')}`,
+  ]) assert.notDeepEqual(unguardedMarkers(bad), [], bad);
+  assert.deepEqual(unguardedMarkers(`if (process.platform !== "linux") return ${call("t", "skip", '"needs /proc; runs on Linux CI"')}`), []);
+});
+
 test("orchestrator tests are not skipped, todo or focused with only", async () => {
   const names = (await readdir(orchestratorDir)).filter((n) => n.endsWith(".test.mjs"));
   assert.ok(names.length > 0);

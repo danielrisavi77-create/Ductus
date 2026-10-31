@@ -195,7 +195,11 @@ function eventCwd(input, root) {
 // worktree also has), that contains the rulebook. The search never leaves the
 // checkout: a cwd outside any checkout looks only at itself, and a worktree
 // without a rulebook does not inherit the rulebook of the checkout above it.
-export function findRulebookDir(cwd) {
+// A cwd outside any checkout counts only when its whole project config is the
+// project root's (F-035 a): a directory with a reduced rulebook of its own
+// would otherwise become the rule source for commands that reach the repo
+// through `git -C`.
+export function findRulebookDir(cwd, root) {
   const chain = [];
   let dir = cwd;
   let bounded = false;
@@ -209,7 +213,13 @@ export function findRulebookDir(cwd) {
     if (parent === dir) break;
     dir = parent;
   }
-  return (bounded ? chain : [cwd]).find((candidate) => fs.existsSync(path.join(candidate, ...RULEBOOK))) ?? null;
+  if (bounded) return chain.find((candidate) => fs.existsSync(path.join(candidate, ...RULEBOOK))) ?? null;
+  if (!fs.existsSync(path.join(cwd, ...RULEBOOK)) || !root) return null;
+  try {
+    return treeDigest(path.join(cwd, PROJECT_CONFIG)) === treeDigest(path.join(root, PROJECT_CONFIG)) ? cwd : null;
+  } catch {
+    return null;
+  }
 }
 
 // Every input of the package 2.6.1 that can change what it denies, for the key
@@ -411,7 +421,7 @@ export function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS_TIMEO
   if (first.block) return first.block;
 
   const cwd = eventCwd(input, root);
-  const rulebookDir = findRulebookDir(cwd);
+  const rulebookDir = findRulebookDir(cwd, root);
   // Without usable project rules here, only the way back to the project root stays open.
   const noRules = (problem) => {
     if (isCdToRoot(command, root)) return { code: 0, stdout: first.stdout, stderr: first.stderr };
@@ -420,6 +430,9 @@ export function decide({ root = defaultRoot(), input, timeoutMs = ANALYSIS_TIMEO
       `${isCdToRoot(`cd "${root}"`, root) ? `Run exactly: cd "${root}" (nothing else in the command) to return to the project root, or ` : ""}leave the worktree with the worktree exit tool, or from the project root run: git -C <this directory> merge origin/main (or git -C <this directory> checkout origin/main -- .cc-safety-net)`,
     );
   };
+  if (!rulebookDir && fs.existsSync(path.join(cwd, ...RULEBOOK))) {
+    return noRules(`${cwd} is outside the checkout and its ${PROJECT_CONFIG} differs from the project root's, so it is not accepted as the project rules`);
+  }
   if (!rulebookDir) {
     return noRules(`no project rulebook (${RULEBOOK.join("/")}) found from ${cwd} up to the checkout root, so the project rules (git add -A, --no-verify, commit -a) would be off`);
   }
