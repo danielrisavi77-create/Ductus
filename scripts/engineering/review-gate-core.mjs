@@ -118,24 +118,37 @@ export function commentTime(item) {
 // `Review-Channel: grok-cli` outside any code block. Sessions that act with the
 // owner's token can write that line too, so the gate status says when it was
 // used (D-162); the owner can already override the gate, so this adds no
-// authority.
-const GROK_CLI_LINE_RE = /^Review-Channel:[ \t]*grok-cli$/i;
+// authority. A Codex review run from the owner's Codex CLI is the same path
+// with `Review-Channel: codex-cli` and counts as the Codex App (D-193). A
+// comment naming both channels is ambiguous and counts as neither.
+const CLI_CHANNELS = new Map([
+  ["grok-cli", { app: "grok-by-xai", note: "Grok CLI review (D-162, owner account)." }],
+  ["codex-cli", { app: "chatgpt-codex-connector", note: "Codex CLI review (D-193, owner account)." }],
+]);
+const CLI_LINE_RE = /^Review-Channel:[ \t]*(grok-cli|codex-cli)$/i;
 
-function viaGrokCli(item, ownerLogin) {
-  return (
-    Boolean(ownerLogin) &&
-    !item?.performed_via_github_app?.slug &&
-    item?.author_association === "OWNER" &&
-    item?.user?.login === ownerLogin &&
-    (canonicalBlock(item?.body, "Agent-Review") || canonicalBlock(item?.body, "QA-Agent")) &&
-    metadataLines(item?.body ?? "").some((line) => GROK_CLI_LINE_RE.test(line))
+function cliChannel(item, ownerLogin) {
+  if (
+    !ownerLogin ||
+    item?.performed_via_github_app?.slug ||
+    item?.author_association !== "OWNER" ||
+    item?.user?.login !== ownerLogin ||
+    !(canonicalBlock(item?.body, "Agent-Review") || canonicalBlock(item?.body, "QA-Agent"))
+  ) {
+    return null;
+  }
+  const named = new Set(
+    metadataLines(item?.body ?? "")
+      .map((line) => CLI_LINE_RE.exec(line)?.[1]?.toLowerCase())
+      .filter(Boolean),
   );
+  return named.size === 1 ? [...named][0] : null;
 }
 
 function commentAppSlug(item, ownerLogin) {
   const slug = item?.performed_via_github_app?.slug ?? null;
   if (slug) return slug;
-  return viaGrokCli(item, ownerLogin) ? "grok-by-xai" : null;
+  return CLI_CHANNELS.get(cliChannel(item, ownerLogin))?.app ?? null;
 }
 
 // A verdict is a person's comment posted through an App.
@@ -147,7 +160,7 @@ function trustedComments(items, logins, ownerLogin = null) {
       login: item?.user?.login ?? null,
       association: item?.author_association ?? null,
       appSlug: commentAppSlug(item, ownerLogin),
-      grokCli: viaGrokCli(item, ownerLogin),
+      cliChannel: cliChannel(item, ownerLogin),
       createdAt: commentTime(item) || index,
       index,
     }))
@@ -790,15 +803,19 @@ export function prNumberFromEvent(event) {
   return null;
 }
 
-// D-162: say in the status when a Grok CLI comment of the owner's account was
-// counted, so the quiet path stays visible.
+// D-162, D-193: say in the status when a CLI comment of the owner's account was
+// counted, so the quiet path stays visible. The note leads the description:
+// the posted status is cut at 140 characters (review-gate.mjs).
 export function evaluateGate(input) {
   const result = evaluateGateCore(input);
   if (result.state !== "success") return result;
-  const used = trustedComments(input.comments, input.trustedLogins ?? TRUSTED_VERDICT_LOGINS, input.ownerLogin).some(
-    (entry) => entry.grokCli,
+  const used = new Set(
+    trustedComments(input.comments, input.trustedLogins ?? TRUSTED_VERDICT_LOGINS, input.ownerLogin).map(
+      (entry) => entry.cliChannel,
+    ),
   );
-  return used ? { ...result, description: `${result.description} Grok CLI review (D-162, owner account).` } : result;
+  const notes = [...CLI_CHANNELS].filter(([channel]) => used.has(channel)).map(([, { note }]) => note);
+  return notes.length ? { ...result, description: `${notes.join(" ")} ${result.description}` } : result;
 }
 
 // True only when every listed file is a newly added test file (isNewTestExempt).
@@ -826,6 +843,27 @@ export function evaluateAutoMergeEligible({ metadata, paths, qaExempt, testsAdde
     return { state: "success", description: "Auto-merge eligible (low or test-only, no D-97)." };
   }
   return { state: "pending", description: "Not eligible for auto-merge." };
+}
+
+// F-165: a commit status belongs to the head, not to the PR. The gate grants a
+// green status only for a PR whose base is the repository's default branch
+// (from the GitHub API PR, never the event); missing fields fail closed.
+export const NOT_DEFAULT_BASE = {
+  state: "pending",
+  description: "The gate grants success only for PRs that target the default branch.",
+};
+export function targetsDefaultBranch(pr) {
+  const ref = pr?.base?.ref;
+  return typeof ref === "string" && ref.length > 0 && ref === pr?.base?.repo?.default_branch;
+}
+
+// F-165: Auto-merge eligible is refused while another open PR shares the head;
+// a list that was not read counts as shared.
+export const SHARED_HEAD = { state: "pending", description: "Not eligible for auto-merge: another open PR shares this head." };
+export function sharesHeadWithOpenPr(pr, openPulls) {
+  if (!Array.isArray(openPulls)) return true;
+  const head = String(pr?.head?.sha ?? "").toLowerCase();
+  return openPulls.some((other) => other?.number !== pr?.number && String(other?.head?.sha ?? "").toLowerCase() === head);
 }
 
 /**

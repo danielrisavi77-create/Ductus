@@ -34,13 +34,15 @@ globalThis.fetch = async (url, options = {}) => {
     return reply(200, { number: 7, head: { sha: "${HEAD}" }, base: { sha: "${BASE}" },
       html_url: "https://github.com/o/r/pull/7", body: "", ...plan.pr });
   }
+  if (path.endsWith("/pulls/7/files")) return reply(200, plan.files ?? []);
+  if (path.endsWith("/pulls")) return reply(200, plan.openPulls ?? []);
   if (path.includes("/commits/")) return reply(200, { sha: "${HEAD}", parents: [{ sha: "${BASE}" }] });
   if (path.includes("/compare/")) return reply(200, { files: [], commits: [] });
   return reply(200, []);
 };
 `;
 
-function run(event, { fail = [], statusFails = false, failPostNumber = 0, pr = {} } = {}) {
+function run(event, { fail = [], statusFails = false, failPostNumber = 0, pr = {}, files, openPulls } = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), "gate-runner-"));
   const fake = path.join(dir, "fake-fetch.mjs");
   const eventPath = path.join(dir, "event.json");
@@ -55,7 +57,7 @@ function run(event, { fail = [], statusFails = false, failPostNumber = 0, pr = {
       GITHUB_REPOSITORY: "o/r",
       GITHUB_API_URL: "https://api.example.test",
       GITHUB_TOKEN: "t",
-      FAKE_GH: JSON.stringify({ fail, statusFails, failPostNumber, pr }),
+      FAKE_GH: JSON.stringify({ fail, statusFails, failPostNumber, pr, files, openPulls }),
       FAKE_LOG: log,
     },
   });
@@ -131,6 +133,62 @@ test("a carrier publish failure replaces a partial success with pending on both 
   assert.deepEqual(posts.slice(-2).map((p) => [p.body.context, p.body.state]), [
     ["Merge authorization", "pending"], ["Engineering review gate", "pending"],
   ]);
+});
+
+// F-165: a PR that only adds a test file, so all three statuses would be green.
+const repoMeta = { id: 1, full_name: "o/r", default_branch: "main" };
+const eligible = {
+  number: 7, state: "open", user: { login: "o" }, changed_files: 1, auto_merge: null,
+  body: "Agent: claude:a:platforma\nRisk: critical\nTask: B-1\n",
+  head: { sha: HEAD, ref: "feat/x", repo: repoMeta },
+  base: { sha: BASE, ref: "main", repo: repoMeta },
+};
+const addedTest = [{ filename: "src/a.test.ts", status: "added" }];
+const states = (posts) => posts.map((p) => [p.body.context, p.body.state]);
+const ALL = ["Merge authorization", "Auto-merge eligible", "Engineering review gate"];
+
+test("control: a PR on the default branch keeps all three green statuses (F-165)", () => {
+  const { code, posts } = run(comment, { pr: eligible, files: addedTest, openPulls: [eligible] });
+  assert.equal(code, 0);
+  assert.deepEqual(states(posts), ALL.map((c) => [c, "success"]));
+});
+
+test("a PR whose base is not the default branch gets no green status for its head (F-165)", () => {
+  for (const base of [
+    { ...eligible.base, ref: "feature" },
+    { ...eligible.base, repo: { ...repoMeta, default_branch: "trunk" } },
+    { ...eligible.base, repo: { id: 1, full_name: "o/r" } },
+  ]) {
+    const { code, posts } = run(comment, { pr: { ...eligible, base }, files: addedTest, openPulls: [] });
+    assert.equal(code, 0);
+    assert.deepEqual(states(posts), ALL.map((c) => [c, "pending"]), JSON.stringify(base));
+    for (const post of posts) {
+      assert.equal(post.path, `/repos/o/r/statuses/${HEAD}`);
+      assert.match(post.body.description, /only for PRs that target the default branch/);
+    }
+  }
+});
+
+test("another open PR on the same head leaves Auto-merge eligible pending (F-165)", () => {
+  for (const other of [{ number: 8, head: { sha: HEAD } }, { number: 9, head: { sha: HEAD }, base: { ref: "feature" } }]) {
+    const { code, posts } = run(comment, { pr: eligible, files: addedTest, openPulls: [eligible, other] });
+    assert.equal(code, 0);
+    assert.deepEqual(states(posts), [
+      ["Merge authorization", "success"], ["Auto-merge eligible", "pending"], ["Engineering review gate", "success"],
+    ]);
+    assert.match(posts[1].body.description, /another open PR shares this head/);
+  }
+  // A failed read of the open PRs fails the run closed.
+  const failed = run(comment, { pr: eligible, files: addedTest, fail: ["/pulls"] });
+  assert.equal(failed.code, 1);
+  assert.ok(failed.posts.every((p) => p.body.state !== "success"));
+});
+
+test("a queue carrier keeps its statuses without a default_branch field (F-165)", () => {
+  assert.equal(carrier.base.repo.default_branch, undefined);
+  const { code, posts } = run(comment, { pr: carrier, openPulls: [{ number: 8, head: { sha: HEAD } }] });
+  assert.equal(code, 0);
+  assert.deepEqual(states(posts), [["Merge authorization", "success"], ["Engineering review gate", "success"]]);
 });
 
 test("a renamed human branch, fork, non-draft or different bot is still subject to the original gate", () => {
