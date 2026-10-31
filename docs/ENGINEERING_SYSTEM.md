@@ -257,7 +257,7 @@ PR koji mijenja ono što korisnik vidi provjerava se i na izgled (D-183): zadata
 - Svaki writer počinje od svježeg `origin/main`.
 - Draft smije zaostajati dok se radi.
 - Prije ready-for-review autor ponovno dohvaća `main` i provjerava stvarni overlap.
-- Ako je `main` promijenio datoteku koju PR dira, autor osvježava branch prije reviewa.
+- Prije reviewa nitko ne osvježava branch s `main` ručno; osvježava ga Mergify kad uzme PR u red, a verdikti se prenose po D-101. Sukob s `main` (DIRTY) autor rješava prije reviewa (D-197). Granica: `pnpm orch:preflight` i dalje traži „merge main first” kad je `main` promijenio datoteku PR-a (`docs/ORKESTRATOR.md` §8).
 - Kod provjera na izvornoj grani PR se spaja samo ako njegov head sadrži aktualni `main`. Nakon aktivacije spekulativnog reda DAN-263 (§10) Mergify provjerava kumulativni rezultat na privremenoj grani; izvorni head ostaje vezan uz svoja odobrenja. Pisac i dalje provjerava overlap prije reviewa (§15).
 - Svaki push nakon reviewa automatski invalidira review preko `Review-Head`, osim čistog spajanja osnovne grane bez promjene diffa PR-a (D-101); isto vrijedi za QA verdikt i Owner Override.
 - Orkestrator ne tretira staro zeleno stanje kao dokaz za novi head.
