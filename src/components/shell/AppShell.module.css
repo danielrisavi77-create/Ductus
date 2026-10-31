@@ -264,7 +264,7 @@
   position: fixed;
   inset: 0;
   z-index: 35;
-  background: #0008;
+  background: var(--scrim);
 }
 
 .content {
