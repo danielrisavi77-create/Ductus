@@ -34,8 +34,9 @@ Standardni E2E (`stack-e2e`) i login E2E (`stack-login`) izvršavaju se paraleln
 - Chromium: svaki frontend/E2E PR, u CI-ju PR-a.
 - Firefox: editor, sync, journal, clipboard, auth i submission PR-ovi. CI PR-a ga ne pokreće, pa dokaz daje QA (lokalni ili ručno pokrenut prolaz na headu PR-a, zapisan u QA nalazu).
 - WebKit: editor, IndexedDB/Dexie, offline, Web Locks, clipboard, auth i submission PR-ovi. Dokaz kao za Firefox.
-- WebKit na macOS-u, prva razina Safarija (DAN-114). Posao "WebKit E2E (macOS)" (`.github/workflows/webkit-macos.yml`) vrti se na `main`, noću, ručno i na PR-u koji mijenja taj workflow, `scripts/engineering/webkit-macos.mjs`, `playwright.config.ts` ili `e2e/support/`.
+- WebKit na macOS-u, prva razina Safarija (DAN-114). Posao "WebKit E2E (macOS)" (`.github/workflows/webkit-macos.yml`) vrti se noću nad `main` i ručno (`workflow_dispatch`).
   - Savjetodavan je, ne obvezan status. Crveni rezultat ipak je nalaz kao i ostali na `main`.
+  - Dok #1046 ima poznate padove, ne vrti se na PR-u ni na pushu na `main`: poznato crven posao bi oborio preflight svakog takvog PR-a i uvjet zelenog `main` iz M0, bez novog nalaza. Ti okidači se vraćaju s popravkom #1046; test u `webkit-macos.test.mjs` to traži čim popis poznatih padova bude prazan.
   - Pokreće cijeli projekt `webkit` nad produkcijskim buildom, bez compose stoga, jer ga ti specovi ne trebaju (prvo pokretanje: 245 prošlo, 7 palo, 1 preskočen).
   - Ne izostavlja nijedan test. Sedam testova iz `KNOWN_FAILURES` u `scripts/engineering/webkit-macos.mjs` pada samo na macOS WebKitu i prati se u #1046, pa je posao crven dok se ne poprave. Izlazni kod je uvijek Playwrightov.
   - Sažetak posla odvaja padove iz #1046 od novih padova. Navodi i test s popisa koji je prošao, pa izlazi s popisa, te test s popisa koji se nije vrtio (preimenovan ili obrisan).

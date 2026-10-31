@@ -34,15 +34,13 @@ test("it is advisory: neither branch protection's list nor Mergify names it", as
   assert.ok(!(await read(".github/mergify.yml")).includes(JOB));
 });
 
-test("it runs on main, nightly, by hand, and on a pull request only for its own files", () => {
+test("while #1046 has known failures it runs only nightly and by hand, never on a PR head or a push", () => {
   const on = workflow.match(/^on:\n((?: {2}.+\n)+)/m)?.[1] ?? "";
-  assert.match(on, /^ {2}push:\n {4}branches: \[main\]$/m);
   assert.match(on, /^ {2}schedule:\n {4}- cron: "\d+ \d+ \* \* \*"$/m);
   assert.match(on, /^ {2}workflow_dispatch:$/m);
-  assert.match(on, /^ {2}pull_request:\n {4}paths:\n/m);
-  for (const path of [".github/workflows/webkit-macos.yml", "scripts/engineering/webkit-macos.mjs", "playwright.config.ts"]) {
-    assert.ok(on.includes(`      - "${path}"\n`), path);
-  }
+  assert.deepEqual([...on.matchAll(/^ {2}([\w-]+):/gm)].map((m) => m[1]), ["schedule", "workflow_dispatch"]);
+  // The two triggers return together with an empty KNOWN_FAILURES list.
+  assert.ok(KNOWN_FAILURES.length > 0, "list empty: put the push and pull_request triggers back");
 });
 
 test("every known failure names a test that exists, once, and the issue that tracks it", async () => {
