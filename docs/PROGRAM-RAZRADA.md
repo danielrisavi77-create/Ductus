@@ -12,6 +12,8 @@ Dokument daje redoslijed faza i koraka, **bez datuma**. Novi raspored i datum pi
 - **Oznake PLAN-TOKOVI**: A1 do E3 su koraci iz `docs/engineering/PLAN-TOKOVI-2026-10-25.md`.
 - Sigurnosni nalazi navode se samo kao ID; pojedinosti su u privatnom registru.
 - Faze idu redom po ovisnostima, ali koraci različitih uloga teku usporedno kad ne ovise jedan o drugom. Faza je gotova tek kad je uvjet završetka dokazan testom ili zapisom.
+- **Uvjetni koraci (val 3, T3)**: korak označen „(uvjetno)” čeka odluku vlasnika, izmjenu Ustava ili PRODUCT §5, ili pravno mišljenje, i **ne gradi se** dok se uvjet ne riješi. Uvjetni korak nije dio uvjeta završetka svoje faze; uvjeti su u odjeljku „Uvjetni koraci” niže (odluka orkestratora T3, #87 c.6544288967, opcija C).
+- **Oznake iz mape ekrana** u ugovorima i tiketima uvijek idu s punim nazivom ekrana, jer kolidiraju s oznakama u `docs/FEATURES.md` i `docs/DECISIONS.md` (npr. S-14, A-10, P-01). Mapa ekrana nije u repou.
 
 ## Redoslijed
 
@@ -148,10 +150,16 @@ M0 → M1 (čeka AAI@EduHr Lab) i M2 → M3 → M5 i M6 → M7 → M4 (čeka lic
 | M5.11 | Pravopis prema jeziku rada bez slanja teksta van (S-07) | F | M2.10 | novo |
 | M5.12 | Uvodni vodič od dvije minute (S-11 iz `docs/FEATURES.md`) | F | | novo |
 | M5.13 | Nalaz identiteta blokova u editoru (samo ID): F-044 | F | | DAN-176 |
+| M5.14a | Panel Nacrt (S-14), ljuska kartice i prikaz Obrnuti nacrt, samo izvedeno iz dokumenta (`docs/design/PANEL-NACRT-SPEC.md`) | F | M5.2, M5.3, M0.5, M5.13 | novo |
+| M5.14b | Panel Nacrt: pohrana plana (pitanje rada, svrhe poglavlja, pojmovnik) kao zapis uz rad; tablica s RLS-om, RPC, pgTAP | B | M5.14a; odluke 1, 2 i 6 iz specifikacije | novo |
+| M5.14c | Panel Nacrt: prikazi Nit i Pojmovnik nad pohranom | F | M5.14b, M2.10 | novo |
+| M5.15 | Planer rada iz roka i opsega po poglavlju (S-06) | F | M5.8 | novo |
 
 Svaki novi čvor sheme traži pravilo u formatu koraka uređivanja i test reprodukcije prije spajanja (B-12).
 
-**Ekrani:** S-10 editor, S-13 Literatura i bilježnica izvora, S-14 panel Nacrt (vidi otvorena pitanja), S-45 prvi ulazak i vodič.
+Koraci M5.14a do M5.14c: odluka vlasnika 31. 10. 2026. da panel Nacrt ulazi u program (#87 c.6543799262, t. 5); smještaj i podjela su PRIJEDLOG iz `docs/design/PANEL-NACRT-SPEC.md`, a pohrana plana, vidljivost mentoru i naziv kartice čekaju odgovore na pitanja 1, 2 i 3 iz te specifikacije (M5.14b i M5.14c ne počinju prije njih).
+
+**Ekrani:** S-10 editor, S-13 Literatura i bilježnica izvora, S-14 panel Nacrt (`docs/design/PANEL-NACRT-SPEC.md`), S-45 prvi ulazak i vodič.
 
 **Uvjet završetka:** izlazni kriterij M5 iz `docs/PROGRAM.md` (izmišljeni testni rad od 15.000 riječi sa svim elementima uređuje se bez gubitka; citati i bibliografija usklađeni); rekonstrukcija tog rada podudarna.
 
@@ -173,10 +181,15 @@ Svaki novi čvor sheme traži pravilo u formatu koraka uređivanja i test reprod
 | M6.8 | Mentorov pregled rada i komentari na mobitelu | F | M6.1 | novo |
 | M6.9 | Konzultacije vezane uz verziju rada (D-47) | B, F | M2.6 | novo |
 | M6.10 | Zbirni pregled kolegija bez imena (N-11) | B, F | | novo |
+| M6.11 | Ključni rokovi mentorskog rada (N-07 iz `docs/FEATURES.md`) | B, F | M2.6, M6.6 | novo |
+| M6.12 | (uvjetno) Sučelje komentora i povjerenstva s vremenski ograničenim pristupom (N-08, N-09, ekran P-01 povjerenstvo); model je M2.8 | F, B | M2.8, M6.1, uvjet U-1 | novo |
+| M6.13 | (uvjetno) Etape mentorskog rada s odobravanjem (N-15 etape) | B, F | M6.9, uvjet U-2 | novo |
+| M6.14 | (uvjetno) Rubrika i nacrt izvješća kao mentorovi radni zapisi (N-15 rubrika i izvješće, D-130, D-135) | B, F | M6.13, uvjet U-2 | novo |
+| M6.15 | (uvjetno) Ocjena vidljiva studentu tek nakon objave (N-15 ocjena, D-135) | B, F | M6.14, uvjet U-2 | novo |
 
 **Ekrani:** S-12 komentari studenta, S-17 kako vidi nastavnik, S-34 reprodukcija vlastitog rada, S-40 komentari na mobitelu, S-41 i Z-07 obavijesti, N-06 rad uživo, N-07 pregled rada, N-08 komentari, prijedlozi i dorada, N-09 reprodukcija, N-12 konzultacije, N-17 zbirni pregled.
 
-**Uvjet završetka:** izlazni kriterij M6 iz `docs/PROGRAM.md`; uz to pgTAP i E2E dokazuju da reprodukciju vide samo mentor, odnosno nastavnik zadatka, i student, a nitko drugi (pravilo 7); obavijest nastavniku ne stiže češće od P-03.
+**Uvjet završetka:** izlazni kriterij M6 iz `docs/PROGRAM.md`; uz to pgTAP i E2E dokazuju da reprodukciju vide samo mentor, odnosno nastavnik zadatka, i student, a nitko drugi (pravilo 7); obavijest nastavniku ne stiže češće od P-03. Koraci M6.12 do M6.15 (uvjetno) nisu dio uvjeta završetka.
 
 ## M7 Predaja i sažetak
 
@@ -195,11 +208,14 @@ Svaki novi čvor sheme traži pravilo u formatu koraka uređivanja i test reprod
 | M7.7 | Karta podrijetla bez zbroja (D-57), otvorena mjesta (D-61), pravila zadatka s kontrolnim popisom bez oznaka prolaza (D-62) | F | | novo |
 | M7.8 | Napomena, dopuna i osporavanje opisa događaja (R-08) | B, F | | novo |
 | M7.9 | Test jednakosti prikaza u sučelju, API-ju i izvozu kao uvjet builda (R-07) | P | | novo |
-| M7.10 | Prenosiv zapis s QR provjerom (D-49) i javna provjera potvrde | B, F | M3.9 | novo |
+| M7.10 | Prenosiv zapis s QR provjerom (D-49), javna provjera potvrde i otvoreni verifikator zapisa (A-07 iz `docs/FEATURES.md`) | B, F | M3.9 | novo |
+| M7.11 | (uvjetno) Priprema za razgovor: deterministički popis mjesta uz studentove izjave, „razgovor održan” bez polja za ocjenu (D-53; ekran N-14 priprema za razgovor i obranu) | F, B | M6.5, M7.5, M7.7, uvjet U-3 | novo |
+| M7.12 | (uvjetno) Priprema za obranu, samo za studenta (A-04 iz `docs/FEATURES.md`) | F | M7.11, uvjet U-3 | novo |
+| M7.13 | „Moj rad u brojkama” za studenta, bez ritma i usporedbe (A-10 iz `docs/FEATURES.md`; ne miješati s ekranom A-10 slučajevi i paket dokaza). Brojke samo iz verzija i samo za studenta, prema D-63 (ispravak u #1030) | F | M7.1, M5.8 | novo |
 
 **Ekrani:** S-05 obavijest (S3), S-15 panel Rad, S-30 pregled prije predaje, S-31 izjava, S-32 potvrda, S-33 sažetak procesa, S-43 napomene i osporavanje, N-05 brz put, N-10 sažetak i karta podrijetla, N-11 usporedba verzija, N-13 produljenje roka, J-03 provjera potvrde.
 
-**Uvjet završetka:** izlazni kriterij M7 iz `docs/PROGRAM.md` (rekonstrukcija podudarna na svim scenarijima uključujući prazninu, nepodudarnost blokira predaju, isti sažetak, nema zabranjenih riječi, rok preko promjene sata, potpuna izjava, karta podrijetla bez zbroja); test iz M7.9 zelen u CI-ju.
+**Uvjet završetka:** izlazni kriterij M7 iz `docs/PROGRAM.md` (rekonstrukcija podudarna na svim scenarijima uključujući prazninu, nepodudarnost blokira predaju, isti sažetak, nema zabranjenih riječi, rok preko promjene sata, potpuna izjava, karta podrijetla bez zbroja); test iz M7.9 zelen u CI-ju. Koraci M7.11 i M7.12 (uvjetno) nisu dio uvjeta završetka.
 
 ## M8 Uvoz i izvoz
 
@@ -215,6 +231,7 @@ Svaki novi čvor sheme traži pravilo u formatu koraka uređivanja i test reprod
 | M8.4 | Izvoz DOCX-a u obliku fakulteta | B | M4.3, M5.4 | novo |
 | M8.5 | Izvoz PDF-a u obliku fakulteta | B | M8.4 | novo |
 | M8.6 | Izvoz predanog rada, potvrde za referadu (R-06) i paket za Merlin (R-05); provjerljiv izvozni paket (D-173) | B, F | M7.1 | DAN-316, DAN-341 |
+| M8.7 | PDF izvori u bilježnici s isticanjem i citatom sa stranicom (S-09) te provjera doslovnog citata u učitanom PDF-u (A-03) | F, B | M5.1, M5.9, M8.3 | novo |
 
 **Ekrani:** S-19 uvoz teksta, S-20 izvoz, N-18 izvoz predanog rada i paket za Merlin.
 
@@ -233,7 +250,7 @@ Svaki novi čvor sheme traži pravilo u formatu koraka uređivanja i test reprod
 | M9.3 | Dopušteni pružatelji po fakultetu i zadatku | B | M2.12, M9.2 | novo |
 | M9.4 | Panel Asistent i prenošenje teksta s bilježenjem pružatelja, modela i svrhe (D-42) | F, B | M9.3, M3.1 | novo |
 | M9.5 | Razgovori priloženi uz izjavu; nepriloženi nisu vidljivi nastavniku (D-41) | B, F | M9.4, M7.5 | novo |
-| M9.6 | Zaštita brojki i citata pri lekturi (D-46); poznato podrijetlo i podudaranje s odgovorom pomoćnika (D-58) | B, F | M9.4 | novo |
+| M9.6 | Zaštita brojki i citata pri lekturi (D-46); poznato podrijetlo i podudaranje s odgovorom pomoćnika (D-58; oznaka podudaranja je uvjetna, U-4) | B, F | M9.4 | novo |
 | M9.7 | Svrhe razine 2 nedostupne dok ih nastavnik ne uključi; pomoćnik koji pita (D-64) | F, B | M9.4 | novo |
 
 **Ekrani:** S-16 panel Asistent. N-19 (AI pomoć nastavniku) je PRIJEDLOG i ne gradi se.
@@ -256,10 +273,13 @@ Svaki novi čvor sheme traži pravilo u formatu koraka uređivanja i test reprod
 | M10.6 | Izlaz iz usluge: izvoz svih podataka fakulteta (F-04) | B | M10.5 | novo |
 | M10.7 | Administracija čuvanja, pravnog zadržavanja i revizijskog traga | F | M10.2, M2.11 | novo |
 | M10.8 | Studentova vlastita povijest rada (D-131) | B, F | pravno mišljenje D-55 | novo |
+| M10.9 | (uvjetno) Paket za zaštitu studenta: proširenje prenosivog zapisa (D-49, S-01 iz `docs/FEATURES.md`; ekran S-46 paket zaštite) | B, F | M7.10, M10.5, uvjet U-5 | novo |
+| M10.10 | (uvjetno) Izvješće za evaluaciju smjernica (F-01, FPZG čl. 13), samo agregati | B, F | M6.10, M10.7, uvjet U-6 | novo |
+| M10.11 | Portfelj nakon studija: izvoz predanog rada za portfelj (S-10) | B, F | M8.6, M10.5 | novo |
 
 **Ekrani:** S-18 vlastita povijest rada, S-42 dnevnik pristupa, S-44 izvoz vlastitih podataka, A-05 čuvanje i pravno zadržavanje, A-06 revizijski trag pristupa, A-08 izlaz iz usluge.
 
-**Uvjet završetka:** izlazni kriterij M10 iz `docs/PROGRAM.md` (brisanje po roku testirano; lanac provjerljiv nakon brisanja sadržaja); pravno zadržavanje zaustavlja brisanje (test).
+**Uvjet završetka:** izlazni kriterij M10 iz `docs/PROGRAM.md` (brisanje po roku testirano; lanac provjerljiv nakon brisanja sadržaja); pravno zadržavanje zaustavlja brisanje (test). Koraci M10.9 i M10.10 (uvjetno) nisu dio uvjeta završetka.
 
 ## M11 GO uvjeti
 
@@ -280,22 +300,38 @@ Svaki novi čvor sheme traži pravilo u formatu koraka uređivanja i test reprod
 | M11.9 | Prije pilota: nadzor i uzbune, build bez source mapa, vanjski penetracijski test, ograničenja zahtjeva, SBOM | P, B | M11.2 | DAN-184 do DAN-187, DAN-322 |
 | M11.10 | „Prijavi problem”, mobilni prikaz svih ekrana, stranica „Kako Ductura radi” | F | | novo |
 | M11.11 | Licenca, uvjeti korištenja i odluka o vidljivosti repoa | V | | DAN-188 |
+| M11.12 | Brze bilješke s mobitela u bilježnicu projekta (S-03). Bilješka koja ulazi u rad je promjena dokumenta s vrstom izvora „mobilna bilješka” (pravilo 8) | F, B | M5.9, M11.10 | novo |
 
 **Ekrani:** A-07 integracije i status AAI@EduHr, A-09 zdravlje sustava i kopije, J-01 naslovnica, J-02 kako Ductura radi, J-05 statusna stranica i izjava o pristupačnosti, Z-09 postavke, Z-10 prijavi problem, Z-12 mobilni prikaz.
 
 **Uvjet završetka:** svaki redak tablice „GO uvjeti za stvarne studente” u `docs/PROGRAM.md` zelen i zapisan s dokazom.
 
+## Uvjetni koraci (val 3, T3)
+
+Sadržaj vala 3 raspoređen je po fazama prema odluci orkestratora T3 (#87 c.6544288967, opcija C; delegirano u #87 c.6543799262, t. 3): stavke bez vanjskog preduvjeta su koraci svojih faza (M5.14 do M5.15, M6.11, M7.13, M8.7, M10.11, M11.12), a već raspoređene stavke ostaju gdje jesu (M6.9 konzultacije, M6.10 zbirni pregled, M7.6 vremeplov, M7.10 prenosiv zapis, M8.3 uvoz PDF-a, M5.7 provjera izvora, M6.2 reprodukcija s poviješću odlomka, M10.8 povijest rada). Stavke ispod imaju pravni ili ustavni uvjet, ne grade se dok se on ne riješi i nisu dio uvjeta završetka svoje faze. Odluku o svakom uvjetu donosi vlasnik.
+
+| Uvjet | Koraci | Što treba riješiti | Granica |
+| --- | --- | --- | --- |
+| U-1 | M6.12 | Što komentor i povjerenstvo smiju vidjeti (tekst, sažetak, reprodukciju, prikaz uživo) i hoće li se mijenjati PRODUCT §3 i §5 pravilo 7. Model u M2.8 ostaje; sučelje čeka. | Ustav C-23, D-154, pravilo 7 |
+| U-2 | M6.13 do M6.15 | Pravno mišljenje D-55 i vlasnikova zasebna odluka o gradnji (D-136). Dio „Bilješka mentora” u M6.9 (D-47) vrijedi pod istim uvjetom (D-135). | D-130, D-135, D-136 |
+| U-3 | M7.11, M7.12 | Vlasnik potvrđuje tekst kriterija prihvaćanja: popis mjesta je činjenica, bez rangiranja, težine ni zbroja; „razgovor održan” bez ocjene; student vidi identičan popis. | PRODUCT §5 pravila 1, 2, 3, 5, 13 |
+| U-4 | dio M9.6 | Oznaka „podudara se s odgovorom AI pomoćnika” ostaje oznaka mjesta, ne tvrdnja o autoru. | pravilo 1 (C-9, C-10); D-194 |
+| U-5 | M10.9 | Tekst paketa i QR provjere ne smije tvrditi autorstvo; dokument izlazi izvan sustava. | pravilo 9, C-13 |
+| U-6 | M10.10 | Agregati bez rizika, ranga i ocjena; isti prag od najmanje 5 studenata kao N-11. | pravilo 2 |
+
+„Moj rad u brojkama” (M7.13) i planer (M5.15) nisu uvjetni: uvjet D-63 riješen je izričitim izuzetkom u PRODUCT §5 pravilu 4 (docs PR #1030). A-08 (dnevni vremenski žig kod vanjskog pružatelja) ostaje izvan rasporeda.
+
 ## Ekrani izvan faza
 
-Ovi ekrani iz mape nemaju mjesto u tablici faza i ne grade se dok vlasnik ne odluči: K-01 koordinator (zbrojevi po kolegiju), K-02 odobrenje istrage (mapa bilježi sukob s D-143 i D-154), A-10 slučajevi i paket dokaza, J-04 stranice za fakultete i nabavu. Sadržaj vala 3 koji D-191 vraća u cilj (N-14 priprema za razgovor i obranu, N-15 etape, rubrika i izvješće, P-01 povjerenstvo, S-46 paket zaštite, vremeplov, planer, portfelj, PDF izvori, brze bilješke) još nije raspoređen po fazama.
+Ovi ekrani iz mape nemaju mjesto u tablici faza i ne grade se dok vlasnik ne odluči: K-01 koordinator (zbrojevi po kolegiju), K-02 odobrenje istrage (mapa bilježi sukob s D-143 i D-154), A-10 slučajevi i paket dokaza, J-04 stranice za fakultete i nabavu.
 
 ## Otvorena pitanja za vlasnika
 
 1. Novi raspored i datum pilota (D-191 t. 2; već u Owner queueu).
 2. M9: D-191 stavlja AI pomoćnika u cilj, a D-77 ga drži izvan pilota zbog obrade u EU-u. Ostaje li izvan pilota i koji pružatelj ispunjava uvjet (M9.1)?
-3. Raspored sadržaja vala 3 po fazama (N-14, N-15, P-01, S-46 i stavke iz `docs/PROGRAM.md`, val 3).
+3. ~~Raspored sadržaja vala 3 po fazama.~~ Riješeno 31. 10. 2026. odlukom orkestratora T3 (#87 c.6544288967): koraci u fazama M5 do M11, uvjetni koraci u odjeljku „Uvjetni koraci”. Preostaju pitanja U-1 do U-6 vlasniku, uz faze kojih se tiču.
 4. Ekrani bez faze: K-01, K-02, A-10, J-04. Grade li se, i u kojoj fazi?
-5. Panel Nacrt (S-14: obrnuti nacrt, nit argumenta, pojmovnik) nema odluke u repou.
+5. ~~Panel Nacrt (S-14: obrnuti nacrt, nit argumenta, pojmovnik).~~ Riješeno 31. 10. 2026.: ulazi u program (#87 c.6543799262, t. 5); koraci M5.14a do M5.14c prema `docs/design/PANEL-NACRT-SPEC.md`. Pitanja 1, 2 i 3 iz te specifikacije ostaju vlasniku.
 6. D-63 (napredak i „preskočena stanka”) prema D-56 i pravilu 4 (DAN-104).
 7. Kriteriji popisa „tko treba pomoć” (N-12, DAN-102).
 8. RPC za dodjelu mentorstva (D-182 t. 1 čeka odluku nakon demoa; M2.6).
