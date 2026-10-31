@@ -1,10 +1,10 @@
 // D-91 (4), DAN-71: tests of scripts/engineering/db-schema.mjs, its CI step
 // and the committed db/schema.sql.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 
-import { compare, dumpedVersions, parseArgs, serverImage, shim } from "./db-schema.mjs";
+import { compare, dumpedVersions, migrationVersions, parseArgs, SCHEMA, serverImage, shim } from "./db-schema.mjs";
 
 const root = new URL("../../", import.meta.url);
 const read = (file) => readFileSync(new URL(file, root), "utf8");
@@ -53,6 +53,12 @@ test("the comparison fails without the file in HEAD, on an empty or foreign dump
   assert.match(compare(Buffer.from(DUMP.replace("x ()", "y ()")), dump), /differs/);
   assert.match(compare(Buffer.from(`${DUMP}\n`), dump), /differs/);
   assert.match(compare(Buffer.from(DUMP.replaceAll("\n", "\r\n")), dump), /differs/);
+});
+
+// A migration added without a new dump fails here, before any stack runs.
+test("db/schema.sql lists exactly the versions of db/migrations, in order", () => {
+  assert.ok(existsSync(new URL(SCHEMA, root)), `${SCHEMA} is committed`);
+  assert.deepEqual(dumpedVersions(read(SCHEMA)), migrationVersions("db/migrations"));
 });
 
 test("CI dumps the freshly migrated database and compares it before any other test touches it", () => {
