@@ -16,6 +16,16 @@ export const CRITICAL_PATHS = [
   "STATE.md",
   ".worktreeinclude",
   "osv-scanner.toml",
+  // F-033: what installs, runs or pins the toolchain, the lint rules and the
+  // scanner exceptions.
+  "package.json",
+  "pnpm-workspace.yaml",
+  ".npmrc",
+  ".nvmrc",
+  "eslint.config.mjs",
+  ".gitleaks.toml",
+  ".gitleaksignore",
+  ".semgrepignore",
   "vitest.config.ts",
   "playwright.config.ts",
   "playwright.login.config.ts",

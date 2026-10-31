@@ -101,10 +101,19 @@ test("a low PR with any runtime, config or served file still waits for review", 
     ["config/faculties/fpzg/citation.json", "modified"],
     ["docs/diagram.svg", "added"],
   ]) {
-    const out = runLow([
+    const list = [
       { filename: "docs/FEATURES.md", status: "modified" },
       { filename, status },
-    ]);
+    ];
+    // F-033: the toolchain files are critical, so a low declaration fails
+    // outright and the critical one still waits for review.
+    const critical = [".npmrc", "pnpm-workspace.yaml", ".nvmrc"].includes(filename);
+    if (critical) {
+      const low = runLow(list);
+      assert.equal(low.result.state, "failure", filename);
+      assert.match(low.result.description, /below minimum critical/, filename);
+    }
+    const out = critical ? evaluate("critical", list) : runLow(list);
     assert.notEqual(out.result.state, "success", filename);
     assert.equal(out.autoMergeEligible.state, "pending", filename);
   }

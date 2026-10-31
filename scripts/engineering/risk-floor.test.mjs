@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 
 import { CRITICAL_PATHS, evaluateMetadata, minimumRisk } from "./pr-metadata-core.mjs";
@@ -24,6 +25,14 @@ const CRITICAL_SAMPLES = [
   ".cc-safety-net/rules/rule.json",
   ".cc-safety-net/rules/ductus-rules/rulebook.json",
   "osv-scanner.toml",
+  "package.json",
+  "pnpm-workspace.yaml",
+  ".npmrc",
+  ".nvmrc",
+  "eslint.config.mjs",
+  ".gitleaks.toml",
+  ".gitleaksignore",
+  ".semgrepignore",
   "STATE.md",
   ".worktreeinclude",
   "plugins/ductura-engineering/plugin.json",
@@ -143,7 +152,7 @@ test("ordinary documentation stays low and ordinary code stays standard", () => 
     assert.equal(declared("low", [file]).ok, true, file);
     assert.deepEqual(ownerCommandPaths([file]), []);
   }
-  for (const file of ["src/domain/document/index.ts", "e2e/editor.spec.ts", "package.json", "scripts/usage-report.ps1", "scripts/demo/nativex/up.mjs", "scripts/demo/up.test.mjsx", "scripts/demo/login-e2e-evidence.mjs", "scripts/demo/login-e2e-evidence.test.mjs"]) {
+  for (const file of ["src/domain/document/index.ts", "e2e/editor.spec.ts", "pnpm-lock.yaml", "src/package.json", "scripts/usage-report.ps1", "scripts/demo/nativex/up.mjs", "scripts/demo/up.test.mjsx", "scripts/demo/login-e2e-evidence.mjs", "scripts/demo/login-e2e-evidence.test.mjs"]) {
     assert.equal(minimumRisk([file]).risk, "standard", file);
   }
 });
@@ -246,5 +255,47 @@ test("the gate workflow re-evaluates when auto-merge is switched on or off", () 
   const types = workflow.match(/pull_request_target:\s*\n\s*types:\s*\[([^\]]+)\]/)?.[1] ?? "";
   for (const type of ["opened", "synchronize", "reopened", "edited", "ready_for_review", "auto_merge_enabled", "auto_merge_disabled"]) {
     assert.ok(types.split(",").map((t) => t.trim()).includes(type), type);
+  }
+});
+
+// F-033: every file a Claude Code hook in a committed settings file runs is an
+// owner-command path, so a hook cannot be swapped under a lower gate.
+/** Repository paths a hooks object runs, from `command` text and `args`. */
+function hookPaths(hooks) {
+  const paths = new Set();
+  const walk = (node) => {
+    if (Array.isArray(node)) return node.forEach(walk);
+    if (!node || typeof node !== "object") return;
+    for (const text of [node.command, ...(Array.isArray(node.args) ? node.args : [])]) {
+      if (typeof text !== "string") continue;
+      for (const m of text.matchAll(/\$\{?CLAUDE_PROJECT_DIR\}?\/([^\s"'$;|&)]+)/g)) paths.add(m[1]);
+    }
+    Object.values(node).forEach(walk);
+  };
+  walk(hooks);
+  return [...paths].sort();
+}
+
+test("the hook path reader sees command text and args, and a hook outside D-97 would fail", () => {
+  const found = hookPaths({
+    Stop: [{ hooks: [{ command: "node", args: ["${CLAUDE_PROJECT_DIR}/scripts/x.mjs", "start"] }] }],
+    PreToolUse: [{ hooks: [{ command: 'node "$CLAUDE_PROJECT_DIR/tools/y.mjs" || exit 0' }] }],
+  });
+  assert.deepEqual(found, ["scripts/x.mjs", "tools/y.mjs"]);
+  for (const file of found) assert.deepEqual(ownerCommandPaths([file]), [], file);
+});
+test("every script a committed settings hook runs is critical and owner-command", () => {
+  const settings = execFileSync("git", ["ls-files", "--", "*settings*.json"], { cwd: root, encoding: "utf8" })
+    .split("\n")
+    .filter((file) => /(?:^|\/)\.claude\/settings(?:\.[^/]+)?\.json$/.test(file));
+  assert.ok(settings.includes(".claude/settings.json"), "the project settings file is tracked");
+  const paths = new Set();
+  for (const file of settings) {
+    for (const p of hookPaths(JSON.parse(readFileSync(new URL(file, root), "utf8")).hooks)) paths.add(p);
+  }
+  assert.ok(paths.size >= 5, `hook scripts found: ${[...paths].join(", ")}`);
+  for (const file of paths) {
+    assert.deepEqual(ownerCommandPaths([file]), [file], file);
+    assert.equal(minimumRisk([file]).risk, "critical", file);
   }
 });
