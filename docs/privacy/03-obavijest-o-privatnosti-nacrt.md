@@ -65,7 +65,7 @@ Neki tehnički otisci (hashevi) nastavljaju postojati nakon brisanja sadržaja d
 
 ### 8. Kome se podaci prenose
 
-Podatke obrađuju podizvršitelji navedeni u `[prilogu, popis iz 04, tek kad bude potvrđen]`. Tekst vašeg rada nije namijenjen prijenosu izvan Europskog gospodarskog prostora. `[Pravnik potvrđuje za svakog podizvršitelja koji djeluje izvan EU-a ili pripada grupi izvan EU-a.]` Ductus u pilotu ne šalje vaš tekst nijednom pružatelju umjetne inteligencije.
+Podatke obrađuju podizvršitelji navedeni u `[prilogu, popis iz 04, tek kad bude potvrđen]`. `[Tvrdnja da tekst rada nije namijenjen prijenosu izvan Europskog gospodarskog prostora vrijedi za Ductusove dobavljače (04); za AI pružatelje ovisi o izboru pružatelja i ugovoru, pa je pravnik prepisuje tek kad pružatelj bude izabran (D-194).]` `[Pravnik potvrđuje za svakog podizvršitelja koji djeluje izvan EU-a ili pripada grupi izvan EU-a.]` `[PLANIRANO, D-194, tek kad pomoćnik postoji: Ductus šalje AI pružatelju samo odlomak koji sami pokrenete poslati pomoćniku, nikad bez vaše radnje; navode se imena pružatelja, zemlja obrade, čuvanje i činjenica da se tekst ne koristi za treniranje. Kineski pružatelji i modeli kineskih tvrtki ne koriste se.]`
 
 ### 9. Vaša prava
 

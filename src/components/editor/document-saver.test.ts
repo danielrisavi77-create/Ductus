@@ -1,4 +1,7 @@
 // @vitest-environment node
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { FetchLike } from "@/client/evidence-ingest";
@@ -39,7 +42,7 @@ describe("3d-2c2 unit 8: which saver writes the sheet", () => {
     vi.stubGlobal("fetch", global);
     const given = vi.fn<FetchLike>();
     const { saver, evidence } = createDocumentSaver({
-      journal: openJournal(), documentId: DOC, assignmentId: null, fetchImpl: given, source: online,
+      journal: openJournal(), documentId: DOC, current: () => true, assignmentId: null, fetchImpl: given, source: online,
     });
     expect(evidence).toBeNull();
     expect(saver).toBeInstanceOf(LocalDocumentSaver);
@@ -52,15 +55,31 @@ describe("3d-2c2 unit 8: which saver writes the sheet", () => {
     expect(global).not.toHaveBeenCalled();
   });
 
+  it("F-154: with an assignment, no evidence request leaves once current() is false", async () => {
+    const given = vi.fn<FetchLike>(async () => json(404, { status: "not_found" }));
+    const { saver } = createDocumentSaver({
+      journal: openJournal(), documentId: DOC, current: () => false, assignmentId: "a-izmisljeni", fetchImpl: given, source: online,
+    });
+    expect((await saver.load()).kind).toBe("unavailable");
+    expect(given).not.toHaveBeenCalled();
+  });
+
+  it("F-154: the sheet of /rad gives the saver its sign-in check (wiring, read from the source)", () => {
+    const source = readFileSync(join(process.cwd(), "src/components/editor/LocalDocument.tsx"), "utf8");
+    const calls = source.match(/createDocumentSaver\(\{[^}]*\}\)/g) ?? [];
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain("current: () => !ended()");
+  });
+
   it("an empty assignment id counts as none", () => {
-    const { evidence } = createDocumentSaver({ journal: openJournal(), documentId: DOC, assignmentId: "", source: online });
+    const { evidence } = createDocumentSaver({ journal: openJournal(), documentId: DOC, current: () => true, assignmentId: "", source: online });
     expect(evidence).toBeNull();
   });
 
   it("with an assignment the evidence session opens the work through the given fetch", async () => {
     const given = vi.fn<FetchLike>(async () => json(404, { status: "not_found" }));
     const { saver, evidence } = createDocumentSaver({
-      journal: openJournal(), documentId: DOC, assignmentId: "a-izmisljeni", fetchImpl: given, source: online,
+      journal: openJournal(), documentId: DOC, current: () => true, assignmentId: "a-izmisljeni", fetchImpl: given, source: online,
     });
     expect(evidence).toBeInstanceOf(EvidenceSession);
     expect(saver).toBe(evidence);
@@ -83,7 +102,7 @@ describe("3d-2c2 unit 8: which saver writes the sheet", () => {
     const local = { failure: "corrupt" as const, capacity: "ok" as const };
     expect(evidenceNotice({ ...local, state: "RECOVERY_REQUIRED" })).toBeNull();
     expect(evidenceNotice({ ...local, state: "CONFLICT" })).toBeNull();
-    const { saver } = createDocumentSaver({ journal: openJournal(), documentId: DOC, assignmentId: null, source: online });
+    const { saver } = createDocumentSaver({ journal: openJournal(), documentId: DOC, current: () => true, assignmentId: null, source: online });
     expect(evidenceNotice({ ...saver.snapshot(), state: "RECOVERY_REQUIRED" })).toBeNull();
   });
 
