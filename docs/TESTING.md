@@ -30,10 +30,10 @@ CI profil (D-160): `scripts/engineering/ci-docs-scope.mjs`, izvršen iz točnog 
 
 Standardni E2E (`stack-e2e`) i login E2E (`stack-login`) izvršavaju se paralelno, svaki na zasebnom runneru s vlastitim Compose stogom, migracijama, demo podacima i čišćenjem. PgTAP, integration i produkcijski build ostaju u standardnom poslu; login koristi `next dev` i zasebnu Next predmemoriju. Obvezni status `Local stack (compose.yaml)` čeka oba posla: puni profil prolazi samo uz oba uspješna rezultata, a docs profil samo uz oba očekivano preskočena posla. Neuspješan klasifikator, nepoznat profil, kvar, neočekivano preskakanje ili otkazivanje ne daju prolaz.
 
-- CI (P1-3, 12. 10. 2026.): na PR-u se E2E vrti samo na Chromiumu (desktop i mobilni viewport); na `main` i u noćnom pokretanju vrte se sva tri enginea (Chromium, Firefox, WebKit). Crveni Firefox ili WebKit na `main` ili noću je nalaz za sljedeći dan, ne tiha regresija.
-- Chromium: svaki frontend/E2E PR, u CI-ju PR-a.
-- Firefox: editor, sync, journal, clipboard, auth i submission PR-ovi. CI PR-a ga ne pokreće, pa dokaz daje QA (lokalni ili ručno pokrenut prolaz na headu PR-a, zapisan u QA nalazu).
-- WebKit: editor, IndexedDB/Dexie, offline, Web Locks, clipboard, auth i submission PR-ovi. Dokaz kao za Firefox.
+- CI (M0.3, DAN-114): standardni E2E (`stack-e2e`) vrti sva tri enginea (Chromium desktop i mobilni viewport, Firefox, WebKit na Linuxu) na svakom PR-u punog profila, na `main` i noću. Rezultat je dio obveznog statusa `Local stack (compose.yaml)`: provjera inventara (`scripts/engineering/e2e-shards.mjs`) traži sva četiri projekta i nula padova. Ovo zamjenjuje dio P1-3 (D-108 (d)) po kojem je PR vrtio samo Chromium; da se `main` ne otkazuje, ostaje.
+- Nestabilni testovi: `retries: 0`, bez izostavljanja i bez ublažavanja pada. Pad na Firefoxu ili WebKitu blokira PR kao i na Chromiumu; nestabilan test je kvar (bug issue i popravak), nikad karantena bez jednakovrijedne zamjene. Ponovljeno pokretanje posla nije dokaz.
+- Chromium, Firefox i WebKit: svaki PR punog profila, u CI-ju PR-a. QA za editor, sync, journal, IndexedDB/Dexie, offline, Web Locks, clipboard, auth i submission PR-ove dokaz o tri enginea čita iz tog runa na aktualnom headu.
+- WebKit na macOS-u nije dio obvezne provjere. Zaseban savjetodavan posao predlaže PR #1041 (#1040); obvezan može postati tek kad su riješeni poznati padovi iz #1046.
 - QA obveza: PR koji dira `src/lib/journal/`, sync, prijavu ili odjavu ne dobiva QA PASS bez dokaza o prolazu na sva tri enginea na aktualnom headu.
 - Prije pilota cijeli acceptance path mora proći na Chromiumu, Firefoxu i WebKitu.
 - Iznimka samo za demo (D-98 dopuna, 10. 10. 2026.): demo spec K-4 obvezan je do 1. 11. samo na Chromiumu; Firefox i WebKit prolaze informativno i ne blokiraju spajanje. Pravilo za pilot se ne mijenja.
