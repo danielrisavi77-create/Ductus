@@ -47,6 +47,8 @@ Normalno rade tri stalna writera (Backend, Frontend, Platforma). Četvrti je dop
 
 Kad sesija zapne na odluci (PRIJEDLOG, nejasan zahtjev, tuđa mapa), ne nagađa: šalje izvještaj sa statusom "blokirano" i staje.
 
+**Zamrznuta grana (vlasnik, 1. 11. 2026., #87 [c.6550413739](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6550413739) t. 1).** Kad review i QA prođu i orkestrator javi da je vlasniku poslana obavijest za „Spoji n”, pisac na tu granu više ništa ne pusha, ni spajanje `main`, dok PR ne bude spojen ili dok orkestrator ne javi da je naredba poništena.
+
 ### 2a. Kad poruka ne stigne
 
 Izvještaj u opisu PR-a je izvor istine; poruka je samo obavijest. Ništa u tijeku ne smije čekati na poruku.
@@ -229,7 +231,7 @@ Isti put ima Codex CLI (D-193): review ili QA pokrenut iz `codex exec` postaje k
 ## 6. Dizajn
 
 1. Prije koda: dizajnerski sustav i ključni ekrani demoa kao Design artifact; Daniel ih komentira i odobrava. Frontend gradi samo po odobrenom.
-2. Svaki frontend PR prilaže snimke zaslona iz Playwrighta (širok i mobilni prikaz, hr i en).
+2. Svaki frontend PR prilaže snimke zaslona iz Playwrighta (širok i mobilni prikaz, hr i en). Snimke za provjeru izgleda (D-183) su na PR-u prije „Spreman za review”: cijela stranica, ne samo vidljivi dio zaslona, u svijetloj i tamnoj temi, na 1440 i 400 px, uz referentnu sliku iz `docs/design/ductura` (vlasnik, 1. 11. 2026., #87 [c.6550413739](https://github.com/danielrisavi77-create/Ductus/issues/87#issuecomment-6550413739) t. 2).
 3. Na zahtjev: lokalno pokretanje i pregled u pregledniku unutar aplikacije. Javni preview tek nakon potvrde dijela D-08 o dobavljačima i trošku (B0.1).
 
 ## 7. Okruženje i održavanje
