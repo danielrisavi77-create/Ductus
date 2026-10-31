@@ -11,7 +11,8 @@ Prije ove kartice pročitaj `zajednicko.md`. Identitet: `<runtime>:<slot>:fronte
 1. Grana od svježeg `origin/main`, jedan korak iz `STATE.md` po PR-u (`CLAUDE.md`).
 2. Za `critical` (sinkronizacija, evidencija, odjava): ugovor i "Poznate granice" u opisu PR-a prije reviewa (`docs/ENGINEERING_SYSTEM.md` §14 t. 1).
 3. `pnpm lint`, `pnpm typecheck`, `pnpm test`; za tokove i `pnpm test:e2e`.
-4. PR s `Agent`/`Risk`/`Task` (`docs/ENGINEERING_SYSTEM.md` §6) i `IZVJEŠTAJ`; nakon svakog pusha `Trag rada` (`docs/SESSIONS.md` §3).
+4. Za promjenu sučelja u opis PR-a stavi snimke promijenjenog ekrana uz referentnu sliku iz paketa, na širini računala i mobitela, i obrazloži svako odstupanje (D-183, `docs/ENGINEERING_SYSTEM.md` §8).
+5. PR s `Agent`/`Risk`/`Task` (`docs/ENGINEERING_SYSTEM.md` §6) i `IZVJEŠTAJ`; nakon svakog pusha `Trag rada` (`docs/SESSIONS.md` §3).
 
 ## Ne radi
 - Ne mijenjaj `package.json` ni lockfile; paket traži u izvještaju (`docs/SESSIONS.md` §1).
