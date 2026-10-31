@@ -1,6 +1,6 @@
 # Independent Codex review of the current branch against origin/main.
 # Codex reads the review instructions from AGENTS.md automatically.
-# Usage: powershell -File scripts/codex-review.ps1 -Level <light|standard|critical> [-Pr <number>] [-NoComment]
+# Usage: powershell -File scripts/codex-review.ps1 -Level <light|standard|critical> [-Pr <number>] [-NoComment] [-Escalate]
 # Levels (docs/SESSIONS.md 5): light = docs, config, packages; standard = ports
 # and features; critical = evidence, crypto, auth, RLS, submission.
 param(
@@ -8,16 +8,20 @@ param(
     [ValidateSet('light', 'standard', 'critical')]
     [string]$Level,
     [int]$Pr = 0,
-    [switch]$NoComment
+    [switch]$NoComment,
+    [switch]$Escalate
 )
 $ErrorActionPreference = 'Stop'
 
+# D-192: Terra for light and standard, Sol for critical, Astra only as -Escalate
+# after an unusable first critical result (docs/SESSIONS.md 5).
 $tiers = @{
-    light    = @{ Model = 'gpt-6-luna';  Effort = 'medium' }
-    standard = @{ Model = 'gpt-6-sol';   Effort = 'high' }
-    critical = @{ Model = 'gpt-6-astra'; Effort = 'xhigh' }
+    light    = @{ Model = 'gpt-6.1-terra'; Effort = 'max' }
+    standard = @{ Model = 'gpt-6.1-terra'; Effort = 'max' }
+    critical = @{ Model = 'gpt-6.1-sol';   Effort = 'max' }
 }
-$tier = $tiers[$Level]
+if ($Escalate -and $Level -ne 'critical') { throw "-Escalate applies to the critical level only" }
+$tier = if ($Escalate) { @{ Model = 'gpt-6-astra'; Effort = 'xhigh' } } else { $tiers[$Level] }
 
 git fetch origin main --quiet
 if ($LASTEXITCODE -ne 0) { throw "git fetch failed; refusing to review against a stale origin/main" }

@@ -206,9 +206,11 @@ Razinu zadaje orkestrator u zadatku; kad je ne zada, sesija bira po tablici (Dan
 
 | Razina | Codex model, effort | Zadaci |
 | --- | --- | --- |
-| `light` | GPT-6-Luna, medium | dokumenti, CI i konfiguracija, paketi, preimenovanja |
-| `standard` | GPT-6-Sol, high | doslovni prijenos s testovima, portovi i adapteri, ekrani i tokovi sučelja, migracije bez novih ovlasti |
-| `critical` | GPT-6-Astra, xhigh | evidencija, potpis i kriptografija, prijava i sesije, RLS i pgTAP matrica, predaja i rekonstrukcija, sve što dira `PRODUCT.md` §5 |
+| `light` | GPT-6.1-Terra, max | dokumenti, CI i konfiguracija, paketi, preimenovanja |
+| `standard` | GPT-6.1-Terra, max | doslovni prijenos s testovima, portovi i adapteri, ekrani i tokovi sučelja, migracije bez novih ovlasti |
+| `critical` | GPT-6.1-Sol, max | evidencija, potpis i kriptografija, prijava i sesije, RLS i pgTAP matrica, predaja i rekonstrukcija, sve što dira `PRODUCT.md` §5 |
+
+Eskalacija na `critical` (D-192): ako prvi Solov pregled nije upotrebljiv, ponavlja se jednom na istom headu s `-Escalate` (GPT-6-Astra, xhigh). Upotrebljiv nije kad se pokretanje prekine ili istekne, kad nalaz nema redak "Dohvatljivo kroz:" ili kad ga orkestrator ili autor obrazloženo ocijeni nepouzdanim. Ova tablica vrijedi samo za lokalni pregled skriptom; Astra u fallback paru za kanonski `critical` PASS (`docs/ENGINEERING_SYSTEM.md` §6, D-158) ostaje neizmijenjena, a Solov komentar nije PASS ni FAIL.
 
 Claude worker sesije trenutačno su na Opusu, osim gdje `docs/ORKESTRATOR.md` §7 ("Model po poslu") traži drugi model; effort orkestrator postavlja po zadatku: `low` → low, `standard` → medium, `critical` → high. Codex worker koristi model/effort koji orkestrator eksplicitno zada ili računov zadani coding model.
 
