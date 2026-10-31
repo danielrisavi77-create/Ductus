@@ -4,7 +4,7 @@ Ažurira se skupno nakon spojenih PR-ova i kontrolnih točaka. Ovaj presjek čuv
 
 ## Trenutna faza
 
-M0 Temelj. Cilj je dovršena aplikacija, sve faze M0 do M11 (D-191); demo za FPZG odgođen je bez datuma. Ductus Engineering System v1 uvodi risk-based review, QA/Bug Hunter/Product uloge, GitHub za izvršenje i dokaze te Linear za zadatke, prioritete, nositelje i statuse.
+M0 Temelj. Gradi se stvarna aplikacija, program je M0 do M11 (D-191). Ductus Engineering System v1 uvodi risk-based review, QA/Bug Hunter/Product uloge, GitHub za izvršenje i dokaze te Linear za zadatke, prioritete, nositelje i statuse.
 
 Session adresa orkestratora: ranije upisana adresa `session_01JCvXpAX1i9hax8K5FFRcTy` je arhivirana i više ne vrijedi za `send_message` (`docs/ORKESTRATOR.md` §5). Nova adresa zasad nije upisana; vidi Owner queue.
 
@@ -47,21 +47,13 @@ Kanonski dokument: `docs/ENGINEERING_SYSTEM.md`.
 
 ## Otvoreni razvojni stog
 
-Stanje 26. 10. 2026. oko 16:00 UTC prema `gh pr list --state open` (nositelj statusa je Linear; review i QA stanje je na PR-u). STATE.md i dalje prati PR-ove i redovito se osvježava (vlasnik, 25. 10. 2026., prenosi orkestrator na #271 `issuecomment-6398469344`; povod je pregled Trijaže `issuecomment-6398435565`). Ovaj presjek uključuje redak "Spojeno" i otvorene PR-ove #807 do #867 (#807 je u međuvremenu spojen; dodani i noviji #868 i #870) iz pregleda Trijaže na #271 (vlasnik, #87, 26. 10. 2026.).
+Stanje 31. 10. 2026. prema popisu otvorenih PR-ova (34); (n) označava nacrt. Nositelj statusa je Linear, review i QA stanje je na PR-u. Presjek se osvježava skupno.
 
-Otvoreno:
-
-- DAN-89 demo lanac: #815 prikaz "Kako vidi nastavnik" na `/rad` (#732 t. 7); #726 (K-4c-2) i #810 (K-4d korak 3), nacrti koraka demo prolaza.
-- DAN-37 dokazi: #811 spajanje sesije s listom u `/rad` (3d-2c2b); #818 predani rad samo za čitanje (DAN-328).
-- DAN-308 brzi put nastavnika: #780 ruta (B-11c); #825 F-11 čita radove iz B-11c (DAN-334).
-- Rad, zadatak, editor i početna stranica: #830 rad nastaje na klik "Započni rad" (DAN-330) i #831 korak na poslužitelju (F-137, DAN-331, nacrt); #866 citati i popis literature iz kartice Literatura (DAN-343, nacrt); #867 paleta Archivum V3 (nacrt); #870 ruta za novu verziju zadatka (DAN-292, nacrt s ugovorom); #868 početna stranica (Refs #823, nacrt).
-- Sigurnosni nalazi, samo ID: #861 (F-151, dio 1), #862 (F-149) i #863 (F-150), nacrti.
-- Platforma, orkestrator i CI: #837 pravila Actions za engineering gate (DAN-337); #812 ovo osvježavanje; #684 `orch:shadow` (DAN-269, nacrt); #643 (nacrt), #642, #641 Mergify i akcije; #628 Playwright ponavljanja (DAN-262, nacrt).
-- Stariji nacrti: #629, #571, #553, #552, #551, #550, #438, #372, #370, #354, #347, #344; #94 drugi pružatelj reviewa (DAN-41, nakon demoa).
-
-Spojeno od 25. 10. oko 14:00 UTC do 26. 10. oko 16:00 UTC, 49 PR-ova: #346, #731, #751, #768, #769 (B-11a), #772, #773, #774 (B-11b), #782, #786 do #788, #791, #793 do #798, #800, #801, #803 (3d-2c2a), #804, #805 (DAN-290), #806 do #809, #814, #816, #817 (DAN-335), #819 do #822, #832, #834, #836, #839, #840, #843, #844, #846 i #847 (DAN-326 E1), #851, #855, #856 (D-176), #857 (D-177) i #860 (F-148). Zatvoreni bez spajanja: #833, #848, #850.
-
-Spojeno od 12. do 26. 10. 2026.: 325 PR-ova (#180 do #860, s preskocima). Potpun popis: `gh pr list --state merged`.
+- Platforma, CI i orkestrator: #1083 pravila pisaca u definicijama agenata (D8); #1082 kritični pod za toolchain, lint i skenere (DAN-166); #1081 ci-once; #1079 kritični PR bez D-97 putanja (D-196); #1078 (n) pravilo testova prijenosa (D-195); #1076 agentske datoteke kritične (DAN-171); #1073 usporedba sheme s `db/schema.sql` (DAN-71); #1059 (n) `scripts/local` (DAN-434); #1057 i #641 Mergify; #1041 WebKit na macOS-u (DAN-114); #1038 brži hookovi (DAN-432); #994 D-161 (g) (DAN-361); #684 (n) `orch:shadow`; #643 (n) Mergify nositelj; #628 (n) Playwright ponavljanja (DAN-262).
+- Baza: #1077 migrator i grupne uloge (DAN-71); #1051 (n) advisory lock za dbmate (DAN-71); #947 (n) put evidencije mentorstva (DAN-349).
+- Sučelje i editor: #1075 (n) tema na cijelom dokumentu (Z-13a); #1024 `/prijava` u paleti papir i grafit (DAN-344); #980 (n) i #976 (n) editor prema V3 (DAN-214, DAN-211); #866 (n) citati i literatura (DAN-343); #831 (n) korak na poslužitelju (DAN-331); #1048 (n) napomena S3 (D-63); #553 (n) obavijest o radnim zapisima mentora.
+- Testovi: #1084 (n) auth tok i OIDC klijent (DAN-307); #970 (n) postavljanje labela (DAN-83); #550 (n) parovi falsifikacije (DAN-233).
+- Dokumenti: #1030 D-63 i pravilo 4; #959 (n) papir i grafit u uputama (DAN-357); #551 (n) UX evaluacija (DAN-234); #344 (n) elementi prototipa u M5.
 
 ## Ne smije se izgubiti
 
