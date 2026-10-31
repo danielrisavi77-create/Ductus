@@ -88,7 +88,8 @@ const eslintConfig = [
   },
   {
     // Integration tests and the full login E2E check the compose stack directly.
-    files: ["src/server/db/**", "tests/integration/**", "e2e/login/**"],
+    // The migration runner holds only the D-91 (3) advisory lock, no app data.
+    files: ["src/server/db/**", "tests/integration/**", "e2e/login/**", "scripts/db/migrate-locked.mjs"],
     rules: {
       "no-restricted-imports": "off",
       "database-boundary/no-restricted-dynamic-imports": "off",
