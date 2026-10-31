@@ -6,7 +6,9 @@ import type { WithActor } from "@/server/db/with-actor";
  * 3a). Who asks comes only from the session cookie, bound into withActor; the
  * database decides which courses (institution.list_teacher_courses, under the
  * existing RLS). The answer names no student, no text and no time of the
- * live view: per assignment only the number of students of the course.
+ * live view: per assignment only the number of students of the course. Each
+ * course carries its rule on AI help (DAN-344 R-1), which the new assignment
+ * form must send unchanged or narrower.
  */
 
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
@@ -14,6 +16,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const ACADEMIC_YEAR = /^[0-9]{4}\/[0-9]{4}$/;
 const SQLSTATE = /^[0-9A-Z]{5}$/;
 const NO_STORE = { "cache-control": "no-store" };
+/** The three rules a course can have (institution.course.ai_policy). */
+const AI_POLICIES = new Set(["prohibited", "partially_allowed", "encouraged"]);
+export type CourseAiPolicy = "prohibited" | "partially_allowed" | "encouraged";
 const WORK_TYPES = new Set([
   "short_paper",
   "essay",
@@ -43,6 +48,7 @@ export interface TeacherCourse {
   id: string;
   name: string;
   academicYear: string;
+  aiPolicy: CourseAiPolicy;
   assignments: TeacherAssignment[];
 }
 
@@ -68,14 +74,16 @@ function instant(value: unknown): string | null {
 export function coursesOf(rows: readonly Row[]): TeacherCourse[] | null {
   const courses = new Map<string, TeacherCourse>();
   for (const row of rows) {
-    const { course_id: id, course_name: name, academic_year: year } = row;
+    const { course_id: id, course_name: name, academic_year: year, ai_policy: policy } = row;
     if (typeof id !== "string" || !UUID.test(id) || typeof name !== "string" || name === ""
-      || typeof year !== "string" || !ACADEMIC_YEAR.test(year)) return null;
+      || typeof year !== "string" || !ACADEMIC_YEAR.test(year)
+      || typeof policy !== "string" || !AI_POLICIES.has(policy)) return null;
+    const aiPolicy = policy as CourseAiPolicy;
     let course = courses.get(id);
     if (course === undefined) {
-      course = { id, name, academicYear: year, assignments: [] };
+      course = { id, name, academicYear: year, aiPolicy, assignments: [] };
       courses.set(id, course);
-    } else if (course.name !== name || course.academicYear !== year) {
+    } else if (course.name !== name || course.academicYear !== year || course.aiPolicy !== aiPolicy) {
       return null;
     }
     if (row.assignment_id === null) continue;
@@ -123,7 +131,7 @@ export async function readTeacherCourses(sessionToken: string | undefined, withA
     const result = await withActor(sessionToken, (tx) =>
       tx.query<Row>(
         `SELECT course_id::text, course_name, academic_year, assignment_id::text, title, work_type,
-                opens_at, due_at, current_version, enrolled_students
+                opens_at, due_at, current_version, enrolled_students, ai_policy
            FROM institution.list_teacher_courses()`,
       ),
     );

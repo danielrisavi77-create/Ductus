@@ -46,33 +46,47 @@ describe("conditional-validity property tests (S-UV1)", () => {
   });
 
   it("changing a word always triggers re-review", () => {
-    fc.assert(
-      fc.property(
-        fc.string({ minLength: 5, maxLength: 100 }),
-        fc.string({ minLength: 1, maxLength: 20 }),
-        (base, replacement) => {
-          const original = base.trim();
-          if (!original || original === replacement) return true;
-
-          const condition: ValidityCondition = {
-            kind: "text_range",
-            revision_id: "rev-1",
-            text_snapshot_hash: simpleHash(normalizeForComparison(original)),
-            status: "valid",
-            accepted_at: "2026-10-13T00:00:00Z",
-            accepted_by: "t",
-          };
-
-          const changed = original.replace(/\S+/, replacement);
-          if (changed === original) return true;
-
-          const result = applyRevisionToConditions([condition], changed);
-          return hasNeedsReReview(result);
-        },
-      ),
-      { numRuns: 50 },
-    );
+    fc.assert(changingAWord(), { numRuns: 50 });
   });
+
+  // #963: this seed and path once produced "!" -> " ", a change that only
+  // removes trailing punctuation and whitespace, which normalisation ignores
+  // on purpose (see the test above). It must stay a passing case.
+  it("changing a word: regression seed of #963", () => {
+    fc.assert(changingAWord(), {
+      seed: -167247653,
+      path: "9:0:0:0:0:0:1:0:0:0:0:1:1",
+      endOnFailure: true,
+    });
+  });
+
+  function changingAWord() {
+    return fc.property(
+      fc.string({ minLength: 5, maxLength: 100 }),
+      fc.string({ minLength: 1, maxLength: 20 }),
+      (base, replacement) => {
+        const original = base.trim();
+        if (!original || original === replacement) return true;
+
+        const condition: ValidityCondition = {
+          kind: "text_range",
+          revision_id: "rev-1",
+          text_snapshot_hash: simpleHash(normalizeForComparison(original)),
+          status: "valid",
+          accepted_at: "2026-10-13T00:00:00Z",
+          accepted_by: "t",
+        };
+
+        const changed = original.replace(/\S+/, replacement);
+        // Only trailing punctuation or whitespace changed (#963): not a
+        // changed word; the test above covers that case.
+        if (normalizeForComparison(changed) === normalizeForComparison(original)) return true;
+
+        const result = applyRevisionToConditions([condition], changed);
+        return hasNeedsReReview(result);
+      },
+    );
+  }
 
   it("old confirmation is never deleted", () => {
     fc.assert(

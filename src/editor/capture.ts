@@ -30,13 +30,13 @@ import { EDIT_STEP_FORMAT_V1, parseEditSteps } from "@/domain/document/edit-step
 import { exceedsEvidenceSegmentLimit } from "@/domain/forensics/evidence-chain-v2";
 import { digestCanonicalDocumentV2 } from "@/domain/forensics/evidence-replay-v2";
 import {
-  canonicalEvidenceSegmentV2,
+  canonicalEvidenceSegment,
   EVIDENCE_CANONICALIZATION_V2,
   EVIDENCE_HASH_ALGORITHM_V2,
-  EVIDENCE_SEGMENT_SCHEMA_V2,
-  type EvidenceEventV2,
-  type EvidenceSegmentV2,
-  type EvidenceSourceV2,
+  evidenceSchemaForEvents,
+  type EvidenceEventV3,
+  type EvidenceSegment,
+  type EvidenceSource,
 } from "@/domain/forensics/evidence-segment-v2";
 import { canonicalizeJcs, type JcsJsonValue } from "@/domain/forensics/jcs";
 import { sha256WebCrypto } from "@/domain/forensics/crypto";
@@ -59,7 +59,7 @@ export type CapturedChange = {
   docs: readonly PmNode[];
   /** The document after the last step. */
   after: PmNode;
-  source: EvidenceSourceV2;
+  source: EvidenceSource;
   /** Epoch milliseconds when the change entered the editor. */
   at: number;
 };
@@ -73,7 +73,7 @@ export type SegmentTiming = {
 };
 
 export type BuiltSegment = {
-  segment: EvidenceSegmentV2;
+  segment: EvidenceSegment;
   /** Exact JCS bytes of the segment and their hash. */
   bytes: Uint8Array;
   sha256: string;
@@ -109,7 +109,7 @@ export class CaptureError extends Error {
  */
 export function changeOf(
   transactions: readonly Transaction[],
-  source: EvidenceSourceV2,
+  source: EvidenceSource,
   at: number,
 ): CapturedChange {
   const steps: Step[] = [];
@@ -121,7 +121,7 @@ export function changeOf(
   return { steps, docs, after: transactions[transactions.length - 1]!.doc, source, at };
 }
 
-type RawEvent = { source: EvidenceSourceV2; changes: CapturedChange[] };
+type RawEvent = { source: EvidenceSource; changes: CapturedChange[] };
 
 const MINUTE_MS = 60_000;
 const encoder = new TextEncoder();
@@ -358,7 +358,7 @@ class EventFailure extends Error {
 async function buildSegment(raw: readonly RawEvent[], context: SegmentContext): Promise<BuiltSegment> {
   const startedMs = Math.floor(raw[0]!.changes[0]!.at / MINUTE_MS) * MINUTE_MS;
   const lastEvent = raw[raw.length - 1]!;
-  const events: EvidenceEventV2[] = [];
+  const events: EvidenceEventV3[] = [];
   const timing: SegmentTiming["events"] = [];
   let initial: string | null = null;
   let previousAfter: { canonical: string; sha256: string } | null = null;
@@ -381,7 +381,7 @@ async function buildSegment(raw: readonly RawEvent[], context: SegmentContext): 
       events.push({
         sequence,
         source: event.source,
-        steps: parsed.steps as unknown as EvidenceEventV2["steps"],
+        steps: parsed.steps as unknown as EvidenceEventV3["steps"],
         beforeDocumentHash: before.sha256,
         afterDocumentHash: after.sha256,
       });
@@ -393,8 +393,10 @@ async function buildSegment(raw: readonly RawEvent[], context: SegmentContext): 
       throw new EventFailure(index, error instanceof CaptureError ? error.code : "unsupported_step");
     }
   }
-  const segment: EvidenceSegmentV2 = {
-    evidenceSchema: EVIDENCE_SEGMENT_SCHEMA_V2,
+  // v3 only when an event is citation-form, so every other segment keeps its
+  // v2 bytes (contract #896, P1); the canonical form below checks the pair.
+  const segment = {
+    evidenceSchema: evidenceSchemaForEvents(events),
     canonicalization: EVIDENCE_CANONICALIZATION_V2,
     hashAlgorithm: EVIDENCE_HASH_ALGORITHM_V2,
     documentId: context.documentId,
@@ -410,10 +412,10 @@ async function buildSegment(raw: readonly RawEvent[], context: SegmentContext): 
     events,
     captureContext: { editorModel: "prosemirror", transactionFormat: EDIT_STEP_FORMAT_V1 },
     evidenceProfileId: context.evidenceProfileId,
-  };
+  } as EvidenceSegment;
   let canonical: string;
   try {
-    canonical = canonicalEvidenceSegmentV2(segment);
+    canonical = canonicalEvidenceSegment(segment);
   } catch {
     throw new CaptureError("unsupported_step");
   }
