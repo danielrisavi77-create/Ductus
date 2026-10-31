@@ -150,14 +150,14 @@ M0 → M1 (čeka AAI@EduHr Lab) i M2 → M3 → M5 i M6 → M7 → M4 (čeka lic
 | M5.11 | Pravopis prema jeziku rada bez slanja teksta van (S-07) | F | M2.10 | novo |
 | M5.12 | Uvodni vodič od dvije minute (S-11 iz `docs/FEATURES.md`) | F | | novo |
 | M5.13 | Nalaz identiteta blokova u editoru (samo ID): F-044 | F | | DAN-176 |
-| M5.14a | Panel Nacrt (S-14), ljuska kartice i prikaz Obrnuti nacrt, samo izvedeno iz dokumenta (`docs/design/PANEL-NACRT-SPEC.md`) | F | M5.2, M5.3, M0.5, M5.13 | novo |
+| M5.14a | Panel Nacrt (S-14), ljuska kartice i prikaz Obrnuti nacrt, samo izvedeno iz dokumenta (`docs/design/PANEL-NACRT-SPEC.md`) | F | M5.2, M5.3, M0.5, M5.13; odgovori vlasnika na pitanja 3 (naziv kartice) i 9 (podjela M5.14a/b/c) iz specifikacije | novo |
 | M5.14b | Panel Nacrt: pohrana plana (pitanje rada, svrhe poglavlja, pojmovnik) kao zapis uz rad; tablica s RLS-om, RPC, pgTAP | B | M5.14a; odluke 1, 2 i 6 iz specifikacije | novo |
 | M5.14c | Panel Nacrt: prikazi Nit i Pojmovnik nad pohranom | F | M5.14b, M2.10 | novo |
-| M5.15 | Planer rada iz roka i opsega po poglavlju (S-06) | F | M5.8 | novo |
+| M5.15 | Planer rada iz roka i opsega po poglavlju (S-06) | F | M5.8, spajanje #1030 (izuzetak u PRODUCT §5 pravilu 4: napredak po poglavlju i dani do roka) | novo |
 
 Svaki novi čvor sheme traži pravilo u formatu koraka uređivanja i test reprodukcije prije spajanja (B-12).
 
-Koraci M5.14a do M5.14c: odluka vlasnika 31. 10. 2026. da panel Nacrt ulazi u program (#87 c.6543799262, t. 5); smještaj i podjela su PRIJEDLOG iz `docs/design/PANEL-NACRT-SPEC.md`, a pohrana plana, vidljivost mentoru i naziv kartice čekaju odgovore na pitanja 1, 2 i 3 iz te specifikacije (M5.14b i M5.14c ne počinju prije njih).
+Koraci M5.14a do M5.14c: odluka vlasnika 31. 10. 2026. da panel Nacrt ulazi u program (#87 c.6543799262, t. 5); smještaj i podjela su PRIJEDLOG iz `docs/design/PANEL-NACRT-SPEC.md`, a pohrana plana, vidljivost mentoru i naziv kartice čekaju odgovore na pitanja 1, 2 i 3 iz te specifikacije, a podjela na odgovor na pitanje 9. **Nijedan od koraka M5.14a do M5.14c ne počinje prije tih odgovora** (M5.14a ne prije pitanja 3 i 9, M5.14b i M5.14c ne prije pitanja 1, 2 i 3); redak M5.14 u ovoj razradi je do tada samo okvir.
 
 **Ekrani:** S-10 editor, S-13 Literatura i bilježnica izvora, S-14 panel Nacrt (`docs/design/PANEL-NACRT-SPEC.md`), S-45 prvi ulazak i vodič.
 
@@ -179,7 +179,7 @@ Koraci M5.14a do M5.14c: odluka vlasnika 31. 10. 2026. da panel Nacrt ulazi u pr
 | M6.6 | Obavijesti u aplikaciji i e-poštom, podsjetnici o roku (N-01, N-02) | B, F | | DAN-305 (#950) |
 | M6.7 | Odgođeno objavljivanje komentara (D-51), banka komentara (N-03), promjene od zadnjeg pregleda (N-05) | F, B | | novo |
 | M6.8 | Mentorov pregled rada i komentari na mobitelu | F | M6.1 | novo |
-| M6.9 | Konzultacije vezane uz verziju rada (D-47) | B, F | M2.6 | novo |
+| M6.9 | Konzultacije vezane uz verziju rada (D-47); dio „Bilješka mentora” je uvjetan (U-2, D-135) | B, F | M2.6 | novo |
 | M6.10 | Zbirni pregled kolegija bez imena (N-11) | B, F | | novo |
 | M6.11 | Ključni rokovi mentorskog rada (N-07 iz `docs/FEATURES.md`) | B, F | M2.6, M6.6 | novo |
 | M6.12 | (uvjetno) Sučelje komentora i povjerenstva s vremenski ograničenim pristupom (N-08, N-09, ekran P-01 povjerenstvo); model je M2.8 | F, B | M2.8, M6.1, uvjet U-1 | novo |
@@ -255,7 +255,7 @@ Koraci M5.14a do M5.14c: odluka vlasnika 31. 10. 2026. da panel Nacrt ulazi u pr
 
 **Ekrani:** S-16 panel Asistent. N-19 (AI pomoć nastavniku) je PRIJEDLOG i ne gradi se.
 
-**Uvjet završetka:** izlazni kriterij M9 iz `docs/PROGRAM.md`.
+**Uvjet završetka:** izlazni kriterij M9 iz `docs/PROGRAM.md`, bez oznake podudaranja s odgovorom AI pomoćnika iz M9.6 (D-58, uvjet U-4): ta oznaka (stavka „prepisan AI odgovor označen” u izlaznom kriteriju) nije dio uvjeta završetka M9 dok se U-4 ne riješi.
 
 ## M10 Podaci
 
@@ -315,11 +315,11 @@ Sadržaj vala 3 raspoređen je po fazama prema odluci orkestratora T3 (#87 c.654
 | U-1 | M6.12 | Što komentor i povjerenstvo smiju vidjeti (tekst, sažetak, reprodukciju, prikaz uživo) i hoće li se mijenjati PRODUCT §3 i §5 pravilo 7. Model u M2.8 ostaje; sučelje čeka. | Ustav C-23, D-154, pravilo 7 |
 | U-2 | M6.13 do M6.15 | Pravno mišljenje D-55 i vlasnikova zasebna odluka o gradnji (D-136). Dio „Bilješka mentora” u M6.9 (D-47) vrijedi pod istim uvjetom (D-135). | D-130, D-135, D-136 |
 | U-3 | M7.11, M7.12 | Vlasnik potvrđuje tekst kriterija prihvaćanja: popis mjesta je činjenica, bez rangiranja, težine ni zbroja; „razgovor održan” bez ocjene; student vidi identičan popis. | PRODUCT §5 pravila 1, 2, 3, 5, 13 |
-| U-4 | dio M9.6 | Oznaka „podudara se s odgovorom AI pomoćnika” ostaje oznaka mjesta, ne tvrdnja o autoru. | pravilo 1 (C-9, C-10); D-194 |
+| U-4 | dio M9.6 | Oznaka „podudara se s odgovorom AI pomoćnika” ostaje oznaka mjesta, ne tvrdnja o autoru. | pravilo 1 (C-9, C-10); D-194 (još nije na `main`, čeka spajanje docs PR-a #1023) |
 | U-5 | M10.9 | Tekst paketa i QR provjere ne smije tvrditi autorstvo; dokument izlazi izvan sustava. | pravilo 9, C-13 |
 | U-6 | M10.10 | Agregati bez rizika, ranga i ocjena; isti prag od najmanje 5 studenata kao N-11. | pravilo 2 |
 
-Planer (M5.15) nije uvjetan. „Moj rad u brojkama” (M7.13) više nije uvjetan prema odluci vlasnika o D-63 („1. da 2. da”, #87), ali izričiti izuzetak u PRODUCT §5 pravilu 4 upisuje tek docs PR #1030: **M7.13 ne počinje prije spajanja #1030.** A-08 (dnevni vremenski žig kod vanjskog pružatelja) ostaje izvan rasporeda.
+Planer (M5.15) i „Moj rad u brojkama” (M7.13) više nisu uvjetni prema odluci vlasnika o D-63 („1. da 2. da”, #87), ali izričiti izuzetak u PRODUCT §5 pravilu 4 (napredak po poglavlju, dani do roka, napredak iz verzija) upisuje tek docs PR #1030: **M5.15 i M7.13 ne počinju prije spajanja #1030.** A-08 (dnevni vremenski žig kod vanjskog pružatelja) ostaje izvan rasporeda.
 
 ## Ekrani izvan faza
 
@@ -331,7 +331,7 @@ Ovi ekrani iz mape nemaju mjesto u tablici faza i ne grade se dok vlasnik ne odl
 2. M9: D-191 stavlja AI pomoćnika u cilj, a D-77 ga drži izvan pilota zbog obrade u EU-u. Ostaje li izvan pilota i koji pružatelj ispunjava uvjet (M9.1)?
 3. ~~Raspored sadržaja vala 3 po fazama.~~ Riješeno 31. 10. 2026. odlukom orkestratora T3 (#87 c.6544288967): koraci u fazama M5 do M11, uvjetni koraci u odjeljku „Uvjetni koraci”. Preostaju pitanja U-1 do U-6 vlasniku, uz faze kojih se tiču.
 4. Ekrani bez faze: K-01, K-02, A-10, J-04. Grade li se, i u kojoj fazi?
-5. ~~Panel Nacrt (S-14: obrnuti nacrt, nit argumenta, pojmovnik).~~ Riješeno 31. 10. 2026.: ulazi u program (#87 c.6543799262, t. 5); koraci M5.14a do M5.14c prema `docs/design/PANEL-NACRT-SPEC.md`. Pitanja 1, 2 i 3 iz te specifikacije ostaju vlasniku.
+5. Panel Nacrt (S-14: obrnuti nacrt, nit argumenta, pojmovnik). Djelomično riješeno 31. 10. 2026.: ulazi u program (#87 c.6543799262, t. 5); koraci M5.14a do M5.14c prema `docs/design/PANEL-NACRT-SPEC.md` kao okvir. **Smještaj i naziv ostaju otvoreni:** pitanja 1, 2, 3 i 9 iz te specifikacije čekaju vlasnika i nijedan korak M5.14 ne počinje prije odgovora.
 6. D-63 (napredak i „preskočena stanka”) prema D-56 i pravilu 4 (DAN-104).
 7. Kriteriji popisa „tko treba pomoć” (N-12, DAN-102).
 8. RPC za dodjelu mentorstva (D-182 t. 1 čeka odluku nakon demoa; M2.6).
